@@ -1,0 +1,422 @@
+Original prompt: ok start a progress md file that we'll use as short term memotry
+
+# Progress
+
+## Current State
+
+- Repo is a Phaser + TypeScript prototype for Everybody's Platformer.
+- Current build is a strong single-room vertical slice: editor, tile placement, object placement, backgrounds, and local test play all exist.
+- PRD direction is editor-first and zero-friction; infinite-world, persistence, auth, multiplayer, and blockchain layers are still future work.
+
+## Recent Changes
+
+- Extended the stitched overworld object runtime beyond collectibles so the next live object set actually behaves in play:
+  - `OverworldPlayScene` now updates per-object runtime state for ladders, bounce pads, and the first moving enemy set instead of treating them as static sprites
+  - ladders are climbable in play mode, with gravity disabled while attached and `Up/W` driving vertical climb movement
+  - bounce pads now use their intended compact top-surface collision instead of a full-sprite static body, so dropping onto them launches the player upward reliably
+  - birds now fly horizontally with a wave offset, snakes and penguins patrol across the room on the ground, and frogs hop forward on a timer
+  - enemy/bird contact in stitched play respawns the player through the same live overlap path used for the existing hazard/enemy slice
+  - added richer overworld debug state for live object positions/velocities plus a dev-only `window.__EVERYBODYS_PLATFORMER_GAME__` hook to support deterministic local scene verification
+- Verification passed for the new object-runtime pass:
+  - `npm run build`
+  - required skill-client run at `output/web-game/object-runtime-skill-client/`
+  - targeted routed Playwright verification at `output/web-game/object-runtime-check/` confirmed:
+    - bounce pad launch state reached `player.velocityY: -222` after dropping directly onto the pad
+    - ladder attach/climb state reached `player.climbing: true`, `ladderKey: "0,0:0"`, and `player.velocityY: -90`
+    - bird, snake, frog, and penguin all changed position over time in stitched play (`output/web-game/object-runtime-check/summary.json`)
+    - placing the player directly in the bird path respawned them back to spawn (`player` reset to `x: 328, y: 329`)
+  - visual captures for the close-up object checks are in `output/web-game/object-runtime-check/02-bounce-pad.png`, `output/web-game/object-runtime-check/03-ladder-climb.png`, and `output/web-game/object-runtime-check/04-enemy-motion.png`
+- Removed the stale pre-overworld scene stack:
+  - deleted `src/scenes/PlayScene.ts` and `src/scenes/WorldScene.ts`, which were no longer part of the live boot/editor/world flow
+  - removed `PlayScene` from the Phaser scene registration and debug scene-order list in `src/main.ts`
+  - trimmed obsolete scene payload types (`WorldSceneData`, `PlaySceneData`, `WorldPlayEntryState`) from `src/scenes/sceneData.ts`
+  - updated the object config comment so it no longer refers to the deleted `PlayScene`
+- Verification passed for the legacy-scene cleanup:
+  - `npm run build`
+  - code search after the cleanup showed only live `OverworldPlayScene` references remain in the active scene wiring
+- Wired the first live object simulation slice into stitched overworld play so collectibles actually work:
+  - `OverworldPlayScene` full-room textures now render without baked-in objects, and loaded play rooms spawn live object sprites on top instead
+  - live room objects now animate in play mode, preserve visibility for non-collectibles, and create runtime physics interactions by category
+  - collectibles now disappear on contact, increment score (`gold=3`, `silver=2`, `gem=5`, others=1), and report collection feedback through the world HUD/bottom bar
+  - hazards/enemies now at least respawn the player on contact in stitched play, `platform` objects now collide, and `bounce_pad` now launches the player upward
+  - full-room streaming now invalidates on `updatedAt` as well as `version`, which prevents stale draft play-room renders when editor changes reuse the same version number
+- Verification passed for the collectible/object-play fix:
+  - `npm run build`
+  - custom Playwright repro from the editor flow on fresh frontier room `(-1,0)` placed a gold coin at spawn and confirmed stitched test play reached `score: 3` with `collectibles: 0`
+  - stock skill-client run at `output/web-game/coin-published-client/` against published room `(-1,0)` confirmed the same result (`score: 3`, `collectibles: 0`) with no console/page errors
+  - visual captures for the editor placement + stitched play pass are in `output/web-game/coin-editor-spawn.png` and `output/web-game/coin-play-spawn.png`
+- Implemented the planned auto-publish / claimer / rollback slice:
+  - `Back to World` in `EditorScene` now returns immediately when clean, auto-publishes dirty rooms through the existing publish/version path, and falls back to draft-save + draft preview when publish fails
+  - shared room records now carry claimer, last-publisher, minted placeholder metadata, room permissions, and rich version records instead of bare snapshots
+  - added `POST /api/rooms/:id/revert`, claimer/minted enforcement in the Worker, and D1 migration `0002_room_claims_and_reverts.sql`
+  - added editor `History` UI with a modal version list, claimer metadata, and in-editor revert actions for authorized claimers
+  - overworld scene data now supports clearing stale draft previews and transient post-editor status messages
+- Verification passed for the new room publishing / rollback flow:
+  - `npm run build`
+  - `npm run cf:d1:migrate:local`
+  - required skill-client run at `output/web-game/auto-publish-history-skill-client/`
+  - direct API checks confirmed:
+    - guest publish leaves rooms unclaimed
+    - first authenticated publish claims the room and enables revert for that claimer
+    - non-claimer revert returns `403`
+    - claimer revert appends a new latest version instead of mutating history
+    - minted placeholder metadata blocks publish + revert with `403`
+  - direct Playwright UI checks confirmed:
+    - dirty exit auto-publishes and returns to overworld with published state
+    - clean exit does not create a new version
+    - publish failure returns to overworld with a draft preview and `Publish failed, draft saved instead.`
+    - history modal shows versions newest-first, exposes claimer-only revert buttons, and refreshes after revert
+  - browser artifacts for the UI pass are in `output/web-game/auto-publish-history-ui-check/`, including `guest-auto-publish.png`, `guest-fallback-draft.png`, `claimer-history-before-revert.png`, `claimer-history-after-revert.png`, and `summary.json`
+- Removed the baked-in background-layer dimming across all room renderers:
+  - `EditorScene` no longer forces the `background` tile layer to `0.6` alpha
+  - `PlayScene` no longer forces the `background` tile layer to `0.6` alpha
+  - room snapshot baking in `src/visuals/roomSnapshotTexture.ts` now draws background tiles at full opacity too, so overworld/editor/play stay consistent
+- Verification passed for the background-layer opacity fix:
+  - `npm run build`
+  - required skill-client run completed at `output/web-game/background-alpha-skill-client/`
+  - targeted editor capture at `output/web-game/background-alpha-local-check/editor-background-layer.png` shows background-layer tiles rendering solid instead of washed out
+  - no console or page errors during the targeted check
+- Fixed the edit-mode background fit regression introduced by the surrounding-room preview work:
+  - `EditorScene` now scales live parallax background layers with the exact room-height ratio instead of `Math.ceil(...)`
+  - this matches the baked room-preview / overworld renderer again, so backgrounds like `forest` no longer blow up in the editor while the same room looks correct in overworld
+- Local verification passed for the background-fit fix:
+  - `npm run build`
+  - required Playwright skill-client run against the live-worker boot flow still showed remote `(0,0)` as `selectedState: "empty"`, so it was not a usable repro target today
+  - direct local verification used `VITE_ROOM_STORAGE_BACKEND=local` with seeded published rooms in browser `localStorage`, then captured matching overworld/editor room renders at `output/web-game/editor-background-local-check/world-canvas.png` and `output/web-game/editor-background-local-check/editor-canvas.png`
+  - no console or page errors during the seeded local repro
+- Editor backgrounds now render with the same screen-space dual-camera/parallax model as play mode.
+- Play mode spawn/respawn now chooses a grounded surface from the bottom up instead of using the first terrain tile found from the top.
+- `npm run build` passed after both fixes.
+- Added a first persistence slice for a single room:
+  - room snapshot/repository model in `src/persistence/roomRepository.ts`
+  - local draft load/save/publish flow backed by `localStorage`
+  - editor now loads the current room on boot, autosaves draft changes, and can explicitly save/publish from the bottom bar
+- `npm run build` passed after the persistence changes too.
+- Added local `wrangler` as a dev dependency using `--ignore-scripts` to work around an npm/`sharp` install failure.
+- Replaced the local-only room persistence path with a Cloudflare-backed version:
+  - shared room model in `src/persistence/roomModel.ts`
+  - remote-first room repository in `src/persistence/roomRepository.ts`
+  - Worker API in `src/cloudflare/worker.ts`
+  - D1 schema in `migrations/0000_create_rooms.sql`
+  - Wrangler config in `wrangler.jsonc`
+  - Vite `/api` proxy plus Cloudflare npm scripts in `vite.config.ts` and `package.json`
+- Local verification passed:
+  - `npm run build`
+  - `wrangler d1 migrations apply DB --local`
+  - `wrangler dev`
+  - local `/api/health`, room load, draft save, publish, and versions endpoints
+- Cloudflare deployment succeeded:
+  - Worker URL: `https://everybodys-platformer.novox-robot.workers.dev`
+  - D1 database: `everybodys-platformer-db`
+  - D1 database ID: `3cba45fc-4f29-4081-89f7-c57ab3179292`
+  - remote migration applied successfully
+  - live `/api/health`, frontend root, room draft save, room load, publish, and versions endpoints all responded correctly
+- Updated `PRD.md` to reflect current reality:
+  - current state is a single-room vertical slice with Cloudflare persistence
+  - room dimensions are now treated as decided (`40x22`)
+  - Cloudflare deployment is marked as done
+  - the next recommended milestone is the **world shell**: coordinate-addressed multi-room loading, frontier state, and simple map/navigation
+- Started Milestone 1 implementation:
+  - added shared world-shell types in `src/persistence/worldModel.ts`
+  - added client world data loading in `src/persistence/worldRepository.ts`
+  - added URL coordinate helpers in `src/navigation/worldNavigation.ts`
+  - extended the Worker with `GET /api/world` and `GET /api/rooms/:id/published`
+- Finished Milestone 1 world-shell implementation:
+  - `BootScene` now lands in a new `WorldScene`
+  - added a `17x17` world grid HUD with published/frontier/empty states, coordinate jump, and build/play actions
+  - `EditorScene` now accepts coordinate/source launch data and can return to the world map
+  - `PlayScene` now supports `mode: 'test' | 'world'`
+  - world play loads published room snapshots by coordinates and supports edge-to-edge room traversal
+  - editor test-play still uses the in-editor draft snapshot and returns to the editor as before
+  - added debug text-state hooks via `window.render_game_to_text` so browser automation can verify scene state even when WebGL screenshots are black
+  - improved dev fallback so room/world repositories fall back to local storage when the Vite `/api` proxy returns `5xx`
+- Refined the world shell presentation and editor layout:
+  - world-map rooms now use the real room aspect ratio (`40x22` tiles) instead of square abstract cells
+  - `WorldScene` now renders thumbnail previews of visible published rooms from their actual background, tile layers, and placed objects
+  - added world-map zoom controls (buttons + mouse wheel) by changing visible radius
+  - restored the editor layout to a stable left-tools / right-canvas split using CSS grid so the build area no longer wraps below the fold when entered from the world map
+- Fixed draft preview / editor background regressions:
+  - `EditorScene` now fully resets its background-camera runtime state on shutdown/re-entry instead of reusing stale camera references
+  - returning from the editor to the world now passes the current draft snapshot back to `WorldScene`
+  - `WorldScene` now shows local draft rooms with live room thumbnails and a `Draft` state instead of leaving them as brown frontier placeholders
+  - room-preview texture keys now include room status + `updatedAt` so background/tile preview changes invalidate immediately
+  - editor debug state now reports background-layer count and whether the background camera exists so the room/world/editor loop can be verified without relying on broken headless screenshots
+- Added screenshot/capture diagnostics in `src/main.ts`:
+  - query flags `?renderer=canvas|webgl|auto`, `?preserveDrawingBuffer=1`, and `?captureDebug=1`
+  - new `window.capture_debug_info()` hook reports requested/active renderer, canvas `toDataURL` health, pixel probes, WebGL context attributes, and current scene state
+  - when `captureDebug=1`, the app logs the capture probe to the console after boot
+- Milestone 1 verification passed locally:
+  - fresh local D1 showed only frontier room `(0,0)`
+  - building from frontier opened `EditorScene` at `(0,0)` with `source: world`
+  - publishing `(0,0)` produced published room `(0,0)` plus four frontier neighbors
+  - loading `/?x=2&y=-1` restored map focus to `(2,-1)`
+  - missing adjacent published room blocked world-play traversal, kept the player in `(0,0)`, and only issued a single missing-room request until the player moved back inward
+  - after publishing `(1,0)`, crossing the right edge from `(0,0)` loaded room `(1,0)`
+  - `npm run build` passed after the world-shell changes
+- World-map / layout verification passed locally:
+  - world-map debug state showed published preview cache entries for visible published rooms
+  - zooming in on `/?x=0&y=-1` reduced radius from `8` to `7` and kept frontier build flow working
+  - DOM geometry check at `1440x900` confirmed sidebar `280px` wide on the left, game container on the right, and bottom bar pinned below both
+  - world-play traversal from `(0,0)` to `(1,0)` still worked after the preview/zoom/layout changes
+  - editing frontier room `(1,-1)`, saving a `forest` draft, returning to world, and re-entering now yields:
+    - world state `selectedState: "draft"` with `draftRooms: ["1,-1"]`
+    - world HUD text `Draft preview · background forest`
+    - editor state on re-entry `background: "forest"`, `backgroundLayerCount: 8`, and `hasBackgroundCamera: true`
+  - repeated the same loop at frontier room `(2,0)` with the same result
+  - `npm run build` passed after the draft-preview / background-lifecycle fix
+  - screenshot diagnostics matrix:
+    - plain Playwright `page.screenshot()` on `/?captureDebug=1` produced a correct non-black image
+    - forced `?renderer=webgl` and `?renderer=webgl&preserveDrawingBuffer=1` failed in this headless environment with `Cannot create WebGL context, aborting.`
+    - forced `?renderer=canvas&captureDebug=1` produced a correct image in the skill client
+    - `AUTO` mode in this environment resolves to Canvas, and `capture_debug_info()` showed valid non-black pixels plus a healthy PNG `toDataURL`
+    - despite that, the skill-client capture for `AUTO` still produced a black `shot-0.png`, which points to the client capture path rather than Phaser rendering
+- Started the first overworld-play prototype:
+  - added `src/scenes/OverworldPlayScene.ts`
+  - `WorldScene` `Play Room` now launches the stitched overworld scene instead of the room-by-room `PlayScene` world path
+  - the overworld scene loads a published world window around the selected room, keeps nearby rooms fully loaded, and keeps the rest as baked room previews
+  - camera now supports `inspect` and `follow` modes, with `C` toggling follow at the current zoom level
+  - bottom-bar controls now route `Back to World`, `Edit Room`, and `Fit` to the overworld scene when active
+  - room textures are baked from published room snapshots so the overworld can show backgrounds, terrain, and placed objects without building full live tilemaps for every visible room
+- Overworld prototype verification passed locally:
+  - `npm run build`
+  - browser flow `world -> Play Room -> overworld -> Back to World -> Play Room -> Edit Room` worked with no console or page errors
+  - debug state in overworld reported `scene: "overworld-play"`, `cameraMode: "inspect"` initially, then `cameraMode: "follow"` after pressing `C`
+  - moving right for ~600ms changed player X from `328` to `418`, confirming local player movement is live in the overworld prototype
+  - forced `?renderer=canvas` screenshots now capture the overworld scene correctly in this environment
+- Wiped local room data on user request:
+  - local D1 `rooms` count is now `0`
+  - local D1 `room_versions` count is now `0`
+  - browser `localStorage` room count was already `0`
+  - remote Cloudflare D1 was not touched because this shell does not currently have permission to query it (`7403`)
+- Merged the old world shell and stitched-room prototype into one user-facing overworld flow:
+  - `BootScene` now lands directly in `OverworldPlayScene`; the old `WorldScene` is no longer part of the main scene list
+  - overworld browse/test now share the same scene, with internal `browse` and `play` modes instead of separate map vs stitched-world scenes
+  - editor `Test Play` now wakes the overworld in `mode: 'play'` with the current draft room injected, and `Back to World` returns to overworld `mode: 'browse'`
+  - world HUD now owns `Play Room`, `Edit Room`, `Build Here`, jump, and zoom controls; the bottom bar is reduced to status + fit + zoom only
+  - editor world actions moved into the sidebar as `Back to World`, `Test Play`, `Save Draft`, and `Publish`
+  - overworld inspect mode now supports `Option`/`Alt` drag panning; in play mode the same gesture exits follow-cam and pans in inspect mode
+  - default overworld zoom now stays at the intended inspect zoom (`0.18x`) instead of auto-fitting the full loaded window on resize; `Fit` still performs the explicit full-window zoom-out
+- Single-overworld verification passed locally:
+  - `npm run build`
+  - boot now opens the unified overworld in browse mode with the world HUD visible
+  - jumping to a frontier room, clicking `Build Here`, then `Test Play` returns to the same overworld in `mode: "play"` with `selectedState: "draft"`
+  - pressing `C` in world test mode enters follow-cam, and `Option`/`Alt` drag switches back to `inspect`
+  - clicking `Edit Room` from overworld play reopens the editor for the same coordinates, and `Back to World` returns to overworld browse with the draft still visible
+  - sidebar/editor buttons and bottom-bar simplification verified in browser screenshots at `output/web-game/single-overworld-flow/*.png`
+- Added the first visual/camera polish pass focused on look, grid readability, and zoom feel:
+  - default background for `background: "none"` is now a black starfield in both the editor and stitched-room room previews via `src/visuals/starfield.ts`
+  - the UI shell was recolored away from the purple default into a black/bone/amber/cyan retro palette in `src/styles/main.css`
+  - overworld now renders a dedicated screen-space room grid overlay instead of relying on room-border strokes alone, so the lattice reads more consistently while zooming
+  - overworld and editor wheel zoom are both slower now and keep the cursor's world point anchored while zooming
+  - Phaser canvas background was changed to black so empty space matches the new starfield direction
+- Visual/camera verification passed locally:
+  - `npm run build`
+  - Playwright client capture at `output/web-game/visual-pass-client-3/shot-0.png`
+  - full-page screenshots at `output/web-game/visual-pass-flow/*.png` and `output/web-game/visual-pass-boot-2.png`
+  - state checks confirmed off-center wheel zoom changed both `zoom` and camera scroll in overworld (`0.18 -> 0.194`) and editor (`2.0 -> 2.16`), which verifies cursor-focused zoom rather than center-only zoom
+  - editor starfield/default room background and unified world test flow still worked after the visual pass with no console/page errors
+- Fixed the remaining overworld grid / zoom regressions after the first visual pass:
+  - overworld grid overlay now renders in world space with zoom-compensated line widths instead of trying to fake screen-space graphics, which fixes the broken half-screen line pattern seen at `Fit` zoom
+  - overworld wheel zoom now uses explicit world-point anchoring (`scroll = worldPoint - screen / zoom`) instead of the previous approximate method
+  - editor wheel zoom now uses the same explicit anchor math and clamps back to camera bounds after wheel zoom and panning
+  - editor camera now updates/parallax-clamps cleanly during pan + zoom so the starfield background stays aligned
+- Grid/zoom regression verification passed locally:
+  - `npm run build`
+  - full-page captures at `output/web-game/grid-zoom-fix-check/02-fit-world.png`, `output/web-game/grid-zoom-fix-check/03-world-wheel.png`, and `output/web-game/grid-zoom-fix-check/05-editor-wheel.png`
+  - overworld `Fit` now shows a coherent lattice at `0.10x` instead of the broken partial-grid artifact
+  - wheel zoom in overworld remained stable after `Fit` (`0.102 -> 0.110`) with controlled scroll changes instead of a jumpy recenter
+  - editor wheel zoom remained stable as well (`2.0 -> 2.16`) with no console/page errors during the same run
+- Tightened the zoom model and fixed the overworld backdrop regression:
+  - overworld zoom is now intentionally split by input: mouse wheel stays cursor-anchored, while the `+/-` buttons zoom toward the selected room in browse mode and the current room in play mode
+  - overworld HUD/bottom-bar copy now explains those zoom anchors directly so it is clear what the camera is targeting
+  - editor zoom now recenters on the room itself instead of the mouse pointer, keeping the room grid centered while zooming
+  - overworld starfield now renders through its own screen-space background camera instead of the zoomed world camera, so it covers the full viewport again while panning/zooming
+- Zoom/backdrop verification passed locally:
+  - `npm run build`
+  - required skill-client runs at `output/web-game/zoom-fix-world-initial/` and `output/web-game/zoom-fix-world-button/`
+  - direct Playwright wheel-validation captures at `output/web-game/zoom-fix-custom/`
+  - screenshots confirmed the starfield stays full-screen in overworld before and after zoom, button zoom recenters the selected room, overworld wheel zoom still anchors off-center, and editor wheel zoom keeps the room grid centered
+  - state checks confirmed overworld wheel zoom changed `zoom`/`camera` from `0.18 / (-2778,-848)` to `0.194 / (-2461,-1021)` and editor wheel zoom changed `zoom` from `2.0` to `2.16` with no console/page errors
+- Added an overworld zoom-debug path and switched inspect-mode wheel anchoring to raw canvas coordinates:
+  - `OverworldPlayScene` now listens to the canvas `wheel` DOM event directly instead of trusting Phaser's wheel-pointer coordinates
+  - `?zoomDebug=1` now enables an on-canvas debug marker/text block and logs `[zoom-debug]` payloads to the console
+  - `window.get_zoom_debug()` returns the latest recorded wheel anchor data for manual browser debugging
+- Zoom-debug verification passed locally:
+  - `npm run build`
+  - required skill-client capture at `output/web-game/zoom-debug-client/`
+  - direct Playwright wheel-debug capture at `output/web-game/zoom-debug-wheel/`
+  - captured debug payload showed the likely root cause clearly: raw canvas wheel position `screen.x = 780` while Phaser's pointer still reported `phaserPointer.x = 500` for the same wheel event
+  - no console/page errors during the zoom-debug run
+- Fixed the remaining overworld cursor-zoom drift and the world-mode canvas sizing bug:
+  - switching app modes now triggers an explicit layout re-measure via `src/ui/appMode.ts`, so the Phaser canvas resizes to the actual world/editor container instead of staying at the old editor-width canvas
+  - the real inspect-camera bug was coordinate-space math: Phaser camera `scrollX/scrollY` are not the world-view top-left when zoomed, so the old zoom/constrain code was anchoring and clamping in the wrong space
+  - `OverworldPlayScene` now computes wheel-anchor world points and post-zoom scroll using the camera viewport/display math Phaser actually uses, and its inspect-camera clamp now matches Phaser's own bounds math
+  - browse-mode boot/resize now lands with the selected room properly centered again (`camera.scrollX = -400`, `worldView.x = -3680` at `0.18x` on a `1440x864` canvas, instead of the broken left-bound boot state)
+- Final zoom verification passed locally:
+  - `npm run build`
+  - required skill-client captures at `output/web-game/zoom-fix-client-boot/` and `output/web-game/zoom-fix-client-editor/`
+  - direct Playwright captures at `output/web-game/zoom-fix-custom-2/` and `output/web-game/zoom-fix-editor-wheel/`
+  - geometry probe confirmed overworld world-mode boot now uses a full-width Phaser canvas that matches `#game-container` exactly (`1440x864`)
+  - wheel-debug probes at multiple screen positions showed exact cursor anchoring in overworld (`anchorWorldBefore === anchorWorldAfter` at `400,240`, `720,432`, `948,540`, and `1040,620`)
+  - editor still entered cleanly from world mode, and editor wheel zoom continued to work with no console/page errors
+- Applied the same corrected camera-space logic to the editor camera:
+  - `EditorScene` now recenters the room through a shared `centerCameraOnRoom()` path instead of duplicating `setZoom` / `centerOn` / clamp logic
+  - editor camera clamp now uses Phaser scroll-space math (`displayWidth/displayHeight` aware), matching the overworld fix instead of treating `scrollX/scrollY` like world-view top-left coordinates
+  - editor now recenters cleanly on Phaser resize events, which keeps the room framing stable when app-mode/layout changes resize the canvas
+- Editor-centering verification passed locally:
+  - `npm run build`
+  - required skill-client captures at `output/web-game/editor-center-client-boot/` and `output/web-game/editor-center-client-editor/`
+  - direct Playwright captures at `output/web-game/editor-center-check/`
+  - editor state stayed centered across wheel zoom (`camera.scrollX = -260`, `camera.scrollY = -256` before and after wheel while zoom changed `2.0 -> 2.14`)
+  - overworld boot still rendered correctly after the editor-camera change, with no console/page errors in the same run
+- Removed the unused editor sidebar `Selected` preview block:
+  - deleted the `tile-preview` section from `index.html` to free vertical space for the tileset/palette area
+  - left the preview-rendering code in place because it already safely no-ops when the preview canvas is absent, which kept the change isolated to layout only
+- Sidebar cleanup verification passed locally:
+  - `npm run build`
+  - required skill-client captures at `output/web-game/remove-selected-client-boot/` and `output/web-game/remove-selected-client-editor/`
+  - direct full-page editor capture at `output/web-game/remove-selected-custom/editor-full.png`
+  - layout probe confirmed `selectionPreviewExists: false`, with the editor sidebar still filling the full `864px` height and the palette container visible at `331px` tall
+- Fixed a world-to-editor room mismatch for published rooms like `(0,0)`:
+  - root cause: the editor always loaded `record.draft`, even when the visible overworld room was a published snapshot and the saved draft was still the default blank room
+  - `OverworldPlayScene` now passes the currently visible room snapshot into `EditorScene` when editing from the overworld
+  - `EditorScene` now falls back to the passed snapshot, or to `record.published`, when `record.draft` is blank, so editing starts from the room content the player actually clicked
+  - added `isRoomSnapshotBlank()` in the shared room model to make that fallback explicit instead of guessing from version numbers
+- Room-mismatch verification passed locally:
+  - `npm run build`
+  - required skill-client captures at `output/web-game/edit-mismatch-client-boot/` and `output/web-game/edit-mismatch-client-editor/`
+  - direct repro capture at `output/web-game/edit-mismatch-custom/`
+  - repro used a blank `draft` plus non-blank `published` room for `0,0`; overworld state stayed `selectedState: "published"` and the editor opened with the published terrain instead of an empty room
+- Added the first real auth slice on Cloudflare Workers + D1:
+  - created D1 auth tables for `users`, `magic_link_tokens`, `sessions`, and `wallet_challenges` in `migrations/0001_create_auth.sql`
+  - extended the Worker with `/api/auth/session`, `/api/auth/request-link`, `/api/auth/verify`, `/api/auth/logout`, `/api/auth/wallet/challenge`, and `/api/auth/wallet/verify`
+  - added secure session-cookie handling (`ep_session`) plus shared auth response types in `src/auth/model.ts`
+  - email auth now sends via Resend when `RESEND_API_KEY` is configured, and falls back to a returned debug magic link in local/dev mode when `AUTH_DEBUG_MAGIC_LINKS=1`
+  - wallet auth now uses Reown AppKit + Ethers on the client and a signed nonce challenge verified in the Worker
+  - Vite now reads repo-root `env.local`, so the Reown/WalletConnect project ID can live there instead of `.env.local`
+  - frontend auth UI now lives in `index.html` / `src/styles/main.css` / `src/auth/client.ts`, with `window.get_auth_debug_state()` exposed for diagnostics
+- Auth verification passed locally:
+  - `npm run cf:d1:migrate:local`
+  - `npm run build`
+  - required skill-client capture at `output/web-game/auth-client-boot-2/`
+  - direct email auth run at `output/web-game/auth-manual-2/`, which generated a debug magic link and ended signed in as `jonathan@example.com`
+  - direct wallet modal probe at `output/web-game/wallet-manual-2/`, which confirmed `w3m-modal` mounted with class `open` and no console/page errors
+  - room/world fetches now include `credentials: 'include'`, so future ownership/claim rules can rely on the same session cookie path
+- Added a backend-first testing/reset mode for repeated clean-slate runs:
+  - browser room/world persistence now defaults to `remote` instead of dev-only `auto`, so the game no longer silently falls back to `localStorage` unless `VITE_ROOM_STORAGE_BACKEND` is explicitly set to `local` or `auto`
+  - added a dev/test Worker route at `/api/test/reset`, guarded by `ENABLE_TEST_RESET=1`, which deletes `rooms`, `room_versions`, `users`, `sessions`, `magic_link_tokens`, and `wallet_challenges`, and clears the auth session cookie
+  - added a `Reset Test Data` button to the auth panel, shown in local Vite dev (or when `VITE_ENABLE_TEST_RESET=1`), which confirms, calls the reset route, clears stale browser room keys, and reloads the app
+  - added `src/persistence/browserStorage.ts` so room-cache keys are shared and can be cleared intentionally instead of relying on duplicate string literals
+  - added `npm run dev:api:remote` so local Vite can point at a real remote Cloudflare Worker/D1 session when we want to test against the hosted backend rather than Wrangler's local D1
+- Reset-mode verification passed locally:
+  - `npm run build`
+  - required skill-client capture at `output/web-game/test-reset-client-final/`
+  - direct reset flow capture at `output/web-game/test-reset-manual/`
+  - pre-reset state showed `selectedState: "published"` with `publishedRoomsInWindow: 3` and the `Reset Test Data` button visible
+  - post-reset state showed `selectedState: "frontier"` with `publishedRoomsInWindow: 0`
+  - manual local-storage probe confirmed `everybodys-platformer:room:*` keys were removed after reset
+  - auth debug state now reports `storageBackend: "remote"` and `testResetEnabled: true`
+- Fixed the overworld inspect-camera's fully-zoomed-out centering regression:
+  - root cause had two parts: our custom inspect clamp still inherited Phaser's built-in bounds clamp, and Phaser intentionally left-aligns the world when the visible viewport is larger than the bounds
+  - `OverworldPlayScene` inspect mode now disables Phaser bounds clamping and uses the scene's manual constrain path instead, while follow-cam still keeps Phaser bounds enabled
+  - the manual inspect clamp now centers the loaded world on any axis where the viewport is larger than the current window, which keeps the seed room / `0,0` centered at `Fit` and at the minimum zoom
+- Overworld centering verification passed locally:
+  - `npm run build`
+  - required skill-client capture at `output/web-game/overworld-fit-center-fix-client/`
+  - direct min-zoom capture at `output/web-game/overworld-minzoom-center-fix/`
+  - off-center cursor-wheel anchor probe at `output/web-game/overworld-cursor-anchor-post-fix/`
+  - `Fit` state now reports centered inspect scroll `(-320, -166)` at `0.106x` instead of the previous left-aligned value
+  - true min zoom now reports centered inspect scroll `(-480, -256)` at `0.082x`, and the screenshot shows room `0,0` centered instead of parked in the upper-left quadrant
+  - post-fix wheel debug confirmed cursor anchoring still holds in browse inspect mode: `anchorWorldBefore === anchorWorldAfter` at screen point `(1140, 520)` while zoom changed `0.18 -> 0.194`
+- Fixed DOM text-input focus stealing for auth / HUD typing:
+  - root cause was Phaser keyboard capture plus active-scene keyboard handlers staying live while DOM inputs were focused
+  - added `src/ui/keyboardFocus.ts` and wired `src/main.ts` to sync keyboard state on `focusin`, `focusout`, initial boot, and app-mode changes
+  - when a text input/select/textarea/contenteditable element is focused, Phaser now stops calling `preventDefault` on captured keys and disables active-scene keyboard plugins, resetting pressed keys so gameplay / editor shortcuts do not leak into typing
+- Keyboard-focus verification passed locally:
+  - `npm run build`
+  - required skill-client capture at `output/web-game/auth-input-focus-client/`
+  - direct typing verification at `output/web-game/auth-input-focus-manual/`
+  - browse-mode auth input now accepts `wasd@example.com`
+  - editor-mode auth input now accepts `brgep@example.com` while state stays `scene: "editor"`, `activeTool: "pencil"`, and `isPlaying: false`
+  - world test-play auth input now accepts `wasd@example.com` while player `x` remains unchanged and `velocityX` stays `0`, confirming `A/D` movement does not leak through focused typing
+- Fixed multi-tile palette stamps so transparent cells no longer place solid terrain:
+  - `TileSelection` now carries an `occupiedMask`, built from per-tile alpha analysis of the tileset image instead of assuming every cell in the selected rectangle is real terrain
+  - the editor now skips masked-out cells during pencil stamping, and single-tile rect/fill tools now no-op when the active selection resolves to an empty tile
+  - the tile picker now marks skipped cells with an `X` overlay and shows the occupied count in the selection label, so irregular stamps read as `6x4, 17 tiles` instead of a misleading solid `6x4`
+- Tightened the stamp occupancy heuristic so tiny decorative overhangs do not count as filled cells:
+  - palette occupancy now requires at least `24` opaque pixels in a `16x16` tile before the tile is considered part of a multi-tile stamp
+  - this drops small stray rocks / grass overhang fragments that were still slipping through the initial `any alpha > 0` mask
+- Tile-stamp mask verification passed locally:
+  - `npm run build`
+  - required skill-client capture at `output/web-game/tile-picker-empty-mask-client/`
+  - direct browser verification at `output/web-game/tile-picker-empty-mask-check/`
+  - selecting the large forest `6x4` stamp now displays only `17` occupied cells in the picker
+  - stamping that selection once into a blank frontier room at `(1,0)` saved exactly `17` terrain tiles to the room draft, confirming the transparent cells were skipped instead of becoming collidable terrain
+- Tile-stamp threshold verification passed locally:
+  - `npm run build`
+  - required skill-client capture at `output/web-game/tile-picker-threshold-client/`
+  - direct browser verification at `output/web-game/tile-picker-threshold-check/`
+  - the same forest `6x4` stamp now reads `14 tiles` instead of `17`, with the sparse top-row overhang cells correctly marked empty in the picker
+  - stamping that selection once into a blank frontier room at `(0,1)` saved exactly `14` terrain tiles to the room draft, confirming the minimum-opaque-area cutoff filtered those tiny decorative cells out of placement
+- Reworked editor room presentation so backgrounds stay inside the active room and neighboring published rooms can be inspected around it:
+  - extracted the overworld room-preview canvas renderer into `src/visuals/roomSnapshotTexture.ts` so both scenes can build the same room textures
+  - editor backgrounds are no longer drawn by a separate full-screen background camera; they now render as room-sized world-space layers, which confines the selected background art to the room bounds instead of filling the entire edit viewport
+  - editor now loads published rooms from a `radius: 1` world window around the active coordinates and draws them as static preview images with faint borders, so zooming out / panning reveals surrounding rooms without making them editable
+  - editor camera bounds now cover the local `3x3` room neighborhood around the active room to support that zoomed-out inspection
+- Editor room-bounds / neighbor-preview verification passed locally:
+  - `npm run build`
+  - required skill-client capture at `output/web-game/editor-room-bounded-background-client/`
+  - direct browser verification at `output/web-game/editor-room-bounded-background-check/`
+  - entering editor for published room `(0,0)` now reports `hasBackgroundCamera: false`, confirming the old full-screen background-camera path is no longer active
+  - the zoomed-out editor capture shows the active room background confined to the room rectangle, black space outside the room, and the published top neighbor `(0,-1)` visible as a static preview above it at `zoom: 0.79`
+
+## Current Notes
+
+- Automated browser screenshots from this environment were black, so visual verification was limited to local/manual checking.
+- Automated browser screenshots are still black in this environment, but `window.render_game_to_text` now provides reliable scene-state verification for world/editor/play flows.
+- The current best screenshot workaround in this environment is a plain Playwright `page.screenshot()` or forcing `?renderer=canvas` during diagnostics.
+- Automated browser screenshots are still black in this environment, so room preview visuals still need a real manual browser check despite the state/DOM verification.
+- The unified overworld flow is now the main navigation path, but `src/scenes/WorldScene.ts` and the old isolated `PlayScene` world-return path still exist on disk as legacy code and should be cleaned up once the new loop feels settled.
+- The new overworld grid is much closer, but it still wants a real human visual pass in a live browser to judge final line weight/contrast at multiple zoom levels; headless screenshots are useful but not the last word here.
+- The overworld prototype currently simulates terrain traversal only; placed objects are rendered into room textures but hazards, enemies, collectibles, and multiplayer presence are not yet live in overworld play.
+- A process was seen listening on `localhost:3333` during this session, but it was not started or managed by Codex in this turn.
+- `PRD.md` is the main product context file.
+- The reliable local runtime for Wrangler on this machine is `nvm use 20.19.4`; `.nvmrc` now pins that.
+- The shell startup still appears to have a broken `NVM_DIR`/link setup, which is why bare `npx wrangler ...` was misleading earlier.
+- Wrangler auto-provisioned the D1 database during deploy, but did not write the `database_id` back into `wrangler.jsonc`; that ID was added manually afterward so remote migrations and future deploys are stable.
+- In development, the frontend still runs on Vite (`npm run dev`) and proxies `/api` to `wrangler dev` on `127.0.0.1:8787`.
+- Cloudflare/Wrangler now has a real auth foundation:
+  - one Worker still serves both static assets and `/api/*`, now including auth/session routes backed by D1
+  - repo-root `env.local` is now a supported frontend config source for `VITE_REOWN_PROJECT_ID` / `VITE_WALLET_CONNECT_PROJECT_ID`
+  - local Worker auth config comes from `.dev.vars`; production still needs Wrangler secrets/vars for `RESEND_API_KEY`, `AUTH_EMAIL_FROM`, and `APP_BASE_URL`
+  - the frontend can now authenticate by email or wallet, but room ownership, creator binding, claim rules, and wallet-first mint flows are not enforced yet
+  - important workflow note: the app now defaults to remote API-backed room/world state, but `npm run dev:api` still uses Wrangler's local D1 while `npm run dev:api:remote` hits the real remote Worker/D1
+  - the new reset button wipes whichever backend the current `/api` target is pointing at, so use `dev:api:remote` intentionally before clearing shared remote test data
+
+## Known Gaps Vs PRD
+
+- Milestone 1 world shell is in place, and the main navigation now runs through a single overworld scene, but the prototype is still far from the PRD's MMO-style shared world.
+- The overworld scene does not yet stream very large visible windows or apply true simulation/rendering LOD for hundreds of rooms.
+- Email auth and wallet-connect scaffolding now exist, but room ownership/claim auth, multiplayer ghosts, minimap, goals, and leaderboards are still missing.
+- Overworld play does not yet simulate placed hazards/enemies/collectibles; those are currently visual-only in the stitched-room prototype.
+- Player is still a placeholder rectangle; final character art is not sourced yet.
+- Production email delivery still depends on configuring a real Resend key/domain; local debug mode currently uses returned magic links instead of sending mail.
+- Wallet connect mounts and starts the sign-in flow locally, but a full real-wallet signature pass still needs a headed/manual browser check.
+
+## Likely Next Priorities
+
+- Wire auth into actual ownership and creator rules:
+  - attach `creator_id` / owner identity to room records and published versions
+  - require auth for saving/publishing rooms that should belong to a user
+  - make overwrite/edit behavior explicit when a signed-in user opens a published room with a stale or blank draft
+  - add a small “account” / “linked wallet” status path in the UI before tying it to minting
+- Decide whether the test-reset route should stay local/dev-only forever or grow a stronger token-based guard for shared remote staging use.
+- Keep pushing the overworld prototype:
+  - add true near/far LOD so far rooms stay as thumbnails while only nearby rooms keep live collisions
+  - add streaming as the inspect camera pans, not just as the player changes rooms
+  - add lightweight player markers/ghosts so the overworld starts to feel inhabited
+  - decide whether free-cam should pause local gameplay or allow the player to keep moving offscreen
+- Then make overworld play more faithful:
+  - simulate placed hazards/enemies/collectibles in nearby loaded rooms
+  - add authored spawn points and room goals to `RoomSnapshot`
+- Keep minimap, wallet/minting, and broader multiplayer after the overworld model feels right.

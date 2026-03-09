@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Everybody's Platformer</title>
+  <link rel="stylesheet" href="/src/styles/main.css">
+</head>
+<body>
+  <div id="auth-panel">
+    <button id="menu-toggle" type="button" aria-label="Menu">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </button>
+    <div id="menu-body">
+      <div class="auth-header">
+        <span class="auth-title">Account</span>
+        <span id="auth-identity" class="auth-identity">Guest</span>
+      </div>
+      <div class="auth-row">
+        <input id="auth-email-input" type="email" placeholder="you@example.com" spellcheck="false" />
+        <button id="btn-auth-email" class="bar-btn bar-btn-small">Email Link</button>
+      </div>
+      <div class="auth-row">
+        <button id="btn-auth-wallet" class="bar-btn">Wallet Connect</button>
+        <button id="btn-auth-logout" class="bar-btn hidden">Logout</button>
+      </div>
+      <div class="auth-row">
+        <button id="btn-test-reset" class="bar-btn bar-btn-danger hidden">Reset Test Data</button>
+      </div>
+      <a id="auth-debug-link" class="auth-debug-link hidden"></a>
+      <div id="auth-status" class="auth-status">Guest mode.</div>
+    </div>
+  </div>
+  <div id="app">
+    <!-- Left Sidebar -->
+    <div id="sidebar">
+      <!-- Tools -->
+      <div class="sidebar-section">
+        <div class="section-label">Tools</div>
+        <div id="tools">
+          <button class="tool-btn active" data-tool="pencil" title="Draw (B)">
+            <span class="tool-icon">&#9998;</span>
+            <span class="tool-label">Draw</span>
+          </button>
+          <button class="tool-btn" data-tool="rect" title="Rectangle (R)">
+            <span class="tool-icon">&#9634;</span>
+            <span class="tool-label">Rect</span>
+          </button>
+          <button class="tool-btn" data-tool="fill" title="Fill (G)">
+            <span class="tool-icon">&#9687;</span>
+            <span class="tool-label">Fill</span>
+          </button>
+          <button class="tool-btn" data-tool="eraser" title="Erase (E)">
+            <span class="tool-icon">&#9003;</span>
+            <span class="tool-label">Erase</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Layers -->
+      <div class="sidebar-section">
+        <div class="section-label">Layers</div>
+        <div id="layers">
+          <button class="layer-btn" data-layer="foreground">Foreground</button>
+          <button class="layer-btn active" data-layer="terrain">Terrain</button>
+          <button class="layer-btn" data-layer="background">Background</button>
+        </div>
+      </div>
+
+      <!-- Background Selector -->
+      <div class="sidebar-section">
+        <div class="section-label">Background</div>
+        <select id="background-select">
+          <option value="none">None</option>
+          <option value="forest">Forest</option>
+          <option value="dark_forest">Dark Forest</option>
+          <option value="grassland">Grassland</option>
+          <option value="mountains">Mountains</option>
+          <option value="meadow">Meadow</option>
+          <option value="aurora">Aurora</option>
+          <option value="cave">Cave</option>
+        </select>
+      </div>
+
+      <!-- Palette Mode Toggle -->
+      <div class="sidebar-section">
+        <div class="palette-tabs">
+          <button class="palette-tab active" data-mode="tiles">Tiles</button>
+          <button class="palette-tab" data-mode="objects">Objects</button>
+        </div>
+      </div>
+
+      <!-- Tileset Selector (visible in tiles mode) -->
+      <div class="sidebar-section" id="tileset-section">
+        <div class="section-label">Tileset</div>
+        <select id="tileset-select">
+          <option value="forest">Forest</option>
+          <option value="desert">Desert</option>
+          <option value="dirt">Dirt</option>
+          <option value="lava">Lava</option>
+          <option value="snow">Snow</option>
+          <option value="water">Water</option>
+        </select>
+      </div>
+
+      <!-- Tile Palette (visible in tiles mode) -->
+      <div class="sidebar-section palette-section" id="tile-palette-section">
+        <div class="section-label">Tiles <span id="selection-info" class="selection-info"></span></div>
+        <div id="palette-container">
+          <canvas id="palette-canvas"></canvas>
+        </div>
+        <div class="palette-hint">Click to select. Drag to select multiple.</div>
+      </div>
+
+      <!-- Object Palette (visible in objects mode) -->
+      <div class="sidebar-section palette-section hidden" id="object-palette-section">
+        <div class="section-label">Objects</div>
+        <div class="object-category-tabs">
+          <button class="obj-cat-tab active" data-category="all">All</button>
+          <button class="obj-cat-tab" data-category="collectible">Collect</button>
+          <button class="obj-cat-tab" data-category="enemy">Enemy</button>
+          <button class="obj-cat-tab" data-category="hazard">Hazard</button>
+          <button class="obj-cat-tab" data-category="decoration">Deco</button>
+          <button class="obj-cat-tab" data-category="interactive">Other</button>
+        </div>
+        <div id="object-grid"></div>
+        <div class="palette-hint">Click an object, then click on the canvas to place.</div>
+      </div>
+
+      <div class="sidebar-section" id="editor-actions">
+        <div class="section-label">Actions</div>
+        <div class="editor-action-stack">
+          <button id="btn-back-to-world" class="bar-btn">Back to World</button>
+          <button id="btn-test-play" class="bar-btn">Test Play</button>
+          <button id="btn-save-draft" class="bar-btn">Save Draft</button>
+          <button id="btn-publish-room" class="bar-btn">Publish</button>
+          <button id="btn-room-history" class="bar-btn">History</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Game Canvas -->
+    <div id="game-container">
+      <div id="world-hud" class="hidden">
+        <div class="world-hud-title">World</div>
+        <div class="world-hud-row">
+          <span class="world-hud-label">Selected</span>
+          <span id="world-selected-coords" class="world-hud-value">0,0</span>
+          <span id="world-selected-state" class="world-state-pill">Empty</span>
+        </div>
+        <div id="world-selected-meta" class="world-hud-meta">No adjacent published room</div>
+        <div class="world-hud-row">
+          <input id="world-jump-input" type="text" value="0,0" spellcheck="false" />
+          <button id="btn-world-jump" class="bar-btn bar-btn-small">Jump</button>
+        </div>
+        <div class="world-hud-row">
+          <span class="world-hud-label">View</span>
+          <button id="btn-world-zoom-in" class="bar-btn bar-btn-small">+</button>
+          <button id="btn-world-zoom-out" class="bar-btn bar-btn-small">-</button>
+          <span id="world-zoom-label" class="world-hud-value">0.18x</span>
+        </div>
+        <div class="world-hud-row">
+          <button id="btn-world-play" class="bar-btn bar-btn-small" disabled>Play Room</button>
+          <button id="btn-world-edit" class="bar-btn bar-btn-small" disabled>Edit Room</button>
+          <button id="btn-world-build" class="bar-btn bar-btn-small" disabled>Build Here</button>
+        </div>
+        <div id="world-status" class="world-hud-status">Published rooms can play. Frontier rooms can build.</div>
+      </div>
+    </div>
+
+    <!-- Bottom Bar -->
+    <div id="bottom-bar">
+      <div class="bar-left">
+        <span id="room-coords">Room (0, 0)</span>
+        <span class="separator">|</span>
+        <span id="cursor-coords">Tile: -, -</span>
+      </div>
+      <div class="bar-center"></div>
+      <div class="bar-right">
+        <span id="room-save-status">Draft ready.</span>
+        <button id="btn-fit-screen" class="bar-btn bar-btn-small">Fit</button>
+        <span id="zoom-level">Zoom: 2x</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="room-history-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel" role="dialog" aria-modal="true" aria-labelledby="room-history-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Room History</div>
+          <h2 id="room-history-title" class="history-modal-title">Versions</h2>
+          <div id="room-history-meta" class="history-modal-meta">No published versions yet.</div>
+        </div>
+        <button id="btn-room-history-close" class="bar-btn bar-btn-small">Close</button>
+      </div>
+      <div id="room-history-error" class="history-modal-error hidden"></div>
+      <div id="room-history-list" class="history-version-list"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
