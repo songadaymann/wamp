@@ -55,6 +55,45 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Remote rollout verification on March 11, 2026:
+  - pushed current repo state to `origin/main` at commit `8bc87ae` (`Ship world progression, auth, minting, and multiplayer polish`)
+  - remote Worker deployed successfully to:
+    - `https://everybodys-platformer.novox-robot.workers.dev`
+  - remote D1 migrations are fully up to date (`npm run cf:d1:migrate:remote` -> `No migrations to apply!`)
+  - PartyKit required an explicit redeploy of `partykit/presenceServer.ts`; after that:
+    - `https://everybodys-platformer-presence.songadaymann.partykit.dev` returned `404` at root instead of `522`
+    - direct websocket connect to `/parties/main/...` opened successfully
+  - added reusable live rollout checker at `scripts/remote_rollout_check.mjs`
+    - authenticates two real remote wallet-backed accounts
+    - verifies draft save, publish, frontier claim cap, room/global leaderboard writes, and PartyKit presence traffic
+    - writes summary artifact to `output/remote-rollout-check/summary.json`
+    - cleans up its own remote test users/rooms/runs/points afterward
+  - live remote API results from that checker:
+    - account A published `0,0` successfully
+    - account A session dropped to `roomClaimsRemainingToday = 0` immediately after publish
+    - account B could still save a draft on account A's unminted room
+    - account B could claim adjacent frontier room `1,0`
+    - account B's second same-day new-room claim returned `429`
+    - room leaderboard write succeeded for a completed `reach_exit` run
+    - global leaderboard points updated as expected:
+      - publisher/runner account: `450`
+      - second frontier claimant: `300`
+  - important remote finding:
+    - room minting is **not configured** on the remote Worker right now
+    - both `POST /api/rooms/:id/mint/prepare` checks returned `503` with `Room minting is not configured on this backend.`
+    - mint/edit-gating on the real remote environment cannot be fully tested until the remote mint env is configured
+  - important data cleanup:
+    - found and removed an orphaned remote published room at `98,98` (no claimer, no publishing user, created `2026-03-08T03:32:34.863Z`)
+    - that orphaned row was breaking the frontier rule by making the world look non-empty while the visible center was empty
+  - post-check cleanup confirmed remote DB returned to empty test state:
+    - `rooms = 0`
+    - `room_versions = 0`
+    - `users = 0`
+    - `sessions = 0`
+    - `room_runs = 0`
+    - `user_stats = 0`
+    - `point_events = 0`
+
 - PRD sync pass:
   - updated `PRD.md` to match the actual repo instead of the older single-room / future-systems framing
   - captured current shipped state more accurately:
