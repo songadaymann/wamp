@@ -3,7 +3,6 @@ import {
   cloneRoomSnapshot,
   createRoomVersionRecord,
   createDefaultRoomRecord,
-  DEFAULT_ROOM_ID,
   isRoomMinted,
   normalizeRoomRecord,
   type RoomVersionRecord,
@@ -13,6 +12,10 @@ import {
   type RoomSnapshot,
 } from './roomModel';
 import { ROOM_STORAGE_PREFIX } from './browserStorage';
+import type {
+  RoomMintConfirmRequestBody,
+  RoomMintPrepareResponse,
+} from '../mint/roomOwnership';
 
 export * from './roomModel';
 
@@ -21,6 +24,12 @@ export interface RoomRepository {
   saveDraft(room: RoomSnapshot): Promise<RoomRecord>;
   publish(room: RoomSnapshot): Promise<RoomRecord>;
   revert(roomId: string, coordinates: RoomCoordinates, targetVersion: number): Promise<RoomRecord>;
+  prepareMint(roomId: string, coordinates: RoomCoordinates): Promise<RoomMintPrepareResponse>;
+  confirmMint(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    request: RoomMintConfirmRequestBody
+  ): Promise<RoomRecord>;
 }
 
 function getStorageKey(roomId: string): string {
@@ -43,8 +52,10 @@ function parseStoredRecord(
 
 function computeLocalPermissions(record: RoomRecord): RoomRecord['permissions'] {
   return {
+    canSaveDraft: !isRoomMinted(record),
     canPublish: !isRoomMinted(record),
     canRevert: !isRoomMinted(record) && record.permissions.canRevert,
+    canMint: !isRoomMinted(record) && record.permissions.canMint,
   };
 }
 
@@ -86,6 +97,8 @@ class LocalRoomRepository implements RoomRepository {
       mintedChainId: existing.mintedChainId,
       mintedContractAddress: existing.mintedContractAddress,
       mintedTokenId: existing.mintedTokenId,
+      mintedOwnerWalletAddress: existing.mintedOwnerWalletAddress,
+      mintedOwnerSyncedAt: existing.mintedOwnerSyncedAt,
       permissions: computeLocalPermissions(existing),
     };
 
@@ -139,6 +152,8 @@ class LocalRoomRepository implements RoomRepository {
       mintedChainId: existing.mintedChainId,
       mintedContractAddress: existing.mintedContractAddress,
       mintedTokenId: existing.mintedTokenId,
+      mintedOwnerWalletAddress: existing.mintedOwnerWalletAddress,
+      mintedOwnerSyncedAt: existing.mintedOwnerSyncedAt,
       permissions: computeLocalPermissions(existing),
     };
 
@@ -196,12 +211,30 @@ class LocalRoomRepository implements RoomRepository {
       mintedChainId: existing.mintedChainId,
       mintedContractAddress: existing.mintedContractAddress,
       mintedTokenId: existing.mintedTokenId,
+      mintedOwnerWalletAddress: existing.mintedOwnerWalletAddress,
+      mintedOwnerSyncedAt: existing.mintedOwnerSyncedAt,
       permissions: computeLocalPermissions(existing),
     };
 
     localStorage.setItem(getStorageKey(roomId), JSON.stringify(nextRecord));
     return cloneRoomRecord(nextRecord);
   }
+
+  async prepareMint(_roomId: string, _coordinates: RoomCoordinates): Promise<RoomMintPrepareResponse> {
+    throw new Error('Minting requires the remote API backend.');
+  }
+
+  async confirmMint(
+    _roomId: string,
+    _coordinates: RoomCoordinates,
+    _request: RoomMintConfirmRequestBody
+  ): Promise<RoomRecord> {
+    throw new Error('Minting requires the remote API backend.');
+  }
+}
+
+export function createLocalRoomRepository(): RoomRepository {
+  return new LocalRoomRepository();
 }
 
 class RoomApiError extends Error {
@@ -287,7 +320,40 @@ class ApiRoomRepository implements RoomRepository {
     );
   }
 
-  private async request(path: string, init?: RequestInit): Promise<RoomRecord> {
+  async prepareMint(roomId: string, coordinates: RoomCoordinates): Promise<RoomMintPrepareResponse> {
+    const params = new URLSearchParams({
+      x: String(coordinates.x),
+      y: String(coordinates.y),
+    });
+
+    return this.request<RoomMintPrepareResponse>(
+      `/api/rooms/${encodeURIComponent(roomId)}/mint/prepare?${params.toString()}`,
+      {
+        method: 'POST',
+      }
+    );
+  }
+
+  async confirmMint(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    request: RoomMintConfirmRequestBody
+  ): Promise<RoomRecord> {
+    const params = new URLSearchParams({
+      x: String(coordinates.x),
+      y: String(coordinates.y),
+    });
+
+    return this.request<RoomRecord>(
+      `/api/rooms/${encodeURIComponent(roomId)}/mint/confirm?${params.toString()}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }
+    );
+  }
+
+  private async request<T>(path: string, init?: RequestInit): Promise<T> {
     const headers = new Headers(init?.headers);
 
     if (init?.body && !headers.has('Content-Type')) {
@@ -321,8 +387,12 @@ class ApiRoomRepository implements RoomRepository {
       );
     }
 
-    const data = (await response.json()) as RoomRecord;
-    return cloneRoomRecord(data);
+    const data = (await response.json()) as T;
+    if (isRoomRecordResponse(data)) {
+      return cloneRoomRecord(data) as T;
+    }
+
+    return data;
   }
 
   private async withFallback(
@@ -357,7 +427,7 @@ class ApiRoomRepository implements RoomRepository {
 
 export function createRoomRepository(): RoomRepository {
   const backend = getRoomStorageBackend();
-  const localRepository = new LocalRoomRepository();
+  const localRepository = createLocalRoomRepository();
 
   if (backend === 'local') {
     return localRepository;
@@ -366,5 +436,19 @@ export function createRoomRepository(): RoomRepository {
   return new ApiRoomRepository(
     getApiBaseUrl(),
     backend === 'auto' ? localRepository : null
+  );
+}
+
+export function isRoomApiError(error: unknown): error is RoomApiError {
+  return error instanceof RoomApiError;
+}
+
+function isRoomRecordResponse(value: unknown): value is RoomRecord {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      'draft' in value &&
+      'versions' in value &&
+      'permissions' in value
   );
 }

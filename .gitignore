@@ -1,7 +1,12 @@
 node_modules/
 dist/
 .wrangler/
+.partykit/
 output/
+test-results/
+contracts/cache/
+contracts/out/
+contracts/broadcast/
 
 .DS_Store
 

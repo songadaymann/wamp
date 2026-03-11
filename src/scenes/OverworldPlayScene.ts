@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { playSfx } from '../audio/sfx';
+import { SceneFxController } from '../fx/controller';
 import {
   getObjectById,
   type GameObjectConfig,
@@ -6,7 +8,6 @@ import {
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
   ROOM_WIDTH,
-  TILESETS,
   TILE_SIZE,
 } from '../config';
 import { getFocusedCoordinatesFromUrl, setFocusedCoordinatesInUrl } from '../navigation/worldNavigation';
@@ -20,7 +21,9 @@ import {
 import { createWorldRepository } from '../persistence/worldRepository';
 import {
   getOrthogonalNeighbors,
-  isWithinWorldWindow,
+  type WorldChunkBounds,
+  type WorldChunkWindow,
+  type WorldRoomBounds,
   type WorldRoomSummary,
   type WorldWindow,
 } from '../persistence/worldModel';
@@ -28,13 +31,45 @@ import {
   RETRO_COLORS,
   ensureStarfieldTexture,
 } from '../visuals/starfield';
-import { buildRoomSnapshotTexture, buildRoomTextureKey } from '../visuals/roomSnapshotTexture';
+import {
+  DEFAULT_PLAYER_ANIMATION_KEYS,
+  DEFAULT_PLAYER_IDLE_FRAME,
+  DEFAULT_PLAYER_IDLE_TEXTURE_KEY,
+  DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
+  type DefaultPlayerAnimationState,
+} from '../player/defaultPlayer';
+import { ROOM_GOAL_LABELS, type GoalMarkerPoint } from '../goals/roomGoals';
+import {
+  createGoalMarkerFlagSprite,
+  type GoalMarkerFlagVariant,
+} from '../goals/markerFlags';
 import { setAppMode } from '../ui/appMode';
+import { getAuthDebugState } from '../auth/client';
+import { createRunRepository } from '../runs/runRepository';
+import {
+  type WorldPresenceIdentity,
+  type WorldPresenceSnapshot,
+  type WorldPresenceClient,
+} from '../presence/worldPresence';
+import {
+  OverworldGoalRunController,
+  type GoalRunMutationResult,
+  type GoalRunState,
+} from './overworld/goalRuns';
+import { OverworldHudBridge, type OverworldHudViewModel } from './overworld/hud';
+import {
+  OverworldLiveObjectController,
+  isDynamicArcadeBody,
+  type ArcadeObjectBody,
+  type LoadedRoomObject,
+} from './overworld/liveObjects';
+import { OverworldPresenceController } from './overworld/presence';
+import {
+  OverworldWorldStreamingController,
+  type LoadedFullRoom,
+} from './overworld/worldStreaming';
 import type { EditorSceneData, OverworldMode, OverworldPlaySceneData } from './sceneData';
 
-const WINDOW_RADIUS = 8;
-const STREAM_RADIUS = 1;
-const PREVIEW_TILE_SIZE = 4;
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 2.5;
 const DEFAULT_ZOOM = 0.18;
@@ -57,44 +92,21 @@ interface RoomEdgeWall {
   collider: Phaser.Physics.Arcade.Collider;
 }
 
-interface LoadedFullRoom {
-  room: RoomSnapshot;
-  image: Phaser.GameObjects.Image;
-  textureKey: string;
-  map: Phaser.Tilemaps.Tilemap;
-  terrainLayer: Phaser.Tilemaps.TilemapLayer;
-  terrainCollider: Phaser.Physics.Arcade.Collider | null;
-  edgeWalls: RoomEdgeWall[];
-  liveObjects: LoadedRoomObject[];
-}
-
-type ArcadeObjectBody = Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody;
-
-interface LoadedRoomObjectRuntimeState {
-  baseX: number;
-  baseY: number;
-  initialDirectionX: number;
+interface PlayerProjectile {
+  rect: Phaser.GameObjects.Rectangle;
   directionX: number;
-  elapsedMs: number;
-  nextActionAt: number;
-  cooldownUntil: number;
-  activatedUntil: number;
+  speed: number;
+  expiresAt: number;
 }
 
-interface LoadedRoomObject {
-  key: string;
-  config: GameObjectConfig;
-  sprite: Phaser.GameObjects.Sprite;
-  interactions: Phaser.Physics.Arcade.Collider[];
-  worldColliders: Phaser.Physics.Arcade.Collider[];
-  runtime: LoadedRoomObjectRuntimeState;
+interface CrateInteraction {
+  crateBody: Phaser.Physics.Arcade.Body;
+  mode: 'push' | 'pull';
+  moveDirectionX: -1 | 1;
+  facing: -1 | 1;
 }
 
-interface RenderableRoom {
-  id: string;
-  coordinates: RoomCoordinates;
-  room: RoomSnapshot;
-}
+type SceneLoadedFullRoom = LoadedFullRoom<LoadedRoomObject, RoomEdgeWall>;
 
 interface ZoomDebugState {
   source: 'canvas-wheel';
@@ -118,13 +130,16 @@ interface ZoomDebugState {
 }
 
 export class OverworldPlayScene extends Phaser.Scene {
-  private readonly worldRepository = createWorldRepository();
-
   private readonly PLAYER_SPEED = 150;
   private readonly JUMP_VELOCITY = -280;
   private readonly GRAVITY = 700;
   private readonly PLAYER_WIDTH = 10;
   private readonly PLAYER_HEIGHT = 14;
+  private readonly PLAYER_CROUCH_HEIGHT = 9;
+  private readonly CRAWL_SPEED = 70;
+  private readonly CRATE_PUSH_SPEED = 78;
+  private readonly CRATE_PULL_SPEED = 66;
+  private readonly CRATE_INTERACTION_MAX_GAP = 14;
   private readonly COYOTE_MS = 80;
   private readonly JUMP_BUFFER_MS = 100;
   private readonly LADDER_CLIMB_SPEED = 90;
@@ -134,14 +149,34 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly BIRD_SPEED = 80;
   private readonly BIRD_WAVE_AMPLITUDE = 10;
   private readonly BIRD_WAVE_SPEED = 0.008;
+  private readonly CRAB_SPEED = 36;
   private readonly SNAKE_SPEED = 42;
+  private readonly SLIME_SPEED = 30;
   private readonly PENGUIN_SPEED = 54;
   private readonly FROG_HOP_SPEED = 68;
   private readonly FROG_HOP_VELOCITY = -236;
   private readonly FROG_HOP_DELAY_MS = 720;
+  private readonly CANNON_FIRE_DELAY_MS = 1400;
+  private readonly CANNON_BULLET_SPEED = 150;
+  private readonly CANNON_BULLET_LIFETIME_MS = 2400;
+  private readonly SWORD_COOLDOWN_MS = 220;
+  private readonly SWORD_ATTACK_MS = 170;
+  private readonly WEAPON_KNOCKBACK_MS = 90;
+  private readonly SWORD_HIT_LUNGE_VELOCITY = 90;
+  private readonly DOWNWARD_SLASH_BOUNCE_VELOCITY = -210;
+  private readonly GUN_COOLDOWN_MS = 260;
+  private readonly GUN_ATTACK_MS = 120;
+  private readonly GUN_RECOIL_VELOCITY = 44;
+  private readonly PROJECTILE_SPEED = 360;
+  private readonly PROJECTILE_LIFETIME_MS = 720;
 
   private player: Phaser.GameObjects.Rectangle | null = null;
   private playerBody: Phaser.Physics.Arcade.Body | null = null;
+  private playerSprite: Phaser.GameObjects.Sprite | null = null;
+  private playerAnimationState: DefaultPlayerAnimationState = 'idle';
+  private playerFacing = 1;
+  private playerWasGrounded = false;
+  private playerLandAnimationUntil = 0;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: {
     W: Phaser.Input.Keyboard.Key;
@@ -149,30 +184,40 @@ export class OverworldPlayScene extends Phaser.Scene {
     S: Phaser.Input.Keyboard.Key;
     D: Phaser.Input.Keyboard.Key;
   };
+  private attackKeys!: {
+    Q: Phaser.Input.Keyboard.Key;
+    E: Phaser.Input.Keyboard.Key;
+  };
   private modifierKeys!: {
     ALT: Phaser.Input.Keyboard.Key;
     SPACE: Phaser.Input.Keyboard.Key;
   };
+  private isCrouching = false;
+  private activeAttackAnimation: DefaultPlayerAnimationState | null = null;
+  private activeAttackAnimationUntil = 0;
+  private meleeCooldownUntil = 0;
+  private rangedCooldownUntil = 0;
+  private activeCrateInteractionMode: 'push' | 'pull' | null = null;
+  private activeCrateInteractionFacing: -1 | 1 | null = null;
+  private weaponKnockbackVelocityX = 0;
+  private weaponKnockbackUntil = 0;
+  private playerProjectiles: PlayerProjectile[] = [];
+  private nextLadderClimbSfxAt = 0;
 
   private loadingText!: Phaser.GameObjects.Text;
   private roomGridGraphics!: Phaser.GameObjects.Graphics;
   private roomFillGraphics!: Phaser.GameObjects.Graphics;
   private roomFrameGraphics!: Phaser.GameObjects.Graphics;
+  private goalMarkerSprites: Phaser.GameObjects.Sprite[] = [];
+  private goalMarkerLabels: Phaser.GameObjects.Text[] = [];
   private starfieldSprites: Phaser.GameObjects.TileSprite[] = [];
   private backdropCamera: Phaser.Cameras.Scene2D.Camera | null = null;
   private zoomDebugText: Phaser.GameObjects.Text | null = null;
   private zoomDebugGraphics: Phaser.GameObjects.Graphics | null = null;
   private zoomDebugEnabled = false;
   private lastZoomDebug: ZoomDebugState | null = null;
-
-  private worldWindow: WorldWindow | null = null;
-  private roomSummariesById = new Map<string, WorldRoomSummary>();
-  private draftRoomsById = new Map<string, RoomSnapshot>();
-  private roomSnapshotsById = new Map<string, RoomSnapshot>();
-  private roomLoadPromisesById = new Map<string, Promise<RoomSnapshot | null>>();
-  private previewImagesByRoomId = new Map<string, Phaser.GameObjects.Image>();
-  private previewTextureKeysByRoomId = new Map<string, string>();
-  private loadedFullRoomsById = new Map<string, LoadedFullRoom>();
+  private hudBridge: OverworldHudBridge | null = null;
+  private fxController: SceneFxController | null = null;
 
   private mode: OverworldMode = 'browse';
   private cameraMode: CameraMode = 'inspect';
@@ -198,9 +243,14 @@ export class OverworldPlayScene extends Phaser.Scene {
   private activeLadderKey: string | null = null;
   private collectedObjectKeys = new Set<string>();
   private score = 0;
+  private readonly goalRunController: OverworldGoalRunController;
+  private readonly liveObjectController: OverworldLiveObjectController<RoomEdgeWall>;
+  private readonly worldStreamingController: OverworldWorldStreamingController<
+    LoadedRoomObject,
+    RoomEdgeWall
+  >;
+  private readonly presenceController: OverworldPresenceController;
 
-  private destroyed = false;
-  private loadGeneration = 0;
   private shouldCenterCamera = false;
   private shouldRespawnPlayer = false;
   private readonly handleCanvasWheel = (event: WheelEvent): void => {
@@ -259,6 +309,173 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   constructor() {
     super({ key: 'OverworldPlayScene' });
+    this.goalRunController = new OverworldGoalRunController({
+      runRepository: createRunRepository(),
+      getScore: () => this.score,
+      getAuthenticated: () => getAuthDebugState().authenticated,
+      countRoomObjectsByCategory: (room, category) =>
+        this.countRoomObjectsByCategory(room, category),
+    });
+    this.liveObjectController = new OverworldLiveObjectController({
+      scene: this,
+      settings: {
+        bouncePadVelocity: this.BOUNCE_PAD_VELOCITY,
+        bouncePadCooldownMs: this.BOUNCE_PAD_COOLDOWN_MS,
+        bouncePadActiveMs: this.BOUNCE_PAD_ACTIVE_MS,
+        birdSpeed: this.BIRD_SPEED,
+        birdWaveAmplitude: this.BIRD_WAVE_AMPLITUDE,
+        birdWaveSpeed: this.BIRD_WAVE_SPEED,
+        crabSpeed: this.CRAB_SPEED,
+        snakeSpeed: this.SNAKE_SPEED,
+        slimeSpeed: this.SLIME_SPEED,
+        penguinSpeed: this.PENGUIN_SPEED,
+        frogHopSpeed: this.FROG_HOP_SPEED,
+        frogHopVelocity: this.FROG_HOP_VELOCITY,
+        frogHopDelayMs: this.FROG_HOP_DELAY_MS,
+        cannonFireDelayMs: this.CANNON_FIRE_DELAY_MS,
+        cannonBulletSpeed: this.CANNON_BULLET_SPEED,
+        cannonBulletLifetimeMs: this.CANNON_BULLET_LIFETIME_MS,
+        respawnFallDistance: RESPAWN_FALL_DISTANCE,
+        enemyStompBounceVelocity: this.JUMP_VELOCITY * 0.58,
+      },
+      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
+      getPlacedObjectRuntimeKey: (roomId, placedIndex) =>
+        this.getPlacedObjectRuntimeKey(roomId, placedIndex),
+      isCollectedObjectKey: (key) => this.collectedObjectKeys.has(key),
+      markCollectedObjectKey: (key) => {
+        this.collectedObjectKeys.add(key);
+      },
+      getPlayer: () => this.player,
+      getPlayerBody: () => this.playerBody,
+      getCurrentTime: () => this.time.now,
+      addScore: (delta) => {
+        this.score += delta;
+      },
+      showTransientStatus: (message) => this.showTransientStatus(message),
+      handlePlayerDeath: (reason) => this.handlePlayerDeath(reason),
+      onEnemyDefeated: (roomId, enemyName) => this.handleEnemyDefeated(roomId, enemyName),
+      onCollectibleCollected: (roomId) => this.handleCollectibleCollected(roomId),
+      playEnemyKillFx: (x, y) => this.fxController?.playEnemyKillFx(x, y),
+      playCollectFx: (x, y, scoreDelta, cue) =>
+        this.fxController?.playCollectFx(x, y, scoreDelta, cue),
+      playBounceFx: (x, y) => this.fxController?.playBounceFx(x, y),
+    });
+    this.worldStreamingController = new OverworldWorldStreamingController({
+      scene: this,
+      worldRepository: createWorldRepository(),
+      getMode: () => this.mode,
+      getSelectedCoordinates: () => this.selectedCoordinates,
+      getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
+      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
+      getPlayer: () => this.player,
+      createLiveObjects: (loadedRoom) => this.createLiveObjects(loadedRoom),
+      destroyLiveObjects: (loadedRoom) => this.destroyLiveObjects(loadedRoom),
+      destroyEdgeWalls: (loadedRoom) => this.destroyEdgeWalls(loadedRoom),
+      onBackdropObjectsChanged: () => this.syncBackdropCameraIgnores(),
+      onFullRoomVisibilityChanged: () => this.syncGhostVisibility(),
+    });
+    this.presenceController = new OverworldPresenceController({
+      scene: this,
+      isFullRoomLoaded: (roomId) => this.loadedFullRoomsById.has(roomId),
+      getMode: () => this.mode,
+      getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
+      getSelectedCoordinates: () => this.selectedCoordinates,
+      getZoom: () => this.cameras.main.zoom,
+      onSnapshotUpdated: () => this.renderHud(),
+      onGhostDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
+    });
+  }
+
+  private get currentGoalRun(): GoalRunState | null {
+    return this.goalRunController.getCurrentRun();
+  }
+
+  private get currentRoomLeaderboard() {
+    return this.goalRunController.getCurrentRoomLeaderboard();
+  }
+
+  private get globalLeaderboard() {
+    return this.goalRunController.getGlobalLeaderboard();
+  }
+
+  private get leaderboardState() {
+    return this.goalRunController.getLeaderboardState();
+  }
+
+  private get leaderboardMessage() {
+    return this.goalRunController.getLeaderboardMessage();
+  }
+
+  private get worldWindow(): WorldWindow | null {
+    return this.worldStreamingController.getWorldWindow();
+  }
+
+  private get chunkWindow(): WorldChunkWindow | null {
+    return this.worldStreamingController.getChunkWindow();
+  }
+
+  private get loadedRoomBounds(): WorldRoomBounds | null {
+    return this.worldStreamingController.getLoadedRoomBounds();
+  }
+
+  private get loadedChunkBounds(): WorldChunkBounds | null {
+    return this.worldStreamingController.getLoadedChunkBounds();
+  }
+
+  private get roomSummariesById(): Map<string, WorldRoomSummary> {
+    return this.worldStreamingController.getRoomSummariesById();
+  }
+
+  private get draftRoomsById(): Map<string, RoomSnapshot> {
+    return this.worldStreamingController.getDraftRoomsById();
+  }
+
+  private get roomSnapshotsById(): Map<string, RoomSnapshot> {
+    return this.worldStreamingController.getRoomSnapshotsById();
+  }
+
+  private get previewImagesByRoomId(): Map<string, Phaser.GameObjects.Image> {
+    return this.worldStreamingController.getPreviewImagesByRoomId();
+  }
+
+  private get previewTextureKeysByRoomId(): Map<string, string> {
+    return this.worldStreamingController.getPreviewTextureKeysByRoomId();
+  }
+
+  private get loadedFullRoomsById(): Map<string, SceneLoadedFullRoom> {
+    return this.worldStreamingController.getLoadedFullRoomsById();
+  }
+
+  private get nearLodRoomIds(): Set<string> {
+    return this.worldStreamingController.getNearLodRoomIds();
+  }
+
+  private get midLodRoomIds(): Set<string> {
+    return this.worldStreamingController.getMidLodRoomIds();
+  }
+
+  private get farLodRoomIds(): Set<string> {
+    return this.worldStreamingController.getFarLodRoomIds();
+  }
+
+  private get presenceClient(): WorldPresenceClient | null {
+    return this.presenceController.getClient();
+  }
+
+  private get presenceIdentity(): WorldPresenceIdentity | null {
+    return this.presenceController.getIdentity();
+  }
+
+  private get presenceSnapshot(): WorldPresenceSnapshot | null {
+    return this.presenceController.getSnapshot();
+  }
+
+  private get roomPopulationsById(): Map<string, number> {
+    return this.presenceController.getRoomPopulationsById();
+  }
+
+  private get renderedGhostsByConnectionId() {
+    return this.presenceController.getRenderedGhostsByConnectionId();
   }
 
   create(data?: OverworldPlaySceneData): void {
@@ -276,7 +493,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.roomGridGraphics.setDepth(-4);
     this.roomFrameGraphics = this.add.graphics();
     this.roomFrameGraphics.setDepth(20);
-
     this.loadingText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Loading world...', {
       fontFamily: 'Courier New',
       fontSize: '16px',
@@ -287,10 +503,16 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.loadingText.setDepth(200);
     this.syncBackdropCameraIgnores();
     this.setupZoomDebug();
+    this.hudBridge = new OverworldHudBridge();
+    this.fxController = new SceneFxController({
+      scene: this,
+      onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
+    });
 
     this.setupControls();
     this.setupPointerControls();
     this.setupCamera();
+    this.initializePresenceClient();
     this.game.canvas.addEventListener('wheel', this.handleCanvasWheel, { passive: false });
     (window as Window & { get_zoom_debug?: () => ZoomDebugState | null }).get_zoom_debug = () =>
       this.lastZoomDebug;
@@ -314,15 +536,18 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.updateBackdrop();
     this.redrawGridOverlay();
     this.updateLiveObjects(delta);
+    this.updateGhosts(delta);
 
     if (!this.playerBody) {
-      this.updateHud();
-      this.updateBottomBar();
+      this.clearCrateInteractionState();
+      this.syncLocalPresence();
+      this.renderHud();
       return;
     }
 
     const left = this.cursors.left.isDown || this.wasd.A.isDown;
     const right = this.cursors.right.isDown || this.wasd.D.isDown;
+    const horizontalInput = (right ? 1 : 0) - (left ? 1 : 0);
     const upHeld = this.cursors.up.isDown || this.wasd.W.isDown;
     const downHeld = this.cursors.down.isDown || this.wasd.S.isDown;
     const verticalInput = (downHeld ? 1 : 0) - (upHeld ? 1 : 0);
@@ -336,6 +561,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       !spacePressed &&
       (verticalInput !== 0 || (this.isClimbingLadder && !left && !right));
     const jumpedOffLadder = this.isClimbingLadder && spacePressed;
+    const swordPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.Q);
+    const gunPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E);
 
     if (stayOnLadder && overlappingLadder) {
       this.setPlayerLadderState(overlappingLadder);
@@ -345,30 +572,62 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.coyoteTime = 0;
       this.jumpBuffered = false;
       this.jumpBufferTime = 0;
+      this.isCrouching = false;
+      this.clearCrateInteractionState();
+      this.syncPlayerHitbox();
     } else {
       if (this.isClimbingLadder) {
         this.setPlayerLadderState(null);
       }
 
       const onFloor = this.playerBody.blocked.down || this.playerBody.touching.down;
+      const crateInteraction =
+        onFloor && horizontalInput !== 0
+          ? this.findCrateInteraction(horizontalInput, downHeld)
+          : null;
+      const wantsCrouch = onFloor && downHeld && !crateInteraction;
+      this.isCrouching = wantsCrouch || (this.isCrouching && !this.canPlayerStandUp());
+      this.syncPlayerHitbox();
       if (onFloor) {
         this.coyoteTime = this.COYOTE_MS;
       } else {
         this.coyoteTime = Math.max(0, this.coyoteTime - delta);
       }
 
-      if (left) {
-        this.playerBody.setVelocityX(-this.PLAYER_SPEED);
-      } else if (right) {
-        this.playerBody.setVelocityX(this.PLAYER_SPEED);
+      if (crateInteraction) {
+        const moveSpeed =
+          crateInteraction.mode === 'push' ? this.CRATE_PUSH_SPEED : this.CRATE_PULL_SPEED;
+        this.activeCrateInteractionMode = crateInteraction.mode;
+        this.activeCrateInteractionFacing = crateInteraction.facing;
+        this.playerBody.setVelocityX(crateInteraction.moveDirectionX * moveSpeed);
+        crateInteraction.crateBody.setVelocityX(crateInteraction.moveDirectionX * moveSpeed);
       } else {
-        this.playerBody.setVelocityX(0);
+        this.clearCrateInteractionState();
+        if (this.time.now < this.weaponKnockbackUntil) {
+          this.playerBody.setVelocityX(this.weaponKnockbackVelocityX);
+        } else {
+          this.weaponKnockbackVelocityX = 0;
+          const moveSpeed = this.isCrouching ? this.CRAWL_SPEED : this.PLAYER_SPEED;
+          if (left) {
+            this.playerBody.setVelocityX(-moveSpeed);
+          } else if (right) {
+            this.playerBody.setVelocityX(moveSpeed);
+          } else {
+            this.playerBody.setVelocityX(0);
+          }
+        }
       }
 
-      const jumpPressed = spacePressed || (upPressed && overlappingLadder === null);
+      const jumpPressed =
+        !this.isCrouching && (spacePressed || (upPressed && overlappingLadder === null));
 
       if (jumpedOffLadder) {
         this.playerBody.setVelocityY(this.JUMP_VELOCITY);
+        this.fxController?.playJumpDustFx(
+          this.player?.x ?? this.playerBody.center.x,
+          this.playerBody.bottom,
+          this.playerFacing
+        );
         this.jumpBuffered = false;
         this.jumpBufferTime = 0;
         this.coyoteTime = 0;
@@ -387,6 +646,11 @@ export class OverworldPlayScene extends Phaser.Scene {
 
         if (this.jumpBuffered && this.coyoteTime > 0) {
           this.playerBody.setVelocityY(this.JUMP_VELOCITY);
+          this.fxController?.playJumpDustFx(
+            this.player?.x ?? this.playerBody.center.x,
+            this.playerBody.bottom,
+            this.playerFacing
+          );
           this.jumpBuffered = false;
           this.coyoteTime = 0;
         }
@@ -396,12 +660,23 @@ export class OverworldPlayScene extends Phaser.Scene {
           this.playerBody.setVelocityY(this.playerBody.velocity.y * 0.85);
         }
       }
+
+      this.handleCombatInput({
+        swordPressed,
+        gunPressed,
+        downHeld,
+        grounded: onFloor,
+      });
     }
 
+    this.updatePlayerProjectiles(delta);
+    this.maybePlayLadderClimbSfx(verticalInput);
     this.maybeRespawnFromVoid();
     this.maybeAdvancePlayerRoom();
-    this.updateHud();
-    this.updateBottomBar();
+    this.syncPlayerVisual();
+    this.syncLocalPresence();
+    this.updateGoalRun(delta);
+    this.renderHud();
   }
 
   private resetRuntimeState(): void {
@@ -409,15 +684,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.cameras.remove(this.backdropCamera, true);
     }
 
-    this.destroyed = false;
-    this.worldWindow = null;
-    this.roomSummariesById = new Map();
-    this.draftRoomsById = new Map();
-    this.roomSnapshotsById = new Map();
-    this.roomLoadPromisesById = new Map();
-    this.previewImagesByRoomId = new Map();
-    this.previewTextureKeysByRoomId = new Map();
-    this.loadedFullRoomsById = new Map();
+    this.worldStreamingController.reset();
     this.starfieldSprites = [];
     this.backdropCamera = null;
     this.mode = 'browse';
@@ -440,11 +707,33 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.jumpBufferTime = 0;
     this.isClimbingLadder = false;
     this.activeLadderKey = null;
+    this.isCrouching = false;
+    this.clearCrateInteractionState();
+    this.activeAttackAnimation = null;
+    this.activeAttackAnimationUntil = 0;
+    this.meleeCooldownUntil = 0;
+    this.rangedCooldownUntil = 0;
+    this.weaponKnockbackVelocityX = 0;
+    this.weaponKnockbackUntil = 0;
+    this.nextLadderClimbSfxAt = 0;
+    this.destroyPlayerProjectiles();
     this.collectedObjectKeys = new Set();
     this.score = 0;
-    this.loadGeneration = 0;
+    this.goalRunController.reset();
+    this.playerAnimationState = 'idle';
+    this.playerFacing = 1;
+    this.playerWasGrounded = false;
+    this.playerLandAnimationUntil = 0;
     this.shouldCenterCamera = false;
     this.shouldRespawnPlayer = false;
+    this.presenceController.reset();
+    this.hudBridge?.destroy();
+    this.hudBridge = null;
+    this.fxController?.destroy();
+  }
+
+  private initializePresenceClient(): void {
+    this.presenceController.initialize();
   }
 
   private setupControls(): void {
@@ -456,6 +745,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       A: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       S: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
       D: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+    };
+    this.attackKeys = {
+      Q: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
+      E: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
     };
     this.modifierKeys = {
       ALT: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ALT),
@@ -639,7 +932,17 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (this.loadingText) ignoredObjects.push(this.loadingText);
     if (this.zoomDebugGraphics) ignoredObjects.push(this.zoomDebugGraphics);
     if (this.zoomDebugText) ignoredObjects.push(this.zoomDebugText);
+    for (const sprite of this.goalMarkerSprites) {
+      ignoredObjects.push(sprite);
+    }
+    for (const label of this.goalMarkerLabels) {
+      ignoredObjects.push(label);
+    }
     if (this.player) ignoredObjects.push(this.player);
+    if (this.playerSprite) ignoredObjects.push(this.playerSprite);
+    for (const projectile of this.playerProjectiles) {
+      ignoredObjects.push(projectile.rect);
+    }
 
     for (const image of this.previewImagesByRoomId.values()) {
       ignoredObjects.push(image);
@@ -655,6 +958,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       }
     }
 
+    ignoredObjects.push(...this.presenceController.getBackdropIgnoredObjects());
+    ignoredObjects.push(...(this.fxController?.getBackdropIgnoredObjects() ?? []));
+
     this.backdropCamera.ignore(ignoredObjects);
   }
 
@@ -669,7 +975,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private handleRoomSelection(pointer: Phaser.Input.Pointer): void {
     const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
     const coordinates = this.getRoomCoordinatesForPoint(worldPoint.x, worldPoint.y);
-    if (!isWithinWorldWindow(coordinates, this.windowCenterCoordinates, WINDOW_RADIUS)) {
+    if (!this.isWithinLoadedRoomBounds(coordinates)) {
       return;
     }
 
@@ -678,9 +984,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.currentRoomCoordinates = { ...coordinates };
     }
     this.updateSelectedSummary();
+    void this.refreshLeaderboardForSelection();
     this.redrawWorld();
-    this.updateHud();
-    this.updateBottomBar();
+    this.renderHud();
   }
 
   private handleResize(): void {
@@ -695,12 +1001,12 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     if (this.worldWindow) {
       this.centerCameraOnCoordinates(this.getZoomFocusCoordinates());
+      this.refreshChunkWindowIfNeeded(this.getZoomFocusCoordinates());
     } else {
       this.constrainInspectCamera();
     }
     this.redrawGridOverlay();
-    this.updateHud();
-    this.updateBottomBar();
+    this.renderHud();
   }
 
   private handleWake = (_sys: Phaser.Scenes.Systems, data?: OverworldPlaySceneData): void => {
@@ -718,12 +1024,12 @@ export class OverworldPlayScene extends Phaser.Scene {
     const fallback = data?.centerCoordinates ?? data?.roomCoordinates ?? getFocusedCoordinatesFromUrl();
 
     if (data?.clearDraftRoomId) {
-      this.draftRoomsById.delete(data.clearDraftRoomId);
+      this.worldStreamingController.clearDraftRoom(data.clearDraftRoomId);
     }
 
     if (data?.draftRoom) {
       const draftRoom = cloneRoomSnapshot(data.draftRoom);
-      this.draftRoomsById.set(draftRoom.id, draftRoom);
+      this.worldStreamingController.setDraftRoom(draftRoom);
     }
 
     if (data?.statusMessage) {
@@ -808,10 +1114,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.inspectZoom = Number(nextZoom.toFixed(3));
     camera.setZoom(this.inspectZoom);
     this.centerCameraOnCoordinates(this.getZoomFocusCoordinates());
+    this.refreshChunkWindowIfNeeded(this.getZoomFocusCoordinates());
     this.updateBackdrop();
     this.redrawGridOverlay();
-    this.updateHud();
-    this.updateBottomBar();
+    this.renderHud();
   }
 
   private adjustZoomByFactor(factor: number, screenX?: number, screenY?: number): void {
@@ -835,10 +1141,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.constrainInspectCamera();
     }
 
+    this.refreshChunkWindowIfNeeded(this.getZoomFocusCoordinates());
     this.updateBackdrop();
     this.redrawGridOverlay();
-    this.updateHud();
-    this.updateBottomBar();
+    this.renderHud();
   }
 
   private getScreenAnchorWorldPoint(
@@ -878,283 +1184,73 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private async refreshAround(centerCoordinates: RoomCoordinates): Promise<boolean> {
-    const generation = ++this.loadGeneration;
     this.windowCenterCoordinates = { ...centerCoordinates };
-    this.updateHud('Loading world...');
-    this.updateBottomBar('Loading world...');
+    this.renderHud('Loading world...');
 
     try {
-      const worldWindow = await this.worldRepository.loadWorldWindow(centerCoordinates, WINDOW_RADIUS);
-      if (this.destroyed || generation !== this.loadGeneration) {
+      const refreshed = await this.worldStreamingController.refreshAround(centerCoordinates);
+      if (!refreshed) {
         return false;
       }
-
-      this.worldWindow = worldWindow;
-      this.roomSummariesById = new Map(worldWindow.rooms.map((summary) => [summary.id, summary]));
-
-      const renderableRooms = await this.collectRenderableRooms(worldWindow);
-      if (this.destroyed || generation !== this.loadGeneration) {
-        return false;
-      }
-
-      for (const renderableRoom of renderableRooms.values()) {
-        this.ensureRoomPreview(renderableRoom.room);
-      }
-
-      const fullRoomIds = new Set<string>();
-      if (this.mode === 'play') {
-        for (const renderableRoom of renderableRooms.values()) {
-          if (this.isWithinStreamRadius(renderableRoom.coordinates, this.currentRoomCoordinates)) {
-            await this.ensureFullRoom(renderableRoom.room);
-            fullRoomIds.add(renderableRoom.id);
-          }
-        }
-      }
-
-      this.unloadRoomsOutsideWindow(new Set(renderableRooms.keys()));
-      this.unloadFullRoomsOutsideStream(fullRoomIds);
       this.updateSelectedSummary();
+      void this.refreshLeaderboardForSelection();
       this.updateCameraBounds();
       this.syncModeRuntime();
       this.syncPreviewVisibility();
+      this.syncPresenceSubscriptions();
+      this.syncGhostVisibility();
       this.redrawWorld();
-      this.updateHud();
-      this.updateBottomBar();
+      this.renderHud();
       this.loadingText.setVisible(false);
       return true;
     } catch (error) {
       console.error('Failed to load overworld window', error);
-      this.updateHud('Failed to load world.');
-      this.updateBottomBar('Failed to load world.');
+      this.renderHud('Failed to load world.');
       return false;
     }
   }
 
-  private async collectRenderableRooms(worldWindow: WorldWindow): Promise<Map<string, RenderableRoom>> {
-    const renderableRooms = new Map<string, RenderableRoom>();
-    const visibleDraftRooms = Array.from(this.draftRoomsById.values()).filter((room) =>
-      isWithinWorldWindow(room.coordinates, worldWindow.center, worldWindow.radius)
-    );
-
-    for (const draftRoom of visibleDraftRooms) {
-      renderableRooms.set(draftRoom.id, {
-        id: draftRoom.id,
-        coordinates: { ...draftRoom.coordinates },
-        room: cloneRoomSnapshot(draftRoom),
-      });
+  private refreshChunkWindowIfNeeded(centerCoordinates: RoomCoordinates): void {
+    if (this.worldStreamingController.needsRefreshAround(centerCoordinates)) {
+      void this.refreshAround(centerCoordinates);
     }
-
-    const visiblePublishedRooms = worldWindow.rooms.filter((room) => room.state === 'published');
-    await Promise.all(
-      visiblePublishedRooms.map(async (summary) => {
-        if (renderableRooms.has(summary.id)) return;
-
-        const publishedRoom = await this.ensurePublishedRoomSnapshot(summary);
-        if (!publishedRoom) return;
-
-        renderableRooms.set(summary.id, {
-          id: summary.id,
-          coordinates: { ...summary.coordinates },
-          room: publishedRoom,
-        });
-      })
-    );
-
-    return renderableRooms;
   }
 
-  private async ensurePublishedRoomSnapshot(summary: WorldRoomSummary): Promise<RoomSnapshot | null> {
-    const cached = this.roomSnapshotsById.get(summary.id);
-    if (cached && cached.version === (summary.version ?? cached.version)) {
-      return cached;
-    }
-
-    const inFlight = this.roomLoadPromisesById.get(summary.id);
-    if (inFlight) {
-      return inFlight;
-    }
-
-    const request = this.worldRepository
-      .loadPublishedRoom(summary.id, summary.coordinates)
-      .then((room) => {
-        if (room) {
-          this.roomSnapshotsById.set(room.id, room);
-        }
-        return room;
-      })
-      .finally(() => {
-        this.roomLoadPromisesById.delete(summary.id);
-      });
-
-    this.roomLoadPromisesById.set(summary.id, request);
-    return request;
+  private syncPresenceSubscriptions(): void {
+    this.presenceController.setSubscribedChunkBounds(this.loadedChunkBounds);
   }
 
-  private ensureRoomPreview(room: RoomSnapshot): void {
-    const textureKey = buildRoomTextureKey(room, 'preview', PREVIEW_TILE_SIZE);
-    const previousTextureKey = this.previewTextureKeysByRoomId.get(room.id);
-
-    if (previousTextureKey && previousTextureKey !== textureKey && this.textures.exists(previousTextureKey)) {
-      this.textures.remove(previousTextureKey);
-    }
-
-    if (!this.textures.exists(textureKey)) {
-      buildRoomSnapshotTexture(this, room, textureKey, PREVIEW_TILE_SIZE);
-    }
-
-    let previewImage = this.previewImagesByRoomId.get(room.id) ?? null;
-    if (!previewImage) {
-      previewImage = this.add.image(0, 0, textureKey);
-      previewImage.setOrigin(0.5);
-      previewImage.setDepth(0);
-      this.previewImagesByRoomId.set(room.id, previewImage);
-    } else {
-      previewImage.setTexture(textureKey);
-    }
-
-    const origin = this.getRoomOrigin(room.coordinates);
-    previewImage.setPosition(origin.x + ROOM_PX_WIDTH / 2, origin.y + ROOM_PX_HEIGHT / 2);
-    previewImage.setDisplaySize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-    previewImage.setVisible(!this.loadedFullRoomsById.has(room.id));
-    this.previewTextureKeysByRoomId.set(room.id, textureKey);
-    this.syncBackdropCameraIgnores();
-  }
-
-  private async ensureFullRoom(room: RoomSnapshot): Promise<void> {
-    const existing = this.loadedFullRoomsById.get(room.id);
-    if (
-      existing &&
-      existing.room.version === room.version &&
-      existing.room.updatedAt === room.updatedAt
-    ) {
-      existing.image.setVisible(true);
-      for (const liveObject of existing.liveObjects) {
-        liveObject.sprite.setVisible(true);
-      }
-      this.previewImagesByRoomId.get(room.id)?.setVisible(false);
+  private syncLocalPresence(): void {
+    if (!this.player || !this.playerBody || this.mode !== 'play') {
+      this.presenceController.updateLocalPresence(null);
       return;
     }
 
-    this.destroyFullRoom(room.id);
-
-    const textureKey = buildRoomTextureKey(room, 'full', TILE_SIZE, { includeObjects: false });
-    if (!this.textures.exists(textureKey)) {
-      buildRoomSnapshotTexture(this, room, textureKey, TILE_SIZE, { includeObjects: false });
-    }
-
-    const origin = this.getRoomOrigin(room.coordinates);
-    const image = this.add.image(origin.x + ROOM_PX_WIDTH / 2, origin.y + ROOM_PX_HEIGHT / 2, textureKey);
-    image.setOrigin(0.5);
-    image.setDepth(10);
-    image.setDisplaySize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-
-    const map = this.make.tilemap({
-      tileWidth: TILE_SIZE,
-      tileHeight: TILE_SIZE,
-      width: ROOM_WIDTH,
-      height: ROOM_HEIGHT,
+    this.presenceController.updateLocalPresence({
+      mode: this.mode,
+      roomCoordinates: { ...this.currentRoomCoordinates },
+      x: this.player.x,
+      y: this.playerBody.bottom + DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
+      velocityX: this.playerBody.velocity.x,
+      velocityY: this.playerBody.velocity.y,
+      facing: this.playerFacing,
+      animationState: this.playerAnimationState,
     });
-    const tilesets: Phaser.Tilemaps.Tileset[] = [];
-    for (const tilesetConfig of TILESETS) {
-      const tileset = map.addTilesetImage(
-        tilesetConfig.key,
-        tilesetConfig.key,
-        TILE_SIZE,
-        TILE_SIZE,
-        0,
-        0,
-        tilesetConfig.firstGid
-      );
-      if (tileset) {
-        tilesets.push(tileset);
-      }
-    }
-
-    const terrainLayer = map.createBlankLayer(`terrain-${room.id}`, tilesets, origin.x, origin.y);
-    if (!terrainLayer) {
-      image.destroy();
-      return;
-    }
-
-    for (let y = 0; y < ROOM_HEIGHT; y++) {
-      for (let x = 0; x < ROOM_WIDTH; x++) {
-        const gid = room.tileData.terrain[y][x];
-        if (gid > 0) {
-          terrainLayer.putTileAt(gid, x, y);
-        }
-      }
-    }
-
-    terrainLayer.setCollisionByExclusion([-1]);
-    terrainLayer.setVisible(false);
-
-    const loadedRoom: LoadedFullRoom = {
-      room,
-      image,
-      textureKey,
-      map,
-      terrainLayer,
-      terrainCollider: this.player ? this.physics.add.collider(this.player, terrainLayer) : null,
-      edgeWalls: [],
-      liveObjects: [],
-    };
-    this.createLiveObjects(loadedRoom);
-    this.loadedFullRoomsById.set(room.id, loadedRoom);
-    this.previewImagesByRoomId.get(room.id)?.setVisible(false);
-    this.syncBackdropCameraIgnores();
   }
 
-  private unloadRoomsOutsideWindow(visibleRoomIds: Set<string>): void {
-    for (const [roomId, image] of this.previewImagesByRoomId.entries()) {
-      if (visibleRoomIds.has(roomId)) continue;
-
-      image.destroy();
-      this.previewImagesByRoomId.delete(roomId);
-
-      const textureKey = this.previewTextureKeysByRoomId.get(roomId);
-      if (textureKey && this.textures.exists(textureKey)) {
-        this.textures.remove(textureKey);
-      }
-      this.previewTextureKeysByRoomId.delete(roomId);
-    }
-
-    for (const roomId of Array.from(this.roomSnapshotsById.keys())) {
-      if (!visibleRoomIds.has(roomId) && !this.loadedFullRoomsById.has(roomId)) {
-        this.roomSnapshotsById.delete(roomId);
-      }
-    }
-
-    this.syncBackdropCameraIgnores();
+  private updateGhosts(delta: number): void {
+    this.presenceController.updateGhosts(delta);
   }
 
-  private unloadFullRoomsOutsideStream(fullRoomIds: Set<string>): void {
-    for (const roomId of Array.from(this.loadedFullRoomsById.keys())) {
-      if (fullRoomIds.has(roomId)) continue;
-      this.destroyFullRoom(roomId);
-      this.previewImagesByRoomId.get(roomId)?.setVisible(true);
-    }
+  private syncGhostVisibility(): void {
+    this.presenceController.refreshGhostVisibility();
   }
 
-  private destroyFullRoom(roomId: string): void {
-    const loadedRoom = this.loadedFullRoomsById.get(roomId);
-    if (!loadedRoom) return;
-
-    this.destroyEdgeWalls(loadedRoom);
-    this.destroyLiveObjects(loadedRoom);
-    loadedRoom.terrainCollider?.destroy();
-    loadedRoom.terrainLayer.destroy();
-    loadedRoom.map.destroy();
-    loadedRoom.image.destroy();
-
-    if (this.textures.exists(loadedRoom.textureKey)) {
-      this.textures.remove(loadedRoom.textureKey);
-    }
-
-    this.loadedFullRoomsById.delete(roomId);
-    this.syncBackdropCameraIgnores();
+  private getRoomPopulation(coordinates: RoomCoordinates): number {
+    return this.presenceController.getRoomPopulation(coordinates);
   }
 
-  private destroyEdgeWalls(loadedRoom: LoadedFullRoom): void {
+  private destroyEdgeWalls(loadedRoom: SceneLoadedFullRoom): void {
     for (const wall of loadedRoom.edgeWalls) {
       wall.collider.destroy();
       wall.rect.destroy();
@@ -1162,120 +1258,12 @@ export class OverworldPlayScene extends Phaser.Scene {
     loadedRoom.edgeWalls = [];
   }
 
-  private createLiveObjects(loadedRoom: LoadedFullRoom): void {
-    const roomOrigin = this.getRoomOrigin(loadedRoom.room.coordinates);
-
-    for (let index = 0; index < loadedRoom.room.placedObjects.length; index += 1) {
-      const placedObject = loadedRoom.room.placedObjects[index];
-      const config = getObjectById(placedObject.id);
-      if (!config) continue;
-
-      const objectKey = this.getPlacedObjectRuntimeKey(loadedRoom.room.id, index);
-      if (this.collectedObjectKeys.has(objectKey)) {
-        continue;
-      }
-
-      const sprite = this.add.sprite(
-        roomOrigin.x + placedObject.x,
-        roomOrigin.y + placedObject.y,
-        config.id,
-        0
-      );
-      sprite.setOrigin(0.5, 0.5);
-      sprite.setDepth(18);
-
-      if (config.frameCount > 1 && config.fps > 0) {
-        const animKey = `${config.id}_anim`;
-        if (this.anims.exists(animKey)) {
-          sprite.play(animKey);
-        }
-      }
-
-      if (config.bodyWidth > 0 && config.bodyHeight > 0) {
-        if (this.usesDynamicObjectBody(config)) {
-          this.physics.add.existing(sprite);
-          const body = sprite.body as Phaser.Physics.Arcade.Body;
-          body.setSize(config.bodyWidth, config.bodyHeight, true);
-          body.setOffset(...this.getObjectBodyOffset(config));
-          body.setCollideWorldBounds(false);
-          body.setAllowGravity(this.objectUsesGravity(config));
-        } else {
-          this.physics.add.existing(sprite, true);
-          const body = sprite.body as Phaser.Physics.Arcade.StaticBody;
-          body.updateFromGameObject();
-          body.setSize(config.bodyWidth, config.bodyHeight);
-          body.setOffset(...this.getObjectBodyOffset(config));
-        }
-      }
-
-      const initialDirectionX = placedObject.x <= ROOM_PX_WIDTH * 0.5 ? 1 : -1;
-      loadedRoom.liveObjects.push({
-        key: objectKey,
-        config,
-        sprite,
-        interactions: [],
-        worldColliders: [],
-        runtime: {
-          baseX: sprite.x,
-          baseY: sprite.y,
-          initialDirectionX,
-          directionX: initialDirectionX,
-          elapsedMs: 0,
-          nextActionAt: config.id === 'frog' ? this.time.now + 250 : this.time.now,
-          cooldownUntil: 0,
-          activatedUntil: 0,
-        },
-      });
-    }
-
-    this.syncRoomObjectWorldColliders(loadedRoom);
+  private createLiveObjects(loadedRoom: SceneLoadedFullRoom): void {
+    this.liveObjectController.createLiveObjects(loadedRoom);
   }
 
-  private destroyLiveObjects(loadedRoom: LoadedFullRoom): void {
-    for (const liveObject of loadedRoom.liveObjects) {
-      this.destroyLiveObjectInteractions(liveObject);
-      this.destroyLiveObjectWorldColliders(liveObject);
-      liveObject.sprite.destroy();
-    }
-
-    loadedRoom.liveObjects = [];
-  }
-
-  private destroyLiveObjectInteractions(liveObject: LoadedRoomObject): void {
-    for (const interaction of liveObject.interactions) {
-      interaction.destroy();
-    }
-    liveObject.interactions = [];
-  }
-
-  private destroyLiveObjectWorldColliders(liveObject: LoadedRoomObject): void {
-    for (const collider of liveObject.worldColliders) {
-      collider.destroy();
-    }
-    liveObject.worldColliders = [];
-  }
-
-  private syncRoomObjectWorldColliders(loadedRoom: LoadedFullRoom): void {
-    const solidPlatforms = loadedRoom.liveObjects.filter(
-      (candidate) => candidate.config.category === 'platform' && candidate.sprite.body
-    );
-
-    for (const liveObject of loadedRoom.liveObjects) {
-      this.destroyLiveObjectWorldColliders(liveObject);
-
-      if (!this.usesDynamicObjectBody(liveObject.config) || !liveObject.sprite.body) {
-        continue;
-      }
-
-      liveObject.worldColliders.push(this.physics.add.collider(liveObject.sprite, loadedRoom.terrainLayer));
-      for (const platform of solidPlatforms) {
-        if (!platform.sprite.active || !platform.sprite.body) {
-          continue;
-        }
-
-        liveObject.worldColliders.push(this.physics.add.collider(liveObject.sprite, platform.sprite));
-      }
-    }
+  private destroyLiveObjects(loadedRoom: SceneLoadedFullRoom): void {
+    this.liveObjectController.destroyLiveObjects(loadedRoom);
   }
 
   private updateLiveObjects(delta: number): void {
@@ -1283,242 +1271,19 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    for (const loadedRoom of this.loadedFullRoomsById.values()) {
-      for (const liveObject of loadedRoom.liveObjects) {
-        if (!liveObject.sprite.active) {
-          continue;
-        }
-
-        switch (liveObject.config.id) {
-          case 'bird':
-            this.updateBirdObject(loadedRoom.room, liveObject, delta);
-            break;
-          case 'snake':
-          case 'penguin':
-            this.updatePatrolEnemy(loadedRoom.room, liveObject);
-            break;
-          case 'frog':
-            this.updateFrogEnemy(loadedRoom.room, liveObject);
-            break;
-          case 'bounce_pad':
-            this.updateBouncePadObject(liveObject);
-            break;
-          default:
-            break;
-        }
-      }
-    }
-  }
-
-  private updateBirdObject(room: RoomSnapshot, liveObject: LoadedRoomObject, delta: number): void {
-    const body = liveObject.sprite.body as Phaser.Physics.Arcade.StaticBody | null;
-    if (!body) {
-      return;
-    }
-
-    const bounds = this.getObjectHorizontalTravelBounds(room, liveObject.config);
-    liveObject.runtime.elapsedMs += delta;
-
-    let nextX = liveObject.sprite.x + liveObject.runtime.directionX * this.BIRD_SPEED * (delta / 1000);
-    if (nextX <= bounds.left || nextX >= bounds.right) {
-      nextX = Phaser.Math.Clamp(nextX, bounds.left, bounds.right);
-      liveObject.runtime.directionX *= -1;
-    }
-
-    const nextY =
-      liveObject.runtime.baseY +
-      Math.sin(liveObject.runtime.elapsedMs * this.BIRD_WAVE_SPEED) * this.BIRD_WAVE_AMPLITUDE;
-    liveObject.sprite.setPosition(nextX, nextY);
-    body.updateFromGameObject();
-  }
-
-  private updatePatrolEnemy(room: RoomSnapshot, liveObject: LoadedRoomObject): void {
-    const body = this.getDynamicBody(liveObject.sprite);
-    if (!body) {
-      return;
-    }
-
-    if (this.resetDynamicObjectIfOutOfBounds(room, liveObject, body)) {
-      return;
-    }
-
-    this.maybeReverseGroundEnemy(room, liveObject, body);
-    body.setVelocityX(liveObject.runtime.directionX * this.getGroundEnemySpeed(liveObject.config.id));
-  }
-
-  private updateFrogEnemy(room: RoomSnapshot, liveObject: LoadedRoomObject): void {
-    const body = this.getDynamicBody(liveObject.sprite);
-    if (!body) {
-      return;
-    }
-
-    if (this.resetDynamicObjectIfOutOfBounds(room, liveObject, body)) {
-      return;
-    }
-
-    this.maybeReverseGroundEnemy(room, liveObject, body);
-    const onFloor = body.blocked.down || body.touching.down;
-
-    if (onFloor) {
-      if (this.time.now >= liveObject.runtime.nextActionAt) {
-        body.setVelocityX(liveObject.runtime.directionX * this.FROG_HOP_SPEED);
-        body.setVelocityY(this.FROG_HOP_VELOCITY);
-        liveObject.runtime.nextActionAt = this.time.now + this.FROG_HOP_DELAY_MS;
-      } else {
-        body.setVelocityX(0);
-      }
-      return;
-    }
-
-    if (Math.abs(body.velocity.x) < this.FROG_HOP_SPEED * 0.8) {
-      body.setVelocityX(liveObject.runtime.directionX * this.FROG_HOP_SPEED);
-    }
-  }
-
-  private updateBouncePadObject(liveObject: LoadedRoomObject): void {
-    if (liveObject.config.frameCount <= 1) {
-      return;
-    }
-
-    const nextFrame = this.time.now < liveObject.runtime.activatedUntil ? 1 : 0;
-    if (Number(liveObject.sprite.frame.name) !== nextFrame) {
-      liveObject.sprite.setFrame(nextFrame);
-    }
-  }
-
-  private maybeReverseGroundEnemy(
-    room: RoomSnapshot,
-    liveObject: LoadedRoomObject,
-    body: Phaser.Physics.Arcade.Body
-  ): void {
-    const bounds = this.getObjectHorizontalTravelBounds(room, liveObject.config);
-    const touchingWall =
-      (body.blocked.left && liveObject.runtime.directionX < 0) ||
-      (body.blocked.right && liveObject.runtime.directionX > 0);
-    const reachedBounds =
-      (liveObject.sprite.x <= bounds.left && liveObject.runtime.directionX < 0) ||
-      (liveObject.sprite.x >= bounds.right && liveObject.runtime.directionX > 0);
-    const onFloor = body.blocked.down || body.touching.down;
-    const missingGroundAhead =
-      onFloor && !this.hasSolidTerrainAhead(room, body, liveObject.runtime.directionX);
-
-    if (touchingWall || reachedBounds || missingGroundAhead) {
-      liveObject.runtime.directionX *= -1;
-    }
-  }
-
-  private resetDynamicObjectIfOutOfBounds(
-    room: RoomSnapshot,
-    liveObject: LoadedRoomObject,
-    body: Phaser.Physics.Arcade.Body
-  ): boolean {
-    const roomOrigin = this.getRoomOrigin(room.coordinates);
-    if (liveObject.sprite.y <= roomOrigin.y + ROOM_PX_HEIGHT + RESPAWN_FALL_DISTANCE) {
-      return false;
-    }
-
-    liveObject.runtime.directionX = liveObject.runtime.initialDirectionX;
-    liveObject.runtime.elapsedMs = 0;
-    liveObject.runtime.nextActionAt = this.time.now + 250;
-    body.reset(liveObject.runtime.baseX, liveObject.runtime.baseY);
-    liveObject.sprite.setPosition(liveObject.runtime.baseX, liveObject.runtime.baseY);
-    body.setVelocity(0, 0);
-    return true;
-  }
-
-  private hasSolidTerrainAhead(
-    room: RoomSnapshot,
-    body: Phaser.Physics.Arcade.Body,
-    directionX: number
-  ): boolean {
-    const probeX = body.center.x + directionX * (body.halfWidth + 4);
-    const probeY = body.bottom + 2;
-    return this.hasSolidTerrainAtWorldPoint(room, probeX, probeY);
-  }
-
-  private hasSolidTerrainAtWorldPoint(room: RoomSnapshot, worldX: number, worldY: number): boolean {
-    const roomOrigin = this.getRoomOrigin(room.coordinates);
-    const localX = Math.floor((worldX - roomOrigin.x) / TILE_SIZE);
-    const localY = Math.floor((worldY - roomOrigin.y) / TILE_SIZE);
-
-    if (localX < 0 || localX >= ROOM_WIDTH || localY < 0 || localY >= ROOM_HEIGHT) {
-      return false;
-    }
-
-    return room.tileData.terrain[localY][localX] > 0;
-  }
-
-  private getObjectHorizontalTravelBounds(
-    room: RoomSnapshot,
-    config: GameObjectConfig
-  ): { left: number; right: number } {
-    const roomOrigin = this.getRoomOrigin(room.coordinates);
-    const halfWidth = Math.max(4, (config.bodyWidth > 0 ? config.bodyWidth : config.frameWidth) * 0.5);
-    return {
-      left: roomOrigin.x + halfWidth + 2,
-      right: roomOrigin.x + ROOM_PX_WIDTH - halfWidth - 2,
-    };
-  }
-
-  private usesDynamicObjectBody(config: GameObjectConfig): boolean {
-    return config.id === 'snake' || config.id === 'penguin' || config.id === 'frog';
-  }
-
-  private objectUsesGravity(config: GameObjectConfig): boolean {
-    return config.id !== 'bird';
-  }
-
-  private getObjectBodyOffset(config: GameObjectConfig): [number, number] {
-    const centeredX = Math.max(0, (config.frameWidth - config.bodyWidth) * 0.5);
-    let offsetY = Math.max(0, (config.frameHeight - config.bodyHeight) * 0.5);
-
-    switch (config.id) {
-      case 'bounce_pad':
-      case 'snake':
-      case 'penguin':
-      case 'frog':
-        offsetY = Math.max(0, config.frameHeight - config.bodyHeight);
-        break;
-      default:
-        break;
-    }
-
-    return [centeredX, offsetY];
-  }
-
-  private getDynamicBody(sprite: Phaser.GameObjects.Sprite): Phaser.Physics.Arcade.Body | null {
-    const body = sprite.body as ArcadeObjectBody | null;
-    if (!this.isDynamicArcadeBody(body)) {
-      return null;
-    }
-
-    return body;
-  }
-
-  private isDynamicArcadeBody(body: ArcadeObjectBody | null): body is Phaser.Physics.Arcade.Body {
-    return Boolean(body && 'velocity' in body);
-  }
-
-  private getGroundEnemySpeed(objectId: string): number {
-    switch (objectId) {
-      case 'penguin':
-        return this.PENGUIN_SPEED;
-      case 'snake':
-      default:
-        return this.SNAKE_SPEED;
-    }
+    this.liveObjectController.updateLiveObjects(this.loadedFullRoomsById.values(), delta);
   }
 
   private syncPreviewVisibility(): void {
-    for (const [roomId, image] of this.previewImagesByRoomId.entries()) {
-      image.setVisible(!this.loadedFullRoomsById.has(roomId));
-    }
+    this.worldStreamingController.syncPreviewVisibility();
   }
 
   private syncModeRuntime(): void {
     if (this.mode === 'browse') {
       this.destroyPlayer();
       this.cameraMode = 'inspect';
+      this.goalRunController.clearCurrentRun();
+      this.redrawGoalMarkers();
       this.syncCameraBoundsUsage();
       this.syncEdgeWalls();
       if (this.shouldCenterCamera) {
@@ -1527,6 +1292,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       } else {
         this.constrainInspectCamera();
       }
+      this.syncGhostVisibility();
       return;
     }
 
@@ -1535,7 +1301,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.mode = 'browse';
       this.cameraMode = 'inspect';
       this.syncCameraBoundsUsage();
+      this.applyGoalRunMutation(this.goalRunController.syncRunForRoom(null));
       this.destroyPlayer();
+      this.syncGhostVisibility();
       return;
     }
 
@@ -1545,27 +1313,152 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.shouldRespawnPlayer = false;
     }
 
+    this.applyGoalRunMutation(this.goalRunController.syncRunForRoom(currentRoom));
+
     this.syncFullRoomColliders();
     this.syncLiveObjectInteractions();
     this.syncEdgeWalls();
     this.applyCameraMode(this.shouldCenterCamera);
     this.shouldCenterCamera = false;
+    this.syncGhostVisibility();
+  }
+
+  private countRoomObjectsByCategory(room: RoomSnapshot, category: GameObjectConfig['category']): number {
+    let count = 0;
+
+    for (const placedObject of room.placedObjects) {
+      const config = getObjectById(placedObject.id);
+      if (config?.category === category) {
+        count += 1;
+      }
+    }
+
+    return count;
+  }
+
+  private async refreshLeaderboardForSelection(): Promise<void> {
+    const targetRoom =
+      this.mode === 'play'
+        ? this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates)
+        : this.getRoomSnapshotForCoordinates(this.selectedCoordinates);
+    await this.goalRunController.refreshLeaderboardsForRoom(targetRoom);
+  }
+
+  private redrawGoalMarkers(): void {
+    for (const sprite of this.goalMarkerSprites) {
+      sprite.destroy();
+    }
+    this.goalMarkerSprites = [];
+    for (const label of this.goalMarkerLabels) {
+      label.destroy();
+    }
+    this.goalMarkerLabels = [];
+
+    if (!this.currentGoalRun) {
+      this.syncBackdropCameraIgnores();
+      return;
+    }
+
+    const markers = this.getGoalMarkerDescriptors(this.currentGoalRun);
+    for (const marker of markers) {
+      const sprite = createGoalMarkerFlagSprite(
+        this,
+        marker.variant,
+        marker.point.x,
+        marker.point.y + 2,
+        21,
+      );
+      this.goalMarkerSprites.push(sprite);
+
+      if (marker.label) {
+        const label = this.add.text(marker.point.x, marker.point.y - 28, marker.label, {
+          fontFamily: 'Courier New',
+          fontSize: '12px',
+          color: marker.textColor,
+          stroke: '#050505',
+          strokeThickness: 4,
+        });
+        label.setOrigin(0.5, 1);
+        label.setDepth(22);
+        this.goalMarkerLabels.push(label);
+      }
+    }
+
+    this.syncBackdropCameraIgnores();
+  }
+
+  private getGoalMarkerDescriptors(runState: GoalRunState): Array<{
+    point: GoalMarkerPoint;
+    label: string | null;
+    variant: GoalMarkerFlagVariant;
+    textColor: string;
+  }> {
+    switch (runState.goal.type) {
+      case 'reach_exit':
+        return runState.goal.exit
+          ? [{
+              point: this.toWorldGoalPoint(runState.roomCoordinates, runState.goal.exit),
+              label: null,
+              variant: (runState.result === 'completed' ? 'finish-cleared' : 'finish-pending') as GoalMarkerFlagVariant,
+              textColor: runState.result === 'completed' ? '#f6e6a6' : '#ffefef',
+            }]
+          : [];
+      case 'checkpoint_sprint':
+        return [
+          ...runState.goal.checkpoints.map((checkpoint, index) => {
+            const reached = index < runState.nextCheckpointIndex;
+            return {
+              point: this.toWorldGoalPoint(runState.roomCoordinates, checkpoint),
+              label: `${index + 1}`,
+              variant: (reached ? 'checkpoint-reached' : 'checkpoint-pending') as GoalMarkerFlagVariant,
+              textColor: reached ? '#a9ffd0' : '#ffefef',
+            };
+          }),
+          ...(runState.goal.finish
+            ? [{
+                point: this.toWorldGoalPoint(runState.roomCoordinates, runState.goal.finish),
+                label: null,
+                variant: (runState.result === 'completed' ? 'finish-cleared' : 'finish-pending') as GoalMarkerFlagVariant,
+                textColor: runState.result === 'completed' ? '#f6e6a6' : '#ffefef',
+              }]
+            : []),
+        ];
+      default:
+        return [];
+    }
+  }
+
+  private toWorldGoalPoint(
+    roomCoordinates: RoomCoordinates,
+    point: GoalMarkerPoint
+  ): GoalMarkerPoint {
+    const origin = this.getRoomOrigin(roomCoordinates);
+    return {
+      x: origin.x + point.x,
+      y: origin.y + point.y,
+    };
   }
 
   private destroyPlayer(): void {
+    this.destroyPlayerProjectiles();
     for (const loadedRoom of this.loadedFullRoomsById.values()) {
       loadedRoom.terrainCollider?.destroy();
       loadedRoom.terrainCollider = null;
-      for (const liveObject of loadedRoom.liveObjects) {
-        this.destroyLiveObjectInteractions(liveObject);
-      }
+      this.liveObjectController.clearRoomInteractions(loadedRoom);
       this.destroyEdgeWalls(loadedRoom);
     }
 
     this.isClimbingLadder = false;
     this.activeLadderKey = null;
+    this.isCrouching = false;
+    this.activeAttackAnimation = null;
+    this.activeAttackAnimationUntil = 0;
+    this.playerLandAnimationUntil = 0;
+    this.playerWasGrounded = false;
     this.playerBody?.destroy();
     this.playerBody = null;
+    this.playerSprite?.destroy();
+    this.playerSprite = null;
     this.player?.destroy();
     this.player = null;
     this.syncBackdropCameraIgnores();
@@ -1582,65 +1475,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private syncLiveObjectInteractions(): void {
-    for (const loadedRoom of this.loadedFullRoomsById.values()) {
-      for (const liveObject of loadedRoom.liveObjects) {
-        this.destroyLiveObjectInteractions(liveObject);
-
-        if (!this.player || !this.playerBody || !liveObject.sprite.active || !liveObject.sprite.body) {
-          continue;
-        }
-
-        switch (liveObject.config.category) {
-          case 'collectible':
-            liveObject.interactions.push(
-              this.physics.add.overlap(this.player, liveObject.sprite, () => {
-                this.collectLiveObject(loadedRoom, liveObject);
-              })
-            );
-            break;
-          case 'hazard':
-          case 'enemy':
-            liveObject.interactions.push(
-              this.physics.add.overlap(this.player, liveObject.sprite, () => {
-                this.respawnPlayerToCurrentRoom();
-              })
-            );
-            break;
-          case 'platform':
-            liveObject.interactions.push(this.physics.add.collider(this.player, liveObject.sprite));
-            break;
-          case 'interactive':
-            if (liveObject.config.id === 'bounce_pad') {
-              liveObject.interactions.push(
-                this.physics.add.overlap(this.player, liveObject.sprite, () => {
-                  const padBody = liveObject.sprite.body as ArcadeObjectBody | null;
-                  if (!this.playerBody || !padBody) {
-                    return;
-                  }
-
-                  if (this.time.now < liveObject.runtime.cooldownUntil || this.playerBody.velocity.y < -24) {
-                    return;
-                  }
-
-                  const playerBottom = this.playerBody.bottom;
-                  const padTop = padBody.top;
-                  if (playerBottom > padTop + 12) {
-                    return;
-                  }
-
-                  liveObject.runtime.cooldownUntil = this.time.now + this.BOUNCE_PAD_COOLDOWN_MS;
-                  liveObject.runtime.activatedUntil = this.time.now + this.BOUNCE_PAD_ACTIVE_MS;
-                  this.playerBody.setVelocityY(this.BOUNCE_PAD_VELOCITY);
-                  this.showTransientStatus('Bounce pad launched you.');
-                })
-              );
-            }
-            break;
-          default:
-            break;
-        }
-      }
-    }
+    this.liveObjectController.syncLiveObjectInteractions(this.loadedFullRoomsById.values());
   }
 
   private syncEdgeWalls(): void {
@@ -1853,8 +1688,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (this.mode !== 'play') return;
     this.cameraMode = this.cameraMode === 'inspect' ? 'follow' : 'inspect';
     this.applyCameraMode(true);
-    this.updateHud();
-    this.updateBottomBar();
+    this.renderHud();
   }
 
   private applyCameraMode(forceCenter: boolean = false): void {
@@ -1918,7 +1752,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private createPlayer(startRoom: RoomSnapshot): void {
-    const spawn = this.getSurfaceSpawn(startRoom);
+    const spawn = this.getPlayerSpawn(startRoom);
 
     this.player = this.add.rectangle(
       spawn.x,
@@ -1927,54 +1761,40 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.PLAYER_HEIGHT,
       RETRO_COLORS.draft
     );
+    this.player.setVisible(false);
     this.player.setDepth(25);
 
     this.physics.add.existing(this.player);
     this.playerBody = this.player.body as Phaser.Physics.Arcade.Body;
-    this.playerBody.setSize(this.PLAYER_WIDTH, this.PLAYER_HEIGHT);
     this.playerBody.setCollideWorldBounds(false);
     this.playerBody.setMaxVelocityY(500);
     this.playerBody.setAllowGravity(true);
+    this.isCrouching = false;
+    this.syncPlayerHitbox();
+    this.playerSprite = this.add.sprite(
+      spawn.x,
+      spawn.y,
+      DEFAULT_PLAYER_IDLE_TEXTURE_KEY,
+      DEFAULT_PLAYER_IDLE_FRAME
+    );
+    this.playerSprite.setOrigin(0.5, 1);
+    this.playerSprite.setDepth(26);
+    this.playerSprite.play(DEFAULT_PLAYER_ANIMATION_KEYS.idle);
+    this.playerSprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.playerAnimationState = 'idle';
+    this.playerFacing = 1;
+    this.playerWasGrounded = true;
+    this.playerLandAnimationUntil = 0;
+    this.activeAttackAnimation = null;
+    this.activeAttackAnimationUntil = 0;
     this.isClimbingLadder = false;
     this.activeLadderKey = null;
+    this.syncPlayerVisual();
     this.syncBackdropCameraIgnores();
   }
 
   private findOverlappingLadder(): LoadedRoomObject | null {
-    if (!this.playerBody) {
-      return null;
-    }
-
-    const playerBounds = this.getArcadeBodyBounds(this.playerBody);
-    let closestLadder: LoadedRoomObject | null = null;
-    let closestDistance = Number.POSITIVE_INFINITY;
-
-    for (const loadedRoom of this.loadedFullRoomsById.values()) {
-      for (const liveObject of loadedRoom.liveObjects) {
-        if (liveObject.config.id !== 'ladder' || !liveObject.sprite.active || !liveObject.sprite.body) {
-          continue;
-        }
-
-        const ladderBounds = this.getArcadeBodyBounds(liveObject.sprite.body as ArcadeObjectBody);
-        if (!Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, ladderBounds)) {
-          continue;
-        }
-
-        const distance =
-          Math.abs(liveObject.sprite.x - this.playerBody.center.x) +
-          Math.abs(liveObject.sprite.y - this.playerBody.center.y);
-        if (distance < closestDistance) {
-          closestDistance = distance;
-          closestLadder = liveObject;
-        }
-      }
-    }
-
-    return closestLadder;
-  }
-
-  private getArcadeBodyBounds(body: ArcadeObjectBody): Phaser.Geom.Rectangle {
-    return new Phaser.Geom.Rectangle(body.left, body.top, body.width, body.height);
+    return this.liveObjectController.findOverlappingLadder(this.loadedFullRoomsById.values());
   }
 
   private setPlayerLadderState(ladder: LoadedRoomObject | null): void {
@@ -1997,6 +1817,344 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (enteringLadder) {
       this.playerBody.setVelocityY(0);
     }
+  }
+
+  private syncPlayerHitbox(): void {
+    if (!this.playerBody) {
+      return;
+    }
+
+    const nextHeight = this.isCrouching ? this.PLAYER_CROUCH_HEIGHT : this.PLAYER_HEIGHT;
+    if (this.playerBody.height === nextHeight) {
+      return;
+    }
+
+    this.playerBody.setSize(this.PLAYER_WIDTH, nextHeight, false);
+    this.playerBody.setOffset(0, this.PLAYER_HEIGHT - nextHeight);
+  }
+
+  private clearCrateInteractionState(): void {
+    this.activeCrateInteractionMode = null;
+    this.activeCrateInteractionFacing = null;
+  }
+
+  private applyWeaponKnockback(velocityX: number): void {
+    if (!this.playerBody) {
+      return;
+    }
+
+    this.weaponKnockbackVelocityX = velocityX;
+    this.weaponKnockbackUntil = this.time.now + this.WEAPON_KNOCKBACK_MS;
+    this.playerBody.setVelocityX(velocityX);
+  }
+
+  private canPlayerStandUp(): boolean {
+    if (!this.playerBody) {
+      return true;
+    }
+
+    const room = this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates);
+    if (!room) {
+      return true;
+    }
+
+    const topY = this.playerBody.bottom - this.PLAYER_HEIGHT;
+    const sampleXs = [
+      this.playerBody.center.x,
+      this.playerBody.left + 1,
+      this.playerBody.right - 1,
+    ];
+
+    return sampleXs.every((sampleX) => !this.isSolidTerrainAtWorldPoint(room, sampleX, topY + 1));
+  }
+
+  private findCrateInteraction(horizontalInput: number, downHeld: boolean): CrateInteraction | null {
+    if (!this.playerBody || horizontalInput === 0) {
+      return null;
+    }
+
+    const moveDirectionX = horizontalInput > 0 ? 1 : -1;
+    const playerBounds = this.getArcadeBodyBounds(this.playerBody);
+    let bestInteraction: CrateInteraction | null = null;
+    let bestGap = Number.POSITIVE_INFINITY;
+
+    for (const loadedRoom of this.loadedFullRoomsById.values()) {
+      for (const liveObject of loadedRoom.liveObjects) {
+        if (
+          liveObject.config.id !== 'crate' ||
+          !liveObject.sprite.active ||
+          !isDynamicArcadeBody(liveObject.sprite.body as ArcadeObjectBody | null)
+        ) {
+          continue;
+        }
+
+        const crateBody = liveObject.sprite.body as Phaser.Physics.Arcade.Body;
+        const crateBounds = this.getArcadeBodyBounds(crateBody);
+        const verticalOverlap =
+          Math.min(playerBounds.bottom, crateBounds.bottom) -
+          Math.max(playerBounds.top, crateBounds.top);
+        if (verticalOverlap < Math.min(8, playerBounds.height * 0.5)) {
+          continue;
+        }
+
+        let mode: 'push' | 'pull' | null = null;
+        let gap = Number.POSITIVE_INFINITY;
+        let facing: -1 | 1 = moveDirectionX;
+
+        if (moveDirectionX > 0) {
+          const pushGap = crateBounds.left - playerBounds.right;
+          const pullGap = playerBounds.left - crateBounds.right;
+          if (pushGap >= -6 && pushGap <= this.CRATE_INTERACTION_MAX_GAP) {
+            mode = 'push';
+            gap = Math.abs(pushGap);
+            facing = 1;
+          } else if (downHeld && pullGap >= -6 && pullGap <= this.CRATE_INTERACTION_MAX_GAP) {
+            mode = 'pull';
+            gap = Math.abs(pullGap);
+            facing = -1;
+          }
+        } else {
+          const pushGap = playerBounds.left - crateBounds.right;
+          const pullGap = crateBounds.left - playerBounds.right;
+          if (pushGap >= -6 && pushGap <= this.CRATE_INTERACTION_MAX_GAP) {
+            mode = 'push';
+            gap = Math.abs(pushGap);
+            facing = -1;
+          } else if (downHeld && pullGap >= -6 && pullGap <= this.CRATE_INTERACTION_MAX_GAP) {
+            mode = 'pull';
+            gap = Math.abs(pullGap);
+            facing = 1;
+          }
+        }
+
+        if (!mode || gap >= bestGap) {
+          continue;
+        }
+
+        bestGap = gap;
+        bestInteraction = {
+          crateBody,
+          mode,
+          moveDirectionX,
+          facing,
+        };
+      }
+    }
+
+    return bestInteraction;
+  }
+
+  private handleCombatInput(input: {
+    swordPressed: boolean;
+    gunPressed: boolean;
+    downHeld: boolean;
+    grounded: boolean;
+  }): void {
+    if (!this.player || !this.playerBody) {
+      return;
+    }
+
+    if (input.swordPressed && this.time.now >= this.meleeCooldownUntil) {
+      this.performSwordAttack(input.downHeld, input.grounded);
+      return;
+    }
+
+    if (input.gunPressed && this.time.now >= this.rangedCooldownUntil) {
+      this.fireGunProjectile();
+    }
+  }
+
+  private performSwordAttack(downHeld: boolean, grounded: boolean): void {
+    if (!this.player || !this.playerBody) {
+      return;
+    }
+
+    const downward = !grounded && downHeld;
+    const attackAnimation: DefaultPlayerAnimationState = downward ? 'air-slash-down' : 'sword-slash';
+    this.activeAttackAnimation = attackAnimation;
+    this.activeAttackAnimationUntil = this.time.now + this.SWORD_ATTACK_MS;
+    this.meleeCooldownUntil = this.time.now + this.SWORD_COOLDOWN_MS;
+
+    if (downward && this.playerBody.velocity.y < 120) {
+      this.playerBody.setVelocityY(120);
+    }
+
+    const attackRect = downward
+      ? new Phaser.Geom.Rectangle(
+          this.playerBody.center.x - 12,
+          this.playerBody.bottom - 2,
+          24,
+          28
+        )
+      : new Phaser.Geom.Rectangle(
+          this.playerBody.center.x + this.playerFacing * 8 - 14,
+          this.playerBody.top + 2,
+          28,
+          this.playerBody.height + 10
+        );
+
+    const hits = this.liveObjectController.attackEnemiesInRect(
+      this.loadedFullRoomsById.values(),
+      attackRect,
+      3
+    );
+    this.fxController?.playSwordSlashFx(
+      this.player.x,
+      downward ? this.playerBody.bottom - 2 : this.playerBody.center.y,
+      this.playerFacing,
+      downward
+    );
+    if (hits.length > 0) {
+      playSfx('enemy-hit');
+      if (downward) {
+        this.playerBody.setVelocityY(this.DOWNWARD_SLASH_BOUNCE_VELOCITY);
+      } else {
+        this.applyWeaponKnockback(
+          Phaser.Math.Clamp(
+            this.playerBody.velocity.x + this.playerFacing * this.SWORD_HIT_LUNGE_VELOCITY,
+            -this.PLAYER_SPEED * 1.35,
+            this.PLAYER_SPEED * 1.35
+          )
+        );
+      }
+      this.cameras.main.shake(50, 0.002);
+    }
+  }
+
+  private fireGunProjectile(): void {
+    if (!this.player || !this.playerBody) {
+      return;
+    }
+
+    this.activeAttackAnimation = 'gun-fire';
+    this.activeAttackAnimationUntil = this.time.now + this.GUN_ATTACK_MS;
+    this.rangedCooldownUntil = this.time.now + this.GUN_COOLDOWN_MS;
+
+    const muzzleX = this.player.x + this.playerFacing * 10;
+    const muzzleY = this.playerBody.center.y - (this.isCrouching ? 1 : 5);
+    this.fxController?.playMuzzleFlashFx(muzzleX, muzzleY, this.playerFacing);
+
+    const projectile = this.add.rectangle(muzzleX, muzzleY, 8, 3, 0x9deaff, 1);
+    projectile.setDepth(27);
+    this.playerProjectiles.push({
+      rect: projectile,
+      directionX: this.playerFacing,
+      speed: this.PROJECTILE_SPEED,
+      expiresAt: this.time.now + this.PROJECTILE_LIFETIME_MS,
+    });
+    this.applyWeaponKnockback(
+      Phaser.Math.Clamp(
+        this.playerBody.velocity.x - this.playerFacing * this.GUN_RECOIL_VELOCITY,
+        -this.PLAYER_SPEED * 1.2,
+        this.PLAYER_SPEED * 1.2
+      )
+    );
+    this.syncBackdropCameraIgnores();
+  }
+
+  private updatePlayerProjectiles(delta: number): void {
+    if (this.playerProjectiles.length === 0) {
+      return;
+    }
+
+    for (const projectile of [...this.playerProjectiles]) {
+      if (!projectile.rect.active || this.time.now >= projectile.expiresAt) {
+        this.destroyPlayerProjectile(projectile);
+        continue;
+      }
+
+      const startX = projectile.rect.x;
+      const stepDistance = (projectile.speed * delta) / 1000;
+      const nextX = startX + projectile.directionX * stepDistance;
+      const sampleCount = Math.max(1, Math.ceil(Math.abs(nextX - startX) / 6));
+      let destroyed = false;
+
+      for (let index = 1; index <= sampleCount; index += 1) {
+        const sampleX = Phaser.Math.Linear(startX, nextX, index / sampleCount);
+        const sampleY = projectile.rect.y;
+        const enemyHit = this.liveObjectController.attackEnemyAtPoint(
+          this.loadedFullRoomsById.values(),
+          sampleX,
+          sampleY,
+          5
+        );
+        if (enemyHit) {
+          playSfx('enemy-hit');
+          this.fxController?.playBulletImpactFx(enemyHit.x, enemyHit.y - 2);
+          this.cameras.main.shake(40, 0.0015);
+          this.destroyPlayerProjectile(projectile);
+          destroyed = true;
+          break;
+        }
+
+        if (this.isProjectileBlocked(sampleX, sampleY)) {
+          this.fxController?.playBulletImpactFx(sampleX, sampleY);
+          this.destroyPlayerProjectile(projectile);
+          destroyed = true;
+          break;
+        }
+      }
+
+      if (!destroyed) {
+        projectile.rect.x = nextX;
+      }
+    }
+  }
+
+  private isProjectileBlocked(worldX: number, worldY: number): boolean {
+    const room = this.getRoomSnapshotAtWorldPoint(worldX, worldY);
+    if (!room) {
+      return true;
+    }
+
+    if (this.isSolidTerrainAtWorldPoint(room, worldX, worldY)) {
+      return true;
+    }
+
+    for (const loadedRoom of this.loadedFullRoomsById.values()) {
+      for (const liveObject of loadedRoom.liveObjects) {
+        if (
+          liveObject.config.category !== 'platform' ||
+          !liveObject.sprite.active ||
+          !liveObject.sprite.body
+        ) {
+          continue;
+        }
+
+        const bounds = this.getArcadeBodyBounds(liveObject.sprite.body as ArcadeObjectBody);
+        if (bounds.contains(worldX, worldY)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  private destroyPlayerProjectiles(): void {
+    for (const projectile of this.playerProjectiles) {
+      projectile.rect.destroy();
+    }
+    this.playerProjectiles = [];
+    this.syncBackdropCameraIgnores();
+  }
+
+  private destroyPlayerProjectile(projectile: PlayerProjectile): void {
+    projectile.rect.destroy();
+    this.playerProjectiles = this.playerProjectiles.filter((candidate) => candidate !== projectile);
+    this.syncBackdropCameraIgnores();
+  }
+
+  private getPlayerSpawn(room: RoomSnapshot): PlayerSpawn {
+    if (room.spawnPoint) {
+      const origin = this.getRoomOrigin(room.coordinates);
+      return {
+        x: origin.x + room.spawnPoint.x,
+        y: origin.y + room.spawnPoint.y - this.PLAYER_HEIGHT / 2,
+      };
+    }
+
+    return this.getSurfaceSpawn(room);
   }
 
   private getSurfaceSpawn(room: RoomSnapshot): PlayerSpawn {
@@ -2026,6 +2184,30 @@ export class OverworldPlayScene extends Phaser.Scene {
       x: origin.x + ROOM_PX_WIDTH / 2,
       y: origin.y + TILE_SIZE * 2,
     };
+  }
+
+  private getRoomSnapshotAtWorldPoint(worldX: number, worldY: number): RoomSnapshot | null {
+    const coordinates = {
+      x: Math.floor(worldX / ROOM_PX_WIDTH),
+      y: Math.floor(worldY / ROOM_PX_HEIGHT),
+    };
+    return this.getRoomSnapshotForCoordinates(coordinates);
+  }
+
+  private isSolidTerrainAtWorldPoint(room: RoomSnapshot, worldX: number, worldY: number): boolean {
+    const roomOrigin = this.getRoomOrigin(room.coordinates);
+    const localX = Math.floor((worldX - roomOrigin.x) / TILE_SIZE);
+    const localY = Math.floor((worldY - roomOrigin.y) / TILE_SIZE);
+
+    if (localX < 0 || localX >= ROOM_WIDTH || localY < 0 || localY >= ROOM_HEIGHT) {
+      return false;
+    }
+
+    return room.tileData.terrain[localY][localX] > 0;
+  }
+
+  private getArcadeBodyBounds(body: ArcadeObjectBody): Phaser.Geom.Rectangle {
+    return new Phaser.Geom.Rectangle(body.left, body.top, body.width, body.height);
   }
 
   private findSpawnSurfaceTile(room: RoomSnapshot, tileX: number): number | null {
@@ -2062,67 +2244,226 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    const spawn = this.getSurfaceSpawn(currentRoom);
-    this.setPlayerLadderState(null);
-    this.playerBody.reset(spawn.x, spawn.y);
-    this.player.setPosition(spawn.x, spawn.y);
-    this.playerBody.setVelocity(0, 0);
+    this.handlePlayerDeath('You fell.');
   }
 
   private respawnPlayerToCurrentRoom(): void {
     const currentRoom = this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates);
     if (!currentRoom || !this.player || !this.playerBody) return;
 
-    const spawn = this.getSurfaceSpawn(currentRoom);
+    const spawn = this.getPlayerSpawn(currentRoom);
     this.setPlayerLadderState(null);
+    this.isCrouching = false;
+    this.activeAttackAnimation = null;
+    this.activeAttackAnimationUntil = 0;
+    this.clearCrateInteractionState();
+    this.weaponKnockbackVelocityX = 0;
+    this.weaponKnockbackUntil = 0;
+    this.destroyPlayerProjectiles();
     this.playerBody.reset(spawn.x, spawn.y);
     this.player.setPosition(spawn.x, spawn.y);
     this.playerBody.setVelocity(0, 0);
+    this.syncPlayerHitbox();
+    this.playerWasGrounded = false;
+    this.nextLadderClimbSfxAt = this.time.now + 120;
+    this.syncPlayerVisual();
+    playSfx('respawn');
   }
 
-  private collectLiveObject(loadedRoom: LoadedFullRoom, liveObject: LoadedRoomObject): void {
-    if (this.collectedObjectKeys.has(liveObject.key)) {
+  private maybePlayLadderClimbSfx(verticalInput: number): void {
+    if (!this.playerBody) {
       return;
     }
 
-    this.collectedObjectKeys.add(liveObject.key);
-    this.score += this.getCollectibleScoreValue(liveObject.config.id);
-    this.showTransientStatus(`${liveObject.config.name} collected.`);
-    this.destroyLiveObjectInteractions(liveObject);
+    const now = this.time.now;
+    if (!this.isClimbingLadder || verticalInput === 0 || now < this.nextLadderClimbSfxAt) {
+      return;
+    }
 
-    const startY = liveObject.sprite.y;
-    this.tweens.add({
-      targets: liveObject.sprite,
-      y: startY - 16,
-      scaleX: 1.5,
-      scaleY: 1.5,
-      alpha: 0,
-      duration: 300,
-      ease: 'Quad.easeOut',
-      onComplete: () => {
-        liveObject.sprite.destroy();
-      },
-    });
-
-    loadedRoom.liveObjects = loadedRoom.liveObjects.filter((candidate) => candidate !== liveObject);
+    playSfx('ladder-climb');
+    this.nextLadderClimbSfxAt = now + 180;
   }
 
-  private getCollectibleScoreValue(objectId: string): number {
-    switch (objectId) {
-      case 'gem':
-        return 5;
-      case 'coin_gold':
-        return 3;
-      case 'coin_silver':
-        return 2;
+  private syncPlayerVisual(): void {
+    if (!this.player || !this.playerBody || !this.playerSprite) {
+      return;
+    }
+
+    this.playerSprite.setPosition(
+      this.player.x,
+      this.playerBody.bottom + DEFAULT_PLAYER_VISUAL_FEET_OFFSET
+    );
+
+    if (this.activeCrateInteractionFacing !== null) {
+      this.playerFacing = this.activeCrateInteractionFacing;
+    } else if (Math.abs(this.playerBody.velocity.x) > 8) {
+      this.playerFacing = this.playerBody.velocity.x < 0 ? -1 : 1;
+    }
+    this.playerSprite.setFlipX(this.playerFacing < 0);
+
+    const grounded = this.playerBody.blocked.down || this.playerBody.touching.down;
+    if (!this.isClimbingLadder && grounded && !this.playerWasGrounded) {
+      this.playerLandAnimationUntil = this.time.now + 120;
+      this.fxController?.playLandingDustFx(this.player.x, this.playerBody.bottom, this.playerFacing);
+    }
+
+    let nextAnimation: DefaultPlayerAnimationState = 'idle';
+    if (this.activeAttackAnimation && this.time.now < this.activeAttackAnimationUntil) {
+      nextAnimation = this.activeAttackAnimation;
+    } else if (this.isClimbingLadder) {
+      nextAnimation = 'ladder-climb';
+    } else if (!grounded) {
+      nextAnimation = this.playerBody.velocity.y < -10 ? 'jump-rise' : 'jump-fall';
+    } else if (this.activeCrateInteractionMode === 'push') {
+      nextAnimation = 'push';
+    } else if (this.activeCrateInteractionMode === 'pull') {
+      nextAnimation = 'pull';
+    } else if (this.isCrouching) {
+      nextAnimation = Math.abs(this.playerBody.velocity.x) > 8 ? 'crawl' : 'crouch';
+    } else if (this.time.now < this.playerLandAnimationUntil) {
+      nextAnimation = 'land';
+    } else if (Math.abs(this.playerBody.velocity.x) > 12) {
+      nextAnimation = 'run';
+    }
+
+    if (nextAnimation !== this.playerAnimationState) {
+      this.playerAnimationState = nextAnimation;
+      this.playerSprite.play(DEFAULT_PLAYER_ANIMATION_KEYS[nextAnimation], true);
+    }
+
+    this.playerWasGrounded = grounded;
+  }
+
+  private updateGoalRun(delta: number): void {
+    this.applyGoalRunMutation(this.goalRunController.tick(delta));
+
+    const runState = this.currentGoalRun;
+    if (!runState || runState.result !== 'active') {
+      return;
+    }
+
+    if (!this.playerBody || !this.player) {
+      return;
+    }
+
+    if (
+      this.currentRoomCoordinates.x !== runState.roomCoordinates.x ||
+      this.currentRoomCoordinates.y !== runState.roomCoordinates.y
+    ) {
+      return;
+    }
+
+    switch (runState.goal.type) {
+      case 'reach_exit':
+        if (
+          runState.goal.exit &&
+          this.playerTouchesGoalPoint(
+            this.toWorldGoalPoint(runState.roomCoordinates, runState.goal.exit)
+          )
+        ) {
+          this.completeGoalRun('Exit reached.');
+        }
+        break;
+      case 'checkpoint_sprint':
+        this.updateCheckpointSprintRun(runState);
+        break;
       default:
-        return 1;
+        break;
     }
   }
 
+  private updateCheckpointSprintRun(runState: GoalRunState): void {
+    if (runState.goal.type !== 'checkpoint_sprint') {
+      return;
+    }
+
+    const nextCheckpoint = runState.goal.checkpoints[runState.nextCheckpointIndex] ?? null;
+    if (nextCheckpoint) {
+      const worldPoint = this.toWorldGoalPoint(runState.roomCoordinates, nextCheckpoint);
+      if (this.playerTouchesGoalPoint(worldPoint)) {
+        this.applyGoalRunMutation(this.goalRunController.recordCheckpointReached());
+      }
+      return;
+    }
+
+    if (
+      runState.goal.finish &&
+      this.playerTouchesGoalPoint(this.toWorldGoalPoint(runState.roomCoordinates, runState.goal.finish))
+    ) {
+      this.completeGoalRun('Sprint clear.');
+    }
+  }
+
+  private playerTouchesGoalPoint(point: GoalMarkerPoint): boolean {
+    if (!this.playerBody) {
+      return false;
+    }
+
+    const feetX = this.playerBody.center.x;
+    const feetY = this.playerBody.bottom;
+    return Phaser.Math.Distance.Between(feetX, feetY, point.x, point.y) <= 18;
+  }
+
+  private completeGoalRun(message: string): void {
+    this.applyGoalRunMutation(this.goalRunController.markCompleted(message));
+  }
+
+  private failGoalRun(message: string): void {
+    this.applyGoalRunMutation(this.goalRunController.markFailed(message));
+  }
+
+  private handlePlayerDeath(reason: string): void {
+    const activeRun = this.currentGoalRun;
+    this.goalRunController.recordDeath();
+    if (this.player && this.playerBody) {
+      this.fxController?.playGoalFx('fail', this.player.x, this.playerBody.bottom - 10);
+    }
+    if (reason.includes('hit you')) {
+      playSfx('player-hurt');
+    }
+    playSfx('player-death');
+
+    this.respawnPlayerToCurrentRoom();
+
+    if (activeRun?.goal.type === 'survival') {
+      const goalRoom = this.getRoomSnapshotForCoordinates(activeRun.roomCoordinates);
+      this.failGoalRun('Survival failed.');
+      if (goalRoom?.goal) {
+        this.applyGoalRunMutation(this.goalRunController.restartRunForRoom(goalRoom));
+        void this.refreshLeaderboardForSelection();
+        this.showTransientStatus(`${reason} Survival run restarted.`);
+      }
+      return;
+    }
+
+    this.showTransientStatus(reason);
+  }
+
+  private handleEnemyDefeated(roomId: string, enemyName: string): boolean {
+    const result = this.goalRunController.recordEnemyDefeated(
+      roomId,
+      enemyName
+    );
+    this.applyGoalRunMutation(result);
+    return Boolean(result.transientStatus);
+  }
+
+  private handleCollectibleCollected(roomId: string): void {
+    this.applyGoalRunMutation(this.goalRunController.recordCollectibleCollected(roomId));
+  }
+
   private resetPlaySession(): void {
+    this.goalRunController.abandonActiveRun();
+
     this.collectedObjectKeys.clear();
     this.score = 0;
+    this.isCrouching = false;
+    this.activeAttackAnimation = null;
+    this.activeAttackAnimationUntil = 0;
+    this.destroyPlayerProjectiles();
+    this.playerLandAnimationUntil = 0;
+    this.goalRunController.reset();
+    this.redrawGoalMarkers();
   }
 
   private getPlacedObjectRuntimeKey(roomId: string, placedIndex: number): string {
@@ -2157,6 +2498,12 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.currentRoomCoordinates = { ...nextRoomCoordinates };
     this.selectedCoordinates = { ...nextRoomCoordinates };
     this.updateSelectedSummary();
+    this.applyGoalRunMutation(
+      this.goalRunController.syncRunForRoom(
+        this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates)
+      )
+    );
+    void this.refreshLeaderboardForSelection();
     setFocusedCoordinatesInUrl(this.currentRoomCoordinates);
 
     if (
@@ -2168,8 +2515,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     this.redrawWorld();
-    this.updateHud();
-    this.updateBottomBar();
+    this.renderHud();
   }
 
   private syncBrowseWindowToCamera(): void {
@@ -2191,6 +2537,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       nextCenterCoordinates.x === this.windowCenterCoordinates.x &&
       nextCenterCoordinates.y === this.windowCenterCoordinates.y
     ) {
+      this.refreshChunkWindowIfNeeded(nextCenterCoordinates);
       return;
     }
 
@@ -2208,11 +2555,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     };
   }
 
-  private isWithinStreamRadius(target: RoomCoordinates, center: RoomCoordinates): boolean {
-    return (
-      Math.abs(target.x - center.x) <= STREAM_RADIUS &&
-      Math.abs(target.y - center.y) <= STREAM_RADIUS
-    );
+  private isWithinLoadedRoomBounds(coordinates: RoomCoordinates): boolean {
+    return this.worldStreamingController.isWithinLoadedRoomBounds(coordinates);
   }
 
   private getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number } {
@@ -2223,13 +2567,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null {
-    const roomId = roomIdFromCoordinates(coordinates);
-    const draftRoom = this.draftRoomsById.get(roomId);
-    if (draftRoom) {
-      return cloneRoomSnapshot(draftRoom);
-    }
-
-    return this.roomSnapshotsById.get(roomId) ?? null;
+    return this.worldStreamingController.getRoomSnapshotForCoordinates(coordinates);
   }
 
   private updateSelectedSummary(): void {
@@ -2278,6 +2616,11 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   playSelectedRoom(): void {
+    if (this.mode === 'play') {
+      this.returnToWorld();
+      return;
+    }
+
     const selectedState = this.getCellStateAt(this.selectedCoordinates);
     if (selectedState !== 'published' && selectedState !== 'draft') return;
 
@@ -2291,6 +2634,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   returnToWorld(): void {
+    this.resetPlaySession();
     this.mode = 'browse';
     this.cameraMode = 'inspect';
     this.selectedCoordinates = { ...this.currentRoomCoordinates };
@@ -2300,7 +2644,8 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   buildSelectedRoom(): void {
-    if (this.getCellStateAt(this.selectedCoordinates) !== 'frontier') return;
+    const selectedState = this.getCellStateAt(this.selectedCoordinates);
+    if (selectedState !== 'frontier' || this.isFrontierBuildBlockedByClaimLimit()) return;
 
     const editorData: EditorSceneData = {
       roomCoordinates: { ...this.selectedCoordinates },
@@ -2329,121 +2674,233 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.editSelectedRoom();
   }
 
-  private updateHud(statusOverride?: string): void {
-    const hud = document.getElementById('world-hud');
-    const selectedCoordsEl = document.getElementById('world-selected-coords');
-    const selectedStateEl = document.getElementById('world-selected-state');
-    const selectedMetaEl = document.getElementById('world-selected-meta');
-    const statusEl = document.getElementById('world-status');
-    const playBtn = document.getElementById('btn-world-play') as HTMLButtonElement | null;
-    const editBtn = document.getElementById('btn-world-edit') as HTMLButtonElement | null;
-    const buildBtn = document.getElementById('btn-world-build') as HTMLButtonElement | null;
-    const jumpInput = document.getElementById('world-jump-input') as HTMLInputElement | null;
-    const zoomLabel = document.getElementById('world-zoom-label');
-
-    if (hud) {
-      hud.classList.remove('hidden');
+  private applyGoalRunMutation(result: GoalRunMutationResult): void {
+    if (!result.changed) {
+      return;
     }
 
-    if (jumpInput && document.activeElement !== jumpInput) {
-      jumpInput.value = roomIdFromCoordinates(this.selectedCoordinates);
+    this.playGoalRunFx(result);
+
+    if (result.transientStatus) {
+      this.showTransientStatus(result.transientStatus);
     }
 
-    if (selectedCoordsEl) {
-      selectedCoordsEl.textContent = roomIdFromCoordinates(this.selectedCoordinates);
+    if (result.goalMarkersChanged) {
+      this.redrawGoalMarkers();
+    }
+  }
+
+  private playGoalRunFx(result: GoalRunMutationResult): void {
+    if (!result.event || !this.fxController) {
+      return;
     }
 
+    const origin = this.getPlayerEffectOrigin();
+    if (!origin) {
+      return;
+    }
+
+    switch (result.event) {
+      case 'start':
+        this.fxController.playGoalFx('start', origin.x, origin.y);
+        break;
+      case 'checkpoint':
+        this.fxController.playGoalFx('checkpoint', origin.x, origin.y);
+        break;
+      case 'complete':
+        this.fxController.playGoalFx('success', origin.x, origin.y);
+        break;
+      case 'fail':
+        this.fxController.playGoalFx(
+          'fail',
+          origin.x,
+          origin.y,
+          result.transientStatus === 'Time up.' ? 'time-up' : 'goal-fail'
+        );
+        break;
+      case 'abandon':
+        this.fxController.playGoalFx('abandon', origin.x, origin.y, 'challenge-abandon');
+        break;
+      default:
+        break;
+    }
+  }
+
+  private getPlayerEffectOrigin(): { x: number; y: number } | null {
+    if (this.player && this.playerBody) {
+      return {
+        x: this.player.x,
+        y: this.playerBody.bottom - this.PLAYER_HEIGHT,
+      };
+    }
+
+    const currentRoom = this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates);
+    if (!currentRoom) {
+      return null;
+    }
+
+    const roomOrigin = this.getRoomOrigin(currentRoom.coordinates);
+    return {
+      x: roomOrigin.x + ROOM_PX_WIDTH * 0.5,
+      y: roomOrigin.y + ROOM_PX_HEIGHT * 0.5,
+    };
+  }
+
+  private getGoalStatusText(): string | null {
+    return this.goalRunController.getGoalStatusText();
+  }
+
+  private renderHud(statusOverride?: string): void {
+    this.hudBridge?.render(this.buildHudViewModel(statusOverride));
+  }
+
+  private buildHudViewModel(statusOverride?: string): OverworldHudViewModel {
     const selectedState = this.getCellStateAt(this.selectedCoordinates);
     const selectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
     const selectedDraft = this.draftRoomsById.get(selectedRoomId) ?? null;
+    const selectedPopulation = this.getRoomPopulation(this.selectedCoordinates);
+    const transientStatus = this.getTransientStatusMessage();
+    const totalPlayerCount = this.presenceController.getTotalPlayerCount();
+    const goalStatus = this.getGoalStatusText();
+    const frontierBuildBlocked = selectedState === 'frontier' && this.isFrontierBuildBlockedByClaimLimit();
+    const rankingMode = this.currentRoomLeaderboard?.rankingMode ?? null;
+    const roomTop = this.currentRoomLeaderboard?.entries[0] ?? null;
+    const saveStatusTone =
+      this.mode === 'play'
+        ? this.currentGoalRun
+          ? this.currentGoalRun.result === 'completed'
+            ? 'challenge-complete'
+            : this.currentGoalRun.result === 'failed'
+              ? 'challenge-failed'
+              : 'challenge-active'
+          : 'play-score'
+        : 'default';
 
-    if (selectedStateEl) {
-      selectedStateEl.textContent =
+    const selectedTitleText = this.getRoomDisplayTitle(
+      selectedState === 'published'
+        ? this.selectedSummary?.title ?? null
+        : selectedState === 'draft'
+          ? selectedDraft?.title ?? null
+          : null,
+      this.selectedCoordinates
+    );
+
+    let selectedMetaText = 'No room here yet';
+    let selectedMetaTone: OverworldHudViewModel['selectedMetaTone'] = 'default';
+    if (selectedState === 'published') {
+      selectedMetaText = this.selectedSummary?.goalType
+        ? `${ROOM_GOAL_LABELS[this.selectedSummary.goalType]} challenge`
+        : 'No challenge';
+      selectedMetaTone = this.selectedSummary?.goalType ? 'challenge' : 'default';
+      if (selectedPopulation > 0) {
+        selectedMetaText += ` · ${selectedPopulation} here`;
+      }
+    } else if (selectedState === 'draft' && selectedDraft) {
+      selectedMetaText = selectedDraft.goal
+        ? `Draft preview · ${ROOM_GOAL_LABELS[selectedDraft.goal.type]} challenge`
+        : 'Draft preview';
+      selectedMetaTone = 'draft';
+    } else if (selectedState === 'frontier') {
+      if (frontierBuildBlocked) {
+        const authState = getAuthDebugState();
+        const limit = authState.roomDailyClaimLimit;
+        selectedMetaText =
+          limit === null
+            ? 'Daily new-room claim limit reached today'
+            : `Daily new-room claim limit reached (${limit}/${limit})`;
+        selectedMetaTone = 'default';
+      } else {
+        selectedMetaText = 'Build a room here';
+        selectedMetaTone = 'frontier';
+      }
+    } else if (selectedState === 'empty') {
+      selectedMetaText = 'You can only build next to an existing published room';
+      selectedMetaTone = 'default';
+    }
+
+    let statusText: string;
+    if (statusOverride) {
+      statusText = statusOverride;
+    } else if (transientStatus) {
+      statusText = transientStatus;
+    } else {
+      statusText = '';
+    }
+
+    let leaderboardText = '';
+    if (roomTop && rankingMode) {
+      const metric =
+        rankingMode === 'time'
+          ? `${(roomTop.elapsedMs / 1000).toFixed(2)}s`
+          : `${roomTop.score} pts`;
+      leaderboardText = `Best: ${roomTop.userDisplayName} · ${metric}`;
+    }
+
+    const saveStatusText =
+      statusOverride ??
+      transientStatus ??
+      (this.mode === 'play'
+        ? goalStatus
+          ? `Score ${this.score} · ${goalStatus}`
+          : `Score ${this.score}`
+        : '');
+
+    return {
+      saveStatusTone,
+      jumpInputValue: roomIdFromCoordinates(this.selectedCoordinates),
+      selectedTitleText,
+      selectedCoordinatesText: roomIdFromCoordinates(this.selectedCoordinates),
+      selectedStateText:
         selectedState === 'published'
           ? 'Published'
           : selectedState === 'draft'
             ? 'Draft'
             : selectedState === 'frontier'
               ? 'Frontier'
-              : 'Empty';
-    }
-
-    if (selectedMetaEl) {
-      if (selectedState === 'published') {
-        selectedMetaEl.textContent = `Published v${this.selectedSummary?.version ?? 1} · room is ${ROOM_WIDTH}x${ROOM_HEIGHT} tiles`;
-      } else if (selectedState === 'draft' && selectedDraft) {
-        selectedMetaEl.textContent = `Draft preview · background ${selectedDraft.background} · testable in the stitched world`;
-      } else if (selectedState === 'frontier') {
-        selectedMetaEl.textContent = `Frontier room · build here to add a new room to the world`;
-      } else {
-        selectedMetaEl.textContent = 'No room here yet';
-      }
-    }
-
-    if (zoomLabel) {
-      zoomLabel.textContent = `${this.cameras.main.zoom.toFixed(2)}x`;
-    }
-
-    if (playBtn) {
-      playBtn.disabled = selectedState !== 'published' && selectedState !== 'draft';
-    }
-    if (editBtn) {
-      editBtn.disabled = selectedState !== 'published' && selectedState !== 'draft';
-    }
-    if (buildBtn) {
-      buildBtn.disabled = selectedState !== 'frontier';
-    }
-
-    if (statusEl) {
-      const transientStatus = this.getTransientStatusMessage();
-      if (statusOverride) {
-        statusEl.textContent = statusOverride;
-      } else if (transientStatus) {
-        statusEl.textContent = transientStatus;
-      } else if (this.mode === 'play') {
-        statusEl.textContent = `Play mode · score ${this.score} · wheel zooms on cursor · +/- zoom current room · C follow cam · Option-drag pans`;
-      } else {
-        statusEl.textContent = 'Browse mode · click rooms to select · wheel zooms on cursor · +/- zoom selected room · Jump recenters';
-      }
-    }
+              : 'Empty',
+      selectedStateTone: selectedState,
+      selectedMetaText,
+      selectedMetaTone,
+      statusText,
+      leaderboardText,
+      zoomLabelText: `${this.cameras.main.zoom.toFixed(2)}x`,
+      playButtonText: this.mode === 'play' ? 'Stop' : 'Play Room',
+      playButtonDisabled: this.mode === 'play' ? false : selectedState !== 'published' && selectedState !== 'draft',
+      playButtonActive: this.mode === 'play',
+      editButtonDisabled: selectedState !== 'published' && selectedState !== 'draft',
+      buildButtonDisabled: selectedState !== 'frontier' || frontierBuildBlocked,
+      roomCoordinatesText: '',
+      cursorText: '',
+      playersOnlineText:
+        totalPlayerCount === null ? '' : `${totalPlayerCount} ${totalPlayerCount === 1 ? 'player' : 'players'} online`,
+      saveStatusText,
+      bottomBarZoomText: `Zoom: ${this.cameras.main.zoom.toFixed(2)}x`,
+    };
   }
 
-  private updateBottomBar(statusOverride?: string): void {
-    const coordsEl = document.getElementById('room-coords');
-    const cursorEl = document.getElementById('cursor-coords');
-    const saveStatusEl = document.getElementById('room-save-status');
-    const fitBtn = document.getElementById('btn-fit-screen');
-    const zoomEl = document.getElementById('zoom-level');
+  private getRoomDisplayTitle(title: string | null, coordinates: RoomCoordinates): string {
+    return title?.trim() ? title : `Room ${coordinates.x},${coordinates.y}`;
+  }
 
-    if (coordsEl) {
-      const focus = this.mode === 'play' ? this.currentRoomCoordinates : this.selectedCoordinates;
-      coordsEl.textContent = `Room (${focus.x}, ${focus.y})`;
-    }
+  private isFrontierBuildBlockedByClaimLimit(): boolean {
+    const authState = getAuthDebugState();
+    return (
+      authState.authenticated &&
+      authState.roomClaimsRemainingToday !== null &&
+      authState.roomClaimsRemainingToday <= 0
+    );
+  }
 
-    if (cursorEl) {
-      cursorEl.textContent =
-        this.mode === 'play' && this.player
-          ? `Player: ${Math.round(this.player.x)}, ${Math.round(this.player.y)}`
-          : `Selected: ${roomIdFromCoordinates(this.selectedCoordinates)}`;
-    }
-
-    if (saveStatusEl) {
-      const transientStatus = this.getTransientStatusMessage();
-      saveStatusEl.textContent =
-        statusOverride ??
-        transientStatus ??
-        (this.mode === 'play'
-          ? `World test mode · score ${this.score} · ${this.cameraMode} cam · wheel=cursor · +/- current room`
-          : 'World browse mode · wheel=cursor · +/- selected room');
-    }
-
-    if (fitBtn) {
-      fitBtn.classList.remove('hidden');
-    }
-
-    if (zoomEl) {
-      zoomEl.textContent = `Zoom: ${this.cameras.main.zoom.toFixed(2)}x`;
-    }
+  getSelectedRoomContext(): {
+    roomId: string;
+    coordinates: RoomCoordinates;
+    state: SelectedCellState;
+  } {
+    return {
+      roomId: roomIdFromCoordinates(this.selectedCoordinates),
+      coordinates: { ...this.selectedCoordinates },
+      state: this.getCellStateAt(this.selectedCoordinates),
+    };
   }
 
   private setupZoomDebug(): void {
@@ -2519,32 +2976,20 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private handleShutdown = (): void => {
-    this.destroyed = true;
+    this.presenceController.destroy();
     this.scale.off('resize', this.handleResize, this);
     this.events.off(Phaser.Scenes.Events.WAKE, this.handleWake, this);
     this.input.removeAllListeners();
     this.input.keyboard?.removeAllListeners();
     this.game.canvas.removeEventListener('wheel', this.handleCanvasWheel);
     delete (window as Window & { get_zoom_debug?: () => ZoomDebugState | null }).get_zoom_debug;
+    this.hudBridge?.destroy();
+    this.hudBridge = null;
+    this.fxController?.destroy();
+    this.fxController = null;
 
     this.destroyPlayer();
-
-    for (const roomId of Array.from(this.loadedFullRoomsById.keys())) {
-      this.destroyFullRoom(roomId);
-    }
-
-    for (const image of this.previewImagesByRoomId.values()) {
-      image.destroy();
-    }
-
-    for (const textureKey of this.previewTextureKeysByRoomId.values()) {
-      if (this.textures.exists(textureKey)) {
-        this.textures.remove(textureKey);
-      }
-    }
-
-    this.previewImagesByRoomId.clear();
-    this.previewTextureKeysByRoomId.clear();
+    this.worldStreamingController.destroy();
     for (const sprite of this.starfieldSprites) {
       sprite.destroy();
     }
@@ -2557,6 +3002,14 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.zoomDebugGraphics = null;
     this.zoomDebugText?.destroy();
     this.zoomDebugText = null;
+    for (const sprite of this.goalMarkerSprites) {
+      sprite.destroy();
+    }
+    this.goalMarkerSprites = [];
+    for (const label of this.goalMarkerLabels) {
+      label.destroy();
+    }
+    this.goalMarkerLabels = [];
     this.roomGridGraphics?.destroy();
     this.roomFillGraphics?.destroy();
     this.roomFrameGraphics?.destroy();
@@ -2565,12 +3018,15 @@ export class OverworldPlayScene extends Phaser.Scene {
   describeState(): Record<string, unknown> {
     const camera = this.cameras.main;
     const cameraBounds = camera.getBounds();
+    const goalRunSnapshot = this.goalRunController.getDebugSnapshot();
+    const streamingMetrics = this.worldStreamingController.getDebugMetrics();
+    const presenceDebug = this.presenceController.getDebugSnapshot();
     const liveObjects = Array.from(this.loadedFullRoomsById.values()).flatMap((loadedRoom) =>
       loadedRoom.liveObjects
         .filter((liveObject) => liveObject.sprite.active)
         .map((liveObject) => {
           const body = liveObject.sprite.body as ArcadeObjectBody | null;
-          const dynamicBody = this.isDynamicArcadeBody(body) ? body : null;
+          const dynamicBody = isDynamicArcadeBody(body) ? body : null;
           return {
             id: liveObject.config.id,
             category: liveObject.config.category,
@@ -2596,14 +3052,59 @@ export class OverworldPlayScene extends Phaser.Scene {
         (room) => room.state === 'published'
       ).length,
       draftRoomsInWindow: Array.from(this.draftRoomsById.values()).filter((room) =>
-        isWithinWorldWindow(room.coordinates, this.windowCenterCoordinates, WINDOW_RADIUS)
+        this.isWithinLoadedRoomBounds(room.coordinates)
       ).map((room) => room.id),
+      chunkWindow: this.chunkWindow
+        ? {
+            chunkBounds: { ...this.chunkWindow.chunkBounds },
+            roomBounds: { ...this.chunkWindow.roomBounds },
+            loadedChunks: this.chunkWindow.chunks.map((chunk) => ({
+              id: chunk.id,
+              coordinates: { ...chunk.coordinates },
+              roomCount: chunk.rooms.length,
+            })),
+          }
+        : null,
+      lod: {
+        nearRoomIds: Array.from(this.nearLodRoomIds.values()).sort(),
+        midRoomIds: Array.from(this.midLodRoomIds.values()).sort(),
+        farRoomIds: Array.from(this.farLodRoomIds.values()).sort(),
+      },
+      lodMetrics: {
+        activeChunkCount: this.chunkWindow?.chunks.length ?? 0,
+        activeChunkRadius: streamingMetrics.activeChunkRadius,
+        visibleRoomCount: streamingMetrics.visibleRoomCount,
+        previewRoomBudget: streamingMetrics.previewRoomBudget,
+        fullRoomBudget: streamingMetrics.fullRoomBudget,
+        loadedPreviewRoomCount: streamingMetrics.loadedPreviewRoomCount,
+        loadedFullRoomCount: streamingMetrics.loadedFullRoomCount,
+      },
       loadedPreviewRooms: this.previewImagesByRoomId.size,
       loadedFullRooms: this.loadedFullRoomsById.size,
       score: this.score,
+      goalRun: goalRunSnapshot.goalRun,
+      leaderboards: goalRunSnapshot.leaderboards,
       collectibles: this.countLiveObjectsByCategory('collectible'),
       hazards: this.countLiveObjectsByCategory('hazard'),
       enemies: this.countLiveObjectsByCategory('enemy'),
+      combat: {
+        crouching: this.isCrouching,
+        activeAttackAnimation: this.activeAttackAnimation,
+        crateInteractionMode: this.activeCrateInteractionMode,
+        crateInteractionFacing: this.activeCrateInteractionFacing,
+        meleeCooldownMs: Math.max(0, this.meleeCooldownUntil - this.time.now),
+        rangedCooldownMs: Math.max(0, this.rangedCooldownUntil - this.time.now),
+        projectileCount: this.playerProjectiles.length,
+      },
+      presence: {
+        status: presenceDebug.snapshot?.status ?? 'disabled',
+        subscribedShardCount: presenceDebug.snapshot?.subscribedShards.length ?? 0,
+        connectedShardCount: presenceDebug.snapshot?.connectedShards.length ?? 0,
+        subscribedChunkBounds: presenceDebug.subscribedChunkBounds,
+        renderedGhostCount: presenceDebug.renderedGhostCount,
+        visibleGhostCount: presenceDebug.visibleGhostCount,
+        ghostRenderBudget: presenceDebug.ghostRenderBudget,
+      },
       zoom: Number(camera.zoom.toFixed(3)),
       camera: {
         scrollX: Math.round(camera.scrollX),
@@ -2629,10 +3130,14 @@ export class OverworldPlayScene extends Phaser.Scene {
             y: Math.round(this.player.y),
             velocityX: Math.round(this.playerBody.velocity.x),
             velocityY: Math.round(this.playerBody.velocity.y),
+            crouching: this.isCrouching,
             climbing: this.isClimbingLadder,
             ladderKey: this.activeLadderKey,
+            animation: this.playerAnimationState,
+            facing: this.playerFacing,
           }
         : null,
+      presenceDebug: this.presenceController.getDebugSnapshot(),
       liveObjects,
     };
   }

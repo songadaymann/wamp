@@ -11,6 +11,8 @@ export default defineConfig(({ mode }) => {
   const walletConnectProjectId =
     env.VITE_WALLET_CONNECT_PROJECT_ID ?? env.VITE_REOWN_PROJECT_ID ?? '';
   const enableTestReset = env.VITE_ENABLE_TEST_RESET ?? (mode === 'development' ? '1' : '');
+  const partykitHost = env.VITE_PARTYKIT_HOST ?? '';
+  const partykitParty = env.VITE_PARTYKIT_PARTY ?? '';
 
   return {
     base: './',
@@ -20,6 +22,8 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_REOWN_PROJECT_ID': JSON.stringify(reownProjectId),
       'import.meta.env.VITE_WALLET_CONNECT_PROJECT_ID': JSON.stringify(walletConnectProjectId),
       'import.meta.env.VITE_ENABLE_TEST_RESET': JSON.stringify(enableTestReset),
+      'import.meta.env.VITE_PARTYKIT_HOST': JSON.stringify(partykitHost),
+      'import.meta.env.VITE_PARTYKIT_PARTY': JSON.stringify(partykitParty),
     },
     build: {
       outDir: 'dist',

@@ -5,8 +5,14 @@ import {
   type LayerName,
   type PlacedObject,
 } from '../config';
+import { normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
 
 export interface RoomCoordinates {
+  x: number;
+  y: number;
+}
+
+export interface RoomSpawnPoint {
   x: number;
   y: number;
 }
@@ -15,14 +21,19 @@ export type RoomStatus = 'draft' | 'published';
 export type RoomTileData = Record<LayerName, (number | -1)[][]>;
 
 export interface RoomPermissions {
+  canSaveDraft: boolean;
   canPublish: boolean;
   canRevert: boolean;
+  canMint: boolean;
 }
 
 export interface RoomSnapshot {
   id: string;
   coordinates: RoomCoordinates;
+  title: string | null;
   background: string;
+  goal: RoomGoal | null;
+  spawnPoint: RoomSpawnPoint | null;
   tileData: RoomTileData;
   placedObjects: PlacedObject[];
   version: number;
@@ -53,6 +64,8 @@ export interface RoomRecord {
   mintedChainId: number | null;
   mintedContractAddress: string | null;
   mintedTokenId: string | null;
+  mintedOwnerWalletAddress: string | null;
+  mintedOwnerSyncedAt: string | null;
   permissions: RoomPermissions;
 }
 
@@ -62,9 +75,23 @@ export interface RoomRevertRequestBody {
 
 export const DEFAULT_ROOM_COORDINATES: RoomCoordinates = { x: 0, y: 0 };
 export const DEFAULT_ROOM_ID = `${DEFAULT_ROOM_COORDINATES.x},${DEFAULT_ROOM_COORDINATES.y}`;
+export const MAX_ROOM_TITLE_LENGTH = 40;
 
 export function roomIdFromCoordinates(coordinates: RoomCoordinates): string {
   return `${coordinates.x},${coordinates.y}`;
+}
+
+export function normalizeRoomTitle(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.slice(0, MAX_ROOM_TITLE_LENGTH);
 }
 
 export function parseRoomId(roomId: string): RoomCoordinates | null {
@@ -102,7 +129,10 @@ export function createDefaultRoomSnapshot(
   return {
     id: roomId,
     coordinates: { ...coordinates },
+    title: null,
     background: 'none',
+    goal: null,
+    spawnPoint: null,
     tileData: createEmptyTileData(),
     placedObjects: [],
     version: 1,
@@ -115,8 +145,10 @@ export function createDefaultRoomSnapshot(
 
 export function createDefaultRoomPermissions(): RoomPermissions {
   return {
+    canSaveDraft: true,
     canPublish: true,
     canRevert: false,
+    canMint: true,
   };
 }
 
@@ -134,6 +166,9 @@ export function cloneRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
   return {
     ...room,
     coordinates: { ...room.coordinates },
+    title: normalizeRoomTitle(room.title),
+    goal: normalizeRoomGoal(room.goal),
+    spawnPoint: room.spawnPoint ? { ...room.spawnPoint } : null,
     tileData: cloneTileData(room.tileData),
     placedObjects: room.placedObjects.map((placed) => ({ ...placed })),
   };
@@ -150,6 +185,7 @@ function isRoomSnapshotLike(value: unknown): value is RoomSnapshot {
       snapshot.coordinates &&
       typeof snapshot.coordinates.x === 'number' &&
       typeof snapshot.coordinates.y === 'number' &&
+      (snapshot.title === undefined || snapshot.title === null || typeof snapshot.title === 'string') &&
       typeof snapshot.background === 'string' &&
       typeof snapshot.version === 'number' &&
       snapshot.tileData &&
@@ -181,8 +217,10 @@ export function cloneRoomVersionRecord(version: RoomVersionRecord): RoomVersionR
 function normalizeRoomPermissions(value: unknown): RoomPermissions {
   const permissions = value as Partial<RoomPermissions> | null | undefined;
   return {
+    canSaveDraft: permissions?.canSaveDraft ?? true,
     canPublish: permissions?.canPublish ?? true,
     canRevert: permissions?.canRevert ?? false,
+    canMint: permissions?.canMint ?? true,
   };
 }
 
@@ -224,7 +262,19 @@ function normalizeRoomVersionRecord(value: unknown): RoomVersionRecord | null {
 }
 
 export function isRoomSnapshotBlank(room: RoomSnapshot): boolean {
+  if (room.title) {
+    return false;
+  }
+
   if (room.background !== 'none') {
+    return false;
+  }
+
+  if (room.spawnPoint) {
+    return false;
+  }
+
+  if (room.goal) {
     return false;
   }
 
@@ -261,6 +311,8 @@ export function createDefaultRoomRecord(
     mintedChainId: null,
     mintedContractAddress: null,
     mintedTokenId: null,
+    mintedOwnerWalletAddress: null,
+    mintedOwnerSyncedAt: null,
     permissions: createDefaultRoomPermissions(),
   };
 }
@@ -304,6 +356,10 @@ export function normalizeRoomRecord(
     mintedContractAddress:
       typeof record.mintedContractAddress === 'string' ? record.mintedContractAddress : null,
     mintedTokenId: typeof record.mintedTokenId === 'string' ? record.mintedTokenId : null,
+    mintedOwnerWalletAddress:
+      typeof record.mintedOwnerWalletAddress === 'string' ? record.mintedOwnerWalletAddress : null,
+    mintedOwnerSyncedAt:
+      typeof record.mintedOwnerSyncedAt === 'string' ? record.mintedOwnerSyncedAt : null,
     permissions: normalizeRoomPermissions(record.permissions),
   };
 }
@@ -322,6 +378,8 @@ export function cloneRoomRecord(record: RoomRecord): RoomRecord {
     mintedChainId: normalized.mintedChainId,
     mintedContractAddress: normalized.mintedContractAddress,
     mintedTokenId: normalized.mintedTokenId,
+    mintedOwnerWalletAddress: normalized.mintedOwnerWalletAddress,
+    mintedOwnerSyncedAt: normalized.mintedOwnerSyncedAt,
     permissions: { ...normalized.permissions },
   };
 }

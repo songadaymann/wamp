@@ -6,6 +6,8 @@ interface ImportMetaEnv {
   readonly VITE_REOWN_PROJECT_ID?: string;
   readonly VITE_WALLET_CONNECT_PROJECT_ID?: string;
   readonly VITE_ENABLE_TEST_RESET?: string;
+  readonly VITE_PARTYKIT_HOST?: string;
+  readonly VITE_PARTYKIT_PARTY?: string;
 }
 
 interface ImportMeta {
@@ -17,4 +19,8 @@ interface Window {
   capture_debug_info?: () => Record<string, unknown>;
   advanceTime?: (ms: number) => Promise<void>;
   get_auth_debug_state?: () => Record<string, unknown>;
+  get_sfx_debug_state?: () => Record<string, unknown>;
+  play_sfx_debug?: (cue: import('./audio/sfx').SfxCue) => void;
+  run_overworld_lod_stress?: () => Promise<Record<string, unknown>>;
+  __EVERYBODYS_PLATFORMER_GAME__?: import('phaser').Game;
 }

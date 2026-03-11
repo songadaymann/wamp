@@ -1,0 +1,1325 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Everybody's Platformer API",
+    "version": "0.5.0",
+    "description": "API for room authoring, authentication, scored runs, leaderboards, and room ownership minting."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Same origin as the deployed app"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "cookieSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "ep_session"
+      },
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "opaque"
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "AuthUser": {
+        "type": "object",
+        "required": ["id", "email", "walletAddress", "displayName"],
+        "properties": {
+          "id": { "type": "string" },
+          "email": { "type": ["string", "null"] },
+          "walletAddress": { "type": ["string", "null"] },
+          "displayName": { "type": "string" },
+          "createdAt": { "type": ["string", "null"], "format": "date-time" }
+        }
+      },
+      "AuthSessionResponse": {
+        "type": "object",
+        "required": ["authenticated", "user"],
+        "properties": {
+          "authenticated": { "type": "boolean" },
+          "user": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/AuthUser" },
+              { "type": "null" }
+            ]
+          },
+          "source": {
+            "type": ["string", "null"],
+            "enum": ["session", "api_token", null]
+          },
+          "scopes": {
+            "type": ["array", "null"],
+            "items": { "$ref": "#/components/schemas/ApiTokenScope" }
+          }
+        }
+      },
+      "ApiTokenScope": {
+        "type": "string",
+        "enum": [
+          "rooms:read",
+          "rooms:write",
+          "runs:write",
+          "leaderboards:read"
+        ]
+      },
+      "ApiTokenRecord": {
+        "type": "object",
+        "required": ["id", "label", "scopes", "createdAt", "lastUsedAt", "revokedAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "scopes": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ApiTokenScope" }
+          },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "lastUsedAt": { "type": ["string", "null"], "format": "date-time" },
+          "revokedAt": { "type": ["string", "null"], "format": "date-time" }
+        }
+      },
+      "ApiTokenListResponse": {
+        "type": "object",
+        "required": ["tokens"],
+        "properties": {
+          "tokens": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ApiTokenRecord" }
+          }
+        }
+      },
+      "ApiTokenCreateRequestBody": {
+        "type": "object",
+        "required": ["label", "scopes"],
+        "properties": {
+          "label": { "type": "string" },
+          "scopes": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ApiTokenScope" }
+          }
+        }
+      },
+      "ApiTokenCreateResponse": {
+        "type": "object",
+        "required": ["token", "record"],
+        "properties": {
+          "token": { "type": "string" },
+          "record": { "$ref": "#/components/schemas/ApiTokenRecord" }
+        }
+      },
+      "MagicLinkRequestBody": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": { "type": "string", "format": "email" }
+        }
+      },
+      "MagicLinkRequestResponse": {
+        "type": "object",
+        "required": ["ok", "delivery"],
+        "properties": {
+          "ok": { "type": "boolean" },
+          "delivery": {
+            "type": "string",
+            "enum": ["email", "debug"]
+          },
+          "debugMagicLink": { "type": ["string", "null"] }
+        }
+      },
+      "WalletChallengeRequestBody": {
+        "type": "object",
+        "required": ["address"],
+        "properties": {
+          "address": { "type": "string" }
+        }
+      },
+      "WalletChallengeResponse": {
+        "type": "object",
+        "required": ["address", "message", "expiresAt"],
+        "properties": {
+          "address": { "type": "string" },
+          "message": { "type": "string" },
+          "expiresAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "WalletVerifyRequestBody": {
+        "type": "object",
+        "required": ["address", "message", "signature"],
+        "properties": {
+          "address": { "type": "string" },
+          "message": { "type": "string" },
+          "signature": { "type": "string" }
+        }
+      },
+      "WalletVerifyResponse": {
+        "type": "object",
+        "required": ["authenticated", "linkedWallet", "user"],
+        "properties": {
+          "authenticated": { "type": "boolean" },
+          "linkedWallet": { "type": "boolean" },
+          "user": { "$ref": "#/components/schemas/AuthUser" }
+        }
+      },
+      "RoomCoordinates": {
+        "type": "object",
+        "required": ["x", "y"],
+        "properties": {
+          "x": { "type": "integer" },
+          "y": { "type": "integer" }
+        }
+      },
+      "GoalMarkerPoint": {
+        "type": "object",
+        "required": ["x", "y"],
+        "properties": {
+          "x": { "type": "number" },
+          "y": { "type": "number" }
+        }
+      },
+      "RoomGoal": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["type", "exit", "timeLimitMs"],
+            "properties": {
+              "type": { "const": "reach_exit" },
+              "exit": {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/GoalMarkerPoint" },
+                  { "type": "null" }
+                ]
+              },
+              "timeLimitMs": { "type": ["integer", "null"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type", "requiredCount", "timeLimitMs"],
+            "properties": {
+              "type": { "const": "collect_target" },
+              "requiredCount": { "type": "integer" },
+              "timeLimitMs": { "type": ["integer", "null"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type", "timeLimitMs"],
+            "properties": {
+              "type": { "const": "defeat_all" },
+              "timeLimitMs": { "type": ["integer", "null"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type", "checkpoints", "finish", "timeLimitMs"],
+            "properties": {
+              "type": { "const": "checkpoint_sprint" },
+              "checkpoints": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/GoalMarkerPoint" }
+              },
+              "finish": {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/GoalMarkerPoint" },
+                  { "type": "null" }
+                ]
+              },
+              "timeLimitMs": { "type": ["integer", "null"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type", "durationMs"],
+            "properties": {
+              "type": { "const": "survival" },
+              "durationMs": { "type": "integer" }
+            }
+          }
+        ]
+      },
+      "RoomTileData": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": { "type": "integer" }
+          }
+        }
+      },
+      "PlacedObject": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "RoomSnapshot": {
+        "type": "object",
+        "required": [
+          "id",
+          "coordinates",
+          "background",
+          "goal",
+          "spawnPoint",
+          "tileData",
+          "placedObjects",
+          "version",
+          "status",
+          "createdAt",
+          "updatedAt",
+          "publishedAt"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "coordinates": { "$ref": "#/components/schemas/RoomCoordinates" },
+          "background": { "type": "string" },
+          "goal": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/RoomGoal" },
+              { "type": "null" }
+            ]
+          },
+          "spawnPoint": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/GoalMarkerPoint" },
+              { "type": "null" }
+            ]
+          },
+          "tileData": { "$ref": "#/components/schemas/RoomTileData" },
+          "placedObjects": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/PlacedObject" }
+          },
+          "version": { "type": "integer" },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "published"]
+          },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" },
+          "publishedAt": { "type": ["string", "null"], "format": "date-time" }
+        }
+      },
+      "RoomVersionRecord": {
+        "type": "object",
+        "required": [
+          "version",
+          "snapshot",
+          "createdAt",
+          "publishedByUserId",
+          "publishedByDisplayName",
+          "revertedFromVersion"
+        ],
+        "properties": {
+          "version": { "type": "integer" },
+          "snapshot": { "$ref": "#/components/schemas/RoomSnapshot" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "publishedByUserId": { "type": ["string", "null"] },
+          "publishedByDisplayName": { "type": ["string", "null"] },
+          "revertedFromVersion": { "type": ["integer", "null"] }
+        }
+      },
+      "RoomPermissions": {
+        "type": "object",
+        "required": ["canSaveDraft", "canPublish", "canRevert", "canMint"],
+        "properties": {
+          "canSaveDraft": { "type": "boolean" },
+          "canPublish": { "type": "boolean" },
+          "canRevert": { "type": "boolean" },
+          "canMint": { "type": "boolean" }
+        }
+      },
+      "RoomRecord": {
+        "type": "object",
+        "required": [
+          "draft",
+          "published",
+          "versions",
+          "claimerUserId",
+          "claimerDisplayName",
+          "claimedAt",
+          "lastPublishedByUserId",
+          "lastPublishedByDisplayName",
+          "mintedChainId",
+          "mintedContractAddress",
+          "mintedTokenId",
+          "mintedOwnerWalletAddress",
+          "mintedOwnerSyncedAt",
+          "permissions"
+        ],
+        "properties": {
+          "draft": { "$ref": "#/components/schemas/RoomSnapshot" },
+          "published": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/RoomSnapshot" },
+              { "type": "null" }
+            ]
+          },
+          "versions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/RoomVersionRecord" }
+          },
+          "claimerUserId": { "type": ["string", "null"] },
+          "claimerDisplayName": { "type": ["string", "null"] },
+          "claimedAt": { "type": ["string", "null"], "format": "date-time" },
+          "lastPublishedByUserId": { "type": ["string", "null"] },
+          "lastPublishedByDisplayName": { "type": ["string", "null"] },
+          "mintedChainId": { "type": ["integer", "null"] },
+          "mintedContractAddress": { "type": ["string", "null"] },
+          "mintedTokenId": { "type": ["string", "null"] },
+          "mintedOwnerWalletAddress": { "type": ["string", "null"] },
+          "mintedOwnerSyncedAt": { "type": ["string", "null"], "format": "date-time" },
+          "permissions": { "$ref": "#/components/schemas/RoomPermissions" }
+        }
+      },
+      "RoomRevertRequestBody": {
+        "type": "object",
+        "required": ["targetVersion"],
+        "properties": {
+          "targetVersion": { "type": "integer" }
+        }
+      },
+      "WorldWindow": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "RunStartRequestBody": {
+        "type": "object",
+        "required": ["roomId", "roomCoordinates", "roomVersion", "goal"],
+        "properties": {
+          "roomId": { "type": "string" },
+          "roomCoordinates": { "$ref": "#/components/schemas/RoomCoordinates" },
+          "roomVersion": { "type": "integer" },
+          "goal": { "$ref": "#/components/schemas/RoomGoal" },
+          "startedAt": { "type": ["string", "null"], "format": "date-time" }
+        }
+      },
+      "RunStartResponse": {
+        "type": "object",
+        "required": [
+          "attemptId",
+          "roomId",
+          "roomVersion",
+          "goalType",
+          "startedAt",
+          "userId",
+          "userDisplayName"
+        ],
+        "properties": {
+          "attemptId": { "type": "string" },
+          "roomId": { "type": "string" },
+          "roomVersion": { "type": "integer" },
+          "goalType": { "type": "string" },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "userId": { "type": "string" },
+          "userDisplayName": { "type": "string" }
+        }
+      },
+      "RunFinishRequestBody": {
+        "type": "object",
+        "required": [
+          "result",
+          "elapsedMs",
+          "deaths",
+          "collectiblesCollected",
+          "enemiesDefeated",
+          "checkpointsReached"
+        ],
+        "properties": {
+          "result": {
+            "type": "string",
+            "enum": ["completed", "failed", "abandoned"]
+          },
+          "elapsedMs": { "type": "integer" },
+          "deaths": { "type": "integer" },
+          "collectiblesCollected": { "type": "integer" },
+          "enemiesDefeated": { "type": "integer" },
+          "checkpointsReached": { "type": "integer" },
+          "score": { "type": ["integer", "null"] },
+          "finishedAt": { "type": ["string", "null"], "format": "date-time" }
+        }
+      },
+      "RoomLeaderboardEntry": {
+        "type": "object",
+        "required": [
+          "rank",
+          "userId",
+          "userDisplayName",
+          "attemptId",
+          "roomId",
+          "roomVersion",
+          "goalType",
+          "elapsedMs",
+          "deaths",
+          "score",
+          "finishedAt"
+        ],
+        "properties": {
+          "rank": { "type": "integer" },
+          "userId": { "type": "string" },
+          "userDisplayName": { "type": "string" },
+          "attemptId": { "type": "string" },
+          "roomId": { "type": "string" },
+          "roomVersion": { "type": "integer" },
+          "goalType": { "type": "string" },
+          "elapsedMs": { "type": "integer" },
+          "deaths": { "type": "integer" },
+          "score": { "type": "integer" },
+          "finishedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "RoomLeaderboardResponse": {
+        "type": "object",
+        "required": ["roomId", "roomCoordinates", "roomVersion", "goalType", "rankingMode", "entries"],
+        "properties": {
+          "roomId": { "type": "string" },
+          "roomCoordinates": { "$ref": "#/components/schemas/RoomCoordinates" },
+          "roomVersion": { "type": "integer" },
+          "goalType": { "type": "string" },
+          "rankingMode": {
+            "type": "string",
+            "enum": ["time", "score"]
+          },
+          "entries": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/RoomLeaderboardEntry" }
+          }
+        }
+      },
+      "GlobalLeaderboardEntry": {
+        "type": "object",
+        "required": [
+          "rank",
+          "userId",
+          "userDisplayName",
+          "totalScore",
+          "completedRuns",
+          "failedRuns",
+          "abandonedRuns",
+          "bestScore",
+          "fastestClearMs",
+          "updatedAt"
+        ],
+        "properties": {
+          "rank": { "type": "integer" },
+          "userId": { "type": "string" },
+          "userDisplayName": { "type": "string" },
+          "totalScore": { "type": "integer" },
+          "completedRuns": { "type": "integer" },
+          "failedRuns": { "type": "integer" },
+          "abandonedRuns": { "type": "integer" },
+          "bestScore": { "type": "integer" },
+          "fastestClearMs": { "type": ["integer", "null"] },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "GlobalLeaderboardResponse": {
+        "type": "object",
+        "required": ["entries"],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/GlobalLeaderboardEntry" }
+          }
+        }
+      },
+      "RoomMintChainInfo": {
+        "type": "object",
+        "required": ["chainId", "name", "rpcUrl", "blockExplorerUrl", "nativeCurrency"],
+        "properties": {
+          "chainId": { "type": "integer" },
+          "name": { "type": "string" },
+          "rpcUrl": { "type": "string" },
+          "blockExplorerUrl": { "type": ["string", "null"] },
+          "nativeCurrency": {
+            "type": "object",
+            "required": ["name", "symbol", "decimals"],
+            "properties": {
+              "name": { "type": "string" },
+              "symbol": { "type": "string" },
+              "decimals": { "type": "integer" }
+            }
+          }
+        }
+      },
+      "PreparedWalletTransaction": {
+        "type": "object",
+        "required": ["to", "data", "value", "chainId"],
+        "properties": {
+          "to": { "type": "string" },
+          "data": { "type": "string" },
+          "value": { "type": "string" },
+          "chainId": { "type": "integer" }
+        }
+      },
+      "RoomMintPrepareResponse": {
+        "type": "object",
+        "required": [
+          "roomId",
+          "roomCoordinates",
+          "linkedWalletAddress",
+          "contractAddress",
+          "priceWei",
+          "chain",
+          "transaction"
+        ],
+        "properties": {
+          "roomId": { "type": "string" },
+          "roomCoordinates": { "$ref": "#/components/schemas/RoomCoordinates" },
+          "linkedWalletAddress": { "type": "string" },
+          "contractAddress": { "type": "string" },
+          "priceWei": { "type": "string" },
+          "chain": { "$ref": "#/components/schemas/RoomMintChainInfo" },
+          "transaction": { "$ref": "#/components/schemas/PreparedWalletTransaction" }
+        }
+      },
+      "RoomMintConfirmRequestBody": {
+        "type": "object",
+        "required": ["txHash"],
+        "properties": {
+          "txHash": { "type": "string" }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": ["ok", "storage", "auth"],
+        "properties": {
+          "ok": { "type": "boolean" },
+          "storage": { "type": "string" },
+          "auth": {
+            "type": "object",
+            "required": ["emailConfigured", "debugMagicLinks", "testResetEnabled"],
+            "properties": {
+              "emailConfigured": { "type": "boolean" },
+              "debugMagicLinks": { "type": "boolean" },
+              "testResetEnabled": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Worker health details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HealthResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/session": {
+      "get": {
+        "summary": "Get current auth state",
+        "description": "Accepts either the session cookie or Authorization: Bearer.",
+        "security": [
+          { "cookieSession": [] },
+          { "bearerAuth": [] },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Current auth state",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuthSessionResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/request-link": {
+      "post": {
+        "summary": "Request an email magic link",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/MagicLinkRequestBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Magic link accepted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MagicLinkRequestResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/verify": {
+      "get": {
+        "summary": "Verify a magic link",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirects to the app and sets the session cookie on success"
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "summary": "Logout current browser session",
+        "security": [
+          { "cookieSession": [] }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logged out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["ok"],
+                  "properties": {
+                    "ok": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/tokens": {
+      "get": {
+        "summary": "List personal API tokens",
+        "description": "Session cookie required. Returns active non-revoked tokens for the signed-in user.",
+        "security": [
+          { "cookieSession": [] }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active API tokens",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApiTokenListResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing session",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a personal API token",
+        "description": "Session cookie required. The raw bearer token is only returned once.",
+        "security": [
+          { "cookieSession": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ApiTokenCreateRequestBody" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Token created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApiTokenCreateResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing session",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/tokens/{tokenId}": {
+      "delete": {
+        "summary": "Revoke a personal API token",
+        "security": [
+          { "cookieSession": [] }
+        ],
+        "parameters": [
+          {
+            "name": "tokenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Token revoked"
+          },
+          "401": {
+            "description": "Missing session",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Token not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/wallet/challenge": {
+      "post": {
+        "summary": "Request a wallet sign-in challenge",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/WalletChallengeRequestBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Challenge message",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/WalletChallengeResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/wallet/verify": {
+      "post": {
+        "summary": "Verify a signed wallet challenge",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/WalletVerifyRequestBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Wallet verified",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/WalletVerifyResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/world": {
+      "get": {
+        "summary": "Read a world window",
+        "description": "Public read. If a bearer token is supplied, it must include rooms:read.",
+        "security": [
+          { "bearerAuth": [] },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "centerX",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "centerY",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "radius",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 0, "maximum": 32 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "World window",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/WorldWindow" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rooms/{roomId}": {
+      "get": {
+        "summary": "Read a room record",
+        "description": "Public read. If a bearer token is supplied, it must include rooms:read.",
+        "security": [
+          { "bearerAuth": [] },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "roomId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Canonical room id in x,y form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Room record",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RoomRecord" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rooms/{roomId}/published": {
+      "get": {
+        "summary": "Read a published room snapshot",
+        "description": "Public read. If a bearer token is supplied, it must include rooms:read.",
+        "security": [
+          { "bearerAuth": [] },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "roomId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Published room snapshot",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RoomSnapshot" }
+              }
+            }
+          },
+          "404": {
+            "description": "No published room",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rooms/{roomId}/draft": {
+      "put": {
+        "summary": "Save a room draft",
+        "description": "Requires auth. Bearer tokens must include rooms:write.",
+        "security": [
+          { "cookieSession": [] },
+          { "bearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "roomId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RoomSnapshot" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated room record",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RoomRecord" }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing auth",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient scope or permission",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rooms/{roomId}/publish": {
+      "post": {
+        "summary": "Publish a room",
+        "description": "Requires auth. Bearer tokens must include rooms:write.",
+        "security": [
+          { "cookieSession": [] },
+          { "bearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "roomId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RoomSnapshot" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated room record",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RoomRecord" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rooms/{roomId}/versions": {
+      "get": {
+        "summary": "List room versions",
+        "description": "Public read. If a bearer token is supplied, it must include rooms:read.",
+        "security": [
+          { "bearerAuth": [] },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "roomId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Room versions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/RoomVersionRecord" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rooms/{roomId}/revert": {
+      "post": {
+        "summary": "Revert a room to a prior published version",
+        "description": "Requires auth. Bearer tokens must include rooms:write.",
+        "security": [
+          { "cookieSession": [] },
+          { "bearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "roomId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RoomRevertRequestBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated room record",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RoomRecord" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rooms/{roomId}/mint/prepare": {
+      "post": {
+        "summary": "Prepare a room mint transaction",
+        "description": "Requires auth, linked wallet, published room, and rooms:write when using bearer auth.",
+        "security": [
+          { "cookieSession": [] },
+          { "bearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "roomId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Prepared mint payload",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RoomMintPrepareResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rooms/{roomId}/mint/confirm": {
+      "post": {
+        "summary": "Confirm a room mint transaction",
+        "description": "Requires auth, linked wallet, and rooms:write when using bearer auth.",
+        "security": [
+          { "cookieSession": [] },
+          { "bearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "roomId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RoomMintConfirmRequestBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated room record with mint metadata",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RoomRecord" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runs/start": {
+      "post": {
+        "summary": "Start a ranked run attempt",
+        "description": "Requires auth. Bearer tokens must include runs:write.",
+        "security": [
+          { "cookieSession": [] },
+          { "bearerAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RunStartRequestBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Run attempt created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RunStartResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runs/{attemptId}/finish": {
+      "post": {
+        "summary": "Finish a ranked run attempt",
+        "description": "Requires auth. Bearer tokens must include runs:write.",
+        "security": [
+          { "cookieSession": [] },
+          { "bearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "attemptId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RunFinishRequestBody" }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Run finalized"
+          }
+        }
+      }
+    },
+    "/api/leaderboards/rooms/{roomId}": {
+      "get": {
+        "summary": "Read a room leaderboard",
+        "description": "Public read. If a bearer token is supplied, it must include leaderboards:read.",
+        "security": [
+          { "bearerAuth": [] },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "roomId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 50, "default": 10 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Room leaderboard",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RoomLeaderboardResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/leaderboards/global": {
+      "get": {
+        "summary": "Read the global leaderboard",
+        "description": "Public read. If a bearer token is supplied, it must include leaderboards:read.",
+        "security": [
+          { "bearerAuth": [] },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 50, "default": 10 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Global leaderboard",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GlobalLeaderboardResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

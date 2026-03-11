@@ -8,7 +8,952 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 - Current build is a strong single-room vertical slice: editor, tile placement, object placement, backgrounds, and local test play all exist.
 - PRD direction is editor-first and zero-friction; infinite-world, persistence, auth, multiplayer, and blockchain layers are still future work.
 
+- Local runtime hardening on March 10, 2026:
+  - normalized `APP_BASE_URL` handling so local magic links work with `localhost:3000` values
+  - room draft/publish mutations now skip mint-owner sync when the configured mint RPC is a missing local node, so local Anvil outages no longer block ordinary room editing
+  - PartyKit presence still needs its own local server on `127.0.0.1:1999` or an explicit `VITE_PARTYKIT_HOST`
+  - extracted shared Worker helpers for `rooms` upserts and `room_versions` writes so future room-schema changes only need one persistence path
+  - restored editor undo/redo shortcuts at the document layer so `Cmd/Ctrl+Z`, `Cmd/Ctrl+Shift+Z`, and `Ctrl+Y` still work even when Phaser focus routing changes
+  - local verification artifact: `output/web-game/undo-shortcut-check/summary.json` confirms spawn-point change -> undo -> redo in the editor scene
+
+## Working Plan
+
+- Temporary in-repo copy of the active 6-milestone program plan so future runs can continue without depending on chat history:
+  - Milestone 1: Core play loop and avatar
+    - overworld `Play Room` becomes a real play/browse toggle
+    - `Stop` exits stitched play back to browse mode in-place
+    - placeholder player becomes the default sprite avatar with `Idle`, `Run`, `JumpRise`, `JumpFall`, `Land`, and `LadderClimb`
+    - room data gains an authored spawn marker with surface-scan fallback
+  - Milestone 2: Room goals and runtime state
+    - room data gains `goal` alongside `spawnPoint`
+    - live goal types are `reach_exit`, `collect_target`, `defeat_all`, `checkpoint_sprint`, and `survival`
+    - editor supports goal selection, marker placement, and goal config editing
+    - play mode tracks elapsed time, deaths, collectibles, enemies, checkpoints, and goal result per room version
+  - Milestone 3: Points, runs, and leaderboards
+    - add D1 support for room goal/spawn metadata plus `room_runs` and `user_stats`
+    - add Worker endpoints:
+      - `POST /api/runs/start`
+      - `POST /api/runs/:attemptId/finish`
+      - `GET /api/leaderboards/rooms/:roomId`
+      - `GET /api/leaderboards/global`
+    - leaderboard submission requires auth; anonymous runs remain local-only
+    - ranking rules:
+      - `checkpoint_sprint` and timed `reach_exit`: fastest time, then fewer deaths, then higher score
+      - `collect_target`, `defeat_all`, `survival`: highest score, then faster time, then fewer deaths
+  - Milestone 4: Room ownership and NFT mint lock
+    - add an ERC721 contract workspace on Base Sepolia
+    - one token per room coordinate, mint price `0.01 ether`
+    - mint locks edit rights but room content stays in D1
+  - Milestone 5: Bot-friendly API surface
+    - bearer tokens with scopes for rooms, runs, and leaderboard access
+    - publish root `skill.md` and `openapi.json`
+    - document room, run, leaderboard, and mint flows for bots
+  - Milestone 6: PartyKit ghosts plus chunking/LOD
+    - PartyKit is presence-only; persistence stays in Worker/D1
+    - chunk world presence by `8x8` shards
+    - add ghost players, chunk streaming, and near/mid/far room LOD
+
 ## Recent Changes
+
+- PRD sync pass:
+  - updated `PRD.md` to match the actual repo instead of the older single-room / future-systems framing
+  - captured current shipped state more accurately:
+    - shared-world overworld slice
+    - chunked world streaming / presence
+    - room titles, points, chat, and mint prepare/confirm flow
+    - sprite-based player combat / movement runtime
+  - rewrote roadmap checkboxes so unfinished work is now easier to spot:
+    - minimap / navigation polish
+    - anonymous-to-account sync
+    - moderation
+    - mobile/touch
+    - creator/social systems
+
+- Room claim-rate guard:
+  - added a Worker-side first-publish claim cap in `src/cloudflare/worker/rooms/store.ts`
+  - default is now `1` new room claim per UTC day per user
+  - the cap only applies when publishing a previously unclaimed room, so draft saves, republishing already-claimed rooms, and reverts still work as before
+  - local env knob: `.dev.vars` now includes `ROOM_DAILY_CLAIM_LIMIT=1`; setting it to `2` or `3` raises the cap, and `0` disables the cap entirely
+  - verification artifact: `output/room-claim-limit-check/summary.json` confirms first new claim `200`, second new claim `429`, and republishing the first room still succeeds
+  - follow-up UX fix:
+    - `Build Here` in the overworld now works for both `frontier` and plain `empty` cells, not just `frontier`
+    - selected empty rooms now also show `Build a room here` in the HUD instead of looking like a dead/unavailable state
+    - targeted browser proof at `output/web-game/build-empty-room-check/summary.json` confirmed selecting empty room `(100,100)` enabled `Build Here` and opened the editor successfully
+
+- Enemy/runtime polish pass:
+  - `src/config.ts`
+    - fixed the crab sheet metadata again: it is now treated as `32x16` frames instead of the old broken `32x24` slicing
+    - `spikes` now use their built-in 4-frame animation instead of staying static
+    - added new hazard objects:
+      - `cannon`
+      - `cactus`
+      - `tornado`
+    - added object metadata for:
+      - `defaultFrame`
+      - custom animation frame lists
+      - natural facing direction for x-flip behavior
+  - `src/scenes/BootScene.ts`
+    - object animation creation now respects explicit animation-frame lists instead of always assuming `0..frameCount-1`
+    - loads an internal `cannon_bullet` spritesheet for cannon-shot runtime bullets
+  - `src/scenes/overworld/liveObjects.ts`
+    - moving enemies now flip on the x-axis to face their movement direction
+    - bird, crab, slimes, snake, penguin, and frog now all use direction-aware facing updates
+    - added cannon shooter runtime:
+      - cannons face inward based on room placement
+      - they periodically spawn bullet hazards
+      - bullets collide with terrain/platforms and kill on contact
+    - static ground hazards with tall frames now use bottom-aligned bodies where appropriate
+  - `src/scenes/editor/editRuntime.ts`
+  - `src/ui/setup/paletteController.ts`
+  - `src/visuals/roomSnapshotTexture.ts`
+    - object previews now respect `defaultFrame`, so multi-frame assets like cannon preview from the intended sprite instead of always frame `0`
+- Enemy/runtime verification passed locally:
+  - `npm run build`
+  - required generic skill-client smoke run at:
+    - `output/web-game/state-0.json`
+    - `output/web-game/state-1.json`
+    - `output/web-game/state-2.json`
+    - `output/web-game/shot-0.png`
+    - `output/web-game/shot-1.png`
+    - `output/web-game/shot-2.png`
+  - targeted enemy proof at `output/web-game/enemy-runtime-check/summary.json`
+    - crab now renders at `32x16`
+    - spikes animate (`frame: 2` captured)
+    - cannon uses the intended default frame and spawns live `cannon_bullet` hazards
+    - cactus and tornado animate from their new sheets
+    - patrol enemies now visibly flip with direction changes:
+      - crab `flipX false -> true`
+      - frog `flipX true -> false`
+    - screenshot captured at `output/web-game/enemy-runtime-check/shot-0.png`
+    - no console or page errors during the targeted run
+  - follow-up facing correction:
+    - the enemy sheets were authored left-facing by default, so `slime_*`, `bat`, `crab`, `bird`, `fish`, `frog`, `snake`, and `penguin` now use `facingDirection: 'left'`
+    - targeted re-check at `output/web-game/enemy-runtime-check/summary.json` confirmed the flipped state inverted from the previous pass
+
+- Replaced checkpoint / finish placeholder circles with sprite-backed flag markers:
+  - added shared marker-flag runtime in `src/goals/markerFlags.ts`
+    - loads and animates:
+      - `public/assets/objects/flag.png`
+      - `public/assets/objects/flag-green.png`
+      - `public/assets/objects/flag-checkered.png`
+      - `public/assets/objects/flag-checkered-gold.png`
+  - `src/scenes/BootScene.ts`
+    - now preloads the flag variant sheets and registers the marker animations at boot
+  - `src/scenes/OverworldPlayScene.ts`
+    - goal markers are now sprite-backed instead of `Graphics` circles
+    - pending checkpoints render as red flags with numeric labels
+    - reached checkpoints render as green flags with numeric labels
+    - pending finish/exit markers render as checkered flags
+    - completed finish/exit markers render as checkered-gold flags
+  - `src/scenes/editor/editRuntime.ts`
+    - editor goal markers now use the same sprite-backed flag variants
+    - checkpoint numbers remain overlaid as text; finish flag has no number
+  - `src/scenes/EditorScene.ts`
+    - background-ignore list now excludes the marker sprites directly
+- Marker-flag verification passed locally:
+  - `npm run build`
+  - required skill-client run at `output/web-game/goal-flag-skill-client/`
+  - targeted browser verification at `output/web-game/goal-flag-marker-check/summary.json`
+    - overworld active state created:
+      - green checkpoint
+      - red checkpoint
+      - checkered finish
+    - overworld complete state created:
+      - green checkpoint
+      - green checkpoint
+      - checkered-gold finish
+    - editor state rendered:
+      - red checkpoints with numeric labels
+      - checkered finish flag
+    - screenshots captured at:
+      - `output/web-game/goal-flag-marker-check/shot-overworld-active.png`
+      - `output/web-game/goal-flag-marker-check/shot-overworld-complete.png`
+      - `output/web-game/goal-flag-marker-check/shot-editor.png`
+
+- Switched the landing SFX cue to the dedicated asset:
+  - `src/audio/sfx.ts`
+    - `land` now uses `public/assets/sfx/movement/land.wav` instead of reusing `footstep.wav`
+
+- Added a flag-variant generator for goal markers:
+  - `scripts/generate_flag_variants.py`
+    - reads `public/assets/objects/flag.png`
+    - generates:
+      - `public/assets/objects/flag-green.png`
+      - `public/assets/objects/flag-gold.png`
+      - `public/assets/objects/flag-checkered.png`
+      - `public/assets/objects/flag-checkered-gold.png`
+    - checker size and palette colors are editable at the top of the script
+  - preview sheet generated for inspection at `output/flag-variants-preview.png`
+
+- Fixed ladder-climb SFX overlap:
+  - `src/audio/sfx.ts`
+    - added per-cue non-overlap support in the audio controller
+    - `ladder-climb` now uses `allowOverlap: false`, so one climb clip has to finish before the next instance can start
+
+- Wired the real UI hover sound asset:
+  - `public/assets/sfx/ui/ui-hover.wav`
+  - `src/audio/sfx.ts`
+    - `ui-hover` now uses the dedicated hover clip instead of reusing `ui-click`
+
+- Removed runtime footstep SFX from player movement:
+  - `src/scenes/OverworldPlayScene.ts`
+    - removed the horizontal step cadence so normal walking/crawling/push-pull no longer fire `footstep`
+    - kept jump, land, ladder-climb, hurt, death, respawn, combat, goal, pickup, chat, and UI sounds intact
+    - narrowed the helper to ladder-climb cadence only
+
+- Wired the current SFX pass to real local audio files and placeholders:
+  - `src/audio/sfx.ts`
+    - replaced the silent stub with a real browser audio controller using the files under `public/assets/sfx`
+    - added cue mappings, per-cue cooldowns, and simple volume/playback-rate tuning
+    - exposed `window.get_sfx_debug_state()` and dev-only `window.play_sfx_debug(cue)` to audition cues against the live singleton
+  - `src/main.ts`
+    - initializes the SFX controller at startup
+    - `render_game_to_text()` now includes compact SFX debug state
+  - `src/ui/setup/buttonFeedback.ts`
+    - UI hover, click, and disabled sounds now fire from the real controller
+  - `src/ui/chat/panel.ts`
+    - chat send/receive sounds are now wired
+  - `src/fx/controller.ts`
+    - pickup, enemy kill, jump, land, bounce, weapon, and goal FX now trigger sound
+    - goal abandon and time-up now have distinct cue routing instead of always reusing generic fail
+  - `src/scenes/overworld/liveObjects.ts`
+    - pickups now select cue by collectible type (`collect`, `collect-fruit`, `collect-gem`, `collect-key`)
+  - `src/scenes/OverworldPlayScene.ts`
+    - wired footstep cadence, ladder-climb cadence, sword/gun enemy-hit layering, player hurt/death, and respawn sounds
+- SFX verification passed locally:
+  - `npm run build`
+  - required skill-client pass at `output/web-game/sfx-wiring-skill-client/state-0.json`
+  - targeted browser sweep at `output/web-game/sfx-wiring-check/summary.json`
+    - all defined cues currently report `status: "played"` through the real live controller
+    - screenshot captured at `output/web-game/sfx-wiring-check/shot-0.png`
+    - expected console noise remained limited to missing local PartyKit presence on `127.0.0.1:1999`
+
+- Made the local challenge counter much more obvious in the world footer:
+  - `src/scenes/OverworldPlayScene.ts`
+    - footer copy now explicitly switches between `Challenge active`, `Challenge clear`, and `Challenge failed` during local goal runs instead of leaving the counter buried inside generic world test text
+  - `src/scenes/overworld/hud.ts`
+    - added footer tone support via `data-overworld-tone` on `#room-save-status`
+  - `src/styles/main.css`
+    - active challenge footer now renders as a red alert pill
+    - completed challenge footer now renders as a green success pill
+    - failed challenge footer now renders as a stronger red fail pill
+  - `src/scenes/editor/uiBridge.ts`
+    - editor rendering now clears the overworld-only footer tone so the highlight does not bleed into editor mode
+- Challenge footer verification passed locally:
+  - `npm run build`
+  - targeted browser verification at `output/web-game/challenge-footer-check/summary.json`
+    - immediate active state still shows the transient `Reach Exit started.` copy, but the footer tone is already `challenge-active`
+    - steady active state settles to `Challenge active · ... 10.4s left ...`
+    - immediate complete state still shows the transient `Exit reached.` copy, but the footer tone is already `challenge-complete`
+    - steady complete state settles to `Challenge clear · ...`
+    - screenshot captured at `output/web-game/challenge-footer-check/shot-0.png`
+    - only console noise was the pre-existing guest autosave `401` while editing without signing in
+
+- Fixed the editor goal time-limit input so timers can be authored again:
+  - `src/ui/setup/keyboardPassthrough.ts`
+    - narrowed the sidebar `mousedown` passthrough guard so it no longer calls `preventDefault()` on real interactive controls like `input`, `button`, `select`, `textarea`, `label`, and links
+    - this was blocking focus on `#goal-time-limit-seconds`, which made the time-limit field look permanently stuck at placeholder `Off`
+- Timer input verification passed locally:
+  - `npm run build`
+  - targeted browser verification at `output/web-game/timer-input-fix-check/summary.json`
+    - clicking the time-limit field focused `#goal-time-limit-seconds`
+    - typing `12` set `goal.timeLimitMs` to `12000`
+    - pressing `ArrowUp` incremented the value to `13` and `goal.timeLimitMs` to `13000`
+    - screenshot captured at `output/web-game/timer-input-fix-check/shot-0.png`
+    - no console or page errors during the targeted run
+
+- Shipped persistent global world chat with Worker + D1 auth/session gating:
+  - added shared chat types in `src/chat/model.ts`
+  - added D1 migration `migrations/0006_chat_messages.sql` for `chat_messages`
+  - added Worker chat modules:
+    - `src/cloudflare/worker/chat/store.ts`
+    - `src/cloudflare/worker/chat/routes.ts`
+  - added public `GET /api/chat/messages` and session-only `POST /api/chat/messages`
+    - reads are public for guests
+    - posting is session-auth only, not API-token based
+    - messages are trimmed, capped at `140` chars, and rate-limited to `1 message / second / user`
+    - initial loads return the latest messages oldest-to-newest for direct rendering
+    - incremental polling uses `after=<ISO timestamp>`
+  - `src/cloudflare/worker.ts`
+    - wired chat routing into the thin Worker entrypoint without changing other route behavior
+  - `src/cloudflare/worker/maintenance/routes.ts`
+    - test reset now counts and clears `chat_messages`
+  - `src/auth/client.ts`
+    - now dispatches `auth-state-changed` on every auth UI render so chat availability updates immediately on sign-in/out
+  - added frontend chat modules:
+    - `src/ui/chat/client.ts`
+    - `src/ui/chat/panel.ts`
+  - `src/ui/setup.ts`
+    - now boots the global chat panel controller alongside the existing UI modules
+  - `index.html`
+    - added a collapsed-by-default bottom-right world chat panel with log, unread badge, composer, and status copy
+  - `src/styles/main.css`
+    - added world/play-world-only chat styles and mobile sizing
+  - `src/main.ts`
+    - `render_game_to_text()` now includes compact chat debug state via `window.get_chat_debug_state()`
+- Global chat verification passed locally:
+  - `npm run build`
+  - `npm run cf:d1:migrate:local`
+  - targeted API verification at `output/worker-chat-api-check/summary.json`
+    - guest read succeeded
+    - guest post returned `401`
+    - wallet-session post succeeded
+    - empty and `141`-char messages returned `400`
+    - second post inside `1s` returned `429`
+    - persisted reload read and incremental `after=` polling both returned the expected messages
+  - required skill-client run at `output/web-game/chat-skill-client/`
+    - as usual in this environment, `shot-0.png` was black, but `state-0.json` showed the world scene and chat debug state correctly
+  - targeted three-context browser verification at `output/web-game/global-chat-check/summary.json`
+    - verified world visibility and editor hiding
+    - verified guest read-only composer state
+    - verified `Enter` opens/focuses chat and disables Phaser keyboard input while typing
+    - verified `Escape` closes chat and restores Phaser keyboard input
+    - verified signed-in send, collapsed unread count on another signed-in client, guest read visibility, and reload-persistent history
+    - screenshots captured at:
+      - `output/web-game/global-chat-check/shot-signed-a.png`
+      - `output/web-game/global-chat-check/shot-signed-b.png`
+      - `output/web-game/global-chat-check/shot-guest.png`
+    - no console or page errors during the targeted browser run
+
+- Added crate push/pull plus lightweight weapon knockback in the overworld:
+  - `src/scenes/OverworldPlayScene.ts`
+    - crates now support explicit adjacent interaction intent in play mode instead of relying on incidental physics only
+    - walking into a crate now drives a real `push` state with the matching player animation
+    - holding `Down` while moving away from an adjacent crate now drives a real `pull` state with the matching facing + animation
+    - added a short weapon-knockback window so sword-hit lunge and gun recoil survive the next movement frame instead of being overwritten immediately
+    - added combat debug state for crate interaction mode/facing so automated checks can verify push/pull directly
+  - `src/scenes/overworld/liveObjects.ts`
+    - crates remain dynamic arcade bodies with terrain/platform collision, so the explicit push/pull intent now moves a real movable object instead of a fake visual
+- Push/pull/knockback verification passed locally:
+  - `npm run build`
+  - required skill-client run at `output/web-game/push-pull-knockback-skill-client/`
+  - targeted verification at `output/web-game/push-pull-knockback-check/summary.json`
+    - push verified:
+      - player `111 -> 140`
+      - crate `136 -> 159`
+      - animation `push`
+      - `combat.crateInteractionMode: push`
+    - pull verified:
+      - player `161 -> 184`
+      - crate `136 -> 154`
+      - animation `pull`
+      - facing `-1`
+      - `combat.crateInteractionMode: pull`
+    - sword knockback verified:
+      - enemy count `2 -> 1`
+      - player `velocityX: 90`
+      - attack animation `sword-slash`
+    - gun recoil verified:
+      - enemy count `2 -> 1`
+      - projectile count `1`
+      - player `velocityX: -44`
+    - screenshots captured at:
+      - `output/web-game/push-pull-knockback-check/shot-0.png`
+      - `output/web-game/push-pull-knockback-check/shot-1.png`
+      - `output/web-game/push-pull-knockback-check/shot-2.png`
+    - console errors: none
+
+- Shipped the first richer movement/combat slice in the overworld:
+  - `src/scenes/OverworldPlayScene.ts`
+    - added crouch + crawl input/state on `Down` / `S`, including a shorter player hitbox and a simple stand-up check against terrain
+    - added combat input on `Z` and `X`
+      - `Z` now performs a short sword slash
+      - `X` now fires a short-lived gun projectile
+    - wired melee/projectile attacks into the play loop, HUD copy, debug state, and transient combat state
+    - exposed `combat.projectileCount`, cooldowns, and crouch state through `describeState()`
+  - `src/scenes/overworld/liveObjects.ts`
+    - crab and both slimes now run through the same dynamic patrol-enemy runtime as snakes/penguins
+    - added shared weapon-hit helpers so stomps, sword kills, and gun kills all reuse the same enemy-defeat path for score/goal progress/status text
+  - `src/fx/controller.ts`
+    - added sword slash, muzzle flash, and bullet impact FX helpers
+  - `src/audio/sfx.ts`
+    - added silent hooks for `sword-slash`, `gun-shot`, and `bullet-impact`
+- Richer movement/combat verification passed locally:
+  - `npm run build`
+  - required skill-client run at `output/web-game/combat-movement-skill-client/`
+  - targeted verification at `output/web-game/combat-movement-check/summary.json`
+    - injected a temporary draft combat room in dev with one crab and one blue slime so the slice could be tested without mutating persisted world data
+    - crouch verified: `crouching: true`, `animation: crouch`, `bodyHeight: 9`
+    - crawl verified: `crouching: true`, `animation: crawl`, `velocityX: 70`, `bodyHeight: 9`
+    - patrol verified for the newly-dynamic enemies:
+      - crab moved `238 -> 213`
+      - blue slime moved `320 -> 299`
+    - sword verified:
+      - enemy count `2 -> 1`
+      - score `0 -> 10`
+    - gun verified:
+      - enemy count `1 -> 0`
+      - score `10 -> 20`
+    - console errors: none
+    - screenshots captured at:
+      - `output/web-game/combat-movement-check/shot-0.png`
+      - `output/web-game/combat-movement-check/shot-1.png`
+  - follow-up note:
+    - this slice covers crouch/crawl plus core sword/gun combat; push/pull, crates, and more advanced combat behavior are still pending
+
+- Hardened the overworld LOD/chunking stack for scale without changing the overall architecture:
+  - `src/scenes/overworld/worldStreaming.ts`
+    - chunk-window refresh now uses containment/hysteresis instead of exact-bounds equality, so zooming back in or small focus shifts do not immediately churn chunk reloads
+    - preview/full-room loading is now budgeted and snapshot fetches are limited to the rooms actually needed for preview or play
+    - browse/play now use mode-aware chunk-radius caps and preview budgets
+    - added debug metrics for active chunk radius, visible room count, preview budget, and full-room budget
+  - `src/scenes/overworld/presence.ts`
+    - PartyKit shard subscriptions now retain larger bounds briefly instead of shrinking immediately, reducing resubscribe churn
+    - ghost renderers are now capped by a small zoom-aware budget and prioritized to loaded nearby rooms first
+    - added debug metrics for subscribed chunk bounds, rendered ghosts, visible ghosts, and ghost render budget
+  - `src/scenes/OverworldPlayScene.ts`
+    - `describeState()` now reports `lodMetrics` plus compact presence counts so automated checks can verify budgets directly
+  - `src/debug/overworldLodStress.ts`
+    - added a dev-only synthetic stress harness exposed as `window.run_overworld_lod_stress()` to jump around the world, zoom, switch into play, and assert that chunk, preview, full-room, shard, and ghost counts stay bounded
+- LOD hardening verification passed locally:
+  - `npm run build`
+  - required skill-client run at `output/web-game/lod-hardening-skill-client/`
+  - targeted stress verification at `output/web-game/lod-hardening-check/summary.json`
+    - stress run passed in both browse and play modes
+    - browse far-zoom capped at `49` active chunks / `49` subscribed shards
+    - play mode stayed at `1` full room with a `9`-room budget
+    - zooming back in intentionally retained the larger subscribed/loaded bounds instead of thrashing downward immediately
+    - screenshot captured at `output/web-game/lod-hardening-check/shot-0.png`
+
+- Fixed the current timer-authoring and sprite-slicing bugs from the gameplay-polish pass:
+  - editor goal numeric inputs no longer get clobbered by the per-frame UI render loop
+    - `src/scenes/editor/uiBridge.ts` now preserves the active input/select value while focused instead of overwriting it every frame
+    - `src/ui/setup/editorControls.ts` now commits goal numeric edits on `input` as well as `change`, so time limits and other goal values update while typing
+  - timed challenge HUD text now shows countdown text for non-survival goals when a time limit exists
+    - `src/scenes/overworld/goalRuns.ts` now reports `Ns left` for timed `reach_exit`, `collect_target`, `defeat_all`, and `checkpoint_sprint` runs instead of only elapsed time
+  - corrected object sheet slicing for the broken assets in `src/config.ts`
+    - `slime_blue` and `slime_red` now use `16x16` frames and only the intended top-row animation frames
+    - `crab` now uses `32x24` frames instead of the broken `16x48` slicing
+    - `clouds_deco` now uses `64x24` frames instead of the broken `32x48` horizontal split
+  - aligned slime/crab hitboxes to the bottom in `src/scenes/overworld/liveObjects.ts` so their overlap bodies sit on the ground rather than floating in the middle of the corrected frame
+- Timer/slicing verification passed locally:
+  - `npm run build`
+  - required skill-client run at `output/web-game/timer-slicing-skill-client/`
+    - the generic headless capture at `shot-0.png` was black again in this environment, but `state-0.json` confirmed the game booted cleanly
+  - targeted editor verification at `output/web-game/timer-and-slicing-check/summary.json`
+    - selecting `Checkpoint Sprint` and typing `15` into the time-limit field now persists
+    - editor scene state recorded `goal.timeLimitMs: 15000`
+    - placed sprite frames now resolve to the corrected sizes:
+      - clouds: `64x24`
+      - red slime: `16x16`
+      - blue slime: `16x16`
+      - crab: `32x24`
+    - screenshot captured at `output/web-game/timer-and-slicing-check/shot-0.png`, showing the corrected cloud/slime/crab presentation in-editor
+  - verification note:
+    - this pass fixed timer authoring and display/slicing bugs only; chat, combat/movement wiring, and LOD hardening are still pending
+
+- Started the gameplay-polish implementation with the asset/runtime foundation slice:
+  - copied the new player atlas assets into `public/assets/player/default/`:
+    - `PlayerSheet.png/.json`
+    - `PlayerCombatSheet.png/.json`
+    - `WeaponsSheet.png/.json`
+    - `FXSheet.png/.json`
+  - copied the first Rocky Roads FX strips into `public/assets/fx/`:
+    - `boing`
+    - `bomb_explosion`
+    - `coin_collect`
+    - `dust`
+    - `hit`
+    - `shine`
+    - `shine_white`
+    - `walk_dust`
+  - replaced the old per-frame default-player loader with an atlas-backed manifest in `src/player/defaultPlayer.ts`
+    - locomotion states now live in the manifest: `idle`, `run`, `jump-rise`, `jump-fall`, `land`, `ladder-climb`
+    - additional future-ready states are now predeclared and boot-loaded: `crouch`, `crawl`, `push`, `pull`, `sword-slash`, `air-slash-down`, `gun-fire`
+    - player FX atlas animations are also registered for `jump-dust`, `landing-dust`, `run-dust-front`, `run-dust-back`, `muzzle-flash`, and `bullet-impact`
+  - added a scene FX foundation:
+    - `src/fx/manifest.ts` for Rocky Roads FX strip metadata and animation keys
+    - `src/fx/controller.ts` with reusable scene calls for collect, enemy-kill, bounce, jump-dust, landing-dust, and goal-result FX
+    - `src/audio/sfx.ts` as a silent/no-op SFX hook so DOM and gameplay code can call named sound cues before the real files are provided
+  - hooked the overworld into the new FX layer:
+    - bounce pads now trigger bounce FX
+    - collectible pickups now trigger collect sparkles and score pop text
+    - enemy stomps now trigger hit/flash FX
+    - goal-run start, checkpoint, success, fail, and abandon mutations now trigger goal FX
+    - player jump / landing now trigger dust FX
+  - added DOM-side button feedback:
+    - `src/ui/setup/buttonFeedback.ts` applies press-state classes and UI click SFX hooks to `.bar-btn`, tool buttons, layer buttons, palette tabs, object-category tabs, object-grid items, and the auth menu toggle
+    - `src/styles/main.css` now gives those controls a pressed/down motion with a fast rebound
+- Gameplay-polish foundation verification passed locally:
+  - `npm run build`
+  - required skill-client run at `output/web-game/fx-foundation-skill-client/`
+    - the generic canvas capture at `shot-0.png` was black again in this headless-WebGL environment, but `state-0.json` confirmed the scene booted cleanly
+  - targeted browser verification at `output/web-game/fx-foundation-check/summary.json`
+    - confirmed the new atlas-backed animation runtime loaded:
+      - `player-default-idle`
+      - `player-default-crouch`
+      - `player-default-sword-slash`
+      - `player-default-fx-jump-dust`
+      - `fx-bomb-explosion`
+    - confirmed the base/combat/fx atlases were present in Phaser texture manager
+    - confirmed DOM button feedback now adds `is-pressed` during pointer down on `#btn-world-zoom-in`
+    - confirmed the zoom button still worked after the feedback hook (`0.18 -> 0.202` in the captured run)
+    - confirmed the FX controller produced live display objects in-scene (`0 -> 6` tracked FX objects in the targeted run)
+    - screenshots captured at:
+      - `output/web-game/fx-foundation-check/shot-0.png`
+      - `output/web-game/fx-foundation-check/shot-1.png`
+  - verification caveat:
+    - this local D1 currently had no published gameplay rooms in the checked window, so the targeted run could not prove collect FX through a real room pickup; it fell back to invoking the live FX controller on the running scene and verifying the created display objects plus the visible full-page screenshot
+
+- Finished the staged `setup.ts` extraction:
+  - added focused UI modules under `src/ui/setup/`:
+    - `sceneBridge.ts`
+    - `historyModal.ts`
+    - `paletteController.ts`
+    - `editorControls.ts`
+    - `sceneCommands.ts`
+    - `keyboardPassthrough.ts`
+  - reduced `src/ui/setup.ts` to a thin bootstrap around those modules while preserving `setupUI(game)` as the only public entrypoint
+  - kept the same DOM IDs, scene method names, `editorState` behavior, and `main.ts` integration
+  - replaced the old `setup.ts` module globals for palette/object UI runtime with a controller object that owns palette images, occupancy maps, drag-selection state, object-grid rendering, and tooltip lifecycle
+- `setup.ts` extraction verification passed locally:
+  - `npm run build`
+  - required skill-client run at `output/web-game/setup-extraction-skill-client/`
+    - the generic headless skill-client screenshot at `shot-0.png` was black again in this environment, but `state-0.json` was still captured
+  - targeted browser verification at `output/web-game/setup-ts-extraction-check/summary.json`
+    - `Build Here` still opened the editor from the overworld
+    - editor `Fit` still changed zoom (`2 -> 1.75` in the captured run)
+    - tile-palette drag selection still updated `#selection-info` (`(4x1, 3 tiles)` in the captured run)
+    - object palette switching and object selection still worked
+    - goal select plus `Set Exit` still placed a `reach_exit` marker and cleared placement mode
+    - `Test Play` still entered overworld play mode and the world `Play Room` button still flipped to `Stop`
+    - leaving play mode through the world `Stop` button still returned to browse mode
+    - world jump and zoom buttons still updated selected room and zoom state
+    - screenshots captured at:
+      - `output/web-game/setup-ts-extraction-check/01-editor-open.png`
+      - `output/web-game/setup-ts-extraction-check/03-editor-goal.png`
+      - `output/web-game/setup-ts-extraction-check/04-test-play.png`
+      - `output/web-game/setup-ts-extraction-check/05-return-world.png`
+  - verification notes:
+    - in the current local frontier-room path, `History` was correctly disabled, so the targeted run verified the disabled state rather than forcing the modal open
+    - the targeted run still saw the existing guest autosave `401` console errors when editing without signing in; that is current backend behavior, not a new setup refactor regression
+
+- Finished the staged `EditorScene` extraction:
+  - added scene-internal editor modules under `src/scenes/editor/`:
+    - `uiBridge.ts`
+    - `roomSession.ts`
+    - `backgrounds.ts`
+    - `editRuntime.ts`
+    - `interaction.ts`
+  - `EditorScene.ts` is now a thin scene shell that keeps lifecycle, scene transitions, public editor methods, and `describeState()`
+  - preserved the existing editor public API used by `setup.ts`, `editorState`, room/world repository interfaces, and overworld wake payloads
+  - moved editor DOM rendering, room metadata/persistence, room-bounded backgrounds + surrounding previews, editable room runtime state, and camera/input/cursor behavior into scene-specific collaborators without redesigning the editor flow
+- Editor extraction verification passed locally:
+  - `npm run build`
+  - required skill-client run at `output/web-game/editor-extraction-skill-client/`
+    - the generic headless skill-client screenshot is still black in this environment, but `state-0.json` remained available
+  - targeted browser verification at `output/web-game/editor-scene-extraction-check/summary.json`
+    - opening the editor from the overworld still worked
+    - `Fit` changed editor zoom (`2 -> 1.75` in the captured run)
+    - switching to object mode and placing a spawn marker updated editor scene state
+    - `Ctrl+Z` cleared the spawn marker and `Ctrl+Y` restored it
+    - goal type selection plus `Set Exit` still placed an exit marker in-room
+    - `Test Play` still woke `OverworldPlayScene` with the draft room snapshot and goal data
+    - `Back to World` still returned to overworld browse mode from play
+    - screenshots captured at:
+      - `output/web-game/editor-scene-extraction-check/01-editor-open.png`
+      - `output/web-game/editor-scene-extraction-check/02-editor-goal.png`
+      - `output/web-game/editor-scene-extraction-check/03-play-mode.png`
+      - `output/web-game/editor-scene-extraction-check/04-return-world.png`
+  - verification note:
+    - the targeted check saw expected `401` autosave console errors while editing as an unauthenticated guest on a published room; that is current backend behavior, not a new refactor regression
+
+- Finished the staged Cloudflare Worker extraction:
+  - kept `src/cloudflare/worker.ts` as the Wrangler entrypoint, but reduced it to route matching, auth/scope gating, and the shared error boundary
+  - added internal worker modules under `src/cloudflare/worker/`:
+    - `core/types.ts`
+    - `core/http.ts`
+    - `auth/store.ts`
+    - `auth/request.ts`
+    - `auth/routes.ts`
+    - `rooms/store.ts`
+    - `world/routes.ts`
+    - `runs/routes.ts`
+    - `mint/service.ts`
+    - `mint/routes.ts`
+    - `maintenance/routes.ts`
+  - preserved the existing HTTP surface, D1 schema usage, env var names, room persistence behavior, leaderboard behavior, and the local missing-mint-RPC fallback for ordinary room saves/publishes
+- Worker extraction verification passed locally:
+  - `npm run build`
+  - `npm run cf:d1:migrate:local`
+  - targeted HTTP verification artifact at `output/worker-refactor-api-check/summary.json`
+    - unauthenticated and authenticated `GET /api/auth/session`
+    - wallet challenge/verify auth flow
+    - API token create/list/delete
+    - room draft save, publish, published read, versions read, and revert
+    - `GET /api/world` and `GET /api/world/chunks`
+    - run start/finish plus room/global leaderboard reads
+    - room mint prepare
+    - room mint confirm route wiring with the expected local-chain-missing failure (`409` for a fake tx hash)
+    - logout cookie clearing
+
+- Finished `OverworldPlayScene` extraction Phase 5:
+  - added `src/scenes/overworld/liveObjects.ts` with `OverworldLiveObjectController`
+  - moved live object creation/destruction, runtime updates, object/world colliders, overlap/collision triggers, collectible scoring, enemy stomp handling, bounce-pad activation, and ladder overlap detection out of `OverworldPlayScene`
+  - `OverworldPlayScene` now keeps only scene-owned callbacks for:
+    - score mutation
+    - player death / respawn
+    - goal-run mutation wiring
+    - room-level play loop and player ladder state
+- Phase 5 live-object extraction verification passed locally:
+  - `npm run build`
+  - required skill-client run at `output/web-game/phase5-live-objects-skill-client/`
+  - targeted browser verification at `output/web-game/phase5-live-objects-check/summary.json`
+    - in published room `(0,-2)`, entering play loaded the three `coin_gold` collectibles and teleporting onto one collected it through the live runtime:
+      - score `0 -> 3`
+      - room live objects `3 -> 2`
+      - goal-run `collectiblesCollected: 0 -> 1`
+    - in published room `(-1,0)`, entering play loaded the `penguin` enemies and a stomp removed one through the live runtime:
+      - score `0 -> 10`
+      - room live objects dropped by one `penguin`
+      - HUD/status showed `Penguin defeated.`
+    - screenshot captured at `output/web-game/phase5-live-objects-check/shot-0.png`
+  - local capture note:
+    - the generic headless skill-client screenshot at `output/web-game/phase5-live-objects-skill-client/shot-0.png` was black again in this environment, but `state-0.json` and the targeted browser screenshot both showed the scene running correctly
+
+- Finished `OverworldPlayScene` extraction Phase 4:
+  - added `src/scenes/overworld/worldStreaming.ts` with `OverworldWorldStreamingController`
+  - moved chunk-window calculation, published-room snapshot caching, preview/full-room texture creation, full-room load/unload orchestration, LOD room bookkeeping, and preview/full-room display caches out of `OverworldPlayScene`
+  - `OverworldPlayScene` now talks to the streaming layer through thin getters/wrappers while keeping scene-specific runtime concerns in place for the later live-object extraction:
+    - selected-room state and HUD composition
+    - player/camera mode transitions
+    - live object creation/destruction callbacks
+    - edge-wall and collision hookup
+- Phase 4 world-streaming extraction verification passed locally:
+  - `npm run build`
+  - required skill-client run at `output/web-game/phase4-world-streaming-skill-client/`
+  - targeted browser verification at `output/web-game/phase4-world-streaming-check/summary.json`
+    - browse mode loaded preview rooms only (`loadedPreviewRooms: 7`, `loadedFullRooms: 0`)
+    - switching to play loaded the near-room set as full rooms (`loadedFullRooms: 5`) without dropping the chunk window
+    - returning to browse unloaded full rooms back to preview-only state
+    - jumping to `(-1,0)` kept the streamed window live and updated the LOD mix (`nearRoomCount: 4`, `midRoomCount: 3`)
+    - screenshot captured at `output/web-game/phase4-world-streaming-check/shot-0.png`
+  - local capture note:
+    - the generic headless skill-client screenshot at `output/web-game/phase4-world-streaming-skill-client/shot-0.png` was black again in this environment, but `state-0.json` and the targeted browser screenshot both showed the scene running correctly
+
+- Finished `OverworldPlayScene` extraction Phase 3:
+  - added `src/scenes/overworld/presence.ts` with `OverworldPresenceController`
+  - moved PartyKit client lifecycle, identity resolution, shard subscription updates, local presence publishing, ghost renderer bookkeeping, ghost visibility, room-population summaries, and presence debug snapshot generation out of `OverworldPlayScene`
+  - `OverworldPlayScene` now keeps only thin scene-facing wrappers for:
+    - refreshing subscribed chunk bounds from the currently loaded world window
+    - forwarding local player pose/state while in play mode
+    - stepping ghost interpolation
+    - pulling presence summary/debug data for HUD and `describeState()`
+  - preserved the existing unified scene architecture and external scene methods used by `setup.ts`
+- Phase 3 presence extraction verification passed locally:
+  - `npm run build`
+  - required skill-client run at `output/web-game/phase3-presence-skill-client/`
+  - targeted browser/controller verification at `output/web-game/phase3-presence-check/summary.json`
+    - confirmed the live `OverworldPlayScene` exposes the extracted presence controller
+    - confirmed presence remained enabled and connected after the extraction
+    - confirmed the controller reported a non-empty subscribed shard set (`25`) with no new console errors
+    - screenshot captured at `output/web-game/phase3-presence-check/shot-0.png`
+  - local capture note:
+    - the generic headless skill-client screenshot at `output/web-game/phase3-presence-skill-client/shot-0.png` was black again in this environment, but `state-0.json` and the targeted browser screenshot both showed the scene running correctly
+
+- Finished `OverworldPlayScene` extraction Phase 2:
+  - added `src/scenes/overworld/goalRuns.ts` with `OverworldGoalRunController`, `GoalRunState`, and a cloned debug snapshot shape
+  - moved room-goal run state, leaderboard state, remote run start/finish submission flow, leaderboard loading, and HUD summary text generation out of `OverworldPlayScene`
+  - `OverworldPlayScene` now keeps the world-side responsibilities only:
+    - physical goal/contact checks
+    - player death handling
+    - live enemy/collectible events
+    - goal marker drawing
+  - codified the selected product rule that leaving a goal room abandons the active run instead of silently orphaning it
+- Phase 2 goal-run extraction verification passed locally:
+  - `npm run build`
+  - required skill-client run at `output/web-game/phase2-goal-runs-skill-client/`
+  - targeted browser/controller verification at `output/web-game/phase2-goal-runs-check/summary.json`
+    - started a fake published `reach_exit` run through the live scene controller and confirmed `submissionState: "local-only"` plus goal HUD text in guest mode
+    - ticked elapsed time forward and confirmed the run timer updated
+    - simulated room exit via `syncRunForRoom(null)` and confirmed the active run cleared
+    - simulated a `collect_target` completion and confirmed the run moved to `result: "completed"`
+    - confirmed draft leaderboard messaging still resolves to `Draft room runs stay local.`
+    - screenshot captured at `output/web-game/phase2-goal-runs-check/shot-0.png`
+  - local runtime note:
+    - the current local D1 database has no published goal rooms, so this verification used the real running Phaser scene plus injected fake published room snapshots instead of mutating local room data
+
+- Started the staged `OverworldPlayScene` extraction with Phase 1 only:
+  - added `src/scenes/overworld/hud.ts` with a cached-DOM `OverworldHudBridge` and shared `OverworldHudViewModel`
+  - `OverworldPlayScene` now builds a single HUD view model and renders through the bridge instead of doing repeated per-frame `getElementById(...)` lookups
+  - preserved the existing local behavior:
+    - world jump input is not overwritten while focused
+    - browse/play button text and status text still switch with scene mode
+    - bottom-bar room/zoom/status text still updates from the same scene state
+- Phase 1 HUD extraction verification passed locally:
+  - `npm run build`
+  - required skill-client run at `output/web-game/phase1-hud-bridge-skill-client/`
+  - targeted browser verification at `output/web-game/phase1-hud-bridge-check/summary.json`
+    - focused `#world-jump-input` kept the typed `-1,0` value across live scene updates
+    - jump recentered selection to `-1,0`
+    - `Play Room` switched to `Stop` in play mode and back to `Play Room` when returning to browse
+    - screenshot captured at `output/web-game/phase1-hud-bridge-check/shot-0.png`
+  - known local-only noise: with no PartyKit server on `127.0.0.1:1999`, the skill-client run still logged the expected websocket `ERR_CONNECTION_REFUSED` errors
+
+- Removed dead-code leftovers with no intended behavior change:
+  - dropped unused imports, fields, methods, and write-only flags in:
+    - `src/persistence/roomRepository.ts`
+    - `src/presence/worldPresence.ts`
+    - `src/scenes/EditorScene.ts`
+    - `src/scenes/OverworldPlayScene.ts`
+    - `src/ui/setup.ts`
+  - this specifically cleaned up stale symbols left behind after the unified-overworld / goals / presence / history work, while preserving the known-needed debug and focus-handling paths
+- Dead-code cleanup verification passed locally:
+  - `npx tsc --noEmit --noUnusedLocals --noUnusedParameters`
+  - `npm run build`
+
+- Finished Milestone 6 PartyKit ghosts plus chunking/LOD pass:
+  - added PartyKit presence infrastructure:
+    - `partykit/presenceServer.ts`
+    - `partykit.json`
+    - `npm run dev:presence`
+  - added shared client presence plumbing in `src/presence/worldPresence.ts`:
+    - subscribes to chunk shards
+    - publishes local play-mode movement only
+    - tracks nearby ghost peers and room populations
+  - replaced the old fixed overworld loading window with chunk-aware loading:
+    - `src/persistence/worldModel.ts` now computes `8x8` world chunks and chunk windows
+    - `src/persistence/worldRepository.ts` can now load chunk windows
+    - Worker now serves `GET /api/world/chunks`
+  - `OverworldPlayScene` now uses near/mid/far room LOD:
+    - near rooms load full collisions and live objects
+    - mid rooms keep preview textures only
+    - far rooms stay metadata-only
+  - overworld presence behavior now matches the milestone target:
+    - browse mode subscribes to nearby shards and surfaces room population counts
+    - play mode publishes local presence and renders nearby non-colliding ghost players with name tags
+    - shard subscriptions update as camera/window bounds move, and published presence follows room-to-room traversal
+  - fixed two Milestone 6 bugs found during verification:
+    - PartyKit single-server dev projects use the implicit `main` party route; the previous `presence` default caused shard `404`s and no ghost connectivity
+    - room populations are now merged per shard instead of being overwritten by the most recent shard snapshot, so browse-mode counts remain correct across multi-chunk subscriptions
+- Milestone 6 verification passed locally:
+  - `npm run build`
+  - `npm run cf:d1:migrate:local`
+  - targeted two-client presence/chunk verification at `output/web-game/milestone6-presence-check/summary.json`
+    - seeded a deterministic published row of rooms `0..15,0`
+    - browse at `(7,0)` saw `roomPopulations["7,0"] === 1` while another player was live in play mode
+    - play at `(7,0)` rendered the remote ghost in a nearby loaded room
+    - moving the live player from room `7,0` to `8,0` shifted the ghost from shard `0,0` to shard `1,0` without disappearing on the observing client
+    - state confirmed chunked LOD was active with non-empty `farRoomIds` and `loadedPreviewRooms > loadedFullRooms`
+  - screenshots captured at:
+    - `output/web-game/milestone6-presence-check/01-browse-population.png`
+    - `output/web-game/milestone6-presence-check/02-play-ghost.png`
+    - `output/web-game/milestone6-presence-check/03-play-ghost-handoff.png`
+  - required skill-client run completed at `output/web-game/m6-skill-client/`
+- Milestone 6 local runtime note:
+  - this local pass depended on the Milestone 4 Anvil room-mint contract config in `.dev.vars`; Anvil plus the local `RoomOwnershipToken` deploy were started so room publish/ownership sync would not fail while seeding the verification world
+
+- Finished Milestone 5 bot-friendly API surface pass:
+  - added D1 migration `0005_api_tokens.sql` for hashed personal bearer tokens with:
+    - `user_id`
+    - `label`
+    - `token_hash`
+    - `scopes_json`
+    - `created_at`
+    - `last_used_at`
+    - `revoked_at`
+  - expanded shared auth types in `src/auth/model.ts` so the Worker, browser, and future bots share:
+    - API token scope constants
+    - token create/list response shapes
+    - auth-session response metadata for `source` and `scopes`
+  - Worker auth now accepts either a browser session cookie or `Authorization: Bearer ...` on authenticated endpoints
+  - added token management endpoints:
+    - `GET /api/auth/tokens`
+    - `POST /api/auth/tokens`
+    - `DELETE /api/auth/tokens/:tokenId`
+  - token handling details:
+    - raw bearer token is only returned once at creation time
+    - only SHA-256 token hashes are stored in D1
+    - revoked tokens return `401`
+    - bearer token `last_used_at` is updated on each successful authenticated request
+  - added scope enforcement for bearer tokens:
+    - `rooms:write` for draft save, publish, revert, and mint prepare/confirm
+    - `runs:write` for run start/finish
+    - `rooms:read` when a bearer token is supplied to world/room/version reads
+    - `leaderboards:read` when a bearer token is supplied to leaderboard reads
+    - anonymous public reads still work for rooms/world/leaderboards when no token is sent
+  - CORS now allows `Authorization` headers and `DELETE`, so external bots can use bearer auth cleanly from browsers or tool runners
+  - published root bot docs from static assets:
+    - `public/skill.md`
+    - `public/openapi.json`
+    - docs now cover auth, coordinate model, room flows, run flows, leaderboard reads, and mint prepare/confirm
+- Milestone 5 verification passed locally:
+  - `npm run build`
+  - `npm run cf:d1:migrate:local`
+  - targeted API verification at `output/web-game/milestone5-api-check/summary.json` confirmed:
+    - session-cookie auth can create/list/revoke personal API tokens
+    - bearer auth reports `source: "api_token"` and echoes the granted scopes on `GET /api/auth/session`
+    - bearer writes for room draft/publish and run start/finish work with the expected scopes
+    - missing-scope bearer reads now fail with `403` for room and leaderboard reads
+    - anonymous room reads still succeed without auth
+    - `skill.md` and `openapi.json` are served from the app origin and parse correctly
+  - required skill-client run at `output/web-game/m5-skill-client/`
+    - current browser state loaded the published room at `(0,0)` and exposed the new leaderboard state in `state-0.json`
+    - screenshots `shot-0.png` and `shot-1.png` were captured for the milestone pass
+- Milestone 5 residual note:
+  - token creation/revocation is API-only right now; there is no in-app token management UI yet, so bots are documented and supported but human token administration still happens through direct API calls
+
+- Finished Milestone 4 room ownership / NFT mint lock pass:
+  - added a Foundry contract workspace under `contracts/` with:
+    - `RoomOwnershipToken.sol` ERC721 room contract
+    - one token per room coordinate
+    - mint price locked at `0.01 ether`
+    - permanent `roomKey -> tokenId` mapping
+    - `RoomMinted` event carrying token id, room key, coordinates, and minter
+    - local contract tests and a Base-style deploy script
+  - added shared mint contract/types in `src/mint/roomOwnership.ts` so the Worker and client use the same ABI, chain payload, and prepare/confirm shapes
+  - added D1 migration `0004_room_mint_owner_snapshot.sql` for:
+    - `rooms.minted_owner_wallet_address`
+    - `rooms.minted_owner_synced_at`
+  - Worker mint flow now exists end-to-end:
+    - `POST /api/rooms/:id/mint/prepare`
+    - `POST /api/rooms/:id/mint/confirm`
+    - prepare requires an authenticated account with a linked wallet and a published room
+    - confirm verifies the transaction receipt against the configured contract and persists minted chain/token/owner snapshot metadata
+  - room write permissions now sync against chain ownership before mutations:
+    - `save draft`
+    - `publish`
+    - `revert`
+    - this catches out-of-band transfers too, so edit rights follow the current token owner wallet instead of stale DB data
+  - room records/permissions now include:
+    - `mintedOwnerWalletAddress`
+    - `mintedOwnerSyncedAt`
+    - `permissions.canSaveDraft`
+    - `permissions.canMint`
+  - editor/UI updates:
+    - new `Mint Room` action button
+    - auto-publishes dirty/unpublished rooms before minting
+    - uses the existing linked wallet/AppKit flow to send the prepared transaction
+    - shows minted owner/token status in idle text, history modal metadata, and `describeState()`
+    - disables save/publish/revert/mint affordances for non-owners on minted rooms
+    - allows leaving a read-only minted room without getting stuck in the old auto-publish fallback loop
+  - wallet client updates:
+    - exported `sendPreparedWalletTransaction(...)`
+    - AppKit networks now include `baseSepolia` first for the live target
+    - generic chain switch/add flow now uses the Worker-provided chain metadata
+- Milestone 4 verification passed locally:
+  - `npm run contracts:test`
+  - `npm run build`
+  - `npm run cf:d1:migrate:local`
+  - required skill-client run at `output/web-game/m4-skill-client/`
+    - guest browser flow opened the minted room editor from the overworld
+    - `state-0.json` confirmed minted guest permissions are locked:
+      - `canSaveDraft: false`
+      - `canPublish: false`
+      - `canRevert: false`
+      - `canMint: false`
+      - `mintedTokenId: "1"`
+      - `mintedOwnerWalletAddress: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"`
+  - targeted API + chain verification at `output/web-game/milestone4-api-check/summary.json` confirmed:
+    - owner wallet can still save drafts on a minted room
+    - second wallet receives `403` on draft save, publish, and revert before transfer
+    - after on-chain `transferFrom(...)`, the second wallet automatically gains write access on the next request
+    - guest room loads expose minted owner snapshot but keep all write permissions `false`
+  - artifact captures worth keeping:
+    - `output/web-game/m4-skill-client/shot-0.png`
+    - `output/web-game/m4-skill-client/state-0.json`
+    - `output/web-game/milestone4-api-check/summary.json`
+- Milestone 4 residual notes:
+  - live minting still depends on backend env configuration:
+    - `ROOM_MINT_RPC_URL`
+    - `ROOM_MINT_CONTRACT_ADDRESS`
+    - optional chain metadata overrides
+  - Base Sepolia deployment is not done yet; local verification used Anvil with an ignored `.dev.vars` override
+  - world-map room summaries do not surface minted ownership yet; lock state becomes visible when the room record/editor is loaded
+
+- Finished Milestone 3 runs / scoring / leaderboards pass:
+  - added D1 migration `0003_runs_and_leaderboards.sql` for room goal/spawn metadata columns plus new `room_runs` and `user_stats` tables
+  - Worker now exposes:
+    - `POST /api/runs/start`
+    - `POST /api/runs/:attemptId/finish`
+    - `GET /api/leaderboards/rooms/:roomId`
+    - `GET /api/leaderboards/global`
+  - run submission is auth-gated on the server; anonymous clients still play locally and the scene marks those runs as `local-only`
+  - server-side scoring now lives in `src/runs/scoring.ts` and the Worker uses the same rules as the client HUD/debug state:
+    - timed `reach_exit` / `checkpoint_sprint` rank by fastest time, then deaths, then score
+    - `collect_target`, `defeat_all`, and `survival` rank by score, then time, then deaths
+  - room/version leaderboards are version-scoped by default:
+    - no `version` query uses the current published version
+    - `?version=` reads historical published versions from `room_versions`
+  - `OverworldPlayScene` now:
+    - starts a ranked attempt automatically for authenticated published-goal runs
+    - submits `completed`, `failed`, or `abandoned` results back to the Worker
+    - leaves draft or guest play in local-only mode
+    - exposes ranked attempt / leaderboard state through `describeState()`
+    - renders simple room/global leaderboard text in the world HUD
+  - added shared client run repository/types under `src/runs/`
+  - verification caught and fixed one Worker bug:
+    - delegated async route handlers were being `return`ed instead of `await`ed, which leaked `HttpError`s as raw `500`s; those routes now `await` the handler so anonymous submissions cleanly return `401`
+- Milestone 3 verification passed locally:
+  - `npm run build`
+  - `npm run cf:d1:migrate:local`
+  - required skill-client run at `output/web-game/m3-skill-client/`
+    - guest browser play on published room `(7,7)` completed the room goal but stayed `submissionState: "local-only"` with `attemptId: null`
+    - the same guest state still loaded room/global leaderboard data for viewing
+  - direct API verification confirmed:
+    - authenticated users can start/finish runs and receive version-scoped leaderboard entries
+    - default room leaderboard for `(7,7)` resolves to current published `roomVersion: 2`
+    - `?version=1` returns only v1 runs and keeps them isolated from v2
+    - global leaderboard rolls up `user_stats` by authenticated user
+    - anonymous `POST /api/runs/start` now returns `401` with the expected JSON error
+  - authenticated browser verification at `output/web-game/milestone3-leaderboard-check/` confirmed:
+    - signed-in play created a real remote attempt id
+    - the scene reached `submissionState: "submitted"` with `submittedScore: 214`
+    - the room leaderboard updated in-app and through the API with the new top run for v2
+  - visual artifacts worth keeping:
+    - `output/web-game/m3-skill-client/shot-0.png`
+    - `output/web-game/milestone3-leaderboard-check/authenticated-run.png`
+    - `output/web-game/milestone3-leaderboard-check/summary.json`
+    - `output/web-game/milestone3-leaderboard-check/leaderboard.json`
+
+- Finished Milestone 2 room goals / runtime pass:
+  - room snapshots now carry a shared `goal` schema covering exactly 5 live types: `reach_exit`, `collect_target`, `defeat_all`, `checkpoint_sprint`, and `survival`
+  - added shared goal helpers in `src/goals/roomGoals.ts` so editor, room persistence, and stitched overworld play all use the same data contract
+  - editor sidebar now has a `Goal` section with goal type selection, optional time-limit controls, collect/survival config inputs, and marker-placement buttons for exit/checkpoint/finish authoring
+  - editor now renders authored goal markers directly in the room view, tracks goal edits in undo/redo, exports/imports them with the room snapshot, and reports goal state through `describeState()`
+  - stitched overworld play now initializes per-room goal run state, exposes it in debug state, renders goal markers in play, and updates elapsed time / deaths / progress counters live
+  - `collect_target` now completes when the configured number of collectibles from the goal room are collected
+  - `defeat_all` is now playable through a minimal stomp interaction: landing on an enemy from above defeats it, adds score, and advances the room goal; side contact still counts as a hit
+  - `checkpoint_sprint` now tracks ordered checkpoint hits before allowing the finish marker to clear the room
+  - `survival` now clears after the configured duration and restarts the attempt on death
+- Milestone 2 verification passed locally:
+  - `npm run build`
+  - required skill-client run at `output/web-game/m2-skill-client/`
+  - targeted goal-flow verification at `output/web-game/milestone2-goal-check/summary.json` confirmed:
+    - `reach_exit` authored in the editor, reloaded through the app flow, and completed in play
+    - `collect_target` completed after collecting a placed gold coin (`collectiblesCollected: 1 / 1`)
+    - `defeat_all` completed after defeating the spawned snake (`enemiesDefeated: 1 / 1`)
+    - `checkpoint_sprint` completed after checkpoint + finish progression (`checkpointsReached: 1 / 1`)
+    - `survival` completed at `durationMs: 1000`
+    - survival retry logic resets the run after death (`result: "active"`, `elapsedMs: 16` after forced restart)
+  - visual artifacts worth keeping:
+    - `output/web-game/milestone2-goal-check/01-reach-exit-editor.png`
+    - `output/web-game/milestone2-goal-check/02-reach-exit-play.png`
+    - `output/web-game/milestone2-goal-check/03-checkpoint-play.png`
+- Milestone 2 residual note:
+  - the targeted app-flow reload for `reach_exit` showed the goal config intact after publish/reopen, but a direct raw `localStorage` probe of `published.goal` in the same scripted run came back `null`; if Milestone 3 touches room persistence internals, re-probe raw storage/Worker payloads before assuming the published goal record is fully verified outside the app flow
+
+- Finished Milestone 1 core play-loop / avatar pass:
+  - overworld `Play Room` is now a true toggle: it becomes `Stop` in play mode, and `Stop`, `P`, or `Esc` return to overworld browse mode without losing the current room focus
+  - room snapshots now carry an authored `spawnPoint`, with shared cloning/blank-room checks updated so spawn markers persist correctly
+  - editor object authoring now supports a single `Spawn Point` marker using the existing object palette flow, plus undo/redo, removal, debug-state reporting, and room export/import
+  - boot now preloads a curated default player art set from `public/assets/player/default/` and registers the first animation subset: `idle`, `run`, `jump-rise`, `jump-fall`, `land`, and `ladder-climb`
+  - stitched overworld play now keeps the physics body as a hidden feet-aligned hitbox while a separate sprite visual follows position/facing/animation state
+  - room entry, respawn, and void respawn now prefer the authored spawn marker and fall back to the existing surface-scan spawn when no marker is present
+- Milestone 1 verification passed locally:
+  - `npm run build`
+  - required skill-client run at `output/web-game/m1-skill-client/`
+  - targeted Playwright flow at `output/web-game/milestone1-spawn-toggle-check/` confirmed:
+    - fresh local boot opens overworld browse with `(0,0)` as a frontier room
+    - `Build Here` opens the editor for `(0,0)`
+    - authored spawn marker saved as `spawnPoint: { x: 328, y: 176 }`
+    - `Test Play` wakes overworld play with the draft room loaded, player spawned from that authored point, and world HUD button text changed to `Stop`
+    - clicking `Stop` returns to overworld browse with the same room still selected and the HUD button text restored to `Play Room`
+    - no console or page errors during the targeted flow (`summary.json`)
+  - artifact screenshots worth keeping:
+    - `output/web-game/milestone1-spawn-toggle-check/02-editor-spawn.png`
+    - `output/web-game/milestone1-spawn-toggle-check/03-play-spawned.png`
+    - `output/web-game/milestone1-spawn-toggle-check/07-play-max-zoom.png`
 
 - Extended the stitched overworld object runtime beyond collectibles so the next live object set actually behaves in play:
   - `OverworldPlayScene` now updates per-object runtime state for ladders, bounce pads, and the first moving enemy set instead of treating them as static sprites
@@ -378,7 +1323,7 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 - Automated browser screenshots are still black in this environment, so room preview visuals still need a real manual browser check despite the state/DOM verification.
 - The unified overworld flow is now the main navigation path, but `src/scenes/WorldScene.ts` and the old isolated `PlayScene` world-return path still exist on disk as legacy code and should be cleaned up once the new loop feels settled.
 - The new overworld grid is much closer, but it still wants a real human visual pass in a live browser to judge final line weight/contrast at multiple zoom levels; headless screenshots are useful but not the last word here.
-- The overworld prototype currently simulates terrain traversal only; placed objects are rendered into room textures but hazards, enemies, collectibles, and multiplayer presence are not yet live in overworld play.
+- Overworld play now supports authored goals, run tracking, near-room live objects, leaderboard submission, minted-room ownership checks, and PartyKit ghost presence, but the MMO-scale version of that loop is still unproven.
 - A process was seen listening on `localhost:3333` during this session, but it was not started or managed by Codex in this turn.
 - `PRD.md` is the main product context file.
 - The reliable local runtime for Wrangler on this machine is `nvm use 20.19.4`; `.nvmrc` now pins that.
@@ -389,34 +1334,214 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - one Worker still serves both static assets and `/api/*`, now including auth/session routes backed by D1
   - repo-root `env.local` is now a supported frontend config source for `VITE_REOWN_PROJECT_ID` / `VITE_WALLET_CONNECT_PROJECT_ID`
   - local Worker auth config comes from `.dev.vars`; production still needs Wrangler secrets/vars for `RESEND_API_KEY`, `AUTH_EMAIL_FROM`, and `APP_BASE_URL`
-  - the frontend can now authenticate by email or wallet, but room ownership, creator binding, claim rules, and wallet-first mint flows are not enforced yet
+  - the frontend can now authenticate by email or wallet, and local room ownership / mint enforcement / leaderboard auth are wired, but broader creator-identity UX and remote production policy still need polish
   - important workflow note: the app now defaults to remote API-backed room/world state, but `npm run dev:api` still uses Wrangler's local D1 while `npm run dev:api:remote` hits the real remote Worker/D1
   - the new reset button wipes whichever backend the current `/api` target is pointing at, so use `dev:api:remote` intentionally before clearing shared remote test data
 
 ## Known Gaps Vs PRD
 
 - Milestone 1 world shell is in place, and the main navigation now runs through a single overworld scene, but the prototype is still far from the PRD's MMO-style shared world.
-- The overworld scene does not yet stream very large visible windows or apply true simulation/rendering LOD for hundreds of rooms.
-- Email auth and wallet-connect scaffolding now exist, but room ownership/claim auth, multiplayer ghosts, minimap, goals, and leaderboards are still missing.
-- Overworld play does not yet simulate placed hazards/enemies/collectibles; those are currently visual-only in the stitched-room prototype.
-- Player is still a placeholder rectangle; final character art is not sourced yet.
+- The overworld scene now uses chunk windows plus near/mid/far room LOD, but it has only been validated on a small seeded local world, not at real large-world or high-concurrency scale.
+- Ghost presence is live, but ghosts are intentionally non-interactive and there is no social/gameplay interaction layer yet.
+- Goals, leaderboards, bearer-token APIs, and minted-room edit locking now exist, but play.fun rewards, bot automation around a deployed production backend, and minimap/polish work are still missing.
+- The default sprite player is wired, but final character-art polish and a larger animation set are still future work.
 - Production email delivery still depends on configuring a real Resend key/domain; local debug mode currently uses returned magic links instead of sending mail.
 - Wallet connect mounts and starts the sign-in flow locally, but a full real-wallet signature pass still needs a headed/manual browser check.
 
 ## Likely Next Priorities
 
-- Wire auth into actual ownership and creator rules:
-  - attach `creator_id` / owner identity to room records and published versions
-  - require auth for saving/publishing rooms that should belong to a user
+- Tighten the ownership/account UX:
+  - attach clearer creator/owner identity to room records and published versions in the UI
   - make overwrite/edit behavior explicit when a signed-in user opens a published room with a stale or blank draft
-  - add a small “account” / “linked wallet” status path in the UI before tying it to minting
+  - add a small account / linked-wallet management path in the UI instead of relying on debug-style auth affordances
 - Decide whether the test-reset route should stay local/dev-only forever or grow a stronger token-based guard for shared remote staging use.
 - Keep pushing the overworld prototype:
-  - add true near/far LOD so far rooms stay as thumbnails while only nearby rooms keep live collisions
-  - add streaming as the inspect camera pans, not just as the player changes rooms
-  - add lightweight player markers/ghosts so the overworld starts to feel inhabited
+  - tune chunk radius / shard subscription breadth so zoomed-out browse mode is cheaper at scale
+  - verify streaming as the inspect camera pans across a much larger seeded world
   - decide whether free-cam should pause local gameplay or allow the player to keep moving offscreen
+  - add presence polish like better ghost interpolation, population badges, and eventually interactions
 - Then make overworld play more faithful:
-  - simulate placed hazards/enemies/collectibles in nearby loaded rooms
-  - add authored spawn points and room goals to `RoomSnapshot`
-- Keep minimap, wallet/minting, and broader multiplayer after the overworld model feels right.
+  - widen live-object coverage and edge-case behavior for more authored object types
+  - add more goal variety, balance, and scoring polish
+- Keep minimap, play.fun/reward wiring, and broader multiplayer after the overworld model feels right.
+
+## March 11, 2026 - Room Titles, Leaderboards, Points
+
+- Added optional room titles end-to-end:
+  - `RoomSnapshot.title`
+  - D1 columns for `rooms.draft_title`, `rooms.published_title`, and `room_versions.title`
+  - editor title input
+  - overworld selected-room title line
+  - world/window payloads now expose `title` and `goalType`
+- Formalized room leaderboard behavior:
+  - room boards are scoped to published room versions
+  - latest published version is the default in the new world leaderboard modal
+  - room leaderboard responses now include `roomTitle`, `viewerBest`, and `viewerRank`
+  - ranking rules are now `time` for `reach_exit`, `collect_target`, `defeat_all`, and `checkpoint_sprint`; `survival` stays `score`
+- Added global points progression:
+  - new `point_events` D1 table with idempotent `(event_type, source_key)` behavior
+  - `user_stats` now tracks `total_points`, `total_deaths`, `total_collectibles`, `total_enemies_defeated`, `total_checkpoints`, and `total_rooms_published`
+  - first publish awards `300`
+  - publish update awards `75`
+  - finalized published runs award action points plus clear / zero-death / personal-best bonuses
+  - run finalization now clamps reported collectible / enemy / checkpoint counts to snapshot maxima before scoring and points are computed
+- Added a new world leaderboard modal with `Room` and `Global` tabs.
+  - `Room` tab shows the selected published challenge room and supports version switching
+  - `Global` tab shows the points board
+  - fixed a UI bug discovered during verification where the modal could stick on the global tab if it rendered before room-version data loaded; it now defaults back to the room tab when a room board is available
+- Verification:
+  - `npm run build` passed
+  - `npm run cf:d1:migrate:local` passed
+  - isolated Worker API check passed and artifact is in `output/worker-room-title-points-check/summary.json`
+  - that check confirmed:
+    - room title propagation through publish, room record, world window, and room leaderboard APIs
+    - first-publish points (`300`)
+    - finalized-run points (`157`)
+    - total points (`457`)
+    - clamped stored run counts (`1` collectible, `1` enemy, `0` checkpoints) despite exaggerated client-submitted counts
+    - viewer-best / viewer-rank and global viewer-entry payloads
+  - browser/UI check passed and artifact is in `output/web-game/room-title-leaderboard-ui-check/summary.json`
+  - skill-client smoke run completed at `output/web-game/room-title-leaderboard-skill-client`
+
+## March 11, 2026 - Combat Key Remap
+
+- Remapped combat controls in overworld play from `Z`/`X` to `Q`/`E`.
+- Updated both the actual key bindings and the footer help text so they stay in sync.
+- Verification:
+  - `npm run build` passed
+  - old `Z` / `X` combat binding references were removed from the scene
+  - skill-client smoke artifact updated in `output/web-game/room-title-leaderboard-skill-client`
+
+## March 11, 2026 - Jump/Land Dust Anchor Fix
+
+- Fixed the player jump/landing dust FX offset in `src/fx/controller.ts`.
+- Root cause: the player FX atlas frames are large (`96x84`) and were still using the default centered sprite origin, so spawning them at the player feet line visually pushed the dust far below the player.
+- Fix: keep the other FX unchanged, but bottom-anchor jump/landing dust specifically with `originY: 1`.
+- Verification:
+  - `npm run build` passed
+  - runtime artifact in `output/web-game/dust-offset-fix-check/summary-runtime.json` confirms the spawned dust now uses `originY: 1`
+  - zoomed screenshot in `output/web-game/dust-offset-fix-check/shot-2.png` shows the dust aligned to the player feet / ground contact line
+
+## March 11, 2026 - SFX Folder Organization
+
+- Created `public/assets/sfx/` category folders and moved the first batch of user-provided sound files out of `~/Downloads/SFX` into the project:
+  - `ui/ui-click.wav`
+  - `movement/jump.wav`, `movement/footstep.wav`, `movement/ladder-climb.wav`, `movement/bounce-pad.wav`
+  - `combat/sword-slash.wav`, `combat/gun-shot.wav`, `combat/enemy-kill.wav`
+  - `goals/goal-checkpoint.wav`, `goals/goal-success.wav`, `goals/game-fail.wav`
+  - `pickups/coin-collect.wav`, `pickups/fruit-collect.wav`, `pickups/gem-collect.wav`, `pickups/key-collect.wav`
+  - `world/respawn.wav`
+- Left original filenames intact for now so asset identification stays obvious before the actual audio wiring pass.
+
+## March 11, 2026 - Enemy Frame Metadata Cleanup
+
+- Corrected enemy-sheet metadata in `src/config.ts` instead of re-exporting assets:
+  - `frog` facing reverted to `right`
+  - `crab` now uses only the coherent top-row walk cycle via `animationFrames: [0, 1, 2, 1]`
+  - `fish` now uses one consistent mirrored set via `animationFrames: [0, 2, 4, 2]` so it no longer blinks between left/right halves
+  - `bat` now uses only the actual flying row via `animationFrames: [4, 5, 6, 7, 6, 5]`
+- Verification:
+  - `npm run build` passed
+  - targeted frame-debug sheets generated in `output/enemy-frame-debug/`
+  - targeted browser probe in `output/web-game/enemy-frame-metadata-check/summary.json` confirmed runtime animation samples now stay within the intended frames:
+    - crab: `0,1,2`
+    - fish: `0,2,4`
+    - frog: `0,1,2,3`
+    - bat: `4,5,6,7`
+
+## March 11, 2026 - World HUD Hierarchy Pass
+
+- Reworked the world-mode information hierarchy across `index.html`, `src/styles/main.css`, `src/scenes/OverworldPlayScene.ts`, `src/scenes/overworld/hud.ts`, and `src/ui/setup/sceneCommands.ts`.
+- Main changes:
+  - replaced the generic `World` kicker with `We All Make A Platformer` using a retro display font
+  - moved world zoom controls out of the top-left HUD and into the bottom-right footer next to `Fit`
+  - added a dedicated `Controls` modal instead of keeping long instructional strings in the HUD/footer
+  - removed redundant bottom-bar room/selection text in world mode
+  - added a centered `players online` pill in the footer
+  - simplified published-room metadata to focus on challenge type instead of version/room-size/debug copy
+  - removed the empty `no room goal leaderboard here` filler line from the HUD
+  - swapped the old orange-heavy accenting to a fuller palette built around green / amber / coral / red
+  - color-coded world actions so play/stop, build, leaderboard, and online status read more distinctly
+- Also trimmed local-only ranked/debug suffixes out of the player-facing goal counter/footer text.
+- Verification:
+  - `npm run build` passed
+  - required smoke run captured in `output/web-game/world-ui-hierarchy-skill-client/`
+  - targeted browser proof in `output/web-game/world-ui-hierarchy-check/summary.json`
+  - screenshots:
+    - `output/web-game/world-ui-hierarchy-check/shot-0-world.png`
+    - `output/web-game/world-ui-hierarchy-check/shot-1-controls.png`
+
+## March 11, 2026 - World Title Font Swap
+
+- Added a local font asset at `public/assets/fonts/early-gameboy.ttf` from the user-provided `Early GameBoy.ttf`.
+- Swapped the world HUD title (`We All Make A Platformer`) from the remote `Press Start 2P` web font to a local `@font-face` using `Early GameBoy`.
+- Verification:
+  - `npm run build` passed
+  - targeted browser proof in `output/web-game/world-title-font-check/summary.json`
+  - screenshot in `output/web-game/world-title-font-check/shot-0.png`
+
+## March 11, 2026 - Guest Draft Sign-In Recovery
+
+- The PRD's guest-build flow was still incomplete: guest edits in remote-backend mode were trying to autosave to the Worker, causing repeated `401` draft-save failures and no durable local handoff before sign-in.
+- Added a guest-local fallback path across:
+  - `src/scenes/editor/roomSession.ts`
+  - `src/persistence/roomRepository.ts`
+  - `src/persistence/browserStorage.ts`
+  - `src/auth/client.ts`
+- New behavior:
+  - guest autosave falls back to local room storage when the remote API returns `401`
+  - hitting `Publish` as a guest now saves the draft locally and opens the sign-in UI with an explicit prompt
+  - local guest drafts are cleared after a successful remote save/publish
+  - auth state refreshes on tab focus / visibility so the original tab notices sign-in completed elsewhere
+- Verification:
+  - `npm run build` passed
+  - targeted guest-flow proof in `output/web-game/guest-signin-draft-check/summary.json`
+  - the proof confirmed:
+    - guest draft title persisted locally
+    - publish opened the sign-in prompt instead of silently failing
+    - a signed-in tab could publish the recovered guest draft
+    - no repeated `Failed to save room draft` console errors remained in the checked flow
+
+## March 11, 2026 - Frontier Build Rule Restored
+
+- Fixed the overworld regression that had broadened `Build Here` from `frontier` cells to any `empty` cell.
+- Client-side changes in `src/scenes/OverworldPlayScene.ts`:
+  - `Build Here` is enabled only for `frontier` rooms again
+  - plain `empty` rooms now show `You can only build next to an existing published room`
+- Added backend enforcement in `src/cloudflare/worker/rooms/store.ts` so first-time claims cannot bypass the frontier rule:
+  - if there are no published rooms yet, the first published room must be `0,0`
+  - otherwise, a new claimed room must be orthogonally adjacent to an existing published room
+  - the daily first-claim cap still applies after the frontier check
+- Verification:
+  - `npm run build` passed
+  - browser proof in `output/web-game/frontier-build-rule-check/summary.json`
+    - `0,0` remained buildable on a fresh reset as `Frontier`
+    - far-away `100,100` showed `Empty`, disabled `Build Here`, and explained the adjacency rule
+  - Worker/API proof in `output/room-frontier-claim-check/summary.json`
+    - first publish at `5,5` returned `409`
+    - first publish at `0,0` returned `200`
+    - non-frontier publish at `5,5` after the seed returned `409`
+    - adjacent frontier publish at `1,0` returned `200`
+    - second new claim the same UTC day returned `429`
+
+## March 11, 2026 - Frontier Build Disabled When Claim Quota Is Exhausted
+
+- Added signed-in claim-quota visibility to `GET /api/auth/session`:
+  - `roomDailyClaimLimit`
+  - `roomClaimsUsedToday`
+  - `roomClaimsRemainingToday`
+- The overworld HUD now disables `Build Here` on `frontier` cells only when:
+  - the user is signed in, and
+  - their daily new-room claim quota is exhausted
+- Important behavior kept intact:
+  - guests can still enter frontier builds and sign in later to publish
+  - editing existing published/draft rooms is unaffected
+  - published room actions remain available even when frontier building is blocked for the day
+- Also refreshed auth session after successful publish so the frontier build button updates immediately after a new claim is used.
+- Verification:
+  - `npm run build` passed
+  - browser proof in `output/web-game/frontier-claim-cap-ui-check/summary.json`
+    - guest on frontier `(1,0)` still saw `Build Here` enabled
+    - signed-in user after one claim saw `roomClaimsRemainingToday: 0`
+    - the same frontier room showed `Build Here` disabled with `Daily new-room claim limit reached (1/1)`
+    - existing published room `(0,0)` still had `Edit Room` enabled

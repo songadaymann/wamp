@@ -1,0 +1,13 @@
+{
+  "name": "everybodys-platformer-contracts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test",
+    "deploy:base-sepolia": "forge script script/DeployRoomOwnershipToken.s.sol:DeployRoomOwnershipToken --rpc-url \"$ROOM_MINT_RPC_URL\" --broadcast"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.4.0"
+  }
+}

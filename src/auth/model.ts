@@ -6,9 +6,23 @@ export interface AuthUser {
   createdAt?: string;
 }
 
+export const API_TOKEN_SCOPES = [
+  'rooms:read',
+  'rooms:write',
+  'runs:write',
+  'leaderboards:read',
+] as const;
+
+export type ApiTokenScope = typeof API_TOKEN_SCOPES[number];
+
 export interface AuthSessionResponse {
   authenticated: boolean;
   user: AuthUser | null;
+  source?: 'session' | 'api_token' | null;
+  scopes?: ApiTokenScope[] | null;
+  roomDailyClaimLimit?: number | null;
+  roomClaimsUsedToday?: number;
+  roomClaimsRemainingToday?: number | null;
 }
 
 export interface MagicLinkRequestBody {
@@ -41,4 +55,27 @@ export interface WalletVerifyResponse {
   authenticated: true;
   linkedWallet: boolean;
   user: AuthUser;
+}
+
+export interface ApiTokenRecord {
+  id: string;
+  label: string;
+  scopes: ApiTokenScope[];
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+}
+
+export interface ApiTokenListResponse {
+  tokens: ApiTokenRecord[];
+}
+
+export interface ApiTokenCreateRequestBody {
+  label: string;
+  scopes: ApiTokenScope[];
+}
+
+export interface ApiTokenCreateResponse {
+  token: string;
+  record: ApiTokenRecord;
 }

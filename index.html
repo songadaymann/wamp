@@ -129,6 +129,52 @@
         <div class="palette-hint">Click an object, then click on the canvas to place.</div>
       </div>
 
+      <div class="sidebar-section" id="room-title-section">
+        <div class="section-label">Room Title</div>
+        <input id="room-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Room title (optional)" />
+      </div>
+
+      <div class="sidebar-section" id="goal-section">
+        <div class="section-label">Goal</div>
+        <select id="goal-type-select">
+          <option value="">None</option>
+          <option value="reach_exit">Reach Exit</option>
+          <option value="collect_target">Collect Target</option>
+          <option value="defeat_all">Defeat All</option>
+          <option value="checkpoint_sprint">Checkpoint Sprint</option>
+          <option value="survival">Survival</option>
+        </select>
+        <div id="goal-time-limit-row" class="goal-control-row hidden">
+          <label class="goal-control-label" for="goal-time-limit-seconds">Time Limit</label>
+          <div class="goal-inline-input">
+            <input id="goal-time-limit-seconds" class="goal-input" type="number" min="1" step="1" placeholder="Off" />
+            <span class="goal-inline-suffix">sec</span>
+          </div>
+        </div>
+        <div id="goal-required-count-row" class="goal-control-row hidden">
+          <label class="goal-control-label" for="goal-required-count">Collect Count</label>
+          <div class="goal-inline-input">
+            <input id="goal-required-count" class="goal-input" type="number" min="1" step="1" />
+            <span class="goal-inline-suffix">items</span>
+          </div>
+        </div>
+        <div id="goal-survival-row" class="goal-control-row hidden">
+          <label class="goal-control-label" for="goal-survival-seconds">Survive For</label>
+          <div class="goal-inline-input">
+            <input id="goal-survival-seconds" class="goal-input" type="number" min="1" step="1" />
+            <span class="goal-inline-suffix">sec</span>
+          </div>
+        </div>
+        <div id="goal-marker-controls" class="goal-marker-controls hidden">
+          <button id="btn-goal-place-exit" class="bar-btn bar-btn-small">Set Exit</button>
+          <button id="btn-goal-add-checkpoint" class="bar-btn bar-btn-small">Add Checkpoint</button>
+          <button id="btn-goal-place-finish" class="bar-btn bar-btn-small">Set Finish</button>
+          <button id="btn-goal-clear-markers" class="bar-btn bar-btn-small">Clear Markers</button>
+        </div>
+        <div id="goal-placement-hint" class="goal-placement-hint hidden">Click the canvas to place the selected goal marker.</div>
+        <div id="goal-summary" class="goal-summary">No room goal selected.</div>
+      </div>
+
       <div class="sidebar-section" id="editor-actions">
         <div class="section-label">Actions</div>
         <div class="editor-action-stack">
@@ -136,6 +182,7 @@
           <button id="btn-test-play" class="bar-btn">Test Play</button>
           <button id="btn-save-draft" class="bar-btn">Save Draft</button>
           <button id="btn-publish-room" class="bar-btn">Publish</button>
+          <button id="btn-mint-room" class="bar-btn">Mint Room</button>
           <button id="btn-room-history" class="bar-btn">History</button>
         </div>
       </div>
@@ -144,9 +191,9 @@
     <!-- Game Canvas -->
     <div id="game-container">
       <div id="world-hud" class="hidden">
-        <div class="world-hud-title">World</div>
+        <div class="world-hud-title">We All Make A Platformer</div>
+        <div id="world-selected-title" class="world-room-title">Room 0,0</div>
         <div class="world-hud-row">
-          <span class="world-hud-label">Selected</span>
           <span id="world-selected-coords" class="world-hud-value">0,0</span>
           <span id="world-selected-state" class="world-state-pill">Empty</span>
         </div>
@@ -156,17 +203,38 @@
           <button id="btn-world-jump" class="bar-btn bar-btn-small">Jump</button>
         </div>
         <div class="world-hud-row">
-          <span class="world-hud-label">View</span>
-          <button id="btn-world-zoom-in" class="bar-btn bar-btn-small">+</button>
-          <button id="btn-world-zoom-out" class="bar-btn bar-btn-small">-</button>
-          <span id="world-zoom-label" class="world-hud-value">0.18x</span>
+          <button id="btn-world-play" class="bar-btn bar-btn-small world-btn-play" disabled>Play Room</button>
+          <button id="btn-world-edit" class="bar-btn bar-btn-small world-btn-edit" disabled>Edit Room</button>
+          <button id="btn-world-build" class="bar-btn bar-btn-small world-btn-build" disabled>Build Here</button>
         </div>
         <div class="world-hud-row">
-          <button id="btn-world-play" class="bar-btn bar-btn-small" disabled>Play Room</button>
-          <button id="btn-world-edit" class="bar-btn bar-btn-small" disabled>Edit Room</button>
-          <button id="btn-world-build" class="bar-btn bar-btn-small" disabled>Build Here</button>
+          <button id="btn-world-leaderboard" class="bar-btn bar-btn-small world-btn-leaderboard">Leaderboard</button>
+          <button id="btn-world-controls" class="bar-btn bar-btn-small world-btn-controls">Controls</button>
         </div>
-        <div id="world-status" class="world-hud-status">Published rooms can play. Frontier rooms can build.</div>
+        <div id="world-status" class="world-hud-status"></div>
+        <div id="world-leaderboard" class="world-hud-meta">Leaderboard inactive.</div>
+      </div>
+      <div id="global-chat" class="chat-panel">
+        <button id="btn-chat-toggle" class="bar-btn bar-btn-small chat-toggle" type="button">
+          World Chat +
+          <span id="chat-unread-badge" class="chat-unread-badge hidden">0</span>
+        </button>
+        <div id="global-chat-body" class="chat-panel-body hidden">
+          <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+          <div id="chat-empty" class="chat-empty">No messages yet.</div>
+          <form id="chat-form" class="chat-form">
+            <input
+              id="chat-input"
+              class="chat-input"
+              type="text"
+              maxlength="140"
+              placeholder="Sign in to chat"
+              spellcheck="true"
+            />
+            <button id="btn-chat-send" class="bar-btn bar-btn-small" type="submit">Send</button>
+          </form>
+          <div id="chat-status" class="chat-status">Signed-in players can post. Guests can read only.</div>
+        </div>
       </div>
     </div>
 
@@ -177,9 +245,13 @@
         <span class="separator">|</span>
         <span id="cursor-coords">Tile: -, -</span>
       </div>
-      <div class="bar-center"></div>
+      <div class="bar-center">
+        <span id="world-online-count" class="world-online-pill world-only-control"></span>
+      </div>
       <div class="bar-right">
         <span id="room-save-status">Draft ready.</span>
+        <button id="btn-world-zoom-out-footer" class="bar-btn bar-btn-small world-btn-zoom world-only-control" type="button">-</button>
+        <button id="btn-world-zoom-in-footer" class="bar-btn bar-btn-small world-btn-zoom world-only-control" type="button">+</button>
         <button id="btn-fit-screen" class="bar-btn bar-btn-small">Fit</button>
         <span id="zoom-level">Zoom: 2x</span>
       </div>
@@ -198,6 +270,73 @@
       </div>
       <div id="room-history-error" class="history-modal-error hidden"></div>
       <div id="room-history-list" class="history-version-list"></div>
+    </div>
+  </div>
+
+  <div id="leaderboard-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel leaderboard-modal-panel" role="dialog" aria-modal="true" aria-labelledby="leaderboard-modal-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Leaderboards</div>
+          <h2 id="leaderboard-modal-title" class="history-modal-title">Leaderboard</h2>
+          <div id="leaderboard-modal-meta" class="history-modal-meta">Browse room and world rankings.</div>
+        </div>
+        <button id="btn-leaderboard-close" class="bar-btn bar-btn-small">Close</button>
+      </div>
+      <div class="leaderboard-tabs">
+        <button id="btn-leaderboard-tab-room" class="bar-btn bar-btn-small active" type="button">Room</button>
+        <button id="btn-leaderboard-tab-global" class="bar-btn bar-btn-small" type="button">Global</button>
+      </div>
+      <div id="leaderboard-modal-error" class="history-modal-error hidden"></div>
+      <div id="leaderboard-room-panel" class="leaderboard-panel">
+        <div class="leaderboard-controls">
+          <label class="goal-control-label" for="leaderboard-version-select">Version</label>
+          <select id="leaderboard-version-select"></select>
+        </div>
+        <div id="leaderboard-room-summary" class="history-modal-meta">No room leaderboard selected.</div>
+        <div id="leaderboard-room-viewer" class="history-modal-meta hidden"></div>
+        <div id="leaderboard-room-list" class="history-version-list"></div>
+      </div>
+      <div id="leaderboard-global-panel" class="leaderboard-panel hidden">
+        <div id="leaderboard-global-summary" class="history-modal-meta">World points leaderboard.</div>
+        <div id="leaderboard-global-viewer" class="history-modal-meta hidden"></div>
+        <div id="leaderboard-global-list" class="history-version-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="controls-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel controls-modal-panel" role="dialog" aria-modal="true" aria-labelledby="controls-modal-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Controls</div>
+          <h2 id="controls-modal-title" class="history-modal-title">World Controls</h2>
+          <div id="controls-modal-meta" class="history-modal-meta">Browse, build, and play from here.</div>
+        </div>
+        <button id="btn-controls-close" class="bar-btn bar-btn-small">Close</button>
+      </div>
+      <div class="controls-grid">
+        <div class="controls-section">
+          <div class="controls-section-title">Browse</div>
+          <div class="controls-row"><span class="controls-key">Click</span><span>Select room</span></div>
+          <div class="controls-row"><span class="controls-key">Wheel</span><span>Zoom to cursor</span></div>
+          <div class="controls-row"><span class="controls-key">Drag / Space</span><span>Pan camera</span></div>
+          <div class="controls-row"><span class="controls-key">Jump field</span><span>Go to coordinates</span></div>
+          <div class="controls-row"><span class="controls-key">F</span><span>Fit loaded world</span></div>
+        </div>
+        <div class="controls-section">
+          <div class="controls-section-title">Play</div>
+          <div class="controls-row"><span class="controls-key">WASD / Arrows</span><span>Move</span></div>
+          <div class="controls-row"><span class="controls-key">Space / Up</span><span>Jump</span></div>
+          <div class="controls-row"><span class="controls-key">Down</span><span>Crouch / crawl</span></div>
+          <div class="controls-row"><span class="controls-key">Down + move</span><span>Pull crate</span></div>
+          <div class="controls-row"><span class="controls-key">Q</span><span>Slash</span></div>
+          <div class="controls-row"><span class="controls-key">E</span><span>Shoot</span></div>
+          <div class="controls-row"><span class="controls-key">C</span><span>Toggle follow cam</span></div>
+          <div class="controls-row"><span class="controls-key">P / Esc</span><span>Return to browse</span></div>
+        </div>
+      </div>
+      <div class="history-modal-meta">Custom control remapping can layer onto this later without changing the basic world HUD.</div>
     </div>
   </div>
 

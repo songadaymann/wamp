@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { getAuthDebugState, setupAuthUi } from './auth/client';
+import { initSfx, globalSfxController } from './audio/sfx';
+import { runOverworldLodStress } from './debug/overworldLodStress';
 import { BootScene } from './scenes/BootScene';
 import { EditorScene } from './scenes/EditorScene';
 import { OverworldPlayScene } from './scenes/OverworldPlayScene';
@@ -43,9 +45,11 @@ const config: Phaser.Types.Core.GameConfig = {
 };
 
 const game = new Phaser.Game(config);
+initSfx();
 
 if (import.meta.env.DEV) {
   (window as Window & { __EVERYBODYS_PLATFORMER_GAME__?: Phaser.Game }).__EVERYBODYS_PLATFORMER_GAME__ = game;
+  window.run_overworld_lod_stress = () => runOverworldLodStress(game);
 }
 
 // Set up HTML UI event handlers
@@ -139,6 +143,8 @@ window.render_game_to_text = () =>
     coordinateSystem: 'Top-left origin. X increases right. Y increases down.',
     activeScene: getDebugState(),
     auth: getAuthDebugState(),
+    chat: window.get_chat_debug_state?.() ?? null,
+    sfx: window.get_sfx_debug_state?.() ?? globalSfxController.getDebugState(),
   });
 
 window.capture_debug_info = () => getCaptureDebugInfo();

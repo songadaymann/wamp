@@ -7,8 +7,12 @@
     "dev": "vite",
     "dev:api": "wrangler dev",
     "dev:api:remote": "wrangler dev --remote",
+    "dev:presence": "partykit dev",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "contracts:build": "npm --prefix contracts run build",
+    "contracts:test": "npm --prefix contracts run test",
+    "contracts:deploy:base-sepolia": "npm --prefix contracts run deploy:base-sepolia",
     "cf:d1:migrate:local": "wrangler d1 migrations apply DB --local",
     "cf:d1:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "cf:deploy": "npm run build && wrangler deploy"
@@ -18,11 +22,13 @@
     "@reown/appkit": "^1.8.19",
     "@reown/appkit-adapter-ethers": "^1.8.19",
     "ethers": "^6.16.0",
+    "partysocket": "^1.1.16",
     "phaser": "^3.87.0",
     "resend": "^6.9.3",
     "viem": "^2.47.0"
   },
   "devDependencies": {
+    "partykit": "^0.0.115",
     "typescript": "^5.7.0",
     "vite": "^6.2.0",
     "wrangler": "^4.71.0"

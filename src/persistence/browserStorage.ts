@@ -1,5 +1,18 @@
 export const ROOM_STORAGE_PREFIX = 'everybodys-platformer:room:';
 
+export function clearLocalRoomStorageEntry(
+  roomId: string,
+  storage: Storage = window.localStorage
+): boolean {
+  const key = `${ROOM_STORAGE_PREFIX}${roomId}`;
+  if (storage.getItem(key) === null) {
+    return false;
+  }
+
+  storage.removeItem(key);
+  return true;
+}
+
 export function clearLocalRoomStorage(storage: Storage = window.localStorage): number {
   const keysToDelete: string[] = [];
 

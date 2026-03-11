@@ -7,11 +7,20 @@ import type {
   WalletVerifyResponse,
 } from './model';
 import { clearLocalRoomStorage } from '../persistence/browserStorage';
+import type {
+  PreparedWalletTransaction,
+  RoomMintChainInfo,
+} from '../mint/roomOwnership';
 
-interface AuthDebugState {
+export const AUTH_STATE_CHANGED_EVENT = 'auth-state-changed';
+
+export interface AuthDebugState {
   loading: boolean;
   authenticated: boolean;
   user: AuthUser | null;
+  roomDailyClaimLimit: number | null;
+  roomClaimsUsedToday: number;
+  roomClaimsRemainingToday: number | null;
   status: string;
   debugMagicLink: string | null;
   walletConnected: boolean;
@@ -26,10 +35,14 @@ interface TestResetResponse {
   deleted: {
     rooms: number;
     roomVersions: number;
+    roomRuns: number;
+    userStats: number;
+    chatMessages: number;
     users: number;
     sessions: number;
     magicLinks: number;
     walletChallenges: number;
+    apiTokens: number;
   };
 }
 
@@ -41,6 +54,9 @@ const state: AuthDebugState = {
   loading: false,
   authenticated: false,
   user: null,
+  roomDailyClaimLimit: null,
+  roomClaimsUsedToday: 0,
+  roomClaimsRemainingToday: null,
   status: 'Guest mode.',
   debugMagicLink: null,
   walletConnected: false,
@@ -61,6 +77,7 @@ let authStatus: HTMLElement | null = null;
 let authDebugLink: HTMLAnchorElement | null = null;
 let appKit: AppKit | null = null;
 let walletBootstrapPromise: Promise<AppKit> | null = null;
+let sessionRefreshListenersBound = false;
 
 export async function setupAuthUi(): Promise<void> {
   authPanel = document.getElementById('auth-panel');
@@ -109,6 +126,7 @@ export async function setupAuthUi(): Promise<void> {
   });
 
   initializeStatusFromQuery();
+  bindSessionRefreshListeners();
   await initializeWalletConnect();
   await refreshSession();
   renderAuthUi();
@@ -116,6 +134,56 @@ export async function setupAuthUi(): Promise<void> {
 
 export function getAuthDebugState(): AuthDebugState {
   return { ...state };
+}
+
+export async function refreshAuthSession(): Promise<void> {
+  await refreshSession();
+}
+
+export function promptForSignIn(status: string = 'Sign in to publish this room.'): void {
+  state.status = status;
+  renderAuthUi();
+  authPanel?.classList.add('menu-open');
+  authEmailInput?.focus();
+  authEmailInput?.select();
+}
+
+export async function sendPreparedWalletTransaction(
+  transaction: PreparedWalletTransaction,
+  chain: RoomMintChainInfo
+): Promise<{ hash: string; from: string }> {
+  if (!state.walletProjectConfigured) {
+    throw new Error('Wallet connect is not configured.');
+  }
+
+  const walletModal = await ensureWalletModal();
+  await ensureWalletConnection();
+  const provider = getWalletProvider(walletModal);
+
+  await ensureWalletChain(provider, chain);
+
+  const { BrowserProvider } = await import('ethers');
+  const browserProvider = new BrowserProvider(provider);
+  const signer = await browserProvider.getSigner();
+  const signerAddress = await signer.getAddress();
+  const linkedWallet = state.user?.walletAddress?.toLowerCase();
+
+  if (linkedWallet && linkedWallet !== signerAddress.toLowerCase()) {
+    throw new Error('Connected wallet does not match the linked account wallet.');
+  }
+
+  const response = await signer.sendTransaction({
+    to: transaction.to,
+    data: transaction.data,
+    value: BigInt(transaction.value),
+  });
+
+  await response.wait();
+
+  return {
+    hash: response.hash,
+    from: signerAddress,
+  };
 }
 
 async function initializeWalletConnect(): Promise<void> {
@@ -136,6 +204,9 @@ async function refreshSession(): Promise<void> {
     const session = await apiRequest<AuthSessionResponse>('/api/auth/session');
     state.authenticated = session.authenticated;
     state.user = session.user;
+    state.roomDailyClaimLimit = session.roomDailyClaimLimit ?? null;
+    state.roomClaimsUsedToday = session.roomClaimsUsedToday ?? 0;
+    state.roomClaimsRemainingToday = session.roomClaimsRemainingToday ?? null;
 
     if (session.authenticated) {
       state.status = `Signed in as ${session.user?.displayName ?? 'player'}.`;
@@ -147,9 +218,30 @@ async function refreshSession(): Promise<void> {
   } catch (error) {
     console.error('Failed to load auth session', error);
     state.status = 'Failed to load account session.';
+    state.roomDailyClaimLimit = null;
+    state.roomClaimsUsedToday = 0;
+    state.roomClaimsRemainingToday = null;
   }
 
   renderAuthUi();
+}
+
+function bindSessionRefreshListeners(): void {
+  if (sessionRefreshListenersBound) {
+    return;
+  }
+
+  sessionRefreshListenersBound = true;
+  window.addEventListener('focus', () => {
+    if (!state.loading) {
+      void refreshSession();
+    }
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !state.loading) {
+      void refreshSession();
+    }
+  });
 }
 
 async function requestMagicLink(): Promise<void> {
@@ -266,10 +358,7 @@ async function authenticateWithWallet(): Promise<void> {
       body: JSON.stringify({ address }),
     });
 
-    const provider = walletModal.getWalletProvider() as Eip1193Provider | undefined;
-    if (!provider) {
-      throw new Error('Wallet provider was not available after connecting.');
-    }
+    const provider = getWalletProvider(walletModal);
 
     const { BrowserProvider } = await import('ethers');
     const browserProvider = new BrowserProvider(provider);
@@ -362,7 +451,7 @@ async function ensureWalletModal(): Promise<AppKit> {
   }
 
   walletBootstrapPromise = (async () => {
-    const [{ createAppKit }, { EthersAdapter }, { base, mainnet }] = await Promise.all([
+    const [{ createAppKit }, { EthersAdapter }, { base, baseSepolia, mainnet }] = await Promise.all([
       import('@reown/appkit'),
       import('@reown/appkit-adapter-ethers'),
       import('@reown/appkit/networks'),
@@ -378,8 +467,8 @@ async function ensureWalletModal(): Promise<AppKit> {
     const walletModal = createAppKit({
       adapters: [new EthersAdapter()],
       metadata,
-      networks: [base, mainnet],
-      defaultNetwork: base,
+      networks: [baseSepolia, base, mainnet],
+      defaultNetwork: baseSepolia,
       projectId,
       themeMode: 'dark',
     });
@@ -402,6 +491,52 @@ async function ensureWalletModal(): Promise<AppKit> {
 function syncWalletAccount(account: { isConnected: boolean; address?: string } | undefined): void {
   state.walletConnected = account?.isConnected ?? false;
   state.walletAddress = account?.address ?? null;
+}
+
+function getWalletProvider(walletModal: AppKit): Eip1193Provider {
+  const provider = walletModal.getWalletProvider() as Eip1193Provider | undefined;
+  if (!provider) {
+    throw new Error('Wallet provider was not available after connecting.');
+  }
+
+  return provider;
+}
+
+async function ensureWalletChain(
+  provider: Eip1193Provider,
+  chain: RoomMintChainInfo
+): Promise<void> {
+  const chainIdHex = `0x${chain.chainId.toString(16)}`;
+
+  try {
+    await provider.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: chainIdHex }],
+    });
+  } catch (error) {
+    const code = getProviderErrorCode(error);
+    if (code !== 4902) {
+      throw error instanceof Error ? error : new Error('Failed to switch wallet network.');
+    }
+
+    await provider.request({
+      method: 'wallet_addEthereumChain',
+      params: [
+        {
+          chainId: chainIdHex,
+          chainName: chain.name,
+          rpcUrls: [chain.rpcUrl],
+          nativeCurrency: chain.nativeCurrency,
+          blockExplorerUrls: chain.blockExplorerUrl ? [chain.blockExplorerUrl] : [],
+        },
+      ],
+    });
+
+    await provider.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: chainIdHex }],
+    });
+  }
 }
 
 function renderAuthUi(): void {
@@ -453,6 +588,12 @@ function renderAuthUi(): void {
       authDebugLink.textContent = '';
     }
   }
+
+  window.dispatchEvent(
+    new CustomEvent(AUTH_STATE_CHANGED_EVENT, {
+      detail: getAuthDebugState(),
+    })
+  );
 }
 
 function buildIdentityText(user: AuthUser | null): string {
@@ -579,4 +720,13 @@ function getErrorMessage(error: unknown, fallback: string): string {
   } catch {
     return error.message || fallback;
   }
+}
+
+function getProviderErrorCode(error: unknown): number | null {
+  if (!error || typeof error !== 'object') {
+    return null;
+  }
+
+  const maybeCode = (error as { code?: unknown }).code;
+  return typeof maybeCode === 'number' ? maybeCode : null;
 }

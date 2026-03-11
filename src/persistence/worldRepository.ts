@@ -6,11 +6,18 @@ import {
   type RoomRecord,
   type RoomSnapshot,
 } from './roomModel';
-import { computeWorldWindow, type WorldWindow } from './worldModel';
+import {
+  computeWorldChunkWindow,
+  computeWorldWindow,
+  type WorldChunkBounds,
+  type WorldChunkWindow,
+  type WorldWindow,
+} from './worldModel';
 import { ROOM_STORAGE_PREFIX } from './browserStorage';
 
 export interface WorldRepository {
   loadWorldWindow(center: RoomCoordinates, radius: number): Promise<WorldWindow>;
+  loadWorldChunkWindow(chunkBounds: WorldChunkBounds): Promise<WorldChunkWindow>;
   loadPublishedRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomSnapshot | null>;
 }
 
@@ -56,22 +63,11 @@ function parseStoredRecord(
 
 class LocalWorldRepository implements WorldRepository {
   async loadWorldWindow(center: RoomCoordinates, radius: number): Promise<WorldWindow> {
-    const publishedRooms: RoomSnapshot[] = [];
+    return computeWorldWindow(this.loadAllPublishedRooms(), center, radius);
+  }
 
-    for (let index = 0; index < localStorage.length; index++) {
-      const key = localStorage.key(index);
-      if (!key || !key.startsWith(ROOM_STORAGE_PREFIX)) continue;
-      const roomId = key.slice(ROOM_STORAGE_PREFIX.length);
-      const coordinates = parseRoomId(roomId);
-      if (!coordinates) continue;
-
-      const stored = parseStoredRecord(localStorage.getItem(key), roomId, coordinates);
-      if (!stored?.published) continue;
-
-      publishedRooms.push(cloneRoomSnapshot(stored.published));
-    }
-
-    return computeWorldWindow(publishedRooms, center, radius);
+  async loadWorldChunkWindow(chunkBounds: WorldChunkBounds): Promise<WorldChunkWindow> {
+    return computeWorldChunkWindow(this.loadAllPublishedRooms(), chunkBounds);
   }
 
   async loadPublishedRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomSnapshot | null> {
@@ -92,6 +88,25 @@ class LocalWorldRepository implements WorldRepository {
 
     return cloneRoomSnapshot(stored.published);
   }
+
+  private loadAllPublishedRooms(): RoomSnapshot[] {
+    const publishedRooms: RoomSnapshot[] = [];
+
+    for (let index = 0; index < localStorage.length; index++) {
+      const key = localStorage.key(index);
+      if (!key || !key.startsWith(ROOM_STORAGE_PREFIX)) continue;
+      const roomId = key.slice(ROOM_STORAGE_PREFIX.length);
+      const coordinates = parseRoomId(roomId);
+      if (!coordinates) continue;
+
+      const stored = parseStoredRecord(localStorage.getItem(key), roomId, coordinates);
+      if (!stored?.published) continue;
+
+      publishedRooms.push(cloneRoomSnapshot(stored.published));
+    }
+
+    return publishedRooms;
+  }
 }
 
 class ApiWorldRepository implements WorldRepository {
@@ -110,6 +125,20 @@ class ApiWorldRepository implements WorldRepository {
     return this.withFallback(
       () => this.requestWorldWindow(`/api/world?${params.toString()}`),
       () => this.fallback?.loadWorldWindow(center, radius)
+    );
+  }
+
+  async loadWorldChunkWindow(chunkBounds: WorldChunkBounds): Promise<WorldChunkWindow> {
+    const params = new URLSearchParams({
+      minChunkX: String(chunkBounds.minChunkX),
+      maxChunkX: String(chunkBounds.maxChunkX),
+      minChunkY: String(chunkBounds.minChunkY),
+      maxChunkY: String(chunkBounds.maxChunkY),
+    });
+
+    return this.withFallback(
+      () => this.requestWorldChunkWindow(`/api/world/chunks?${params.toString()}`),
+      () => this.fallback?.loadWorldChunkWindow(chunkBounds)
     );
   }
 
@@ -139,6 +168,22 @@ class ApiWorldRepository implements WorldRepository {
     }
 
     return (await response.json()) as WorldWindow;
+  }
+
+  private async requestWorldChunkWindow(path: string): Promise<WorldChunkWindow> {
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const details = await response.text();
+      throw new WorldApiError(
+        details || `World API request failed with status ${response.status}.`,
+        response.status
+      );
+    }
+
+    return (await response.json()) as WorldChunkWindow;
   }
 
   private async requestPublishedRoom(path: string): Promise<RoomSnapshot | null> {

@@ -1,5 +1,18 @@
 import Phaser from 'phaser';
-import { TILESETS, BACKGROUND_GROUPS, GAME_OBJECTS } from '../config';
+import { TILESETS, BACKGROUND_GROUPS, GAME_OBJECTS, getObjectAnimationFrames } from '../config';
+import {
+  DEFAULT_PLAYER_ATLAS_ASSETS,
+  DEFAULT_PLAYER_ANIMATIONS,
+  DEFAULT_PLAYER_FX_ANIMATIONS,
+} from '../player/defaultPlayer';
+import {
+  ROCKY_ROADS_FX_ANIMATIONS,
+  ROCKY_ROADS_FX_SPRITESHEETS,
+} from '../fx/manifest';
+import {
+  createGoalMarkerFlagAnimations,
+  loadGoalMarkerFlagSheets,
+} from '../goals/markerFlags';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -27,6 +40,24 @@ export class BootScene extends Phaser.Scene {
       });
     }
 
+    this.load.spritesheet('cannon_bullet', 'assets/enemies/bullet.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+
+    for (const atlas of DEFAULT_PLAYER_ATLAS_ASSETS) {
+      this.load.atlas(atlas.key, atlas.texturePath, atlas.atlasPath);
+    }
+
+    for (const effectSheet of ROCKY_ROADS_FX_SPRITESHEETS) {
+      this.load.spritesheet(effectSheet.key, effectSheet.path, {
+        frameWidth: effectSheet.frameWidth,
+        frameHeight: effectSheet.frameHeight,
+      });
+    }
+
+    loadGoalMarkerFlagSheets(this);
+
     // Loading progress
     this.load.on('progress', (value: number) => {
       console.log(`Loading: ${Math.round(value * 100)}%`);
@@ -39,15 +70,65 @@ export class BootScene extends Phaser.Scene {
       if (obj.frameCount > 1 && obj.fps > 0) {
         this.anims.create({
           key: `${obj.id}_anim`,
-          frames: this.anims.generateFrameNumbers(obj.id, {
-            start: 0,
-            end: obj.frameCount - 1,
-          }),
+          frames: getObjectAnimationFrames(obj).map((frame) => ({
+            key: obj.id,
+            frame,
+          })),
           frameRate: obj.fps,
           repeat: -1,
         });
       }
     }
+
+    for (const animation of DEFAULT_PLAYER_ANIMATIONS) {
+      if (this.anims.exists(animation.key)) {
+        continue;
+      }
+
+      this.anims.create({
+        key: animation.key,
+        frames: animation.frameNames.map((frameName) => ({
+          key: animation.atlasKey,
+          frame: frameName,
+        })),
+        frameRate: animation.frameRate,
+        repeat: animation.repeat,
+      });
+    }
+
+    for (const animation of DEFAULT_PLAYER_FX_ANIMATIONS) {
+      if (this.anims.exists(animation.key)) {
+        continue;
+      }
+
+      this.anims.create({
+        key: animation.key,
+        frames: animation.frameNames.map((frameName) => ({
+          key: animation.atlasKey,
+          frame: frameName,
+        })),
+        frameRate: animation.frameRate,
+        repeat: animation.repeat,
+      });
+    }
+
+    for (const animation of ROCKY_ROADS_FX_ANIMATIONS) {
+      if (this.anims.exists(animation.key)) {
+        continue;
+      }
+
+      this.anims.create({
+        key: animation.key,
+        frames: this.anims.generateFrameNumbers(animation.spritesheetKey, {
+          start: animation.startFrame,
+          end: animation.endFrame,
+        }),
+        frameRate: animation.frameRate,
+        repeat: animation.repeat,
+      });
+    }
+
+    createGoalMarkerFlagAnimations(this);
 
     console.log('Assets loaded, starting world...');
     this.scene.start('OverworldPlayScene');

@@ -9,6 +9,7 @@ import {
   TILE_SIZE,
   getBackgroundGroup,
   getObjectById,
+  getObjectDefaultFrame,
 } from '../config';
 import type { RoomSnapshot } from '../persistence/roomModel';
 import { RETRO_COLORS, drawStarfieldToContext, hashStringToSeed } from './starfield';
@@ -161,7 +162,7 @@ function drawRoomObjects(
 
     context.drawImage(
       sourceImage,
-      0,
+      getObjectDefaultFrame(objectConfig) * objectConfig.frameWidth,
       0,
       objectConfig.frameWidth,
       objectConfig.frameHeight,
