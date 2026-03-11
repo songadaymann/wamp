@@ -79,6 +79,13 @@ let appKit: AppKit | null = null;
 let walletBootstrapPromise: Promise<AppKit> | null = null;
 let sessionRefreshListenersBound = false;
 
+const FEATURED_REOWN_WALLET_IDS = [
+  'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96', // MetaMask
+  '18388be9ac2d02726dbac9777c96efaac06d744b2f6d580fccdd4127a6d01fd1', // Rabby
+  '1ae92b26df02f0abca6304df07debccd18262fdf5fe82daa81593582dac9a369', // Rainbow
+  'ecc4036f814562b41a5268adc86270fba1365471402006302e70169465b7ac18', // Zerion
+] as const;
+
 export async function setupAuthUi(): Promise<void> {
   authPanel = document.getElementById('auth-panel');
   authIdentity = document.getElementById('auth-identity');
@@ -466,6 +473,8 @@ async function ensureWalletModal(): Promise<AppKit> {
 
     const walletModal = createAppKit({
       adapters: [new EthersAdapter()],
+      featuredWalletIds: [...FEATURED_REOWN_WALLET_IDS],
+      enableCoinbase: false,
       metadata,
       networks: [baseSepolia, base, mainnet],
       defaultNetwork: baseSepolia,
