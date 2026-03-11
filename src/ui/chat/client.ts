@@ -3,6 +3,7 @@ import type {
   ChatMessageListResponse,
   ChatMessageRecord,
 } from '../../chat/model';
+import { getApiBaseUrl } from '../../api/baseUrl';
 
 export async function fetchChatMessages(options: {
   limit?: number;
@@ -34,7 +35,7 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(path, {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
     ...init,
     headers,
     credentials: 'include',

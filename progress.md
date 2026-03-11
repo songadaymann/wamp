@@ -55,6 +55,11 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Base Sepolia mint deployment on March 11, 2026:
+  - deployed `RoomOwnershipToken` to `0x4F2c0b0eEe60dB8cD45fa317DcaE56EC02F0D53b`
+  - normalized the local deploy shell to add a missing `0x` prefix to `PRIVATE_KEY` without changing `.env`
+  - updated local `.dev.vars` mint config to point at the deployed Base Sepolia contract and Basescan explorer
+
 - Remote rollout verification on March 11, 2026:
   - pushed current repo state to `origin/main` at commit `8bc87ae` (`Ship world progression, auth, minting, and multiplayer polish`)
   - remote Worker deployed successfully to:

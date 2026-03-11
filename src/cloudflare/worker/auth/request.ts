@@ -103,11 +103,12 @@ export function createSessionResponse(auth: RequestAuth | null): AuthSessionResp
 
 export function createSessionCookie(request: Request, token: string): string {
   const secure = new URL(request.url).protocol === 'https:';
+  const sameSite = secure ? 'SameSite=None' : 'SameSite=Lax';
   return [
     `${SESSION_COOKIE_NAME}=${token}`,
     'Path=/',
     'HttpOnly',
-    'SameSite=Lax',
+    sameSite,
     `Max-Age=${SESSION_MAX_AGE_SECONDS}`,
     secure ? 'Secure' : null,
   ]
@@ -117,11 +118,12 @@ export function createSessionCookie(request: Request, token: string): string {
 
 export function clearSessionCookie(request: Request): string {
   const secure = new URL(request.url).protocol === 'https:';
+  const sameSite = secure ? 'SameSite=None' : 'SameSite=Lax';
   return [
     `${SESSION_COOKIE_NAME}=`,
     'Path=/',
     'HttpOnly',
-    'SameSite=Lax',
+    sameSite,
     'Max-Age=0',
     secure ? 'Secure' : null,
   ]

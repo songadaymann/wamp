@@ -7,6 +7,7 @@ import type {
   WalletVerifyResponse,
 } from './model';
 import { clearLocalRoomStorage } from '../persistence/browserStorage';
+import { getApiBaseUrl } from '../api/baseUrl';
 import type {
   PreparedWalletTransaction,
   RoomMintChainInfo,
@@ -672,7 +673,7 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(path, {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
     ...init,
     headers,
     credentials: 'include',

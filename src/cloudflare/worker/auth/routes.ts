@@ -123,7 +123,8 @@ export async function handleRequestMagicLink(request: Request, env: Env): Promis
 
   await createMagicLinkToken(env, user.id, email, tokenHash, expiresAt, now.toISOString());
 
-  const magicLink = `${resolvePublicBaseUrl(request, env)}/api/auth/verify?token=${encodeURIComponent(token)}`;
+  const verifyBaseUrl = new URL(request.url).origin;
+  const magicLink = `${verifyBaseUrl}/api/auth/verify?token=${encodeURIComponent(token)}`;
   const responseBody: MagicLinkRequestResponse = {
     ok: true,
     delivery: env.RESEND_API_KEY ? 'email' : 'debug',
@@ -148,16 +149,17 @@ export async function handleVerifyMagicLink(
   url: URL,
   env: Env
 ): Promise<Response> {
+  const redirectBaseUrl = resolvePublicBaseUrl(request, env);
   const token = url.searchParams.get('token');
   if (!token) {
-    return redirectResponse('/?auth=invalid');
+    return redirectResponse(`${redirectBaseUrl}/?auth=invalid`);
   }
 
   const tokenHash = await hashToken(token);
   const row = await loadMagicLinkByTokenHash(env, tokenHash);
 
   if (!row || row.consumed_at || isExpired(row.expires_at)) {
-    return redirectResponse('/?auth=invalid');
+    return redirectResponse(`${redirectBaseUrl}/?auth=invalid`);
   }
 
   const user: AuthUser = {
@@ -172,7 +174,7 @@ export async function handleVerifyMagicLink(
   const now = new Date().toISOString();
   await consumeMagicLinkToken(env, row.id, now);
 
-  return redirectResponse('/?auth=email', {
+  return redirectResponse(`${redirectBaseUrl}/?auth=email`, {
     'Set-Cookie': createSessionCookie(request, sessionToken),
   });
 }
