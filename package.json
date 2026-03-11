@@ -32,5 +32,8 @@
     "typescript": "^5.7.0",
     "vite": "^6.2.0",
     "wrangler": "^4.71.0"
+  },
+  "optionalDependencies": {
+    "utf-8-validate": "^5.0.10"
   }
 }
