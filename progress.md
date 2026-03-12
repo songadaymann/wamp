@@ -1845,3 +1845,48 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - final captured state in `output/web-game/editor-open-hang-fix-check/state.json` shows `scene: "editor"` and `busyVisible: false` after the editor -> play -> editor round-trip
   - screenshot proof is in `output/web-game/editor-open-hang-fix-check/editor-reopened.png`
   - required Playwright client run completed in `output/web-game/editor-open-hang-fix-skill-client/`
+
+## March 12, 2026 - Tornado Launch Boosted and Bats Now Patrol
+
+- Tornado tuning:
+  - increased tornado launch force in `OverworldPlayScene` to feel much more violent in play
+  - shortened tornado retrigger cooldown so staying in the funnel keeps tossing the player instead of feeling like a one-time nudge
+  - fixed the real launch killer: the normal "release jump to shorten ascent" logic was also damping tornado/bounce-pad launches every frame
+  - added a short external-launch grace window so tornadoes and bounce pads keep their intended upward velocity for a brief window after launch
+- Bat movement:
+  - bats now run through the same horizontal flying patrol system as birds instead of staying visually animated but motionless
+  - added bat-specific speed/wave tuning so bats glide left-right with a tighter wobble than birds
+- Verification:
+  - `npm run build` passed
+  - deterministic local browser proof is in `output/web-game/tornado-bat-check-2/`
+  - tornado proof:
+    - `output/web-game/tornado-bat-check-2/shot-early.png`
+    - `output/web-game/tornado-bat-check-2/shot-late.png`
+    - `output/web-game/tornado-bat-check-2/summary.json`
+    - player launch sample now shows `velocityY: -477` shortly after contact, with the player continuing far above the tornado instead of being cut down to a normal short hop
+  - bat proof:
+    - same summary shows bat position changing from `x: 298, y: 133` to `x: 280, y: 123`, confirming active left-right flight
+  - required skill-client smoke runs completed in:
+    - `output/web-game/tornado-bat-skill-client/`
+    - `output/web-game/tornado-bat-skill-client-canvas/`
+  - note:
+    - the generic skill-client capture still picks the wrong canvas in this environment, so those screenshots are not useful visually
+    - the deterministic custom Playwright capture above is the trustworthy visual proof for this pass
+    - local runs without the Worker API also log the expected auth-session fetch error because the frontend is using `VITE_ROOM_STORAGE_BACKEND=local`
+
+## March 12, 2026 - Mobile Double-Tap Browser Zoom Suppressed
+
+- Added a browser-zoom suppression pass for coarse-pointer devices:
+  - coarse-pointer body state now uses `touch-action: manipulation` so taps are treated as interactions instead of browser zoom gestures where supported
+  - `MobileUiController` now installs a capture-phase `touchend` guard that prevents the second tap in a rapid double-tap sequence on non-text-input targets
+  - text-entry elements are exempt so caret placement and native input behavior stay intact
+  - the game canvas and joystick keep their stricter touch handling (`touch-action: none`) for in-game gestures
+- Verification:
+  - `npm run build` passed
+  - mobile-emulated browser check completed in `output/web-game/mobile-double-tap-zoom-check/`
+  - `output/web-game/mobile-double-tap-zoom-check/summary.json` reports `visualViewport.scale` staying `1 -> 1` after a rapid double tap with no console/page errors
+  - screenshot artifact is `output/web-game/mobile-double-tap-zoom-check/shot.png`
+  - required skill-client smoke run completed in `output/web-game/mobile-double-tap-skill-client/`
+  - note:
+    - the headless mobile-emulation screenshot shows the expected rotate gate because the test used a portrait phone viewport
+    - the generic skill-client screenshot still captures the wrong canvas in this environment, but state output was clean

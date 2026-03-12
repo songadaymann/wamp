@@ -39,6 +39,9 @@ interface OverworldLiveObjectSettings {
   bouncePadVelocity: number;
   bouncePadCooldownMs: number;
   bouncePadActiveMs: number;
+  batSpeed: number;
+  batWaveAmplitude: number;
+  batWaveSpeed: number;
   birdSpeed: number;
   birdWaveAmplitude: number;
   birdWaveSpeed: number;
@@ -70,6 +73,7 @@ interface OverworldLiveObjectControllerOptions {
   getPlayerBody: () => Phaser.Physics.Arcade.Body | null;
   getCurrentTime: () => number;
   addScore: (delta: number) => void;
+  grantExternalLaunchGrace: (durationMs: number) => void;
   showTransientStatus: (message: string) => void;
   handlePlayerDeath: (reason: string) => void;
   onEnemyDefeated: (roomId: string, enemyName: string) => boolean;
@@ -106,6 +110,9 @@ const CANNON_BULLET_CONFIG: GameObjectConfig = {
   behavior: 'animated',
   description: 'Internal cannon projectile.',
 };
+
+const BOUNCE_PAD_LAUNCH_GRACE_MS = 180;
+const TORNADO_LAUNCH_GRACE_MS = 280;
 
 export class OverworldLiveObjectController<TEdgeWall = unknown> {
   constructor(private readonly options: OverworldLiveObjectControllerOptions) {}
@@ -287,6 +294,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
                   liveObject.runtime.activatedUntil =
                     this.options.getCurrentTime() + this.options.settings.bouncePadActiveMs;
                   activePlayerBody.setVelocityY(this.options.settings.bouncePadVelocity);
+                  this.options.grantExternalLaunchGrace(BOUNCE_PAD_LAUNCH_GRACE_MS);
                   this.options.playBounceFx(liveObject.sprite.x, liveObject.sprite.y - 2);
                   this.options.showTransientStatus('Bounce pad launched you.');
                 })
@@ -311,8 +319,25 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         }
 
         switch (liveObject.config.id) {
+          case 'bat':
+            this.updateFlyingEnemyObject(
+              loadedRoom.room,
+              liveObject,
+              delta,
+              this.options.settings.batSpeed,
+              this.options.settings.batWaveAmplitude,
+              this.options.settings.batWaveSpeed
+            );
+            break;
           case 'bird':
-            this.updateBirdObject(loadedRoom.room, liveObject, delta);
+            this.updateFlyingEnemyObject(
+              loadedRoom.room,
+              liveObject,
+              delta,
+              this.options.settings.birdSpeed,
+              this.options.settings.birdWaveAmplitude,
+              this.options.settings.birdWaveSpeed
+            );
             break;
           case 'crab':
           case 'slime_blue':
@@ -468,7 +493,14 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
   }
 
-  private updateBirdObject(room: RoomSnapshot, liveObject: LoadedRoomObject, delta: number): void {
+  private updateFlyingEnemyObject(
+    room: RoomSnapshot,
+    liveObject: LoadedRoomObject,
+    delta: number,
+    speed: number,
+    waveAmplitude: number,
+    waveSpeed: number
+  ): void {
     const body = liveObject.sprite.body as Phaser.Physics.Arcade.StaticBody | null;
     if (!body) {
       return;
@@ -477,8 +509,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const bounds = this.getObjectHorizontalTravelBounds(room, liveObject.config);
     liveObject.runtime.elapsedMs += delta;
 
-    let nextX =
-      liveObject.sprite.x + liveObject.runtime.directionX * this.options.settings.birdSpeed * (delta / 1000);
+    let nextX = liveObject.sprite.x + liveObject.runtime.directionX * speed * (delta / 1000);
     if (nextX <= bounds.left || nextX >= bounds.right) {
       nextX = Phaser.Math.Clamp(nextX, bounds.left, bounds.right);
       liveObject.runtime.directionX *= -1;
@@ -486,8 +517,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     const nextY =
       liveObject.runtime.baseY +
-      Math.sin(liveObject.runtime.elapsedMs * this.options.settings.birdWaveSpeed) *
-        this.options.settings.birdWaveAmplitude;
+      Math.sin(liveObject.runtime.elapsedMs * waveSpeed) * waveAmplitude;
     liveObject.sprite.setPosition(nextX, nextY);
     this.applyDirectionalFacing(liveObject.sprite, liveObject.config, liveObject.runtime.directionX);
     body.updateFromGameObject();
@@ -612,8 +642,16 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     liveObject.runtime.cooldownUntil =
       this.options.getCurrentTime() + this.options.settings.tornadoCooldownMs;
-    playerBody.setVelocityX(relativeDirection * this.options.settings.tornadoSideVelocity);
-    playerBody.setVelocityY(this.options.settings.tornadoLiftVelocity);
+    playerBody.setVelocityX(
+      playerBody.velocity.x * 0.22 + relativeDirection * this.options.settings.tornadoSideVelocity
+    );
+    playerBody.setVelocityY(
+      Math.min(
+        this.options.settings.tornadoLiftVelocity,
+        playerBody.velocity.y + this.options.settings.tornadoLiftVelocity * 0.32
+      )
+    );
+    this.options.grantExternalLaunchGrace(TORNADO_LAUNCH_GRACE_MS);
     this.options.playBounceFx(liveObject.sprite.x, liveObject.sprite.y - 4);
     this.options.showTransientStatus('Tornado tossed you.');
   }

@@ -172,6 +172,7 @@ body[data-app-ready='false'] #auth-panel {
 
 body[data-coarse-pointer='true'] {
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 body[data-coarse-pointer='true'] #game-container canvas {

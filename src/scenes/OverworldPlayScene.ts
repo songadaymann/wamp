@@ -161,6 +161,9 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly BOUNCE_PAD_VELOCITY = -392;
   private readonly BOUNCE_PAD_COOLDOWN_MS = 220;
   private readonly BOUNCE_PAD_ACTIVE_MS = 140;
+  private readonly BAT_SPEED = 72;
+  private readonly BAT_WAVE_AMPLITUDE = 6;
+  private readonly BAT_WAVE_SPEED = 0.012;
   private readonly BIRD_SPEED = 80;
   private readonly BIRD_WAVE_AMPLITUDE = 10;
   private readonly BIRD_WAVE_SPEED = 0.008;
@@ -174,9 +177,9 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly CANNON_FIRE_DELAY_MS = 1400;
   private readonly CANNON_BULLET_SPEED = 150;
   private readonly CANNON_BULLET_LIFETIME_MS = 2400;
-  private readonly TORNADO_LIFT_VELOCITY = -410;
-  private readonly TORNADO_SIDE_VELOCITY = 135;
-  private readonly TORNADO_COOLDOWN_MS = 360;
+  private readonly TORNADO_LIFT_VELOCITY = -980;
+  private readonly TORNADO_SIDE_VELOCITY = 240;
+  private readonly TORNADO_COOLDOWN_MS = 90;
   private readonly SWORD_COOLDOWN_MS = 220;
   private readonly SWORD_ATTACK_MS = 170;
   private readonly WEAPON_KNOCKBACK_MS = 90;
@@ -220,6 +223,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private activeCrateInteractionFacing: -1 | 1 | null = null;
   private weaponKnockbackVelocityX = 0;
   private weaponKnockbackUntil = 0;
+  private externalLaunchGraceUntil = 0;
   private playerProjectiles: PlayerProjectile[] = [];
   private nextLadderClimbSfxAt = 0;
 
@@ -355,6 +359,9 @@ export class OverworldPlayScene extends Phaser.Scene {
         bouncePadVelocity: this.BOUNCE_PAD_VELOCITY,
         bouncePadCooldownMs: this.BOUNCE_PAD_COOLDOWN_MS,
         bouncePadActiveMs: this.BOUNCE_PAD_ACTIVE_MS,
+        batSpeed: this.BAT_SPEED,
+        batWaveAmplitude: this.BAT_WAVE_AMPLITUDE,
+        batWaveSpeed: this.BAT_WAVE_SPEED,
         birdSpeed: this.BIRD_SPEED,
         birdWaveAmplitude: this.BIRD_WAVE_AMPLITUDE,
         birdWaveSpeed: this.BIRD_WAVE_SPEED,
@@ -386,6 +393,12 @@ export class OverworldPlayScene extends Phaser.Scene {
       getCurrentTime: () => this.time.now,
       addScore: (delta) => {
         this.score += delta;
+      },
+      grantExternalLaunchGrace: (durationMs) => {
+        this.externalLaunchGraceUntil = Math.max(
+          this.externalLaunchGraceUntil,
+          this.time.now + durationMs
+        );
       },
       showTransientStatus: (message) => this.showTransientStatus(message),
       handlePlayerDeath: (reason) => this.handlePlayerDeath(reason),
@@ -680,7 +693,11 @@ export class OverworldPlayScene extends Phaser.Scene {
         }
 
         const jumpHeld = upHeld || this.cursors.space!.isDown || touchInput.jumpHeld;
-        if (!jumpHeld && this.playerBody.velocity.y < 0) {
+        if (
+          !jumpHeld &&
+          this.playerBody.velocity.y < 0 &&
+          this.time.now >= this.externalLaunchGraceUntil
+        ) {
           this.playerBody.setVelocityY(this.playerBody.velocity.y * 0.85);
         }
       }
@@ -1837,6 +1854,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.activeAttackAnimationUntil = 0;
     this.playerLandAnimationUntil = 0;
     this.playerWasGrounded = false;
+    this.externalLaunchGraceUntil = 0;
     this.playerBody?.destroy();
     this.playerBody = null;
     this.playerSprite?.destroy();
@@ -2165,6 +2183,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.playerBody.setCollideWorldBounds(false);
     this.playerBody.setMaxVelocityY(500);
     this.playerBody.setAllowGravity(true);
+    this.externalLaunchGraceUntil = 0;
     this.isCrouching = false;
     this.syncPlayerHitbox();
     this.playerSprite = this.add.sprite(
@@ -2655,6 +2674,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.clearCrateInteractionState();
     this.weaponKnockbackVelocityX = 0;
     this.weaponKnockbackUntil = 0;
+    this.externalLaunchGraceUntil = 0;
     this.destroyPlayerProjectiles();
     this.playerBody.reset(spawn.x, spawn.y);
     this.player.setPosition(spawn.x, spawn.y);
@@ -2856,6 +2876,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.isCrouching = false;
     this.activeAttackAnimation = null;
     this.activeAttackAnimationUntil = 0;
+    this.externalLaunchGraceUntil = 0;
     this.destroyPlayerProjectiles();
     this.playerLandAnimationUntil = 0;
     this.goalRunController.reset();

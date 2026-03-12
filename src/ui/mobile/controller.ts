@@ -48,6 +48,7 @@ export class MobileUiController {
   private joystickPointerId: number | null = null;
   private joystickCenter = { x: 0, y: 0 };
   private joystickRadius = 1;
+  private lastTouchEndAt = 0;
 
   constructor(
     private readonly game: Phaser.Game,
@@ -96,6 +97,7 @@ export class MobileUiController {
     this.bindWorldShortcuts();
     this.bindJoystick();
     this.bindActionButtons();
+    this.bindDoubleTapZoomSuppression();
     this.windowObj.addEventListener('mobile-editor-auto-collapse', this.handleAutoCollapse as EventListener);
     this.render();
   }
@@ -104,6 +106,7 @@ export class MobileUiController {
     this.mutationObserver.disconnect();
     this.windowObj.removeEventListener(DEVICE_LAYOUT_CHANGED_EVENT, this.handleDeviceLayoutChanged as EventListener);
     this.windowObj.removeEventListener('mobile-editor-auto-collapse', this.handleAutoCollapse as EventListener);
+    this.doc.removeEventListener('touchend', this.handleTouchEndSuppressDoubleTapZoom, true);
   }
 
   private readonly handleDeviceLayoutChanged = () => {
@@ -217,6 +220,48 @@ export class MobileUiController {
         this.closeJumpSheet();
       }
     });
+  }
+
+  private bindDoubleTapZoomSuppression(): void {
+    this.doc.addEventListener('touchend', this.handleTouchEndSuppressDoubleTapZoom, {
+      passive: false,
+      capture: true,
+    });
+  }
+
+  private readonly handleTouchEndSuppressDoubleTapZoom = (event: TouchEvent) => {
+    const layout = getDeviceLayoutState();
+    if (!layout.coarsePointer) {
+      return;
+    }
+
+    if (event.touches.length > 0 || event.changedTouches.length === 0) {
+      return;
+    }
+
+    const target = event.target instanceof Element ? event.target : null;
+    if (this.shouldAllowNativeDoubleTap(target)) {
+      this.lastTouchEndAt = event.timeStamp;
+      return;
+    }
+
+    const interval = event.timeStamp - this.lastTouchEndAt;
+    this.lastTouchEndAt = event.timeStamp;
+    if (interval > 0 && interval < 320 && event.cancelable) {
+      event.preventDefault();
+    }
+  };
+
+  private shouldAllowNativeDoubleTap(target: Element | null): boolean {
+    if (!target) {
+      return false;
+    }
+
+    return Boolean(
+      target.closest(
+        'input, textarea, select, option, label, [contenteditable=""], [contenteditable="true"]'
+      )
+    );
   }
 
   private bindJoystick(): void {
