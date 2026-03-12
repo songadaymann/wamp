@@ -188,6 +188,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     Q: Phaser.Input.Keyboard.Key;
     E: Phaser.Input.Keyboard.Key;
   };
+  private cameraToggleKey!: Phaser.Input.Keyboard.Key;
   private modifierKeys!: {
     ALT: Phaser.Input.Keyboard.Key;
     SPACE: Phaser.Input.Keyboard.Key;
@@ -538,6 +539,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.updateLiveObjects(delta);
     this.updateGhosts(delta);
 
+    if (this.mode === 'play' && Phaser.Input.Keyboard.JustDown(this.cameraToggleKey)) {
+      this.toggleCameraMode();
+    }
+
     if (!this.playerBody) {
       this.clearCrateInteractionState();
       this.syncLocalPresence();
@@ -750,15 +755,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       Q: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
       E: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
     };
+    this.cameraToggleKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.BACKTICK);
     this.modifierKeys = {
       ALT: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ALT),
       SPACE: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
     };
-
-    keyboard.on('keydown-C', () => {
-      if (this.mode !== 'play') return;
-      this.toggleCameraMode();
-    });
     keyboard.on('keydown-F', () => {
       this.fitLoadedWorld();
     });
@@ -1039,6 +1040,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (data?.mode) {
       if (data.mode === 'play') {
         this.resetPlaySession();
+        this.cameraMode = 'follow';
       }
       this.mode = data.mode;
     }
@@ -2626,6 +2628,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     this.resetPlaySession();
     this.mode = 'play';
+    this.cameraMode = 'follow';
     this.currentRoomCoordinates = { ...this.selectedCoordinates };
     this.shouldCenterCamera = true;
     this.shouldRespawnPlayer = true;

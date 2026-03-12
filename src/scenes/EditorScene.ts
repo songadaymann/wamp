@@ -780,7 +780,7 @@ export class EditorScene extends Phaser.Scene {
       publishHidden: false,
       publishDisabled: !this.roomPermissions.canPublish,
       mintHidden: false,
-      mintDisabled: !this.roomPermissions.canMint || this.saveInFlight,
+      mintDisabled: Boolean(this.mintedTokenId) || this.saveInFlight,
       mintButtonText: this.mintedTokenId ? 'Minted' : 'Mint Room',
       historyHidden: false,
       historyDisabled: this.roomVersionHistory.length === 0,

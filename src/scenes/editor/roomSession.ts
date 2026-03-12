@@ -483,8 +483,25 @@ export class EditorRoomSession {
       }
     }
 
+    await refreshAuthSession();
+    const authState = getAuthDebugState();
+
+    if (!authState.authenticated) {
+      promptForSignIn('Sign in and link a wallet to mint this room.');
+      return null;
+    }
+
+    if (!authState.user?.walletAddress) {
+      this.setStatusText('Link a wallet from the account menu before minting.');
+      return null;
+    }
+
     if (!this.roomPermissions.canMint) {
-      this.setStatusText('Link the owning wallet and publish the room before minting.');
+      this.setStatusText(
+        this.roomPermissions.canPublish
+          ? 'Link the owning wallet from the account menu before minting.'
+          : 'Only the current claimer can mint this room.'
+      );
       return null;
     }
 
