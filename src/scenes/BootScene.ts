@@ -13,6 +13,11 @@ import {
   createGoalMarkerFlagAnimations,
   loadGoalMarkerFlagSheets,
 } from '../goals/markerFlags';
+import {
+  setBootProgress,
+  setBootStatus,
+  showBootSplash,
+} from '../ui/appFeedback';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -20,6 +25,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    showBootSplash('Loading assets...', 0);
+
     // Load all tilesets as images (Phaser tilemap system handles slicing)
     for (const ts of TILESETS) {
       this.load.image(ts.key, ts.path);
@@ -60,11 +67,14 @@ export class BootScene extends Phaser.Scene {
 
     // Loading progress
     this.load.on('progress', (value: number) => {
-      console.log(`Loading: ${Math.round(value * 100)}%`);
+      setBootProgress(value);
+      setBootStatus(`Loading assets... ${Math.round(value * 100)}%`);
     });
   }
 
   create(): void {
+    this.input.addPointer(4);
+
     // Create animations for game objects with multiple frames
     for (const obj of GAME_OBJECTS) {
       if (obj.frameCount > 1 && obj.fps > 0) {
@@ -130,7 +140,8 @@ export class BootScene extends Phaser.Scene {
 
     createGoalMarkerFlagAnimations(this);
 
-    console.log('Assets loaded, starting world...');
+    setBootProgress(1);
+    setBootStatus('Loading world...');
     this.scene.start('OverworldPlayScene');
   }
 }

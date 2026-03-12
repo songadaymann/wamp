@@ -52,11 +52,14 @@ interface OverworldLiveObjectSettings {
   cannonFireDelayMs: number;
   cannonBulletSpeed: number;
   cannonBulletLifetimeMs: number;
+  tornadoLiftVelocity: number;
+  tornadoSideVelocity: number;
+  tornadoCooldownMs: number;
   respawnFallDistance: number;
   enemyStompBounceVelocity: number;
 }
 
-interface OverworldLiveObjectControllerOptions<TEdgeWall> {
+interface OverworldLiveObjectControllerOptions {
   scene: Phaser.Scene;
   settings: OverworldLiveObjectSettings;
   getRoomOrigin: (coordinates: RoomCoordinates) => { x: number; y: number };
@@ -97,7 +100,7 @@ const CANNON_BULLET_CONFIG: GameObjectConfig = {
   frameCount: 1,
   fps: 0,
   defaultFrame: 0,
-  facingDirection: 'right',
+  facingDirection: 'left',
   bodyWidth: 10,
   bodyHeight: 10,
   behavior: 'animated',
@@ -105,7 +108,7 @@ const CANNON_BULLET_CONFIG: GameObjectConfig = {
 };
 
 export class OverworldLiveObjectController<TEdgeWall = unknown> {
-  constructor(private readonly options: OverworldLiveObjectControllerOptions<TEdgeWall>) {}
+  constructor(private readonly options: OverworldLiveObjectControllerOptions) {}
 
   createLiveObjects(loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>): void {
     const roomOrigin = this.options.getRoomOrigin(loadedRoom.room.coordinates);
@@ -160,7 +163,14 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         }
       }
 
-      const initialDirectionX = placedObject.x <= ROOM_PX_WIDTH * 0.5 ? 1 : -1;
+      const initialDirectionX =
+        placedObject.facing === 'right'
+          ? 1
+          : placedObject.facing === 'left'
+            ? -1
+            : placedObject.x <= ROOM_PX_WIDTH * 0.5
+              ? 1
+              : -1;
       this.applyDirectionalFacing(sprite, config, initialDirectionX);
       loadedRoom.liveObjects.push({
         key: objectKey,
@@ -225,11 +235,19 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             );
             break;
           case 'hazard':
-            liveObject.interactions.push(
-              this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
-                this.options.handlePlayerDeath(`${liveObject.config.name} hit you.`);
-              })
-            );
+            if (liveObject.config.id === 'tornado') {
+              liveObject.interactions.push(
+                this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
+                  this.triggerTornadoLaunch(liveObject);
+                })
+              );
+            } else {
+              liveObject.interactions.push(
+                this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
+                  this.options.handlePlayerDeath(`${liveObject.config.name} hit you.`);
+                })
+              );
+            }
             break;
           case 'enemy':
             liveObject.interactions.push(
@@ -575,13 +593,38 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
   }
 
+  private triggerTornadoLaunch(liveObject: LoadedRoomObject): void {
+    if (this.options.getCurrentTime() < liveObject.runtime.cooldownUntil) {
+      return;
+    }
+
+    const playerBody = this.options.getPlayerBody();
+    if (!playerBody) {
+      return;
+    }
+
+    const relativeDirection =
+      Math.abs(playerBody.center.x - liveObject.sprite.x) < 4
+        ? liveObject.runtime.directionX || 1
+        : playerBody.center.x >= liveObject.sprite.x
+          ? 1
+          : -1;
+
+    liveObject.runtime.cooldownUntil =
+      this.options.getCurrentTime() + this.options.settings.tornadoCooldownMs;
+    playerBody.setVelocityX(relativeDirection * this.options.settings.tornadoSideVelocity);
+    playerBody.setVelocityY(this.options.settings.tornadoLiftVelocity);
+    this.options.playBounceFx(liveObject.sprite.x, liveObject.sprite.y - 4);
+    this.options.showTransientStatus('Tornado tossed you.');
+  }
+
   private spawnCannonBullet(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     cannon: LoadedRoomObject
   ): void {
     const directionX = cannon.runtime.directionX || 1;
     const spawnX = cannon.sprite.x + directionX * 18;
-    const spawnY = cannon.sprite.y - 4;
+    const spawnY = cannon.sprite.y + 2;
     const sprite = this.options.scene.add.sprite(
       spawnX,
       spawnY,
@@ -621,8 +664,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const player = this.options.getPlayer();
     if (player) {
       bullet.interactions.push(
-        this.options.scene.physics.add.overlap(player, sprite, () => {
-          this.options.handlePlayerDeath('Cannonball hit you.');
+        this.options.scene.physics.add.collider(player, sprite, () => {
+          this.handleCannonBulletContact(loadedRoom, bullet);
         }),
       );
     }
@@ -650,6 +693,27 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
 
     loadedRoom.liveObjects.push(bullet);
+  }
+
+  private handleCannonBulletContact(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    bullet: LoadedRoomObject
+  ): void {
+    const playerBody = this.options.getPlayerBody();
+    const bulletBody = this.getDynamicBody(bullet.sprite);
+    if (!playerBody || !bulletBody || !bullet.sprite.active) {
+      return;
+    }
+
+    const stomped = playerBody.velocity.y > 40 && playerBody.bottom <= bulletBody.top + 8;
+    if (stomped) {
+      playerBody.setVelocityY(this.options.settings.enemyStompBounceVelocity);
+      this.options.playBounceFx(bullet.sprite.x, bullet.sprite.y);
+      this.removeLiveObject(loadedRoom, bullet);
+      return;
+    }
+
+    this.options.handlePlayerDeath('Cannonball hit you.');
   }
 
   private maybeReverseGroundEnemy(

@@ -31,6 +31,8 @@ export interface EditorSceneBridge {
   setGoalSurvivalSeconds?: (seconds: number) => void;
   startGoalMarkerPlacement?: (mode: Exclude<GoalPlacementMode, null>) => void;
   clearGoalMarkers?: () => void;
+  undoAction?: () => void;
+  redoAction?: () => void;
 }
 
 export type OverworldSelectedRoomContext = {

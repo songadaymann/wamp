@@ -12,7 +12,10 @@ export interface OverworldPlaySceneData {
   centerCoordinates?: RoomCoordinates;
   roomCoordinates?: RoomCoordinates;
   draftRoom?: RoomSnapshot | null;
+  publishedRoom?: RoomSnapshot | null;
   clearDraftRoomId?: string | null;
+  invalidateRoomId?: string | null;
+  forceRefreshAround?: boolean;
   mode?: OverworldMode;
   statusMessage?: string | null;
 }

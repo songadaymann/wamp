@@ -9,6 +9,7 @@ import {
   type AuthDebugState,
 } from '../../auth/client';
 import { playSfx } from '../../audio/sfx';
+import { APP_READY_EVENT, isAppReady } from '../appFeedback';
 import { isTextInputFocused } from '../keyboardFocus';
 import { fetchChatMessages, sendChatMessage } from './client';
 
@@ -102,6 +103,13 @@ export class ChatPanelController {
     }
   };
 
+  private readonly handleAppReady = () => {
+    if (this.isWorldModeActive()) {
+      void this.ensureLoaded();
+      void this.pollForNewMessages();
+    }
+  };
+
   private readonly handleAuthStateChanged = (event: Event) => {
     const detail = event instanceof CustomEvent ? (event.detail as AuthDebugState | undefined) : undefined;
     this.authState = detail ?? getAuthDebugState();
@@ -141,6 +149,7 @@ export class ChatPanelController {
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
     this.doc.addEventListener('visibilitychange', this.handleVisibilityChange);
     this.windowObj.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
+    this.windowObj.addEventListener(APP_READY_EVENT, this.handleAppReady as EventListener);
     this.appModeObserver.observe(this.doc.body, {
       attributes: true,
       attributeFilter: ['data-app-mode'],
@@ -162,6 +171,7 @@ export class ChatPanelController {
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
     this.doc.removeEventListener('visibilitychange', this.handleVisibilityChange);
     this.windowObj.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
+    this.windowObj.removeEventListener(APP_READY_EVENT, this.handleAppReady as EventListener);
     this.appModeObserver.disconnect();
 
     if (this.pollTimer !== null) {
@@ -189,7 +199,7 @@ export class ChatPanelController {
 
   private handleAppModeChange(): void {
     this.render();
-    if (this.isWorldModeActive()) {
+    if (this.isWorldModeActive() && isAppReady()) {
       void this.ensureLoaded();
       return;
     }
@@ -209,6 +219,7 @@ export class ChatPanelController {
   private async ensureLoaded(): Promise<void> {
     if (
       !this.isWorldModeActive() ||
+      !isAppReady() ||
       this.historyLoaded ||
       this.initialLoadInFlight ||
       this.loading
@@ -265,7 +276,7 @@ export class ChatPanelController {
   }
 
   private shouldPoll(): boolean {
-    return this.isWorldModeActive() && this.doc.visibilityState === 'visible' && !this.destroyed;
+    return this.isWorldModeActive() && isAppReady() && this.doc.visibilityState === 'visible' && !this.destroyed;
   }
 
   private replaceMessages(nextMessages: ChatMessageRecord[]): void {
@@ -322,6 +333,9 @@ export class ChatPanelController {
   private openPanel(focusComposer: boolean): void {
     this.open = true;
     this.unreadCount = 0;
+    if (isAppReady()) {
+      void this.ensureLoaded();
+    }
     this.render();
     this.scrollMessagesToBottom();
 

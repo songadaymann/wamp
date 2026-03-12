@@ -23,7 +23,6 @@ import {
   getOrthogonalNeighbors,
   type WorldChunkBounds,
   type WorldChunkWindow,
-  type WorldRoomBounds,
   type WorldRoomSummary,
   type WorldWindow,
 } from '../persistence/worldModel';
@@ -38,19 +37,26 @@ import {
   DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
   type DefaultPlayerAnimationState,
 } from '../player/defaultPlayer';
-import { ROOM_GOAL_LABELS, type GoalMarkerPoint } from '../goals/roomGoals';
+import { ROOM_GOAL_LABELS, type GoalMarkerPoint, type RoomGoal } from '../goals/roomGoals';
 import {
   createGoalMarkerFlagSprite,
   type GoalMarkerFlagVariant,
 } from '../goals/markerFlags';
 import { setAppMode } from '../ui/appMode';
+import {
+  hideBusyOverlay,
+  isAppReady,
+  isBusyOverlayVisible,
+  markAppReady,
+  setBootProgress,
+  setBootStatus,
+  showBootFailure,
+  showBusyError,
+  showBusyOverlay,
+} from '../ui/appFeedback';
+import { getDeviceLayoutState, isMobileLandscapeBlocked } from '../ui/deviceLayout';
 import { getAuthDebugState } from '../auth/client';
 import { createRunRepository } from '../runs/runRepository';
-import {
-  type WorldPresenceIdentity,
-  type WorldPresenceSnapshot,
-  type WorldPresenceClient,
-} from '../presence/worldPresence';
 import {
   OverworldGoalRunController,
   type GoalRunMutationResult,
@@ -69,12 +75,17 @@ import {
   type LoadedFullRoom,
 } from './overworld/worldStreaming';
 import type { EditorSceneData, OverworldMode, OverworldPlaySceneData } from './sceneData';
+import {
+  consumeTouchAction,
+  getTouchInputState,
+} from '../ui/mobile/touchControls';
 
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 2.5;
 const DEFAULT_ZOOM = 0.18;
 const BUTTON_ZOOM_FACTOR = 1.12;
 const WHEEL_ZOOM_SENSITIVITY = 0.003;
+const PLAY_ROOM_FIT_PADDING = 16;
 const PAN_THRESHOLD = 4;
 const EDGE_WALL_THICKNESS = 12;
 const RESPAWN_FALL_DISTANCE = ROOM_PX_HEIGHT * 2;
@@ -129,6 +140,10 @@ interface ZoomDebugState {
   currentRoom: RoomCoordinates;
 }
 
+interface GoalRoomBadge {
+  container: Phaser.GameObjects.Container;
+}
+
 export class OverworldPlayScene extends Phaser.Scene {
   private readonly PLAYER_SPEED = 150;
   private readonly JUMP_VELOCITY = -280;
@@ -159,6 +174,9 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly CANNON_FIRE_DELAY_MS = 1400;
   private readonly CANNON_BULLET_SPEED = 150;
   private readonly CANNON_BULLET_LIFETIME_MS = 2400;
+  private readonly TORNADO_LIFT_VELOCITY = -410;
+  private readonly TORNADO_SIDE_VELOCITY = 135;
+  private readonly TORNADO_COOLDOWN_MS = 360;
   private readonly SWORD_COOLDOWN_MS = 220;
   private readonly SWORD_ATTACK_MS = 170;
   private readonly WEAPON_KNOCKBACK_MS = 90;
@@ -211,6 +229,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private roomFrameGraphics!: Phaser.GameObjects.Graphics;
   private goalMarkerSprites: Phaser.GameObjects.Sprite[] = [];
   private goalMarkerLabels: Phaser.GameObjects.Text[] = [];
+  private roomGoalBadges: GoalRoomBadge[] = [];
   private starfieldSprites: Phaser.GameObjects.TileSprite[] = [];
   private backdropCamera: Phaser.Cameras.Scene2D.Camera | null = null;
   private zoomDebugText: Phaser.GameObjects.Text | null = null;
@@ -227,6 +246,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private windowCenterCoordinates: RoomCoordinates = { ...DEFAULT_ROOM_COORDINATES };
   private selectedSummary: WorldRoomSummary | null = null;
   private inspectZoom = DEFAULT_ZOOM;
+  private browseInspectZoom = DEFAULT_ZOOM;
   private transientStatusMessage: string | null = null;
   private transientStatusExpiresAt = 0;
 
@@ -234,6 +254,17 @@ export class OverworldPlayScene extends Phaser.Scene {
   private panStartPointer = { x: 0, y: 0 };
   private panCurrentPointer = { x: 0, y: 0 };
   private panStartScroll = { x: 0, y: 0 };
+  private touchPointers = new Map<number, { x: number; y: number }>();
+  private activePrimaryTouchId: number | null = null;
+  private touchTapCandidate:
+    | {
+        pointerId: number;
+        startX: number;
+        startY: number;
+      }
+    | null = null;
+  private touchPinchDistance = 0;
+  private touchPinchAnchor = { x: 0, y: 0 };
   private altDown = false;
   private spaceDown = false;
 
@@ -255,7 +286,8 @@ export class OverworldPlayScene extends Phaser.Scene {
   private shouldCenterCamera = false;
   private shouldRespawnPlayer = false;
   private readonly handleCanvasWheel = (event: WheelEvent): void => {
-    if (document.body.dataset.appMode !== 'world') {
+    const appMode = document.body.dataset.appMode;
+    if (appMode !== 'world' && appMode !== 'play-world') {
       return;
     }
 
@@ -336,6 +368,9 @@ export class OverworldPlayScene extends Phaser.Scene {
         cannonFireDelayMs: this.CANNON_FIRE_DELAY_MS,
         cannonBulletSpeed: this.CANNON_BULLET_SPEED,
         cannonBulletLifetimeMs: this.CANNON_BULLET_LIFETIME_MS,
+        tornadoLiftVelocity: this.TORNADO_LIFT_VELOCITY,
+        tornadoSideVelocity: this.TORNADO_SIDE_VELOCITY,
+        tornadoCooldownMs: this.TORNADO_COOLDOWN_MS,
         respawnFallDistance: RESPAWN_FALL_DISTANCE,
         enemyStompBounceVelocity: this.JUMP_VELOCITY * 0.58,
       },
@@ -395,28 +430,12 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.goalRunController.getCurrentRoomLeaderboard();
   }
 
-  private get globalLeaderboard() {
-    return this.goalRunController.getGlobalLeaderboard();
-  }
-
-  private get leaderboardState() {
-    return this.goalRunController.getLeaderboardState();
-  }
-
-  private get leaderboardMessage() {
-    return this.goalRunController.getLeaderboardMessage();
-  }
-
   private get worldWindow(): WorldWindow | null {
     return this.worldStreamingController.getWorldWindow();
   }
 
   private get chunkWindow(): WorldChunkWindow | null {
     return this.worldStreamingController.getChunkWindow();
-  }
-
-  private get loadedRoomBounds(): WorldRoomBounds | null {
-    return this.worldStreamingController.getLoadedRoomBounds();
   }
 
   private get loadedChunkBounds(): WorldChunkBounds | null {
@@ -431,16 +450,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.worldStreamingController.getDraftRoomsById();
   }
 
-  private get roomSnapshotsById(): Map<string, RoomSnapshot> {
-    return this.worldStreamingController.getRoomSnapshotsById();
-  }
-
   private get previewImagesByRoomId(): Map<string, Phaser.GameObjects.Image> {
     return this.worldStreamingController.getPreviewImagesByRoomId();
-  }
-
-  private get previewTextureKeysByRoomId(): Map<string, string> {
-    return this.worldStreamingController.getPreviewTextureKeysByRoomId();
   }
 
   private get loadedFullRoomsById(): Map<string, SceneLoadedFullRoom> {
@@ -459,29 +470,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.worldStreamingController.getFarLodRoomIds();
   }
 
-  private get presenceClient(): WorldPresenceClient | null {
-    return this.presenceController.getClient();
-  }
-
-  private get presenceIdentity(): WorldPresenceIdentity | null {
-    return this.presenceController.getIdentity();
-  }
-
-  private get presenceSnapshot(): WorldPresenceSnapshot | null {
-    return this.presenceController.getSnapshot();
-  }
-
-  private get roomPopulationsById(): Map<string, number> {
-    return this.presenceController.getRoomPopulationsById();
-  }
-
-  private get renderedGhostsByConnectionId() {
-    return this.presenceController.getRenderedGhostsByConnectionId();
-  }
-
   create(data?: OverworldPlaySceneData): void {
     this.resetRuntimeState();
-    setAppMode('world');
+    this.syncAppMode();
     this.zoomDebugEnabled = this.isDebugQueryEnabled('zoomDebug');
 
     this.physics.world.gravity.y = this.GRAVITY;
@@ -528,9 +519,16 @@ export class OverworldPlayScene extends Phaser.Scene {
       roomCoordinates: initialFocus,
       mode: data?.mode ?? 'browse',
       draftRoom: data?.draftRoom ?? null,
+      publishedRoom: data?.publishedRoom ?? null,
+      clearDraftRoomId: data?.clearDraftRoomId ?? null,
+      invalidateRoomId: data?.invalidateRoomId ?? null,
+      forceRefreshAround: data?.forceRefreshAround ?? false,
+      statusMessage: data?.statusMessage ?? null,
     });
 
-    void this.refreshAround(this.windowCenterCoordinates);
+    void this.refreshAround(this.windowCenterCoordinates, {
+      forceChunkReload: data?.forceRefreshAround ?? false,
+    });
   }
 
   update(_time: number, delta: number): void {
@@ -539,8 +537,22 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.updateLiveObjects(delta);
     this.updateGhosts(delta);
 
-    if (this.mode === 'play' && Phaser.Input.Keyboard.JustDown(this.cameraToggleKey)) {
+    if (isMobileLandscapeBlocked()) {
+      this.syncLocalPresence();
+      this.renderHud();
+      return;
+    }
+
+    if (
+      this.mode === 'play' &&
+      (Phaser.Input.Keyboard.JustDown(this.cameraToggleKey) || consumeTouchAction('cameraToggle'))
+    ) {
       this.toggleCameraMode();
+    }
+
+    if (this.mode === 'play' && consumeTouchAction('stop')) {
+      this.returnToWorld();
+      return;
     }
 
     if (!this.playerBody) {
@@ -550,24 +562,31 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    const left = this.cursors.left.isDown || this.wasd.A.isDown;
-    const right = this.cursors.right.isDown || this.wasd.D.isDown;
+    const touchInput = getTouchInputState();
+    const touchLeft = touchInput.active && touchInput.moveX <= -0.28;
+    const touchRight = touchInput.active && touchInput.moveX >= 0.28;
+    const touchUp = touchInput.active && touchInput.moveY <= -0.46;
+    const touchDown = touchInput.active && touchInput.moveY >= 0.42;
+    const left = this.cursors.left.isDown || this.wasd.A.isDown || touchLeft;
+    const right = this.cursors.right.isDown || this.wasd.D.isDown || touchRight;
     const horizontalInput = (right ? 1 : 0) - (left ? 1 : 0);
-    const upHeld = this.cursors.up.isDown || this.wasd.W.isDown;
-    const downHeld = this.cursors.down.isDown || this.wasd.S.isDown;
+    const upHeld = this.cursors.up.isDown || this.wasd.W.isDown || touchUp;
+    const downHeld = this.cursors.down.isDown || this.wasd.S.isDown || touchDown;
     const verticalInput = (downHeld ? 1 : 0) - (upHeld ? 1 : 0);
+    const touchJumpPressed = consumeTouchAction('jump');
     const upPressed =
       Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
-      Phaser.Input.Keyboard.JustDown(this.wasd.W);
-    const spacePressed = Phaser.Input.Keyboard.JustDown(this.cursors.space!);
+      Phaser.Input.Keyboard.JustDown(this.wasd.W) ||
+      touchJumpPressed;
+    const spacePressed = Phaser.Input.Keyboard.JustDown(this.cursors.space!) || touchJumpPressed;
     const overlappingLadder = this.findOverlappingLadder();
     const stayOnLadder =
       overlappingLadder !== null &&
       !spacePressed &&
       (verticalInput !== 0 || (this.isClimbingLadder && !left && !right));
     const jumpedOffLadder = this.isClimbingLadder && spacePressed;
-    const swordPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.Q);
-    const gunPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E);
+    const swordPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.Q) || consumeTouchAction('slash');
+    const gunPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E) || consumeTouchAction('shoot');
 
     if (stayOnLadder && overlappingLadder) {
       this.setPlayerLadderState(overlappingLadder);
@@ -660,7 +679,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           this.coyoteTime = 0;
         }
 
-        const jumpHeld = upHeld || this.cursors.space!.isDown;
+        const jumpHeld = upHeld || this.cursors.space!.isDown || touchInput.jumpHeld;
         if (!jumpHeld && this.playerBody.velocity.y < 0) {
           this.playerBody.setVelocityY(this.playerBody.velocity.y * 0.85);
         }
@@ -699,12 +718,18 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.windowCenterCoordinates = { ...DEFAULT_ROOM_COORDINATES };
     this.selectedSummary = null;
     this.inspectZoom = DEFAULT_ZOOM;
+    this.browseInspectZoom = DEFAULT_ZOOM;
     this.transientStatusMessage = null;
     this.transientStatusExpiresAt = 0;
     this.isPanning = false;
     this.panStartPointer = { x: 0, y: 0 };
     this.panCurrentPointer = { x: 0, y: 0 };
     this.panStartScroll = { x: 0, y: 0 };
+    this.touchPointers = new Map();
+    this.activePrimaryTouchId = null;
+    this.touchTapCandidate = null;
+    this.touchPinchDistance = 0;
+    this.touchPinchAnchor = { x: 0, y: 0 };
     this.altDown = false;
     this.spaceDown = false;
     this.coyoteTime = 0;
@@ -729,6 +754,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.playerFacing = 1;
     this.playerWasGrounded = false;
     this.playerLandAnimationUntil = 0;
+    this.destroyRoomGoalBadges();
     this.shouldCenterCamera = false;
     this.shouldRespawnPlayer = false;
     this.presenceController.reset();
@@ -791,6 +817,10 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private setupPointerControls(): void {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.handleTouchPointerDown(pointer)) {
+        return;
+      }
+
       const wantsPan = this.pointerRequestsPan(pointer);
       if (wantsPan) {
         if (this.cameraMode === 'follow') {
@@ -812,6 +842,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.handleTouchPointerMove(pointer)) {
+        return;
+      }
+
       if (!this.isPanning) return;
 
       const distance = Phaser.Math.Distance.Between(
@@ -831,7 +865,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.constrainInspectCamera();
     });
 
-    this.input.on('pointerup', () => {
+    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      if (this.handleTouchPointerUp(pointer)) {
+        return;
+      }
+
       const wasPanning = this.isPanning;
       this.isPanning = false;
 
@@ -839,6 +877,208 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.syncBrowseWindowToCamera();
       }
     });
+  }
+
+  private handleTouchPointerDown(pointer: Phaser.Input.Pointer): boolean {
+    if (!this.isTouchPointer(pointer)) {
+      return false;
+    }
+
+    this.touchPointers.set(pointer.id, { x: pointer.x, y: pointer.y });
+
+    if (this.touchPointers.size >= 2) {
+      this.touchTapCandidate = null;
+      this.activePrimaryTouchId = null;
+      this.beginTouchPinchGesture();
+      return true;
+    }
+
+    this.activePrimaryTouchId = pointer.id;
+    this.touchTapCandidate = {
+      pointerId: pointer.id,
+      startX: pointer.x,
+      startY: pointer.y,
+    };
+    this.panStartPointer = { x: pointer.x, y: pointer.y };
+    this.panCurrentPointer = { x: pointer.x, y: pointer.y };
+    this.panStartScroll = {
+      x: this.cameras.main.scrollX,
+      y: this.cameras.main.scrollY,
+    };
+    return true;
+  }
+
+  private handleTouchPointerMove(pointer: Phaser.Input.Pointer): boolean {
+    if (!this.isTouchPointer(pointer)) {
+      return false;
+    }
+
+    if (!this.touchPointers.has(pointer.id)) {
+      return true;
+    }
+
+    this.touchPointers.set(pointer.id, { x: pointer.x, y: pointer.y });
+
+    if (this.touchPointers.size >= 2) {
+      this.handleTouchPinchMove();
+      return true;
+    }
+
+    if (this.activePrimaryTouchId !== pointer.id) {
+      return true;
+    }
+
+    this.panCurrentPointer = { x: pointer.x, y: pointer.y };
+    const distance = Phaser.Math.Distance.Between(
+      this.panStartPointer.x,
+      this.panStartPointer.y,
+      pointer.x,
+      pointer.y,
+    );
+
+    if (distance < PAN_THRESHOLD) {
+      return true;
+    }
+
+    if (this.mode === 'browse' || (this.mode === 'play' && this.cameraMode === 'inspect')) {
+      const camera = this.cameras.main;
+      const dx = (this.panStartPointer.x - pointer.x) / camera.zoom;
+      const dy = (this.panStartPointer.y - pointer.y) / camera.zoom;
+      camera.setScroll(this.panStartScroll.x + dx, this.panStartScroll.y + dy);
+      this.constrainInspectCamera();
+      this.touchTapCandidate = null;
+    }
+
+    return true;
+  }
+
+  private handleTouchPointerUp(pointer: Phaser.Input.Pointer): boolean {
+    if (!this.isTouchPointer(pointer)) {
+      return false;
+    }
+
+    const wasPinching = this.touchPointers.size >= 2;
+    this.touchPointers.delete(pointer.id);
+
+    if (wasPinching) {
+      if (this.touchPointers.size === 1) {
+        const [remainingId, remainingPoint] = Array.from(this.touchPointers.entries())[0];
+        this.activePrimaryTouchId = remainingId;
+        this.touchTapCandidate = {
+          pointerId: remainingId,
+          startX: remainingPoint.x,
+          startY: remainingPoint.y,
+        };
+        this.panStartPointer = { ...remainingPoint };
+        this.panCurrentPointer = { ...remainingPoint };
+        this.panStartScroll = {
+          x: this.cameras.main.scrollX,
+          y: this.cameras.main.scrollY,
+        };
+      } else {
+        this.activePrimaryTouchId = null;
+        this.touchTapCandidate = null;
+      }
+      return true;
+    }
+
+    if (this.touchTapCandidate?.pointerId === pointer.id) {
+      const movedDistance = Phaser.Math.Distance.Between(
+        this.touchTapCandidate.startX,
+        this.touchTapCandidate.startY,
+        pointer.x,
+        pointer.y,
+      );
+      if (movedDistance < PAN_THRESHOLD && this.mode === 'browse') {
+        this.handleRoomSelection(pointer);
+      } else if (this.mode === 'browse') {
+        this.syncBrowseWindowToCamera();
+      }
+    } else if (this.mode === 'browse') {
+      this.syncBrowseWindowToCamera();
+    }
+
+    this.touchTapCandidate = null;
+    this.activePrimaryTouchId = null;
+    return true;
+  }
+
+  private beginTouchPinchGesture(): void {
+    const points = Array.from(this.touchPointers.values());
+    if (points.length < 2) {
+      return;
+    }
+
+    const [firstPoint, secondPoint] = points;
+    this.touchPinchDistance = Phaser.Math.Distance.Between(
+      firstPoint.x,
+      firstPoint.y,
+      secondPoint.x,
+      secondPoint.y,
+    );
+    this.touchPinchAnchor = {
+      x: (firstPoint.x + secondPoint.x) * 0.5,
+      y: (firstPoint.y + secondPoint.y) * 0.5,
+    };
+    this.panStartScroll = {
+      x: this.cameras.main.scrollX,
+      y: this.cameras.main.scrollY,
+    };
+  }
+
+  private handleTouchPinchMove(): void {
+    const points = Array.from(this.touchPointers.values());
+    if (points.length < 2) {
+      return;
+    }
+
+    const [firstPoint, secondPoint] = points;
+    const nextDistance = Phaser.Math.Distance.Between(
+      firstPoint.x,
+      firstPoint.y,
+      secondPoint.x,
+      secondPoint.y,
+    );
+    if (this.touchPinchDistance <= 0) {
+      this.touchPinchDistance = nextDistance;
+      return;
+    }
+
+    const anchorX = (firstPoint.x + secondPoint.x) * 0.5;
+    const anchorY = (firstPoint.y + secondPoint.y) * 0.5;
+    const zoomFactor = nextDistance / this.touchPinchDistance;
+    if (Math.abs(zoomFactor - 1) > 0.02) {
+      this.adjustZoomByFactor(zoomFactor, anchorX, anchorY);
+      this.touchPinchDistance = nextDistance;
+    }
+
+    if (this.mode === 'browse' || (this.mode === 'play' && this.cameraMode === 'inspect')) {
+      const camera = this.cameras.main;
+      const centerX = anchorX;
+      const centerY = anchorY;
+      const dx = (this.touchPinchAnchor.x - centerX) / camera.zoom;
+      const dy = (this.touchPinchAnchor.y - centerY) / camera.zoom;
+      camera.setScroll(this.panStartScroll.x + dx, this.panStartScroll.y + dy);
+      this.constrainInspectCamera();
+    }
+  }
+
+  private isTouchPointer(pointer: Phaser.Input.Pointer): boolean {
+    const layout = getDeviceLayoutState();
+    if (!layout.coarsePointer) {
+      return false;
+    }
+
+    const event = pointer.event as PointerEvent | MouseEvent | undefined;
+    if (!event) {
+      return layout.coarsePointer;
+    }
+
+    if ('pointerType' in event && typeof event.pointerType === 'string') {
+      return event.pointerType === 'touch' || event.pointerType === 'pen';
+    }
+
+    return layout.coarsePointer;
   }
 
   private setupCamera(): void {
@@ -868,6 +1108,8 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private updateBackdrop(): void {
+    this.worldStreamingController.updateFullRoomBackgrounds(this.cameras.main);
+
     if (this.starfieldSprites.length === 0) {
       return;
     }
@@ -939,6 +1181,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     for (const label of this.goalMarkerLabels) {
       ignoredObjects.push(label);
     }
+    for (const badge of this.roomGoalBadges) {
+      ignoredObjects.push(badge.container);
+    }
     if (this.player) ignoredObjects.push(this.player);
     if (this.playerSprite) ignoredObjects.push(this.playerSprite);
     for (const projectile of this.playerProjectiles) {
@@ -950,6 +1195,12 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     for (const loadedRoom of this.loadedFullRoomsById.values()) {
+      if (loadedRoom.backgroundColorRect) {
+        ignoredObjects.push(loadedRoom.backgroundColorRect);
+      }
+      for (const backgroundSprite of loadedRoom.backgroundSprites) {
+        ignoredObjects.push(backgroundSprite.sprite);
+      }
       ignoredObjects.push(loadedRoom.image, loadedRoom.terrainLayer);
       for (const liveObject of loadedRoom.liveObjects) {
         ignoredObjects.push(liveObject.sprite);
@@ -1011,9 +1262,14 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private handleWake = (_sys: Phaser.Scenes.Systems, data?: OverworldPlaySceneData): void => {
-    setAppMode('world');
     this.applySceneData(data);
-    void this.refreshAround(this.windowCenterCoordinates);
+    this.syncAppMode();
+    this.updateSelectedSummary();
+    this.redrawWorld();
+    this.renderHud();
+    void this.refreshAround(this.windowCenterCoordinates, {
+      forceChunkReload: data?.forceRefreshAround ?? false,
+    });
   };
 
   private showTransientStatus(message: string): void {
@@ -1023,14 +1279,15 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private applySceneData(data?: OverworldPlaySceneData): void {
     const fallback = data?.centerCoordinates ?? data?.roomCoordinates ?? getFocusedCoordinatesFromUrl();
+    const wasPlaying = this.mode === 'play';
 
-    if (data?.clearDraftRoomId) {
-      this.worldStreamingController.clearDraftRoom(data.clearDraftRoomId);
-    }
-
-    if (data?.draftRoom) {
-      const draftRoom = cloneRoomSnapshot(data.draftRoom);
-      this.worldStreamingController.setDraftRoom(draftRoom);
+    if (data?.clearDraftRoomId || data?.draftRoom || data?.publishedRoom || data?.invalidateRoomId) {
+      this.worldStreamingController.applyOptimisticMutation({
+        clearDraftRoomId: data.clearDraftRoomId ?? null,
+        draftRoom: data.draftRoom ? cloneRoomSnapshot(data.draftRoom) : null,
+        publishedRoom: data.publishedRoom ? cloneRoomSnapshot(data.publishedRoom) : null,
+        invalidateRoomId: data.invalidateRoomId ?? null,
+      });
     }
 
     if (data?.statusMessage) {
@@ -1039,10 +1296,14 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     if (data?.mode) {
       if (data.mode === 'play') {
+        if (!wasPlaying) {
+          this.browseInspectZoom = this.inspectZoom;
+        }
         this.resetPlaySession();
         this.cameraMode = 'follow';
       }
       this.mode = data.mode;
+      this.syncAppMode();
     }
 
     const focusCoordinates = data?.roomCoordinates ?? data?.draftRoom?.coordinates ?? fallback;
@@ -1054,8 +1315,11 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.shouldCenterCamera = true;
     this.shouldRespawnPlayer = this.mode === 'play';
 
-    if (this.mode === 'browse') {
+    if (this.mode === 'play') {
+      this.inspectZoom = this.getFitZoomForRoom();
+    } else {
       this.cameraMode = 'inspect';
+      this.inspectZoom = this.browseInspectZoom;
     }
   }
 
@@ -1076,6 +1340,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   async jumpToCoordinates(coordinates: RoomCoordinates): Promise<void> {
     this.mode = 'browse';
     this.cameraMode = 'inspect';
+    this.syncAppMode();
     this.selectedCoordinates = { ...coordinates };
     this.currentRoomCoordinates = { ...coordinates };
     this.windowCenterCoordinates = { ...coordinates };
@@ -1114,6 +1379,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     this.inspectZoom = Number(nextZoom.toFixed(3));
+    if (this.mode === 'browse') {
+      this.browseInspectZoom = this.inspectZoom;
+    }
     camera.setZoom(this.inspectZoom);
     this.centerCameraOnCoordinates(this.getZoomFocusCoordinates());
     this.refreshChunkWindowIfNeeded(this.getZoomFocusCoordinates());
@@ -1133,6 +1401,9 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     const anchorWorldPoint = this.getScreenAnchorWorldPoint(anchorX, anchorY, camera);
     this.inspectZoom = Number(nextZoom.toFixed(3));
+    if (this.mode === 'browse') {
+      this.browseInspectZoom = this.inspectZoom;
+    }
     camera.setZoom(this.inspectZoom);
 
     if (this.mode === 'play' && this.cameraMode === 'follow' && this.player) {
@@ -1185,15 +1456,23 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.selectedCoordinates;
   }
 
-  private async refreshAround(centerCoordinates: RoomCoordinates): Promise<boolean> {
+  private async refreshAround(
+    centerCoordinates: RoomCoordinates,
+    options: { forceChunkReload?: boolean } = {}
+  ): Promise<boolean> {
     this.windowCenterCoordinates = { ...centerCoordinates };
     this.renderHud('Loading world...');
+    if (!isAppReady()) {
+      setBootProgress(1);
+      setBootStatus('Loading world...');
+    }
 
-    try {
-      const refreshed = await this.worldStreamingController.refreshAround(centerCoordinates);
-      if (!refreshed) {
-        return false;
+    const refreshed = await this.worldStreamingController.refreshAround(centerCoordinates, options);
+    if (refreshed === 'success') {
+      if (!this.scene.isActive(this.scene.key)) {
+        return true;
       }
+
       this.updateSelectedSummary();
       void this.refreshLeaderboardForSelection();
       this.updateCameraBounds();
@@ -1204,12 +1483,43 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.redrawWorld();
       this.renderHud();
       this.loadingText.setVisible(false);
+      if (!isAppReady()) {
+        markAppReady();
+      }
+      hideBusyOverlay();
       return true;
-    } catch (error) {
-      console.error('Failed to load overworld window', error);
-      this.renderHud('Failed to load world.');
+    }
+
+    if (refreshed === 'cancelled') {
       return false;
     }
+
+    if (!this.scene.isActive(this.scene.key)) {
+      return false;
+    }
+
+    console.error('Failed to load overworld window');
+    const retry = async (): Promise<void> => {
+      if (!isAppReady()) {
+        setBootProgress(1);
+        setBootStatus('Retrying world...');
+      } else {
+        showBusyOverlay('Retrying world...', 'Loading world...');
+      }
+      await this.refreshAround(centerCoordinates, { forceChunkReload: true });
+    };
+
+    if (!isAppReady()) {
+      showBootFailure('Failed to load world. Check your connection and retry.', retry);
+    } else if (isBusyOverlayVisible()) {
+      showBusyError('Failed to load world. Check your connection and try again.', {
+        retryHandler: retry,
+      });
+    } else {
+      this.renderHud('Failed to load world.');
+    }
+
+    return false;
   }
 
   private refreshChunkWindowIfNeeded(centerCoordinates: RoomCoordinates): void {
@@ -1282,6 +1592,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private syncModeRuntime(): void {
     if (this.mode === 'browse') {
+      this.syncAppMode();
       this.destroyPlayer();
       this.cameraMode = 'inspect';
       this.goalRunController.clearCurrentRun();
@@ -1302,6 +1613,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (!currentRoom) {
       this.mode = 'browse';
       this.cameraMode = 'inspect';
+      this.syncAppMode();
       this.syncCameraBoundsUsage();
       this.applyGoalRunMutation(this.goalRunController.syncRunForRoom(null));
       this.destroyPlayer();
@@ -1383,6 +1695,74 @@ export class OverworldPlayScene extends Phaser.Scene {
         label.setOrigin(0.5, 1);
         label.setDepth(22);
         this.goalMarkerLabels.push(label);
+      }
+    }
+
+    this.syncBackdropCameraIgnores();
+  }
+
+  private destroyRoomGoalBadges(): void {
+    for (const badge of this.roomGoalBadges) {
+      badge.container.destroy(true);
+    }
+    this.roomGoalBadges = [];
+  }
+
+  private redrawRoomGoalBadges(): void {
+    this.destroyRoomGoalBadges();
+
+    if (!this.worldWindow || this.mode !== 'browse') {
+      this.syncBackdropCameraIgnores();
+      return;
+    }
+
+    const gridSize = this.worldWindow.radius * 2 + 1;
+    for (let row = 0; row < gridSize; row += 1) {
+      for (let col = 0; col < gridSize; col += 1) {
+        const coordinates = {
+          x: this.worldWindow.center.x + col - this.worldWindow.radius,
+          y: this.worldWindow.center.y + row - this.worldWindow.radius,
+        };
+        const room = this.getRoomSnapshotForCoordinates(coordinates);
+        if (!room?.goal) {
+          continue;
+        }
+
+        const origin = this.getRoomOrigin(coordinates);
+        const titleLabel = this.truncateOverlayText(
+          this.getRoomDisplayTitle(room.title, coordinates).toUpperCase(),
+          20
+        );
+        const goalLabel = this.truncateOverlayText(this.getGoalBadgeText(room.goal).toUpperCase(), 22);
+        const backgroundWidth = Math.max(titleLabel.length * 6.7 + 14, goalLabel.length * 6.1 + 14, 92);
+        const backgroundHeight = 30;
+        const background = this.add.rectangle(0, 0, backgroundWidth, backgroundHeight, 0x050505, 0.84);
+        background.setOrigin(0, 0);
+        background.setStrokeStyle(1, 0x347433, 0.92);
+
+        const titleText = this.add.text(7, 4, titleLabel, {
+          fontFamily: 'Courier New',
+          fontSize: '9px',
+          color: '#f3eee2',
+          stroke: '#050505',
+          strokeThickness: 3,
+        });
+        const goalText = this.add.text(7, 15, goalLabel, {
+          fontFamily: 'Courier New',
+          fontSize: '9px',
+          color: '#ffc107',
+          stroke: '#050505',
+          strokeThickness: 3,
+        });
+
+        const container = this.add.container(origin.x + 8, origin.y + 8, [
+          background,
+          titleText,
+          goalText,
+        ]);
+        container.setDepth(18);
+        container.setScale(1 / this.cameras.main.zoom);
+        this.roomGoalBadges.push({ container });
       }
     }
 
@@ -1553,7 +1933,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.roomFillGraphics.clear();
     this.roomFrameGraphics.clear();
 
-    if (!this.worldWindow) return;
+    if (!this.worldWindow) {
+      this.destroyRoomGoalBadges();
+      return;
+    }
 
     const gridSize = this.worldWindow.radius * 2 + 1;
     for (let row = 0; row < gridSize; row++) {
@@ -1582,6 +1965,8 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.drawCellFrame(coordinates, cellState, origin.x, origin.y);
       }
     }
+
+    this.redrawRoomGoalBadges();
   }
 
   private redrawGridOverlay(): void {
@@ -1751,6 +2136,15 @@ export class OverworldPlayScene extends Phaser.Scene {
         : Phaser.Math.Clamp(camera.scrollY, minScrollY, maxScrollY);
 
     camera.setScroll(nextScrollX, nextScrollY);
+  }
+
+  private getFitZoomForRoom(): number {
+    const fitZoom = Math.min(
+      (this.scale.width - PLAY_ROOM_FIT_PADDING) / ROOM_PX_WIDTH,
+      (this.scale.height - PLAY_ROOM_FIT_PADDING) / ROOM_PX_HEIGHT
+    );
+
+    return Phaser.Math.Clamp(fitZoom, MIN_ZOOM, MAX_ZOOM);
   }
 
   private createPlayer(startRoom: RoomSnapshot): void {
@@ -2605,6 +2999,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     );
 
     this.inspectZoom = Phaser.Math.Clamp(fitZoom, MIN_ZOOM, MAX_ZOOM);
+    if (this.mode === 'browse') {
+      this.browseInspectZoom = this.inspectZoom;
+    }
     camera.setZoom(this.inspectZoom);
 
     if (this.mode === 'play' && this.cameraMode === 'follow' && this.player) {
@@ -2627,8 +3024,11 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (selectedState !== 'published' && selectedState !== 'draft') return;
 
     this.resetPlaySession();
+    this.browseInspectZoom = this.inspectZoom;
     this.mode = 'play';
     this.cameraMode = 'follow';
+    this.inspectZoom = this.getFitZoomForRoom();
+    this.syncAppMode();
     this.currentRoomCoordinates = { ...this.selectedCoordinates };
     this.shouldCenterCamera = true;
     this.shouldRespawnPlayer = true;
@@ -2640,6 +3040,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.resetPlaySession();
     this.mode = 'browse';
     this.cameraMode = 'inspect';
+    this.inspectZoom = this.browseInspectZoom;
+    this.syncAppMode();
     this.selectedCoordinates = { ...this.currentRoomCoordinates };
     this.shouldCenterCamera = true;
     this.shouldRespawnPlayer = false;
@@ -2655,8 +3057,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       source: 'world',
     };
 
-    this.scene.sleep();
-    this.scene.run('EditorScene', editorData);
+    this.openEditor(editorData);
   }
 
   editSelectedRoom(): void {
@@ -2668,6 +3069,20 @@ export class OverworldPlayScene extends Phaser.Scene {
       source: 'world',
       roomSnapshot: this.getRoomSnapshotForCoordinates(this.selectedCoordinates),
     };
+
+    this.openEditor(editorData);
+  }
+
+  private openEditor(editorData: EditorSceneData): void {
+    showBusyOverlay('Opening editor...', 'Loading room...');
+
+    if (
+      this.scene.isActive('EditorScene') ||
+      this.scene.isSleeping('EditorScene') ||
+      this.scene.isPaused('EditorScene')
+    ) {
+      this.scene.stop('EditorScene');
+    }
 
     this.scene.sleep();
     this.scene.run('EditorScene', editorData);
@@ -2749,12 +3164,75 @@ export class OverworldPlayScene extends Phaser.Scene {
     };
   }
 
-  private getGoalStatusText(): string | null {
-    return this.goalRunController.getGoalStatusText();
+  private getGoalBadgeText(goal: RoomGoal): string {
+    switch (goal.type) {
+      case 'reach_exit':
+        return 'Reach Exit';
+      case 'collect_target':
+        return `Collect ${goal.requiredCount}`;
+      case 'defeat_all':
+        return 'Defeat All';
+      case 'checkpoint_sprint':
+        return `${goal.checkpoints.length || 0} Checkpoints`;
+      case 'survival':
+        return `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))}s`;
+    }
+  }
+
+  private getPlayGoalTimerText(runState: GoalRunState): string {
+    if (runState.goal.type === 'survival') {
+      return `${this.formatOverlayTimer(Math.max(0, runState.goal.durationMs - runState.elapsedMs))} LEFT`;
+    }
+
+    if (runState.goal.timeLimitMs !== null) {
+      return `${this.formatOverlayTimer(Math.max(0, runState.goal.timeLimitMs - runState.elapsedMs))} LEFT`;
+    }
+
+    return this.formatOverlayTimer(runState.elapsedMs);
+  }
+
+  private getPlayGoalProgressText(runState: GoalRunState): string {
+    switch (runState.goal.type) {
+      case 'reach_exit':
+        return runState.result === 'completed' ? 'Exit reached' : 'Reach the exit';
+      case 'collect_target':
+        return `${runState.collectiblesCollected}/${runState.goal.requiredCount} collected`;
+      case 'defeat_all':
+        return `${runState.enemiesDefeated}/${runState.enemyTarget ?? 0} defeated`;
+      case 'checkpoint_sprint':
+        return `${runState.checkpointsReached}/${runState.checkpointTarget ?? 0} checkpoints`;
+      case 'survival':
+        return runState.result === 'completed' ? 'Survived' : 'Stay alive';
+    }
+  }
+
+  private formatOverlayTimer(ms: number): string {
+    const clampedMs = Math.max(0, Math.round(ms));
+    const totalSeconds = Math.floor(clampedMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    const tenths = Math.floor((clampedMs % 1000) / 100);
+    return `${minutes}:${String(seconds).padStart(2, '0')}.${tenths}`;
+  }
+
+  private truncateOverlayText(value: string, maxLength: number): string {
+    if (value.length <= maxLength) {
+      return value;
+    }
+
+    return `${value.slice(0, Math.max(1, maxLength - 1))}\u2026`;
+  }
+
+  private syncGoalOverlayScale(): void {
+    const overlayScale = 1 / this.cameras.main.zoom;
+    for (const badge of this.roomGoalBadges) {
+      badge.container.setScale(overlayScale);
+    }
   }
 
   private renderHud(statusOverride?: string): void {
     this.hudBridge?.render(this.buildHudViewModel(statusOverride));
+    this.syncGoalOverlayScale();
   }
 
   private buildHudViewModel(statusOverride?: string): OverworldHudViewModel {
@@ -2764,7 +3242,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     const selectedPopulation = this.getRoomPopulation(this.selectedCoordinates);
     const transientStatus = this.getTransientStatusMessage();
     const totalPlayerCount = this.presenceController.getTotalPlayerCount();
-    const goalStatus = this.getGoalStatusText();
     const frontierBuildBlocked = selectedState === 'frontier' && this.isFrontierBuildBlockedByClaimLimit();
     const rankingMode = this.currentRoomLeaderboard?.rankingMode ?? null;
     const roomTop = this.currentRoomLeaderboard?.entries[0] ?? null;
@@ -2831,7 +3308,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     let leaderboardText = '';
-    if (roomTop && rankingMode) {
+    if (this.mode !== 'play' && roomTop && rankingMode) {
       const metric =
         rankingMode === 'time'
           ? `${(roomTop.elapsedMs / 1000).toFixed(2)}s`
@@ -2840,13 +3317,21 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     const saveStatusText =
-      statusOverride ??
-      transientStatus ??
-      (this.mode === 'play'
-        ? goalStatus
-          ? `Score ${this.score} · ${goalStatus}`
-          : `Score ${this.score}`
-        : '');
+      this.mode === 'play'
+        ? `Score ${this.score}`
+        : statusOverride ??
+          transientStatus ??
+          '';
+    const activeGoalRun = this.mode === 'play' ? this.currentGoalRun : null;
+    const activeGoalRoom = activeGoalRun
+      ? this.getRoomSnapshotForCoordinates(activeGoalRun.roomCoordinates)
+      : null;
+    const goalPanelTone =
+      activeGoalRun?.result === 'completed'
+        ? 'complete'
+        : activeGoalRun?.result === 'failed'
+          ? 'failed'
+          : 'active';
 
     return {
       saveStatusTone,
@@ -2878,6 +3363,17 @@ export class OverworldPlayScene extends Phaser.Scene {
         totalPlayerCount === null ? '' : `${totalPlayerCount} ${totalPlayerCount === 1 ? 'player' : 'players'} online`,
       saveStatusText,
       bottomBarZoomText: `Zoom: ${this.cameras.main.zoom.toFixed(2)}x`,
+      goalPanelVisible: Boolean(activeGoalRun),
+      goalPanelTone,
+      goalPanelRoomText: activeGoalRun
+        ? this.truncateOverlayText(
+            this.getRoomDisplayTitle(activeGoalRoom?.title ?? null, activeGoalRun.roomCoordinates).toUpperCase(),
+            22
+          )
+        : '',
+      goalPanelGoalText: activeGoalRun ? this.getGoalBadgeText(activeGoalRun.goal).toUpperCase() : '',
+      goalPanelTimerText: activeGoalRun ? this.getPlayGoalTimerText(activeGoalRun) : '',
+      goalPanelProgressText: activeGoalRun ? this.getPlayGoalProgressText(activeGoalRun) : '',
     };
   }
 
@@ -2892,6 +3388,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       authState.roomClaimsRemainingToday !== null &&
       authState.roomClaimsRemainingToday <= 0
     );
+  }
+
+  private syncAppMode(): void {
+    setAppMode(this.mode === 'play' ? 'play-world' : 'world');
   }
 
   getSelectedRoomContext(): {
@@ -3013,6 +3513,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       label.destroy();
     }
     this.goalMarkerLabels = [];
+    this.destroyRoomGoalBadges();
     this.roomGridGraphics?.destroy();
     this.roomFillGraphics?.destroy();
     this.roomFrameGraphics?.destroy();
@@ -3024,6 +3525,13 @@ export class OverworldPlayScene extends Phaser.Scene {
     const goalRunSnapshot = this.goalRunController.getDebugSnapshot();
     const streamingMetrics = this.worldStreamingController.getDebugMetrics();
     const presenceDebug = this.presenceController.getDebugSnapshot();
+    const currentLoadedRoom = this.loadedFullRoomsById.get(
+      roomIdFromCoordinates(this.currentRoomCoordinates)
+    ) ?? null;
+    const currentRoomParallaxLayer =
+      currentLoadedRoom?.backgroundSprites.find(
+        (backgroundSprite) => Math.abs(backgroundSprite.parallax) > 0.0001
+      ) ?? null;
     const liveObjects = Array.from(this.loadedFullRoomsById.values()).flatMap((loadedRoom) =>
       loadedRoom.liveObjects
         .filter((liveObject) => liveObject.sprite.active)
@@ -3082,6 +3590,16 @@ export class OverworldPlayScene extends Phaser.Scene {
         loadedPreviewRoomCount: streamingMetrics.loadedPreviewRoomCount,
         loadedFullRoomCount: streamingMetrics.loadedFullRoomCount,
       },
+      currentRoomBackground: currentLoadedRoom
+        ? {
+            background: currentLoadedRoom.room.background,
+            layerCount: currentLoadedRoom.backgroundSprites.length,
+            sampleParallax: currentRoomParallaxLayer?.parallax ?? null,
+            sampleTilePositionX: currentRoomParallaxLayer
+              ? Number(currentRoomParallaxLayer.sprite.tilePositionX.toFixed(3))
+              : null,
+          }
+        : null,
       loadedPreviewRooms: this.previewImagesByRoomId.size,
       loadedFullRooms: this.loadedFullRoomsById.size,
       score: this.score,

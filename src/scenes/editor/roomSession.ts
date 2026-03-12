@@ -23,6 +23,11 @@ import {
   buildExplorerTxUrl,
   formatWalletAddress,
 } from '../../mint/roomOwnership';
+import {
+  hideBusyOverlay,
+  showBusyOverlay,
+  updateBusyOverlay,
+} from '../../ui/appFeedback';
 import type { OverworldPlaySceneData } from '../sceneData';
 
 interface EditorRoomSessionHost {
@@ -58,6 +63,7 @@ export class EditorRoomSession {
   private roomCreatedAt = '';
   private roomUpdatedAt = '';
   private roomPublishedAt: string | null = null;
+  private publishedRoomSnapshot: RoomSnapshot | null = null;
   private roomPermissions: RoomPermissions = {
     canSaveDraft: true,
     canPublish: true,
@@ -178,6 +184,7 @@ export class EditorRoomSession {
     this.roomCreatedAt = '';
     this.roomUpdatedAt = '';
     this.roomPublishedAt = null;
+    this.publishedRoomSnapshot = null;
     this.roomPermissions = {
       canSaveDraft: true,
       canPublish: true,
@@ -255,7 +262,7 @@ export class EditorRoomSession {
     void this.saveDraft();
   }
 
-  async loadPersistedRoom(initialRoomSnapshot: RoomSnapshot | null): Promise<void> {
+  async loadPersistedRoom(initialRoomSnapshot: RoomSnapshot | null): Promise<boolean> {
     this.setStatusText('Loading draft...');
 
     try {
@@ -274,9 +281,11 @@ export class EditorRoomSession {
             : 'Recovered local guest draft.'
           : this.getIdleStatusText()
       );
+      return true;
     } catch (error) {
       console.error('Failed to load room draft', error);
       this.setStatusText('Failed to load draft.');
+      return false;
     }
   }
 
@@ -415,11 +424,26 @@ export class EditorRoomSession {
 
   async buildReturnToWorldWakeData(): Promise<OverworldPlaySceneData | null> {
     if (!this.host.getRoomDirty()) {
+      if (this.shouldShowDraftPreviewInWorld()) {
+        return {
+          centerCoordinates: { ...this.roomCoordinates },
+          roomCoordinates: { ...this.roomCoordinates },
+          draftRoom: cloneRoomSnapshot(this.host.exportRoomSnapshot()),
+          clearDraftRoomId: null,
+          invalidateRoomId: this.roomId,
+          forceRefreshAround: true,
+          mode: 'browse',
+        };
+      }
+
       return {
         centerCoordinates: { ...this.roomCoordinates },
         roomCoordinates: { ...this.roomCoordinates },
-        draftRoom: this.shouldShowDraftPreviewInWorld() ? this.host.exportRoomSnapshot() : null,
-        clearDraftRoomId: this.shouldShowDraftPreviewInWorld() ? null : this.roomId,
+        publishedRoom: this.publishedRoomSnapshot ? cloneRoomSnapshot(this.publishedRoomSnapshot) : null,
+        draftRoom: null,
+        clearDraftRoomId: this.roomId,
+        invalidateRoomId: this.roomId,
+        forceRefreshAround: true,
         mode: 'browse',
       };
     }
@@ -441,8 +465,11 @@ export class EditorRoomSession {
         centerCoordinates: { ...this.roomCoordinates },
         roomCoordinates: { ...this.roomCoordinates },
         statusMessage: 'Auto-published on exit.',
+        publishedRoom: publishedRecord.published ? cloneRoomSnapshot(publishedRecord.published) : null,
         draftRoom: null,
         clearDraftRoomId: this.roomId,
+        invalidateRoomId: this.roomId,
+        forceRefreshAround: true,
         mode: 'browse',
       };
     }
@@ -458,8 +485,10 @@ export class EditorRoomSession {
       centerCoordinates: { ...this.roomCoordinates },
       roomCoordinates: { ...this.roomCoordinates },
       statusMessage: 'Publish failed, draft saved instead.',
-      draftRoom: this.host.exportRoomSnapshot(),
+      draftRoom: cloneRoomSnapshot(draftRecord.draft),
       clearDraftRoomId: null,
+      invalidateRoomId: this.roomId,
+      forceRefreshAround: true,
       mode: 'browse',
     };
   }
@@ -475,9 +504,11 @@ export class EditorRoomSession {
     }
 
     if (this.host.getRoomDirty() || this.publishedVersion === 0) {
+      showBusyOverlay('Publishing room...', 'Preparing room for mint...');
       const publishedRecord = await this.publishRoom(
         this.publishedVersion === 0 ? 'Published. Ready to mint.' : 'Published latest changes before mint.'
       );
+      hideBusyOverlay();
       if (!publishedRecord) {
         return null;
       }
@@ -506,12 +537,15 @@ export class EditorRoomSession {
     }
 
     this.saveInFlight = true;
+    showBusyOverlay('Preparing mint...', 'Checking room mint configuration...');
     this.setStatusText('Preparing mint...');
 
     try {
       const prepare = await this.roomRepository.prepareMint(this.roomId, this.roomCoordinates);
+      updateBusyOverlay('Waiting for wallet confirmation...', `Approve the ${prepare.chain.name} transaction in your wallet.`);
       this.setStatusText(`Waiting for wallet confirmation on ${prepare.chain.name}...`);
       const tx = await sendPreparedWalletTransaction(prepare.transaction, prepare.chain);
+      updateBusyOverlay('Confirming mint...', 'Waiting for on-chain confirmation...');
       this.setStatusText('Confirming mint...');
 
       const record = await this.roomRepository.confirmMint(this.roomId, this.roomCoordinates, {
@@ -526,6 +560,7 @@ export class EditorRoomSession {
           ? `Minted room token #${record.mintedTokenId}. ${explorerUrl}`
           : `Minted room token #${record.mintedTokenId}.`
       );
+      hideBusyOverlay();
       return record;
     } catch (error) {
       console.error('Failed to mint room', error);
@@ -536,6 +571,7 @@ export class EditorRoomSession {
 
       const message = error instanceof Error ? error.message : 'Mint failed.';
       this.setStatusText(message);
+      hideBusyOverlay();
     } finally {
       this.saveInFlight = false;
       this.host.refreshUi();
@@ -597,6 +633,7 @@ export class EditorRoomSession {
     this.roomCreatedAt = record.draft.createdAt;
     this.roomUpdatedAt = record.draft.updatedAt;
     this.roomPublishedAt = record.published?.publishedAt ?? null;
+    this.publishedRoomSnapshot = record.published ? cloneRoomSnapshot(record.published) : null;
     this.roomPermissions = { ...record.permissions };
     this.roomVersionHistory = record.versions.map((version) => ({
       ...version,

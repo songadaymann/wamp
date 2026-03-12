@@ -8,12 +8,12 @@ Players claim rooms on an infinite grid, lay down tiles using a browser-based ed
 
 ---
 
-## Current Product State (March 11, 2026)
+## Current Product State (March 12, 2026)
 
 - The repo is now a real **shared-world vertical slice**, not a single-room editor prototype.
 - Working today:
   - coordinate-addressed overworld browse/play with published, draft, frontier, and empty room states
-  - room-to-room traversal, free-cam browse, follow-cam play, coordinate jump, fit-to-world, and chunked room streaming/LOD
+  - room-to-room traversal, free-cam browse, follow-cam play, coordinate jump, fit-to-world, first-load splash/busy overlays, and chunked room streaming/LOD
   - editor authoring for tiles, placed objects, parallax backgrounds, room titles, spawn markers, goals, undo/redo, test play, and version history
   - current gameplay loop with a sprite-based player, ladders, crouch/crawl, crate push/pull, sword slash, gun shot, collectibles, hazards, and the first enemy set
   - single-room **draft save / load / publish / revert / mint-gated permissions** on **Cloudflare Workers + D1**
@@ -22,13 +22,17 @@ Players claim rooms on an infinite grid, lay down tiles using a browser-based ed
   - PartyKit ghost presence with chunk subscriptions, room populations, and name tags
   - ERC-721 room ownership contract workspace plus mint prepare/confirm flow
   - live world chat backed by Worker + D1
+  - landscape-first mobile/touch support for browse, play, editor, chat, auth, leaderboard, and mint flows
+  - goal badges in browse mode and in-room challenge panel/timer presentation during play
   - bot-facing `skill.md` and `openapi.json`
-- The game is deployed at `https://everybodys-platformer.novox-robot.workers.dev`.
+- The live frontend is `https://wamp.land`, with the Worker/API at `https://everybodys-platformer.novox-robot.workers.dev`.
 - The biggest gaps versus the full PRD are now:
   - minimap / topology navigation and better large-world browse UX
   - a true anonymous-to-account save/sync flow with an inline signup prompt
-  - mobile/touch controls and broader responsive polish
-  - production-hardened mint deployment and clearer in-world ownership/minted-room UX
+  - broader mobile/touch tuning and tablet/phone layout polish
+  - cross-room course authoring, authoritative PvP, and the broader challenge platform
+  - live migration to the hardened claimer-signed mint contract plus clearer in-world ownership/minted-room UX
+  - money-backed challenge settlement, anti-cheat, and operator controls
   - moderation tooling, creator identity/profile UX, ratings/favorites, and richer social systems
 
 ### Recommendation
@@ -39,8 +43,8 @@ That means:
 
 1. Add minimap/world-navigation polish on top of the current coordinate jump flow.
 2. Clarify frontier / claim / minted ownership states directly in the world UI.
-3. Improve mobile controls, responsiveness, and zoomed-out browse performance.
-4. Keep room-level goals and runs stable while deciding whether future **multi-room runs** should become a separate authored system.
+3. Tune the shipped mobile/touch foundation and improve zoomed-out browse performance.
+4. Keep room-level goals and runs stable while introducing cross-room challenges as a separate authored `course` system.
 
 So yes: the world shell now exists. The next step is making it durable, legible, and scalable before layering on bigger creator systems.
 
@@ -53,7 +57,7 @@ So yes: the world shell now exists. The next step is making it durable, legible,
 - An infinite 2D grid of **rooms** (chunks/scenes)
 - Each room is a self-contained platformer scene: platforms, hazards, enemies, collectibles, decorations
 - Rooms connect at their edges — walk off the right side of one room, enter the left side of the next
-- Frontier rooms are still surfaced as the intended organic expansion path, but the current build also lets players jump to arbitrary empty coordinates and start building there
+- Frontier rooms are the intended and enforced expansion path for new room claims
 - Every room has a coordinate address (e.g., `12,-3`) for navigation and sharing
 
 ### Rooms
@@ -84,15 +88,15 @@ So yes: the world shell now exists. The next step is making it durable, legible,
 
 1. User lands on the site and enters the world browse/play shell
 2. They can immediately zoom, jump to coordinates, inspect rooms, and play published rooms with no account
-3. They can click a frontier or empty room and open the editor immediately
+3. They can inspect rooms freely and click a frontier room to open the editor immediately
 4. Guest editing works today, with local draft persistence as the fallback when remote save/publish is auth-gated
-5. The planned `~20 tiles` signup prompt and automatic local-to-account sync are **not shipped yet**
+5. Publishing as a guest prompts sign-in, but the planned `~20 tiles` signup prompt and automatic local-to-account sync are **not shipped yet**
 6. Email auth unlocks durable remote publish, ranked runs, chat posting, API tokens, and mint preparation
 7. Wallet connection is optional and only needed for wallet-linked auth or minting
 
 ### Building
 
-1. User selects a frontier or empty room and opens the editor
+1. User selects a frontier room and opens the editor
 2. Editor opens with tile tools, object placement, background selection, room title, goal controls, and layer controls
 3. User builds the room with terrain, placed objects, decorations, spawn markers, and goals
 4. User can **test play** the room at any time
@@ -270,17 +274,163 @@ Each room can optionally have a goal set by the creator. Goal infrastructure is 
 ### Leaderboards
 
 - **Per-room:** Version-scoped room leaderboards. Ranking mode depends on the goal type:
-  - time-first for `reach_exit` and `checkpoint_sprint`
-  - score-first for `collect_target`, `defeat_all`, and `survival`
+  - time-first for `reach_exit`, `checkpoint_sprint`, `collect_target`, and `defeat_all`
+  - score-first for `survival`
 - **Global:** Aggregate player stats across submitted runs, with **points** currently acting as the primary world ranking
 - **Creator:** Still future work — most played rooms, highest-rated rooms, total plays
 
-### Future Upgrade: Multi-Room Runs
+## Challenge Platform
 
-- Creators could author an optional **course / challenge** spanning multiple published rooms
-- Courses should be version-locked to specific room versions so leaderboard results stay stable
-- Course start, checkpoints, and finish should be authored separately from per-room goals
-- Multi-room courses should have their own leaderboard, separate from individual room leaderboards
+Cross-room challenges, PvP, and crypto stakes should be treated as one future program layered on top of the current room/version/run stack, not as isolated features.
+
+### Summary
+
+- **Cross-room challenges** become the new authored `course` system
+- **PvP** becomes an opt-in, server-authoritative challenge mode that can run across authored room areas
+- **Crypto stakes** only sit on top of authoritative challenge/match results
+- Existing single-room goals/runs remain the live baseline and are not replaced immediately
+
+### Challenge Classes
+
+- **Course Challenges**
+  - single-owner only
+  - built from an explicit, version-locked path of room versions
+  - creator authors start, checkpoints, finish, traversal order, and rules
+  - first implementation is solo only
+  - these evolve naturally from the current room-goal / room-run model
+- **PvP Challenge Modes**
+  - opt-in participation inside the shared world
+  - non-opted players remain non-targetable and stay on the normal browse/presence path
+  - PvP takes place inside published challenge areas built from version-locked room paths
+  - baseline modes:
+    - duel / melee
+    - last man standing
+  - follow-on modes:
+    - capture the flag
+    - balloon hunt / hide-and-seek
+  - PvP uses a real hearts-based health system
+- **Stake-Backed Challenges**
+  - creator-funded bounty model is the default
+  - creator deposits a challenge stake pool
+  - player pays entry fee per run/match
+  - verified clear/win pays the player from the creator pool plus the configured return/split of entry
+  - verified fail/loss routes player entry back toward creator-side economics minus protocol fee
+  - every money-backed run/match settles onchain directly once the authoritative result is finalized
+
+### Authority & Anti-Cheat
+
+- Current client-authoritative gameplay is acceptable for casual play and existing leaderboards
+- PvP and money-backed challenges are **not** allowed on the current trust model
+- Any PvP or stake-backed challenge must run on a **server-authoritative match/challenge server**
+- The authoritative server owns:
+  - player inputs
+  - movement/combat resolution
+  - health/damage
+  - item/flag state
+  - timer/result state
+  - canonical match result
+- The authoritative server writes canonical result state offchain and produces a signed settlement result for onchain payout
+- The contract does **not** read raw Worker/D1 state directly; it verifies an operator-signed settlement payload
+- PartyKit ghost presence stays on the current peaceful path; authoritative PvP/stake matches get their own shard/server layer
+
+### Economics
+
+- **Creator bounty escrow**
+  - creator sets:
+    - challenge stake pool
+    - player entry fee
+    - success payout
+    - optional max winners / stop conditions
+    - protocol fee bps
+  - challenge only stays open while solvent
+  - failed runs replenish creator-side economics
+  - successful runs deplete creator pool
+- **PvP mode payouts**
+  - winner or winning team gets player-side pot plus any configured creator bonus
+- **Required operator controls**
+  - challenge pause
+  - vault shutdown
+  - signer rotation
+  - settlement replay protection
+  - timeout / refund path if a match cannot be settled
+
+### How This Fits The Current Implementation
+
+- Reuse the existing room version model to version-lock course room paths
+- Keep current room-goal play as the single-room casual baseline
+- Add a new challenge domain parallel to rooms/runs instead of overloading the current room schema
+- Do **not** retrofit PvP onto the current client-side combat loop
+- Add a separate authoritative match mode where the client becomes:
+  - input sender
+  - state renderer
+  - prediction/interpolation layer only
+- Keep browse ghosts on the current PartyKit presence stack
+- Add a new authoritative match/challenge shard/server for PvP and stake-backed modes
+- Keep the existing `RoomOwnershipToken` contract separate; add challenge vault/settlement contracts instead of overloading room NFTs
+
+### Planned Public Surfaces
+
+- **Challenge authoring/read**
+  - `POST /api/challenges`
+  - `GET /api/challenges/:id`
+  - `POST /api/challenges/:id/publish`
+- **Challenge runs**
+  - `POST /api/challenges/:id/runs/start`
+  - `POST /api/challenge-runs/:attemptId/finish`
+  - `GET /api/leaderboards/challenges/:id`
+- **Match allocation**
+  - `POST /api/matches`
+  - `GET /api/matches/:id`
+- **Stake flows**
+  - `POST /api/challenges/:id/stake/prepare`
+  - `POST /api/challenges/:id/entry/prepare`
+  - `POST /api/matches/:id/settlement/prepare`
+- Current room APIs stay as-is
+- Challenge APIs are a new parallel surface
+- Money-backed flows require authenticated, wallet-linked users
+
+### Delivery / Acceptance Criteria
+
+- **Cross-room courses**
+  - author can publish a challenge that references only owned room versions
+  - challenge traversal respects ordered room path, checkpoints, and finish rules
+  - challenge stays stable if underlying rooms later change, because referenced versions are locked
+  - challenge leaderboard stays separate from room leaderboards
+  - updating a challenge creates a new challenge version without corrupting prior results
+- **PvP**
+  - non-opted players cannot damage or be damaged
+  - opted players move onto authoritative match state
+  - hearts, damage, death, respawn, and win conditions are server-resolved
+  - duel and last-man-standing complete correctly under disconnect, reconnect, and timeout scenarios
+  - peaceful overworld presence continues working outside active matches
+- **Stakes / anti-cheat**
+  - creator can fund a challenge vault
+  - player can enter only if the vault is solvent and the challenge version is active
+  - successful clear/win settles onchain once and only once
+  - failed run/loss settles creator-side economics correctly
+  - duplicate settlement, stale signer, stale nonce, and wrong payout all fail
+  - match cancellation / server failure resolves via deterministic refund or cancellation paths
+  - canonical offchain result is stored before any settlement signature is issued
+- **Security / economics**
+  - contract replay protection works
+  - signer rotation and challenge pause exist
+  - vault insolvency is blocked
+  - fee accounting is correct
+  - creator cannot change economic terms for an active funded challenge version
+  - one wallet cannot have multiple concurrent money-backed attempts in the same challenge version by default
+
+### Assumptions & Defaults
+
+- Cross-room challenges are single-owner only
+- Challenge layout is an explicit, version-locked room path
+- PvP is opt-in inside the shared world; non-participants remain peaceful
+- PvP and advanced challenge modes use hearts-based health
+- PvP and money-backed modes are server-authoritative
+- Staking uses creator bounty escrow
+- Settlement is direct per-match onchain
+- The intended product direction is broad launch, but implementation still requires operator kill switches, signer controls, and pause paths
+- Existing single-room goals/runs remain the live baseline until challenge runtime ships
+- Existing room NFT ownership remains separate from challenge/staking contracts
 
 ---
 
@@ -301,8 +451,9 @@ Each room can optionally have a goal set by the creator. Goal infrastructure is 
 - Emotes / gestures
 - In-world speech bubbles / spatial chat
 - Collaborative switches (require 2+ players)
-- Optional PvP zones (rooms flagged as arenas by creator)
+- Opt-in authoritative PvP challenge modes layered onto authored room areas
 - Racing (ghost comparison on time trials)
+- Team modes like capture the flag and balloon hunt once the authoritative challenge stack exists
 
 ---
 
@@ -346,6 +497,13 @@ Each room can optionally have a goal set by the creator. Goal infrastructure is 
 - **Object Storage:** Cloudflare R2 is still optional / not required yet
 - **Real-time:** PartyKit presence only. Persistence stays in Worker + D1; editor collaboration is not implemented
 
+### Planned Competitive Extension
+
+- **Challenge domain:** New Worker + D1 domain parallel to rooms/runs for challenge definitions, versions, leaderboards, match records, and stake state
+- **Authoritative runtime:** Separate authoritative match/challenge server layer for PvP and money-backed modes
+- **Presence split:** Current PartyKit shard presence remains for peaceful overworld play; competitive modes use dedicated match shards/rooms
+- **Current rule:** If a mode is PvP or money-backed, it must not rely on the current client-authoritative scene logic for canonical results
+
 ### Blockchain (Base)
 
 - **Contract:** ERC-721 for room NFTs
@@ -355,6 +513,31 @@ Each room can optionally have a goal set by the creator. Goal infrastructure is 
 - **Future blockchain upgrade:** optional fully onchain room-content storage / `tokenURI` export remains a later milestone
 - **Network target:** Base Sepolia first, then production Base deployment once the flow is hardened
 - **Wallet:** Optional wallet connection via standard connector. Only needed for minting/editing minted rooms
+
+### Planned Challenge Contracts
+
+- Keep room ownership separate from challenge economics
+- Add challenge-specific contracts rather than overloading `RoomOwnershipToken`
+- Required future contracts:
+  - `ChallengeEscrow` / `ChallengeVault`
+    - creator deposits bounty
+    - player escrows entry fee
+    - challenge solvency is tracked onchain
+  - `ChallengeSettlement`
+    - verifies operator EIP-712 settlement signatures
+    - enforces one-time settlement per match/run
+    - releases payout directly onchain per verified result
+- Direct-onchain settlement default:
+  - every money-backed run/match ends with a settlement transaction
+  - settlement can be submitted by relayer or claimant
+  - contract verifies:
+    - challenge version id
+    - match/run id
+    - participant
+    - outcome
+    - payout amount
+    - nonce / replay guard
+    - authorized signer
 
 ### API-First Architecture
 
@@ -422,7 +605,7 @@ All game actions are API-driven. The frontend is one client among many. This ena
 
 ### Approach: Permissive with Guardrails
 
-Current state: this section is still aspirational. There is no implemented flagging/admin moderation system in the repo yet.
+Current state: there is now a minimal backend-only admin override path for testing/moderation actions, but there is still no public flagging flow, review UI, or full moderation system in the product.
 
 - No pre-approval queue — rooms go live immediately on publish
 - **Flagging system:** Any user can flag a room for review
@@ -534,6 +717,57 @@ Current persistence shape around that snapshot:
 }
 ```
 
+### Challenge / Match / Stake
+
+```
+{
+  ChallengeDefinition: {
+    id: string,
+    ownerUserId: string,
+    title: string,
+    description: string | null,
+    kind: "course" | "pvp",
+    status: "draft" | "published" | "paused" | "archived",
+    latestVersion: number,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  },
+
+  ChallengeVersion: {
+    challengeId: string,
+    version: number,
+    mode: "solo_course" | "duel" | "last_man_standing" | "capture_the_flag" | "balloon_hunt",
+    roomPath: ChallengeRoomRef[],
+    checkpoints: ChallengeCheckpoint[],
+    rules: object,
+    stakeConfig: {
+      enabled: boolean,
+      creatorPoolAmount: string | null,
+      playerEntryFee: string | null,
+      successPayout: string | null,
+      protocolFeeBps: number,
+      maxWinners: number | null
+    },
+    fundedAt: timestamp | null,
+    publishedAt: timestamp | null
+  }
+}
+```
+
+- `ChallengeRoomRef`: explicit `{ roomId, roomVersion, order }` reference for each room in a challenge path
+- `ChallengeRun`: per-attempt record for a course challenge, parallel to current room runs
+- `ChallengeLeaderboard`: version-scoped ranking for one challenge version
+- `Match`: authoritative PvP instance bound to one challenge version/ruleset
+- `MatchParticipant`: per-player team, hearts, eliminations, disconnect state, and result
+- `StakeVault`: creator bounty pool and solvency state for one funded challenge version
+- `StakeEntry`: player escrowed entry for one run/match attempt
+- `SettlementVoucher`: operator-signed EIP-712 payload used for one-time onchain settlement
+- Defaults:
+  - challenges are owned by one creator account
+  - challenges reference explicit `roomId + roomVersion`
+  - updating a challenge creates a new challenge version
+  - money-backed challenge versions are immutable once funded
+
 ---
 
 ## Roadmap
@@ -542,12 +776,35 @@ Current persistence shape around that snapshot:
 
 - [ ] Add a minimap / topology view that complements the current coordinate jump flow
 - [ ] Surface claim / claimer / minted-owner status more clearly in the world UI
-- [ ] Add better mobile controls and touch-target polish
+- [ ] Tune the shipped mobile controls, phone/tablet layout density, and touch-target polish
 - [ ] Tune chunk streaming / LOD / presence breadth for larger worlds and zoomed-out browse
 - [ ] Validate the shared-world loop against larger seeded worlds and more concurrent players
-- [ ] Decide whether future multi-room runs should be a separate `course` system before extending the current room-run model
+- [ ] Define `ChallengeDefinition` / `ChallengeVersion` foundations for version-locked courses without destabilizing the current room-run model
 
 This is the right bridge between the current working overworld slice and the eventual “endless collaborative world.”
+
+### Competitive Program — Courses, PvP, Stakes
+
+- [ ] **Phase 1: Cross-Room Courses**
+  - add challenge definitions, publish/read APIs, and versioned storage
+  - ship version-locked room-path authoring for single-owner course challenges
+  - add cross-room checkpoints, finish markers, and separate challenge leaderboards
+  - keep current room goals/runs intact as the live solo baseline
+- [ ] **Phase 2: Authoritative Combat**
+  - add hearts/health, damage rules, deaths, and respawns for match play
+  - add opt-in PvP participation inside authored challenge areas
+  - add authoritative match shards/servers plus reconnect and timeout handling
+  - ship duel / melee and last-man-standing
+- [ ] **Phase 3: Onchain Stakes**
+  - deploy `ChallengeVault` / `ChallengeEscrow` contracts
+  - add creator funding, player entry, and solvency checks
+  - add operator-signed settlement vouchers with replay protection
+  - settle every money-backed run/match onchain with pause, shutdown, and refund paths
+- [ ] **Phase 4: Mode Expansion**
+  - add capture the flag
+  - add balloon hunt / hide-and-seek
+  - add team modes
+  - add richer social, spectator, and progression surfaces
 
 ### v1 — MVP
 
@@ -572,7 +829,8 @@ This is the right bridge between the current working overworld slice and the eve
 - [x] Bot-facing API docs (`skill.md`, `openapi.json`, bearer tokens)
 - [x] ERC-721 room ownership contract workspace + mint prepare/confirm flow
 - [x] Cloudflare deployment (Workers static assets + D1; R2 not needed yet)
-- [x] Desktop browser support (mobile/touch is still stretch work)
+- [x] Desktop browser support
+- [x] Landscape-first mobile/touch foundation for world, play, editor, chat, auth, leaderboard, and mint
 
 ### v1.5
 
@@ -580,7 +838,7 @@ This is the right bridge between the current working overworld slice and the eve
 - [ ] Select/move tool in editor
 - [ ] More game objects: moving platforms, switches, doors, readable signs
 - [ ] Better goal polish / balancing / creator affordances
-- [ ] Authored multi-room runs / courses with separate leaderboards
+- [ ] Challenge authoring UI polish that feeds the Phase 1 course system
 - [ ] Room rating / favoriting
 - [ ] Better in-world ownership/status UX for claimed vs minted rooms
 - [ ] Creator profiles
@@ -589,7 +847,7 @@ This is the right bridge between the current working overworld slice and the eve
 
 - [ ] Avatar customization store (monetization)
 - [x] Wallet connect + linked wallet auth
-- [ ] Production Base Sepolia / Base room mint deployment
+- [ ] Migrate live minting to the hardened claimer-signed contract with mutable price / withdraw / tokenURI controls
 - [ ] Onchain tile data in Tiled JSON format via tokenURI
 - [ ] Post-mint edit flow via onchain content transactions
 - [ ] Secondary market for room NFTs
@@ -598,12 +856,12 @@ This is the right bridge between the current working overworld slice and the eve
 
 ### v3+
 
-- [ ] PvP zones / arena rooms
+- [ ] Opt-in authoritative PvP challenge modes and follow-on game types
 - [ ] Agent developer portal / richer public docs
 - [ ] Collaborative game objects (multi-player switches)
 - [ ] Custom tileset uploads
 - [ ] Emotes and richer social features
-- [ ] Mobile support
+- [ ] Broader mobile polish / touch tuning beyond the current shipped foundation
 - [ ] Room templates / prefabs
 - [ ] World events (collaborative build challenges)
 
@@ -615,7 +873,11 @@ This is the right bridge between the current working overworld slice and the eve
 - ~~Specific tileset choice~~ **DECIDED: Rocky Roads asset pack from itch.io** — 6 themes, consistent style
 - How room-to-room transitions work when edge terrain doesn't align (hard cut? fade? doorway?)
 - How should the current points economy evolve beyond room publishes and run results?
-- How should future multi-room runs / courses be authored, versioned, and ranked without overloading the current room-run model?
+- What minimum replay / audit artifact should authoritative matches store to support anti-cheat review and settlement disputes?
+- Should settlement submission default to platform-relayed transactions, claimant-submitted transactions, or both?
+- How conservative should launch economics be for creator bounty defaults, fee bps, and max winners so the system is exciting without being trivially farmable?
+- What disconnect / reconnect grace rules feel fair across duel, last-man-standing, and asynchronous course challenges?
+- What jurisdictional controls or launch gating are required before real-money crypto stakes go live?
 - Should there be a world-level metagame (total stars collected unlocks something)?
 - Room reclamation — what happens to unminted rooms whose creators go inactive?
 - How strict should the room-claim daily cap be, and should it vary by trust level or account age?

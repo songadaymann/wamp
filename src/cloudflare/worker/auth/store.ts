@@ -408,6 +408,7 @@ export async function loadApiTokenAuth(
     user,
     session: null,
     scopes,
+    isAdmin: false,
     apiToken: {
       id: row.id,
       label: row.label,

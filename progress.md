@@ -57,6 +57,141 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- PRD + repo hygiene pass on March 12, 2026:
+  - updated `PRD.md` to match the shipped product more closely: mobile/touch foundation, loading/busy overlays, frontier-only room claiming, current room/global leaderboard behavior, live deployment URLs, and the current moderation/admin reality
+  - removed the small batch of unused locals/getters left over from the scene/controller extraction work
+  - verification:
+    - `npx tsc --noEmit --noUnusedLocals --noUnusedParameters`
+    - `npm run build`
+- Room mint contract hardening on March 12, 2026:
+  - replaced the old open `mintRoom(x, y)` contract flow with claimer-bound backend-signed mint authorizations, so direct contract calls can no longer mint arbitrary rooms without a valid Worker-issued signature for the linked claimer wallet
+  - contract now has mutable `mintPriceWei`, owner-controlled `mintAuthority`, withdraw authority support, and token URI update surfaces via `setTokenURI` and `setRoomTokenURI`
+  - Worker mint prepare now reads the live on-chain mint price instead of using a hard-coded constant and signs the prepared mint transaction with `ROOM_MINT_AUTH_PRIVATE_KEY`
+  - Foundry tests now cover claimer-only minting, price updates, withdraws, and token URI updates
+- Mint role split hardening on March 12, 2026:
+  - `RoomOwnershipToken` deployment now requires explicit initial owner, mint authority, and withdraw authority instead of defaulting mint authority to the deployer
+  - the deploy script now requires:
+    - `ROOM_MINT_OWNER_ADDRESS`
+    - `ROOM_MINT_AUTH_ADDRESS`
+    - `ROOM_MINT_WITHDRAW_ADDRESS`
+  - Worker mint prepare now reads the contract's on-chain `mintAuthority` and rejects misconfigured `ROOM_MINT_AUTH_PRIVATE_KEY` values before preparing a wallet transaction
+  - docs/example envs now call out that deployer, owner, worker signer, and withdraw authority should be distinct roles
+- Local-only mint isolation on March 12, 2026:
+  - added `ROOM_MINT_DISABLED` to the Worker env type and mint service
+  - local `.dev.vars` now sets `ROOM_MINT_DISABLED=1` so local D1/test resets do not sync real Base Sepolia mint ownership into the local Worker
+  - this keeps deployed minted rooms like `0,0` from appearing owner-locked in pure local testing unless the flag is turned back off intentionally
+- Enemy facing tweak on March 12, 2026:
+  - flipped penguin facing metadata so penguins face the direction they travel
+  - reversed cannon bullet travel direction and flipped bullet sprite facing to match the new direction
+  - verification artifacts:
+    - `output/web-game/state-0.json`
+    - `output/web-game/shot-0.png`
+- Frontier build/editor race fix on March 12, 2026:
+  - guarded `OverworldPlayScene.refreshAround(...)` so an old async overworld refresh cannot re-apply `world` app mode after the scene has already gone to sleep and handed control to `EditorScene`
+  - likely root cause was a stale overworld refresh finishing after `Build Here`, which hid the editor sidebar/modal by switching the document back to world mode while the editor scene was already running
+  - build passes; standard client load passed, but a more targeted Playwright reproduction script was blocked by the repo not having `playwright` installed as a direct dependency
+- Goal overlay pass on March 12, 2026:
+  - added browse-mode in-room goal badges in `OverworldPlayScene` so rooms with challenges are labeled directly in the world
+  - moved active play-mode goal UI out of the footer and into a DOM-backed foreground panel inside `#game-container`
+  - play-mode goal panel now shows room title, challenge label, timer, and live progress while the footer stays score-focused
+  - removed the unreliable Phaser-only play goal panel path and routed the active challenge panel through `src/scenes/overworld/hud.ts`
+  - targeted verification artifacts:
+    - `output/web-game/goal-overlay-ui-check/shot-browse.png`
+    - `output/web-game/goal-overlay-ui-check/shot-play.png`
+    - `output/web-game/goal-overlay-ui-check/summary.json`
+- Mobile support foundation on March 11, 2026:
+  - added device-layout runtime in `src/ui/deviceLayout.ts` to classify `desktop`, `tablet`, and `phone` using coarse-pointer detection plus viewport size
+  - added a landscape-only rotate gate for coarse-pointer devices and pause/resume handling for `OverworldPlayScene` and `EditorScene` while portrait is blocked
+  - added phone/tablet safe-area-aware layout rules in `src/styles/main.css`
+  - world mode on phones now uses a compact top card plus mobile shortcut buttons for `Chat` and `Jump`
+  - added mobile jump sheet flow so coordinate jumping no longer depends on a permanently visible text input on phones
+  - added on-screen play controls:
+    - left thumbstick
+    - right `Jump`, `Slash`, and `Shoot` buttons
+    - top-right `Stop` and `Cam` buttons
+  - touch play input is now wired into the existing keyboard movement/combat runtime through `src/ui/mobile/touchControls.ts`
+  - browse mode touch gestures now support tap-to-select, one-finger drag panning, and pinch zoom in `OverworldPlayScene`
+  - editor touch interactions now support one-finger paint/place, touch goal/object placement, two-tap rect placement, and pinch zoom / two-finger pan in `src/scenes/editor/interaction.ts`
+  - phone editor layout now uses bottom-sheet style panel groups with mobile tabs for `Tools`, `Palette`, `Objects`, `Goal`, and `Actions`
+  - mobile overlays now behave like full-screen sheets/panels on phones for:
+    - history
+    - leaderboard
+    - controls
+    - jump sheet
+    - chat/auth via touch-sized layout treatment
+  - disabled hover-only tooltip/audio behavior on coarse-pointer devices and extended button feedback to mobile action buttons
+  - added extra Phaser pointers in `BootScene` so pinch/two-finger gestures can be tracked reliably
+  - desktop keyboard/mouse behavior remains intact
+  - verification:
+    - `npm run build` passes
+    - skill-client artifact: `output/web-game/mobile-support-skill-client/state-0.json`
+    - targeted mobile artifacts:
+      - `output/web-game/mobile-support-check/summary.json`
+      - `output/web-game/mobile-support-check/shot-phone-world.png`
+      - `output/web-game/mobile-support-check/shot-phone-play.png`
+      - `output/web-game/mobile-support-check/shot-phone-editor.png`
+      - `output/web-game/mobile-support-check/shot-phone-portrait.png`
+      - `output/web-game/mobile-support-check/shot-tablet-world.png`
+  - known follow-up tuning likely still needed:
+    - tighter phone chat/jump shortcut choreography while overlays are open
+    - tablet-specific density/layout polish beyond the current touch sizing pass
+    - feel tuning for mobile joystick / touch editor gestures after real-device playtesting
+
+- Mobile editor tray rethink on March 12, 2026:
+  - added a phone-editor collapsed tray state via `data-mobile-editor-collapsed`
+  - mobile tile/object/background/goal-selection flows can now auto-collapse the phone editor sheet so the lower canvas is reachable again immediately after choosing what to place
+  - added `Undo` directly to the mobile editor nav and exposed editor `undoAction` / `redoAction` through the scene bridge
+  - tightened the phone editor sheet height and converted the phone object palette to a horizontally scrollable 2-row rail
+  - capped phone tile-palette scaling so the palette no longer expands to full desktop height inside the bottom sheet
+  - mobile editor nav now supports hide/show behavior instead of forcing the sheet to stay open
+  - verification:
+    - `npm run build` passes
+    - `output/web-game/mobile-editor-rethink-check/summary.json` confirms tile selection collapses the sheet (`mobileEditorCollapsed: true`)
+    - `output/web-game/mobile-editor-undo-check/summary.json` confirms phone draw -> `canUndo: true` -> mobile undo -> `canRedo: true`
+
+- Mobile world HUD pass on March 12, 2026:
+  - narrowed the phone overworld HUD so it no longer spans nearly the full top width
+  - added a phone-only mobile world HUD collapse state via `data-mobile-world-hud-collapsed`
+  - entering `play-world` on phone now auto-collapses the world HUD behind a small `Room +` button
+  - reopening the HUD in play mode is now explicit from that toggle, and the open HUD includes a `Hide` button
+  - returning to browse mode reopens the room HUD automatically on phone
+  - verification:
+    - `npm run build` passes
+    - `output/web-game/mobile-world-hud-check/summary.json` confirms:
+      - browse HUD width `296px`
+      - play mode auto-collapse (`mobileWorldHudCollapsed: true`)
+
+- Play-mode room-fit camera framing on March 12, 2026:
+  - entering play mode now stores the current browse zoom, switches to a dedicated room-fit zoom, and restores the previous browse zoom on return to the overworld
+  - this applies both from the world `Play Room` flow and wake-data play entry paths, so editor test-play and world play use the same room-fit framing rule
+  - room-fit zoom is now based on the current viewport and room bounds instead of inheriting the current overworld browse zoom
+  - verification:
+    - `npm run build` passes
+    - skill client artifact: `output/web-game/play-room-fit-skill-client/state-0.json`
+    - targeted proof: `output/web-game/play-room-fit-check/summary.json`
+    - targeted screenshot: `output/web-game/play-room-fit-check/shot-0.png`
+    - check confirmed:
+      - zoomed-out browse `0.115x`
+      - play-mode room fit `1.898x`
+      - return-to-browse zoom restored exactly to `0.115x`
+      - play-mode reopen from the `Room +` toggle
+
+- Play-mode wheel zoom restore on March 12, 2026:
+  - fixed a follow-cam regression in `src/scenes/OverworldPlayScene.ts` where canvas wheel zoom was gated to `data-app-mode='world'` and silently ignored `play-world`
+  - play mode now keeps the room-fit camera entry behavior while restoring mouse-wheel zoom during follow-cam
+  - existing footer `+/-` zoom controls in play mode still work unchanged
+  - verification:
+    - `npm run build` passes
+    - targeted proof: `output/web-game/play-wheel-zoom-check/summary.json`
+    - targeted screenshot: `output/web-game/play-wheel-zoom-check/shot-play-wheel-restored.png`
+    - skill-client artifacts:
+      - `output/web-game/play-wheel-zoom-skill-client-pdb/state-0.json`
+      - `output/web-game/play-wheel-zoom-skill-client-pdb/shot-2.png`
+    - checks confirmed:
+      - browse wheel zoom still changed `0.18 -> 0.166 -> 0.179`
+      - play follow-cam wheel zoom now changed `1.898 -> 1.746 -> 1.886`
+      - play footer buttons still changed zoom `1.886 -> 1.684 -> 1.886`
+
 - Base Sepolia mint deployment on March 11, 2026:
   - deployed `RoomOwnershipToken` to `0x4F2c0b0eEe60dB8cD45fa317DcaE56EC02F0D53b`
   - normalized the local deploy shell to add a missing `0x` prefix to `PRIVATE_KEY` without changing `.env`
@@ -108,6 +243,11 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - chunked world streaming / presence
     - room titles, points, chat, and mint prepare/confirm flow
     - sprite-based player combat / movement runtime
+
+- PRD challenge-platform expansion on March 12, 2026:
+  - expanded `PRD.md` with a unified plan for cross-room course challenges, opt-in authoritative PvP, and direct-onchain crypto stakes
+  - added challenge-domain entities, acceptance criteria, operator/anti-cheat assumptions, and a dedicated Phase 1-4 competitive roadmap
+  - aligned the roadmap and open questions with the new plan so courses are now treated as a decided parallel system rather than an open design branch
   - rewrote roadmap checkboxes so unfinished work is now easier to spot:
     - minimap / navigation polish
     - anonymous-to-account sync
@@ -1591,3 +1731,117 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - signed-in user after one claim saw `roomClaimsRemainingToday: 0`
     - the same frontier room showed `Build Here` disabled with `Daily new-room claim limit reached (1/1)`
     - existing published room `(0,0)` still had `Edit Room` enabled
+
+## March 12, 2026 - Loading, Busy Overlays, and Same-Chunk Freshness
+
+- Added a real first-load splash and reusable busy overlay through `src/ui/appFeedback.ts`, wired into `src/main.ts`, `src/scenes/BootScene.ts`, `src/scenes/OverworldPlayScene.ts`, `src/scenes/EditorScene.ts`, and `src/scenes/editor/roomSession.ts`.
+- The boot splash is now driven by real asset/world progress instead of only console logs:
+  - shows branded loading UI
+  - blocks input until the first overworld refresh succeeds
+  - exposes retry/error handling for first-world load failure
+- Added transition overlays for slow actions:
+  - opening editor
+  - publishing
+  - returning to world
+  - mint prepare / confirm
+- Implemented optimistic overworld mutation handling in `src/scenes/overworld/worldStreaming.ts` and expanded `OverworldPlaySceneData` in `src/scenes/sceneData.ts` so editor save/publish/revert/mint results can update the overworld immediately before background reconciliation finishes.
+- Fixed the stale same-chunk return path:
+  - explicit publish followed by `Back to World` used to return through the clean-room path with no published mutation payload, so the overworld could stay on cached frontier state until refresh
+  - `EditorRoomSession.buildReturnToWorldWakeData()` now carries published or draft room mutations, invalidates the changed room, and forces a background refresh even when the room is already clean
+- Reduced perceived startup blocking by moving chat history out of the critical path until the app is ready.
+- Verification:
+  - `npm run build` passed
+  - branded boot splash screenshot in `output/web-game/loading-freshness-check/shot-boot.png`
+  - publish/return proof in `output/web-game/loading-freshness-check/summary.json`
+    - local signed-in user built and published `0,0`
+    - overworld returned immediately to `Fresh Room`
+    - selected state was `published` without any manual refresh
+  - standard smoke artifacts in `output/web-game/loading-freshness-skill-client/`
+  - only known console noise was local PartyKit `127.0.0.1:1999` connection refusal while dev presence was offline
+
+## March 12, 2026 - Admin Room Clear, Directional Objects, Tornado Launch, and Spawn UX
+
+- Added a Worker-side admin override hook:
+  - `x-admin-key` is now accepted by the auth/request layer
+  - local `.dev.vars` now includes `ADMIN_API_KEY="local-admin-key"`
+  - new route: `POST /api/admin/rooms/:roomId/clear`
+  - clear route deletes the room row, its versions, its runs, and related room/run point events, then recomputes `user_stats` for affected users
+- Threaded admin awareness through room permissions so signed-in requests carrying the admin key can bypass minted-room and claimer save/publish/revert checks without changing the public UI.
+- Added per-object facing to placed objects:
+  - `PlacedObject` now stores optional `facing: 'left' | 'right'`
+  - editor state now tracks `objectFacing`
+  - new facing controls were added to the object palette
+  - directional placements now store facing instead of relying purely on placement heuristics
+  - room snapshot preview rendering and live runtime rendering now respect stored facing
+- This especially fixes cannon-style authoring:
+  - newly placed cannons can be authored intentionally left/right
+  - runtime direction now comes from stored facing when present
+- Tornado is no longer just an instant-contact kill:
+  - contact now launches the player upward with sideways push
+  - uses a short cooldown so it does not retrigger every frame
+  - reuses bounce FX and transient status text for feedback
+- Spawn-point polish:
+  - added a clearer editor hint in the object palette reminding builders to use `Spawn Point` to choose where players start
+- Verification:
+  - `npm run build` passed
+  - admin route smoke check without a key returned the expected `403` and included `X-Admin-Key` in CORS allow headers
+  - standard Playwright smoke run completed and updated `output/web-game/shot-0.png` / `output/web-game/state-0.json`
+  - headless screenshot remained black in this environment, but state output showed the app booted cleanly with no crash after the new Worker/editor/runtime changes
+- Follow-up note:
+  - restart `npm run dev:api` after this pass so the new local `ADMIN_API_KEY` in `.dev.vars` is picked up before using the admin clear route
+- March 12, 2026 - Cannon bullets now inherit cannon facing correctly, spawn slightly lower from the muzzle, use a player collider for reliable side hits, and can be stomped from above while still killing on non-stomp contact.
+- March 12, 2026 - Bounce pad boing SFX now trims after about 1 second and fades out over 220ms instead of playing the full sample.
+- March 12, 2026 - Editor now keeps the eraser active when switching from tile palette to object palette, shows an in-scene layer/mode/tool reminder chip, and restores proper screen-fixed parallax behavior for editor background layers.
+
+## March 12, 2026 - Editor Background Regression Fixed and Play-Time Parallax Restored
+
+- Restored correct room-bounded background rendering in the editor:
+  - the editor background layers are back to behaving as room-space art instead of viewport-pinned overlays
+  - verified with `background: "forest"`, `backgroundLayerCount: 8`, and `hasBackgroundCamera: false` in `output/web-game/editor-background-check/state.json`
+  - visual confirmation is in `output/web-game/editor-background-check/editor-forest.png`
+- Restored actual live parallax during test play / overworld full-room rendering:
+  - full streamed room textures no longer bake the selected room backdrop art
+  - live room background layers are now created behind full rooms in play mode, while preview rooms keep using baked snapshot textures
+  - `buildRoomSnapshotTexture(...)` now supports `includeBackground: false` so play-time full rooms can render transparent backdrops and show live parallax layers through them
+- Added a small debug hook to `OverworldPlayScene.describeState()` so captures can report the active room's live background data:
+  - `currentRoomBackground.background`
+  - `currentRoomBackground.layerCount`
+  - `currentRoomBackground.sampleParallax`
+  - `currentRoomBackground.sampleTilePositionX`
+- Verification:
+  - `npm run build` passed
+  - required Playwright client run completed in `output/web-game/play-parallax-skill-client/`
+  - editor-to-play regression check completed in `output/web-game/editor-play-parallax-check/`
+  - draft forest room test-play now reports a live play background in `output/web-game/editor-play-parallax-check/state-before.json`
+  - the sample parallax offset changed from `-14.359` to `-13.024` in `output/web-game/editor-play-parallax-check/state-before.json` and `output/web-game/editor-play-parallax-check/state-after.json`, confirming the runtime background layer is moving independently of the main room image while the camera follows
+
+## March 12, 2026 - Play-Time Parallax Damped
+
+- Added a play-only parallax dampener in `src/scenes/overworld/worldStreaming.ts`:
+  - `PLAY_ROOM_PARALLAX_MULTIPLIER = 0.65`
+  - this scales live play-mode room background parallax without changing the editor's raw background preview values
+- Verification:
+  - `npm run build` passed
+  - required Playwright client run completed in `output/web-game/play-parallax-damped-skill-client/`
+  - targeted editor-to-play check completed in `output/web-game/editor-play-parallax-damped-check/`
+  - draft forest room test-play now reports `sampleParallax: 0.0325` instead of `0.05`
+  - sample parallax offset now changes `-9.333 -> -8.436` in `output/web-game/editor-play-parallax-damped-check/state-before.json` and `output/web-game/editor-play-parallax-damped-check/state-after.json`, down from the previous `-14.359 -> -13.024`
+
+## March 12, 2026 - Fixed Stuck "Opening editor..." Overlay After Test Play
+
+- Reproduced the hang deterministically with:
+  - overworld `Edit Room`
+  - editor `Test Play`
+  - overworld `Edit Room`
+- Root cause:
+  - `OverworldPlayScene` was calling `scene.run('EditorScene', data)` while an old `EditorScene` instance was only sleeping from test play
+  - Phaser woke the sleeping editor instead of creating a fresh one, so the busy overlay stayed on the "Opening editor..." state and the editor load/hide-busy path did not run cleanly
+- Fix:
+  - `OverworldPlayScene` now routes world-to-editor transitions through a shared `openEditor(...)` helper
+  - before `scene.run('EditorScene', ...)`, it stops any active/sleeping/paused `EditorScene` instance so editor open always starts fresh with the passed room snapshot
+- Verification:
+  - `npm run build` passed
+  - targeted repro/fix proof is in `output/web-game/editor-open-hang-fix-check/`
+  - final captured state in `output/web-game/editor-open-hang-fix-check/state.json` shows `scene: "editor"` and `busyVisible: false` after the editor -> play -> editor round-trip
+  - screenshot proof is in `output/web-game/editor-open-hang-fix-check/editor-reopened.png`
+  - required Playwright client run completed in `output/web-game/editor-open-hang-fix-skill-client/`

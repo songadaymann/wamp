@@ -18,6 +18,7 @@ export type RoomTextureMode = 'preview' | 'full' | 'editor-preview';
 
 export interface RoomTextureBuildOptions {
   includeObjects?: boolean;
+  includeBackground?: boolean;
 }
 
 export function buildRoomTextureKey(
@@ -31,6 +32,7 @@ export function buildRoomTextureKey(
     sanitizeTextureKey(room.id),
     mode,
     String(tilePixelSize),
+    options.includeBackground === false ? 'no-background' : 'with-background',
     options.includeObjects === false ? 'tiles-only' : 'with-objects',
     room.version,
     sanitizeTextureKey(room.updatedAt),
@@ -60,7 +62,9 @@ export function buildRoomSnapshotTexture(
   context.clearRect(0, 0, width, height);
   context.imageSmoothingEnabled = false;
 
-  drawRoomBackground(scene, context, room, width, height);
+  if (options.includeBackground !== false) {
+    drawRoomBackground(scene, context, room, width, height);
+  }
   drawRoomTiles(scene, context, room, tilePixelSize);
   if (options.includeObjects !== false) {
     drawRoomObjects(scene, context, room, tilePixelSize);
@@ -160,17 +164,41 @@ function drawRoomObjects(
     const destWidth = Math.max(1, Math.round(objectConfig.frameWidth * scale));
     const destHeight = Math.max(1, Math.round(objectConfig.frameHeight * scale));
 
-    context.drawImage(
-      sourceImage,
-      getObjectDefaultFrame(objectConfig) * objectConfig.frameWidth,
-      0,
-      objectConfig.frameWidth,
-      objectConfig.frameHeight,
-      destX,
-      destY,
-      destWidth,
-      destHeight,
-    );
+    const frame = getObjectDefaultFrame(objectConfig);
+    const shouldFlipX =
+      Boolean(objectConfig.facingDirection) &&
+      Boolean(placedObject.facing) &&
+      objectConfig.facingDirection !== placedObject.facing;
+
+    context.save();
+    if (shouldFlipX) {
+      context.translate(destX + destWidth, destY);
+      context.scale(-1, 1);
+      context.drawImage(
+        sourceImage,
+        frame * objectConfig.frameWidth,
+        0,
+        objectConfig.frameWidth,
+        objectConfig.frameHeight,
+        0,
+        0,
+        destWidth,
+        destHeight,
+      );
+    } else {
+      context.drawImage(
+        sourceImage,
+        frame * objectConfig.frameWidth,
+        0,
+        objectConfig.frameWidth,
+        objectConfig.frameHeight,
+        destX,
+        destY,
+        destWidth,
+        destHeight,
+      );
+    }
+    context.restore();
   }
 }
 

@@ -1,3 +1,4 @@
+import { handleAdminRequest } from './worker/admin/routes';
 import type { RoomRevertRequestBody } from '../persistence/roomModel';
 import { handleAuthRequest } from './worker/auth/routes';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth, requireOptionalScope } from './worker/auth/request';
@@ -45,6 +46,10 @@ export default {
 
       if (url.pathname.startsWith('/api/auth')) {
         return await handleAuthRequest(request, url, env);
+      }
+
+      if (url.pathname.startsWith('/api/admin/')) {
+        return await handleAdminRequest(request, url, env);
       }
 
       if (url.pathname === '/api/test/reset' && request.method === 'POST') {
@@ -110,7 +115,8 @@ export default {
           roomId,
           coordinates,
           auth?.user.id ?? null,
-          auth?.user.walletAddress ?? null
+          auth?.user.walletAddress ?? null,
+          auth?.isAdmin ?? false
         );
         if (auth?.user) {
           try {
@@ -120,7 +126,8 @@ export default {
               roomId,
               coordinates,
               auth.user.id,
-              auth.user.walletAddress
+              auth.user.walletAddress,
+              auth.isAdmin
             );
           } catch (error) {
             console.warn('Failed to refresh room ownership from chain during read', error);
@@ -150,7 +157,7 @@ export default {
           'save room drafts',
           'rooms:write'
         );
-        const record = await saveDraft(env, snapshot, auth.user);
+        const record = await saveDraft(env, snapshot, auth.user, auth.isAdmin);
         return jsonResponse(request, record);
       }
 
@@ -162,7 +169,7 @@ export default {
           'publish rooms',
           'rooms:write'
         );
-        const record = await publishRoom(env, snapshot, auth.user);
+        const record = await publishRoom(env, snapshot, auth.user, auth.isAdmin);
         await awardRoomPublishPoints(
           env,
           auth.user.id,
@@ -188,7 +195,8 @@ export default {
           roomId,
           coordinates,
           body.targetVersion,
-          auth.user
+          auth.user,
+          auth.isAdmin
         );
         await awardRoomPublishPoints(
           env,
@@ -210,7 +218,8 @@ export default {
           roomId,
           coordinates,
           auth?.user.id ?? null,
-          auth?.user.walletAddress ?? null
+          auth?.user.walletAddress ?? null,
+          auth?.isAdmin ?? false
         );
         return jsonResponse(request, record.versions);
       }

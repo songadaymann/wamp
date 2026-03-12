@@ -20,6 +20,7 @@ export interface AssetsBinding {
 export interface Env {
   ASSETS: AssetsBinding;
   DB: D1Database;
+  ADMIN_API_KEY?: string;
   RESEND_API_KEY?: string;
   AUTH_EMAIL_FROM?: string;
   AUTH_DEBUG_MAGIC_LINKS?: string;
@@ -28,6 +29,8 @@ export interface Env {
   ROOM_DAILY_CLAIM_LIMIT?: string;
   ROOM_MINT_CHAIN_ID?: string;
   ROOM_MINT_CHAIN_NAME?: string;
+  ROOM_MINT_DISABLED?: string;
+  ROOM_MINT_AUTH_PRIVATE_KEY?: string;
   ROOM_MINT_RPC_URL?: string;
   ROOM_MINT_CONTRACT_ADDRESS?: string;
   ROOM_MINT_BLOCK_EXPLORER_URL?: string;
@@ -217,6 +220,7 @@ export interface RequestAuth {
   session: AuthSession | null;
   scopes: ApiTokenScope[] | null;
   apiToken: ApiTokenRecord | null;
+  isAdmin: boolean;
 }
 
 export interface RoomMintConfig {
@@ -244,7 +248,8 @@ export interface RoomMutationLoadOptions {
 export type RoomPermissionsBuilder = (
   record: RoomRecord,
   viewerUserId: string | null,
-  viewerWalletAddress: string | null
+  viewerWalletAddress: string | null,
+  viewerIsAdmin?: boolean
 ) => RoomRecord['permissions'];
 
 export type RoomVersionListLoader = (env: Env, roomId: string) => Promise<RoomVersionRecord[]>;

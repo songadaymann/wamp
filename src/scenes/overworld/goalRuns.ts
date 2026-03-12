@@ -129,7 +129,7 @@ export class OverworldGoalRunController {
       return NOOP_MUTATION_RESULT;
     }
 
-    const abandoned = this.clearRunForRoomExit();
+    this.clearRunForRoomExit();
     const leaderboardEligible = room.status === 'published' && this.options.getAuthenticated();
 
     this.currentGoalRun = {

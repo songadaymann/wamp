@@ -11,3 +11,6 @@ ROOM_MINT_CHAIN_NAME="Base Sepolia"
 ROOM_MINT_RPC_URL=
 ROOM_MINT_CONTRACT_ADDRESS=
 ROOM_MINT_BLOCK_EXPLORER_URL="https://sepolia.basescan.org"
+# Worker-side signer used for claimer-bound mint authorizations.
+# This must match the contract's on-chain mintAuthority and should not be the owner key.
+ROOM_MINT_AUTH_PRIVATE_KEY=

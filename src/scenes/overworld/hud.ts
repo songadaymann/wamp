@@ -20,6 +20,12 @@ export interface OverworldHudViewModel {
   playersOnlineText: string;
   saveStatusText: string;
   bottomBarZoomText: string;
+  goalPanelVisible: boolean;
+  goalPanelTone: 'active' | 'complete' | 'failed';
+  goalPanelRoomText: string;
+  goalPanelGoalText: string;
+  goalPanelTimerText: string;
+  goalPanelProgressText: string;
 }
 
 export class OverworldHudBridge {
@@ -42,6 +48,11 @@ export class OverworldHudBridge {
   private readonly saveStatusEl: HTMLElement | null;
   private readonly fitButton: HTMLElement | null;
   private readonly bottomBarZoomEl: HTMLElement | null;
+  private readonly goalPanelEl: HTMLElement | null;
+  private readonly goalPanelRoomEl: HTMLElement | null;
+  private readonly goalPanelGoalEl: HTMLElement | null;
+  private readonly goalPanelTimerEl: HTMLElement | null;
+  private readonly goalPanelProgressEl: HTMLElement | null;
   private destroyed = false;
 
   constructor(private readonly doc: Document = document) {
@@ -64,6 +75,11 @@ export class OverworldHudBridge {
     this.saveStatusEl = this.doc.getElementById('room-save-status');
     this.fitButton = this.doc.getElementById('btn-fit-screen');
     this.bottomBarZoomEl = this.doc.getElementById('zoom-level');
+    this.goalPanelEl = this.doc.getElementById('world-goal-panel');
+    this.goalPanelRoomEl = this.doc.getElementById('world-goal-panel-room');
+    this.goalPanelGoalEl = this.doc.getElementById('world-goal-panel-goal');
+    this.goalPanelTimerEl = this.doc.getElementById('world-goal-panel-timer');
+    this.goalPanelProgressEl = this.doc.getElementById('world-goal-panel-progress');
   }
 
   render(viewModel: OverworldHudViewModel): void {
@@ -98,6 +114,7 @@ export class OverworldHudBridge {
     this.setActive(this.playButton, viewModel.playButtonActive);
     this.setDisabled(this.editButton, viewModel.editButtonDisabled);
     this.setDisabled(this.buildButton, viewModel.buildButtonDisabled);
+    this.renderGoalPanel(viewModel);
   }
 
   destroy(): void {
@@ -171,5 +188,18 @@ export class OverworldHudBridge {
 
   private setSeparatorVisible(visible: boolean): void {
     this.separatorEl?.classList.toggle('hidden', !visible);
+  }
+
+  private renderGoalPanel(viewModel: OverworldHudViewModel): void {
+    if (!this.goalPanelEl) {
+      return;
+    }
+
+    this.goalPanelEl.classList.toggle('hidden', !viewModel.goalPanelVisible);
+    this.goalPanelEl.setAttribute('data-goal-panel-tone', viewModel.goalPanelTone);
+    this.setText(this.goalPanelRoomEl, viewModel.goalPanelRoomText);
+    this.setText(this.goalPanelGoalEl, viewModel.goalPanelGoalText);
+    this.setText(this.goalPanelTimerEl, viewModel.goalPanelTimerText);
+    this.setText(this.goalPanelProgressEl, viewModel.goalPanelProgressText);
   }
 }

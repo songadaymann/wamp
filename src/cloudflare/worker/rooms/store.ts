@@ -35,7 +35,8 @@ export async function loadRoomRecord(
   roomId: string,
   coordinates: RoomCoordinates,
   viewerUserId: string | null = null,
-  viewerWalletAddress: string | null = null
+  viewerWalletAddress: string | null = null,
+  viewerIsAdmin = false
 ): Promise<RoomRecord> {
   const row = await env.DB.prepare(
     `
@@ -69,7 +70,12 @@ export async function loadRoomRecord(
     const emptyRecord = createDefaultRoomRecord(roomId, coordinates);
     return {
       ...emptyRecord,
-      permissions: buildRoomPermissions(emptyRecord, viewerUserId, viewerWalletAddress),
+      permissions: buildRoomPermissions(
+        emptyRecord,
+        viewerUserId,
+        viewerWalletAddress,
+        viewerIsAdmin
+      ),
     };
   }
 
@@ -103,7 +109,7 @@ export async function loadRoomRecord(
 
   return {
     ...record,
-    permissions: buildRoomPermissions(record, viewerUserId, viewerWalletAddress),
+    permissions: buildRoomPermissions(record, viewerUserId, viewerWalletAddress, viewerIsAdmin),
   };
 }
 
@@ -111,14 +117,16 @@ export async function loadRoomRecordForMutation(
   env: Env,
   roomId: string,
   coordinates: RoomCoordinates,
-  actor: AuthUser | null
+  actor: AuthUser | null,
+  actorIsAdmin = false
 ): Promise<RoomRecord> {
   const record = await loadRoomRecord(
     env,
     roomId,
     coordinates,
     actor?.id ?? null,
-    actor?.walletAddress ?? null
+    actor?.walletAddress ?? null,
+    actorIsAdmin
   );
   await syncRoomOwnershipFromChain(env, record, actor);
   return loadRoomRecord(
@@ -126,7 +134,8 @@ export async function loadRoomRecordForMutation(
     roomId,
     coordinates,
     actor?.id ?? null,
-    actor?.walletAddress ?? null
+    actor?.walletAddress ?? null,
+    actorIsAdmin
   );
 }
 
@@ -211,11 +220,18 @@ export async function loadRoomVersions(env: Env, roomId: string): Promise<RoomVe
 export async function saveDraft(
   env: Env,
   incomingRoom: RoomSnapshot,
-  actor: AuthUser | null
+  actor: AuthUser | null,
+  actorIsAdmin = false
 ): Promise<RoomRecord> {
   const viewerUserId = actor?.id ?? null;
   const viewerWalletAddress = actor?.walletAddress ?? null;
-  const existing = await loadRoomRecordForMutation(env, incomingRoom.id, incomingRoom.coordinates, actor);
+  const existing = await loadRoomRecordForMutation(
+    env,
+    incomingRoom.id,
+    incomingRoom.coordinates,
+    actor,
+    actorIsAdmin
+  );
   if (!existing.permissions.canSaveDraft) {
     throw new HttpError(403, 'Only the room token owner can save drafts for this minted room.');
   }
@@ -247,17 +263,31 @@ export async function saveDraft(
     }),
   ]);
 
-  return loadRoomRecord(env, draft.id, draft.coordinates, viewerUserId, viewerWalletAddress);
+  return loadRoomRecord(
+    env,
+    draft.id,
+    draft.coordinates,
+    viewerUserId,
+    viewerWalletAddress,
+    actorIsAdmin
+  );
 }
 
 export async function publishRoom(
   env: Env,
   incomingRoom: RoomSnapshot,
-  actor: AuthUser | null
+  actor: AuthUser | null,
+  actorIsAdmin = false
 ): Promise<RoomRecord> {
   const viewerUserId = actor?.id ?? null;
   const viewerWalletAddress = actor?.walletAddress ?? null;
-  const existing = await loadRoomRecordForMutation(env, incomingRoom.id, incomingRoom.coordinates, actor);
+  const existing = await loadRoomRecordForMutation(
+    env,
+    incomingRoom.id,
+    incomingRoom.coordinates,
+    actor,
+    actorIsAdmin
+  );
   if (!existing.permissions.canPublish) {
     throw new HttpError(403, 'Only the room token owner can publish this minted room.');
   }
@@ -270,7 +300,7 @@ export async function publishRoom(
   const publishedByUserId = actor?.id ?? null;
   const publishedByDisplayName = actor?.displayName ?? 'Guest';
   const shouldClaim = !existing.claimerUserId && actor !== null;
-  if (shouldClaim) {
+  if (shouldClaim && !actorIsAdmin) {
     await enforceFrontierClaimRule(env, incomingRoom.coordinates);
     await enforceDailyRoomClaimLimit(env, actor.id, now);
   }
@@ -317,7 +347,14 @@ export async function publishRoom(
     }),
   ]);
 
-  return loadRoomRecord(env, draft.id, draft.coordinates, viewerUserId, viewerWalletAddress);
+  return loadRoomRecord(
+    env,
+    draft.id,
+    draft.coordinates,
+    viewerUserId,
+    viewerWalletAddress,
+    actorIsAdmin
+  );
 }
 
 export async function revertRoom(
@@ -325,7 +362,8 @@ export async function revertRoom(
   roomId: string,
   coordinates: RoomCoordinates,
   targetVersion: number,
-  actor: AuthUser | null
+  actor: AuthUser | null,
+  actorIsAdmin = false
 ): Promise<RoomRecord> {
   if (!Number.isInteger(targetVersion) || targetVersion < 1) {
     throw new HttpError(400, 'targetVersion must be a positive integer.');
@@ -333,7 +371,13 @@ export async function revertRoom(
 
   const viewerUserId = actor?.id ?? null;
   const viewerWalletAddress = actor?.walletAddress ?? null;
-  const existing = await loadRoomRecordForMutation(env, roomId, coordinates, actor);
+  const existing = await loadRoomRecordForMutation(
+    env,
+    roomId,
+    coordinates,
+    actor,
+    actorIsAdmin
+  );
   if (!existing.permissions.canRevert) {
     if (isRoomMinted(existing)) {
       throw new HttpError(403, 'Only the room token owner can revert this minted room.');
@@ -390,7 +434,14 @@ export async function revertRoom(
     }),
   ]);
 
-  return loadRoomRecord(env, draft.id, draft.coordinates, viewerUserId, viewerWalletAddress);
+  return loadRoomRecord(
+    env,
+    draft.id,
+    draft.coordinates,
+    viewerUserId,
+    viewerWalletAddress,
+    actorIsAdmin
+  );
 }
 
 export function parseStoredSnapshot(raw: string, label: string): RoomSnapshot {
@@ -714,8 +765,22 @@ export function getRoomSnapshotStorageMetadata(snapshot: RoomSnapshot | null): {
 export function buildRoomPermissions(
   record: RoomRecord,
   viewerUserId: string | null,
-  viewerWalletAddress: string | null
+  viewerWalletAddress: string | null,
+  viewerIsAdmin = false
 ): RoomRecord['permissions'] {
+  if (viewerIsAdmin) {
+    return {
+      canSaveDraft: true,
+      canPublish: true,
+      canRevert: true,
+      canMint:
+        !isRoomMinted(record) &&
+        record.published !== null &&
+        viewerUserId !== null &&
+        viewerWalletAddress !== null,
+    };
+  }
+
   const minted = isRoomMinted(record);
   const ownsMintedRoom =
     minted &&

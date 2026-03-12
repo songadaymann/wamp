@@ -41,6 +41,14 @@ export async function requireAuthenticatedRequestAuth(
   return auth;
 }
 
+export function requireAdminRequest(env: Env, request: Request, actionLabel: string): void {
+  if (isAdminRequest(env, request)) {
+    return;
+  }
+
+  throw new HttpError(403, `Admin key is required to ${actionLabel}.`);
+}
+
 export async function requireWalletLinkedRequestAuth(
   env: Env,
   request: Request,
@@ -59,6 +67,7 @@ export async function loadOptionalRequestAuth(
   env: Env,
   request: Request
 ): Promise<RequestAuth | null> {
+  const isAdmin = isAdminRequest(env, request);
   const bearerToken = parseBearerToken(request.headers.get('Authorization'));
   if (bearerToken) {
     const tokenAuth = await loadApiTokenAuth(env, bearerToken);
@@ -66,7 +75,10 @@ export async function loadOptionalRequestAuth(
       throw new HttpError(401, 'API token is invalid or has been revoked.');
     }
 
-    return tokenAuth;
+    return {
+      ...tokenAuth,
+      isAdmin,
+    };
   }
 
   const session = await loadCurrentSession(env, request);
@@ -80,6 +92,7 @@ export async function loadOptionalRequestAuth(
     session,
     scopes: null,
     apiToken: null,
+    isAdmin,
   };
 }
 
@@ -143,6 +156,20 @@ export function parseBearerToken(rawHeader: string | null): string | null {
 
   const token = match[1].trim();
   return token ? token : null;
+}
+
+export function isAdminRequest(env: Env, request: Request): boolean {
+  const configured = env.ADMIN_API_KEY?.trim();
+  if (!configured) {
+    return false;
+  }
+
+  const provided = request.headers.get('x-admin-key')?.trim();
+  if (!provided) {
+    return false;
+  }
+
+  return provided === configured;
 }
 
 export function hasScope(auth: RequestAuth, scope: ApiTokenScope): boolean {

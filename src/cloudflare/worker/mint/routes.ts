@@ -1,12 +1,18 @@
 import { encodeFunctionData } from 'viem';
-import { ROOM_MINT_PRICE_WEI, ROOM_OWNERSHIP_TOKEN_ABI, type RoomMintConfirmRequestBody, type RoomMintPrepareResponse } from '../../../mint/roomOwnership';
+import { ROOM_OWNERSHIP_TOKEN_ABI, type RoomMintConfirmRequestBody, type RoomMintPrepareResponse } from '../../../mint/roomOwnership';
 import { isRoomMinted, type RoomCoordinates } from '../../../persistence/roomModel';
 import { normalizeAddress } from '../auth/store';
 import { requireWalletLinkedRequestAuth } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
 import { loadRoomRecord, loadRoomRecordForMutation } from '../rooms/store';
-import { persistRoomMintState, requireRoomMintConfig, verifyMintTransactionForRoom } from './service';
+import {
+  loadRoomMintPriceWei,
+  persistRoomMintState,
+  requireRoomMintConfig,
+  signRoomMintAuthorization,
+  verifyMintTransactionForRoom,
+} from './service';
 
 export async function handleRoomMintPrepare(
   request: Request,
@@ -34,12 +40,23 @@ export async function handleRoomMintPrepare(
     throw new HttpError(403, 'You do not have permission to mint this room.');
   }
 
+  const priceWei = await loadRoomMintPriceWei(config);
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 30 * 60);
+  const linkedWalletAddress = auth.user.walletAddress as `0x${string}`;
+  const signature = await signRoomMintAuthorization(
+    env,
+    config,
+    record.draft.coordinates,
+    linkedWalletAddress,
+    deadline
+  );
+
   const responseBody: RoomMintPrepareResponse = {
     roomId: record.draft.id,
     roomCoordinates: { ...record.draft.coordinates },
-    linkedWalletAddress: auth.user.walletAddress!,
+    linkedWalletAddress,
     contractAddress: config.contractAddress,
-    priceWei: ROOM_MINT_PRICE_WEI,
+    priceWei,
     chain: {
       chainId: config.chainId,
       name: config.chainName,
@@ -56,9 +73,15 @@ export async function handleRoomMintPrepare(
       data: encodeFunctionData({
         abi: ROOM_OWNERSHIP_TOKEN_ABI,
         functionName: 'mintRoom',
-        args: [record.draft.coordinates.x, record.draft.coordinates.y],
+        args: [
+          record.draft.coordinates.x,
+          record.draft.coordinates.y,
+          linkedWalletAddress,
+          deadline,
+          signature,
+        ],
       }),
-      value: ROOM_MINT_PRICE_WEI,
+      value: priceWei,
       chainId: config.chainId,
     },
   };

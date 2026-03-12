@@ -127,13 +127,17 @@ export async function handleRequestMagicLink(request: Request, env: Env): Promis
   const magicLink = `${verifyBaseUrl}/api/auth/verify?token=${encodeURIComponent(token)}`;
   const responseBody: MagicLinkRequestResponse = {
     ok: true,
-    delivery: env.RESEND_API_KEY ? 'email' : 'debug',
+    delivery: env.AUTH_DEBUG_MAGIC_LINKS === '1'
+      ? 'debug'
+      : env.RESEND_API_KEY
+        ? 'email'
+        : 'debug',
   };
 
-  if (env.RESEND_API_KEY) {
-    await sendMagicLinkEmail(env, email, magicLink);
-  } else if (env.AUTH_DEBUG_MAGIC_LINKS === '1') {
+  if (env.AUTH_DEBUG_MAGIC_LINKS === '1') {
     responseBody.debugMagicLink = magicLink;
+  } else if (env.RESEND_API_KEY) {
+    await sendMagicLinkEmail(env, email, magicLink);
   } else {
     throw new HttpError(
       500,

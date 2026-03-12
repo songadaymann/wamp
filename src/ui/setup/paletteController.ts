@@ -3,11 +3,14 @@ import {
   TILE_SIZE,
   GAME_OBJECTS,
   editorState,
+  getObjectById,
   getObjectDefaultFrame,
   getTilesetByKey,
+  type GameObjectConfig,
   type TileSelection,
   type TilesetConfig,
 } from '../../config';
+import { getDeviceLayoutState, isCoarsePointerDevice } from '../deviceLayout';
 
 const MIN_SELECTION_OPAQUE_PIXELS = 24;
 
@@ -18,6 +21,9 @@ export class PaletteController {
   private readonly selectionInfo: HTMLElement | null;
   private readonly tilePreviewCanvas: HTMLCanvasElement | null;
   private readonly objectGrid: HTMLElement | null;
+  private readonly objectFacingControls: HTMLElement | null;
+  private readonly objectFacingLeftBtn: HTMLButtonElement | null;
+  private readonly objectFacingRightBtn: HTMLButtonElement | null;
 
   private readonly paletteImages = new Map<string, HTMLImageElement>();
   private readonly paletteTileOccupancy = new Map<string, boolean[]>();
@@ -32,19 +38,25 @@ export class PaletteController {
     this.selectionInfo = this.doc.getElementById('selection-info');
     this.tilePreviewCanvas = this.doc.getElementById('tile-preview') as HTMLCanvasElement | null;
     this.objectGrid = this.doc.getElementById('object-grid');
+    this.objectFacingControls = this.doc.getElementById('object-facing-controls');
+    this.objectFacingLeftBtn = this.doc.getElementById('btn-object-facing-left') as HTMLButtonElement | null;
+    this.objectFacingRightBtn = this.doc.getElementById('btn-object-facing-right') as HTMLButtonElement | null;
   }
 
   init(): void {
     this.loadPaletteImages();
+    this.bindObjectFacingControls();
     this.renderObjectGrid();
+    this.renderObjectFacingControls();
   }
 
   destroy(): void {
     if (this.paletteCanvas) {
-      this.paletteCanvas.onmousedown = null;
-      this.paletteCanvas.onmousemove = null;
-      this.paletteCanvas.onmouseup = null;
-      this.paletteCanvas.onmouseleave = null;
+      this.paletteCanvas.onpointerdown = null;
+      this.paletteCanvas.onpointermove = null;
+      this.paletteCanvas.onpointerup = null;
+      this.paletteCanvas.onpointercancel = null;
+      this.paletteCanvas.onpointerleave = null;
       this.paletteCanvas.onclick = null;
     }
 
@@ -120,7 +132,12 @@ export class PaletteController {
     }
 
     const availableWidth = this.paletteContainer.clientWidth - 4;
-    const scale = Math.max(1, availableWidth / ts.imageWidth);
+    const layout = getDeviceLayoutState();
+    const maxScale =
+      layout.deviceClass === 'phone' && layout.coarsePointer
+        ? 2
+        : Number.POSITIVE_INFINITY;
+    const scale = Math.min(maxScale, Math.max(1, availableWidth / ts.imageWidth));
     const scaledWidth = Math.floor(ts.imageWidth * scale);
     const scaledHeight = Math.floor(ts.imageHeight * scale);
     const scaledTile = TILE_SIZE * scale;
@@ -129,6 +146,7 @@ export class PaletteController {
     this.paletteCanvas.height = scaledHeight;
     this.paletteCanvas.style.width = `${scaledWidth}px`;
     this.paletteCanvas.style.height = `${scaledHeight}px`;
+    this.paletteCanvas.style.touchAction = 'none';
 
     const ctx = this.paletteCanvas.getContext('2d');
     if (!ctx) {
@@ -171,7 +189,7 @@ export class PaletteController {
       this.drawSelectionEmptyCellOverlay(ctx, selection, scaledTile, scaledTile, sx - 1, sy - 1);
     }
 
-    this.paletteCanvas.onmousedown = (event: MouseEvent) => {
+    this.paletteCanvas.onpointerdown = (event: PointerEvent) => {
       const rect = this.paletteCanvas?.getBoundingClientRect();
       if (!rect) {
         return;
@@ -185,10 +203,11 @@ export class PaletteController {
       if (col >= 0 && col < ts.columns && row >= 0 && row < ts.rows) {
         this.paletteDragStart = { col, row };
         this.updateSelection(ts.key, col, row, col, row);
+        this.paletteCanvas?.setPointerCapture(event.pointerId);
       }
     };
 
-    this.paletteCanvas.onmousemove = (event: MouseEvent) => {
+    this.paletteCanvas.onpointermove = (event: PointerEvent) => {
       if (!this.paletteDragStart) {
         return;
       }
@@ -206,11 +225,20 @@ export class PaletteController {
       this.updateSelection(ts.key, this.paletteDragStart.col, this.paletteDragStart.row, col, row);
     };
 
-    this.paletteCanvas.onmouseup = () => {
-      this.paletteDragStart = null;
+    this.paletteCanvas.onpointerup = () => {
+      if (this.paletteDragStart) {
+        this.paletteDragStart = null;
+        this.requestPhoneEditorAutoCollapse();
+      }
     };
 
-    this.paletteCanvas.onmouseleave = () => {
+    this.paletteCanvas.onpointercancel = () => {
+      if (this.paletteDragStart) {
+        this.paletteDragStart = null;
+      }
+    };
+
+    this.paletteCanvas.onpointerleave = () => {
       if (this.paletteDragStart) {
         this.paletteDragStart = null;
       }
@@ -247,16 +275,16 @@ export class PaletteController {
           const offsetX = Math.floor((64 - drawWidth) / 2);
           const offsetY = Math.floor((64 - drawHeight) / 2);
 
-          ctx.drawImage(
+          this.drawObjectFrame(
+            ctx,
+            selectedObject,
             objectImage,
-            0,
-            0,
-            selectedObject.frameWidth,
-            selectedObject.frameHeight,
+            getObjectDefaultFrame(selectedObject),
             offsetX,
             offsetY,
             drawWidth,
             drawHeight,
+            this.shouldFlipSelectedObject(selectedObject)
           );
         };
         return;
@@ -331,13 +359,15 @@ export class PaletteController {
       }
       item.dataset.objectId = objectConfig.id;
 
-      item.addEventListener('mouseenter', (event) => {
-        this.showObjectTooltip(
-          event.currentTarget as HTMLElement,
-          `${objectConfig.name} — ${objectConfig.description}`,
-        );
-      });
-      item.addEventListener('mouseleave', () => this.hideObjectTooltip());
+      if (!isCoarsePointerDevice()) {
+        item.addEventListener('mouseenter', (event) => {
+          this.showObjectTooltip(
+            event.currentTarget as HTMLElement,
+            `${objectConfig.name} — ${objectConfig.description}`,
+          );
+        });
+        item.addEventListener('mouseleave', () => this.hideObjectTooltip());
+      }
 
       const img = this.doc.createElement('img');
       img.src = objectConfig.path;
@@ -378,6 +408,7 @@ export class PaletteController {
 
       item.addEventListener('click', () => {
         editorState.selectedObjectId = objectConfig.id;
+        editorState.objectFacing = objectConfig.facingDirection ?? 'right';
         this.doc.querySelectorAll('.object-item').forEach((element) => element.classList.remove('active'));
         item.classList.add('active');
 
@@ -386,11 +417,43 @@ export class PaletteController {
           button.classList.toggle('active', (button as HTMLElement).dataset.tool === 'pencil');
         });
 
+        this.renderObjectFacingControls();
         this.renderTilePreview();
+        this.requestPhoneEditorAutoCollapse();
       });
 
       this.objectGrid.appendChild(item);
     }
+
+    this.renderObjectFacingControls();
+  }
+
+  private requestPhoneEditorAutoCollapse(): void {
+    this.doc.defaultView?.dispatchEvent(new Event('mobile-editor-auto-collapse'));
+  }
+
+  private bindObjectFacingControls(): void {
+    const applyFacing = (facing: 'left' | 'right') => {
+      const selectedObject = this.getSelectedObjectConfig();
+      if (!selectedObject?.facingDirection) {
+        return;
+      }
+
+      editorState.objectFacing = facing;
+      this.renderObjectFacingControls();
+      this.renderTilePreview();
+    };
+
+    this.objectFacingLeftBtn?.addEventListener('click', () => applyFacing('left'));
+    this.objectFacingRightBtn?.addEventListener('click', () => applyFacing('right'));
+  }
+
+  private renderObjectFacingControls(): void {
+    const selectedObject = this.getSelectedObjectConfig();
+    const visible = Boolean(selectedObject?.facingDirection);
+    this.objectFacingControls?.classList.toggle('hidden', !visible);
+    this.objectFacingLeftBtn?.classList.toggle('active', visible && editorState.objectFacing === 'left');
+    this.objectFacingRightBtn?.classList.toggle('active', visible && editorState.objectFacing === 'right');
   }
 
   private loadPaletteImages(): void {
@@ -573,5 +636,65 @@ export class PaletteController {
     }
 
     ctx.restore();
+  }
+
+  private getSelectedObjectConfig(): GameObjectConfig | null {
+    if (!editorState.selectedObjectId) {
+      return null;
+    }
+
+    return getObjectById(editorState.selectedObjectId) ?? null;
+  }
+
+  private shouldFlipSelectedObject(objectConfig: GameObjectConfig): boolean {
+    if (!objectConfig.facingDirection) {
+      return false;
+    }
+
+    return objectConfig.facingDirection !== editorState.objectFacing;
+  }
+
+  private drawObjectFrame(
+    context: CanvasRenderingContext2D,
+    objectConfig: GameObjectConfig,
+    image: CanvasImageSource,
+    frame: number,
+    destX: number,
+    destY: number,
+    destWidth: number,
+    destHeight: number,
+    flipX: boolean,
+  ): void {
+    context.save();
+
+    if (flipX) {
+      context.translate(destX + destWidth, destY);
+      context.scale(-1, 1);
+      context.drawImage(
+        image,
+        frame * objectConfig.frameWidth,
+        0,
+        objectConfig.frameWidth,
+        objectConfig.frameHeight,
+        0,
+        0,
+        destWidth,
+        destHeight,
+      );
+    } else {
+      context.drawImage(
+        image,
+        frame * objectConfig.frameWidth,
+        0,
+        objectConfig.frameWidth,
+        objectConfig.frameHeight,
+        destX,
+        destY,
+        destWidth,
+        destHeight,
+      );
+    }
+
+    context.restore();
   }
 }

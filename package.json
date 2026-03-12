@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --strictPort --port 3000",
+    "dev:frontend:local": "VITE_ROOM_API_BASE_URL='' vite --strictPort --port 3000",
+    "dev:frontend:remote": "VITE_ROOM_API_BASE_URL='https://everybodys-platformer.novox-robot.workers.dev' vite --strictPort --port 3000",
     "dev:api": "wrangler dev",
     "dev:api:remote": "wrangler dev --remote",
     "dev:presence": "partykit dev",

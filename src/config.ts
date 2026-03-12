@@ -267,7 +267,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'fire',        name: 'Fire',        category: 'hazard',      path: 'assets/enemies/fire.png',        frameWidth: 16, frameHeight: 16, frameCount: 6,  fps: 10, bodyWidth: 12, bodyHeight: 14, behavior: 'animated', description: 'Stationary flame. Burns on contact.' },
   { id: 'fireball',    name: 'Fireball',    category: 'hazard',      path: 'assets/enemies/fireball.png',    frameWidth: 16, frameHeight: 16, frameCount: 4,  fps: 10, bodyWidth: 12, bodyHeight: 12, behavior: 'animated', description: 'Shoots in a direction. Kills on contact.' },
   { id: 'wood_stakes', name: 'Wood Stakes', category: 'hazard',      path: 'assets/enemies/wood_stakes.png', frameWidth: 32, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 28, behavior: 'static',   description: 'Sharpened stakes. Kills on contact.' },
-  { id: 'cannon',      name: 'Cannon',      category: 'hazard',      path: 'assets/enemies/cannon.png',      frameWidth: 32, frameHeight: 32, frameCount: 1,  fps: 0,  defaultFrame: 2, facingDirection: 'right', bodyWidth: 24, bodyHeight: 18, behavior: 'shooter',  description: 'Shoots bullets in the direction it faces.' },
+  { id: 'cannon',      name: 'Cannon',      category: 'hazard',      path: 'assets/enemies/cannon.png',      frameWidth: 32, frameHeight: 32, frameCount: 1,  fps: 0,  defaultFrame: 2, facingDirection: 'left', bodyWidth: 24, bodyHeight: 18, behavior: 'shooter',  description: 'Shoots bullets in the direction it faces.' },
   { id: 'cactus',      name: 'Cactus',      category: 'hazard',      path: 'assets/enemies/cactus.png',      frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 8,  bodyWidth: 16, bodyHeight: 26, behavior: 'animated', description: 'Animated cactus hazard. Hurts on contact.' },
   { id: 'tornado',     name: 'Tornado',     category: 'hazard',      path: 'assets/enemies/tornado.png',     frameWidth: 48, frameHeight: 48, frameCount: 8,  fps: 10, bodyWidth: 28, bodyHeight: 40, behavior: 'animated', description: 'Animated whirlwind hazard. Hurts on contact.' },
 
@@ -280,7 +280,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'fish',        name: 'Fish',        category: 'enemy',       path: 'assets/enemies/fish.png',        frameWidth: 16, frameHeight: 16, frameCount: 6,  fps: 8,  animationFrames: [0, 2, 4, 2], defaultFrame: 2, facingDirection: 'left', bodyWidth: 14, bodyHeight: 12, behavior: 'bounce',   description: 'Jumps up and down. Kills on contact.' },
   { id: 'frog',        name: 'Frog',        category: 'enemy',       path: 'assets/enemies/frog.png',        frameWidth: 32, frameHeight: 32, frameCount: 4,  fps: 6,  facingDirection: 'right', bodyWidth: 24, bodyHeight: 24, behavior: 'bounce',   description: 'Hops around periodically. Kills on contact.' },
   { id: 'snake',       name: 'Snake',       category: 'enemy',       path: 'assets/enemies/snake.png',       frameWidth: 32, frameHeight: 32, frameCount: 4,  fps: 6,  facingDirection: 'left', bodyWidth: 24, bodyHeight: 20, behavior: 'patrol',   description: 'Patrols back and forth. Kills on contact.' },
-  { id: 'penguin',     name: 'Penguin',     category: 'enemy',       path: 'assets/enemies/penguin.png',     frameWidth: 32, frameHeight: 32, frameCount: 4,  fps: 6,  facingDirection: 'left', bodyWidth: 24, bodyHeight: 28, behavior: 'patrol',   description: 'Patrols back and forth. Kills on contact.' },
+  { id: 'penguin',     name: 'Penguin',     category: 'enemy',       path: 'assets/enemies/penguin.png',     frameWidth: 32, frameHeight: 32, frameCount: 4,  fps: 6,  facingDirection: 'right', bodyWidth: 24, bodyHeight: 28, behavior: 'patrol',   description: 'Patrols back and forth. Kills on contact.' },
 
   // ── Interactive ──
   { id: 'bounce_pad',  name: 'Bounce Pad',  category: 'interactive', path: 'assets/objects/bounce_pad.png',  frameWidth: 16, frameHeight: 32, frameCount: 4,  fps: 0,  bodyWidth: 16, bodyHeight: 8,  behavior: 'bounce',   description: 'Launches player upward on contact.' },
@@ -325,6 +325,7 @@ export interface PlacedObject {
   id: string;        // GameObjectConfig.id
   x: number;         // world pixel x
   y: number;         // world pixel y
+  facing?: 'left' | 'right';
 }
 
 // ── Editor State (shared between Phaser and HTML UI) ──
@@ -338,6 +339,7 @@ export interface EditorState {
   isPlaying: boolean;
   paletteMode: PaletteMode;
   selectedObjectId: string | null;
+  objectFacing: 'left' | 'right';
   selectedBackground: string;        // BackgroundGroup.id
   placedObjects: PlacedObject[];
 }
@@ -359,6 +361,7 @@ export const editorState: EditorState = {
   isPlaying: false,
   paletteMode: 'tiles',
   selectedObjectId: null,
+  objectFacing: 'right',
   selectedBackground: 'none',
   placedObjects: [],
 };

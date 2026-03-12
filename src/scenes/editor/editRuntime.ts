@@ -461,6 +461,7 @@ export class EditorEditRuntime {
       id: editorState.selectedObjectId,
       x: tileX * TILE_SIZE + objectConfig.frameWidth / 2,
       y: tileY * TILE_SIZE + TILE_SIZE - objectConfig.frameHeight / 2,
+      facing: objectConfig.facingDirection ? editorState.objectFacing : undefined,
     };
 
     editorState.placedObjects.push(placed);
@@ -537,6 +538,7 @@ export class EditorEditRuntime {
       } else {
         sprite.setFrame(getObjectDefaultFrame(objectConfig));
       }
+      this.applyPlacedObjectFacing(sprite, objectConfig, placed);
       this.objectSprites.push(sprite);
     }
 
@@ -557,6 +559,19 @@ export class EditorEditRuntime {
     this.redrawGoalMarkers();
     this.host.updateGoalUi();
     this.host.syncBackgroundCameraIgnores();
+  }
+
+  private applyPlacedObjectFacing(
+    sprite: Phaser.GameObjects.Sprite,
+    objectConfig: ReturnType<typeof getObjectById>,
+    placed: PlacedObject
+  ): void {
+    if (!objectConfig?.facingDirection || !placed.facing) {
+      sprite.setFlipX(false);
+      return;
+    }
+
+    sprite.setFlipX(objectConfig.facingDirection !== placed.facing);
   }
 
   setGoalType(nextType: RoomGoalType | null): void {
@@ -795,6 +810,14 @@ export class EditorEditRuntime {
       case 'survival':
         return `Stay alive for ${Math.round(this.roomGoal.durationMs / 1000)} seconds.`;
     }
+  }
+
+  hasUndoHistory(): boolean {
+    return this.undoStack.length > 0;
+  }
+
+  hasRedoHistory(): boolean {
+    return this.redoStack.length > 0;
   }
 
   undo(): void {

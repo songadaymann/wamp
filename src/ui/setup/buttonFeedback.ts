@@ -1,4 +1,5 @@
 import { playSfx } from '../../audio/sfx';
+import { isCoarsePointerDevice } from '../deviceLayout';
 
 const PRESSABLE_SELECTOR = [
   '.bar-btn',
@@ -8,6 +9,7 @@ const PRESSABLE_SELECTOR = [
   '.obj-cat-tab',
   '.object-item',
   '#menu-toggle',
+  '.mobile-action-btn',
 ].join(', ');
 
 function isDisabled(target: HTMLElement): boolean {
@@ -53,6 +55,10 @@ export function setupButtonFeedback(doc: Document = document): void {
   });
 
   doc.addEventListener('pointerover', (event) => {
+    if (isCoarsePointerDevice()) {
+      return;
+    }
+
     const target = resolvePressable(event.target);
     if (!target || isDisabled(target)) {
       return;

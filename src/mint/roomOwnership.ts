@@ -1,17 +1,29 @@
 import type { RoomCoordinates } from '../persistence/roomModel';
+import { encodeAbiParameters, keccak256, stringToHex, type Hex } from 'viem';
 
-export const ROOM_MINT_PRICE_WEI = '10000000000000000';
 export const DEFAULT_ROOM_MINT_CHAIN_ID = 84532;
 export const DEFAULT_ROOM_MINT_CHAIN_NAME = 'Base Sepolia';
 export const DEFAULT_ROOM_MINT_BLOCK_EXPLORER_URL = 'https://sepolia.basescan.org';
+export const ROOM_MINT_AUTHORIZATION_TYPE =
+  'RoomMintAuthorization(uint256 chainId,address verifyingContract,int32 x,int32 y,address claimer,uint256 deadline)';
+export const ROOM_MINT_AUTHORIZATION_TYPEHASH = keccak256(
+  stringToHex(ROOM_MINT_AUTHORIZATION_TYPE)
+);
 
 export const ROOM_OWNERSHIP_TOKEN_ABI = [
   {
     type: 'function',
-    name: 'MINT_PRICE',
+    name: 'mintPriceWei',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'mintAuthority',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
   },
   {
     type: 'function',
@@ -47,8 +59,65 @@ export const ROOM_OWNERSHIP_TOKEN_ABI = [
     inputs: [
       { name: 'x', type: 'int32' },
       { name: 'y', type: 'int32' },
+      { name: 'claimer', type: 'address' },
+      { name: 'deadline', type: 'uint256' },
+      { name: 'signature', type: 'bytes' },
     ],
     outputs: [{ name: 'tokenId', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'mintAuthorizationHash',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'x', type: 'int32' },
+      { name: 'y', type: 'int32' },
+      { name: 'claimer', type: 'address' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bytes32' }],
+  },
+  {
+    type: 'function',
+    name: 'tokenURI',
+    stateMutability: 'view',
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'string' }],
+  },
+  {
+    type: 'function',
+    name: 'setTokenURI',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'tokenId', type: 'uint256' },
+      { name: 'nextTokenURI', type: 'string' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setRoomTokenURI',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'x', type: 'int32' },
+      { name: 'y', type: 'int32' },
+      { name: 'nextTokenURI', type: 'string' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setMintPriceWei',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'nextMintPriceWei', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'withdraw',
+    stateMutability: 'nonpayable',
+    inputs: [],
+    outputs: [],
   },
   {
     type: 'event',
@@ -95,6 +164,37 @@ export interface RoomMintPrepareResponse {
 
 export interface RoomMintConfirmRequestBody {
   txHash: string;
+}
+
+export function buildRoomMintAuthorizationHash(
+  chainId: number,
+  contractAddress: `0x${string}`,
+  coordinates: RoomCoordinates,
+  claimer: `0x${string}`,
+  deadline: bigint
+): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: 'bytes32' },
+        { type: 'uint256' },
+        { type: 'address' },
+        { type: 'int32' },
+        { type: 'int32' },
+        { type: 'address' },
+        { type: 'uint256' },
+      ],
+      [
+        ROOM_MINT_AUTHORIZATION_TYPEHASH,
+        BigInt(chainId),
+        contractAddress,
+        coordinates.x,
+        coordinates.y,
+        claimer,
+        deadline,
+      ]
+    )
+  );
 }
 
 export function buildExplorerTxUrl(

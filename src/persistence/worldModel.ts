@@ -215,6 +215,47 @@ export function computeWorldWindow(
   };
 }
 
+export function computeWorldSummariesFromPublishedSummariesInBounds(
+  publishedRooms: WorldRoomSummary[],
+  bounds: WorldRoomBounds
+): WorldRoomSummary[] {
+  const publishedById = new Map<string, WorldRoomSummary>();
+  for (const room of publishedRooms) {
+    if (room.state === 'published') {
+      publishedById.set(room.id, room);
+    }
+  }
+
+  const roomsById = new Map<string, WorldRoomSummary>();
+  for (const room of publishedRooms) {
+    if (room.state === 'published' && isWithinRoomBounds(room.coordinates, bounds)) {
+      roomsById.set(room.id, { ...room, coordinates: { ...room.coordinates } });
+    }
+  }
+
+  if (publishedById.size === 0) {
+    if (isWithinRoomBounds(DEFAULT_ROOM_COORDINATES, bounds)) {
+      const frontier = createFrontierRoomSummary(DEFAULT_ROOM_COORDINATES);
+      roomsById.set(frontier.id, frontier);
+    }
+
+    return Array.from(roomsById.values()).sort(compareWorldSummaries);
+  }
+
+  for (const room of publishedById.values()) {
+    for (const neighbor of getOrthogonalNeighbors(room.coordinates)) {
+      const neighborId = roomIdFromCoordinates(neighbor);
+      if (publishedById.has(neighborId)) continue;
+      if (!isWithinRoomBounds(neighbor, bounds)) continue;
+      if (roomsById.has(neighborId)) continue;
+
+      roomsById.set(neighborId, createFrontierRoomSummary(neighbor));
+    }
+  }
+
+  return Array.from(roomsById.values()).sort(compareWorldSummaries);
+}
+
 function computeWorldSummariesInBounds(
   publishedRooms: RoomSnapshot[],
   bounds: WorldRoomBounds

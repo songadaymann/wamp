@@ -31,10 +31,11 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 3000,
+      strictPort: true,
       open: true,
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:8787',
+          target: 'http://localhost:8787',
           changeOrigin: true,
         },
       },
@@ -47,8 +48,8 @@ function loadMergedEnv(mode: string): Record<string, string> {
   const repoEnv = loadRepoEnvFile('env.local');
 
   return {
-    ...viteEnv,
     ...repoEnv,
+    ...viteEnv,
   };
 }
 

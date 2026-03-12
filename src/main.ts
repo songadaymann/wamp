@@ -5,7 +5,15 @@ import { runOverworldLodStress } from './debug/overworldLodStress';
 import { BootScene } from './scenes/BootScene';
 import { EditorScene } from './scenes/EditorScene';
 import { OverworldPlayScene } from './scenes/OverworldPlayScene';
+import {
+  getAppFeedbackDebugState,
+  initializeAppFeedback,
+  isAppReady,
+  showBootSplash,
+} from './ui/appFeedback';
+import { getDeviceLayoutState } from './ui/deviceLayout';
 import { syncGameKeyboardFocus } from './ui/keyboardFocus';
+import { getTouchInputDebugState } from './ui/mobile/touchControls';
 import { setupUI } from './ui/setup';
 
 const gameContainer = document.getElementById('game-container')!;
@@ -44,6 +52,8 @@ const config: Phaser.Types.Core.GameConfig = {
   },
 };
 
+initializeAppFeedback();
+showBootSplash('Loading assets...', 0);
 const game = new Phaser.Game(config);
 initSfx();
 
@@ -144,7 +154,13 @@ window.render_game_to_text = () =>
     activeScene: getDebugState(),
     auth: getAuthDebugState(),
     chat: window.get_chat_debug_state?.() ?? null,
+    device: getDeviceLayoutState(),
+    touch: getTouchInputDebugState(),
     sfx: window.get_sfx_debug_state?.() ?? globalSfxController.getDebugState(),
+    appFeedback: {
+      ready: isAppReady(),
+      ...getAppFeedbackDebugState(),
+    },
   });
 
 window.capture_debug_info = () => getCaptureDebugInfo();

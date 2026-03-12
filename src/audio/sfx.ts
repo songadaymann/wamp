@@ -4,6 +4,8 @@ type CueConfig = {
   playbackRate?: number;
   cooldownMs?: number;
   allowOverlap?: boolean;
+  trimAfterMs?: number;
+  fadeOutMs?: number;
 };
 
 export type SfxCue =
@@ -163,6 +165,8 @@ const SFX_CUES: Record<SfxCue, CueConfig> = {
     path: 'assets/sfx/movement/bounce-pad.wav',
     volume: 0.56,
     cooldownMs: 60,
+    trimAfterMs: 1000,
+    fadeOutMs: 220,
   },
   jump: {
     path: 'assets/sfx/movement/jump.wav',
@@ -222,7 +226,7 @@ export class SfxController {
   private readonly lastPlayedAt = new Map<SfxCue, number>();
   private readonly history: SfxHistoryEntry[] = [];
 
-  init(doc: Document = document, windowObj: Window = window): void {
+  init(windowObj: Window = window): void {
     if (this.initialized) {
       return;
     }
@@ -302,13 +306,24 @@ export class SfxController {
     }
 
     const player = baseAudio.cloneNode() as HTMLAudioElement;
-    player.volume = PhaserClamp(config.volume, 0, 1);
+    const baseVolume = PhaserClamp(config.volume, 0, 1);
+    player.volume = baseVolume;
     player.playbackRate = config.playbackRate ?? 1;
     player.currentTime = 0;
 
     this.activeAudio.add(player);
     this.activeCueCounts.set(cue, (this.activeCueCounts.get(cue) ?? 0) + 1);
+    let fadeIntervalId: number | null = null;
+    let trimTimeoutId: number | null = null;
     const cleanup = () => {
+      if (trimTimeoutId !== null) {
+        window.clearTimeout(trimTimeoutId);
+        trimTimeoutId = null;
+      }
+      if (fadeIntervalId !== null) {
+        window.clearInterval(fadeIntervalId);
+        fadeIntervalId = null;
+      }
       this.activeAudio.delete(player);
       const nextCount = Math.max(0, (this.activeCueCounts.get(cue) ?? 1) - 1);
       if (nextCount === 0) {
@@ -321,6 +336,29 @@ export class SfxController {
     };
     player.addEventListener('ended', cleanup);
     player.addEventListener('error', cleanup);
+
+    if ((config.trimAfterMs ?? 0) > 0) {
+      trimTimeoutId = window.setTimeout(() => {
+        trimTimeoutId = null;
+        const fadeOutMs = Math.max(0, config.fadeOutMs ?? 0);
+        if (fadeOutMs <= 0) {
+          player.pause();
+          cleanup();
+          return;
+        }
+
+        const fadeStartedAt = performance.now();
+        fadeIntervalId = window.setInterval(() => {
+          const elapsed = performance.now() - fadeStartedAt;
+          const progress = PhaserClamp(elapsed / fadeOutMs, 0, 1);
+          player.volume = baseVolume * (1 - progress);
+          if (progress >= 1) {
+            player.pause();
+            cleanup();
+          }
+        }, 30);
+      }, config.trimAfterMs);
+    }
 
     const playPromise = player.play();
     if (playPromise) {
@@ -358,7 +396,8 @@ function PhaserClamp(value: number, min: number, max: number): number {
 export const globalSfxController = new SfxController();
 
 export function initSfx(doc: Document = document, windowObj: Window = window): void {
-  globalSfxController.init(doc, windowObj);
+  void doc;
+  globalSfxController.init(windowObj);
 }
 
 export function playSfx(cue: SfxCue): void {

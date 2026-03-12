@@ -31,6 +31,11 @@ import {
   type RoomGoalType,
 } from '../goals/roomGoals';
 import { setAppMode } from '../ui/appMode';
+import {
+  hideBusyOverlay,
+  showBusyError,
+  showBusyOverlay,
+} from '../ui/appFeedback';
 import { isTextInputFocused } from '../ui/keyboardFocus';
 import type { EditorSceneData, OverworldPlaySceneData } from './sceneData';
 import { EditorUiBridge } from './editor/uiBridge';
@@ -43,6 +48,7 @@ const EDITOR_NEIGHBOR_RADIUS = 1;
 
 export class EditorScene extends Phaser.Scene {
   private uiBridge: EditorUiBridge | null = null;
+  private layerIndicatorText: Phaser.GameObjects.Text | null = null;
 
   // Tilemap
   private map!: Phaser.Tilemaps.Tilemap;
@@ -113,6 +119,8 @@ export class EditorScene extends Phaser.Scene {
     this.game.canvas.removeEventListener('contextmenu', this.handleCanvasContextMenu);
     this.uiBridge?.destroy();
     this.uiBridge = null;
+    this.layerIndicatorText?.destroy();
+    this.layerIndicatorText = null;
     this.resetRuntimeState();
   };
 
@@ -370,6 +378,7 @@ export class EditorScene extends Phaser.Scene {
     this.drawRoomBorder();
     this.drawGrid();
     this.createCursorOverlay();
+    this.createLayerIndicator();
     this.setupCamera();
     this.setupInput();
     this.setupKeyboard();
@@ -399,6 +408,7 @@ export class EditorScene extends Phaser.Scene {
     this.maybeAutoSave(time);
     this.updateBackgroundPreview();
     this.updateCursorHighlight();
+    this.updateLayerIndicator();
   }
 
   // ══════════════════════════════════════
@@ -412,6 +422,8 @@ export class EditorScene extends Phaser.Scene {
   private resetRuntimeState(): void {
     this.backgroundController.reset();
     this.interactionController.reset();
+    this.layerIndicatorText?.destroy();
+    this.layerIndicatorText = null;
     this.tilesets = new Map();
     this.layers = new Map();
     this.editRuntime.reset();
@@ -440,9 +452,36 @@ export class EditorScene extends Phaser.Scene {
   // ══════════════════════════════════════
 
   private async loadPersistedRoom(): Promise<void> {
-    await this.roomSession.loadPersistedRoom(this.initialRoomSnapshot);
+    const loaded = await this.roomSession.loadPersistedRoom(this.initialRoomSnapshot);
+    if (!loaded) {
+      if (this.entrySource === 'world') {
+        showBusyError('Failed to load room.', {
+          retryHandler: () => {
+            showBusyOverlay('Opening editor...', 'Loading room...');
+            return this.loadPersistedRoom();
+          },
+          closeHandler: async () => {
+            hideBusyOverlay();
+            this.scene.stop();
+            this.scene.wake('OverworldPlayScene', {
+              centerCoordinates: { ...this.roomCoordinates },
+              roomCoordinates: { ...this.roomCoordinates },
+              mode: 'browse',
+              statusMessage: 'Failed to open room.',
+            });
+          },
+        });
+      }
+      return;
+    }
+
     if (this.entrySource === 'world' && this.mintedTokenId && !this.roomPermissions.canSaveDraft) {
       this.returnToWorldReadOnly();
+      return;
+    }
+
+    if (this.entrySource === 'world') {
+      hideBusyOverlay();
     }
   }
 
@@ -495,11 +534,17 @@ export class EditorScene extends Phaser.Scene {
   }
 
   async publishRoom(successText?: string): Promise<RoomRecord | null> {
-    return this.roomSession.publishRoom(successText);
+    showBusyOverlay('Publishing room...', 'Saving the latest version...');
+    const record = await this.roomSession.publishRoom(successText);
+    hideBusyOverlay();
+    return record;
   }
 
   async revertToVersion(targetVersion: number): Promise<RoomRecord | null> {
-    return this.roomSession.revertToVersion(targetVersion, this.initialRoomSnapshot);
+    showBusyOverlay(`Reverting room...`, `Loading version ${targetVersion}...`);
+    const record = await this.roomSession.revertToVersion(targetVersion, this.initialRoomSnapshot);
+    hideBusyOverlay();
+    return record;
   }
 
   // ══════════════════════════════════════
@@ -576,8 +621,64 @@ export class EditorScene extends Phaser.Scene {
     this.editRuntime.initializeGraphics();
   }
 
+  private createLayerIndicator(): void {
+    this.layerIndicatorText?.destroy();
+    this.layerIndicatorText = this.add.text(0, 0, '', {
+      fontFamily: '"IBM Plex Mono", monospace',
+      fontSize: '12px',
+      color: '#f6f1de',
+      backgroundColor: '#121109cc',
+      padding: {
+        x: 10,
+        y: 6,
+      },
+    });
+    this.layerIndicatorText.setDepth(130);
+    this.layerIndicatorText.setScrollFactor(0);
+    this.updateLayerIndicator();
+  }
+
   private updateCursorHighlight(): void {
     this.interactionController.updateCursorHighlight();
+  }
+
+  private updateLayerIndicator(): void {
+    if (!this.layerIndicatorText) {
+      return;
+    }
+
+    const layerLabel =
+      editorState.activeLayer === 'terrain'
+        ? 'Terrain'
+        : editorState.activeLayer === 'background'
+          ? 'Background'
+          : 'Foreground';
+    const layerColor =
+      editorState.activeLayer === 'terrain'
+        ? '#347433'
+        : editorState.activeLayer === 'background'
+          ? '#2f6b7f'
+          : '#ff6f3c';
+    const modeLabel = editorState.paletteMode === 'objects' ? 'Objects' : 'Tiles';
+    const toolLabel =
+      editorState.activeTool === 'eraser'
+        ? 'Erase'
+        : editorState.activeTool === 'rect'
+          ? 'Rect'
+          : editorState.activeTool === 'fill'
+            ? 'Fill'
+            : 'Draw';
+
+    const text = `${layerLabel} layer  |  ${modeLabel}  |  ${toolLabel}`;
+    if (this.layerIndicatorText.text !== text) {
+      this.layerIndicatorText.setText(text);
+    }
+
+    this.layerIndicatorText.setBackgroundColor(`${layerColor}cc`);
+    this.layerIndicatorText.setPosition(
+      this.scale.width - this.layerIndicatorText.width - 18,
+      18,
+    );
   }
 
   // ══════════════════════════════════════
@@ -874,8 +975,12 @@ export class EditorScene extends Phaser.Scene {
   }
 
   async returnToWorld(): Promise<void> {
+    showBusyOverlay('Returning to world...', 'Saving room state...');
     const wakeData = await this.roomSession.buildReturnToWorldWakeData();
     if (!wakeData) {
+      showBusyError(this.persistenceStatusText || 'Failed to return to world.', {
+        closeHandler: () => hideBusyOverlay(),
+      });
       return;
     }
 
@@ -885,6 +990,16 @@ export class EditorScene extends Phaser.Scene {
 
   async mintRoom(): Promise<RoomRecord | null> {
     return this.roomSession.mintRoom();
+  }
+
+  undoAction(): void {
+    this.undo();
+    this.updateBottomBar();
+  }
+
+  redoAction(): void {
+    this.redo();
+    this.updateBottomBar();
   }
 
   describeState(): Record<string, unknown> {
@@ -921,6 +1036,8 @@ export class EditorScene extends Phaser.Scene {
         scrollY: Math.round(this.cameras.main.scrollY),
       },
       placedObjects: editorState.placedObjects.length,
+      canUndo: this.editRuntime.hasUndoHistory(),
+      canRedo: this.editRuntime.hasRedoHistory(),
       isPlaying: editorState.isPlaying,
     };
   }

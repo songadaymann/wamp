@@ -75,6 +75,7 @@ function setupBackgroundSelector(doc: Document, windowObj: Window): void {
   select.addEventListener('change', () => {
     editorState.selectedBackground = select.value;
     windowObj.dispatchEvent(new Event('background-changed'));
+    requestPhoneEditorAutoCollapse(doc);
   });
 }
 
@@ -120,18 +121,21 @@ function setupGoalControls(game: Phaser.Game, doc: Document): void {
     withActiveEditorScene(game, (scene) => {
       scene.startGoalMarkerPlacement?.('exit');
     });
+    requestPhoneEditorAutoCollapse(doc);
   });
 
   addCheckpointBtn?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
       scene.startGoalMarkerPlacement?.('checkpoint');
     });
+    requestPhoneEditorAutoCollapse(doc);
   });
 
   placeFinishBtn?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
       scene.startGoalMarkerPlacement?.('finish');
     });
+    requestPhoneEditorAutoCollapse(doc);
   });
 
   clearMarkersBtn?.addEventListener('click', () => {
@@ -139,6 +143,10 @@ function setupGoalControls(game: Phaser.Game, doc: Document): void {
       scene.clearGoalMarkers?.();
     });
   });
+}
+
+function requestPhoneEditorAutoCollapse(doc: Document): void {
+  doc.defaultView?.dispatchEvent(new Event('mobile-editor-auto-collapse'));
 }
 
 function bindNumericGoalInput(
@@ -175,10 +183,12 @@ function setupPaletteModeTabs(paletteController: PaletteController, doc: Documen
         tilesetSection?.classList.add('hidden');
         tilePaletteSection?.classList.add('hidden');
         objectPaletteSection?.classList.remove('hidden');
-        editorState.activeTool = 'pencil';
-        doc.querySelectorAll('.tool-btn').forEach((button) => {
-          button.classList.toggle('active', (button as HTMLElement).dataset.tool === 'pencil');
-        });
+        if (editorState.activeTool !== 'eraser') {
+          editorState.activeTool = 'pencil';
+          doc.querySelectorAll('.tool-btn').forEach((button) => {
+            button.classList.toggle('active', (button as HTMLElement).dataset.tool === 'pencil');
+          });
+        }
       }
 
       paletteController.renderTilePreview();

@@ -1,6 +1,8 @@
 import { createPublicClient, decodeEventLog, http, isAddress, type Hex } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import type { AuthUser } from '../../../auth/model';
 import {
+  buildRoomMintAuthorizationHash,
   DEFAULT_ROOM_MINT_BLOCK_EXPLORER_URL,
   DEFAULT_ROOM_MINT_CHAIN_ID,
   DEFAULT_ROOM_MINT_CHAIN_NAME,
@@ -12,6 +14,10 @@ import { HttpError } from '../core/http';
 import type { Env, RoomMintChainState, RoomMintConfig } from '../core/types';
 
 export function getOptionalRoomMintConfig(env: Env): RoomMintConfig | null {
+  if (env.ROOM_MINT_DISABLED?.trim() === '1') {
+    return null;
+  }
+
   const contractAddress = env.ROOM_MINT_CONTRACT_ADDRESS?.trim() ?? '';
   const rpcUrl = env.ROOM_MINT_RPC_URL?.trim() ?? '';
 
@@ -55,9 +61,70 @@ export function requireRoomMintConfig(env: Env): RoomMintConfig {
   return config;
 }
 
+export function requireRoomMintAuthAccount(env: Env) {
+  const privateKey = normalizeRoomMintPrivateKey(env.ROOM_MINT_AUTH_PRIVATE_KEY);
+  if (!privateKey) {
+    throw new HttpError(
+      503,
+      'Room mint authorization signing is not configured on this backend.'
+    );
+  }
+
+  return privateKeyToAccount(privateKey);
+}
+
 export function createRoomMintPublicClient(config: RoomMintConfig) {
   return createPublicClient({
     transport: http(config.rpcUrl),
+  });
+}
+
+export async function loadRoomMintPriceWei(config: RoomMintConfig): Promise<string> {
+  const client = createRoomMintPublicClient(config);
+  const priceWei = await client.readContract({
+    address: config.contractAddress,
+    abi: ROOM_OWNERSHIP_TOKEN_ABI,
+    functionName: 'mintPriceWei',
+  });
+
+  return priceWei.toString();
+}
+
+export async function loadRoomMintAuthority(config: RoomMintConfig): Promise<`0x${string}`> {
+  const client = createRoomMintPublicClient(config);
+  return client.readContract({
+    address: config.contractAddress,
+    abi: ROOM_OWNERSHIP_TOKEN_ABI,
+    functionName: 'mintAuthority',
+  });
+}
+
+export async function signRoomMintAuthorization(
+  env: Env,
+  config: RoomMintConfig,
+  coordinates: RoomCoordinates,
+  claimer: `0x${string}`,
+  deadline: bigint
+): Promise<Hex> {
+  const account = requireRoomMintAuthAccount(env);
+  const onChainMintAuthority = normalizeAddress(await loadRoomMintAuthority(config));
+  if (normalizeAddress(account.address) !== onChainMintAuthority) {
+    throw new HttpError(
+      500,
+      'ROOM_MINT_AUTH_PRIVATE_KEY does not match the configured contract mint authority.'
+    );
+  }
+
+  const authorizationHash = buildRoomMintAuthorizationHash(
+    config.chainId,
+    config.contractAddress,
+    coordinates,
+    claimer,
+    deadline
+  );
+
+  return account.signMessage({
+    message: { raw: authorizationHash },
   });
 }
 
@@ -293,4 +360,13 @@ export async function persistRoomMintState(
 
 export function normalizeNullableAddress(address: string | null): string | null {
   return address ? normalizeAddress(address) : null;
+}
+
+function normalizeRoomMintPrivateKey(value: string | null | undefined): `0x${string}` | null {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return (trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`) as `0x${string}`;
 }
