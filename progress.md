@@ -16,6 +16,7 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - restored editor undo/redo shortcuts at the document layer so `Cmd/Ctrl+Z`, `Cmd/Ctrl+Shift+Z`, and `Ctrl+Y` still work even when Phaser focus routing changes
   - local verification artifact: `output/web-game/undo-shortcut-check/summary.json` confirms spawn-point change -> undo -> redo in the editor scene
   - entering play mode now defaults to follow-cam, the follow toggle moved to `` ` / ~ ``, and the editor mint button stays clickable so wallet-link/publish requirements show as real status text instead of a dead disabled button
+  - minted-room gating is now enforced in the editor runtime itself, and non-owners entering a minted room from the overworld are bounced back out immediately with an owner-only status message
 
 ## Working Plan
 

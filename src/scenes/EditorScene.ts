@@ -441,6 +441,23 @@ export class EditorScene extends Phaser.Scene {
 
   private async loadPersistedRoom(): Promise<void> {
     await this.roomSession.loadPersistedRoom(this.initialRoomSnapshot);
+    if (this.entrySource === 'world' && this.mintedTokenId && !this.roomPermissions.canSaveDraft) {
+      this.returnToWorldReadOnly();
+    }
+  }
+
+  private returnToWorldReadOnly(): void {
+    const wakeData: OverworldPlaySceneData = {
+      centerCoordinates: { ...this.roomCoordinates },
+      roomCoordinates: { ...this.roomCoordinates },
+      statusMessage: 'This minted room can only be edited by its token owner.',
+      draftRoom: null,
+      clearDraftRoomId: this.roomId,
+      mode: 'browse',
+    };
+
+    this.scene.stop();
+    this.scene.wake('OverworldPlayScene', wakeData);
   }
 
   private getIdleStatusText(): string {

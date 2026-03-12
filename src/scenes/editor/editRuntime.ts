@@ -151,6 +151,19 @@ export class EditorEditRuntime {
     // Goal markers are sprite-backed; no persistent graphics overlay needed.
   }
 
+  private canEditRoom(): boolean {
+    return this.host.canSaveDraft();
+  }
+
+  private guardEditable(): boolean {
+    if (this.canEditRoom()) {
+      return true;
+    }
+
+    this.host.updatePersistenceStatus('Minted room is read-only for non-owners.');
+    return false;
+  }
+
   reset(): void {
     for (const sprite of this.objectSprites) {
       sprite.destroy();
@@ -239,6 +252,10 @@ export class EditorEditRuntime {
   }
 
   beginTileBatch(): void {
+    if (!this.guardEditable()) {
+      this.currentBatch = [];
+      return;
+    }
     this.currentBatch = [];
   }
 
@@ -258,6 +275,9 @@ export class EditorEditRuntime {
   }
 
   placeTileAt(worldX: number, worldY: number): void {
+    if (!this.guardEditable()) {
+      return;
+    }
     const baseTileX = Math.floor(worldX / TILE_SIZE);
     const baseTileY = Math.floor(worldY / TILE_SIZE);
     const layer = this.host.getLayers().get(editorState.activeLayer);
@@ -298,6 +318,9 @@ export class EditorEditRuntime {
   }
 
   eraseTileAt(worldX: number, worldY: number): void {
+    if (!this.guardEditable()) {
+      return;
+    }
     const tileX = Math.floor(worldX / TILE_SIZE);
     const tileY = Math.floor(worldY / TILE_SIZE);
     if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
@@ -326,6 +349,9 @@ export class EditorEditRuntime {
   }
 
   fillRect(x1: number, y1: number, x2: number, y2: number): void {
+    if (!this.guardEditable()) {
+      return;
+    }
     const minX = Math.max(0, Math.min(x1, x2));
     const minY = Math.max(0, Math.min(y1, y2));
     const maxX = Math.min(ROOM_WIDTH - 1, Math.max(x1, x2));
@@ -356,6 +382,9 @@ export class EditorEditRuntime {
   }
 
   floodFill(startX: number, startY: number): void {
+    if (!this.guardEditable()) {
+      return;
+    }
     const layer = this.host.getLayers().get(editorState.activeLayer);
     if (!layer || editorState.selectedTileGid < 0) {
       return;
@@ -402,6 +431,9 @@ export class EditorEditRuntime {
   }
 
   handleObjectPlace(worldX: number, worldY: number, tileX: number, tileY: number): void {
+    if (!this.guardEditable()) {
+      return;
+    }
     if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
       return;
     }
@@ -443,6 +475,9 @@ export class EditorEditRuntime {
   }
 
   removeObjectAt(worldX: number, worldY: number): void {
+    if (!this.guardEditable()) {
+      return;
+    }
     if (this.roomSpawnPoint) {
       const spawnDist = Math.hypot(this.roomSpawnPoint.x - worldX, this.roomSpawnPoint.y - worldY);
       if (spawnDist < 14) {
@@ -525,11 +560,17 @@ export class EditorEditRuntime {
   }
 
   setGoalType(nextType: RoomGoalType | null): void {
+    if (!this.guardEditable()) {
+      return;
+    }
     this.goalPlacementMode = null;
     this.updateRoomGoal(nextType ? createDefaultRoomGoal(nextType) : null);
   }
 
   setGoalTimeLimitSeconds(seconds: number | null): void {
+    if (!this.guardEditable()) {
+      return;
+    }
     if (!this.roomGoal || !goalSupportsTimeLimit(this.roomGoal.type)) {
       return;
     }
@@ -544,6 +585,9 @@ export class EditorEditRuntime {
   }
 
   setGoalRequiredCount(requiredCount: number): void {
+    if (!this.guardEditable()) {
+      return;
+    }
     if (!this.roomGoal || this.roomGoal.type !== 'collect_target') {
       return;
     }
@@ -558,6 +602,9 @@ export class EditorEditRuntime {
   }
 
   setGoalSurvivalSeconds(seconds: number): void {
+    if (!this.guardEditable()) {
+      return;
+    }
     if (!this.roomGoal || this.roomGoal.type !== 'survival') {
       return;
     }
@@ -572,6 +619,9 @@ export class EditorEditRuntime {
   }
 
   startGoalMarkerPlacement(mode: GoalPlacementMode): void {
+    if (!this.guardEditable()) {
+      return;
+    }
     if (!this.goalUsesMarkers(this.roomGoal)) {
       this.goalPlacementMode = null;
       this.host.updateGoalUi();
@@ -583,6 +633,9 @@ export class EditorEditRuntime {
   }
 
   clearGoalMarkers(): void {
+    if (!this.guardEditable()) {
+      return;
+    }
     if (!this.goalUsesMarkers(this.roomGoal)) {
       return;
     }
@@ -618,6 +671,9 @@ export class EditorEditRuntime {
   }
 
   placeGoalMarker(tileX: number, tileY: number): void {
+    if (!this.guardEditable()) {
+      return;
+    }
     if (!this.roomGoal || !this.goalPlacementMode) {
       return;
     }
@@ -653,6 +709,9 @@ export class EditorEditRuntime {
   }
 
   removeGoalMarkerAt(worldX: number, worldY: number): boolean {
+    if (!this.guardEditable()) {
+      return false;
+    }
     if (!this.roomGoal) {
       return false;
     }
@@ -739,6 +798,9 @@ export class EditorEditRuntime {
   }
 
   undo(): void {
+    if (!this.guardEditable()) {
+      return;
+    }
     const action = this.undoStack.pop();
     if (!action) {
       return;
@@ -817,6 +879,9 @@ export class EditorEditRuntime {
   }
 
   redo(): void {
+    if (!this.guardEditable()) {
+      return;
+    }
     const action = this.redoStack.pop();
     if (!action) {
       return;
