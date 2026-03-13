@@ -57,6 +57,39 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Mobile play HUD + camera framing pass on March 13, 2026:
+  - moved the active challenge HUD off the floating rounded panel on phones and into a dedicated full-width footer strip with goal, progress, and timer
+  - kept the existing floating challenge panel on desktop/tablet, but hide it in phone play mode so it no longer steals vertical room from the playfield
+  - replaced the original weak fixed-pixel mobile follow offset with a ratio-based target so the phone camera can be tuned by desired on-screen player position instead of tiny offsets that barely read
+  - the new knob is `MOBILE_PLAY_CAMERA_TARGET_Y` in `src/scenes/OverworldPlayScene.ts`; `0.5` matches desktop centering and the verified pass uses `0.58`
+  - reused the existing overworld HUD view-model data for both surfaces so challenge timer/progress stay in sync across desktop and mobile
+  - verification:
+    - `npm run build`
+    - required Playwright client smoke run completed in `output/web-game/mobile-challenge-camera-skill-client/`
+    - targeted desktop-vs-phone browser verification completed in `output/web-game/mobile-play-hud-camera-check/`
+    - `output/web-game/mobile-play-hud-camera-check/summary.json` confirms:
+      - desktop keeps the floating challenge panel visible
+      - phone hides the floating panel and shows the footer challenge strip instead
+      - phone player framing is lower than desktop (`playerViewportRatio: 0.559` vs `0.5`)
+    - screenshots:
+      - `output/web-game/mobile-play-hud-camera-check/shot-desktop.png`
+      - `output/web-game/mobile-play-hud-camera-check/shot-mobile.png`
+  - follow-up camera retune verification:
+    - `npm run build`
+    - required Playwright client smoke run completed in `output/web-game/mobile-camera-target-ratio-skill-client/`
+    - targeted browser verification completed in `output/web-game/mobile-camera-target-ratio-check/`
+    - `output/web-game/mobile-camera-target-ratio-check/summary.json` confirms the ratio-based target is taking effect with `desktopRatio: 0.5` and `mobileRatio: 0.583`
+- Mobile portrait-to-landscape loading hang fix on March 13, 2026:
+  - reproduced the real bug where loading the app in portrait left `appReady: false` and the boot splash visible even after rotating to landscape
+  - root cause was the mobile rotate gate pausing `OverworldPlayScene` while `refreshAround(...)` was still in flight; the success path treated paused scenes as unavailable and returned before `markAppReady()` / `hideBusyOverlay()`
+  - narrowed that guard so paused scenes still finish the successful boot/load path, while sleeping/stopped scenes keep the old early-return behavior
+  - verification:
+    - `npm run build`
+    - required Playwright client smoke run completed in `output/web-game/mobile-rotate-hang-skill-client/`
+    - targeted portrait-then-landscape browser verification completed in `output/web-game/mobile-rotate-loading-hang-check/`
+    - `output/web-game/mobile-rotate-loading-hang-check/summary.json` now shows `appReady: true` and `bootVisible: false` after rotation without requiring a refresh
+    - screenshot:
+      - `output/web-game/mobile-rotate-loading-hang-check/shot-landscape.png`
 - Mobile editor bottom-gap safe-area fix on March 13, 2026:
   - opted the app into edge-to-edge mobile layout with `viewport-fit=cover`
   - switched device layout measurement to `visualViewport` when available and exported live `--app-viewport-width` / `--app-viewport-height` CSS vars
@@ -1975,3 +2008,26 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - required skill-client smoke run completed in `output/web-game/room-badge-zoom-skill-client/`
   - note:
     - the generic skill-client screenshot still grabbed the wrong canvas in this environment, so the targeted custom screenshots above are the meaningful visual proof
+
+## March 13, 2026 - Gun Facing Lock and Ladder Movement SFX
+
+- Adjusted play-combat facing and ladder audio behavior in `OverworldPlayScene` and `src/audio/sfx.ts`:
+  - shooting no longer flips the player left/right from recoil alone
+  - facing stays locked during the weapon knockback window unless real directional movement changes it
+  - ladder climb audio is now a managed looping cue instead of periodic retriggers
+  - the ladder sound only runs while the player is actively moving vertically on a ladder
+  - the ladder sound stops immediately when vertical ladder motion stops, on ladder exit, respawn, reset, and player destroy paths
+  - `SfxController` now tracks active cues and supports explicit `stopSfx(...)`, which is also exposed in the debug snapshot
+- Verification:
+  - `npm run build` passed
+  - required skill-client smoke run completed in `output/web-game/gun-ladder-smoke/`
+  - targeted deterministic browser check completed in `output/web-game/gun-ladder-sfx-check/`
+  - `output/web-game/gun-ladder-sfx-check/summary.json` shows gun facing staying `1 -> 1 -> 1 -> 1` across repeated shots
+  - the same summary shows ladder audio absent before movement, present during upward climb as `ladder-climb`, and gone again once the player stops on the ladder
+  - screenshots:
+    - `output/web-game/gun-ladder-sfx-check/shot-gun.png`
+    - `output/web-game/gun-ladder-sfx-check/shot-ladder-moving.png`
+    - `output/web-game/gun-ladder-sfx-check/shot-ladder-stopped.png`
+  - no browser console errors were reported in the targeted run
+  - note:
+    - the generic skill-client smoke run stayed in browse mode, so the targeted deterministic capture above is the meaningful gameplay proof for this pass

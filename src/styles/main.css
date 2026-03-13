@@ -1418,6 +1418,65 @@ body[data-app-mode="play-world"] #game-container {
   display: none;
 }
 
+.mobile-goal-footer {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 193, 7, 0.34);
+  border-radius: 12px;
+  background: rgba(5, 5, 5, 0.92);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+.mobile-goal-footer[data-goal-panel-tone='complete'] {
+  border-color: rgba(52, 116, 51, 0.45);
+}
+
+.mobile-goal-footer[data-goal-panel-tone='failed'] {
+  border-color: rgba(178, 34, 34, 0.48);
+}
+
+.mobile-goal-footer-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.mobile-goal-footer-goal {
+  color: var(--accent-warm);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.mobile-goal-footer-progress {
+  color: var(--text);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.mobile-goal-footer-timer {
+  color: #ffcf4c;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.mobile-goal-footer[data-goal-panel-tone='complete'] .mobile-goal-footer-goal,
+.mobile-goal-footer[data-goal-panel-tone='complete'] .mobile-goal-footer-timer {
+  color: #b6ffbe;
+}
+
+.mobile-goal-footer[data-goal-panel-tone='failed'] .mobile-goal-footer-goal,
+.mobile-goal-footer[data-goal-panel-tone='failed'] .mobile-goal-footer-timer {
+  color: #ff9c91;
+}
+
 .mobile-editor-tab,
 .mobile-editor-utility {
   border-radius: 0;
@@ -1918,6 +1977,21 @@ body[data-device-class='phone'] .bar-left,
 body[data-device-class='phone'] .bar-right,
 body[data-device-class='phone'] .bar-center {
   flex-wrap: wrap;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel {
+  display: none !important;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .mobile-goal-footer {
+  display: flex;
+  flex: 1 0 100%;
+  width: 100%;
+  order: -1;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .mobile-goal-footer.hidden {
+  display: none !important;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] #game-container,

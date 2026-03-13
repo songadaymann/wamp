@@ -53,6 +53,10 @@ export class OverworldHudBridge {
   private readonly goalPanelGoalEl: HTMLElement | null;
   private readonly goalPanelTimerEl: HTMLElement | null;
   private readonly goalPanelProgressEl: HTMLElement | null;
+  private readonly mobileGoalFooterEl: HTMLElement | null;
+  private readonly mobileGoalFooterGoalEl: HTMLElement | null;
+  private readonly mobileGoalFooterProgressEl: HTMLElement | null;
+  private readonly mobileGoalFooterTimerEl: HTMLElement | null;
   private destroyed = false;
 
   constructor(private readonly doc: Document = document) {
@@ -80,6 +84,10 @@ export class OverworldHudBridge {
     this.goalPanelGoalEl = this.doc.getElementById('world-goal-panel-goal');
     this.goalPanelTimerEl = this.doc.getElementById('world-goal-panel-timer');
     this.goalPanelProgressEl = this.doc.getElementById('world-goal-panel-progress');
+    this.mobileGoalFooterEl = this.doc.getElementById('mobile-goal-footer');
+    this.mobileGoalFooterGoalEl = this.doc.getElementById('mobile-goal-footer-goal');
+    this.mobileGoalFooterProgressEl = this.doc.getElementById('mobile-goal-footer-progress');
+    this.mobileGoalFooterTimerEl = this.doc.getElementById('mobile-goal-footer-timer');
   }
 
   render(viewModel: OverworldHudViewModel): void {
@@ -192,6 +200,7 @@ export class OverworldHudBridge {
 
   private renderGoalPanel(viewModel: OverworldHudViewModel): void {
     if (!this.goalPanelEl) {
+      this.renderMobileGoalFooter(viewModel);
       return;
     }
 
@@ -201,5 +210,18 @@ export class OverworldHudBridge {
     this.setText(this.goalPanelGoalEl, viewModel.goalPanelGoalText);
     this.setText(this.goalPanelTimerEl, viewModel.goalPanelTimerText);
     this.setText(this.goalPanelProgressEl, viewModel.goalPanelProgressText);
+    this.renderMobileGoalFooter(viewModel);
+  }
+
+  private renderMobileGoalFooter(viewModel: OverworldHudViewModel): void {
+    if (!this.mobileGoalFooterEl) {
+      return;
+    }
+
+    this.mobileGoalFooterEl.classList.toggle('hidden', !viewModel.goalPanelVisible);
+    this.mobileGoalFooterEl.setAttribute('data-goal-panel-tone', viewModel.goalPanelTone);
+    this.setText(this.mobileGoalFooterGoalEl, viewModel.goalPanelGoalText || viewModel.goalPanelRoomText);
+    this.setText(this.mobileGoalFooterProgressEl, viewModel.goalPanelProgressText || viewModel.goalPanelRoomText);
+    this.setText(this.mobileGoalFooterTimerEl, viewModel.goalPanelTimerText);
   }
 }

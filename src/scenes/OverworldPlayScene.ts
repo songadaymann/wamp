@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { playSfx } from '../audio/sfx';
+import { playSfx, stopSfx } from '../audio/sfx';
 import { SceneFxController } from '../fx/controller';
 import {
   getObjectById,
@@ -92,6 +92,8 @@ const PLAY_ROOM_FIT_PADDING = 16;
 const PAN_THRESHOLD = 4;
 const EDGE_WALL_THICKNESS = 12;
 const RESPAWN_FALL_DISTANCE = ROOM_PX_HEIGHT * 2;
+const FOLLOW_CAMERA_LERP = 0.12;
+const MOBILE_PLAY_CAMERA_TARGET_Y = 0.75;
 
 type CameraMode = 'inspect' | 'follow';
 type SelectedCellState = 'published' | 'draft' | 'frontier' | 'empty';
@@ -228,7 +230,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private weaponKnockbackUntil = 0;
   private externalLaunchGraceUntil = 0;
   private playerProjectiles: PlayerProjectile[] = [];
-  private nextLadderClimbSfxAt = 0;
+  private ladderClimbSfxPlaying = false;
 
   private loadingText!: Phaser.GameObjects.Text;
   private roomGridGraphics!: Phaser.GameObjects.Graphics;
@@ -714,7 +716,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     this.updatePlayerProjectiles(delta);
-    this.maybePlayLadderClimbSfx(verticalInput);
+    this.syncLadderClimbSfx(verticalInput);
     this.maybeRespawnFromVoid();
     this.maybeAdvancePlayerRoom();
     this.syncPlayerVisual();
@@ -765,7 +767,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.rangedCooldownUntil = 0;
     this.weaponKnockbackVelocityX = 0;
     this.weaponKnockbackUntil = 0;
-    this.nextLadderClimbSfxAt = 0;
+    this.setLadderClimbSfxPlaying(false);
     this.destroyPlayerProjectiles();
     this.collectedObjectKeys = new Set();
     this.score = 0;
@@ -1427,7 +1429,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     camera.setZoom(this.inspectZoom);
 
     if (this.mode === 'play' && this.cameraMode === 'follow' && this.player) {
-      camera.centerOn(this.player.x, this.player.y);
+      this.startFollowCamera(camera);
     } else {
       const nextScroll = this.getScrollForScreenAnchor(anchorWorldPoint.x, anchorWorldPoint.y, anchorX, anchorY, camera);
       camera.setScroll(nextScroll.x, nextScroll.y);
@@ -1488,8 +1490,11 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     const refreshed = await this.worldStreamingController.refreshAround(centerCoordinates, options);
+    const sceneAvailable =
+      this.scene.isActive(this.scene.key) ||
+      this.scene.isPaused(this.scene.key);
     if (refreshed === 'success') {
-      if (!this.scene.isActive(this.scene.key)) {
+      if (!sceneAvailable) {
         return true;
       }
 
@@ -1514,7 +1519,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       return false;
     }
 
-    if (!this.scene.isActive(this.scene.key)) {
+    if (!sceneAvailable) {
       return false;
     }
 
@@ -1852,6 +1857,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     this.isClimbingLadder = false;
     this.activeLadderKey = null;
+    this.setLadderClimbSfxPlaying(false);
     this.isCrouching = false;
     this.activeAttackAnimation = null;
     this.activeAttackAnimationUntil = 0;
@@ -2111,7 +2117,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     if (this.cameraMode === 'follow') {
       this.syncCameraBoundsUsage();
-      camera.startFollow(this.player, true, 0.12, 0.12);
+      this.startFollowCamera(camera);
       camera.setZoom(this.inspectZoom);
       return;
     }
@@ -2133,6 +2139,31 @@ export class OverworldPlayScene extends Phaser.Scene {
     camera.stopFollow();
     camera.centerOn(origin.x + ROOM_PX_WIDTH / 2, origin.y + ROOM_PX_HEIGHT / 2);
     this.constrainInspectCamera();
+  }
+
+  private startFollowCamera(camera: Phaser.Cameras.Scene2D.Camera): void {
+    if (!this.player) {
+      return;
+    }
+
+    camera.startFollow(
+      this.player,
+      true,
+      FOLLOW_CAMERA_LERP,
+      FOLLOW_CAMERA_LERP,
+      0,
+      this.getMobilePlayFollowOffsetY(camera)
+    );
+  }
+
+  private getMobilePlayFollowOffsetY(camera: Phaser.Cameras.Scene2D.Camera): number {
+    const layout = getDeviceLayoutState();
+    if (layout.deviceClass !== 'phone' || !layout.coarsePointer || layout.mobileLandscapeBlocked) {
+      return 0;
+    }
+
+    const visibleWorldHeight = camera.height / Math.max(camera.zoom, 0.001);
+    return Math.round((MOBILE_PLAY_CAMERA_TARGET_Y - 0.5) * visibleWorldHeight);
   }
 
   private constrainInspectCamera(): void {
@@ -2207,6 +2238,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.activeAttackAnimationUntil = 0;
     this.isClimbingLadder = false;
     this.activeLadderKey = null;
+    this.setLadderClimbSfxPlaying(false);
     this.syncPlayerVisual();
     this.syncBackdropCameraIgnores();
   }
@@ -2219,6 +2251,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (!this.playerBody) {
       this.isClimbingLadder = false;
       this.activeLadderKey = null;
+      this.setLadderClimbSfxPlaying(false);
       return;
     }
 
@@ -2231,6 +2264,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.isClimbingLadder = ladder !== null;
     this.activeLadderKey = nextKey;
     this.playerBody.setAllowGravity(!ladder);
+    if (!ladder) {
+      this.setLadderClimbSfxPlaying(false);
+    }
 
     if (enteringLadder) {
       this.playerBody.setVelocityY(0);
@@ -2684,23 +2720,32 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.playerBody.setVelocity(0, 0);
     this.syncPlayerHitbox();
     this.playerWasGrounded = false;
-    this.nextLadderClimbSfxAt = this.time.now + 120;
+    this.setLadderClimbSfxPlaying(false);
     this.syncPlayerVisual();
     playSfx('respawn');
   }
 
-  private maybePlayLadderClimbSfx(verticalInput: number): void {
-    if (!this.playerBody) {
+  private syncLadderClimbSfx(verticalInput: number): void {
+    const shouldPlay =
+      Boolean(this.playerBody) &&
+      this.isClimbingLadder &&
+      verticalInput !== 0 &&
+      Math.abs(this.playerBody?.velocity.y ?? 0) > 6;
+    this.setLadderClimbSfxPlaying(shouldPlay);
+  }
+
+  private setLadderClimbSfxPlaying(playing: boolean): void {
+    if (this.ladderClimbSfxPlaying === playing) {
       return;
     }
 
-    const now = this.time.now;
-    if (!this.isClimbingLadder || verticalInput === 0 || now < this.nextLadderClimbSfxAt) {
+    this.ladderClimbSfxPlaying = playing;
+    if (playing) {
+      playSfx('ladder-climb');
       return;
     }
 
-    playSfx('ladder-climb');
-    this.nextLadderClimbSfxAt = now + 180;
+    stopSfx('ladder-climb');
   }
 
   private syncPlayerVisual(): void {
@@ -2713,9 +2758,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.playerBody.bottom + DEFAULT_PLAYER_VISUAL_FEET_OFFSET
     );
 
+    const facingLockedByWeaponKnockback = this.time.now < this.weaponKnockbackUntil;
     if (this.activeCrateInteractionFacing !== null) {
       this.playerFacing = this.activeCrateInteractionFacing;
-    } else if (Math.abs(this.playerBody.velocity.x) > 8) {
+    } else if (!facingLockedByWeaponKnockback && Math.abs(this.playerBody.velocity.x) > 8) {
       this.playerFacing = this.playerBody.velocity.x < 0 ? -1 : 1;
     }
     this.playerSprite.setFlipX(this.playerFacing < 0);
@@ -3029,7 +3075,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     camera.setZoom(this.inspectZoom);
 
     if (this.mode === 'play' && this.cameraMode === 'follow' && this.player) {
-      camera.startFollow(this.player, true, 0.12, 0.12);
+      this.startFollowCamera(camera);
       return;
     }
 

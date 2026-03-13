@@ -4,6 +4,7 @@ type CueConfig = {
   playbackRate?: number;
   cooldownMs?: number;
   allowOverlap?: boolean;
+  loop?: boolean;
   trimAfterMs?: number;
   fadeOutMs?: number;
 };
@@ -187,8 +188,9 @@ const SFX_CUES: Record<SfxCue, CueConfig> = {
   'ladder-climb': {
     path: 'assets/sfx/movement/ladder-climb.wav',
     volume: 0.26,
-    cooldownMs: 120,
+    cooldownMs: 30,
     allowOverlap: false,
+    loop: true,
   },
   respawn: {
     path: 'assets/sfx/world/respawn.wav',
@@ -222,6 +224,8 @@ export class SfxController {
   private userInteracted = false;
   private readonly baseAudioByPath = new Map<string, HTMLAudioElement>();
   private readonly activeAudio = new Set<HTMLAudioElement>();
+  private readonly activeAudioByCue = new Map<SfxCue, Set<HTMLAudioElement>>();
+  private readonly cleanupByAudio = new Map<HTMLAudioElement, () => void>();
   private readonly activeCueCounts = new Map<SfxCue, number>();
   private readonly lastPlayedAt = new Map<SfxCue, number>();
   private readonly history: SfxHistoryEntry[] = [];
@@ -269,6 +273,10 @@ export class SfxController {
       muted: this.muted,
       userInteracted: this.userInteracted,
       activeCount: this.activeAudio.size,
+      activeCues: [...this.activeAudioByCue.entries()].map(([cue, players]) => ({
+        cue,
+        count: players.size,
+      })),
       history: [...this.history],
     };
   }
@@ -310,8 +318,12 @@ export class SfxController {
     player.volume = baseVolume;
     player.playbackRate = config.playbackRate ?? 1;
     player.currentTime = 0;
+    player.loop = Boolean(config.loop);
 
     this.activeAudio.add(player);
+    const cuePlayers = this.activeAudioByCue.get(cue) ?? new Set<HTMLAudioElement>();
+    cuePlayers.add(player);
+    this.activeAudioByCue.set(cue, cuePlayers);
     this.activeCueCounts.set(cue, (this.activeCueCounts.get(cue) ?? 0) + 1);
     let fadeIntervalId: number | null = null;
     let trimTimeoutId: number | null = null;
@@ -324,7 +336,13 @@ export class SfxController {
         window.clearInterval(fadeIntervalId);
         fadeIntervalId = null;
       }
+      this.cleanupByAudio.delete(player);
       this.activeAudio.delete(player);
+      const activeCuePlayers = this.activeAudioByCue.get(cue);
+      activeCuePlayers?.delete(player);
+      if (activeCuePlayers && activeCuePlayers.size === 0) {
+        this.activeAudioByCue.delete(cue);
+      }
       const nextCount = Math.max(0, (this.activeCueCounts.get(cue) ?? 1) - 1);
       if (nextCount === 0) {
         this.activeCueCounts.delete(cue);
@@ -334,6 +352,7 @@ export class SfxController {
       player.removeEventListener('ended', cleanup);
       player.removeEventListener('error', cleanup);
     };
+    this.cleanupByAudio.set(player, cleanup);
     player.addEventListener('ended', cleanup);
     player.addEventListener('error', cleanup);
 
@@ -376,6 +395,19 @@ export class SfxController {
     this.record(cue, 'played');
   }
 
+  stop(cue: SfxCue): void {
+    const activeCuePlayers = this.activeAudioByCue.get(cue);
+    if (!activeCuePlayers || activeCuePlayers.size === 0) {
+      return;
+    }
+
+    for (const player of [...activeCuePlayers]) {
+      player.pause();
+      player.currentTime = 0;
+      this.cleanupByAudio.get(player)?.();
+    }
+  }
+
   private record(cue: SfxCue, status: SfxHistoryEntry['status']): void {
     this.history.push({
       cue,
@@ -402,4 +434,8 @@ export function initSfx(doc: Document = document, windowObj: Window = window): v
 
 export function playSfx(cue: SfxCue): void {
   globalSfxController.play(cue);
+}
+
+export function stopSfx(cue: SfxCue): void {
+  globalSfxController.stop(cue);
 }
