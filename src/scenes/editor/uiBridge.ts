@@ -40,17 +40,17 @@ export interface EditorUiViewModel {
 
 export class EditorUiBridge {
   private readonly roomTitleInput: HTMLInputElement | null;
-  private readonly roomCoordsEl: HTMLElement | null;
+  private readonly roomCoordsEls: HTMLElement[];
   private readonly separatorEl: HTMLElement | null;
-  private readonly saveStatusEl: HTMLElement | null;
-  private readonly zoomEl: HTMLElement | null;
+  private readonly saveStatusEls: HTMLElement[];
+  private readonly zoomEls: HTMLElement[];
   private readonly backToWorldBtn: HTMLButtonElement | null;
   private readonly playBtn: HTMLButtonElement | null;
   private readonly saveBtn: HTMLButtonElement | null;
   private readonly publishBtn: HTMLButtonElement | null;
   private readonly mintBtn: HTMLButtonElement | null;
   private readonly historyBtn: HTMLButtonElement | null;
-  private readonly fitBtn: HTMLButtonElement | null;
+  private readonly fitBtns: HTMLButtonElement[];
   private readonly goalTypeSelect: HTMLSelectElement | null;
   private readonly timeLimitRow: HTMLElement | null;
   private readonly timeLimitInput: HTMLInputElement | null;
@@ -64,21 +64,34 @@ export class EditorUiBridge {
   private readonly placeExitBtn: HTMLButtonElement | null;
   private readonly addCheckpointBtn: HTMLButtonElement | null;
   private readonly placeFinishBtn: HTMLButtonElement | null;
+  private readonly backgroundButtons: HTMLButtonElement[];
   private destroyed = false;
 
   constructor(private readonly doc: Document = document) {
     this.roomTitleInput = this.doc.getElementById('room-title-input') as HTMLInputElement | null;
-    this.roomCoordsEl = this.doc.getElementById('room-coords');
+    this.roomCoordsEls = [
+      this.doc.getElementById('room-coords'),
+      this.doc.getElementById('mobile-editor-room-coords'),
+    ].filter((element): element is HTMLElement => Boolean(element));
     this.separatorEl = this.doc.querySelector('#bottom-bar .separator');
-    this.saveStatusEl = this.doc.getElementById('room-save-status');
-    this.zoomEl = this.doc.getElementById('zoom-level');
+    this.saveStatusEls = [
+      this.doc.getElementById('room-save-status'),
+      this.doc.getElementById('mobile-editor-save-status'),
+    ].filter((element): element is HTMLElement => Boolean(element));
+    this.zoomEls = [
+      this.doc.getElementById('zoom-level'),
+      this.doc.getElementById('mobile-editor-zoom-level'),
+    ].filter((element): element is HTMLElement => Boolean(element));
     this.backToWorldBtn = this.doc.getElementById('btn-back-to-world') as HTMLButtonElement | null;
     this.playBtn = this.doc.getElementById('btn-test-play') as HTMLButtonElement | null;
     this.saveBtn = this.doc.getElementById('btn-save-draft') as HTMLButtonElement | null;
     this.publishBtn = this.doc.getElementById('btn-publish-room') as HTMLButtonElement | null;
     this.mintBtn = this.doc.getElementById('btn-mint-room') as HTMLButtonElement | null;
     this.historyBtn = this.doc.getElementById('btn-room-history') as HTMLButtonElement | null;
-    this.fitBtn = this.doc.getElementById('btn-fit-screen') as HTMLButtonElement | null;
+    this.fitBtns = [
+      this.doc.getElementById('btn-fit-screen') as HTMLButtonElement | null,
+      this.doc.getElementById('btn-mobile-editor-fit') as HTMLButtonElement | null,
+    ].filter((element): element is HTMLButtonElement => Boolean(element));
     this.goalTypeSelect = this.doc.getElementById('goal-type-select') as HTMLSelectElement | null;
     this.timeLimitRow = this.doc.getElementById('goal-time-limit-row');
     this.timeLimitInput = this.doc.getElementById('goal-time-limit-seconds') as HTMLInputElement | null;
@@ -92,6 +105,9 @@ export class EditorUiBridge {
     this.placeExitBtn = this.doc.getElementById('btn-goal-place-exit') as HTMLButtonElement | null;
     this.addCheckpointBtn = this.doc.getElementById('btn-goal-add-checkpoint') as HTMLButtonElement | null;
     this.placeFinishBtn = this.doc.getElementById('btn-goal-place-finish') as HTMLButtonElement | null;
+    this.backgroundButtons = Array.from(
+      this.doc.querySelectorAll<HTMLButtonElement>('[data-background-id]')
+    );
   }
 
   render(viewModel: EditorUiViewModel): void {
@@ -100,11 +116,12 @@ export class EditorUiBridge {
     }
 
     this.setValue(this.roomTitleInput, viewModel.roomTitleValue);
-    this.setText(this.roomCoordsEl, viewModel.roomCoordinatesText);
+    this.setText(this.roomCoordsEls, viewModel.roomCoordinatesText);
     this.separatorEl?.classList.toggle('hidden', false);
-    this.setText(this.saveStatusEl, viewModel.saveStatusText);
+    this.setText(this.saveStatusEls, viewModel.saveStatusText);
     this.resetSaveStatusTone();
-    this.setText(this.zoomEl, viewModel.zoomText);
+    this.setText(this.zoomEls, viewModel.zoomText);
+    this.syncBackgroundSelection();
 
     this.setHidden(this.backToWorldBtn, viewModel.backToWorldHidden);
     this.setHidden(this.playBtn, viewModel.playHidden);
@@ -117,7 +134,7 @@ export class EditorUiBridge {
     this.setButtonText(this.mintBtn, viewModel.mintButtonText);
     this.setHidden(this.historyBtn, viewModel.historyHidden);
     this.setDisabled(this.historyBtn, viewModel.historyDisabled);
-    this.setHidden(this.fitBtn, viewModel.fitHidden);
+    this.setHidden(this.fitBtns, viewModel.fitHidden);
 
     this.setValue(this.goalTypeSelect, viewModel.goal.goalTypeValue);
     this.setHidden(this.timeLimitRow, viewModel.goal.timeLimitHidden);
@@ -143,9 +160,12 @@ export class EditorUiBridge {
     this.destroyed = true;
   }
 
-  private setText(element: HTMLElement | null, text: string): void {
-    if (element && element.textContent !== text) {
-      element.textContent = text;
+  private setText(elements: HTMLElement | HTMLElement[] | null, text: string): void {
+    const targets = Array.isArray(elements) ? elements : elements ? [elements] : [];
+    for (const element of targets) {
+      if (element.textContent !== text) {
+        element.textContent = text;
+      }
     }
   }
 
@@ -172,9 +192,24 @@ export class EditorUiBridge {
     }
   }
 
-  private setHidden(element: HTMLElement | null, hidden: boolean): void {
-    if (element) {
-      element.classList.toggle('hidden', hidden);
+  private setHidden(element: HTMLElement | HTMLElement[] | null, hidden: boolean): void {
+    const targets = Array.isArray(element) ? element : element ? [element] : [];
+    for (const target of targets) {
+      target.classList.toggle('hidden', hidden);
+    }
+  }
+
+  private syncBackgroundSelection(): void {
+    for (const button of this.backgroundButtons) {
+      const active = button.dataset.backgroundId === (this.doc.getElementById('background-select') as HTMLSelectElement | null)?.value;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+  }
+
+  private resetSaveStatusTone(): void {
+    for (const element of this.saveStatusEls) {
+      element.removeAttribute('data-overworld-tone');
     }
   }
 
@@ -188,9 +223,5 @@ export class EditorUiBridge {
     if (element && element.textContent !== text) {
       element.textContent = text;
     }
-  }
-
-  private resetSaveStatusTone(): void {
-    this.saveStatusEl?.removeAttribute('data-overworld-tone');
   }
 }

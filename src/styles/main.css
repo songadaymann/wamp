@@ -724,6 +724,31 @@ body[data-app-mode="play-world"] #global-chat {
   flex-wrap: wrap;
 }
 
+.object-search-row {
+  margin-bottom: 8px;
+}
+
+.object-search-input {
+  width: 100%;
+  padding: 7px 9px;
+  background: var(--field);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.object-search-input::placeholder {
+  color: var(--text-dim);
+}
+
+.object-search-input:focus {
+  outline: none;
+  border-color: var(--accent-warm);
+  box-shadow: 0 0 0 1px var(--accent-warm-soft);
+}
+
 .obj-cat-tab {
   padding: 3px 6px;
   background: var(--panel-2);
@@ -768,6 +793,16 @@ body[data-app-mode="play-world"] #global-chat {
   overflow-y: auto;
   flex: 1;
   padding: 2px;
+}
+
+.object-grid-empty {
+  grid-column: 1 / -1;
+  padding: 14px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  text-align: center;
+  line-height: 1.45;
 }
 
 .object-facing-controls {
@@ -1357,20 +1392,49 @@ body[data-app-mode="play-world"] #game-container {
 
 .mobile-editor-nav {
   position: fixed;
-  left: calc(10px + var(--safe-left));
-  right: calc(10px + var(--safe-right));
+  left: calc(8px + var(--safe-left));
+  right: calc(8px + var(--safe-right));
   bottom: calc(46px + var(--safe-bottom));
   z-index: 18;
   display: flex;
-  gap: 6px;
+  justify-content: center;
+  gap: 0;
   overflow-x: auto;
-  padding-bottom: 2px;
+  padding: 0 2px 2px;
+  scrollbar-width: none;
 }
 
 .mobile-editor-nav .bar-btn {
   padding: 8px 6px;
   flex: 0 0 auto;
   min-width: 86px;
+}
+
+.mobile-editor-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-editor-tab,
+.mobile-editor-utility {
+  border-radius: 0;
+}
+
+.mobile-editor-nav .mobile-editor-tab:first-of-type {
+  border-top-left-radius: 14px;
+}
+
+.mobile-editor-nav .mobile-editor-utility:last-of-type {
+  border-top-right-radius: 14px;
+}
+
+.mobile-editor-utility {
+  color: var(--accent-warm);
+}
+
+.mobile-editor-actions-panel,
+.mobile-editor-only,
+.background-card-grid {
+  display: none;
 }
 
 .mobile-sheet-panel {
@@ -1952,15 +2016,20 @@ body[data-device-class='phone'] #global-chat .chat-panel-body {
   border-radius: 14px;
 }
 
+body[data-device-class='phone'][data-app-mode='editor'] {
+  --phone-editor-sheet-height: min(46vh, 344px);
+}
+
 body[data-device-class='phone'][data-app-mode='editor'] #sidebar {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(94px + var(--safe-bottom));
+  bottom: var(--safe-bottom);
   top: auto;
   z-index: 17;
   width: auto;
-  max-height: 31vh;
+  height: var(--phone-editor-sheet-height);
+  max-height: calc(100vh - 108px - var(--safe-top) - var(--safe-bottom));
   border-right: none;
   border-top: 1px solid var(--border);
   background: rgba(11, 11, 11, 0.96);
@@ -1971,9 +2040,21 @@ body[data-device-class='phone'][data-app-mode='editor'] #sidebar {
 }
 
 body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-collapsed='true'] #sidebar {
-  transform: translateY(calc(100% + 20px));
+  transform: translateY(calc(100% + 10px));
   opacity: 0;
   pointer-events: none;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #bottom-bar {
+  display: none;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-only {
+  display: block;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .background-card-grid {
+  display: grid;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] #sidebar .sidebar-section {
@@ -1981,6 +2062,7 @@ body[data-device-class='phone'][data-app-mode='editor'] #sidebar .sidebar-sectio
 }
 
 body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='tools'] #sidebar .sidebar-section[data-mobile-panel='tools'],
+body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='background'] #sidebar .sidebar-section[data-mobile-panel='background'],
 body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='palette'] #sidebar .sidebar-section[data-mobile-panel='palette'],
 body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='objects'] #sidebar .sidebar-section[data-mobile-panel='objects'],
 body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='objects'] #sidebar .sidebar-section[data-mobile-panel-alt='objects'],
@@ -1992,14 +2074,61 @@ body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet
 body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='actions'] #sidebar .editor-action-stack {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] #sidebar .sidebar-section {
-  padding: 8px 12px;
+  padding: 10px 12px;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] #sidebar .section-label {
   margin-bottom: 6px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav {
+  left: 50%;
+  right: auto;
+  bottom: calc(var(--phone-editor-sheet-height) + var(--safe-bottom) - 1px);
+  width: min(calc(100vw - 12px - var(--safe-left) - var(--safe-right)), 820px);
+  transform: translateX(-50%);
+  padding: 0;
+  background: rgba(14, 14, 14, 0.98);
+  border: 1px solid var(--border-strong);
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -14px 30px rgba(0, 0, 0, 0.26);
+}
+
+body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-collapsed='true'] #mobile-editor-nav {
+  bottom: var(--safe-bottom);
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .bar-btn {
+  min-width: 0;
+  padding: 10px 12px;
+  border: none;
+  border-right: 1px solid rgba(243, 238, 226, 0.08);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .bar-btn:last-child {
+  border-right: none;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-tab.active {
+  background: rgba(11, 11, 11, 0.98);
+  color: #f7ecd1;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-utility {
+  color: var(--accent-warm);
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-utility:active,
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-tab:active {
+  background: rgba(243, 238, 226, 0.08);
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] #tools,
@@ -2013,9 +2142,16 @@ body[data-device-class='phone'][data-app-mode='editor'] #layers {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+body[data-device-class='phone'][data-app-mode='editor'] #background-select,
+body[data-device-class='phone'][data-app-mode='editor'] .palette-tabs,
+body[data-device-class='phone'][data-app-mode='editor'] #object-palette-section > .section-label,
+body[data-device-class='phone'][data-app-mode='editor'] [data-mobile-panel='background'] > .section-label {
+  display: none;
+}
+
 body[data-device-class='phone'][data-app-mode='editor'] #palette-container {
   flex: none;
-  max-height: 152px;
+  max-height: 166px;
   overflow: auto;
 }
 
@@ -2027,6 +2163,10 @@ body[data-device-class='phone'][data-app-mode='editor'] .object-category-tabs {
   flex-wrap: nowrap;
   overflow-x: auto;
   padding-bottom: 4px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .object-search-input {
+  font-size: 16px;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] #object-grid {
@@ -2050,8 +2190,152 @@ body[data-device-class='phone'][data-app-mode='editor'] .palette-hint {
 
 body[data-device-class='phone'][data-app-mode='editor'] #room-title-section,
 body[data-device-class='phone'][data-app-mode='editor'] #goal-section {
-  max-height: calc(31vh - 22px);
+  max-height: calc(var(--phone-editor-sheet-height) - 26px);
   overflow: auto;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #goal-section {
+  display: grid;
+  gap: 10px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #goal-section .goal-control-row {
+  display: grid;
+  grid-template-columns: minmax(88px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-top: 0;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #goal-section .goal-inline-input {
+  min-width: 0;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #goal-marker-controls {
+  margin-top: 0;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #editor-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-actions-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  border-radius: 10px;
+  background: rgba(243, 238, 226, 0.03);
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-card-wide {
+  grid-column: 1 / -1;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-label {
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-value {
+  min-width: 0;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-zoom-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-zoom-readout {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  border-radius: 10px;
+  background: rgba(243, 238, 226, 0.03);
+  color: var(--text);
+  font-size: 11px;
+  text-align: center;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .background-card-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .background-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(243, 238, 226, 0.12);
+  border-radius: 12px;
+  background: rgba(243, 238, 226, 0.03);
+  color: var(--text);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .background-card.active {
+  border-color: var(--accent-warm);
+  background: rgba(255, 193, 7, 0.1);
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .background-card-art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  background-color: #111;
+  background-image:
+    linear-gradient(180deg, rgba(11, 11, 11, 0.08), rgba(11, 11, 11, 0.22)),
+    var(--background-card-front),
+    var(--background-card-back);
+  background-size: cover, contain, cover;
+  background-position: center, center bottom, center;
+  background-repeat: no-repeat;
+  box-shadow: inset 0 -18px 28px rgba(0, 0, 0, 0.28);
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .background-card:not(.background-card-none) .background-card-art {
+  background-color: var(--background-card-tint, #111);
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .background-card-none .background-card-art {
+  background-image:
+    radial-gradient(circle at 22% 30%, rgba(243, 238, 226, 0.9) 0 1px, transparent 1px),
+    radial-gradient(circle at 65% 42%, rgba(255, 193, 7, 0.82) 0 1.2px, transparent 1.2px),
+    linear-gradient(180deg, rgba(44, 63, 89, 0.92), rgba(11, 11, 11, 0.98));
+  background-size: auto, auto, cover;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .background-card-label {
+  font-size: 11px;
+  text-align: left;
 }
 
 body[data-device-class='phone'] .chat-form,

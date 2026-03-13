@@ -21,6 +21,7 @@ export function setupEditorControls(
   setupRoomTitleInput(game, doc);
   setupTilesetSelector(paletteController, doc);
   setupBackgroundSelector(doc, windowObj);
+  setupBackgroundCards(doc, windowObj);
   setupGoalControls(game, doc);
   setupPaletteModeTabs(paletteController, doc);
   setupObjectCategoryTabs(paletteController, doc);
@@ -74,9 +75,34 @@ function setupBackgroundSelector(doc: Document, windowObj: Window): void {
 
   select.addEventListener('change', () => {
     editorState.selectedBackground = select.value;
+    syncBackgroundCardSelection(doc, select.value);
     windowObj.dispatchEvent(new Event('background-changed'));
     requestPhoneEditorAutoCollapse(doc);
   });
+}
+
+function setupBackgroundCards(doc: Document, windowObj: Window): void {
+  const select = doc.getElementById('background-select') as HTMLSelectElement | null;
+  const cards = Array.from(doc.querySelectorAll<HTMLButtonElement>('[data-background-id]'));
+  if (!select || cards.length === 0) {
+    return;
+  }
+
+  syncBackgroundCardSelection(doc, select.value);
+  for (const card of cards) {
+    card.addEventListener('click', () => {
+      const nextBackground = card.dataset.backgroundId;
+      if (!nextBackground || select.value === nextBackground) {
+        return;
+      }
+
+      select.value = nextBackground;
+      editorState.selectedBackground = nextBackground;
+      syncBackgroundCardSelection(doc, nextBackground);
+      windowObj.dispatchEvent(new Event('background-changed'));
+      requestPhoneEditorAutoCollapse(doc);
+    });
+  }
 }
 
 function setupGoalControls(game: Phaser.Game, doc: Document): void {
@@ -147,6 +173,14 @@ function setupGoalControls(game: Phaser.Game, doc: Document): void {
 
 function requestPhoneEditorAutoCollapse(doc: Document): void {
   doc.defaultView?.dispatchEvent(new Event('mobile-editor-auto-collapse'));
+}
+
+function syncBackgroundCardSelection(doc: Document, activeBackgroundId: string): void {
+  doc.querySelectorAll<HTMLButtonElement>('[data-background-id]').forEach((button) => {
+    const active = button.dataset.backgroundId === activeBackgroundId;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
 }
 
 function bindNumericGoalInput(

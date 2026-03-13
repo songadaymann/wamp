@@ -12,6 +12,7 @@ import {
   type RoomSnapshot,
 } from './roomModel';
 import { ROOM_STORAGE_PREFIX } from './browserStorage';
+import { getApiBaseUrl } from '../api/baseUrl';
 import type {
   RoomMintConfirmRequestBody,
   RoomMintPrepareResponse,
@@ -256,11 +257,6 @@ function getRoomStorageBackend(): RoomStorageBackend {
   }
 
   return 'remote';
-}
-
-function getApiBaseUrl(): string {
-  const configured = import.meta.env.VITE_ROOM_API_BASE_URL?.trim();
-  return configured ? configured.replace(/\/+$/, '') : '';
 }
 
 class ApiRoomRepository implements RoomRepository {

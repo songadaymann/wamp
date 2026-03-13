@@ -1,4 +1,5 @@
 import type { RoomCoordinates } from '../persistence/roomModel';
+import { getApiBaseUrl } from '../api/baseUrl';
 import type {
   GlobalLeaderboardResponse,
   RoomLeaderboardResponse,
@@ -26,11 +27,6 @@ class RunApiError extends Error {
   ) {
     super(message);
   }
-}
-
-function getApiBaseUrl(): string {
-  const configured = import.meta.env.VITE_ROOM_API_BASE_URL?.trim();
-  return configured ? configured.replace(/\/+$/, '') : '';
 }
 
 class ApiRunRepository implements RunRepository {

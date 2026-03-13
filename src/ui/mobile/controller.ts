@@ -9,7 +9,7 @@ import {
   setTouchMove,
 } from './touchControls';
 
-type EditorSheetId = 'tools' | 'palette' | 'objects' | 'goal' | 'actions';
+type EditorSheetId = 'tools' | 'background' | 'palette' | 'objects' | 'goal' | 'actions';
 
 type Elements = {
   rotateGate: HTMLElement | null;
@@ -147,11 +147,9 @@ export class MobileUiController {
           return;
         }
 
-        if (this.activeEditorSheet === nextSheet && this.editorSheetCollapsed) {
-          this.editorSheetCollapsed = false;
-        } else if (this.activeEditorSheet === nextSheet) {
-          this.editorSheetCollapsed = !this.editorSheetCollapsed;
-        } else {
+        this.syncEditorPaletteMode(nextSheet);
+
+        if (this.activeEditorSheet !== nextSheet || this.editorSheetCollapsed) {
           this.editorSheetCollapsed = false;
         }
         this.activeEditorSheet = nextSheet;
@@ -170,10 +168,24 @@ export class MobileUiController {
     });
 
     this.elements.mobileEditorToggleButton?.addEventListener('click', () => {
-      this.editorSheetCollapsed = !this.editorSheetCollapsed;
-      this.doc.body.dataset.mobileEditorCollapsed = this.editorSheetCollapsed ? 'true' : 'false';
-      this.render();
+      if (!this.editorSheetCollapsed) {
+        this.editorSheetCollapsed = true;
+        this.doc.body.dataset.mobileEditorCollapsed = 'true';
+        this.render();
+      }
     });
+  }
+
+  private syncEditorPaletteMode(sheet: EditorSheetId): void {
+    if (sheet !== 'palette' && sheet !== 'objects') {
+      return;
+    }
+
+    const targetMode = sheet === 'objects' ? 'objects' : 'tiles';
+    const targetButton = this.doc.querySelector<HTMLButtonElement>(`.palette-tab[data-mode="${targetMode}"]`);
+    if (targetButton && !targetButton.classList.contains('active')) {
+      targetButton.click();
+    }
   }
 
   private bindMobileWorldHud(): void {
@@ -409,7 +421,6 @@ export class MobileUiController {
         'hidden',
         !(isPhone && layout.coarsePointer && !layout.mobileLandscapeBlocked && isEditor),
       );
-      this.elements.mobileEditorToggleButton && (this.elements.mobileEditorToggleButton.textContent = this.editorSheetCollapsed ? 'Show' : 'Hide');
       this.elements.mobileEditorNav
         .querySelectorAll<HTMLButtonElement>('[data-mobile-editor-sheet]')
         .forEach((button) => {

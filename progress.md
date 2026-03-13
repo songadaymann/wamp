@@ -57,14 +57,63 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Phone editor mobile redesign on March 13, 2026:
+  - removed the bottom footer only in phone editor mode so the canvas gets the full lower screen back
+  - rebuilt the phone editor shell into a bottom-docked sheet with an attached segmented rail above it
+  - expanded the mobile editor rail to `Tools`, `Background`, `Palette`, `Objects`, `Goal`, `Actions`, `Undo`, `Hide`
+  - added a dedicated `Background` phone sheet with preview cards instead of reusing the desktop dropdown
+  - made phone sheet tabs reopen the editor when collapsed; `Hide` now only collapses the sheet body and leaves the rail visible
+  - moved phone editor status/utility info into `Actions`, including room coords, cursor coords, save status, fit, and zoom controls
+  - removed the redundant phone `Tiles / Objects` toggle framing and now drive tile/object mode from the mobile rail instead
+  - kept desktop and tablet editor layout unchanged
+  - verification:
+    - `npm run build`
+    - required Playwright client artifact: `output/web-game/phone-editor-redesign-probe/`
+    - targeted phone Playwright artifact: `output/web-game/mobile-editor-redesign-check/`
+    - screenshots:
+      - `output/web-game/mobile-editor-redesign-check/shot-phone-editor.png`
+      - `output/web-game/mobile-editor-redesign-check/shot-background-tab.png`
+      - `output/web-game/mobile-editor-redesign-check/shot-actions-tab.png`
+      - `output/web-game/mobile-editor-redesign-check/shot-collapsed.png`
+      - `output/web-game/mobile-editor-redesign-check/shot-objects-tab.png`
+- Editor object search on March 13, 2026:
+  - added a search field to the editor object palette so object browsing no longer depends only on category tabs
+  - search now filters by object name, id, description, and category while preserving the existing category filter and selected-object behavior
+  - added an object-grid empty state so zero matches read as intentional instead of looking like a broken palette
+  - verification:
+    - `npm run build`
+    - local browser artifacts:
+      - `output/web-game/editor-object-search-check/summary.json`
+      - `output/web-game/editor-object-search-check/shot-search.png`
+- Branding pass on March 13, 2026:
+  - changed the browser tab title from `Everybody's Platformer` to `WAMP`
+  - added a provisional SVG favicon at `public/favicon.svg` using the current black / amber / green UI palette
+  - updated wallet-connect metadata to use the same `WAMP` name and favicon asset instead of the old missing `/favicon.ico` path
+  - verification:
+    - `npm run build`
+    - local browser artifact: `output/web-game/wamp-title-favicon-check/shot-0.png`
 - Live auth diagnosis + email error handling on March 12, 2026:
   - confirmed the deployed `wamp.land` frontend still sends `POST /api/auth/request-link` to `https://everybodys-platformer.novox-robot.workers.dev` and updates the UI to `Check your email for the sign-in link.`
   - confirmed invalid live verify links redirect back to `https://wamp.land/?auth=invalid`, so the current remote `APP_BASE_URL` path is aligned
   - verified the split-domain session flow still works in Chromium with a synthetic wallet sign-in, so the live cross-site cookie path is not obviously broken in the deployed code
   - found a real bug in Worker email auth: `sendMagicLinkEmail(...)` awaited `resend.emails.send(...)` but never checked the returned `{ error }` payload, so the API could falsely report success even when Resend rejected delivery
   - patched `src/cloudflare/worker/auth/store.ts` to throw on Resend error or missing confirmation id so live email auth fails loudly instead of silently
+  - follow-up diagnosis: desktop magic-link auth works reliably on `wamp.land`, but mobile auth does not; the live frontend bundle still hardcodes `https://everybodys-platformer.novox-robot.workers.dev`, so mobile is still forced through a cross-site auth/session path instead of same-origin `/api`
+  - frontend follow-up should remove duplicated API-base helpers and treat `VITE_ROOM_API_BASE_URL` as an optional override rather than a production requirement
   - verification:
     - `npm run build`
+- Frontend same-origin `/api` switch on March 12, 2026:
+  - removed the duplicated `getApiBaseUrl()` helpers from world, room, and run repositories and routed all frontend API callers through `src/api/baseUrl.ts`
+  - kept `VITE_ROOM_API_BASE_URL` as an explicit override, but updated the frontend deploy docs so production custom-domain builds leave it unset and rely on same-origin `/api`
+  - documented that shipping `wamp.land` with a `workers.dev` API override forces cross-site auth and breaks mobile magic-link sign-in
+  - verification:
+    - `VITE_ROOM_API_BASE_URL='' npm run build`
+    - `rg "everybodys-platformer\\.novox-robot\\.workers\\.dev" dist/index.html dist/assets` returned no matches after the default build
+    - `VITE_ROOM_API_BASE_URL='https://everybodys-platformer.novox-robot.workers.dev' npm run build`
+    - `rg "everybodys-platformer\\.novox-robot\\.workers\\.dev" dist/index.html dist/assets` matched the explicit override build as expected
+    - local browser artifact on a fresh Vite `3002` + Wrangler `8788` stack is in `output/web-game/api-base-same-origin-check-canvas/`
+  - local note:
+    - an older existing local Vite/Worker stack was already occupying `3000` and `8787`; it was left untouched, so the browser verification used fresh ports instead of replacing the existing processes
 - PRD + repo hygiene pass on March 12, 2026:
   - updated `PRD.md` to match the shipped product more closely: mobile/touch foundation, loading/busy overlays, frontier-only room claiming, current room/global leaderboard behavior, live deployment URLs, and the current moderation/admin reality
   - removed the small batch of unused locals/getters left over from the scene/controller extraction work

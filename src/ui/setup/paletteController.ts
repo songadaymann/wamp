@@ -21,6 +21,7 @@ export class PaletteController {
   private readonly selectionInfo: HTMLElement | null;
   private readonly tilePreviewCanvas: HTMLCanvasElement | null;
   private readonly objectGrid: HTMLElement | null;
+  private readonly objectSearchInput: HTMLInputElement | null;
   private readonly objectFacingControls: HTMLElement | null;
   private readonly objectFacingLeftBtn: HTMLButtonElement | null;
   private readonly objectFacingRightBtn: HTMLButtonElement | null;
@@ -28,6 +29,7 @@ export class PaletteController {
   private readonly paletteImages = new Map<string, HTMLImageElement>();
   private readonly paletteTileOccupancy = new Map<string, boolean[]>();
   private currentObjectCategory = 'all';
+  private currentObjectSearch = '';
   private paletteDragStart: { col: number; row: number } | null = null;
   private objectTooltipEl: HTMLDivElement | null = null;
 
@@ -38,6 +40,7 @@ export class PaletteController {
     this.selectionInfo = this.doc.getElementById('selection-info');
     this.tilePreviewCanvas = this.doc.getElementById('tile-preview') as HTMLCanvasElement | null;
     this.objectGrid = this.doc.getElementById('object-grid');
+    this.objectSearchInput = this.doc.getElementById('object-search-input') as HTMLInputElement | null;
     this.objectFacingControls = this.doc.getElementById('object-facing-controls');
     this.objectFacingLeftBtn = this.doc.getElementById('btn-object-facing-left') as HTMLButtonElement | null;
     this.objectFacingRightBtn = this.doc.getElementById('btn-object-facing-right') as HTMLButtonElement | null;
@@ -45,6 +48,7 @@ export class PaletteController {
 
   init(): void {
     this.loadPaletteImages();
+    this.bindObjectSearchInput();
     this.bindObjectFacingControls();
     this.renderObjectGrid();
     this.renderObjectFacingControls();
@@ -62,6 +66,10 @@ export class PaletteController {
 
     this.objectTooltipEl?.remove();
     this.objectTooltipEl = null;
+    if (this.objectSearchInput) {
+      this.objectSearchInput.oninput = null;
+      this.objectSearchInput.onchange = null;
+    }
   }
 
   setObjectCategory(category: string): void {
@@ -340,16 +348,19 @@ export class PaletteController {
 
     this.objectGrid.innerHTML = '';
 
-    const filteredObjects =
-      this.currentObjectCategory === 'all'
-        ? GAME_OBJECTS
-        : GAME_OBJECTS.filter((objectConfig) => {
-            if (this.currentObjectCategory === 'interactive') {
-              return objectConfig.category === 'interactive' || objectConfig.category === 'platform';
-            }
+    const filteredObjects = GAME_OBJECTS.filter((objectConfig) => (
+      this.matchesObjectCategoryFilter(objectConfig) &&
+      this.matchesObjectSearchFilter(objectConfig)
+    ));
 
-            return objectConfig.category === this.currentObjectCategory;
-          });
+    if (filteredObjects.length === 0) {
+      const emptyState = this.doc.createElement('div');
+      emptyState.className = 'object-grid-empty';
+      emptyState.textContent = 'No objects match this filter.';
+      this.objectGrid.appendChild(emptyState);
+      this.renderObjectFacingControls();
+      return;
+    }
 
     for (const objectConfig of filteredObjects) {
       const item = this.doc.createElement('div');
@@ -426,6 +437,21 @@ export class PaletteController {
     }
 
     this.renderObjectFacingControls();
+  }
+
+  private bindObjectSearchInput(): void {
+    if (!this.objectSearchInput) {
+      return;
+    }
+
+    const applySearch = () => {
+      this.currentObjectSearch = this.objectSearchInput?.value.trim().toLowerCase() ?? '';
+      this.renderObjectGrid();
+    };
+
+    this.currentObjectSearch = this.objectSearchInput.value.trim().toLowerCase();
+    this.objectSearchInput.oninput = applySearch;
+    this.objectSearchInput.onchange = applySearch;
   }
 
   private requestPhoneEditorAutoCollapse(): void {
@@ -644,6 +670,35 @@ export class PaletteController {
     }
 
     return getObjectById(editorState.selectedObjectId) ?? null;
+  }
+
+  private matchesObjectCategoryFilter(objectConfig: GameObjectConfig): boolean {
+    if (this.currentObjectCategory === 'all') {
+      return true;
+    }
+
+    if (this.currentObjectCategory === 'interactive') {
+      return objectConfig.category === 'interactive' || objectConfig.category === 'platform';
+    }
+
+    return objectConfig.category === this.currentObjectCategory;
+  }
+
+  private matchesObjectSearchFilter(objectConfig: GameObjectConfig): boolean {
+    if (!this.currentObjectSearch) {
+      return true;
+    }
+
+    const searchableText = [
+      objectConfig.name,
+      objectConfig.id,
+      objectConfig.description,
+      objectConfig.category,
+    ]
+      .join(' ')
+      .toLowerCase();
+
+    return searchableText.includes(this.currentObjectSearch);
   }
 
   private shouldFlipSelectedObject(objectConfig: GameObjectConfig): boolean {

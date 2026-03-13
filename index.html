@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Everybody's Platformer</title>
+  <title>WAMP</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/src/styles/main.css">
 </head>
 <body>
@@ -98,7 +99,7 @@
       </div>
 
       <!-- Background Selector -->
-      <div class="sidebar-section" data-mobile-panel="palette">
+      <div class="sidebar-section" data-mobile-panel="background">
         <div class="section-label">Background</div>
         <select id="background-select">
           <option value="none">None</option>
@@ -110,10 +111,79 @@
           <option value="aurora">Aurora</option>
           <option value="cave">Cave</option>
         </select>
+        <div id="background-card-grid" class="background-card-grid" aria-label="Backgrounds">
+          <button class="background-card background-card-none active" type="button" data-background-id="none">
+            <span class="background-card-art" aria-hidden="true"></span>
+            <span class="background-card-label">None</span>
+          </button>
+          <button
+            class="background-card"
+            type="button"
+            data-background-id="forest"
+            style="--background-card-back: url('/assets/backgrounds/forest/1.png'); --background-card-front: url('/assets/backgrounds/forest/8.png'); --background-card-tint: rgba(74, 102, 58, 0.42);"
+          >
+            <span class="background-card-art" aria-hidden="true"></span>
+            <span class="background-card-label">Forest</span>
+          </button>
+          <button
+            class="background-card"
+            type="button"
+            data-background-id="dark_forest"
+            style="--background-card-back: url('/assets/backgrounds/dark_forest/1.png'); --background-card-front: url('/assets/backgrounds/dark_forest/7.png'); --background-card-tint: rgba(47, 68, 54, 0.46);"
+          >
+            <span class="background-card-art" aria-hidden="true"></span>
+            <span class="background-card-label">Dark Forest</span>
+          </button>
+          <button
+            class="background-card"
+            type="button"
+            data-background-id="grassland"
+            style="--background-card-back: url('/assets/backgrounds/grassland/1.png'); --background-card-front: url('/assets/backgrounds/grassland/4.png'); --background-card-tint: rgba(122, 151, 67, 0.42);"
+          >
+            <span class="background-card-art" aria-hidden="true"></span>
+            <span class="background-card-label">Grassland</span>
+          </button>
+          <button
+            class="background-card"
+            type="button"
+            data-background-id="mountains"
+            style="--background-card-back: url('/assets/backgrounds/mountains/1.png'); --background-card-front: url('/assets/backgrounds/mountains/4.png'); --background-card-tint: rgba(92, 103, 127, 0.42);"
+          >
+            <span class="background-card-art" aria-hidden="true"></span>
+            <span class="background-card-label">Mountains</span>
+          </button>
+          <button
+            class="background-card"
+            type="button"
+            data-background-id="meadow"
+            style="--background-card-back: url('/assets/backgrounds/meadow/1.png'); --background-card-front: url('/assets/backgrounds/meadow/5.png'); --background-card-tint: rgba(119, 160, 98, 0.42);"
+          >
+            <span class="background-card-art" aria-hidden="true"></span>
+            <span class="background-card-label">Meadow</span>
+          </button>
+          <button
+            class="background-card"
+            type="button"
+            data-background-id="aurora"
+            style="--background-card-back: url('/assets/backgrounds/aurora/1.png'); --background-card-front: url('/assets/backgrounds/aurora/3.png'); --background-card-tint: rgba(83, 111, 146, 0.44);"
+          >
+            <span class="background-card-art" aria-hidden="true"></span>
+            <span class="background-card-label">Aurora</span>
+          </button>
+          <button
+            class="background-card"
+            type="button"
+            data-background-id="cave"
+            style="--background-card-back: url('/assets/backgrounds/cave/layer1_far.png'); --background-card-front: url('/assets/backgrounds/cave/layer3_near.png'); --background-card-tint: rgba(79, 74, 118, 0.46);"
+          >
+            <span class="background-card-art" aria-hidden="true"></span>
+            <span class="background-card-label">Cave</span>
+          </button>
+        </div>
       </div>
 
       <!-- Palette Mode Toggle -->
-      <div class="sidebar-section" data-mobile-panel="palette" data-mobile-panel-alt="objects">
+      <div class="sidebar-section" data-mobile-panel="palette">
         <div class="palette-tabs">
           <button class="palette-tab active" data-mode="tiles">Tiles</button>
           <button class="palette-tab" data-mode="objects">Objects</button>
@@ -135,7 +205,7 @@
 
       <!-- Tile Palette (visible in tiles mode) -->
       <div class="sidebar-section palette-section" id="tile-palette-section" data-mobile-panel="palette">
-        <div class="section-label">Tiles <span id="selection-info" class="selection-info"></span></div>
+        <div class="section-label">Selection <span id="selection-info" class="selection-info"></span></div>
         <div id="palette-container">
           <canvas id="palette-canvas"></canvas>
         </div>
@@ -152,6 +222,16 @@
           <button class="obj-cat-tab" data-category="hazard">Hazard</button>
           <button class="obj-cat-tab" data-category="decoration">Deco</button>
           <button class="obj-cat-tab" data-category="interactive">Other</button>
+        </div>
+        <div class="object-search-row">
+          <input
+            id="object-search-input"
+            class="object-search-input"
+            type="search"
+            placeholder="Search objects"
+            spellcheck="false"
+            autocomplete="off"
+          />
         </div>
         <div id="object-facing-controls" class="object-facing-controls hidden">
           <span class="object-facing-label">Facing</span>
@@ -218,6 +298,28 @@
           <button id="btn-publish-room" class="bar-btn">Publish</button>
           <button id="btn-mint-room" class="bar-btn">Mint Room</button>
           <button id="btn-room-history" class="bar-btn">History</button>
+        </div>
+        <div class="mobile-editor-actions-panel mobile-editor-only">
+          <div class="mobile-editor-status-grid">
+            <div class="mobile-editor-status-card">
+              <div class="mobile-editor-status-label">Room</div>
+              <div id="mobile-editor-room-coords" class="mobile-editor-status-value">Room (0, 0)</div>
+            </div>
+            <div class="mobile-editor-status-card">
+              <div class="mobile-editor-status-label">Cursor</div>
+              <div id="mobile-editor-cursor-coords" class="mobile-editor-status-value">Tile: -, -</div>
+            </div>
+            <div class="mobile-editor-status-card mobile-editor-status-card-wide">
+              <div class="mobile-editor-status-label">Status</div>
+              <div id="mobile-editor-save-status" class="mobile-editor-status-value">Draft ready.</div>
+            </div>
+          </div>
+          <div class="mobile-editor-zoom-row">
+            <button id="btn-mobile-editor-zoom-out" class="bar-btn bar-btn-small" type="button">-</button>
+            <span id="mobile-editor-zoom-level" class="mobile-editor-zoom-readout">Zoom: 2x</span>
+            <button id="btn-mobile-editor-zoom-in" class="bar-btn bar-btn-small" type="button">+</button>
+            <button id="btn-mobile-editor-fit" class="bar-btn bar-btn-small" type="button">Fit</button>
+          </div>
         </div>
       </div>
     </div>
@@ -319,13 +421,14 @@
       </div>
     </div>
     <div id="mobile-editor-nav" class="mobile-editor-nav hidden" aria-label="Editor panels">
-      <button class="bar-btn bar-btn-small" type="button" data-mobile-editor-sheet="tools">Tools</button>
-      <button class="bar-btn bar-btn-small" type="button" data-mobile-editor-sheet="palette">Palette</button>
-      <button class="bar-btn bar-btn-small" type="button" data-mobile-editor-sheet="objects">Objects</button>
-      <button class="bar-btn bar-btn-small" type="button" data-mobile-editor-sheet="goal">Goal</button>
-      <button class="bar-btn bar-btn-small" type="button" data-mobile-editor-sheet="actions">Actions</button>
-      <button id="btn-mobile-editor-undo" class="bar-btn bar-btn-small" type="button">Undo</button>
-      <button id="btn-mobile-editor-toggle" class="bar-btn bar-btn-small" type="button">Hide</button>
+      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="tools">Tools</button>
+      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="background">Background</button>
+      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="palette">Palette</button>
+      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="objects">Objects</button>
+      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="goal">Goal</button>
+      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="actions">Actions</button>
+      <button id="btn-mobile-editor-undo" class="bar-btn bar-btn-small mobile-editor-utility" type="button">Undo</button>
+      <button id="btn-mobile-editor-toggle" class="bar-btn bar-btn-small mobile-editor-utility" type="button">Hide</button>
     </div>
   </div>
 

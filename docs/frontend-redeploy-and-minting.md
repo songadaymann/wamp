@@ -13,13 +13,21 @@ Best-guess stable setup for the Pages frontend:
 Frontend env vars Pages should have:
 
 - `VITE_REOWN_PROJECT_ID=<your reown project id>`
-- `VITE_ROOM_API_BASE_URL=https://everybodys-platformer.novox-robot.workers.dev`
 - `VITE_PARTYKIT_HOST=everybodys-platformer-presence.songadaymann.partykit.dev`
+
+Frontend API base guidance:
+
+- For the intended production setup, leave `VITE_ROOM_API_BASE_URL` unset so the app uses same-origin `/api`.
+- Only set `VITE_ROOM_API_BASE_URL` when you intentionally want the frontend to talk to a different backend, such as:
+  - local remote-debugging against `https://everybodys-platformer.novox-robot.workers.dev`
+  - a temporary staging/custom API hostname like `https://api.wamp.land`
+- Do not ship the `wamp.land` frontend with `VITE_ROOM_API_BASE_URL=https://everybodys-platformer.novox-robot.workers.dev`; that forces cross-site auth/session behavior and breaks mobile magic-link sign-in.
 
 Notes:
 
 - Do **not** try to reuse the current `wrangler.jsonc` as a shared Pages config. This repo already uses an `ASSETS` binding for the Worker, and adding `pages_build_output_dir` makes Wrangler treat it as a Pages config and fail.
 - The safest frontend redeploy path is the Pages dashboard: point `wamp` at `main`, use the build command/output above, and clear build cache when needed.
+- Once `wamp.land` serves the Worker API on `/api`, the frontend should rely on that same-origin path by default instead of a `workers.dev` override.
 - If you want CLI Pages deploys later, use a separate Pages config file instead of the Worker `wrangler.jsonc`.
 - The Pages CLI deploy still depends on the `wamp` project existing in the same Cloudflare account Wrangler is logged into.
 

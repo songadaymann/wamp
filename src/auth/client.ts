@@ -466,10 +466,10 @@ async function ensureWalletModal(): Promise<AppKit> {
     ]);
 
     const metadata = {
-      name: "Everybody's Platformer",
+      name: 'WAMP',
       description: 'Collaborative platformer world builder',
       url: window.location.origin,
-      icons: [`${window.location.origin}/favicon.ico`],
+      icons: [`${window.location.origin}/favicon.svg`],
     };
 
     const walletModal = createAppKit({

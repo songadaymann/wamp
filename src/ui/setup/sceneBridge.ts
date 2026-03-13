@@ -24,6 +24,8 @@ export interface EditorSceneBridge {
   returnToWorld?: () => Promise<void> | void;
   mintRoom?: () => Promise<RoomRecord | null>;
   fitToScreen?: () => void;
+  zoomIn?: () => void;
+  zoomOut?: () => void;
   setRoomTitle?: (title: string | null) => void;
   setGoalType?: (nextType: RoomGoalType | null) => void;
   setGoalTimeLimitSeconds?: (seconds: number | null) => void;

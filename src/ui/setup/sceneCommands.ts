@@ -30,6 +30,9 @@ export function setupSceneCommands(
   const historyBtn = doc.getElementById('btn-room-history');
   const mintBtn = doc.getElementById('btn-mint-room');
   const fitBtn = doc.getElementById('btn-fit-screen');
+  const mobileFitBtn = doc.getElementById('btn-mobile-editor-fit');
+  const mobileZoomInBtn = doc.getElementById('btn-mobile-editor-zoom-in');
+  const mobileZoomOutBtn = doc.getElementById('btn-mobile-editor-zoom-out');
 
   worldPlayBtn?.addEventListener('click', () => {
     leaderboardModal.close();
@@ -148,5 +151,17 @@ export function setupSceneCommands(
 
     controlsModal.close();
     getActiveOverworldScene(game)?.fitLoadedWorld?.();
+  });
+
+  mobileFitBtn?.addEventListener('click', () => {
+    getActiveEditorScene(game)?.fitToScreen?.();
+  });
+
+  mobileZoomInBtn?.addEventListener('click', () => {
+    getActiveEditorScene(game)?.zoomIn?.();
+  });
+
+  mobileZoomOutBtn?.addEventListener('click', () => {
+    getActiveEditorScene(game)?.zoomOut?.();
   });
 }

@@ -83,6 +83,9 @@ import {
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 2.5;
 const DEFAULT_ZOOM = 0.18;
+const ROOM_BADGE_MAX_SCALE_ZOOM = DEFAULT_ZOOM;
+const ROOM_BADGE_FADE_START_ZOOM = 0.14;
+const ROOM_BADGE_HIDE_ZOOM = 0.11;
 const BUTTON_ZOOM_FACTOR = 1.12;
 const WHEEL_ZOOM_SENSITIVITY = 0.003;
 const PLAY_ROOM_FIT_PADDING = 16;
@@ -3245,9 +3248,17 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private syncGoalOverlayScale(): void {
-    const overlayScale = 1 / this.cameras.main.zoom;
+    const zoom = this.cameras.main.zoom;
+    const overlayScale = 1 / Math.max(zoom, ROOM_BADGE_MAX_SCALE_ZOOM);
+    const fadeProgress = Phaser.Math.Clamp(
+      (zoom - ROOM_BADGE_HIDE_ZOOM) / (ROOM_BADGE_FADE_START_ZOOM - ROOM_BADGE_HIDE_ZOOM),
+      0,
+      1
+    );
     for (const badge of this.roomGoalBadges) {
       badge.container.setScale(overlayScale);
+      badge.container.setAlpha(fadeProgress);
+      badge.container.setVisible(fadeProgress > 0.02);
     }
   }
 

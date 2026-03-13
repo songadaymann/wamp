@@ -40,7 +40,7 @@ export class EditorInteractionController {
   private isDrawing = false;
   private spaceDown = false;
   private rectStart: { x: number; y: number } | null = null;
-  private readonly cursorCoordsEl: HTMLElement | null;
+  private readonly cursorCoordsEls: HTMLElement[];
   private touchPointers = new Map<number, { x: number; y: number }>();
   private touchPrimaryPointerId: number | null = null;
   private pinchDistance = 0;
@@ -51,7 +51,10 @@ export class EditorInteractionController {
     private readonly host: EditorInteractionHost,
     doc: Document = document,
   ) {
-    this.cursorCoordsEl = doc.getElementById('cursor-coords');
+    this.cursorCoordsEls = [
+      doc.getElementById('cursor-coords'),
+      doc.getElementById('mobile-editor-cursor-coords'),
+    ].filter((element): element is HTMLElement => Boolean(element));
   }
 
   get cursorOverlay(): Phaser.GameObjects.Graphics | null {
@@ -122,6 +125,14 @@ export class EditorInteractionController {
     this.centerCameraOnRoom();
     this.host.updateBackgroundPreview();
     this.host.updateZoomUI();
+  }
+
+  zoomIn(): void {
+    this.handleZoom(1.15);
+  }
+
+  zoomOut(): void {
+    this.handleZoom(1 / 1.15);
   }
 
   updateCursorHighlight(): void {
@@ -415,8 +426,8 @@ export class EditorInteractionController {
   }
 
   private updateCursorCoords(tileX: number, tileY: number): void {
-    if (this.cursorCoordsEl) {
-      this.cursorCoordsEl.textContent = `Tile: ${tileX}, ${tileY}`;
+    for (const element of this.cursorCoordsEls) {
+      element.textContent = `Tile: ${tileX}, ${tileY}`;
     }
   }
 

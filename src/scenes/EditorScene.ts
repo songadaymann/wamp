@@ -76,6 +76,7 @@ export class EditorScene extends Phaser.Scene {
   private readonly handleBackgroundChanged = (): void => {
     this.updateBackground();
     this.markRoomDirty();
+    this.renderEditorUi();
   };
   private readonly handleCanvasContextMenu = (event: Event): void => {
     event.preventDefault();
@@ -699,6 +700,14 @@ export class EditorScene extends Phaser.Scene {
 
   fitToScreen(): void {
     this.interactionController.fitToScreen();
+  }
+
+  zoomIn(): void {
+    this.interactionController.zoomIn();
+  }
+
+  zoomOut(): void {
+    this.interactionController.zoomOut();
   }
 
   // ══════════════════════════════════════

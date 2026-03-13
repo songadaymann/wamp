@@ -13,6 +13,7 @@ import {
   type WorldChunkWindow,
   type WorldWindow,
 } from './worldModel';
+import { getApiBaseUrl } from '../api/baseUrl';
 import { ROOM_STORAGE_PREFIX } from './browserStorage';
 
 export interface WorldRepository {
@@ -40,11 +41,6 @@ function getRoomStorageBackend(): RoomStorageBackend {
   }
 
   return 'remote';
-}
-
-function getApiBaseUrl(): string {
-  const configured = import.meta.env.VITE_ROOM_API_BASE_URL?.trim();
-  return configured ? configured.replace(/\/+$/, '') : '';
 }
 
 function parseStoredRecord(
