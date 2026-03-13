@@ -57,6 +57,33 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Desktop editor sidebar containment + collapsible sections on March 13, 2026:
+  - reverted the experimental inline goal-type button grid and restored the compact goal dropdown in the desktop editor
+  - identified the real overlap cause: the tile/object palette sections were leaking overflow into the room-title/goal area when the lower sections got taller
+  - contained the palette panels with explicit desktop max-heights and internal scroll behavior so `Objects` and `Selection` no longer bleed over the sections below
+  - added collapsible desktop sidebar sections so `Tools`, `Layers`, `Background`, `Tileset`, `Selection`, `Objects`, `Room Title`, `Goal`, and `Actions` can be folded up from their section labels when the sidebar gets crowded
+  - verification:
+    - `npm run build`
+    - required Playwright client artifact: `output/web-game/editor-sidebar-goal-recheck/`
+    - full-page desktop checks:
+      - `output/web-game/editor-sidebar-collapse-check.png`
+      - `output/web-game/editor-goal-objects-layout-check.png`
+    - `output/web-game/editor-goal-objects-layout-check.png` confirms:
+      - `Objects` stays contained inside its own panel
+      - the restored goal dropdown stays compact
+      - the goal section no longer visually overruns the object panel
+- Editor goal UI + crate/saw asset polish on March 13, 2026:
+  - initial inline goal-button experiment shipped here, but it was later reverted in the follow-up sidebar containment pass because it made the sidebar taller instead of fixing the actual overlap problem
+  - fixed the saw blade animation sequence by skipping the blank spritesheet frame and using `[0, 2, 3, 2]`
+  - corrected the crate visual by switching it to a dedicated `crate_static.png` asset with the box art aligned into the bottom-left tile footprint, plus matching collision/editor preview bounds
+  - verification:
+    - `npm run build`
+    - required Playwright client runs completed in:
+      - `output/web-game/editor-goal-crate-saw-baseline/`
+      - `output/web-game/frontier-state-check-2/`
+      - `output/web-game/editor-goal-crate-saw-editor-entry/`
+    - additional full-page Playwright check:
+      - `output/web-game/editor-goal-page-check.png`
 - Avatar generation stage-1 prototype on March 13, 2026:
   - repurposed `gen-avatar/run-first-test.mjs` into a standalone base-sprite generator that reads `gen-avatar/.env`, expands a short prompt into a strict JSON sprite spec with OpenAI, and then generates a transparent PNG base sprite with `gpt-image-1.5`
   - each run now saves `input-prompt.txt`, `sprite-spec.json`, `image-prompt.json`, `base-sprite.png`, and `report.json` under `gen-avatar/output/<timestamp>-.../`

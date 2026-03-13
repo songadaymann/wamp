@@ -245,6 +245,18 @@ export interface GameObjectConfig {
   bodyWidth: number;
   /** collision body height (0 = no collision / decoration) */
   bodyHeight: number;
+  /** explicit collision body offset inside the frame */
+  bodyOffsetX?: number;
+  /** explicit collision body offset inside the frame */
+  bodyOffsetY?: number;
+  /** optional editor preview width override */
+  previewWidth?: number;
+  /** optional editor preview height override */
+  previewHeight?: number;
+  /** optional editor preview x offset inside the frame */
+  previewOffsetX?: number;
+  /** optional editor preview y offset inside the frame */
+  previewOffsetY?: number;
   /** behavior hint for runtime object logic */
   behavior: 'static' | 'patrol' | 'fly' | 'bounce' | 'animated' | 'shooter';
   /** short tooltip description for the editor palette */
@@ -263,7 +275,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
 
   // ── Hazards ──
   { id: 'spikes',      name: 'Spikes',      category: 'hazard',      path: 'assets/enemies/spikes.png',      frameWidth: 16, frameHeight: 16, frameCount: 4,  fps: 8,  bodyWidth: 14, bodyHeight: 10, behavior: 'animated', description: 'Animated spike trap. Kills on contact.' },
-  { id: 'saw',         name: 'Saw',         category: 'hazard',      path: 'assets/enemies/saw.png',         frameWidth: 34, frameHeight: 34, frameCount: 4,  fps: 8,  bodyWidth: 30, bodyHeight: 30, behavior: 'animated', description: 'Spinning blade. Orbits in a circle.' },
+  { id: 'saw',         name: 'Saw',         category: 'hazard',      path: 'assets/enemies/saw.png',         frameWidth: 34, frameHeight: 34, frameCount: 4,  fps: 8,  animationFrames: [0, 2, 3, 2], bodyWidth: 30, bodyHeight: 30, behavior: 'animated', description: 'Spinning blade. Orbits in a circle.' },
   { id: 'fire',        name: 'Fire',        category: 'hazard',      path: 'assets/enemies/fire.png',        frameWidth: 16, frameHeight: 16, frameCount: 6,  fps: 10, bodyWidth: 12, bodyHeight: 14, behavior: 'animated', description: 'Stationary flame. Burns on contact.' },
   { id: 'fireball',    name: 'Fireball',    category: 'hazard',      path: 'assets/enemies/fireball.png',    frameWidth: 16, frameHeight: 16, frameCount: 4,  fps: 10, bodyWidth: 12, bodyHeight: 12, behavior: 'animated', description: 'Shoots in a direction. Kills on contact.' },
   { id: 'wood_stakes', name: 'Wood Stakes', category: 'hazard',      path: 'assets/enemies/wood_stakes.png', frameWidth: 32, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 28, behavior: 'static',   description: 'Sharpened stakes. Kills on contact.' },
@@ -286,7 +298,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'bounce_pad',  name: 'Bounce Pad',  category: 'interactive', path: 'assets/objects/bounce_pad.png',  frameWidth: 16, frameHeight: 32, frameCount: 4,  fps: 0,  bodyWidth: 16, bodyHeight: 8,  behavior: 'bounce',   description: 'Launches player upward on contact.' },
   { id: 'spawn_point', name: 'Spawn Point', category: 'interactive', path: 'assets/objects/sign_arrow.png',  frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Player spawn marker. Only one is stored per room.' },
   { id: 'flag',        name: 'Flag',        category: 'interactive', path: 'assets/objects/flag.png',        frameWidth: 32, frameHeight: 32, frameCount: 9,  fps: 8,  bodyWidth: 8,  bodyHeight: 28, behavior: 'animated', description: 'Goal marker. Reach to complete the room.' },
-  { id: 'crate',       name: 'Crate',       category: 'platform',    path: 'assets/objects/crate.png',       frameWidth: 32, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 28, behavior: 'static',   description: 'Solid block. Stand on it or push it.' },
+  { id: 'crate',       name: 'Crate',       category: 'platform',    path: 'assets/objects/crate_static.png', frameWidth: 32, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 0, bodyOffsetY: 16, previewWidth: 16, previewHeight: 16, previewOffsetX: 0, previewOffsetY: 16, behavior: 'static',   description: 'Solid block. Stand on it or push it.' },
   { id: 'sign',        name: 'Sign',        category: 'decoration',  path: 'assets/objects/sign.png',        frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative signpost. No collision.' },
   { id: 'sign_arrow',  name: 'Arrow Sign',  category: 'decoration',  path: 'assets/objects/sign_arrow.png',  frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative arrow sign. No collision.' },
   { id: 'ladder',      name: 'Ladder',      category: 'interactive', path: 'assets/objects/ladder.png',      frameWidth: 16, frameHeight: 64, frameCount: 1,  fps: 0,  bodyWidth: 14, bodyHeight: 60, behavior: 'static',   description: 'Climbable surface. Press up to climb.' },

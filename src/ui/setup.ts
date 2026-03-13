@@ -9,6 +9,7 @@ import { RoomHistoryModalController } from './setup/historyModal';
 import { setupKeyboardShortcutPassthrough } from './setup/keyboardPassthrough';
 import { LeaderboardModalController } from './setup/leaderboardModal';
 import { PaletteController } from './setup/paletteController';
+import { setupCollapsibleSidebarSections } from './setup/sidebarSections';
 import { setupSceneCommands } from './setup/sceneCommands';
 
 export function setupUI(game: Phaser.Game): void {
@@ -21,6 +22,7 @@ export function setupUI(game: Phaser.Game): void {
   const mobileUi = new MobileUiController(game);
 
   paletteController.init();
+  setupCollapsibleSidebarSections();
   setupEditorControls(game, paletteController);
   historyModal.init();
   leaderboardModal.init();

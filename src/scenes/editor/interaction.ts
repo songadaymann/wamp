@@ -162,19 +162,23 @@ export class EditorInteractionController {
     if (editorState.paletteMode === 'objects') {
       const objectConfig = editorState.selectedObjectId ? getObjectById(editorState.selectedObjectId) : null;
       if (objectConfig && editorState.activeTool !== 'eraser') {
+        const previewWidth = objectConfig.previewWidth ?? objectConfig.frameWidth;
+        const previewHeight = objectConfig.previewHeight ?? objectConfig.frameHeight;
+        const previewOffsetX = objectConfig.previewOffsetX ?? 0;
+        const previewOffsetY = objectConfig.previewOffsetY ?? 0;
         this.cursorGraphics.fillStyle(RETRO_COLORS.draft, 0.14);
         this.cursorGraphics.fillRect(
-          tileX * TILE_SIZE,
-          tileY * TILE_SIZE + TILE_SIZE - objectConfig.frameHeight,
-          objectConfig.frameWidth,
-          objectConfig.frameHeight,
+          tileX * TILE_SIZE + previewOffsetX,
+          tileY * TILE_SIZE + TILE_SIZE - objectConfig.frameHeight + previewOffsetY,
+          previewWidth,
+          previewHeight,
         );
         this.cursorGraphics.lineStyle(1, RETRO_COLORS.draft, 0.75);
         this.cursorGraphics.strokeRect(
-          tileX * TILE_SIZE,
-          tileY * TILE_SIZE + TILE_SIZE - objectConfig.frameHeight,
-          objectConfig.frameWidth,
-          objectConfig.frameHeight,
+          tileX * TILE_SIZE + previewOffsetX,
+          tileY * TILE_SIZE + TILE_SIZE - objectConfig.frameHeight + previewOffsetY,
+          previewWidth,
+          previewHeight,
         );
       } else {
         this.cursorGraphics.lineStyle(2, RETRO_COLORS.danger, 0.85);

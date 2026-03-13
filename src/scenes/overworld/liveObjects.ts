@@ -864,6 +864,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   }
 
   private getObjectBodyOffset(config: GameObjectConfig): [number, number] {
+    if (typeof config.bodyOffsetX === 'number' || typeof config.bodyOffsetY === 'number') {
+      return [config.bodyOffsetX ?? 0, config.bodyOffsetY ?? 0];
+    }
+
     const centeredX = Math.max(0, (config.frameWidth - config.bodyWidth) * 0.5);
     let offsetY = Math.max(0, (config.frameHeight - config.bodyHeight) * 0.5);
 

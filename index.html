@@ -70,7 +70,7 @@
     <!-- Left Sidebar -->
     <div id="sidebar">
       <!-- Tools -->
-      <div class="sidebar-section" data-mobile-panel="tools">
+      <div class="sidebar-section" data-mobile-panel="tools" data-sidebar-collapsible="true">
         <div class="section-label">Tools</div>
         <div id="tools">
           <button class="tool-btn active" data-tool="pencil" title="Draw (B)">
@@ -93,7 +93,7 @@
       </div>
 
       <!-- Layers -->
-      <div class="sidebar-section" data-mobile-panel="tools">
+      <div class="sidebar-section" data-mobile-panel="tools" data-sidebar-collapsible="true">
         <div class="section-label">Layers</div>
         <div id="layers">
           <button class="layer-btn" data-layer="foreground">Foreground</button>
@@ -103,7 +103,7 @@
       </div>
 
       <!-- Background Selector -->
-      <div class="sidebar-section" data-mobile-panel="background">
+      <div class="sidebar-section" data-mobile-panel="background" data-sidebar-collapsible="true">
         <div class="section-label">Background</div>
         <select id="background-select">
           <option value="none">None</option>
@@ -195,7 +195,7 @@
       </div>
 
       <!-- Tileset Selector (visible in tiles mode) -->
-      <div class="sidebar-section" id="tileset-section" data-mobile-panel="palette">
+      <div class="sidebar-section" id="tileset-section" data-mobile-panel="palette" data-sidebar-collapsible="true">
         <div class="section-label">Tileset</div>
         <select id="tileset-select">
           <option value="forest">Forest</option>
@@ -208,7 +208,7 @@
       </div>
 
       <!-- Tile Palette (visible in tiles mode) -->
-      <div class="sidebar-section palette-section" id="tile-palette-section" data-mobile-panel="palette">
+      <div class="sidebar-section palette-section" id="tile-palette-section" data-mobile-panel="palette" data-sidebar-collapsible="true">
         <div class="section-label">Selection <span id="selection-info" class="selection-info"></span></div>
         <div id="palette-container">
           <canvas id="palette-canvas"></canvas>
@@ -217,7 +217,7 @@
       </div>
 
       <!-- Object Palette (visible in objects mode) -->
-      <div class="sidebar-section palette-section hidden" id="object-palette-section" data-mobile-panel="objects">
+      <div class="sidebar-section palette-section hidden" id="object-palette-section" data-mobile-panel="objects" data-sidebar-collapsible="true">
         <div class="section-label">Objects</div>
         <div class="object-category-tabs">
           <button class="obj-cat-tab active" data-category="all">All</button>
@@ -247,12 +247,12 @@
         <div class="palette-hint palette-hint-accent">Use Spawn Point to choose where players start.</div>
       </div>
 
-      <div class="sidebar-section" id="room-title-section" data-mobile-panel="goal">
+      <div class="sidebar-section" id="room-title-section" data-mobile-panel="goal" data-sidebar-collapsible="true">
         <div class="section-label">Room Title</div>
         <input id="room-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Room title (optional)" />
       </div>
 
-      <div class="sidebar-section" id="goal-section" data-mobile-panel="goal">
+      <div class="sidebar-section" id="goal-section" data-mobile-panel="goal" data-sidebar-collapsible="true">
         <div class="section-label">Goal</div>
         <select id="goal-type-select">
           <option value="">None</option>
@@ -293,7 +293,7 @@
         <div id="goal-summary" class="goal-summary">No room goal selected.</div>
       </div>
 
-      <div class="sidebar-section" id="editor-actions" data-mobile-panel="actions">
+      <div class="sidebar-section" id="editor-actions" data-mobile-panel="actions" data-sidebar-collapsible="true">
         <div class="section-label">Actions</div>
         <div class="editor-action-stack">
           <button id="btn-back-to-world" class="bar-btn">Back to World</button>
