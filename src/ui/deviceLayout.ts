@@ -40,8 +40,9 @@ function classifyDeviceClass(width: number, height: number, coarsePointer: boole
 }
 
 function computeState(): DeviceLayoutState {
-  const width = Math.max(0, Math.round(window.innerWidth));
-  const height = Math.max(0, Math.round(window.innerHeight));
+  const viewport = window.visualViewport;
+  const width = Math.max(0, Math.round(viewport?.width ?? window.innerWidth));
+  const height = Math.max(0, Math.round(viewport?.height ?? window.innerHeight));
   const coarsePointer =
     window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
   const orientationState: OrientationState = width >= height ? 'landscape' : 'portrait';
@@ -66,6 +67,8 @@ function applyStateToDom(nextState: DeviceLayoutState): void {
   document.body.dataset.orientationState = nextState.orientationState;
   document.body.dataset.coarsePointer = nextState.coarsePointer ? 'true' : 'false';
   document.body.dataset.mobileLandscapeBlocked = nextState.mobileLandscapeBlocked ? 'true' : 'false';
+  document.documentElement.style.setProperty('--app-viewport-width', `${nextState.viewport.width}px`);
+  document.documentElement.style.setProperty('--app-viewport-height', `${nextState.viewport.height}px`);
 }
 
 function statesEqual(a: DeviceLayoutState, b: DeviceLayoutState): boolean {
@@ -102,6 +105,8 @@ export function initializeDeviceLayout(): DeviceLayoutState {
     applyStateToDom(state);
     window.addEventListener('resize', refreshState);
     window.addEventListener('orientationchange', refreshState);
+    window.visualViewport?.addEventListener('resize', refreshState);
+    window.visualViewport?.addEventListener('scroll', refreshState);
   } else {
     refreshState();
   }

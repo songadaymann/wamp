@@ -57,6 +57,17 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Mobile editor bottom-gap safe-area fix on March 13, 2026:
+  - opted the app into edge-to-edge mobile layout with `viewport-fit=cover`
+  - switched device layout measurement to `visualViewport` when available and exported live `--app-viewport-width` / `--app-viewport-height` CSS vars
+  - updated the app shell to size against the real visual viewport instead of relying only on `100vh`
+  - changed the phone editor sheet to sit at `bottom: 0` and use internal safe-area padding instead of lifting the whole sheet above the bottom inset
+  - adjusted the attached mobile editor rail to align with the new flush-bottom sheet geometry
+  - verification:
+    - `npm run build`
+    - required Playwright client artifact: `output/web-game/mobile-safe-area-probe/`
+    - targeted phone Playwright artifact: `output/web-game/mobile-safe-area-check/`
+    - `output/web-game/mobile-safe-area-check/summary.json` confirms `sidebarGapToViewport: 0`
 - Phone editor mobile redesign on March 13, 2026:
   - removed the bottom footer only in phone editor mode so the canvas gets the full lower screen back
   - rebuilt the phone editor shell into a bottom-docked sheet with an attached segmented rail above it
