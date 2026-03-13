@@ -34,6 +34,11 @@ export interface Env {
   ROOM_MINT_RPC_URL?: string;
   ROOM_MINT_CONTRACT_ADDRESS?: string;
   ROOM_MINT_BLOCK_EXPLORER_URL?: string;
+  PLAYFUN_ENABLED?: string;
+  PLAYFUN_API_KEY?: string;
+  PLAYFUN_SECRET_KEY?: string;
+  PLAYFUN_GAME_ID?: string;
+  PLAYFUN_BASE_URL?: string;
 }
 
 export interface RoomRow {
@@ -137,6 +142,19 @@ export interface PointEventRow {
   points: number;
   breakdown_json: string | null;
   created_at: string;
+}
+
+export interface PlayfunPointSyncRow {
+  point_event_id: string;
+  user_id: string;
+  ogp_id: string;
+  points: number;
+  status: 'pending' | 'sent' | 'failed' | string;
+  attempt_count: number;
+  created_at: string;
+  last_attempted_at: string | null;
+  synced_at: string | null;
+  last_error: string | null;
 }
 
 export interface ChatMessageRow {

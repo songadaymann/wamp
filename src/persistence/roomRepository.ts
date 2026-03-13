@@ -17,6 +17,10 @@ import type {
   RoomMintConfirmRequestBody,
   RoomMintPrepareResponse,
 } from '../mint/roomOwnership';
+import {
+  appendPlayfunRequestHeaders,
+  notifyPlayfunEligibleActionSuccess,
+} from '../playfun/client';
 
 export * from './roomModel';
 
@@ -290,11 +294,17 @@ class ApiRoomRepository implements RoomRepository {
 
   async publish(room: RoomSnapshot): Promise<RoomRecord> {
     return this.withFallback(
-      () =>
-        this.request(`/api/rooms/${encodeURIComponent(room.id)}/publish`, {
+      async () => {
+        const headers = new Headers();
+        appendPlayfunRequestHeaders(headers);
+        const record = await this.request<RoomRecord>(`/api/rooms/${encodeURIComponent(room.id)}/publish`, {
           method: 'POST',
+          headers,
           body: JSON.stringify(room),
-        }),
+        });
+        notifyPlayfunEligibleActionSuccess();
+        return record;
+      },
       () => this.fallback?.publish(room)
     );
   }
@@ -307,11 +317,17 @@ class ApiRoomRepository implements RoomRepository {
     const body: RoomRevertRequestBody = { targetVersion };
 
     return this.withFallback(
-      () =>
-        this.request(`/api/rooms/${encodeURIComponent(roomId)}/revert?${params.toString()}`, {
+      async () => {
+        const headers = new Headers();
+        appendPlayfunRequestHeaders(headers);
+        const record = await this.request<RoomRecord>(`/api/rooms/${encodeURIComponent(roomId)}/revert?${params.toString()}`, {
           method: 'POST',
+          headers,
           body: JSON.stringify(body),
-        }),
+        });
+        notifyPlayfunEligibleActionSuccess();
+        return record;
+      },
       () => this.fallback?.revert(roomId, coordinates, targetVersion)
     );
   }

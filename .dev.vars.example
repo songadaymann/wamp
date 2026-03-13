@@ -14,3 +14,10 @@ ROOM_MINT_BLOCK_EXPLORER_URL="https://sepolia.basescan.org"
 # Worker-side signer used for claimer-bound mint authorizations.
 # This must match the contract's on-chain mintAuthority and should not be the owner key.
 ROOM_MINT_AUTH_PRIVATE_KEY=
+
+# Optional Play.fun integration for reward mode (`?pf=1`).
+PLAYFUN_ENABLED=0
+PLAYFUN_API_KEY=
+PLAYFUN_SECRET_KEY=
+PLAYFUN_GAME_ID=
+PLAYFUN_BASE_URL="https://api.play.fun"

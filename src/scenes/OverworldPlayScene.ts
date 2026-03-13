@@ -56,6 +56,10 @@ import {
 } from '../ui/appFeedback';
 import { getDeviceLayoutState, isMobileLandscapeBlocked } from '../ui/deviceLayout';
 import { getAuthDebugState } from '../auth/client';
+import {
+  PLAYFUN_GAME_PAUSE_EVENT,
+  PLAYFUN_GAME_RESUME_EVENT,
+} from '../playfun/client';
 import { createRunRepository } from '../runs/runRepository';
 import {
   OverworldGoalRunController,
@@ -195,6 +199,8 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly GUN_RECOIL_VELOCITY = 44;
   private readonly PROJECTILE_SPEED = 360;
   private readonly PROJECTILE_LIFETIME_MS = 720;
+  private playfunPauseDepth = 0;
+  private playfunPauseApplied = false;
 
   private player: Phaser.GameObjects.Rectangle | null = null;
   private playerBody: Phaser.Physics.Arcade.Body | null = null;
@@ -347,6 +353,26 @@ export class OverworldPlayScene extends Phaser.Scene {
       selected: { ...this.selectedCoordinates },
       currentRoom: { ...this.currentRoomCoordinates },
     });
+  };
+
+  private readonly handlePlayfunGamePause = (): void => {
+    this.playfunPauseDepth += 1;
+    if (this.playfunPauseApplied) {
+      return;
+    }
+
+    this.playfunPauseApplied = true;
+    this.scene.pause();
+  };
+
+  private readonly handlePlayfunGameResume = (): void => {
+    this.playfunPauseDepth = Math.max(0, this.playfunPauseDepth - 1);
+    if (!this.playfunPauseApplied || this.playfunPauseDepth > 0) {
+      return;
+    }
+
+    this.playfunPauseApplied = false;
+    this.scene.resume();
   };
 
   constructor() {
@@ -513,6 +539,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.loadingText.setDepth(200);
     this.syncBackdropCameraIgnores();
     this.setupZoomDebug();
+    window.addEventListener(PLAYFUN_GAME_PAUSE_EVENT, this.handlePlayfunGamePause);
+    window.addEventListener(PLAYFUN_GAME_RESUME_EVENT, this.handlePlayfunGameResume);
     this.hudBridge = new OverworldHudBridge();
     this.fxController = new SceneFxController({
       scene: this,
@@ -3558,6 +3586,10 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private handleShutdown = (): void => {
     this.presenceController.destroy();
+    window.removeEventListener(PLAYFUN_GAME_PAUSE_EVENT, this.handlePlayfunGamePause);
+    window.removeEventListener(PLAYFUN_GAME_RESUME_EVENT, this.handlePlayfunGameResume);
+    this.playfunPauseDepth = 0;
+    this.playfunPauseApplied = false;
     this.scale.off('resize', this.handleResize, this);
     this.events.off(Phaser.Scenes.Events.WAKE, this.handleWake, this);
     this.input.removeAllListeners();

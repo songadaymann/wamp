@@ -7,6 +7,10 @@ import type {
   RunStartRequestBody,
   RunStartResponse,
 } from './model';
+import {
+  appendPlayfunRequestHeaders,
+  notifyPlayfunEligibleActionSuccess,
+} from '../playfun/client';
 
 export interface RunRepository {
   startRun(body: RunStartRequestBody): Promise<RunStartResponse>;
@@ -40,10 +44,14 @@ class ApiRunRepository implements RunRepository {
   }
 
   async finishRun(attemptId: string, body: RunFinishRequestBody): Promise<void> {
+    const headers = new Headers();
+    appendPlayfunRequestHeaders(headers);
     await this.request(`/api/runs/${encodeURIComponent(attemptId)}/finish`, {
       method: 'POST',
+      headers,
       body: JSON.stringify(body),
     });
+    notifyPlayfunEligibleActionSuccess();
   }
 
   async loadRoomLeaderboard(

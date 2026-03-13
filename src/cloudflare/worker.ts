@@ -8,6 +8,13 @@ import type { Env } from './worker/core/types';
 import { handleTestReset } from './worker/maintenance/routes';
 import { handleRoomMintConfirm, handleRoomMintPrepare } from './worker/mint/routes';
 import { syncRoomOwnershipFromChain } from './worker/mint/service';
+import { handlePlayfunConfig, handlePlayfunFlush } from './worker/playfun/routes';
+import {
+  enqueuePlayfunPointSync,
+  flushPlayfunPointSync,
+  getPlayfunSessionTokenFromRequest,
+  validatePlayfunSessionToken,
+} from './worker/playfun/service';
 import { handleGlobalLeaderboard, handleRoomLeaderboard, handleRunFinish, handleRunStart } from './worker/runs/routes';
 import { awardRoomPublishPoints, upsertUserStats } from './worker/runs/points';
 import { loadPublishedRoom, loadRoomRecord, publishRoom, revertRoom, saveDraft } from './worker/rooms/store';
@@ -70,6 +77,14 @@ export default {
         const auth = await loadOptionalRequestAuth(env, request);
         requireOptionalScope(auth, 'rooms:read', 'read world room chunks');
         return handleWorldChunksRequest(request, url, env);
+      }
+
+      if (url.pathname === '/api/playfun/config' && request.method === 'GET') {
+        return await handlePlayfunConfig(request, env);
+      }
+
+      if (url.pathname === '/api/playfun/flush' && request.method === 'POST') {
+        return await handlePlayfunFlush(request, env);
       }
 
       if (url.pathname === '/api/runs/start' && request.method === 'POST') {
@@ -170,13 +185,14 @@ export default {
           'rooms:write'
         );
         const record = await publishRoom(env, snapshot, auth.user, auth.isAdmin);
-        await awardRoomPublishPoints(
+        const pointEvent = await awardRoomPublishPoints(
           env,
           auth.user.id,
           record.draft.id,
           record.published?.version ?? record.draft.version,
           record.versions.length === 1
         );
+        await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
         await upsertUserStats(env, auth.user.id);
         return jsonResponse(request, record);
       }
@@ -198,13 +214,14 @@ export default {
           auth.user,
           auth.isAdmin
         );
-        await awardRoomPublishPoints(
+        const pointEvent = await awardRoomPublishPoints(
           env,
           auth.user.id,
           record.draft.id,
           record.published?.version ?? record.draft.version,
           false
         );
+        await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
         await upsertUserStats(env, auth.user.id);
         return jsonResponse(request, record);
       }
@@ -263,3 +280,23 @@ export default {
     }
   },
 };
+
+async function maybeMirrorPointEventToPlayfun(
+  env: Env,
+  request: Request,
+  userId: string,
+  pointEvent: { id: string; user_id: string; points: number; created_at: string }
+): Promise<void> {
+  if (pointEvent.points <= 0) {
+    return;
+  }
+
+  const sessionToken = getPlayfunSessionTokenFromRequest(request);
+  const playfunSession = await validatePlayfunSessionToken(env, sessionToken);
+  if (!playfunSession) {
+    return;
+  }
+
+  await enqueuePlayfunPointSync(env, pointEvent, playfunSession.ogpId);
+  await flushPlayfunPointSync(env, userId);
+}

@@ -3,7 +3,7 @@ import type { RoomGoal } from '../../../goals/roomGoals';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
 import type { RoomRunRecord, UserStatsRecord } from '../../../runs/model';
 import { compareLeaderboardEntries } from '../../../runs/scoring';
-import type { Env, RoomRunRow, UserRow, UserStatsRow } from '../core/types';
+import type { Env, PointEventRow, RoomRunRow, UserRow, UserStatsRow } from '../core/types';
 
 export type PointEventType = 'room_first_publish' | 'room_publish_update' | 'run_finalized';
 
@@ -22,10 +22,10 @@ export async function awardRoomPublishPoints(
   roomId: string,
   roomVersion: number,
   isFirstPublish: boolean,
-): Promise<void> {
+): Promise<PointEventRow> {
   const eventType: PointEventType = isFirstPublish ? 'room_first_publish' : 'room_publish_update';
   const points = isFirstPublish ? ROOM_FIRST_PUBLISH_POINTS : ROOM_PUBLISH_UPDATE_POINTS;
-  await recordPointEvent(env, {
+  return recordPointEvent(env, {
     userId,
     eventType,
     sourceKey: `${roomId}:${roomVersion}`,
@@ -42,7 +42,7 @@ export async function awardRunFinalizePoints(
   env: Env,
   run: RoomRunRecord,
   isNewPersonalBest: boolean,
-): Promise<void> {
+): Promise<PointEventRow> {
   let points = 0;
   const breakdown = {
     collectibles: Math.max(0, run.collectiblesCollected) * RUN_COLLECTIBLE_POINTS,
@@ -70,7 +70,7 @@ export async function awardRunFinalizePoints(
     }
   }
 
-  await recordPointEvent(env, {
+  return recordPointEvent(env, {
     userId: run.userId,
     eventType: 'run_finalized',
     sourceKey: run.attemptId,
@@ -415,7 +415,9 @@ async function recordPointEvent(
     points: number;
     breakdown: Record<string, unknown>;
   }
-): Promise<void> {
+): Promise<PointEventRow> {
+  const eventId = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
   await env.DB.batch([
     env.DB.prepare(
       `
@@ -431,13 +433,38 @@ async function recordPointEvent(
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `
     ).bind(
-      crypto.randomUUID(),
+      eventId,
       input.userId,
       input.eventType,
       input.sourceKey,
       Math.max(0, Math.round(input.points)),
       JSON.stringify(input.breakdown),
-      new Date().toISOString()
+      createdAt
     ),
   ]);
+
+  const row = await env.DB.prepare(
+    `
+      SELECT
+        id,
+        user_id,
+        event_type,
+        source_key,
+        points,
+        breakdown_json,
+        created_at
+      FROM point_events
+      WHERE event_type = ?
+        AND source_key = ?
+      LIMIT 1
+    `
+  )
+    .bind(input.eventType, input.sourceKey)
+    .first<PointEventRow>();
+
+  if (!row) {
+    throw new Error('Failed to reload recorded point event.');
+  }
+
+  return row;
 }

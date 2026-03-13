@@ -57,6 +57,12 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Avatar generation stage-1 prototype on March 13, 2026:
+  - repurposed `gen-avatar/run-first-test.mjs` into a standalone base-sprite generator that reads `gen-avatar/.env`, expands a short prompt into a strict JSON sprite spec with OpenAI, and then generates a transparent PNG base sprite with `gpt-image-1.5`
+  - each run now saves `input-prompt.txt`, `sprite-spec.json`, `image-prompt.json`, `base-sprite.png`, and `report.json` under `gen-avatar/output/<timestamp>-.../`
+  - the saved report also enumerates the current player animation targets under `public/assets/player/default` so the approved base sprite can feed a later Pixel Engine animation pass
+  - live proof run completed for `an anthropomorphic frog 16 bit video game sprite in a walking pose`; OpenAI generation succeeded and Pixel Engine auth also verified separately via `/balance`
+  - current blocker before Pixel Engine animation is asset prep, not API access: OpenAI returned `1024x1024` PNGs while Pixel Engine requires PNG input at `<= 256px` per axis, so the next slice should add a resize/canvas-fit step after image approval
 - Mobile play HUD + camera framing pass on March 13, 2026:
   - moved the active challenge HUD off the floating rounded panel on phones and into a dedicated full-width footer strip with goal, progress, and timer
   - kept the existing floating challenge panel on desktop/tablet, but hide it in phone play mode so it no longer steals vertical room from the playfield

@@ -2,6 +2,11 @@ import Phaser from 'phaser';
 import { getAuthDebugState, setupAuthUi } from './auth/client';
 import { initSfx, globalSfxController } from './audio/sfx';
 import { runOverworldLodStress } from './debug/overworldLodStress';
+import {
+  bootstrapPlayfunModeFromUrl,
+  getPlayfunDebugState,
+  setupPlayfunClient,
+} from './playfun/client';
 import { BootScene } from './scenes/BootScene';
 import { EditorScene } from './scenes/EditorScene';
 import { OverworldPlayScene } from './scenes/OverworldPlayScene';
@@ -52,6 +57,7 @@ const config: Phaser.Types.Core.GameConfig = {
   },
 };
 
+bootstrapPlayfunModeFromUrl();
 initializeAppFeedback();
 showBootSplash('Loading assets...', 0);
 const game = new Phaser.Game(config);
@@ -65,6 +71,7 @@ if (import.meta.env.DEV) {
 // Set up HTML UI event handlers
 setupUI(game);
 void setupAuthUi();
+void setupPlayfunClient();
 syncGameKeyboardFocus(game);
 
 const resizeGameToContainer = () => {
@@ -156,6 +163,7 @@ window.render_game_to_text = () =>
     chat: window.get_chat_debug_state?.() ?? null,
     device: getDeviceLayoutState(),
     touch: getTouchInputDebugState(),
+    playfun: getPlayfunDebugState(),
     sfx: window.get_sfx_debug_state?.() ?? globalSfxController.getDebugState(),
     appFeedback: {
       ready: isAppReady(),

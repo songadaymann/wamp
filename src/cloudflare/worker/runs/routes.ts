@@ -28,6 +28,12 @@ import type { Env, RoomRunRow, UserStatsRow } from '../core/types';
 import { requireAuthenticatedRequestAuth, loadOptionalRequestAuth, requireOptionalScope } from '../auth/request';
 import { loadRoomRecord } from '../rooms/store';
 import {
+  enqueuePlayfunPointSync,
+  flushPlayfunPointSync,
+  getPlayfunSessionTokenFromRequest,
+  validatePlayfunSessionToken,
+} from '../playfun/service';
+import {
   awardRunFinalizePoints,
   clampRunMetricsToSnapshot,
   loadBestCompletedRunForUserAndRoomVersion,
@@ -219,7 +225,8 @@ export async function handleRunFinish(
       sortCompletedRunsForLeaderboard([finalizedRun, previousBest], snapshot.goal)[0]?.attemptId ===
         finalizedRun.attemptId);
 
-  await awardRunFinalizePoints(env, finalizedRun, isNewPersonalBest);
+  const pointEvent = await awardRunFinalizePoints(env, finalizedRun, isNewPersonalBest);
+  await maybeMirrorRunPointEventToPlayfun(env, request, auth.user.id, pointEvent);
   await upsertUserStats(env, auth.user.id);
   return noContentResponse(request);
 }
@@ -257,6 +264,26 @@ export async function handleRoomLeaderboard(
 
   const leaderboard = await buildRoomLeaderboardResponse(env, snapshot, limit, auth?.user.id ?? null);
   return jsonResponse(request, leaderboard);
+}
+
+async function maybeMirrorRunPointEventToPlayfun(
+  env: Env,
+  request: Request,
+  userId: string,
+  pointEvent: { id: string; user_id: string; points: number; created_at: string }
+): Promise<void> {
+  if (pointEvent.points <= 0) {
+    return;
+  }
+
+  const sessionToken = getPlayfunSessionTokenFromRequest(request);
+  const playfunSession = await validatePlayfunSessionToken(env, sessionToken);
+  if (!playfunSession) {
+    return;
+  }
+
+  await enqueuePlayfunPointSync(env, pointEvent, playfunSession.ogpId);
+  await flushPlayfunPointSync(env, userId);
 }
 
 export async function handleGlobalLeaderboard(
