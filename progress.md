@@ -57,6 +57,14 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Live auth diagnosis + email error handling on March 12, 2026:
+  - confirmed the deployed `wamp.land` frontend still sends `POST /api/auth/request-link` to `https://everybodys-platformer.novox-robot.workers.dev` and updates the UI to `Check your email for the sign-in link.`
+  - confirmed invalid live verify links redirect back to `https://wamp.land/?auth=invalid`, so the current remote `APP_BASE_URL` path is aligned
+  - verified the split-domain session flow still works in Chromium with a synthetic wallet sign-in, so the live cross-site cookie path is not obviously broken in the deployed code
+  - found a real bug in Worker email auth: `sendMagicLinkEmail(...)` awaited `resend.emails.send(...)` but never checked the returned `{ error }` payload, so the API could falsely report success even when Resend rejected delivery
+  - patched `src/cloudflare/worker/auth/store.ts` to throw on Resend error or missing confirmation id so live email auth fails loudly instead of silently
+  - verification:
+    - `npm run build`
 - PRD + repo hygiene pass on March 12, 2026:
   - updated `PRD.md` to match the shipped product more closely: mobile/touch foundation, loading/busy overlays, frontier-only room claiming, current room/global leaderboard behavior, live deployment URLs, and the current moderation/admin reality
   - removed the small batch of unused locals/getters left over from the scene/controller extraction work
@@ -1890,3 +1898,20 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - note:
     - the headless mobile-emulation screenshot shows the expected rotate gate because the test used a portrait phone viewport
     - the generic skill-client screenshot still captures the wrong canvas in this environment, but state output was clean
+
+## March 12, 2026 - Hide Room Challenge Badges When Zoomed Far Out
+
+- Adjusted browse-mode room challenge badge scaling in `OverworldPlayScene`:
+  - room badges no longer keep growing as the camera zooms out
+  - badge scale is now capped at the normal browse-size baseline instead of continuing to enlarge at low zoom
+  - badges fade out as zoom drops and are hidden entirely at far-out browse zoom levels where they become clutter
+- Verification:
+  - `npm run build` passed
+  - targeted seeded-room zoom check completed in `output/web-game/room-badge-zoom-check/`
+  - `output/web-game/room-badge-zoom-check/shot-before.png` shows the badge visible at `0.18x`
+  - `output/web-game/room-badge-zoom-check/shot-after.png` shows the badge gone at `0.08x`
+  - `output/web-game/room-badge-zoom-check/summary.json` reports the expected zoom transition `0.18 -> 0.08`
+  - the local-storage verification run logged the expected auth-session fetch error because the Worker API was intentionally not running
+  - required skill-client smoke run completed in `output/web-game/room-badge-zoom-skill-client/`
+  - note:
+    - the generic skill-client screenshot still grabbed the wrong canvas in this environment, so the targeted custom screenshots above are the meaningful visual proof

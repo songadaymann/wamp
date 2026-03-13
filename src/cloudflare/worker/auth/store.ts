@@ -563,7 +563,7 @@ export async function sendMagicLinkEmail(
   const resend = new Resend(env.RESEND_API_KEY);
   const from = env.AUTH_EMAIL_FROM?.trim() || DEFAULT_AUTH_EMAIL_FROM;
 
-  await resend.emails.send({
+  const response = await resend.emails.send({
     from,
     to: email,
     subject: "Your sign-in link for Everybody's Platformer",
@@ -582,6 +582,18 @@ export async function sendMagicLinkEmail(
       '</div>',
     ].join(''),
   });
+
+  if (response.error) {
+    const status = response.error.statusCode ?? 502;
+    throw new HttpError(
+      status >= 400 && status < 600 ? status : 502,
+      `Failed to send sign-in email: ${response.error.message}`
+    );
+  }
+
+  if (!response.data?.id) {
+    throw new HttpError(502, 'Email provider did not confirm the sign-in email request.');
+  }
 }
 
 export function createWalletChallengeMessage(
