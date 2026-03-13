@@ -893,12 +893,20 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private renderEditorUi(): void {
+    const saveStatus =
+      this.roomSession.statusDetails.text ||
+      this.roomSession.statusDetails.accentText ||
+      this.roomSession.statusDetails.linkLabel
+        ? this.roomSession.statusDetails
+        : this.roomSession.getIdleStatusDetails();
+
     this.uiBridge?.render({
       roomTitleValue: this.roomTitle ?? '',
       roomCoordinatesText: `Room (${this.roomCoordinates.x}, ${this.roomCoordinates.y})`,
-      saveStatusText:
-        this.persistenceStatusText ||
-        (this.entrySource === 'world' && !this.roomDirty ? this.getIdleStatusText() : ''),
+      saveStatusText: saveStatus.text,
+      saveStatusAccentText: saveStatus.accentText,
+      saveStatusLinkText: saveStatus.linkLabel,
+      saveStatusLinkHref: saveStatus.linkHref,
       zoomText: `Zoom: ${editorState.zoom}x`,
       backToWorldHidden: this.entrySource !== 'world',
       playHidden: false,

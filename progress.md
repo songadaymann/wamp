@@ -2031,3 +2031,32 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - no browser console errors were reported in the targeted run
   - note:
     - the generic skill-client smoke run stayed in browse mode, so the targeted deterministic capture above is the meaningful gameplay proof for this pass
+
+## March 13, 2026 - Mint Confirm RPC Read Robustness
+
+- Hardened the Worker-side mint confirm path after local Sepolia mints succeeded onchain but sometimes failed during post-mint verification:
+  - added the OpenZeppelin `ERC721NonexistentToken(uint256)` custom error to the shared room-token ABI so viem can decode owner lookup reverts cleanly
+  - changed `verifyMintTransactionForRoom(...)` to anchor its readback checks to the mint receipt block number instead of unqualified `latest`
+  - added a short retry loop around the post-receipt room/token ownership read so slightly stale RPC backends return a friendly `409` retry message instead of a noisy undecoded contract error
+  - the verification path now first rechecks `tokenIdForRoomCoordinates(...)` for the minted room and only calls `ownerOf(...)` once the receipt block state is readable
+- Verification:
+  - `npm run build` passed
+  - no contract changes were required; this was a Worker/frontend ABI verification fix only
+
+## March 13, 2026 - Mint Footer Transaction Link And Token Accent
+
+- Updated the editor footer/mobile actions status render for mint success and minted-room idle state:
+  - editor save-status output is now structured instead of plain text-only
+  - `Minted token #n` now renders as a green accent label
+  - the transaction explorer URL now renders as a clickable `Transaction` link instead of raw text
+  - the same rich status render is used in both the desktop footer and the mobile editor status card
+- Verification:
+  - `npm run build` passed
+  - required skill-client smoke run completed in `output/web-game/mint-footer-link-smoke/`
+  - targeted editor render check completed in `output/web-game/mint-footer-link-check/`
+  - `output/web-game/mint-footer-link-check/summary.json` confirms:
+    - `accentText: "Minted token #12"`
+    - `linkText: "Transaction"`
+    - `_blank` explorer `href`
+    - accent color `rgb(52, 116, 51)`
+  - screenshot artifact: `output/web-game/mint-footer-link-check/shot-editor-footer.png`

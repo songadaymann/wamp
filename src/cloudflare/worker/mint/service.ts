@@ -287,12 +287,13 @@ export async function verifyMintTransactionForRoom(
     throw new HttpError(400, 'Transaction did not mint the requested room.');
   }
 
-  const ownerWalletAddress = await client.readContract({
-    address: config.contractAddress,
-    abi: ROOM_OWNERSHIP_TOKEN_ABI,
-    functionName: 'ownerOf',
-    args: [tokenId],
-  });
+  const ownerWalletAddress = await waitForMintedRoomOwner(
+    client,
+    config,
+    coordinates,
+    tokenId,
+    receipt.blockNumber
+  );
 
   return {
     chainId: config.chainId,
@@ -312,6 +313,63 @@ export function roomMintStateNeedsUpdate(record: RoomRecord, state: RoomMintChai
     normalizeNullableAddress(record.mintedOwnerWalletAddress) !==
       normalizeNullableAddress(state.ownerWalletAddress) ||
     record.mintedOwnerSyncedAt === null
+  );
+}
+
+async function waitForMintedRoomOwner(
+  client: ReturnType<typeof createRoomMintPublicClient>,
+  config: RoomMintConfig,
+  coordinates: RoomCoordinates,
+  tokenId: bigint,
+  blockNumber: bigint
+): Promise<`0x${string}`> {
+  const maxAttempts = 6;
+  const retryDelayMs = 750;
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const tokenIdForRoom = await client.readContract({
+        address: config.contractAddress,
+        abi: ROOM_OWNERSHIP_TOKEN_ABI,
+        functionName: 'tokenIdForRoomCoordinates',
+        args: [coordinates.x, coordinates.y],
+        blockNumber,
+      });
+
+      if (tokenIdForRoom === tokenId) {
+        return client.readContract({
+          address: config.contractAddress,
+          abi: ROOM_OWNERSHIP_TOKEN_ABI,
+          functionName: 'ownerOf',
+          args: [tokenId],
+          blockNumber,
+        });
+      }
+
+      if (tokenIdForRoom !== 0n) {
+        throw new HttpError(400, 'Mint transaction resolved to an unexpected room token.');
+      }
+    } catch (error) {
+      if (error instanceof HttpError && error.status !== 409) {
+        throw error;
+      }
+      lastError = error;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+  }
+
+  console.warn('Mint receipt was confirmed, but the minted owner was not readable yet.', {
+    contractAddress: config.contractAddress,
+    coordinates,
+    tokenId: tokenId.toString(),
+    blockNumber: blockNumber.toString(),
+    lastError,
+  });
+  throw new HttpError(
+    409,
+    'Mint transaction confirmed, but the contract state is not readable from the RPC yet. Wait a few seconds and try again.'
   );
 }
 

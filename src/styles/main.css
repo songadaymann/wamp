@@ -1577,6 +1577,29 @@ body[data-app-mode="play-world"] #game-container {
   border-color: rgba(178, 34, 34, 0.48);
 }
 
+#room-save-status.editor-save-status-rich {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.editor-save-status-accent {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.editor-save-status-link {
+  color: var(--accent-warm);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.editor-save-status-link:hover {
+  color: #ffd868;
+}
+
 .separator {
   color: var(--border);
 }
@@ -2340,6 +2363,13 @@ body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-va
   font-size: 11px;
   line-height: 1.45;
   word-break: break-word;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-value.editor-save-status-rich {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-zoom-row {

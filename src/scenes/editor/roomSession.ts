@@ -52,6 +52,13 @@ export interface EditorHistoryState {
   versions: RoomVersionRecord[];
 }
 
+export interface EditorStatusDetails {
+  text: string;
+  accentText: string;
+  linkLabel: string;
+  linkHref: string | null;
+}
+
 export class EditorRoomSession {
   private readonly AUTO_SAVE_DELAY_MS = 600;
 
@@ -79,7 +86,12 @@ export class EditorRoomSession {
   private mintedOwnerWalletAddress: string | null = null;
   private mintedOwnerSyncedAt: string | null = null;
   private saveInFlight = false;
-  private persistenceStatusText = '';
+  private persistenceStatus: EditorStatusDetails = {
+    text: '',
+    accentText: '',
+    linkLabel: '',
+    linkHref: null,
+  };
   private readonly localRoomRepository: RoomRepository = createLocalRoomRepository();
 
   constructor(
@@ -172,7 +184,11 @@ export class EditorRoomSession {
   }
 
   get statusText(): string {
-    return this.persistenceStatusText;
+    return this.persistenceStatus.text;
+  }
+
+  get statusDetails(): EditorStatusDetails {
+    return { ...this.persistenceStatus };
   }
 
   reset(): void {
@@ -200,32 +216,77 @@ export class EditorRoomSession {
     this.mintedOwnerWalletAddress = null;
     this.mintedOwnerSyncedAt = null;
     this.saveInFlight = false;
-    this.persistenceStatusText = '';
+    this.persistenceStatus = {
+      text: '',
+      accentText: '',
+      linkLabel: '',
+      linkHref: null,
+    };
   }
 
   setStatusText(text: string): void {
-    this.persistenceStatusText = text;
+    this.setStatusDetails({
+      text,
+      accentText: '',
+      linkLabel: '',
+      linkHref: null,
+    });
+  }
+
+  setStatusDetails(details: EditorStatusDetails): void {
+    this.persistenceStatus = { ...details };
     this.host.refreshUi();
   }
 
   getIdleStatusText(): string {
+    const details = this.getIdleStatusDetails();
+    return details.accentText ? `${details.accentText}. ${details.text}`.trim() : details.text;
+  }
+
+  getIdleStatusDetails(): EditorStatusDetails {
     if (this.mintedTokenId) {
+      const accentText = `Minted token #${this.mintedTokenId}`;
       if (this.roomPermissions.canSaveDraft) {
-        return `Minted room token #${this.mintedTokenId}. Owner: ${formatWalletAddress(this.mintedOwnerWalletAddress)}.`;
+        return {
+          text: `Owner: ${formatWalletAddress(this.mintedOwnerWalletAddress)}.`,
+          accentText,
+          linkLabel: '',
+          linkHref: null,
+        };
       }
 
-      return `Minted room owned by ${formatWalletAddress(this.mintedOwnerWalletAddress)}. Edit locked.`;
+      return {
+        text: `Owned by ${formatWalletAddress(this.mintedOwnerWalletAddress)}. Edit locked.`,
+        accentText,
+        linkLabel: '',
+        linkHref: null,
+      };
     }
 
     if (this.claimerDisplayName) {
-      return `Claimed by ${this.claimerDisplayName}.`;
+      return {
+        text: `Claimed by ${this.claimerDisplayName}.`,
+        accentText: '',
+        linkLabel: '',
+        linkHref: null,
+      };
     }
 
     if (this.publishedVersion > 0) {
-      return `Editing published room v${this.publishedVersion}.`;
+      return {
+        text: `Editing published room v${this.publishedVersion}.`,
+        accentText: '',
+        linkLabel: '',
+        linkHref: null,
+      };
     }
 
-    return 'Editing frontier draft.';
+    return {
+      text: 'Editing frontier draft.',
+      accentText: '',
+      linkLabel: '',
+      linkHref: null,
+    };
   }
 
   getHistoryState(): EditorHistoryState {
@@ -555,11 +616,12 @@ export class EditorRoomSession {
       this.host.setRoomDirty(false);
 
       const explorerUrl = buildExplorerTxUrl(prepare.chain, tx.hash);
-      this.setStatusText(
-        explorerUrl
-          ? `Minted room token #${record.mintedTokenId}. ${explorerUrl}`
-          : `Minted room token #${record.mintedTokenId}.`
-      );
+      this.setStatusDetails({
+        text: '',
+        accentText: `Minted token #${record.mintedTokenId}`,
+        linkLabel: explorerUrl ? 'Transaction' : '',
+        linkHref: explorerUrl,
+      });
       hideBusyOverlay();
       return record;
     } catch (error) {

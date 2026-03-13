@@ -12,6 +12,11 @@ export const ROOM_MINT_AUTHORIZATION_TYPEHASH = keccak256(
 
 export const ROOM_OWNERSHIP_TOKEN_ABI = [
   {
+    type: 'error',
+    name: 'ERC721NonexistentToken',
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+  },
+  {
     type: 'function',
     name: 'mintPriceWei',
     stateMutability: 'view',

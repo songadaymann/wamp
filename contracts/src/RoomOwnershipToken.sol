@@ -1,4 +1,17 @@
 // SPDX-License-Identifier: MIT
+/*
+     _  _  _  _  _  _  _  _  _  _  _  _  _  _  _  _  _  _
+    |_||_||_||_||_||_||_||_||_||_||_||_||_||_||_||_||_||_|
+    |_|                                                |_|
+    |_| .::    .   .::::::.     .        :::::::::::.  |_|
+    |_| ';;,  ;;  ;;;' ;;`;;    ;;,.    ;;;`;;;```.;;; |_|
+    |_|  '[[, [[, [[' ,[[ '[[,  [[[[, ,[[[[,`]]nnn]]'  |_|
+    |_|    Y$c$$$c$P c$$$cc$$$c $$$$$$$$\"$$$ $$$\"\"     |_|
+    |_|     \"88\"888   888   888,888 Y88\" 888o888o      |_|
+    |_|      \"M \"M\"   YMM   \"\"` MMM  M'  \"MMMYMMMb     |_|
+    |_| _  _  _  _  _  _  _  _  _  _  _  _  _  _  _  _ |_|
+    |_||_||_||_||_||_||_||_||_||_||_||_||_||_||_||_||_||_|
+*/
 pragma solidity ^0.8.28;
 
 import { ERC721 } from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
@@ -39,7 +52,7 @@ contract RoomOwnershipToken is ERC721URIStorage, Ownable {
         address initialWithdrawAuthority,
         uint256 initialMintPriceWei
     )
-        ERC721("Everybody's Platformer Room", "EPRM")
+        ERC721("WAMP", "WAMP")
         Ownable(initialOwner)
     {
         require(initialMintAuthority != address(0), "Mint authority required.");

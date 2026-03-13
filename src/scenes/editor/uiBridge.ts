@@ -22,6 +22,9 @@ export interface EditorUiViewModel {
   roomTitleValue: string;
   roomCoordinatesText: string;
   saveStatusText: string;
+  saveStatusAccentText: string;
+  saveStatusLinkText: string;
+  saveStatusLinkHref: string | null;
   zoomText: string;
   backToWorldHidden: boolean;
   playHidden: boolean;
@@ -118,7 +121,7 @@ export class EditorUiBridge {
     this.setValue(this.roomTitleInput, viewModel.roomTitleValue);
     this.setText(this.roomCoordsEls, viewModel.roomCoordinatesText);
     this.separatorEl?.classList.toggle('hidden', false);
-    this.setText(this.saveStatusEls, viewModel.saveStatusText);
+    this.renderSaveStatus(this.saveStatusEls, viewModel);
     this.resetSaveStatusTone();
     this.setText(this.zoomEls, viewModel.zoomText);
     this.syncBackgroundSelection();
@@ -165,6 +168,43 @@ export class EditorUiBridge {
     for (const element of targets) {
       if (element.textContent !== text) {
         element.textContent = text;
+      }
+    }
+  }
+
+  private renderSaveStatus(elements: HTMLElement[], viewModel: EditorUiViewModel): void {
+    for (const element of elements) {
+      element.replaceChildren();
+
+      const hasRichStatus =
+        viewModel.saveStatusAccentText.length > 0 || viewModel.saveStatusLinkText.length > 0;
+      element.classList.toggle('editor-save-status-rich', hasRichStatus);
+
+      if (viewModel.saveStatusAccentText) {
+        const accent = this.doc.createElement('span');
+        accent.className = 'editor-save-status-accent';
+        accent.textContent = viewModel.saveStatusAccentText;
+        element.append(accent);
+      }
+
+      if (viewModel.saveStatusText) {
+        if (element.childNodes.length > 0) {
+          element.append(this.doc.createTextNode(' '));
+        }
+        element.append(this.doc.createTextNode(viewModel.saveStatusText));
+      }
+
+      if (viewModel.saveStatusLinkText && viewModel.saveStatusLinkHref) {
+        if (element.childNodes.length > 0) {
+          element.append(this.doc.createTextNode(' '));
+        }
+        const link = this.doc.createElement('a');
+        link.className = 'editor-save-status-link';
+        link.href = viewModel.saveStatusLinkHref;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = viewModel.saveStatusLinkText;
+        element.append(link);
       }
     }
   }
