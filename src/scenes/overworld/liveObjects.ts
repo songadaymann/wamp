@@ -31,6 +31,7 @@ export interface LoadedRoomObject {
   key: string;
   config: GameObjectConfig;
   sprite: Phaser.GameObjects.Sprite;
+  helpers: Phaser.GameObjects.GameObject[];
   interactions: Phaser.Physics.Arcade.Collider[];
   worldColliders: Phaser.Physics.Arcade.Collider[];
   runtime: LoadedRoomObjectRuntimeState;
@@ -72,6 +73,8 @@ interface OverworldLiveObjectControllerOptions {
   markCollectedObjectKey: (key: string) => void;
   getPlayer: () => Phaser.GameObjects.GameObject | null;
   getPlayerBody: () => Phaser.Physics.Arcade.Body | null;
+  isPlayerClimbingLadder: () => boolean;
+  isLadderDropRequested: () => boolean;
   getCurrentTime: () => number;
   addScore: (delta: number) => void;
   onKeyCollected: () => void;
@@ -182,10 +185,18 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
               ? 1
               : -1;
       this.applyDirectionalFacing(sprite, config, initialDirectionX);
+      const helpers: Phaser.GameObjects.GameObject[] = [];
+      if (config.id === 'ladder') {
+        const supportZone = this.createLadderTopSupport(sprite);
+        if (supportZone) {
+          helpers.push(supportZone);
+        }
+      }
       loadedRoom.liveObjects.push({
         key: objectKey,
         config,
         sprite,
+        helpers,
         interactions: [],
         worldColliders: [],
         runtime: {
@@ -213,6 +224,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     for (const liveObject of loadedRoom.liveObjects) {
       this.destroyLiveObjectInteractions(liveObject);
       this.destroyLiveObjectWorldColliders(liveObject);
+      this.destroyLiveObjectHelpers(liveObject);
       liveObject.sprite.destroy();
     }
 
@@ -270,7 +282,19 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             liveObject.interactions.push(this.options.scene.physics.add.collider(player, liveObject.sprite));
             break;
           case 'interactive':
-            if (liveObject.config.id === 'bounce_pad') {
+            if (liveObject.config.id === 'ladder') {
+              const supportZone = liveObject.helpers[0];
+              if (supportZone && supportZone.body) {
+                liveObject.interactions.push(
+                  this.options.scene.physics.add.collider(
+                    player,
+                    supportZone,
+                    undefined,
+                    () => this.shouldCollideWithLadderTopSupport(playerBody, supportZone.body as ArcadeObjectBody),
+                  )
+                );
+              }
+            } else if (liveObject.config.id === 'bounce_pad') {
               liveObject.interactions.push(
                 this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
                   const padBody = liveObject.sprite.body as ArcadeObjectBody | null;
@@ -495,6 +519,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       interaction.destroy();
     }
     liveObject.interactions = [];
+  }
+
+  private destroyLiveObjectHelpers(liveObject: LoadedRoomObject): void {
+    for (const helper of liveObject.helpers) {
+      helper.destroy();
+    }
+    liveObject.helpers = [];
   }
 
   private destroyLiveObjectWorldColliders(liveObject: LoadedRoomObject): void {
@@ -727,6 +758,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       key: `${cannon.key}:bullet:${this.options.getCurrentTime()}`,
       config: CANNON_BULLET_CONFIG,
       sprite,
+      helpers: [],
       interactions: [],
       worldColliders: [],
       runtime: {
@@ -920,6 +952,40 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     return config.id !== 'bird' && config.id !== 'cannon_bullet';
   }
 
+  private createLadderTopSupport(sprite: Phaser.GameObjects.Sprite): Phaser.GameObjects.Zone | null {
+    const ladderBody = sprite.body as ArcadeObjectBody | null;
+    if (!ladderBody) {
+      return null;
+    }
+
+    const width = Math.max(16, ladderBody.width + 2);
+    const height = 6;
+    const centerX = sprite.x;
+    const top = ladderBody.top + 2;
+    const centerY = top + height * 0.5;
+    const supportZone = this.options.scene.add.zone(centerX, centerY, width, height);
+    this.options.scene.physics.add.existing(supportZone, true);
+    const supportBody = supportZone.body as Phaser.Physics.Arcade.StaticBody | null;
+    supportBody?.setSize(width, height);
+    supportBody?.updateFromGameObject();
+    return supportZone;
+  }
+
+  private shouldCollideWithLadderTopSupport(
+    playerBody: Phaser.Physics.Arcade.Body,
+    supportBody: ArcadeObjectBody
+  ): boolean {
+    if (this.options.isPlayerClimbingLadder() || this.options.isLadderDropRequested()) {
+      return false;
+    }
+
+    if (playerBody.velocity.y < -4) {
+      return false;
+    }
+
+    return playerBody.bottom <= supportBody.top + 10;
+  }
+
   private getObjectBodyOffset(config: GameObjectConfig): [number, number] {
     if (typeof config.bodyOffsetX === 'number' || typeof config.bodyOffsetY === 'number') {
       return [config.bodyOffsetX ?? 0, config.bodyOffsetY ?? 0];
@@ -995,6 +1061,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   ): void {
     this.destroyLiveObjectInteractions(liveObject);
     this.destroyLiveObjectWorldColliders(liveObject);
+    this.destroyLiveObjectHelpers(liveObject);
     liveObject.sprite.destroy();
     loadedRoom.liveObjects = loadedRoom.liveObjects.filter((candidate) => candidate !== liveObject);
   }

@@ -427,6 +427,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       getPlayer: () => this.player,
       getPlayerBody: () => this.playerBody,
+      isPlayerClimbingLadder: () => this.isClimbingLadder,
+      isLadderDropRequested: () => this.isLadderDropRequested(),
       getCurrentTime: () => this.time.now,
       addScore: (delta) => {
         this.score += delta;
@@ -2362,6 +2364,15 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private findOverlappingLadder(): LoadedRoomObject | null {
     return this.liveObjectController.findOverlappingLadder(this.loadedFullRoomsById.values());
+  }
+
+  private isLadderDropRequested(): boolean {
+    const touchInput = getTouchInputState();
+    return (
+      this.cursors.down.isDown ||
+      this.wasd.S.isDown ||
+      (touchInput.active && touchInput.moveY >= 0.42)
+    );
   }
 
   private setPlayerLadderState(ladder: LoadedRoomObject | null): void {

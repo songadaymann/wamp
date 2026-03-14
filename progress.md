@@ -2350,3 +2350,40 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - `output/web-game/frame-inspect/bomb-frames-48x48.png`
   - note:
     - local verification still logged the expected missing PartyKit `127.0.0.1:1999` websocket connection noise because the presence server was not part of this targeted check
+
+## March 14, 2026 - Crates Support Standing And Ladders No Longer Behave Like Holes
+
+- Fixed the movable crate collision box to match the centered `crate_static` art:
+  - `crate` body and preview offsets now use the centered `16x16` bounds instead of the old lower-left offset
+  - this restores clean stand-on behavior for crates in play mode
+- Added ladder-top support behavior in play mode:
+  - each ladder now creates a small invisible top support collider
+  - the support only catches the player from above, so you can walk across a ladder opening like solid floor
+  - the support disables while actively climbing or when pressing down, so ladders still work as intentional drop-throughs
+- Verification:
+  - required skill-client smoke run completed in `output/web-game/box-ladder-smoke/`
+  - `npm run build` passed
+  - targeted local browser verification completed in `output/web-game/box-ladder-check/`
+  - screenshot artifacts:
+    - `output/web-game/box-ladder-check/crate-play.png`
+    - `output/web-game/box-ladder-check/ladder-cross-play.png`
+    - `output/web-game/box-ladder-check/ladder-drop-play.png`
+  - summary artifacts:
+    - `output/web-game/box-ladder-check/crate-summary.json`
+    - `output/web-game/box-ladder-check/ladder-cross-summary.json`
+    - `output/web-game/box-ladder-check/ladder-drop-summary.json`
+  - behavioral checks confirmed:
+    - the player settles on the crate instead of falling through
+    - walking right across the ladder gap keeps the player on the upper floor
+    - pressing down on the ladder top drops the player into the ladder shaft
+  - note:
+    - local verification still logged the expected missing PartyKit `127.0.0.1:1999` websocket connection noise because the presence server was not part of this targeted check
+
+## March 14, 2026 - Desktop Sidebar Sections Stop Shrinking Into Each Other
+
+- Fixed the desktop editor sidebar flex sizing so ordinary sections keep their natural height:
+  - `.sidebar-section` now uses `flex: 0 0 auto`
+  - the desktop tile/object palette sections explicitly stay as the flexible sections with `flex: 1 1 auto`
+- This prevents the palette area from compressing earlier sections like `Layers`, which was causing the layer buttons to be visibly cut off under the `Background` section header
+- Verification:
+  - `npm run build` passed

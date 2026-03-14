@@ -474,6 +474,7 @@ body[data-playfun-mode='true'] .rotate-gate {
 }
 
 .sidebar-section {
+  flex: 0 0 auto;
   padding: 8px 10px;
   border-bottom: 1px solid var(--border);
   overflow: hidden;
@@ -2312,6 +2313,7 @@ body[data-device-class='phone'][data-app-mode='editor'] .sidebar-section-toggle 
 
 body[data-app-mode='editor']:not([data-device-class='phone']) #tile-palette-section,
 body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section {
+  flex: 1 1 auto;
   overflow: hidden;
 }
 
