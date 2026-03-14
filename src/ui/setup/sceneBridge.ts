@@ -27,6 +27,8 @@ export interface EditorSceneBridge {
   fitToScreen?: () => void;
   zoomIn?: () => void;
   zoomOut?: () => void;
+  clearCurrentLayer?: () => void;
+  clearAllTiles?: () => void;
   setRoomTitle?: (title: string | null) => void;
   setGoalType?: (nextType: RoomGoalType | null) => void;
   setGoalTimeLimitSeconds?: (seconds: number | null) => void;

@@ -61,6 +61,20 @@ export class SceneFxController {
     playSfx('bounce');
   }
 
+  playBombExplosionFx(x: number, y: number): void {
+    this.playAnimatedFx(FX_ANIMATION_KEYS['bomb-explosion'], x, y - 10, {
+      scale: 1.4,
+      depth: 30,
+    });
+    this.playAnimatedFx(FX_ANIMATION_KEYS.dust, x, y - 4, {
+      scale: 1.1,
+      depth: 29,
+      tint: 0xffd27a,
+    });
+    this.spawnFlash(x, y - 8, 30, 0xffd27a, 0.28);
+    playSfx('enemy-kill');
+  }
+
   playJumpDustFx(x: number, y: number, facing: number): void {
     this.playAnimatedFx(FX_ANIMATION_KEYS['player-jump-dust'], x, y - 2, {
       scale: 1.1,

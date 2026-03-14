@@ -2446,3 +2446,27 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - the preview smoke still hit the existing `TypeError: Failed to construct 'URL': Invalid base URL` page error and rendered black
     - the dev-server smoke produced a valid `render_game_to_text` state dump at `output/web-game/editor-layer-flip-dev-smoke/state-0.json`
     - the dev-server smoke still logged the expected missing PartyKit `127.0.0.1:1999` websocket connection noise because the presence server was not part of this check
+
+## March 14, 2026 - Bomb Explosions, Lighter Quicksand, And Stronger Erase/Layer Tools
+
+- Bomb hazards now actually explode instead of acting like silent touch-death:
+  - reused the existing `assets/fx/bomb_explosion.png` effect already wired in the FX manifest
+  - touching a bomb now plays the explosion FX and temporarily hides/disables the bomb before it re-arms
+- Quicksand was loosened again:
+  - increased movement and jump strength while inside it
+  - reduced the forced downward pull further so upward jumps can break out more easily
+- Added an editor-side `See Layers` toggle:
+  - when enabled, the editor draws color-coded outlines around occupied tiles and placed objects for background, terrain, and foreground
+  - this is a true overlay, not just a text label, and it stays editor-only
+- Expanded erase tooling in the editor:
+  - added brush sizes `1x1`, `3x3`, and `5x5`
+  - added destructive actions `Clear Layer` and `Nuke Tiles`
+  - the erase cursor preview now matches the selected brush size
+  - the top-right layer indicator now includes the active erase brush size, e.g. `Erase 3x3`
+- Verification:
+  - `npm run build` passed
+  - required dev-server Playwright smoke executed into `output/web-game/bomb-eraser-layer-smoke/`
+  - notes:
+    - the smoke produced a valid `render_game_to_text` dump at `output/web-game/bomb-eraser-layer-smoke/state-0.json`
+    - screenshot capture remained black in headless mode, which matches the existing local WebGL capture issue rather than a new runtime failure
+    - the dev smoke still logged the expected missing PartyKit `127.0.0.1:1999` websocket connection noise because the presence server was not part of this check

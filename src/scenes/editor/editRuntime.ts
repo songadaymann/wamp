@@ -336,9 +336,44 @@ export class EditorEditRuntime {
     if (!this.guardEditable()) {
       return;
     }
+
+    const brushSize = Math.max(1, editorState.eraserBrushSize);
     const tileX = Math.floor(worldX / TILE_SIZE);
     const tileY = Math.floor(worldY / TILE_SIZE);
-    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
+    const layer = this.host.getLayers().get(editorState.activeLayer);
+    if (!layer) {
+      return;
+    }
+
+    const radius = Math.floor(brushSize * 0.5);
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        const targetX = tileX + dx;
+        const targetY = tileY + dy;
+        if (targetX < 0 || targetX >= ROOM_WIDTH || targetY < 0 || targetY >= ROOM_HEIGHT) {
+          continue;
+        }
+
+        const existingTile = layer.getTileAt(targetX, targetY);
+        if (!existingTile) {
+          continue;
+        }
+
+        const oldGid = encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY);
+        layer.removeTileAt(targetX, targetY);
+        this.currentBatch.push({
+          layer: editorState.activeLayer,
+          x: targetX,
+          y: targetY,
+          oldGid,
+          newGid: -1,
+        });
+      }
+    }
+  }
+
+  clearCurrentLayer(): void {
+    if (!this.guardEditable()) {
       return;
     }
 
@@ -347,20 +382,72 @@ export class EditorEditRuntime {
       return;
     }
 
-    const existingTile = layer.getTileAt(tileX, tileY);
-    if (!existingTile) {
+    const actions: TileAction[] = [];
+    for (let y = 0; y < ROOM_HEIGHT; y += 1) {
+      for (let x = 0; x < ROOM_WIDTH; x += 1) {
+        const existingTile = layer.getTileAt(x, y);
+        if (!existingTile) {
+          continue;
+        }
+
+        actions.push({
+          layer: editorState.activeLayer,
+          x,
+          y,
+          oldGid: encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY),
+          newGid: -1,
+        });
+        layer.removeTileAt(x, y);
+      }
+    }
+
+    if (actions.length === 0) {
       return;
     }
 
-    const oldGid = encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY);
-    layer.removeTileAt(tileX, tileY);
-    this.currentBatch.push({
-      layer: editorState.activeLayer,
-      x: tileX,
-      y: tileY,
-      oldGid,
-      newGid: -1,
-    });
+    this.undoStack.push({ kind: 'tiles', actions });
+    this.redoStack = [];
+    this.markRoomDirty();
+  }
+
+  clearAllTiles(): void {
+    if (!this.guardEditable()) {
+      return;
+    }
+
+    const actions: TileAction[] = [];
+    for (const layerName of LAYER_NAMES) {
+      const layer = this.host.getLayers().get(layerName);
+      if (!layer) {
+        continue;
+      }
+
+      for (let y = 0; y < ROOM_HEIGHT; y += 1) {
+        for (let x = 0; x < ROOM_WIDTH; x += 1) {
+          const existingTile = layer.getTileAt(x, y);
+          if (!existingTile) {
+            continue;
+          }
+
+          actions.push({
+            layer: layerName,
+            x,
+            y,
+            oldGid: encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY),
+            newGid: -1,
+          });
+          layer.removeTileAt(x, y);
+        }
+      }
+    }
+
+    if (actions.length === 0) {
+      return;
+    }
+
+    this.undoStack.push({ kind: 'tiles', actions });
+    this.redoStack = [];
+    this.markRoomDirty();
   }
 
   fillRect(x1: number, y1: number, x2: number, y2: number): void {

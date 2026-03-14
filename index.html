@@ -91,6 +91,20 @@
             <span class="tool-label">Erase</span>
           </button>
         </div>
+        <div id="erase-controls" class="erase-controls hidden">
+          <div class="erase-controls-row">
+            <label class="erase-controls-label" for="erase-brush-select">Brush</label>
+            <select id="erase-brush-select">
+              <option value="1">1x1</option>
+              <option value="3">3x3</option>
+              <option value="5">5x5</option>
+            </select>
+          </div>
+          <div class="erase-action-grid">
+            <button id="btn-erase-clear-layer" class="bar-btn bar-btn-small" type="button">Clear Layer</button>
+            <button id="btn-erase-clear-all" class="bar-btn bar-btn-small bar-btn-danger" type="button">Nuke Tiles</button>
+          </div>
+        </div>
       </div>
 
       <!-- Layers -->
@@ -100,6 +114,9 @@
           <button class="layer-btn" data-layer="foreground">Foreground</button>
           <button class="layer-btn active" data-layer="terrain">Terrain</button>
           <button class="layer-btn" data-layer="background">Background</button>
+        </div>
+        <div class="layer-controls-row">
+          <button id="btn-editor-layer-guides" class="bar-btn bar-btn-small" type="button">See Layers</button>
         </div>
       </div>
 

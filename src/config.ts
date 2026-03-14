@@ -12,6 +12,8 @@ export type LayerName = typeof LAYER_NAMES[number];
 // ── Tools ──
 export const TOOLS = ['pencil', 'rect', 'fill', 'eraser'] as const;
 export type ToolName = typeof TOOLS[number];
+export const ERASER_BRUSH_SIZES = [1, 3, 5] as const;
+export type EraserBrushSize = typeof ERASER_BRUSH_SIZES[number];
 
 // ── Palette Modes ──
 export type PaletteMode = 'tiles' | 'objects';
@@ -408,8 +410,10 @@ export interface EditorState {
   activeLayer: LayerName;
   selectedTilesetKey: string;
   selectedTileGid: number;  // global tile ID of top-left of selection
+  eraserBrushSize: EraserBrushSize;
   tileFlipX: boolean;
   tileFlipY: boolean;
+  showLayerGuides: boolean;
   selection: TileSelection;
   zoom: number;
   isPlaying: boolean;
@@ -425,8 +429,10 @@ export const editorState: EditorState = {
   activeLayer: 'terrain',
   selectedTilesetKey: 'forest',
   selectedTileGid: 1,  // first tile of forest
+  eraserBrushSize: 1,
   tileFlipX: false,
   tileFlipY: false,
+  showLayerGuides: false,
   selection: {
     tilesetKey: 'forest',
     startCol: 0,

@@ -88,6 +88,7 @@ interface OverworldLiveObjectControllerOptions {
   playEnemyKillFx: (x: number, y: number) => void;
   playCollectFx: (x: number, y: number, scoreDelta: number, cue?: SfxCue) => void;
   playBounceFx: (x: number, y: number) => void;
+  playBombExplosionFx: (x: number, y: number) => void;
 }
 
 export function isDynamicArcadeBody(body: ArcadeObjectBody | null): body is Phaser.Physics.Arcade.Body {
@@ -264,6 +265,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
                   this.options.touchQuicksand();
                 })
               );
+            } else if (liveObject.config.id === 'bomb') {
+              liveObject.interactions.push(
+                this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
+                  this.triggerBombExplosion(liveObject);
+                })
+              );
             } else if (liveObject.config.id === 'tornado' || liveObject.config.id === 'tornado_sand') {
               liveObject.interactions.push(
                 this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
@@ -427,6 +434,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             break;
           case 'cannon_bullet':
             this.updateCannonBullet(loadedRoom, liveObject);
+            break;
+          case 'bomb':
+            this.updateBombObject(liveObject);
             break;
           case 'bounce_pad':
             this.updateBouncePadObject(liveObject);
@@ -703,6 +713,22 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
   }
 
+  private updateBombObject(liveObject: LoadedRoomObject): void {
+    const body = liveObject.sprite.body as ArcadeObjectBody | null;
+    const exploded = this.options.getCurrentTime() < liveObject.runtime.cooldownUntil;
+    const shouldBeVisible = !exploded;
+    if (liveObject.sprite.visible !== shouldBeVisible) {
+      liveObject.sprite.setVisible(shouldBeVisible);
+    }
+
+    if (body) {
+      body.enable = shouldBeVisible;
+      if (shouldBeVisible && 'updateFromGameObject' in body) {
+        body.updateFromGameObject();
+      }
+    }
+  }
+
   private triggerTornadoLaunch(liveObject: LoadedRoomObject): void {
     if (this.options.getCurrentTime() < liveObject.runtime.cooldownUntil) {
       return;
@@ -734,6 +760,17 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     this.options.grantExternalLaunchGrace(TORNADO_LAUNCH_GRACE_MS);
     this.options.playBounceFx(liveObject.sprite.x, liveObject.sprite.y - 4);
     this.options.showTransientStatus('Tornado tossed you.');
+  }
+
+  private triggerBombExplosion(liveObject: LoadedRoomObject): void {
+    if (this.options.getCurrentTime() < liveObject.runtime.cooldownUntil) {
+      return;
+    }
+
+    liveObject.runtime.activatedUntil = this.options.getCurrentTime() + 240;
+    liveObject.runtime.cooldownUntil = this.options.getCurrentTime() + 1500;
+    this.options.playBombExplosionFx(liveObject.sprite.x, liveObject.sprite.y);
+    this.options.handlePlayerDeath('Bomb exploded.');
   }
 
   private spawnCannonBullet(

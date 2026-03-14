@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import {
+  ERASER_BRUSH_SIZES,
   editorState,
   getTilesetByKey,
+  type EraserBrushSize,
   type LayerName,
   type PaletteMode,
   type ToolName,
@@ -22,14 +24,17 @@ export function setupEditorControls(
   setupToolButtons(doc);
   setupLayerButtons(doc);
   setupLayerStatusChip(doc);
+  setupLayerGuideToggle(doc);
   setupRoomTitleInput(game, doc);
   setupTilesetSelector(paletteController, doc);
   setupTileFlipControls(paletteController, doc);
+  setupEraserControls(game, doc);
   setupBackgroundSelector(doc, windowObj);
   setupBackgroundCards(doc, windowObj);
   setupGoalControls(game, doc);
   setupPaletteModeTabs(paletteController, doc);
   setupObjectCategoryTabs(paletteController, doc);
+  syncEditorToolPanels(doc);
 }
 
 function setupRoomTitleInput(game: Phaser.Game, doc: Document): void {
@@ -56,6 +61,7 @@ function setupToolButtons(doc: Document): void {
 
       doc.querySelectorAll('.tool-btn').forEach((item) => item.classList.remove('active'));
       button.classList.add('active');
+      syncEditorToolPanels(doc);
     });
   });
 }
@@ -127,6 +133,42 @@ function setupTileFlipControls(paletteController: PaletteController, doc: Docume
   sync();
 }
 
+function setupEraserControls(game: Phaser.Game, doc: Document): void {
+  const select = doc.getElementById('erase-brush-select') as HTMLSelectElement | null;
+  const clearLayerButton = doc.getElementById('btn-erase-clear-layer') as HTMLButtonElement | null;
+  const clearAllButton = doc.getElementById('btn-erase-clear-all') as HTMLButtonElement | null;
+
+  if (select) {
+    select.value = String(editorState.eraserBrushSize);
+    select.addEventListener('change', () => {
+      const nextSize = Number.parseInt(select.value, 10);
+      if (ERASER_BRUSH_SIZES.includes(nextSize as EraserBrushSize)) {
+        editorState.eraserBrushSize = nextSize as EraserBrushSize;
+      }
+    });
+  }
+
+  clearLayerButton?.addEventListener('click', () => {
+    if (!window.confirm('Clear every tile on the current layer?')) {
+      return;
+    }
+
+    withActiveEditorScene(game, (scene) => {
+      scene.clearCurrentLayer?.();
+    });
+  });
+
+  clearAllButton?.addEventListener('click', () => {
+    if (!window.confirm('Remove all tiles from background, terrain, and foreground?')) {
+      return;
+    }
+
+    withActiveEditorScene(game, (scene) => {
+      scene.clearAllTiles?.();
+    });
+  });
+}
+
 function setupLayerStatusChip(doc: Document): void {
   const chip = doc.getElementById('editor-layer-chip');
   if (!chip) {
@@ -145,6 +187,26 @@ function setupLayerStatusChip(doc: Document): void {
   };
 
   doc.defaultView?.addEventListener(EDITOR_LAYER_CHANGED_EVENT, sync);
+  sync();
+}
+
+function setupLayerGuideToggle(doc: Document): void {
+  const button = doc.getElementById('btn-editor-layer-guides') as HTMLButtonElement | null;
+  if (!button) {
+    return;
+  }
+
+  const sync = () => {
+    button.classList.toggle('active', editorState.showLayerGuides);
+    button.setAttribute('aria-pressed', editorState.showLayerGuides ? 'true' : 'false');
+    button.textContent = editorState.showLayerGuides ? 'Hide Layers' : 'See Layers';
+  };
+
+  button.addEventListener('click', () => {
+    editorState.showLayerGuides = !editorState.showLayerGuides;
+    sync();
+  });
+
   sync();
 }
 
@@ -293,6 +355,7 @@ function setupPaletteModeTabs(paletteController: PaletteController, doc: Documen
       }
 
       paletteController.renderTilePreview();
+      syncEditorToolPanels(doc);
     });
   });
 }
@@ -324,4 +387,11 @@ function setupTilesetSelector(paletteController: PaletteController, doc: Documen
     paletteController.renderPalette();
     paletteController.renderTilePreview();
   });
+}
+
+function syncEditorToolPanels(doc: Document): void {
+  const eraseControls = doc.getElementById('erase-controls');
+  const showEraseControls =
+    editorState.paletteMode === 'tiles' && editorState.activeTool === 'eraser';
+  eraseControls?.classList.toggle('hidden', !showEraseControls);
 }

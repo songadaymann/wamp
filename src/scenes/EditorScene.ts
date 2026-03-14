@@ -13,6 +13,9 @@ import {
   LAYER_NAMES,
   TILESETS,
   editorState,
+  getObjectById,
+  getPlacedObjectLayer,
+  type LayerName,
 } from '../config';
 import {
   DEFAULT_ROOM_COORDINATES,
@@ -61,6 +64,7 @@ export class EditorScene extends Phaser.Scene {
   private readonly PUBLISH_NUDGE_EDIT_THRESHOLD = 10;
   private uiBridge: EditorUiBridge | null = null;
   private layerIndicatorText: Phaser.GameObjects.Text | null = null;
+  private layerGuideGraphics: Phaser.GameObjects.Graphics | null = null;
   private editorPresenceClient: WorldPresenceClient | null = null;
   private roomEditCount = 0;
   private publishNudgeTriggered = false;
@@ -229,6 +233,7 @@ export class EditorScene extends Phaser.Scene {
 
         const overlays = [
           this.gridGraphics,
+          this.layerGuideGraphics,
           this.interactionController.cursorOverlay,
           this.interactionController.rectPreviewOverlay,
           this.borderGraphics,
@@ -433,6 +438,7 @@ export class EditorScene extends Phaser.Scene {
     this.maybeAutoSave(time);
     this.syncEditorPresence();
     this.updateBackgroundPreview();
+    this.updateLayerGuideOverlay();
     this.updateCursorHighlight();
     this.updateLayerIndicator();
   }
@@ -450,6 +456,8 @@ export class EditorScene extends Phaser.Scene {
     this.interactionController.reset();
     this.layerIndicatorText?.destroy();
     this.layerIndicatorText = null;
+    this.layerGuideGraphics?.destroy();
+    this.layerGuideGraphics = null;
     this.tilesets = new Map();
     this.layers = new Map();
     this.editRuntime.reset();
@@ -654,6 +662,9 @@ export class EditorScene extends Phaser.Scene {
   private createCursorOverlay(): void {
     this.interactionController.initializeOverlays();
     this.editRuntime.initializeGraphics();
+    this.layerGuideGraphics?.destroy();
+    this.layerGuideGraphics = this.add.graphics();
+    this.layerGuideGraphics.setDepth(97);
   }
 
   private createLayerIndicator(): void {
@@ -678,6 +689,63 @@ export class EditorScene extends Phaser.Scene {
     this.interactionController.updateCursorHighlight();
   }
 
+  private updateLayerGuideOverlay(): void {
+    this.layerGuideGraphics?.clear();
+    if (!this.layerGuideGraphics || editorState.isPlaying || !editorState.showLayerGuides) {
+      return;
+    }
+
+    for (const layerName of LAYER_NAMES) {
+      const layer = this.layers.get(layerName);
+      if (!layer) {
+        continue;
+      }
+
+      this.layerGuideGraphics.lineStyle(1, this.getLayerGuideColor(layerName), 0.42);
+      for (let y = 0; y < ROOM_HEIGHT; y += 1) {
+        for (let x = 0; x < ROOM_WIDTH; x += 1) {
+          if (!layer.getTileAt(x, y)) {
+            continue;
+          }
+
+          this.layerGuideGraphics.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        }
+      }
+    }
+
+    for (const placedObject of editorState.placedObjects) {
+      const objectConfig = getObjectById(placedObject.id);
+      if (!objectConfig) {
+        continue;
+      }
+
+      const layerName = getPlacedObjectLayer(placedObject);
+      const previewWidth = objectConfig.previewWidth ?? objectConfig.frameWidth;
+      const previewHeight = objectConfig.previewHeight ?? objectConfig.frameHeight;
+      const previewOffsetX = objectConfig.previewOffsetX ?? 0;
+      const previewOffsetY = objectConfig.previewOffsetY ?? 0;
+      this.layerGuideGraphics.lineStyle(1, this.getLayerGuideColor(layerName), 0.62);
+      this.layerGuideGraphics.strokeRect(
+        placedObject.x - objectConfig.frameWidth * 0.5 + previewOffsetX,
+        placedObject.y - objectConfig.frameHeight * 0.5 + previewOffsetY,
+        previewWidth,
+        previewHeight,
+      );
+    }
+  }
+
+  private getLayerGuideColor(layerName: LayerName): number {
+    switch (layerName) {
+      case 'background':
+        return 0x2f6b7f;
+      case 'foreground':
+        return 0xff6f3c;
+      case 'terrain':
+      default:
+        return 0x347433;
+    }
+  }
+
   private updateLayerIndicator(): void {
     if (!this.layerIndicatorText) {
       return;
@@ -698,7 +766,7 @@ export class EditorScene extends Phaser.Scene {
     const modeLabel = editorState.paletteMode === 'objects' ? 'Objects' : 'Tiles';
     const toolLabel =
       editorState.activeTool === 'eraser'
-        ? 'Erase'
+        ? `Erase ${editorState.eraserBrushSize}x${editorState.eraserBrushSize}`
         : editorState.activeTool === 'rect'
           ? 'Rect'
           : editorState.activeTool === 'fill'
@@ -878,6 +946,14 @@ export class EditorScene extends Phaser.Scene {
     this.editRuntime.eraseTileAt(worldX, worldY);
   }
 
+  clearCurrentLayer(): void {
+    this.editRuntime.clearCurrentLayer();
+  }
+
+  clearAllTiles(): void {
+    this.editRuntime.clearAllTiles();
+  }
+
   private fillRect(x1: number, y1: number, x2: number, y2: number): void {
     this.editRuntime.fillRect(x1, y1, x2, y2);
   }
@@ -944,6 +1020,10 @@ export class EditorScene extends Phaser.Scene {
     document.querySelectorAll('.tool-btn').forEach(btn => {
       btn.classList.toggle('active', (btn as HTMLElement).dataset.tool === editorState.activeTool);
     });
+    document.getElementById('erase-controls')?.classList.toggle(
+      'hidden',
+      !(editorState.paletteMode === 'tiles' && editorState.activeTool === 'eraser'),
+    );
   }
 
   private updateBottomBar(): void {

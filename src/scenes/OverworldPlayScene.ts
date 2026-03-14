@@ -174,9 +174,9 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly BOUNCE_PAD_VELOCITY = -392;
   private readonly BOUNCE_PAD_COOLDOWN_MS = 220;
   private readonly BOUNCE_PAD_ACTIVE_MS = 140;
-  private readonly QUICKSAND_ACTIVE_BUFFER_MS = 100;
-  private readonly QUICKSAND_MOVE_FACTOR = 0.46;
-  private readonly QUICKSAND_JUMP_FACTOR = 0.78;
+  private readonly QUICKSAND_ACTIVE_BUFFER_MS = 90;
+  private readonly QUICKSAND_MOVE_FACTOR = 0.56;
+  private readonly QUICKSAND_JUMP_FACTOR = 0.92;
   private readonly QUICKSAND_VISUAL_SINK_MAX = 5;
   private readonly BAT_SPEED = 72;
   private readonly BAT_WAVE_AMPLITUDE = 6;
@@ -468,6 +468,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       playCollectFx: (x, y, scoreDelta, cue) =>
         this.fxController?.playCollectFx(x, y, scoreDelta, cue),
       playBounceFx: (x, y) => this.fxController?.playBounceFx(x, y),
+      playBombExplosionFx: (x, y) => this.fxController?.playBombExplosionFx(x, y),
     });
     this.worldStreamingController = new OverworldWorldStreamingController({
       scene: this,
@@ -767,12 +768,12 @@ export class OverworldPlayScene extends Phaser.Scene {
           this.playerBody.velocity.y < 0 &&
           this.time.now >= this.externalLaunchGraceUntil
         ) {
-          this.playerBody.setVelocityY(this.playerBody.velocity.y * (inQuicksand ? 0.78 : 0.85));
+          this.playerBody.setVelocityY(this.playerBody.velocity.y * (inQuicksand ? 0.84 : 0.85));
         }
       }
 
       if (inQuicksand && onFloor) {
-        this.playerBody.setVelocityY(Math.max(this.playerBody.velocity.y, 10));
+        this.playerBody.setVelocityY(Math.max(this.playerBody.velocity.y, 4));
       }
 
       this.handleCombatInput({

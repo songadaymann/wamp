@@ -210,25 +210,51 @@ export class EditorInteractionController {
       editorState.activeTool === 'pencil'
         ? this.getDraggedStampOrigin(tileX, tileY)
         : { x: tileX, y: tileY };
-    const cursorW = editorState.activeTool === 'pencil' ? selection.width : 1;
-    const cursorH = editorState.activeTool === 'pencil' ? selection.height : 1;
+    const eraserBrushSize =
+      editorState.paletteMode === 'tiles' && editorState.activeTool === 'eraser'
+        ? editorState.eraserBrushSize
+        : 1;
+    const cursorOrigin =
+      editorState.activeTool === 'eraser'
+        ? {
+            x: tileX - Math.floor(eraserBrushSize * 0.5),
+            y: tileY - Math.floor(eraserBrushSize * 0.5),
+          }
+        : stampOrigin;
+    const cursorW =
+      editorState.activeTool === 'pencil'
+        ? selection.width
+        : editorState.activeTool === 'eraser'
+          ? eraserBrushSize
+          : 1;
+    const cursorH =
+      editorState.activeTool === 'pencil'
+        ? selection.height
+        : editorState.activeTool === 'eraser'
+          ? eraserBrushSize
+          : 1;
 
     if (editorState.activeTool === 'eraser') {
       this.cursorGraphics.lineStyle(2, RETRO_COLORS.danger, 0.85);
-      this.cursorGraphics.strokeRect(tileX * TILE_SIZE, tileY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+      this.cursorGraphics.strokeRect(
+        cursorOrigin.x * TILE_SIZE,
+        cursorOrigin.y * TILE_SIZE,
+        cursorW * TILE_SIZE,
+        cursorH * TILE_SIZE,
+      );
     } else {
       const layerAccent = getEditorLayerAccent();
       this.cursorGraphics.fillStyle(layerAccent.stroke, layerAccent.fillAlpha);
       this.cursorGraphics.fillRect(
-        stampOrigin.x * TILE_SIZE,
-        stampOrigin.y * TILE_SIZE,
+        cursorOrigin.x * TILE_SIZE,
+        cursorOrigin.y * TILE_SIZE,
         cursorW * TILE_SIZE,
         cursorH * TILE_SIZE,
       );
       this.cursorGraphics.lineStyle(1, layerAccent.stroke, 0.92);
       this.cursorGraphics.strokeRect(
-        stampOrigin.x * TILE_SIZE,
-        stampOrigin.y * TILE_SIZE,
+        cursorOrigin.x * TILE_SIZE,
+        cursorOrigin.y * TILE_SIZE,
         cursorW * TILE_SIZE,
         cursorH * TILE_SIZE,
       );
