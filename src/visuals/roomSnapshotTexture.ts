@@ -11,6 +11,7 @@ import {
   getObjectById,
   getObjectDefaultFrame,
   getObjectFrameSourceRect,
+  getPlacedObjectLayer,
 } from '../config';
 import type { RoomSnapshot } from '../persistence/roomModel';
 import { RETRO_COLORS, drawStarfieldToContext, hashStringToSeed } from './starfield';
@@ -66,10 +67,7 @@ export function buildRoomSnapshotTexture(
   if (options.includeBackground !== false) {
     drawRoomBackground(scene, context, room, width, height);
   }
-  drawRoomTiles(scene, context, room, tilePixelSize);
-  if (options.includeObjects !== false) {
-    drawRoomObjects(scene, context, room, tilePixelSize);
-  }
+  drawRoomTiles(scene, context, room, tilePixelSize, options.includeObjects !== false);
   canvasTexture.refresh();
 }
 
@@ -111,6 +109,7 @@ function drawRoomTiles(
   context: CanvasRenderingContext2D,
   room: RoomSnapshot,
   tilePixelSize: number,
+  includeObjects: boolean,
 ): void {
   for (const layerName of LAYER_NAMES) {
     for (let y = 0; y < ROOM_HEIGHT; y++) {
@@ -140,20 +139,29 @@ function drawRoomTiles(
         );
       }
     }
+
+    if (includeObjects) {
+      drawRoomObjectsForLayer(scene, context, room, tilePixelSize, layerName);
+    }
   }
 
   context.globalAlpha = 1;
 }
 
-function drawRoomObjects(
+function drawRoomObjectsForLayer(
   scene: Phaser.Scene,
   context: CanvasRenderingContext2D,
   room: RoomSnapshot,
   tilePixelSize: number,
+  layerName: (typeof LAYER_NAMES)[number],
 ): void {
   const scale = tilePixelSize / TILE_SIZE;
 
   for (const placedObject of room.placedObjects) {
+    if (getPlacedObjectLayer(placedObject) !== layerName) {
+      continue;
+    }
+
     const objectConfig = getObjectById(placedObject.id);
     if (!objectConfig) continue;
 

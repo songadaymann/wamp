@@ -3,6 +3,7 @@ import type { SfxCue } from '../../audio/sfx';
 import {
   getObjectById,
   getObjectDefaultFrame,
+  getPlacedObjectLayer,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
@@ -141,7 +142,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         getObjectDefaultFrame(config)
       );
       sprite.setOrigin(0.5, 0.5);
-      sprite.setDepth(18);
+      sprite.setDepth(this.getPlacedObjectRuntimeDepth(placedObject));
 
       if (config.frameCount > 1 && config.fps > 0) {
         const animationKey = `${config.id}_anim`;
@@ -827,6 +828,18 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     const facingRight = directionX > 0;
     sprite.setFlipX(config.facingDirection === 'right' ? !facingRight : facingRight);
+  }
+
+  private getPlacedObjectRuntimeDepth(placedObject: Pick<RoomSnapshot['placedObjects'][number], 'layer'>): number {
+    switch (getPlacedObjectLayer(placedObject)) {
+      case 'background':
+        return 9.5;
+      case 'foreground':
+        return 28;
+      case 'terrain':
+      default:
+        return 18;
+    }
   }
 
   private resetDynamicObjectIfOutOfBounds(

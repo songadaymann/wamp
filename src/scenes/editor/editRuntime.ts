@@ -5,6 +5,7 @@ import {
   ROOM_WIDTH,
   TILE_SIZE,
   editorState,
+  getPlacedObjectLayer,
   getObjectById,
   getObjectDefaultFrame,
   getSelectionGid,
@@ -462,6 +463,7 @@ export class EditorEditRuntime {
       x: tileX * TILE_SIZE + objectConfig.frameWidth / 2,
       y: tileY * TILE_SIZE + TILE_SIZE - objectConfig.frameHeight / 2,
       facing: objectConfig.facingDirection ? editorState.objectFacing : undefined,
+      layer: editorState.activeLayer,
     };
 
     editorState.placedObjects.push(placed);
@@ -528,7 +530,7 @@ export class EditorEditRuntime {
       }
 
       const sprite = this.scene.add.sprite(placed.x, placed.y, objectConfig.id, 0);
-      sprite.setDepth(25);
+      sprite.setDepth(this.getPlacedObjectEditorDepth(placed));
       sprite.setOrigin(0.5, 0.5);
       if (objectConfig.frameCount > 1 && objectConfig.fps > 0) {
         const animKey = `${objectConfig.id}_anim`;
@@ -572,6 +574,18 @@ export class EditorEditRuntime {
     }
 
     sprite.setFlipX(objectConfig.facingDirection !== placed.facing);
+  }
+
+  private getPlacedObjectEditorDepth(placed: PlacedObject): number {
+    switch (getPlacedObjectLayer(placed)) {
+      case 'background':
+        return 5;
+      case 'foreground':
+        return 60;
+      case 'terrain':
+      default:
+        return 25;
+    }
   }
 
   setGoalType(nextType: RoomGoalType | null): void {

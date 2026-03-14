@@ -351,6 +351,12 @@ body[data-playfun-mode='true'] .rotate-gate {
   justify-content: space-between;
 }
 
+.auth-copy {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .auth-title {
   color: var(--text);
   font-size: 12px;

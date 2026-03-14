@@ -43,19 +43,20 @@
       <span class="hamburger-line"></span>
       <span class="hamburger-line"></span>
     </button>
-    <div id="menu-body">
-      <div class="auth-header">
-        <span class="auth-title">Account</span>
-        <span id="auth-identity" class="auth-identity">Guest</span>
-      </div>
-      <div class="auth-row">
-        <input id="auth-email-input" type="email" placeholder="you@example.com" spellcheck="false" />
-        <button id="btn-auth-email" class="bar-btn bar-btn-small">Email Link</button>
-      </div>
-      <div class="auth-row">
-        <button id="btn-auth-wallet" class="bar-btn">Wallet Connect</button>
-        <button id="btn-auth-logout" class="bar-btn hidden">Logout</button>
-      </div>
+      <div id="menu-body">
+        <div class="auth-header">
+          <span class="auth-title">Account</span>
+          <span id="auth-identity" class="auth-identity">Guest</span>
+        </div>
+        <div class="auth-copy">Use email, wallet, or both. Wallet-only works for minting.</div>
+        <div class="auth-row">
+          <input id="auth-email-input" type="email" placeholder="you@example.com" spellcheck="false" />
+          <button id="btn-auth-email" class="bar-btn bar-btn-small">Sign In Email</button>
+        </div>
+        <div class="auth-row">
+          <button id="btn-auth-wallet" class="bar-btn">Sign In Wallet</button>
+          <button id="btn-auth-logout" class="bar-btn hidden">Logout</button>
+        </div>
       <div class="auth-row">
         <button id="btn-test-reset" class="bar-btn bar-btn-danger hidden">Reset Test Data</button>
       </div>
@@ -63,9 +64,9 @@
         <button id="btn-playfun-open-site" class="bar-btn hidden" type="button">Open Full Site</button>
       </div>
       <a id="auth-debug-link" class="auth-debug-link hidden"></a>
-      <div id="auth-status" class="auth-status">Guest mode.</div>
+      <div id="auth-status" class="auth-status">Use email, wallet, or both.</div>
+      </div>
     </div>
-  </div>
   <div id="app">
     <!-- Left Sidebar -->
     <div id="sidebar">

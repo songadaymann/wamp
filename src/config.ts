@@ -280,7 +280,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'saw',         name: 'Saw',         category: 'hazard',      path: 'assets/enemies/saw.png',         frameWidth: 34, frameHeight: 34, frameCount: 4,  fps: 8,  animationFrames: [0, 2, 3, 2], bodyWidth: 30, bodyHeight: 30, behavior: 'animated', description: 'Spinning blade. Orbits in a circle.' },
   { id: 'fire',        name: 'Fire',        category: 'hazard',      path: 'assets/enemies/fire.png',        frameWidth: 16, frameHeight: 16, frameCount: 6,  fps: 10, bodyWidth: 12, bodyHeight: 14, behavior: 'animated', description: 'Stationary flame. Burns on contact.' },
   { id: 'fireball',    name: 'Fireball',    category: 'hazard',      path: 'assets/enemies/fireball.png',    frameWidth: 16, frameHeight: 16, frameCount: 4,  fps: 10, bodyWidth: 12, bodyHeight: 12, behavior: 'animated', description: 'Shoots in a direction. Kills on contact.' },
-  { id: 'bomb',        name: 'Bomb',        category: 'hazard',      path: 'assets/enemies/bomb.png',        frameWidth: 48, frameHeight: 48, frameCount: 10, fps: 8,  bodyWidth: 18, bodyHeight: 22, bodyOffsetX: 15, bodyOffsetY: 18, behavior: 'animated', description: 'Bomb hazard. Touching it is lethal.' },
+  { id: 'bomb',        name: 'Bomb',        category: 'hazard',      path: 'assets/enemies/bomb.png',        frameWidth: 32, frameHeight: 48, frameCount: 15, fps: 8,  bodyWidth: 18, bodyHeight: 22, bodyOffsetX: 7, bodyOffsetY: 18, behavior: 'animated', description: 'Bomb hazard. Touching it is lethal.' },
   { id: 'wood_stakes', name: 'Wood Stakes', category: 'hazard',      path: 'assets/enemies/wood_stakes.png', frameWidth: 32, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 28, behavior: 'static',   description: 'Sharpened stakes. Kills on contact.' },
   { id: 'cannon',      name: 'Cannon',      category: 'hazard',      path: 'assets/enemies/cannon.png',      frameWidth: 32, frameHeight: 32, frameCount: 1,  fps: 0,  defaultFrame: 2, facingDirection: 'left', bodyWidth: 24, bodyHeight: 18, behavior: 'shooter',  description: 'Shoots bullets in the direction it faces.' },
   { id: 'cactus',      name: 'Cactus',      category: 'hazard',      path: 'assets/enemies/cactus.png',      frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 8,  bodyWidth: 16, bodyHeight: 26, behavior: 'animated', description: 'Animated cactus hazard. Hurts on contact.' },
@@ -309,7 +309,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'penguin',     name: 'Penguin',     category: 'enemy',       path: 'assets/enemies/penguin.png',     frameWidth: 32, frameHeight: 32, frameCount: 4,  fps: 6,  facingDirection: 'right', bodyWidth: 24, bodyHeight: 28, behavior: 'patrol',   description: 'Patrols back and forth. Kills on contact.' },
   { id: 'bear_brown',  name: 'Brown Mouse', category: 'enemy',       path: 'assets/enemies/bear_brown.png',  frameWidth: 32, frameHeight: 32, frameCount: 8,  fps: 6,  animationFrames: [4, 5, 6, 7, 6, 5], defaultFrame: 5, facingDirection: 'right', bodyWidth: 24, bodyHeight: 22, behavior: 'patrol',   description: 'Small patrol mouse. Kills on contact.' },
   { id: 'bear_polar',  name: 'White Mouse', category: 'enemy',       path: 'assets/enemies/bear_polar.png',  frameWidth: 32, frameHeight: 32, frameCount: 8,  fps: 6,  animationFrames: [4, 5, 6, 7, 6, 5], defaultFrame: 5, facingDirection: 'right', bodyWidth: 24, bodyHeight: 22, behavior: 'patrol',   description: 'Small patrol mouse. Kills on contact.' },
-  { id: 'chicken',     name: 'Chicken',     category: 'enemy',       path: 'assets/enemies/chicken.png',     frameWidth: 32, frameHeight: 32, frameCount: 7,  fps: 8,  defaultFrame: 1, facingDirection: 'right', bodyWidth: 18, bodyHeight: 16, behavior: 'patrol',   description: 'Quick patrol enemy. Kills on contact.' },
+  { id: 'chicken',     name: 'Chicken',     category: 'enemy',       path: 'assets/enemies/chicken.png',     frameWidth: 32, frameHeight: 32, frameCount: 14, fps: 8,  animationFrames: [7, 8, 9, 10, 11, 12, 13], defaultFrame: 7, facingDirection: 'right', bodyWidth: 18, bodyHeight: 16, behavior: 'patrol',   description: 'Quick patrol enemy. Kills on contact.' },
   { id: 'shark',       name: 'Shark',       category: 'enemy',       path: 'assets/enemies/shark.png',       frameWidth: 64, frameHeight: 32, frameCount: 4,  fps: 8,  animationFrames: [0, 1, 2, 3, 2, 1], defaultFrame: 1, facingDirection: 'left', bodyWidth: 48, bodyHeight: 18, behavior: 'fly',      description: 'Cruises left and right in a wave pattern. Kills on contact.' },
 
   // ── Interactive ──
@@ -380,6 +380,17 @@ export interface PlacedObject {
   x: number;         // world pixel x
   y: number;         // world pixel y
   facing?: 'left' | 'right';
+  layer?: LayerName;
+}
+
+export function getPlacedObjectLayer(
+  placed: Pick<PlacedObject, 'layer'> | null | undefined
+): LayerName {
+  if (placed?.layer === 'background' || placed?.layer === 'terrain' || placed?.layer === 'foreground') {
+    return placed.layer;
+  }
+
+  return 'terrain';
 }
 
 // ── Editor State (shared between Phaser and HTML UI) ──

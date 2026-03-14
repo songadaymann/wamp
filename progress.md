@@ -57,6 +57,33 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Pixel Engine frog batch prototype on March 14, 2026:
+  - added `gen-avatar/run-pixel-engine-batch.mjs` to submit a full approved-sprite batch to Pixel Engine, poll jobs to completion, split returned spritesheets into per-frame PNGs, and write runtime frame-name mappings for atlas-backed animations
+  - the batch uses the prepared `96x84` frog input plus a local prompt enhancer built from `sprite-spec.json` instead of relying on undocumented frontend-only prompt enhancement / pixel-art conversion helpers
+  - live batch run completed at `gen-avatar/output/20260313-142144-an-anthropomorphic-frog-16-bit-video-game-sprite/pixel-engine-batch-20260314-112207/`
+  - covered targets:
+    - base-style captures: `idle`, `run`, `jump-rise`, `jump-fall`, `land`, `ladder-climb`, `crouch`, `crawl`
+    - combat-atlas captures: `sword-slash`, `air-slash-down`, `gun-fire`
+  - credit tracking from `batch-report.json`:
+    - starting balance: `2070`
+    - ending balance: `1850`
+    - observed spend: `220`
+    - expected spend: `220` (`11` jobs at `20` credits each)
+  - artifact structure per target includes:
+    - raw Pixel Engine spritesheet
+    - split `all-frames/`
+    - selected runtime frames in `selected-frames/`
+    - `target-report.json` with runtime atlas frame-name mappings
+  - first quality read:
+    - `run` and `crawl` look directionally usable
+    - `crouch` is weak/minimal
+    - combat outputs introduce aggressive slash FX / prop hallucination, so atlas packing should wait until prompt tuning or cleanup is done
+- Approved frog sprite prep pass on March 14, 2026:
+  - added `gen-avatar/prepare-approved-sprite.mjs` to turn an approved OpenAI base sprite into a Pixel Engine-ready input PNG
+  - the prep step currently serves as the local fallback for the Pixel Engine frontend-only helpers we could not find in the public API: it removes faint low-alpha shadow pixels, trims dead space, uses nearest-neighbor scaling, quantizes to 24 colors, and centers the result on the repo's `96x84` player frame canvas
+  - generated a prepared input from `gen-avatar/output/20260313-142144-an-anthropomorphic-frog-16-bit-video-game-sprite/base-sprite.png`
+  - prepared asset path: `gen-avatar/output/20260313-142144-an-anthropomorphic-frog-16-bit-video-game-sprite/pixel-engine-input-96x84.png`
+  - prep report path: `gen-avatar/output/20260313-142144-an-anthropomorphic-frog-16-bit-video-game-sprite/pixel-engine-input-report.json`
 - Draft publish nudges + in-progress presence pass in progress on March 13, 2026:
   - started implementing a stronger “draft only / not visible until published” path in the editor
   - added a per-room-session publish nudge after enough edits and a new actions-panel callout/button so builders get pushed toward sign-in/publish instead of quietly leaving private drafts behind
@@ -2262,3 +2289,64 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - `output/web-game/tile-pattern-drag-check/editor-after-drag.png`
   - note:
     - local verification still logged the expected missing PartyKit `127.0.0.1:1999` websocket connection noise because the presence server was not part of this targeted editor check
+
+## March 14, 2026 - Object Placement Layering Persists For Background And Foreground
+
+- Fixed object placement so the selected editor layer now actually persists on placed objects instead of being discarded:
+  - `PlacedObject` now carries an optional `layer`
+  - new object placements store `editorState.activeLayer`
+  - existing rooms without a stored object layer default to `terrain` for backward compatibility
+- Fixed editor rendering depths for placed objects:
+  - background objects render below terrain at depth `5`
+  - terrain objects keep the normal object depth `25`
+  - foreground objects render above the foreground tile layer at depth `60`
+- Fixed play-time live object depths to respect stored object layer:
+  - background live objects render below the room image at depth `9.5`
+  - terrain live objects render at the existing gameplay depth `18`
+  - foreground live objects render above the player plane at depth `28`
+- Fixed room preview / snapshot composition so placed objects are drawn in layer order instead of one flat pass after all tiles:
+  - background objects now draw after background tiles and before terrain tiles
+  - terrain objects draw after terrain tiles and before foreground tiles
+  - foreground objects draw after foreground tiles
+- Verification:
+  - `npm run build` passed
+  - targeted browser verification completed in `output/web-game/object-layer-background-check/`
+  - `output/web-game/object-layer-background-check/summary.json` confirms:
+    - stored placed object layers are `background`, `terrain`, and `foreground`
+    - sprite depths resolve to `5`, `25`, and `60`
+    - tile layer depths remain `1`, `10`, and `50`
+  - screenshot artifacts:
+    - `output/web-game/object-layer-background-check/editor-layering.png`
+  - note:
+    - local verification still logged the expected missing PartyKit `127.0.0.1:1999` websocket connection noise because the presence server was not running during this editor-only check
+
+## March 14, 2026 - Bomb And Chicken Sprite Sheets Corrected
+
+- Checked `bomb` and `chicken` for the same Rocky Roads sprite-sheet issues that previously affected crab/mice.
+- Findings:
+  - `chicken` is a two-row `14 x 32x32` sheet, and the old config was only animating frames `0-6`
+  - within that first `0-6` range, frames `2-6` are empty, which is why the chicken could blink/crop incorrectly
+  - `bomb` was also misconfigured: the sheet is `15 x 32x48`, but the old config treated it as `10 x 48x48`, which caused adjacent frames to bleed into the editor/play rendering
+- Fixed both in `src/config.ts`:
+  - `chicken` now uses `frameCount: 14`
+  - `chicken` animation is restricted to the valid second-row walk frames via `animationFrames: [7, 8, 9, 10, 11, 12, 13]`
+  - `chicken` `defaultFrame` now uses a valid non-empty frame from that row
+  - `bomb` now uses the correct `frameWidth: 32`, `frameHeight: 48`, and `frameCount: 15`
+  - `bomb` collision offset was adjusted to match the narrower frame width
+- Verification:
+  - required skill-client smoke runs completed in `output/web-game/bomb-chicken-smoke/` and `output/web-game/bomb-width-smoke/`
+  - `npm run build` passed
+  - targeted local browser verification completed in `output/web-game/bomb-chicken-sheet-check/`
+  - `output/web-game/bomb-chicken-sheet-check/summary.json` confirms:
+    - play mode loaded successfully
+    - `chicken` is present as a live enemy with patrol velocity
+    - `bomb` is present as a live hazard with no movement
+  - targeted local editor verification completed in `output/web-game/bomb-editor-check/`
+  - screenshot artifacts:
+    - `output/web-game/bomb-chicken-sheet-check/play-room.png`
+    - `output/web-game/bomb-editor-check/editor-room.png`
+    - `output/web-game/frame-inspect/chicken-frames.png`
+    - `output/web-game/frame-inspect/bomb-frames-32x48.png`
+    - `output/web-game/frame-inspect/bomb-frames-48x48.png`
+  - note:
+    - local verification still logged the expected missing PartyKit `127.0.0.1:1999` websocket connection noise because the presence server was not part of this targeted check

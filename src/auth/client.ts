@@ -148,7 +148,7 @@ export async function refreshAuthSession(): Promise<void> {
   await refreshSession();
 }
 
-export function promptForSignIn(status: string = 'Sign in to publish this room.'): void {
+export function promptForSignIn(status: string = 'Sign in with email or wallet to publish this room.'): void {
   state.status = status;
   renderAuthUi();
   authPanel?.classList.add('menu-open');
@@ -204,7 +204,7 @@ async function initializeWalletConnect(): Promise<void> {
     return;
   }
 
-  state.status = 'Email auth is ready. Wallet connect will load on demand.';
+  state.status = 'Use email, wallet, or both.';
 }
 
 async function refreshSession(): Promise<void> {
@@ -221,7 +221,7 @@ async function refreshSession(): Promise<void> {
     } else if (window.location.search.includes('auth=')) {
       // Preserve status set from query params.
     } else {
-      state.status = 'Guest mode.';
+      state.status = 'Use email, wallet, or both.';
     }
   } catch (error) {
     console.error('Failed to load auth session', error);
@@ -256,7 +256,7 @@ async function requestMagicLink(): Promise<void> {
   const email = authEmailInput?.value.trim() ?? '';
 
   if (!email) {
-    state.status = 'Enter an email address first.';
+    state.status = 'Enter an email address, or sign in with wallet.';
     renderAuthUi();
     return;
   }
@@ -272,7 +272,7 @@ async function requestMagicLink(): Promise<void> {
     state.debugMagicLink = response.debugMagicLink ?? null;
     state.status =
       response.delivery === 'email'
-        ? 'Check your email for the sign-in link.'
+        ? 'Check your email for the sign-in link. Wallet-only sign-in also works.'
         : 'Debug sign-in link generated below.';
   } catch (error) {
     console.error('Failed to request magic link', error);
@@ -643,7 +643,7 @@ function getWalletButtonLabel(): string {
     return 'Sign In Wallet';
   }
 
-  return 'Wallet Connect';
+  return 'Sign In Wallet';
 }
 
 function getStorageBackend(): 'auto' | 'local' | 'remote' {
