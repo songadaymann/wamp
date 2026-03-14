@@ -2135,3 +2135,108 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - `_blank` explorer `href`
     - accent color `rgb(52, 116, 51)`
   - screenshot artifact: `output/web-game/mint-footer-link-check/shot-editor-footer.png`
+
+## March 14, 2026 - Rocky Roads Asset Pass
+
+- Integrated a broad first-pass of missing Rocky Roads non-background assets into the live object catalog:
+  - added extra collectibles: `coin_small_gold`, `coin_small_silver`
+  - added extra hazards: `bomb`, `fire_big`, `ice_spikes`, `icicle`, `lightning`, `propeller`, `quicksand`, `cactus_spike`, `tornado_sand`
+  - added lethal placeable liquids: `lava_surface`, `water_surface_a`, `water_surface_b`
+  - added extra enemies: `bear_brown`, `bear_polar`, `chicken`, `shark`
+  - added extra props/platforms/deco: generated `door_locked`, `brick_box`, `treasure_chest`, `log_wall`, `button`, `tree_c`, `tree_trunk`
+- Gameplay/runtime updates:
+  - keys now track a held count during play sessions
+  - the new locked door consumes a collected key and removes itself on contact
+  - sand tornadoes share the same launch behavior as normal tornadoes
+  - new patrol/fly enemy variants reuse the existing movement runtime
+  - water/lava are explicitly lethal for now; there is still no swim animation/state for the player
+- Hardening:
+  - fixed a presence-client null handling bug in `src/presence/worldPresence.ts` where `roomEditors` arriving as `null` caused repeated `Object.entries(...)` page errors on startup
+- Verification:
+  - `npm run build` passed after the asset/runtime pass
+  - required Playwright client smoke run completed in `output/web-game/rocky-roads-smoke/`
+  - targeted browser verification completed in `output/web-game/rocky-roads-asset-check/`
+  - `output/web-game/rocky-roads-asset-check/summary.json` confirms:
+    - editor palette contains `Locked Door`, `Lava Pool`, and `Tree C`
+    - key pickup increments `keysHeld` to `1`
+    - door contact consumes the key and removes `door_locked`
+    - lava contact respawns the player
+  - screenshots:
+    - `output/web-game/rocky-roads-asset-check/editor-palette.png`
+    - `output/web-game/rocky-roads-asset-check/editor-room.png`
+    - `output/web-game/rocky-roads-asset-check/play-start.png`
+    - `output/web-game/rocky-roads-asset-check/play-after.png`
+  - note:
+    - the targeted run still logged a local `401` from the unauthenticated dev session flow; gameplay/object verification itself passed
+
+## March 14, 2026 - Desktop Sidebar Palette Breathing Room
+
+- Relaxed the desktop editor sidebar palette sizing after the new collapsible sections made the tile/object chooser feel crushed:
+  - desktop `#tile-palette-section` now gets a larger height budget
+  - desktop `#object-palette-section` now gets a larger height budget than tiles so the object picker can breathe
+  - the object grid now uses `minmax(0, 1fr)` columns, explicit `overflow-x: hidden`, and `align-content: start`
+  - `.object-item` now has `min-width: 0` so grid tracks do not force horizontal overflow
+- Verification:
+  - `npm run build` passed
+  - required skill-client smoke run completed in `output/web-game/sidebar-layout-smoke/`
+  - targeted desktop sidebar check completed in `output/web-game/sidebar-palette-height-check/`
+  - `output/web-game/sidebar-palette-height-check/summary.json` confirms:
+    - `objectGrid.clientHeight: 178`
+    - `objectGrid.scrollWidth === clientWidth`
+    - `overflowX: "hidden"`
+    - `objectSection.clientHeight: 339`
+  - screenshot artifact: `output/web-game/sidebar-palette-height-check/sidebar.png`
+  - note:
+    - the targeted local browser check still logged expected PartyKit `127.0.0.1:1999` connection-refused noise because the presence server was not running; sidebar verification itself passed
+
+## March 14, 2026 - Rocky Roads Animal Sheet And Patrol Fixes
+
+- Corrected several Rocky Roads enemy spritesheet assumptions so the preview/runtime stop cropping them in half:
+  - `fish` now uses `32x16` frames across a 3-frame row instead of pretending the sheet is `6x16`
+  - `shark` now uses `64x32` frames across a 4-frame row instead of pretending the sheet is `8x32`
+  - `bear_brown`, `bear_polar`, and `chicken` now use `32x32` top-row frames instead of `32x64` frames that were including blank lower space
+- Runtime behavior updates:
+  - `fish` was moved onto the flying/swimming left-right update path so it actually cruises horizontally now
+  - `shark` keeps the flying/swimming path with the corrected frame size and a slightly flatter wave
+  - `chicken`, `bear_brown`, and `bear_polar` keep using the existing ground-patrol path, but now render with the corrected frame extraction like `crab`
+- Verification:
+  - `npm run build` passed
+  - required skill-client smoke run completed in `output/web-game/animal-sprites-smoke/`
+  - targeted synthetic room check completed in `output/web-game/animal-sheet-fix-check/`
+  - `output/web-game/animal-sheet-fix-check/summary.json` confirms:
+    - `fish.x` changes `5995 -> 6050`
+    - `shark.x` changes `6022 -> 5944`
+    - `chicken.velocityX` is nonzero at `59`
+    - `bear_brown.velocityX` and `bear_polar.velocityX` are nonzero at `41 / -41`
+    - `crab.velocityX` remains nonzero at `36`
+  - screenshot artifacts:
+    - `output/web-game/animal-sheet-fix-check/play-room.png`
+  - note:
+    - local verification still logged the expected missing PartyKit server `127.0.0.1:1999` websocket noise plus one guest autosave `401`; the sprite/movement verification itself passed
+
+## March 14, 2026 - Rocky Roads Mice Naming And Bound Tightening
+
+- Follow-up cleanup on the same Rocky Roads pass:
+  - the assets previously labeled `Brown Bear` / `Polar Bear` are now presented as `Brown Mouse` / `White Mouse`
+  - those two sheets now use the actual lower-row walk cycle (`4,5,6,7,6,5`) instead of the top-row blanks, which stops the blink-in/blink-out issue
+  - both mouse variants now declare `facingDirection: 'right'` so their walk direction matches the sprite art
+  - `cactus_spike` now uses tight collision + editor preview bounds (`8x7` with `4,5` offsets) instead of a nearly full-tile box
+  - `brick_box` now uses a tighter default frame and crate-style body/preview bounds so it matches the visible block art better
+- General spritesheet rendering hardening:
+  - added a shared frame-source helper in `src/config.ts` so multi-row object sheets can render the correct frame rectangle
+  - object palette thumbnails in `src/ui/setup/paletteController.ts` now respect multi-row sheets instead of assuming all frames live on a single top row
+  - room snapshot rendering in `src/visuals/roomSnapshotTexture.ts` now uses that same frame-source logic, so overworld/editor thumbnails stay in sync with Phaser runtime sprites
+- Verification:
+  - `npm run build` passed
+  - required skill-client smoke run completed in `output/web-game/animal-mouse-sizing-smoke/`
+  - targeted local seeded-room check completed in `output/web-game/mouse-bounds-check/`
+  - `output/web-game/mouse-bounds-check/summary.json` confirms:
+    - palette search labels are `Brown Mouse` and `White Mouse`
+    - `bear_brown` patrols from `x: 216 -> 279` with `velocityX: 41`
+    - `bear_polar` patrols from `x: 168 -> 105` with `velocityX: -41`
+    - `cactus_spike` and `brick_box` remain static in the seeded room with the tightened footprint config
+  - screenshot artifacts:
+    - `output/web-game/mouse-bounds-check/editor-mouse-palette.png`
+    - `output/web-game/mouse-bounds-check/play-room.png`
+  - note:
+    - local browser verification still logged the expected missing PartyKit `127.0.0.1:1999` websocket noise because the presence server was not running during the check

@@ -10,6 +10,7 @@ import {
   getBackgroundGroup,
   getObjectById,
   getObjectDefaultFrame,
+  getObjectFrameSourceRect,
 } from '../config';
 import type { RoomSnapshot } from '../persistence/roomModel';
 import { RETRO_COLORS, drawStarfieldToContext, hashStringToSeed } from './starfield';
@@ -165,6 +166,11 @@ function drawRoomObjects(
     const destHeight = Math.max(1, Math.round(objectConfig.frameHeight * scale));
 
     const frame = getObjectDefaultFrame(objectConfig);
+    const { sx, sy, sw, sh } = getObjectFrameSourceRect(
+      objectConfig,
+      frame,
+      getCanvasSourceWidth(sourceImage) || objectConfig.frameWidth,
+    );
     const shouldFlipX =
       Boolean(objectConfig.facingDirection) &&
       Boolean(placedObject.facing) &&
@@ -176,10 +182,10 @@ function drawRoomObjects(
       context.scale(-1, 1);
       context.drawImage(
         sourceImage,
-        frame * objectConfig.frameWidth,
-        0,
-        objectConfig.frameWidth,
-        objectConfig.frameHeight,
+        sx,
+        sy,
+        sw,
+        sh,
         0,
         0,
         destWidth,
@@ -188,10 +194,10 @@ function drawRoomObjects(
     } else {
       context.drawImage(
         sourceImage,
-        frame * objectConfig.frameWidth,
-        0,
-        objectConfig.frameWidth,
-        objectConfig.frameHeight,
+        sx,
+        sy,
+        sw,
+        sh,
         destX,
         destY,
         destWidth,
@@ -206,6 +212,18 @@ function getTextureSource(scene: Phaser.Scene, key: string): CanvasImageSource |
   const texture = scene.textures.get(key);
   if (!texture) return null;
   return (texture.getSourceImage() as CanvasImageSource | null) ?? null;
+}
+
+function getCanvasSourceWidth(source: CanvasImageSource): number {
+  const sourceWithDimensions = source as
+    | { naturalWidth?: number; width?: number; videoWidth?: number }
+    | undefined;
+  return (
+    sourceWithDimensions?.naturalWidth ??
+    sourceWithDimensions?.videoWidth ??
+    sourceWithDimensions?.width ??
+    0
+  );
 }
 
 function resolveTilesetForGid(gid: number) {

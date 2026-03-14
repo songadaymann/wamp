@@ -294,6 +294,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private isClimbingLadder = false;
   private activeLadderKey: string | null = null;
   private collectedObjectKeys = new Set<string>();
+  private heldKeyCount = 0;
   private score = 0;
   private readonly goalRunController: OverworldGoalRunController;
   private readonly liveObjectController: OverworldLiveObjectController<RoomEdgeWall>;
@@ -429,6 +430,17 @@ export class OverworldPlayScene extends Phaser.Scene {
       getCurrentTime: () => this.time.now,
       addScore: (delta) => {
         this.score += delta;
+      },
+      onKeyCollected: () => {
+        this.heldKeyCount += 1;
+      },
+      tryConsumeHeldKey: () => {
+        if (this.heldKeyCount <= 0) {
+          return false;
+        }
+
+        this.heldKeyCount -= 1;
+        return true;
       },
       grantExternalLaunchGrace: (durationMs) => {
         this.externalLaunchGraceUntil = Math.max(
@@ -3026,6 +3038,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.goalRunController.abandonActiveRun();
 
     this.collectedObjectKeys.clear();
+    this.heldKeyCount = 0;
     this.score = 0;
     this.isCrouching = false;
     this.activeAttackAnimation = null;
@@ -3808,6 +3821,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       loadedPreviewRooms: this.previewImagesByRoomId.size,
       loadedFullRooms: this.loadedFullRoomsById.size,
       score: this.score,
+      keysHeld: this.heldKeyCount,
       goalRun: goalRunSnapshot.goalRun,
       leaderboards: goalRunSnapshot.leaderboards,
       collectibles: this.countLiveObjectsByCategory('collectible'),

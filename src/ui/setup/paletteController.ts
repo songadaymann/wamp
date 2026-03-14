@@ -5,6 +5,7 @@ import {
   editorState,
   getObjectById,
   getObjectDefaultFrame,
+  getObjectFrameSourceRect,
   getTilesetByKey,
   type GameObjectConfig,
   type TileSelection,
@@ -395,16 +396,16 @@ export class PaletteController {
           }
 
           ctx.imageSmoothingEnabled = false;
-          ctx.drawImage(
+          this.drawObjectFrame(
+            ctx,
+            objectConfig,
             srcImg,
-            getObjectDefaultFrame(objectConfig) * objectConfig.frameWidth,
-            0,
-            objectConfig.frameWidth,
-            objectConfig.frameHeight,
+            getObjectDefaultFrame(objectConfig),
             0,
             0,
             objectConfig.frameWidth,
             objectConfig.frameHeight,
+            false,
           );
           img.src = canvas.toDataURL();
         };
@@ -712,7 +713,7 @@ export class PaletteController {
   private drawObjectFrame(
     context: CanvasRenderingContext2D,
     objectConfig: GameObjectConfig,
-    image: CanvasImageSource,
+    image: HTMLImageElement,
     frame: number,
     destX: number,
     destY: number,
@@ -720,6 +721,11 @@ export class PaletteController {
     destHeight: number,
     flipX: boolean,
   ): void {
+    const { sx, sy, sw, sh } = getObjectFrameSourceRect(
+      objectConfig,
+      frame,
+      image.naturalWidth || image.width || objectConfig.frameWidth,
+    );
     context.save();
 
     if (flipX) {
@@ -727,10 +733,10 @@ export class PaletteController {
       context.scale(-1, 1);
       context.drawImage(
         image,
-        frame * objectConfig.frameWidth,
-        0,
-        objectConfig.frameWidth,
-        objectConfig.frameHeight,
+        sx,
+        sy,
+        sw,
+        sh,
         0,
         0,
         destWidth,
@@ -739,10 +745,10 @@ export class PaletteController {
     } else {
       context.drawImage(
         image,
-        frame * objectConfig.frameWidth,
-        0,
-        objectConfig.frameWidth,
-        objectConfig.frameHeight,
+        sx,
+        sy,
+        sw,
+        sh,
         destX,
         destY,
         destWidth,

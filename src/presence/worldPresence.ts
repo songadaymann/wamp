@@ -327,9 +327,12 @@ export class WorldPresenceClient {
     this.emitSnapshot();
   }
 
-  private replaceRoomPopulations(shardId: string, next: Record<string, number>): void {
+  private replaceRoomPopulations(
+    shardId: string,
+    next: Record<string, number> | null | undefined
+  ): void {
     const shardPopulations = new Map<string, number>();
-    for (const [roomId, count] of Object.entries(next)) {
+    for (const [roomId, count] of Object.entries(next ?? {})) {
       if (count > 0) {
         shardPopulations.set(roomId, count);
       }
@@ -338,9 +341,12 @@ export class WorldPresenceClient {
     this.roomPopulationsByShardId.set(shardId, shardPopulations);
   }
 
-  private replaceRoomEditors(shardId: string, next: Record<string, number>): void {
+  private replaceRoomEditors(
+    shardId: string,
+    next: Record<string, number> | null | undefined
+  ): void {
     const shardEditors = new Map<string, number>();
-    for (const [roomId, count] of Object.entries(next)) {
+    for (const [roomId, count] of Object.entries(next ?? {})) {
       if (count > 0) {
         shardEditors.set(roomId, count);
       }

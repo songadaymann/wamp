@@ -899,12 +899,14 @@ body[data-playfun-mode='true'] .rotate-gate {
 
 #object-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
   overflow-y: auto;
+  overflow-x: hidden;
   flex: 1;
   min-height: 0;
   padding: 2px;
+  align-content: start;
 }
 
 .object-grid-empty {
@@ -948,6 +950,7 @@ body[data-playfun-mode='true'] .rotate-gate {
     color 0.1s,
     transform 0.06s ease,
     box-shadow 0.06s ease;
+  min-width: 0;
   min-height: 48px;
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.28);
 }
@@ -2303,7 +2306,22 @@ body[data-device-class='phone'][data-app-mode='editor'] .sidebar-section-toggle 
 
 body[data-app-mode='editor']:not([data-device-class='phone']) #tile-palette-section,
 body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section {
-  max-height: 240px;
+  overflow: hidden;
+}
+
+body[data-app-mode='editor']:not([data-device-class='phone']) #tile-palette-section {
+  min-height: 280px;
+  max-height: 340px;
+}
+
+body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section {
+  min-height: 340px;
+  max-height: 420px;
+}
+
+body[data-app-mode='editor']:not([data-device-class='phone']) #tile-palette-section .sidebar-section-body,
+body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section .sidebar-section-body {
+  overflow: hidden;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav {

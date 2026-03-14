@@ -73,6 +73,8 @@ interface OverworldLiveObjectControllerOptions {
   getPlayerBody: () => Phaser.Physics.Arcade.Body | null;
   getCurrentTime: () => number;
   addScore: (delta: number) => void;
+  onKeyCollected: () => void;
+  tryConsumeHeldKey: () => boolean;
   grantExternalLaunchGrace: (durationMs: number) => void;
   showTransientStatus: (message: string) => void;
   handlePlayerDeath: (reason: string) => void;
@@ -242,7 +244,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             );
             break;
           case 'hazard':
-            if (liveObject.config.id === 'tornado') {
+            if (liveObject.config.id === 'tornado' || liveObject.config.id === 'tornado_sand') {
               liveObject.interactions.push(
                 this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
                   this.triggerTornadoLaunch(liveObject);
@@ -299,6 +301,22 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
                   this.options.showTransientStatus('Bounce pad launched you.');
                 })
               );
+            } else if (liveObject.config.id === 'door_locked') {
+              liveObject.interactions.push(
+                this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
+                  if (this.options.tryConsumeHeldKey()) {
+                    this.options.playBounceFx(liveObject.sprite.x, liveObject.sprite.y - 6);
+                    this.options.showTransientStatus('Unlocked the door.');
+                    this.removeLiveObject(loadedRoom, liveObject);
+                    return;
+                  }
+
+                  if (this.options.getCurrentTime() >= liveObject.runtime.cooldownUntil) {
+                    liveObject.runtime.cooldownUntil = this.options.getCurrentTime() + 900;
+                    this.options.showTransientStatus('Need a key.');
+                  }
+                })
+              );
             }
             break;
           default:
@@ -339,11 +357,34 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
               this.options.settings.birdWaveSpeed
             );
             break;
+          case 'fish':
+            this.updateFlyingEnemyObject(
+              loadedRoom.room,
+              liveObject,
+              delta,
+              this.options.settings.birdSpeed * 0.58,
+              3,
+              0.008
+            );
+            break;
+          case 'shark':
+            this.updateFlyingEnemyObject(
+              loadedRoom.room,
+              liveObject,
+              delta,
+              this.options.settings.birdSpeed * 0.82,
+              3,
+              0.006
+            );
+            break;
           case 'crab':
           case 'slime_blue':
           case 'slime_red':
           case 'snake':
           case 'penguin':
+          case 'bear_brown':
+          case 'bear_polar':
+          case 'chicken':
             this.updatePatrolEnemy(loadedRoom.room, liveObject);
             break;
           case 'frog':
@@ -855,7 +896,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       config.id === 'slime_red' ||
       config.id === 'snake' ||
       config.id === 'penguin' ||
-      config.id === 'frog'
+      config.id === 'frog' ||
+      config.id === 'bear_brown' ||
+      config.id === 'bear_polar' ||
+      config.id === 'chicken'
     );
   }
 
@@ -880,9 +924,24 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       case 'penguin':
       case 'frog':
       case 'spikes':
+      case 'ice_spikes':
       case 'cannon':
       case 'cactus':
       case 'tornado':
+      case 'tornado_sand':
+      case 'fire_big':
+      case 'quicksand':
+      case 'cactus_spike':
+      case 'lava_surface':
+      case 'water_surface_a':
+      case 'water_surface_b':
+      case 'brick_box':
+      case 'treasure_chest':
+      case 'door_locked':
+      case 'log_wall':
+      case 'bear_brown':
+      case 'bear_polar':
+      case 'chicken':
         offsetY = Math.max(0, config.frameHeight - config.bodyHeight);
         break;
       default:
@@ -904,6 +963,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       case 'slime_blue':
       case 'slime_red':
         return this.options.settings.slimeSpeed;
+      case 'bear_brown':
+      case 'bear_polar':
+        return this.options.settings.penguinSpeed * 0.76;
+      case 'chicken':
+        return this.options.settings.penguinSpeed * 1.1;
       case 'penguin':
         return this.options.settings.penguinSpeed;
       case 'snake':
@@ -959,6 +1023,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     this.options.markCollectedObjectKey(liveObject.key);
     const scoreDelta = this.getCollectibleScoreValue(liveObject.config.id);
     this.options.addScore(scoreDelta);
+    if (liveObject.config.id === 'key') {
+      this.options.onKeyCollected();
+    }
     this.options.playCollectFx(
       liveObject.sprite.x,
       liveObject.sprite.y,
@@ -994,6 +1061,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         return 3;
       case 'coin_silver':
         return 2;
+      case 'coin_small_gold':
+        return 2;
+      case 'coin_small_silver':
+        return 1;
       default:
         return 1;
     }
