@@ -57,6 +57,27 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Play.fun menu layering fix on March 13, 2026:
+  - confirmed the Play.fun widget iframe was mounting at `z-index: 9999`, which made the top-right hamburger menu unclickable in `?pf=1` mode because `#auth-panel` was only `z-index: 20`
+  - added body-level Play.fun mode flags from `src/playfun/client.ts` so CSS can react cleanly to Play.fun mode
+  - raised the account menu above the Play.fun widget only in Play.fun mode and raised app boot/busy/rotate overlays above both so blocking UI still wins
+  - verification:
+    - `npm run build`
+    - standard Playwright client artifact: `output/web-game/playfun-menu-zindex-check/`
+    - direct DOM check confirmed:
+      - Play.fun iframe `z-index: 9999`
+      - `#auth-panel z-index: 10020`
+      - menu toggle opens successfully in `?pf=1`
+    - visual artifact: `output/web-game/playfun-menu-zindex-fullpage.png`
+- Chat panel height pass on March 13, 2026:
+  - increased the opened chat panel body cap and message-list height so the world chat reveals a lot more history when opened
+  - fixed the empty-chat case specifically by increasing `.chat-messages` minimum height; previously the panel still looked short unless there were many messages
+  - current measured desktop open state at `1280x720` is roughly:
+    - chat body height: `285px`
+    - message list height: `180px`
+  - verification:
+    - `npm run build`
+    - Playwright artifact: `output/web-game/chat-height-check/`
 - Desktop editor sidebar containment + collapsible sections on March 13, 2026:
   - reverted the experimental inline goal-type button grid and restored the compact goal dropdown in the desktop editor
   - identified the real overlap cause: the tile/object palette sections were leaking overflow into the room-title/goal area when the lower sections got taller

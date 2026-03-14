@@ -133,6 +133,14 @@ body {
   background: rgba(5, 5, 5, 0.76);
 }
 
+body[data-playfun-mode='true'] .app-feedback {
+  z-index: 10040;
+}
+
+body[data-playfun-mode='true'] .app-busy-overlay {
+  z-index: 10035;
+}
+
 .app-busy-card {
   width: min(360px, calc(100vw - 48px));
   display: flex;
@@ -204,6 +212,10 @@ body[data-app-mode="play-world"] #global-chat {
   pointer-events: none;
 }
 
+body[data-playfun-mode='true'] #auth-panel {
+  z-index: 10020;
+}
+
 #menu-toggle,
 #menu-body {
   pointer-events: auto;
@@ -219,6 +231,10 @@ body[data-app-mode="play-world"] #global-chat {
   padding: 24px;
   background: rgba(5, 5, 5, 0.96);
   backdrop-filter: blur(12px);
+}
+
+body[data-playfun-mode='true'] .rotate-gate {
+  z-index: 10050;
 }
 
 .rotate-gate-card {
@@ -1248,11 +1264,12 @@ body[data-app-mode="play-world"] #game-container {
   border-radius: 6px;
   backdrop-filter: blur(4px);
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32);
+  max-height: min(520px, 68vh);
 }
 
 .chat-messages {
-  min-height: 96px;
-  max-height: min(240px, 34vh);
+  min-height: 180px;
+  max-height: min(360px, 50vh);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -2175,7 +2192,7 @@ body[data-device-class='phone'] #global-chat {
 }
 
 body[data-device-class='phone'] #global-chat .chat-panel-body {
-  max-height: 58vh;
+  max-height: 70vh;
   border-radius: 14px;
 }
 
@@ -2606,6 +2623,6 @@ body[data-device-class='tablet'][data-coarse-pointer='true'] .bar-btn:hover {
   }
 
   .chat-messages {
-    max-height: min(196px, 28vh);
+    max-height: min(320px, 46vh);
   }
 }

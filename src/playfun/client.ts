@@ -74,6 +74,7 @@ export function bootstrapPlayfunModeFromUrl(): void {
   }
 
   playfunMode = nextMode;
+  syncPlayfunBodyData();
 }
 
 export function isPlayfunMode(): boolean {
@@ -103,6 +104,7 @@ export async function setupPlayfunClient(): Promise<void> {
 
   playfunClientInitialized = true;
   playfunAuthenticated = getAuthDebugState().authenticated;
+  syncPlayfunBodyData();
 
   const openSiteButton = document.getElementById('btn-playfun-open-site') as HTMLButtonElement | null;
   openSiteButton?.addEventListener('click', () => {
@@ -410,6 +412,15 @@ function ensurePlayfunFlushTimer(): void {
       void flushPendingPlayfunPoints();
     }
   }, PLAYFUN_FLUSH_INTERVAL_MS);
+}
+
+function syncPlayfunBodyData(): void {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  document.body.dataset.playfunMode = playfunMode ? 'true' : 'false';
+  document.body.dataset.playfunEmbedded = playfunMode && isEmbeddedContext() ? 'true' : 'false';
 }
 
 function isEmbeddedContext(): boolean {
