@@ -433,6 +433,36 @@ body[data-playfun-mode='true'] .rotate-gate {
   gap: 6px;
 }
 
+.editor-publish-nudge {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 176, 74, 0.42);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(255, 176, 74, 0.1), rgba(255, 176, 74, 0.04)),
+    rgba(11, 11, 11, 0.94);
+  box-shadow: inset 0 1px 0 rgba(255, 193, 7, 0.08);
+}
+
+.editor-publish-nudge-kicker {
+  color: var(--accent-warm);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.editor-publish-nudge-text {
+  margin-top: 6px;
+  margin-bottom: 10px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.editor-publish-nudge .bar-btn {
+  width: 100%;
+}
+
 #editor-actions .bar-btn {
   width: 100%;
 }

@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { getAuthDebugState } from '../../auth/client';
 import {
   DEFAULT_PLAYER_ANIMATION_KEYS,
   DEFAULT_PLAYER_IDLE_FRAME,
@@ -10,6 +9,7 @@ import { roomIdFromCoordinates, type RoomCoordinates } from '../../persistence/r
 import { type WorldChunkBounds } from '../../persistence/worldModel';
 import {
   resolveWorldPresenceConfig,
+  resolveWorldPresenceIdentity,
   WorldPresenceClient,
   type WorldGhostPresence,
   type WorldPresenceIdentity,
@@ -50,6 +50,7 @@ interface OverworldPresenceControllerOptions {
   getSelectedCoordinates: () => RoomCoordinates;
   getZoom: () => number;
   onSnapshotUpdated?: () => void;
+  onRoomActivityChanged?: () => void;
   onGhostDisplayObjectsChanged?: () => void;
 }
 
@@ -58,6 +59,7 @@ export class OverworldPresenceController {
   private identity: WorldPresenceIdentity | null = null;
   private snapshot: WorldPresenceSnapshot | null = null;
   private roomPopulationsById = new Map<string, number>();
+  private roomEditorsById = new Map<string, number>();
   private renderedGhostsByConnectionId = new Map<string, RenderedGhost>();
   private subscribedChunkBounds: WorldChunkBounds | null = null;
   private subscribedBoundsRetainUntil = 0;
@@ -77,20 +79,29 @@ export class OverworldPresenceController {
         publishedShard: null,
         ghosts: [],
         roomPopulations: {},
+        roomEditors: {},
       };
       this.roomPopulationsById = new Map();
+      this.roomEditorsById = new Map();
       return;
     }
 
-    this.identity = this.resolvePresenceIdentity();
+    this.identity = resolveWorldPresenceIdentity();
     this.client = new WorldPresenceClient({
       ...config,
       identity: this.identity,
       onSnapshot: (snapshot) => {
+        const roomActivityChanged =
+          !this.areCountMapsEqual(this.roomPopulationsById, snapshot.roomPopulations)
+          || !this.areCountMapsEqual(this.roomEditorsById, snapshot.roomEditors);
         this.snapshot = snapshot;
         this.roomPopulationsById = new Map(Object.entries(snapshot.roomPopulations));
+        this.roomEditorsById = new Map(Object.entries(snapshot.roomEditors));
         this.syncGhostRenderers();
         this.refreshGhostVisibility();
+        if (roomActivityChanged) {
+          this.options.onRoomActivityChanged?.();
+        }
         this.options.onSnapshotUpdated?.();
       },
     });
@@ -101,6 +112,7 @@ export class OverworldPresenceController {
     this.identity = null;
     this.snapshot = null;
     this.roomPopulationsById = new Map();
+    this.roomEditorsById = new Map();
     this.subscribedChunkBounds = null;
     this.subscribedBoundsRetainUntil = 0;
     this.ghostRenderBudget = 0;
@@ -112,6 +124,7 @@ export class OverworldPresenceController {
     this.client = null;
     this.destroyGhostRenderers();
     this.roomPopulationsById = new Map();
+    this.roomEditorsById = new Map();
     this.snapshot = null;
     this.identity = null;
     this.subscribedChunkBounds = null;
@@ -134,6 +147,10 @@ export class OverworldPresenceController {
 
   getRoomPopulationsById(): Map<string, number> {
     return this.roomPopulationsById;
+  }
+
+  getRoomEditorsById(): Map<string, number> {
+    return this.roomEditorsById;
   }
 
   getRenderedGhostsByConnectionId(): Map<string, RenderedGhost> {
@@ -228,6 +245,10 @@ export class OverworldPresenceController {
     return this.roomPopulationsById.get(roomIdFromCoordinates(coordinates)) ?? 0;
   }
 
+  getRoomEditorCount(coordinates: RoomCoordinates): number {
+    return this.roomEditorsById.get(roomIdFromCoordinates(coordinates)) ?? 0;
+  }
+
   getTotalPlayerCount(): number | null {
     if (!this.snapshot?.enabled) {
       return null;
@@ -249,6 +270,7 @@ export class OverworldPresenceController {
     const focusCoordinates =
       input.mode === 'play' ? input.currentRoomCoordinates : input.selectedCoordinates;
     const population = this.getRoomPopulation(focusCoordinates);
+    const editorCount = this.getRoomEditorCount(focusCoordinates);
     const visibleGhosts = Array.from(this.renderedGhostsByConnectionId.values()).filter(
       (renderedGhost) => renderedGhost.sprite.visible
     ).length;
@@ -260,6 +282,10 @@ export class OverworldPresenceController {
 
     if (visibleGhosts > 0) {
       parts.push(`${visibleGhosts} ${visibleGhosts === 1 ? 'ghost' : 'ghosts'} nearby`);
+    }
+
+    if (editorCount > 0) {
+      parts.push(`${editorCount} ${editorCount === 1 ? 'builder' : 'builders'} editing here`);
     }
 
     if (this.snapshot.status === 'connecting') {
@@ -281,6 +307,7 @@ export class OverworldPresenceController {
     renderedGhostCount: number;
     visibleGhostCount: number;
     roomPopulations: Record<string, number>;
+    roomEditors: Record<string, number>;
     ghosts: Array<{
       connectionId: string;
       userId: string;
@@ -304,6 +331,11 @@ export class OverworldPresenceController {
           left.localeCompare(right)
         )
       ),
+      roomEditors: Object.fromEntries(
+        Array.from(this.roomEditorsById.entries()).sort(([left], [right]) =>
+          left.localeCompare(right)
+        )
+      ),
       ghosts: Array.from(this.renderedGhostsByConnectionId.values()).map((renderedGhost) => ({
         connectionId: renderedGhost.presence.connectionId,
         userId: renderedGhost.presence.userId,
@@ -317,45 +349,21 @@ export class OverworldPresenceController {
     };
   }
 
-  private resolvePresenceIdentity(): WorldPresenceIdentity {
-    const authState = getAuthDebugState();
-    if (authState.authenticated && authState.user) {
-      return {
-        userId: authState.user.id,
-        displayName: authState.user.displayName,
-        avatarId: 'default-player',
-      };
+  private areCountMapsEqual(
+    current: Map<string, number>,
+    next: Record<string, number>
+  ): boolean {
+    if (current.size !== Object.keys(next).length) {
+      return false;
     }
 
-    const storageKey = 'ep_presence_guest_identity_v1';
-    try {
-      const existingRaw = window.localStorage.getItem(storageKey);
-      if (existingRaw) {
-        const existing = JSON.parse(existingRaw) as Partial<WorldPresenceIdentity>;
-        if (typeof existing.userId === 'string' && typeof existing.displayName === 'string') {
-          return {
-            userId: existing.userId,
-            displayName: existing.displayName,
-            avatarId: typeof existing.avatarId === 'string' ? existing.avatarId : 'default-player',
-          };
-        }
+    for (const [roomId, count] of current.entries()) {
+      if ((next[roomId] ?? 0) !== count) {
+        return false;
       }
-    } catch {
-      // Fall through to a new guest identity.
     }
 
-    const guestIdentity: WorldPresenceIdentity = {
-      userId: `guest-${crypto.randomUUID()}`,
-      displayName: `Guest ${Math.random().toString(36).slice(2, 6)}`,
-      avatarId: 'default-player',
-    };
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(guestIdentity));
-    } catch {
-      // Ignore storage failures for guest identities.
-    }
-
-    return guestIdentity;
+    return true;
   }
 
   private syncGhostRenderers(): void {

@@ -1,4 +1,5 @@
 import PartySocket from 'partysocket';
+import { getAuthDebugState } from '../auth/client';
 import type { DefaultPlayerAnimationState } from '../player/defaultPlayer';
 import { roomIdFromCoordinates, type RoomCoordinates } from '../persistence/roomModel';
 import {
@@ -7,7 +8,7 @@ import {
   type WorldChunkCoordinates,
 } from '../persistence/worldModel';
 
-export type WorldPresenceMode = 'browse' | 'play';
+export type WorldPresenceMode = 'browse' | 'play' | 'edit';
 export type WorldPresenceAnimationState = DefaultPlayerAnimationState;
 
 export interface WorldPresenceIdentity {
@@ -45,6 +46,7 @@ export interface WorldPresenceSnapshot {
   publishedShard: string | null;
   ghosts: WorldGhostPresence[];
   roomPopulations: Record<string, number>;
+  roomEditors: Record<string, number>;
 }
 
 interface PartySocketRecord {
@@ -56,6 +58,7 @@ interface PresenceSnapshotMessage {
   type: 'snapshot';
   peers: WorldGhostPresence[];
   roomPopulations: Record<string, number>;
+  roomEditors: Record<string, number>;
 }
 
 interface PresenceUpsertMessage {
@@ -71,6 +74,7 @@ interface PresenceRemoveMessage {
 interface PresencePopulationsMessage {
   type: 'populations';
   roomPopulations: Record<string, number>;
+  roomEditors: Record<string, number>;
 }
 
 type PresenceMessage =
@@ -100,6 +104,7 @@ export class WorldPresenceClient {
   private readonly socketsByShardId = new Map<string, PartySocketRecord>();
   private readonly ghostsByConnectionId = new Map<string, WorldGhostPresence>();
   private readonly roomPopulationsByShardId = new Map<string, Map<string, number>>();
+  private readonly roomEditorsByShardId = new Map<string, Map<string, number>>();
   private readonly connectedShards = new Set<string>();
   private desiredShardIds = new Set<string>();
   private localPresence: WorldPresencePayload | null = null;
@@ -147,7 +152,7 @@ export class WorldPresenceClient {
     }
 
     this.localPresence = nextPresence;
-    if (!nextPresence || nextPresence.mode !== 'play' || !nextShardId) {
+    if (!nextPresence || nextPresence.mode === 'browse' || !nextShardId) {
       this.emitSnapshot();
       return;
     }
@@ -189,6 +194,7 @@ export class WorldPresenceClient {
     this.connectedShards.clear();
     this.ghostsByConnectionId.clear();
     this.roomPopulationsByShardId.clear();
+    this.roomEditorsByShardId.clear();
     this.localPresence = null;
     this.publishedShardId = null;
     this.lastPublishedPayloadJson = null;
@@ -210,7 +216,11 @@ export class WorldPresenceClient {
 
     socket.addEventListener('open', () => {
       this.connectedShards.add(shardId);
-      if (this.localPresence && this.localPresence.mode === 'play' && this.resolveLocalShardId() === shardId) {
+      if (
+        this.localPresence &&
+        this.localPresence.mode !== 'browse' &&
+        this.resolveLocalShardId() === shardId
+      ) {
         this.lastPublishedPayloadJson = null;
         this.updateLocalPresence(this.localPresence);
       } else {
@@ -222,6 +232,7 @@ export class WorldPresenceClient {
       this.connectedShards.delete(shardId);
       this.removeGhostsForShard(shardId);
       this.roomPopulationsByShardId.delete(shardId);
+      this.roomEditorsByShardId.delete(shardId);
       if (this.publishedShardId === shardId) {
         this.lastPublishedPayloadJson = null;
       }
@@ -293,6 +304,7 @@ export class WorldPresenceClient {
           });
         }
         this.replaceRoomPopulations(shardId, message.roomPopulations);
+        this.replaceRoomEditors(shardId, message.roomEditors);
         break;
       case 'upsert':
         this.ghostsByConnectionId.set(message.peer.connectionId, {
@@ -306,6 +318,7 @@ export class WorldPresenceClient {
         break;
       case 'populations':
         this.replaceRoomPopulations(shardId, message.roomPopulations);
+        this.replaceRoomEditors(shardId, message.roomEditors);
         break;
       default:
         return;
@@ -323,6 +336,17 @@ export class WorldPresenceClient {
     }
 
     this.roomPopulationsByShardId.set(shardId, shardPopulations);
+  }
+
+  private replaceRoomEditors(shardId: string, next: Record<string, number>): void {
+    const shardEditors = new Map<string, number>();
+    for (const [roomId, count] of Object.entries(next)) {
+      if (count > 0) {
+        shardEditors.set(roomId, count);
+      }
+    }
+
+    this.roomEditorsByShardId.set(shardId, shardEditors);
   }
 
   private removeGhostsForShard(shardId: string): void {
@@ -350,11 +374,23 @@ export class WorldPresenceClient {
         mergedRoomPopulations.set(roomId, (mergedRoomPopulations.get(roomId) ?? 0) + count);
       }
     }
+    const mergedRoomEditors = new Map<string, number>();
+    for (const shardEditors of this.roomEditorsByShardId.values()) {
+      for (const [roomId, count] of shardEditors.entries()) {
+        mergedRoomEditors.set(roomId, (mergedRoomEditors.get(roomId) ?? 0) + count);
+      }
+    }
     const roomPopulations: Record<string, number> = {};
     for (const [roomId, count] of Array.from(mergedRoomPopulations.entries()).sort(([left], [right]) =>
       left.localeCompare(right)
     )) {
       roomPopulations[roomId] = count;
+    }
+    const roomEditors: Record<string, number> = {};
+    for (const [roomId, count] of Array.from(mergedRoomEditors.entries()).sort(([left], [right]) =>
+      left.localeCompare(right)
+    )) {
+      roomEditors[roomId] = count;
     }
 
     this.options.onSnapshot({
@@ -372,8 +408,50 @@ export class WorldPresenceClient {
         left.displayName.localeCompare(right.displayName)
       ),
       roomPopulations,
+      roomEditors,
     });
   }
+}
+
+export function resolveWorldPresenceIdentity(): WorldPresenceIdentity {
+  const authState = getAuthDebugState();
+  if (authState.authenticated && authState.user) {
+    return {
+      userId: authState.user.id,
+      displayName: authState.user.displayName,
+      avatarId: 'default-player',
+    };
+  }
+
+  const storageKey = 'ep_presence_guest_identity_v1';
+  try {
+    const existingRaw = window.localStorage.getItem(storageKey);
+    if (existingRaw) {
+      const existing = JSON.parse(existingRaw) as Partial<WorldPresenceIdentity>;
+      if (typeof existing.userId === 'string' && typeof existing.displayName === 'string') {
+        return {
+          userId: existing.userId,
+          displayName: existing.displayName,
+          avatarId: typeof existing.avatarId === 'string' ? existing.avatarId : 'default-player',
+        };
+      }
+    }
+  } catch {
+    // Fall through to a new guest identity.
+  }
+
+  const guestIdentity: WorldPresenceIdentity = {
+    userId: `guest-${crypto.randomUUID()}`,
+    displayName: `Guest ${Math.random().toString(36).slice(2, 6)}`,
+    avatarId: 'default-player',
+  };
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(guestIdentity));
+  } catch {
+    // Ignore storage failures for guest identities.
+  }
+
+  return guestIdentity;
 }
 
 export function resolveWorldPresenceConfig(): {

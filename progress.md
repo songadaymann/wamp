@@ -57,6 +57,27 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Draft publish nudges + in-progress presence pass in progress on March 13, 2026:
+  - started implementing a stronger “draft only / not visible until published” path in the editor
+  - added a per-room-session publish nudge after enough edits and a new actions-panel callout/button so builders get pushed toward sign-in/publish instead of quietly leaving private drafts behind
+  - changed editor return-to-world draft messaging to explicitly say the world preview is local-only
+  - extended PartyKit presence with an `edit` mode and separate room editor counts so the overworld can show “building here” without polluting active-player counts or exposing public draft tiles
+  - verification:
+    - `npm run build`
+    - required Playwright client smoke:
+      - `output/web-game/draft-publish-presence-smoke-current/`
+    - isolated current-code Vite + PartyKit verification on:
+      - frontend `http://localhost:3002`
+      - PartyKit `http://127.0.0.1:1998`
+    - targeted two-page Playwright check:
+      - `output/web-game/draft-publish-presence-check/summary.json`
+      - `output/web-game/draft-publish-presence-check/editor-publish-nudge.png`
+      - `output/web-game/draft-publish-presence-check/overworld-building-indicator.png`
+      - `output/web-game/draft-publish-presence-check/draft-return-warning.png`
+    - confirmed:
+      - after enough edits, the editor shows `Draft only` with `Sign In to Publish`
+      - a second viewer sees `Building in progress · 1 builder here`
+      - returning to the overworld shows `Local draft only · publish to make it public`
 - Play.fun menu layering fix on March 13, 2026:
   - confirmed the Play.fun widget iframe was mounting at `z-index: 9999`, which made the top-right hamburger menu unclickable in `?pf=1` mode because `#auth-panel` was only `z-index: 20`
   - added body-level Play.fun mode flags from `src/playfun/client.ts` so CSS can react cleanly to Play.fun mode

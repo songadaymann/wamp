@@ -25,6 +25,9 @@ export interface EditorUiViewModel {
   saveStatusAccentText: string;
   saveStatusLinkText: string;
   saveStatusLinkHref: string | null;
+  publishNudgeVisible: boolean;
+  publishNudgeText: string;
+  publishNudgeActionText: string;
   zoomText: string;
   backToWorldHidden: boolean;
   playHidden: boolean;
@@ -46,6 +49,9 @@ export class EditorUiBridge {
   private readonly roomCoordsEls: HTMLElement[];
   private readonly separatorEl: HTMLElement | null;
   private readonly saveStatusEls: HTMLElement[];
+  private readonly publishNudgeRoot: HTMLElement | null;
+  private readonly publishNudgeTextEl: HTMLElement | null;
+  private readonly publishNudgeActionBtn: HTMLButtonElement | null;
   private readonly zoomEls: HTMLElement[];
   private readonly backToWorldBtn: HTMLButtonElement | null;
   private readonly playBtn: HTMLButtonElement | null;
@@ -81,6 +87,9 @@ export class EditorUiBridge {
       this.doc.getElementById('room-save-status'),
       this.doc.getElementById('mobile-editor-save-status'),
     ].filter((element): element is HTMLElement => Boolean(element));
+    this.publishNudgeRoot = this.doc.getElementById('editor-publish-nudge');
+    this.publishNudgeTextEl = this.doc.getElementById('editor-publish-nudge-text');
+    this.publishNudgeActionBtn = this.doc.getElementById('btn-editor-publish-nudge') as HTMLButtonElement | null;
     this.zoomEls = [
       this.doc.getElementById('zoom-level'),
       this.doc.getElementById('mobile-editor-zoom-level'),
@@ -122,6 +131,9 @@ export class EditorUiBridge {
     this.setText(this.roomCoordsEls, viewModel.roomCoordinatesText);
     this.separatorEl?.classList.toggle('hidden', false);
     this.renderSaveStatus(this.saveStatusEls, viewModel);
+    this.setHidden(this.publishNudgeRoot, !viewModel.publishNudgeVisible);
+    this.setText(this.publishNudgeTextEl, viewModel.publishNudgeText);
+    this.setButtonText(this.publishNudgeActionBtn, viewModel.publishNudgeActionText);
     this.resetSaveStatusTone();
     this.setText(this.zoomEls, viewModel.zoomText);
     this.syncBackgroundSelection();

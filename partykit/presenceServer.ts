@@ -1,6 +1,6 @@
 import type * as Party from 'partykit/server';
 
-type PresenceMode = 'browse' | 'play';
+type PresenceMode = 'browse' | 'play' | 'edit';
 type PresenceAnimationState =
   | 'idle'
   | 'run'
@@ -79,6 +79,7 @@ export default class PresenceServer implements Party.Server {
         type: 'snapshot',
         peers: this.listPeers(connection.id),
         roomPopulations: this.computeRoomPopulations(),
+        roomEditors: this.computeRoomEditors(),
       })
     );
   }
@@ -110,6 +111,7 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
+    const previousMode = current.presence?.mode ?? null;
     const presence = this.normalizePresencePayload(parsed.presence);
     if (!presence) {
       return;
@@ -120,38 +122,51 @@ export default class PresenceServer implements Party.Server {
       presence,
     });
 
-    const peer = this.toGhostPresence(sender);
-    if (!peer) {
-      return;
+    if (previousMode === 'play' && presence.mode !== 'play') {
+      this.room.broadcast(
+        JSON.stringify({
+          type: 'remove',
+          connectionId: sender.id,
+        }),
+        [sender.id]
+      );
     }
 
-    this.room.broadcast(
-      JSON.stringify({
-        type: 'upsert',
-        peer,
-      }),
-      [sender.id]
-    );
+    const peer = this.toGhostPresence(sender);
+    if (peer) {
+      this.room.broadcast(
+        JSON.stringify({
+          type: 'upsert',
+          peer,
+        }),
+        [sender.id]
+      );
+    }
+
     this.broadcastPopulations();
   }
 
   onClose(connection: Party.Connection<ConnectionPresenceState>): void {
-    if (!connection.state?.presence || connection.state.presence.mode !== 'play') {
+    const presence = connection.state?.presence;
+    if (!presence) {
       return;
     }
 
-    this.room.broadcast(
-      JSON.stringify({
-        type: 'remove',
-        connectionId: connection.id,
-      })
-    );
+    if (presence.mode === 'play') {
+      this.room.broadcast(
+        JSON.stringify({
+          type: 'remove',
+          connectionId: connection.id,
+        })
+      );
+    }
     this.broadcastPopulations();
   }
 
   private clearPresence(connection: Party.Connection<ConnectionPresenceState>): void {
     const current = connection.state;
-    if (!current?.presence || current.presence.mode !== 'play') {
+    const previousPresence = current?.presence ?? null;
+    if (!previousPresence) {
       connection.setState(
         current
           ? {
@@ -168,13 +183,15 @@ export default class PresenceServer implements Party.Server {
       presence: null,
     });
 
-    this.room.broadcast(
-      JSON.stringify({
-        type: 'remove',
-        connectionId: connection.id,
-      }),
-      [connection.id]
-    );
+    if (previousPresence.mode === 'play') {
+      this.room.broadcast(
+        JSON.stringify({
+          type: 'remove',
+          connectionId: connection.id,
+        }),
+        [connection.id]
+      );
+    }
     this.broadcastPopulations();
   }
 
@@ -212,11 +229,30 @@ export default class PresenceServer implements Party.Server {
     );
   }
 
+  private computeRoomEditors(): Record<string, number> {
+    const counts = new Map<string, number>();
+
+    for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
+      const presence = connection.state?.presence;
+      if (!presence || presence.mode !== 'edit') {
+        continue;
+      }
+
+      const roomId = `${presence.roomCoordinates.x},${presence.roomCoordinates.y}`;
+      counts.set(roomId, (counts.get(roomId) ?? 0) + 1);
+    }
+
+    return Object.fromEntries(
+      Array.from(counts.entries()).sort(([left], [right]) => left.localeCompare(right))
+    );
+  }
+
   private broadcastPopulations(): void {
     this.room.broadcast(
       JSON.stringify({
         type: 'populations',
         roomPopulations: this.computeRoomPopulations(),
+        roomEditors: this.computeRoomEditors(),
       })
     );
   }
@@ -285,7 +321,7 @@ export default class PresenceServer implements Party.Server {
       return null;
     }
 
-    if (payload.mode !== 'browse' && payload.mode !== 'play') {
+    if (payload.mode !== 'browse' && payload.mode !== 'play' && payload.mode !== 'edit') {
       return null;
     }
 

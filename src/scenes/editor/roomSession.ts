@@ -61,6 +61,8 @@ export interface EditorStatusDetails {
 
 export class EditorRoomSession {
   private readonly AUTO_SAVE_DELAY_MS = 600;
+  private readonly DRAFT_VISIBILITY_WARNING = 'Draft only. Not visible in the world until published.';
+  private readonly DRAFT_WORLD_PREVIEW_WARNING = 'Only you can see this draft preview. Publish to make it public.';
 
   private roomId = DEFAULT_ROOM_ID;
   private roomCoordinates = DEFAULT_ROOM_COORDINATES;
@@ -282,7 +284,7 @@ export class EditorRoomSession {
     }
 
     return {
-      text: 'Editing frontier draft.',
+      text: this.DRAFT_VISIBILITY_WARNING,
       accentText: '',
       linkLabel: '',
       linkHref: null,
@@ -338,8 +340,8 @@ export class EditorRoomSession {
       this.setStatusText(
         localRecord
           ? getAuthDebugState().authenticated
-            ? 'Recovered local draft. Save or publish to sync it.'
-            : 'Recovered local guest draft.'
+            ? `Recovered local draft. ${this.DRAFT_VISIBILITY_WARNING}`
+            : `Recovered local guest draft. ${this.DRAFT_VISIBILITY_WARNING}`
           : this.getIdleStatusText()
       );
       return true;
@@ -489,6 +491,7 @@ export class EditorRoomSession {
         return {
           centerCoordinates: { ...this.roomCoordinates },
           roomCoordinates: { ...this.roomCoordinates },
+          statusMessage: this.DRAFT_WORLD_PREVIEW_WARNING,
           draftRoom: cloneRoomSnapshot(this.host.exportRoomSnapshot()),
           clearDraftRoomId: null,
           invalidateRoomId: this.roomId,
@@ -545,7 +548,7 @@ export class EditorRoomSession {
     return {
       centerCoordinates: { ...this.roomCoordinates },
       roomCoordinates: { ...this.roomCoordinates },
-      statusMessage: 'Publish failed, draft saved instead.',
+      statusMessage: this.DRAFT_WORLD_PREVIEW_WARNING,
       draftRoom: cloneRoomSnapshot(draftRecord.draft),
       clearDraftRoomId: null,
       invalidateRoomId: this.roomId,

@@ -21,6 +21,7 @@ export interface EditorSceneBridge {
   startPlayMode?: () => void;
   saveDraft?: (force?: boolean) => Promise<RoomRecord | null>;
   publishRoom?: () => Promise<RoomRecord | null>;
+  handlePublishNudgeAction?: () => Promise<void>;
   returnToWorld?: () => Promise<void> | void;
   mintRoom?: () => Promise<RoomRecord | null>;
   fitToScreen?: () => void;

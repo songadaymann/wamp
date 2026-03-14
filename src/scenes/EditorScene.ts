@@ -1,5 +1,10 @@
 import Phaser from 'phaser';
 import {
+  AUTH_STATE_CHANGED_EVENT,
+  getAuthDebugState,
+  promptForSignIn,
+} from '../auth/client';
+import {
   TILE_SIZE,
   ROOM_WIDTH,
   ROOM_HEIGHT,
@@ -23,6 +28,12 @@ import {
   type RoomVersionRecord,
 } from '../persistence/roomRepository';
 import { createWorldRepository } from '../persistence/worldRepository';
+import { roomToChunkCoordinates } from '../persistence/worldModel';
+import {
+  resolveWorldPresenceConfig,
+  resolveWorldPresenceIdentity,
+  WorldPresenceClient,
+} from '../presence/worldPresence';
 import { RETRO_COLORS } from '../visuals/starfield';
 import {
   cloneRoomGoal,
@@ -47,8 +58,12 @@ import { EditorInteractionController } from './editor/interaction';
 const EDITOR_NEIGHBOR_RADIUS = 1;
 
 export class EditorScene extends Phaser.Scene {
+  private readonly PUBLISH_NUDGE_EDIT_THRESHOLD = 10;
   private uiBridge: EditorUiBridge | null = null;
   private layerIndicatorText: Phaser.GameObjects.Text | null = null;
+  private editorPresenceClient: WorldPresenceClient | null = null;
+  private roomEditCount = 0;
+  private publishNudgeTriggered = false;
 
   // Tilemap
   private map!: Phaser.Tilemaps.Tilemap;
@@ -70,8 +85,12 @@ export class EditorScene extends Phaser.Scene {
   private readonly handleWake = (): void => {
     setAppMode('editor');
     editorState.isPlaying = false;
+    this.syncEditorPresence();
     this.updateBottomBar();
     this.updateGoalUi();
+  };
+  private readonly handleAuthStateChanged = (): void => {
+    this.renderEditorUi();
   };
   private readonly handleBackgroundChanged = (): void => {
     this.updateBackground();
@@ -112,6 +131,7 @@ export class EditorScene extends Phaser.Scene {
   };
   private readonly handleShutdown = (): void => {
     window.removeEventListener('background-changed', this.handleBackgroundChanged);
+    window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
     document.removeEventListener('keydown', this.handleDocumentKeyDown);
     this.events.off('wake', this.handleWake, this);
     this.scale.off('resize', this.handleResize, this);
@@ -122,6 +142,8 @@ export class EditorScene extends Phaser.Scene {
     this.uiBridge = null;
     this.layerIndicatorText?.destroy();
     this.layerIndicatorText = null;
+    this.editorPresenceClient?.destroy();
+    this.editorPresenceClient = null;
     this.resetRuntimeState();
   };
 
@@ -389,6 +411,7 @@ export class EditorScene extends Phaser.Scene {
 
     this.events.on('wake', this.handleWake, this);
     window.addEventListener('background-changed', this.handleBackgroundChanged);
+    window.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
     document.addEventListener('keydown', this.handleDocumentKeyDown);
     this.scale.on('resize', this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
@@ -401,12 +424,14 @@ export class EditorScene extends Phaser.Scene {
     }
 
     void this.loadPersistedRoom();
+    this.initializeEditorPresence();
     this.updateBottomBar();
     this.updateGoalUi();
   }
 
   update(time: number): void {
     this.maybeAutoSave(time);
+    this.syncEditorPresence();
     this.updateBackgroundPreview();
     this.updateCursorHighlight();
     this.updateLayerIndicator();
@@ -429,6 +454,8 @@ export class EditorScene extends Phaser.Scene {
     this.layers = new Map();
     this.editRuntime.reset();
     this.roomSession.reset();
+    this.roomEditCount = 0;
+    this.publishNudgeTriggered = false;
     editorState.isPlaying = false;
   }
 
@@ -484,6 +511,8 @@ export class EditorScene extends Phaser.Scene {
     if (this.entrySource === 'world') {
       hideBusyOverlay();
     }
+
+    this.syncEditorPresence();
   }
 
   private returnToWorldReadOnly(): void {
@@ -519,11 +548,13 @@ export class EditorScene extends Phaser.Scene {
   private markRoomDirty(): void {
     this.editRuntime.isRoomDirty = true;
     this.editRuntime.currentLastDirtyAt = performance.now();
+    this.roomEditCount += 1;
     this.updatePersistenceStatus(
       this.roomPermissions.canSaveDraft
         ? 'Draft changes...'
         : 'Read-only minted room. Changes are local only.'
     );
+    this.maybeTriggerPublishNudge();
   }
 
   private updatePersistenceStatus(text: string): void {
@@ -873,9 +904,25 @@ export class EditorScene extends Phaser.Scene {
       mode: 'play',
     };
 
+    this.editorPresenceClient?.updateLocalPresence(null);
     this.scene.sleep();
     this.scene.wake('OverworldPlayScene', playData);
     this.updateBottomBar();
+  }
+
+  async handlePublishNudgeAction(): Promise<void> {
+    if (!this.shouldShowPublishNudge()) {
+      return;
+    }
+
+    if (!getAuthDebugState().authenticated) {
+      promptForSignIn('People can’t see this room until you publish it. Sign in to publish.');
+      return;
+    }
+
+    if (this.roomPermissions.canPublish) {
+      await this.publishRoom();
+    }
   }
 
   // ══════════════════════════════════════
@@ -899,6 +946,13 @@ export class EditorScene extends Phaser.Scene {
       this.roomSession.statusDetails.linkLabel
         ? this.roomSession.statusDetails
         : this.roomSession.getIdleStatusDetails();
+    const publishNudgeVisible = this.shouldShowPublishNudge();
+    const publishNudgeText = getAuthDebugState().authenticated
+      ? 'People can’t see this room until you publish it.'
+      : 'People can’t see this room until you sign in and publish it.';
+    const publishNudgeActionText = getAuthDebugState().authenticated
+      ? 'Publish Now'
+      : 'Sign In to Publish';
 
     this.uiBridge?.render({
       roomTitleValue: this.roomTitle ?? '',
@@ -907,6 +961,9 @@ export class EditorScene extends Phaser.Scene {
       saveStatusAccentText: saveStatus.accentText,
       saveStatusLinkText: saveStatus.linkLabel,
       saveStatusLinkHref: saveStatus.linkHref,
+      publishNudgeVisible,
+      publishNudgeText,
+      publishNudgeActionText,
       zoomText: `Zoom: ${editorState.zoom}x`,
       backToWorldHidden: this.entrySource !== 'world',
       playHidden: false,
@@ -954,6 +1011,70 @@ export class EditorScene extends Phaser.Scene {
         placeFinishActive: this.goalPlacementMode === 'finish',
       },
     });
+  }
+
+  private initializeEditorPresence(): void {
+    this.editorPresenceClient?.destroy();
+    this.editorPresenceClient = null;
+
+    const config = resolveWorldPresenceConfig();
+    if (!config) {
+      return;
+    }
+
+    this.editorPresenceClient = new WorldPresenceClient({
+      ...config,
+      identity: resolveWorldPresenceIdentity(),
+      onSnapshot: () => {
+        // Editor presence only publishes activity to the overworld.
+      },
+    });
+    this.editorPresenceClient.setSubscribedShards([
+      roomToChunkCoordinates(this.roomCoordinates),
+    ]);
+    this.syncEditorPresence();
+  }
+
+  private syncEditorPresence(): void {
+    if (!this.editorPresenceClient || !this.scene.isActive(this.scene.key) || editorState.isPlaying) {
+      this.editorPresenceClient?.updateLocalPresence(null);
+      return;
+    }
+
+    this.editorPresenceClient.updateLocalPresence({
+      roomCoordinates: { ...this.roomCoordinates },
+      x: ROOM_PX_WIDTH * 0.5,
+      y: ROOM_PX_HEIGHT * 0.5,
+      velocityX: 0,
+      velocityY: 0,
+      facing: 1,
+      animationState: 'idle',
+      mode: 'edit',
+      timestamp: Date.now(),
+    });
+  }
+
+  private maybeTriggerPublishNudge(): void {
+    if (this.publishNudgeTriggered || !this.shouldShowPublishNudge()) {
+      return;
+    }
+
+    this.publishNudgeTriggered = true;
+    if (!getAuthDebugState().authenticated) {
+      promptForSignIn('People can’t see this room until you publish it. Sign in to publish.');
+      return;
+    }
+
+    this.roomSession.setStatusText('Draft only. Not visible in the world until published.');
+  }
+
+  private shouldShowPublishNudge(): boolean {
+    return (
+      this.publishedVersion === 0
+      && this.roomPermissions.canSaveDraft
+      && !this.mintedTokenId
+      && this.roomEditCount >= this.PUBLISH_NUDGE_EDIT_THRESHOLD
+    );
   }
 
   // ── Public API for UI ──

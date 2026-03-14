@@ -153,6 +153,10 @@ interface GoalRoomBadge {
   container: Phaser.GameObjects.Container;
 }
 
+interface RoomActivityBadge {
+  container: Phaser.GameObjects.Container;
+}
+
 export class OverworldPlayScene extends Phaser.Scene {
   private readonly PLAYER_SPEED = 150;
   private readonly JUMP_VELOCITY = -280;
@@ -245,6 +249,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private goalMarkerSprites: Phaser.GameObjects.Sprite[] = [];
   private goalMarkerLabels: Phaser.GameObjects.Text[] = [];
   private roomGoalBadges: GoalRoomBadge[] = [];
+  private roomActivityBadges: RoomActivityBadge[] = [];
   private starfieldSprites: Phaser.GameObjects.TileSprite[] = [];
   private backdropCamera: Phaser.Cameras.Scene2D.Camera | null = null;
   private zoomDebugText: Phaser.GameObjects.Text | null = null;
@@ -462,6 +467,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getSelectedCoordinates: () => this.selectedCoordinates,
       getZoom: () => this.cameras.main.zoom,
       onSnapshotUpdated: () => this.renderHud(),
+      onRoomActivityChanged: () => this.redrawWorld(),
       onGhostDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
     });
   }
@@ -805,6 +811,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.playerWasGrounded = false;
     this.playerLandAnimationUntil = 0;
     this.destroyRoomGoalBadges();
+    this.destroyRoomActivityBadges();
     this.shouldCenterCamera = false;
     this.shouldRespawnPlayer = false;
     this.presenceController.reset();
@@ -1234,6 +1241,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     for (const badge of this.roomGoalBadges) {
       ignoredObjects.push(badge.container);
     }
+    for (const badge of this.roomActivityBadges) {
+      ignoredObjects.push(badge.container);
+    }
     if (this.player) ignoredObjects.push(this.player);
     if (this.playerSprite) ignoredObjects.push(this.playerSprite);
     for (const projectile of this.playerProjectiles) {
@@ -1615,6 +1625,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.presenceController.getRoomPopulation(coordinates);
   }
 
+  private getRoomEditorCount(coordinates: RoomCoordinates): number {
+    return this.presenceController.getRoomEditorCount(coordinates);
+  }
+
   private destroyEdgeWalls(loadedRoom: SceneLoadedFullRoom): void {
     for (const wall of loadedRoom.edgeWalls) {
       wall.collider.destroy();
@@ -1761,6 +1775,13 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.roomGoalBadges = [];
   }
 
+  private destroyRoomActivityBadges(): void {
+    for (const badge of this.roomActivityBadges) {
+      badge.container.destroy(true);
+    }
+    this.roomActivityBadges = [];
+  }
+
   private redrawRoomGoalBadges(): void {
     this.destroyRoomGoalBadges();
 
@@ -1816,6 +1837,54 @@ export class OverworldPlayScene extends Phaser.Scene {
         container.setDepth(18);
         container.setScale(1 / this.cameras.main.zoom);
         this.roomGoalBadges.push({ container });
+      }
+    }
+
+    this.syncBackdropCameraIgnores();
+  }
+
+  private redrawRoomActivityBadges(): void {
+    this.destroyRoomActivityBadges();
+
+    if (!this.worldWindow || this.mode !== 'browse') {
+      this.syncBackdropCameraIgnores();
+      return;
+    }
+
+    const gridSize = this.worldWindow.radius * 2 + 1;
+    for (let row = 0; row < gridSize; row += 1) {
+      for (let col = 0; col < gridSize; col += 1) {
+        const coordinates = {
+          x: this.worldWindow.center.x + col - this.worldWindow.radius,
+          y: this.worldWindow.center.y + row - this.worldWindow.radius,
+        };
+        const editorCount = this.getRoomEditorCount(coordinates);
+        if (editorCount <= 0) {
+          continue;
+        }
+
+        const origin = this.getRoomOrigin(coordinates);
+        const label = editorCount === 1 ? 'BUILDING' : `${editorCount} BUILDING`;
+        const backgroundWidth = Math.max(label.length * 6.2 + 12, 72);
+        const background = this.add.rectangle(0, 0, backgroundWidth, 16, RETRO_COLORS.backgroundNumber, 0.88);
+        background.setOrigin(0, 0);
+        background.setStrokeStyle(1, RETRO_COLORS.frontier, 0.94);
+
+        const labelText = this.add.text(6, 3, label, {
+          fontFamily: 'Courier New',
+          fontSize: '8px',
+          color: '#ffcf86',
+          stroke: '#050505',
+          strokeThickness: 3,
+        });
+
+        const container = this.add.container(origin.x + 8, origin.y + ROOM_PX_HEIGHT - 24, [
+          background,
+          labelText,
+        ]);
+        container.setDepth(18);
+        container.setScale(1 / this.cameras.main.zoom);
+        this.roomActivityBadges.push({ container });
       }
     }
 
@@ -1990,6 +2059,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     if (!this.worldWindow) {
       this.destroyRoomGoalBadges();
+      this.destroyRoomActivityBadges();
       return;
     }
 
@@ -2022,6 +2092,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     this.redrawRoomGoalBadges();
+    this.redrawRoomActivityBadges();
   }
 
   private redrawGridOverlay(): void {
@@ -2072,6 +2143,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     x: number,
     y: number
   ): void {
+    const editorCount = this.getRoomEditorCount(coordinates);
     if (cellState === 'draft') {
       this.roomFrameGraphics.lineStyle(2, RETRO_COLORS.draft, 0.95);
       this.roomFrameGraphics.strokeRect(x + 4, y + 4, ROOM_PX_WIDTH - 8, ROOM_PX_HEIGHT - 8);
@@ -2098,6 +2170,11 @@ export class OverworldPlayScene extends Phaser.Scene {
     ) {
       this.roomFrameGraphics.lineStyle(2, RETRO_COLORS.selected, 0.95);
       this.roomFrameGraphics.strokeRect(x + 8, y + 8, ROOM_PX_WIDTH - 16, ROOM_PX_HEIGHT - 16);
+    }
+
+    if (editorCount > 0 && cellState !== 'draft') {
+      this.roomFrameGraphics.lineStyle(2, RETRO_COLORS.frontier, 0.88);
+      this.roomFrameGraphics.strokeRect(x + 14, y + 14, ROOM_PX_WIDTH - 28, ROOM_PX_HEIGHT - 28);
     }
   }
 
@@ -3334,6 +3411,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       badge.container.setAlpha(fadeProgress);
       badge.container.setVisible(fadeProgress > 0.02);
     }
+    for (const badge of this.roomActivityBadges) {
+      badge.container.setScale(overlayScale);
+      badge.container.setAlpha(fadeProgress);
+      badge.container.setVisible(fadeProgress > 0.02);
+    }
   }
 
   private renderHud(statusOverride?: string): void {
@@ -3346,6 +3428,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     const selectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
     const selectedDraft = this.draftRoomsById.get(selectedRoomId) ?? null;
     const selectedPopulation = this.getRoomPopulation(this.selectedCoordinates);
+    const selectedEditorCount = this.getRoomEditorCount(this.selectedCoordinates);
     const transientStatus = this.getTransientStatusMessage();
     const totalPlayerCount = this.presenceController.getTotalPlayerCount();
     const frontierBuildBlocked = selectedState === 'frontier' && this.isFrontierBuildBlockedByClaimLimit();
@@ -3381,10 +3464,13 @@ export class OverworldPlayScene extends Phaser.Scene {
       if (selectedPopulation > 0) {
         selectedMetaText += ` · ${selectedPopulation} here`;
       }
+      if (selectedEditorCount > 0) {
+        selectedMetaText += ` · ${selectedEditorCount} building`;
+      }
     } else if (selectedState === 'draft' && selectedDraft) {
       selectedMetaText = selectedDraft.goal
-        ? `Draft preview · ${ROOM_GOAL_LABELS[selectedDraft.goal.type]} challenge`
-        : 'Draft preview';
+        ? `Local draft only · ${ROOM_GOAL_LABELS[selectedDraft.goal.type]} challenge · publish to make it public`
+        : 'Local draft only · publish to make it public';
       selectedMetaTone = 'draft';
     } else if (selectedState === 'frontier') {
       if (frontierBuildBlocked) {
@@ -3396,12 +3482,20 @@ export class OverworldPlayScene extends Phaser.Scene {
             : `Daily new-room claim limit reached (${limit}/${limit})`;
         selectedMetaTone = 'default';
       } else {
-        selectedMetaText = 'Build a room here';
+        selectedMetaText =
+          selectedEditorCount > 0
+            ? `Building in progress · ${selectedEditorCount} ${selectedEditorCount === 1 ? 'builder' : 'builders'} here`
+            : 'Build a room here';
         selectedMetaTone = 'frontier';
       }
     } else if (selectedState === 'empty') {
-      selectedMetaText = 'You can only build next to an existing published room';
-      selectedMetaTone = 'default';
+      if (selectedEditorCount > 0) {
+        selectedMetaText = `Building in progress · ${selectedEditorCount} ${selectedEditorCount === 1 ? 'builder' : 'builders'} here`;
+        selectedMetaTone = 'frontier';
+      } else {
+        selectedMetaText = 'You can only build next to an existing published room';
+        selectedMetaTone = 'default';
+      }
     }
 
     let statusText: string;
@@ -3624,6 +3718,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
     this.goalMarkerLabels = [];
     this.destroyRoomGoalBadges();
+    this.destroyRoomActivityBadges();
     this.roomGridGraphics?.destroy();
     this.roomFillGraphics?.destroy();
     this.roomFrameGraphics?.destroy();

@@ -27,6 +27,7 @@ export function setupSceneCommands(
   const playBtn = doc.getElementById('btn-test-play');
   const saveBtn = doc.getElementById('btn-save-draft');
   const publishBtn = doc.getElementById('btn-publish-room');
+  const publishNudgeBtn = doc.getElementById('btn-editor-publish-nudge');
   const historyBtn = doc.getElementById('btn-room-history');
   const mintBtn = doc.getElementById('btn-mint-room');
   const fitBtn = doc.getElementById('btn-fit-screen');
@@ -126,6 +127,14 @@ export function setupSceneCommands(
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.publishRoom) {
       await editorScene.publishRoom();
+    }
+  });
+
+  publishNudgeBtn?.addEventListener('click', async () => {
+    controlsModal.close();
+    const editorScene = getActiveEditorScene(game);
+    if (editorScene?.handlePublishNudgeAction) {
+      await editorScene.handlePublishNudgeAction();
     }
   });
 
