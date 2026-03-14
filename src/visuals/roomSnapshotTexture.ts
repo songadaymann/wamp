@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import {
+  decodeTileDataValue,
   LAYER_NAMES,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
@@ -12,6 +13,7 @@ import {
   getObjectDefaultFrame,
   getObjectFrameSourceRect,
   getPlacedObjectLayer,
+  type LayerName,
 } from '../config';
 import type { RoomSnapshot } from '../persistence/roomModel';
 import { RETRO_COLORS, drawStarfieldToContext, hashStringToSeed } from './starfield';
@@ -21,6 +23,7 @@ export type RoomTextureMode = 'preview' | 'full' | 'editor-preview';
 export interface RoomTextureBuildOptions {
   includeObjects?: boolean;
   includeBackground?: boolean;
+  includedLayers?: LayerName[];
 }
 
 export function buildRoomTextureKey(
@@ -36,6 +39,7 @@ export function buildRoomTextureKey(
     String(tilePixelSize),
     options.includeBackground === false ? 'no-background' : 'with-background',
     options.includeObjects === false ? 'tiles-only' : 'with-objects',
+    options.includedLayers?.join('_') ?? 'all-layers',
     room.version,
     sanitizeTextureKey(room.updatedAt),
   ].join('-');
@@ -67,7 +71,14 @@ export function buildRoomSnapshotTexture(
   if (options.includeBackground !== false) {
     drawRoomBackground(scene, context, room, width, height);
   }
-  drawRoomTiles(scene, context, room, tilePixelSize, options.includeObjects !== false);
+  drawRoomTiles(
+    scene,
+    context,
+    room,
+    tilePixelSize,
+    options.includeObjects !== false,
+    options.includedLayers ?? LAYER_NAMES
+  );
   canvasTexture.refresh();
 }
 
@@ -110,11 +121,13 @@ function drawRoomTiles(
   room: RoomSnapshot,
   tilePixelSize: number,
   includeObjects: boolean,
+  includedLayers: readonly LayerName[],
 ): void {
-  for (const layerName of LAYER_NAMES) {
+  for (const layerName of includedLayers) {
     for (let y = 0; y < ROOM_HEIGHT; y++) {
       for (let x = 0; x < ROOM_WIDTH; x++) {
-        const gid = room.tileData[layerName][y][x];
+        const tileValue = room.tileData[layerName][y][x];
+        const { gid, flipX, flipY } = decodeTileDataValue(tileValue);
         if (gid <= 0) continue;
 
         const resolvedTileset = resolveTilesetForGid(gid);
@@ -125,17 +138,17 @@ function drawRoomTiles(
 
         const sourceCol = resolvedTileset.localIndex % resolvedTileset.columns;
         const sourceRow = Math.floor(resolvedTileset.localIndex / resolvedTileset.columns);
-
-        context.drawImage(
+        drawTileFrame(
+          context,
           sourceImage,
           sourceCol * TILE_SIZE,
           sourceRow * TILE_SIZE,
-          TILE_SIZE,
-          TILE_SIZE,
           x * tilePixelSize,
           y * tilePixelSize,
           tilePixelSize,
           tilePixelSize,
+          flipX,
+          flipY,
         );
       }
     }
@@ -146,6 +159,35 @@ function drawRoomTiles(
   }
 
   context.globalAlpha = 1;
+}
+
+function drawTileFrame(
+  context: CanvasRenderingContext2D,
+  sourceImage: CanvasImageSource,
+  sx: number,
+  sy: number,
+  dx: number,
+  dy: number,
+  sizeX: number,
+  sizeY: number,
+  flipX: boolean,
+  flipY: boolean,
+): void {
+  context.save();
+  context.translate(dx + (flipX ? sizeX : 0), dy + (flipY ? sizeY : 0));
+  context.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+  context.drawImage(
+    sourceImage,
+    sx,
+    sy,
+    TILE_SIZE,
+    TILE_SIZE,
+    0,
+    0,
+    sizeX,
+    sizeY,
+  );
+  context.restore();
 }
 
 function drawRoomObjectsForLayer(

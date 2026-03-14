@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import {
+  decodeTileDataValue,
   getBackgroundGroup,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
@@ -54,6 +55,8 @@ export interface LoadedFullRoom<TLiveObject = unknown, TEdgeWall = unknown> {
   backgroundSprites: LoadedRoomBackgroundSprite[];
   image: Phaser.GameObjects.Image;
   textureKey: string;
+  foregroundImage: Phaser.GameObjects.Image | null;
+  foregroundTextureKey: string | null;
   map: Phaser.Tilemaps.Tilemap;
   terrainLayer: Phaser.Tilemaps.TilemapLayer;
   terrainCollider: Phaser.Physics.Arcade.Collider | null;
@@ -893,6 +896,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     const existing = this.loadedFullRoomsById.get(room.id);
     if (existing && existing.room.version === room.version && existing.room.updatedAt === room.updatedAt) {
       existing.image.setVisible(true);
+      existing.foregroundImage?.setVisible(true);
       for (const liveObject of existing.liveObjects) {
         const sprite = (liveObject as { sprite?: Phaser.GameObjects.Sprite }).sprite;
         sprite?.setVisible(true);
@@ -907,11 +911,25 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     const textureKey = buildRoomTextureKey(room, 'full', TILE_SIZE, {
       includeBackground: false,
       includeObjects: false,
+      includedLayers: ['background', 'terrain'],
+    });
+    const foregroundTextureKey = buildRoomTextureKey(room, 'full', TILE_SIZE, {
+      includeBackground: false,
+      includeObjects: false,
+      includedLayers: ['foreground'],
     });
     if (!this.options.scene.textures.exists(textureKey)) {
       buildRoomSnapshotTexture(this.options.scene, room, textureKey, TILE_SIZE, {
         includeBackground: false,
         includeObjects: false,
+        includedLayers: ['background', 'terrain'],
+      });
+    }
+    if (!this.options.scene.textures.exists(foregroundTextureKey)) {
+      buildRoomSnapshotTexture(this.options.scene, room, foregroundTextureKey, TILE_SIZE, {
+        includeBackground: false,
+        includeObjects: false,
+        includedLayers: ['foreground'],
       });
     }
 
@@ -925,6 +943,14 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     image.setOrigin(0.5);
     image.setDepth(10);
     image.setDisplaySize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
+    const foregroundImage = this.options.scene.add.image(
+      origin.x + ROOM_PX_WIDTH / 2,
+      origin.y + ROOM_PX_HEIGHT / 2,
+      foregroundTextureKey
+    );
+    foregroundImage.setOrigin(0.5);
+    foregroundImage.setDepth(27.25);
+    foregroundImage.setDisplaySize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
 
     const map = this.options.scene.make.tilemap({
       tileWidth: TILE_SIZE,
@@ -960,9 +986,13 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
     for (let y = 0; y < ROOM_HEIGHT; y += 1) {
       for (let x = 0; x < ROOM_WIDTH; x += 1) {
-        const gid = room.tileData.terrain[y][x];
+        const { gid, flipX, flipY } = decodeTileDataValue(room.tileData.terrain[y][x]);
         if (gid > 0) {
-          terrainLayer.putTileAt(gid, x, y);
+          const tile = terrainLayer.putTileAt(gid, x, y);
+          if (tile) {
+            tile.flipX = flipX;
+            tile.flipY = flipY;
+          }
         }
       }
     }
@@ -977,6 +1007,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       backgroundSprites: roomBackground.sprites,
       image,
       textureKey,
+      foregroundImage,
+      foregroundTextureKey,
       map,
       terrainLayer,
       terrainCollider: player ? this.options.scene.physics.add.collider(player, terrainLayer) : null,
@@ -1043,9 +1075,13 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       backgroundSprite.sprite.destroy();
     }
     loadedRoom.image.destroy();
+    loadedRoom.foregroundImage?.destroy();
 
     if (this.options.scene.textures.exists(loadedRoom.textureKey)) {
       this.options.scene.textures.remove(loadedRoom.textureKey);
+    }
+    if (loadedRoom.foregroundTextureKey && this.options.scene.textures.exists(loadedRoom.foregroundTextureKey)) {
+      this.options.scene.textures.remove(loadedRoom.foregroundTextureKey);
     }
 
     this.loadedFullRoomsById.delete(roomId);

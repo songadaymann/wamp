@@ -456,7 +456,10 @@ export class EditorScene extends Phaser.Scene {
     this.roomSession.reset();
     this.roomEditCount = 0;
     this.publishNudgeTriggered = false;
+    editorState.tileFlipX = false;
+    editorState.tileFlipY = false;
     editorState.isPlaying = false;
+    window.dispatchEvent(new Event('tile-flip-changed'));
   }
 
   updateBackground(): void {
@@ -657,12 +660,13 @@ export class EditorScene extends Phaser.Scene {
     this.layerIndicatorText?.destroy();
     this.layerIndicatorText = this.add.text(0, 0, '', {
       fontFamily: '"IBM Plex Mono", monospace',
-      fontSize: '12px',
+      fontSize: '13px',
+      fontStyle: 'bold',
       color: '#f6f1de',
       backgroundColor: '#121109cc',
       padding: {
-        x: 10,
-        y: 6,
+        x: 12,
+        y: 7,
       },
     });
     this.layerIndicatorText.setDepth(130);
@@ -700,8 +704,15 @@ export class EditorScene extends Phaser.Scene {
           : editorState.activeTool === 'fill'
             ? 'Fill'
             : 'Draw';
-
-    const text = `${layerLabel} layer  |  ${modeLabel}  |  ${toolLabel}`;
+    const flipLabels: string[] = [];
+    if (editorState.paletteMode === 'tiles' && editorState.tileFlipX) {
+      flipLabels.push('Flip H');
+    }
+    if (editorState.paletteMode === 'tiles' && editorState.tileFlipY) {
+      flipLabels.push('Flip V');
+    }
+    const detailParts = [toolLabel, ...flipLabels];
+    const text = `${modeLabel} -> ${layerLabel}\n${detailParts.join('  |  ')}`;
     if (this.layerIndicatorText.text !== text) {
       this.layerIndicatorText.setText(text);
     }

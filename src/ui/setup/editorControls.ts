@@ -10,6 +10,9 @@ import type { RoomGoalType } from '../../goals/roomGoals';
 import { withActiveEditorScene } from './sceneBridge';
 import { PaletteController } from './paletteController';
 
+const TILE_FLIP_CHANGED_EVENT = 'tile-flip-changed';
+const EDITOR_LAYER_CHANGED_EVENT = 'editor-layer-changed';
+
 export function setupEditorControls(
   game: Phaser.Game,
   paletteController: PaletteController,
@@ -18,8 +21,10 @@ export function setupEditorControls(
 ): void {
   setupToolButtons(doc);
   setupLayerButtons(doc);
+  setupLayerStatusChip(doc);
   setupRoomTitleInput(game, doc);
   setupTilesetSelector(paletteController, doc);
+  setupTileFlipControls(paletteController, doc);
   setupBackgroundSelector(doc, windowObj);
   setupBackgroundCards(doc, windowObj);
   setupGoalControls(game, doc);
@@ -56,15 +61,24 @@ function setupToolButtons(doc: Document): void {
 }
 
 function setupLayerButtons(doc: Document): void {
+  const sync = () => {
+    doc.querySelectorAll('.layer-btn').forEach((button) => {
+      const layer = (button as HTMLElement).dataset.layer as LayerName;
+      button.classList.toggle('active', layer === editorState.activeLayer);
+    });
+  };
+
   doc.querySelectorAll('.layer-btn').forEach((button) => {
     button.addEventListener('click', () => {
       const layer = (button as HTMLElement).dataset.layer as LayerName;
       editorState.activeLayer = layer;
-
-      doc.querySelectorAll('.layer-btn').forEach((item) => item.classList.remove('active'));
-      button.classList.add('active');
+      sync();
+      doc.defaultView?.dispatchEvent(new Event(EDITOR_LAYER_CHANGED_EVENT));
     });
   });
+
+  doc.defaultView?.addEventListener(EDITOR_LAYER_CHANGED_EVENT, sync);
+  sync();
 }
 
 function setupBackgroundSelector(doc: Document, windowObj: Window): void {
@@ -79,6 +93,59 @@ function setupBackgroundSelector(doc: Document, windowObj: Window): void {
     windowObj.dispatchEvent(new Event('background-changed'));
     requestPhoneEditorAutoCollapse(doc);
   });
+}
+
+function setupTileFlipControls(paletteController: PaletteController, doc: Document): void {
+  const flipXButton = doc.getElementById('btn-tile-flip-x') as HTMLButtonElement | null;
+  const flipYButton = doc.getElementById('btn-tile-flip-y') as HTMLButtonElement | null;
+  if (!flipXButton || !flipYButton) {
+    return;
+  }
+
+  const sync = () => {
+    flipXButton.classList.toggle('active', editorState.tileFlipX);
+    flipYButton.classList.toggle('active', editorState.tileFlipY);
+    flipXButton.setAttribute('aria-pressed', editorState.tileFlipX ? 'true' : 'false');
+    flipYButton.setAttribute('aria-pressed', editorState.tileFlipY ? 'true' : 'false');
+  };
+
+  flipXButton.addEventListener('click', () => {
+    editorState.tileFlipX = !editorState.tileFlipX;
+    sync();
+    paletteController.renderTilePreview();
+    doc.defaultView?.dispatchEvent(new Event(TILE_FLIP_CHANGED_EVENT));
+  });
+
+  flipYButton.addEventListener('click', () => {
+    editorState.tileFlipY = !editorState.tileFlipY;
+    sync();
+    paletteController.renderTilePreview();
+    doc.defaultView?.dispatchEvent(new Event(TILE_FLIP_CHANGED_EVENT));
+  });
+
+  doc.defaultView?.addEventListener(TILE_FLIP_CHANGED_EVENT, sync);
+  sync();
+}
+
+function setupLayerStatusChip(doc: Document): void {
+  const chip = doc.getElementById('editor-layer-chip');
+  if (!chip) {
+    return;
+  }
+
+  const sync = () => {
+    const label =
+      editorState.activeLayer === 'terrain'
+        ? 'Terrain'
+        : editorState.activeLayer === 'background'
+          ? 'Background'
+          : 'Foreground';
+    chip.textContent = `Placing on ${label}`;
+    chip.setAttribute('data-layer-tone', editorState.activeLayer);
+  };
+
+  doc.defaultView?.addEventListener(EDITOR_LAYER_CHANGED_EVENT, sync);
+  sync();
 }
 
 function setupBackgroundCards(doc: Document, windowObj: Window): void {

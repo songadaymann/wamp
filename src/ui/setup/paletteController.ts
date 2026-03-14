@@ -319,18 +319,40 @@ export class PaletteController {
 
     const offsetX = Math.floor((64 - drawWidth) / 2);
     const offsetY = Math.floor((64 - drawHeight) / 2);
+    const cellWidth = drawWidth / selection.width;
+    const cellHeight = drawHeight / selection.height;
 
-    ctx.drawImage(
-      img,
-      selection.startCol * TILE_SIZE,
-      selection.startRow * TILE_SIZE,
-      selectionPixelWidth,
-      selectionPixelHeight,
-      offsetX,
-      offsetY,
-      drawWidth,
-      drawHeight,
-    );
+    for (let dy = 0; dy < selection.height; dy += 1) {
+      for (let dx = 0; dx < selection.width; dx += 1) {
+        if (!selection.occupiedMask[dy]?.[dx]) {
+          continue;
+        }
+
+        const sourceDx = editorState.tileFlipX ? selection.width - 1 - dx : dx;
+        const sourceDy = editorState.tileFlipY ? selection.height - 1 - dy : dy;
+        const sourceCol = selection.startCol + sourceDx;
+        const sourceRow = selection.startRow + sourceDy;
+
+        ctx.save();
+        ctx.translate(
+          offsetX + dx * cellWidth + (editorState.tileFlipX ? cellWidth : 0),
+          offsetY + dy * cellHeight + (editorState.tileFlipY ? cellHeight : 0),
+        );
+        ctx.scale(editorState.tileFlipX ? -1 : 1, editorState.tileFlipY ? -1 : 1);
+        ctx.drawImage(
+          img,
+          sourceCol * TILE_SIZE,
+          sourceRow * TILE_SIZE,
+          TILE_SIZE,
+          TILE_SIZE,
+          0,
+          0,
+          cellWidth,
+          cellHeight,
+        );
+        ctx.restore();
+      }
+    }
 
     this.drawSelectionEmptyCellOverlay(
       ctx,

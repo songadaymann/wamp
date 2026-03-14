@@ -193,6 +193,7 @@
           <button class="palette-tab active" data-mode="tiles">Tiles</button>
           <button class="palette-tab" data-mode="objects">Objects</button>
         </div>
+        <div id="editor-layer-chip" class="editor-layer-chip" data-layer-tone="terrain">Placing on Terrain</div>
       </div>
 
       <!-- Tileset Selector (visible in tiles mode) -->
@@ -206,6 +207,10 @@
           <option value="snow">Snow</option>
           <option value="water">Water</option>
         </select>
+        <div class="tile-transform-controls">
+          <button id="btn-tile-flip-x" class="bar-btn bar-btn-small" type="button">Flip H</button>
+          <button id="btn-tile-flip-y" class="bar-btn bar-btn-small" type="button">Flip V</button>
+        </div>
       </div>
 
       <!-- Tile Palette (visible in tiles mode) -->

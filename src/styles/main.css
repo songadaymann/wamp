@@ -673,6 +673,35 @@ body[data-playfun-mode='true'] .rotate-gate {
   gap: 2px;
 }
 
+.editor-layer-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(243, 238, 226, 0.18);
+  background: rgba(18, 17, 9, 0.9);
+  color: var(--text);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.editor-layer-chip[data-layer-tone='background'] {
+  border-color: rgba(47, 107, 127, 0.65);
+  color: #bfe9f4;
+}
+
+.editor-layer-chip[data-layer-tone='terrain'] {
+  border-color: rgba(52, 116, 51, 0.68);
+  color: #d7f5d2;
+}
+
+.editor-layer-chip[data-layer-tone='foreground'] {
+  border-color: rgba(255, 111, 60, 0.7);
+  color: #ffd2c3;
+}
+
 .palette-tab {
   flex: 1;
   padding: 5px 8px;
@@ -724,6 +753,13 @@ body[data-playfun-mode='true'] .rotate-gate {
 
 #tileset-select option {
   background: var(--panel);
+}
+
+.tile-transform-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 8px;
 }
 
 #goal-type-select,

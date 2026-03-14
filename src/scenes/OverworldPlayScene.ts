@@ -174,6 +174,10 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly BOUNCE_PAD_VELOCITY = -392;
   private readonly BOUNCE_PAD_COOLDOWN_MS = 220;
   private readonly BOUNCE_PAD_ACTIVE_MS = 140;
+  private readonly QUICKSAND_ACTIVE_BUFFER_MS = 100;
+  private readonly QUICKSAND_MOVE_FACTOR = 0.46;
+  private readonly QUICKSAND_JUMP_FACTOR = 0.78;
+  private readonly QUICKSAND_VISUAL_SINK_MAX = 5;
   private readonly BAT_SPEED = 72;
   private readonly BAT_WAVE_AMPLITUDE = 6;
   private readonly BAT_WAVE_SPEED = 0.012;
@@ -269,6 +273,9 @@ export class OverworldPlayScene extends Phaser.Scene {
   private browseInspectZoom = DEFAULT_ZOOM;
   private transientStatusMessage: string | null = null;
   private transientStatusExpiresAt = 0;
+  private quicksandTouchedUntil = 0;
+  private quicksandVisualSink = 0;
+  private quicksandStatusCooldownUntil = 0;
 
   private isPanning = false;
   private panStartPointer = { x: 0, y: 0 };
@@ -443,6 +450,9 @@ export class OverworldPlayScene extends Phaser.Scene {
 
         this.heldKeyCount -= 1;
         return true;
+      },
+      touchQuicksand: () => {
+        this.touchQuicksand();
       },
       grantExternalLaunchGrace: (durationMs) => {
         this.externalLaunchGraceUntil = Math.max(
@@ -653,6 +663,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     const jumpedOffLadder = this.isClimbingLadder && spacePressed;
     const swordPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.Q) || consumeTouchAction('slash');
     const gunPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E) || consumeTouchAction('shoot');
+    const inQuicksand = this.isPlayerInQuicksand();
 
     if (stayOnLadder && overlappingLadder) {
       this.setPlayerLadderState(overlappingLadder);
@@ -672,7 +683,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
       const onFloor = this.playerBody.blocked.down || this.playerBody.touching.down;
       const crateInteraction =
-        onFloor && horizontalInput !== 0
+        !inQuicksand && onFloor && horizontalInput !== 0
           ? this.findCrateInteraction(horizontalInput, downHeld)
           : null;
       const wantsCrouch = onFloor && downHeld && !crateInteraction;
@@ -697,7 +708,8 @@ export class OverworldPlayScene extends Phaser.Scene {
           this.playerBody.setVelocityX(this.weaponKnockbackVelocityX);
         } else {
           this.weaponKnockbackVelocityX = 0;
-          const moveSpeed = this.isCrouching ? this.CRAWL_SPEED : this.PLAYER_SPEED;
+          const moveSpeedBase = this.isCrouching ? this.CRAWL_SPEED : this.PLAYER_SPEED;
+          const moveSpeed = inQuicksand ? moveSpeedBase * this.QUICKSAND_MOVE_FACTOR : moveSpeedBase;
           if (left) {
             this.playerBody.setVelocityX(-moveSpeed);
           } else if (right) {
@@ -712,7 +724,9 @@ export class OverworldPlayScene extends Phaser.Scene {
         !this.isCrouching && (spacePressed || (upPressed && overlappingLadder === null));
 
       if (jumpedOffLadder) {
-        this.playerBody.setVelocityY(this.JUMP_VELOCITY);
+        this.playerBody.setVelocityY(
+          inQuicksand ? this.JUMP_VELOCITY * this.QUICKSAND_JUMP_FACTOR : this.JUMP_VELOCITY
+        );
         this.fxController?.playJumpDustFx(
           this.player?.x ?? this.playerBody.center.x,
           this.playerBody.bottom,
@@ -735,7 +749,9 @@ export class OverworldPlayScene extends Phaser.Scene {
         }
 
         if (this.jumpBuffered && this.coyoteTime > 0) {
-          this.playerBody.setVelocityY(this.JUMP_VELOCITY);
+          this.playerBody.setVelocityY(
+            inQuicksand ? this.JUMP_VELOCITY * this.QUICKSAND_JUMP_FACTOR : this.JUMP_VELOCITY
+          );
           this.fxController?.playJumpDustFx(
             this.player?.x ?? this.playerBody.center.x,
             this.playerBody.bottom,
@@ -751,8 +767,12 @@ export class OverworldPlayScene extends Phaser.Scene {
           this.playerBody.velocity.y < 0 &&
           this.time.now >= this.externalLaunchGraceUntil
         ) {
-          this.playerBody.setVelocityY(this.playerBody.velocity.y * 0.85);
+          this.playerBody.setVelocityY(this.playerBody.velocity.y * (inQuicksand ? 0.78 : 0.85));
         }
+      }
+
+      if (inQuicksand && onFloor) {
+        this.playerBody.setVelocityY(Math.max(this.playerBody.velocity.y, 10));
       }
 
       this.handleCombatInput({
@@ -763,6 +783,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       });
     }
 
+    this.updateQuicksandVisualSink();
     this.updatePlayerProjectiles(delta);
     this.syncLadderClimbSfx(verticalInput);
     this.maybeRespawnFromVoid();
@@ -791,6 +812,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.browseInspectZoom = DEFAULT_ZOOM;
     this.transientStatusMessage = null;
     this.transientStatusExpiresAt = 0;
+    this.quicksandTouchedUntil = 0;
+    this.quicksandVisualSink = 0;
+    this.quicksandStatusCooldownUntil = 0;
     this.isPanning = false;
     this.panStartPointer = { x: 0, y: 0 };
     this.panCurrentPointer = { x: 0, y: 0 };
@@ -1276,6 +1300,9 @@ export class OverworldPlayScene extends Phaser.Scene {
         ignoredObjects.push(backgroundSprite.sprite);
       }
       ignoredObjects.push(loadedRoom.image, loadedRoom.terrainLayer);
+      if (loadedRoom.foregroundImage) {
+        ignoredObjects.push(loadedRoom.foregroundImage);
+      }
       for (const liveObject of loadedRoom.liveObjects) {
         ignoredObjects.push(liveObject.sprite);
       }
@@ -1349,6 +1376,30 @@ export class OverworldPlayScene extends Phaser.Scene {
   private showTransientStatus(message: string): void {
     this.transientStatusMessage = message;
     this.transientStatusExpiresAt = this.time.now + 4200;
+  }
+
+  private touchQuicksand(): void {
+    this.quicksandTouchedUntil = Math.max(
+      this.quicksandTouchedUntil,
+      this.time.now + this.QUICKSAND_ACTIVE_BUFFER_MS
+    );
+    if (this.time.now >= this.quicksandStatusCooldownUntil) {
+      this.quicksandStatusCooldownUntil = this.time.now + 2400;
+      this.showTransientStatus('Quicksand drags you down.');
+    }
+  }
+
+  private isPlayerInQuicksand(): boolean {
+    return this.time.now < this.quicksandTouchedUntil;
+  }
+
+  private updateQuicksandVisualSink(): void {
+    const target = this.isPlayerInQuicksand() ? this.QUICKSAND_VISUAL_SINK_MAX : 0;
+    const lerp = this.isPlayerInQuicksand() ? 0.24 : 0.18;
+    this.quicksandVisualSink = Phaser.Math.Linear(this.quicksandVisualSink, target, lerp);
+    if (Math.abs(this.quicksandVisualSink - target) < 0.08) {
+      this.quicksandVisualSink = target;
+    }
   }
 
   private applySceneData(data?: OverworldPlaySceneData): void {
@@ -2883,7 +2934,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     this.playerSprite.setPosition(
       this.player.x,
-      this.playerBody.bottom + DEFAULT_PLAYER_VISUAL_FEET_OFFSET
+      this.playerBody.bottom + DEFAULT_PLAYER_VISUAL_FEET_OFFSET + this.quicksandVisualSink
     );
 
     const facingLockedByWeaponKnockback = this.time.now < this.weaponKnockbackUntil;

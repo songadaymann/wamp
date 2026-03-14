@@ -2387,3 +2387,62 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 - This prevents the palette area from compressing earlier sections like `Layers`, which was causing the layer buttons to be visibly cut off under the `Background` section header
 - Verification:
   - `npm run build` passed
+
+## March 14, 2026 - Ladder And Crate Bounds Match The Actual Art
+
+- Rechecked the source PNG bounds directly:
+  - `ladder.png` visible pixels occupy `(0, 13) -> (16, 64)` inside the `16x64` frame
+  - `crate_static.png` visible pixels occupy `(0, 16) -> (16, 32)` inside the `32x32` frame
+- Updated the config to align both collision and editor preview boxes with the visible art instead of the full frame:
+  - `ladder` now uses a `16x51` body and preview with offsets `0, 13`
+  - `crate` now uses a `16x16` body and preview with offsets `0, 16`
+- This should fix:
+  - the ladder top support being attached above the visible ladder top
+  - the ladder selection box extending a tile too high in the editor
+  - the crate stand-on area being centered over empty pixels instead of the visible crate
+- Verification:
+  - `npm run build` passed
+
+## March 14, 2026 - Quicksand Becomes Sticky Instead Of Instantly Lethal
+
+- Replaced the generic quicksand death overlap with a dedicated quicksand player state:
+  - touching `quicksand` now refreshes a short active window instead of calling the death handler
+  - while active, player movement is slowed and jumps are weaker
+  - the player visual is nudged downward a few pixels so the sand reads as viscous rather than just slippery
+- Updated the quicksand editor description to match the new behavior
+- Verification:
+  - `npm run build` passed
+  - required Playwright smoke run executed into `output/web-game/quicksand-smoke/`
+  - note:
+    - the preview smoke still hit an existing `TypeError: Failed to construct 'URL': Invalid base URL` boot error and rendered black, so this pass is build-verified but still wants an in-game manual/interactive check once the local API-backed dev loop is running
+
+## March 14, 2026 - Tile Flips, Active Layer Visibility, And Real Foreground Tiles
+
+- Added tile transform support to editor state and room serialization:
+  - tile cells can now encode horizontal and vertical flip flags alongside the gid
+  - editor placement, fill, flood fill, undo/redo, room export, room import, and room snapshot rendering all decode and preserve flipped tiles
+- Added editor-side tile flip controls:
+  - `Flip H` and `Flip V` buttons now live under the tileset selector
+  - tile preview rendering mirrors the current multi-tile selection as a chunk instead of just flipping the first tile
+  - editor scene resets now broadcast a tile-flip sync event so the buttons do not get visually stuck after scene resets
+- Added stronger edit-mode layer feedback:
+  - cursor highlight color now reflects the active layer for both tiles and objects
+  - the top-right editor layer indicator now shows `Tiles/Objects -> Background/Terrain/Foreground`
+  - added a persistent sidebar chip under the `Tiles / Objects` tabs that reads `Placing on Background/Terrain/Foreground`, so the active layer stays visible even if the `Layers` section is collapsed
+- Split full-room rendering in play mode so foreground tiles can actually render in front of the player:
+  - full loaded rooms now build one texture for `background + terrain` and a separate texture for `foreground`
+  - the foreground texture is placed above the player visual depth
+  - full-room terrain collision rebuild now preserves flipped terrain tiles too
+- Tuned quicksand to be slightly less viscous:
+  - reduced the sticky buffer window a bit
+  - increased movement and jump strength while in quicksand
+  - reduced the forced downward velocity so jumping up inside the sand feels more possible
+- Verification:
+  - `npm run build` passed
+  - required skill-client smoke runs executed into:
+    - `output/web-game/editor-layer-flip-smoke/`
+    - `output/web-game/editor-layer-flip-dev-smoke/`
+  - notes:
+    - the preview smoke still hit the existing `TypeError: Failed to construct 'URL': Invalid base URL` page error and rendered black
+    - the dev-server smoke produced a valid `render_game_to_text` state dump at `output/web-game/editor-layer-flip-dev-smoke/state-0.json`
+    - the dev-server smoke still logged the expected missing PartyKit `127.0.0.1:1999` websocket connection noise because the presence server was not part of this check

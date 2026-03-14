@@ -26,6 +26,15 @@ export interface TileSelection {
   occupiedMask: boolean[][];
 }
 
+export const TILE_FLIP_X_FLAG = 1 << 20;
+export const TILE_FLIP_Y_FLAG = 1 << 21;
+
+export interface DecodedTileDataValue {
+  gid: number;
+  flipX: boolean;
+  flipY: boolean;
+}
+
 // ── Tileset Configs ──
 export interface TilesetConfig {
   key: string;
@@ -290,7 +299,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'icicle',      name: 'Icicle',      category: 'hazard',      path: 'assets/enemies/icicle.png',      frameWidth: 48, frameHeight: 48, frameCount: 6,  fps: 8,  bodyWidth: 14, bodyHeight: 40, bodyOffsetX: 17, bodyOffsetY: 4, behavior: 'animated', description: 'Hanging icicle. Touching it is lethal.' },
   { id: 'lightning',   name: 'Lightning',   category: 'hazard',      path: 'assets/enemies/lightning.png',   frameWidth: 64, frameHeight: 96, frameCount: 4,  fps: 10, bodyWidth: 18, bodyHeight: 84, bodyOffsetX: 23, bodyOffsetY: 6, behavior: 'animated', description: 'Lightning strike hazard. Deadly on contact.' },
   { id: 'propeller',   name: 'Propeller',   category: 'hazard',      path: 'assets/enemies/propeller.png',   frameWidth: 16, frameHeight: 16, frameCount: 4,  fps: 12, bodyWidth: 14, bodyHeight: 14, behavior: 'animated', description: 'Spinning blade propeller. Kills on contact.' },
-  { id: 'quicksand',   name: 'Quicksand',   category: 'hazard',      path: 'assets/enemies/quicksand.png',   frameWidth: 32, frameHeight: 32, frameCount: 8,  fps: 8,  bodyWidth: 28, bodyHeight: 18, behavior: 'animated', description: 'Sinkhole hazard. No swimming or wading, just death.' },
+  { id: 'quicksand',   name: 'Quicksand',   category: 'hazard',      path: 'assets/enemies/quicksand.png',   frameWidth: 32, frameHeight: 32, frameCount: 8,  fps: 8,  bodyWidth: 28, bodyHeight: 18, behavior: 'animated', description: 'Viscous sand that drags you down and slows movement.' },
   { id: 'cactus_spike',name: 'Cactus Spike',category: 'hazard',      path: 'assets/enemies/cactus_spike.png',frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 8,  bodyHeight: 7,  bodyOffsetX: 4, bodyOffsetY: 5, previewWidth: 8, previewHeight: 7, previewOffsetX: 4, previewOffsetY: 5, behavior: 'static',   description: 'Single cactus spike. Kills on contact.' },
   { id: 'tornado_sand',name: 'Sand Tornado',category: 'hazard',      path: 'assets/enemies/tornado_sand.png',frameWidth: 48, frameHeight: 48, frameCount: 8,  fps: 10, bodyWidth: 28, bodyHeight: 40, behavior: 'animated', description: 'Desert whirlwind. Launches and kills on contact.' },
   { id: 'lava_surface',name: 'Lava Pool',   category: 'hazard',      path: 'assets/deco/lava_surface.png',   frameWidth: 48, frameHeight: 48, frameCount: 8,  fps: 8,  bodyWidth: 44, bodyHeight: 22, bodyOffsetX: 2, bodyOffsetY: 24, behavior: 'animated', description: 'Animated lava surface. There is no swimming, only death.' },
@@ -317,13 +326,13 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'spawn_point', name: 'Spawn Point', category: 'interactive', path: 'assets/objects/sign_arrow.png',  frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Player spawn marker. Only one is stored per room.' },
   { id: 'flag',        name: 'Flag',        category: 'interactive', path: 'assets/objects/flag.png',        frameWidth: 32, frameHeight: 32, frameCount: 9,  fps: 8,  bodyWidth: 8,  bodyHeight: 28, behavior: 'animated', description: 'Goal marker. Reach to complete the room.' },
   { id: 'door_locked', name: 'Locked Door', category: 'interactive', path: 'assets/objects/door_locked.png', frameWidth: 32, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 44, bodyOffsetX: 2, bodyOffsetY: 4, behavior: 'static',   description: 'A key-gated door. Collect a key to unlock and pass through.' },
-  { id: 'crate',       name: 'Crate',       category: 'platform',    path: 'assets/objects/crate_static.png', frameWidth: 32, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 8, bodyOffsetY: 8, previewWidth: 16, previewHeight: 16, previewOffsetX: 8, previewOffsetY: 8, behavior: 'static',   description: 'Solid block. Stand on it or push it.' },
+  { id: 'crate',       name: 'Crate',       category: 'platform',    path: 'assets/objects/crate_static.png', frameWidth: 32, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 0, bodyOffsetY: 16, previewWidth: 16, previewHeight: 16, previewOffsetX: 0, previewOffsetY: 16, behavior: 'static',   description: 'Solid block. Stand on it or push it.' },
   { id: 'brick_box',   name: 'Brick Box',   category: 'platform',    path: 'assets/objects/brick_box.png',   frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 0,  defaultFrame: 3, bodyWidth: 16, bodyHeight: 17, bodyOffsetX: 8, bodyOffsetY: 7, previewWidth: 16, previewHeight: 17, previewOffsetX: 8, previewOffsetY: 7, behavior: 'static',   description: 'Solid brick block. Stand on it like a platform.' },
   { id: 'treasure_chest', name: 'Treasure Chest', category: 'platform', path: 'assets/objects/treasure_chest.png', frameWidth: 32, frameHeight: 32, frameCount: 4, fps: 0, defaultFrame: 0, bodyWidth: 28, bodyHeight: 18, bodyOffsetX: 2, bodyOffsetY: 14, behavior: 'static', description: 'Solid chest prop. Good for treasure rooms.' },
   { id: 'log_wall',    name: 'Log Wall',    category: 'platform',    path: 'assets/deco/log_wall.png',       frameWidth: 32, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 44, bodyOffsetX: 2, bodyOffsetY: 4, behavior: 'static',   description: 'Tall wooden wall segment. Solid collision.' },
   { id: 'sign',        name: 'Sign',        category: 'decoration',  path: 'assets/objects/sign.png',        frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative signpost. No collision.' },
   { id: 'sign_arrow',  name: 'Arrow Sign',  category: 'decoration',  path: 'assets/objects/sign_arrow.png',  frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative arrow sign. No collision.' },
-  { id: 'ladder',      name: 'Ladder',      category: 'interactive', path: 'assets/objects/ladder.png',      frameWidth: 16, frameHeight: 64, frameCount: 1,  fps: 0,  bodyWidth: 14, bodyHeight: 60, behavior: 'static',   description: 'Climbable surface. Press up to climb.' },
+  { id: 'ladder',      name: 'Ladder',      category: 'interactive', path: 'assets/objects/ladder.png',      frameWidth: 16, frameHeight: 64, frameCount: 1,  fps: 0,  bodyWidth: 16, bodyHeight: 51, bodyOffsetX: 0, bodyOffsetY: 13, previewWidth: 16, previewHeight: 51, previewOffsetX: 0, previewOffsetY: 13, behavior: 'static',   description: 'Climbable surface. Press up to climb.' },
   { id: 'button',      name: 'Button',      category: 'decoration',  path: 'assets/objects/button.png',      frameWidth: 16, frameHeight: 16, frameCount: 4,  fps: 0,  defaultFrame: 0, bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Floor button prop. Logic can be added later.' },
 
   // ── Decorations ──
@@ -399,6 +408,8 @@ export interface EditorState {
   activeLayer: LayerName;
   selectedTilesetKey: string;
   selectedTileGid: number;  // global tile ID of top-left of selection
+  tileFlipX: boolean;
+  tileFlipY: boolean;
   selection: TileSelection;
   zoom: number;
   isPlaying: boolean;
@@ -414,6 +425,8 @@ export const editorState: EditorState = {
   activeLayer: 'terrain',
   selectedTilesetKey: 'forest',
   selectedTileGid: 1,  // first tile of forest
+  tileFlipX: false,
+  tileFlipY: false,
   selection: {
     tilesetKey: 'forest',
     startCol: 0,
@@ -437,6 +450,36 @@ export function selectionCellIsOccupied(dx: number, dy: number): boolean {
   return row[dx] ?? true;
 }
 
+export function encodeTileDataValue(gid: number, flipX = false, flipY = false): number {
+  if (gid <= 0) {
+    return -1;
+  }
+
+  let encoded = gid;
+  if (flipX) {
+    encoded += TILE_FLIP_X_FLAG;
+  }
+  if (flipY) {
+    encoded += TILE_FLIP_Y_FLAG;
+  }
+  return encoded;
+}
+
+export function decodeTileDataValue(value: number): DecodedTileDataValue {
+  if (value <= 0) {
+    return { gid: -1, flipX: false, flipY: false };
+  }
+
+  const flipX = value >= TILE_FLIP_X_FLAG && Math.floor(value / TILE_FLIP_X_FLAG) % 2 === 1;
+  const flipY = value >= TILE_FLIP_Y_FLAG && Math.floor(value / TILE_FLIP_Y_FLAG) % 2 === 1;
+  const gid =
+    value -
+    (flipX ? TILE_FLIP_X_FLAG : 0) -
+    (flipY ? TILE_FLIP_Y_FLAG : 0);
+
+  return { gid, flipX, flipY };
+}
+
 // Helper: get the GID for a position within the current selection
 export function getSelectionGid(dx: number, dy: number): number {
   const ts = getTilesetByKey(editorState.selection.tilesetKey);
@@ -445,4 +488,11 @@ export function getSelectionGid(dx: number, dy: number): number {
   const col = editorState.selection.startCol + dx;
   const row = editorState.selection.startRow + dy;
   return ts.firstGid + row * ts.columns + col;
+}
+
+export function getSelectionTileValue(dx: number, dy: number): number {
+  const selectionDx = editorState.tileFlipX ? editorState.selection.width - 1 - dx : dx;
+  const selectionDy = editorState.tileFlipY ? editorState.selection.height - 1 - dy : dy;
+  const gid = getSelectionGid(selectionDx, selectionDy);
+  return encodeTileDataValue(gid, editorState.tileFlipX, editorState.tileFlipY);
 }

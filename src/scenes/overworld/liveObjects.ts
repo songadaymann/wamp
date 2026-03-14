@@ -79,6 +79,7 @@ interface OverworldLiveObjectControllerOptions {
   addScore: (delta: number) => void;
   onKeyCollected: () => void;
   tryConsumeHeldKey: () => boolean;
+  touchQuicksand: () => void;
   grantExternalLaunchGrace: (durationMs: number) => void;
   showTransientStatus: (message: string) => void;
   handlePlayerDeath: (reason: string) => void;
@@ -257,7 +258,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             );
             break;
           case 'hazard':
-            if (liveObject.config.id === 'tornado' || liveObject.config.id === 'tornado_sand') {
+            if (liveObject.config.id === 'quicksand') {
+              liveObject.interactions.push(
+                this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
+                  this.options.touchQuicksand();
+                })
+              );
+            } else if (liveObject.config.id === 'tornado' || liveObject.config.id === 'tornado_sand') {
               liveObject.interactions.push(
                 this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
                   this.triggerTornadoLaunch(liveObject);

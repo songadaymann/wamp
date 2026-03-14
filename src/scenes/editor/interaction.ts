@@ -12,6 +12,18 @@ import { RETRO_COLORS } from '../../visuals/starfield';
 import { getDeviceLayoutState, isMobileLandscapeBlocked } from '../../ui/deviceLayout';
 import type { GoalPlacementMode } from './editRuntime';
 
+function getEditorLayerAccent(): { stroke: number; fillAlpha: number } {
+  switch (editorState.activeLayer) {
+    case 'background':
+      return { stroke: 0x2f6b7f, fillAlpha: 0.16 };
+    case 'foreground':
+      return { stroke: 0xff6f3c, fillAlpha: 0.18 };
+    case 'terrain':
+    default:
+      return { stroke: 0x347433, fillAlpha: 0.18 };
+  }
+}
+
 interface EditorInteractionHost {
   getNeighborRadius(): number;
   getGoalPlacementMode(): GoalPlacementMode;
@@ -165,19 +177,20 @@ export class EditorInteractionController {
 
     if (editorState.paletteMode === 'objects') {
       const objectConfig = editorState.selectedObjectId ? getObjectById(editorState.selectedObjectId) : null;
+      const layerAccent = getEditorLayerAccent();
       if (objectConfig && editorState.activeTool !== 'eraser') {
         const previewWidth = objectConfig.previewWidth ?? objectConfig.frameWidth;
         const previewHeight = objectConfig.previewHeight ?? objectConfig.frameHeight;
         const previewOffsetX = objectConfig.previewOffsetX ?? 0;
         const previewOffsetY = objectConfig.previewOffsetY ?? 0;
-        this.cursorGraphics.fillStyle(RETRO_COLORS.draft, 0.14);
+        this.cursorGraphics.fillStyle(layerAccent.stroke, layerAccent.fillAlpha);
         this.cursorGraphics.fillRect(
           tileX * TILE_SIZE + previewOffsetX,
           tileY * TILE_SIZE + TILE_SIZE - objectConfig.frameHeight + previewOffsetY,
           previewWidth,
           previewHeight,
         );
-        this.cursorGraphics.lineStyle(1, RETRO_COLORS.draft, 0.75);
+        this.cursorGraphics.lineStyle(1, layerAccent.stroke, 0.9);
         this.cursorGraphics.strokeRect(
           tileX * TILE_SIZE + previewOffsetX,
           tileY * TILE_SIZE + TILE_SIZE - objectConfig.frameHeight + previewOffsetY,
@@ -204,14 +217,15 @@ export class EditorInteractionController {
       this.cursorGraphics.lineStyle(2, RETRO_COLORS.danger, 0.85);
       this.cursorGraphics.strokeRect(tileX * TILE_SIZE, tileY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
     } else {
-      this.cursorGraphics.fillStyle(RETRO_COLORS.draft, 0.18);
+      const layerAccent = getEditorLayerAccent();
+      this.cursorGraphics.fillStyle(layerAccent.stroke, layerAccent.fillAlpha);
       this.cursorGraphics.fillRect(
         stampOrigin.x * TILE_SIZE,
         stampOrigin.y * TILE_SIZE,
         cursorW * TILE_SIZE,
         cursorH * TILE_SIZE,
       );
-      this.cursorGraphics.lineStyle(1, RETRO_COLORS.draft, 0.8);
+      this.cursorGraphics.lineStyle(1, layerAccent.stroke, 0.92);
       this.cursorGraphics.strokeRect(
         stampOrigin.x * TILE_SIZE,
         stampOrigin.y * TILE_SIZE,
