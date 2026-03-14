@@ -2240,3 +2240,25 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - `output/web-game/mouse-bounds-check/play-room.png`
   - note:
     - local browser verification still logged the expected missing PartyKit `127.0.0.1:1999` websocket noise because the presence server was not running during the check
+
+## March 14, 2026 - Multi-Tile Drag Repeats Selected Chunk
+
+- Improved desktop editor tile dragging so multi-tile palette selections repeat as a snapped chunk instead of overlapping stamps every tile:
+  - when the active tool is `pencil` and the current tile selection is larger than `1x1`, dragging now advances in whole selection-width / selection-height steps from the drag start
+  - a `2x2` selection now paints as repeated `2x2` chunks (`ABAB / CDCD`) instead of smearing the top-left tile across the drag path
+  - the editor cursor preview now snaps to the repeated chunk origin during multi-tile drag so the highlighted placement box matches the actual stamp location
+- Implementation:
+  - added drag-origin tracking and snapped chunk placement helpers in `src/scenes/editor/interaction.ts`
+  - wired both mouse and touch pencil-drag paths through the new snapped multi-tile stamp logic
+- Verification:
+  - `npm run build` passed
+  - required skill-client smoke run completed in `output/web-game/tile-pattern-drag-smoke/`
+  - targeted local editor verification completed in `output/web-game/tile-pattern-drag-check/`
+  - `output/web-game/tile-pattern-drag-check/summary.json` confirms:
+    - tile selection info reads `(2x2)`
+    - dragged terrain row `10` resolves to `27, 28, 27, 28`
+    - dragged terrain row `11` resolves to `39, 40, 39, 40`
+  - screenshot artifacts:
+    - `output/web-game/tile-pattern-drag-check/editor-after-drag.png`
+  - note:
+    - local verification still logged the expected missing PartyKit `127.0.0.1:1999` websocket connection noise because the presence server was not part of this targeted editor check

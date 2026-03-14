@@ -38,6 +38,8 @@ export class EditorInteractionController {
   private panStartPointer = { x: 0, y: 0 };
   private panStartScroll = { x: 0, y: 0 };
   private isDrawing = false;
+  private tileDragStart: { x: number; y: number } | null = null;
+  private lastDraggedStampOrigin: { x: number; y: number } | null = null;
   private spaceDown = false;
   private rectStart: { x: number; y: number } | null = null;
   private readonly cursorCoordsEls: HTMLElement[];
@@ -80,6 +82,8 @@ export class EditorInteractionController {
     this.rectPreviewGraphics = null;
     this.isPanning = false;
     this.isDrawing = false;
+    this.tileDragStart = null;
+    this.lastDraggedStampOrigin = null;
     this.spaceDown = false;
     this.rectStart = null;
     this.touchPointers = new Map();
@@ -189,6 +193,10 @@ export class EditorInteractionController {
     }
 
     const selection = editorState.selection;
+    const stampOrigin =
+      editorState.activeTool === 'pencil'
+        ? this.getDraggedStampOrigin(tileX, tileY)
+        : { x: tileX, y: tileY };
     const cursorW = editorState.activeTool === 'pencil' ? selection.width : 1;
     const cursorH = editorState.activeTool === 'pencil' ? selection.height : 1;
 
@@ -198,15 +206,15 @@ export class EditorInteractionController {
     } else {
       this.cursorGraphics.fillStyle(RETRO_COLORS.draft, 0.18);
       this.cursorGraphics.fillRect(
-        tileX * TILE_SIZE,
-        tileY * TILE_SIZE,
+        stampOrigin.x * TILE_SIZE,
+        stampOrigin.y * TILE_SIZE,
         cursorW * TILE_SIZE,
         cursorH * TILE_SIZE,
       );
       this.cursorGraphics.lineStyle(1, RETRO_COLORS.draft, 0.8);
       this.cursorGraphics.strokeRect(
-        tileX * TILE_SIZE,
-        tileY * TILE_SIZE,
+        stampOrigin.x * TILE_SIZE,
+        stampOrigin.y * TILE_SIZE,
         cursorW * TILE_SIZE,
         cursorH * TILE_SIZE,
       );
@@ -255,14 +263,16 @@ export class EditorInteractionController {
         return;
       }
 
+      const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      const tileX = Math.floor(worldPoint.x / TILE_SIZE);
+      const tileY = Math.floor(worldPoint.y / TILE_SIZE);
+      if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
+        return;
+      }
+
       const goalPlacementMode = this.host.getGoalPlacementMode();
       if (goalPlacementMode) {
-        const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-        const tileX = Math.floor(worldPoint.x / TILE_SIZE);
-        const tileY = Math.floor(worldPoint.y / TILE_SIZE);
-        if (tileX >= 0 && tileX < ROOM_WIDTH && tileY >= 0 && tileY < ROOM_HEIGHT) {
-          this.host.placeGoalMarker(tileX, tileY);
-        }
+        this.host.placeGoalMarker(tileX, tileY);
         return;
       }
 
@@ -272,6 +282,7 @@ export class EditorInteractionController {
         this.host.handleToolDown(pointer);
         if (editorState.activeTool !== 'fill') {
           this.isDrawing = true;
+          this.beginTileDrag(tileX, tileY);
         }
       }
     });
@@ -302,7 +313,7 @@ export class EditorInteractionController {
       if (this.isDrawing && pointer.leftButtonDown()) {
         const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
         if (editorState.activeTool === 'pencil') {
-          this.host.placeTileAt(worldPoint.x, worldPoint.y);
+          this.placeDraggedTileStamp(worldPoint.x, worldPoint.y);
         } else if (editorState.activeTool === 'eraser') {
           this.host.eraseTileAt(worldPoint.x, worldPoint.y);
         }
@@ -346,6 +357,7 @@ export class EditorInteractionController {
 
       this.host.commitTileBatch();
       this.isDrawing = false;
+      this.clearTileDrag();
     });
 
     this.scene.input.on('wheel', (_pointer: Phaser.Input.Pointer, _gameObjects: unknown[], _deltaX: number, deltaY: number) => {
@@ -501,6 +513,7 @@ export class EditorInteractionController {
     this.host.handleToolDown(pointer);
     if (editorState.activeTool !== 'fill') {
       this.isDrawing = true;
+      this.beginTileDrag(tileX, tileY);
     }
     return true;
   }
@@ -530,7 +543,7 @@ export class EditorInteractionController {
 
     const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
     if (editorState.activeTool === 'pencil') {
-      this.host.placeTileAt(worldPoint.x, worldPoint.y);
+      this.placeDraggedTileStamp(worldPoint.x, worldPoint.y);
     } else if (editorState.activeTool === 'eraser') {
       this.host.eraseTileAt(worldPoint.x, worldPoint.y);
     }
@@ -571,6 +584,66 @@ export class EditorInteractionController {
       this.host.commitTileBatch();
       this.isDrawing = false;
     }
+    this.clearTileDrag();
+  }
+
+  private beginTileDrag(tileX: number, tileY: number): void {
+    if (
+      editorState.paletteMode !== 'tiles' ||
+      editorState.activeTool !== 'pencil'
+    ) {
+      this.clearTileDrag();
+      return;
+    }
+
+    this.tileDragStart = { x: tileX, y: tileY };
+    this.lastDraggedStampOrigin = { x: tileX, y: tileY };
+  }
+
+  private clearTileDrag(): void {
+    this.tileDragStart = null;
+    this.lastDraggedStampOrigin = null;
+  }
+
+  private placeDraggedTileStamp(worldX: number, worldY: number): void {
+    const tileX = Math.floor(worldX / TILE_SIZE);
+    const tileY = Math.floor(worldY / TILE_SIZE);
+    const stampOrigin = this.getDraggedStampOrigin(tileX, tileY);
+
+    if (
+      this.lastDraggedStampOrigin &&
+      this.lastDraggedStampOrigin.x === stampOrigin.x &&
+      this.lastDraggedStampOrigin.y === stampOrigin.y
+    ) {
+      return;
+    }
+
+    this.lastDraggedStampOrigin = { ...stampOrigin };
+    this.host.placeTileAt(stampOrigin.x * TILE_SIZE, stampOrigin.y * TILE_SIZE);
+  }
+
+  private getDraggedStampOrigin(tileX: number, tileY: number): { x: number; y: number } {
+    if (
+      !this.isDrawing ||
+      editorState.paletteMode !== 'tiles' ||
+      editorState.activeTool !== 'pencil' ||
+      !this.tileDragStart
+    ) {
+      return { x: tileX, y: tileY };
+    }
+
+    const selectionWidth = Math.max(1, editorState.selection.width);
+    const selectionHeight = Math.max(1, editorState.selection.height);
+    if (selectionWidth === 1 && selectionHeight === 1) {
+      return { x: tileX, y: tileY };
+    }
+
+    const dx = tileX - this.tileDragStart.x;
+    const dy = tileY - this.tileDragStart.y;
+    return {
+      x: this.tileDragStart.x + Math.floor(dx / selectionWidth) * selectionWidth,
+      y: this.tileDragStart.y + Math.floor(dy / selectionHeight) * selectionHeight,
+    };
   }
 
   private beginPinchGesture(): void {
