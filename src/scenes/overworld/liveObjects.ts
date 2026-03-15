@@ -122,6 +122,8 @@ const CANNON_BULLET_CONFIG: GameObjectConfig = {
 
 const BOUNCE_PAD_LAUNCH_GRACE_MS = 180;
 const TORNADO_LAUNCH_GRACE_MS = 280;
+const LIGHTNING_ACTIVE_MS = 190;
+const LIGHTNING_COOLDOWN_MS = 1150;
 
 export class OverworldLiveObjectController<TEdgeWall = unknown> {
   constructor(private readonly options: OverworldLiveObjectControllerOptions) {}
@@ -155,6 +157,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         if (this.options.scene.anims.exists(animationKey)) {
           sprite.play(animationKey);
         }
+      }
+
+      if (config.id === 'lightning') {
+        sprite.stop();
+        sprite.setVisible(false);
       }
 
       if (config.bodyWidth > 0 && config.bodyHeight > 0) {
@@ -213,6 +220,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
               ? this.options.getCurrentTime() + 250
               : config.id === 'cannon'
                 ? this.options.getCurrentTime() + 700
+                : config.id === 'lightning'
+                  ? this.options.getCurrentTime() + ((placedObject.x + placedObject.y) % 500)
                 : this.options.getCurrentTime(),
           cooldownUntil: 0,
           activatedUntil: 0,
@@ -438,6 +447,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             break;
           case 'bomb':
             this.updateBombObject(liveObject);
+            break;
+          case 'lightning':
+            this.updateLightningObject(liveObject);
             break;
           case 'bounce_pad':
             this.updateBouncePadObject(liveObject);
@@ -730,6 +742,34 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     if (body) {
       body.enable = shouldBeVisible;
       if (shouldBeVisible && 'updateFromGameObject' in body) {
+        body.updateFromGameObject();
+      }
+    }
+  }
+
+  private updateLightningObject(liveObject: LoadedRoomObject): void {
+    const now = this.options.getCurrentTime();
+    const body = liveObject.sprite.body as ArcadeObjectBody | null;
+    const active = now < liveObject.runtime.activatedUntil;
+
+    if (!active && now >= liveObject.runtime.nextActionAt) {
+      liveObject.runtime.activatedUntil = now + LIGHTNING_ACTIVE_MS;
+      liveObject.runtime.nextActionAt = liveObject.runtime.activatedUntil + LIGHTNING_COOLDOWN_MS;
+    }
+
+    const currentlyActive = now < liveObject.runtime.activatedUntil;
+    if (currentlyActive) {
+      const frameElapsed = now % 120;
+      liveObject.sprite.setVisible(true);
+      liveObject.sprite.setFrame(frameElapsed < 60 ? 0 : 1);
+    } else {
+      liveObject.sprite.setVisible(false);
+      liveObject.sprite.setFrame(1);
+    }
+
+    if (body) {
+      body.enable = currentlyActive;
+      if (currentlyActive && 'updateFromGameObject' in body) {
         body.updateFromGameObject();
       }
     }
