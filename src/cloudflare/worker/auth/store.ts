@@ -159,6 +159,48 @@ export async function updateUserDisplayName(
         WHERE id = ?
       `
     ).bind(displayName, updatedAt, user.id),
+    env.DB.prepare(
+      `
+        UPDATE chat_messages
+        SET user_display_name = ?
+        WHERE user_id = ?
+      `
+    ).bind(displayName, user.id),
+    env.DB.prepare(
+      `
+        UPDATE room_runs
+        SET user_display_name = ?
+        WHERE user_id = ?
+      `
+    ).bind(displayName, user.id),
+    env.DB.prepare(
+      `
+        UPDATE user_stats
+        SET user_display_name = ?, updated_at = ?
+        WHERE user_id = ?
+      `
+    ).bind(displayName, updatedAt, user.id),
+    env.DB.prepare(
+      `
+        UPDATE rooms
+        SET claimer_display_name = ?
+        WHERE claimer_user_id = ?
+      `
+    ).bind(displayName, user.id),
+    env.DB.prepare(
+      `
+        UPDATE rooms
+        SET last_published_by_display_name = ?
+        WHERE last_published_by_user_id = ?
+      `
+    ).bind(displayName, user.id),
+    env.DB.prepare(
+      `
+        UPDATE room_versions
+        SET published_by_display_name = ?
+        WHERE published_by_user_id = ?
+      `
+    ).bind(displayName, user.id),
   ]);
 
   return {

@@ -57,6 +57,15 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Pixel Engine recreation research memo on March 15, 2026:
+  - added `docs/pixel-engine-recreation-plan.md` as a technical design memo rather than a PRD, since the immediate problem is model/pipeline architecture and dataset strategy, not feature scoping
+  - documented a first approximation of how to recreate the product with open-source components, including likely backbone candidates (`Wan 2.1`, `CogVideoX`, `Stable Video Diffusion`, `I2VGen-XL`, `VideoCrafter`)
+  - captured the current working hypothesis from our local experiments: open image-to-video backbone + sprite-specific fine-tuning + strong preprocessing/postprocessing
+  - included a concrete phased plan for:
+    - data bootstrapping from sprite resources
+    - first-frame-to-clip fine-tuning
+    - pixel-art postprocess
+    - separate handling of locomotion, hold states, combat, and FX
 - Chat panel polish on March 15, 2026:
   - chat now auto-opens on the first transition into world mode so new arrivals immediately see it
   - increased desktop chat height budget to `min(620px, 76vh)` with a `240px` minimum message area
@@ -80,6 +89,16 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - `npm run build` passed
     - local `wrangler dev` smoke on `http://127.0.0.1:8791` returned `{\"available\":false,\"claimedByCurrentUser\":false}` for `jonathan`
     - Playwright smoke against local dev server wrote `output/web-game/display-name-availability-check/`
+- Display-name propagation on March 15, 2026:
+  - renaming an account now fan-outs to denormalized display-name fields in `chat_messages`, `room_runs`, `user_stats`, `rooms`, and `room_versions`
+  - this makes renamed accounts update across chat history, room author labels, and leaderboard rows instead of only changing future session identity
+  - verification:
+    - `npm run build` passed
+    - local rename smoke:
+      - signed in a local debug-auth user
+      - seeded old-name rows in `chat_messages`, `room_runs`, `user_stats`, `rooms`, and `room_versions`
+      - `POST /api/auth/display-name` changed every seeded row from `rename-test` to `newname`
+    - deployed live worker version `a847f19b-8e93-47ae-8103-aac33b4045f0`
 
 - Pixel Engine frog batch prototype on March 14, 2026:
   - added `gen-avatar/run-pixel-engine-batch.mjs` to submit a full approved-sprite batch to Pixel Engine, poll jobs to completion, split returned spritesheets into per-frame PNGs, and write runtime frame-name mappings for atlas-backed animations
