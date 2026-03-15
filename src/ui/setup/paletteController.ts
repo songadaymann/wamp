@@ -29,6 +29,7 @@ export class PaletteController {
 
   private readonly paletteImages = new Map<string, HTMLImageElement>();
   private readonly paletteTileOccupancy = new Map<string, boolean[]>();
+  private readonly paletteTileVisibility = new Map<string, boolean[]>();
   private currentObjectCategory = 'all';
   private currentObjectSearch = '';
   private paletteDragStart: { col: number; row: number } | null = null;
@@ -514,6 +515,7 @@ export class PaletteController {
       img.onload = () => {
         this.paletteImages.set(ts.key, img);
         this.paletteTileOccupancy.set(ts.key, this.computeTilesetOccupancy(ts, img));
+        this.paletteTileVisibility.set(ts.key, this.computeTilesetVisibility(ts, img));
         loadedCount++;
 
         if (loadedCount === TILESETS.length) {
@@ -549,6 +551,18 @@ export class PaletteController {
   }
 
   private computeTilesetOccupancy(ts: TilesetConfig, img: HTMLImageElement): boolean[] {
+    return this.computeTilesetVisibilityMap(ts, img, false);
+  }
+
+  private computeTilesetVisibility(ts: TilesetConfig, img: HTMLImageElement): boolean[] {
+    return this.computeTilesetVisibilityMap(ts, img, true);
+  }
+
+  private computeTilesetVisibilityMap(
+    ts: TilesetConfig,
+    img: HTMLImageElement,
+    allowSparseTiles: boolean,
+  ): boolean[] {
     const canvas = this.doc.createElement('canvas');
     canvas.width = ts.imageWidth;
     canvas.height = ts.imageHeight;
@@ -567,14 +581,19 @@ export class PaletteController {
     for (let row = 0; row < ts.rows; row++) {
       for (let col = 0; col < ts.columns; col++) {
         const tileIndex = row * ts.columns + col;
-        occupied[tileIndex] = this.tileHasVisiblePixels(imageData, col, row);
+        occupied[tileIndex] = this.tileHasVisiblePixels(imageData, col, row, allowSparseTiles);
       }
     }
 
     return occupied;
   }
 
-  private tileHasVisiblePixels(imageData: ImageData, tileCol: number, tileRow: number): boolean {
+  private tileHasVisiblePixels(
+    imageData: ImageData,
+    tileCol: number,
+    tileRow: number,
+    allowSparseTiles: boolean,
+  ): boolean {
     const startX = tileCol * TILE_SIZE;
     const startY = tileRow * TILE_SIZE;
     const endX = startX + TILE_SIZE;
@@ -586,6 +605,9 @@ export class PaletteController {
       for (let x = startX; x < endX; x++) {
         const alphaIndex = (y * imageData.width + x) * 4 + 3;
         if (imageData.data[alphaIndex] > 0) {
+          if (allowSparseTiles) {
+            return true;
+          }
           opaquePixelCount++;
           if (opaquePixelCount >= MIN_SELECTION_OPAQUE_PIXELS) {
             return true;
@@ -606,6 +628,7 @@ export class PaletteController {
   ): boolean[][] {
     const ts = getTilesetByKey(tilesetKey);
     const occupancy = this.paletteTileOccupancy.get(tilesetKey);
+    const visibility = this.paletteTileVisibility.get(tilesetKey);
 
     if (!ts || !occupancy) {
       return Array.from({ length: height }, () => Array.from({ length: width }, () => true));
@@ -614,6 +637,9 @@ export class PaletteController {
     return Array.from({ length: height }, (_, dy) =>
       Array.from({ length: width }, (_, dx) => {
         const tileIndex = (startRow + dy) * ts.columns + startCol + dx;
+        if (width === 1 && height === 1) {
+          return visibility?.[tileIndex] ?? occupancy[tileIndex] ?? true;
+        }
         return occupancy[tileIndex] ?? true;
       }),
     );

@@ -13,6 +13,7 @@ import {
 } from '../../config';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import type { LoadedFullRoom } from './worldStreaming';
+import { terrainTileCollidesAtLocalPixel } from './terrainCollision';
 
 export type ArcadeObjectBody = Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody;
 
@@ -567,6 +568,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       liveObject.worldColliders.push(
         this.options.scene.physics.add.collider(liveObject.sprite, loadedRoom.terrainLayer)
       );
+      if (loadedRoom.terrainInsetBodies) {
+        liveObject.worldColliders.push(
+          this.options.scene.physics.add.collider(liveObject.sprite, loadedRoom.terrainInsetBodies)
+        );
+      }
       for (const platform of solidPlatforms) {
         if (!platform.sprite.active || !platform.sprite.body) {
           continue;
@@ -831,6 +837,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         this.removeLiveObject(loadedRoom, bullet);
       }),
     );
+    if (loadedRoom.terrainInsetBodies) {
+      bullet.worldColliders.push(
+        this.options.scene.physics.add.collider(sprite, loadedRoom.terrainInsetBodies, () => {
+          this.removeLiveObject(loadedRoom, bullet);
+        }),
+      );
+    }
     for (const platform of loadedRoom.liveObjects) {
       if (
         platform === bullet ||
@@ -961,7 +974,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       return false;
     }
 
-    return room.tileData.terrain[localY][localX] > 0;
+    const localPixelY = worldY - roomOrigin.y - localY * TILE_SIZE;
+    return terrainTileCollidesAtLocalPixel(room, localX, localY, localPixelY);
   }
 
   private getObjectHorizontalTravelBounds(

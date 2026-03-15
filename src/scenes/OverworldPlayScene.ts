@@ -78,6 +78,10 @@ import {
   OverworldWorldStreamingController,
   type LoadedFullRoom,
 } from './overworld/worldStreaming';
+import {
+  getTerrainTileCollisionProfile,
+  terrainTileCollidesAtLocalPixel,
+} from './overworld/terrainCollision';
 import type { EditorSceneData, OverworldMode, OverworldPlaySceneData } from './sceneData';
 import {
   consumeTouchAction,
@@ -2014,6 +2018,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     for (const loadedRoom of this.loadedFullRoomsById.values()) {
       loadedRoom.terrainCollider?.destroy();
       loadedRoom.terrainCollider = null;
+      loadedRoom.terrainInsetCollider?.destroy();
+      loadedRoom.terrainInsetCollider = null;
       this.liveObjectController.clearRoomInteractions(loadedRoom);
       this.destroyEdgeWalls(loadedRoom);
     }
@@ -2042,6 +2048,12 @@ export class OverworldPlayScene extends Phaser.Scene {
     for (const loadedRoom of this.loadedFullRoomsById.values()) {
       if (!loadedRoom.terrainCollider) {
         loadedRoom.terrainCollider = this.physics.add.collider(this.player, loadedRoom.terrainLayer);
+      }
+      if (loadedRoom.terrainInsetBodies && !loadedRoom.terrainInsetCollider) {
+        loadedRoom.terrainInsetCollider = this.physics.add.collider(
+          this.player,
+          loadedRoom.terrainInsetBodies
+        );
       }
     }
   }
@@ -2806,9 +2818,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       const surfaceTileY = this.findSpawnSurfaceTile(room, tileX);
       if (surfaceTileY !== null) {
         const origin = this.getRoomOrigin(room.coordinates);
+        const profile = getTerrainTileCollisionProfile(room, tileX, surfaceTileY);
         return {
           x: origin.x + tileX * TILE_SIZE + TILE_SIZE / 2,
-          y: origin.y + surfaceTileY * TILE_SIZE - this.PLAYER_HEIGHT / 2,
+          y: origin.y + surfaceTileY * TILE_SIZE + profile.topInset - this.PLAYER_HEIGHT / 2,
         };
       }
     }
@@ -2837,7 +2850,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       return false;
     }
 
-    return room.tileData.terrain[localY][localX] > 0;
+    const localPixelY = worldY - roomOrigin.y - localY * TILE_SIZE;
+    return terrainTileCollidesAtLocalPixel(room, localX, localY, localPixelY);
   }
 
   private getArcadeBodyBounds(body: ArcadeObjectBody): Phaser.Geom.Rectangle {

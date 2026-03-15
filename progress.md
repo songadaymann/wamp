@@ -2513,3 +2513,49 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - the smoke produced a valid `render_game_to_text` dump at `output/web-game/bomb-eraser-layer-smoke/state-0.json`
     - screenshot capture remained black in headless mode, which matches the existing local WebGL capture issue rather than a new runtime failure
     - the dev smoke still logged the expected missing PartyKit `127.0.0.1:1999` websocket connection noise because the presence server was not part of this check
+
+## March 15, 2026 - Trimmed Top-Tile Collision For Decorative Terrain
+
+- Replaced the earlier top-trim heuristic with explicit terrain collision profiles:
+  - tilesets can now mark specific local tile indices as `decoratedTop` in `src/config.ts`
+  - exposed `decoratedTop` tiles can use a configurable top inset when building runtime terrain collision, while ordinary terrain tiles stay full-height
+  - this defines the future workflow explicitly: art and collision are related by metadata, not guessed from raw pixels
+  - spawn placement and point-based terrain checks now use the same profile-driven logic, so the player, respawn search, and simple AI support probes agree on where the floor actually is
+- Verification:
+  - `npm run build` passed
+  - targeted local browser verification completed in `output/web-game/tile-top-collision-check/`
+  - `output/web-game/tile-top-collision-check/summary.json` confirms the profile-driven runtime collision path was active on a synthetic top platform
+  - screenshot artifact: `output/web-game/tile-top-collision-check/play.png`
+  - notes:
+    - the only runtime noise in the check was the expected missing local PartyKit `127.0.0.1:1999` websocket connection noise because the presence server was not part of this verification
+
+## March 15, 2026 - Completed Explicit Decorative Terrain Collision
+
+- Closed the remaining gaps in the explicit terrain collision system:
+  - terrain tiles with the `none` collision profile now disable tilemap collision in `src/scenes/overworld/worldStreaming.ts` instead of only returning non-colliding from helper functions
+  - widened the explicit `decoratedTop` index maps in `src/config.ts` to cover the additional exposed-top platform variants in the standard, snow, and lava tilesets
+  - the practical result is that both visual-only garnish tiles and the previously-missed solid top-cap tiles now behave according to metadata instead of falling back to full-height tilemap collision
+- Verification:
+  - `npm run build` passed
+  - focused local browser verification completed in `output/web-game/tile-top-collision-missed-index-check/`
+  - `output/web-game/tile-top-collision-missed-index-check/summary.json` confirms a previously-missed forest top tile (`local index 50`) now lands the player at the trimmed surface instead of the old full-height surface
+  - screenshot artifact: `output/web-game/tile-top-collision-missed-index-check/play.png`
+  - notes:
+    - the only runtime noise in the check was the expected missing local PartyKit `127.0.0.1:1999` websocket connection noise because the presence server was not part of this verification
+
+## March 15, 2026 - Tuned Decorative Top Collision Back To Full Height
+
+- Reduced the shared `decoratedTop` inset in `src/config.ts` from `4px` to `2px`, then finally to `0px` after local visual review
+- This keeps the explicit metadata-driven system and the `none` collision tiles, while letting ordinary grassy platforms sit at full visual height
+- Verification:
+  - `npm run build` passed
+  - reran the focused local browser verification in `output/web-game/tile-top-collision-missed-index-check/`
+  - `output/web-game/tile-top-collision-missed-index-check/summary.json` captured the intermediate verification on the same previously-missed forest top tile before the final `0px` tuning
+
+## March 15, 2026 - Single-Tile Decorative Picks Stay Selectable
+
+- Relaxed the palette occupancy logic for single-cell picks:
+  - single tile selections now count any tile with visible pixels as selectable, even if it is too sparse for the stricter multi-tile occupancy mask
+  - larger rectangle selections still use the existing mask so sparse junk cells do not come back in marquee picks
+- Verification:
+  - `npm run build` passed

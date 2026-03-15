@@ -32,6 +32,11 @@ import {
 import { RETRO_COLORS, ensureStarfieldTexture } from '../../visuals/starfield';
 import { buildRoomSnapshotTexture, buildRoomTextureKey } from '../../visuals/roomSnapshotTexture';
 import type { OverworldMode } from '../sceneData';
+import {
+  getTerrainTileCollisionProfile,
+  terrainTileDisablesTilemapCollision,
+  terrainTileNeedsInsetBody,
+} from './terrainCollision';
 
 const STREAM_RADIUS = 1;
 const PLAY_MAX_CHUNK_RADIUS = 2;
@@ -60,6 +65,8 @@ export interface LoadedFullRoom<TLiveObject = unknown, TEdgeWall = unknown> {
   map: Phaser.Tilemaps.Tilemap;
   terrainLayer: Phaser.Tilemaps.TilemapLayer;
   terrainCollider: Phaser.Physics.Arcade.Collider | null;
+  terrainInsetBodies: Phaser.Physics.Arcade.StaticGroup | null;
+  terrainInsetCollider: Phaser.Physics.Arcade.Collider | null;
   edgeWalls: TEdgeWall[];
   liveObjects: TLiveObject[];
 }
@@ -999,6 +1006,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
     terrainLayer.setCollisionByExclusion([-1]);
     terrainLayer.setVisible(false);
+    const terrainInsetBodies = this.createTerrainInsetBodies(room, origin, terrainLayer);
 
     const player = this.options.getPlayer();
     const loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall> = {
@@ -1012,6 +1020,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       map,
       terrainLayer,
       terrainCollider: player ? this.options.scene.physics.add.collider(player, terrainLayer) : null,
+      terrainInsetBodies,
+      terrainInsetCollider:
+        player && terrainInsetBodies
+          ? this.options.scene.physics.add.collider(player, terrainInsetBodies)
+          : null,
       edgeWalls: [],
       liveObjects: [],
     };
@@ -1068,6 +1081,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.options.destroyEdgeWalls(loadedRoom);
     this.options.destroyLiveObjects(loadedRoom);
     loadedRoom.terrainCollider?.destroy();
+    loadedRoom.terrainInsetCollider?.destroy();
+    loadedRoom.terrainInsetBodies?.clear(true, true);
+    loadedRoom.terrainInsetBodies?.destroy();
     loadedRoom.terrainLayer.destroy();
     loadedRoom.map.destroy();
     loadedRoom.backgroundColorRect?.destroy();
@@ -1087,6 +1103,47 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.loadedFullRoomsById.delete(roomId);
     this.options.onBackdropObjectsChanged?.();
     this.options.onFullRoomVisibilityChanged?.();
+  }
+
+  private createTerrainInsetBodies(
+    room: RoomSnapshot,
+    origin: { x: number; y: number },
+    terrainLayer: Phaser.Tilemaps.TilemapLayer
+  ): Phaser.Physics.Arcade.StaticGroup | null {
+    const insetBodies = this.options.scene.physics.add.staticGroup();
+    let bodyCount = 0;
+
+    for (let y = 0; y < ROOM_HEIGHT; y += 1) {
+      for (let x = 0; x < ROOM_WIDTH; x += 1) {
+        const tile = terrainLayer.getTileAt(x, y);
+        if (tile && terrainTileDisablesTilemapCollision(room, x, y)) {
+          tile.setCollision(false, false, false, false);
+        }
+
+        if (!terrainTileNeedsInsetBody(room, x, y)) {
+          continue;
+        }
+
+        const profile = getTerrainTileCollisionProfile(room, x, y);
+        const zone = this.options.scene.add.zone(
+          origin.x + x * TILE_SIZE + TILE_SIZE / 2,
+          origin.y + y * TILE_SIZE + profile.topInset + profile.height / 2,
+          TILE_SIZE,
+          profile.height
+        );
+        this.options.scene.physics.add.existing(zone, true);
+        insetBodies.add(zone);
+        bodyCount += 1;
+      }
+    }
+
+    if (bodyCount === 0) {
+      insetBodies.destroy();
+      return null;
+    }
+
+    terrainLayer.calculateFacesWithin(0, 0, ROOM_WIDTH, ROOM_HEIGHT);
+    return insetBodies;
   }
 
   private createRoomBackground(
