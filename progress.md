@@ -57,6 +57,30 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Chat panel polish on March 15, 2026:
+  - chat now auto-opens on the first transition into world mode so new arrivals immediately see it
+  - increased desktop chat height budget to `min(620px, 76vh)` with a `240px` minimum message area
+  - increased phone chat height budget to `78vh` with a taller message list there too
+  - verification:
+    - `npm run build` passed
+    - Playwright smoke against local dev server + live API wrote `output/web-game/chat-default-open-check/`
+    - DOM check confirmed `chat.open === true` on first load with `bodyHeight: 321` and `messagesHeight: 240`
+- Display-name editing on March 15, 2026:
+  - added a signed-in `Display name` field plus `Save Name` button in the account menu
+  - added `POST /api/auth/display-name` to update `users.display_name` for the current session user
+  - display-name saves now refresh the current auth session so chat/presence/identity pick up the new name
+  - verification:
+    - `npm run build` passed
+    - local `wrangler dev` smoke on `http://127.0.0.1:8791` returned the expected `401` for unauthenticated `POST /api/auth/display-name`
+- Display-name claim checks on March 15, 2026:
+  - added `GET /api/auth/display-name-availability?displayName=...`
+  - display-name updates now reject collisions server-side with a `409` if another user already claimed the name
+  - account menu now shows a live availability hint while typing a new name
+  - verification:
+    - `npm run build` passed
+    - local `wrangler dev` smoke on `http://127.0.0.1:8791` returned `{\"available\":false,\"claimedByCurrentUser\":false}` for `jonathan`
+    - Playwright smoke against local dev server wrote `output/web-game/display-name-availability-check/`
+
 - Pixel Engine frog batch prototype on March 14, 2026:
   - added `gen-avatar/run-pixel-engine-batch.mjs` to submit a full approved-sprite batch to Pixel Engine, poll jobs to completion, split returned spritesheets into per-frame PNGs, and write runtime frame-name mappings for atlas-backed animations
   - the batch uses the prepared `96x84` frog input plus a local prompt enhancer built from `sprite-spec.json` instead of relying on undocumented frontend-only prompt enhancement / pixel-art conversion helpers

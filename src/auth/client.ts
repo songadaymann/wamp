@@ -1,6 +1,8 @@
 import type { AppKit } from '@reown/appkit';
 import type {
   AuthSessionResponse,
+  DisplayNameAvailabilityResponse,
+  DisplayNameUpdateResponse,
   AuthUser,
   MagicLinkRequestResponse,
   WalletChallengeResponse,
@@ -73,12 +75,20 @@ let authEmailInput: HTMLInputElement | null = null;
 let authEmailButton: HTMLButtonElement | null = null;
 let authWalletButton: HTMLButtonElement | null = null;
 let authLogoutButton: HTMLButtonElement | null = null;
+let authDisplayNameRow: HTMLElement | null = null;
+let authDisplayNameInput: HTMLInputElement | null = null;
+let authDisplayNameButton: HTMLButtonElement | null = null;
+let authDisplayNameStatus: HTMLElement | null = null;
 let testResetButton: HTMLButtonElement | null = null;
 let authStatus: HTMLElement | null = null;
 let authDebugLink: HTMLAnchorElement | null = null;
 let appKit: AppKit | null = null;
 let walletBootstrapPromise: Promise<AppKit> | null = null;
 let sessionRefreshListenersBound = false;
+let displayNameCheckTimer: number | null = null;
+let displayNameCheckToken = 0;
+let lastCheckedDisplayName = '';
+let lastDisplayNameAvailability: DisplayNameAvailabilityResponse | null = null;
 
 const FEATURED_REOWN_WALLET_IDS = [
   'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96', // MetaMask
@@ -94,6 +104,10 @@ export async function setupAuthUi(): Promise<void> {
   authEmailButton = document.getElementById('btn-auth-email') as HTMLButtonElement | null;
   authWalletButton = document.getElementById('btn-auth-wallet') as HTMLButtonElement | null;
   authLogoutButton = document.getElementById('btn-auth-logout') as HTMLButtonElement | null;
+  authDisplayNameRow = document.getElementById('auth-display-name-row');
+  authDisplayNameInput = document.getElementById('auth-display-name-input') as HTMLInputElement | null;
+  authDisplayNameButton = document.getElementById('btn-auth-display-name') as HTMLButtonElement | null;
+  authDisplayNameStatus = document.getElementById('auth-display-name-status');
   testResetButton = document.getElementById('btn-test-reset') as HTMLButtonElement | null;
   authStatus = document.getElementById('auth-status');
   authDebugLink = document.getElementById('auth-debug-link') as HTMLAnchorElement | null;
@@ -128,6 +142,18 @@ export async function setupAuthUi(): Promise<void> {
   });
   authLogoutButton?.addEventListener('click', () => {
     void logout();
+  });
+  authDisplayNameButton?.addEventListener('click', () => {
+    void updateDisplayName();
+  });
+  authDisplayNameInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void updateDisplayName();
+    }
+  });
+  authDisplayNameInput?.addEventListener('input', () => {
+    void scheduleDisplayNameAvailabilityCheck();
   });
   testResetButton?.addEventListener('click', () => {
     void resetTestData();
@@ -218,10 +244,21 @@ async function refreshSession(): Promise<void> {
 
     if (session.authenticated) {
       state.status = `Signed in as ${session.user?.displayName ?? 'player'}.`;
+      lastCheckedDisplayName = session.user?.displayName ?? '';
+      lastDisplayNameAvailability = session.user
+        ? {
+            available: true,
+            claimedByCurrentUser: true,
+          }
+        : null;
     } else if (window.location.search.includes('auth=')) {
       // Preserve status set from query params.
+      lastCheckedDisplayName = '';
+      lastDisplayNameAvailability = null;
     } else {
       state.status = 'Use email, wallet, or both.';
+      lastCheckedDisplayName = '';
+      lastDisplayNameAvailability = null;
     }
   } catch (error) {
     console.error('Failed to load auth session', error);
@@ -229,6 +266,8 @@ async function refreshSession(): Promise<void> {
     state.roomDailyClaimLimit = null;
     state.roomClaimsUsedToday = 0;
     state.roomClaimsRemainingToday = null;
+    lastCheckedDisplayName = '';
+    lastDisplayNameAvailability = null;
   }
 
   renderAuthUi();
@@ -331,6 +370,102 @@ async function resetTestData(): Promise<void> {
     console.error('Test reset failed', error);
     state.status = getErrorMessage(error, 'Failed to reset test data.');
     setLoading(false);
+  }
+}
+
+async function updateDisplayName(): Promise<void> {
+  if (!state.authenticated || !state.user || !authDisplayNameInput) {
+    return;
+  }
+
+  const displayName = authDisplayNameInput.value.replace(/\s+/g, ' ').trim();
+  if (!displayName) {
+    state.status = 'Enter a display name first.';
+    renderAuthUi();
+    return;
+  }
+
+  if (displayName.length > 24) {
+    state.status = 'Display name must be 24 characters or fewer.';
+    renderAuthUi();
+    return;
+  }
+
+  if (lastCheckedDisplayName === displayName && lastDisplayNameAvailability && !lastDisplayNameAvailability.available) {
+    state.status = 'That display name has already been claimed.';
+    renderAuthUi();
+    return;
+  }
+
+  setLoading(true, 'Saving display name...');
+
+  try {
+    const response = await apiRequest<DisplayNameUpdateResponse>('/api/auth/display-name', {
+      method: 'POST',
+      body: JSON.stringify({ displayName }),
+    });
+    state.user = response.user;
+    state.status = `Display name updated to ${response.user.displayName}.`;
+    lastCheckedDisplayName = response.user.displayName;
+    lastDisplayNameAvailability = {
+      available: true,
+      claimedByCurrentUser: true,
+    };
+  } catch (error) {
+    console.error('Failed to update display name', error);
+    state.status = getErrorMessage(error, 'Failed to update display name.');
+  } finally {
+    setLoading(false);
+    await refreshSession();
+  }
+}
+
+async function scheduleDisplayNameAvailabilityCheck(): Promise<void> {
+  if (!state.authenticated || !authDisplayNameInput) {
+    return;
+  }
+
+  if (displayNameCheckTimer !== null) {
+    window.clearTimeout(displayNameCheckTimer);
+    displayNameCheckTimer = null;
+  }
+
+  const displayName = authDisplayNameInput.value.replace(/\s+/g, ' ').trim();
+  if (!displayName) {
+    lastCheckedDisplayName = '';
+    lastDisplayNameAvailability = null;
+    renderAuthUi();
+    return;
+  }
+
+  displayNameCheckTimer = window.setTimeout(() => {
+    displayNameCheckTimer = null;
+    void checkDisplayNameAvailability(displayName);
+  }, 250);
+}
+
+async function checkDisplayNameAvailability(displayName: string): Promise<void> {
+  const currentToken = ++displayNameCheckToken;
+  try {
+    const response = await apiRequest<DisplayNameAvailabilityResponse>(
+      `/api/auth/display-name-availability?displayName=${encodeURIComponent(displayName)}`
+    );
+    if (currentToken !== displayNameCheckToken) {
+      return;
+    }
+
+    lastCheckedDisplayName = displayName;
+    lastDisplayNameAvailability = response;
+    renderAuthUi();
+  } catch (error) {
+    if (currentToken !== displayNameCheckToken) {
+      return;
+    }
+
+    console.error('Failed to check display name availability', error);
+    lastCheckedDisplayName = displayName;
+    lastDisplayNameAvailability = null;
+    renderAuthUi();
   }
 }
 
@@ -580,6 +715,50 @@ function renderAuthUi(): void {
   if (authLogoutButton) {
     authLogoutButton.classList.toggle('hidden', !state.authenticated);
     authLogoutButton.disabled = state.loading;
+  }
+
+  if (authDisplayNameRow) {
+    authDisplayNameRow.classList.toggle('hidden', !state.authenticated);
+  }
+
+  if (authDisplayNameInput) {
+    const desiredValue = state.user?.displayName ?? '';
+    if (authDisplayNameInput !== document.activeElement) {
+      authDisplayNameInput.value = desiredValue;
+    }
+    authDisplayNameInput.disabled = state.loading || !state.authenticated;
+  }
+
+  if (authDisplayNameButton) {
+    authDisplayNameButton.classList.toggle('hidden', !state.authenticated);
+    authDisplayNameButton.disabled = state.loading || !state.authenticated;
+  }
+
+  if (authDisplayNameStatus) {
+    authDisplayNameStatus.classList.toggle('hidden', !state.authenticated);
+    authDisplayNameStatus.classList.remove('is-available', 'is-taken');
+
+    const draftValue = authDisplayNameInput?.value.replace(/\s+/g, ' ').trim() ?? '';
+    if (!state.authenticated || !draftValue) {
+      authDisplayNameStatus.textContent = '';
+    } else if (draftValue === state.user?.displayName) {
+      authDisplayNameStatus.textContent = 'Current display name.';
+      authDisplayNameStatus.classList.add('is-available');
+    } else if (lastCheckedDisplayName === draftValue && lastDisplayNameAvailability) {
+      if (lastDisplayNameAvailability.available) {
+        authDisplayNameStatus.textContent = lastDisplayNameAvailability.claimedByCurrentUser
+          ? 'Current display name.'
+          : 'Display name is available.';
+        authDisplayNameStatus.classList.add('is-available');
+      } else {
+        authDisplayNameStatus.textContent = 'That display name has already been claimed.';
+        authDisplayNameStatus.classList.add('is-taken');
+      }
+    } else if (authDisplayNameInput === document.activeElement) {
+      authDisplayNameStatus.textContent = 'Checking availability...';
+    } else {
+      authDisplayNameStatus.textContent = '';
+    }
   }
 
   if (testResetButton) {

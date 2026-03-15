@@ -3,6 +3,9 @@ import type {
   ApiTokenCreateRequestBody,
   ApiTokenCreateResponse,
   ApiTokenListResponse,
+  DisplayNameAvailabilityResponse,
+  DisplayNameUpdateRequestBody,
+  DisplayNameUpdateResponse,
   AuthSessionResponse,
   AuthUser,
   MagicLinkRequestBody,
@@ -31,6 +34,7 @@ import {
   deleteSessionById,
   extractNonceFromWalletMessage,
   findApiTokenIdForUser,
+  findUserByDisplayName,
   findUserByEmail,
   findUserByWallet,
   generateOpaqueToken,
@@ -47,6 +51,7 @@ import {
   resolvePublicBaseUrl,
   revokeApiTokenForUser,
   sendMagicLinkEmail,
+  updateUserDisplayName,
 } from './store';
 import {
   clearSessionCookie,
@@ -81,6 +86,14 @@ export async function handleAuthRequest(request: Request, url: URL, env: Env): P
 
   if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
     return handleLogout(request, env);
+  }
+
+  if (url.pathname === '/api/auth/display-name' && request.method === 'POST') {
+    return handleUpdateDisplayName(request, env);
+  }
+
+  if (url.pathname === '/api/auth/display-name-availability' && request.method === 'GET') {
+    return handleDisplayNameAvailability(request, url, env);
   }
 
   if (url.pathname === '/api/auth/tokens' && request.method === 'GET') {
@@ -198,6 +211,58 @@ export async function handleLogout(request: Request, env: Env): Promise<Response
       },
     }
   );
+}
+
+export async function handleUpdateDisplayName(request: Request, env: Env): Promise<Response> {
+  const session = await requireCurrentSession(env, request, 'update display name');
+  const body = await parseJsonBody<DisplayNameUpdateRequestBody>(request);
+  const displayName = normalizeDisplayName(body.displayName);
+
+  if (!displayName) {
+    throw new HttpError(400, 'Display name is required.');
+  }
+
+  if (displayName.length > 24) {
+    throw new HttpError(400, 'Display name must be 24 characters or fewer.');
+  }
+
+  const existingUser = await findUserByDisplayName(env, displayName);
+  if (existingUser && existingUser.id !== session.user.id) {
+    throw new HttpError(409, 'That display name has already been claimed.');
+  }
+
+  const updatedUser = await updateUserDisplayName(env, session.user, displayName);
+  const responseBody: DisplayNameUpdateResponse = {
+    ok: true,
+    user: updatedUser,
+  };
+
+  return jsonResponse(request, responseBody);
+}
+
+export async function handleDisplayNameAvailability(
+  request: Request,
+  url: URL,
+  env: Env
+): Promise<Response> {
+  const displayName = normalizeDisplayName(url.searchParams.get('displayName'));
+  if (!displayName) {
+    throw new HttpError(400, 'displayName is required.');
+  }
+
+  if (displayName.length > 24) {
+    throw new HttpError(400, 'Display name must be 24 characters or fewer.');
+  }
+
+  const auth = await loadOptionalRequestAuth(env, request);
+  const existingUser = await findUserByDisplayName(env, displayName);
+  const claimedByCurrentUser = Boolean(existingUser && auth?.user.id === existingUser.id);
+  const responseBody: DisplayNameAvailabilityResponse = {
+    available: !existingUser || claimedByCurrentUser,
+    claimedByCurrentUser,
+  };
+
+  return jsonResponse(request, responseBody);
 }
 
 export async function handleListApiTokens(request: Request, env: Env): Promise<Response> {
@@ -371,4 +436,12 @@ async function parseApiTokenCreateBody(request: Request): Promise<ApiTokenCreate
     label,
     scopes,
   };
+}
+
+function normalizeDisplayName(value: unknown): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value.replace(/\s+/g, ' ').trim();
 }

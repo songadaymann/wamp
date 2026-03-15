@@ -55,6 +55,7 @@ export class ChatPanelController {
   private latestCreatedAt: string | null = null;
   private unreadCount = 0;
   private open = false;
+  private openedOnFirstWorldVisit = false;
   private historyLoaded = false;
   private initialLoadInFlight = false;
   private loading = false;
@@ -198,9 +199,17 @@ export class ChatPanelController {
   }
 
   private handleAppModeChange(): void {
-    this.render();
-    if (this.isWorldModeActive() && isAppReady()) {
-      void this.ensureLoaded();
+    if (this.isWorldModeActive()) {
+      if (!this.openedOnFirstWorldVisit) {
+        this.openedOnFirstWorldVisit = true;
+        this.openPanel(false);
+        return;
+      }
+
+      this.render();
+      if (isAppReady()) {
+        void this.ensureLoaded();
+      }
       return;
     }
 

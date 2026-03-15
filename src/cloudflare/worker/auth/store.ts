@@ -49,6 +49,21 @@ export async function findUserByWallet(env: Env, walletAddress: string): Promise
   return row ? mapUserRow(row) : null;
 }
 
+export async function findUserByDisplayName(env: Env, displayName: string): Promise<AuthUser | null> {
+  const row = await env.DB.prepare(
+    `
+      SELECT id, email, wallet_address, display_name, created_at, updated_at
+      FROM users
+      WHERE lower(display_name) = lower(?)
+      LIMIT 1
+    `
+  )
+    .bind(displayName)
+    .first<UserRow>();
+
+  return row ? mapUserRow(row) : null;
+}
+
 export async function createUserForEmail(env: Env, email: string): Promise<AuthUser> {
   const now = new Date().toISOString();
   const user: AuthUser = {
@@ -127,6 +142,28 @@ export async function attachWalletToUser(
   return {
     ...user,
     walletAddress: normalizedWallet,
+  };
+}
+
+export async function updateUserDisplayName(
+  env: Env,
+  user: AuthUser,
+  displayName: string
+): Promise<AuthUser> {
+  const updatedAt = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare(
+      `
+        UPDATE users
+        SET display_name = ?, updated_at = ?
+        WHERE id = ?
+      `
+    ).bind(displayName, updatedAt, user.id),
+  ]);
+
+  return {
+    ...user,
+    displayName,
   };
 }
 

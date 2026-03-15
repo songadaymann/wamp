@@ -57,6 +57,20 @@ export interface WalletVerifyResponse {
   user: AuthUser;
 }
 
+export interface DisplayNameUpdateRequestBody {
+  displayName: string;
+}
+
+export interface DisplayNameUpdateResponse {
+  ok: true;
+  user: AuthUser;
+}
+
+export interface DisplayNameAvailabilityResponse {
+  available: boolean;
+  claimedByCurrentUser: boolean;
+}
+
 export interface ApiTokenRecord {
   id: string;
   label: string;
