@@ -36,6 +36,7 @@ export type SfxCue =
   | 'footstep'
   | 'ladder-climb'
   | 'respawn'
+  | 'warp'
   | 'chat-send'
   | 'chat-receive';
 
@@ -196,6 +197,11 @@ const SFX_CUES: Record<SfxCue, CueConfig> = {
     path: 'assets/sfx/world/respawn.wav',
     volume: 0.52,
     cooldownMs: 120,
+  },
+  warp: {
+    path: 'assets/sfx/world/warp.wav',
+    volume: 0.56,
+    cooldownMs: 180,
   },
   'chat-send': {
     path: 'assets/sfx/ui/ui-click.wav',

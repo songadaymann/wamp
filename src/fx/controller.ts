@@ -123,7 +123,14 @@ export class SceneFxController {
     playSfx('bullet-impact');
   }
 
-  playGoalFx(kind: GoalFxKind, x: number, y: number, cueOverride?: SfxCue): void {
+  playGoalFx(kind: GoalFxKind, x: number, y: number, cueOverride?: SfxCue | null): void {
+    const playGoalCue = (fallbackCue: SfxCue): void => {
+      if (cueOverride === null) {
+        return;
+      }
+      playSfx(cueOverride ?? fallbackCue);
+    };
+
     switch (kind) {
       case 'start':
         this.playAnimatedFx(FX_ANIMATION_KEYS.shine, x, y - 20, {
@@ -131,7 +138,7 @@ export class SceneFxController {
           depth: 30,
           alpha: 0.9,
         });
-        playSfx(cueOverride ?? 'goal-start');
+        playGoalCue('goal-start');
         break;
       case 'checkpoint':
         this.playAnimatedFx(FX_ANIMATION_KEYS['shine-white'], x, y - 20, {
@@ -140,7 +147,7 @@ export class SceneFxController {
           alpha: 0.95,
         });
         this.spawnRing(x, y - 12, 0x7de5ff);
-        playSfx(cueOverride ?? 'goal-checkpoint');
+        playGoalCue('goal-checkpoint');
         break;
       case 'success':
         this.playAnimatedFx(FX_ANIMATION_KEYS['bomb-explosion'], x, y - 16, {
@@ -153,7 +160,7 @@ export class SceneFxController {
           alpha: 0.9,
         });
         this.spawnRing(x, y - 14, 0xffd27a);
-        playSfx(cueOverride ?? 'goal-success');
+        playGoalCue('goal-success');
         break;
       case 'fail':
       case 'abandon':
@@ -168,7 +175,7 @@ export class SceneFxController {
           tint: 0xff8b8b,
         });
         this.spawnRing(x, y - 10, 0xff6b6b);
-        playSfx(cueOverride ?? (kind === 'abandon' ? 'challenge-abandon' : 'goal-fail'));
+        playGoalCue(kind === 'abandon' ? 'challenge-abandon' : 'goal-fail');
         break;
       default:
         break;

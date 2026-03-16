@@ -1476,6 +1476,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.windowCenterCoordinates = { ...coordinates };
     this.shouldCenterCamera = true;
     this.shouldRespawnPlayer = false;
+    playSfx('warp');
     await this.refreshAround(coordinates);
   }
 
@@ -3075,12 +3076,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     const activeRun = this.currentGoalRun;
     this.goalRunController.recordDeath();
     if (this.player && this.playerBody) {
-      this.fxController?.playGoalFx('fail', this.player.x, this.playerBody.bottom - 10);
+      this.fxController?.playGoalFx('fail', this.player.x, this.playerBody.bottom - 10, null);
     }
-    if (reason.includes('hit you')) {
-      playSfx('player-hurt');
-    }
-    playSfx('player-death');
 
     this.respawnPlayerToCurrentRoom();
 
