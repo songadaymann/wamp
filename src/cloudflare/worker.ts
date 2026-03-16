@@ -12,8 +12,7 @@ import { handlePlayfunConfig, handlePlayfunFlush } from './worker/playfun/routes
 import {
   enqueuePlayfunPointSync,
   flushPlayfunPointSync,
-  getPlayfunSessionTokenFromRequest,
-  validatePlayfunSessionToken,
+  linkPlayfunUserFromRequest,
 } from './worker/playfun/service';
 import { handleGlobalLeaderboard, handleRoomLeaderboard, handleRunFinish, handleRunStart } from './worker/runs/routes';
 import { awardRoomPublishPoints, upsertUserStats } from './worker/runs/points';
@@ -291,8 +290,7 @@ async function maybeMirrorPointEventToPlayfun(
     return;
   }
 
-  const sessionToken = getPlayfunSessionTokenFromRequest(request);
-  const playfunSession = await validatePlayfunSessionToken(env, sessionToken);
+  const playfunSession = await linkPlayfunUserFromRequest(env, request, userId);
   if (!playfunSession) {
     return;
   }

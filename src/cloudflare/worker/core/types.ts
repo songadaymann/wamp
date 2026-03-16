@@ -157,6 +157,15 @@ export interface PlayfunPointSyncRow {
   last_error: string | null;
 }
 
+export interface PlayfunUserLinkRow {
+  user_id: string;
+  ogp_id: string;
+  player_id: string | null;
+  game_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ChatMessageRow {
   id: string;
   user_id: string;

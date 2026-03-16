@@ -1,6 +1,7 @@
 import type {
   Env,
   PlayfunPointSyncRow,
+  PlayfunUserLinkRow,
   PointEventRow,
 } from '../core/types';
 
@@ -141,6 +142,82 @@ export async function enqueuePlayfunPointSync(
   ]);
 }
 
+export async function upsertPlayfunUserLink(
+  env: Env,
+  userId: string,
+  session: PlayfunValidatedSession
+): Promise<void> {
+  if (!isPlayfunConfigured(env)) {
+    return;
+  }
+
+  const now = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare(
+      `
+        INSERT INTO playfun_user_links (
+          user_id,
+          ogp_id,
+          player_id,
+          game_id,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+          ogp_id = excluded.ogp_id,
+          player_id = excluded.player_id,
+          game_id = excluded.game_id,
+          updated_at = excluded.updated_at
+      `
+    ).bind(
+      userId,
+      session.ogpId,
+      session.playerId,
+      session.gameId,
+      now,
+      now
+    ),
+  ]);
+}
+
+export async function loadPlayfunUserLink(
+  env: Env,
+  userId: string
+): Promise<PlayfunUserLinkRow | null> {
+  return env.DB.prepare(
+    `
+      SELECT
+        user_id,
+        ogp_id,
+        player_id,
+        game_id,
+        created_at,
+        updated_at
+      FROM playfun_user_links
+      WHERE user_id = ?
+      LIMIT 1
+    `
+  )
+    .bind(userId)
+    .first<PlayfunUserLinkRow>();
+}
+
+export async function linkPlayfunUserFromRequest(
+  env: Env,
+  request: Request,
+  userId: string
+): Promise<PlayfunValidatedSession | null> {
+  const sessionToken = getPlayfunSessionTokenFromRequest(request);
+  const playfunSession = await validatePlayfunSessionToken(env, sessionToken);
+  if (!playfunSession) {
+    return null;
+  }
+
+  await upsertPlayfunUserLink(env, userId, playfunSession);
+  return playfunSession;
+}
+
 export async function flushPlayfunPointSync(
   env: Env,
   userId: string
@@ -151,6 +228,11 @@ export async function flushPlayfunPointSync(
       pending: 0,
       failed: 0,
     };
+  }
+
+  const linkedUser = await loadPlayfunUserLink(env, userId);
+  if (linkedUser?.ogp_id) {
+    await enqueueMissingPlayfunPointSyncForUser(env, userId, linkedUser.ogp_id);
   }
 
   const pendingRows = await env.DB.prepare(
@@ -228,6 +310,36 @@ function isPlayfunConfigured(env: Env): boolean {
     Boolean(env.PLAYFUN_SECRET_KEY?.trim()) &&
     Boolean(env.PLAYFUN_GAME_ID?.trim())
   );
+}
+
+async function enqueueMissingPlayfunPointSyncForUser(
+  env: Env,
+  userId: string,
+  ogpId: string
+): Promise<void> {
+  const result = await env.DB.prepare(
+    `
+      SELECT
+        e.id,
+        e.user_id,
+        e.points,
+        e.created_at
+      FROM point_events e
+      LEFT JOIN playfun_point_sync s
+        ON s.point_event_id = e.id
+      WHERE e.user_id = ?
+        AND e.points > 0
+        AND s.point_event_id IS NULL
+      ORDER BY e.created_at ASC
+      LIMIT 200
+    `
+  )
+    .bind(userId)
+    .all<Pick<PointEventRow, 'id' | 'user_id' | 'points' | 'created_at'>>();
+
+  for (const row of result.results) {
+    await enqueuePlayfunPointSync(env, row, ogpId);
+  }
 }
 
 async function playfunRequest<T>(

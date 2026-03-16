@@ -7,6 +7,7 @@ test-results/
 contracts/cache/
 contracts/out/
 contracts/broadcast/
+gen-avatar/
 
 .DS_Store
 

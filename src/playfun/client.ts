@@ -152,9 +152,12 @@ export async function flushPendingPlayfunPoints(): Promise<{ flushed: number; pe
 
   playfunFlushPromise = (async () => {
     try {
+      const headers = new Headers();
+      appendPlayfunRequestHeaders(headers);
       const response = await fetch(`${getApiBaseUrl()}/api/playfun/flush`, {
         method: 'POST',
         credentials: 'include',
+        headers,
       });
 
       if (!response.ok) {

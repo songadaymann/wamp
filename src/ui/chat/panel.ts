@@ -9,7 +9,9 @@ import {
   type AuthDebugState,
 } from '../../auth/client';
 import { playSfx } from '../../audio/sfx';
+import { isPlayfunMode } from '../../playfun/client';
 import { APP_READY_EVENT, isAppReady } from '../appFeedback';
+import { getDeviceLayoutState } from '../deviceLayout';
 import { isTextInputFocused } from '../keyboardFocus';
 import { fetchChatMessages, sendChatMessage } from './client';
 
@@ -202,8 +204,10 @@ export class ChatPanelController {
     if (this.isWorldModeActive()) {
       if (!this.openedOnFirstWorldVisit) {
         this.openedOnFirstWorldVisit = true;
-        this.openPanel(false);
-        return;
+        if (this.shouldAutoOpenOnFirstWorldVisit()) {
+          this.openPanel(false);
+          return;
+        }
       }
 
       this.render();
@@ -219,6 +223,11 @@ export class ChatPanelController {
   private isWorldModeActive(): boolean {
     const mode = this.doc.body.dataset.appMode;
     return mode === 'world' || mode === 'play-world';
+  }
+
+  private shouldAutoOpenOnFirstWorldVisit(): boolean {
+    const layout = getDeviceLayoutState();
+    return !isPlayfunMode() && !layout.coarsePointer;
   }
 
   private canPost(): boolean {

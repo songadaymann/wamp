@@ -5,10 +5,11 @@ import type { RoomRunRecord, UserStatsRecord } from '../../../runs/model';
 import { compareLeaderboardEntries } from '../../../runs/scoring';
 import type { Env, PointEventRow, RoomRunRow, UserRow, UserStatsRow } from '../core/types';
 
-export type PointEventType = 'room_first_publish' | 'room_publish_update' | 'run_finalized';
+export type PointEventType = 'room_first_publish' | 'room_publish_update' | 'run_finalized' | 'room_creator_completion';
 
 const ROOM_FIRST_PUBLISH_POINTS = 300;
 const ROOM_PUBLISH_UPDATE_POINTS = 75;
+const ROOM_CREATOR_COMPLETION_POINTS = 50;
 const RUN_COLLECTIBLE_POINTS = 2;
 const RUN_ENEMY_POINTS = 5;
 const RUN_CHECKPOINT_POINTS = 10;
@@ -76,6 +77,34 @@ export async function awardRunFinalizePoints(
     sourceKey: run.attemptId,
     points,
     breakdown,
+  });
+}
+
+export async function awardRoomCreatorCompletionPoints(
+  env: Env,
+  input: {
+    creatorUserId: string | null;
+    roomId: string;
+    roomVersion: number;
+    finisherUserId: string;
+    attemptId: string;
+  }
+): Promise<PointEventRow | null> {
+  if (!input.creatorUserId || input.creatorUserId === input.finisherUserId) {
+    return null;
+  }
+
+  return recordPointEvent(env, {
+    userId: input.creatorUserId,
+    eventType: 'room_creator_completion',
+    sourceKey: `${input.roomId}:${input.roomVersion}:${input.finisherUserId}`,
+    points: ROOM_CREATOR_COMPLETION_POINTS,
+    breakdown: {
+      roomId: input.roomId,
+      roomVersion: input.roomVersion,
+      finisherUserId: input.finisherUserId,
+      attemptId: input.attemptId,
+    },
   });
 }
 

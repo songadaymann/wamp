@@ -30,10 +30,11 @@ import { loadRoomRecord } from '../rooms/store';
 import {
   enqueuePlayfunPointSync,
   flushPlayfunPointSync,
-  getPlayfunSessionTokenFromRequest,
-  validatePlayfunSessionToken,
+  linkPlayfunUserFromRequest,
+  loadPlayfunUserLink,
 } from '../playfun/service';
 import {
+  awardRoomCreatorCompletionPoints,
   awardRunFinalizePoints,
   clampRunMetricsToSnapshot,
   loadBestCompletedRunForUserAndRoomVersion,
@@ -227,6 +228,20 @@ export async function handleRunFinish(
 
   const pointEvent = await awardRunFinalizePoints(env, finalizedRun, isNewPersonalBest);
   await maybeMirrorRunPointEventToPlayfun(env, request, auth.user.id, pointEvent);
+  const creatorPointEvent =
+    finalizedRun.result === 'completed'
+      ? await awardRoomCreatorCompletionPoints(env, {
+          creatorUserId: resolveRoomVersionPublisherUserId(roomRecord, finalizedRun.roomVersion),
+          roomId: finalizedRun.roomId,
+          roomVersion: finalizedRun.roomVersion,
+          finisherUserId: finalizedRun.userId,
+          attemptId: finalizedRun.attemptId,
+        })
+      : null;
+  if (creatorPointEvent) {
+    await maybeMirrorPointEventToLinkedPlayfunUser(env, creatorPointEvent.user_id, creatorPointEvent);
+    await upsertUserStats(env, creatorPointEvent.user_id);
+  }
   await upsertUserStats(env, auth.user.id);
   return noContentResponse(request);
 }
@@ -276,14 +291,38 @@ async function maybeMirrorRunPointEventToPlayfun(
     return;
   }
 
-  const sessionToken = getPlayfunSessionTokenFromRequest(request);
-  const playfunSession = await validatePlayfunSessionToken(env, sessionToken);
+  const playfunSession = await linkPlayfunUserFromRequest(env, request, userId);
   if (!playfunSession) {
     return;
   }
 
   await enqueuePlayfunPointSync(env, pointEvent, playfunSession.ogpId);
   await flushPlayfunPointSync(env, userId);
+}
+
+async function maybeMirrorPointEventToLinkedPlayfunUser(
+  env: Env,
+  userId: string,
+  pointEvent: { id: string; user_id: string; points: number; created_at: string }
+): Promise<void> {
+  if (pointEvent.points <= 0) {
+    return;
+  }
+
+  const link = await loadPlayfunUserLink(env, userId);
+  if (!link?.ogp_id) {
+    return;
+  }
+
+  await enqueuePlayfunPointSync(env, pointEvent, link.ogp_id);
+  await flushPlayfunPointSync(env, userId);
+}
+
+function resolveRoomVersionPublisherUserId(
+  roomRecord: { versions: Array<{ version: number; publishedByUserId: string | null }> },
+  roomVersion: number
+): string | null {
+  return roomRecord.versions.find((entry) => entry.version === roomVersion)?.publishedByUserId ?? null;
 }
 
 export async function handleGlobalLeaderboard(

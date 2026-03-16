@@ -89,6 +89,13 @@ async function handleAdminRoomClear(
           AND source_key LIKE ?
       `
     ).bind(`${roomId}:%`),
+    env.DB.prepare(
+      `
+        DELETE FROM point_events
+        WHERE event_type = 'room_creator_completion'
+          AND source_key LIKE ?
+      `
+    ).bind(`${roomId}:%`),
   ];
 
   if (attemptIds.length > 0) {
@@ -118,6 +125,7 @@ async function handleAdminRoomClear(
       versions: versionsResult.results.length,
       runs: attemptIds.length,
       publishPointEvents: true,
+      creatorCompletionPointEvents: true,
       runPointEvents: attemptIds.length,
     },
     affectedUsers: [...affectedUserIds],
