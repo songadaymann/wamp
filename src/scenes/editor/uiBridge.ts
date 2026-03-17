@@ -1,15 +1,52 @@
 export interface EditorGoalUiViewModel {
   goalTypeValue: string;
+  goalTypeDisabled: boolean;
   timeLimitHidden: boolean;
+  timeLimitDisabled: boolean;
   timeLimitValue: string;
   requiredCountHidden: boolean;
+  requiredCountDisabled: boolean;
   requiredCountValue: string;
   survivalHidden: boolean;
+  survivalDisabled: boolean;
   survivalValue: string;
   markerControlsHidden: boolean;
   placementHintHidden: boolean;
   placementHintText: string;
   summaryText: string;
+  contextHidden: boolean;
+  contextText: string;
+  placeStartHidden: boolean;
+  placeStartActive: boolean;
+  placeExitHidden: boolean;
+  placeExitActive: boolean;
+  addCheckpointHidden: boolean;
+  addCheckpointActive: boolean;
+  placeFinishHidden: boolean;
+  placeFinishActive: boolean;
+}
+
+export interface EditorCourseUiViewModel {
+  visible: boolean;
+  statusHidden: boolean;
+  statusText: string;
+  goalTypeValue: string;
+  goalTypeDisabled: boolean;
+  timeLimitHidden: boolean;
+  timeLimitDisabled: boolean;
+  timeLimitValue: string;
+  requiredCountHidden: boolean;
+  requiredCountDisabled: boolean;
+  requiredCountValue: string;
+  survivalHidden: boolean;
+  survivalDisabled: boolean;
+  survivalValue: string;
+  markerControlsHidden: boolean;
+  placementHintHidden: boolean;
+  placementHintText: string;
+  summaryText: string;
+  placeStartHidden: boolean;
+  placeStartActive: boolean;
   placeExitHidden: boolean;
   placeExitActive: boolean;
   addCheckpointHidden: boolean;
@@ -42,6 +79,7 @@ export interface EditorUiViewModel {
   historyDisabled: boolean;
   fitHidden: boolean;
   goal: EditorGoalUiViewModel;
+  course: EditorCourseUiViewModel;
 }
 
 export class EditorUiBridge {
@@ -61,6 +99,7 @@ export class EditorUiBridge {
   private readonly historyBtn: HTMLButtonElement | null;
   private readonly fitBtns: HTMLButtonElement[];
   private readonly goalTypeSelect: HTMLSelectElement | null;
+  private readonly goalContextNote: HTMLElement | null;
   private readonly timeLimitRow: HTMLElement | null;
   private readonly timeLimitInput: HTMLInputElement | null;
   private readonly requiredCountRow: HTMLElement | null;
@@ -70,9 +109,26 @@ export class EditorUiBridge {
   private readonly markerControls: HTMLElement | null;
   private readonly placementHint: HTMLElement | null;
   private readonly summary: HTMLElement | null;
+  private readonly placeStartBtn: HTMLButtonElement | null;
   private readonly placeExitBtn: HTMLButtonElement | null;
   private readonly addCheckpointBtn: HTMLButtonElement | null;
   private readonly placeFinishBtn: HTMLButtonElement | null;
+  private readonly courseRoot: HTMLElement | null;
+  private readonly courseStatus: HTMLElement | null;
+  private readonly courseGoalTypeSelect: HTMLSelectElement | null;
+  private readonly courseTimeLimitRow: HTMLElement | null;
+  private readonly courseTimeLimitInput: HTMLInputElement | null;
+  private readonly courseRequiredCountRow: HTMLElement | null;
+  private readonly courseRequiredCountInput: HTMLInputElement | null;
+  private readonly courseSurvivalRow: HTMLElement | null;
+  private readonly courseSurvivalInput: HTMLInputElement | null;
+  private readonly courseMarkerControls: HTMLElement | null;
+  private readonly coursePlacementHint: HTMLElement | null;
+  private readonly courseSummary: HTMLElement | null;
+  private readonly coursePlaceStartBtn: HTMLButtonElement | null;
+  private readonly coursePlaceExitBtn: HTMLButtonElement | null;
+  private readonly courseAddCheckpointBtn: HTMLButtonElement | null;
+  private readonly coursePlaceFinishBtn: HTMLButtonElement | null;
   private readonly backgroundButtons: HTMLButtonElement[];
   private destroyed = false;
 
@@ -105,6 +161,7 @@ export class EditorUiBridge {
       this.doc.getElementById('btn-mobile-editor-fit') as HTMLButtonElement | null,
     ].filter((element): element is HTMLButtonElement => Boolean(element));
     this.goalTypeSelect = this.doc.getElementById('goal-type-select') as HTMLSelectElement | null;
+    this.goalContextNote = this.doc.getElementById('goal-context-note');
     this.timeLimitRow = this.doc.getElementById('goal-time-limit-row');
     this.timeLimitInput = this.doc.getElementById('goal-time-limit-seconds') as HTMLInputElement | null;
     this.requiredCountRow = this.doc.getElementById('goal-required-count-row');
@@ -114,9 +171,26 @@ export class EditorUiBridge {
     this.markerControls = this.doc.getElementById('goal-marker-controls');
     this.placementHint = this.doc.getElementById('goal-placement-hint');
     this.summary = this.doc.getElementById('goal-summary');
+    this.placeStartBtn = this.doc.getElementById('btn-goal-place-start') as HTMLButtonElement | null;
     this.placeExitBtn = this.doc.getElementById('btn-goal-place-exit') as HTMLButtonElement | null;
     this.addCheckpointBtn = this.doc.getElementById('btn-goal-add-checkpoint') as HTMLButtonElement | null;
     this.placeFinishBtn = this.doc.getElementById('btn-goal-place-finish') as HTMLButtonElement | null;
+    this.courseRoot = this.doc.getElementById('course-goal-section');
+    this.courseStatus = this.doc.getElementById('course-editor-status');
+    this.courseGoalTypeSelect = this.doc.getElementById('course-editor-goal-type-select') as HTMLSelectElement | null;
+    this.courseTimeLimitRow = this.doc.getElementById('course-editor-time-limit-row');
+    this.courseTimeLimitInput = this.doc.getElementById('course-editor-time-limit-seconds') as HTMLInputElement | null;
+    this.courseRequiredCountRow = this.doc.getElementById('course-editor-required-count-row');
+    this.courseRequiredCountInput = this.doc.getElementById('course-editor-required-count') as HTMLInputElement | null;
+    this.courseSurvivalRow = this.doc.getElementById('course-editor-survival-row');
+    this.courseSurvivalInput = this.doc.getElementById('course-editor-survival-seconds') as HTMLInputElement | null;
+    this.courseMarkerControls = this.doc.getElementById('course-editor-marker-controls');
+    this.coursePlacementHint = this.doc.getElementById('course-editor-placement-hint');
+    this.courseSummary = this.doc.getElementById('course-editor-summary');
+    this.coursePlaceStartBtn = this.doc.getElementById('btn-course-editor-place-start') as HTMLButtonElement | null;
+    this.coursePlaceExitBtn = this.doc.getElementById('btn-course-editor-place-exit') as HTMLButtonElement | null;
+    this.courseAddCheckpointBtn = this.doc.getElementById('btn-course-editor-add-checkpoint') as HTMLButtonElement | null;
+    this.coursePlaceFinishBtn = this.doc.getElementById('btn-course-editor-place-finish') as HTMLButtonElement | null;
     this.backgroundButtons = Array.from(
       this.doc.querySelectorAll<HTMLButtonElement>('[data-background-id]')
     );
@@ -152,23 +226,58 @@ export class EditorUiBridge {
     this.setHidden(this.fitBtns, viewModel.fitHidden);
 
     this.setValue(this.goalTypeSelect, viewModel.goal.goalTypeValue);
+    this.setDisabled(this.goalTypeSelect, viewModel.goal.goalTypeDisabled);
+    this.setHidden(this.goalContextNote, viewModel.goal.contextHidden);
+    this.setText(this.goalContextNote, viewModel.goal.contextText);
     this.setHidden(this.timeLimitRow, viewModel.goal.timeLimitHidden);
+    this.setDisabled(this.timeLimitInput, viewModel.goal.timeLimitDisabled);
     this.setValue(this.timeLimitInput, viewModel.goal.timeLimitValue);
     this.setHidden(this.requiredCountRow, viewModel.goal.requiredCountHidden);
+    this.setDisabled(this.requiredCountInput, viewModel.goal.requiredCountDisabled);
     this.setValue(this.requiredCountInput, viewModel.goal.requiredCountValue);
     this.setHidden(this.survivalRow, viewModel.goal.survivalHidden);
+    this.setDisabled(this.survivalInput, viewModel.goal.survivalDisabled);
     this.setValue(this.survivalInput, viewModel.goal.survivalValue);
     this.setHidden(this.markerControls, viewModel.goal.markerControlsHidden);
     this.setHidden(this.placementHint, viewModel.goal.placementHintHidden);
     this.setText(this.placementHint, viewModel.goal.placementHintText);
     this.setText(this.summary, viewModel.goal.summaryText);
 
+    this.setHidden(this.placeStartBtn, viewModel.goal.placeStartHidden);
+    this.setActive(this.placeStartBtn, viewModel.goal.placeStartActive);
     this.setHidden(this.placeExitBtn, viewModel.goal.placeExitHidden);
     this.setActive(this.placeExitBtn, viewModel.goal.placeExitActive);
     this.setHidden(this.addCheckpointBtn, viewModel.goal.addCheckpointHidden);
     this.setActive(this.addCheckpointBtn, viewModel.goal.addCheckpointActive);
     this.setHidden(this.placeFinishBtn, viewModel.goal.placeFinishHidden);
     this.setActive(this.placeFinishBtn, viewModel.goal.placeFinishActive);
+
+    this.setHidden(this.courseRoot, !viewModel.course.visible);
+    this.setHidden(this.courseStatus, viewModel.course.statusHidden);
+    this.setText(this.courseStatus, viewModel.course.statusText);
+    this.setValue(this.courseGoalTypeSelect, viewModel.course.goalTypeValue);
+    this.setDisabled(this.courseGoalTypeSelect, viewModel.course.goalTypeDisabled);
+    this.setHidden(this.courseTimeLimitRow, viewModel.course.timeLimitHidden);
+    this.setDisabled(this.courseTimeLimitInput, viewModel.course.timeLimitDisabled);
+    this.setValue(this.courseTimeLimitInput, viewModel.course.timeLimitValue);
+    this.setHidden(this.courseRequiredCountRow, viewModel.course.requiredCountHidden);
+    this.setDisabled(this.courseRequiredCountInput, viewModel.course.requiredCountDisabled);
+    this.setValue(this.courseRequiredCountInput, viewModel.course.requiredCountValue);
+    this.setHidden(this.courseSurvivalRow, viewModel.course.survivalHidden);
+    this.setDisabled(this.courseSurvivalInput, viewModel.course.survivalDisabled);
+    this.setValue(this.courseSurvivalInput, viewModel.course.survivalValue);
+    this.setHidden(this.courseMarkerControls, viewModel.course.markerControlsHidden);
+    this.setHidden(this.coursePlacementHint, viewModel.course.placementHintHidden);
+    this.setText(this.coursePlacementHint, viewModel.course.placementHintText);
+    this.setText(this.courseSummary, viewModel.course.summaryText);
+    this.setHidden(this.coursePlaceStartBtn, viewModel.course.placeStartHidden);
+    this.setActive(this.coursePlaceStartBtn, viewModel.course.placeStartActive);
+    this.setHidden(this.coursePlaceExitBtn, viewModel.course.placeExitHidden);
+    this.setActive(this.coursePlaceExitBtn, viewModel.course.placeExitActive);
+    this.setHidden(this.courseAddCheckpointBtn, viewModel.course.addCheckpointHidden);
+    this.setActive(this.courseAddCheckpointBtn, viewModel.course.addCheckpointActive);
+    this.setHidden(this.coursePlaceFinishBtn, viewModel.course.placeFinishHidden);
+    this.setActive(this.coursePlaceFinishBtn, viewModel.course.placeFinishActive);
   }
 
   destroy(): void {
@@ -238,7 +347,10 @@ export class EditorUiBridge {
     }
   }
 
-  private setDisabled(element: HTMLButtonElement | null, disabled: boolean): void {
+  private setDisabled(
+    element: HTMLButtonElement | HTMLInputElement | HTMLSelectElement | null,
+    disabled: boolean,
+  ): void {
     if (element && element.disabled !== disabled) {
       element.disabled = disabled;
     }

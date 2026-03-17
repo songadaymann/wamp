@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { AboutModalController } from './aboutModal';
 import { ControlsModalController } from './controlsModal';
+import { CourseModalController } from './courseModal';
 import { RoomHistoryModalController } from './historyModal';
 import { LeaderboardModalController } from './leaderboardModal';
 import {
@@ -14,6 +15,7 @@ export function setupSceneCommands(
   leaderboardModal: LeaderboardModalController,
   controlsModal: ControlsModalController,
   aboutModal: AboutModalController,
+  courseModal: CourseModalController,
   doc: Document = document,
 ): void {
   const authPanel = doc.getElementById('auth-panel');
@@ -24,6 +26,8 @@ export function setupSceneCommands(
   const worldZoomInBtn = doc.getElementById('btn-world-zoom-in-footer');
   const worldZoomOutBtn = doc.getElementById('btn-world-zoom-out-footer');
   const worldLeaderboardBtn = doc.getElementById('btn-world-leaderboard');
+  const worldPlayCourseBtn = doc.getElementById('btn-world-play-course');
+  const worldCourseBuilderBtn = doc.getElementById('btn-world-course-builder');
   const worldControlsBtn = doc.getElementById('btn-world-controls');
   const aboutOpenBtn = doc.getElementById('btn-about-open');
   const worldJumpInput = doc.getElementById('world-jump-input') as HTMLInputElement | null;
@@ -47,13 +51,22 @@ export function setupSceneCommands(
     leaderboardModal.close();
     controlsModal.close();
     aboutModal.close();
+    courseModal.close();
     getActiveOverworldScene(game)?.playSelectedRoom?.();
+  });
+
+  worldPlayCourseBtn?.addEventListener('click', () => {
+    leaderboardModal.close();
+    controlsModal.close();
+    aboutModal.close();
+    void getActiveOverworldScene(game)?.playSelectedCourse?.();
   });
 
   worldEditBtn?.addEventListener('click', () => {
     leaderboardModal.close();
     controlsModal.close();
     aboutModal.close();
+    courseModal.close();
     getActiveOverworldScene(game)?.editSelectedRoom?.();
   });
 
@@ -61,7 +74,16 @@ export function setupSceneCommands(
     leaderboardModal.close();
     controlsModal.close();
     aboutModal.close();
+    courseModal.close();
     getActiveOverworldScene(game)?.buildSelectedRoom?.();
+  });
+
+  worldCourseBuilderBtn?.addEventListener('click', () => {
+    leaderboardModal.close();
+    controlsModal.close();
+    aboutModal.close();
+    void getActiveOverworldScene(game)?.openCourseComposer?.();
+    courseModal.open();
   });
 
   worldZoomInBtn?.addEventListener('click', () => {
@@ -93,12 +115,14 @@ export function setupSceneCommands(
   worldLeaderboardBtn?.addEventListener('click', () => {
     controlsModal.close();
     aboutModal.close();
+    courseModal.close();
     void leaderboardModal.open();
   });
   worldControlsBtn?.addEventListener('click', () => {
     leaderboardModal.close();
     historyModal.close();
     aboutModal.close();
+    courseModal.close();
     controlsModal.open();
   });
   aboutOpenBtn?.addEventListener('click', () => {
@@ -106,6 +130,7 @@ export function setupSceneCommands(
     historyModal.close();
     leaderboardModal.close();
     controlsModal.close();
+    courseModal.close();
     aboutModal.open();
   });
   worldJumpInput?.addEventListener('keydown', (event) => {
@@ -119,6 +144,7 @@ export function setupSceneCommands(
     leaderboardModal.close();
     controlsModal.close();
     aboutModal.close();
+    courseModal.close();
     getActiveEditorScene(game)?.startPlayMode?.();
   });
 
@@ -127,6 +153,7 @@ export function setupSceneCommands(
     leaderboardModal.close();
     controlsModal.close();
     aboutModal.close();
+    courseModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.returnToWorld) {
       void editorScene.returnToWorld();
@@ -139,15 +166,17 @@ export function setupSceneCommands(
   saveBtn?.addEventListener('click', async () => {
     controlsModal.close();
     aboutModal.close();
+    courseModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.saveDraft) {
-      await editorScene.saveDraft(true);
+      await editorScene.saveDraft(true, { promptForSignInOnUnauthorized: true });
     }
   });
 
   publishBtn?.addEventListener('click', async () => {
     controlsModal.close();
     aboutModal.close();
+    courseModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.publishRoom) {
       await editorScene.publishRoom();
@@ -157,6 +186,7 @@ export function setupSceneCommands(
   publishNudgeBtn?.addEventListener('click', async () => {
     controlsModal.close();
     aboutModal.close();
+    courseModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.handlePublishNudgeAction) {
       await editorScene.handlePublishNudgeAction();
@@ -166,6 +196,7 @@ export function setupSceneCommands(
   mintBtn?.addEventListener('click', async () => {
     controlsModal.close();
     aboutModal.close();
+    courseModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.mintRoom) {
       await editorScene.mintRoom();
@@ -175,6 +206,7 @@ export function setupSceneCommands(
   historyBtn?.addEventListener('click', () => {
     controlsModal.close();
     aboutModal.close();
+    courseModal.close();
     void historyModal.open();
   });
 
@@ -187,6 +219,7 @@ export function setupSceneCommands(
 
     controlsModal.close();
     aboutModal.close();
+    courseModal.close();
     getActiveOverworldScene(game)?.fitLoadedWorld?.();
   });
 

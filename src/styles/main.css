@@ -2045,6 +2045,29 @@ body[data-app-mode="play-world"] .world-only-control {
   width: min(720px, calc(100vw - 40px));
 }
 
+.course-modal-panel {
+  width: min(760px, calc(100vw - 40px));
+}
+
+body:not([data-device-class='phone']) #course-modal {
+  z-index: 12;
+  display: block;
+  padding: 0;
+  background: transparent;
+  backdrop-filter: none;
+  pointer-events: none;
+}
+
+body:not([data-device-class='phone']) #course-modal .course-modal-panel {
+  position: absolute;
+  top: calc(220px + var(--safe-top));
+  left: calc(16px + var(--safe-left));
+  width: 320px;
+  max-height: calc(100vh - 236px - var(--safe-top) - var(--safe-bottom));
+  margin: 0;
+  pointer-events: auto;
+}
+
 .controls-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2092,6 +2115,12 @@ body[data-app-mode="play-world"] .world-only-control {
 
 .about-section a:hover {
   color: #b7e9ff;
+}
+
+.course-room-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .controls-section {
@@ -2228,6 +2257,17 @@ body[data-app-mode="play-world"] .world-only-control {
   color: var(--text-muted);
   font-size: 11px;
   line-height: 1.4;
+}
+
+.course-room-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1.4fr) auto auto;
+  align-items: center;
+}
+
+.course-room-row-selected {
+  border-color: rgba(60, 143, 255, 0.5);
+  background: rgba(60, 143, 255, 0.08);
 }
 
 .leaderboard-modal-panel {

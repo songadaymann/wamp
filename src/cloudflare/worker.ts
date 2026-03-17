@@ -3,6 +3,15 @@ import type { RoomRevertRequestBody } from '../persistence/roomModel';
 import { handleAuthRequest } from './worker/auth/routes';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth, requireOptionalScope } from './worker/auth/request';
 import { handleChatRequest } from './worker/chat/routes';
+import {
+  handleCourseCreate,
+  handleCourseDraftSave,
+  handleCourseGet,
+  handleCourseLeaderboard,
+  handleCoursePublish,
+  handleCourseRunFinish,
+  handleCourseRunStart,
+} from './worker/courses/routes';
 import { corsHeaders, getCoordinatesFromRequest, HttpError, jsonResponse, parseJsonBody, parseRoomSnapshot } from './worker/core/http';
 import type { Env } from './worker/core/types';
 import { handleTestReset } from './worker/maintenance/routes';
@@ -90,9 +99,38 @@ export default {
         return await handleRunStart(request, env);
       }
 
+      if (url.pathname === '/api/courses' && request.method === 'POST') {
+        return await handleCourseCreate(request, env);
+      }
+
+      const courseMatch = /^\/api\/courses\/([^/]+)$/.exec(url.pathname);
+      if (courseMatch && request.method === 'GET') {
+        return await handleCourseGet(request, env, decodeURIComponent(courseMatch[1]));
+      }
+
+      const courseDraftMatch = /^\/api\/courses\/([^/]+)\/draft$/.exec(url.pathname);
+      if (courseDraftMatch && request.method === 'PUT') {
+        return await handleCourseDraftSave(request, env, decodeURIComponent(courseDraftMatch[1]));
+      }
+
+      const coursePublishMatch = /^\/api\/courses\/([^/]+)\/publish$/.exec(url.pathname);
+      if (coursePublishMatch && request.method === 'POST') {
+        return await handleCoursePublish(request, env, decodeURIComponent(coursePublishMatch[1]));
+      }
+
+      const courseRunStartMatch = /^\/api\/courses\/([^/]+)\/runs\/start$/.exec(url.pathname);
+      if (courseRunStartMatch && request.method === 'POST') {
+        return await handleCourseRunStart(request, env, decodeURIComponent(courseRunStartMatch[1]));
+      }
+
       const finishRunMatch = /^\/api\/runs\/([^/]+)\/finish$/.exec(url.pathname);
       if (finishRunMatch && request.method === 'POST') {
         return await handleRunFinish(request, env, decodeURIComponent(finishRunMatch[1]));
+      }
+
+      const finishCourseRunMatch = /^\/api\/course-runs\/([^/]+)\/finish$/.exec(url.pathname);
+      if (finishCourseRunMatch && request.method === 'POST') {
+        return await handleCourseRunFinish(request, env, decodeURIComponent(finishCourseRunMatch[1]));
       }
 
       const roomLeaderboardMatch = /^\/api\/leaderboards\/rooms\/([^/]+)$/.exec(url.pathname);
@@ -102,6 +140,16 @@ export default {
           url,
           env,
           decodeURIComponent(roomLeaderboardMatch[1])
+        );
+      }
+
+      const courseLeaderboardMatch = /^\/api\/leaderboards\/courses\/([^/]+)$/.exec(url.pathname);
+      if (courseLeaderboardMatch && request.method === 'GET') {
+        return await handleCourseLeaderboard(
+          request,
+          url,
+          env,
+          decodeURIComponent(courseLeaderboardMatch[1])
         );
       }
 

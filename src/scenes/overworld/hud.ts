@@ -13,6 +13,11 @@ export interface OverworldHudViewModel {
   playButtonText: string;
   playButtonDisabled: boolean;
   playButtonActive: boolean;
+  playCourseButtonText: string;
+  playCourseButtonDisabled: boolean;
+  playCourseButtonHidden: boolean;
+  playCourseButtonActive: boolean;
+  courseBuilderButtonDisabled: boolean;
   editButtonDisabled: boolean;
   buildButtonDisabled: boolean;
   roomCoordinatesText: string;
@@ -37,6 +42,8 @@ export class OverworldHudBridge {
   private readonly statusEl: HTMLElement | null;
   private readonly leaderboardEl: HTMLElement | null;
   private readonly playButton: HTMLButtonElement | null;
+  private readonly playCourseButton: HTMLButtonElement | null;
+  private readonly courseBuilderButton: HTMLButtonElement | null;
   private readonly editButton: HTMLButtonElement | null;
   private readonly buildButton: HTMLButtonElement | null;
   private readonly jumpInput: HTMLInputElement | null;
@@ -68,6 +75,8 @@ export class OverworldHudBridge {
     this.statusEl = this.doc.getElementById('world-status');
     this.leaderboardEl = this.doc.getElementById('world-leaderboard');
     this.playButton = this.doc.getElementById('btn-world-play') as HTMLButtonElement | null;
+    this.playCourseButton = this.doc.getElementById('btn-world-play-course') as HTMLButtonElement | null;
+    this.courseBuilderButton = this.doc.getElementById('btn-world-course-builder') as HTMLButtonElement | null;
     this.editButton = this.doc.getElementById('btn-world-edit') as HTMLButtonElement | null;
     this.buildButton = this.doc.getElementById('btn-world-build') as HTMLButtonElement | null;
     this.jumpInput = this.doc.getElementById('world-jump-input') as HTMLInputElement | null;
@@ -120,6 +129,14 @@ export class OverworldHudBridge {
     this.setText(this.bottomBarZoomEl, viewModel.bottomBarZoomText);
     this.setButton(this.playButton, viewModel.playButtonText, viewModel.playButtonDisabled);
     this.setActive(this.playButton, viewModel.playButtonActive);
+    this.setButton(
+      this.playCourseButton,
+      viewModel.playCourseButtonText,
+      viewModel.playCourseButtonDisabled
+    );
+    this.setActive(this.playCourseButton, viewModel.playCourseButtonActive);
+    this.playCourseButton?.classList.toggle('hidden', viewModel.playCourseButtonHidden);
+    this.setDisabled(this.courseBuilderButton, viewModel.courseBuilderButtonDisabled);
     this.setDisabled(this.editButton, viewModel.editButtonDisabled);
     this.setDisabled(this.buildButton, viewModel.buildButtonDisabled);
     this.renderGoalPanel(viewModel);

@@ -59,6 +59,10 @@ export interface EditorStatusDetails {
   linkHref: string | null;
 }
 
+interface SaveDraftOptions {
+  promptForSignInOnUnauthorized?: boolean;
+}
+
 export class EditorRoomSession {
   private readonly AUTO_SAVE_DELAY_MS = 600;
   private readonly DRAFT_VISIBILITY_WARNING = 'Draft only. Not visible in the world until published.';
@@ -352,7 +356,10 @@ export class EditorRoomSession {
     }
   }
 
-  async saveDraft(force: boolean = false): Promise<RoomRecord | null> {
+  async saveDraft(
+    force: boolean = false,
+    options: SaveDraftOptions = {}
+  ): Promise<RoomRecord | null> {
     if (this.saveInFlight) {
       return null;
     }
@@ -365,6 +372,18 @@ export class EditorRoomSession {
     }
 
     const saveStartedAt = this.host.getLastDirtyAt();
+    if (options.promptForSignInOnUnauthorized) {
+      await refreshAuthSession();
+      if (!getAuthDebugState().authenticated) {
+        await this.saveDraftLocally(
+          saveStartedAt,
+          'Draft saved locally. Sign in to save drafts to your account.'
+        );
+        promptForSignIn('Sign in to save drafts to your account. Your local draft is safe.');
+        return null;
+      }
+    }
+
     this.saveInFlight = true;
     this.setStatusText('Saving draft...');
 
@@ -382,10 +401,16 @@ export class EditorRoomSession {
       return record;
     } catch (error) {
       if (this.shouldPersistGuestDraftLocally(error)) {
-        return this.saveDraftLocally(
+        const record = await this.saveDraftLocally(
           saveStartedAt,
-          'Draft saved locally. Sign in to publish.'
+          options.promptForSignInOnUnauthorized
+            ? 'Draft saved locally. Sign in to save drafts to your account.'
+            : 'Draft saved locally. Sign in to publish.'
         );
+        if (options.promptForSignInOnUnauthorized) {
+          promptForSignIn('Sign in to save drafts to your account. Your local draft is safe.');
+        }
+        return record;
       }
 
       console.error('Failed to save room draft', error);

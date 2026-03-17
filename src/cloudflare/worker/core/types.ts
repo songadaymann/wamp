@@ -1,4 +1,5 @@
 import type { ApiTokenRecord, ApiTokenScope, AuthUser } from '../../../auth/model';
+import type { CourseSnapshot } from '../../../courses/model';
 import type { RoomCoordinates, RoomRecord, RoomSnapshot, RoomVersionRecord } from '../../../persistence/roomModel';
 import type { RunResult } from '../../../runs/model';
 
@@ -71,6 +72,41 @@ export interface RoomVersionRow {
   reverted_from_version: number | null;
 }
 
+export interface CourseRow {
+  id: string;
+  owner_user_id: string;
+  owner_display_name: string;
+  draft_json: string;
+  published_json: string | null;
+  draft_title: string | null;
+  published_title: string | null;
+  draft_version: number;
+  published_version: number | null;
+  created_at: string;
+  updated_at: string;
+  published_at: string | null;
+}
+
+export interface CourseVersionRow {
+  version: number;
+  snapshot_json: string;
+  title: string | null;
+  created_at: string;
+  published_by_user_id: string | null;
+  published_by_display_name: string | null;
+}
+
+export interface CourseRoomRefRow {
+  course_id: string;
+  course_version: number;
+  room_order: number;
+  room_id: string;
+  room_x: number;
+  room_y: number;
+  room_version: number;
+  room_title: string | null;
+}
+
 export interface PersistRoomRecordInput {
   draft: RoomSnapshot;
   published: RoomSnapshot | null;
@@ -93,6 +129,43 @@ export interface PersistRoomVersionInput {
   publishedByDisplayName: string | null;
   revertedFromVersion: number | null;
   onConflictUpdate: boolean;
+}
+
+export interface PersistCourseRecordInput {
+  draft: CourseSnapshot;
+  published: CourseSnapshot | null;
+  ownerUserId: string;
+  ownerDisplayName: string;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt: string | null;
+}
+
+export interface PersistCourseVersionInput {
+  snapshot: CourseSnapshot;
+  createdAt: string;
+  publishedByUserId: string | null;
+  publishedByDisplayName: string | null;
+  onConflictUpdate: boolean;
+}
+
+export interface CourseRunRow {
+  attempt_id: string;
+  course_id: string;
+  course_version: number;
+  goal_type: string;
+  goal_json: string;
+  user_id: string;
+  user_display_name: string;
+  started_at: string;
+  finished_at: string | null;
+  result: RunResult;
+  elapsed_ms: number | null;
+  deaths: number;
+  score: number;
+  collectibles_collected: number;
+  enemies_defeated: number;
+  checkpoints_reached: number;
 }
 
 export interface RoomRunRow {

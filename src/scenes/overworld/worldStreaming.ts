@@ -124,6 +124,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private loadedChunkBounds: WorldChunkBounds | null = null;
   private roomSummariesById = new Map<string, WorldRoomSummary>();
   private draftRoomsById = new Map<string, RoomSnapshot>();
+  private transientRoomOverridesById = new Map<string, RoomSnapshot>();
   private roomSnapshotsById = new Map<string, RoomSnapshot>();
   private roomLoadPromisesById = new Map<string, Promise<RoomSnapshot | null>>();
   private previewImagesByRoomId = new Map<string, Phaser.GameObjects.Image>();
@@ -149,6 +150,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.loadedChunkBounds = null;
     this.roomSummariesById = new Map();
     this.draftRoomsById = new Map();
+    this.transientRoomOverridesById = new Map();
     this.roomSnapshotsById = new Map();
     this.roomLoadPromisesById = new Map();
     this.previewImagesByRoomId = new Map();
@@ -173,6 +175,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.loadedChunkBounds = null;
     this.roomSummariesById = new Map();
     this.draftRoomsById = new Map();
+    this.transientRoomOverridesById = new Map();
     this.roomSnapshotsById = new Map();
     this.roomLoadPromisesById = new Map();
     this.previewImagesByRoomId = new Map();
@@ -193,6 +196,14 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
   clearDraftRoom(roomId: string): void {
     this.draftRoomsById.delete(roomId);
+  }
+
+  setTransientRoomOverride(room: RoomSnapshot): void {
+    this.transientRoomOverridesById.set(room.id, cloneRoomSnapshot(room));
+  }
+
+  clearTransientRoomOverride(roomId: string): void {
+    this.transientRoomOverridesById.delete(roomId);
   }
 
   applyOptimisticMutation(mutation: OptimisticWorldMutation): void {
@@ -335,6 +346,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
   getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null {
     const roomId = roomIdFromCoordinates(coordinates);
+    const transientRoom = this.transientRoomOverridesById.get(roomId);
+    if (transientRoom) {
+      return cloneRoomSnapshot(transientRoom);
+    }
+
     const draftRoom = this.draftRoomsById.get(roomId);
     if (draftRoom) {
       return cloneRoomSnapshot(draftRoom);
@@ -577,6 +593,20 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         coordinates: { ...draftRoom.coordinates },
         summary: existing?.summary ?? null,
         draft: cloneRoomSnapshot(draftRoom),
+      });
+    }
+
+    for (const overrideRoom of this.transientRoomOverridesById.values()) {
+      if (!isWithinRoomBounds(overrideRoom.coordinates, roomBounds)) {
+        continue;
+      }
+
+      const existing = candidates.get(overrideRoom.id);
+      candidates.set(overrideRoom.id, {
+        id: overrideRoom.id,
+        coordinates: { ...overrideRoom.coordinates },
+        summary: existing?.summary ?? null,
+        draft: cloneRoomSnapshot(overrideRoom),
       });
     }
 

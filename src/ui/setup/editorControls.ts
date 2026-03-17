@@ -8,6 +8,7 @@ import {
   type PaletteMode,
   type ToolName,
 } from '../../config';
+import type { CourseGoalType } from '../../courses/model';
 import type { RoomGoalType } from '../../goals/roomGoals';
 import { withActiveEditorScene } from './sceneBridge';
 import { PaletteController } from './paletteController';
@@ -239,10 +240,20 @@ function setupGoalControls(game: Phaser.Game, doc: Document): void {
   const timeLimitInput = doc.getElementById('goal-time-limit-seconds') as HTMLInputElement | null;
   const requiredCountInput = doc.getElementById('goal-required-count') as HTMLInputElement | null;
   const survivalInput = doc.getElementById('goal-survival-seconds') as HTMLInputElement | null;
+  const placeStartBtn = doc.getElementById('btn-goal-place-start');
   const placeExitBtn = doc.getElementById('btn-goal-place-exit');
   const addCheckpointBtn = doc.getElementById('btn-goal-add-checkpoint');
   const placeFinishBtn = doc.getElementById('btn-goal-place-finish');
   const clearMarkersBtn = doc.getElementById('btn-goal-clear-markers');
+  const courseGoalTypeSelect = doc.getElementById('course-editor-goal-type-select') as HTMLSelectElement | null;
+  const courseTimeLimitInput = doc.getElementById('course-editor-time-limit-seconds') as HTMLInputElement | null;
+  const courseRequiredCountInput = doc.getElementById('course-editor-required-count') as HTMLInputElement | null;
+  const courseSurvivalInput = doc.getElementById('course-editor-survival-seconds') as HTMLInputElement | null;
+  const coursePlaceStartBtn = doc.getElementById('btn-course-editor-place-start');
+  const coursePlaceExitBtn = doc.getElementById('btn-course-editor-place-exit');
+  const courseAddCheckpointBtn = doc.getElementById('btn-course-editor-add-checkpoint');
+  const coursePlaceFinishBtn = doc.getElementById('btn-course-editor-place-finish');
+  const courseClearMarkersBtn = doc.getElementById('btn-course-editor-clear-markers');
 
   goalTypeSelect?.addEventListener('change', () => {
     withActiveEditorScene(game, (scene) => {
@@ -272,6 +283,13 @@ function setupGoalControls(game: Phaser.Game, doc: Document): void {
     });
   });
 
+  placeStartBtn?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.startGoalMarkerPlacement?.('start');
+    });
+    requestPhoneEditorAutoCollapse(doc);
+  });
+
   placeExitBtn?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
       scene.startGoalMarkerPlacement?.('exit');
@@ -296,6 +314,70 @@ function setupGoalControls(game: Phaser.Game, doc: Document): void {
   clearMarkersBtn?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
       scene.clearGoalMarkers?.();
+    });
+  });
+
+  courseGoalTypeSelect?.addEventListener('change', () => {
+    withActiveEditorScene(game, (scene) => {
+      const nextType = courseGoalTypeSelect.value
+        ? (courseGoalTypeSelect.value as CourseGoalType)
+        : null;
+      scene.setCourseGoalType?.(nextType);
+    });
+  });
+
+  bindNumericGoalInput(courseTimeLimitInput, (input) => {
+    withActiveEditorScene(game, (scene) => {
+      const seconds = Number.parseInt(input.value, 10);
+      scene.setCourseGoalTimeLimitSeconds?.(Number.isFinite(seconds) && seconds > 0 ? seconds : null);
+    });
+  });
+
+  bindNumericGoalInput(courseRequiredCountInput, (input) => {
+    withActiveEditorScene(game, (scene) => {
+      const requiredCount = Number.parseInt(input.value, 10);
+      scene.setCourseGoalRequiredCount?.(Number.isFinite(requiredCount) && requiredCount > 0 ? requiredCount : 1);
+    });
+  });
+
+  bindNumericGoalInput(courseSurvivalInput, (input) => {
+    withActiveEditorScene(game, (scene) => {
+      const seconds = Number.parseInt(input.value, 10);
+      scene.setCourseGoalSurvivalSeconds?.(Number.isFinite(seconds) && seconds > 0 ? seconds : 30);
+    });
+  });
+
+  coursePlaceStartBtn?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.startCourseGoalMarkerPlacement?.('start');
+    });
+    requestPhoneEditorAutoCollapse(doc);
+  });
+
+  coursePlaceExitBtn?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.startCourseGoalMarkerPlacement?.('exit');
+    });
+    requestPhoneEditorAutoCollapse(doc);
+  });
+
+  courseAddCheckpointBtn?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.startCourseGoalMarkerPlacement?.('checkpoint');
+    });
+    requestPhoneEditorAutoCollapse(doc);
+  });
+
+  coursePlaceFinishBtn?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.startCourseGoalMarkerPlacement?.('finish');
+    });
+    requestPhoneEditorAutoCollapse(doc);
+  });
+
+  courseClearMarkersBtn?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.clearCourseGoalMarkers?.();
     });
   });
 }

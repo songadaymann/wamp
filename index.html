@@ -319,6 +319,7 @@
           </div>
         </div>
         <div id="goal-marker-controls" class="goal-marker-controls hidden">
+          <button id="btn-goal-place-start" class="bar-btn bar-btn-small hidden">Set Start</button>
           <button id="btn-goal-place-exit" class="bar-btn bar-btn-small">Set Exit</button>
           <button id="btn-goal-add-checkpoint" class="bar-btn bar-btn-small">Add Checkpoint</button>
           <button id="btn-goal-place-finish" class="bar-btn bar-btn-small">Set Finish</button>
@@ -326,6 +327,49 @@
         </div>
         <div id="goal-placement-hint" class="goal-placement-hint hidden">Click the canvas to place the selected goal marker.</div>
         <div id="goal-summary" class="goal-summary">No room goal selected.</div>
+      </div>
+
+      <div class="sidebar-section hidden" id="course-goal-section" data-mobile-panel="goal" data-sidebar-collapsible="true">
+        <div class="section-label">Course Goal</div>
+        <div id="course-editor-status" class="goal-context-note hidden"></div>
+        <select id="course-editor-goal-type-select">
+          <option value="">None</option>
+          <option value="reach_exit">Reach Exit</option>
+          <option value="collect_target">Collect Target</option>
+          <option value="defeat_all">Defeat All</option>
+          <option value="checkpoint_sprint">Checkpoint Sprint</option>
+          <option value="survival">Survival</option>
+        </select>
+        <div id="course-editor-time-limit-row" class="goal-control-row hidden">
+          <label class="goal-control-label" for="course-editor-time-limit-seconds">Time Limit</label>
+          <div class="goal-inline-input">
+            <input id="course-editor-time-limit-seconds" class="goal-input" type="number" min="1" step="1" placeholder="Off" />
+            <span class="goal-inline-suffix">sec</span>
+          </div>
+        </div>
+        <div id="course-editor-required-count-row" class="goal-control-row hidden">
+          <label class="goal-control-label" for="course-editor-required-count">Collect Count</label>
+          <div class="goal-inline-input">
+            <input id="course-editor-required-count" class="goal-input" type="number" min="1" step="1" />
+            <span class="goal-inline-suffix">items</span>
+          </div>
+        </div>
+        <div id="course-editor-survival-row" class="goal-control-row hidden">
+          <label class="goal-control-label" for="course-editor-survival-seconds">Survive For</label>
+          <div class="goal-inline-input">
+            <input id="course-editor-survival-seconds" class="goal-input" type="number" min="1" step="1" />
+            <span class="goal-inline-suffix">sec</span>
+          </div>
+        </div>
+        <div id="course-editor-marker-controls" class="goal-marker-controls hidden">
+          <button id="btn-course-editor-place-start" class="bar-btn bar-btn-small">Set Start</button>
+          <button id="btn-course-editor-place-exit" class="bar-btn bar-btn-small">Set Exit</button>
+          <button id="btn-course-editor-add-checkpoint" class="bar-btn bar-btn-small">Add Checkpoint</button>
+          <button id="btn-course-editor-place-finish" class="bar-btn bar-btn-small">Set Finish</button>
+          <button id="btn-course-editor-clear-markers" class="bar-btn bar-btn-small">Clear Markers</button>
+        </div>
+        <div id="course-editor-placement-hint" class="goal-placement-hint hidden">Click the canvas to place the selected course marker.</div>
+        <div id="course-editor-summary" class="goal-summary">No course selected.</div>
       </div>
 
       <div class="sidebar-section" id="editor-actions" data-mobile-panel="actions" data-sidebar-collapsible="true">
@@ -394,8 +438,12 @@
         </div>
         <div class="world-hud-row">
           <button id="btn-world-play" class="bar-btn bar-btn-small world-btn-play" disabled>Play Room</button>
+          <button id="btn-world-play-course" class="bar-btn bar-btn-small world-btn-play hidden" disabled>Play Course</button>
           <button id="btn-world-edit" class="bar-btn bar-btn-small world-btn-edit" disabled>Edit Room</button>
           <button id="btn-world-build" class="bar-btn bar-btn-small world-btn-build" disabled>Build Here</button>
+        </div>
+        <div class="world-hud-row">
+          <button id="btn-world-course-builder" class="bar-btn bar-btn-small world-btn-controls" disabled>Course Builder</button>
         </div>
         <div class="world-hud-row">
           <button id="btn-world-leaderboard" class="bar-btn bar-btn-small world-btn-leaderboard">Leaderboard</button>
@@ -550,6 +598,56 @@
         <div id="leaderboard-global-summary" class="history-modal-meta">World points leaderboard.</div>
         <div id="leaderboard-global-viewer" class="history-modal-meta hidden"></div>
         <div id="leaderboard-global-list" class="history-version-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="course-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel leaderboard-modal-panel course-modal-panel" role="dialog" aria-modal="true" aria-labelledby="course-modal-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Courses</div>
+          <h2 id="course-modal-title" class="history-modal-title">Course Builder</h2>
+          <div id="course-modal-meta" class="history-modal-meta">Select 2-4 adjacent published rooms in order.</div>
+        </div>
+        <button id="btn-course-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div class="about-copy">
+        <div class="about-section">
+          <div class="about-section-title">Title</div>
+          <input id="course-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Course title (optional)" />
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Rooms</div>
+          <div id="course-selected-room-status" class="history-modal-meta">Select a published room to add it.</div>
+          <div class="course-room-actions">
+            <button id="btn-course-add-selected-room" class="bar-btn bar-btn-small" type="button">Add Selected Room</button>
+            <button id="btn-course-remove-selected-room" class="bar-btn bar-btn-small" type="button">Remove Selected Room</button>
+            <button id="btn-course-move-selected-earlier" class="bar-btn bar-btn-small" type="button">Move Earlier</button>
+            <button id="btn-course-move-selected-later" class="bar-btn bar-btn-small" type="button">Move Later</button>
+          </div>
+          <div id="course-room-list" class="history-version-list"></div>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Course Goal</div>
+          <div class="goal-placement-hint">Goal type, start point, and course markers are authored in the room editor for the selected course room.</div>
+          <div id="course-summary" class="goal-summary">No course goal selected yet.</div>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Editor</div>
+          <div class="course-room-actions">
+            <button id="btn-course-edit-selected-room" class="bar-btn" type="button">Edit Selected Room</button>
+            <button id="btn-course-test-draft" class="bar-btn" type="button">Test Draft Course</button>
+          </div>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Publish</div>
+          <div class="course-room-actions">
+            <button id="btn-course-save-draft" class="bar-btn" type="button">Save Draft</button>
+            <button id="btn-course-publish" class="bar-btn" type="button">Publish Course</button>
+          </div>
+          <div id="course-modal-status" class="history-modal-meta hidden"></div>
+        </div>
       </div>
     </div>
   </div>

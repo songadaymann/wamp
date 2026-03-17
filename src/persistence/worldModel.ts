@@ -4,6 +4,7 @@ import {
   type RoomCoordinates,
   type RoomSnapshot,
 } from './roomModel';
+import type { CourseMembershipSummary } from '../courses/model';
 import type { RoomGoalType } from '../goals/roomGoals';
 
 export type WorldCellState = 'published' | 'frontier';
@@ -18,6 +19,7 @@ export interface WorldRoomSummary {
   goalType: RoomGoalType | null;
   version: number | null;
   publishedAt: string | null;
+  course: CourseMembershipSummary | null;
 }
 
 export interface WorldChunkCoordinates {
@@ -148,6 +150,7 @@ export function createPublishedRoomSummary(room: RoomSnapshot): WorldRoomSummary
     goalType: room.goal?.type ?? null,
     version: room.version,
     publishedAt: room.publishedAt,
+    course: null,
   };
 }
 
@@ -161,6 +164,7 @@ export function createFrontierRoomSummary(coordinates: RoomCoordinates): WorldRo
     goalType: null,
     version: null,
     publishedAt: null,
+    course: null,
   };
 }
 
