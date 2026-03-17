@@ -1193,12 +1193,36 @@ body[data-app-mode="play-world"] #game-container {
   gap: 8px;
 }
 
+.world-hud-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .world-hud-title {
   color: var(--accent-warm);
   font-family: 'Early GameBoy', monospace;
   font-size: 12px;
   line-height: 1.5;
   letter-spacing: 0.04em;
+}
+
+.world-hud-beta {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border: 1px solid rgba(255, 111, 60, 0.5);
+  border-radius: 999px;
+  background: rgba(255, 111, 60, 0.14);
+  color: var(--accent-hot);
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  transform: rotate(-10deg);
+  transform-origin: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24);
 }
 
 .world-room-title {
@@ -2322,6 +2346,15 @@ body[data-device-class='phone'] .world-room-title {
 
 body[data-device-class='phone'] .world-hud-title {
   font-size: 11px;
+}
+
+body[data-device-class='phone'] .world-hud-title-wrap {
+  gap: 6px;
+}
+
+body[data-device-class='phone'] .world-hud-beta {
+  padding: 2px 6px;
+  font-size: 8px;
 }
 
 body[data-device-class='phone'] .world-hud-row {
