@@ -149,7 +149,7 @@ function setupEraserControls(game: Phaser.Game, doc: Document): void {
   }
 
   clearLayerButton?.addEventListener('click', () => {
-    if (!window.confirm('Clear every tile on the current layer?')) {
+    if (!window.confirm('Clear every terrain tile on the current layer?')) {
       return;
     }
 
@@ -159,7 +159,7 @@ function setupEraserControls(game: Phaser.Game, doc: Document): void {
   });
 
   clearAllButton?.addEventListener('click', () => {
-    if (!window.confirm('Remove all tiles from background, terrain, and foreground?')) {
+    if (!window.confirm('Remove all terrain from background, terrain, and foreground?')) {
       return;
     }
 

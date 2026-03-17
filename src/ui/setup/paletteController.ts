@@ -122,7 +122,7 @@ export class PaletteController {
       } else if (occupiedCount === totalCells) {
         this.selectionInfo.textContent = `(${nextSelection.width}x${nextSelection.height})`;
       } else {
-        this.selectionInfo.textContent = `(${nextSelection.width}x${nextSelection.height}, ${occupiedCount} tiles)`;
+        this.selectionInfo.textContent = `(${nextSelection.width}x${nextSelection.height}, ${occupiedCount} terrain cells)`;
       }
     }
 

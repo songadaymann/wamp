@@ -763,7 +763,7 @@ export class EditorScene extends Phaser.Scene {
         : editorState.activeLayer === 'background'
           ? '#2f6b7f'
           : '#ff6f3c';
-    const modeLabel = editorState.paletteMode === 'objects' ? 'Objects' : 'Tiles';
+    const modeLabel = editorState.paletteMode === 'objects' ? 'Objects' : 'Terrain';
     const toolLabel =
       editorState.activeTool === 'eraser'
         ? `Erase ${editorState.eraserBrushSize}x${editorState.eraserBrushSize}`
