@@ -48,7 +48,8 @@ import {
   normalizeAddress,
   normalizeApiTokenScopes,
   normalizeEmail,
-  resolvePublicBaseUrl,
+  resolveMagicLinkRedirectBase,
+  resolveMagicLinkReturnBase,
   revokeApiTokenForUser,
   sendMagicLinkEmail,
   updateUserDisplayName,
@@ -142,7 +143,11 @@ export async function handleRequestMagicLink(request: Request, env: Env): Promis
   await createMagicLinkToken(env, user.id, email, tokenHash, expiresAt, now.toISOString());
 
   const verifyBaseUrl = new URL(request.url).origin;
-  const magicLink = `${verifyBaseUrl}/api/auth/verify?token=${encodeURIComponent(token)}`;
+  const returnBaseUrl = resolveMagicLinkReturnBase(request, env);
+  const magicLinkUrl = new URL('/api/auth/verify', verifyBaseUrl);
+  magicLinkUrl.searchParams.set('token', token);
+  magicLinkUrl.searchParams.set('returnTo', returnBaseUrl);
+  const magicLink = magicLinkUrl.toString();
   const responseBody: MagicLinkRequestResponse = {
     ok: true,
     delivery: env.AUTH_DEBUG_MAGIC_LINKS === '1'
@@ -171,7 +176,7 @@ export async function handleVerifyMagicLink(
   url: URL,
   env: Env
 ): Promise<Response> {
-  const redirectBaseUrl = resolvePublicBaseUrl(request, env);
+  const redirectBaseUrl = resolveMagicLinkRedirectBase(request, env, url.searchParams.get('returnTo'));
   const token = url.searchParams.get('token');
   if (!token) {
     return redirectResponse(`${redirectBaseUrl}/?auth=invalid`);

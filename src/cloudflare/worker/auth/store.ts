@@ -657,6 +657,82 @@ export function resolvePublicBaseUrl(request: Request, env: Env): string {
   return new URL(request.url).origin;
 }
 
+export function resolveMagicLinkReturnBase(request: Request, env: Env): string {
+  return (
+    normalizeTrustedAuthRedirectBase(request.headers.get('Origin'), env)
+    ?? resolvePublicBaseUrl(request, env)
+  );
+}
+
+export function resolveMagicLinkRedirectBase(
+  request: Request,
+  env: Env,
+  candidate: string | null
+): string {
+  return normalizeTrustedAuthRedirectBase(candidate, env) ?? resolvePublicBaseUrl(request, env);
+}
+
+function normalizeTrustedAuthRedirectBase(candidate: string | null, env: Env): string | null {
+  if (!candidate) {
+    return null;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate.trim());
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    return null;
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  if (!isTrustedAuthRedirectHostname(hostname, env)) {
+    return null;
+  }
+
+  return parsed.origin;
+}
+
+function isTrustedAuthRedirectHostname(hostname: string, env: Env): boolean {
+  if (isLocalDevHostname(hostname)) {
+    return true;
+  }
+
+  const configuredHostname = getConfiguredPublicHostname(env);
+  if (configuredHostname && hostname === configuredHostname) {
+    return true;
+  }
+
+  if (hostname === 'everybodys-platformer.novox-robot.workers.dev') {
+    return true;
+  }
+
+  return hostname === 'wampland.pages.dev' || hostname.endsWith('.wampland.pages.dev');
+}
+
+function isLocalDevHostname(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+}
+
+function getConfiguredPublicHostname(env: Env): string | null {
+  const configured = env.APP_BASE_URL?.trim();
+  if (!configured) {
+    return null;
+  }
+
+  try {
+    const normalized = /^https?:\/\//i.test(configured)
+      ? configured.replace(/\/+$/, '')
+      : `https://${configured.replace(/\/+$/, '')}`;
+    return new URL(normalized).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
 export async function sendMagicLinkEmail(
   env: Env,
   email: string,
