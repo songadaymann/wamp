@@ -95,6 +95,34 @@ body {
   line-height: 1.7;
 }
 
+.app-boot-splash-title-wrap {
+  position: relative;
+  display: inline-flex;
+  align-self: center;
+  justify-content: center;
+  max-width: 100%;
+  padding: 0 18px;
+}
+
+.app-boot-splash-beta {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 111, 60, 0.55);
+  border-radius: 999px;
+  background: rgba(255, 111, 60, 0.14);
+  color: var(--accent-hot);
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  transform: rotate(-14deg);
+  transform-origin: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+}
+
 .app-feedback-status {
   color: var(--text-muted);
   font-size: 13px;
@@ -402,6 +430,21 @@ body[data-playfun-mode='true'] .rotate-gate {
 #auth-display-name-input:focus {
   outline: none;
   border-color: var(--accent-cool);
+}
+
+.auth-menu-action-row {
+  width: 100%;
+}
+
+.auth-menu-action-btn {
+  width: 100%;
+  justify-content: center;
+  border-color: rgba(227, 187, 77, 0.4);
+  color: var(--accent-warm);
+}
+
+.auth-menu-action-btn:hover {
+  background: rgba(227, 187, 77, 0.12);
 }
 
 #btn-auth-wallet {
@@ -1998,10 +2041,57 @@ body[data-app-mode="play-world"] .world-only-control {
   width: min(720px, calc(100vw - 40px));
 }
 
+.about-modal-panel {
+  width: min(720px, calc(100vw - 40px));
+}
+
 .controls-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.about-copy {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.about-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(243, 238, 226, 0.03);
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  border-radius: 8px;
+}
+
+.about-section-title {
+  color: var(--accent-warm);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.about-section p {
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.about-section a {
+  color: #8fd8ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.about-section a:hover {
+  color: #b7e9ff;
 }
 
 .controls-section {
@@ -2282,6 +2372,21 @@ body[data-device-class='phone'][data-app-mode='play-world'] #game-container {
 .world-hud-mobile-toggle,
 .world-hud-toggle {
   white-space: nowrap;
+}
+
+.about-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.about-modal-note code {
+  color: var(--accent-warm);
 }
 
 .world-hud-toggle {

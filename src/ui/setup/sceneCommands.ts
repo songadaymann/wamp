@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { AboutModalController } from './aboutModal';
 import { ControlsModalController } from './controlsModal';
 import { RoomHistoryModalController } from './historyModal';
 import { LeaderboardModalController } from './leaderboardModal';
@@ -12,8 +13,10 @@ export function setupSceneCommands(
   historyModal: RoomHistoryModalController,
   leaderboardModal: LeaderboardModalController,
   controlsModal: ControlsModalController,
+  aboutModal: AboutModalController,
   doc: Document = document,
 ): void {
+  const authPanel = doc.getElementById('auth-panel');
   const worldPlayBtn = doc.getElementById('btn-world-play');
   const worldEditBtn = doc.getElementById('btn-world-edit');
   const worldBuildBtn = doc.getElementById('btn-world-build');
@@ -22,6 +25,7 @@ export function setupSceneCommands(
   const worldZoomOutBtn = doc.getElementById('btn-world-zoom-out-footer');
   const worldLeaderboardBtn = doc.getElementById('btn-world-leaderboard');
   const worldControlsBtn = doc.getElementById('btn-world-controls');
+  const aboutOpenBtn = doc.getElementById('btn-about-open');
   const worldJumpInput = doc.getElementById('world-jump-input') as HTMLInputElement | null;
   const backToWorldBtn = doc.getElementById('btn-back-to-world');
   const playBtn = doc.getElementById('btn-test-play');
@@ -35,21 +39,28 @@ export function setupSceneCommands(
   const mobileZoomInBtn = doc.getElementById('btn-mobile-editor-zoom-in');
   const mobileZoomOutBtn = doc.getElementById('btn-mobile-editor-zoom-out');
 
+  const closeMenu = () => {
+    authPanel?.classList.remove('menu-open');
+  };
+
   worldPlayBtn?.addEventListener('click', () => {
     leaderboardModal.close();
     controlsModal.close();
+    aboutModal.close();
     getActiveOverworldScene(game)?.playSelectedRoom?.();
   });
 
   worldEditBtn?.addEventListener('click', () => {
     leaderboardModal.close();
     controlsModal.close();
+    aboutModal.close();
     getActiveOverworldScene(game)?.editSelectedRoom?.();
   });
 
   worldBuildBtn?.addEventListener('click', () => {
     leaderboardModal.close();
     controlsModal.close();
+    aboutModal.close();
     getActiveOverworldScene(game)?.buildSelectedRoom?.();
   });
 
@@ -81,12 +92,21 @@ export function setupSceneCommands(
   worldJumpBtn?.addEventListener('click', handleWorldJump);
   worldLeaderboardBtn?.addEventListener('click', () => {
     controlsModal.close();
+    aboutModal.close();
     void leaderboardModal.open();
   });
   worldControlsBtn?.addEventListener('click', () => {
     leaderboardModal.close();
     historyModal.close();
+    aboutModal.close();
     controlsModal.open();
+  });
+  aboutOpenBtn?.addEventListener('click', () => {
+    closeMenu();
+    historyModal.close();
+    leaderboardModal.close();
+    controlsModal.close();
+    aboutModal.open();
   });
   worldJumpInput?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
@@ -98,6 +118,7 @@ export function setupSceneCommands(
     historyModal.close();
     leaderboardModal.close();
     controlsModal.close();
+    aboutModal.close();
     getActiveEditorScene(game)?.startPlayMode?.();
   });
 
@@ -105,6 +126,7 @@ export function setupSceneCommands(
     historyModal.close();
     leaderboardModal.close();
     controlsModal.close();
+    aboutModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.returnToWorld) {
       void editorScene.returnToWorld();
@@ -116,6 +138,7 @@ export function setupSceneCommands(
 
   saveBtn?.addEventListener('click', async () => {
     controlsModal.close();
+    aboutModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.saveDraft) {
       await editorScene.saveDraft(true);
@@ -124,6 +147,7 @@ export function setupSceneCommands(
 
   publishBtn?.addEventListener('click', async () => {
     controlsModal.close();
+    aboutModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.publishRoom) {
       await editorScene.publishRoom();
@@ -132,6 +156,7 @@ export function setupSceneCommands(
 
   publishNudgeBtn?.addEventListener('click', async () => {
     controlsModal.close();
+    aboutModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.handlePublishNudgeAction) {
       await editorScene.handlePublishNudgeAction();
@@ -140,6 +165,7 @@ export function setupSceneCommands(
 
   mintBtn?.addEventListener('click', async () => {
     controlsModal.close();
+    aboutModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.mintRoom) {
       await editorScene.mintRoom();
@@ -148,6 +174,7 @@ export function setupSceneCommands(
 
   historyBtn?.addEventListener('click', () => {
     controlsModal.close();
+    aboutModal.close();
     void historyModal.open();
   });
 
@@ -159,6 +186,7 @@ export function setupSceneCommands(
     }
 
     controlsModal.close();
+    aboutModal.close();
     getActiveOverworldScene(game)?.fitLoadedWorld?.();
   });
 

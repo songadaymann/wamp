@@ -12,7 +12,10 @@
   <div id="boot-splash" class="app-feedback app-boot-splash" aria-live="polite">
     <div class="app-feedback-card app-boot-splash-card">
       <div class="app-boot-splash-kicker">Loading</div>
-      <div class="app-boot-splash-title">We All Make A Platformer</div>
+      <div class="app-boot-splash-title-wrap">
+        <div class="app-boot-splash-title">We All Make A Platformer</div>
+        <div class="app-boot-splash-beta">BETA</div>
+      </div>
       <div id="boot-splash-status" class="app-feedback-status">Loading assets...</div>
       <div class="app-boot-progress" aria-hidden="true">
         <div id="boot-splash-progress-bar" class="app-boot-progress-bar"></div>
@@ -47,6 +50,9 @@
         <div class="auth-header">
           <span class="auth-title">Account</span>
           <span id="auth-identity" class="auth-identity">Guest</span>
+        </div>
+        <div class="auth-row auth-menu-action-row">
+          <button id="btn-about-open" class="bar-btn auth-menu-action-btn" type="button">About WAMP</button>
         </div>
         <div class="auth-copy">Use email, wallet, or both. Wallet-only works for minting.</div>
         <div class="auth-row">
@@ -226,6 +232,7 @@
           <option value="desert">Desert</option>
           <option value="dirt">Dirt</option>
           <option value="lava">Lava</option>
+          <option value="smb_lvl1_3_5">SMB Lvl 1-3-5</option>
           <option value="snow">Snow</option>
           <option value="water">Water</option>
         </select>
@@ -589,6 +596,57 @@
         </div>
       </div>
       <div class="history-modal-meta">Custom control remapping can layer onto this later without changing the basic world HUD.</div>
+    </div>
+  </div>
+
+  <div id="about-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel about-modal-panel" role="dialog" aria-modal="true" aria-labelledby="about-modal-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">About</div>
+          <h2 id="about-modal-title" class="history-modal-title">We All Make A Platformer</h2>
+          <div class="history-modal-meta">a game by Jonathan Mann (aka songadaymann aka gamejew)</div>
+        </div>
+        <button id="btn-about-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div class="about-copy">
+        <div class="about-section">
+          <div class="about-section-title">How It Works</div>
+          <p>Every room in the overworld can become a small platforming challenge. Orange rooms are unclaimed. Explore, choose an unclaimed room, build a platforming challenge and publish it so everyone else can play it!</p>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Build And Publish</div>
+          <ul class="about-list">
+            <li>Drafts stay private until you publish.</li>
+            <li>Published rooms appear in the overworld and both players and builders earn points from challenges being completed.</li>
+            <li>Anyone can edit anyone else's room!</li>
+            <li>The original claimer of a room can revert the room to any previously published state.</li>
+            <li>To prevent people from editing a room you claimed, you can mint it as an NFT for .01e.</li>
+          </ul>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Challenges</div>
+          <p>Right now, every challenge lives inside a single room. A room can be a speedrun, a checkpoint sprint, a collectible hunt, a survival room, or any other small self-contained test you want to make.</p>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Future Improvements</div>
+          <ul class="about-list">
+            <li>Multi-room challenges that stretch across several connected rooms.</li>
+            <li>More ways for players to interact with each other inside the world while they explore and play levels.</li>
+          </ul>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Add Your Own Assets</div>
+          <p>If you want to contribute art, <a href="mailto:jonathan@jonathanmann.net">send it over</a>. We review assets before they go in, clean them up if needed, and make sure they fit the game style, animation flow, and collision rules.</p>
+          <ul class="about-list">
+            <li><strong>Terrain:</strong> use a <code>16x16</code> grid. Terrain sheets should snap cleanly to that grid and usually come as a PNG sheet.</li>
+            <li><strong>Objects + enemies:</strong> start from the existing room scale. Match the current player and room proportions so placements stay readable.</li>
+            <li><strong>Backgrounds:</strong> wide layered PNGs work best. Keep them painterly and easy to tile or parallax.</li>
+            <li><strong>Player art:</strong> keep sprite size and animation readability close to the current platformer proportions unless we intentionally replace the whole set.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="history-modal-meta about-modal-note">This copy lives directly in <code>index.html</code>, so it's easy to edit later.</div>
     </div>
   </div>
 

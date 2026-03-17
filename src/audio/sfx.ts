@@ -219,9 +219,9 @@ const SFX_CUES: Record<SfxCue, CueConfig> = {
 
 function resolveAssetUrl(path: string): string {
   const base = import.meta.env.BASE_URL || '/';
-  const normalizedBase = base.endsWith('/') ? base : `${base}/`;
   const normalizedPath = path.replace(/^\/+/, '');
-  return new URL(normalizedPath, `${window.location.origin}${normalizedBase}`).toString();
+  const baseUrl = new URL(base, window.location.href);
+  return new URL(normalizedPath, baseUrl).toString();
 }
 
 export class SfxController {
