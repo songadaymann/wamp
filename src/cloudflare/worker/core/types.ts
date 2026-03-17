@@ -28,6 +28,7 @@ export interface Env {
   ASSETS: AssetsBinding;
   DB: D1Database;
   ADMIN_API_KEY?: string;
+  CHAT_OWNER_EMAILS?: string;
   RESEND_API_KEY?: string;
   AUTH_EMAIL_FROM?: string;
   AUTH_DEBUG_MAGIC_LINKS?: string;
@@ -306,6 +307,24 @@ export interface ChatMessageRow {
   user_id: string;
   user_display_name: string;
   body: string;
+  created_at: string;
+  deleted_at: string | null;
+  deleted_by_user_id: string | null;
+}
+
+export interface ChatAdminRow {
+  user_id: string;
+  display_name: string;
+  granted_by_user_id: string;
+  granted_by_display_name: string | null;
+  created_at: string;
+}
+
+export interface ChatBanRow {
+  user_id: string;
+  display_name: string;
+  banned_by_user_id: string;
+  banned_by_display_name: string | null;
   created_at: string;
 }
 

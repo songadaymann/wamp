@@ -56,6 +56,9 @@
         <div class="auth-row auth-menu-action-row">
           <button id="btn-about-open" class="bar-btn auth-menu-action-btn" type="button">About WAMP</button>
         </div>
+        <div class="auth-row auth-menu-action-row">
+          <button id="btn-chat-moderation-open" class="bar-btn auth-menu-action-btn hidden" type="button">Chat Moderation</button>
+        </div>
         <div class="auth-copy">Use email, wallet, or both. Wallet-only works for minting.</div>
         <div class="auth-row">
           <input id="auth-email-input" type="email" placeholder="you@example.com" spellcheck="false" />
@@ -786,6 +789,39 @@
         </div>
       </div>
       <div class="history-modal-meta about-modal-note">This copy lives directly in <code>index.html</code>, so it&apos;s easy to edit later.</div>
+    </div>
+  </div>
+
+  <div id="chat-moderation-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel leaderboard-modal-panel chat-moderation-modal-panel" role="dialog" aria-modal="true" aria-labelledby="chat-moderation-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Moderation</div>
+          <h2 id="chat-moderation-title" class="history-modal-title">Chat Moderation</h2>
+          <div class="history-modal-meta">Manage chat admins and banned users.</div>
+        </div>
+        <button id="btn-chat-moderation-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div id="chat-moderation-status" class="history-modal-error hidden"></div>
+      <div id="chat-moderation-admin-section" class="chat-moderation-section hidden">
+        <div class="history-modal-meta">Add or remove delegated chat admins by display name.</div>
+        <form id="chat-moderation-admin-form" class="chat-moderation-form">
+          <input
+            id="chat-moderation-admin-input"
+            class="chat-moderation-input"
+            type="text"
+            maxlength="24"
+            placeholder="Display name"
+            spellcheck="false"
+          />
+          <button id="btn-chat-moderation-admin-add" class="bar-btn bar-btn-small" type="submit">Add Admin</button>
+        </form>
+        <div id="chat-moderation-admin-list" class="chat-moderation-list"></div>
+      </div>
+      <div id="chat-moderation-ban-section" class="chat-moderation-section">
+        <div class="history-modal-meta">Banned users can still read chat, but they cannot post.</div>
+        <div id="chat-moderation-ban-list" class="chat-moderation-list"></div>
+      </div>
     </div>
   </div>
 

@@ -6,6 +6,7 @@ APP_BASE_URL="http://127.0.0.1:3000"
 AUTH_DEBUG_MAGIC_LINKS=1
 # Dev-only reset route for wiping test data through the Worker UI button.
 ENABLE_TEST_RESET=1
+CHAT_OWNER_EMAILS=
 ROOM_MINT_CHAIN_ID=84532
 ROOM_MINT_CHAIN_NAME="Base Sepolia"
 ROOM_MINT_RPC_URL=

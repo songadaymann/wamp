@@ -61,12 +61,17 @@ import {
   loadOptionalRequestAuth,
   requireCurrentSession,
 } from './request';
+import { NO_CHAT_MODERATION_VIEWER, resolveChatModerationViewer } from '../chat/moderation';
 import { getRoomClaimQuota } from '../rooms/store';
 
 export async function handleAuthRequest(request: Request, url: URL, env: Env): Promise<Response> {
   if (url.pathname === '/api/auth/session' && request.method === 'GET') {
     const auth = await loadOptionalRequestAuth(env, request);
     const responseBody: AuthSessionResponse = createSessionResponse(auth);
+    responseBody.chatModeration =
+      auth?.source === 'session'
+        ? await resolveChatModerationViewer(env, auth.user)
+        : NO_CHAT_MODERATION_VIEWER;
     if (auth?.source === 'session') {
       const quota = await getRoomClaimQuota(env, auth.user.id);
       responseBody.roomDailyClaimLimit = quota.limit;

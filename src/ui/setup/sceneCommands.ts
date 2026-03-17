@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { AboutModalController } from './aboutModal';
+import { ChatModerationModalController } from './chatModerationModal';
 import { ControlsModalController } from './controlsModal';
 import { CourseModalController } from './courseModal';
 import { RoomHistoryModalController } from './historyModal';
@@ -15,6 +16,7 @@ export function setupSceneCommands(
   leaderboardModal: LeaderboardModalController,
   controlsModal: ControlsModalController,
   aboutModal: AboutModalController,
+  chatModerationModal: ChatModerationModalController,
   courseModal: CourseModalController,
   doc: Document = document,
 ): void {
@@ -30,6 +32,7 @@ export function setupSceneCommands(
   const worldCourseBuilderBtn = doc.getElementById('btn-world-course-builder');
   const worldControlsBtn = doc.getElementById('btn-world-controls');
   const aboutOpenBtn = doc.getElementById('btn-about-open');
+  const chatModerationOpenBtn = doc.getElementById('btn-chat-moderation-open');
   const worldJumpInput = doc.getElementById('world-jump-input') as HTMLInputElement | null;
   const backToWorldBtn = doc.getElementById('btn-back-to-world');
   const playBtn = doc.getElementById('btn-test-play');
@@ -52,6 +55,7 @@ export function setupSceneCommands(
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
+    chatModerationModal.close();
     getActiveOverworldScene(game)?.playSelectedRoom?.();
   });
 
@@ -59,6 +63,7 @@ export function setupSceneCommands(
     leaderboardModal.close();
     controlsModal.close();
     aboutModal.close();
+    chatModerationModal.close();
     void getActiveOverworldScene(game)?.playSelectedCourse?.();
   });
 
@@ -67,6 +72,7 @@ export function setupSceneCommands(
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
+    chatModerationModal.close();
     getActiveOverworldScene(game)?.editSelectedRoom?.();
   });
 
@@ -75,6 +81,7 @@ export function setupSceneCommands(
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
+    chatModerationModal.close();
     getActiveOverworldScene(game)?.buildSelectedRoom?.();
   });
 
@@ -82,6 +89,7 @@ export function setupSceneCommands(
     leaderboardModal.close();
     controlsModal.close();
     aboutModal.close();
+    chatModerationModal.close();
     void getActiveOverworldScene(game)?.openCourseComposer?.();
     courseModal.open();
   });
@@ -116,6 +124,7 @@ export function setupSceneCommands(
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
+    chatModerationModal.close();
     void leaderboardModal.open();
   });
   worldControlsBtn?.addEventListener('click', () => {
@@ -123,6 +132,7 @@ export function setupSceneCommands(
     historyModal.close();
     aboutModal.close();
     courseModal.close();
+    chatModerationModal.close();
     controlsModal.open();
   });
   aboutOpenBtn?.addEventListener('click', () => {
@@ -131,7 +141,17 @@ export function setupSceneCommands(
     leaderboardModal.close();
     controlsModal.close();
     courseModal.close();
+    chatModerationModal.close();
     aboutModal.open();
+  });
+  chatModerationOpenBtn?.addEventListener('click', () => {
+    closeMenu();
+    historyModal.close();
+    leaderboardModal.close();
+    controlsModal.close();
+    aboutModal.close();
+    courseModal.close();
+    void chatModerationModal.open();
   });
   worldJumpInput?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
@@ -145,6 +165,7 @@ export function setupSceneCommands(
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
+    chatModerationModal.close();
     getActiveEditorScene(game)?.startPlayMode?.();
   });
 
@@ -154,6 +175,7 @@ export function setupSceneCommands(
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
+    chatModerationModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.returnToWorld) {
       void editorScene.returnToWorld();
@@ -167,6 +189,7 @@ export function setupSceneCommands(
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
+    chatModerationModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.saveDraft) {
       await editorScene.saveDraft(true, { promptForSignInOnUnauthorized: true });
@@ -177,6 +200,7 @@ export function setupSceneCommands(
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
+    chatModerationModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.publishRoom) {
       await editorScene.publishRoom();
@@ -187,6 +211,7 @@ export function setupSceneCommands(
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
+    chatModerationModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.handlePublishNudgeAction) {
       await editorScene.handlePublishNudgeAction();
@@ -197,6 +222,7 @@ export function setupSceneCommands(
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
+    chatModerationModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.mintRoom) {
       await editorScene.mintRoom();
@@ -207,6 +233,7 @@ export function setupSceneCommands(
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
+    chatModerationModal.close();
     void historyModal.open();
   });
 
@@ -220,6 +247,7 @@ export function setupSceneCommands(
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
+    chatModerationModal.close();
     getActiveOverworldScene(game)?.fitLoadedWorld?.();
   });
 
