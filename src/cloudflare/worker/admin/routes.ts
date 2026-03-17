@@ -80,6 +80,7 @@ async function handleAdminRoomClear(
 
   const statements = [
     env.DB.prepare('DELETE FROM room_runs WHERE room_id = ?').bind(roomId),
+    env.DB.prepare('DELETE FROM room_difficulty_votes WHERE room_id = ?').bind(roomId),
     env.DB.prepare('DELETE FROM room_versions WHERE room_id = ?').bind(roomId),
     env.DB.prepare('DELETE FROM rooms WHERE id = ?').bind(roomId),
     env.DB.prepare(
@@ -124,6 +125,7 @@ async function handleAdminRoomClear(
       room: 1,
       versions: versionsResult.results.length,
       runs: attemptIds.length,
+      difficultyVotes: true,
       publishPointEvents: true,
       creatorCompletionPointEvents: true,
       runPointEvents: attemptIds.length,

@@ -943,6 +943,17 @@ body[data-playfun-mode='true'] .rotate-gate {
   line-height: 1.35;
 }
 
+.goal-context-note {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(121, 199, 255, 0.35);
+  border-radius: 10px;
+  color: #bde5ff;
+  background: rgba(48, 108, 149, 0.18);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
 .goal-placement-hint {
   color: var(--accent-warm);
 }
@@ -2287,6 +2298,58 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   padding: 0 20px 20px;
 }
 
+.leaderboard-difficulty {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-muted);
+  border-radius: 12px;
+  background: rgba(12, 13, 18, 0.64);
+}
+
+.leaderboard-difficulty-actions,
+.leaderboard-discover-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.leaderboard-difficulty-actions .bar-btn.active,
+.leaderboard-discover-filters .bar-btn.active {
+  border-color: var(--accent-cool);
+  color: var(--accent-cool);
+}
+
+.leaderboard-discover-row {
+  width: 100%;
+  border: 1px solid var(--border-muted);
+  border-radius: 12px;
+  background: rgba(15, 17, 24, 0.8);
+  color: inherit;
+  text-align: left;
+  padding: 12px;
+  cursor: pointer;
+}
+
+.leaderboard-discover-row:hover,
+.leaderboard-discover-row:focus-visible {
+  border-color: var(--accent-cool);
+  outline: none;
+}
+
+.leaderboard-discover-title {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.leaderboard-discover-meta {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .leaderboard-controls {
   display: flex;
   align-items: center;
@@ -2324,6 +2387,18 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
 .leaderboard-empty {
   color: var(--text-muted);
   padding: 6px 0;
+}
+
+@media (max-width: 700px) {
+  .leaderboard-row,
+  .leaderboard-row.leaderboard-global-row {
+    grid-template-columns: 36px minmax(0, 1.4fr) minmax(0, 1fr);
+  }
+
+  .leaderboard-row > :nth-child(4),
+  .leaderboard-row > :nth-child(5) {
+    display: none;
+  }
 }
 
 /* ── Scrollbar styling ── */

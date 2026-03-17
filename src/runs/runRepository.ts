@@ -2,7 +2,10 @@ import type { RoomCoordinates } from '../persistence/roomModel';
 import { getApiBaseUrl } from '../api/baseUrl';
 import type {
   GlobalLeaderboardResponse,
+  RoomDifficulty,
+  RoomDiscoveryResponse,
   RoomLeaderboardResponse,
+  RoomDifficultyVoteRequestBody,
   RunFinishRequestBody,
   RunStartRequestBody,
   RunStartResponse,
@@ -21,6 +24,11 @@ export interface RunRepository {
     version?: number | null,
     limit?: number
   ): Promise<RoomLeaderboardResponse>;
+  submitRoomDifficultyVote(roomId: string, body: RoomDifficultyVoteRequestBody): Promise<void>;
+  loadRoomDiscovery(
+    difficulty: RoomDifficulty | null,
+    limit?: number
+  ): Promise<RoomDiscoveryResponse>;
   loadGlobalLeaderboard(limit?: number): Promise<GlobalLeaderboardResponse>;
 }
 
@@ -72,6 +80,32 @@ class ApiRunRepository implements RunRepository {
 
     return this.request<RoomLeaderboardResponse>(
       `/api/leaderboards/rooms/${encodeURIComponent(roomId)}?${params.toString()}`
+    );
+  }
+
+  async submitRoomDifficultyVote(
+    roomId: string,
+    body: RoomDifficultyVoteRequestBody
+  ): Promise<void> {
+    await this.request(`/api/leaderboards/rooms/${encodeURIComponent(roomId)}/difficulty-vote`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async loadRoomDiscovery(
+    difficulty: RoomDifficulty | null,
+    limit: number = 100
+  ): Promise<RoomDiscoveryResponse> {
+    const params = new URLSearchParams({
+      limit: String(limit),
+    });
+    if (difficulty) {
+      params.set('difficulty', difficulty);
+    }
+
+    return this.request<RoomDiscoveryResponse>(
+      `/api/leaderboards/rooms/discover?${params.toString()}`
     );
   }
 

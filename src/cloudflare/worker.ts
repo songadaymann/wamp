@@ -23,7 +23,14 @@ import {
   flushPlayfunPointSync,
   linkPlayfunUserFromRequest,
 } from './worker/playfun/service';
-import { handleGlobalLeaderboard, handleRoomLeaderboard, handleRunFinish, handleRunStart } from './worker/runs/routes';
+import {
+  handleGlobalLeaderboard,
+  handleRoomDifficultyVote,
+  handleRoomDiscovery,
+  handleRoomLeaderboard,
+  handleRunFinish,
+  handleRunStart,
+} from './worker/runs/routes';
 import { awardRoomPublishPoints, upsertUserStats } from './worker/runs/points';
 import { loadPublishedRoom, loadRoomRecord, publishRoom, revertRoom, saveDraft } from './worker/rooms/store';
 import { handleWorldChunksRequest, handleWorldRequest } from './worker/world/routes';
@@ -133,6 +140,10 @@ export default {
         return await handleCourseRunFinish(request, env, decodeURIComponent(finishCourseRunMatch[1]));
       }
 
+      if (url.pathname === '/api/leaderboards/rooms/discover' && request.method === 'GET') {
+        return await handleRoomDiscovery(request, url, env);
+      }
+
       const roomLeaderboardMatch = /^\/api\/leaderboards\/rooms\/([^/]+)$/.exec(url.pathname);
       if (roomLeaderboardMatch && request.method === 'GET') {
         return await handleRoomLeaderboard(
@@ -140,6 +151,17 @@ export default {
           url,
           env,
           decodeURIComponent(roomLeaderboardMatch[1])
+        );
+      }
+
+      const roomDifficultyVoteMatch = /^\/api\/leaderboards\/rooms\/([^/]+)\/difficulty-vote$/.exec(
+        url.pathname
+      );
+      if (roomDifficultyVoteMatch && request.method === 'POST') {
+        return await handleRoomDifficultyVote(
+          request,
+          env,
+          decodeURIComponent(roomDifficultyVoteMatch[1])
         );
       }
 

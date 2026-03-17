@@ -4,6 +4,7 @@ import { computeRunScore, getLeaderboardRankingMode, sortCompletedRunsForLeaderb
 import type {
   GlobalLeaderboardEntry,
   GlobalLeaderboardResponse,
+  RoomDifficultyVoteRequestBody,
   RoomLeaderboardEntry,
   RoomLeaderboardResponse,
   RoomRunRecord,
@@ -42,6 +43,13 @@ import {
   compareGlobalLeaderboardEntries,
   upsertUserStats,
 } from './points';
+import {
+  buildRoomDifficultySummary,
+  hasViewerRatedRoomVersion,
+  loadRoomDiscoveryResponse,
+  parseRoomDifficultyOrThrow,
+  upsertRoomDifficultyVote,
+} from './difficulty';
 
 export async function handleRunStart(request: Request, env: Env): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
@@ -277,8 +285,82 @@ export async function handleRoomLeaderboard(
     throw new HttpError(404, 'This room version does not have a leaderboard goal.');
   }
 
-  const leaderboard = await buildRoomLeaderboardResponse(env, snapshot, limit, auth?.user.id ?? null);
+  const leaderboard = await buildRoomLeaderboardResponse(
+    env,
+    snapshot,
+    limit,
+    auth?.user.id ?? null,
+    record.published?.version ?? null
+  );
   return jsonResponse(request, leaderboard);
+}
+
+export async function handleRoomDifficultyVote(
+  request: Request,
+  env: Env,
+  roomId: string
+): Promise<Response> {
+  const auth = await requireAuthenticatedRequestAuth(
+    env,
+    request,
+    'rate room difficulty',
+    'runs:write'
+  );
+  const body = await parseRoomDifficultyVoteBody(request);
+  const record = await loadRoomRecord(
+    env,
+    roomId,
+    body.roomCoordinates,
+    auth.user.id,
+    auth.user.walletAddress ?? null,
+    auth.isAdmin
+  );
+
+  if (!record.published || record.published.version !== body.roomVersion) {
+    throw new HttpError(409, 'Difficulty voting is only available on the current published version.');
+  }
+
+  const snapshot = resolveRoomSnapshotForVersion(record, body.roomVersion);
+  if (!snapshot.goal) {
+    throw new HttpError(409, 'Only published challenge rooms can receive difficulty votes.');
+  }
+
+  const hasPlayedVersion = await hasViewerRatedRoomVersion(
+    env,
+    snapshot.id,
+    snapshot.version,
+    auth.user.id
+  );
+  if (!hasPlayedVersion) {
+    throw new HttpError(409, 'Play this published version once before rating its difficulty.');
+  }
+
+  const now = new Date().toISOString();
+  await upsertRoomDifficultyVote(
+    env,
+    snapshot.id,
+    snapshot.version,
+    auth.user.id,
+    body.difficulty,
+    now
+  );
+
+  return noContentResponse(request);
+}
+
+export async function handleRoomDiscovery(
+  request: Request,
+  url: URL,
+  env: Env
+): Promise<Response> {
+  const auth = await loadOptionalRequestAuth(env, request);
+  requireOptionalScope(auth, 'leaderboards:read', 'discover room challenges');
+  const rawDifficulty = url.searchParams.get('difficulty');
+  const difficultyFilter =
+    rawDifficulty && rawDifficulty.trim() ? parseRoomDifficultyOrThrow(rawDifficulty) : null;
+  const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 100, 1, 200);
+  const response = await loadRoomDiscoveryResponse(env, difficultyFilter, limit);
+  return jsonResponse(request, response);
 }
 
 async function maybeMirrorRunPointEventToPlayfun(
@@ -387,6 +469,18 @@ export async function parseRunFinishBody(request: Request): Promise<RunFinishReq
     ),
     score: null,
     finishedAt: normalizeIsoTimestamp(body.finishedAt),
+  };
+}
+
+export async function parseRoomDifficultyVoteBody(
+  request: Request
+): Promise<RoomDifficultyVoteRequestBody> {
+  const body = await parseJsonBody<RoomDifficultyVoteRequestBody>(request);
+
+  return {
+    roomCoordinates: normalizeRoomCoordinates(body.roomCoordinates),
+    roomVersion: normalizePositiveInteger(body.roomVersion, 'roomVersion'),
+    difficulty: parseRoomDifficultyOrThrow(body.difficulty),
   };
 }
 
@@ -522,7 +616,8 @@ export async function buildRoomLeaderboardResponse(
   env: Env,
   snapshot: RoomSnapshot,
   limit: number,
-  viewerUserId: string | null = null
+  viewerUserId: string | null = null,
+  currentPublishedVersion: number | null = null
 ): Promise<RoomLeaderboardResponse> {
   if (!snapshot.goal) {
     throw new HttpError(404, 'This room version does not have a leaderboard goal.');
@@ -539,6 +634,12 @@ export async function buildRoomLeaderboardResponse(
       ? null
       : sortedAll.findIndex((run) => run.attemptId === viewerBestRun.attemptId) + 1;
   const sorted = sortedAll.slice(0, limit);
+  const difficulty = await buildRoomDifficultySummary(
+    env,
+    snapshot,
+    viewerUserId,
+    currentPublishedVersion
+  );
   const entries: RoomLeaderboardEntry[] = sorted.map((run, index) => ({
     rank: index + 1,
     userId: run.userId,
@@ -560,6 +661,7 @@ export async function buildRoomLeaderboardResponse(
     roomVersion: snapshot.version,
     goalType: snapshot.goal.type,
     rankingMode: getLeaderboardRankingMode(snapshot.goal),
+    difficulty,
     entries,
     viewerBest:
       viewerBestRun === null

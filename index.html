@@ -289,6 +289,7 @@
 
       <div class="sidebar-section" id="goal-section" data-mobile-panel="goal" data-sidebar-collapsible="true">
         <div class="section-label">Goal</div>
+        <div id="goal-context-note" class="goal-context-note hidden"></div>
         <select id="goal-type-select">
           <option value="">None</option>
           <option value="reach_exit">Reach Exit</option>
@@ -582,6 +583,8 @@
       </div>
       <div class="leaderboard-tabs">
         <button id="btn-leaderboard-tab-room" class="bar-btn bar-btn-small active" type="button">Room</button>
+        <button id="btn-leaderboard-tab-discover" class="bar-btn bar-btn-small" type="button">Discover</button>
+        <button id="btn-leaderboard-tab-course" class="bar-btn bar-btn-small" type="button">Course</button>
         <button id="btn-leaderboard-tab-global" class="bar-btn bar-btn-small" type="button">Global</button>
       </div>
       <div id="leaderboard-modal-error" class="history-modal-error hidden"></div>
@@ -592,7 +595,33 @@
         </div>
         <div id="leaderboard-room-summary" class="history-modal-meta">No room leaderboard selected.</div>
         <div id="leaderboard-room-viewer" class="history-modal-meta hidden"></div>
+        <div id="leaderboard-room-difficulty" class="leaderboard-difficulty">
+          <div id="leaderboard-room-difficulty-summary" class="history-modal-meta">No difficulty ratings yet.</div>
+          <div id="leaderboard-room-difficulty-actions" class="leaderboard-difficulty-actions">
+            <button class="bar-btn bar-btn-small" type="button" data-room-difficulty="easy">Easy</button>
+            <button class="bar-btn bar-btn-small" type="button" data-room-difficulty="medium">Medium</button>
+            <button class="bar-btn bar-btn-small" type="button" data-room-difficulty="hard">Hard</button>
+            <button class="bar-btn bar-btn-small" type="button" data-room-difficulty="extreme">Extreme</button>
+          </div>
+          <div id="leaderboard-room-difficulty-status" class="leaderboard-secondary"></div>
+        </div>
         <div id="leaderboard-room-list" class="history-version-list"></div>
+      </div>
+      <div id="leaderboard-discover-panel" class="leaderboard-panel hidden">
+        <div id="leaderboard-discover-filters" class="leaderboard-discover-filters">
+          <button class="bar-btn bar-btn-small active" type="button" data-discover-difficulty="">All</button>
+          <button class="bar-btn bar-btn-small" type="button" data-discover-difficulty="easy">Easy</button>
+          <button class="bar-btn bar-btn-small" type="button" data-discover-difficulty="medium">Medium</button>
+          <button class="bar-btn bar-btn-small" type="button" data-discover-difficulty="hard">Hard</button>
+          <button class="bar-btn bar-btn-small" type="button" data-discover-difficulty="extreme">Extreme</button>
+        </div>
+        <div id="leaderboard-discover-summary" class="history-modal-meta">Browse published room challenges by difficulty.</div>
+        <div id="leaderboard-discover-list" class="history-version-list"></div>
+      </div>
+      <div id="leaderboard-course-panel" class="leaderboard-panel hidden">
+        <div id="leaderboard-course-summary" class="history-modal-meta">No published course selected.</div>
+        <div id="leaderboard-course-viewer" class="history-modal-meta hidden"></div>
+        <div id="leaderboard-course-list" class="history-version-list"></div>
       </div>
       <div id="leaderboard-global-panel" class="leaderboard-panel hidden">
         <div id="leaderboard-global-summary" class="history-modal-meta">World points leaderboard.</div>

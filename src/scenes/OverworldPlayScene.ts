@@ -547,6 +547,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.collectedObjectKeys.add(key);
       },
       getPlayer: () => this.player,
+      getPlayerPickupSensor: () => this.playerPickupSensor,
       getPlayerBody: () => this.playerBody,
       isPlayerClimbingLadder: () => this.isClimbingLadder,
       isLadderDropRequested: () => this.isLadderDropRequested(),

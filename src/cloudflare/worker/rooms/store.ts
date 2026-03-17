@@ -21,6 +21,7 @@ import type {
   RoomVersionRow,
 } from '../core/types';
 import { syncRoomOwnershipFromChain } from '../mint/service';
+import { cloneRoomDifficultyVotesToVersion } from '../runs/difficulty';
 
 const DEFAULT_DAILY_ROOM_CLAIM_LIMIT = 1;
 
@@ -347,6 +348,16 @@ export async function publishRoom(
     }),
   ]);
 
+  if (published.goal && lastPublishedVersion > 0) {
+    await cloneRoomDifficultyVotesToVersion(
+      env,
+      published.id,
+      lastPublishedVersion,
+      published.version,
+      now
+    );
+  }
+
   return loadRoomRecord(
     env,
     draft.id,
@@ -433,6 +444,16 @@ export async function revertRoom(
       onConflictUpdate: false,
     }),
   ]);
+
+  if (published.goal && (lastPublished?.version ?? 0) > 0) {
+    await cloneRoomDifficultyVotesToVersion(
+      env,
+      published.id,
+      lastPublished?.version ?? 0,
+      published.version,
+      now
+    );
+  }
 
   return loadRoomRecord(
     env,
