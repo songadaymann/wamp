@@ -61,6 +61,43 @@ async function handleAdminRoomClear(
     .bind(roomId)
     .all<{ published_by_user_id: string | null }>();
 
+  const courseMembershipsResult = await env.DB.prepare(
+    `
+      SELECT DISTINCT course_id
+      FROM course_room_refs
+      WHERE room_id = ?
+    `
+  )
+    .bind(roomId)
+    .all<{ course_id: string }>();
+
+  const courseIds = courseMembershipsResult.results.map((row) => row.course_id);
+  const courseRunsResult =
+    courseIds.length > 0
+      ? await env.DB.prepare(
+          `
+            SELECT DISTINCT attempt_id, user_id
+            FROM course_runs
+            WHERE course_id IN (${courseIds.map(() => '?').join(', ')})
+          `
+        )
+          .bind(...courseIds)
+          .all<{ attempt_id: string; user_id: string }>()
+      : { results: [] as Array<{ attempt_id: string; user_id: string }> };
+
+  const courseOwnersResult =
+    courseIds.length > 0
+      ? await env.DB.prepare(
+          `
+            SELECT DISTINCT owner_user_id
+            FROM courses
+            WHERE id IN (${courseIds.map(() => '?').join(', ')})
+          `
+        )
+          .bind(...courseIds)
+          .all<{ owner_user_id: string | null }>()
+      : { results: [] as Array<{ owner_user_id: string | null }> };
+
   const affectedUserIds = new Set<string>();
   if (roomRow.claimer_user_id) {
     affectedUserIds.add(roomRow.claimer_user_id);
@@ -75,11 +112,59 @@ async function handleAdminRoomClear(
       affectedUserIds.add(row.published_by_user_id);
     }
   }
+  for (const row of courseRunsResult.results) {
+    if (row.user_id) {
+      affectedUserIds.add(row.user_id);
+    }
+  }
+  for (const row of courseOwnersResult.results) {
+    if (row.owner_user_id) {
+      affectedUserIds.add(row.owner_user_id);
+    }
+  }
 
   const attemptIds = runsResult.results.map((row) => row.attempt_id);
+  const courseAttemptIds = courseRunsResult.results.map((row) => row.attempt_id);
 
   const statements = [
+    ...(courseIds.length > 0
+      ? [
+          env.DB.prepare(
+            `
+              DELETE FROM point_events
+              WHERE event_type IN (
+                'course_first_publish',
+                'course_publish_update',
+                'course_creator_completion'
+              )
+                AND (${courseIds.map(() => 'source_key LIKE ?').join(' OR ')})
+            `
+          ).bind(...courseIds.map((courseId) => `${courseId}:%`)),
+        ]
+      : []),
+    ...(courseAttemptIds.length > 0
+      ? [
+          env.DB.prepare(
+            `
+              DELETE FROM point_events
+              WHERE event_type = 'run_finalized'
+                AND source_key IN (${courseAttemptIds.map(() => '?').join(', ')})
+            `
+          ).bind(...courseAttemptIds),
+        ]
+      : []),
+    ...(courseIds.length > 0
+      ? [
+          env.DB.prepare(
+            `
+              DELETE FROM courses
+              WHERE id IN (${courseIds.map(() => '?').join(', ')})
+            `
+          ).bind(...courseIds),
+        ]
+      : []),
     env.DB.prepare('DELETE FROM room_runs WHERE room_id = ?').bind(roomId),
+    env.DB.prepare('DELETE FROM room_difficulty_votes WHERE room_id = ?').bind(roomId),
     env.DB.prepare('DELETE FROM room_versions WHERE room_id = ?').bind(roomId),
     env.DB.prepare('DELETE FROM rooms WHERE id = ?').bind(roomId),
     env.DB.prepare(
@@ -127,6 +212,9 @@ async function handleAdminRoomClear(
       publishPointEvents: true,
       creatorCompletionPointEvents: true,
       runPointEvents: attemptIds.length,
+      courses: courseIds.length,
+      coursePublishPointEvents: courseIds.length > 0,
+      courseRuns: courseAttemptIds.length,
     },
     affectedUsers: [...affectedUserIds],
   });

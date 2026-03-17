@@ -73,6 +73,7 @@ interface OverworldLiveObjectControllerOptions {
   isCollectedObjectKey: (key: string) => boolean;
   markCollectedObjectKey: (key: string) => void;
   getPlayer: () => Phaser.GameObjects.GameObject | null;
+  getPlayerPickupSensor: () => Phaser.GameObjects.GameObject | null;
   getPlayerBody: () => Phaser.Physics.Arcade.Body | null;
   isPlayerClimbingLadder: () => boolean;
   isLadderDropRequested: () => boolean;
@@ -255,6 +256,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         this.destroyLiveObjectInteractions(liveObject);
 
         const player = this.options.getPlayer();
+        const playerPickupSensor = this.options.getPlayerPickupSensor();
         const playerBody = this.options.getPlayerBody();
         if (!player || !playerBody || !liveObject.sprite.active || !liveObject.sprite.body) {
           continue;
@@ -262,8 +264,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
         switch (liveObject.config.category) {
           case 'collectible':
+            if (!playerPickupSensor) {
+              break;
+            }
             liveObject.interactions.push(
-              this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
+              this.options.scene.physics.add.overlap(playerPickupSensor, liveObject.sprite, () => {
                 this.collectLiveObject(loadedRoom, liveObject);
               })
             );

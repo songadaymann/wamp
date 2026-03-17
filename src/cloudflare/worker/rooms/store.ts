@@ -1,4 +1,5 @@
 import type { AuthUser } from '../../../auth/model';
+import type { PrincipalKind } from '../../../agents/model';
 import {
   cloneRoomSnapshot,
   DEFAULT_ROOM_COORDINATES,
@@ -21,6 +22,7 @@ import type {
   RoomVersionRow,
 } from '../core/types';
 import { syncRoomOwnershipFromChain } from '../mint/service';
+import { cloneRoomDifficultyVotesToVersion } from '../runs/difficulty';
 
 const DEFAULT_DAILY_ROOM_CLAIM_LIMIT = 1;
 
@@ -28,6 +30,13 @@ export interface RoomClaimQuota {
   limit: number | null;
   claimsUsedToday: number;
   claimsRemainingToday: number | null;
+}
+
+export interface RoomMutationActor {
+  ownerUser: AuthUser | null;
+  principalKind: PrincipalKind;
+  principalAgentId: string | null;
+  principalDisplayName: string;
 }
 
 export async function loadRoomRecord(
@@ -49,9 +58,13 @@ export async function loadRoomRecord(
         draft_title,
         published_title,
         claimer_user_id,
+        claimer_principal_type,
+        claimer_agent_id,
         claimer_display_name,
         claimed_at,
         last_published_by_user_id,
+        last_published_by_principal_type,
+        last_published_by_agent_id,
         last_published_by_display_name,
         minted_chain_id,
         minted_contract_address,
@@ -90,9 +103,13 @@ export async function loadRoomRecord(
     published,
     versions,
     claimerUserId: row.claimer_user_id,
+    claimerPrincipalKind: row.claimer_principal_type,
+    claimerAgentId: row.claimer_agent_id,
     claimerDisplayName: row.claimer_display_name,
     claimedAt: row.claimed_at,
     lastPublishedByUserId: row.last_published_by_user_id,
+    lastPublishedByPrincipalKind: row.last_published_by_principal_type,
+    lastPublishedByAgentId: row.last_published_by_agent_id,
     lastPublishedByDisplayName: row.last_published_by_display_name,
     mintedChainId: row.minted_chain_id,
     mintedContractAddress: row.minted_contract_address,
@@ -195,6 +212,8 @@ export async function loadRoomVersions(env: Env, roomId: string): Promise<RoomVe
         title,
         created_at,
         published_by_user_id,
+        published_by_principal_type,
+        published_by_agent_id,
         published_by_display_name,
         reverted_from_version
       FROM room_versions
@@ -211,6 +230,8 @@ export async function loadRoomVersions(env: Env, roomId: string): Promise<RoomVe
       version: row.version,
       createdAt: row.created_at,
       publishedByUserId: row.published_by_user_id,
+      publishedByPrincipalKind: row.published_by_principal_type,
+      publishedByAgentId: row.published_by_agent_id,
       publishedByDisplayName: row.published_by_display_name,
       revertedFromVersion: row.reverted_from_version,
     });
@@ -220,16 +241,16 @@ export async function loadRoomVersions(env: Env, roomId: string): Promise<RoomVe
 export async function saveDraft(
   env: Env,
   incomingRoom: RoomSnapshot,
-  actor: AuthUser | null,
+  actor: RoomMutationActor,
   actorIsAdmin = false
 ): Promise<RoomRecord> {
-  const viewerUserId = actor?.id ?? null;
-  const viewerWalletAddress = actor?.walletAddress ?? null;
+  const viewerUserId = actor.ownerUser?.id ?? null;
+  const viewerWalletAddress = actor.ownerUser?.walletAddress ?? null;
   const existing = await loadRoomRecordForMutation(
     env,
     incomingRoom.id,
     incomingRoom.coordinates,
-    actor,
+    actor.ownerUser,
     actorIsAdmin
   );
   if (!existing.permissions.canSaveDraft) {
@@ -251,9 +272,13 @@ export async function saveDraft(
       draft,
       published: existing.published,
       claimerUserId: existing.claimerUserId,
+      claimerPrincipalType: existing.claimerPrincipalKind,
+      claimerAgentId: existing.claimerAgentId,
       claimerDisplayName: existing.claimerDisplayName,
       claimedAt: existing.claimedAt,
       lastPublishedByUserId: existing.lastPublishedByUserId,
+      lastPublishedByPrincipalType: existing.lastPublishedByPrincipalKind,
+      lastPublishedByAgentId: existing.lastPublishedByAgentId,
       lastPublishedByDisplayName: existing.lastPublishedByDisplayName,
       mintedChainId: existing.mintedChainId,
       mintedContractAddress: existing.mintedContractAddress,
@@ -276,16 +301,16 @@ export async function saveDraft(
 export async function publishRoom(
   env: Env,
   incomingRoom: RoomSnapshot,
-  actor: AuthUser | null,
+  actor: RoomMutationActor,
   actorIsAdmin = false
 ): Promise<RoomRecord> {
-  const viewerUserId = actor?.id ?? null;
-  const viewerWalletAddress = actor?.walletAddress ?? null;
+  const viewerUserId = actor.ownerUser?.id ?? null;
+  const viewerWalletAddress = actor.ownerUser?.walletAddress ?? null;
   const existing = await loadRoomRecordForMutation(
     env,
     incomingRoom.id,
     incomingRoom.coordinates,
-    actor,
+    actor.ownerUser,
     actorIsAdmin
   );
   if (!existing.permissions.canPublish) {
@@ -297,15 +322,17 @@ export async function publishRoom(
   const lastPublishedVersion = lastPublished ? lastPublished.version : 0;
   const nextVersion =
     lastPublishedVersion > 0 ? lastPublishedVersion + 1 : Math.max(1, incomingRoom.version);
-  const publishedByUserId = actor?.id ?? null;
-  const publishedByDisplayName = actor?.displayName ?? 'Guest';
-  const shouldClaim = !existing.claimerUserId && actor !== null;
+  const publishedByUserId = actor.ownerUser?.id ?? null;
+  const publishedByDisplayName = actor.principalDisplayName || actor.ownerUser?.displayName || 'Guest';
+  const shouldClaim = !existing.claimerUserId && actor.ownerUser !== null;
   if (shouldClaim && !actorIsAdmin) {
     await enforceFrontierClaimRule(env, incomingRoom.coordinates);
-    await enforceDailyRoomClaimLimit(env, actor.id, now);
+    await enforceDailyRoomClaimLimit(env, actor.ownerUser!.id, now);
   }
-  const claimerUserId = shouldClaim ? actor.id : existing.claimerUserId;
-  const claimerDisplayName = shouldClaim ? actor.displayName : existing.claimerDisplayName;
+  const claimerUserId = shouldClaim ? actor.ownerUser!.id : existing.claimerUserId;
+  const claimerPrincipalType = shouldClaim ? actor.principalKind : existing.claimerPrincipalKind;
+  const claimerAgentId = shouldClaim ? actor.principalAgentId : existing.claimerAgentId;
+  const claimerDisplayName = shouldClaim ? publishedByDisplayName : existing.claimerDisplayName;
   const claimedAt = shouldClaim ? now : existing.claimedAt;
 
   const published: RoomSnapshot = {
@@ -327,9 +354,13 @@ export async function publishRoom(
       draft,
       published,
       claimerUserId,
+      claimerPrincipalType,
+      claimerAgentId,
       claimerDisplayName,
       claimedAt,
       lastPublishedByUserId: publishedByUserId,
+      lastPublishedByPrincipalType: actor.principalKind,
+      lastPublishedByAgentId: actor.principalAgentId,
       lastPublishedByDisplayName: publishedByDisplayName,
       mintedChainId: existing.mintedChainId,
       mintedContractAddress: existing.mintedContractAddress,
@@ -341,11 +372,17 @@ export async function publishRoom(
       snapshot: published,
       createdAt: published.publishedAt ?? now,
       publishedByUserId,
+      publishedByPrincipalType: actor.principalKind,
+      publishedByAgentId: actor.principalAgentId,
       publishedByDisplayName,
       revertedFromVersion: null,
       onConflictUpdate: true,
     }),
   ]);
+
+  if (published.goal && lastPublishedVersion > 0) {
+    await cloneRoomDifficultyVotesToVersion(env, published.id, lastPublishedVersion, published.version, now);
+  }
 
   return loadRoomRecord(
     env,
@@ -362,20 +399,20 @@ export async function revertRoom(
   roomId: string,
   coordinates: RoomCoordinates,
   targetVersion: number,
-  actor: AuthUser | null,
+  actor: RoomMutationActor,
   actorIsAdmin = false
 ): Promise<RoomRecord> {
   if (!Number.isInteger(targetVersion) || targetVersion < 1) {
     throw new HttpError(400, 'targetVersion must be a positive integer.');
   }
 
-  const viewerUserId = actor?.id ?? null;
-  const viewerWalletAddress = actor?.walletAddress ?? null;
+  const viewerUserId = actor.ownerUser?.id ?? null;
+  const viewerWalletAddress = actor.ownerUser?.walletAddress ?? null;
   const existing = await loadRoomRecordForMutation(
     env,
     roomId,
     coordinates,
-    actor,
+    actor.ownerUser,
     actorIsAdmin
   );
   if (!existing.permissions.canRevert) {
@@ -394,7 +431,8 @@ export async function revertRoom(
   const now = new Date().toISOString();
   const lastPublished = existing.versions[existing.versions.length - 1];
   const nextVersion = (lastPublished?.version ?? 0) + 1;
-  const publishedByDisplayName = actor?.displayName ?? existing.claimerDisplayName ?? 'Guest';
+  const publishedByDisplayName =
+    actor.principalDisplayName || existing.claimerDisplayName || actor.ownerUser?.displayName || 'Guest';
   const published: RoomSnapshot = {
     ...cloneRoomSnapshot(target.snapshot),
     createdAt: existing.draft.createdAt,
@@ -414,9 +452,13 @@ export async function revertRoom(
       draft,
       published,
       claimerUserId: existing.claimerUserId,
+      claimerPrincipalType: existing.claimerPrincipalKind,
+      claimerAgentId: existing.claimerAgentId,
       claimerDisplayName: existing.claimerDisplayName,
       claimedAt: existing.claimedAt,
-      lastPublishedByUserId: actor?.id ?? null,
+      lastPublishedByUserId: actor.ownerUser?.id ?? null,
+      lastPublishedByPrincipalType: actor.principalKind,
+      lastPublishedByAgentId: actor.principalAgentId,
       lastPublishedByDisplayName: publishedByDisplayName,
       mintedChainId: existing.mintedChainId,
       mintedContractAddress: existing.mintedContractAddress,
@@ -427,12 +469,24 @@ export async function revertRoom(
     preparePersistRoomVersionStatement(env, {
       snapshot: published,
       createdAt: now,
-      publishedByUserId: actor?.id ?? null,
+      publishedByUserId: actor.ownerUser?.id ?? null,
+      publishedByPrincipalType: actor.principalKind,
+      publishedByAgentId: actor.principalAgentId,
       publishedByDisplayName,
       revertedFromVersion: target.version,
       onConflictUpdate: false,
     }),
   ]);
+
+  if (published.goal && (lastPublished?.version ?? 0) > 0) {
+    await cloneRoomDifficultyVotesToVersion(
+      env,
+      published.id,
+      lastPublished?.version ?? 0,
+      published.version,
+      now
+    );
+  }
 
   return loadRoomRecord(
     env,
@@ -616,9 +670,13 @@ export const UPSERT_ROOM_RECORD_SQL = `
     published_spawn_x,
     published_spawn_y,
     claimer_user_id,
+    claimer_principal_type,
+    claimer_agent_id,
     claimer_display_name,
     claimed_at,
     last_published_by_user_id,
+    last_published_by_principal_type,
+    last_published_by_agent_id,
     last_published_by_display_name,
     minted_chain_id,
     minted_contract_address,
@@ -626,7 +684,7 @@ export const UPSERT_ROOM_RECORD_SQL = `
     minted_owner_wallet_address,
     minted_owner_synced_at
   )
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(id) DO UPDATE SET
     x = excluded.x,
     y = excluded.y,
@@ -643,9 +701,13 @@ export const UPSERT_ROOM_RECORD_SQL = `
     published_spawn_x = excluded.published_spawn_x,
     published_spawn_y = excluded.published_spawn_y,
     claimer_user_id = excluded.claimer_user_id,
+    claimer_principal_type = excluded.claimer_principal_type,
+    claimer_agent_id = excluded.claimer_agent_id,
     claimer_display_name = excluded.claimer_display_name,
     claimed_at = excluded.claimed_at,
     last_published_by_user_id = excluded.last_published_by_user_id,
+    last_published_by_principal_type = excluded.last_published_by_principal_type,
+    last_published_by_agent_id = excluded.last_published_by_agent_id,
     last_published_by_display_name = excluded.last_published_by_display_name,
     minted_chain_id = excluded.minted_chain_id,
     minted_contract_address = excluded.minted_contract_address,
@@ -666,10 +728,12 @@ export const INSERT_ROOM_VERSION_SQL = `
     spawn_y,
     created_at,
     published_by_user_id,
+    published_by_principal_type,
+    published_by_agent_id,
     published_by_display_name,
     reverted_from_version
   )
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 export const UPSERT_ROOM_VERSION_SQL = `
@@ -683,6 +747,8 @@ export const UPSERT_ROOM_VERSION_SQL = `
     spawn_y = excluded.spawn_y,
     created_at = excluded.created_at,
     published_by_user_id = excluded.published_by_user_id,
+    published_by_principal_type = excluded.published_by_principal_type,
+    published_by_agent_id = excluded.published_by_agent_id,
     published_by_display_name = excluded.published_by_display_name,
     reverted_from_version = excluded.reverted_from_version
 `;
@@ -711,9 +777,13 @@ export function preparePersistRoomRecordStatement(
     publishedMetadata.spawnX,
     publishedMetadata.spawnY,
     input.claimerUserId,
+    input.claimerPrincipalType,
+    input.claimerAgentId,
     input.claimerDisplayName,
     input.claimedAt,
     input.lastPublishedByUserId,
+    input.lastPublishedByPrincipalType,
+    input.lastPublishedByAgentId,
     input.lastPublishedByDisplayName,
     input.mintedChainId,
     input.mintedContractAddress,
@@ -741,6 +811,8 @@ export function preparePersistRoomVersionStatement(
     metadata.spawnY,
     input.createdAt,
     input.publishedByUserId,
+    input.publishedByPrincipalType,
+    input.publishedByAgentId,
     input.publishedByDisplayName,
     input.revertedFromVersion
   );

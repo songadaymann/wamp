@@ -2,9 +2,19 @@ import { handleAdminRequest } from './worker/admin/routes';
 import type { RoomRevertRequestBody } from '../persistence/roomModel';
 import { handleAuthRequest } from './worker/auth/routes';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth, requireOptionalScope } from './worker/auth/request';
+import { handleAgentRequest } from './worker/agents/routes';
 import { handleChatRequest } from './worker/chat/routes';
+import {
+  handleCourseCreate,
+  handleCourseDraftSave,
+  handleCourseGet,
+  handleCourseLeaderboard,
+  handleCoursePublish,
+  handleCourseRunFinish,
+  handleCourseRunStart,
+} from './worker/courses/routes';
 import { corsHeaders, getCoordinatesFromRequest, HttpError, jsonResponse, parseJsonBody, parseRoomSnapshot } from './worker/core/http';
-import type { Env } from './worker/core/types';
+import type { Env, RequestAuth } from './worker/core/types';
 import { handleTestReset } from './worker/maintenance/routes';
 import { handleRoomMintConfirm, handleRoomMintPrepare } from './worker/mint/routes';
 import { syncRoomOwnershipFromChain } from './worker/mint/service';
@@ -14,10 +24,28 @@ import {
   flushPlayfunPointSync,
   linkPlayfunUserFromRequest,
 } from './worker/playfun/service';
-import { handleGlobalLeaderboard, handleRoomLeaderboard, handleRunFinish, handleRunStart } from './worker/runs/routes';
+import {
+  handleGlobalLeaderboard,
+  handleRoomDifficultyVote,
+  handleRoomDiscovery,
+  handleRoomLeaderboard,
+  handleRunFinish,
+  handleRunStart,
+} from './worker/runs/routes';
 import { awardRoomPublishPoints, upsertUserStats } from './worker/runs/points';
-import { loadPublishedRoom, loadRoomRecord, publishRoom, revertRoom, saveDraft } from './worker/rooms/store';
-import { handleWorldChunksRequest, handleWorldRequest } from './worker/world/routes';
+import {
+  loadPublishedRoom,
+  loadRoomRecord,
+  publishRoom,
+  revertRoom,
+  saveDraft,
+  type RoomMutationActor,
+} from './worker/rooms/store';
+import {
+  handleClaimableFrontierRoomsRequest,
+  handleWorldChunksRequest,
+  handleWorldRequest,
+} from './worker/world/routes';
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -54,6 +82,10 @@ export default {
         return await handleAuthRequest(request, url, env);
       }
 
+      if (url.pathname.startsWith('/api/agents')) {
+        return await handleAgentRequest(request, url, env);
+      }
+
       if (url.pathname.startsWith('/api/admin/')) {
         return await handleAdminRequest(request, url, env);
       }
@@ -70,6 +102,16 @@ export default {
         const auth = await loadOptionalRequestAuth(env, request);
         requireOptionalScope(auth, 'rooms:read', 'read world rooms');
         return handleWorldRequest(request, url, env);
+      }
+
+      if (url.pathname === '/api/world/claimable' && request.method === 'GET') {
+        const auth = await requireAuthenticatedRequestAuth(
+          env,
+          request,
+          'find claimable frontier rooms',
+          'rooms:write'
+        );
+        return handleClaimableFrontierRoomsRequest(request, url, env, auth);
       }
 
       if (url.pathname === '/api/world/chunks' && request.method === 'GET') {
@@ -90,9 +132,42 @@ export default {
         return await handleRunStart(request, env);
       }
 
+      if (url.pathname === '/api/courses' && request.method === 'POST') {
+        return await handleCourseCreate(request, env);
+      }
+
+      const courseMatch = /^\/api\/courses\/([^/]+)$/.exec(url.pathname);
+      if (courseMatch && request.method === 'GET') {
+        return await handleCourseGet(request, env, decodeURIComponent(courseMatch[1]));
+      }
+
+      const courseDraftMatch = /^\/api\/courses\/([^/]+)\/draft$/.exec(url.pathname);
+      if (courseDraftMatch && request.method === 'PUT') {
+        return await handleCourseDraftSave(request, env, decodeURIComponent(courseDraftMatch[1]));
+      }
+
+      const coursePublishMatch = /^\/api\/courses\/([^/]+)\/publish$/.exec(url.pathname);
+      if (coursePublishMatch && request.method === 'POST') {
+        return await handleCoursePublish(request, env, decodeURIComponent(coursePublishMatch[1]));
+      }
+
+      const courseRunStartMatch = /^\/api\/courses\/([^/]+)\/runs\/start$/.exec(url.pathname);
+      if (courseRunStartMatch && request.method === 'POST') {
+        return await handleCourseRunStart(request, env, decodeURIComponent(courseRunStartMatch[1]));
+      }
+
       const finishRunMatch = /^\/api\/runs\/([^/]+)\/finish$/.exec(url.pathname);
       if (finishRunMatch && request.method === 'POST') {
         return await handleRunFinish(request, env, decodeURIComponent(finishRunMatch[1]));
+      }
+
+      const finishCourseRunMatch = /^\/api\/course-runs\/([^/]+)\/finish$/.exec(url.pathname);
+      if (finishCourseRunMatch && request.method === 'POST') {
+        return await handleCourseRunFinish(request, env, decodeURIComponent(finishCourseRunMatch[1]));
+      }
+
+      if (url.pathname === '/api/leaderboards/rooms/discover' && request.method === 'GET') {
+        return await handleRoomDiscovery(request, url, env);
       }
 
       const roomLeaderboardMatch = /^\/api\/leaderboards\/rooms\/([^/]+)$/.exec(url.pathname);
@@ -102,6 +177,27 @@ export default {
           url,
           env,
           decodeURIComponent(roomLeaderboardMatch[1])
+        );
+      }
+
+      const roomDifficultyVoteMatch = /^\/api\/leaderboards\/rooms\/([^/]+)\/difficulty-vote$/.exec(
+        url.pathname
+      );
+      if (roomDifficultyVoteMatch && request.method === 'POST') {
+        return await handleRoomDifficultyVote(
+          request,
+          env,
+          decodeURIComponent(roomDifficultyVoteMatch[1])
+        );
+      }
+
+      const courseLeaderboardMatch = /^\/api\/leaderboards\/courses\/([^/]+)$/.exec(url.pathname);
+      if (courseLeaderboardMatch && request.method === 'GET') {
+        return await handleCourseLeaderboard(
+          request,
+          url,
+          env,
+          decodeURIComponent(courseLeaderboardMatch[1])
         );
       }
 
@@ -171,7 +267,7 @@ export default {
           'save room drafts',
           'rooms:write'
         );
-        const record = await saveDraft(env, snapshot, auth.user, auth.isAdmin);
+        const record = await saveDraft(env, snapshot, buildRoomMutationActor(auth), auth.isAdmin);
         return jsonResponse(request, record);
       }
 
@@ -183,7 +279,7 @@ export default {
           'publish rooms',
           'rooms:write'
         );
-        const record = await publishRoom(env, snapshot, auth.user, auth.isAdmin);
+        const record = await publishRoom(env, snapshot, buildRoomMutationActor(auth), auth.isAdmin);
         const pointEvent = await awardRoomPublishPoints(
           env,
           auth.user.id,
@@ -210,7 +306,7 @@ export default {
           roomId,
           coordinates,
           body.targetVersion,
-          auth.user,
+          buildRoomMutationActor(auth),
           auth.isAdmin
         );
         const pointEvent = await awardRoomPublishPoints(
@@ -297,4 +393,13 @@ async function maybeMirrorPointEventToPlayfun(
 
   await enqueuePlayfunPointSync(env, pointEvent, playfunSession.ogpId);
   await flushPlayfunPointSync(env, userId);
+}
+
+function buildRoomMutationActor(auth: RequestAuth): RoomMutationActor {
+  return {
+    ownerUser: auth.user,
+    principalKind: auth.principal.kind,
+    principalAgentId: auth.principal.agentId,
+    principalDisplayName: auth.principal.displayName,
+  };
 }

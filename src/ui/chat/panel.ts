@@ -1,4 +1,5 @@
 import {
+  type ChatMessageListResponse,
   CHAT_MESSAGE_MAX_LENGTH,
   DEFAULT_CHAT_MESSAGE_LIMIT,
   type ChatMessageRecord,
@@ -6,6 +7,7 @@ import {
 import {
   AUTH_STATE_CHANGED_EVENT,
   getAuthDebugState,
+  syncChatModerationState,
   type AuthDebugState,
 } from '../../auth/client';
 import { playSfx } from '../../audio/sfx';
@@ -13,7 +15,7 @@ import { isPlayfunMode } from '../../playfun/client';
 import { APP_READY_EVENT, isAppReady } from '../appFeedback';
 import { getDeviceLayoutState } from '../deviceLayout';
 import { isTextInputFocused } from '../keyboardFocus';
-import { fetchChatMessages, sendChatMessage } from './client';
+import { banChatUser, deleteChatMessage, fetchChatMessages, sendChatMessage } from './client';
 
 const CHAT_POLL_INTERVAL_MS = 3000;
 const MAX_RENDERED_MESSAGES = 100;
@@ -62,6 +64,7 @@ export class ChatPanelController {
   private initialLoadInFlight = false;
   private loading = false;
   private sending = false;
+  private moderationActionMessageId: string | null = null;
   private destroyed = false;
 
   private readonly handleToggleClick = () => {
@@ -117,6 +120,7 @@ export class ChatPanelController {
     const detail = event instanceof CustomEvent ? (event.detail as AuthDebugState | undefined) : undefined;
     this.authState = detail ?? getAuthDebugState();
     this.render();
+    this.renderMessages();
   };
 
   constructor(
@@ -192,6 +196,9 @@ export class ChatPanelController {
       authenticated: this.authState.authenticated,
       loading: this.loading,
       sending: this.sending,
+      role: this.authState.chatModeration.role,
+      banned: this.authState.chatModeration.banned,
+      moderationActionMessageId: this.moderationActionMessageId,
       messageCount: this.messages.length,
       unreadCount: this.unreadCount,
       latestCreatedAt: this.latestCreatedAt,
@@ -231,7 +238,11 @@ export class ChatPanelController {
   }
 
   private canPost(): boolean {
-    return this.authState.authenticated && !this.authState.loading;
+    return this.authState.authenticated && !this.authState.loading && !this.authState.chatModeration.banned;
+  }
+
+  private canModerateMessages(): boolean {
+    return this.authState.chatModeration.role === 'owner' || this.authState.chatModeration.role === 'admin';
   }
 
   private async ensureLoaded(): Promise<void> {
@@ -251,7 +262,7 @@ export class ChatPanelController {
 
     try {
       const response = await fetchChatMessages({ limit: DEFAULT_CHAT_MESSAGE_LIMIT });
-      this.replaceMessages(response.messages);
+      this.applyChatResponse(response, false);
       this.historyLoaded = true;
     } catch (error) {
       console.error('Failed to load chat history', error);
@@ -284,7 +295,7 @@ export class ChatPanelController {
         : await fetchChatMessages({
             limit: DEFAULT_CHAT_MESSAGE_LIMIT,
           });
-      this.appendMessages(response.messages, true);
+      this.applyChatResponse(response, true);
     } catch (error) {
       console.error('Failed to poll chat messages', error);
     } finally {
@@ -303,6 +314,20 @@ export class ChatPanelController {
     this.latestCreatedAt = null;
     this.appendMessages(nextMessages, false);
     this.unreadCount = 0;
+  }
+
+  private applyChatResponse(response: ChatMessageListResponse, countUnread: boolean): void {
+    this.authState = {
+      ...this.authState,
+      chatModeration: response.viewer,
+    };
+    syncChatModerationState(response.viewer);
+    if (!this.historyLoaded || !countUnread) {
+      this.replaceMessages(response.messages);
+      return;
+    }
+
+    this.appendMessages(response.messages, true);
   }
 
   private appendMessages(nextMessages: ChatMessageRecord[], countUnread: boolean): void {
@@ -404,6 +429,74 @@ export class ChatPanelController {
     }
   }
 
+  private async handleDeleteMessage(message: ChatMessageRecord): Promise<void> {
+    if (
+      !this.canModerateMessages()
+      || this.moderationActionMessageId
+      || !this.windowObj.confirm(`Delete ${message.userDisplayName}'s chat message?`)
+    ) {
+      return;
+    }
+
+    this.moderationActionMessageId = message.id;
+    this.setStatus('Deleting message...');
+    this.render();
+
+    try {
+      const response = await deleteChatMessage(message.id);
+      this.authState = {
+        ...this.authState,
+        chatModeration: response.viewer,
+      };
+      syncChatModerationState(response.viewer);
+      await this.reloadMessages();
+      this.setStatus('Message deleted.');
+    } catch (error) {
+      console.error('Failed to delete chat message', error);
+      this.setStatus(getErrorMessage(error, 'Failed to delete chat message.'));
+    } finally {
+      this.moderationActionMessageId = null;
+      this.render();
+    }
+  }
+
+  private async handleBanUser(message: ChatMessageRecord): Promise<void> {
+    if (
+      !this.canModerateMessages()
+      || this.moderationActionMessageId
+      || !this.windowObj.confirm(`Ban ${message.userDisplayName} from chat?`)
+    ) {
+      return;
+    }
+
+    this.moderationActionMessageId = message.id;
+    this.setStatus(`Banning ${message.userDisplayName}...`);
+    this.render();
+
+    try {
+      const response = await banChatUser(message.userId);
+      this.authState = {
+        ...this.authState,
+        chatModeration: response.viewer,
+      };
+      syncChatModerationState(response.viewer);
+      await this.reloadMessages();
+      this.setStatus(`${message.userDisplayName} was banned from chat.`);
+    } catch (error) {
+      console.error('Failed to ban chat user', error);
+      this.setStatus(getErrorMessage(error, 'Failed to ban chat user.'));
+    } finally {
+      this.moderationActionMessageId = null;
+      this.render();
+    }
+  }
+
+  private async reloadMessages(): Promise<void> {
+    const response = await fetchChatMessages({ limit: DEFAULT_CHAT_MESSAGE_LIMIT });
+    this.historyLoaded = true;
+    this.applyChatResponse(response, false);
+  }
+
   private setStatus(message: string): void {
     if (this.elements.status) {
       this.elements.status.textContent = message;
@@ -435,9 +528,12 @@ export class ChatPanelController {
 
     if (this.elements.input) {
       this.elements.input.disabled = !this.canPost() || this.sending;
-      this.elements.input.placeholder = this.canPost()
-        ? 'Say something...'
-        : 'Sign in to chat';
+      this.elements.input.placeholder =
+        this.authState.chatModeration.banned
+          ? 'Chat banned'
+          : this.canPost()
+            ? 'Say something...'
+            : 'Sign in to chat';
     }
 
     if (this.elements.sendButton) {
@@ -454,6 +550,11 @@ export class ChatPanelController {
     }
 
     if (this.sending) {
+      return;
+    }
+
+    if (this.authState.chatModeration.banned) {
+      this.elements.status.textContent = 'You are banned from chat. You can still read messages.';
       return;
     }
 
@@ -511,6 +612,41 @@ export class ChatPanelController {
       const body = this.doc.createElement('div');
       body.className = 'chat-message-body';
       body.textContent = message.body;
+
+      const canModerateThisMessage =
+        this.canModerateMessages()
+        && message.userId !== (this.authState.user?.id ?? null);
+
+      if (canModerateThisMessage) {
+        const actions = this.doc.createElement('div');
+        actions.className = 'chat-message-actions';
+
+        const deleteButton = this.doc.createElement('button');
+        deleteButton.className = 'bar-btn bar-btn-small chat-message-action';
+        deleteButton.type = 'button';
+        deleteButton.textContent =
+          this.moderationActionMessageId === message.id ? 'Working...' : 'Delete';
+        deleteButton.disabled = this.moderationActionMessageId !== null;
+        deleteButton.addEventListener('click', () => {
+          void this.handleDeleteMessage(message);
+        });
+
+        const banButton = this.doc.createElement('button');
+        banButton.className = 'bar-btn bar-btn-small bar-btn-danger chat-message-action';
+        banButton.type = 'button';
+        banButton.textContent =
+          this.moderationActionMessageId === message.id ? 'Working...' : 'Ban';
+        banButton.disabled = this.moderationActionMessageId !== null;
+        banButton.addEventListener('click', () => {
+          void this.handleBanUser(message);
+        });
+
+        header.append(author, timestamp);
+        actions.append(deleteButton, banButton);
+        row.append(header, body, actions);
+        this.elements.messages.appendChild(row);
+        continue;
+      }
 
       header.append(author, timestamp);
       row.append(header, body);

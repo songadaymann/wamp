@@ -49,6 +49,21 @@ export async function findUserByWallet(env: Env, walletAddress: string): Promise
   return row ? mapUserRow(row) : null;
 }
 
+export async function findUserById(env: Env, userId: string): Promise<AuthUser | null> {
+  const row = await env.DB.prepare(
+    `
+      SELECT id, email, wallet_address, display_name, created_at, updated_at
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+    `
+  )
+    .bind(userId)
+    .first<UserRow>();
+
+  return row ? mapUserRow(row) : null;
+}
+
 export async function findUserByDisplayName(env: Env, displayName: string): Promise<AuthUser | null> {
   const row = await env.DB.prepare(
     `
@@ -185,6 +200,7 @@ export async function updateUserDisplayName(
         UPDATE rooms
         SET claimer_display_name = ?
         WHERE claimer_user_id = ?
+          AND COALESCE(claimer_principal_type, 'user') = 'user'
       `
     ).bind(displayName, user.id),
     env.DB.prepare(
@@ -192,6 +208,7 @@ export async function updateUserDisplayName(
         UPDATE rooms
         SET last_published_by_display_name = ?
         WHERE last_published_by_user_id = ?
+          AND COALESCE(last_published_by_principal_type, 'user') = 'user'
       `
     ).bind(displayName, user.id),
     env.DB.prepare(
@@ -199,6 +216,7 @@ export async function updateUserDisplayName(
         UPDATE room_versions
         SET published_by_display_name = ?
         WHERE published_by_user_id = ?
+          AND COALESCE(published_by_principal_type, 'user') = 'user'
       `
     ).bind(displayName, user.id),
   ]);
@@ -485,6 +503,14 @@ export async function loadApiTokenAuth(
   return {
     source: 'api_token',
     user,
+    principal: {
+      kind: 'user',
+      id: user.id,
+      displayName: user.displayName,
+      ownerUserId: user.id,
+      agentId: null,
+    },
+    agent: null,
     session: null,
     scopes,
     isAdmin: false,
@@ -496,6 +522,7 @@ export async function loadApiTokenAuth(
       lastUsedAt,
       revokedAt: row.revoked_at,
     },
+    agentToken: null,
   };
 }
 

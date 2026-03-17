@@ -18,6 +18,7 @@ export interface RoomSpawnPoint {
 }
 
 export type RoomStatus = 'draft' | 'published';
+export type RoomAuthorPrincipalKind = 'user' | 'agent';
 export type RoomTileData = Record<LayerName, (number | -1)[][]>;
 
 export interface RoomPermissions {
@@ -48,6 +49,8 @@ export interface RoomVersionRecord {
   snapshot: RoomSnapshot;
   createdAt: string;
   publishedByUserId: string | null;
+  publishedByPrincipalKind: RoomAuthorPrincipalKind | null;
+  publishedByAgentId: string | null;
   publishedByDisplayName: string | null;
   revertedFromVersion: number | null;
 }
@@ -57,9 +60,13 @@ export interface RoomRecord {
   published: RoomSnapshot | null;
   versions: RoomVersionRecord[];
   claimerUserId: string | null;
+  claimerPrincipalKind: RoomAuthorPrincipalKind | null;
+  claimerAgentId: string | null;
   claimerDisplayName: string | null;
   claimedAt: string | null;
   lastPublishedByUserId: string | null;
+  lastPublishedByPrincipalKind: RoomAuthorPrincipalKind | null;
+  lastPublishedByAgentId: string | null;
   lastPublishedByDisplayName: string | null;
   mintedChainId: number | null;
   mintedContractAddress: string | null;
@@ -202,6 +209,8 @@ export function createRoomVersionRecord(
     snapshot: cloneRoomSnapshot(snapshot),
     createdAt: overrides.createdAt ?? snapshot.publishedAt ?? snapshot.updatedAt,
     publishedByUserId: overrides.publishedByUserId ?? null,
+    publishedByPrincipalKind: overrides.publishedByPrincipalKind ?? null,
+    publishedByAgentId: overrides.publishedByAgentId ?? null,
     publishedByDisplayName: overrides.publishedByDisplayName ?? null,
     revertedFromVersion: overrides.revertedFromVersion ?? null,
   };
@@ -242,6 +251,15 @@ function normalizeRoomVersionRecord(value: unknown): RoomVersionRecord | null {
       publishedByUserId:
         typeof versionRecord.publishedByUserId === 'string'
           ? versionRecord.publishedByUserId
+          : null,
+      publishedByPrincipalKind:
+        versionRecord.publishedByPrincipalKind === 'user' ||
+        versionRecord.publishedByPrincipalKind === 'agent'
+          ? versionRecord.publishedByPrincipalKind
+          : null,
+      publishedByAgentId:
+        typeof versionRecord.publishedByAgentId === 'string'
+          ? versionRecord.publishedByAgentId
           : null,
       publishedByDisplayName:
         typeof versionRecord.publishedByDisplayName === 'string'
@@ -304,9 +322,13 @@ export function createDefaultRoomRecord(
     published: null,
     versions: [],
     claimerUserId: null,
+    claimerPrincipalKind: null,
+    claimerAgentId: null,
     claimerDisplayName: null,
     claimedAt: null,
     lastPublishedByUserId: null,
+    lastPublishedByPrincipalKind: null,
+    lastPublishedByAgentId: null,
     lastPublishedByDisplayName: null,
     mintedChainId: null,
     mintedContractAddress: null,
@@ -340,11 +362,23 @@ export function normalizeRoomRecord(
           .filter((version): version is RoomVersionRecord => version !== null)
       : [],
     claimerUserId: typeof record.claimerUserId === 'string' ? record.claimerUserId : null,
+    claimerPrincipalKind:
+      record.claimerPrincipalKind === 'user' || record.claimerPrincipalKind === 'agent'
+        ? record.claimerPrincipalKind
+        : null,
+    claimerAgentId: typeof record.claimerAgentId === 'string' ? record.claimerAgentId : null,
     claimerDisplayName:
       typeof record.claimerDisplayName === 'string' ? record.claimerDisplayName : null,
     claimedAt: typeof record.claimedAt === 'string' ? record.claimedAt : null,
     lastPublishedByUserId:
       typeof record.lastPublishedByUserId === 'string' ? record.lastPublishedByUserId : null,
+    lastPublishedByPrincipalKind:
+      record.lastPublishedByPrincipalKind === 'user' ||
+      record.lastPublishedByPrincipalKind === 'agent'
+        ? record.lastPublishedByPrincipalKind
+        : null,
+    lastPublishedByAgentId:
+      typeof record.lastPublishedByAgentId === 'string' ? record.lastPublishedByAgentId : null,
     lastPublishedByDisplayName:
       typeof record.lastPublishedByDisplayName === 'string'
         ? record.lastPublishedByDisplayName
@@ -371,9 +405,13 @@ export function cloneRoomRecord(record: RoomRecord): RoomRecord {
     published: normalized.published ? cloneRoomSnapshot(normalized.published) : null,
     versions: normalized.versions.map((version) => cloneRoomVersionRecord(version)),
     claimerUserId: normalized.claimerUserId,
+    claimerPrincipalKind: normalized.claimerPrincipalKind,
+    claimerAgentId: normalized.claimerAgentId,
     claimerDisplayName: normalized.claimerDisplayName,
     claimedAt: normalized.claimedAt,
     lastPublishedByUserId: normalized.lastPublishedByUserId,
+    lastPublishedByPrincipalKind: normalized.lastPublishedByPrincipalKind,
+    lastPublishedByAgentId: normalized.lastPublishedByAgentId,
     lastPublishedByDisplayName: normalized.lastPublishedByDisplayName,
     mintedChainId: normalized.mintedChainId,
     mintedContractAddress: normalized.mintedContractAddress,

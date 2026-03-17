@@ -460,6 +460,21 @@ export class OverworldGoalRunController {
   }
 
   getDebugSnapshot(): OverworldGoalRunSnapshot {
+    const roomDifficulty = this.currentRoomLeaderboard?.difficulty ?? {
+      consensus: null,
+      counts: {
+        easy: 0,
+        medium: 0,
+        hard: 0,
+        extreme: 0,
+      },
+      totalVotes: 0,
+      viewerVote: null,
+      viewerSignedIn: false,
+      viewerCanVote: false,
+      viewerNeedsRun: false,
+    };
+
     return {
       goalRun: this.currentGoalRun
         ? {
@@ -497,6 +512,15 @@ export class OverworldGoalRunController {
               roomVersion: this.currentRoomLeaderboard.roomVersion,
               goalType: this.currentRoomLeaderboard.goalType,
               rankingMode: this.currentRoomLeaderboard.rankingMode,
+              difficulty: {
+                consensus: roomDifficulty.consensus,
+                counts: { ...roomDifficulty.counts },
+                totalVotes: roomDifficulty.totalVotes,
+                viewerVote: roomDifficulty.viewerVote,
+                viewerSignedIn: roomDifficulty.viewerSignedIn,
+                viewerCanVote: roomDifficulty.viewerCanVote,
+                viewerNeedsRun: roomDifficulty.viewerNeedsRun,
+              },
               entries: this.currentRoomLeaderboard.entries.map((entry) => ({ ...entry })),
               viewerBest: this.currentRoomLeaderboard.viewerBest
                 ? { ...this.currentRoomLeaderboard.viewerBest }

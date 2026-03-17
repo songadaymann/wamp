@@ -12,6 +12,8 @@ import { RETRO_COLORS } from '../../visuals/starfield';
 import { getDeviceLayoutState, isMobileLandscapeBlocked } from '../../ui/deviceLayout';
 import type { GoalPlacementMode } from './editRuntime';
 
+type EditorInteractionGoalPlacementMode = GoalPlacementMode | 'start';
+
 function getEditorLayerAccent(): { stroke: number; fillAlpha: number } {
   switch (editorState.activeLayer) {
     case 'background':
@@ -26,7 +28,7 @@ function getEditorLayerAccent(): { stroke: number; fillAlpha: number } {
 
 interface EditorInteractionHost {
   getNeighborRadius(): number;
-  getGoalPlacementMode(): GoalPlacementMode;
+  getGoalPlacementMode(): EditorInteractionGoalPlacementMode;
   handleObjectPlace(pointer: Phaser.Input.Pointer): void;
   handleToolDown(pointer: Phaser.Input.Pointer): void;
   removeGoalMarkerAt(worldX: number, worldY: number): boolean;

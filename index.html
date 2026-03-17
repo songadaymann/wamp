@@ -6,13 +6,18 @@
   <meta name="x-ogp-key" content="64ee7b61-3b07-437b-bcea-565ee94a0ddc" id="ogp-key-meta" />
   <title>WAMP</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="alternate" type="text/markdown" href="./skill.md">
+  <link rel="service-desc" type="application/json" href="./openapi.json">
   <link rel="stylesheet" href="/src/styles/main.css">
 </head>
 <body>
   <div id="boot-splash" class="app-feedback app-boot-splash" aria-live="polite">
     <div class="app-feedback-card app-boot-splash-card">
       <div class="app-boot-splash-kicker">Loading</div>
-      <div class="app-boot-splash-title">We All Make A Platformer</div>
+      <div class="app-boot-splash-title-wrap">
+        <div class="app-boot-splash-title">We All Make A Platformer</div>
+        <div class="app-boot-splash-beta">BETA</div>
+      </div>
       <div id="boot-splash-status" class="app-feedback-status">Loading assets...</div>
       <div class="app-boot-progress" aria-hidden="true">
         <div id="boot-splash-progress-bar" class="app-boot-progress-bar"></div>
@@ -47,6 +52,12 @@
         <div class="auth-header">
           <span class="auth-title">Account</span>
           <span id="auth-identity" class="auth-identity">Guest</span>
+        </div>
+        <div class="auth-row auth-menu-action-row">
+          <button id="btn-about-open" class="bar-btn auth-menu-action-btn" type="button">About WAMP</button>
+        </div>
+        <div class="auth-row auth-menu-action-row">
+          <button id="btn-chat-moderation-open" class="bar-btn auth-menu-action-btn hidden" type="button">Chat Moderation</button>
         </div>
         <div class="auth-copy">Use email, wallet, or both. Wallet-only works for minting.</div>
         <div class="auth-row">
@@ -226,6 +237,7 @@
           <option value="desert">Desert</option>
           <option value="dirt">Dirt</option>
           <option value="lava">Lava</option>
+          <option value="smb_lvl1_3_5">SMB Lvl 1-3-5</option>
           <option value="snow">Snow</option>
           <option value="water">Water</option>
         </select>
@@ -282,6 +294,7 @@
 
       <div class="sidebar-section" id="goal-section" data-mobile-panel="goal" data-sidebar-collapsible="true">
         <div class="section-label">Goal</div>
+        <div id="goal-context-note" class="goal-context-note hidden"></div>
         <select id="goal-type-select">
           <option value="">None</option>
           <option value="reach_exit">Reach Exit</option>
@@ -312,6 +325,7 @@
           </div>
         </div>
         <div id="goal-marker-controls" class="goal-marker-controls hidden">
+          <button id="btn-goal-place-start" class="bar-btn bar-btn-small hidden">Set Start</button>
           <button id="btn-goal-place-exit" class="bar-btn bar-btn-small">Set Exit</button>
           <button id="btn-goal-add-checkpoint" class="bar-btn bar-btn-small">Add Checkpoint</button>
           <button id="btn-goal-place-finish" class="bar-btn bar-btn-small">Set Finish</button>
@@ -319,6 +333,49 @@
         </div>
         <div id="goal-placement-hint" class="goal-placement-hint hidden">Click the canvas to place the selected goal marker.</div>
         <div id="goal-summary" class="goal-summary">No room goal selected.</div>
+      </div>
+
+      <div class="sidebar-section hidden" id="course-goal-section" data-mobile-panel="goal" data-sidebar-collapsible="true">
+        <div class="section-label">Course Goal</div>
+        <div id="course-editor-status" class="goal-context-note hidden"></div>
+        <select id="course-editor-goal-type-select">
+          <option value="">None</option>
+          <option value="reach_exit">Reach Exit</option>
+          <option value="collect_target">Collect Target</option>
+          <option value="defeat_all">Defeat All</option>
+          <option value="checkpoint_sprint">Checkpoint Sprint</option>
+          <option value="survival">Survival</option>
+        </select>
+        <div id="course-editor-time-limit-row" class="goal-control-row hidden">
+          <label class="goal-control-label" for="course-editor-time-limit-seconds">Time Limit</label>
+          <div class="goal-inline-input">
+            <input id="course-editor-time-limit-seconds" class="goal-input" type="number" min="1" step="1" placeholder="Off" />
+            <span class="goal-inline-suffix">sec</span>
+          </div>
+        </div>
+        <div id="course-editor-required-count-row" class="goal-control-row hidden">
+          <label class="goal-control-label" for="course-editor-required-count">Collect Count</label>
+          <div class="goal-inline-input">
+            <input id="course-editor-required-count" class="goal-input" type="number" min="1" step="1" />
+            <span class="goal-inline-suffix">items</span>
+          </div>
+        </div>
+        <div id="course-editor-survival-row" class="goal-control-row hidden">
+          <label class="goal-control-label" for="course-editor-survival-seconds">Survive For</label>
+          <div class="goal-inline-input">
+            <input id="course-editor-survival-seconds" class="goal-input" type="number" min="1" step="1" />
+            <span class="goal-inline-suffix">sec</span>
+          </div>
+        </div>
+        <div id="course-editor-marker-controls" class="goal-marker-controls hidden">
+          <button id="btn-course-editor-place-start" class="bar-btn bar-btn-small">Set Start</button>
+          <button id="btn-course-editor-place-exit" class="bar-btn bar-btn-small">Set Exit</button>
+          <button id="btn-course-editor-add-checkpoint" class="bar-btn bar-btn-small">Add Checkpoint</button>
+          <button id="btn-course-editor-place-finish" class="bar-btn bar-btn-small">Set Finish</button>
+          <button id="btn-course-editor-clear-markers" class="bar-btn bar-btn-small">Clear Markers</button>
+        </div>
+        <div id="course-editor-placement-hint" class="goal-placement-hint hidden">Click the canvas to place the selected course marker.</div>
+        <div id="course-editor-summary" class="goal-summary">No course selected.</div>
       </div>
 
       <div class="sidebar-section" id="editor-actions" data-mobile-panel="actions" data-sidebar-collapsible="true">
@@ -387,8 +444,12 @@
         </div>
         <div class="world-hud-row">
           <button id="btn-world-play" class="bar-btn bar-btn-small world-btn-play" disabled>Play Room</button>
+          <button id="btn-world-play-course" class="bar-btn bar-btn-small world-btn-play hidden" disabled>Play Course</button>
           <button id="btn-world-edit" class="bar-btn bar-btn-small world-btn-edit" disabled>Edit Room</button>
           <button id="btn-world-build" class="bar-btn bar-btn-small world-btn-build" disabled>Build Here</button>
+        </div>
+        <div class="world-hud-row">
+          <button id="btn-world-course-builder" class="bar-btn bar-btn-small world-btn-controls" disabled>Course Builder</button>
         </div>
         <div class="world-hud-row">
           <button id="btn-world-leaderboard" class="bar-btn bar-btn-small world-btn-leaderboard">Leaderboard</button>
@@ -527,6 +588,8 @@
       </div>
       <div class="leaderboard-tabs">
         <button id="btn-leaderboard-tab-room" class="bar-btn bar-btn-small active" type="button">Room</button>
+        <button id="btn-leaderboard-tab-discover" class="bar-btn bar-btn-small" type="button">Discover</button>
+        <button id="btn-leaderboard-tab-course" class="bar-btn bar-btn-small" type="button">Course</button>
         <button id="btn-leaderboard-tab-global" class="bar-btn bar-btn-small" type="button">Global</button>
       </div>
       <div id="leaderboard-modal-error" class="history-modal-error hidden"></div>
@@ -537,12 +600,88 @@
         </div>
         <div id="leaderboard-room-summary" class="history-modal-meta">No room leaderboard selected.</div>
         <div id="leaderboard-room-viewer" class="history-modal-meta hidden"></div>
+        <div id="leaderboard-room-difficulty" class="leaderboard-difficulty">
+          <div id="leaderboard-room-difficulty-summary" class="history-modal-meta">No difficulty ratings yet.</div>
+          <div id="leaderboard-room-difficulty-actions" class="leaderboard-difficulty-actions">
+            <button class="bar-btn bar-btn-small" type="button" data-room-difficulty="easy">Easy</button>
+            <button class="bar-btn bar-btn-small" type="button" data-room-difficulty="medium">Medium</button>
+            <button class="bar-btn bar-btn-small" type="button" data-room-difficulty="hard">Hard</button>
+            <button class="bar-btn bar-btn-small" type="button" data-room-difficulty="extreme">Extreme</button>
+          </div>
+          <div id="leaderboard-room-difficulty-status" class="leaderboard-secondary"></div>
+        </div>
         <div id="leaderboard-room-list" class="history-version-list"></div>
+      </div>
+      <div id="leaderboard-discover-panel" class="leaderboard-panel hidden">
+        <div id="leaderboard-discover-filters" class="leaderboard-discover-filters">
+          <button class="bar-btn bar-btn-small active" type="button" data-discover-difficulty="">All</button>
+          <button class="bar-btn bar-btn-small" type="button" data-discover-difficulty="easy">Easy</button>
+          <button class="bar-btn bar-btn-small" type="button" data-discover-difficulty="medium">Medium</button>
+          <button class="bar-btn bar-btn-small" type="button" data-discover-difficulty="hard">Hard</button>
+          <button class="bar-btn bar-btn-small" type="button" data-discover-difficulty="extreme">Extreme</button>
+        </div>
+        <div id="leaderboard-discover-summary" class="history-modal-meta">Browse published room challenges by difficulty.</div>
+        <div id="leaderboard-discover-list" class="history-version-list"></div>
+      </div>
+      <div id="leaderboard-course-panel" class="leaderboard-panel hidden">
+        <div id="leaderboard-course-summary" class="history-modal-meta">No published course selected.</div>
+        <div id="leaderboard-course-viewer" class="history-modal-meta hidden"></div>
+        <div id="leaderboard-course-list" class="history-version-list"></div>
       </div>
       <div id="leaderboard-global-panel" class="leaderboard-panel hidden">
         <div id="leaderboard-global-summary" class="history-modal-meta">World points leaderboard.</div>
         <div id="leaderboard-global-viewer" class="history-modal-meta hidden"></div>
         <div id="leaderboard-global-list" class="history-version-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="course-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel leaderboard-modal-panel course-modal-panel" role="dialog" aria-modal="true" aria-labelledby="course-modal-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Courses</div>
+          <h2 id="course-modal-title" class="history-modal-title">Course Builder</h2>
+          <div id="course-modal-meta" class="history-modal-meta">Select 2-4 adjacent published rooms in order.</div>
+        </div>
+        <button id="btn-course-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div class="about-copy">
+        <div class="about-section">
+          <div class="about-section-title">Title</div>
+          <input id="course-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Course title (optional)" />
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Rooms</div>
+          <div id="course-selected-room-status" class="history-modal-meta">Select a published room to add it.</div>
+          <div class="course-room-actions">
+            <button id="btn-course-add-selected-room" class="bar-btn bar-btn-small" type="button">Add Selected Room</button>
+            <button id="btn-course-remove-selected-room" class="bar-btn bar-btn-small" type="button">Remove Selected Room</button>
+            <button id="btn-course-move-selected-earlier" class="bar-btn bar-btn-small" type="button">Move Earlier</button>
+            <button id="btn-course-move-selected-later" class="bar-btn bar-btn-small" type="button">Move Later</button>
+          </div>
+          <div id="course-room-list" class="history-version-list"></div>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Course Goal</div>
+          <div class="goal-placement-hint">Goal type, start point, and course markers are authored in the room editor for the selected course room.</div>
+          <div id="course-summary" class="goal-summary">No course goal selected yet.</div>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Editor</div>
+          <div class="course-room-actions">
+            <button id="btn-course-edit-selected-room" class="bar-btn" type="button">Edit Selected Room</button>
+            <button id="btn-course-test-draft" class="bar-btn" type="button">Test Draft Course</button>
+          </div>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Publish</div>
+          <div class="course-room-actions">
+            <button id="btn-course-save-draft" class="bar-btn" type="button">Save Draft</button>
+            <button id="btn-course-publish" class="bar-btn" type="button">Publish Course</button>
+          </div>
+          <div id="course-modal-status" class="history-modal-meta hidden"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -589,6 +728,104 @@
         </div>
       </div>
       <div class="history-modal-meta">Custom control remapping can layer onto this later without changing the basic world HUD.</div>
+    </div>
+  </div>
+
+  <div id="about-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel about-modal-panel" role="dialog" aria-modal="true" aria-labelledby="about-modal-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">About</div>
+          <h2 id="about-modal-title" class="history-modal-title">We All Make A Platformer</h2>
+          <div class="history-modal-meta">a game by Jonathan Mann (aka songadaymann aka gamejew)</div>
+        </div>
+        <button id="btn-about-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div class="about-copy">
+        <div class="about-section">
+          <div class="about-section-title">How It Works</div>
+          <p>Every room in the overworld can become a small platforming challenge. Orange rooms are unclaimed. Explore, choose an unclaimed room, build a platforming challenge and publish it so everyone else can play it!</p>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Build And Publish</div>
+          <ul class="about-list">
+            <li>Drafts stay private until you publish.</li>
+            <li>Published rooms appear in the overworld and both players and builders earn points from challenges being completed.</li>
+            <li>Anyone can edit anyone else's room! </li>
+            <li>The original claimer of a room can revert the room to any previously published state.</li>
+            <li>To prevent people from editing a room you claimed, you can mint it as an NFT for .01e.</li>
+          </ul>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Challenges</div>
+          <p>Right now, every challenge lives inside a single room. A room can be a speedrun, a checkpoint sprint, a collectible hunt, a survival room, or any other small self-contained test you want to make.</p>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Future Improvements</div>
+          <ul class="about-list">
+            <li>Multi-room challenges that stretch across several connected rooms.</li>
+            <li>More ways for players to interact with each other inside the world while they explore and play levels.</li>
+            <li>Deeper collaborative world systems layered on top of the current room-by-room format.</li>
+            <li>Bug finds and suggestions are always welcome!</li>
+          </ul>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Agents &amp; API</div>
+          <p>Agents can inspect the world, claim rooms, and build challenges through the public skill and API. Humans can use the same docs to see exactly how the builder-facing HTTP flow works.</p>
+          <div class="about-action-row">
+            <a id="about-skill-link" class="bar-btn bar-btn-small" href="./skill.md" target="_blank" rel="noreferrer">Open skill.md</a>
+            <a class="bar-btn bar-btn-small" href="./openapi.json" target="_blank" rel="noreferrer">Open OpenAPI</a>
+            <button id="btn-about-copy-skill-url" class="bar-btn bar-btn-small" type="button">Copy Skill URL</button>
+          </div>
+          <div id="about-copy-status" class="about-copy-status hidden" aria-live="polite"></div>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Add Your Own Assets</div>
+          <p>If you want to contribute art, <a href="mailto:jonathan@jonathanmann.net">send it over</a>. We review assets before they go in, clean them up if needed, and make sure they fit the game style, animation flow, and collision rules.</p>
+          <ul class="about-list">
+            <li><strong>Terrain:</strong> use a <code>16x16</code> grid. Terrain sheets should snap cleanly to that grid and usually come as a PNG sheet.</li>
+            <li><strong>Objects and props:</strong> the easiest sizes are <code>16x16</code>, <code>16x32</code>, <code>32x32</code>, <code>32x48</code>, <code>48x48</code>, or <code>64x32</code>.</li>
+            <li><strong>Enemies and hazards:</strong> same general pipeline as objects. Simple strips on a fixed frame grid are easiest for patrol, flying, bounce, and animated hazard behavior.</li>
+            <li><strong>Backgrounds:</strong> current parallax sets are usually layered PNGs at <code>576x324</code> or <code>960x480</code>. Separate layers are better than one flattened image.</li>
+            <li><strong>Player sprites:</strong> these are the fussiest. Our current player workflow starts from a <code>96x84</code> source canvas and then gets packed into movement, combat, weapons, and FX atlases.</li>
+            <li><strong>Best format:</strong> transparent PNGs, nearest-neighbor / no blur, and consistent pixel scale. If something needs unusual timing, collision, or slicing, we usually configure that by hand during review.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="history-modal-meta about-modal-note">This copy lives directly in <code>index.html</code>, so it&apos;s easy to edit later.</div>
+    </div>
+  </div>
+
+  <div id="chat-moderation-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel leaderboard-modal-panel chat-moderation-modal-panel" role="dialog" aria-modal="true" aria-labelledby="chat-moderation-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Moderation</div>
+          <h2 id="chat-moderation-title" class="history-modal-title">Chat Moderation</h2>
+          <div class="history-modal-meta">Manage chat admins and banned users.</div>
+        </div>
+        <button id="btn-chat-moderation-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div id="chat-moderation-status" class="history-modal-error hidden"></div>
+      <div id="chat-moderation-admin-section" class="chat-moderation-section hidden">
+        <div class="history-modal-meta">Add or remove delegated chat admins by display name.</div>
+        <form id="chat-moderation-admin-form" class="chat-moderation-form">
+          <input
+            id="chat-moderation-admin-input"
+            class="chat-moderation-input"
+            type="text"
+            maxlength="24"
+            placeholder="Display name"
+            spellcheck="false"
+          />
+          <button id="btn-chat-moderation-admin-add" class="bar-btn bar-btn-small" type="submit">Add Admin</button>
+        </form>
+        <div id="chat-moderation-admin-list" class="chat-moderation-list"></div>
+      </div>
+      <div id="chat-moderation-ban-section" class="chat-moderation-section">
+        <div class="history-modal-meta">Banned users can still read chat, but they cannot post.</div>
+        <div id="chat-moderation-ban-list" class="chat-moderation-list"></div>
+      </div>
     </div>
   </div>
 

@@ -1,4 +1,6 @@
 import type { ApiTokenRecord, ApiTokenScope, AuthUser } from '../../../auth/model';
+import type { AgentAccount, AgentTokenRecord, RequestAuthSource, RequestPrincipal } from '../../../agents/model';
+import type { CourseRecord, CourseSnapshot, CourseVersionRecord } from '../../../courses/model';
 import type { RoomCoordinates, RoomRecord, RoomSnapshot, RoomVersionRecord } from '../../../persistence/roomModel';
 import type { RunResult } from '../../../runs/model';
 
@@ -21,6 +23,7 @@ export interface Env {
   ASSETS: AssetsBinding;
   DB: D1Database;
   ADMIN_API_KEY?: string;
+  CHAT_OWNER_EMAILS?: string;
   RESEND_API_KEY?: string;
   AUTH_EMAIL_FROM?: string;
   AUTH_DEBUG_MAGIC_LINKS?: string;
@@ -50,9 +53,13 @@ export interface RoomRow {
   draft_title: string | null;
   published_title: string | null;
   claimer_user_id: string | null;
+  claimer_principal_type: 'user' | 'agent' | null;
+  claimer_agent_id: string | null;
   claimer_display_name: string | null;
   claimed_at: string | null;
   last_published_by_user_id: string | null;
+  last_published_by_principal_type: 'user' | 'agent' | null;
+  last_published_by_agent_id: string | null;
   last_published_by_display_name: string | null;
   minted_chain_id: number | null;
   minted_contract_address: string | null;
@@ -67,17 +74,102 @@ export interface RoomVersionRow {
   title: string | null;
   created_at: string;
   published_by_user_id: string | null;
+  published_by_principal_type: 'user' | 'agent' | null;
+  published_by_agent_id: string | null;
   published_by_display_name: string | null;
   reverted_from_version: number | null;
+}
+
+export interface AgentRow {
+  id: string;
+  owner_user_id: string;
+  display_name: string;
+  description: string | null;
+  avatar_url: string | null;
+  avatar_seed: string | null;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentTokenRow {
+  id: string;
+  agent_id: string;
+  label: string;
+  scopes_json: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface AgentJoinRow extends AgentRow {
+  owner_email: string | null;
+  owner_wallet_address: string | null;
+  owner_display_name: string;
+  owner_created_at: string;
+}
+
+export interface AgentTokenJoinRow extends AgentTokenRow {
+  owner_user_id: string;
+  agent_display_name: string;
+  agent_description: string | null;
+  agent_avatar_url: string | null;
+  agent_avatar_seed: string | null;
+  agent_is_active: number;
+  agent_created_at: string;
+  agent_updated_at: string;
+  owner_email: string | null;
+  owner_wallet_address: string | null;
+  owner_display_name: string;
+  owner_created_at: string;
+}
+
+export interface CourseRow {
+  id: string;
+  owner_user_id: string;
+  owner_display_name: string;
+  draft_json: string;
+  published_json: string | null;
+  draft_title: string | null;
+  published_title: string | null;
+  draft_version: number;
+  published_version: number | null;
+  created_at: string;
+  updated_at: string;
+  published_at: string | null;
+}
+
+export interface CourseVersionRow {
+  version: number;
+  snapshot_json: string;
+  title: string | null;
+  created_at: string;
+  published_by_user_id: string | null;
+  published_by_display_name: string | null;
+}
+
+export interface CourseRoomRefRow {
+  course_id: string;
+  course_version: number;
+  room_order: number;
+  room_id: string;
+  room_x: number;
+  room_y: number;
+  room_version: number;
+  room_title: string | null;
 }
 
 export interface PersistRoomRecordInput {
   draft: RoomSnapshot;
   published: RoomSnapshot | null;
   claimerUserId: string | null;
+  claimerPrincipalType: 'user' | 'agent' | null;
+  claimerAgentId: string | null;
   claimerDisplayName: string | null;
   claimedAt: string | null;
   lastPublishedByUserId: string | null;
+  lastPublishedByPrincipalType: 'user' | 'agent' | null;
+  lastPublishedByAgentId: string | null;
   lastPublishedByDisplayName: string | null;
   mintedChainId: number | null;
   mintedContractAddress: string | null;
@@ -90,9 +182,48 @@ export interface PersistRoomVersionInput {
   snapshot: RoomSnapshot;
   createdAt: string;
   publishedByUserId: string | null;
+  publishedByPrincipalType: 'user' | 'agent' | null;
+  publishedByAgentId: string | null;
   publishedByDisplayName: string | null;
   revertedFromVersion: number | null;
   onConflictUpdate: boolean;
+}
+
+export interface PersistCourseRecordInput {
+  draft: CourseSnapshot;
+  published: CourseSnapshot | null;
+  ownerUserId: string;
+  ownerDisplayName: string;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt: string | null;
+}
+
+export interface PersistCourseVersionInput {
+  snapshot: CourseSnapshot;
+  createdAt: string;
+  publishedByUserId: string | null;
+  publishedByDisplayName: string | null;
+  onConflictUpdate: boolean;
+}
+
+export interface CourseRunRow {
+  attempt_id: string;
+  course_id: string;
+  course_version: number;
+  goal_type: string;
+  goal_json: string;
+  user_id: string;
+  user_display_name: string;
+  started_at: string;
+  finished_at: string | null;
+  result: RunResult;
+  elapsed_ms: number | null;
+  deaths: number;
+  score: number;
+  collectibles_collected: number;
+  enemies_defeated: number;
+  checkpoints_reached: number;
 }
 
 export interface RoomRunRow {
@@ -114,6 +245,16 @@ export interface RoomRunRow {
   collectibles_collected: number;
   enemies_defeated: number;
   checkpoints_reached: number;
+}
+
+export interface RoomDifficultyVoteRow {
+  room_id: string;
+  room_version: number;
+  user_id: string;
+  difficulty: string;
+  created_at: string;
+  updated_at: string;
+  carried_from_version: number | null;
 }
 
 export interface UserStatsRow {
@@ -171,6 +312,24 @@ export interface ChatMessageRow {
   user_id: string;
   user_display_name: string;
   body: string;
+  created_at: string;
+  deleted_at: string | null;
+  deleted_by_user_id: string | null;
+}
+
+export interface ChatAdminRow {
+  user_id: string;
+  display_name: string;
+  granted_by_user_id: string;
+  granted_by_display_name: string | null;
+  created_at: string;
+}
+
+export interface ChatBanRow {
+  user_id: string;
+  display_name: string;
+  banned_by_user_id: string;
+  banned_by_display_name: string | null;
   created_at: string;
 }
 
@@ -242,11 +401,14 @@ export interface AuthSession {
 }
 
 export interface RequestAuth {
-  source: 'session' | 'api_token';
+  source: RequestAuthSource;
   user: AuthUser;
+  principal: RequestPrincipal;
+  agent: AgentAccount | null;
   session: AuthSession | null;
   scopes: ApiTokenScope[] | null;
   apiToken: ApiTokenRecord | null;
+  agentToken: AgentTokenRecord | null;
   isAdmin: boolean;
 }
 

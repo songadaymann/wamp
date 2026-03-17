@@ -1,5 +1,37 @@
 import Phaser from 'phaser';
 import { playSfx, stopSfx } from '../audio/sfx';
+import { createCourseRepository } from '../courses/courseRepository';
+import {
+  clearActiveCourseDraftSessionRoomOverride,
+  getActiveCourseDraftSessionCourseId,
+  getActiveCourseDraftSessionDraft,
+  getActiveCourseDraftSessionRecord,
+  getActiveCourseDraftSessionRoomOverrides,
+  getActiveCourseDraftSessionSelectedRoomId,
+  getActiveCourseDraftSessionSelectedRoomOrder,
+  isRoomInActiveCourseDraftSession,
+  isActiveCourseDraftSessionDirty,
+  setActiveCourseDraftSessionRecord,
+  setActiveCourseDraftSessionRoomOverride,
+  setActiveCourseDraftSessionSelectedRoom,
+  updateActiveCourseDraftSession,
+} from '../courses/draftSession';
+import {
+  areCourseRoomRefsOrthogonallyAdjacent,
+  courseRoomRefsFollowLinearPath,
+  COURSE_GOAL_LABELS,
+  cloneCourseSnapshot,
+  createDefaultCourseRecord,
+  getCourseRoomOrder,
+  MAX_COURSE_ROOMS,
+  type CourseGoal,
+  type CourseGoalType,
+  type CourseMarkerPoint,
+  type CourseRecord,
+  type CourseRoomRef,
+  type CourseSnapshot,
+} from '../courses/model';
+import type { CourseRunFinishRequestBody } from '../courses/runModel';
 import { SceneFxController } from '../fx/controller';
 import {
   getObjectById,
@@ -18,6 +50,7 @@ import {
   type RoomCoordinates,
   type RoomSnapshot,
 } from '../persistence/roomModel';
+import { createRoomRepository } from '../persistence/roomRepository';
 import { createWorldRepository } from '../persistence/worldRepository';
 import {
   getOrthogonalNeighbors,
@@ -55,6 +88,10 @@ import {
   showBusyOverlay,
 } from '../ui/appFeedback';
 import { getDeviceLayoutState, isMobileLandscapeBlocked } from '../ui/deviceLayout';
+import {
+  COURSE_COMPOSER_STATE_CHANGED_EVENT,
+  type CourseComposerState,
+} from '../ui/setup/sceneBridge';
 import { getAuthDebugState } from '../auth/client';
 import {
   PLAYFUN_GAME_PAUSE_EVENT,
@@ -82,7 +119,13 @@ import {
   getTerrainTileCollisionProfile,
   terrainTileCollidesAtLocalPixel,
 } from './overworld/terrainCollision';
-import type { EditorSceneData, OverworldMode, OverworldPlaySceneData } from './sceneData';
+import type {
+  CourseEditedRoomData,
+  EditorCourseEditData,
+  EditorSceneData,
+  OverworldMode,
+  OverworldPlaySceneData,
+} from './sceneData';
 import {
   consumeTouchAction,
   getTouchInputState,
@@ -91,9 +134,12 @@ import {
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 2.5;
 const DEFAULT_ZOOM = 0.18;
-const ROOM_BADGE_MAX_SCALE_ZOOM = DEFAULT_ZOOM;
 const ROOM_BADGE_FADE_START_ZOOM = 0.14;
 const ROOM_BADGE_HIDE_ZOOM = 0.11;
+const ROOM_BADGE_SCALE_FULL_ZOOM = 0.5;
+const ROOM_BADGE_LAYOUT_FULL_ZOOM = 0.32;
+const ROOM_BADGE_MIN_SCREEN_SCALE = 0.72;
+const ROOM_BADGE_MAX_SCREEN_SCALE = 1.45;
 const BUTTON_ZOOM_FACTOR = 1.12;
 const WHEEL_ZOOM_SENSITIVITY = 0.003;
 const PLAY_ROOM_FIT_PADDING = 16;
@@ -155,10 +201,58 @@ interface ZoomDebugState {
 
 interface GoalRoomBadge {
   container: Phaser.GameObjects.Container;
+  zoomedInPosition: { x: number; y: number };
+  zoomedOutPosition: { x: number; y: number };
 }
 
 interface RoomActivityBadge {
   container: Phaser.GameObjects.Container;
+  zoomedInPosition: { x: number; y: number };
+  zoomedOutPosition: { x: number; y: number };
+}
+
+interface CourseRoomBadge {
+  container: Phaser.GameObjects.Container;
+  zoomedInPosition: { x: number; y: number };
+  zoomedOutPosition: { x: number; y: number };
+}
+
+interface CoursePublishedRoomMeta {
+  roomId: string;
+  coordinates: RoomCoordinates;
+  roomVersion: number;
+  roomTitle: string | null;
+  publishedByUserId: string | null;
+}
+
+interface SelectedCourseContext {
+  courseId: string;
+  courseTitle: string | null;
+  goalType: CourseGoalType | null;
+  roomIndex: number;
+  roomCount: number;
+}
+
+interface ActiveCourseRunState {
+  course: CourseSnapshot;
+  returnCoordinates: RoomCoordinates;
+  elapsedMs: number;
+  deaths: number;
+  collectiblesCollected: number;
+  collectibleTarget: number | null;
+  enemiesDefeated: number;
+  enemyTarget: number | null;
+  checkpointsReached: number;
+  checkpointTarget: number | null;
+  nextCheckpointIndex: number;
+  result: 'active' | 'completed' | 'failed';
+  completionMessage: string | null;
+  attemptId: string | null;
+  submissionState: 'local-only' | 'starting' | 'active' | 'finishing' | 'submitted' | 'error';
+  submissionMessage: string | null;
+  pendingResult: 'completed' | 'failed' | 'abandoned' | null;
+  submittedScore: number | null;
+  leaderboardEligible: boolean;
 }
 
 export class OverworldPlayScene extends Phaser.Scene {
@@ -168,6 +262,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly PLAYER_WIDTH = 10;
   private readonly PLAYER_HEIGHT = 14;
   private readonly PLAYER_CROUCH_HEIGHT = 9;
+  private readonly PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT = 15;
   private readonly CRAWL_SPEED = 70;
   private readonly CRATE_PUSH_SPEED = 78;
   private readonly CRATE_PULL_SPEED = 66;
@@ -216,6 +311,8 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private player: Phaser.GameObjects.Rectangle | null = null;
   private playerBody: Phaser.Physics.Arcade.Body | null = null;
+  private playerPickupSensor: Phaser.GameObjects.Rectangle | null = null;
+  private playerPickupSensorBody: Phaser.Physics.Arcade.Body | null = null;
   private playerSprite: Phaser.GameObjects.Sprite | null = null;
   private playerAnimationState: DefaultPlayerAnimationState = 'idle';
   private playerFacing = 1;
@@ -258,6 +355,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private goalMarkerLabels: Phaser.GameObjects.Text[] = [];
   private roomGoalBadges: GoalRoomBadge[] = [];
   private roomActivityBadges: RoomActivityBadge[] = [];
+  private roomCourseBadges: CourseRoomBadge[] = [];
   private starfieldSprites: Phaser.GameObjects.TileSprite[] = [];
   private backdropCamera: Phaser.Cameras.Scene2D.Camera | null = null;
   private zoomDebugText: Phaser.GameObjects.Text | null = null;
@@ -280,6 +378,18 @@ export class OverworldPlayScene extends Phaser.Scene {
   private quicksandTouchedUntil = 0;
   private quicksandVisualSink = 0;
   private quicksandStatusCooldownUntil = 0;
+  private readonly roomRepository = createRoomRepository();
+  private readonly courseRepository = createCourseRepository();
+  private readonly activeCourseRoomOverrideIds = new Set<string>();
+  private courseComposerOpen = false;
+  private courseComposerLoading = false;
+  private courseComposerRecord: CourseRecord | null = null;
+  private courseComposerStatusText: string | null = null;
+  private courseComposerSelectedRoomEligible = false;
+  private courseComposerSelectedRoomInDraft = false;
+  private courseComposerSelectedRoomOrder: number | null = null;
+  private readonly courseRoomMetaByRoomId = new Map<string, CoursePublishedRoomMeta>();
+  private activeCourseRun: ActiveCourseRunState | null = null;
 
   private isPanning = false;
   private panStartPointer = { x: 0, y: 0 };
@@ -437,6 +547,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.collectedObjectKeys.add(key);
       },
       getPlayer: () => this.player,
+      getPlayerPickupSensor: () => this.playerPickupSensor,
       getPlayerBody: () => this.playerBody,
       isPlayerClimbingLadder: () => this.isClimbingLadder,
       isLadderDropRequested: () => this.isLadderDropRequested(),
@@ -503,6 +614,113 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private get currentGoalRun(): GoalRunState | null {
     return this.goalRunController.getCurrentRun();
+  }
+
+  private get activeCourseSnapshot(): CourseSnapshot | null {
+    return this.activeCourseRun?.course ?? null;
+  }
+
+  private getSelectedCourseContext(): SelectedCourseContext | null {
+    const publishedCourse = this.selectedSummary?.course ?? null;
+    if (publishedCourse) {
+      return {
+        courseId: publishedCourse.courseId,
+        courseTitle: publishedCourse.courseTitle,
+        goalType: publishedCourse.goalType,
+        roomIndex: publishedCourse.roomIndex,
+        roomCount: publishedCourse.roomCount,
+      };
+    }
+
+    return null;
+  }
+
+  private getActiveCourseDraftSessionContextForRoom(roomId: string): EditorCourseEditData | null {
+    const courseId = getActiveCourseDraftSessionCourseId();
+    const draft = getActiveCourseDraftSessionDraft();
+    if (!courseId || !draft) {
+      return null;
+    }
+
+    const roomOrder = getCourseRoomOrder(draft.roomRefs, roomId);
+    if (roomOrder < 0) {
+      return null;
+    }
+
+    return {
+      courseId,
+      roomId,
+      roomOrder,
+    };
+  }
+
+  private syncCourseComposerRecordFromSession(): void {
+    this.courseComposerRecord = getActiveCourseDraftSessionRecord();
+  }
+
+  private setCourseComposerRecord(
+    record: CourseRecord | null,
+    options: { selectedRoomId?: string | null } = {}
+  ): void {
+    setActiveCourseDraftSessionRecord(record, options);
+    this.syncCourseComposerRecordFromSession();
+  }
+
+  private sanitizeCourseComposerRecord(record: CourseRecord): {
+    record: CourseRecord;
+    resetMessage: string | null;
+  } {
+    if (courseRoomRefsFollowLinearPath(record.draft.roomRefs)) {
+      return {
+        record,
+        resetMessage: null,
+      };
+    }
+
+    if (record.published && courseRoomRefsFollowLinearPath(record.published.roomRefs)) {
+      const nextDraft = cloneCourseSnapshot(record.published);
+      nextDraft.status = 'draft';
+      nextDraft.updatedAt = new Date().toISOString();
+      return {
+        record: {
+          ...record,
+          draft: nextDraft,
+        },
+        resetMessage: 'Old draft reset to the published linear course path.',
+      };
+    }
+
+    const reset = createDefaultCourseRecord(record.draft.id);
+    reset.ownerUserId = record.ownerUserId;
+    reset.ownerDisplayName = record.ownerDisplayName;
+    reset.permissions = { ...record.permissions };
+    reset.versions = record.versions.map((version) => ({ ...version, snapshot: cloneCourseSnapshot(version.snapshot) }));
+    reset.published = record.published ? cloneCourseSnapshot(record.published) : null;
+    if (record.draft.title?.trim()) {
+      reset.draft.title = record.draft.title;
+    }
+    return {
+      record: reset,
+      resetMessage: 'Old draft reset for the new linear course builder.',
+    };
+  }
+
+  private getIsCurrentCourseDraftPreviewReady(): boolean {
+    const draft = this.courseComposerRecord?.draft ?? null;
+    if (!draft?.goal || draft.roomRefs.length === 0 || !draft.startPoint) {
+      return false;
+    }
+
+    switch (draft.goal.type) {
+      case 'reach_exit':
+        return draft.goal.exit !== null;
+      case 'checkpoint_sprint':
+        return draft.goal.finish !== null && draft.goal.checkpoints.length > 0;
+      case 'collect_target':
+      case 'defeat_all':
+      case 'survival':
+        return true;
+    }
   }
 
   private get currentRoomLeaderboard() {
@@ -855,12 +1073,24 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.playerLandAnimationUntil = 0;
     this.destroyRoomGoalBadges();
     this.destroyRoomActivityBadges();
+    this.destroyRoomCourseBadges();
     this.shouldCenterCamera = false;
     this.shouldRespawnPlayer = false;
     this.presenceController.reset();
+    this.courseComposerOpen = false;
+    this.courseComposerLoading = false;
+    this.courseComposerRecord = null;
+    this.courseComposerStatusText = null;
+    this.courseComposerSelectedRoomEligible = false;
+    this.courseComposerSelectedRoomInDraft = false;
+    this.courseComposerSelectedRoomOrder = null;
+    this.courseRoomMetaByRoomId.clear();
+    this.activeCourseRoomOverrideIds.clear();
+    this.activeCourseRun = null;
     this.hudBridge?.destroy();
     this.hudBridge = null;
     this.fxController?.destroy();
+    this.emitCourseComposerStateChanged();
   }
 
   private initializePresenceClient(): void {
@@ -1287,6 +1517,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     for (const badge of this.roomActivityBadges) {
       ignoredObjects.push(badge.container);
     }
+    for (const badge of this.roomCourseBadges) {
+      ignoredObjects.push(badge.container);
+    }
     if (this.player) ignoredObjects.push(this.player);
     if (this.playerSprite) ignoredObjects.push(this.playerSprite);
     for (const projectile of this.playerProjectiles) {
@@ -1341,7 +1574,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (this.mode !== 'play') {
       this.currentRoomCoordinates = { ...coordinates };
     }
+    setActiveCourseDraftSessionSelectedRoom(roomIdFromCoordinates(coordinates));
     this.updateSelectedSummary();
+    void this.refreshCourseComposerSelectedRoomState();
     void this.refreshLeaderboardForSelection();
     this.redrawWorld();
     this.renderHud();
@@ -1368,19 +1603,77 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private handleWake = (_sys: Phaser.Scenes.Systems, data?: OverworldPlaySceneData): void => {
+    void this.handleWakeAsync(data);
+  };
+
+  private async handleWakeAsync(data?: OverworldPlaySceneData): Promise<void> {
     this.applySceneData(data);
+    if (data?.courseDraftPreviewId) {
+      const draft = getActiveCourseDraftSessionDraft();
+      if (draft?.id === data.courseDraftPreviewId && draft.goal) {
+        await this.activateDraftCoursePreview(draft, data.draftRoom ?? null);
+      }
+    }
     this.syncAppMode();
     this.updateSelectedSummary();
     this.redrawWorld();
     this.renderHud();
-    void this.refreshAround(this.windowCenterCoordinates, {
+    await this.refreshAround(this.windowCenterCoordinates, {
       forceChunkReload: data?.forceRefreshAround ?? false,
     });
-  };
+  }
 
   private showTransientStatus(message: string): void {
     this.transientStatusMessage = message;
     this.transientStatusExpiresAt = this.time.now + 4200;
+  }
+
+  private applyCourseEditedRoomReturn(
+    courseEditedRoom: CourseEditedRoomData,
+    draftRoom: RoomSnapshot | null,
+    publishedRoom: RoomSnapshot | null
+  ): void {
+    if (getActiveCourseDraftSessionCourseId() !== courseEditedRoom.courseId) {
+      return;
+    }
+
+    const currentDraft = getActiveCourseDraftSessionDraft();
+    const currentRoomRef =
+      currentDraft?.roomRefs.find((roomRef) => roomRef.roomId === courseEditedRoom.roomId) ?? null;
+    if (!currentRoomRef) {
+      return;
+    }
+
+    setActiveCourseDraftSessionSelectedRoom(courseEditedRoom.roomId);
+
+    const nextDraftRoom =
+      draftRoom?.id === courseEditedRoom.roomId ? cloneRoomSnapshot(draftRoom) : null;
+    const nextPublishedRoom =
+      publishedRoom?.id === courseEditedRoom.roomId ? cloneRoomSnapshot(publishedRoom) : null;
+
+    if (nextPublishedRoom) {
+      clearActiveCourseDraftSessionRoomOverride(courseEditedRoom.roomId);
+    } else if (nextDraftRoom) {
+      setActiveCourseDraftSessionRoomOverride(nextDraftRoom);
+    }
+
+    const nextTitle = (nextPublishedRoom ?? nextDraftRoom)?.title ?? currentRoomRef.roomTitle ?? null;
+    const nextVersion = nextPublishedRoom?.version ?? currentRoomRef.roomVersion;
+    if (currentRoomRef.roomTitle === nextTitle && currentRoomRef.roomVersion === nextVersion) {
+      return;
+    }
+
+    updateActiveCourseDraftSession((draft) => {
+      const roomRef = draft.roomRefs.find((entry) => entry.roomId === courseEditedRoom.roomId);
+      if (!roomRef) {
+        return;
+      }
+
+      roomRef.roomTitle = nextTitle;
+      if (nextPublishedRoom) {
+        roomRef.roomVersion = nextPublishedRoom.version;
+      }
+    });
   }
 
   private touchQuicksand(): void {
@@ -1420,8 +1713,23 @@ export class OverworldPlayScene extends Phaser.Scene {
       });
     }
 
+    if (data?.courseEditedRoom) {
+      this.applyCourseEditedRoomReturn(
+        data.courseEditedRoom,
+        data.draftRoom ? cloneRoomSnapshot(data.draftRoom) : null,
+        data.publishedRoom ? cloneRoomSnapshot(data.publishedRoom) : null
+      );
+    }
+
     if (data?.statusMessage) {
       this.showTransientStatus(data.statusMessage);
+    }
+
+    this.syncCourseComposerRecordFromSession();
+    if (data?.courseEditorReturned && this.courseComposerRecord) {
+      this.courseComposerStatusText = 'Course draft updated.';
+      void this.refreshCourseComposerSelectedRoomState();
+      this.emitCourseComposerStateChanged();
     }
 
     if (data?.mode) {
@@ -1765,7 +2073,12 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.shouldRespawnPlayer = false;
     }
 
-    this.applyGoalRunMutation(this.goalRunController.syncRunForRoom(currentRoom));
+    if (this.activeCourseRun) {
+      this.goalRunController.clearCurrentRun();
+      this.redrawGoalMarkers();
+    } else {
+      this.applyGoalRunMutation(this.goalRunController.syncRunForRoom(currentRoom));
+    }
 
     this.syncFullRoomColliders();
     this.syncLiveObjectInteractions();
@@ -1789,6 +2102,10 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private async refreshLeaderboardForSelection(): Promise<void> {
+    if (this.activeCourseRun) {
+      return;
+    }
+
     const targetRoom =
       this.mode === 'play'
         ? this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates)
@@ -1806,12 +2123,14 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
     this.goalMarkerLabels = [];
 
-    if (!this.currentGoalRun) {
+    if (!this.currentGoalRun && !this.activeCourseRun) {
       this.syncBackdropCameraIgnores();
       return;
     }
 
-    const markers = this.getGoalMarkerDescriptors(this.currentGoalRun);
+    const markers = this.activeCourseRun
+      ? this.getCourseMarkerDescriptors(this.activeCourseRun)
+      : this.getGoalMarkerDescriptors(this.currentGoalRun!);
     for (const marker of markers) {
       const sprite = createGoalMarkerFlagSprite(
         this,
@@ -1853,6 +2172,17 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.roomActivityBadges = [];
   }
 
+  private destroyRoomCourseBadges(): void {
+    for (const badge of this.roomCourseBadges) {
+      badge.container.destroy(true);
+    }
+    this.roomCourseBadges = [];
+  }
+
+  private emitCourseComposerStateChanged(): void {
+    window.dispatchEvent(new CustomEvent(COURSE_COMPOSER_STATE_CHANGED_EVENT));
+  }
+
   private redrawRoomGoalBadges(): void {
     this.destroyRoomGoalBadges();
 
@@ -1879,20 +2209,20 @@ export class OverworldPlayScene extends Phaser.Scene {
           20
         );
         const goalLabel = this.truncateOverlayText(this.getGoalBadgeText(room.goal).toUpperCase(), 22);
-        const backgroundWidth = Math.max(titleLabel.length * 6.7 + 14, goalLabel.length * 6.1 + 14, 92);
-        const backgroundHeight = 30;
+        const backgroundWidth = Math.max(titleLabel.length * 6.3 + 12, goalLabel.length * 5.8 + 12, 84);
+        const backgroundHeight = 26;
         const background = this.add.rectangle(0, 0, backgroundWidth, backgroundHeight, 0x050505, 0.84);
         background.setOrigin(0, 0);
         background.setStrokeStyle(1, 0x347433, 0.92);
 
-        const titleText = this.add.text(7, 4, titleLabel, {
+        const titleText = this.add.text(6, 3, titleLabel, {
           fontFamily: 'Courier New',
           fontSize: '9px',
           color: '#f3eee2',
           stroke: '#050505',
           strokeThickness: 3,
         });
-        const goalText = this.add.text(7, 15, goalLabel, {
+        const goalText = this.add.text(6, 13, goalLabel, {
           fontFamily: 'Courier New',
           fontSize: '9px',
           color: '#ffc107',
@@ -1900,14 +2230,23 @@ export class OverworldPlayScene extends Phaser.Scene {
           strokeThickness: 3,
         });
 
-        const container = this.add.container(origin.x + 8, origin.y + 8, [
+        const zoomedInPosition = { x: origin.x + 8, y: origin.y + 8 };
+        const zoomedOutPosition = {
+          x: origin.x + (ROOM_PX_WIDTH - backgroundWidth) * 0.5,
+          y: origin.y + 22,
+        };
+        const container = this.add.container(zoomedInPosition.x, zoomedInPosition.y, [
           background,
           titleText,
           goalText,
         ]);
         container.setDepth(18);
-        container.setScale(1 / this.cameras.main.zoom);
-        this.roomGoalBadges.push({ container });
+        container.setScale(this.getRoomBadgeOverlayScale(this.cameras.main.zoom));
+        this.roomGoalBadges.push({
+          container,
+          zoomedInPosition,
+          zoomedOutPosition,
+        });
       }
     }
 
@@ -1936,12 +2275,12 @@ export class OverworldPlayScene extends Phaser.Scene {
 
         const origin = this.getRoomOrigin(coordinates);
         const label = editorCount === 1 ? 'BUILDING' : `${editorCount} BUILDING`;
-        const backgroundWidth = Math.max(label.length * 6.2 + 12, 72);
-        const background = this.add.rectangle(0, 0, backgroundWidth, 16, RETRO_COLORS.backgroundNumber, 0.88);
+        const backgroundWidth = Math.max(label.length * 5.9 + 10, 64);
+        const background = this.add.rectangle(0, 0, backgroundWidth, 14, RETRO_COLORS.backgroundNumber, 0.88);
         background.setOrigin(0, 0);
         background.setStrokeStyle(1, RETRO_COLORS.frontier, 0.94);
 
-        const labelText = this.add.text(6, 3, label, {
+        const labelText = this.add.text(5, 2, label, {
           fontFamily: 'Courier New',
           fontSize: '8px',
           color: '#ffcf86',
@@ -1949,13 +2288,102 @@ export class OverworldPlayScene extends Phaser.Scene {
           strokeThickness: 3,
         });
 
-        const container = this.add.container(origin.x + 8, origin.y + ROOM_PX_HEIGHT - 24, [
+        const zoomedInPosition = { x: origin.x + 8, y: origin.y + ROOM_PX_HEIGHT - 22 };
+        const zoomedOutPosition = {
+          x: origin.x + (ROOM_PX_WIDTH - backgroundWidth) * 0.5,
+          y: origin.y + ROOM_PX_HEIGHT - 22,
+        };
+        const container = this.add.container(zoomedInPosition.x, zoomedInPosition.y, [
           background,
           labelText,
         ]);
         container.setDepth(18);
-        container.setScale(1 / this.cameras.main.zoom);
-        this.roomActivityBadges.push({ container });
+        container.setScale(this.getRoomBadgeOverlayScale(this.cameras.main.zoom));
+        this.roomActivityBadges.push({
+          container,
+          zoomedInPosition,
+          zoomedOutPosition,
+        });
+      }
+    }
+
+    this.syncBackdropCameraIgnores();
+  }
+
+  private redrawRoomCourseBadges(): void {
+    this.destroyRoomCourseBadges();
+
+    if (!this.worldWindow || this.mode !== 'browse') {
+      this.syncBackdropCameraIgnores();
+      return;
+    }
+
+    const gridSize = this.worldWindow.radius * 2 + 1;
+    for (let row = 0; row < gridSize; row += 1) {
+      for (let col = 0; col < gridSize; col += 1) {
+        const coordinates = {
+          x: this.worldWindow.center.x + col - this.worldWindow.radius,
+          y: this.worldWindow.center.y + row - this.worldWindow.radius,
+        };
+        const summary = this.roomSummariesById.get(roomIdFromCoordinates(coordinates));
+        if (!summary?.course) {
+          continue;
+        }
+
+        const origin = this.getRoomOrigin(coordinates);
+        const titleLabel = this.truncateOverlayText(
+          (summary.course.courseTitle?.trim() || 'COURSE').toUpperCase(),
+          16
+        );
+        const goalLabel = this.truncateOverlayText(
+          (summary.course.goalType ? COURSE_GOAL_LABELS[summary.course.goalType] : 'Course')
+            .toUpperCase(),
+          17
+        );
+        const backgroundWidth = Math.min(
+          Math.max(titleLabel.length * 6.3 + 12, goalLabel.length * 5.8 + 12, 84),
+          112
+        );
+        const backgroundHeight = 26;
+        const background = this.add.rectangle(0, 0, backgroundWidth, backgroundHeight, 0x050505, 0.88);
+        background.setOrigin(0, 0);
+        background.setStrokeStyle(1, RETRO_COLORS.selected, 0.88);
+
+        const titleText = this.add.text(6, 3, titleLabel, {
+          fontFamily: 'Courier New',
+          fontSize: '9px',
+          color: '#9ddcff',
+          stroke: '#050505',
+          strokeThickness: 3,
+        });
+        const goalText = this.add.text(6, 13, goalLabel, {
+          fontFamily: 'Courier New',
+          fontSize: '8px',
+          color: '#f3eee2',
+          stroke: '#050505',
+          strokeThickness: 3,
+        });
+
+        const zoomedInPosition = {
+          x: origin.x + ROOM_PX_WIDTH - backgroundWidth - 8,
+          y: origin.y + 8,
+        };
+        const zoomedOutPosition = {
+          x: origin.x + (ROOM_PX_WIDTH - backgroundWidth) * 0.5,
+          y: origin.y + 8,
+        };
+        const container = this.add.container(zoomedInPosition.x, zoomedInPosition.y, [
+          background,
+          titleText,
+          goalText,
+        ]);
+        container.setDepth(18);
+        container.setScale(this.getRoomBadgeOverlayScale(this.cameras.main.zoom));
+        this.roomCourseBadges.push({
+          container,
+          zoomedInPosition,
+          zoomedOutPosition,
+        });
       }
     }
 
@@ -2003,11 +2431,85 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
   }
 
+  private getCourseMarkerDescriptors(runState: ActiveCourseRunState): Array<{
+    point: GoalMarkerPoint;
+    label: string | null;
+    variant: GoalMarkerFlagVariant;
+    textColor: string;
+  }> {
+    const goal = runState.course.goal;
+    if (!goal) {
+      return [];
+    }
+
+    const markers: Array<{
+      point: GoalMarkerPoint;
+      label: string | null;
+      variant: GoalMarkerFlagVariant;
+      textColor: string;
+    }> = [];
+
+    if (runState.course.startPoint) {
+      markers.push({
+        point: this.toWorldCoursePoint(runState.course.startPoint),
+        label: 'S',
+        variant: 'checkpoint-pending',
+        textColor: '#9fdcff',
+      });
+    }
+
+    if (goal.type === 'reach_exit' && goal.exit) {
+      markers.push({
+        point: this.toWorldCoursePoint(goal.exit),
+        label: null,
+        variant: (runState.result === 'completed' ? 'finish-cleared' : 'finish-pending') as GoalMarkerFlagVariant,
+        textColor: runState.result === 'completed' ? '#f6e6a6' : '#ffefef',
+      });
+    }
+
+    if (goal.type === 'checkpoint_sprint') {
+      for (let index = 0; index < goal.checkpoints.length; index += 1) {
+        const checkpoint = goal.checkpoints[index];
+        const reached = index < runState.nextCheckpointIndex;
+        markers.push({
+          point: this.toWorldCoursePoint(checkpoint),
+          label: `${index + 1}`,
+          variant: (reached ? 'checkpoint-reached' : 'checkpoint-pending') as GoalMarkerFlagVariant,
+          textColor: reached ? '#a9ffd0' : '#ffefef',
+        });
+      }
+
+      if (goal.finish) {
+        markers.push({
+          point: this.toWorldCoursePoint(goal.finish),
+          label: null,
+          variant: (runState.result === 'completed' ? 'finish-cleared' : 'finish-pending') as GoalMarkerFlagVariant,
+          textColor: runState.result === 'completed' ? '#f6e6a6' : '#ffefef',
+        });
+      }
+    }
+
+    return markers;
+  }
+
   private toWorldGoalPoint(
     roomCoordinates: RoomCoordinates,
     point: GoalMarkerPoint
   ): GoalMarkerPoint {
     const origin = this.getRoomOrigin(roomCoordinates);
+    return {
+      x: origin.x + point.x,
+      y: origin.y + point.y,
+    };
+  }
+
+  private toWorldCoursePoint(point: CourseMarkerPoint): GoalMarkerPoint {
+    const roomRef =
+      this.activeCourseSnapshot?.roomRefs.find((candidate) => candidate.roomId === point.roomId) ??
+      this.courseComposerRecord?.draft.roomRefs.find((candidate) => candidate.roomId === point.roomId) ??
+      null;
+
+    const origin = this.getRoomOrigin(roomRef?.coordinates ?? this.selectedCoordinates);
     return {
       x: origin.x + point.x,
       y: origin.y + point.y,
@@ -2036,6 +2538,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.externalLaunchGraceUntil = 0;
     this.playerBody?.destroy();
     this.playerBody = null;
+    this.playerPickupSensorBody?.destroy();
+    this.playerPickupSensorBody = null;
+    this.playerPickupSensor?.destroy();
+    this.playerPickupSensor = null;
     this.playerSprite?.destroy();
     this.playerSprite = null;
     this.player?.destroy();
@@ -2072,8 +2578,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       }
 
       for (const neighbor of getOrthogonalNeighbors(loadedRoom.room.coordinates)) {
-        const neighborState = this.getCellStateAt(neighbor);
-        if (neighborState === 'published' || neighborState === 'draft') {
+        if (this.isNeighborReachableInCurrentPlayMode(loadedRoom.room.coordinates, neighbor)) {
           continue;
         }
 
@@ -2083,6 +2588,26 @@ export class OverworldPlayScene extends Phaser.Scene {
         }
       }
     }
+  }
+
+  private isNeighborReachableInCurrentPlayMode(
+    roomCoordinates: RoomCoordinates,
+    neighborCoordinates: RoomCoordinates
+  ): boolean {
+    if (this.activeCourseSnapshot) {
+      const currentRoomId = roomIdFromCoordinates(roomCoordinates);
+      const neighborRoomId = roomIdFromCoordinates(neighborCoordinates);
+      const currentIndex = this.activeCourseSnapshot.roomRefs.findIndex(
+        (roomRef) => roomRef.roomId === currentRoomId
+      );
+      const neighborIndex = this.activeCourseSnapshot.roomRefs.findIndex(
+        (roomRef) => roomRef.roomId === neighborRoomId
+      );
+      return currentIndex >= 0 && neighborIndex >= 0 && Math.abs(currentIndex - neighborIndex) === 1;
+    }
+
+    const neighborState = this.getCellStateAt(neighborCoordinates);
+    return neighborState === 'published' || neighborState === 'draft';
   }
 
   private createEdgeWall(
@@ -2139,6 +2664,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (!this.worldWindow) {
       this.destroyRoomGoalBadges();
       this.destroyRoomActivityBadges();
+      this.destroyRoomCourseBadges();
       return;
     }
 
@@ -2172,6 +2698,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     this.redrawRoomGoalBadges();
     this.redrawRoomActivityBadges();
+    this.redrawRoomCourseBadges();
   }
 
   private redrawGridOverlay(): void {
@@ -2222,6 +2749,11 @@ export class OverworldPlayScene extends Phaser.Scene {
     x: number,
     y: number
   ): void {
+    if (this.activeCourseSnapshot && this.isRoomInActiveCourse(coordinates)) {
+      this.drawActiveCourseBoundary(coordinates, x, y);
+      return;
+    }
+
     const editorCount = this.getRoomEditorCount(coordinates);
     if (cellState === 'draft') {
       this.roomFrameGraphics.lineStyle(2, RETRO_COLORS.draft, 0.95);
@@ -2254,6 +2786,38 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (editorCount > 0 && cellState !== 'draft') {
       this.roomFrameGraphics.lineStyle(2, RETRO_COLORS.frontier, 0.88);
       this.roomFrameGraphics.strokeRect(x + 14, y + 14, ROOM_PX_WIDTH - 28, ROOM_PX_HEIGHT - 28);
+    }
+  }
+
+  private drawActiveCourseBoundary(
+    coordinates: RoomCoordinates,
+    x: number,
+    y: number
+  ): void {
+    const lineInset = 4;
+    const left = x + lineInset;
+    const right = x + ROOM_PX_WIDTH - lineInset;
+    const top = y + lineInset;
+    const bottom = y + ROOM_PX_HEIGHT - lineInset;
+    const neighbors = {
+      left: this.isRoomInActiveCourse({ x: coordinates.x - 1, y: coordinates.y }),
+      right: this.isRoomInActiveCourse({ x: coordinates.x + 1, y: coordinates.y }),
+      up: this.isRoomInActiveCourse({ x: coordinates.x, y: coordinates.y - 1 }),
+      down: this.isRoomInActiveCourse({ x: coordinates.x, y: coordinates.y + 1 }),
+    };
+
+    this.roomFrameGraphics.lineStyle(3, RETRO_COLORS.draft, 0.92);
+    if (!neighbors.left) {
+      this.roomFrameGraphics.lineBetween(left, top, left, bottom);
+    }
+    if (!neighbors.right) {
+      this.roomFrameGraphics.lineBetween(right, top, right, bottom);
+    }
+    if (!neighbors.up) {
+      this.roomFrameGraphics.lineBetween(left, top, right, top);
+    }
+    if (!neighbors.down) {
+      this.roomFrameGraphics.lineBetween(left, bottom, right, bottom);
     }
   }
 
@@ -2401,6 +2965,19 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.playerBody.setCollideWorldBounds(false);
     this.playerBody.setMaxVelocityY(500);
     this.playerBody.setAllowGravity(true);
+    this.playerPickupSensor = this.add.rectangle(
+      spawn.x,
+      spawn.y,
+      this.PLAYER_WIDTH,
+      this.PLAYER_HEIGHT + this.PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT,
+      RETRO_COLORS.draft
+    );
+    this.playerPickupSensor.setVisible(false);
+    this.physics.add.existing(this.playerPickupSensor);
+    this.playerPickupSensorBody = this.playerPickupSensor.body as Phaser.Physics.Arcade.Body;
+    this.playerPickupSensorBody.setAllowGravity(false);
+    this.playerPickupSensorBody.setImmovable(true);
+    this.playerPickupSensorBody.moves = false;
     this.externalLaunchGraceUntil = 0;
     this.isCrouching = false;
     this.syncPlayerHitbox();
@@ -2472,12 +3049,11 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     const nextHeight = this.isCrouching ? this.PLAYER_CROUCH_HEIGHT : this.PLAYER_HEIGHT;
-    if (this.playerBody.height === nextHeight) {
-      return;
+    if (this.playerBody.height !== nextHeight) {
+      this.playerBody.setSize(this.PLAYER_WIDTH, nextHeight, false);
+      this.playerBody.setOffset(0, this.PLAYER_HEIGHT - nextHeight);
     }
-
-    this.playerBody.setSize(this.PLAYER_WIDTH, nextHeight, false);
-    this.playerBody.setOffset(0, this.PLAYER_HEIGHT - nextHeight);
+    this.syncPlayerPickupSensor();
   }
 
   private clearCrateInteractionState(): void {
@@ -2793,6 +3369,14 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private getPlayerSpawn(room: RoomSnapshot): PlayerSpawn {
+    if (this.activeCourseSnapshot?.startPoint?.roomId === room.id) {
+      const origin = this.getRoomOrigin(room.coordinates);
+      return {
+        x: origin.x + this.activeCourseSnapshot.startPoint.x,
+        y: origin.y + this.activeCourseSnapshot.startPoint.y - this.PLAYER_HEIGHT / 2,
+      };
+    }
+
     if (room.spawnPoint) {
       const origin = this.getRoomOrigin(room.coordinates);
       return {
@@ -2948,6 +3532,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
+    this.syncPlayerPickupSensor();
+
     this.playerSprite.setPosition(
       this.player.x,
       this.playerBody.bottom + DEFAULT_PLAYER_VISUAL_FEET_OFFSET + this.quicksandVisualSink
@@ -2995,6 +3581,11 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private updateGoalRun(delta: number): void {
+    if (this.activeCourseRun) {
+      this.updateCourseRun(delta);
+      return;
+    }
+
     this.applyGoalRunMutation(this.goalRunController.tick(delta));
 
     const runState = this.currentGoalRun;
@@ -3030,6 +3621,21 @@ export class OverworldPlayScene extends Phaser.Scene {
       default:
         break;
     }
+  }
+
+  private syncPlayerPickupSensor(): void {
+    if (!this.playerBody || !this.playerPickupSensor || !this.playerPickupSensorBody) {
+      return;
+    }
+
+    const sensorWidth = this.playerBody.width;
+    const sensorHeight = this.playerBody.height + this.PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT;
+    const sensorX = this.playerBody.center.x;
+    const sensorY = this.playerBody.bottom - sensorHeight * 0.5;
+    this.playerPickupSensor.setSize(sensorWidth, sensorHeight);
+    this.playerPickupSensor.setPosition(sensorX, sensorY);
+    this.playerPickupSensorBody.setSize(sensorWidth, sensorHeight, true);
+    this.playerPickupSensorBody.reset(sensorX, sensorY);
   }
 
   private updateCheckpointSprintRun(runState: GoalRunState): void {
@@ -3072,14 +3678,96 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.applyGoalRunMutation(this.goalRunController.markFailed(message));
   }
 
+  private updateCourseRun(delta: number): void {
+    const runState = this.activeCourseRun;
+    if (!runState || runState.result !== 'active') {
+      return;
+    }
+
+    runState.elapsedMs += delta;
+    const goal = runState.course.goal;
+    if (!goal || !this.playerBody || !this.player) {
+      return;
+    }
+
+    if ('timeLimitMs' in goal && goal.timeLimitMs !== null && runState.elapsedMs >= goal.timeLimitMs) {
+      this.failCourseRun('Time up.');
+      return;
+    }
+
+    if (goal.type === 'survival' && runState.elapsedMs >= goal.durationMs) {
+      this.completeCourseRun('Course cleared.');
+      return;
+    }
+
+    if (goal.type === 'reach_exit' && goal.exit && this.playerTouchesGoalPoint(this.toWorldCoursePoint(goal.exit))) {
+      this.completeCourseRun('Exit reached.');
+      return;
+    }
+
+    if (goal.type === 'checkpoint_sprint') {
+      const nextCheckpoint = goal.checkpoints[runState.nextCheckpointIndex] ?? null;
+      if (nextCheckpoint && this.playerTouchesGoalPoint(this.toWorldCoursePoint(nextCheckpoint))) {
+        runState.nextCheckpointIndex += 1;
+        runState.checkpointsReached += 1;
+        this.showTransientStatus(`Checkpoint ${runState.checkpointsReached} reached.`);
+        this.redrawGoalMarkers();
+      }
+
+      if (
+        runState.nextCheckpointIndex >= goal.checkpoints.length &&
+        goal.finish &&
+        this.playerTouchesGoalPoint(this.toWorldCoursePoint(goal.finish))
+      ) {
+        this.completeCourseRun('Sprint clear.');
+      }
+    }
+  }
+
+  private completeCourseRun(message: string): void {
+    if (!this.activeCourseRun || this.activeCourseRun.result !== 'active') {
+      return;
+    }
+
+    this.activeCourseRun.result = 'completed';
+    this.activeCourseRun.completionMessage = message;
+    this.showTransientStatus(message);
+    this.fxController?.playGoalFx('success', this.player?.x ?? 0, this.playerBody?.bottom ?? 0);
+    this.redrawGoalMarkers();
+    void this.finalizeActiveCourseRun('completed');
+  }
+
+  private failCourseRun(message: string): void {
+    if (!this.activeCourseRun || this.activeCourseRun.result !== 'active') {
+      return;
+    }
+
+    this.activeCourseRun.result = 'failed';
+    this.activeCourseRun.completionMessage = message;
+    this.showTransientStatus(message);
+    this.fxController?.playGoalFx('fail', this.player?.x ?? 0, this.playerBody?.bottom ?? 0, 'goal-fail');
+    this.redrawGoalMarkers();
+    void this.finalizeActiveCourseRun('failed');
+  }
+
   private handlePlayerDeath(reason: string): void {
     const activeRun = this.currentGoalRun;
+    const activeCourseRun = this.activeCourseRun;
     this.goalRunController.recordDeath();
+    if (activeCourseRun && activeCourseRun.result === 'active') {
+      activeCourseRun.deaths += 1;
+    }
     if (this.player && this.playerBody) {
       this.fxController?.playGoalFx('fail', this.player.x, this.playerBody.bottom - 10, null);
     }
 
     this.respawnPlayerToCurrentRoom();
+
+    if (activeCourseRun?.course.goal?.type === 'survival') {
+      this.failCourseRun('Course survival failed.');
+      this.showTransientStatus(`${reason} Course run failed.`);
+      return;
+    }
 
     if (activeRun?.goal.type === 'survival') {
       const goalRoom = this.getRoomSnapshotForCoordinates(activeRun.roomCoordinates);
@@ -3096,6 +3784,13 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private handleEnemyDefeated(roomId: string, enemyName: string): boolean {
+    if (this.activeCourseRun?.result === 'active' && this.activeCourseRun.enemyTarget !== null) {
+      this.activeCourseRun.enemiesDefeated += 1;
+      if (this.activeCourseRun.enemiesDefeated >= this.activeCourseRun.enemyTarget) {
+        this.completeCourseRun('All enemies defeated.');
+      }
+    }
+
     const result = this.goalRunController.recordEnemyDefeated(
       roomId,
       enemyName
@@ -3105,11 +3800,23 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private handleCollectibleCollected(roomId: string): void {
+    if (this.activeCourseRun?.result === 'active' && this.activeCourseRun.collectibleTarget !== null) {
+      this.activeCourseRun.collectiblesCollected += 1;
+      if (this.activeCourseRun.collectiblesCollected >= this.activeCourseRun.collectibleTarget) {
+        this.completeCourseRun('Collection target reached.');
+      }
+    }
+
     this.applyGoalRunMutation(this.goalRunController.recordCollectibleCollected(roomId));
   }
 
   private resetPlaySession(): void {
     this.goalRunController.abandonActiveRun();
+    if (this.activeCourseRun?.result === 'active') {
+      void this.finalizeActiveCourseRun('abandoned');
+    }
+    this.activeCourseRun = null;
+    this.clearActiveCourseRoomOverrides();
 
     this.collectedObjectKeys.clear();
     this.heldKeyCount = 0;
@@ -3192,7 +3899,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    const activeGoalRun = this.currentGoalRun;
+    const activeGoalRun = this.activeCourseRun ? null : this.currentGoalRun;
     if (
       activeGoalRun &&
       activeGoalRun.result === 'active' &&
@@ -3205,12 +3912,15 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.currentRoomCoordinates = { ...nextRoomCoordinates };
     this.selectedCoordinates = { ...nextRoomCoordinates };
     this.updateSelectedSummary();
-    this.applyGoalRunMutation(
-      this.goalRunController.syncRunForRoom(
-        this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates)
-      )
-    );
-    void this.refreshLeaderboardForSelection();
+    if (!this.activeCourseRun) {
+      this.applyGoalRunMutation(
+        this.goalRunController.syncRunForRoom(
+          this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates)
+        )
+      );
+      void this.refreshLeaderboardForSelection();
+    }
+    void this.refreshCourseComposerSelectedRoomState();
     setFocusedCoordinatesInUrl(this.currentRoomCoordinates);
 
     if (
@@ -3283,6 +3993,9 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private getCellStateAt(coordinates: RoomCoordinates): SelectedCellState {
     const roomId = roomIdFromCoordinates(coordinates);
+    if (this.activeCourseRoomOverrideIds.has(roomId)) {
+      return 'published';
+    }
     if (this.draftRoomsById.has(roomId)) {
       return 'draft';
     }
@@ -3295,6 +4008,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       return 'frontier';
     }
     return 'empty';
+  }
+
+  private isRoomInActiveCourse(coordinates: RoomCoordinates): boolean {
+    const roomId = roomIdFromCoordinates(coordinates);
+    return Boolean(this.activeCourseSnapshot?.roomRefs.some((roomRef) => roomRef.roomId === roomId));
   }
 
   fitLoadedWorld(): void {
@@ -3348,15 +4066,17 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   returnToWorld(): void {
+    const returnCoordinates = this.activeCourseRun?.returnCoordinates ?? this.currentRoomCoordinates;
     this.resetPlaySession();
     this.mode = 'browse';
     this.cameraMode = 'inspect';
     this.inspectZoom = this.browseInspectZoom;
     this.syncAppMode();
-    this.selectedCoordinates = { ...this.currentRoomCoordinates };
+    this.selectedCoordinates = { ...returnCoordinates };
+    this.currentRoomCoordinates = { ...returnCoordinates };
     this.shouldCenterCamera = true;
     this.shouldRespawnPlayer = false;
-    void this.refreshAround(this.currentRoomCoordinates);
+    void this.refreshAround(returnCoordinates);
   }
 
   buildSelectedRoom(): void {
@@ -3374,11 +4094,14 @@ export class OverworldPlayScene extends Phaser.Scene {
   editSelectedRoom(): void {
     const selectedState = this.getCellStateAt(this.selectedCoordinates);
     if (selectedState !== 'published' && selectedState !== 'draft') return;
+    const selectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
+    const courseEdit = this.getActiveCourseDraftSessionContextForRoom(selectedRoomId);
 
     const editorData: EditorSceneData = {
       roomCoordinates: { ...this.selectedCoordinates },
       source: 'world',
       roomSnapshot: this.getRoomSnapshotForCoordinates(this.selectedCoordinates),
+      courseEdit,
     };
 
     this.openEditor(editorData);
@@ -3401,6 +4124,770 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   editCurrentRoom(): void {
     this.editSelectedRoom();
+  }
+
+  async playSelectedCourse(): Promise<void> {
+    if (this.activeCourseRun) {
+      this.returnToWorld();
+      return;
+    }
+
+    const selectedCourseId = this.getSelectedCourseContext()?.courseId ?? null;
+    if (!selectedCourseId) {
+      return;
+    }
+
+    showBusyOverlay('Starting course...', 'Loading course...');
+    try {
+      const record = await this.courseRepository.loadCourse(selectedCourseId);
+      const snapshot = record.published ? cloneCourseSnapshot(record.published) : null;
+      if (!snapshot || !snapshot.goal) {
+        throw new Error('This course is not published yet.');
+      }
+
+      await this.startCoursePlayback(snapshot);
+      hideBusyOverlay();
+    } catch (error) {
+      console.error('Failed to start course', error);
+      showBusyError(
+        error instanceof Error ? error.message : 'Failed to start course.',
+        {
+          closeHandler: () => hideBusyOverlay(),
+        }
+      );
+    }
+  }
+
+  private async startCoursePlayback(snapshot: CourseSnapshot): Promise<void> {
+    this.resetPlaySession();
+    this.goalRunController.clearCurrentRun();
+    await this.prepareActiveCourseRoomOverrides(snapshot);
+    this.activeCourseRun = this.createCourseRunState(snapshot);
+
+    if (this.activeCourseRun.leaderboardEligible) {
+      void this.startRemoteCourseRun(this.activeCourseRun);
+    }
+
+    const startRoom = this.getCourseStartRoomRef(snapshot) ?? snapshot.roomRefs[0] ?? null;
+    if (!startRoom) {
+      throw new Error('This course has no playable rooms.');
+    }
+
+    this.browseInspectZoom = this.inspectZoom;
+    this.mode = 'play';
+    this.cameraMode = 'follow';
+    this.inspectZoom = this.getFitZoomForRoom();
+    this.syncAppMode();
+    this.currentRoomCoordinates = { ...startRoom.coordinates };
+    this.selectedCoordinates = { ...startRoom.coordinates };
+    this.shouldCenterCamera = true;
+    this.shouldRespawnPlayer = true;
+    this.courseComposerStatusText = null;
+    this.emitCourseComposerStateChanged();
+    setFocusedCoordinatesInUrl(this.currentRoomCoordinates);
+    await this.refreshAround(this.currentRoomCoordinates, { forceChunkReload: true });
+  }
+
+  async openCourseComposer(): Promise<void> {
+    const authState = getAuthDebugState();
+    this.courseComposerOpen = true;
+    this.courseComposerLoading = true;
+    this.emitCourseComposerStateChanged();
+
+    try {
+      const sessionRecord = getActiveCourseDraftSessionRecord();
+      const selectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
+      const selectedRoomInSession = Boolean(
+        sessionRecord &&
+        getCourseRoomOrder(sessionRecord.draft.roomRefs, selectedRoomId) >= 0
+      );
+      const selectedCourseId = selectedRoomInSession
+        ? null
+        : this.selectedSummary?.course?.courseId ?? null;
+      let nextRecord: CourseRecord;
+      if (selectedRoomInSession && sessionRecord) {
+        nextRecord = sessionRecord;
+      } else if (selectedCourseId && sessionRecord?.draft.id !== selectedCourseId) {
+        nextRecord = await this.courseRepository.loadCourse(selectedCourseId);
+      } else if (selectedCourseId && sessionRecord?.draft.id === selectedCourseId) {
+        nextRecord = sessionRecord;
+      } else if (sessionRecord) {
+        nextRecord = sessionRecord;
+      } else {
+        nextRecord = createDefaultCourseRecord();
+        nextRecord.ownerUserId = authState.user?.id ?? null;
+        nextRecord.ownerDisplayName = authState.user?.displayName ?? null;
+        nextRecord.permissions = {
+          canSaveDraft: Boolean(authState.authenticated),
+          canPublish: Boolean(authState.authenticated),
+        };
+      }
+
+      const sanitized = this.sanitizeCourseComposerRecord(nextRecord);
+      this.setCourseComposerRecord(sanitized.record, {
+        selectedRoomId: roomIdFromCoordinates(this.selectedCoordinates),
+      });
+      this.courseComposerStatusText =
+        sanitized.resetMessage ??
+        (selectedRoomInSession
+          ? 'Loaded active course draft.'
+          : selectedCourseId
+          ? 'Loaded course.'
+          : authState.authenticated
+            ? 'Build a linear 1-4 room course path.'
+            : 'Sign in to author and publish courses.');
+      await this.refreshCourseComposerSelectedRoomState();
+    } catch (error) {
+      console.error('Failed to open course composer', error);
+      this.courseComposerStatusText =
+        error instanceof Error ? error.message : 'Failed to open course builder.';
+    } finally {
+      this.courseComposerLoading = false;
+      this.emitCourseComposerStateChanged();
+      this.renderHud();
+    }
+  }
+
+  closeCourseComposer(): void {
+    this.courseComposerOpen = false;
+    this.emitCourseComposerStateChanged();
+    this.renderHud();
+  }
+
+  getCourseComposerState(): CourseComposerState | null {
+    if (!this.courseComposerOpen || !this.courseComposerRecord) {
+      return null;
+    }
+
+    const draft = this.courseComposerRecord.draft;
+    return {
+      courseId: draft.id,
+      title: draft.title ?? '',
+      roomRefs: draft.roomRefs.map((roomRef) => ({
+        ...roomRef,
+        coordinates: { ...roomRef.coordinates },
+      })),
+      goalType: draft.goal?.type ?? null,
+      timeLimitSeconds:
+        draft.goal && 'timeLimitMs' in draft.goal && draft.goal.timeLimitMs !== null
+          ? Math.max(1, Math.round(draft.goal.timeLimitMs / 1000))
+          : null,
+      requiredCount: draft.goal?.type === 'collect_target' ? draft.goal.requiredCount : null,
+      survivalSeconds:
+        draft.goal?.type === 'survival' ? Math.max(1, Math.round(draft.goal.durationMs / 1000)) : null,
+      startPointRoomId: draft.startPoint?.roomId ?? null,
+      checkpointCount: draft.goal?.type === 'checkpoint_sprint' ? draft.goal.checkpoints.length : 0,
+      finishRoomId:
+        draft.goal?.type === 'checkpoint_sprint'
+          ? draft.goal.finish?.roomId ?? null
+          : draft.goal?.type === 'reach_exit'
+            ? draft.goal.exit?.roomId ?? null
+            : null,
+      selectedRoomInDraft: this.courseComposerSelectedRoomInDraft,
+      selectedRoomEligible: this.courseComposerSelectedRoomEligible,
+      selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
+      canEdit: this.courseComposerRecord.permissions.canSaveDraft,
+      published: Boolean(this.courseComposerRecord.published),
+      dirty: this.isCourseComposerDirty(),
+      statusText: this.courseComposerLoading
+        ? 'Loading course...'
+        : this.courseComposerStatusText,
+      selectedRoomOrder: this.courseComposerSelectedRoomOrder,
+      canMoveSelectedRoomEarlier:
+        this.courseComposerSelectedRoomOrder !== null && this.courseComposerSelectedRoomOrder > 0,
+      canMoveSelectedRoomLater:
+        this.courseComposerSelectedRoomOrder !== null &&
+        this.courseComposerSelectedRoomOrder < draft.roomRefs.length - 1,
+      canEditSelectedRoom:
+        this.courseComposerRecord.permissions.canSaveDraft &&
+        getActiveCourseDraftSessionSelectedRoomId() !== null,
+      canTestDraft:
+        this.courseComposerRecord.permissions.canSaveDraft && this.getIsCurrentCourseDraftPreviewReady(),
+    };
+  }
+
+  setCourseTitle(title: string | null): void {
+    this.updateCourseComposerDraft((draft) => {
+      draft.title = title?.trim() ? title.trim() : null;
+    });
+  }
+
+  addSelectedRoomToCourseDraft(): void {
+    void this.addSelectedRoomToCourseDraftAsync();
+  }
+
+  removeSelectedRoomFromCourseDraft(): void {
+    if (!this.courseComposerRecord?.permissions.canSaveDraft) {
+      return;
+    }
+
+    const selectedRoomId = getActiveCourseDraftSessionSelectedRoomId();
+    if (!selectedRoomId) {
+      return;
+    }
+    this.updateCourseComposerDraft((draft) => {
+      draft.roomRefs = draft.roomRefs.filter((roomRef) => roomRef.roomId !== selectedRoomId);
+      if (draft.startPoint?.roomId === selectedRoomId) {
+        draft.startPoint = null;
+      }
+      if (draft.goal?.type === 'reach_exit' && draft.goal.exit?.roomId === selectedRoomId) {
+        draft.goal.exit = null;
+      }
+      if (draft.goal?.type === 'checkpoint_sprint') {
+        draft.goal.checkpoints = draft.goal.checkpoints.filter(
+          (checkpoint) => checkpoint.roomId !== selectedRoomId
+        );
+        if (draft.goal.finish?.roomId === selectedRoomId) {
+          draft.goal.finish = null;
+        }
+      }
+    });
+    void this.refreshCourseComposerSelectedRoomState();
+  }
+
+  moveSelectedRoomEarlierInCourseDraft(): void {
+    this.moveSelectedRoomInCourseDraft(-1);
+  }
+
+  moveSelectedRoomLaterInCourseDraft(): void {
+    this.moveSelectedRoomInCourseDraft(1);
+  }
+
+  selectCourseRoomInComposer(roomId: string): void {
+    if (!this.courseComposerRecord) {
+      return;
+    }
+
+    const roomRef = this.courseComposerRecord.draft.roomRefs.find((candidate) => candidate.roomId === roomId);
+    if (!roomRef) {
+      return;
+    }
+
+    setActiveCourseDraftSessionSelectedRoom(roomId);
+    this.courseComposerSelectedRoomOrder = getActiveCourseDraftSessionSelectedRoomOrder();
+    this.selectedCoordinates = { ...roomRef.coordinates };
+    if (this.mode !== 'play') {
+      this.currentRoomCoordinates = { ...roomRef.coordinates };
+    }
+    this.updateSelectedSummary();
+    this.redrawWorld();
+    this.renderHud();
+    this.emitCourseComposerStateChanged();
+  }
+
+  editSelectedCourseRoom(): boolean {
+    if (!this.courseComposerRecord?.permissions.canSaveDraft) {
+      return false;
+    }
+
+    const roomId = getActiveCourseDraftSessionSelectedRoomId();
+    const roomOrder = getActiveCourseDraftSessionSelectedRoomOrder();
+    const roomRef = roomId
+      ? this.courseComposerRecord.draft.roomRefs.find((candidate) => candidate.roomId === roomId) ?? null
+      : null;
+    if (roomOrder === null || roomOrder < 0) {
+      this.courseComposerStatusText = 'Select a room from this course to open it in the editor.';
+      this.emitCourseComposerStateChanged();
+      return false;
+    }
+
+    if (!roomRef) {
+      this.courseComposerStatusText = 'Selected course room is no longer in this draft.';
+      this.emitCourseComposerStateChanged();
+      return false;
+    }
+
+    const roomSnapshot = this.getRoomSnapshotForCoordinates(roomRef.coordinates);
+    if (!roomSnapshot) {
+      this.courseComposerStatusText = 'Selected course room is not loaded yet.';
+      this.emitCourseComposerStateChanged();
+      return false;
+    }
+
+    this.courseComposerStatusText = 'Editing course room in the room editor...';
+    this.emitCourseComposerStateChanged();
+
+    const editorData: EditorSceneData = {
+      roomCoordinates: { ...roomRef.coordinates },
+      source: 'world',
+      roomSnapshot,
+      courseEdit: {
+        courseId: this.courseComposerRecord.draft.id,
+        roomId: roomRef.roomId,
+        roomOrder,
+      },
+    };
+
+    this.openEditor(editorData);
+    return true;
+  }
+
+  async testDraftCourse(): Promise<void> {
+    const draft = this.courseComposerRecord?.draft ?? null;
+    if (!this.courseComposerRecord?.permissions.canSaveDraft || !draft || !this.getIsCurrentCourseDraftPreviewReady()) {
+      return;
+    }
+
+    showBusyOverlay('Testing draft course...', 'Loading draft...');
+    try {
+      const snapshot = cloneCourseSnapshot(draft);
+      await this.startCoursePlayback(snapshot);
+      this.showTransientStatus('Testing draft course.');
+      hideBusyOverlay();
+    } catch (error) {
+      console.error('Failed to test draft course', error);
+      showBusyError(
+        error instanceof Error ? error.message : 'Failed to test draft course.',
+        {
+          closeHandler: () => hideBusyOverlay(),
+        }
+      );
+    }
+  }
+
+  async saveCourseDraft(): Promise<void> {
+    if (!this.courseComposerRecord?.permissions.canSaveDraft) {
+      return;
+    }
+
+    this.courseComposerStatusText = 'Saving course draft...';
+    this.emitCourseComposerStateChanged();
+    try {
+      const saved = await this.courseRepository.saveDraft(this.courseComposerRecord.draft);
+      this.setCourseComposerRecord(saved, {
+        selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
+      });
+      this.courseComposerStatusText = 'Course draft saved.';
+      await this.refreshCourseComposerSelectedRoomState();
+      await this.refreshAround(this.windowCenterCoordinates, { forceChunkReload: true });
+    } catch (error) {
+      console.error('Failed to save course draft', error);
+      this.courseComposerStatusText =
+        error instanceof Error ? error.message : 'Failed to save course draft.';
+    } finally {
+      this.emitCourseComposerStateChanged();
+      this.renderHud();
+    }
+  }
+
+  async publishCourseDraft(): Promise<void> {
+    if (!this.courseComposerRecord?.permissions.canPublish) {
+      return;
+    }
+
+    this.courseComposerStatusText = 'Publishing course...';
+    this.emitCourseComposerStateChanged();
+    try {
+      const saved = await this.courseRepository.saveDraft(this.courseComposerRecord.draft);
+      this.setCourseComposerRecord(saved, {
+        selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
+      });
+      const published = await this.courseRepository.publishCourse(this.courseComposerRecord.draft.id);
+      this.setCourseComposerRecord(published, {
+        selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
+      });
+      this.courseComposerStatusText = 'Course published.';
+      await this.refreshCourseComposerSelectedRoomState();
+      await this.refreshAround(this.windowCenterCoordinates, { forceChunkReload: true });
+    } catch (error) {
+      console.error('Failed to publish course', error);
+      this.courseComposerStatusText =
+        error instanceof Error ? error.message : 'Failed to publish course.';
+    } finally {
+      this.emitCourseComposerStateChanged();
+      this.renderHud();
+    }
+  }
+
+  private async addSelectedRoomToCourseDraftAsync(): Promise<void> {
+    if (!this.courseComposerRecord?.permissions.canSaveDraft) {
+      return;
+    }
+
+    const meta = await this.loadPublishedRoomMeta(this.selectedCoordinates);
+    if (!meta || !this.canSelectedRoomJoinCourseDraft(meta)) {
+      this.courseComposerStatusText = 'Selected room cannot be added to this course.';
+      this.emitCourseComposerStateChanged();
+      return;
+    }
+
+    this.updateCourseComposerDraft((draft) => {
+      const nextRoomRef = {
+        roomId: meta.roomId,
+        coordinates: { ...meta.coordinates },
+        roomVersion: meta.roomVersion,
+        roomTitle: meta.roomTitle,
+      };
+      if (draft.roomRefs.length === 0) {
+        draft.roomRefs = [nextRoomRef];
+        return;
+      }
+
+      const firstRoomRef = draft.roomRefs[0];
+      const lastRoomRef = draft.roomRefs[draft.roomRefs.length - 1];
+      if (areCourseRoomRefsOrthogonallyAdjacent(nextRoomRef, firstRoomRef)) {
+        draft.roomRefs = [nextRoomRef, ...draft.roomRefs];
+        return;
+      }
+
+      if (areCourseRoomRefsOrthogonallyAdjacent(nextRoomRef, lastRoomRef)) {
+        draft.roomRefs = [...draft.roomRefs, nextRoomRef];
+      }
+    });
+    setActiveCourseDraftSessionSelectedRoom(meta.roomId);
+    await this.refreshCourseComposerSelectedRoomState();
+  }
+
+  private moveSelectedRoomInCourseDraft(direction: -1 | 1): void {
+    if (!this.courseComposerRecord?.permissions.canSaveDraft) {
+      return;
+    }
+
+    const roomId = getActiveCourseDraftSessionSelectedRoomId();
+    if (!roomId) {
+      return;
+    }
+    this.updateCourseComposerDraft((draft) => {
+      const currentIndex = draft.roomRefs.findIndex((roomRef) => roomRef.roomId === roomId);
+      if (currentIndex < 0) {
+        return;
+      }
+
+      const nextIndex = Phaser.Math.Clamp(currentIndex + direction, 0, draft.roomRefs.length - 1);
+      if (nextIndex === currentIndex) {
+        return;
+      }
+
+      const nextRoomRefs = [...draft.roomRefs];
+      const [moved] = nextRoomRefs.splice(currentIndex, 1);
+      nextRoomRefs.splice(nextIndex, 0, moved);
+      if (!courseRoomRefsFollowLinearPath(nextRoomRefs)) {
+        return;
+      }
+      draft.roomRefs = nextRoomRefs;
+    });
+    void this.refreshCourseComposerSelectedRoomState();
+  }
+
+  private updateCourseComposerDraft(mutator: (draft: CourseSnapshot) => void): void {
+    if (!this.courseComposerRecord?.permissions.canSaveDraft) {
+      return;
+    }
+
+    updateActiveCourseDraftSession((draft) => {
+      mutator(draft);
+    });
+    this.syncCourseComposerRecordFromSession();
+    this.emitCourseComposerStateChanged();
+    this.renderHud();
+  }
+
+  private isCourseComposerDirty(): boolean {
+    return isActiveCourseDraftSessionDirty();
+  }
+
+  private async refreshCourseComposerSelectedRoomState(): Promise<void> {
+    if (!this.courseComposerOpen || !this.courseComposerRecord) {
+      return;
+    }
+
+    const roomRefs = this.courseComposerRecord.draft.roomRefs;
+    const worldSelectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
+    const worldSelectedRoomOrder = roomRefs.findIndex((roomRef) => roomRef.roomId === worldSelectedRoomId);
+    this.courseComposerSelectedRoomInDraft = worldSelectedRoomOrder >= 0;
+    if (worldSelectedRoomOrder >= 0) {
+      setActiveCourseDraftSessionSelectedRoom(worldSelectedRoomId);
+    }
+    this.courseComposerSelectedRoomOrder = getActiveCourseDraftSessionSelectedRoomOrder();
+
+    const meta = await this.loadPublishedRoomMeta(this.selectedCoordinates);
+    this.courseComposerSelectedRoomEligible =
+      meta !== null && this.canSelectedRoomJoinCourseDraft(meta);
+    this.emitCourseComposerStateChanged();
+  }
+
+  private async loadPublishedRoomMeta(
+    coordinates: RoomCoordinates
+  ): Promise<CoursePublishedRoomMeta | null> {
+    const roomId = roomIdFromCoordinates(coordinates);
+    const cached = this.courseRoomMetaByRoomId.get(roomId);
+    if (cached) {
+      return cached;
+    }
+
+    const record = await this.roomRepository.loadRoom(roomId, coordinates);
+    if (!record.published) {
+      return null;
+    }
+
+    const publishedVersion =
+      record.versions.find((version) => version.version === record.published?.version) ?? null;
+    const meta: CoursePublishedRoomMeta = {
+      roomId,
+      coordinates: { ...coordinates },
+      roomVersion: record.published.version,
+      roomTitle: record.published.title,
+      publishedByUserId:
+        publishedVersion?.publishedByUserId ?? record.lastPublishedByUserId ?? null,
+    };
+    this.courseRoomMetaByRoomId.set(roomId, meta);
+    return meta;
+  }
+
+  private canSelectedRoomJoinCourseDraft(meta: CoursePublishedRoomMeta): boolean {
+    if (!this.courseComposerRecord?.permissions.canSaveDraft) {
+      return false;
+    }
+
+    const authState = getAuthDebugState();
+    if (!authState.authenticated || !authState.user?.id) {
+      return false;
+    }
+
+    if (meta.publishedByUserId !== authState.user.id) {
+      return false;
+    }
+
+    if (
+      this.selectedSummary?.course?.courseId &&
+      this.selectedSummary.course.courseId !== this.courseComposerRecord.draft.id
+    ) {
+      return false;
+    }
+
+    if (this.courseComposerRecord.draft.roomRefs.some((roomRef) => roomRef.roomId === meta.roomId)) {
+      return false;
+    }
+
+    if (this.courseComposerRecord.draft.roomRefs.length >= MAX_COURSE_ROOMS) {
+      return false;
+    }
+
+    if (this.courseComposerRecord.ownerUserId && this.courseComposerRecord.ownerUserId !== meta.publishedByUserId) {
+      return false;
+    }
+
+    if (this.courseComposerRecord.draft.roomRefs.length === 0) {
+      return true;
+    }
+
+    if (!courseRoomRefsFollowLinearPath(this.courseComposerRecord.draft.roomRefs)) {
+      return false;
+    }
+
+    const firstRoomRef = this.courseComposerRecord.draft.roomRefs[0];
+    const lastRoomRef =
+      this.courseComposerRecord.draft.roomRefs[this.courseComposerRecord.draft.roomRefs.length - 1];
+    return (
+      areCourseRoomRefsOrthogonallyAdjacent(meta, firstRoomRef) ||
+      areCourseRoomRefsOrthogonallyAdjacent(meta, lastRoomRef)
+    );
+  }
+
+  private clearActiveCourseRoomOverrides(): void {
+    for (const roomId of this.activeCourseRoomOverrideIds) {
+      this.worldStreamingController.clearTransientRoomOverride(roomId);
+    }
+    this.activeCourseRoomOverrideIds.clear();
+  }
+
+  private async prepareActiveCourseRoomOverrides(
+    course: CourseSnapshot,
+    roomOverrides: RoomSnapshot[] = [],
+  ): Promise<void> {
+    this.clearActiveCourseRoomOverrides();
+    const overrideByRoomId = new Map<string, RoomSnapshot>();
+    for (const room of getActiveCourseDraftSessionRoomOverrides()) {
+      overrideByRoomId.set(room.id, cloneRoomSnapshot(room));
+    }
+    for (const room of roomOverrides) {
+      overrideByRoomId.set(room.id, cloneRoomSnapshot(room));
+    }
+
+    await Promise.all(
+      course.roomRefs.map(async (roomRef) => {
+        let snapshot = overrideByRoomId.get(roomRef.roomId) ?? null;
+        if (!snapshot) {
+          const localDraft = this.draftRoomsById.get(roomRef.roomId) ?? null;
+          snapshot = localDraft ? cloneRoomSnapshot(localDraft) : null;
+        }
+        if (!snapshot) {
+          const record = await this.roomRepository.loadRoom(roomRef.roomId, roomRef.coordinates);
+          const historicalVersion =
+            record.versions.find((entry) => entry.version === roomRef.roomVersion)?.snapshot ??
+            record.published ??
+            null;
+          if (!historicalVersion) {
+            return;
+          }
+
+          snapshot = cloneRoomSnapshot(historicalVersion);
+        }
+
+        snapshot.status = 'published';
+        this.worldStreamingController.setTransientRoomOverride(snapshot);
+        this.activeCourseRoomOverrideIds.add(snapshot.id);
+      })
+    );
+  }
+
+  private async activateDraftCoursePreview(
+    course: CourseSnapshot,
+    draftRoom: RoomSnapshot | null,
+  ): Promise<void> {
+    const snapshot = cloneCourseSnapshot(course);
+    await this.prepareActiveCourseRoomOverrides(
+      snapshot,
+      draftRoom ? [draftRoom] : [],
+    );
+    this.activeCourseRun = this.createCourseRunState(snapshot);
+  }
+
+  private getCourseStartRoomRef(course: CourseSnapshot): CourseRoomRef | null {
+    if (course.startPoint) {
+      return course.roomRefs.find((roomRef) => roomRef.roomId === course.startPoint?.roomId) ?? null;
+    }
+
+    return course.roomRefs[0] ?? null;
+  }
+
+  private createCourseRunState(course: CourseSnapshot): ActiveCourseRunState {
+    const leaderboardEligible = course.status === 'published' && getAuthDebugState().authenticated;
+    return {
+      course: cloneCourseSnapshot(course),
+      returnCoordinates: { ...this.selectedCoordinates },
+      elapsedMs: 0,
+      deaths: 0,
+      collectiblesCollected: 0,
+      collectibleTarget: course.goal?.type === 'collect_target' ? course.goal.requiredCount : null,
+      enemiesDefeated: 0,
+      enemyTarget:
+        course.goal?.type === 'defeat_all'
+          ? this.countCourseObjectsByCategory(course, 'enemy')
+          : null,
+      checkpointsReached: 0,
+      checkpointTarget:
+        course.goal?.type === 'checkpoint_sprint' ? course.goal.checkpoints.length : null,
+      nextCheckpointIndex: 0,
+      result: 'active',
+      completionMessage: null,
+      attemptId: null,
+      submissionState: leaderboardEligible ? 'starting' : 'local-only',
+      submissionMessage: leaderboardEligible
+        ? 'Starting ranked course run...'
+        : 'Course run stays local.',
+      pendingResult: null,
+      submittedScore: null,
+      leaderboardEligible,
+    };
+  }
+
+  private countCourseObjectsByCategory(
+    course: CourseSnapshot,
+    category: GameObjectConfig['category']
+  ): number {
+    let count = 0;
+    for (const roomRef of course.roomRefs) {
+      const room = this.getCourseRoomSnapshot(course, roomRef.roomId);
+      if (!room) {
+        continue;
+      }
+
+      count += this.countRoomObjectsByCategory(room, category);
+    }
+
+    return count;
+  }
+
+  private getCourseRoomSnapshot(course: CourseSnapshot, roomId: string): RoomSnapshot | null {
+    const roomRef = course.roomRefs.find((entry) => entry.roomId === roomId) ?? null;
+    if (!roomRef) {
+      return null;
+    }
+
+    return this.getRoomSnapshotForCoordinates(roomRef.coordinates);
+  }
+
+  private async startRemoteCourseRun(runState: ActiveCourseRunState): Promise<void> {
+    try {
+      const response = await this.courseRepository.startRun(runState.course.id, {
+        courseId: runState.course.id,
+        courseVersion: runState.course.version,
+        goal: runState.course.goal as CourseGoal,
+        startedAt: new Date().toISOString(),
+      });
+      if (this.activeCourseRun?.course.id !== runState.course.id) {
+        return;
+      }
+
+      this.activeCourseRun.attemptId = response.attemptId;
+      this.activeCourseRun.submissionState = 'active';
+      this.activeCourseRun.submissionMessage = 'Ranked course run active.';
+      this.renderHud();
+    } catch (error) {
+      console.error('Failed to start ranked course run', error);
+      if (this.activeCourseRun?.course.id !== runState.course.id) {
+        return;
+      }
+
+      this.activeCourseRun.submissionState = 'error';
+      this.activeCourseRun.submissionMessage =
+        error instanceof Error ? error.message : 'Ranked course run unavailable.';
+      this.renderHud();
+    }
+  }
+
+  private async finalizeActiveCourseRun(
+    result: 'completed' | 'failed' | 'abandoned'
+  ): Promise<void> {
+    if (!this.activeCourseRun || this.activeCourseRun.pendingResult) {
+      return;
+    }
+
+    this.activeCourseRun.pendingResult = result;
+    const attemptId = this.activeCourseRun.attemptId;
+    if (!attemptId || this.activeCourseRun.submissionState === 'local-only') {
+      this.activeCourseRun.submissionState = 'submitted';
+      this.activeCourseRun.submissionMessage = 'Local course run saved on this client only.';
+      this.renderHud();
+      return;
+    }
+
+    this.activeCourseRun.submissionState = 'finishing';
+    this.activeCourseRun.submissionMessage = 'Submitting course run...';
+    this.renderHud();
+
+    const body: CourseRunFinishRequestBody = {
+      result,
+      elapsedMs: this.activeCourseRun.elapsedMs,
+      deaths: this.activeCourseRun.deaths,
+      collectiblesCollected: this.activeCourseRun.collectiblesCollected,
+      enemiesDefeated: this.activeCourseRun.enemiesDefeated,
+      checkpointsReached: this.activeCourseRun.checkpointsReached,
+      score: null,
+      finishedAt: new Date().toISOString(),
+    };
+
+    try {
+      await this.courseRepository.finishRun(attemptId, body);
+      if (!this.activeCourseRun || this.activeCourseRun.attemptId !== attemptId) {
+        return;
+      }
+
+      this.activeCourseRun.submissionState = 'submitted';
+      this.activeCourseRun.submissionMessage = 'Ranked course run submitted.';
+    } catch (error) {
+      console.error('Failed to finish ranked course run', error);
+      if (!this.activeCourseRun || this.activeCourseRun.attemptId !== attemptId) {
+        return;
+      }
+
+      this.activeCourseRun.submissionState = 'error';
+      this.activeCourseRun.submissionMessage =
+        error instanceof Error ? error.message : 'Failed to submit course run.';
+    } finally {
+      this.renderHud();
+    }
   }
 
   private applyGoalRunMutation(result: GoalRunMutationResult): void {
@@ -3490,6 +4977,25 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
   }
 
+  private getCourseGoalBadgeText(goal: CourseGoal | null): string {
+    if (!goal) {
+      return 'Course';
+    }
+
+    switch (goal.type) {
+      case 'reach_exit':
+        return 'Reach Exit';
+      case 'collect_target':
+        return `Collect ${goal.requiredCount}`;
+      case 'defeat_all':
+        return 'Defeat All';
+      case 'checkpoint_sprint':
+        return `${goal.checkpoints.length || 0} Checkpoints`;
+      case 'survival':
+        return `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))}s`;
+    }
+  }
+
   private getPlayGoalTimerText(runState: GoalRunState): string {
     if (runState.goal.type === 'survival') {
       return `${this.formatOverlayTimer(Math.max(0, runState.goal.durationMs - runState.elapsedMs))} LEFT`;
@@ -3497,6 +5003,23 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     if (runState.goal.timeLimitMs !== null) {
       return `${this.formatOverlayTimer(Math.max(0, runState.goal.timeLimitMs - runState.elapsedMs))} LEFT`;
+    }
+
+    return this.formatOverlayTimer(runState.elapsedMs);
+  }
+
+  private getCourseGoalTimerText(runState: ActiveCourseRunState): string {
+    const goal = runState.course.goal;
+    if (!goal) {
+      return this.formatOverlayTimer(runState.elapsedMs);
+    }
+
+    if (goal.type === 'survival') {
+      return `${this.formatOverlayTimer(Math.max(0, goal.durationMs - runState.elapsedMs))} LEFT`;
+    }
+
+    if ('timeLimitMs' in goal && goal.timeLimitMs !== null) {
+      return `${this.formatOverlayTimer(Math.max(0, goal.timeLimitMs - runState.elapsedMs))} LEFT`;
     }
 
     return this.formatOverlayTimer(runState.elapsedMs);
@@ -3512,6 +5035,26 @@ export class OverworldPlayScene extends Phaser.Scene {
         return `${runState.enemiesDefeated}/${runState.enemyTarget ?? 0} defeated`;
       case 'checkpoint_sprint':
         return `${runState.checkpointsReached}/${runState.checkpointTarget ?? 0} checkpoints`;
+      case 'survival':
+        return runState.result === 'completed' ? 'Survived' : 'Stay alive';
+    }
+  }
+
+  private getCourseGoalProgressText(runState: ActiveCourseRunState): string {
+    const goal = runState.course.goal;
+    if (!goal) {
+      return '';
+    }
+
+    switch (goal.type) {
+      case 'reach_exit':
+        return runState.result === 'completed' ? 'Exit reached' : 'Reach the exit';
+      case 'collect_target':
+        return `${runState.collectiblesCollected}/${runState.collectibleTarget ?? goal.requiredCount} collected`;
+      case 'defeat_all':
+        return `${runState.enemiesDefeated}/${runState.enemyTarget ?? 0} defeated`;
+      case 'checkpoint_sprint':
+        return `${runState.checkpointsReached}/${runState.checkpointTarget ?? goal.checkpoints.length} checkpoints`;
       case 'survival':
         return runState.result === 'completed' ? 'Survived' : 'Stay alive';
     }
@@ -3534,20 +5077,64 @@ export class OverworldPlayScene extends Phaser.Scene {
     return `${value.slice(0, Math.max(1, maxLength - 1))}\u2026`;
   }
 
+  private getRoomBadgeOverlayScale(zoom: number): number {
+    const zoomProgress = this.getRoomBadgeScaleProgress(zoom);
+    const desiredScreenScale = Phaser.Math.Linear(
+      ROOM_BADGE_MIN_SCREEN_SCALE,
+      ROOM_BADGE_MAX_SCREEN_SCALE,
+      zoomProgress
+    );
+    return desiredScreenScale / Math.max(zoom, 0.001);
+  }
+
+  private getRoomBadgeScaleProgress(zoom: number): number {
+    return Phaser.Math.Clamp(
+      (zoom - ROOM_BADGE_HIDE_ZOOM) / (ROOM_BADGE_SCALE_FULL_ZOOM - ROOM_BADGE_HIDE_ZOOM),
+      0,
+      1
+    );
+  }
+
+  private getRoomBadgeLayoutProgress(zoom: number): number {
+    return Phaser.Math.Clamp(
+      (zoom - ROOM_BADGE_HIDE_ZOOM) / (ROOM_BADGE_LAYOUT_FULL_ZOOM - ROOM_BADGE_HIDE_ZOOM),
+      0,
+      1
+    );
+  }
+
   private syncGoalOverlayScale(): void {
     const zoom = this.cameras.main.zoom;
-    const overlayScale = 1 / Math.max(zoom, ROOM_BADGE_MAX_SCALE_ZOOM);
+    const overlayScale = this.getRoomBadgeOverlayScale(zoom);
+    const layoutProgress = this.getRoomBadgeLayoutProgress(zoom);
     const fadeProgress = Phaser.Math.Clamp(
       (zoom - ROOM_BADGE_HIDE_ZOOM) / (ROOM_BADGE_FADE_START_ZOOM - ROOM_BADGE_HIDE_ZOOM),
       0,
       1
     );
     for (const badge of this.roomGoalBadges) {
+      badge.container.setPosition(
+        Phaser.Math.Linear(badge.zoomedOutPosition.x, badge.zoomedInPosition.x, layoutProgress),
+        Phaser.Math.Linear(badge.zoomedOutPosition.y, badge.zoomedInPosition.y, layoutProgress)
+      );
       badge.container.setScale(overlayScale);
       badge.container.setAlpha(fadeProgress);
       badge.container.setVisible(fadeProgress > 0.02);
     }
     for (const badge of this.roomActivityBadges) {
+      badge.container.setPosition(
+        Phaser.Math.Linear(badge.zoomedOutPosition.x, badge.zoomedInPosition.x, layoutProgress),
+        Phaser.Math.Linear(badge.zoomedOutPosition.y, badge.zoomedInPosition.y, layoutProgress)
+      );
+      badge.container.setScale(overlayScale);
+      badge.container.setAlpha(fadeProgress);
+      badge.container.setVisible(fadeProgress > 0.02);
+    }
+    for (const badge of this.roomCourseBadges) {
+      badge.container.setPosition(
+        Phaser.Math.Linear(badge.zoomedOutPosition.x, badge.zoomedInPosition.x, layoutProgress),
+        Phaser.Math.Linear(badge.zoomedOutPosition.y, badge.zoomedInPosition.y, layoutProgress)
+      );
       badge.container.setScale(overlayScale);
       badge.container.setAlpha(fadeProgress);
       badge.container.setVisible(fadeProgress > 0.02);
@@ -3562,20 +5149,25 @@ export class OverworldPlayScene extends Phaser.Scene {
   private buildHudViewModel(statusOverride?: string): OverworldHudViewModel {
     const selectedState = this.getCellStateAt(this.selectedCoordinates);
     const selectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
+    const selectedRoomInActiveCourseSession = isRoomInActiveCourseDraftSession(selectedRoomId);
     const selectedDraft = this.draftRoomsById.get(selectedRoomId) ?? null;
     const selectedPopulation = this.getRoomPopulation(this.selectedCoordinates);
     const selectedEditorCount = this.getRoomEditorCount(this.selectedCoordinates);
+    const selectedCourse = this.getSelectedCourseContext();
     const transientStatus = this.getTransientStatusMessage();
     const totalPlayerCount = this.presenceController.getTotalPlayerCount();
     const frontierBuildBlocked = selectedState === 'frontier' && this.isFrontierBuildBlockedByClaimLimit();
     const rankingMode = this.currentRoomLeaderboard?.rankingMode ?? null;
     const roomTop = this.currentRoomLeaderboard?.entries[0] ?? null;
+    const activeCourseRun = this.mode === 'play' ? this.activeCourseRun : null;
+    const activeRoomGoalRun = activeCourseRun ? null : this.mode === 'play' ? this.currentGoalRun : null;
+    const activeRunResult = activeCourseRun?.result ?? activeRoomGoalRun?.result ?? null;
     const saveStatusTone =
       this.mode === 'play'
-        ? this.currentGoalRun
-          ? this.currentGoalRun.result === 'completed'
+        ? activeCourseRun || activeRoomGoalRun
+          ? activeRunResult === 'completed'
             ? 'challenge-complete'
-            : this.currentGoalRun.result === 'failed'
+            : activeRunResult === 'failed'
               ? 'challenge-failed'
               : 'challenge-active'
           : 'play-score'
@@ -3593,16 +5185,29 @@ export class OverworldPlayScene extends Phaser.Scene {
     let selectedMetaText = 'No room here yet';
     let selectedMetaTone: OverworldHudViewModel['selectedMetaTone'] = 'default';
     if (selectedState === 'published') {
-      selectedMetaText = this.selectedSummary?.goalType
-        ? `${ROOM_GOAL_LABELS[this.selectedSummary.goalType]} challenge`
-        : 'No challenge';
-      selectedMetaTone = this.selectedSummary?.goalType ? 'challenge' : 'default';
+      const metaParts: string[] = [];
+      if (selectedCourse) {
+        metaParts.push(
+          selectedCourse.courseTitle?.trim()
+            ? `Part of course: ${selectedCourse.courseTitle}`
+            : `Part of course ${selectedCourse.roomIndex + 1}/${selectedCourse.roomCount}`
+        );
+        selectedMetaTone = 'challenge';
+      }
+      if (this.selectedSummary?.goalType) {
+        metaParts.push(`${ROOM_GOAL_LABELS[this.selectedSummary.goalType]} challenge`);
+        selectedMetaTone = 'challenge';
+      }
+      if (metaParts.length === 0) {
+        metaParts.push('No challenge');
+      }
       if (selectedPopulation > 0) {
-        selectedMetaText += ` · ${selectedPopulation} here`;
+        metaParts.push(`${selectedPopulation} here`);
       }
       if (selectedEditorCount > 0) {
-        selectedMetaText += ` · ${selectedEditorCount} building`;
+        metaParts.push(`${selectedEditorCount} building`);
       }
+      selectedMetaText = metaParts.join(' · ');
     } else if (selectedState === 'draft' && selectedDraft) {
       selectedMetaText = selectedDraft.goal
         ? `Local draft only · ${ROOM_GOAL_LABELS[selectedDraft.goal.type]} challenge · publish to make it public`
@@ -3644,7 +5249,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     let leaderboardText = '';
-    if (this.mode !== 'play' && roomTop && rankingMode) {
+    if (!activeCourseRun && this.mode !== 'play' && roomTop && rankingMode) {
       const metric =
         rankingMode === 'time'
           ? `${(roomTop.elapsedMs / 1000).toFixed(2)}s`
@@ -3658,14 +5263,13 @@ export class OverworldPlayScene extends Phaser.Scene {
         : statusOverride ??
           transientStatus ??
           '';
-    const activeGoalRun = this.mode === 'play' ? this.currentGoalRun : null;
-    const activeGoalRoom = activeGoalRun
-      ? this.getRoomSnapshotForCoordinates(activeGoalRun.roomCoordinates)
+    const activeGoalRoom = activeRoomGoalRun
+      ? this.getRoomSnapshotForCoordinates(activeRoomGoalRun.roomCoordinates)
       : null;
     const goalPanelTone =
-      activeGoalRun?.result === 'completed'
+      activeRunResult === 'completed'
         ? 'complete'
-        : activeGoalRun?.result === 'failed'
+        : activeRunResult === 'failed'
           ? 'failed'
           : 'active';
 
@@ -3688,9 +5292,21 @@ export class OverworldPlayScene extends Phaser.Scene {
       statusText,
       leaderboardText,
       zoomLabelText: `${this.cameras.main.zoom.toFixed(2)}x`,
-      playButtonText: this.mode === 'play' ? 'Stop' : 'Play Room',
-      playButtonDisabled: this.mode === 'play' ? false : selectedState !== 'published' && selectedState !== 'draft',
-      playButtonActive: this.mode === 'play',
+      playButtonText: activeCourseRun ? 'Play Room' : this.mode === 'play' ? 'Stop' : 'Play Room',
+      playButtonDisabled:
+        activeCourseRun
+          ? true
+          : this.mode === 'play'
+            ? false
+            : selectedState !== 'published' && selectedState !== 'draft',
+      playButtonActive: this.mode === 'play' && !activeCourseRun,
+      playCourseButtonText: activeCourseRun ? 'Stop Course' : 'Play Course',
+      playCourseButtonDisabled: activeCourseRun ? false : !selectedCourse,
+      playCourseButtonHidden: !selectedCourse && !activeCourseRun,
+      playCourseButtonActive: Boolean(activeCourseRun),
+      courseBuilderButtonDisabled:
+        this.courseComposerLoading ||
+        (!selectedRoomInActiveCourseSession && selectedState !== 'published' && !selectedCourse),
       editButtonDisabled: selectedState !== 'published' && selectedState !== 'draft',
       buildButtonDisabled: selectedState !== 'frontier' || frontierBuildBlocked,
       roomCoordinatesText: '',
@@ -3699,17 +5315,34 @@ export class OverworldPlayScene extends Phaser.Scene {
         totalPlayerCount === null ? '' : `${totalPlayerCount} ${totalPlayerCount === 1 ? 'player' : 'players'} online`,
       saveStatusText,
       bottomBarZoomText: `Zoom: ${this.cameras.main.zoom.toFixed(2)}x`,
-      goalPanelVisible: Boolean(activeGoalRun),
+      goalPanelVisible: Boolean(activeCourseRun || activeRoomGoalRun),
       goalPanelTone,
-      goalPanelRoomText: activeGoalRun
+      goalPanelRoomText: activeCourseRun
         ? this.truncateOverlayText(
-            this.getRoomDisplayTitle(activeGoalRoom?.title ?? null, activeGoalRun.roomCoordinates).toUpperCase(),
+            (activeCourseRun.course.title?.trim() || 'COURSE').toUpperCase(),
+            22
+          )
+        : activeRoomGoalRun
+        ? this.truncateOverlayText(
+            this.getRoomDisplayTitle(activeGoalRoom?.title ?? null, activeRoomGoalRun.roomCoordinates).toUpperCase(),
             22
           )
         : '',
-      goalPanelGoalText: activeGoalRun ? this.getGoalBadgeText(activeGoalRun.goal).toUpperCase() : '',
-      goalPanelTimerText: activeGoalRun ? this.getPlayGoalTimerText(activeGoalRun) : '',
-      goalPanelProgressText: activeGoalRun ? this.getPlayGoalProgressText(activeGoalRun) : '',
+      goalPanelGoalText: activeCourseRun
+        ? this.getCourseGoalBadgeText(activeCourseRun.course.goal).toUpperCase()
+        : activeRoomGoalRun
+          ? this.getGoalBadgeText(activeRoomGoalRun.goal).toUpperCase()
+          : '',
+      goalPanelTimerText: activeCourseRun
+        ? this.getCourseGoalTimerText(activeCourseRun)
+        : activeRoomGoalRun
+          ? this.getPlayGoalTimerText(activeRoomGoalRun)
+          : '',
+      goalPanelProgressText: activeCourseRun
+        ? this.getCourseGoalProgressText(activeCourseRun)
+        : activeRoomGoalRun
+          ? this.getPlayGoalProgressText(activeRoomGoalRun)
+          : '',
     };
   }
 
@@ -3734,11 +5367,21 @@ export class OverworldPlayScene extends Phaser.Scene {
     roomId: string;
     coordinates: RoomCoordinates;
     state: SelectedCellState;
+    courseId: string | null;
+    courseTitle: string | null;
+    courseGoalType: CourseGoalType | null;
+    courseRoomIndex: number | null;
+    courseRoomCount: number | null;
   } {
     return {
       roomId: roomIdFromCoordinates(this.selectedCoordinates),
       coordinates: { ...this.selectedCoordinates },
       state: this.getCellStateAt(this.selectedCoordinates),
+      courseId: this.getSelectedCourseContext()?.courseId ?? null,
+      courseTitle: this.getSelectedCourseContext()?.courseTitle ?? null,
+      courseGoalType: this.getSelectedCourseContext()?.goalType ?? null,
+      courseRoomIndex: this.getSelectedCourseContext()?.roomIndex ?? null,
+      courseRoomCount: this.getSelectedCourseContext()?.roomCount ?? null,
     };
   }
 

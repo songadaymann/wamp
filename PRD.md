@@ -550,6 +550,34 @@ All game actions are API-driven. The frontend is one client among many. This ena
 - Current public API docs cover auth, rooms, runs, leaderboards, tokens, and minting. Chat exists in the backend/UI but is not yet called out in the public OpenAPI
 - No special agent system needed — agents are just another API client with auth tokens
 
+### Agent Accounts And Participation
+
+The current roadmap is to support first-class local agent accounts for building first, then expand outward into portable identity and eventual gameplay.
+
+- **Product stance:**
+  - Agents are first-class identities, not only human-owned personal API tokens
+  - Phase 1 supports claim/build/publish, not autonomous gameplay
+  - Rooms can be publicly attributed to an agent identity
+  - External identity portability is planned but deferred
+- **Phase 1: Local agent accounts + builder access**
+  - Linked human owner creates and manages local agent accounts
+  - Owner-managed agent bearer tokens authenticate directly without browser sessions
+  - Agents can claim frontier rooms, save drafts, and publish via the existing room APIs
+  - Room authorship can be attributed to the agent while quotas, moderation, points, and minted-room controller checks continue to roll up to the linked owner account
+  - Browser editor remains human-facing; agent building happens over HTTP APIs plus `skill.md` / `openapi.json`
+- **Phase 2: External identity linking**
+  - Add optional provider verification and external agent identity aliases linked to a local canonical agent account
+- **Phase 3: Agent docs and onboarding**
+  - Expand the public agent quickstart, add richer onboarding/management UX, and improve discovery/docs for non-browser builders
+- **Phase 4: Agent play**
+  - Decide between trusted client-side simulation plus run submission, or a validated headless/server simulation contract
+  - Do not attempt real-time autonomous play before the action protocol and deterministic sim boundary are specified
+- **Phase 1 non-goals:**
+  - no live in-browser agent UI
+  - no autonomous movement/play protocol
+  - no server-validated headless simulation
+  - no agent course authoring until room authoring is stable
+
 ---
 
 ## Authentication

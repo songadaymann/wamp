@@ -8,6 +8,7 @@ import type {
   WalletChallengeResponse,
   WalletVerifyResponse,
 } from './model';
+import type { ChatModerationViewer } from '../chat/model';
 import { clearLocalRoomStorage } from '../persistence/browserStorage';
 import { getApiBaseUrl } from '../api/baseUrl';
 import type {
@@ -31,6 +32,7 @@ export interface AuthDebugState {
   walletProjectConfigured: boolean;
   storageBackend: 'auto' | 'local' | 'remote';
   testResetEnabled: boolean;
+  chatModeration: ChatModerationViewer;
 }
 
 interface TestResetResponse {
@@ -41,6 +43,8 @@ interface TestResetResponse {
     roomRuns: number;
     userStats: number;
     chatMessages: number;
+    chatAdmins: number;
+    chatBans: number;
     users: number;
     sessions: number;
     magicLinks: number;
@@ -67,6 +71,10 @@ const state: AuthDebugState = {
   walletProjectConfigured: false,
   storageBackend: getStorageBackend(),
   testResetEnabled: isTestResetEnabled(),
+  chatModeration: {
+    role: 'none',
+    banned: false,
+  },
 };
 
 let authPanel: HTMLElement | null = null;
@@ -167,11 +175,27 @@ export async function setupAuthUi(): Promise<void> {
 }
 
 export function getAuthDebugState(): AuthDebugState {
-  return { ...state };
+  return {
+    ...state,
+    chatModeration: { ...state.chatModeration },
+  };
 }
 
 export async function refreshAuthSession(): Promise<void> {
   await refreshSession();
+}
+
+export function syncChatModerationState(viewer: ChatModerationViewer): void {
+  const normalized = normalizeChatModerationViewer(viewer);
+  if (
+    state.chatModeration.role === normalized.role
+    && state.chatModeration.banned === normalized.banned
+  ) {
+    return;
+  }
+
+  state.chatModeration = normalized;
+  renderAuthUi();
 }
 
 export function promptForSignIn(status: string = 'Sign in with email or wallet to publish this room.'): void {
@@ -241,6 +265,7 @@ async function refreshSession(): Promise<void> {
     state.roomDailyClaimLimit = session.roomDailyClaimLimit ?? null;
     state.roomClaimsUsedToday = session.roomClaimsUsedToday ?? 0;
     state.roomClaimsRemainingToday = session.roomClaimsRemainingToday ?? null;
+    state.chatModeration = normalizeChatModerationViewer(session.chatModeration);
 
     if (session.authenticated) {
       state.status = `Signed in as ${session.user?.displayName ?? 'player'}.`;
@@ -266,6 +291,10 @@ async function refreshSession(): Promise<void> {
     state.roomDailyClaimLimit = null;
     state.roomClaimsUsedToday = 0;
     state.roomClaimsRemainingToday = null;
+    state.chatModeration = {
+      role: 'none',
+      banned: false,
+    };
     lastCheckedDisplayName = '';
     lastDisplayNameAvailability = null;
   }
@@ -332,6 +361,10 @@ async function logout(): Promise<void> {
     state.authenticated = false;
     state.user = null;
     state.debugMagicLink = null;
+    state.chatModeration = {
+      role: 'none',
+      banned: false,
+    };
     state.status = 'Signed out.';
   } catch (error) {
     console.error('Failed to sign out', error);
@@ -360,6 +393,10 @@ async function resetTestData(): Promise<void> {
     state.authenticated = false;
     state.user = null;
     state.debugMagicLink = null;
+    state.chatModeration = {
+      role: 'none',
+      banned: false,
+    };
     state.status = `Reset complete. Cleared ${response.deleted.rooms} rooms and ${clearedLocalRooms} local cached room entries. Reloading...`;
     renderAuthUi();
 
@@ -844,6 +881,22 @@ function setLoading(loading: boolean, status?: string): void {
     state.status = status;
   }
   renderAuthUi();
+}
+
+function normalizeChatModerationViewer(
+  viewer: ChatModerationViewer | null | undefined
+): ChatModerationViewer {
+  if (!viewer || (viewer.role !== 'none' && viewer.role !== 'admin' && viewer.role !== 'owner')) {
+    return {
+      role: 'none',
+      banned: false,
+    };
+  }
+
+  return {
+    role: viewer.role,
+    banned: viewer.banned === true,
+  };
 }
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {

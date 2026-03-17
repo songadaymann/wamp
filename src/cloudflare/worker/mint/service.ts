@@ -172,6 +172,13 @@ export async function syncRoomOwnershipFromChain(
       normalizeAddress(actor.walletAddress) === normalizeAddress(chainState.ownerWalletAddress)
         ? actor.id
         : null),
+    claimerPrincipalKind:
+      record.claimerPrincipalKind ??
+      (actor?.walletAddress &&
+      normalizeAddress(actor.walletAddress) === normalizeAddress(chainState.ownerWalletAddress)
+        ? 'user'
+        : null),
+    claimerAgentId: record.claimerAgentId ?? null,
     claimerDisplayName:
       record.claimerDisplayName ??
       (actor?.walletAddress &&
@@ -398,6 +405,8 @@ export async function persistRoomMintState(
           minted_owner_wallet_address = ?,
           minted_owner_synced_at = ?,
           claimer_user_id = COALESCE(claimer_user_id, ?),
+          claimer_principal_type = COALESCE(claimer_principal_type, ?),
+          claimer_agent_id = COALESCE(claimer_agent_id, NULL),
           claimer_display_name = COALESCE(claimer_display_name, ?),
           claimed_at = COALESCE(claimed_at, ?)
         WHERE id = ?
@@ -409,6 +418,7 @@ export async function persistRoomMintState(
       normalizeAddress(state.ownerWalletAddress),
       state.ownerSyncedAt,
       claimUserId,
+      claimUserId ? 'user' : null,
       claimDisplayName,
       claimedAt,
       record.draft.id

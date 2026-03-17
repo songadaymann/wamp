@@ -3,6 +3,15 @@ import type { RoomGoal, RoomGoalType } from '../goals/roomGoals';
 
 export type RunResult = 'active' | 'completed' | 'failed' | 'abandoned';
 export type LeaderboardRankingMode = 'time' | 'score';
+export const ROOM_DIFFICULTIES = ['easy', 'medium', 'hard', 'extreme'] as const;
+export type RoomDifficulty = typeof ROOM_DIFFICULTIES[number];
+
+export const ROOM_DIFFICULTY_LABELS: Record<RoomDifficulty, string> = {
+  easy: 'Easy',
+  medium: 'Medium',
+  hard: 'Hard',
+  extreme: 'Extreme',
+};
 
 export interface RunStartRequestBody {
   roomId: string;
@@ -67,6 +76,23 @@ export interface RoomLeaderboardEntry {
   finishedAt: string;
 }
 
+export interface RoomDifficultyCounts {
+  easy: number;
+  medium: number;
+  hard: number;
+  extreme: number;
+}
+
+export interface RoomDifficultySummary {
+  consensus: RoomDifficulty | null;
+  counts: RoomDifficultyCounts;
+  totalVotes: number;
+  viewerVote: RoomDifficulty | null;
+  viewerSignedIn: boolean;
+  viewerCanVote: boolean;
+  viewerNeedsRun: boolean;
+}
+
 export interface RoomLeaderboardResponse {
   roomId: string;
   roomCoordinates: RoomCoordinates;
@@ -74,9 +100,32 @@ export interface RoomLeaderboardResponse {
   roomVersion: number;
   goalType: RoomGoalType;
   rankingMode: LeaderboardRankingMode;
+  difficulty: RoomDifficultySummary;
   entries: RoomLeaderboardEntry[];
   viewerBest: RoomLeaderboardEntry | null;
   viewerRank: number | null;
+}
+
+export interface RoomDifficultyVoteRequestBody {
+  roomCoordinates: RoomCoordinates;
+  roomVersion: number;
+  difficulty: RoomDifficulty;
+}
+
+export interface RoomDiscoveryEntry {
+  roomId: string;
+  roomCoordinates: RoomCoordinates;
+  roomTitle: string | null;
+  roomVersion: number;
+  goalType: RoomGoalType;
+  consensusDifficulty: RoomDifficulty | null;
+  voteCount: number;
+  publishedAt: string | null;
+}
+
+export interface RoomDiscoveryResponse {
+  difficultyFilter: RoomDifficulty | null;
+  results: RoomDiscoveryEntry[];
 }
 
 export interface GlobalLeaderboardEntry {
@@ -115,4 +164,10 @@ export interface UserStatsRecord {
   bestScore: number;
   fastestClearMs: number | null;
   updatedAt: string;
+}
+
+export function normalizeRoomDifficulty(value: unknown): RoomDifficulty | null {
+  return typeof value === 'string' && ROOM_DIFFICULTIES.includes(value as RoomDifficulty)
+    ? (value as RoomDifficulty)
+    : null;
 }

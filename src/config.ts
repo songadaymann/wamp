@@ -211,6 +211,17 @@ export const TILESETS: TilesetConfig[] = [
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_WATER, NO_COLLISION_PROFILE),
     },
   },
+  {
+    key: 'smb_lvl1_3_5',
+    name: 'SMB Lvl 1-3-5',
+    path: 'assets/tilesets/tileset_smb_lvl1_3_5.png',
+    imageWidth: 128,
+    imageHeight: 64,
+    columns: 8,
+    rows: 4,
+    tileCount: 32,
+    firstGid: 460,
+  },
 ];
 
 export function getTilesetByKey(key: string): TilesetConfig | undefined {

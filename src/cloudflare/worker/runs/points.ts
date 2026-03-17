@@ -1,15 +1,26 @@
 import { getObjectById } from '../../../config';
+import type { CourseRunRecord } from '../../../courses/runModel';
 import type { RoomGoal } from '../../../goals/roomGoals';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
 import type { RoomRunRecord, UserStatsRecord } from '../../../runs/model';
 import { compareLeaderboardEntries } from '../../../runs/scoring';
-import type { Env, PointEventRow, RoomRunRow, UserRow, UserStatsRow } from '../core/types';
+import type { CourseRunRow, Env, PointEventRow, RoomRunRow, UserRow, UserStatsRow } from '../core/types';
 
-export type PointEventType = 'room_first_publish' | 'room_publish_update' | 'run_finalized' | 'room_creator_completion';
+export type PointEventType =
+  | 'room_first_publish'
+  | 'room_publish_update'
+  | 'course_first_publish'
+  | 'course_publish_update'
+  | 'run_finalized'
+  | 'room_creator_completion'
+  | 'course_creator_completion';
 
 const ROOM_FIRST_PUBLISH_POINTS = 300;
 const ROOM_PUBLISH_UPDATE_POINTS = 75;
+const COURSE_FIRST_PUBLISH_POINTS = ROOM_FIRST_PUBLISH_POINTS;
+const COURSE_PUBLISH_UPDATE_POINTS = ROOM_PUBLISH_UPDATE_POINTS;
 const ROOM_CREATOR_COMPLETION_POINTS = 50;
+const COURSE_CREATOR_COMPLETION_POINTS = 50;
 const RUN_COLLECTIBLE_POINTS = 2;
 const RUN_ENEMY_POINTS = 5;
 const RUN_CHECKPOINT_POINTS = 10;
@@ -41,7 +52,16 @@ export async function awardRoomPublishPoints(
 
 export async function awardRunFinalizePoints(
   env: Env,
-  run: RoomRunRecord,
+  run: Pick<
+    RoomRunRecord | CourseRunRecord,
+    | 'attemptId'
+    | 'userId'
+    | 'collectiblesCollected'
+    | 'enemiesDefeated'
+    | 'checkpointsReached'
+    | 'result'
+    | 'deaths'
+  >,
   isNewPersonalBest: boolean,
 ): Promise<PointEventRow> {
   let points = 0;
@@ -80,6 +100,32 @@ export async function awardRunFinalizePoints(
   });
 }
 
+export async function awardCoursePublishPoints(
+  env: Env,
+  userId: string,
+  courseId: string,
+  courseVersion: number,
+  isFirstPublish: boolean
+): Promise<PointEventRow> {
+  const eventType: PointEventType = isFirstPublish
+    ? 'course_first_publish'
+    : 'course_publish_update';
+  const points = isFirstPublish
+    ? COURSE_FIRST_PUBLISH_POINTS
+    : COURSE_PUBLISH_UPDATE_POINTS;
+  return recordPointEvent(env, {
+    userId,
+    eventType,
+    sourceKey: `${courseId}:${courseVersion}`,
+    points,
+    breakdown: {
+      courseId,
+      courseVersion,
+      firstPublish: isFirstPublish,
+    },
+  });
+}
+
 export async function awardRoomCreatorCompletionPoints(
   env: Env,
   input: {
@@ -102,6 +148,34 @@ export async function awardRoomCreatorCompletionPoints(
     breakdown: {
       roomId: input.roomId,
       roomVersion: input.roomVersion,
+      finisherUserId: input.finisherUserId,
+      attemptId: input.attemptId,
+    },
+  });
+}
+
+export async function awardCourseCreatorCompletionPoints(
+  env: Env,
+  input: {
+    creatorUserId: string | null;
+    courseId: string;
+    courseVersion: number;
+    finisherUserId: string;
+    attemptId: string;
+  }
+): Promise<PointEventRow | null> {
+  if (!input.creatorUserId || input.creatorUserId === input.finisherUserId) {
+    return null;
+  }
+
+  return recordPointEvent(env, {
+    userId: input.creatorUserId,
+    eventType: 'course_creator_completion',
+    sourceKey: `${input.courseId}:${input.courseVersion}:${input.finisherUserId}`,
+    points: COURSE_CREATOR_COMPLETION_POINTS,
+    breakdown: {
+      courseId: input.courseId,
+      courseVersion: input.courseVersion,
       finisherUserId: input.finisherUserId,
       attemptId: input.attemptId,
     },
@@ -206,15 +280,27 @@ export async function upsertUserStats(env: Env, userId: string): Promise<void> {
         collectibles_collected,
         enemies_defeated,
         checkpoints_reached
+      FROM course_runs
+      WHERE user_id = ?
+        AND result != 'active'
+      UNION ALL
+      SELECT
+        result,
+        elapsed_ms,
+        score,
+        deaths,
+        collectibles_collected,
+        enemies_defeated,
+        checkpoints_reached
       FROM room_runs
       WHERE user_id = ?
         AND result != 'active'
     `
   )
-    .bind(userId)
+    .bind(userId, userId)
     .all<
       Pick<
-        RoomRunRow,
+        RoomRunRow | CourseRunRow,
         | 'result'
         | 'elapsed_ms'
         | 'score'

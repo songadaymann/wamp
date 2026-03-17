@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Everybody's Platformer API",
-    "version": "0.5.0",
-    "description": "API for room authoring, authentication, scored runs, leaderboards, and room ownership minting."
+    "version": "0.6.0",
+    "description": "API for room authoring, authentication, agent builders, scored runs, leaderboards, and room ownership minting."
   },
   "servers": [
     {
@@ -58,12 +58,38 @@
           },
           "source": {
             "type": ["string", "null"],
-            "enum": ["session", "api_token", null]
+            "enum": ["session", "api_token", "agent_token", null]
           },
           "scopes": {
             "type": ["array", "null"],
             "items": { "$ref": "#/components/schemas/ApiTokenScope" }
+          },
+          "principal": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/RequestPrincipal" },
+              { "type": "null" }
+            ]
+          },
+          "agent": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/AgentAccount" },
+              { "type": "null" }
+            ]
           }
+        }
+      },
+      "RequestPrincipal": {
+        "type": "object",
+        "required": ["kind", "id", "displayName", "ownerUserId", "agentId"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["user", "agent"]
+          },
+          "id": { "type": "string" },
+          "displayName": { "type": "string" },
+          "ownerUserId": { "type": "string" },
+          "agentId": { "type": ["string", "null"] }
         }
       },
       "ApiTokenScope": {
@@ -117,6 +143,114 @@
         "properties": {
           "token": { "type": "string" },
           "record": { "$ref": "#/components/schemas/ApiTokenRecord" }
+        }
+      },
+      "AgentTokenScope": {
+        "type": "string",
+        "enum": [
+          "rooms:read",
+          "rooms:write",
+          "leaderboards:read"
+        ]
+      },
+      "AgentAccount": {
+        "type": "object",
+        "required": [
+          "id",
+          "ownerUserId",
+          "displayName",
+          "description",
+          "avatarUrl",
+          "avatarSeed",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "ownerUserId": { "type": "string" },
+          "displayName": { "type": "string" },
+          "description": { "type": ["string", "null"] },
+          "avatarUrl": { "type": ["string", "null"] },
+          "avatarSeed": { "type": ["string", "null"] },
+          "status": {
+            "type": "string",
+            "enum": ["active", "disabled"]
+          },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "AgentAccountListResponse": {
+        "type": "object",
+        "required": ["agents"],
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AgentAccount" }
+          }
+        }
+      },
+      "AgentAccountCreateRequestBody": {
+        "type": "object",
+        "required": ["displayName"],
+        "properties": {
+          "displayName": { "type": "string" },
+          "description": { "type": ["string", "null"] },
+          "avatarUrl": { "type": ["string", "null"] },
+          "avatarSeed": { "type": ["string", "null"] }
+        }
+      },
+      "AgentAccountCreateResponse": {
+        "type": "object",
+        "required": ["agent"],
+        "properties": {
+          "agent": { "$ref": "#/components/schemas/AgentAccount" }
+        }
+      },
+      "AgentTokenRecord": {
+        "type": "object",
+        "required": ["id", "agentId", "label", "scopes", "createdAt", "lastUsedAt", "revokedAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "agentId": { "type": "string" },
+          "label": { "type": "string" },
+          "scopes": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AgentTokenScope" }
+          },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "lastUsedAt": { "type": ["string", "null"], "format": "date-time" },
+          "revokedAt": { "type": ["string", "null"], "format": "date-time" }
+        }
+      },
+      "AgentTokenListResponse": {
+        "type": "object",
+        "required": ["tokens"],
+        "properties": {
+          "tokens": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AgentTokenRecord" }
+          }
+        }
+      },
+      "AgentTokenCreateRequestBody": {
+        "type": "object",
+        "required": ["label"],
+        "properties": {
+          "label": { "type": "string" },
+          "scopes": {
+            "type": ["array", "null"],
+            "items": { "$ref": "#/components/schemas/AgentTokenScope" }
+          }
+        }
+      },
+      "AgentTokenCreateResponse": {
+        "type": "object",
+        "required": ["token", "record"],
+        "properties": {
+          "token": { "type": "string" },
+          "record": { "$ref": "#/components/schemas/AgentTokenRecord" }
         }
       },
       "MagicLinkRequestBody": {
@@ -317,6 +451,8 @@
           "snapshot",
           "createdAt",
           "publishedByUserId",
+          "publishedByPrincipalKind",
+          "publishedByAgentId",
           "publishedByDisplayName",
           "revertedFromVersion"
         ],
@@ -325,6 +461,11 @@
           "snapshot": { "$ref": "#/components/schemas/RoomSnapshot" },
           "createdAt": { "type": "string", "format": "date-time" },
           "publishedByUserId": { "type": ["string", "null"] },
+          "publishedByPrincipalKind": {
+            "type": ["string", "null"],
+            "enum": ["user", "agent", null]
+          },
+          "publishedByAgentId": { "type": ["string", "null"] },
           "publishedByDisplayName": { "type": ["string", "null"] },
           "revertedFromVersion": { "type": ["integer", "null"] }
         }
@@ -346,9 +487,13 @@
           "published",
           "versions",
           "claimerUserId",
+          "claimerPrincipalKind",
+          "claimerAgentId",
           "claimerDisplayName",
           "claimedAt",
           "lastPublishedByUserId",
+          "lastPublishedByPrincipalKind",
+          "lastPublishedByAgentId",
           "lastPublishedByDisplayName",
           "mintedChainId",
           "mintedContractAddress",
@@ -370,9 +515,19 @@
             "items": { "$ref": "#/components/schemas/RoomVersionRecord" }
           },
           "claimerUserId": { "type": ["string", "null"] },
+          "claimerPrincipalKind": {
+            "type": ["string", "null"],
+            "enum": ["user", "agent", null]
+          },
+          "claimerAgentId": { "type": ["string", "null"] },
           "claimerDisplayName": { "type": ["string", "null"] },
           "claimedAt": { "type": ["string", "null"], "format": "date-time" },
           "lastPublishedByUserId": { "type": ["string", "null"] },
+          "lastPublishedByPrincipalKind": {
+            "type": ["string", "null"],
+            "enum": ["user", "agent", null]
+          },
+          "lastPublishedByAgentId": { "type": ["string", "null"] },
           "lastPublishedByDisplayName": { "type": ["string", "null"] },
           "mintedChainId": { "type": ["integer", "null"] },
           "mintedContractAddress": { "type": ["string", "null"] },
@@ -390,6 +545,10 @@
         }
       },
       "WorldWindow": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "ClaimableFrontierRoomWindow": {
         "type": "object",
         "additionalProperties": true
       },
@@ -824,6 +983,260 @@
         }
       }
     },
+    "/api/agents": {
+      "get": {
+        "summary": "List local agent accounts for the signed-in owner",
+        "security": [
+          { "cookieSession": [] }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned agents",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AgentAccountListResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing session",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a local agent account",
+        "description": "Session cookie required. Creates an agent linked to the signed-in human owner.",
+        "security": [
+          { "cookieSession": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AgentAccountCreateRequestBody" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Agent created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AgentAccountCreateResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing session",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "409": {
+            "description": "Display name conflict",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{agentId}": {
+      "delete": {
+        "summary": "Disable an owned agent account",
+        "security": [
+          { "cookieSession": [] }
+        ],
+        "parameters": [
+          {
+            "name": "agentId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Agent disabled"
+          },
+          "401": {
+            "description": "Missing session",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{agentId}/tokens": {
+      "get": {
+        "summary": "List active tokens for an owned agent",
+        "security": [
+          { "cookieSession": [] }
+        ],
+        "parameters": [
+          {
+            "name": "agentId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active agent tokens",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AgentTokenListResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing session",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a bearer token for an owned agent",
+        "description": "Session cookie required. The raw bearer token is only returned once.",
+        "security": [
+          { "cookieSession": [] }
+        ],
+        "parameters": [
+          {
+            "name": "agentId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AgentTokenCreateRequestBody" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Agent token created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AgentTokenCreateResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing session",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{agentId}/tokens/{tokenId}": {
+      "delete": {
+        "summary": "Revoke an owned agent token",
+        "security": [
+          { "cookieSession": [] }
+        ],
+        "parameters": [
+          {
+            "name": "agentId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "tokenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Agent token revoked"
+          },
+          "401": {
+            "description": "Missing session",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent token not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/wallet/challenge": {
       "post": {
         "summary": "Request a wallet sign-in challenge",
@@ -904,6 +1317,45 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/WorldWindow" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/world/claimable": {
+      "get": {
+        "summary": "Find claimable frontier rooms",
+        "description": "Authenticated read for sessions, personal API tokens, or agent tokens with rooms:write. Returns frontier rooms that are currently unclaimed, unminted, and claimable by the authenticated actor within the requested window.",
+        "security": [
+          { "bearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "centerX",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "centerY",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "radius",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 0, "maximum": 32 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Claimable frontier room window",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ClaimableFrontierRoomWindow" }
               }
             }
           }

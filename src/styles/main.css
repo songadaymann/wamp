@@ -95,6 +95,34 @@ body {
   line-height: 1.7;
 }
 
+.app-boot-splash-title-wrap {
+  position: relative;
+  display: inline-flex;
+  align-self: center;
+  justify-content: center;
+  max-width: 100%;
+  padding: 0 18px;
+}
+
+.app-boot-splash-beta {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 111, 60, 0.55);
+  border-radius: 999px;
+  background: rgba(255, 111, 60, 0.14);
+  color: var(--accent-hot);
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  transform: rotate(-14deg);
+  transform-origin: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+}
+
 .app-feedback-status {
   color: var(--text-muted);
   font-size: 13px;
@@ -355,6 +383,21 @@ body[data-playfun-mode='true'] .rotate-gate {
   color: var(--text-muted);
   font-size: 11px;
   line-height: 1.35;
+}
+
+.auth-menu-action-row {
+  width: 100%;
+}
+
+.auth-menu-action-btn {
+  width: 100%;
+  justify-content: center;
+  border-color: rgba(227, 187, 77, 0.4);
+  color: var(--accent-warm);
+}
+
+.auth-menu-action-btn:hover {
+  background: rgba(227, 187, 77, 0.12);
 }
 
 .auth-title {
@@ -896,6 +939,17 @@ body[data-playfun-mode='true'] .rotate-gate {
 .goal-summary {
   margin-top: 8px;
   color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.goal-context-note {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(121, 199, 255, 0.35);
+  border-radius: 10px;
+  color: #bde5ff;
+  background: rgba(48, 108, 149, 0.18);
   font-size: 10px;
   line-height: 1.35;
 }
@@ -1539,6 +1593,16 @@ body[data-app-mode="play-world"] #game-container {
   word-break: break-word;
 }
 
+.chat-message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chat-message-action {
+  min-width: 70px;
+}
+
 /* ── Bottom Bar ── */
 
 #bottom-bar {
@@ -1939,6 +2003,10 @@ body[data-app-mode="play-world"] .world-only-control {
   color: #ffd7d7;
 }
 
+.world-btn-play.hidden {
+  display: none;
+}
+
 .world-btn-edit:not(:disabled) {
   border-color: rgba(255, 193, 7, 0.4);
   color: #ffe7a0;
@@ -1998,10 +2066,210 @@ body[data-app-mode="play-world"] .world-only-control {
   width: min(720px, calc(100vw - 40px));
 }
 
+.about-modal-panel {
+  width: min(720px, calc(100vw - 40px));
+}
+
+.course-modal-panel {
+  width: min(760px, calc(100vw - 40px));
+}
+
+body:not([data-device-class='phone']) #course-modal {
+  z-index: 12;
+  display: block;
+  padding: 0;
+  background: transparent;
+  backdrop-filter: none;
+  pointer-events: none;
+}
+
+body:not([data-device-class='phone']) #course-modal .course-modal-panel {
+  position: absolute;
+  top: calc(220px + var(--safe-top));
+  left: calc(16px + var(--safe-left));
+  width: 320px;
+  max-height: calc(100vh - 236px - var(--safe-top) - var(--safe-bottom));
+  margin: 0;
+  pointer-events: auto;
+}
+
 .controls-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.about-copy {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.about-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(243, 238, 226, 0.03);
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  border-radius: 8px;
+}
+
+.about-section-title {
+  color: var(--accent-warm);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.about-section p {
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.about-section a {
+  color: #8fd8ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.about-section a:hover {
+  color: #b7e9ff;
+}
+
+.about-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.about-copy-status {
+  min-height: 15px;
+  color: var(--accent-cool);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.course-room-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-moderation-modal-panel {
+  width: min(640px, calc(100vw - 40px));
+}
+
+.chat-moderation-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(243, 238, 226, 0.03);
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  border-radius: 8px;
+}
+
+.chat-moderation-form {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-moderation-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--field);
+  color: var(--text);
+  font-size: 12px;
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+}
+
+.chat-moderation-input:focus {
+  outline: none;
+  border-color: var(--accent-cool);
+}
+
+.chat-moderation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-moderation-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.chat-moderation-item-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.chat-moderation-item-title {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chat-moderation-item-meta {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.chat-moderation-empty {
+  padding: 12px;
+  border: 1px dashed rgba(243, 238, 226, 0.12);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.chat-moderation-status-success {
+  color: var(--accent-cool);
+}
+
+.course-room-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1.4fr) auto auto;
+  align-items: center;
+}
+
+.course-room-row-selected {
+  border-color: rgba(60, 143, 255, 0.5);
+  background: rgba(60, 143, 255, 0.08);
+}
+
+.about-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.about-modal-note code {
+  color: var(--accent-warm);
 }
 
 .controls-section {
@@ -2157,6 +2425,58 @@ body[data-app-mode="play-world"] .world-only-control {
   padding: 0 20px 20px;
 }
 
+.leaderboard-difficulty {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-muted);
+  border-radius: 12px;
+  background: rgba(12, 13, 18, 0.64);
+}
+
+.leaderboard-difficulty-actions,
+.leaderboard-discover-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.leaderboard-difficulty-actions .bar-btn.active,
+.leaderboard-discover-filters .bar-btn.active {
+  border-color: var(--accent-cool);
+  color: var(--accent-cool);
+}
+
+.leaderboard-discover-row {
+  width: 100%;
+  border: 1px solid var(--border-muted);
+  border-radius: 12px;
+  background: rgba(15, 17, 24, 0.8);
+  color: inherit;
+  text-align: left;
+  padding: 12px;
+  cursor: pointer;
+}
+
+.leaderboard-discover-row:hover,
+.leaderboard-discover-row:focus-visible {
+  border-color: var(--accent-cool);
+  outline: none;
+}
+
+.leaderboard-discover-title {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.leaderboard-discover-meta {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .leaderboard-controls {
   display: flex;
   align-items: center;
@@ -2194,6 +2514,18 @@ body[data-app-mode="play-world"] .world-only-control {
 .leaderboard-empty {
   color: var(--text-muted);
   padding: 6px 0;
+}
+
+@media (max-width: 700px) {
+  .leaderboard-row,
+  .leaderboard-row.leaderboard-global-row {
+    grid-template-columns: 36px minmax(0, 1.4fr) minmax(0, 1fr);
+  }
+
+  .leaderboard-row > :nth-child(4),
+  .leaderboard-row > :nth-child(5) {
+    display: none;
+  }
 }
 
 /* ── Scrollbar styling ── */
@@ -2744,10 +3076,16 @@ body[data-device-class='phone'][data-app-mode='editor'] .background-card-label {
 }
 
 body[data-device-class='phone'] .chat-form,
+body[data-device-class='phone'] .chat-moderation-form,
 body[data-device-class='phone'] .mobile-jump-sheet-form,
 body[data-device-class='phone'] .leaderboard-controls {
   flex-direction: column;
   align-items: stretch;
+}
+
+body[data-device-class='phone'] .chat-moderation-item {
+  align-items: stretch;
+  flex-direction: column;
 }
 
 body[data-device-class='phone'] .leaderboard-row,
