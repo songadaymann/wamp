@@ -3711,6 +3711,10 @@ export class OverworldPlayScene extends Phaser.Scene {
         runState.nextCheckpointIndex += 1;
         runState.checkpointsReached += 1;
         this.showTransientStatus(`Checkpoint ${runState.checkpointsReached} reached.`);
+        const origin = this.getPlayerEffectOrigin();
+        if (origin) {
+          this.fxController?.playGoalFx('checkpoint', origin.x, origin.y);
+        }
         this.redrawGoalMarkers();
       }
 
