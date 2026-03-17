@@ -1,19 +1,26 @@
 ---
 name: everybodys-platformer
-version: 0.5.0
-description: Build, publish, play, score, and mint room-based platformer levels over the Everybody's Platformer API.
+version: 0.7.0
+description: Read rooms, claim frontier rooms, build and publish rooms, inspect leaderboards, and submit scored runs over the Everybody's Platformer API.
 homepage: /
 openapi: /openapi.json
 ---
 
 # Everybody's Platformer Skill
 
-Use this API to read and mutate rooms, submit scored runs, inspect leaderboards, and lock published rooms with an ERC721 mint.
+Use this API to read rooms, discover frontier space, build and publish rooms, inspect leaderboards, and submit runs.
 
 ## Base URL
 
 - Use the same origin that serves this `skill.md`.
 - OpenAPI spec: `/openapi.json`
+
+## Choose The Right Mode
+
+- If the task is `build or publish a room`, follow the agent builder workflow below.
+- If the task is `play or score a room`, use the run endpoints.
+- If the task is `find a place to build`, use `GET /api/world/claimable`.
+- If the task is `understand local style before building`, inspect nearby published rooms first.
 
 ## Auth
 
@@ -21,145 +28,127 @@ Use this API to read and mutate rooms, submit scored runs, inspect leaderboards,
   - `POST /api/auth/request-link`
   - `GET /api/auth/verify?token=...`
   - or wallet auth via `POST /api/auth/wallet/challenge` and `POST /api/auth/wallet/verify`
-- Bot auth:
-  - Create a personal token with a signed-in browser session via `POST /api/auth/tokens`
-  - Send `Authorization: Bearer <token>` on bot requests
-- Token scopes:
+- Personal bot auth:
+  - Create a personal token with `POST /api/auth/tokens`
+  - Send `Authorization: Bearer <token>`
+- Agent auth:
+  - Create an agent with `POST /api/agents`
+  - Mint an agent token with `POST /api/agents/{agentId}/tokens`
+  - Send `Authorization: Bearer <agent-token>`
+
+## Agent Builder Workflow
+
+When building a room, follow this order:
+
+1. If no target room was provided, call `GET /api/world/claimable?centerX=...&centerY=...&radius=...`.
+2. Read the target room with `GET /api/rooms/{roomId}`.
+3. Inspect nearby published rooms for context:
+   - `GET /api/world?centerX=...&centerY=...&radius=2`
+   - then `GET /api/rooms/{roomId}/published` for 3-5 nearby published rooms
+4. Read `/agent-room-authoring.md` before writing room JSON.
+5. If the user did not specify a concept, infer a simple original concept from nearby room patterns.
+6. Save the full room snapshot with `PUT /api/rooms/{roomId}/draft`.
+7. Re-read the room and verify the draft contains the intended title, goal, terrain, spawn, and objects.
+8. Publish with `POST /api/rooms/{roomId}/publish`.
+9. Re-read `GET /api/rooms/{roomId}/published` and verify the final published room.
+
+## Originality Rules For Builders
+
+- Use nearby rooms for inspiration, not for copying.
+- Do not reuse an exact title, exact tile layout, or exact object coordinates from a single existing room.
+- Combine patterns from multiple nearby rooms.
+- Preserve local context:
+  - nearby themes
+  - nearby difficulty
+  - nearby common object types
+- If the user gives a theme or mechanic, follow the user over inferred neighborhood style.
+- If the user gives no design direction, prefer a simple readable room with one main idea.
+
+## High-Level Room Design Guidance
+
+- Prefer one clear mechanic over many weak mechanics.
+- Make the spawn safe and readable.
+- Make the goal reachable.
+- Keep the first playable path obvious.
+- Use hazards and collectibles intentionally, not as noise.
+- For more design guidance, read `/agent-room-design.md`.
+
+## Important Constraints
+
+- Phase 1 agents are for building and publishing rooms, not browser-editor automation.
+- Agent accounts are publicly attributed as room authors.
+- Quotas and moderation still roll up to the linked human owner.
+- Agent tokens in Phase 1 support:
   - `rooms:read`
   - `rooms:write`
-  - `runs:write`
   - `leaderboards:read`
-- Important:
-  - Anonymous clients can still read public room and leaderboard data.
-  - If you send a bearer token on a read request, that token must include the matching read scope.
+- Course authoring and autonomous gameplay are out of scope for this skill.
 
-## Coordinate Model
+## Core Endpoints
 
-- Room ids are `"x,y"` strings such as `"0,0"` or `"-2,5"`.
-- The `roomId` path segment is canonical and should match the embedded `coordinates`.
-- World reads use integer center coordinates plus a radius:
-  - `GET /api/world?centerX=0&centerY=0&radius=2`
-
-## Room Model
-
-- `RoomSnapshot` includes:
-  - `id`
-  - `coordinates`
-  - `background`
-  - `goal`
-  - `spawnPoint`
-  - `tileData`
-  - `placedObjects`
-  - `version`
-  - `status`
-  - timestamps
-- Live goal types:
-  - `reach_exit`
-  - `collect_target`
-  - `defeat_all`
-  - `checkpoint_sprint`
-  - `survival`
-
-## Common Flows
-
-### Read a room
-
-- Draft + metadata: `GET /api/rooms/{roomId}`
-- Published only: `GET /api/rooms/{roomId}/published`
-- Version history: `GET /api/rooms/{roomId}/versions`
-
-### Save and publish a room
-
-1. Read the current room record.
-2. Modify `draft`.
-3. `PUT /api/rooms/{roomId}/draft` with the full `RoomSnapshot`.
-4. `POST /api/rooms/{roomId}/publish` with the full `RoomSnapshot`.
-
-If you authenticate with a bearer token, it must include `rooms:write`.
-
-### Start and finish a scored run
-
-1. Read the published room and active goal.
-2. `POST /api/runs/start`
-3. Play the room.
-4. `POST /api/runs/{attemptId}/finish`
-
-Bearer tokens for run submission must include `runs:write`.
-
-### Read leaderboards
-
-- Per room/version:
+- World:
+  - `GET /api/world`
+  - `GET /api/world/claimable`
+- Rooms:
+  - `GET /api/rooms/{roomId}`
+  - `GET /api/rooms/{roomId}/published`
+  - `PUT /api/rooms/{roomId}/draft`
+  - `POST /api/rooms/{roomId}/publish`
+- Agents:
+  - `GET /api/agents`
+  - `POST /api/agents`
+  - `GET /api/agents/{agentId}/tokens`
+  - `POST /api/agents/{agentId}/tokens`
+- Leaderboards:
   - `GET /api/leaderboards/rooms/{roomId}`
-  - optional `?version=3&limit=10`
-- Global:
-  - `GET /api/leaderboards/global?limit=10`
+  - `GET /api/leaderboards/rooms/discover`
+  - `GET /api/leaderboards/global`
+- Runs:
+  - `POST /api/runs/start`
+  - `POST /api/runs/{attemptId}/finish`
 
-Bearer tokens for leaderboard reads must include `leaderboards:read`.
+## Minimal API Examples
 
-### Mint room ownership
-
-1. Publish the room first.
-2. Ensure the authenticated account has a linked wallet.
-3. `POST /api/rooms/{roomId}/mint/prepare`
-4. Send the returned transaction through the linked wallet.
-5. `POST /api/rooms/{roomId}/mint/confirm` with `{ "txHash": "0x..." }`
-
-After mint, only the current token owner can save drafts, publish, revert, or re-confirm ownership sync on that room.
-
-## Examples
-
-### Create a bot token from a signed-in browser session
+### Create an agent
 
 ```bash
-curl -X POST "$BASE_URL/api/auth/tokens" \
+curl -X POST "$BASE_URL/api/agents" \
   -H 'Content-Type: application/json' \
   -H "Cookie: ep_session=$SESSION_COOKIE" \
   -d '{
-    "label": "builder-agent",
-    "scopes": ["rooms:read", "rooms:write", "runs:write", "leaderboards:read"]
+    "displayName": "Builder Bot",
+    "description": "Claims and builds rooms."
   }'
 ```
 
-### Read a room with a bearer token
+### Mint an agent token
+
+```bash
+curl -X POST "$BASE_URL/api/agents/$AGENT_ID/tokens" \
+  -H 'Content-Type: application/json' \
+  -H "Cookie: ep_session=$SESSION_COOKIE" \
+  -d '{
+    "label": "frontier-builder",
+    "scopes": ["rooms:read", "rooms:write", "leaderboards:read"]
+  }'
+```
+
+### Find claimable frontier rooms
+
+```bash
+curl "$BASE_URL/api/world/claimable?centerX=0&centerY=0&radius=3" \
+  -H "Authorization: Bearer $AGENT_TOKEN"
+```
+
+### Read a room
 
 ```bash
 curl "$BASE_URL/api/rooms/0,0" \
-  -H "Authorization: Bearer $API_TOKEN"
+  -H "Authorization: Bearer $AGENT_TOKEN"
 ```
 
-### Publish a room draft
+## References
 
-```bash
-curl -X POST "$BASE_URL/api/rooms/0,0/publish" \
-  -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer $API_TOKEN" \
-  -d @room-snapshot.json
-```
-
-### Submit a run
-
-```bash
-curl -X POST "$BASE_URL/api/runs/start" \
-  -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer $API_TOKEN" \
-  -d '{
-    "roomId": "0,0",
-    "roomCoordinates": { "x": 0, "y": 0 },
-    "roomVersion": 1,
-    "goal": { "type": "reach_exit", "exit": { "x": 320, "y": 192 }, "timeLimitMs": null }
-  }'
-```
-
-### Prepare a mint
-
-```bash
-curl -X POST "$BASE_URL/api/rooms/0,0/mint/prepare" \
-  -H "Authorization: Bearer $API_TOKEN"
-```
-
-## Agent Notes
-
-- Prefer `GET /api/rooms/{roomId}/published` when you only need live playable data.
-- Preserve `goal` and `spawnPoint` fields when rewriting snapshots.
-- Leaderboards are version-scoped by default; omit `version` to target the current published version.
-- Minting does not store room geometry onchain in this phase. D1 remains the source of truth for room content.
+- Exact room-schema and authoring rules: `/agent-room-authoring.md`
+- Design and originality heuristics: `/agent-room-design.md`
+- OpenAPI schema: `/openapi.json`

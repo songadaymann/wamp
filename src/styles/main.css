@@ -2128,6 +2128,19 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   color: #b7e9ff;
 }
 
+.about-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.about-copy-status {
+  min-height: 15px;
+  color: var(--accent-cool);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .course-room-actions {
   display: flex;
   flex-wrap: wrap;

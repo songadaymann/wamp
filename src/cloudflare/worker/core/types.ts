@@ -1,4 +1,10 @@
 import type { ApiTokenRecord, ApiTokenScope, AuthUser } from '../../../auth/model';
+import type {
+  AgentAccount,
+  AgentTokenRecord,
+  RequestAuthSource,
+  RequestPrincipal,
+} from '../../../agents/model';
 import type { CourseSnapshot } from '../../../courses/model';
 import type { RoomCoordinates, RoomRecord, RoomSnapshot, RoomVersionRecord } from '../../../persistence/roomModel';
 import type { RunResult } from '../../../runs/model';
@@ -51,9 +57,13 @@ export interface RoomRow {
   draft_title: string | null;
   published_title: string | null;
   claimer_user_id: string | null;
+  claimer_principal_type: 'user' | 'agent' | null;
+  claimer_agent_id: string | null;
   claimer_display_name: string | null;
   claimed_at: string | null;
   last_published_by_user_id: string | null;
+  last_published_by_principal_type: 'user' | 'agent' | null;
+  last_published_by_agent_id: string | null;
   last_published_by_display_name: string | null;
   minted_chain_id: number | null;
   minted_contract_address: string | null;
@@ -68,8 +78,54 @@ export interface RoomVersionRow {
   title: string | null;
   created_at: string;
   published_by_user_id: string | null;
+  published_by_principal_type: 'user' | 'agent' | null;
+  published_by_agent_id: string | null;
   published_by_display_name: string | null;
   reverted_from_version: number | null;
+}
+
+export interface AgentRow {
+  id: string;
+  owner_user_id: string;
+  display_name: string;
+  description: string | null;
+  avatar_url: string | null;
+  avatar_seed: string | null;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentTokenRow {
+  id: string;
+  agent_id: string;
+  label: string;
+  scopes_json: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface AgentJoinRow extends AgentRow {
+  owner_email: string | null;
+  owner_wallet_address: string | null;
+  owner_display_name: string;
+  owner_created_at: string;
+}
+
+export interface AgentTokenJoinRow extends AgentTokenRow {
+  owner_user_id: string;
+  agent_display_name: string;
+  agent_description: string | null;
+  agent_avatar_url: string | null;
+  agent_avatar_seed: string | null;
+  agent_is_active: number;
+  agent_created_at: string;
+  agent_updated_at: string;
+  owner_email: string | null;
+  owner_wallet_address: string | null;
+  owner_display_name: string;
+  owner_created_at: string;
 }
 
 export interface CourseRow {
@@ -111,9 +167,13 @@ export interface PersistRoomRecordInput {
   draft: RoomSnapshot;
   published: RoomSnapshot | null;
   claimerUserId: string | null;
+  claimerPrincipalType: 'user' | 'agent' | null;
+  claimerAgentId: string | null;
   claimerDisplayName: string | null;
   claimedAt: string | null;
   lastPublishedByUserId: string | null;
+  lastPublishedByPrincipalType: 'user' | 'agent' | null;
+  lastPublishedByAgentId: string | null;
   lastPublishedByDisplayName: string | null;
   mintedChainId: number | null;
   mintedContractAddress: string | null;
@@ -126,6 +186,8 @@ export interface PersistRoomVersionInput {
   snapshot: RoomSnapshot;
   createdAt: string;
   publishedByUserId: string | null;
+  publishedByPrincipalType: 'user' | 'agent' | null;
+  publishedByAgentId: string | null;
   publishedByDisplayName: string | null;
   revertedFromVersion: number | null;
   onConflictUpdate: boolean;
@@ -315,11 +377,14 @@ export interface AuthSession {
 }
 
 export interface RequestAuth {
-  source: 'session' | 'api_token';
+  source: RequestAuthSource;
   user: AuthUser;
+  principal: RequestPrincipal;
+  agent: AgentAccount | null;
   session: AuthSession | null;
   scopes: ApiTokenScope[] | null;
   apiToken: ApiTokenRecord | null;
+  agentToken: AgentTokenRecord | null;
   isAdmin: boolean;
 }
 

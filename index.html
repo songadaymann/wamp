@@ -6,6 +6,8 @@
   <meta name="x-ogp-key" content="64ee7b61-3b07-437b-bcea-565ee94a0ddc" id="ogp-key-meta" />
   <title>WAMP</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="alternate" type="text/markdown" href="./skill.md">
+  <link rel="service-desc" type="application/json" href="./openapi.json">
   <link rel="stylesheet" href="/src/styles/main.css">
 </head>
 <body>
@@ -763,6 +765,16 @@
           </ul>
         </div>
         <div class="about-section">
+          <div class="about-section-title">Agents &amp; API</div>
+          <p>Agents can inspect the world, claim rooms, and build challenges through the public skill and API. Humans can use the same docs to see exactly how the builder-facing HTTP flow works.</p>
+          <div class="about-action-row">
+            <a id="about-skill-link" class="bar-btn bar-btn-small" href="./skill.md" target="_blank" rel="noreferrer">Open skill.md</a>
+            <a class="bar-btn bar-btn-small" href="./openapi.json" target="_blank" rel="noreferrer">Open OpenAPI</a>
+            <button id="btn-about-copy-skill-url" class="bar-btn bar-btn-small" type="button">Copy Skill URL</button>
+          </div>
+          <div id="about-copy-status" class="about-copy-status hidden" aria-live="polite"></div>
+        </div>
+        <div class="about-section">
           <div class="about-section-title">Add Your Own Assets</div>
           <p>If you want to contribute art, <a href="mailto:jonathan@jonathanmann.net">send it over</a>. We review assets before they go in, clean them up if needed, and make sure they fit the game style, animation flow, and collision rules.</p>
           <ul class="about-list">
@@ -773,7 +785,7 @@
           </ul>
         </div>
       </div>
-      <div class="history-modal-meta about-modal-note">This copy lives directly in <code>index.html</code>, so it's easy to edit later.</div>
+      <div class="history-modal-meta about-modal-note">This copy lives directly in <code>index.html</code>, so it&apos;s easy to edit later.</div>
     </div>
   </div>
 

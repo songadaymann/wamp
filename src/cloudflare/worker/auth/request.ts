@@ -1,6 +1,7 @@
 import type { ApiTokenScope, AuthSessionResponse } from '../../../auth/model';
 import { HttpError } from '../core/http';
 import type { AuthSession, Env, RequestAuth } from '../core/types';
+import { loadAgentTokenAuth } from '../agents/store';
 import {
   SESSION_MAX_AGE_SECONDS,
   loadApiTokenAuth,
@@ -70,7 +71,7 @@ export async function loadOptionalRequestAuth(
   const isAdmin = isAdminRequest(env, request);
   const bearerToken = parseBearerToken(request.headers.get('Authorization'));
   if (bearerToken) {
-    const tokenAuth = await loadApiTokenAuth(env, bearerToken);
+    const tokenAuth = (await loadApiTokenAuth(env, bearerToken)) ?? (await loadAgentTokenAuth(env, bearerToken));
     if (!tokenAuth) {
       throw new HttpError(401, 'API token is invalid or has been revoked.');
     }
@@ -89,9 +90,18 @@ export async function loadOptionalRequestAuth(
   return {
     source: 'session',
     user: session.user,
+    principal: {
+      kind: 'user',
+      id: session.user.id,
+      displayName: session.user.displayName,
+      ownerUserId: session.user.id,
+      agentId: null,
+    },
+    agent: null,
     session,
     scopes: null,
     apiToken: null,
+    agentToken: null,
     isAdmin,
   };
 }
@@ -111,6 +121,8 @@ export function createSessionResponse(auth: RequestAuth | null): AuthSessionResp
     user: auth?.user ?? null,
     source: auth?.source ?? null,
     scopes: auth?.scopes ?? null,
+    principal: auth?.principal ?? null,
+    agent: auth?.agent ?? null,
   };
 }
 
@@ -178,7 +190,7 @@ export function hasScope(auth: RequestAuth, scope: ApiTokenScope): boolean {
 
 export function requireScope(auth: RequestAuth, scope: ApiTokenScope, actionLabel: string): void {
   if (!hasScope(auth, scope)) {
-    throw new HttpError(403, `This API token lacks the ${scope} scope required to ${actionLabel}.`);
+    throw new HttpError(403, `This token lacks the ${scope} scope required to ${actionLabel}.`);
   }
 }
 
@@ -187,7 +199,7 @@ export function requireOptionalScope(
   scope: ApiTokenScope,
   actionLabel: string
 ): void {
-  if (!auth || auth.source !== 'api_token') {
+  if (!auth || auth.source === 'session') {
     return;
   }
 

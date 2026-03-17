@@ -1,3 +1,5 @@
+import type { AgentAccount, RequestAuthSource, RequestPrincipal } from '../agents/model';
+
 export interface AuthUser {
   id: string;
   email: string | null;
@@ -18,8 +20,10 @@ export type ApiTokenScope = typeof API_TOKEN_SCOPES[number];
 export interface AuthSessionResponse {
   authenticated: boolean;
   user: AuthUser | null;
-  source?: 'session' | 'api_token' | null;
+  source?: RequestAuthSource | null;
   scopes?: ApiTokenScope[] | null;
+  principal?: RequestPrincipal | null;
+  agent?: AgentAccount | null;
   roomDailyClaimLimit?: number | null;
   roomClaimsUsedToday?: number;
   roomClaimsRemainingToday?: number | null;

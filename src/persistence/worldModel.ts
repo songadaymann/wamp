@@ -60,6 +60,15 @@ export interface WorldWindow {
   rooms: WorldRoomSummary[];
 }
 
+export interface ClaimableFrontierRoomWindow {
+  center: RoomCoordinates;
+  radius: number;
+  rooms: WorldRoomSummary[];
+  roomDailyClaimLimit: number | null;
+  roomClaimsUsedToday: number;
+  roomClaimsRemainingToday: number | null;
+}
+
 export function getOrthogonalNeighbors(coordinates: RoomCoordinates): RoomCoordinates[] {
   return [
     { x: coordinates.x + 1, y: coordinates.y },
