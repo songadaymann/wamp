@@ -2183,6 +2183,23 @@ export class OverworldPlayScene extends Phaser.Scene {
     window.dispatchEvent(new CustomEvent(COURSE_COMPOSER_STATE_CHANGED_EVENT));
   }
 
+  private getCenteredRoomBadgePosition(
+    origin: { x: number; y: number },
+    backgroundWidth: number,
+    backgroundHeight: number,
+    stackIndex: number,
+    stackCount: number,
+  ): { x: number; y: number } {
+    const stackGap = 8;
+    const totalHeight = stackCount * backgroundHeight + Math.max(0, stackCount - 1) * stackGap;
+    const centerX = origin.x + ROOM_PX_WIDTH * 0.5;
+    const centerY = origin.y + ROOM_PX_HEIGHT * 0.44;
+    return {
+      x: centerX - backgroundWidth * 0.5,
+      y: centerY - totalHeight * 0.5 + stackIndex * (backgroundHeight + stackGap),
+    };
+  }
+
   private redrawRoomGoalBadges(): void {
     this.destroyRoomGoalBadges();
 
@@ -2204,6 +2221,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         }
 
         const origin = this.getRoomOrigin(coordinates);
+        const hasCourseBadge = Boolean(this.roomSummariesById.get(roomIdFromCoordinates(coordinates))?.course);
         const titleLabel = this.truncateOverlayText(
           this.getRoomDisplayTitle(room.title, coordinates).toUpperCase(),
           20
@@ -2230,11 +2248,15 @@ export class OverworldPlayScene extends Phaser.Scene {
           strokeThickness: 3,
         });
 
-        const zoomedInPosition = { x: origin.x + 8, y: origin.y + 8 };
-        const zoomedOutPosition = {
-          x: origin.x + (ROOM_PX_WIDTH - backgroundWidth) * 0.5,
-          y: origin.y + 22,
-        };
+        const centeredPosition = this.getCenteredRoomBadgePosition(
+          origin,
+          backgroundWidth,
+          backgroundHeight,
+          0,
+          hasCourseBadge ? 2 : 1
+        );
+        const zoomedInPosition = centeredPosition;
+        const zoomedOutPosition = centeredPosition;
         const container = this.add.container(zoomedInPosition.x, zoomedInPosition.y, [
           background,
           titleText,
@@ -2364,14 +2386,16 @@ export class OverworldPlayScene extends Phaser.Scene {
           strokeThickness: 3,
         });
 
-        const zoomedInPosition = {
-          x: origin.x + ROOM_PX_WIDTH - backgroundWidth - 8,
-          y: origin.y + 8,
-        };
-        const zoomedOutPosition = {
-          x: origin.x + (ROOM_PX_WIDTH - backgroundWidth) * 0.5,
-          y: origin.y + 8,
-        };
+        const hasRoomGoalBadge = Boolean(this.getRoomSnapshotForCoordinates(coordinates)?.goal);
+        const centeredPosition = this.getCenteredRoomBadgePosition(
+          origin,
+          backgroundWidth,
+          backgroundHeight,
+          hasRoomGoalBadge ? 1 : 0,
+          hasRoomGoalBadge ? 2 : 1
+        );
+        const zoomedInPosition = centeredPosition;
+        const zoomedOutPosition = centeredPosition;
         const container = this.add.container(zoomedInPosition.x, zoomedInPosition.y, [
           background,
           titleText,
