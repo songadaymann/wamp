@@ -3124,6 +3124,45 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.redrawGoalMarkers();
   }
 
+  private resetSingleRoomChallengeStateOnRoomExit(runState: GoalRunState): void {
+    const room = this.getRoomSnapshotForCoordinates(runState.roomCoordinates);
+    if (!room) {
+      return;
+    }
+
+    const restoredKeyCount = this.clearCollectedObjectKeysForRoom(room);
+    if (restoredKeyCount > 0) {
+      this.heldKeyCount = Math.max(0, this.heldKeyCount - restoredKeyCount);
+    }
+    this.score = 0;
+
+    const loadedRoom = this.loadedFullRoomsById.get(room.id) ?? null;
+    if (!loadedRoom) {
+      return;
+    }
+
+    this.destroyLiveObjects(loadedRoom);
+    this.createLiveObjects(loadedRoom);
+    this.syncLiveObjectInteractions();
+  }
+
+  private clearCollectedObjectKeysForRoom(room: RoomSnapshot): number {
+    let restoredKeyCount = 0;
+
+    for (let index = 0; index < room.placedObjects.length; index += 1) {
+      const runtimeKey = this.getPlacedObjectRuntimeKey(room.id, index);
+      if (!this.collectedObjectKeys.delete(runtimeKey)) {
+        continue;
+      }
+
+      if (room.placedObjects[index]?.id === 'key') {
+        restoredKeyCount += 1;
+      }
+    }
+
+    return restoredKeyCount;
+  }
+
   private getPlacedObjectRuntimeKey(roomId: string, placedIndex: number): string {
     return `${roomId}:${placedIndex}`;
   }
@@ -3151,6 +3190,16 @@ export class OverworldPlayScene extends Phaser.Scene {
       nextRoomCoordinates.y === this.currentRoomCoordinates.y
     ) {
       return;
+    }
+
+    const activeGoalRun = this.currentGoalRun;
+    if (
+      activeGoalRun &&
+      activeGoalRun.result === 'active' &&
+      (nextRoomCoordinates.x !== activeGoalRun.roomCoordinates.x ||
+        nextRoomCoordinates.y !== activeGoalRun.roomCoordinates.y)
+    ) {
+      this.resetSingleRoomChallengeStateOnRoomExit(activeGoalRun);
     }
 
     this.currentRoomCoordinates = { ...nextRoomCoordinates };
