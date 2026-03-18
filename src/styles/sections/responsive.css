@@ -41,19 +41,54 @@ body[data-device-class='phone'] .bar-center {
   flex-wrap: wrap;
 }
 
-body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel {
-  display: none !important;
-}
-
 body[data-device-class='phone'][data-app-mode='play-world'] .mobile-goal-footer {
-  display: flex;
-  flex: 1 0 100%;
-  width: 100%;
-  order: -1;
+  display: none !important;
 }
 
-body[data-device-class='phone'][data-app-mode='play-world'] .mobile-goal-footer.hidden {
-  display: none !important;
+body[data-device-class='phone'][data-app-mode='play-world'] #bottom-bar {
+  min-height: 0;
+  padding: 0 calc(10px + var(--safe-right)) calc(4px + var(--safe-bottom)) calc(10px + var(--safe-left));
+  gap: 6px;
+  align-items: flex-end;
+  justify-content: center;
+  background: linear-gradient(180deg, rgba(5, 5, 5, 0), rgba(5, 5, 5, 0.56));
+  border-top: none;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .bar-left {
+  display: none;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .bar-center,
+body[data-device-class='phone'][data-app-mode='play-world'] .bar-right {
+  flex: 0 1 auto;
+  gap: 6px;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .bar-right {
+  justify-content: flex-start;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-zoom-out-footer,
+body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-zoom-in-footer,
+body[data-device-class='phone'][data-app-mode='play-world'] #btn-fit-screen,
+body[data-device-class='phone'][data-app-mode='play-world'] #zoom-level {
+  display: none;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] #world-online-count,
+body[data-device-class='phone'][data-app-mode='play-world'] #room-save-status {
+  min-height: 20px;
+  padding: 2px 7px;
+  font-size: 10px;
+  backdrop-filter: blur(4px);
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] #room-save-status {
+  max-width: 46vw;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] #game-container,
@@ -104,6 +139,44 @@ body[data-device-class='phone'] .world-goal-panel-timer {
 
 body[data-device-class='phone'] .world-goal-panel-progress {
   font-size: 11px;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel {
+  top: calc(6px + var(--safe-top));
+  width: min(264px, calc(100vw - 128px - var(--safe-left) - var(--safe-right)));
+  max-width: calc(100vw - 128px - var(--safe-left) - var(--safe-right));
+  padding: 8px 12px;
+  gap: 3px;
+  border-radius: 16px;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-room {
+  display: none;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-goal {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-row {
+  align-items: center;
+  gap: 8px;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-progress {
+  min-width: 0;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-timer {
+  flex: 0 0 auto;
+  font-size: 12px;
 }
 
 body[data-device-class='phone'][data-mobile-world-hud-collapsed='true'] #world-hud {

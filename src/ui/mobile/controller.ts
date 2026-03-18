@@ -10,6 +10,7 @@ import {
 } from './touchControls';
 
 type EditorSheetId = 'tools' | 'background' | 'palette' | 'objects' | 'goal' | 'actions';
+type MoveDirection = 'up' | 'left' | 'right' | 'down';
 
 type Elements = {
   rotateGate: HTMLElement | null;
@@ -17,8 +18,8 @@ type Elements = {
   mobileEditorUndoButton: HTMLButtonElement | null;
   mobileEditorToggleButton: HTMLButtonElement | null;
   mobilePlayControls: HTMLElement | null;
-  mobileJoystick: HTMLElement | null;
-  mobileJoystickKnob: HTMLElement | null;
+  mobileDpad: HTMLElement | null;
+  mobileDpadButtons: HTMLButtonElement[];
   mobileJumpButton: HTMLButtonElement | null;
   mobileSlashButton: HTMLButtonElement | null;
   mobileShootButton: HTMLButtonElement | null;
@@ -45,9 +46,7 @@ export class MobileUiController {
   private editorSheetCollapsed = false;
   private worldHudCollapsed = false;
   private previousAppMode: string | null = null;
-  private joystickPointerId: number | null = null;
-  private joystickCenter = { x: 0, y: 0 };
-  private joystickRadius = 1;
+  private activeDpadPointers = new Map<number, MoveDirection>();
   private lastTouchEndAt = 0;
 
   constructor(
@@ -61,8 +60,8 @@ export class MobileUiController {
       mobileEditorUndoButton: doc.getElementById('btn-mobile-editor-undo') as HTMLButtonElement | null,
       mobileEditorToggleButton: doc.getElementById('btn-mobile-editor-toggle') as HTMLButtonElement | null,
       mobilePlayControls: doc.getElementById('mobile-play-controls'),
-      mobileJoystick: doc.getElementById('mobile-joystick'),
-      mobileJoystickKnob: doc.getElementById('mobile-joystick-knob'),
+      mobileDpad: doc.getElementById('mobile-dpad'),
+      mobileDpadButtons: Array.from(doc.querySelectorAll<HTMLButtonElement>('[data-mobile-direction]')),
       mobileJumpButton: doc.getElementById('btn-mobile-jump') as HTMLButtonElement | null,
       mobileSlashButton: doc.getElementById('btn-mobile-slash') as HTMLButtonElement | null,
       mobileShootButton: doc.getElementById('btn-mobile-shoot') as HTMLButtonElement | null,
@@ -95,7 +94,7 @@ export class MobileUiController {
     this.bindMobileEditorActions();
     this.bindMobileWorldHud();
     this.bindWorldShortcuts();
-    this.bindJoystick();
+    this.bindDpad();
     this.bindActionButtons();
     this.bindDoubleTapZoomSuppression();
     this.windowObj.addEventListener('mobile-editor-auto-collapse', this.handleAutoCollapse as EventListener);
@@ -136,6 +135,23 @@ export class MobileUiController {
     this.mutationObserver.observe(this.doc.body, {
       attributes: true,
       attributeFilter: ['data-app-mode'],
+    });
+    this.observeClassChanges(this.doc.getElementById('auth-panel'));
+    this.observeClassChanges(this.doc.getElementById('global-chat'));
+    this.observeClassChanges(this.doc.getElementById('busy-overlay'));
+    this.doc.querySelectorAll('.history-modal').forEach((element) => {
+      this.observeClassChanges(element);
+    });
+  }
+
+  private observeClassChanges(target: Element | null): void {
+    if (!target) {
+      return;
+    }
+
+    this.mutationObserver.observe(target, {
+      attributes: true,
+      attributeFilter: ['class'],
     });
   }
 
@@ -276,52 +292,95 @@ export class MobileUiController {
     );
   }
 
-  private bindJoystick(): void {
-    const joystick = this.elements.mobileJoystick;
-    if (!joystick) {
+  private bindDpad(): void {
+    if (!this.elements.mobileDpad || this.elements.mobileDpadButtons.length === 0) {
       return;
     }
 
-    const release = () => {
-      this.joystickPointerId = null;
-      setTouchMove(0, 0);
-      this.updateJoystickKnob(0, 0);
-    };
-
-    const updateFromEvent = (event: PointerEvent) => {
-      if (this.joystickPointerId !== event.pointerId) {
+    const release = (pointerId: number) => {
+      if (!this.activeDpadPointers.has(pointerId)) {
         return;
       }
 
-      const dx = event.clientX - this.joystickCenter.x;
-      const dy = event.clientY - this.joystickCenter.y;
-      const distance = Math.min(this.joystickRadius, Math.hypot(dx, dy));
-      const angle = Math.atan2(dy, dx);
-      const knobX = Math.cos(angle) * distance;
-      const knobY = Math.sin(angle) * distance;
-      const normalizedX = Math.abs(knobX / this.joystickRadius) < 0.12 ? 0 : knobX / this.joystickRadius;
-      const normalizedY = Math.abs(knobY / this.joystickRadius) < 0.12 ? 0 : knobY / this.joystickRadius;
-      setTouchMove(normalizedX, normalizedY);
-      this.updateJoystickKnob(knobX, knobY);
+      this.activeDpadPointers.delete(pointerId);
+      this.applyDpadState();
     };
 
-    joystick.addEventListener('pointerdown', (event) => {
-      event.preventDefault();
-      const rect = joystick.getBoundingClientRect();
-      this.joystickCenter = {
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2,
-      };
-      this.joystickRadius = rect.width * 0.32;
-      this.joystickPointerId = event.pointerId;
-      joystick.setPointerCapture(event.pointerId);
-      updateFromEvent(event);
-    });
+    this.elements.mobileDpadButtons.forEach((button) => {
+      const direction = this.getMoveDirection(button.dataset.mobileDirection);
+      if (!direction) {
+        return;
+      }
 
-    joystick.addEventListener('pointermove', updateFromEvent);
-    joystick.addEventListener('pointerup', release);
-    joystick.addEventListener('pointercancel', release);
-    joystick.addEventListener('lostpointercapture', release);
+      button.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        this.activeDpadPointers.set(event.pointerId, direction);
+        button.setPointerCapture(event.pointerId);
+        this.applyDpadState();
+      });
+
+      const releaseButtonPointer = (event: PointerEvent) => {
+        if (this.activeDpadPointers.get(event.pointerId) !== direction) {
+          return;
+        }
+
+        release(event.pointerId);
+      };
+
+      button.addEventListener('pointerup', releaseButtonPointer);
+      button.addEventListener('pointercancel', releaseButtonPointer);
+      button.addEventListener('lostpointercapture', releaseButtonPointer);
+    });
+  }
+
+  private getMoveDirection(direction: string | undefined): MoveDirection | null {
+    if (
+      direction === 'up'
+      || direction === 'left'
+      || direction === 'right'
+      || direction === 'down'
+    ) {
+      return direction;
+    }
+
+    return null;
+  }
+
+  private applyDpadState(): void {
+    let x = 0;
+    let y = 0;
+
+    for (const direction of this.activeDpadPointers.values()) {
+      if (direction === 'left') {
+        x -= 1;
+      } else if (direction === 'right') {
+        x += 1;
+      } else if (direction === 'up') {
+        y -= 1;
+      } else if (direction === 'down') {
+        y += 1;
+      }
+    }
+
+    setTouchMove(Math.max(-1, Math.min(1, x)), Math.max(-1, Math.min(1, y)));
+    this.syncDpadButtonState();
+  }
+
+  private syncDpadButtonState(): void {
+    const activeDirections = new Set(this.activeDpadPointers.values());
+    this.elements.mobileDpadButtons.forEach((button) => {
+      const direction = this.getMoveDirection(button.dataset.mobileDirection);
+      button.classList.toggle('is-active', Boolean(direction && activeDirections.has(direction)));
+    });
+  }
+
+  private clearDpadState(): void {
+    if (this.activeDpadPointers.size > 0) {
+      this.activeDpadPointers.clear();
+    }
+
+    setTouchMove(0, 0);
+    this.syncDpadButtonState();
   }
 
   private bindActionButtons(): void {
@@ -358,7 +417,8 @@ export class MobileUiController {
   }
 
   private openJumpSheet(): void {
-    if (!this.elements.worldJumpSheet) {
+    const jumpSheet = this.elements.worldJumpSheet;
+    if (!jumpSheet) {
       return;
     }
 
@@ -366,23 +426,42 @@ export class MobileUiController {
       this.elements.worldJumpSheetInput.value = this.elements.worldJumpInput.value;
     }
 
-    this.elements.worldJumpSheet.classList.remove('hidden');
+    if (!jumpSheet.classList.contains('hidden')) {
+      this.elements.worldJumpSheetInput?.focus();
+      this.elements.worldJumpSheetInput?.select();
+      return;
+    }
+
+    jumpSheet.classList.remove('hidden');
     this.doc.body.dataset.mobileJumpSheetOpen = 'true';
     this.elements.worldJumpSheetInput?.focus();
     this.elements.worldJumpSheetInput?.select();
   }
 
   private closeJumpSheet(): void {
-    this.elements.worldJumpSheet?.classList.add('hidden');
-    delete this.doc.body.dataset.mobileJumpSheetOpen;
-  }
-
-  private updateJoystickKnob(x: number, y: number): void {
-    if (!this.elements.mobileJoystickKnob) {
+    const jumpSheet = this.elements.worldJumpSheet;
+    if (!jumpSheet) {
+      delete this.doc.body.dataset.mobileJumpSheetOpen;
       return;
     }
 
-    this.elements.mobileJoystickKnob.style.transform = `translate(${x}px, ${y}px)`;
+    if (jumpSheet.classList.contains('hidden')) {
+      delete this.doc.body.dataset.mobileJumpSheetOpen;
+      return;
+    }
+
+    jumpSheet.classList.add('hidden');
+    delete this.doc.body.dataset.mobileJumpSheetOpen;
+  }
+
+  private hasVisibleNonJumpModal(): boolean {
+    return Array.from(this.doc.querySelectorAll<HTMLElement>('.history-modal')).some((element) => {
+      if (element === this.elements.worldJumpSheet) {
+        return false;
+      }
+
+      return !element.classList.contains('hidden');
+    });
   }
 
   private render(): void {
@@ -395,6 +474,11 @@ export class MobileUiController {
     const isPhoneWorld = layout.deviceClass === 'phone' && layout.coarsePointer && !layout.mobileLandscapeBlocked && isWorld;
     const chatOpen = this.doc.getElementById('global-chat')?.classList.contains('is-open') ?? false;
     const jumpSheetOpen = !(this.elements.worldJumpSheet?.classList.contains('hidden') ?? true);
+    const menuOpen = this.doc.getElementById('auth-panel')?.classList.contains('menu-open') ?? false;
+    const busyOverlayOpen = !(this.doc.getElementById('busy-overlay')?.classList.contains('hidden') ?? true);
+    const nonJumpModalOpen = this.hasVisibleNonJumpModal();
+    const mobileShortcutOverlayOpen =
+      chatOpen || jumpSheetOpen || menuOpen || busyOverlayOpen || nonJumpModalOpen;
 
     if (!isEditor && this.editorSheetCollapsed) {
       this.editorSheetCollapsed = false;
@@ -445,16 +529,22 @@ export class MobileUiController {
     this.elements.worldHudToggleButton?.classList.toggle('hidden', !(isPhoneWorld && this.worldHudCollapsed));
     this.elements.worldHudMinimizeButton?.classList.toggle('hidden', !(isPhoneWorld && !this.worldHudCollapsed));
 
-    this.elements.worldChatButton?.classList.toggle('hidden', !(layout.coarsePointer && isWorld) || chatOpen);
-    this.elements.worldJumpSheetButton?.classList.toggle('hidden', !(layout.coarsePointer && isWorld) || jumpSheetOpen);
-    if (!(layout.coarsePointer && isWorld)) {
+    this.elements.worldChatButton?.classList.toggle(
+      'hidden',
+      !(layout.coarsePointer && isWorld) || mobileShortcutOverlayOpen,
+    );
+    this.elements.worldJumpSheetButton?.classList.toggle(
+      'hidden',
+      !(layout.coarsePointer && isWorld) || mobileShortcutOverlayOpen,
+    );
+    if (!(layout.coarsePointer && isWorld) || chatOpen || menuOpen || busyOverlayOpen || nonJumpModalOpen) {
       this.closeJumpSheet();
     }
 
     setTouchControlsActive(layout.coarsePointer && isPlay && !layout.mobileLandscapeBlocked);
     if (!layout.coarsePointer || layout.mobileLandscapeBlocked || !isPlay) {
       resetTouchInputState();
-      this.updateJoystickKnob(0, 0);
+      this.clearDpadState();
     }
 
     if (layout.mobileLandscapeBlocked) {

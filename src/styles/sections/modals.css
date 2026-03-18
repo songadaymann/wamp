@@ -41,6 +41,10 @@
   width: min(620px, calc(100vw - 40px));
 }
 
+#install-help-modal {
+  z-index: 160;
+}
+
 body:not([data-device-class='phone']) #course-modal {
   z-index: 12;
   display: block;
@@ -68,6 +72,91 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
 
 .install-help-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.install-help-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.install-help-media-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.install-help-media-title {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.install-help-media-meta {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.install-help-media-frame {
+  position: relative;
+  height: clamp(180px, 38vh, 260px);
+  overflow: hidden;
+  border: 1px solid rgba(143, 216, 255, 0.18);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(20, 20, 20, 0.96), rgba(10, 10, 10, 0.98)),
+    radial-gradient(circle at top, rgba(143, 216, 255, 0.12), transparent 58%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.install-help-media-video,
+.install-help-media-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #050505;
+}
+
+.install-help-media-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  text-align: center;
+}
+
+.install-help-media-placeholder-title {
+  color: var(--accent-cool);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.install-help-media-placeholder-copy {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.install-help-media-placeholder code,
+.install-help-media-note code {
+  font-size: 10px;
+}
+
+.install-help-media-card[data-install-media-ready='true'] .install-help-media-placeholder {
+  display: none;
+}
+
+.install-help-media-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .about-copy {
@@ -289,6 +378,13 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+}
+
+.history-modal-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .history-modal-title-group {
