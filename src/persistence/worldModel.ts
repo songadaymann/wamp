@@ -1,4 +1,5 @@
 import {
+  cloneRoomSnapshot,
   DEFAULT_ROOM_COORDINATES,
   roomIdFromCoordinates,
   type RoomCoordinates,
@@ -46,6 +47,8 @@ export interface WorldChunk {
   coordinates: WorldChunkCoordinates;
   roomBounds: WorldRoomBounds;
   rooms: WorldRoomSummary[];
+  previewRooms: RoomSnapshot[];
+  chunkPreviewHash: string;
 }
 
 export interface WorldChunkWindow {
@@ -182,13 +185,17 @@ export function computeWorldChunk(
   coordinates: WorldChunkCoordinates
 ): WorldChunk {
   const roomBounds = getChunkRoomBounds(coordinates);
-
-  return {
+  const chunk: WorldChunk = {
     id: chunkIdFromCoordinates(coordinates),
     coordinates: { ...coordinates },
     roomBounds,
     rooms: computeWorldSummariesInBounds(publishedRooms, roomBounds),
+    previewRooms: computePublishedRoomPreviewSnapshotsInBounds(publishedRooms, roomBounds),
+    chunkPreviewHash: '',
   };
+
+  chunk.chunkPreviewHash = computeWorldChunkPreviewHash(chunk);
+  return chunk;
 }
 
 export function computeWorldChunkWindow(
@@ -314,4 +321,68 @@ function compareWorldSummaries(a: WorldRoomSummary, b: WorldRoomSummary): number
   }
 
   return a.coordinates.x - b.coordinates.x;
+}
+
+function compareRoomSnapshots(a: RoomSnapshot, b: RoomSnapshot): number {
+  if (a.coordinates.y !== b.coordinates.y) {
+    return a.coordinates.y - b.coordinates.y;
+  }
+
+  return a.coordinates.x - b.coordinates.x;
+}
+
+function computePublishedRoomPreviewSnapshotsInBounds(
+  publishedRooms: RoomSnapshot[],
+  bounds: WorldRoomBounds
+): RoomSnapshot[] {
+  const roomsById = new Map<string, RoomSnapshot>();
+
+  for (const room of publishedRooms) {
+    if (isWithinRoomBounds(room.coordinates, bounds)) {
+      roomsById.set(room.id, cloneRoomSnapshot(room));
+    }
+  }
+
+  return Array.from(roomsById.values()).sort(compareRoomSnapshots);
+}
+
+export function computeWorldChunkPreviewHash(
+  chunk: Pick<WorldChunk, 'rooms' | 'previewRooms'>
+): string {
+  const roomSummarySignature = chunk.rooms
+    .slice()
+    .sort(compareWorldSummaries)
+    .map((room) =>
+      [
+        room.id,
+        room.state,
+        room.version ?? '',
+        room.publishedAt ?? '',
+        room.title ?? '',
+        room.background ?? '',
+        room.goalType ?? '',
+        room.course?.courseId ?? '',
+        room.course?.goalType ?? '',
+        room.course?.roomIndex ?? '',
+        room.course?.roomCount ?? '',
+      ].join(':')
+    )
+    .join('|');
+  const previewSignature = chunk.previewRooms
+    .slice()
+    .sort(compareRoomSnapshots)
+    .map((room) => `${room.id}:${room.version}:${room.updatedAt}`)
+    .join('|');
+
+  return hashChunkSignature(`${roomSummarySignature}#${previewSignature}`);
+}
+
+function hashChunkSignature(value: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0).toString(36);
 }
