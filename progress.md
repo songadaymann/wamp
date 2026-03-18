@@ -57,6 +57,16 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Installable app shell pass on March 18, 2026:
+  - added `public/app.webmanifest` for the main game shell with `standalone` display mode, landscape orientation, root-relative install scope, and the current WAMP brand metadata/colors
+  - generated fixed install icons under `public/icons/` from the existing `public/favicon.svg` mark: `192x192`, `512x512`, and `180x180` Apple touch icon
+  - updated the main app `index.html` head with manifest linkage, Apple touch icon linkage, `theme-color`, and Apple standalone meta tags
+  - kept installability limited to the main game shell; the separate operator/admin page remains browser-only
+  - added short install guidance to the existing `Controls` and `About` modal copy for Safari and Brave/Chrome, including the expected standalone-launch result
+  - explicitly did not add a service worker, offline support, or custom install-prompt UI in this first pass
+  - verification:
+    - `npm run build` passed
+    - confirmed `dist/app.webmanifest` plus `dist/icons/icon-192.png`, `dist/icons/icon-512.png`, and `dist/icons/apple-touch-icon.png` are emitted in the production build
 - Wave 3 refactor tracker + extraction pass on March 18, 2026:
   - created `docs/2026-03-18-repo-audit-wave-3-tracker.md` as the living audit/refactor tracker for the March 18 cleanup pass
   - extracted overworld badge overlay math, camera math, and course-run state/progression helpers out of `src/scenes/OverworldPlayScene.ts` into `src/scenes/overworld/`

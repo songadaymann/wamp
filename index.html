@@ -3,9 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#050505">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="WAMP">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="x-ogp-key" content="64ee7b61-3b07-437b-bcea-565ee94a0ddc" id="ogp-key-meta" />
   <title>WAMP</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="manifest" href="./app.webmanifest">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="alternate" type="text/markdown" href="./skill.md">
   <link rel="service-desc" type="application/json" href="./openapi.json">
   <link rel="stylesheet" href="/src/styles/main.css">
@@ -735,6 +741,9 @@
           <div class="controls-row"><span class="controls-key">2 fingers</span><span>Pan editor camera</span></div>
           <div class="controls-row"><span class="controls-key">Joystick</span><span>Move in play mode</span></div>
           <div class="controls-row"><span class="controls-key">Jump / Slash / Shoot</span><span>Right-side action buttons</span></div>
+          <div class="controls-row"><span class="controls-key">Safari</span><span>Share -> Add to Home Screen</span></div>
+          <div class="controls-row"><span class="controls-key">Brave / Chrome</span><span>Menu -> Add to Home screen or Install app</span></div>
+          <div class="controls-row"><span class="controls-key">Installed</span><span>Launch from the icon to hide browser chrome</span></div>
         </div>
       </div>
       <div class="history-modal-meta">Custom control remapping can layer onto this later without changing the basic world HUD.</div>
@@ -769,6 +778,15 @@
         <div class="about-section">
           <div class="about-section-title">Challenges</div>
           <p>Right now, the game supports both single-room challenges and short published courses that stitch 2-4 adjacent rooms together. Rooms still handle speedruns, checkpoint sprints, collectible hunts, survival, and other small self-contained tests, while courses let you chain authored room challenges into a longer path.</p>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Install App</div>
+          <p>On mobile, you can launch WAMP without the normal browser address bar and tabs by installing it to your home screen.</p>
+          <ul class="about-list">
+            <li><strong>Safari:</strong> use <code>Share -&gt; Add to Home Screen</code>.</li>
+            <li><strong>Brave / Chrome:</strong> open the browser menu and choose <code>Add to Home screen</code> or <code>Install app</code>.</li>
+            <li><strong>Result:</strong> launching from the installed icon opens the game in a standalone app shell.</li>
+          </ul>
         </div>
         <div class="about-section">
           <div class="about-section-title">Future Improvements</div>
