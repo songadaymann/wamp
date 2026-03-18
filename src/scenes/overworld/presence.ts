@@ -19,10 +19,25 @@ import type { OverworldMode } from '../sceneData';
 
 export interface RenderedGhost {
   presence: WorldGhostPresence;
+  halo: Phaser.GameObjects.Ellipse;
   sprite: Phaser.GameObjects.Sprite;
   label: Phaser.GameObjects.Text;
   targetX: number;
   targetY: number;
+}
+
+export interface BrowsePresenceDotPresence {
+  connectionId: string;
+  roomId: string;
+  roomCoordinates: RoomCoordinates;
+  x: number;
+  y: number;
+}
+
+export interface PlayRoomPresenceMarkerDescriptor {
+  roomId: string;
+  coordinates: RoomCoordinates;
+  population: number;
 }
 
 interface LocalPresenceInput {
@@ -55,6 +70,7 @@ interface OverworldPresenceControllerOptions {
 }
 
 export class OverworldPresenceController {
+  private static readonly PRESENCE_STALE_MS = 15_000;
   private client: WorldPresenceClient | null = null;
   private identity: WorldPresenceIdentity | null = null;
   private snapshot: WorldPresenceSnapshot | null = null;
@@ -211,6 +227,8 @@ export class OverworldPresenceController {
     for (const renderedGhost of this.renderedGhostsByConnectionId.values()) {
       renderedGhost.sprite.x = Phaser.Math.Linear(renderedGhost.sprite.x, renderedGhost.targetX, step);
       renderedGhost.sprite.y = Phaser.Math.Linear(renderedGhost.sprite.y, renderedGhost.targetY, step);
+      renderedGhost.halo.x = renderedGhost.sprite.x;
+      renderedGhost.halo.y = renderedGhost.sprite.y - 2;
       renderedGhost.label.setPosition(renderedGhost.sprite.x, renderedGhost.sprite.y - 28);
     }
   }
@@ -223,7 +241,8 @@ export class OverworldPresenceController {
       const visible =
         showGhosts &&
         this.options.isFullRoomLoaded(renderedGhost.presence.roomId) &&
-        Date.now() - renderedGhost.presence.timestamp <= 15_000;
+        this.isPresenceFresh(renderedGhost.presence.timestamp);
+      renderedGhost.halo.setVisible(visible);
       renderedGhost.sprite.setVisible(visible);
       renderedGhost.label.setVisible(visible);
       if (visible) {
@@ -236,7 +255,7 @@ export class OverworldPresenceController {
   getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
     const objects: Phaser.GameObjects.GameObject[] = [];
     for (const renderedGhost of this.renderedGhostsByConnectionId.values()) {
-      objects.push(renderedGhost.sprite, renderedGhost.label);
+      objects.push(renderedGhost.halo, renderedGhost.sprite, renderedGhost.label);
     }
     return objects;
   }
@@ -347,6 +366,152 @@ export class OverworldPresenceController {
         visible: renderedGhost.sprite.visible,
       })),
     };
+  }
+
+  getSampledBrowsePresenceDots(
+    visibleRooms: RoomCoordinates[],
+    maxDots = 96,
+    perRoomLimit = 4,
+  ): BrowsePresenceDotPresence[] {
+    if (this.options.getMode() !== 'browse' || !this.snapshot?.enabled || visibleRooms.length === 0) {
+      return [];
+    }
+
+    const visibleRoomIds = new Set(visibleRooms.map((coordinates) => roomIdFromCoordinates(coordinates)));
+    const visibleGhosts = (this.snapshot.ghosts ?? []).filter((ghost) =>
+      ghost.mode === 'play'
+      && visibleRoomIds.has(ghost.roomId)
+      && this.isPresenceFresh(ghost.timestamp)
+      && (!this.identity || ghost.userId !== this.identity.userId)
+    );
+    if (visibleGhosts.length === 0) {
+      return [];
+    }
+
+    const groupedByRoomId = new Map<string, WorldGhostPresence[]>();
+    for (const ghost of visibleGhosts) {
+      const group = groupedByRoomId.get(ghost.roomId);
+      if (group) {
+        group.push(ghost);
+      } else {
+        groupedByRoomId.set(ghost.roomId, [ghost]);
+      }
+    }
+
+    const focusCoordinates = this.options.getSelectedCoordinates();
+    const orderedRooms = [...groupedByRoomId.entries()]
+      .map(([roomId, ghosts]) => {
+        ghosts.sort((left, right) => {
+          if (left.timestamp !== right.timestamp) {
+            return right.timestamp - left.timestamp;
+          }
+
+          return left.connectionId.localeCompare(right.connectionId);
+        });
+        return {
+          roomId,
+          roomCoordinates: ghosts[0]?.roomCoordinates ?? focusCoordinates,
+          ghosts,
+          newestTimestamp: ghosts[0]?.timestamp ?? 0,
+        };
+      })
+      .sort((left, right) => {
+        const leftDistance =
+          Math.abs(left.roomCoordinates.x - focusCoordinates.x)
+          + Math.abs(left.roomCoordinates.y - focusCoordinates.y);
+        const rightDistance =
+          Math.abs(right.roomCoordinates.x - focusCoordinates.x)
+          + Math.abs(right.roomCoordinates.y - focusCoordinates.y);
+        if (leftDistance !== rightDistance) {
+          return leftDistance - rightDistance;
+        }
+
+        if (left.newestTimestamp !== right.newestTimestamp) {
+          return right.newestTimestamp - left.newestTimestamp;
+        }
+
+        return left.roomId.localeCompare(right.roomId);
+      });
+
+    const sampled: BrowsePresenceDotPresence[] = [];
+    for (const room of orderedRooms) {
+      if (sampled.length >= maxDots) {
+        break;
+      }
+
+      const ghost = room.ghosts[0];
+      if (!ghost) {
+        continue;
+      }
+
+      sampled.push({
+        connectionId: ghost.connectionId,
+        roomId: ghost.roomId,
+        roomCoordinates: { ...ghost.roomCoordinates },
+        x: ghost.x,
+        y: ghost.y,
+      });
+    }
+
+    for (let slot = 1; slot < perRoomLimit && sampled.length < maxDots; slot += 1) {
+      for (const room of orderedRooms) {
+        if (sampled.length >= maxDots) {
+          break;
+        }
+
+        const ghost = room.ghosts[slot];
+        if (!ghost) {
+          continue;
+        }
+
+        sampled.push({
+          connectionId: ghost.connectionId,
+          roomId: ghost.roomId,
+          roomCoordinates: { ...ghost.roomCoordinates },
+          x: ghost.x,
+          y: ghost.y,
+        });
+      }
+    }
+
+    return sampled;
+  }
+
+  getPlayRoomPresenceMarkers(
+    visibleRooms: RoomCoordinates[],
+    currentRoomCoordinates: RoomCoordinates,
+  ): PlayRoomPresenceMarkerDescriptor[] {
+    if (this.options.getMode() !== 'play' || !this.snapshot?.enabled || visibleRooms.length === 0) {
+      return [];
+    }
+
+    return visibleRooms
+      .filter((coordinates) =>
+        coordinates.x !== currentRoomCoordinates.x || coordinates.y !== currentRoomCoordinates.y
+      )
+      .map((coordinates) => ({
+        roomId: roomIdFromCoordinates(coordinates),
+        coordinates,
+        population: this.getRoomPopulation(coordinates),
+      }))
+      .filter((entry) => entry.population > 0)
+      .sort((left, right) => {
+        const leftDistance =
+          Math.abs(left.coordinates.x - currentRoomCoordinates.x)
+          + Math.abs(left.coordinates.y - currentRoomCoordinates.y);
+        const rightDistance =
+          Math.abs(right.coordinates.x - currentRoomCoordinates.x)
+          + Math.abs(right.coordinates.y - currentRoomCoordinates.y);
+        if (leftDistance !== rightDistance) {
+          return leftDistance - rightDistance;
+        }
+
+        if (left.population !== right.population) {
+          return right.population - left.population;
+        }
+
+        return left.roomId.localeCompare(right.roomId);
+      });
   }
 
   private areCountMapsEqual(
@@ -480,6 +645,9 @@ export class OverworldPresenceController {
   }
 
   private createRenderedGhost(ghost: WorldGhostPresence): RenderedGhost {
+    const halo = this.options.scene.add.ellipse(ghost.x, ghost.y - 2, 18, 8, 0xffffff, 0.28);
+    halo.setDepth(22);
+
     const sprite = this.options.scene.add.sprite(
       ghost.x,
       ghost.y,
@@ -487,7 +655,7 @@ export class OverworldPresenceController {
       DEFAULT_PLAYER_IDLE_FRAME
     );
     sprite.setOrigin(0.5, 1);
-    sprite.setAlpha(0.5);
+    sprite.setAlpha(0.74);
     sprite.setDepth(24);
     sprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     sprite.setFlipX(ghost.facing < 0);
@@ -495,17 +663,20 @@ export class OverworldPresenceController {
 
     const label = this.options.scene.add.text(ghost.x, ghost.y - 28, ghost.displayName, {
       fontFamily: 'Courier New',
-      fontSize: '10px',
-      color: '#d9d1c3',
+      fontSize: '11px',
+      color: '#f3eee2',
       backgroundColor: '#050505',
-      padding: { x: 3, y: 1 },
+      stroke: '#050505',
+      strokeThickness: 3,
+      padding: { x: 4, y: 2 },
     });
     label.setOrigin(0.5, 1);
-    label.setAlpha(0.82);
-    label.setDepth(23);
+    label.setAlpha(0.94);
+    label.setDepth(25);
 
     return {
       presence: ghost,
+      halo,
       sprite,
       label,
       targetX: ghost.x,
@@ -526,7 +697,12 @@ export class OverworldPresenceController {
   }
 
   private destroyRenderedGhost(renderedGhost: RenderedGhost): void {
+    renderedGhost.halo.destroy();
     renderedGhost.sprite.destroy();
     renderedGhost.label.destroy();
+  }
+
+  private isPresenceFresh(timestamp: number): boolean {
+    return Date.now() - timestamp <= OverworldPresenceController.PRESENCE_STALE_MS;
   }
 }
