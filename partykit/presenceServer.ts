@@ -1,4 +1,11 @@
 import type * as Party from 'partykit/server';
+import type { PartyKitLaunchStats, PartyKitShardHeartbeat } from '../src/admin/model';
+
+const HEARTBEAT_INTERVAL_MS = 15_000;
+const STALE_HEARTBEAT_MS = 120_000;
+const INTERNAL_TOKEN_HEADER = 'x-partykit-internal-token';
+const METRICS_ROOM_ID = '__launch-stats__';
+const METRICS_STORAGE_PREFIX = 'shard:';
 
 type PresenceMode = 'browse' | 'play' | 'edit';
 type PresenceAnimationState =
@@ -51,9 +58,19 @@ type IncomingMessage =
       type: 'presence:leave';
     };
 
+interface HeartbeatMutationResponse {
+  ok: true;
+}
+
 export default class PresenceServer implements Party.Server {
   static onBeforeConnect(req: Party.Request): Party.Request | Response {
     const url = new URL(req.url);
+    if (url.pathname.includes(`/${METRICS_ROOM_ID}`)) {
+      return new Response('Metrics room does not accept WebSocket connections.', {
+        status: 400,
+      });
+    }
+
     if (!url.searchParams.get('userId') || !url.searchParams.get('displayName')) {
       return new Response('Missing presence identity.', { status: 400 });
     }
@@ -65,9 +82,41 @@ export default class PresenceServer implements Party.Server {
     hibernate: true,
   } satisfies Party.ServerOptions;
 
-  constructor(readonly room: Party.Room) {}
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private lastHeartbeatAt = 0;
 
-  onConnect(connection: Party.Connection<ConnectionPresenceState>, ctx: Party.ConnectionContext): void {
+  constructor(readonly room: Party.Room) {
+    this.syncHeartbeatTimer();
+  }
+
+  async onRequest(req: Party.Request): Promise<Response> {
+    if (!this.isMetricsRoom()) {
+      return new Response('Not found.', { status: 404 });
+    }
+
+    const url = new URL(req.url);
+    const isHeartbeatPost = req.method === 'POST' && url.pathname.endsWith('/heartbeat');
+    if (!this.hasValidInternalToken(req)) {
+      if (isHeartbeatPost) {
+        await req.text().catch(() => null);
+      }
+      return new Response('Forbidden.', { status: 403 });
+    }
+
+    if (req.method === 'POST' && url.pathname.endsWith('/heartbeat')) {
+      return this.handleHeartbeat(req);
+    }
+    if (req.method === 'GET' && url.pathname.endsWith('/stats')) {
+      return this.handleStats();
+    }
+
+    return new Response('Not found.', { status: 404 });
+  }
+
+  onConnect(
+    connection: Party.Connection<ConnectionPresenceState>,
+    ctx: Party.ConnectionContext
+  ): void {
     const identity = this.parseIdentity(ctx.request.url);
     connection.setState({
       ...identity,
@@ -82,6 +131,10 @@ export default class PresenceServer implements Party.Server {
         roomEditors: this.computeRoomEditors(),
       })
     );
+
+    this.broadcastPopulations();
+    this.syncHeartbeatTimer();
+    void this.maybeSendShardHeartbeat(true);
   }
 
   onMessage(message: string, sender: Party.Connection<ConnectionPresenceState>): void {
@@ -111,7 +164,7 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    const previousMode = current.presence?.mode ?? null;
+    const previousPresence = current.presence ?? null;
     const presence = this.normalizePresencePayload(parsed.presence);
     if (!presence) {
       return;
@@ -122,7 +175,7 @@ export default class PresenceServer implements Party.Server {
       presence,
     });
 
-    if (previousMode === 'play' && presence.mode !== 'play') {
+    if (previousPresence?.mode === 'play' && presence.mode !== 'play') {
       this.room.broadcast(
         JSON.stringify({
           type: 'remove',
@@ -143,16 +196,16 @@ export default class PresenceServer implements Party.Server {
       );
     }
 
-    this.broadcastPopulations();
+    const shouldBroadcast = this.shouldBroadcastPopulations(previousPresence, presence);
+    if (shouldBroadcast) {
+      this.broadcastPopulations();
+      void this.maybeSendShardHeartbeat(true);
+    }
   }
 
   onClose(connection: Party.Connection<ConnectionPresenceState>): void {
     const presence = connection.state?.presence;
-    if (!presence) {
-      return;
-    }
-
-    if (presence.mode === 'play') {
+    if (presence?.mode === 'play') {
       this.room.broadcast(
         JSON.stringify({
           type: 'remove',
@@ -160,7 +213,10 @@ export default class PresenceServer implements Party.Server {
         })
       );
     }
+
     this.broadcastPopulations();
+    this.syncHeartbeatTimer();
+    void this.maybeSendShardHeartbeat(true);
   }
 
   private clearPresence(connection: Party.Connection<ConnectionPresenceState>): void {
@@ -192,7 +248,11 @@ export default class PresenceServer implements Party.Server {
         [connection.id]
       );
     }
-    this.broadcastPopulations();
+
+    if (this.shouldBroadcastPopulations(previousPresence, null)) {
+      this.broadcastPopulations();
+      void this.maybeSendShardHeartbeat(true);
+    }
   }
 
   private listPeers(excludeConnectionId: string | null): WorldGhostPresence[] {
@@ -276,6 +336,230 @@ export default class PresenceServer implements Party.Server {
     };
   }
 
+  private shouldBroadcastPopulations(
+    previousPresence: PresencePayload | null,
+    nextPresence: PresencePayload | null
+  ): boolean {
+    const previousCountsMode = this.getPopulationMode(previousPresence);
+    const nextCountsMode = this.getPopulationMode(nextPresence);
+    const previousRoomId = previousPresence ? this.getRoomId(previousPresence.roomCoordinates) : null;
+    const nextRoomId = nextPresence ? this.getRoomId(nextPresence.roomCoordinates) : null;
+
+    return previousCountsMode !== nextCountsMode || previousRoomId !== nextRoomId;
+  }
+
+  private getPopulationMode(presence: PresencePayload | null): 'play' | 'edit' | null {
+    if (!presence || (presence.mode !== 'play' && presence.mode !== 'edit')) {
+      return null;
+    }
+
+    return presence.mode;
+  }
+
+  private getRoomId(roomCoordinates: RoomCoordinates): string {
+    return `${roomCoordinates.x},${roomCoordinates.y}`;
+  }
+
+  private async maybeSendShardHeartbeat(force = false): Promise<void> {
+    if (this.isMetricsRoom()) {
+      return;
+    }
+
+    const token = this.getInternalToken();
+    if (!token) {
+      return;
+    }
+
+    const heartbeat = this.computeShardHeartbeat();
+    if (!heartbeat) {
+      return;
+    }
+
+    const now = Date.now();
+    if (!force && now - this.lastHeartbeatAt < HEARTBEAT_INTERVAL_MS) {
+      return;
+    }
+
+    this.lastHeartbeatAt = now;
+
+    try {
+      await this.room.context.parties[this.room.name].get(METRICS_ROOM_ID).fetch('/heartbeat', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          [INTERNAL_TOKEN_HEADER]: token,
+        },
+        body: JSON.stringify(heartbeat),
+      });
+    } catch {
+      // Metrics are best-effort and should not affect live ghost traffic.
+    }
+  }
+
+  private computeShardHeartbeat(): PartyKitShardHeartbeat | null {
+    let totalConnections = 0;
+    let playConnections = 0;
+    let editConnections = 0;
+
+    for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
+      totalConnections += 1;
+
+      const mode = connection.state?.presence?.mode ?? null;
+      if (mode === 'play') {
+        playConnections += 1;
+      } else if (mode === 'edit') {
+        editConnections += 1;
+      }
+    }
+
+    if (totalConnections === 0) {
+      return null;
+    }
+
+    return {
+      shardId: this.room.id,
+      totalConnections,
+      playConnections,
+      editConnections,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  private syncHeartbeatTimer(): void {
+    if (this.isMetricsRoom()) {
+      if (this.heartbeatTimer !== null) {
+        clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = null;
+      }
+      return;
+    }
+
+    const hasConnections = this.hasAnyConnections();
+    if (!hasConnections) {
+      if (this.heartbeatTimer !== null) {
+        clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = null;
+      }
+      return;
+    }
+
+    if (this.heartbeatTimer === null) {
+      this.heartbeatTimer = setInterval(() => {
+        void this.maybeSendShardHeartbeat();
+      }, HEARTBEAT_INTERVAL_MS);
+    }
+  }
+
+  private hasAnyConnections(): boolean {
+    return this.room.getConnections<ConnectionPresenceState>()[Symbol.iterator]().next().done === false;
+  }
+
+  private async handleHeartbeat(req: Party.Request): Promise<Response> {
+    const heartbeat = this.normalizeHeartbeatPayload(await req.json().catch(() => null));
+    if (!heartbeat) {
+      return new Response('Invalid heartbeat payload.', { status: 400 });
+    }
+
+    await this.pruneStaleHeartbeats();
+    await this.room.storage.put(this.getHeartbeatStorageKey(heartbeat.shardId), heartbeat);
+
+    return this.json({
+      ok: true,
+    } satisfies HeartbeatMutationResponse);
+  }
+
+  private async handleStats(): Promise<Response> {
+    const { heartbeats, staleShardCount } = await this.loadActiveHeartbeats();
+    const responseBody: PartyKitLaunchStats = {
+      fetchedAt: new Date().toISOString(),
+      shardCount: heartbeats.length,
+      staleShardCount,
+      totalConnections: heartbeats.reduce((sum, shard) => sum + shard.totalConnections, 0),
+      totalPlayConnections: heartbeats.reduce((sum, shard) => sum + shard.playConnections, 0),
+      totalEditConnections: heartbeats.reduce((sum, shard) => sum + shard.editConnections, 0),
+      shards: heartbeats,
+    };
+
+    return this.json(responseBody);
+  }
+
+  private async loadActiveHeartbeats(): Promise<{
+    heartbeats: PartyKitShardHeartbeat[];
+    staleShardCount: number;
+  }> {
+    const entries = await this.room.storage.list<PartyKitShardHeartbeat>({
+      prefix: METRICS_STORAGE_PREFIX,
+    });
+    const heartbeats: PartyKitShardHeartbeat[] = [];
+    const staleKeys: string[] = [];
+    const now = Date.now();
+
+    for (const [key, value] of entries) {
+      const heartbeat = this.normalizeHeartbeatPayload(value);
+      if (!heartbeat) {
+        staleKeys.push(key);
+        continue;
+      }
+
+      const updatedAtMs = Date.parse(heartbeat.updatedAt);
+      if (!Number.isFinite(updatedAtMs) || now - updatedAtMs > STALE_HEARTBEAT_MS) {
+        staleKeys.push(key);
+        continue;
+      }
+
+      heartbeats.push(heartbeat);
+    }
+
+    if (staleKeys.length > 0) {
+      await Promise.all(staleKeys.map((key) => this.room.storage.delete(key)));
+    }
+
+    heartbeats.sort(
+      (left, right) =>
+        right.totalConnections - left.totalConnections || left.shardId.localeCompare(right.shardId)
+    );
+
+    return {
+      heartbeats,
+      staleShardCount: staleKeys.length,
+    };
+  }
+
+  private async pruneStaleHeartbeats(): Promise<void> {
+    await this.loadActiveHeartbeats();
+  }
+
+  private getHeartbeatStorageKey(shardId: string): string {
+    return `${METRICS_STORAGE_PREFIX}${shardId}`;
+  }
+
+  private hasValidInternalToken(req: Request): boolean {
+    const expected = this.getInternalToken();
+    if (!expected) {
+      return false;
+    }
+
+    return req.headers.get(INTERNAL_TOKEN_HEADER) === expected;
+  }
+
+  private getInternalToken(): string | null {
+    const value = String(this.room.env.PARTYKIT_INTERNAL_TOKEN ?? '').trim();
+    return value || null;
+  }
+
+  private isMetricsRoom(): boolean {
+    return this.room.id === METRICS_ROOM_ID;
+  }
+
+  private json(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: {
+        'content-type': 'application/json',
+      },
+    });
+  }
+
   private parseIdentity(urlString: string): Omit<ConnectionPresenceState, 'presence'> {
     const url = new URL(urlString);
     const userId = (url.searchParams.get('userId') ?? '').trim() || crypto.randomUUID();
@@ -338,6 +622,38 @@ export default class PresenceServer implements Party.Server {
       animationState,
       mode: payload.mode,
       timestamp: payload.timestamp,
+    };
+  }
+
+  private normalizeHeartbeatPayload(value: unknown): PartyKitShardHeartbeat | null {
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    const payload = value as Partial<PartyKitShardHeartbeat>;
+    const updatedAtMs = Date.parse(String(payload.updatedAt ?? ''));
+    if (
+      typeof payload.shardId !== 'string' ||
+      !payload.shardId.trim() ||
+      payload.shardId === METRICS_ROOM_ID ||
+      !Number.isInteger(payload.totalConnections) ||
+      !Number.isInteger(payload.playConnections) ||
+      !Number.isInteger(payload.editConnections) ||
+      payload.totalConnections < 0 ||
+      payload.playConnections < 0 ||
+      payload.editConnections < 0 ||
+      payload.playConnections + payload.editConnections > payload.totalConnections ||
+      !Number.isFinite(updatedAtMs)
+    ) {
+      return null;
+    }
+
+    return {
+      shardId: payload.shardId,
+      totalConnections: payload.totalConnections,
+      playConnections: payload.playConnections,
+      editConnections: payload.editConnections,
+      updatedAt: new Date(updatedAtMs).toISOString(),
     };
   }
 }

@@ -11,6 +11,8 @@ import {
 export type WorldPresenceMode = 'browse' | 'play' | 'edit';
 export type WorldPresenceAnimationState = DefaultPlayerAnimationState;
 
+const PRESENCE_PUBLISH_INTERVAL_MS = 200;
+
 export interface WorldPresenceIdentity {
   userId: string;
   displayName: string;
@@ -169,15 +171,17 @@ export class WorldPresenceClient {
       presence: nextPresence,
     } satisfies PresencePublishMessage);
     const changed = payload !== this.lastPublishedPayloadJson;
-    const enoughTimeElapsed = Date.now() - this.lastPublishedAt >= 100;
-    if (!changed && !enoughTimeElapsed) {
+    const isInitialPublish = this.lastPublishedPayloadJson === null;
+    const now = Date.now();
+    const enoughTimeElapsed = now - this.lastPublishedAt >= PRESENCE_PUBLISH_INTERVAL_MS;
+    if (!isInitialPublish && (!changed || !enoughTimeElapsed)) {
       return;
     }
 
     shardSocket.send(payload);
     this.publishedShardId = nextShardId;
     this.lastPublishedPayloadJson = payload;
-    this.lastPublishedAt = Date.now();
+    this.lastPublishedAt = now;
     this.emitSnapshot();
   }
 

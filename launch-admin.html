@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Launch Admin</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #070b10;
+        --panel: #111823;
+        --panel-border: rgba(170, 196, 255, 0.18);
+        --panel-strong: rgba(170, 196, 255, 0.32);
+        --text: #f5f7fb;
+        --muted: #9eabc4;
+        --good: #59d98e;
+        --warn: #ffcd57;
+        --danger: #ff6d6d;
+        --accent: #7ec9ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top, rgba(126, 201, 255, 0.16), transparent 32%),
+          linear-gradient(180deg, #0b1018 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      .shell {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px 20px 48px;
+      }
+
+      .masthead {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+        font-family: "IBM Plex Mono", "Fira Code", monospace;
+        letter-spacing: 0.02em;
+      }
+
+      p {
+        color: var(--muted);
+      }
+
+      .panel {
+        background: rgba(17, 24, 35, 0.9);
+        border: 1px solid var(--panel-border);
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.24);
+      }
+
+      .stack {
+        display: grid;
+        gap: 16px;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+
+      input[type="password"] {
+        min-width: min(420px, 100%);
+        padding: 12px 14px;
+        background: rgba(7, 11, 16, 0.9);
+        border: 1px solid var(--panel-strong);
+        border-radius: 12px;
+        color: var(--text);
+      }
+
+      button {
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--panel-strong);
+        background: rgba(126, 201, 255, 0.12);
+        color: var(--text);
+        cursor: pointer;
+      }
+
+      button.secondary {
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      .grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      .grid.cards {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      }
+
+      .card {
+        background: rgba(7, 11, 16, 0.65);
+        border: 1px solid rgba(170, 196, 255, 0.12);
+        border-radius: 14px;
+        padding: 14px;
+      }
+
+      .label {
+        display: block;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+
+      .value {
+        font-size: 28px;
+        font-weight: 700;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 600;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .chip.good {
+        color: var(--good);
+        border-color: rgba(89, 217, 142, 0.24);
+      }
+
+      .chip.warn {
+        color: var(--warn);
+        border-color: rgba(255, 205, 87, 0.24);
+      }
+
+      .chip.danger {
+        color: var(--danger);
+        border-color: rgba(255, 109, 109, 0.24);
+      }
+
+      .warning-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .warning {
+        border-radius: 14px;
+        padding: 12px 14px;
+        border: 1px solid rgba(255, 205, 87, 0.28);
+        background: rgba(255, 205, 87, 0.08);
+        color: var(--warn);
+      }
+
+      .warning.danger {
+        border-color: rgba(255, 109, 109, 0.28);
+        background: rgba(255, 109, 109, 0.08);
+        color: var(--danger);
+      }
+
+      .links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        text-align: left;
+        padding: 10px 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      tr.warn td:last-child {
+        color: var(--warn);
+      }
+
+      tr.danger td:last-child {
+        color: var(--danger);
+      }
+
+      .meta {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      @media (max-width: 720px) {
+        .shell {
+          padding: 16px 14px 32px;
+        }
+
+        input[type="password"] {
+          min-width: 100%;
+        }
+
+        .controls {
+          align-items: stretch;
+        }
+
+        .controls button {
+          flex: 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell stack">
+      <header class="masthead">
+        <div class="stack" style="gap: 6px">
+          <h1>Launch Admin</h1>
+          <p>Hidden operator console for launch-day traffic, auth safety, and ghost shard health.</p>
+        </div>
+        <div id="last-updated" class="meta">No snapshot loaded yet.</div>
+      </header>
+
+      <section class="panel stack">
+        <div class="controls">
+          <input id="admin-key-input" type="password" autocomplete="off" placeholder="Paste ADMIN_API_KEY" />
+          <button id="save-key-button" type="button">Use Key</button>
+          <button id="refresh-button" type="button" class="secondary">Refresh</button>
+          <button id="clear-key-button" type="button" class="secondary">Clear Key</button>
+        </div>
+        <div id="auth-status" class="meta">Paste the admin key to start polling.</div>
+        <div id="warnings" class="warning-list"></div>
+      </section>
+
+      <section class="panel stack">
+        <h2>Quick Links</h2>
+        <div class="links">
+          <a href="https://dash.cloudflare.com/" target="_blank" rel="noreferrer">Cloudflare Workers</a>
+          <a href="https://dash.cloudflare.com/" target="_blank" rel="noreferrer">Cloudflare D1</a>
+          <a href="https://app.resend.com/" target="_blank" rel="noreferrer">Resend</a>
+          <a href="https://www.partykit.io/dashboard" target="_blank" rel="noreferrer">PartyKit</a>
+        </div>
+      </section>
+
+      <section class="panel stack">
+        <h2>Config</h2>
+        <div id="config-chips" class="chips"></div>
+      </section>
+
+      <section class="panel stack">
+        <h2>Totals</h2>
+        <div id="totals-grid" class="grid cards"></div>
+      </section>
+
+      <section class="panel stack">
+        <h2>Recent Activity</h2>
+        <div id="activity-grid" class="grid cards"></div>
+      </section>
+
+      <section class="panel stack">
+        <h2>PartyKit</h2>
+        <div id="partykit-summary" class="grid cards"></div>
+      </section>
+
+      <section class="panel stack">
+        <h2>Shard Heartbeats</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Shard</th>
+              <th>Total</th>
+              <th>Play</th>
+              <th>Edit</th>
+              <th>Heartbeat Age</th>
+            </tr>
+          </thead>
+          <tbody id="partykit-shards-body">
+            <tr>
+              <td colspan="5" class="meta">No shard data yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+
+    <script type="module" src="/src/launch-admin.ts"></script>
+  </body>
+</html>

@@ -2,12 +2,17 @@ import { requireAdminRequest } from '../auth/request';
 import { HttpError, jsonResponse } from '../core/http';
 import type { Env } from '../core/types';
 import { upsertUserStats } from '../runs/points';
+import { loadLaunchStats } from './launchStats';
 
 export async function handleAdminRequest(
   request: Request,
   url: URL,
   env: Env
 ): Promise<Response> {
+  if (url.pathname === '/api/admin/launch-stats' && request.method === 'GET') {
+    return handleAdminLaunchStats(request, env);
+  }
+
   const clearMatch = /^\/api\/admin\/rooms\/([^/]+)\/clear$/.exec(url.pathname);
   if (clearMatch && request.method === 'POST') {
     return handleAdminRoomClear(request, env, decodeURIComponent(clearMatch[1]));
@@ -132,4 +137,9 @@ async function handleAdminRoomClear(
     },
     affectedUsers: [...affectedUserIds],
   });
+}
+
+async function handleAdminLaunchStats(request: Request, env: Env): Promise<Response> {
+  requireAdminRequest(env, request, 'read launch stats');
+  return jsonResponse(request, await loadLaunchStats(env));
 }

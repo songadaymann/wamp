@@ -28,6 +28,12 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       assetsInlineLimit: 0,
+      rollupOptions: {
+        input: {
+          main: resolve(process.cwd(), 'index.html'),
+          launchAdmin: resolve(process.cwd(), 'launch-admin.html'),
+        },
+      },
     },
     server: {
       port: 3000,
