@@ -1,9 +1,7 @@
 import { getApiBaseUrl } from '../api/baseUrl';
 import {
   cloneCourseRecord,
-  cloneCourseSnapshot,
   normalizeCourseRecord,
-  normalizeCourseSnapshot,
   type CourseRecord,
   type CourseSnapshot,
 } from './model';

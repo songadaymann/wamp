@@ -4,9 +4,9 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Current State
 
-- Repo is a Phaser + TypeScript prototype for Everybody's Platformer.
-- Current build is a strong single-room vertical slice: editor, tile placement, object placement, backgrounds, and local test play all exist.
-- PRD direction is editor-first and zero-friction; infinite-world, persistence, auth, multiplayer, and blockchain layers are still future work.
+- Repo is a Phaser + TypeScript shared-world vertical slice for Everybody's Platformer.
+- Current build includes overworld browse/play, room and course authoring, persistence/auth, leaderboards, chat, agent tokens, and mint-gated room ownership flows.
+- PRD direction is still editor-first and zero-friction, but minimap/topology navigation, course/challenge polish, richer social systems, and broader operator/report tooling are still future work.
 
 - Local runtime hardening on March 10, 2026:
   - normalized `APP_BASE_URL` handling so local magic links work with `localhost:3000` values
@@ -57,6 +57,89 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Wave 3 refactor tracker + extraction pass on March 18, 2026:
+  - created `docs/2026-03-18-repo-audit-wave-3-tracker.md` as the living audit/refactor tracker for the March 18 cleanup pass
+  - extracted overworld badge overlay math, camera math, and course-run state/progression helpers out of `src/scenes/OverworldPlayScene.ts` into `src/scenes/overworld/`
+  - extracted editor course state/view-model/play handoff helpers out of `src/scenes/EditorScene.ts` into `src/scenes/editor/`
+  - split `src/styles/main.css` into ordered partials under `src/styles/sections/` while keeping `main.css` as the root import path
+  - verification:
+    - `npx tsc --noEmit` passed
+    - `npm run build` passed
+    - local Playwright smoke against `http://127.0.0.1:3001` produced `output/web-game/state-0.json` with a clean overworld boot state; the companion headless screenshot was black again, so a manual browser pass is still needed for visual verification
+- Overworld room badge centering pass on March 17, 2026:
+  - moved browse-mode room goal badges and course badges from corner anchors into a centered in-room stack so the room badge sits above the course badge when both are present
+  - kept the transient `BUILDING` activity badge on its existing lower placement for now, so only the title/goal cards adopt the new centered presentation
+  - verification:
+    - `npm run build` passed
+    - local Playwright smoke against `http://127.0.0.1:3000` wrote `output/web-game/room-badge-centering-smoke/state-0.json` and `output/web-game/room-badge-centering-smoke-2/state-0.json`, but the current local app instance never advanced past the existing boot/loading state, so the final visual check still needs a manual look in the running overworld
+- Player pickup tuning cleanup on March 17, 2026:
+  - removed the temporary overworld hitbox/pickup-sensor debug toggle and overlay after using it to tune the pickup sensor height
+  - kept the defensive null-guard in `OverworldGoalRunController.getDebugSnapshot()` so debug-state reads no longer crash if leaderboard difficulty data is missing
+  - fixed editor `Test Play` handoff so, when the current room is already cleanly published, the editor now wakes the overworld with a fresh `publishedRoom` snapshot plus invalidation/refresh flags instead of assuming the sleeping overworld cache is current
+  - this specifically targets the stale-cache path where `Publish` -> `Test Play` from the editor could show old room geometry while returning to the overworld and playing there showed the new geometry
+  - verification:
+    - `npm run build` passed
+    - Playwright smoke against the local frontend wrote `output/web-game/editor-play-handoff-smoke/state-0.json` and reached normal overworld play without new browser errors
+    - remaining gap: I did not complete an authenticated publish-then-test-play browser pass here, so the exact signed-in room publish flow is fixed by code path review plus compile/smoke verification rather than a full live publish repro
+- Room badge zoom tuning on March 17, 2026:
+  - changed browse-mode room/course/activity badge scaling so labels now shrink when zoomed out and grow when zoomed in instead of staying effectively fixed on screen
+  - badge overlay scale now uses a clamped screen-scale curve from `0.72x` near the hide threshold to `1.45x` by `0.5` zoom
+  - tightened badge padding/height and added a separate position interpolation so, when zoomed out, room goal/course badges pull toward the room center instead of piling into adjacent corners; as you zoom back in they return to their corner anchors
+  - verification:
+    - `npm run build` passed
+- Editor terminology tweak on March 17, 2026:
+  - renamed the user-facing `Tiles` editor copy to `Terrain` in the palette tab, destructive buttons, editor mode label, mobile controls text, asset guidance copy, and terrain-selection readout
+  - internal ids and data model names like `tiles`, `tileset`, and tilemap plumbing were intentionally left unchanged
+  - verification:
+    - `npm run build` passed
+- Pickup sensor and room difficulty discovery pass on March 16, 2026:
+  - added a dedicated player pickup sensor for `collectible` overlaps while leaving the existing low player collision body unchanged for terrain, hazards, enemies, ladders, and combat
+  - pickup sensor now resizes with crouch/stand hitbox changes and stays bottom-aligned to the main player body so collectibles can be grabbed slightly above the platforming collision headroom
+  - added `room_difficulty_votes` via `migrations/0011_room_difficulty_votes.sql`
+  - room leaderboard responses now include difficulty consensus, vote counts, viewer vote, signed-in state, and vote eligibility for the selected published room version
+  - added `POST /api/leaderboards/rooms/:roomId/difficulty-vote` for signed-in players who have a recorded non-active run on the current published room version
+  - added `GET /api/leaderboards/rooms/discover` for difficulty-based room discovery using latest published room challenges only
+  - room publish/revert now clones difficulty votes forward from the previous published version into the new published version so ratings carry across republishes immediately
+  - leaderboard modal now has a `Discover` tab, in-room difficulty voting controls, and jump-to-room discovery rows inside the existing modal flow
+  - test/admin cleanup now deletes room difficulty votes alongside room data
+  - verification:
+    - `npm run cf:d1:migrate:local` applied `0011_room_difficulty_votes.sql` successfully
+    - `npm run build` passed
+    - Playwright smoke against local frontend + local Worker wrote `output/web-game/pickup-difficulty-smoke/state-0.json` and `output/web-game/pickup-difficulty-smoke/shot-0.png`
+    - the headless screenshot is still black because of the existing WebGL capture limitation, but the state dump confirms the overworld loaded against local API data
+    - targeted Playwright DOM/API probe confirmed:
+      - leaderboard modal opens locally
+      - tabs now include `Room`, `Discover`, `Course`, `Global`
+      - discover filter chip count is `5`
+      - room difficulty vote button count is `4`
+      - local `GET /api/leaderboards/rooms/discover?limit=5` returned `200`
+    - remaining gap: I did not complete a live authored collectible-room gameplay pass to empirically tune the new pickup sensor reach
+- Course continuity fix pass on March 16, 2026:
+  - active course draft session now tracks per-room local room overrides so course preview can use current room geometry across the whole path instead of only the room you just edited
+  - overworld/editor wake data now carries `courseEditedRoom` context so returning from the editor can keep the active course room selected, update room-ref title/version after room publish, and preserve builder continuity
+  - `Edit Room` in the overworld now re-enters course edit context automatically when the selected room belongs to the active course draft session
+  - `Course Builder` button gating now keys off active course-session membership instead of published course membership only, so local-draft course rooms no longer grey the button out
+  - course preview room overrides moved onto a transient world-streaming layer so starting/stopping draft course preview no longer stomps ordinary world draft-room state
+  - `Stop Course` now stops based on the active course run itself and restores the pre-run selected room instead of depending on selected published-course metadata
+  - verification:
+    - `npm run build` passed
+    - Playwright client cold-load smoke wrote `output/web-game/course-continuity-smoke/`
+    - targeted browser continuity probe wrote `output/web-game/course-continuity-probe/result.json` and confirmed:
+      - builder stays enabled for a selected room in the active course session even when that room is a local draft
+      - world `Edit Room` opens with course-edit context for active course rooms
+      - draft preview merges multiple active-session room overrides
+      - `Stop Course` returns to browse mode and restores the stored return room
+    - remaining gap: I did not complete the full authenticated manual 3-room authoring/publish flow, so that exact end-to-end user path still wants a real signed-in browser pass
+- Course marker authoring split on March 16, 2026:
+  - course builder now keeps title, room selection/order, goal choice, save, and publish in overworld
+  - marker-based course goals (`reach_exit`, `checkpoint_sprint`) now use a new `Edit Markers In Editor` flow instead of clicking markers into the overworld
+  - returning from editor now restores the sleeping course builder with the updated course draft and reopens the docked panel
+  - editor goal UI now has a course-marker mode with `Set Start`, `Set Exit`, `Add Checkpoint`, `Set Finish`, and `Clear Markers`, all writing back into the course draft for the current room
+  - current room goal editing stays unchanged outside course-marker mode
+  - verification:
+    - `npm run build` passed
+    - local worker/frontend smoke against `http://localhost:3001` + `http://localhost:8788` returned healthy world state JSON in `output/web-game/state-0.json` through `state-2.json`
+    - headless screenshot capture still hit the existing black-frame/WebGL issue, so this pass is compile-verified and state-verified but still wants a real local/manual marker-placement check
 - Pixel Engine recreation research memo on March 15, 2026:
   - added `docs/pixel-engine-recreation-plan.md` as a technical design memo rather than a PRD, since the immediate problem is model/pipeline architecture and dataset strategy, not feature scoping
   - documented a first approximation of how to recreate the product with open-source components, including likely backbone candidates (`Wan 2.1`, `CogVideoX`, `Stable Video Diffusion`, `I2VGen-XL`, `VideoCrafter`)
@@ -1823,6 +1906,56 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - fixed a UI bug discovered during verification where the modal could stick on the global tab if it rendered before room-version data loaded; it now defaults back to the room tab when a room board is available
 - Verification:
   - `npm run build` passed
+
+## March 17, 2026 - Fixed Local Asset URL Resolution For Relative Vite Base
+
+- Fixed the audio asset URL helper so it no longer string-concatenates `window.location.origin` with `import.meta.env.BASE_URL`
+- This specifically fixes local/build setups where Vite uses `base: './'`, which previously produced invalid bases like `http://localhost:3000./`
+- `resolveAssetUrl()` in `src/audio/sfx.ts` now resolves the configured base through `new URL(base, window.location.href)` before resolving the asset path
+- Verification:
+  - `npm run build` passed
+
+## March 17, 2026 - Rewrote Public Agent Skill For Better Originality And Schema Reliability
+
+- Rewrote `public/skill.md` into a leaner top-level skill focused on:
+  - choosing the right API mode
+  - the room-builder workflow
+  - originality rules
+  - when to inspect nearby rooms before building
+- Removed worked room-building examples from the main skill to avoid agents cloning the example level
+- Added `public/agent-room-authoring.md`:
+  - exact room-schema guidance
+  - tile gid / `-1` empty rules
+  - spawn and goal-marker special cases
+  - valid placed-object ids
+- Added `public/agent-room-design.md`:
+  - nearby-room inspiration workflow
+  - anti-copy rules
+  - simple room design heuristics by goal type
+- Goal of this rewrite:
+  - improve agent output reliability without over-constraining design
+  - push agents to inspect local context for ideas instead of copying a sample room
+
+## March 17, 2026 - Added Claimable Frontier Room Discovery For Agents
+
+- Added a dedicated authenticated world endpoint for builder/agent discovery:
+  - `GET /api/world/claimable?centerX=...&centerY=...&radius=...`
+  - requires an authenticated session, personal API token, or agent token with `rooms:write`
+- The endpoint returns only frontier rooms that are currently:
+  - unclaimed
+  - unminted
+  - still unpublished
+  - claimable by the current actor under the live daily claim quota
+- Implementation notes:
+  - the route filters frontier cells from the existing world window logic
+  - each candidate room is checked through the normal mutation load path so mint-chain ownership sync still applies before the room is reported as claimable
+  - the response also includes the current room-claim quota counters for the authenticated actor
+- Updated agent-facing docs:
+  - `public/skill.md` now documents the new frontier discovery flow
+  - `public/openapi.json` now includes the new path
+- Verification:
+  - `npm run build` passed
+  - local worker smoke with an agent token returned claimable frontier rooms around the published test rooms
   - `npm run cf:d1:migrate:local` passed
   - isolated Worker API check passed and artifact is in `output/worker-room-title-points-check/summary.json`
   - that check confirmed:
@@ -2559,3 +2692,382 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - larger rectangle selections still use the existing mask so sparse junk cells do not come back in marquee picks
 - Verification:
   - `npm run build` passed
+
+## March 16, 2026 - Creator Rewards For Other Players Completing Your Rooms
+
+- Added a creator-side completion reward path for published room challenges:
+  - when another player completes your published challenge, the room creator now earns points
+  - the reward is version-scoped and only grants once per `other player + room version`, so the same player cannot repeatedly farm the same published version
+  - the reward path mirrors the existing builder reward model instead of inventing a separate scoring system
+- Extended the Play.fun sync pipeline to support creator-side reward mirroring:
+  - added persistent Play.fun user-link support for creator rewards
+  - added backfill support so newly linked Play.fun creators can sync previously unsent positive point events
+  - added migration `migrations/0009_playfun_creator_rewards.sql`
+- Live rollout:
+  - applied the remote D1 migration
+  - deployed the worker
+  - verified live worker health at `https://api.wamp.land/api/health`
+  - confirmed the new `playfun_user_links` table exists remotely
+- Verification:
+  - `npm run build` passed before rollout
+
+## March 16, 2026 - About Modal, Beta Label, And Asset Contribution Guidance
+
+- Added a first-pass `About WAMP` entry in the hamburger menu backed by a dedicated modal
+- Updated the About copy to better reflect the current game state:
+  - removed the earlier `Accounts` / `What WAMP Is` sections
+  - added a clearer note that challenges are currently per-room
+  - added a `Future Improvements` section calling out multi-room challenges and deeper player interaction as planned follow-up areas
+- Added an `Add Your Own Assets` section:
+  - makes it clear contributed assets are reviewed before being added
+  - documents the current sizing expectations for tiles, objects, enemies, backgrounds, and player sprites
+  - includes a `Send it over` mail link to `jonathan@jonathanmann.net`
+- Added a diagonal `BETA` badge on the main loading card so the work-in-progress state is more explicit
+- Styling pass:
+  - tuned the mail link color to a lighter blue for better readability
+- Verification:
+  - `npm run build` passed
+- Status:
+  - this About / BETA work is still local and uncommitted as of this note
+
+## March 16, 2026 - V1 Multi-Room Courses, Draft Testing, And Course-Goal Rework
+
+- Started a new explicit `course` domain parallel to single-room goals and runs:
+  - added course storage and APIs for draft/publish/run/leaderboard flow
+  - added migration `migrations/0010_courses.sql`
+  - courses are currently authored as `2-4` connected published rooms, same-creator only
+- Added the first overworld course builder flow:
+  - room selection, ordering, title, save draft, and publish live in the overworld
+  - the course builder panel now docks on desktop below the main world HUD instead of opening as a centered blocking modal
+  - saved / published course rooms now expose course context in the overworld, including a separate `Play Course` action alongside ordinary room play/edit actions
+- Added course-aware overworld play state:
+  - internal seams between linked course rooms are removed during active course play
+  - outer boundaries still behave like normal room edges
+  - course play uses separate course-wide HUD/run state instead of piggybacking on a single room challenge
+- Reworked authoring after the first flow proved too brittle:
+  - the course builder now handles only the course shell (title, rooms, order, save, publish)
+  - room goals and course goals are now explicitly separate concepts in the editor
+  - editor mode now has a dedicated `Course Goal` section that only appears for saved courses containing the current room
+  - course marker placement (`start`, `exit`, `checkpoints`, `finish`) is now authored from editor mode, not from the overworld
+- Hardened course draft persistence:
+  - added autosave for course-goal edits so marker changes persist when leaving and reopening editor mode
+  - reopening editor now correctly restores saved draft course markers
+  - `Test Play` from editor and `Play Course` from overworld now prefer the owner’s draft course data when available, so unpublished course changes can be tested without republishing
+- Local setup fix:
+  - applied local D1 migrations so course tables exist during `wrangler dev`
+- Verification:
+  - `npm run build` passed repeatedly through the rework
+  - local smokes against split frontend / worker dev servers booted without page or console errors
+  - local headless screenshots remain black due the pre-existing WebGL capture issue, so most course verification relied on runtime state and direct manual flow checks instead
+- Status:
+  - this course work is still in progress locally
+  - it is not committed or deployed yet
+  - current rough edges are in the authoring UX, not the initial schema/API scaffolding
+
+## March 16, 2026 - Course Rework Cleanup: Linear Path Builder + Shared Draft Session
+
+- Replaced the old hybrid course-authoring attempt with a stricter v1 model:
+  - course drafts are now an ordered linear path of `1-4` unique rooms
+  - published courses still require `2-4` rooms
+  - runtime traversal only opens seams between consecutive rooms in authored order
+  - non-consecutive touching rooms stay blocked during course play
+- Moved course editing ownership to a single client-side draft session:
+  - overworld and editor now share one active course draft record instead of passing full course snapshots through scene wake data
+  - returning from editor now rehydrates the existing builder session instead of cloning draft payloads back and forth
+- Simplified the overworld course builder:
+  - overworld now owns title, room add/remove/reorder, save draft, publish, open selected room in editor, and `Test Draft Course`
+  - removed the old overworld-side course-goal editing and marker-placement flow
+  - main `Play Course` now always uses the published course; draft preview is a separate local-only action
+- Simplified editor course mode:
+  - editor course UI now only targets the active course-builder session for the selected course room
+  - removed the old “select one of your saved courses containing this room” dropdown flow
+  - course start / exit / checkpoints / finish are now authored only from editor mode
+- Tightened worker semantics to match the new design:
+  - removed the unused `GET /api/courses?roomId=...` editable-course listing path
+  - removed client repository support for that dead API
+  - worker validation now rejects duplicate rooms and non-linear room order
+  - publish validation is now server-side for title, room count, required start marker, last-room exit / finish, and ordered checkpoint progression
+- Verification:
+  - `npm run build` passed after the rework cleanup
+  - Playwright smoke on `http://127.0.0.1:3000` with remote Worker data booted cleanly and produced no browser console / page errors
+  - `render_game_to_text` confirmed stable overworld browse state during the smoke
+  - browser probe confirmed the new course-builder DOM contract is present (`Edit Selected Room`, `Test Draft Course`) and the world HUD still loads without JS errors
+  - headless and headed screenshot captures are still black in this environment due the existing WebGL capture limitation, so visual smoke coverage is still limited
+- Remaining gap:
+  - I did not complete an authenticated end-to-end course author / publish / preview pass in browser automation, so the new session flow is compile-verified and smoke-verified but not fully auth-flow-verified yet
+
+## March 16, 2026 - Course Badge Polish, Course-Play Highlight Cleanup, And Play.fun Course Publish Rewards
+
+- Updated overworld course room badges to show course identity instead of step count:
+  - right-side course badges now render the published course title on line 1 and the published course goal label on line 2
+  - removed the old `COURSE 1/3` / `2/3` / `3/3` copy from the in-world room badge
+  - kept room-goal presentation separate so room goals can still occupy the left-side badge
+  - badge title text now truncates and the background width is capped so long course names do not spill across the room
+- Extended world/course data to support the new badge copy:
+  - published course membership summaries now include `goalType`
+  - overworld selected-room context now exposes `courseGoalType` alongside the existing course id / title / index metadata
+- Cleaned up active course play visuals:
+  - course play still stitches the authored path boundary across linked rooms
+  - removed the extra moving white selected-room inset while an active course run exists
+  - ordinary browse-mode room selection and non-course room play highlights are unchanged
+- Added Play.fun support for course publishing:
+  - course publish requests now send the Play.fun session token header in Play.fun mode
+  - successful course publish now runs the same client-side Play.fun flush / widget refresh path already used by run completion
+  - worker point events now include `course_first_publish` and `course_publish_update`
+  - course publish points mirror the existing room publish point values
+  - admin room-clear cleanup now removes the new course publish point events too
+- Verification:
+  - `npm run build` passed
+  - browser probe confirmed the rendered course badge text is now `title + goal`, with long titles truncating and no step-counter text remaining
+  - browser probe confirmed selected-room context now carries `courseGoalType`
+  - instrumented draw-call probe confirmed browse mode still draws the selected-room inset, while active course play draws only stitched course boundary lines and no extra inset rectangle
+  - mocked Play.fun browser probe confirmed course publish requests include `X-Playfun-Session-Token` and that successful publishes trigger the flush / widget refresh path
+
+## March 16, 2026 - Manual Room Save Now Prompts Sign-In On Unauthorized
+
+- Updated the editor `Save Draft` flow so explicit manual saves now match publish behavior when the player is signed out or their session has expired:
+  - manual `Save Draft` first refreshes auth state
+  - if the player is not authenticated, the draft is saved locally and the sign-in panel opens immediately
+  - if the server still responds `401`, the editor still saves locally first and then opens the sign-in panel
+- Kept autosave and internal forced saves unchanged:
+  - autosave still does not pop auth UI while the player is editing
+  - play-mode entry and other internal save calls still avoid forced auth prompts
+- Verification:
+  - `npm run build` passed
+
+## March 16, 2026 - Overworld HUD Beta Pill, Room-Challenge Exit Reset, And Chat Auto-Open Tuning
+
+- Added `BETA` signage to the fixed upper-left overworld HUD:
+  - the world HUD title now includes a small beta pill next to `We All Make A Platformer`
+  - styling reuses the existing warm beta badge direction from the boot splash but is scaled for the HUD header and mobile hide-button layout
+- Reset single-room challenge state when leaving the room:
+  - when a player walks out of an active single-room challenge, collected-object runtime keys for that room are cleared
+  - keys collected from that room are removed from the player’s held-key count
+  - room score is reset for that abandoned room challenge
+  - if the room is still loaded, its live objects are destroyed and rebuilt immediately so collectibles, keys, and locked doors are present again on return
+  - active course play is explicitly excluded from this reset path
+- Stopped chat from auto-opening on first world visit in the constrained cases:
+  - chat still auto-opens on normal desktop non-Play.fun sessions
+  - chat now stays closed on first load in Play.fun mode
+  - chat now stays closed on coarse-pointer / mobile devices
+  - manual open, Enter-to-open, polling, unread badges, and the mobile chat button still work
+- Verification:
+  - `npm run build` passed
+  - browser/runtime probe in `output/web-game/world-hud-chat-reset-probe/result.json` confirmed:
+    - desktop non-Play.fun still auto-opens chat
+    - Play.fun desktop starts with chat closed
+    - phone/coarse-pointer starts with chat closed
+    - the new world HUD beta pill exists
+    - single-room challenge reset clears collected room items, restores key/door objects, and resets held-key count / score
+    - course play does not trigger the single-room collected-item reset
+  - DOM screenshot in `output/web-game/world-hud-chat-reset-probe/world-hud.png` shows the beta pill placement in the live world HUD
+
+## March 16, 2026 - Clarified Death Vs Respawn Audio And Wired Coordinate Warp SFX
+
+- Confirmed the world death / respawn flow uses two separate cues:
+  - `player-death` still maps to the fail sting in `assets/sfx/goals/game-fail.wav`
+  - `respawn` maps to `assets/sfx/world/respawn.wav`
+- Added a dedicated `warp` cue that maps to `assets/sfx/world/warp.wav`
+- Wired coordinate jump / warp travel through the shared overworld `jumpToCoordinates()` path so both desktop and mobile jump-to-coordinate actions now play the warp sound
+- Simplified the death->respawn audio stack:
+  - removed the `player-death` trigger from the actual overworld death handler
+  - deaths now play the existing hurt cue when applicable, then only the respawn sound on reposition
+- Removed the remaining fail-sting path from ordinary death respawns:
+  - overworld death visuals now request silent fail FX instead of `goal-fail`
+  - hit-based deaths no longer fire the separate `player-hurt` fail sting before respawn
+  - actual goal/course failure flows still keep their own fail sounds
+- Verification:
+  - `npm run build` passed
+
+## March 17, 2026 - Added Agent Skill Links To The About Modal
+
+- Added a new `Agents & API` section to the About modal in `index.html`
+- Added direct front-end links to the public `skill.md` and `openapi.json`
+- Added a `Copy Skill URL` button with a small inline status message
+- Added `<link rel="alternate">` and `<link rel="service-desc">` tags in the page head so agent-facing docs are easier to discover
+
+## March 17, 2026 - Added Local SMB Test Terrain Set
+
+- Confirmed the editor/overworld terrain pipeline does not require Aseprite; it uses plain PNG tileset sheets loaded via Phaser
+- Packed the loose `16x16` Mario 2 terrain tile PNGs from `Sprites-and-Things/MARIO-2/tilesets/SMB-LVL1-3-5` into a local test sheet at `public/assets/tilesets/tileset_smb_lvl1_3_5.png`
+- Registered a new appended terrain set key `smb_lvl1_3_5` in `src/config.ts` so existing gids remain stable
+- Added `SMB Lvl 1-3-5` to the editor terrain-set dropdown in `index.html`
+
+## March 17, 2026 - Added Chat Moderation Roles, Bans, And Delegated Chat Admin UI
+
+- Added chat-only moderation data and server behavior on top of the existing Worker + D1 chat stack:
+  - new `CHAT_OWNER_EMAILS` Worker env for bootstrap owner accounts
+  - new `chat_admins` and `chat_bans` tables
+  - soft-delete support on `chat_messages` via `deleted_at` and `deleted_by_user_id`
+  - shared chat moderation role resolution for `owner`, `admin`, and `none`
+- Extended auth/chat API responses so the client always knows current chat moderation state:
+  - `/api/auth/session` now returns `chatModeration`
+  - `/api/chat/messages` now returns `viewer`
+  - banned users can still read chat but `POST /api/chat/messages` now returns `403` with `You are banned from chat.`
+- Added chat moderation routes:
+  - `GET/POST/DELETE /api/chat/moderation/admins`
+  - `GET/POST/DELETE /api/chat/moderation/bans`
+  - `DELETE /api/chat/messages/:messageId`
+- Enforced the v1 permission model:
+  - only owners can grant/revoke chat admins
+  - owners/admins can delete messages and ban/unban ordinary users
+  - admins cannot moderate owners or other admins
+  - owners cannot ban or revoke themselves
+- Added front-end moderation UI:
+  - new `Chat Moderation` account-menu button
+  - owner modal shows delegated chat admin management plus banned users
+  - admin modal shows banned users only
+  - moderator quick actions now appear on chat message rows for `Delete` and `Ban`
+  - banned users now see read-only chat UI with `Chat banned` placeholder and an explicit banned status message
+- Fixed one client-side moderation bug found during browser verification:
+  - when a signed-in user was promoted to chat admin while chat history was already loaded, the auth state updated but existing chat rows did not rerender, so moderation buttons were missing until a later reload
+  - `ChatPanelController` now rerenders message rows on auth-state changes so delegated admin actions appear as soon as polling upgrades the viewer role
+- Verification:
+  - `npm run cf:d1:migrate:local` applied the new moderation migration cleanly
+  - `npm run build` passed
+  - direct Worker probes verified:
+    - owner bootstrap from `CHAT_OWNER_EMAILS`
+    - owner grant/revoke admin by display name
+    - admin delete/ban/unban behavior on ordinary users
+    - admin rejection when targeting owner/moderator accounts
+    - deleted messages disappear from normal chat reads
+    - banned users can still load chat but cannot post
+  - browser probe in `output/web-game/chat-moderation-ui/summary.json` confirmed:
+    - non-admin player does not see the moderation button
+    - owner sees the full moderation modal and can add `admin`
+    - delegated admin picks up the role via polling and sees the bans-only moderation modal
+    - delegated admin can ban the player from the live chat row
+    - banned mobile/landscape player sees read-only composer state
+  - screenshots in `output/web-game/chat-moderation-ui/` captured the owner modal, admin modal, and banned mobile chat state
+
+## March 17, 2026 - Course Checkpoint Sprint SFX Hook
+
+- Wired course checkpoint-sprint progress into the same checkpoint FX/SFX path already used by room goal runs.
+- The gap was in `src/scenes/OverworldPlayScene.ts`: course checkpoints incremented progress and redrew flags, but never called `fxController.playGoalFx('checkpoint', ...)`, so the checkpoint flag success sound never fired.
+- Verification:
+  - `npm run build` passed
+  - local frontend smoke ran at `http://127.0.0.1:3000`
+  - Playwright smoke artifact: `output/web-game/course-checkpoint-sfx-smoke/state-0.json`
+  - note: the headless screenshot in `output/web-game/course-checkpoint-sfx-smoke/shot-0.png` came out black despite valid `render_game_to_text` state, so this check only verified clean boot/regression safety, not the audible cue itself
+
+## March 18, 2026 - Added Repo-Local Planning Files
+
+- Added `docs/ideas-inbox.md` as the raw collaborative idea dump for quick notes from Jonathan and co-makers
+- Added `docs/backlog.md` as the curated, buildable backlog with sections for `Codex Ready`, `Now`, `Next`, `Later`, `Blocked`, and `Done`
+- Linked the two files to each other so rough ideas can be promoted into implementation-ready backlog items over time
+
+## March 18, 2026 - Triaged First Idea Inbox Pass Into The Backlog
+
+- Read the first raw `docs/ideas-inbox.md` dump and promoted it into concrete backlog items in `docs/backlog.md`
+- Grouped ideas by urgency instead of copying them verbatim
+- Marked a small set as `Codex Ready` (`starter room templates`, `direct-link instant play affordance`)
+- Marked live product concerns like room reset consistency and overworld player presence as `Now`
+- Left larger systems like dynamic music, triggers, narrative tools, monetization, and marketplace work in `Later` or `Blocked`
+
+## March 18, 2026 - Refined Backlog Item For Room Reset Behavior
+
+- Updated the `Now` backlog item about room reset behavior in `docs/backlog.md`
+- Clarified that the already-fixed case is leaving during an active challenge
+- Narrowed the remaining issue to the completed-run case, where consumed room objects do not refresh after leaving and coming back
+
+## March 18, 2026 - Promoted Frontier Room Soft-Lock Bug Into Backlog
+
+- Read the new bug note added to `docs/ideas-inbox.md`
+- Added a `Codex Ready` backlog item for the normal room-play frontier transition bug
+- Captured the current behavior: course mode blocks frontier entry correctly, but normal room play can still enter frontier space, trigger death, and soft-lock the session
+
+## March 18, 2026 - Fixed Two Targeted Room-Play Bugs
+
+- Fixed the completed-run room refresh gap in `src/scenes/OverworldPlayScene.ts`
+  - `resetPlaySession()` now restores the single-room challenge state for the current run before clearing session state
+  - the room-reset helper now applies to `active`, `completed`, and `failed` single-room runs instead of only active-abandon cases
+  - this covers the case where a room challenge is completed, the player leaves or returns to world, and then comes back to a still-consumed room
+- Fixed the frontier-room soft lock in normal room play in `src/scenes/OverworldPlayScene.ts`
+  - `maybeAdvancePlayerRoom()` now hard-blocks unreachable room transitions before they can change the active room
+  - if a player slips past a thin edge-wall collider toward a frontier/empty room, they are snapped back inside the current room instead of transitioning into an invalid state
+- Verification:
+  - `npm run build` passed
+  - targeted Playwright scene probe in `output/web-game/g003-g019-probe/result.json` confirmed:
+    - forced normal-play transition from room `-1,-1` toward blocked frontier neighbor `-2,-1` kept the active room at `-1,-1`
+    - simulated completed-run reset on room `0,-1` restored live objects from `4` back to the original `5`
+  - DOM screenshot in `output/web-game/g003-g019-probe/page.png` captured the probe session without console errors
+
+## March 18, 2026 - Completed Wave 0 Hygiene Sweep
+
+- Ran a strict cleanup pass limited to symbols TypeScript proved unused under `--noUnusedLocals --noUnusedParameters`
+- Removed dead imports, dead helper wrappers left behind by the Wave 3 scene extractions, and unused worker/course type aliases
+- Intentionally did not include naming cleanup, docs drift fixes, or any behavioral refactor work in this pass
+- Verification:
+  - `npx tsc --noEmit --noUnusedLocals --noUnusedParameters` passed
+  - `npx tsc --noEmit` passed
+  - `npm run build` passed
+
+## March 18, 2026 - Wave 1 Docs Drift Pass
+
+- Updated the repo-level PRD snapshot so it now reflects shipped courses, difficulty discovery, agent tokens, chat moderation, and the current frontend/API topology
+- Corrected `docs/frontend-redeploy-and-minting.md` to point at the `wampland` Pages project instead of the stale `wamp` reference
+- Updated the in-product About modal copy so it no longer claims that all challenges are single-room only
+- Clarified that `docs/asset-intake-rules.md` is the detailed asset intake reference while the About modal stays as the shorter public summary
+
+## March 18, 2026 - Scoped OpenAPI Back To Agent Reality
+
+- Reframed `public/openapi.json` as the agent-facing / builder-facing contract instead of implying it is a complete mirror of every live Worker route
+- Bumped the spec metadata to `0.7.0` to match `public/skill.md`
+- Added the missing `GET /api/leaderboards/rooms/discover` path that `skill.md` already tells agents to use
+- Updated the documented room/global leaderboard payloads so they now include the live difficulty and viewer fields agents can actually read back today
+- Left chat moderation, UI-only auth helpers, and internal/admin routes intentionally out of scope for this contract
+- Verification:
+  - `node` JSON parse of `public/openapi.json` passed
+  - `npm run build` passed
+
+## March 18, 2026 - Marked G-003 And G-019 Done In Backlog
+
+- Moved `G-003` and `G-019` from active backlog sections into `Done` in `docs/backlog.md`
+- Left the remaining nearby room/gameplay items active so the backlog still reflects open work accurately
+
+## March 18, 2026 - Clarified G-004 Presence Requirements
+
+- Refined `G-004` in `docs/backlog.md` to reflect the two distinct presence needs:
+  - browse / LOD mode should still reveal player activity at room/world scale
+  - play mode should make nearby active players easier to find than faint ghosts alone
+- Added an explicit scaling requirement so the eventual solution works for both small-player and high-player concurrency cases
+
+## March 18, 2026 - Implemented G-004 Presence Visibility
+
+- Added browse-mode moving presence dots driven from the existing world presence snapshot, with deterministic room-aware sampling capped at 96 remote play-presence dots
+- Kept existing `BUILDING` editor badges unchanged
+- Strengthened play-mode ghost visibility by raising ghost alpha, improving nameplate contrast, and adding a bright foot-halo beacon
+- Added play-mode occupied-room pip markers for visible non-current rooms with active players
+- Kept the feature fully client-side on top of the existing presence snapshot and room population maps; no presence protocol or worker route changes were needed
+- Verification:
+  - `npm run build` passed
+  - three-session local Playwright probe against `http://localhost:3000` passed
+  - probe result: browse mode showed `browseDotCount: 1`, play mode showed `visibleGhostCount: 1` and `playRoomMarkerCount: 1`
+  - artifacts written to `output/web-game/g004-presence-probe/`
+
+## March 18, 2026 - Reworked Room Goal And Course Badges Into Zoom Tiers
+
+- Replaced the old browse-mode goal/course overlay cards with a shared semantic badge system in `src/scenes/OverworldPlayScene.ts` and `src/scenes/overworld/badgeOverlays.ts`
+- Goal and course badges now render through three zoom tiers:
+  - far zoom: small semantic markers only
+  - mid zoom: compact code chips
+  - near zoom: larger centered text cards with `title + type`
+- Locked a shared semantic color system across room goals and course goals:
+  - `reach_exit` blue
+  - `checkpoint_sprint` amber
+  - `collect_target` green
+  - `defeat_all` red
+  - `survival` violet
+- Differentiated room goals vs courses by badge form instead of color:
+  - room goals use circular / rounded shapes
+  - courses use diamond / chamfered / outlined shapes
+- Kept `BUILDING` activity badges and presence overlays on their existing systems
+- Verification:
+  - `npx tsc --noEmit` passed
+  - `npm run build` passed
+  - required Playwright smoke against `http://localhost:3000` wrote `output/web-game/room-badge-rework-smoke/`
+  - targeted Playwright probe wrote `output/web-game/room-badge-rework-probe/` and confirmed tier transitions numerically:
+    - `far.json`: zoom `0.18`, dot tier visible, compact/text hidden
+    - `mid.json`: zoom `0.283`, compact tier visible, dot/text hidden
+    - `near.json`: zoom `0.446`, text tier dominant, dot hidden
+  - local presence WebSocket errors were still expected because PartyKit was not running on `127.0.0.1:1999`

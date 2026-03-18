@@ -5,6 +5,8 @@ This doc turns the current PRD and runtime into concrete asset rules for two use
 1. finding more art packs to add now
 2. defining the normalization target for future user-added assets
 
+This is the detailed intake reference. The in-product About modal only carries a shorter public summary.
+
 The important distinction is:
 
 - hard constraints: what the game code expects today

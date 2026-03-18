@@ -751,20 +751,22 @@
           <ul class="about-list">
             <li>Drafts stay private until you publish.</li>
             <li>Published rooms appear in the overworld and both players and builders earn points from challenges being completed.</li>
-            <li>Anyone can edit anyone else's room!</li>
+            <li>Anyone can edit anyone else's room! </li>
             <li>The original claimer of a room can revert the room to any previously published state.</li>
             <li>To prevent people from editing a room you claimed, you can mint it as an NFT for .01e.</li>
           </ul>
         </div>
         <div class="about-section">
           <div class="about-section-title">Challenges</div>
-          <p>Right now, every challenge lives inside a single room. A room can be a speedrun, a checkpoint sprint, a collectible hunt, a survival room, or any other small self-contained test you want to make.</p>
+          <p>Right now, the game supports both single-room challenges and short published courses that stitch 2-4 adjacent rooms together. Rooms still handle speedruns, checkpoint sprints, collectible hunts, survival, and other small self-contained tests, while courses let you chain authored room challenges into a longer path.</p>
         </div>
         <div class="about-section">
           <div class="about-section-title">Future Improvements</div>
           <ul class="about-list">
-            <li>Multi-room challenges that stretch across several connected rooms.</li>
+            <li>Better course discovery, curation, and progression on top of the current room/course leaderboard flow.</li>
             <li>More ways for players to interact with each other inside the world while they explore and play levels.</li>
+            <li>Deeper collaborative world systems layered on top of the current room and course format.</li>
+            <li>Bug finds and suggestions are always welcome!</li>
           </ul>
         </div>
         <div class="about-section">
@@ -779,12 +781,14 @@
         </div>
         <div class="about-section">
           <div class="about-section-title">Add Your Own Assets</div>
-          <p>If you want to contribute art, <a href="mailto:jonathan@jonathanmann.net">send it over</a>. We review assets before they go in, clean them up if needed, and make sure they fit the game style, animation flow, and collision rules.</p>
+          <p>If you want to contribute art, <a href="mailto:jonathan@jonathanmann.net">send it over</a>. This is the short public intake guide; we still review assets by hand and clean them up as needed so they fit the game style, animation flow, and collision rules.</p>
           <ul class="about-list">
             <li><strong>Terrain:</strong> use a <code>16x16</code> grid. Terrain sheets should snap cleanly to that grid and usually come as a PNG sheet.</li>
-            <li><strong>Objects + enemies:</strong> start from the existing room scale. Match the current player and room proportions so placements stay readable.</li>
-            <li><strong>Backgrounds:</strong> wide layered PNGs work best. Keep them painterly and easy to tile or parallax.</li>
-            <li><strong>Player art:</strong> keep sprite size and animation readability close to the current platformer proportions unless we intentionally replace the whole set.</li>
+            <li><strong>Objects and props:</strong> the easiest sizes are <code>16x16</code>, <code>16x32</code>, <code>32x32</code>, <code>32x48</code>, <code>48x48</code>, or <code>64x32</code>.</li>
+            <li><strong>Enemies and hazards:</strong> same general pipeline as objects. Simple strips on a fixed frame grid are easiest for patrol, flying, bounce, and animated hazard behavior.</li>
+            <li><strong>Backgrounds:</strong> current parallax sets are usually layered PNGs at <code>576x324</code> or <code>960x480</code>. Separate layers are better than one flattened image.</li>
+            <li><strong>Player sprites:</strong> these are the fussiest. Our current player workflow starts from a <code>96x84</code> source canvas and then gets packed into movement, combat, weapons, and FX atlases.</li>
+            <li><strong>Best format:</strong> transparent PNGs, nearest-neighbor / no blur, and consistent pixel scale. If something needs unusual timing, collision, or slicing, we usually configure that by hand during review.</li>
           </ul>
         </div>
       </div>

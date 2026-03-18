@@ -1,10 +1,5 @@
 import type { ApiTokenRecord, ApiTokenScope, AuthUser } from '../../../auth/model';
-import type {
-  AgentAccount,
-  AgentTokenRecord,
-  RequestAuthSource,
-  RequestPrincipal,
-} from '../../../agents/model';
+import type { AgentAccount, AgentTokenRecord, RequestAuthSource, RequestPrincipal } from '../../../agents/model';
 import type { CourseSnapshot } from '../../../courses/model';
 import type { RoomCoordinates, RoomRecord, RoomSnapshot, RoomVersionRecord } from '../../../persistence/roomModel';
 import type { RunResult } from '../../../runs/model';
@@ -250,6 +245,16 @@ export interface RoomRunRow {
   collectibles_collected: number;
   enemies_defeated: number;
   checkpoints_reached: number;
+}
+
+export interface RoomDifficultyVoteRow {
+  room_id: string;
+  room_version: number;
+  user_id: string;
+  difficulty: string;
+  created_at: string;
+  updated_at: string;
+  carried_from_version: number | null;
 }
 
 export interface UserStatsRow {

@@ -1,7 +1,5 @@
 import {
-  COURSE_GOAL_LABELS,
   cloneCourseGoal,
-  cloneCourseRecord,
   cloneCourseSnapshot,
   normalizeCourseGoal,
   normalizeCourseSnapshot,
