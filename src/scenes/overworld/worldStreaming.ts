@@ -42,13 +42,13 @@ const STREAM_RADIUS = 1;
 const PLAY_MAX_CHUNK_RADIUS = 2;
 const BROWSE_MAX_CHUNK_RADIUS = 3;
 const PLAY_MAX_PREVIEW_ROOMS = 25;
-const BROWSE_NEAR_MAX_PREVIEW_ROOMS = 25;
-const BROWSE_MID_MAX_PREVIEW_ROOMS = 49;
-const BROWSE_FAR_MAX_PREVIEW_ROOMS = 81;
+const BROWSE_NEAR_MAX_PREVIEW_ROOMS = 64;
+const BROWSE_MID_MAX_PREVIEW_ROOMS = 144;
+const BROWSE_FAR_MAX_PREVIEW_ROOMS = 256;
 const PLAY_MID_LOD_ROOM_RADIUS = 4;
-const BROWSE_NEAR_MID_LOD_ROOM_RADIUS = 4;
-const BROWSE_MID_MID_LOD_ROOM_RADIUS = 6;
-const BROWSE_FAR_MID_LOD_ROOM_RADIUS = 8;
+const BROWSE_NEAR_MID_LOD_ROOM_RADIUS = 6;
+const BROWSE_MID_MID_LOD_ROOM_RADIUS = 10;
+const BROWSE_FAR_MID_LOD_ROOM_RADIUS = 14;
 const PREVIEW_TILE_SIZE = 4;
 const MIN_ZOOM = 0.08;
 const FULL_ROOM_BUDGET = (STREAM_RADIUS * 2 + 1) ** 2;
@@ -291,9 +291,13 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       this.nearLodRoomIds = lodRoomIds.near;
       this.midLodRoomIds = lodRoomIds.mid;
       this.farLodRoomIds = lodRoomIds.far;
+      const previewEligibleRoomIds =
+        this.options.getMode() === 'browse'
+          ? new Set([...this.nearLodRoomIds, ...this.midLodRoomIds, ...this.farLodRoomIds])
+          : new Set([...this.nearLodRoomIds, ...this.midLodRoomIds]);
       const previewRoomIds = this.selectPrioritizedRoomIds(
         roomCandidates,
-        new Set([...this.nearLodRoomIds, ...this.midLodRoomIds]),
+        previewEligibleRoomIds,
         this.previewRoomBudget
       );
       const fullRoomIds =
@@ -503,10 +507,14 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.nearLodRoomIds = lodRoomIds.near;
     this.midLodRoomIds = lodRoomIds.mid;
     this.farLodRoomIds = lodRoomIds.far;
+    const previewEligibleRoomIds =
+      this.options.getMode() === 'browse'
+        ? new Set([...this.nearLodRoomIds, ...this.midLodRoomIds, ...this.farLodRoomIds])
+        : new Set([...this.nearLodRoomIds, ...this.midLodRoomIds]);
 
     const previewRoomIds = this.selectPrioritizedRoomIds(
       roomCandidates,
-      new Set([...this.nearLodRoomIds, ...this.midLodRoomIds]),
+      previewEligibleRoomIds,
       this.previewRoomBudget
     );
     const fullRoomIds =
@@ -818,8 +826,16 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
           (roomCandidate.draft !== null || roomCandidate.summary?.state === 'published')
       )
       .sort((left, right) => {
-        const leftBucket = this.nearLodRoomIds.has(left.id) ? 0 : 1;
-        const rightBucket = this.nearLodRoomIds.has(right.id) ? 0 : 1;
+        const leftBucket = this.nearLodRoomIds.has(left.id)
+          ? 0
+          : this.midLodRoomIds.has(left.id)
+            ? 1
+            : 2;
+        const rightBucket = this.nearLodRoomIds.has(right.id)
+          ? 0
+          : this.midLodRoomIds.has(right.id)
+            ? 1
+            : 2;
         if (leftBucket !== rightBucket) {
           return leftBucket - rightBucket;
         }
