@@ -1,6 +1,7 @@
 import type { CourseGoalType } from '../../../courses/model';
 import { isRoomMinted } from '../../../persistence/roomModel';
 import {
+  computeWorldChunkPreviewHash,
   computeWorldChunkWindow,
   computeWorldWindow,
   getRoomBoundsForChunkBounds,
@@ -65,11 +66,8 @@ export async function handleWorldChunksRequest(
   const chunkWindow = computeWorldChunkWindow(publishedRooms, chunkBounds);
   for (const chunk of chunkWindow.chunks) {
     applyCourseMemberships(chunk.rooms, memberships);
+    chunk.chunkPreviewHash = computeWorldChunkPreviewHash(chunk);
   }
-  applyCourseMemberships(
-    chunkWindow.chunks.flatMap((chunk) => chunk.rooms),
-    memberships
-  );
 
   return jsonResponse(request, chunkWindow);
 }
