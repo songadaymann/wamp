@@ -4,9 +4,9 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Current State
 
-- Repo is a Phaser + TypeScript prototype for Everybody's Platformer.
-- Current build is a strong single-room vertical slice: editor, tile placement, object placement, backgrounds, and local test play all exist.
-- PRD direction is editor-first and zero-friction; infinite-world, persistence, auth, multiplayer, and blockchain layers are still future work.
+- Repo is a Phaser + TypeScript shared-world vertical slice for Everybody's Platformer.
+- Current build includes overworld browse/play, room and course authoring, persistence/auth, leaderboards, chat, agent tokens, and mint-gated room ownership flows.
+- PRD direction is still editor-first and zero-friction, but minimap/topology navigation, course/challenge polish, richer social systems, and broader operator/report tooling are still future work.
 
 - Local runtime hardening on March 10, 2026:
   - normalized `APP_BASE_URL` handling so local magic links work with `localhost:3000` values
@@ -57,6 +57,21 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Wave 3 refactor tracker + extraction pass on March 18, 2026:
+  - created `docs/2026-03-18-repo-audit-wave-3-tracker.md` as the living audit/refactor tracker for the March 18 cleanup pass
+  - extracted overworld badge overlay math, camera math, and course-run state/progression helpers out of `src/scenes/OverworldPlayScene.ts` into `src/scenes/overworld/`
+  - extracted editor course state/view-model/play handoff helpers out of `src/scenes/EditorScene.ts` into `src/scenes/editor/`
+  - split `src/styles/main.css` into ordered partials under `src/styles/sections/` while keeping `main.css` as the root import path
+  - verification:
+    - `npx tsc --noEmit` passed
+    - `npm run build` passed
+    - local Playwright smoke against `http://127.0.0.1:3001` produced `output/web-game/state-0.json` with a clean overworld boot state; the companion headless screenshot was black again, so a manual browser pass is still needed for visual verification
+- Overworld room badge centering pass on March 17, 2026:
+  - moved browse-mode room goal badges and course badges from corner anchors into a centered in-room stack so the room badge sits above the course badge when both are present
+  - kept the transient `BUILDING` activity badge on its existing lower placement for now, so only the title/goal cards adopt the new centered presentation
+  - verification:
+    - `npm run build` passed
+    - local Playwright smoke against `http://127.0.0.1:3000` wrote `output/web-game/room-badge-centering-smoke/state-0.json` and `output/web-game/room-badge-centering-smoke-2/state-0.json`, but the current local app instance never advanced past the existing boot/loading state, so the final visual check still needs a manual look in the running overworld
 - Player pickup tuning cleanup on March 17, 2026:
   - removed the temporary overworld hitbox/pickup-sensor debug toggle and overlay after using it to tune the pickup sensor height
   - kept the defensive null-guard in `OverworldGoalRunController.getDebugSnapshot()` so debug-state reads no longer crash if leaderboard difficulty data is missing
@@ -2924,3 +2939,135 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - delegated admin can ban the player from the live chat row
     - banned mobile/landscape player sees read-only composer state
   - screenshots in `output/web-game/chat-moderation-ui/` captured the owner modal, admin modal, and banned mobile chat state
+
+## March 17, 2026 - Course Checkpoint Sprint SFX Hook
+
+- Wired course checkpoint-sprint progress into the same checkpoint FX/SFX path already used by room goal runs.
+- The gap was in `src/scenes/OverworldPlayScene.ts`: course checkpoints incremented progress and redrew flags, but never called `fxController.playGoalFx('checkpoint', ...)`, so the checkpoint flag success sound never fired.
+- Verification:
+  - `npm run build` passed
+  - local frontend smoke ran at `http://127.0.0.1:3000`
+  - Playwright smoke artifact: `output/web-game/course-checkpoint-sfx-smoke/state-0.json`
+  - note: the headless screenshot in `output/web-game/course-checkpoint-sfx-smoke/shot-0.png` came out black despite valid `render_game_to_text` state, so this check only verified clean boot/regression safety, not the audible cue itself
+
+## March 18, 2026 - Added Repo-Local Planning Files
+
+- Added `docs/ideas-inbox.md` as the raw collaborative idea dump for quick notes from Jonathan and co-makers
+- Added `docs/backlog.md` as the curated, buildable backlog with sections for `Codex Ready`, `Now`, `Next`, `Later`, `Blocked`, and `Done`
+- Linked the two files to each other so rough ideas can be promoted into implementation-ready backlog items over time
+
+## March 18, 2026 - Triaged First Idea Inbox Pass Into The Backlog
+
+- Read the first raw `docs/ideas-inbox.md` dump and promoted it into concrete backlog items in `docs/backlog.md`
+- Grouped ideas by urgency instead of copying them verbatim
+- Marked a small set as `Codex Ready` (`starter room templates`, `direct-link instant play affordance`)
+- Marked live product concerns like room reset consistency and overworld player presence as `Now`
+- Left larger systems like dynamic music, triggers, narrative tools, monetization, and marketplace work in `Later` or `Blocked`
+
+## March 18, 2026 - Refined Backlog Item For Room Reset Behavior
+
+- Updated the `Now` backlog item about room reset behavior in `docs/backlog.md`
+- Clarified that the already-fixed case is leaving during an active challenge
+- Narrowed the remaining issue to the completed-run case, where consumed room objects do not refresh after leaving and coming back
+
+## March 18, 2026 - Promoted Frontier Room Soft-Lock Bug Into Backlog
+
+- Read the new bug note added to `docs/ideas-inbox.md`
+- Added a `Codex Ready` backlog item for the normal room-play frontier transition bug
+- Captured the current behavior: course mode blocks frontier entry correctly, but normal room play can still enter frontier space, trigger death, and soft-lock the session
+
+## March 18, 2026 - Fixed Two Targeted Room-Play Bugs
+
+- Fixed the completed-run room refresh gap in `src/scenes/OverworldPlayScene.ts`
+  - `resetPlaySession()` now restores the single-room challenge state for the current run before clearing session state
+  - the room-reset helper now applies to `active`, `completed`, and `failed` single-room runs instead of only active-abandon cases
+  - this covers the case where a room challenge is completed, the player leaves or returns to world, and then comes back to a still-consumed room
+- Fixed the frontier-room soft lock in normal room play in `src/scenes/OverworldPlayScene.ts`
+  - `maybeAdvancePlayerRoom()` now hard-blocks unreachable room transitions before they can change the active room
+  - if a player slips past a thin edge-wall collider toward a frontier/empty room, they are snapped back inside the current room instead of transitioning into an invalid state
+- Verification:
+  - `npm run build` passed
+  - targeted Playwright scene probe in `output/web-game/g003-g019-probe/result.json` confirmed:
+    - forced normal-play transition from room `-1,-1` toward blocked frontier neighbor `-2,-1` kept the active room at `-1,-1`
+    - simulated completed-run reset on room `0,-1` restored live objects from `4` back to the original `5`
+  - DOM screenshot in `output/web-game/g003-g019-probe/page.png` captured the probe session without console errors
+
+## March 18, 2026 - Completed Wave 0 Hygiene Sweep
+
+- Ran a strict cleanup pass limited to symbols TypeScript proved unused under `--noUnusedLocals --noUnusedParameters`
+- Removed dead imports, dead helper wrappers left behind by the Wave 3 scene extractions, and unused worker/course type aliases
+- Intentionally did not include naming cleanup, docs drift fixes, or any behavioral refactor work in this pass
+- Verification:
+  - `npx tsc --noEmit --noUnusedLocals --noUnusedParameters` passed
+  - `npx tsc --noEmit` passed
+  - `npm run build` passed
+
+## March 18, 2026 - Wave 1 Docs Drift Pass
+
+- Updated the repo-level PRD snapshot so it now reflects shipped courses, difficulty discovery, agent tokens, chat moderation, and the current frontend/API topology
+- Corrected `docs/frontend-redeploy-and-minting.md` to point at the `wampland` Pages project instead of the stale `wamp` reference
+- Updated the in-product About modal copy so it no longer claims that all challenges are single-room only
+- Clarified that `docs/asset-intake-rules.md` is the detailed asset intake reference while the About modal stays as the shorter public summary
+
+## March 18, 2026 - Scoped OpenAPI Back To Agent Reality
+
+- Reframed `public/openapi.json` as the agent-facing / builder-facing contract instead of implying it is a complete mirror of every live Worker route
+- Bumped the spec metadata to `0.7.0` to match `public/skill.md`
+- Added the missing `GET /api/leaderboards/rooms/discover` path that `skill.md` already tells agents to use
+- Updated the documented room/global leaderboard payloads so they now include the live difficulty and viewer fields agents can actually read back today
+- Left chat moderation, UI-only auth helpers, and internal/admin routes intentionally out of scope for this contract
+- Verification:
+  - `node` JSON parse of `public/openapi.json` passed
+  - `npm run build` passed
+
+## March 18, 2026 - Marked G-003 And G-019 Done In Backlog
+
+- Moved `G-003` and `G-019` from active backlog sections into `Done` in `docs/backlog.md`
+- Left the remaining nearby room/gameplay items active so the backlog still reflects open work accurately
+
+## March 18, 2026 - Clarified G-004 Presence Requirements
+
+- Refined `G-004` in `docs/backlog.md` to reflect the two distinct presence needs:
+  - browse / LOD mode should still reveal player activity at room/world scale
+  - play mode should make nearby active players easier to find than faint ghosts alone
+- Added an explicit scaling requirement so the eventual solution works for both small-player and high-player concurrency cases
+
+## March 18, 2026 - Implemented G-004 Presence Visibility
+
+- Added browse-mode moving presence dots driven from the existing world presence snapshot, with deterministic room-aware sampling capped at 96 remote play-presence dots
+- Kept existing `BUILDING` editor badges unchanged
+- Strengthened play-mode ghost visibility by raising ghost alpha, improving nameplate contrast, and adding a bright foot-halo beacon
+- Added play-mode occupied-room pip markers for visible non-current rooms with active players
+- Kept the feature fully client-side on top of the existing presence snapshot and room population maps; no presence protocol or worker route changes were needed
+- Verification:
+  - `npm run build` passed
+  - three-session local Playwright probe against `http://localhost:3000` passed
+  - probe result: browse mode showed `browseDotCount: 1`, play mode showed `visibleGhostCount: 1` and `playRoomMarkerCount: 1`
+  - artifacts written to `output/web-game/g004-presence-probe/`
+
+## March 18, 2026 - Reworked Room Goal And Course Badges Into Zoom Tiers
+
+- Replaced the old browse-mode goal/course overlay cards with a shared semantic badge system in `src/scenes/OverworldPlayScene.ts` and `src/scenes/overworld/badgeOverlays.ts`
+- Goal and course badges now render through three zoom tiers:
+  - far zoom: small semantic markers only
+  - mid zoom: compact code chips
+  - near zoom: larger centered text cards with `title + type`
+- Locked a shared semantic color system across room goals and course goals:
+  - `reach_exit` blue
+  - `checkpoint_sprint` amber
+  - `collect_target` green
+  - `defeat_all` red
+  - `survival` violet
+- Differentiated room goals vs courses by badge form instead of color:
+  - room goals use circular / rounded shapes
+  - courses use diamond / chamfered / outlined shapes
+- Kept `BUILDING` activity badges and presence overlays on their existing systems
+- Verification:
+  - `npx tsc --noEmit` passed
+  - `npm run build` passed
+  - required Playwright smoke against `http://localhost:3000` wrote `output/web-game/room-badge-rework-smoke/`
+  - targeted Playwright probe wrote `output/web-game/room-badge-rework-probe/` and confirmed tier transitions numerically:
+    - `far.json`: zoom `0.18`, dot tier visible, compact/text hidden
+    - `mid.json`: zoom `0.283`, compact tier visible, dot/text hidden
+    - `near.json`: zoom `0.446`, text tier dominant, dot hidden
+  - local presence WebSocket errors were still expected because PartyKit was not running on `127.0.0.1:1999`

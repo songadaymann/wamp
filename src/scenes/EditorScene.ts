@@ -56,13 +56,11 @@ import {
 import {
   cloneRoomGoal,
   createGoalMarkerPointFromTile,
-  goalSupportsTimeLimit,
   type RoomGoal,
   type RoomGoalType,
 } from '../goals/roomGoals';
 import {
   createGoalMarkerFlagSprite,
-  type GoalMarkerFlagVariant,
 } from '../goals/markerFlags';
 import { setAppMode } from '../ui/appMode';
 import {
@@ -82,6 +80,19 @@ import { EditorRoomSession } from './editor/roomSession';
 import { EditorBackgroundController } from './editor/backgrounds';
 import { EditorEditRuntime, type GoalPlacementMode } from './editor/editRuntime';
 import { EditorInteractionController } from './editor/interaction';
+import {
+  buildCourseEditedRoomData as buildCourseEditedRoomDataHelper,
+  buildCourseEditorState,
+  buildCourseMarkerDescriptors,
+} from './editor/courseEditing';
+import {
+  buildEditorPlayModeData,
+  getSelectedCoursePreviewForPlay as getSelectedCoursePreviewForPlayHelper,
+} from './editor/playMode';
+import {
+  buildEditorUiViewModel,
+  shouldShowPublishNudge as shouldShowPublishNudgeHelper,
+} from './editor/viewModel';
 import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
 
 const EDITOR_NEIGHBOR_RADIUS = 1;
@@ -427,24 +438,6 @@ export class EditorScene extends Phaser.Scene {
     return this.activeCourseDraft?.goal ?? null;
   }
 
-  private getCourseEditorContextStatusText(): string | null {
-    if (!this.activeCourseMarkerEdit) {
-      return this.courseEditorStatusText;
-    }
-
-    const draft = this.activeCourseDraft;
-    if (!draft) {
-      return this.courseEditorStatusText ?? 'Open this room from the active course builder session.';
-    }
-
-    const stepText =
-      this.activeCourseMarkerEdit.roomOrder === null
-        ? 'Course room'
-        : `Step ${this.activeCourseMarkerEdit.roomOrder + 1}`;
-    const titleText = draft.title?.trim() || 'Untitled Course';
-    return `${stepText} · ${titleText}`;
-  }
-
   private destroyCourseMarkerOverlays(): void {
     for (const sprite of this.courseMarkerSprites) {
       sprite.destroy();
@@ -472,15 +465,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private buildCourseEditedRoomData(): CourseEditedRoomData | null {
-    if (!this.activeCourseMarkerEdit) {
-      return null;
-    }
-
-    return {
-      courseId: this.activeCourseMarkerEdit.courseId,
-      roomId: this.activeCourseMarkerEdit.roomId,
-      roomOrder: this.activeCourseMarkerEdit.roomOrder,
-    };
+    return buildCourseEditedRoomDataHelper(this.activeCourseMarkerEdit);
   }
 
   private syncActiveCourseRoomSessionSnapshot(
@@ -526,106 +511,12 @@ export class EditorScene extends Phaser.Scene {
     return goal !== null;
   }
 
-  private getCourseGoalSummaryText(): string {
-    const draft = this.activeCourseDraft;
-    const goal = draft?.goal ?? null;
-    if (!goal) {
-      return 'No course goal selected.';
-    }
-
-    const parts: string[] = [];
-    switch (goal.type) {
-      case 'reach_exit':
-        parts.push('Reach Exit');
-        parts.push(draft?.startPoint ? 'start set' : 'start missing');
-        parts.push(goal.exit ? 'exit set' : 'exit missing');
-        break;
-      case 'checkpoint_sprint':
-        parts.push('Checkpoint Sprint');
-        parts.push(draft?.startPoint ? 'start set' : 'start missing');
-        parts.push(`${goal.checkpoints.length} checkpoint${goal.checkpoints.length === 1 ? '' : 's'}`);
-        parts.push(goal.finish ? 'finish set' : 'finish missing');
-        break;
-      case 'collect_target':
-        parts.push(`Collect Target · ${goal.requiredCount} required`);
-        break;
-      case 'defeat_all':
-        parts.push('Defeat All');
-        break;
-      case 'survival':
-        parts.push(`Survival · ${Math.max(1, Math.round(goal.durationMs / 1000))}s`);
-        break;
-    }
-
-    if (draft?.roomRefs.length) {
-      parts.push(`${draft.roomRefs.length} room${draft.roomRefs.length === 1 ? '' : 's'}`);
-    }
-
-    return parts.join(' · ');
-  }
-
   private redrawCourseGoalMarkers(): void {
     this.destroyCourseMarkerOverlays();
-    if (!this.activeCourseDraft) {
+    const markers = buildCourseMarkerDescriptors(this.activeCourseDraft, this.roomId);
+    if (markers.length === 0) {
       this.syncBackgroundCameraIgnores();
       return;
-    }
-
-    const draft = this.activeCourseDraft;
-    const goal = draft?.goal ?? null;
-    if (!draft || !goal) {
-      this.syncBackgroundCameraIgnores();
-      return;
-    }
-
-    const markers: Array<{
-      point: CourseMarkerPoint;
-      label: string | null;
-      variant: GoalMarkerFlagVariant;
-      textColor: string;
-    }> = [];
-    const currentRoomId = this.roomId;
-
-    if (draft.startPoint?.roomId === currentRoomId) {
-      markers.push({
-        point: draft.startPoint,
-        label: 'START',
-        variant: 'checkpoint-pending',
-        textColor: '#ffefef',
-      });
-    }
-
-    if (goal.type === 'reach_exit' && goal.exit?.roomId === currentRoomId) {
-      markers.push({
-        point: goal.exit,
-        label: null,
-        variant: 'finish-pending',
-        textColor: '#ffefef',
-      });
-    }
-
-    if (goal.type === 'checkpoint_sprint') {
-      goal.checkpoints.forEach((checkpoint, index) => {
-        if (checkpoint.roomId !== currentRoomId) {
-          return;
-        }
-
-        markers.push({
-          point: checkpoint,
-          label: `${index + 1}`,
-          variant: 'checkpoint-pending',
-          textColor: '#ffefef',
-        });
-      });
-
-      if (goal.finish?.roomId === currentRoomId) {
-        markers.push({
-          point: goal.finish,
-          label: 'FINISH',
-          variant: 'finish-pending',
-          textColor: '#ffefef',
-        });
-      }
     }
 
     for (const marker of markers) {
@@ -656,53 +547,13 @@ export class EditorScene extends Phaser.Scene {
   }
 
   getCourseEditorState(): EditorCourseUiState {
-    const draft = this.activeCourseDraft;
-    const activeGoal = this.activeCourseGoal;
-    const coursePlacementMode = this.courseGoalPlacementMode;
-    return {
-      visible: Boolean(this.activeCourseMarkerEdit || this.courseEditorStatusText),
-      statusHidden: !this.getCourseEditorContextStatusText(),
-      statusText: this.getCourseEditorContextStatusText(),
-      goalTypeValue: activeGoal?.type ?? '',
-      goalTypeDisabled: !draft,
-      timeLimitHidden: !activeGoal || !('timeLimitMs' in activeGoal),
-      timeLimitDisabled: !draft,
-      timeLimitValue:
-        activeGoal && 'timeLimitMs' in activeGoal && activeGoal.timeLimitMs
-          ? String(Math.round(activeGoal.timeLimitMs / 1000))
-          : '',
-      requiredCountHidden: activeGoal?.type !== 'collect_target',
-      requiredCountDisabled: !draft,
-      requiredCountValue:
-        activeGoal?.type === 'collect_target' ? String(activeGoal.requiredCount) : '1',
-      survivalHidden: activeGoal?.type !== 'survival',
-      survivalDisabled: !draft,
-      survivalValue:
-        activeGoal?.type === 'survival'
-          ? String(Math.round(activeGoal.durationMs / 1000))
-          : '30',
-      markerControlsHidden: !activeGoal,
-      placementHintHidden: coursePlacementMode === null,
-      placementHintText:
-        coursePlacementMode === 'start'
-          ? 'Click the canvas to place the course start marker.'
-          : coursePlacementMode === 'exit'
-            ? 'Click the canvas to place the course exit marker.'
-            : coursePlacementMode === 'checkpoint'
-              ? 'Click the canvas to add a course checkpoint.'
-            : coursePlacementMode === 'finish'
-              ? 'Click the canvas to place the course finish marker.'
-              : '',
-      summaryText: draft ? this.getCourseGoalSummaryText() : 'Open this room from the course builder.',
-      placeStartHidden: !activeGoal,
-      placeStartActive: coursePlacementMode === 'start',
-      placeExitHidden: activeGoal?.type !== 'reach_exit',
-      placeExitActive: coursePlacementMode === 'exit',
-      addCheckpointHidden: activeGoal?.type !== 'checkpoint_sprint',
-      addCheckpointActive: coursePlacementMode === 'checkpoint',
-      placeFinishHidden: activeGoal?.type !== 'checkpoint_sprint',
-      placeFinishActive: coursePlacementMode === 'finish',
-    };
+    return buildCourseEditorState({
+      activeCourseMarkerEdit: this.activeCourseMarkerEdit,
+      courseEditorStatusText: this.courseEditorStatusText,
+      draft: this.activeCourseDraft,
+      activeGoal: this.activeCourseGoal,
+      coursePlacementMode: this.courseGoalPlacementMode,
+    });
   }
 
   create(data?: EditorSceneData): void {
@@ -876,10 +727,6 @@ export class EditorScene extends Phaser.Scene {
 
     this.scene.stop();
     this.scene.wake('OverworldPlayScene', wakeData);
-  }
-
-  private getIdleStatusText(): string {
-    return this.roomSession.getIdleStatusText();
   }
 
   private applyRoomSnapshot(room: RoomSnapshot): void {
@@ -1316,27 +1163,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private getSelectedCoursePreviewForPlay(): CourseSnapshot | null {
-    const draft = this.activeCourseDraft;
-    if (!draft?.goal || !draft.startPoint) {
-      return null;
-    }
-
-    if (!draft.roomRefs.some((roomRef) => roomRef.roomId === this.roomId)) {
-      return null;
-    }
-
-    if (draft.goal.type === 'reach_exit' && !draft.goal.exit) {
-      return null;
-    }
-
-    if (
-      draft.goal.type === 'checkpoint_sprint' &&
-      (!draft.goal.finish || draft.goal.checkpoints.length === 0)
-    ) {
-      return null;
-    }
-
-    return cloneCourseSnapshot(draft);
+    return getSelectedCoursePreviewForPlayHelper(this.activeCourseDraft, this.roomId);
   }
 
   private placeGoalMarker(tileX: number, tileY: number): void {
@@ -1539,24 +1366,13 @@ export class EditorScene extends Phaser.Scene {
     this.syncActiveCourseRoomSessionSnapshot(currentRoomSnapshot, {
       published: usePublishedCourseRoomVersion,
     });
-    const startRoomRef = coursePreview
-      ? (coursePreview.startPoint
-          ? coursePreview.roomRefs.find((roomRef) => roomRef.roomId === coursePreview.startPoint?.roomId) ?? null
-          : coursePreview.roomRefs[0] ?? null)
-      : null;
-    const playCoordinates = startRoomRef?.coordinates ?? this.roomCoordinates;
-    const playData: OverworldPlaySceneData = {
-      centerCoordinates: { ...playCoordinates },
-      roomCoordinates: { ...playCoordinates },
-      draftRoom: usePublishedCourseRoomVersion ? null : currentRoomSnapshot,
-      publishedRoom: usePublishedCourseRoomVersion ? currentRoomSnapshot : null,
-      invalidateRoomId: currentRoomSnapshot.id,
-      forceRefreshAround: usePublishedCourseRoomVersion,
-      courseDraftPreviewId: coursePreview?.id ?? null,
+    const playData: OverworldPlaySceneData = buildEditorPlayModeData({
+      roomCoordinates: this.roomCoordinates,
+      roomSnapshot: currentRoomSnapshot,
+      usePublishedCourseRoomVersion,
+      coursePreview,
       courseEditedRoom: this.buildCourseEditedRoomData(),
-      statusMessage: coursePreview ? 'Testing draft course.' : null,
-      mode: 'play',
-    };
+    });
 
     this.editorPresenceClient?.updateLocalPresence(null);
     this.scene.sleep();
@@ -1613,104 +1429,27 @@ export class EditorScene extends Phaser.Scene {
     const publishNudgeActionText = getAuthDebugState().authenticated
       ? 'Publish Now'
       : 'Sign In to Publish';
-    const goalModel = {
-      goalTypeValue: this.roomGoal?.type ?? '',
-      goalTypeDisabled: false,
-      timeLimitHidden: !this.roomGoal || !goalSupportsTimeLimit(this.roomGoal.type),
-      timeLimitDisabled: false,
-      timeLimitValue:
-        this.roomGoal &&
-        goalSupportsTimeLimit(this.roomGoal.type) &&
-        this.roomGoal.type !== 'survival' &&
-        this.roomGoal.timeLimitMs
-          ? String(Math.round(this.roomGoal.timeLimitMs / 1000))
-          : '',
-      requiredCountHidden: this.roomGoal?.type !== 'collect_target',
-      requiredCountDisabled: false,
-      requiredCountValue:
-        this.roomGoal?.type === 'collect_target' ? String(this.roomGoal.requiredCount) : '1',
-      survivalHidden: this.roomGoal?.type !== 'survival',
-      survivalDisabled: false,
-      survivalValue:
-        this.roomGoal?.type === 'survival'
-          ? String(Math.round(this.roomGoal.durationMs / 1000))
-          : '30',
-      markerControlsHidden: !this.goalUsesMarkers(this.roomGoal),
-      placementHintHidden: roomPlacementMode === null,
-      placementHintText:
-        roomPlacementMode === 'exit'
-          ? 'Click the canvas to place the exit marker.'
-          : roomPlacementMode === 'checkpoint'
-            ? 'Click the canvas to add a checkpoint marker.'
-            : roomPlacementMode === 'finish'
-              ? 'Click the canvas to place the finish marker.'
-              : '',
-      summaryText: this.getGoalSummaryText(),
-      contextHidden: true,
-      contextText: '',
-      placeStartHidden: true,
-      placeStartActive: false,
-      placeExitHidden: this.roomGoal?.type !== 'reach_exit',
-      placeExitActive: roomPlacementMode === 'exit',
-      addCheckpointHidden: this.roomGoal?.type !== 'checkpoint_sprint',
-      addCheckpointActive: roomPlacementMode === 'checkpoint',
-      placeFinishHidden: this.roomGoal?.type !== 'checkpoint_sprint',
-      placeFinishActive: roomPlacementMode === 'finish',
-    };
-
-    this.uiBridge?.render({
-      roomTitleValue: this.roomTitle ?? '',
-      roomCoordinatesText: `Room (${this.roomCoordinates.x}, ${this.roomCoordinates.y})`,
-      saveStatusText: saveStatus.text,
-      saveStatusAccentText: saveStatus.accentText,
-      saveStatusLinkText: saveStatus.linkLabel,
-      saveStatusLinkHref: saveStatus.linkHref,
-      publishNudgeVisible,
-      publishNudgeText,
-      publishNudgeActionText,
-      zoomText: `Zoom: ${editorState.zoom}x`,
-      backToWorldHidden: this.entrySource !== 'world',
-      playHidden: false,
-      saveHidden: false,
-      saveDisabled: !this.roomPermissions.canSaveDraft,
-      publishHidden: false,
-      publishDisabled: !this.roomPermissions.canPublish,
-      mintHidden: false,
-      mintDisabled: Boolean(this.mintedTokenId) || this.saveInFlight,
-      mintButtonText: this.mintedTokenId ? 'Minted' : 'Mint Room',
-      historyHidden: false,
-      historyDisabled: this.roomVersionHistory.length === 0,
-      fitHidden: false,
-      goal: goalModel,
-      course: {
-        visible: courseEditorState.visible,
-        statusHidden: courseEditorState.statusHidden,
-        statusText: courseEditorState.statusText ?? '',
-        goalTypeValue: courseEditorState.goalTypeValue,
-        goalTypeDisabled: courseEditorState.goalTypeDisabled,
-        timeLimitHidden: courseEditorState.timeLimitHidden,
-        timeLimitDisabled: courseEditorState.timeLimitDisabled,
-        timeLimitValue: courseEditorState.timeLimitValue,
-        requiredCountHidden: courseEditorState.requiredCountHidden,
-        requiredCountDisabled: courseEditorState.requiredCountDisabled,
-        requiredCountValue: courseEditorState.requiredCountValue,
-        survivalHidden: courseEditorState.survivalHidden,
-        survivalDisabled: courseEditorState.survivalDisabled,
-        survivalValue: courseEditorState.survivalValue,
-        markerControlsHidden: courseEditorState.markerControlsHidden,
-        placementHintHidden: courseEditorState.placementHintHidden,
-        placementHintText: courseEditorState.placementHintText,
-        summaryText: courseEditorState.summaryText,
-        placeStartHidden: courseEditorState.placeStartHidden,
-        placeStartActive: courseEditorState.placeStartActive,
-        placeExitHidden: courseEditorState.placeExitHidden,
-        placeExitActive: courseEditorState.placeExitActive,
-        addCheckpointHidden: courseEditorState.addCheckpointHidden,
-        addCheckpointActive: courseEditorState.addCheckpointActive,
-        placeFinishHidden: courseEditorState.placeFinishHidden,
-        placeFinishActive: courseEditorState.placeFinishActive,
-      },
-    });
+    this.uiBridge?.render(
+      buildEditorUiViewModel({
+        roomTitle: this.roomTitle,
+        roomCoordinates: this.roomCoordinates,
+        roomGoal: this.roomGoal,
+        roomPlacementMode,
+        goalUsesMarkers: this.goalUsesMarkers(this.roomGoal),
+        goalSummaryText: this.getGoalSummaryText(),
+        roomPermissions: this.roomPermissions,
+        mintedTokenId: this.mintedTokenId,
+        saveInFlight: this.saveInFlight,
+        roomVersionHistory: this.roomVersionHistory,
+        entrySource: this.entrySource,
+        zoomText: `Zoom: ${editorState.zoom}x`,
+        saveStatus,
+        publishNudgeVisible,
+        publishNudgeText,
+        publishNudgeActionText,
+        courseEditorState,
+      }),
+    );
   }
 
   private initializeEditorPresence(): void {
@@ -1769,11 +1508,12 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private shouldShowPublishNudge(): boolean {
-    return (
-      this.publishedVersion === 0
-      && this.roomPermissions.canSaveDraft
-      && !this.mintedTokenId
-      && this.roomEditCount >= this.PUBLISH_NUDGE_EDIT_THRESHOLD
+    return shouldShowPublishNudgeHelper(
+      this.publishedVersion,
+      this.roomPermissions.canSaveDraft,
+      this.mintedTokenId,
+      this.roomEditCount,
+      this.PUBLISH_NUDGE_EDIT_THRESHOLD,
     );
   }
 

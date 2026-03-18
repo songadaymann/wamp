@@ -10,16 +10,6 @@ import { normalizeRoomDifficulty, ROOM_DIFFICULTIES } from '../../../runs/model'
 import { HttpError } from '../core/http';
 import type { Env } from '../core/types';
 
-interface RoomDifficultyVoteRow {
-  room_id: string;
-  room_version: number;
-  user_id: string;
-  difficulty: string;
-  created_at: string;
-  updated_at: string;
-  carried_from_version: number | null;
-}
-
 interface RoomDifficultyAggregateRow {
   room_id: string;
   room_version: number;

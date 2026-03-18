@@ -7,7 +7,6 @@ import type {
 import type { ApiTokenScope, AuthUser } from '../../../auth/model';
 import { HttpError } from '../core/http';
 import type {
-  AgentJoinRow,
   AgentRow,
   AgentTokenJoinRow,
   AgentTokenRow,
@@ -422,20 +421,6 @@ function parseStoredAgentTokenScopes(raw: string): AgentTokenScope[] {
 }
 
 function mapAgentRow(row: AgentRow): AgentAccount {
-  return {
-    id: row.id,
-    ownerUserId: row.owner_user_id,
-    displayName: row.display_name,
-    description: row.description,
-    avatarUrl: row.avatar_url,
-    avatarSeed: row.avatar_seed,
-    status: row.is_active === 1 ? 'active' : 'disabled',
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function mapAgentJoinRow(row: AgentJoinRow): AgentAccount {
   return {
     id: row.id,
     ownerUserId: row.owner_user_id,

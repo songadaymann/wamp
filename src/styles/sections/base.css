@@ -1,0 +1,493 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+@font-face {
+  font-family: 'Early GameBoy';
+  src: url('/assets/fonts/early-gameboy.ttf') format('truetype');
+  font-display: swap;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #050505;
+  --panel: #0b0b0b;
+  --panel-2: #141414;
+  --panel-3: #1b1b1b;
+  --field: #090909;
+  --border: #252525;
+  --border-strong: #3f4b26;
+  --text: #f3eee2;
+  --text-muted: #a89f8f;
+  --text-dim: #70695c;
+  --accent-cool: #347433;
+  --accent-cool-soft: rgba(52, 116, 51, 0.18);
+  --accent-warm: #ffc107;
+  --accent-warm-soft: rgba(255, 193, 7, 0.18);
+  --accent-hot: #ff6f3c;
+  --accent-hot-soft: rgba(255, 111, 60, 0.18);
+  --danger: #b22222;
+  --danger-soft: rgba(178, 34, 34, 0.18);
+  --success: #347433;
+  --success-soft: rgba(52, 116, 51, 0.18);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --app-viewport-width: 100vw;
+  --app-viewport-height: 100vh;
+}
+
+body {
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  user-select: none;
+}
+
+.app-feedback {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top, rgba(52, 116, 51, 0.18), transparent 36%),
+    rgba(5, 5, 5, 0.94);
+  backdrop-filter: blur(12px);
+}
+
+.app-feedback-card {
+  width: min(480px, calc(100vw - 48px));
+  padding: 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(20, 20, 20, 0.98), rgba(11, 11, 11, 0.96));
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
+}
+
+.app-boot-splash-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+}
+
+.app-boot-splash-kicker,
+.app-busy-title {
+  color: var(--accent-warm);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.app-boot-splash-title {
+  color: var(--text);
+  font-family: 'Early GameBoy', monospace;
+  font-size: 20px;
+  line-height: 1.7;
+}
+
+.app-boot-splash-title-wrap {
+  position: relative;
+  display: inline-flex;
+  align-self: center;
+  justify-content: center;
+  max-width: 100%;
+  padding: 0 18px;
+}
+
+.app-boot-splash-beta {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 111, 60, 0.55);
+  border-radius: 999px;
+  background: rgba(255, 111, 60, 0.14);
+  color: var(--accent-hot);
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  transform: rotate(-14deg);
+  transform-origin: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+}
+
+.app-feedback-status {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.app-boot-progress {
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(52, 116, 51, 0.38);
+  border-radius: 999px;
+  background: rgba(52, 116, 51, 0.12);
+}
+
+.app-boot-progress-bar {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-cool), var(--accent-warm));
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 0.14s ease-out;
+}
+
+.app-boot-splash[data-boot-state='failed'] .app-boot-progress {
+  border-color: rgba(178, 34, 34, 0.42);
+  background: rgba(178, 34, 34, 0.12);
+}
+
+.app-boot-splash[data-boot-state='failed'] .app-feedback-status {
+  color: #ffd2d2;
+}
+
+.app-busy-overlay {
+  z-index: 135;
+  background: rgba(5, 5, 5, 0.76);
+}
+
+body[data-playfun-mode='true'] .app-feedback {
+  z-index: 10040;
+}
+
+body[data-playfun-mode='true'] .app-busy-overlay {
+  z-index: 10035;
+}
+
+.app-busy-card {
+  width: min(360px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.app-busy-title {
+  font-size: 13px;
+  letter-spacing: 0.12em;
+}
+
+.app-busy-spinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid rgba(243, 238, 226, 0.15);
+  border-top-color: var(--accent-warm);
+  border-radius: 999px;
+  animation: busy-spin 0.8s linear infinite;
+}
+
+.app-busy-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.app-busy-actions .bar-btn {
+  min-width: 92px;
+}
+
+.app-busy-overlay[data-busy-state='error'] .app-busy-title {
+  color: #ffd2d2;
+}
+
+body[data-app-ready='false'] #app,
+body[data-app-ready='false'] #auth-panel {
+  pointer-events: none;
+}
+
+body[data-coarse-pointer='true'] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+body[data-coarse-pointer='true'] #game-container canvas {
+  touch-action: none;
+}
+
+body[data-app-mode="world"] #sidebar,
+body[data-app-mode="play-world"] #sidebar {
+  display: none;
+}
+
+body[data-app-mode="world"] #world-hud,
+body[data-app-mode="play-world"] #world-hud {
+  display: flex;
+}
+
+body[data-app-mode="world"] #global-chat,
+body[data-app-mode="play-world"] #global-chat {
+  display: flex;
+}
+
+#auth-panel {
+  position: fixed;
+  top: calc(16px + var(--safe-top));
+  right: calc(16px + var(--safe-right));
+  z-index: 20;
+  pointer-events: none;
+}
+
+body[data-playfun-mode='true'] #auth-panel {
+  z-index: 10020;
+}
+
+#menu-toggle,
+#menu-body {
+  pointer-events: auto;
+}
+
+.rotate-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(5, 5, 5, 0.96);
+  backdrop-filter: blur(12px);
+}
+
+body[data-playfun-mode='true'] .rotate-gate {
+  z-index: 10050;
+}
+
+.rotate-gate-card {
+  width: min(420px, calc(100vw - 48px));
+  padding: 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(20, 20, 20, 0.96), rgba(11, 11, 11, 0.96));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
+  text-align: center;
+}
+
+.rotate-gate-title {
+  color: var(--accent-warm);
+  font-family: 'Early GameBoy', monospace;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.rotate-gate-copy {
+  margin-top: 14px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+@keyframes busy-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+#menu-toggle {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  width: 36px;
+  height: 36px;
+  margin-left: auto;
+  padding: 0;
+  background: rgba(11, 11, 11, 0.92);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition:
+    background 0.15s,
+    transform 0.06s ease,
+    box-shadow 0.06s ease;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+#menu-toggle:hover {
+  background: rgba(30, 30, 30, 0.95);
+}
+
+#menu-toggle.is-pressed {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0.18);
+}
+
+.hamburger-line {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: var(--text);
+  border-radius: 1px;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+/* Animate hamburger to X when open */
+#auth-panel.menu-open #menu-toggle .hamburger-line:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+#auth-panel.menu-open #menu-toggle .hamburger-line:nth-child(2) {
+  opacity: 0;
+}
+#auth-panel.menu-open #menu-toggle .hamburger-line:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
+}
+
+#menu-body {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  width: 312px;
+  max-width: calc(100vw - 32px);
+  margin-top: 6px;
+  padding: 12px;
+  background: rgba(11, 11, 11, 0.92);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  backdrop-filter: blur(4px);
+}
+
+#auth-panel.menu-open #menu-body {
+  display: flex;
+}
+
+.auth-header,
+.auth-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-header {
+  justify-content: space-between;
+}
+
+.auth-copy {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.auth-menu-action-row {
+  width: 100%;
+}
+
+.auth-menu-action-btn {
+  width: 100%;
+  justify-content: center;
+  border-color: rgba(227, 187, 77, 0.4);
+  color: var(--accent-warm);
+}
+
+.auth-menu-action-btn:hover {
+  background: rgba(227, 187, 77, 0.12);
+}
+
+.auth-title {
+  color: var(--text);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.auth-identity {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: right;
+}
+
+#auth-email-input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+}
+
+#auth-display-name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+}
+
+#auth-email-input:focus {
+  outline: none;
+  border-color: var(--accent-cool);
+}
+
+#auth-display-name-input:focus {
+  outline: none;
+  border-color: var(--accent-cool);
+}
+
+#btn-auth-wallet {
+  flex: 1;
+}
+
+.auth-status {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.auth-display-name-status {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.auth-display-name-status.is-available {
+  color: #89e28f;
+}
+
+.auth-display-name-status.is-taken {
+  color: #ff8b78;
+}
+
+.auth-debug-link {
+  color: var(--accent-cool);
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.auth-debug-link:hover {
+  text-decoration: underline;
+}
+
+#app {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) 36px;
+  height: 100vh;
+  height: min(100dvh, var(--app-viewport-height));
+  width: 100vw;
+  width: min(100dvw, var(--app-viewport-width));
+}
+

@@ -213,7 +213,7 @@ export const TILESETS: TilesetConfig[] = [
   },
   {
     key: 'smb_lvl1_3_5',
-    name: 'SMB Lvl 1-3-5',
+    name: 'SMB2-1',
     path: 'assets/tilesets/tileset_smb_lvl1_3_5.png',
     imageWidth: 128,
     imageHeight: 64,

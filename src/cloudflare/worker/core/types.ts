@@ -1,6 +1,6 @@
 import type { ApiTokenRecord, ApiTokenScope, AuthUser } from '../../../auth/model';
 import type { AgentAccount, AgentTokenRecord, RequestAuthSource, RequestPrincipal } from '../../../agents/model';
-import type { CourseRecord, CourseSnapshot, CourseVersionRecord } from '../../../courses/model';
+import type { CourseSnapshot } from '../../../courses/model';
 import type { RoomCoordinates, RoomRecord, RoomSnapshot, RoomVersionRecord } from '../../../persistence/roomModel';
 import type { RunResult } from '../../../runs/model';
 

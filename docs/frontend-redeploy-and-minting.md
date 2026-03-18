@@ -4,11 +4,12 @@
 
 Best-guess stable setup for the Pages frontend:
 
-- Pages project: `wamp`
+- Pages project serving `wamp.land`: `wampland`
 - Branch: `main`
 - Build command: `npm ci && npm run build`
 - Build output directory: `dist`
 - Clear build cache on the first retry after dependency or env changes
+- Note: there is also a separate Pages project named `wamp`, but it is not the project currently attached to `wamp.land`
 
 Frontend env vars Pages should have:
 
@@ -20,16 +21,17 @@ Frontend API base guidance:
 - For the intended production setup, leave `VITE_ROOM_API_BASE_URL` unset so the app uses same-origin `/api`.
 - Only set `VITE_ROOM_API_BASE_URL` when you intentionally want the frontend to talk to a different backend, such as:
   - local remote-debugging against `https://everybodys-platformer.novox-robot.workers.dev`
-  - a temporary staging/custom API hostname like `https://api.wamp.land`
+  - the current public API hostname `https://api.wamp.land`
+  - a temporary staging/custom API hostname
 - Do not ship the `wamp.land` frontend with `VITE_ROOM_API_BASE_URL=https://everybodys-platformer.novox-robot.workers.dev`; that forces cross-site auth/session behavior and breaks mobile magic-link sign-in.
 
 Notes:
 
 - Do **not** try to reuse the current `wrangler.jsonc` as a shared Pages config. This repo already uses an `ASSETS` binding for the Worker, and adding `pages_build_output_dir` makes Wrangler treat it as a Pages config and fail.
-- The safest frontend redeploy path is the Pages dashboard: point `wamp` at `main`, use the build command/output above, and clear build cache when needed.
-- Once `wamp.land` serves the Worker API on `/api`, the frontend should rely on that same-origin path by default instead of a `workers.dev` override.
+- The safest frontend redeploy path is the Pages dashboard: point `wampland` at `main`, use the build command/output above, and clear build cache when needed.
+- `wamp.land` currently runs as a Pages frontend while the public API is exposed separately at `https://api.wamp.land`. If the frontend later serves the Worker API on same-origin `/api`, leaving `VITE_ROOM_API_BASE_URL` unset remains the preferred setup.
 - If you want CLI Pages deploys later, use a separate Pages config file instead of the Worker `wrangler.jsonc`.
-- The Pages CLI deploy still depends on the `wamp` project existing in the same Cloudflare account Wrangler is logged into.
+- The Pages CLI deploy still depends on the `wampland` project existing in the same Cloudflare account Wrangler is logged into.
 
 ## Minting Setup
 

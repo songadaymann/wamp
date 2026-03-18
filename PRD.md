@@ -8,7 +8,7 @@ Players claim rooms on an infinite grid, lay down tiles using a browser-based ed
 
 ---
 
-## Current Product State (March 12, 2026)
+## Current Product State (March 18, 2026)
 
 - The repo is now a real **shared-world vertical slice**, not a single-room editor prototype.
 - Working today:
@@ -17,23 +17,25 @@ Players claim rooms on an infinite grid, lay down tiles using a browser-based ed
   - editor authoring for tiles, placed objects, parallax backgrounds, room titles, spawn markers, goals, undo/redo, test play, and version history
   - current gameplay loop with a sprite-based player, ladders, crouch/crawl, crate push/pull, sword slash, gun shot, collectibles, hazards, and the first enemy set
   - single-room **draft save / load / publish / revert / mint-gated permissions** on **Cloudflare Workers + D1**
+  - authored `course` drafts and published 2-4 room course runs, with marker editing routed through the room editor, browse-mode course badges, and course leaderboard support
   - version-scoped room runs, per-room leaderboards, and a global **points/stats** leaderboard
+  - room difficulty voting plus a published-room `Discover` flow keyed by difficulty
   - email auth, linked-wallet auth, session cookies, and bearer API tokens
   - PartyKit ghost presence with chunk subscriptions, room populations, and name tags
   - ERC-721 room ownership contract workspace plus mint prepare/confirm flow
-  - live world chat backed by Worker + D1
+  - live world chat backed by Worker + D1, plus owner/delegated chat moderation for delete/ban/admin actions
+  - agent accounts with scoped tokens, claimable frontier discovery, and public `skill.md` / `openapi.json` surfaces
   - landscape-first mobile/touch support for browse, play, editor, chat, auth, leaderboard, and mint flows
   - goal badges in browse mode and in-room challenge panel/timer presentation during play
-  - bot-facing `skill.md` and `openapi.json`
-- The live frontend is `https://wamp.land`, with the Worker/API at `https://everybodys-platformer.novox-robot.workers.dev`.
+- The live frontend is `https://wamp.land`, the public API is `https://api.wamp.land`, and the raw Worker endpoint is `https://everybodys-platformer.novox-robot.workers.dev`.
 - The biggest gaps versus the full PRD are now:
   - minimap / topology navigation and better large-world browse UX
   - a true anonymous-to-account save/sync flow with an inline signup prompt
   - broader mobile/touch tuning and tablet/phone layout polish
-  - cross-room course authoring, authoritative PvP, and the broader challenge platform
+  - course authoring polish, stronger course discovery/curation, authoritative PvP, and the broader challenge platform
   - live migration to the hardened claimer-signed mint contract plus clearer in-world ownership/minted-room UX
-  - money-backed challenge settlement, anti-cheat, and operator controls
-  - moderation tooling, creator identity/profile UX, ratings/favorites, and richer social systems
+  - money-backed challenge settlement, anti-cheat, and broader operator/report/review tooling beyond chat moderation
+  - creator identity/profile UX, ratings/favorites, and richer social systems
 
 ### Recommendation
 
@@ -44,7 +46,7 @@ That means:
 1. Add minimap/world-navigation polish on top of the current coordinate jump flow.
 2. Clarify frontier / claim / minted ownership states directly in the world UI.
 3. Tune the shipped mobile/touch foundation and improve zoomed-out browse performance.
-4. Keep room-level goals and runs stable while introducing cross-room challenges as a separate authored `course` system.
+4. Keep room-level goals and runs stable while hardening the newly shipped authored `course` system.
 
 So yes: the world shell now exists. The next step is making it durable, legible, and scalable before layering on bigger creator systems.
 
@@ -633,7 +635,7 @@ The current roadmap is to support first-class local agent accounts for building 
 
 ### Approach: Permissive with Guardrails
 
-Current state: there is now a minimal backend-only admin override path for testing/moderation actions, but there is still no public flagging flow, review UI, or full moderation system in the product.
+Current state: chat moderation is now live for owner/delegated admins, including message deletion plus chat ban/unban controls. There is still no public room-flagging flow, review UI, or full moderation system for the broader product.
 
 - No pre-approval queue — rooms go live immediately on publish
 - **Flagging system:** Any user can flag a room for review

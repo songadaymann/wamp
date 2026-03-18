@@ -2,7 +2,6 @@ import type { AuthUser } from '../../../auth/model';
 import {
   cloneCourseRecord,
   cloneCourseSnapshot,
-  cloneCourseVersionRecord,
   courseRoomRefsFollowLinearPath,
   courseRoomRefsHaveUniqueRoomIds,
   createCourseVersionRecord,

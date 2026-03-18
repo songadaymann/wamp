@@ -109,6 +109,7 @@ import {
   type GoalRunState,
 } from './overworld/goalRuns';
 import {
+  getCenteredRoomBadgePosition as calculateCenteredRoomBadgePosition,
   getRoomBadgeOverlayScale as calculateRoomBadgeOverlayScale,
   syncBadgePlacements,
   type OverworldBadgePlacement,
@@ -122,11 +123,33 @@ import {
   type ArcadeObjectBody,
   type LoadedRoomObject,
 } from './overworld/liveObjects';
-import { OverworldPresenceController } from './overworld/presence';
+import {
+  OverworldPresenceController,
+} from './overworld/presence';
 import {
   OverworldWorldStreamingController,
   type LoadedFullRoom,
 } from './overworld/worldStreaming';
+import {
+  createActiveCourseRunState,
+  getCourseGoalBadgeText,
+  getCourseGoalProgressText,
+  getCourseGoalTimerText,
+  recordCourseRunCollectibleCollected,
+  recordCourseRunDeath,
+  recordCourseRunEnemyDefeated,
+  tickActiveCourseRun,
+  type ActiveCourseRunState,
+  type CourseRunMutationResult,
+} from './overworld/courseRuns';
+import {
+  constrainInspectCamera,
+  getFitZoomForRoom as calculateFitZoomForRoom,
+  getMobilePlayFollowOffsetY as calculateMobilePlayFollowOffsetY,
+  getScreenAnchorWorldPoint as calculateScreenAnchorWorldPoint,
+  getScrollForScreenAnchor as calculateScrollForScreenAnchor,
+  type CameraMode,
+} from './overworld/camera';
 import {
   getTerrainTileCollisionProfile,
   terrainTileCollidesAtLocalPixel,
@@ -153,7 +176,7 @@ const ROOM_BADGE_LAYOUT_FULL_ZOOM = 0.32;
 const ROOM_BADGE_MIN_SCREEN_SCALE = 0.72;
 const ROOM_BADGE_MAX_SCREEN_SCALE = 1.45;
 const ROOM_BADGE_DOT_TIER_MAX_ZOOM = 0.22;
-const ROOM_BADGE_COMPACT_TIER_MAX_ZOOM = 0.58;
+const ROOM_BADGE_COMPACT_TIER_MAX_ZOOM = 0.95;
 const ROOM_BADGE_TIER_FADE_SPAN = 0.032;
 const ROOM_BADGE_TEXT_MIN_WIDTH = 98;
 const ROOM_BADGE_TEXT_MAX_WIDTH = Math.round(
@@ -186,8 +209,6 @@ const EDGE_WALL_THICKNESS = 12;
 const RESPAWN_FALL_DISTANCE = ROOM_PX_HEIGHT * 2;
 const FOLLOW_CAMERA_LERP = 0.12;
 const MOBILE_PLAY_CAMERA_TARGET_Y = 0.75;
-
-type CameraMode = 'inspect' | 'follow';
 type SelectedCellState = 'published' | 'draft' | 'frontier' | 'empty';
 
 interface PlayerSpawn {
@@ -278,28 +299,6 @@ interface SelectedCourseContext {
   goalType: CourseGoalType | null;
   roomIndex: number;
   roomCount: number;
-}
-
-interface ActiveCourseRunState {
-  course: CourseSnapshot;
-  returnCoordinates: RoomCoordinates;
-  elapsedMs: number;
-  deaths: number;
-  collectiblesCollected: number;
-  collectibleTarget: number | null;
-  enemiesDefeated: number;
-  enemyTarget: number | null;
-  checkpointsReached: number;
-  checkpointTarget: number | null;
-  nextCheckpointIndex: number;
-  result: 'active' | 'completed' | 'failed';
-  completionMessage: string | null;
-  attemptId: string | null;
-  submissionState: 'local-only' | 'starting' | 'active' | 'finishing' | 'submitted' | 'error';
-  submissionMessage: string | null;
-  pendingResult: 'completed' | 'failed' | 'abandoned' | null;
-  submittedScore: number | null;
-  leaderboardEligible: boolean;
 }
 
 export class OverworldPlayScene extends Phaser.Scene {
@@ -1934,12 +1933,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     screenY: number,
     camera: Phaser.Cameras.Scene2D.Camera
   ): Phaser.Math.Vector2 {
-    const localX = screenX - camera.x;
-    const localY = screenY - camera.y;
-    return new Phaser.Math.Vector2(
-      camera.scrollX + camera.width * camera.originX - camera.displayWidth * 0.5 + localX / camera.zoom,
-      camera.scrollY + camera.height * camera.originY - camera.displayHeight * 0.5 + localY / camera.zoom
-    );
+    return calculateScreenAnchorWorldPoint(screenX, screenY, camera);
   }
 
   private getScrollForScreenAnchor(
@@ -1949,12 +1943,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     screenY: number,
     camera: Phaser.Cameras.Scene2D.Camera
   ): Phaser.Math.Vector2 {
-    const localX = screenX - camera.x;
-    const localY = screenY - camera.y;
-    return new Phaser.Math.Vector2(
-      worldX - camera.width * camera.originX + camera.displayWidth * 0.5 - localX / camera.zoom,
-      worldY - camera.height * camera.originY + camera.displayHeight * 0.5 - localY / camera.zoom
-    );
+    return calculateScrollForScreenAnchor(worldX, worldY, screenX, screenY, camera);
   }
 
   private getZoomFocusCoordinates(): RoomCoordinates {
@@ -2458,7 +2447,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     const markerPipRadius = Phaser.Math.Clamp(2.1 / zoom, 1.4, 5);
     const markerSpacing = markerPipRadius * 2.8;
     for (const marker of this.playRoomPresenceMarkers) {
-      const [background] = marker.container.list as Phaser.GameObjects.GameObject[];
+      const [background, ...pips] = marker.container.list as Phaser.GameObjects.GameObject[];
       if (background instanceof Phaser.GameObjects.Rectangle) {
         background.setSize(markerBackgroundWidth, markerBackgroundHeight);
       }
@@ -2473,6 +2462,39 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private emitCourseComposerStateChanged(): void {
     window.dispatchEvent(new CustomEvent(COURSE_COMPOSER_STATE_CHANGED_EVENT));
+  }
+
+  private getCenteredRoomBadgePosition(
+    origin: { x: number; y: number },
+    backgroundWidth: number,
+    backgroundHeight: number,
+    stackIndex: number,
+    stackCount: number,
+  ): { x: number; y: number } {
+    return calculateCenteredRoomBadgePosition({
+      origin,
+      backgroundWidth,
+      backgroundHeight,
+      stackIndex,
+      stackCount,
+      roomWidth: ROOM_PX_WIDTH,
+      roomHeight: ROOM_PX_HEIGHT,
+    });
+  }
+
+  private getCornerRoomBadgeAnchorPosition(
+    origin: { x: number; y: number },
+    owner: SemanticBadgeOwner,
+  ): { x: number; y: number } {
+    return owner === 'goal'
+      ? {
+          x: origin.x + ROOM_BADGE_CORNER_INSET_X,
+          y: origin.y + ROOM_BADGE_CORNER_INSET_Y,
+        }
+      : {
+          x: origin.x + ROOM_PX_WIDTH - ROOM_BADGE_CORNER_INSET_X,
+          y: origin.y + ROOM_BADGE_CORNER_INSET_Y,
+        };
   }
 
   private getSemanticBadgeColor(goalType: RoomGoalType | CourseGoalType | null): number {
@@ -2497,21 +2519,6 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private getCourseGoalTypeBadgeLabel(goalType: CourseGoalType | null): string {
     return (goalType ? COURSE_GOAL_LABELS[goalType] : 'Course').toUpperCase();
-  }
-
-  private getCornerRoomBadgeAnchorPosition(
-    origin: { x: number; y: number },
-    owner: SemanticBadgeOwner,
-  ): { x: number; y: number } {
-    return owner === 'goal'
-      ? {
-          x: origin.x + ROOM_BADGE_CORNER_INSET_X,
-          y: origin.y + ROOM_BADGE_CORNER_INSET_Y,
-        }
-      : {
-          x: origin.x + ROOM_PX_WIDTH - ROOM_BADGE_CORNER_INSET_X,
-          y: origin.y + ROOM_BADGE_CORNER_INSET_Y,
-        };
   }
 
   private createRoundedBadgeBackground(
@@ -2623,7 +2630,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       shape.setStrokeStyle(1, RETRO_COLORS.backgroundNumber, 0.72);
     }
 
-    return this.add.container(0, ROOM_BADGE_DOT_SIZE * 0.5, [shape]);
+    return this.add.container(owner === 'goal' ? 0 : 0, ROOM_BADGE_DOT_SIZE * 0.5, [shape]);
   }
 
   private createBadgeCompactTier(
@@ -2805,6 +2812,9 @@ export class OverworldPlayScene extends Phaser.Scene {
           continue;
         }
 
+        const hasCourseBadge = Boolean(
+          this.roomSummariesById.get(roomIdFromCoordinates(coordinates))?.course,
+        );
         this.roomGoalBadges.push(
           this.createSemanticRoomBadge({
             owner: 'goal',
@@ -2899,6 +2909,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           continue;
         }
 
+        const hasRoomGoalBadge = Boolean(this.getRoomSnapshotForCoordinates(coordinates)?.goal);
         this.roomCourseBadges.push(
           this.createSemanticRoomBadge({
             owner: 'course',
@@ -3434,46 +3445,28 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private getMobilePlayFollowOffsetY(camera: Phaser.Cameras.Scene2D.Camera): number {
-    const layout = getDeviceLayoutState();
-    if (layout.deviceClass !== 'phone' || !layout.coarsePointer || layout.mobileLandscapeBlocked) {
-      return 0;
-    }
-
-    const visibleWorldHeight = camera.height / Math.max(camera.zoom, 0.001);
-    return Math.round((MOBILE_PLAY_CAMERA_TARGET_Y - 0.5) * visibleWorldHeight);
+    return calculateMobilePlayFollowOffsetY(
+      camera,
+      getDeviceLayoutState(),
+      MOBILE_PLAY_CAMERA_TARGET_Y,
+    );
   }
 
   private constrainInspectCamera(): void {
     if (!this.worldWindow) return;
-
-    const camera = this.cameras.main;
-    const bounds = camera.getBounds();
-    const minScrollX = bounds.x + (camera.displayWidth - camera.width) * 0.5;
-    const maxScrollX = minScrollX + bounds.width - camera.displayWidth;
-    const minScrollY = bounds.y + (camera.displayHeight - camera.height) * 0.5;
-    const maxScrollY = minScrollY + bounds.height - camera.displayHeight;
-    const boundsFitWithinViewportX = bounds.width <= camera.displayWidth;
-    const boundsFitWithinViewportY = bounds.height <= camera.displayHeight;
-
-    const nextScrollX =
-      boundsFitWithinViewportX
-        ? bounds.centerX - camera.width * camera.originX
-        : Phaser.Math.Clamp(camera.scrollX, minScrollX, maxScrollX);
-    const nextScrollY =
-      boundsFitWithinViewportY
-        ? bounds.centerY - camera.height * camera.originY
-        : Phaser.Math.Clamp(camera.scrollY, minScrollY, maxScrollY);
-
-    camera.setScroll(nextScrollX, nextScrollY);
+    constrainInspectCamera(this.cameras.main);
   }
 
   private getFitZoomForRoom(): number {
-    const fitZoom = Math.min(
-      (this.scale.width - PLAY_ROOM_FIT_PADDING) / ROOM_PX_WIDTH,
-      (this.scale.height - PLAY_ROOM_FIT_PADDING) / ROOM_PX_HEIGHT
+    return calculateFitZoomForRoom(
+      this.scale.width,
+      this.scale.height,
+      ROOM_PX_WIDTH,
+      ROOM_PX_HEIGHT,
+      PLAY_ROOM_FIT_PADDING,
+      MIN_ZOOM,
+      MAX_ZOOM,
     );
-
-    return Phaser.Math.Clamp(fitZoom, MIN_ZOOM, MAX_ZOOM);
   }
 
   private createPlayer(startRoom: RoomSnapshot): void {
@@ -4208,48 +4201,40 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private updateCourseRun(delta: number): void {
-    const runState = this.activeCourseRun;
-    if (!runState || runState.result !== 'active') {
+    this.applyCourseRunMutation(
+      tickActiveCourseRun(this.activeCourseRun, {
+        delta,
+        touchesCoursePoint: (point) => this.playerTouchesGoalPoint(this.toWorldCoursePoint(point)),
+        getPlayerEffectOrigin: () => this.getPlayerEffectOrigin(),
+      }),
+    );
+  }
+
+  private applyCourseRunMutation(result: CourseRunMutationResult): void {
+    if (!result.changed) {
       return;
     }
 
-    runState.elapsedMs += delta;
-    const goal = runState.course.goal;
-    if (!goal || !this.playerBody || !this.player) {
-      return;
+    if (result.transientStatus) {
+      this.showTransientStatus(result.transientStatus);
     }
 
-    if ('timeLimitMs' in goal && goal.timeLimitMs !== null && runState.elapsedMs >= goal.timeLimitMs) {
-      this.failCourseRun('Time up.');
-      return;
+    if (result.checkpointEffectOrigin) {
+      this.fxController?.playGoalFx(
+        'checkpoint',
+        result.checkpointEffectOrigin.x,
+        result.checkpointEffectOrigin.y,
+      );
     }
 
-    if (goal.type === 'survival' && runState.elapsedMs >= goal.durationMs) {
-      this.completeCourseRun('Course cleared.');
-      return;
+    if (result.goalMarkersChanged) {
+      this.redrawGoalMarkers();
     }
 
-    if (goal.type === 'reach_exit' && goal.exit && this.playerTouchesGoalPoint(this.toWorldCoursePoint(goal.exit))) {
-      this.completeCourseRun('Exit reached.');
-      return;
-    }
-
-    if (goal.type === 'checkpoint_sprint') {
-      const nextCheckpoint = goal.checkpoints[runState.nextCheckpointIndex] ?? null;
-      if (nextCheckpoint && this.playerTouchesGoalPoint(this.toWorldCoursePoint(nextCheckpoint))) {
-        runState.nextCheckpointIndex += 1;
-        runState.checkpointsReached += 1;
-        this.showTransientStatus(`Checkpoint ${runState.checkpointsReached} reached.`);
-        this.redrawGoalMarkers();
-      }
-
-      if (
-        runState.nextCheckpointIndex >= goal.checkpoints.length &&
-        goal.finish &&
-        this.playerTouchesGoalPoint(this.toWorldCoursePoint(goal.finish))
-      ) {
-        this.completeCourseRun('Sprint clear.');
-      }
+    if (result.terminalResult === 'completed' && result.terminalMessage) {
+      this.completeCourseRun(result.terminalMessage);
+    } else if (result.terminalResult === 'failed' && result.terminalMessage) {
+      this.failCourseRun(result.terminalMessage);
     }
   }
 
@@ -4283,9 +4268,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     const activeRun = this.currentGoalRun;
     const activeCourseRun = this.activeCourseRun;
     this.goalRunController.recordDeath();
-    if (activeCourseRun && activeCourseRun.result === 'active') {
-      activeCourseRun.deaths += 1;
-    }
+    recordCourseRunDeath(activeCourseRun);
     if (this.player && this.playerBody) {
       this.fxController?.playGoalFx('fail', this.player.x, this.playerBody.bottom - 10, null);
     }
@@ -4313,12 +4296,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private handleEnemyDefeated(roomId: string, enemyName: string): boolean {
-    if (this.activeCourseRun?.result === 'active' && this.activeCourseRun.enemyTarget !== null) {
-      this.activeCourseRun.enemiesDefeated += 1;
-      if (this.activeCourseRun.enemiesDefeated >= this.activeCourseRun.enemyTarget) {
-        this.completeCourseRun('All enemies defeated.');
-      }
-    }
+    this.applyCourseRunMutation(recordCourseRunEnemyDefeated(this.activeCourseRun));
 
     const result = this.goalRunController.recordEnemyDefeated(
       roomId,
@@ -4329,20 +4307,22 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private handleCollectibleCollected(roomId: string): void {
-    if (this.activeCourseRun?.result === 'active' && this.activeCourseRun.collectibleTarget !== null) {
-      this.activeCourseRun.collectiblesCollected += 1;
-      if (this.activeCourseRun.collectiblesCollected >= this.activeCourseRun.collectibleTarget) {
-        this.completeCourseRun('Collection target reached.');
-      }
-    }
+    this.applyCourseRunMutation(recordCourseRunCollectibleCollected(this.activeCourseRun));
 
     this.applyGoalRunMutation(this.goalRunController.recordCollectibleCollected(roomId));
   }
 
   private resetPlaySession(): void {
+    const singleRoomRunToReset = this.activeCourseRun ? null : this.currentGoalRun;
     this.goalRunController.abandonActiveRun();
     if (this.activeCourseRun?.result === 'active') {
       void this.finalizeActiveCourseRun('abandoned');
+    }
+    if (
+      singleRoomRunToReset &&
+      this.shouldResetSingleRoomChallengeStateForRun(singleRoomRunToReset)
+    ) {
+      this.resetSingleRoomChallengeStateForRun(singleRoomRunToReset);
     }
     this.activeCourseRun = null;
     this.clearActiveCourseRoomOverrides();
@@ -4360,7 +4340,15 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.redrawGoalMarkers();
   }
 
-  private resetSingleRoomChallengeStateOnRoomExit(runState: GoalRunState): void {
+  private shouldResetSingleRoomChallengeStateForRun(runState: GoalRunState): boolean {
+    return (
+      runState.result === 'active' ||
+      runState.result === 'completed' ||
+      runState.result === 'failed'
+    );
+  }
+
+  private resetSingleRoomChallengeStateForRun(runState: GoalRunState): void {
     const room = this.getRoomSnapshotForCoordinates(runState.roomCoordinates);
     if (!room) {
       return;
@@ -4428,14 +4416,21 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
+    if (
+      this.shouldBlockRoomTransition(this.currentRoomCoordinates, nextRoomCoordinates)
+    ) {
+      this.blockRoomTransition(this.currentRoomCoordinates, nextRoomCoordinates);
+      return;
+    }
+
     const activeGoalRun = this.activeCourseRun ? null : this.currentGoalRun;
     if (
       activeGoalRun &&
-      activeGoalRun.result === 'active' &&
       (nextRoomCoordinates.x !== activeGoalRun.roomCoordinates.x ||
-        nextRoomCoordinates.y !== activeGoalRun.roomCoordinates.y)
+        nextRoomCoordinates.y !== activeGoalRun.roomCoordinates.y) &&
+      this.shouldResetSingleRoomChallengeStateForRun(activeGoalRun)
     ) {
-      this.resetSingleRoomChallengeStateOnRoomExit(activeGoalRun);
+      this.resetSingleRoomChallengeStateForRun(activeGoalRun);
     }
 
     this.currentRoomCoordinates = { ...nextRoomCoordinates };
@@ -4462,6 +4457,53 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     this.redrawWorld();
     this.renderHud();
+  }
+
+  private shouldBlockRoomTransition(
+    currentRoomCoordinates: RoomCoordinates,
+    nextRoomCoordinates: RoomCoordinates
+  ): boolean {
+    const deltaX = nextRoomCoordinates.x - currentRoomCoordinates.x;
+    const deltaY = nextRoomCoordinates.y - currentRoomCoordinates.y;
+    if (Math.abs(deltaX) + Math.abs(deltaY) !== 1) {
+      return false;
+    }
+
+    return !this.isNeighborReachableInCurrentPlayMode(currentRoomCoordinates, nextRoomCoordinates);
+  }
+
+  private blockRoomTransition(
+    currentRoomCoordinates: RoomCoordinates,
+    nextRoomCoordinates: RoomCoordinates
+  ): void {
+    if (!this.player || !this.playerBody) {
+      return;
+    }
+
+    const roomOrigin = this.getRoomOrigin(currentRoomCoordinates);
+    const deltaX = nextRoomCoordinates.x - currentRoomCoordinates.x;
+    const deltaY = nextRoomCoordinates.y - currentRoomCoordinates.y;
+    const halfWidth = this.playerBody.width * 0.5;
+    const halfHeight = this.playerBody.height * 0.5;
+    const inset = 1;
+
+    let nextX = this.player.x;
+    let nextY = this.player.y;
+
+    if (deltaX === 1) {
+      nextX = roomOrigin.x + ROOM_PX_WIDTH - halfWidth - inset;
+    } else if (deltaX === -1) {
+      nextX = roomOrigin.x + halfWidth + inset;
+    } else if (deltaY === 1) {
+      nextY = roomOrigin.y + ROOM_PX_HEIGHT - halfHeight - inset;
+    } else if (deltaY === -1) {
+      nextY = roomOrigin.y + halfHeight + inset;
+    }
+
+    this.setPlayerLadderState(null);
+    this.playerBody.reset(nextX, nextY);
+    this.player.setPosition(nextX, nextY);
+    this.syncPlayerPickupSensor();
   }
 
   private syncBrowseWindowToCamera(): void {
@@ -5282,33 +5324,15 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private createCourseRunState(course: CourseSnapshot): ActiveCourseRunState {
     const leaderboardEligible = course.status === 'published' && getAuthDebugState().authenticated;
-    return {
+    return createActiveCourseRunState({
       course: cloneCourseSnapshot(course),
       returnCoordinates: { ...this.selectedCoordinates },
-      elapsedMs: 0,
-      deaths: 0,
-      collectiblesCollected: 0,
-      collectibleTarget: course.goal?.type === 'collect_target' ? course.goal.requiredCount : null,
-      enemiesDefeated: 0,
       enemyTarget:
         course.goal?.type === 'defeat_all'
           ? this.countCourseObjectsByCategory(course, 'enemy')
           : null,
-      checkpointsReached: 0,
-      checkpointTarget:
-        course.goal?.type === 'checkpoint_sprint' ? course.goal.checkpoints.length : null,
-      nextCheckpointIndex: 0,
-      result: 'active',
-      completionMessage: null,
-      attemptId: null,
-      submissionState: leaderboardEligible ? 'starting' : 'local-only',
-      submissionMessage: leaderboardEligible
-        ? 'Starting ranked course run...'
-        : 'Course run stays local.',
-      pendingResult: null,
-      submittedScore: null,
       leaderboardEligible,
-    };
+    });
   }
 
   private countCourseObjectsByCategory(
@@ -5507,22 +5531,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private getCourseGoalBadgeText(goal: CourseGoal | null): string {
-    if (!goal) {
-      return 'Course';
-    }
-
-    switch (goal.type) {
-      case 'reach_exit':
-        return 'Reach Exit';
-      case 'collect_target':
-        return `Collect ${goal.requiredCount}`;
-      case 'defeat_all':
-        return 'Defeat All';
-      case 'checkpoint_sprint':
-        return `${goal.checkpoints.length || 0} Checkpoints`;
-      case 'survival':
-        return `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))}s`;
-    }
+    return getCourseGoalBadgeText(goal);
   }
 
   private getPlayGoalTimerText(runState: GoalRunState): string {
@@ -5538,20 +5547,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private getCourseGoalTimerText(runState: ActiveCourseRunState): string {
-    const goal = runState.course.goal;
-    if (!goal) {
-      return this.formatOverlayTimer(runState.elapsedMs);
-    }
-
-    if (goal.type === 'survival') {
-      return `${this.formatOverlayTimer(Math.max(0, goal.durationMs - runState.elapsedMs))} LEFT`;
-    }
-
-    if ('timeLimitMs' in goal && goal.timeLimitMs !== null) {
-      return `${this.formatOverlayTimer(Math.max(0, goal.timeLimitMs - runState.elapsedMs))} LEFT`;
-    }
-
-    return this.formatOverlayTimer(runState.elapsedMs);
+    return getCourseGoalTimerText(runState, (ms) => this.formatOverlayTimer(ms));
   }
 
   private getPlayGoalProgressText(runState: GoalRunState): string {
@@ -5570,23 +5566,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private getCourseGoalProgressText(runState: ActiveCourseRunState): string {
-    const goal = runState.course.goal;
-    if (!goal) {
-      return '';
-    }
-
-    switch (goal.type) {
-      case 'reach_exit':
-        return runState.result === 'completed' ? 'Exit reached' : 'Reach the exit';
-      case 'collect_target':
-        return `${runState.collectiblesCollected}/${runState.collectibleTarget ?? goal.requiredCount} collected`;
-      case 'defeat_all':
-        return `${runState.enemiesDefeated}/${runState.enemyTarget ?? 0} defeated`;
-      case 'checkpoint_sprint':
-        return `${runState.checkpointsReached}/${runState.checkpointTarget ?? goal.checkpoints.length} checkpoints`;
-      case 'survival':
-        return runState.result === 'completed' ? 'Survived' : 'Stay alive';
-    }
+    return getCourseGoalProgressText(runState);
   }
 
   private formatOverlayTimer(ms: number): string {
