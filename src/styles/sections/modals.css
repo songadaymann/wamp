@@ -37,6 +37,10 @@
   width: min(760px, calc(100vw - 40px));
 }
 
+.install-help-modal-panel {
+  width: min(620px, calc(100vw - 40px));
+}
+
 body:not([data-device-class='phone']) #course-modal {
   z-index: 12;
   display: block;
@@ -60,6 +64,10 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.install-help-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .about-copy {
@@ -259,6 +267,12 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   gap: 12px;
   color: var(--text);
   font-size: 12px;
+}
+
+.install-help-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .controls-key {
@@ -509,4 +523,3 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
 ::-webkit-scrollbar-thumb:hover {
   background: #676153;
 }
-

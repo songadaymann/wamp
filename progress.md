@@ -57,6 +57,14 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Install-help popup pass on March 18, 2026:
+  - added a dedicated `Install App` modal with step-by-step home-screen instructions for Safari on iPhone/iPad and Brave/Chrome on Android
+  - mobile browser tabs now auto-open that install-help modal once after the app is ready, but only on coarse-pointer devices that are not already running in standalone mode
+  - dismissing the modal now records a `localStorage` flag so the popup does not keep reappearing on every visit
+  - added a persistent `Install App` button to the account menu on supported mobile browser tabs so players can reopen the instructions after dismissing them
+  - suppressed the popup/button in standalone launches and Play.fun mode, and avoided auto-opening while another modal, the auth menu, or the busy overlay is already visible
+  - verification:
+    - `npm run build` passed
 - Installable app shell pass on March 18, 2026:
   - added `public/app.webmanifest` for the main game shell with `standalone` display mode, landscape orientation, root-relative install scope, and the current WAMP brand metadata/colors
   - generated fixed install icons under `public/icons/` from the existing `public/favicon.svg` mark: `192x192`, `512x512`, and `180x180` Apple touch icon
