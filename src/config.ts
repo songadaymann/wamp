@@ -351,6 +351,15 @@ export const BACKGROUND_GROUPS: BackgroundGroup[] = [
       { key: 'cave_near', path: 'assets/backgrounds/cave/layer3_near.png', width: 960, height: 480, scrollFactor: 0.5 },
     ],
   },
+  {
+    id: 'desert',
+    name: 'Desert',
+    layers: [
+      { key: 'desert_far', path: 'assets/backgrounds/desert/far.png', width: 576, height: 324, scrollFactor: 0.0 },
+      { key: 'desert_mid', path: 'assets/backgrounds/desert/middle.png', width: 576, height: 324, scrollFactor: 0.2 },
+      { key: 'desert_near', path: 'assets/backgrounds/desert/near.png', width: 576, height: 324, scrollFactor: 0.5 },
+    ],
+  },
 ];
 
 export function getBackgroundGroup(id: string): BackgroundGroup | undefined {
