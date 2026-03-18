@@ -26,6 +26,11 @@ export interface RoomTextureBuildOptions {
   includedLayers?: LayerName[];
 }
 
+export interface RoomTextureDrawOptions extends RoomTextureBuildOptions {
+  offsetX?: number;
+  offsetY?: number;
+}
+
 export function buildRoomTextureKey(
   room: RoomSnapshot,
   mode: RoomTextureMode,
@@ -68,8 +73,24 @@ export function buildRoomSnapshotTexture(
   context.clearRect(0, 0, width, height);
   context.imageSmoothingEnabled = false;
 
+  drawRoomSnapshotToContext(scene, context, room, tilePixelSize, options);
+  canvasTexture.refresh();
+}
+
+export function drawRoomSnapshotToContext(
+  scene: Phaser.Scene,
+  context: CanvasRenderingContext2D,
+  room: RoomSnapshot,
+  tilePixelSize: number,
+  options: RoomTextureDrawOptions = {},
+): void {
+  const width = ROOM_WIDTH * tilePixelSize;
+  const height = ROOM_HEIGHT * tilePixelSize;
+  const offsetX = options.offsetX ?? 0;
+  const offsetY = options.offsetY ?? 0;
+
   if (options.includeBackground !== false) {
-    drawRoomBackground(scene, context, room, width, height);
+    drawRoomBackground(scene, context, room, width, height, offsetX, offsetY);
   }
   drawRoomTiles(
     scene,
@@ -77,9 +98,10 @@ export function buildRoomSnapshotTexture(
     room,
     tilePixelSize,
     options.includeObjects !== false,
-    options.includedLayers ?? LAYER_NAMES
+    options.includedLayers ?? LAYER_NAMES,
+    offsetX,
+    offsetY,
   );
-  canvasTexture.refresh();
 }
 
 export function drawRoomBackground(
@@ -88,20 +110,25 @@ export function drawRoomBackground(
   room: Pick<RoomSnapshot, 'id' | 'coordinates' | 'background'>,
   width: number = ROOM_PX_WIDTH,
   height: number = ROOM_PX_HEIGHT,
+  offsetX = 0,
+  offsetY = 0,
 ): void {
   const backgroundGroup = getBackgroundGroup(room.background);
   if (!backgroundGroup || backgroundGroup.layers.length === 0) {
+    context.save();
+    context.translate(offsetX, offsetY);
     drawStarfieldToContext(
       context,
       width,
       height,
       hashStringToSeed(`${room.id}:${room.coordinates.x},${room.coordinates.y}`),
     );
+    context.restore();
     return;
   }
 
   context.fillStyle = backgroundGroup.bgColor ?? RETRO_COLORS.background;
-  context.fillRect(0, 0, width, height);
+  context.fillRect(offsetX, offsetY, width, height);
 
   for (const layer of backgroundGroup.layers) {
     const sourceImage = getTextureSource(scene, layer.key);
@@ -110,7 +137,7 @@ export function drawRoomBackground(
     const scale = height / layer.height;
     const drawWidth = Math.max(1, Math.ceil(layer.width * scale));
     for (let drawX = 0; drawX < width + drawWidth; drawX += drawWidth) {
-      context.drawImage(sourceImage, drawX, 0, drawWidth, height);
+      context.drawImage(sourceImage, offsetX + drawX, offsetY, drawWidth, height);
     }
   }
 }
@@ -122,6 +149,8 @@ function drawRoomTiles(
   tilePixelSize: number,
   includeObjects: boolean,
   includedLayers: readonly LayerName[],
+  offsetX = 0,
+  offsetY = 0,
 ): void {
   for (const layerName of includedLayers) {
     for (let y = 0; y < ROOM_HEIGHT; y++) {
@@ -143,8 +172,8 @@ function drawRoomTiles(
           sourceImage,
           sourceCol * TILE_SIZE,
           sourceRow * TILE_SIZE,
-          x * tilePixelSize,
-          y * tilePixelSize,
+          offsetX + x * tilePixelSize,
+          offsetY + y * tilePixelSize,
           tilePixelSize,
           tilePixelSize,
           flipX,
@@ -154,7 +183,7 @@ function drawRoomTiles(
     }
 
     if (includeObjects) {
-      drawRoomObjectsForLayer(scene, context, room, tilePixelSize, layerName);
+      drawRoomObjectsForLayer(scene, context, room, tilePixelSize, layerName, offsetX, offsetY);
     }
   }
 
@@ -196,6 +225,8 @@ function drawRoomObjectsForLayer(
   room: RoomSnapshot,
   tilePixelSize: number,
   layerName: (typeof LAYER_NAMES)[number],
+  offsetX = 0,
+  offsetY = 0,
 ): void {
   const scale = tilePixelSize / TILE_SIZE;
 
@@ -210,8 +241,8 @@ function drawRoomObjectsForLayer(
     const sourceImage = getTextureSource(scene, objectConfig.id);
     if (!sourceImage) continue;
 
-    const destX = Math.round((placedObject.x - objectConfig.frameWidth / 2) * scale);
-    const destY = Math.round((placedObject.y - objectConfig.frameHeight / 2) * scale);
+    const destX = offsetX + Math.round((placedObject.x - objectConfig.frameWidth / 2) * scale);
+    const destY = offsetY + Math.round((placedObject.y - objectConfig.frameHeight / 2) * scale);
     const destWidth = Math.max(1, Math.round(objectConfig.frameWidth * scale));
     const destHeight = Math.max(1, Math.round(objectConfig.frameHeight * scale));
 

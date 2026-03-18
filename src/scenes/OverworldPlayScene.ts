@@ -201,6 +201,8 @@ const ROOM_BADGE_SEMANTIC_CODES: Record<RoomGoalType, string> = {
   defeat_all: 'KO',
   survival: 'SV',
 };
+const BROWSE_VISIBLE_CHUNK_REFRESH_INTERVAL_MS = 15000;
+const PLAY_VISIBLE_CHUNK_REFRESH_INTERVAL_MS = 8000;
 const SELECTED_ROOM_PLAY_BUTTON_RADIUS = 10;
 const SELECTED_ROOM_PLAY_BUTTON_SCALE_FACTOR = 0.9;
 const SELECTED_ROOM_PLAY_BUTTON_MIN_SCALE = 1;
@@ -497,6 +499,8 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private shouldCenterCamera = false;
   private shouldRespawnPlayer = false;
+  private visibleChunkRefreshInFlight = false;
+  private nextVisibleChunkRefreshAt = 0;
   private readonly handleCanvasWheel = (event: WheelEvent): void => {
     const appMode = document.body.dataset.appMode;
     if (appMode !== 'world' && appMode !== 'play-world') {
@@ -820,8 +824,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.worldStreamingController.getDraftRoomsById();
   }
 
-  private get previewImagesByRoomId(): Map<string, Phaser.GameObjects.Image> {
-    return this.worldStreamingController.getPreviewImagesByRoomId();
+  private get previewImages(): Phaser.GameObjects.Image[] {
+    return this.worldStreamingController.getPreviewImages();
   }
 
   private get loadedFullRoomsById(): Map<string, SceneLoadedFullRoom> {
@@ -905,6 +909,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    this.maybeRefreshVisibleChunks();
     this.updateBackdrop();
     this.redrawGridOverlay();
     this.updateLiveObjects(delta);
@@ -1610,7 +1615,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       ignoredObjects.push(projectile.rect);
     }
 
-    for (const image of this.previewImagesByRoomId.values()) {
+    for (const image of this.previewImages) {
       ignoredObjects.push(image);
     }
 
@@ -1999,6 +2004,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.redrawWorld();
       this.renderHud();
       this.loadingText.setVisible(false);
+      this.nextVisibleChunkRefreshAt = this.time.now + this.getVisibleChunkRefreshIntervalMs();
       if (!isAppReady()) {
         markAppReady();
       }
@@ -2041,7 +2047,54 @@ export class OverworldPlayScene extends Phaser.Scene {
   private refreshChunkWindowIfNeeded(centerCoordinates: RoomCoordinates): void {
     if (this.worldStreamingController.needsRefreshAround(centerCoordinates)) {
       void this.refreshAround(centerCoordinates);
+      return;
     }
+
+    this.worldStreamingController.refreshVisibleSelectionFromCache();
+    this.syncPreviewVisibility();
+  }
+
+  private maybeRefreshVisibleChunks(): void {
+    if (this.visibleChunkRefreshInFlight) {
+      return;
+    }
+
+    const now = this.time.now;
+    if (now < this.nextVisibleChunkRefreshAt) {
+      return;
+    }
+
+    const centerCoordinates = this.getZoomFocusCoordinates();
+    if (this.worldStreamingController.needsRefreshAround(centerCoordinates)) {
+      return;
+    }
+
+    this.visibleChunkRefreshInFlight = true;
+    void this.worldStreamingController.refreshLoadedChunksIfChanged(centerCoordinates)
+      .then((result) => {
+        if (result !== 'updated') {
+          return;
+        }
+
+        this.updateSelectedSummary();
+        void this.refreshLeaderboardForSelection();
+        this.syncModeRuntime();
+        this.syncPreviewVisibility();
+        this.syncPresenceSubscriptions();
+        this.syncGhostVisibility();
+        this.redrawWorld();
+        this.renderHud();
+      })
+      .finally(() => {
+        this.visibleChunkRefreshInFlight = false;
+        this.nextVisibleChunkRefreshAt = this.time.now + this.getVisibleChunkRefreshIntervalMs();
+      });
+  }
+
+  private getVisibleChunkRefreshIntervalMs(): number {
+    return this.mode === 'browse'
+      ? BROWSE_VISIBLE_CHUNK_REFRESH_INTERVAL_MS
+      : PLAY_VISIBLE_CHUNK_REFRESH_INTERVAL_MS;
   }
 
   private syncPresenceSubscriptions(): void {
@@ -3320,19 +3373,10 @@ export class OverworldPlayScene extends Phaser.Scene {
         const roomId = roomIdFromCoordinates(coordinates);
         const origin = this.getRoomOrigin(coordinates);
         const cellState = this.getCellStateAt(coordinates);
-        const previewImage = this.previewImagesByRoomId.get(roomId) ?? null;
         const cellFill = this.getCellFillStyle(cellState);
 
         this.roomFillGraphics.fillStyle(cellFill.color, cellFill.alpha);
         this.roomFillGraphics.fillRect(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-
-        if (previewImage) {
-          previewImage.setPosition(origin.x + ROOM_PX_WIDTH / 2, origin.y + ROOM_PX_HEIGHT / 2);
-          previewImage.setDisplaySize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-          previewImage.setVisible(
-            (cellState === 'draft' || cellState === 'published') && !this.loadedFullRoomsById.has(roomId)
-          );
-        }
 
         this.drawCellFrame(coordinates, cellState, origin.x, origin.y);
       }
@@ -6149,7 +6193,7 @@ export class OverworldPlayScene extends Phaser.Scene {
               : null,
           }
         : null,
-      loadedPreviewRooms: this.previewImagesByRoomId.size,
+      loadedPreviewRooms: this.previewImages.length,
       loadedFullRooms: this.loadedFullRoomsById.size,
       score: this.score,
       keysHeld: this.heldKeyCount,
