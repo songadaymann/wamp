@@ -57,6 +57,25 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Mobile play HUD compression + D-pad pass on March 18, 2026:
+  - replaced the phone play analog joystick with a four-button D-pad so movement now uses discrete held directions with a smaller on-screen footprint and still supports simultaneous multi-button direction holds
+  - restyled the phone action cluster into circular controller-like buttons with distinct green/blue/red tones for `Jump`, `Slash`, and `Shoot`, and lowered both the D-pad and action controls closer to the screen edges
+  - moved the small `Stop` and `Cam` utility buttons out of the top corner and into a compact vertical stack above the action cluster so play mode no longer wastes top-of-screen space
+  - stopped using the chunky `mobile-goal-footer` in phone play mode; room/course timing now lives in the compact top `world-goal-panel`, while the bottom bar collapses into a tiny status strip that keeps only the small online/status pills during play
+  - verification:
+    - `npm run build` passed
+    - Playwright smoke client passed with no console errors and wrote `output/web-game/mobile-hud-smoke-final/state-0.json`
+    - targeted iPhone-landscape captures confirmed the new control layout in `output/web-game/mobile-play-layout-check/iphone-landscape.png` and `output/web-game/mobile-play-layout-check-2/iphone-landscape.png`
+    - targeted phone interaction check confirmed the D-pad path is live: holding `right` moved the player from `x=320` to `x=395`
+- Install-help media slots pass on March 18, 2026:
+  - added a `Watch It` section to the install modal with three drop-in media cards: `Safari on iPhone`, `Chrome on iPhone`, and `Android Chrome / Brave`
+  - the modal now auto-loads `webm`, `mp4`, or `gif` files from `public/install-help/` using stable filenames, so install walkthrough loops can be added without changing code again
+  - when a slot has no media yet, it renders a clean placeholder with the exact filename to drop into `public/install-help/`; the empty-state card height is clamped so that guidance stays visible on phone-sized screens
+  - added `public/install-help/.gitkeep` so the asset folder exists in-repo even before any walkthrough media is committed
+  - verification:
+    - `npm run build` passed
+    - Playwright smoke client passed with no console errors and wrote `output/web-game/install-help-media-smoke-2/state-0.json`
+    - targeted iPhone modal capture confirmed the no-media placeholder state in `output/web-game/install-help-media-modal-2/iphone-modal.png`
 - Portrait install-path pass on March 18, 2026:
   - rewrote the mobile rotate gate into a portrait-first install screen, so blocked phone users are guided to install WAMP before rotating instead of only being told to turn the device
   - added browser-targeted edge cues to that portrait gate: iPhone/iPad-class launches point toward the bottom `Share` control, while Android/Chromium-class launches point toward the top-right browser menu
@@ -86,6 +105,13 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - verification:
     - `npm run build` passed
     - confirmed `dist/app.webmanifest` plus `dist/icons/icon-192.png`, `dist/icons/icon-512.png`, and `dist/icons/apple-touch-icon.png` are emitted in the production build
+- Mobile world shortcut choreography pass on March 18, 2026:
+  - `MobileUiController` now observes auth-menu, chat, busy-overlay, and modal open/close state instead of only rerendering on app-mode or device-layout changes
+  - phone world shortcut buttons for `Chat` and `Jump` now hide consistently whenever chat, the jump sheet, the auth menu, the busy overlay, or another modal is open
+  - opening chat, auth, or any non-jump modal now collapses the mobile jump sheet so phone overlays do not stack on top of each other
+  - this is a targeted polish pass against the existing mobile foundation rather than a new mobile feature slice
+  - verification:
+    - `npm run build` passed
 - Wave 3 refactor tracker + extraction pass on March 18, 2026:
   - created `docs/2026-03-18-repo-audit-wave-3-tracker.md` as the living audit/refactor tracker for the March 18 cleanup pass
   - extracted overworld badge overlay math, camera math, and course-run state/progression helpers out of `src/scenes/OverworldPlayScene.ts` into `src/scenes/overworld/`
@@ -3100,3 +3126,179 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - `mid.json`: zoom `0.283`, compact tier visible, dot/text hidden
     - `near.json`: zoom `0.446`, text tier dominant, dot hidden
   - local presence WebSocket errors were still expected because PartyKit was not running on `127.0.0.1:1999`
+
+## March 18, 2026 - Extracted Endless Overworld Preview Stage 1
+
+- Started the endless-overworld preview architecture by splitting preview-only responsibilities out of `src/scenes/overworld/worldStreaming.ts`
+- Added `src/scenes/overworld/previewStreaming.ts` for preview policy only:
+  - desired chunk bounds
+  - browse/play preview budgets
+  - LOD buckets
+  - prioritized preview/full-room selection
+- Added `src/scenes/overworld/previewCache.ts` for preview-room snapshot caching and per-room published snapshot loading/inflight dedupe
+- Added `src/scenes/overworld/chunkPreviewRenderer.ts` for preview texture/image lifecycle
+- Kept `worldStreaming.ts` as the coordinator over chunk loading, full-room loading, summary state, and optimistic mutations
+- Extended the visual preview policy into play mode too:
+  - full simulation stays near-only
+  - preview selection now includes far rooms in play mode
+  - play-mode preview budgets/radii scale up as you zoom farther out
+  - play-mode chunk radius can expand when zoomed out without changing the small full-room simulation radius
+- This is still Stage 1 of the larger plan:
+  - browse mode still fetches per-room published snapshots for preview art
+  - chunk preview payloads/assets and chunk-level freshness hashes are not implemented yet
+- Verification:
+  - `npx tsc --noEmit` passed
+  - `npm run build` passed
+  - required Playwright client was run after the refactor, but runtime smoke could not complete because the local/preview app never reached `domcontentloaded` within the client’s 30s timeout on `http://localhost:3000`, `http://localhost:3001`, or `http://localhost:4173`
+  - this looks like an existing app boot/path issue in the current local environment, not a TypeScript/build failure from the refactor itself
+
+## March 18, 2026 - Launch-Day Ghost Hardening + Launch Dashboard
+
+- Added launch-day PartyKit hardening and operator tooling without any schema changes
+- Presence client publish cadence in `src/presence/worldPresence.ts` now caps live presence sends to 5 Hz instead of sending every changed movement packet
+- PartyKit presence server in `partykit/presenceServer.ts` now:
+  - only rebroadcasts room population/editor counts on connect/disconnect, play/edit mode transitions, or room changes
+  - exposes a reserved metrics room `__launch-stats__` with token-protected `POST /heartbeat` and `GET /stats`
+  - sends best-effort shard heartbeats every 15s while a shard has live connections
+- Added worker-side `GET /api/admin/launch-stats` in `src/cloudflare/worker/admin/routes.ts` plus `src/cloudflare/worker/admin/launchStats.ts`
+  - combines D1 totals/activity windows with PartyKit metrics-room health
+  - PartyKit fetch failures degrade to `reachable: false` instead of breaking the admin route
+- Added hidden standalone operator page at `/launch-admin.html`
+  - manual `ADMIN_API_KEY` paste stored in `sessionStorage`
+  - polls `/api/admin/launch-stats` every 10s only while visible
+  - keeps the last good snapshot on screen if a poll fails
+- Build/config updates:
+  - added shared types in `src/admin/model.ts`
+  - added Worker env examples for `PARTYKIT_HOST`, `PARTYKIT_PARTY`, and `PARTYKIT_INTERNAL_TOKEN` in `.dev.vars.example`
+  - updated `vite.config.ts` so `launch-admin.html` is emitted into `dist`
+- Verification:
+  - `npm run build` passed
+  - local Worker smoke on `http://127.0.0.1:8789` confirmed `/api/admin/launch-stats` returns `403` without `x-admin-key` and returns a structured payload with a valid local admin key
+  - local PartyKit smoke on `http://127.0.0.1:1998` confirmed metrics-room auth rejects missing/bad tokens, accepts valid heartbeat posts, and prunes stale shard entries on `GET /stats`
+
+## March 18, 2026 - Fixed Mobile Boot Freeze + Advanced Endless Overworld Preview Stage 2
+
+- Fixed a local boot freeze introduced by the mobile overlay observer polish in `src/ui/mobile/controller.ts`
+  - `render()` could repeatedly call `closeJumpSheet()` while the jump sheet's `class` attribute was being observed
+  - added guards so `openJumpSheet()` / `closeJumpSheet()` only mutate DOM when the sheet state actually changes
+  - local `http://localhost:3000` boot now reaches `data-app-ready="true"` again
+- Advanced the endless-overworld work into Stage 2
+  - extended `WorldChunk` in `src/persistence/worldModel.ts` to include `previewRooms`
+  - chunk responses now embed faithful published room preview snapshots directly in `/api/world/chunks`
+  - hydrated the preview cache from chunk responses in `src/scenes/overworld/worldStreaming.ts`
+  - changed `src/scenes/overworld/previewCache.ts` so browse-mode preview rendering uses chunk-provided snapshots instead of per-room `/published` fetches
+  - kept full-room fetch fallback only for missing full-room loads, preserving the later path for play/detail cases
+- Verification:
+  - `npx tsc --noEmit` passed
+  - `npm run build` passed
+  - direct chunk API probe on `http://localhost:3000/api/world/chunks?...` confirmed `previewRooms` is present and includes published room snapshot fields
+  - Playwright request probe on `http://localhost:3000` showed browse boot performs:
+    - `1` `/api/world/chunks` request
+    - `0` `/api/rooms/:id/published` requests
+
+## March 18, 2026 - Advanced Endless Overworld Preview Stage 3
+
+- Landed the first chunk-level preview renderer for browse/play far-room art
+  - added `src/scenes/overworld/chunkPreviewRenderer.ts`
+  - `src/scenes/overworld/worldStreaming.ts` now hands preview rooms to the chunk renderer instead of building one preview image per room
+  - preview visibility still hides chunk-rendered room art when that room is also loaded as a full interactive room
+- Extended `src/visuals/roomSnapshotTexture.ts`
+  - added `drawRoomSnapshotToContext(...)` so multiple faithful room snapshots can be drawn into a single larger canvas
+  - chunk previews currently use that path to build one client-side preview texture per chunk from the exact room snapshot art
+- Updated `src/scenes/OverworldPlayScene.ts`
+  - scene debug/readout now treats browse previews as chunk images rather than per-room images
+  - backdrop ignore lists and redraw paths now consume the chunk preview image list
+- Verification:
+  - `npx tsc --noEmit` passed
+  - `npm run build` passed
+  - Playwright boot probe on `http://localhost:3000` confirmed normal boot with `readyState: "complete"` and `data-app-ready="true"`
+  - Playwright request probe still showed browse boot performs:
+    - `1` `/api/world/chunks` request
+    - `0` `/api/rooms/:id/published` requests
+  - debug snapshot confirmed chunk-level aggregation is active:
+    - `loadedPreviewRoomCount: 4`
+    - `loadedPreviewRoomsField: 3`
+    - meaning 4 preview rooms were represented by 3 chunk preview images
+
+## March 18, 2026 - Advanced Endless Overworld Preview Stage 4
+
+- Added chunk-level freshness metadata
+  - `src/persistence/worldModel.ts` now computes `chunkPreviewHash` for each chunk from both room summaries and preview snapshots
+  - `src/cloudflare/worker/world/routes.ts` recomputes that hash after course membership is applied so remote chunk responses carry a stable freshness token
+- Added slow visible-chunk refresh logic
+  - `src/scenes/overworld/worldStreaming.ts` now tracks loaded chunk hashes and exposes `refreshLoadedChunksIfChanged(...)`
+  - when the visible chunk window is unchanged, the controller can reload just that window, compare hashes, and skip redraw work if nothing changed
+  - optimistic local room mutations now recompute loaded chunk preview state and hashes immediately so local publish/revert flows still update without waiting for the poll
+- Hooked the slow poll into the overworld scene
+  - `src/scenes/OverworldPlayScene.ts` now runs a low-frequency visible-chunk refresh timer
+  - browse mode polls every 15s
+  - play mode polls every 8s
+  - the poll timer is reset after a successful full `refreshAround(...)` so boot/movement does not immediately double-hit the chunk API
+- Also fixed a small unrelated TypeScript drift that was blocking the build
+  - `src/mint/roomMetadataRender.ts` now imports `RoomSnapshot` from `roomModel`
+  - `src/persistence/roomRepository.ts` now imports metadata-refresh request/response types directly from `mint/roomMetadata`
+- Verification:
+  - `npx tsc --noEmit` passed
+  - `npm run build` passed
+  - direct chunk API probe on `http://localhost:8787/api/world/chunks?...` confirmed chunk responses now include `chunkPreviewHash`
+  - short Playwright request probe on `http://localhost:3000` still showed:
+    - `1` `/api/world/chunks` request on boot
+    - `0` `/api/rooms/:id/published` requests
+  - longer Playwright request probe after `17s` showed:
+    - `2` `/api/world/chunks` requests total
+    - `0` `/api/rooms/:id/published` requests
+    - meaning the client is now doing a slow chunk refresh poll instead of room-by-room freshness checks
+
+## March 18, 2026 - Advanced Endless Overworld Preview Stage 5
+
+- Tuned play-mode preview policy in `src/scenes/overworld/previewStreaming.ts`
+  - kept the full simulation radius unchanged
+  - increased play-mode visual preview budgets and LOD radii as zoom decreases
+  - added explicit play preview tiers:
+    - `near`
+    - `mid`
+    - `far`
+    - `ultra`
+  - play-mode preview budget now ramps up from `49` to `256` while the full-room budget remains fixed at `9`
+- Fixed an important zoom-state gap between Stages 4 and 5
+  - previously, zoom changes only recalculated preview policy when the chunk window bounds changed
+  - exposed a cache-only preview refresh in `src/scenes/overworld/worldStreaming.ts`
+  - `src/scenes/OverworldPlayScene.ts` now triggers that refresh on zoom changes even when the loaded chunk window stays the same
+  - this makes play-mode zoom-out immediately adopt the correct preview tier/budget without forcing a network reload
+- Verification:
+  - `npx tsc --noEmit` passed
+  - `npm run build` passed
+  - Playwright play-mode probe on `http://localhost:3000`:
+    - entered a room
+    - wheel-zoomed out to `0.08x`
+    - debug snapshot showed:
+      - `mode: "play"`
+      - `previewRoomBudget: 256`
+      - `fullRoomBudget: 9`
+      - `activeChunkRadius: 2`
+      - `loadedFullRoomCount: 6`
+    - confirming play mode now keeps the small interactive set while scaling up the visual preview policy as the camera zooms out
+
+## March 18, 2026 - On-Chain Room NFT Metadata URI
+
+- Added a dedicated minted-room metadata pipeline for room NFTs
+  - new shared metadata builder in `src/mint/roomMetadata.ts`
+  - canonical `wamp_room` payload stores room id, coordinates, title, background, goal, spawn, placed objects, compact encoded tile layers, version, and publish timestamp
+  - `tokenURI` is now intended to be a `data:application/json;base64,...` document with standard NFT fields plus `wamp_room`
+- Added client-side metadata rendering helpers
+  - `src/mint/roomMetadataRender.ts` renders published room snapshots without depending on Phaser scene state
+  - new standalone `minted-room.html` + `src/minted-room.ts` render NFTs from on-chain `tokenURI` metadata via `animation_url`
+- Added room metadata refresh flow for minted rooms
+  - worker routes now support `/api/rooms/:roomId/mint/metadata/prepare` and `/api/rooms/:roomId/mint/metadata/confirm`
+  - metadata refresh verifies the on-chain `setRoomTokenURI` / `setTokenURI` transaction and persists sync state back to the room record
+  - editor/history UI now exposes `Refresh NFT Metadata` for minted rooms when the token owner is editing a published room
+- Added backend metadata freshness tracking
+  - room records now carry `mintedMetadataRoomVersion`, `mintedMetadataUpdatedAt`, and `mintedMetadataHash`
+  - new migration `0014_room_mint_metadata_sync.sql` adds the corresponding `rooms` columns
+- Verification:
+  - `npx tsc --noEmit` passed
+  - `npm run build` passed
+  - `npx --yes tsx` metadata roundtrip probe passed:
+    - canonical room payload encoded deterministically
+    - `data:` tokenURI parsed successfully
+    - reconstructed room snapshot matched the representative published room input

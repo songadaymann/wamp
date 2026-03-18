@@ -6,6 +6,19 @@ const INSTALL_HELP_DISMISSED_STORAGE_KEY = 'wamp_install_help_dismissed_v1';
 const INSTALL_HELP_AUTO_OPEN_DELAY_MS = 900;
 
 type InstallHelpTarget = 'safari-share' | 'browser-menu' | 'generic';
+type InstallHelpMediaKey = 'safari-iphone' | 'chrome-iphone' | 'android-browser';
+
+type InstallHelpMediaSlot = {
+  container: HTMLElement;
+  video: HTMLVideoElement | null;
+  image: HTMLImageElement | null;
+};
+
+type InstallHelpMediaCandidate = {
+  kind: 'video' | 'image';
+  src: string;
+  mimeType?: string;
+};
 
 type InstallHelpElements = {
   modal: HTMLElement | null;
@@ -22,9 +35,11 @@ type NavigatorWithStandalone = Navigator & {
 
 export class InstallHelpController {
   private readonly elements: InstallHelpElements;
+  private readonly mediaSlots: InstallHelpMediaSlot[];
   private autoOpenTimer: number | null = null;
   private dismissed = false;
   private autoOpened = false;
+  private mediaSlotsLoaded = false;
 
   private readonly handleOpenClick = () => {
     this.open();
@@ -78,6 +93,11 @@ export class InstallHelpController {
       rotateGateOpenButton: this.doc.getElementById('btn-rotate-install-help') as HTMLButtonElement | null,
       authPanel: this.doc.getElementById('auth-panel'),
     };
+    this.mediaSlots = Array.from(this.doc.querySelectorAll<HTMLElement>('[data-install-media-key]')).map((container) => ({
+      container,
+      video: container.querySelector('.install-help-media-video') as HTMLVideoElement | null,
+      image: container.querySelector('.install-help-media-image') as HTMLImageElement | null,
+    }));
   }
 
   init(): void {
@@ -126,6 +146,7 @@ export class InstallHelpController {
 
     this.clearAutoOpenTimer();
     this.autoOpened = true;
+    this.ensureMediaSlotsLoaded();
     this.elements.authPanel?.classList.remove('menu-open');
     this.doc.body.dataset.installHelpOpen = 'true';
     this.elements.modal.classList.remove('hidden');
@@ -187,9 +208,9 @@ export class InstallHelpController {
     const layout = getDeviceLayoutState();
     return (
       this.shouldOfferHelp() &&
+      !layout.mobileLandscapeBlocked &&
       !this.dismissed &&
       !this.autoOpened &&
-      !layout.mobileLandscapeBlocked &&
       this.doc.visibilityState === 'visible' &&
       !this.hasBlockingSurface()
     );
@@ -202,6 +223,148 @@ export class InstallHelpController {
 
   private applyHelpTarget(): void {
     this.doc.body.dataset.installHelpTarget = this.detectHelpTarget();
+  }
+
+  private ensureMediaSlotsLoaded(): void {
+    if (this.mediaSlotsLoaded) {
+      return;
+    }
+
+    this.mediaSlotsLoaded = true;
+    this.mediaSlots.forEach((slot) => {
+      slot.container.dataset.installMediaReady = 'false';
+      void this.loadMediaSlot(slot);
+    });
+  }
+
+  private async loadMediaSlot(slot: InstallHelpMediaSlot): Promise<void> {
+    const key = slot.container.dataset.installMediaKey as InstallHelpMediaKey | undefined;
+    if (!key) {
+      return;
+    }
+
+    this.resetMediaSlot(slot);
+    for (const candidate of this.getMediaCandidates(key)) {
+      const loaded =
+        candidate.kind === 'image'
+          ? await this.tryLoadImage(slot, candidate.src)
+          : await this.tryLoadVideo(slot, candidate.src, candidate.mimeType ?? 'video/mp4');
+      if (loaded) {
+        slot.container.dataset.installMediaReady = 'true';
+        return;
+      }
+    }
+
+    slot.container.dataset.installMediaReady = 'false';
+  }
+
+  private getMediaCandidates(key: InstallHelpMediaKey): InstallHelpMediaCandidate[] {
+    return [
+      { kind: 'video', src: `/install-help/${key}.webm`, mimeType: 'video/webm' },
+      { kind: 'video', src: `/install-help/${key}.mp4`, mimeType: 'video/mp4' },
+      { kind: 'image', src: `/install-help/${key}.gif` },
+    ];
+  }
+
+  private resetMediaSlot(slot: InstallHelpMediaSlot): void {
+    if (slot.video) {
+      slot.video.pause();
+      slot.video.classList.add('hidden');
+      while (slot.video.firstChild) {
+        slot.video.removeChild(slot.video.firstChild);
+      }
+      slot.video.removeAttribute('src');
+      slot.video.load();
+    }
+
+    if (slot.image) {
+      slot.image.classList.add('hidden');
+      slot.image.removeAttribute('src');
+    }
+  }
+
+  private tryLoadVideo(slot: InstallHelpMediaSlot, src: string, mimeType: string): Promise<boolean> {
+    const video = slot.video;
+    if (!video) {
+      return Promise.resolve(false);
+    }
+
+    video.pause();
+    video.classList.add('hidden');
+    while (video.firstChild) {
+      video.removeChild(video.firstChild);
+    }
+    video.removeAttribute('src');
+
+    return new Promise((resolve) => {
+      const cleanup = () => {
+        video.removeEventListener('loadeddata', handleLoaded);
+        video.removeEventListener('error', handleError);
+      };
+
+      const handleLoaded = () => {
+        cleanup();
+        video.classList.remove('hidden');
+        void video.play().catch(() => {
+          // Muted inline loops should usually autoplay, but keep the asset visible if they do not.
+        });
+        resolve(true);
+      };
+
+      const handleError = () => {
+        cleanup();
+        video.pause();
+        video.classList.add('hidden');
+        while (video.firstChild) {
+          video.removeChild(video.firstChild);
+        }
+        video.removeAttribute('src');
+        video.load();
+        resolve(false);
+      };
+
+      video.addEventListener('loadeddata', handleLoaded, { once: true });
+      video.addEventListener('error', handleError, { once: true });
+      const source = this.doc.createElement('source');
+      source.src = src;
+      source.type = mimeType;
+      video.appendChild(source);
+      video.load();
+    });
+  }
+
+  private tryLoadImage(slot: InstallHelpMediaSlot, src: string): Promise<boolean> {
+    const image = slot.image;
+    if (!image) {
+      return Promise.resolve(false);
+    }
+
+    image.classList.add('hidden');
+    image.removeAttribute('src');
+
+    return new Promise((resolve) => {
+      const cleanup = () => {
+        image.removeEventListener('load', handleLoad);
+        image.removeEventListener('error', handleError);
+      };
+
+      const handleLoad = () => {
+        cleanup();
+        image.classList.remove('hidden');
+        resolve(true);
+      };
+
+      const handleError = () => {
+        cleanup();
+        image.classList.add('hidden');
+        image.removeAttribute('src');
+        resolve(false);
+      };
+
+      image.addEventListener('load', handleLoad, { once: true });
+      image.addEventListener('error', handleError, { once: true });
+      image.src = src;
+    });
   }
 
   private isStandaloneLaunch(): boolean {

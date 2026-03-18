@@ -177,6 +177,7 @@
           <option value="meadow">Meadow</option>
           <option value="aurora">Aurora</option>
           <option value="cave">Cave</option>
+          <option value="desert">Desert</option>
         </select>
         <div id="background-card-grid" class="background-card-grid" aria-label="Backgrounds">
           <button class="background-card background-card-none active" type="button" data-background-id="none">
@@ -245,6 +246,15 @@
           >
             <span class="background-card-art" aria-hidden="true"></span>
             <span class="background-card-label">Cave</span>
+          </button>
+          <button
+            class="background-card"
+            type="button"
+            data-background-id="desert"
+            style="--background-card-back: url('/assets/backgrounds/desert/far.png'); --background-card-front: url('/assets/backgrounds/desert/near.png'); --background-card-tint: rgba(189, 145, 92, 0.34);"
+          >
+            <span class="background-card-art" aria-hidden="true"></span>
+            <span class="background-card-label">Desert</span>
           </button>
         </div>
       </div>
@@ -424,6 +434,7 @@
           <button id="btn-save-draft" class="bar-btn">Save Draft</button>
           <button id="btn-publish-room" class="bar-btn">Publish</button>
           <button id="btn-mint-room" class="bar-btn">Mint Room</button>
+          <button id="btn-refresh-room-metadata" class="bar-btn hidden">Refresh NFT Metadata</button>
           <button id="btn-room-history" class="bar-btn">History</button>
         </div>
         <div class="mobile-editor-actions-panel mobile-editor-only">
@@ -503,8 +514,11 @@
           <button id="btn-mobile-stop" class="mobile-action-btn mobile-utility-btn" type="button">Stop</button>
           <button id="btn-mobile-camera" class="mobile-action-btn mobile-utility-btn" type="button">Cam</button>
         </div>
-        <div id="mobile-joystick" class="mobile-joystick" aria-label="Move">
-          <div id="mobile-joystick-knob" class="mobile-joystick-knob"></div>
+        <div id="mobile-dpad" class="mobile-dpad" aria-label="Move">
+          <button class="mobile-dpad-btn mobile-dpad-up" data-mobile-direction="up" type="button" aria-label="Move up">Up</button>
+          <button class="mobile-dpad-btn mobile-dpad-left" data-mobile-direction="left" type="button" aria-label="Move left">Left</button>
+          <button class="mobile-dpad-btn mobile-dpad-right" data-mobile-direction="right" type="button" aria-label="Move right">Right</button>
+          <button class="mobile-dpad-btn mobile-dpad-down" data-mobile-direction="down" type="button" aria-label="Move down">Down</button>
         </div>
         <div class="mobile-play-actions">
           <button id="btn-mobile-jump" class="mobile-action-btn mobile-action-jump" type="button">Jump</button>
@@ -598,7 +612,10 @@
           <h2 id="room-history-title" class="history-modal-title">Versions</h2>
           <div id="room-history-meta" class="history-modal-meta">No published versions yet.</div>
         </div>
-        <button id="btn-room-history-close" class="bar-btn bar-btn-small">Close</button>
+        <div class="history-modal-header-actions">
+          <button id="btn-room-history-refresh-metadata" class="bar-btn bar-btn-small hidden" type="button">Refresh NFT Metadata</button>
+          <button id="btn-room-history-close" class="bar-btn bar-btn-small">Close</button>
+        </div>
       </div>
       <div id="room-history-error" class="history-modal-error hidden"></div>
       <div id="room-history-list" class="history-version-list"></div>
@@ -777,6 +794,59 @@
         <div class="about-section">
           <div class="about-section-title">Why Install</div>
           <p>Installing WAMP gives you a cleaner mobile launch with browser chrome out of the way. You only need to do this once on a device.</p>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Watch It</div>
+          <div class="install-help-media-grid">
+            <div class="install-help-media-card" data-install-media-key="safari-iphone" data-install-media-ready="false">
+              <div class="install-help-media-title">Safari on iPhone</div>
+              <div class="install-help-media-meta">Share -> Add to Home Screen</div>
+              <div class="install-help-media-frame">
+                <video class="install-help-media-video hidden" muted loop playsinline preload="metadata" aria-label="Safari on iPhone install walkthrough"></video>
+                <img class="install-help-media-image hidden" alt="Safari on iPhone install walkthrough" loading="lazy" />
+                <div class="install-help-media-placeholder">
+                  <div class="install-help-media-placeholder-title">Drop media here</div>
+                  <div class="install-help-media-placeholder-copy"><code>/public/install-help/safari-iphone.webm</code></div>
+                  <div class="install-help-media-placeholder-copy">Also works with <code>.mp4</code> or <code>.gif</code>.</div>
+                </div>
+              </div>
+            </div>
+            <div class="install-help-media-card" data-install-media-key="chrome-iphone" data-install-media-ready="false">
+              <div class="install-help-media-title">Chrome on iPhone</div>
+              <div class="install-help-media-meta">Browser controls can vary by layout</div>
+              <div class="install-help-media-frame">
+                <video class="install-help-media-video hidden" muted loop playsinline preload="metadata" aria-label="Chrome on iPhone install walkthrough"></video>
+                <img class="install-help-media-image hidden" alt="Chrome on iPhone install walkthrough" loading="lazy" />
+                <div class="install-help-media-placeholder">
+                  <div class="install-help-media-placeholder-title">Drop media here</div>
+                  <div class="install-help-media-placeholder-copy"><code>/public/install-help/chrome-iphone.webm</code></div>
+                  <div class="install-help-media-placeholder-copy">Also works with <code>.mp4</code> or <code>.gif</code>.</div>
+                </div>
+              </div>
+            </div>
+            <div class="install-help-media-card" data-install-media-key="android-browser" data-install-media-ready="false">
+              <div class="install-help-media-title">Android Chrome / Brave</div>
+              <div class="install-help-media-meta">Menu -> Add to Home screen / Install app</div>
+              <div class="install-help-media-frame">
+                <video class="install-help-media-video hidden" muted loop playsinline preload="metadata" aria-label="Android Chrome or Brave install walkthrough"></video>
+                <img class="install-help-media-image hidden" alt="Android Chrome or Brave install walkthrough" loading="lazy" />
+                <div class="install-help-media-placeholder">
+                  <div class="install-help-media-placeholder-title">Drop media here</div>
+                  <div class="install-help-media-placeholder-copy"><code>/public/install-help/android-browser.webm</code></div>
+                  <div class="install-help-media-placeholder-copy">Also works with <code>.mp4</code> or <code>.gif</code>.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="install-help-media-note">The install modal auto-loads short loops from <code>public/install-help/</code>, so you can drop in files without changing the code again.</p>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Where To Look</div>
+          <p>You do not need to rotate your phone to install WAMP.</p>
+          <ul class="about-list">
+            <li><strong>Safari:</strong> the <code>Share</code> control is usually in the bottom toolbar.</li>
+            <li><strong>Brave / Chrome:</strong> the browser menu is usually in the top-right corner.</li>
+          </ul>
         </div>
         <div class="controls-grid install-help-grid">
           <div class="controls-section">
