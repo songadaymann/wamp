@@ -203,6 +203,11 @@ const ROOM_BADGE_SEMANTIC_CODES: Record<RoomGoalType, string> = {
 };
 const BROWSE_VISIBLE_CHUNK_REFRESH_INTERVAL_MS = 15000;
 const PLAY_VISIBLE_CHUNK_REFRESH_INTERVAL_MS = 8000;
+const SELECTED_ROOM_PLAY_BUTTON_RADIUS = 10;
+const SELECTED_ROOM_PLAY_BUTTON_EDGE_INSET = 16;
+const SELECTED_ROOM_PLAY_BUTTON_SCALE_FACTOR = 0.9;
+const SELECTED_ROOM_PLAY_BUTTON_MIN_SCALE = 1;
+const SELECTED_ROOM_PLAY_BUTTON_MAX_SCALE = 8;
 const BUTTON_ZOOM_FACTOR = 1.12;
 const WHEEL_ZOOM_SENSITIVITY = 0.003;
 const PLAY_ROOM_FIT_PADDING = 16;
@@ -285,6 +290,12 @@ interface PlayRoomPresenceMarker {
   roomId: string;
   container: Phaser.GameObjects.Container;
   pips: Phaser.GameObjects.Arc[];
+}
+
+interface SelectedRoomPlayAffordance {
+  container: Phaser.GameObjects.Container;
+  background: Phaser.GameObjects.Arc;
+  icon: Phaser.GameObjects.Graphics;
 }
 
 interface CoursePublishedRoomMeta {
@@ -404,6 +415,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private roomGoalBadges: GoalRoomBadge[] = [];
   private roomActivityBadges: RoomActivityBadge[] = [];
   private roomCourseBadges: CourseRoomBadge[] = [];
+  private selectedRoomPlayAffordance: SelectedRoomPlayAffordance | null = null;
   private readonly browsePresenceDotsByConnectionId = new Map<string, BrowsePresenceDotRenderer>();
   private playRoomPresenceMarkers: PlayRoomPresenceMarker[] = [];
   private starfieldSprites: Phaser.GameObjects.TileSprite[] = [];
@@ -848,6 +860,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.roomGridGraphics.setDepth(-4);
     this.roomFrameGraphics = this.add.graphics();
     this.roomFrameGraphics.setDepth(20);
+    this.createSelectedRoomPlayAffordance();
     this.loadingText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Loading world...', {
       fontFamily: 'Courier New',
       fontSize: '16px',
@@ -1587,6 +1600,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
     for (const badge of this.roomCourseBadges) {
       ignoredObjects.push(badge.container);
+    }
+    if (this.selectedRoomPlayAffordance) {
+      ignoredObjects.push(this.selectedRoomPlayAffordance.container);
     }
     for (const presenceDot of this.browsePresenceDotsByConnectionId.values()) {
       ignoredObjects.push(presenceDot.dot);
@@ -3247,6 +3263,93 @@ export class OverworldPlayScene extends Phaser.Scene {
     return { rect, collider };
   }
 
+  private createSelectedRoomPlayAffordance(): void {
+    const background = this.add.circle(
+      0,
+      0,
+      SELECTED_ROOM_PLAY_BUTTON_RADIUS,
+      RETRO_COLORS.backgroundNumber,
+      0.9
+    );
+    background.setStrokeStyle(1.5, RETRO_COLORS.selected, 0.92);
+
+    const icon = this.add.graphics();
+    icon.fillStyle(RETRO_COLORS.selected, 1);
+    icon.fillTriangle(-3, -5, -3, 5, 5, 0);
+
+    const container = this.add.container(0, 0, [background, icon]);
+    container.setDepth(28);
+    container.setVisible(false);
+    container.setSize(
+      SELECTED_ROOM_PLAY_BUTTON_RADIUS * 2,
+      SELECTED_ROOM_PLAY_BUTTON_RADIUS * 2
+    );
+    container.setInteractive(
+      new Phaser.Geom.Circle(0, 0, SELECTED_ROOM_PLAY_BUTTON_RADIUS + 4),
+      Phaser.Geom.Circle.Contains
+    );
+    container.on(
+      Phaser.Input.Events.GAMEOBJECT_POINTER_OVER,
+      () => background.setFillStyle(RETRO_COLORS.backgroundNumber, 0.98)
+    );
+    container.on(
+      Phaser.Input.Events.GAMEOBJECT_POINTER_OUT,
+      () => background.setFillStyle(RETRO_COLORS.backgroundNumber, 0.9)
+    );
+    container.on(
+      Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN,
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData
+      ) => {
+        event.stopPropagation();
+        this.playSelectedRoom();
+      }
+    );
+
+    this.selectedRoomPlayAffordance = {
+      container,
+      background,
+      icon,
+    };
+  }
+
+  private updateSelectedRoomPlayAffordance(): void {
+    const affordance = this.selectedRoomPlayAffordance;
+    if (!affordance) {
+      return;
+    }
+
+    const selectedState = this.getCellStateAt(this.selectedCoordinates);
+    const shouldShow =
+      Boolean(this.worldWindow) &&
+      this.mode === 'browse' &&
+      (selectedState === 'published' || selectedState === 'draft') &&
+      this.isWithinLoadedRoomBounds(this.selectedCoordinates);
+
+    affordance.container.setVisible(shouldShow);
+    if (!shouldShow) {
+      return;
+    }
+
+    const origin = this.getRoomOrigin(this.selectedCoordinates);
+    affordance.container.setPosition(
+      origin.x + ROOM_PX_WIDTH - SELECTED_ROOM_PLAY_BUTTON_EDGE_INSET,
+      origin.y + ROOM_PX_HEIGHT * 0.5
+    );
+    affordance.container.setScale(this.getSelectedRoomPlayAffordanceScale(this.cameras.main.zoom));
+  }
+
+  private getSelectedRoomPlayAffordanceScale(zoom: number): number {
+    return Phaser.Math.Clamp(
+      SELECTED_ROOM_PLAY_BUTTON_SCALE_FACTOR / Math.max(zoom, MIN_ZOOM),
+      SELECTED_ROOM_PLAY_BUTTON_MIN_SCALE,
+      SELECTED_ROOM_PLAY_BUTTON_MAX_SCALE
+    );
+  }
+
   private redrawWorld(): void {
     this.roomFillGraphics.clear();
     this.roomFrameGraphics.clear();
@@ -3257,6 +3360,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.destroyRoomCourseBadges();
       this.destroyBrowsePresenceDots();
       this.destroyPlayRoomPresenceMarkers();
+      this.updateSelectedRoomPlayAffordance();
       return;
     }
 
@@ -3283,6 +3387,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.redrawRoomActivityBadges();
     this.redrawRoomCourseBadges();
     this.syncPresenceOverlays();
+    this.updateSelectedRoomPlayAffordance();
   }
 
   private redrawGridOverlay(): void {
@@ -5640,6 +5745,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     syncBadgePlacements(this.roomActivityBadges, zoom, this.roomBadgeScaleConfig);
     syncBadgePlacements(this.roomCourseBadges, zoom, this.roomBadgeScaleConfig);
     this.syncPresenceOverlayScale();
+    this.updateSelectedRoomPlayAffordance();
   }
 
   private renderHud(statusOverride?: string): void {
