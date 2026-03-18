@@ -63,6 +63,9 @@
           <button id="btn-about-open" class="bar-btn auth-menu-action-btn" type="button">About WAMP</button>
         </div>
         <div class="auth-row auth-menu-action-row">
+          <button id="btn-install-help-open" class="bar-btn auth-menu-action-btn hidden" type="button">Install App</button>
+        </div>
+        <div class="auth-row auth-menu-action-row">
           <button id="btn-chat-moderation-open" class="bar-btn auth-menu-action-btn hidden" type="button">Chat Moderation</button>
         </div>
         <div class="auth-copy">Use email, wallet, or both. Wallet-only works for minting.</div>
@@ -737,6 +740,46 @@
         </div>
       </div>
       <div class="history-modal-meta">Custom control remapping can layer onto this later without changing the basic world HUD.</div>
+    </div>
+  </div>
+
+  <div id="install-help-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel install-help-modal-panel" role="dialog" aria-modal="true" aria-labelledby="install-help-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Install</div>
+          <h2 id="install-help-title" class="history-modal-title">Add WAMP To Your Home Screen</h2>
+          <div class="history-modal-meta">Launch from the icon to use the app without the normal browser address bar and tabs.</div>
+        </div>
+        <button id="btn-install-help-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div class="about-copy">
+        <div class="about-section">
+          <div class="about-section-title">Why Install</div>
+          <p>Installing WAMP gives you a cleaner mobile launch with browser chrome out of the way. You only need to do this once on a device.</p>
+        </div>
+        <div class="controls-grid install-help-grid">
+          <div class="controls-section">
+            <div class="controls-section-title">Safari On iPhone / iPad</div>
+            <div class="controls-row"><span class="controls-key">1</span><span>Tap <code>Share</code></span></div>
+            <div class="controls-row"><span class="controls-key">2</span><span>Choose <code>Add to Home Screen</code></span></div>
+            <div class="controls-row"><span class="controls-key">3</span><span>Launch WAMP from the new icon</span></div>
+          </div>
+          <div class="controls-section">
+            <div class="controls-section-title">Brave / Chrome On Android</div>
+            <div class="controls-row"><span class="controls-key">1</span><span>Open the browser menu</span></div>
+            <div class="controls-row"><span class="controls-key">2</span><span>Choose <code>Add to Home screen</code> or <code>Install app</code></span></div>
+            <div class="controls-row"><span class="controls-key">3</span><span>Launch WAMP from the installed icon</span></div>
+          </div>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Result</div>
+          <p>Once installed, WAMP opens in its own standalone app shell, which gives the game more vertical room and reduces browser UI clutter.</p>
+        </div>
+      </div>
+      <div class="install-help-footer">
+        <button id="btn-install-help-got-it" class="bar-btn" type="button">Got It</button>
+      </div>
     </div>
   </div>
 
