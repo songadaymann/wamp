@@ -57,6 +57,17 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Portrait install-path pass on March 18, 2026:
+  - rewrote the mobile rotate gate into a portrait-first install screen, so blocked phone users are guided to install WAMP before rotating instead of only being told to turn the device
+  - added browser-targeted edge cues to that portrait gate: iPhone/iPad-class launches point toward the bottom `Share` control, while Android/Chromium-class launches point toward the top-right browser menu
+  - the detailed install modal remains available from the rotate gate and account menu, but it no longer auto-opens while portrait-blocked; the inline portrait guide is now the primary blocked-state experience
+  - opening install help still temporarily suppresses the rotate gate behind it so the secondary modal does not fight the primary portrait overlay
+  - verification:
+    - `npm run build` passed
+    - Playwright smoke client passed with no console errors and wrote `output/web-game/install-help-smoke/state-0.json`
+    - targeted portrait Playwright captures confirmed both install targets:
+      - `output/web-game/install-help-portrait/iphone.png`
+      - `output/web-game/install-help-portrait/pixel.png`
 - Install-help popup pass on March 18, 2026:
   - added a dedicated `Install App` modal with step-by-step home-screen instructions for Safari on iPhone/iPad and Brave/Chrome on Android
   - mobile browser tabs now auto-open that install-help modal once after the app is ready, but only on coarse-pointer devices that are not already running in standalone mode

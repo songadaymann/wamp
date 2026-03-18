@@ -5,11 +5,14 @@ import { DEVICE_LAYOUT_CHANGED_EVENT, getDeviceLayoutState } from '../deviceLayo
 const INSTALL_HELP_DISMISSED_STORAGE_KEY = 'wamp_install_help_dismissed_v1';
 const INSTALL_HELP_AUTO_OPEN_DELAY_MS = 900;
 
+type InstallHelpTarget = 'safari-share' | 'browser-menu' | 'generic';
+
 type InstallHelpElements = {
   modal: HTMLElement | null;
   closeButton: HTMLButtonElement | null;
   gotItButton: HTMLButtonElement | null;
   openButton: HTMLButtonElement | null;
+  rotateGateOpenButton: HTMLButtonElement | null;
   authPanel: HTMLElement | null;
 };
 
@@ -72,13 +75,16 @@ export class InstallHelpController {
       closeButton: this.doc.getElementById('btn-install-help-close') as HTMLButtonElement | null,
       gotItButton: this.doc.getElementById('btn-install-help-got-it') as HTMLButtonElement | null,
       openButton: this.doc.getElementById('btn-install-help-open') as HTMLButtonElement | null,
+      rotateGateOpenButton: this.doc.getElementById('btn-rotate-install-help') as HTMLButtonElement | null,
       authPanel: this.doc.getElementById('auth-panel'),
     };
   }
 
   init(): void {
     this.dismissed = this.readDismissedState();
+    this.applyHelpTarget();
     this.elements.openButton?.addEventListener('click', this.handleOpenClick);
+    this.elements.rotateGateOpenButton?.addEventListener('click', this.handleOpenClick);
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.gotItButton?.addEventListener('click', this.handleCloseClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
@@ -98,6 +104,7 @@ export class InstallHelpController {
   destroy(): void {
     this.clearAutoOpenTimer();
     this.elements.openButton?.removeEventListener('click', this.handleOpenClick);
+    this.elements.rotateGateOpenButton?.removeEventListener('click', this.handleOpenClick);
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.gotItButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
@@ -109,6 +116,7 @@ export class InstallHelpController {
       this.handleDeviceLayoutChanged as EventListener,
     );
     this.close(false);
+    delete this.doc.body.dataset.installHelpTarget;
   }
 
   open(): void {
@@ -119,6 +127,7 @@ export class InstallHelpController {
     this.clearAutoOpenTimer();
     this.autoOpened = true;
     this.elements.authPanel?.classList.remove('menu-open');
+    this.doc.body.dataset.installHelpOpen = 'true';
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
     this.render();
@@ -131,6 +140,7 @@ export class InstallHelpController {
 
     this.elements.modal.classList.add('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'true');
+    delete this.doc.body.dataset.installHelpOpen;
     if (persistDismissal && this.shouldOfferHelp()) {
       this.dismissed = true;
       this.writeDismissedState();
@@ -139,7 +149,9 @@ export class InstallHelpController {
   }
 
   private render(): void {
+    this.applyHelpTarget();
     this.elements.openButton?.classList.toggle('hidden', !this.shouldOfferHelp());
+    this.elements.rotateGateOpenButton?.classList.toggle('hidden', !this.shouldOfferHelp());
 
     if (!this.shouldOfferHelp() && this.elements.modal && !this.elements.modal.classList.contains('hidden')) {
       this.close(false);
@@ -188,12 +200,35 @@ export class InstallHelpController {
     return layout.coarsePointer && !this.isStandaloneLaunch() && !isPlayfunMode();
   }
 
+  private applyHelpTarget(): void {
+    this.doc.body.dataset.installHelpTarget = this.detectHelpTarget();
+  }
+
   private isStandaloneLaunch(): boolean {
     const navigatorWithStandalone = this.windowObj.navigator as NavigatorWithStandalone;
     return (
       this.windowObj.matchMedia('(display-mode: standalone)').matches ||
       navigatorWithStandalone.standalone === true
     );
+  }
+
+  private detectHelpTarget(): InstallHelpTarget {
+    const { navigator } = this.windowObj;
+    const userAgent = navigator.userAgent ?? '';
+    const platform = navigator.platform ?? '';
+    const isIos =
+      /iPad|iPhone|iPod/i.test(userAgent) ||
+      (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    if (isIos) {
+      return 'safari-share';
+    }
+
+    if (/Android/i.test(userAgent) || /Chrome|Chromium|CriOS|Brave|EdgA/i.test(userAgent)) {
+      return 'browser-menu';
+    }
+
+    return 'generic';
   }
 
   private hasBlockingSurface(): boolean {

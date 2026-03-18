@@ -259,6 +259,7 @@ body[data-playfun-mode='true'] #auth-panel {
   padding: 24px;
   background: rgba(5, 5, 5, 0.96);
   backdrop-filter: blur(12px);
+  overflow: hidden;
 }
 
 body[data-playfun-mode='true'] .rotate-gate {
@@ -266,6 +267,8 @@ body[data-playfun-mode='true'] .rotate-gate {
 }
 
 .rotate-gate-card {
+  position: relative;
+  z-index: 1;
   width: min(420px, calc(100vw - 48px));
   padding: 24px;
   border: 1px solid var(--border-strong);
@@ -275,10 +278,18 @@ body[data-playfun-mode='true'] .rotate-gate {
   text-align: center;
 }
 
+.rotate-gate-kicker {
+  color: var(--accent-cool);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .rotate-gate-title {
+  margin-top: 8px;
   color: var(--accent-warm);
   font-family: 'Early GameBoy', monospace;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.7;
 }
 
@@ -287,6 +298,166 @@ body[data-playfun-mode='true'] .rotate-gate {
   color: var(--text);
   font-size: 14px;
   line-height: 1.5;
+}
+
+.rotate-gate-copy-secondary {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.rotate-gate-copy code {
+  font-size: 11px;
+}
+
+.rotate-gate-browser-copy {
+  display: none;
+}
+
+body[data-install-help-target='safari-share'] .rotate-gate-browser-copy-share,
+body[data-install-help-target='browser-menu'] .rotate-gate-browser-copy-menu,
+body[data-install-help-target='generic'] .rotate-gate-browser-copy-generic,
+body:not([data-install-help-target]) .rotate-gate-browser-copy-generic {
+  display: block;
+}
+
+.rotate-gate-actions {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.rotate-gate-note {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.rotate-gate-target {
+  position: absolute;
+  display: none;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.rotate-gate-target-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 8px 12px;
+  border: 1px solid rgba(143, 216, 255, 0.32);
+  border-radius: 999px;
+  background: rgba(15, 26, 36, 0.92);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  color: var(--accent-cool);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rotate-gate-target-arrow {
+  position: relative;
+  opacity: 0.9;
+}
+
+.rotate-gate-target-arrow::after {
+  content: '';
+  position: absolute;
+  display: block;
+}
+
+.rotate-gate-target-share {
+  left: 50%;
+  bottom: calc(22px + var(--safe-bottom));
+  transform: translateX(-50%);
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.rotate-gate-target-arrow-share {
+  width: 2px;
+  height: 48px;
+  background: linear-gradient(180deg, rgba(143, 216, 255, 0.14), rgba(143, 216, 255, 0.96));
+}
+
+.rotate-gate-target-arrow-share::after {
+  left: 50%;
+  bottom: -1px;
+  width: 12px;
+  height: 12px;
+  border-right: 2px solid var(--accent-cool);
+  border-bottom: 2px solid var(--accent-cool);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.rotate-gate-target-menu {
+  top: calc(16px + var(--safe-top));
+  right: calc(16px + var(--safe-right));
+  display: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.rotate-gate-target-menu .rotate-gate-target-label {
+  margin-right: 28px;
+}
+
+.rotate-gate-target-arrow-menu {
+  width: 54px;
+  height: 38px;
+  border-top: 2px solid var(--accent-cool);
+  border-right: 2px solid var(--accent-cool);
+  border-top-right-radius: 20px;
+}
+
+.rotate-gate-target-arrow-menu::after {
+  top: -7px;
+  right: -2px;
+  width: 12px;
+  height: 12px;
+  border-top: 2px solid var(--accent-cool);
+  border-right: 2px solid var(--accent-cool);
+}
+
+.rotate-gate-target-generic {
+  top: calc(16px + var(--safe-top));
+  left: 50%;
+  transform: translateX(-50%);
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 8px;
+}
+
+.rotate-gate-target-arrow-generic {
+  width: 2px;
+  height: 40px;
+  background: linear-gradient(180deg, rgba(143, 216, 255, 0.96), rgba(143, 216, 255, 0.14));
+}
+
+.rotate-gate-target-arrow-generic::after {
+  top: -1px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  border-left: 2px solid var(--accent-cool);
+  border-top: 2px solid var(--accent-cool);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+body[data-install-help-target='safari-share'] .rotate-gate-target-share,
+body[data-install-help-target='browser-menu'] .rotate-gate-target-menu,
+body[data-install-help-target='generic'] .rotate-gate-target-generic,
+body:not([data-install-help-target]) .rotate-gate-target-generic {
+  display: flex;
+}
+
+body[data-install-help-open='true'] .rotate-gate {
+  opacity: 0;
+  pointer-events: none;
 }
 
 @keyframes busy-spin {
@@ -490,4 +661,3 @@ body[data-playfun-mode='true'] .rotate-gate {
   width: 100vw;
   width: min(100dvw, var(--app-viewport-width));
 }
-
