@@ -89,6 +89,13 @@ export function drawRoomSnapshotToContext(
   const offsetX = options.offsetX ?? 0;
   const offsetY = options.offsetY ?? 0;
 
+  // Shared chunk canvases need an explicit per-room clip so repeating
+  // background layers don't bleed into adjacent frontier cells.
+  context.save();
+  context.beginPath();
+  context.rect(offsetX, offsetY, width, height);
+  context.clip();
+
   if (options.includeBackground !== false) {
     drawRoomBackground(scene, context, room, width, height, offsetX, offsetY);
   }
@@ -102,6 +109,8 @@ export function drawRoomSnapshotToContext(
     offsetX,
     offsetY,
   );
+
+  context.restore();
 }
 
 export function drawRoomBackground(
