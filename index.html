@@ -43,9 +43,29 @@
     </div>
   </div>
   <div id="rotate-gate" class="rotate-gate hidden" aria-hidden="true">
+    <div class="rotate-gate-target rotate-gate-target-share" aria-hidden="true">
+      <div class="rotate-gate-target-label">Tap Share</div>
+      <div class="rotate-gate-target-arrow rotate-gate-target-arrow-share"></div>
+    </div>
+    <div class="rotate-gate-target rotate-gate-target-menu" aria-hidden="true">
+      <div class="rotate-gate-target-label">Open Menu</div>
+      <div class="rotate-gate-target-arrow rotate-gate-target-arrow-menu"></div>
+    </div>
+    <div class="rotate-gate-target rotate-gate-target-generic" aria-hidden="true">
+      <div class="rotate-gate-target-label">Open Browser Menu</div>
+      <div class="rotate-gate-target-arrow rotate-gate-target-arrow-generic"></div>
+    </div>
     <div class="rotate-gate-card">
-      <div class="rotate-gate-title">Rotate Device</div>
-      <div class="rotate-gate-copy">We All Make A Platformer is landscape-only on mobile for now.</div>
+      <div class="rotate-gate-kicker">Portrait Install</div>
+      <div class="rotate-gate-title">Install WAMP From Here</div>
+      <div class="rotate-gate-copy">You can stay in portrait long enough to install WAMP, then launch it from your home screen without the normal browser address bar and tabs.</div>
+      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-copy-share">Tap <code>Share</code> in the bottom toolbar, then choose <code>Add to Home Screen</code>.</div>
+      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-copy-menu">Open the browser menu in the top-right, then choose <code>Add to Home screen</code> or <code>Install app</code>.</div>
+      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-copy-generic">Open your browser menu and look for <code>Add to Home Screen</code> or <code>Install</code>.</div>
+      <div class="rotate-gate-actions">
+        <button id="btn-rotate-install-help" class="bar-btn" type="button">Full Install Steps</button>
+        <div class="rotate-gate-note">If you want to keep using the browser tab instead, rotate to landscape.</div>
+      </div>
     </div>
   </div>
   <div id="auth-panel">
