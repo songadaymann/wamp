@@ -37,6 +37,18 @@ Notes:
 
 The app is wired for **Base Sepolia**, not Ethereum Sepolia.
 
+Current known production deployment:
+
+- Base mainnet contract: `0xc3032d5e67c8a67c9745943929f8dff2410dd9a1`
+- Base mainnet chain id: `8453`
+- Base mainnet explorer: `https://basescan.org`
+
+Historical test deployment still referenced elsewhere:
+
+- Base Sepolia contract: `0x4F2c0b0eEe60dB8cD45fa317DcaE56EC02F0D53b`
+- Base Sepolia chain id: `84532`
+- Base Sepolia explorer: `https://sepolia.basescan.org`
+
 What is required to test real minting:
 
 - a funded **Base Sepolia** deployer private key
