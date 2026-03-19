@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WAMP Minted Room</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #090b10;
+        --panel: rgba(17, 21, 29, 0.92);
+        --panel-border: rgba(245, 241, 222, 0.16);
+        --text: #f5f1de;
+        --muted: #aeb7c4;
+        --accent: #7fd4ff;
+        --danger: #ff8f7a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top, rgba(127, 212, 255, 0.14), transparent 28%),
+          linear-gradient(180deg, #11151d 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      main {
+        width: min(980px, calc(100vw - 32px));
+        margin: 24px auto 48px;
+        display: grid;
+        gap: 16px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 18px;
+        padding: 18px;
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.22);
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      h1, h2 {
+        margin: 0;
+        font-family: "IBM Plex Mono", monospace;
+      }
+
+      p, .muted {
+        color: var(--muted);
+      }
+
+      .hero {
+        display: grid;
+        gap: 14px;
+      }
+
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid rgba(245, 241, 222, 0.14);
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 999px;
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+        gap: 16px;
+      }
+
+      .preview-shell {
+        display: grid;
+        place-items: center;
+        min-height: 260px;
+        background:
+          radial-gradient(circle at center, rgba(127, 212, 255, 0.08), transparent 55%),
+          rgba(4, 6, 10, 0.84);
+        border: 1px solid rgba(245, 241, 222, 0.08);
+        border-radius: 16px;
+        overflow: auto;
+      }
+
+      canvas, img {
+        image-rendering: pixelated;
+      }
+
+      dl {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 8px 12px;
+        margin: 0;
+      }
+
+      dt {
+        color: var(--muted);
+      }
+
+      dd {
+        margin: 0;
+        word-break: break-word;
+      }
+
+      ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+
+      .error {
+        border-color: rgba(255, 143, 122, 0.24);
+        color: var(--danger);
+      }
+
+      @media (max-width: 840px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="panel hero">
+        <div>
+          <div class="muted">WAMP NFT</div>
+          <h1 id="minted-room-title">Loading room...</h1>
+        </div>
+        <div id="minted-room-summary" class="muted">Reading token metadata from chain.</div>
+        <div id="minted-room-meta" class="meta"></div>
+      </section>
+
+      <section class="layout">
+        <div class="panel">
+          <h2>Rendered From On-Chain Metadata</h2>
+          <p id="minted-room-preview-status" class="muted">Loading preview…</p>
+          <div id="minted-room-preview" class="preview-shell"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Token Details</h2>
+          <dl id="minted-room-details"></dl>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Attributes</h2>
+        <ul id="minted-room-attributes"></ul>
+      </section>
+
+      <section id="minted-room-error" class="panel error hidden">
+        <h2>Unable To Render Token</h2>
+        <p id="minted-room-error-text"></p>
+      </section>
+    </main>
+    <script type="module" src="/src/minted-room.ts"></script>
+  </body>
+</html>

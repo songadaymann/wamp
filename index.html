@@ -57,15 +57,19 @@
       <div class="rotate-gate-target-arrow rotate-gate-target-arrow-generic"></div>
     </div>
     <div class="rotate-gate-card">
-      <div class="rotate-gate-kicker">Portrait Install</div>
-      <div class="rotate-gate-title">Install WAMP From Here</div>
-      <div class="rotate-gate-copy">You can stay in portrait long enough to install WAMP, then launch it from your home screen without the normal browser address bar and tabs.</div>
-      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-copy-share">Tap <code>Share</code> in the bottom toolbar, then choose <code>Add to Home Screen</code>.</div>
-      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-copy-menu">Open the browser menu in the top-right, then choose <code>Add to Home screen</code> or <code>Install app</code>.</div>
-      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-copy-generic">Open your browser menu and look for <code>Add to Home Screen</code> or <code>Install</code>.</div>
+      <div class="rotate-gate-kicker rotate-gate-browser-only">Portrait Install</div>
+      <div class="rotate-gate-kicker rotate-gate-standalone-only">Turn To Play</div>
+      <div class="rotate-gate-title rotate-gate-browser-only">Install WAMP From Here</div>
+      <div class="rotate-gate-title rotate-gate-standalone-only">Turn Your Phone</div>
+      <div class="rotate-gate-copy rotate-gate-browser-only">WAMP only works on mobile as a web app! Search for:<br><code>how to add web app to home screen on [your phone] on [your browser]</code></div>
+      <div class="rotate-gate-copy rotate-gate-standalone-only">WAMP is installed. Rotate to landscape to browse the overworld, play rooms, and use the on-screen controls without the sideways confusion.</div>
+      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-only rotate-gate-browser-copy-share">Tap <code>Share</code> in the bottom toolbar, then choose <code>Add to Home Screen</code>.</div>
+      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-only rotate-gate-browser-copy-menu">Open the browser menu in the top-right, then choose <code>Add to Home screen</code> or <code>Install app</code>.</div>
+      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-only rotate-gate-browser-copy-generic">Open your browser menu and look for <code>Add to Home Screen</code> or <code>Install</code>.</div>
       <div class="rotate-gate-actions">
-        <button id="btn-rotate-install-help" class="bar-btn" type="button">Full Install Steps</button>
-        <div class="rotate-gate-note">If you want to keep using the browser tab instead, rotate to landscape.</div>
+        <button id="btn-rotate-install-help" class="bar-btn rotate-gate-browser-only" type="button">Full Install Steps</button>
+        <div class="rotate-gate-note rotate-gate-browser-only">If you want to keep using the browser tab instead, rotate to landscape.</div>
+        <div class="rotate-gate-note rotate-gate-standalone-only">Once you rotate, the game will resume automatically.</div>
       </div>
     </div>
   </div>
@@ -510,16 +514,19 @@
         </div>
       </div>
       <button id="btn-world-hud-toggle" class="bar-btn bar-btn-small world-hud-toggle hidden" type="button">Room +</button>
+      <button
+        id="btn-mobile-world-stop"
+        class="bar-btn bar-btn-small world-btn-play active mobile-world-stop hidden"
+        type="button"
+      >
+        Stop
+      </button>
       <div id="mobile-play-controls" class="mobile-play-controls hidden">
-        <div class="mobile-play-utility">
-          <button id="btn-mobile-stop" class="mobile-action-btn mobile-utility-btn" type="button">Stop</button>
-          <button id="btn-mobile-camera" class="mobile-action-btn mobile-utility-btn" type="button">Cam</button>
-        </div>
         <div id="mobile-dpad" class="mobile-dpad" aria-label="Move">
-          <button class="mobile-dpad-btn mobile-dpad-up" data-mobile-direction="up" type="button" aria-label="Move up">Up</button>
-          <button class="mobile-dpad-btn mobile-dpad-left" data-mobile-direction="left" type="button" aria-label="Move left">Left</button>
-          <button class="mobile-dpad-btn mobile-dpad-right" data-mobile-direction="right" type="button" aria-label="Move right">Right</button>
-          <button class="mobile-dpad-btn mobile-dpad-down" data-mobile-direction="down" type="button" aria-label="Move down">Down</button>
+          <button id="btn-mobile-up" class="mobile-dpad-btn mobile-dpad-up" data-mobile-direction="up" type="button" aria-label="Move up">Up</button>
+          <button id="btn-mobile-left" class="mobile-dpad-btn mobile-dpad-left" data-mobile-direction="left" type="button" aria-label="Move left">Left</button>
+          <button id="btn-mobile-right" class="mobile-dpad-btn mobile-dpad-right" data-mobile-direction="right" type="button" aria-label="Move right">Right</button>
+          <button id="btn-mobile-down" class="mobile-dpad-btn mobile-dpad-down" data-mobile-direction="down" type="button" aria-label="Move down">Down</button>
         </div>
         <div class="mobile-play-actions">
           <button id="btn-mobile-jump" class="mobile-action-btn mobile-action-jump" type="button">Jump</button>
@@ -533,6 +540,10 @@
           <span id="chat-unread-badge" class="chat-unread-badge hidden">0</span>
         </button>
         <div id="global-chat-body" class="chat-panel-body hidden">
+          <div class="chat-panel-header">
+            <div class="chat-panel-title">World Chat</div>
+            <button id="btn-chat-close" class="bar-btn bar-btn-small chat-panel-close" type="button">Close</button>
+          </div>
           <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
           <div id="chat-empty" class="chat-empty">No messages yet.</div>
           <form id="chat-form" class="chat-form">
@@ -793,75 +804,22 @@
       </div>
       <div class="about-copy">
         <div class="about-section">
-          <div class="about-section-title">Why Install</div>
-          <p>Installing WAMP gives you a cleaner mobile launch with browser chrome out of the way. You only need to do this once on a device.</p>
+          <div class="about-section-title">Required On Mobile</div>
+          <p>This game only works on mobile if you add it as a web app to your home screen.</p>
+          <p>Once that is done, open WAMP from the home-screen icon instead of the browser tab.</p>
         </div>
         <div class="about-section">
-          <div class="about-section-title">Watch It</div>
-          <div class="install-help-media-grid">
-            <div class="install-help-media-card" data-install-media-key="safari-iphone" data-install-media-ready="false">
-              <div class="install-help-media-title">Safari on iPhone</div>
-              <div class="install-help-media-meta">Share -> Add to Home Screen</div>
-              <div class="install-help-media-frame">
-                <video class="install-help-media-video hidden" muted loop playsinline preload="metadata" aria-label="Safari on iPhone install walkthrough"></video>
-                <img class="install-help-media-image hidden" alt="Safari on iPhone install walkthrough" loading="lazy" />
-                <div class="install-help-media-placeholder">
-                  <div class="install-help-media-placeholder-title">Drop media here</div>
-                  <div class="install-help-media-placeholder-copy"><code>/public/install-help/safari-iphone.webm</code></div>
-                  <div class="install-help-media-placeholder-copy">Also works with <code>.mp4</code> or <code>.gif</code>.</div>
-                </div>
-              </div>
-            </div>
-            <div class="install-help-media-card" data-install-media-key="chrome-iphone" data-install-media-ready="false">
-              <div class="install-help-media-title">Chrome on iPhone</div>
-              <div class="install-help-media-meta">Browser controls can vary by layout</div>
-              <div class="install-help-media-frame">
-                <video class="install-help-media-video hidden" muted loop playsinline preload="metadata" aria-label="Chrome on iPhone install walkthrough"></video>
-                <img class="install-help-media-image hidden" alt="Chrome on iPhone install walkthrough" loading="lazy" />
-                <div class="install-help-media-placeholder">
-                  <div class="install-help-media-placeholder-title">Drop media here</div>
-                  <div class="install-help-media-placeholder-copy"><code>/public/install-help/chrome-iphone.webm</code></div>
-                  <div class="install-help-media-placeholder-copy">Also works with <code>.mp4</code> or <code>.gif</code>.</div>
-                </div>
-              </div>
-            </div>
-            <div class="install-help-media-card" data-install-media-key="android-browser" data-install-media-ready="false">
-              <div class="install-help-media-title">Android Chrome / Brave</div>
-              <div class="install-help-media-meta">Menu -> Add to Home screen / Install app</div>
-              <div class="install-help-media-frame">
-                <video class="install-help-media-video hidden" muted loop playsinline preload="metadata" aria-label="Android Chrome or Brave install walkthrough"></video>
-                <img class="install-help-media-image hidden" alt="Android Chrome or Brave install walkthrough" loading="lazy" />
-                <div class="install-help-media-placeholder">
-                  <div class="install-help-media-placeholder-title">Drop media here</div>
-                  <div class="install-help-media-placeholder-copy"><code>/public/install-help/android-browser.webm</code></div>
-                  <div class="install-help-media-placeholder-copy">Also works with <code>.mp4</code> or <code>.gif</code>.</div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <p class="install-help-media-note">The install modal auto-loads short loops from <code>public/install-help/</code>, so you can drop in files without changing the code again.</p>
+          <div class="about-section-title">If You Need Help</div>
+          <p>If you do not know how to do this on your phone/browser, search for:</p>
+          <p class="install-help-search-prompt"><code>how to add web app to home screen on [your phone] on [your browser]</code></p>
         </div>
         <div class="about-section">
-          <div class="about-section-title">Where To Look</div>
-          <p>You do not need to rotate your phone to install WAMP.</p>
+          <div class="about-section-title">Quick Reminder</div>
           <ul class="about-list">
-            <li><strong>Safari:</strong> the <code>Share</code> control is usually in the bottom toolbar.</li>
-            <li><strong>Brave / Chrome:</strong> the browser menu is usually in the top-right corner.</li>
+            <li><strong>Safari:</strong> use <code>Share -&gt; Add to Home Screen</code>.</li>
+            <li><strong>Brave / Chrome:</strong> open the browser menu and choose <code>Add to Home screen</code> or <code>Install app</code>.</li>
+            <li><strong>After that:</strong> launch WAMP from the installed icon.</li>
           </ul>
-        </div>
-        <div class="controls-grid install-help-grid">
-          <div class="controls-section">
-            <div class="controls-section-title">Safari On iPhone / iPad</div>
-            <div class="controls-row"><span class="controls-key">1</span><span>Tap <code>Share</code></span></div>
-            <div class="controls-row"><span class="controls-key">2</span><span>Choose <code>Add to Home Screen</code></span></div>
-            <div class="controls-row"><span class="controls-key">3</span><span>Launch WAMP from the new icon</span></div>
-          </div>
-          <div class="controls-section">
-            <div class="controls-section-title">Brave / Chrome On Android</div>
-            <div class="controls-row"><span class="controls-key">1</span><span>Open the browser menu</span></div>
-            <div class="controls-row"><span class="controls-key">2</span><span>Choose <code>Add to Home screen</code> or <code>Install app</code></span></div>
-            <div class="controls-row"><span class="controls-key">3</span><span>Launch WAMP from the installed icon</span></div>
-          </div>
         </div>
         <div class="about-section">
           <div class="about-section-title">Result</div>

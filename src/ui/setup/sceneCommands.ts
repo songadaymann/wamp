@@ -41,6 +41,7 @@ export function setupSceneCommands(
   const publishNudgeBtn = doc.getElementById('btn-editor-publish-nudge');
   const historyBtn = doc.getElementById('btn-room-history');
   const mintBtn = doc.getElementById('btn-mint-room');
+  const refreshMetadataBtn = doc.getElementById('btn-refresh-room-metadata');
   const fitBtn = doc.getElementById('btn-fit-screen');
   const mobileFitBtn = doc.getElementById('btn-mobile-editor-fit');
   const mobileZoomInBtn = doc.getElementById('btn-mobile-editor-zoom-in');
@@ -226,6 +227,17 @@ export function setupSceneCommands(
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.mintRoom) {
       await editorScene.mintRoom();
+    }
+  });
+
+  refreshMetadataBtn?.addEventListener('click', async () => {
+    controlsModal.close();
+    aboutModal.close();
+    courseModal.close();
+    chatModerationModal.close();
+    const editorScene = getActiveEditorScene(game);
+    if (editorScene?.refreshMintMetadata) {
+      await editorScene.refreshMintMetadata();
     }
   });
 

@@ -17,6 +17,11 @@ import type {
   RoomMintConfirmRequestBody,
   RoomMintPrepareResponse,
 } from '../mint/roomOwnership';
+import type {
+  RoomMetadataRefreshConfirmRequestBody,
+  RoomMetadataRefreshPrepareRequestBody,
+  RoomMetadataRefreshPrepareResponse,
+} from '../mint/roomMetadata';
 import {
   appendPlayfunRequestHeaders,
   notifyPlayfunEligibleActionSuccess,
@@ -34,6 +39,16 @@ export interface RoomRepository {
     roomId: string,
     coordinates: RoomCoordinates,
     request: RoomMintConfirmRequestBody
+  ): Promise<RoomRecord>;
+  prepareMetadataRefresh(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    request: RoomMetadataRefreshPrepareRequestBody
+  ): Promise<RoomMetadataRefreshPrepareResponse>;
+  confirmMetadataRefresh(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    request: RoomMetadataRefreshConfirmRequestBody
   ): Promise<RoomRecord>;
 }
 
@@ -108,6 +123,9 @@ class LocalRoomRepository implements RoomRepository {
       mintedTokenId: existing.mintedTokenId,
       mintedOwnerWalletAddress: existing.mintedOwnerWalletAddress,
       mintedOwnerSyncedAt: existing.mintedOwnerSyncedAt,
+      mintedMetadataRoomVersion: existing.mintedMetadataRoomVersion,
+      mintedMetadataUpdatedAt: existing.mintedMetadataUpdatedAt,
+      mintedMetadataHash: existing.mintedMetadataHash,
       permissions: computeLocalPermissions(existing),
     };
 
@@ -169,6 +187,9 @@ class LocalRoomRepository implements RoomRepository {
       mintedTokenId: existing.mintedTokenId,
       mintedOwnerWalletAddress: existing.mintedOwnerWalletAddress,
       mintedOwnerSyncedAt: existing.mintedOwnerSyncedAt,
+      mintedMetadataRoomVersion: existing.mintedMetadataRoomVersion,
+      mintedMetadataUpdatedAt: existing.mintedMetadataUpdatedAt,
+      mintedMetadataHash: existing.mintedMetadataHash,
       permissions: computeLocalPermissions(existing),
     };
 
@@ -234,6 +255,9 @@ class LocalRoomRepository implements RoomRepository {
       mintedTokenId: existing.mintedTokenId,
       mintedOwnerWalletAddress: existing.mintedOwnerWalletAddress,
       mintedOwnerSyncedAt: existing.mintedOwnerSyncedAt,
+      mintedMetadataRoomVersion: existing.mintedMetadataRoomVersion,
+      mintedMetadataUpdatedAt: existing.mintedMetadataUpdatedAt,
+      mintedMetadataHash: existing.mintedMetadataHash,
       permissions: computeLocalPermissions(existing),
     };
 
@@ -251,6 +275,22 @@ class LocalRoomRepository implements RoomRepository {
     _request: RoomMintConfirmRequestBody
   ): Promise<RoomRecord> {
     throw new Error('Minting requires the remote API backend.');
+  }
+
+  async prepareMetadataRefresh(
+    _roomId: string,
+    _coordinates: RoomCoordinates,
+    _request: RoomMetadataRefreshPrepareRequestBody
+  ): Promise<RoomMetadataRefreshPrepareResponse> {
+    throw new Error('NFT metadata refresh requires the remote API backend.');
+  }
+
+  async confirmMetadataRefresh(
+    _roomId: string,
+    _coordinates: RoomCoordinates,
+    _request: RoomMetadataRefreshConfirmRequestBody
+  ): Promise<RoomRecord> {
+    throw new Error('NFT metadata refresh requires the remote API backend.');
   }
 }
 
@@ -311,11 +351,8 @@ class ApiRoomRepository implements RoomRepository {
   async publish(room: RoomSnapshot): Promise<RoomRecord> {
     return this.withFallback(
       async () => {
-        const headers = new Headers();
-        appendPlayfunRequestHeaders(headers);
         const record = await this.request<RoomRecord>(`/api/rooms/${encodeURIComponent(room.id)}/publish`, {
           method: 'POST',
-          headers,
           body: JSON.stringify(room),
         });
         notifyPlayfunEligibleActionSuccess();
@@ -334,11 +371,8 @@ class ApiRoomRepository implements RoomRepository {
 
     return this.withFallback(
       async () => {
-        const headers = new Headers();
-        appendPlayfunRequestHeaders(headers);
         const record = await this.request<RoomRecord>(`/api/rooms/${encodeURIComponent(roomId)}/revert?${params.toString()}`, {
           method: 'POST',
-          headers,
           body: JSON.stringify(body),
         });
         notifyPlayfunEligibleActionSuccess();
@@ -374,6 +408,44 @@ class ApiRoomRepository implements RoomRepository {
 
     return this.request<RoomRecord>(
       `/api/rooms/${encodeURIComponent(roomId)}/mint/confirm?${params.toString()}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }
+    );
+  }
+
+  async prepareMetadataRefresh(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    request: RoomMetadataRefreshPrepareRequestBody
+  ): Promise<RoomMetadataRefreshPrepareResponse> {
+    const params = new URLSearchParams({
+      x: String(coordinates.x),
+      y: String(coordinates.y),
+    });
+
+    return this.request<RoomMetadataRefreshPrepareResponse>(
+      `/api/rooms/${encodeURIComponent(roomId)}/mint/metadata/prepare?${params.toString()}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }
+    );
+  }
+
+  async confirmMetadataRefresh(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    request: RoomMetadataRefreshConfirmRequestBody
+  ): Promise<RoomRecord> {
+    const params = new URLSearchParams({
+      x: String(coordinates.x),
+      y: String(coordinates.y),
+    });
+
+    return this.request<RoomRecord>(
+      `/api/rooms/${encodeURIComponent(roomId)}/mint/metadata/confirm?${params.toString()}`,
       {
         method: 'POST',
         body: JSON.stringify(request),

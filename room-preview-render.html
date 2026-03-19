@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WAMP Room Preview Renderer</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #090b10;
+        --panel: rgba(17, 21, 29, 0.94);
+        --panel-border: rgba(245, 241, 222, 0.14);
+        --text: #f5f1de;
+        --muted: #aeb7c4;
+        --danger: #ff8f7a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at top, rgba(127, 212, 255, 0.14), transparent 30%),
+          linear-gradient(180deg, #11151d 0%, var(--bg) 100%);
+        color: var(--text);
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      }
+
+      main {
+        width: min(720px, calc(100vw - 32px));
+        display: grid;
+        gap: 14px;
+        padding: 20px;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 18px;
+      }
+
+      h1 {
+        margin: 0;
+        font-family: "IBM Plex Mono", monospace;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .error {
+        color: var(--danger);
+      }
+
+      .preview {
+        min-height: 180px;
+        display: grid;
+        place-items: center;
+        background: rgba(4, 6, 10, 0.84);
+        border-radius: 14px;
+        overflow: auto;
+        padding: 16px;
+      }
+
+      img {
+        image-rendering: pixelated;
+        max-width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div>
+        <div class="muted">WAMP Metadata Renderer</div>
+        <h1 id="room-preview-title">Loading room preview...</h1>
+      </div>
+      <div id="room-preview-status" class="muted">Fetching published room.</div>
+      <div class="preview">
+        <img id="room-preview-image" alt="WAMP room preview" />
+      </div>
+    </main>
+    <script type="module" src="/src/room-preview-render.ts"></script>
+  </body>
+</html>

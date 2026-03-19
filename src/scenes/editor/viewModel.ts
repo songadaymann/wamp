@@ -14,7 +14,9 @@ export interface BuildEditorUiViewModelOptions {
   goalSummaryText: string;
   roomPermissions: RoomPermissions;
   mintedTokenId: string | null;
+  canRefreshMintMetadata: boolean;
   saveInFlight: boolean;
+  mintedMetadataCurrent: boolean;
   roomVersionHistory: RoomVersionRecord[];
   entrySource: 'world' | 'direct';
   zoomText: string;
@@ -52,7 +54,9 @@ export function buildEditorUiViewModel(
     goalSummaryText,
     roomPermissions,
     mintedTokenId,
+    canRefreshMintMetadata,
     saveInFlight,
+    mintedMetadataCurrent,
     roomVersionHistory,
     entrySource,
     zoomText,
@@ -83,6 +87,11 @@ export function buildEditorUiViewModel(
     mintHidden: false,
     mintDisabled: Boolean(mintedTokenId) || saveInFlight,
     mintButtonText: mintedTokenId ? 'Minted' : 'Mint Room',
+    refreshMetadataHidden: !mintedTokenId,
+    refreshMetadataDisabled: !canRefreshMintMetadata || saveInFlight,
+    refreshMetadataButtonText: mintedMetadataCurrent
+      ? 'Refresh NFT Metadata'
+      : 'Refresh NFT Metadata',
     historyHidden: false,
     historyDisabled: roomVersionHistory.length === 0,
     fitHidden: false,

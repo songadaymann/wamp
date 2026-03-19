@@ -70,7 +70,10 @@ export async function loadRoomRecord(
         minted_contract_address,
         minted_token_id,
         minted_owner_wallet_address,
-        minted_owner_synced_at
+        minted_owner_synced_at,
+        minted_metadata_room_version,
+        minted_metadata_updated_at,
+        minted_metadata_hash
       FROM rooms
       WHERE id = ? OR (x = ? AND y = ?)
       LIMIT 1
@@ -116,6 +119,9 @@ export async function loadRoomRecord(
     mintedTokenId: row.minted_token_id,
     mintedOwnerWalletAddress: row.minted_owner_wallet_address,
     mintedOwnerSyncedAt: row.minted_owner_synced_at,
+    mintedMetadataRoomVersion: row.minted_metadata_room_version,
+    mintedMetadataUpdatedAt: row.minted_metadata_updated_at,
+    mintedMetadataHash: row.minted_metadata_hash,
     permissions: {
       canSaveDraft: true,
       canPublish: true,
@@ -285,6 +291,9 @@ export async function saveDraft(
       mintedTokenId: existing.mintedTokenId,
       mintedOwnerWalletAddress: existing.mintedOwnerWalletAddress,
       mintedOwnerSyncedAt: existing.mintedOwnerSyncedAt,
+      mintedMetadataRoomVersion: existing.mintedMetadataRoomVersion,
+      mintedMetadataUpdatedAt: existing.mintedMetadataUpdatedAt,
+      mintedMetadataHash: existing.mintedMetadataHash,
     }),
   ]);
 
@@ -367,6 +376,9 @@ export async function publishRoom(
       mintedTokenId: existing.mintedTokenId,
       mintedOwnerWalletAddress: existing.mintedOwnerWalletAddress,
       mintedOwnerSyncedAt: existing.mintedOwnerSyncedAt,
+      mintedMetadataRoomVersion: existing.mintedMetadataRoomVersion,
+      mintedMetadataUpdatedAt: existing.mintedMetadataUpdatedAt,
+      mintedMetadataHash: existing.mintedMetadataHash,
     }),
     preparePersistRoomVersionStatement(env, {
       snapshot: published,
@@ -465,6 +477,9 @@ export async function revertRoom(
       mintedTokenId: existing.mintedTokenId,
       mintedOwnerWalletAddress: existing.mintedOwnerWalletAddress,
       mintedOwnerSyncedAt: existing.mintedOwnerSyncedAt,
+      mintedMetadataRoomVersion: existing.mintedMetadataRoomVersion,
+      mintedMetadataUpdatedAt: existing.mintedMetadataUpdatedAt,
+      mintedMetadataHash: existing.mintedMetadataHash,
     }),
     preparePersistRoomVersionStatement(env, {
       snapshot: published,
@@ -682,9 +697,12 @@ export const UPSERT_ROOM_RECORD_SQL = `
     minted_contract_address,
     minted_token_id,
     minted_owner_wallet_address,
-    minted_owner_synced_at
+    minted_owner_synced_at,
+    minted_metadata_room_version,
+    minted_metadata_updated_at,
+    minted_metadata_hash
   )
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(id) DO UPDATE SET
     x = excluded.x,
     y = excluded.y,
@@ -713,7 +731,10 @@ export const UPSERT_ROOM_RECORD_SQL = `
     minted_contract_address = excluded.minted_contract_address,
     minted_token_id = excluded.minted_token_id,
     minted_owner_wallet_address = excluded.minted_owner_wallet_address,
-    minted_owner_synced_at = excluded.minted_owner_synced_at
+    minted_owner_synced_at = excluded.minted_owner_synced_at,
+    minted_metadata_room_version = excluded.minted_metadata_room_version,
+    minted_metadata_updated_at = excluded.minted_metadata_updated_at,
+    minted_metadata_hash = excluded.minted_metadata_hash
 `;
 
 export const INSERT_ROOM_VERSION_SQL = `
@@ -789,7 +810,10 @@ export function preparePersistRoomRecordStatement(
     input.mintedContractAddress,
     input.mintedTokenId,
     input.mintedOwnerWalletAddress,
-    input.mintedOwnerSyncedAt
+    input.mintedOwnerSyncedAt,
+    input.mintedMetadataRoomVersion,
+    input.mintedMetadataUpdatedAt,
+    input.mintedMetadataHash
   );
 }
 

@@ -14,6 +14,7 @@ type HistoryModalElements = {
   meta: HTMLElement | null;
   list: HTMLElement | null;
   error: HTMLElement | null;
+  refreshMetadataButton: HTMLButtonElement | null;
   closeButton: HTMLElement | null;
   status: HTMLElement | null;
 };
@@ -48,6 +49,30 @@ export class RoomHistoryModalController {
     void this.render();
   };
 
+  private readonly handleRefreshMetadataClick = async () => {
+    const editorScene = getActiveEditorScene(this.game);
+    if (!editorScene?.refreshMintMetadata) {
+      return;
+    }
+
+    this.activeTargetVersion = -1;
+    this.setError(null);
+    await this.render();
+
+    const result = await editorScene.refreshMintMetadata();
+    this.activeTargetVersion = null;
+
+    if (!result) {
+      const statusMessage = this.getEditorStatusText() || 'NFT metadata refresh failed.';
+      this.setError(statusMessage);
+      await this.render();
+      return;
+    }
+
+    this.setError(null);
+    await this.render();
+  };
+
   constructor(
     private readonly game: Phaser.Game,
     private readonly doc: Document = document,
@@ -58,12 +83,14 @@ export class RoomHistoryModalController {
       meta: this.doc.getElementById('room-history-meta'),
       list: this.doc.getElementById('room-history-list'),
       error: this.doc.getElementById('room-history-error'),
+      refreshMetadataButton: this.doc.getElementById('btn-room-history-refresh-metadata') as HTMLButtonElement | null,
       closeButton: this.doc.getElementById('btn-room-history-close'),
       status: this.doc.getElementById('room-save-status'),
     };
   }
 
   init(): void {
+    this.elements.refreshMetadataButton?.addEventListener('click', this.handleRefreshMetadataClick);
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
@@ -71,6 +98,7 @@ export class RoomHistoryModalController {
   }
 
   destroy(): void {
+    this.elements.refreshMetadataButton?.removeEventListener('click', this.handleRefreshMetadataClick);
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
@@ -187,6 +215,16 @@ export class RoomHistoryModalController {
       metaParts.push(
         `Token #${state.mintedTokenId} · Owner ${state.mintedOwnerWalletAddress ?? 'unknown'}`
       );
+      if (state.mintedMetadataRoomVersion === null) {
+        metaParts.push('NFT metadata not set');
+      } else if (state.mintedMetadataCurrent) {
+        metaParts.push(`NFT metadata current at v${state.mintedMetadataRoomVersion}`);
+      } else {
+        metaParts.push(`NFT metadata stale at v${state.mintedMetadataRoomVersion}`);
+      }
+      if (state.mintedMetadataUpdatedAt) {
+        metaParts.push(`Metadata updated ${this.formatTimestamp(state.mintedMetadataUpdatedAt)}`);
+      }
     } else if (state.canMint) {
       metaParts.push('Eligible to mint');
     }
@@ -289,6 +327,18 @@ export class RoomHistoryModalController {
     const versionsNewestFirst = [...state.versions].sort((a, b) => b.version - a.version);
 
     this.renderMeta(state);
+    if (this.elements.refreshMetadataButton) {
+      const refreshing = this.activeTargetVersion === -1;
+      this.elements.refreshMetadataButton.classList.toggle(
+        'hidden',
+        !state.canRefreshMintMetadata,
+      );
+      this.elements.refreshMetadataButton.disabled =
+        refreshing || this.activeTargetVersion !== null;
+      this.elements.refreshMetadataButton.textContent = refreshing
+        ? 'Refreshing...'
+        : 'Refresh NFT Metadata';
+    }
     this.elements.list.replaceChildren();
 
     if (versionsNewestFirst.length === 0) {

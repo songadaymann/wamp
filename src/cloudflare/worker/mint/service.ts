@@ -1,4 +1,4 @@
-import { createPublicClient, decodeEventLog, http, isAddress, type Hex } from 'viem';
+import { createPublicClient, decodeEventLog, decodeFunctionData, http, isAddress, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { AuthUser } from '../../../auth/model';
 import {
@@ -8,6 +8,7 @@ import {
   DEFAULT_ROOM_MINT_CHAIN_NAME,
   ROOM_OWNERSHIP_TOKEN_ABI,
 } from '../../../mint/roomOwnership';
+import { sha256Hex } from '../../../mint/roomMetadata';
 import { type RoomCoordinates, type RoomRecord } from '../../../persistence/roomModel';
 import { normalizeAddress } from '../auth/store';
 import { HttpError } from '../core/http';
@@ -166,6 +167,9 @@ export async function syncRoomOwnershipFromChain(
     mintedTokenId: chainState.tokenId,
     mintedOwnerWalletAddress: normalizeAddress(chainState.ownerWalletAddress),
     mintedOwnerSyncedAt: chainState.ownerSyncedAt,
+    mintedMetadataRoomVersion: record.mintedMetadataRoomVersion,
+    mintedMetadataUpdatedAt: record.mintedMetadataUpdatedAt,
+    mintedMetadataHash: record.mintedMetadataHash,
     claimerUserId:
       record.claimerUserId ??
       (actor?.walletAddress &&
@@ -417,6 +421,171 @@ export async function persistRoomMintState(
       state.tokenId,
       normalizeAddress(state.ownerWalletAddress),
       state.ownerSyncedAt,
+      claimUserId,
+      claimUserId ? 'user' : null,
+      claimDisplayName,
+      claimedAt,
+      record.draft.id
+    ),
+  ]);
+}
+
+export async function verifyRoomTokenMetadataTransaction(
+  config: RoomMintConfig,
+  txHash: string,
+  record: RoomRecord,
+  expectedMetadataHash: string
+): Promise<{
+  tokenId: string;
+  ownerWalletAddress: `0x${string}`;
+  metadataHash: string;
+  updatedAt: string;
+}> {
+  if (!record.mintedTokenId) {
+    throw new HttpError(409, 'Room is not minted yet.');
+  }
+
+  const client = createRoomMintPublicClient(config);
+  let receipt: Awaited<ReturnType<typeof client.getTransactionReceipt>>;
+  let transaction: Awaited<ReturnType<typeof client.getTransaction>>;
+
+  try {
+    receipt = await client.getTransactionReceipt({
+      hash: txHash as Hex,
+    });
+    transaction = await client.getTransaction({
+      hash: txHash as Hex,
+    });
+  } catch {
+    throw new HttpError(
+      409,
+      'Metadata refresh transaction was not found yet. Wait for confirmation and try again.'
+    );
+  }
+
+  if (receipt.status !== 'success') {
+    throw new HttpError(400, 'Metadata refresh transaction failed.');
+  }
+
+  if (
+    !receipt.to ||
+    normalizeAddress(receipt.to) !== normalizeAddress(config.contractAddress) ||
+    !transaction.to ||
+    normalizeAddress(transaction.to) !== normalizeAddress(config.contractAddress)
+  ) {
+    throw new HttpError(400, 'Transaction was not sent to the configured room mint contract.');
+  }
+
+  const decoded = decodeFunctionData({
+    abi: ROOM_OWNERSHIP_TOKEN_ABI,
+    data: transaction.input,
+  });
+
+  if (decoded.functionName === 'setRoomTokenURI') {
+    const [x, y] = decoded.args as readonly [number, number, string];
+    if (Number(x) !== record.draft.coordinates.x || Number(y) !== record.draft.coordinates.y) {
+      throw new HttpError(400, 'Transaction did not target the requested room.');
+    }
+  } else if (decoded.functionName === 'setTokenURI') {
+    const [tokenId] = decoded.args as readonly [bigint, string];
+    if (tokenId.toString() !== record.mintedTokenId) {
+      throw new HttpError(400, 'Transaction did not target the requested room token.');
+    }
+  } else {
+    throw new HttpError(400, 'Transaction did not update room token metadata.');
+  }
+
+  const tokenId = await client.readContract({
+    address: config.contractAddress,
+    abi: ROOM_OWNERSHIP_TOKEN_ABI,
+    functionName: 'tokenIdForRoomCoordinates',
+    args: [record.draft.coordinates.x, record.draft.coordinates.y],
+  });
+
+  if (tokenId === 0n) {
+    throw new HttpError(409, 'Room token is not readable from the chain yet.');
+  }
+
+  const ownerWalletAddress = await client.readContract({
+    address: config.contractAddress,
+    abi: ROOM_OWNERSHIP_TOKEN_ABI,
+    functionName: 'ownerOf',
+    args: [tokenId],
+  });
+
+  const tokenUri = await client.readContract({
+    address: config.contractAddress,
+    abi: ROOM_OWNERSHIP_TOKEN_ABI,
+    functionName: 'tokenURI',
+    args: [tokenId],
+  });
+
+  const metadataHash = await sha256Hex(tokenUri);
+  if (metadataHash !== expectedMetadataHash) {
+    throw new HttpError(
+      409,
+      'On-chain token metadata does not match the room metadata that was submitted.'
+    );
+  }
+
+  return {
+    tokenId: tokenId.toString(),
+    ownerWalletAddress,
+    metadataHash,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export async function persistRoomTokenMetadataState(
+  env: Env,
+  record: RoomRecord,
+  state: {
+    tokenId: string;
+    ownerWalletAddress: string;
+    metadataRoomVersion: number;
+    metadataHash: string;
+    updatedAt: string;
+  },
+  actor: AuthUser | null
+): Promise<void> {
+  const normalizedOwner = normalizeAddress(state.ownerWalletAddress);
+  const actorOwnsMintedRoom =
+    actor?.walletAddress != null &&
+    normalizeAddress(actor.walletAddress) === normalizedOwner;
+  const claimUserId = !record.claimerUserId && actor && actorOwnsMintedRoom ? actor.id : null;
+  const claimDisplayName =
+    !record.claimerDisplayName && actor && actorOwnsMintedRoom ? actor.displayName : null;
+  const claimedAt = !record.claimedAt && actorOwnsMintedRoom ? state.updatedAt : null;
+
+  await env.DB.batch([
+    env.DB.prepare(
+      `
+        UPDATE rooms
+        SET
+          minted_chain_id = ?,
+          minted_contract_address = ?,
+          minted_token_id = ?,
+          minted_owner_wallet_address = ?,
+          minted_owner_synced_at = ?,
+          minted_metadata_room_version = ?,
+          minted_metadata_updated_at = ?,
+          minted_metadata_hash = ?,
+          claimer_user_id = COALESCE(claimer_user_id, ?),
+          claimer_principal_type = COALESCE(claimer_principal_type, ?),
+          claimer_agent_id = COALESCE(claimer_agent_id, NULL),
+          claimer_display_name = COALESCE(claimer_display_name, ?),
+          claimed_at = COALESCE(claimed_at, ?)
+        WHERE id = ?
+      `
+    ).bind(
+      record.mintedChainId,
+      record.mintedContractAddress,
+      state.tokenId,
+      normalizedOwner,
+      state.updatedAt,
+      state.metadataRoomVersion,
+      state.updatedAt,
+      state.metadataHash,
       claimUserId,
       claimUserId ? 'user' : null,
       claimDisplayName,
