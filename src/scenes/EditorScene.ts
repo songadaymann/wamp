@@ -1439,7 +1439,9 @@ export class EditorScene extends Phaser.Scene {
         goalSummaryText: this.getGoalSummaryText(),
         roomPermissions: this.roomPermissions,
         mintedTokenId: this.mintedTokenId,
+        canRefreshMintMetadata: this.roomSession.getHistoryState().canRefreshMintMetadata,
         saveInFlight: this.saveInFlight,
+        mintedMetadataCurrent: this.roomSession.getHistoryState().mintedMetadataCurrent,
         roomVersionHistory: this.roomVersionHistory,
         entrySource: this.entrySource,
         zoomText: `Zoom: ${editorState.zoom}x`,
@@ -1545,8 +1547,12 @@ export class EditorScene extends Phaser.Scene {
     canRevert: boolean;
     canPublish: boolean;
     canMint: boolean;
+    canRefreshMintMetadata: boolean;
     mintedTokenId: string | null;
     mintedOwnerWalletAddress: string | null;
+    mintedMetadataRoomVersion: number | null;
+    mintedMetadataUpdatedAt: string | null;
+    mintedMetadataCurrent: boolean;
     versions: RoomVersionRecord[];
   } {
     return this.roomSession.getHistoryState();
@@ -1571,6 +1577,10 @@ export class EditorScene extends Phaser.Scene {
 
   async mintRoom(): Promise<RoomRecord | null> {
     return this.roomSession.mintRoom();
+  }
+
+  async refreshMintMetadata(): Promise<RoomRecord | null> {
+    return this.roomSession.refreshMintMetadata();
   }
 
   undoAction(): void {

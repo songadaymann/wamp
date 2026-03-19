@@ -75,6 +75,9 @@ export interface EditorUiViewModel {
   mintHidden: boolean;
   mintDisabled: boolean;
   mintButtonText: string;
+  refreshMetadataHidden: boolean;
+  refreshMetadataDisabled: boolean;
+  refreshMetadataButtonText: string;
   historyHidden: boolean;
   historyDisabled: boolean;
   fitHidden: boolean;
@@ -96,6 +99,7 @@ export class EditorUiBridge {
   private readonly saveBtn: HTMLButtonElement | null;
   private readonly publishBtn: HTMLButtonElement | null;
   private readonly mintBtn: HTMLButtonElement | null;
+  private readonly refreshMetadataBtn: HTMLButtonElement | null;
   private readonly historyBtn: HTMLButtonElement | null;
   private readonly fitBtns: HTMLButtonElement[];
   private readonly goalTypeSelect: HTMLSelectElement | null;
@@ -155,6 +159,7 @@ export class EditorUiBridge {
     this.saveBtn = this.doc.getElementById('btn-save-draft') as HTMLButtonElement | null;
     this.publishBtn = this.doc.getElementById('btn-publish-room') as HTMLButtonElement | null;
     this.mintBtn = this.doc.getElementById('btn-mint-room') as HTMLButtonElement | null;
+    this.refreshMetadataBtn = this.doc.getElementById('btn-refresh-room-metadata') as HTMLButtonElement | null;
     this.historyBtn = this.doc.getElementById('btn-room-history') as HTMLButtonElement | null;
     this.fitBtns = [
       this.doc.getElementById('btn-fit-screen') as HTMLButtonElement | null,
@@ -221,6 +226,9 @@ export class EditorUiBridge {
     this.setHidden(this.mintBtn, viewModel.mintHidden);
     this.setDisabled(this.mintBtn, viewModel.mintDisabled);
     this.setButtonText(this.mintBtn, viewModel.mintButtonText);
+    this.setHidden(this.refreshMetadataBtn, viewModel.refreshMetadataHidden);
+    this.setDisabled(this.refreshMetadataBtn, viewModel.refreshMetadataDisabled);
+    this.setButtonText(this.refreshMetadataBtn, viewModel.refreshMetadataButtonText);
     this.setHidden(this.historyBtn, viewModel.historyHidden);
     this.setDisabled(this.historyBtn, viewModel.historyDisabled);
     this.setHidden(this.fitBtns, viewModel.fitHidden);

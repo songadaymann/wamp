@@ -23,6 +23,8 @@ import {
   buildExplorerTxUrl,
   formatWalletAddress,
 } from '../../mint/roomOwnership';
+import { buildRoomTokenMetadata } from '../../mint/roomMetadata';
+import { renderRoomSnapshotToPngDataUrl } from '../../mint/roomMetadataRender';
 import {
   hideBusyOverlay,
   showBusyOverlay,
@@ -47,8 +49,12 @@ export interface EditorHistoryState {
   canRevert: boolean;
   canPublish: boolean;
   canMint: boolean;
+  canRefreshMintMetadata: boolean;
   mintedTokenId: string | null;
   mintedOwnerWalletAddress: string | null;
+  mintedMetadataRoomVersion: number | null;
+  mintedMetadataUpdatedAt: string | null;
+  mintedMetadataCurrent: boolean;
   versions: RoomVersionRecord[];
 }
 
@@ -91,6 +97,9 @@ export class EditorRoomSession {
   private mintedTokenId: string | null = null;
   private mintedOwnerWalletAddress: string | null = null;
   private mintedOwnerSyncedAt: string | null = null;
+  private mintedMetadataRoomVersion: number | null = null;
+  private mintedMetadataUpdatedAt: string | null = null;
+  private mintedMetadataHash: string | null = null;
   private saveInFlight = false;
   private persistenceStatus: EditorStatusDetails = {
     text: '',
@@ -221,6 +230,9 @@ export class EditorRoomSession {
     this.mintedTokenId = null;
     this.mintedOwnerWalletAddress = null;
     this.mintedOwnerSyncedAt = null;
+    this.mintedMetadataRoomVersion = null;
+    this.mintedMetadataUpdatedAt = null;
+    this.mintedMetadataHash = null;
     this.saveInFlight = false;
     this.persistenceStatus = {
       text: '',
@@ -253,8 +265,26 @@ export class EditorRoomSession {
     if (this.mintedTokenId) {
       const accentText = `Minted token #${this.mintedTokenId}`;
       if (this.roomPermissions.canSaveDraft) {
+        if (this.mintedMetadataRoomVersion === null) {
+          return {
+            text: `Owner: ${formatWalletAddress(this.mintedOwnerWalletAddress)}. NFT metadata is not on-chain yet.`,
+            accentText,
+            linkLabel: '',
+            linkHref: null,
+          };
+        }
+
+        if (!this.isMintMetadataCurrent()) {
+          return {
+            text: `Owner: ${formatWalletAddress(this.mintedOwnerWalletAddress)}. NFT metadata is stale (on-chain v${this.mintedMetadataRoomVersion}, room v${this.publishedVersion}).`,
+            accentText,
+            linkLabel: '',
+            linkHref: null,
+          };
+        }
+
         return {
-          text: `Owner: ${formatWalletAddress(this.mintedOwnerWalletAddress)}.`,
+          text: `Owner: ${formatWalletAddress(this.mintedOwnerWalletAddress)}. NFT metadata is current at v${this.mintedMetadataRoomVersion}.`,
           accentText,
           linkLabel: '',
           linkHref: null,
@@ -303,8 +333,12 @@ export class EditorRoomSession {
       canRevert: this.roomPermissions.canRevert,
       canPublish: this.roomPermissions.canPublish,
       canMint: this.roomPermissions.canMint,
+      canRefreshMintMetadata: this.canRefreshMintMetadata(),
       mintedTokenId: this.mintedTokenId,
       mintedOwnerWalletAddress: this.mintedOwnerWalletAddress,
+      mintedMetadataRoomVersion: this.mintedMetadataRoomVersion,
+      mintedMetadataUpdatedAt: this.mintedMetadataUpdatedAt,
+      mintedMetadataCurrent: this.isMintMetadataCurrent(),
       versions: this.roomVersionHistory.map((version) => ({
         ...version,
         snapshot: cloneRoomSnapshot(version.snapshot),
@@ -450,7 +484,16 @@ export class EditorRoomSession {
       clearLocalRoomStorageEntry(this.roomId);
       await refreshAuthSession();
       this.host.setRoomDirty(false);
-      this.setStatusText(successText ?? `Published v${this.publishedVersion}.`);
+      if (this.mintedTokenId && this.canRefreshMintMetadata() && !this.isMintMetadataCurrent()) {
+        this.setStatusDetails({
+          text: 'NFT metadata is stale. Refresh NFT Metadata to update the on-chain snapshot.',
+          accentText: `Published v${this.publishedVersion}`,
+          linkLabel: '',
+          linkHref: null,
+        });
+      } else {
+        this.setStatusText(successText ?? `Published v${this.publishedVersion}.`);
+      }
       return record;
     } catch (error) {
       if (this.shouldPersistGuestDraftLocally(error)) {
@@ -670,6 +713,112 @@ export class EditorRoomSession {
     return null;
   }
 
+  async refreshMintMetadata(): Promise<RoomRecord | null> {
+    if (this.saveInFlight) {
+      return null;
+    }
+
+    if (!this.mintedTokenId || !this.mintedContractAddress || this.mintedChainId === null) {
+      this.setStatusText('This room is not minted yet.');
+      return null;
+    }
+
+    if (!this.publishedRoomSnapshot) {
+      this.setStatusText('Publish the room before refreshing NFT metadata.');
+      return null;
+    }
+
+    if (!this.canRefreshMintMetadata()) {
+      this.setStatusText('Only the room token owner can refresh NFT metadata.');
+      return null;
+    }
+
+    await refreshAuthSession();
+    const authState = getAuthDebugState();
+
+    if (!authState.authenticated) {
+      promptForSignIn('Sign in and link the owning wallet to refresh NFT metadata.');
+      return null;
+    }
+
+    if (!authState.user?.walletAddress) {
+      this.setStatusText('Link the token-owning wallet from the account menu before refreshing NFT metadata.');
+      return null;
+    }
+
+    this.saveInFlight = true;
+    showBusyOverlay('Preparing NFT metadata...', 'Rendering room preview...');
+    this.setStatusText('Preparing NFT metadata...');
+
+    try {
+      const imageDataUrl = await renderRoomSnapshotToPngDataUrl(this.publishedRoomSnapshot, {
+        tilePixelSize: 2,
+      });
+      const built = await buildRoomTokenMetadata(
+        this.publishedRoomSnapshot,
+        imageDataUrl,
+        {
+          origin: window.location.origin,
+          chainId: this.mintedChainId,
+          contractAddress: this.mintedContractAddress,
+          tokenId: this.mintedTokenId,
+        }
+      );
+      updateBusyOverlay('Preparing wallet transaction...', 'Packaging room metadata for the wallet...');
+      const prepare = await this.roomRepository.prepareMetadataRefresh(
+        this.roomId,
+        this.roomCoordinates,
+        {
+          tokenUri: built.tokenUri,
+        }
+      );
+      updateBusyOverlay(
+        'Waiting for wallet confirmation...',
+        `Approve the ${prepare.chain.name} transaction in your wallet.`
+      );
+      this.setStatusText(`Waiting for wallet confirmation on ${prepare.chain.name}...`);
+      const tx = await sendPreparedWalletTransaction(prepare.transaction, prepare.chain);
+      updateBusyOverlay('Confirming metadata refresh...', 'Waiting for on-chain confirmation...');
+      this.setStatusText('Confirming NFT metadata refresh...');
+
+      const record = await this.roomRepository.confirmMetadataRefresh(
+        this.roomId,
+        this.roomCoordinates,
+        {
+          txHash: tx.hash,
+          metadataRoomVersion: this.publishedVersion,
+          metadataHash: built.metadataHash,
+        }
+      );
+      this.syncRoomMetadata(record);
+
+      const explorerUrl = buildExplorerTxUrl(prepare.chain, tx.hash);
+      this.setStatusDetails({
+        text: `On-chain metadata is now synced to room v${record.mintedMetadataRoomVersion ?? this.publishedVersion}.`,
+        accentText: `NFT metadata refreshed for token #${record.mintedTokenId}`,
+        linkLabel: explorerUrl ? 'Transaction' : '',
+        linkHref: explorerUrl,
+      });
+      hideBusyOverlay();
+      return record;
+    } catch (error) {
+      console.error('Failed to refresh room NFT metadata', error);
+      if (isRoomApiError(error) && error.status === 409) {
+        const refreshed = await this.roomRepository.loadRoom(this.roomId, this.roomCoordinates);
+        this.syncRoomMetadata(refreshed);
+      }
+
+      const message = error instanceof Error ? error.message : 'NFT metadata refresh failed.';
+      this.setStatusText(message);
+      hideBusyOverlay();
+    } finally {
+      this.saveInFlight = false;
+      this.host.refreshUi();
+    }
+
+    return null;
+  }
+
   private shouldShowDraftPreviewInWorld(): boolean {
     return this.roomPublishedAt === null || this.roomUpdatedAt !== this.roomPublishedAt;
   }
@@ -697,6 +846,19 @@ export class EditorRoomSession {
 
   private shouldPersistGuestDraftLocally(error: unknown): boolean {
     return isRoomApiError(error) && error.status === 401;
+  }
+
+  private canRefreshMintMetadata(): boolean {
+    return Boolean(this.mintedTokenId && this.publishedRoomSnapshot && this.roomPermissions.canSaveDraft);
+  }
+
+  private isMintMetadataCurrent(): boolean {
+    return (
+      this.mintedTokenId !== null &&
+      this.publishedVersion > 0 &&
+      this.mintedMetadataRoomVersion !== null &&
+      this.mintedMetadataRoomVersion === this.publishedVersion
+    );
   }
 
   private async saveDraftLocally(
@@ -736,6 +898,9 @@ export class EditorRoomSession {
     this.mintedTokenId = record.mintedTokenId;
     this.mintedOwnerWalletAddress = record.mintedOwnerWalletAddress;
     this.mintedOwnerSyncedAt = record.mintedOwnerSyncedAt;
+    this.mintedMetadataRoomVersion = record.mintedMetadataRoomVersion;
+    this.mintedMetadataUpdatedAt = record.mintedMetadataUpdatedAt;
+    this.mintedMetadataHash = record.mintedMetadataHash;
     this.host.refreshUi();
   }
 

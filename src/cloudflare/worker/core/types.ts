@@ -69,6 +69,9 @@ export interface RoomRow {
   minted_token_id: string | null;
   minted_owner_wallet_address: string | null;
   minted_owner_synced_at: string | null;
+  minted_metadata_room_version: number | null;
+  minted_metadata_updated_at: string | null;
+  minted_metadata_hash: string | null;
 }
 
 export interface RoomVersionRow {
@@ -179,6 +182,9 @@ export interface PersistRoomRecordInput {
   mintedTokenId: string | null;
   mintedOwnerWalletAddress: string | null;
   mintedOwnerSyncedAt: string | null;
+  mintedMetadataRoomVersion: number | null;
+  mintedMetadataUpdatedAt: string | null;
+  mintedMetadataHash: string | null;
 }
 
 export interface PersistRoomVersionInput {

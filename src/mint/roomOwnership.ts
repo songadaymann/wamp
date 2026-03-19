@@ -136,6 +136,15 @@ export const ROOM_OWNERSHIP_TOKEN_ABI = [
     ],
     anonymous: false,
   },
+  {
+    type: 'event',
+    name: 'RoomTokenURIUpdated',
+    inputs: [
+      { indexed: true, name: 'tokenId', type: 'uint256' },
+      { indexed: false, name: 'tokenURI', type: 'string' },
+    ],
+    anonymous: false,
+  },
 ] as const;
 
 export interface RoomMintChainInfo {
@@ -225,3 +234,9 @@ export function formatWalletAddress(address: string | null): string {
 
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
+
+export type {
+  RoomMetadataRefreshConfirmRequestBody,
+  RoomMetadataRefreshPrepareRequestBody,
+  RoomMetadataRefreshPrepareResponse,
+} from './roomMetadata';

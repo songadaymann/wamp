@@ -16,7 +16,12 @@ import {
 import { corsHeaders, getCoordinatesFromRequest, HttpError, jsonResponse, parseJsonBody, parseRoomSnapshot } from './worker/core/http';
 import type { Env, RequestAuth } from './worker/core/types';
 import { handleTestReset } from './worker/maintenance/routes';
-import { handleRoomMintConfirm, handleRoomMintPrepare } from './worker/mint/routes';
+import {
+  handleRoomMintConfirm,
+  handleRoomMintPrepare,
+  handleRoomTokenMetadataConfirm,
+  handleRoomTokenMetadataPrepare,
+} from './worker/mint/routes';
 import { syncRoomOwnershipFromChain } from './worker/mint/service';
 import { handlePlayfunConfig, handlePlayfunFlush } from './worker/playfun/routes';
 import {
@@ -339,6 +344,28 @@ export default {
           auth?.isAdmin ?? false
         );
         return jsonResponse(request, record.versions);
+      }
+
+      if (
+        segments.length === 6 &&
+        segments[3] === 'mint' &&
+        segments[4] === 'metadata' &&
+        segments[5] === 'prepare' &&
+        request.method === 'POST'
+      ) {
+        const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
+        return await handleRoomTokenMetadataPrepare(request, env, roomId, coordinates);
+      }
+
+      if (
+        segments.length === 6 &&
+        segments[3] === 'mint' &&
+        segments[4] === 'metadata' &&
+        segments[5] === 'confirm' &&
+        request.method === 'POST'
+      ) {
+        const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
+        return await handleRoomTokenMetadataConfirm(request, env, roomId, coordinates);
       }
 
       if (

@@ -11,8 +11,12 @@ export type EditorHistoryState = {
   canRevert: boolean;
   canPublish: boolean;
   canMint: boolean;
+  canRefreshMintMetadata: boolean;
   mintedTokenId: string | null;
   mintedOwnerWalletAddress: string | null;
+  mintedMetadataRoomVersion: number | null;
+  mintedMetadataUpdatedAt: string | null;
+  mintedMetadataCurrent: boolean;
   versions: RoomVersionRecord[];
 };
 
@@ -58,6 +62,7 @@ export interface EditorSceneBridge {
   handlePublishNudgeAction?: () => Promise<void>;
   returnToWorld?: () => Promise<void> | void;
   mintRoom?: () => Promise<RoomRecord | null>;
+  refreshMintMetadata?: () => Promise<RoomRecord | null>;
   fitToScreen?: () => void;
   zoomIn?: () => void;
   zoomOut?: () => void;

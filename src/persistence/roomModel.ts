@@ -73,6 +73,9 @@ export interface RoomRecord {
   mintedTokenId: string | null;
   mintedOwnerWalletAddress: string | null;
   mintedOwnerSyncedAt: string | null;
+  mintedMetadataRoomVersion: number | null;
+  mintedMetadataUpdatedAt: string | null;
+  mintedMetadataHash: string | null;
   permissions: RoomPermissions;
 }
 
@@ -335,6 +338,9 @@ export function createDefaultRoomRecord(
     mintedTokenId: null,
     mintedOwnerWalletAddress: null,
     mintedOwnerSyncedAt: null,
+    mintedMetadataRoomVersion: null,
+    mintedMetadataUpdatedAt: null,
+    mintedMetadataHash: null,
     permissions: createDefaultRoomPermissions(),
   };
 }
@@ -394,6 +400,17 @@ export function normalizeRoomRecord(
       typeof record.mintedOwnerWalletAddress === 'string' ? record.mintedOwnerWalletAddress : null,
     mintedOwnerSyncedAt:
       typeof record.mintedOwnerSyncedAt === 'string' ? record.mintedOwnerSyncedAt : null,
+    mintedMetadataRoomVersion:
+      typeof record.mintedMetadataRoomVersion === 'number' &&
+      Number.isInteger(record.mintedMetadataRoomVersion)
+        ? record.mintedMetadataRoomVersion
+        : null,
+    mintedMetadataUpdatedAt:
+      typeof record.mintedMetadataUpdatedAt === 'string'
+        ? record.mintedMetadataUpdatedAt
+        : null,
+    mintedMetadataHash:
+      typeof record.mintedMetadataHash === 'string' ? record.mintedMetadataHash : null,
     permissions: normalizeRoomPermissions(record.permissions),
   };
 }
@@ -418,6 +435,9 @@ export function cloneRoomRecord(record: RoomRecord): RoomRecord {
     mintedTokenId: normalized.mintedTokenId,
     mintedOwnerWalletAddress: normalized.mintedOwnerWalletAddress,
     mintedOwnerSyncedAt: normalized.mintedOwnerSyncedAt,
+    mintedMetadataRoomVersion: normalized.mintedMetadataRoomVersion,
+    mintedMetadataUpdatedAt: normalized.mintedMetadataUpdatedAt,
+    mintedMetadataHash: normalized.mintedMetadataHash,
     permissions: { ...normalized.permissions },
   };
 }
