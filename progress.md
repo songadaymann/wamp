@@ -60,11 +60,15 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 - Standalone portrait rotation + control spacing pass on March 18, 2026:
   - promoted standalone/PWA launch detection into shared device-layout state so installed launches now suppress the portrait install gate and install-help surfaces consistently instead of only relying on the install-help controller's local check
   - installed portrait launches now auto-rotate the app shell into landscape by rotating the new top-level `#shell-root` and swapping the effective mobile viewport/orientation fed into layout, HUD, and control logic
+  - followed up on the first rotate pass by forcing `#app` to use the full swapped standalone viewport instead of clamping to the live portrait `dvw`/`dvh`, which removes the "bunched at the bottom" presentation on first portrait load
+  - flipped the standalone portrait rotation direction and remapped the safe-area edges so the important overworld UI now lands at the top of the portrait phone instead of the bottom when the device has not been physically rotated yet
   - tightened the phone controls again without shrinking the hit targets: action buttons and D-pad pads now render as smaller inner shapes inside the same larger touchable areas, which gives the buttons more breathing room on screen
   - verification:
     - `npm run build` passed
     - Playwright smoke client passed with no console errors and wrote `output/web-game/mobile-standalone-smoke-2/state-0.json`
     - targeted installed-portrait capture confirmed the rotate gate stays hidden and the shell loads sideways in `output/web-game/mobile-standalone-portrait-2/iphone-portrait.png`
+    - follow-up installed-portrait capture confirmed the room card now lands at the top of the portrait phone in `output/web-game/mobile-standalone-portrait-4/iphone-portrait.png`
+    - follow-up Playwright smoke client passed with no console errors and wrote `output/web-game/mobile-portrait-force-smoke/state-0.json`
     - targeted phone control-spacing capture confirmed the smaller visible button pads in `output/web-game/mobile-control-spacing-2/iphone-landscape.png`
     - targeted installed-portrait interaction check confirmed the rotated standalone layout is still playable: holding `right` moved the player from `x=320` to `x=398`
 - Mobile play HUD compression + D-pad pass on March 18, 2026:

@@ -55,10 +55,10 @@ body {
 }
 
 body[data-standalone-portrait='true'] {
-  --safe-top: env(safe-area-inset-right, 0px);
-  --safe-right: env(safe-area-inset-bottom, 0px);
-  --safe-bottom: env(safe-area-inset-left, 0px);
-  --safe-left: env(safe-area-inset-top, 0px);
+  --safe-top: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-right, 0px);
+  --safe-left: env(safe-area-inset-bottom, 0px);
 }
 
 body[data-standalone-portrait='true'] #shell-root {
@@ -69,7 +69,7 @@ body[data-standalone-portrait='true'] #shell-root {
   height: var(--app-viewport-height);
   overflow: hidden;
   transform-origin: top left;
-  transform: translateY(var(--app-viewport-width)) rotate(-90deg);
+  transform: translateX(var(--app-viewport-height)) rotate(90deg);
 }
 
 .app-feedback {
@@ -682,4 +682,9 @@ body[data-install-help-open='true'] .rotate-gate {
   height: min(100dvh, var(--app-viewport-height));
   width: 100vw;
   width: min(100dvw, var(--app-viewport-width));
+}
+
+body[data-standalone-portrait='true'] #app {
+  width: var(--app-viewport-width);
+  height: var(--app-viewport-height);
 }
