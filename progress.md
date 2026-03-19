@@ -57,6 +57,10 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Rotate-gate copy tweak on March 19, 2026:
+  - replaced the browser-portrait rotate-gate intro sentence with a shorter requirement/search prompt:
+    - `WAMP only works on mobile as a web app!`
+    - `how to add web app to home screen on [your phone] on [your browser]`
 - Install-help simplification pass on March 19, 2026:
   - removed the abandoned install-walkthrough media/placeholder section from the install modal
   - simplified the install modal copy so it now clearly says mobile play requires adding WAMP to the home screen, then suggests searching for `how to add web app to home screen on [your phone] on [your browser]` if the player needs device-specific steps
