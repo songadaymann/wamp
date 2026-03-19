@@ -61,20 +61,15 @@ function classifyDeviceClass(width: number, height: number, coarsePointer: boole
 
 function computeState(): DeviceLayoutState {
   const viewport = window.visualViewport;
-  const rawWidth = Math.max(0, Math.round(viewport?.width ?? window.innerWidth));
-  const rawHeight = Math.max(0, Math.round(viewport?.height ?? window.innerHeight));
+  const width = Math.max(0, Math.round(viewport?.width ?? window.innerWidth));
+  const height = Math.max(0, Math.round(viewport?.height ?? window.innerHeight));
   const coarsePointer =
     window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
   const standaloneLaunch = detectStandaloneLaunch();
-  const standalonePortrait =
-    standaloneLaunch &&
-    coarsePointer &&
-    rawWidth < rawHeight;
-  const width = standalonePortrait ? rawHeight : rawWidth;
-  const height = standalonePortrait ? rawWidth : rawHeight;
+  const standalonePortrait = standaloneLaunch && coarsePointer && width < height;
   const orientationState: OrientationState = width >= height ? 'landscape' : 'portrait';
   const deviceClass = classifyDeviceClass(width, height, coarsePointer);
-  const mobileLandscapeRequired = coarsePointer && deviceClass !== 'desktop' && !standaloneLaunch;
+  const mobileLandscapeRequired = coarsePointer && deviceClass !== 'desktop';
 
   return {
     deviceClass,

@@ -23,8 +23,7 @@ type Elements = {
   mobileJumpButton: HTMLButtonElement | null;
   mobileSlashButton: HTMLButtonElement | null;
   mobileShootButton: HTMLButtonElement | null;
-  mobileStopButton: HTMLButtonElement | null;
-  mobileCameraButton: HTMLButtonElement | null;
+  mobileWorldStopButton: HTMLButtonElement | null;
   worldHudToggleButton: HTMLButtonElement | null;
   worldHudMinimizeButton: HTMLButtonElement | null;
   worldChatButton: HTMLButtonElement | null;
@@ -65,8 +64,7 @@ export class MobileUiController {
       mobileJumpButton: doc.getElementById('btn-mobile-jump') as HTMLButtonElement | null,
       mobileSlashButton: doc.getElementById('btn-mobile-slash') as HTMLButtonElement | null,
       mobileShootButton: doc.getElementById('btn-mobile-shoot') as HTMLButtonElement | null,
-      mobileStopButton: doc.getElementById('btn-mobile-stop') as HTMLButtonElement | null,
-      mobileCameraButton: doc.getElementById('btn-mobile-camera') as HTMLButtonElement | null,
+      mobileWorldStopButton: doc.getElementById('btn-mobile-world-stop') as HTMLButtonElement | null,
       worldHudToggleButton: doc.getElementById('btn-world-hud-toggle') as HTMLButtonElement | null,
       worldHudMinimizeButton: doc.getElementById('btn-mobile-world-hud-minimize') as HTMLButtonElement | null,
       worldChatButton: doc.getElementById('btn-world-chat') as HTMLButtonElement | null,
@@ -315,8 +313,8 @@ export class MobileUiController {
       button.addEventListener('pointerdown', (event) => {
         event.preventDefault();
         this.activeDpadPointers.set(event.pointerId, direction);
-        button.setPointerCapture(event.pointerId);
         this.applyDpadState();
+        this.trySetPointerCapture(button, event.pointerId);
       });
 
       const releaseButtonPointer = (event: PointerEvent) => {
@@ -388,11 +386,10 @@ export class MobileUiController {
     this.bindHoldButton(this.elements.mobileSlashButton, 'slash');
     this.bindHoldButton(this.elements.mobileShootButton, 'shoot');
 
-    this.elements.mobileStopButton?.addEventListener('click', () => {
-      pressTouchAction('stop');
-    });
-    this.elements.mobileCameraButton?.addEventListener('click', () => {
-      pressTouchAction('cameraToggle');
+    this.elements.mobileWorldStopButton?.addEventListener('click', () => {
+      if (this.doc.body.dataset.appMode === 'play-world') {
+        pressTouchAction('stop');
+      }
     });
   }
 
@@ -409,7 +406,7 @@ export class MobileUiController {
       event.preventDefault();
       setTouchActionHeld(action, true);
       pressTouchAction(action);
-      button.setPointerCapture(event.pointerId);
+      this.trySetPointerCapture(button, event.pointerId);
     });
     button.addEventListener('pointerup', release);
     button.addEventListener('pointercancel', release);
@@ -452,6 +449,18 @@ export class MobileUiController {
 
     jumpSheet.classList.add('hidden');
     delete this.doc.body.dataset.mobileJumpSheetOpen;
+  }
+
+  private trySetPointerCapture(button: HTMLButtonElement, pointerId: number): void {
+    if (typeof button.setPointerCapture !== 'function') {
+      return;
+    }
+
+    try {
+      button.setPointerCapture(pointerId);
+    } catch {
+      // Synthetic pointer flows and some browser edge cases can reject capture.
+    }
   }
 
   private hasVisibleNonJumpModal(): boolean {
@@ -522,6 +531,10 @@ export class MobileUiController {
     this.elements.mobilePlayControls?.classList.toggle(
       'hidden',
       !(layout.coarsePointer && !layout.mobileLandscapeBlocked && isPlay),
+    );
+    this.elements.mobileWorldStopButton?.classList.toggle(
+      'hidden',
+      !(isPhoneWorld && isPlay && this.worldHudCollapsed),
     );
 
     this.doc.body.dataset.mobileWorldHudCollapsed =
