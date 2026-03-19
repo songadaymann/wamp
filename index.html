@@ -57,15 +57,19 @@
       <div class="rotate-gate-target-arrow rotate-gate-target-arrow-generic"></div>
     </div>
     <div class="rotate-gate-card">
-      <div class="rotate-gate-kicker">Portrait Install</div>
-      <div class="rotate-gate-title">Install WAMP From Here</div>
-      <div class="rotate-gate-copy">You can stay in portrait long enough to install WAMP, then launch it from your home screen without the normal browser address bar and tabs.</div>
-      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-copy-share">Tap <code>Share</code> in the bottom toolbar, then choose <code>Add to Home Screen</code>.</div>
-      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-copy-menu">Open the browser menu in the top-right, then choose <code>Add to Home screen</code> or <code>Install app</code>.</div>
-      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-copy-generic">Open your browser menu and look for <code>Add to Home Screen</code> or <code>Install</code>.</div>
+      <div class="rotate-gate-kicker rotate-gate-browser-only">Portrait Install</div>
+      <div class="rotate-gate-kicker rotate-gate-standalone-only">Turn To Play</div>
+      <div class="rotate-gate-title rotate-gate-browser-only">Install WAMP From Here</div>
+      <div class="rotate-gate-title rotate-gate-standalone-only">Turn Your Phone</div>
+      <div class="rotate-gate-copy rotate-gate-browser-only">You can stay in portrait long enough to install WAMP, then launch it from your home screen without the normal browser address bar and tabs.</div>
+      <div class="rotate-gate-copy rotate-gate-standalone-only">WAMP is installed. Rotate to landscape to browse the overworld, play rooms, and use the on-screen controls without the sideways confusion.</div>
+      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-only rotate-gate-browser-copy-share">Tap <code>Share</code> in the bottom toolbar, then choose <code>Add to Home Screen</code>.</div>
+      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-only rotate-gate-browser-copy-menu">Open the browser menu in the top-right, then choose <code>Add to Home screen</code> or <code>Install app</code>.</div>
+      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-only rotate-gate-browser-copy-generic">Open your browser menu and look for <code>Add to Home Screen</code> or <code>Install</code>.</div>
       <div class="rotate-gate-actions">
-        <button id="btn-rotate-install-help" class="bar-btn" type="button">Full Install Steps</button>
-        <div class="rotate-gate-note">If you want to keep using the browser tab instead, rotate to landscape.</div>
+        <button id="btn-rotate-install-help" class="bar-btn rotate-gate-browser-only" type="button">Full Install Steps</button>
+        <div class="rotate-gate-note rotate-gate-browser-only">If you want to keep using the browser tab instead, rotate to landscape.</div>
+        <div class="rotate-gate-note rotate-gate-standalone-only">Once you rotate, the game will resume automatically.</div>
       </div>
     </div>
   </div>
@@ -516,10 +520,9 @@
           <button id="btn-mobile-camera" class="mobile-action-btn mobile-utility-btn" type="button">Cam</button>
         </div>
         <div id="mobile-dpad" class="mobile-dpad" aria-label="Move">
-          <button class="mobile-dpad-btn mobile-dpad-up" data-mobile-direction="up" type="button" aria-label="Move up">Up</button>
-          <button class="mobile-dpad-btn mobile-dpad-left" data-mobile-direction="left" type="button" aria-label="Move left">Left</button>
-          <button class="mobile-dpad-btn mobile-dpad-right" data-mobile-direction="right" type="button" aria-label="Move right">Right</button>
-          <button class="mobile-dpad-btn mobile-dpad-down" data-mobile-direction="down" type="button" aria-label="Move down">Down</button>
+          <button id="btn-mobile-left" class="mobile-dpad-btn mobile-dpad-left" data-mobile-direction="left" type="button" aria-label="Move left">Left</button>
+          <button id="btn-mobile-right" class="mobile-dpad-btn mobile-dpad-right" data-mobile-direction="right" type="button" aria-label="Move right">Right</button>
+          <button id="btn-mobile-down" class="mobile-dpad-btn mobile-dpad-down" data-mobile-direction="down" type="button" aria-label="Move down">Down</button>
         </div>
         <div class="mobile-play-actions">
           <button id="btn-mobile-jump" class="mobile-action-btn mobile-action-jump" type="button">Jump</button>

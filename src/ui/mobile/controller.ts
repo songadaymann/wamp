@@ -315,8 +315,8 @@ export class MobileUiController {
       button.addEventListener('pointerdown', (event) => {
         event.preventDefault();
         this.activeDpadPointers.set(event.pointerId, direction);
-        button.setPointerCapture(event.pointerId);
         this.applyDpadState();
+        this.trySetPointerCapture(button, event.pointerId);
       });
 
       const releaseButtonPointer = (event: PointerEvent) => {
@@ -409,7 +409,7 @@ export class MobileUiController {
       event.preventDefault();
       setTouchActionHeld(action, true);
       pressTouchAction(action);
-      button.setPointerCapture(event.pointerId);
+      this.trySetPointerCapture(button, event.pointerId);
     });
     button.addEventListener('pointerup', release);
     button.addEventListener('pointercancel', release);
@@ -452,6 +452,18 @@ export class MobileUiController {
 
     jumpSheet.classList.add('hidden');
     delete this.doc.body.dataset.mobileJumpSheetOpen;
+  }
+
+  private trySetPointerCapture(button: HTMLButtonElement, pointerId: number): void {
+    if (typeof button.setPointerCapture !== 'function') {
+      return;
+    }
+
+    try {
+      button.setPointerCapture(pointerId);
+    } catch {
+      // Synthetic pointer flows and some browser edge cases can reject capture.
+    }
   }
 
   private hasVisibleNonJumpModal(): boolean {

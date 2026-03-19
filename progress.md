@@ -57,6 +57,45 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Mobile control layout + transparency pass on March 19, 2026:
+  - removed the visible `Up` pad from phone play controls and reshaped the left cluster around larger `Left` / `Right` targets plus a smaller centered `Down`
+  - rebuilt the right-side action cluster into a GameCube-like triangle: `Jump` is now the large center button, while `Slash` and `Shoot` sit around it as smaller surrounding buttons
+  - increased the touch-target sizes for the most important phone play controls without making the visible button faces equally bulky, so `Left`, `Right`, and `Jump` are easier to hit while still leaving more scene visible
+  - made the main phone overlays more transparent: the world card, goal chip, chat body, bottom status strip, utility buttons, D-pad faces, and action buttons all let more of the game show through
+  - shifted the closed chat toggle left in phone play mode so it no longer sits on top of the larger jump button
+  - kept ladder climb-up reachable after removing the `Up` pad by letting the mobile `Jump` hold act as upward ladder input when the player is overlapping a ladder
+  - hardened the mobile pointer handlers so D-pad and action state still apply even if `setPointerCapture(...)` is rejected by a synthetic or browser-edge pointer flow
+  - verification:
+    - `npm run build` passed
+    - required Playwright smoke client passed with no console errors and wrote `output/web-game/mobile-controls-smoke-3/state-0.json`
+    - targeted phone landscape capture confirmed the new transparent control layout in `output/web-game/mobile-controls-layout-probe/iphone-landscape.png`
+    - targeted control geometry probe confirmed the larger touch-target boxes:
+      - `Left`: `96x82`
+      - `Right`: `96x82`
+      - `Down`: `74x60`
+      - `Jump`: `106x106`
+      - `Slash`: `74x74`
+      - `Shoot`: `74x74`
+    - targeted phone interaction probe confirmed the main controls still work end-to-end:
+      - holding `Right` set `touch.moveX` to `1` and moved the player from `x=320` to `x=348`
+      - holding `Jump` set `touch.jumpHeld` to `true`, and after release the player had upward velocity `-238`
+      - probe artifacts:
+        - `output/web-game/mobile-controls-layout-probe/state.json`
+        - `output/web-game/mobile-controls-interaction-probe/state.json`
+- Standalone portrait rotate-gate fallback pass on March 19, 2026:
+  - removed the forced sideways standalone-portrait shell behavior after it proved more confusing than helpful on phone; installed portrait launches now stay in their real portrait layout state
+  - mobile landscape blocking now applies to installed launches too, so opening the installed app in portrait pauses the live scenes and shows the rotate gate instead of exposing a compressed sideways overworld
+  - split the rotate gate into two variants:
+    - browser portrait keeps the install-first copy and browser-specific `Share` / menu cues
+    - installed portrait now shows a clean `Turn Your Phone` message with no install arrows or install CTA
+  - verification:
+    - `npm run build` passed
+    - required Playwright smoke client passed with no console errors and wrote `output/web-game/mobile-rotate-gate-smoke/state-0.json`
+    - targeted iPhone portrait browser capture confirmed the install-first gate in `output/web-game/mobile-portrait-browser-gate/iphone-portrait.png`
+    - targeted iPhone portrait standalone simulation confirmed the rotate-first installed gate in `output/web-game/mobile-portrait-standalone-gate/iphone-portrait.png`
+    - targeted browser/standalone state dumps confirmed `mobileLandscapeBlocked: true` in both cases, with `standaloneLaunch: true` only in the installed simulation:
+      - `output/web-game/mobile-portrait-browser-gate/state.json`
+      - `output/web-game/mobile-portrait-standalone-gate/state.json`
 - Standalone portrait rotation + control spacing pass on March 18, 2026:
   - promoted standalone/PWA launch detection into shared device-layout state so installed launches now suppress the portrait install gate and install-help surfaces consistently instead of only relying on the install-help controller's local check
   - installed portrait launches now auto-rotate the app shell into landscape by rotating the new top-level `#shell-root` and swapping the effective mobile viewport/orientation fed into layout, HUD, and control logic

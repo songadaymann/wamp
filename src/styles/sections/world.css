@@ -426,20 +426,20 @@ body[data-app-mode="play-world"] #game-container {
 .mobile-play-utility {
   position: absolute;
   right: calc(14px + var(--safe-right));
-  bottom: calc(126px + var(--safe-bottom));
+  bottom: calc(164px + var(--safe-bottom));
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6px;
+  gap: 8px;
   pointer-events: auto;
 }
 
 .mobile-play-actions {
   position: absolute;
-  right: calc(14px + var(--safe-right));
-  bottom: calc(12px + var(--safe-bottom));
-  width: 162px;
-  height: 144px;
+  right: calc(8px + var(--safe-right));
+  bottom: calc(4px + var(--safe-bottom));
+  width: 188px;
+  height: 180px;
   pointer-events: auto;
 }
 
@@ -454,6 +454,8 @@ body[data-app-mode="play-world"] #game-container {
   border: none;
   background: transparent;
   isolation: isolate;
+  pointer-events: auto;
+  touch-action: none;
   color: #f6ead2;
   font-family: 'IBM Plex Mono', 'Courier New', monospace;
   font-size: 10px;
@@ -467,11 +469,11 @@ body[data-app-mode="play-world"] #game-container {
 .mobile-action-btn::before {
   content: '';
   position: absolute;
-  inset: 7px;
+  inset: 11px;
   z-index: -1;
   border-radius: 999px;
   border: 1px solid rgba(243, 238, 226, 0.16);
-  background: rgba(11, 11, 11, 0.9);
+  background: rgba(11, 11, 11, 0.64);
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3);
   transition:
     transform 0.06s ease,
@@ -491,36 +493,41 @@ body[data-app-mode="play-world"] #game-container {
 }
 
 .mobile-action-jump {
-  right: 44px;
-  bottom: 0;
+  left: 74px;
+  top: 74px;
+  width: 106px;
+  height: 106px;
   color: #eaffea;
+  font-size: 12px;
+  letter-spacing: 0.05em;
 }
 
 .mobile-action-jump::before {
+  inset: 10px;
   border-color: rgba(52, 116, 51, 0.5);
-  background: linear-gradient(180deg, rgba(73, 160, 83, 0.92), rgba(33, 88, 39, 0.96));
+  background: linear-gradient(180deg, rgba(73, 160, 83, 0.82), rgba(33, 88, 39, 0.9));
 }
 
 .mobile-action-slash {
-  left: 0;
-  bottom: 42px;
+  left: 108px;
+  top: 0;
   color: #edf5ff;
 }
 
 .mobile-action-slash::before {
   border-color: rgba(69, 138, 255, 0.5);
-  background: linear-gradient(180deg, rgba(77, 142, 255, 0.92), rgba(31, 76, 168, 0.96));
+  background: linear-gradient(180deg, rgba(77, 142, 255, 0.8), rgba(31, 76, 168, 0.9));
 }
 
 .mobile-action-shoot {
-  right: 0;
-  bottom: 42px;
+  left: 0;
+  top: 98px;
   color: #fff0ed;
 }
 
 .mobile-action-shoot::before {
   border-color: rgba(223, 69, 58, 0.52);
-  background: linear-gradient(180deg, rgba(239, 86, 75, 0.94), rgba(170, 32, 32, 0.98));
+  background: linear-gradient(180deg, rgba(239, 86, 75, 0.82), rgba(170, 32, 32, 0.92));
 }
 
 .mobile-utility-btn {
@@ -535,22 +542,22 @@ body[data-app-mode="play-world"] #game-container {
 .mobile-utility-btn::before {
   inset: 4px 0;
   border-radius: 999px;
-  background: rgba(5, 5, 5, 0.82);
+  background: rgba(5, 5, 5, 0.58);
 }
 
 .mobile-dpad {
   position: absolute;
-  left: calc(14px + var(--safe-left));
-  bottom: calc(12px + var(--safe-bottom));
-  width: 156px;
-  height: 148px;
+  left: calc(8px + var(--safe-left));
+  bottom: calc(4px + var(--safe-bottom));
+  width: 212px;
+  height: 138px;
   pointer-events: none;
 }
 
 .mobile-dpad-btn {
   position: absolute;
-  width: 72px;
-  height: 72px;
+  width: 74px;
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -571,11 +578,11 @@ body[data-app-mode="play-world"] #game-container {
 .mobile-dpad-btn::before {
   content: '';
   position: absolute;
-  inset: 10px;
+  inset: 11px 10px;
   z-index: -1;
-  border-radius: 18px;
+  border-radius: 999px;
   border: 1px solid rgba(243, 238, 226, 0.18);
-  background: linear-gradient(180deg, rgba(26, 26, 26, 0.94), rgba(7, 7, 7, 0.96));
+  background: linear-gradient(180deg, rgba(26, 26, 26, 0.76), rgba(7, 7, 7, 0.88));
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
   transition:
     transform 0.06s ease,
@@ -592,27 +599,26 @@ body[data-app-mode="play-world"] #game-container {
 .mobile-dpad-btn.is-active::before,
 .mobile-dpad-btn:active::before {
   transform: translateY(2px);
-  background: linear-gradient(180deg, rgba(67, 67, 67, 0.96), rgba(15, 15, 15, 0.98));
-}
-
-.mobile-dpad-up {
-  left: 42px;
-  top: 0;
+  background: linear-gradient(180deg, rgba(67, 67, 67, 0.84), rgba(15, 15, 15, 0.92));
 }
 
 .mobile-dpad-left {
   left: 0;
-  top: 38px;
+  bottom: 0;
+  width: 96px;
+  height: 82px;
 }
 
 .mobile-dpad-right {
   right: 0;
-  top: 38px;
+  bottom: 0;
+  width: 96px;
+  height: 82px;
 }
 
 .mobile-dpad-down {
-  left: 42px;
-  bottom: 0;
+  left: 70px;
+  top: 0;
 }
 
 .mobile-editor-nav {
