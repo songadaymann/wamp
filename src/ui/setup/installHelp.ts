@@ -1,6 +1,10 @@
 import { isPlayfunMode } from '../../playfun/client';
 import { APP_READY_EVENT, isAppReady, isBusyOverlayVisible } from '../appFeedback';
-import { DEVICE_LAYOUT_CHANGED_EVENT, getDeviceLayoutState } from '../deviceLayout';
+import {
+  DEVICE_LAYOUT_CHANGED_EVENT,
+  detectStandaloneLaunch,
+  getDeviceLayoutState,
+} from '../deviceLayout';
 
 const INSTALL_HELP_DISMISSED_STORAGE_KEY = 'wamp_install_help_dismissed_v1';
 const INSTALL_HELP_AUTO_OPEN_DELAY_MS = 900;
@@ -27,10 +31,6 @@ type InstallHelpElements = {
   openButton: HTMLButtonElement | null;
   rotateGateOpenButton: HTMLButtonElement | null;
   authPanel: HTMLElement | null;
-};
-
-type NavigatorWithStandalone = Navigator & {
-  standalone?: boolean;
 };
 
 export class InstallHelpController {
@@ -368,11 +368,7 @@ export class InstallHelpController {
   }
 
   private isStandaloneLaunch(): boolean {
-    const navigatorWithStandalone = this.windowObj.navigator as NavigatorWithStandalone;
-    return (
-      this.windowObj.matchMedia('(display-mode: standalone)').matches ||
-      navigatorWithStandalone.standalone === true
-    );
+    return detectStandaloneLaunch(this.windowObj);
   }
 
   private detectHelpTarget(): InstallHelpTarget {
