@@ -49,8 +49,8 @@ export const DEFAULT_PLAYER_ATLAS_ASSETS: PlayerAtlasAssetEntry[] = [
   },
   {
     key: DEFAULT_PLAYER_ATLAS_KEYS.combat,
-    texturePath: `${PLAYER_ASSET_ROOT}/PlayerCombatSheet.png`,
-    atlasPath: `${PLAYER_ASSET_ROOT}/PlayerCombatSheet.json`,
+    texturePath: `${PLAYER_ASSET_ROOT}/PlayerCombatActionsSheet.png`,
+    atlasPath: `${PLAYER_ASSET_ROOT}/PlayerCombatActionsSheet.json`,
   },
   {
     key: DEFAULT_PLAYER_ATLAS_KEYS.weapons,
