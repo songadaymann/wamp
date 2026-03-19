@@ -57,6 +57,14 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Android combat-atlas compatibility fix on March 19, 2026:
+  - identified the likely Android-only black-square cause as the runtime combat atlas height: `public/assets/player/default/PlayerCombatSheet.png` is `960x4368`, which exceeds the common `4096` max texture size on many Android WebGL stacks
+  - added `scripts/build-player-combat-actions-atlas.mjs` to repack just the runtime-used combat frames (`sword-slash`, `air-slash-down`, `gun-fire`) into a compact `576x252` atlas while preserving the original frame names and durations
+  - generated `public/assets/player/default/PlayerCombatActionsSheet.png/.json`
+  - switched the default player combat atlas load path to the new compact sheet, so runtime combat anims no longer depend on the oversized source atlas
+  - verification:
+    - `npm run build` passed
+    - Playwright smoke client passed with no captured console/runtime errors and wrote `output/web-game/combat-atlas-smoke/state-0.json`
 - Rotate-gate copy tweak on March 19, 2026:
   - replaced the browser-portrait rotate-gate intro sentence with a shorter requirement/search prompt:
     - `WAMP only works on mobile as a web app!`
