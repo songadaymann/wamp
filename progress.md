@@ -57,12 +57,13 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Install-help simplification pass on March 19, 2026:
+  - removed the abandoned install-walkthrough media/placeholder section from the install modal
+  - simplified the install modal copy so it now clearly says mobile play requires adding WAMP to the home screen, then suggests searching for `how to add web app to home screen on [your phone] on [your browser]` if the player needs device-specific steps
+  - removed the install-help controller's media auto-load code and the now-unused modal CSS that supported video/gif placeholder cards
 - Mobile D-pad cross restore pass on March 19, 2026:
   - restored the visible phone `Up` pad after removing it proved too limiting for actual play
   - rearranged the phone D-pad back into a true four-way cross so `Up` sits above `Left` / `Right` and `Down` now sits below them instead of occupying the top slot
-  - verification:
-    - `npm run build` passed
-    - targeted phone-landscape probe confirmed the live D-pad layout in `output/web-game/mobile-stop-chat-layout-2/play-mode.png`
 - Mobile stop/chat/overworld touch reset pass on March 19, 2026:
   - removed the phone `Cam` button from play mode because it was not providing meaningful mobile value
   - moved the phone `Stop` action out of the right-side control cluster and into the top-left HUD lane as a red world-style button that appears just under the collapsed `Room +` toggle during phone play
