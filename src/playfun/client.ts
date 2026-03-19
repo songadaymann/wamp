@@ -24,17 +24,10 @@ export const PLAYFUN_GAME_RESUME_EVENT = 'playfun-game-resume';
 
 const PLAYFUN_MODE_QUERY_KEY = 'pf';
 const PLAYFUN_MODE_SESSION_KEY = 'playfun_mode';
-const PLAYFUN_SDK_SRC = 'https://sdk.play.fun';
 const PLAYFUN_FLUSH_INTERVAL_MS = 60_000;
 
-interface PlayfunConfigResponse {
-  enabled: boolean;
-  apiKey: string | null;
-  gameId: string | null;
-}
-
 interface OpenGameSDKInstance {
-  init(options: { gameId: string }): Promise<unknown>;
+  init(options?: { gameId?: string }): Promise<unknown>;
   on(eventName: string, callback: (...args: unknown[]) => void): void;
   showPoints?(): void;
   hidePoints?(): void;
@@ -60,7 +53,6 @@ declare global {
 }
 
 let playfunAuthenticated = false;
-let playfunConfigPromise: Promise<PlayfunConfigResponse | null> | null = null;
 let playfunSdkPromise: Promise<OpenGameSDKInstance | null> | null = null;
 let playfunSdk: OpenGameSDKInstance | null = null;
 let playfunSdkReady = false;
@@ -243,21 +235,12 @@ async function ensurePlayfunSdk(): Promise<OpenGameSDKInstance | null> {
   }
 
   playfunSdkPromise = (async () => {
-    const config = await loadPlayfunConfig();
-    if (!config?.enabled || !config.apiKey || !config.gameId) {
-      return null;
-    }
-
-    applyPlayfunMetaKey(config.apiKey);
-    await loadPlayfunSdkScript();
-
     if (!window.OpenGameSDK) {
-      console.warn('Play.fun SDK loaded without OpenGameSDK global.');
+      console.warn('Play.fun SDK not loaded — is the script tag in <head>?');
       return null;
     }
 
     const sdk = new window.OpenGameSDK({
-      apiKey: config.apiKey,
       ui: {
         usePointsWidget: true,
       },
@@ -290,7 +273,7 @@ async function ensurePlayfunSdk(): Promise<OpenGameSDKInstance | null> {
       window.dispatchEvent(new Event(PLAYFUN_GAME_RESUME_EVENT));
     });
 
-    await sdk.init({ gameId: config.gameId });
+    await sdk.init();
 
     playfunSdk = sdk;
     capturePlayfunSessionToken();
@@ -300,83 +283,6 @@ async function ensurePlayfunSdk(): Promise<OpenGameSDKInstance | null> {
   })();
 
   return playfunSdkPromise;
-}
-
-async function loadPlayfunConfig(): Promise<PlayfunConfigResponse | null> {
-  if (!isPlayfunMode()) {
-    return null;
-  }
-
-  if (playfunConfigPromise) {
-    return playfunConfigPromise;
-  }
-
-  playfunConfigPromise = (async () => {
-    try {
-      const response = await fetch(`${getApiBaseUrl()}/api/playfun/config`, {
-        credentials: 'include',
-      });
-      if (!response.ok) {
-        console.warn('Failed to load Play.fun config', await response.text());
-        return null;
-      }
-
-      return (await response.json()) as PlayfunConfigResponse;
-    } catch (error) {
-      console.warn('Failed to load Play.fun config', error);
-      return null;
-    }
-  })();
-
-  return playfunConfigPromise;
-}
-
-async function loadPlayfunSdkScript(): Promise<void> {
-  if (window.OpenGameSDK) {
-    return;
-  }
-
-  const existing = document.querySelector<HTMLScriptElement>('script[data-playfun-sdk="1"]');
-  if (existing) {
-    await waitForPlayfunGlobal();
-    return;
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = PLAYFUN_SDK_SRC;
-    script.async = true;
-    script.dataset.playfunSdk = '1';
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load Play.fun SDK.'));
-    document.head.appendChild(script);
-  });
-
-  await waitForPlayfunGlobal();
-}
-
-async function waitForPlayfunGlobal(): Promise<void> {
-  if (window.OpenGameSDK) {
-    return;
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    const deadline = window.setTimeout(() => {
-      reject(new Error('Timed out waiting for Play.fun SDK.'));
-    }, 5_000);
-
-    const tick = () => {
-      if (window.OpenGameSDK) {
-        window.clearTimeout(deadline);
-        resolve();
-        return;
-      }
-
-      window.requestAnimationFrame(tick);
-    };
-
-    tick();
-  });
 }
 
 function capturePlayfunSessionToken(): void {
@@ -440,18 +346,3 @@ function isEmbeddedContext(): boolean {
   }
 }
 
-function applyPlayfunMetaKey(apiKey: string): void {
-  const meta =
-    document.getElementById('ogp-key-meta') as HTMLMetaElement | null
-    ?? document.querySelector('meta[name="x-ogp-key"]');
-  if (meta) {
-    meta.content = apiKey;
-    return;
-  }
-
-  const nextMeta = document.createElement('meta');
-  nextMeta.name = 'x-ogp-key';
-  nextMeta.content = apiKey;
-  nextMeta.id = 'ogp-key-meta';
-  document.head.appendChild(nextMeta);
-}
