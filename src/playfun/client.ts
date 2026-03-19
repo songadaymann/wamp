@@ -1,5 +1,23 @@
-import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState, type AuthDebugState } from '../auth/client';
+import {
+  AUTH_STATE_CHANGED_EVENT,
+  getAuthDebugState,
+  refreshAuthSession,
+  type AuthDebugState,
+} from '../auth/client';
 import { getApiBaseUrl } from '../api/baseUrl';
+import {
+  appendPlayfunRequestHeaders,
+  getPlayfunSessionToken,
+  isPlayfunMode,
+  setPlayfunMode,
+  setPlayfunSessionToken,
+} from './state';
+
+export {
+  appendPlayfunRequestHeaders,
+  getPlayfunSessionToken,
+  isPlayfunMode,
+} from './state';
 
 export const PLAYFUN_GAME_PAUSE_EVENT = 'playfun-game-pause';
 export const PLAYFUN_GAME_RESUME_EVENT = 'playfun-game-resume';
@@ -41,13 +59,11 @@ declare global {
   }
 }
 
-let playfunMode = false;
 let playfunAuthenticated = false;
 let playfunConfigPromise: Promise<PlayfunConfigResponse | null> | null = null;
 let playfunSdkPromise: Promise<OpenGameSDKInstance | null> | null = null;
 let playfunSdk: OpenGameSDKInstance | null = null;
 let playfunSdkReady = false;
-let playfunSessionToken: string | null = null;
 let playfunClientInitialized = false;
 let playfunFlushPromise: Promise<{ flushed: number; pending: number; failed: number } | null> | null = null;
 let playfunFlushIntervalId: number | null = null;
@@ -73,28 +89,12 @@ export function bootstrapPlayfunModeFromUrl(): void {
     nextMode = false;
   }
 
-  playfunMode = nextMode;
+  setPlayfunMode(nextMode);
   syncPlayfunBodyData();
 }
 
-export function isPlayfunMode(): boolean {
-  return playfunMode;
-}
-
 export function canOpenPlayfunFullSite(): boolean {
-  return playfunMode && isEmbeddedContext();
-}
-
-export function appendPlayfunRequestHeaders(headers: Headers): void {
-  if (!playfunMode || !playfunSessionToken) {
-    return;
-  }
-
-  headers.set('X-Playfun-Session-Token', playfunSessionToken);
-}
-
-export function getPlayfunSessionToken(): string | null {
-  return playfunSessionToken;
+  return isPlayfunMode() && isEmbeddedContext();
 }
 
 export async function setupPlayfunClient(): Promise<void> {
@@ -124,12 +124,12 @@ export async function setupPlayfunClient(): Promise<void> {
   window.addEventListener(AUTH_STATE_CHANGED_EVENT, (event) => {
     const detail = (event as CustomEvent<AuthDebugState | undefined>).detail;
     playfunAuthenticated = detail?.authenticated ?? false;
-    if (playfunMode && playfunAuthenticated) {
+    if (isPlayfunMode() && playfunAuthenticated) {
       void flushPendingPlayfunPoints();
     }
   });
 
-  if (!playfunMode) {
+  if (!isPlayfunMode()) {
     return;
   }
 
@@ -142,7 +142,7 @@ export async function setupPlayfunClient(): Promise<void> {
 }
 
 export async function flushPendingPlayfunPoints(): Promise<{ flushed: number; pending: number; failed: number } | null> {
-  if (!playfunMode || !playfunAuthenticated) {
+  if (!isPlayfunMode() || !playfunAuthenticated) {
     return null;
   }
 
@@ -194,7 +194,7 @@ export async function flushPendingPlayfunPoints(): Promise<{ flushed: number; pe
 }
 
 export function notifyPlayfunEligibleActionSuccess(): void {
-  if (!playfunMode) {
+  if (!isPlayfunMode()) {
     return;
   }
 
@@ -205,7 +205,7 @@ export function notifyPlayfunEligibleActionSuccess(): void {
 }
 
 export async function refreshPlayfunWidget(): Promise<void> {
-  if (!playfunMode || !playfunSdkReady || !playfunSdk?.refreshPointsAndMultiplier) {
+  if (!isPlayfunMode() || !playfunSdkReady || !playfunSdk?.refreshPointsAndMultiplier) {
     return;
   }
 
@@ -224,16 +224,17 @@ export function openPlayfunFullSite(): void {
 
 export function getPlayfunDebugState(): Record<string, unknown> {
   return {
-    mode: playfunMode,
+    mode: isPlayfunMode(),
+    source: getAuthDebugState().source ?? null,
     authenticated: playfunAuthenticated,
     sdkReady: playfunSdkReady,
-    hasSessionToken: Boolean(playfunSessionToken),
+    hasSessionToken: Boolean(getPlayfunSessionToken()),
     embedded: isEmbeddedContext(),
   };
 }
 
 async function ensurePlayfunSdk(): Promise<OpenGameSDKInstance | null> {
-  if (!playfunMode) {
+  if (!isPlayfunMode()) {
     return null;
   }
 
@@ -247,6 +248,7 @@ async function ensurePlayfunSdk(): Promise<OpenGameSDKInstance | null> {
       return null;
     }
 
+    applyPlayfunMetaKey(config.apiKey);
     await loadPlayfunSdkScript();
 
     if (!window.OpenGameSDK) {
@@ -266,16 +268,19 @@ async function ensurePlayfunSdk(): Promise<OpenGameSDKInstance | null> {
       playfunSdkReady = true;
       capturePlayfunSessionToken();
       syncPlayfunWidgetVisibility();
+      void refreshAuthSession();
       if (playfunAuthenticated) {
         void flushPendingPlayfunPoints();
       }
     });
     sdk.on('LoginSuccess', () => {
       capturePlayfunSessionToken();
+      void refreshAuthSession();
       void flushPendingPlayfunPoints();
     });
     sdk.on('SessionStarted', () => {
       capturePlayfunSessionToken();
+      void refreshAuthSession();
       void flushPendingPlayfunPoints();
     });
     sdk.on('GamePause', () => {
@@ -290,6 +295,7 @@ async function ensurePlayfunSdk(): Promise<OpenGameSDKInstance | null> {
     playfunSdk = sdk;
     capturePlayfunSessionToken();
     syncPlayfunWidgetVisibility();
+    void refreshAuthSession();
     return sdk;
   })();
 
@@ -297,7 +303,7 @@ async function ensurePlayfunSdk(): Promise<OpenGameSDKInstance | null> {
 }
 
 async function loadPlayfunConfig(): Promise<PlayfunConfigResponse | null> {
-  if (!playfunMode) {
+  if (!isPlayfunMode()) {
     return null;
   }
 
@@ -374,11 +380,11 @@ async function waitForPlayfunGlobal(): Promise<void> {
 }
 
 function capturePlayfunSessionToken(): void {
-  playfunSessionToken = playfunSdk?.sessionToken?.trim() || null;
+  setPlayfunSessionToken(playfunSdk?.sessionToken?.trim() || null);
 }
 
 function syncPlayfunWidgetVisibility(): void {
-  if (!playfunMode || !playfunSdkReady || !playfunSdk) {
+  if (!isPlayfunMode() || !playfunSdkReady || !playfunSdk) {
     return;
   }
 
@@ -411,7 +417,7 @@ function ensurePlayfunFlushTimer(): void {
   }
 
   playfunFlushIntervalId = window.setInterval(() => {
-    if (playfunMode && playfunAuthenticated) {
+    if (isPlayfunMode() && playfunAuthenticated) {
       void flushPendingPlayfunPoints();
     }
   }, PLAYFUN_FLUSH_INTERVAL_MS);
@@ -422,8 +428,8 @@ function syncPlayfunBodyData(): void {
     return;
   }
 
-  document.body.dataset.playfunMode = playfunMode ? 'true' : 'false';
-  document.body.dataset.playfunEmbedded = playfunMode && isEmbeddedContext() ? 'true' : 'false';
+  document.body.dataset.playfunMode = isPlayfunMode() ? 'true' : 'false';
+  document.body.dataset.playfunEmbedded = isPlayfunMode() && isEmbeddedContext() ? 'true' : 'false';
 }
 
 function isEmbeddedContext(): boolean {
@@ -432,4 +438,20 @@ function isEmbeddedContext(): boolean {
   } catch {
     return true;
   }
+}
+
+function applyPlayfunMetaKey(apiKey: string): void {
+  const meta =
+    document.getElementById('ogp-key-meta') as HTMLMetaElement | null
+    ?? document.querySelector('meta[name="x-ogp-key"]');
+  if (meta) {
+    meta.content = apiKey;
+    return;
+  }
+
+  const nextMeta = document.createElement('meta');
+  nextMeta.name = 'x-ogp-key';
+  nextMeta.content = apiKey;
+  nextMeta.id = 'ogp-key-meta';
+  document.head.appendChild(nextMeta);
 }

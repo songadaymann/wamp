@@ -3141,6 +3141,7 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - `near.json`: zoom `0.446`, text tier dominant, dot hidden
   - local presence WebSocket errors were still expected because PartyKit was not running on `127.0.0.1:1999`
 
+<<<<<<< HEAD
 ## March 18, 2026 - Extracted Endless Overworld Preview Stage 1
 
 - Started the endless-overworld preview architecture by splitting preview-only responsibilities out of `src/scenes/overworld/worldStreaming.ts`
@@ -3330,3 +3331,25 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - `npx tsc --noEmit` passed
   - `npm run build` passed
   - Playwright smoke on `http://localhost:3000` booted the overworld scene with a selected published room and no runtime errors
+
+## March 19, 2026 - Play.fun Auth And Point Sync Pass
+
+- Converted Play.fun into a real alternate request-auth source for browser users with a valid `X-Playfun-Session-Token`
+  - `src/cloudflare/worker/auth/request.ts` now resolves Play.fun auth when there is no WAMP session cookie
+  - valid Play.fun users are mapped onto normal local `users` rows and return `source: 'playfun'`
+  - cookie auth still wins when both are present, and agent/API token behavior stays unchanged
+- Added local-user provisioning and stable Play.fun identity linking
+  - `src/cloudflare/worker/auth/store.ts` now creates deterministic default display names for first-time Play.fun users
+  - `src/cloudflare/worker/playfun/service.ts` now looks up links by `ogp_id`, safely reuses existing links, and avoids silently stealing a link from another local user
+- Fixed the raw Play.fun point-save payload and widened header coverage
+  - `/play/dev/batch-save-points` now sends `PLAYFUN_API_KEY` as `gameApiKey`
+  - auth/session requests and the room/course/run repositories now append the Play.fun session header centrally so create/save/publish/start/finish flows all carry it in Play.fun mode
+- Cleaned up the browser SDK key path
+  - the hardcoded `x-ogp-key` meta value in `index.html` is now blank by default
+  - `src/playfun/client.ts` now populates the meta tag from `/api/playfun/config` before loading `https://sdk.play.fun`
+  - Play.fun SDK lifecycle events now refresh the WAMP auth session so Play.fun-backed users can appear signed in without a separate cookie login
+- Verification:
+  - `npm run build` passed
+  - Playwright smoke on `http://127.0.0.1:4317/?renderer=canvas` booted the overworld with no new runtime errors and the auth state remained stable
+  - Playwright smoke on `http://127.0.0.1:4317/?pf=1&renderer=canvas` booted with `playfun.mode: true`, `sdkReady: true`, and `hasSessionToken: false`
+  - the `?pf=1` smoke logged Play.fun SDK errors about missing embed/Privy context, which is expected outside a real Play.fun embed and is still the remaining gap for true end-to-end points verification

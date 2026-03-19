@@ -203,6 +203,51 @@ export async function loadPlayfunUserLink(
     .first<PlayfunUserLinkRow>();
 }
 
+export async function loadPlayfunUserLinkByOgpId(
+  env: Env,
+  ogpId: string
+): Promise<PlayfunUserLinkRow | null> {
+  return env.DB.prepare(
+    `
+      SELECT
+        user_id,
+        ogp_id,
+        player_id,
+        game_id,
+        created_at,
+        updated_at
+      FROM playfun_user_links
+      WHERE ogp_id = ?
+      LIMIT 1
+    `
+  )
+    .bind(ogpId)
+    .first<PlayfunUserLinkRow>();
+}
+
+export async function maybeLinkPlayfunUser(
+  env: Env,
+  userId: string,
+  session: PlayfunValidatedSession
+): Promise<PlayfunUserLinkRow | null> {
+  if (!isPlayfunConfigured(env)) {
+    return null;
+  }
+
+  const existingByUser = await loadPlayfunUserLink(env, userId);
+  if (existingByUser && existingByUser.ogp_id !== session.ogpId) {
+    return existingByUser;
+  }
+
+  const existingByOgpId = await loadPlayfunUserLinkByOgpId(env, session.ogpId);
+  if (existingByOgpId && existingByOgpId.user_id !== userId) {
+    return existingByOgpId;
+  }
+
+  await upsertPlayfunUserLink(env, userId, session);
+  return loadPlayfunUserLink(env, userId);
+}
+
 export async function linkPlayfunUserFromRequest(
   env: Env,
   request: Request,
@@ -214,8 +259,8 @@ export async function linkPlayfunUserFromRequest(
     return null;
   }
 
-  await upsertPlayfunUserLink(env, userId, playfunSession);
-  return playfunSession;
+  const link = await maybeLinkPlayfunUser(env, userId, playfunSession);
+  return link?.user_id === userId ? playfunSession : null;
 }
 
 export async function flushPlayfunPointSync(
@@ -272,7 +317,7 @@ export async function flushPlayfunPointSync(
 
     try {
       await playfunRequest<PlayfunBatchSaveResponse>(env, 'POST', '/play/dev/batch-save-points', {
-        gameApiKey: env.PLAYFUN_GAME_ID?.trim(),
+        gameApiKey: env.PLAYFUN_API_KEY?.trim(),
         points: [{ playerId: ogpId, points: totalPoints }],
       });
 

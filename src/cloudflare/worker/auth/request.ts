@@ -3,7 +3,15 @@ import { HttpError } from '../core/http';
 import type { AuthSession, Env, RequestAuth } from '../core/types';
 import { loadAgentTokenAuth } from '../agents/store';
 import {
+  getPlayfunSessionTokenFromRequest,
+  loadPlayfunUserLinkByOgpId,
+  maybeLinkPlayfunUser,
+  validatePlayfunSessionToken,
+} from '../playfun/service';
+import {
   SESSION_MAX_AGE_SECONDS,
+  createUserForPlayfun,
+  findUserById,
   loadApiTokenAuth,
   loadSessionFromToken,
   parseCookie,
@@ -83,27 +91,12 @@ export async function loadOptionalRequestAuth(
   }
 
   const session = await loadCurrentSession(env, request);
-  if (!session) {
-    return null;
+  if (session) {
+    await syncPlayfunLinkForUser(env, request, session.user.id);
+    return createUserRequestAuth('session', session.user, isAdmin, session);
   }
 
-  return {
-    source: 'session',
-    user: session.user,
-    principal: {
-      kind: 'user',
-      id: session.user.id,
-      displayName: session.user.displayName,
-      ownerUserId: session.user.id,
-      agentId: null,
-    },
-    agent: null,
-    session,
-    scopes: null,
-    apiToken: null,
-    agentToken: null,
-    isAdmin,
-  };
+  return loadPlayfunRequestAuth(env, request, isAdmin);
 }
 
 export async function loadCurrentSession(env: Env, request: Request): Promise<AuthSession | null> {
@@ -185,7 +178,7 @@ export function isAdminRequest(env: Env, request: Request): boolean {
 }
 
 export function hasScope(auth: RequestAuth, scope: ApiTokenScope): boolean {
-  return auth.source === 'session' || auth.scopes?.includes(scope) === true;
+  return (auth.source === 'session' || auth.source === 'playfun') || auth.scopes?.includes(scope) === true;
 }
 
 export function requireScope(auth: RequestAuth, scope: ApiTokenScope, actionLabel: string): void {
@@ -199,9 +192,73 @@ export function requireOptionalScope(
   scope: ApiTokenScope,
   actionLabel: string
 ): void {
-  if (!auth || auth.source === 'session') {
+  if (!auth || auth.source === 'session' || auth.source === 'playfun') {
     return;
   }
 
   requireScope(auth, scope, actionLabel);
+}
+
+async function loadPlayfunRequestAuth(
+  env: Env,
+  request: Request,
+  isAdmin: boolean
+): Promise<RequestAuth | null> {
+  const playfunSession = await validatePlayfunSessionToken(
+    env,
+    getPlayfunSessionTokenFromRequest(request)
+  );
+  if (!playfunSession) {
+    return null;
+  }
+
+  const existingLink = await loadPlayfunUserLinkByOgpId(env, playfunSession.ogpId);
+  const linkedUser = existingLink ? await findUserById(env, existingLink.user_id) : null;
+  const provisionalUser = linkedUser ?? (await createUserForPlayfun(env, playfunSession.ogpId));
+  const resolvedLink = await maybeLinkPlayfunUser(env, provisionalUser.id, playfunSession);
+  const resolvedUser = resolvedLink && resolvedLink.user_id !== provisionalUser.id
+    ? (await findUserById(env, resolvedLink.user_id)) ?? provisionalUser
+    : provisionalUser;
+  return createUserRequestAuth('playfun', resolvedUser, isAdmin, null);
+}
+
+async function syncPlayfunLinkForUser(
+  env: Env,
+  request: Request,
+  userId: string
+): Promise<void> {
+  const playfunSession = await validatePlayfunSessionToken(
+    env,
+    getPlayfunSessionTokenFromRequest(request)
+  );
+  if (!playfunSession) {
+    return;
+  }
+
+  await maybeLinkPlayfunUser(env, userId, playfunSession);
+}
+
+function createUserRequestAuth(
+  source: 'session' | 'playfun',
+  user: AuthSession['user'],
+  isAdmin: boolean,
+  session: AuthSession | null
+): RequestAuth {
+  return {
+    source,
+    user,
+    principal: {
+      kind: 'user',
+      id: user.id,
+      displayName: user.displayName,
+      ownerUserId: user.id,
+      agentId: null,
+    },
+    agent: null,
+    session,
+    scopes: null,
+    apiToken: null,
+    agentToken: null,
+    isAdmin,
+  };
 }

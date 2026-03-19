@@ -18,10 +18,10 @@ import type {
 import { HttpError, jsonResponse, noContentResponse, parseJsonBody, redirectResponse } from '../core/http';
 import type { Env } from '../core/types';
 import {
+  attachWalletToUser,
   API_TOKEN_PREFIX,
   MAGIC_LINK_TTL_MS,
   WALLET_CHALLENGE_TTL_MS,
-  attachWalletToUser,
   consumeMagicLinkToken,
   consumeWalletChallenge,
   createApiTokenForUser,
@@ -60,6 +60,7 @@ import {
   createSessionResponse,
   loadCurrentSession,
   loadOptionalRequestAuth,
+  requireAuthenticatedRequestAuth,
   requireCurrentSession,
 } from './request';
 import { NO_CHAT_MODERATION_VIEWER, resolveChatModerationViewer } from '../chat/moderation';
@@ -70,10 +71,10 @@ export async function handleAuthRequest(request: Request, url: URL, env: Env): P
     const auth = await loadOptionalRequestAuth(env, request);
     const responseBody: AuthSessionResponse = createSessionResponse(auth);
     responseBody.chatModeration =
-      auth?.source === 'session'
+      auth?.source === 'session' || auth?.source === 'playfun'
         ? await resolveChatModerationViewer(env, auth.user)
         : NO_CHAT_MODERATION_VIEWER;
-    if (auth?.source === 'session') {
+    if (auth?.source === 'session' || auth?.source === 'playfun') {
       const quota = await getRoomClaimQuota(env, auth.user.id);
       responseBody.roomDailyClaimLimit = quota.limit;
       responseBody.roomClaimsUsedToday = quota.claimsUsedToday;
@@ -224,7 +225,7 @@ export async function handleLogout(request: Request, env: Env): Promise<Response
 }
 
 export async function handleUpdateDisplayName(request: Request, env: Env): Promise<Response> {
-  const session = await requireCurrentSession(env, request, 'update display name');
+  const auth = await requireAuthenticatedRequestAuth(env, request, 'update display name');
   const body = await parseJsonBody<DisplayNameUpdateRequestBody>(request);
   const displayName = normalizeDisplayName(body.displayName);
 
@@ -237,11 +238,11 @@ export async function handleUpdateDisplayName(request: Request, env: Env): Promi
   }
 
   const existingUser = await findUserByDisplayName(env, displayName);
-  if (existingUser && existingUser.id !== session.user.id) {
+  if (existingUser && existingUser.id !== auth.user.id) {
     throw new HttpError(409, 'That display name has already been claimed.');
   }
 
-  const updatedUser = await updateUserDisplayName(env, session.user, displayName);
+  const updatedUser = await updateUserDisplayName(env, auth.user, displayName);
   const responseBody: DisplayNameUpdateResponse = {
     ok: true,
     user: updatedUser,
@@ -392,14 +393,21 @@ export async function handleWalletVerify(request: Request, env: Env): Promise<Re
   const now = new Date().toISOString();
   await consumeWalletChallenge(env, challenge.id, now);
 
-  const existingSession = await loadCurrentSession(env, request);
+  const existingAuth = await loadOptionalRequestAuth(env, request);
   let user: AuthUser;
   let setCookie: string | null = null;
   let linkedWallet = false;
 
-  if (existingSession) {
-    user = await attachWalletToUser(env, existingSession.user, address);
+  if (existingAuth) {
+    if (existingAuth.source === 'api_token' || existingAuth.source === 'agent_token') {
+      throw new HttpError(403, 'API tokens cannot link wallets.');
+    }
+
+    user = await attachWalletToUser(env, existingAuth.user, address);
     linkedWallet = true;
+    if (existingAuth.source === 'playfun') {
+      setCookie = createSessionCookie(request, await createSession(env, user.id));
+    }
   } else {
     const existingWalletUser = await findUserByWallet(env, address);
     user = existingWalletUser ?? (await createUserForWallet(env, address));

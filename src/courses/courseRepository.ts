@@ -61,11 +61,8 @@ class ApiCourseRepository implements CourseRepository {
   }
 
   async publishCourse(courseId: string): Promise<CourseRecord> {
-    const headers = new Headers();
-    appendPlayfunRequestHeaders(headers);
     const record = await this.request<CourseRecord>(`/api/courses/${encodeURIComponent(courseId)}/publish`, {
       method: 'POST',
-      headers,
     });
     notifyPlayfunEligibleActionSuccess();
     return record;
@@ -82,11 +79,8 @@ class ApiCourseRepository implements CourseRepository {
   }
 
   async finishRun(attemptId: string, body: CourseRunFinishRequestBody): Promise<void> {
-    const headers = new Headers();
-    appendPlayfunRequestHeaders(headers);
     await this.request(`/api/course-runs/${encodeURIComponent(attemptId)}/finish`, {
       method: 'POST',
-      headers,
       body: JSON.stringify(body),
     });
     notifyPlayfunEligibleActionSuccess();
@@ -112,6 +106,7 @@ class ApiCourseRepository implements CourseRepository {
 
   private async request<T = void>(path: string, init?: RequestInit): Promise<T> {
     const headers = new Headers(init?.headers);
+    appendPlayfunRequestHeaders(headers);
     if (init?.body && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');
     }

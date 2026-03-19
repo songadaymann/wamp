@@ -11,6 +11,7 @@ import type {
 import type { ChatModerationViewer } from '../chat/model';
 import { clearLocalRoomStorage } from '../persistence/browserStorage';
 import { getApiBaseUrl } from '../api/baseUrl';
+import { appendPlayfunRequestHeaders } from '../playfun/state';
 import type {
   PreparedWalletTransaction,
   RoomMintChainInfo,
@@ -22,6 +23,7 @@ export interface AuthDebugState {
   loading: boolean;
   authenticated: boolean;
   user: AuthUser | null;
+  source: AuthSessionResponse['source'] | null;
   roomDailyClaimLimit: number | null;
   roomClaimsUsedToday: number;
   roomClaimsRemainingToday: number | null;
@@ -61,6 +63,7 @@ const state: AuthDebugState = {
   loading: false,
   authenticated: false,
   user: null,
+  source: null,
   roomDailyClaimLimit: null,
   roomClaimsUsedToday: 0,
   roomClaimsRemainingToday: null,
@@ -262,13 +265,16 @@ async function refreshSession(): Promise<void> {
     const session = await apiRequest<AuthSessionResponse>('/api/auth/session');
     state.authenticated = session.authenticated;
     state.user = session.user;
+    state.source = session.source ?? null;
     state.roomDailyClaimLimit = session.roomDailyClaimLimit ?? null;
     state.roomClaimsUsedToday = session.roomClaimsUsedToday ?? 0;
     state.roomClaimsRemainingToday = session.roomClaimsRemainingToday ?? null;
     state.chatModeration = normalizeChatModerationViewer(session.chatModeration);
 
     if (session.authenticated) {
-      state.status = `Signed in as ${session.user?.displayName ?? 'player'}.`;
+      state.status = session.source === 'playfun'
+        ? `Signed in via Play.fun as ${session.user?.displayName ?? 'player'}.`
+        : `Signed in as ${session.user?.displayName ?? 'player'}.`;
       lastCheckedDisplayName = session.user?.displayName ?? '';
       lastDisplayNameAvailability = session.user
         ? {
@@ -278,9 +284,11 @@ async function refreshSession(): Promise<void> {
         : null;
     } else if (window.location.search.includes('auth=')) {
       // Preserve status set from query params.
+      state.source = null;
       lastCheckedDisplayName = '';
       lastDisplayNameAvailability = null;
     } else {
+      state.source = null;
       state.status = 'Use email, wallet, or both.';
       lastCheckedDisplayName = '';
       lastDisplayNameAvailability = null;
@@ -288,6 +296,7 @@ async function refreshSession(): Promise<void> {
   } catch (error) {
     console.error('Failed to load auth session', error);
     state.status = 'Failed to load account session.';
+    state.source = null;
     state.roomDailyClaimLimit = null;
     state.roomClaimsUsedToday = 0;
     state.roomClaimsRemainingToday = null;
@@ -360,6 +369,7 @@ async function logout(): Promise<void> {
 
     state.authenticated = false;
     state.user = null;
+    state.source = null;
     state.debugMagicLink = null;
     state.chatModeration = {
       role: 'none',
@@ -392,6 +402,7 @@ async function resetTestData(): Promise<void> {
     const clearedLocalRooms = clearLocalRoomStorage();
     state.authenticated = false;
     state.user = null;
+    state.source = null;
     state.debugMagicLink = null;
     state.chatModeration = {
       role: 'none',
@@ -557,6 +568,7 @@ async function authenticateWithWallet(): Promise<void> {
 
     state.authenticated = true;
     state.user = response.user;
+    state.source = 'session';
     state.status = response.linkedWallet
       ? `Wallet linked to ${response.user.displayName}.`
       : `Signed in with wallet ${shortenAddress(signerAddress)}.`;
@@ -750,7 +762,7 @@ function renderAuthUi(): void {
   }
 
   if (authLogoutButton) {
-    authLogoutButton.classList.toggle('hidden', !state.authenticated);
+    authLogoutButton.classList.toggle('hidden', !state.authenticated || state.source === 'playfun');
     authLogoutButton.disabled = state.loading;
   }
 
@@ -901,6 +913,7 @@ function normalizeChatModerationViewer(
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
+  appendPlayfunRequestHeaders(headers);
   if (init?.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }

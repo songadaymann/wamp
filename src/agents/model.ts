@@ -2,7 +2,7 @@ import type { ApiTokenScope } from '../auth/model';
 
 export type AgentStatus = 'active' | 'disabled';
 export type PrincipalKind = 'user' | 'agent';
-export type RequestAuthSource = 'session' | 'api_token' | 'agent_token';
+export type RequestAuthSource = 'session' | 'playfun' | 'api_token' | 'agent_token';
 
 export const AGENT_TOKEN_SCOPES = [
   'rooms:read',

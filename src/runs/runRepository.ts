@@ -52,11 +52,8 @@ class ApiRunRepository implements RunRepository {
   }
 
   async finishRun(attemptId: string, body: RunFinishRequestBody): Promise<void> {
-    const headers = new Headers();
-    appendPlayfunRequestHeaders(headers);
     await this.request(`/api/runs/${encodeURIComponent(attemptId)}/finish`, {
       method: 'POST',
-      headers,
       body: JSON.stringify(body),
     });
     notifyPlayfunEligibleActionSuccess();
@@ -119,6 +116,7 @@ class ApiRunRepository implements RunRepository {
 
   private async request<T = void>(path: string, init?: RequestInit): Promise<T> {
     const headers = new Headers(init?.headers);
+    appendPlayfunRequestHeaders(headers);
 
     if (init?.body && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');

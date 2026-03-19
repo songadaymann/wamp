@@ -123,6 +123,28 @@ export async function createUserForWallet(env: Env, walletAddress: string): Prom
   return user;
 }
 
+export async function createUserForPlayfun(env: Env, ogpId: string): Promise<AuthUser> {
+  const now = new Date().toISOString();
+  const user: AuthUser = {
+    id: crypto.randomUUID(),
+    email: null,
+    walletAddress: null,
+    displayName: createDisplayNameFromPlayfunOgpId(ogpId),
+    createdAt: now,
+  };
+
+  await env.DB.batch([
+    env.DB.prepare(
+      `
+        INSERT INTO users (id, email, wallet_address, display_name, created_at, updated_at)
+        VALUES (?, NULL, NULL, ?, ?, ?)
+      `
+    ).bind(user.id, user.displayName, now, now),
+  ]);
+
+  return user;
+}
+
 export async function attachWalletToUser(
   env: Env,
   user: AuthUser,
@@ -805,6 +827,12 @@ export function extractNonceFromWalletMessage(message: string): string | null {
 export function createDisplayNameFromEmail(email: string): string {
   const local = email.split('@')[0] || 'player';
   return local.slice(0, 24);
+}
+
+export function createDisplayNameFromPlayfunOgpId(ogpId: string): string {
+  const normalized = ogpId.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  const suffix = normalized.slice(0, 16) || 'player';
+  return `playfun-${suffix}`.slice(0, 24);
 }
 
 export function normalizeEmail(email: string): string {
