@@ -5,6 +5,8 @@ export interface DeviceLayoutState {
   deviceClass: DeviceClass;
   orientationState: OrientationState;
   coarsePointer: boolean;
+  standaloneLaunch: boolean;
+  standalonePortrait: boolean;
   mobileLandscapeRequired: boolean;
   mobileLandscapeBlocked: boolean;
   viewport: {
@@ -19,6 +21,8 @@ const DEFAULT_STATE: DeviceLayoutState = {
   deviceClass: 'desktop',
   orientationState: 'landscape',
   coarsePointer: false,
+  standaloneLaunch: false,
+  standalonePortrait: false,
   mobileLandscapeRequired: false,
   mobileLandscapeBlocked: false,
   viewport: {
@@ -29,6 +33,22 @@ const DEFAULT_STATE: DeviceLayoutState = {
 
 let state: DeviceLayoutState = { ...DEFAULT_STATE };
 let initialized = false;
+
+type NavigatorWithStandalone = Navigator & {
+  standalone?: boolean;
+};
+
+export function detectStandaloneLaunch(windowObj: Window = window): boolean {
+  const navigatorWithStandalone = windowObj.navigator as NavigatorWithStandalone;
+  const referrer = windowObj.document.referrer ?? '';
+  return (
+    windowObj.matchMedia('(display-mode: standalone)').matches ||
+    windowObj.matchMedia('(display-mode: fullscreen)').matches ||
+    windowObj.matchMedia('(display-mode: minimal-ui)').matches ||
+    navigatorWithStandalone.standalone === true ||
+    referrer.startsWith('android-app://')
+  );
+}
 
 function classifyDeviceClass(width: number, height: number, coarsePointer: boolean): DeviceClass {
   if (!coarsePointer) {
@@ -41,18 +61,27 @@ function classifyDeviceClass(width: number, height: number, coarsePointer: boole
 
 function computeState(): DeviceLayoutState {
   const viewport = window.visualViewport;
-  const width = Math.max(0, Math.round(viewport?.width ?? window.innerWidth));
-  const height = Math.max(0, Math.round(viewport?.height ?? window.innerHeight));
+  const rawWidth = Math.max(0, Math.round(viewport?.width ?? window.innerWidth));
+  const rawHeight = Math.max(0, Math.round(viewport?.height ?? window.innerHeight));
   const coarsePointer =
     window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+  const standaloneLaunch = detectStandaloneLaunch();
+  const standalonePortrait =
+    standaloneLaunch &&
+    coarsePointer &&
+    rawWidth < rawHeight;
+  const width = standalonePortrait ? rawHeight : rawWidth;
+  const height = standalonePortrait ? rawWidth : rawHeight;
   const orientationState: OrientationState = width >= height ? 'landscape' : 'portrait';
   const deviceClass = classifyDeviceClass(width, height, coarsePointer);
-  const mobileLandscapeRequired = coarsePointer && deviceClass !== 'desktop';
+  const mobileLandscapeRequired = coarsePointer && deviceClass !== 'desktop' && !standaloneLaunch;
 
   return {
     deviceClass,
     orientationState,
     coarsePointer,
+    standaloneLaunch,
+    standalonePortrait,
     mobileLandscapeRequired,
     mobileLandscapeBlocked: mobileLandscapeRequired && orientationState === 'portrait',
     viewport: {
@@ -66,6 +95,8 @@ function applyStateToDom(nextState: DeviceLayoutState): void {
   document.body.dataset.deviceClass = nextState.deviceClass;
   document.body.dataset.orientationState = nextState.orientationState;
   document.body.dataset.coarsePointer = nextState.coarsePointer ? 'true' : 'false';
+  document.body.dataset.standaloneLaunch = nextState.standaloneLaunch ? 'true' : 'false';
+  document.body.dataset.standalonePortrait = nextState.standalonePortrait ? 'true' : 'false';
   document.body.dataset.mobileLandscapeBlocked = nextState.mobileLandscapeBlocked ? 'true' : 'false';
   document.documentElement.style.setProperty('--app-viewport-width', `${nextState.viewport.width}px`);
   document.documentElement.style.setProperty('--app-viewport-height', `${nextState.viewport.height}px`);
@@ -76,6 +107,8 @@ function statesEqual(a: DeviceLayoutState, b: DeviceLayoutState): boolean {
     a.deviceClass === b.deviceClass &&
     a.orientationState === b.orientationState &&
     a.coarsePointer === b.coarsePointer &&
+    a.standaloneLaunch === b.standaloneLaunch &&
+    a.standalonePortrait === b.standalonePortrait &&
     a.mobileLandscapeRequired === b.mobileLandscapeRequired &&
     a.mobileLandscapeBlocked === b.mobileLandscapeBlocked &&
     a.viewport.width === b.viewport.width &&

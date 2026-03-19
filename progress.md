@@ -57,6 +57,16 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Standalone portrait rotation + control spacing pass on March 18, 2026:
+  - promoted standalone/PWA launch detection into shared device-layout state so installed launches now suppress the portrait install gate and install-help surfaces consistently instead of only relying on the install-help controller's local check
+  - installed portrait launches now auto-rotate the app shell into landscape by rotating the new top-level `#shell-root` and swapping the effective mobile viewport/orientation fed into layout, HUD, and control logic
+  - tightened the phone controls again without shrinking the hit targets: action buttons and D-pad pads now render as smaller inner shapes inside the same larger touchable areas, which gives the buttons more breathing room on screen
+  - verification:
+    - `npm run build` passed
+    - Playwright smoke client passed with no console errors and wrote `output/web-game/mobile-standalone-smoke-2/state-0.json`
+    - targeted installed-portrait capture confirmed the rotate gate stays hidden and the shell loads sideways in `output/web-game/mobile-standalone-portrait-2/iphone-portrait.png`
+    - targeted phone control-spacing capture confirmed the smaller visible button pads in `output/web-game/mobile-control-spacing-2/iphone-landscape.png`
+    - targeted installed-portrait interaction check confirmed the rotated standalone layout is still playable: holding `right` moved the player from `x=320` to `x=398`
 - Mobile play HUD compression + D-pad pass on March 18, 2026:
   - replaced the phone play analog joystick with a four-button D-pad so movement now uses discrete held directions with a smaller on-screen footprint and still supports simultaneous multi-button direction holds
   - restyled the phone action cluster into circular controller-like buttons with distinct green/blue/red tones for `Jump`, `Slash`, and `Shoot`, and lowered both the D-pad and action controls closer to the screen edges
@@ -3302,3 +3312,17 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - canonical room payload encoded deterministically
     - `data:` tokenURI parsed successfully
     - reconstructed room snapshot matched the representative published room input
+
+## March 18, 2026 - Selected Room Play Chip
+
+- Added an in-world browse-mode play affordance for the selected room
+  - `src/scenes/OverworldPlayScene.ts` now creates a small side-mounted play chip on the selected room when the selected room is playable
+  - the chip is hidden outside browse mode and for frontier/empty selections
+  - clicking it reuses the existing `playSelectedRoom()` flow instead of introducing a second play path
+- Tuned the chip for overworld readability
+  - the affordance scales against camera zoom so it stays visible while browsing zoomed out
+  - it is ignored by the backdrop camera so it layers with the other overworld overlays correctly
+- Verification:
+  - `npx tsc --noEmit` passed
+  - `npm run build` passed
+  - Playwright smoke on `http://localhost:3000` booted the overworld scene with a selected published room and no runtime errors
