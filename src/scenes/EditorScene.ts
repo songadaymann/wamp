@@ -468,6 +468,26 @@ export class EditorScene extends Phaser.Scene {
     return buildCourseEditedRoomDataHelper(this.activeCourseMarkerEdit);
   }
 
+  private getAdjacentCourseEdit(offset: -1 | 1): EditorCourseEditData | null {
+    const courseEdit = this.activeCourseMarkerEdit;
+    const draft = this.activeCourseDraft;
+    if (!courseEdit || !draft || courseEdit.roomOrder === null) {
+      return null;
+    }
+
+    const nextOrder = courseEdit.roomOrder + offset;
+    const nextRoomRef = draft.roomRefs[nextOrder] ?? null;
+    if (!nextRoomRef) {
+      return null;
+    }
+
+    return {
+      courseId: courseEdit.courseId,
+      roomId: nextRoomRef.roomId,
+      roomOrder: nextOrder,
+    };
+  }
+
   private syncActiveCourseRoomSessionSnapshot(
     room: RoomSnapshot,
     options: { published: boolean }
@@ -1571,6 +1591,47 @@ export class EditorScene extends Phaser.Scene {
 
     wakeData.courseEditorReturned = Boolean(this.activeCourseMarkerEdit);
     wakeData.courseEditedRoom = this.buildCourseEditedRoomData();
+
+    this.scene.stop();
+    this.scene.wake('OverworldPlayScene', wakeData);
+  }
+
+  async returnToCourseBuilder(): Promise<void> {
+    await this.returnToWorld();
+  }
+
+  async editPreviousCourseRoom(): Promise<void> {
+    await this.editAdjacentCourseRoom(-1);
+  }
+
+  async editNextCourseRoom(): Promise<void> {
+    await this.editAdjacentCourseRoom(1);
+  }
+
+  private async editAdjacentCourseRoom(offset: -1 | 1): Promise<void> {
+    const adjacent = this.getAdjacentCourseEdit(offset);
+    if (!adjacent) {
+      this.courseEditorStatusText =
+        offset < 0 ? 'Already at the first course room.' : 'Already at the last course room.';
+      this.updateGoalUi();
+      return;
+    }
+
+    showBusyOverlay(
+      offset < 0 ? 'Opening previous room...' : 'Opening next room...',
+      'Saving room state...'
+    );
+    const wakeData = await this.roomSession.buildReturnToWorldWakeData();
+    if (!wakeData) {
+      showBusyError(this.persistenceStatusText || 'Failed to open the adjacent room.', {
+        closeHandler: () => hideBusyOverlay(),
+      });
+      return;
+    }
+
+    wakeData.courseEditorReturned = false;
+    wakeData.courseEditedRoom = this.buildCourseEditedRoomData();
+    wakeData.courseEditorNavigateOffset = offset;
 
     this.scene.stop();
     this.scene.wake('OverworldPlayScene', wakeData);

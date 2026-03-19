@@ -6,6 +6,7 @@ import {
   getActiveCourseDraftSessionCourseId,
   getActiveCourseDraftSessionDraft,
   getActiveCourseDraftSessionRecord,
+  getActiveCourseDraftSessionRoomOverride,
   getActiveCourseDraftSessionRoomOverrides,
   getActiveCourseDraftSessionSelectedRoomId,
   getActiveCourseDraftSessionSelectedRoomOrder,
@@ -782,22 +783,73 @@ export class OverworldPlayScene extends Phaser.Scene {
     };
   }
 
-  private getIsCurrentCourseDraftPreviewReady(): boolean {
-    const draft = this.courseComposerRecord?.draft ?? null;
-    if (!draft?.goal || draft.roomRefs.length === 0 || !draft.startPoint) {
-      return false;
+  private getCurrentCourseDraftGoalSetupDisabledReason(
+    draft: CourseSnapshot | null
+  ): string | null {
+    if (!draft?.goal) {
+      return 'Choose a course goal in the editor first.';
+    }
+
+    if (!draft.startPoint) {
+      return 'Place a course start marker first.';
     }
 
     switch (draft.goal.type) {
       case 'reach_exit':
-        return draft.goal.exit !== null;
+        return draft.goal.exit ? null : 'Place a course exit in the last room first.';
       case 'checkpoint_sprint':
-        return draft.goal.finish !== null && draft.goal.checkpoints.length > 0;
+        if (draft.goal.checkpoints.length === 0) {
+          return 'Add at least one checkpoint first.';
+        }
+        return draft.goal.finish ? null : 'Place a course finish marker in the last room first.';
       case 'collect_target':
       case 'defeat_all':
       case 'survival':
-        return true;
+        return null;
     }
+  }
+
+  private getCurrentCourseDraftPreviewDisabledReason(): string | null {
+    const draft = this.courseComposerRecord?.draft ?? null;
+    if (!draft || draft.roomRefs.length === 0) {
+      return 'Add at least one room to the course first.';
+    }
+
+    return this.getCurrentCourseDraftGoalSetupDisabledReason(draft);
+  }
+
+  private getCurrentCourseDraftSaveDisabledReason(): string | null {
+    const draft = this.courseComposerRecord?.draft ?? null;
+    if (!draft || draft.roomRefs.length === 0) {
+      return 'Add at least one room before saving.';
+    }
+
+    if (!draft.title?.trim()) {
+      return 'Add a course title before saving.';
+    }
+
+    if (!this.isCourseComposerDirty()) {
+      return 'No unpublished course changes yet.';
+    }
+
+    return null;
+  }
+
+  private getCurrentCourseDraftPublishDisabledReason(): string | null {
+    const draft = this.courseComposerRecord?.draft ?? null;
+    if (!draft || draft.roomRefs.length < 2) {
+      return 'Add at least 2 rooms before publishing.';
+    }
+
+    if (!draft.title?.trim()) {
+      return 'Add a course title before publishing.';
+    }
+
+    return this.getCurrentCourseDraftGoalSetupDisabledReason(draft);
+  }
+
+  private getIsCurrentCourseDraftPreviewReady(): boolean {
+    return this.getCurrentCourseDraftPreviewDisabledReason() === null;
   }
 
   private get currentRoomLeaderboard() {
@@ -1700,6 +1752,10 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private async handleWakeAsync(data?: OverworldPlaySceneData): Promise<void> {
     this.applySceneData(data);
+    if (data?.courseEditorNavigateOffset) {
+      await this.continueCourseEditorNavigation(data.courseEditorNavigateOffset);
+      return;
+    }
     if (data?.courseDraftPreviewId) {
       const draft = getActiveCourseDraftSessionDraft();
       if (draft?.id === data.courseDraftPreviewId && draft.goal) {
@@ -2578,7 +2634,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private getSemanticBadgeCode(goalType: RoomGoalType | CourseGoalType | null): string {
     if (!goalType) {
-      return 'CR';
+      return '??';
     }
 
     return ROOM_BADGE_SEMANTIC_CODES[goalType];
@@ -2589,7 +2645,11 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private getCourseGoalTypeBadgeLabel(goalType: CourseGoalType | null): string {
-    return (goalType ? COURSE_GOAL_LABELS[goalType] : 'Course').toUpperCase();
+    return (goalType ? COURSE_GOAL_LABELS[goalType] : 'Goal Missing').toUpperCase();
+  }
+
+  private getCourseGoalSummaryText(goalType: CourseGoalType | null): string {
+    return goalType ? `${COURSE_GOAL_LABELS[goalType]} course` : 'Course objective missing';
   }
 
   private createRoundedBadgeBackground(
@@ -4880,8 +4940,11 @@ export class OverworldPlayScene extends Phaser.Scene {
     try {
       const record = await this.courseRepository.loadCourse(selectedCourseId);
       const snapshot = record.published ? cloneCourseSnapshot(record.published) : null;
-      if (!snapshot || !snapshot.goal) {
+      if (!snapshot) {
         throw new Error('This course is not published yet.');
+      }
+      if (!snapshot.goal) {
+        throw new Error('Published course is missing objective data. Reopen the builder and publish again.');
       }
 
       await this.startCoursePlayback(snapshot);
@@ -5000,6 +5063,18 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     const draft = this.courseComposerRecord.draft;
+    const testDraftDisabledReason =
+      !this.courseComposerRecord.permissions.canSaveDraft
+        ? 'This course is read-only for your account.'
+        : this.getCurrentCourseDraftPreviewDisabledReason();
+    const saveDraftDisabledReason =
+      !this.courseComposerRecord.permissions.canSaveDraft
+        ? 'This course is read-only for your account.'
+        : this.getCurrentCourseDraftSaveDisabledReason();
+    const publishCourseDisabledReason =
+      !this.courseComposerRecord.permissions.canPublish
+        ? 'This course is read-only for your account.'
+        : this.getCurrentCourseDraftPublishDisabledReason();
     return {
       courseId: draft.id,
       title: draft.title ?? '',
@@ -5033,16 +5108,17 @@ export class OverworldPlayScene extends Phaser.Scene {
         ? 'Loading course...'
         : this.courseComposerStatusText,
       selectedRoomOrder: this.courseComposerSelectedRoomOrder,
-      canMoveSelectedRoomEarlier:
-        this.courseComposerSelectedRoomOrder !== null && this.courseComposerSelectedRoomOrder > 0,
-      canMoveSelectedRoomLater:
-        this.courseComposerSelectedRoomOrder !== null &&
-        this.courseComposerSelectedRoomOrder < draft.roomRefs.length - 1,
+      canMoveSelectedRoomEarlier: this.canMoveSelectedCourseRoom(-1),
+      canMoveSelectedRoomLater: this.canMoveSelectedCourseRoom(1),
       canEditSelectedRoom:
         this.courseComposerRecord.permissions.canSaveDraft &&
         getActiveCourseDraftSessionSelectedRoomId() !== null,
-      canTestDraft:
-        this.courseComposerRecord.permissions.canSaveDraft && this.getIsCurrentCourseDraftPreviewReady(),
+      canTestDraft: testDraftDisabledReason === null,
+      testDraftDisabledReason,
+      canSaveDraft: saveDraftDisabledReason === null,
+      saveDraftDisabledReason,
+      canPublishCourse: publishCourseDisabledReason === null,
+      publishCourseDisabledReason,
     };
   }
 
@@ -5054,6 +5130,41 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   addSelectedRoomToCourseDraft(): void {
     void this.addSelectedRoomToCourseDraftAsync();
+  }
+
+  private canMoveSelectedCourseRoom(direction: -1 | 1): boolean {
+    const draft = this.courseComposerRecord?.draft ?? null;
+    const selectedRoomId = getActiveCourseDraftSessionSelectedRoomId();
+    if (!draft || !selectedRoomId) {
+      return false;
+    }
+
+    return this.buildMovedCourseRoomRefs(draft.roomRefs, selectedRoomId, direction) !== null;
+  }
+
+  private buildMovedCourseRoomRefs(
+    roomRefs: CourseRoomRef[],
+    roomId: string,
+    direction: -1 | 1,
+  ): CourseRoomRef[] | null {
+    const currentIndex = roomRefs.findIndex((roomRef) => roomRef.roomId === roomId);
+    if (currentIndex < 0) {
+      return null;
+    }
+
+    const nextIndex = Phaser.Math.Clamp(currentIndex + direction, 0, roomRefs.length - 1);
+    if (nextIndex === currentIndex) {
+      return null;
+    }
+
+    const nextRoomRefs = [...roomRefs];
+    const [moved] = nextRoomRefs.splice(currentIndex, 1);
+    nextRoomRefs.splice(nextIndex, 0, moved);
+    if (!courseRoomRefsFollowLinearPath(nextRoomRefs)) {
+      return null;
+    }
+
+    return nextRoomRefs;
   }
 
   removeSelectedRoomFromCourseDraft(): void {
@@ -5162,9 +5273,79 @@ export class OverworldPlayScene extends Phaser.Scene {
     return true;
   }
 
+  private async continueCourseEditorNavigation(offset: -1 | 1): Promise<void> {
+    const draft = getActiveCourseDraftSessionDraft();
+    const currentOrder = getActiveCourseDraftSessionSelectedRoomOrder();
+    const nextRoomRef =
+      draft && currentOrder !== null ? draft.roomRefs[currentOrder + offset] ?? null : null;
+    if (!draft || currentOrder === null || !nextRoomRef) {
+      this.courseComposerStatusText =
+        offset < 0
+          ? 'Previous course room is no longer available.'
+          : 'Next course room is no longer available.';
+      await this.refreshCourseComposerSelectedRoomState();
+      this.emitCourseComposerStateChanged();
+      hideBusyOverlay();
+      return;
+    }
+
+    setActiveCourseDraftSessionSelectedRoom(nextRoomRef.roomId);
+    this.syncCourseComposerRecordFromSession();
+    this.courseComposerSelectedRoomOrder = getActiveCourseDraftSessionSelectedRoomOrder();
+    this.courseComposerSelectedRoomInDraft = true;
+    this.selectedCoordinates = { ...nextRoomRef.coordinates };
+    if (this.mode !== 'play') {
+      this.currentRoomCoordinates = { ...nextRoomRef.coordinates };
+    }
+    this.windowCenterCoordinates = { ...nextRoomRef.coordinates };
+    this.shouldCenterCamera = true;
+    this.updateSelectedSummary();
+    this.redrawWorld();
+    this.renderHud();
+
+    await this.refreshAround(nextRoomRef.coordinates, { forceChunkReload: true });
+
+    const roomSnapshot =
+      getActiveCourseDraftSessionRoomOverride(nextRoomRef.roomId) ??
+      this.getRoomSnapshotForCoordinates(nextRoomRef.coordinates) ??
+      (await (async () => {
+        const record = await this.roomRepository.loadRoom(nextRoomRef.roomId, nextRoomRef.coordinates);
+        return record.draft ? cloneRoomSnapshot(record.draft) : null;
+      })());
+    if (!roomSnapshot) {
+      this.courseComposerStatusText =
+        offset < 0
+          ? 'Failed to reopen the previous course room.'
+          : 'Failed to reopen the next course room.';
+      await this.refreshCourseComposerSelectedRoomState();
+      this.emitCourseComposerStateChanged();
+      hideBusyOverlay();
+      return;
+    }
+
+    this.courseComposerStatusText = null;
+    this.openEditor({
+      roomCoordinates: { ...nextRoomRef.coordinates },
+      source: 'world',
+      roomSnapshot: cloneRoomSnapshot(roomSnapshot),
+      courseEdit: {
+        courseId: draft.id,
+        roomId: nextRoomRef.roomId,
+        roomOrder: currentOrder + offset,
+      },
+    });
+  }
+
   async testDraftCourse(): Promise<void> {
     const draft = this.courseComposerRecord?.draft ?? null;
-    if (!this.courseComposerRecord?.permissions.canSaveDraft || !draft || !this.getIsCurrentCourseDraftPreviewReady()) {
+    const disabledReason =
+      !this.courseComposerRecord?.permissions.canSaveDraft
+        ? 'This course is read-only for your account.'
+        : this.getCurrentCourseDraftPreviewDisabledReason();
+    if (!draft || disabledReason) {
+      this.courseComposerStatusText = disabledReason ?? 'Course draft is not ready to test.';
+      this.emitCourseComposerStateChanged();
+      this.renderHud();
       return;
     }
 
@@ -5186,14 +5367,25 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   async saveCourseDraft(): Promise<void> {
-    if (!this.courseComposerRecord?.permissions.canSaveDraft) {
+    const courseRecord = this.courseComposerRecord;
+    const disabledReason =
+      !courseRecord?.permissions.canSaveDraft
+        ? 'This course is read-only for your account.'
+        : this.getCurrentCourseDraftSaveDisabledReason();
+    if (disabledReason) {
+      this.courseComposerStatusText = disabledReason;
+      this.emitCourseComposerStateChanged();
+      this.renderHud();
+      return;
+    }
+    if (!courseRecord) {
       return;
     }
 
     this.courseComposerStatusText = 'Saving course draft...';
     this.emitCourseComposerStateChanged();
     try {
-      const saved = await this.courseRepository.saveDraft(this.courseComposerRecord.draft);
+      const saved = await this.courseRepository.saveDraft(courseRecord.draft);
       this.setCourseComposerRecord(saved, {
         selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
       });
@@ -5211,18 +5403,29 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   async publishCourseDraft(): Promise<void> {
-    if (!this.courseComposerRecord?.permissions.canPublish) {
+    const courseRecord = this.courseComposerRecord;
+    const disabledReason =
+      !courseRecord?.permissions.canPublish
+        ? 'This course is read-only for your account.'
+        : this.getCurrentCourseDraftPublishDisabledReason();
+    if (disabledReason) {
+      this.courseComposerStatusText = disabledReason;
+      this.emitCourseComposerStateChanged();
+      this.renderHud();
+      return;
+    }
+    if (!courseRecord) {
       return;
     }
 
     this.courseComposerStatusText = 'Publishing course...';
     this.emitCourseComposerStateChanged();
     try {
-      const saved = await this.courseRepository.saveDraft(this.courseComposerRecord.draft);
+      const saved = await this.courseRepository.saveDraft(courseRecord.draft);
       this.setCourseComposerRecord(saved, {
         selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
       });
-      const published = await this.courseRepository.publishCourse(this.courseComposerRecord.draft.id);
+      const published = await this.courseRepository.publishCourse(courseRecord.draft.id);
       this.setCourseComposerRecord(published, {
         selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
       });
@@ -5262,14 +5465,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         draft.roomRefs = [nextRoomRef];
         return;
       }
-
-      const firstRoomRef = draft.roomRefs[0];
       const lastRoomRef = draft.roomRefs[draft.roomRefs.length - 1];
-      if (areCourseRoomRefsOrthogonallyAdjacent(nextRoomRef, firstRoomRef)) {
-        draft.roomRefs = [nextRoomRef, ...draft.roomRefs];
-        return;
-      }
-
       if (areCourseRoomRefsOrthogonallyAdjacent(nextRoomRef, lastRoomRef)) {
         draft.roomRefs = [...draft.roomRefs, nextRoomRef];
       }
@@ -5287,25 +5483,24 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (!roomId) {
       return;
     }
+    const nextRoomRefs = this.buildMovedCourseRoomRefs(this.courseComposerRecord.draft.roomRefs, roomId, direction);
+    if (!nextRoomRefs) {
+      this.courseComposerStatusText =
+        direction < 0
+          ? 'This room cannot move earlier without breaking the course path.'
+          : 'This room cannot move later without breaking the course path.';
+      this.emitCourseComposerStateChanged();
+      this.renderHud();
+      return;
+    }
+
     this.updateCourseComposerDraft((draft) => {
-      const currentIndex = draft.roomRefs.findIndex((roomRef) => roomRef.roomId === roomId);
-      if (currentIndex < 0) {
-        return;
-      }
-
-      const nextIndex = Phaser.Math.Clamp(currentIndex + direction, 0, draft.roomRefs.length - 1);
-      if (nextIndex === currentIndex) {
-        return;
-      }
-
-      const nextRoomRefs = [...draft.roomRefs];
-      const [moved] = nextRoomRefs.splice(currentIndex, 1);
-      nextRoomRefs.splice(nextIndex, 0, moved);
-      if (!courseRoomRefsFollowLinearPath(nextRoomRefs)) {
-        return;
-      }
       draft.roomRefs = nextRoomRefs;
     });
+    this.courseComposerStatusText =
+      direction < 0 ? 'Moved selected room earlier.' : 'Moved selected room later.';
+    this.emitCourseComposerStateChanged();
+    this.renderHud();
     void this.refreshCourseComposerSelectedRoomState();
   }
 
@@ -5415,13 +5610,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       return false;
     }
 
-    const firstRoomRef = this.courseComposerRecord.draft.roomRefs[0];
     const lastRoomRef =
       this.courseComposerRecord.draft.roomRefs[this.courseComposerRecord.draft.roomRefs.length - 1];
-    return (
-      areCourseRoomRefsOrthogonallyAdjacent(meta, firstRoomRef) ||
-      areCourseRoomRefsOrthogonallyAdjacent(meta, lastRoomRef)
-    );
+    return areCourseRoomRefsOrthogonallyAdjacent(meta, lastRoomRef);
   }
 
   private clearActiveCourseRoomOverrides(): void {
@@ -5819,6 +6010,7 @@ export class OverworldPlayScene extends Phaser.Scene {
             ? `Part of course: ${selectedCourse.courseTitle}`
             : `Part of course ${selectedCourse.roomIndex + 1}/${selectedCourse.roomCount}`
         );
+        metaParts.push(this.getCourseGoalSummaryText(selectedCourse.goalType));
         selectedMetaTone = 'challenge';
       }
       if (this.selectedSummary?.goalType) {
@@ -5836,10 +6028,21 @@ export class OverworldPlayScene extends Phaser.Scene {
       }
       selectedMetaText = metaParts.join(' · ');
     } else if (selectedState === 'draft' && selectedDraft) {
-      selectedMetaText = selectedDraft.goal
-        ? `Local draft only · ${ROOM_GOAL_LABELS[selectedDraft.goal.type]} challenge · publish to make it public`
-        : 'Local draft only · publish to make it public';
-      selectedMetaTone = 'draft';
+      const metaParts = ['Local draft only'];
+      if (selectedCourse) {
+        metaParts.push(
+          selectedCourse.courseTitle?.trim()
+            ? `Part of course: ${selectedCourse.courseTitle}`
+            : `Part of course ${selectedCourse.roomIndex + 1}/${selectedCourse.roomCount}`
+        );
+        metaParts.push(this.getCourseGoalSummaryText(selectedCourse.goalType));
+      }
+      if (selectedDraft.goal) {
+        metaParts.push(`${ROOM_GOAL_LABELS[selectedDraft.goal.type]} challenge`);
+      }
+      metaParts.push('publish to make it public');
+      selectedMetaText = metaParts.join(' · ');
+      selectedMetaTone = selectedCourse ? 'challenge' : 'draft';
     } else if (selectedState === 'frontier') {
       if (frontierBuildBlocked) {
         const authState = getAuthDebugState();

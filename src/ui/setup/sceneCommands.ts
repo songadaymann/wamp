@@ -35,6 +35,7 @@ export function setupSceneCommands(
   const chatModerationOpenBtn = doc.getElementById('btn-chat-moderation-open');
   const worldJumpInput = doc.getElementById('world-jump-input') as HTMLInputElement | null;
   const backToWorldBtn = doc.getElementById('btn-back-to-world');
+  const backToCourseBuilderBtn = doc.getElementById('btn-back-to-course-builder');
   const playBtn = doc.getElementById('btn-test-play');
   const saveBtn = doc.getElementById('btn-save-draft');
   const publishBtn = doc.getElementById('btn-publish-room');
@@ -184,6 +185,23 @@ export function setupSceneCommands(
     }
 
     getActiveOverworldScene(game)?.returnToWorld?.();
+  });
+
+  backToCourseBuilderBtn?.addEventListener('click', () => {
+    historyModal.close();
+    leaderboardModal.close();
+    controlsModal.close();
+    aboutModal.close();
+    chatModerationModal.close();
+    const editorScene = getActiveEditorScene(game);
+    if (editorScene?.returnToCourseBuilder) {
+      void editorScene.returnToCourseBuilder();
+      return;
+    }
+
+    if (editorScene?.returnToWorld) {
+      void editorScene.returnToWorld();
+    }
   });
 
   saveBtn?.addEventListener('click', async () => {

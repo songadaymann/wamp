@@ -254,6 +254,8 @@ function setupGoalControls(game: Phaser.Game, doc: Document): void {
   const courseAddCheckpointBtn = doc.getElementById('btn-course-editor-add-checkpoint');
   const coursePlaceFinishBtn = doc.getElementById('btn-course-editor-place-finish');
   const courseClearMarkersBtn = doc.getElementById('btn-course-editor-clear-markers');
+  const coursePreviousRoomBtn = doc.getElementById('btn-course-editor-previous-room');
+  const courseNextRoomBtn = doc.getElementById('btn-course-editor-next-room');
 
   goalTypeSelect?.addEventListener('change', () => {
     withActiveEditorScene(game, (scene) => {
@@ -378,6 +380,18 @@ function setupGoalControls(game: Phaser.Game, doc: Document): void {
   courseClearMarkersBtn?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
       scene.clearCourseGoalMarkers?.();
+    });
+  });
+
+  coursePreviousRoomBtn?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      void scene.editPreviousCourseRoom?.();
+    });
+  });
+
+  courseNextRoomBtn?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      void scene.editNextCourseRoom?.();
     });
   });
 }

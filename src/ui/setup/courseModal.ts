@@ -21,9 +21,12 @@ type CourseModalElements = {
   moveSelectedRoomLaterButton: HTMLButtonElement | null;
   editSelectedRoomButton: HTMLButtonElement | null;
   testDraftButton: HTMLButtonElement | null;
+  testDraftReason: HTMLElement | null;
   summary: HTMLElement | null;
   saveButton: HTMLButtonElement | null;
+  saveDraftReason: HTMLElement | null;
   publishButton: HTMLButtonElement | null;
+  publishReason: HTMLElement | null;
 };
 
 function goalTypeLabel(goalType: CourseComposerState['goalType']): string {
@@ -108,9 +111,12 @@ export class CourseModalController {
       moveSelectedRoomLaterButton: this.doc.getElementById('btn-course-move-selected-later') as HTMLButtonElement | null,
       editSelectedRoomButton: this.doc.getElementById('btn-course-edit-selected-room') as HTMLButtonElement | null,
       testDraftButton: this.doc.getElementById('btn-course-test-draft') as HTMLButtonElement | null,
+      testDraftReason: this.doc.getElementById('course-test-draft-reason'),
       summary: this.doc.getElementById('course-summary'),
       saveButton: this.doc.getElementById('btn-course-save-draft') as HTMLButtonElement | null,
+      saveDraftReason: this.doc.getElementById('course-save-draft-reason'),
       publishButton: this.doc.getElementById('btn-course-publish') as HTMLButtonElement | null,
+      publishReason: this.doc.getElementById('course-publish-reason'),
     };
   }
 
@@ -215,24 +221,24 @@ export class CourseModalController {
       const roomCount = state.roomRefs.length;
       this.elements.meta.textContent =
         roomCount > 0
-          ? `${roomCount} room${roomCount === 1 ? '' : 's'} selected · adjacent room order defines the path`
-          : 'Select 1-4 published rooms you authored and keep the path linear.';
+          ? `${roomCount} room${roomCount === 1 ? '' : 's'} selected · authored order defines the path`
+          : 'Select 1-4 adjacent published rooms you authored in path order.';
     }
 
     this.setInputValue(this.elements.titleInput, state.title);
     if (this.elements.selectedRoomStatus) {
-      let selectedText = 'Select a published room in the world to add it to this course.';
+      let selectedText = 'Select a published room in the world to extend this course tail.';
       if (state.selectedRoomId && state.selectedRoomOrder !== null) {
         selectedText = `Course room step ${state.selectedRoomOrder + 1} is selected for edit and reorder actions.`;
       }
       if (state.selectedRoomInDraft && state.selectedRoomOrder !== null) {
         selectedText = `World selection is already in the course at step ${state.selectedRoomOrder + 1}.`;
       } else if (state.selectedRoomEligible) {
-        selectedText = 'World selection can extend this course path.';
+        selectedText = 'World selection can extend the current course tail.';
       } else if (!state.canEdit) {
         selectedText = 'This course is read-only for your account.';
       } else {
-        selectedText = 'World selection cannot extend this course path.';
+        selectedText = 'World selection cannot extend the current course tail.';
       }
       this.elements.selectedRoomStatus.textContent = selectedText;
     }
@@ -256,21 +262,30 @@ export class CourseModalController {
       !state.canEdit || !state.canEditSelectedRoom
     );
     this.setButtonDisabled(this.elements.testDraftButton, !state.canEdit || !state.canTestDraft);
-    const hasTitle = state.title.trim().length > 0;
-    const goalReady =
-      state.goalType === 'reach_exit'
-        ? Boolean(state.startPointRoomId && state.finishRoomId)
-        : state.goalType === 'checkpoint_sprint'
-          ? Boolean(state.startPointRoomId && state.finishRoomId && state.checkpointCount > 0)
-          : state.goalType !== null && Boolean(state.startPointRoomId);
-    this.setButtonDisabled(
-      this.elements.saveButton,
-      !state.canEdit || !state.dirty || !hasTitle || state.roomRefs.length === 0
-    );
-    this.setButtonDisabled(
-      this.elements.publishButton,
-      !state.canEdit || !hasTitle || state.roomRefs.length < 2 || !goalReady
-    );
+    const testDraftReason = !state.canTestDraft ? state.testDraftDisabledReason : null;
+    if (this.elements.testDraftButton) {
+      this.elements.testDraftButton.title = testDraftReason ?? '';
+    }
+    if (this.elements.testDraftReason) {
+      this.elements.testDraftReason.textContent = testDraftReason ?? '';
+      this.elements.testDraftReason.classList.toggle('hidden', !testDraftReason);
+    }
+    this.setButtonDisabled(this.elements.saveButton, !state.canSaveDraft);
+    if (this.elements.saveButton) {
+      this.elements.saveButton.title = state.saveDraftDisabledReason ?? '';
+    }
+    if (this.elements.saveDraftReason) {
+      this.elements.saveDraftReason.textContent = state.saveDraftDisabledReason ?? '';
+      this.elements.saveDraftReason.classList.toggle('hidden', !state.saveDraftDisabledReason);
+    }
+    this.setButtonDisabled(this.elements.publishButton, !state.canPublishCourse);
+    if (this.elements.publishButton) {
+      this.elements.publishButton.title = state.publishCourseDisabledReason ?? '';
+    }
+    if (this.elements.publishReason) {
+      this.elements.publishReason.textContent = state.publishCourseDisabledReason ?? '';
+      this.elements.publishReason.classList.toggle('hidden', !state.publishCourseDisabledReason);
+    }
 
     if (this.elements.status) {
       this.elements.status.textContent = state.statusText ?? '';
@@ -364,6 +379,18 @@ export class CourseModalController {
     this.elements.roomList?.replaceChildren();
     if (this.elements.summary) {
       this.elements.summary.textContent = 'No course selected.';
+    }
+    if (this.elements.saveDraftReason) {
+      this.elements.saveDraftReason.textContent = '';
+      this.elements.saveDraftReason.classList.add('hidden');
+    }
+    if (this.elements.publishReason) {
+      this.elements.publishReason.textContent = '';
+      this.elements.publishReason.classList.add('hidden');
+    }
+    if (this.elements.testDraftReason) {
+      this.elements.testDraftReason.textContent = '';
+      this.elements.testDraftReason.classList.add('hidden');
     }
   }
 

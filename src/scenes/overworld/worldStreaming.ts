@@ -196,10 +196,19 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
   setTransientRoomOverride(room: RoomSnapshot): void {
     this.transientRoomOverridesById.set(room.id, cloneRoomSnapshot(room));
+    this.invalidateRoomArtifacts(room.id, false);
+    this.rebuildLoadedSummaryState();
+    this.refreshVisibleRoomsFromCache();
   }
 
   clearTransientRoomOverride(roomId: string): void {
-    this.transientRoomOverridesById.delete(roomId);
+    if (!this.transientRoomOverridesById.delete(roomId)) {
+      return;
+    }
+
+    this.invalidateRoomArtifacts(roomId, false);
+    this.rebuildLoadedSummaryState();
+    this.refreshVisibleRoomsFromCache();
   }
 
   applyOptimisticMutation(mutation: OptimisticWorldMutation): void {

@@ -79,6 +79,7 @@ export function buildEditorUiViewModel(
     publishNudgeActionText,
     zoomText,
     backToWorldHidden: entrySource !== 'world',
+    backToCourseBuilderHidden: !courseEditorState.canReturnToCourseBuilder,
     playHidden: false,
     saveHidden: false,
     saveDisabled: !roomPermissions.canSaveDraft,
@@ -143,6 +144,8 @@ export function buildEditorUiViewModel(
       visible: courseEditorState.visible,
       statusHidden: courseEditorState.statusHidden,
       statusText: courseEditorState.statusText ?? '',
+      roomStepText: courseEditorState.roomStepText,
+      canReturnToCourseBuilder: courseEditorState.canReturnToCourseBuilder,
       goalTypeValue: courseEditorState.goalTypeValue,
       goalTypeDisabled: courseEditorState.goalTypeDisabled,
       timeLimitHidden: courseEditorState.timeLimitHidden,
@@ -166,6 +169,8 @@ export function buildEditorUiViewModel(
       addCheckpointActive: courseEditorState.addCheckpointActive,
       placeFinishHidden: courseEditorState.placeFinishHidden,
       placeFinishActive: courseEditorState.placeFinishActive,
+      canEditPreviousRoom: courseEditorState.canEditPreviousRoom,
+      canEditNextRoom: courseEditorState.canEditNextRoom,
     },
   };
 }

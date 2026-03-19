@@ -25,6 +25,8 @@ export type EditorCourseUiState = {
   visible: boolean;
   statusHidden: boolean;
   statusText: string | null;
+  roomStepText: string;
+  canReturnToCourseBuilder: boolean;
   goalTypeValue: string;
   goalTypeDisabled: boolean;
   timeLimitHidden: boolean;
@@ -48,6 +50,8 @@ export type EditorCourseUiState = {
   addCheckpointActive: boolean;
   placeFinishHidden: boolean;
   placeFinishActive: boolean;
+  canEditPreviousRoom: boolean;
+  canEditNextRoom: boolean;
 };
 
 export interface EditorSceneBridge {
@@ -61,6 +65,7 @@ export interface EditorSceneBridge {
   publishRoom?: () => Promise<RoomRecord | null>;
   handlePublishNudgeAction?: () => Promise<void>;
   returnToWorld?: () => Promise<void> | void;
+  returnToCourseBuilder?: () => Promise<void> | void;
   mintRoom?: () => Promise<RoomRecord | null>;
   refreshMintMetadata?: () => Promise<RoomRecord | null>;
   fitToScreen?: () => void;
@@ -82,6 +87,8 @@ export interface EditorSceneBridge {
   setCourseGoalSurvivalSeconds?: (seconds: number) => void;
   startCourseGoalMarkerPlacement?: (mode: EditorMarkerPlacementMode) => void;
   clearCourseGoalMarkers?: () => void;
+  editPreviousCourseRoom?: () => Promise<void> | void;
+  editNextCourseRoom?: () => Promise<void> | void;
   undoAction?: () => void;
   redoAction?: () => void;
 }
@@ -122,6 +129,11 @@ export type CourseComposerState = {
   canMoveSelectedRoomLater: boolean;
   canEditSelectedRoom: boolean;
   canTestDraft: boolean;
+  testDraftDisabledReason: string | null;
+  canSaveDraft: boolean;
+  saveDraftDisabledReason: string | null;
+  canPublishCourse: boolean;
+  publishCourseDisabledReason: string | null;
 };
 
 export const COURSE_COMPOSER_STATE_CHANGED_EVENT = 'course-composer-state-changed';

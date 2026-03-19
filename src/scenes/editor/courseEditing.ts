@@ -160,10 +160,26 @@ export function buildCourseEditorState(
     activeGoal,
     coursePlacementMode,
   } = options;
+  const roomOrder = activeCourseMarkerEdit?.roomOrder ?? null;
+  const roomStepText =
+    roomOrder !== null
+      ? draft
+        ? `Room ${roomOrder + 1} of ${draft.roomRefs.length}`
+        : `Room ${roomOrder + 1}`
+      : '';
+  const canEditPreviousRoom =
+    roomOrder !== null &&
+    roomOrder > 0;
+  const canEditNextRoom =
+    roomOrder !== null &&
+    draft !== null &&
+    roomOrder < draft.roomRefs.length - 1;
   return {
     visible: Boolean(activeCourseMarkerEdit || courseEditorStatusText),
     statusHidden: !getCourseEditorContextStatusText(activeCourseMarkerEdit, draft, courseEditorStatusText),
     statusText: getCourseEditorContextStatusText(activeCourseMarkerEdit, draft, courseEditorStatusText),
+    roomStepText,
+    canReturnToCourseBuilder: Boolean(activeCourseMarkerEdit),
     goalTypeValue: activeGoal?.type ?? '',
     goalTypeDisabled: !draft,
     timeLimitHidden: !activeGoal || !('timeLimitMs' in activeGoal),
@@ -203,6 +219,8 @@ export function buildCourseEditorState(
     addCheckpointActive: coursePlacementMode === 'checkpoint',
     placeFinishHidden: activeGoal?.type !== 'checkpoint_sprint',
     placeFinishActive: coursePlacementMode === 'finish',
+    canEditPreviousRoom,
+    canEditNextRoom,
   };
 }
 

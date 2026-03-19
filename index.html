@@ -420,6 +420,11 @@
           <button id="btn-course-editor-place-finish" class="bar-btn bar-btn-small">Set Finish</button>
           <button id="btn-course-editor-clear-markers" class="bar-btn bar-btn-small">Clear Markers</button>
         </div>
+        <div id="course-editor-room-step" class="history-modal-meta hidden"></div>
+        <div class="course-room-actions">
+          <button id="btn-course-editor-previous-room" class="bar-btn bar-btn-small" type="button">Previous Room</button>
+          <button id="btn-course-editor-next-room" class="bar-btn bar-btn-small" type="button">Next Room</button>
+        </div>
         <div id="course-editor-placement-hint" class="goal-placement-hint hidden">Click the canvas to place the selected course marker.</div>
         <div id="course-editor-summary" class="goal-summary">No course selected.</div>
       </div>
@@ -437,6 +442,7 @@
         </div>
         <div class="editor-action-stack">
           <button id="btn-back-to-world" class="bar-btn">Back to World</button>
+          <button id="btn-back-to-course-builder" class="bar-btn hidden">Back to Course Builder</button>
           <button id="btn-test-play" class="bar-btn">Test Play</button>
           <button id="btn-save-draft" class="bar-btn">Save Draft</button>
           <button id="btn-publish-room" class="bar-btn">Publish</button>
@@ -702,7 +708,7 @@
         <div class="history-modal-title-group">
           <div class="history-modal-kicker">Courses</div>
           <h2 id="course-modal-title" class="history-modal-title">Course Builder</h2>
-          <div id="course-modal-meta" class="history-modal-meta">Select 2-4 adjacent published rooms in order.</div>
+          <div id="course-modal-meta" class="history-modal-meta">Select 2-4 adjacent published rooms in authored order.</div>
         </div>
         <button id="btn-course-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
@@ -713,7 +719,7 @@
         </div>
         <div class="about-section">
           <div class="about-section-title">Rooms</div>
-          <div id="course-selected-room-status" class="history-modal-meta">Select a published room to add it.</div>
+          <div id="course-selected-room-status" class="history-modal-meta">Select a published room to extend the course tail.</div>
           <div class="course-room-actions">
             <button id="btn-course-add-selected-room" class="bar-btn bar-btn-small" type="button">Add Selected Room</button>
             <button id="btn-course-remove-selected-room" class="bar-btn bar-btn-small" type="button">Remove Selected Room</button>
@@ -733,6 +739,7 @@
             <button id="btn-course-edit-selected-room" class="bar-btn" type="button">Edit Selected Room</button>
             <button id="btn-course-test-draft" class="bar-btn" type="button">Test Draft Course</button>
           </div>
+          <div id="course-test-draft-reason" class="history-modal-meta hidden"></div>
         </div>
         <div class="about-section">
           <div class="about-section-title">Publish</div>
@@ -740,6 +747,8 @@
             <button id="btn-course-save-draft" class="bar-btn" type="button">Save Draft</button>
             <button id="btn-course-publish" class="bar-btn" type="button">Publish Course</button>
           </div>
+          <div id="course-save-draft-reason" class="history-modal-meta hidden"></div>
+          <div id="course-publish-reason" class="history-modal-meta hidden"></div>
           <div id="course-modal-status" class="history-modal-meta hidden"></div>
         </div>
       </div>

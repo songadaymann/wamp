@@ -30,6 +30,8 @@ export interface EditorCourseUiViewModel {
   visible: boolean;
   statusHidden: boolean;
   statusText: string;
+  roomStepText: string;
+  canReturnToCourseBuilder: boolean;
   goalTypeValue: string;
   goalTypeDisabled: boolean;
   timeLimitHidden: boolean;
@@ -53,6 +55,8 @@ export interface EditorCourseUiViewModel {
   addCheckpointActive: boolean;
   placeFinishHidden: boolean;
   placeFinishActive: boolean;
+  canEditPreviousRoom: boolean;
+  canEditNextRoom: boolean;
 }
 
 export interface EditorUiViewModel {
@@ -67,6 +71,7 @@ export interface EditorUiViewModel {
   publishNudgeActionText: string;
   zoomText: string;
   backToWorldHidden: boolean;
+  backToCourseBuilderHidden: boolean;
   playHidden: boolean;
   saveHidden: boolean;
   saveDisabled: boolean;
@@ -95,6 +100,7 @@ export class EditorUiBridge {
   private readonly publishNudgeActionBtn: HTMLButtonElement | null;
   private readonly zoomEls: HTMLElement[];
   private readonly backToWorldBtn: HTMLButtonElement | null;
+  private readonly backToCourseBuilderBtn: HTMLButtonElement | null;
   private readonly playBtn: HTMLButtonElement | null;
   private readonly saveBtn: HTMLButtonElement | null;
   private readonly publishBtn: HTMLButtonElement | null;
@@ -119,6 +125,7 @@ export class EditorUiBridge {
   private readonly placeFinishBtn: HTMLButtonElement | null;
   private readonly courseRoot: HTMLElement | null;
   private readonly courseStatus: HTMLElement | null;
+  private readonly courseRoomStep: HTMLElement | null;
   private readonly courseGoalTypeSelect: HTMLSelectElement | null;
   private readonly courseTimeLimitRow: HTMLElement | null;
   private readonly courseTimeLimitInput: HTMLInputElement | null;
@@ -133,6 +140,8 @@ export class EditorUiBridge {
   private readonly coursePlaceExitBtn: HTMLButtonElement | null;
   private readonly courseAddCheckpointBtn: HTMLButtonElement | null;
   private readonly coursePlaceFinishBtn: HTMLButtonElement | null;
+  private readonly coursePreviousRoomBtn: HTMLButtonElement | null;
+  private readonly courseNextRoomBtn: HTMLButtonElement | null;
   private readonly backgroundButtons: HTMLButtonElement[];
   private destroyed = false;
 
@@ -155,6 +164,7 @@ export class EditorUiBridge {
       this.doc.getElementById('mobile-editor-zoom-level'),
     ].filter((element): element is HTMLElement => Boolean(element));
     this.backToWorldBtn = this.doc.getElementById('btn-back-to-world') as HTMLButtonElement | null;
+    this.backToCourseBuilderBtn = this.doc.getElementById('btn-back-to-course-builder') as HTMLButtonElement | null;
     this.playBtn = this.doc.getElementById('btn-test-play') as HTMLButtonElement | null;
     this.saveBtn = this.doc.getElementById('btn-save-draft') as HTMLButtonElement | null;
     this.publishBtn = this.doc.getElementById('btn-publish-room') as HTMLButtonElement | null;
@@ -182,6 +192,7 @@ export class EditorUiBridge {
     this.placeFinishBtn = this.doc.getElementById('btn-goal-place-finish') as HTMLButtonElement | null;
     this.courseRoot = this.doc.getElementById('course-goal-section');
     this.courseStatus = this.doc.getElementById('course-editor-status');
+    this.courseRoomStep = this.doc.getElementById('course-editor-room-step');
     this.courseGoalTypeSelect = this.doc.getElementById('course-editor-goal-type-select') as HTMLSelectElement | null;
     this.courseTimeLimitRow = this.doc.getElementById('course-editor-time-limit-row');
     this.courseTimeLimitInput = this.doc.getElementById('course-editor-time-limit-seconds') as HTMLInputElement | null;
@@ -196,6 +207,8 @@ export class EditorUiBridge {
     this.coursePlaceExitBtn = this.doc.getElementById('btn-course-editor-place-exit') as HTMLButtonElement | null;
     this.courseAddCheckpointBtn = this.doc.getElementById('btn-course-editor-add-checkpoint') as HTMLButtonElement | null;
     this.coursePlaceFinishBtn = this.doc.getElementById('btn-course-editor-place-finish') as HTMLButtonElement | null;
+    this.coursePreviousRoomBtn = this.doc.getElementById('btn-course-editor-previous-room') as HTMLButtonElement | null;
+    this.courseNextRoomBtn = this.doc.getElementById('btn-course-editor-next-room') as HTMLButtonElement | null;
     this.backgroundButtons = Array.from(
       this.doc.querySelectorAll<HTMLButtonElement>('[data-background-id]')
     );
@@ -218,6 +231,7 @@ export class EditorUiBridge {
     this.syncBackgroundSelection();
 
     this.setHidden(this.backToWorldBtn, viewModel.backToWorldHidden);
+    this.setHidden(this.backToCourseBuilderBtn, viewModel.backToCourseBuilderHidden);
     this.setHidden(this.playBtn, viewModel.playHidden);
     this.setHidden(this.saveBtn, viewModel.saveHidden);
     this.setDisabled(this.saveBtn, viewModel.saveDisabled);
@@ -263,6 +277,8 @@ export class EditorUiBridge {
     this.setHidden(this.courseRoot, !viewModel.course.visible);
     this.setHidden(this.courseStatus, viewModel.course.statusHidden);
     this.setText(this.courseStatus, viewModel.course.statusText);
+    this.setHidden(this.courseRoomStep, viewModel.course.roomStepText.length === 0);
+    this.setText(this.courseRoomStep, viewModel.course.roomStepText);
     this.setValue(this.courseGoalTypeSelect, viewModel.course.goalTypeValue);
     this.setDisabled(this.courseGoalTypeSelect, viewModel.course.goalTypeDisabled);
     this.setHidden(this.courseTimeLimitRow, viewModel.course.timeLimitHidden);
@@ -286,6 +302,8 @@ export class EditorUiBridge {
     this.setActive(this.courseAddCheckpointBtn, viewModel.course.addCheckpointActive);
     this.setHidden(this.coursePlaceFinishBtn, viewModel.course.placeFinishHidden);
     this.setActive(this.coursePlaceFinishBtn, viewModel.course.placeFinishActive);
+    this.setDisabled(this.coursePreviousRoomBtn, !viewModel.course.canEditPreviousRoom);
+    this.setDisabled(this.courseNextRoomBtn, !viewModel.course.canEditNextRoom);
   }
 
   destroy(): void {
