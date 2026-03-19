@@ -1359,10 +1359,11 @@ export class EditorScene extends Phaser.Scene {
       void this.saveDraft(true);
     }
     const currentRoomSnapshot = this.exportRoomSnapshot();
+    // A saved draft on top of a published room is "clean" but still must stay on the draft path.
     const usePublishedCourseRoomVersion =
       !this.roomDirty &&
       this.publishedVersion > 0 &&
-      this.roomVersion === this.publishedVersion;
+      !this.roomSession.hasDraftPreviewInWorld();
     this.syncActiveCourseRoomSessionSnapshot(currentRoomSnapshot, {
       published: usePublishedCourseRoomVersion,
     });

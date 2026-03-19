@@ -206,6 +206,10 @@ export class EditorRoomSession {
     return { ...this.persistenceStatus };
   }
 
+  hasDraftPreviewInWorld(): boolean {
+    return this.shouldShowDraftPreviewInWorld();
+  }
+
   reset(): void {
     this.roomId = DEFAULT_ROOM_ID;
     this.roomCoordinates = { ...DEFAULT_ROOM_COORDINATES };
