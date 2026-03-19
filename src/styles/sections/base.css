@@ -54,24 +54,6 @@ body {
   min-height: 100vh;
 }
 
-body[data-standalone-portrait='true'] {
-  --safe-top: env(safe-area-inset-left, 0px);
-  --safe-right: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-right, 0px);
-  --safe-left: env(safe-area-inset-bottom, 0px);
-}
-
-body[data-standalone-portrait='true'] #shell-root {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: var(--app-viewport-width);
-  height: var(--app-viewport-height);
-  overflow: hidden;
-  transform-origin: top left;
-  transform: translateX(var(--app-viewport-height)) rotate(90deg);
-}
-
 .app-feedback {
   position: fixed;
   inset: 0;
@@ -331,8 +313,20 @@ body[data-playfun-mode='true'] .rotate-gate {
   font-size: 11px;
 }
 
+.rotate-gate-standalone-only {
+  display: none;
+}
+
 .rotate-gate-browser-copy {
   display: none;
+}
+
+body[data-standalone-launch='true'] .rotate-gate-browser-only {
+  display: none !important;
+}
+
+body[data-standalone-launch='true'] .rotate-gate-standalone-only {
+  display: block;
 }
 
 body[data-install-help-target='safari-share'] .rotate-gate-browser-copy-share,
@@ -475,6 +469,10 @@ body[data-install-help-target='browser-menu'] .rotate-gate-target-menu,
 body[data-install-help-target='generic'] .rotate-gate-target-generic,
 body:not([data-install-help-target]) .rotate-gate-target-generic {
   display: flex;
+}
+
+body[data-standalone-launch='true'] .rotate-gate-target {
+  display: none !important;
 }
 
 body[data-install-help-open='true'] .rotate-gate {
@@ -682,9 +680,4 @@ body[data-install-help-open='true'] .rotate-gate {
   height: min(100dvh, var(--app-viewport-height));
   width: 100vw;
   width: min(100dvw, var(--app-viewport-width));
-}
-
-body[data-standalone-portrait='true'] #app {
-  width: var(--app-viewport-width);
-  height: var(--app-viewport-height);
 }

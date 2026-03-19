@@ -89,8 +89,8 @@ export function drawRoomSnapshotToContext(
   const offsetX = options.offsetX ?? 0;
   const offsetY = options.offsetY ?? 0;
 
-  // Shared chunk canvases need an explicit per-room clip so repeating
-  // background layers don't bleed into adjacent frontier cells.
+  // When drawing multiple rooms into a shared chunk canvas, clip each room to
+  // its own cell so repeating background layers do not bleed into neighbors.
   context.save();
   context.beginPath();
   context.rect(offsetX, offsetY, width, height);

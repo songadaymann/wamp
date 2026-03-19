@@ -34,6 +34,7 @@ type ChatElements = {
   root: HTMLElement | null;
   toggleButton: HTMLButtonElement | null;
   body: HTMLElement | null;
+  closeButton: HTMLButtonElement | null;
   unreadBadge: HTMLElement | null;
   messages: HTMLElement | null;
   empty: HTMLElement | null;
@@ -74,6 +75,10 @@ export class ChatPanelController {
     }
 
     this.openPanel(true);
+  };
+
+  private readonly handleCloseClick = () => {
+    this.closePanel();
   };
 
   private readonly handleFormSubmit = (event: SubmitEvent) => {
@@ -131,6 +136,7 @@ export class ChatPanelController {
       root: this.doc.getElementById('global-chat'),
       toggleButton: this.doc.getElementById('btn-chat-toggle') as HTMLButtonElement | null,
       body: this.doc.getElementById('global-chat-body'),
+      closeButton: this.doc.getElementById('btn-chat-close') as HTMLButtonElement | null,
       unreadBadge: this.doc.getElementById('chat-unread-badge'),
       messages: this.doc.getElementById('chat-messages'),
       empty: this.doc.getElementById('chat-empty'),
@@ -152,6 +158,7 @@ export class ChatPanelController {
 
     this.elements.input?.setAttribute('maxlength', String(CHAT_MESSAGE_MAX_LENGTH));
     this.elements.toggleButton?.addEventListener('click', this.handleToggleClick);
+    this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.form?.addEventListener('submit', this.handleFormSubmit);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
     this.doc.addEventListener('visibilitychange', this.handleVisibilityChange);
@@ -174,6 +181,7 @@ export class ChatPanelController {
   destroy(): void {
     this.destroyed = true;
     this.elements.toggleButton?.removeEventListener('click', this.handleToggleClick);
+    this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.form?.removeEventListener('submit', this.handleFormSubmit);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
     this.doc.removeEventListener('visibilitychange', this.handleVisibilityChange);
