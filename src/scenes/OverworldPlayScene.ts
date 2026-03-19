@@ -202,7 +202,6 @@ const ROOM_BADGE_SEMANTIC_CODES: Record<RoomGoalType, string> = {
   survival: 'SV',
 };
 const SELECTED_ROOM_PLAY_BUTTON_RADIUS = 10;
-const SELECTED_ROOM_PLAY_BUTTON_EDGE_INSET = 16;
 const SELECTED_ROOM_PLAY_BUTTON_SCALE_FACTOR = 0.9;
 const SELECTED_ROOM_PLAY_BUTTON_MIN_SCALE = 1;
 const SELECTED_ROOM_PLAY_BUTTON_MAX_SCALE = 8;
@@ -3283,7 +3282,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     const origin = this.getRoomOrigin(this.selectedCoordinates);
     affordance.container.setPosition(
-      origin.x + ROOM_PX_WIDTH - SELECTED_ROOM_PLAY_BUTTON_EDGE_INSET,
+      origin.x + ROOM_PX_WIDTH * 0.5,
       origin.y + ROOM_PX_HEIGHT * 0.5
     );
     affordance.container.setScale(this.getSelectedRoomPlayAffordanceScale(this.cameras.main.zoom));
