@@ -2935,10 +2935,10 @@ export class OverworldPlayScene extends Phaser.Scene {
           strokeThickness: 3,
         });
 
-        const zoomedInPosition = { x: origin.x + 8, y: origin.y + ROOM_PX_HEIGHT - 22 };
+        const zoomedInPosition = { x: origin.x + 8, y: origin.y + ROOM_PX_HEIGHT - 34 };
         const zoomedOutPosition = {
           x: origin.x + (ROOM_PX_WIDTH - backgroundWidth) * 0.5,
-          y: origin.y + ROOM_PX_HEIGHT - 22,
+          y: origin.y + ROOM_PX_HEIGHT - 34,
         };
         const container = this.add.container(zoomedInPosition.x, zoomedInPosition.y, [
           background,
