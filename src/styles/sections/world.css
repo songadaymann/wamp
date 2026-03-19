@@ -294,6 +294,26 @@ body[data-app-mode="play-world"] #game-container {
   max-height: min(620px, 76vh);
 }
 
+.chat-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chat-panel-title {
+  color: var(--accent-warm);
+  font-family: 'Early GameBoy', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+}
+
+.chat-panel-close {
+  margin-left: auto;
+  min-width: 64px;
+}
+
 .chat-messages {
   min-height: 240px;
   max-height: min(460px, 60vh);
@@ -423,6 +443,14 @@ body[data-app-mode="play-world"] #game-container {
   pointer-events: none;
 }
 
+.mobile-world-stop {
+  position: absolute;
+  top: calc(46px + var(--safe-top));
+  left: calc(8px + var(--safe-left));
+  z-index: 12;
+  min-width: 68px;
+}
+
 .mobile-play-utility {
   position: absolute;
   right: calc(14px + var(--safe-right));
@@ -550,7 +578,7 @@ body[data-app-mode="play-world"] #game-container {
   left: calc(8px + var(--safe-left));
   bottom: calc(4px + var(--safe-bottom));
   width: 212px;
-  height: 138px;
+  height: 176px;
   pointer-events: none;
 }
 
@@ -602,23 +630,28 @@ body[data-app-mode="play-world"] #game-container {
   background: linear-gradient(180deg, rgba(67, 67, 67, 0.84), rgba(15, 15, 15, 0.92));
 }
 
+.mobile-dpad-up {
+  left: 69px;
+  top: 0;
+}
+
 .mobile-dpad-left {
   left: 0;
-  bottom: 0;
+  top: 47px;
   width: 96px;
   height: 82px;
 }
 
 .mobile-dpad-right {
   right: 0;
-  bottom: 0;
+  top: 47px;
   width: 96px;
   height: 82px;
 }
 
 .mobile-dpad-down {
-  left: 70px;
-  top: 0;
+  left: 69px;
+  top: 116px;
 }
 
 .mobile-editor-nav {

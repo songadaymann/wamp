@@ -4491,6 +4491,21 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.redrawGoalMarkers();
   }
 
+  private clearTouchGestureState(): void {
+    this.isPanning = false;
+    this.panStartPointer = { x: 0, y: 0 };
+    this.panCurrentPointer = { x: 0, y: 0 };
+    this.panStartScroll = {
+      x: this.cameras.main.scrollX,
+      y: this.cameras.main.scrollY,
+    };
+    this.touchPointers.clear();
+    this.activePrimaryTouchId = null;
+    this.touchTapCandidate = null;
+    this.touchPinchDistance = 0;
+    this.touchPinchAnchor = { x: 0, y: 0 };
+  }
+
   private shouldResetSingleRoomChallengeStateForRun(runState: GoalRunState): boolean {
     return (
       runState.result === 'active' ||
@@ -4775,6 +4790,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (selectedState !== 'published' && selectedState !== 'draft') return;
 
     this.resetPlaySession();
+    this.clearTouchGestureState();
     this.browseInspectZoom = this.inspectZoom;
     this.mode = 'play';
     this.cameraMode = 'follow';
@@ -4790,6 +4806,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   returnToWorld(): void {
     const returnCoordinates = this.activeCourseRun?.returnCoordinates ?? this.currentRoomCoordinates;
     this.resetPlaySession();
+    this.clearTouchGestureState();
     this.mode = 'browse';
     this.cameraMode = 'inspect';
     this.inspectZoom = this.browseInspectZoom;
@@ -4882,6 +4899,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private async startCoursePlayback(snapshot: CourseSnapshot): Promise<void> {
     this.resetPlaySession();
+    this.clearTouchGestureState();
     this.goalRunController.clearCurrentRun();
     await this.prepareActiveCourseRoomOverrides(snapshot);
     this.activeCourseRun = this.createCourseRunState(snapshot);

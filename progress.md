@@ -57,6 +57,36 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Mobile D-pad cross restore pass on March 19, 2026:
+  - restored the visible phone `Up` pad after removing it proved too limiting for actual play
+  - rearranged the phone D-pad back into a true four-way cross so `Up` sits above `Left` / `Right` and `Down` now sits below them instead of occupying the top slot
+  - verification:
+    - `npm run build` passed
+    - targeted phone-landscape probe confirmed the live D-pad layout in `output/web-game/mobile-stop-chat-layout-2/play-mode.png`
+- Mobile stop/chat/overworld touch reset pass on March 19, 2026:
+  - removed the phone `Cam` button from play mode because it was not providing meaningful mobile value
+  - moved the phone `Stop` action out of the right-side control cluster and into the top-left HUD lane as a red world-style button that appears just under the collapsed `Room +` toggle during phone play
+  - kept the in-HUD `Play Room` -> `Stop` behavior intact, so reopening the room card in play still exposes the same native stop control inside the HUD
+  - added a real chat header with a dedicated `Close` button and converted open phone chat into a bounded full-screen panel so it can no longer spill off the top of the device viewport
+  - reset the overworld scene's touch pan/pinch gesture state whenever play starts or stops, which should prevent stale gesture state from breaking browse-mode pan/zoom after leaving a room
+  - verification:
+    - `npm run build` passed
+    - required Playwright smoke client passed with no console errors and wrote `output/web-game/mobile-stop-chat-smoke/state-0.json`
+    - targeted phone-landscape probe confirmed:
+      - play mode shows the top-left red stop button at `x=8`, `y=48`, `68x23`
+      - tapping that stop button returns the app from `play-world` to `world`
+      - open phone chat stays within the viewport at `x=8`, `y=8`, `828x322`, with a dedicated close button in the header
+      - artifacts:
+        - `output/web-game/mobile-stop-chat-layout-2/play-mode.png`
+        - `output/web-game/mobile-stop-chat-layout-2/chat-open.png`
+        - `output/web-game/mobile-stop-chat-layout-2/state.json`
+    - targeted gesture-reset probe confirmed that returning to world clears stale touch gesture state:
+      - `touchPointersSize: 0`
+      - `activePrimaryTouchId: null`
+      - `touchTapCandidate: null`
+      - `touchPinchDistance: 0`
+      - `isPanning: false`
+      - artifact: `output/web-game/mobile-gesture-reset/state.json`
 - Mobile control layout + transparency pass on March 19, 2026:
   - removed the visible `Up` pad from phone play controls and reshaped the left cluster around larger `Left` / `Right` targets plus a smaller centered `Down`
   - rebuilt the right-side action cluster into a GameCube-like triangle: `Jump` is now the large center button, while `Slash` and `Shoot` sit around it as smaller surrounding buttons

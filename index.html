@@ -514,12 +514,16 @@
         </div>
       </div>
       <button id="btn-world-hud-toggle" class="bar-btn bar-btn-small world-hud-toggle hidden" type="button">Room +</button>
+      <button
+        id="btn-mobile-world-stop"
+        class="bar-btn bar-btn-small world-btn-play active mobile-world-stop hidden"
+        type="button"
+      >
+        Stop
+      </button>
       <div id="mobile-play-controls" class="mobile-play-controls hidden">
-        <div class="mobile-play-utility">
-          <button id="btn-mobile-stop" class="mobile-action-btn mobile-utility-btn" type="button">Stop</button>
-          <button id="btn-mobile-camera" class="mobile-action-btn mobile-utility-btn" type="button">Cam</button>
-        </div>
         <div id="mobile-dpad" class="mobile-dpad" aria-label="Move">
+          <button id="btn-mobile-up" class="mobile-dpad-btn mobile-dpad-up" data-mobile-direction="up" type="button" aria-label="Move up">Up</button>
           <button id="btn-mobile-left" class="mobile-dpad-btn mobile-dpad-left" data-mobile-direction="left" type="button" aria-label="Move left">Left</button>
           <button id="btn-mobile-right" class="mobile-dpad-btn mobile-dpad-right" data-mobile-direction="right" type="button" aria-label="Move right">Right</button>
           <button id="btn-mobile-down" class="mobile-dpad-btn mobile-dpad-down" data-mobile-direction="down" type="button" aria-label="Move down">Down</button>
@@ -536,6 +540,10 @@
           <span id="chat-unread-badge" class="chat-unread-badge hidden">0</span>
         </button>
         <div id="global-chat-body" class="chat-panel-body hidden">
+          <div class="chat-panel-header">
+            <div class="chat-panel-title">World Chat</div>
+            <button id="btn-chat-close" class="bar-btn bar-btn-small chat-panel-close" type="button">Close</button>
+          </div>
           <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
           <div id="chat-empty" class="chat-empty">No messages yet.</div>
           <form id="chat-form" class="chat-form">

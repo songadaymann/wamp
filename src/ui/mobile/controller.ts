@@ -23,8 +23,7 @@ type Elements = {
   mobileJumpButton: HTMLButtonElement | null;
   mobileSlashButton: HTMLButtonElement | null;
   mobileShootButton: HTMLButtonElement | null;
-  mobileStopButton: HTMLButtonElement | null;
-  mobileCameraButton: HTMLButtonElement | null;
+  mobileWorldStopButton: HTMLButtonElement | null;
   worldHudToggleButton: HTMLButtonElement | null;
   worldHudMinimizeButton: HTMLButtonElement | null;
   worldChatButton: HTMLButtonElement | null;
@@ -65,8 +64,7 @@ export class MobileUiController {
       mobileJumpButton: doc.getElementById('btn-mobile-jump') as HTMLButtonElement | null,
       mobileSlashButton: doc.getElementById('btn-mobile-slash') as HTMLButtonElement | null,
       mobileShootButton: doc.getElementById('btn-mobile-shoot') as HTMLButtonElement | null,
-      mobileStopButton: doc.getElementById('btn-mobile-stop') as HTMLButtonElement | null,
-      mobileCameraButton: doc.getElementById('btn-mobile-camera') as HTMLButtonElement | null,
+      mobileWorldStopButton: doc.getElementById('btn-mobile-world-stop') as HTMLButtonElement | null,
       worldHudToggleButton: doc.getElementById('btn-world-hud-toggle') as HTMLButtonElement | null,
       worldHudMinimizeButton: doc.getElementById('btn-mobile-world-hud-minimize') as HTMLButtonElement | null,
       worldChatButton: doc.getElementById('btn-world-chat') as HTMLButtonElement | null,
@@ -388,11 +386,10 @@ export class MobileUiController {
     this.bindHoldButton(this.elements.mobileSlashButton, 'slash');
     this.bindHoldButton(this.elements.mobileShootButton, 'shoot');
 
-    this.elements.mobileStopButton?.addEventListener('click', () => {
-      pressTouchAction('stop');
-    });
-    this.elements.mobileCameraButton?.addEventListener('click', () => {
-      pressTouchAction('cameraToggle');
+    this.elements.mobileWorldStopButton?.addEventListener('click', () => {
+      if (this.doc.body.dataset.appMode === 'play-world') {
+        pressTouchAction('stop');
+      }
     });
   }
 
@@ -534,6 +531,10 @@ export class MobileUiController {
     this.elements.mobilePlayControls?.classList.toggle(
       'hidden',
       !(layout.coarsePointer && !layout.mobileLandscapeBlocked && isPlay),
+    );
+    this.elements.mobileWorldStopButton?.classList.toggle(
+      'hidden',
+      !(isPhoneWorld && isPlay && this.worldHudCollapsed),
     );
 
     this.doc.body.dataset.mobileWorldHudCollapsed =
