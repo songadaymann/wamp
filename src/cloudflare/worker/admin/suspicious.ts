@@ -145,6 +145,7 @@ interface SuspiciousAnalysis {
 interface InvalidationSelection {
   roomRuns: SuspiciousRunCase[];
   courseRuns: SuspiciousRunCase[];
+  selectedPointEvents: PointEventRow[];
   runPointEvents: PointEventRow[];
   creatorPointEvents: PointEventRow[];
   playfunSync: PlayfunPointSyncRow[];
@@ -268,12 +269,12 @@ export async function handleAdminSuspiciousInvalidate(
   requireAdminRequest(env, request, `invalidate suspicious activity for ${userId}`);
   const body = await parseSuspiciousInvalidationBody(request);
   const preview = await buildInvalidationPreview(env, userId, body);
-  await ensureSuspiciousAuditSchema(env);
   const auditId = crypto.randomUUID();
   const createdAt = new Date().toISOString();
   const snapshot = {
     roomRuns: preview.roomRuns,
     courseRuns: preview.courseRuns,
+    selectedPointEvents: preview.selectedPointEvents,
     runPointEvents: preview.runPointEvents,
     creatorPointEvents: preview.creatorPointEvents,
     playfunSync: preview.playfunSync,
@@ -309,6 +310,7 @@ export async function handleAdminSuspiciousInvalidate(
       JSON.stringify(preview.roomRuns.map((run) => run.attemptId)),
       JSON.stringify(preview.courseRuns.map((run) => run.attemptId)),
       JSON.stringify([
+        ...preview.selectedPointEvents.map((event) => event.id),
         ...preview.runPointEvents.map((event) => event.id),
         ...preview.creatorPointEvents.map((event) => event.id),
       ]),
@@ -326,7 +328,11 @@ export async function handleAdminSuspiciousInvalidate(
   for (const run of preview.courseRuns) {
     statements.push(env.DB.prepare('DELETE FROM course_runs WHERE attempt_id = ?').bind(run.attemptId));
   }
-  for (const event of [...preview.runPointEvents, ...preview.creatorPointEvents]) {
+  for (const event of [
+    ...preview.selectedPointEvents,
+    ...preview.runPointEvents,
+    ...preview.creatorPointEvents,
+  ]) {
     statements.push(env.DB.prepare('DELETE FROM point_events WHERE id = ?').bind(event.id));
   }
 
@@ -1188,7 +1194,6 @@ async function loadRecentInvalidations(
   env: Env,
   targetUserId: string | null = null
 ): Promise<SuspiciousInvalidationAuditSummary[]> {
-  await ensureSuspiciousAuditSchema(env);
   const rows = targetUserId
     ? await env.DB.prepare(
         `
@@ -1241,66 +1246,19 @@ async function loadRecentInvalidations(
   return rows.results.map(mapAuditSummary);
 }
 
-async function ensureSuspiciousAuditSchema(env: Env): Promise<void> {
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        CREATE TABLE IF NOT EXISTS admin_suspicious_invalidation_audit (
-          id TEXT PRIMARY KEY,
-          target_user_id TEXT NOT NULL,
-          target_user_display_name TEXT NOT NULL,
-          operator_label TEXT NOT NULL,
-          reason TEXT NOT NULL,
-          room_run_attempt_ids_json TEXT NOT NULL,
-          course_run_attempt_ids_json TEXT NOT NULL,
-          affected_point_event_ids_json TEXT NOT NULL,
-          affected_playfun_sync_json TEXT NOT NULL,
-          affected_creator_user_ids_json TEXT NOT NULL,
-          remote_follow_up_required INTEGER NOT NULL DEFAULT 0,
-          snapshot_json TEXT NOT NULL,
-          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-      `
-    ),
-    env.DB.prepare(
-      `
-        CREATE INDEX IF NOT EXISTS idx_admin_suspicious_audit_created
-        ON admin_suspicious_invalidation_audit(created_at DESC)
-      `
-    ),
-    env.DB.prepare(
-      `
-        CREATE INDEX IF NOT EXISTS idx_admin_suspicious_audit_target_user
-        ON admin_suspicious_invalidation_audit(target_user_id, created_at DESC)
-      `
-    ),
-    env.DB.prepare(
-      `
-        CREATE INDEX IF NOT EXISTS idx_room_runs_finished_result_user
-        ON room_runs(finished_at DESC, result, user_id)
-      `
-    ),
-    env.DB.prepare(
-      `
-        CREATE INDEX IF NOT EXISTS idx_course_runs_finished_result_user
-        ON course_runs(finished_at DESC, result, user_id)
-      `
-    ),
-    env.DB.prepare(
-      `
-        CREATE INDEX IF NOT EXISTS idx_point_events_created_user
-        ON point_events(created_at DESC, user_id)
-      `
-    ),
-  ]);
-}
-
 async function buildInvalidationPreview(
   env: Env,
   userId: string,
   input: SuspiciousInvalidationPreviewRequest
 ): Promise<SuspiciousInvalidationPreviewResponse> {
-  const selection = await loadInvalidationSelection(env, userId, input.roomRunAttemptIds, input.courseRunAttemptIds);
+  const selection = await loadInvalidationSelection(
+    env,
+    userId,
+    input.roomRunAttemptIds,
+    input.courseRunAttemptIds,
+    input.pointEventIds
+  );
+  const selectedPointEvents = selection.selectedPointEvents.map(mapPointEventRecord);
   const targetUser = selection.affectedUsers.find((entry) => entry.userId === userId);
   if (!targetUser) {
     throw new HttpError(404, 'Target user could not be resolved for invalidation.');
@@ -1312,6 +1270,7 @@ async function buildInvalidationPreview(
     reason: input.reason,
     roomRuns: selection.roomRuns,
     courseRuns: selection.courseRuns,
+    selectedPointEvents,
     runPointEvents: selection.runPointEvents.map(mapPointEventRecord),
     creatorPointEvents: selection.creatorPointEvents.map(mapPointEventRecord),
     affectedUsers: selection.affectedUsers,
@@ -1326,6 +1285,7 @@ async function buildInvalidationPreview(
     summary: {
       roomRunsDeleted: selection.roomRuns.length,
       courseRunsDeleted: selection.courseRuns.length,
+      selectedPointEventsDeleted: selectedPointEvents.length,
       runPointEventsDeleted: selection.runPointEvents.length,
       creatorPointEventsDeleted: selection.creatorPointEvents.length,
     },
@@ -1336,10 +1296,11 @@ async function loadInvalidationSelection(
   env: Env,
   userId: string,
   roomRunAttemptIds: string[],
-  courseRunAttemptIds: string[]
+  courseRunAttemptIds: string[],
+  pointEventIds: string[]
 ): Promise<InvalidationSelection> {
-  if (roomRunAttemptIds.length === 0 && courseRunAttemptIds.length === 0) {
-    throw new HttpError(400, 'Select at least one suspicious room or course run.');
+  if (roomRunAttemptIds.length === 0 && courseRunAttemptIds.length === 0 && pointEventIds.length === 0) {
+    throw new HttpError(400, 'Select at least one suspicious run or point event.');
   }
 
   const roomRuns = await loadSelectedRoomRuns(env, userId, roomRunAttemptIds);
@@ -1348,9 +1309,20 @@ async function loadInvalidationSelection(
     ...roomRuns.map((run) => run.attemptId),
     ...courseRuns.map((run) => run.attemptId),
   ];
-  const runPointEvents = await loadRunPointEventsByAttemptIds(env, allAttemptIds);
-  const creatorPointEvents = await loadCreatorPointEventsByAttemptIds(env, allAttemptIds);
+  const [selectedPointEventsRaw, runPointEventsRaw, creatorPointEventsRaw] = await Promise.all([
+    loadSelectedPointEvents(env, userId, pointEventIds),
+    loadRunPointEventsByAttemptIds(env, allAttemptIds),
+    loadCreatorPointEventsByAttemptIds(env, allAttemptIds),
+  ]);
+  const runPointEventIds = new Set(runPointEventsRaw.map((event) => event.id));
+  const creatorPointEventIds = new Set(creatorPointEventsRaw.map((event) => event.id));
+  const selectedPointEvents = selectedPointEventsRaw.filter(
+    (event) => !runPointEventIds.has(event.id) && !creatorPointEventIds.has(event.id)
+  );
+  const runPointEvents = dedupePointEventsById(runPointEventsRaw);
+  const creatorPointEvents = dedupePointEventsById(creatorPointEventsRaw);
   const allPointEventIds = [
+    ...selectedPointEvents.map((event) => event.id),
     ...runPointEvents.map((event) => event.id),
     ...creatorPointEvents.map((event) => event.id),
   ];
@@ -1381,6 +1353,7 @@ async function loadInvalidationSelection(
   return {
     roomRuns,
     courseRuns,
+    selectedPointEvents,
     runPointEvents,
     creatorPointEvents,
     playfunSync,
@@ -1488,6 +1461,38 @@ async function loadSelectedRoomRuns(
   }
 
   return rows.sort(compareRunCases);
+}
+
+async function loadSelectedPointEvents(
+  env: Env,
+  userId: string,
+  pointEventIds: string[]
+): Promise<PointEventRow[]> {
+  if (pointEventIds.length === 0) {
+    return [];
+  }
+
+  const rows: PointEventRow[] = [];
+  for (const chunk of chunkArray([...new Set(pointEventIds)], 50)) {
+    const placeholders = chunk.map(() => '?').join(', ');
+    const result = await env.DB.prepare(
+      `
+        SELECT id, user_id, event_type, source_key, points, breakdown_json, created_at
+        FROM point_events
+        WHERE user_id = ?
+          AND id IN (${placeholders})
+      `
+    )
+      .bind(userId, ...chunk)
+      .all<PointEventRow>();
+    rows.push(...result.results);
+  }
+
+  if (rows.length !== [...new Set(pointEventIds)].length) {
+    throw new HttpError(404, 'One or more selected point events could not be found for this user.');
+  }
+
+  return dedupePointEventsById(rows);
 }
 
 async function loadSelectedCourseRuns(
@@ -1891,6 +1896,14 @@ function mapPointEventRecord(row: PointEventRow): SuspiciousPointEventRecord {
   };
 }
 
+function dedupePointEventsById(rows: PointEventRow[]): PointEventRow[] {
+  const unique = new Map<string, PointEventRow>();
+  for (const row of rows) {
+    unique.set(row.id, row);
+  }
+  return [...unique.values()];
+}
+
 function decodeJsonArray(raw: string | null): unknown[] {
   const parsed = parseJsonSafely(raw);
   return Array.isArray(parsed) ? parsed : [];
@@ -1950,6 +1963,7 @@ async function parseSuspiciousInvalidationPreviewBody(
   return {
     roomRunAttemptIds: normalizeStringArray(body.roomRunAttemptIds, 'roomRunAttemptIds'),
     courseRunAttemptIds: normalizeStringArray(body.courseRunAttemptIds, 'courseRunAttemptIds'),
+    pointEventIds: normalizeStringArray(body.pointEventIds, 'pointEventIds'),
     reason,
   };
 }
@@ -1961,6 +1975,7 @@ async function parseSuspiciousInvalidationBody(
   return {
     roomRunAttemptIds: normalizeStringArray(body.roomRunAttemptIds, 'roomRunAttemptIds'),
     courseRunAttemptIds: normalizeStringArray(body.courseRunAttemptIds, 'courseRunAttemptIds'),
+    pointEventIds: normalizeStringArray(body.pointEventIds, 'pointEventIds'),
     reason: normalizeRequiredText(body.reason, 'reason'),
     operatorLabel: normalizeRequiredText(body.operatorLabel, 'operatorLabel'),
   };

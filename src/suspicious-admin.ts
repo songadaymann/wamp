@@ -67,6 +67,7 @@ interface ViewState {
   preview: SuspiciousInvalidationPreviewResponse | SuspiciousInvalidationResult | null;
   selectedRoomRunIds: Set<string>;
   selectedCourseRunIds: Set<string>;
+  selectedPointEventIds: Set<string>;
   loading: boolean;
   detailLoading: boolean;
   previewLoading: boolean;
@@ -87,6 +88,7 @@ const state: ViewState = {
   preview: null,
   selectedRoomRunIds: new Set<string>(),
   selectedCourseRunIds: new Set<string>(),
+  selectedPointEventIds: new Set<string>(),
   loading: false,
   detailLoading: false,
   previewLoading: false,
@@ -133,6 +135,7 @@ clearKeyButton?.addEventListener('click', () => {
   state.preview = null;
   state.selectedRoomRunIds.clear();
   state.selectedCourseRunIds.clear();
+  state.selectedPointEventIds.clear();
   window.sessionStorage.removeItem(ADMIN_KEY_STORAGE_KEY);
   if (adminKeyInput) {
     adminKeyInput.value = '';
@@ -163,6 +166,7 @@ queueList?.addEventListener('click', (event) => {
 
 detailRoomRuns?.addEventListener('change', handleSelectionChange);
 detailCourseRuns?.addEventListener('change', handleSelectionChange);
+detailPointEvents?.addEventListener('change', handleSelectionChange);
 
 previewButton?.addEventListener('click', () => {
   void previewInvalidation();
@@ -212,6 +216,7 @@ async function refreshAll(force = false): Promise<void> {
       state.preview = null;
       state.selectedRoomRunIds.clear();
       state.selectedCourseRunIds.clear();
+      state.selectedPointEventIds.clear();
     }
 
     if (state.selectedUserId) {
@@ -243,12 +248,17 @@ async function loadDetail(userId: string, preserveSelection = false): Promise<vo
     if (!preserveSelection) {
       state.selectedRoomRunIds = new Set(detail.roomRuns.map((run) => run.attemptId));
       state.selectedCourseRunIds = new Set(detail.courseRuns.map((run) => run.attemptId));
+      state.selectedPointEventIds =
+        detail.roomRuns.length === 0 && detail.courseRuns.length === 0
+          ? new Set(detail.recentPointEvents.map((event) => event.id))
+          : new Set();
     }
   } catch (error) {
     state.detail = null;
     state.preview = null;
     state.selectedRoomRunIds.clear();
     state.selectedCourseRunIds.clear();
+    state.selectedPointEventIds.clear();
     setStatus(detailStatus, getErrorMessage(error, 'Failed to load suspicious user detail.'), true);
   } finally {
     state.detailLoading = false;
@@ -279,6 +289,7 @@ async function previewInvalidation(): Promise<void> {
         body: JSON.stringify({
           roomRunAttemptIds: [...state.selectedRoomRunIds],
           courseRunAttemptIds: [...state.selectedCourseRunIds],
+          pointEventIds: [...state.selectedPointEventIds],
           reason,
         }),
       }
@@ -324,6 +335,7 @@ async function executeInvalidation(): Promise<void> {
         body: JSON.stringify({
           roomRunAttemptIds: [...state.selectedRoomRunIds],
           courseRunAttemptIds: [...state.selectedCourseRunIds],
+          pointEventIds: [...state.selectedPointEventIds],
           reason,
           operatorLabel,
         }),
@@ -346,11 +358,16 @@ function handleSelectionChange(event: Event): void {
   }
   const attemptId = target.dataset.attemptId?.trim() ?? '';
   const kind = target.dataset.kind;
-  if (!attemptId || (kind !== 'room' && kind !== 'course')) {
+  if (!attemptId || (kind !== 'room' && kind !== 'course' && kind !== 'point')) {
     return;
   }
 
-  const set = kind === 'room' ? state.selectedRoomRunIds : state.selectedCourseRunIds;
+  const set =
+    kind === 'room'
+      ? state.selectedRoomRunIds
+      : kind === 'course'
+        ? state.selectedCourseRunIds
+        : state.selectedPointEventIds;
   if (target.checked) {
     set.add(attemptId);
   } else {
@@ -623,14 +640,16 @@ function renderPointEvents(
   body.replaceChildren();
   if (events.length === 0) {
     const row = document.createElement('tr');
-    row.innerHTML = '<td colspan="3" class="meta">No recent point events.</td>';
+    row.innerHTML = '<td colspan="4" class="meta">No recent point events.</td>';
     body.appendChild(row);
     return;
   }
 
   for (const event of events) {
     const row = document.createElement('tr');
+    const checked = state.selectedPointEventIds.has(event.id) ? 'checked' : '';
     row.innerHTML = `
+      <td><input type="checkbox" data-kind="point" data-attempt-id="${escapeHtml(event.id)}" ${checked} /></td>
       <td>${escapeHtml(event.eventType)}</td>
       <td>${event.points}</td>
       <td>${formatTimestamp(event.createdAt)}</td>
@@ -688,7 +707,7 @@ function renderPreview(): void {
   const followUpCount = preview.playfunSync.filter((row) => row.status === 'sent').length;
   previewMeta.innerHTML = `
     <div>${preview.summary.roomRunsDeleted} room runs · ${preview.summary.courseRunsDeleted} course runs</div>
-    <div>${preview.summary.runPointEventsDeleted} run point events · ${preview.summary.creatorPointEventsDeleted} creator point events</div>
+    <div>${preview.summary.selectedPointEventsDeleted} selected point events · ${preview.summary.runPointEventsDeleted} run point events · ${preview.summary.creatorPointEventsDeleted} creator point events</div>
     <div>${preview.remoteFollowUpRequired ? `Remote Play.fun follow-up required for ${followUpCount} synced row${followUpCount === 1 ? '' : 's'}.` : 'No remote Play.fun follow-up required.'}</div>
   `;
 
@@ -697,7 +716,7 @@ function renderPreview(): void {
     .join('');
 
   previewPointEvents.replaceChildren();
-  const pointEvents = [...preview.runPointEvents, ...preview.creatorPointEvents];
+  const pointEvents = [...preview.selectedPointEvents, ...preview.runPointEvents, ...preview.creatorPointEvents];
   if (pointEvents.length === 0) {
     const row = document.createElement('tr');
     row.innerHTML = '<td colspan="3" class="meta">No affected point events.</td>';
@@ -721,7 +740,8 @@ function renderSelectionSummary(): void {
   }
   const roomCount = state.selectedRoomRunIds.size;
   const courseCount = state.selectedCourseRunIds.size;
-  selectionSummary.textContent = `${roomCount} room runs and ${courseCount} course runs selected.`;
+  const pointCount = state.selectedPointEventIds.size;
+  selectionSummary.textContent = `${roomCount} room runs, ${courseCount} course runs, and ${pointCount} point events selected.`;
 }
 
 function formatRunMetric(run: SuspiciousUserDetailResponse['roomRuns'][number]): string {

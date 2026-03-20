@@ -182,6 +182,7 @@ export interface SuspiciousUserDetailResponse {
 export interface SuspiciousInvalidationPreviewRequest {
   roomRunAttemptIds: string[];
   courseRunAttemptIds: string[];
+  pointEventIds: string[];
   reason: string;
 }
 
@@ -208,6 +209,7 @@ export interface SuspiciousInvalidationPreviewResponse {
   reason: string;
   roomRuns: SuspiciousRunCase[];
   courseRuns: SuspiciousRunCase[];
+  selectedPointEvents: SuspiciousPointEventRecord[];
   runPointEvents: SuspiciousPointEventRecord[];
   creatorPointEvents: SuspiciousPointEventRecord[];
   affectedUsers: SuspiciousInvalidationUserRecord[];
@@ -216,6 +218,7 @@ export interface SuspiciousInvalidationPreviewResponse {
   summary: {
     roomRunsDeleted: number;
     courseRunsDeleted: number;
+    selectedPointEventsDeleted: number;
     runPointEventsDeleted: number;
     creatorPointEventsDeleted: number;
   };
