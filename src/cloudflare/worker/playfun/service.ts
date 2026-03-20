@@ -318,7 +318,7 @@ export async function flushPlayfunPointSync(
     try {
       await playfunRequest<PlayfunBatchSaveResponse>(env, 'POST', '/play/dev/batch-save-points', {
         gameApiKey: env.PLAYFUN_API_KEY?.trim(),
-        points: [{ playerId: ogpId, points: totalPoints }],
+        points: [{ playerId: ogpId, points: String(totalPoints) }],
       });
 
       flushed += group.length;
