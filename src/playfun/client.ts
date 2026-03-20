@@ -81,6 +81,12 @@ export function bootstrapPlayfunModeFromUrl(): void {
     nextMode = false;
   }
 
+  // Auto-detect Play.fun embedding: if we're in an iframe and the SDK is
+  // available, enable playfun mode even without the ?pf=1 query param.
+  if (!nextMode && isEmbeddedContext() && typeof window.OpenGameSDK !== 'undefined') {
+    nextMode = true;
+  }
+
   setPlayfunMode(nextMode);
   syncPlayfunBodyData();
 }
