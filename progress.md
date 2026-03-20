@@ -57,6 +57,15 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Tileset follow-up pass on March 20, 2026:
+  - lifted the remaining wanted `tilesets` branch changes onto `main`: added the new `cage` and `floor_trigger` object assets plus catalog entries, and carried over the desert sand deco/collision fix
+  - `cage` is currently wired as a solid platform prop and `floor_trigger` as a non-colliding interactive prop so both appear in the editor palette immediately without waiting on bespoke trigger logic
+  - updated `public/agent-room-authoring.md` so the documented object catalog includes both additions
+  - verification:
+    - `npm run build` passed in a clean checkout from the latest `origin/main`
+    - Playwright smoke against `http://127.0.0.1:4175` wrote `output/web-game/objects-sand-smoke/state-0.json` through `state-2.json` with a clean overworld boot state
+    - screenshot capture still hit the existing black-frame/WebGL limitation, so the remaining check is a real in-editor visual pass to confirm the default `cage` frame and `floor_trigger` read well in the palette/runtime
+
 - Standalone portrait rotation + control spacing pass on March 18, 2026:
   - promoted standalone/PWA launch detection into shared device-layout state so installed launches now suppress the portrait install gate and install-help surfaces consistently instead of only relying on the install-help controller's local check
   - installed portrait launches now auto-rotate the app shell into landscape by rotating the new top-level `#shell-root` and swapping the effective mobile viewport/orientation fed into layout, HUD, and control logic

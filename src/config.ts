@@ -118,7 +118,7 @@ const TOP_DECOR_INDICES_LAVA = [
   85,
 ];
 const DECO_ONLY_INDICES_FOREST = [2, 3, 5, 18];
-const DECO_ONLY_INDICES_DESERT = [3, 18];
+const DECO_ONLY_INDICES_DESERT = [3, 4, 18];
 const DECO_ONLY_INDICES_WATER = [1, 2, 3, 5, 13, 18];
 const DECO_ONLY_INDICES_SNOW = [8, 9, 10];
 const DECO_ONLY_INDICES_LAVA = [8, 10];
@@ -472,9 +472,11 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'brick_box',   name: 'Brick Box',   category: 'platform',    path: 'assets/objects/brick_box.png',   frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 0,  defaultFrame: 3, bodyWidth: 16, bodyHeight: 17, bodyOffsetX: 8, bodyOffsetY: 7, previewWidth: 16, previewHeight: 17, previewOffsetX: 8, previewOffsetY: 7, behavior: 'static',   description: 'Solid brick block. Stand on it like a platform.' },
   { id: 'treasure_chest', name: 'Treasure Chest', category: 'platform', path: 'assets/objects/treasure_chest.png', frameWidth: 32, frameHeight: 32, frameCount: 4, fps: 0, defaultFrame: 0, bodyWidth: 28, bodyHeight: 18, bodyOffsetX: 2, bodyOffsetY: 14, behavior: 'static', description: 'Solid chest prop. Good for treasure rooms.' },
   { id: 'log_wall',    name: 'Log Wall',    category: 'platform',    path: 'assets/deco/log_wall.png',       frameWidth: 32, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 44, bodyOffsetX: 2, bodyOffsetY: 4, behavior: 'static',   description: 'Tall wooden wall segment. Solid collision.' },
+  { id: 'cage',        name: 'Cage',        category: 'platform',    path: 'assets/objects/cage.png',        frameWidth: 16, frameHeight: 32, frameCount: 5,  fps: 0,  defaultFrame: 4, bodyWidth: 14, bodyHeight: 30, bodyOffsetX: 1, bodyOffsetY: 2, behavior: 'static',   description: 'Tall cage prop. Solid collision.' },
   { id: 'sign',        name: 'Sign',        category: 'decoration',  path: 'assets/objects/sign.png',        frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative signpost. No collision.' },
   { id: 'sign_arrow',  name: 'Arrow Sign',  category: 'decoration',  path: 'assets/objects/sign_arrow.png',  frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative arrow sign. No collision.' },
   { id: 'ladder',      name: 'Ladder',      category: 'interactive', path: 'assets/objects/ladder.png',      frameWidth: 16, frameHeight: 64, frameCount: 1,  fps: 0,  bodyWidth: 16, bodyHeight: 51, bodyOffsetX: 0, bodyOffsetY: 13, previewWidth: 16, previewHeight: 51, previewOffsetX: 0, previewOffsetY: 13, behavior: 'static',   description: 'Climbable surface. Press up to climb.' },
+  { id: 'floor_trigger', name: 'Floor Trigger', category: 'interactive', path: 'assets/objects/floor_trigger.png', frameWidth: 8, frameHeight: 16, frameCount: 4, fps: 0, defaultFrame: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Pressure-plate trigger prop. Logic can be added later.' },
   { id: 'button',      name: 'Button',      category: 'decoration',  path: 'assets/objects/button.png',      frameWidth: 16, frameHeight: 16, frameCount: 4,  fps: 0,  defaultFrame: 0, bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Floor button prop. Logic can be added later.' },
 
   // ── Decorations ──

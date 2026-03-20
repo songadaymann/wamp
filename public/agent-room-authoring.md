@@ -200,11 +200,13 @@ Common valid object ids by category:
   - `flag`
   - `door_locked`
   - `ladder`
+  - `floor_trigger`
 - `platform`:
   - `crate`
   - `brick_box`
   - `treasure_chest`
   - `log_wall`
+  - `cage`
 - `decoration`:
   - `sign`
   - `sign_arrow`
