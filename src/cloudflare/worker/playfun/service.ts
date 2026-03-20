@@ -460,21 +460,26 @@ async function updatePlayfunPointSyncRows(
     return;
   }
 
-  const placeholders = pointEventIds.map(() => '?').join(', ');
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        UPDATE playfun_point_sync
-        SET
-          status = ?,
-          attempt_count = attempt_count + 1,
-          last_attempted_at = ?,
-          synced_at = ?,
-          last_error = ?
-        WHERE point_event_id IN (${placeholders})
-      `
-    ).bind(input.status, input.attemptedAt, input.syncedAt, input.lastError, ...pointEventIds),
-  ]);
+  // D1 limits bound parameters to ~100 per statement; 4 are fixed, so chunk IDs
+  const CHUNK_SIZE = 90;
+  for (let i = 0; i < pointEventIds.length; i += CHUNK_SIZE) {
+    const chunk = pointEventIds.slice(i, i + CHUNK_SIZE);
+    const placeholders = chunk.map(() => '?').join(', ');
+    await env.DB.batch([
+      env.DB.prepare(
+        `
+          UPDATE playfun_point_sync
+          SET
+            status = ?,
+            attempt_count = attempt_count + 1,
+            last_attempted_at = ?,
+            synced_at = ?,
+            last_error = ?
+          WHERE point_event_id IN (${placeholders})
+        `
+      ).bind(input.status, input.attemptedAt, input.syncedAt, input.lastError, ...chunk),
+    ]);
+  }
 }
 
 async function loadPlayfunPointSyncCounts(
