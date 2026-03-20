@@ -247,7 +247,13 @@ async function ensurePlayfunSdk(): Promise<OpenGameSDKInstance | null> {
       logLevel: 'warn',
     });
 
-    sdk.on('OnReady', () => {
+    sdk.on('OnReady', (...args: unknown[]) => {
+      console.log('[Play.fun] OnReady fired', {
+        sessionToken: sdk.sessionToken,
+        playerId: sdk.playerId,
+        args,
+        sdkKeys: Object.keys(sdk),
+      });
       playfunSdkReady = true;
       capturePlayfunSessionToken();
       syncPlayfunWidgetVisibility();
@@ -256,12 +262,22 @@ async function ensurePlayfunSdk(): Promise<OpenGameSDKInstance | null> {
         void flushPendingPlayfunPoints();
       }
     });
-    sdk.on('LoginSuccess', () => {
+    sdk.on('LoginSuccess', (...args: unknown[]) => {
+      console.log('[Play.fun] LoginSuccess fired', {
+        sessionToken: sdk.sessionToken,
+        playerId: sdk.playerId,
+        args,
+      });
       capturePlayfunSessionToken();
       void refreshAuthSession();
       void flushPendingPlayfunPoints();
     });
-    sdk.on('SessionStarted', () => {
+    sdk.on('SessionStarted', (...args: unknown[]) => {
+      console.log('[Play.fun] SessionStarted fired', {
+        sessionToken: sdk.sessionToken,
+        playerId: sdk.playerId,
+        args,
+      });
       capturePlayfunSessionToken();
       void refreshAuthSession();
       void flushPendingPlayfunPoints();
@@ -274,6 +290,13 @@ async function ensurePlayfunSdk(): Promise<OpenGameSDKInstance | null> {
     });
 
     await sdk.init();
+
+    console.log('[Play.fun] SDK initialized', {
+      sessionToken: sdk.sessionToken,
+      playerId: sdk.playerId,
+      sdkKeys: Object.keys(sdk),
+      sdkPrototypeKeys: Object.getOwnPropertyNames(Object.getPrototypeOf(sdk)),
+    });
 
     playfunSdk = sdk;
     capturePlayfunSessionToken();
