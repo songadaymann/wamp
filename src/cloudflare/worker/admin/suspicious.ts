@@ -1329,9 +1329,21 @@ async function loadInvalidationSelection(
   const playfunSync = await loadPlayfunSyncRowsByPointEventIds(env, allPointEventIds);
 
   const affectedUsers = new Map<string, { userId: string; userDisplayName: string }>();
-  const targetDisplayName = roomRuns[0]?.userDisplayName ?? courseRuns[0]?.userDisplayName ?? null;
-  if (targetDisplayName) {
-    affectedUsers.set(userId, { userId, userDisplayName: targetDisplayName });
+  const targetUserRow = await env.DB.prepare(
+    `
+      SELECT id, display_name
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+    `
+  )
+    .bind(userId)
+    .first<{ id: string; display_name: string }>();
+  if (targetUserRow) {
+    affectedUsers.set(userId, {
+      userId: targetUserRow.id,
+      userDisplayName: targetUserRow.display_name,
+    });
   }
 
   const creatorUserIds = [...new Set(creatorPointEvents.map((event) => event.user_id))];
