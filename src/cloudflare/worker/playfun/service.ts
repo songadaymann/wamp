@@ -317,7 +317,9 @@ export async function flushPlayfunPointSync(
 
     try {
       await playfunRequest<PlayfunBatchSaveResponse>(env, 'POST', '/play/dev/batch-save-points', {
-        gameApiKey: env.PLAYFUN_API_KEY?.trim(),
+        // The raw REST endpoint still uses the legacy field names here:
+        // "gameApiKey" is the registered game UUID and "points" is the batch array.
+        gameApiKey: env.PLAYFUN_GAME_ID?.trim(),
         points: [{ playerId: ogpId, points: String(totalPoints) }],
       });
 
@@ -401,7 +403,8 @@ async function playfunRequest<T>(
     throw new Error('Play.fun credentials are not configured.');
   }
 
-  const timestamp = Math.floor(Date.now() / 1000);
+  // Play.fun HMAC auth expects a Unix timestamp in milliseconds.
+  const timestamp = Date.now();
   const signature = await signPlayfunRequest(secretKey, method, path, timestamp);
   const headers = new Headers({
     Authorization: `HMAC-SHA256 apiKey=${apiKey}, signature=${signature}, timestamp=${timestamp}`,
@@ -421,8 +424,11 @@ async function playfunRequest<T>(
   if (!response.ok) {
     const parsedMessage = extractPlayfunError(parsed);
     const rawMessage = rawText.trim();
-    const message = (parsedMessage ?? rawMessage) || `Play.fun request failed with status ${response.status}.`;
-    throw new Error(message);
+    const message =
+      (parsedMessage ?? rawMessage) ||
+      `Play.fun request failed with status ${response.status}.`;
+    const contextualMessage = `Play.fun ${method} ${path} failed with status ${response.status}: ${message}`;
+    throw new Error(contextualMessage);
   }
 
   return extractPlayfunPayload<T>(parsed);
