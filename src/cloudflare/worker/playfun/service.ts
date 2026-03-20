@@ -401,7 +401,7 @@ async function playfunRequest<T>(
     throw new Error('Play.fun credentials are not configured.');
   }
 
-  const timestamp = Date.now();
+  const timestamp = Math.floor(Date.now() / 1000);
   const signature = await signPlayfunRequest(secretKey, method, path, timestamp);
   const headers = new Headers({
     Authorization: `HMAC-SHA256 apiKey=${apiKey}, signature=${signature}, timestamp=${timestamp}`,
