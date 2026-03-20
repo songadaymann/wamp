@@ -378,8 +378,12 @@ async function maybeMirrorRunPointEventToPlayfun(
     return;
   }
 
-  await enqueuePlayfunPointSync(env, pointEvent, playfunSession.ogpId);
-  await flushPlayfunPointSync(env, userId);
+  try {
+    await enqueuePlayfunPointSync(env, pointEvent, playfunSession.ogpId);
+    await flushPlayfunPointSync(env, userId);
+  } catch (error) {
+    console.warn('Failed to mirror run point event to Play.fun', { userId, pointEventId: pointEvent.id, error });
+  }
 }
 
 async function maybeMirrorPointEventToLinkedPlayfunUser(
@@ -396,8 +400,12 @@ async function maybeMirrorPointEventToLinkedPlayfunUser(
     return;
   }
 
-  await enqueuePlayfunPointSync(env, pointEvent, link.ogp_id);
-  await flushPlayfunPointSync(env, userId);
+  try {
+    await enqueuePlayfunPointSync(env, pointEvent, link.ogp_id);
+    await flushPlayfunPointSync(env, userId);
+  } catch (error) {
+    console.warn('Failed to mirror linked Play.fun point event', { userId, pointEventId: pointEvent.id, error });
+  }
 }
 
 function resolveRoomVersionPublisherUserId(

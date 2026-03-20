@@ -474,8 +474,12 @@ async function maybeMirrorPointEventToPlayfun(
     return;
   }
 
-  await enqueuePlayfunPointSync(env, pointEvent, playfunSession.ogpId);
-  await flushPlayfunPointSync(env, userId);
+  try {
+    await enqueuePlayfunPointSync(env, pointEvent, playfunSession.ogpId);
+    await flushPlayfunPointSync(env, userId);
+  } catch (error) {
+    console.warn('Failed to mirror room point event to Play.fun', { userId, pointEventId: pointEvent.id, error });
+  }
 }
 
 function buildRoomMutationActor(auth: RequestAuth): RoomMutationActor {
