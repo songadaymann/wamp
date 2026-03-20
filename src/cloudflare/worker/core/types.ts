@@ -316,6 +316,22 @@ export interface PlayfunUserLinkRow {
   updated_at: string;
 }
 
+export interface SuspiciousInvalidationAuditRow {
+  id: string;
+  target_user_id: string;
+  target_user_display_name: string;
+  operator_label: string;
+  reason: string;
+  room_run_attempt_ids_json: string;
+  course_run_attempt_ids_json: string;
+  affected_point_event_ids_json: string;
+  affected_playfun_sync_json: string;
+  affected_creator_user_ids_json: string;
+  remote_follow_up_required: number;
+  snapshot_json: string;
+  created_at: string;
+}
+
 export interface ChatMessageRow {
   id: string;
   user_id: string;

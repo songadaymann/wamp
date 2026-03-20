@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Suspicious Activity Admin</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #070b10;
+        --panel: rgba(17, 24, 35, 0.9);
+        --panel-border: rgba(170, 196, 255, 0.18);
+        --panel-strong: rgba(170, 196, 255, 0.3);
+        --text: #f5f7fb;
+        --muted: #9eabc4;
+        --good: #59d98e;
+        --warn: #ffcd57;
+        --danger: #ff6d6d;
+        --accent: #7ec9ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top, rgba(126, 201, 255, 0.14), transparent 28%),
+          linear-gradient(180deg, #0b1018 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      .shell {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 24px 20px 48px;
+        display: grid;
+        gap: 16px;
+      }
+
+      .masthead {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        font-family: "IBM Plex Mono", "Fira Code", monospace;
+        letter-spacing: 0.02em;
+      }
+
+      p,
+      .meta {
+        color: var(--muted);
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.22);
+      }
+
+      .stack {
+        display: grid;
+        gap: 16px;
+      }
+
+      .controls,
+      .filters,
+      .actions,
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .filters label,
+      .field label {
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      input[type="password"],
+      input[type="text"],
+      select,
+      textarea {
+        min-height: 44px;
+        padding: 11px 13px;
+        background: rgba(7, 11, 16, 0.92);
+        border: 1px solid var(--panel-strong);
+        border-radius: 12px;
+        color: var(--text);
+      }
+
+      textarea {
+        min-height: 80px;
+        resize: vertical;
+      }
+
+      button {
+        min-height: 44px;
+        padding: 11px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--panel-strong);
+        background: rgba(126, 201, 255, 0.12);
+        color: var(--text);
+        cursor: pointer;
+      }
+
+      button.secondary {
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      button.danger {
+        background: rgba(255, 109, 109, 0.12);
+        border-color: rgba(255, 109, 109, 0.26);
+      }
+
+      button:disabled {
+        opacity: 0.55;
+        cursor: default;
+      }
+
+      .cards {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      }
+
+      .card {
+        border-radius: 14px;
+        background: rgba(7, 11, 16, 0.68);
+        border: 1px solid rgba(170, 196, 255, 0.14);
+        padding: 14px;
+      }
+
+      .label {
+        display: block;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+
+      .value {
+        font-size: 28px;
+        font-weight: 700;
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(360px, 420px) minmax(0, 1fr);
+        gap: 16px;
+        align-items: start;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .chip.high {
+        color: var(--danger);
+        border-color: rgba(255, 109, 109, 0.28);
+      }
+
+      .chip.medium {
+        color: var(--warn);
+        border-color: rgba(255, 205, 87, 0.28);
+      }
+
+      .chip.low {
+        color: var(--accent);
+        border-color: rgba(126, 201, 255, 0.24);
+      }
+
+      .status {
+        min-height: 20px;
+        color: var(--muted);
+      }
+
+      .status.error {
+        color: var(--danger);
+      }
+
+      .status.success {
+        color: var(--good);
+      }
+
+      .queue-list,
+      .audit-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .queue-row,
+      .audit-row {
+        border-radius: 14px;
+        background: rgba(7, 11, 16, 0.64);
+        border: 1px solid rgba(170, 196, 255, 0.12);
+        padding: 12px;
+      }
+
+      .queue-row.active {
+        border-color: rgba(126, 201, 255, 0.4);
+        box-shadow: inset 0 0 0 1px rgba(126, 201, 255, 0.22);
+      }
+
+      .queue-row button {
+        width: 100%;
+        text-align: left;
+        background: transparent;
+        border: none;
+        padding: 0;
+        min-height: 0;
+      }
+
+      .queue-title,
+      .audit-title {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+
+      .queue-title strong,
+      .audit-title strong {
+        font-size: 16px;
+      }
+
+      .queue-meta,
+      .audit-meta {
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .detail-grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .two-up {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .field {
+        display: grid;
+        gap: 6px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        text-align: left;
+        padding: 10px 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .empty {
+        padding: 18px;
+        border-radius: 14px;
+        background: rgba(7, 11, 16, 0.56);
+        border: 1px dashed rgba(170, 196, 255, 0.18);
+        color: var(--muted);
+      }
+
+      .selection-summary {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 1100px) {
+        .workspace,
+        .two-up {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .shell {
+          padding: 16px 14px 32px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="masthead">
+        <div class="stack" style="gap: 6px">
+          <h1>Suspicious Activity Admin</h1>
+          <p>Internal operator console for local cheating review, invalidation, and Play.fun follow-up tracking.</p>
+        </div>
+        <div id="last-updated" class="meta">No snapshot loaded yet.</div>
+      </header>
+
+      <section class="panel stack">
+        <div class="controls">
+          <input id="admin-key-input" type="password" autocomplete="off" placeholder="Paste ADMIN_API_KEY" />
+          <button id="save-key-button" type="button">Use Key</button>
+          <button id="refresh-button" type="button" class="secondary">Refresh</button>
+          <button id="clear-key-button" type="button" class="secondary">Clear Key</button>
+        </div>
+        <div id="auth-status" class="status">Paste the admin key to start reviewing suspicious activity.</div>
+      </section>
+
+      <section class="panel stack">
+        <h2>Filters</h2>
+        <div class="filters">
+          <label>
+            Review Window
+            <select id="window-hours-select">
+              <option value="24">Last 24h</option>
+              <option value="72">Last 72h</option>
+              <option value="168">Last 7d</option>
+            </select>
+          </label>
+          <label>
+            Severity
+            <select id="severity-select">
+              <option value="all">All severities</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </label>
+          <label>
+            Signal
+            <select id="signal-select">
+              <option value="all">All signals</option>
+              <option value="record_gap">Record Gap</option>
+              <option value="too_fast_absolute">Too Fast</option>
+              <option value="run_burst_5m">Run Burst · 5m</option>
+              <option value="run_burst_60m">Run Burst · 60m</option>
+              <option value="repeat_identical">Repeated Identical Clears</option>
+              <option value="point_burst_5m">Point Burst · 5m</option>
+              <option value="new_account_spike">New Account Spike</option>
+            </select>
+          </label>
+          <label style="flex: 1 1 260px">
+            Search
+            <input id="search-input" type="text" placeholder="Display name, user id, OGP id" />
+          </label>
+          <button id="apply-filters-button" type="button">Apply Filters</button>
+        </div>
+      </section>
+
+      <section class="panel stack">
+        <h2>Summary</h2>
+        <div id="summary-grid" class="cards">
+          <div class="card"><span class="label">Open Cases</span><div class="value">0</div></div>
+        </div>
+      </section>
+
+      <section class="panel stack">
+        <div class="queue-title">
+          <h2>Recent Invalidations</h2>
+          <a href="/launch-admin.html">Open Launch Admin</a>
+        </div>
+        <div id="recent-invalidations" class="audit-list">
+          <div class="empty">No invalidations yet.</div>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <section class="panel stack">
+          <div class="queue-title">
+            <h2>Suspicious Users</h2>
+            <div id="queue-count" class="meta">0 users</div>
+          </div>
+          <div id="queue-list" class="queue-list">
+            <div class="empty">Load the queue to begin.</div>
+          </div>
+        </section>
+
+        <section class="panel stack">
+          <div class="queue-title">
+            <h2>User Detail</h2>
+            <div id="detail-status" class="status"></div>
+          </div>
+
+          <div id="detail-empty" class="empty">Select a suspicious user to inspect flagged runs and local point impact.</div>
+
+          <div id="detail-shell" class="detail-grid" hidden>
+            <section class="card stack">
+              <div class="queue-title">
+                <strong id="detail-user-name">Unknown User</strong>
+                <span id="detail-user-severity" class="chip">none</span>
+              </div>
+              <div id="detail-user-meta" class="queue-meta"></div>
+              <div id="detail-signals" class="chips"></div>
+            </section>
+
+            <section class="card stack">
+              <div class="two-up">
+                <div class="field">
+                  <label for="reason-input">Invalidation Reason</label>
+                  <textarea id="reason-input" placeholder="Explain why this activity is being invalidated."></textarea>
+                </div>
+                <div class="field">
+                  <label for="operator-label-input">Operator Label</label>
+                  <input id="operator-label-input" type="text" placeholder="Your name or handle" />
+                  <div class="selection-summary" id="selection-summary">0 runs selected.</div>
+                </div>
+              </div>
+              <div class="actions">
+                <button id="preview-button" type="button">Preview Invalidation</button>
+                <button id="execute-button" type="button" class="danger">Execute Invalidation</button>
+              </div>
+              <div id="action-status" class="status"></div>
+            </section>
+
+            <section class="card stack">
+              <h3>Suspicious Room Runs</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Room</th>
+                    <th>Metric</th>
+                    <th>Signals</th>
+                    <th>Finished</th>
+                  </tr>
+                </thead>
+                <tbody id="detail-room-runs">
+                  <tr><td colspan="5" class="meta">No room runs.</td></tr>
+                </tbody>
+              </table>
+            </section>
+
+            <section class="card stack">
+              <h3>Suspicious Course Runs</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Course</th>
+                    <th>Metric</th>
+                    <th>Signals</th>
+                    <th>Finished</th>
+                  </tr>
+                </thead>
+                <tbody id="detail-course-runs">
+                  <tr><td colspan="5" class="meta">No course runs.</td></tr>
+                </tbody>
+              </table>
+            </section>
+
+            <section class="two-up">
+              <section class="card stack">
+                <h3>Recent Point Events</h3>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Event</th>
+                      <th>Points</th>
+                      <th>Created</th>
+                    </tr>
+                  </thead>
+                  <tbody id="detail-point-events">
+                    <tr><td colspan="3" class="meta">No recent point events.</td></tr>
+                  </tbody>
+                </table>
+              </section>
+
+              <section class="card stack">
+                <h3>Recent Invalidations</h3>
+                <div id="detail-invalidations" class="audit-list">
+                  <div class="empty">No prior invalidations for this user.</div>
+                </div>
+              </section>
+            </section>
+
+            <section class="card stack">
+              <h3>Preview</h3>
+              <div id="preview-empty" class="empty">Preview an invalidation to see exactly which local runs and point events will be removed.</div>
+              <div id="preview-shell" hidden class="stack">
+                <div id="preview-meta" class="queue-meta"></div>
+                <div id="preview-users" class="chips"></div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Point Event Type</th>
+                      <th>Points</th>
+                      <th>Created</th>
+                    </tr>
+                  </thead>
+                  <tbody id="preview-point-events">
+                    <tr><td colspan="3" class="meta">No affected point events.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="/src/suspicious-admin.ts"></script>
+  </body>
+</html>
