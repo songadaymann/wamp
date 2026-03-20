@@ -460,25 +460,27 @@ async function updatePlayfunPointSyncRows(
     return;
   }
 
-  // D1 limits bound parameters to ~100 per statement; 4 are fixed, so chunk IDs
-  const CHUNK_SIZE = 90;
-  for (let i = 0; i < pointEventIds.length; i += CHUNK_SIZE) {
-    const chunk = pointEventIds.slice(i, i + CHUNK_SIZE);
-    const placeholders = chunk.map(() => '?').join(', ');
-    await env.DB.batch([
-      env.DB.prepare(
-        `
-          UPDATE playfun_point_sync
-          SET
-            status = ?,
-            attempt_count = attempt_count + 1,
-            last_attempted_at = ?,
-            synced_at = ?,
-            last_error = ?
-          WHERE point_event_id IN (${placeholders})
-        `
-      ).bind(input.status, input.attemptedAt, input.syncedAt, input.lastError, ...chunk),
-    ]);
+  // D1 can reject large dynamic IN (...) updates with "too many SQL variables".
+  // Use fixed-width statements and batch a small number of them together instead.
+  const STATEMENTS_PER_BATCH = 25;
+  for (let i = 0; i < pointEventIds.length; i += STATEMENTS_PER_BATCH) {
+    const chunk = pointEventIds.slice(i, i + STATEMENTS_PER_BATCH);
+    await env.DB.batch(
+      chunk.map((pointEventId) =>
+        env.DB.prepare(
+          `
+            UPDATE playfun_point_sync
+            SET
+              status = ?,
+              attempt_count = attempt_count + 1,
+              last_attempted_at = ?,
+              synced_at = ?,
+              last_error = ?
+            WHERE point_event_id = ?
+          `
+        ).bind(input.status, input.attemptedAt, input.syncedAt, input.lastError, pointEventId)
+      )
+    );
   }
 }
 
