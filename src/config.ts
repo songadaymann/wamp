@@ -94,8 +94,9 @@ function createTilesetCollisionProfiles(
 const DECORATED_TOP_PROFILE = 'decoratedTop' as const;
 const NO_COLLISION_PROFILE = 'none' as const;
 const TOP_DECOR_INDICES_STANDARD = [
-  14, 15, 16, 17, 20,
-  25, 26, 27, 28, 29, 30,
+  9, 11,
+  14, 15, 16, 17, 20, 21, 23,
+  25, 26, 27, 28, 29, 30, 33, 34, 35,
   37, 38, 39, 40, 41, 42,
   44, 45, 46,
   49, 50, 51, 52, 53, 54,
@@ -118,7 +119,7 @@ const TOP_DECOR_INDICES_LAVA = [
 ];
 const DECO_ONLY_INDICES_FOREST = [2, 3, 5, 18];
 const DECO_ONLY_INDICES_DESERT = [3, 18];
-const DECO_ONLY_INDICES_WATER = [2, 3, 5, 18, 22];
+const DECO_ONLY_INDICES_WATER = [1, 2, 3, 5, 13, 18];
 const DECO_ONLY_INDICES_SNOW = [8, 9, 10];
 const DECO_ONLY_INDICES_LAVA = [8, 10];
 
