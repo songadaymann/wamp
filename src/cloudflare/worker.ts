@@ -40,6 +40,17 @@ import {
 } from './worker/runs/routes';
 import { awardRoomPublishPoints, upsertUserStats } from './worker/runs/points';
 import {
+  annotateRoomRecordWithTilesetHints,
+  annotateRoomSnapshotWithTilesetHint,
+  annotateRoomVersionRecordsWithTilesetHints,
+  getAgentTilesetCatalogResponse,
+  renderAgentTilesetMarkdown,
+} from '../agentBuilder/tilesetCatalog';
+import {
+  parseRoomDraftCommandsRequest,
+  saveDraftFromCommandRequest,
+} from './worker/rooms/commands';
+import {
   loadPublishedRoom,
   loadRoomRecord,
   publishRoom,
@@ -56,6 +67,16 @@ import {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === '/agent-tilesets.md' && request.method === 'GET') {
+      return new Response(renderAgentTilesetMarkdown(), {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/markdown; charset=utf-8',
+          ...corsHeaders(request),
+        },
+      });
+    }
 
     if (!url.pathname.startsWith('/api/')) {
       return env.ASSETS.fetch(request);
@@ -128,6 +149,10 @@ export default {
 
       if (url.pathname === '/api/playfun/config' && request.method === 'GET') {
         return await handlePlayfunConfig(request, env);
+      }
+
+      if (url.pathname === '/api/tilesets' && request.method === 'GET') {
+        return jsonResponse(request, getAgentTilesetCatalogResponse());
       }
 
       if (url.pathname === '/api/playfun/flush' && request.method === 'POST') {
@@ -254,7 +279,7 @@ export default {
             console.warn('Failed to refresh room ownership from chain during read', error);
           }
         }
-        return jsonResponse(request, record);
+        return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
       }
 
       if (segments.length === 4 && segments[3] === 'published' && request.method === 'GET') {
@@ -267,7 +292,7 @@ export default {
           throw new HttpError(404, 'Published room not found.');
         }
 
-        return jsonResponse(request, publishedRoom);
+        return jsonResponse(request, annotateRoomSnapshotWithTilesetHint(publishedRoom));
       }
 
       if (segments.length === 4 && segments[3] === 'draft' && request.method === 'PUT') {
@@ -279,7 +304,27 @@ export default {
           'rooms:write'
         );
         const record = await saveDraft(env, snapshot, buildRoomMutationActor(auth), auth.isAdmin);
-        return jsonResponse(request, record);
+        return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
+      }
+
+      if (segments.length === 5 && segments[3] === 'draft' && segments[4] === 'commands' && request.method === 'POST') {
+        const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
+        const body = await parseRoomDraftCommandsRequest(request);
+        const auth = await requireAuthenticatedRequestAuth(
+          env,
+          request,
+          'save room drafts from commands',
+          'rooms:write'
+        );
+        const record = await saveDraftFromCommandRequest(
+          env,
+          roomId,
+          coordinates,
+          body,
+          buildRoomMutationActor(auth),
+          auth.isAdmin,
+        );
+        return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
       }
 
       if (segments.length === 4 && segments[3] === 'publish' && request.method === 'POST') {
@@ -305,7 +350,7 @@ export default {
         );
         await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
         await upsertUserStats(env, auth.user.id);
-        return jsonResponse(request, record);
+        return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
       }
 
       if (segments.length === 4 && segments[3] === 'revert' && request.method === 'POST') {
@@ -334,7 +379,7 @@ export default {
         );
         await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
         await upsertUserStats(env, auth.user.id);
-        return jsonResponse(request, record);
+        return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
       }
 
       if (segments.length === 4 && segments[3] === 'versions' && request.method === 'GET') {
@@ -349,7 +394,7 @@ export default {
           auth?.user.walletAddress ?? null,
           auth?.isAdmin ?? false
         );
-        return jsonResponse(request, record.versions);
+        return jsonResponse(request, annotateRoomVersionRecordsWithTilesetHints(record.versions));
       }
 
       if (

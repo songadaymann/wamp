@@ -41,13 +41,77 @@ The room id and coordinates must match the target room.
 - `0` does not mean terrain; it is treated as empty
 - Do not invent tile values blindly
 
+## How Terrain Actually Works
+
+- Any terrain gid `<= 0` is empty.
+- Positive terrain gids collide by default.
+- Transparency does not mean a tile is non-solid.
+- Only tiles explicitly marked as non-colliding are safe decoration-only terrain.
+- gids map to tileset ranges, so you must know which tileset you are using before writing terrain.
+
+Use these references first:
+
+- `GET /api/tilesets`
+- `/agent-tilesets.md`
+
+Room reads can also include `tilesetHint`, which summarizes:
+
+- the dominant tileset in the room
+- all tilesets used
+- observed surface gids
+- observed fill gids
+- a recommended build style id
+
 Safe terrain strategy:
 
 1. Inspect nearby published rooms
-2. Reuse real positive terrain cell values that already exist in the local neighborhood
-3. Preserve the same tileset vocabulary, but create a new layout
+2. Read `GET /api/tilesets` and pick one named build style
+3. Prefer the `tilesetHint` from nearby room responses when it is present
+4. Preserve the same tileset vocabulary, but create a new layout
 
 If you do not know what terrain gids to use, do not guess.
+
+## Preferred Terrain Mutation Path
+
+For first-pass agent builds, prefer:
+
+- `POST /api/rooms/{roomId}/draft/commands`
+
+Use raw `PUT /api/rooms/{roomId}/draft` only when you need advanced edits that the command API does not cover.
+
+The command API is safer because terrain commands use:
+
+- `tilesetKey`
+- `styleId`
+
+instead of raw gids.
+
+Example:
+
+```json
+{
+  "base": "blank",
+  "commands": [
+    {
+      "type": "platform",
+      "tilesetKey": "forest",
+      "styleId": "forest_flat",
+      "row": 17,
+      "colStart": 0,
+      "colEnd": 39,
+      "depth": 3
+    }
+  ]
+}
+```
+
+## Safe Terrain Heuristics
+
+- Surface rows are the exposed top tiles of a platform.
+- Fill rows are the solid body tiles under the surface.
+- Use one tileset and one build style for the main route before mixing styles.
+- If a room is mixed-theme, still choose one primary tileset for the traversable ground.
+- If a nearby published room already has a good `tilesetHint`, reuse that tileset/style pairing instead of reverse-engineering raw integers.
 
 ## Spawn Rules
 

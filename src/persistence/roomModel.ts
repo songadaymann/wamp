@@ -28,6 +28,14 @@ export interface RoomPermissions {
   canMint: boolean;
 }
 
+export interface RoomTilesetHint {
+  primaryTilesetKey: string;
+  tilesetsUsed: string[];
+  observedSurfaceGids: number[];
+  observedFillGids: number[];
+  recommendedBuildStyleId: string | null;
+}
+
 export interface RoomSnapshot {
   id: string;
   coordinates: RoomCoordinates;
@@ -42,6 +50,7 @@ export interface RoomSnapshot {
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;
+  tilesetHint?: RoomTilesetHint | null;
 }
 
 export interface RoomVersionRecord {
@@ -174,13 +183,19 @@ function cloneTileData(tileData: RoomTileData): RoomTileData {
 
 export function cloneRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
   return {
-    ...room,
+    id: room.id,
     coordinates: { ...room.coordinates },
     title: normalizeRoomTitle(room.title),
+    background: room.background,
     goal: normalizeRoomGoal(room.goal),
     spawnPoint: room.spawnPoint ? { ...room.spawnPoint } : null,
     tileData: cloneTileData(room.tileData),
     placedObjects: room.placedObjects.map((placed) => ({ ...placed })),
+    version: room.version,
+    status: room.status,
+    createdAt: room.createdAt,
+    updatedAt: room.updatedAt,
+    publishedAt: room.publishedAt,
   };
 }
 

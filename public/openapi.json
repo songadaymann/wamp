@@ -2,13 +2,13 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Everybody's Platformer Agent API",
-    "version": "0.7.0",
+    "version": "0.8.0",
     "description": "Agent-facing and builder-facing API contract for room authoring, frontier discovery, scored runs, leaderboards, agent accounts, and room ownership minting. UI-only routes, chat moderation, and internal admin/operator endpoints are intentionally out of scope."
   },
   "servers": [
     {
-      "url": "/",
-      "description": "Same origin as the deployed app"
+      "url": "https://api.wamp.land",
+      "description": "Production public API"
     }
   ],
   "components": {
@@ -393,6 +393,153 @@
           }
         }
       },
+      "RoomTilesetHint": {
+        "type": "object",
+        "required": [
+          "primaryTilesetKey",
+          "tilesetsUsed",
+          "observedSurfaceGids",
+          "observedFillGids",
+          "recommendedBuildStyleId"
+        ],
+        "properties": {
+          "primaryTilesetKey": { "type": "string" },
+          "tilesetsUsed": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "observedSurfaceGids": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "observedFillGids": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "recommendedBuildStyleId": { "type": ["string", "null"] }
+        }
+      },
+      "AgentTilesetBuildStyle": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "description",
+          "surfaceLocalIndices",
+          "surfaceGids",
+          "fillLocalIndices",
+          "fillGids"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "description": { "type": "string" },
+          "surfaceLocalIndices": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "surfaceGids": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "fillLocalIndices": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "fillGids": {
+            "type": "array",
+            "items": { "type": "integer" }
+          }
+        }
+      },
+      "AgentTilesetCatalogEntry": {
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "gidStart",
+          "gidEnd",
+          "decoratedTopLocalIndices",
+          "decoratedTopGids",
+          "nonCollidingLocalIndices",
+          "nonCollidingGids",
+          "buildStyles"
+        ],
+        "properties": {
+          "key": { "type": "string" },
+          "name": { "type": "string" },
+          "gidStart": { "type": "integer" },
+          "gidEnd": { "type": "integer" },
+          "decoratedTopLocalIndices": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "decoratedTopGids": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "nonCollidingLocalIndices": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "nonCollidingGids": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "buildStyles": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AgentTilesetBuildStyle" }
+          }
+        }
+      },
+      "AgentTilesetCatalogResponse": {
+        "type": "object",
+        "required": ["tilesets"],
+        "properties": {
+          "tilesets": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AgentTilesetCatalogEntry" }
+          }
+        }
+      },
+      "RoomDraftCommand": {
+        "type": "object",
+        "required": ["type"],
+        "additionalProperties": true,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "set_title",
+              "set_background",
+              "set_spawn",
+              "set_goal",
+              "clear_goal",
+              "platform",
+              "fill_rect",
+              "erase_rect",
+              "clear_layer",
+              "place_object",
+              "remove_objects_in_rect",
+              "clear_objects"
+            ]
+          }
+        }
+      },
+      "RoomDraftCommandsRequestBody": {
+        "type": "object",
+        "required": ["base", "commands"],
+        "properties": {
+          "base": {
+            "type": "string",
+            "enum": ["current_draft", "published", "blank"]
+          },
+          "commands": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/RoomDraftCommand" }
+          }
+        }
+      },
       "PlacedObject": {
         "type": "object",
         "additionalProperties": true
@@ -430,6 +577,13 @@
             ]
           },
           "tileData": { "$ref": "#/components/schemas/RoomTileData" },
+          "tilesetHint": {
+            "description": "Response-only terrain hint derived from the room's terrain usage. Inbound write requests may include this field, but the server ignores it.",
+            "oneOf": [
+              { "$ref": "#/components/schemas/RoomTilesetHint" },
+              { "type": "null" }
+            ]
+          },
           "placedObjects": {
             "type": "array",
             "items": { "$ref": "#/components/schemas/PlacedObject" }
@@ -1481,6 +1635,22 @@
         }
       }
     },
+    "/api/tilesets": {
+      "get": {
+        "summary": "Read the curated agent tileset catalog",
+        "description": "Public read. Returns the canonical agent-facing tileset catalog, including gid ranges, collision exceptions, and named build styles for safe terrain generation.",
+        "responses": {
+          "200": {
+            "description": "Agent tileset catalog",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AgentTilesetCatalogResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/rooms/{roomId}": {
       "get": {
         "summary": "Read a room record",
@@ -1549,7 +1719,7 @@
     "/api/rooms/{roomId}/draft": {
       "put": {
         "summary": "Save a room draft",
-        "description": "Requires auth. Bearer tokens must include rooms:write.",
+        "description": "Requires auth. Bearer tokens must include rooms:write. This is the raw snapshot write path; response-only fields like tilesetHint are ignored on input.",
         "security": [
           { "cookieSession": [] },
           { "bearerAuth": [] }
@@ -1598,10 +1768,102 @@
         }
       }
     },
+    "/api/rooms/{roomId}/draft/commands": {
+      "post": {
+        "summary": "Build a room draft from validated commands",
+        "description": "Requires auth. Bearer tokens must include rooms:write. Validates the entire command list, applies it atomically against the selected base snapshot, then persists through the normal draft-save path.",
+        "security": [
+          { "cookieSession": [] },
+          { "bearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "roomId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RoomDraftCommandsRequestBody" },
+              "example": {
+                "base": "blank",
+                "commands": [
+                  { "type": "set_title", "title": "Bridge Practice" },
+                  { "type": "set_background", "background": "forest" },
+                  { "type": "set_spawn", "tileX": 2, "tileY": 16 },
+                  {
+                    "type": "platform",
+                    "tilesetKey": "forest",
+                    "styleId": "forest_flat",
+                    "row": 17,
+                    "colStart": 0,
+                    "colEnd": 39,
+                    "depth": 3
+                  },
+                  {
+                    "type": "set_goal",
+                    "goal": {
+                      "type": "reach_exit",
+                      "exit": { "tileX": 36, "tileY": 16 }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated room record",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RoomRecord" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid command set or out-of-bounds edit",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing auth",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient scope or permission",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "409": {
+            "description": "Requested base snapshot is unavailable, such as base=published on a room with no published version",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/rooms/{roomId}/publish": {
       "post": {
         "summary": "Publish a room",
-        "description": "Requires auth. Bearer tokens must include rooms:write.",
+        "description": "Requires auth. Bearer tokens must include rooms:write. Response-only fields like tilesetHint are ignored on input.",
         "security": [
           { "cookieSession": [] },
           { "bearerAuth": [] }
