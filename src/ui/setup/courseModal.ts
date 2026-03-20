@@ -11,6 +11,8 @@ type CourseModalElements = {
   hudRoot: HTMLElement | null;
   meta: HTMLElement | null;
   status: HTMLElement | null;
+  publishedState: HTMLElement | null;
+  publishedWarning: HTMLElement | null;
   closeButton: HTMLElement | null;
   titleInput: HTMLInputElement | null;
   roomList: HTMLElement | null;
@@ -27,6 +29,8 @@ type CourseModalElements = {
   saveDraftReason: HTMLElement | null;
   publishButton: HTMLButtonElement | null;
   publishReason: HTMLElement | null;
+  unpublishButton: HTMLButtonElement | null;
+  unpublishReason: HTMLElement | null;
 };
 
 function goalTypeLabel(goalType: CourseComposerState['goalType']): string {
@@ -101,6 +105,8 @@ export class CourseModalController {
       hudRoot: this.doc.getElementById('world-hud'),
       meta: this.doc.getElementById('course-modal-meta'),
       status: this.doc.getElementById('course-modal-status'),
+      publishedState: this.doc.getElementById('course-published-state'),
+      publishedWarning: this.doc.getElementById('course-published-warning'),
       closeButton: this.doc.getElementById('btn-course-close'),
       titleInput: this.doc.getElementById('course-title-input') as HTMLInputElement | null,
       roomList: this.doc.getElementById('course-room-list'),
@@ -117,6 +123,8 @@ export class CourseModalController {
       saveDraftReason: this.doc.getElementById('course-save-draft-reason'),
       publishButton: this.doc.getElementById('btn-course-publish') as HTMLButtonElement | null,
       publishReason: this.doc.getElementById('course-publish-reason'),
+      unpublishButton: this.doc.getElementById('btn-course-unpublish') as HTMLButtonElement | null,
+      unpublishReason: this.doc.getElementById('course-unpublish-reason'),
     };
   }
 
@@ -159,6 +167,9 @@ export class CourseModalController {
     });
     this.elements.publishButton?.addEventListener('click', () => {
       void getActiveOverworldScene(this.game)?.publishCourseDraft?.();
+    });
+    this.elements.unpublishButton?.addEventListener('click', () => {
+      void getActiveOverworldScene(this.game)?.unpublishCourse?.();
     });
   }
 
@@ -225,6 +236,18 @@ export class CourseModalController {
           : 'Select 1-4 adjacent published rooms you authored in path order.';
     }
 
+    if (this.elements.publishedState) {
+      const publishedRoomText =
+        state.published && state.publishedRoomCount > 0
+          ? ` · ${state.publishedRoomCount} room${state.publishedRoomCount === 1 ? '' : 's'}`
+          : '';
+      this.elements.publishedState.textContent = `${state.publishedStateText}${publishedRoomText}`;
+    }
+    if (this.elements.publishedWarning) {
+      this.elements.publishedWarning.textContent = state.publishedDraftWarningText ?? '';
+      this.elements.publishedWarning.classList.toggle('hidden', !state.publishedDraftWarningText);
+    }
+
     this.setInputValue(this.elements.titleInput, state.title);
     if (this.elements.selectedRoomStatus) {
       let selectedText = 'Select a published room in the world to extend this course tail.';
@@ -285,6 +308,16 @@ export class CourseModalController {
     if (this.elements.publishReason) {
       this.elements.publishReason.textContent = state.publishCourseDisabledReason ?? '';
       this.elements.publishReason.classList.toggle('hidden', !state.publishCourseDisabledReason);
+    }
+    if (this.elements.unpublishButton) {
+      this.elements.unpublishButton.classList.toggle('hidden', !state.showUnpublishCourse);
+      this.elements.unpublishButton.title = state.unpublishCourseDisabledReason ?? '';
+    }
+    this.setButtonDisabled(this.elements.unpublishButton, !state.canUnpublishCourse);
+    if (this.elements.unpublishReason) {
+      const unpublishReason = state.showUnpublishCourse ? state.unpublishCourseDisabledReason : null;
+      this.elements.unpublishReason.textContent = unpublishReason ?? '';
+      this.elements.unpublishReason.classList.toggle('hidden', !unpublishReason);
     }
 
     if (this.elements.status) {
@@ -376,6 +409,13 @@ export class CourseModalController {
       this.elements.status.textContent = '';
       this.elements.status.classList.add('hidden');
     }
+    if (this.elements.publishedState) {
+      this.elements.publishedState.textContent = 'Not published';
+    }
+    if (this.elements.publishedWarning) {
+      this.elements.publishedWarning.textContent = '';
+      this.elements.publishedWarning.classList.add('hidden');
+    }
     this.elements.roomList?.replaceChildren();
     if (this.elements.summary) {
       this.elements.summary.textContent = 'No course selected.';
@@ -387,6 +427,14 @@ export class CourseModalController {
     if (this.elements.publishReason) {
       this.elements.publishReason.textContent = '';
       this.elements.publishReason.classList.add('hidden');
+    }
+    if (this.elements.unpublishButton) {
+      this.elements.unpublishButton.classList.add('hidden');
+      this.elements.unpublishButton.title = '';
+    }
+    if (this.elements.unpublishReason) {
+      this.elements.unpublishReason.textContent = '';
+      this.elements.unpublishReason.classList.add('hidden');
     }
     if (this.elements.testDraftReason) {
       this.elements.testDraftReason.textContent = '';

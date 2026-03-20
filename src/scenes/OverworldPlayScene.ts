@@ -314,6 +314,8 @@ interface SelectedCourseContext {
   roomCount: number;
 }
 
+type CoursePlaybackRoomSourceMode = 'published' | 'draftPreview';
+
 export class OverworldPlayScene extends Phaser.Scene {
   private readonly PLAYER_SPEED = 150;
   private readonly JUMP_VELOCITY = -280;
@@ -809,10 +811,42 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
   }
 
+  private getPublishedCourseStillLiveWarningText(): string | null {
+    const published = this.courseComposerRecord?.published ?? null;
+    if (!published) {
+      return null;
+    }
+
+    return `Published course v${published.version} is still live until you unpublish it.`;
+  }
+
+  private getCourseComposerPublishedStateText(): string {
+    const published = this.courseComposerRecord?.published ?? null;
+    if (!published) {
+      return 'Not published';
+    }
+
+    if (this.isCourseComposerDirty()) {
+      return `Published v${published.version} live · draft has unpublished changes`;
+    }
+
+    return `Published v${published.version} live`;
+  }
+
+  private getCourseComposerPublishedDraftWarningText(): string | null {
+    const published = this.courseComposerRecord?.published ?? null;
+    const draft = this.courseComposerRecord?.draft ?? null;
+    if (!published || !draft || draft.roomRefs.length > 0) {
+      return null;
+    }
+
+    return `Draft is empty. Published course v${published.version} is still live until you unpublish it.`;
+  }
+
   private getCurrentCourseDraftPreviewDisabledReason(): string | null {
     const draft = this.courseComposerRecord?.draft ?? null;
     if (!draft || draft.roomRefs.length === 0) {
-      return 'Add at least one room to the course first.';
+      return this.getCourseComposerPublishedDraftWarningText() ?? 'Add at least one room to the course first.';
     }
 
     return this.getCurrentCourseDraftGoalSetupDisabledReason(draft);
@@ -821,7 +855,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private getCurrentCourseDraftSaveDisabledReason(): string | null {
     const draft = this.courseComposerRecord?.draft ?? null;
     if (!draft || draft.roomRefs.length === 0) {
-      return 'Add at least one room before saving.';
+      return this.getCourseComposerPublishedDraftWarningText() ?? 'Add at least one room before saving.';
     }
 
     if (!draft.title?.trim()) {
@@ -838,7 +872,10 @@ export class OverworldPlayScene extends Phaser.Scene {
   private getCurrentCourseDraftPublishDisabledReason(): string | null {
     const draft = this.courseComposerRecord?.draft ?? null;
     if (!draft || draft.roomRefs.length < 2) {
-      return 'Add at least 2 rooms before publishing.';
+      const published = this.courseComposerRecord?.published ?? null;
+      return published
+        ? `Add at least 2 rooms before publishing. Published course v${published.version} is still live until you republish or unpublish it.`
+        : 'Add at least 2 rooms before publishing.';
     }
 
     if (!draft.title?.trim()) {
@@ -850,6 +887,18 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private getIsCurrentCourseDraftPreviewReady(): boolean {
     return this.getCurrentCourseDraftPreviewDisabledReason() === null;
+  }
+
+  private getCourseComposerUnpublishDisabledReason(): string | null {
+    if (!this.courseComposerRecord?.published) {
+      return 'This course is not published yet.';
+    }
+
+    if (!this.courseComposerRecord.permissions.canUnpublish) {
+      return 'This course is read-only for your account.';
+    }
+
+    return null;
   }
 
   private get currentRoomLeaderboard() {
@@ -4947,7 +4996,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         throw new Error('Published course is missing objective data. Reopen the builder and publish again.');
       }
 
-      await this.startCoursePlayback(snapshot);
+      await this.startCoursePlayback(snapshot, 'published');
       hideBusyOverlay();
     } catch (error) {
       console.error('Failed to start course', error);
@@ -4960,11 +5009,14 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
   }
 
-  private async startCoursePlayback(snapshot: CourseSnapshot): Promise<void> {
+  private async startCoursePlayback(
+    snapshot: CourseSnapshot,
+    roomSourceMode: CoursePlaybackRoomSourceMode,
+  ): Promise<void> {
     this.resetPlaySession();
     this.clearTouchGestureState();
     this.goalRunController.clearCurrentRun();
-    await this.prepareActiveCourseRoomOverrides(snapshot);
+    await this.prepareActiveCourseRoomOverrides(snapshot, { mode: roomSourceMode });
     this.activeCourseRun = this.createCourseRunState(snapshot);
 
     if (this.activeCourseRun.leaderboardEligible) {
@@ -5023,6 +5075,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         nextRecord.permissions = {
           canSaveDraft: Boolean(authState.authenticated),
           canPublish: Boolean(authState.authenticated),
+          canUnpublish: Boolean(authState.authenticated),
         };
       }
 
@@ -5075,6 +5128,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       !this.courseComposerRecord.permissions.canPublish
         ? 'This course is read-only for your account.'
         : this.getCurrentCourseDraftPublishDisabledReason();
+    const unpublishCourseDisabledReason = this.getCourseComposerUnpublishDisabledReason();
     return {
       courseId: draft.id,
       title: draft.title ?? '',
@@ -5103,6 +5157,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
       canEdit: this.courseComposerRecord.permissions.canSaveDraft,
       published: Boolean(this.courseComposerRecord.published),
+      publishedVersion: this.courseComposerRecord.published?.version ?? null,
+      publishedRoomCount: this.courseComposerRecord.published?.roomRefs.length ?? 0,
+      publishedStateText: this.getCourseComposerPublishedStateText(),
+      publishedDraftWarningText: this.getCourseComposerPublishedDraftWarningText(),
       dirty: this.isCourseComposerDirty(),
       statusText: this.courseComposerLoading
         ? 'Loading course...'
@@ -5119,6 +5177,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       saveDraftDisabledReason,
       canPublishCourse: publishCourseDisabledReason === null,
       publishCourseDisabledReason,
+      showUnpublishCourse: Boolean(this.courseComposerRecord.published),
+      canUnpublishCourse: unpublishCourseDisabledReason === null,
+      unpublishCourseDisabledReason,
     };
   }
 
@@ -5352,7 +5413,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     showBusyOverlay('Testing draft course...', 'Loading draft...');
     try {
       const snapshot = cloneCourseSnapshot(draft);
-      await this.startCoursePlayback(snapshot);
+      await this.startCoursePlayback(snapshot, 'draftPreview');
       this.showTransientStatus('Testing draft course.');
       hideBusyOverlay();
     } catch (error) {
@@ -5436,6 +5497,67 @@ export class OverworldPlayScene extends Phaser.Scene {
       console.error('Failed to publish course', error);
       this.courseComposerStatusText =
         error instanceof Error ? error.message : 'Failed to publish course.';
+    } finally {
+      this.emitCourseComposerStateChanged();
+      this.renderHud();
+    }
+  }
+
+  async unpublishCourse(): Promise<void> {
+    const courseRecord = this.courseComposerRecord;
+    const disabledReason = this.getCourseComposerUnpublishDisabledReason();
+    if (disabledReason) {
+      this.courseComposerStatusText = disabledReason;
+      this.emitCourseComposerStateChanged();
+      this.renderHud();
+      return;
+    }
+    if (!courseRecord) {
+      return;
+    }
+
+    this.courseComposerStatusText = 'Unpublishing course...';
+    this.emitCourseComposerStateChanged();
+    try {
+      const unpublished = await this.courseRepository.unpublishCourse(courseRecord.draft.id);
+      const preservedDraft = cloneCourseSnapshot(courseRecord.draft);
+      preservedDraft.status = 'draft';
+      preservedDraft.publishedAt = null;
+      this.setCourseComposerRecord(
+        {
+          ...unpublished,
+          draft: preservedDraft,
+        },
+        {
+          selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
+        }
+      );
+
+      const unpublishedActiveCourse =
+        this.activeCourseRun?.course.id === courseRecord.draft.id;
+      if (unpublishedActiveCourse) {
+        const returnCoordinates = this.activeCourseRun?.returnCoordinates ?? this.currentRoomCoordinates;
+        this.resetPlaySession();
+        this.clearTouchGestureState();
+        this.mode = 'browse';
+        this.cameraMode = 'inspect';
+        this.inspectZoom = this.browseInspectZoom;
+        this.syncAppMode();
+        this.selectedCoordinates = { ...returnCoordinates };
+        this.currentRoomCoordinates = { ...returnCoordinates };
+        this.shouldCenterCamera = true;
+        this.shouldRespawnPlayer = false;
+        setFocusedCoordinatesInUrl(this.currentRoomCoordinates);
+        this.showTransientStatus('Stopped course because it was unpublished.');
+      }
+
+      this.courseComposerStatusText = 'Course unpublished. The live course is no longer public.';
+      await this.refreshCourseComposerSelectedRoomState();
+      await this.refreshAround(this.currentRoomCoordinates, { forceChunkReload: true });
+    } catch (error) {
+      console.error('Failed to unpublish course', error);
+      this.courseComposerStatusText =
+        error instanceof Error ? error.message : 'Failed to unpublish course.';
     } finally {
       this.emitCourseComposerStateChanged();
       this.renderHud();
@@ -5622,44 +5744,55 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.activeCourseRoomOverrideIds.clear();
   }
 
+  private async loadPinnedCourseRoomSnapshot(roomRef: CourseRoomRef): Promise<RoomSnapshot> {
+    const record = await this.roomRepository.loadRoom(roomRef.roomId, roomRef.coordinates);
+    const historicalVersion =
+      record.versions.find((entry) => entry.version === roomRef.roomVersion)?.snapshot ??
+      (record.published?.version === roomRef.roomVersion ? record.published : null);
+    if (!historicalVersion) {
+      const roomLabel =
+        roomRef.roomTitle?.trim() || `Room ${roomRef.coordinates.x},${roomRef.coordinates.y}`;
+      throw new Error(
+        `${roomLabel} is missing published room version v${roomRef.roomVersion}. Reopen the course builder and publish again.`
+      );
+    }
+
+    return cloneRoomSnapshot(historicalVersion);
+  }
+
   private async prepareActiveCourseRoomOverrides(
     course: CourseSnapshot,
-    roomOverrides: RoomSnapshot[] = [],
+    options: {
+      mode: CoursePlaybackRoomSourceMode;
+      roomOverrides?: RoomSnapshot[];
+    },
   ): Promise<void> {
     this.clearActiveCourseRoomOverrides();
     const overrideByRoomId = new Map<string, RoomSnapshot>();
-    for (const room of getActiveCourseDraftSessionRoomOverrides()) {
-      overrideByRoomId.set(room.id, cloneRoomSnapshot(room));
-    }
-    for (const room of roomOverrides) {
-      overrideByRoomId.set(room.id, cloneRoomSnapshot(room));
+    if (options.mode === 'draftPreview') {
+      for (const room of options.roomOverrides ?? []) {
+        overrideByRoomId.set(room.id, cloneRoomSnapshot(room));
+      }
+      for (const room of getActiveCourseDraftSessionRoomOverrides()) {
+        overrideByRoomId.set(room.id, cloneRoomSnapshot(room));
+      }
     }
 
-    await Promise.all(
+    const snapshots = await Promise.all(
       course.roomRefs.map(async (roomRef) => {
-        let snapshot = overrideByRoomId.get(roomRef.roomId) ?? null;
-        if (!snapshot) {
-          const localDraft = this.draftRoomsById.get(roomRef.roomId) ?? null;
-          snapshot = localDraft ? cloneRoomSnapshot(localDraft) : null;
-        }
-        if (!snapshot) {
-          const record = await this.roomRepository.loadRoom(roomRef.roomId, roomRef.coordinates);
-          const historicalVersion =
-            record.versions.find((entry) => entry.version === roomRef.roomVersion)?.snapshot ??
-            record.published ??
-            null;
-          if (!historicalVersion) {
-            return;
-          }
-
-          snapshot = cloneRoomSnapshot(historicalVersion);
-        }
-
+        const draftOverride = overrideByRoomId.get(roomRef.roomId);
+        const snapshot = draftOverride
+          ? cloneRoomSnapshot(draftOverride)
+          : await this.loadPinnedCourseRoomSnapshot(roomRef);
         snapshot.status = 'published';
-        this.worldStreamingController.setTransientRoomOverride(snapshot);
-        this.activeCourseRoomOverrideIds.add(snapshot.id);
+        return snapshot;
       })
     );
+
+    for (const snapshot of snapshots) {
+      this.worldStreamingController.setTransientRoomOverride(snapshot);
+      this.activeCourseRoomOverrideIds.add(snapshot.id);
+    }
   }
 
   private async activateDraftCoursePreview(
@@ -5669,7 +5802,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     const snapshot = cloneCourseSnapshot(course);
     await this.prepareActiveCourseRoomOverrides(
       snapshot,
-      draftRoom ? [draftRoom] : [],
+      {
+        mode: 'draftPreview',
+        roomOverrides: draftRoom ? [draftRoom] : [],
+      },
     );
     this.activeCourseRun = this.createCourseRunState(snapshot);
   }

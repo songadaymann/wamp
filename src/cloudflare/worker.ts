@@ -12,6 +12,7 @@ import {
   handleCoursePublish,
   handleCourseRunFinish,
   handleCourseRunStart,
+  handleCourseUnpublish,
 } from './worker/courses/routes';
 import { corsHeaders, getCoordinatesFromRequest, HttpError, jsonResponse, parseJsonBody, parseRoomSnapshot } from './worker/core/http';
 import type { Env, RequestAuth } from './worker/core/types';
@@ -154,6 +155,11 @@ export default {
       const coursePublishMatch = /^\/api\/courses\/([^/]+)\/publish$/.exec(url.pathname);
       if (coursePublishMatch && request.method === 'POST') {
         return await handleCoursePublish(request, env, decodeURIComponent(coursePublishMatch[1]));
+      }
+
+      const courseUnpublishMatch = /^\/api\/courses\/([^/]+)\/unpublish$/.exec(url.pathname);
+      if (courseUnpublishMatch && request.method === 'POST') {
+        return await handleCourseUnpublish(request, env, decodeURIComponent(courseUnpublishMatch[1]));
       }
 
       const courseRunStartMatch = /^\/api\/courses\/([^/]+)\/runs\/start$/.exec(url.pathname);

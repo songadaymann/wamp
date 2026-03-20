@@ -71,6 +71,7 @@ export async function loadCourseRecord(
     permissions: {
       canSaveDraft: viewerIsAdmin || (viewerUserId !== null && viewerUserId === row.owner_user_id),
       canPublish: viewerIsAdmin || (viewerUserId !== null && viewerUserId === row.owner_user_id),
+      canUnpublish: viewerIsAdmin || (viewerUserId !== null && viewerUserId === row.owner_user_id),
     },
   };
 
@@ -203,6 +204,7 @@ export async function createCourseDraft(
     permissions: {
       canSaveDraft: true,
       canPublish: true,
+      canUnpublish: true,
     },
   };
 
@@ -351,6 +353,51 @@ export async function publishCourse(
   const stored = await loadCourseRecord(env, courseId, actor.id, actorIsAdmin);
   if (!stored?.published) {
     throw new HttpError(500, 'Failed to publish course.');
+  }
+
+  return stored;
+}
+
+export async function unpublishCourse(
+  env: Env,
+  courseId: string,
+  actor: AuthUser,
+  actorIsAdmin = false
+): Promise<CourseRecord> {
+  const existing = await loadCourseRecord(env, courseId, actor.id, actorIsAdmin);
+  if (!existing) {
+    throw new HttpError(404, 'Course draft not found.');
+  }
+
+  if (!existing.permissions.canUnpublish) {
+    throw new HttpError(403, 'You do not have permission to unpublish this course.');
+  }
+
+  if (!existing.published) {
+    throw new HttpError(409, 'This course is not published.');
+  }
+
+  const now = new Date().toISOString();
+  const draft: CourseSnapshot = {
+    ...cloneCourseSnapshot(existing.draft),
+    status: 'draft',
+    updatedAt: now,
+    publishedAt: null,
+  };
+
+  await persistCourseRecord(env, {
+    draft,
+    published: null,
+    ownerUserId: existing.ownerUserId ?? actor.id,
+    ownerDisplayName: existing.ownerDisplayName ?? actor.displayName,
+    createdAt: existing.draft.createdAt,
+    updatedAt: now,
+    publishedAt: null,
+  });
+
+  const stored = await loadCourseRecord(env, courseId, actor.id, actorIsAdmin);
+  if (!stored || stored.published) {
+    throw new HttpError(500, 'Failed to unpublish course.');
   }
 
   return stored;

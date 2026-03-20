@@ -55,6 +55,7 @@ import {
   loadPublishedCourse,
   publishCourse,
   saveCourseDraft,
+  unpublishCourse,
 } from './store';
 
 export async function handleCourseCreate(
@@ -143,6 +144,21 @@ export async function handleCoursePublish(
   );
   await maybeMirrorAuthenticatedPointEventToPlayfun(env, request, auth.user.id, pointEvent);
   await upsertUserStats(env, auth.user.id);
+  return jsonResponse(request, record);
+}
+
+export async function handleCourseUnpublish(
+  request: Request,
+  env: Env,
+  courseId: string
+): Promise<Response> {
+  const auth = await requireAuthenticatedRequestAuth(
+    env,
+    request,
+    'unpublish courses',
+    'rooms:write'
+  );
+  const record = await unpublishCourse(env, courseId, auth.user, auth.isAdmin);
   return jsonResponse(request, record);
 }
 
@@ -364,6 +380,7 @@ function sanitizeCourseRecordForPublicRead(record: CourseRecord): CourseRecord {
     permissions: {
       canSaveDraft: false,
       canPublish: false,
+      canUnpublish: false,
     },
   };
 }
@@ -440,15 +457,17 @@ async function resolvePublishedCourseVersion(
   version?: number
 ): Promise<CourseSnapshot> {
   const course = await loadPublishedCourse(env, courseId);
-  if (!course) {
-    throw new HttpError(404, 'Published course not found.');
-  }
-
-  if (version === undefined || version === null || course.version === version) {
+  if (course && (version === undefined || version === null || course.version === version)) {
     return cloneCourseSnapshot(course);
   }
 
   const record = await loadCourseRecord(env, courseId);
+  if (!record) {
+    throw new HttpError(404, 'Course not found.');
+  }
+  if (version === undefined || version === null) {
+    throw new HttpError(404, 'Published course not found.');
+  }
   const historicalVersion =
     record?.versions.find((entry) => entry.version === version) ?? null;
   if (!historicalVersion) {

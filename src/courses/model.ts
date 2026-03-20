@@ -89,6 +89,7 @@ export interface CourseVersionRecord {
 export interface CoursePermissions {
   canSaveDraft: boolean;
   canPublish: boolean;
+  canUnpublish: boolean;
 }
 
 export interface CourseRecord {
@@ -137,6 +138,7 @@ export function createDefaultCoursePermissions(): CoursePermissions {
   return {
     canSaveDraft: true,
     canPublish: true,
+    canUnpublish: true,
   };
 }
 
@@ -568,6 +570,7 @@ export function normalizeCourseRecord(value: unknown, fallbackCourseId: string):
     permissions: {
       canSaveDraft: record.permissions?.canSaveDraft ?? true,
       canPublish: record.permissions?.canPublish ?? true,
+      canUnpublish: record.permissions?.canUnpublish ?? true,
     },
   };
 }

@@ -718,6 +718,11 @@
           <input id="course-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Course title (optional)" />
         </div>
         <div class="about-section">
+          <div class="about-section-title">Live State</div>
+          <div id="course-published-state" class="goal-summary">Not published</div>
+          <div id="course-published-warning" class="history-modal-meta hidden"></div>
+        </div>
+        <div class="about-section">
           <div class="about-section-title">Rooms</div>
           <div id="course-selected-room-status" class="history-modal-meta">Select a published room to extend the course tail.</div>
           <div class="course-room-actions">
@@ -746,9 +751,11 @@
           <div class="course-room-actions">
             <button id="btn-course-save-draft" class="bar-btn" type="button">Save Draft</button>
             <button id="btn-course-publish" class="bar-btn" type="button">Publish Course</button>
+            <button id="btn-course-unpublish" class="bar-btn hidden" type="button">Unpublish Course</button>
           </div>
           <div id="course-save-draft-reason" class="history-modal-meta hidden"></div>
           <div id="course-publish-reason" class="history-modal-meta hidden"></div>
+          <div id="course-unpublish-reason" class="history-modal-meta hidden"></div>
           <div id="course-modal-status" class="history-modal-meta hidden"></div>
         </div>
       </div>

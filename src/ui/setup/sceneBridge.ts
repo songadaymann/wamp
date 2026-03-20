@@ -122,6 +122,10 @@ export type CourseComposerState = {
   selectedRoomId: string | null;
   canEdit: boolean;
   published: boolean;
+  publishedVersion: number | null;
+  publishedRoomCount: number;
+  publishedStateText: string;
+  publishedDraftWarningText: string | null;
   dirty: boolean;
   statusText: string | null;
   selectedRoomOrder: number | null;
@@ -134,6 +138,9 @@ export type CourseComposerState = {
   saveDraftDisabledReason: string | null;
   canPublishCourse: boolean;
   publishCourseDisabledReason: string | null;
+  showUnpublishCourse: boolean;
+  canUnpublishCourse: boolean;
+  unpublishCourseDisabledReason: string | null;
 };
 
 export const COURSE_COMPOSER_STATE_CHANGED_EVENT = 'course-composer-state-changed';
@@ -162,6 +169,7 @@ export interface OverworldSceneBridge {
   testDraftCourse?: () => Promise<void> | void;
   saveCourseDraft?: () => Promise<void>;
   publishCourseDraft?: () => Promise<void>;
+  unpublishCourse?: () => Promise<void>;
 }
 
 function getScene<T>(game: Phaser.Game, key: string): T | null {

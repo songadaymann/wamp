@@ -21,6 +21,7 @@ export interface CourseRepository {
   loadCourse(courseId: string): Promise<CourseRecord>;
   saveDraft(snapshot: CourseSnapshot): Promise<CourseRecord>;
   publishCourse(courseId: string): Promise<CourseRecord>;
+  unpublishCourse(courseId: string): Promise<CourseRecord>;
   startRun(courseId: string, body: CourseRunStartRequestBody): Promise<CourseRunStartResponse>;
   finishRun(attemptId: string, body: CourseRunFinishRequestBody): Promise<void>;
   loadCourseLeaderboard(
@@ -66,6 +67,12 @@ class ApiCourseRepository implements CourseRepository {
     });
     notifyPlayfunEligibleActionSuccess();
     return record;
+  }
+
+  async unpublishCourse(courseId: string): Promise<CourseRecord> {
+    return this.request<CourseRecord>(`/api/courses/${encodeURIComponent(courseId)}/unpublish`, {
+      method: 'POST',
+    });
   }
 
   async startRun(
