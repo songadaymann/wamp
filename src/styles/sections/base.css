@@ -581,7 +581,8 @@ body[data-install-help-open='true'] .rotate-gate {
 }
 
 .auth-menu-action-btn {
-  width: 100%;
+  flex: 1 1 auto;
+  width: auto;
   justify-content: center;
   border-color: rgba(227, 187, 77, 0.4);
   color: var(--accent-warm);
@@ -589,6 +590,48 @@ body[data-install-help-open='true'] .rotate-gate {
 
 .auth-menu-action-btn:hover {
   background: rgba(227, 187, 77, 0.12);
+}
+
+.auth-discord-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  padding: 0;
+  border: 1px solid rgba(88, 101, 242, 0.45);
+  border-radius: 3px;
+  background: rgba(88, 101, 242, 0.14);
+  color: #c7cfff;
+  text-decoration: none;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+  transition:
+    background 0.1s,
+    border-color 0.1s,
+    color 0.1s,
+    transform 0.06s ease,
+    box-shadow 0.06s ease;
+}
+
+.auth-discord-link:hover {
+  background: rgba(88, 101, 242, 0.22);
+  border-color: rgba(132, 145, 255, 0.7);
+  color: #ffffff;
+}
+
+.auth-discord-link:focus-visible {
+  outline: none;
+  border-color: var(--accent-cool);
+  box-shadow:
+    0 0 0 2px rgba(143, 216, 255, 0.22),
+    0 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.auth-discord-link svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
 }
 
 .auth-title {

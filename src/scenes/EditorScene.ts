@@ -911,42 +911,76 @@ export class EditorScene extends Phaser.Scene {
     }
 
     for (const layerName of LAYER_NAMES) {
-      const layer = this.layers.get(layerName);
-      if (!layer) {
+      const occupiedCells = this.collectLayerGuideCells(layerName);
+      if (occupiedCells.size === 0) {
         continue;
       }
 
-      this.layerGuideGraphics.lineStyle(1, this.getLayerGuideColor(layerName), 0.42);
+      this.layerGuideGraphics.fillStyle(this.getLayerGuideColor(layerName), 0.72);
+      for (const key of occupiedCells) {
+        const [xText, yText] = key.split(':');
+        const tileX = Number.parseInt(xText, 10);
+        const tileY = Number.parseInt(yText, 10);
+        this.layerGuideGraphics.fillCircle(
+          tileX * TILE_SIZE + TILE_SIZE * 0.5,
+          tileY * TILE_SIZE + TILE_SIZE * 0.5,
+          2.5,
+        );
+      }
+    }
+  }
+
+  private collectLayerGuideCells(layerName: LayerName): Set<string> {
+    const occupiedCells = new Set<string>();
+    const layer = this.layers.get(layerName);
+    if (layer) {
       for (let y = 0; y < ROOM_HEIGHT; y += 1) {
         for (let x = 0; x < ROOM_WIDTH; x += 1) {
-          if (!layer.getTileAt(x, y)) {
-            continue;
+          if (layer.getTileAt(x, y)) {
+            occupiedCells.add(this.getLayerGuideCellKey(x, y));
           }
-
-          this.layerGuideGraphics.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
         }
       }
     }
 
     for (const placedObject of editorState.placedObjects) {
       const objectConfig = getObjectById(placedObject.id);
-      if (!objectConfig) {
+      if (!objectConfig || getPlacedObjectLayer(placedObject) !== layerName) {
         continue;
       }
 
-      const layerName = getPlacedObjectLayer(placedObject);
       const previewWidth = objectConfig.previewWidth ?? objectConfig.frameWidth;
       const previewHeight = objectConfig.previewHeight ?? objectConfig.frameHeight;
       const previewOffsetX = objectConfig.previewOffsetX ?? 0;
       const previewOffsetY = objectConfig.previewOffsetY ?? 0;
-      this.layerGuideGraphics.lineStyle(1, this.getLayerGuideColor(layerName), 0.62);
-      this.layerGuideGraphics.strokeRect(
-        placedObject.x - objectConfig.frameWidth * 0.5 + previewOffsetX,
-        placedObject.y - objectConfig.frameHeight * 0.5 + previewOffsetY,
-        previewWidth,
-        previewHeight,
+      const minTileX = Math.max(
+        0,
+        Math.floor((placedObject.x - objectConfig.frameWidth * 0.5 + previewOffsetX) / TILE_SIZE),
       );
+      const maxTileX = Math.min(
+        ROOM_WIDTH,
+        Math.ceil((placedObject.x - objectConfig.frameWidth * 0.5 + previewOffsetX + previewWidth) / TILE_SIZE),
+      );
+      const minTileY = Math.max(
+        0,
+        Math.floor((placedObject.y - objectConfig.frameHeight * 0.5 + previewOffsetY) / TILE_SIZE),
+      );
+      const maxTileY = Math.min(
+        ROOM_HEIGHT,
+        Math.ceil((placedObject.y - objectConfig.frameHeight * 0.5 + previewOffsetY + previewHeight) / TILE_SIZE),
+      );
+      for (let tileY = minTileY; tileY < maxTileY; tileY += 1) {
+        for (let tileX = minTileX; tileX < maxTileX; tileX += 1) {
+          occupiedCells.add(this.getLayerGuideCellKey(tileX, tileY));
+        }
+      }
     }
+
+    return occupiedCells;
+  }
+
+  private getLayerGuideCellKey(x: number, y: number): string {
+    return `${x}:${y}`;
   }
 
   private getLayerGuideColor(layerName: LayerName): number {
