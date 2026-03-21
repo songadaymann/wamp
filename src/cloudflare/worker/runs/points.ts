@@ -1,4 +1,4 @@
-import { getObjectById } from '../../../config';
+import { placedObjectContributesToCategory } from '../../../config';
 import type { CourseRunRecord } from '../../../courses/runModel';
 import type { RoomGoal } from '../../../goals/roomGoals';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
@@ -484,11 +484,10 @@ function clampMetric(value: number, max: number): number {
   return Math.max(0, Math.min(Math.round(value), Math.max(0, max)));
 }
 
-function countRoomObjectsByCategory(room: RoomSnapshot, category: string): number {
+function countRoomObjectsByCategory(room: RoomSnapshot, category: 'collectible' | 'enemy'): number {
   let count = 0;
   for (const placed of room.placedObjects) {
-    const object = getObjectById(placed.id);
-    if (object?.category === category) {
+    if (placedObjectContributesToCategory(placed, category)) {
       count += 1;
     }
   }

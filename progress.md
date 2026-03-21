@@ -57,6 +57,81 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Collapsed layer image-button pass on March 21, 2026:
+  - copied the supplied layer reference images into `public/assets/ui/layers/foreground.png`, `terrain.png`, and `background.png`
+  - replaced the CSS-drawn collapsed `Layers` mini-stack with those actual PNGs, while keeping the expanded layer controls and tooltips unchanged
+  - kept the collapsed mini-stack interactive for power users: the image buttons still switch the active layer even while the section stays collapsed
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client reopened the editor via `#btn-world-edit` and wrote:
+      - `output/web-game/layer-image-buttons-smoke/state-0.json`
+      - `output/web-game/layer-image-buttons-smoke/shot-0.png`
+    - targeted collapsed-layer check wrote:
+      - `output/web-game/layer-image-buttons-check/summary.json`
+      - `output/web-game/layer-image-buttons-check/layers-collapsed.png`
+      - `output/web-game/layer-image-buttons-check/layers-collapsed-background-selected.png`
+    - the targeted summary confirms the collapsed buttons load the three PNGs and clicking the collapsed `background` button switches `selectedLayer` to `background`
+- Copy-tool exit fix on March 21, 2026:
+  - fixed the desktop tool-button path for leaving copy/paste preview mode
+  - root cause: the sidebar tool buttons were calling the `updateToolUi` scene-bridge name, but `EditorScene` only exposed the internal `updateToolUI` method name, so button clicks changed the highlighted tool without clearing `clipboardPastePreviewActive`
+  - added an `EditorScene.updateToolUi()` bridge wrapper so clicking `Draw` or `Erase` now runs the same copy-preview teardown path as the keyboard tool shortcuts
+  - follow-up status cleanup:
+    - canceling copy preview now restores the normal editor status (`Claimed by ...` / `Draft changes...`) instead of leaving the temporary copy hint stuck in the top bar
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client reopened the editor via `#btn-world-edit` and wrote:
+      - `output/web-game/copy-tool-exit-smoke/state-0.json`
+      - `output/web-game/copy-tool-exit-smoke/shot-0.png`
+    - targeted Playwright probe wrote:
+      - `output/web-game/copy-tool-exit-check/summary.json`
+      - `output/web-game/copy-tool-exit-check/copy-active.png`
+      - `output/web-game/copy-tool-exit-check/after-draw-click.png`
+    - the targeted summary confirms `clipboardPastePreviewActive` flips from `true` to `false` after clicking either `Draw` or `Erase`
+    - follow-up status check wrote:
+      - `output/web-game/copy-tool-status-check/summary.json`
+      - `output/web-game/copy-tool-status-check/after-draw-click.png`
+    - the follow-up status check confirms the top status returns to `Claimed by jonathan.` after leaving copy mode
+- Desktop editor sidebar polish follow-up on March 21, 2026:
+  - turned the desktop action rail into icon + label buttons for `Back`, `Test`, `Save`, and `Publish`, and aligned the tool row onto the same IBM Plex Mono label styling so both rows now read as one system
+  - simplified the visible layer button copy down to `In front of player`, `Main solid layer`, and `Behind player`, then added per-layer info buttons with hover/focus tooltips that explain occlusion and collision behavior
+  - added a collapsed mini-stack preview for the `Layers` section so collapsing it still leaves a compact three-layer rendering visible instead of removing the section entirely
+  - moved the floating object inspector to the left edge of the game area beside the sidebar instead of pinning it to the far upper-right corner
+  - changed tile copy so a successful drag-copy immediately enters follow-cursor placement mode instead of waiting for a separate paste command
+  - follow-up tweak pass:
+    - swapped the layer info glyph to the standard circled `ⓘ`
+    - restyled the collapsed layer preview into three overlapping-square buttons based on the shared reference image
+    - changed the top action icons to use a diskette for save and a rocket for publish
+    - fixed the copy teardown bug by making actual tool changes notify the active editor scene and clear any lingering copy/rect overlay state when leaving those tools
+    - follow-up copy preview pass:
+      - changed tile and clipboard cursor previews to render only occupied cells from the active selection mask instead of always drawing a full bounding rectangle
+      - this makes large irregular terrain stamps read as their actual shape when returning to `Draw`, which avoids the “stuck copy rectangle” look from the earlier bounding-box preview
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client reopened the editor via `#btn-world-edit` and wrote `output/web-game/editor-sidebar-polish-smoke/client/state-0.json`
+    - targeted DOM + screenshot check wrote:
+      - `output/web-game/editor-sidebar-polish-smoke/summary.json`
+      - `output/web-game/editor-sidebar-polish-smoke/editor-full.png`
+    - the DOM check confirms the new action icons/labels, matching tool/action fonts, layer tooltip visibility, collapsed layer mini-stack visibility, and the inspector now using `left: 18px`
+    - follow-up Playwright check wrote:
+      - `output/web-game/editor-layer-copy-check/summary.json`
+      - `output/web-game/editor-layer-copy-check/layers-collapsed.png`
+      - `output/web-game/editor-layer-copy-check/copy-preview.png`
+      - `output/web-game/editor-layer-copy-check/after-draw-switch.png`
+    - the follow-up check confirms the `ⓘ` glyphs, the new diskette/rocket icons, the collapsed layer buttons, and that `clipboardPastePreviewActive` is `false` again after switching from copy back to draw
+    - latest targeted check wrote:
+      - `output/web-game/copy-preview-shape-check/large-selection-draw-preview.png`
+      - the large-selection preview now follows the occupied terrain cells of the brush instead of showing a generic full rectangle
+- Collapsed layer dark-tile asset refresh on March 21, 2026:
+  - replaced the collapsed `Layers` mini-button PNGs with the updated inverted versions from `GADtrailers/WAMP/layers-images`
+  - restored the mini-button tiles to the dark editor panel background so the new white icon shapes carry the contrast instead of relying on a light tile fill
+  - kept the stronger green active ring so the selected layer still reads clearly while the section is collapsed
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client wrote:
+      - `output/web-game/layer-dark-images-smoke/state-0.json`
+      - `output/web-game/layer-dark-images-smoke/shot-0.png`
+    - targeted sidebar capture wrote:
+      - `output/web-game/layer-dark-images-check/layers-collapsed.png`
 - Tileset follow-up pass on March 20, 2026:
   - lifted the remaining wanted `tilesets` branch changes onto `main`: added the new `cage` and `floor_trigger` object assets plus catalog entries, and carried over the desert sand deco/collision fix
   - `cage` is currently wired as a solid platform prop and `floor_trigger` as a non-colliding interactive prop so both appear in the editor palette immediately without waiting on bespoke trigger logic
@@ -65,7 +140,29 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - `npm run build` passed in a clean checkout from the latest `origin/main`
     - Playwright smoke against `http://127.0.0.1:4175` wrote `output/web-game/objects-sand-smoke/state-0.json` through `state-2.json` with a clean overworld boot state
     - screenshot capture still hit the existing black-frame/WebGL limitation, so the remaining check is a real in-editor visual pass to confirm the default `cage` frame and `floor_trigger` read well in the palette/runtime
-
+- Desktop editor layout refactor pass on March 20, 2026:
+  - rebuilt the desktop editor hierarchy around a sticky top action rail (`back`, `test`, `save`, `publish`), then moved room title, tools, layers, palette/background, goal, and advanced actions into a stable order that no longer buries the core build controls under contextual panels
+  - replaced the inline pressure-plate and chest/cage controls with a floating contextual inspector in the canvas area; hovering previews the relevant object controls, clicking pins them, and `Esc` now dismisses connect mode, paste preview, pinned inspector, or finally returns to world/course builder in that order
+  - added the new tile-only `Copy` tool with `1/2/3` tool shortcuts, `R`/`G` for rect/fill, `Enter`/`P` for test play, `Cmd/Ctrl+S` for save draft, `Cmd/Ctrl+Shift+P` for publish, drag-to-copy tile selection, and `Cmd/Ctrl+V` paste preview mode
+  - demoted mint/history into a desktop-collapsed `Advanced` section, renamed the visible layer copy to `Back`, `Gameplay`, and `Front`, renamed `Terrain` palette copy to `Tiles` / `Tileset`, and kept `Course Goal` hidden unless the room was actually opened from course editing
+  - removed the extra shared layer explainer from the top of the `Layers` section so the only layer guidance now lives on the individual layer buttons
+  - verification:
+    - `npm run build` passed
+    - local Playwright desktop editor smoke passed with no console errors and wrote:
+      - `output/web-game/editor-layout-refactor-smoke/state.json`
+      - `output/web-game/editor-layout-refactor-smoke/summary.json`
+      - `output/web-game/editor-layout-refactor-smoke/editor-desktop.png`
+    - the smoke confirms the new desktop order (`actions -> room title -> tools -> layers -> background/palette -> goal -> advanced`), that `Advanced` starts collapsed on desktop, and that `Course Goal` stays hidden in a normal overworld-opened room edit
+- Course consistency pass on March 19, 2026:
+  - published course playback now resolves only the exact room versions pinned into the published course; normal room drafts and active course draft overrides no longer bleed into `Play Course`
+  - draft course preview keeps the draft-only override path, but pinned room-version fallback is now strict and throws a visible error instead of silently substituting the latest published room
+  - added explicit course unpublish support across client + Worker; unpublishing clears the live published snapshot/membership while preserving draft state in the active builder session, historical versions, and existing run history
+  - course builder now shows a dedicated live-state panel (`Not published`, `Published vN live`, or `Published vN live · draft has unpublished changes`) plus an explicit empty-draft warning when a published course still exists
+  - added `Unpublish Course` to the builder and forced a world refresh after publish/unpublish so room course badges, `Play Course`, and published course meta clear/update immediately
+  - verification:
+    - `npm run build` passed
+    - Playwright smoke against `http://127.0.0.1:4174` wrote `output/web-game/course-consistency-smoke/state-0.json` through `state-2.json` with a clean anonymous overworld boot state
+    - screenshot capture still hit the existing black-frame/WebGL limitation, so the course-builder/unpublish UX still wants a real authenticated manual browser pass
 - Standalone portrait rotation + control spacing pass on March 18, 2026:
   - promoted standalone/PWA launch detection into shared device-layout state so installed launches now suppress the portrait install gate and install-help surfaces consistently instead of only relying on the install-help controller's local check
   - installed portrait launches now auto-rotate the app shell into landscape by rotating the new top-level `#shell-root` and swapping the effective mobile viewport/orientation fed into layout, HUD, and control logic
@@ -3150,7 +3247,6 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - `near.json`: zoom `0.446`, text tier dominant, dot hidden
   - local presence WebSocket errors were still expected because PartyKit was not running on `127.0.0.1:1999`
 
-<<<<<<< HEAD
 ## March 18, 2026 - Extracted Endless Overworld Preview Stage 1
 
 - Started the endless-overworld preview architecture by splitting preview-only responsibilities out of `src/scenes/overworld/worldStreaming.ts`
@@ -3362,3 +3458,30 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Playwright smoke on `http://127.0.0.1:4317/?renderer=canvas` booted the overworld with no new runtime errors and the auth state remained stable
   - Playwright smoke on `http://127.0.0.1:4317/?pf=1&renderer=canvas` booted with `playfun.mode: true`, `sdkReady: true`, and `hasSessionToken: false`
   - the `?pf=1` smoke logged Play.fun SDK errors about missing embed/Privy context, which is expected outside a real Play.fun embed and is still the remaining gap for true end-to-end points verification
+
+- Tablet chat placement pass on March 19, 2026:
+  - added a tablet coarse-pointer override so `#global-chat` now anchors in the upper-right under the auth/menu button instead of inheriting the shared bottom-right placement
+  - the tablet chat panel body now uses a slightly softer translucent background and a capped height sized for the remaining screen under the menu
+  - verification:
+    - `npm run build` passed
+    - Playwright smoke client on `http://127.0.0.1:4317/?renderer=canvas` completed with no new runtime errors and wrote `output/web-game/ipad-chat-smoke/shot-0.png`
+    - targeted forced-tablet layout capture confirmed the chat panel now sits at `top: 76px` / `right: 12px` in `output/web-game/ipad-chat-forced-layout/forced-tablet-play-chat.png`
+
+## March 20, 2026 - Chest / Cage Contents Authoring Pass
+
+- Added authored container contents to room objects via `containedObjectId`
+  - cages can now hold exactly one enemy
+  - treasure chests can now hold exactly one collectible
+  - invalid stored ids are sanitized during room snapshot normalization and mint-payload round-trips
+- Editor object workflow now supports direct container filling
+  - hover a cage or treasure chest to see its current contents and instructions
+  - select an enemy or collectible in the object palette, then click the cage/chest to assign it
+  - added a `Clear Contents` action in the object sidebar panel for the focused container
+- Runtime trigger behavior now uses authored contents instead of hardcoded defaults
+  - triggered cages open to their open frame and only spawn their stored enemy
+  - triggered treasure chests open and only spawn their stored collectible
+  - spawned contents now count toward goal/completion math
+- Goal-count helpers now treat hidden chest/cage contents as part of the room inventory in both runtime UI and run-point clamping
+- Verification:
+  - `npm run build` passed
+  - remaining manual check: author a chest and cage in the editor, assign contents, trigger them in play, and confirm the exact spawn/goal behavior feels right

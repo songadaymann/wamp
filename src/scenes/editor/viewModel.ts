@@ -66,6 +66,7 @@ export function buildEditorUiViewModel(
     publishNudgeActionText,
     courseEditorState,
   } = options;
+  const canReturnToCourseBuilder = courseEditorState.canReturnToCourseBuilder;
 
   return {
     roomTitleValue: roomTitle ?? '',
@@ -78,8 +79,8 @@ export function buildEditorUiViewModel(
     publishNudgeText,
     publishNudgeActionText,
     zoomText,
-    backToWorldHidden: entrySource !== 'world',
-    backToCourseBuilderHidden: !courseEditorState.canReturnToCourseBuilder,
+    backButtonHidden: entrySource !== 'world' && !canReturnToCourseBuilder,
+    backButtonText: canReturnToCourseBuilder ? 'Course' : 'World',
     playHidden: false,
     saveHidden: false,
     saveDisabled: !roomPermissions.canSaveDraft,

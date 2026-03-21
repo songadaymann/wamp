@@ -36,6 +36,7 @@ import type { CourseRunFinishRequestBody } from '../courses/runModel';
 import { SceneFxController } from '../fx/controller';
 import {
   getObjectById,
+  placedObjectContributesToCategory,
   type GameObjectConfig,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
@@ -617,8 +618,8 @@ export class OverworldPlayScene extends Phaser.Scene {
         enemyStompBounceVelocity: this.JUMP_VELOCITY * 0.58,
       },
       getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
-      getPlacedObjectRuntimeKey: (roomId, placedIndex) =>
-        this.getPlacedObjectRuntimeKey(roomId, placedIndex),
+      getPlacedObjectRuntimeKey: (roomId, placedObject, placedIndex) =>
+        this.getPlacedObjectRuntimeKey(roomId, placedObject, placedIndex),
       isCollectedObjectKey: (key) => this.collectedObjectKeys.has(key),
       markCollectedObjectKey: (key) => {
         this.collectedObjectKeys.add(key);
@@ -2327,8 +2328,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     let count = 0;
 
     for (const placedObject of room.placedObjects) {
-      const config = getObjectById(placedObject.id);
-      if (config?.category === category) {
+      if (placedObjectContributesToCategory(placedObject, category)) {
         count += 1;
       }
     }
@@ -4649,7 +4649,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     let restoredKeyCount = 0;
 
     for (let index = 0; index < room.placedObjects.length; index += 1) {
-      const runtimeKey = this.getPlacedObjectRuntimeKey(room.id, index);
+      const runtimeKey = this.getPlacedObjectRuntimeKey(room.id, room.placedObjects[index], index);
       if (!this.collectedObjectKeys.delete(runtimeKey)) {
         continue;
       }
@@ -4662,8 +4662,12 @@ export class OverworldPlayScene extends Phaser.Scene {
     return restoredKeyCount;
   }
 
-  private getPlacedObjectRuntimeKey(roomId: string, placedIndex: number): string {
-    return `${roomId}:${placedIndex}`;
+  private getPlacedObjectRuntimeKey(
+    roomId: string,
+    placedObject: RoomSnapshot['placedObjects'][number],
+    placedIndex: number,
+  ): string {
+    return `${roomId}:${placedObject.instanceId || placedIndex}`;
   }
 
   private countLiveObjectsByCategory(category: GameObjectConfig['category']): number {

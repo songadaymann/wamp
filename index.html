@@ -144,27 +144,41 @@
     <!-- Left Sidebar -->
     <div id="sidebar">
       <!-- Tools -->
-      <div class="sidebar-section" data-mobile-panel="tools" data-sidebar-collapsible="true">
+      <div class="sidebar-section" id="tools-section" data-mobile-panel="tools" data-sidebar-collapsible="true">
         <div class="section-label">Tools</div>
-        <div id="tools">
-          <button class="tool-btn active" data-tool="pencil" title="Draw (B)">
+        <div id="tools" class="tools-primary-row">
+          <button class="tool-btn active" data-tool="pencil" title="Draw (1)">
             <span class="tool-icon">&#9998;</span>
             <span class="tool-label">Draw</span>
           </button>
-          <button class="tool-btn" data-tool="rect" title="Rectangle (R)">
-            <span class="tool-icon">&#9634;</span>
-            <span class="tool-label">Rect</span>
-          </button>
-          <button class="tool-btn" data-tool="fill" title="Fill (G)">
-            <span class="tool-icon">&#9687;</span>
-            <span class="tool-label">Fill</span>
-          </button>
-          <button class="tool-btn" data-tool="eraser" title="Erase (E)">
+          <button class="tool-btn" data-tool="eraser" title="Erase (2)">
             <span class="tool-icon">&#9003;</span>
             <span class="tool-label">Erase</span>
           </button>
+          <button class="tool-btn" data-tool="copy" title="Copy (3)">
+            <span class="tool-icon">&#10697;</span>
+            <span class="tool-label">Copy</span>
+          </button>
+          <button id="btn-tool-more" class="tool-btn tool-btn-more" type="button" title="More Tools">
+            <span class="tool-icon">&#8942;</span>
+            <span class="tool-label">More</span>
+          </button>
         </div>
-        <div id="erase-controls" class="erase-controls hidden">
+        <div id="more-tools-panel" class="editor-tool-popover hidden">
+          <div class="editor-tool-popover-label">More Tools</div>
+          <div class="editor-tool-popover-grid">
+            <button class="tool-btn tool-btn-compact" data-tool="rect" title="Rectangle (R)">
+              <span class="tool-icon">&#9634;</span>
+              <span class="tool-label">Rect</span>
+            </button>
+            <button class="tool-btn tool-btn-compact" data-tool="fill" title="Fill (G)">
+              <span class="tool-icon">&#9687;</span>
+              <span class="tool-label">Fill</span>
+            </button>
+          </div>
+        </div>
+        <div id="erase-controls" class="erase-controls editor-tool-popover hidden">
+          <div class="editor-tool-popover-label">Eraser</div>
           <div class="erase-controls-row">
             <label class="erase-controls-label" for="erase-brush-select">Brush</label>
             <select id="erase-brush-select">
@@ -181,20 +195,81 @@
       </div>
 
       <!-- Layers -->
-      <div class="sidebar-section" data-mobile-panel="tools" data-sidebar-collapsible="true">
+      <div class="sidebar-section" id="layers-section" data-mobile-panel="tools" data-sidebar-collapsible="true">
         <div class="section-label">Layers</div>
-        <div id="layers">
-          <button class="layer-btn" data-layer="foreground">Foreground</button>
-          <button class="layer-btn active" data-layer="terrain">Terrain</button>
-          <button class="layer-btn" data-layer="background">Background</button>
+        <div class="layer-stack-mini" aria-hidden="true">
+          <button class="layer-stack-mini-btn" type="button" data-layer="foreground" aria-label="In front of player">
+            <img
+              class="layer-stack-mini-image"
+              src="/assets/ui/layers/foreground.png"
+              alt=""
+              width="106"
+              height="104"
+            />
+          </button>
+          <button class="layer-stack-mini-btn active" type="button" data-layer="terrain" aria-label="Main solid layer">
+            <img
+              class="layer-stack-mini-image"
+              src="/assets/ui/layers/terrain.png"
+              alt=""
+              width="106"
+              height="104"
+            />
+          </button>
+          <button class="layer-stack-mini-btn" type="button" data-layer="background" aria-label="Behind player">
+            <img
+              class="layer-stack-mini-image"
+              src="/assets/ui/layers/background.png"
+              alt=""
+              width="106"
+              height="104"
+            />
+          </button>
         </div>
-        <div class="layer-controls-row">
-          <button id="btn-editor-layer-guides" class="bar-btn bar-btn-small" type="button">See Layers</button>
+        <div class="sidebar-section-body">
+          <div id="layers">
+            <div class="layer-row">
+              <button class="layer-btn" data-layer="foreground">
+                <span class="layer-btn-summary">In front of player</span>
+              </button>
+              <div class="layer-info-wrap">
+                <button class="layer-info-button" type="button" aria-label="About the front layer">&#9432;</button>
+                <div class="layer-info-tooltip">
+                  Places tiles and objects in front of the player. Use it for trees, arches, and anything the player should pass behind. This layer does not collide.
+                </div>
+              </div>
+            </div>
+            <div class="layer-row">
+              <button class="layer-btn active" data-layer="terrain">
+                <span class="layer-btn-summary">Main solid layer</span>
+              </button>
+              <div class="layer-info-wrap">
+                <button class="layer-info-button" type="button" aria-label="About the gameplay layer">&#9432;</button>
+                <div class="layer-info-tooltip">
+                  Places tiles and objects on the player's main gameplay plane. Use it for floors, walls, and most walkable terrain. This layer has collision.
+                </div>
+              </div>
+            </div>
+            <div class="layer-row">
+              <button class="layer-btn" data-layer="background">
+                <span class="layer-btn-summary">Behind player</span>
+              </button>
+              <div class="layer-info-wrap">
+                <button class="layer-info-button" type="button" aria-label="About the back layer">&#9432;</button>
+                <div class="layer-info-tooltip">
+                  Places tiles and objects behind the player. Use it for scenery and distant decoration. This layer does not collide.
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="layer-controls-row">
+            <button id="btn-editor-layer-guides" class="bar-btn bar-btn-small" type="button">See Layers</button>
+          </div>
         </div>
       </div>
 
       <!-- Background Selector -->
-      <div class="sidebar-section" data-mobile-panel="background" data-sidebar-collapsible="true">
+      <div class="sidebar-section" id="background-section" data-mobile-panel="background" data-sidebar-collapsible="true">
         <div class="section-label">Background</div>
         <select id="background-select">
           <option value="none">None</option>
@@ -290,15 +365,15 @@
       <!-- Palette Mode Toggle -->
       <div class="sidebar-section" data-mobile-panel="palette">
         <div class="palette-tabs">
-          <button class="palette-tab active" data-mode="tiles">Terrain</button>
+          <button class="palette-tab active" data-mode="tiles">Tiles</button>
           <button class="palette-tab" data-mode="objects">Objects</button>
         </div>
-        <div id="editor-layer-chip" class="editor-layer-chip" data-layer-tone="terrain">Placing on Terrain</div>
+        <div id="editor-layer-chip" class="editor-layer-chip" data-layer-tone="terrain">Placing on Gameplay</div>
       </div>
 
       <!-- Tileset Selector (visible in tiles mode) -->
       <div class="sidebar-section" id="tileset-section" data-mobile-panel="palette" data-sidebar-collapsible="true">
-        <div class="section-label">Terrain Set</div>
+        <div class="section-label">Tileset</div>
         <select id="tileset-select">
           <option value="forest">Forest</option>
           <option value="desert">Desert</option>
@@ -450,8 +525,26 @@
         <div id="course-editor-summary" class="goal-summary">No course selected.</div>
       </div>
 
-      <div class="sidebar-section" id="editor-actions" data-mobile-panel="actions" data-sidebar-collapsible="true">
-        <div class="section-label">Actions</div>
+      <div class="sidebar-section" id="editor-actions" data-mobile-panel="actions">
+        <div class="editor-action-rail">
+          <button id="btn-editor-back" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Back (Esc)">
+            <span class="tool-icon" aria-hidden="true">&#8592;</span>
+            <span class="tool-label" data-button-label>World</span>
+          </button>
+          <button id="btn-test-play" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Test Play (Enter / P)">
+            <span class="tool-icon" aria-hidden="true">&#9654;</span>
+            <span class="tool-label">Test</span>
+          </button>
+          <button id="btn-save-draft" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Save Draft (Cmd/Ctrl+S)">
+            <span class="tool-icon" aria-hidden="true">&#128190;</span>
+            <span class="tool-label">Save</span>
+          </button>
+          <button id="btn-publish-room" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Publish (Cmd/Ctrl+Shift+P)">
+            <span class="tool-icon" aria-hidden="true">&#128640;</span>
+            <span class="tool-label">Publish</span>
+          </button>
+        </div>
+        <div id="editor-top-save-status" class="editor-top-save-status">Draft ready.</div>
         <div id="editor-publish-nudge" class="editor-publish-nudge hidden">
           <div class="editor-publish-nudge-kicker">Draft Only</div>
           <div id="editor-publish-nudge-text" class="editor-publish-nudge-text">
@@ -460,16 +553,6 @@
           <button id="btn-editor-publish-nudge" class="bar-btn bar-btn-small" type="button">
             Publish Now
           </button>
-        </div>
-        <div class="editor-action-stack">
-          <button id="btn-back-to-world" class="bar-btn">Back to World</button>
-          <button id="btn-back-to-course-builder" class="bar-btn hidden">Back to Course Builder</button>
-          <button id="btn-test-play" class="bar-btn">Test Play</button>
-          <button id="btn-save-draft" class="bar-btn">Save Draft</button>
-          <button id="btn-publish-room" class="bar-btn">Publish</button>
-          <button id="btn-mint-room" class="bar-btn">Mint Room</button>
-          <button id="btn-refresh-room-metadata" class="bar-btn hidden">Refresh NFT Metadata</button>
-          <button id="btn-room-history" class="bar-btn">History</button>
         </div>
         <div class="mobile-editor-actions-panel mobile-editor-only">
           <div class="mobile-editor-status-grid">
@@ -494,10 +577,43 @@
           </div>
         </div>
       </div>
+
+      <div
+        class="sidebar-section"
+        id="editor-advanced"
+        data-mobile-panel="actions"
+        data-sidebar-collapsible="true"
+        data-sidebar-default-collapsed="desktop"
+      >
+        <div class="section-label">Advanced</div>
+        <div class="editor-advanced-grid">
+          <button id="btn-mint-room" class="bar-btn">Mint Room</button>
+          <button id="btn-refresh-room-metadata" class="bar-btn hidden">Refresh NFT Metadata</button>
+          <button id="btn-room-history" class="bar-btn">History</button>
+        </div>
+      </div>
     </div>
 
     <!-- Game Canvas -->
     <div id="game-container">
+      <div id="editor-inspector" class="editor-inspector desktop-editor-only hidden">
+        <div id="pressure-plate-panel" class="pressure-plate-panel hidden">
+          <div class="section-label">Pressure Plate</div>
+          <div id="pressure-plate-status" class="goal-context-note">Hover a pressure plate to edit its link.</div>
+          <div class="course-room-actions">
+            <button id="btn-pressure-plate-connect" class="bar-btn bar-btn-small" type="button">Connect</button>
+            <button id="btn-pressure-plate-clear" class="bar-btn bar-btn-small" type="button">Clear Link</button>
+            <button id="btn-pressure-plate-done-later" class="bar-btn bar-btn-small hidden" type="button">I Don’t Know Yet</button>
+          </div>
+        </div>
+        <div id="container-contents-panel" class="pressure-plate-panel hidden">
+          <div class="section-label">Chest / Cage</div>
+          <div id="container-contents-status" class="goal-context-note">Hover a chest or cage to set what is inside.</div>
+          <div class="course-room-actions">
+            <button id="btn-container-clear" class="bar-btn bar-btn-small" type="button">Clear Contents</button>
+          </div>
+        </div>
+      </div>
       <div id="world-hud" class="hidden">
         <div class="world-hud-topline">
           <div class="world-hud-title-wrap">
