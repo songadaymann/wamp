@@ -118,7 +118,11 @@ import {
   type OverworldBadgeTierDisplay,
   type RoomBadgeScaleConfig,
 } from './overworld/badgeOverlays';
-import { OverworldHudBridge, type OverworldHudViewModel } from './overworld/hud';
+import {
+  OverworldHudBridge,
+  type OverworldHudViewModel,
+  type OverworldOnlineRosterViewEntry,
+} from './overworld/hud';
 import {
   OverworldLiveObjectController,
   isDynamicArcadeBody,
@@ -6114,6 +6118,14 @@ export class OverworldPlayScene extends Phaser.Scene {
     const selectedCourse = this.getSelectedCourseContext();
     const transientStatus = this.getTransientStatusMessage();
     const totalPlayerCount = this.presenceController.getTotalPlayerCount();
+    const onlineRosterEntries: OverworldOnlineRosterViewEntry[] = this.presenceController
+      .getOnlineRoster()
+      .map((entry) => ({
+        key: entry.key,
+        displayName: entry.displayName,
+        roomText: `Room ${entry.roomId}`,
+        isSelf: entry.isSelf,
+      }));
     const frontierBuildBlocked = selectedState === 'frontier' && this.isFrontierBuildBlockedByClaimLimit();
     const rankingMode = this.currentRoomLeaderboard?.rankingMode ?? null;
     const roomTop = this.currentRoomLeaderboard?.entries[0] ?? null;
@@ -6283,6 +6295,13 @@ export class OverworldPlayScene extends Phaser.Scene {
       cursorText: '',
       playersOnlineText:
         totalPlayerCount === null ? '' : `${totalPlayerCount} ${totalPlayerCount === 1 ? 'player' : 'players'} online`,
+      playersOnlineSummaryText:
+        totalPlayerCount === null
+          ? ''
+          : onlineRosterEntries.length === 0
+            ? 'Live presence in loaded rooms.'
+            : `${onlineRosterEntries.length} ${onlineRosterEntries.length === 1 ? 'player' : 'players'} visible right now`,
+      playersOnlineEntries: onlineRosterEntries,
       saveStatusText,
       bottomBarZoomText: `Zoom: ${this.cameras.main.zoom.toFixed(2)}x`,
       goalPanelVisible: Boolean(activeCourseRun || activeRoomGoalRun),

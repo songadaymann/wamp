@@ -105,6 +105,11 @@ body[data-device-class='phone'][data-app-mode='play-world'] #room-save-status {
   backdrop-filter: blur(4px);
 }
 
+body[data-device-class='phone'] .world-online-popover {
+  width: min(280px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
+  max-height: min(260px, 36vh);
+}
+
 body[data-device-class='phone'][data-app-mode='play-world'] #room-save-status {
   max-width: 46vw;
   overflow: hidden;

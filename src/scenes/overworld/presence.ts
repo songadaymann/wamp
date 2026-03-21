@@ -40,6 +40,14 @@ export interface PlayRoomPresenceMarkerDescriptor {
   population: number;
 }
 
+export interface OnlineRosterEntry {
+  key: string;
+  displayName: string;
+  roomId: string;
+  roomCoordinates: RoomCoordinates;
+  isSelf: boolean;
+}
+
 interface LocalPresenceInput {
   mode: OverworldMode;
   roomCoordinates: RoomCoordinates;
@@ -279,6 +287,48 @@ export class OverworldPresenceController {
     }
 
     return total;
+  }
+
+  getOnlineRoster(): OnlineRosterEntry[] {
+    if (!this.snapshot?.enabled) {
+      return [];
+    }
+
+    const entries: OnlineRosterEntry[] = (this.snapshot.ghosts ?? [])
+      .filter((ghost) => ghost.mode === 'play' && this.isPresenceFresh(ghost.timestamp))
+      .sort((left, right) => {
+        if (left.timestamp !== right.timestamp) {
+          return right.timestamp - left.timestamp;
+        }
+
+        return left.displayName.localeCompare(right.displayName);
+      })
+      .map((ghost) => ({
+        key: ghost.connectionId,
+        displayName: ghost.displayName,
+        roomId: ghost.roomId,
+        roomCoordinates: { ...ghost.roomCoordinates },
+        isSelf: false,
+      }));
+
+    const totalPlayerCount = this.getTotalPlayerCount();
+    if (
+      totalPlayerCount !== null &&
+      totalPlayerCount > entries.length &&
+      this.options.getMode() === 'play' &&
+      this.identity
+    ) {
+      const roomCoordinates = this.options.getCurrentRoomCoordinates();
+      entries.unshift({
+        key: `self:${this.identity.userId}`,
+        displayName: this.identity.displayName,
+        roomId: roomIdFromCoordinates(roomCoordinates),
+        roomCoordinates: { ...roomCoordinates },
+        isSelf: true,
+      });
+    }
+
+    return entries;
   }
 
   getPresenceSummaryText(input: PresenceSummaryInput): string | null {

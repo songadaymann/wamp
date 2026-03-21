@@ -23,6 +23,8 @@ export interface OverworldHudViewModel {
   roomCoordinatesText: string;
   cursorText: string;
   playersOnlineText: string;
+  playersOnlineSummaryText: string;
+  playersOnlineEntries: OverworldOnlineRosterViewEntry[];
   saveStatusText: string;
   bottomBarZoomText: string;
   goalPanelVisible: boolean;
@@ -31,6 +33,13 @@ export interface OverworldHudViewModel {
   goalPanelGoalText: string;
   goalPanelTimerText: string;
   goalPanelProgressText: string;
+}
+
+export interface OverworldOnlineRosterViewEntry {
+  key: string;
+  displayName: string;
+  roomText: string;
+  isSelf: boolean;
 }
 
 export class OverworldHudBridge {
@@ -51,7 +60,12 @@ export class OverworldHudBridge {
   private readonly roomCoordinatesEl: HTMLElement | null;
   private readonly separatorEl: HTMLElement | null;
   private readonly cursorEl: HTMLElement | null;
-  private readonly playersOnlineEl: HTMLElement | null;
+  private readonly playersOnlineWrapEl: HTMLElement | null;
+  private readonly playersOnlineEl: HTMLButtonElement | null;
+  private readonly playersOnlinePopoverEl: HTMLElement | null;
+  private readonly playersOnlinePopoverSummaryEl: HTMLElement | null;
+  private readonly playersOnlinePopoverEmptyEl: HTMLElement | null;
+  private readonly playersOnlinePopoverListEl: HTMLElement | null;
   private readonly saveStatusEl: HTMLElement | null;
   private readonly fitButton: HTMLElement | null;
   private readonly bottomBarZoomEl: HTMLElement | null;
@@ -65,6 +79,88 @@ export class OverworldHudBridge {
   private readonly mobileGoalFooterProgressEl: HTMLElement | null;
   private readonly mobileGoalFooterTimerEl: HTMLElement | null;
   private destroyed = false;
+  private playersOnlinePinned = false;
+
+  private readonly handlePlayersOnlineClick = (event: MouseEvent): void => {
+    if (!this.canShowPlayersOnlinePopover()) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.playersOnlinePinned = !this.playersOnlinePinned;
+    this.setPlayersOnlinePopoverOpen(this.playersOnlinePinned);
+  };
+
+  private readonly handlePlayersOnlinePointerEnter = (): void => {
+    if (this.playersOnlinePinned || !this.canShowPlayersOnlinePopover()) {
+      return;
+    }
+
+    this.setPlayersOnlinePopoverOpen(true);
+  };
+
+  private readonly handlePlayersOnlinePointerLeave = (event: PointerEvent): void => {
+    if (this.playersOnlinePinned || !this.playersOnlineWrapEl) {
+      return;
+    }
+
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && this.playersOnlineWrapEl.contains(nextTarget)) {
+      return;
+    }
+
+    this.setPlayersOnlinePopoverOpen(false);
+  };
+
+  private readonly handlePlayersOnlineFocusIn = (): void => {
+    if (this.playersOnlinePinned || !this.canShowPlayersOnlinePopover()) {
+      return;
+    }
+
+    this.setPlayersOnlinePopoverOpen(true);
+  };
+
+  private readonly handlePlayersOnlineFocusOut = (event: FocusEvent): void => {
+    if (this.playersOnlinePinned || !this.playersOnlineWrapEl) {
+      return;
+    }
+
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && this.playersOnlineWrapEl.contains(nextTarget)) {
+      return;
+    }
+
+    this.setPlayersOnlinePopoverOpen(false);
+  };
+
+  private readonly handleDocumentPointerDown = (event: PointerEvent): void => {
+    if (!this.playersOnlinePinned || !this.playersOnlineWrapEl) {
+      return;
+    }
+
+    const target = event.target;
+    if (target instanceof Node && this.playersOnlineWrapEl.contains(target)) {
+      return;
+    }
+
+    this.playersOnlinePinned = false;
+    this.setPlayersOnlinePopoverOpen(false);
+  };
+
+  private readonly handleDocumentKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape') {
+      return;
+    }
+
+    const popoverOpen = this.playersOnlinePopoverEl?.classList.contains('hidden') === false;
+    if (!this.playersOnlinePinned && !popoverOpen) {
+      return;
+    }
+
+    this.playersOnlinePinned = false;
+    this.setPlayersOnlinePopoverOpen(false);
+  };
 
   constructor(private readonly doc: Document = document) {
     this.hudRoot = this.doc.getElementById('world-hud');
@@ -84,7 +180,12 @@ export class OverworldHudBridge {
     this.roomCoordinatesEl = this.doc.getElementById('room-coords');
     this.separatorEl = this.doc.querySelector('#bottom-bar .separator');
     this.cursorEl = this.doc.getElementById('cursor-coords');
-    this.playersOnlineEl = this.doc.getElementById('world-online-count');
+    this.playersOnlineWrapEl = this.doc.getElementById('world-online-wrap');
+    this.playersOnlineEl = this.doc.getElementById('world-online-count') as HTMLButtonElement | null;
+    this.playersOnlinePopoverEl = this.doc.getElementById('world-online-popover');
+    this.playersOnlinePopoverSummaryEl = this.doc.getElementById('world-online-popover-summary');
+    this.playersOnlinePopoverEmptyEl = this.doc.getElementById('world-online-popover-empty');
+    this.playersOnlinePopoverListEl = this.doc.getElementById('world-online-popover-list');
     this.saveStatusEl = this.doc.getElementById('room-save-status');
     this.fitButton = this.doc.getElementById('btn-fit-screen');
     this.bottomBarZoomEl = this.doc.getElementById('zoom-level');
@@ -97,6 +198,14 @@ export class OverworldHudBridge {
     this.mobileGoalFooterGoalEl = this.doc.getElementById('mobile-goal-footer-goal');
     this.mobileGoalFooterProgressEl = this.doc.getElementById('mobile-goal-footer-progress');
     this.mobileGoalFooterTimerEl = this.doc.getElementById('mobile-goal-footer-timer');
+
+    this.playersOnlineWrapEl?.addEventListener('pointerenter', this.handlePlayersOnlinePointerEnter);
+    this.playersOnlineWrapEl?.addEventListener('pointerleave', this.handlePlayersOnlinePointerLeave);
+    this.playersOnlineWrapEl?.addEventListener('focusin', this.handlePlayersOnlineFocusIn);
+    this.playersOnlineWrapEl?.addEventListener('focusout', this.handlePlayersOnlineFocusOut);
+    this.playersOnlineEl?.addEventListener('click', this.handlePlayersOnlineClick);
+    this.doc.addEventListener('pointerdown', this.handleDocumentPointerDown, true);
+    this.doc.addEventListener('keydown', this.handleDocumentKeyDown, true);
   }
 
   render(viewModel: OverworldHudViewModel): void {
@@ -123,7 +232,7 @@ export class OverworldHudBridge {
     this.setText(this.roomCoordinatesEl, viewModel.roomCoordinatesText);
     this.setText(this.cursorEl, viewModel.cursorText);
     this.setSeparatorVisible(Boolean(viewModel.roomCoordinatesText && viewModel.cursorText));
-    this.setText(this.playersOnlineEl, viewModel.playersOnlineText);
+    this.renderPlayersOnline(viewModel);
     this.setText(this.saveStatusEl, viewModel.saveStatusText);
     this.setSaveStatusTone(viewModel.saveStatusTone);
     this.setText(this.bottomBarZoomEl, viewModel.bottomBarZoomText);
@@ -144,6 +253,13 @@ export class OverworldHudBridge {
 
   destroy(): void {
     this.destroyed = true;
+    this.playersOnlineWrapEl?.removeEventListener('pointerenter', this.handlePlayersOnlinePointerEnter);
+    this.playersOnlineWrapEl?.removeEventListener('pointerleave', this.handlePlayersOnlinePointerLeave);
+    this.playersOnlineWrapEl?.removeEventListener('focusin', this.handlePlayersOnlineFocusIn);
+    this.playersOnlineWrapEl?.removeEventListener('focusout', this.handlePlayersOnlineFocusOut);
+    this.playersOnlineEl?.removeEventListener('click', this.handlePlayersOnlineClick);
+    this.doc.removeEventListener('pointerdown', this.handleDocumentPointerDown, true);
+    this.doc.removeEventListener('keydown', this.handleDocumentKeyDown, true);
   }
 
   private setText(element: HTMLElement | null, text: string): void {
@@ -213,6 +329,59 @@ export class OverworldHudBridge {
 
   private setSeparatorVisible(visible: boolean): void {
     this.separatorEl?.classList.toggle('hidden', !visible);
+  }
+
+  private renderPlayersOnline(viewModel: OverworldHudViewModel): void {
+    this.setText(this.playersOnlineEl, viewModel.playersOnlineText);
+    this.setText(this.playersOnlinePopoverSummaryEl, viewModel.playersOnlineSummaryText);
+
+    const showPlayersOnline = viewModel.playersOnlineText.trim().length > 0;
+    this.playersOnlineWrapEl?.classList.toggle('hidden', !showPlayersOnline);
+
+    if (!showPlayersOnline) {
+      this.playersOnlinePinned = false;
+      this.setPlayersOnlinePopoverOpen(false);
+      return;
+    }
+
+    if (this.playersOnlinePopoverEmptyEl) {
+      this.playersOnlinePopoverEmptyEl.classList.toggle('hidden', viewModel.playersOnlineEntries.length > 0);
+    }
+
+    if (this.playersOnlinePopoverListEl) {
+      this.playersOnlinePopoverListEl.replaceChildren(
+        ...viewModel.playersOnlineEntries.map((entry) => this.createPlayersOnlineEntry(entry))
+      );
+    }
+  }
+
+  private createPlayersOnlineEntry(entry: OverworldOnlineRosterViewEntry): HTMLElement {
+    const row = this.doc.createElement('div');
+    row.className = 'world-online-popover-entry';
+    row.dataset.onlineKey = entry.key;
+
+    const name = this.doc.createElement('div');
+    name.className = 'world-online-popover-entry-name';
+    name.dataset.onlineSelf = entry.isSelf ? 'true' : 'false';
+    name.textContent = entry.isSelf ? `${entry.displayName} (You)` : entry.displayName;
+
+    const room = this.doc.createElement('div');
+    room.className = 'world-online-popover-room';
+    room.textContent = entry.roomText;
+
+    row.append(name, room);
+    return row;
+  }
+
+  private canShowPlayersOnlinePopover(): boolean {
+    return Boolean(this.playersOnlineWrapEl && !this.playersOnlineWrapEl.classList.contains('hidden'));
+  }
+
+  private setPlayersOnlinePopoverOpen(open: boolean): void {
+    this.playersOnlineWrapEl?.classList.toggle('is-open', open);
+    this.playersOnlinePopoverEl?.classList.toggle('hidden', !open);
+    this.playersOnlinePopoverEl?.setAttribute('aria-hidden', open ? 'false' : 'true');
+    this.playersOnlineEl?.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
 
   private renderGoalPanel(viewModel: OverworldHudViewModel): void {

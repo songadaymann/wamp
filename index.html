@@ -722,7 +722,24 @@
         <div id="mobile-goal-footer-timer" class="mobile-goal-footer-timer">0:00.0</div>
       </div>
       <div class="bar-center">
-        <span id="world-online-count" class="world-online-pill world-only-control"></span>
+        <div id="world-online-wrap" class="world-online-wrap world-only-control hidden">
+          <button
+            id="world-online-count"
+            class="world-online-pill"
+            type="button"
+            aria-label="Players online"
+            aria-expanded="false"
+            aria-controls="world-online-popover"
+          ></button>
+          <div id="world-online-popover" class="world-online-popover hidden" aria-hidden="true">
+            <div class="world-online-popover-header">
+              <div class="world-online-popover-title">Players Online</div>
+              <div id="world-online-popover-summary" class="world-online-popover-summary"></div>
+            </div>
+            <div id="world-online-popover-empty" class="world-online-popover-empty">No players visible right now.</div>
+            <div id="world-online-popover-list" class="world-online-popover-list"></div>
+          </div>
+        </div>
       </div>
       <div class="bar-right">
         <span id="room-save-status">Draft ready.</span>
