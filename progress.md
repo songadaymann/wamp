@@ -57,6 +57,29 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Desktop editor layout refactor pass on March 20, 2026:
+  - rebuilt the desktop editor hierarchy around a sticky top action rail (`back`, `test`, `save`, `publish`), then moved room title, tools, layers, palette/background, goal, and advanced actions into a stable order that no longer buries the core build controls under contextual panels
+  - replaced the inline pressure-plate and chest/cage controls with a floating contextual inspector in the canvas area; hovering previews the relevant object controls, clicking pins them, and `Esc` now dismisses connect mode, paste preview, pinned inspector, or finally returns to world/course builder in that order
+  - added the new tile-only `Copy` tool with `1/2/3` tool shortcuts, `R`/`G` for rect/fill, `Enter`/`P` for test play, `Cmd/Ctrl+S` for save draft, `Cmd/Ctrl+Shift+P` for publish, drag-to-copy tile selection, and `Cmd/Ctrl+V` paste preview mode
+  - demoted mint/history into a desktop-collapsed `Advanced` section, renamed the visible layer copy to `Back`, `Gameplay`, and `Front`, renamed `Terrain` palette copy to `Tiles` / `Tileset`, and kept `Course Goal` hidden unless the room was actually opened from course editing
+  - removed the extra shared layer explainer from the top of the `Layers` section so the only layer guidance now lives on the individual layer buttons
+  - verification:
+    - `npm run build` passed
+    - local Playwright desktop editor smoke passed with no console errors and wrote:
+      - `output/web-game/editor-layout-refactor-smoke/state.json`
+      - `output/web-game/editor-layout-refactor-smoke/summary.json`
+      - `output/web-game/editor-layout-refactor-smoke/editor-desktop.png`
+    - the smoke confirms the new desktop order (`actions -> room title -> tools -> layers -> background/palette -> goal -> advanced`), that `Advanced` starts collapsed on desktop, and that `Course Goal` stays hidden in a normal overworld-opened room edit
+- Course consistency pass on March 19, 2026:
+  - published course playback now resolves only the exact room versions pinned into the published course; normal room drafts and active course draft overrides no longer bleed into `Play Course`
+  - draft course preview keeps the draft-only override path, but pinned room-version fallback is now strict and throws a visible error instead of silently substituting the latest published room
+  - added explicit course unpublish support across client + Worker; unpublishing clears the live published snapshot/membership while preserving draft state in the active builder session, historical versions, and existing run history
+  - course builder now shows a dedicated live-state panel (`Not published`, `Published vN live`, or `Published vN live · draft has unpublished changes`) plus an explicit empty-draft warning when a published course still exists
+  - added `Unpublish Course` to the builder and forced a world refresh after publish/unpublish so room course badges, `Play Course`, and published course meta clear/update immediately
+  - verification:
+    - `npm run build` passed
+    - Playwright smoke against `http://127.0.0.1:4174` wrote `output/web-game/course-consistency-smoke/state-0.json` through `state-2.json` with a clean anonymous overworld boot state
+    - screenshot capture still hit the existing black-frame/WebGL limitation, so the course-builder/unpublish UX still wants a real authenticated manual browser pass
 - Standalone portrait rotation + control spacing pass on March 18, 2026:
   - promoted standalone/PWA launch detection into shared device-layout state so installed launches now suppress the portrait install gate and install-help surfaces consistently instead of only relying on the install-help controller's local check
   - installed portrait launches now auto-rotate the app shell into landscape by rotating the new top-level `#shell-root` and swapping the effective mobile viewport/orientation fed into layout, HUD, and control logic
@@ -3353,3 +3376,30 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Playwright smoke on `http://127.0.0.1:4317/?renderer=canvas` booted the overworld with no new runtime errors and the auth state remained stable
   - Playwright smoke on `http://127.0.0.1:4317/?pf=1&renderer=canvas` booted with `playfun.mode: true`, `sdkReady: true`, and `hasSessionToken: false`
   - the `?pf=1` smoke logged Play.fun SDK errors about missing embed/Privy context, which is expected outside a real Play.fun embed and is still the remaining gap for true end-to-end points verification
+
+- Tablet chat placement pass on March 19, 2026:
+  - added a tablet coarse-pointer override so `#global-chat` now anchors in the upper-right under the auth/menu button instead of inheriting the shared bottom-right placement
+  - the tablet chat panel body now uses a slightly softer translucent background and a capped height sized for the remaining screen under the menu
+  - verification:
+    - `npm run build` passed
+    - Playwright smoke client on `http://127.0.0.1:4317/?renderer=canvas` completed with no new runtime errors and wrote `output/web-game/ipad-chat-smoke/shot-0.png`
+    - targeted forced-tablet layout capture confirmed the chat panel now sits at `top: 76px` / `right: 12px` in `output/web-game/ipad-chat-forced-layout/forced-tablet-play-chat.png`
+
+## March 20, 2026 - Chest / Cage Contents Authoring Pass
+
+- Added authored container contents to room objects via `containedObjectId`
+  - cages can now hold exactly one enemy
+  - treasure chests can now hold exactly one collectible
+  - invalid stored ids are sanitized during room snapshot normalization and mint-payload round-trips
+- Editor object workflow now supports direct container filling
+  - hover a cage or treasure chest to see its current contents and instructions
+  - select an enemy or collectible in the object palette, then click the cage/chest to assign it
+  - added a `Clear Contents` action in the object sidebar panel for the focused container
+- Runtime trigger behavior now uses authored contents instead of hardcoded defaults
+  - triggered cages open to their open frame and only spawn their stored enemy
+  - triggered treasure chests open and only spawn their stored collectible
+  - spawned contents now count toward goal/completion math
+- Goal-count helpers now treat hidden chest/cage contents as part of the room inventory in both runtime UI and run-point clamping
+- Verification:
+  - `npm run build` passed
+  - remaining manual check: author a chest and cage in the editor, assign contents, trigger them in play, and confirm the exact spawn/goal behavior feels right

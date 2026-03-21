@@ -59,6 +59,22 @@ export interface EditorCourseUiViewModel {
   canEditNextRoom: boolean;
 }
 
+export interface EditorInspectorState {
+  visible: boolean;
+  pressureVisible: boolean;
+  pressureStatusText: string;
+  pressureConnectHidden: boolean;
+  pressureConnectDisabled: boolean;
+  pressureConnectTitle: string;
+  pressureClearHidden: boolean;
+  pressureClearDisabled: boolean;
+  pressureDoneLaterHidden: boolean;
+  containerVisible: boolean;
+  containerStatusText: string;
+  containerClearDisabled: boolean;
+  containerClearTitle: string;
+}
+
 export interface EditorUiViewModel {
   roomTitleValue: string;
   roomCoordinatesText: string;
@@ -70,8 +86,8 @@ export interface EditorUiViewModel {
   publishNudgeText: string;
   publishNudgeActionText: string;
   zoomText: string;
-  backToWorldHidden: boolean;
-  backToCourseBuilderHidden: boolean;
+  backButtonHidden: boolean;
+  backButtonText: string;
   playHidden: boolean;
   saveHidden: boolean;
   saveDisabled: boolean;
@@ -99,8 +115,7 @@ export class EditorUiBridge {
   private readonly publishNudgeTextEl: HTMLElement | null;
   private readonly publishNudgeActionBtn: HTMLButtonElement | null;
   private readonly zoomEls: HTMLElement[];
-  private readonly backToWorldBtn: HTMLButtonElement | null;
-  private readonly backToCourseBuilderBtn: HTMLButtonElement | null;
+  private readonly backBtn: HTMLButtonElement | null;
   private readonly playBtn: HTMLButtonElement | null;
   private readonly saveBtn: HTMLButtonElement | null;
   private readonly publishBtn: HTMLButtonElement | null;
@@ -142,6 +157,15 @@ export class EditorUiBridge {
   private readonly coursePlaceFinishBtn: HTMLButtonElement | null;
   private readonly coursePreviousRoomBtn: HTMLButtonElement | null;
   private readonly courseNextRoomBtn: HTMLButtonElement | null;
+  private readonly inspectorRoot: HTMLElement | null;
+  private readonly pressurePanel: HTMLElement | null;
+  private readonly pressureStatus: HTMLElement | null;
+  private readonly pressureConnectBtn: HTMLButtonElement | null;
+  private readonly pressureClearBtn: HTMLButtonElement | null;
+  private readonly pressureDoneLaterBtn: HTMLButtonElement | null;
+  private readonly containerPanel: HTMLElement | null;
+  private readonly containerStatus: HTMLElement | null;
+  private readonly containerClearBtn: HTMLButtonElement | null;
   private readonly backgroundButtons: HTMLButtonElement[];
   private destroyed = false;
 
@@ -153,6 +177,7 @@ export class EditorUiBridge {
     ].filter((element): element is HTMLElement => Boolean(element));
     this.separatorEl = this.doc.querySelector('#bottom-bar .separator');
     this.saveStatusEls = [
+      this.doc.getElementById('editor-top-save-status'),
       this.doc.getElementById('room-save-status'),
       this.doc.getElementById('mobile-editor-save-status'),
     ].filter((element): element is HTMLElement => Boolean(element));
@@ -163,8 +188,7 @@ export class EditorUiBridge {
       this.doc.getElementById('zoom-level'),
       this.doc.getElementById('mobile-editor-zoom-level'),
     ].filter((element): element is HTMLElement => Boolean(element));
-    this.backToWorldBtn = this.doc.getElementById('btn-back-to-world') as HTMLButtonElement | null;
-    this.backToCourseBuilderBtn = this.doc.getElementById('btn-back-to-course-builder') as HTMLButtonElement | null;
+    this.backBtn = this.doc.getElementById('btn-editor-back') as HTMLButtonElement | null;
     this.playBtn = this.doc.getElementById('btn-test-play') as HTMLButtonElement | null;
     this.saveBtn = this.doc.getElementById('btn-save-draft') as HTMLButtonElement | null;
     this.publishBtn = this.doc.getElementById('btn-publish-room') as HTMLButtonElement | null;
@@ -209,6 +233,15 @@ export class EditorUiBridge {
     this.coursePlaceFinishBtn = this.doc.getElementById('btn-course-editor-place-finish') as HTMLButtonElement | null;
     this.coursePreviousRoomBtn = this.doc.getElementById('btn-course-editor-previous-room') as HTMLButtonElement | null;
     this.courseNextRoomBtn = this.doc.getElementById('btn-course-editor-next-room') as HTMLButtonElement | null;
+    this.inspectorRoot = this.doc.getElementById('editor-inspector');
+    this.pressurePanel = this.doc.getElementById('pressure-plate-panel');
+    this.pressureStatus = this.doc.getElementById('pressure-plate-status');
+    this.pressureConnectBtn = this.doc.getElementById('btn-pressure-plate-connect') as HTMLButtonElement | null;
+    this.pressureClearBtn = this.doc.getElementById('btn-pressure-plate-clear') as HTMLButtonElement | null;
+    this.pressureDoneLaterBtn = this.doc.getElementById('btn-pressure-plate-done-later') as HTMLButtonElement | null;
+    this.containerPanel = this.doc.getElementById('container-contents-panel');
+    this.containerStatus = this.doc.getElementById('container-contents-status');
+    this.containerClearBtn = this.doc.getElementById('btn-container-clear') as HTMLButtonElement | null;
     this.backgroundButtons = Array.from(
       this.doc.querySelectorAll<HTMLButtonElement>('[data-background-id]')
     );
@@ -230,8 +263,8 @@ export class EditorUiBridge {
     this.setText(this.zoomEls, viewModel.zoomText);
     this.syncBackgroundSelection();
 
-    this.setHidden(this.backToWorldBtn, viewModel.backToWorldHidden);
-    this.setHidden(this.backToCourseBuilderBtn, viewModel.backToCourseBuilderHidden);
+    this.setHidden(this.backBtn, viewModel.backButtonHidden);
+    this.setButtonText(this.backBtn, viewModel.backButtonText);
     this.setHidden(this.playBtn, viewModel.playHidden);
     this.setHidden(this.saveBtn, viewModel.saveHidden);
     this.setDisabled(this.saveBtn, viewModel.saveDisabled);
@@ -304,6 +337,30 @@ export class EditorUiBridge {
     this.setActive(this.coursePlaceFinishBtn, viewModel.course.placeFinishActive);
     this.setDisabled(this.coursePreviousRoomBtn, !viewModel.course.canEditPreviousRoom);
     this.setDisabled(this.courseNextRoomBtn, !viewModel.course.canEditNextRoom);
+  }
+
+  renderInspector(state: EditorInspectorState): void {
+    if (this.destroyed) {
+      return;
+    }
+
+    this.setHidden(this.inspectorRoot, !state.visible);
+    this.setHidden(this.pressurePanel, !state.pressureVisible);
+    this.setText(this.pressureStatus, state.pressureStatusText);
+    this.setHidden(this.pressureConnectBtn, state.pressureConnectHidden);
+    this.setDisabled(this.pressureConnectBtn, state.pressureConnectDisabled);
+    if (this.pressureConnectBtn) {
+      this.pressureConnectBtn.title = state.pressureConnectTitle;
+    }
+    this.setHidden(this.pressureClearBtn, state.pressureClearHidden);
+    this.setDisabled(this.pressureClearBtn, state.pressureClearDisabled);
+    this.setHidden(this.pressureDoneLaterBtn, state.pressureDoneLaterHidden);
+    this.setHidden(this.containerPanel, !state.containerVisible);
+    this.setText(this.containerStatus, state.containerStatusText);
+    this.setDisabled(this.containerClearBtn, state.containerClearDisabled);
+    if (this.containerClearBtn) {
+      this.containerClearBtn.title = state.containerClearTitle;
+    }
   }
 
   destroy(): void {

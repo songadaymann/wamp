@@ -89,6 +89,10 @@ export interface EditorSceneBridge {
   clearCourseGoalMarkers?: () => void;
   editPreviousCourseRoom?: () => Promise<void> | void;
   editNextCourseRoom?: () => Promise<void> | void;
+  beginFocusedPressurePlateConnection?: () => void;
+  clearFocusedPressurePlateConnection?: () => void;
+  cancelPressurePlateConnection?: () => void;
+  clearFocusedContainerContents?: () => void;
   undoAction?: () => void;
   redoAction?: () => void;
 }

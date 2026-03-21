@@ -1,5 +1,10 @@
 import Phaser from 'phaser';
 import {
+  canObjectBeStoredInContainer,
+  canPlacedObjectBeContainer,
+  canPlacedObjectBePressurePlateTarget,
+  canPlacedObjectTriggerOtherObjects,
+  createPlacedObjectInstanceId,
   decodeTileDataValue,
   encodeTileDataValue,
   LAYER_NAMES,
@@ -10,6 +15,7 @@ import {
   getPlacedObjectLayer,
   getObjectById,
   getObjectDefaultFrame,
+  placedObjectContributesToCategory,
   getSelectionTileValue,
   type LayerName,
   type PlacedObject,
@@ -38,10 +44,9 @@ interface TileAction {
   newGid: number;
 }
 
-interface ObjectAction {
-  type: 'add' | 'remove';
-  object: PlacedObject;
-  index: number;
+interface ObjectsAction {
+  previous: PlacedObject[];
+  next: PlacedObject[];
 }
 
 interface SpawnAction {
@@ -56,7 +61,7 @@ interface GoalAction {
 
 type UndoAction =
   | { kind: 'tiles'; actions: TileAction[] }
-  | { kind: 'object'; action: ObjectAction }
+  | { kind: 'objects'; action: ObjectsAction }
   | { kind: 'spawn'; action: SpawnAction }
   | { kind: 'goal'; action: GoalAction };
 
@@ -70,6 +75,14 @@ interface EditorRoomSnapshotMetadata {
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;
+}
+
+export interface EditorClipboardState {
+  sourceLayer: LayerName;
+  width: number;
+  height: number;
+  tiles: number[][];
+  occupiedMask: boolean[][];
 }
 
 interface EditorEditRuntimeHost {
@@ -96,6 +109,7 @@ export class EditorEditRuntime {
   private undoStack: UndoAction[] = [];
   private redoStack: UndoAction[] = [];
   private currentBatch: TileAction[] = [];
+  private clipboardState: EditorClipboardState | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -150,6 +164,18 @@ export class EditorEditRuntime {
     this.goalPlacementMode = value;
   }
 
+  get currentClipboardState(): EditorClipboardState | null {
+    return this.clipboardState
+      ? {
+          sourceLayer: this.clipboardState.sourceLayer,
+          width: this.clipboardState.width,
+          height: this.clipboardState.height,
+          tiles: this.clipboardState.tiles.map((row) => [...row]),
+          occupiedMask: this.clipboardState.occupiedMask.map((row) => [...row]),
+        }
+      : null;
+  }
+
   initializeGraphics(): void {
     // Goal markers are sprite-backed; no persistent graphics overlay needed.
   }
@@ -194,6 +220,7 @@ export class EditorEditRuntime {
     this.undoStack = [];
     this.redoStack = [];
     this.currentBatch = [];
+    this.clipboardState = null;
   }
 
   applyRoomSnapshot(room: RoomSnapshot): void {
@@ -239,6 +266,119 @@ export class EditorEditRuntime {
     this.lastDirtyAt = 0;
   }
 
+  hasClipboardTiles(): boolean {
+    return Boolean(this.clipboardState);
+  }
+
+  copyTilesToClipboard(x1: number, y1: number, x2: number, y2: number): boolean {
+    const layer = this.host.getLayers().get(editorState.activeLayer);
+    if (!layer) {
+      return false;
+    }
+
+    const minX = Math.max(0, Math.min(x1, x2));
+    const minY = Math.max(0, Math.min(y1, y2));
+    const maxX = Math.min(ROOM_WIDTH - 1, Math.max(x1, x2));
+    const maxY = Math.min(ROOM_HEIGHT - 1, Math.max(y1, y2));
+    const width = maxX - minX + 1;
+    const height = maxY - minY + 1;
+    if (width <= 0 || height <= 0) {
+      return false;
+    }
+
+    const tiles: number[][] = [];
+    const occupiedMask: boolean[][] = [];
+    let hasOccupiedTiles = false;
+
+    for (let dy = 0; dy < height; dy += 1) {
+      const tileRow: number[] = [];
+      const occupiedRow: boolean[] = [];
+      for (let dx = 0; dx < width; dx += 1) {
+        const existingTile = layer.getTileAt(minX + dx, minY + dy);
+        const encodedTileValue = existingTile
+          ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
+          : -1;
+        const occupied = encodedTileValue >= 0;
+        tileRow.push(encodedTileValue);
+        occupiedRow.push(occupied);
+        hasOccupiedTiles ||= occupied;
+      }
+      tiles.push(tileRow);
+      occupiedMask.push(occupiedRow);
+    }
+
+    if (!hasOccupiedTiles) {
+      return false;
+    }
+
+    this.clipboardState = {
+      sourceLayer: editorState.activeLayer,
+      width,
+      height,
+      tiles,
+      occupiedMask,
+    };
+    return true;
+  }
+
+  pasteClipboardAt(baseTileX: number, baseTileY: number): boolean {
+    if (!this.guardEditable()) {
+      return false;
+    }
+
+    const layer = this.host.getLayers().get(editorState.activeLayer);
+    const clipboard = this.clipboardState;
+    if (!layer || !clipboard) {
+      return false;
+    }
+
+    let changed = false;
+    for (let dy = 0; dy < clipboard.height; dy += 1) {
+      for (let dx = 0; dx < clipboard.width; dx += 1) {
+        if (!clipboard.occupiedMask[dy]?.[dx]) {
+          continue;
+        }
+
+        const tileX = baseTileX + dx;
+        const tileY = baseTileY + dy;
+        if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
+          continue;
+        }
+
+        const newGid = clipboard.tiles[dy]?.[dx] ?? -1;
+        if (newGid < 0) {
+          continue;
+        }
+
+        const existingTile = layer.getTileAt(tileX, tileY);
+        const oldGid = existingTile
+          ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
+          : -1;
+        if (oldGid === newGid) {
+          continue;
+        }
+
+        const decoded = decodeTileDataValue(newGid);
+        const pastedTile = layer.putTileAt(decoded.gid, tileX, tileY);
+        if (pastedTile) {
+          pastedTile.flipX = decoded.flipX;
+          pastedTile.flipY = decoded.flipY;
+        }
+
+        this.currentBatch.push({
+          layer: editorState.activeLayer,
+          x: tileX,
+          y: tileY,
+          oldGid,
+          newGid,
+        });
+        changed = true;
+      }
+    }
+
+    return changed;
+  }
+
   exportRoomSnapshot(): RoomSnapshot {
     const metadata = this.host.getRoomSnapshotMetadata();
 
@@ -280,6 +420,10 @@ export class EditorEditRuntime {
 
   clearTileBatch(): void {
     this.currentBatch = [];
+  }
+
+  private clonePlacedObjects(placedObjects: PlacedObject[] = editorState.placedObjects): PlacedObject[] {
+    return placedObjects.map((placed) => ({ ...placed }));
   }
 
   placeTileAt(worldX: number, worldY: number): void {
@@ -548,66 +692,71 @@ export class EditorEditRuntime {
     }
   }
 
-  handleObjectPlace(worldX: number, worldY: number, tileX: number, tileY: number): void {
+  handleObjectPlace(worldX: number, worldY: number, tileX: number, tileY: number): PlacedObject | null {
     if (!this.guardEditable()) {
-      return;
+      return null;
     }
     if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
-      return;
+      return null;
     }
 
     if (editorState.activeTool === 'eraser') {
       this.removeObjectAt(worldX, worldY);
-      return;
+      return null;
     }
 
     if (!editorState.selectedObjectId) {
-      return;
+      return null;
     }
 
     const objectConfig = getObjectById(editorState.selectedObjectId);
     if (!objectConfig) {
-      return;
+      return null;
     }
 
     if (objectConfig.id === 'spawn_point') {
       this.placeSpawnPoint(tileX, tileY);
-      return;
+      return null;
     }
 
     const placed: PlacedObject = {
       id: editorState.selectedObjectId,
       x: tileX * TILE_SIZE + objectConfig.frameWidth / 2,
       y: tileY * TILE_SIZE + TILE_SIZE - objectConfig.frameHeight / 2,
+      instanceId: createPlacedObjectInstanceId(),
       facing: objectConfig.facingDirection ? editorState.objectFacing : undefined,
       layer: editorState.activeLayer,
+      triggerTargetInstanceId: null,
+      containedObjectId: null,
     };
 
-    editorState.placedObjects.push(placed);
-    const index = editorState.placedObjects.length - 1;
+    const previous = this.clonePlacedObjects();
+    const next = [...previous, placed];
+    editorState.placedObjects = next;
     this.undoStack.push({
-      kind: 'object',
-      action: { type: 'add', object: placed, index },
+      kind: 'objects',
+      action: { previous, next: this.clonePlacedObjects(next) },
     });
     this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
+    return placed;
   }
 
-  removeObjectAt(worldX: number, worldY: number): void {
+  removeObjectAt(worldX: number, worldY: number): PlacedObject | null {
     if (!this.guardEditable()) {
-      return;
+      return null;
     }
     if (this.roomSpawnPoint) {
       const spawnDist = Math.hypot(this.roomSpawnPoint.x - worldX, this.roomSpawnPoint.y - worldY);
       if (spawnDist < 14) {
         this.updateSpawnPoint(null);
-        return;
+        return null;
       }
     }
 
     if (this.removeGoalMarkerAt(worldX, worldY)) {
-      return;
+      return null;
     }
 
     let bestIndex = -1;
@@ -623,15 +772,27 @@ export class EditorEditRuntime {
     }
 
     if (bestIndex >= 0) {
-      const removed = editorState.placedObjects.splice(bestIndex, 1)[0];
+      const previous = this.clonePlacedObjects();
+      const removed = previous[bestIndex];
+      const next = previous
+        .filter((_, index) => index !== bestIndex)
+        .map((placed) =>
+          placed.triggerTargetInstanceId === removed.instanceId
+            ? { ...placed, triggerTargetInstanceId: null }
+            : placed
+        );
+      editorState.placedObjects = next;
       this.undoStack.push({
-        kind: 'object',
-        action: { type: 'remove', object: removed, index: bestIndex },
+        kind: 'objects',
+        action: { previous, next: this.clonePlacedObjects(next) },
       });
       this.redoStack = [];
       this.rebuildObjectSprites();
       this.markRoomDirty();
+      return removed;
     }
+
+    return null;
   }
 
   rebuildObjectSprites(): void {
@@ -657,6 +818,9 @@ export class EditorEditRuntime {
       } else {
         sprite.setFrame(getObjectDefaultFrame(objectConfig));
       }
+      if (placed.id === 'door_metal') {
+        sprite.setTint(0xb8c4d8);
+      }
       this.applyPlacedObjectFacing(sprite, objectConfig, placed);
       this.objectSprites.push(sprite);
     }
@@ -678,6 +842,195 @@ export class EditorEditRuntime {
     this.redrawGoalMarkers();
     this.host.updateGoalUi();
     this.host.syncBackgroundCameraIgnores();
+  }
+
+  getPlacedObjectByInstanceId(instanceId: string | null | undefined): PlacedObject | null {
+    if (!instanceId) {
+      return null;
+    }
+
+    return editorState.placedObjects.find((placed) => placed.instanceId === instanceId) ?? null;
+  }
+
+  hasPlacedObjectInstanceId(instanceId: string | null | undefined): boolean {
+    return Boolean(this.getPlacedObjectByInstanceId(instanceId));
+  }
+
+  findPlacedObjectAt(
+    worldX: number,
+    worldY: number,
+    filter?: (placed: PlacedObject) => boolean,
+  ): PlacedObject | null {
+    let bestMatch: PlacedObject | null = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    for (let index = editorState.placedObjects.length - 1; index >= 0; index -= 1) {
+      const placed = editorState.placedObjects[index];
+      if (filter && !filter(placed)) {
+        continue;
+      }
+
+      const bounds = this.getPlacedObjectBounds(placed);
+      const contains = Phaser.Geom.Rectangle.Contains(bounds, worldX, worldY);
+      const distance = Math.hypot(placed.x - worldX, placed.y - worldY);
+      if (!contains && distance > 18) {
+        continue;
+      }
+
+      const score = contains ? distance : distance + 20;
+      if (score < bestScore) {
+        bestScore = score;
+        bestMatch = placed;
+      }
+    }
+
+    return bestMatch;
+  }
+
+  getPressurePlateEligibleTargets(triggerInstanceId: string | null | undefined): PlacedObject[] {
+    return editorState.placedObjects.filter((placed) => {
+      if (!canPlacedObjectBePressurePlateTarget(placed)) {
+        return false;
+      }
+
+      return placed.instanceId !== triggerInstanceId;
+    });
+  }
+
+  setContainerContents(
+    containerInstanceId: string,
+    containedObjectId: string | null,
+  ): boolean {
+    const containerIndex = editorState.placedObjects.findIndex(
+      (placed) => placed.instanceId === containerInstanceId
+    );
+    if (containerIndex < 0) {
+      return false;
+    }
+
+    const container = editorState.placedObjects[containerIndex];
+    if (!canPlacedObjectBeContainer(container)) {
+      return false;
+    }
+
+    if (containedObjectId) {
+      const objectConfig = getObjectById(containedObjectId);
+      if (!canObjectBeStoredInContainer(container.id, objectConfig)) {
+        return false;
+      }
+    }
+
+    const previous = this.clonePlacedObjects();
+    const previousContents = previous[containerIndex]?.containedObjectId ?? null;
+    if (previousContents === containedObjectId) {
+      return true;
+    }
+
+    const next = previous.map((placed, index) =>
+      index === containerIndex
+        ? {
+            ...placed,
+            containedObjectId,
+          }
+        : placed
+    );
+    editorState.placedObjects = next;
+    this.undoStack.push({
+      kind: 'objects',
+      action: { previous, next: this.clonePlacedObjects(next) },
+    });
+    this.redoStack = [];
+    this.rebuildObjectSprites();
+    this.markRoomDirty();
+    return true;
+  }
+
+  setPressurePlateTarget(
+    triggerInstanceId: string,
+    targetInstanceId: string | null,
+  ): boolean {
+    const triggerIndex = editorState.placedObjects.findIndex(
+      (placed) => placed.instanceId === triggerInstanceId
+    );
+    if (triggerIndex < 0) {
+      return false;
+    }
+
+    const trigger = editorState.placedObjects[triggerIndex];
+    if (!canPlacedObjectTriggerOtherObjects(trigger)) {
+      return false;
+    }
+
+    if (targetInstanceId) {
+      const target = this.getPlacedObjectByInstanceId(targetInstanceId);
+      if (
+        !target ||
+        target.instanceId === triggerInstanceId ||
+        !canPlacedObjectBePressurePlateTarget(target)
+      ) {
+        return false;
+      }
+    }
+
+    const previous = this.clonePlacedObjects();
+    const next = previous.map((placed, index) =>
+      index === triggerIndex
+        ? {
+            ...placed,
+            triggerTargetInstanceId: targetInstanceId,
+          }
+        : placed
+    );
+    const previousTarget = previous[triggerIndex]?.triggerTargetInstanceId ?? null;
+    if (previousTarget === targetInstanceId) {
+      return true;
+    }
+
+    editorState.placedObjects = next;
+    this.undoStack.push({
+      kind: 'objects',
+      action: { previous, next: this.clonePlacedObjects(next) },
+    });
+    this.redoStack = [];
+    this.rebuildObjectSprites();
+    this.markRoomDirty();
+    return true;
+  }
+
+  getPlacedObjectBounds(placed: PlacedObject): Phaser.Geom.Rectangle {
+    const objectConfig = getObjectById(placed.id);
+    if (!objectConfig) {
+      return new Phaser.Geom.Rectangle(placed.x - 8, placed.y - 8, 16, 16);
+    }
+
+    const width = Math.max(
+      objectConfig.previewWidth ?? 0,
+      objectConfig.bodyWidth ?? 0,
+      objectConfig.frameWidth
+    );
+    const height = Math.max(
+      objectConfig.previewHeight ?? 0,
+      objectConfig.bodyHeight ?? 0,
+      objectConfig.frameHeight
+    );
+    const x =
+      placed.x -
+      objectConfig.frameWidth * 0.5 +
+      (objectConfig.previewOffsetX ?? 0);
+    const y =
+      placed.y -
+      objectConfig.frameHeight * 0.5 +
+      (objectConfig.previewOffsetY ?? 0);
+
+    return new Phaser.Geom.Rectangle(x - 4, y - 4, width + 8, height + 8);
+  }
+
+  getContainerContentsLabel(placed: PlacedObject | null | undefined): string | null {
+    if (!placed || !canPlacedObjectBeContainer(placed) || !placed.containedObjectId) {
+      return null;
+    }
+
+    return getObjectById(placed.containedObjectId)?.name ?? null;
   }
 
   private applyPlacedObjectFacing(
@@ -990,21 +1343,15 @@ export class EditorEditRuntime {
       return;
     }
 
-    if (action.kind === 'object') {
-      const objectAction = action.action;
-      if (objectAction.type === 'add') {
-        editorState.placedObjects.splice(objectAction.index, 1);
-        this.redoStack.push({
-          kind: 'object',
-          action: { type: 'remove', object: objectAction.object, index: objectAction.index },
-        });
-      } else {
-        editorState.placedObjects.splice(objectAction.index, 0, objectAction.object);
-        this.redoStack.push({
-          kind: 'object',
-          action: { type: 'add', object: objectAction.object, index: objectAction.index },
-        });
-      }
+    if (action.kind === 'objects') {
+      editorState.placedObjects = this.clonePlacedObjects(action.action.previous);
+      this.redoStack.push({
+        kind: 'objects',
+        action: {
+          previous: this.clonePlacedObjects(action.action.next),
+          next: this.clonePlacedObjects(action.action.previous),
+        },
+      });
       this.rebuildObjectSprites();
       this.markRoomDirty();
       return;
@@ -1076,21 +1423,15 @@ export class EditorEditRuntime {
       return;
     }
 
-    if (action.kind === 'object') {
-      const objectAction = action.action;
-      if (objectAction.type === 'add') {
-        editorState.placedObjects.splice(objectAction.index, 1);
-        this.undoStack.push({
-          kind: 'object',
-          action: { type: 'remove', object: objectAction.object, index: objectAction.index },
-        });
-      } else {
-        editorState.placedObjects.splice(objectAction.index, 0, objectAction.object);
-        this.undoStack.push({
-          kind: 'object',
-          action: { type: 'add', object: objectAction.object, index: objectAction.index },
-        });
-      }
+    if (action.kind === 'objects') {
+      editorState.placedObjects = this.clonePlacedObjects(action.action.previous);
+      this.undoStack.push({
+        kind: 'objects',
+        action: {
+          previous: this.clonePlacedObjects(action.action.next),
+          next: this.clonePlacedObjects(action.action.previous),
+        },
+      });
       this.rebuildObjectSprites();
       this.markRoomDirty();
       return;
@@ -1287,8 +1628,7 @@ export class EditorEditRuntime {
   private countPlacedObjectsByCategory(category: 'collectible' | 'enemy'): number {
     let count = 0;
     for (const placed of editorState.placedObjects) {
-      const config = getObjectById(placed.id);
-      if (config?.category === category) {
+      if (placedObjectContributesToCategory(placed, category)) {
         count += 1;
       }
     }

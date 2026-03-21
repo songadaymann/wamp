@@ -34,8 +34,7 @@ export function setupSceneCommands(
   const aboutOpenBtn = doc.getElementById('btn-about-open');
   const chatModerationOpenBtn = doc.getElementById('btn-chat-moderation-open');
   const worldJumpInput = doc.getElementById('world-jump-input') as HTMLInputElement | null;
-  const backToWorldBtn = doc.getElementById('btn-back-to-world');
-  const backToCourseBuilderBtn = doc.getElementById('btn-back-to-course-builder');
+  const editorBackBtn = doc.getElementById('btn-editor-back');
   const playBtn = doc.getElementById('btn-test-play');
   const saveBtn = doc.getElementById('btn-save-draft');
   const publishBtn = doc.getElementById('btn-publish-room');
@@ -171,7 +170,7 @@ export function setupSceneCommands(
     getActiveEditorScene(game)?.startPlayMode?.();
   });
 
-  backToWorldBtn?.addEventListener('click', () => {
+  editorBackBtn?.addEventListener('click', () => {
     historyModal.close();
     leaderboardModal.close();
     controlsModal.close();
@@ -179,29 +178,18 @@ export function setupSceneCommands(
     courseModal.close();
     chatModerationModal.close();
     const editorScene = getActiveEditorScene(game);
-    if (editorScene?.returnToWorld) {
-      void editorScene.returnToWorld();
-      return;
-    }
-
-    getActiveOverworldScene(game)?.returnToWorld?.();
-  });
-
-  backToCourseBuilderBtn?.addEventListener('click', () => {
-    historyModal.close();
-    leaderboardModal.close();
-    controlsModal.close();
-    aboutModal.close();
-    chatModerationModal.close();
-    const editorScene = getActiveEditorScene(game);
-    if (editorScene?.returnToCourseBuilder) {
+    const canReturnToCourseBuilder = editorScene?.getCourseEditorState?.().canReturnToCourseBuilder ?? false;
+    if (canReturnToCourseBuilder && editorScene?.returnToCourseBuilder) {
       void editorScene.returnToCourseBuilder();
       return;
     }
 
     if (editorScene?.returnToWorld) {
       void editorScene.returnToWorld();
+      return;
     }
+
+    getActiveOverworldScene(game)?.returnToWorld?.();
   });
 
   saveBtn?.addEventListener('click', async () => {

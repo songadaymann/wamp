@@ -10,7 +10,7 @@ export const LAYER_NAMES = ['background', 'terrain', 'foreground'] as const;
 export type LayerName = typeof LAYER_NAMES[number];
 
 // ── Tools ──
-export const TOOLS = ['pencil', 'rect', 'fill', 'eraser'] as const;
+export const TOOLS = ['pencil', 'rect', 'fill', 'eraser', 'copy'] as const;
 export type ToolName = typeof TOOLS[number];
 export const ERASER_BRUSH_SIZES = [1, 3, 5] as const;
 export type EraserBrushSize = typeof ERASER_BRUSH_SIZES[number];
@@ -414,6 +414,17 @@ export interface GameObjectConfig {
   description: string;
 }
 
+export const PRESSURE_PLATE_TARGET_OBJECT_IDS = [
+  'door_locked',
+  'door_metal',
+  'cage',
+  'treasure_chest',
+] as const;
+
+export type PressurePlateTargetObjectId = (typeof PRESSURE_PLATE_TARGET_OBJECT_IDS)[number];
+export const CONTAINER_OBJECT_IDS = ['cage', 'treasure_chest'] as const;
+export type ContainerObjectId = (typeof CONTAINER_OBJECT_IDS)[number];
+
 export const GAME_OBJECTS: GameObjectConfig[] = [
   // ── Collectibles ──
   { id: 'coin_gold',   name: 'Gold Coin',   category: 'collectible', path: 'assets/objects/coin_gold.png',   frameWidth: 16, frameHeight: 16, frameCount: 8,  fps: 10, bodyWidth: 12, bodyHeight: 12, behavior: 'animated', description: 'Collect for points. Disappears on contact.' },
@@ -468,13 +479,16 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'spawn_point', name: 'Spawn Point', category: 'interactive', path: 'assets/objects/sign_arrow.png',  frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Player spawn marker. Only one is stored per room.' },
   { id: 'flag',        name: 'Flag',        category: 'interactive', path: 'assets/objects/flag.png',        frameWidth: 32, frameHeight: 32, frameCount: 9,  fps: 8,  bodyWidth: 8,  bodyHeight: 28, behavior: 'animated', description: 'Goal marker. Reach to complete the room.' },
   { id: 'door_locked', name: 'Locked Door', category: 'interactive', path: 'assets/objects/door_locked.png', frameWidth: 32, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 44, bodyOffsetX: 2, bodyOffsetY: 4, behavior: 'static',   description: 'A key-gated door. Collect a key to unlock and pass through.' },
+  { id: 'door_metal',  name: 'Metal Door',  category: 'platform',    path: 'assets/objects/door_locked.png', frameWidth: 32, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 44, bodyOffsetX: 2, bodyOffsetY: 4, behavior: 'static',   description: 'Pressure-plate door. Opens while its linked plate stays pressed.' },
   { id: 'crate',       name: 'Crate',       category: 'platform',    path: 'assets/objects/crate_static.png', frameWidth: 32, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 0, bodyOffsetY: 16, previewWidth: 16, previewHeight: 16, previewOffsetX: 0, previewOffsetY: 16, behavior: 'static',   description: 'Solid block. Stand on it or push it.' },
   { id: 'brick_box',   name: 'Brick Box',   category: 'platform',    path: 'assets/objects/brick_box.png',   frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 0,  defaultFrame: 3, bodyWidth: 16, bodyHeight: 17, bodyOffsetX: 8, bodyOffsetY: 7, previewWidth: 16, previewHeight: 17, previewOffsetX: 8, previewOffsetY: 7, behavior: 'static',   description: 'Solid brick block. Stand on it like a platform.' },
   { id: 'treasure_chest', name: 'Treasure Chest', category: 'platform', path: 'assets/objects/treasure_chest.png', frameWidth: 32, frameHeight: 32, frameCount: 4, fps: 0, defaultFrame: 0, bodyWidth: 28, bodyHeight: 18, bodyOffsetX: 2, bodyOffsetY: 14, behavior: 'static', description: 'Solid chest prop. Good for treasure rooms.' },
   { id: 'log_wall',    name: 'Log Wall',    category: 'platform',    path: 'assets/deco/log_wall.png',       frameWidth: 32, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 44, bodyOffsetX: 2, bodyOffsetY: 4, behavior: 'static',   description: 'Tall wooden wall segment. Solid collision.' },
+  { id: 'cage',        name: 'Cage',        category: 'platform',    path: 'assets/objects/cage.png',        frameWidth: 16, frameHeight: 32, frameCount: 5,  fps: 0,  defaultFrame: 0, bodyWidth: 14, bodyHeight: 30, bodyOffsetX: 1, bodyOffsetY: 2, behavior: 'static',   description: 'Tall cage prop. Solid collision.' },
   { id: 'sign',        name: 'Sign',        category: 'decoration',  path: 'assets/objects/sign.png',        frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative signpost. No collision.' },
   { id: 'sign_arrow',  name: 'Arrow Sign',  category: 'decoration',  path: 'assets/objects/sign_arrow.png',  frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative arrow sign. No collision.' },
   { id: 'ladder',      name: 'Ladder',      category: 'interactive', path: 'assets/objects/ladder.png',      frameWidth: 16, frameHeight: 64, frameCount: 1,  fps: 0,  bodyWidth: 16, bodyHeight: 51, bodyOffsetX: 0, bodyOffsetY: 13, previewWidth: 16, previewHeight: 51, previewOffsetX: 0, previewOffsetY: 13, behavior: 'static',   description: 'Climbable surface. Press up to climb.' },
+  { id: 'floor_trigger', name: 'Pressure Plate', category: 'interactive', path: 'assets/objects/floor_trigger.png', frameWidth: 8, frameHeight: 16, frameCount: 4, fps: 0, defaultFrame: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Link this plate to a door, cage, or chest, then press it with a player, monster, or crate.' },
   { id: 'button',      name: 'Button',      category: 'decoration',  path: 'assets/objects/button.png',      frameWidth: 16, frameHeight: 16, frameCount: 4,  fps: 0,  defaultFrame: 0, bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Floor button prop. Logic can be added later.' },
 
   // ── Decorations ──
@@ -530,8 +544,11 @@ export interface PlacedObject {
   id: string;        // GameObjectConfig.id
   x: number;         // world pixel x
   y: number;         // world pixel y
+  instanceId: string;
   facing?: 'left' | 'right';
   layer?: LayerName;
+  triggerTargetInstanceId?: string | null;
+  containedObjectId?: string | null;
 }
 
 export function getPlacedObjectLayer(
@@ -542,6 +559,99 @@ export function getPlacedObjectLayer(
   }
 
   return 'terrain';
+}
+
+export function createPlacedObjectInstanceId(): string {
+  const maybeCrypto = (globalThis as { crypto?: Crypto }).crypto;
+  if (maybeCrypto?.randomUUID) {
+    return `obj_${maybeCrypto.randomUUID()}`;
+  }
+
+  return `obj_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function createLegacyPlacedObjectInstanceId(
+  placed: Pick<PlacedObject, 'id' | 'x' | 'y' | 'facing' | 'layer'>,
+  index: number,
+): string {
+  const facing = placed.facing === 'left' || placed.facing === 'right' ? placed.facing : 'none';
+  return `legacy_${index}_${placed.id}_${Math.round(placed.x)}_${Math.round(placed.y)}_${facing}_${getPlacedObjectLayer(placed)}`;
+}
+
+export function getPlacedObjectInstanceId(
+  placed: Pick<PlacedObject, 'id' | 'x' | 'y' | 'facing' | 'layer' | 'instanceId'>,
+  index: number,
+): string {
+  if (typeof placed.instanceId === 'string' && placed.instanceId.trim()) {
+    return placed.instanceId;
+  }
+
+  return createLegacyPlacedObjectInstanceId(placed, index);
+}
+
+export function isPressurePlateTriggerId(id: string): id is 'floor_trigger' {
+  return id === 'floor_trigger';
+}
+
+export function canPlacedObjectTriggerOtherObjects(
+  placed: Pick<PlacedObject, 'id'> | null | undefined
+): boolean {
+  return isPressurePlateTriggerId(placed?.id ?? '');
+}
+
+export function canPlacedObjectBePressurePlateTarget(
+  placed: Pick<PlacedObject, 'id'> | null | undefined
+): placed is Pick<PlacedObject, 'id'> & { id: PressurePlateTargetObjectId } {
+  if (!placed) {
+    return false;
+  }
+
+  return (PRESSURE_PLATE_TARGET_OBJECT_IDS as readonly string[]).includes(placed.id);
+}
+
+export function canPlacedObjectBeContainer<T extends Pick<PlacedObject, 'id'>>(
+  placed: T | null | undefined
+): placed is T & { id: ContainerObjectId } {
+  if (!placed) {
+    return false;
+  }
+
+  return (CONTAINER_OBJECT_IDS as readonly string[]).includes(placed.id);
+}
+
+export function canObjectBeStoredInContainer(
+  containerId: string,
+  objectConfig: Pick<GameObjectConfig, 'category'> | null | undefined,
+): boolean {
+  if (!objectConfig) {
+    return false;
+  }
+
+  if (containerId === 'cage') {
+    return objectConfig.category === 'enemy';
+  }
+  if (containerId === 'treasure_chest') {
+    return objectConfig.category === 'collectible';
+  }
+
+  return false;
+}
+
+export function placedObjectContributesToCategory(
+  placed: Pick<PlacedObject, 'id' | 'containedObjectId'>,
+  category: ObjectCategory,
+): boolean {
+  const directConfig = getObjectById(placed.id);
+  if (directConfig?.category === category) {
+    return true;
+  }
+
+  if (!canPlacedObjectBeContainer(placed) || !placed.containedObjectId) {
+    return false;
+  }
+
+  const containedConfig = getObjectById(placed.containedObjectId);
+  return containedConfig?.category === category;
 }
 
 // ── Editor State (shared between Phaser and HTML UI) ──
