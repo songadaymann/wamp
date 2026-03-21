@@ -156,7 +156,14 @@ function setupLayerButtons(doc: Document): void {
     });
     doc.querySelectorAll<HTMLElement>('.layer-stack-mini-btn').forEach((previewButton) => {
       const layer = previewButton.dataset.layer as LayerName | undefined;
-      previewButton.classList.toggle('active', layer === editorState.activeLayer);
+      const isActive = layer === editorState.activeLayer;
+      previewButton.classList.toggle('active', isActive);
+      const image = previewButton.querySelector<HTMLImageElement>('.layer-stack-mini-image');
+      if (image) {
+        const defaultSrc = image.dataset.defaultSrc?.trim() || image.getAttribute('src') || '';
+        const selectedSrc = image.dataset.selectedSrc?.trim() || defaultSrc;
+        image.setAttribute('src', isActive ? selectedSrc : defaultSrc);
+      }
     });
   };
 
