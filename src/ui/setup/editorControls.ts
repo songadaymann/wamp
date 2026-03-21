@@ -22,7 +22,7 @@ export function setupEditorControls(
   doc: Document = document,
   windowObj: Window = window,
 ): void {
-  setupToolButtons(doc);
+  setupToolButtons(game, doc);
   setupLayerButtons(doc);
   setupLayerStatusChip(doc);
   setupLayerGuideToggle(doc);
@@ -64,10 +64,13 @@ function syncToolButtonState(doc: Document): void {
   moreButton?.classList.toggle('active', rectOrFillActive || popoverOpen);
 }
 
-function setActiveEditorTool(doc: Document, tool: ToolName): void {
+function setActiveEditorTool(game: Phaser.Game, doc: Document, tool: ToolName): void {
   editorState.activeTool = tool;
   syncToolButtonState(doc);
   syncEditorToolPanels(doc);
+  withActiveEditorScene(game, (scene) => {
+    scene.updateToolUi?.();
+  });
 }
 
 function setupRoomTitleInput(game: Phaser.Game, doc: Document): void {
@@ -86,7 +89,7 @@ function setupRoomTitleInput(game: Phaser.Game, doc: Document): void {
   input.addEventListener('change', commit);
 }
 
-function setupToolButtons(doc: Document): void {
+function setupToolButtons(game: Phaser.Game, doc: Document): void {
   const moreToolsButton = doc.getElementById('btn-tool-more') as HTMLButtonElement | null;
   const moreToolsPanel = doc.getElementById('more-tools-panel') as HTMLElement | null;
 
@@ -116,7 +119,7 @@ function setupToolButtons(doc: Document): void {
         return;
       }
 
-      setActiveEditorTool(doc, tool);
+      setActiveEditorTool(game, doc, tool);
       if (tool !== 'rect' && tool !== 'fill') {
         closeMoreTools();
       }

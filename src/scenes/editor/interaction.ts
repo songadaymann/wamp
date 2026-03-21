@@ -95,6 +95,11 @@ export class EditorInteractionController {
     this.rectPreviewGraphics.setDepth(98);
   }
 
+  clearShapePreview(): void {
+    this.rectStart = null;
+    this.rectPreviewGraphics?.clear();
+  }
+
   reset(): void {
     this.cursorGraphics?.destroy();
     this.rectPreviewGraphics?.destroy();

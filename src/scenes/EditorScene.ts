@@ -905,20 +905,31 @@ export class EditorScene extends Phaser.Scene {
     this.roomSession.maybeAutoSave(editorState.isPlaying);
   }
 
+  private getDirtyPersistenceStatusText(): string {
+    return this.roomPermissions.canSaveDraft
+      ? 'Draft changes...'
+      : 'Read-only minted room. Changes are local only.';
+  }
+
   private markRoomDirty(): void {
     this.editRuntime.isRoomDirty = true;
     this.editRuntime.currentLastDirtyAt = performance.now();
     this.roomEditCount += 1;
-    this.updatePersistenceStatus(
-      this.roomPermissions.canSaveDraft
-        ? 'Draft changes...'
-        : 'Read-only minted room. Changes are local only.'
-    );
+    this.updatePersistenceStatus(this.getDirtyPersistenceStatusText());
     this.maybeTriggerPublishNudge();
   }
 
   private updatePersistenceStatus(text: string): void {
     this.roomSession.setStatusText(text);
+  }
+
+  private restorePersistenceStatus(): void {
+    if (this.roomDirty) {
+      this.updatePersistenceStatus(this.getDirtyPersistenceStatusText());
+      return;
+    }
+
+    this.roomSession.setStatusDetails(this.roomSession.getIdleStatusDetails());
   }
 
   async saveDraft(
@@ -2187,7 +2198,8 @@ export class EditorScene extends Phaser.Scene {
     }
 
     this.clipboardPastePreviewActive = false;
-    this.renderEditorUi();
+    this.interactionController.clearShapePreview();
+    this.restorePersistenceStatus();
   }
 
   private pasteClipboardAt(tileX: number, tileY: number): void {
@@ -2273,13 +2285,21 @@ export class EditorScene extends Phaser.Scene {
     }
   }
 
+  updateToolUi(): void {
+    this.updateToolUI();
+  }
+
   // ══════════════════════════════════════
   // UI SYNC
   // ══════════════════════════════════════
 
   private updateToolUI(): void {
     if (this.clipboardPastePreviewActive && editorState.activeTool !== 'copy') {
-      this.clipboardPastePreviewActive = false;
+      this.cancelClipboardPastePreview();
+    }
+
+    if (editorState.activeTool !== 'rect' && editorState.activeTool !== 'copy') {
+      this.interactionController.clearShapePreview();
     }
 
     document.querySelectorAll<HTMLButtonElement>('.tool-btn[data-tool]').forEach((button) => {

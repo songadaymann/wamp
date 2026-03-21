@@ -71,6 +71,7 @@ export interface EditorSceneBridge {
   fitToScreen?: () => void;
   zoomIn?: () => void;
   zoomOut?: () => void;
+  updateToolUi?: () => void;
   clearCurrentLayer?: () => void;
   clearAllTiles?: () => void;
   setRoomTitle?: (title: string | null) => void;

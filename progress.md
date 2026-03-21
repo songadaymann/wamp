@@ -57,6 +57,14 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Copy-tool exit fix on March 21, 2026:
+  - fixed the desktop tool-button path for leaving copy/paste preview mode
+  - root cause: the sidebar tool buttons were only updating `editorState.activeTool`, so copy preview stayed latched in the active editor scene even after `Draw` or `Erase` looked selected in the UI
+  - tool-button changes now notify the active editor scene, which clears clipboard preview state and any lingering copy rectangle when leaving `Copy`
+  - follow-up status cleanup:
+    - canceling copy preview now restores the normal editor status (`Claimed by ...` / `Draft changes...`) instead of leaving the temporary copy hint stuck in the top bar
+  - verification:
+    - `npm run build` passed
 - Desktop editor layout refactor pass on March 20, 2026:
   - rebuilt the desktop editor hierarchy around a sticky top action rail (`back`, `test`, `save`, `publish`), then moved room title, tools, layers, palette/background, goal, and advanced actions into a stable order that no longer buries the core build controls under contextual panels
   - replaced the inline pressure-plate and chest/cage controls with a floating contextual inspector in the canvas area; hovering previews the relevant object controls, clicking pins them, and `Esc` now dismisses connect mode, paste preview, pinned inspector, or finally returns to world/course builder in that order
