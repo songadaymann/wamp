@@ -800,6 +800,17 @@ export class EditorEditRuntime {
     return removed;
   }
 
+  canRemoveObjectAt(worldX: number, worldY: number): boolean {
+    if (this.roomSpawnPoint) {
+      const spawnDist = Math.hypot(this.roomSpawnPoint.x - worldX, this.roomSpawnPoint.y - worldY);
+      if (spawnDist < 14) {
+        return true;
+      }
+    }
+
+    return Boolean(this.findPlacedObjectAt(worldX, worldY));
+  }
+
   rebuildObjectSprites(): void {
     for (const sprite of this.objectSprites) {
       sprite.destroy();

@@ -402,10 +402,17 @@ export class EditorInteractionController {
       }
 
       if (editorState.paletteMode === 'objects') {
-        if (this.host.handleObjectModePrimaryAction(pointer)) {
-          return;
+        if (editorState.activeTool === 'eraser') {
+          if (this.host.handleObjectModeSecondaryAction(worldPoint.x, worldPoint.y)) {
+            return;
+          }
+          this.host.removeObjectAt(worldPoint.x, worldPoint.y);
+        } else {
+          if (this.host.handleObjectModePrimaryAction(pointer)) {
+            return;
+          }
+          this.host.handleObjectPlace(pointer);
         }
-        this.host.handleObjectPlace(pointer);
       } else {
         if (this.host.isClipboardPastePreviewActive()) {
           this.host.pasteClipboardAt(tileX, tileY);

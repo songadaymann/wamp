@@ -1580,15 +1580,20 @@ export class EditorScene extends Phaser.Scene {
     }
 
     if (this.pinnedInspector) {
+      const hasSelectedObject = Boolean(editorState.selectedObjectId);
       this.clearPinnedInspector();
-      return true;
+      return !hasSelectedObject;
     }
 
     return false;
   }
 
-  private handleObjectModeSecondaryAction(_worldX: number, _worldY: number): boolean {
+  private handleObjectModeSecondaryAction(worldX: number, worldY: number): boolean {
     if (!this.connectingPressurePlateInstanceId) {
+      return false;
+    }
+
+    if (this.editRuntime.canRemoveObjectAt(worldX, worldY)) {
       return false;
     }
 
