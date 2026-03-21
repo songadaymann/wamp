@@ -150,13 +150,17 @@ function setupToolButtons(game: Phaser.Game, doc: Document): void {
 
 function setupLayerButtons(doc: Document): void {
   const sync = () => {
-    doc.querySelectorAll('.layer-btn').forEach((button) => {
+    doc.querySelectorAll<HTMLElement>('.layer-btn').forEach((button) => {
       const layer = (button as HTMLElement).dataset.layer as LayerName;
       button.classList.toggle('active', layer === editorState.activeLayer);
     });
+    doc.querySelectorAll<HTMLElement>('.layer-stack-mini-btn').forEach((previewButton) => {
+      const layer = previewButton.dataset.layer as LayerName | undefined;
+      previewButton.classList.toggle('active', layer === editorState.activeLayer);
+    });
   };
 
-  doc.querySelectorAll('.layer-btn').forEach((button) => {
+  doc.querySelectorAll<HTMLElement>('.layer-btn, .layer-stack-mini-btn').forEach((button) => {
     button.addEventListener('click', () => {
       const layer = (button as HTMLElement).dataset.layer as LayerName;
       editorState.activeLayer = layer;

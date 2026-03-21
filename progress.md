@@ -59,12 +59,54 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 - Copy-tool exit fix on March 21, 2026:
   - fixed the desktop tool-button path for leaving copy/paste preview mode
-  - root cause: the sidebar tool buttons were only updating `editorState.activeTool`, so copy preview stayed latched in the active editor scene even after `Draw` or `Erase` looked selected in the UI
-  - tool-button changes now notify the active editor scene, which clears clipboard preview state and any lingering copy rectangle when leaving `Copy`
+  - root cause: the sidebar tool buttons were calling the `updateToolUi` scene-bridge name, but `EditorScene` only exposed the internal `updateToolUI` method name, so button clicks changed the highlighted tool without clearing `clipboardPastePreviewActive`
+  - added an `EditorScene.updateToolUi()` bridge wrapper so clicking `Draw` or `Erase` now runs the same copy-preview teardown path as the keyboard tool shortcuts
   - follow-up status cleanup:
     - canceling copy preview now restores the normal editor status (`Claimed by ...` / `Draft changes...`) instead of leaving the temporary copy hint stuck in the top bar
   - verification:
     - `npm run build` passed
+    - Playwright skill client reopened the editor via `#btn-world-edit` and wrote:
+      - `output/web-game/copy-tool-exit-smoke/state-0.json`
+      - `output/web-game/copy-tool-exit-smoke/shot-0.png`
+    - targeted Playwright probe wrote:
+      - `output/web-game/copy-tool-exit-check/summary.json`
+      - `output/web-game/copy-tool-exit-check/copy-active.png`
+      - `output/web-game/copy-tool-exit-check/after-draw-click.png`
+    - the targeted summary confirms `clipboardPastePreviewActive` flips from `true` to `false` after clicking either `Draw` or `Erase`
+    - follow-up status check wrote:
+      - `output/web-game/copy-tool-status-check/summary.json`
+      - `output/web-game/copy-tool-status-check/after-draw-click.png`
+    - the follow-up status check confirms the top status returns to `Claimed by jonathan.` after leaving copy mode
+- Desktop editor sidebar polish follow-up on March 21, 2026:
+  - turned the desktop action rail into icon + label buttons for `Back`, `Test`, `Save`, and `Publish`, and aligned the tool row onto the same IBM Plex Mono label styling so both rows now read as one system
+  - simplified the visible layer button copy down to `In front of player`, `Main solid layer`, and `Behind player`, then added per-layer info buttons with hover/focus tooltips that explain occlusion and collision behavior
+  - added a collapsed mini-stack preview for the `Layers` section so collapsing it still leaves a compact three-layer rendering visible instead of removing the section entirely
+  - moved the floating object inspector to the left edge of the game area beside the sidebar instead of pinning it to the far upper-right corner
+  - changed tile copy so a successful drag-copy immediately enters follow-cursor placement mode instead of waiting for a separate paste command
+  - follow-up tweak pass:
+    - swapped the layer info glyph to the standard circled `ⓘ`
+    - restyled the collapsed layer preview into three overlapping-square buttons based on the shared reference image
+    - changed the top action icons to use a diskette for save and a rocket for publish
+    - fixed the copy teardown bug by making actual tool changes notify the active editor scene and clear any lingering copy/rect overlay state when leaving those tools
+    - follow-up copy preview pass:
+      - changed tile and clipboard cursor previews to render only occupied cells from the active selection mask instead of always drawing a full bounding rectangle
+      - this makes large irregular terrain stamps read as their actual shape when returning to `Draw`, which avoids the “stuck copy rectangle” look from the earlier bounding-box preview
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client reopened the editor via `#btn-world-edit` and wrote `output/web-game/editor-sidebar-polish-smoke/client/state-0.json`
+    - targeted DOM + screenshot check wrote:
+      - `output/web-game/editor-sidebar-polish-smoke/summary.json`
+      - `output/web-game/editor-sidebar-polish-smoke/editor-full.png`
+    - the DOM check confirms the new action icons/labels, matching tool/action fonts, layer tooltip visibility, collapsed layer mini-stack visibility, and the inspector now using `left: 18px`
+    - follow-up Playwright check wrote:
+      - `output/web-game/editor-layer-copy-check/summary.json`
+      - `output/web-game/editor-layer-copy-check/layers-collapsed.png`
+      - `output/web-game/editor-layer-copy-check/copy-preview.png`
+      - `output/web-game/editor-layer-copy-check/after-draw-switch.png`
+    - the follow-up check confirms the `ⓘ` glyphs, the new diskette/rocket icons, the collapsed layer buttons, and that `clipboardPastePreviewActive` is `false` again after switching from copy back to draw
+    - latest targeted check wrote:
+      - `output/web-game/copy-preview-shape-check/large-selection-draw-preview.png`
+      - the large-selection preview now follows the occupied terrain cells of the brush instead of showing a generic full rectangle
 - Desktop editor layout refactor pass on March 20, 2026:
   - rebuilt the desktop editor hierarchy around a sticky top action rail (`back`, `test`, `save`, `publish`), then moved room title, tools, layers, palette/background, goal, and advanced actions into a stable order that no longer buries the core build controls under contextual panels
   - replaced the inline pressure-plate and chest/cage controls with a floating contextual inspector in the canvas area; hovering previews the relevant object controls, clicking pins them, and `Esc` now dismisses connect mode, paste preview, pinned inspector, or finally returns to world/course builder in that order

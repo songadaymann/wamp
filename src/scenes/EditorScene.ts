@@ -2166,11 +2166,15 @@ export class EditorScene extends Phaser.Scene {
 
     this.lastCopySelection = { x1, y1, x2, y2 };
     const copied = this.editRuntime.copyTilesToClipboard(x1, y1, x2, y2);
-    this.clipboardPastePreviewActive = false;
-    this.updatePersistenceStatus(
-      copied ? 'Copied tile region. Press Cmd/Ctrl+V to paste.' : 'No tiles in that selection to copy.'
-    );
-    this.renderEditorUi();
+    if (!copied) {
+      this.clipboardPastePreviewActive = false;
+      this.updatePersistenceStatus('No tiles in that selection to copy.');
+      this.renderEditorUi();
+      return;
+    }
+
+    this.beginClipboardPastePreview();
+    this.updatePersistenceStatus('Copied tile region. Move the mouse and click to place it.');
   }
 
   private getClipboardPreview(): EditorClipboardState | null {
@@ -2189,7 +2193,7 @@ export class EditorScene extends Phaser.Scene {
     this.clipboardPastePreviewActive = true;
     editorState.activeTool = 'copy';
     this.updateToolUI();
-    this.updatePersistenceStatus('Paste preview active. Click to place tiles, or press Esc to cancel.');
+    this.updatePersistenceStatus('Copy preview active. Move the mouse and click to place tiles, or press Esc to cancel.');
   }
 
   private cancelClipboardPastePreview(): void {

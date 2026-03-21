@@ -80,7 +80,7 @@ export function buildEditorUiViewModel(
     publishNudgeActionText,
     zoomText,
     backButtonHidden: entrySource !== 'world' && !canReturnToCourseBuilder,
-    backButtonText: canReturnToCourseBuilder ? '← Course Builder' : '← World',
+    backButtonText: canReturnToCourseBuilder ? 'Course' : 'World',
     playHidden: false,
     saveHidden: false,
     saveDisabled: !roomPermissions.canSaveDraft,

@@ -100,6 +100,54 @@ export class EditorInteractionController {
     this.rectPreviewGraphics?.clear();
   }
 
+  private drawOccupiedCellPreview(
+    originX: number,
+    originY: number,
+    width: number,
+    height: number,
+    occupiedMask: boolean[][],
+    stroke: number,
+    fillAlpha: number,
+    lineAlpha: number,
+    lineWidth: number,
+  ): void {
+    if (!this.cursorGraphics) {
+      return;
+    }
+
+    let drewAnyCell = false;
+    this.cursorGraphics.fillStyle(stroke, fillAlpha);
+    this.cursorGraphics.lineStyle(lineWidth, stroke, lineAlpha);
+    for (let dy = 0; dy < height; dy += 1) {
+      for (let dx = 0; dx < width; dx += 1) {
+        if (!occupiedMask[dy]?.[dx]) {
+          continue;
+        }
+
+        drewAnyCell = true;
+        this.cursorGraphics.fillRect(
+          (originX + dx) * TILE_SIZE,
+          (originY + dy) * TILE_SIZE,
+          TILE_SIZE,
+          TILE_SIZE,
+        );
+        this.cursorGraphics.strokeRect(
+          (originX + dx) * TILE_SIZE,
+          (originY + dy) * TILE_SIZE,
+          TILE_SIZE,
+          TILE_SIZE,
+        );
+      }
+    }
+
+    if (drewAnyCell) {
+      return;
+    }
+
+    this.cursorGraphics.fillRect(originX * TILE_SIZE, originY * TILE_SIZE, width * TILE_SIZE, height * TILE_SIZE);
+    this.cursorGraphics.strokeRect(originX * TILE_SIZE, originY * TILE_SIZE, width * TILE_SIZE, height * TILE_SIZE);
+  }
+
   reset(): void {
     this.cursorGraphics?.destroy();
     this.rectPreviewGraphics?.destroy();
@@ -222,19 +270,16 @@ export class EditorInteractionController {
       const clipboard = this.host.getClipboardPreview();
       if (clipboard) {
         const layerAccent = getEditorLayerAccent();
-        this.cursorGraphics.fillStyle(layerAccent.stroke, 0.12);
-        this.cursorGraphics.fillRect(
-          tileX * TILE_SIZE,
-          tileY * TILE_SIZE,
-          clipboard.width * TILE_SIZE,
-          clipboard.height * TILE_SIZE,
-        );
-        this.cursorGraphics.lineStyle(2, layerAccent.stroke, 0.95);
-        this.cursorGraphics.strokeRect(
-          tileX * TILE_SIZE,
-          tileY * TILE_SIZE,
-          clipboard.width * TILE_SIZE,
-          clipboard.height * TILE_SIZE,
+        this.drawOccupiedCellPreview(
+          tileX,
+          tileY,
+          clipboard.width,
+          clipboard.height,
+          clipboard.occupiedMask,
+          layerAccent.stroke,
+          0.12,
+          0.95,
+          2,
         );
         this.updateCursorCoords(tileX, tileY);
         return;
@@ -280,19 +325,20 @@ export class EditorInteractionController {
       );
     } else {
       const layerAccent = getEditorLayerAccent();
-      this.cursorGraphics.fillStyle(layerAccent.stroke, layerAccent.fillAlpha);
-      this.cursorGraphics.fillRect(
-        cursorOrigin.x * TILE_SIZE,
-        cursorOrigin.y * TILE_SIZE,
-        cursorW * TILE_SIZE,
-        cursorH * TILE_SIZE,
-      );
-      this.cursorGraphics.lineStyle(1, layerAccent.stroke, 0.92);
-      this.cursorGraphics.strokeRect(
-        cursorOrigin.x * TILE_SIZE,
-        cursorOrigin.y * TILE_SIZE,
-        cursorW * TILE_SIZE,
-        cursorH * TILE_SIZE,
+      const occupiedMask =
+        editorState.activeTool === 'pencil'
+          ? editorState.selection.occupiedMask
+          : Array.from({ length: cursorH }, () => Array.from({ length: cursorW }, () => true));
+      this.drawOccupiedCellPreview(
+        cursorOrigin.x,
+        cursorOrigin.y,
+        cursorW,
+        cursorH,
+        occupiedMask,
+        layerAccent.stroke,
+        layerAccent.fillAlpha,
+        0.92,
+        1,
       );
     }
 
@@ -457,6 +503,7 @@ export class EditorInteractionController {
         this.host.commitTileBatch();
       }
       this.isDrawing = false;
+      this.clearShapePreview();
       this.clearTileDrag();
     });
 
@@ -634,8 +681,7 @@ export class EditorInteractionController {
         } else {
           this.host.fillRect(this.rectStart.x, this.rectStart.y, tileX, tileY);
         }
-        this.rectStart = null;
-        this.rectPreviewGraphics?.clear();
+        this.clearShapePreview();
       }
       return true;
     }
@@ -720,6 +766,7 @@ export class EditorInteractionController {
       }
       this.isDrawing = false;
     }
+    this.clearShapePreview();
     this.clearTileDrag();
   }
 

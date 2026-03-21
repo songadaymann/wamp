@@ -467,7 +467,19 @@ export class EditorUiBridge {
   }
 
   private setButtonText(element: HTMLButtonElement | null, text: string): void {
-    if (element && element.textContent !== text) {
+    if (!element) {
+      return;
+    }
+
+    const labelTarget = element.querySelector<HTMLElement>('[data-button-label]');
+    if (labelTarget) {
+      if (labelTarget.textContent !== text) {
+        labelTarget.textContent = text;
+      }
+      return;
+    }
+
+    if (element.textContent !== text) {
       element.textContent = text;
     }
   }

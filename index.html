@@ -197,22 +197,68 @@
       <!-- Layers -->
       <div class="sidebar-section" id="layers-section" data-mobile-panel="tools" data-sidebar-collapsible="true">
         <div class="section-label">Layers</div>
-        <div id="layers">
-          <button class="layer-btn" data-layer="foreground">
-            <span class="layer-btn-title">Front</span>
-            <span class="layer-btn-hint">In front of player</span>
+        <div class="layer-stack-mini" aria-hidden="true">
+          <button class="layer-stack-mini-btn" type="button" data-layer="foreground" aria-label="In front of player">
+            <span class="layer-stack-mini-icon" data-layer-preview="foreground">
+              <span class="layer-stack-mini-square layer-stack-mini-square-top"></span>
+              <span class="layer-stack-mini-square layer-stack-mini-square-mid"></span>
+              <span class="layer-stack-mini-square layer-stack-mini-square-back"></span>
+            </span>
           </button>
-          <button class="layer-btn active" data-layer="terrain">
-            <span class="layer-btn-title">Gameplay</span>
-            <span class="layer-btn-hint">Main solid layer</span>
+          <button class="layer-stack-mini-btn active" type="button" data-layer="terrain" aria-label="Main solid layer">
+            <span class="layer-stack-mini-icon" data-layer-preview="terrain">
+              <span class="layer-stack-mini-square layer-stack-mini-square-top"></span>
+              <span class="layer-stack-mini-square layer-stack-mini-square-mid"></span>
+              <span class="layer-stack-mini-square layer-stack-mini-square-back"></span>
+            </span>
           </button>
-          <button class="layer-btn" data-layer="background">
-            <span class="layer-btn-title">Back</span>
-            <span class="layer-btn-hint">Behind player</span>
+          <button class="layer-stack-mini-btn" type="button" data-layer="background" aria-label="Behind player">
+            <span class="layer-stack-mini-icon" data-layer-preview="background">
+              <span class="layer-stack-mini-square layer-stack-mini-square-top"></span>
+              <span class="layer-stack-mini-square layer-stack-mini-square-mid"></span>
+              <span class="layer-stack-mini-square layer-stack-mini-square-back"></span>
+            </span>
           </button>
         </div>
-        <div class="layer-controls-row">
-          <button id="btn-editor-layer-guides" class="bar-btn bar-btn-small" type="button">See Layers</button>
+        <div class="sidebar-section-body">
+          <div id="layers">
+            <div class="layer-row">
+              <button class="layer-btn" data-layer="foreground">
+                <span class="layer-btn-summary">In front of player</span>
+              </button>
+              <div class="layer-info-wrap">
+                <button class="layer-info-button" type="button" aria-label="About the front layer">&#9432;</button>
+                <div class="layer-info-tooltip">
+                  Places tiles and objects in front of the player. Use it for trees, arches, and anything the player should pass behind. This layer does not collide.
+                </div>
+              </div>
+            </div>
+            <div class="layer-row">
+              <button class="layer-btn active" data-layer="terrain">
+                <span class="layer-btn-summary">Main solid layer</span>
+              </button>
+              <div class="layer-info-wrap">
+                <button class="layer-info-button" type="button" aria-label="About the gameplay layer">&#9432;</button>
+                <div class="layer-info-tooltip">
+                  Places tiles and objects on the player's main gameplay plane. Use it for floors, walls, and most walkable terrain. This layer has collision.
+                </div>
+              </div>
+            </div>
+            <div class="layer-row">
+              <button class="layer-btn" data-layer="background">
+                <span class="layer-btn-summary">Behind player</span>
+              </button>
+              <div class="layer-info-wrap">
+                <button class="layer-info-button" type="button" aria-label="About the back layer">&#9432;</button>
+                <div class="layer-info-tooltip">
+                  Places tiles and objects behind the player. Use it for scenery and distant decoration. This layer does not collide.
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="layer-controls-row">
+            <button id="btn-editor-layer-guides" class="bar-btn bar-btn-small" type="button">See Layers</button>
+          </div>
         </div>
       </div>
 
@@ -475,10 +521,22 @@
 
       <div class="sidebar-section" id="editor-actions" data-mobile-panel="actions">
         <div class="editor-action-rail">
-          <button id="btn-editor-back" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Back (Esc)">← World</button>
-          <button id="btn-test-play" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Test Play (Enter / P)">Test</button>
-          <button id="btn-save-draft" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Save Draft (Cmd/Ctrl+S)">Save</button>
-          <button id="btn-publish-room" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Publish (Cmd/Ctrl+Shift+P)">Publish</button>
+          <button id="btn-editor-back" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Back (Esc)">
+            <span class="tool-icon" aria-hidden="true">&#8592;</span>
+            <span class="tool-label" data-button-label>World</span>
+          </button>
+          <button id="btn-test-play" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Test Play (Enter / P)">
+            <span class="tool-icon" aria-hidden="true">&#9654;</span>
+            <span class="tool-label">Test</span>
+          </button>
+          <button id="btn-save-draft" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Save Draft (Cmd/Ctrl+S)">
+            <span class="tool-icon" aria-hidden="true">&#128190;</span>
+            <span class="tool-label">Save</span>
+          </button>
+          <button id="btn-publish-room" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Publish (Cmd/Ctrl+Shift+P)">
+            <span class="tool-icon" aria-hidden="true">&#128640;</span>
+            <span class="tool-label">Publish</span>
+          </button>
         </div>
         <div id="editor-top-save-status" class="editor-top-save-status">Draft ready.</div>
         <div id="editor-publish-nudge" class="editor-publish-nudge hidden">
