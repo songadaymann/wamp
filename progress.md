@@ -57,6 +57,20 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Collapsed layer image-button pass on March 21, 2026:
+  - copied the supplied layer reference images into `public/assets/ui/layers/foreground.png`, `terrain.png`, and `background.png`
+  - replaced the CSS-drawn collapsed `Layers` mini-stack with those actual PNGs, while keeping the expanded layer controls and tooltips unchanged
+  - kept the collapsed mini-stack interactive for power users: the image buttons still switch the active layer even while the section stays collapsed
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client reopened the editor via `#btn-world-edit` and wrote:
+      - `output/web-game/layer-image-buttons-smoke/state-0.json`
+      - `output/web-game/layer-image-buttons-smoke/shot-0.png`
+    - targeted collapsed-layer check wrote:
+      - `output/web-game/layer-image-buttons-check/summary.json`
+      - `output/web-game/layer-image-buttons-check/layers-collapsed.png`
+      - `output/web-game/layer-image-buttons-check/layers-collapsed-background-selected.png`
+    - the targeted summary confirms the collapsed buttons load the three PNGs and clicking the collapsed `background` button switches `selectedLayer` to `background`
 - Copy-tool exit fix on March 21, 2026:
   - fixed the desktop tool-button path for leaving copy/paste preview mode
   - root cause: the sidebar tool buttons were calling the `updateToolUi` scene-bridge name, but `EditorScene` only exposed the internal `updateToolUI` method name, so button clicks changed the highlighted tool without clearing `clipboardPastePreviewActive`
@@ -107,6 +121,17 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - latest targeted check wrote:
       - `output/web-game/copy-preview-shape-check/large-selection-draw-preview.png`
       - the large-selection preview now follows the occupied terrain cells of the brush instead of showing a generic full rectangle
+- Collapsed layer dark-tile asset refresh on March 21, 2026:
+  - replaced the collapsed `Layers` mini-button PNGs with the updated inverted versions from `GADtrailers/WAMP/layers-images`
+  - restored the mini-button tiles to the dark editor panel background so the new white icon shapes carry the contrast instead of relying on a light tile fill
+  - kept the stronger green active ring so the selected layer still reads clearly while the section is collapsed
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client wrote:
+      - `output/web-game/layer-dark-images-smoke/state-0.json`
+      - `output/web-game/layer-dark-images-smoke/shot-0.png`
+    - targeted sidebar capture wrote:
+      - `output/web-game/layer-dark-images-check/layers-collapsed.png`
 - Desktop editor layout refactor pass on March 20, 2026:
   - rebuilt the desktop editor hierarchy around a sticky top action rail (`back`, `test`, `save`, `publish`), then moved room title, tools, layers, palette/background, goal, and advanced actions into a stable order that no longer buries the core build controls under contextual panels
   - replaced the inline pressure-plate and chest/cage controls with a floating contextual inspector in the canvas area; hovering previews the relevant object controls, clicking pins them, and `Esc` now dismisses connect mode, paste preview, pinned inspector, or finally returns to world/course builder in that order
