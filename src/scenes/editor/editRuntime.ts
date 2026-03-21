@@ -759,40 +759,45 @@ export class EditorEditRuntime {
       return null;
     }
 
-    let bestIndex = -1;
-    let bestDist = 12;
+    const target = this.findPlacedObjectAt(worldX, worldY);
+    if (!target) {
+      return null;
+    }
 
+    let bestIndex = -1;
     for (let i = editorState.placedObjects.length - 1; i >= 0; i -= 1) {
-      const obj = editorState.placedObjects[i];
-      const dist = Math.sqrt((obj.x - worldX) ** 2 + (obj.y - worldY) ** 2);
-      if (dist < bestDist) {
-        bestDist = dist;
+      const placed = editorState.placedObjects[i];
+      if (
+        placed === target ||
+        (Boolean(target.instanceId) && placed.instanceId === target.instanceId)
+      ) {
         bestIndex = i;
+        break;
       }
     }
 
-    if (bestIndex >= 0) {
-      const previous = this.clonePlacedObjects();
-      const removed = previous[bestIndex];
-      const next = previous
-        .filter((_, index) => index !== bestIndex)
-        .map((placed) =>
-          placed.triggerTargetInstanceId === removed.instanceId
-            ? { ...placed, triggerTargetInstanceId: null }
-            : placed
-        );
-      editorState.placedObjects = next;
-      this.undoStack.push({
-        kind: 'objects',
-        action: { previous, next: this.clonePlacedObjects(next) },
-      });
-      this.redoStack = [];
-      this.rebuildObjectSprites();
-      this.markRoomDirty();
-      return removed;
+    if (bestIndex < 0) {
+      return null;
     }
 
-    return null;
+    const previous = this.clonePlacedObjects();
+    const removed = previous[bestIndex];
+    const next = previous
+      .filter((_, index) => index !== bestIndex)
+      .map((placed) =>
+        placed.triggerTargetInstanceId === removed.instanceId
+          ? { ...placed, triggerTargetInstanceId: null }
+          : placed
+      );
+    editorState.placedObjects = next;
+    this.undoStack.push({
+      kind: 'objects',
+      action: { previous, next: this.clonePlacedObjects(next) },
+    });
+    this.redoStack = [];
+    this.rebuildObjectSprites();
+    this.markRoomDirty();
+    return removed;
   }
 
   rebuildObjectSprites(): void {
