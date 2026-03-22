@@ -108,6 +108,10 @@ const FEATURED_REOWN_WALLET_IDS = [
   'ecc4036f814562b41a5268adc86270fba1365471402006302e70169465b7ac18', // Zerion
 ] as const;
 
+const DEFAULT_GUEST_STATUS = 'Sign in to build rooms, publish them, and save your runs.';
+const DEFAULT_SIGN_IN_PROMPT_STATUS = 'Sign in to build rooms, publish them, chat, and climb the leaderboards.';
+let guestPanelAutoOpened = false;
+
 export async function setupAuthUi(): Promise<void> {
   authPanel = document.getElementById('auth-panel');
   authIdentity = document.getElementById('auth-identity');
@@ -174,6 +178,7 @@ export async function setupAuthUi(): Promise<void> {
   bindSessionRefreshListeners();
   await initializeWalletConnect();
   await refreshSession();
+  maybeAutoOpenGuestPanel();
   renderAuthUi();
 }
 
@@ -201,7 +206,7 @@ export function syncChatModerationState(viewer: ChatModerationViewer): void {
   renderAuthUi();
 }
 
-export function promptForSignIn(status: string = 'Sign in with email or wallet to publish this room.'): void {
+export function promptForSignIn(status: string = DEFAULT_SIGN_IN_PROMPT_STATUS): void {
   state.status = status;
   renderAuthUi();
   authPanel?.classList.add('menu-open');
@@ -257,7 +262,7 @@ async function initializeWalletConnect(): Promise<void> {
     return;
   }
 
-  state.status = 'Use email, wallet, or both.';
+  state.status = DEFAULT_GUEST_STATUS;
 }
 
 async function refreshSession(): Promise<void> {
@@ -289,7 +294,7 @@ async function refreshSession(): Promise<void> {
       lastDisplayNameAvailability = null;
     } else {
       state.source = null;
-      state.status = 'Use email, wallet, or both.';
+      state.status = DEFAULT_GUEST_STATUS;
       lastCheckedDisplayName = '';
       lastDisplayNameAvailability = null;
     }
@@ -761,6 +766,8 @@ function renderAuthUi(): void {
     authWalletButton.textContent = getWalletButtonLabel();
   }
 
+  authPanel.classList.toggle('auth-panel-guest', !state.authenticated);
+
   if (authLogoutButton) {
     authLogoutButton.classList.toggle('hidden', !state.authenticated || state.source === 'playfun');
     authLogoutButton.disabled = state.loading;
@@ -868,10 +875,30 @@ function getWalletButtonLabel(): string {
   }
 
   if (state.walletConnected) {
-    return 'Sign In Wallet';
+    return 'Sign In With Wallet';
   }
 
-  return 'Sign In Wallet';
+  return 'Sign In With Wallet';
+}
+
+function maybeAutoOpenGuestPanel(): void {
+  if (guestPanelAutoOpened || state.authenticated || state.loading || !authPanel || isPlayfunVisitor()) {
+    return;
+  }
+
+  guestPanelAutoOpened = true;
+  authPanel.classList.add('menu-open');
+  authEmailInput?.focus();
+  authEmailInput?.select();
+}
+
+function isPlayfunVisitor(): boolean {
+  if (document.body.dataset.playfunMode === 'true') {
+    return true;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  return params.get('pf') === '1';
 }
 
 function getStorageBackend(): 'auto' | 'local' | 'remote' {

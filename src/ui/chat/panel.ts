@@ -11,9 +11,7 @@ import {
   type AuthDebugState,
 } from '../../auth/client';
 import { playSfx } from '../../audio/sfx';
-import { isPlayfunMode } from '../../playfun/client';
 import { APP_READY_EVENT, isAppReady } from '../appFeedback';
-import { getDeviceLayoutState } from '../deviceLayout';
 import { isTextInputFocused } from '../keyboardFocus';
 import { banChatUser, deleteChatMessage, fetchChatMessages, sendChatMessage } from './client';
 
@@ -241,8 +239,7 @@ export class ChatPanelController {
   }
 
   private shouldAutoOpenOnFirstWorldVisit(): boolean {
-    const layout = getDeviceLayoutState();
-    return !isPlayfunMode() && !layout.coarsePointer;
+    return false;
   }
 
   private canPost(): boolean {
