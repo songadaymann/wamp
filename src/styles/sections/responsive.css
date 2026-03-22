@@ -41,6 +41,11 @@ body[data-device-class='tablet'][data-coarse-pointer='true'] #global-chat .chat-
   backdrop-filter: blur(8px);
 }
 
+body[data-device-class='tablet'][data-coarse-pointer='true'] #perf-debug-hud {
+  max-width: min(40ch, calc(100vw - 20px - var(--safe-left) - var(--safe-right)));
+  font-size: 10px;
+}
+
 body[data-device-class='tablet'][data-coarse-pointer='true'][data-performance-profile='reduced'] #world-hud {
   background: rgba(11, 11, 11, 0.95);
   backdrop-filter: none;
@@ -70,6 +75,11 @@ body[data-device-class='phone'] #bottom-bar {
   flex-wrap: wrap;
   background: rgba(5, 5, 5, 0.66);
   backdrop-filter: blur(8px);
+}
+
+body[data-device-class='phone'] #perf-debug-hud {
+  max-width: min(38ch, calc(100vw - 20px - var(--safe-left) - var(--safe-right)));
+  font-size: 10px;
 }
 
 body[data-device-class='phone'] .bar-left,

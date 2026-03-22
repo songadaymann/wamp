@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
+import { isPerfLowStreamEnabled } from '../../debug/perfDebug';
 import type { RoomCoordinates } from '../../persistence/roomModel';
 import {
   roomToChunkCoordinates,
@@ -18,6 +19,10 @@ const REDUCED_PLAY_NEAR_MAX_CHUNK_RADIUS = 2;
 const REDUCED_PLAY_MID_MAX_CHUNK_RADIUS = 2;
 const REDUCED_PLAY_FAR_MAX_CHUNK_RADIUS = 3;
 const REDUCED_PLAY_ULTRA_MAX_CHUNK_RADIUS = 3;
+const LOW_STREAM_PLAY_NEAR_MAX_CHUNK_RADIUS = 1;
+const LOW_STREAM_PLAY_MID_MAX_CHUNK_RADIUS = 1;
+const LOW_STREAM_PLAY_FAR_MAX_CHUNK_RADIUS = 2;
+const LOW_STREAM_PLAY_ULTRA_MAX_CHUNK_RADIUS = 2;
 const BROWSE_MAX_CHUNK_RADIUS = 3;
 const PLAY_NEAR_MAX_PREVIEW_ROOMS = 49;
 const PLAY_MID_MAX_PREVIEW_ROOMS = 121;
@@ -27,6 +32,10 @@ const REDUCED_PLAY_NEAR_MAX_PREVIEW_ROOMS = 25;
 const REDUCED_PLAY_MID_MAX_PREVIEW_ROOMS = 49;
 const REDUCED_PLAY_FAR_MAX_PREVIEW_ROOMS = 81;
 const REDUCED_PLAY_ULTRA_MAX_PREVIEW_ROOMS = 121;
+const LOW_STREAM_PLAY_NEAR_MAX_PREVIEW_ROOMS = 9;
+const LOW_STREAM_PLAY_MID_MAX_PREVIEW_ROOMS = 25;
+const LOW_STREAM_PLAY_FAR_MAX_PREVIEW_ROOMS = 49;
+const LOW_STREAM_PLAY_ULTRA_MAX_PREVIEW_ROOMS = 81;
 const BROWSE_NEAR_MAX_PREVIEW_ROOMS = 64;
 const BROWSE_MID_MAX_PREVIEW_ROOMS = 144;
 const BROWSE_FAR_MAX_PREVIEW_ROOMS = 256;
@@ -38,6 +47,10 @@ const REDUCED_PLAY_NEAR_MID_LOD_ROOM_RADIUS = 4;
 const REDUCED_PLAY_MID_MID_LOD_ROOM_RADIUS = 6;
 const REDUCED_PLAY_FAR_MID_LOD_ROOM_RADIUS = 8;
 const REDUCED_PLAY_ULTRA_MID_LOD_ROOM_RADIUS = 10;
+const LOW_STREAM_PLAY_NEAR_MID_LOD_ROOM_RADIUS = 3;
+const LOW_STREAM_PLAY_MID_MID_LOD_ROOM_RADIUS = 4;
+const LOW_STREAM_PLAY_FAR_MID_LOD_ROOM_RADIUS = 6;
+const LOW_STREAM_PLAY_ULTRA_MID_LOD_ROOM_RADIUS = 8;
 const BROWSE_NEAR_MID_LOD_ROOM_RADIUS = 6;
 const BROWSE_MID_MID_LOD_ROOM_RADIUS = 10;
 const BROWSE_FAR_MID_LOD_ROOM_RADIUS = 14;
@@ -181,6 +194,20 @@ function getMaxChunkRadius(
     return BROWSE_MAX_CHUNK_RADIUS;
   }
 
+  if (isPerfLowStreamEnabled()) {
+    switch (getPlayPreviewTier(zoom)) {
+      case 'ultra':
+        return LOW_STREAM_PLAY_ULTRA_MAX_CHUNK_RADIUS;
+      case 'far':
+        return LOW_STREAM_PLAY_FAR_MAX_CHUNK_RADIUS;
+      case 'mid':
+        return LOW_STREAM_PLAY_MID_MAX_CHUNK_RADIUS;
+      case 'near':
+      default:
+        return LOW_STREAM_PLAY_NEAR_MAX_CHUNK_RADIUS;
+    }
+  }
+
   if (performanceProfile === 'reduced') {
     switch (getPlayPreviewTier(zoom)) {
       case 'ultra':
@@ -214,6 +241,20 @@ function getMidLodRoomRadius(
   performanceProfile: PerformanceProfile,
 ): number {
   if (mode === 'play') {
+    if (isPerfLowStreamEnabled()) {
+      switch (getPlayPreviewTier(zoom)) {
+        case 'ultra':
+          return LOW_STREAM_PLAY_ULTRA_MID_LOD_ROOM_RADIUS;
+        case 'far':
+          return LOW_STREAM_PLAY_FAR_MID_LOD_ROOM_RADIUS;
+        case 'mid':
+          return LOW_STREAM_PLAY_MID_MID_LOD_ROOM_RADIUS;
+        case 'near':
+        default:
+          return LOW_STREAM_PLAY_NEAR_MID_LOD_ROOM_RADIUS;
+      }
+    }
+
     if (performanceProfile === 'reduced') {
       switch (getPlayPreviewTier(zoom)) {
         case 'ultra':
@@ -258,6 +299,32 @@ function computeStreamingBudgets(
   performanceProfile: PerformanceProfile,
 ): StreamingBudgetResult {
   if (mode === 'play') {
+    if (isPerfLowStreamEnabled()) {
+      switch (getPlayPreviewTier(zoom)) {
+        case 'ultra':
+          return {
+            previewRoomBudget: LOW_STREAM_PLAY_ULTRA_MAX_PREVIEW_ROOMS,
+            fullRoomBudget: FULL_ROOM_BUDGET,
+          };
+        case 'far':
+          return {
+            previewRoomBudget: LOW_STREAM_PLAY_FAR_MAX_PREVIEW_ROOMS,
+            fullRoomBudget: FULL_ROOM_BUDGET,
+          };
+        case 'mid':
+          return {
+            previewRoomBudget: LOW_STREAM_PLAY_MID_MAX_PREVIEW_ROOMS,
+            fullRoomBudget: FULL_ROOM_BUDGET,
+          };
+        case 'near':
+        default:
+          return {
+            previewRoomBudget: LOW_STREAM_PLAY_NEAR_MAX_PREVIEW_ROOMS,
+            fullRoomBudget: FULL_ROOM_BUDGET,
+          };
+      }
+    }
+
     if (performanceProfile === 'reduced') {
       switch (getPlayPreviewTier(zoom)) {
         case 'ultra':

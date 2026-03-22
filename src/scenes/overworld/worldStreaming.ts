@@ -30,6 +30,7 @@ import {
 } from '../../persistence/worldModel';
 import { RETRO_COLORS, ensureStarfieldTexture } from '../../visuals/starfield';
 import { buildRoomSnapshotTexture, buildRoomTextureKey } from '../../visuals/roomSnapshotTexture';
+import { isPerfNoParallaxEnabled } from '../../debug/perfDebug';
 import type { OverworldMode } from '../sceneData';
 import { OverworldChunkPreviewRenderer } from './chunkPreviewRenderer';
 import {
@@ -462,7 +463,10 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   updateFullRoomBackgrounds(camera: Phaser.Cameras.Scene2D.Camera): void {
-    if (this.options.getMode() === 'play' && this.options.getPerformanceProfile() === 'reduced') {
+    if (
+      isPerfNoParallaxEnabled() ||
+      (this.options.getMode() === 'play' && this.options.getPerformanceProfile() === 'reduced')
+    ) {
       return;
     }
 
@@ -1083,6 +1087,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     camera: Phaser.Cameras.Scene2D.Camera
   ): void {
     const origin = this.options.getRoomOrigin(loadedRoom.room.coordinates);
+    const disableParallax = isPerfNoParallaxEnabled();
 
     if (loadedRoom.backgroundColorRect) {
       loadedRoom.backgroundColorRect.setPosition(origin.x, origin.y);
@@ -1093,11 +1098,16 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       backgroundSprite.sprite.setPosition(origin.x, origin.y);
       backgroundSprite.sprite.setSize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
       backgroundSprite.sprite.setTileScale(backgroundSprite.tileScale, backgroundSprite.tileScale);
-      backgroundSprite.sprite.tilePositionX =
-        (camera.scrollX * backgroundSprite.parallax) / backgroundSprite.tileScale;
-      backgroundSprite.sprite.tilePositionY = backgroundSprite.useVerticalParallax
-        ? (camera.scrollY * backgroundSprite.parallax) / backgroundSprite.tileScale
-        : 0;
+      if (disableParallax) {
+        backgroundSprite.sprite.tilePositionX = 0;
+        backgroundSprite.sprite.tilePositionY = 0;
+      } else {
+        backgroundSprite.sprite.tilePositionX =
+          (camera.scrollX * backgroundSprite.parallax) / backgroundSprite.tileScale;
+        backgroundSprite.sprite.tilePositionY = backgroundSprite.useVerticalParallax
+          ? (camera.scrollY * backgroundSprite.parallax) / backgroundSprite.tileScale
+          : 0;
+      }
     }
   }
 }
