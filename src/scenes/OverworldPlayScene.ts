@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { playSfx, stopSfx } from '../audio/sfx';
 import { createCourseRepository } from '../courses/courseRepository';
+import { getPerfToggleState, isPerfNoLiveObjectsEnabled } from '../debug/perfToggles';
 import {
   clearActiveCourseDraftSessionRoomOverride,
   getActiveCourseDraftSessionCourseId,
@@ -2259,6 +2260,10 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private createLiveObjects(loadedRoom: SceneLoadedFullRoom): void {
+    if (isPerfNoLiveObjectsEnabled()) {
+      return;
+    }
+
     this.liveObjectController.createLiveObjects(loadedRoom);
   }
 
@@ -2267,7 +2272,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private updateLiveObjects(delta: number): void {
-    if (this.mode !== 'play') {
+    if (this.mode !== 'play' || isPerfNoLiveObjectsEnabled()) {
       return;
     }
 
@@ -6532,6 +6537,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     return {
       scene: 'overworld-play',
       performanceProfile: getDeviceLayoutState().performanceProfile,
+      perfToggles: getPerfToggleState(),
       mode: this.mode,
       cameraMode: this.cameraMode,
       selected: { ...this.selectedCoordinates },

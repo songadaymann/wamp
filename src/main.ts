@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { getAuthDebugState, setupAuthUi } from './auth/client';
 import { initSfx, globalSfxController } from './audio/sfx';
 import { runOverworldLodStress } from './debug/overworldLodStress';
+import { getPerfToggleState, isPerfHalfResEnabled } from './debug/perfToggles';
 import {
   bootstrapPlayfunModeFromUrl,
   getPlayfunDebugState,
@@ -28,9 +29,10 @@ const debug_options = {
   renderer: normalizeRendererQuery(query.get('renderer')),
   preserveDrawingBuffer: parseBooleanQuery(query.get('preserveDrawingBuffer')),
   captureDebug: parseBooleanQuery(query.get('captureDebug')),
+  perf: getPerfToggleState(),
 } as const;
 
-const config: Phaser.Types.Core.GameConfig = {
+const config = {
   type: resolveRendererType(debug_options.renderer),
   parent: gameContainer,
   width: gameContainer.clientWidth,
@@ -55,7 +57,7 @@ const config: Phaser.Types.Core.GameConfig = {
       preventDefaultWheel: true,
     },
   },
-};
+} as Phaser.Types.Core.GameConfig;
 
 bootstrapPlayfunModeFromUrl();
 initializeAppFeedback();
@@ -82,10 +84,12 @@ const resizeGameToContainer = () => {
   }
 
   if (game.scale.width === width && game.scale.height === height) {
+    applyPerfRenderResolution(width, height);
     return;
   }
 
   game.scale.resize(width, height);
+  applyPerfRenderResolution(width, height);
 };
 
 let resizeQueued = false;
@@ -135,6 +139,28 @@ window.requestAnimationFrame(() => {
   syncGameKeyboardFocus(game);
 });
 
+function getRuntimeResolution(): number {
+  return debug_options.perf.halfRes ? 0.5 : 1;
+}
+
+function applyPerfRenderResolution(width: number, height: number): void {
+  if (!isPerfHalfResEnabled()) {
+    return;
+  }
+
+  const renderWidth = Math.max(1, Math.round(width * 0.5));
+  const renderHeight = Math.max(1, Math.round(height * 0.5));
+  const canvas = game.canvas;
+
+  canvas.width = renderWidth;
+  canvas.height = renderHeight;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+
+  const renderer = game.renderer as { resize?: (nextWidth: number, nextHeight: number) => unknown };
+  renderer.resize?.(renderWidth, renderHeight);
+}
+
 function getDebugState(): Record<string, unknown> {
   const sceneOrder = ['OverworldPlayScene', 'EditorScene', 'BootScene'];
 
@@ -162,6 +188,17 @@ window.render_game_to_text = () =>
     auth: getAuthDebugState(),
     chat: window.get_chat_debug_state?.() ?? null,
     device: getDeviceLayoutState(),
+    perfToggles: debug_options.perf,
+    runtime: {
+      renderer: getRendererLabel(game.renderer.type),
+      resolution: getRuntimeResolution(),
+      canvas: {
+        width: game.canvas.width,
+        height: game.canvas.height,
+        clientWidth: game.canvas.clientWidth,
+        clientHeight: game.canvas.clientHeight,
+      },
+    },
     touch: getTouchInputDebugState(),
     playfun: getPlayfunDebugState(),
     sfx: window.get_sfx_debug_state?.() ?? globalSfxController.getDebugState(),
@@ -248,6 +285,7 @@ function getCaptureDebugInfo(): Record<string, unknown> {
       requested: debug_options.renderer,
       active: getRendererLabel(game.renderer.type),
       type: game.renderer.type,
+      resolution: getRuntimeResolution(),
     },
     canvas: {
       width: canvas.width,

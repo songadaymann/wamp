@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
+import { isPerfNoPreviewsEnabled, isPerfSingleRoomEnabled } from '../../debug/perfToggles';
 import type { RoomCoordinates } from '../../persistence/roomModel';
 import {
   roomToChunkCoordinates,
@@ -257,75 +258,98 @@ function computeStreamingBudgets(
   zoom: number,
   performanceProfile: PerformanceProfile,
 ): StreamingBudgetResult {
+  const noPreviews = isPerfNoPreviewsEnabled();
+  const singleRoom = isPerfSingleRoomEnabled();
+
   if (mode === 'play') {
+    let result: StreamingBudgetResult;
+
     if (performanceProfile === 'reduced') {
       switch (getPlayPreviewTier(zoom)) {
         case 'ultra':
-          return {
+          result = {
             previewRoomBudget: REDUCED_PLAY_ULTRA_MAX_PREVIEW_ROOMS,
             fullRoomBudget: FULL_ROOM_BUDGET,
           };
+          break;
         case 'far':
-          return {
+          result = {
             previewRoomBudget: REDUCED_PLAY_FAR_MAX_PREVIEW_ROOMS,
             fullRoomBudget: FULL_ROOM_BUDGET,
           };
+          break;
         case 'mid':
-          return {
+          result = {
             previewRoomBudget: REDUCED_PLAY_MID_MAX_PREVIEW_ROOMS,
             fullRoomBudget: FULL_ROOM_BUDGET,
           };
+          break;
         case 'near':
         default:
-          return {
+          result = {
             previewRoomBudget: REDUCED_PLAY_NEAR_MAX_PREVIEW_ROOMS,
             fullRoomBudget: FULL_ROOM_BUDGET,
           };
+          break;
+      }
+    } else {
+      switch (getPlayPreviewTier(zoom)) {
+        case 'ultra':
+          result = {
+            previewRoomBudget: PLAY_ULTRA_MAX_PREVIEW_ROOMS,
+            fullRoomBudget: FULL_ROOM_BUDGET,
+          };
+          break;
+        case 'far':
+          result = {
+            previewRoomBudget: PLAY_FAR_MAX_PREVIEW_ROOMS,
+            fullRoomBudget: FULL_ROOM_BUDGET,
+          };
+          break;
+        case 'mid':
+          result = {
+            previewRoomBudget: PLAY_MID_MAX_PREVIEW_ROOMS,
+            fullRoomBudget: FULL_ROOM_BUDGET,
+          };
+          break;
+        case 'near':
+        default:
+          result = {
+            previewRoomBudget: PLAY_NEAR_MAX_PREVIEW_ROOMS,
+            fullRoomBudget: FULL_ROOM_BUDGET,
+          };
+          break;
       }
     }
 
-    switch (getPlayPreviewTier(zoom)) {
-      case 'ultra':
-        return {
-          previewRoomBudget: PLAY_ULTRA_MAX_PREVIEW_ROOMS,
-          fullRoomBudget: FULL_ROOM_BUDGET,
-        };
-      case 'far':
-        return {
-          previewRoomBudget: PLAY_FAR_MAX_PREVIEW_ROOMS,
-          fullRoomBudget: FULL_ROOM_BUDGET,
-        };
-      case 'mid':
-        return {
-          previewRoomBudget: PLAY_MID_MAX_PREVIEW_ROOMS,
-          fullRoomBudget: FULL_ROOM_BUDGET,
-        };
-      case 'near':
-      default:
-        return {
-          previewRoomBudget: PLAY_NEAR_MAX_PREVIEW_ROOMS,
-          fullRoomBudget: FULL_ROOM_BUDGET,
-        };
-    }
-  }
-
-  if (zoom <= 0.12) {
     return {
-      previewRoomBudget: BROWSE_FAR_MAX_PREVIEW_ROOMS,
-      fullRoomBudget: 0,
+      previewRoomBudget: noPreviews ? 0 : result.previewRoomBudget,
+      fullRoomBudget: singleRoom ? 1 : result.fullRoomBudget,
     };
   }
 
-  if (zoom <= 0.2) {
-    return {
+  let result: StreamingBudgetResult;
+
+  if (zoom <= 0.12) {
+    result = {
+      previewRoomBudget: BROWSE_FAR_MAX_PREVIEW_ROOMS,
+      fullRoomBudget: 0,
+    };
+  } else if (zoom <= 0.2) {
+    result = {
       previewRoomBudget: BROWSE_MID_MAX_PREVIEW_ROOMS,
+      fullRoomBudget: 0,
+    };
+  } else {
+    result = {
+      previewRoomBudget: BROWSE_NEAR_MAX_PREVIEW_ROOMS,
       fullRoomBudget: 0,
     };
   }
 
   return {
-    previewRoomBudget: BROWSE_NEAR_MAX_PREVIEW_ROOMS,
-    fullRoomBudget: 0,
+    previewRoomBudget: noPreviews ? 0 : result.previewRoomBudget,
+    fullRoomBudget: result.fullRoomBudget,
   };
 }
 
