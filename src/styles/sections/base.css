@@ -50,34 +50,6 @@ body {
   user-select: none;
 }
 
-#perf-debug-hud {
-  position: fixed;
-  top: calc(8px + var(--safe-top));
-  right: calc(8px + var(--safe-right));
-  z-index: 180;
-  max-width: min(44ch, calc(100vw - 16px - var(--safe-left) - var(--safe-right)));
-  padding: 8px 10px;
-  border: 1px solid rgba(125, 229, 255, 0.45);
-  border-radius: 10px;
-  background: rgba(5, 5, 5, 0.88);
-  color: #7de5ff;
-  font-family: 'IBM Plex Mono', 'Courier New', monospace;
-  font-size: 11px;
-  line-height: 1.35;
-  white-space: pre-wrap;
-  pointer-events: none;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-}
-
-body[data-perf-min-hud='true'] #world-hud,
-body[data-perf-min-hud='true'] #bottom-bar,
-body[data-perf-min-hud='true'] #global-chat,
-body[data-perf-min-hud='true'] .world-goal-panel,
-body[data-perf-min-hud='true'] #btn-world-hud-toggle,
-body[data-perf-min-hud='true'] #btn-mobile-world-hud-minimize {
-  display: none !important;
-}
-
 #shell-root {
   min-height: 100vh;
 }

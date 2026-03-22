@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { getAuthDebugState, setupAuthUi } from './auth/client';
 import { initSfx, globalSfxController } from './audio/sfx';
-import { applyPerfDebugBodyDataset, getPerfDebugState } from './debug/perfDebug';
 import { runOverworldLodStress } from './debug/overworldLodStress';
 import {
   bootstrapPlayfunModeFromUrl,
@@ -60,7 +59,6 @@ const config: Phaser.Types.Core.GameConfig = {
 
 bootstrapPlayfunModeFromUrl();
 initializeAppFeedback();
-applyPerfDebugBodyDataset(document);
 showBootSplash('Loading assets...', 0);
 const game = new Phaser.Game(config);
 initSfx();
@@ -75,7 +73,6 @@ setupUI(game);
 void setupAuthUi();
 void setupPlayfunClient();
 syncGameKeyboardFocus(game);
-setupPerfDebugHud(game);
 
 const resizeGameToContainer = () => {
   const width = Math.round(gameContainer.clientWidth);
@@ -163,7 +160,6 @@ window.render_game_to_text = () =>
     coordinateSystem: 'Top-left origin. X increases right. Y increases down.',
     activeScene: getDebugState(),
     auth: getAuthDebugState(),
-    perfDebug: getPerfDebugState(),
     chat: window.get_chat_debug_state?.() ?? null,
     device: getDeviceLayoutState(),
     touch: getTouchInputDebugState(),
@@ -177,7 +173,6 @@ window.render_game_to_text = () =>
 
 window.capture_debug_info = () => getCaptureDebugInfo();
 window.get_auth_debug_state = () => ({ ...getAuthDebugState() });
-window.get_perf_debug_state = () => ({ ...getPerfDebugState() });
 
 if (typeof window.advanceTime !== 'function') {
   window.advanceTime = async (ms: number) => {
@@ -249,7 +244,6 @@ function getCaptureDebugInfo(): Record<string, unknown> {
 
   return {
     debugOptions: { ...debug_options },
-    perfDebug: getPerfDebugState(),
     renderer: {
       requested: debug_options.renderer,
       active: getRendererLabel(game.renderer.type),
@@ -271,120 +265,6 @@ function getCaptureDebugInfo(): Record<string, unknown> {
     webgl: gl ? getWebglDebugInfo(gl) : null,
     activeScene: getDebugState(),
   };
-}
-
-function setupPerfDebugHud(game: Phaser.Game): void {
-  const perfDebug = getPerfDebugState();
-  if (!perfDebug.showHud) {
-    return;
-  }
-
-  const existing = document.getElementById('perf-debug-hud');
-  existing?.remove();
-
-  const hud = document.createElement('pre');
-  hud.id = 'perf-debug-hud';
-  document.body.appendChild(hud);
-
-  const updateHud = () => {
-    const activeScene = getDebugState();
-    hud.textContent = formatPerfHud(game, activeScene, perfDebug);
-  };
-
-  updateHud();
-  window.setInterval(updateHud, 250);
-}
-
-function formatPerfHud(
-  game: Phaser.Game,
-  activeScene: Record<string, unknown>,
-  perfDebug: ReturnType<typeof getPerfDebugState>,
-): string {
-  const flagsLabel = perfDebug.flags.length > 0 ? perfDebug.flags.join(', ') : 'hud';
-  const lines = [
-    `PERF ${flagsLabel}`,
-    `fps ${formatPerfNumber(game.loop.actualFps)} · renderer ${getRendererLabel(game.renderer.type)}`,
-  ];
-
-  const sceneName = readString(activeScene.scene) ?? 'unknown';
-  lines.push(`scene ${sceneName}`);
-
-  const mode = readString(activeScene.mode);
-  const profile = readString(activeScene.performanceProfile);
-  if (mode || profile) {
-    lines.push(`mode ${mode ?? '-'} · profile ${profile ?? '-'}`);
-  }
-
-  const lodMetrics = readRecord(activeScene.lodMetrics);
-  if (lodMetrics) {
-    lines.push(
-      `rooms vis ${formatPerfInt(readNumber(lodMetrics.visibleRoomCount))} · preview ${formatPerfInt(readNumber(lodMetrics.loadedPreviewRoomCount))}/${formatPerfInt(readNumber(lodMetrics.previewRoomBudget))} · full ${formatPerfInt(readNumber(lodMetrics.loadedFullRoomCount))}/${formatPerfInt(readNumber(lodMetrics.fullRoomBudget))} · chunkR ${formatPerfInt(readNumber(lodMetrics.activeChunkRadius))}`,
-    );
-  }
-
-  const presence = readRecord(activeScene.presence);
-  if (presence) {
-    lines.push(
-      `presence ghosts ${formatPerfInt(readNumber(presence.visibleGhostCount))}/${formatPerfInt(readNumber(presence.renderedGhostCount))} · dots ${formatPerfInt(readNumber(presence.browseDotCount))} · markers ${formatPerfInt(readNumber(presence.playRoomMarkerCount))}`,
-    );
-  }
-
-  const liveObjects = Array.isArray(activeScene.liveObjects) ? activeScene.liveObjects.length : null;
-  const currentRoom = readRecord(activeScene.currentRoom);
-  if (liveObjects !== null || currentRoom) {
-    lines.push(
-      `room ${formatRoomCoordinates(currentRoom)} · live ${liveObjects ?? '-'}`,
-    );
-  }
-
-  const currentRoomBackground = readRecord(activeScene.currentRoomBackground);
-  if (currentRoomBackground) {
-    const sampleTilePositionX = readNumber(currentRoomBackground.sampleTilePositionX);
-    if (sampleTilePositionX !== null) {
-      lines.push(`bg tileX ${formatPerfNumber(sampleTilePositionX)}`);
-    }
-  }
-
-  const perf = readRecord(activeScene.perf);
-  if (perf) {
-    lines.push(
-      `ms frame ${formatPerfNumber(readNumber(perf.frameMs))} · stream ${formatPerfNumber(readNumber(perf.streamingMs))} · parallax ${formatPerfNumber(readNumber(perf.parallaxMs))} · live ${formatPerfNumber(readNumber(perf.liveObjectsMs))} · presence ${formatPerfNumber(readNumber(perf.presenceMs))} · hud ${formatPerfNumber(readNumber(perf.hudMs))}`,
-    );
-  }
-
-  return lines.join('\n');
-}
-
-function readRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function readString(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
-function readNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function formatPerfNumber(value: number | null): string {
-  return value === null ? '-' : value.toFixed(1);
-}
-
-function formatPerfInt(value: number | null): string {
-  return value === null ? '-' : `${Math.round(value)}`;
-}
-
-function formatRoomCoordinates(value: Record<string, unknown> | null): string {
-  if (!value) {
-    return '-';
-  }
-
-  const x = readNumber(value.x);
-  const y = readNumber(value.y);
-  return x === null || y === null ? '-' : `${Math.round(x)},${Math.round(y)}`;
 }
 
 function getCanvasDataUrl(canvas: HTMLCanvasElement): {

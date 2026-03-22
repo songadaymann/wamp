@@ -2,11 +2,6 @@ import Phaser from 'phaser';
 import { playSfx, stopSfx } from '../audio/sfx';
 import { createCourseRepository } from '../courses/courseRepository';
 import {
-  getPerfDebugState,
-  isPerfNoParallaxEnabled,
-  isPerfNoPresenceEnabled,
-} from '../debug/perfDebug';
-import {
   clearActiveCourseDraftSessionRoomOverride,
   getActiveCourseDraftSessionCourseId,
   getActiveCourseDraftSessionDraft,
@@ -228,15 +223,6 @@ const FOLLOW_CAMERA_LERP = 0.12;
 const MOBILE_PLAY_CAMERA_TARGET_Y = 0.75;
 type SelectedCellState = 'published' | 'draft' | 'frontier' | 'empty';
 
-interface PerfTimingSnapshot {
-  frameMs: number;
-  streamingMs: number;
-  parallaxMs: number;
-  liveObjectsMs: number;
-  presenceMs: number;
-  hudMs: number;
-}
-
 interface PlayerSpawn {
   x: number;
   y: number;
@@ -334,29 +320,6 @@ interface SelectedCourseContext {
 }
 
 type CoursePlaybackRoomSourceMode = 'published' | 'draftPreview';
-
-function createEmptyPerfTimingSnapshot(): PerfTimingSnapshot {
-  return {
-    frameMs: 0,
-    streamingMs: 0,
-    parallaxMs: 0,
-    liveObjectsMs: 0,
-    presenceMs: 0,
-    hudMs: 0,
-  };
-}
-
-function smoothPerfSample(previous: number, next: number, alpha = 0.18): number {
-  if (!Number.isFinite(next)) {
-    return previous;
-  }
-
-  if (previous <= 0) {
-    return next;
-  }
-
-  return previous + (next - previous) * alpha;
-}
 
 export class OverworldPlayScene extends Phaser.Scene {
   private readonly PLAYER_SPEED = 150;
@@ -468,8 +431,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private zoomDebugGraphics: Phaser.GameObjects.Graphics | null = null;
   private zoomDebugEnabled = false;
   private lastZoomDebug: ZoomDebugState | null = null;
-  private perfTimingSnapshot: PerfTimingSnapshot = createEmptyPerfTimingSnapshot();
-  private perfHudAccumulatorMs = 0;
   private hudBridge: OverworldHudBridge | null = null;
   private fxController: SceneFxController | null = null;
 
@@ -1055,141 +1016,153 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    const perfEnabled = getPerfDebugState().enabled;
-    const perfFrameStart = perfEnabled ? performance.now() : 0;
-    const perfHudAccumulatorStart = this.perfHudAccumulatorMs;
-    const perfBuckets = {
-      streamingMs: 0,
-      parallaxMs: 0,
-      liveObjectsMs: 0,
-      presenceMs: 0,
-    };
+    this.maybeRefreshVisibleChunks();
+    this.updateBackdrop();
+    this.redrawGridOverlay();
+    this.updateLiveObjects(delta);
+    this.updateGhosts(delta);
+    this.updateBrowsePresenceDots(delta);
 
-    try {
-      this.measurePerfBucket(perfEnabled, perfBuckets, 'streamingMs', () => this.maybeRefreshVisibleChunks());
-      this.measurePerfBucket(perfEnabled, perfBuckets, 'parallaxMs', () => this.updateBackdrop());
-      this.redrawGridOverlay();
-      this.measurePerfBucket(perfEnabled, perfBuckets, 'liveObjectsMs', () => this.updateLiveObjects(delta));
-      this.measurePerfBucket(perfEnabled, perfBuckets, 'presenceMs', () => {
-        this.updateGhosts(delta);
-        this.updateBrowsePresenceDots(delta);
-      });
+    if (isMobileLandscapeBlocked()) {
+      this.syncLocalPresence();
+      this.renderHud();
+      return;
+    }
 
-      if (isMobileLandscapeBlocked()) {
-        this.syncLocalPresence();
-        this.renderHud();
-        return;
+    if (
+      this.mode === 'play' &&
+      (Phaser.Input.Keyboard.JustDown(this.cameraToggleKey) || consumeTouchAction('cameraToggle'))
+    ) {
+      this.toggleCameraMode();
+    }
+
+    if (this.mode === 'play' && consumeTouchAction('stop')) {
+      this.returnToWorld();
+      return;
+    }
+
+    if (!this.playerBody) {
+      this.clearCrateInteractionState();
+      this.syncLocalPresence();
+      this.renderHud();
+      return;
+    }
+
+    const touchInput = getTouchInputState();
+    const touchLeft = touchInput.active && touchInput.moveX <= -0.28;
+    const touchRight = touchInput.active && touchInput.moveX >= 0.28;
+    const touchUp = touchInput.active && touchInput.moveY <= -0.42;
+    const touchDown = touchInput.active && touchInput.moveY >= 0.42;
+    const left = this.cursors.left.isDown || this.wasd.A.isDown || touchLeft;
+    const right = this.cursors.right.isDown || this.wasd.D.isDown || touchRight;
+    const horizontalInput = (right ? 1 : 0) - (left ? 1 : 0);
+    const touchJumpPressed = consumeTouchAction('jump');
+    const overlappingLadder = this.findOverlappingLadder();
+    const touchClimbUpHeld = overlappingLadder !== null && (touchUp || touchInput.jumpHeld);
+    const upHeld = this.cursors.up.isDown || this.wasd.W.isDown || touchClimbUpHeld;
+    const downHeld = this.cursors.down.isDown || this.wasd.S.isDown || touchDown;
+    const verticalInput = (downHeld ? 1 : 0) - (upHeld ? 1 : 0);
+    const touchJumpUsedForLadder = touchJumpPressed && overlappingLadder !== null;
+    const upPressed =
+      Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
+      Phaser.Input.Keyboard.JustDown(this.wasd.W) ||
+      touchJumpUsedForLadder;
+    const spacePressed =
+      Phaser.Input.Keyboard.JustDown(this.cursors.space!) ||
+      (touchJumpPressed && !touchJumpUsedForLadder);
+    const stayOnLadder =
+      overlappingLadder !== null &&
+      !spacePressed &&
+      (verticalInput !== 0 || (this.isClimbingLadder && !left && !right));
+    const jumpedOffLadder = this.isClimbingLadder && spacePressed;
+    const swordPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.Q) || consumeTouchAction('slash');
+    const gunPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E) || consumeTouchAction('shoot');
+    const inQuicksand = this.isPlayerInQuicksand();
+
+    if (stayOnLadder && overlappingLadder) {
+      this.setPlayerLadderState(overlappingLadder);
+      const ladderDeltaX = overlappingLadder.sprite.x - (this.player?.x ?? this.playerBody.center.x);
+      this.playerBody.setVelocityX(Phaser.Math.Clamp(ladderDeltaX * 12, -45, 45));
+      this.playerBody.setVelocityY(verticalInput * this.LADDER_CLIMB_SPEED);
+      this.coyoteTime = 0;
+      this.jumpBuffered = false;
+      this.jumpBufferTime = 0;
+      this.isCrouching = false;
+      this.clearCrateInteractionState();
+      this.syncPlayerHitbox();
+    } else {
+      if (this.isClimbingLadder) {
+        this.setPlayerLadderState(null);
       }
 
-      if (
-        this.mode === 'play' &&
-        (Phaser.Input.Keyboard.JustDown(this.cameraToggleKey) || consumeTouchAction('cameraToggle'))
-      ) {
-        this.toggleCameraMode();
+      const onFloor = this.playerBody.blocked.down || this.playerBody.touching.down;
+      const crateInteraction =
+        !inQuicksand && onFloor && horizontalInput !== 0
+          ? this.findCrateInteraction(horizontalInput, downHeld)
+          : null;
+      const wantsCrouch = onFloor && downHeld && !crateInteraction;
+      this.isCrouching = wantsCrouch || (this.isCrouching && !this.canPlayerStandUp());
+      this.syncPlayerHitbox();
+      if (onFloor) {
+        this.coyoteTime = this.COYOTE_MS;
+      } else {
+        this.coyoteTime = Math.max(0, this.coyoteTime - delta);
       }
 
-      if (this.mode === 'play' && consumeTouchAction('stop')) {
-        this.returnToWorld();
-        return;
-      }
-
-      if (!this.playerBody) {
+      if (crateInteraction) {
+        const moveSpeed =
+          crateInteraction.mode === 'push' ? this.CRATE_PUSH_SPEED : this.CRATE_PULL_SPEED;
+        this.activeCrateInteractionMode = crateInteraction.mode;
+        this.activeCrateInteractionFacing = crateInteraction.facing;
+        this.playerBody.setVelocityX(crateInteraction.moveDirectionX * moveSpeed);
+        crateInteraction.crateBody.setVelocityX(crateInteraction.moveDirectionX * moveSpeed);
+      } else {
         this.clearCrateInteractionState();
-        this.syncLocalPresence();
-        this.renderHud();
-        return;
+        if (this.time.now < this.weaponKnockbackUntil) {
+          this.playerBody.setVelocityX(this.weaponKnockbackVelocityX);
+        } else {
+          this.weaponKnockbackVelocityX = 0;
+          const moveSpeedBase = this.isCrouching ? this.CRAWL_SPEED : this.PLAYER_SPEED;
+          const moveSpeed = inQuicksand ? moveSpeedBase * this.QUICKSAND_MOVE_FACTOR : moveSpeedBase;
+          if (left) {
+            this.playerBody.setVelocityX(-moveSpeed);
+          } else if (right) {
+            this.playerBody.setVelocityX(moveSpeed);
+          } else {
+            this.playerBody.setVelocityX(0);
+          }
+        }
       }
 
-      const touchInput = getTouchInputState();
-      const touchLeft = touchInput.active && touchInput.moveX <= -0.28;
-      const touchRight = touchInput.active && touchInput.moveX >= 0.28;
-      const touchUp = touchInput.active && touchInput.moveY <= -0.42;
-      const touchDown = touchInput.active && touchInput.moveY >= 0.42;
-      const left = this.cursors.left.isDown || this.wasd.A.isDown || touchLeft;
-      const right = this.cursors.right.isDown || this.wasd.D.isDown || touchRight;
-      const horizontalInput = (right ? 1 : 0) - (left ? 1 : 0);
-      const touchJumpPressed = consumeTouchAction('jump');
-      const overlappingLadder = this.findOverlappingLadder();
-      const touchClimbUpHeld = overlappingLadder !== null && (touchUp || touchInput.jumpHeld);
-      const upHeld = this.cursors.up.isDown || this.wasd.W.isDown || touchClimbUpHeld;
-      const downHeld = this.cursors.down.isDown || this.wasd.S.isDown || touchDown;
-      const verticalInput = (downHeld ? 1 : 0) - (upHeld ? 1 : 0);
-      const touchJumpUsedForLadder = touchJumpPressed && overlappingLadder !== null;
-      const upPressed =
-        Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
-        Phaser.Input.Keyboard.JustDown(this.wasd.W) ||
-        touchJumpUsedForLadder;
-      const spacePressed =
-        Phaser.Input.Keyboard.JustDown(this.cursors.space!) ||
-        (touchJumpPressed && !touchJumpUsedForLadder);
-      const stayOnLadder =
-        overlappingLadder !== null &&
-        !spacePressed &&
-        (verticalInput !== 0 || (this.isClimbingLadder && !left && !right));
-      const jumpedOffLadder = this.isClimbingLadder && spacePressed;
-      const swordPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.Q) || consumeTouchAction('slash');
-      const gunPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E) || consumeTouchAction('shoot');
-      const inQuicksand = this.isPlayerInQuicksand();
+      const jumpPressed =
+        !this.isCrouching && (spacePressed || (upPressed && overlappingLadder === null));
 
-      if (stayOnLadder && overlappingLadder) {
-        this.setPlayerLadderState(overlappingLadder);
-        const ladderDeltaX = overlappingLadder.sprite.x - (this.player?.x ?? this.playerBody.center.x);
-        this.playerBody.setVelocityX(Phaser.Math.Clamp(ladderDeltaX * 12, -45, 45));
-        this.playerBody.setVelocityY(verticalInput * this.LADDER_CLIMB_SPEED);
-        this.coyoteTime = 0;
+      if (jumpedOffLadder) {
+        this.playerBody.setVelocityY(
+          inQuicksand ? this.JUMP_VELOCITY * this.QUICKSAND_JUMP_FACTOR : this.JUMP_VELOCITY
+        );
+        this.fxController?.playJumpDustFx(
+          this.player?.x ?? this.playerBody.center.x,
+          this.playerBody.bottom,
+          this.playerFacing
+        );
         this.jumpBuffered = false;
         this.jumpBufferTime = 0;
-        this.isCrouching = false;
-        this.clearCrateInteractionState();
-        this.syncPlayerHitbox();
+        this.coyoteTime = 0;
       } else {
-        if (this.isClimbingLadder) {
-          this.setPlayerLadderState(null);
+        if (jumpPressed) {
+          this.jumpBuffered = true;
+          this.jumpBufferTime = this.JUMP_BUFFER_MS;
         }
 
-        const onFloor = this.playerBody.blocked.down || this.playerBody.touching.down;
-        const crateInteraction =
-          !inQuicksand && onFloor && horizontalInput !== 0
-            ? this.findCrateInteraction(horizontalInput, downHeld)
-            : null;
-        const wantsCrouch = onFloor && downHeld && !crateInteraction;
-        this.isCrouching = wantsCrouch || (this.isCrouching && !this.canPlayerStandUp());
-        this.syncPlayerHitbox();
-        if (onFloor) {
-          this.coyoteTime = this.COYOTE_MS;
-        } else {
-          this.coyoteTime = Math.max(0, this.coyoteTime - delta);
-        }
-
-        if (crateInteraction) {
-          const moveSpeed =
-            crateInteraction.mode === 'push' ? this.CRATE_PUSH_SPEED : this.CRATE_PULL_SPEED;
-          this.activeCrateInteractionMode = crateInteraction.mode;
-          this.activeCrateInteractionFacing = crateInteraction.facing;
-          this.playerBody.setVelocityX(crateInteraction.moveDirectionX * moveSpeed);
-          crateInteraction.crateBody.setVelocityX(crateInteraction.moveDirectionX * moveSpeed);
-        } else {
-          this.clearCrateInteractionState();
-          if (this.time.now < this.weaponKnockbackUntil) {
-            this.playerBody.setVelocityX(this.weaponKnockbackVelocityX);
-          } else {
-            this.weaponKnockbackVelocityX = 0;
-            const moveSpeedBase = this.isCrouching ? this.CRAWL_SPEED : this.PLAYER_SPEED;
-            const moveSpeed = inQuicksand ? moveSpeedBase * this.QUICKSAND_MOVE_FACTOR : moveSpeedBase;
-            if (left) {
-              this.playerBody.setVelocityX(-moveSpeed);
-            } else if (right) {
-              this.playerBody.setVelocityX(moveSpeed);
-            } else {
-              this.playerBody.setVelocityX(0);
-            }
+        if (this.jumpBufferTime > 0) {
+          this.jumpBufferTime -= delta;
+          if (this.jumpBufferTime <= 0) {
+            this.jumpBuffered = false;
           }
         }
 
-        const jumpPressed =
-          !this.isCrouching && (spacePressed || (upPressed && overlappingLadder === null));
-
-        if (jumpedOffLadder) {
+        if (this.jumpBuffered && this.coyoteTime > 0) {
           this.playerBody.setVelocityY(
             inQuicksand ? this.JUMP_VELOCITY * this.QUICKSAND_JUMP_FACTOR : this.JUMP_VELOCITY
           );
@@ -1199,116 +1172,40 @@ export class OverworldPlayScene extends Phaser.Scene {
             this.playerFacing
           );
           this.jumpBuffered = false;
-          this.jumpBufferTime = 0;
           this.coyoteTime = 0;
-        } else {
-          if (jumpPressed) {
-            this.jumpBuffered = true;
-            this.jumpBufferTime = this.JUMP_BUFFER_MS;
-          }
-
-          if (this.jumpBufferTime > 0) {
-            this.jumpBufferTime -= delta;
-            if (this.jumpBufferTime <= 0) {
-              this.jumpBuffered = false;
-            }
-          }
-
-          if (this.jumpBuffered && this.coyoteTime > 0) {
-            this.playerBody.setVelocityY(
-              inQuicksand ? this.JUMP_VELOCITY * this.QUICKSAND_JUMP_FACTOR : this.JUMP_VELOCITY
-            );
-            this.fxController?.playJumpDustFx(
-              this.player?.x ?? this.playerBody.center.x,
-              this.playerBody.bottom,
-              this.playerFacing
-            );
-            this.jumpBuffered = false;
-            this.coyoteTime = 0;
-          }
-
-          const jumpHeld = upHeld || this.cursors.space!.isDown || touchInput.jumpHeld;
-          if (
-            !jumpHeld &&
-            this.playerBody.velocity.y < 0 &&
-            this.time.now >= this.externalLaunchGraceUntil
-          ) {
-            this.playerBody.setVelocityY(this.playerBody.velocity.y * (inQuicksand ? 0.84 : 0.85));
-          }
         }
 
-        if (inQuicksand && onFloor) {
-          this.playerBody.setVelocityY(Math.max(this.playerBody.velocity.y, 4));
+        const jumpHeld = upHeld || this.cursors.space!.isDown || touchInput.jumpHeld;
+        if (
+          !jumpHeld &&
+          this.playerBody.velocity.y < 0 &&
+          this.time.now >= this.externalLaunchGraceUntil
+        ) {
+          this.playerBody.setVelocityY(this.playerBody.velocity.y * (inQuicksand ? 0.84 : 0.85));
         }
-
-        this.handleCombatInput({
-          swordPressed,
-          gunPressed,
-          downHeld,
-          grounded: onFloor,
-        });
       }
 
-      this.updateQuicksandVisualSink();
-      this.updatePlayerProjectiles(delta);
-      this.syncLadderClimbSfx(verticalInput);
-      this.maybeRespawnFromVoid();
-      this.maybeAdvancePlayerRoom();
-      this.syncPlayerVisual();
-      this.syncLocalPresence();
-      this.updateGoalRun(delta);
-      this.renderHud();
-    } finally {
-      this.finishPerfFrame(perfEnabled, perfFrameStart, perfHudAccumulatorStart, perfBuckets);
-    }
-  }
+      if (inQuicksand && onFloor) {
+        this.playerBody.setVelocityY(Math.max(this.playerBody.velocity.y, 4));
+      }
 
-  private measurePerfBucket(
-    enabled: boolean,
-    buckets: {
-      streamingMs: number;
-      parallaxMs: number;
-      liveObjectsMs: number;
-      presenceMs: number;
-    },
-    key: 'streamingMs' | 'parallaxMs' | 'liveObjectsMs' | 'presenceMs',
-    callback: () => void,
-  ): void {
-    if (!enabled) {
-      callback();
-      return;
+      this.handleCombatInput({
+        swordPressed,
+        gunPressed,
+        downHeld,
+        grounded: onFloor,
+      });
     }
 
-    const start = performance.now();
-    callback();
-    buckets[key] += performance.now() - start;
-  }
-
-  private finishPerfFrame(
-    enabled: boolean,
-    frameStart: number,
-    hudAccumulatorStart: number,
-    buckets: {
-      streamingMs: number;
-      parallaxMs: number;
-      liveObjectsMs: number;
-      presenceMs: number;
-    },
-  ): void {
-    if (!enabled) {
-      return;
-    }
-
-    const frameMs = performance.now() - frameStart;
-    const hudMs = Math.max(0, this.perfHudAccumulatorMs - hudAccumulatorStart);
-    this.perfTimingSnapshot = {
-      frameMs: smoothPerfSample(this.perfTimingSnapshot.frameMs, frameMs),
-      streamingMs: smoothPerfSample(this.perfTimingSnapshot.streamingMs, buckets.streamingMs),
-      parallaxMs: smoothPerfSample(this.perfTimingSnapshot.parallaxMs, buckets.parallaxMs),
-      liveObjectsMs: smoothPerfSample(this.perfTimingSnapshot.liveObjectsMs, buckets.liveObjectsMs),
-      presenceMs: smoothPerfSample(this.perfTimingSnapshot.presenceMs, buckets.presenceMs),
-      hudMs: smoothPerfSample(this.perfTimingSnapshot.hudMs, hudMs),
-    };
+    this.updateQuicksandVisualSink();
+    this.updatePlayerProjectiles(delta);
+    this.syncLadderClimbSfx(verticalInput);
+    this.maybeRespawnFromVoid();
+    this.maybeAdvancePlayerRoom();
+    this.syncPlayerVisual();
+    this.syncLocalPresence();
+    this.updateGoalRun(delta);
+    this.renderHud();
   }
 
   private resetRuntimeState(): void {
@@ -1388,10 +1285,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private initializePresenceClient(): void {
-    if (isPerfNoPresenceEnabled()) {
-      return;
-    }
-
     this.presenceController.initialize();
   }
 
@@ -1736,10 +1629,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private updateBackdrop(): void {
-    const disableParallax = isPerfNoParallaxEnabled();
-    if (!disableParallax) {
-      this.worldStreamingController.updateFullRoomBackgrounds(this.cameras.main);
-    }
+    this.worldStreamingController.updateFullRoomBackgrounds(this.cameras.main);
 
     if (this.starfieldSprites.length === 0) {
       return;
@@ -1758,13 +1648,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       sprite.setPosition(0, 0);
       sprite.setSize(this.scale.width, this.scale.height);
       sprite.setTileScale(config.tileScale, config.tileScale);
-      if (disableParallax) {
-        sprite.tilePositionX = 0;
-        sprite.tilePositionY = 0;
-      } else {
-        sprite.tilePositionX = (motionCamera.scrollX * config.parallax) / config.tileScale;
-        sprite.tilePositionY = (motionCamera.scrollY * config.parallax) / config.tileScale;
-      }
+      sprite.tilePositionX = (motionCamera.scrollX * config.parallax) / config.tileScale;
+      sprite.tilePositionY = (motionCamera.scrollY * config.parallax) / config.tileScale;
     }
 
     if (backdropCamera) {
@@ -2328,18 +2213,10 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private syncPresenceSubscriptions(): void {
-    if (isPerfNoPresenceEnabled()) {
-      return;
-    }
-
     this.presenceController.setSubscribedChunkBounds(this.loadedChunkBounds);
   }
 
   private syncLocalPresence(): void {
-    if (isPerfNoPresenceEnabled()) {
-      return;
-    }
-
     if (!this.player || !this.playerBody || this.mode !== 'play') {
       this.presenceController.updateLocalPresence(null);
       return;
@@ -2358,18 +2235,10 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private updateGhosts(delta: number): void {
-    if (isPerfNoPresenceEnabled()) {
-      return;
-    }
-
     this.presenceController.updateGhosts(delta);
   }
 
   private syncGhostVisibility(): void {
-    if (isPerfNoPresenceEnabled()) {
-      return;
-    }
-
     this.presenceController.refreshGhostVisibility();
   }
 
@@ -6237,13 +6106,8 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private renderHud(statusOverride?: string): void {
-    const perfEnabled = getPerfDebugState().enabled;
-    const start = perfEnabled ? performance.now() : 0;
     this.hudBridge?.render(this.buildHudViewModel(statusOverride));
     this.syncGoalOverlayScale();
-    if (perfEnabled) {
-      this.perfHudAccumulatorMs += performance.now() - start;
-    }
   }
 
   private buildHudViewModel(statusOverride?: string): OverworldHudViewModel {
@@ -6668,7 +6532,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     return {
       scene: 'overworld-play',
       performanceProfile: getDeviceLayoutState().performanceProfile,
-      perfDebug: getPerfDebugState(),
       mode: this.mode,
       cameraMode: this.cameraMode,
       selected: { ...this.selectedCoordinates },
@@ -6744,14 +6607,6 @@ export class OverworldPlayScene extends Phaser.Scene {
         ghostRenderBudget: presenceDebug.ghostRenderBudget,
         browseDotCount: this.browsePresenceDotsByConnectionId.size,
         playRoomMarkerCount: this.playRoomPresenceMarkers.length,
-      },
-      perf: {
-        frameMs: Number(this.perfTimingSnapshot.frameMs.toFixed(2)),
-        streamingMs: Number(this.perfTimingSnapshot.streamingMs.toFixed(2)),
-        parallaxMs: Number(this.perfTimingSnapshot.parallaxMs.toFixed(2)),
-        liveObjectsMs: Number(this.perfTimingSnapshot.liveObjectsMs.toFixed(2)),
-        presenceMs: Number(this.perfTimingSnapshot.presenceMs.toFixed(2)),
-        hudMs: Number(this.perfTimingSnapshot.hudMs.toFixed(2)),
       },
       zoom: Number(camera.zoom.toFixed(3)),
       camera: {

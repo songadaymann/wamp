@@ -19,7 +19,6 @@ interface Window {
   capture_debug_info?: () => Record<string, unknown>;
   advanceTime?: (ms: number) => Promise<void>;
   get_auth_debug_state?: () => Record<string, unknown>;
-  get_perf_debug_state?: () => Record<string, unknown>;
   get_sfx_debug_state?: () => Record<string, unknown>;
   play_sfx_debug?: (cue: import('./audio/sfx').SfxCue) => void;
   run_overworld_lod_stress?: () => Promise<Record<string, unknown>>;
