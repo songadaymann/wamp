@@ -41,6 +41,22 @@ body[data-device-class='tablet'][data-coarse-pointer='true'] #global-chat .chat-
   backdrop-filter: blur(8px);
 }
 
+body[data-device-class='tablet'][data-coarse-pointer='true'][data-performance-profile='reduced'] #world-hud {
+  background: rgba(11, 11, 11, 0.95);
+  backdrop-filter: none;
+}
+
+body[data-device-class='tablet'][data-coarse-pointer='true'][data-performance-profile='reduced'] .world-goal-panel {
+  background: rgba(5, 5, 5, 0.95);
+  backdrop-filter: none;
+}
+
+body[data-device-class='tablet'][data-coarse-pointer='true'][data-performance-profile='reduced'] #bottom-bar,
+body[data-device-class='tablet'][data-coarse-pointer='true'][data-performance-profile='reduced'] #global-chat .chat-panel-body,
+body[data-device-class='tablet'][data-coarse-pointer='true'][data-performance-profile='reduced'] .world-online-popover {
+  backdrop-filter: none;
+}
+
 body[data-device-class='phone'] #app {
   grid-template-columns: 1fr;
   grid-template-rows: minmax(0, 1fr) auto;
@@ -209,7 +225,7 @@ body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-ti
   font-size: 12px;
 }
 
-body[data-device-class='phone'][data-mobile-world-hud-collapsed='true'] #world-hud {
+body[data-coarse-pointer='true']:not([data-device-class='desktop'])[data-mobile-world-hud-collapsed='true'] #world-hud {
   transform: translateY(calc(-100% - 14px));
   opacity: 0;
   pointer-events: none;
