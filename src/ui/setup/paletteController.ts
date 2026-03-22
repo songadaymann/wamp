@@ -389,6 +389,8 @@ export class PaletteController {
     for (const objectConfig of filteredObjects) {
       const item = this.doc.createElement('div');
       item.className = 'object-item';
+      item.setAttribute('aria-label', objectConfig.name);
+      item.title = objectConfig.name;
       if (editorState.selectedObjectId === objectConfig.id) {
         item.classList.add('active');
       }
@@ -398,7 +400,7 @@ export class PaletteController {
         item.addEventListener('mouseenter', (event) => {
           this.showObjectTooltip(
             event.currentTarget as HTMLElement,
-            `${objectConfig.name} — ${objectConfig.description}`,
+            objectConfig.name,
           );
         });
         item.addEventListener('mouseleave', () => this.hideObjectTooltip());
@@ -434,12 +436,7 @@ export class PaletteController {
         };
       }
 
-      const label = this.doc.createElement('div');
-      label.className = 'object-item-label';
-      label.textContent = objectConfig.name;
-
       item.appendChild(img);
-      item.appendChild(label);
 
       item.addEventListener('click', () => {
         editorState.selectedObjectId = objectConfig.id;

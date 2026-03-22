@@ -865,7 +865,7 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #editor-advanced {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4px 2px;
+  padding: 6px 4px;
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -877,7 +877,7 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #editor-advanced {
     transform 0.06s ease,
     box-shadow 0.06s ease;
   min-width: 0;
-  min-height: 48px;
+  min-height: 56px;
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.28);
 }
 
@@ -921,21 +921,9 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #editor-advanced {
 
 .object-item img {
   image-rendering: pixelated;
-  max-width: 48px;
-  max-height: 32px;
+  max-width: 56px;
+  max-height: 40px;
   object-fit: contain;
-}
-
-.object-item-label {
-  font-size: 8px;
-  color: var(--text-muted);
-  text-align: center;
-  margin-top: 2px;
-  line-height: 1.1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
 }
 
 .palette-hint-accent {
