@@ -480,7 +480,11 @@ export class MobileUiController {
     const isEditor = appMode === 'editor';
     const isWorld = appMode === 'world' || appMode === 'play-world';
     const isPlay = appMode === 'play-world';
-    const isPhoneWorld = layout.deviceClass === 'phone' && layout.coarsePointer && !layout.mobileLandscapeBlocked && isWorld;
+    const isCollapsibleWorldHud =
+      layout.coarsePointer &&
+      layout.deviceClass !== 'desktop' &&
+      !layout.mobileLandscapeBlocked &&
+      isWorld;
     const chatOpen = this.doc.getElementById('global-chat')?.classList.contains('is-open') ?? false;
     const jumpSheetOpen = !(this.elements.worldJumpSheet?.classList.contains('hidden') ?? true);
     const menuOpen = this.doc.getElementById('auth-panel')?.classList.contains('menu-open') ?? false;
@@ -494,7 +498,7 @@ export class MobileUiController {
     }
 
     if (this.previousAppMode !== appMode) {
-      if (layout.deviceClass === 'phone' && layout.coarsePointer) {
+      if (layout.coarsePointer && layout.deviceClass !== 'desktop') {
         if (appMode === 'play-world') {
           this.worldHudCollapsed = true;
         } else if (appMode === 'world') {
@@ -534,13 +538,19 @@ export class MobileUiController {
     );
     this.elements.mobileWorldStopButton?.classList.toggle(
       'hidden',
-      !(isPhoneWorld && isPlay && this.worldHudCollapsed),
+      !(isCollapsibleWorldHud && isPlay && this.worldHudCollapsed),
     );
 
     this.doc.body.dataset.mobileWorldHudCollapsed =
-      isPhoneWorld && this.worldHudCollapsed ? 'true' : 'false';
-    this.elements.worldHudToggleButton?.classList.toggle('hidden', !(isPhoneWorld && this.worldHudCollapsed));
-    this.elements.worldHudMinimizeButton?.classList.toggle('hidden', !(isPhoneWorld && !this.worldHudCollapsed));
+      isCollapsibleWorldHud && this.worldHudCollapsed ? 'true' : 'false';
+    this.elements.worldHudToggleButton?.classList.toggle(
+      'hidden',
+      !(isCollapsibleWorldHud && this.worldHudCollapsed),
+    );
+    this.elements.worldHudMinimizeButton?.classList.toggle(
+      'hidden',
+      !(isCollapsibleWorldHud && !this.worldHudCollapsed),
+    );
 
     this.elements.worldChatButton?.classList.toggle(
       'hidden',

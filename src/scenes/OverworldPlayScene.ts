@@ -1050,13 +1050,14 @@ export class OverworldPlayScene extends Phaser.Scene {
     const touchInput = getTouchInputState();
     const touchLeft = touchInput.active && touchInput.moveX <= -0.28;
     const touchRight = touchInput.active && touchInput.moveX >= 0.28;
+    const touchUp = touchInput.active && touchInput.moveY <= -0.42;
     const touchDown = touchInput.active && touchInput.moveY >= 0.42;
     const left = this.cursors.left.isDown || this.wasd.A.isDown || touchLeft;
     const right = this.cursors.right.isDown || this.wasd.D.isDown || touchRight;
     const horizontalInput = (right ? 1 : 0) - (left ? 1 : 0);
     const touchJumpPressed = consumeTouchAction('jump');
     const overlappingLadder = this.findOverlappingLadder();
-    const touchClimbUpHeld = touchInput.jumpHeld && overlappingLadder !== null;
+    const touchClimbUpHeld = overlappingLadder !== null && (touchUp || touchInput.jumpHeld);
     const upHeld = this.cursors.up.isDown || this.wasd.W.isDown || touchClimbUpHeld;
     const downHeld = this.cursors.down.isDown || this.wasd.S.isDown || touchDown;
     const verticalInput = (downHeld ? 1 : 0) - (upHeld ? 1 : 0);

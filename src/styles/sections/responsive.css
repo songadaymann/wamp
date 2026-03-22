@@ -209,7 +209,7 @@ body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-ti
   font-size: 12px;
 }
 
-body[data-device-class='phone'][data-mobile-world-hud-collapsed='true'] #world-hud {
+body[data-coarse-pointer='true']:not([data-device-class='desktop'])[data-mobile-world-hud-collapsed='true'] #world-hud {
   transform: translateY(calc(-100% - 14px));
   opacity: 0;
   pointer-events: none;
