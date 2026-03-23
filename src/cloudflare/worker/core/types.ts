@@ -363,6 +363,8 @@ export interface UserRow {
   email: string | null;
   wallet_address: string | null;
   display_name: string;
+  avatar_url: string | null;
+  bio: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -376,6 +378,8 @@ export interface SessionJoinRow {
   email: string | null;
   wallet_address: string | null;
   display_name: string;
+  avatar_url: string | null;
+  bio: string | null;
   user_created_at: string;
 }
 
@@ -389,6 +393,8 @@ export interface MagicLinkJoinRow {
   created_at: string;
   wallet_address: string | null;
   display_name: string;
+  avatar_url: string | null;
+  bio: string | null;
   user_created_at: string;
 }
 
@@ -413,6 +419,8 @@ export interface ApiTokenRow {
   email: string | null;
   wallet_address: string | null;
   display_name: string;
+  avatar_url: string | null;
+  bio: string | null;
   user_created_at: string;
 }
 

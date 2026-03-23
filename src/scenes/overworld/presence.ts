@@ -42,6 +42,7 @@ export interface PlayRoomPresenceMarkerDescriptor {
 
 export interface OnlineRosterEntry {
   key: string;
+  userId: string | null;
   displayName: string;
   roomId: string;
   roomCoordinates: RoomCoordinates;
@@ -305,6 +306,7 @@ export class OverworldPresenceController {
       })
       .map((ghost) => ({
         key: ghost.connectionId,
+        userId: ghost.userId,
         displayName: ghost.displayName,
         roomId: ghost.roomId,
         roomCoordinates: { ...ghost.roomCoordinates },
@@ -321,6 +323,7 @@ export class OverworldPresenceController {
       const roomCoordinates = this.options.getCurrentRoomCoordinates();
       entries.unshift({
         key: `self:${this.identity.userId}`,
+        userId: this.identity.userId,
         displayName: this.identity.displayName,
         roomId: roomIdFromCoordinates(roomCoordinates),
         roomCoordinates: { ...roomCoordinates },

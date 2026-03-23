@@ -43,6 +43,7 @@ import {
   type OverworldPreviewSelection,
   type PreviewSelectionCandidate,
 } from './previewStreaming';
+import type { PerformanceProfile } from '../../ui/deviceLayout';
 import {
   getTerrainTileCollisionProfile,
   terrainTileDisablesTilemapCollision,
@@ -80,6 +81,7 @@ interface OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall> {
   scene: Phaser.Scene;
   worldRepository: WorldRepository;
   getMode: () => OverworldMode;
+  getPerformanceProfile: () => PerformanceProfile;
   getSelectedCoordinates: () => RoomCoordinates;
   getCurrentRoomCoordinates: () => RoomCoordinates;
   getRoomOrigin: (coordinates: RoomCoordinates) => { x: number; y: number };
@@ -118,6 +120,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private nearLodRoomIds = new Set<string>();
   private midLodRoomIds = new Set<string>();
   private farLodRoomIds = new Set<string>();
+  private protectedVisiblePreviewRoomCount = 0;
   private visibleRoomIds = new Set<string>();
   private previewRoomBudget = 0;
   private fullRoomBudget = 0;
@@ -446,6 +449,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     visibleRoomCount: number;
     previewRoomBudget: number;
     fullRoomBudget: number;
+    protectedVisiblePreviewRoomCount: number;
     loadedPreviewRoomCount: number;
     loadedFullRoomCount: number;
   } {
@@ -454,12 +458,17 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       visibleRoomCount: this.visibleRoomIds.size,
       previewRoomBudget: this.previewRoomBudget,
       fullRoomBudget: this.fullRoomBudget,
+      protectedVisiblePreviewRoomCount: this.protectedVisiblePreviewRoomCount,
       loadedPreviewRoomCount: this.previewRenderer.getLoadedPreviewRoomCount(),
       loadedFullRoomCount: this.loadedFullRoomsById.size,
     };
   }
 
   updateFullRoomBackgrounds(camera: Phaser.Cameras.Scene2D.Camera): void {
+    if (this.options.getMode() === 'play' && this.options.getPerformanceProfile() === 'reduced') {
+      return;
+    }
+
     for (const loadedRoom of this.loadedFullRoomsById.values()) {
       this.updateFullRoomBackground(loadedRoom, camera);
     }
@@ -648,13 +657,16 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
     const selection = computeOverworldPreviewSelection({
       mode: this.options.getMode(),
+      performanceProfile: this.options.getPerformanceProfile(),
       zoom: this.options.scene.cameras.main.zoom,
       focusCoordinates: this.getFocusCoordinates(),
       roomCandidates: previewCandidates,
+      visibleRoomBounds: this.getViewportRoomBounds(),
     });
 
     this.previewRoomBudget = selection.previewRoomBudget;
     this.fullRoomBudget = selection.fullRoomBudget;
+    this.protectedVisiblePreviewRoomCount = selection.protectedVisiblePreviewRoomCount;
     this.nearLodRoomIds = selection.nearLodRoomIds;
     this.midLodRoomIds = selection.midLodRoomIds;
     this.farLodRoomIds = selection.farLodRoomIds;
@@ -720,10 +732,22 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return getDesiredChunkBounds({
       centerCoordinates,
       mode: this.options.getMode(),
+      performanceProfile: this.options.getPerformanceProfile(),
       zoom: camera.zoom,
       viewportWidth: this.options.scene.scale.width,
       viewportHeight: this.options.scene.scale.height,
     });
+  }
+
+  private getViewportRoomBounds(): WorldRoomBounds {
+    const camera = this.options.scene.cameras.main;
+    const worldView = camera.worldView;
+    const minX = Math.floor(worldView.left / ROOM_PX_WIDTH);
+    const maxX = Math.floor((worldView.right - 1) / ROOM_PX_WIDTH);
+    const minY = Math.floor(worldView.top / ROOM_PX_HEIGHT);
+    const maxY = Math.floor((worldView.bottom - 1) / ROOM_PX_HEIGHT);
+
+    return { minX, maxX, minY, maxY };
   }
 
   private containsChunkBounds(container: WorldChunkBounds, inner: WorldChunkBounds): boolean {

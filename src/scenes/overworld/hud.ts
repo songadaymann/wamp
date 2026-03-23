@@ -1,8 +1,11 @@
+import { createProfileTriggerElement, isOpenableProfileUserId, requestProfileOpen } from '../../ui/setup/profileEvents';
+
 export interface OverworldHudViewModel {
   saveStatusTone: 'default' | 'play-score' | 'challenge-active' | 'challenge-complete' | 'challenge-failed';
   jumpInputValue: string;
   selectedTitleText: string;
-  selectedCoordinatesText: string;
+  selectedCreatorText: string;
+  selectedCreatorUserId: string | null;
   selectedStateText: string;
   selectedStateTone: 'published' | 'draft' | 'frontier' | 'empty';
   selectedMetaText: string;
@@ -37,6 +40,7 @@ export interface OverworldHudViewModel {
 
 export interface OverworldOnlineRosterViewEntry {
   key: string;
+  userId: string | null;
   displayName: string;
   roomText: string;
   isSelf: boolean;
@@ -45,7 +49,7 @@ export interface OverworldOnlineRosterViewEntry {
 export class OverworldHudBridge {
   private readonly hudRoot: HTMLElement | null;
   private readonly selectedTitleEl: HTMLElement | null;
-  private readonly selectedCoordinatesEl: HTMLElement | null;
+  private readonly selectedCreatorEl: HTMLButtonElement | null;
   private readonly selectedStateEl: HTMLElement | null;
   private readonly selectedMetaEl: HTMLElement | null;
   private readonly statusEl: HTMLElement | null;
@@ -80,6 +84,16 @@ export class OverworldHudBridge {
   private readonly mobileGoalFooterTimerEl: HTMLElement | null;
   private destroyed = false;
   private playersOnlinePinned = false;
+  private selectedCreatorUserId: string | null = null;
+
+  private readonly handleSelectedCreatorClick = (event: MouseEvent): void => {
+    if (!isOpenableProfileUserId(this.selectedCreatorUserId)) {
+      return;
+    }
+
+    event.preventDefault();
+    requestProfileOpen(this.selectedCreatorUserId);
+  };
 
   private readonly handlePlayersOnlineClick = (event: MouseEvent): void => {
     if (!this.canShowPlayersOnlinePopover()) {
@@ -165,7 +179,7 @@ export class OverworldHudBridge {
   constructor(private readonly doc: Document = document) {
     this.hudRoot = this.doc.getElementById('world-hud');
     this.selectedTitleEl = this.doc.getElementById('world-selected-title');
-    this.selectedCoordinatesEl = this.doc.getElementById('world-selected-coords');
+    this.selectedCreatorEl = this.doc.getElementById('world-selected-coords') as HTMLButtonElement | null;
     this.selectedStateEl = this.doc.getElementById('world-selected-state');
     this.selectedMetaEl = this.doc.getElementById('world-selected-meta');
     this.statusEl = this.doc.getElementById('world-status');
@@ -204,6 +218,7 @@ export class OverworldHudBridge {
     this.playersOnlineWrapEl?.addEventListener('focusin', this.handlePlayersOnlineFocusIn);
     this.playersOnlineWrapEl?.addEventListener('focusout', this.handlePlayersOnlineFocusOut);
     this.playersOnlineEl?.addEventListener('click', this.handlePlayersOnlineClick);
+    this.selectedCreatorEl?.addEventListener('click', this.handleSelectedCreatorClick);
     this.doc.addEventListener('pointerdown', this.handleDocumentPointerDown, true);
     this.doc.addEventListener('keydown', this.handleDocumentKeyDown, true);
   }
@@ -221,7 +236,7 @@ export class OverworldHudBridge {
     }
 
     this.setText(this.selectedTitleEl, viewModel.selectedTitleText);
-    this.setText(this.selectedCoordinatesEl, viewModel.selectedCoordinatesText);
+    this.renderSelectedCreator(viewModel.selectedCreatorText, viewModel.selectedCreatorUserId);
     this.setText(this.selectedStateEl, viewModel.selectedStateText);
     this.setStateTone(viewModel.selectedStateTone);
     this.setText(this.selectedMetaEl, viewModel.selectedMetaText);
@@ -258,6 +273,7 @@ export class OverworldHudBridge {
     this.playersOnlineWrapEl?.removeEventListener('focusin', this.handlePlayersOnlineFocusIn);
     this.playersOnlineWrapEl?.removeEventListener('focusout', this.handlePlayersOnlineFocusOut);
     this.playersOnlineEl?.removeEventListener('click', this.handlePlayersOnlineClick);
+    this.selectedCreatorEl?.removeEventListener('click', this.handleSelectedCreatorClick);
     this.doc.removeEventListener('pointerdown', this.handleDocumentPointerDown, true);
     this.doc.removeEventListener('keydown', this.handleDocumentKeyDown, true);
   }
@@ -360,10 +376,14 @@ export class OverworldHudBridge {
     row.className = 'world-online-popover-entry';
     row.dataset.onlineKey = entry.key;
 
-    const name = this.doc.createElement('div');
-    name.className = 'world-online-popover-entry-name';
+    const name = createProfileTriggerElement(
+      this.doc,
+      entry.userId,
+      entry.isSelf ? `${entry.displayName} (You)` : entry.displayName,
+      'world-online-popover-entry-name',
+      'div'
+    );
     name.dataset.onlineSelf = entry.isSelf ? 'true' : 'false';
-    name.textContent = entry.isSelf ? `${entry.displayName} (You)` : entry.displayName;
 
     const room = this.doc.createElement('div');
     room.className = 'world-online-popover-room';
@@ -371,6 +391,19 @@ export class OverworldHudBridge {
 
     row.append(name, room);
     return row;
+  }
+
+  private renderSelectedCreator(text: string, userId: string | null): void {
+    if (!this.selectedCreatorEl) {
+      return;
+    }
+
+    this.selectedCreatorUserId = userId;
+    this.selectedCreatorEl.textContent = text;
+    const clickable = isOpenableProfileUserId(userId);
+    this.selectedCreatorEl.disabled = !clickable;
+    this.selectedCreatorEl.classList.toggle('is-clickable', clickable);
+    this.selectedCreatorEl.title = clickable ? `View ${text.replace(/^by\s+/i, '')}'s profile` : '';
   }
 
   private canShowPlayersOnlinePopover(): boolean {

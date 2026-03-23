@@ -25,6 +25,7 @@ import {
 } from './worker/mint/routes';
 import { syncRoomOwnershipFromChain } from './worker/mint/service';
 import { handlePlayfunConfig, handlePlayfunFlush } from './worker/playfun/routes';
+import { handleProfileGet, handleProfileUpdateMe } from './worker/profiles/routes';
 import {
   enqueuePlayfunPointSync,
   flushPlayfunPointSync,
@@ -157,6 +158,15 @@ export default {
 
       if (url.pathname === '/api/playfun/flush' && request.method === 'POST') {
         return await handlePlayfunFlush(request, env);
+      }
+
+      if (url.pathname === '/api/profiles/me' && request.method === 'PATCH') {
+        return await handleProfileUpdateMe(request, env);
+      }
+
+      const profileMatch = /^\/api\/profiles\/([^/]+)$/.exec(url.pathname);
+      if (profileMatch && request.method === 'GET') {
+        return await handleProfileGet(request, env, decodeURIComponent(profileMatch[1]));
       }
 
       if (url.pathname === '/api/runs/start' && request.method === 'POST') {

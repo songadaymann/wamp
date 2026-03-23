@@ -671,6 +671,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       scene: this,
       worldRepository: createWorldRepository(),
       getMode: () => this.mode,
+      getPerformanceProfile: () => getDeviceLayoutState().performanceProfile,
       getSelectedCoordinates: () => this.selectedCoordinates,
       getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
       getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
@@ -6126,6 +6127,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       .getOnlineRoster()
       .map((entry) => ({
         key: entry.key,
+        userId: entry.userId,
         displayName: entry.displayName,
         roomText: `Room ${entry.roomId}`,
         isSelf: entry.isSelf,
@@ -6155,6 +6157,15 @@ export class OverworldPlayScene extends Phaser.Scene {
           : null,
       this.selectedCoordinates
     );
+    const selectedCreatorUserId =
+      selectedState === 'published'
+      && this.selectedSummary?.publishedByUserId
+      && this.selectedSummary.publishedByDisplayName
+        ? this.selectedSummary.publishedByUserId
+        : null;
+    const selectedCreatorText = selectedCreatorUserId && this.selectedSummary?.publishedByDisplayName
+      ? `by ${this.selectedSummary.publishedByDisplayName}`
+      : roomIdFromCoordinates(this.selectedCoordinates);
 
     let selectedMetaText = 'No room here yet';
     let selectedMetaTone: OverworldHudViewModel['selectedMetaTone'] = 'default';
@@ -6263,7 +6274,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       saveStatusTone,
       jumpInputValue: roomIdFromCoordinates(this.selectedCoordinates),
       selectedTitleText,
-      selectedCoordinatesText: roomIdFromCoordinates(this.selectedCoordinates),
+      selectedCreatorText,
+      selectedCreatorUserId,
       selectedStateText:
         selectedState === 'published'
           ? 'Published'
@@ -6533,6 +6545,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     return {
       scene: 'overworld-play',
+      performanceProfile: getDeviceLayoutState().performanceProfile,
       mode: this.mode,
       cameraMode: this.cameraMode,
       selected: { ...this.selectedCoordinates },
@@ -6567,6 +6580,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         visibleRoomCount: streamingMetrics.visibleRoomCount,
         previewRoomBudget: streamingMetrics.previewRoomBudget,
         fullRoomBudget: streamingMetrics.fullRoomBudget,
+        protectedVisiblePreviewRoomCount: streamingMetrics.protectedVisiblePreviewRoomCount,
         loadedPreviewRoomCount: streamingMetrics.loadedPreviewRoomCount,
         loadedFullRoomCount: streamingMetrics.loadedFullRoomCount,
       },
