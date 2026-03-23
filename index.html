@@ -858,13 +858,8 @@
   </div>
 
   <div id="profile-modal" class="history-modal hidden" aria-hidden="true">
-    <div class="history-modal-panel leaderboard-modal-panel profile-modal-panel" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
-      <div class="history-modal-header">
-        <div class="history-modal-title-group">
-          <div class="history-modal-kicker">Profile</div>
-          <h2 id="profile-modal-title" class="history-modal-title">Profile</h2>
-          <div id="profile-modal-meta" class="history-modal-meta">View creator profile, rooms, and stats.</div>
-        </div>
+    <div class="history-modal-panel leaderboard-modal-panel profile-modal-panel" role="dialog" aria-modal="true" aria-label="Profile">
+      <div class="history-modal-header profile-modal-header">
         <button id="btn-profile-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
       <div id="profile-modal-error" class="history-modal-error hidden"></div>
@@ -880,7 +875,6 @@
             <div id="profile-overview-bio" class="profile-overview-bio">No bio yet.</div>
           </div>
         </div>
-        <div id="profile-overview-stats" class="profile-overview-stats"></div>
         <div id="profile-edit-fields" class="profile-edit-fields hidden">
           <label class="goal-control-label" for="profile-display-name-input">Display Name</label>
           <input id="profile-display-name-input" class="goal-input room-title-input" type="text" maxlength="24" spellcheck="false" />
@@ -894,14 +888,10 @@
           </div>
         </div>
         <div class="leaderboard-tabs profile-tabs">
-          <button id="btn-profile-tab-overview" class="bar-btn bar-btn-small active" type="button" aria-selected="true">Overview</button>
-          <button id="btn-profile-tab-rooms" class="bar-btn bar-btn-small" type="button" aria-selected="false">Created Rooms</button>
+          <button id="btn-profile-tab-rooms" class="bar-btn bar-btn-small active" type="button" aria-selected="true">Created Rooms</button>
           <button id="btn-profile-tab-stats" class="bar-btn bar-btn-small" type="button" aria-selected="false">Stats</button>
         </div>
-        <div id="profile-overview-panel" class="leaderboard-panel">
-          <div class="history-modal-meta">Public profile overview and creator summary.</div>
-        </div>
-        <div id="profile-rooms-panel" class="leaderboard-panel hidden">
+        <div id="profile-rooms-panel" class="leaderboard-panel">
           <div class="history-modal-meta">Newest published rooms from this creator. Click one to warp there.</div>
           <div id="profile-rooms-empty" class="leaderboard-empty">No published rooms yet.</div>
           <div id="profile-rooms-list" class="history-version-list"></div>

@@ -10,7 +10,7 @@ import { createProfileRepository, type ProfileRepository } from '../../profiles/
 import { getActiveOverworldScene } from './sceneBridge';
 import { PROFILE_OPEN_REQUEST_EVENT, type ProfileOpenRequestDetail } from './profileEvents';
 
-type ProfileTabId = 'overview' | 'rooms' | 'stats';
+type ProfileTabId = 'rooms' | 'stats';
 
 type ProfileModalElements = {
   modal: HTMLElement | null;
@@ -23,7 +23,6 @@ type ProfileModalElements = {
   displayName: HTMLElement | null;
   joinedDate: HTMLElement | null;
   overviewBio: HTMLElement | null;
-  overviewStats: HTMLElement | null;
   editFields: HTMLElement | null;
   displayNameInput: HTMLInputElement | null;
   avatarUrlInput: HTMLInputElement | null;
@@ -41,7 +40,7 @@ export class ProfileModalController {
   private readonly elements: ProfileModalElements;
   private readonly profileCache = new Map<string, UserProfileResponse>();
   private authState: AuthDebugState = getAuthDebugState();
-  private activeTab: ProfileTabId = 'overview';
+  private activeTab: ProfileTabId = 'rooms';
   private currentProfileUserId: string | null = null;
   private currentProfile: UserProfileResponse | null = null;
   private loading = false;
@@ -111,7 +110,6 @@ export class ProfileModalController {
       displayName: this.doc.getElementById('profile-display-name'),
       joinedDate: this.doc.getElementById('profile-joined-date'),
       overviewBio: this.doc.getElementById('profile-overview-bio'),
-      overviewStats: this.doc.getElementById('profile-overview-stats'),
       editFields: this.doc.getElementById('profile-edit-fields'),
       displayNameInput: this.doc.getElementById('profile-display-name-input') as HTMLInputElement | null,
       avatarUrlInput: this.doc.getElementById('profile-avatar-url-input') as HTMLInputElement | null,
@@ -119,12 +117,10 @@ export class ProfileModalController {
       saveButton: this.doc.getElementById('btn-profile-save') as HTMLButtonElement | null,
       saveStatus: this.doc.getElementById('profile-save-status'),
       tabButtons: {
-        overview: this.doc.getElementById('btn-profile-tab-overview') as HTMLButtonElement | null,
         rooms: this.doc.getElementById('btn-profile-tab-rooms') as HTMLButtonElement | null,
         stats: this.doc.getElementById('btn-profile-tab-stats') as HTMLButtonElement | null,
       },
       panels: {
-        overview: this.doc.getElementById('profile-overview-panel'),
         rooms: this.doc.getElementById('profile-rooms-panel'),
         stats: this.doc.getElementById('profile-stats-panel'),
       },
@@ -167,7 +163,7 @@ export class ProfileModalController {
     }
 
     this.currentProfileUserId = userId;
-    this.activeTab = 'overview';
+    this.activeTab = 'rooms';
     this.loading = true;
     this.avatarPreviewBroken = false;
     this.setError(null);
@@ -329,7 +325,6 @@ export class ProfileModalController {
     }
 
     this.renderAvatar();
-    this.renderOverviewStats(profile?.stats ?? null, profile?.publishedCourseCount ?? 0);
     this.renderRooms(profile?.publishedRooms ?? []);
     this.renderStats(profile?.stats ?? null, profile?.publishedCourseCount ?? 0);
     this.renderTabs();
@@ -358,36 +353,6 @@ export class ProfileModalController {
       this.elements.avatarImage.src = avatarUrl;
       this.elements.avatarImage.alt = `${nameDraft} avatar`;
     }
-  }
-
-  private renderOverviewStats(stats: ProfileStatsSummary | null, publishedCourseCount: number): void {
-    if (!this.elements.overviewStats) {
-      return;
-    }
-
-    const entries = [
-      ['Points', String(stats?.totalPoints ?? 0)],
-      ['Score', String(stats?.totalScore ?? 0)],
-      ['Rooms', String(stats?.totalRoomsPublished ?? 0)],
-      ['Clears', String(stats?.completedRuns ?? 0)],
-      ['Courses', String(publishedCourseCount)],
-      ['Rank', stats?.globalRank ? `#${stats.globalRank}` : 'Unranked'],
-    ];
-
-    this.elements.overviewStats.replaceChildren(
-      ...entries.map(([label, value]) => {
-        const chip = this.doc.createElement('div');
-        chip.className = 'profile-stat-chip';
-        const labelEl = this.doc.createElement('div');
-        labelEl.className = 'profile-stat-chip-label';
-        labelEl.textContent = label;
-        const valueEl = this.doc.createElement('div');
-        valueEl.className = 'profile-stat-chip-value';
-        valueEl.textContent = value;
-        chip.append(labelEl, valueEl);
-        return chip;
-      })
-    );
   }
 
   private renderRooms(rooms: ProfilePublishedRoomEntry[]): void {
