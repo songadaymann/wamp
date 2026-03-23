@@ -536,6 +536,11 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   max-width: min(760px, calc(100vw - 32px));
 }
 
+.profile-modal-header {
+  justify-content: flex-end;
+  gap: 0;
+}
+
 .profile-modal-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -613,34 +618,6 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
 
 .profile-overview-bio-empty {
   color: var(--text-muted);
-}
-
-.profile-overview-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.profile-stat-chip {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
-  border: 1px solid rgba(243, 238, 226, 0.08);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.profile-stat-chip-label {
-  color: var(--text-muted);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.profile-stat-chip-value {
-  color: var(--text);
-  font-size: 15px;
 }
 
 .profile-edit-fields {
@@ -729,7 +706,6 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
     flex-direction: column;
   }
 
-  .profile-overview-stats,
   .profile-stats-list {
     grid-template-columns: 1fr;
   }
