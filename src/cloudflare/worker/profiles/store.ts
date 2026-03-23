@@ -1,6 +1,6 @@
 import type { UserProfileResponse, ProfilePublishedRoomEntry, ProfileStatsSummary } from '../../../profiles/model';
 import type { Env } from '../core/types';
-import { findUserById, loadAllUserStatsRows, loadPublicUserProfileCourseCount, loadPublishedRoomsByAuthor, loadUserStatsRow } from '../auth/store';
+import { findUserById, loadAllUserStatsRows, loadPublicUserProfileCourseCount, loadPublishedRoomsByCreator, loadUserStatsRow } from '../auth/store';
 import { parseStoredSnapshot } from '../rooms/store';
 import { compareGlobalLeaderboardEntries, mapUserStatsRow } from '../runs/points';
 
@@ -33,11 +33,11 @@ export async function loadUserProfile(
   const [statsRow, allStatsRows, publishedRoomRows, publishedCourseCount] = await Promise.all([
     loadUserStatsRow(env, targetUserId),
     loadAllUserStatsRows(env),
-    loadPublishedRoomsByAuthor(env, targetUserId),
+    loadPublishedRoomsByCreator(env, targetUserId),
     loadPublicUserProfileCourseCount(env, targetUserId),
   ]);
 
-  const stats = buildProfileStats(statsRow, allStatsRows);
+  const stats = buildProfileStats(statsRow, allStatsRows, publishedRoomRows.length);
   const publishedRooms = buildPublishedRooms(publishedRoomRows);
   const isSelf = viewerUserId === targetUserId;
 
@@ -57,10 +57,14 @@ export async function loadUserProfile(
 
 function buildProfileStats(
   statsRow: Awaited<ReturnType<typeof loadUserStatsRow>>,
-  allStatsRows: Awaited<ReturnType<typeof loadAllUserStatsRows>>
+  allStatsRows: Awaited<ReturnType<typeof loadAllUserStatsRows>>,
+  publishedRoomCount: number
 ): ProfileStatsSummary {
   if (!statsRow) {
-    return { ...EMPTY_PROFILE_STATS };
+    return {
+      ...EMPTY_PROFILE_STATS,
+      totalRoomsPublished: publishedRoomCount,
+    };
   }
 
   const stats = mapUserStatsRow(statsRow);
@@ -76,7 +80,7 @@ function buildProfileStats(
     totalCollectibles: stats.totalCollectibles,
     totalEnemiesDefeated: stats.totalEnemiesDefeated,
     totalCheckpoints: stats.totalCheckpoints,
-    totalRoomsPublished: stats.totalRoomsPublished,
+    totalRoomsPublished: publishedRoomCount,
     completedRuns: stats.completedRuns,
     failedRuns: stats.failedRuns,
     abandonedRuns: stats.abandonedRuns,
@@ -87,7 +91,7 @@ function buildProfileStats(
 }
 
 function buildPublishedRooms(
-  rows: Awaited<ReturnType<typeof loadPublishedRoomsByAuthor>>
+  rows: Awaited<ReturnType<typeof loadPublishedRoomsByCreator>>
 ): ProfilePublishedRoomEntry[] {
   const entries: ProfilePublishedRoomEntry[] = [];
 

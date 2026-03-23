@@ -6181,12 +6181,12 @@ export class OverworldPlayScene extends Phaser.Scene {
     );
     const selectedCreatorUserId =
       selectedState === 'published'
-      && this.selectedSummary?.publishedByUserId
-      && this.selectedSummary.publishedByDisplayName
-        ? this.selectedSummary.publishedByUserId
+      && this.selectedSummary?.creatorUserId
+      && this.selectedSummary.creatorDisplayName
+        ? this.selectedSummary.creatorUserId
         : null;
-    const selectedCreatorText = selectedCreatorUserId && this.selectedSummary?.publishedByDisplayName
-      ? `by ${this.selectedSummary.publishedByDisplayName}`
+    const selectedCreatorText = selectedCreatorUserId && this.selectedSummary?.creatorDisplayName
+      ? `by ${this.selectedSummary.creatorDisplayName}`
       : roomIdFromCoordinates(this.selectedCoordinates);
 
     let selectedMetaText = 'No room here yet';

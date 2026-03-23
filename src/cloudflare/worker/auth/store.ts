@@ -387,7 +387,7 @@ export async function loadAllUserStatsRows(env: Env) {
   return result.results;
 }
 
-export async function loadPublishedRoomsByAuthor(env: Env, userId: string) {
+export async function loadPublishedRoomsByCreator(env: Env, userId: string) {
   const result = await env.DB.prepare(
     `
       SELECT
@@ -398,7 +398,7 @@ export async function loadPublishedRoomsByAuthor(env: Env, userId: string) {
         published_json
       FROM rooms
       WHERE published_json IS NOT NULL
-        AND last_published_by_user_id = ?
+        AND COALESCE(claimer_user_id, last_published_by_user_id) = ?
     `
   )
     .bind(userId)
