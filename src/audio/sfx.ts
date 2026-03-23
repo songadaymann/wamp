@@ -37,6 +37,9 @@ export type SfxCue =
   | 'ladder-climb'
   | 'respawn'
   | 'warp'
+  | 'pressure-plate-down'
+  | 'treasure-open'
+  | 'cage-open'
   | 'chat-send'
   | 'chat-receive';
 
@@ -202,6 +205,21 @@ const SFX_CUES: Record<SfxCue, CueConfig> = {
     path: 'assets/sfx/world/warp.wav',
     volume: 0.56,
     cooldownMs: 180,
+  },
+  'pressure-plate-down': {
+    path: 'assets/sfx/world/pressure-plate-down.wav',
+    volume: 0.42,
+    cooldownMs: 45,
+  },
+  'treasure-open': {
+    path: 'assets/sfx/world/treasure-open.wav',
+    volume: 0.48,
+    cooldownMs: 90,
+  },
+  'cage-open': {
+    path: 'assets/sfx/world/cage-open.wav',
+    volume: 0.52,
+    cooldownMs: 90,
   },
   'chat-send': {
     path: 'assets/sfx/ui/ui-click.wav',

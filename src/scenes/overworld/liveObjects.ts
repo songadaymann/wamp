@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { SfxCue } from '../../audio/sfx';
+import { playSfx, type SfxCue } from '../../audio/sfx';
 import {
   getObjectById,
   getObjectDefaultFrame,
@@ -634,10 +634,14 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           continue;
         }
 
+        const wasPressed = liveObject.runtime.pressureActive;
         const pressed = this.isPressurePlatePressed(liveObject, loadedRooms);
         liveObject.runtime.pressureActive = pressed;
         if (liveObject.config.frameCount > 1) {
           liveObject.sprite.setFrame(pressed ? 1 : 0);
+        }
+        if (pressed && !wasPressed) {
+          playSfx('pressure-plate-down');
         }
         if (pressed && liveObject.linkedTargetInstanceId) {
           activeTargetIds.add(liveObject.linkedTargetInstanceId);
@@ -755,6 +759,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
 
     liveObject.runtime.triggerLatched = true;
+    playSfx('cage-open');
     if (liveObject.config.frameCount > 0) {
       liveObject.sprite.setFrame(Math.max(0, liveObject.config.frameCount - 1));
     }
@@ -779,6 +784,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
 
     liveObject.runtime.triggerLatched = true;
+    playSfx('treasure-open');
     if (liveObject.config.frameCount > 0) {
       liveObject.sprite.setFrame(Math.max(0, liveObject.config.frameCount - 1));
     }
