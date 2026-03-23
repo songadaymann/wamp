@@ -3485,3 +3485,27 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 - Verification:
   - `npm run build` passed
   - remaining manual check: author a chest and cage in the editor, assign contents, trigger them in play, and confirm the exact spawn/goal behavior feels right
+
+## March 23, 2026 - Canonical Room Versions + Exact-Content Lineage
+
+- Added shared exact-content room version lineage logic in `src/persistence/roomVersionLineage.ts`
+  - fingerprints now follow gameplay-only room state: goal, spawn point, tiles, and placed objects
+  - title, background, timestamps, and publisher metadata are excluded so cosmetic-only publishes do not fragment leaderboard history
+  - placed objects are canonicalized before fingerprinting so reordered objects and random instance ids do not split identical rooms, while trigger-target wiring still affects the fingerprint
+- Added room-level canonical published version support
+  - new migration `0017_room_canonical_version.sql` adds `rooms.canonical_version`
+  - room records and editor history state now expose `canonicalVersion`
+  - added `POST /api/rooms/:roomId/canonical` plus repository/session wiring so creators can mark a published version as canonical from the editor history UI
+- Made room leaderboard and difficulty reads lineage-aware
+  - room leaderboards now aggregate runs across exact-equivalent published versions
+  - responses now include `displayRoomVersion`, `equivalentRoomVersions`, and `canonicalRoomVersion`
+  - difficulty consensus and viewer eligibility now aggregate across the same exact-equivalence group instead of fragmenting on identical re-publishes
+  - revert-time difficulty cloning was removed because exact-content lineage now surfaces the existing vote/run history directly
+- Updated history and leaderboard UI around the new model
+  - history rows now show `Canonical`, `Same as vX`, and `Revert of vX` badges together
+  - added `Mark Canonical` per-version actions and a header-level `Restore Canonical` action when the live version drifts away from the canonical lineage
+  - leaderboard version selection now collapses identical versions into grouped options like `v16 · canonical` or `v16 · live as v21`
+  - room-discovery cards and room leaderboard headers now display representative versions instead of the latest duplicate publish number
+- Verification:
+  - `./node_modules/.bin/tsc --noEmit` passed
+  - `npm run build` passed

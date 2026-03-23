@@ -34,6 +34,11 @@ export interface RoomRepository {
   saveDraft(room: RoomSnapshot): Promise<RoomRecord>;
   publish(room: RoomSnapshot): Promise<RoomRecord>;
   revert(roomId: string, coordinates: RoomCoordinates, targetVersion: number): Promise<RoomRecord>;
+  setCanonicalVersion(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    targetVersion: number
+  ): Promise<RoomRecord>;
   prepareMint(roomId: string, coordinates: RoomCoordinates): Promise<RoomMintPrepareResponse>;
   confirmMint(
     roomId: string,
@@ -109,6 +114,7 @@ class LocalRoomRepository implements RoomRepository {
       draft,
       published: existing.published,
       versions: existing.versions,
+      canonicalVersion: existing.canonicalVersion,
       claimerUserId: existing.claimerUserId,
       claimerPrincipalKind: existing.claimerPrincipalKind,
       claimerAgentId: existing.claimerAgentId,
@@ -173,6 +179,7 @@ class LocalRoomRepository implements RoomRepository {
           publishedByDisplayName: 'Guest',
         }),
       ],
+      canonicalVersion: existing.canonicalVersion,
       claimerUserId: existing.claimerUserId,
       claimerPrincipalKind: existing.claimerPrincipalKind,
       claimerAgentId: existing.claimerAgentId,
@@ -241,6 +248,7 @@ class LocalRoomRepository implements RoomRepository {
       draft,
       published,
       versions: [...existing.versions, nextVersionRecord],
+      canonicalVersion: existing.canonicalVersion,
       claimerUserId: existing.claimerUserId,
       claimerPrincipalKind: existing.claimerPrincipalKind,
       claimerAgentId: existing.claimerAgentId,
@@ -250,6 +258,50 @@ class LocalRoomRepository implements RoomRepository {
       lastPublishedByPrincipalKind: existing.claimerPrincipalKind,
       lastPublishedByAgentId: existing.claimerAgentId,
       lastPublishedByDisplayName: existing.claimerDisplayName,
+      mintedChainId: existing.mintedChainId,
+      mintedContractAddress: existing.mintedContractAddress,
+      mintedTokenId: existing.mintedTokenId,
+      mintedOwnerWalletAddress: existing.mintedOwnerWalletAddress,
+      mintedOwnerSyncedAt: existing.mintedOwnerSyncedAt,
+      mintedMetadataRoomVersion: existing.mintedMetadataRoomVersion,
+      mintedMetadataUpdatedAt: existing.mintedMetadataUpdatedAt,
+      mintedMetadataHash: existing.mintedMetadataHash,
+      permissions: computeLocalPermissions(existing),
+    };
+
+    localStorage.setItem(getStorageKey(roomId), JSON.stringify(nextRecord));
+    return cloneRoomRecord(nextRecord);
+  }
+
+  async setCanonicalVersion(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    targetVersion: number
+  ): Promise<RoomRecord> {
+    const existing = await this.loadRoom(roomId, coordinates);
+    if (!existing.permissions.canRevert) {
+      throw new Error('You do not have permission to set the canonical version for this room.');
+    }
+
+    const target = existing.versions.find((version) => version.version === targetVersion) ?? null;
+    if (!target) {
+      throw new Error(`Version ${targetVersion} was not found.`);
+    }
+
+    const nextRecord: RoomRecord = {
+      draft: existing.draft,
+      published: existing.published,
+      versions: existing.versions,
+      canonicalVersion: target.version,
+      claimerUserId: existing.claimerUserId,
+      claimerPrincipalKind: existing.claimerPrincipalKind,
+      claimerAgentId: existing.claimerAgentId,
+      claimerDisplayName: existing.claimerDisplayName,
+      claimedAt: existing.claimedAt,
+      lastPublishedByUserId: existing.lastPublishedByUserId,
+      lastPublishedByPrincipalKind: existing.lastPublishedByPrincipalKind,
+      lastPublishedByAgentId: existing.lastPublishedByAgentId,
+      lastPublishedByDisplayName: existing.lastPublishedByDisplayName,
       mintedChainId: existing.mintedChainId,
       mintedContractAddress: existing.mintedContractAddress,
       mintedTokenId: existing.mintedTokenId,
@@ -379,6 +431,29 @@ class ApiRoomRepository implements RoomRepository {
         return record;
       },
       () => this.fallback?.revert(roomId, coordinates, targetVersion)
+    );
+  }
+
+  async setCanonicalVersion(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    targetVersion: number
+  ): Promise<RoomRecord> {
+    const params = new URLSearchParams({
+      x: String(coordinates.x),
+      y: String(coordinates.y),
+    });
+
+    return this.withFallback(
+      () =>
+        this.request<RoomRecord>(
+          `/api/rooms/${encodeURIComponent(roomId)}/canonical?${params.toString()}`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ targetVersion }),
+          }
+        ),
+      () => this.fallback?.setCanonicalVersion(roomId, coordinates, targetVersion)
     );
   }
 

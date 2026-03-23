@@ -74,6 +74,7 @@ export interface RoomRecord {
   draft: RoomSnapshot;
   published: RoomSnapshot | null;
   versions: RoomVersionRecord[];
+  canonicalVersion: number | null;
   claimerUserId: string | null;
   claimerPrincipalKind: RoomAuthorPrincipalKind | null;
   claimerAgentId: string | null;
@@ -95,6 +96,10 @@ export interface RoomRecord {
 }
 
 export interface RoomRevertRequestBody {
+  targetVersion: number;
+}
+
+export interface RoomCanonicalVersionRequestBody {
   targetVersion: number;
 }
 
@@ -421,6 +426,7 @@ export function createDefaultRoomRecord(
     draft: createDefaultRoomSnapshot(roomId, coordinates),
     published: null,
     versions: [],
+    canonicalVersion: null,
     claimerUserId: null,
     claimerPrincipalKind: null,
     claimerAgentId: null,
@@ -464,6 +470,10 @@ export function normalizeRoomRecord(
           .map((version) => normalizeRoomVersionRecord(version))
           .filter((version): version is RoomVersionRecord => version !== null)
       : [],
+    canonicalVersion:
+      typeof record.canonicalVersion === 'number' && Number.isInteger(record.canonicalVersion)
+        ? record.canonicalVersion
+        : null,
     claimerUserId: typeof record.claimerUserId === 'string' ? record.claimerUserId : null,
     claimerPrincipalKind:
       record.claimerPrincipalKind === 'user' || record.claimerPrincipalKind === 'agent'
@@ -518,6 +528,7 @@ export function cloneRoomRecord(record: RoomRecord): RoomRecord {
     draft: cloneRoomSnapshot(normalized.draft),
     published: normalized.published ? cloneRoomSnapshot(normalized.published) : null,
     versions: normalized.versions.map((version) => cloneRoomVersionRecord(version)),
+    canonicalVersion: normalized.canonicalVersion,
     claimerUserId: normalized.claimerUserId,
     claimerPrincipalKind: normalized.claimerPrincipalKind,
     claimerAgentId: normalized.claimerAgentId,

@@ -50,6 +50,7 @@ export interface EditorHistoryState {
   canPublish: boolean;
   canMint: boolean;
   canRefreshMintMetadata: boolean;
+  canonicalVersion: number | null;
   mintedTokenId: string | null;
   mintedOwnerWalletAddress: string | null;
   mintedMetadataRoomVersion: number | null;
@@ -78,6 +79,7 @@ export class EditorRoomSession {
   private roomCoordinates = DEFAULT_ROOM_COORDINATES;
   private roomVersion = 1;
   private publishedVersion = 0;
+  private canonicalVersion: number | null = null;
   private roomTitle: string | null = null;
   private roomCreatedAt = '';
   private roomUpdatedAt = '';
@@ -215,6 +217,7 @@ export class EditorRoomSession {
     this.roomCoordinates = { ...DEFAULT_ROOM_COORDINATES };
     this.roomVersion = 1;
     this.publishedVersion = 0;
+    this.canonicalVersion = null;
     this.roomTitle = null;
     this.roomCreatedAt = '';
     this.roomUpdatedAt = '';
@@ -338,6 +341,7 @@ export class EditorRoomSession {
       canPublish: this.roomPermissions.canPublish,
       canMint: this.roomPermissions.canMint,
       canRefreshMintMetadata: this.canRefreshMintMetadata(),
+      canonicalVersion: this.canonicalVersion,
       mintedTokenId: this.mintedTokenId,
       mintedOwnerWalletAddress: this.mintedOwnerWalletAddress,
       mintedMetadataRoomVersion: this.mintedMetadataRoomVersion,
@@ -548,6 +552,43 @@ export class EditorRoomSession {
     } catch (error) {
       console.error('Failed to revert room version', error);
       const message = error instanceof Error ? error.message : 'Revert failed.';
+      this.setStatusText(message);
+    } finally {
+      this.saveInFlight = false;
+      this.host.refreshUi();
+    }
+
+    return null;
+  }
+
+  async setCanonicalVersion(targetVersion: number): Promise<RoomRecord | null> {
+    if (this.saveInFlight) {
+      return null;
+    }
+    if (!this.roomPermissions.canRevert) {
+      this.setStatusText(
+        this.mintedTokenId
+          ? 'Only the room token owner can set the canonical version for this room.'
+          : 'Only the claimer can set the canonical version for this room.'
+      );
+      return null;
+    }
+
+    this.saveInFlight = true;
+    this.setStatusText(`Marking v${targetVersion} as canonical...`);
+
+    try {
+      const record = await this.roomRepository.setCanonicalVersion(
+        this.roomId,
+        this.roomCoordinates,
+        targetVersion
+      );
+      this.syncRoomMetadata(record);
+      this.setStatusText(`Canonical version set to v${targetVersion}.`);
+      return record;
+    } catch (error) {
+      console.error('Failed to set canonical room version', error);
+      const message = error instanceof Error ? error.message : 'Canonical version update failed.';
       this.setStatusText(message);
     } finally {
       this.saveInFlight = false;
@@ -885,6 +926,7 @@ export class EditorRoomSession {
     this.roomCoordinates = { ...record.draft.coordinates };
     this.roomVersion = record.draft.version;
     this.publishedVersion = record.published?.version ?? 0;
+    this.canonicalVersion = record.canonicalVersion;
     this.roomTitle = record.draft.title;
     this.roomCreatedAt = record.draft.createdAt;
     this.roomUpdatedAt = record.draft.updatedAt;

@@ -391,6 +391,13 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   min-width: 0;
 }
 
+.history-version-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .history-version-line {
   display: flex;
   flex-wrap: wrap;

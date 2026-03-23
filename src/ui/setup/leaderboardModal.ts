@@ -22,6 +22,10 @@ import type {
 } from '../../courses/runModel';
 import { getActiveOverworldScene, type OverworldSelectedRoomContext } from './sceneBridge';
 import { createProfileTriggerElement } from './profileEvents';
+import {
+  buildRoomLeaderboardVersionSelectionState,
+  type RoomLeaderboardVersionOption,
+} from './leaderboardRoomVersions';
 
 type LeaderboardTab = 'room' | 'discover' | 'course' | 'global';
 
@@ -60,6 +64,8 @@ export class LeaderboardModalController {
   private readonly elements: LeaderboardModalElements;
   private activeTab: LeaderboardTab = 'room';
   private roomVersions: RoomVersionRecord[] = [];
+  private roomVersionOptions: RoomLeaderboardVersionOption[] = [];
+  private currentPublishedVersion: number | null = null;
   private selectedVersion: number | null = null;
   private roomLeaderboard: RoomLeaderboardResponse | null = null;
   private roomDiscovery: RoomDiscoveryResponse | null = null;
@@ -201,6 +207,8 @@ export class LeaderboardModalController {
     this.courseLeaderboard = null;
     this.globalLeaderboard = null;
     this.roomVersions = [];
+    this.roomVersionOptions = [];
+    this.currentPublishedVersion = null;
     this.selectedVersion = null;
     this.discoverFilter = null;
     this.activeTab = 'room';
@@ -235,8 +243,6 @@ export class LeaderboardModalController {
           : this.roomContext?.courseId
             ? 'course'
             : 'discover';
-      this.selectedVersion =
-        this.roomVersions[this.roomVersions.length - 1]?.version ?? null;
       await Promise.all([
         this.loadRoomLeaderboard(),
         this.loadCourseLeaderboard(),
@@ -254,6 +260,9 @@ export class LeaderboardModalController {
 
   private async loadRoomVersions(): Promise<RoomVersionRecord[]> {
     if (!this.roomContext || this.roomContext.state !== 'published') {
+      this.roomVersionOptions = [];
+      this.currentPublishedVersion = null;
+      this.selectedVersion = null;
       return [];
     }
 
@@ -261,6 +270,10 @@ export class LeaderboardModalController {
       this.roomContext.roomId,
       this.roomContext.coordinates
     );
+    const selectionState = buildRoomLeaderboardVersionSelectionState(record);
+    this.roomVersionOptions = selectionState.options;
+    this.currentPublishedVersion = selectionState.currentPublishedVersion;
+    this.selectedVersion = selectionState.defaultValue;
 
     return record.versions.filter((version) => version.snapshot.goal !== null);
   }
@@ -398,7 +411,7 @@ export class LeaderboardModalController {
 
     if (this.activeTab === 'room') {
       const roomLabel = this.roomLeaderboard
-        ? `${this.roomLeaderboard.roomTitle?.trim() || `Room ${this.roomLeaderboard.roomCoordinates.x},${this.roomLeaderboard.roomCoordinates.y}`} · ${this.roomLeaderboard.roomCoordinates.x},${this.roomLeaderboard.roomCoordinates.y} · ${this.roomLeaderboard.goalType.replace('_', ' ')} · v${this.roomLeaderboard.roomVersion}`
+        ? `${this.roomLeaderboard.roomTitle?.trim() || `Room ${this.roomLeaderboard.roomCoordinates.x},${this.roomLeaderboard.roomCoordinates.y}`} · ${this.roomLeaderboard.roomCoordinates.x},${this.roomLeaderboard.roomCoordinates.y} · ${this.roomLeaderboard.goalType.replace('_', ' ')} · ${this.formatRoomVersionLabel(this.roomLeaderboard)}`
         : 'No published room challenge selected.';
       this.elements.meta.textContent = roomLabel;
       return;
@@ -439,11 +452,11 @@ export class LeaderboardModalController {
     }
 
     this.elements.versionSelect.disabled = false;
-    for (const version of this.roomVersions) {
+    for (const version of this.roomVersionOptions) {
       const option = this.doc.createElement('option');
-      option.value = String(version.version);
-      option.textContent = `v${version.version}`;
-      if (version.version === this.selectedVersion) {
+      option.value = String(version.value);
+      option.textContent = version.label;
+      if (version.value === this.selectedVersion) {
         option.selected = true;
       }
       this.elements.versionSelect.appendChild(option);
@@ -685,7 +698,17 @@ export class LeaderboardModalController {
     const difficultyLabel = entry.consensusDifficulty
       ? ROOM_DIFFICULTY_LABELS[entry.consensusDifficulty]
       : 'Unrated';
-    meta.textContent = `${entry.goalType.replace('_', ' ')} · ${difficultyLabel} · ${
+    const versionLabel =
+      entry.displayRoomVersion === entry.roomVersion
+        ? `v${entry.displayRoomVersion}`
+        : `v${entry.displayRoomVersion} · live as v${entry.roomVersion}`;
+    const canonicalLabel =
+      entry.canonicalRoomVersion !== null &&
+      (entry.canonicalRoomVersion === entry.roomVersion ||
+        entry.canonicalRoomVersion === entry.displayRoomVersion)
+        ? ' · canonical'
+        : '';
+    meta.textContent = `${entry.goalType.replace('_', ' ')} · ${versionLabel}${canonicalLabel} · ${difficultyLabel} · ${
       entry.voteCount
     } vote${entry.voteCount === 1 ? '' : 's'} · ${entry.roomCoordinates.x},${entry.roomCoordinates.y}`;
     button.appendChild(meta);
@@ -763,7 +786,7 @@ export class LeaderboardModalController {
       return 'Difficulty data unavailable for this room yet.';
     }
 
-    const currentVersion = this.roomVersions[this.roomVersions.length - 1]?.version ?? null;
+    const currentVersion = this.currentPublishedVersion;
     if (!difficulty.viewerSignedIn) {
       return 'Sign in and play this published version to rate its difficulty.';
     }
@@ -791,6 +814,14 @@ export class LeaderboardModalController {
     }
 
     return ROOM_DIFFICULTIES.includes(value as RoomDifficulty) ? (value as RoomDifficulty) : null;
+  }
+
+  private formatRoomVersionLabel(response: RoomLeaderboardResponse): string {
+    if (response.displayRoomVersion === response.roomVersion) {
+      return `v${response.displayRoomVersion}`;
+    }
+
+    return `v${response.displayRoomVersion} · live as v${response.roomVersion}`;
   }
 
   private setError(message: string | null): void {

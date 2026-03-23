@@ -2477,6 +2477,7 @@ export class EditorScene extends Phaser.Scene {
     canPublish: boolean;
     canMint: boolean;
     canRefreshMintMetadata: boolean;
+    canonicalVersion: number | null;
     mintedTokenId: string | null;
     mintedOwnerWalletAddress: string | null;
     mintedMetadataRoomVersion: number | null;
@@ -2551,6 +2552,10 @@ export class EditorScene extends Phaser.Scene {
 
   async refreshMintMetadata(): Promise<RoomRecord | null> {
     return this.roomSession.refreshMintMetadata();
+  }
+
+  async setCanonicalVersion(targetVersion: number): Promise<RoomRecord | null> {
+    return this.roomSession.setCanonicalVersion(targetVersion);
   }
 
   undoAction(): void {

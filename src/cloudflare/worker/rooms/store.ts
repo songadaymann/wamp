@@ -23,7 +23,6 @@ import type {
   RoomVersionRow,
 } from '../core/types';
 import { syncRoomOwnershipFromChain } from '../mint/service';
-import { cloneRoomDifficultyVotesToVersion } from '../runs/difficulty';
 
 const DEFAULT_DAILY_ROOM_CLAIM_LIMIT = 1;
 
@@ -74,7 +73,8 @@ export async function loadRoomRecord(
         minted_owner_synced_at,
         minted_metadata_room_version,
         minted_metadata_updated_at,
-        minted_metadata_hash
+        minted_metadata_hash,
+        canonical_version
       FROM rooms
       WHERE id = ? OR (x = ? AND y = ?)
       LIMIT 1
@@ -106,6 +106,7 @@ export async function loadRoomRecord(
     draft,
     published,
     versions,
+    canonicalVersion: row.canonical_version,
     claimerUserId: row.claimer_user_id,
     claimerPrincipalKind: row.claimer_principal_type,
     claimerAgentId: row.claimer_agent_id,
@@ -291,6 +292,7 @@ export async function saveDraft(
     preparePersistRoomRecordStatement(env, {
       draft,
       published: existing.published,
+      canonicalVersion: existing.canonicalVersion,
       claimerUserId: existing.claimerUserId,
       claimerPrincipalType: existing.claimerPrincipalKind,
       claimerAgentId: existing.claimerAgentId,
@@ -376,6 +378,7 @@ export async function publishRoom(
     preparePersistRoomRecordStatement(env, {
       draft,
       published,
+      canonicalVersion: existing.canonicalVersion,
       claimerUserId,
       claimerPrincipalType,
       claimerAgentId,
@@ -405,10 +408,6 @@ export async function publishRoom(
       onConflictUpdate: true,
     }),
   ]);
-
-  if (published.goal && lastPublishedVersion > 0) {
-    await cloneRoomDifficultyVotesToVersion(env, published.id, lastPublishedVersion, published.version, now);
-  }
 
   return loadRoomRecord(
     env,
@@ -477,6 +476,7 @@ export async function revertRoom(
     preparePersistRoomRecordStatement(env, {
       draft,
       published,
+      canonicalVersion: existing.canonicalVersion,
       claimerUserId: existing.claimerUserId,
       claimerPrincipalType: existing.claimerPrincipalKind,
       claimerAgentId: existing.claimerAgentId,
@@ -507,20 +507,80 @@ export async function revertRoom(
     }),
   ]);
 
-  if (published.goal && (lastPublished?.version ?? 0) > 0) {
-    await cloneRoomDifficultyVotesToVersion(
-      env,
-      published.id,
-      lastPublished?.version ?? 0,
-      published.version,
-      now
-    );
-  }
-
   return loadRoomRecord(
     env,
     draft.id,
     draft.coordinates,
+    viewerUserId,
+    viewerWalletAddress,
+    actorIsAdmin
+  );
+}
+
+export async function setCanonicalRoomVersion(
+  env: Env,
+  roomId: string,
+  coordinates: RoomCoordinates,
+  targetVersion: number,
+  actor: RoomMutationActor,
+  actorIsAdmin = false
+): Promise<RoomRecord> {
+  if (!Number.isInteger(targetVersion) || targetVersion < 1) {
+    throw new HttpError(400, 'targetVersion must be a positive integer.');
+  }
+
+  const viewerUserId = actor.ownerUser?.id ?? null;
+  const viewerWalletAddress = actor.ownerUser?.walletAddress ?? null;
+  const existing = await loadRoomRecordForMutation(
+    env,
+    roomId,
+    coordinates,
+    actor.ownerUser,
+    actorIsAdmin
+  );
+
+  if (!existing.permissions.canRevert) {
+    if (isRoomMinted(existing)) {
+      throw new HttpError(403, 'Only the room token owner can set the canonical version for this room.');
+    }
+
+    throw new HttpError(403, 'Only the claimer can set the canonical version for this room.');
+  }
+
+  const target = existing.versions.find((version) => version.version === targetVersion) ?? null;
+  if (!target) {
+    throw new HttpError(404, `Version ${targetVersion} was not found.`);
+  }
+
+  await env.DB.batch([
+    preparePersistRoomRecordStatement(env, {
+      draft: existing.draft,
+      published: existing.published,
+      canonicalVersion: target.version,
+      claimerUserId: existing.claimerUserId,
+      claimerPrincipalType: existing.claimerPrincipalKind,
+      claimerAgentId: existing.claimerAgentId,
+      claimerDisplayName: existing.claimerDisplayName,
+      claimedAt: existing.claimedAt,
+      lastPublishedByUserId: existing.lastPublishedByUserId,
+      lastPublishedByPrincipalType: existing.lastPublishedByPrincipalKind,
+      lastPublishedByAgentId: existing.lastPublishedByAgentId,
+      lastPublishedByDisplayName: existing.lastPublishedByDisplayName,
+      mintedChainId: existing.mintedChainId,
+      mintedContractAddress: existing.mintedContractAddress,
+      mintedTokenId: existing.mintedTokenId,
+      mintedOwnerWalletAddress: existing.mintedOwnerWalletAddress,
+      mintedOwnerSyncedAt: existing.mintedOwnerSyncedAt,
+      mintedMetadataRoomVersion: existing.mintedMetadataRoomVersion,
+      mintedMetadataUpdatedAt: existing.mintedMetadataUpdatedAt,
+      mintedMetadataHash: existing.mintedMetadataHash,
+    }),
+  ]);
+
+  return loadRoomRecord(
+    env,
+    roomId,
+    coordinates,
     viewerUserId,
     viewerWalletAddress,
     actorIsAdmin
@@ -714,9 +774,10 @@ export const UPSERT_ROOM_RECORD_SQL = `
     minted_owner_synced_at,
     minted_metadata_room_version,
     minted_metadata_updated_at,
-    minted_metadata_hash
+    minted_metadata_hash,
+    canonical_version
   )
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(id) DO UPDATE SET
     x = excluded.x,
     y = excluded.y,
@@ -748,7 +809,8 @@ export const UPSERT_ROOM_RECORD_SQL = `
     minted_owner_synced_at = excluded.minted_owner_synced_at,
     minted_metadata_room_version = excluded.minted_metadata_room_version,
     minted_metadata_updated_at = excluded.minted_metadata_updated_at,
-    minted_metadata_hash = excluded.minted_metadata_hash
+    minted_metadata_hash = excluded.minted_metadata_hash,
+    canonical_version = excluded.canonical_version
 `;
 
 export const INSERT_ROOM_VERSION_SQL = `
@@ -827,7 +889,8 @@ export function preparePersistRoomRecordStatement(
     input.mintedOwnerSyncedAt,
     input.mintedMetadataRoomVersion,
     input.mintedMetadataUpdatedAt,
-    input.mintedMetadataHash
+    input.mintedMetadataHash,
+    input.canonicalVersion
   );
 }
 
