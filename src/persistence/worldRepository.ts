@@ -101,8 +101,8 @@ class LocalWorldRepository implements WorldRepository {
 
       publishedRooms.push({
         snapshot: cloneRoomSnapshot(stored.published),
-        publishedByUserId: stored.lastPublishedByUserId,
-        publishedByDisplayName: stored.lastPublishedByDisplayName,
+        creatorUserId: stored.claimerUserId ?? stored.lastPublishedByUserId,
+        creatorDisplayName: stored.claimerDisplayName ?? stored.lastPublishedByDisplayName,
       });
     }
 

@@ -20,6 +20,8 @@ export interface WorldRoomSummary {
   goalType: RoomGoalType | null;
   version: number | null;
   publishedAt: string | null;
+  creatorUserId: string | null;
+  creatorDisplayName: string | null;
   publishedByUserId: string | null;
   publishedByDisplayName: string | null;
   course: CourseMembershipSummary | null;
@@ -27,8 +29,8 @@ export interface WorldRoomSummary {
 
 export interface PublishedWorldRoomSource {
   snapshot: RoomSnapshot;
-  publishedByUserId: string | null;
-  publishedByDisplayName: string | null;
+  creatorUserId: string | null;
+  creatorDisplayName: string | null;
 }
 
 export interface WorldChunkCoordinates {
@@ -173,8 +175,10 @@ export function createPublishedRoomSummary(
     goalType: snapshot.goal?.type ?? null,
     version: snapshot.version,
     publishedAt: snapshot.publishedAt,
-    publishedByUserId: isPublishedWorldRoomSource(room) ? room.publishedByUserId : null,
-    publishedByDisplayName: isPublishedWorldRoomSource(room) ? room.publishedByDisplayName : null,
+    creatorUserId: isPublishedWorldRoomSource(room) ? room.creatorUserId : null,
+    creatorDisplayName: isPublishedWorldRoomSource(room) ? room.creatorDisplayName : null,
+    publishedByUserId: isPublishedWorldRoomSource(room) ? room.creatorUserId : null,
+    publishedByDisplayName: isPublishedWorldRoomSource(room) ? room.creatorDisplayName : null,
     course: null,
   };
 }
@@ -189,6 +193,8 @@ export function createFrontierRoomSummary(coordinates: RoomCoordinates): WorldRo
     goalType: null,
     version: null,
     publishedAt: null,
+    creatorUserId: null,
+    creatorDisplayName: null,
     publishedByUserId: null,
     publishedByDisplayName: null,
     course: null,
@@ -377,8 +383,8 @@ export function computeWorldChunkPreviewHash(
         room.state,
         room.version ?? '',
         room.publishedAt ?? '',
-        room.publishedByUserId ?? '',
-        room.publishedByDisplayName ?? '',
+        room.creatorUserId ?? '',
+        room.creatorDisplayName ?? '',
         room.title ?? '',
         room.background ?? '',
         room.goalType ?? '',

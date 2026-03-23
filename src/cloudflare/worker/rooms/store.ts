@@ -197,6 +197,8 @@ export async function loadPublishedRoomsInBounds(
     `
       SELECT
         published_json,
+        claimer_user_id,
+        claimer_display_name,
         last_published_by_user_id,
         last_published_by_display_name
       FROM rooms
@@ -208,14 +210,16 @@ export async function loadPublishedRoomsInBounds(
     .bind(minX, maxX, minY, maxY)
     .all<{
       published_json: string;
+      claimer_user_id: string | null;
+      claimer_display_name: string | null;
       last_published_by_user_id: string | null;
       last_published_by_display_name: string | null;
     }>();
 
   return result.results.map((row) => ({
     snapshot: parseStoredSnapshot(row.published_json, 'published room'),
-    publishedByUserId: row.last_published_by_user_id,
-    publishedByDisplayName: row.last_published_by_display_name,
+    creatorUserId: row.claimer_user_id ?? row.last_published_by_user_id,
+    creatorDisplayName: row.claimer_display_name ?? row.last_published_by_display_name,
   }));
 }
 
