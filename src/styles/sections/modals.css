@@ -659,8 +659,81 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   max-height: none;
 }
 
-.profile-room-row {
+.profile-room-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.profile-room-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   width: 100%;
+  padding: 12px;
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  text-align: left;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.profile-room-card:hover,
+.profile-room-card:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(167, 201, 87, 0.4);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.profile-room-preview {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 18 / 10;
+  border-radius: 10px;
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  background:
+    linear-gradient(180deg, rgba(18, 21, 28, 0.92), rgba(10, 12, 18, 0.96));
+}
+
+.profile-room-preview-image,
+.profile-room-preview-fallback {
+  width: 100%;
+  height: 100%;
+}
+
+.profile-room-preview-image {
+  display: block;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.profile-room-preview-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.profile-room-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-room-card-title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.profile-room-card-meta {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .profile-stats-list {

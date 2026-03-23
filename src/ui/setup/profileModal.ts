@@ -5,6 +5,8 @@ import {
   refreshAuthSession,
   type AuthDebugState,
 } from '../../auth/client';
+import { renderRoomSnapshotToPngDataUrl } from '../../mint/roomMetadataRender';
+import { createWorldRepository, type WorldRepository } from '../../persistence/worldRepository';
 import type { ProfilePublishedRoomEntry, ProfileStatsSummary, UserProfileResponse } from '../../profiles/model';
 import { createProfileRepository, type ProfileRepository } from '../../profiles/profileRepository';
 import { getActiveOverworldScene } from './sceneBridge';
@@ -39,6 +41,8 @@ type ProfileModalElements = {
 export class ProfileModalController {
   private readonly elements: ProfileModalElements;
   private readonly profileCache = new Map<string, UserProfileResponse>();
+  private readonly roomPreviewCache = new Map<string, string | null>();
+  private readonly roomPreviewLoads = new Map<string, Promise<string | null>>();
   private authState: AuthDebugState = getAuthDebugState();
   private activeTab: ProfileTabId = 'rooms';
   private currentProfileUserId: string | null = null;
@@ -96,6 +100,7 @@ export class ProfileModalController {
   constructor(
     private readonly game: Phaser.Game,
     private readonly profileRepository: ProfileRepository = createProfileRepository(),
+    private readonly worldRepository: WorldRepository = createWorldRepository(),
     private readonly doc: Document = document,
     private readonly windowObj: Window = window
   ) {
@@ -369,25 +374,125 @@ export class ProfileModalController {
   private createRoomRow(room: ProfilePublishedRoomEntry): HTMLElement {
     const button = this.doc.createElement('button');
     button.type = 'button';
-    button.className = 'leaderboard-discover-row profile-room-row';
+    button.className = 'profile-room-card';
     button.addEventListener('click', () => {
       this.close();
       void getActiveOverworldScene(this.game)?.jumpToCoordinates?.(room.roomCoordinates);
     });
 
+    const preview = this.doc.createElement('div');
+    preview.className = 'profile-room-preview';
+
+    const previewImage = this.doc.createElement('img');
+    previewImage.className = 'profile-room-preview-image hidden';
+    previewImage.alt = `${room.roomTitle?.trim() || `Room ${room.roomCoordinates.x},${room.roomCoordinates.y}`} preview`;
+
+    const previewFallback = this.doc.createElement('div');
+    previewFallback.className = 'profile-room-preview-fallback';
+    previewFallback.textContent = `${room.roomCoordinates.x},${room.roomCoordinates.y}`;
+
+    preview.append(previewImage, previewFallback);
+
+    const copy = this.doc.createElement('div');
+    copy.className = 'profile-room-card-copy';
+
     const title = this.doc.createElement('div');
-    title.className = 'leaderboard-discover-title';
+    title.className = 'profile-room-card-title';
     title.textContent =
       room.roomTitle?.trim() || `Room ${room.roomCoordinates.x},${room.roomCoordinates.y}`;
 
     const meta = this.doc.createElement('div');
-    meta.className = 'leaderboard-discover-meta';
+    meta.className = 'profile-room-card-meta';
     const goalText = room.goalType ? room.goalType.replace(/_/g, ' ') : 'free play';
     const publishedText = room.publishedAt ? this.formatShortDate(room.publishedAt) : 'Unpublished';
     meta.textContent = `${goalText} · v${room.roomVersion} · ${room.roomCoordinates.x},${room.roomCoordinates.y} · ${publishedText}`;
 
-    button.append(title, meta);
+    copy.append(title, meta);
+    button.append(preview, copy);
+    this.attachRoomPreview(room, previewImage, previewFallback);
     return button;
+  }
+
+  private attachRoomPreview(
+    room: ProfilePublishedRoomEntry,
+    imageEl: HTMLImageElement,
+    fallbackEl: HTMLElement
+  ): void {
+    const previewKey = this.buildRoomPreviewKey(room);
+    imageEl.dataset.previewKey = previewKey;
+
+    const cached = this.roomPreviewCache.get(previewKey);
+    if (cached !== undefined) {
+      this.applyRoomPreview(imageEl, fallbackEl, cached, room);
+      return;
+    }
+
+    fallbackEl.textContent = 'Loading preview...';
+    imageEl.classList.add('hidden');
+    fallbackEl.classList.remove('hidden');
+
+    void this.loadRoomPreview(room).then((dataUrl) => {
+      if (!imageEl.isConnected || imageEl.dataset.previewKey !== previewKey) {
+        return;
+      }
+
+      this.applyRoomPreview(imageEl, fallbackEl, dataUrl, room);
+    });
+  }
+
+  private applyRoomPreview(
+    imageEl: HTMLImageElement,
+    fallbackEl: HTMLElement,
+    dataUrl: string | null,
+    room: ProfilePublishedRoomEntry
+  ): void {
+    if (dataUrl) {
+      imageEl.src = dataUrl;
+      imageEl.classList.remove('hidden');
+      fallbackEl.classList.add('hidden');
+      return;
+    }
+
+    fallbackEl.textContent = room.roomTitle?.trim() || `${room.roomCoordinates.x},${room.roomCoordinates.y}`;
+    imageEl.classList.add('hidden');
+    fallbackEl.classList.remove('hidden');
+  }
+
+  private loadRoomPreview(room: ProfilePublishedRoomEntry): Promise<string | null> {
+    const previewKey = this.buildRoomPreviewKey(room);
+    const inFlight = this.roomPreviewLoads.get(previewKey);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const request = (async () => {
+      try {
+        const snapshot = await this.worldRepository.loadPublishedRoom(room.roomId, room.roomCoordinates);
+        if (!snapshot) {
+          this.roomPreviewCache.set(previewKey, null);
+          return null;
+        }
+
+        const dataUrl = await renderRoomSnapshotToPngDataUrl(snapshot, {
+          tilePixelSize: 4,
+        });
+        this.roomPreviewCache.set(previewKey, dataUrl);
+        return dataUrl;
+      } catch (error) {
+        console.warn('Failed to load profile room preview.', room.roomId, error);
+        this.roomPreviewCache.set(previewKey, null);
+        return null;
+      } finally {
+        this.roomPreviewLoads.delete(previewKey);
+      }
+    })();
+
+    this.roomPreviewLoads.set(previewKey, request);
+    return request;
+  }
+
+  private buildRoomPreviewKey(room: ProfilePublishedRoomEntry): string {
+    return `${room.roomId}:${room.roomVersion}`;
   }
 
   private renderStats(stats: ProfileStatsSummary | null, publishedCourseCount: number): void {
