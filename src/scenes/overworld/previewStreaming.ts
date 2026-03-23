@@ -2,8 +2,10 @@ import Phaser from 'phaser';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
 import type { RoomCoordinates } from '../../persistence/roomModel';
 import {
+  isWithinRoomBounds,
   roomToChunkCoordinates,
   type WorldChunkBounds,
+  type WorldRoomBounds,
   WORLD_CHUNK_SIZE,
 } from '../../persistence/worldModel';
 import type { OverworldMode } from '../sceneData';
@@ -33,6 +35,7 @@ const FULL_ROOM_BUDGET = (STREAM_RADIUS * 2 + 1) ** 2;
 const PLAY_ULTRA_ZOOM_THRESHOLD = 0.11;
 const PLAY_FAR_ZOOM_THRESHOLD = 0.16;
 const PLAY_MID_ZOOM_THRESHOLD = 0.28;
+const VIEWPORT_ROOM_PADDING = 1;
 
 export interface PreviewSelectionCandidate {
   id: string;
@@ -43,6 +46,7 @@ export interface PreviewSelectionCandidate {
 export interface OverworldPreviewSelection {
   previewRoomBudget: number;
   fullRoomBudget: number;
+  protectedVisiblePreviewRoomCount: number;
   nearLodRoomIds: Set<string>;
   midLodRoomIds: Set<string>;
   farLodRoomIds: Set<string>;
@@ -55,6 +59,7 @@ interface OverworldPreviewSelectionInput {
   zoom: number;
   focusCoordinates: RoomCoordinates;
   roomCandidates: Iterable<PreviewSelectionCandidate>;
+  visibleRoomBounds: WorldRoomBounds | null;
 }
 
 interface StreamingBudgetResult {
@@ -103,6 +108,9 @@ export function computeOverworldPreviewSelection(
   const roomCandidates = Array.from(input.roomCandidates);
   const budgets = computeStreamingBudgets(mode, zoom);
   const midLodRoomRadius = getMidLodRoomRadius(mode, zoom);
+  const visibleRoomBounds = input.visibleRoomBounds
+    ? expandRoomBounds(input.visibleRoomBounds, VIEWPORT_ROOM_PADDING)
+    : null;
   const nearLodRoomIds = new Set<string>();
   const midLodRoomIds = new Set<string>();
   const farLodRoomIds = new Set<string>();
@@ -129,9 +137,22 @@ export function computeOverworldPreviewSelection(
     ...midLodRoomIds,
     ...farLodRoomIds,
   ]);
+  const visibleRoomIds = new Set(
+    roomCandidates
+      .filter(
+        (roomCandidate) =>
+          roomCandidate.isRenderable &&
+          visibleRoomBounds !== null &&
+          isWithinRoomBounds(roomCandidate.coordinates, visibleRoomBounds)
+      )
+      .map((roomCandidate) => roomCandidate.id)
+  );
+  const effectivePreviewBudget = Math.max(budgets.previewRoomBudget, visibleRoomIds.size);
 
   return {
-    ...budgets,
+    previewRoomBudget: effectivePreviewBudget,
+    fullRoomBudget: budgets.fullRoomBudget,
+    protectedVisiblePreviewRoomCount: visibleRoomIds.size,
     nearLodRoomIds,
     midLodRoomIds,
     farLodRoomIds,
@@ -140,8 +161,9 @@ export function computeOverworldPreviewSelection(
       eligibleRoomIds: previewEligibleRoomIds,
       nearLodRoomIds,
       midLodRoomIds,
+      visibleRoomIds,
       focusCoordinates,
-      budget: budgets.previewRoomBudget,
+      budget: effectivePreviewBudget,
     }),
     fullRoomIds:
       mode === 'play'
@@ -150,6 +172,7 @@ export function computeOverworldPreviewSelection(
             eligibleRoomIds: nearLodRoomIds,
             nearLodRoomIds,
             midLodRoomIds,
+            visibleRoomIds: new Set<string>(),
             focusCoordinates,
             budget: budgets.fullRoomBudget,
           })
@@ -264,11 +287,21 @@ function getPlayPreviewTier(zoom: number): PlayPreviewTier {
   return 'near';
 }
 
+function expandRoomBounds(bounds: WorldRoomBounds, padding: number): WorldRoomBounds {
+  return {
+    minX: bounds.minX - padding,
+    maxX: bounds.maxX + padding,
+    minY: bounds.minY - padding,
+    maxY: bounds.maxY + padding,
+  };
+}
+
 function selectPrioritizedRoomIds(input: {
   roomCandidates: PreviewSelectionCandidate[];
   eligibleRoomIds: Set<string>;
   nearLodRoomIds: Set<string>;
   midLodRoomIds: Set<string>;
+  visibleRoomIds: Set<string>;
   focusCoordinates: RoomCoordinates;
   budget: number;
 }): Set<string> {
@@ -277,6 +310,7 @@ function selectPrioritizedRoomIds(input: {
     eligibleRoomIds,
     nearLodRoomIds,
     midLodRoomIds,
+    visibleRoomIds,
     focusCoordinates,
     budget,
   } = input;
@@ -292,6 +326,12 @@ function selectPrioritizedRoomIds(input: {
         roomCandidate !== null && roomCandidate.isRenderable
     )
     .sort((left, right) => {
+      const leftVisible = visibleRoomIds.has(left.id);
+      const rightVisible = visibleRoomIds.has(right.id);
+      if (leftVisible !== rightVisible) {
+        return leftVisible ? -1 : 1;
+      }
+
       const leftBucket = nearLodRoomIds.has(left.id) ? 0 : midLodRoomIds.has(left.id) ? 1 : 2;
       const rightBucket = nearLodRoomIds.has(right.id) ? 0 : midLodRoomIds.has(right.id) ? 1 : 2;
       if (leftBucket !== rightBucket) {
