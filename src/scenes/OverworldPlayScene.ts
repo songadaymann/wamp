@@ -1981,12 +1981,15 @@ export class OverworldPlayScene extends Phaser.Scene {
   async jumpToCoordinates(coordinates: RoomCoordinates): Promise<void> {
     this.mode = 'browse';
     this.cameraMode = 'inspect';
+    this.inspectZoom = this.getFitZoomForRoom();
+    this.browseInspectZoom = this.inspectZoom;
     this.syncAppMode();
     this.selectedCoordinates = { ...coordinates };
     this.currentRoomCoordinates = { ...coordinates };
     this.windowCenterCoordinates = { ...coordinates };
     this.shouldCenterCamera = true;
     this.shouldRespawnPlayer = false;
+    setFocusedCoordinatesInUrl(this.currentRoomCoordinates);
     playSfx('warp');
     await this.refreshAround(coordinates);
   }
