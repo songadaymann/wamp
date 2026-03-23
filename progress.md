@@ -3485,3 +3485,32 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 - Verification:
   - `npm run build` passed
   - remaining manual check: author a chest and cage in the editor, assign contents, trigger them in play, and confirm the exact spawn/goal behavior feels right
+
+## March 23, 2026 - Ranked Room Start Gating
+
+- Single-room challenge runs now stay in `practice` until the player starts from that room's spawn
+  - entering a goal room from a neighboring room no longer creates a ranked attempt immediately
+  - the room run promotes to ranked only after the player reaches the resolved room start point
+  - promotion resets timer/counters and reinitializes room challenge state so pre-spawn progress cannot carry into the ranked run
+- Kept the policy out of `OverworldPlayScene` as much as possible
+  - added `src/scenes/overworld/goalRunStartGate.ts` for spawn/start-point resolution and qualification checks
+  - expanded `src/scenes/overworld/goalRuns.ts` to track `practice` vs `qualified` room-run state and delay remote run creation until qualification
+  - `OverworldPlayScene` now only passes entry context, forwards feet-position checks, and uses the shared start-point resolver for room spawn fallback
+- HUD/play-state changes
+  - practice-mode room runs now surface `Practice run. Reach spawn to start ranked attempt.`
+  - room-goal timer/progress copy switches to practice messaging until the run is qualified
+- Verification:
+  - `npm run build` passed
+  - targeted seeded browser rig wrote `output/web-game/ranked-room-start-gating-check/summary.json`
+  - targeted seeded browser rig screenshots:
+    - `output/web-game/ranked-room-start-gating-check/practice-side-entry.png`
+    - `output/web-game/ranked-room-start-gating-check/qualified-at-spawn.png`
+    - `output/web-game/ranked-room-start-gating-check/completed-ranked-run.png`
+    - `output/web-game/ranked-room-start-gating-check/legacy-spawn-room.png`
+  - verified in that rig:
+    - side-entry into a published exit room leaves the run in `practice` with `attemptId: null`, `submissionState: waiting`, and `elapsedMs: 0`
+    - reaching the room spawn promotes the same run to `qualified` and starts the ranked attempt
+    - returning to the exit after qualification completes and submits the run normally
+    - a published room with no authored `spawnPoint` still starts correctly from the shared fallback surface spawn
+  - remaining manual check:
+    - side-enter a challenge room, die before reaching spawn, and confirm the respawned run feels correct in live play

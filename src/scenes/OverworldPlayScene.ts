@@ -157,9 +157,11 @@ import {
   type CameraMode,
 } from './overworld/camera';
 import {
-  getTerrainTileCollisionProfile,
   terrainTileCollidesAtLocalPixel,
 } from './overworld/terrainCollision';
+import {
+  resolveGoalRunStartPoint,
+} from './overworld/goalRunStartGate';
 import type {
   CourseEditedRoomData,
   EditorCourseEditData,
@@ -587,6 +589,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   constructor() {
     super({ key: 'OverworldPlayScene' });
     this.goalRunController = new OverworldGoalRunController({
+      playerHeight: this.PLAYER_HEIGHT,
       runRepository: createRunRepository(),
       getScore: () => this.score,
       getAuthenticated: () => getAuthDebugState().authenticated,
@@ -2326,7 +2329,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.goalRunController.clearCurrentRun();
       this.redrawGoalMarkers();
     } else {
-      this.applyGoalRunMutation(this.goalRunController.syncRunForRoom(currentRoom));
+      this.applyGoalRunMutation(this.goalRunController.syncRunForRoom(currentRoom, 'spawn'));
     }
 
     this.syncFullRoomColliders();
@@ -4172,44 +4175,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       };
     }
 
-    if (room.spawnPoint) {
-      const origin = this.getRoomOrigin(room.coordinates);
-      return {
-        x: origin.x + room.spawnPoint.x,
-        y: origin.y + room.spawnPoint.y - this.PLAYER_HEIGHT / 2,
-      };
-    }
-
-    return this.getSurfaceSpawn(room);
-  }
-
-  private getSurfaceSpawn(room: RoomSnapshot): PlayerSpawn {
-    const centerCol = Math.floor(ROOM_WIDTH / 2);
-    const candidateCols: number[] = [centerCol];
-
-    for (let offset = 1; offset < ROOM_WIDTH; offset++) {
-      const left = centerCol - offset;
-      const right = centerCol + offset;
-      if (left >= 0) candidateCols.push(left);
-      if (right < ROOM_WIDTH) candidateCols.push(right);
-    }
-
-    for (const tileX of candidateCols) {
-      const surfaceTileY = this.findSpawnSurfaceTile(room, tileX);
-      if (surfaceTileY !== null) {
-        const origin = this.getRoomOrigin(room.coordinates);
-        const profile = getTerrainTileCollisionProfile(room, tileX, surfaceTileY);
-        return {
-          x: origin.x + tileX * TILE_SIZE + TILE_SIZE / 2,
-          y: origin.y + surfaceTileY * TILE_SIZE + profile.topInset - this.PLAYER_HEIGHT / 2,
-        };
-      }
-    }
-
-    const origin = this.getRoomOrigin(room.coordinates);
+    const startPoint = resolveGoalRunStartPoint(room, this.PLAYER_HEIGHT);
     return {
-      x: origin.x + ROOM_PX_WIDTH / 2,
-      y: origin.y + TILE_SIZE * 2,
+      x: startPoint.x,
+      y: startPoint.y - this.PLAYER_HEIGHT / 2,
     };
   }
 
@@ -4236,31 +4205,6 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private getArcadeBodyBounds(body: ArcadeObjectBody): Phaser.Geom.Rectangle {
     return new Phaser.Geom.Rectangle(body.left, body.top, body.width, body.height);
-  }
-
-  private findSpawnSurfaceTile(room: RoomSnapshot, tileX: number): number | null {
-    const clearTilesNeeded = Math.max(2, Math.ceil(this.PLAYER_HEIGHT / TILE_SIZE) + 1);
-
-    for (let tileY = ROOM_HEIGHT - 1; tileY >= 0; tileY--) {
-      const tile = room.tileData.terrain[tileY][tileX];
-      if (tile <= 0) continue;
-
-      let hasClearHeadroom = true;
-      for (let offset = 1; offset <= clearTilesNeeded; offset++) {
-        const aboveTileY = tileY - offset;
-        if (aboveTileY < 0) break;
-        if (room.tileData.terrain[aboveTileY][tileX] > 0) {
-          hasClearHeadroom = false;
-          break;
-        }
-      }
-
-      if (hasClearHeadroom) {
-        return tileY;
-      }
-    }
-
-    return null;
   }
 
   private maybeRespawnFromVoid(): void {
@@ -4379,6 +4323,15 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (this.activeCourseRun) {
       this.updateCourseRun(delta);
       return;
+    }
+
+    if (this.playerBody) {
+      this.applyGoalRunMutation(
+        this.goalRunController.qualifyPracticeRunAt({
+          x: this.playerBody.center.x,
+          y: this.playerBody.bottom,
+        })
+      );
     }
 
     this.applyGoalRunMutation(this.goalRunController.tick(delta));
@@ -4558,11 +4511,21 @@ export class OverworldPlayScene extends Phaser.Scene {
       const goalRoom = this.getRoomSnapshotForCoordinates(activeRun.roomCoordinates);
       this.failGoalRun('Survival failed.');
       if (goalRoom?.goal) {
-        this.applyGoalRunMutation(this.goalRunController.restartRunForRoom(goalRoom));
+        this.applyGoalRunMutation(this.goalRunController.restartRunForRoom(goalRoom, 'respawn'));
         void this.refreshLeaderboardForSelection();
         this.showTransientStatus(`${reason} Survival run restarted.`);
       }
       return;
+    }
+
+    if (activeRun?.qualificationState === 'practice') {
+      const goalRoom = this.getRoomSnapshotForCoordinates(activeRun.roomCoordinates);
+      if (goalRoom?.goal) {
+        this.resetSingleRoomChallengeStateForRun(activeRun);
+        this.applyGoalRunMutation(this.goalRunController.restartRunForRoom(goalRoom, 'respawn'));
+        void this.refreshLeaderboardForSelection();
+        return;
+      }
     }
 
     this.showTransientStatus(reason);
@@ -4731,7 +4694,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (!this.activeCourseRun) {
       this.applyGoalRunMutation(
         this.goalRunController.syncRunForRoom(
-          this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates)
+          this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates),
+          'transition'
         )
       );
       void this.refreshLeaderboardForSelection();
@@ -5961,6 +5925,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
+    if (result.resetChallengeState && this.currentGoalRun) {
+      this.resetSingleRoomChallengeStateForRun(this.currentGoalRun);
+    }
+
     this.playGoalRunFx(result);
 
     if (result.transientStatus) {
@@ -6048,6 +6016,10 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private getPlayGoalTimerText(runState: GoalRunState): string {
+    if (runState.qualificationState === 'practice') {
+      return 'PRACTICE';
+    }
+
     if (runState.goal.type === 'survival') {
       return `${this.formatOverlayTimer(Math.max(0, runState.goal.durationMs - runState.elapsedMs))} LEFT`;
     }
@@ -6064,6 +6036,10 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private getPlayGoalProgressText(runState: GoalRunState): string {
+    if (runState.qualificationState === 'practice') {
+      return runState.leaderboardEligible ? 'Reach spawn to rank' : 'Reach spawn to start';
+    }
+
     switch (runState.goal.type) {
       case 'reach_exit':
         return runState.result === 'completed' ? 'Exit reached' : 'Reach the exit';
@@ -6269,6 +6245,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       statusText = statusOverride;
     } else if (transientStatus) {
       statusText = transientStatus;
+    } else if (this.mode === 'play') {
+      statusText = this.goalRunController.getPersistentStatusText() ?? '';
     } else {
       statusText = '';
     }
