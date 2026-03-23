@@ -871,8 +871,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   }
 
   private syncRoomObjectWorldColliders(loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>): void {
-    const solidPlatforms = loadedRoom.liveObjects.filter(
-      (candidate) => candidate.config.category === 'platform' && candidate.sprite.body
+    const solidObstacles = loadedRoom.liveObjects.filter(
+      (candidate) =>
+        candidate.sprite.body &&
+        (candidate.config.category === 'platform' || candidate.config.id === 'door_locked')
     );
 
     for (const liveObject of loadedRoom.liveObjects) {
@@ -890,17 +892,17 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           this.options.scene.physics.add.collider(liveObject.sprite, loadedRoom.terrainInsetBodies)
         );
       }
-      for (const platform of solidPlatforms) {
-        if (!platform.sprite.active || !platform.sprite.body) {
+      for (const obstacle of solidObstacles) {
+        if (!obstacle.sprite.active || !obstacle.sprite.body) {
           continue;
         }
 
-        if (platform === liveObject) {
+        if (obstacle === liveObject) {
           continue;
         }
 
         liveObject.worldColliders.push(
-          this.options.scene.physics.add.collider(liveObject.sprite, platform.sprite)
+          this.options.scene.physics.add.collider(liveObject.sprite, obstacle.sprite)
         );
       }
     }
