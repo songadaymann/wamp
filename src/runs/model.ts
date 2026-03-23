@@ -98,6 +98,9 @@ export interface RoomLeaderboardResponse {
   roomCoordinates: RoomCoordinates;
   roomTitle: string | null;
   roomVersion: number;
+  displayRoomVersion: number;
+  equivalentRoomVersions: number[];
+  canonicalRoomVersion: number | null;
   goalType: RoomGoalType;
   rankingMode: LeaderboardRankingMode;
   difficulty: RoomDifficultySummary;
@@ -117,6 +120,8 @@ export interface RoomDiscoveryEntry {
   roomCoordinates: RoomCoordinates;
   roomTitle: string | null;
   roomVersion: number;
+  displayRoomVersion: number;
+  canonicalRoomVersion: number | null;
   goalType: RoomGoalType;
   consensusDifficulty: RoomDifficulty | null;
   voteCount: number;

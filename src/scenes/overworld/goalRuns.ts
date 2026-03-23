@@ -591,6 +591,9 @@ export class OverworldGoalRunController {
               roomCoordinates: { ...this.currentRoomLeaderboard.roomCoordinates },
               roomTitle: this.currentRoomLeaderboard.roomTitle,
               roomVersion: this.currentRoomLeaderboard.roomVersion,
+              displayRoomVersion: this.currentRoomLeaderboard.displayRoomVersion,
+              equivalentRoomVersions: [...this.currentRoomLeaderboard.equivalentRoomVersions],
+              canonicalRoomVersion: this.currentRoomLeaderboard.canonicalRoomVersion,
               goalType: this.currentRoomLeaderboard.goalType,
               rankingMode: this.currentRoomLeaderboard.rankingMode,
               difficulty: {

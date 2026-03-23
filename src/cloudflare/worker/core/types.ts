@@ -72,6 +72,7 @@ export interface RoomRow {
   minted_metadata_room_version: number | null;
   minted_metadata_updated_at: string | null;
   minted_metadata_hash: string | null;
+  canonical_version: number | null;
 }
 
 export interface RoomVersionRow {
@@ -168,6 +169,7 @@ export interface CourseRoomRefRow {
 export interface PersistRoomRecordInput {
   draft: RoomSnapshot;
   published: RoomSnapshot | null;
+  canonicalVersion: number | null;
   claimerUserId: string | null;
   claimerPrincipalType: 'user' | 'agent' | null;
   claimerAgentId: string | null;

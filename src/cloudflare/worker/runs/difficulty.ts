@@ -1,4 +1,10 @@
-import { cloneRoomSnapshot, type RoomSnapshot } from '../../../persistence/roomModel';
+import {
+  cloneRoomSnapshot,
+  createRoomVersionRecord,
+  type RoomSnapshot,
+  type RoomVersionRecord,
+} from '../../../persistence/roomModel';
+import { buildRoomVersionLineage } from '../../../persistence/roomVersionLineage';
 import type {
   RoomDifficulty,
   RoomDifficultyCounts,
@@ -8,11 +14,9 @@ import type {
 } from '../../../runs/model';
 import { normalizeRoomDifficulty, ROOM_DIFFICULTIES } from '../../../runs/model';
 import { HttpError } from '../core/http';
-import type { Env } from '../core/types';
+import type { Env, RoomDifficultyVoteRow, RoomVersionRow } from '../core/types';
 
 interface RoomDifficultyAggregateRow {
-  room_id: string;
-  room_version: number;
   easy_votes: number | string | null;
   medium_votes: number | string | null;
   hard_votes: number | string | null;
@@ -22,6 +26,11 @@ interface RoomDifficultyAggregateRow {
 interface PublishedRoomDiscoveryRow {
   id: string;
   published_json: string;
+  canonical_version: number | null;
+}
+
+interface RoomVersionDiscoveryRow extends RoomVersionRow {
+  room_id: string;
 }
 
 export function createEmptyRoomDifficultyCounts(): RoomDifficultyCounts {
@@ -56,73 +65,46 @@ export function resolveRoomDifficultyConsensus(
 export async function loadRoomDifficultyCounts(
   env: Env,
   roomId: string,
-  roomVersion: number
+  roomVersions: number[]
 ): Promise<RoomDifficultyCounts> {
-  const row = await env.DB.prepare(
-    `
-      SELECT
-        room_id,
-        room_version,
-        SUM(CASE WHEN difficulty = 'easy' THEN 1 ELSE 0 END) AS easy_votes,
-        SUM(CASE WHEN difficulty = 'medium' THEN 1 ELSE 0 END) AS medium_votes,
-        SUM(CASE WHEN difficulty = 'hard' THEN 1 ELSE 0 END) AS hard_votes,
-        SUM(CASE WHEN difficulty = 'extreme' THEN 1 ELSE 0 END) AS extreme_votes
-      FROM room_difficulty_votes
-      WHERE room_id = ?
-        AND room_version = ?
-      GROUP BY room_id, room_version
-    `
-  )
-    .bind(roomId, roomVersion)
-    .first<RoomDifficultyAggregateRow>();
-
-  if (!row) {
-    return createEmptyRoomDifficultyCounts();
-  }
-
-  return mapDifficultyAggregateRow(row);
+  const dedupedVotes = await loadLatestDifficultyVotesByUser(env, roomId, roomVersions);
+  return summarizeDifficultyVotes(dedupedVotes);
 }
 
 export async function loadViewerRoomDifficultyVote(
   env: Env,
   roomId: string,
-  roomVersion: number,
+  roomVersions: number[],
   userId: string
 ): Promise<RoomDifficulty | null> {
-  const row = await env.DB.prepare(
-    `
-      SELECT difficulty
-      FROM room_difficulty_votes
-      WHERE room_id = ?
-        AND room_version = ?
-        AND user_id = ?
-      LIMIT 1
-    `
-  )
-    .bind(roomId, roomVersion, userId)
-    .first<{ difficulty: string | null }>();
-
-  return normalizeRoomDifficulty(row?.difficulty ?? null);
+  const votes = await loadLatestDifficultyVotesByUser(env, roomId, roomVersions);
+  return normalizeRoomDifficulty(
+    votes.find((vote) => vote.user_id === userId)?.difficulty ?? null
+  );
 }
 
 export async function hasViewerRatedRoomVersion(
   env: Env,
   roomId: string,
-  roomVersion: number,
+  roomVersions: number[],
   userId: string
 ): Promise<boolean> {
+  if (roomVersions.length === 0) {
+    return false;
+  }
+
   const row = await env.DB.prepare(
     `
       SELECT 1 AS found
       FROM room_runs
       WHERE room_id = ?
-        AND room_version = ?
+        AND room_version IN (${roomVersions.map(() => '?').join(', ')})
         AND user_id = ?
         AND result != 'active'
       LIMIT 1
     `
   )
-    .bind(roomId, roomVersion, userId)
+    .bind(roomId, ...roomVersions, userId)
     .first<{ found: number | string | null }>();
 
   return Number(row?.found ?? 0) === 1;
@@ -132,18 +114,20 @@ export async function buildRoomDifficultySummary(
   env: Env,
   snapshot: RoomSnapshot,
   viewerUserId: string | null,
-  currentPublishedVersion: number | null
+  currentPublishedVersion: number | null,
+  effectiveRoomVersion: number,
+  equivalentRoomVersions: number[]
 ): Promise<RoomDifficultySummary> {
-  const counts = await loadRoomDifficultyCounts(env, snapshot.id, snapshot.version);
+  const counts = await loadRoomDifficultyCounts(env, snapshot.id, equivalentRoomVersions);
   const viewerSignedIn = viewerUserId !== null;
   const viewerVote =
     viewerUserId === null
       ? null
-      : await loadViewerRoomDifficultyVote(env, snapshot.id, snapshot.version, viewerUserId);
+      : await loadViewerRoomDifficultyVote(env, snapshot.id, equivalentRoomVersions, viewerUserId);
   const viewerCanRateCurrentVersion =
     viewerUserId !== null &&
-    currentPublishedVersion === snapshot.version &&
-    (await hasViewerRatedRoomVersion(env, snapshot.id, snapshot.version, viewerUserId));
+    currentPublishedVersion === effectiveRoomVersion &&
+    (await hasViewerRatedRoomVersion(env, snapshot.id, equivalentRoomVersions, viewerUserId));
 
   return {
     consensus: resolveRoomDifficultyConsensus(counts),
@@ -154,7 +138,7 @@ export async function buildRoomDifficultySummary(
     viewerCanVote: viewerCanRateCurrentVersion,
     viewerNeedsRun:
       viewerUserId !== null &&
-      currentPublishedVersion === snapshot.version &&
+      currentPublishedVersion === effectiveRoomVersion &&
       !viewerCanRateCurrentVersion,
   };
 }
@@ -189,51 +173,6 @@ export async function upsertRoomDifficultyVote(
   ]);
 }
 
-export async function cloneRoomDifficultyVotesToVersion(
-  env: Env,
-  roomId: string,
-  sourceVersion: number,
-  targetVersion: number,
-  now: string
-): Promise<void> {
-  if (
-    !Number.isInteger(sourceVersion) ||
-    !Number.isInteger(targetVersion) ||
-    sourceVersion < 1 ||
-    targetVersion < 1 ||
-    sourceVersion === targetVersion
-  ) {
-    return;
-  }
-
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        INSERT INTO room_difficulty_votes (
-          room_id,
-          room_version,
-          user_id,
-          difficulty,
-          created_at,
-          updated_at,
-          carried_from_version
-        )
-        SELECT
-          ?,
-          ?,
-          user_id,
-          difficulty,
-          ?,
-          ?,
-          ?
-        FROM room_difficulty_votes
-        WHERE room_id = ?
-          AND room_version = ?
-      `
-    ).bind(roomId, targetVersion, now, now, sourceVersion, roomId, sourceVersion),
-  ]);
-}
-
 export async function loadRoomDiscoveryResponse(
   env: Env,
   difficultyFilter: RoomDifficulty | null,
@@ -241,15 +180,18 @@ export async function loadRoomDiscoveryResponse(
 ): Promise<RoomDiscoveryResponse> {
   const publishedRooms = await env.DB.prepare(
     `
-      SELECT id, published_json
+      SELECT id, published_json, canonical_version
       FROM rooms
       WHERE published_json IS NOT NULL
     `
   ).all<PublishedRoomDiscoveryRow>();
 
   const challengeSnapshots = publishedRooms.results
-    .map((row) => parseStoredSnapshot(row.published_json))
-    .filter((snapshot) => snapshot.goal !== null);
+    .map((row) => ({
+      snapshot: parseStoredSnapshot(row.published_json),
+      canonicalVersion: row.canonical_version,
+    }))
+    .filter((entry) => entry.snapshot.goal !== null);
 
   if (challengeSnapshots.length === 0) {
     return {
@@ -258,38 +200,93 @@ export async function loadRoomDiscoveryResponse(
     };
   }
 
-  const roomIds = challengeSnapshots.map((snapshot) => snapshot.id);
-  const aggregates = await env.DB.prepare(
+  const roomIds = challengeSnapshots.map((entry) => entry.snapshot.id);
+  const versionRows = await env.DB.prepare(
+    `
+      SELECT
+        room_id,
+        version,
+        snapshot_json,
+        title,
+        created_at,
+        published_by_user_id,
+        published_by_principal_type,
+        published_by_agent_id,
+        published_by_display_name,
+        reverted_from_version
+      FROM room_versions
+      WHERE room_id IN (${roomIds.map(() => '?').join(', ')})
+      ORDER BY room_id ASC, version ASC
+    `
+  )
+    .bind(...roomIds)
+    .all<RoomVersionDiscoveryRow>();
+
+  const versionsByRoomId = new Map<string, RoomVersionRecord[]>();
+  for (const row of versionRows.results) {
+    const snapshot = parseStoredSnapshot(row.snapshot_json);
+    const version = createRoomVersionRecord(snapshot, {
+      version: row.version,
+      createdAt: row.created_at,
+      publishedByUserId: row.published_by_user_id,
+      publishedByPrincipalKind: row.published_by_principal_type,
+      publishedByAgentId: row.published_by_agent_id,
+      publishedByDisplayName: row.published_by_display_name,
+      revertedFromVersion: row.reverted_from_version,
+    });
+    const bucket = versionsByRoomId.get(row.room_id);
+    if (bucket) {
+      bucket.push(version);
+    } else {
+      versionsByRoomId.set(row.room_id, [version]);
+    }
+  }
+
+  const voteRows = await env.DB.prepare(
     `
       SELECT
         room_id,
         room_version,
-        SUM(CASE WHEN difficulty = 'easy' THEN 1 ELSE 0 END) AS easy_votes,
-        SUM(CASE WHEN difficulty = 'medium' THEN 1 ELSE 0 END) AS medium_votes,
-        SUM(CASE WHEN difficulty = 'hard' THEN 1 ELSE 0 END) AS hard_votes,
-        SUM(CASE WHEN difficulty = 'extreme' THEN 1 ELSE 0 END) AS extreme_votes
+        user_id,
+        difficulty,
+        created_at,
+        updated_at,
+        carried_from_version
       FROM room_difficulty_votes
       WHERE room_id IN (${roomIds.map(() => '?').join(', ')})
-      GROUP BY room_id, room_version
     `
   )
     .bind(...roomIds)
-    .all<RoomDifficultyAggregateRow>();
+    .all<RoomDifficultyVoteRow>();
 
-  const aggregateByVersion = new Map<string, RoomDifficultyCounts>();
-  for (const row of aggregates.results) {
-    aggregateByVersion.set(`${row.room_id}:${row.room_version}`, mapDifficultyAggregateRow(row));
+  const votesByRoomId = new Map<string, RoomDifficultyVoteRow[]>();
+  for (const row of voteRows.results) {
+    const bucket = votesByRoomId.get(row.room_id);
+    if (bucket) {
+      bucket.push(row);
+    } else {
+      votesByRoomId.set(row.room_id, [row]);
+    }
   }
 
   const results = challengeSnapshots
-    .map<RoomDiscoveryEntry>((snapshot) => {
-      const counts =
-        aggregateByVersion.get(`${snapshot.id}:${snapshot.version}`) ?? createEmptyRoomDifficultyCounts();
+    .map<RoomDiscoveryEntry>(({ snapshot, canonicalVersion }) => {
+      const versions = versionsByRoomId.get(snapshot.id) ?? [createRoomVersionRecord(snapshot)];
+      const lineage = buildRoomVersionLineage(versions, canonicalVersion, snapshot.version);
+      const lineageEntry = lineage.byVersion.get(snapshot.version) ?? null;
+      const equivalentRoomVersions = lineageEntry?.equivalentVersions ?? [snapshot.version];
+      const votes = (votesByRoomId.get(snapshot.id) ?? []).filter((vote) =>
+        equivalentRoomVersions.includes(vote.room_version)
+      );
+      const counts = summarizeDifficultyVotes(dedupeLatestDifficultyVotesByUser(votes));
+
       return {
         roomId: snapshot.id,
         roomCoordinates: { ...snapshot.coordinates },
         roomTitle: snapshot.title,
         roomVersion: snapshot.version,
+        displayRoomVersion: lineageEntry?.representativeVersion ?? snapshot.version,
+        canonicalRoomVersion: canonicalVersion,
         goalType: snapshot.goal!.type,
         consensusDifficulty: resolveRoomDifficultyConsensus(counts),
         voteCount: getRoomDifficultyVoteTotal(counts),
@@ -323,13 +320,70 @@ export function parseRoomDifficultyOrThrow(value: unknown): RoomDifficulty {
   return normalized;
 }
 
-function mapDifficultyAggregateRow(row: RoomDifficultyAggregateRow): RoomDifficultyCounts {
-  return {
-    easy: Number(row.easy_votes ?? 0),
-    medium: Number(row.medium_votes ?? 0),
-    hard: Number(row.hard_votes ?? 0),
-    extreme: Number(row.extreme_votes ?? 0),
-  };
+async function loadLatestDifficultyVotesByUser(
+  env: Env,
+  roomId: string,
+  roomVersions: number[]
+): Promise<RoomDifficultyVoteRow[]> {
+  if (roomVersions.length === 0) {
+    return [];
+  }
+
+  const result = await env.DB.prepare(
+    `
+      SELECT
+        room_id,
+        room_version,
+        user_id,
+        difficulty,
+        created_at,
+        updated_at,
+        carried_from_version
+      FROM room_difficulty_votes
+      WHERE room_id = ?
+        AND room_version IN (${roomVersions.map(() => '?').join(', ')})
+    `
+  )
+    .bind(roomId, ...roomVersions)
+    .all<RoomDifficultyVoteRow>();
+
+  return dedupeLatestDifficultyVotesByUser(result.results);
+}
+
+function dedupeLatestDifficultyVotesByUser(rows: RoomDifficultyVoteRow[]): RoomDifficultyVoteRow[] {
+  const latestByUser = new Map<string, RoomDifficultyVoteRow>();
+
+  for (const row of rows) {
+    const existing = latestByUser.get(row.user_id);
+    if (!existing) {
+      latestByUser.set(row.user_id, row);
+      continue;
+    }
+
+    const existingUpdatedAt = Date.parse(existing.updated_at);
+    const nextUpdatedAt = Date.parse(row.updated_at);
+    if (
+      nextUpdatedAt > existingUpdatedAt ||
+      (nextUpdatedAt === existingUpdatedAt && row.room_version > existing.room_version)
+    ) {
+      latestByUser.set(row.user_id, row);
+    }
+  }
+
+  return Array.from(latestByUser.values());
+}
+
+function summarizeDifficultyVotes(rows: RoomDifficultyVoteRow[]): RoomDifficultyCounts {
+  const counts = createEmptyRoomDifficultyCounts();
+  for (const row of rows) {
+    const difficulty = normalizeRoomDifficulty(row.difficulty);
+    if (!difficulty) {
+      continue;
+    }
+
+    counts[difficulty] += 1;
+  }
+  return counts;
 }
 
 function parseStoredSnapshot(raw: string): RoomSnapshot {

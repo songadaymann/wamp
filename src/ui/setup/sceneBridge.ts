@@ -12,6 +12,7 @@ export type EditorHistoryState = {
   canPublish: boolean;
   canMint: boolean;
   canRefreshMintMetadata: boolean;
+  canonicalVersion: number | null;
   mintedTokenId: string | null;
   mintedOwnerWalletAddress: string | null;
   mintedMetadataRoomVersion: number | null;
@@ -57,6 +58,7 @@ export type EditorCourseUiState = {
 export interface EditorSceneBridge {
   getHistoryState?: () => EditorHistoryState;
   revertToVersion?: (targetVersion: number) => Promise<RoomRecord | null>;
+  setCanonicalVersion?: (targetVersion: number) => Promise<RoomRecord | null>;
   startPlayMode?: () => Promise<void> | void;
   saveDraft?: (
     force?: boolean,

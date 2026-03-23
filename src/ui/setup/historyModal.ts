@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { buildRoomVersionLineage } from '../../persistence/roomVersionLineage';
 import { getActiveEditorScene, type EditorHistoryState } from './sceneBridge';
 
 const HISTORY_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
@@ -15,6 +16,7 @@ type HistoryModalElements = {
   list: HTMLElement | null;
   error: HTMLElement | null;
   refreshMetadataButton: HTMLButtonElement | null;
+  restoreCanonicalButton: HTMLButtonElement | null;
   closeButton: HTMLElement | null;
   status: HTMLElement | null;
 };
@@ -22,6 +24,8 @@ type HistoryModalElements = {
 export class RoomHistoryModalController {
   private readonly elements: HistoryModalElements;
   private activeTargetVersion: number | null = null;
+  private activeCanonicalVersion: number | null = null;
+  private metadataRefreshInFlight = false;
 
   private readonly handleCloseClick = () => {
     this.close();
@@ -55,12 +59,12 @@ export class RoomHistoryModalController {
       return;
     }
 
-    this.activeTargetVersion = -1;
+    this.metadataRefreshInFlight = true;
     this.setError(null);
     await this.render();
 
     const result = await editorScene.refreshMintMetadata();
-    this.activeTargetVersion = null;
+    this.metadataRefreshInFlight = false;
 
     if (!result) {
       const statusMessage = this.getEditorStatusText() || 'NFT metadata refresh failed.';
@@ -71,6 +75,16 @@ export class RoomHistoryModalController {
 
     this.setError(null);
     await this.render();
+  };
+
+  private readonly handleRestoreCanonicalClick = async () => {
+    const editorScene = getActiveEditorScene(this.game);
+    const canonicalVersion = editorScene?.getHistoryState?.().canonicalVersion ?? null;
+    if (!editorScene?.revertToVersion || canonicalVersion === null) {
+      return;
+    }
+
+    await this.handleRevert(canonicalVersion);
   };
 
   constructor(
@@ -84,6 +98,7 @@ export class RoomHistoryModalController {
       list: this.doc.getElementById('room-history-list'),
       error: this.doc.getElementById('room-history-error'),
       refreshMetadataButton: this.doc.getElementById('btn-room-history-refresh-metadata') as HTMLButtonElement | null,
+      restoreCanonicalButton: this.doc.getElementById('btn-room-history-restore-canonical') as HTMLButtonElement | null,
       closeButton: this.doc.getElementById('btn-room-history-close'),
       status: this.doc.getElementById('room-save-status'),
     };
@@ -91,6 +106,7 @@ export class RoomHistoryModalController {
 
   init(): void {
     this.elements.refreshMetadataButton?.addEventListener('click', this.handleRefreshMetadataClick);
+    this.elements.restoreCanonicalButton?.addEventListener('click', this.handleRestoreCanonicalClick);
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
@@ -99,6 +115,7 @@ export class RoomHistoryModalController {
 
   destroy(): void {
     this.elements.refreshMetadataButton?.removeEventListener('click', this.handleRefreshMetadataClick);
+    this.elements.restoreCanonicalButton?.removeEventListener('click', this.handleRestoreCanonicalClick);
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
@@ -115,6 +132,8 @@ export class RoomHistoryModalController {
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
     this.activeTargetVersion = null;
+    this.activeCanonicalVersion = null;
+    this.metadataRefreshInFlight = false;
     this.setError(null);
     await this.render();
   }
@@ -125,6 +144,8 @@ export class RoomHistoryModalController {
     }
 
     this.activeTargetVersion = null;
+    this.activeCanonicalVersion = null;
+    this.metadataRefreshInFlight = false;
     this.setError(null);
     this.elements.list.replaceChildren();
     this.elements.modal.classList.add('hidden');
@@ -188,6 +209,31 @@ export class RoomHistoryModalController {
     await this.render();
   }
 
+  private async handleSetCanonical(targetVersion: number): Promise<void> {
+    const editorScene = getActiveEditorScene(this.game);
+    if (!editorScene?.setCanonicalVersion) {
+      return;
+    }
+
+    this.activeCanonicalVersion = targetVersion;
+    this.setError(null);
+    await this.render();
+
+    const result = await editorScene.setCanonicalVersion(targetVersion);
+    this.activeCanonicalVersion = null;
+
+    if (!result) {
+      const statusMessage =
+        this.getEditorStatusText() || `Setting canonical version to v${targetVersion} failed.`;
+      this.setError(statusMessage);
+      await this.render();
+      return;
+    }
+
+    this.setError(null);
+    await this.render();
+  }
+
   private renderMeta(state: EditorHistoryState): void {
     if (!this.elements.meta) {
       return;
@@ -209,6 +255,14 @@ export class RoomHistoryModalController {
 
     if (!state.canPublish) {
       metaParts.push('Minted lock active');
+    }
+
+    const latestVersion = state.versions.reduce((max, version) => Math.max(max, version.version), 0);
+    const lineage = buildRoomVersionLineage(state.versions, state.canonicalVersion, latestVersion || null);
+    if (state.canonicalVersion !== null) {
+      metaParts.push(
+        `Canonical v${lineage.canonicalRepresentativeVersion ?? state.canonicalVersion}`
+      );
     }
 
     if (state.mintedTokenId) {
@@ -247,6 +301,7 @@ export class RoomHistoryModalController {
     state: EditorHistoryState,
     latestVersion: number,
     version: EditorHistoryState['versions'][number],
+    lineage: ReturnType<typeof buildRoomVersionLineage>,
   ): HTMLElement {
     const row = this.doc.createElement('div');
     row.className = 'history-version-row';
@@ -261,11 +316,26 @@ export class RoomHistoryModalController {
     label.className = 'history-version-label';
     label.textContent = `v${version.version}`;
     titleLine.appendChild(label);
+    const lineageEntry = lineage.byVersion.get(version.version) ?? null;
 
     if (version.version === latestVersion) {
       const badge = this.doc.createElement('span');
       badge.className = 'history-version-badge';
       badge.textContent = 'Latest';
+      titleLine.appendChild(badge);
+    }
+
+    if (lineageEntry?.isCanonical) {
+      const badge = this.doc.createElement('span');
+      badge.className = 'history-version-badge';
+      badge.textContent = 'Canonical';
+      titleLine.appendChild(badge);
+    }
+
+    if (lineageEntry && lineageEntry.sameAsVersion !== null) {
+      const badge = this.doc.createElement('span');
+      badge.className = 'history-version-badge';
+      badge.textContent = `Same as v${lineageEntry.sameAsVersion}`;
       titleLine.appendChild(badge);
     }
 
@@ -288,16 +358,35 @@ export class RoomHistoryModalController {
     copy.appendChild(metaLine);
     row.appendChild(copy);
 
+    const actions = this.doc.createElement('div');
+    actions.className = 'history-version-actions';
+
     if (state.canRevert && version.version < latestVersion) {
       const button = this.doc.createElement('button');
       button.className = 'bar-btn bar-btn-small';
       button.textContent =
         this.activeTargetVersion === version.version ? 'Reverting...' : 'Revert';
-      button.disabled = this.activeTargetVersion !== null;
+      button.disabled = this.hasPendingAction();
       button.addEventListener('click', () => {
         void this.handleRevert(version.version);
       });
-      row.appendChild(button);
+      actions.appendChild(button);
+    }
+
+    if (state.canRevert && state.canonicalVersion !== version.version) {
+      const button = this.doc.createElement('button');
+      button.className = 'bar-btn bar-btn-small';
+      button.textContent =
+        this.activeCanonicalVersion === version.version ? 'Saving...' : 'Mark Canonical';
+      button.disabled = this.hasPendingAction();
+      button.addEventListener('click', () => {
+        void this.handleSetCanonical(version.version);
+      });
+      actions.appendChild(button);
+    }
+
+    if (actions.childElementCount > 0) {
+      row.appendChild(actions);
     }
 
     return row;
@@ -324,20 +413,32 @@ export class RoomHistoryModalController {
       (max, version) => Math.max(max, version.version),
       0,
     );
+    const lineage = buildRoomVersionLineage(state.versions, state.canonicalVersion, latestVersion || null);
     const versionsNewestFirst = [...state.versions].sort((a, b) => b.version - a.version);
 
     this.renderMeta(state);
     if (this.elements.refreshMetadataButton) {
-      const refreshing = this.activeTargetVersion === -1;
+      const refreshing = this.metadataRefreshInFlight;
       this.elements.refreshMetadataButton.classList.toggle(
         'hidden',
         !state.canRefreshMintMetadata,
       );
-      this.elements.refreshMetadataButton.disabled =
-        refreshing || this.activeTargetVersion !== null;
+      this.elements.refreshMetadataButton.disabled = this.hasPendingAction();
       this.elements.refreshMetadataButton.textContent = refreshing
         ? 'Refreshing...'
         : 'Refresh NFT Metadata';
+    }
+    if (this.elements.restoreCanonicalButton) {
+      const canonicalCurrent =
+        state.canonicalVersion !== null &&
+        (lineage.byVersion.get(latestVersion)?.inCanonicalGroup ?? false);
+      const showRestore = state.canRevert && state.canonicalVersion !== null && !canonicalCurrent;
+      this.elements.restoreCanonicalButton.classList.toggle('hidden', !showRestore);
+      this.elements.restoreCanonicalButton.disabled = this.hasPendingAction();
+      this.elements.restoreCanonicalButton.textContent =
+        state.canonicalVersion !== null && lineage.canonicalRepresentativeVersion !== null
+          ? `Restore Canonical (v${lineage.canonicalRepresentativeVersion})`
+          : 'Restore Canonical';
     }
     this.elements.list.replaceChildren();
 
@@ -347,7 +448,15 @@ export class RoomHistoryModalController {
     }
 
     for (const version of versionsNewestFirst) {
-      this.elements.list.appendChild(this.renderVersionRow(state, latestVersion, version));
+      this.elements.list.appendChild(this.renderVersionRow(state, latestVersion, version, lineage));
     }
+  }
+
+  private hasPendingAction(): boolean {
+    return (
+      this.activeTargetVersion !== null ||
+      this.activeCanonicalVersion !== null ||
+      this.metadataRefreshInFlight
+    );
   }
 }

@@ -50,6 +50,7 @@ import {
   parseRoomDifficultyOrThrow,
   upsertRoomDifficultyVote,
 } from './difficulty';
+import { resolveAggregatedRoomVersionSelection, type AggregatedRoomVersionSelection } from './roomVersionAggregation';
 
 export async function handleRunStart(request: Request, env: Env): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
@@ -272,14 +273,8 @@ export async function handleRoomLeaderboard(
     auth?.user.id ?? null,
     auth?.user.walletAddress ?? null
   );
-  const snapshot =
-    version === null
-      ? record.published
-      : resolveRoomSnapshotForVersion(record, version);
-
-  if (!snapshot) {
-    throw new HttpError(404, 'Published room version not found.');
-  }
+  const selection = resolveAggregatedRoomVersionSelection(record, version);
+  const snapshot = selection.snapshot;
 
   if (!snapshot.goal) {
     throw new HttpError(404, 'This room version does not have a leaderboard goal.');
@@ -287,10 +282,9 @@ export async function handleRoomLeaderboard(
 
   const leaderboard = await buildRoomLeaderboardResponse(
     env,
-    snapshot,
+    selection,
     limit,
-    auth?.user.id ?? null,
-    record.published?.version ?? null
+    auth?.user.id ?? null
   );
   return jsonResponse(request, leaderboard);
 }
@@ -315,12 +309,13 @@ export async function handleRoomDifficultyVote(
     auth.user.walletAddress ?? null,
     auth.isAdmin
   );
+  const selection = resolveAggregatedRoomVersionSelection(record, body.roomVersion);
 
-  if (!record.published || record.published.version !== body.roomVersion) {
+  if (!record.published || record.published.version !== selection.roomVersion) {
     throw new HttpError(409, 'Difficulty voting is only available on the current published version.');
   }
 
-  const snapshot = resolveRoomSnapshotForVersion(record, body.roomVersion);
+  const snapshot = selection.snapshot;
   if (!snapshot.goal) {
     throw new HttpError(409, 'Only published challenge rooms can receive difficulty votes.');
   }
@@ -328,7 +323,7 @@ export async function handleRoomDifficultyVote(
   const hasPlayedVersion = await hasViewerRatedRoomVersion(
     env,
     snapshot.id,
-    snapshot.version,
+    selection.equivalentRoomVersions,
     auth.user.id
   );
   if (!hasPlayedVersion) {
@@ -339,7 +334,7 @@ export async function handleRoomDifficultyVote(
   await upsertRoomDifficultyVote(
     env,
     snapshot.id,
-    snapshot.version,
+    selection.roomVersion,
     auth.user.id,
     body.difficulty,
     now
@@ -583,6 +578,48 @@ export async function loadCompletedRoomRuns(
   return result.results.map(mapRoomRunRow);
 }
 
+export async function loadCompletedRoomRunsForVersions(
+  env: Env,
+  roomId: string,
+  roomVersions: number[]
+): Promise<RoomRunRecord[]> {
+  if (roomVersions.length === 0) {
+    return [];
+  }
+
+  const result = await env.DB.prepare(
+    `
+      SELECT
+        attempt_id,
+        room_id,
+        room_x,
+        room_y,
+        room_version,
+        goal_type,
+        goal_json,
+        user_id,
+        user_display_name,
+        started_at,
+        finished_at,
+        result,
+        elapsed_ms,
+        deaths,
+        score,
+        collectibles_collected,
+        enemies_defeated,
+        checkpoints_reached
+      FROM room_runs
+      WHERE room_id = ?
+        AND room_version IN (${roomVersions.map(() => '?').join(', ')})
+        AND result = 'completed'
+    `
+  )
+    .bind(roomId, ...roomVersions)
+    .all<RoomRunRow>();
+
+  return result.results.map(mapRoomRunRow);
+}
+
 export function mapRoomRunRow(row: RoomRunRow): RoomRunRecord {
   return {
     attemptId: row.attempt_id,
@@ -622,16 +659,20 @@ export function parseStoredGoal(raw: string, label: string): RoomGoal {
 
 export async function buildRoomLeaderboardResponse(
   env: Env,
-  snapshot: RoomSnapshot,
+  selection: AggregatedRoomVersionSelection,
   limit: number,
-  viewerUserId: string | null = null,
-  currentPublishedVersion: number | null = null
+  viewerUserId: string | null = null
 ): Promise<RoomLeaderboardResponse> {
+  const snapshot = selection.snapshot;
   if (!snapshot.goal) {
     throw new HttpError(404, 'This room version does not have a leaderboard goal.');
   }
 
-  const runs = await loadCompletedRoomRuns(env, snapshot.id, snapshot.version);
+  const runs = await loadCompletedRoomRunsForVersions(
+    env,
+    snapshot.id,
+    selection.equivalentRoomVersions
+  );
   const sortedAll = sortCompletedRunsForLeaderboard(runs, snapshot.goal);
   const viewerBestRun =
     viewerUserId === null
@@ -646,7 +687,9 @@ export async function buildRoomLeaderboardResponse(
     env,
     snapshot,
     viewerUserId,
-    currentPublishedVersion
+    selection.currentPublishedVersion,
+    selection.roomVersion,
+    selection.equivalentRoomVersions
   );
   const entries: RoomLeaderboardEntry[] = sorted.map((run, index) => ({
     rank: index + 1,
@@ -666,7 +709,10 @@ export async function buildRoomLeaderboardResponse(
     roomId: snapshot.id,
     roomCoordinates: { ...snapshot.coordinates },
     roomTitle: snapshot.title,
-    roomVersion: snapshot.version,
+    roomVersion: selection.roomVersion,
+    displayRoomVersion: selection.displayRoomVersion,
+    equivalentRoomVersions: [...selection.equivalentRoomVersions],
+    canonicalRoomVersion: selection.canonicalRoomVersion,
     goalType: snapshot.goal.type,
     rankingMode: getLeaderboardRankingMode(snapshot.goal),
     difficulty,

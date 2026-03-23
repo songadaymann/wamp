@@ -1,5 +1,5 @@
 import { handleAdminRequest } from './worker/admin/routes';
-import type { RoomRevertRequestBody } from '../persistence/roomModel';
+import type { RoomCanonicalVersionRequestBody, RoomRevertRequestBody } from '../persistence/roomModel';
 import { handleAuthRequest } from './worker/auth/routes';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth, requireOptionalScope } from './worker/auth/request';
 import { handleAgentRequest } from './worker/agents/routes';
@@ -57,6 +57,7 @@ import {
   publishRoom,
   revertRoom,
   saveDraft,
+  setCanonicalRoomVersion,
   type RoomMutationActor,
 } from './worker/rooms/store';
 import {
@@ -389,6 +390,26 @@ export default {
         );
         await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
         await upsertUserStats(env, auth.user.id);
+        return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
+      }
+
+      if (segments.length === 4 && segments[3] === 'canonical' && request.method === 'POST') {
+        const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
+        const body = await parseJsonBody<RoomCanonicalVersionRequestBody>(request);
+        const auth = await requireAuthenticatedRequestAuth(
+          env,
+          request,
+          'set room canonical version',
+          'rooms:write'
+        );
+        const record = await setCanonicalRoomVersion(
+          env,
+          roomId,
+          coordinates,
+          body.targetVersion,
+          buildRoomMutationActor(auth),
+          auth.isAdmin
+        );
         return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
       }
 
