@@ -277,6 +277,30 @@ export class OverworldPresenceController {
     return this.roomEditorsById.get(roomIdFromCoordinates(coordinates)) ?? 0;
   }
 
+  getRoomEditorDisplayNames(coordinates: RoomCoordinates): string[] {
+    if (!this.snapshot?.enabled) {
+      return [];
+    }
+
+    const roomId = roomIdFromCoordinates(coordinates);
+    const names = new Set<string>();
+
+    for (const ghost of this.snapshot.ghosts ?? []) {
+      if (
+        ghost.mode !== 'edit' ||
+        ghost.roomId !== roomId ||
+        !this.isPresenceFresh(ghost.timestamp) ||
+        !ghost.displayName.trim()
+      ) {
+        continue;
+      }
+
+      names.add(ghost.displayName.trim());
+    }
+
+    return [...names].sort((left, right) => left.localeCompare(right));
+  }
+
   getTotalPlayerCount(): number | null {
     if (!this.snapshot?.enabled) {
       return null;

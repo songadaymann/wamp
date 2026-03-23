@@ -2253,6 +2253,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.presenceController.getRoomEditorCount(coordinates);
   }
 
+  private getRoomEditorDisplayNames(coordinates: RoomCoordinates): string[] {
+    return this.presenceController.getRoomEditorDisplayNames(coordinates);
+  }
+
   private destroyEdgeWalls(loadedRoom: SceneLoadedFullRoom): void {
     for (const wall of loadedRoom.edgeWalls) {
       wall.collider.destroy();
@@ -6113,6 +6117,23 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.syncGoalOverlayScale();
   }
 
+  private formatRoomEditorSummary(coordinates: RoomCoordinates): string | null {
+    const names = this.getRoomEditorDisplayNames(coordinates);
+    if (names.length === 0) {
+      return null;
+    }
+
+    if (names.length === 1) {
+      return `${names[0]} building`;
+    }
+
+    if (names.length === 2) {
+      return `${names[0]} + ${names[1]} building`;
+    }
+
+    return `${names[0]} + ${names.length - 1} others building`;
+  }
+
   private buildHudViewModel(statusOverride?: string): OverworldHudViewModel {
     const selectedState = this.getCellStateAt(this.selectedCoordinates);
     const selectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
@@ -6120,6 +6141,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     const selectedDraft = this.draftRoomsById.get(selectedRoomId) ?? null;
     const selectedPopulation = this.getRoomPopulation(this.selectedCoordinates);
     const selectedEditorCount = this.getRoomEditorCount(this.selectedCoordinates);
+    const selectedEditorSummary = this.formatRoomEditorSummary(this.selectedCoordinates);
     const selectedCourse = this.getSelectedCourseContext();
     const transientStatus = this.getTransientStatusMessage();
     const totalPlayerCount = this.presenceController.getTotalPlayerCount();
@@ -6191,7 +6213,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         metaParts.push(`${selectedPopulation} here`);
       }
       if (selectedEditorCount > 0) {
-        metaParts.push(`${selectedEditorCount} building`);
+        metaParts.push(selectedEditorSummary ?? `${selectedEditorCount} building`);
       }
       selectedMetaText = metaParts.join(' · ');
     } else if (selectedState === 'draft' && selectedDraft) {
@@ -6222,13 +6244,19 @@ export class OverworldPlayScene extends Phaser.Scene {
       } else {
         selectedMetaText =
           selectedEditorCount > 0
-            ? `Building in progress · ${selectedEditorCount} ${selectedEditorCount === 1 ? 'builder' : 'builders'} here`
+            ? `Building in progress · ${
+              selectedEditorSummary
+              ?? `${selectedEditorCount} ${selectedEditorCount === 1 ? 'builder' : 'builders'} here`
+            }`
             : 'Build a room here';
         selectedMetaTone = 'frontier';
       }
     } else if (selectedState === 'empty') {
       if (selectedEditorCount > 0) {
-        selectedMetaText = `Building in progress · ${selectedEditorCount} ${selectedEditorCount === 1 ? 'builder' : 'builders'} here`;
+        selectedMetaText = `Building in progress · ${
+          selectedEditorSummary
+          ?? `${selectedEditorCount} ${selectedEditorCount === 1 ? 'builder' : 'builders'} here`
+        }`;
         selectedMetaTone = 'frontier';
       } else {
         selectedMetaText = 'You can only build next to an existing published room';
