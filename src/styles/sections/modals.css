@@ -537,9 +537,13 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
 }
 
 .profile-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .profile-hero {
@@ -663,6 +667,19 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
 
 .profile-tabs {
   padding: 0;
+}
+
+.profile-modal-panel .leaderboard-panel {
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
+  padding: 0;
+}
+
+.profile-modal-panel .history-version-list {
+  flex: 0 0 auto;
+  min-height: auto;
+  max-height: none;
 }
 
 .profile-room-row {
