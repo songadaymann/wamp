@@ -6567,6 +6567,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         visibleRoomCount: streamingMetrics.visibleRoomCount,
         previewRoomBudget: streamingMetrics.previewRoomBudget,
         fullRoomBudget: streamingMetrics.fullRoomBudget,
+        protectedVisiblePreviewRoomCount: streamingMetrics.protectedVisiblePreviewRoomCount,
         loadedPreviewRoomCount: streamingMetrics.loadedPreviewRoomCount,
         loadedFullRoomCount: streamingMetrics.loadedFullRoomCount,
       },
