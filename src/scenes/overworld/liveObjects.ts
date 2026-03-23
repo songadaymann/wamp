@@ -1250,7 +1250,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       (liveObject.sprite.x >= bounds.right && liveObject.runtime.directionX > 0);
     const onFloor = body.blocked.down || body.touching.down;
     const missingGroundAhead =
-      onFloor && !this.hasSolidTerrainAhead(room, body, liveObject.runtime.directionX);
+      onFloor &&
+      this.groundEnemyAvoidsEdges(liveObject.config.id) &&
+      !this.hasSolidTerrainAhead(room, body, liveObject.runtime.directionX);
 
     if (touchingWall || reachedBounds || missingGroundAhead) {
       liveObject.runtime.directionX *= -1;
@@ -1327,6 +1329,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     const localPixelY = worldY - roomOrigin.y - localY * TILE_SIZE;
     return terrainTileCollidesAtLocalPixel(room, localX, localY, localPixelY);
+  }
+
+  private groundEnemyAvoidsEdges(objectId: string): boolean {
+    return objectId !== 'penguin';
   }
 
   private getObjectHorizontalTravelBounds(
