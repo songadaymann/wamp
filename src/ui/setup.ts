@@ -13,6 +13,7 @@ import { setupKeyboardShortcutPassthrough } from './setup/keyboardPassthrough';
 import { LeaderboardModalController } from './setup/leaderboardModal';
 import { InstallHelpController } from './setup/installHelp';
 import { PaletteController } from './setup/paletteController';
+import { ProfileModalController } from './setup/profileModal';
 import { setupCollapsibleSidebarSections } from './setup/sidebarSections';
 import { setupSceneCommands } from './setup/sceneCommands';
 
@@ -26,6 +27,7 @@ export function setupUI(game: Phaser.Game): void {
   const aboutModal = new AboutModalController();
   const chatModerationModal = new ChatModerationModalController();
   const courseModal = new CourseModalController(game);
+  const profileModal = new ProfileModalController(game);
   const chatPanel = new ChatPanelController();
   const mobileUi = new MobileUiController(game);
 
@@ -39,6 +41,7 @@ export function setupUI(game: Phaser.Game): void {
   aboutModal.init();
   chatModerationModal.init();
   courseModal.init();
+  profileModal.init();
   chatPanel.init();
   mobileUi.init();
   setupSceneCommands(

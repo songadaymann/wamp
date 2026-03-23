@@ -12,6 +12,7 @@ import type { ChatModerationViewer } from '../chat/model';
 import { clearLocalRoomStorage } from '../persistence/browserStorage';
 import { getApiBaseUrl } from '../api/baseUrl';
 import { appendPlayfunRequestHeaders } from '../playfun/state';
+import { isOpenableProfileUserId, requestProfileOpen } from '../ui/setup/profileEvents';
 import type {
   PreparedWalletTransaction,
   RoomMintChainInfo,
@@ -141,6 +142,21 @@ export async function setupAuthUi(): Promise<void> {
     if (authPanel && authPanel.classList.contains('menu-open') && !authPanel.contains(e.target as Node)) {
       authPanel.classList.remove('menu-open');
     }
+  });
+  authIdentity?.addEventListener('click', () => {
+    if (!isOpenableProfileUserId(state.user?.id)) {
+      return;
+    }
+
+    requestProfileOpen(state.user.id);
+  });
+  authIdentity?.addEventListener('keydown', (event) => {
+    if ((event.key !== 'Enter' && event.key !== ' ') || !isOpenableProfileUserId(state.user?.id)) {
+      return;
+    }
+
+    event.preventDefault();
+    requestProfileOpen(state.user.id);
   });
 
   authEmailButton?.addEventListener('click', () => {
@@ -747,6 +763,17 @@ function renderAuthUi(): void {
     authIdentity.textContent = state.authenticated
       ? buildIdentityText(state.user)
       : 'Guest';
+    const canOpenProfile = isOpenableProfileUserId(state.user?.id);
+    authIdentity.classList.toggle('profile-trigger', canOpenProfile);
+    authIdentity.classList.toggle('auth-identity-clickable', canOpenProfile);
+    if (canOpenProfile) {
+      authIdentity.setAttribute('role', 'button');
+      authIdentity.setAttribute('tabindex', '0');
+    } else {
+      authIdentity.removeAttribute('role');
+      authIdentity.setAttribute('tabindex', '-1');
+    }
+    authIdentity.setAttribute('aria-label', canOpenProfile ? 'Open profile' : 'Account identity');
   }
 
   if (authStatus) {

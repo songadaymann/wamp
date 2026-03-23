@@ -21,6 +21,7 @@ import type {
   CourseLeaderboardResponse,
 } from '../../courses/runModel';
 import { getActiveOverworldScene, type OverworldSelectedRoomContext } from './sceneBridge';
+import { createProfileTriggerElement } from './profileEvents';
 
 type LeaderboardTab = 'room' | 'discover' | 'course' | 'global';
 
@@ -628,11 +629,15 @@ export class LeaderboardModalController {
     row.className = 'history-version-row leaderboard-row';
 
     row.appendChild(this.createCell('leaderboard-rank', `#${entry.rank}`));
-
-    const playerCell = this.doc.createElement('div');
-    playerCell.className = 'leaderboard-primary';
-    playerCell.textContent = entry.userDisplayName;
-    row.appendChild(playerCell);
+    row.appendChild(
+      createProfileTriggerElement(
+        this.doc,
+        entry.userId,
+        entry.userDisplayName,
+        'leaderboard-primary',
+        'div'
+      )
+    );
 
     row.appendChild(this.createCell('leaderboard-primary', this.formatRoomMetric(entry, rankingMode)));
     row.appendChild(this.createCell('leaderboard-secondary', `${entry.deaths} deaths`));
@@ -645,7 +650,15 @@ export class LeaderboardModalController {
     row.className = 'history-version-row leaderboard-row leaderboard-global-row';
 
     row.appendChild(this.createCell('leaderboard-rank', `#${entry.rank}`));
-    row.appendChild(this.createCell('leaderboard-primary', entry.userDisplayName));
+    row.appendChild(
+      createProfileTriggerElement(
+        this.doc,
+        entry.userId,
+        entry.userDisplayName,
+        'leaderboard-primary',
+        'div'
+      )
+    );
     row.appendChild(this.createCell('leaderboard-primary', `${entry.totalPoints} pts`));
     row.appendChild(this.createCell('leaderboard-secondary', `${entry.completedRuns} clears`));
     row.appendChild(this.createCell('leaderboard-secondary', `${entry.totalRoomsPublished} rooms`));
@@ -687,7 +700,15 @@ export class LeaderboardModalController {
     row.className = 'history-version-row leaderboard-row';
 
     row.appendChild(this.createCell('leaderboard-rank', `#${entry.rank}`));
-    row.appendChild(this.createCell('leaderboard-primary', entry.userDisplayName));
+    row.appendChild(
+      createProfileTriggerElement(
+        this.doc,
+        entry.userId,
+        entry.userDisplayName,
+        'leaderboard-primary',
+        'div'
+      )
+    );
     row.appendChild(this.createCell('leaderboard-primary', this.formatCourseMetric(entry, rankingMode)));
     row.appendChild(this.createCell('leaderboard-secondary', `${entry.deaths} deaths`));
     row.appendChild(this.createCell('leaderboard-secondary', this.formatShortDate(entry.finishedAt)));

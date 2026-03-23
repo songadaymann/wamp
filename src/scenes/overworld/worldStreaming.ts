@@ -43,6 +43,7 @@ import {
   type OverworldPreviewSelection,
   type PreviewSelectionCandidate,
 } from './previewStreaming';
+import type { PerformanceProfile } from '../../ui/deviceLayout';
 import {
   getTerrainTileCollisionProfile,
   terrainTileDisablesTilemapCollision,
@@ -80,6 +81,7 @@ interface OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall> {
   scene: Phaser.Scene;
   worldRepository: WorldRepository;
   getMode: () => OverworldMode;
+  getPerformanceProfile: () => PerformanceProfile;
   getSelectedCoordinates: () => RoomCoordinates;
   getCurrentRoomCoordinates: () => RoomCoordinates;
   getRoomOrigin: (coordinates: RoomCoordinates) => { x: number; y: number };
@@ -463,6 +465,10 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   updateFullRoomBackgrounds(camera: Phaser.Cameras.Scene2D.Camera): void {
+    if (this.options.getMode() === 'play' && this.options.getPerformanceProfile() === 'reduced') {
+      return;
+    }
+
     for (const loadedRoom of this.loadedFullRoomsById.values()) {
       this.updateFullRoomBackground(loadedRoom, camera);
     }
@@ -651,6 +657,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
     const selection = computeOverworldPreviewSelection({
       mode: this.options.getMode(),
+      performanceProfile: this.options.getPerformanceProfile(),
       zoom: this.options.scene.cameras.main.zoom,
       focusCoordinates: this.getFocusCoordinates(),
       roomCandidates: previewCandidates,
@@ -725,6 +732,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return getDesiredChunkBounds({
       centerCoordinates,
       mode: this.options.getMode(),
+      performanceProfile: this.options.getPerformanceProfile(),
       zoom: camera.zoom,
       viewportWidth: this.options.scene.scale.width,
       viewportHeight: this.options.scene.scale.height,

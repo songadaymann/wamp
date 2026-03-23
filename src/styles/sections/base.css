@@ -656,6 +656,32 @@ body[data-install-help-open='true'] .rotate-gate {
   text-align: right;
 }
 
+.auth-identity-clickable {
+  cursor: pointer;
+}
+
+.profile-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-trigger:hover,
+.profile-trigger:focus-visible {
+  color: var(--accent-cool);
+  text-decoration: underline;
+  outline: none;
+}
+
 #auth-email-input {
   flex: 1;
   min-width: 0;

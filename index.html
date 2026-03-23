@@ -380,6 +380,7 @@
           <option value="dirt">Dirt</option>
           <option value="lava">Lava</option>
           <option value="smb_lvl1_3_5">SMB2-1</option>
+          <option value="mario1_mix">Mario1-mix</option>
           <option value="snow">Snow</option>
           <option value="water">Water</option>
         </select>
@@ -607,8 +608,8 @@
           </div>
         </div>
         <div id="container-contents-panel" class="pressure-plate-panel hidden">
-          <div class="section-label">Chest / Cage</div>
-          <div id="container-contents-status" class="goal-context-note">Hover a chest or cage to set what is inside.</div>
+          <div class="section-label">Container</div>
+          <div id="container-contents-status" class="goal-context-note">Hover a chest, cage, or question block to set what is inside.</div>
           <div class="course-room-actions">
             <button id="btn-container-clear" class="bar-btn bar-btn-small" type="button">Clear Contents</button>
           </div>
@@ -624,7 +625,7 @@
         </div>
         <div id="world-selected-title" class="world-room-title">Room 0,0</div>
         <div class="world-hud-row">
-          <span id="world-selected-coords" class="world-hud-value">0,0</span>
+          <button id="world-selected-coords" class="world-hud-value world-hud-value-button" type="button">0,0</button>
           <span id="world-selected-state" class="world-state-pill">Empty</span>
         </div>
         <div id="world-selected-meta" class="world-hud-meta">No adjacent published room</div>
@@ -852,6 +853,63 @@
         <div id="leaderboard-global-summary" class="history-modal-meta">World points leaderboard.</div>
         <div id="leaderboard-global-viewer" class="history-modal-meta hidden"></div>
         <div id="leaderboard-global-list" class="history-version-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="profile-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel leaderboard-modal-panel profile-modal-panel" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Profile</div>
+          <h2 id="profile-modal-title" class="history-modal-title">Profile</h2>
+          <div id="profile-modal-meta" class="history-modal-meta">View creator profile, rooms, and stats.</div>
+        </div>
+        <button id="btn-profile-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div id="profile-modal-error" class="history-modal-error hidden"></div>
+      <div class="profile-modal-body">
+        <div class="profile-hero">
+          <div class="profile-avatar-shell">
+            <img id="profile-avatar-image" class="profile-avatar-image hidden" alt="" />
+            <div id="profile-avatar-fallback" class="profile-avatar-fallback">PR</div>
+          </div>
+          <div class="profile-hero-copy">
+            <div id="profile-display-name" class="profile-display-name">Profile</div>
+            <div id="profile-joined-date" class="history-modal-meta">Joined recently</div>
+            <div id="profile-overview-bio" class="profile-overview-bio">No bio yet.</div>
+          </div>
+        </div>
+        <div id="profile-overview-stats" class="profile-overview-stats"></div>
+        <div id="profile-edit-fields" class="profile-edit-fields hidden">
+          <label class="goal-control-label" for="profile-display-name-input">Display Name</label>
+          <input id="profile-display-name-input" class="goal-input room-title-input" type="text" maxlength="24" spellcheck="false" />
+          <label class="goal-control-label" for="profile-avatar-url-input">Avatar URL</label>
+          <input id="profile-avatar-url-input" class="goal-input room-title-input" type="url" maxlength="500" spellcheck="false" placeholder="https://..." />
+          <label class="goal-control-label" for="profile-bio-input">Bio</label>
+          <textarea id="profile-bio-input" class="goal-input goal-textarea profile-bio-input" maxlength="280" rows="4" spellcheck="true" placeholder="Tell people a little about yourself."></textarea>
+          <div class="profile-edit-actions">
+            <button id="btn-profile-save" class="bar-btn" type="button">Save Profile</button>
+            <div id="profile-save-status" class="history-modal-meta hidden"></div>
+          </div>
+        </div>
+        <div class="leaderboard-tabs profile-tabs">
+          <button id="btn-profile-tab-overview" class="bar-btn bar-btn-small active" type="button" aria-selected="true">Overview</button>
+          <button id="btn-profile-tab-rooms" class="bar-btn bar-btn-small" type="button" aria-selected="false">Created Rooms</button>
+          <button id="btn-profile-tab-stats" class="bar-btn bar-btn-small" type="button" aria-selected="false">Stats</button>
+        </div>
+        <div id="profile-overview-panel" class="leaderboard-panel">
+          <div class="history-modal-meta">Public profile overview and creator summary.</div>
+        </div>
+        <div id="profile-rooms-panel" class="leaderboard-panel hidden">
+          <div class="history-modal-meta">Newest published rooms from this creator. Click one to warp there.</div>
+          <div id="profile-rooms-empty" class="leaderboard-empty">No published rooms yet.</div>
+          <div id="profile-rooms-list" class="history-version-list"></div>
+        </div>
+        <div id="profile-stats-panel" class="leaderboard-panel hidden">
+          <div class="history-modal-meta">Current leaderboard and progression summary.</div>
+          <div id="profile-stats-list" class="profile-stats-list"></div>
+        </div>
       </div>
     </div>
   </div>

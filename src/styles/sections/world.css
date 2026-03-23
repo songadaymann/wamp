@@ -100,6 +100,31 @@ body[data-app-mode="play-world"] #game-container {
   color: var(--text);
 }
 
+.world-hud-value-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.world-hud-value-button:disabled {
+  cursor: default;
+  opacity: 1;
+  color: var(--text);
+}
+
+.world-hud-value-button.is-clickable {
+  cursor: pointer;
+}
+
+.world-hud-value-button.is-clickable:hover,
+.world-hud-value-button.is-clickable:focus-visible {
+  color: var(--accent-cool);
+  text-decoration: underline;
+  outline: none;
+}
+
 .world-state-pill {
   margin-left: auto;
   padding: 2px 6px;
@@ -1040,6 +1065,10 @@ body[data-app-mode="play-world"] .world-only-control {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.world-online-popover-entry-name.profile-trigger {
+  text-decoration: none;
 }
 
 .world-online-popover-entry-name[data-online-self='true'] {

@@ -13,6 +13,7 @@ import {
 import { playSfx } from '../../audio/sfx';
 import { APP_READY_EVENT, isAppReady } from '../appFeedback';
 import { isTextInputFocused } from '../keyboardFocus';
+import { createProfileTriggerElement } from '../setup/profileEvents';
 import { banChatUser, deleteChatMessage, fetchChatMessages, sendChatMessage } from './client';
 
 const CHAT_POLL_INTERVAL_MS = 3000;
@@ -606,9 +607,12 @@ export class ChatPanelController {
       const header = this.doc.createElement('div');
       header.className = 'chat-message-header';
 
-      const author = this.doc.createElement('span');
-      author.className = 'chat-message-author';
-      author.textContent = message.userDisplayName;
+      const author = createProfileTriggerElement(
+        this.doc,
+        message.userId,
+        message.userDisplayName,
+        'chat-message-author'
+      );
 
       const timestamp = this.doc.createElement('span');
       timestamp.className = 'chat-message-time';

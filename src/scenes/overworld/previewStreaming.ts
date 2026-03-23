@@ -8,6 +8,7 @@ import {
   type WorldRoomBounds,
   WORLD_CHUNK_SIZE,
 } from '../../persistence/worldModel';
+import type { PerformanceProfile } from '../../ui/deviceLayout';
 import type { OverworldMode } from '../sceneData';
 
 const STREAM_RADIUS = 1;
@@ -15,11 +16,19 @@ const PLAY_NEAR_MAX_CHUNK_RADIUS = 2;
 const PLAY_MID_MAX_CHUNK_RADIUS = 3;
 const PLAY_FAR_MAX_CHUNK_RADIUS = 4;
 const PLAY_ULTRA_MAX_CHUNK_RADIUS = 4;
+const REDUCED_PLAY_NEAR_MAX_CHUNK_RADIUS = 2;
+const REDUCED_PLAY_MID_MAX_CHUNK_RADIUS = 2;
+const REDUCED_PLAY_FAR_MAX_CHUNK_RADIUS = 3;
+const REDUCED_PLAY_ULTRA_MAX_CHUNK_RADIUS = 3;
 const BROWSE_MAX_CHUNK_RADIUS = 3;
 const PLAY_NEAR_MAX_PREVIEW_ROOMS = 49;
 const PLAY_MID_MAX_PREVIEW_ROOMS = 121;
 const PLAY_FAR_MAX_PREVIEW_ROOMS = 196;
 const PLAY_ULTRA_MAX_PREVIEW_ROOMS = 256;
+const REDUCED_PLAY_NEAR_MAX_PREVIEW_ROOMS = 25;
+const REDUCED_PLAY_MID_MAX_PREVIEW_ROOMS = 49;
+const REDUCED_PLAY_FAR_MAX_PREVIEW_ROOMS = 81;
+const REDUCED_PLAY_ULTRA_MAX_PREVIEW_ROOMS = 121;
 const BROWSE_NEAR_MAX_PREVIEW_ROOMS = 64;
 const BROWSE_MID_MAX_PREVIEW_ROOMS = 144;
 const BROWSE_FAR_MAX_PREVIEW_ROOMS = 256;
@@ -27,6 +36,10 @@ const PLAY_NEAR_MID_LOD_ROOM_RADIUS = 5;
 const PLAY_MID_MID_LOD_ROOM_RADIUS = 9;
 const PLAY_FAR_MID_LOD_ROOM_RADIUS = 13;
 const PLAY_ULTRA_MID_LOD_ROOM_RADIUS = 17;
+const REDUCED_PLAY_NEAR_MID_LOD_ROOM_RADIUS = 4;
+const REDUCED_PLAY_MID_MID_LOD_ROOM_RADIUS = 6;
+const REDUCED_PLAY_FAR_MID_LOD_ROOM_RADIUS = 8;
+const REDUCED_PLAY_ULTRA_MID_LOD_ROOM_RADIUS = 10;
 const BROWSE_NEAR_MID_LOD_ROOM_RADIUS = 6;
 const BROWSE_MID_MID_LOD_ROOM_RADIUS = 10;
 const BROWSE_FAR_MID_LOD_ROOM_RADIUS = 14;
@@ -56,6 +69,7 @@ export interface OverworldPreviewSelection {
 
 interface OverworldPreviewSelectionInput {
   mode: OverworldMode;
+  performanceProfile: PerformanceProfile;
   zoom: number;
   focusCoordinates: RoomCoordinates;
   roomCandidates: Iterable<PreviewSelectionCandidate>;
@@ -72,11 +86,12 @@ type PlayPreviewTier = 'near' | 'mid' | 'far' | 'ultra';
 export function getDesiredChunkBounds(input: {
   centerCoordinates: RoomCoordinates;
   mode: OverworldMode;
+  performanceProfile: PerformanceProfile;
   zoom: number;
   viewportWidth: number;
   viewportHeight: number;
 }): WorldChunkBounds {
-  const { centerCoordinates, mode, viewportWidth, viewportHeight } = input;
+  const { centerCoordinates, mode, performanceProfile, viewportWidth, viewportHeight } = input;
   const zoom = Math.max(input.zoom, MIN_ZOOM);
   const chunkCenter = roomToChunkCoordinates(centerCoordinates);
   const visibleRoomsX = Math.ceil(viewportWidth / (ROOM_PX_WIDTH * zoom));
@@ -85,7 +100,7 @@ export function getDesiredChunkBounds(input: {
     STREAM_RADIUS + 1,
     Math.ceil(Math.max(visibleRoomsX, visibleRoomsY) * 0.5) + 2
   );
-  const maxChunkRadius = getMaxChunkRadius(mode, zoom);
+  const maxChunkRadius = getMaxChunkRadius(mode, zoom, performanceProfile);
   const chunkRadius = Phaser.Math.Clamp(
     Math.ceil(paddedRoomRadius / WORLD_CHUNK_SIZE),
     1,
@@ -103,11 +118,11 @@ export function getDesiredChunkBounds(input: {
 export function computeOverworldPreviewSelection(
   input: OverworldPreviewSelectionInput
 ): OverworldPreviewSelection {
-  const { focusCoordinates, mode } = input;
+  const { focusCoordinates, mode, performanceProfile } = input;
   const zoom = Math.max(input.zoom, MIN_ZOOM);
   const roomCandidates = Array.from(input.roomCandidates);
-  const budgets = computeStreamingBudgets(mode, zoom);
-  const midLodRoomRadius = getMidLodRoomRadius(mode, zoom);
+  const budgets = computeStreamingBudgets(mode, zoom, performanceProfile);
+  const midLodRoomRadius = getMidLodRoomRadius(mode, zoom, performanceProfile);
   const visibleRoomBounds = input.visibleRoomBounds
     ? expandRoomBounds(input.visibleRoomBounds, VIEWPORT_ROOM_PADDING)
     : null;
@@ -147,7 +162,10 @@ export function computeOverworldPreviewSelection(
       )
       .map((roomCandidate) => roomCandidate.id)
   );
-  const effectivePreviewBudget = Math.max(budgets.previewRoomBudget, visibleRoomIds.size);
+  const effectivePreviewBudget = Math.max(
+    budgets.previewRoomBudget,
+    visibleRoomIds.size
+  );
 
   return {
     previewRoomBudget: effectivePreviewBudget,
@@ -180,9 +198,27 @@ export function computeOverworldPreviewSelection(
   };
 }
 
-function getMaxChunkRadius(mode: OverworldMode, zoom: number): number {
+function getMaxChunkRadius(
+  mode: OverworldMode,
+  zoom: number,
+  performanceProfile: PerformanceProfile,
+): number {
   if (mode === 'browse') {
     return BROWSE_MAX_CHUNK_RADIUS;
+  }
+
+  if (performanceProfile === 'reduced') {
+    switch (getPlayPreviewTier(zoom)) {
+      case 'ultra':
+        return REDUCED_PLAY_ULTRA_MAX_CHUNK_RADIUS;
+      case 'far':
+        return REDUCED_PLAY_FAR_MAX_CHUNK_RADIUS;
+      case 'mid':
+        return REDUCED_PLAY_MID_MAX_CHUNK_RADIUS;
+      case 'near':
+      default:
+        return REDUCED_PLAY_NEAR_MAX_CHUNK_RADIUS;
+    }
   }
 
   switch (getPlayPreviewTier(zoom)) {
@@ -198,8 +234,26 @@ function getMaxChunkRadius(mode: OverworldMode, zoom: number): number {
   }
 }
 
-function getMidLodRoomRadius(mode: OverworldMode, zoom: number): number {
+function getMidLodRoomRadius(
+  mode: OverworldMode,
+  zoom: number,
+  performanceProfile: PerformanceProfile,
+): number {
   if (mode === 'play') {
+    if (performanceProfile === 'reduced') {
+      switch (getPlayPreviewTier(zoom)) {
+        case 'ultra':
+          return REDUCED_PLAY_ULTRA_MID_LOD_ROOM_RADIUS;
+        case 'far':
+          return REDUCED_PLAY_FAR_MID_LOD_ROOM_RADIUS;
+        case 'mid':
+          return REDUCED_PLAY_MID_MID_LOD_ROOM_RADIUS;
+        case 'near':
+        default:
+          return REDUCED_PLAY_NEAR_MID_LOD_ROOM_RADIUS;
+      }
+    }
+
     switch (getPlayPreviewTier(zoom)) {
       case 'ultra':
         return PLAY_ULTRA_MID_LOD_ROOM_RADIUS;
@@ -224,8 +278,38 @@ function getMidLodRoomRadius(mode: OverworldMode, zoom: number): number {
   return BROWSE_NEAR_MID_LOD_ROOM_RADIUS;
 }
 
-function computeStreamingBudgets(mode: OverworldMode, zoom: number): StreamingBudgetResult {
+function computeStreamingBudgets(
+  mode: OverworldMode,
+  zoom: number,
+  performanceProfile: PerformanceProfile,
+): StreamingBudgetResult {
   if (mode === 'play') {
+    if (performanceProfile === 'reduced') {
+      switch (getPlayPreviewTier(zoom)) {
+        case 'ultra':
+          return {
+            previewRoomBudget: REDUCED_PLAY_ULTRA_MAX_PREVIEW_ROOMS,
+            fullRoomBudget: FULL_ROOM_BUDGET,
+          };
+        case 'far':
+          return {
+            previewRoomBudget: REDUCED_PLAY_FAR_MAX_PREVIEW_ROOMS,
+            fullRoomBudget: FULL_ROOM_BUDGET,
+          };
+        case 'mid':
+          return {
+            previewRoomBudget: REDUCED_PLAY_MID_MAX_PREVIEW_ROOMS,
+            fullRoomBudget: FULL_ROOM_BUDGET,
+          };
+        case 'near':
+        default:
+          return {
+            previewRoomBudget: REDUCED_PLAY_NEAR_MAX_PREVIEW_ROOMS,
+            fullRoomBudget: FULL_ROOM_BUDGET,
+          };
+      }
+    }
+
     switch (getPlayPreviewTier(zoom)) {
       case 'ultra':
         return {
