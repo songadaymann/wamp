@@ -1,5 +1,9 @@
 import { handleAdminRequest } from './worker/admin/routes';
-import type { RoomCanonicalVersionRequestBody, RoomRevertRequestBody } from '../persistence/roomModel';
+import type {
+  RoomCanonicalVersionRequestBody,
+  RoomLeaderboardLineageRequestBody,
+  RoomRevertRequestBody,
+} from '../persistence/roomModel';
 import { handleAuthRequest } from './worker/auth/routes';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth, requireOptionalScope } from './worker/auth/request';
 import { handleAgentRequest } from './worker/agents/routes';
@@ -58,6 +62,7 @@ import {
   revertRoom,
   saveDraft,
   setCanonicalRoomVersion,
+  setRoomVersionLeaderboardSource,
   type RoomMutationActor,
 } from './worker/rooms/store';
 import {
@@ -407,6 +412,27 @@ export default {
           roomId,
           coordinates,
           body.targetVersion,
+          buildRoomMutationActor(auth),
+          auth.isAdmin
+        );
+        return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
+      }
+
+      if (segments.length === 4 && segments[3] === 'leaderboard-lineage' && request.method === 'POST') {
+        const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
+        const body = await parseJsonBody<RoomLeaderboardLineageRequestBody>(request);
+        const auth = await requireAuthenticatedRequestAuth(
+          env,
+          request,
+          'set room leaderboard lineage',
+          'rooms:write'
+        );
+        const record = await setRoomVersionLeaderboardSource(
+          env,
+          roomId,
+          coordinates,
+          body.targetVersion,
+          body.sourceVersion,
           buildRoomMutationActor(auth),
           auth.isAdmin
         );

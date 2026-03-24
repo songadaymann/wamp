@@ -698,10 +698,11 @@ export class LeaderboardModalController {
     const difficultyLabel = entry.consensusDifficulty
       ? ROOM_DIFFICULTY_LABELS[entry.consensusDifficulty]
       : 'Unrated';
-    const versionLabel =
-      entry.displayRoomVersion === entry.roomVersion
-        ? `v${entry.displayRoomVersion}`
-        : `v${entry.displayRoomVersion} · live as v${entry.roomVersion}`;
+    const versionLabel = this.formatRoomVersionSummary(
+      entry.displayRoomVersion,
+      entry.roomVersion,
+      entry.leaderboardSourceVersion
+    );
     const canonicalLabel =
       entry.canonicalRoomVersion !== null &&
       (entry.canonicalRoomVersion === entry.roomVersion ||
@@ -817,11 +818,29 @@ export class LeaderboardModalController {
   }
 
   private formatRoomVersionLabel(response: RoomLeaderboardResponse): string {
-    if (response.displayRoomVersion === response.roomVersion) {
-      return `v${response.displayRoomVersion}`;
+    return this.formatRoomVersionSummary(
+      response.displayRoomVersion,
+      response.roomVersion,
+      response.leaderboardSourceVersion
+    );
+  }
+
+  private formatRoomVersionSummary(
+    displayRoomVersion: number,
+    roomVersion: number,
+    leaderboardSourceVersion: number | null
+  ): string {
+    const parts = [
+      displayRoomVersion === roomVersion
+        ? `v${displayRoomVersion}`
+        : `v${displayRoomVersion} · live as v${roomVersion}`,
+    ];
+
+    if (leaderboardSourceVersion !== null) {
+      parts.push(`leaderboard from v${leaderboardSourceVersion}`);
     }
 
-    return `v${response.displayRoomVersion} · live as v${response.roomVersion}`;
+    return parts.join(' · ');
   }
 
   private setError(message: string | null): void {

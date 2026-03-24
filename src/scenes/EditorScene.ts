@@ -2558,6 +2558,13 @@ export class EditorScene extends Phaser.Scene {
     return this.roomSession.setCanonicalVersion(targetVersion);
   }
 
+  async setLeaderboardSourceVersion(
+    targetVersion: number,
+    sourceVersion: number | null
+  ): Promise<RoomRecord | null> {
+    return this.roomSession.setLeaderboardSourceVersion(targetVersion, sourceVersion);
+  }
+
   undoAction(): void {
     this.undo();
     this.updateBottomBar();

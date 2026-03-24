@@ -5,6 +5,7 @@ import {
   createDefaultRoomRecord,
   isRoomMinted,
   normalizeRoomRecord,
+  type RoomLeaderboardLineageRequestBody,
   type RoomVersionRecord,
   type RoomCoordinates,
   type RoomRecord,
@@ -13,6 +14,8 @@ import {
 } from './roomModel';
 import { ROOM_STORAGE_PREFIX } from './browserStorage';
 import { getApiBaseUrl } from '../api/baseUrl';
+import { buildRoomVersionLineage } from './roomVersionLineage';
+import { getManualRoomLeaderboardSourceValidationError } from './roomLeaderboardLineage';
 import type {
   RoomMintConfirmRequestBody,
   RoomMintPrepareResponse,
@@ -38,6 +41,12 @@ export interface RoomRepository {
     roomId: string,
     coordinates: RoomCoordinates,
     targetVersion: number
+  ): Promise<RoomRecord>;
+  setLeaderboardSourceVersion(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    targetVersion: number,
+    sourceVersion: number | null
   ): Promise<RoomRecord>;
   prepareMint(roomId: string, coordinates: RoomCoordinates): Promise<RoomMintPrepareResponse>;
   confirmMint(
@@ -177,6 +186,7 @@ class LocalRoomRepository implements RoomRepository {
           publishedByPrincipalKind: null,
           publishedByAgentId: null,
           publishedByDisplayName: 'Guest',
+          leaderboardSourceVersion: null,
         }),
       ],
       canonicalVersion: existing.canonicalVersion,
@@ -242,6 +252,7 @@ class LocalRoomRepository implements RoomRepository {
       publishedByAgentId: existing.claimerAgentId,
       publishedByDisplayName: existing.claimerDisplayName,
       revertedFromVersion: target.version,
+      leaderboardSourceVersion: null,
     });
 
     const nextRecord: RoomRecord = {
@@ -293,6 +304,79 @@ class LocalRoomRepository implements RoomRepository {
       published: existing.published,
       versions: existing.versions,
       canonicalVersion: target.version,
+      claimerUserId: existing.claimerUserId,
+      claimerPrincipalKind: existing.claimerPrincipalKind,
+      claimerAgentId: existing.claimerAgentId,
+      claimerDisplayName: existing.claimerDisplayName,
+      claimedAt: existing.claimedAt,
+      lastPublishedByUserId: existing.lastPublishedByUserId,
+      lastPublishedByPrincipalKind: existing.lastPublishedByPrincipalKind,
+      lastPublishedByAgentId: existing.lastPublishedByAgentId,
+      lastPublishedByDisplayName: existing.lastPublishedByDisplayName,
+      mintedChainId: existing.mintedChainId,
+      mintedContractAddress: existing.mintedContractAddress,
+      mintedTokenId: existing.mintedTokenId,
+      mintedOwnerWalletAddress: existing.mintedOwnerWalletAddress,
+      mintedOwnerSyncedAt: existing.mintedOwnerSyncedAt,
+      mintedMetadataRoomVersion: existing.mintedMetadataRoomVersion,
+      mintedMetadataUpdatedAt: existing.mintedMetadataUpdatedAt,
+      mintedMetadataHash: existing.mintedMetadataHash,
+      permissions: computeLocalPermissions(existing),
+    };
+
+    localStorage.setItem(getStorageKey(roomId), JSON.stringify(nextRecord));
+    return cloneRoomRecord(nextRecord);
+  }
+
+  async setLeaderboardSourceVersion(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    targetVersion: number,
+    sourceVersion: number | null
+  ): Promise<RoomRecord> {
+    const existing = await this.loadRoom(roomId, coordinates);
+    if (!existing.permissions.canRevert) {
+      throw new Error('You do not have permission to manage leaderboard lineage for this room.');
+    }
+
+    const target = existing.versions.find((version) => version.version === targetVersion) ?? null;
+    if (!target) {
+      throw new Error(`Version ${targetVersion} was not found.`);
+    }
+
+    if (sourceVersion !== null) {
+      const source = existing.versions.find((version) => version.version === sourceVersion) ?? null;
+      if (!source) {
+        throw new Error(`Version ${sourceVersion} was not found.`);
+      }
+
+      const exactLineage = buildRoomVersionLineage(
+        existing.versions,
+        existing.canonicalVersion,
+        existing.published?.version ?? null
+      );
+      const validationError = getManualRoomLeaderboardSourceValidationError(target, source, exactLineage);
+      if (validationError) {
+        throw new Error(validationError);
+      }
+    }
+
+    const nextRecord: RoomRecord = {
+      draft: existing.draft,
+      published: existing.published,
+      versions: existing.versions.map((version) =>
+        version.version === targetVersion
+          ? {
+              ...version,
+              leaderboardSourceVersion: sourceVersion,
+              snapshot: cloneRoomSnapshot(version.snapshot),
+            }
+          : {
+              ...version,
+              snapshot: cloneRoomSnapshot(version.snapshot),
+            }
+      ),
+      canonicalVersion: existing.canonicalVersion,
       claimerUserId: existing.claimerUserId,
       claimerPrincipalKind: existing.claimerPrincipalKind,
       claimerAgentId: existing.claimerAgentId,
@@ -454,6 +538,31 @@ class ApiRoomRepository implements RoomRepository {
           }
         ),
       () => this.fallback?.setCanonicalVersion(roomId, coordinates, targetVersion)
+    );
+  }
+
+  async setLeaderboardSourceVersion(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    targetVersion: number,
+    sourceVersion: number | null
+  ): Promise<RoomRecord> {
+    const params = new URLSearchParams({
+      x: String(coordinates.x),
+      y: String(coordinates.y),
+    });
+    const body: RoomLeaderboardLineageRequestBody = { targetVersion, sourceVersion };
+
+    return this.withFallback(
+      () =>
+        this.request<RoomRecord>(
+          `/api/rooms/${encodeURIComponent(roomId)}/leaderboard-lineage?${params.toString()}`,
+          {
+            method: 'POST',
+            body: JSON.stringify(body),
+          }
+        ),
+      () => this.fallback?.setLeaderboardSourceVersion(roomId, coordinates, targetVersion, sourceVersion)
     );
   }
 

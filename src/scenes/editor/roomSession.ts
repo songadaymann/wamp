@@ -598,6 +598,55 @@ export class EditorRoomSession {
     return null;
   }
 
+  async setLeaderboardSourceVersion(
+    targetVersion: number,
+    sourceVersion: number | null
+  ): Promise<RoomRecord | null> {
+    if (this.saveInFlight) {
+      return null;
+    }
+    if (!this.roomPermissions.canRevert) {
+      this.setStatusText(
+        this.mintedTokenId
+          ? 'Only the room token owner can manage leaderboard lineage for this room.'
+          : 'Only the claimer can manage leaderboard lineage for this room.'
+      );
+      return null;
+    }
+
+    this.saveInFlight = true;
+    this.setStatusText(
+      sourceVersion === null
+        ? `Restoring v${targetVersion} to its own leaderboard...`
+        : `Linking v${targetVersion} to leaderboard v${sourceVersion}...`
+    );
+
+    try {
+      const record = await this.roomRepository.setLeaderboardSourceVersion(
+        this.roomId,
+        this.roomCoordinates,
+        targetVersion,
+        sourceVersion
+      );
+      this.syncRoomMetadata(record);
+      this.setStatusText(
+        sourceVersion === null
+          ? `v${targetVersion} now uses its own leaderboard.`
+          : `v${targetVersion} now uses leaderboard v${sourceVersion}.`
+      );
+      return record;
+    } catch (error) {
+      console.error('Failed to update room leaderboard lineage', error);
+      const message = error instanceof Error ? error.message : 'Leaderboard lineage update failed.';
+      this.setStatusText(message);
+    } finally {
+      this.saveInFlight = false;
+      this.host.refreshUi();
+    }
+
+    return null;
+  }
+
   async buildReturnToWorldWakeData(): Promise<OverworldPlaySceneData | null> {
     if (!this.host.getRoomDirty()) {
       if (this.shouldShowDraftPreviewInWorld()) {

@@ -12,6 +12,8 @@ import {
   type RoomVersionRecord,
 } from '../../../persistence/roomModel';
 import type { PublishedWorldRoomSource } from '../../../persistence/worldModel';
+import { buildRoomVersionLineage } from '../../../persistence/roomVersionLineage';
+import { getManualRoomLeaderboardSourceValidationError } from '../../../persistence/roomLeaderboardLineage';
 import { normalizeAddress } from '../auth/store';
 import { HttpError } from '../core/http';
 import type {
@@ -236,7 +238,8 @@ export async function loadRoomVersions(env: Env, roomId: string): Promise<RoomVe
         published_by_principal_type,
         published_by_agent_id,
         published_by_display_name,
-        reverted_from_version
+        reverted_from_version,
+        leaderboard_source_version
       FROM room_versions
       WHERE room_id = ?
       ORDER BY version ASC
@@ -255,6 +258,7 @@ export async function loadRoomVersions(env: Env, roomId: string): Promise<RoomVe
       publishedByAgentId: row.published_by_agent_id,
       publishedByDisplayName: row.published_by_display_name,
       revertedFromVersion: row.reverted_from_version,
+      leaderboardSourceVersion: row.leaderboard_source_version,
     });
   });
 }
@@ -405,6 +409,7 @@ export async function publishRoom(
       publishedByAgentId: actor.principalAgentId,
       publishedByDisplayName,
       revertedFromVersion: null,
+      leaderboardSourceVersion: null,
       onConflictUpdate: true,
     }),
   ]);
@@ -503,6 +508,7 @@ export async function revertRoom(
       publishedByAgentId: actor.principalAgentId,
       publishedByDisplayName,
       revertedFromVersion: target.version,
+      leaderboardSourceVersion: null,
       onConflictUpdate: false,
     }),
   ]);
@@ -575,6 +581,95 @@ export async function setCanonicalRoomVersion(
       mintedMetadataUpdatedAt: existing.mintedMetadataUpdatedAt,
       mintedMetadataHash: existing.mintedMetadataHash,
     }),
+  ]);
+
+  return loadRoomRecord(
+    env,
+    roomId,
+    coordinates,
+    viewerUserId,
+    viewerWalletAddress,
+    actorIsAdmin
+  );
+}
+
+export async function setRoomVersionLeaderboardSource(
+  env: Env,
+  roomId: string,
+  coordinates: RoomCoordinates,
+  targetVersion: number,
+  sourceVersion: number | null,
+  actor: RoomMutationActor,
+  actorIsAdmin = false
+): Promise<RoomRecord> {
+  if (!Number.isInteger(targetVersion) || targetVersion < 1) {
+    throw new HttpError(400, 'targetVersion must be a positive integer.');
+  }
+
+  if (sourceVersion !== null && (!Number.isInteger(sourceVersion) || sourceVersion < 1)) {
+    throw new HttpError(400, 'sourceVersion must be null or a positive integer.');
+  }
+
+  const viewerUserId = actor.ownerUser?.id ?? null;
+  const viewerWalletAddress = actor.ownerUser?.walletAddress ?? null;
+  const existing = await loadRoomRecordForMutation(
+    env,
+    roomId,
+    coordinates,
+    actor.ownerUser,
+    actorIsAdmin
+  );
+
+  if (!existing.permissions.canRevert) {
+    if (isRoomMinted(existing)) {
+      throw new HttpError(403, 'Only the room token owner can manage leaderboard lineage for this room.');
+    }
+
+    throw new HttpError(403, 'Only the claimer can manage leaderboard lineage for this room.');
+  }
+
+  const target = existing.versions.find((version) => version.version === targetVersion) ?? null;
+  if (!target) {
+    throw new HttpError(404, `Version ${targetVersion} was not found.`);
+  }
+
+  let nextSourceVersion: number | null = null;
+  if (sourceVersion !== null) {
+    const source = existing.versions.find((version) => version.version === sourceVersion) ?? null;
+    if (!source) {
+      throw new HttpError(404, `Version ${sourceVersion} was not found.`);
+    }
+
+    const exactLineage = buildRoomVersionLineage(
+      existing.versions,
+      existing.canonicalVersion,
+      existing.published?.version ?? null
+    );
+    const validationError = getManualRoomLeaderboardSourceValidationError(
+      target,
+      source,
+      exactLineage
+    );
+    if (validationError) {
+      throw new HttpError(409, validationError);
+    }
+
+    if (wouldCreateLeaderboardSourceCycle(existing.versions, target.version, source.version)) {
+      throw new HttpError(409, 'This leaderboard source would create a version cycle.');
+    }
+
+    nextSourceVersion = source.version;
+  }
+
+  await env.DB.batch([
+    env.DB.prepare(
+      `
+        UPDATE room_versions
+        SET leaderboard_source_version = ?
+        WHERE room_id = ?
+          AND version = ?
+      `
+    ).bind(nextSourceVersion, roomId, target.version),
   ]);
 
   return loadRoomRecord(
@@ -828,9 +923,10 @@ export const INSERT_ROOM_VERSION_SQL = `
     published_by_principal_type,
     published_by_agent_id,
     published_by_display_name,
-    reverted_from_version
+    reverted_from_version,
+    leaderboard_source_version
   )
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 export const UPSERT_ROOM_VERSION_SQL = `
@@ -847,7 +943,8 @@ export const UPSERT_ROOM_VERSION_SQL = `
     published_by_principal_type = excluded.published_by_principal_type,
     published_by_agent_id = excluded.published_by_agent_id,
     published_by_display_name = excluded.published_by_display_name,
-    reverted_from_version = excluded.reverted_from_version
+    reverted_from_version = excluded.reverted_from_version,
+    leaderboard_source_version = excluded.leaderboard_source_version
 `;
 
 export function preparePersistRoomRecordStatement(
@@ -915,7 +1012,8 @@ export function preparePersistRoomVersionStatement(
     input.publishedByPrincipalType,
     input.publishedByAgentId,
     input.publishedByDisplayName,
-    input.revertedFromVersion
+    input.revertedFromVersion,
+    input.leaderboardSourceVersion
   );
 }
 
@@ -974,4 +1072,28 @@ export function buildRoomPermissions(
       viewerWalletAddress !== null &&
       (record.claimerUserId === null || viewerUserId === record.claimerUserId),
   };
+}
+
+function wouldCreateLeaderboardSourceCycle(
+  versions: RoomVersionRecord[],
+  targetVersion: number,
+  sourceVersion: number
+): boolean {
+  const sourceByVersion = new Map<number, number | null>();
+  for (const version of versions) {
+    sourceByVersion.set(version.version, version.leaderboardSourceVersion);
+  }
+
+  const visited = new Set<number>();
+  let currentVersion: number | null = sourceVersion;
+  while (currentVersion !== null && !visited.has(currentVersion)) {
+    if (currentVersion === targetVersion) {
+      return true;
+    }
+
+    visited.add(currentVersion);
+    currentVersion = sourceByVersion.get(currentVersion) ?? null;
+  }
+
+  return false;
 }

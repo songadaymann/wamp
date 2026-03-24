@@ -3509,3 +3509,32 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 - Verification:
   - `./node_modules/.bin/tsc --noEmit` passed
   - `npm run build` passed
+
+## March 24, 2026 - Manual Leaderboard Adoption For Room Versions
+
+- Added manual leaderboard-family adoption on top of the canonical/exact-content lineage model
+  - new migration `0018_room_version_leaderboard_source.sql` adds `room_versions.leaderboard_source_version`
+  - `RoomVersionRecord` now carries `leaderboardSourceVersion`
+  - added `POST /api/rooms/:roomId/leaderboard-lineage` to set or clear a leaderboard source for a published target version
+- Introduced a dedicated shared lineage helper in `src/persistence/roomLeaderboardLineage.ts`
+  - composes exact-content equivalence groups with manual same-room source links
+  - keeps exact-content identity separate from broader leaderboard-family reads
+  - validates manual sources so only older published versions with matching goal/ranking rules can be adopted
+- Switched room leaderboard, difficulty, and discovery reads to aggregate across the resolved leaderboard family
+  - run submissions and difficulty votes still write the exact current `room_version`
+  - leaderboard responses now include `leaderboardFamilyVersions` and `leaderboardSourceVersion`
+  - difficulty summaries and viewer eligibility now treat adopted-family runs as sufficient
+- Updated history and leaderboard UI for creator-controlled adoption
+  - history rows now show `Leaderboard from vX` badges when a manual source is active
+  - added `Use This Leaderboard` on eligible older published versions for the current live version
+  - added `Use Own Leaderboard` on the current published version to clear the manual adoption
+  - leaderboard labels now keep the real live version visible, e.g. `v21 · leaderboard from v16`
+- Cleanup:
+  - removed the now-unused exact-only worker helper `src/cloudflare/worker/runs/roomVersionAggregation.ts`
+- Verification:
+  - `./node_modules/.bin/tsc --noEmit` passed
+  - `npm run build` passed
+  - local D1 migrations applied cleanly through `0018`
+  - Playwright boot smoke on `http://127.0.0.1:3100` loaded the overworld; only expected local PartyKit connection-refused errors appeared because PartyKit was not running
+  - fresh local worker smoke on `http://127.0.0.1:8910` returned `401` for unauthenticated `POST /api/rooms/:roomId/leaderboard-lineage`, confirming the new route is registered
+  - remaining manual verification: authenticated creator flow in the history modal against a room with multiple published versions and existing leaderboard history

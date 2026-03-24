@@ -1,22 +1,24 @@
 import { cloneRoomSnapshot, type RoomRecord, type RoomSnapshot } from '../../../persistence/roomModel';
-import { buildRoomVersionLineage } from '../../../persistence/roomVersionLineage';
+import { buildRoomLeaderboardLineage } from '../../../persistence/roomLeaderboardLineage';
 import { HttpError } from '../core/http';
 
-export interface AggregatedRoomVersionSelection {
+export interface AggregatedRoomLeaderboardSelection {
   snapshot: RoomSnapshot;
   roomVersion: number;
   displayRoomVersion: number;
   equivalentRoomVersions: number[];
+  leaderboardFamilyVersions: number[];
+  leaderboardSourceVersion: number | null;
   canonicalRoomVersion: number | null;
   currentPublishedVersion: number | null;
 }
 
-export function resolveAggregatedRoomVersionSelection(
+export function resolveAggregatedRoomLeaderboardSelection(
   record: RoomRecord,
   requestedVersion: number | null
-): AggregatedRoomVersionSelection {
+): AggregatedRoomLeaderboardSelection {
   const currentPublishedVersion = record.published?.version ?? null;
-  const lineage = buildRoomVersionLineage(record.versions, record.canonicalVersion, currentPublishedVersion);
+  const lineage = buildRoomLeaderboardLineage(record.versions, record.canonicalVersion, currentPublishedVersion);
   const fallbackVersion = currentPublishedVersion ?? null;
   const selectedVersion = requestedVersion ?? fallbackVersion;
 
@@ -33,12 +35,18 @@ export function resolveAggregatedRoomVersionSelection(
     selectedEntry.groupContainsCurrentPublished && currentPublishedVersion !== null
       ? currentPublishedVersion
       : selectedVersion;
+  const effectiveEntry = lineage.byVersion.get(effectiveRoomVersion) ?? null;
+  if (!effectiveEntry) {
+    throw new HttpError(404, `Room version ${effectiveRoomVersion} was not found.`);
+  }
 
   return {
     snapshot: resolveSnapshotForVersion(record, effectiveRoomVersion),
     roomVersion: effectiveRoomVersion,
-    displayRoomVersion: selectedEntry.representativeVersion,
-    equivalentRoomVersions: [...selectedEntry.equivalentVersions],
+    displayRoomVersion: effectiveEntry.representativeVersion,
+    equivalentRoomVersions: [...effectiveEntry.equivalentVersions],
+    leaderboardFamilyVersions: [...effectiveEntry.leaderboardFamilyVersions],
+    leaderboardSourceVersion: effectiveEntry.leaderboardSourceRepresentativeVersion,
     canonicalRoomVersion: record.canonicalVersion,
     currentPublishedVersion,
   };
