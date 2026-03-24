@@ -37,7 +37,8 @@ export function buildRoomLeaderboardVersionSelectionState(
         record.canonicalVersion !== null && group.versions.includes(record.canonicalVersion);
       const containsCurrentPublished =
         currentPublishedVersion !== null && group.versions.includes(currentPublishedVersion);
-      const value =
+      const value = group.representativeVersion;
+      const labelContextVersion =
         containsCurrentPublished && currentPublishedVersion !== null
           ? currentPublishedVersion
           : group.representativeVersion;
@@ -52,7 +53,7 @@ export function buildRoomLeaderboardVersionSelectionState(
           containsCanonical,
           containsCurrentPublished,
           leaderboardSourceVersion:
-            lineage.byVersion.get(value)?.leaderboardSourceRepresentativeVersion ?? null,
+            lineage.byVersion.get(labelContextVersion)?.leaderboardSourceRepresentativeVersion ?? null,
         }),
       };
     });
