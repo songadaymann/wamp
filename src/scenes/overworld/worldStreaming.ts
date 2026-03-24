@@ -579,6 +579,15 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         continue;
       }
 
+      if (candidate.sharedPreview) {
+        renderableRooms.set(candidate.id, {
+          id: candidate.id,
+          coordinates: { ...candidate.coordinates },
+          room: cloneRoomSnapshot(candidate.sharedPreview),
+        });
+        continue;
+      }
+
       if (!candidate.summary || candidate.summary.state !== 'published') {
         continue;
       }

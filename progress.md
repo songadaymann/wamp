@@ -57,6 +57,19 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Frontier construction preview refresh follow-up on March 24, 2026:
+  - traced the missing post-refresh sign to `src/scenes/overworld/worldStreaming.ts`
+  - `syncPresencePreviewRooms()` was collecting `sharedPreview` rooms correctly, but the fast redraw path in `refreshVisibleRoomsFromCache()` rebuilt renderable rooms from drafts and published snapshots only, so a presence-driven refresh could still drop the shared construction room until a later full world refresh
+  - fixed by letting that redraw path render `candidate.sharedPreview` snapshots the same way the full async `previewCache.collectRenderableRooms()` path already does
+  - verification:
+    - `npm run build` passed
+    - Playwright smoke against local dev + remote API wrote:
+      - `output/web-game/frontier-preview-refresh-fix-smoke/shot-0.png`
+      - `output/web-game/frontier-preview-refresh-fix-smoke/state-0.json`
+    - targeted browser probe on visible frontier room `2,-8` wrote:
+      - `output/web-game/frontier-preview-refresh-fix-targeted/probe.json`
+      - confirmed the refreshed-path signal flips from `hasPreviewForTarget: false` to `true` immediately after the injected shared preview update
+
 - Frontier construction preview pass on March 24, 2026:
   - unpublished frontier rooms being edited from the overworld now publish a throttled shared `RoomSnapshot` preview over PartyKit presence, so other players can see that the room is effectively claimed before it is published
   - overworld chunk streaming now treats those shared previews as preview-only renderables:
