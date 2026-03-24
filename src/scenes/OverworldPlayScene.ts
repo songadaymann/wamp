@@ -163,6 +163,7 @@ import {
   resolveGoalRunStartPoint,
 } from './overworld/goalRunStartGate';
 import type {
+  CourseEditorSceneData,
   CourseEditedRoomData,
   EditorCourseEditData,
   EditorSceneData,
@@ -317,7 +318,6 @@ interface SelectedCourseContext {
   courseId: string;
   courseTitle: string | null;
   goalType: CourseGoalType | null;
-  roomIndex: number;
   roomCount: number;
 }
 
@@ -474,6 +474,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private courseComposerSelectedRoomOrder: number | null = null;
   private readonly courseRoomMetaByRoomId = new Map<string, CoursePublishedRoomMeta>();
   private activeCourseRun: ActiveCourseRunState | null = null;
+  private courseEditorReturnTarget: OverworldPlaySceneData['courseEditorReturnTarget'] = null;
 
   private isPanning = false;
   private panStartPointer = { x: 0, y: 0 };
@@ -729,7 +730,6 @@ export class OverworldPlayScene extends Phaser.Scene {
         courseId: publishedCourse.courseId,
         courseTitle: publishedCourse.courseTitle,
         goalType: publishedCourse.goalType,
-        roomIndex: publishedCourse.roomIndex,
         roomCount: publishedCourse.roomCount,
       };
     }
@@ -1294,6 +1294,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.courseRoomMetaByRoomId.clear();
     this.activeCourseRoomOverrideIds.clear();
     this.activeCourseRun = null;
+    this.courseEditorReturnTarget = null;
     this.hudBridge?.destroy();
     this.hudBridge = null;
     this.fxController?.destroy();
@@ -1943,6 +1944,10 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     if (data?.statusMessage) {
       this.showTransientStatus(data.statusMessage);
+    }
+
+    if (data?.courseEditorReturnTarget !== undefined) {
+      this.courseEditorReturnTarget = data.courseEditorReturnTarget ?? null;
     }
 
     this.syncCourseComposerRecordFromSession();
@@ -4922,6 +4927,8 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   returnToWorld(): void {
     const returnCoordinates = this.activeCourseRun?.returnCoordinates ?? this.currentRoomCoordinates;
+    const courseEditorReturnTarget = this.courseEditorReturnTarget;
+    this.courseEditorReturnTarget = null;
     this.resetPlaySession();
     this.clearTouchGestureState();
     this.mode = 'browse';
@@ -4932,6 +4939,16 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.currentRoomCoordinates = { ...returnCoordinates };
     this.shouldCenterCamera = true;
     this.shouldRespawnPlayer = false;
+    if (courseEditorReturnTarget) {
+    this.scene.wake('CourseEditorScene', {
+        courseId: courseEditorReturnTarget.courseId,
+        selectedCoordinates: { ...courseEditorReturnTarget.selectedCoordinates },
+        centerCoordinates: { ...courseEditorReturnTarget.centerCoordinates },
+      });
+      this.scene.sleep();
+      return;
+    }
+
     void this.refreshAround(returnCoordinates);
   }
 
@@ -4974,8 +4991,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.scene.stop('EditorScene');
     }
 
-    this.scene.sleep();
     this.scene.run('EditorScene', editorData);
+    this.scene.sleep();
   }
 
   editCurrentRoom(): void {
@@ -5049,6 +5066,38 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.emitCourseComposerStateChanged();
     setFocusedCoordinatesInUrl(this.currentRoomCoordinates);
     await this.refreshAround(this.currentRoomCoordinates, { forceChunkReload: true });
+  }
+
+  async openCourseEditor(): Promise<void> {
+    const selectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
+    const sessionRecord = getActiveCourseDraftSessionRecord();
+    const selectedRoomInSession = Boolean(
+      sessionRecord && getCourseRoomOrder(sessionRecord.draft.roomRefs, selectedRoomId) >= 0
+    );
+    const nextCourseId = selectedRoomInSession
+      ? sessionRecord?.draft.id ?? null
+      : this.selectedSummary?.course?.courseId ?? sessionRecord?.draft.id ?? null;
+
+    const sceneData: CourseEditorSceneData = {
+      courseId: nextCourseId,
+      selectedCoordinates: { ...this.selectedCoordinates },
+      centerCoordinates: { ...this.windowCenterCoordinates },
+    };
+
+    if (this.scene.isSleeping('CourseEditorScene') || this.scene.isPaused('CourseEditorScene')) {
+      this.scene.wake('CourseEditorScene', sceneData);
+      this.scene.sleep();
+      return;
+    }
+
+    if (this.scene.isActive('CourseEditorScene')) {
+      this.scene.bringToTop('CourseEditorScene');
+      this.scene.sleep();
+      return;
+    }
+
+    this.scene.run('CourseEditorScene', sceneData);
+    this.scene.sleep();
   }
 
   async openCourseComposer(): Promise<void> {
@@ -6200,7 +6249,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         metaParts.push(
           selectedCourse.courseTitle?.trim()
             ? `Part of course: ${selectedCourse.courseTitle}`
-            : `Part of course ${selectedCourse.roomIndex + 1}/${selectedCourse.roomCount}`
+            : `Part of course · ${selectedCourse.roomCount} rooms`
         );
         metaParts.push(this.getCourseGoalSummaryText(selectedCourse.goalType));
         selectedMetaTone = 'challenge';
@@ -6225,7 +6274,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         metaParts.push(
           selectedCourse.courseTitle?.trim()
             ? `Part of course: ${selectedCourse.courseTitle}`
-            : `Part of course ${selectedCourse.roomIndex + 1}/${selectedCourse.roomCount}`
+            : `Part of course · ${selectedCourse.roomCount} rooms`
         );
         metaParts.push(this.getCourseGoalSummaryText(selectedCourse.goalType));
       }
@@ -6408,7 +6457,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     courseId: string | null;
     courseTitle: string | null;
     courseGoalType: CourseGoalType | null;
-    courseRoomIndex: number | null;
     courseRoomCount: number | null;
   } {
     return {
@@ -6418,7 +6466,6 @@ export class OverworldPlayScene extends Phaser.Scene {
       courseId: this.getSelectedCourseContext()?.courseId ?? null,
       courseTitle: this.getSelectedCourseContext()?.courseTitle ?? null,
       courseGoalType: this.getSelectedCourseContext()?.goalType ?? null,
-      courseRoomIndex: this.getSelectedCourseContext()?.roomIndex ?? null,
       courseRoomCount: this.getSelectedCourseContext()?.roomCount ?? null,
     };
   }

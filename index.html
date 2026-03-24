@@ -615,6 +615,113 @@
           </div>
         </div>
       </div>
+      <div id="course-editor-shell" class="course-editor-shell hidden">
+        <div class="course-editor-panel">
+          <div class="course-editor-header">
+            <div class="course-editor-header-copy">
+              <div class="history-modal-kicker">Courses</div>
+              <div class="history-modal-title">Course Editor</div>
+              <div id="course-workbench-status" class="history-modal-meta hidden"></div>
+            </div>
+            <button id="btn-course-workbench-back-world" class="bar-btn bar-btn-small" type="button">World</button>
+          </div>
+
+          <div class="course-editor-toolbar">
+            <div class="course-editor-tool-row">
+              <button class="bar-btn bar-btn-small" type="button" data-course-editor-tool="select">Select</button>
+              <button class="bar-btn bar-btn-small" type="button" data-course-editor-tool="rooms">Rooms</button>
+              <button class="bar-btn bar-btn-small" type="button" data-course-editor-tool="start">Start</button>
+              <button class="bar-btn bar-btn-small" type="button" data-course-editor-tool="exit">Exit</button>
+              <button class="bar-btn bar-btn-small" type="button" data-course-editor-tool="checkpoint">Checkpoint</button>
+              <button class="bar-btn bar-btn-small" type="button" data-course-editor-tool="finish">Finish</button>
+              <button id="btn-course-workbench-clear-markers" class="bar-btn bar-btn-small" type="button">Clear Markers</button>
+            </div>
+            <div class="course-editor-zoom-row">
+              <button id="btn-course-workbench-zoom-out" class="bar-btn bar-btn-small" type="button">-</button>
+              <div id="course-workbench-zoom-text" class="course-editor-zoom-text">Zoom: 0.18x</div>
+              <button id="btn-course-workbench-zoom-in" class="bar-btn bar-btn-small" type="button">+</button>
+              <button id="btn-course-workbench-fit" class="bar-btn bar-btn-small" type="button">Fit</button>
+            </div>
+          </div>
+
+          <div class="course-editor-scroll">
+            <div class="about-section">
+              <div class="about-section-title">Title</div>
+              <input id="course-workbench-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Course title" />
+            </div>
+
+            <div class="about-section">
+              <div class="about-section-title">Selected Room</div>
+              <div id="course-workbench-selected-room-summary" class="goal-summary">Room 0,0</div>
+              <div id="course-workbench-selected-room-status" class="history-modal-meta">Select a room to begin.</div>
+              <div id="course-workbench-selected-room-actions" class="course-room-actions">
+                <button id="btn-course-workbench-toggle-room" class="bar-btn bar-btn-small" type="button">Add Room</button>
+                <button id="btn-course-workbench-open-room" class="bar-btn bar-btn-small" type="button">Open Room</button>
+                <button id="btn-course-workbench-center-room" class="bar-btn bar-btn-small" type="button">Center</button>
+              </div>
+            </div>
+
+            <div class="about-section">
+              <div class="about-section-title">Goal</div>
+              <div class="goal-control-row">
+                <label class="goal-label" for="course-workbench-goal-type">Type</label>
+                <select id="course-workbench-goal-type" class="goal-select">
+                  <option value="">None</option>
+                  <option value="reach_exit">Reach Exit</option>
+                  <option value="collect_target">Collect Target</option>
+                  <option value="defeat_all">Defeat All</option>
+                  <option value="checkpoint_sprint">Checkpoint Sprint</option>
+                  <option value="survival">Survival</option>
+                </select>
+              </div>
+              <div id="course-workbench-time-limit-row" class="goal-control-row">
+                <label class="goal-label" for="course-workbench-time-limit-seconds">Time Limit</label>
+                <input id="course-workbench-time-limit-seconds" class="goal-inline-input" type="number" min="1" step="1" inputmode="numeric" placeholder="Seconds" />
+              </div>
+              <div id="course-workbench-required-count-row" class="goal-control-row">
+                <label class="goal-label" for="course-workbench-required-count">Required</label>
+                <input id="course-workbench-required-count" class="goal-inline-input" type="number" min="1" step="1" inputmode="numeric" placeholder="Count" />
+              </div>
+              <div id="course-workbench-survival-row" class="goal-control-row">
+                <label class="goal-label" for="course-workbench-survival-seconds">Survival</label>
+                <input id="course-workbench-survival-seconds" class="goal-inline-input" type="number" min="1" step="1" inputmode="numeric" placeholder="Seconds" />
+              </div>
+              <div id="course-workbench-placement-hint" class="goal-placement-hint hidden"></div>
+              <div id="course-workbench-summary" class="goal-summary">Select published rooms you authored to build a course.</div>
+            </div>
+
+            <div class="about-section">
+              <div class="about-section-title">Rooms</div>
+              <div id="course-workbench-room-list" class="course-editor-list"></div>
+            </div>
+
+            <div class="about-section">
+              <div class="about-section-title">Checkpoints</div>
+              <div id="course-workbench-checkpoint-list" class="course-editor-list"></div>
+            </div>
+
+            <div class="about-section">
+              <div class="about-section-title">Live State</div>
+              <div id="course-workbench-published-state" class="goal-summary">Not published</div>
+              <div id="course-workbench-published-warning" class="history-modal-meta hidden"></div>
+            </div>
+
+            <div class="about-section">
+              <div class="about-section-title">Actions</div>
+              <div class="course-room-actions">
+                <button id="btn-course-workbench-test" class="bar-btn" type="button">Test Draft</button>
+                <button id="btn-course-workbench-save" class="bar-btn" type="button">Save Draft</button>
+                <button id="btn-course-workbench-publish" class="bar-btn" type="button">Publish Course</button>
+                <button id="btn-course-workbench-unpublish" class="bar-btn hidden" type="button">Unpublish Course</button>
+              </div>
+              <div id="course-workbench-test-reason" class="history-modal-meta hidden"></div>
+              <div id="course-workbench-save-reason" class="history-modal-meta hidden"></div>
+              <div id="course-workbench-publish-reason" class="history-modal-meta hidden"></div>
+              <div id="course-workbench-unpublish-reason" class="history-modal-meta hidden"></div>
+            </div>
+          </div>
+        </div>
+      </div>
       <div id="world-hud" class="hidden">
         <div class="world-hud-topline">
           <div class="world-hud-title-wrap">

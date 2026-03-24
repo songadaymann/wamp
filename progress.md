@@ -57,6 +57,44 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Separate course editor pass on March 24, 2026:
+  - replaced the overworld-first course composer launch path with a dedicated `CourseEditorScene` that owns a standalone world-anchored authoring shell, pan/zoom camera, room membership selection, and direct marker placement for `start`, `exit`, `checkpoint`, and `finish`
+  - course validation is now cluster-based instead of linear-order-based: draft/publish paths require unique authored rooms forming one orthogonally connected cluster, while publish validation now follows marker placement rather than first-room / last-room assumptions
+  - course room membership is persisted in deterministic coordinate order only for compatibility; `room_order` is no longer treated as authored progression semantics
+  - room editor course return flow now wakes the sleeping course editor directly, and overworld HUD course copy no longer shows misleading `step X/Y` labels
+  - added the new course-editor scene bridge + UI shell for title/goal editing, room list, checkpoint list, zoom controls, save/publish/test/unpublish actions, and quick-open into the existing room editor
+  - verification:
+    - `./node_modules/.bin/tsc --noEmit` passed in the clean `/tmp/wamp-course-editor` worktree
+    - `npm run build` passed in the clean `/tmp/wamp-course-editor` worktree
+  - remaining check:
+    - browser/runtime smoke is still pending for scene transitions, marker placement, and test-run return-to-course-editor flow
+
+- Separate course editor runtime smoke follow-up on March 24, 2026:
+  - fixed the new scene launch path by giving `CourseEditorScene` an explicit Phaser key; without that, clicking `Course Builder` left the app with no active scene because Phaser could not launch the unnamed scene instance by key
+  - fixed new course-editor transition ordering so handoffs use `run/wake` before `sleep`, matching the rest of the scene stack and preventing transient blank-scene states
+  - changed course-editor return-to-world from `stop` to `sleep` and changed overworld reopen behavior to `wake` an existing sleeping course editor instead of destroying/recreating it; this prevents chunk-preview texture teardown from invalidating the overworld's shared preview images on return
+  - suppressed the generic course-editor helper copy from leaking into the overworld status bar on exit
+  - verification:
+    - `./node_modules/.bin/tsc --noEmit` passed
+    - `npm run build` passed
+    - shared Playwright smoke client confirmed the course editor scene becomes active after `#btn-world-course-builder` and wrote:
+      - `output/web-game/course-editor-smoke-2/state-0.json`
+      - `output/web-game/course-editor-smoke-2/shot-0.png`
+    - smoke caveat:
+      - the shared client still hit the existing black-canvas capture path, so visual verification relied on direct full-page Playwright screenshots instead
+    - direct Playwright DOM/browser checks wrote:
+      - `output/web-game/course-editor-dom-check-3.json`
+      - `output/web-game/course-editor-dom-check-3.png`
+      - `output/web-game/course-editor-return-check-3.json`
+      - `output/web-game/course-editor-return-check-3.png`
+      - `output/web-game/course-editor-reopen-check.json`
+      - `output/web-game/course-editor-reopen-check.png`
+    - those checks confirmed:
+      - overworld `Course Builder` now opens `CourseEditorScene`
+      - selecting a different room in the course editor updates `selectedCoordinates`
+      - `World` returns cleanly to the overworld with no `drawImage` page error
+      - reopening the course editor reuses the sleeping scene and preserves the selected room focus
+
 - Practice-run spawn marker depth follow-up on March 24, 2026:
   - raised play-scene goal marker depth so the practice `START` sign and label now render above the room foreground plane instead of occasionally hiding behind front-layer art
   - verification:

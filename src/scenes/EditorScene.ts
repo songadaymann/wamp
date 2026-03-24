@@ -75,6 +75,7 @@ import {
 } from '../ui/appFeedback';
 import { isTextInputFocused } from '../ui/keyboardFocus';
 import type {
+  CourseEditorSceneData,
   CourseEditedRoomData,
   EditorCourseEditData,
   EditorSceneData,
@@ -844,6 +845,16 @@ export class EditorScene extends Phaser.Scene {
           closeHandler: async () => {
             hideBusyOverlay();
             this.scene.stop();
+            if (this.shouldReturnToCourseEditor()) {
+              this.scene.wake('CourseEditorScene', {
+                courseId: this.activeCourseMarkerEdit?.courseId ?? null,
+                selectedCoordinates: { ...this.roomCoordinates },
+                centerCoordinates: { ...this.roomCoordinates },
+                statusMessage: 'Failed to open room.',
+              } satisfies CourseEditorSceneData);
+              return;
+            }
+
             this.scene.wake('OverworldPlayScene', {
               centerCoordinates: { ...this.roomCoordinates },
               roomCoordinates: { ...this.roomCoordinates },
@@ -880,6 +891,10 @@ export class EditorScene extends Phaser.Scene {
     };
 
     this.scene.stop();
+    if (this.shouldReturnToCourseEditor()) {
+      this.scene.wake('CourseEditorScene', this.buildCourseEditorWakeData(wakeData));
+      return;
+    }
     this.scene.wake('OverworldPlayScene', wakeData);
   }
 
@@ -2502,11 +2517,38 @@ export class EditorScene extends Phaser.Scene {
     wakeData.courseEditedRoom = this.buildCourseEditedRoomData();
 
     this.scene.stop();
+    if (this.shouldReturnToCourseEditor()) {
+      this.scene.wake('CourseEditorScene', this.buildCourseEditorWakeData(wakeData));
+      return;
+    }
     this.scene.wake('OverworldPlayScene', wakeData);
   }
 
   async returnToCourseBuilder(): Promise<void> {
     await this.returnToWorld();
+  }
+
+  private shouldReturnToCourseEditor(): boolean {
+    return Boolean(
+      this.activeCourseMarkerEdit &&
+        (this.scene.isSleeping('CourseEditorScene') ||
+          this.scene.isPaused('CourseEditorScene') ||
+          this.scene.isActive('CourseEditorScene'))
+    );
+  }
+
+  private buildCourseEditorWakeData(wakeData: OverworldPlaySceneData): CourseEditorSceneData {
+    return {
+      courseId: this.activeCourseMarkerEdit?.courseId ?? null,
+      selectedCoordinates: { ...this.roomCoordinates },
+      centerCoordinates: { ...(wakeData.centerCoordinates ?? this.roomCoordinates) },
+      statusMessage: wakeData.statusMessage ?? null,
+      courseEditedRoom: this.buildCourseEditedRoomData(),
+      draftRoom: wakeData.draftRoom ?? null,
+      publishedRoom: wakeData.publishedRoom ?? null,
+      clearDraftRoomId: wakeData.clearDraftRoomId ?? null,
+      invalidateRoomId: wakeData.invalidateRoomId ?? null,
+    };
   }
 
   async editPreviousCourseRoom(): Promise<void> {

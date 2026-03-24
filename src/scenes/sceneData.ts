@@ -9,7 +9,12 @@ export interface EditorCourseEditData {
 export interface CourseEditedRoomData {
   courseId: string;
   roomId: string;
-  roomOrder: number | null;
+}
+
+export interface CourseEditorReturnTarget {
+  courseId: string | null;
+  selectedCoordinates: RoomCoordinates;
+  centerCoordinates: RoomCoordinates;
 }
 
 export interface EditorSceneData {
@@ -17,6 +22,18 @@ export interface EditorSceneData {
   source?: 'world' | 'direct';
   roomSnapshot?: RoomSnapshot | null;
   courseEdit?: EditorCourseEditData | null;
+}
+
+export interface CourseEditorSceneData {
+  selectedCoordinates?: RoomCoordinates;
+  centerCoordinates?: RoomCoordinates;
+  courseId?: string | null;
+  statusMessage?: string | null;
+  courseEditedRoom?: CourseEditedRoomData | null;
+  draftRoom?: RoomSnapshot | null;
+  publishedRoom?: RoomSnapshot | null;
+  clearDraftRoomId?: string | null;
+  invalidateRoomId?: string | null;
 }
 
 export type OverworldMode = 'browse' | 'play';
@@ -35,4 +52,5 @@ export interface OverworldPlaySceneData {
   courseDraftPreviewId?: string | null;
   courseEditedRoom?: CourseEditedRoomData | null;
   courseEditorNavigateOffset?: -1 | 1 | null;
+  courseEditorReturnTarget?: CourseEditorReturnTarget | null;
 }

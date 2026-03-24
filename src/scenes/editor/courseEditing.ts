@@ -54,7 +54,6 @@ export function buildCourseEditedRoomData(
   return {
     courseId: activeCourseMarkerEdit.courseId,
     roomId: activeCourseMarkerEdit.roomId,
-    roomOrder: activeCourseMarkerEdit.roomOrder,
   };
 }
 
@@ -155,72 +154,75 @@ export function buildCourseEditorState(
 ): EditorCourseUiState {
   const {
     activeCourseMarkerEdit,
-    courseEditorStatusText,
     draft,
     activeGoal,
-    coursePlacementMode,
   } = options;
-  const roomOrder = activeCourseMarkerEdit?.roomOrder ?? null;
-  const roomStepText =
-    roomOrder !== null
-      ? draft
-        ? `Room ${roomOrder + 1} of ${draft.roomRefs.length}`
-        : `Room ${roomOrder + 1}`
-      : '';
-  const canEditPreviousRoom =
-    roomOrder !== null &&
-    roomOrder > 0;
-  const canEditNextRoom =
-    roomOrder !== null &&
-    draft !== null &&
-    roomOrder < draft.roomRefs.length - 1;
+  if (activeCourseMarkerEdit) {
+    return {
+      visible: false,
+      statusHidden: true,
+      statusText: null,
+      roomStepText: '',
+      canReturnToCourseBuilder: true,
+      goalTypeValue: activeGoal?.type ?? '',
+      goalTypeDisabled: true,
+      timeLimitHidden: true,
+      timeLimitDisabled: true,
+      timeLimitValue: '',
+      requiredCountHidden: true,
+      requiredCountDisabled: true,
+      requiredCountValue: '1',
+      survivalHidden: true,
+      survivalDisabled: true,
+      survivalValue: '30',
+      markerControlsHidden: true,
+      placementHintHidden: true,
+      placementHintText: '',
+      summaryText: draft ? getCourseGoalSummaryText(draft) : '',
+      placeStartHidden: true,
+      placeStartActive: false,
+      placeExitHidden: true,
+      placeExitActive: false,
+      addCheckpointHidden: true,
+      addCheckpointActive: false,
+      placeFinishHidden: true,
+      placeFinishActive: false,
+      canEditPreviousRoom: false,
+      canEditNextRoom: false,
+    };
+  }
+
   return {
-    visible: Boolean(activeCourseMarkerEdit),
-    statusHidden: !getCourseEditorContextStatusText(activeCourseMarkerEdit, draft, courseEditorStatusText),
-    statusText: getCourseEditorContextStatusText(activeCourseMarkerEdit, draft, courseEditorStatusText),
-    roomStepText,
-    canReturnToCourseBuilder: Boolean(activeCourseMarkerEdit),
+    visible: false,
+    statusHidden: true,
+    statusText: null,
+    roomStepText: '',
+    canReturnToCourseBuilder: false,
     goalTypeValue: activeGoal?.type ?? '',
-    goalTypeDisabled: !draft,
-    timeLimitHidden: !activeGoal || !('timeLimitMs' in activeGoal),
-    timeLimitDisabled: !draft,
-    timeLimitValue:
-      activeGoal && 'timeLimitMs' in activeGoal && activeGoal.timeLimitMs
-        ? String(Math.round(activeGoal.timeLimitMs / 1000))
-        : '',
-    requiredCountHidden: activeGoal?.type !== 'collect_target',
-    requiredCountDisabled: !draft,
-    requiredCountValue:
-      activeGoal?.type === 'collect_target' ? String(activeGoal.requiredCount) : '1',
-    survivalHidden: activeGoal?.type !== 'survival',
-    survivalDisabled: !draft,
-    survivalValue:
-      activeGoal?.type === 'survival'
-        ? String(Math.round(activeGoal.durationMs / 1000))
-        : '30',
-    markerControlsHidden: !activeGoal,
-    placementHintHidden: coursePlacementMode === null,
-    placementHintText:
-      coursePlacementMode === 'start'
-        ? 'Click the canvas to place the course start marker.'
-        : coursePlacementMode === 'exit'
-          ? 'Click the canvas to place the course exit marker.'
-          : coursePlacementMode === 'checkpoint'
-            ? 'Click the canvas to add a course checkpoint.'
-            : coursePlacementMode === 'finish'
-              ? 'Click the canvas to place the course finish marker.'
-              : '',
-    summaryText: draft ? getCourseGoalSummaryText(draft) : 'Open this room from the course builder.',
-    placeStartHidden: !activeGoal,
-    placeStartActive: coursePlacementMode === 'start',
-    placeExitHidden: activeGoal?.type !== 'reach_exit',
-    placeExitActive: coursePlacementMode === 'exit',
-    addCheckpointHidden: activeGoal?.type !== 'checkpoint_sprint',
-    addCheckpointActive: coursePlacementMode === 'checkpoint',
-    placeFinishHidden: activeGoal?.type !== 'checkpoint_sprint',
-    placeFinishActive: coursePlacementMode === 'finish',
-    canEditPreviousRoom,
-    canEditNextRoom,
+    goalTypeDisabled: true,
+    timeLimitHidden: true,
+    timeLimitDisabled: true,
+    timeLimitValue: '',
+    requiredCountHidden: true,
+    requiredCountDisabled: true,
+    requiredCountValue: '1',
+    survivalHidden: true,
+    survivalDisabled: true,
+    survivalValue: '30',
+    markerControlsHidden: true,
+    placementHintHidden: true,
+    placementHintText: '',
+    summaryText: draft ? getCourseGoalSummaryText(draft) : '',
+    placeStartHidden: true,
+    placeStartActive: false,
+    placeExitHidden: true,
+    placeExitActive: false,
+    addCheckpointHidden: true,
+    addCheckpointActive: false,
+    placeFinishHidden: true,
+    placeFinishActive: false,
+    canEditPreviousRoom: false,
+    canEditNextRoom: false,
   };
 }
 
