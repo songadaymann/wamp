@@ -57,6 +57,18 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Practice-run spawn marker depth follow-up on March 24, 2026:
+  - raised play-scene goal marker depth so the practice `START` sign and label now render above the room foreground plane instead of occasionally hiding behind front-layer art
+  - verification:
+    - `npm run build` passed
+    - Playwright smoke client wrote:
+      - `output/web-game/practice-spawn-sign-depth-smoke/shot-0.png`
+      - `output/web-game/practice-spawn-sign-depth-smoke/state-0.json`
+    - source check:
+      - room foreground preview plane still renders at depth `27.25`
+      - goal-marker sprites now render at depth `29`
+      - goal-marker labels now render at depth `30`
+
 - Practice-run spawn marker pass on March 24, 2026:
   - room challenge play now renders the existing `spawn_point` sign asset at the ranked start location while a single-room run is still in `practice`
   - the practice marker adds a `START` label and rides the same goal-marker overlay system as exits/checkpoints, so side-entry players can see exactly where they need to go to arm the ranked attempt

@@ -333,6 +333,9 @@ interface PlayGoalMarkerDescriptor {
   alpha?: number;
 }
 
+const GOAL_MARKER_SPRITE_DEPTH = 29;
+const GOAL_MARKER_LABEL_DEPTH = 30;
+
 export class OverworldPlayScene extends Phaser.Scene {
   private readonly PLAYER_SPEED = 150;
   private readonly JUMP_VELOCITY = -280;
@@ -2399,7 +2402,7 @@ export class OverworldPlayScene extends Phaser.Scene {
             marker.variant,
             marker.point.x,
             marker.point.y + (marker.spriteOffsetY ?? 2),
-            21,
+            GOAL_MARKER_SPRITE_DEPTH,
           )
         : this.add.sprite(
             marker.point.x,
@@ -2408,7 +2411,7 @@ export class OverworldPlayScene extends Phaser.Scene {
             0,
           );
       sprite.setOrigin(0.5, 1);
-      sprite.setDepth(21);
+      sprite.setDepth(GOAL_MARKER_SPRITE_DEPTH);
       if (marker.alpha !== undefined) {
         sprite.setAlpha(marker.alpha);
       }
@@ -2423,7 +2426,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           strokeThickness: 4,
         });
         label.setOrigin(0.5, 1);
-        label.setDepth(22);
+        label.setDepth(GOAL_MARKER_LABEL_DEPTH);
         this.goalMarkerLabels.push(label);
       }
     }
