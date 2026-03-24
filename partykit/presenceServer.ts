@@ -8,6 +8,7 @@ import {
   type RoomChatSayMessage,
   type RoomChatTransportChannel,
 } from '../src/chat/roomChatModel';
+import type { RoomSnapshot } from '../src/persistence/roomModel';
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 const STALE_HEARTBEAT_MS = 120_000;
@@ -41,6 +42,12 @@ interface PresencePayload {
   timestamp: number;
 }
 
+interface RoomPreviewPayload {
+  roomCoordinates: RoomCoordinates;
+  snapshot: RoomSnapshot;
+  timestamp: number;
+}
+
 interface ConnectionPresenceState {
   channel: RoomChatTransportChannel;
   userId: string;
@@ -59,10 +66,24 @@ interface WorldGhostPresence extends PresencePayload {
   roomId: string;
 }
 
+interface SharedRoomPreview extends RoomPreviewPayload {
+  roomId: string;
+  userId: string;
+  displayName: string;
+  shardId: string;
+}
+
 type IncomingMessage =
   | {
       type: 'presence:update';
       presence: PresencePayload;
+    }
+  | {
+      type: 'presence:preview:update';
+      preview: RoomPreviewPayload;
+    }
+  | {
+      type: 'presence:preview:clear';
     }
   | {
       type: 'presence:leave';
@@ -95,6 +116,7 @@ export default class PresenceServer implements Party.Server {
 
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private lastHeartbeatAt = 0;
+  private readonly previewsByConnectionId = new Map<string, RoomPreviewPayload>();
 
   constructor(readonly room: Party.Room) {
     this.syncHeartbeatTimer();
@@ -142,6 +164,7 @@ export default class PresenceServer implements Party.Server {
           peers: this.listPeers(connection.id),
           roomPopulations: this.computeRoomPopulations(),
           roomEditors: this.computeRoomEditors(),
+          roomPreviews: this.computeRoomPreviews(),
         })
       );
     }
@@ -174,6 +197,16 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
+    if (parsed.type === 'presence:preview:clear') {
+      this.clearPreview(sender);
+      return;
+    }
+
+    if (parsed.type === 'presence:preview:update') {
+      this.updatePreview(sender, parsed.preview);
+      return;
+    }
+
     if (parsed.type !== 'presence:update') {
       return;
     }
@@ -184,9 +217,23 @@ export default class PresenceServer implements Party.Server {
     }
 
     const previousPresence = current.presence ?? null;
+    const previousPreview = this.previewsByConnectionId.get(sender.id) ?? null;
     const presence = this.normalizePresencePayload(parsed.presence);
     if (!presence) {
       return;
+    }
+
+    const nextPreview =
+      previousPreview &&
+      presence.mode === 'edit' &&
+      this.getRoomId(previousPreview.roomCoordinates) === this.getRoomId(presence.roomCoordinates)
+        ? previousPreview
+        : null;
+    const previewChanged = nextPreview !== previousPreview;
+    if (nextPreview) {
+      this.previewsByConnectionId.set(sender.id, nextPreview);
+    } else {
+      this.previewsByConnectionId.delete(sender.id);
     }
 
     sender.setState({
@@ -217,7 +264,7 @@ export default class PresenceServer implements Party.Server {
       }
 
       const shouldBroadcast = this.shouldBroadcastPopulations(previousPresence, presence);
-      if (shouldBroadcast) {
+      if (shouldBroadcast || previewChanged) {
         this.broadcastPopulations();
         void this.maybeSendShardHeartbeat(true);
       }
@@ -226,6 +273,7 @@ export default class PresenceServer implements Party.Server {
 
   onClose(connection: Party.Connection<ConnectionPresenceState>): void {
     const presence = connection.state?.presence;
+    this.previewsByConnectionId.delete(connection.id);
     if (connection.state?.channel === 'presence' && this.isVisiblePresence(presence)) {
       this.sendPresenceMessage({
         type: 'remove',
@@ -243,6 +291,8 @@ export default class PresenceServer implements Party.Server {
   private clearPresence(connection: Party.Connection<ConnectionPresenceState>): void {
     const current = connection.state;
     const previousPresence = current?.presence ?? null;
+    const previousPreview = this.previewsByConnectionId.get(connection.id) ?? null;
+    this.previewsByConnectionId.delete(connection.id);
     if (!previousPresence) {
       connection.setState(
         current
@@ -252,6 +302,10 @@ export default class PresenceServer implements Party.Server {
             }
           : null
       );
+      if (current?.channel === 'presence' && previousPreview !== null) {
+        this.broadcastPopulations();
+        void this.maybeSendShardHeartbeat(true);
+      }
       return;
     }
 
@@ -272,7 +326,7 @@ export default class PresenceServer implements Party.Server {
 
     if (
       current?.channel === 'presence' &&
-      this.shouldBroadcastPopulations(previousPresence, null)
+      (this.shouldBroadcastPopulations(previousPresence, null) || previousPreview !== null)
     ) {
       this.broadcastPopulations();
       void this.maybeSendShardHeartbeat(true);
@@ -336,11 +390,32 @@ export default class PresenceServer implements Party.Server {
     );
   }
 
+  private computeRoomPreviews(): Record<string, SharedRoomPreview> {
+    const previewsByRoomId = new Map<string, SharedRoomPreview>();
+
+    for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
+      const preview = this.toRoomPreview(connection);
+      if (!preview) {
+        continue;
+      }
+
+      const existing = previewsByRoomId.get(preview.roomId) ?? null;
+      if (!existing || preview.timestamp >= existing.timestamp) {
+        previewsByRoomId.set(preview.roomId, preview);
+      }
+    }
+
+    return Object.fromEntries(
+      Array.from(previewsByRoomId.entries()).sort(([left], [right]) => left.localeCompare(right))
+    );
+  }
+
   private broadcastPopulations(): void {
     this.sendPresenceMessage({
       type: 'populations',
       roomPopulations: this.computeRoomPopulations(),
       roomEditors: this.computeRoomEditors(),
+      roomPreviews: this.computeRoomPreviews(),
     });
   }
 
@@ -370,6 +445,55 @@ export default class PresenceServer implements Party.Server {
     );
   }
 
+  private toRoomPreview(
+    connection: Party.Connection<ConnectionPresenceState>
+  ): SharedRoomPreview | null {
+    const state = connection.state;
+    const preview = this.previewsByConnectionId.get(connection.id) ?? null;
+    if (!state?.presence || state.presence.mode !== 'edit' || !preview) {
+      return null;
+    }
+
+    return {
+      ...preview,
+      roomId: this.getRoomId(preview.roomCoordinates),
+      userId: state.userId,
+      displayName: state.displayName,
+      shardId: this.room.id,
+    };
+  }
+
+  private updatePreview(
+    connection: Party.Connection<ConnectionPresenceState>,
+    value: unknown,
+  ): void {
+    const current = connection.state;
+    if (!current || current.channel !== 'presence') {
+      return;
+    }
+
+    const preview = this.normalizeRoomPreviewPayload(value);
+    if (!preview) {
+      return;
+    }
+
+    this.previewsByConnectionId.set(connection.id, preview);
+    this.broadcastPopulations();
+  }
+
+  private clearPreview(connection: Party.Connection<ConnectionPresenceState>): void {
+    if (connection.state?.channel !== 'presence') {
+      return;
+    }
+
+    if (!this.previewsByConnectionId.has(connection.id)) {
+      return;
+    }
+
+    this.previewsByConnectionId.delete(connection.id);
+    this.broadcastPopulations();
+  }
+
   private shouldBroadcastPopulations(
     previousPresence: PresencePayload | null,
     nextPresence: PresencePayload | null
@@ -392,6 +516,51 @@ export default class PresenceServer implements Party.Server {
 
   private getRoomId(roomCoordinates: RoomCoordinates): string {
     return `${roomCoordinates.x},${roomCoordinates.y}`;
+  }
+
+  private normalizeRoomPreviewPayload(value: unknown): RoomPreviewPayload | null {
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    const payload = value as Partial<RoomPreviewPayload>;
+    if (
+      !payload.roomCoordinates ||
+      !Number.isInteger(payload.roomCoordinates.x) ||
+      !Number.isInteger(payload.roomCoordinates.y) ||
+      typeof payload.timestamp !== 'number' ||
+      !payload.snapshot ||
+      typeof payload.snapshot !== 'object'
+    ) {
+      return null;
+    }
+
+    const snapshot = payload.snapshot as Partial<RoomSnapshot>;
+    if (
+      typeof snapshot.id !== 'string' ||
+      !snapshot.coordinates ||
+      snapshot.coordinates.x !== payload.roomCoordinates.x ||
+      snapshot.coordinates.y !== payload.roomCoordinates.y
+    ) {
+      return null;
+    }
+
+    try {
+      if (JSON.stringify(payload.snapshot).length > 120_000) {
+        return null;
+      }
+    } catch {
+      return null;
+    }
+
+    return {
+      roomCoordinates: {
+        x: payload.roomCoordinates.x,
+        y: payload.roomCoordinates.y,
+      },
+      snapshot: payload.snapshot as RoomSnapshot,
+      timestamp: payload.timestamp,
+    };
   }
 
   private async maybeSendShardHeartbeat(force = false): Promise<void> {

@@ -434,6 +434,7 @@ export class EditorScene extends Phaser.Scene {
       },
       onRoomMarkedDirty: () => {
         this.roomEditCount += 1;
+        this.presenceController.markConstructionPreviewDirty();
         this.flowController.maybeTriggerPublishNudge();
       },
     });
@@ -514,6 +515,9 @@ export class EditorScene extends Phaser.Scene {
     );
     this.presenceController = new EditorPresenceController({
       getRoomCoordinates: () => ({ ...this.roomCoordinates }),
+      getEntrySource: () => this.entrySource,
+      getPublishedVersion: () => this.publishedVersion,
+      exportRoomSnapshot: () => this.exportRoomSnapshot(),
       isPlaying: () => editorState.isPlaying,
       isSceneActive: () => this.scene.isActive(this.scene.key),
     });

@@ -356,6 +356,8 @@ export class OverworldChunkPreviewRenderer {
           {
             offsetX: localRoomX * ROOM_WIDTH * previewTileSize,
             offsetY: localRoomY * ROOM_HEIGHT * previewTileSize,
+            showConstructionOverlay: room.status !== 'published',
+            constructionLabel: 'BUILDING',
           }
         );
       }

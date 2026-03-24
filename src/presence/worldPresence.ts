@@ -2,7 +2,12 @@ import PartySocket from 'partysocket';
 import { getAuthDebugState, getResolvedPartykitConfig } from '../auth/client';
 import { resolveActivePlayerAvatarId } from '../player/avatar/runtime';
 import type { DefaultPlayerAnimationState } from '../player/defaultPlayer';
-import { roomIdFromCoordinates, type RoomCoordinates } from '../persistence/roomModel';
+import {
+  cloneRoomSnapshot,
+  roomIdFromCoordinates,
+  type RoomCoordinates,
+  type RoomSnapshot,
+} from '../persistence/roomModel';
 import {
   chunkIdFromCoordinates,
   roomToChunkCoordinates,
@@ -42,6 +47,16 @@ export interface WorldGhostPresence extends WorldPresencePayload {
   roomId: string;
 }
 
+export interface WorldPresenceRoomPreview {
+  roomId: string;
+  roomCoordinates: RoomCoordinates;
+  snapshot: RoomSnapshot;
+  timestamp: number;
+  userId: string;
+  displayName: string;
+  shardId: string;
+}
+
 export interface WorldPresenceSnapshot {
   enabled: boolean;
   status: 'disabled' | 'connecting' | 'connected';
@@ -51,6 +66,7 @@ export interface WorldPresenceSnapshot {
   ghosts: WorldGhostPresence[];
   roomPopulations: Record<string, number>;
   roomEditors: Record<string, number>;
+  roomPreviews: Record<string, WorldPresenceRoomPreview>;
 }
 
 interface PartySocketRecord {
@@ -63,6 +79,7 @@ interface PresenceSnapshotMessage {
   peers: WorldGhostPresence[];
   roomPopulations: Record<string, number>;
   roomEditors: Record<string, number>;
+  roomPreviews: Record<string, WorldPresenceRoomPreview>;
 }
 
 interface PresenceUpsertMessage {
@@ -79,6 +96,7 @@ interface PresencePopulationsMessage {
   type: 'populations';
   roomPopulations: Record<string, number>;
   roomEditors: Record<string, number>;
+  roomPreviews: Record<string, WorldPresenceRoomPreview>;
 }
 
 type PresenceMessage =
@@ -92,8 +110,23 @@ interface PresencePublishMessage {
   presence: WorldPresencePayload;
 }
 
+interface PresencePreviewPayload {
+  roomCoordinates: RoomCoordinates;
+  snapshot: RoomSnapshot;
+  timestamp: number;
+}
+
 interface PresenceLeaveMessage {
   type: 'presence:leave';
+}
+
+interface PresencePreviewUpdateMessage {
+  type: 'presence:preview:update';
+  preview: PresencePreviewPayload;
+}
+
+interface PresencePreviewClearMessage {
+  type: 'presence:preview:clear';
 }
 
 interface WorldPresenceClientOptions {
@@ -109,11 +142,15 @@ export class WorldPresenceClient {
   private readonly ghostsByConnectionId = new Map<string, WorldGhostPresence>();
   private readonly roomPopulationsByShardId = new Map<string, Map<string, number>>();
   private readonly roomEditorsByShardId = new Map<string, Map<string, number>>();
+  private readonly roomPreviewsByShardId = new Map<string, Map<string, WorldPresenceRoomPreview>>();
   private readonly connectedShards = new Set<string>();
   private desiredShardIds = new Set<string>();
   private localPresence: WorldPresencePayload | null = null;
+  private localRoomPreview: PresencePreviewPayload | null = null;
   private publishedShardId: string | null = null;
+  private previewShardId: string | null = null;
   private lastPublishedPayloadJson: string | null = null;
+  private lastPublishedPreviewJson: string | null = null;
   private lastPublishedAt = 0;
 
   constructor(private readonly options: WorldPresenceClientOptions) {
@@ -187,9 +224,64 @@ export class WorldPresenceClient {
     this.emitSnapshot();
   }
 
+  updateLocalRoomPreview(nextPreview: {
+    roomCoordinates: RoomCoordinates;
+    snapshot: RoomSnapshot;
+  } | null): void {
+    const normalizedPreview = nextPreview
+      ? {
+          roomCoordinates: { ...nextPreview.roomCoordinates },
+          snapshot: cloneRoomSnapshot(nextPreview.snapshot),
+          timestamp: Date.now(),
+        }
+      : null;
+    const nextShardId = normalizedPreview
+      ? chunkIdFromCoordinates(roomToChunkCoordinates(normalizedPreview.roomCoordinates))
+      : null;
+
+    if (this.previewShardId && this.previewShardId !== nextShardId) {
+      this.sendPreviewClearToShard(this.previewShardId);
+      this.previewShardId = null;
+      this.lastPublishedPreviewJson = null;
+    }
+
+    this.localRoomPreview = normalizedPreview;
+    if (!normalizedPreview || !nextShardId) {
+      if (this.previewShardId) {
+        this.sendPreviewClearToShard(this.previewShardId);
+      }
+      this.previewShardId = null;
+      this.lastPublishedPreviewJson = null;
+      this.emitSnapshot();
+      return;
+    }
+
+    const shardSocket = this.socketsByShardId.get(nextShardId)?.socket ?? null;
+    this.previewShardId = nextShardId;
+    if (!shardSocket || shardSocket.readyState !== PartySocket.OPEN) {
+      this.emitSnapshot();
+      return;
+    }
+
+    const payload = JSON.stringify({
+      type: 'presence:preview:update',
+      preview: normalizedPreview,
+    } satisfies PresencePreviewUpdateMessage);
+    if (payload === this.lastPublishedPreviewJson) {
+      return;
+    }
+
+    shardSocket.send(payload);
+    this.lastPublishedPreviewJson = payload;
+    this.emitSnapshot();
+  }
+
   destroy(): void {
     if (this.publishedShardId) {
       this.sendLeaveToShard(this.publishedShardId);
+    }
+    if (this.previewShardId) {
+      this.sendPreviewClearToShard(this.previewShardId);
     }
 
     for (const shardId of Array.from(this.socketsByShardId.keys())) {
@@ -201,9 +293,13 @@ export class WorldPresenceClient {
     this.ghostsByConnectionId.clear();
     this.roomPopulationsByShardId.clear();
     this.roomEditorsByShardId.clear();
+    this.roomPreviewsByShardId.clear();
     this.localPresence = null;
+    this.localRoomPreview = null;
     this.publishedShardId = null;
+    this.previewShardId = null;
     this.lastPublishedPayloadJson = null;
+    this.lastPublishedPreviewJson = null;
     this.emitSnapshot();
   }
 
@@ -225,6 +321,11 @@ export class WorldPresenceClient {
       if (this.localPresence && this.resolveLocalShardId() === shardId) {
         this.lastPublishedPayloadJson = null;
         this.updateLocalPresence(this.localPresence);
+      }
+
+      if (this.localRoomPreview && this.resolveLocalPreviewShardId() === shardId) {
+        this.lastPublishedPreviewJson = null;
+        this.updateLocalRoomPreview(this.localRoomPreview);
       } else {
         this.emitSnapshot();
       }
@@ -235,8 +336,12 @@ export class WorldPresenceClient {
       this.removeGhostsForShard(shardId);
       this.roomPopulationsByShardId.delete(shardId);
       this.roomEditorsByShardId.delete(shardId);
+      this.roomPreviewsByShardId.delete(shardId);
       if (this.publishedShardId === shardId) {
         this.lastPublishedPayloadJson = null;
+      }
+      if (this.previewShardId === shardId) {
+        this.lastPublishedPreviewJson = null;
       }
       this.emitSnapshot();
     });
@@ -266,11 +371,17 @@ export class WorldPresenceClient {
       this.publishedShardId = null;
       this.lastPublishedPayloadJson = null;
     }
+    if (this.previewShardId === shardId) {
+      this.sendPreviewClearToShard(shardId);
+      this.previewShardId = null;
+      this.lastPublishedPreviewJson = null;
+    }
 
     record.socket.close(1000, 'shard-unsubscribe');
     this.connectedShards.delete(shardId);
     this.socketsByShardId.delete(shardId);
     this.removeGhostsForShard(shardId);
+    this.roomPreviewsByShardId.delete(shardId);
   }
 
   private sendLeaveToShard(shardId: string): void {
@@ -280,6 +391,15 @@ export class WorldPresenceClient {
     }
 
     socket.send(JSON.stringify({ type: 'presence:leave' } satisfies PresenceLeaveMessage));
+  }
+
+  private sendPreviewClearToShard(shardId: string): void {
+    const socket = this.socketsByShardId.get(shardId)?.socket ?? null;
+    if (!socket || socket.readyState !== PartySocket.OPEN) {
+      return;
+    }
+
+    socket.send(JSON.stringify({ type: 'presence:preview:clear' } satisfies PresencePreviewClearMessage));
   }
 
   private handlePresenceMessage(shardId: string, rawMessage: string): void {
@@ -307,6 +427,7 @@ export class WorldPresenceClient {
         }
         this.replaceRoomPopulations(shardId, message.roomPopulations);
         this.replaceRoomEditors(shardId, message.roomEditors);
+        this.replaceRoomPreviews(shardId, message.roomPreviews);
         break;
       case 'upsert':
         this.ghostsByConnectionId.set(message.peer.connectionId, {
@@ -321,6 +442,7 @@ export class WorldPresenceClient {
       case 'populations':
         this.replaceRoomPopulations(shardId, message.roomPopulations);
         this.replaceRoomEditors(shardId, message.roomEditors);
+        this.replaceRoomPreviews(shardId, message.roomPreviews);
         break;
       default:
         return;
@@ -357,6 +479,28 @@ export class WorldPresenceClient {
     this.roomEditorsByShardId.set(shardId, shardEditors);
   }
 
+  private replaceRoomPreviews(
+    shardId: string,
+    next: Record<string, WorldPresenceRoomPreview> | null | undefined,
+  ): void {
+    const shardPreviews = new Map<string, WorldPresenceRoomPreview>();
+    for (const [roomId, preview] of Object.entries(next ?? {})) {
+      if (!preview || typeof preview !== 'object' || typeof preview.timestamp !== 'number') {
+        continue;
+      }
+
+      shardPreviews.set(roomId, {
+        ...preview,
+        roomId,
+        shardId,
+        roomCoordinates: { ...preview.roomCoordinates },
+        snapshot: cloneRoomSnapshot(preview.snapshot),
+      });
+    }
+
+    this.roomPreviewsByShardId.set(shardId, shardPreviews);
+  }
+
   private removeGhostsForShard(shardId: string): void {
     for (const [connectionId, ghost] of this.ghostsByConnectionId.entries()) {
       if (ghost.shardId === shardId) {
@@ -371,6 +515,14 @@ export class WorldPresenceClient {
     }
 
     return chunkIdFromCoordinates(roomToChunkCoordinates(this.localPresence.roomCoordinates));
+  }
+
+  private resolveLocalPreviewShardId(): string | null {
+    if (!this.localRoomPreview) {
+      return null;
+    }
+
+    return chunkIdFromCoordinates(roomToChunkCoordinates(this.localRoomPreview.roomCoordinates));
   }
 
   private emitSnapshot(): void {
@@ -388,6 +540,15 @@ export class WorldPresenceClient {
         mergedRoomEditors.set(roomId, (mergedRoomEditors.get(roomId) ?? 0) + count);
       }
     }
+    const mergedRoomPreviews = new Map<string, WorldPresenceRoomPreview>();
+    for (const shardPreviews of this.roomPreviewsByShardId.values()) {
+      for (const [roomId, preview] of shardPreviews.entries()) {
+        const existing = mergedRoomPreviews.get(roomId) ?? null;
+        if (!existing || preview.timestamp >= existing.timestamp) {
+          mergedRoomPreviews.set(roomId, preview);
+        }
+      }
+    }
     const roomPopulations: Record<string, number> = {};
     for (const [roomId, count] of Array.from(mergedRoomPopulations.entries()).sort(([left], [right]) =>
       left.localeCompare(right)
@@ -399,6 +560,16 @@ export class WorldPresenceClient {
       left.localeCompare(right)
     )) {
       roomEditors[roomId] = count;
+    }
+    const roomPreviews: Record<string, WorldPresenceRoomPreview> = {};
+    for (const [roomId, preview] of Array.from(mergedRoomPreviews.entries()).sort(([left], [right]) =>
+      left.localeCompare(right)
+    )) {
+      roomPreviews[roomId] = {
+        ...preview,
+        roomCoordinates: { ...preview.roomCoordinates },
+        snapshot: cloneRoomSnapshot(preview.snapshot),
+      };
     }
 
     this.options.onSnapshot({
@@ -417,6 +588,7 @@ export class WorldPresenceClient {
       ),
       roomPopulations,
       roomEditors,
+      roomPreviews,
     });
   }
 }
