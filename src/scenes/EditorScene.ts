@@ -106,12 +106,16 @@ type EditorMarkerPlacementMode = GoalPlacementMode | 'start';
 
 export class EditorScene extends Phaser.Scene {
   private readonly PUBLISH_NUDGE_EDIT_THRESHOLD = 10;
+  private readonly SHARED_PREVIEW_PUBLISH_INTERVAL_MS = 1_200;
   private uiBridge: EditorUiBridge | null = null;
   private layerIndicatorText: Phaser.GameObjects.Text | null = null;
   private layerGuideGraphics: Phaser.GameObjects.Graphics | null = null;
   private pressurePlateGraphics: Phaser.GameObjects.Graphics | null = null;
   private containerGraphics: Phaser.GameObjects.Graphics | null = null;
   private editorPresenceClient: WorldPresenceClient | null = null;
+  private sharedConstructionPreviewDirty = true;
+  private lastSharedConstructionPreviewPublishAt = 0;
+  private lastSharedConstructionPreviewStateKey: string | null = null;
   private courseMarkerSprites: Phaser.GameObjects.Sprite[] = [];
   private courseMarkerLabels: Phaser.GameObjects.Text[] = [];
   private activeCourseMarkerEdit: EditorCourseEditData | null = null;
@@ -915,6 +919,7 @@ export class EditorScene extends Phaser.Scene {
     this.editRuntime.isRoomDirty = true;
     this.editRuntime.currentLastDirtyAt = performance.now();
     this.roomEditCount += 1;
+    this.sharedConstructionPreviewDirty = true;
     this.updatePersistenceStatus(this.getDirtyPersistenceStatusText());
     this.maybeTriggerPublishNudge();
   }
@@ -2408,6 +2413,7 @@ export class EditorScene extends Phaser.Scene {
   private syncEditorPresence(): void {
     if (!this.editorPresenceClient || !this.scene.isActive(this.scene.key) || editorState.isPlaying) {
       this.editorPresenceClient?.updateLocalPresence(null);
+      this.clearSharedConstructionPreview();
       return;
     }
 
@@ -2422,6 +2428,67 @@ export class EditorScene extends Phaser.Scene {
       mode: 'edit',
       timestamp: Date.now(),
     });
+    this.syncSharedConstructionPreview();
+  }
+
+  private syncSharedConstructionPreview(): void {
+    if (!this.editorPresenceClient) {
+      return;
+    }
+
+    const stateKey = this.shouldPublishSharedConstructionPreview()
+      ? `${this.roomCoordinates.x},${this.roomCoordinates.y}:${this.publishedVersion}`
+      : null;
+    if (!stateKey) {
+      this.clearSharedConstructionPreview();
+      return;
+    }
+
+    const now = performance.now();
+    const stateChanged = this.lastSharedConstructionPreviewStateKey !== stateKey;
+    if (
+      !stateChanged &&
+      !this.sharedConstructionPreviewDirty &&
+      this.lastSharedConstructionPreviewStateKey !== null
+    ) {
+      return;
+    }
+
+    if (
+      !stateChanged &&
+      now - this.lastSharedConstructionPreviewPublishAt < this.SHARED_PREVIEW_PUBLISH_INTERVAL_MS
+    ) {
+      return;
+    }
+
+    this.editorPresenceClient.updateLocalRoomPreview({
+      roomCoordinates: this.roomCoordinates,
+      snapshot: this.buildSharedConstructionPreviewSnapshot(),
+    });
+    this.sharedConstructionPreviewDirty = false;
+    this.lastSharedConstructionPreviewPublishAt = now;
+    this.lastSharedConstructionPreviewStateKey = stateKey;
+  }
+
+  private clearSharedConstructionPreview(): void {
+    if (!this.editorPresenceClient || this.lastSharedConstructionPreviewStateKey === null) {
+      return;
+    }
+
+    this.editorPresenceClient.updateLocalRoomPreview(null);
+    this.lastSharedConstructionPreviewStateKey = null;
+  }
+
+  private shouldPublishSharedConstructionPreview(): boolean {
+    return this.entrySource === 'world' && this.publishedVersion === 0;
+  }
+
+  private buildSharedConstructionPreviewSnapshot(): RoomSnapshot {
+    const snapshot = this.exportRoomSnapshot();
+    snapshot.status = 'draft';
+    snapshot.updatedAt = new Date().toISOString();
+    snapshot.publishedAt = null;
+    return snapshot;
   }
 
   private maybeTriggerPublishNudge(): void {

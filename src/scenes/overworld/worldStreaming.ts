@@ -114,6 +114,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private roomSummariesById = new Map<string, WorldRoomSummary>();
   private draftRoomsById = new Map<string, RoomSnapshot>();
   private transientRoomOverridesById = new Map<string, RoomSnapshot>();
+  private presencePreviewRoomsById = new Map<string, RoomSnapshot>();
   private readonly previewCache: OverworldPreviewCache;
   private readonly previewRenderer: OverworldChunkPreviewRenderer;
   private loadedFullRoomsById = new Map<string, LoadedFullRoom<TLiveObject, TEdgeWall>>();
@@ -151,6 +152,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.roomSummariesById = new Map();
     this.draftRoomsById = new Map();
     this.transientRoomOverridesById = new Map();
+    this.presencePreviewRoomsById = new Map();
     this.previewCache.reset();
     this.previewRenderer.reset();
     this.loadedFullRoomsById = new Map();
@@ -176,6 +178,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.roomSummariesById = new Map();
     this.draftRoomsById = new Map();
     this.transientRoomOverridesById = new Map();
+    this.presencePreviewRoomsById = new Map();
     this.previewCache.reset();
     this.previewRenderer.reset();
     this.loadedFullRoomsById = new Map();
@@ -201,6 +204,20 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.transientRoomOverridesById.set(room.id, cloneRoomSnapshot(room));
     this.invalidateRoomArtifacts(room.id, false);
     this.rebuildLoadedSummaryState();
+    this.refreshVisibleRoomsFromCache();
+  }
+
+  syncPresencePreviewRooms(previews: Iterable<RoomSnapshot>): void {
+    const nextPreviewsById = new Map<string, RoomSnapshot>();
+    for (const preview of previews) {
+      nextPreviewsById.set(preview.id, cloneRoomSnapshot(preview));
+    }
+
+    if (this.arePresencePreviewMapsEqual(this.presencePreviewRoomsById, nextPreviewsById)) {
+      return;
+    }
+
+    this.presencePreviewRoomsById = nextPreviewsById;
     this.refreshVisibleRoomsFromCache();
   }
 
@@ -610,6 +627,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         coordinates: { ...summary.coordinates },
         summary,
         draft: null,
+        sharedPreview: null,
+        allowFullRoomLoad: summary.state === 'published',
       });
     }
 
@@ -624,6 +643,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         coordinates: { ...draftRoom.coordinates },
         summary: existing?.summary ?? null,
         draft: cloneRoomSnapshot(draftRoom),
+        sharedPreview: null,
+        allowFullRoomLoad: true,
       });
     }
 
@@ -638,6 +659,28 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         coordinates: { ...overrideRoom.coordinates },
         summary: existing?.summary ?? null,
         draft: cloneRoomSnapshot(overrideRoom),
+        sharedPreview: null,
+        allowFullRoomLoad: true,
+      });
+    }
+
+    for (const previewRoom of this.presencePreviewRoomsById.values()) {
+      if (!isWithinRoomBounds(previewRoom.coordinates, roomBounds)) {
+        continue;
+      }
+
+      const existing = candidates.get(previewRoom.id);
+      if (existing?.draft) {
+        continue;
+      }
+
+      candidates.set(previewRoom.id, {
+        id: previewRoom.id,
+        coordinates: { ...previewRoom.coordinates },
+        summary: existing?.summary ?? null,
+        draft: null,
+        sharedPreview: cloneRoomSnapshot(previewRoom),
+        allowFullRoomLoad: false,
       });
     }
 
@@ -651,7 +694,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       (roomCandidate) => ({
         id: roomCandidate.id,
         coordinates: { ...roomCandidate.coordinates },
-        isRenderable: roomCandidate.draft !== null || roomCandidate.summary?.state === 'published',
+        isRenderable:
+          roomCandidate.draft !== null ||
+          roomCandidate.sharedPreview !== null ||
+          roomCandidate.summary?.state === 'published',
+        allowFullRoomLoad: roomCandidate.allowFullRoomLoad,
       })
     );
 
@@ -672,6 +719,32 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.farLodRoomIds = selection.farLodRoomIds;
 
     return selection;
+  }
+
+  private arePresencePreviewMapsEqual(
+    current: Map<string, RoomSnapshot>,
+    next: Map<string, RoomSnapshot>,
+  ): boolean {
+    if (current.size !== next.size) {
+      return false;
+    }
+
+    for (const [roomId, currentRoom] of current.entries()) {
+      const nextRoom = next.get(roomId);
+      if (!nextRoom) {
+        return false;
+      }
+
+      if (
+        currentRoom.version !== nextRoom.version ||
+        currentRoom.updatedAt !== nextRoom.updatedAt ||
+        currentRoom.status !== nextRoom.status
+      ) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   private mergeRoomSummariesFromChunks(chunkWindow: WorldChunkWindow): WorldRoomSummary[] {

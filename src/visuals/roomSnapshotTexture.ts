@@ -24,6 +24,8 @@ export interface RoomTextureBuildOptions {
   includeObjects?: boolean;
   includeBackground?: boolean;
   includedLayers?: LayerName[];
+  showConstructionOverlay?: boolean;
+  constructionLabel?: string;
 }
 
 export interface RoomTextureDrawOptions extends RoomTextureBuildOptions {
@@ -45,6 +47,7 @@ export function buildRoomTextureKey(
     options.includeBackground === false ? 'no-background' : 'with-background',
     options.includeObjects === false ? 'tiles-only' : 'with-objects',
     options.includedLayers?.join('_') ?? 'all-layers',
+    options.showConstructionOverlay ? `construction-${sanitizeTextureKey(options.constructionLabel ?? 'building')}` : 'clean',
     room.version,
     sanitizeTextureKey(room.updatedAt),
   ].join('-');
@@ -109,6 +112,17 @@ export function drawRoomSnapshotToContext(
     offsetX,
     offsetY,
   );
+
+  if (options.showConstructionOverlay) {
+    drawConstructionOverlay(
+      context,
+      width,
+      height,
+      offsetX,
+      offsetY,
+      options.constructionLabel ?? 'BUILDING',
+    );
+  }
 
   context.restore();
 }
@@ -197,6 +211,50 @@ function drawRoomTiles(
   }
 
   context.globalAlpha = 1;
+}
+
+function drawConstructionOverlay(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  offsetX: number,
+  offsetY: number,
+  label: string,
+): void {
+  const bannerHeight = Math.max(10, Math.floor(height * 0.22));
+  const stripeWidth = Math.max(8, Math.floor(width / 10));
+  const stripeHeight = Math.max(8, Math.floor(bannerHeight * 0.92));
+
+  context.save();
+  context.translate(offsetX, offsetY);
+
+  context.fillStyle = 'rgba(12, 12, 12, 0.28)';
+  context.fillRect(0, 0, width, height);
+
+  for (let stripeX = -stripeWidth; stripeX < width + stripeWidth; stripeX += stripeWidth) {
+    context.fillStyle = (Math.floor(stripeX / stripeWidth) & 1) === 0 ? '#f6c445' : '#141414';
+    context.beginPath();
+    context.moveTo(stripeX, 0);
+    context.lineTo(stripeX + stripeWidth, 0);
+    context.lineTo(stripeX + stripeWidth * 0.4, stripeHeight);
+    context.lineTo(stripeX - stripeWidth * 0.6, stripeHeight);
+    context.closePath();
+    context.fill();
+  }
+
+  context.fillStyle = 'rgba(7, 7, 7, 0.76)';
+  context.fillRect(0, 0, width, bannerHeight);
+  context.strokeStyle = 'rgba(255, 203, 82, 0.92)';
+  context.lineWidth = 2;
+  context.strokeRect(1, 1, Math.max(0, width - 2), Math.max(0, height - 2));
+
+  context.font = `bold ${Math.max(6, Math.floor(bannerHeight * 0.54))}px monospace`;
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillStyle = '#fff6c2';
+  context.fillText(label, width * 0.5, bannerHeight * 0.54);
+
+  context.restore();
 }
 
 function drawTileFrame(

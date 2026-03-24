@@ -57,6 +57,30 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Frontier construction preview pass on March 24, 2026:
+  - unpublished frontier rooms being edited from the overworld now publish a throttled shared `RoomSnapshot` preview over PartyKit presence, so other players can see that the room is effectively claimed before it is published
+  - overworld chunk streaming now treats those shared previews as preview-only renderables:
+    - they render in browse mode and play mode
+    - they never become eligible for full-room loading or stitched-room gameplay just because a builder is editing them
+  - room preview rendering now adds a clear construction treatment for non-published snapshots:
+    - dark wash
+    - caution stripe banner
+    - `BUILDING` label
+  - root-cause follow-up:
+    - the first implementation pushed preview payloads into PartyKit connection state, which let editor-presence counts through but dropped the actual preview snapshot from shard broadcasts
+    - fixed by moving room-preview storage to an explicit server-side `previewsByConnectionId` map in `partykit/presenceServer.ts`, keyed by connection id instead of serialized connection state
+  - verification:
+    - `npm run build` passed
+    - paired builder/viewer browser probe wrote:
+      - `output/web-game/shared-builder-preview-check/summary.json`
+      - `output/web-game/shared-builder-preview-check/browse-construction-preview.png`
+      - `output/web-game/shared-builder-preview-check/play-construction-preview.png`
+    - the paired probe confirmed:
+      - builder editing frontier room `-1,-3` publishes a shared preview visible from neighboring published room `0,-3`
+      - browse mode shows the under-construction room in the world preview grid
+      - play mode still shows that neighboring room preview while `loadedFullRoom` stays `false` for `-1,-3`
+      - the viewer presence snapshot includes the builder-owned room preview metadata and the play-scene stream reports `hasPreviewForRoom: true`
+
 - Practice-run spawn marker depth follow-up on March 24, 2026:
   - raised play-scene goal marker depth so the practice `START` sign and label now render above the room foreground plane instead of occasionally hiding behind front-layer art
   - verification:

@@ -54,6 +54,7 @@ export interface PreviewSelectionCandidate {
   id: string;
   coordinates: RoomCoordinates;
   isRenderable: boolean;
+  allowFullRoomLoad: boolean;
 }
 
 export interface OverworldPreviewSelection {
@@ -186,8 +187,15 @@ export function computeOverworldPreviewSelection(
     fullRoomIds:
       mode === 'play'
         ? selectPrioritizedRoomIds({
-            roomCandidates,
-            eligibleRoomIds: nearLodRoomIds,
+            roomCandidates: roomCandidates.filter((roomCandidate) => roomCandidate.allowFullRoomLoad),
+            eligibleRoomIds: new Set(
+              roomCandidates
+                .filter(
+                  (roomCandidate) =>
+                    roomCandidate.allowFullRoomLoad && nearLodRoomIds.has(roomCandidate.id)
+                )
+                .map((roomCandidate) => roomCandidate.id)
+            ),
             nearLodRoomIds,
             midLodRoomIds,
             visibleRoomIds: new Set<string>(),

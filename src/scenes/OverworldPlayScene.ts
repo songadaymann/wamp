@@ -706,6 +706,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getSelectedCoordinates: () => this.selectedCoordinates,
       getZoom: () => this.cameras.main.zoom,
       onSnapshotUpdated: () => {
+        this.syncSharedConstructionPreviews();
         this.syncPresenceOverlays();
         this.renderHud();
       },
@@ -2498,6 +2499,12 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.syncBrowsePresenceDots();
     this.syncPlayRoomPresenceMarkers();
     this.syncBackdropCameraIgnores();
+  }
+
+  private syncSharedConstructionPreviews(): void {
+    this.worldStreamingController.syncPresencePreviewRooms(
+      Array.from(this.presenceController.getRoomPreviewsById().values(), (preview) => preview.snapshot)
+    );
   }
 
   private syncBrowsePresenceDots(): void {

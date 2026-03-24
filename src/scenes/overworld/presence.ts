@@ -13,6 +13,7 @@ import {
   WorldPresenceClient,
   type WorldGhostPresence,
   type WorldPresenceIdentity,
+  type WorldPresenceRoomPreview,
   type WorldPresenceSnapshot,
 } from '../../presence/worldPresence';
 import type { OverworldMode } from '../sceneData';
@@ -85,6 +86,7 @@ export class OverworldPresenceController {
   private snapshot: WorldPresenceSnapshot | null = null;
   private roomPopulationsById = new Map<string, number>();
   private roomEditorsById = new Map<string, number>();
+  private roomPreviewsById = new Map<string, WorldPresenceRoomPreview>();
   private renderedGhostsByConnectionId = new Map<string, RenderedGhost>();
   private subscribedChunkBounds: WorldChunkBounds | null = null;
   private subscribedBoundsRetainUntil = 0;
@@ -105,9 +107,11 @@ export class OverworldPresenceController {
         ghosts: [],
         roomPopulations: {},
         roomEditors: {},
+        roomPreviews: {},
       };
       this.roomPopulationsById = new Map();
       this.roomEditorsById = new Map();
+      this.roomPreviewsById = new Map();
       return;
     }
 
@@ -119,6 +123,7 @@ export class OverworldPresenceController {
         const roomActivityChanged =
           !this.areCountMapsEqual(this.roomPopulationsById, snapshot.roomPopulations)
           || !this.areCountMapsEqual(this.roomEditorsById, snapshot.roomEditors);
+        this.roomPreviewsById = new Map(Object.entries(snapshot.roomPreviews));
         this.snapshot = snapshot;
         this.roomPopulationsById = new Map(Object.entries(snapshot.roomPopulations));
         this.roomEditorsById = new Map(Object.entries(snapshot.roomEditors));
@@ -138,6 +143,7 @@ export class OverworldPresenceController {
     this.snapshot = null;
     this.roomPopulationsById = new Map();
     this.roomEditorsById = new Map();
+    this.roomPreviewsById = new Map();
     this.subscribedChunkBounds = null;
     this.subscribedBoundsRetainUntil = 0;
     this.ghostRenderBudget = 0;
@@ -150,6 +156,7 @@ export class OverworldPresenceController {
     this.destroyGhostRenderers();
     this.roomPopulationsById = new Map();
     this.roomEditorsById = new Map();
+    this.roomPreviewsById = new Map();
     this.snapshot = null;
     this.identity = null;
     this.subscribedChunkBounds = null;
@@ -176,6 +183,10 @@ export class OverworldPresenceController {
 
   getRoomEditorsById(): Map<string, number> {
     return this.roomEditorsById;
+  }
+
+  getRoomPreviewsById(): Map<string, WorldPresenceRoomPreview> {
+    return this.roomPreviewsById;
   }
 
   getRenderedGhostsByConnectionId(): Map<string, RenderedGhost> {
@@ -404,6 +415,11 @@ export class OverworldPresenceController {
     visibleGhostCount: number;
     roomPopulations: Record<string, number>;
     roomEditors: Record<string, number>;
+    roomPreviews: Record<string, {
+      displayName: string;
+      timestamp: number;
+      updatedAt: string;
+    }>;
     ghosts: Array<{
       connectionId: string;
       userId: string;
@@ -431,6 +447,18 @@ export class OverworldPresenceController {
         Array.from(this.roomEditorsById.entries()).sort(([left], [right]) =>
           left.localeCompare(right)
         )
+      ),
+      roomPreviews: Object.fromEntries(
+        Array.from(this.roomPreviewsById.entries()).sort(([left], [right]) =>
+          left.localeCompare(right)
+        ).map(([roomId, preview]) => [
+          roomId,
+          {
+            displayName: preview.displayName,
+            timestamp: preview.timestamp,
+            updatedAt: preview.snapshot.updatedAt,
+          },
+        ])
       ),
       ghosts: Array.from(this.renderedGhostsByConnectionId.values()).map((renderedGhost) => ({
         connectionId: renderedGhost.presence.connectionId,

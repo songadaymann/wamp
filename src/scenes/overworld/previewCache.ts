@@ -8,6 +8,8 @@ export interface StreamingRoomCandidate {
   coordinates: RoomCoordinates;
   summary: WorldRoomSummary | null;
   draft: RoomSnapshot | null;
+  sharedPreview: RoomSnapshot | null;
+  allowFullRoomLoad: boolean;
 }
 
 export interface RenderableRoom {
@@ -94,6 +96,15 @@ export class OverworldPreviewCache {
             id: candidate.id,
             coordinates: { ...candidate.coordinates },
             room: cloneRoomSnapshot(candidate.draft),
+          });
+          return;
+        }
+
+        if (candidate.sharedPreview) {
+          renderableRooms.set(candidate.id, {
+            id: candidate.id,
+            coordinates: { ...candidate.coordinates },
+            room: cloneRoomSnapshot(candidate.sharedPreview),
           });
           return;
         }
