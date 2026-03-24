@@ -7,6 +7,7 @@ const STALE_HEARTBEAT_MS = 120_000;
 const INTERNAL_TOKEN_HEADER = 'x-partykit-internal-token';
 const METRICS_ROOM_ID = '__launch-stats__';
 const METRICS_STORAGE_PREFIX = 'shard:';
+const PREVIEW_STORAGE_PREFIX = 'preview:';
 
 type PresenceMode = 'browse' | 'play' | 'edit';
 type PresenceAnimationState =
@@ -106,9 +107,28 @@ export default class PresenceServer implements Party.Server {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private lastHeartbeatAt = 0;
   private readonly previewsByConnectionId = new Map<string, RoomPreviewPayload>();
+  private readonly persistedPreviewsByRoomId = new Map<string, SharedRoomPreview>();
 
   constructor(readonly room: Party.Room) {
     this.syncHeartbeatTimer();
+  }
+
+  async onStart(): Promise<void> {
+    if (this.isMetricsRoom()) {
+      return;
+    }
+
+    const entries = await this.room.storage.list<SharedRoomPreview>({
+      prefix: PREVIEW_STORAGE_PREFIX,
+    });
+    for (const storedPreview of entries.values()) {
+      const preview = this.normalizeStoredSharedPreview(storedPreview);
+      if (!preview) {
+        continue;
+      }
+
+      this.persistedPreviewsByRoomId.set(preview.roomId, preview);
+    }
   }
 
   async onRequest(req: Party.Request): Promise<Response> {
@@ -358,7 +378,7 @@ export default class PresenceServer implements Party.Server {
   }
 
   private computeRoomPreviews(): Record<string, SharedRoomPreview> {
-    const previewsByRoomId = new Map<string, SharedRoomPreview>();
+    const previewsByRoomId = new Map<string, SharedRoomPreview>(this.persistedPreviewsByRoomId);
 
     for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
       const preview = this.toRoomPreview(connection);
@@ -440,15 +460,24 @@ export default class PresenceServer implements Party.Server {
     }
 
     this.previewsByConnectionId.set(connection.id, preview);
+    const sharedPreview = this.toStoredSharedPreview(connection, preview);
+    if (sharedPreview) {
+      this.persistedPreviewsByRoomId.set(sharedPreview.roomId, sharedPreview);
+      void this.room.storage.put(this.getPreviewStorageKey(sharedPreview.roomId), sharedPreview);
+    }
     this.broadcastPopulations();
   }
 
   private clearPreview(connection: Party.Connection<ConnectionPresenceState>): void {
-    if (!this.previewsByConnectionId.has(connection.id)) {
+    const preview = this.previewsByConnectionId.get(connection.id) ?? null;
+    if (!preview) {
       return;
     }
 
     this.previewsByConnectionId.delete(connection.id);
+    const roomId = this.getRoomId(preview.roomCoordinates);
+    this.persistedPreviewsByRoomId.delete(roomId);
+    void this.room.storage.delete(this.getPreviewStorageKey(roomId));
     this.broadcastPopulations();
   }
 
@@ -474,6 +503,57 @@ export default class PresenceServer implements Party.Server {
 
   private getRoomId(roomCoordinates: RoomCoordinates): string {
     return `${roomCoordinates.x},${roomCoordinates.y}`;
+  }
+
+  private getPreviewStorageKey(roomId: string): string {
+    return `${PREVIEW_STORAGE_PREFIX}${roomId}`;
+  }
+
+  private toStoredSharedPreview(
+    connection: Party.Connection<ConnectionPresenceState>,
+    preview: RoomPreviewPayload,
+  ): SharedRoomPreview | null {
+    const state = connection.state;
+    if (!state) {
+      return null;
+    }
+
+    return {
+      ...preview,
+      roomId: this.getRoomId(preview.roomCoordinates),
+      userId: state.userId,
+      displayName: state.displayName,
+      shardId: this.room.id,
+    };
+  }
+
+  private normalizeStoredSharedPreview(value: unknown): SharedRoomPreview | null {
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    const preview = value as Partial<SharedRoomPreview>;
+    if (
+      typeof preview.roomId !== 'string' ||
+      typeof preview.userId !== 'string' ||
+      typeof preview.displayName !== 'string' ||
+      typeof preview.shardId !== 'string'
+    ) {
+      return null;
+    }
+
+    const normalizedPayload = this.normalizeRoomPreviewPayload(preview);
+    if (!normalizedPayload) {
+      return null;
+    }
+
+    return {
+      ...normalizedPayload,
+      roomId: preview.roomId,
+      userId: preview.userId,
+      displayName: preview.displayName,
+      shardId: preview.shardId,
+    };
   }
 
   private normalizeRoomPreviewPayload(value: unknown): RoomPreviewPayload | null {

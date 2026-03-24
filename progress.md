@@ -80,6 +80,21 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - browse mode shows the under-construction room in the world preview grid
       - play mode still shows that neighboring room preview while `loadedFullRoom` stays `false` for `-1,-3`
       - the viewer presence snapshot includes the builder-owned room preview metadata and the play-scene stream reports `hasPreviewForRoom: true`
+  - refresh-persistence follow-up:
+    - construction previews now persist in PartyKit room storage by `roomId`, so a frontier preview survives editor disconnects and page refreshes instead of disappearing with the builder socket
+    - `WorldPresenceClient` no longer auto-clears the preview just because the editor scene closes or a shard socket is torn down; explicit clears still happen when the editor intentionally clears/publishes the frontier room
+    - editor exit now forces one last preview publish before `scene.stop()`, which fixes the stale-empty-preview edge case when someone edits a frontier room and leaves immediately
+  - refresh-persistence verification:
+    - `npm run build` passed after the persistence follow-up
+    - targeted refresh probe wrote:
+      - `output/web-game/frontier-preview-refresh-check/summary.json`
+      - `output/web-game/frontier-preview-refresh-check/after-refresh.png`
+    - the refreshed viewer probe confirmed:
+      - builder edited frontier room `-1,-3`, returned to world, disconnected, and the viewer still had `roomPreviews['-1,-3']` after a full reload
+      - the persisted preview kept the edited snapshot contents, including `background: "grassland"`, both placed objects, and the test terrain tiles `[1,2,3] / [4,5,6]`
+    - standard Playwright smoke client also ran and wrote:
+      - `output/web-game/frontier-preview-refresh-smoke/state-0.json`
+      - `output/web-game/frontier-preview-refresh-smoke/shot-0.png`
 
 - Practice-run spawn marker depth follow-up on March 24, 2026:
   - raised play-scene goal marker depth so the practice `START` sign and label now render above the room foreground plane instead of occasionally hiding behind front-layer art

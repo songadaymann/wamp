@@ -237,12 +237,6 @@ export class WorldPresenceClient {
       ? chunkIdFromCoordinates(roomToChunkCoordinates(normalizedPreview.roomCoordinates))
       : null;
 
-    if (this.previewShardId && this.previewShardId !== nextShardId) {
-      this.sendPreviewClearToShard(this.previewShardId);
-      this.previewShardId = null;
-      this.lastPublishedPreviewJson = null;
-    }
-
     this.localRoomPreview = normalizedPreview;
     if (!normalizedPreview || !nextShardId) {
       if (this.previewShardId) {
@@ -277,9 +271,6 @@ export class WorldPresenceClient {
   destroy(): void {
     if (this.publishedShardId) {
       this.sendLeaveToShard(this.publishedShardId);
-    }
-    if (this.previewShardId) {
-      this.sendPreviewClearToShard(this.previewShardId);
     }
 
     for (const shardId of Array.from(this.socketsByShardId.keys())) {
@@ -374,7 +365,6 @@ export class WorldPresenceClient {
       this.lastPublishedPayloadJson = null;
     }
     if (this.previewShardId === shardId) {
-      this.sendPreviewClearToShard(shardId);
       this.previewShardId = null;
       this.lastPublishedPreviewJson = null;
     }

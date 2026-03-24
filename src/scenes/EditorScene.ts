@@ -874,6 +874,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private returnToWorldReadOnly(): void {
+    this.flushSharedConstructionPreviewForExit();
     const wakeData: OverworldPlaySceneData = {
       centerCoordinates: { ...this.roomCoordinates },
       roomCoordinates: { ...this.roomCoordinates },
@@ -2413,7 +2414,6 @@ export class EditorScene extends Phaser.Scene {
   private syncEditorPresence(): void {
     if (!this.editorPresenceClient || !this.scene.isActive(this.scene.key) || editorState.isPlaying) {
       this.editorPresenceClient?.updateLocalPresence(null);
-      this.clearSharedConstructionPreview();
       return;
     }
 
@@ -2431,11 +2431,16 @@ export class EditorScene extends Phaser.Scene {
     this.syncSharedConstructionPreview();
   }
 
-  private syncSharedConstructionPreview(): void {
+  private flushSharedConstructionPreviewForExit(): void {
+    this.syncSharedConstructionPreview({ force: true });
+  }
+
+  private syncSharedConstructionPreview(options?: { force?: boolean }): void {
     if (!this.editorPresenceClient) {
       return;
     }
 
+    const force = options?.force === true;
     const stateKey = this.shouldPublishSharedConstructionPreview()
       ? `${this.roomCoordinates.x},${this.roomCoordinates.y}:${this.publishedVersion}`
       : null;
@@ -2447,6 +2452,7 @@ export class EditorScene extends Phaser.Scene {
     const now = performance.now();
     const stateChanged = this.lastSharedConstructionPreviewStateKey !== stateKey;
     if (
+      !force &&
       !stateChanged &&
       !this.sharedConstructionPreviewDirty &&
       this.lastSharedConstructionPreviewStateKey !== null
@@ -2455,6 +2461,7 @@ export class EditorScene extends Phaser.Scene {
     }
 
     if (
+      !force &&
       !stateChanged &&
       now - this.lastSharedConstructionPreviewPublishAt < this.SHARED_PREVIEW_PUBLISH_INTERVAL_MS
     ) {
@@ -2567,6 +2574,7 @@ export class EditorScene extends Phaser.Scene {
     wakeData.courseEditorReturned = Boolean(this.activeCourseMarkerEdit);
     wakeData.courseEditedRoom = this.buildCourseEditedRoomData();
 
+    this.flushSharedConstructionPreviewForExit();
     this.scene.stop();
     this.scene.wake('OverworldPlayScene', wakeData);
   }
@@ -2608,6 +2616,7 @@ export class EditorScene extends Phaser.Scene {
     wakeData.courseEditedRoom = this.buildCourseEditedRoomData();
     wakeData.courseEditorNavigateOffset = offset;
 
+    this.flushSharedConstructionPreviewForExit();
     this.scene.stop();
     this.scene.wake('OverworldPlayScene', wakeData);
   }
