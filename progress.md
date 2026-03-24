@@ -57,6 +57,22 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Frontier construction preview deploy follow-up on March 24, 2026:
+  - investigated the new report that construction styling still disappears after refresh on the safety branch deploy
+  - local end-to-end repro against a local frontend + local PartyKit persistence path stayed healthy:
+    - seeded a persisted preview for frontier room `-1,-3` directly through PartyKit
+    - overworld browse mode reported `presenceMetadata: true`, `syncedPresencePreview: true`, and `renderedPreview: true`
+    - the same room still reported all three as `true` after a full page reload
+    - artifacts:
+      - `output/web-game/frontier-preview-browse-repro/summary.json`
+      - `output/web-game/frontier-preview-browse-repro/summary-after-status-key.json`
+  - shipped a safe renderer hardening anyway:
+    - `src/scenes/overworld/chunkPreviewRenderer.ts` now includes `room.status` in the chunk preview texture signature
+    - this prevents stale chunk textures from reusing a published-looking preview when the same room snapshot should instead render with the draft `BUILDING` overlay
+  - verification:
+    - `npm run build` passed
+    - the local persisted-preview reload probe still showed `renderedPreview: true` before and after reload after the texture-key change
+
 - Frontier construction preview refresh follow-up on March 24, 2026:
   - traced the missing post-refresh sign to `src/scenes/overworld/worldStreaming.ts`
   - `syncPresencePreviewRooms()` was collecting `sharedPreview` rooms correctly, but the fast redraw path in `refreshVisibleRoomsFromCache()` rebuilt renderable rooms from drafts and published snapshots only, so a presence-driven refresh could still drop the shared construction room until a later full world refresh

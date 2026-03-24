@@ -256,7 +256,7 @@ export class OverworldChunkPreviewRenderer {
 
   private buildChunkTextureKey(chunkId: string, rooms: RoomSnapshot[]): string {
     const signature = rooms
-      .map((room) => `${room.id}:${room.version}:${room.updatedAt}`)
+      .map((room) => `${room.id}:${room.version}:${room.updatedAt}:${room.status}`)
       .join('|');
     const hash = hashStringToSeed(`${chunkId}|${signature}`).toString(36);
     return `chunk-preview-${sanitizeChunkKey(chunkId)}-${this.options.previewTileSize}-${hash}`;
