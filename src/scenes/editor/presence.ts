@@ -85,7 +85,6 @@ export class EditorPresenceController {
   sync(): void {
     if (!this.client || !this.host.isSceneActive() || this.host.isPlaying()) {
       this.client?.updateLocalPresence(null);
-      this.clearSharedConstructionPreview();
       return;
     }
 
@@ -104,8 +103,8 @@ export class EditorPresenceController {
   }
 
   clear(): void {
+    this.syncSharedConstructionPreview({ force: true });
     this.client?.updateLocalPresence(null);
-    this.clearSharedConstructionPreview();
   }
 
   markConstructionPreviewDirty(): void {
@@ -113,18 +112,19 @@ export class EditorPresenceController {
   }
 
   destroy(): void {
-    this.clearSharedConstructionPreview();
+    this.syncSharedConstructionPreview({ force: true });
     this.client?.destroy();
     this.client = null;
     this.identity = null;
     this.resetSharedConstructionPreviewState();
   }
 
-  private syncSharedConstructionPreview(): void {
+  private syncSharedConstructionPreview(options?: { force?: boolean }): void {
     if (!this.client) {
       return;
     }
 
+    const force = options?.force === true;
     const roomCoordinates = this.host.getRoomCoordinates();
     const stateKey = this.shouldPublishSharedConstructionPreview()
       ? `${roomCoordinates.x},${roomCoordinates.y}:${this.host.getPublishedVersion()}`
@@ -137,6 +137,7 @@ export class EditorPresenceController {
     const now = performance.now();
     const stateChanged = this.lastSharedConstructionPreviewStateKey !== stateKey;
     if (
+      !force &&
       !stateChanged &&
       !this.sharedConstructionPreviewDirty &&
       this.lastSharedConstructionPreviewStateKey !== null
@@ -145,6 +146,7 @@ export class EditorPresenceController {
     }
 
     if (
+      !force &&
       !stateChanged &&
       now - this.lastSharedConstructionPreviewPublishAt < SHARED_PREVIEW_PUBLISH_INTERVAL_MS
     ) {
