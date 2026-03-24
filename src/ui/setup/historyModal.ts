@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
-import { buildRoomVersionLineage } from '../../persistence/roomVersionLineage';
+import {
+  buildRoomLeaderboardLineage,
+  getManualRoomLeaderboardSourceValidationError,
+} from '../../persistence/roomLeaderboardLineage';
 import { getActiveEditorScene, type EditorHistoryState } from './sceneBridge';
 
 const HISTORY_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
@@ -25,6 +28,8 @@ export class RoomHistoryModalController {
   private readonly elements: HistoryModalElements;
   private activeTargetVersion: number | null = null;
   private activeCanonicalVersion: number | null = null;
+  private activeLeaderboardTargetVersion: number | null = null;
+  private activeLeaderboardSourceVersion: number | null = null;
   private metadataRefreshInFlight = false;
 
   private readonly handleCloseClick = () => {
@@ -133,6 +138,8 @@ export class RoomHistoryModalController {
     this.elements.modal.setAttribute('aria-hidden', 'false');
     this.activeTargetVersion = null;
     this.activeCanonicalVersion = null;
+    this.activeLeaderboardTargetVersion = null;
+    this.activeLeaderboardSourceVersion = null;
     this.metadataRefreshInFlight = false;
     this.setError(null);
     await this.render();
@@ -145,6 +152,8 @@ export class RoomHistoryModalController {
 
     this.activeTargetVersion = null;
     this.activeCanonicalVersion = null;
+    this.activeLeaderboardTargetVersion = null;
+    this.activeLeaderboardSourceVersion = null;
     this.metadataRefreshInFlight = false;
     this.setError(null);
     this.elements.list.replaceChildren();
@@ -234,6 +243,41 @@ export class RoomHistoryModalController {
     await this.render();
   }
 
+  private async handleSetLeaderboardSource(
+    targetVersion: number,
+    sourceVersion: number | null
+  ): Promise<void> {
+    const editorScene = getActiveEditorScene(this.game);
+    if (!editorScene?.setLeaderboardSourceVersion) {
+      return;
+    }
+
+    this.activeLeaderboardTargetVersion = targetVersion;
+    this.activeLeaderboardSourceVersion = sourceVersion;
+    this.setError(null);
+    await this.render();
+
+    const result = await editorScene.setLeaderboardSourceVersion(targetVersion, sourceVersion);
+    this.activeLeaderboardTargetVersion = null;
+    this.activeLeaderboardSourceVersion = null;
+
+    if (!result) {
+      const statusMessage =
+        this.getEditorStatusText()
+        || (
+          sourceVersion === null
+            ? `Restoring v${targetVersion} to its own leaderboard failed.`
+            : `Setting v${targetVersion} to use leaderboard v${sourceVersion} failed.`
+        );
+      this.setError(statusMessage);
+      await this.render();
+      return;
+    }
+
+    this.setError(null);
+    await this.render();
+  }
+
   private renderMeta(state: EditorHistoryState): void {
     if (!this.elements.meta) {
       return;
@@ -258,10 +302,10 @@ export class RoomHistoryModalController {
     }
 
     const latestVersion = state.versions.reduce((max, version) => Math.max(max, version.version), 0);
-    const lineage = buildRoomVersionLineage(state.versions, state.canonicalVersion, latestVersion || null);
+    const lineage = buildRoomLeaderboardLineage(state.versions, state.canonicalVersion, latestVersion || null);
     if (state.canonicalVersion !== null) {
       metaParts.push(
-        `Canonical v${lineage.canonicalRepresentativeVersion ?? state.canonicalVersion}`
+        `Canonical v${lineage.exactLineage.canonicalRepresentativeVersion ?? state.canonicalVersion}`
       );
     }
 
@@ -301,7 +345,7 @@ export class RoomHistoryModalController {
     state: EditorHistoryState,
     latestVersion: number,
     version: EditorHistoryState['versions'][number],
-    lineage: ReturnType<typeof buildRoomVersionLineage>,
+    lineage: ReturnType<typeof buildRoomLeaderboardLineage>,
   ): HTMLElement {
     const row = this.doc.createElement('div');
     row.className = 'history-version-row';
@@ -317,6 +361,11 @@ export class RoomHistoryModalController {
     label.textContent = `v${version.version}`;
     titleLine.appendChild(label);
     const lineageEntry = lineage.byVersion.get(version.version) ?? null;
+    const leaderboardSourceRepresentativeVersion =
+      lineageEntry?.leaderboardSourceRepresentativeVersion ?? null;
+    const currentVersion = state.versions.find((candidate) => candidate.version === latestVersion) ?? null;
+    const currentLineageEntry =
+      currentVersion === null ? null : lineage.byVersion.get(currentVersion.version) ?? null;
 
     if (version.version === latestVersion) {
       const badge = this.doc.createElement('span');
@@ -343,6 +392,13 @@ export class RoomHistoryModalController {
       const badge = this.doc.createElement('span');
       badge.className = 'history-version-badge';
       badge.textContent = `Revert of v${version.revertedFromVersion}`;
+      titleLine.appendChild(badge);
+    }
+
+    if (leaderboardSourceRepresentativeVersion !== null) {
+      const badge = this.doc.createElement('span');
+      badge.className = 'history-version-badge';
+      badge.textContent = `Leaderboard from v${leaderboardSourceRepresentativeVersion}`;
       titleLine.appendChild(badge);
     }
 
@@ -385,6 +441,57 @@ export class RoomHistoryModalController {
       actions.appendChild(button);
     }
 
+    const manualLineageError =
+      currentVersion && version.version < latestVersion
+        ? getManualRoomLeaderboardSourceValidationError(currentVersion, version, lineage.exactLineage)
+        : 'Only older published challenge versions can supply a leaderboard.';
+    const currentSourceRepresentativeVersion =
+      currentLineageEntry?.leaderboardSourceRepresentativeVersion ?? null;
+    const currentUsesThisSource =
+      currentSourceRepresentativeVersion !== null &&
+      lineageEntry !== null &&
+      currentSourceRepresentativeVersion === lineageEntry.representativeVersion;
+
+    if (
+      state.canRevert &&
+      currentVersion &&
+      version.version === currentVersion.version &&
+      version.leaderboardSourceVersion !== null
+    ) {
+      const button = this.doc.createElement('button');
+      button.className = 'bar-btn bar-btn-small';
+      button.textContent =
+        this.activeLeaderboardTargetVersion === version.version &&
+        this.activeLeaderboardSourceVersion === null
+          ? 'Saving...'
+          : 'Use Own Leaderboard';
+      button.disabled = this.hasPendingAction();
+      button.addEventListener('click', () => {
+        void this.handleSetLeaderboardSource(version.version, null);
+      });
+      actions.appendChild(button);
+    } else if (
+      state.canRevert &&
+      currentVersion &&
+      version.version < latestVersion &&
+      manualLineageError === null
+    ) {
+      const button = this.doc.createElement('button');
+      button.className = 'bar-btn bar-btn-small';
+      button.textContent =
+        this.activeLeaderboardTargetVersion === latestVersion &&
+        this.activeLeaderboardSourceVersion === version.version
+          ? 'Saving...'
+          : currentUsesThisSource
+            ? 'Using Leaderboard'
+            : 'Use This Leaderboard';
+      button.disabled = this.hasPendingAction() || currentUsesThisSource;
+      button.addEventListener('click', () => {
+        void this.handleSetLeaderboardSource(latestVersion, version.version);
+      });
+      actions.appendChild(button);
+    }
+
     if (actions.childElementCount > 0) {
       row.appendChild(actions);
     }
@@ -413,7 +520,7 @@ export class RoomHistoryModalController {
       (max, version) => Math.max(max, version.version),
       0,
     );
-    const lineage = buildRoomVersionLineage(state.versions, state.canonicalVersion, latestVersion || null);
+    const lineage = buildRoomLeaderboardLineage(state.versions, state.canonicalVersion, latestVersion || null);
     const versionsNewestFirst = [...state.versions].sort((a, b) => b.version - a.version);
 
     this.renderMeta(state);
@@ -436,8 +543,8 @@ export class RoomHistoryModalController {
       this.elements.restoreCanonicalButton.classList.toggle('hidden', !showRestore);
       this.elements.restoreCanonicalButton.disabled = this.hasPendingAction();
       this.elements.restoreCanonicalButton.textContent =
-        state.canonicalVersion !== null && lineage.canonicalRepresentativeVersion !== null
-          ? `Restore Canonical (v${lineage.canonicalRepresentativeVersion})`
+        state.canonicalVersion !== null && lineage.exactLineage.canonicalRepresentativeVersion !== null
+          ? `Restore Canonical (v${lineage.exactLineage.canonicalRepresentativeVersion})`
           : 'Restore Canonical';
     }
     this.elements.list.replaceChildren();
@@ -456,6 +563,7 @@ export class RoomHistoryModalController {
     return (
       this.activeTargetVersion !== null ||
       this.activeCanonicalVersion !== null ||
+      this.activeLeaderboardTargetVersion !== null ||
       this.metadataRefreshInFlight
     );
   }

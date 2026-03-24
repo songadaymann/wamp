@@ -4,7 +4,7 @@ import {
   type RoomSnapshot,
   type RoomVersionRecord,
 } from '../../../persistence/roomModel';
-import { buildRoomVersionLineage } from '../../../persistence/roomVersionLineage';
+import { buildRoomLeaderboardLineage } from '../../../persistence/roomLeaderboardLineage';
 import type {
   RoomDifficulty,
   RoomDifficultyCounts,
@@ -116,18 +116,18 @@ export async function buildRoomDifficultySummary(
   viewerUserId: string | null,
   currentPublishedVersion: number | null,
   effectiveRoomVersion: number,
-  equivalentRoomVersions: number[]
+  leaderboardFamilyVersions: number[]
 ): Promise<RoomDifficultySummary> {
-  const counts = await loadRoomDifficultyCounts(env, snapshot.id, equivalentRoomVersions);
+  const counts = await loadRoomDifficultyCounts(env, snapshot.id, leaderboardFamilyVersions);
   const viewerSignedIn = viewerUserId !== null;
   const viewerVote =
     viewerUserId === null
       ? null
-      : await loadViewerRoomDifficultyVote(env, snapshot.id, equivalentRoomVersions, viewerUserId);
+      : await loadViewerRoomDifficultyVote(env, snapshot.id, leaderboardFamilyVersions, viewerUserId);
   const viewerCanRateCurrentVersion =
     viewerUserId !== null &&
     currentPublishedVersion === effectiveRoomVersion &&
-    (await hasViewerRatedRoomVersion(env, snapshot.id, equivalentRoomVersions, viewerUserId));
+    (await hasViewerRatedRoomVersion(env, snapshot.id, leaderboardFamilyVersions, viewerUserId));
 
   return {
     consensus: resolveRoomDifficultyConsensus(counts),
@@ -213,7 +213,8 @@ export async function loadRoomDiscoveryResponse(
         published_by_principal_type,
         published_by_agent_id,
         published_by_display_name,
-        reverted_from_version
+        reverted_from_version,
+        leaderboard_source_version
       FROM room_versions
       WHERE room_id IN (${roomIds.map(() => '?').join(', ')})
       ORDER BY room_id ASC, version ASC
@@ -233,6 +234,7 @@ export async function loadRoomDiscoveryResponse(
       publishedByAgentId: row.published_by_agent_id,
       publishedByDisplayName: row.published_by_display_name,
       revertedFromVersion: row.reverted_from_version,
+      leaderboardSourceVersion: row.leaderboard_source_version,
     });
     const bucket = versionsByRoomId.get(row.room_id);
     if (bucket) {
@@ -272,11 +274,11 @@ export async function loadRoomDiscoveryResponse(
   const results = challengeSnapshots
     .map<RoomDiscoveryEntry>(({ snapshot, canonicalVersion }) => {
       const versions = versionsByRoomId.get(snapshot.id) ?? [createRoomVersionRecord(snapshot)];
-      const lineage = buildRoomVersionLineage(versions, canonicalVersion, snapshot.version);
+      const lineage = buildRoomLeaderboardLineage(versions, canonicalVersion, snapshot.version);
       const lineageEntry = lineage.byVersion.get(snapshot.version) ?? null;
-      const equivalentRoomVersions = lineageEntry?.equivalentVersions ?? [snapshot.version];
+      const leaderboardFamilyVersions = lineageEntry?.leaderboardFamilyVersions ?? [snapshot.version];
       const votes = (votesByRoomId.get(snapshot.id) ?? []).filter((vote) =>
-        equivalentRoomVersions.includes(vote.room_version)
+        leaderboardFamilyVersions.includes(vote.room_version)
       );
       const counts = summarizeDifficultyVotes(dedupeLatestDifficultyVotesByUser(votes));
 
@@ -286,6 +288,7 @@ export async function loadRoomDiscoveryResponse(
         roomTitle: snapshot.title,
         roomVersion: snapshot.version,
         displayRoomVersion: lineageEntry?.representativeVersion ?? snapshot.version,
+        leaderboardSourceVersion: lineageEntry?.leaderboardSourceRepresentativeVersion ?? null,
         canonicalRoomVersion: canonicalVersion,
         goalType: snapshot.goal!.type,
         consensusDifficulty: resolveRoomDifficultyConsensus(counts),

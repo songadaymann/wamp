@@ -85,6 +85,7 @@ export interface RoomVersionRow {
   published_by_agent_id: string | null;
   published_by_display_name: string | null;
   reverted_from_version: number | null;
+  leaderboard_source_version: number | null;
 }
 
 export interface AgentRow {
@@ -197,6 +198,7 @@ export interface PersistRoomVersionInput {
   publishedByAgentId: string | null;
   publishedByDisplayName: string | null;
   revertedFromVersion: number | null;
+  leaderboardSourceVersion: number | null;
   onConflictUpdate: boolean;
 }
 

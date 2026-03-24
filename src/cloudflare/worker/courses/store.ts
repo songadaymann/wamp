@@ -513,7 +513,8 @@ async function loadPublishedRoomVersionForCourse(
         created_at,
         published_by_user_id,
         published_by_display_name,
-        reverted_from_version
+        reverted_from_version,
+        leaderboard_source_version
       FROM room_versions
       WHERE room_id = ?
         AND version = ?

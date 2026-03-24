@@ -50,7 +50,10 @@ import {
   parseRoomDifficultyOrThrow,
   upsertRoomDifficultyVote,
 } from './difficulty';
-import { resolveAggregatedRoomVersionSelection, type AggregatedRoomVersionSelection } from './roomVersionAggregation';
+import {
+  resolveAggregatedRoomLeaderboardSelection,
+  type AggregatedRoomLeaderboardSelection,
+} from './roomLeaderboardAggregation';
 
 export async function handleRunStart(request: Request, env: Env): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
@@ -273,7 +276,7 @@ export async function handleRoomLeaderboard(
     auth?.user.id ?? null,
     auth?.user.walletAddress ?? null
   );
-  const selection = resolveAggregatedRoomVersionSelection(record, version);
+  const selection = resolveAggregatedRoomLeaderboardSelection(record, version);
   const snapshot = selection.snapshot;
 
   if (!snapshot.goal) {
@@ -309,7 +312,7 @@ export async function handleRoomDifficultyVote(
     auth.user.walletAddress ?? null,
     auth.isAdmin
   );
-  const selection = resolveAggregatedRoomVersionSelection(record, body.roomVersion);
+  const selection = resolveAggregatedRoomLeaderboardSelection(record, body.roomVersion);
 
   if (!record.published || record.published.version !== selection.roomVersion) {
     throw new HttpError(409, 'Difficulty voting is only available on the current published version.');
@@ -323,7 +326,7 @@ export async function handleRoomDifficultyVote(
   const hasPlayedVersion = await hasViewerRatedRoomVersion(
     env,
     snapshot.id,
-    selection.equivalentRoomVersions,
+    selection.leaderboardFamilyVersions,
     auth.user.id
   );
   if (!hasPlayedVersion) {
@@ -659,7 +662,7 @@ export function parseStoredGoal(raw: string, label: string): RoomGoal {
 
 export async function buildRoomLeaderboardResponse(
   env: Env,
-  selection: AggregatedRoomVersionSelection,
+  selection: AggregatedRoomLeaderboardSelection,
   limit: number,
   viewerUserId: string | null = null
 ): Promise<RoomLeaderboardResponse> {
@@ -671,7 +674,7 @@ export async function buildRoomLeaderboardResponse(
   const runs = await loadCompletedRoomRunsForVersions(
     env,
     snapshot.id,
-    selection.equivalentRoomVersions
+    selection.leaderboardFamilyVersions
   );
   const sortedAll = sortCompletedRunsForLeaderboard(runs, snapshot.goal);
   const viewerBestRun =
@@ -689,7 +692,7 @@ export async function buildRoomLeaderboardResponse(
     viewerUserId,
     selection.currentPublishedVersion,
     selection.roomVersion,
-    selection.equivalentRoomVersions
+    selection.leaderboardFamilyVersions
   );
   const entries: RoomLeaderboardEntry[] = sorted.map((run, index) => ({
     rank: index + 1,
@@ -712,6 +715,8 @@ export async function buildRoomLeaderboardResponse(
     roomVersion: selection.roomVersion,
     displayRoomVersion: selection.displayRoomVersion,
     equivalentRoomVersions: [...selection.equivalentRoomVersions],
+    leaderboardFamilyVersions: [...selection.leaderboardFamilyVersions],
+    leaderboardSourceVersion: selection.leaderboardSourceVersion,
     canonicalRoomVersion: selection.canonicalRoomVersion,
     goalType: snapshot.goal.type,
     rankingMode: getLeaderboardRankingMode(snapshot.goal),

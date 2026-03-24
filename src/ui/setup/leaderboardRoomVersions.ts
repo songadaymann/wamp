@@ -1,5 +1,8 @@
 import type { RoomRecord } from '../../persistence/roomModel';
-import { buildRoomVersionLineage, type RoomVersionLineage } from '../../persistence/roomVersionLineage';
+import {
+  buildRoomLeaderboardLineage,
+  type RoomLeaderboardLineage,
+} from '../../persistence/roomLeaderboardLineage';
 
 export interface RoomLeaderboardVersionOption {
   value: number;
@@ -14,20 +17,20 @@ export interface RoomLeaderboardVersionSelectionState {
   options: RoomLeaderboardVersionOption[];
   defaultValue: number | null;
   currentPublishedVersion: number | null;
-  lineage: RoomVersionLineage;
+  lineage: RoomLeaderboardLineage;
 }
 
 export function buildRoomLeaderboardVersionSelectionState(
   record: Pick<RoomRecord, 'versions' | 'published' | 'canonicalVersion'>
 ): RoomLeaderboardVersionSelectionState {
   const currentPublishedVersion = record.published?.version ?? null;
-  const lineage = buildRoomVersionLineage(
+  const lineage = buildRoomLeaderboardLineage(
     record.versions,
     record.canonicalVersion,
     currentPublishedVersion
   );
 
-  const options = lineage.groups
+  const options = lineage.exactLineage.groups
     .filter((group) => group.hasGoal)
     .map<RoomLeaderboardVersionOption>((group) => {
       const containsCanonical =
@@ -48,13 +51,15 @@ export function buildRoomLeaderboardVersionSelectionState(
         label: buildOptionLabel(group.representativeVersion, group.latestVersion, {
           containsCanonical,
           containsCurrentPublished,
+          leaderboardSourceVersion:
+            lineage.byVersion.get(value)?.leaderboardSourceRepresentativeVersion ?? null,
         }),
       };
     });
 
   const defaultValue =
-    options.find((option) => option.containsCanonical)?.value ??
-    options.find((option) => option.containsCurrentPublished)?.value ??
+    options.find((option: RoomLeaderboardVersionOption) => option.containsCanonical)?.value ??
+    options.find((option: RoomLeaderboardVersionOption) => option.containsCurrentPublished)?.value ??
     options[options.length - 1]?.value ??
     null;
 
@@ -72,6 +77,7 @@ function buildOptionLabel(
   options: {
     containsCanonical: boolean;
     containsCurrentPublished: boolean;
+    leaderboardSourceVersion: number | null;
   }
 ): string {
   const parts = [`v${representativeVersion}`];
@@ -83,6 +89,10 @@ function buildOptionLabel(
     parts.push(
       options.containsCurrentPublished ? `live as v${latestVersion}` : `also v${latestVersion}`
     );
+  }
+
+  if (options.leaderboardSourceVersion !== null) {
+    parts.push(`leaderboard from v${options.leaderboardSourceVersion}`);
   }
 
   return parts.join(' · ');

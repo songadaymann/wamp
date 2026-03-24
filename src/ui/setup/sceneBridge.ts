@@ -59,6 +59,10 @@ export interface EditorSceneBridge {
   getHistoryState?: () => EditorHistoryState;
   revertToVersion?: (targetVersion: number) => Promise<RoomRecord | null>;
   setCanonicalVersion?: (targetVersion: number) => Promise<RoomRecord | null>;
+  setLeaderboardSourceVersion?: (
+    targetVersion: number,
+    sourceVersion: number | null
+  ) => Promise<RoomRecord | null>;
   startPlayMode?: () => Promise<void> | void;
   saveDraft?: (
     force?: boolean,

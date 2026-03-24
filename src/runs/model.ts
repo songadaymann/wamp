@@ -100,6 +100,8 @@ export interface RoomLeaderboardResponse {
   roomVersion: number;
   displayRoomVersion: number;
   equivalentRoomVersions: number[];
+  leaderboardFamilyVersions: number[];
+  leaderboardSourceVersion: number | null;
   canonicalRoomVersion: number | null;
   goalType: RoomGoalType;
   rankingMode: LeaderboardRankingMode;
@@ -121,6 +123,7 @@ export interface RoomDiscoveryEntry {
   roomTitle: string | null;
   roomVersion: number;
   displayRoomVersion: number;
+  leaderboardSourceVersion: number | null;
   canonicalRoomVersion: number | null;
   goalType: RoomGoalType;
   consensusDifficulty: RoomDifficulty | null;

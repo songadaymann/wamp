@@ -68,6 +68,7 @@ export interface RoomVersionRecord {
   publishedByAgentId: string | null;
   publishedByDisplayName: string | null;
   revertedFromVersion: number | null;
+  leaderboardSourceVersion: number | null;
 }
 
 export interface RoomRecord {
@@ -101,6 +102,11 @@ export interface RoomRevertRequestBody {
 
 export interface RoomCanonicalVersionRequestBody {
   targetVersion: number;
+}
+
+export interface RoomLeaderboardLineageRequestBody {
+  targetVersion: number;
+  sourceVersion: number | null;
 }
 
 export const DEFAULT_ROOM_COORDINATES: RoomCoordinates = { x: 0, y: 0 };
@@ -318,6 +324,7 @@ export function createRoomVersionRecord(
     publishedByAgentId: overrides.publishedByAgentId ?? null,
     publishedByDisplayName: overrides.publishedByDisplayName ?? null,
     revertedFromVersion: overrides.revertedFromVersion ?? null,
+    leaderboardSourceVersion: overrides.leaderboardSourceVersion ?? null,
   };
 }
 
@@ -373,6 +380,10 @@ function normalizeRoomVersionRecord(value: unknown): RoomVersionRecord | null {
       revertedFromVersion:
         typeof versionRecord.revertedFromVersion === 'number'
           ? versionRecord.revertedFromVersion
+          : null,
+      leaderboardSourceVersion:
+        typeof versionRecord.leaderboardSourceVersion === 'number'
+          ? versionRecord.leaderboardSourceVersion
           : null,
     });
   }
