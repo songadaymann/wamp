@@ -372,7 +372,7 @@ export class OverworldChunkPreviewRenderer {
     previewTileSize: number,
   ): string {
     const signature = rooms
-      .map((room) => `${room.id}:${room.version}:${room.updatedAt}`)
+      .map((room) => `${room.id}:${room.version}:${room.updatedAt}:${room.status}`)
       .join('|');
     const hash = hashStringToSeed(`${chunkId}|${signature}`).toString(36);
     return `chunk-preview-${this.textureNamespace}-${sanitizeChunkKey(chunkId)}-${previewTileSize}-${hash}`;
