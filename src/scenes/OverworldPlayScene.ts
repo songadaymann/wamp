@@ -350,6 +350,10 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly CRATE_INTERACTION_MAX_GAP = 14;
   private readonly COYOTE_MS = 80;
   private readonly JUMP_BUFFER_MS = 100;
+  private readonly WALL_SLIDE_MAX_FALL_SPEED = 70;
+  private readonly WALL_JUMP_VELOCITY_X = 205;
+  private readonly WALL_JUMP_VELOCITY_Y = -265;
+  private readonly WALL_JUMP_INPUT_LOCK_MS = 240;
   private readonly LADDER_CLIMB_SPEED = 90;
   private readonly BOUNCE_PAD_VELOCITY = -392;
   private readonly BOUNCE_PAD_COOLDOWN_MS = 220;
@@ -496,6 +500,12 @@ export class OverworldPlayScene extends Phaser.Scene {
   private coyoteTime = 0;
   private jumpBuffered = false;
   private jumpBufferTime = 0;
+  private wallContactSide: -1 | 1 | 0 = 0;
+  private isWallSliding = false;
+  private wallJumpLockUntil = 0;
+  private wallJumpActive = false;
+  private wallJumpDirection: -1 | 1 | 0 = 0;
+  private wallJumpBlockedSide: -1 | 1 | 0 = 0;
   private isClimbingLadder = false;
   private activeLadderKey: string | null = null;
   private collectedObjectKeys = new Set<string>();
@@ -1059,6 +1069,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     if (!this.playerBody) {
       this.clearCrateInteractionState();
+      this.resetWallMovementState();
       this.syncLocalPresence();
       this.renderHud();
       return;
@@ -1105,6 +1116,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.jumpBufferTime = 0;
       this.isCrouching = false;
       this.clearCrateInteractionState();
+      this.resetWallMovementState();
       this.syncPlayerHitbox();
     } else {
       if (this.isClimbingLadder) {
@@ -1119,6 +1131,13 @@ export class OverworldPlayScene extends Phaser.Scene {
       const wantsCrouch = onFloor && downHeld && !crateInteraction;
       this.isCrouching = wantsCrouch || (this.isCrouching && !this.canPlayerStandUp());
       this.syncPlayerHitbox();
+      const canWallSlide =
+        !onFloor &&
+        crateInteraction === null &&
+        !this.isCrouching &&
+        this.playerBody.velocity.y >= 0 &&
+        this.time.now >= this.wallJumpLockUntil;
+      this.updateWallMovementState(horizontalInput, onFloor, canWallSlide);
       if (onFloor) {
         this.coyoteTime = this.COYOTE_MS;
       } else {
@@ -1136,6 +1155,8 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.clearCrateInteractionState();
         if (this.time.now < this.weaponKnockbackUntil) {
           this.playerBody.setVelocityX(this.weaponKnockbackVelocityX);
+        } else if (this.time.now < this.wallJumpLockUntil && this.wallJumpDirection !== 0) {
+          this.playerBody.setVelocityX(this.wallJumpDirection * this.WALL_JUMP_VELOCITY_X);
         } else {
           this.weaponKnockbackVelocityX = 0;
           const moveSpeedBase = this.isCrouching ? this.CRAWL_SPEED : this.PLAYER_SPEED;
@@ -1165,10 +1186,31 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.jumpBuffered = false;
         this.jumpBufferTime = 0;
         this.coyoteTime = 0;
+        this.resetWallMovementState();
       } else {
         if (jumpPressed) {
-          this.jumpBuffered = true;
-          this.jumpBufferTime = this.JUMP_BUFFER_MS;
+          if (this.isWallSliding && this.wallContactSide !== 0) {
+            const wallJumpSourceSide = this.wallContactSide;
+            const wallJumpDirection = (wallJumpSourceSide === -1 ? 1 : -1) as -1 | 1;
+            this.playerBody.setVelocityX(wallJumpDirection * this.WALL_JUMP_VELOCITY_X);
+            this.playerBody.setVelocityY(this.WALL_JUMP_VELOCITY_Y);
+            this.fxController?.playJumpDustFx(
+              this.player?.x ?? this.playerBody.center.x,
+              this.playerBody.bottom,
+              this.playerFacing
+            );
+            this.jumpBuffered = false;
+            this.jumpBufferTime = 0;
+            this.coyoteTime = 0;
+            this.clearWallSlideState();
+            this.wallJumpLockUntil = this.time.now + this.WALL_JUMP_INPUT_LOCK_MS;
+            this.wallJumpActive = true;
+            this.wallJumpDirection = wallJumpDirection;
+            this.wallJumpBlockedSide = wallJumpSourceSide;
+          } else {
+            this.jumpBuffered = true;
+            this.jumpBufferTime = this.JUMP_BUFFER_MS;
+          }
         }
 
         if (this.jumpBufferTime > 0) {
@@ -1188,7 +1230,12 @@ export class OverworldPlayScene extends Phaser.Scene {
             this.playerFacing
           );
           this.jumpBuffered = false;
+          this.jumpBufferTime = 0;
           this.coyoteTime = 0;
+          this.wallJumpActive = false;
+          this.wallJumpDirection = 0;
+          this.wallJumpLockUntil = 0;
+          this.wallJumpBlockedSide = 0;
         }
 
         const jumpHeld = upHeld || this.cursors.space!.isDown || touchInput.jumpHeld;
@@ -1199,6 +1246,10 @@ export class OverworldPlayScene extends Phaser.Scene {
         ) {
           this.playerBody.setVelocityY(this.playerBody.velocity.y * (inQuicksand ? 0.84 : 0.85));
         }
+      }
+
+      if (this.isWallSliding && this.playerBody.velocity.y > this.WALL_SLIDE_MAX_FALL_SPEED) {
+        this.playerBody.setVelocityY(this.WALL_SLIDE_MAX_FALL_SPEED);
       }
 
       if (inQuicksand && onFloor) {
@@ -1259,6 +1310,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.coyoteTime = 0;
     this.jumpBuffered = false;
     this.jumpBufferTime = 0;
+    this.resetWallMovementState();
     this.isClimbingLadder = false;
     this.activeLadderKey = null;
     this.isCrouching = false;
@@ -3291,6 +3343,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.activeLadderKey = null;
     this.setLadderClimbSfxPlaying(false);
     this.isCrouching = false;
+    this.resetWallMovementState();
     this.activeAttackAnimation = null;
     this.activeAttackAnimationUntil = 0;
     this.playerLandAnimationUntil = 0;
@@ -3805,6 +3858,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.playerPickupSensorBody.moves = false;
     this.externalLaunchGraceUntil = 0;
     this.isCrouching = false;
+    this.resetWallMovementState();
     this.syncPlayerHitbox();
     this.playerSprite = this.add.sprite(
       spawn.x,
@@ -3829,6 +3883,71 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.syncBackdropCameraIgnores();
   }
 
+  private resetWallMovementState(): void {
+    this.clearWallSlideState();
+    this.wallJumpLockUntil = 0;
+    this.wallJumpActive = false;
+    this.wallJumpDirection = 0;
+    this.wallJumpBlockedSide = 0;
+  }
+
+  private clearWallSlideState(): void {
+    this.wallContactSide = 0;
+    this.isWallSliding = false;
+  }
+
+  private getWallContactSide(horizontalInput: number): -1 | 1 | 0 {
+    if (!this.playerBody || horizontalInput === 0) {
+      return 0;
+    }
+
+    const touchingLeft = this.playerBody.blocked.left || this.playerBody.touching.left;
+    const touchingRight = this.playerBody.blocked.right || this.playerBody.touching.right;
+    if (horizontalInput < 0 && touchingLeft) {
+      return -1;
+    }
+    if (horizontalInput > 0 && touchingRight) {
+      return 1;
+    }
+
+    return 0;
+  }
+
+  private updateWallMovementState(horizontalInput: number, onFloor: boolean, canWallSlide: boolean): void {
+    if (!this.playerBody || onFloor || this.isClimbingLadder) {
+      this.resetWallMovementState();
+      return;
+    }
+
+    if (this.wallJumpActive && this.playerBody.velocity.y >= 0) {
+      this.wallJumpActive = false;
+      this.wallJumpDirection = 0;
+    }
+
+    const rawWallContactSide = canWallSlide ? this.getWallContactSide(horizontalInput) : 0;
+    if (
+      rawWallContactSide !== 0 &&
+      this.wallJumpBlockedSide !== 0 &&
+      rawWallContactSide !== this.wallJumpBlockedSide
+    ) {
+      this.wallJumpBlockedSide = 0;
+    }
+
+    const wallContactSide =
+      rawWallContactSide !== 0 && rawWallContactSide === this.wallJumpBlockedSide
+        ? 0
+        : rawWallContactSide;
+    this.wallContactSide = wallContactSide;
+    this.isWallSliding = wallContactSide !== 0;
+
+    if (this.isWallSliding) {
+      this.wallJumpActive = false;
+      this.wallJumpDirection = 0;
+    } else if (!this.wallJumpActive && this.time.now >= this.wallJumpLockUntil) {
+      this.wallJumpDirection = 0;
+    }
+  }
+
   private findOverlappingLadder(): LoadedRoomObject | null {
     return this.liveObjectController.findOverlappingLadder(this.loadedFullRoomsById.values());
   }
@@ -3846,6 +3965,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (!this.playerBody) {
       this.isClimbingLadder = false;
       this.activeLadderKey = null;
+      this.resetWallMovementState();
       this.setLadderClimbSfxPlaying(false);
       return;
     }
@@ -3861,6 +3981,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.playerBody.setAllowGravity(!ladder);
     if (!ladder) {
       this.setLadderClimbSfxPlaying(false);
+    } else {
+      this.resetWallMovementState();
     }
 
     if (enteringLadder) {
@@ -4259,6 +4381,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.weaponKnockbackVelocityX = 0;
     this.weaponKnockbackUntil = 0;
     this.externalLaunchGraceUntil = 0;
+    this.resetWallMovementState();
     this.destroyPlayerProjectiles();
     this.playerBody.reset(spawn.x, spawn.y);
     this.player.setPosition(spawn.x, spawn.y);
@@ -4306,7 +4429,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     );
 
     const facingLockedByWeaponKnockback = this.time.now < this.weaponKnockbackUntil;
-    if (this.activeCrateInteractionFacing !== null) {
+    if (this.isWallSliding && this.wallContactSide !== 0) {
+      this.playerFacing = this.wallContactSide;
+    } else if (this.activeCrateInteractionFacing !== null) {
       this.playerFacing = this.activeCrateInteractionFacing;
     } else if (!facingLockedByWeaponKnockback && Math.abs(this.playerBody.velocity.x) > 8) {
       this.playerFacing = this.playerBody.velocity.x < 0 ? -1 : 1;
@@ -4324,6 +4449,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       nextAnimation = this.activeAttackAnimation;
     } else if (this.isClimbingLadder) {
       nextAnimation = 'ladder-climb';
+    } else if (this.isWallSliding) {
+      nextAnimation = 'wall-slide';
+    } else if (this.wallJumpActive) {
+      nextAnimation = 'wall-jump';
     } else if (!grounded) {
       nextAnimation = this.playerBody.velocity.y < -10 ? 'jump-rise' : 'jump-fall';
     } else if (this.activeCrateInteractionMode === 'push') {
@@ -4594,6 +4723,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.heldKeyCount = 0;
     this.score = 0;
     this.isCrouching = false;
+    this.resetWallMovementState();
     this.activeAttackAnimation = null;
     this.activeAttackAnimationUntil = 0;
     this.externalLaunchGraceUntil = 0;
@@ -6683,6 +6813,11 @@ export class OverworldPlayScene extends Phaser.Scene {
             velocityY: Math.round(this.playerBody.velocity.y),
             crouching: this.isCrouching,
             climbing: this.isClimbingLadder,
+            wallSliding: this.isWallSliding,
+            wallContactSide: this.wallContactSide,
+            wallJumpBlockedSide: this.wallJumpBlockedSide,
+            wallJumpActive: this.wallJumpActive,
+            wallJumpLockMs: Math.max(0, this.wallJumpLockUntil - this.time.now),
             ladderKey: this.activeLadderKey,
             animation: this.playerAnimationState,
             facing: this.playerFacing,

@@ -3,6 +3,8 @@ export type PlayerAnimationState =
   | 'run'
   | 'jump-rise'
   | 'jump-fall'
+  | 'wall-slide'
+  | 'wall-jump'
   | 'land'
   | 'ladder-climb'
   | 'crouch'
@@ -72,6 +74,8 @@ const IDLE_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [0, 1, 2, 3, 4, 5, 6]);
 const RUN_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [15, 16, 17, 18, 19, 20, 21, 22]);
 const JUMP_RISE_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [32]);
 const JUMP_FALL_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [34]);
+const WALL_SLIDE_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [107, 108, 109, 110, 111, 112]);
+const WALL_JUMP_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123]);
 const LAND_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [35, 36]);
 const LADDER_CLIMB_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [124, 125, 126, 127, 128, 129, 130, 131]);
 const CROUCH_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [51, 52, 53, 54, 55, 56]);
@@ -144,6 +148,8 @@ export const DEFAULT_PLAYER_ANIMATION_KEYS: Record<PlayerAnimationState, string>
   run: 'player-default-run',
   'jump-rise': 'player-default-jump-rise',
   'jump-fall': 'player-default-jump-fall',
+  'wall-slide': 'player-default-wall-slide',
+  'wall-jump': 'player-default-wall-jump',
   land: 'player-default-land',
   'ladder-climb': 'player-default-ladder-climb',
   crouch: 'player-default-crouch',
@@ -182,6 +188,20 @@ export const DEFAULT_PLAYER_ANIMATIONS: DefaultPlayerAnimationDefinition[] = [
     atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.base,
     frameNames: JUMP_FALL_FRAMES,
     frameRate: 1,
+    repeat: -1,
+  },
+  {
+    key: DEFAULT_PLAYER_ANIMATION_KEYS['wall-slide'],
+    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.base,
+    frameNames: WALL_SLIDE_FRAMES,
+    frameRate: 10,
+    repeat: -1,
+  },
+  {
+    key: DEFAULT_PLAYER_ANIMATION_KEYS['wall-jump'],
+    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.base,
+    frameNames: WALL_JUMP_FRAMES,
+    frameRate: 14,
     repeat: -1,
   },
   {
