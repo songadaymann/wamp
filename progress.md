@@ -57,6 +57,25 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Practice-run spawn marker pass on March 24, 2026:
+  - room challenge play now renders the existing `spawn_point` sign asset at the ranked start location while a single-room run is still in `practice`
+  - the practice marker adds a `START` label and rides the same goal-marker overlay system as exits/checkpoints, so side-entry players can see exactly where they need to go to arm the ranked attempt
+  - this also covers legacy rooms without an authored spawn, because it uses the same resolved fallback start point as the ranked-room gating logic
+  - verification:
+    - `npm run build` passed
+    - targeted browser probe wrote:
+      - `output/web-game/practice-spawn-sign-check/summary.json`
+      - `output/web-game/practice-spawn-sign-check/practice-spawn-sign.png`
+    - targeted probe confirmed:
+      - practice-mode markers now include `spawn_point` at the ranked start location
+      - the `START` label renders above that sign
+      - the existing finish flag still renders alongside it
+    - shared Playwright smoke client also ran against local preview and wrote:
+      - `output/web-game/practice-spawn-sign-smoke/shot-0.png`
+      - `output/web-game/practice-spawn-sign-smoke/state-0.json`
+    - smoke caveat:
+      - the generic client capture landed during early boot and stayed black, so the real visual confirmation for this change is the targeted `practice-spawn-sign-check` artifact
+
 - Collapsed layer image-button pass on March 21, 2026:
   - copied the supplied layer reference images into `public/assets/ui/layers/foreground.png`, `terrain.png`, and `background.png`
   - replaced the CSS-drawn collapsed `Layers` mini-stack with those actual PNGs, while keeping the expanded layer controls and tooltips unchanged

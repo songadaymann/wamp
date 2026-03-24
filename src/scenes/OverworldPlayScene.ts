@@ -323,6 +323,16 @@ interface SelectedCourseContext {
 
 type CoursePlaybackRoomSourceMode = 'published' | 'draftPreview';
 
+interface PlayGoalMarkerDescriptor {
+  point: GoalMarkerPoint;
+  label: string | null;
+  textColor: string;
+  variant?: GoalMarkerFlagVariant;
+  textureKey?: string;
+  spriteOffsetY?: number;
+  alpha?: number;
+}
+
 export class OverworldPlayScene extends Phaser.Scene {
   private readonly PLAYER_SPEED = 150;
   private readonly JUMP_VELOCITY = -280;
@@ -2383,13 +2393,25 @@ export class OverworldPlayScene extends Phaser.Scene {
       ? this.getCourseMarkerDescriptors(this.activeCourseRun)
       : this.getGoalMarkerDescriptors(this.currentGoalRun!);
     for (const marker of markers) {
-      const sprite = createGoalMarkerFlagSprite(
-        this,
-        marker.variant,
-        marker.point.x,
-        marker.point.y + 2,
-        21,
-      );
+      const sprite = marker.variant
+        ? createGoalMarkerFlagSprite(
+            this,
+            marker.variant,
+            marker.point.x,
+            marker.point.y + (marker.spriteOffsetY ?? 2),
+            21,
+          )
+        : this.add.sprite(
+            marker.point.x,
+            marker.point.y + (marker.spriteOffsetY ?? 0),
+            marker.textureKey ?? 'spawn_point',
+            0,
+          );
+      sprite.setOrigin(0.5, 1);
+      sprite.setDepth(21);
+      if (marker.alpha !== undefined) {
+        sprite.setAlpha(marker.alpha);
+      }
       this.goalMarkerSprites.push(sprite);
 
       if (marker.label) {
@@ -3123,24 +3145,36 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.syncBackdropCameraIgnores();
   }
 
-  private getGoalMarkerDescriptors(runState: GoalRunState): Array<{
-    point: GoalMarkerPoint;
-    label: string | null;
-    variant: GoalMarkerFlagVariant;
-    textColor: string;
-  }> {
+  private getGoalMarkerDescriptors(runState: GoalRunState): PlayGoalMarkerDescriptor[] {
+    const markers: PlayGoalMarkerDescriptor[] = [];
+
+    if (runState.qualificationState === 'practice') {
+      markers.push({
+        point: runState.rankedStartPoint,
+        label: 'START',
+        textColor: '#9fdcff',
+        textureKey: 'spawn_point',
+        spriteOffsetY: 0,
+        alpha: 0.94,
+      });
+    }
+
     switch (runState.goal.type) {
       case 'reach_exit':
         return runState.goal.exit
-          ? [{
+          ? [
+              ...markers,
+              {
               point: this.toWorldGoalPoint(runState.roomCoordinates, runState.goal.exit),
               label: null,
               variant: (runState.result === 'completed' ? 'finish-cleared' : 'finish-pending') as GoalMarkerFlagVariant,
               textColor: runState.result === 'completed' ? '#f6e6a6' : '#ffefef',
-            }]
-          : [];
+            },
+            ]
+          : markers;
       case 'checkpoint_sprint':
         return [
+          ...markers,
           ...runState.goal.checkpoints.map((checkpoint, index) => {
             const reached = index < runState.nextCheckpointIndex;
             return {
@@ -3160,27 +3194,17 @@ export class OverworldPlayScene extends Phaser.Scene {
             : []),
         ];
       default:
-        return [];
+        return markers;
     }
   }
 
-  private getCourseMarkerDescriptors(runState: ActiveCourseRunState): Array<{
-    point: GoalMarkerPoint;
-    label: string | null;
-    variant: GoalMarkerFlagVariant;
-    textColor: string;
-  }> {
+  private getCourseMarkerDescriptors(runState: ActiveCourseRunState): PlayGoalMarkerDescriptor[] {
     const goal = runState.course.goal;
     if (!goal) {
       return [];
     }
 
-    const markers: Array<{
-      point: GoalMarkerPoint;
-      label: string | null;
-      variant: GoalMarkerFlagVariant;
-      textColor: string;
-    }> = [];
+    const markers: PlayGoalMarkerDescriptor[] = [];
 
     if (runState.course.startPoint) {
       markers.push({
