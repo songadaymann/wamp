@@ -4,14 +4,22 @@ import { Wallet } from 'ethers';
 
 const BASE_URL =
   process.env.ROLL_OUT_BASE_URL ??
-  'https://everybodys-platformer.novox-robot.workers.dev';
+  'http://127.0.0.1:8787';
 const PARTYKIT_HOST =
   process.env.ROLL_OUT_PARTYKIT_HOST ??
-  'everybodys-platformer-presence.songadaymann.partykit.dev';
+  '127.0.0.1:1999';
 const OUTPUT_DIR = 'output/remote-rollout-check';
 const ROOM_IDS = ['0,0', '1,0', '0,1'];
 const ROOM_WIDTH = 40;
 const ROOM_HEIGHT = 22;
+const ALLOW_MUTATIONS = process.env.ROLL_OUT_ALLOW_MUTATIONS === '1';
+const BLOCKED_BASE_URL_HOSTS = new Set([
+  'api.wamp.land',
+  'everybodys-platformer.novox-robot.workers.dev',
+]);
+const BLOCKED_PARTYKIT_HOSTS = new Set([
+  'everybodys-platformer-presence.songadaymann.partykit.dev',
+]);
 
 mkdirSync(OUTPUT_DIR, { recursive: true });
 
@@ -19,6 +27,7 @@ const summary = {
   baseUrl: BASE_URL,
   partykitHost: PARTYKIT_HOST,
   startedAt: new Date().toISOString(),
+  allowMutations: ALLOW_MUTATIONS,
   worldBefore: null,
   accounts: {},
   api: {},
@@ -99,7 +108,7 @@ class SessionClient {
       }
     }
 
-  return {
+    return {
       status: response.status,
       ok: response.ok,
       json,
@@ -279,10 +288,82 @@ async function testPartyKit() {
   return events;
 }
 
+function classifyTargetHost(hostname) {
+  const normalized = hostname.trim().toLowerCase();
+  if (
+    normalized === 'localhost' ||
+    normalized === '127.0.0.1' ||
+    normalized === '[::1]'
+  ) {
+    return 'local';
+  }
+
+  if (
+    normalized.includes('safety') ||
+    normalized.includes('staging') ||
+    normalized.includes('preview')
+  ) {
+    return 'non-production';
+  }
+
+  return 'unknown';
+}
+
+function assertMutationTargetSafety() {
+  if (!ALLOW_MUTATIONS) {
+    throw new Error(
+      'remote_rollout_check mutates backend state. Re-run with ROLL_OUT_ALLOW_MUTATIONS=1 only against local or dedicated safety targets.'
+    );
+  }
+
+  const baseHost = new URL(BASE_URL).hostname.toLowerCase();
+  const partykitHost = PARTYKIT_HOST.replace(/^(https?:\/\/|wss?:\/\/)/, '')
+    .replace(/\/.*$/, '')
+    .toLowerCase();
+
+  summary.targetChecks = {
+    baseHost,
+    baseHostClassification: classifyTargetHost(baseHost),
+    partykitHost,
+    partykitHostClassification: classifyTargetHost(partykitHost),
+  };
+
+  if (BLOCKED_BASE_URL_HOSTS.has(baseHost)) {
+    throw new Error(
+      `Refusing to mutate the known production Worker target ${baseHost}. Use a local or safety backend instead.`
+    );
+  }
+
+  if (BLOCKED_PARTYKIT_HOSTS.has(partykitHost)) {
+    throw new Error(
+      `Refusing to mutate the known production PartyKit target ${partykitHost}. Use a local or safety PartyKit project instead.`
+    );
+  }
+
+  if (
+    summary.targetChecks.baseHostClassification === 'unknown' ||
+    summary.targetChecks.partykitHostClassification === 'unknown'
+  ) {
+    throw new Error(
+      `Refusing to mutate an unclassified target (${baseHost}, ${partykitHost}). Name safety backends with a clear non-production hostname or use localhost.`
+    );
+  }
+}
+
 function d1Exec(sql) {
   return execFileSync(
     'npx',
-    ['wrangler', 'd1', 'execute', 'DB', '--remote', '--command', sql],
+    [
+      'wrangler',
+      'd1',
+      'execute',
+      'DB',
+      '--remote',
+      '--env',
+      process.env.ROLL_OUT_WRANGLER_ENV?.trim() || 'safety',
+      '--command',
+      sql,
+    ],
     {
       cwd: process.cwd(),
       encoding: 'utf8',
@@ -313,6 +394,7 @@ function cleanupRemoteData(accountA, accountB) {
 }
 
 async function main() {
+  assertMutationTargetSafety();
   const worldBefore = await assertEmptyPublishedWorld();
   summary.worldBefore = worldBefore;
 
@@ -441,7 +523,7 @@ main()
       }
     }
 
-  const summaryPath = `${OUTPUT_DIR}/summary.json`;
+    const summaryPath = `${OUTPUT_DIR}/summary.json`;
     writeFileSync(summaryPath, JSON.stringify(summary, null, 2));
     console.log(summaryPath);
     if (summary.error) {

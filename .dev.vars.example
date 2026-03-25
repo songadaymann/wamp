@@ -2,6 +2,9 @@ RESEND_API_KEY=
 AUTH_EMAIL_FROM="Everybody's Platformer <onboarding@resend.dev>"
 # Public app base URL used when constructing auth links from the Worker.
 APP_BASE_URL="http://127.0.0.1:3000"
+# Optional extra frontend hostnames allowed for auth redirects, comma-separated.
+# Useful for non-production preview frontends that do not live on `*.wampland.pages.dev`.
+# AUTH_TRUSTED_REDIRECT_HOSTS="preview.example.com,.preview.example.com"
 # Debug-only local mode: return the magic link in the API response instead of sending email.
 AUTH_DEBUG_MAGIC_LINKS=1
 # Dev-only reset route for wiping test data through the Worker UI button.

@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run build",
     "dev": "vite --strictPort --port 3000",
     "dev:frontend:local": "VITE_ROOM_API_BASE_URL='' vite --strictPort --port 3000",
     "dev:frontend:remote": "VITE_ROOM_API_BASE_URL='https://everybodys-platformer.novox-robot.workers.dev' vite --strictPort --port 3000",
@@ -12,12 +14,16 @@
     "dev:presence": "partykit dev",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "smoke:preview:readonly": "npx --yes --quiet -p playwright node scripts/preview_smoke_readonly.mjs",
     "contracts:build": "npm --prefix contracts run build",
     "contracts:test": "npm --prefix contracts run test",
     "contracts:deploy:base-sepolia": "npm --prefix contracts run deploy:base-sepolia",
     "cf:d1:migrate:local": "wrangler d1 migrations apply DB --local",
     "cf:d1:migrate:remote": "wrangler d1 migrations apply DB --remote",
-    "cf:deploy": "npm run build && wrangler deploy"
+    "cf:d1:migrate:safety": "wrangler d1 migrations apply DB --env safety --remote",
+    "cf:deploy": "npm run build && wrangler deploy",
+    "cf:deploy:safety": "npm run build && wrangler deploy --env safety",
+    "presence:deploy:safety": "partykit deploy --config partykit.safety.json"
   },
   "dependencies": {
     "@ethersproject/sha2": "^5.8.0",

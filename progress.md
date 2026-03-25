@@ -57,6 +57,51 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Safety backend foundation on March 25, 2026:
+  - started the maintainability rollout from a fresh `origin/main` safety worktree on branch `safety/safety-backend-foundation-2026-03-25`
+  - added root verification commands:
+    - `npm run typecheck`
+    - `npm run check`
+    - `npm run smoke:preview:readonly`
+  - added Worker safety-environment wiring in `wrangler.jsonc`:
+    - new `env.safety` Worker name `everybodys-platformer-safety`
+    - preview URLs enabled
+    - separate safety D1 binding placeholder `everybodys-platformer-safety-db`
+  - added `partykit.safety.json` for the separate PartyKit presence project `everybodys-platformer-presence-safety`
+  - added `docs/safety-backend-foundation.md` to document:
+    - Worker safety deploy setup
+    - PartyKit safety deploy setup
+    - Pages branch-preview env wiring
+    - read-only preview smoke usage
+    - mutating rollout-check guardrails
+  - hardened Worker auth redirect trust with optional `AUTH_TRUSTED_REDIRECT_HOSTS` so non-production preview frontends can be explicitly allowed without changing production defaults
+  - changed `scripts/remote_rollout_check.mjs` so it now:
+    - defaults to local Worker + local PartyKit targets
+    - requires `ROLL_OUT_ALLOW_MUTATIONS=1`
+    - refuses the known production Worker and PartyKit hosts
+    - refuses unclassified non-local targets
+    - defaults D1 writes to Wrangler `--env safety`
+  - added `scripts/preview_smoke_readonly.mjs`, a Playwright-based read-only smoke that:
+    - boots a preview URL
+    - reads `window.render_game_to_text`
+    - selects an editable room through a narrow `previewSmoke=1` app hook
+    - verifies browse boot, play-mode entry, return-to-world, and editor entry without mutating backend state
+  - verification:
+    - `npm run typecheck` passed
+    - `npm run check` passed
+    - `node scripts/remote_rollout_check.mjs` now fails safely by default and wrote `output/remote-rollout-check/summary.json`
+    - remote-backed preview build passed with:
+      - `VITE_ROOM_API_BASE_URL=https://everybodys-platformer.novox-robot.workers.dev`
+      - `VITE_PARTYKIT_HOST=everybodys-platformer-presence.songadaymann.partykit.dev`
+    - read-only smoke passed against local preview and wrote:
+      - `output/web-game/preview-readonly-smoke/127.0.0.1-4174/summary.json`
+      - `output/web-game/preview-readonly-smoke/127.0.0.1-4174/browse.png`
+      - `output/web-game/preview-readonly-smoke/127.0.0.1-4174/play.png`
+      - `output/web-game/preview-readonly-smoke/127.0.0.1-4174/editor.png`
+    - screenshot check:
+      - browse capture shows published room selection and world HUD rendered correctly
+      - editor capture shows the room editor loaded on `0,0` with expected controls visible
+
 - Practice-run spawn marker depth follow-up on March 24, 2026:
   - raised play-scene goal marker depth so the practice `START` sign and label now render above the room foreground plane instead of occasionally hiding behind front-layer art
   - verification:

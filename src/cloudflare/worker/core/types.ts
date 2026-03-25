@@ -30,6 +30,7 @@ export interface Env {
   RESEND_API_KEY?: string;
   AUTH_EMAIL_FROM?: string;
   AUTH_DEBUG_MAGIC_LINKS?: string;
+  AUTH_TRUSTED_REDIRECT_HOSTS?: string;
   APP_BASE_URL?: string;
   ENABLE_TEST_RESET?: string;
   ROOM_DAILY_CLAIM_LIMIT?: string;

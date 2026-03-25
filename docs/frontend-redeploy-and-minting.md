@@ -29,6 +29,7 @@ Notes:
 
 - Do **not** try to reuse the current `wrangler.jsonc` as a shared Pages config. This repo already uses an `ASSETS` binding for the Worker, and adding `pages_build_output_dir` makes Wrangler treat it as a Pages config and fail.
 - The safest frontend redeploy path is the Pages dashboard: point `wampland` at `main`, use the build command/output above, and clear build cache when needed.
+- For backend-changing safety branches, use the dedicated safety backend flow in [safety-backend-foundation.md](./safety-backend-foundation.md) instead of pointing a Pages preview at production services.
 - `wamp.land` currently runs as a Pages frontend while the public API is exposed separately at `https://api.wamp.land`. If the frontend later serves the Worker API on same-origin `/api`, leaving `VITE_ROOM_API_BASE_URL` unset remains the preferred setup.
 - If you want CLI Pages deploys later, use a separate Pages config file instead of the Worker `wrangler.jsonc`.
 - The Pages CLI deploy still depends on the `wampland` project existing in the same Cloudflare account Wrangler is logged into.

@@ -17,5 +17,25 @@
       "database_id": "3cba45fc-4f29-4081-89f7-c57ab3179292",
       "migrations_dir": "./migrations"
     }
-  ]
+  ],
+  "env": {
+    "safety": {
+      "name": "everybodys-platformer-safety",
+      "preview_urls": true,
+      "vars": {
+        "ENABLE_TEST_RESET": "0",
+        "PARTYKIT_PARTY": "main",
+        "ROOM_MINT_DISABLED": "1"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "everybodys-platformer-safety-db",
+          // Replace before the first safety deploy:
+          "database_id": "REPLACE_WITH_SAFETY_DATABASE_ID",
+          "migrations_dir": "./migrations"
+        }
+      ]
+    }
+  }
 }

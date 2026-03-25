@@ -965,7 +965,13 @@ function isTrustedAuthRedirectHostname(hostname: string, env: Env): boolean {
     return true;
   }
 
-  return hostname === 'wampland.pages.dev' || hostname.endsWith('.wampland.pages.dev');
+  if (hostname === 'wampland.pages.dev' || hostname.endsWith('.wampland.pages.dev')) {
+    return true;
+  }
+
+  return getConfiguredTrustedRedirectHosts(env).some((candidate) =>
+    hostnameMatchesTrustedRedirectCandidate(hostname, candidate)
+  );
 }
 
 function isLocalDevHostname(hostname: string): boolean {
@@ -986,6 +992,31 @@ function getConfiguredPublicHostname(env: Env): string | null {
   } catch {
     return null;
   }
+}
+
+function getConfiguredTrustedRedirectHosts(env: Env): string[] {
+  const configured = env.AUTH_TRUSTED_REDIRECT_HOSTS?.trim();
+  if (!configured) {
+    return [];
+  }
+
+  return configured
+    .split(',')
+    .map((candidate) => candidate.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function hostnameMatchesTrustedRedirectCandidate(hostname: string, candidate: string): boolean {
+  const normalized = candidate.startsWith('*.') ? candidate.slice(1) : candidate;
+  if (!normalized) {
+    return false;
+  }
+
+  if (normalized.startsWith('.')) {
+    return hostname.endsWith(normalized);
+  }
+
+  return hostname === normalized;
 }
 
 export async function sendMagicLinkEmail(
