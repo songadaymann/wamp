@@ -24,6 +24,7 @@
       "preview_urls": true,
       "vars": {
         "ENABLE_TEST_RESET": "0",
+        "PARTYKIT_HOST": "everybodys-platformer-presence-safety.songadaymann.partykit.dev",
         "PARTYKIT_PARTY": "main",
         "ROOM_MINT_DISABLED": "1"
       },
@@ -31,8 +32,7 @@
         {
           "binding": "DB",
           "database_name": "everybodys-platformer-safety-db",
-          // Replace before the first safety deploy:
-          "database_id": "REPLACE_WITH_SAFETY_DATABASE_ID",
+          "database_id": "27f64d18-5d6d-45a0-9361-c09ec1a805a6",
           "migrations_dir": "./migrations"
         }
       ]

@@ -14,17 +14,23 @@ This branch establishes the non-production rollout path for backend-changing saf
 `wrangler.jsonc` now includes `env.safety` with a separate Worker name:
 
 - Worker name: `everybodys-platformer-safety`
+- Worker URL: `https://everybodys-platformer-safety.novox-robot.workers.dev`
 - preview URLs: enabled
 - D1 binding: `everybodys-platformer-safety-db`
+- D1 database id: `27f64d18-5d6d-45a0-9361-c09ec1a805a6`
+- PartyKit host: `everybodys-platformer-presence-safety.songadaymann.partykit.dev`
 
-Before the first safety deploy:
+To deploy the safety Worker:
 
-1. create a dedicated D1 database for safety
-2. replace `REPLACE_WITH_SAFETY_DATABASE_ID` in `wrangler.jsonc`
-3. deploy with:
+1. apply migrations:
 
 ```bash
 npm run cf:d1:migrate:safety
+```
+
+2. deploy with:
+
+```bash
 npm run cf:deploy:safety
 ```
 
@@ -32,6 +38,7 @@ Recommended Worker vars/secrets for `--env safety`:
 
 - `PARTYKIT_PARTY=main`
 - `PARTYKIT_HOST=<your safety PartyKit hostname>`
+- `PARTYKIT_HOST=everybodys-platformer-presence-safety.songadaymann.partykit.dev`
 - `PARTYKIT_INTERNAL_TOKEN=<shared random secret>`
 - `AUTH_DEBUG_MAGIC_LINKS=0`
 - `ENABLE_TEST_RESET=0`
@@ -43,6 +50,7 @@ Recommended Worker vars/secrets for `--env safety`:
 `partykit.safety.json` defines a separate PartyKit project:
 
 - project name: `everybodys-platformer-presence-safety`
+- deployed host: `everybodys-platformer-presence-safety.songadaymann.partykit.dev`
 
 Deploy it with:
 
@@ -57,6 +65,15 @@ npx partykit env add PARTYKIT_INTERNAL_TOKEN --config partykit.safety.json
 ```
 
 Use the same token value in the Worker `PARTYKIT_INTERNAL_TOKEN` safety secret.
+
+## Current Safety Data State
+
+The safety backend is live, but the D1 database is a fresh safety database, not a copy of production.
+
+- `GET /api/health` returns healthy auth + D1 status from `https://everybodys-platformer-safety.novox-robot.workers.dev/api/health`
+- `GET /api/world?centerX=0&centerY=0&radius=1` currently returns the default frontier origin window rather than populated live world data
+
+If you need backend-changing safety branches to exercise production-like data, add an explicit seed/snapshot step instead of pointing them at production D1.
 
 ## Pages Preview Wiring
 

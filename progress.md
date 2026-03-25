@@ -101,6 +101,25 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - screenshot check:
       - browse capture shows published room selection and world HUD rendered correctly
       - editor capture shows the room editor loaded on `0,0` with expected controls visible
+  - follow-up deploy state:
+    - created D1 database `everybodys-platformer-safety-db`
+    - wired safety D1 id `27f64d18-5d6d-45a0-9361-c09ec1a805a6` into `wrangler.jsonc`
+    - deployed PartyKit project `everybodys-platformer-presence-safety`
+    - wired safety PartyKit host `everybodys-platformer-presence-safety.songadaymann.partykit.dev` into `wrangler.jsonc`
+    - deployed Worker `everybodys-platformer-safety`
+      - URL: `https://everybodys-platformer-safety.novox-robot.workers.dev`
+    - uploaded Worker safety secrets including:
+      - `AUTH_EMAIL_FROM`
+      - `RESEND_API_KEY`
+      - `PARTYKIT_INTERNAL_TOKEN`
+      - admin + mint config values from local `.dev.vars`
+    - applied all remote D1 migrations through `0018_room_version_leaderboard_source.sql`
+    - remote health checks passed:
+      - `/api/health`
+      - `/api/world?centerX=0&centerY=0&radius=1`
+      - `/api/world/chunks?minChunkX=-1&maxChunkX=1&minChunkY=-1&maxChunkY=1`
+    - caveat:
+      - safety D1 is currently fresh and only returns the default frontier origin, not cloned production world data
 
 - Practice-run spawn marker depth follow-up on March 24, 2026:
   - raised play-scene goal marker depth so the practice `START` sign and label now render above the room foreground plane instead of occasionally hiding behind front-layer art
