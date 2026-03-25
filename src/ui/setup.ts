@@ -19,40 +19,36 @@ import { setupSceneCommands } from './setup/sceneCommands';
 
 export function setupUI(game: Phaser.Game): void {
   initializeDeviceLayout();
+
   const paletteController = new PaletteController();
-  const historyModal = new RoomHistoryModalController(game);
-  const leaderboardModal = new LeaderboardModalController(game);
+  paletteController.init();
+
+  const modals = {
+    historyModal: new RoomHistoryModalController(game),
+    leaderboardModal: new LeaderboardModalController(game),
+    controlsModal: new ControlsModalController(),
+    aboutModal: new AboutModalController(),
+    chatModerationModal: new ChatModerationModalController(),
+    courseModal: new CourseModalController(game),
+  };
   const installHelp = new InstallHelpController();
-  const controlsModal = new ControlsModalController();
-  const aboutModal = new AboutModalController();
-  const chatModerationModal = new ChatModerationModalController();
-  const courseModal = new CourseModalController(game);
   const profileModal = new ProfileModalController(game);
   const chatPanel = new ChatPanelController();
   const mobileUi = new MobileUiController(game);
 
-  paletteController.init();
   setupCollapsibleSidebarSections();
   setupEditorControls(game, paletteController);
-  historyModal.init();
-  leaderboardModal.init();
+  modals.historyModal.init();
+  modals.leaderboardModal.init();
   installHelp.init();
-  controlsModal.init();
-  aboutModal.init();
-  chatModerationModal.init();
-  courseModal.init();
+  modals.controlsModal.init();
+  modals.aboutModal.init();
+  modals.chatModerationModal.init();
+  modals.courseModal.init();
   profileModal.init();
   chatPanel.init();
   mobileUi.init();
-  setupSceneCommands(
-    game,
-    historyModal,
-    leaderboardModal,
-    controlsModal,
-    aboutModal,
-    chatModerationModal,
-    courseModal
-  );
+  setupSceneCommands(game, modals);
   setupButtonFeedback();
   setupKeyboardShortcutPassthrough();
 

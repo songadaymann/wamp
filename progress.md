@@ -3598,3 +3598,22 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Playwright boot smoke on `http://127.0.0.1:3100` loaded the overworld; only expected local PartyKit connection-refused errors appeared because PartyKit was not running
   - fresh local worker smoke on `http://127.0.0.1:8910` returned `401` for unauthenticated `POST /api/rooms/:roomId/leaderboard-lineage`, confirming the new route is registered
   - remaining manual verification: authenticated creator flow in the history modal against a room with multiple published versions and existing leaderboard history
+
+## March 25, 2026 - Phase 4 Safety Rollout: Shell + Auth Boundary
+
+- Split `src/auth/client.ts` into clearer auth/UI responsibilities while keeping the public auth entrypoints stable
+  - new `src/auth/sessionService.ts` now owns session fetch, magic-link request, logout, display-name availability, display-name update, and test-reset HTTP flows
+  - new `src/auth/domController.ts` now owns auth-panel DOM lookup and event binding
+  - new `src/auth/render.ts` now owns auth-panel rendering, identity text, wallet button labels, and display-name availability copy
+  - new `src/auth/clientTypes.ts` now holds the shared `AuthDebugState` shape instead of leaving it trapped inside the main auth client
+  - `src/auth/client.ts` now focuses on auth orchestration, exported auth entrypoints, and wallet-connect flow
+- Reduced UI shell wiring so `src/ui/setup.ts` is more clearly a composition root
+  - modal/controller construction is grouped and passed into scene command wiring as a single dependency object
+  - `src/ui/setup/sceneCommands.ts` now uses typed button/input binding helpers instead of one long ad hoc DOM script
+- Narrowed the scene bridge surface slightly
+  - removed unused exported scene-lookup helpers from `src/ui/setup/sceneBridge.ts`
+  - kept the active-scene helpers that the rest of the UI shell still uses
+- Verification:
+  - `npm run build` passed
+  - local preview smoke on `http://127.0.0.1:4176` reached `overworld-play` browse mode with auth debug state still reporting guest/remote defaults; runtime state artifact written to `output/web-game/state-0.json`
+  - caveat: the headless smoke screenshot remained visually black in this environment, so the check relies on `render_game_to_text` state rather than the image alone

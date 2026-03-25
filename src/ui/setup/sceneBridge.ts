@@ -191,11 +191,11 @@ function getScene<T>(game: Phaser.Game, key: string): T | null {
   }
 }
 
-export function getEditorScene(game: Phaser.Game): EditorSceneBridge | null {
+function getEditorScene(game: Phaser.Game): EditorSceneBridge | null {
   return getScene<EditorSceneBridge>(game, 'EditorScene');
 }
 
-export function getOverworldScene(game: Phaser.Game): OverworldSceneBridge | null {
+function getOverworldScene(game: Phaser.Game): OverworldSceneBridge | null {
   return getScene<OverworldSceneBridge>(game, 'OverworldPlayScene');
 }
 
@@ -220,18 +220,6 @@ export function withActiveEditorScene(
   callback: (scene: EditorSceneBridge) => void,
 ): void {
   const scene = getActiveEditorScene(game);
-  if (!scene) {
-    return;
-  }
-
-  callback(scene);
-}
-
-export function withActiveOverworldScene(
-  game: Phaser.Game,
-  callback: (scene: OverworldSceneBridge) => void,
-): void {
-  const scene = getActiveOverworldScene(game);
   if (!scene) {
     return;
   }
