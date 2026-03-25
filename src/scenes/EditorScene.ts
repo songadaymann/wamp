@@ -319,6 +319,15 @@ export class EditorScene extends Phaser.Scene {
         updatedAt: this.roomUpdatedAt,
         publishedAt: this.roomPublishedAt,
       }),
+      getRoomOrigin: () => ({ x: 0, y: 0 }),
+      getSelectedBackground: () => editorState.selectedBackground,
+      setSelectedBackground: (backgroundId) => {
+        editorState.selectedBackground = backgroundId;
+      },
+      getPlacedObjects: () => editorState.placedObjects,
+      setPlacedObjects: (placedObjects) => {
+        editorState.placedObjects = placedObjects;
+      },
       updateBackgroundSelectValue: (backgroundId) => {
         const backgroundSelect = document.getElementById('background-select') as HTMLSelectElement | null;
         if (backgroundSelect) {
@@ -588,23 +597,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private getAdjacentCourseEdit(offset: -1 | 1): EditorCourseEditData | null {
-    const courseEdit = this.activeCourseMarkerEdit;
-    const draft = this.activeCourseDraft;
-    if (!courseEdit || !draft || courseEdit.roomOrder === null) {
-      return null;
-    }
-
-    const nextOrder = courseEdit.roomOrder + offset;
-    const nextRoomRef = draft.roomRefs[nextOrder] ?? null;
-    if (!nextRoomRef) {
-      return null;
-    }
-
-    return {
-      courseId: courseEdit.courseId,
-      roomId: nextRoomRef.roomId,
-      roomOrder: nextOrder,
-    };
+    return null;
   }
 
   private syncActiveCourseRoomSessionSnapshot(
@@ -703,7 +696,6 @@ export class EditorScene extends Phaser.Scene {
       ? {
           courseId: data.courseEdit.courseId,
           roomId: data.courseEdit.roomId,
-          roomOrder: data.courseEdit.roomOrder,
         }
       : null;
     this.courseEditorStatusText = this.activeCourseMarkerEdit
@@ -846,7 +838,7 @@ export class EditorScene extends Phaser.Scene {
             hideBusyOverlay();
             this.scene.stop();
             if (this.shouldReturnToCourseEditor()) {
-              this.scene.wake('CourseEditorScene', {
+              this.scene.wake('CourseComposerScene', {
                 courseId: this.activeCourseMarkerEdit?.courseId ?? null,
                 selectedCoordinates: { ...this.roomCoordinates },
                 centerCoordinates: { ...this.roomCoordinates },
@@ -892,7 +884,7 @@ export class EditorScene extends Phaser.Scene {
 
     this.scene.stop();
     if (this.shouldReturnToCourseEditor()) {
-      this.scene.wake('CourseEditorScene', this.buildCourseEditorWakeData(wakeData));
+      this.scene.wake('CourseComposerScene', this.buildCourseEditorWakeData(wakeData));
       return;
     }
     this.scene.wake('OverworldPlayScene', wakeData);
@@ -2518,7 +2510,7 @@ export class EditorScene extends Phaser.Scene {
 
     this.scene.stop();
     if (this.shouldReturnToCourseEditor()) {
-      this.scene.wake('CourseEditorScene', this.buildCourseEditorWakeData(wakeData));
+      this.scene.wake('CourseComposerScene', this.buildCourseEditorWakeData(wakeData));
       return;
     }
     this.scene.wake('OverworldPlayScene', wakeData);
@@ -2531,9 +2523,9 @@ export class EditorScene extends Phaser.Scene {
   private shouldReturnToCourseEditor(): boolean {
     return Boolean(
       this.activeCourseMarkerEdit &&
-        (this.scene.isSleeping('CourseEditorScene') ||
-          this.scene.isPaused('CourseEditorScene') ||
-          this.scene.isActive('CourseEditorScene'))
+        (this.scene.isSleeping('CourseComposerScene') ||
+          this.scene.isPaused('CourseComposerScene') ||
+          this.scene.isActive('CourseComposerScene'))
     );
   }
 
@@ -2552,11 +2544,13 @@ export class EditorScene extends Phaser.Scene {
   }
 
   async editPreviousCourseRoom(): Promise<void> {
-    await this.editAdjacentCourseRoom(-1);
+    this.courseEditorStatusText = 'Room order is no longer used in course editing.';
+    this.updateGoalUi();
   }
 
   async editNextCourseRoom(): Promise<void> {
-    await this.editAdjacentCourseRoom(1);
+    this.courseEditorStatusText = 'Room order is no longer used in course editing.';
+    this.updateGoalUi();
   }
 
   private async editAdjacentCourseRoom(offset: -1 | 1): Promise<void> {
@@ -2644,7 +2638,6 @@ export class EditorScene extends Phaser.Scene {
         ? {
             courseId: this.activeCourseMarkerEdit.courseId,
             roomId: this.activeCourseMarkerEdit.roomId,
-            roomOrder: this.activeCourseMarkerEdit.roomOrder,
           }
         : null,
       spawnPoint: this.roomSpawnPoint ? { ...this.roomSpawnPoint } : null,

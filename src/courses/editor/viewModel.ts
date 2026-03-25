@@ -27,6 +27,8 @@ export interface BuildCourseEditorUiStateOptions {
   toggleSelectedRoomDisabledReason: string | null;
   canOpenSelectedRoom: boolean;
   canCenterSelectedRoom: boolean;
+  canOpenCourseEditor: boolean;
+  openCourseEditorDisabledReason: string | null;
   roomEntries: CourseEditorRoomEntry[];
   checkpointEntries: CourseEditorCheckpointEntry[];
 }
@@ -48,6 +50,8 @@ export function buildCourseEditorUiState(
     toggleSelectedRoomDisabledReason,
     canOpenSelectedRoom,
     canCenterSelectedRoom,
+    canOpenCourseEditor,
+    openCourseEditorDisabledReason,
     roomEntries,
     checkpointEntries,
   } = options;
@@ -80,6 +84,8 @@ export function buildCourseEditorUiState(
     toggleSelectedRoomDisabledReason,
     canOpenSelectedRoom,
     canCenterSelectedRoom,
+    canOpenCourseEditor,
+    openCourseEditorDisabledReason,
     roomEntries,
     checkpointEntries,
     goalType: draft?.goal?.type ?? null,

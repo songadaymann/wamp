@@ -36,12 +36,8 @@ export function getCourseEditorContextStatusText(
     return courseEditorStatusText ?? 'Open this room from the active course builder session.';
   }
 
-  const stepText =
-    activeCourseMarkerEdit.roomOrder === null
-      ? 'Course room'
-      : `Step ${activeCourseMarkerEdit.roomOrder + 1}`;
   const titleText = draft.title?.trim() || 'Untitled Course';
-  return `${stepText} · ${titleText}`;
+  return `Course room · ${titleText}`;
 }
 
 export function buildCourseEditedRoomData(
@@ -162,7 +158,7 @@ export function buildCourseEditorState(
       visible: false,
       statusHidden: true,
       statusText: null,
-      roomStepText: '',
+      roomStepText: draft ? `${draft.roomRefs.length} room${draft.roomRefs.length === 1 ? '' : 's'} in course` : '',
       canReturnToCourseBuilder: true,
       goalTypeValue: activeGoal?.type ?? '',
       goalTypeDisabled: true,

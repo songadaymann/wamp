@@ -3,7 +3,6 @@ import type { RoomCoordinates, RoomSnapshot } from '../persistence/roomModel';
 export interface EditorCourseEditData {
   courseId: string;
   roomId: string;
-  roomOrder: number | null;
 }
 
 export interface CourseEditedRoomData {
@@ -11,7 +10,7 @@ export interface CourseEditedRoomData {
   roomId: string;
 }
 
-export interface CourseEditorReturnTarget {
+export interface CourseComposerReturnTarget {
   courseId: string | null;
   selectedCoordinates: RoomCoordinates;
   centerCoordinates: RoomCoordinates;
@@ -24,10 +23,23 @@ export interface EditorSceneData {
   courseEdit?: EditorCourseEditData | null;
 }
 
-export interface CourseEditorSceneData {
+export interface CourseComposerSceneData {
   selectedCoordinates?: RoomCoordinates;
   centerCoordinates?: RoomCoordinates;
   courseId?: string | null;
+  statusMessage?: string | null;
+  courseEditedRoom?: CourseEditedRoomData | null;
+  draftRoom?: RoomSnapshot | null;
+  publishedRoom?: RoomSnapshot | null;
+  clearDraftRoomId?: string | null;
+  invalidateRoomId?: string | null;
+}
+
+export interface CourseEditorSceneData {
+  courseId?: string | null;
+  selectedRoomId?: string | null;
+  selectedCoordinates?: RoomCoordinates;
+  centerCoordinates?: RoomCoordinates;
   statusMessage?: string | null;
   courseEditedRoom?: CourseEditedRoomData | null;
   draftRoom?: RoomSnapshot | null;
@@ -52,5 +64,5 @@ export interface OverworldPlaySceneData {
   courseDraftPreviewId?: string | null;
   courseEditedRoom?: CourseEditedRoomData | null;
   courseEditorNavigateOffset?: -1 | 1 | null;
-  courseEditorReturnTarget?: CourseEditorReturnTarget | null;
+  courseEditorReturnTarget?: CourseComposerReturnTarget | null;
 }

@@ -163,6 +163,7 @@ import {
   resolveGoalRunStartPoint,
 } from './overworld/goalRunStartGate';
 import type {
+  CourseComposerSceneData,
   CourseEditorSceneData,
   CourseEditedRoomData,
   EditorCourseEditData,
@@ -744,15 +745,14 @@ export class OverworldPlayScene extends Phaser.Scene {
       return null;
     }
 
-    const roomOrder = getCourseRoomOrder(draft.roomRefs, roomId);
-    if (roomOrder < 0) {
+    const roomRef = draft.roomRefs.find((candidate) => candidate.roomId === roomId) ?? null;
+    if (!roomRef) {
       return null;
     }
 
     return {
       courseId,
       roomId,
-      roomOrder,
     };
   }
 
@@ -1836,6 +1836,16 @@ export class OverworldPlayScene extends Phaser.Scene {
       }
     }
     this.syncAppMode();
+    if (data?.forceRefreshAround) {
+      this.worldStreamingController.reset();
+      this.updateSelectedSummary();
+      this.renderHud();
+      await this.refreshAround(this.windowCenterCoordinates, {
+        forceChunkReload: true,
+      });
+      return;
+    }
+
     this.updateSelectedSummary();
     this.redrawWorld();
     this.renderHud();
@@ -3360,15 +3370,21 @@ export class OverworldPlayScene extends Phaser.Scene {
     neighborCoordinates: RoomCoordinates
   ): boolean {
     if (this.activeCourseSnapshot) {
+      const deltaX = Math.abs(neighborCoordinates.x - roomCoordinates.x);
+      const deltaY = Math.abs(neighborCoordinates.y - roomCoordinates.y);
+      if (deltaX + deltaY !== 1) {
+        return false;
+      }
+
       const currentRoomId = roomIdFromCoordinates(roomCoordinates);
       const neighborRoomId = roomIdFromCoordinates(neighborCoordinates);
-      const currentIndex = this.activeCourseSnapshot.roomRefs.findIndex(
+      const currentInCourse = this.activeCourseSnapshot.roomRefs.some(
         (roomRef) => roomRef.roomId === currentRoomId
       );
-      const neighborIndex = this.activeCourseSnapshot.roomRefs.findIndex(
+      const neighborInCourse = this.activeCourseSnapshot.roomRefs.some(
         (roomRef) => roomRef.roomId === neighborRoomId
       );
-      return currentIndex >= 0 && neighborIndex >= 0 && Math.abs(currentIndex - neighborIndex) === 1;
+      return currentInCourse && neighborInCourse;
     }
 
     const neighborState = this.getCellStateAt(neighborCoordinates);
@@ -5069,96 +5085,48 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   async openCourseEditor(): Promise<void> {
-    const selectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
-    const sessionRecord = getActiveCourseDraftSessionRecord();
-    const selectedRoomInSession = Boolean(
-      sessionRecord && getCourseRoomOrder(sessionRecord.draft.roomRefs, selectedRoomId) >= 0
-    );
-    const nextCourseId = selectedRoomInSession
-      ? sessionRecord?.draft.id ?? null
-      : this.selectedSummary?.course?.courseId ?? sessionRecord?.draft.id ?? null;
-
-    const sceneData: CourseEditorSceneData = {
-      courseId: nextCourseId,
-      selectedCoordinates: { ...this.selectedCoordinates },
-      centerCoordinates: { ...this.windowCenterCoordinates },
-    };
-
-    if (this.scene.isSleeping('CourseEditorScene') || this.scene.isPaused('CourseEditorScene')) {
-      this.scene.wake('CourseEditorScene', sceneData);
-      this.scene.sleep();
-      return;
-    }
-
-    if (this.scene.isActive('CourseEditorScene')) {
-      this.scene.bringToTop('CourseEditorScene');
-      this.scene.sleep();
-      return;
-    }
-
-    this.scene.run('CourseEditorScene', sceneData);
-    this.scene.sleep();
+    await this.openCourseComposer();
   }
 
   async openCourseComposer(): Promise<void> {
     const authState = getAuthDebugState();
-    this.courseComposerOpen = true;
-    this.courseComposerLoading = true;
+    const sessionRecord = getActiveCourseDraftSessionRecord();
+    const selectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
+    const selectedRoomInSession = Boolean(
+      sessionRecord &&
+      getCourseRoomOrder(sessionRecord.draft.roomRefs, selectedRoomId) >= 0
+    );
+    const selectedCourseId =
+      selectedRoomInSession
+        ? sessionRecord?.draft.id ?? null
+        : this.selectedSummary?.course?.courseId ?? sessionRecord?.draft.id ?? null;
+    const wakeData: CourseComposerSceneData = {
+      courseId: selectedCourseId,
+      selectedCoordinates: { ...this.selectedCoordinates },
+      centerCoordinates: { ...this.currentRoomCoordinates },
+      statusMessage: authState.authenticated ? null : 'Sign in to author and publish courses.',
+    };
+
+    this.courseComposerOpen = false;
+    this.courseComposerLoading = false;
+    this.courseComposerStatusText = null;
     this.emitCourseComposerStateChanged();
+    this.renderHud();
 
-    try {
-      const sessionRecord = getActiveCourseDraftSessionRecord();
-      const selectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
-      const selectedRoomInSession = Boolean(
-        sessionRecord &&
-        getCourseRoomOrder(sessionRecord.draft.roomRefs, selectedRoomId) >= 0
-      );
-      const selectedCourseId = selectedRoomInSession
-        ? null
-        : this.selectedSummary?.course?.courseId ?? null;
-      let nextRecord: CourseRecord;
-      if (selectedRoomInSession && sessionRecord) {
-        nextRecord = sessionRecord;
-      } else if (selectedCourseId && sessionRecord?.draft.id !== selectedCourseId) {
-        nextRecord = await this.courseRepository.loadCourse(selectedCourseId);
-      } else if (selectedCourseId && sessionRecord?.draft.id === selectedCourseId) {
-        nextRecord = sessionRecord;
-      } else if (sessionRecord) {
-        nextRecord = sessionRecord;
-      } else {
-        nextRecord = createDefaultCourseRecord();
-        nextRecord.ownerUserId = authState.user?.id ?? null;
-        nextRecord.ownerDisplayName = authState.user?.displayName ?? null;
-        nextRecord.permissions = {
-          canSaveDraft: Boolean(authState.authenticated),
-          canPublish: Boolean(authState.authenticated),
-          canUnpublish: Boolean(authState.authenticated),
-        };
-      }
-
-      const sanitized = this.sanitizeCourseComposerRecord(nextRecord);
-      this.setCourseComposerRecord(sanitized.record, {
-        selectedRoomId: roomIdFromCoordinates(this.selectedCoordinates),
-      });
-      this.courseComposerStatusText =
-        sanitized.resetMessage ??
-        (selectedRoomInSession
-          ? 'Loaded active course draft.'
-          : selectedCourseId
-          ? 'Loaded course.'
-          : authState.authenticated
-            ? 'Build a linear 1-4 room course path.'
-            : 'Sign in to author and publish courses.');
-      await this.refreshCourseComposerSelectedRoomState();
-    } catch (error) {
-      console.error('Failed to open course composer', error);
-      this.courseComposerStatusText =
-        error instanceof Error ? error.message : 'Failed to open course builder.';
-    } finally {
-      this.courseComposerLoading = false;
-      this.emitCourseComposerStateChanged();
-      this.renderHud();
+    if (this.scene.isSleeping('CourseComposerScene') || this.scene.isPaused('CourseComposerScene')) {
+      this.scene.wake('CourseComposerScene', wakeData);
+      this.scene.sleep();
+      return;
     }
+
+    if (this.scene.isActive('CourseComposerScene')) {
+      this.scene.bringToTop('CourseComposerScene');
+      this.scene.sleep();
+      return;
+    }
+
+    this.scene.run('CourseComposerScene', wakeData);
+    this.scene.sleep();
   }
 
   closeCourseComposer(): void {
@@ -5350,11 +5318,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     const roomId = getActiveCourseDraftSessionSelectedRoomId();
-    const roomOrder = getActiveCourseDraftSessionSelectedRoomOrder();
     const roomRef = roomId
       ? this.courseComposerRecord.draft.roomRefs.find((candidate) => candidate.roomId === roomId) ?? null
       : null;
-    if (roomOrder === null || roomOrder < 0) {
+    if (!roomId) {
       this.courseComposerStatusText = 'Select a room from this course to open it in the editor.';
       this.emitCourseComposerStateChanged();
       return false;
@@ -5383,7 +5350,6 @@ export class OverworldPlayScene extends Phaser.Scene {
       courseEdit: {
         courseId: this.courseComposerRecord.draft.id,
         roomId: roomRef.roomId,
-        roomOrder,
       },
     };
 
@@ -5449,7 +5415,6 @@ export class OverworldPlayScene extends Phaser.Scene {
       courseEdit: {
         courseId: draft.id,
         roomId: nextRoomRef.roomId,
-        roomOrder: currentOrder + offset,
       },
     });
   }

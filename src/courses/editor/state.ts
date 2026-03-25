@@ -46,6 +46,8 @@ export interface CourseEditorUiState {
   toggleSelectedRoomDisabledReason: string | null;
   canOpenSelectedRoom: boolean;
   canCenterSelectedRoom: boolean;
+  canOpenCourseEditor: boolean;
+  openCourseEditorDisabledReason: string | null;
   roomEntries: CourseEditorRoomEntry[];
   checkpointEntries: CourseEditorCheckpointEntry[];
   goalType: CourseGoalType | null;

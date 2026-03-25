@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import type { CourseGoalType } from '../../courses/model';
-import type { CourseEditorCheckpointEntry, CourseEditorRoomEntry, CourseEditorTool, CourseEditorUiState } from '../../courses/editor/state';
+import type { CourseEditorCheckpointEntry, CourseEditorRoomEntry, CourseEditorUiState } from '../../courses/editor/state';
 import {
-  COURSE_EDITOR_STATE_CHANGED_EVENT,
-  getActiveCourseEditorScene,
+  COURSE_COMPOSER_STATE_CHANGED_EVENT,
+  getActiveCourseComposerScene,
 } from './sceneBridge';
 
 type CourseEditorPanelElements = {
@@ -16,7 +16,11 @@ type CourseEditorPanelElements = {
   toggleSelectedRoomButton: HTMLButtonElement | null;
   openSelectedRoomButton: HTMLButtonElement | null;
   centerSelectedRoomButton: HTMLButtonElement | null;
-  toolButtons: HTMLButtonElement[];
+  editCourseButton: HTMLButtonElement | null;
+  placeStartButton: HTMLButtonElement | null;
+  placeExitButton: HTMLButtonElement | null;
+  addCheckpointButton: HTMLButtonElement | null;
+  placeFinishButton: HTMLButtonElement | null;
   clearMarkersButton: HTMLButtonElement | null;
   placementHint: HTMLElement | null;
   goalTypeSelect: HTMLSelectElement | null;
@@ -46,7 +50,7 @@ type CourseEditorPanelElements = {
   backButton: HTMLButtonElement | null;
 };
 
-export class CourseEditorPanelController {
+export class CourseComposerPanelController {
   private readonly elements: CourseEditorPanelElements;
 
   private readonly handleStateChanged = () => {
@@ -68,9 +72,11 @@ export class CourseEditorPanelController {
       toggleSelectedRoomButton: this.doc.getElementById('btn-course-workbench-toggle-room') as HTMLButtonElement | null,
       openSelectedRoomButton: this.doc.getElementById('btn-course-workbench-open-room') as HTMLButtonElement | null,
       centerSelectedRoomButton: this.doc.getElementById('btn-course-workbench-center-room') as HTMLButtonElement | null,
-      toolButtons: Array.from(
-        this.doc.querySelectorAll<HTMLButtonElement>('[data-course-editor-tool]')
-      ),
+      editCourseButton: this.doc.getElementById('btn-course-workbench-edit-course') as HTMLButtonElement | null,
+      placeStartButton: this.doc.getElementById('btn-course-workbench-place-start') as HTMLButtonElement | null,
+      placeExitButton: this.doc.getElementById('btn-course-workbench-place-exit') as HTMLButtonElement | null,
+      addCheckpointButton: this.doc.getElementById('btn-course-workbench-add-checkpoint') as HTMLButtonElement | null,
+      placeFinishButton: this.doc.getElementById('btn-course-workbench-place-finish') as HTMLButtonElement | null,
       clearMarkersButton: this.doc.getElementById('btn-course-workbench-clear-markers') as HTMLButtonElement | null,
       placementHint: this.doc.getElementById('course-workbench-placement-hint'),
       goalTypeSelect: this.doc.getElementById('course-workbench-goal-type') as HTMLSelectElement | null,
@@ -102,21 +108,21 @@ export class CourseEditorPanelController {
   }
 
   init(): void {
-    this.windowObj.addEventListener(COURSE_EDITOR_STATE_CHANGED_EVENT, this.handleStateChanged);
+    this.windowObj.addEventListener(COURSE_COMPOSER_STATE_CHANGED_EVENT, this.handleStateChanged);
 
     this.elements.titleInput?.addEventListener('input', () => {
-      getActiveCourseEditorScene(this.game)?.setCourseTitle?.(this.elements.titleInput?.value ?? null);
+      getActiveCourseComposerScene(this.game)?.setCourseTitle?.(this.elements.titleInput?.value ?? null);
     });
     this.elements.goalTypeSelect?.addEventListener('change', () => {
       const nextType = this.elements.goalTypeSelect?.value
         ? (this.elements.goalTypeSelect.value as CourseGoalType)
         : null;
-      getActiveCourseEditorScene(this.game)?.setCourseGoalType?.(nextType);
+      getActiveCourseComposerScene(this.game)?.setCourseGoalType?.(nextType);
     });
     this.elements.timeLimitInput?.addEventListener('change', () => {
       const raw = this.elements.timeLimitInput?.value.trim() ?? '';
       const seconds = raw.length > 0 ? Number(raw) : null;
-      getActiveCourseEditorScene(this.game)?.setCourseGoalTimeLimitSeconds?.(
+      getActiveCourseComposerScene(this.game)?.setCourseGoalTimeLimitSeconds?.(
         seconds !== null && Number.isFinite(seconds) ? seconds : null
       );
     });
@@ -125,59 +131,65 @@ export class CourseEditorPanelController {
       if (!Number.isFinite(raw)) {
         return;
       }
-      getActiveCourseEditorScene(this.game)?.setCourseGoalRequiredCount?.(raw);
+      getActiveCourseComposerScene(this.game)?.setCourseGoalRequiredCount?.(raw);
     });
     this.elements.survivalInput?.addEventListener('change', () => {
       const raw = Number(this.elements.survivalInput?.value ?? '');
       if (!Number.isFinite(raw)) {
         return;
       }
-      getActiveCourseEditorScene(this.game)?.setCourseGoalSurvivalSeconds?.(raw);
+      getActiveCourseComposerScene(this.game)?.setCourseGoalSurvivalSeconds?.(raw);
     });
-    this.elements.toolButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        const tool = button.dataset.courseEditorTool as CourseEditorTool | undefined;
-        if (!tool) {
-          return;
-        }
-        getActiveCourseEditorScene(this.game)?.setTool?.(tool);
-      });
+    this.elements.placeStartButton?.addEventListener('click', () => {
+      getActiveCourseComposerScene(this.game)?.startMarkerPlacement?.('start');
+    });
+    this.elements.placeExitButton?.addEventListener('click', () => {
+      getActiveCourseComposerScene(this.game)?.startMarkerPlacement?.('exit');
+    });
+    this.elements.addCheckpointButton?.addEventListener('click', () => {
+      getActiveCourseComposerScene(this.game)?.startMarkerPlacement?.('checkpoint');
+    });
+    this.elements.placeFinishButton?.addEventListener('click', () => {
+      getActiveCourseComposerScene(this.game)?.startMarkerPlacement?.('finish');
     });
     this.elements.clearMarkersButton?.addEventListener('click', () => {
-      getActiveCourseEditorScene(this.game)?.clearMarkers?.();
+      getActiveCourseComposerScene(this.game)?.clearMarkers?.();
     });
     this.elements.toggleSelectedRoomButton?.addEventListener('click', () => {
-      getActiveCourseEditorScene(this.game)?.toggleSelectedRoomMembership?.();
+      getActiveCourseComposerScene(this.game)?.toggleSelectedRoomMembership?.();
     });
     this.elements.openSelectedRoomButton?.addEventListener('click', () => {
-      void getActiveCourseEditorScene(this.game)?.openSelectedRoom?.();
+      void getActiveCourseComposerScene(this.game)?.openSelectedRoom?.();
     });
     this.elements.centerSelectedRoomButton?.addEventListener('click', () => {
-      getActiveCourseEditorScene(this.game)?.centerSelectedRoom?.();
+      getActiveCourseComposerScene(this.game)?.centerSelectedRoom?.();
+    });
+    this.elements.editCourseButton?.addEventListener('click', () => {
+      void getActiveCourseComposerScene(this.game)?.openCourseEditor?.();
     });
     this.elements.testDraftButton?.addEventListener('click', () => {
-      void getActiveCourseEditorScene(this.game)?.testDraftCourse?.();
+      void getActiveCourseComposerScene(this.game)?.testDraftCourse?.();
     });
     this.elements.saveButton?.addEventListener('click', () => {
-      void getActiveCourseEditorScene(this.game)?.saveCourseDraft?.();
+      void getActiveCourseComposerScene(this.game)?.saveCourseDraft?.();
     });
     this.elements.publishButton?.addEventListener('click', () => {
-      void getActiveCourseEditorScene(this.game)?.publishCourseDraft?.();
+      void getActiveCourseComposerScene(this.game)?.publishCourseDraft?.();
     });
     this.elements.unpublishButton?.addEventListener('click', () => {
-      void getActiveCourseEditorScene(this.game)?.unpublishCourse?.();
+      void getActiveCourseComposerScene(this.game)?.unpublishCourse?.();
     });
     this.elements.zoomInButton?.addEventListener('click', () => {
-      getActiveCourseEditorScene(this.game)?.zoomIn?.();
+      getActiveCourseComposerScene(this.game)?.zoomIn?.();
     });
     this.elements.zoomOutButton?.addEventListener('click', () => {
-      getActiveCourseEditorScene(this.game)?.zoomOut?.();
+      getActiveCourseComposerScene(this.game)?.zoomOut?.();
     });
     this.elements.fitButton?.addEventListener('click', () => {
-      getActiveCourseEditorScene(this.game)?.fitCourseToView?.();
+      getActiveCourseComposerScene(this.game)?.fitCourseToView?.();
     });
     this.elements.backButton?.addEventListener('click', () => {
-      void getActiveCourseEditorScene(this.game)?.returnToWorld?.();
+      void getActiveCourseComposerScene(this.game)?.returnToWorld?.();
     });
 
     this.elements.roomList?.addEventListener('click', (event) => {
@@ -187,7 +199,7 @@ export class CourseEditorPanelController {
       if (!roomId) {
         return;
       }
-      getActiveCourseEditorScene(this.game)?.selectRoom?.(roomId);
+      getActiveCourseComposerScene(this.game)?.selectRoom?.(roomId);
     });
 
     this.elements.checkpointList?.addEventListener('click', (event) => {
@@ -199,7 +211,7 @@ export class CourseEditorPanelController {
       }
 
       const action = button.dataset.courseEditorCheckpointAction;
-      const scene = getActiveCourseEditorScene(this.game);
+      const scene = getActiveCourseComposerScene(this.game);
       if (!scene) {
         return;
       }
@@ -217,11 +229,11 @@ export class CourseEditorPanelController {
   }
 
   destroy(): void {
-    this.windowObj.removeEventListener(COURSE_EDITOR_STATE_CHANGED_EVENT, this.handleStateChanged);
+    this.windowObj.removeEventListener(COURSE_COMPOSER_STATE_CHANGED_EVENT, this.handleStateChanged);
   }
 
   render(): void {
-    const state = getActiveCourseEditorScene(this.game)?.getCourseEditorState?.() ?? null;
+    const state = getActiveCourseComposerScene(this.game)?.getCourseEditorState?.() ?? null;
     const visible = state?.visible ?? false;
     this.elements.shell?.classList.toggle('hidden', !visible);
     if (!state) {
@@ -241,21 +253,19 @@ export class CourseEditorPanelController {
     }
     this.setDisabled(this.elements.openSelectedRoomButton, !state.canOpenSelectedRoom);
     this.setDisabled(this.elements.centerSelectedRoomButton, !state.canCenterSelectedRoom);
+    this.setDisabled(this.elements.editCourseButton, !state.canOpenCourseEditor);
+    if (this.elements.editCourseButton) {
+      this.elements.editCourseButton.title = state.openCourseEditorDisabledReason ?? '';
+    }
 
-    this.elements.toolButtons.forEach((button) => {
-      const tool = button.dataset.courseEditorTool as CourseEditorTool | undefined;
-      const active = tool === state.tool;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-pressed', active ? 'true' : 'false');
-
-      if (tool === 'exit') {
-        button.disabled = state.goalType !== 'reach_exit';
-      } else if (tool === 'checkpoint' || tool === 'finish') {
-        button.disabled = state.goalType !== 'checkpoint_sprint';
-      } else {
-        button.disabled = false;
-      }
-    });
+    this.renderPlacementButton(this.elements.placeStartButton, state.tool === 'start', !(state.goalType === 'reach_exit' || state.goalType === 'checkpoint_sprint'));
+    this.renderPlacementButton(this.elements.placeExitButton, state.tool === 'exit', state.goalType !== 'reach_exit');
+    this.renderPlacementButton(this.elements.addCheckpointButton, state.tool === 'checkpoint', state.goalType !== 'checkpoint_sprint');
+    this.renderPlacementButton(this.elements.placeFinishButton, state.tool === 'finish', state.goalType !== 'checkpoint_sprint');
+    this.setHidden(
+      this.elements.clearMarkersButton,
+      !(state.goalType === 'reach_exit' || state.goalType === 'checkpoint_sprint')
+    );
 
     this.setText(this.elements.placementHint, state.placementHintText ?? '');
     this.setHidden(this.elements.placementHint, !state.placementHintText);
@@ -294,6 +304,19 @@ export class CourseEditorPanelController {
     this.setText(this.elements.unpublishReason, state.unpublishCourseDisabledReason ?? '');
     this.setHidden(this.elements.unpublishReason, !state.unpublishCourseDisabledReason);
     this.setText(this.elements.zoomText, state.zoomText);
+  }
+
+  private renderPlacementButton(
+    button: HTMLButtonElement | null,
+    active: boolean,
+    hidden: boolean,
+  ): void {
+    if (!button) {
+      return;
+    }
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    button.classList.toggle('hidden', hidden);
   }
 
   private renderRoomEntries(entries: CourseEditorRoomEntry[]): void {

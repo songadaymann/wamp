@@ -6,19 +6,19 @@
   display: none;
 }
 
-body[data-app-mode='course-editor'] #game-container {
+body[data-app-mode='course-composer'] #game-container {
   grid-column: 1 / -1;
 }
 
-body[data-app-mode='course-editor'] #sidebar,
-body[data-app-mode='course-editor'] #world-hud,
-body[data-app-mode='course-editor'] #global-chat,
-body[data-app-mode='course-editor'] #bottom-bar,
-body[data-app-mode='course-editor'] #mobile-editor-nav {
+body[data-app-mode='course-composer'] #sidebar,
+body[data-app-mode='course-composer'] #world-hud,
+body[data-app-mode='course-composer'] #global-chat,
+body[data-app-mode='course-composer'] #bottom-bar,
+body[data-app-mode='course-composer'] #mobile-editor-nav {
   display: none !important;
 }
 
-body[data-app-mode='course-editor'] #course-editor-shell {
+body[data-app-mode='course-composer'] #course-editor-shell {
   display: block;
 }
 
@@ -60,7 +60,6 @@ body[data-app-mode='course-editor'] #course-editor-shell {
   gap: 8px;
 }
 
-.course-editor-tool-row,
 .course-editor-zoom-row,
 .course-editor-checkpoint-actions {
   display: flex;

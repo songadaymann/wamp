@@ -7,7 +7,7 @@ import { setupButtonFeedback } from './setup/buttonFeedback';
 import { ChatModerationModalController } from './setup/chatModerationModal';
 import { ControlsModalController } from './setup/controlsModal';
 import { CourseModalController } from './setup/courseModal';
-import { CourseEditorPanelController } from './setup/courseEditorPanel';
+import { CourseComposerPanelController } from './setup/courseComposerPanel';
 import { setupEditorControls } from './setup/editorControls';
 import { RoomHistoryModalController } from './setup/historyModal';
 import { setupKeyboardShortcutPassthrough } from './setup/keyboardPassthrough';
@@ -28,7 +28,7 @@ export function setupUI(game: Phaser.Game): void {
   const aboutModal = new AboutModalController();
   const chatModerationModal = new ChatModerationModalController();
   const courseModal = new CourseModalController(game);
-  const courseEditorPanel = new CourseEditorPanelController(game);
+  const courseComposerPanel = new CourseComposerPanelController(game);
   const profileModal = new ProfileModalController(game);
   const chatPanel = new ChatPanelController();
   const mobileUi = new MobileUiController(game);
@@ -43,7 +43,7 @@ export function setupUI(game: Phaser.Game): void {
   aboutModal.init();
   chatModerationModal.init();
   courseModal.init();
-  courseEditorPanel.init();
+  courseComposerPanel.init();
   profileModal.init();
   chatPanel.init();
   mobileUi.init();

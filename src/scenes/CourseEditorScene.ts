@@ -1,37 +1,34 @@
 import Phaser from 'phaser';
-import { getAuthDebugState } from '../auth/client';
-import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../config';
+import {
+  LAYER_NAMES,
+  ROOM_HEIGHT,
+  ROOM_PX_HEIGHT,
+  ROOM_PX_WIDTH,
+  ROOM_WIDTH,
+  TILESETS,
+  TILE_SIZE,
+  editorState,
+  type LayerName,
+  type PlacedObject,
+} from '../config';
 import { createCourseRepository } from '../courses/courseRepository';
 import {
-  cloneCourseRecord,
   cloneCourseSnapshot,
-  courseRoomRefsFormConnectedCluster,
   createDefaultCourseGoal,
-  createDefaultCourseRecord,
-  getCourseRoomOrder,
-  MAX_COURSE_ROOMS,
-  sortCourseRoomRefsForStorage,
   type CourseCheckpointSprintGoal,
   type CourseGoal,
   type CourseGoalType,
   type CourseMarkerPoint,
   type CourseRecord,
   type CourseRoomRef,
+  type CourseSnapshot,
 } from '../courses/model';
-import {
-  buildCourseEditorUiState,
-} from '../courses/editor/viewModel';
-import type {
-  CourseEditorCheckpointEntry,
-  CourseEditorRoomEntry,
-  CourseEditorTool,
-  CourseEditorUiState,
-} from '../courses/editor/state';
 import {
   clearActiveCourseDraftSessionRoomOverride,
   getActiveCourseDraftSessionCourseId,
   getActiveCourseDraftSessionDraft,
   getActiveCourseDraftSessionRecord,
+  getActiveCourseDraftSessionRoomOverride,
   getActiveCourseDraftSessionSelectedRoomId,
   isActiveCourseDraftSessionDirty,
   setActiveCourseDraftSessionRecord,
@@ -39,86 +36,216 @@ import {
   setActiveCourseDraftSessionSelectedRoom,
   updateActiveCourseDraftSession,
 } from '../courses/draftSession';
+import {
+  getCourseWorkspaceBounds,
+  getCourseWorkspacePixelSize,
+  getCourseWorkspaceRoomOrigin,
+  type CourseWorkspaceBounds,
+} from '../courses/editor/workspace';
 import { createGoalMarkerFlagSprite } from '../goals/markerFlags';
+import { cloneRoomGoal, type RoomGoal } from '../goals/roomGoals';
 import {
   cloneRoomSnapshot,
-  DEFAULT_ROOM_COORDINATES,
+  createRoomRepository,
   roomIdFromCoordinates,
   type RoomCoordinates,
+  type RoomPermissions,
   type RoomRecord,
   type RoomSnapshot,
+  type RoomVersionRecord,
 } from '../persistence/roomRepository';
-import { createRoomRepository } from '../persistence/roomRepository';
-import type { WorldRoomSummary } from '../persistence/worldModel';
-import { createWorldRepository } from '../persistence/worldRepository';
 import { setAppMode } from '../ui/appMode';
 import { hideBusyOverlay, showBusyError, showBusyOverlay } from '../ui/appFeedback';
-import { getPerformanceProfile } from '../ui/deviceLayout';
-import {
-  COURSE_EDITOR_STATE_CHANGED_EVENT,
-  type CourseEditorSceneBridge,
-} from '../ui/setup/sceneBridge';
-import { constrainInspectCamera, getFitZoomForRoom, getScrollForScreenAnchor, getScreenAnchorWorldPoint } from './overworld/camera';
-import { OverworldWorldStreamingController } from './overworld/worldStreaming';
-import type { CourseEditorSceneData, EditorSceneData, OverworldPlaySceneData } from './sceneData';
+import { isTextInputFocused } from '../ui/keyboardFocus';
+import type { EditorCourseUiState, EditorMarkerPlacementMode } from '../ui/setup/sceneBridge';
+import { EditorUiBridge } from './editor/uiBridge';
+import type { EditorStatusDetails } from './editor/roomSession';
+import { buildEditorUiViewModel } from './editor/viewModel';
+import { EditorEditRuntime, type GoalPlacementMode } from './editor/editRuntime';
+import { getCourseGoalSummaryText } from './editor/courseEditing';
+import type { CourseComposerSceneData, CourseEditorSceneData, OverworldPlaySceneData } from './sceneData';
+import { RETRO_COLORS } from '../visuals/starfield';
 
 const MIN_ZOOM = 0.08;
-const MAX_ZOOM = 1.5;
-const BUTTON_ZOOM_FACTOR = 1.2;
-const FIT_PADDING = 96;
+const MAX_ZOOM = 3;
+const BUTTON_ZOOM_FACTOR = 1.18;
+const FIT_PADDING = 64;
 const PAN_THRESHOLD = 5;
-const DEFAULT_COURSE_EDITOR_STATUS_TEXT = 'Select published rooms you authored to build a course.';
 
-interface CoursePublishedRoomMeta {
+type TileDragMode = 'pencil' | 'eraser' | null;
+type RectMode = 'rect' | 'copy' | null;
+type CourseGoalPlacementMode = EditorMarkerPlacementMode | null;
+
+interface CourseRoomSlice {
   roomId: string;
   coordinates: RoomCoordinates;
-  roomVersion: number;
   roomTitle: string | null;
-  publishedByUserId: string | null;
-  courseId: string | null;
+  backgroundId: string;
+  placedObjects: PlacedObject[];
+  permissions: RoomPermissions;
+  roomVersionHistory: RoomVersionRecord[];
+  publishedVersion: number;
+  currentVersion: number;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt: string | null;
+  origin: { x: number; y: number };
+  map: Phaser.Tilemaps.Tilemap;
+  layers: Map<string, Phaser.Tilemaps.TilemapLayer>;
+  border: Phaser.GameObjects.Graphics;
+  grid: Phaser.GameObjects.Graphics;
+  label: Phaser.GameObjects.Text;
+  runtime: EditorEditRuntime;
 }
 
-export class CourseEditorScene extends Phaser.Scene implements CourseEditorSceneBridge {
-  private readonly worldRepository = createWorldRepository();
+export class CourseEditorScene extends Phaser.Scene {
   private readonly roomRepository = createRoomRepository();
   private readonly courseRepository = createCourseRepository();
-  private worldStreamingController!: OverworldWorldStreamingController;
-  private record: CourseRecord | null = null;
-  private uiState: CourseEditorUiState | null = null;
-  private selectedCoordinates: RoomCoordinates = { ...DEFAULT_ROOM_COORDINATES };
-  private centerCoordinates: RoomCoordinates = { ...DEFAULT_ROOM_COORDINATES };
-  private inspectZoom = 0.18;
-  private tool: CourseEditorTool = 'select';
+  private uiBridge: EditorUiBridge | null = null;
+  private courseRecord: CourseRecord | null = null;
+  private workspaceBounds: CourseWorkspaceBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+  private roomSlices = new Map<string, CourseRoomSlice>();
+  private courseMarkerSprites: Phaser.GameObjects.Sprite[] = [];
+  private courseMarkerLabels: Phaser.GameObjects.Text[] = [];
+  private selectionGraphics: Phaser.GameObjects.Graphics | null = null;
+  private cursorGraphics: Phaser.GameObjects.Graphics | null = null;
+  private rectPreviewGraphics: Phaser.GameObjects.Graphics | null = null;
+  private selectedRoomId: string | null = null;
+  private loading = false;
   private statusText: string | null = null;
-  private selectionGraphics!: Phaser.GameObjects.Graphics;
-  private markerSprites: Phaser.GameObjects.Sprite[] = [];
-  private markerLabels: Phaser.GameObjects.Text[] = [];
+  private inspectZoom = 0.22;
+  private isPanning = false;
+  private panStartPointer = { x: 0, y: 0 };
+  private panStartScroll = { x: 0, y: 0 };
+  private tileDragMode: TileDragMode = null;
+  private activeTileDragRoomId: string | null = null;
+  private rectMode: RectMode = null;
+  private rectStart:
+    | {
+        roomId: string;
+        x: number;
+        y: number;
+      }
+    | null = null;
+  private clipboardSourceRoomId: string | null = null;
+  private clipboardPastePreviewActive = false;
+  private courseGoalPlacementMode: CourseGoalPlacementMode = null;
   private modifierKeys: {
     SPACE: Phaser.Input.Keyboard.Key | null;
     ALT: Phaser.Input.Keyboard.Key | null;
   } = { SPACE: null, ALT: null };
-  private isPanning = false;
-  private panStartPointer = { x: 0, y: 0 };
-  private panStartScroll = { x: 0, y: 0 };
-  private loading = false;
-  private roomMetaByRoomId = new Map<string, CoursePublishedRoomMeta>();
-
-  constructor() {
-    super({ key: 'CourseEditorScene' });
-  }
 
   private readonly handleWake = (_sys: Phaser.Scenes.Systems, data?: CourseEditorSceneData): void => {
     void this.openFromData(data);
   };
 
-  private readonly handleResize = (): void => {
-    if (!this.scene.isActive(this.scene.key)) {
+  private readonly handleBackgroundChanged = (): void => {
+    const slice = this.getSelectedSlice();
+    if (!slice) {
       return;
     }
 
-    this.syncCameraBounds();
-    this.fitCourseToView(false);
-    this.redraw();
+    if (slice.backgroundId === editorState.selectedBackground) {
+      return;
+    }
+
+    slice.backgroundId = editorState.selectedBackground;
+    slice.runtime.isRoomDirty = true;
+    slice.runtime.currentLastDirtyAt = performance.now();
+    this.statusText = `Updated background for ${this.getSliceLabel(slice)}.`;
+    this.renderUi();
+  };
+
+  private readonly handleDocumentKeyDown = (event: KeyboardEvent): void => {
+    if (!this.scene.isActive(this.scene.key) || editorState.isPlaying || isTextInputFocused()) {
+      return;
+    }
+
+    const key = event.key.toLowerCase();
+    if (key === 'escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      if (this.clipboardPastePreviewActive) {
+        this.cancelClipboardPastePreview();
+        return;
+      }
+      if (this.courseGoalPlacementMode) {
+        this.courseGoalPlacementMode = null;
+        this.renderUi();
+        return;
+      }
+      if (this.rectStart) {
+        this.clearRectPreview();
+        return;
+      }
+      void this.returnToCourseBuilder();
+      return;
+    }
+
+    const primaryModifier = event.metaKey || event.ctrlKey;
+    if (primaryModifier && key === 's') {
+      event.preventDefault();
+      event.stopPropagation();
+      void this.saveDraft(true);
+      return;
+    }
+
+    if (primaryModifier && event.shiftKey && key === 'p') {
+      event.preventDefault();
+      event.stopPropagation();
+      void this.publishRoom();
+      return;
+    }
+
+    if (primaryModifier && key === 'z') {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.shiftKey) {
+        this.redoAction();
+      } else {
+        this.undoAction();
+      }
+      return;
+    }
+
+    if (event.ctrlKey && !event.metaKey && key === 'y') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.redoAction();
+      return;
+    }
+
+    if (event.code === 'Digit1') {
+      event.preventDefault();
+      editorState.activeTool = 'pencil';
+      this.updateToolUi();
+      return;
+    }
+
+    if (event.code === 'Digit2') {
+      event.preventDefault();
+      editorState.activeTool = 'eraser';
+      this.updateToolUi();
+      return;
+    }
+
+    if (event.code === 'Digit3') {
+      event.preventDefault();
+      editorState.activeTool = 'copy';
+      this.updateToolUi();
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      event.stopPropagation();
+      void this.startPlayMode();
+    }
+  };
+
+  private readonly handleResize = (): void => {
+    this.fitToScreen();
+    this.renderUi();
   };
 
   private readonly handleCanvasWheel = (event: WheelEvent): void => {
@@ -131,289 +258,241 @@ export class CourseEditorScene extends Phaser.Scene implements CourseEditorScene
     this.adjustZoomByFactor(zoomFactor, event.clientX, event.clientY);
   };
 
-  create(data?: CourseEditorSceneData): void {
-    this.worldStreamingController = new OverworldWorldStreamingController({
-      scene: this,
-      worldRepository: this.worldRepository,
-      getMode: () => 'browse',
-      getPerformanceProfile: () => getPerformanceProfile(),
-      getSelectedCoordinates: () => this.centerCoordinates,
-      getCurrentRoomCoordinates: () => this.centerCoordinates,
-      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
-      getPlayer: () => null,
-      createLiveObjects: () => {},
-      destroyLiveObjects: () => {},
-      destroyEdgeWalls: () => {},
-    });
+  constructor() {
+    super({ key: 'CourseEditorScene' });
+  }
 
-    setAppMode('course-editor');
+  create(data?: CourseEditorSceneData): void {
+    setAppMode('editor');
+    this.uiBridge = new EditorUiBridge();
     this.selectionGraphics = this.add.graphics();
     this.selectionGraphics.setDepth(120);
-    this.setupCamera();
-    this.setupPointerControls();
-    this.setupKeyboard();
+    this.cursorGraphics = this.add.graphics();
+    this.cursorGraphics.setDepth(121);
+    this.rectPreviewGraphics = this.add.graphics();
+    this.rectPreviewGraphics.setDepth(122);
+    this.cameras.main.setRoundPixels(true);
     this.events.on('wake', this.handleWake, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
     this.scale.on('resize', this.handleResize, this);
+    document.addEventListener('keydown', this.handleDocumentKeyDown);
+    window.addEventListener('background-changed', this.handleBackgroundChanged);
     this.game.canvas.addEventListener('wheel', this.handleCanvasWheel, { passive: false });
-
+    this.setupPointerControls();
+    this.setupKeyboard();
     void this.openFromData(data);
   }
 
-  getCourseEditorState(): CourseEditorUiState | null {
-    return this.uiState;
-  }
+  getCourseEditorState(): EditorCourseUiState {
+    const draft = this.getActiveCourseDraft();
+    const goal = draft?.goal ?? null;
 
-  describeState(): Record<string, unknown> {
     return {
-      scene: 'course-editor',
-      courseId: this.record?.draft.id ?? null,
-      selectedCoordinates: { ...this.selectedCoordinates },
-      centerCoordinates: { ...this.centerCoordinates },
-      roomCount: this.record?.draft.roomRefs.length ?? 0,
-      tool: this.tool,
-      zoom: this.cameras.main.zoom,
+      visible: true,
+      statusHidden: !this.statusText,
+      statusText: this.statusText,
+      roomStepText: draft
+        ? `${draft.roomRefs.length} room${draft.roomRefs.length === 1 ? '' : 's'} · editing ${this.getSelectedSlice()?.coordinates.x ?? 0},${this.getSelectedSlice()?.coordinates.y ?? 0}`
+        : '',
+      canReturnToCourseBuilder: true,
+      goalTypeValue: goal?.type ?? '',
+      goalTypeDisabled: false,
+      timeLimitHidden:
+        !(goal?.type === 'reach_exit' || goal?.type === 'collect_target' || goal?.type === 'defeat_all' || goal?.type === 'checkpoint_sprint'),
+      timeLimitDisabled: false,
+      timeLimitValue:
+        goal &&
+        'timeLimitMs' in goal &&
+        goal.timeLimitMs
+          ? String(Math.round(goal.timeLimitMs / 1000))
+          : '',
+      requiredCountHidden: goal?.type !== 'collect_target',
+      requiredCountDisabled: false,
+      requiredCountValue: goal?.type === 'collect_target' ? String(goal.requiredCount) : '1',
+      survivalHidden: goal?.type !== 'survival',
+      survivalDisabled: false,
+      survivalValue: goal?.type === 'survival' ? String(Math.round(goal.durationMs / 1000)) : '30',
+      markerControlsHidden: !(goal?.type === 'reach_exit' || goal?.type === 'checkpoint_sprint'),
+      placementHintHidden: this.courseGoalPlacementMode === null,
+      placementHintText:
+        this.courseGoalPlacementMode === 'start'
+          ? 'Click a course room to place the course start.'
+          : this.courseGoalPlacementMode === 'exit'
+            ? 'Click a course room to place the exit.'
+            : this.courseGoalPlacementMode === 'checkpoint'
+              ? 'Click a course room to add a checkpoint.'
+              : this.courseGoalPlacementMode === 'finish'
+                ? 'Click a course room to place the finish.'
+                : '',
+      summaryText: draft ? getCourseGoalSummaryText(draft) : 'No course selected.',
+      placeStartHidden: !(goal?.type === 'reach_exit' || goal?.type === 'checkpoint_sprint'),
+      placeStartActive: this.courseGoalPlacementMode === 'start',
+      placeExitHidden: goal?.type !== 'reach_exit',
+      placeExitActive: this.courseGoalPlacementMode === 'exit',
+      addCheckpointHidden: goal?.type !== 'checkpoint_sprint',
+      addCheckpointActive: this.courseGoalPlacementMode === 'checkpoint',
+      placeFinishHidden: goal?.type !== 'checkpoint_sprint',
+      placeFinishActive: this.courseGoalPlacementMode === 'finish',
+      canEditPreviousRoom: false,
+      canEditNextRoom: false,
     };
   }
 
   async returnToWorld(): Promise<void> {
-    const wakeData: OverworldPlaySceneData = {
-      centerCoordinates: { ...this.centerCoordinates },
-      roomCoordinates: { ...this.selectedCoordinates },
-      mode: 'browse',
-      statusMessage:
-        this.statusText && this.statusText !== DEFAULT_COURSE_EDITOR_STATUS_TEXT
-          ? this.statusText
-          : null,
-      forceRefreshAround: true,
-    };
-
-    this.scene.wake('OverworldPlayScene', wakeData);
-    this.scene.sleep();
+    await this.returnToCourseBuilder();
   }
 
-  setCourseTitle(title: string | null): void {
-    this.mutateDraft((draft) => {
-      draft.title = title?.trim() ? title.trim() : null;
-    });
+  async returnToCourseBuilder(): Promise<void> {
+    this.persistSessionOverridesForDirtySlices();
+    const selectedSlice = this.getSelectedSlice();
+    const wakeData: CourseComposerSceneData = {
+      courseId: this.courseRecord?.draft.id ?? null,
+      selectedCoordinates: selectedSlice?.coordinates,
+      centerCoordinates: selectedSlice?.coordinates,
+      statusMessage: this.statusText ?? null,
+    };
+    this.scene.stop();
+    this.scene.wake('CourseComposerScene', wakeData);
+  }
+
+  setRoomTitle(title: string | null): void {
+    const slice = this.getSelectedSlice();
+    if (!slice || !slice.permissions.canSaveDraft) {
+      return;
+    }
+
+    const normalized = title?.trim() ? title.trim() : null;
+    if (slice.roomTitle === normalized) {
+      return;
+    }
+
+    slice.roomTitle = normalized;
+    slice.runtime.isRoomDirty = true;
+    slice.runtime.currentLastDirtyAt = performance.now();
+    this.statusText = `Updated title for ${this.getSliceLabel(slice)}.`;
+    this.renderUi();
+  }
+
+  setGoalType(_nextType: CourseGoalType | null): void {
+    // Room goals stay hidden in course edit mode.
+  }
+
+  setGoalTimeLimitSeconds(_seconds: number | null): void {
+    // Room goals stay hidden in course edit mode.
+  }
+
+  setGoalRequiredCount(_requiredCount: number): void {
+    // Room goals stay hidden in course edit mode.
+  }
+
+  setGoalSurvivalSeconds(_seconds: number): void {
+    // Room goals stay hidden in course edit mode.
   }
 
   setCourseGoalType(goalType: CourseGoalType | null): void {
-    this.mutateDraft((draft) => {
-      draft.goal = goalType ? createDefaultCourseGoal(goalType) : null;
-    });
+    const draft = this.getActiveCourseDraft();
+    if (!draft) {
+      return;
+    }
+
+    const nextDraft = cloneCourseSnapshot(draft);
+    nextDraft.goal = goalType ? createDefaultCourseGoal(goalType) : null;
+    if (!goalType) {
+      nextDraft.startPoint = null;
+    }
+    this.courseGoalPlacementMode = null;
+    this.setActiveCourseDraft(nextDraft);
   }
 
   setCourseGoalTimeLimitSeconds(seconds: number | null): void {
-    this.mutateDraft((draft) => {
-      const goal = draft.goal;
-      if (!goal || !('timeLimitMs' in goal)) {
-        return;
-      }
+    const draft = this.getActiveCourseDraft();
+    if (!draft?.goal || draft.goal.type === 'survival' || !('timeLimitMs' in draft.goal)) {
+      return;
+    }
 
-      goal.timeLimitMs =
-        seconds === null || !Number.isFinite(seconds) || seconds <= 0
-          ? null
-          : Math.round(seconds * 1000);
-    });
+    const nextDraft = cloneCourseSnapshot(draft);
+    if (nextDraft.goal && 'timeLimitMs' in nextDraft.goal) {
+      nextDraft.goal.timeLimitMs = seconds === null ? null : Math.max(1, seconds) * 1000;
+      this.setActiveCourseDraft(nextDraft);
+    }
   }
 
   setCourseGoalRequiredCount(requiredCount: number): void {
-    this.mutateDraft((draft) => {
-      if (draft.goal?.type !== 'collect_target') {
-        return;
-      }
+    const draft = this.getActiveCourseDraft();
+    if (draft?.goal?.type !== 'collect_target') {
+      return;
+    }
 
-      draft.goal.requiredCount = Math.max(1, Math.round(requiredCount));
-    });
+    const nextDraft = cloneCourseSnapshot(draft);
+    if (nextDraft.goal?.type === 'collect_target') {
+      nextDraft.goal.requiredCount = Math.max(1, requiredCount);
+      this.setActiveCourseDraft(nextDraft);
+    }
   }
 
   setCourseGoalSurvivalSeconds(seconds: number): void {
-    this.mutateDraft((draft) => {
-      if (draft.goal?.type !== 'survival') {
-        return;
-      }
+    const draft = this.getActiveCourseDraft();
+    if (draft?.goal?.type !== 'survival') {
+      return;
+    }
 
-      draft.goal.durationMs = Math.max(1, Math.round(seconds)) * 1000;
-    });
+    const nextDraft = cloneCourseSnapshot(draft);
+    if (nextDraft.goal?.type === 'survival') {
+      nextDraft.goal.durationMs = Math.max(1, seconds) * 1000;
+      this.setActiveCourseDraft(nextDraft);
+    }
   }
 
-  setTool(tool: CourseEditorTool): void {
-    this.tool = tool;
+  startGoalMarkerPlacement(_mode: EditorMarkerPlacementMode): void {
+    // Room goals stay hidden in course edit mode.
+  }
+
+  clearGoalMarkers(): void {
+    // Room goals stay hidden in course edit mode.
+  }
+
+  startCourseGoalMarkerPlacement(mode: EditorMarkerPlacementMode): void {
+    const draft = this.getActiveCourseDraft();
+    if (!draft?.goal) {
+      return;
+    }
+
+    this.courseGoalPlacementMode = this.courseGoalPlacementMode === mode ? null : mode;
     this.renderUi();
   }
 
-  clearMarkers(): void {
-    this.mutateDraft((draft) => {
-      draft.startPoint = null;
-      if (draft.goal?.type === 'reach_exit') {
-        draft.goal.exit = null;
-      }
-      if (draft.goal?.type === 'checkpoint_sprint') {
-        draft.goal.checkpoints = [];
-        draft.goal.finish = null;
-      }
-    });
-  }
-
-  centerSelectedRoom(): void {
-    this.centerCoordinates = { ...this.selectedCoordinates };
-    this.centerCameraOnCoordinates(this.centerCoordinates);
-    void this.refreshAround(this.centerCoordinates);
-  }
-
-  selectRoom(roomId: string): void {
-    const draft = this.record?.draft ?? null;
-    const draftRoom = draft?.roomRefs.find((roomRef) => roomRef.roomId === roomId) ?? null;
-    if (draftRoom) {
-      this.selectedCoordinates = { ...draftRoom.coordinates };
-      this.centerCoordinates = { ...draftRoom.coordinates };
-      setActiveCourseDraftSessionSelectedRoom(roomId);
-      this.centerCameraOnCoordinates(this.selectedCoordinates);
-      void this.refreshAround(this.centerCoordinates);
-      return;
-    }
-
-    const summary = this.worldStreamingController.getRoomSummariesById().get(roomId) ?? null;
-    if (!summary) {
-      return;
-    }
-
-    this.selectedCoordinates = { ...summary.coordinates };
-    this.centerCoordinates = { ...summary.coordinates };
-    this.centerCameraOnCoordinates(this.selectedCoordinates);
-    void this.refreshAround(this.centerCoordinates);
-  }
-
-  toggleSelectedRoomMembership(): void {
-    const selectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
-    const selectedMeta = this.getSelectedRoomMeta();
-    const draft = this.record?.draft ?? null;
-    const selectedRoomInDraft = Boolean(draft?.roomRefs.some((roomRef) => roomRef.roomId === selectedRoomId));
+  clearCourseGoalMarkers(): void {
+    const draft = this.getActiveCourseDraft();
     if (!draft) {
       return;
     }
 
-    if (selectedRoomInDraft) {
-      const removalBlockedReason = this.getSelectedRoomRemovalDisabledReason(selectedRoomId);
-      if (removalBlockedReason) {
-        this.statusText = removalBlockedReason;
-        this.renderUi();
-        return;
-      }
-
-      this.mutateDraft((mutableDraft) => {
-        mutableDraft.roomRefs = mutableDraft.roomRefs.filter((roomRef) => roomRef.roomId !== selectedRoomId);
-      });
-      this.statusText = 'Removed room from course.';
-      this.renderUi();
-      return;
+    const nextDraft = cloneCourseSnapshot(draft);
+    nextDraft.startPoint = null;
+    if (nextDraft.goal?.type === 'reach_exit') {
+      nextDraft.goal.exit = null;
+    } else if (nextDraft.goal?.type === 'checkpoint_sprint') {
+      nextDraft.goal.checkpoints = [];
+      nextDraft.goal.finish = null;
     }
+    this.courseGoalPlacementMode = null;
+    this.setActiveCourseDraft(nextDraft);
+  }
 
-    if (!selectedMeta) {
-      this.statusText = 'Only published rooms can be added to a course.';
-      this.renderUi();
-      return;
-    }
-
-    const addBlockedReason = this.getSelectedRoomAddDisabledReason(selectedMeta);
-    if (addBlockedReason) {
-      this.statusText = addBlockedReason;
-      this.renderUi();
-      return;
-    }
-
-    this.mutateDraft((mutableDraft) => {
-      mutableDraft.roomRefs = sortCourseRoomRefsForStorage([
-        ...mutableDraft.roomRefs,
-        {
-          roomId: selectedMeta.roomId,
-          coordinates: { ...selectedMeta.coordinates },
-          roomVersion: selectedMeta.roomVersion,
-          roomTitle: selectedMeta.roomTitle,
-        },
-      ]);
-    });
-    setActiveCourseDraftSessionSelectedRoom(selectedMeta.roomId);
-    this.statusText = 'Added room to course.';
+  fitToScreen(): void {
+    const size = getCourseWorkspacePixelSize(this.workspaceBounds);
+    const fitZoom = Phaser.Math.Clamp(
+      Math.min(
+        (this.scale.width - FIT_PADDING) / Math.max(ROOM_PX_WIDTH, size.width),
+        (this.scale.height - FIT_PADDING) / Math.max(ROOM_PX_HEIGHT, size.height),
+      ),
+      MIN_ZOOM,
+      MAX_ZOOM,
+    );
+    this.inspectZoom = Number(fitZoom.toFixed(3));
+    this.cameras.main.setZoom(this.inspectZoom);
+    this.centerCameraOnWorkspace();
     this.renderUi();
-  }
-
-  async openSelectedRoom(): Promise<void> {
-    const draft = this.record?.draft ?? null;
-    if (!draft) {
-      return;
-    }
-
-    const roomId = roomIdFromCoordinates(this.selectedCoordinates);
-    const roomRef = draft.roomRefs.find((entry) => entry.roomId === roomId) ?? null;
-    if (!roomRef) {
-      return;
-    }
-
-    showBusyOverlay('Opening room...', 'Loading room...');
-    let roomSnapshot =
-      this.worldStreamingController.getRoomSnapshotForCoordinates(roomRef.coordinates) ?? null;
-    if (!roomSnapshot) {
-      const record = await this.roomRepository.loadRoom(roomRef.roomId, roomRef.coordinates);
-      roomSnapshot = record.draft ?? record.published ?? null;
-    }
-
-    if (!roomSnapshot) {
-      showBusyError('Failed to load the selected room.', {
-        closeHandler: () => hideBusyOverlay(),
-      });
-      return;
-    }
-
-    const editorData: EditorSceneData = {
-      roomCoordinates: { ...roomRef.coordinates },
-      source: 'world',
-      roomSnapshot,
-      courseEdit: {
-        courseId: draft.id,
-        roomId: roomRef.roomId,
-        roomOrder: null,
-      },
-    };
-
-    if (
-      this.scene.isActive('EditorScene') ||
-      this.scene.isSleeping('EditorScene') ||
-      this.scene.isPaused('EditorScene')
-    ) {
-      this.scene.stop('EditorScene');
-    }
-
-    this.scene.run('EditorScene', editorData);
-    this.scene.sleep();
-  }
-
-  moveCheckpoint(index: number, direction: -1 | 1): void {
-    this.mutateDraft((draft) => {
-      if (draft.goal?.type !== 'checkpoint_sprint') {
-        return;
-      }
-
-      const nextIndex = Phaser.Math.Clamp(index + direction, 0, draft.goal.checkpoints.length - 1);
-      if (nextIndex === index) {
-        return;
-      }
-
-      const nextCheckpoints = [...draft.goal.checkpoints];
-      const [moved] = nextCheckpoints.splice(index, 1);
-      nextCheckpoints.splice(nextIndex, 0, moved);
-      draft.goal.checkpoints = nextCheckpoints;
-    });
-  }
-
-  removeCheckpoint(index: number): void {
-    this.mutateDraft((draft) => {
-      if (draft.goal?.type !== 'checkpoint_sprint') {
-        return;
-      }
-      draft.goal.checkpoints = draft.goal.checkpoints.filter((_, checkpointIndex) => checkpointIndex !== index);
-    });
   }
 
   zoomIn(): void {
@@ -424,139 +503,83 @@ export class CourseEditorScene extends Phaser.Scene implements CourseEditorScene
     this.adjustButtonZoom(1 / BUTTON_ZOOM_FACTOR);
   }
 
-  fitCourseToView(shouldRefresh: boolean = true): void {
-    const focusBounds = this.getCourseBounds();
-    const roomCount =
-      (focusBounds.maxX - focusBounds.minX + 1) * (focusBounds.maxY - focusBounds.minY + 1);
-    const fitZoom = getFitZoomForRoom(
-      this.scale.width,
-      this.scale.height,
-      Math.max(ROOM_PX_WIDTH, (focusBounds.maxX - focusBounds.minX + 1) * ROOM_PX_WIDTH),
-      Math.max(ROOM_PX_HEIGHT, (focusBounds.maxY - focusBounds.minY + 1) * ROOM_PX_HEIGHT),
-      roomCount > 1 ? FIT_PADDING : 48,
-      MIN_ZOOM,
-      MAX_ZOOM,
-    );
-    this.inspectZoom = Number(fitZoom.toFixed(3));
-    this.cameras.main.setZoom(this.inspectZoom);
-
-    const focusCoordinates = this.getCourseCenterCoordinates();
-    this.centerCoordinates = { ...focusCoordinates };
-    this.centerCameraOnCoordinates(focusCoordinates);
-    if (shouldRefresh) {
-      void this.refreshAround(this.centerCoordinates);
-    } else {
-      this.redraw();
-    }
-  }
-
-  async saveCourseDraft(): Promise<void> {
-    if (!this.record) {
-      return;
+  updateToolUi(): void {
+    if (this.clipboardPastePreviewActive && editorState.activeTool !== 'copy') {
+      this.cancelClipboardPastePreview();
     }
 
-    const state = this.uiState;
-    if (!state?.canSaveDraft) {
-      this.statusText = state?.saveDraftDisabledReason ?? 'Course draft is not ready to save.';
-      this.renderUi();
-      return;
+    if (editorState.activeTool !== 'rect' && editorState.activeTool !== 'copy') {
+      this.clearRectPreview();
     }
 
-    this.loading = true;
-    this.statusText = 'Saving course draft...';
     this.renderUi();
+  }
+
+  async saveDraft(_force?: boolean): Promise<RoomRecord | null> {
+    const dirtySlices = this.getDirtySlices();
+    if (dirtySlices.length === 0) {
+      this.statusText = 'No room draft changes to save.';
+      this.renderUi();
+      return null;
+    }
+
+    showBusyOverlay('Saving course rooms...', `Saving ${dirtySlices.length} room draft${dirtySlices.length === 1 ? '' : 's'}...`);
+    let lastRecord: RoomRecord | null = null;
     try {
-      const saved = await this.courseRepository.saveDraft(this.record.draft);
-      this.setRecord(saved, getActiveCourseDraftSessionSelectedRoomId());
-      this.statusText = 'Course draft saved.';
-      await this.refreshAround(this.centerCoordinates, true);
+      for (const slice of dirtySlices) {
+        const record = await this.roomRepository.saveDraft(slice.runtime.exportRoomSnapshot());
+        this.applyStoredRoomRecordToSlice(slice, record, { keepDirty: false, keepOverride: true });
+        lastRecord = record;
+      }
+      this.statusText = `Saved ${dirtySlices.length} room draft${dirtySlices.length === 1 ? '' : 's'}.`;
+      this.renderUi();
+      return lastRecord;
     } catch (error) {
-      this.statusText = error instanceof Error ? error.message : 'Failed to save course draft.';
+      this.statusText = error instanceof Error ? error.message : 'Failed to save course room drafts.';
       this.renderUi();
+      return null;
     } finally {
-      this.loading = false;
-      this.renderUi();
+      hideBusyOverlay();
     }
   }
 
-  async publishCourseDraft(): Promise<void> {
-    if (!this.record) {
-      return;
-    }
-
-    const state = this.uiState;
-    if (!state?.canPublishCourse) {
-      this.statusText = state?.publishCourseDisabledReason ?? 'Course draft is not ready to publish.';
+  async publishRoom(): Promise<RoomRecord | null> {
+    const targetSlices = this.getChangedSlicesForPublish();
+    if (targetSlices.length === 0) {
+      this.statusText = 'No changed rooms to publish.';
       this.renderUi();
-      return;
+      return null;
     }
 
-    this.loading = true;
-    this.statusText = 'Publishing course...';
-    this.renderUi();
+    showBusyOverlay('Publishing course rooms...', `Publishing ${targetSlices.length} room${targetSlices.length === 1 ? '' : 's'}...`);
+    let lastRecord: RoomRecord | null = null;
     try {
-      const saved = await this.courseRepository.saveDraft(this.record.draft);
-      this.setRecord(saved, getActiveCourseDraftSessionSelectedRoomId());
-      const published = await this.courseRepository.publishCourse(this.record.draft.id);
-      this.setRecord(published, getActiveCourseDraftSessionSelectedRoomId());
-      this.statusText = 'Course published.';
-      await this.refreshAround(this.centerCoordinates, true);
+      for (const slice of targetSlices) {
+        const record = await this.roomRepository.publish(slice.runtime.exportRoomSnapshot());
+        this.applyStoredRoomRecordToSlice(slice, record, { keepDirty: false, keepOverride: false });
+        lastRecord = record;
+      }
+      this.statusText = `Published ${targetSlices.length} room${targetSlices.length === 1 ? '' : 's'}.`;
+      this.renderUi();
+      return lastRecord;
     } catch (error) {
-      this.statusText = error instanceof Error ? error.message : 'Failed to publish course.';
+      this.statusText = error instanceof Error ? error.message : 'Failed to publish changed course rooms.';
       this.renderUi();
+      return null;
     } finally {
-      this.loading = false;
-      this.renderUi();
+      hideBusyOverlay();
     }
   }
 
-  async unpublishCourse(): Promise<void> {
-    if (!this.record) {
-      return;
-    }
-
-    const state = this.uiState;
-    if (!state?.canUnpublishCourse) {
-      this.statusText = state?.unpublishCourseDisabledReason ?? 'Course is not ready to unpublish.';
+  async startPlayMode(): Promise<void> {
+    const draft = this.getActiveCourseDraft();
+    if (!draft || draft.roomRefs.length === 0) {
+      this.statusText = 'Add course rooms before testing.';
       this.renderUi();
       return;
     }
 
-    this.loading = true;
-    this.statusText = 'Unpublishing course...';
-    this.renderUi();
-    try {
-      const unpublished = await this.courseRepository.unpublishCourse(this.record.draft.id);
-      const preservedDraft = cloneCourseSnapshot(this.record.draft);
-      preservedDraft.status = 'draft';
-      preservedDraft.publishedAt = null;
-      this.setRecord(
-        {
-          ...unpublished,
-          draft: preservedDraft,
-        },
-        getActiveCourseDraftSessionSelectedRoomId(),
-      );
-      this.statusText = 'Course unpublished.';
-      await this.refreshAround(this.centerCoordinates, true);
-    } catch (error) {
-      this.statusText = error instanceof Error ? error.message : 'Failed to unpublish course.';
-      this.renderUi();
-    } finally {
-      this.loading = false;
-      this.renderUi();
-    }
-  }
-
-  async testDraftCourse(): Promise<void> {
-    const draft = this.record?.draft ?? null;
-    const state = this.uiState;
-    if (!draft || !state?.canTestDraft) {
-      this.statusText = state?.testDraftDisabledReason ?? 'Course draft is not ready to test.';
-      this.renderUi();
-      return;
-    }
-
+    this.persistSessionOverridesForDirtySlices();
     const startRoom =
       (draft.startPoint
         ? draft.roomRefs.find((roomRef) => roomRef.roomId === draft.startPoint?.roomId) ?? null
@@ -567,6 +590,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseEditorScene
       return;
     }
 
+    const selectedSlice = this.getSelectedSlice();
     const wakeData: OverworldPlaySceneData = {
       centerCoordinates: { ...startRoom.coordinates },
       roomCoordinates: { ...startRoom.coordinates },
@@ -575,458 +599,438 @@ export class CourseEditorScene extends Phaser.Scene implements CourseEditorScene
       courseDraftPreviewId: draft.id,
       courseEditorReturnTarget: {
         courseId: draft.id,
-        selectedCoordinates: { ...this.selectedCoordinates },
-        centerCoordinates: { ...this.centerCoordinates },
+        selectedCoordinates: { ...(selectedSlice?.coordinates ?? startRoom.coordinates) },
+        centerCoordinates: { ...(selectedSlice?.coordinates ?? startRoom.coordinates) },
       },
     };
 
-    this.scene.wake('OverworldPlayScene', wakeData);
     this.scene.sleep();
+    this.scene.wake('OverworldPlayScene', wakeData);
+  }
+
+  undoAction(): void {
+    const slice = this.getSelectedSlice();
+    if (!slice) {
+      return;
+    }
+
+    slice.runtime.undo();
+    this.renderUi();
+  }
+
+  redoAction(): void {
+    const slice = this.getSelectedSlice();
+    if (!slice) {
+      return;
+    }
+
+    slice.runtime.redo();
+    this.renderUi();
+  }
+
+  describeState(): Record<string, unknown> {
+    return {
+      scene: 'course-editor',
+      courseId: this.courseRecord?.draft.id ?? null,
+      roomCount: this.courseRecord?.draft.roomRefs.length ?? 0,
+      selectedRoomId: this.selectedRoomId,
+      zoom: this.cameras.main.zoom,
+      dirtyRoomCount: this.getDirtySlices().length,
+      courseGoalPlacementMode: this.courseGoalPlacementMode,
+    };
   }
 
   private async openFromData(data?: CourseEditorSceneData): Promise<void> {
-    setAppMode('course-editor');
+    setAppMode('editor');
     this.loading = true;
-    this.applySceneData(data);
+    this.statusText = data?.statusMessage ?? 'Loading course editor...';
     this.renderUi();
 
     try {
-      const nextRecord = await this.resolveInitialRecord(data?.courseId ?? null);
-      this.setRecord(nextRecord, data?.courseEditedRoom?.roomId ?? roomIdFromCoordinates(this.selectedCoordinates));
+      const record = await this.resolveCourseRecord(data?.courseId ?? null);
+      this.courseRecord = record;
+      this.rebuildWorkspace(record);
 
-      if (data?.courseEditedRoom) {
-        setActiveCourseDraftSessionSelectedRoom(data.courseEditedRoom.roomId);
-        const currentDraft = this.record?.draft ?? null;
-        const roomRef =
-          currentDraft?.roomRefs.find((entry) => entry.roomId === data.courseEditedRoom?.roomId) ?? null;
-        if (roomRef) {
-          this.selectedCoordinates = { ...roomRef.coordinates };
-        }
-      }
-
+      const nextSelectedRoomId =
+        data?.selectedRoomId ??
+        (data?.selectedCoordinates ? roomIdFromCoordinates(data.selectedCoordinates) : null) ??
+        getActiveCourseDraftSessionSelectedRoomId() ??
+        record.draft.roomRefs[0]?.roomId ??
+        null;
+      this.selectRoomById(nextSelectedRoomId);
       if (data?.statusMessage) {
         this.statusText = data.statusMessage;
-      } else if (!this.statusText) {
-        this.statusText = this.record?.draft.title?.trim()
-          ? `Editing ${this.record.draft.title}`
-          : DEFAULT_COURSE_EDITOR_STATUS_TEXT;
-      }
-
-      if (this.record?.draft.roomRefs.length) {
-        this.fitCourseToView(false);
       } else {
-        this.centerCameraOnCoordinates(this.centerCoordinates);
+        this.statusText = `Editing ${record.draft.title?.trim() || 'course'} across ${record.draft.roomRefs.length} room${record.draft.roomRefs.length === 1 ? '' : 's'}.`;
       }
-
-      await this.refreshAround(this.centerCoordinates, true);
+      this.fitToScreen();
+      this.redrawCourseMarkers();
+      this.redrawSelection();
     } catch (error) {
       console.error('Failed to open course editor', error);
-      this.statusText = error instanceof Error ? error.message : 'Failed to open course editor.';
-      this.renderUi();
+      this.statusText = error instanceof Error ? error.message : 'Failed to open the course editor.';
     } finally {
       this.loading = false;
       this.renderUi();
     }
   }
 
-  private applySceneData(data?: CourseEditorSceneData): void {
-    if (data?.selectedCoordinates) {
-      this.selectedCoordinates = { ...data.selectedCoordinates };
-    }
-    if (data?.centerCoordinates) {
-      this.centerCoordinates = { ...data.centerCoordinates };
-    } else if (data?.selectedCoordinates) {
-      this.centerCoordinates = { ...data.selectedCoordinates };
+  private async resolveCourseRecord(courseId: string | null): Promise<CourseRecord> {
+    const session = getActiveCourseDraftSessionRecord();
+    if (session && (!courseId || session.draft.id === courseId)) {
+      return session;
     }
 
-    if (
-      data?.clearDraftRoomId ||
-      data?.draftRoom ||
-      data?.publishedRoom ||
-      data?.invalidateRoomId
-    ) {
-      this.worldStreamingController.applyOptimisticMutation({
-        clearDraftRoomId: data.clearDraftRoomId ?? null,
-        draftRoom: data.draftRoom ? cloneRoomSnapshot(data.draftRoom) : null,
-        publishedRoom: data.publishedRoom ? cloneRoomSnapshot(data.publishedRoom) : null,
-        invalidateRoomId: data.invalidateRoomId ?? null,
-      });
+    if (!courseId) {
+      throw new Error('No active course to edit.');
     }
+
+    const record = await this.courseRepository.loadCourse(courseId);
+    setActiveCourseDraftSessionRecord(record);
+    return record;
   }
 
-  private async resolveInitialRecord(courseId: string | null): Promise<CourseRecord> {
-    const sessionRecord = getActiveCourseDraftSessionRecord();
-    const selectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
-    if (sessionRecord && getCourseRoomOrder(sessionRecord.draft.roomRefs, selectedRoomId) >= 0) {
-      return this.normalizeRecord(sessionRecord);
+  private rebuildWorkspace(record: CourseRecord): void {
+    this.destroyWorkspace();
+    this.workspaceBounds = getCourseWorkspaceBounds(record.draft.roomRefs);
+    for (const roomRef of record.draft.roomRefs) {
+      this.createRoomSlice(roomRef);
     }
+    this.syncCameraBounds();
+  }
 
-    if (courseId) {
-      if (sessionRecord?.draft.id === courseId) {
-        return this.normalizeRecord(sessionRecord);
+  private destroyWorkspace(): void {
+    this.clearCourseMarkers();
+    for (const slice of this.roomSlices.values()) {
+      slice.runtime.reset();
+      slice.map.destroy();
+      slice.border.destroy();
+      slice.grid.destroy();
+      slice.label.destroy();
+    }
+    this.roomSlices.clear();
+    this.selectionGraphics?.clear();
+    this.cursorGraphics?.clear();
+    this.clearRectPreview();
+  }
+
+  private createRoomSlice(roomRef: CourseRoomRef): void {
+    const origin = getCourseWorkspaceRoomOrigin(roomRef.coordinates, this.workspaceBounds);
+    const map = this.make.tilemap({
+      tileWidth: TILE_SIZE,
+      tileHeight: TILE_SIZE,
+      width: ROOM_WIDTH,
+      height: ROOM_HEIGHT,
+    });
+
+    const tilesets = TILESETS.map((tileset) =>
+      map.addTilesetImage(tileset.key, tileset.key, TILE_SIZE, TILE_SIZE, 0, 0, tileset.firstGid)
+    ).filter((tileset): tileset is Phaser.Tilemaps.Tileset => Boolean(tileset));
+
+    const layers = new Map<string, Phaser.Tilemaps.TilemapLayer>();
+    for (const layerName of LAYER_NAMES) {
+      const layer = map.createBlankLayer(layerName, tilesets, origin.x, origin.y);
+      if (!layer) {
+        continue;
       }
-      const loaded = await this.courseRepository.loadCourse(courseId);
-      return this.normalizeRecord(loaded);
+      if (layerName === 'foreground') {
+        layer.setDepth(50);
+      } else if (layerName === 'terrain') {
+        layer.setDepth(10);
+      } else {
+        layer.setDepth(1);
+      }
+      layers.set(layerName, layer);
     }
 
-    if (sessionRecord) {
-      return this.normalizeRecord(sessionRecord);
-    }
+    const border = this.add.graphics();
+    border.lineStyle(2, RETRO_COLORS.published, 0.75);
+    border.strokeRect(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
+    border.setDepth(90);
 
-    const authState = getAuthDebugState();
-    const record = createDefaultCourseRecord();
-    record.ownerUserId = authState.user?.id ?? null;
-    record.ownerDisplayName = authState.user?.displayName ?? null;
-    record.permissions = {
-      canSaveDraft: Boolean(authState.authenticated),
-      canPublish: Boolean(authState.authenticated),
-      canUnpublish: Boolean(authState.authenticated),
-    };
-    return this.normalizeRecord(record);
-  }
-
-  private normalizeRecord(record: CourseRecord): CourseRecord {
-    const next = cloneCourseRecord(record);
-    next.draft.roomRefs = sortCourseRoomRefsForStorage(next.draft.roomRefs);
-    if (next.published) {
-      next.published.roomRefs = sortCourseRoomRefsForStorage(next.published.roomRefs);
+    const grid = this.add.graphics();
+    grid.lineStyle(1, RETRO_COLORS.grid, 0.12);
+    for (let x = 0; x <= ROOM_WIDTH; x += 1) {
+      grid.moveTo(origin.x + x * TILE_SIZE, origin.y);
+      grid.lineTo(origin.x + x * TILE_SIZE, origin.y + ROOM_PX_HEIGHT);
     }
-    next.versions = next.versions.map((version) => ({
-      ...version,
-      snapshot: {
-        ...version.snapshot,
-        roomRefs: sortCourseRoomRefsForStorage(version.snapshot.roomRefs),
+    for (let y = 0; y <= ROOM_HEIGHT; y += 1) {
+      grid.moveTo(origin.x, origin.y + y * TILE_SIZE);
+      grid.lineTo(origin.x + ROOM_PX_WIDTH, origin.y + y * TILE_SIZE);
+    }
+    grid.strokePath();
+    grid.setDepth(95);
+
+    const label = this.add.text(origin.x + 10, origin.y + 10, roomRef.roomTitle?.trim() || `${roomRef.coordinates.x},${roomRef.coordinates.y}`, {
+      fontFamily: '"IBM Plex Mono", monospace',
+      fontSize: '12px',
+      color: '#f6f1de',
+      backgroundColor: '#121109cc',
+      padding: { x: 6, y: 3 },
+    });
+    label.setDepth(96);
+
+    const slice: CourseRoomSlice = {
+      roomId: roomRef.roomId,
+      coordinates: { ...roomRef.coordinates },
+      roomTitle: roomRef.roomTitle,
+      backgroundId: 'none',
+      placedObjects: [],
+      permissions: {
+        canSaveDraft: true,
+        canPublish: true,
+        canRevert: false,
+        canMint: false,
       },
-    }));
-    return next;
+      roomVersionHistory: [],
+      publishedVersion: 0,
+      currentVersion: roomRef.roomVersion,
+      createdAt: '',
+      updatedAt: '',
+      publishedAt: null,
+      origin,
+      map,
+      layers,
+      border,
+      grid,
+      label,
+      runtime: new EditorEditRuntime(this, {
+        getLayers: () => slice.layers,
+        getRoomSnapshotMetadata: () => ({
+          roomId: slice.roomId,
+          coordinates: slice.coordinates,
+          title: slice.roomTitle,
+          version: slice.currentVersion,
+          createdAt: slice.createdAt,
+          updatedAt: slice.updatedAt,
+          publishedAt: slice.publishedAt,
+        }),
+        getRoomOrigin: () => slice.origin,
+        getSelectedBackground: () => slice.backgroundId,
+        setSelectedBackground: (backgroundId) => {
+          slice.backgroundId = backgroundId;
+        },
+        getPlacedObjects: () => slice.placedObjects,
+        setPlacedObjects: (placedObjects) => {
+          slice.placedObjects = placedObjects.map((placed) => ({ ...placed }));
+        },
+        updateBackgroundSelectValue: (backgroundId) => {
+          if (this.selectedRoomId !== slice.roomId) {
+            return;
+          }
+          const select = document.getElementById('background-select') as HTMLSelectElement | null;
+          if (select) {
+            select.value = backgroundId;
+          }
+        },
+        updateBackground: () => {
+          this.renderUi();
+        },
+        updateGoalUi: () => {
+          this.renderUi();
+        },
+        syncBackgroundCameraIgnores: () => {
+          // Multi-room editor does not use separate background cameras yet.
+        },
+        updatePersistenceStatus: (text) => {
+          this.statusText = text;
+          this.renderUi();
+        },
+        canSaveDraft: () => slice.permissions.canSaveDraft,
+      }),
+    };
+
+    this.roomSlices.set(slice.roomId, slice);
+    void this.loadRoomSliceState(slice);
   }
 
-  private setRecord(record: CourseRecord | null, selectedRoomId: string | null = null): void {
-    setActiveCourseDraftSessionRecord(record, { selectedRoomId });
-    this.record = getActiveCourseDraftSessionRecord();
+  private async loadRoomSliceState(slice: CourseRoomSlice): Promise<void> {
+    const record = await this.roomRepository.loadRoom(slice.roomId, slice.coordinates);
+    const override = getActiveCourseDraftSessionRoomOverride(slice.roomId);
+    const snapshot = override ?? record.draft ?? record.published ?? null;
+    if (!snapshot) {
+      return;
+    }
+
+    this.applyStoredRoomRecordToSlice(slice, record, {
+      keepDirty: Boolean(override),
+      keepOverride: Boolean(override),
+    });
+    slice.runtime.applyRoomSnapshot(cloneRoomSnapshot(snapshot));
+    if (override) {
+      slice.runtime.isRoomDirty = true;
+    }
     this.renderUi();
   }
 
-  private mutateDraft(mutator: (draft: CourseRecord['draft']) => void): void {
-    if (!this.record?.permissions.canSaveDraft) {
+  private applyStoredRoomRecordToSlice(
+    slice: CourseRoomSlice,
+    record: RoomRecord,
+    options: { keepDirty: boolean; keepOverride: boolean },
+  ): void {
+    const snapshot = record.draft ?? record.published ?? null;
+    if (!snapshot) {
       return;
+    }
+
+    slice.permissions = record.permissions;
+    slice.roomVersionHistory = record.versions;
+    slice.publishedVersion = record.published?.version ?? 0;
+    slice.currentVersion = snapshot.version;
+    slice.roomTitle = snapshot.title ?? null;
+    slice.createdAt = snapshot.createdAt;
+    slice.updatedAt = snapshot.updatedAt;
+    slice.publishedAt = snapshot.publishedAt;
+    slice.backgroundId = snapshot.background;
+    slice.placedObjects = snapshot.placedObjects.map((placed) => ({ ...placed }));
+    slice.label.setText(slice.roomTitle?.trim() || `${slice.coordinates.x},${slice.coordinates.y}`);
+    slice.runtime.applyRoomSnapshot(cloneRoomSnapshot(snapshot));
+    slice.runtime.isRoomDirty = options.keepDirty;
+    if (options.keepOverride) {
+      setActiveCourseDraftSessionRoomOverride(slice.runtime.exportRoomSnapshot());
+    } else {
+      clearActiveCourseDraftSessionRoomOverride(slice.roomId);
     }
 
     updateActiveCourseDraftSession((draft) => {
-      mutator(draft);
-      draft.roomRefs = sortCourseRoomRefsForStorage(draft.roomRefs);
-    });
-    this.record = getActiveCourseDraftSessionRecord();
-    this.renderUi();
-  }
-
-  private async refreshAround(
-    centerCoordinates: RoomCoordinates,
-    forceChunkReload: boolean = false
-  ): Promise<void> {
-    this.centerCoordinates = { ...centerCoordinates };
-    await this.worldStreamingController.refreshAround(centerCoordinates, { forceChunkReload });
-    this.syncCameraBounds();
-    this.redraw();
-  }
-
-  private redraw(): void {
-    this.redrawSelection();
-    this.redrawMarkers();
-    this.renderUi();
-  }
-
-  private renderUi(): void {
-    this.uiState = buildCourseEditorUiState({
-      record: this.record,
-      dirty: isActiveCourseDraftSessionDirty(),
-      zoomText: `Zoom: ${this.cameras.main.zoom.toFixed(2)}x`,
-      tool: this.tool,
-      statusText: this.loading ? 'Loading course…' : this.statusText,
-      selectedRoomSummary: this.getSelectedRoomSummaryText(),
-      selectedRoomStatusText: this.getSelectedRoomStatusText(),
-      selectedRoomId: this.getSelectedRoomRef()?.roomId ?? this.getSelectedSummary()?.id ?? null,
-      canToggleSelectedRoom: this.canToggleSelectedRoomMembership(),
-      toggleSelectedRoomLabel: this.getSelectedRoomToggleLabel(),
-      toggleSelectedRoomDisabledReason: this.getSelectedRoomToggleDisabledReason(),
-      canOpenSelectedRoom: this.getSelectedRoomRef() !== null,
-      canCenterSelectedRoom: true,
-      roomEntries: this.buildRoomEntries(),
-      checkpointEntries: this.buildCheckpointEntries(),
-    });
-
-    window.dispatchEvent(new Event(COURSE_EDITOR_STATE_CHANGED_EVENT));
-  }
-
-  private getSelectedSummary(): WorldRoomSummary | null {
-    return this.worldStreamingController.getRoomSummariesById().get(
-      roomIdFromCoordinates(this.selectedCoordinates)
-    ) ?? null;
-  }
-
-  private getSelectedRoomMeta(): CoursePublishedRoomMeta | null {
-    const roomId = roomIdFromCoordinates(this.selectedCoordinates);
-    const cached = this.roomMetaByRoomId.get(roomId);
-    if (cached) {
-      return cached;
-    }
-
-    const summary = this.getSelectedSummary();
-    if (!summary || summary.state !== 'published') {
-      return null;
-    }
-
-    const meta: CoursePublishedRoomMeta = {
-      roomId,
-      coordinates: { ...summary.coordinates },
-      roomVersion: summary.version ?? 1,
-      roomTitle: summary.title,
-      publishedByUserId: summary.publishedByUserId ?? summary.creatorUserId ?? null,
-      courseId: summary.course?.courseId ?? null,
-    };
-    this.roomMetaByRoomId.set(roomId, meta);
-    return meta;
-  }
-
-  private getSelectedRoomRef(): CourseRoomRef | null {
-    const draft = this.record?.draft ?? null;
-    if (!draft) {
-      return null;
-    }
-
-    const roomId = roomIdFromCoordinates(this.selectedCoordinates);
-    return draft.roomRefs.find((roomRef) => roomRef.roomId === roomId) ?? null;
-  }
-
-  private getSelectedRoomSummaryText(): string {
-    const summary = this.getSelectedSummary();
-    const selectedRef = this.getSelectedRoomRef();
-    const coordinates = `${this.selectedCoordinates.x},${this.selectedCoordinates.y}`;
-    const title =
-      selectedRef?.roomTitle?.trim() ??
-      summary?.title?.trim() ??
-      `Room ${coordinates}`;
-    const membershipText = selectedRef ? 'In this course' : 'Not in this course';
-
-    return `${title} · ${coordinates} · ${membershipText}`;
-  }
-
-  private getSelectedRoomStatusText(): string {
-    const selectedRef = this.getSelectedRoomRef();
-    if (selectedRef) {
-      const removalBlockedReason = this.getSelectedRoomRemovalDisabledReason(selectedRef.roomId);
-      return removalBlockedReason ?? 'Room is part of this course cluster.';
-    }
-
-    const meta = this.getSelectedRoomMeta();
-    if (!meta) {
-      return 'Only published rooms you authored can be added.';
-    }
-
-    return this.getSelectedRoomAddDisabledReason(meta) ?? 'Room can join the current connected cluster.';
-  }
-
-  private canToggleSelectedRoomMembership(): boolean {
-    const selectedRef = this.getSelectedRoomRef();
-    if (selectedRef) {
-      return this.getSelectedRoomRemovalDisabledReason(selectedRef.roomId) === null;
-    }
-
-    const meta = this.getSelectedRoomMeta();
-    return meta !== null && this.getSelectedRoomAddDisabledReason(meta) === null;
-  }
-
-  private getSelectedRoomToggleLabel(): string {
-    return this.getSelectedRoomRef() ? 'Remove Room' : 'Add Room';
-  }
-
-  private getSelectedRoomToggleDisabledReason(): string | null {
-    const selectedRef = this.getSelectedRoomRef();
-    if (selectedRef) {
-      return this.getSelectedRoomRemovalDisabledReason(selectedRef.roomId);
-    }
-
-    const meta = this.getSelectedRoomMeta();
-    return meta ? this.getSelectedRoomAddDisabledReason(meta) : 'Only published rooms can be added.';
-  }
-
-  private getSelectedRoomAddDisabledReason(meta: CoursePublishedRoomMeta): string | null {
-    if (!this.record?.permissions.canSaveDraft) {
-      return 'This course is read-only for your account.';
-    }
-
-    const authState = getAuthDebugState();
-    if (!authState.authenticated || !authState.user?.id) {
-      return 'Sign in to edit courses.';
-    }
-
-    if (meta.publishedByUserId !== authState.user.id) {
-      return 'You can only add rooms you authored.';
-    }
-
-    if (meta.courseId && meta.courseId !== this.record.draft.id) {
-      return 'This room is already published in another course.';
-    }
-
-    if (this.record.ownerUserId && this.record.ownerUserId !== meta.publishedByUserId) {
-      return 'All course rooms must belong to the same creator.';
-    }
-
-    if (this.record.draft.roomRefs.some((roomRef) => roomRef.roomId === meta.roomId)) {
-      return 'Room is already in this course.';
-    }
-
-    if (this.record.draft.roomRefs.length >= MAX_COURSE_ROOMS) {
-      return `Courses are limited to ${MAX_COURSE_ROOMS} rooms for now.`;
-    }
-
-    const nextRoomRefs = [
-      ...this.record.draft.roomRefs,
-      {
-        roomId: meta.roomId,
-        coordinates: { ...meta.coordinates },
-        roomVersion: meta.roomVersion,
-        roomTitle: meta.roomTitle,
-      },
-    ];
-    return courseRoomRefsFormConnectedCluster(nextRoomRefs)
-      ? null
-      : 'Course rooms must stay in one connected cluster.';
-  }
-
-  private getSelectedRoomRemovalDisabledReason(roomId: string): string | null {
-    const draft = this.record?.draft ?? null;
-    if (!draft) {
-      return 'No active course draft.';
-    }
-
-    if (draft.startPoint?.roomId === roomId) {
-      return 'Remove the course start marker first.';
-    }
-
-    if (draft.goal?.type === 'reach_exit' && draft.goal.exit?.roomId === roomId) {
-      return 'Remove the course exit marker first.';
-    }
-
-    if (draft.goal?.type === 'checkpoint_sprint') {
-      if (draft.goal.finish?.roomId === roomId) {
-        return 'Remove the finish marker first.';
-      }
-      if (draft.goal.checkpoints.some((checkpoint) => checkpoint.roomId === roomId)) {
-        return 'Remove checkpoints in this room first.';
-      }
-    }
-
-    const nextRoomRefs = draft.roomRefs.filter((roomRef) => roomRef.roomId !== roomId);
-    if (nextRoomRefs.length > 0 && !courseRoomRefsFormConnectedCluster(nextRoomRefs)) {
-      return 'Removing this room would split the course cluster.';
-    }
-
-    return null;
-  }
-
-  private buildRoomEntries(): CourseEditorRoomEntry[] {
-    const draft = this.record?.draft ?? null;
-    if (!draft) {
-      return [];
-    }
-
-    const checkpointIndexesByRoomId = new Map<string, number[]>();
-    if (draft.goal?.type === 'checkpoint_sprint') {
-      draft.goal.checkpoints.forEach((checkpoint, index) => {
-        const existing = checkpointIndexesByRoomId.get(checkpoint.roomId) ?? [];
-        existing.push(index);
-        checkpointIndexesByRoomId.set(checkpoint.roomId, existing);
-      });
-    }
-
-    const roomEntries = sortCourseRoomRefsForStorage(draft.roomRefs).map((roomRef) => ({
-      roomId: roomRef.roomId,
-      coordinates: { ...roomRef.coordinates },
-      roomVersion: roomRef.roomVersion,
-      roomTitle: roomRef.roomTitle,
-      selected: roomRef.roomId === roomIdFromCoordinates(this.selectedCoordinates),
-      isStartRoom: draft.startPoint?.roomId === roomRef.roomId,
-      isFinishRoom:
-        draft.goal?.type === 'reach_exit'
-          ? draft.goal.exit?.roomId === roomRef.roomId
-          : draft.goal?.type === 'checkpoint_sprint'
-            ? draft.goal.finish?.roomId === roomRef.roomId
-            : false,
-      checkpointIndexes: checkpointIndexesByRoomId.get(roomRef.roomId) ?? [],
-    }));
-
-    return roomEntries;
-  }
-
-  private buildCheckpointEntries(): CourseEditorCheckpointEntry[] {
-    const draft = this.record?.draft ?? null;
-    const goal = draft?.goal?.type === 'checkpoint_sprint' ? draft.goal : null;
-    if (!draft || !goal) {
-      return [];
-    }
-
-    return goal.checkpoints.map((point, index) => {
-      const roomRef = draft.roomRefs.find((room) => room.roomId === point.roomId) ?? null;
-      return {
-        index,
-        point: { ...point },
-        roomTitle: roomRef?.roomTitle ?? null,
-        coordinates: roomRef?.coordinates ? { ...roomRef.coordinates } : { ...this.selectedCoordinates },
-        canMoveEarlier: index > 0,
-        canMoveLater: index < goal.checkpoints.length - 1,
-      };
-    });
-  }
-
-  private redrawSelection(): void {
-    const draft = this.record?.draft ?? null;
-    this.selectionGraphics.clear();
-    if (!draft) {
-      return;
-    }
-
-    this.selectionGraphics.lineStyle(2, 0xffd36a, 0.88);
-    for (const roomRef of draft.roomRefs) {
-      const origin = this.getRoomOrigin(roomRef.coordinates);
-      this.selectionGraphics.strokeRect(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-    }
-
-    const selectedOrigin = this.getRoomOrigin(this.selectedCoordinates);
-    this.selectionGraphics.lineStyle(3, 0x7de5ff, 0.95);
-    this.selectionGraphics.strokeRect(selectedOrigin.x + 2, selectedOrigin.y + 2, ROOM_PX_WIDTH - 4, ROOM_PX_HEIGHT - 4);
-  }
-
-  private redrawMarkers(): void {
-    this.markerSprites.forEach((sprite) => sprite.destroy());
-    this.markerLabels.forEach((label) => label.destroy());
-    this.markerSprites = [];
-    this.markerLabels = [];
-
-    const draft = this.record?.draft ?? null;
-    if (!draft?.goal) {
-      return;
-    }
-
-    const addLabel = (point: CourseMarkerPoint, labelText: string | null, finish: boolean): void => {
-      const roomRef = draft.roomRefs.find((room) => room.roomId === point.roomId) ?? null;
+      const roomRef = draft.roomRefs.find((entry) => entry.roomId === slice.roomId);
       if (!roomRef) {
         return;
       }
-      const origin = this.getRoomOrigin(roomRef.coordinates);
+      roomRef.roomTitle = slice.roomTitle;
+      if (!options.keepOverride) {
+        roomRef.roomVersion = record.published?.version ?? roomRef.roomVersion;
+      }
+    });
+    this.redrawCourseMarkers();
+  }
+
+  private getActiveCourseDraft(): CourseSnapshot | null {
+    const courseId = this.courseRecord?.draft.id ?? null;
+    if (!courseId || getActiveCourseDraftSessionCourseId() !== courseId) {
+      return null;
+    }
+    return getActiveCourseDraftSessionDraft();
+  }
+
+  private setActiveCourseDraft(nextDraft: CourseSnapshot): void {
+    const courseId = this.courseRecord?.draft.id ?? null;
+    if (!courseId || getActiveCourseDraftSessionCourseId() !== courseId) {
+      return;
+    }
+
+    const normalized = cloneCourseSnapshot(nextDraft);
+    updateActiveCourseDraftSession((draft) => {
+      draft.title = normalized.title;
+      draft.roomRefs = normalized.roomRefs;
+      draft.startPoint = normalized.startPoint;
+      draft.goal = normalized.goal;
+    });
+    this.courseRecord = getActiveCourseDraftSessionRecord();
+    this.redrawCourseMarkers();
+    this.renderUi();
+  }
+
+  private getDirtySlices(): CourseRoomSlice[] {
+    return Array.from(this.roomSlices.values()).filter((slice) => slice.runtime.isRoomDirty);
+  }
+
+  private getChangedSlicesForPublish(): CourseRoomSlice[] {
+    return Array.from(this.roomSlices.values()).filter(
+      (slice) =>
+        slice.runtime.isRoomDirty ||
+        getActiveCourseDraftSessionRoomOverride(slice.roomId) !== null
+    );
+  }
+
+  private persistSessionOverridesForDirtySlices(): void {
+    for (const slice of this.roomSlices.values()) {
+      if (!slice.runtime.isRoomDirty) {
+        continue;
+      }
+      setActiveCourseDraftSessionRoomOverride(slice.runtime.exportRoomSnapshot());
+    }
+  }
+
+  private getSelectedSlice(): CourseRoomSlice | null {
+    return this.selectedRoomId ? this.roomSlices.get(this.selectedRoomId) ?? null : null;
+  }
+
+  private selectRoomById(roomId: string | null): void {
+    const fallback = this.courseRecord?.draft.roomRefs[0]?.roomId ?? null;
+    const nextRoomId = roomId && this.roomSlices.has(roomId) ? roomId : fallback;
+    this.selectedRoomId = nextRoomId;
+    setActiveCourseDraftSessionSelectedRoom(nextRoomId);
+    const slice = this.getSelectedSlice();
+    if (slice) {
+      editorState.selectedBackground = slice.backgroundId;
+      const select = document.getElementById('background-select') as HTMLSelectElement | null;
+      if (select) {
+        select.value = slice.backgroundId;
+      }
+    }
+    this.redrawSelection();
+    this.renderUi();
+  }
+
+  private redrawSelection(): void {
+    this.selectionGraphics?.clear();
+    const slice = this.getSelectedSlice();
+    if (!slice || !this.selectionGraphics) {
+      return;
+    }
+
+    this.selectionGraphics.lineStyle(3, 0x7de5ff, 0.95);
+    this.selectionGraphics.strokeRect(
+      slice.origin.x + 2,
+      slice.origin.y + 2,
+      ROOM_PX_WIDTH - 4,
+      ROOM_PX_HEIGHT - 4,
+    );
+  }
+
+  private clearCourseMarkers(): void {
+    for (const sprite of this.courseMarkerSprites) {
+      sprite.destroy();
+    }
+    this.courseMarkerSprites = [];
+    for (const label of this.courseMarkerLabels) {
+      label.destroy();
+    }
+    this.courseMarkerLabels = [];
+  }
+
+  private redrawCourseMarkers(): void {
+    this.clearCourseMarkers();
+    const draft = this.getActiveCourseDraft();
+    const goal = draft?.goal ?? null;
+    if (!draft || !goal) {
+      return;
+    }
+
+    const addMarker = (
+      point: CourseMarkerPoint,
+      labelText: string | null,
+      finish: boolean,
+    ): void => {
+      const slice = this.roomSlices.get(point.roomId);
+      if (!slice) {
+        return;
+      }
       const sprite = createGoalMarkerFlagSprite(
         this,
         finish ? 'finish-pending' : 'checkpoint-pending',
-        origin.x + point.x,
-        origin.y + point.y + 2,
+        slice.origin.x + point.x,
+        slice.origin.y + point.y + 2,
         130,
       );
-      this.markerSprites.push(sprite);
+      this.courseMarkerSprites.push(sprite);
 
       if (!labelText) {
         return;
       }
-      const label = this.add.text(origin.x + point.x, origin.y + point.y - 28, labelText, {
+
+      const label = this.add.text(slice.origin.x + point.x, slice.origin.y + point.y - 28, labelText, {
         fontFamily: 'Courier New',
         fontSize: '12px',
         color: '#ffefef',
@@ -1035,32 +1039,25 @@ export class CourseEditorScene extends Phaser.Scene implements CourseEditorScene
       });
       label.setOrigin(0.5, 1);
       label.setDepth(131);
-      this.markerLabels.push(label);
+      this.courseMarkerLabels.push(label);
     };
 
     if (draft.startPoint) {
-      addLabel(draft.startPoint, 'START', false);
+      addMarker(draft.startPoint, 'START', false);
     }
 
-    if (draft.goal.type === 'reach_exit' && draft.goal.exit) {
-      addLabel(draft.goal.exit, 'EXIT', true);
+    if (goal.type === 'reach_exit' && goal.exit) {
+      addMarker(goal.exit, 'EXIT', true);
     }
 
-    if (draft.goal.type === 'checkpoint_sprint') {
-      draft.goal.checkpoints.forEach((checkpoint, index) => {
-        addLabel(checkpoint, `${index + 1}`, false);
+    if (goal.type === 'checkpoint_sprint') {
+      goal.checkpoints.forEach((checkpoint, index) => {
+        addMarker(checkpoint, `${index + 1}`, false);
       });
-      if (draft.goal.finish) {
-        addLabel(draft.goal.finish, 'FINISH', true);
+      if (goal.finish) {
+        addMarker(goal.finish, 'FINISH', true);
       }
     }
-  }
-
-  private setupCamera(): void {
-    this.cameras.main.setRoundPixels(true);
-    this.cameras.main.setZoom(this.inspectZoom);
-    this.syncCameraBounds();
-    this.centerCameraOnCoordinates(this.centerCoordinates);
   }
 
   private setupPointerControls(): void {
@@ -1074,38 +1071,38 @@ export class CourseEditorScene extends Phaser.Scene implements CourseEditorScene
         };
         return;
       }
+
+      this.handlePrimaryPointerDown(pointer);
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (!this.isPanning) {
+      if (this.isPanning) {
+        const distance = Phaser.Math.Distance.Between(
+          this.panStartPointer.x,
+          this.panStartPointer.y,
+          pointer.x,
+          pointer.y,
+        );
+        if (distance >= PAN_THRESHOLD) {
+          const dx = (this.panStartPointer.x - pointer.x) / this.cameras.main.zoom;
+          const dy = (this.panStartPointer.y - pointer.y) / this.cameras.main.zoom;
+          this.cameras.main.setScroll(this.panStartScroll.x + dx, this.panStartScroll.y + dy);
+          this.constrainCamera();
+        }
         return;
       }
 
-      const distance = Phaser.Math.Distance.Between(
-        this.panStartPointer.x,
-        this.panStartPointer.y,
-        pointer.x,
-        pointer.y,
-      );
-      if (distance < PAN_THRESHOLD) {
-        return;
-      }
-
-      const dx = (this.panStartPointer.x - pointer.x) / this.cameras.main.zoom;
-      const dy = (this.panStartPointer.y - pointer.y) / this.cameras.main.zoom;
-      this.cameras.main.setScroll(this.panStartScroll.x + dx, this.panStartScroll.y + dy);
-      this.constrainInspectCamera();
+      this.updateCursorHighlight(pointer);
+      this.handlePointerDrag(pointer);
     });
 
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (this.isPanning) {
         this.isPanning = false;
-        this.centerCoordinates = this.getCameraCenterCoordinates();
-        void this.refreshAround(this.centerCoordinates);
         return;
       }
 
-      this.handlePointerAction(pointer);
+      this.finishPointerAction(pointer);
     });
   }
 
@@ -1121,73 +1118,363 @@ export class CourseEditorScene extends Phaser.Scene implements CourseEditorScene
     };
 
     keyboard.on('keydown-F', () => {
-      this.fitCourseToView();
-    });
-    keyboard.on('keydown-ESC', () => {
-      void this.returnToWorld();
+      this.fitToScreen();
     });
   }
 
-  private handlePointerAction(pointer: Phaser.Input.Pointer): void {
-    const coordinates = this.getPointerRoomCoordinates(pointer);
-    this.selectedCoordinates = { ...coordinates };
-    const roomId = roomIdFromCoordinates(coordinates);
-    if (this.record?.draft.roomRefs.some((roomRef) => roomRef.roomId === roomId)) {
-      setActiveCourseDraftSessionSelectedRoom(roomId);
-    }
-
-    if (this.tool === 'select') {
-      this.redraw();
+  private handlePrimaryPointerDown(pointer: Phaser.Input.Pointer): void {
+    const slice = this.getSliceForPointer(pointer);
+    if (!slice) {
       return;
     }
 
-    if (this.tool === 'rooms') {
-      this.toggleSelectedRoomMembership();
-      this.redraw();
+    this.selectRoomById(slice.roomId);
+    const localTile = this.getLocalTileForPointer(pointer, slice);
+    if (!localTile) {
       return;
     }
 
-    if (!this.getSelectedRoomRef()) {
-      this.statusText = 'Add this room to the course first.';
-      this.redraw();
+    if (this.courseGoalPlacementMode) {
+      this.placeCourseGoalMarker(slice, localTile.tileX, localTile.tileY);
       return;
     }
 
-    const point = this.createMarkerPointFromPointer(pointer, coordinates);
-    this.mutateDraft((draft) => {
-      if (this.tool === 'start') {
-        draft.startPoint = point;
-        return;
+    if (editorState.paletteMode === 'objects') {
+      if (editorState.activeTool === 'eraser') {
+        slice.runtime.removeObjectAt(pointer.worldX, pointer.worldY);
+      } else {
+        slice.runtime.handleObjectPlace(pointer.worldX, pointer.worldY, localTile.tileX, localTile.tileY);
       }
+      this.renderUi();
+      return;
+    }
 
-      if (draft.goal?.type === 'reach_exit' && this.tool === 'exit') {
-        draft.goal.exit = point;
-        return;
-      }
+    if (this.clipboardPastePreviewActive) {
+      this.pasteClipboardIntoSlice(slice, localTile.tileX, localTile.tileY);
+      return;
+    }
 
-      if (draft.goal?.type === 'checkpoint_sprint' && this.tool === 'checkpoint') {
-        draft.goal.checkpoints = [...draft.goal.checkpoints, point];
-        return;
-      }
-
-      if (draft.goal?.type === 'checkpoint_sprint' && this.tool === 'finish') {
-        draft.goal.finish = point;
-      }
-    });
-    this.statusText = 'Marker updated.';
-    this.redraw();
+    switch (editorState.activeTool) {
+      case 'pencil':
+        slice.runtime.beginTileBatch();
+        slice.runtime.placeTileAt(pointer.worldX, pointer.worldY);
+        this.tileDragMode = 'pencil';
+        this.activeTileDragRoomId = slice.roomId;
+        break;
+      case 'eraser':
+        slice.runtime.beginTileBatch();
+        slice.runtime.eraseTileAt(pointer.worldX, pointer.worldY);
+        this.tileDragMode = 'eraser';
+        this.activeTileDragRoomId = slice.roomId;
+        break;
+      case 'fill':
+        slice.runtime.beginTileBatch();
+        slice.runtime.floodFill(localTile.tileX, localTile.tileY);
+        slice.runtime.commitTileBatch();
+        this.renderUi();
+        break;
+      case 'rect':
+      case 'copy':
+        this.rectMode = editorState.activeTool;
+        this.rectStart = { roomId: slice.roomId, x: localTile.tileX, y: localTile.tileY };
+        this.drawRectPreview(slice, this.rectStart.x, this.rectStart.y, localTile.tileX, localTile.tileY);
+        break;
+      default:
+        break;
+    }
   }
 
-  private createMarkerPointFromPointer(
+  private handlePointerDrag(pointer: Phaser.Input.Pointer): void {
+    if (!pointer.leftButtonDown()) {
+      return;
+    }
+
+    const slice = this.getSliceForPointer(pointer);
+    if (!slice) {
+      return;
+    }
+
+    const localTile = this.getLocalTileForPointer(pointer, slice);
+    if (!localTile) {
+      return;
+    }
+
+    if (this.tileDragMode) {
+      if (this.activeTileDragRoomId !== slice.roomId) {
+        const previous = this.activeTileDragRoomId
+          ? this.roomSlices.get(this.activeTileDragRoomId) ?? null
+          : null;
+        previous?.runtime.commitTileBatch();
+        slice.runtime.beginTileBatch();
+        this.activeTileDragRoomId = slice.roomId;
+      }
+
+      if (this.tileDragMode === 'pencil') {
+        slice.runtime.placeTileAt(pointer.worldX, pointer.worldY);
+      } else {
+        slice.runtime.eraseTileAt(pointer.worldX, pointer.worldY);
+      }
+      return;
+    }
+
+    if (this.rectStart) {
+      const startSlice = this.roomSlices.get(this.rectStart.roomId) ?? null;
+      if (!startSlice) {
+        return;
+      }
+
+      const previewTile = startSlice.roomId === slice.roomId
+        ? localTile
+        : this.getClosestTileInSlice(startSlice, pointer.worldX, pointer.worldY);
+      this.drawRectPreview(startSlice, this.rectStart.x, this.rectStart.y, previewTile.tileX, previewTile.tileY);
+    }
+  }
+
+  private finishPointerAction(pointer: Phaser.Input.Pointer): void {
+    const activeSlice = this.activeTileDragRoomId
+      ? this.roomSlices.get(this.activeTileDragRoomId) ?? null
+      : null;
+    if (activeSlice && this.tileDragMode) {
+      activeSlice.runtime.commitTileBatch();
+      this.tileDragMode = null;
+      this.activeTileDragRoomId = null;
+      this.renderUi();
+      return;
+    }
+
+    if (!this.rectStart || !this.rectMode) {
+      return;
+    }
+
+    const startSlice = this.roomSlices.get(this.rectStart.roomId) ?? null;
+    if (!startSlice) {
+      this.clearRectPreview();
+      return;
+    }
+
+    const pointerSlice = this.getSliceForPointer(pointer);
+    const endTile = pointerSlice && pointerSlice.roomId === startSlice.roomId
+      ? this.getLocalTileForPointer(pointer, startSlice)
+      : this.getClosestTileInSlice(startSlice, pointer.worldX, pointer.worldY);
+    if (!endTile) {
+      this.clearRectPreview();
+      return;
+    }
+
+    if (this.rectMode === 'rect') {
+      startSlice.runtime.beginTileBatch();
+      startSlice.runtime.fillRect(this.rectStart.x, this.rectStart.y, endTile.tileX, endTile.tileY);
+      startSlice.runtime.commitTileBatch();
+      this.statusText =
+        pointerSlice && pointerSlice.roomId !== startSlice.roomId
+          ? 'Rectangle fill stayed within the starting room.'
+          : 'Filled room area.';
+    } else {
+      const copied = startSlice.runtime.copyTilesToClipboard(
+        this.rectStart.x,
+        this.rectStart.y,
+        endTile.tileX,
+        endTile.tileY,
+      );
+      if (copied) {
+        this.clipboardSourceRoomId = startSlice.roomId;
+        this.clipboardPastePreviewActive = true;
+        this.statusText = 'Copied tile region. Click inside the same room to paste.';
+      } else {
+        this.statusText = 'No tiles in that selection to copy.';
+      }
+    }
+
+    this.clearRectPreview();
+    this.renderUi();
+  }
+
+  private getSliceForPointer(pointer: Phaser.Input.Pointer): CourseRoomSlice | null {
+    return this.getSliceAtWorldPoint(pointer.worldX, pointer.worldY);
+  }
+
+  private getSliceAtWorldPoint(worldX: number, worldY: number): CourseRoomSlice | null {
+    for (const slice of this.roomSlices.values()) {
+      if (
+        worldX >= slice.origin.x &&
+        worldX < slice.origin.x + ROOM_PX_WIDTH &&
+        worldY >= slice.origin.y &&
+        worldY < slice.origin.y + ROOM_PX_HEIGHT
+      ) {
+        return slice;
+      }
+    }
+
+    return null;
+  }
+
+  private getLocalTileForPointer(
     pointer: Phaser.Input.Pointer,
-    coordinates: RoomCoordinates
-  ): CourseMarkerPoint {
-    const origin = this.getRoomOrigin(coordinates);
+    slice: CourseRoomSlice,
+  ): { tileX: number; tileY: number } | null {
+    const localX = pointer.worldX - slice.origin.x;
+    const localY = pointer.worldY - slice.origin.y;
+    const tileX = Math.floor(localX / TILE_SIZE);
+    const tileY = Math.floor(localY / TILE_SIZE);
+    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
+      return null;
+    }
+
+    return { tileX, tileY };
+  }
+
+  private getClosestTileInSlice(
+    slice: CourseRoomSlice,
+    worldX: number,
+    worldY: number,
+  ): { tileX: number; tileY: number } {
+    const localX = Phaser.Math.Clamp(worldX - slice.origin.x, 0, ROOM_PX_WIDTH - 1);
+    const localY = Phaser.Math.Clamp(worldY - slice.origin.y, 0, ROOM_PX_HEIGHT - 1);
     return {
-      roomId: roomIdFromCoordinates(coordinates),
-      x: Phaser.Math.Clamp(Math.round(pointer.worldX - origin.x), 0, ROOM_PX_WIDTH - 1),
-      y: Phaser.Math.Clamp(Math.round(pointer.worldY - origin.y), 0, ROOM_PX_HEIGHT - 1),
+      tileX: Math.floor(localX / TILE_SIZE),
+      tileY: Math.floor(localY / TILE_SIZE),
     };
+  }
+
+  private placeCourseGoalMarker(slice: CourseRoomSlice, tileX: number, tileY: number): void {
+    const draft = this.getActiveCourseDraft();
+    const goal = draft?.goal ?? null;
+    if (!draft || !goal || !this.courseGoalPlacementMode) {
+      return;
+    }
+
+    const point: CourseMarkerPoint = {
+      roomId: slice.roomId,
+      x: tileX * TILE_SIZE + TILE_SIZE * 0.5,
+      y: tileY * TILE_SIZE + TILE_SIZE,
+    };
+    const nextDraft = cloneCourseSnapshot(draft);
+
+    if (this.courseGoalPlacementMode === 'start') {
+      nextDraft.startPoint = point;
+      this.courseGoalPlacementMode = null;
+      this.setActiveCourseDraft(nextDraft);
+      return;
+    }
+
+    if (goal.type === 'reach_exit' && nextDraft.goal?.type === 'reach_exit' && this.courseGoalPlacementMode === 'exit') {
+      nextDraft.goal.exit = point;
+      this.courseGoalPlacementMode = null;
+      this.setActiveCourseDraft(nextDraft);
+      return;
+    }
+
+    if (goal.type !== 'checkpoint_sprint' || nextDraft.goal?.type !== 'checkpoint_sprint') {
+      return;
+    }
+
+    if (this.courseGoalPlacementMode === 'checkpoint') {
+      nextDraft.goal.checkpoints = [...nextDraft.goal.checkpoints, point];
+      this.courseGoalPlacementMode = null;
+      this.setActiveCourseDraft(nextDraft);
+      return;
+    }
+
+    if (this.courseGoalPlacementMode === 'finish') {
+      nextDraft.goal.finish = point;
+      this.courseGoalPlacementMode = null;
+      this.setActiveCourseDraft(nextDraft);
+    }
+  }
+
+  private pasteClipboardIntoSlice(slice: CourseRoomSlice, tileX: number, tileY: number): void {
+    if (this.clipboardSourceRoomId !== slice.roomId) {
+      this.statusText = 'Pasting across room boundaries is not enabled yet. Paste inside the source room.';
+      this.renderUi();
+      return;
+    }
+
+    slice.runtime.beginTileBatch();
+    const pasted = slice.runtime.pasteClipboardAt(tileX, tileY);
+    slice.runtime.commitTileBatch();
+    this.statusText = pasted
+      ? 'Pasted tile region.'
+      : 'Nothing to paste at that position.';
+    this.renderUi();
+  }
+
+  private cancelClipboardPastePreview(): void {
+    this.clipboardPastePreviewActive = false;
+    this.clipboardSourceRoomId = null;
+    this.clearRectPreview();
+    this.statusText = 'Paste preview canceled.';
+    this.renderUi();
+  }
+
+  private drawRectPreview(
+    slice: CourseRoomSlice,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+  ): void {
+    this.rectPreviewGraphics?.clear();
+    if (!this.rectPreviewGraphics) {
+      return;
+    }
+
+    const minX = Math.min(x1, x2);
+    const minY = Math.min(y1, y2);
+    const width = Math.abs(x2 - x1) + 1;
+    const height = Math.abs(y2 - y1) + 1;
+    this.rectPreviewGraphics.lineStyle(2, 0xffd36a, 0.92);
+    this.rectPreviewGraphics.fillStyle(0xffd36a, 0.12);
+    this.rectPreviewGraphics.fillRect(
+      slice.origin.x + minX * TILE_SIZE,
+      slice.origin.y + minY * TILE_SIZE,
+      width * TILE_SIZE,
+      height * TILE_SIZE,
+    );
+    this.rectPreviewGraphics.strokeRect(
+      slice.origin.x + minX * TILE_SIZE,
+      slice.origin.y + minY * TILE_SIZE,
+      width * TILE_SIZE,
+      height * TILE_SIZE,
+    );
+  }
+
+  private clearRectPreview(): void {
+    this.rectPreviewGraphics?.clear();
+    this.rectStart = null;
+    this.rectMode = null;
+  }
+
+  private updateCursorHighlight(pointer: Phaser.Input.Pointer): void {
+    this.cursorGraphics?.clear();
+    if (!this.cursorGraphics) {
+      return;
+    }
+
+    const slice = this.getSliceForPointer(pointer);
+    if (!slice) {
+      return;
+    }
+
+    const tile = this.getLocalTileForPointer(pointer, slice);
+    if (!tile) {
+      return;
+    }
+
+    const color = this.courseGoalPlacementMode ? RETRO_COLORS.frontier : 0x7de5ff;
+    this.cursorGraphics.lineStyle(2, color, 0.88);
+    this.cursorGraphics.fillStyle(color, 0.12);
+    this.cursorGraphics.fillRect(
+      slice.origin.x + tile.tileX * TILE_SIZE,
+      slice.origin.y + tile.tileY * TILE_SIZE,
+      TILE_SIZE,
+      TILE_SIZE,
+    );
+    this.cursorGraphics.strokeRect(
+      slice.origin.x + tile.tileX * TILE_SIZE,
+      slice.origin.y + tile.tileY * TILE_SIZE,
+      TILE_SIZE,
+      TILE_SIZE,
+    );
   }
 
   private pointerRequestsPan(pointer: Phaser.Input.Pointer): boolean {
@@ -1198,134 +1485,164 @@ export class CourseEditorScene extends Phaser.Scene implements CourseEditorScene
     );
   }
 
-  private getPointerRoomCoordinates(pointer: Phaser.Input.Pointer): RoomCoordinates {
-    return {
-      x: Math.floor(pointer.worldX / ROOM_PX_WIDTH),
-      y: Math.floor(pointer.worldY / ROOM_PX_HEIGHT),
-    };
+  private syncCameraBounds(): void {
+    const size = getCourseWorkspacePixelSize(this.workspaceBounds);
+    const margin = TILE_SIZE * 4;
+    this.cameras.main.setBounds(
+      -margin,
+      -margin,
+      size.width + margin * 2,
+      size.height + margin * 2,
+    );
+  }
+
+  private centerCameraOnWorkspace(): void {
+    const size = getCourseWorkspacePixelSize(this.workspaceBounds);
+    this.cameras.main.centerOn(size.width * 0.5, size.height * 0.5);
+    this.constrainCamera();
+  }
+
+  private constrainCamera(): void {
+    const camera = this.cameras.main;
+    const bounds = camera.getBounds();
+    if (!bounds) {
+      return;
+    }
+    const maxScrollX = bounds.x + bounds.width - camera.width / camera.zoom;
+    const maxScrollY = bounds.y + bounds.height - camera.height / camera.zoom;
+    camera.scrollX = Phaser.Math.Clamp(camera.scrollX, bounds.x, Math.max(bounds.x, maxScrollX));
+    camera.scrollY = Phaser.Math.Clamp(camera.scrollY, bounds.y, Math.max(bounds.y, maxScrollY));
   }
 
   private adjustButtonZoom(factor: number): void {
-    const nextZoom = Phaser.Math.Clamp(this.cameras.main.zoom * factor, MIN_ZOOM, MAX_ZOOM);
-    if (Math.abs(nextZoom - this.cameras.main.zoom) < 0.0001) {
-      return;
-    }
-
-    this.inspectZoom = Number(nextZoom.toFixed(3));
-    this.cameras.main.setZoom(this.inspectZoom);
-    this.centerCameraOnCoordinates(this.centerCoordinates);
-    void this.refreshAround(this.centerCoordinates);
+    this.adjustZoomByFactor(factor, this.scale.width * 0.5, this.scale.height * 0.5);
   }
 
   private adjustZoomByFactor(factor: number, screenX: number, screenY: number): void {
     const camera = this.cameras.main;
-    const nextZoom = Phaser.Math.Clamp(camera.zoom * factor, MIN_ZOOM, MAX_ZOOM);
-    if (Math.abs(nextZoom - camera.zoom) < 0.0001) {
-      return;
-    }
-
-    const anchorWorldPoint = getScreenAnchorWorldPoint(screenX, screenY, camera);
-    this.inspectZoom = Number(nextZoom.toFixed(3));
+    const anchor = camera.getWorldPoint(screenX, screenY);
+    this.inspectZoom = Phaser.Math.Clamp(Number((camera.zoom * factor).toFixed(3)), MIN_ZOOM, MAX_ZOOM);
     camera.setZoom(this.inspectZoom);
-    const nextScroll = getScrollForScreenAnchor(
-      anchorWorldPoint.x,
-      anchorWorldPoint.y,
-      screenX,
-      screenY,
-      camera,
-    );
-    camera.setScroll(nextScroll.x, nextScroll.y);
-    this.constrainInspectCamera();
-    this.centerCoordinates = this.getCameraCenterCoordinates();
-    void this.refreshAround(this.centerCoordinates);
+    camera.scrollX = anchor.x - screenX / camera.zoom;
+    camera.scrollY = anchor.y - screenY / camera.zoom;
+    this.constrainCamera();
+    this.renderUi();
   }
 
-  private centerCameraOnCoordinates(coordinates: RoomCoordinates): void {
-    const origin = this.getRoomOrigin(coordinates);
-    this.syncCameraBounds();
-    this.cameras.main.setZoom(this.inspectZoom);
-    this.cameras.main.centerOn(origin.x + ROOM_PX_WIDTH / 2, origin.y + ROOM_PX_HEIGHT / 2);
-    this.constrainInspectCamera();
-  }
-
-  private syncCameraBounds(): void {
-    const worldWindow = this.worldStreamingController.getWorldWindow();
-    if (!worldWindow) {
-      return;
-    }
-
-    const minX = (worldWindow.center.x - worldWindow.radius) * ROOM_PX_WIDTH;
-    const minY = (worldWindow.center.y - worldWindow.radius) * ROOM_PX_HEIGHT;
-    const width = (worldWindow.radius * 2 + 1) * ROOM_PX_WIDTH;
-    const height = (worldWindow.radius * 2 + 1) * ROOM_PX_HEIGHT;
-    this.cameras.main.setBounds(minX, minY, width, height);
-  }
-
-  private constrainInspectCamera(): void {
-    if (!this.worldStreamingController.getWorldWindow()) {
-      return;
-    }
-    constrainInspectCamera(this.cameras.main);
-  }
-
-  private getCameraCenterCoordinates(): RoomCoordinates {
-    const camera = this.cameras.main;
-    return {
-      x: Math.floor((camera.scrollX + camera.width * 0.5 / camera.zoom) / ROOM_PX_WIDTH),
-      y: Math.floor((camera.scrollY + camera.height * 0.5 / camera.zoom) / ROOM_PX_HEIGHT),
+  private renderUi(): void {
+    const selectedSlice = this.getSelectedSlice();
+    const draft = this.getActiveCourseDraft();
+    const dirtySlices = this.getDirtySlices();
+    const selectedPermissions = selectedSlice?.permissions ?? {
+      canSaveDraft: false,
+      canPublish: false,
+      canRevert: false,
+      canMint: false,
     };
-  }
-
-  private getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number } {
-    return {
-      x: coordinates.x * ROOM_PX_WIDTH,
-      y: coordinates.y * ROOM_PX_HEIGHT,
+    const saveStatus: EditorStatusDetails = {
+      text:
+        this.loading
+          ? 'Loading course...'
+          : this.statusText ??
+            (dirtySlices.length > 0
+              ? `${dirtySlices.length} room draft${dirtySlices.length === 1 ? '' : 's'} changed.`
+              : 'Course rooms are ready.'),
+      accentText: '',
+      linkLabel: '',
+      linkHref: null,
     };
-  }
 
-  private getCourseBounds(): { minX: number; minY: number; maxX: number; maxY: number } {
-    const roomRefs = this.record?.draft.roomRefs ?? [];
-    if (roomRefs.length === 0) {
-      return {
-        minX: this.selectedCoordinates.x,
-        maxX: this.selectedCoordinates.x,
-        minY: this.selectedCoordinates.y,
-        maxY: this.selectedCoordinates.y,
-      };
-    }
-
-    return roomRefs.reduce(
-      (bounds, roomRef) => ({
-        minX: Math.min(bounds.minX, roomRef.coordinates.x),
-        maxX: Math.max(bounds.maxX, roomRef.coordinates.x),
-        minY: Math.min(bounds.minY, roomRef.coordinates.y),
-        maxY: Math.max(bounds.maxY, roomRef.coordinates.y),
+    this.uiBridge?.render(
+      buildEditorUiViewModel({
+        roomTitle: selectedSlice?.roomTitle ?? '',
+        roomCoordinates: selectedSlice?.coordinates ?? { x: 0, y: 0 },
+        roomGoal: null,
+        roomPlacementMode: null as GoalPlacementMode,
+        goalUsesMarkers: false,
+        goalSummaryText: 'Room goals are hidden while editing the whole course.',
+        roomPermissions: selectedPermissions,
+        mintedTokenId: null,
+        canRefreshMintMetadata: false,
+        saveInFlight: this.loading,
+        mintedMetadataCurrent: true,
+        roomVersionHistory: selectedSlice?.roomVersionHistory ?? [],
+        entrySource: 'world',
+        zoomText: `Zoom: ${this.cameras.main.zoom.toFixed(2)}x`,
+        saveStatus,
+        publishNudgeVisible: false,
+        publishNudgeText: '',
+        publishNudgeActionText: '',
+        courseEditorState: this.getCourseEditorState(),
       }),
-      {
-        minX: roomRefs[0].coordinates.x,
-        maxX: roomRefs[0].coordinates.x,
-        minY: roomRefs[0].coordinates.y,
-        maxY: roomRefs[0].coordinates.y,
-      },
     );
+
+    this.syncEditorChrome(draft, dirtySlices.length);
   }
 
-  private getCourseCenterCoordinates(): RoomCoordinates {
-    const bounds = this.getCourseBounds();
-    return {
-      x: Math.floor((bounds.minX + bounds.maxX) * 0.5),
-      y: Math.floor((bounds.minY + bounds.maxY) * 0.5),
-    };
+  private syncEditorChrome(draft: CourseSnapshot | null, dirtyRoomCount: number): void {
+    document.getElementById('goal-section')?.classList.add('hidden');
+    document.getElementById('course-goal-section')?.classList.remove('hidden');
+    document.getElementById('room-title-section')?.classList.remove('hidden');
+    document.getElementById('btn-mint-room')?.classList.add('hidden');
+    document.getElementById('btn-refresh-room-metadata')?.classList.add('hidden');
+    document.getElementById('btn-room-history')?.classList.add('hidden');
+    document.getElementById('editor-advanced')?.classList.add('hidden');
+
+    const saveLabel = document.querySelector('#btn-save-draft .tool-label');
+    if (saveLabel) {
+      saveLabel.textContent = 'Save All';
+    }
+    const backLabel = document.querySelector('#btn-editor-back .tool-label');
+    if (backLabel) {
+      backLabel.textContent = 'Setup';
+    }
+    const publishLabel = document.querySelector('#btn-publish-room .tool-label');
+    if (publishLabel) {
+      publishLabel.textContent = 'Publish Changed Rooms';
+    }
+    const playLabel = document.querySelector('#btn-test-play .tool-label');
+    if (playLabel) {
+      playLabel.textContent = 'Test';
+    }
+
+    const backButton = document.getElementById('btn-editor-back');
+    if (backButton) {
+      backButton.setAttribute('title', 'Return to Course Setup (Esc)');
+    }
+    const publishButton = document.getElementById('btn-publish-room');
+    if (publishButton) {
+      publishButton.setAttribute(
+        'title',
+        'Publish changed room drafts. Publishing the course still happens in Course Setup.'
+      );
+    }
+
+    const topStatus = document.getElementById('editor-top-save-status');
+    if (topStatus) {
+      topStatus.textContent = draft
+        ? `${dirtyRoomCount} changed room${dirtyRoomCount === 1 ? '' : 's'} · ${draft.roomRefs.length} room${draft.roomRefs.length === 1 ? '' : 's'} in course · publish the course from Setup`
+        : 'No course loaded.';
+    }
   }
 
-  private handleShutdown(): void {
+  private getSliceLabel(slice: CourseRoomSlice): string {
+    return slice.roomTitle?.trim() || `Room ${slice.coordinates.x},${slice.coordinates.y}`;
+  }
+
+  private handleShutdown = (): void => {
+    document.removeEventListener('keydown', this.handleDocumentKeyDown);
+    window.removeEventListener('background-changed', this.handleBackgroundChanged);
     this.events.off('wake', this.handleWake, this);
     this.scale.off('resize', this.handleResize, this);
-    this.worldStreamingController.destroy();
     this.game.canvas.removeEventListener('wheel', this.handleCanvasWheel);
-    this.markerSprites.forEach((sprite) => sprite.destroy());
-    this.markerLabels.forEach((label) => label.destroy());
-    this.markerSprites = [];
-    this.markerLabels = [];
-  }
+    this.selectionGraphics?.destroy();
+    this.selectionGraphics = null;
+    this.cursorGraphics?.destroy();
+    this.cursorGraphics = null;
+    this.rectPreviewGraphics?.destroy();
+    this.rectPreviewGraphics = null;
+    this.uiBridge?.destroy();
+    this.uiBridge = null;
+    this.destroyWorkspace();
+  };
 }

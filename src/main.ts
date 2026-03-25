@@ -9,6 +9,7 @@ import {
 } from './playfun/client';
 import { BootScene } from './scenes/BootScene';
 import { CourseEditorScene } from './scenes/CourseEditorScene';
+import { CourseComposerScene } from './scenes/CourseComposerScene';
 import { EditorScene } from './scenes/EditorScene';
 import { OverworldPlayScene } from './scenes/OverworldPlayScene';
 import {
@@ -39,7 +40,7 @@ const config: Phaser.Types.Core.GameConfig = {
   pixelArt: true,
   preserveDrawingBuffer: debug_options.preserveDrawingBuffer,
   backgroundColor: '#050505',
-  scene: [BootScene, EditorScene, OverworldPlayScene, CourseEditorScene],
+  scene: [BootScene, EditorScene, OverworldPlayScene, CourseComposerScene, CourseEditorScene],
   physics: {
     default: 'arcade',
     arcade: {
@@ -137,7 +138,7 @@ window.requestAnimationFrame(() => {
 });
 
 function getDebugState(): Record<string, unknown> {
-  const sceneOrder = ['CourseEditorScene', 'OverworldPlayScene', 'EditorScene', 'BootScene'];
+  const sceneOrder = ['CourseEditorScene', 'CourseComposerScene', 'OverworldPlayScene', 'EditorScene', 'BootScene'];
 
   for (const sceneKey of sceneOrder) {
     if (!game.scene.isActive(sceneKey)) continue;
