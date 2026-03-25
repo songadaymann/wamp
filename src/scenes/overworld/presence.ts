@@ -132,6 +132,53 @@ export class OverworldPresenceController {
     });
   }
 
+  refreshIdentity(): boolean {
+    const config = resolveWorldPresenceConfig();
+    const nextIdentity = config ? resolveWorldPresenceIdentity() : null;
+    const currentIdentity = this.identity;
+    const existingBounds = this.subscribedChunkBounds ? { ...this.subscribedChunkBounds } : null;
+
+    if (!config) {
+      if (!this.client && !currentIdentity) {
+        return false;
+      }
+
+      this.destroy();
+      this.snapshot = {
+        enabled: false,
+        status: 'disabled',
+        subscribedShards: [],
+        connectedShards: [],
+        publishedShard: null,
+        ghosts: [],
+        roomPopulations: {},
+        roomEditors: {},
+      };
+      this.roomPopulationsById = new Map();
+      this.roomEditorsById = new Map();
+      this.options.onSnapshotUpdated?.();
+      this.options.onRoomActivityChanged?.();
+      return true;
+    }
+
+    if (
+      currentIdentity &&
+      nextIdentity &&
+      currentIdentity.userId === nextIdentity.userId &&
+      currentIdentity.displayName === nextIdentity.displayName &&
+      currentIdentity.avatarId === nextIdentity.avatarId
+    ) {
+      return false;
+    }
+
+    this.destroy();
+    this.initialize();
+    if (existingBounds) {
+      this.setSubscribedChunkBounds(existingBounds);
+    }
+    return true;
+  }
+
   reset(): void {
     this.destroy();
     this.identity = null;
