@@ -7,6 +7,7 @@ import type {
 import { handleAuthRequest } from './worker/auth/routes';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth, requireOptionalScope } from './worker/auth/request';
 import { handleAgentRequest } from './worker/agents/routes';
+import { handleDashboardStatsRequest } from './worker/dashboard/routes';
 import { handleChatRequest } from './worker/chat/routes';
 import {
   handleCourseCreate,
@@ -74,6 +75,11 @@ import {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    const assetAlias = resolvePublicAssetAlias(url.pathname);
+
+    if (assetAlias && (request.method === 'GET' || request.method === 'HEAD')) {
+      return env.ASSETS.fetch(new Request(new URL(assetAlias, request.url), request));
+    }
 
     if (url.pathname === '/agent-tilesets.md' && request.method === 'GET') {
       return new Response(renderAgentTilesetMarkdown(), {
@@ -110,6 +116,10 @@ export default {
             },
           }
         );
+      }
+
+      if (url.pathname === '/api/dashboard/stats' && request.method === 'GET') {
+        return await handleDashboardStatsRequest(request, env);
       }
 
       if (url.pathname.startsWith('/api/auth')) {
@@ -515,6 +525,14 @@ export default {
     }
   },
 };
+
+function resolvePublicAssetAlias(pathname: string): string | null {
+  if (pathname === '/dashboard' || pathname === '/dashboard/') {
+    return '/dashboard.html';
+  }
+
+  return null;
+}
 
 async function maybeMirrorPointEventToPlayfun(
   env: Env,
