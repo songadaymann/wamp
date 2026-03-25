@@ -120,6 +120,35 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - `/api/world/chunks?minChunkX=-1&maxChunkX=1&minChunkY=-1&maxChunkY=1`
     - caveat:
       - safety D1 is currently fresh and only returns the default frontier origin, not cloned production world data
+  - snapshot pipeline:
+    - added `scripts/refresh_safety_from_prod.mjs`
+    - added root commands:
+      - `npm run db:safety:refresh:plan`
+      - `npm run db:safety:refresh`
+    - refresh pipeline now:
+      - clears safety D1 application tables
+      - copies prod D1 into safety table by table through Worker admin snapshot endpoints
+      - uses keyset pagination for single-primary-key tables so live prod writes do not scramble batch boundaries
+      - retries transient Wrangler/admin request failures and logs per-table progress
+      - imports rows into safety with row-count verification
+      - skips ephemeral auth/session tables by default
+      - writes summaries to `output/db-safety-refresh/<timestamp>/summary.json`
+    - verified full prod-to-safety refresh on March 25, 2026:
+      - summary: `output/db-safety-refresh/2026-03-25T16-51-44-126Z/summary.json`
+      - matched copied tables:
+        - `users=180`
+        - `rooms=109`
+        - `room_versions=450`
+        - `point_events=12610`
+        - `room_runs=12161`
+        - `playfun_point_sync=3273`
+      - skipped auth/session tables were cleared:
+        - `magic_link_tokens`
+        - `sessions`
+        - `wallet_challenges`
+      - post-refresh safety health checks passed:
+        - `/api/health`
+        - `/api/world?centerX=0&centerY=0&radius=1`
 
 - Practice-run spawn marker depth follow-up on March 24, 2026:
   - raised play-scene goal marker depth so the practice `START` sign and label now render above the room foreground plane instead of occasionally hiding behind front-layer art

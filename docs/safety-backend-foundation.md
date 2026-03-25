@@ -68,12 +68,72 @@ Use the same token value in the Worker `PARTYKIT_INTERNAL_TOKEN` safety secret.
 
 ## Current Safety Data State
 
-The safety backend is live, but the D1 database is a fresh safety database, not a copy of production.
+The safety backend is live, and the D1 database can now be refreshed from production on demand.
 
 - `GET /api/health` returns healthy auth + D1 status from `https://everybodys-platformer-safety.novox-robot.workers.dev/api/health`
-- `GET /api/world?centerX=0&centerY=0&radius=1` currently returns the default frontier origin window rather than populated live world data
+- `GET /api/world?centerX=0&centerY=0&radius=1` returns a populated live-like world window after the latest prod-to-safety refresh
+- the latest verified refresh summary lives at `output/db-safety-refresh/2026-03-25T16-51-44-126Z/summary.json`
 
-If you need backend-changing safety branches to exercise production-like data, add an explicit seed/snapshot step instead of pointing them at production D1.
+Safety is still isolated from production writes. If it gets stale, refresh it again instead of pointing safety branches at production D1 directly.
+
+## Prod To Safety Snapshot Refresh
+
+The branch now includes a one-way refresh script that replaces the safety D1 contents with a fresh snapshot from production:
+
+```bash
+npm run db:safety:refresh:plan
+npm run db:safety:refresh
+```
+
+What it does:
+
+- reads production from `everybodys-platformer-db`
+- clears application tables in `everybodys-platformer-safety-db`
+- streams rows from production table by table and imports them through Worker admin snapshot endpoints
+- uses keyset pagination for single-primary-key tables so live inserts do not scramble batch boundaries
+- retries transient Wrangler and admin-request failures instead of failing the whole run on one flaky batch
+- verifies source/target row counts table-by-table after import
+- writes a run summary to `output/db-safety-refresh/<timestamp>/summary.json`
+
+Default exclusions:
+
+- `d1_migrations`
+- `_cf_KV`
+- `magic_link_tokens`
+- `sessions`
+- `wallet_challenges`
+
+Those auth/session tables are cleared from safety by default so stale login state does not survive refreshes. If you intentionally want them copied too, run:
+
+```bash
+SAFETY_REFRESH_FROM_PROD=1 \
+SAFETY_REFRESH_INCLUDE_EPHEMERAL_AUTH=1 \
+node scripts/refresh_safety_from_prod.mjs
+```
+
+Optional controls:
+
+- `SAFETY_REFRESH_SOURCE_DB` override the source D1 database name
+- `SAFETY_REFRESH_TARGET_DB` override the target D1 database name
+- `SAFETY_REFRESH_EXCLUDE_TABLES=table_a,table_b` skip extra tables
+- `SAFETY_REFRESH_INCLUDE_TABLES=table_a,table_b` copy only a limited table set
+- `SAFETY_REFRESH_INCLUDE_EPHEMERAL_AUTH=1` also copy `magic_link_tokens`, `sessions`, and `wallet_challenges`
+- `SAFETY_REFRESH_WRANGLER_MAX_ATTEMPTS=<n>` change Wrangler retry count
+- `SAFETY_REFRESH_ADMIN_REQUEST_MAX_ATTEMPTS=<n>` change admin import retry count
+- `SAFETY_REFRESH_ADMIN_REQUEST_TIMEOUT_MS=<ms>` change per-request timeout for Worker admin imports
+
+Guardrails:
+
+- the script refuses to run if source and target names match
+- the script refuses to write into a target database name that does not look like `safety`, `staging`, `preview`, or `local`
+- non-dry runs require `SAFETY_REFRESH_FROM_PROD=1`
+
+Worker-side snapshot endpoints:
+
+- `POST /api/admin/snapshot/reset`
+- `POST /api/admin/snapshot/import/:table`
+
+They use the existing `x-admin-key` auth and are intended only for controlled safety refresh workflows.
 
 ## Pages Preview Wiring
 

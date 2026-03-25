@@ -18,6 +18,8 @@
     "contracts:build": "npm --prefix contracts run build",
     "contracts:test": "npm --prefix contracts run test",
     "contracts:deploy:base-sepolia": "npm --prefix contracts run deploy:base-sepolia",
+    "db:safety:refresh:plan": "SAFETY_REFRESH_DRY_RUN=1 node scripts/refresh_safety_from_prod.mjs",
+    "db:safety:refresh": "SAFETY_REFRESH_FROM_PROD=1 node scripts/refresh_safety_from_prod.mjs",
     "cf:d1:migrate:local": "wrangler d1 migrations apply DB --local",
     "cf:d1:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "cf:d1:migrate:safety": "wrangler d1 migrations apply DB --env safety --remote",

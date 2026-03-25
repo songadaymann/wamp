@@ -10,6 +10,7 @@ import {
   handleAdminSuspiciousUserDetail,
   handleAdminSuspiciousUsers,
 } from './suspicious';
+import { handleAdminSnapshotImport, handleAdminSnapshotReset } from './snapshot';
 
 export async function handleAdminRequest(
   request: Request,
@@ -26,6 +27,15 @@ export async function handleAdminRequest(
 
   if (url.pathname === '/api/admin/suspicious/users' && request.method === 'GET') {
     return handleAdminSuspiciousUsers(request, url, env);
+  }
+
+  if (url.pathname === '/api/admin/snapshot/reset' && request.method === 'POST') {
+    return handleAdminSnapshotReset(request, env);
+  }
+
+  const snapshotImportMatch = /^\/api\/admin\/snapshot\/import\/([^/]+)$/.exec(url.pathname);
+  if (snapshotImportMatch && request.method === 'POST') {
+    return handleAdminSnapshotImport(request, env, decodeURIComponent(snapshotImportMatch[1]));
   }
 
   const suspiciousUserDetailMatch = /^\/api\/admin\/suspicious\/users\/([^/]+)$/.exec(url.pathname);
