@@ -41,6 +41,7 @@ import {
   resolveWorldPresenceConfig,
   resolveWorldPresenceIdentity,
   WorldPresenceClient,
+  type WorldPresenceIdentity,
 } from '../presence/worldPresence';
 import { RETRO_COLORS } from '../visuals/starfield';
 import {
@@ -112,6 +113,7 @@ export class EditorScene extends Phaser.Scene {
   private pressurePlateGraphics: Phaser.GameObjects.Graphics | null = null;
   private containerGraphics: Phaser.GameObjects.Graphics | null = null;
   private editorPresenceClient: WorldPresenceClient | null = null;
+  private editorPresenceIdentity: WorldPresenceIdentity | null = null;
   private courseMarkerSprites: Phaser.GameObjects.Sprite[] = [];
   private courseMarkerLabels: Phaser.GameObjects.Text[] = [];
   private activeCourseMarkerEdit: EditorCourseEditData | null = null;
@@ -153,6 +155,7 @@ export class EditorScene extends Phaser.Scene {
     this.updateGoalUi();
   };
   private readonly handleAuthStateChanged = (): void => {
+    this.refreshEditorPresenceIdentity();
     this.renderEditorUi();
   };
   private readonly handleBackgroundChanged = (): void => {
@@ -2386,15 +2389,17 @@ export class EditorScene extends Phaser.Scene {
   private initializeEditorPresence(): void {
     this.editorPresenceClient?.destroy();
     this.editorPresenceClient = null;
+    this.editorPresenceIdentity = null;
 
     const config = resolveWorldPresenceConfig();
     if (!config) {
       return;
     }
 
+    this.editorPresenceIdentity = resolveWorldPresenceIdentity();
     this.editorPresenceClient = new WorldPresenceClient({
       ...config,
-      identity: resolveWorldPresenceIdentity(),
+      identity: this.editorPresenceIdentity,
       onSnapshot: () => {
         // Editor presence only publishes activity to the overworld.
       },
@@ -2403,6 +2408,32 @@ export class EditorScene extends Phaser.Scene {
       roomToChunkCoordinates(this.roomCoordinates),
     ]);
     this.syncEditorPresence();
+  }
+
+  private refreshEditorPresenceIdentity(): void {
+    const config = resolveWorldPresenceConfig();
+    const nextIdentity = config ? resolveWorldPresenceIdentity() : null;
+    const currentIdentity = this.editorPresenceIdentity;
+    if (!config) {
+      if (!this.editorPresenceClient && !currentIdentity) {
+        return;
+      }
+
+      this.initializeEditorPresence();
+      return;
+    }
+
+    if (
+      currentIdentity &&
+      nextIdentity &&
+      currentIdentity.userId === nextIdentity.userId &&
+      currentIdentity.displayName === nextIdentity.displayName &&
+      currentIdentity.avatarId === nextIdentity.avatarId
+    ) {
+      return;
+    }
+
+    this.initializeEditorPresence();
   }
 
   private syncEditorPresence(): void {

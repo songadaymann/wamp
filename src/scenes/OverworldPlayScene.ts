@@ -99,7 +99,7 @@ import {
   COURSE_COMPOSER_STATE_CHANGED_EVENT,
   type CourseComposerState,
 } from '../ui/setup/sceneBridge';
-import { getAuthDebugState } from '../auth/client';
+import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState } from '../auth/client';
 import {
   PLAYFUN_GAME_PAUSE_EVENT,
   PLAYFUN_GAME_RESUME_EVENT,
@@ -1016,6 +1016,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.setupCamera();
     this.initializePresenceClient();
     this.game.canvas.addEventListener('wheel', this.handleCanvasWheel, { passive: false });
+    window.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
     (window as Window & { get_zoom_debug?: () => ZoomDebugState | null }).get_zoom_debug = () =>
       this.lastZoomDebug;
 
@@ -1872,6 +1873,16 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private handleWake = (_sys: Phaser.Scenes.Systems, data?: OverworldPlaySceneData): void => {
     void this.handleWakeAsync(data);
+  };
+  private readonly handleAuthStateChanged = (): void => {
+    const identityChanged = this.presenceController.refreshIdentity();
+    if (identityChanged) {
+      if (this.loadedChunkBounds) {
+        this.presenceController.setSubscribedChunkBounds(this.loadedChunkBounds);
+      }
+      this.syncLocalPresence();
+    }
+    this.renderHud();
   };
 
   private async handleWakeAsync(data?: OverworldPlaySceneData): Promise<void> {
@@ -6627,6 +6638,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private handleShutdown = (): void => {
     this.presenceController.destroy();
+    window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
     window.removeEventListener(PLAYFUN_GAME_PAUSE_EVENT, this.handlePlayfunGamePause);
     window.removeEventListener(PLAYFUN_GAME_RESUME_EVENT, this.handlePlayfunGameResume);
     this.playfunPauseDepth = 0;
