@@ -1,5 +1,10 @@
 import Phaser from 'phaser';
 import {
+  canObjectBeStoredInContainer,
+  canPlacedObjectBeContainer,
+  canPlacedObjectBePressurePlateTarget,
+  canPlacedObjectTriggerOtherObjects,
+  getObjectById,
   LAYER_NAMES,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
@@ -8,15 +13,12 @@ import {
   TILESETS,
   TILE_SIZE,
   editorState,
-  type LayerName,
   type PlacedObject,
 } from '../config';
 import { createCourseRepository } from '../courses/courseRepository';
 import {
   cloneCourseSnapshot,
   createDefaultCourseGoal,
-  type CourseCheckpointSprintGoal,
-  type CourseGoal,
   type CourseGoalType,
   type CourseMarkerPoint,
   type CourseRecord,
@@ -43,7 +45,6 @@ import {
   type CourseWorkspaceBounds,
 } from '../courses/editor/workspace';
 import { createGoalMarkerFlagSprite } from '../goals/markerFlags';
-import { cloneRoomGoal, type RoomGoal } from '../goals/roomGoals';
 import {
   cloneRoomSnapshot,
   createRoomRepository,
@@ -58,10 +59,14 @@ import { setAppMode } from '../ui/appMode';
 import { hideBusyOverlay, showBusyError, showBusyOverlay } from '../ui/appFeedback';
 import { isTextInputFocused } from '../ui/keyboardFocus';
 import type { EditorCourseUiState, EditorMarkerPlacementMode } from '../ui/setup/sceneBridge';
-import { EditorUiBridge } from './editor/uiBridge';
+import { EditorUiBridge, type EditorInspectorState } from './editor/uiBridge';
 import type { EditorStatusDetails } from './editor/roomSession';
 import { buildEditorUiViewModel } from './editor/viewModel';
-import { EditorEditRuntime, type GoalPlacementMode } from './editor/editRuntime';
+import {
+  EditorEditRuntime,
+  type EditorClipboardState,
+  type GoalPlacementMode,
+} from './editor/editRuntime';
 import { getCourseGoalSummaryText } from './editor/courseEditing';
 import type { CourseComposerSceneData, CourseEditorSceneData, OverworldPlaySceneData } from './sceneData';
 import { RETRO_COLORS } from '../visuals/starfield';
@@ -110,6 +115,8 @@ export class CourseEditorScene extends Phaser.Scene {
   private selectionGraphics: Phaser.GameObjects.Graphics | null = null;
   private cursorGraphics: Phaser.GameObjects.Graphics | null = null;
   private rectPreviewGraphics: Phaser.GameObjects.Graphics | null = null;
+  private pressurePlateGraphics: Phaser.GameObjects.Graphics | null = null;
+  private containerGraphics: Phaser.GameObjects.Graphics | null = null;
   private selectedRoomId: string | null = null;
   private loading = false;
   private statusText: string | null = null;
@@ -128,8 +135,15 @@ export class CourseEditorScene extends Phaser.Scene {
       }
     | null = null;
   private clipboardSourceRoomId: string | null = null;
+  private clipboardState: EditorClipboardState | null = null;
   private clipboardPastePreviewActive = false;
   private courseGoalPlacementMode: CourseGoalPlacementMode = null;
+  private focusedPressurePlateInstanceId: string | null = null;
+  private connectingPressurePlateInstanceId: string | null = null;
+  private pressurePlateStatusText: string | null = null;
+  private focusedContainerInstanceId: string | null = null;
+  private containerStatusText: string | null = null;
+  private pinnedInspector: { kind: 'pressure' | 'container'; instanceId: string } | null = null;
   private modifierKeys: {
     SPACE: Phaser.Input.Keyboard.Key | null;
     ALT: Phaser.Input.Keyboard.Key | null;
@@ -165,6 +179,14 @@ export class CourseEditorScene extends Phaser.Scene {
     if (key === 'escape') {
       event.preventDefault();
       event.stopPropagation();
+      if (this.connectingPressurePlateInstanceId) {
+        this.cancelPressurePlateConnection();
+        return;
+      }
+      if (this.pinnedInspector) {
+        this.clearPinnedInspector();
+        return;
+      }
       if (this.clipboardPastePreviewActive) {
         this.cancelClipboardPastePreview();
         return;
@@ -187,6 +209,18 @@ export class CourseEditorScene extends Phaser.Scene {
       event.preventDefault();
       event.stopPropagation();
       void this.saveDraft(true);
+      return;
+    }
+
+    if (primaryModifier && key === 'v') {
+      if (!this.clipboardState || editorState.paletteMode !== 'tiles') {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.clipboardPastePreviewActive = true;
+      this.statusText = 'Click a course room to paste the copied tiles.';
+      this.renderUi();
       return;
     }
 
@@ -271,6 +305,10 @@ export class CourseEditorScene extends Phaser.Scene {
     this.cursorGraphics.setDepth(121);
     this.rectPreviewGraphics = this.add.graphics();
     this.rectPreviewGraphics.setDepth(122);
+    this.pressurePlateGraphics = this.add.graphics();
+    this.pressurePlateGraphics.setDepth(123);
+    this.containerGraphics = this.add.graphics();
+    this.containerGraphics.setDepth(124);
     this.cameras.main.setRoundPixels(true);
     this.events.on('wake', this.handleWake, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
@@ -281,6 +319,11 @@ export class CourseEditorScene extends Phaser.Scene {
     this.setupPointerControls();
     this.setupKeyboard();
     void this.openFromData(data);
+  }
+
+  update(): void {
+    this.updatePressurePlateOverlay();
+    this.updateContainerOverlay();
   }
 
   getCourseEditorState(): EditorCourseUiState {
@@ -711,6 +754,10 @@ export class CourseEditorScene extends Phaser.Scene {
     this.roomSlices.clear();
     this.selectionGraphics?.clear();
     this.cursorGraphics?.clear();
+    this.pressurePlateGraphics?.clear();
+    this.containerGraphics?.clear();
+    this.clearTransientObjectInspectorState();
+    this.renderInspectorUi();
     this.clearRectPreview();
   }
 
@@ -959,7 +1006,11 @@ export class CourseEditorScene extends Phaser.Scene {
   private selectRoomById(roomId: string | null): void {
     const fallback = this.courseRecord?.draft.roomRefs[0]?.roomId ?? null;
     const nextRoomId = roomId && this.roomSlices.has(roomId) ? roomId : fallback;
+    const roomChanged = nextRoomId !== this.selectedRoomId;
     this.selectedRoomId = nextRoomId;
+    if (roomChanged) {
+      this.clearTransientObjectInspectorState();
+    }
     setActiveCourseDraftSessionSelectedRoom(nextRoomId);
     const slice = this.getSelectedSlice();
     if (slice) {
@@ -1128,6 +1179,17 @@ export class CourseEditorScene extends Phaser.Scene {
       return;
     }
 
+    const selectedSlice = this.getSelectedSlice();
+    if (
+      this.connectingPressurePlateInstanceId &&
+      selectedSlice &&
+      selectedSlice.roomId !== slice.roomId
+    ) {
+      this.pressurePlateStatusText = 'Pick a door, metal door, cage, or chest in the same room.';
+      this.renderUi();
+      return;
+    }
+
     this.selectRoomById(slice.roomId);
     const localTile = this.getLocalTileForPointer(pointer, slice);
     if (!localTile) {
@@ -1140,10 +1202,42 @@ export class CourseEditorScene extends Phaser.Scene {
     }
 
     if (editorState.paletteMode === 'objects') {
+      if (this.connectingPressurePlateInstanceId) {
+        this.handlePressurePlateConnectionClick(slice, pointer.worldX, pointer.worldY);
+        this.renderUi();
+        return;
+      }
+
+      const clickedPressurePlate = slice.runtime.findPlacedObjectAt(
+        pointer.worldX,
+        pointer.worldY,
+        (placed) => canPlacedObjectTriggerOtherObjects(placed)
+      );
+      if (clickedPressurePlate) {
+        this.focusedPressurePlateInstanceId = clickedPressurePlate.instanceId ?? null;
+        this.focusedContainerInstanceId = null;
+        this.pinInspector('pressure', clickedPressurePlate.instanceId ?? '');
+        this.pressurePlateStatusText = null;
+        this.renderUi();
+        return;
+      }
+
+      if (this.handleContainerContentsClick(slice, pointer.worldX, pointer.worldY)) {
+        return;
+      }
+
+      if (this.pinnedInspector) {
+        const hasSelectedObject = Boolean(editorState.selectedObjectId);
+        this.clearPinnedInspector();
+        if (!hasSelectedObject) {
+          return;
+        }
+      }
+
       if (editorState.activeTool === 'eraser') {
-        slice.runtime.removeObjectAt(pointer.worldX, pointer.worldY);
+        this.removeObjectAt(slice, pointer.worldX, pointer.worldY);
       } else {
-        slice.runtime.handleObjectPlace(pointer.worldX, pointer.worldY, localTile.tileX, localTile.tileY);
+        this.handleObjectPlace(slice, pointer, localTile.tileX, localTile.tileY);
       }
       this.renderUi();
       return;
@@ -1181,6 +1275,55 @@ export class CourseEditorScene extends Phaser.Scene {
         break;
       default:
         break;
+    }
+  }
+
+  private handleObjectPlace(
+    slice: CourseRoomSlice,
+    pointer: Phaser.Input.Pointer,
+    tileX: number,
+    tileY: number,
+  ): void {
+    const placed = slice.runtime.handleObjectPlace(pointer.worldX, pointer.worldY, tileX, tileY);
+    if (placed && canPlacedObjectTriggerOtherObjects(placed)) {
+      this.focusedContainerInstanceId = null;
+      this.focusedPressurePlateInstanceId = placed.instanceId ?? null;
+      this.pinInspector('pressure', placed.instanceId ?? '');
+      this.beginPressurePlateConnection(placed.instanceId ?? '', true);
+      return;
+    }
+
+    if (placed && canPlacedObjectBeContainer(placed)) {
+      this.focusedContainerInstanceId = placed.instanceId ?? null;
+      this.focusedPressurePlateInstanceId = null;
+      this.pinInspector('container', placed.instanceId ?? '');
+      this.containerStatusText = `${this.getContainerName(placed.id)} placed. Select a ${this.getContainerAcceptedContentsLabel(placed.id)} and click it to fill the container.`;
+    }
+  }
+
+  private removeObjectAt(slice: CourseRoomSlice, worldX: number, worldY: number): void {
+    const removed = slice.runtime.removeObjectAt(worldX, worldY);
+    if (!removed) {
+      return;
+    }
+
+    if (removed.instanceId === this.connectingPressurePlateInstanceId) {
+      this.connectingPressurePlateInstanceId = null;
+    }
+    if (removed.instanceId === this.focusedPressurePlateInstanceId) {
+      this.focusedPressurePlateInstanceId = null;
+    }
+    if (removed.instanceId === this.focusedContainerInstanceId) {
+      this.focusedContainerInstanceId = null;
+    }
+    if (this.pinnedInspector?.instanceId === removed.instanceId) {
+      this.pinnedInspector = null;
+    }
+    if (canPlacedObjectBePressurePlateTarget(removed)) {
+      this.pressurePlateStatusText = `${this.getPressurePlateTargetLabel(removed.id)} removed. Linked plates were cleared.`;
+    }
+    if (canPlacedObjectBeContainer(removed)) {
+      this.containerStatusText = `${this.getContainerName(removed.id)} removed.`;
     }
   }
 
@@ -1277,9 +1420,10 @@ export class CourseEditorScene extends Phaser.Scene {
         endTile.tileY,
       );
       if (copied) {
+        this.clipboardState = startSlice.runtime.currentClipboardState;
         this.clipboardSourceRoomId = startSlice.roomId;
         this.clipboardPastePreviewActive = true;
-        this.statusText = 'Copied tile region. Click inside the same room to paste.';
+        this.statusText = 'Copied tile region. Click any course room to paste.';
       } else {
         this.statusText = 'No tiles in that selection to copy.';
       }
@@ -1383,17 +1527,20 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   private pasteClipboardIntoSlice(slice: CourseRoomSlice, tileX: number, tileY: number): void {
-    if (this.clipboardSourceRoomId !== slice.roomId) {
-      this.statusText = 'Pasting across room boundaries is not enabled yet. Paste inside the source room.';
+    if (!this.clipboardState) {
+      this.statusText = 'Nothing to paste yet.';
       this.renderUi();
       return;
     }
 
+    slice.runtime.setClipboardState(this.clipboardState);
     slice.runtime.beginTileBatch();
     const pasted = slice.runtime.pasteClipboardAt(tileX, tileY);
     slice.runtime.commitTileBatch();
     this.statusText = pasted
-      ? 'Pasted tile region.'
+      ? this.clipboardSourceRoomId === slice.roomId
+        ? 'Pasted tile region.'
+        : `Pasted tile region into ${this.getSliceLabel(slice)}.`
       : 'Nothing to paste at that position.';
     this.renderUi();
   }
@@ -1404,6 +1551,587 @@ export class CourseEditorScene extends Phaser.Scene {
     this.clearRectPreview();
     this.statusText = 'Paste preview canceled.';
     this.renderUi();
+  }
+
+  beginFocusedPressurePlateConnection(): void {
+    const focused = this.getFocusedPressurePlate();
+    if (!focused) {
+      this.pressurePlateStatusText = 'Hover or place a pressure plate first.';
+      this.renderInspectorUi();
+      return;
+    }
+
+    this.beginPressurePlateConnection(focused.instanceId ?? '', false);
+  }
+
+  clearFocusedPressurePlateConnection(): void {
+    const slice = this.getSelectedSlice();
+    const focused = this.getFocusedPressurePlate();
+    if (!slice || !focused || !canPlacedObjectTriggerOtherObjects(focused)) {
+      return;
+    }
+
+    if (slice.runtime.setPressurePlateTarget(focused.instanceId ?? '', null)) {
+      this.pressurePlateStatusText = 'Pressure plate link cleared.';
+      this.connectingPressurePlateInstanceId = null;
+      this.focusedPressurePlateInstanceId = focused.instanceId ?? null;
+      this.pinInspector('pressure', focused.instanceId ?? '');
+      this.renderInspectorUi();
+    }
+  }
+
+  cancelPressurePlateConnection(): void {
+    if (!this.connectingPressurePlateInstanceId) {
+      return;
+    }
+
+    this.connectingPressurePlateInstanceId = null;
+    this.pressurePlateStatusText = 'Pressure plate left unlinked for now.';
+    if (this.focusedPressurePlateInstanceId) {
+      this.pinInspector('pressure', this.focusedPressurePlateInstanceId);
+    }
+    this.renderInspectorUi();
+  }
+
+  clearFocusedContainerContents(): void {
+    const slice = this.getSelectedSlice();
+    const focused = this.getFocusedContainer();
+    if (!slice || !focused || !canPlacedObjectBeContainer(focused)) {
+      return;
+    }
+
+    if (slice.runtime.setContainerContents(focused.instanceId ?? '', null)) {
+      this.focusedContainerInstanceId = focused.instanceId ?? null;
+      this.pinInspector('container', focused.instanceId ?? '');
+      this.containerStatusText = `${this.getContainerName(focused.id)} is now empty.`;
+      this.renderInspectorUi();
+    }
+  }
+
+  private createEmptyInspectorState(): EditorInspectorState {
+    return {
+      visible: false,
+      pressureVisible: false,
+      pressureStatusText: '',
+      pressureConnectHidden: true,
+      pressureConnectDisabled: true,
+      pressureConnectTitle: '',
+      pressureClearHidden: true,
+      pressureClearDisabled: true,
+      pressureDoneLaterHidden: true,
+      containerVisible: false,
+      containerStatusText: '',
+      containerClearDisabled: true,
+      containerClearTitle: '',
+    };
+  }
+
+  private clearTransientObjectInspectorState(): void {
+    this.focusedPressurePlateInstanceId = null;
+    this.connectingPressurePlateInstanceId = null;
+    this.pressurePlateStatusText = null;
+    this.focusedContainerInstanceId = null;
+    this.containerStatusText = null;
+    this.pinnedInspector = null;
+  }
+
+  private pinInspector(kind: 'pressure' | 'container', instanceId: string): void {
+    this.pinnedInspector = { kind, instanceId };
+  }
+
+  private clearPinnedInspector(): void {
+    this.clearTransientObjectInspectorState();
+    this.renderInspectorUi();
+  }
+
+  private getFocusedPressurePlate(): PlacedObject | null {
+    const slice = this.getSelectedSlice();
+    if (!slice) {
+      return null;
+    }
+
+    const pinnedPressureId = this.pinnedInspector?.kind === 'pressure'
+      ? this.pinnedInspector.instanceId
+      : null;
+    const activeId =
+      this.connectingPressurePlateInstanceId ?? pinnedPressureId ?? this.focusedPressurePlateInstanceId;
+    const focused = slice.runtime.getPlacedObjectByInstanceId(activeId);
+    if (focused && canPlacedObjectTriggerOtherObjects(focused)) {
+      return focused;
+    }
+
+    return null;
+  }
+
+  private getFocusedContainer(): PlacedObject | null {
+    const slice = this.getSelectedSlice();
+    if (!slice) {
+      return null;
+    }
+
+    const pinnedContainerId = this.pinnedInspector?.kind === 'container'
+      ? this.pinnedInspector.instanceId
+      : null;
+    const focused = slice.runtime.getPlacedObjectByInstanceId(
+      pinnedContainerId ?? this.focusedContainerInstanceId
+    );
+    if (focused && canPlacedObjectBeContainer(focused)) {
+      return focused;
+    }
+
+    return null;
+  }
+
+  private getConnectingPressurePlate(): PlacedObject | null {
+    const slice = this.getSelectedSlice();
+    if (!slice) {
+      return null;
+    }
+
+    const focused = slice.runtime.getPlacedObjectByInstanceId(this.connectingPressurePlateInstanceId);
+    if (focused && canPlacedObjectTriggerOtherObjects(focused)) {
+      return focused;
+    }
+
+    return null;
+  }
+
+  private beginPressurePlateConnection(triggerInstanceId: string, autoPlaced: boolean): void {
+    const slice = this.getSelectedSlice();
+    if (!slice) {
+      return;
+    }
+
+    const trigger = slice.runtime.getPlacedObjectByInstanceId(triggerInstanceId);
+    if (!trigger || !canPlacedObjectTriggerOtherObjects(trigger)) {
+      return;
+    }
+
+    this.focusedPressurePlateInstanceId = trigger.instanceId ?? null;
+    this.connectingPressurePlateInstanceId = trigger.instanceId ?? null;
+    this.pinInspector('pressure', trigger.instanceId ?? '');
+    const eligibleTargets = slice.runtime.getPressurePlateEligibleTargets(trigger.instanceId);
+    this.pressurePlateStatusText =
+      eligibleTargets.length > 0
+        ? autoPlaced
+          ? 'Pressure plate placed. Click a door, metal door, cage, or chest to link it.'
+          : 'Click a door, metal door, cage, or chest to link this pressure plate.'
+        : 'No door, metal door, cage, or chest is in this room yet. You can link this pressure plate later.';
+    this.renderInspectorUi();
+  }
+
+  private handlePressurePlateConnectionClick(
+    slice: CourseRoomSlice,
+    worldX: number,
+    worldY: number,
+  ): boolean {
+    const source = this.getConnectingPressurePlate();
+    if (!source || this.getSelectedSlice()?.roomId !== slice.roomId) {
+      this.connectingPressurePlateInstanceId = null;
+      return false;
+    }
+
+    const target = slice.runtime.findPlacedObjectAt(
+      worldX,
+      worldY,
+      (placed) => canPlacedObjectBePressurePlateTarget(placed) && placed.instanceId !== source.instanceId
+    );
+    if (!target) {
+      this.pressurePlateStatusText = 'Pick a door, metal door, cage, or chest in this room.';
+      this.renderInspectorUi();
+      return true;
+    }
+
+    if (slice.runtime.setPressurePlateTarget(source.instanceId ?? '', target.instanceId ?? null)) {
+      this.connectingPressurePlateInstanceId = null;
+      this.focusedPressurePlateInstanceId = source.instanceId ?? null;
+      this.pinInspector('pressure', source.instanceId ?? '');
+      this.pressurePlateStatusText = `Pressure plate linked to ${this.getPressurePlateTargetLabel(target.id)}.`;
+      this.renderInspectorUi();
+    }
+    return true;
+  }
+
+  private handleContainerContentsClick(
+    slice: CourseRoomSlice,
+    worldX: number,
+    worldY: number,
+  ): boolean {
+    const focused = slice.runtime.findPlacedObjectAt(
+      worldX,
+      worldY,
+      (placed) => canPlacedObjectBeContainer(placed)
+    );
+    if (!focused || !focused.instanceId) {
+      return false;
+    }
+
+    this.focusedContainerInstanceId = focused.instanceId;
+    this.focusedPressurePlateInstanceId = null;
+    this.pinInspector('container', focused.instanceId);
+    const selectedObject = editorState.selectedObjectId
+      ? getObjectById(editorState.selectedObjectId)
+      : null;
+    if (!selectedObject) {
+      this.renderInspectorUi();
+      return true;
+    }
+
+    const selectedLooksLikeContents =
+      selectedObject.category === 'enemy' || selectedObject.category === 'collectible';
+    if (!selectedLooksLikeContents) {
+      this.renderInspectorUi();
+      return true;
+    }
+
+    if (!canObjectBeStoredInContainer(focused.id, selectedObject)) {
+      this.containerStatusText = `${this.getContainerName(focused.id)} can only hold ${this.getContainerAcceptedContentsLabel(focused.id)}.`;
+      this.renderInspectorUi();
+      return true;
+    }
+
+    if (slice.runtime.setContainerContents(focused.instanceId, selectedObject.id)) {
+      this.containerStatusText = `${this.getContainerName(focused.id)} now holds ${selectedObject.name}.`;
+      this.renderInspectorUi();
+      return true;
+    }
+
+    return true;
+  }
+
+  private updatePressurePlateOverlay(): void {
+    this.pressurePlateGraphics?.clear();
+    if (!this.pressurePlateGraphics || editorState.isPlaying) {
+      this.renderPressurePlatePanel();
+      return;
+    }
+
+    const slice = this.getSelectedSlice();
+    if (!slice) {
+      this.renderPressurePlatePanel();
+      return;
+    }
+
+    if (
+      this.focusedPressurePlateInstanceId &&
+      !slice.runtime.hasPlacedObjectInstanceId(this.focusedPressurePlateInstanceId)
+    ) {
+      this.focusedPressurePlateInstanceId = null;
+    }
+    if (
+      this.connectingPressurePlateInstanceId &&
+      !slice.runtime.hasPlacedObjectInstanceId(this.connectingPressurePlateInstanceId)
+    ) {
+      this.connectingPressurePlateInstanceId = null;
+    }
+    if (
+      this.pinnedInspector?.kind === 'pressure' &&
+      !slice.runtime.hasPlacedObjectInstanceId(this.pinnedInspector.instanceId)
+    ) {
+      this.pinnedInspector = null;
+    }
+
+    const pointer = this.input.activePointer;
+    const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    if (!this.connectingPressurePlateInstanceId) {
+      const hoveredTrigger = slice.runtime.findPlacedObjectAt(
+        worldPoint.x,
+        worldPoint.y,
+        (placed) => canPlacedObjectTriggerOtherObjects(placed)
+      );
+      if (hoveredTrigger) {
+        if (this.focusedPressurePlateInstanceId !== hoveredTrigger.instanceId) {
+          this.pressurePlateStatusText = null;
+        }
+        this.focusedPressurePlateInstanceId = hoveredTrigger.instanceId ?? null;
+      } else if (this.pinnedInspector?.kind !== 'pressure') {
+        this.focusedPressurePlateInstanceId = null;
+      }
+    }
+
+    const source = this.getFocusedPressurePlate();
+    if (!source) {
+      this.renderPressurePlatePanel();
+      return;
+    }
+
+    const currentTarget = slice.runtime.getPlacedObjectByInstanceId(source.triggerTargetInstanceId ?? null);
+    if (currentTarget) {
+      this.drawPressurePlateLink(source, currentTarget, 0x6dd5ff, 0.9);
+    }
+
+    const sourceBounds = slice.runtime.getPlacedObjectBounds(source);
+    this.pressurePlateGraphics.lineStyle(2, 0xc3f4ff, 0.88);
+    this.pressurePlateGraphics.strokeRoundedRect(
+      sourceBounds.x,
+      sourceBounds.y,
+      sourceBounds.width,
+      sourceBounds.height,
+      6
+    );
+
+    if (this.connectingPressurePlateInstanceId === source.instanceId) {
+      const hoveredTarget = slice.runtime.findPlacedObjectAt(
+        worldPoint.x,
+        worldPoint.y,
+        (placed) => canPlacedObjectBePressurePlateTarget(placed) && placed.instanceId !== source.instanceId
+      );
+      const eligibleTargets = slice.runtime.getPressurePlateEligibleTargets(source.instanceId);
+      for (const target of eligibleTargets) {
+        const bounds = slice.runtime.getPlacedObjectBounds(target);
+        this.pressurePlateGraphics.lineStyle(
+          2,
+          hoveredTarget?.instanceId === target.instanceId ? 0x9dff8a : 0x7ad3ff,
+          hoveredTarget?.instanceId === target.instanceId ? 0.95 : 0.55
+        );
+        this.pressurePlateGraphics.strokeRoundedRect(
+          bounds.x,
+          bounds.y,
+          bounds.width,
+          bounds.height,
+          6
+        );
+      }
+
+      if (hoveredTarget) {
+        this.drawPressurePlateLink(source, hoveredTarget, 0x9dff8a, 0.95);
+      } else {
+        this.pressurePlateGraphics.lineStyle(2, 0xffd36b, 0.5);
+        this.pressurePlateGraphics.beginPath();
+        this.pressurePlateGraphics.moveTo(
+          slice.origin.x + source.x,
+          slice.origin.y + source.y - 4
+        );
+        this.pressurePlateGraphics.lineTo(worldPoint.x, worldPoint.y);
+        this.pressurePlateGraphics.strokePath();
+      }
+    }
+
+    this.renderPressurePlatePanel();
+  }
+
+  private drawPressurePlateLink(
+    source: PlacedObject,
+    target: PlacedObject,
+    color: number,
+    alpha: number,
+  ): void {
+    const slice = this.getSelectedSlice();
+    if (!this.pressurePlateGraphics || !slice) {
+      return;
+    }
+
+    this.pressurePlateGraphics.lineStyle(2, color, alpha);
+    this.pressurePlateGraphics.beginPath();
+    this.pressurePlateGraphics.moveTo(slice.origin.x + source.x, slice.origin.y + source.y - 4);
+    this.pressurePlateGraphics.lineTo(slice.origin.x + target.x, slice.origin.y + target.y - 6);
+    this.pressurePlateGraphics.strokePath();
+    this.pressurePlateGraphics.fillStyle(color, alpha * 0.9);
+    this.pressurePlateGraphics.fillCircle(slice.origin.x + source.x, slice.origin.y + source.y - 4, 3);
+    this.pressurePlateGraphics.fillCircle(slice.origin.x + target.x, slice.origin.y + target.y - 6, 3);
+  }
+
+  private renderPressurePlatePanel(): void {
+    this.renderInspectorUi();
+  }
+
+  private updateContainerOverlay(): void {
+    this.containerGraphics?.clear();
+    if (
+      !this.containerGraphics ||
+      editorState.isPlaying ||
+      this.connectingPressurePlateInstanceId
+    ) {
+      this.renderContainerContentsPanel();
+      return;
+    }
+
+    const slice = this.getSelectedSlice();
+    if (!slice) {
+      this.renderContainerContentsPanel();
+      return;
+    }
+
+    if (
+      this.focusedContainerInstanceId &&
+      !slice.runtime.hasPlacedObjectInstanceId(this.focusedContainerInstanceId)
+    ) {
+      this.focusedContainerInstanceId = null;
+    }
+    if (
+      this.pinnedInspector?.kind === 'container' &&
+      !slice.runtime.hasPlacedObjectInstanceId(this.pinnedInspector.instanceId)
+    ) {
+      this.pinnedInspector = null;
+    }
+
+    const pointer = this.input.activePointer;
+    const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const hoveredContainer = slice.runtime.findPlacedObjectAt(
+      worldPoint.x,
+      worldPoint.y,
+      (placed) => canPlacedObjectBeContainer(placed)
+    );
+    if (hoveredContainer) {
+      if (this.focusedContainerInstanceId !== hoveredContainer.instanceId) {
+        this.containerStatusText = null;
+      }
+      this.focusedContainerInstanceId = hoveredContainer.instanceId ?? null;
+    } else if (this.pinnedInspector?.kind !== 'container') {
+      this.focusedContainerInstanceId = null;
+    }
+
+    const focused = this.getFocusedContainer();
+    if (!focused) {
+      this.renderContainerContentsPanel();
+      return;
+    }
+
+    const bounds = slice.runtime.getPlacedObjectBounds(focused);
+    const selectedObject = editorState.selectedObjectId
+      ? getObjectById(editorState.selectedObjectId)
+      : null;
+    const canStoreSelected = canObjectBeStoredInContainer(focused.id, selectedObject);
+    const selectedLooksLikeContents =
+      selectedObject?.category === 'enemy' || selectedObject?.category === 'collectible';
+    const strokeColor = canStoreSelected
+      ? 0x9dff8a
+      : selectedLooksLikeContents
+        ? 0xffc76b
+        : 0xffe0a6;
+    const strokeAlpha = canStoreSelected ? 0.92 : 0.74;
+    this.containerGraphics.lineStyle(2, strokeColor, strokeAlpha);
+    this.containerGraphics.strokeRoundedRect(bounds.x, bounds.y, bounds.width, bounds.height, 6);
+    this.containerGraphics.fillStyle(strokeColor, 0.86);
+    this.containerGraphics.fillCircle(
+      slice.origin.x + focused.x,
+      slice.origin.y + focused.y - 6,
+      3
+    );
+
+    this.renderContainerContentsPanel();
+  }
+
+  private renderContainerContentsPanel(): void {
+    this.renderInspectorUi();
+  }
+
+  private renderInspectorUi(): void {
+    const hiddenState = this.createEmptyInspectorState();
+    const slice = this.getSelectedSlice();
+    if (!slice || editorState.isPlaying) {
+      this.uiBridge?.renderInspector(hiddenState);
+      return;
+    }
+
+    const connectMode = this.connectingPressurePlateInstanceId !== null;
+    const source =
+      this.pinnedInspector?.kind === 'container' && !connectMode
+        ? null
+        : this.getFocusedPressurePlate();
+    if (source && (editorState.paletteMode === 'objects' || connectMode)) {
+      const target = slice.runtime.getPlacedObjectByInstanceId(source.triggerTargetInstanceId ?? null);
+      const eligibleTargetCount = slice.runtime.getPressurePlateEligibleTargets(source.instanceId).length;
+      const state: EditorInspectorState = {
+        ...hiddenState,
+        visible: true,
+        pressureVisible: true,
+        pressureStatusText:
+          this.pressurePlateStatusText ??
+          (connectMode
+            ? eligibleTargetCount > 0
+              ? 'Click a door, metal door, cage, or chest to link this pressure plate.'
+              : 'No door, metal door, cage, or chest is in this room yet.'
+            : target
+              ? `Linked to ${this.getPressurePlateTargetLabel(target.id)}.`
+              : 'This pressure plate is not linked yet.'),
+        pressureConnectHidden: connectMode,
+        pressureConnectDisabled: connectMode || eligibleTargetCount === 0,
+        pressureConnectTitle: eligibleTargetCount === 0 ? 'Add a door, metal door, cage, or chest first.' : '',
+        pressureClearHidden: connectMode,
+        pressureClearDisabled: !target,
+        pressureDoneLaterHidden: !connectMode,
+        containerVisible: false,
+        containerStatusText: '',
+        containerClearDisabled: true,
+        containerClearTitle: '',
+      };
+      this.uiBridge?.renderInspector(state);
+      return;
+    }
+
+    const focusedContainer =
+      this.pinnedInspector?.kind === 'pressure' && !connectMode
+        ? null
+        : this.getFocusedContainer();
+    if (
+      focusedContainer &&
+      editorState.paletteMode === 'objects' &&
+      !this.connectingPressurePlateInstanceId
+    ) {
+      const selectedObject = editorState.selectedObjectId
+        ? getObjectById(editorState.selectedObjectId)
+        : null;
+      const selectedLooksLikeContents =
+        selectedObject?.category === 'enemy' || selectedObject?.category === 'collectible';
+      const canStoreSelected = canObjectBeStoredInContainer(focusedContainer.id, selectedObject);
+      const currentContentsLabel = slice.runtime.getContainerContentsLabel(focusedContainer);
+      const state: EditorInspectorState = {
+        ...hiddenState,
+        visible: true,
+        containerVisible: true,
+        containerStatusText:
+          this.containerStatusText ??
+          (canStoreSelected && selectedObject
+            ? `Click this ${this.getContainerLabel(focusedContainer.id)} to stash ${selectedObject.name} inside.`
+            : selectedLooksLikeContents && selectedObject
+              ? `${this.getContainerName(focusedContainer.id)} can only hold ${this.getContainerAcceptedContentsLabel(focusedContainer.id)}.`
+              : currentContentsLabel
+                ? `${this.getContainerName(focusedContainer.id)} currently holds ${currentContentsLabel}. Select a ${this.getContainerAcceptedContentsLabel(focusedContainer.id)} and click it to change the contents.`
+                : `${this.getContainerName(focusedContainer.id)} is empty. Select a ${this.getContainerAcceptedContentsLabel(focusedContainer.id)} from the object list, then click it to fill the container.`),
+        containerClearDisabled: !focusedContainer.containedObjectId,
+        containerClearTitle: focusedContainer.containedObjectId ? '' : 'This container is empty.',
+        pressureVisible: false,
+        pressureStatusText: '',
+        pressureConnectHidden: true,
+        pressureConnectDisabled: true,
+        pressureConnectTitle: '',
+        pressureClearHidden: true,
+        pressureClearDisabled: true,
+        pressureDoneLaterHidden: true,
+      };
+      this.uiBridge?.renderInspector(state);
+      return;
+    }
+
+    this.uiBridge?.renderInspector(hiddenState);
+  }
+
+  private getPressurePlateTargetLabel(objectId: string): string {
+    switch (objectId) {
+      case 'door_locked':
+        return 'door';
+      case 'door_metal':
+        return 'metal door';
+      case 'treasure_chest':
+        return 'treasure chest';
+      case 'cage':
+        return 'cage';
+      default:
+        return getObjectById(objectId)?.name ?? 'object';
+    }
+  }
+
+  private getContainerLabel(objectId: string): string {
+    return objectId === 'cage' ? 'cage' : 'treasure chest';
+  }
+
+  private getContainerName(objectId: string): string {
+    return objectId === 'cage' ? 'This cage' : 'This treasure chest';
+  }
+
+  private getContainerAcceptedContentsLabel(objectId: string): string {
+    return objectId === 'cage' ? 'enemies' : 'collectibles';
   }
 
   private drawRectPreview(
@@ -1641,6 +2369,10 @@ export class CourseEditorScene extends Phaser.Scene {
     this.cursorGraphics = null;
     this.rectPreviewGraphics?.destroy();
     this.rectPreviewGraphics = null;
+    this.pressurePlateGraphics?.destroy();
+    this.pressurePlateGraphics = null;
+    this.containerGraphics?.destroy();
+    this.containerGraphics = null;
     this.uiBridge?.destroy();
     this.uiBridge = null;
     this.destroyWorkspace();

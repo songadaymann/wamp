@@ -2,6 +2,7 @@ import type { AuthUser } from '../../../auth/model';
 import {
   cloneCourseRecord,
   cloneCourseSnapshot,
+  courseGoalRequiresStartPoint,
   courseRoomRefsFormConnectedCluster,
   courseRoomRefsHaveUniqueRoomIds,
   createCourseVersionRecord,
@@ -579,7 +580,7 @@ function validatePublishableCourseDraft(
     throw new HttpError(400, 'Published courses must span 2 to 4 rooms.');
   }
 
-  if (!draft.startPoint) {
+  if (courseGoalRequiresStartPoint(draft.goal) && !draft.startPoint) {
     throw new HttpError(400, 'Published courses need a start point.');
   }
 

@@ -3745,3 +3745,33 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - `failure: null`
     - `consoleErrors: []`
     - app returns cleanly to browse-mode overworld on room `0,0`
+
+## March 25, 2026 - Course Goal Start + Pressure Plate Follow-ups
+
+- Relaxed course start-marker requirements for non-marker goals
+  - shared course-goal helpers now treat `reach_exit` and `checkpoint_sprint` as the only course goals that require a start point
+  - `collect_target`, `defeat_all`, and `survival` can now save/publish/test without a course start flag
+  - patched both frontend gating and worker publish validation so setup/editor behavior matches the backend:
+    - `src/courses/editor/state.ts`
+    - `src/cloudflare/worker/courses/store.ts`
+    - `src/scenes/editor/playMode.ts`
+    - `src/scenes/overworld/courseRuns.ts`
+    - `src/scenes/OverworldPlayScene.ts`
+- Carried the pressure-plate / container inspector flow into `CourseEditorScene`
+  - the stitched multi-room editor now supports the same hover/pin/connect/clear/done-later pressure-plate workflow as the single-room editor
+  - pressure targets are still room-local on purpose; editing a course across multiple rooms does not imply cross-room trigger wiring
+  - also carried the container inspector so chests/cages can still be filled/cleared from the course editor
+  - key files:
+    - `src/scenes/CourseEditorScene.ts`
+    - `src/scenes/editor/editRuntime.ts`
+- Enabled cross-room tile paste in the stitched editor
+  - copied tile selections are now promoted to scene-level clipboard state instead of being trapped in the source room runtime
+  - paste preview can now target any course room, and `Cmd/Ctrl+V` re-enters paste mode there
+- Verification:
+  - `./node_modules/.bin/tsc --noEmit` passed in `/tmp/wamp-course-overhaul`
+  - `npm run build` passed in `/tmp/wamp-course-overhaul`
+  - Playwright skill client boot smoke against `http://localhost:3000` completed and wrote:
+    - `output/web-game/state-0.json`
+    - `output/web-game/shot-0.png`
+  - note:
+    - the smoke still hit the existing headless/WebGL black-frame screenshot limitation, so it only confirms boot + `render_game_to_text`; the new course interactions still want a manual browser pass

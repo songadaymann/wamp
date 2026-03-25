@@ -4,6 +4,7 @@ import type {
   CourseMarkerPoint,
   CourseSnapshot,
 } from '../../courses/model';
+import { courseGoalRequiresStartPoint } from '../../courses/model';
 import type { GoalMarkerPoint } from '../../goals/roomGoals';
 import type { RoomCoordinates } from '../../persistence/roomModel';
 
@@ -265,7 +266,11 @@ export function isCourseDraftPreviewReady(
   course: CourseSnapshot | null,
   activeRoomId: string,
 ): boolean {
-  if (!course?.goal || !course.startPoint) {
+  if (!course?.goal) {
+    return false;
+  }
+
+  if (courseGoalRequiresStartPoint(course.goal) && !course.startPoint) {
     return false;
   }
 

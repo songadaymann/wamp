@@ -6,6 +6,7 @@ import type {
   CourseRoomRef,
   CourseSnapshot,
 } from '../model';
+import { courseGoalRequiresStartPoint } from '../model';
 import type { RoomCoordinates } from '../../persistence/roomModel';
 
 export type CourseEditorTool = 'select' | 'rooms' | 'start' | 'exit' | 'checkpoint' | 'finish';
@@ -94,7 +95,7 @@ export function getCurrentCourseDraftGoalSetupDisabledReason(
     return 'Choose a course goal first.';
   }
 
-  if (!draft.startPoint) {
+  if (courseGoalRequiresStartPoint(draft.goal) && !draft.startPoint) {
     return 'Place a course start marker first.';
   }
 

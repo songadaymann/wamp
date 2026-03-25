@@ -120,6 +120,27 @@ export const COURSE_GOAL_LABELS: Record<CourseGoalType, string> = {
   survival: 'Survival',
 };
 
+function getCourseGoalTypeValue(goal: Pick<CourseGoal, 'type'> | CourseGoalType | null): CourseGoalType | null {
+  if (!goal) {
+    return null;
+  }
+
+  return typeof goal === 'string' ? goal : goal.type;
+}
+
+export function courseGoalRequiresStartPoint(
+  goal: Pick<CourseGoal, 'type'> | CourseGoalType | null
+): boolean {
+  const goalType = getCourseGoalTypeValue(goal);
+  return goalType === 'reach_exit' || goalType === 'checkpoint_sprint';
+}
+
+export function courseGoalUsesMarkerPlacement(
+  goal: Pick<CourseGoal, 'type'> | CourseGoalType | null
+): boolean {
+  return courseGoalRequiresStartPoint(goal);
+}
+
 export function normalizeCourseTitle(value: unknown): string | null {
   const normalized = normalizeRoomTitle(value);
   if (!normalized) {

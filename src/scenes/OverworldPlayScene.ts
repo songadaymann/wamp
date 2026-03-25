@@ -20,6 +20,7 @@ import {
 import {
   areCourseRoomRefsOrthogonallyAdjacent,
   courseRoomRefsFollowLinearPath,
+  courseGoalRequiresStartPoint,
   COURSE_GOAL_LABELS,
   cloneCourseSnapshot,
   createDefaultCourseRecord,
@@ -814,18 +815,18 @@ export class OverworldPlayScene extends Phaser.Scene {
       return 'Choose a course goal in the editor first.';
     }
 
-    if (!draft.startPoint) {
+    if (draft.goal && courseGoalRequiresStartPoint(draft.goal) && !draft.startPoint) {
       return 'Place a course start marker first.';
     }
 
     switch (draft.goal.type) {
       case 'reach_exit':
-        return draft.goal.exit ? null : 'Place a course exit in the last room first.';
+        return draft.goal.exit ? null : 'Place a course exit first.';
       case 'checkpoint_sprint':
         if (draft.goal.checkpoints.length === 0) {
           return 'Add at least one checkpoint first.';
         }
-        return draft.goal.finish ? null : 'Place a course finish marker in the last room first.';
+        return draft.goal.finish ? null : 'Place a course finish marker first.';
       case 'collect_target':
       case 'defeat_all':
       case 'survival':

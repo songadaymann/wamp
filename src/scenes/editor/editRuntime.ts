@@ -181,6 +181,18 @@ export class EditorEditRuntime {
       : null;
   }
 
+  setClipboardState(state: EditorClipboardState | null): void {
+    this.clipboardState = state
+      ? {
+          sourceLayer: state.sourceLayer,
+          width: state.width,
+          height: state.height,
+          tiles: state.tiles.map((row) => [...row]),
+          occupiedMask: state.occupiedMask.map((row) => [...row]),
+        }
+      : null;
+  }
+
   initializeGraphics(): void {
     // Goal markers are sprite-backed; no persistent graphics overlay needed.
   }
