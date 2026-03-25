@@ -627,9 +627,7 @@ async function waitForWalletConnection(timeoutMs: number = 60_000): Promise<stri
     return existing;
   }
 
-  await walletModal.open({ view: 'Connect', namespace: 'eip155' });
-
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let settled = false;
     const finish = (value: string | null) => {
       if (settled) return;
@@ -637,6 +635,13 @@ async function waitForWalletConnection(timeoutMs: number = 60_000): Promise<stri
       window.clearTimeout(timer);
       unsubscribe();
       resolve(value);
+    };
+    const fail = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      unsubscribe();
+      reject(error instanceof Error ? error : new Error('Failed to open wallet connection modal.'));
     };
 
     const unsubscribe = walletModal.subscribeAccount((account) => {
@@ -646,6 +651,16 @@ async function waitForWalletConnection(timeoutMs: number = 60_000): Promise<stri
     }, 'eip155');
 
     const timer = window.setTimeout(() => finish(null), timeoutMs);
+
+    const current = walletModal.getAddress('eip155');
+    if (current) {
+      finish(current);
+      return;
+    }
+
+    void walletModal.open({ view: 'Connect', namespace: 'eip155' }).catch((error) => {
+      fail(error);
+    });
   });
 }
 
