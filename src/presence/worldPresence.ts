@@ -7,38 +7,26 @@ import {
   roomToChunkCoordinates,
   type WorldChunkCoordinates,
 } from '../persistence/worldModel';
+import {
+  isPresenceServerMessage,
+  type PresenceLeaveMessage,
+  type PresencePublishMessage,
+  type PresenceServerMessage,
+  type WorldGhostPresence,
+  type WorldPresenceAnimationState,
+  type WorldPresenceIdentity,
+  type WorldPresencePayload,
+} from './protocol';
 
-export type WorldPresenceMode = 'browse' | 'play' | 'edit';
-export type WorldPresenceAnimationState = DefaultPlayerAnimationState;
+export type {
+  WorldGhostPresence,
+  WorldPresenceAnimationState,
+  WorldPresenceIdentity,
+  WorldPresenceMode,
+  WorldPresencePayload,
+} from './protocol';
 
 const PRESENCE_PUBLISH_INTERVAL_MS = 200;
-
-export interface WorldPresenceIdentity {
-  userId: string;
-  displayName: string;
-  avatarId: string;
-}
-
-export interface WorldPresencePayload {
-  roomCoordinates: RoomCoordinates;
-  x: number;
-  y: number;
-  velocityX: number;
-  velocityY: number;
-  facing: number;
-  animationState: WorldPresenceAnimationState;
-  mode: WorldPresenceMode;
-  timestamp: number;
-}
-
-export interface WorldGhostPresence extends WorldPresencePayload {
-  connectionId: string;
-  userId: string;
-  displayName: string;
-  avatarId: string;
-  shardId: string;
-  roomId: string;
-}
 
 export interface WorldPresenceSnapshot {
   enabled: boolean;
@@ -56,44 +44,6 @@ interface PartySocketRecord {
   socket: PartySocket;
 }
 
-interface PresenceSnapshotMessage {
-  type: 'snapshot';
-  peers: WorldGhostPresence[];
-  roomPopulations: Record<string, number>;
-  roomEditors: Record<string, number>;
-}
-
-interface PresenceUpsertMessage {
-  type: 'upsert';
-  peer: WorldGhostPresence;
-}
-
-interface PresenceRemoveMessage {
-  type: 'remove';
-  connectionId: string;
-}
-
-interface PresencePopulationsMessage {
-  type: 'populations';
-  roomPopulations: Record<string, number>;
-  roomEditors: Record<string, number>;
-}
-
-type PresenceMessage =
-  | PresenceSnapshotMessage
-  | PresenceUpsertMessage
-  | PresenceRemoveMessage
-  | PresencePopulationsMessage;
-
-interface PresencePublishMessage {
-  type: 'presence:update';
-  presence: WorldPresencePayload;
-}
-
-interface PresenceLeaveMessage {
-  type: 'presence:leave';
-}
-
 interface WorldPresenceClientOptions {
   host: string;
   protocol: 'ws' | 'wss';
@@ -101,6 +51,15 @@ interface WorldPresenceClientOptions {
   identity: WorldPresenceIdentity;
   onSnapshot: (snapshot: WorldPresenceSnapshot) => void;
 }
+
+type Assert<T extends true> = T;
+type _WorldPresenceAnimationStateMatchesDefaultPlayer = Assert<
+  WorldPresenceAnimationState extends DefaultPlayerAnimationState
+    ? DefaultPlayerAnimationState extends WorldPresenceAnimationState
+      ? true
+      : false
+    : false
+>;
 
 export class WorldPresenceClient {
   private readonly socketsByShardId = new Map<string, PartySocketRecord>();
@@ -285,15 +244,15 @@ export class WorldPresenceClient {
   }
 
   private handlePresenceMessage(shardId: string, rawMessage: string): void {
-    let message: PresenceMessage | null = null;
+    let message: PresenceServerMessage | null = null;
 
     try {
-      message = JSON.parse(rawMessage) as PresenceMessage;
+      const parsed = JSON.parse(rawMessage) as unknown;
+      if (!isPresenceServerMessage(parsed)) {
+        return;
+      }
+      message = parsed;
     } catch {
-      return;
-    }
-
-    if (!message || typeof message !== 'object' || typeof message.type !== 'string') {
       return;
     }
 

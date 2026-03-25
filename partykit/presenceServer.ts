@@ -1,5 +1,16 @@
 import type * as Party from 'partykit/server';
 import type { PartyKitLaunchStats, PartyKitShardHeartbeat } from '../src/admin/model';
+import {
+  isPresenceClientMessage,
+  isWorldPresencePayload,
+  type PresenceClientMessage as IncomingMessage,
+  type PresencePopulationsMessage,
+  type PresenceRemoveMessage,
+  type PresenceSnapshotMessage,
+  type PresenceUpsertMessage,
+  type WorldGhostPresence,
+  type WorldPresencePayload as PresencePayload,
+} from '../src/presence/protocol';
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 const STALE_HEARTBEAT_MS = 120_000;
@@ -7,56 +18,12 @@ const INTERNAL_TOKEN_HEADER = 'x-partykit-internal-token';
 const METRICS_ROOM_ID = '__launch-stats__';
 const METRICS_STORAGE_PREFIX = 'shard:';
 
-type PresenceMode = 'browse' | 'play' | 'edit';
-type PresenceAnimationState =
-  | 'idle'
-  | 'run'
-  | 'jump-rise'
-  | 'jump-fall'
-  | 'land'
-  | 'ladder-climb';
-
-interface RoomCoordinates {
-  x: number;
-  y: number;
-}
-
-interface PresencePayload {
-  roomCoordinates: RoomCoordinates;
-  x: number;
-  y: number;
-  velocityX: number;
-  velocityY: number;
-  facing: number;
-  animationState: PresenceAnimationState;
-  mode: PresenceMode;
-  timestamp: number;
-}
-
 interface ConnectionPresenceState {
   userId: string;
   displayName: string;
   avatarId: string;
   presence: PresencePayload | null;
 }
-
-interface WorldGhostPresence extends PresencePayload {
-  connectionId: string;
-  userId: string;
-  displayName: string;
-  avatarId: string;
-  shardId: string;
-  roomId: string;
-}
-
-type IncomingMessage =
-  | {
-      type: 'presence:update';
-      presence: PresencePayload;
-    }
-  | {
-      type: 'presence:leave';
-    };
 
 interface HeartbeatMutationResponse {
   ok: true;
@@ -129,7 +96,7 @@ export default class PresenceServer implements Party.Server {
         peers: this.listPeers(connection.id),
         roomPopulations: this.computeRoomPopulations(),
         roomEditors: this.computeRoomEditors(),
-      })
+      } satisfies PresenceSnapshotMessage)
     );
 
     this.broadcastPopulations();
@@ -141,12 +108,12 @@ export default class PresenceServer implements Party.Server {
     let parsed: IncomingMessage | null = null;
 
     try {
-      parsed = JSON.parse(message) as IncomingMessage;
+      const candidate = JSON.parse(message) as unknown;
+      if (!isPresenceClientMessage(candidate)) {
+        return;
+      }
+      parsed = candidate;
     } catch {
-      return;
-    }
-
-    if (!parsed || typeof parsed !== 'object' || typeof parsed.type !== 'string') {
       return;
     }
 
@@ -180,7 +147,7 @@ export default class PresenceServer implements Party.Server {
         JSON.stringify({
           type: 'remove',
           connectionId: sender.id,
-        }),
+        } satisfies PresenceRemoveMessage),
         [sender.id]
       );
     }
@@ -191,7 +158,7 @@ export default class PresenceServer implements Party.Server {
         JSON.stringify({
           type: 'upsert',
           peer,
-        }),
+        } satisfies PresenceUpsertMessage),
         [sender.id]
       );
     }
@@ -210,7 +177,7 @@ export default class PresenceServer implements Party.Server {
         JSON.stringify({
           type: 'remove',
           connectionId: connection.id,
-        })
+        } satisfies PresenceRemoveMessage)
       );
     }
 
@@ -234,6 +201,10 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
+    if (!current) {
+      return;
+    }
+
     connection.setState({
       ...current,
       presence: null,
@@ -244,7 +215,7 @@ export default class PresenceServer implements Party.Server {
         JSON.stringify({
           type: 'remove',
           connectionId: connection.id,
-        }),
+        } satisfies PresenceRemoveMessage),
         [connection.id]
       );
     }
@@ -313,7 +284,7 @@ export default class PresenceServer implements Party.Server {
         type: 'populations',
         roomPopulations: this.computeRoomPopulations(),
         roomEditors: this.computeRoomEditors(),
-      })
+      } satisfies PresencePopulationsMessage)
     );
   }
 
@@ -356,7 +327,7 @@ export default class PresenceServer implements Party.Server {
     return presence.mode;
   }
 
-  private getRoomId(roomCoordinates: RoomCoordinates): string {
+  private getRoomId(roomCoordinates: PresencePayload['roomCoordinates']): string {
     return `${roomCoordinates.x},${roomCoordinates.y}`;
   }
 
@@ -533,7 +504,7 @@ export default class PresenceServer implements Party.Server {
     return `${METRICS_STORAGE_PREFIX}${shardId}`;
   }
 
-  private hasValidInternalToken(req: Request): boolean {
+  private hasValidInternalToken(req: Party.Request): boolean {
     const expected = this.getInternalToken();
     if (!expected) {
       return false;
@@ -574,54 +545,23 @@ export default class PresenceServer implements Party.Server {
   }
 
   private normalizePresencePayload(value: unknown): PresencePayload | null {
-    if (!value || typeof value !== 'object') {
-      return null;
-    }
-
-    const payload = value as Partial<PresencePayload>;
-    if (
-      !payload.roomCoordinates ||
-      !Number.isInteger(payload.roomCoordinates.x) ||
-      !Number.isInteger(payload.roomCoordinates.y) ||
-      typeof payload.x !== 'number' ||
-      typeof payload.y !== 'number' ||
-      typeof payload.velocityX !== 'number' ||
-      typeof payload.velocityY !== 'number' ||
-      typeof payload.facing !== 'number' ||
-      typeof payload.timestamp !== 'number'
-    ) {
-      return null;
-    }
-
-    const animationState = payload.animationState;
-    if (
-      animationState !== 'idle' &&
-      animationState !== 'run' &&
-      animationState !== 'jump-rise' &&
-      animationState !== 'jump-fall' &&
-      animationState !== 'land' &&
-      animationState !== 'ladder-climb'
-    ) {
-      return null;
-    }
-
-    if (payload.mode !== 'browse' && payload.mode !== 'play' && payload.mode !== 'edit') {
+    if (!isWorldPresencePayload(value)) {
       return null;
     }
 
     return {
       roomCoordinates: {
-        x: payload.roomCoordinates.x,
-        y: payload.roomCoordinates.y,
+        x: value.roomCoordinates.x,
+        y: value.roomCoordinates.y,
       },
-      x: payload.x,
-      y: payload.y,
-      velocityX: payload.velocityX,
-      velocityY: payload.velocityY,
-      facing: payload.facing < 0 ? -1 : 1,
-      animationState,
-      mode: payload.mode,
-      timestamp: payload.timestamp,
+      x: value.x,
+      y: value.y,
+      velocityX: value.velocityX,
+      velocityY: value.velocityY,
+      facing: value.facing < 0 ? -1 : 1,
+      animationState: value.animationState,
+      mode: value.mode,
+      timestamp: value.timestamp,
     };
   }
 
@@ -631,28 +571,43 @@ export default class PresenceServer implements Party.Server {
     }
 
     const payload = value as Partial<PartyKitShardHeartbeat>;
+    const totalConnections = payload.totalConnections;
+    const playConnections = payload.playConnections;
+    const editConnections = payload.editConnections;
     const updatedAtMs = Date.parse(String(payload.updatedAt ?? ''));
+    if (
+      typeof totalConnections !== 'number' ||
+      typeof playConnections !== 'number' ||
+      typeof editConnections !== 'number'
+    ) {
+      return null;
+    }
+
     if (
       typeof payload.shardId !== 'string' ||
       !payload.shardId.trim() ||
       payload.shardId === METRICS_ROOM_ID ||
-      !Number.isInteger(payload.totalConnections) ||
-      !Number.isInteger(payload.playConnections) ||
-      !Number.isInteger(payload.editConnections) ||
-      payload.totalConnections < 0 ||
-      payload.playConnections < 0 ||
-      payload.editConnections < 0 ||
-      payload.playConnections + payload.editConnections > payload.totalConnections ||
+      !Number.isInteger(totalConnections) ||
+      !Number.isInteger(playConnections) ||
+      !Number.isInteger(editConnections) ||
+      totalConnections < 0 ||
+      playConnections < 0 ||
+      editConnections < 0 ||
+      playConnections + editConnections > totalConnections ||
       !Number.isFinite(updatedAtMs)
     ) {
       return null;
     }
 
+    const normalizedTotalConnections = totalConnections as number;
+    const normalizedPlayConnections = playConnections as number;
+    const normalizedEditConnections = editConnections as number;
+
     return {
       shardId: payload.shardId,
-      totalConnections: payload.totalConnections,
-      playConnections: payload.playConnections,
-      editConnections: payload.editConnections,
+      totalConnections: normalizedTotalConnections,
+      playConnections: normalizedPlayConnections,
+      editConnections: normalizedEditConnections,
       updatedAt: new Date(updatedAtMs).toISOString(),
     };
   }

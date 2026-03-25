@@ -1,0 +1,35 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": ".tsbuild/worker",
+    "lib": ["ES2020", "WebWorker"]
+  },
+  "include": [
+    "src/admin/model.ts",
+    "src/agentBuilder/tilesetCatalog.ts",
+    "src/agents/model.ts",
+    "src/auth/model.ts",
+    "src/chat/model.ts",
+    "src/cloudflare/**/*.ts",
+    "src/config.ts",
+    "src/courses/model.ts",
+    "src/courses/runModel.ts",
+    "src/courses/scoring.ts",
+    "src/dashboard/model.ts",
+    "src/goals/roomGoals.ts",
+    "src/mint/roomMetadata.ts",
+    "src/mint/roomOwnership.ts",
+    "src/persistence/roomLeaderboardLineage.ts",
+    "src/persistence/roomModel.ts",
+    "src/persistence/roomVersionLineage.ts",
+    "src/persistence/worldModel.ts",
+    "src/playfun/identity.ts",
+    "src/profiles/model.ts",
+    "src/runs/model.ts",
+    "src/runs/scoring.ts"
+  ],
+  "exclude": ["node_modules", "dist", "partykit/**/*"]
+}

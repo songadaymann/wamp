@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": ".tsbuild/partykit",
+    "lib": ["ES2020", "WebWorker"]
+  },
+  "include": [
+    "partykit/**/*.ts",
+    "src/admin/model.ts",
+    "src/config.ts",
+    "src/goals/roomGoals.ts",
+    "src/persistence/roomModel.ts",
+    "src/presence/protocol.ts"
+  ],
+  "exclude": ["node_modules", "dist", "src/cloudflare/**/*"]
+}

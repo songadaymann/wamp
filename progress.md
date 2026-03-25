@@ -3598,3 +3598,23 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Playwright boot smoke on `http://127.0.0.1:3100` loaded the overworld; only expected local PartyKit connection-refused errors appeared because PartyKit was not running
   - fresh local worker smoke on `http://127.0.0.1:8910` returned `401` for unauthenticated `POST /api/rooms/:roomId/leaderboard-lineage`, confirming the new route is registered
   - remaining manual verification: authenticated creator flow in the history modal against a room with multiple published versions and existing leaderboard history
+
+## March 25, 2026 - Phase 2 Safety Rollout: Root Typecheck + Shared Presence Protocol
+
+- Added a project-reference TypeScript layout so the browser app, Cloudflare Worker, and PartyKit server all participate in the root typecheck
+  - new `tsconfig.base.json` holds shared compiler defaults
+  - root `tsconfig.json` now typechecks the app project and references `tsconfig.worker.json` plus `tsconfig.partykit.json`
+  - root scripts now expose `npm run typecheck` and `npm run check`, and `npm run build` now runs the full typecheck before Vite build
+- Extracted the authoritative presence wire contract into `src/presence/protocol.ts`
+  - shared browser/PartyKit message unions now define `snapshot`, `upsert`, `remove`, `populations`, `publish`, and `leave`
+  - shared payload guards now validate presence modes, animation states, player payloads, and incoming/outgoing wire messages
+  - widened the shared animation-state union to match the actual default-player animation states already emitted by the game so contract checking reflects runtime reality
+- Switched the browser presence client and PartyKit presence server over to the shared protocol
+  - `src/presence/worldPresence.ts` now consumes shared types/guards instead of maintaining its own duplicate message declarations
+  - `partykit/presenceServer.ts` now validates incoming messages with the shared guards and emits typed shared messages for every broadcast path
+  - runtime behavior stays the same, but client/server message drift now fails during `npm run typecheck` instead of surfacing only at runtime
+- Verification:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - local preview smoke on `http://127.0.0.1:4174` reached `overworld-play` browse mode with no new app console failures; artifact state written to `output/web-game/state-0.json`
+  - caveat: the captured local smoke screenshot stayed visually black even though the runtime state reported a loaded overworld, so the smoke currently relies on runtime state rather than the screenshot alone
