@@ -274,7 +274,7 @@ async function initializeWalletConnect(): Promise<void> {
 
   if (!projectId) {
     state.status =
-      'Add VITE_REOWN_PROJECT_ID or VITE_WALLET_CONNECT_PROJECT_ID to env.local to enable wallet sign-in.';
+      'Add VITE_REOWN_PROJECT_ID or VITE_WALLET_CONNECT_PROJECT_ID to .env.local to enable wallet sign-in.';
     return;
   }
 
@@ -541,7 +541,7 @@ async function checkDisplayNameAvailability(displayName: string): Promise<void> 
 async function handleWalletButton(): Promise<void> {
   if (!state.walletProjectConfigured) {
     state.status =
-      'Wallet connect is not configured. Add the project ID to env.local and restart Vite.';
+      'Wallet connect is not configured. Add the project ID to .env.local and restart Vite.';
     renderAuthUi();
     return;
   }

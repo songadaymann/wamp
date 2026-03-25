@@ -16,6 +16,8 @@ Frontend env vars Pages should have:
 - `VITE_REOWN_PROJECT_ID=<your reown project id>`
 - `VITE_PARTYKIT_HOST=everybodys-platformer-presence.songadaymann.partykit.dev`
 
+For local frontend setup, use `.env.local`; see [Env And Config Guide](./env-config.md).
+
 Frontend API base guidance:
 
 - For the intended production setup, leave `VITE_ROOM_API_BASE_URL` unset so the app uses same-origin `/api`.

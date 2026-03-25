@@ -3598,3 +3598,27 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Playwright boot smoke on `http://127.0.0.1:3100` loaded the overworld; only expected local PartyKit connection-refused errors appeared because PartyKit was not running
   - fresh local worker smoke on `http://127.0.0.1:8910` returned `401` for unauthenticated `POST /api/rooms/:roomId/leaderboard-lineage`, confirming the new route is registered
   - remaining manual verification: authenticated creator flow in the history modal against a room with multiple published versions and existing leaderboard history
+
+## March 25, 2026 - Phase 3 Safety Rollout: Env + Config Normalization
+
+- Standardized frontend local env on Vite-native `.env.local`
+  - removed the custom `env.local` parser from `vite.config.ts`
+  - added tracked frontend example file `.env.local.example`
+  - updated local setup guidance so frontend `VITE_*` vars point at `.env.local` while Worker / PartyKit vars stay in `.dev.vars`
+- Documented the config split between local frontend, Worker, local PartyKit, and deployed Pages / Worker env
+  - added `docs/env-config.md` as the single reference for where each class of env belongs
+  - linked the existing frontend redeploy doc back to that guide
+- Split `src/config.ts` into domain modules behind a compatibility barrel so imports remain stable
+  - new `src/config/room.ts` holds room dimensions, layer names, and tile encoding helpers
+  - new `src/config/tilesets.ts` holds tilesets plus terrain collision metadata
+  - new `src/config/backgrounds.ts` holds background groups
+  - new `src/config/objects.ts` holds object catalog / placed-object helpers
+  - new `src/config/editor.ts` holds editor state, selection helpers, and editor tool constants
+  - `src/config.ts` now re-exports from those modules instead of remaining the monolith
+- Cleanup:
+  - updated auth UI setup copy to reference `.env.local` instead of the old `env.local`
+  - kept legacy `env.local` ignored in git, but it is now explicitly documented as unsupported runtime config
+- Verification:
+  - `npm run build` passed
+  - local preview smoke on `http://127.0.0.1:4175` reached `overworld-play` browse mode; runtime state artifact written to `output/web-game/state-0.json`
+  - caveat: the headless smoke screenshot remained visually black in this environment, so the check relies on `render_game_to_text` state rather than the image alone

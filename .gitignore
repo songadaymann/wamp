@@ -15,9 +15,13 @@ gen-avatar/
 .dev.vars.*
 !.dev.vars.example
 
+.env.local
+.env.local.*
+!.env.local.example
+
+# Legacy ignored frontend env filename; Vite no longer reads it.
 env.local
 env.local.*
-!env.local.example
 
 .env
 .env.*

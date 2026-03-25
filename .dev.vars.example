@@ -1,3 +1,5 @@
+# Worker and local PartyKit server config. Frontend `VITE_*` vars belong in `.env.local`.
+
 RESEND_API_KEY=
 AUTH_EMAIL_FROM="Everybody's Platformer <onboarding@resend.dev>"
 # Public app base URL used when constructing auth links from the Worker.
