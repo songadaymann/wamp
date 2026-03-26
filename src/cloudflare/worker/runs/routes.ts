@@ -184,17 +184,19 @@ export async function handleRunFinish(
     checkpointsReached: body.checkpointsReached,
   });
   const finishedAt = new Date().toISOString();
+  const reportedElapsedMs = body.elapsedMs;
   const clampedBody: RunFinishRequestBody = {
     ...normalizeFinalizedRunBody(
       snapshot.goal,
       {
         ...body,
-        elapsedMs: computeEffectiveElapsedMs(existing.startedAt, finishedAt, body.elapsedMs),
+        elapsedMs: computeEffectiveElapsedMs(existing.startedAt, finishedAt, reportedElapsedMs),
         collectiblesCollected: clampedMetrics.collectiblesCollected,
         enemiesDefeated: clampedMetrics.enemiesDefeated,
         checkpointsReached: clampedMetrics.checkpointsReached,
       },
-      metricCaps
+      metricCaps,
+      reportedElapsedMs
     ),
     finishedAt,
   };
@@ -697,7 +699,8 @@ function normalizeFinalizedRunBody(
     maxCollectibles: number;
     maxEnemies: number;
     maxCheckpoints: number;
-  }
+  },
+  reportedElapsedMs: number
 ): RunFinishRequestBody {
   if (body.result !== 'completed') {
     return {
@@ -708,7 +711,11 @@ function normalizeFinalizedRunBody(
     };
   }
 
-  if ('timeLimitMs' in goal && goal.timeLimitMs !== null && body.elapsedMs > goal.timeLimitMs) {
+  if (
+    'timeLimitMs' in goal &&
+    goal.timeLimitMs !== null &&
+    reportedElapsedMs > goal.timeLimitMs
+  ) {
     throw new HttpError(409, 'Completed runs must finish within the published time limit.');
   }
 
