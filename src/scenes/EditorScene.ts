@@ -221,6 +221,7 @@ export class EditorScene extends Phaser.Scene {
     this.input.removeAllListeners();
     this.input.keyboard?.removeAllListeners();
     this.game.canvas.removeEventListener('contextmenu', this.handleCanvasContextMenu);
+    this.inspectorController.reset();
     this.uiBridge?.destroy();
     this.uiBridge = null;
     this.presenceController.destroy();

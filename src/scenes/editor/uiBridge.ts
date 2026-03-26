@@ -563,6 +563,9 @@ export class EditorUiBridge {
   }
 
   destroy(): void {
+    this.setHidden(this.inspectorRoot, true);
+    this.setHidden(this.pressurePanel, true);
+    this.setHidden(this.containerPanel, true);
     this.destroyed = true;
     for (const cleanup of this.cleanupCallbacks) {
       cleanup();

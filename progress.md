@@ -3973,3 +3973,19 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - `output/web-game/editor-overlay-controller-probe/editor-after-overlay-probe-page.png`
   - Note:
     - direct canvas screenshots of the editor still come back black in this environment, so the overlay probe relied on state inspection plus a full-page screenshot rather than the raw canvas capture.
+
+- March 26, 2026: fixed lingering editor inspector chrome when returning to world.
+  - `EditorScene.handleShutdown()` now clears the inspector controller before tearing down the bridge.
+  - `EditorUiBridge.destroy()` now defensively hides the shared inspector root and its pressure/container panels.
+  - This fixes the case where a selected pressure-plate inspector could remain over the overworld HUD after `Back` / `returnToWorld()`.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-course-flow-editor-integration`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/editor-inspector-return-smoke/state-0.json`
+      - `output/web-game/editor-inspector-return-smoke/shot-0.png`
+    - targeted browser probe forced a visible inspector panel through `EditorUiBridge`, called `returnToWorld()`, and confirmed:
+      - before return: `#editor-inspector` was visible
+      - after return: `#editor-inspector` had the `hidden` class while `OverworldPlayScene` was active
+      - artifacts: `output/web-game/editor-inspector-return-probe/summary.json`, `output/web-game/editor-inspector-return-probe/after-return.png`
+  - Note:
+    - the targeted local probe still logged an unrelated editor room-load background error while booting a synthetic local room; it did not affect the inspector teardown assertion.
