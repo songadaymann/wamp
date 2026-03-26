@@ -173,7 +173,7 @@ export const TILESETS: TilesetConfig[] = [
     columns: 12,
     rows: 6,
     tileCount: 72,
-    firstGid: 73,
+    firstGid: 145,
     terrainCollisionProfiles: {
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_STANDARD, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_DESERT, NO_COLLISION_PROFILE),
@@ -188,7 +188,7 @@ export const TILESETS: TilesetConfig[] = [
     columns: 12,
     rows: 6,
     tileCount: 72,
-    firstGid: 145,
+    firstGid: 217,
     terrainCollisionProfiles: createTilesetCollisionProfiles(TOP_DECOR_INDICES_STANDARD, DECORATED_TOP_PROFILE),
   },
   {
@@ -200,7 +200,7 @@ export const TILESETS: TilesetConfig[] = [
     columns: 15,
     rows: 7,
     tileCount: 105,
-    firstGid: 217,
+    firstGid: 289,
     terrainCollisionProfiles: {
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_LAVA, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_LAVA, NO_COLLISION_PROFILE),
@@ -215,7 +215,7 @@ export const TILESETS: TilesetConfig[] = [
     columns: 11,
     rows: 6,
     tileCount: 66,
-    firstGid: 322,
+    firstGid: 394,
     terrainCollisionProfiles: {
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_SNOW, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_SNOW, NO_COLLISION_PROFILE),
@@ -230,7 +230,7 @@ export const TILESETS: TilesetConfig[] = [
     columns: 12,
     rows: 6,
     tileCount: 72,
-    firstGid: 388,
+    firstGid: 460,
     terrainCollisionProfiles: {
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_STANDARD, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_WATER, NO_COLLISION_PROFILE),
@@ -245,7 +245,7 @@ export const TILESETS: TilesetConfig[] = [
     columns: 8,
     rows: 4,
     tileCount: 32,
-    firstGid: 460,
+    firstGid: 532,
   },
 ];
 
