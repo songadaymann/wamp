@@ -145,7 +145,6 @@ function applyCourseMemberships(
       courseId: string;
       courseTitle: string | null;
       goalType: CourseGoalType | null;
-      roomIndex: number;
       roomCount: number;
     } | null;
   }>,
@@ -154,7 +153,6 @@ function applyCourseMemberships(
     courseId: string;
     courseTitle: string | null;
     goalType: CourseGoalType | null;
-    roomIndex: number;
     roomCount: number;
   }>
 ): void {
@@ -166,7 +164,6 @@ function applyCourseMemberships(
           courseId: membership.courseId,
           courseTitle: membership.courseTitle,
           goalType: membership.goalType,
-          roomIndex: membership.roomIndex,
           roomCount: membership.roomCount,
         }
       : null;

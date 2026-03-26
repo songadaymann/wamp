@@ -79,8 +79,9 @@ export function setupSceneCommands(
     controlsModal.close();
     aboutModal.close();
     chatModerationModal.close();
-    void getActiveOverworldScene(game)?.openCourseComposer?.();
-    courseModal.open();
+    courseModal.close();
+    void (getActiveOverworldScene(game)?.openCourseEditor?.() ??
+      getActiveOverworldScene(game)?.openCourseComposer?.());
   });
 
   worldZoomInBtn?.addEventListener('click', () => {

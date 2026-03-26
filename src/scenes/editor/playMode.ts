@@ -1,4 +1,8 @@
-import { cloneCourseSnapshot, type CourseSnapshot } from '../../courses/model';
+import {
+  cloneCourseSnapshot,
+  courseGoalRequiresStartPoint,
+  type CourseSnapshot,
+} from '../../courses/model';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomRepository';
 import type { CourseEditedRoomData, OverworldPlaySceneData } from '../sceneData';
 
@@ -6,7 +10,11 @@ export function getSelectedCoursePreviewForPlay(
   draft: CourseSnapshot | null,
   activeRoomId: string,
 ): CourseSnapshot | null {
-  if (!draft?.goal || !draft.startPoint) {
+  if (!draft?.goal) {
+    return null;
+  }
+
+  if (courseGoalRequiresStartPoint(draft.goal) && !draft.startPoint) {
     return null;
   }
 

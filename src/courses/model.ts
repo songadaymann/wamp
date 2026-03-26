@@ -105,7 +105,6 @@ export interface CourseMembershipSummary {
   courseId: string;
   courseTitle: string | null;
   goalType: CourseGoalType | null;
-  roomIndex: number;
   roomCount: number;
 }
 
@@ -120,6 +119,27 @@ export const COURSE_GOAL_LABELS: Record<CourseGoalType, string> = {
   checkpoint_sprint: 'Checkpoint Sprint',
   survival: 'Survival',
 };
+
+function getCourseGoalTypeValue(goal: Pick<CourseGoal, 'type'> | CourseGoalType | null): CourseGoalType | null {
+  if (!goal) {
+    return null;
+  }
+
+  return typeof goal === 'string' ? goal : goal.type;
+}
+
+export function courseGoalRequiresStartPoint(
+  goal: Pick<CourseGoal, 'type'> | CourseGoalType | null
+): boolean {
+  const goalType = getCourseGoalTypeValue(goal);
+  return goalType === 'reach_exit' || goalType === 'checkpoint_sprint';
+}
+
+export function courseGoalUsesMarkerPlacement(
+  goal: Pick<CourseGoal, 'type'> | CourseGoalType | null
+): boolean {
+  return courseGoalRequiresStartPoint(goal);
+}
 
 export function normalizeCourseTitle(value: unknown): string | null {
   const normalized = normalizeRoomTitle(value);
@@ -231,6 +251,58 @@ export function courseRoomRefsFollowLinearPath(roomRefs: CourseRoomRef[]): boole
   }
 
   return true;
+}
+
+export function sortCourseRoomRefsForStorage(roomRefs: CourseRoomRef[]): CourseRoomRef[] {
+  return roomRefs
+    .map(cloneCourseRoomRef)
+    .sort((left, right) => {
+      if (left.coordinates.y !== right.coordinates.y) {
+        return left.coordinates.y - right.coordinates.y;
+      }
+      if (left.coordinates.x !== right.coordinates.x) {
+        return left.coordinates.x - right.coordinates.x;
+      }
+      return left.roomId.localeCompare(right.roomId);
+    });
+}
+
+export function courseRoomRefsFormConnectedCluster(roomRefs: CourseRoomRef[]): boolean {
+  if (roomRefs.length <= 1) {
+    return true;
+  }
+
+  if (!courseRoomRefsHaveUniqueRoomIds(roomRefs)) {
+    return false;
+  }
+
+  const refsByRoomId = new Map(roomRefs.map((roomRef) => [roomRef.roomId, roomRef] as const));
+  const visited = new Set<string>();
+  const queue = [roomRefs[0].roomId];
+
+  while (queue.length > 0) {
+    const roomId = queue.shift();
+    if (!roomId || visited.has(roomId)) {
+      continue;
+    }
+
+    visited.add(roomId);
+    const current = refsByRoomId.get(roomId);
+    if (!current) {
+      continue;
+    }
+
+    for (const candidate of roomRefs) {
+      if (
+        !visited.has(candidate.roomId) &&
+        areCourseRoomRefsOrthogonallyAdjacent(current, candidate)
+      ) {
+        queue.push(candidate.roomId);
+      }
+    }
+  }
+
+  return visited.size === roomRefs.length;
 }
 
 export function getCourseRoomOrder(roomRefs: CourseRoomRef[], roomId: string): number {
@@ -347,7 +419,7 @@ export function createDefaultCourseRecord(courseId: string = createCourseId()): 
 export function getComparableCourseSnapshot(snapshot: CourseSnapshot) {
   return {
     title: snapshot.title,
-    roomRefs: snapshot.roomRefs.map((roomRef) => ({
+    roomRefs: sortCourseRoomRefsForStorage(snapshot.roomRefs).map((roomRef) => ({
       roomId: roomRef.roomId,
       coordinates: roomRef.coordinates,
       roomVersion: roomRef.roomVersion,
@@ -496,11 +568,13 @@ export function normalizeCourseSnapshot(
   return {
     id: typeof snapshot.id === 'string' && snapshot.id.trim() ? snapshot.id.trim() : fallbackCourseId,
     title: normalizeCourseTitle(snapshot.title),
-    roomRefs: Array.isArray(snapshot.roomRefs)
-      ? snapshot.roomRefs
-          .map((roomRef) => normalizeCourseRoomRef(roomRef))
-          .filter((roomRef): roomRef is CourseRoomRef => roomRef !== null)
-      : [],
+    roomRefs: sortCourseRoomRefsForStorage(
+      Array.isArray(snapshot.roomRefs)
+        ? snapshot.roomRefs
+            .map((roomRef) => normalizeCourseRoomRef(roomRef))
+            .filter((roomRef): roomRef is CourseRoomRef => roomRef !== null)
+        : []
+    ),
     startPoint: isCourseMarkerPointLike(snapshot.startPoint)
       ? cloneCourseMarkerPoint(snapshot.startPoint)
       : null,

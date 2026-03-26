@@ -15,8 +15,8 @@ import {
   showBusyOverlay,
 } from '../../ui/appFeedback';
 import type {
+  CourseEditorSceneData,
   CourseEditedRoomData,
-  EditorCourseEditData,
   OverworldPlaySceneData,
 } from '../sceneData';
 import { buildEditorPlayModeData } from './playMode';
@@ -38,10 +38,12 @@ interface EditorSceneFlowHost {
   sleepEditorScene(): void;
   stopEditorScene(): void;
   wakeOverworld(data: OverworldPlaySceneData): void;
+  wakeCourseComposer(data: CourseEditorSceneData): void;
   updateBottomBar(): void;
   hasActiveCourseEdit(): boolean;
   canReturnToCourseBuilder(): boolean;
-  getAdjacentCourseEdit(offset: -1 | 1): EditorCourseEditData | null;
+  shouldReturnToCourseEditor(): boolean;
+  buildCourseEditorWakeData(wakeData: OverworldPlaySceneData): CourseEditorSceneData;
   setCourseEditorStatusText(text: string | null): void;
   updateGoalUi(): void;
   getPersistenceStatusText(): string;
@@ -131,15 +133,22 @@ export class EditorSceneFlowController {
   }
 
   returnToWorldReadOnly(): void {
-    this.host.stopEditorScene();
-    this.host.wakeOverworld({
+    const wakeData: OverworldPlaySceneData = {
       centerCoordinates: { ...this.host.getRoomCoordinates() },
       roomCoordinates: { ...this.host.getRoomCoordinates() },
       statusMessage: 'This minted room can only be edited by its token owner.',
       draftRoom: null,
       clearDraftRoomId: this.roomSession.currentRoomId,
       mode: 'browse',
-    });
+    };
+
+    this.host.stopEditorScene();
+    if (this.host.shouldReturnToCourseEditor()) {
+      this.host.wakeCourseComposer(this.host.buildCourseEditorWakeData(wakeData));
+      return;
+    }
+
+    this.host.wakeOverworld(wakeData);
   }
 
   async returnToWorld(): Promise<void> {
@@ -156,6 +165,11 @@ export class EditorSceneFlowController {
     wakeData.courseEditedRoom = this.host.buildCourseEditedRoomData();
 
     this.host.stopEditorScene();
+    if (this.host.shouldReturnToCourseEditor()) {
+      this.host.wakeCourseComposer(this.host.buildCourseEditorWakeData(wakeData));
+      return;
+    }
+
     this.host.wakeOverworld(wakeData);
   }
 
@@ -173,40 +187,12 @@ export class EditorSceneFlowController {
   }
 
   async editPreviousCourseRoom(): Promise<void> {
-    await this.editAdjacentCourseRoom(-1);
+    this.host.setCourseEditorStatusText('Room order is no longer used in course editing.');
+    this.host.updateGoalUi();
   }
 
   async editNextCourseRoom(): Promise<void> {
-    await this.editAdjacentCourseRoom(1);
-  }
-
-  private async editAdjacentCourseRoom(offset: -1 | 1): Promise<void> {
-    const adjacent = this.host.getAdjacentCourseEdit(offset);
-    if (!adjacent) {
-      this.host.setCourseEditorStatusText(
-        offset < 0 ? 'Already at the first course room.' : 'Already at the last course room.',
-      );
-      this.host.updateGoalUi();
-      return;
-    }
-
-    showBusyOverlay(
-      offset < 0 ? 'Opening previous room...' : 'Opening next room...',
-      'Saving room state...',
-    );
-    const wakeData = await this.roomSession.buildReturnToWorldWakeData();
-    if (!wakeData) {
-      showBusyError(this.host.getPersistenceStatusText() || 'Failed to open the adjacent room.', {
-        closeHandler: () => hideBusyOverlay(),
-      });
-      return;
-    }
-
-    wakeData.courseEditorReturned = false;
-    wakeData.courseEditedRoom = this.host.buildCourseEditedRoomData();
-    wakeData.courseEditorNavigateOffset = offset;
-
-    this.host.stopEditorScene();
-    this.host.wakeOverworld(wakeData);
+    this.host.setCourseEditorStatusText('Room order is no longer used in course editing.');
+    this.host.updateGoalUi();
   }
 }

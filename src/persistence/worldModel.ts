@@ -390,7 +390,6 @@ export function computeWorldChunkPreviewHash(
         room.goalType ?? '',
         room.course?.courseId ?? '',
         room.course?.goalType ?? '',
-        room.course?.roomIndex ?? '',
         room.course?.roomCount ?? '',
       ].join(':')
     )

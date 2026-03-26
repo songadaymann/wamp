@@ -20,6 +20,7 @@ import { filterCourseLeaderboardForCurrentSurface } from '../playfun/leaderboard
 export interface CourseRepository {
   createCourse(snapshot: CourseSnapshot): Promise<CourseRecord>;
   loadCourse(courseId: string): Promise<CourseRecord>;
+  loadLatestDraftForRoom(roomId: string): Promise<CourseRecord | null>;
   saveDraft(snapshot: CourseSnapshot): Promise<CourseRecord>;
   publishCourse(courseId: string): Promise<CourseRecord>;
   unpublishCourse(courseId: string): Promise<CourseRecord>;
@@ -53,6 +54,19 @@ class ApiCourseRepository implements CourseRepository {
 
   async loadCourse(courseId: string): Promise<CourseRecord> {
     return this.request<CourseRecord>(`/api/courses/${encodeURIComponent(courseId)}`);
+  }
+
+  async loadLatestDraftForRoom(roomId: string): Promise<CourseRecord | null> {
+    try {
+      return await this.request<CourseRecord>(
+        `/api/courses/drafts/by-room/${encodeURIComponent(roomId)}`
+      );
+    } catch (error) {
+      if (isCourseApiError(error) && error.status === 404) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async saveDraft(snapshot: CourseSnapshot): Promise<CourseRecord> {

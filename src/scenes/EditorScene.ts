@@ -48,6 +48,7 @@ import {
 } from '../ui/appFeedback';
 import { isTextInputFocused } from '../ui/keyboardFocus';
 import type {
+  CourseEditorSceneData,
   CourseEditedRoomData,
   EditorCourseEditData,
   EditorSceneData,
@@ -261,6 +262,16 @@ export class EditorScene extends Phaser.Scene {
         updatedAt: this.roomUpdatedAt,
         publishedAt: this.roomPublishedAt,
       }),
+      getRoomOrigin: () => ({ x: 0, y: 0 }),
+      getSelectedBackground: () => editorState.selectedBackground,
+      setSelectedBackground: (backgroundId) => {
+        editorState.selectedBackground = backgroundId;
+      },
+      getPlacedObjects: () => editorState.placedObjects,
+      setPlacedObjects: (placedObjects) => {
+        editorState.placedObjects = placedObjects;
+      },
+      updateBackgroundSelectValue: () => {},
       updateBackground: () => this.updateBackground(),
       updateGoalUi: () => this.updateGoalUi(),
       syncBackgroundCameraIgnores: () => this.syncBackgroundCameraIgnores(),
@@ -309,10 +320,12 @@ export class EditorScene extends Phaser.Scene {
       sleepEditorScene: () => this.scene.sleep(),
       stopEditorScene: () => this.scene.stop(),
       wakeOverworld: (data) => this.scene.wake('OverworldPlayScene', data),
+      wakeCourseComposer: (data) => this.scene.wake('CourseComposerScene', data),
       updateBottomBar: () => this.updateBottomBar(),
       hasActiveCourseEdit: () => this.courseController.hasActiveCourseEdit(),
       canReturnToCourseBuilder: () => this.courseController.getCourseEditorState().canReturnToCourseBuilder,
-      getAdjacentCourseEdit: (offset) => this.courseController.getAdjacentCourseEdit(offset),
+      shouldReturnToCourseEditor: () => this.shouldReturnToCourseEditor(),
+      buildCourseEditorWakeData: (wakeData) => this.buildCourseEditorWakeData(wakeData),
       setCourseEditorStatusText: (text) => this.courseController.setStatusText(text),
       updateGoalUi: () => this.updateGoalUi(),
       getPersistenceStatusText: () => this.persistenceStatusText,
@@ -528,7 +541,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private getAdjacentCourseEdit(offset: -1 | 1): EditorCourseEditData | null {
-    return this.courseController.getAdjacentCourseEdit(offset);
+    return null;
   }
 
   private syncActiveCourseRoomSessionSnapshot(
@@ -730,6 +743,17 @@ export class EditorScene extends Phaser.Scene {
           closeHandler: async () => {
             hideBusyOverlay();
             this.scene.stop();
+            if (this.shouldReturnToCourseEditor()) {
+              const courseEdit = this.buildCourseEditedRoomData();
+              this.scene.wake('CourseComposerScene', {
+                courseId: courseEdit?.courseId ?? null,
+                selectedCoordinates: { ...this.roomCoordinates },
+                centerCoordinates: { ...this.roomCoordinates },
+                statusMessage: 'Failed to open room.',
+              } satisfies CourseEditorSceneData);
+              return;
+            }
+
             this.scene.wake('OverworldPlayScene', {
               centerCoordinates: { ...this.roomCoordinates },
               roomCoordinates: { ...this.roomCoordinates },
@@ -1532,6 +1556,30 @@ export class EditorScene extends Phaser.Scene {
 
   private async handleEditorBackAction(): Promise<void> {
     await this.flowController.handleEditorBackAction();
+  }
+
+  private shouldReturnToCourseEditor(): boolean {
+    return Boolean(
+      this.buildCourseEditedRoomData() &&
+        (this.scene.isSleeping('CourseComposerScene') ||
+          this.scene.isPaused('CourseComposerScene') ||
+          this.scene.isActive('CourseComposerScene'))
+    );
+  }
+
+  private buildCourseEditorWakeData(wakeData: OverworldPlaySceneData): CourseEditorSceneData {
+    const courseEdit = this.buildCourseEditedRoomData();
+    return {
+      courseId: courseEdit?.courseId ?? null,
+      selectedCoordinates: { ...this.roomCoordinates },
+      centerCoordinates: { ...(wakeData.centerCoordinates ?? this.roomCoordinates) },
+      statusMessage: wakeData.statusMessage ?? null,
+      courseEditedRoom: this.buildCourseEditedRoomData(),
+      draftRoom: wakeData.draftRoom ?? null,
+      publishedRoom: wakeData.publishedRoom ?? null,
+      clearDraftRoomId: wakeData.clearDraftRoomId ?? null,
+      invalidateRoomId: wakeData.invalidateRoomId ?? null,
+    };
   }
 
   async editPreviousCourseRoom(): Promise<void> {

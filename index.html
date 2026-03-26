@@ -615,6 +615,72 @@
           </div>
         </div>
       </div>
+      <div id="course-editor-shell" class="course-editor-shell hidden">
+        <div class="course-editor-panel">
+          <div class="course-editor-header">
+            <div class="course-editor-header-copy">
+              <div class="history-modal-kicker">Courses</div>
+              <div class="history-modal-title">Course Setup</div>
+              <div id="course-workbench-status" class="history-modal-meta hidden"></div>
+            </div>
+            <button id="btn-course-workbench-back-world" class="bar-btn bar-btn-small" type="button">World</button>
+          </div>
+
+          <div class="course-editor-toolbar">
+            <div class="course-editor-zoom-row">
+              <button id="btn-course-workbench-zoom-out" class="bar-btn bar-btn-small" type="button">-</button>
+              <div id="course-workbench-zoom-text" class="course-editor-zoom-text">Zoom: 0.18x</div>
+              <button id="btn-course-workbench-zoom-in" class="bar-btn bar-btn-small" type="button">+</button>
+              <button id="btn-course-workbench-fit" class="bar-btn bar-btn-small" type="button">Fit</button>
+            </div>
+          </div>
+
+          <div class="course-editor-scroll">
+            <div class="about-section">
+              <div class="about-section-title">Title</div>
+              <input id="course-workbench-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Course title" />
+            </div>
+
+            <div class="about-section">
+              <div class="about-section-title">Selected Room</div>
+              <div id="course-workbench-selected-room-summary" class="goal-summary">Room 0,0</div>
+              <div id="course-workbench-selected-room-status" class="history-modal-meta">Select a room to begin.</div>
+              <div id="course-workbench-selected-room-actions" class="course-room-actions">
+                <button id="btn-course-workbench-toggle-room" class="bar-btn bar-btn-small" type="button">Add Room</button>
+                <button id="btn-course-workbench-open-room" class="bar-btn bar-btn-small" type="button">Open Room</button>
+                <button id="btn-course-workbench-center-room" class="bar-btn bar-btn-small" type="button">Center</button>
+                <button id="btn-course-workbench-edit-course" class="bar-btn bar-btn-small" type="button">Edit Course</button>
+              </div>
+            </div>
+
+            <div class="about-section">
+              <div class="about-section-title">Setup</div>
+              <div class="history-modal-meta">Save this title + room list before opening the course editor.</div>
+              <div class="course-room-actions">
+                <button id="btn-course-workbench-save" class="bar-btn" type="button">Save Setup</button>
+                <button id="btn-course-workbench-test" class="bar-btn" type="button">Test Draft</button>
+                <button id="btn-course-workbench-publish" class="bar-btn" type="button">Publish Course</button>
+                <button id="btn-course-workbench-unpublish" class="bar-btn hidden" type="button">Unpublish Course</button>
+              </div>
+              <div id="course-workbench-save-reason" class="history-modal-meta hidden"></div>
+              <div id="course-workbench-test-reason" class="history-modal-meta hidden"></div>
+              <div id="course-workbench-publish-reason" class="history-modal-meta hidden"></div>
+              <div id="course-workbench-unpublish-reason" class="history-modal-meta hidden"></div>
+            </div>
+
+            <div class="about-section">
+              <div class="about-section-title">Rooms</div>
+              <div id="course-workbench-room-list" class="course-editor-list"></div>
+            </div>
+
+            <div class="about-section">
+              <div class="about-section-title">Live State</div>
+              <div id="course-workbench-published-state" class="goal-summary">Not published</div>
+              <div id="course-workbench-published-warning" class="history-modal-meta hidden"></div>
+            </div>
+          </div>
+        </div>
+      </div>
       <div id="world-hud" class="hidden">
         <div class="world-hud-topline">
           <div class="world-hud-title-wrap">

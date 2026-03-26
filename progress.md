@@ -57,6 +57,44 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Separate course editor pass on March 24, 2026:
+  - replaced the overworld-first course composer launch path with a dedicated `CourseEditorScene` that owns a standalone world-anchored authoring shell, pan/zoom camera, room membership selection, and direct marker placement for `start`, `exit`, `checkpoint`, and `finish`
+  - course validation is now cluster-based instead of linear-order-based: draft/publish paths require unique authored rooms forming one orthogonally connected cluster, while publish validation now follows marker placement rather than first-room / last-room assumptions
+  - course room membership is persisted in deterministic coordinate order only for compatibility; `room_order` is no longer treated as authored progression semantics
+  - room editor course return flow now wakes the sleeping course editor directly, and overworld HUD course copy no longer shows misleading `step X/Y` labels
+  - added the new course-editor scene bridge + UI shell for title/goal editing, room list, checkpoint list, zoom controls, save/publish/test/unpublish actions, and quick-open into the existing room editor
+  - verification:
+    - `./node_modules/.bin/tsc --noEmit` passed in the clean `/tmp/wamp-course-editor` worktree
+    - `npm run build` passed in the clean `/tmp/wamp-course-editor` worktree
+  - remaining check:
+    - browser/runtime smoke is still pending for scene transitions, marker placement, and test-run return-to-course-editor flow
+
+- Separate course editor runtime smoke follow-up on March 24, 2026:
+  - fixed the new scene launch path by giving `CourseEditorScene` an explicit Phaser key; without that, clicking `Course Builder` left the app with no active scene because Phaser could not launch the unnamed scene instance by key
+  - fixed new course-editor transition ordering so handoffs use `run/wake` before `sleep`, matching the rest of the scene stack and preventing transient blank-scene states
+  - changed course-editor return-to-world from `stop` to `sleep` and changed overworld reopen behavior to `wake` an existing sleeping course editor instead of destroying/recreating it; this prevents chunk-preview texture teardown from invalidating the overworld's shared preview images on return
+  - suppressed the generic course-editor helper copy from leaking into the overworld status bar on exit
+  - verification:
+    - `./node_modules/.bin/tsc --noEmit` passed
+    - `npm run build` passed
+    - shared Playwright smoke client confirmed the course editor scene becomes active after `#btn-world-course-builder` and wrote:
+      - `output/web-game/course-editor-smoke-2/state-0.json`
+      - `output/web-game/course-editor-smoke-2/shot-0.png`
+    - smoke caveat:
+      - the shared client still hit the existing black-canvas capture path, so visual verification relied on direct full-page Playwright screenshots instead
+    - direct Playwright DOM/browser checks wrote:
+      - `output/web-game/course-editor-dom-check-3.json`
+      - `output/web-game/course-editor-dom-check-3.png`
+      - `output/web-game/course-editor-return-check-3.json`
+      - `output/web-game/course-editor-return-check-3.png`
+      - `output/web-game/course-editor-reopen-check.json`
+      - `output/web-game/course-editor-reopen-check.png`
+    - those checks confirmed:
+      - overworld `Course Builder` now opens `CourseEditorScene`
+      - selecting a different room in the course editor updates `selectedCoordinates`
+      - `World` returns cleanly to the overworld with no `drawImage` page error
+      - reopening the course editor reuses the sleeping scene and preserves the selected room focus
+
 - Practice-run spawn marker depth follow-up on March 24, 2026:
   - raised play-scene goal marker depth so the practice `START` sign and label now render above the room foreground plane instead of occasionally hiding behind front-layer art
   - verification:
@@ -3690,3 +3728,180 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - `reach_exit` summary became `Reach Exit · start set · exit set · 1 room`
     - `checkpoint_sprint` summary became `Checkpoint Sprint · start set · 1 checkpoint · finish set · 1 room`
     - no new console or page errors were captured
+
+## March 25, 2026 - Two-Phase Course Authoring Overhaul
+
+- Reframed the old standalone course scene into `CourseComposerScene`
+  - overworld `Course Builder` now launches the dedicated composer scene instead of the legacy in-HUD course modal flow
+  - composer toolbar is reduced to browse/select plus contextual room actions; global `rooms/start/exit/checkpoint/finish` tool row is gone
+  - course marker placement now comes from the goal section, so `reach_exit` and `checkpoint_sprint` expose marker buttons contextually while non-marker goals do not
+  - added the explicit `Edit Course` action from the composer to launch the stitched multi-room editor
+- Added a real `CourseEditorScene` as a seamless multi-room editor
+  - spans the stitched bounds of all course rooms with one camera and explicit room borders/labels
+  - reuses `EditorEditRuntime` per room slice with new host hooks for room origin, room-local backgrounds, and room-local placed object state
+  - painting, erasing, fill, rect/copy, object placement, background changes, and undo/redo all route to the selected room slice; cross-room tile drags commit the current batch and continue in the next slice
+  - editor chrome is reused but adapted for course mode: `Back` becomes `Course`, `Save` becomes `Save All`, `Publish` becomes `Publish Rooms`, room-goal controls stay hidden, and course-goal controls remain the active goal surface
+  - draft test from the course editor returns back to `CourseEditorScene`, not the overworld
+- Removed authoring-time room-order dependence from the active course-edit flow
+  - `EditorCourseEditData` / `CourseEditedRoomData` are now room-id-based only
+  - single-room editor previous/next course navigation is disabled with explicit status text instead of relying on step order
+  - course context text in the room editor now uses room-count messaging rather than `Step X/Y`
+- Verification:
+  - `./node_modules/.bin/tsc --noEmit` passed in `/tmp/wamp-course-overhaul`
+  - `npm run build` passed in `/tmp/wamp-course-overhaul`
+  - local D1 migrations applied cleanly through `0018`
+  - Playwright smoke confirmed `#btn-world-course-builder` now lands in `course-composer`; artifacts:
+    - `output/web-game/course-authoring-overhaul-smoke/state-0.json`
+    - `output/web-game/course-authoring-overhaul-smoke/composer-dom.json`
+    - `output/web-game/course-authoring-overhaul-smoke/composer-dom.png`
+  - deeper local Playwright smoke used debug email auth plus local room claims/publishes to validate the stitched editor end-to-end:
+    - built and published two local rooms
+    - opened course setup, added both rooms, and launched `CourseEditorScene`
+    - edited one room slice and saved it through `Save All`
+    - artifacts:
+      - `output/web-game/course-authoring-overhaul-e2e/summary.json`
+      - `output/web-game/course-authoring-overhaul-e2e/course-editor.png`
+  - remaining polish:
+    - the legacy course modal controller still exists but is dormant because the overworld launch path now goes straight into `CourseComposerScene`
+    - the local browser checks covered the real flow, but a human pass is still worthwhile for course-goal placement UX and multi-room object dragging across room boundaries
+
+## March 25, 2026 - Course Setup / Editor Handoff Refinement
+
+- Simplified `Course Setup` so it only handles setup concerns
+  - removed the goal section from setup entirely; course-goal editing now lives only inside `CourseEditorScene`
+  - removed checkpoint listing from setup
+  - reordered the setup shell so the authoring flow reads: title, selected room, setup actions, rooms, live state
+  - renamed `Save Draft` to `Save Setup`
+- Added explicit setup gating before entering the stitched editor
+  - `Edit Course` is now disabled until the course has a title, at least one selected room, and a saved draft state
+  - save success copy now explicitly points authors back toward `Edit Course` for goal placement and multi-room editing
+  - fixed course draft dirty tracking so draft-only courses compare against the last persisted draft, not just `published`, which means `Save Setup` now actually clears dirty state and unlocks `Edit Course`
+- Clarified the stitched editor copy so it no longer sounds like publishing the course
+  - `Back` now reads `Setup`
+  - `Publish Rooms` now reads `Publish Changed Rooms`
+  - publish tooltip and top status text now explicitly say course publishing still happens from setup
+- Verification:
+  - `./node_modules/.bin/tsc --noEmit` passed in `/tmp/wamp-course-overhaul`
+  - `npm run build` passed in `/tmp/wamp-course-overhaul`
+  - targeted local Playwright smoke confirmed the new handoff:
+    - before save: `Edit Course` disabled with `Save course setup before editing.`
+    - after save: dirty state clears and `Edit Course` unlocks
+    - inside editor: labels show `Setup` and `Publish Changed Rooms`
+    - artifacts:
+      - `output/web-game/course-setup-refine-2/summary.json`
+      - `output/web-game/course-setup-refine-2/course-setup.png`
+
+## March 25, 2026 - Course Return / Adjacency Fixes
+
+- Fixed the course-setup return path back to the overworld
+  - `CourseComposerScene.returnToWorld()` now stops the composer scene instead of leaving it sleeping on shared preview textures
+  - `OverworldPlayScene.handleWakeAsync()` now treats `forceRefreshAround` wakes as a full streaming rebuild and skips the stale pre-refresh redraw that was causing the null-texture crash
+- Fixed course-play room boundary reachability for non-linear course layouts
+  - course edge walls now allow any orthogonally adjacent room that belongs to the active course cluster
+  - this removes the old linear-order assumption that could leave invisible barriers between vertically adjacent course rooms in a 2x2 or other connected cluster
+- Verification:
+  - `./node_modules/.bin/tsc --noEmit` passed in `/tmp/wamp-course-overhaul`
+  - `npm run build` passed in `/tmp/wamp-course-overhaul`
+  - targeted local Playwright smoke covered composer -> world return and stayed console-clean with no Phaser texture crash
+    - artifacts:
+      - `output/web-game/course-return-and-adjacency/summary.json`
+      - `output/web-game/course-return-and-adjacency/after-return.png`
+  - direct browser probe of the active course reachability helper confirmed:
+    - horizontal neighbor: reachable
+    - vertical neighbor: reachable
+    - diagonal: blocked
+    - outside-course neighbor: blocked
+
+## March 25, 2026 - Scene Texture Namespace Fix
+
+- Fixed the remaining first-round-trip Phaser null-texture crash by removing global texture-key collisions between overworld/course scenes
+  - `OverworldPlayScene` and `CourseComposerScene` both use the shared Phaser texture manager for chunk previews and full-room textures
+  - before this fix, both scenes generated the same global keys for the same room/chunk content, so when one scene refreshed or cleared its streaming state it could remove a texture source still bound to live `Image`s in the other scene
+  - that manifested as the lingering first-time `glTexture` / `drawImage` null crash during the real setup -> editor -> test -> publish -> world round trip
+- Implementation:
+  - `src/scenes/overworld/chunkPreviewRenderer.ts`
+    - chunk preview textures are now namespaced by scene key
+  - `src/scenes/overworld/worldStreaming.ts`
+    - full-room texture keys are now namespaced by scene key before being created, reused, or removed
+  - this keeps each scene’s cleanup local instead of letting composer refreshes delete overworld textures or vice versa
+- Verification:
+  - `./node_modules/.bin/tsc --noEmit` passed in `/tmp/wamp-course-overhaul`
+  - `npm run build` passed in `/tmp/wamp-course-overhaul`
+  - deterministic local Playwright repro now completes cleanly for the exact first-time flow:
+    - course setup -> edit course -> test -> return -> save rooms -> publish rooms -> setup -> publish course -> world
+  - repro artifacts:
+    - `output/web-game/course-full-return-repro/summary.json`
+    - `output/web-game/course-full-return-repro/before-world.png`
+    - `output/web-game/course-full-return-repro/after-world.png`
+  - final repro result:
+    - `failure: null`
+    - `consoleErrors: []`
+    - app returns cleanly to browse-mode overworld on room `0,0`
+
+## March 25, 2026 - Course Goal Start + Pressure Plate Follow-ups
+
+- Relaxed course start-marker requirements for non-marker goals
+  - shared course-goal helpers now treat `reach_exit` and `checkpoint_sprint` as the only course goals that require a start point
+  - `collect_target`, `defeat_all`, and `survival` can now save/publish/test without a course start flag
+  - patched both frontend gating and worker publish validation so setup/editor behavior matches the backend:
+    - `src/courses/editor/state.ts`
+    - `src/cloudflare/worker/courses/store.ts`
+    - `src/scenes/editor/playMode.ts`
+    - `src/scenes/overworld/courseRuns.ts`
+    - `src/scenes/OverworldPlayScene.ts`
+- Carried the pressure-plate / container inspector flow into `CourseEditorScene`
+  - the stitched multi-room editor now supports the same hover/pin/connect/clear/done-later pressure-plate workflow as the single-room editor
+  - pressure targets are still room-local on purpose; editing a course across multiple rooms does not imply cross-room trigger wiring
+  - also carried the container inspector so chests/cages can still be filled/cleared from the course editor
+  - key files:
+    - `src/scenes/CourseEditorScene.ts`
+    - `src/scenes/editor/editRuntime.ts`
+- Enabled cross-room tile paste in the stitched editor
+  - copied tile selections are now promoted to scene-level clipboard state instead of being trapped in the source room runtime
+  - paste preview can now target any course room, and `Cmd/Ctrl+V` re-enters paste mode there
+- Verification:
+  - `./node_modules/.bin/tsc --noEmit` passed in `/tmp/wamp-course-overhaul`
+  - `npm run build` passed in `/tmp/wamp-course-overhaul`
+  - Playwright skill client boot smoke against `http://localhost:3000` completed and wrote:
+    - `output/web-game/state-0.json`
+    - `output/web-game/shot-0.png`
+  - note:
+    - the smoke still hit the existing headless/WebGL black-frame screenshot limitation, so it only confirms boot + `render_game_to_text`; the new course interactions still want a manual browser pass
+
+- March 26, 2026: fixed course-setup rediscovery after fresh sessions.
+  - Root cause: unpublished course drafts were saved correctly, but reopening Course Setup from the world only knew how to find published course memberships or the in-memory draft session. After a refresh/day-later revisit, saved unpublished drafts looked lost because the composer opened a brand-new default record.
+  - Added authenticated draft lookup by selected room via `GET /api/courses/drafts/by-room/:roomId`, and CourseComposerScene now reopens the latest saved draft containing the selected room before falling back to a new draft.
+  - Verification: `./node_modules/.bin/tsc --noEmit` and `npm run build` passed in `/tmp/wamp-course-draft-discovery`.
+
+- March 26, 2026: cleaned up course-setup gating/messaging.
+  - The actual `Edit Course` gate was already title + rooms + saved setup only, but setup still leaked goal-dependent disabled reasons and actions, which made it look like choosing a goal was required before entering the editor.
+  - Course setup now hides `Test Draft` / `Publish Course` until a goal exists, and any remaining goal-blocked messages explicitly point the user to `Edit Course` instead of sounding like a setup prerequisite.
+  - Verification: `./node_modules/.bin/tsc --noEmit` and `npm run build` passed in `/tmp/wamp-course-draft-discovery`.
+
+## March 26, 2026 - Course Flow + Editor Refactor Integration
+
+- Integrated `origin/safety/course-draft-discovery-2026-03-26` onto the phase-6 editor refactor baseline.
+  - Kept the newer course-authoring model as the source of truth:
+    - `EditorCourseEditData` no longer carries `roomOrder`
+    - room-editor returns during course editing now route back to `CourseComposerScene`
+    - previous/next room controls in room-editor/course-editor now explicitly report that room order is no longer used
+  - Preserved the phase-5/6 seams instead of reintroducing older setup wiring:
+    - kept `EditorUiBridge`
+    - kept extracted editor controllers (`flow`, `presence`, `inspector`, `courseController`)
+    - adapted `CourseEditorScene` to the current `EditorUiBridge` action API
+  - Resolved the overlapping scene/setup merge points in:
+    - `src/scenes/EditorScene.ts`
+    - `src/scenes/editor/editRuntime.ts`
+    - `src/ui/setup.ts`
+    - `src/scenes/CourseEditorScene.ts`
+- Verification:
+  - `npm run build` passed in `/private/tmp/wamp-course-flow-editor-integration`
+  - focused browser probe against local dev + safety backend passed cleanly for:
+    - `CourseComposerScene -> EditorScene -> CourseComposerScene`
+    - `CourseComposerScene -> CourseEditorScene -> CourseComposerScene`
+  - no console errors or page errors in the probe
+  - artifacts:
+    - `output/web-game/course-flow-editor-integration-probe/summary.json`
+    - `output/web-game/course-flow-editor-integration-probe/course-composer.png`
+    - `output/web-game/course-flow-editor-integration-probe/course-editor.png`
+    - `output/web-game/course-flow-editor-integration-probe/composer-after-editor-return.png`

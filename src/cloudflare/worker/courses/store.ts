@@ -2,12 +2,14 @@ import type { AuthUser } from '../../../auth/model';
 import {
   cloneCourseRecord,
   cloneCourseSnapshot,
-  courseRoomRefsFollowLinearPath,
+  courseGoalRequiresStartPoint,
+  courseRoomRefsFormConnectedCluster,
   courseRoomRefsHaveUniqueRoomIds,
   createCourseVersionRecord,
   getCourseRoomOrder,
   normalizeCourseGoal,
   normalizeCourseSnapshot,
+  sortCourseRoomRefsForStorage,
   type CourseGoalType,
   type CourseMarkerPoint,
   type CourseRecord,
@@ -78,6 +80,36 @@ export async function loadCourseRecord(
   return cloneCourseRecord(record);
 }
 
+export async function loadLatestEditableDraftCourseForRoom(
+  env: Env,
+  roomId: string,
+  viewerUserId: string,
+  viewerIsAdmin = false
+): Promise<CourseRecord | null> {
+  const row = await env.DB.prepare(
+    `
+      SELECT id
+      FROM courses
+      WHERE owner_user_id = ?
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(courses.draft_json, '$.roomRefs') room_ref
+          WHERE json_extract(room_ref.value, '$.roomId') = ?
+        )
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `
+  )
+    .bind(viewerUserId, roomId)
+    .first<{ id: string }>();
+
+  if (!row?.id) {
+    return null;
+  }
+
+  return loadCourseRecord(env, row.id, viewerUserId, viewerIsAdmin);
+}
+
 export async function loadPublishedCourse(
   env: Env,
   courseId: string
@@ -113,7 +145,6 @@ export async function loadPublishedCourseMembershipsInBounds(
     courseId: string;
     courseTitle: string | null;
     goalType: CourseGoalType | null;
-    roomIndex: number;
     roomCount: number;
   }>
 > {
@@ -121,7 +152,6 @@ export async function loadPublishedCourseMembershipsInBounds(
     `
       SELECT
         refs.room_id,
-        refs.room_order,
         course.id AS course_id,
         course.published_title,
         course.published_json,
@@ -140,13 +170,12 @@ export async function loadPublishedCourseMembershipsInBounds(
        AND room_counts.course_version = refs.course_version
       WHERE refs.room_x BETWEEN ? AND ?
         AND refs.room_y BETWEEN ? AND ?
-      ORDER BY refs.course_id ASC, refs.room_order ASC
+      ORDER BY refs.course_id ASC, refs.room_y ASC, refs.room_x ASC, refs.room_id ASC
     `
   )
     .bind(minX, maxX, minY, maxY)
     .all<{
       room_id: string;
-      room_order: number;
       course_id: string;
       published_title: string | null;
       published_json: string | null;
@@ -170,7 +199,6 @@ export async function loadPublishedCourseMembershipsInBounds(
     roomId: row.room_id,
     courseId: row.course_id,
     courseTitle: row.published_title,
-    roomIndex: row.room_order,
     roomCount: Number(row.room_count ?? 0),
   }));
 }
@@ -455,11 +483,11 @@ async function resolveValidatedCourseDraft(
     throw new HttpError(400, 'Published courses must span 2 to 4 rooms.');
   }
 
-  if (!courseRoomRefsFollowLinearPath(roomRefs)) {
-    throw new HttpError(400, 'Course rooms must follow one ordered linear path.');
+  if (!courseRoomRefsFormConnectedCluster(roomRefs)) {
+    throw new HttpError(400, 'Course rooms must stay in one connected cluster.');
   }
 
-  const resolvedRefs = await Promise.all(
+  const resolvedRefs = sortCourseRoomRefsForStorage(await Promise.all(
     roomRefs.map(async (roomRef) => {
       const roomVersion = await loadPublishedRoomVersionForCourse(env, roomRef.roomId, roomRef.roomVersion);
       if (!roomVersion.published_by_user_id) {
@@ -475,7 +503,7 @@ async function resolveValidatedCourseDraft(
         roomTitle: roomVersion.title ?? roomRef.roomTitle ?? null,
       } satisfies CourseRoomRef;
     })
-  );
+  ));
 
   const nextGoal = normalizeCourseGoal(draft.goal);
   validateCourseMarkerBelongsToCourse(draft.startPoint, resolvedRefs, 'Start point');
@@ -578,27 +606,18 @@ function validatePublishableCourseDraft(
     throw new HttpError(400, 'Published courses need a goal.');
   }
 
-  const firstRoomRef = roomRefs[0] ?? null;
-  const lastRoomRef = roomRefs[roomRefs.length - 1] ?? null;
-  if (!firstRoomRef || !lastRoomRef) {
+  if (roomRefs.length < 2) {
     throw new HttpError(400, 'Published courses must span 2 to 4 rooms.');
   }
 
-  if (!draft.startPoint) {
+  if (courseGoalRequiresStartPoint(draft.goal) && !draft.startPoint) {
     throw new HttpError(400, 'Published courses need a start point.');
-  }
-
-  if (draft.startPoint.roomId !== firstRoomRef.roomId) {
-    throw new HttpError(400, 'Start point must be placed in the first course room.');
   }
 
   switch (draft.goal.type) {
     case 'reach_exit':
       if (!draft.goal.exit) {
         throw new HttpError(400, 'Reach Exit courses need an exit.');
-      }
-      if (draft.goal.exit.roomId !== lastRoomRef.roomId) {
-        throw new HttpError(400, 'Exit must be placed in the last course room.');
       }
       return;
     case 'checkpoint_sprint':
@@ -608,19 +627,11 @@ function validatePublishableCourseDraft(
       if (!draft.goal.finish) {
         throw new HttpError(400, 'Checkpoint Sprint courses need a finish.');
       }
-      if (draft.goal.finish.roomId !== lastRoomRef.roomId) {
-        throw new HttpError(400, 'Finish must be placed in the last course room.');
-      }
-      let previousOrder = -1;
       for (const checkpoint of draft.goal.checkpoints) {
         const order = getCourseRoomOrder(roomRefs, checkpoint.roomId);
         if (order < 0) {
           throw new HttpError(400, 'Checkpoint must belong to a room in the course.');
         }
-        if (order < previousOrder) {
-          throw new HttpError(400, 'Checkpoints must follow the authored room order.');
-        }
-        previousOrder = order;
       }
       return;
     case 'collect_target':
@@ -713,6 +724,7 @@ async function persistCourseRecord(env: Env, input: PersistCourseRecordInput): P
 async function persistCourseVersion(env: Env, input: PersistCourseVersionInput): Promise<void> {
   const version = input.snapshot.version;
   const title = input.snapshot.title;
+  const sortedRoomRefs = sortCourseRoomRefsForStorage(input.snapshot.roomRefs);
 
   const statements = [
     env.DB.prepare(
@@ -752,8 +764,8 @@ async function persistCourseVersion(env: Env, input: PersistCourseVersionInput):
     ).bind(input.snapshot.id, version),
   ];
 
-  for (let index = 0; index < input.snapshot.roomRefs.length; index += 1) {
-    const roomRef = input.snapshot.roomRefs[index];
+  for (let index = 0; index < sortedRoomRefs.length; index += 1) {
+    const roomRef = sortedRoomRefs[index];
     statements.push(
       env.DB.prepare(
         `

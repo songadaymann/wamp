@@ -50,7 +50,6 @@ export class EditorCourseController {
       ? {
           courseId: courseEdit.courseId,
           roomId: courseEdit.roomId,
-          roomOrder: courseEdit.roomOrder,
         }
       : null;
     this.courseGoalPlacementMode = null;
@@ -84,26 +83,6 @@ export class EditorCourseController {
 
   buildCourseEditedRoomData(): CourseEditedRoomData | null {
     return buildCourseEditedRoomData(this.activeCourseMarkerEdit);
-  }
-
-  getAdjacentCourseEdit(offset: -1 | 1): EditorCourseEditData | null {
-    const courseEdit = this.activeCourseMarkerEdit;
-    const draft = this.getActiveCourseDraft();
-    if (!courseEdit || !draft || courseEdit.roomOrder === null) {
-      return null;
-    }
-
-    const nextOrder = courseEdit.roomOrder + offset;
-    const nextRoomRef = draft.roomRefs[nextOrder] ?? null;
-    if (!nextRoomRef) {
-      return null;
-    }
-
-    return {
-      courseId: courseEdit.courseId,
-      roomId: nextRoomRef.roomId,
-      roomOrder: nextOrder,
-    };
   }
 
   setStatusText(text: string | null): void {

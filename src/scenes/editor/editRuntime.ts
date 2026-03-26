@@ -88,6 +88,12 @@ export interface EditorClipboardState {
 interface EditorEditRuntimeHost {
   getLayers(): Map<string, Phaser.Tilemaps.TilemapLayer>;
   getRoomSnapshotMetadata(): EditorRoomSnapshotMetadata;
+  getRoomOrigin(): { x: number; y: number };
+  getSelectedBackground(): string;
+  setSelectedBackground(backgroundId: string): void;
+  getPlacedObjects(): PlacedObject[];
+  setPlacedObjects(placedObjects: PlacedObject[]): void;
+  updateBackgroundSelectValue(backgroundId: string): void;
   updateBackground(): void;
   updateGoalUi(): void;
   syncBackgroundCameraIgnores(): void;
@@ -175,8 +181,40 @@ export class EditorEditRuntime {
       : null;
   }
 
+  setClipboardState(state: EditorClipboardState | null): void {
+    this.clipboardState = state
+      ? {
+          sourceLayer: state.sourceLayer,
+          width: state.width,
+          height: state.height,
+          tiles: state.tiles.map((row) => [...row]),
+          occupiedMask: state.occupiedMask.map((row) => [...row]),
+        }
+      : null;
+  }
+
   initializeGraphics(): void {
     // Goal markers are sprite-backed; no persistent graphics overlay needed.
+  }
+
+  private getRoomOrigin(): { x: number; y: number } {
+    return this.host.getRoomOrigin();
+  }
+
+  private toLocalWorldPoint(worldX: number, worldY: number): { x: number; y: number } {
+    const origin = this.getRoomOrigin();
+    return {
+      x: worldX - origin.x,
+      y: worldY - origin.y,
+    };
+  }
+
+  private toWorldPoint(localX: number, localY: number): { x: number; y: number } {
+    const origin = this.getRoomOrigin();
+    return {
+      x: origin.x + localX,
+      y: origin.y + localY,
+    };
   }
 
   private canEditRoom(): boolean {
@@ -248,12 +286,13 @@ export class EditorEditRuntime {
       }
     }
 
-    editorState.selectedBackground = room.background;
+    this.host.setSelectedBackground(room.background);
+    this.host.updateBackgroundSelectValue(room.background);
     this.host.updateBackground();
 
     this.roomGoal = cloneRoomGoal(room.goal);
     this.roomSpawnPoint = room.spawnPoint ? { ...room.spawnPoint } : null;
-    editorState.placedObjects = room.placedObjects.map((placed) => ({ ...placed }));
+    this.host.setPlacedObjects(room.placedObjects.map((placed) => ({ ...placed })));
     this.rebuildObjectSprites();
     this.host.updateGoalUi();
 
@@ -384,11 +423,11 @@ export class EditorEditRuntime {
       id: metadata.roomId,
       coordinates: { ...metadata.coordinates },
       title: metadata.title,
-      background: editorState.selectedBackground,
+      background: this.host.getSelectedBackground(),
       goal: cloneRoomGoal(this.roomGoal),
       spawnPoint: this.roomSpawnPoint ? { ...this.roomSpawnPoint } : null,
       tileData: this.serializeTileData(),
-      placedObjects: editorState.placedObjects.map((placed) => ({ ...placed })),
+      placedObjects: this.host.getPlacedObjects().map((placed) => ({ ...placed })),
       version: metadata.version,
       status: 'draft',
       createdAt: metadata.createdAt || new Date().toISOString(),
@@ -420,7 +459,7 @@ export class EditorEditRuntime {
     this.currentBatch = [];
   }
 
-  private clonePlacedObjects(placedObjects: PlacedObject[] = editorState.placedObjects): PlacedObject[] {
+  private clonePlacedObjects(placedObjects: PlacedObject[] = this.host.getPlacedObjects()): PlacedObject[] {
     return placedObjects.map((placed) => ({ ...placed }));
   }
 
@@ -428,8 +467,9 @@ export class EditorEditRuntime {
     if (!this.guardEditable()) {
       return;
     }
-    const baseTileX = Math.floor(worldX / TILE_SIZE);
-    const baseTileY = Math.floor(worldY / TILE_SIZE);
+    const localPoint = this.toLocalWorldPoint(worldX, worldY);
+    const baseTileX = Math.floor(localPoint.x / TILE_SIZE);
+    const baseTileY = Math.floor(localPoint.y / TILE_SIZE);
     const layer = this.host.getLayers().get(editorState.activeLayer);
     if (!layer) {
       return;
@@ -480,8 +520,9 @@ export class EditorEditRuntime {
     }
 
     const brushSize = Math.max(1, editorState.eraserBrushSize);
-    const tileX = Math.floor(worldX / TILE_SIZE);
-    const tileY = Math.floor(worldY / TILE_SIZE);
+    const localPoint = this.toLocalWorldPoint(worldX, worldY);
+    const tileX = Math.floor(localPoint.x / TILE_SIZE);
+    const tileY = Math.floor(localPoint.y / TILE_SIZE);
     const layer = this.host.getLayers().get(editorState.activeLayer);
     if (!layer) {
       return;
@@ -730,7 +771,7 @@ export class EditorEditRuntime {
 
     const previous = this.clonePlacedObjects();
     const next = [...previous, placed];
-    editorState.placedObjects = next;
+    this.host.setPlacedObjects(next);
     this.undoStack.push({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
@@ -745,8 +786,9 @@ export class EditorEditRuntime {
     if (!this.guardEditable()) {
       return null;
     }
+    const localPoint = this.toLocalWorldPoint(worldX, worldY);
     if (this.roomSpawnPoint) {
-      const spawnDist = Math.hypot(this.roomSpawnPoint.x - worldX, this.roomSpawnPoint.y - worldY);
+      const spawnDist = Math.hypot(this.roomSpawnPoint.x - localPoint.x, this.roomSpawnPoint.y - localPoint.y);
       if (spawnDist < 14) {
         this.updateSpawnPoint(null);
         return null;
@@ -763,8 +805,9 @@ export class EditorEditRuntime {
     }
 
     let bestIndex = -1;
-    for (let i = editorState.placedObjects.length - 1; i >= 0; i -= 1) {
-      const placed = editorState.placedObjects[i];
+    const placedObjects = this.host.getPlacedObjects();
+    for (let i = placedObjects.length - 1; i >= 0; i -= 1) {
+      const placed = placedObjects[i];
       if (
         placed === target ||
         (Boolean(target.instanceId) && placed.instanceId === target.instanceId)
@@ -787,7 +830,7 @@ export class EditorEditRuntime {
           ? { ...placed, triggerTargetInstanceId: null }
           : placed
       );
-    editorState.placedObjects = next;
+    this.host.setPlacedObjects(next);
     this.undoStack.push({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
@@ -799,8 +842,9 @@ export class EditorEditRuntime {
   }
 
   canRemoveObjectAt(worldX: number, worldY: number): boolean {
+    const localPoint = this.toLocalWorldPoint(worldX, worldY);
     if (this.roomSpawnPoint) {
-      const spawnDist = Math.hypot(this.roomSpawnPoint.x - worldX, this.roomSpawnPoint.y - worldY);
+      const spawnDist = Math.hypot(this.roomSpawnPoint.x - localPoint.x, this.roomSpawnPoint.y - localPoint.y);
       if (spawnDist < 14) {
         return true;
       }
@@ -815,13 +859,14 @@ export class EditorEditRuntime {
     }
     this.objectSprites = [];
 
-    for (const placed of editorState.placedObjects) {
+    for (const placed of this.host.getPlacedObjects()) {
       const objectConfig = getObjectById(placed.id);
       if (!objectConfig) {
         continue;
       }
 
-      const sprite = this.scene.add.sprite(placed.x, placed.y, objectConfig.id, 0);
+      const worldPoint = this.toWorldPoint(placed.x, placed.y);
+      const sprite = this.scene.add.sprite(worldPoint.x, worldPoint.y, objectConfig.id, 0);
       sprite.setDepth(this.getPlacedObjectEditorDepth(placed));
       sprite.setOrigin(0.5, 0.5);
       if (objectConfig.frameCount > 1 && objectConfig.fps > 0) {
@@ -842,9 +887,10 @@ export class EditorEditRuntime {
     this.spawnMarkerSprite?.destroy();
     this.spawnMarkerSprite = null;
     if (this.roomSpawnPoint) {
+      const worldPoint = this.toWorldPoint(this.roomSpawnPoint.x, this.roomSpawnPoint.y);
       this.spawnMarkerSprite = this.scene.add.sprite(
-        this.roomSpawnPoint.x,
-        this.roomSpawnPoint.y,
+        worldPoint.x,
+        worldPoint.y,
         'spawn_point',
         0,
       );
@@ -863,7 +909,7 @@ export class EditorEditRuntime {
       return null;
     }
 
-    return editorState.placedObjects.find((placed) => placed.instanceId === instanceId) ?? null;
+    return this.host.getPlacedObjects().find((placed) => placed.instanceId === instanceId) ?? null;
   }
 
   hasPlacedObjectInstanceId(instanceId: string | null | undefined): boolean {
@@ -878,15 +924,17 @@ export class EditorEditRuntime {
     let bestMatch: PlacedObject | null = null;
     let bestScore = Number.POSITIVE_INFINITY;
 
-    for (let index = editorState.placedObjects.length - 1; index >= 0; index -= 1) {
-      const placed = editorState.placedObjects[index];
+    const placedObjects = this.host.getPlacedObjects();
+    for (let index = placedObjects.length - 1; index >= 0; index -= 1) {
+      const placed = placedObjects[index];
       if (filter && !filter(placed)) {
         continue;
       }
 
       const bounds = this.getPlacedObjectBounds(placed);
       const contains = Phaser.Geom.Rectangle.Contains(bounds, worldX, worldY);
-      const distance = Math.hypot(placed.x - worldX, placed.y - worldY);
+      const worldPoint = this.toWorldPoint(placed.x, placed.y);
+      const distance = Math.hypot(worldPoint.x - worldX, worldPoint.y - worldY);
       if (!contains && distance > 18) {
         continue;
       }
@@ -902,7 +950,7 @@ export class EditorEditRuntime {
   }
 
   getPressurePlateEligibleTargets(triggerInstanceId: string | null | undefined): PlacedObject[] {
-    return editorState.placedObjects.filter((placed) => {
+    return this.host.getPlacedObjects().filter((placed) => {
       if (!canPlacedObjectBePressurePlateTarget(placed)) {
         return false;
       }
@@ -915,14 +963,15 @@ export class EditorEditRuntime {
     containerInstanceId: string,
     containedObjectId: string | null,
   ): boolean {
-    const containerIndex = editorState.placedObjects.findIndex(
+    const placedObjects = this.host.getPlacedObjects();
+    const containerIndex = placedObjects.findIndex(
       (placed) => placed.instanceId === containerInstanceId
     );
     if (containerIndex < 0) {
       return false;
     }
 
-    const container = editorState.placedObjects[containerIndex];
+    const container = placedObjects[containerIndex];
     if (!canPlacedObjectBeContainer(container)) {
       return false;
     }
@@ -948,7 +997,7 @@ export class EditorEditRuntime {
           }
         : placed
     );
-    editorState.placedObjects = next;
+    this.host.setPlacedObjects(next);
     this.undoStack.push({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
@@ -963,14 +1012,15 @@ export class EditorEditRuntime {
     triggerInstanceId: string,
     targetInstanceId: string | null,
   ): boolean {
-    const triggerIndex = editorState.placedObjects.findIndex(
+    const placedObjects = this.host.getPlacedObjects();
+    const triggerIndex = placedObjects.findIndex(
       (placed) => placed.instanceId === triggerInstanceId
     );
     if (triggerIndex < 0) {
       return false;
     }
 
-    const trigger = editorState.placedObjects[triggerIndex];
+    const trigger = placedObjects[triggerIndex];
     if (!canPlacedObjectTriggerOtherObjects(trigger)) {
       return false;
     }
@@ -1000,7 +1050,7 @@ export class EditorEditRuntime {
       return true;
     }
 
-    editorState.placedObjects = next;
+    this.host.setPlacedObjects(next);
     this.undoStack.push({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
@@ -1014,7 +1064,8 @@ export class EditorEditRuntime {
   getPlacedObjectBounds(placed: PlacedObject): Phaser.Geom.Rectangle {
     const objectConfig = getObjectById(placed.id);
     if (!objectConfig) {
-      return new Phaser.Geom.Rectangle(placed.x - 8, placed.y - 8, 16, 16);
+      const worldPoint = this.toWorldPoint(placed.x, placed.y);
+      return new Phaser.Geom.Rectangle(worldPoint.x - 8, worldPoint.y - 8, 16, 16);
     }
 
     const width = Math.max(
@@ -1036,7 +1087,8 @@ export class EditorEditRuntime {
       objectConfig.frameHeight * 0.5 +
       (objectConfig.previewOffsetY ?? 0);
 
-    return new Phaser.Geom.Rectangle(x - 4, y - 4, width + 8, height + 8);
+    const origin = this.getRoomOrigin();
+    return new Phaser.Geom.Rectangle(origin.x + x - 4, origin.y + y - 4, width + 8, height + 8);
   }
 
   getContainerContentsLabel(placed: PlacedObject | null | undefined): string | null {
@@ -1358,7 +1410,7 @@ export class EditorEditRuntime {
     }
 
     if (action.kind === 'objects') {
-      editorState.placedObjects = this.clonePlacedObjects(action.action.previous);
+      this.host.setPlacedObjects(this.clonePlacedObjects(action.action.previous));
       this.redoStack.push({
         kind: 'objects',
         action: {
@@ -1438,7 +1490,7 @@ export class EditorEditRuntime {
     }
 
     if (action.kind === 'objects') {
-      editorState.placedObjects = this.clonePlacedObjects(action.action.previous);
+      this.host.setPlacedObjects(this.clonePlacedObjects(action.action.previous));
       this.undoStack.push({
         kind: 'objects',
         action: {
@@ -1552,14 +1604,18 @@ export class EditorEditRuntime {
       const sprite = createGoalMarkerFlagSprite(
         this.scene,
         marker.variant,
-        marker.point.x,
-        marker.point.y + 2,
+        this.getRoomOrigin().x + marker.point.x,
+        this.getRoomOrigin().y + marker.point.y + 2,
         97,
       );
       this.goalMarkerSprites.push(sprite);
 
       if (marker.label) {
-        const label = this.scene.add.text(marker.point.x, marker.point.y - 28, marker.label, {
+        const label = this.scene.add.text(
+          this.getRoomOrigin().x + marker.point.x,
+          this.getRoomOrigin().y + marker.point.y - 28,
+          marker.label,
+          {
           fontFamily: 'Courier New',
           fontSize: '12px',
           color: marker.textColor,
@@ -1641,7 +1697,7 @@ export class EditorEditRuntime {
 
   private countPlacedObjectsByCategory(category: 'collectible' | 'enemy'): number {
     let count = 0;
-    for (const placed of editorState.placedObjects) {
+    for (const placed of this.host.getPlacedObjects()) {
       if (placedObjectContributesToCategory(placed, category)) {
         count += 1;
       }
