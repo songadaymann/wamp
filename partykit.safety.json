@@ -1,0 +1,8 @@
+{
+  "$schema": "./node_modules/partykit/schema.json",
+  "name": "everybodys-platformer-presence-safety",
+  "main": "partykit/presenceServer.ts",
+  "port": 1999,
+  "compatibilityDate": "2026-03-10",
+  "persist": true
+}
