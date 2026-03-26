@@ -710,11 +710,18 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       return this.normalizeRecord(loaded);
     }
 
+    const authState = getAuthDebugState();
+    if (authState.authenticated) {
+      const savedDraftForSelectedRoom = await this.courseRepository.loadLatestDraftForRoom(selectedRoomId);
+      if (savedDraftForSelectedRoom) {
+        return this.normalizeRecord(savedDraftForSelectedRoom);
+      }
+    }
+
     if (sessionRecord) {
       return this.normalizeRecord(sessionRecord);
     }
 
-    const authState = getAuthDebugState();
     const record = createDefaultCourseRecord();
     record.ownerUserId = authState.user?.id ?? null;
     record.ownerDisplayName = authState.user?.displayName ?? null;

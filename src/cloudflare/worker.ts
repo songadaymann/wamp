@@ -10,6 +10,7 @@ import { handleAgentRequest } from './worker/agents/routes';
 import { handleChatRequest } from './worker/chat/routes';
 import {
   handleCourseCreate,
+  handleCourseDraftByRoomLookup,
   handleCourseDraftSave,
   handleCourseGet,
   handleCourseLeaderboard,
@@ -186,6 +187,15 @@ export default {
       const courseMatch = /^\/api\/courses\/([^/]+)$/.exec(url.pathname);
       if (courseMatch && request.method === 'GET') {
         return await handleCourseGet(request, env, decodeURIComponent(courseMatch[1]));
+      }
+
+      const courseDraftByRoomMatch = /^\/api\/courses\/drafts\/by-room\/([^/]+)$/.exec(url.pathname);
+      if (courseDraftByRoomMatch && request.method === 'GET') {
+        return await handleCourseDraftByRoomLookup(
+          request,
+          env,
+          decodeURIComponent(courseDraftByRoomMatch[1])
+        );
       }
 
       const courseDraftMatch = /^\/api\/courses\/([^/]+)\/draft$/.exec(url.pathname);

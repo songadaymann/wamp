@@ -3775,3 +3775,8 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - `output/web-game/shot-0.png`
   - note:
     - the smoke still hit the existing headless/WebGL black-frame screenshot limitation, so it only confirms boot + `render_game_to_text`; the new course interactions still want a manual browser pass
+
+- March 26, 2026: fixed course-setup rediscovery after fresh sessions.
+  - Root cause: unpublished course drafts were saved correctly, but reopening Course Setup from the world only knew how to find published course memberships or the in-memory draft session. After a refresh/day-later revisit, saved unpublished drafts looked lost because the composer opened a brand-new default record.
+  - Added authenticated draft lookup by selected room via `GET /api/courses/drafts/by-room/:roomId`, and CourseComposerScene now reopens the latest saved draft containing the selected room before falling back to a new draft.
+  - Verification: `./node_modules/.bin/tsc --noEmit` and `npm run build` passed in `/tmp/wamp-course-draft-discovery`.

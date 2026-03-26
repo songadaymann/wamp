@@ -80,6 +80,36 @@ export async function loadCourseRecord(
   return cloneCourseRecord(record);
 }
 
+export async function loadLatestEditableDraftCourseForRoom(
+  env: Env,
+  roomId: string,
+  viewerUserId: string,
+  viewerIsAdmin = false
+): Promise<CourseRecord | null> {
+  const row = await env.DB.prepare(
+    `
+      SELECT id
+      FROM courses
+      WHERE owner_user_id = ?
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(courses.draft_json, '$.roomRefs') room_ref
+          WHERE json_extract(room_ref.value, '$.roomId') = ?
+        )
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `
+  )
+    .bind(viewerUserId, roomId)
+    .first<{ id: string }>();
+
+  if (!row?.id) {
+    return null;
+  }
+
+  return loadCourseRecord(env, row.id, viewerUserId, viewerIsAdmin);
+}
+
 export async function loadPublishedCourse(
   env: Env,
   courseId: string
