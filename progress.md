@@ -3935,3 +3935,19 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - probe artifacts:
       - `output/web-game/editor-persistence-controller-probe/summary.json`
       - `output/web-game/editor-persistence-controller-probe/editor-after-save.png`
+
+- March 26, 2026: extracted editor tool/clipboard orchestration from `EditorScene`.
+  - Added `src/scenes/editor/tools.ts` as the new shell for room-goal tool routing, clipboard preview state, copy/paste flow, tool switching side effects, and undo/redo delegation.
+  - `EditorScene` now routes UI bridge tool actions, keyboard tool shortcuts, and interaction-controller clipboard callbacks through `EditorToolController` instead of carrying that tool-state glue inline.
+  - `EditorScene.ts` is down to 1,479 lines after the cut.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-course-flow-editor-integration`
+    - skill smoke booted locally against the safety backend
+    - targeted browser probe opened `EditorScene` via the real overworld `openEditor(...)` path and exercised the new controller:
+      - copy selection on the first occupied terrain tile produced `clipboardPastePreviewActive: true`
+      - paste at an in-bounds target produced `roomDirty: true`, `canUndo: true`, and `statusText: "Pasted tile region. Click again to repeat, or press Esc to stop pasting."`
+      - switching back to `pencil` cleared the clipboard preview
+      - `undoAction()` / `redoAction()` toggled undo/redo availability as expected
+    - probe artifacts:
+      - `output/web-game/editor-tool-controller-probe/summary.json`
+      - `output/web-game/editor-tool-controller-probe/editor-after-tool-probe.png`

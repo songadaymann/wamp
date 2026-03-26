@@ -57,12 +57,13 @@ import type {
 import { EditorUiBridge } from './editor/uiBridge';
 import { EditorRoomSession } from './editor/roomSession';
 import { EditorBackgroundController } from './editor/backgrounds';
-import { EditorEditRuntime, type EditorClipboardState, type GoalPlacementMode } from './editor/editRuntime';
+import { EditorEditRuntime, type GoalPlacementMode } from './editor/editRuntime';
 import { EditorSceneFlowController } from './editor/flow';
 import { EditorInspectorController } from './editor/inspector';
 import { EditorInteractionController } from './editor/interaction';
 import { EditorPresenceController } from './editor/presence';
 import { EditorPersistenceController } from './editor/persistence';
+import { EditorToolController } from './editor/tools';
 import { EditorCourseController } from './editor/courseController';
 import {
   buildEditorUiViewModel,
@@ -78,8 +79,6 @@ export class EditorScene extends Phaser.Scene {
   private layerGuideGraphics: Phaser.GameObjects.Graphics | null = null;
   private pressurePlateGraphics: Phaser.GameObjects.Graphics | null = null;
   private containerGraphics: Phaser.GameObjects.Graphics | null = null;
-  private clipboardPastePreviewActive = false;
-  private lastCopySelection: { x1: number; y1: number; x2: number; y2: number } | null = null;
   private roomEditCount = 0;
 
   // Tilemap
@@ -102,6 +101,7 @@ export class EditorScene extends Phaser.Scene {
   private readonly interactionController: EditorInteractionController;
   private readonly presenceController: EditorPresenceController;
   private readonly persistenceController: EditorPersistenceController;
+  private readonly toolController: EditorToolController;
   private entrySource: 'world' | 'direct' = 'direct';
   private initialRoomSnapshot: RoomSnapshot | null = null;
   private readonly handleWake = (): void => {
@@ -133,8 +133,8 @@ export class EditorScene extends Phaser.Scene {
         return;
       }
 
-      if (this.clipboardPastePreviewActive) {
-        this.cancelClipboardPastePreview();
+      if (this.toolController.isClipboardPastePreviewActive()) {
+        this.toolController.cancelClipboardPastePreview();
         return;
       }
 
@@ -172,22 +172,16 @@ export class EditorScene extends Phaser.Scene {
       }
       event.preventDefault();
       event.stopPropagation();
-      this.beginClipboardPastePreview();
+      this.toolController.beginClipboardPastePreview();
       return;
     }
 
     if (primaryModifier && key === 'c' && editorState.paletteMode === 'tiles' && editorState.activeTool === 'copy') {
-      if (!this.lastCopySelection) {
+      if (!this.toolController.repeatLastCopySelection()) {
         return;
       }
       event.preventDefault();
       event.stopPropagation();
-      this.captureCopySelection(
-        this.lastCopySelection.x1,
-        this.lastCopySelection.y1,
-        this.lastCopySelection.x2,
-        this.lastCopySelection.y2,
-      );
       return;
     }
 
@@ -195,9 +189,9 @@ export class EditorScene extends Phaser.Scene {
       event.preventDefault();
       event.stopPropagation();
       if (event.shiftKey) {
-        this.redo();
+        this.toolController.redo();
       } else {
-        this.undo();
+        this.toolController.undo();
       }
       return;
     }
@@ -205,29 +199,25 @@ export class EditorScene extends Phaser.Scene {
     if (event.ctrlKey && !event.metaKey && key === 'y') {
       event.preventDefault();
       event.stopPropagation();
-      this.redo();
+      this.toolController.redo();
       return;
     }
 
     if (event.code === 'Digit1') {
       event.preventDefault();
-      editorState.activeTool = 'pencil';
-      this.updateToolUI();
+      this.toolController.selectTool('pencil');
       return;
     }
 
     if (event.code === 'Digit2') {
       event.preventDefault();
-      editorState.activeTool = 'eraser';
-      this.cancelClipboardPastePreview();
-      this.updateToolUI();
+      this.toolController.selectTool('eraser');
       return;
     }
 
     if (event.code === 'Digit3') {
       event.preventDefault();
-      editorState.activeTool = 'copy';
-      this.updateToolUI();
+      this.toolController.selectTool('copy');
       return;
     }
 
@@ -320,6 +310,17 @@ export class EditorScene extends Phaser.Scene {
         this.flowController.maybeTriggerPublishNudge();
       },
     });
+    this.toolController = new EditorToolController(
+      this,
+      this.editRuntime,
+      this.persistenceController,
+      {
+        startRectDrawing: (tileX, tileY) => this.interactionController.startRectDrawing(tileX, tileY),
+        clearShapePreview: () => this.interactionController.clearShapePreview(),
+        clearCoursePlacementMode: () => this.courseController.clearPlacementMode(),
+        renderUi: () => this.renderEditorUi(),
+      },
+    );
     this.courseController = new EditorCourseController(this, {
       getRoomId: () => this.roomId,
       syncBackgroundCameraIgnores: () => this.syncBackgroundCameraIgnores(),
@@ -329,7 +330,7 @@ export class EditorScene extends Phaser.Scene {
       },
     });
     this.flowController = new EditorSceneFlowController(this.roomSession, {
-      cancelClipboardPastePreview: () => this.cancelClipboardPastePreview(),
+      cancelClipboardPastePreview: () => this.toolController.cancelClipboardPastePreview(),
       getSelectedCoursePreviewForPlay: () => this.getSelectedCoursePreviewForPlay(),
       getRoomPermissions: () => this.roomPermissions,
       saveDraft: (force = false) => this.persistenceController.saveDraft(force),
@@ -375,22 +376,22 @@ export class EditorScene extends Phaser.Scene {
       handleObjectModeSecondaryAction: (worldX, worldY) =>
         this.handleObjectModeSecondaryAction(worldX, worldY),
       handleObjectPlace: (pointer) => this.handleObjectPlace(pointer),
-      handleToolDown: (pointer) => this.handleToolDown(pointer),
+      handleToolDown: (pointer) => this.toolController.handleToolDown(pointer),
       removeGoalMarkerAt: (worldX, worldY) => this.removeGoalMarkerAt(worldX, worldY),
       removeObjectAt: (worldX, worldY) => this.removeObjectAt(worldX, worldY),
       placeGoalMarker: (tileX, tileY) => this.placeGoalMarker(tileX, tileY),
-      placeTileAt: (worldX, worldY) => this.placeTileAt(worldX, worldY),
-      eraseTileAt: (worldX, worldY) => this.eraseTileAt(worldX, worldY),
-      fillRect: (x1, y1, x2, y2) => this.fillRect(x1, y1, x2, y2),
-      captureCopySelection: (x1, y1, x2, y2) => this.captureCopySelection(x1, y1, x2, y2),
-      getClipboardPreview: () => this.getClipboardPreview(),
-      isClipboardPastePreviewActive: () => this.isClipboardPastePreviewActive(),
-      pasteClipboardAt: (tileX, tileY) => this.pasteClipboardAt(tileX, tileY),
-      cancelClipboardPastePreview: () => this.cancelClipboardPastePreview(),
+      placeTileAt: (worldX, worldY) => this.editRuntime.placeTileAt(worldX, worldY),
+      eraseTileAt: (worldX, worldY) => this.editRuntime.eraseTileAt(worldX, worldY),
+      fillRect: (x1, y1, x2, y2) => this.editRuntime.fillRect(x1, y1, x2, y2),
+      captureCopySelection: (x1, y1, x2, y2) => this.toolController.captureCopySelection(x1, y1, x2, y2),
+      getClipboardPreview: () => this.toolController.getClipboardPreview(),
+      isClipboardPastePreviewActive: () => this.toolController.isClipboardPastePreviewActive(),
+      pasteClipboardAt: (tileX, tileY) => this.toolController.pasteClipboardAt(tileX, tileY),
+      cancelClipboardPastePreview: () => this.toolController.cancelClipboardPastePreview(),
       beginTileBatch: () => this.editRuntime.beginTileBatch(),
       commitTileBatch: () => this.editRuntime.commitTileBatch(),
       startPlayMode: () => this.startPlayMode(),
-      updateToolUi: () => this.updateToolUI(),
+      updateToolUi: () => this.toolController.updateToolUi(),
       updateBackgroundPreview: () => this.updateBackgroundPreview(),
       updateZoomUI: () => this.updateZoomUI(),
     });
@@ -620,19 +621,16 @@ export class EditorScene extends Phaser.Scene {
       onZoomIn: () => this.zoomIn(),
       onZoomOut: () => this.zoomOut(),
       onSetRoomTitle: (title) => this.persistenceController.setRoomTitle(title),
-      onSelectTool: (tool) => {
-        editorState.activeTool = tool;
-        this.updateToolUI();
-      },
-      onClearCurrentLayer: () => this.clearCurrentLayer(),
-      onClearAllTiles: () => this.clearAllTiles(),
+      onSelectTool: (tool) => this.toolController.selectTool(tool),
+      onClearCurrentLayer: () => this.toolController.clearCurrentLayer(),
+      onClearAllTiles: () => this.toolController.clearAllTiles(),
       onSelectBackground: () => this.applySelectedBackground(),
-      onSetGoalType: (nextType) => this.setGoalType(nextType),
-      onSetGoalTimeLimitSeconds: (seconds) => this.setGoalTimeLimitSeconds(seconds),
-      onSetGoalRequiredCount: (requiredCount) => this.setGoalRequiredCount(requiredCount),
-      onSetGoalSurvivalSeconds: (seconds) => this.setGoalSurvivalSeconds(seconds),
-      onStartGoalMarkerPlacement: (mode) => this.startGoalMarkerPlacement(mode),
-      onClearGoalMarkers: () => this.clearGoalMarkers(),
+      onSetGoalType: (nextType) => this.toolController.setGoalType(nextType),
+      onSetGoalTimeLimitSeconds: (seconds) => this.toolController.setGoalTimeLimitSeconds(seconds),
+      onSetGoalRequiredCount: (requiredCount) => this.toolController.setGoalRequiredCount(requiredCount),
+      onSetGoalSurvivalSeconds: (seconds) => this.toolController.setGoalSurvivalSeconds(seconds),
+      onStartGoalMarkerPlacement: (mode) => this.toolController.startGoalMarkerPlacement(mode),
+      onClearGoalMarkers: () => this.toolController.clearGoalMarkers(),
       onSetCourseGoalType: (goalType) => this.setCourseGoalType(goalType),
       onSetCourseGoalTimeLimitSeconds: (seconds) => this.setCourseGoalTimeLimitSeconds(seconds),
       onSetCourseGoalRequiredCount: (requiredCount) => this.setCourseGoalRequiredCount(requiredCount),
@@ -716,8 +714,7 @@ export class EditorScene extends Phaser.Scene {
     this.inspectorController.reset();
     this.courseController.reset();
     this.roomSession.reset();
-    this.clipboardPastePreviewActive = false;
-    this.lastCopySelection = null;
+    this.toolController.reset();
     this.roomEditCount = 0;
     resetEditorPaletteSelection();
     editorState.tileFlipX = false;
@@ -808,8 +805,7 @@ export class EditorScene extends Phaser.Scene {
     this.editRuntime.applyRoomSnapshot(room);
     this.inspectorController.reset();
     this.inspectorController.handleObjectSpritesRebuilt();
-    this.clipboardPastePreviewActive = false;
-    this.lastCopySelection = null;
+    this.toolController.reset();
   }
 
   private exportRoomSnapshot(): RoomSnapshot {
@@ -1075,7 +1071,7 @@ export class EditorScene extends Phaser.Scene {
           : editorState.activeTool === 'fill'
             ? 'Fill'
             : editorState.activeTool === 'copy'
-              ? this.clipboardPastePreviewActive
+              ? this.toolController.isClipboardPastePreviewActive()
                 ? 'Paste'
                 : 'Copy'
               : 'Draw';
@@ -1186,28 +1182,27 @@ export class EditorScene extends Phaser.Scene {
   }
 
   setGoalType(nextType: RoomGoalType | null): void {
-    this.editRuntime.setGoalType(nextType);
+    this.toolController.setGoalType(nextType);
   }
 
   setGoalTimeLimitSeconds(seconds: number | null): void {
-    this.editRuntime.setGoalTimeLimitSeconds(seconds);
+    this.toolController.setGoalTimeLimitSeconds(seconds);
   }
 
   setGoalRequiredCount(requiredCount: number): void {
-    this.editRuntime.setGoalRequiredCount(requiredCount);
+    this.toolController.setGoalRequiredCount(requiredCount);
   }
 
   setGoalSurvivalSeconds(seconds: number): void {
-    this.editRuntime.setGoalSurvivalSeconds(seconds);
+    this.toolController.setGoalSurvivalSeconds(seconds);
   }
 
   startGoalMarkerPlacement(mode: EditorMarkerPlacementMode): void {
-    this.courseController.clearPlacementMode();
-    this.editRuntime.startGoalMarkerPlacement(mode as GoalPlacementMode);
+    this.toolController.startGoalMarkerPlacement(mode);
   }
 
   clearGoalMarkers(): void {
-    this.editRuntime.clearGoalMarkers();
+    this.toolController.clearGoalMarkers();
   }
 
   setCourseGoalType(goalType: CourseGoalType | null): void {
@@ -1240,7 +1235,7 @@ export class EditorScene extends Phaser.Scene {
     availableCollectibles: number;
     availableEnemies: number;
   } {
-    return this.editRuntime.getGoalEditorState();
+    return this.toolController.getGoalEditorState();
   }
 
   private getSelectedCoursePreviewForPlay(): CourseSnapshot | null {
@@ -1264,153 +1259,12 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private getGoalSummaryText(): string {
-    return this.editRuntime.getGoalSummaryText();
+    return this.toolController.getGoalSummaryText();
   }
 
   private updateGoalUi(): void {
     this.courseController.redrawMarkers();
     this.renderEditorUi();
-  }
-
-  // ══════════════════════════════════════
-  // TOOL HANDLERS
-  // ══════════════════════════════════════
-
-  private handleToolDown(pointer: Phaser.Input.Pointer): void {
-    const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    const tileX = Math.floor(worldPoint.x / TILE_SIZE);
-    const tileY = Math.floor(worldPoint.y / TILE_SIZE);
-
-    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) return;
-
-    switch (editorState.activeTool) {
-      case 'pencil':
-        this.editRuntime.beginTileBatch();
-        this.placeTileAt(worldPoint.x, worldPoint.y);
-        break;
-      case 'eraser':
-        this.editRuntime.beginTileBatch();
-        this.eraseTileAt(worldPoint.x, worldPoint.y);
-        break;
-      case 'rect':
-        this.editRuntime.beginTileBatch();
-        this.interactionController.startRectDrawing(tileX, tileY);
-        break;
-      case 'fill':
-        this.editRuntime.beginTileBatch();
-        this.floodFill(tileX, tileY);
-        this.editRuntime.commitTileBatch();
-        break;
-      case 'copy':
-        this.interactionController.startRectDrawing(tileX, tileY);
-        break;
-    }
-  }
-
-  // ── Pencil (supports multi-tile selection) ──
-
-  private placeTileAt(worldX: number, worldY: number): void {
-    this.editRuntime.placeTileAt(worldX, worldY);
-  }
-
-  // ── Eraser ──
-
-  private eraseTileAt(worldX: number, worldY: number): void {
-    this.editRuntime.eraseTileAt(worldX, worldY);
-  }
-
-  clearCurrentLayer(): void {
-    this.editRuntime.clearCurrentLayer();
-  }
-
-  clearAllTiles(): void {
-    this.editRuntime.clearAllTiles();
-  }
-
-  private fillRect(x1: number, y1: number, x2: number, y2: number): void {
-    this.editRuntime.fillRect(x1, y1, x2, y2);
-  }
-
-  private captureCopySelection(x1: number, y1: number, x2: number, y2: number): void {
-    if (editorState.paletteMode !== 'tiles') {
-      return;
-    }
-
-    this.lastCopySelection = { x1, y1, x2, y2 };
-    const copied = this.editRuntime.copyTilesToClipboard(x1, y1, x2, y2);
-    if (!copied) {
-      this.clipboardPastePreviewActive = false;
-      this.updatePersistenceStatus('No tiles in that selection to copy.');
-      this.renderEditorUi();
-      return;
-    }
-
-    this.beginClipboardPastePreview();
-    this.updatePersistenceStatus('Copied tile region. Move the mouse and click to place it.');
-  }
-
-  private getClipboardPreview(): EditorClipboardState | null {
-    return this.editRuntime.currentClipboardState;
-  }
-
-  private isClipboardPastePreviewActive(): boolean {
-    return this.clipboardPastePreviewActive;
-  }
-
-  private beginClipboardPastePreview(): void {
-    if (!this.editRuntime.hasClipboardTiles() || editorState.paletteMode !== 'tiles') {
-      return;
-    }
-
-    this.clipboardPastePreviewActive = true;
-    editorState.activeTool = 'copy';
-    this.updateToolUI();
-    this.updatePersistenceStatus('Copy preview active. Move the mouse and click to place tiles, or press Esc to cancel.');
-  }
-
-  private cancelClipboardPastePreview(): void {
-    if (!this.clipboardPastePreviewActive) {
-      return;
-    }
-
-    this.clipboardPastePreviewActive = false;
-    this.interactionController.clearShapePreview();
-    this.persistenceController.restorePersistenceStatus();
-  }
-
-  private pasteClipboardAt(tileX: number, tileY: number): void {
-    if (!this.clipboardPastePreviewActive) {
-      return;
-    }
-
-    this.editRuntime.beginTileBatch();
-    const pasted = this.editRuntime.pasteClipboardAt(tileX, tileY);
-    this.editRuntime.commitTileBatch();
-    if (!pasted) {
-      this.updatePersistenceStatus('Nothing to paste at that position.');
-      return;
-    }
-
-    this.updatePersistenceStatus('Pasted tile region. Click again to repeat, or press Esc to stop pasting.');
-    this.renderEditorUi();
-  }
-
-  // ── Flood Fill ──
-
-  private floodFill(startX: number, startY: number): void {
-    this.editRuntime.floodFill(startX, startY);
-  }
-
-  // ══════════════════════════════════════
-  // UNDO / REDO
-  // ══════════════════════════════════════
-
-  private undo(): void {
-    this.editRuntime.undo();
-  }
-
-  private redo(): void {
-    this.editRuntime.redo();
   }
 
   // ══════════════════════════════════════
@@ -1426,23 +1280,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   updateToolUi(): void {
-    this.updateToolUI();
-  }
-
-  // ══════════════════════════════════════
-  // UI SYNC
-  // ══════════════════════════════════════
-
-  private updateToolUI(): void {
-    if (this.clipboardPastePreviewActive && editorState.activeTool !== 'copy') {
-      this.cancelClipboardPastePreview();
-    }
-
-    if (editorState.activeTool !== 'rect' && editorState.activeTool !== 'copy') {
-      this.interactionController.clearShapePreview();
-    }
-
-    this.renderEditorUi();
+    this.toolController.updateToolUi();
   }
 
   private updateBottomBar(): void {
@@ -1589,12 +1427,12 @@ export class EditorScene extends Phaser.Scene {
   }
 
   undoAction(): void {
-    this.undo();
+    this.toolController.undo();
     this.updateBottomBar();
   }
 
   redoAction(): void {
-    this.redo();
+    this.toolController.redo();
     this.updateBottomBar();
   }
 
