@@ -239,6 +239,7 @@ export class CourseComposerPanelController {
     if (!state) {
       return;
     }
+    const showGoalDependentActions = state.goalType !== null;
 
     this.setValue(this.elements.titleInput, state.title);
     this.setText(this.elements.status, state.statusText ?? '');
@@ -290,15 +291,17 @@ export class CourseComposerPanelController {
     this.setText(this.elements.publishedState, state.publishedStateText);
     this.setText(this.elements.publishedWarning, state.publishedDraftWarningText ?? '');
     this.setHidden(this.elements.publishedWarning, !state.publishedDraftWarningText);
-    this.setDisabled(this.elements.testDraftButton, !state.canTestDraft);
-    this.setText(this.elements.testDraftReason, state.testDraftDisabledReason ?? '');
-    this.setHidden(this.elements.testDraftReason, !state.testDraftDisabledReason);
+    this.setHidden(this.elements.testDraftButton, !showGoalDependentActions);
+    this.setDisabled(this.elements.testDraftButton, !showGoalDependentActions || !state.canTestDraft);
+    this.setText(this.elements.testDraftReason, showGoalDependentActions ? (state.testDraftDisabledReason ?? '') : '');
+    this.setHidden(this.elements.testDraftReason, !showGoalDependentActions || !state.testDraftDisabledReason);
     this.setDisabled(this.elements.saveButton, !state.canSaveDraft);
     this.setText(this.elements.saveReason, state.saveDraftDisabledReason ?? '');
     this.setHidden(this.elements.saveReason, !state.saveDraftDisabledReason);
-    this.setDisabled(this.elements.publishButton, !state.canPublishCourse);
-    this.setText(this.elements.publishReason, state.publishCourseDisabledReason ?? '');
-    this.setHidden(this.elements.publishReason, !state.publishCourseDisabledReason);
+    this.setHidden(this.elements.publishButton, !showGoalDependentActions);
+    this.setDisabled(this.elements.publishButton, !showGoalDependentActions || !state.canPublishCourse);
+    this.setText(this.elements.publishReason, showGoalDependentActions ? (state.publishCourseDisabledReason ?? '') : '');
+    this.setHidden(this.elements.publishReason, !showGoalDependentActions || !state.publishCourseDisabledReason);
     this.setHidden(this.elements.unpublishButton, !state.showUnpublishCourse);
     this.setDisabled(this.elements.unpublishButton, !state.canUnpublishCourse);
     this.setText(this.elements.unpublishReason, state.unpublishCourseDisabledReason ?? '');

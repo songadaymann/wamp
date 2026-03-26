@@ -3780,3 +3780,8 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Root cause: unpublished course drafts were saved correctly, but reopening Course Setup from the world only knew how to find published course memberships or the in-memory draft session. After a refresh/day-later revisit, saved unpublished drafts looked lost because the composer opened a brand-new default record.
   - Added authenticated draft lookup by selected room via `GET /api/courses/drafts/by-room/:roomId`, and CourseComposerScene now reopens the latest saved draft containing the selected room before falling back to a new draft.
   - Verification: `./node_modules/.bin/tsc --noEmit` and `npm run build` passed in `/tmp/wamp-course-draft-discovery`.
+
+- March 26, 2026: cleaned up course-setup gating/messaging.
+  - The actual `Edit Course` gate was already title + rooms + saved setup only, but setup still leaked goal-dependent disabled reasons and actions, which made it look like choosing a goal was required before entering the editor.
+  - Course setup now hides `Test Draft` / `Publish Course` until a goal exists, and any remaining goal-blocked messages explicitly point the user to `Edit Course` instead of sounding like a setup prerequisite.
+  - Verification: `./node_modules/.bin/tsc --noEmit` and `npm run build` passed in `/tmp/wamp-course-draft-discovery`.
