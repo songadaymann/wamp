@@ -298,10 +298,10 @@ export class CourseComposerPanelController {
     this.setDisabled(this.elements.saveButton, !state.canSaveDraft);
     this.setText(this.elements.saveReason, state.saveDraftDisabledReason ?? '');
     this.setHidden(this.elements.saveReason, !state.saveDraftDisabledReason);
-    this.setHidden(this.elements.publishButton, !showGoalDependentActions);
-    this.setDisabled(this.elements.publishButton, !showGoalDependentActions || !state.canPublishCourse);
-    this.setText(this.elements.publishReason, showGoalDependentActions ? (state.publishCourseDisabledReason ?? '') : '');
-    this.setHidden(this.elements.publishReason, !showGoalDependentActions || !state.publishCourseDisabledReason);
+    this.setHidden(this.elements.publishButton, false);
+    this.setDisabled(this.elements.publishButton, !state.canPublishCourse);
+    this.setText(this.elements.publishReason, state.publishCourseDisabledReason ?? '');
+    this.setHidden(this.elements.publishReason, !state.publishCourseDisabledReason);
     this.setHidden(this.elements.unpublishButton, !state.showUnpublishCourse);
     this.setDisabled(this.elements.unpublishButton, !state.canUnpublishCourse);
     this.setText(this.elements.unpublishReason, state.unpublishCourseDisabledReason ?? '');
