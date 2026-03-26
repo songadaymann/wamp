@@ -3634,3 +3634,18 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - verification:
     - `npm run build` passed
     - `output/web-game/editor-default-selection-fix/summary.json` records the new default selection state
+
+## March 26, 2026 - Phase 6 Safety Rollout: Editor Scene Split (Inspector Extraction)
+
+- Pulled the inspector subsystem out of `src/scenes/EditorScene.ts`
+  - added `src/scenes/editor/inspector.ts` with `EditorInspectorController`
+  - moved pressure-plate focus/linking, container focus/filling, inspector panel state, and the associated overlay rendering into the controller
+  - `EditorScene` now delegates inspector-specific object interactions and overlay updates instead of owning those details directly
+- Kept the scene boundary stable while reducing scene size
+  - `EditorScene` still exposes the same public methods used by the UI bridge and interaction controller, but those methods now forward into the inspector controller where appropriate
+  - `resetRuntimeState()`, `applyRoomSnapshot()`, and `renderEditorUi()` now sync inspector state through the controller instead of manually resetting scattered fields
+- Verification:
+  - `npm run build` passed in the phase-6 worktree
+  - `develop-web-game` boot smoke on `http://127.0.0.1:3000` wrote `output/web-game/editor-scene-split-boot-smoke/state-0.json` and confirmed normal overworld browse boot against the safety backend
+  - targeted local Playwright probe wrote `output/web-game/editor-scene-split-probe/summary.json`
+  - the probe directly transitioned from the dev-exposed overworld scene into `EditorScene` and confirmed `scene=editor`, `roomId=0,0`, `roomVersion=29`, `publishedVersion=29`, `placedObjects=28`, `canSaveDraft=true`, with no new console or page errors
