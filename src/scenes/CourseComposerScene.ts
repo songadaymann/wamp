@@ -785,10 +785,12 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
   }
 
   private renderUi(): void {
+    const zoom = this.cameras.main?.zoom ?? this.inspectZoom;
+
     this.uiState = buildCourseEditorUiState({
       record: this.record,
       dirty: isActiveCourseDraftSessionDirty(),
-      zoomText: `Zoom: ${this.cameras.main.zoom.toFixed(2)}x`,
+      zoomText: `Zoom: ${zoom.toFixed(2)}x`,
       tool: this.tool,
       statusText: this.loading ? 'Loading course…' : this.statusText,
       selectedRoomSummary: this.getSelectedRoomSummaryText(),

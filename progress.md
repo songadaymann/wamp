@@ -4039,3 +4039,29 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - artifacts: `output/web-game/overworld-ui-boundary-probe/summary.json`, `output/web-game/overworld-ui-boundary-probe/after-jump.png`
   - Status:
     - phase 7 is complete on `safety/overworld-ui-boundary-2026-03-26`; the next maintainability branch should move to the overworld scene split work.
+
+- March 26, 2026: started the phase-8 overworld scene split with a scene-flow extraction.
+  - Added `src/scenes/overworld/flow.ts` with `OverworldSceneFlowController` to own the active overworld scene-transition cluster:
+    - fit-world zoom calculation
+    - browse/play room transitions
+    - return-to-world handling
+    - world build/edit entry
+    - course playback start
+    - course editor / course composer entry
+  - `OverworldPlayScene.ts` now instantiates that controller and delegates the moved flow methods instead of carrying those transition bodies inline.
+  - `OverworldPlayScene.ts` is down to 6,529 lines after this cut.
+  - Hardened `CourseComposerScene.renderUi()` so the setup HUD can render safely during the pre-camera frame when the composer opens from overworld flow.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-scene-flow-skill-smoke/state-0.json`
+      - `output/web-game/overworld-scene-flow-skill-smoke/shot-0.png`
+    - targeted browser probe exercised the real extracted flow paths and confirmed:
+      - `playSelectedRoom()` switched overworld from `browse` to `play`
+      - `returnToWorld()` restored `browse`
+      - opening `EditorScene` from overworld and backing out returned cleanly to overworld
+      - opening `CourseComposerScene` from overworld and backing out returned cleanly to overworld
+      - no console or page errors
+      - artifacts: `output/web-game/overworld-scene-flow-probe/summary.json`, `output/web-game/overworld-scene-flow-probe/overworld.png`, `output/web-game/overworld-scene-flow-probe/play.png`, `output/web-game/overworld-scene-flow-probe/editor.png`, `output/web-game/overworld-scene-flow-probe/course-composer.png`
+  - Status:
+    - phase 8 is underway on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming `OverworldPlayScene` by extracting another active subsystem boundary rather than touching dormant legacy course-composer state.

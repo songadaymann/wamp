@@ -24,7 +24,6 @@ import {
   COURSE_GOAL_LABELS,
   cloneCourseSnapshot,
   createDefaultCourseRecord,
-  getCourseRoomOrder,
   MAX_COURSE_ROOMS,
   type CourseGoal,
   type CourseGoalType,
@@ -111,6 +110,7 @@ import {
   type GoalRunMutationResult,
   type GoalRunState,
 } from './overworld/goalRuns';
+import { OverworldSceneFlowController } from './overworld/flow';
 import {
   getCenteredRoomBadgePosition as calculateCenteredRoomBadgePosition,
   getRoomBadgeOverlayScale as calculateRoomBadgeOverlayScale,
@@ -166,7 +166,6 @@ import {
   resolveGoalRunStartPoint,
 } from './overworld/goalRunStartGate';
 import type {
-  CourseComposerSceneData,
   CourseEditorSceneData,
   CourseEditedRoomData,
   EditorCourseEditData,
@@ -517,6 +516,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private heldKeyCount = 0;
   private score = 0;
   private readonly goalRunController: OverworldGoalRunController;
+  private readonly flowController: OverworldSceneFlowController;
   private readonly roomBadgeScaleConfig: RoomBadgeScaleConfig = {
     hideZoom: ROOM_BADGE_HIDE_ZOOM,
     fadeStartZoom: ROOM_BADGE_FADE_START_ZOOM,
@@ -726,6 +726,70 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       onRoomActivityChanged: () => this.redrawWorld(),
       onGhostDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
+    });
+    this.flowController = new OverworldSceneFlowController(this, {
+      getMode: () => this.mode,
+      setMode: (mode) => {
+        this.mode = mode;
+      },
+      setCameraMode: (mode) => {
+        this.cameraMode = mode;
+      },
+      getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
+      setSelectedCoordinates: (coordinates) => {
+        this.selectedCoordinates = { ...coordinates };
+      },
+      getCurrentRoomCoordinates: () => ({ ...this.currentRoomCoordinates }),
+      setCurrentRoomCoordinates: (coordinates) => {
+        this.currentRoomCoordinates = { ...coordinates };
+      },
+      getSelectedPublishedCourseId: () => this.getSelectedCourseContext()?.courseId ?? null,
+      getCourseEditorReturnTarget: () => this.courseEditorReturnTarget ?? null,
+      setCourseEditorReturnTarget: (target) => {
+        this.courseEditorReturnTarget = target;
+      },
+      getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
+      isFrontierBuildBlockedByClaimLimit: () => this.isFrontierBuildBlockedByClaimLimit(),
+      getSelectedRoomSnapshot: (coordinates) => this.getRoomSnapshotForCoordinates(coordinates),
+      getActiveCourseEditContext: (roomId) => this.getActiveCourseDraftSessionContextForRoom(roomId),
+      resetPlaySession: () => this.resetPlaySession(),
+      clearTouchGestureState: () => this.clearTouchGestureState(),
+      clearGoalRun: () => {
+        this.goalRunController.clearCurrentRun();
+      },
+      getInspectZoom: () => this.inspectZoom,
+      setInspectZoom: (zoom) => {
+        this.inspectZoom = zoom;
+      },
+      getBrowseInspectZoom: () => this.browseInspectZoom,
+      setBrowseInspectZoom: (zoom) => {
+        this.browseInspectZoom = zoom;
+      },
+      getFitZoomForRoom: () => this.getFitZoomForRoom(),
+      syncAppMode: () => this.syncAppMode(),
+      setShouldCenterCamera: (value) => {
+        this.shouldCenterCamera = value;
+      },
+      setShouldRespawnPlayer: (value) => {
+        this.shouldRespawnPlayer = value;
+      },
+      refreshAround: (coordinates, options) => this.refreshAround(coordinates, options),
+      prepareActiveCourseRoomOverrides: (snapshot, options) =>
+        this.prepareActiveCourseRoomOverrides(snapshot, options),
+      createCourseRunState: (snapshot) => this.createCourseRunState(snapshot),
+      getCourseStartRoomRef: (course) => this.getCourseStartRoomRef(course),
+      getActiveCourseRun: () => this.activeCourseRun,
+      setActiveCourseRun: (runState) => {
+        this.activeCourseRun = runState;
+      },
+      startRemoteCourseRun: (runState) => {
+        void this.startRemoteCourseRun(runState);
+      },
+      setCourseComposerStatusText: (text) => {
+        this.courseComposerStatusText = text;
+      },
+      emitCourseComposerStateChanged: () => this.emitCourseComposerStateChanged(),
+      renderHud: () => this.renderHud(),
     });
   }
 
@@ -5035,25 +5099,10 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   fitLoadedWorld(): void {
-    if (!this.worldWindow) return;
-
-    const camera = this.cameras.main;
-    const totalWidth = (this.worldWindow.radius * 2 + 1) * ROOM_PX_WIDTH;
-    const totalHeight = (this.worldWindow.radius * 2 + 1) * ROOM_PX_HEIGHT;
-    const padding = 48;
-    const fitZoom = Math.min(
-      (this.scale.width - padding) / totalWidth,
-      (this.scale.height - padding) / totalHeight
-    );
-
-    this.inspectZoom = Phaser.Math.Clamp(fitZoom, MIN_ZOOM, MAX_ZOOM);
-    if (this.mode === 'browse') {
-      this.browseInspectZoom = this.inspectZoom;
-    }
-    camera.setZoom(this.inspectZoom);
+    this.flowController.fitLoadedWorld(this.worldWindow);
 
     if (this.mode === 'play' && this.cameraMode === 'follow' && this.player) {
-      this.startFollowCamera(camera);
+      this.startFollowCamera(this.cameras.main);
       return;
     }
 
@@ -5063,96 +5112,19 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   playSelectedRoom(): void {
-    if (this.mode === 'play') {
-      this.returnToWorld();
-      return;
-    }
-
-    const selectedState = this.getCellStateAt(this.selectedCoordinates);
-    if (selectedState !== 'published' && selectedState !== 'draft') return;
-
-    this.resetPlaySession();
-    this.clearTouchGestureState();
-    this.browseInspectZoom = this.inspectZoom;
-    this.mode = 'play';
-    this.cameraMode = 'follow';
-    this.inspectZoom = this.getFitZoomForRoom();
-    this.syncAppMode();
-    this.currentRoomCoordinates = { ...this.selectedCoordinates };
-    this.shouldCenterCamera = true;
-    this.shouldRespawnPlayer = true;
-    setFocusedCoordinatesInUrl(this.currentRoomCoordinates);
-    void this.refreshAround(this.currentRoomCoordinates);
+    this.flowController.playSelectedRoom();
   }
 
   returnToWorld(): void {
-    const returnCoordinates = this.activeCourseRun?.returnCoordinates ?? this.currentRoomCoordinates;
-    const courseEditorReturnTarget = this.courseEditorReturnTarget;
-    this.courseEditorReturnTarget = null;
-    this.resetPlaySession();
-    this.clearTouchGestureState();
-    this.mode = 'browse';
-    this.cameraMode = 'inspect';
-    this.inspectZoom = this.browseInspectZoom;
-    this.syncAppMode();
-    this.selectedCoordinates = { ...returnCoordinates };
-    this.currentRoomCoordinates = { ...returnCoordinates };
-    this.shouldCenterCamera = true;
-    this.shouldRespawnPlayer = false;
-    if (courseEditorReturnTarget) {
-    this.scene.wake('CourseEditorScene', {
-        courseId: courseEditorReturnTarget.courseId,
-        selectedCoordinates: { ...courseEditorReturnTarget.selectedCoordinates },
-        centerCoordinates: { ...courseEditorReturnTarget.centerCoordinates },
-      });
-      this.scene.sleep();
-      return;
-    }
-
-    void this.refreshAround(returnCoordinates);
+    this.flowController.returnToWorld();
   }
 
   buildSelectedRoom(): void {
-    const selectedState = this.getCellStateAt(this.selectedCoordinates);
-    if (selectedState !== 'frontier' || this.isFrontierBuildBlockedByClaimLimit()) return;
-
-    const editorData: EditorSceneData = {
-      roomCoordinates: { ...this.selectedCoordinates },
-      source: 'world',
-    };
-
-    this.openEditor(editorData);
+    this.flowController.buildSelectedRoom();
   }
 
   editSelectedRoom(): void {
-    const selectedState = this.getCellStateAt(this.selectedCoordinates);
-    if (selectedState !== 'published' && selectedState !== 'draft') return;
-    const selectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
-    const courseEdit = this.getActiveCourseDraftSessionContextForRoom(selectedRoomId);
-
-    const editorData: EditorSceneData = {
-      roomCoordinates: { ...this.selectedCoordinates },
-      source: 'world',
-      roomSnapshot: this.getRoomSnapshotForCoordinates(this.selectedCoordinates),
-      courseEdit,
-    };
-
-    this.openEditor(editorData);
-  }
-
-  private openEditor(editorData: EditorSceneData): void {
-    showBusyOverlay('Opening editor...', 'Loading room...');
-
-    if (
-      this.scene.isActive('EditorScene') ||
-      this.scene.isSleeping('EditorScene') ||
-      this.scene.isPaused('EditorScene')
-    ) {
-      this.scene.stop('EditorScene');
-    }
-
-    this.scene.run('EditorScene', editorData);
-    this.scene.sleep();
+    this.flowController.editSelectedRoom();
   }
 
   editCurrentRoom(): void {
@@ -5160,117 +5132,15 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   async playSelectedCourse(): Promise<void> {
-    if (this.activeCourseRun) {
-      this.returnToWorld();
-      return;
-    }
-
-    const selectedCourseId = this.getSelectedCourseContext()?.courseId ?? null;
-    if (!selectedCourseId) {
-      return;
-    }
-
-    showBusyOverlay('Starting course...', 'Loading course...');
-    try {
-      const record = await this.courseRepository.loadCourse(selectedCourseId);
-      const snapshot = record.published ? cloneCourseSnapshot(record.published) : null;
-      if (!snapshot) {
-        throw new Error('This course is not published yet.');
-      }
-      if (!snapshot.goal) {
-        throw new Error('Published course is missing objective data. Reopen the builder and publish again.');
-      }
-
-      await this.startCoursePlayback(snapshot, 'published');
-      hideBusyOverlay();
-    } catch (error) {
-      console.error('Failed to start course', error);
-      showBusyError(
-        error instanceof Error ? error.message : 'Failed to start course.',
-        {
-          closeHandler: () => hideBusyOverlay(),
-        }
-      );
-    }
-  }
-
-  private async startCoursePlayback(
-    snapshot: CourseSnapshot,
-    roomSourceMode: CoursePlaybackRoomSourceMode,
-  ): Promise<void> {
-    this.resetPlaySession();
-    this.clearTouchGestureState();
-    this.goalRunController.clearCurrentRun();
-    await this.prepareActiveCourseRoomOverrides(snapshot, { mode: roomSourceMode });
-    this.activeCourseRun = this.createCourseRunState(snapshot);
-
-    if (this.activeCourseRun.leaderboardEligible) {
-      void this.startRemoteCourseRun(this.activeCourseRun);
-    }
-
-    const startRoom = this.getCourseStartRoomRef(snapshot) ?? snapshot.roomRefs[0] ?? null;
-    if (!startRoom) {
-      throw new Error('This course has no playable rooms.');
-    }
-
-    this.browseInspectZoom = this.inspectZoom;
-    this.mode = 'play';
-    this.cameraMode = 'follow';
-    this.inspectZoom = this.getFitZoomForRoom();
-    this.syncAppMode();
-    this.currentRoomCoordinates = { ...startRoom.coordinates };
-    this.selectedCoordinates = { ...startRoom.coordinates };
-    this.shouldCenterCamera = true;
-    this.shouldRespawnPlayer = true;
-    this.courseComposerStatusText = null;
-    this.emitCourseComposerStateChanged();
-    setFocusedCoordinatesInUrl(this.currentRoomCoordinates);
-    await this.refreshAround(this.currentRoomCoordinates, { forceChunkReload: true });
+    await this.flowController.playSelectedCourse();
   }
 
   async openCourseEditor(): Promise<void> {
-    await this.openCourseComposer();
+    await this.flowController.openCourseEditor();
   }
 
   async openCourseComposer(): Promise<void> {
-    const authState = getAuthDebugState();
-    const sessionRecord = getActiveCourseDraftSessionRecord();
-    const selectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
-    const selectedRoomInSession = Boolean(
-      sessionRecord &&
-      getCourseRoomOrder(sessionRecord.draft.roomRefs, selectedRoomId) >= 0
-    );
-    const selectedCourseId =
-      selectedRoomInSession
-        ? sessionRecord?.draft.id ?? null
-        : this.selectedSummary?.course?.courseId ?? sessionRecord?.draft.id ?? null;
-    const wakeData: CourseComposerSceneData = {
-      courseId: selectedCourseId,
-      selectedCoordinates: { ...this.selectedCoordinates },
-      centerCoordinates: { ...this.currentRoomCoordinates },
-      statusMessage: authState.authenticated ? null : 'Sign in to author and publish courses.',
-    };
-
-    this.courseComposerOpen = false;
-    this.courseComposerLoading = false;
-    this.courseComposerStatusText = null;
-    this.emitCourseComposerStateChanged();
-    this.renderHud();
-
-    if (this.scene.isSleeping('CourseComposerScene') || this.scene.isPaused('CourseComposerScene')) {
-      this.scene.wake('CourseComposerScene', wakeData);
-      this.scene.sleep();
-      return;
-    }
-
-    if (this.scene.isActive('CourseComposerScene')) {
-      this.scene.bringToTop('CourseComposerScene');
-      this.scene.sleep();
-      return;
-    }
-
-    this.scene.run('CourseComposerScene', wakeData);
-    this.scene.sleep();
+    await this.flowController.openCourseComposer();
   }
 
   closeCourseComposer(): void {
@@ -5497,7 +5367,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
     };
 
-    this.openEditor(editorData);
+    this.flowController.openEditor(editorData);
     return true;
   }
 
@@ -5552,7 +5422,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     this.courseComposerStatusText = null;
-    this.openEditor({
+    this.flowController.openEditor({
       roomCoordinates: { ...nextRoomRef.coordinates },
       source: 'world',
       roomSnapshot: cloneRoomSnapshot(roomSnapshot),
@@ -5579,7 +5449,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     showBusyOverlay('Testing draft course...', 'Loading draft...');
     try {
       const snapshot = cloneCourseSnapshot(draft);
-      await this.startCoursePlayback(snapshot, 'draftPreview');
+      await this.flowController.startCoursePlayback(snapshot, 'draftPreview');
       this.showTransientStatus('Testing draft course.');
       hideBusyOverlay();
     } catch (error) {
