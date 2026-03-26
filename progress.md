@@ -91,6 +91,9 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - second follow-up:
     - rebuilt `public/assets/player/punk4495/Punk4495Base.png` again from the fully refreshed source set after the user manually normalized every idle/run/jump/land frame in `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/GADtrailers/WAMP/punk/4495`
     - used the supplied `64x64` source files as-is for this pass instead of re-trimming them again, so the sheet now preserves the user's manual alignment work directly
+  - baseline follow-up:
+    - after preview review, the refreshed source frames were still sitting about 10px above the expected ground line
+    - rebuilt the base strip with a uniform `-roll +0+10` on every movement frame so the whole avatar sits 10px lower in the same `64x64` frame budget without changing the shared JSON layout
   - verification:
     - `npm run build` passed
     - targeted browser probe wrote:
