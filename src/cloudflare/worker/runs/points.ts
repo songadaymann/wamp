@@ -62,33 +62,41 @@ export async function awardRunFinalizePoints(
     | 'result'
     | 'deaths'
   >,
-  isNewPersonalBest: boolean,
+  options: {
+    isFirstCompletion: boolean;
+    isNewPersonalBest: boolean;
+  },
 ): Promise<PointEventRow> {
   let points = 0;
   const breakdown = {
-    collectibles: Math.max(0, run.collectiblesCollected) * RUN_COLLECTIBLE_POINTS,
-    enemies: Math.max(0, run.enemiesDefeated) * RUN_ENEMY_POINTS,
-    checkpoints: Math.max(0, run.checkpointsReached) * RUN_CHECKPOINT_POINTS,
+    collectibles: 0,
+    enemies: 0,
+    checkpoints: 0,
     clear: 0,
     zeroDeath: 0,
     personalBest: 0,
+    awardMode: 'none' as 'none' | 'first_completion' | 'personal_best',
   };
 
-  points += breakdown.collectibles + breakdown.enemies + breakdown.checkpoints;
-
-  if (run.result === 'completed') {
+  if (run.result === 'completed' && options.isFirstCompletion) {
+    breakdown.awardMode = 'first_completion';
+    breakdown.collectibles = Math.max(0, run.collectiblesCollected) * RUN_COLLECTIBLE_POINTS;
+    breakdown.enemies = Math.max(0, run.enemiesDefeated) * RUN_ENEMY_POINTS;
+    breakdown.checkpoints = Math.max(0, run.checkpointsReached) * RUN_CHECKPOINT_POINTS;
     breakdown.clear = RUN_CLEAR_POINTS;
-    points += RUN_CLEAR_POINTS;
+    points +=
+      breakdown.collectibles + breakdown.enemies + breakdown.checkpoints + breakdown.clear;
 
     if (run.deaths === 0) {
       breakdown.zeroDeath = RUN_ZERO_DEATH_CLEAR_POINTS;
       points += RUN_ZERO_DEATH_CLEAR_POINTS;
     }
+  }
 
-    if (isNewPersonalBest) {
-      breakdown.personalBest = RUN_PERSONAL_BEST_POINTS;
-      points += RUN_PERSONAL_BEST_POINTS;
-    }
+  if (run.result === 'completed' && options.isNewPersonalBest) {
+    breakdown.awardMode = options.isFirstCompletion ? 'first_completion' : 'personal_best';
+    breakdown.personalBest = RUN_PERSONAL_BEST_POINTS;
+    points += RUN_PERSONAL_BEST_POINTS;
   }
 
   return recordPointEvent(env, {
@@ -477,6 +485,18 @@ export function clampRunMetricsToSnapshot(
     collectiblesCollected: clampMetric(metrics.collectiblesCollected, maxCollectibles),
     enemiesDefeated: clampMetric(metrics.enemiesDefeated, maxEnemies),
     checkpointsReached: clampMetric(metrics.checkpointsReached, maxCheckpoints),
+  };
+}
+
+export function getRunMetricCapsForSnapshot(room: RoomSnapshot): {
+  maxCollectibles: number;
+  maxEnemies: number;
+  maxCheckpoints: number;
+} {
+  return {
+    maxCollectibles: countRoomObjectsByCategory(room, 'collectible'),
+    maxEnemies: countRoomObjectsByCategory(room, 'enemy'),
+    maxCheckpoints: room.goal?.type === 'checkpoint_sprint' ? room.goal.checkpoints.length : 0,
   };
 }
 

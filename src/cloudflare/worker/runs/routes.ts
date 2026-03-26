@@ -38,6 +38,7 @@ import {
   awardRoomCreatorCompletionPoints,
   awardRunFinalizePoints,
   clampRunMetricsToSnapshot,
+  getRunMetricCapsForSnapshot,
   loadBestCompletedRunForUserAndRoomVersion,
   mapUserStatsRow,
   compareGlobalLeaderboardEntries,
@@ -80,7 +81,7 @@ export async function handleRunStart(request: Request, env: Env): Promise<Respon
   }
 
   const attemptId = crypto.randomUUID();
-  const startedAt = normalizeIsoTimestamp(body.startedAt) ?? new Date().toISOString();
+  const startedAt = new Date().toISOString();
 
   await env.DB.batch([
     env.DB.prepare(
@@ -176,20 +177,28 @@ export async function handleRunFinish(
     throw new HttpError(409, 'This room version no longer has a leaderboard goal.');
   }
 
+  const metricCaps = getRunMetricCapsForSnapshot(snapshot);
   const clampedMetrics = clampRunMetricsToSnapshot(snapshot, {
     collectiblesCollected: body.collectiblesCollected,
     enemiesDefeated: body.enemiesDefeated,
     checkpointsReached: body.checkpointsReached,
   });
-  const finishedAt = normalizeIsoTimestamp(body.finishedAt) ?? new Date().toISOString();
+  const finishedAt = new Date().toISOString();
   const clampedBody: RunFinishRequestBody = {
-    ...body,
-    collectiblesCollected: clampedMetrics.collectiblesCollected,
-    enemiesDefeated: clampedMetrics.enemiesDefeated,
-    checkpointsReached: clampedMetrics.checkpointsReached,
+    ...normalizeFinalizedRunBody(
+      snapshot.goal,
+      {
+        ...body,
+        elapsedMs: computeEffectiveElapsedMs(existing.startedAt, finishedAt, body.elapsedMs),
+        collectiblesCollected: clampedMetrics.collectiblesCollected,
+        enemiesDefeated: clampedMetrics.enemiesDefeated,
+        checkpointsReached: clampedMetrics.checkpointsReached,
+      },
+      metricCaps
+    ),
     finishedAt,
   };
-  const score = computeRunScore(snapshot.goal, clampedBody);
+  const score = clampedBody.result === 'completed' ? computeRunScore(snapshot.goal, clampedBody) : 0;
 
   await env.DB.batch([
     env.DB.prepare(
@@ -208,9 +217,9 @@ export async function handleRunFinish(
       `
     ).bind(
       finishedAt,
-      body.result,
-      body.elapsedMs,
-      body.deaths,
+      clampedBody.result,
+      clampedBody.elapsedMs,
+      clampedBody.deaths,
       score,
       clampedBody.collectiblesCollected,
       clampedBody.enemiesDefeated,
@@ -224,21 +233,28 @@ export async function handleRunFinish(
     throw new HttpError(500, 'Failed to reload finalized run.');
   }
 
-  const previousBest = await loadBestCompletedRunForUserAndRoomVersion(
-    env,
-    auth.user.id,
-    finalizedRun.roomId,
-    finalizedRun.roomVersion,
-    snapshot.goal,
-    finalizedRun.attemptId
-  );
-  const isNewPersonalBest =
-    finalizedRun.result === 'completed' &&
-    (previousBest === null ||
+  let isFirstCompletion = false;
+  let isNewPersonalBest = false;
+  if (finalizedRun.result === 'completed') {
+    const previousBest = await loadBestCompletedRunForUserAndRoomVersion(
+      env,
+      auth.user.id,
+      finalizedRun.roomId,
+      finalizedRun.roomVersion,
+      snapshot.goal,
+      finalizedRun.attemptId
+    );
+    isFirstCompletion = previousBest === null;
+    isNewPersonalBest =
+      previousBest === null ||
       sortCompletedRunsForLeaderboard([finalizedRun, previousBest], snapshot.goal)[0]?.attemptId ===
-        finalizedRun.attemptId);
+        finalizedRun.attemptId;
+  }
 
-  const pointEvent = await awardRunFinalizePoints(env, finalizedRun, isNewPersonalBest);
+  const pointEvent = await awardRunFinalizePoints(env, finalizedRun, {
+    isFirstCompletion,
+    isNewPersonalBest,
+  });
   await maybeMirrorRunPointEventToPlayfun(env, request, auth.user.id, pointEvent);
   const creatorPointEvent =
     finalizedRun.result === 'completed'
@@ -660,6 +676,70 @@ export function parseStoredGoal(raw: string, label: string): RoomGoal {
   }
 }
 
+function computeEffectiveElapsedMs(
+  startedAt: string,
+  finishedAt: string,
+  reportedElapsedMs: number
+): number {
+  const observedStart = Date.parse(startedAt);
+  const observedFinish = Date.parse(finishedAt);
+  const observedElapsedMs =
+    Number.isFinite(observedStart) && Number.isFinite(observedFinish)
+      ? Math.max(0, observedFinish - observedStart)
+      : 0;
+  return Math.max(Math.round(reportedElapsedMs), observedElapsedMs);
+}
+
+function normalizeFinalizedRunBody(
+  goal: RoomGoal,
+  body: RunFinishRequestBody,
+  metricCaps: {
+    maxCollectibles: number;
+    maxEnemies: number;
+    maxCheckpoints: number;
+  }
+): RunFinishRequestBody {
+  if (body.result !== 'completed') {
+    return {
+      ...body,
+      collectiblesCollected: 0,
+      enemiesDefeated: 0,
+      checkpointsReached: 0,
+    };
+  }
+
+  if ('timeLimitMs' in goal && goal.timeLimitMs !== null && body.elapsedMs > goal.timeLimitMs) {
+    throw new HttpError(409, 'Completed runs must finish within the published time limit.');
+  }
+
+  switch (goal.type) {
+    case 'collect_target':
+      if (body.collectiblesCollected < goal.requiredCount) {
+        throw new HttpError(409, 'Completed collect-target runs must meet the published goal.');
+      }
+      break;
+    case 'defeat_all':
+      if (body.enemiesDefeated < metricCaps.maxEnemies) {
+        throw new HttpError(409, 'Completed defeat-all runs must clear every published enemy.');
+      }
+      break;
+    case 'checkpoint_sprint':
+      if (body.checkpointsReached < metricCaps.maxCheckpoints) {
+        throw new HttpError(409, 'Completed checkpoint-sprint runs must hit every checkpoint.');
+      }
+      break;
+    case 'survival':
+      if (body.elapsedMs < goal.durationMs) {
+        throw new HttpError(409, 'Completed survival runs must last the full published duration.');
+      }
+      break;
+    case 'reach_exit':
+      break;
+  }
+
+  return body;
+}
+
 export async function buildRoomLeaderboardResponse(
   env: Env,
   selection: AggregatedRoomLeaderboardSelection,
@@ -676,7 +756,7 @@ export async function buildRoomLeaderboardResponse(
     snapshot.id,
     selection.leaderboardFamilyVersions
   );
-  const sortedAll = sortCompletedRunsForLeaderboard(runs, snapshot.goal);
+  const sortedAll = selectBestCompletedRunPerUser(runs, snapshot.goal);
   const viewerBestRun =
     viewerUserId === null
       ? null
@@ -740,6 +820,17 @@ export async function buildRoomLeaderboardResponse(
           },
     viewerRank: viewerRank || null,
   };
+}
+
+function selectBestCompletedRunPerUser(runs: RoomRunRecord[], goal: RoomGoal): RoomRunRecord[] {
+  const sorted = sortCompletedRunsForLeaderboard(runs, goal);
+  const unique = new Map<string, RoomRunRecord>();
+  for (const run of sorted) {
+    if (!unique.has(run.userId)) {
+      unique.set(run.userId, run);
+    }
+  }
+  return [...unique.values()];
 }
 
 export async function buildGlobalLeaderboardResponse(
