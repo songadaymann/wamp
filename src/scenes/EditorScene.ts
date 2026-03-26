@@ -1,8 +1,5 @@
 import Phaser from 'phaser';
 import {
-  getAuthDebugState,
-} from '../auth/client';
-import {
   TILE_SIZE,
   ROOM_WIDTH,
   ROOM_HEIGHT,
@@ -60,9 +57,7 @@ import { EditorPersistenceController } from './editor/persistence';
 import { EditorToolController } from './editor/tools';
 import { EditorCourseController } from './editor/courseController';
 import { EditorOverlayController } from './editor/overlays';
-import {
-  buildEditorUiViewModel,
-} from './editor/viewModel';
+import { EditorChromeController } from './editor/chrome';
 import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
 
 const EDITOR_NEIGHBOR_RADIUS = 1;
@@ -90,6 +85,7 @@ export class EditorScene extends Phaser.Scene {
   private readonly presenceController: EditorPresenceController;
   private readonly persistenceController: EditorPersistenceController;
   private readonly toolController: EditorToolController;
+  private readonly chromeController: EditorChromeController;
   private entrySource: 'world' | 'direct' = 'direct';
   private initialRoomSnapshot: RoomSnapshot | null = null;
   private readonly handleWake = (): void => {
@@ -350,6 +346,26 @@ export class EditorScene extends Phaser.Scene {
       this,
       this.editRuntime,
       (state) => this.uiBridge?.renderInspector(state),
+    );
+    this.chromeController = new EditorChromeController(
+      this.editRuntime,
+      this.flowController,
+      this.persistenceController,
+      this.toolController,
+      this.inspectorController,
+      this.courseController,
+      {
+        getUiBridge: () => this.uiBridge,
+        getRoomTitle: () => this.roomTitle,
+        getRoomCoordinates: () => ({ ...this.roomCoordinates }),
+        getRoomGoal: () => this.roomGoal,
+        getRoomPermissions: () => this.roomPermissions,
+        getMintedTokenId: () => this.mintedTokenId,
+        getRoomVersionHistory: () => this.roomVersionHistory,
+        getEntrySource: () => this.entrySource,
+        getCourseEditorState: () => this.courseController.getCourseEditorState(),
+        getSaveInFlight: () => this.saveInFlight,
+      },
     );
     this.presenceController = new EditorPresenceController({
       getRoomCoordinates: () => ({ ...this.roomCoordinates }),
@@ -1035,13 +1051,8 @@ export class EditorScene extends Phaser.Scene {
     return this.editRuntime.removeGoalMarkerAt(worldX, worldY);
   }
 
-  private getGoalSummaryText(): string {
-    return this.toolController.getGoalSummaryText();
-  }
-
   private updateGoalUi(): void {
-    this.courseController.redrawMarkers();
-    this.renderEditorUi();
+    this.chromeController.refreshGoalUi();
   }
 
   // ══════════════════════════════════════
@@ -1061,50 +1072,11 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private updateBottomBar(): void {
-    this.renderEditorUi();
+    this.chromeController.refreshBottomBar();
   }
 
   private renderEditorUi(): void {
-    const roomPlacementMode = this.editRuntime.currentGoalPlacementMode;
-    const courseEditorState = this.getCourseEditorState();
-    const historyState = this.persistenceController.getHistoryState();
-    const saveStatus =
-      this.persistenceController.statusDetails.text ||
-      this.persistenceController.statusDetails.accentText ||
-      this.persistenceController.statusDetails.linkLabel
-        ? this.persistenceController.statusDetails
-        : this.persistenceController.getIdleStatusDetails();
-    const publishNudgeVisible = this.flowController.shouldShowPublishNudge();
-    const publishNudgeText = getAuthDebugState().authenticated
-      ? 'People can’t see this room until you publish it.'
-      : 'People can’t see this room until you sign in and publish it.';
-    const publishNudgeActionText = getAuthDebugState().authenticated
-      ? 'Publish Now'
-      : 'Sign In to Publish';
-    this.uiBridge?.render(
-      buildEditorUiViewModel({
-        roomTitle: this.roomTitle,
-        roomCoordinates: this.roomCoordinates,
-        roomGoal: this.roomGoal,
-        roomPlacementMode,
-        goalUsesMarkers: this.editRuntime.goalUsesMarkers(this.roomGoal),
-        goalSummaryText: this.getGoalSummaryText(),
-        roomPermissions: this.roomPermissions,
-        mintedTokenId: this.mintedTokenId,
-        canRefreshMintMetadata: historyState.canRefreshMintMetadata,
-        saveInFlight: this.saveInFlight,
-        mintedMetadataCurrent: historyState.mintedMetadataCurrent,
-        roomVersionHistory: this.roomVersionHistory,
-        entrySource: this.entrySource,
-        zoomText: `Zoom: ${editorState.zoom}x`,
-        saveStatus,
-        publishNudgeVisible,
-        publishNudgeText,
-        publishNudgeActionText,
-        courseEditorState,
-      }),
-    );
-    this.inspectorController.refreshUi();
+    this.chromeController.render();
   }
 
   // ── Public API for UI ──

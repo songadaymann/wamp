@@ -3989,3 +3989,26 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - artifacts: `output/web-game/editor-inspector-return-probe/summary.json`, `output/web-game/editor-inspector-return-probe/after-return.png`
   - Note:
     - the targeted local probe still logged an unrelated editor room-load background error while booting a synthetic local room; it did not affect the inspector teardown assertion.
+
+- March 26, 2026: finished the last `EditorScene` chrome/render extraction pass for phase 6.
+  - Added `src/scenes/editor/chrome.ts` as `EditorChromeController`.
+  - Moved editor chrome/view-model composition out of `EditorScene`, including:
+    - publish-nudge text/action selection from auth state
+    - save-status selection from persistence state vs idle fallback
+    - final `buildEditorUiViewModel(...)` composition
+    - bridge render + inspector refresh sequencing
+  - `EditorScene.updateGoalUi()`, `updateBottomBar()`, and `renderEditorUi()` now delegate to the chrome controller instead of building view models inline.
+  - `EditorScene.ts` is down to 1,228 lines after this cut.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-course-flow-editor-integration`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/editor-chrome-controller-skill-smoke/state-0.json`
+      - `output/web-game/editor-chrome-controller-skill-smoke/shot-0.png`
+    - targeted browser probe opened the real editor path from `OverworldPlayScene` and confirmed:
+      - active scene switched to `editor`
+      - room chrome showed `Room (0, 0)` with `World` back label
+      - save status rendered `Claimed by jonathanmann.`
+      - no console or page errors
+      - artifacts: `output/web-game/editor-chrome-controller-probe/summary.json`, `output/web-game/editor-chrome-controller-probe/editor-open.png`
+  - Status:
+    - phase 6 is now complete on `safety/course-flow-editor-integration-2026-03-26`; the next maintainability branch should move to the overworld UI boundary work.
