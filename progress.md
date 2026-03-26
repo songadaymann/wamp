@@ -3649,3 +3649,19 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - `develop-web-game` boot smoke on `http://127.0.0.1:3000` wrote `output/web-game/editor-scene-split-boot-smoke/state-0.json` and confirmed normal overworld browse boot against the safety backend
   - targeted local Playwright probe wrote `output/web-game/editor-scene-split-probe/summary.json`
   - the probe directly transitioned from the dev-exposed overworld scene into `EditorScene` and confirmed `scene=editor`, `roomId=0,0`, `roomVersion=29`, `publishedVersion=29`, `placedObjects=28`, `canSaveDraft=true`, with no new console or page errors
+
+## March 26, 2026 - Phase 6 Follow-up: Editor Scene Flow + Presence Extraction
+
+- Pulled scene-flow and editor-presence responsibilities out of `src/scenes/EditorScene.ts`
+  - added `src/scenes/editor/flow.ts` with `EditorSceneFlowController`
+  - added `src/scenes/editor/presence.ts` with `EditorPresenceController`
+  - `EditorScene` now delegates play-mode handoff, return-to-world navigation, adjacent course-room navigation, publish-nudge logic, and editor presence lifecycle/syncing
+- Kept the public scene surface stable
+  - `EditorScene` still exposes the same methods used by the UI bridge (`startPlayMode`, `returnToWorld`, `editPreviousCourseRoom`, `editNextCourseRoom`, etc.), but those methods now forward into the flow controller
+  - auth-change, wake, update-loop, and shutdown hooks now go through the presence controller instead of owning PartyKit client state directly
+- Verification:
+  - `npm run build` passed after the flow/presence extraction
+  - `develop-web-game` boot smoke on `http://127.0.0.1:3000` wrote `output/web-game/editor-scene-flow-boot-smoke/state-0.json` and confirmed clean overworld browse boot
+  - targeted local Playwright probe wrote `output/web-game/editor-scene-flow-probe/summary.json`
+  - the probe confirmed overworld browse -> editor -> overworld browse handoff with no new console/page errors
+  - caveat: in local headless dev automation, the dev-hook editor entry still materialized room `0,0` as draft `v1` on open before returning to the world as a draft, so treat that probe as a flow sanity check rather than a perfect published-room fidelity check; live safety-preview testing should validate the real entry path

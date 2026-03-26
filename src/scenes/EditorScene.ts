@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import {
   getAuthDebugState,
-  promptForSignIn,
 } from '../auth/client';
 import {
   TILE_SIZE,
@@ -31,13 +30,6 @@ import {
   type RoomVersionRecord,
 } from '../persistence/roomRepository';
 import { createWorldRepository } from '../persistence/worldRepository';
-import { roomToChunkCoordinates } from '../persistence/worldModel';
-import {
-  resolveWorldPresenceConfig,
-  resolveWorldPresenceIdentity,
-  WorldPresenceClient,
-  type WorldPresenceIdentity,
-} from '../presence/worldPresence';
 import { RETRO_COLORS } from '../visuals/starfield';
 import {
   cloneCourseSnapshot,
@@ -80,20 +72,20 @@ import { EditorUiBridge } from './editor/uiBridge';
 import { EditorRoomSession } from './editor/roomSession';
 import { EditorBackgroundController } from './editor/backgrounds';
 import { EditorEditRuntime, type EditorClipboardState, type GoalPlacementMode } from './editor/editRuntime';
+import { EditorSceneFlowController } from './editor/flow';
 import { EditorInspectorController } from './editor/inspector';
 import { EditorInteractionController } from './editor/interaction';
+import { EditorPresenceController } from './editor/presence';
 import {
   buildCourseEditedRoomData as buildCourseEditedRoomDataHelper,
   buildCourseEditorState,
   buildCourseMarkerDescriptors,
 } from './editor/courseEditing';
 import {
-  buildEditorPlayModeData,
   getSelectedCoursePreviewForPlay as getSelectedCoursePreviewForPlayHelper,
 } from './editor/playMode';
 import {
   buildEditorUiViewModel,
-  shouldShowPublishNudge as shouldShowPublishNudgeHelper,
 } from './editor/viewModel';
 import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
 
@@ -101,14 +93,11 @@ const EDITOR_NEIGHBOR_RADIUS = 1;
 type EditorMarkerPlacementMode = GoalPlacementMode | 'start';
 
 export class EditorScene extends Phaser.Scene {
-  private readonly PUBLISH_NUDGE_EDIT_THRESHOLD = 10;
   private uiBridge: EditorUiBridge | null = null;
   private layerIndicatorText: Phaser.GameObjects.Text | null = null;
   private layerGuideGraphics: Phaser.GameObjects.Graphics | null = null;
   private pressurePlateGraphics: Phaser.GameObjects.Graphics | null = null;
   private containerGraphics: Phaser.GameObjects.Graphics | null = null;
-  private editorPresenceClient: WorldPresenceClient | null = null;
-  private editorPresenceIdentity: WorldPresenceIdentity | null = null;
   private courseMarkerSprites: Phaser.GameObjects.Sprite[] = [];
   private courseMarkerLabels: Phaser.GameObjects.Text[] = [];
   private activeCourseMarkerEdit: EditorCourseEditData | null = null;
@@ -116,7 +105,6 @@ export class EditorScene extends Phaser.Scene {
   private clipboardPastePreviewActive = false;
   private lastCopySelection: { x1: number; y1: number; x2: number; y2: number } | null = null;
   private roomEditCount = 0;
-  private publishNudgeTriggered = false;
 
   // Tilemap
   private map!: Phaser.Tilemaps.Tilemap;
@@ -132,15 +120,17 @@ export class EditorScene extends Phaser.Scene {
   private readonly roomSession: EditorRoomSession;
   private readonly worldRepository = createWorldRepository();
   private readonly backgroundController: EditorBackgroundController;
+  private readonly flowController: EditorSceneFlowController;
   private readonly inspectorController: EditorInspectorController;
   private readonly interactionController: EditorInteractionController;
+  private readonly presenceController: EditorPresenceController;
   private entrySource: 'world' | 'direct' = 'direct';
   private initialRoomSnapshot: RoomSnapshot | null = null;
   private courseEditorStatusText: string | null = null;
   private readonly handleWake = (): void => {
     setAppMode('editor');
     editorState.isPlaying = false;
-    this.syncEditorPresence();
+    this.presenceController.sync();
     this.updateBottomBar();
     this.updateGoalUi();
   };
@@ -280,8 +270,7 @@ export class EditorScene extends Phaser.Scene {
     this.uiBridge = null;
     this.layerIndicatorText?.destroy();
     this.layerIndicatorText = null;
-    this.editorPresenceClient?.destroy();
-    this.editorPresenceClient = null;
+    this.presenceController.destroy();
     this.destroyCourseMarkerOverlays();
     this.resetRuntimeState();
   };
@@ -322,11 +311,46 @@ export class EditorScene extends Phaser.Scene {
         void this.refreshSurroundingRoomPreviews();
       },
     });
+    this.flowController = new EditorSceneFlowController(this.roomSession, {
+      cancelClipboardPastePreview: () => this.cancelClipboardPastePreview(),
+      getSelectedCoursePreviewForPlay: () => this.getSelectedCoursePreviewForPlay(),
+      getRoomPermissions: () => this.roomPermissions,
+      saveDraft: (force = false) => this.saveDraft(force),
+      exportRoomSnapshot: () => this.exportRoomSnapshot(),
+      getRoomDirty: () => this.roomDirty,
+      getPublishedVersion: () => this.publishedVersion,
+      getRoomCoordinates: () => ({ ...this.roomCoordinates }),
+      buildCourseEditedRoomData: () => this.buildCourseEditedRoomData(),
+      syncActiveCourseRoomSessionSnapshot: (room, options) => {
+        this.syncActiveCourseRoomSessionSnapshot(room, options);
+      },
+      clearEditorPresence: () => this.presenceController.clear(),
+      sleepEditorScene: () => this.scene.sleep(),
+      stopEditorScene: () => this.scene.stop(),
+      wakeOverworld: (data) => this.scene.wake('OverworldPlayScene', data),
+      updateBottomBar: () => this.updateBottomBar(),
+      hasActiveCourseEdit: () => Boolean(this.activeCourseMarkerEdit),
+      canReturnToCourseBuilder: () => this.getCourseEditorState().canReturnToCourseBuilder,
+      getAdjacentCourseEdit: (offset) => this.getAdjacentCourseEdit(offset),
+      setCourseEditorStatusText: (text) => {
+        this.courseEditorStatusText = text;
+      },
+      updateGoalUi: () => this.updateGoalUi(),
+      getPersistenceStatusText: () => this.persistenceStatusText,
+      getMintedTokenId: () => this.mintedTokenId,
+      getRoomEditCount: () => this.roomEditCount,
+      publishRoom: () => this.publishRoom(),
+    });
     this.inspectorController = new EditorInspectorController(
       this,
       this.editRuntime,
       (state) => this.uiBridge?.renderInspector(state),
     );
+    this.presenceController = new EditorPresenceController({
+      getRoomCoordinates: () => ({ ...this.roomCoordinates }),
+      isPlaying: () => editorState.isPlaying,
+      isSceneActive: () => this.scene.isActive(this.scene.key),
+    });
     this.interactionController = new EditorInteractionController(this, {
       getNeighborRadius: () => EDITOR_NEIGHBOR_RADIUS,
       getGoalPlacementMode: () => this.goalPlacementMode as GoalPlacementMode,
@@ -705,7 +729,7 @@ export class EditorScene extends Phaser.Scene {
       onRequestRender: () => this.renderEditorUi(),
       onDocumentKeyDown: this.handleDocumentKeyDown,
       onAuthStateChanged: () => {
-        this.refreshEditorPresenceIdentity();
+        this.presenceController.refreshIdentity();
         this.renderEditorUi();
       },
       onBack: () => this.handleEditorBackAction(),
@@ -781,14 +805,14 @@ export class EditorScene extends Phaser.Scene {
     }
 
     void this.loadPersistedRoom();
-    this.initializeEditorPresence();
+    this.presenceController.initialize();
     this.updateBottomBar();
     this.updateGoalUi();
   }
 
   update(time: number): void {
     this.maybeAutoSave(time);
-    this.syncEditorPresence();
+    this.presenceController.sync();
     this.updateBackgroundPreview();
     this.updateLayerGuideOverlay();
     this.updateCursorHighlight();
@@ -819,6 +843,7 @@ export class EditorScene extends Phaser.Scene {
     this.tilesets = new Map();
     this.layers = new Map();
     this.editRuntime.reset();
+    this.flowController.reset();
     this.inspectorController.reset();
     this.roomSession.reset();
     this.courseEditorStatusText = null;
@@ -828,7 +853,6 @@ export class EditorScene extends Phaser.Scene {
     this.lastCopySelection = null;
     this.destroyCourseMarkerOverlays();
     this.roomEditCount = 0;
-    this.publishNudgeTriggered = false;
     resetEditorPaletteSelection();
     editorState.tileFlipX = false;
     editorState.tileFlipY = false;
@@ -895,22 +919,12 @@ export class EditorScene extends Phaser.Scene {
       hideBusyOverlay();
     }
 
-    this.syncEditorPresence();
+    this.presenceController.sync();
     this.updateGoalUi();
   }
 
   private returnToWorldReadOnly(): void {
-    const wakeData: OverworldPlaySceneData = {
-      centerCoordinates: { ...this.roomCoordinates },
-      roomCoordinates: { ...this.roomCoordinates },
-      statusMessage: 'This minted room can only be edited by its token owner.',
-      draftRoom: null,
-      clearDraftRoomId: this.roomId,
-      mode: 'browse',
-    };
-
-    this.scene.stop();
-    this.scene.wake('OverworldPlayScene', wakeData);
+    this.flowController.returnToWorldReadOnly();
   }
 
   private applyRoomSnapshot(room: RoomSnapshot): void {
@@ -940,7 +954,7 @@ export class EditorScene extends Phaser.Scene {
     this.editRuntime.currentLastDirtyAt = performance.now();
     this.roomEditCount += 1;
     this.updatePersistenceStatus(this.getDirtyPersistenceStatusText());
-    this.maybeTriggerPublishNudge();
+    this.flowController.maybeTriggerPublishNudge();
   }
 
   private updatePersistenceStatus(text: string): void {
@@ -1707,47 +1721,11 @@ export class EditorScene extends Phaser.Scene {
   // ══════════════════════════════════════
 
   async startPlayMode(): Promise<void> {
-    this.cancelClipboardPastePreview();
-    const coursePreview = this.getSelectedCoursePreviewForPlay();
-    if (this.roomPermissions.canSaveDraft) {
-      void this.saveDraft(true);
-    }
-    const currentRoomSnapshot = this.exportRoomSnapshot();
-    // A saved draft on top of a published room is "clean" but still must stay on the draft path.
-    const usePublishedCourseRoomVersion =
-      !this.roomDirty &&
-      this.publishedVersion > 0 &&
-      !this.roomSession.hasDraftPreviewInWorld();
-    this.syncActiveCourseRoomSessionSnapshot(currentRoomSnapshot, {
-      published: usePublishedCourseRoomVersion,
-    });
-    const playData: OverworldPlaySceneData = buildEditorPlayModeData({
-      roomCoordinates: this.roomCoordinates,
-      roomSnapshot: currentRoomSnapshot,
-      usePublishedCourseRoomVersion,
-      coursePreview,
-      courseEditedRoom: this.buildCourseEditedRoomData(),
-    });
-
-    this.editorPresenceClient?.updateLocalPresence(null);
-    this.scene.sleep();
-    this.scene.wake('OverworldPlayScene', playData);
-    this.updateBottomBar();
+    await this.flowController.startPlayMode();
   }
 
   async handlePublishNudgeAction(): Promise<void> {
-    if (!this.shouldShowPublishNudge()) {
-      return;
-    }
-
-    if (!getAuthDebugState().authenticated) {
-      promptForSignIn('People can’t see this room until you publish it. Sign in to publish.');
-      return;
-    }
-
-    if (this.roomPermissions.canPublish) {
-      await this.publishRoom();
-    }
+    await this.flowController.handlePublishNudgeAction();
   }
 
   updateToolUi(): void {
@@ -1783,7 +1761,7 @@ export class EditorScene extends Phaser.Scene {
       this.roomSession.statusDetails.linkLabel
         ? this.roomSession.statusDetails
         : this.roomSession.getIdleStatusDetails();
-    const publishNudgeVisible = this.shouldShowPublishNudge();
+    const publishNudgeVisible = this.flowController.shouldShowPublishNudge();
     const publishNudgeText = getAuthDebugState().authenticated
       ? 'People can’t see this room until you publish it.'
       : 'People can’t see this room until you sign in and publish it.';
@@ -1814,99 +1792,6 @@ export class EditorScene extends Phaser.Scene {
       }),
     );
     this.inspectorController.refreshUi();
-  }
-
-  private initializeEditorPresence(): void {
-    this.editorPresenceClient?.destroy();
-    this.editorPresenceClient = null;
-    this.editorPresenceIdentity = null;
-
-    const config = resolveWorldPresenceConfig();
-    if (!config) {
-      return;
-    }
-
-    this.editorPresenceIdentity = resolveWorldPresenceIdentity();
-    this.editorPresenceClient = new WorldPresenceClient({
-      ...config,
-      identity: this.editorPresenceIdentity,
-      onSnapshot: () => {
-        // Editor presence only publishes activity to the overworld.
-      },
-    });
-    this.editorPresenceClient.setSubscribedShards([
-      roomToChunkCoordinates(this.roomCoordinates),
-    ]);
-    this.syncEditorPresence();
-  }
-
-  private refreshEditorPresenceIdentity(): void {
-    const config = resolveWorldPresenceConfig();
-    const nextIdentity = config ? resolveWorldPresenceIdentity() : null;
-    const currentIdentity = this.editorPresenceIdentity;
-    if (!config) {
-      if (!this.editorPresenceClient && !currentIdentity) {
-        return;
-      }
-
-      this.initializeEditorPresence();
-      return;
-    }
-
-    if (
-      currentIdentity &&
-      nextIdentity &&
-      currentIdentity.userId === nextIdentity.userId &&
-      currentIdentity.displayName === nextIdentity.displayName &&
-      currentIdentity.avatarId === nextIdentity.avatarId
-    ) {
-      return;
-    }
-
-    this.initializeEditorPresence();
-  }
-
-  private syncEditorPresence(): void {
-    if (!this.editorPresenceClient || !this.scene.isActive(this.scene.key) || editorState.isPlaying) {
-      this.editorPresenceClient?.updateLocalPresence(null);
-      return;
-    }
-
-    this.editorPresenceClient.updateLocalPresence({
-      roomCoordinates: { ...this.roomCoordinates },
-      x: ROOM_PX_WIDTH * 0.5,
-      y: ROOM_PX_HEIGHT * 0.5,
-      velocityX: 0,
-      velocityY: 0,
-      facing: 1,
-      animationState: 'idle',
-      mode: 'edit',
-      timestamp: Date.now(),
-    });
-  }
-
-  private maybeTriggerPublishNudge(): void {
-    if (this.publishNudgeTriggered || !this.shouldShowPublishNudge()) {
-      return;
-    }
-
-    this.publishNudgeTriggered = true;
-    if (!getAuthDebugState().authenticated) {
-      promptForSignIn('People can’t see this room until you publish it. Sign in to publish.');
-      return;
-    }
-
-    this.roomSession.setStatusText('Draft only. Not visible in the world until published.');
-  }
-
-  private shouldShowPublishNudge(): boolean {
-    return shouldShowPublishNudgeHelper(
-      this.publishedVersion,
-      this.roomPermissions.canSaveDraft,
-      this.mintedTokenId,
-      this.roomEditCount,
-      this.PUBLISH_NUDGE_EDIT_THRESHOLD,
-    );
   }
 
   // ── Public API for UI ──
@@ -1950,70 +1835,23 @@ export class EditorScene extends Phaser.Scene {
   }
 
   async returnToWorld(): Promise<void> {
-    showBusyOverlay('Returning to world...', 'Saving room state...');
-    const wakeData = await this.roomSession.buildReturnToWorldWakeData();
-    if (!wakeData) {
-      showBusyError(this.persistenceStatusText || 'Failed to return to world.', {
-        closeHandler: () => hideBusyOverlay(),
-      });
-      return;
-    }
-
-    wakeData.courseEditorReturned = Boolean(this.activeCourseMarkerEdit);
-    wakeData.courseEditedRoom = this.buildCourseEditedRoomData();
-
-    this.scene.stop();
-    this.scene.wake('OverworldPlayScene', wakeData);
+    await this.flowController.returnToWorld();
   }
 
   async returnToCourseBuilder(): Promise<void> {
-    await this.returnToWorld();
+    await this.flowController.returnToCourseBuilder();
   }
 
   private async handleEditorBackAction(): Promise<void> {
-    if (this.getCourseEditorState().canReturnToCourseBuilder) {
-      await this.returnToCourseBuilder();
-      return;
-    }
-
-    await this.returnToWorld();
+    await this.flowController.handleEditorBackAction();
   }
 
   async editPreviousCourseRoom(): Promise<void> {
-    await this.editAdjacentCourseRoom(-1);
+    await this.flowController.editPreviousCourseRoom();
   }
 
   async editNextCourseRoom(): Promise<void> {
-    await this.editAdjacentCourseRoom(1);
-  }
-
-  private async editAdjacentCourseRoom(offset: -1 | 1): Promise<void> {
-    const adjacent = this.getAdjacentCourseEdit(offset);
-    if (!adjacent) {
-      this.courseEditorStatusText =
-        offset < 0 ? 'Already at the first course room.' : 'Already at the last course room.';
-      this.updateGoalUi();
-      return;
-    }
-
-    showBusyOverlay(
-      offset < 0 ? 'Opening previous room...' : 'Opening next room...',
-      'Saving room state...'
-    );
-    const wakeData = await this.roomSession.buildReturnToWorldWakeData();
-    if (!wakeData) {
-      showBusyError(this.persistenceStatusText || 'Failed to open the adjacent room.', {
-        closeHandler: () => hideBusyOverlay(),
-      });
-      return;
-    }
-
-    wakeData.courseEditorReturned = false;
-    wakeData.courseEditedRoom = this.buildCourseEditedRoomData();
-    wakeData.courseEditorNavigateOffset = offset;
-
-    this.scene.stop();
-    this.scene.wake('OverworldPlayScene', wakeData);
+    await this.flowController.editNextCourseRoom();
   }
 
   async mintRoom(): Promise<RoomRecord | null> {
