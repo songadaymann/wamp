@@ -32,29 +32,14 @@ import {
 import { createWorldRepository } from '../persistence/worldRepository';
 import { RETRO_COLORS } from '../visuals/starfield';
 import {
-  cloneCourseSnapshot,
-  createDefaultCourseGoal,
-  type CourseGoal,
   type CourseGoalType,
-  type CourseMarkerPoint,
   type CourseSnapshot,
 } from '../courses/model';
 import {
-  clearActiveCourseDraftSessionRoomOverride,
-  getActiveCourseDraftSessionCourseId,
-  getActiveCourseDraftSessionDraft,
-  setActiveCourseDraftSessionRoomOverride,
-  updateActiveCourseDraftSession,
-} from '../courses/draftSession';
-import {
   cloneRoomGoal,
-  createGoalMarkerPointFromTile,
   type RoomGoal,
   type RoomGoalType,
 } from '../goals/roomGoals';
-import {
-  createGoalMarkerFlagSprite,
-} from '../goals/markerFlags';
 import { setAppMode } from '../ui/appMode';
 import {
   hideBusyOverlay,
@@ -76,21 +61,14 @@ import { EditorSceneFlowController } from './editor/flow';
 import { EditorInspectorController } from './editor/inspector';
 import { EditorInteractionController } from './editor/interaction';
 import { EditorPresenceController } from './editor/presence';
-import {
-  buildCourseEditedRoomData as buildCourseEditedRoomDataHelper,
-  buildCourseEditorState,
-  buildCourseMarkerDescriptors,
-} from './editor/courseEditing';
-import {
-  getSelectedCoursePreviewForPlay as getSelectedCoursePreviewForPlayHelper,
-} from './editor/playMode';
+import { EditorCourseController } from './editor/courseController';
 import {
   buildEditorUiViewModel,
 } from './editor/viewModel';
 import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
 
 const EDITOR_NEIGHBOR_RADIUS = 1;
-type EditorMarkerPlacementMode = GoalPlacementMode | 'start';
+type EditorMarkerPlacementMode = Exclude<GoalPlacementMode, null> | 'start';
 
 export class EditorScene extends Phaser.Scene {
   private uiBridge: EditorUiBridge | null = null;
@@ -98,10 +76,6 @@ export class EditorScene extends Phaser.Scene {
   private layerGuideGraphics: Phaser.GameObjects.Graphics | null = null;
   private pressurePlateGraphics: Phaser.GameObjects.Graphics | null = null;
   private containerGraphics: Phaser.GameObjects.Graphics | null = null;
-  private courseMarkerSprites: Phaser.GameObjects.Sprite[] = [];
-  private courseMarkerLabels: Phaser.GameObjects.Text[] = [];
-  private activeCourseMarkerEdit: EditorCourseEditData | null = null;
-  private courseGoalPlacementMode: EditorMarkerPlacementMode = null;
   private clipboardPastePreviewActive = false;
   private lastCopySelection: { x1: number; y1: number; x2: number; y2: number } | null = null;
   private roomEditCount = 0;
@@ -120,13 +94,13 @@ export class EditorScene extends Phaser.Scene {
   private readonly roomSession: EditorRoomSession;
   private readonly worldRepository = createWorldRepository();
   private readonly backgroundController: EditorBackgroundController;
+  private readonly courseController: EditorCourseController;
   private readonly flowController: EditorSceneFlowController;
   private readonly inspectorController: EditorInspectorController;
   private readonly interactionController: EditorInteractionController;
   private readonly presenceController: EditorPresenceController;
   private entrySource: 'world' | 'direct' = 'direct';
   private initialRoomSnapshot: RoomSnapshot | null = null;
-  private courseEditorStatusText: string | null = null;
   private readonly handleWake = (): void => {
     setAppMode('editor');
     editorState.isPlaying = false;
@@ -271,7 +245,6 @@ export class EditorScene extends Phaser.Scene {
     this.layerIndicatorText?.destroy();
     this.layerIndicatorText = null;
     this.presenceController.destroy();
-    this.destroyCourseMarkerOverlays();
     this.resetRuntimeState();
   };
 
@@ -311,6 +284,14 @@ export class EditorScene extends Phaser.Scene {
         void this.refreshSurroundingRoomPreviews();
       },
     });
+    this.courseController = new EditorCourseController(this, {
+      getRoomId: () => this.roomId,
+      syncBackgroundCameraIgnores: () => this.syncBackgroundCameraIgnores(),
+      updateGoalUi: () => this.updateGoalUi(),
+      clearRoomGoalPlacementMode: () => {
+        this.editRuntime.currentGoalPlacementMode = null;
+      },
+    });
     this.flowController = new EditorSceneFlowController(this.roomSession, {
       cancelClipboardPastePreview: () => this.cancelClipboardPastePreview(),
       getSelectedCoursePreviewForPlay: () => this.getSelectedCoursePreviewForPlay(),
@@ -329,12 +310,10 @@ export class EditorScene extends Phaser.Scene {
       stopEditorScene: () => this.scene.stop(),
       wakeOverworld: (data) => this.scene.wake('OverworldPlayScene', data),
       updateBottomBar: () => this.updateBottomBar(),
-      hasActiveCourseEdit: () => Boolean(this.activeCourseMarkerEdit),
-      canReturnToCourseBuilder: () => this.getCourseEditorState().canReturnToCourseBuilder,
-      getAdjacentCourseEdit: (offset) => this.getAdjacentCourseEdit(offset),
-      setCourseEditorStatusText: (text) => {
-        this.courseEditorStatusText = text;
-      },
+      hasActiveCourseEdit: () => this.courseController.hasActiveCourseEdit(),
+      canReturnToCourseBuilder: () => this.courseController.getCourseEditorState().canReturnToCourseBuilder,
+      getAdjacentCourseEdit: (offset) => this.courseController.getAdjacentCourseEdit(offset),
+      setCourseEditorStatusText: (text) => this.courseController.setStatusText(text),
       updateGoalUi: () => this.updateGoalUi(),
       getPersistenceStatusText: () => this.persistenceStatusText,
       getMintedTokenId: () => this.mintedTokenId,
@@ -425,11 +404,11 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private get goalMarkerSprites(): Phaser.GameObjects.Sprite[] {
-    return [...this.editRuntime.currentGoalMarkerSprites, ...this.courseMarkerSprites];
+    return [...this.editRuntime.currentGoalMarkerSprites, ...this.courseController.getMarkerSprites()];
   }
 
   private get goalMarkerLabels(): Phaser.GameObjects.Text[] {
-    return [...this.editRuntime.currentGoalMarkerLabels, ...this.courseMarkerLabels];
+    return [...this.editRuntime.currentGoalMarkerLabels, ...this.courseController.getMarkerLabels()];
   }
 
   private get roomId(): string {
@@ -541,177 +520,33 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private get goalPlacementMode(): EditorMarkerPlacementMode {
-    return this.courseGoalPlacementMode ?? (this.editRuntime.currentGoalPlacementMode as EditorMarkerPlacementMode);
-  }
-
-  private get activeCourseDraft(): CourseSnapshot | null {
-    if (!this.activeCourseMarkerEdit) {
-      return null;
-    }
-
-    if (getActiveCourseDraftSessionCourseId() !== this.activeCourseMarkerEdit.courseId) {
-      return null;
-    }
-
-    return getActiveCourseDraftSessionDraft();
-  }
-
-  private get activeCourseGoal(): CourseGoal | null {
-    return this.activeCourseDraft?.goal ?? null;
-  }
-
-  private destroyCourseMarkerOverlays(): void {
-    for (const sprite of this.courseMarkerSprites) {
-      sprite.destroy();
-    }
-    this.courseMarkerSprites = [];
-    for (const label of this.courseMarkerLabels) {
-      label.destroy();
-    }
-    this.courseMarkerLabels = [];
-  }
-
-  private setActiveCourseDraft(nextDraft: CourseSnapshot): void {
-    if (!this.activeCourseMarkerEdit || getActiveCourseDraftSessionCourseId() !== this.activeCourseMarkerEdit.courseId) {
-      return;
-    }
-
-    const normalized = cloneCourseSnapshot(nextDraft);
-    updateActiveCourseDraftSession((draft) => {
-      draft.title = normalized.title;
-      draft.roomRefs = normalized.roomRefs;
-      draft.startPoint = normalized.startPoint;
-      draft.goal = normalized.goal;
-    });
-    this.updateGoalUi();
+    return this.courseController.getGoalPlacementMode() ?? (this.editRuntime.currentGoalPlacementMode as EditorMarkerPlacementMode);
   }
 
   private buildCourseEditedRoomData(): CourseEditedRoomData | null {
-    return buildCourseEditedRoomDataHelper(this.activeCourseMarkerEdit);
+    return this.courseController.buildCourseEditedRoomData();
   }
 
   private getAdjacentCourseEdit(offset: -1 | 1): EditorCourseEditData | null {
-    const courseEdit = this.activeCourseMarkerEdit;
-    const draft = this.activeCourseDraft;
-    if (!courseEdit || !draft || courseEdit.roomOrder === null) {
-      return null;
-    }
-
-    const nextOrder = courseEdit.roomOrder + offset;
-    const nextRoomRef = draft.roomRefs[nextOrder] ?? null;
-    if (!nextRoomRef) {
-      return null;
-    }
-
-    return {
-      courseId: courseEdit.courseId,
-      roomId: nextRoomRef.roomId,
-      roomOrder: nextOrder,
-    };
+    return this.courseController.getAdjacentCourseEdit(offset);
   }
 
   private syncActiveCourseRoomSessionSnapshot(
     room: RoomSnapshot,
     options: { published: boolean }
   ): void {
-    const courseEdit = this.activeCourseMarkerEdit;
-    if (!courseEdit || getActiveCourseDraftSessionCourseId() !== courseEdit.courseId) {
-      return;
-    }
-
-    const snapshot = cloneRoomSnapshot(room);
-    if (options.published) {
-      clearActiveCourseDraftSessionRoomOverride(snapshot.id);
-    } else {
-      setActiveCourseDraftSessionRoomOverride(snapshot);
-    }
-
-    const currentDraft = getActiveCourseDraftSessionDraft();
-    const currentRoomRef = currentDraft?.roomRefs.find((entry) => entry.roomId === snapshot.id) ?? null;
-    const nextTitle = snapshot.title ?? null;
-    const needsRecordUpdate =
-      currentRoomRef !== null &&
-      (currentRoomRef.roomTitle !== nextTitle ||
-        (options.published && currentRoomRef.roomVersion !== snapshot.version));
-    if (needsRecordUpdate) {
-      updateActiveCourseDraftSession((draft) => {
-        const roomRef = draft.roomRefs.find((entry) => entry.roomId === snapshot.id);
-        if (!roomRef) {
-          return;
-        }
-
-        roomRef.roomTitle = nextTitle;
-        if (options.published) {
-          roomRef.roomVersion = snapshot.version;
-        }
-      });
-      this.updateGoalUi();
-    }
-  }
-
-  private getCourseGoalUsesMarkers(goal: CourseGoal | null): boolean {
-    return goal !== null;
-  }
-
-  private redrawCourseGoalMarkers(): void {
-    this.destroyCourseMarkerOverlays();
-    const markers = buildCourseMarkerDescriptors(this.activeCourseDraft, this.roomId);
-    if (markers.length === 0) {
-      this.syncBackgroundCameraIgnores();
-      return;
-    }
-
-    for (const marker of markers) {
-      const sprite = createGoalMarkerFlagSprite(
-        this,
-        marker.variant,
-        marker.point.x,
-        marker.point.y + 2,
-        97,
-      );
-      this.courseMarkerSprites.push(sprite);
-
-      if (marker.label) {
-        const label = this.add.text(marker.point.x, marker.point.y - 28, marker.label, {
-          fontFamily: 'Courier New',
-          fontSize: '12px',
-          color: marker.textColor,
-          stroke: '#050505',
-          strokeThickness: 4,
-        });
-        label.setOrigin(0.5, 1);
-        label.setDepth(98);
-        this.courseMarkerLabels.push(label);
-      }
-    }
-
-    this.syncBackgroundCameraIgnores();
+    this.courseController.syncActiveCourseRoomSessionSnapshot(room, options);
   }
 
   getCourseEditorState(): EditorCourseUiState {
-    return buildCourseEditorState({
-      activeCourseMarkerEdit: this.activeCourseMarkerEdit,
-      courseEditorStatusText: this.courseEditorStatusText,
-      draft: this.activeCourseDraft,
-      activeGoal: this.activeCourseGoal,
-      coursePlacementMode: this.courseGoalPlacementMode,
-    });
+    return this.courseController.getCourseEditorState();
   }
 
   create(data?: EditorSceneData): void {
     this.resetRuntimeState();
 
     this.initialRoomSnapshot = data?.roomSnapshot ? cloneRoomSnapshot(data.roomSnapshot) : null;
-    this.activeCourseMarkerEdit = data?.courseEdit
-      ? {
-          courseId: data.courseEdit.courseId,
-          roomId: data.courseEdit.roomId,
-          roomOrder: data.courseEdit.roomOrder,
-        }
-      : null;
-    this.courseEditorStatusText = this.activeCourseMarkerEdit
-      ? null
-      : 'Open this room from the course builder to edit course goals.';
+    this.courseController.initialize(data?.courseEdit ?? null);
 
     if (this.initialRoomSnapshot) {
       this.roomCoordinates = { ...this.initialRoomSnapshot.coordinates };
@@ -845,13 +680,10 @@ export class EditorScene extends Phaser.Scene {
     this.editRuntime.reset();
     this.flowController.reset();
     this.inspectorController.reset();
+    this.courseController.reset();
     this.roomSession.reset();
-    this.courseEditorStatusText = null;
-    this.activeCourseMarkerEdit = null;
-    this.courseGoalPlacementMode = null;
     this.clipboardPastePreviewActive = false;
     this.lastCopySelection = null;
-    this.destroyCourseMarkerOverlays();
     this.roomEditCount = 0;
     resetEditorPaletteSelection();
     editorState.tileFlipX = false;
@@ -1361,7 +1193,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   startGoalMarkerPlacement(mode: EditorMarkerPlacementMode): void {
-    this.courseGoalPlacementMode = null;
+    this.courseController.clearPlacementMode();
     this.editRuntime.startGoalMarkerPlacement(mode as GoalPlacementMode);
   }
 
@@ -1370,85 +1202,27 @@ export class EditorScene extends Phaser.Scene {
   }
 
   setCourseGoalType(goalType: CourseGoalType | null): void {
-    const draft = this.activeCourseDraft;
-    if (!draft) {
-      return;
-    }
-
-    const nextDraft = cloneCourseSnapshot(draft);
-    nextDraft.goal = goalType ? createDefaultCourseGoal(goalType) : null;
-    if (!goalType) {
-      nextDraft.startPoint = null;
-    }
-    this.courseGoalPlacementMode = null;
-    this.setActiveCourseDraft(nextDraft);
+    this.courseController.setCourseGoalType(goalType);
   }
 
   setCourseGoalTimeLimitSeconds(seconds: number | null): void {
-    const draft = this.activeCourseDraft;
-    if (!draft?.goal || draft.goal.type === 'survival' || !('timeLimitMs' in draft.goal)) {
-      return;
-    }
-
-    const nextDraft = cloneCourseSnapshot(draft);
-    if (nextDraft.goal && 'timeLimitMs' in nextDraft.goal) {
-      nextDraft.goal.timeLimitMs = seconds === null ? null : Math.max(1, seconds) * 1000;
-      this.setActiveCourseDraft(nextDraft);
-    }
+    this.courseController.setCourseGoalTimeLimitSeconds(seconds);
   }
 
   setCourseGoalRequiredCount(requiredCount: number): void {
-    const draft = this.activeCourseDraft;
-    if (draft?.goal?.type !== 'collect_target') {
-      return;
-    }
-
-    const nextDraft = cloneCourseSnapshot(draft);
-    if (nextDraft.goal?.type === 'collect_target') {
-      nextDraft.goal.requiredCount = Math.max(1, requiredCount);
-      this.setActiveCourseDraft(nextDraft);
-    }
+    this.courseController.setCourseGoalRequiredCount(requiredCount);
   }
 
   setCourseGoalSurvivalSeconds(seconds: number): void {
-    const draft = this.activeCourseDraft;
-    if (draft?.goal?.type !== 'survival') {
-      return;
-    }
-
-    const nextDraft = cloneCourseSnapshot(draft);
-    if (nextDraft.goal?.type === 'survival') {
-      nextDraft.goal.durationMs = Math.max(1, seconds) * 1000;
-      this.setActiveCourseDraft(nextDraft);
-    }
+    this.courseController.setCourseGoalSurvivalSeconds(seconds);
   }
 
   startCourseGoalMarkerPlacement(mode: EditorMarkerPlacementMode): void {
-    if (!this.activeCourseDraft || !this.getCourseGoalUsesMarkers(this.activeCourseGoal)) {
-      return;
-    }
-
-    this.editRuntime.currentGoalPlacementMode = null;
-    this.courseGoalPlacementMode = this.courseGoalPlacementMode === mode ? null : mode;
-    this.updateGoalUi();
+    this.courseController.startCourseGoalMarkerPlacement(mode);
   }
 
   clearCourseGoalMarkers(): void {
-    const draft = this.activeCourseDraft;
-    if (!draft) {
-      return;
-    }
-
-    const nextDraft = cloneCourseSnapshot(draft);
-    nextDraft.startPoint = null;
-    if (nextDraft.goal?.type === 'reach_exit') {
-      nextDraft.goal.exit = null;
-    } else if (nextDraft.goal?.type === 'checkpoint_sprint') {
-      nextDraft.goal.checkpoints = [];
-      nextDraft.goal.finish = null;
-    }
-    this.courseGoalPlacementMode = null;
-    this.setActiveCourseDraft(nextDraft);
+    this.courseController.clearCourseGoalMarkers();
   }
 
   getGoalEditorState(): {
@@ -1461,52 +1235,11 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private getSelectedCoursePreviewForPlay(): CourseSnapshot | null {
-    return getSelectedCoursePreviewForPlayHelper(this.activeCourseDraft, this.roomId);
+    return this.courseController.getSelectedCoursePreviewForPlay();
   }
 
   private placeGoalMarker(tileX: number, tileY: number): void {
-    if (this.courseGoalPlacementMode !== null) {
-      const draft = this.activeCourseDraft;
-      const goal = this.activeCourseGoal;
-      if (!draft || !goal) {
-        return;
-      }
-
-      const localPoint: CourseMarkerPoint = {
-        roomId: this.roomId,
-        ...createGoalMarkerPointFromTile(tileX, tileY),
-      };
-      const nextDraft = cloneCourseSnapshot(draft);
-
-      if (this.courseGoalPlacementMode === 'start') {
-        nextDraft.startPoint = localPoint;
-        this.courseGoalPlacementMode = null;
-        this.setActiveCourseDraft(nextDraft);
-        return;
-      }
-
-      if (goal.type === 'reach_exit' && this.courseGoalPlacementMode === 'exit' && nextDraft.goal?.type === 'reach_exit') {
-        nextDraft.goal.exit = localPoint;
-        this.courseGoalPlacementMode = null;
-        this.setActiveCourseDraft(nextDraft);
-        return;
-      }
-
-      if (goal.type !== 'checkpoint_sprint' || nextDraft.goal?.type !== 'checkpoint_sprint') {
-        return;
-      }
-
-      if (this.courseGoalPlacementMode === 'checkpoint') {
-        nextDraft.goal.checkpoints = [...nextDraft.goal.checkpoints, localPoint];
-        this.setActiveCourseDraft(nextDraft);
-        return;
-      }
-
-      if (this.courseGoalPlacementMode === 'finish') {
-        nextDraft.goal.finish = localPoint;
-        this.courseGoalPlacementMode = null;
-        this.setActiveCourseDraft(nextDraft);
-      }
+    if (this.courseController.placeGoalMarker(tileX, tileY)) {
       return;
     }
 
@@ -1514,56 +1247,11 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private removeGoalMarkerAt(worldX: number, worldY: number): boolean {
-    if (this.activeCourseDraft) {
-      const draft = this.activeCourseDraft;
-      const goal = this.activeCourseGoal;
-      if (!draft || !goal) {
-        return false;
-      }
-
-      const nextDraft = cloneCourseSnapshot(draft);
-      const tryRemovePoint = (point: CourseMarkerPoint | null): boolean =>
-        Boolean(point && point.roomId === this.roomId && Math.hypot(point.x - worldX, point.y - worldY) < 16);
-
-      if (tryRemovePoint(nextDraft.startPoint)) {
-        nextDraft.startPoint = null;
-        this.setActiveCourseDraft(nextDraft);
-        return true;
-      }
-
-      if (goal.type === 'reach_exit' && nextDraft.goal?.type === 'reach_exit' && tryRemovePoint(nextDraft.goal.exit)) {
-        nextDraft.goal.exit = null;
-        this.setActiveCourseDraft(nextDraft);
-        return true;
-      }
-
-      if (goal.type !== 'checkpoint_sprint' || nextDraft.goal?.type !== 'checkpoint_sprint') {
-        return false;
-      }
-
-      if (tryRemovePoint(nextDraft.goal.finish)) {
-        nextDraft.goal.finish = null;
-        this.setActiveCourseDraft(nextDraft);
-        return true;
-      }
-
-      const index = nextDraft.goal.checkpoints.findIndex(
-        (checkpoint) =>
-          checkpoint.roomId === this.roomId &&
-          Math.hypot(checkpoint.x - worldX, checkpoint.y - worldY) < 16
-      );
-      if (index >= 0) {
-        nextDraft.goal.checkpoints.splice(index, 1);
-        this.setActiveCourseDraft(nextDraft);
-        return true;
-      }
+    if (this.courseController.removeGoalMarkerAt(worldX, worldY)) {
+      return true;
     }
 
     return this.editRuntime.removeGoalMarkerAt(worldX, worldY);
-  }
-
-  private goalUsesMarkers(goal: RoomGoal | null): boolean {
-    return this.editRuntime.goalUsesMarkers(goal);
   }
 
   private getGoalSummaryText(): string {
@@ -1571,7 +1259,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private updateGoalUi(): void {
-    this.redrawCourseGoalMarkers();
+    this.courseController.redrawMarkers();
     this.renderEditorUi();
   }
 
@@ -1774,7 +1462,7 @@ export class EditorScene extends Phaser.Scene {
         roomCoordinates: this.roomCoordinates,
         roomGoal: this.roomGoal,
         roomPlacementMode,
-        goalUsesMarkers: this.goalUsesMarkers(this.roomGoal),
+        goalUsesMarkers: this.editRuntime.goalUsesMarkers(this.roomGoal),
         goalSummaryText: this.getGoalSummaryText(),
         roomPermissions: this.roomPermissions,
         mintedTokenId: this.mintedTokenId,
@@ -1906,13 +1594,7 @@ export class EditorScene extends Phaser.Scene {
       background: editorState.selectedBackground,
       goal: cloneRoomGoal(this.roomGoal),
       goalPlacementMode: this.goalPlacementMode,
-      courseEdit: this.activeCourseMarkerEdit
-        ? {
-            courseId: this.activeCourseMarkerEdit.courseId,
-            roomId: this.activeCourseMarkerEdit.roomId,
-            roomOrder: this.activeCourseMarkerEdit.roomOrder,
-          }
-        : null,
+      courseEdit: this.buildCourseEditedRoomData(),
       spawnPoint: this.roomSpawnPoint ? { ...this.roomSpawnPoint } : null,
       backgroundLayerCount: this.backgroundController.backgroundLayerCount,
       hasBackgroundCamera: this.backgroundController.hasBackgroundCamera,

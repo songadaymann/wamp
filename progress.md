@@ -3665,3 +3665,28 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - targeted local Playwright probe wrote `output/web-game/editor-scene-flow-probe/summary.json`
   - the probe confirmed overworld browse -> editor -> overworld browse handoff with no new console/page errors
   - caveat: in local headless dev automation, the dev-hook editor entry still materialized room `0,0` as draft `v1` on open before returning to the world as a draft, so treat that probe as a flow sanity check rather than a perfect published-room fidelity check; live safety-preview testing should validate the real entry path
+
+## March 26, 2026 - Phase 6 Follow-up: Course Goal / Course Session Extraction
+
+- Pulled course-edit session state and course-goal mutation logic out of `src/scenes/EditorScene.ts`
+  - added `src/scenes/editor/courseController.ts` with `EditorCourseController`
+  - moved active course edit/session tracking, course goal type/time/count mutations, start/exit/checkpoint/finish marker placement-removal, course marker overlay rendering, and draft-session room snapshot syncing into the controller
+  - `EditorScene` now delegates course-goal methods, course editor UI state, and course preview-for-play resolution to the controller instead of owning duplicated course-session state directly
+- Kept the scene boundary stable while reducing internal coupling
+  - `EditorSceneFlowController` now pulls adjacent-room navigation and course status updates through the course controller instead of touching scene-owned course fields
+  - course marker overlays now flow through the existing background ignore pipeline via controller-owned sprite/label accessors, so the UI boundary and background controller still see the same combined marker set
+- Verification:
+  - `npm run build` passed after the course controller extraction
+  - `develop-web-game` boot smoke on `http://127.0.0.1:3100` wrote:
+    - `output/web-game/editor-course-controller-boot-smoke/shot-0.png`
+    - `output/web-game/editor-course-controller-boot-smoke/shot-1.png`
+    - `output/web-game/editor-course-controller-boot-smoke/state-0.json`
+    - `output/web-game/editor-course-controller-boot-smoke/state-1.json`
+  - targeted local Playwright probe wrote:
+    - `output/web-game/editor-course-controller-probe/summary.json`
+    - `output/web-game/editor-course-controller-probe/editor-course-controller-probe.png`
+  - the targeted probe booted overworld browse, seeded a local draft-session course record for room `0,0`, opened `EditorScene` with `courseEdit`, then exercised `reach_exit` and `checkpoint_sprint` marker placement through the public editor scene methods
+  - probe result:
+    - `reach_exit` summary became `Reach Exit · start set · exit set · 1 room`
+    - `checkpoint_sprint` summary became `Checkpoint Sprint · start set · 1 checkpoint · finish set · 1 room`
+    - no new console or page errors were captured
