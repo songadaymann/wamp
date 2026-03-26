@@ -266,11 +266,16 @@ export async function handleCourseRunFinish(
   }
 
   const finishedAt = new Date().toISOString();
+  const reportedElapsedMs = body.elapsedMs;
   const clampedBody: CourseRunFinishRequestBody = {
-    ...normalizeFinalizedCourseRunBody(snapshot.goal, {
-      ...body,
-      elapsedMs: computeEffectiveElapsedMs(existing.startedAt, finishedAt, body.elapsedMs),
-    }),
+    ...normalizeFinalizedCourseRunBody(
+      snapshot.goal,
+      {
+        ...body,
+        elapsedMs: computeEffectiveElapsedMs(existing.startedAt, finishedAt, reportedElapsedMs),
+      },
+      reportedElapsedMs
+    ),
     finishedAt,
   };
   const score =
@@ -478,7 +483,8 @@ function computeEffectiveElapsedMs(
 
 function normalizeFinalizedCourseRunBody(
   goal: CourseSnapshot['goal'],
-  body: CourseRunFinishRequestBody
+  body: CourseRunFinishRequestBody,
+  reportedElapsedMs: number
 ): CourseRunFinishRequestBody {
   if (!goal) {
     return body;
@@ -493,7 +499,11 @@ function normalizeFinalizedCourseRunBody(
     };
   }
 
-  if ('timeLimitMs' in goal && goal.timeLimitMs !== null && body.elapsedMs > goal.timeLimitMs) {
+  if (
+    'timeLimitMs' in goal &&
+    goal.timeLimitMs !== null &&
+    reportedElapsedMs > goal.timeLimitMs
+  ) {
     throw new HttpError(409, 'Completed course runs must finish within the published time limit.');
   }
 
