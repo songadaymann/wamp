@@ -6,15 +6,10 @@ import {
   TILE_SIZE,
   ROOM_WIDTH,
   ROOM_HEIGHT,
-  ROOM_PX_WIDTH,
-  ROOM_PX_HEIGHT,
   LAYER_NAMES,
   TILESETS,
   editorState,
-  getObjectById,
-  getPlacedObjectLayer,
   resetEditorPaletteSelection,
-  type LayerName,
 } from '../config';
 import {
   DEFAULT_ROOM_COORDINATES,
@@ -30,7 +25,6 @@ import {
   type RoomVersionRecord,
 } from '../persistence/roomRepository';
 import { createWorldRepository } from '../persistence/worldRepository';
-import { RETRO_COLORS } from '../visuals/starfield';
 import {
   type CourseGoalType,
   type CourseSnapshot,
@@ -65,6 +59,7 @@ import { EditorPresenceController } from './editor/presence';
 import { EditorPersistenceController } from './editor/persistence';
 import { EditorToolController } from './editor/tools';
 import { EditorCourseController } from './editor/courseController';
+import { EditorOverlayController } from './editor/overlays';
 import {
   buildEditorUiViewModel,
 } from './editor/viewModel';
@@ -75,20 +70,12 @@ type EditorMarkerPlacementMode = Exclude<GoalPlacementMode, null> | 'start';
 
 export class EditorScene extends Phaser.Scene {
   private uiBridge: EditorUiBridge | null = null;
-  private layerIndicatorText: Phaser.GameObjects.Text | null = null;
-  private layerGuideGraphics: Phaser.GameObjects.Graphics | null = null;
-  private pressurePlateGraphics: Phaser.GameObjects.Graphics | null = null;
-  private containerGraphics: Phaser.GameObjects.Graphics | null = null;
   private roomEditCount = 0;
 
   // Tilemap
   private map!: Phaser.Tilemaps.Tilemap;
   private tilesets: Map<string, Phaser.Tilemaps.Tileset> = new Map();
   private layers: Map<string, Phaser.Tilemaps.TilemapLayer> = new Map();
-
-  // Graphics overlays
-  private gridGraphics!: Phaser.GameObjects.Graphics;
-  private borderGraphics!: Phaser.GameObjects.Graphics;
 
   // Single-room persistence (local-first, ready for a remote adapter later)
   private readonly editRuntime: EditorEditRuntime;
@@ -99,6 +86,7 @@ export class EditorScene extends Phaser.Scene {
   private readonly flowController: EditorSceneFlowController;
   private readonly inspectorController: EditorInspectorController;
   private readonly interactionController: EditorInteractionController;
+  private readonly overlayController: EditorOverlayController;
   private readonly presenceController: EditorPresenceController;
   private readonly persistenceController: EditorPersistenceController;
   private readonly toolController: EditorToolController;
@@ -235,8 +223,6 @@ export class EditorScene extends Phaser.Scene {
     this.game.canvas.removeEventListener('contextmenu', this.handleCanvasContextMenu);
     this.uiBridge?.destroy();
     this.uiBridge = null;
-    this.layerIndicatorText?.destroy();
-    this.layerIndicatorText = null;
     this.presenceController.destroy();
     this.resetRuntimeState();
   };
@@ -395,6 +381,11 @@ export class EditorScene extends Phaser.Scene {
       updateBackgroundPreview: () => this.updateBackgroundPreview(),
       updateZoomUI: () => this.updateZoomUI(),
     });
+    this.overlayController = new EditorOverlayController(this, {
+      getLayers: () => this.layers,
+      getPlacedObjects: () => editorState.placedObjects,
+      isClipboardPastePreviewActive: () => this.toolController.isClipboardPastePreviewActive(),
+    });
     this.backgroundController = new EditorBackgroundController(this, this.worldRepository, {
       getRoomId: () => this.roomId,
       getRoomCoordinates: () => this.roomCoordinates,
@@ -416,11 +407,11 @@ export class EditorScene extends Phaser.Scene {
         ignored.push(...this.goalMarkerLabels);
 
         const overlays = [
-          this.gridGraphics,
-          this.layerGuideGraphics,
+          this.overlayController.gridOverlay,
+          this.overlayController.layerGuideOverlay,
           this.interactionController.cursorOverlay,
           this.interactionController.rectPreviewOverlay,
-          this.borderGraphics,
+          this.overlayController.borderOverlay,
         ];
         for (const overlay of overlays) {
           if (overlay) {
@@ -647,12 +638,8 @@ export class EditorScene extends Phaser.Scene {
 
     this.createBackground();
     this.createTilemap();
-    this.drawRoomBorder();
-    this.drawGrid();
     this.createCursorOverlay();
-    this.createPressurePlateOverlay();
-    this.createContainerOverlay();
-    this.createLayerIndicator();
+    this.overlayController.createOverlays();
     this.setupCamera();
     this.setupInput();
     this.setupKeyboard();
@@ -681,11 +668,15 @@ export class EditorScene extends Phaser.Scene {
     this.maybeAutoSave(time);
     this.presenceController.sync();
     this.updateBackgroundPreview();
-    this.updateLayerGuideOverlay();
     this.updateCursorHighlight();
-    this.updatePressurePlateOverlay();
-    this.updateContainerOverlay();
-    this.updateLayerIndicator();
+    this.overlayController.updateLayerGuideOverlay();
+    this.overlayController.updatePressurePlateOverlay((graphics) => {
+      this.inspectorController.updatePressurePlateOverlay(graphics);
+    });
+    this.overlayController.updateContainerOverlay((graphics) => {
+      this.inspectorController.updateContainerOverlay(graphics);
+    });
+    this.overlayController.updateLayerIndicator();
   }
 
   // ══════════════════════════════════════
@@ -699,14 +690,7 @@ export class EditorScene extends Phaser.Scene {
   private resetRuntimeState(): void {
     this.backgroundController.reset();
     this.interactionController.reset();
-    this.layerIndicatorText?.destroy();
-    this.layerIndicatorText = null;
-    this.layerGuideGraphics?.destroy();
-    this.layerGuideGraphics = null;
-    this.pressurePlateGraphics?.destroy();
-    this.pressurePlateGraphics = null;
-    this.containerGraphics?.destroy();
-    this.containerGraphics = null;
+    this.overlayController.reset();
     this.tilesets = new Map();
     this.layers = new Map();
     this.editRuntime.reset();
@@ -878,221 +862,13 @@ export class EditorScene extends Phaser.Scene {
   // GRID & VISUAL OVERLAYS
   // ══════════════════════════════════════
 
-  private drawRoomBorder(): void {
-    this.borderGraphics = this.add.graphics();
-    this.borderGraphics.lineStyle(2, RETRO_COLORS.published, 0.85);
-    this.borderGraphics.strokeRect(0, 0, ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-    this.borderGraphics.setDepth(90);
-  }
-
-  private drawGrid(): void {
-    this.gridGraphics = this.add.graphics();
-    this.gridGraphics.lineStyle(1, RETRO_COLORS.grid, 0.12);
-
-    // Vertical lines
-    for (let x = 0; x <= ROOM_WIDTH; x++) {
-      this.gridGraphics.moveTo(x * TILE_SIZE, 0);
-      this.gridGraphics.lineTo(x * TILE_SIZE, ROOM_PX_HEIGHT);
-    }
-    // Horizontal lines
-    for (let y = 0; y <= ROOM_HEIGHT; y++) {
-      this.gridGraphics.moveTo(0, y * TILE_SIZE);
-      this.gridGraphics.lineTo(ROOM_PX_WIDTH, y * TILE_SIZE);
-    }
-
-    this.gridGraphics.strokePath();
-    this.gridGraphics.setDepth(95);
-  }
-
   private createCursorOverlay(): void {
     this.interactionController.initializeOverlays();
     this.editRuntime.initializeGraphics();
-    this.layerGuideGraphics?.destroy();
-    this.layerGuideGraphics = this.add.graphics();
-    this.layerGuideGraphics.setDepth(97);
-  }
-
-  private createPressurePlateOverlay(): void {
-    this.pressurePlateGraphics?.destroy();
-    this.pressurePlateGraphics = this.add.graphics();
-    this.pressurePlateGraphics.setDepth(99);
-  }
-
-  private createContainerOverlay(): void {
-    this.containerGraphics?.destroy();
-    this.containerGraphics = this.add.graphics();
-    this.containerGraphics.setDepth(98);
-  }
-
-  private createLayerIndicator(): void {
-    this.layerIndicatorText?.destroy();
-    this.layerIndicatorText = this.add.text(0, 0, '', {
-      fontFamily: '"IBM Plex Mono", monospace',
-      fontSize: '13px',
-      fontStyle: 'bold',
-      color: '#f6f1de',
-      backgroundColor: '#121109cc',
-      padding: {
-        x: 12,
-        y: 7,
-      },
-    });
-    this.layerIndicatorText.setDepth(130);
-    this.layerIndicatorText.setScrollFactor(0);
-    this.updateLayerIndicator();
   }
 
   private updateCursorHighlight(): void {
     this.interactionController.updateCursorHighlight();
-  }
-
-  private updatePressurePlateOverlay(): void {
-    this.inspectorController.updatePressurePlateOverlay(this.pressurePlateGraphics);
-  }
-
-  private updateContainerOverlay(): void {
-    this.inspectorController.updateContainerOverlay(this.containerGraphics);
-  }
-
-  private updateLayerGuideOverlay(): void {
-    this.layerGuideGraphics?.clear();
-    if (!this.layerGuideGraphics || editorState.isPlaying || !editorState.showLayerGuides) {
-      return;
-    }
-
-    for (const layerName of LAYER_NAMES) {
-      const occupiedCells = this.collectLayerGuideCells(layerName);
-      if (occupiedCells.size === 0) {
-        continue;
-      }
-
-      this.layerGuideGraphics.fillStyle(this.getLayerGuideColor(layerName), 0.72);
-      for (const key of occupiedCells) {
-        const [xText, yText] = key.split(':');
-        const tileX = Number.parseInt(xText, 10);
-        const tileY = Number.parseInt(yText, 10);
-        this.layerGuideGraphics.fillCircle(
-          tileX * TILE_SIZE + TILE_SIZE * 0.5,
-          tileY * TILE_SIZE + TILE_SIZE * 0.5,
-          2.5,
-        );
-      }
-    }
-  }
-
-  private collectLayerGuideCells(layerName: LayerName): Set<string> {
-    const occupiedCells = new Set<string>();
-    const layer = this.layers.get(layerName);
-    if (layer) {
-      for (let y = 0; y < ROOM_HEIGHT; y += 1) {
-        for (let x = 0; x < ROOM_WIDTH; x += 1) {
-          if (layer.getTileAt(x, y)) {
-            occupiedCells.add(this.getLayerGuideCellKey(x, y));
-          }
-        }
-      }
-    }
-
-    for (const placedObject of editorState.placedObjects) {
-      const objectConfig = getObjectById(placedObject.id);
-      if (!objectConfig || getPlacedObjectLayer(placedObject) !== layerName) {
-        continue;
-      }
-
-      const previewWidth = objectConfig.previewWidth ?? objectConfig.frameWidth;
-      const previewHeight = objectConfig.previewHeight ?? objectConfig.frameHeight;
-      const previewOffsetX = objectConfig.previewOffsetX ?? 0;
-      const previewOffsetY = objectConfig.previewOffsetY ?? 0;
-      const minTileX = Math.max(
-        0,
-        Math.floor((placedObject.x - objectConfig.frameWidth * 0.5 + previewOffsetX) / TILE_SIZE),
-      );
-      const maxTileX = Math.min(
-        ROOM_WIDTH,
-        Math.ceil((placedObject.x - objectConfig.frameWidth * 0.5 + previewOffsetX + previewWidth) / TILE_SIZE),
-      );
-      const minTileY = Math.max(
-        0,
-        Math.floor((placedObject.y - objectConfig.frameHeight * 0.5 + previewOffsetY) / TILE_SIZE),
-      );
-      const maxTileY = Math.min(
-        ROOM_HEIGHT,
-        Math.ceil((placedObject.y - objectConfig.frameHeight * 0.5 + previewOffsetY + previewHeight) / TILE_SIZE),
-      );
-      for (let tileY = minTileY; tileY < maxTileY; tileY += 1) {
-        for (let tileX = minTileX; tileX < maxTileX; tileX += 1) {
-          occupiedCells.add(this.getLayerGuideCellKey(tileX, tileY));
-        }
-      }
-    }
-
-    return occupiedCells;
-  }
-
-  private getLayerGuideCellKey(x: number, y: number): string {
-    return `${x}:${y}`;
-  }
-
-  private getLayerGuideColor(layerName: LayerName): number {
-    switch (layerName) {
-      case 'background':
-        return 0x2f6b7f;
-      case 'foreground':
-        return 0xff6f3c;
-      case 'terrain':
-      default:
-        return 0x347433;
-    }
-  }
-
-  private updateLayerIndicator(): void {
-    if (!this.layerIndicatorText) {
-      return;
-    }
-
-    const layerLabel =
-      editorState.activeLayer === 'terrain'
-        ? 'Gameplay'
-        : editorState.activeLayer === 'background'
-          ? 'Back'
-          : 'Front';
-    const layerColor =
-      editorState.activeLayer === 'terrain'
-        ? '#347433'
-        : editorState.activeLayer === 'background'
-          ? '#2f6b7f'
-          : '#ff6f3c';
-    const modeLabel = editorState.paletteMode === 'objects' ? 'Objects' : 'Tiles';
-    const toolLabel =
-      editorState.activeTool === 'eraser'
-        ? `Erase ${editorState.eraserBrushSize}x${editorState.eraserBrushSize}`
-        : editorState.activeTool === 'rect'
-          ? 'Rect'
-          : editorState.activeTool === 'fill'
-            ? 'Fill'
-            : editorState.activeTool === 'copy'
-              ? this.toolController.isClipboardPastePreviewActive()
-                ? 'Paste'
-                : 'Copy'
-              : 'Draw';
-    const flipLabels: string[] = [];
-    if (editorState.paletteMode === 'tiles' && editorState.tileFlipX) {
-      flipLabels.push('Flip H');
-    }
-    if (editorState.paletteMode === 'tiles' && editorState.tileFlipY) {
-      flipLabels.push('Flip V');
-    }
-    const detailParts = [toolLabel, ...flipLabels];
-    const text = `${modeLabel} -> ${layerLabel}\n${detailParts.join('  |  ')}`;
-    if (this.layerIndicatorText.text !== text) {
-      this.layerIndicatorText.setText(text);
-    }
-
-    this.layerIndicatorText.setBackgroundColor(`${layerColor}cc`);
-    this.layerIndicatorText.setPosition(
-      this.scale.width - this.layerIndicatorText.width - 18,
-      18,
-    );
   }
 
   // ══════════════════════════════════════

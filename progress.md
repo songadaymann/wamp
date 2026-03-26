@@ -3951,3 +3951,25 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - probe artifacts:
       - `output/web-game/editor-tool-controller-probe/summary.json`
       - `output/web-game/editor-tool-controller-probe/editor-after-tool-probe.png`
+
+- March 26, 2026: extracted the remaining editor overlay shell from `EditorScene`.
+  - Added `src/scenes/editor/overlays.ts` as `EditorOverlayController`.
+  - Moved grid, room border, layer-guide dots, pressure-plate/container overlay graphics, and layer-indicator text ownership out of `EditorScene`.
+  - `EditorScene` now delegates overlay creation/reset and per-frame overlay updates through the controller, and `EditorBackgroundController` camera-ignore wiring now reads overlay objects from that controller instead of scene-owned fields.
+  - `EditorScene.ts` is down to 1,255 lines after this cut.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-course-flow-editor-integration`
+    - required `develop-web-game` client smoke passed against local Vite dev pointed at the safety backend:
+      - `output/web-game/editor-overlay-shell-skill-smoke-canvas/state-0.json`
+      - `output/web-game/editor-overlay-shell-skill-smoke-canvas/shot-0.png`
+    - targeted browser probe forced entry into `EditorScene`, toggled `See Layers`, and confirmed the new controller owns the live overlays:
+      - grid overlay present at depth `95` with `396` draw commands
+      - border overlay present at depth `90` with `43` draw commands
+      - layer-guide overlay present at depth `97`
+      - layer-guide button switched to `Hide Layers` with `aria-pressed="true"`
+      - no console or page errors
+    - probe artifacts:
+      - `output/web-game/editor-overlay-controller-probe/summary.json`
+      - `output/web-game/editor-overlay-controller-probe/editor-after-overlay-probe-page.png`
+  - Note:
+    - direct canvas screenshots of the editor still come back black in this environment, so the overlay probe relied on state inspection plus a full-page screenshot rather than the raw canvas capture.
