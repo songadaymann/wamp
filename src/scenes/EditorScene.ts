@@ -62,6 +62,7 @@ import { EditorSceneFlowController } from './editor/flow';
 import { EditorInspectorController } from './editor/inspector';
 import { EditorInteractionController } from './editor/interaction';
 import { EditorPresenceController } from './editor/presence';
+import { EditorPersistenceController } from './editor/persistence';
 import { EditorCourseController } from './editor/courseController';
 import {
   buildEditorUiViewModel,
@@ -100,6 +101,7 @@ export class EditorScene extends Phaser.Scene {
   private readonly inspectorController: EditorInspectorController;
   private readonly interactionController: EditorInteractionController;
   private readonly presenceController: EditorPresenceController;
+  private readonly persistenceController: EditorPersistenceController;
   private entrySource: 'world' | 'direct' = 'direct';
   private initialRoomSnapshot: RoomSnapshot | null = null;
   private readonly handleWake = (): void => {
@@ -295,6 +297,29 @@ export class EditorScene extends Phaser.Scene {
         void this.refreshSurroundingRoomPreviews();
       },
     });
+    this.persistenceController = new EditorPersistenceController(this.roomSession, {
+      getRoomPermissions: () => this.roomPermissions,
+      getRoomTitle: () => this.roomTitle,
+      setRoomTitle: (title) => {
+        this.roomTitle = title;
+      },
+      getRoomDirty: () => this.roomDirty,
+      setRoomDirty: (dirty) => {
+        this.roomDirty = dirty;
+      },
+      getLastDirtyAt: () => this.lastDirtyAt,
+      setLastDirtyAt: (value) => {
+        this.lastDirtyAt = value;
+      },
+      getInitialRoomSnapshot: () => this.initialRoomSnapshot ? cloneRoomSnapshot(this.initialRoomSnapshot) : null,
+      syncActiveCourseRoomSessionSnapshot: (room, options) => {
+        this.syncActiveCourseRoomSessionSnapshot(room, options);
+      },
+      onRoomMarkedDirty: () => {
+        this.roomEditCount += 1;
+        this.flowController.maybeTriggerPublishNudge();
+      },
+    });
     this.courseController = new EditorCourseController(this, {
       getRoomId: () => this.roomId,
       syncBackgroundCameraIgnores: () => this.syncBackgroundCameraIgnores(),
@@ -307,7 +332,7 @@ export class EditorScene extends Phaser.Scene {
       cancelClipboardPastePreview: () => this.cancelClipboardPastePreview(),
       getSelectedCoursePreviewForPlay: () => this.getSelectedCoursePreviewForPlay(),
       getRoomPermissions: () => this.roomPermissions,
-      saveDraft: (force = false) => this.saveDraft(force),
+      saveDraft: (force = false) => this.persistenceController.saveDraft(force),
       exportRoomSnapshot: () => this.exportRoomSnapshot(),
       getRoomDirty: () => this.roomDirty,
       getPublishedVersion: () => this.publishedVersion,
@@ -328,10 +353,10 @@ export class EditorScene extends Phaser.Scene {
       buildCourseEditorWakeData: (wakeData) => this.buildCourseEditorWakeData(wakeData),
       setCourseEditorStatusText: (text) => this.courseController.setStatusText(text),
       updateGoalUi: () => this.updateGoalUi(),
-      getPersistenceStatusText: () => this.persistenceStatusText,
+      getPersistenceStatusText: () => this.persistenceController.statusText,
       getMintedTokenId: () => this.mintedTokenId,
       getRoomEditCount: () => this.roomEditCount,
-      publishRoom: () => this.publishRoom(),
+      publishRoom: () => this.persistenceController.publishRoom(),
     });
     this.inspectorController = new EditorInspectorController(
       this,
@@ -504,10 +529,6 @@ export class EditorScene extends Phaser.Scene {
     return this.roomSession.isSaveInFlight;
   }
 
-  private get persistenceStatusText(): string {
-    return this.roomSession.statusText;
-  }
-
   private get roomGoal(): RoomGoal | null {
     return this.editRuntime.currentRoomGoal;
   }
@@ -583,22 +604,22 @@ export class EditorScene extends Phaser.Scene {
       onBack: () => this.handleEditorBackAction(),
       onStartPlayMode: () => this.startPlayMode(),
       onSaveDraft: async () => {
-        await this.saveDraft(true, { promptForSignInOnUnauthorized: true });
+        await this.persistenceController.saveDraft(true, { promptForSignInOnUnauthorized: true });
       },
       onPublishRoom: async () => {
-        await this.publishRoom();
+        await this.persistenceController.publishRoom();
       },
       onPublishNudge: () => this.handlePublishNudgeAction(),
       onMintRoom: async () => {
-        await this.mintRoom();
+        await this.persistenceController.mintRoom();
       },
       onRefreshMintMetadata: async () => {
-        await this.refreshMintMetadata();
+        await this.persistenceController.refreshMintMetadata();
       },
       onFitToScreen: () => this.fitToScreen(),
       onZoomIn: () => this.zoomIn(),
       onZoomOut: () => this.zoomOut(),
-      onSetRoomTitle: (title) => this.setRoomTitle(title),
+      onSetRoomTitle: (title) => this.persistenceController.setRoomTitle(title),
       onSelectTool: (tool) => {
         editorState.activeTool = tool;
         this.updateToolUI();
@@ -711,7 +732,7 @@ export class EditorScene extends Phaser.Scene {
 
   private applySelectedBackground(): void {
     this.updateBackground();
-    this.markRoomDirty();
+    this.persistenceController.markRoomDirty();
     this.renderEditorUi();
   }
 
@@ -796,62 +817,26 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private maybeAutoSave(_time: number): void {
-    this.roomSession.maybeAutoSave(editorState.isPlaying);
-  }
-
-  private getDirtyPersistenceStatusText(): string {
-    return this.roomPermissions.canSaveDraft
-      ? 'Draft changes...'
-      : 'Read-only minted room. Changes are local only.';
-  }
-
-  private markRoomDirty(): void {
-    this.editRuntime.isRoomDirty = true;
-    this.editRuntime.currentLastDirtyAt = performance.now();
-    this.roomEditCount += 1;
-    this.updatePersistenceStatus(this.getDirtyPersistenceStatusText());
-    this.flowController.maybeTriggerPublishNudge();
+    this.persistenceController.maybeAutoSave(editorState.isPlaying);
   }
 
   private updatePersistenceStatus(text: string): void {
-    this.roomSession.setStatusText(text);
-  }
-
-  private restorePersistenceStatus(): void {
-    if (this.roomDirty) {
-      this.updatePersistenceStatus(this.getDirtyPersistenceStatusText());
-      return;
-    }
-
-    this.roomSession.setStatusDetails(this.roomSession.getIdleStatusDetails());
+    this.persistenceController.setStatusText(text);
   }
 
   async saveDraft(
     force: boolean = false,
     options?: { promptForSignInOnUnauthorized?: boolean }
   ): Promise<RoomRecord | null> {
-    const record = await this.roomSession.saveDraft(force, options);
-    if (record?.draft) {
-      this.syncActiveCourseRoomSessionSnapshot(record.draft, { published: false });
-    }
-    return record;
+    return this.persistenceController.saveDraft(force, options);
   }
 
   async publishRoom(successText?: string): Promise<RoomRecord | null> {
-    showBusyOverlay('Publishing room...', 'Saving the latest version...');
-    const record = await this.roomSession.publishRoom(successText);
-    if (record?.published) {
-      this.syncActiveCourseRoomSessionSnapshot(record.published, { published: true });
-    }
-    hideBusyOverlay();
-    return record;
+    return this.persistenceController.publishRoom(successText);
   }
 
   async revertToVersion(targetVersion: number): Promise<RoomRecord | null> {
-    showBusyOverlay(`Reverting room...`, `Loading version ${targetVersion}...`);
-    const record = await this.roomSession.revertToVersion(targetVersion, this.initialRoomSnapshot);
-    hideBusyOverlay();
-    return record;
+    return this.persistenceController.revertToVersion(targetVersion);
   }
 
   // ══════════════════════════════════════
@@ -1390,7 +1375,7 @@ export class EditorScene extends Phaser.Scene {
 
     this.clipboardPastePreviewActive = false;
     this.interactionController.clearShapePreview();
-    this.restorePersistenceStatus();
+    this.persistenceController.restorePersistenceStatus();
   }
 
   private pasteClipboardAt(tileX: number, tileY: number): void {
@@ -1467,12 +1452,13 @@ export class EditorScene extends Phaser.Scene {
   private renderEditorUi(): void {
     const roomPlacementMode = this.editRuntime.currentGoalPlacementMode;
     const courseEditorState = this.getCourseEditorState();
+    const historyState = this.persistenceController.getHistoryState();
     const saveStatus =
-      this.roomSession.statusDetails.text ||
-      this.roomSession.statusDetails.accentText ||
-      this.roomSession.statusDetails.linkLabel
-        ? this.roomSession.statusDetails
-        : this.roomSession.getIdleStatusDetails();
+      this.persistenceController.statusDetails.text ||
+      this.persistenceController.statusDetails.accentText ||
+      this.persistenceController.statusDetails.linkLabel
+        ? this.persistenceController.statusDetails
+        : this.persistenceController.getIdleStatusDetails();
     const publishNudgeVisible = this.flowController.shouldShowPublishNudge();
     const publishNudgeText = getAuthDebugState().authenticated
       ? 'People can’t see this room until you publish it.'
@@ -1490,9 +1476,9 @@ export class EditorScene extends Phaser.Scene {
         goalSummaryText: this.getGoalSummaryText(),
         roomPermissions: this.roomPermissions,
         mintedTokenId: this.mintedTokenId,
-        canRefreshMintMetadata: this.roomSession.getHistoryState().canRefreshMintMetadata,
+        canRefreshMintMetadata: historyState.canRefreshMintMetadata,
         saveInFlight: this.saveInFlight,
-        mintedMetadataCurrent: this.roomSession.getHistoryState().mintedMetadataCurrent,
+        mintedMetadataCurrent: historyState.mintedMetadataCurrent,
         roomVersionHistory: this.roomVersionHistory,
         entrySource: this.entrySource,
         zoomText: `Zoom: ${editorState.zoom}x`,
@@ -1513,14 +1499,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   setRoomTitle(nextTitle: string | null): void {
-    const normalized = typeof nextTitle === 'string' ? nextTitle.trim().slice(0, 40) || null : null;
-    if (this.roomTitle === normalized) {
-      return;
-    }
-
-    this.roomTitle = normalized;
-    this.markRoomDirty();
-    this.renderEditorUi();
+    this.persistenceController.setRoomTitle(nextTitle);
   }
 
   getLayers(): Map<string, Phaser.Tilemaps.TilemapLayer> {
@@ -1543,7 +1522,7 @@ export class EditorScene extends Phaser.Scene {
     mintedMetadataCurrent: boolean;
     versions: RoomVersionRecord[];
   } {
-    return this.roomSession.getHistoryState();
+    return this.persistenceController.getHistoryState();
   }
 
   async returnToWorld(): Promise<void> {
@@ -1591,22 +1570,22 @@ export class EditorScene extends Phaser.Scene {
   }
 
   async mintRoom(): Promise<RoomRecord | null> {
-    return this.roomSession.mintRoom();
+    return this.persistenceController.mintRoom();
   }
 
   async refreshMintMetadata(): Promise<RoomRecord | null> {
-    return this.roomSession.refreshMintMetadata();
+    return this.persistenceController.refreshMintMetadata();
   }
 
   async setCanonicalVersion(targetVersion: number): Promise<RoomRecord | null> {
-    return this.roomSession.setCanonicalVersion(targetVersion);
+    return this.persistenceController.setCanonicalVersion(targetVersion);
   }
 
   async setLeaderboardSourceVersion(
     targetVersion: number,
     sourceVersion: number | null
   ): Promise<RoomRecord | null> {
-    return this.roomSession.setLeaderboardSourceVersion(targetVersion, sourceVersion);
+    return this.persistenceController.setLeaderboardSourceVersion(targetVersion, sourceVersion);
   }
 
   undoAction(): void {

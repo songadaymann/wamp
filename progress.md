@@ -3919,3 +3919,19 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - `output/web-game/course-setup-goal-owner-probe/before-editor-goal.png`
       - `output/web-game/course-setup-goal-owner-probe/course-editor-goal-set.png`
       - `output/web-game/course-setup-goal-owner-probe/after-editor-return.png`
+
+- March 26, 2026: extracted editor persistence/status orchestration from `EditorScene`.
+  - Added `src/scenes/editor/persistence.ts` as the new persistence shell around `EditorRoomSession`.
+  - Moved dirty-state bookkeeping, title mutation, save/publish/revert wrappers, and mint/history passthroughs behind `EditorPersistenceController`.
+  - `EditorScene` now routes UI bridge save/publish/title actions and flow-controller save/publish calls through the new controller instead of carrying that room-session glue inline.
+  - `EditorScene.ts` is down to 1,641 lines after the cut.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-course-flow-editor-integration`
+    - skill smoke booted locally against the safety backend and produced `output/web-game/state-0.json`
+    - targeted browser probe opened `EditorScene` via the real overworld `openEditor(...)` path, changed the room title, and saved successfully:
+      - before: `roomDirty: false`, `statusText: "Claimed by jonathanmann."`
+      - after title change: `roomDirty: true`, `statusText: "Draft changes..."`
+      - after save: `roomDirty: false`, `statusText: "Draft saved locally. Sign in to publish."`
+    - probe artifacts:
+      - `output/web-game/editor-persistence-controller-probe/summary.json`
+      - `output/web-game/editor-persistence-controller-probe/editor-after-save.png`
