@@ -84,6 +84,10 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - local Playwright boot smoke wrote `output/web-game/shot-0.png`, `output/web-game/state-0.json`, and `output/web-game/errors-0.json`
   - caveat:
     - the repo still shows the existing headless black-frame WebGL screenshot issue, so the smoke only confirmed clean boot/no missing-frame errors, not visual quality; real browser validation should happen on the safety branch
+  - follow-up:
+    - swapped the movement atlas over to the newer cut-out idle set in `4495/4495-idle`
+    - rebuilt the whole base strip with `-trim +repage -gravity south -extent 64x64` so the feet/base line up more consistently frame to frame
+    - reduced idle/run playback to `6fps` and `10fps` respectively to make the remaining AI-frame wobble read less aggressively in motion
   - verification:
     - `npm run build` passed
     - targeted browser probe wrote:

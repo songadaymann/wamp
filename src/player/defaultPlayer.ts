@@ -166,14 +166,14 @@ export const DEFAULT_PLAYER_ANIMATIONS: DefaultPlayerAnimationDefinition[] = [
     key: DEFAULT_PLAYER_ANIMATION_KEYS.idle,
     atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.base,
     frameNames: IDLE_FRAMES,
-    frameRate: 8,
+    frameRate: 6,
     repeat: -1,
   },
   {
     key: DEFAULT_PLAYER_ANIMATION_KEYS.run,
     atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.base,
     frameNames: RUN_FRAMES,
-    frameRate: 12,
+    frameRate: 10,
     repeat: -1,
   },
   {
