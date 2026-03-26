@@ -1,4 +1,71 @@
+import type { RoomCoordinates } from '../../persistence/roomModel';
 import { createProfileTriggerElement, isOpenableProfileUserId, requestProfileOpen } from '../../ui/setup/profileEvents';
+
+interface OverworldHudRuntimeConfig {
+  onPlayRoom: () => void | Promise<void>;
+  onPlayCourse: () => void | Promise<void>;
+  onEditRoom: () => void | Promise<void>;
+  onBuildRoom: () => void | Promise<void>;
+  onOpenCourseBuilder: () => void | Promise<void>;
+  onJumpToCoordinates: (coordinates: RoomCoordinates) => void | Promise<void>;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onOpenLeaderboard: () => void | Promise<void>;
+  onOpenControls: () => void | Promise<void>;
+  onFitWorld: () => void;
+}
+
+const runtimeConfig: OverworldHudRuntimeConfig = {
+  onPlayRoom: () => {},
+  onPlayCourse: () => {},
+  onEditRoom: () => {},
+  onBuildRoom: () => {},
+  onOpenCourseBuilder: () => {},
+  onJumpToCoordinates: () => {},
+  onZoomIn: () => {},
+  onZoomOut: () => {},
+  onOpenLeaderboard: () => {},
+  onOpenControls: () => {},
+  onFitWorld: () => {},
+};
+
+export function configureOverworldHudBridgeRuntime(
+  config: Partial<OverworldHudRuntimeConfig>,
+): void {
+  if (config.onPlayRoom) {
+    runtimeConfig.onPlayRoom = config.onPlayRoom;
+  }
+  if (config.onPlayCourse) {
+    runtimeConfig.onPlayCourse = config.onPlayCourse;
+  }
+  if (config.onEditRoom) {
+    runtimeConfig.onEditRoom = config.onEditRoom;
+  }
+  if (config.onBuildRoom) {
+    runtimeConfig.onBuildRoom = config.onBuildRoom;
+  }
+  if (config.onOpenCourseBuilder) {
+    runtimeConfig.onOpenCourseBuilder = config.onOpenCourseBuilder;
+  }
+  if (config.onJumpToCoordinates) {
+    runtimeConfig.onJumpToCoordinates = config.onJumpToCoordinates;
+  }
+  if (config.onZoomIn) {
+    runtimeConfig.onZoomIn = config.onZoomIn;
+  }
+  if (config.onZoomOut) {
+    runtimeConfig.onZoomOut = config.onZoomOut;
+  }
+  if (config.onOpenLeaderboard) {
+    runtimeConfig.onOpenLeaderboard = config.onOpenLeaderboard;
+  }
+  if (config.onOpenControls) {
+    runtimeConfig.onOpenControls = config.onOpenControls;
+  }
+  if (config.onFitWorld) {
+    runtimeConfig.onFitWorld = config.onFitWorld;
+  }
+}
 
 export interface OverworldHudViewModel {
   saveStatusTone: 'default' | 'play-score' | 'challenge-active' | 'challenge-complete' | 'challenge-failed';
@@ -60,6 +127,11 @@ export class OverworldHudBridge {
   private readonly editButton: HTMLButtonElement | null;
   private readonly buildButton: HTMLButtonElement | null;
   private readonly jumpInput: HTMLInputElement | null;
+  private readonly jumpButton: HTMLButtonElement | null;
+  private readonly zoomInButton: HTMLButtonElement | null;
+  private readonly zoomOutButton: HTMLButtonElement | null;
+  private readonly leaderboardButton: HTMLButtonElement | null;
+  private readonly controlsButton: HTMLButtonElement | null;
   private readonly zoomLabelEl: HTMLElement | null;
   private readonly roomCoordinatesEl: HTMLElement | null;
   private readonly separatorEl: HTMLElement | null;
@@ -176,6 +248,70 @@ export class OverworldHudBridge {
     this.setPlayersOnlinePopoverOpen(false);
   };
 
+  private readonly handlePlayRoomClick = (): void => {
+    void runtimeConfig.onPlayRoom();
+  };
+
+  private readonly handlePlayCourseClick = (): void => {
+    void runtimeConfig.onPlayCourse();
+  };
+
+  private readonly handleEditRoomClick = (): void => {
+    void runtimeConfig.onEditRoom();
+  };
+
+  private readonly handleBuildRoomClick = (): void => {
+    void runtimeConfig.onBuildRoom();
+  };
+
+  private readonly handleOpenCourseBuilderClick = (): void => {
+    void runtimeConfig.onOpenCourseBuilder();
+  };
+
+  private readonly handleZoomInClick = (): void => {
+    runtimeConfig.onZoomIn();
+  };
+
+  private readonly handleZoomOutClick = (): void => {
+    runtimeConfig.onZoomOut();
+  };
+
+  private readonly handleLeaderboardClick = (): void => {
+    void runtimeConfig.onOpenLeaderboard();
+  };
+
+  private readonly handleControlsClick = (): void => {
+    void runtimeConfig.onOpenControls();
+  };
+
+  private readonly handleFitWorldClick = (): void => {
+    runtimeConfig.onFitWorld();
+  };
+
+  private readonly handleJumpSubmit = (): void => {
+    if (!this.jumpInput) {
+      return;
+    }
+
+    const match = /^\s*(-?\d+)\s*,\s*(-?\d+)\s*$/.exec(this.jumpInput.value);
+    if (!match) {
+      return;
+    }
+
+    void runtimeConfig.onJumpToCoordinates({
+      x: Number(match[1]),
+      y: Number(match[2]),
+    });
+  };
+
+  private readonly handleJumpInputKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Enter') {
+      return;
+    }
+
+    this.handleJumpSubmit();
+  };
+
   constructor(private readonly doc: Document = document) {
     this.hudRoot = this.doc.getElementById('world-hud');
     this.selectedTitleEl = this.doc.getElementById('world-selected-title');
@@ -190,6 +326,11 @@ export class OverworldHudBridge {
     this.editButton = this.doc.getElementById('btn-world-edit') as HTMLButtonElement | null;
     this.buildButton = this.doc.getElementById('btn-world-build') as HTMLButtonElement | null;
     this.jumpInput = this.doc.getElementById('world-jump-input') as HTMLInputElement | null;
+    this.jumpButton = this.doc.getElementById('btn-world-jump') as HTMLButtonElement | null;
+    this.zoomInButton = this.doc.getElementById('btn-world-zoom-in-footer') as HTMLButtonElement | null;
+    this.zoomOutButton = this.doc.getElementById('btn-world-zoom-out-footer') as HTMLButtonElement | null;
+    this.leaderboardButton = this.doc.getElementById('btn-world-leaderboard') as HTMLButtonElement | null;
+    this.controlsButton = this.doc.getElementById('btn-world-controls') as HTMLButtonElement | null;
     this.zoomLabelEl = this.doc.getElementById('world-zoom-label');
     this.roomCoordinatesEl = this.doc.getElementById('room-coords');
     this.separatorEl = this.doc.querySelector('#bottom-bar .separator');
@@ -219,6 +360,18 @@ export class OverworldHudBridge {
     this.playersOnlineWrapEl?.addEventListener('focusout', this.handlePlayersOnlineFocusOut);
     this.playersOnlineEl?.addEventListener('click', this.handlePlayersOnlineClick);
     this.selectedCreatorEl?.addEventListener('click', this.handleSelectedCreatorClick);
+    this.playButton?.addEventListener('click', this.handlePlayRoomClick);
+    this.playCourseButton?.addEventListener('click', this.handlePlayCourseClick);
+    this.editButton?.addEventListener('click', this.handleEditRoomClick);
+    this.buildButton?.addEventListener('click', this.handleBuildRoomClick);
+    this.courseBuilderButton?.addEventListener('click', this.handleOpenCourseBuilderClick);
+    this.jumpButton?.addEventListener('click', this.handleJumpSubmit);
+    this.jumpInput?.addEventListener('keydown', this.handleJumpInputKeyDown);
+    this.zoomInButton?.addEventListener('click', this.handleZoomInClick);
+    this.zoomOutButton?.addEventListener('click', this.handleZoomOutClick);
+    this.leaderboardButton?.addEventListener('click', this.handleLeaderboardClick);
+    this.controlsButton?.addEventListener('click', this.handleControlsClick);
+    this.fitButton?.addEventListener('click', this.handleFitWorldClick);
     this.doc.addEventListener('pointerdown', this.handleDocumentPointerDown, true);
     this.doc.addEventListener('keydown', this.handleDocumentKeyDown, true);
   }
@@ -274,6 +427,18 @@ export class OverworldHudBridge {
     this.playersOnlineWrapEl?.removeEventListener('focusout', this.handlePlayersOnlineFocusOut);
     this.playersOnlineEl?.removeEventListener('click', this.handlePlayersOnlineClick);
     this.selectedCreatorEl?.removeEventListener('click', this.handleSelectedCreatorClick);
+    this.playButton?.removeEventListener('click', this.handlePlayRoomClick);
+    this.playCourseButton?.removeEventListener('click', this.handlePlayCourseClick);
+    this.editButton?.removeEventListener('click', this.handleEditRoomClick);
+    this.buildButton?.removeEventListener('click', this.handleBuildRoomClick);
+    this.courseBuilderButton?.removeEventListener('click', this.handleOpenCourseBuilderClick);
+    this.jumpButton?.removeEventListener('click', this.handleJumpSubmit);
+    this.jumpInput?.removeEventListener('keydown', this.handleJumpInputKeyDown);
+    this.zoomInButton?.removeEventListener('click', this.handleZoomInClick);
+    this.zoomOutButton?.removeEventListener('click', this.handleZoomOutClick);
+    this.leaderboardButton?.removeEventListener('click', this.handleLeaderboardClick);
+    this.controlsButton?.removeEventListener('click', this.handleControlsClick);
+    this.fitButton?.removeEventListener('click', this.handleFitWorldClick);
     this.doc.removeEventListener('pointerdown', this.handleDocumentPointerDown, true);
     this.doc.removeEventListener('keydown', this.handleDocumentKeyDown, true);
   }

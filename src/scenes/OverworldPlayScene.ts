@@ -121,9 +121,11 @@ import {
 } from './overworld/badgeOverlays';
 import {
   OverworldHudBridge,
-  type OverworldHudViewModel,
-  type OverworldOnlineRosterViewEntry,
 } from './overworld/hud';
+import {
+  buildOverworldHudViewModel,
+  formatRoomEditorSummary,
+} from './overworld/hudViewModel';
 import {
   OverworldLiveObjectController,
   isDynamicArcadeBody,
@@ -6272,39 +6274,16 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private renderHud(statusOverride?: string): void {
-    this.hudBridge?.render(this.buildHudViewModel(statusOverride));
-    this.syncGoalOverlayScale();
-  }
-
-  private formatRoomEditorSummary(coordinates: RoomCoordinates): string | null {
-    const names = this.getRoomEditorDisplayNames(coordinates);
-    if (names.length === 0) {
-      return null;
-    }
-
-    if (names.length === 1) {
-      return `${names[0]} building`;
-    }
-
-    if (names.length === 2) {
-      return `${names[0]} + ${names[1]} building`;
-    }
-
-    return `${names[0]} + ${names.length - 1} others building`;
-  }
-
-  private buildHudViewModel(statusOverride?: string): OverworldHudViewModel {
-    const selectedState = this.getCellStateAt(this.selectedCoordinates);
     const selectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
-    const selectedRoomInActiveCourseSession = isRoomInActiveCourseDraftSession(selectedRoomId);
+    const selectedState = this.getCellStateAt(this.selectedCoordinates);
     const selectedDraft = this.draftRoomsById.get(selectedRoomId) ?? null;
-    const selectedPopulation = this.getRoomPopulation(this.selectedCoordinates);
-    const selectedEditorCount = this.getRoomEditorCount(this.selectedCoordinates);
-    const selectedEditorSummary = this.formatRoomEditorSummary(this.selectedCoordinates);
     const selectedCourse = this.getSelectedCourseContext();
-    const transientStatus = this.getTransientStatusMessage();
-    const totalPlayerCount = this.presenceController.getTotalPlayerCount();
-    const onlineRosterEntries: OverworldOnlineRosterViewEntry[] = this.presenceController
+    const activeCourseRun = this.mode === 'play' ? this.activeCourseRun : null;
+    const activeRoomGoalRun = activeCourseRun ? null : this.mode === 'play' ? this.currentGoalRun : null;
+    const activeGoalRoom = activeRoomGoalRun
+      ? this.getRoomSnapshotForCoordinates(activeRoomGoalRun.roomCoordinates)
+      : null;
+    const onlineRosterEntries = this.presenceController
       .getOnlineRoster()
       .map((entry) => ({
         key: entry.key,
@@ -6313,231 +6292,56 @@ export class OverworldPlayScene extends Phaser.Scene {
         roomText: `Room ${entry.roomId}`,
         isSelf: entry.isSelf,
       }));
-    const frontierBuildBlocked = selectedState === 'frontier' && this.isFrontierBuildBlockedByClaimLimit();
-    const rankingMode = this.currentRoomLeaderboard?.rankingMode ?? null;
-    const roomTop = this.currentRoomLeaderboard?.entries[0] ?? null;
-    const activeCourseRun = this.mode === 'play' ? this.activeCourseRun : null;
-    const activeRoomGoalRun = activeCourseRun ? null : this.mode === 'play' ? this.currentGoalRun : null;
-    const activeRunResult = activeCourseRun?.result ?? activeRoomGoalRun?.result ?? null;
-    const saveStatusTone =
-      this.mode === 'play'
-        ? activeCourseRun || activeRoomGoalRun
-          ? activeRunResult === 'completed'
-            ? 'challenge-complete'
-            : activeRunResult === 'failed'
-              ? 'challenge-failed'
-              : 'challenge-active'
-          : 'play-score'
-        : 'default';
 
-    const selectedTitleText = this.getRoomDisplayTitle(
-      selectedState === 'published'
-        ? this.selectedSummary?.title ?? null
-        : selectedState === 'draft'
-          ? selectedDraft?.title ?? null
+    this.hudBridge?.render(
+      buildOverworldHudViewModel({
+        selectedState,
+        selectedCoordinates: this.selectedCoordinates,
+        selectedSummary: this.selectedSummary
+          ? {
+              title: this.selectedSummary.title ?? null,
+              creatorUserId: this.selectedSummary.creatorUserId ?? null,
+              creatorDisplayName: this.selectedSummary.creatorDisplayName ?? null,
+              goalType: this.selectedSummary.goalType ?? null,
+            }
           : null,
-      this.selectedCoordinates
+        selectedDraft,
+        selectedPopulation: this.getRoomPopulation(this.selectedCoordinates),
+        selectedEditorCount: this.getRoomEditorCount(this.selectedCoordinates),
+        selectedEditorSummary: formatRoomEditorSummary(
+          this.getRoomEditorDisplayNames(this.selectedCoordinates),
+        ),
+        selectedCourse,
+        selectedRoomInActiveCourseSession: isRoomInActiveCourseDraftSession(selectedRoomId),
+        frontierBuildBlocked:
+          selectedState === 'frontier' && this.isFrontierBuildBlockedByClaimLimit(),
+        frontierClaimLimit: getAuthDebugState().roomDailyClaimLimit,
+        transientStatus: this.getTransientStatusMessage(),
+        statusOverride,
+        mode: this.mode,
+        goalPersistentStatusText: this.goalRunController.getPersistentStatusText() ?? null,
+        rankingMode: this.currentRoomLeaderboard?.rankingMode ?? null,
+        roomTop: this.currentRoomLeaderboard?.entries[0] ?? null,
+        activeCourseRun,
+        activeRoomGoalRun,
+        activeGoalRoom,
+        totalPlayerCount: this.presenceController.getTotalPlayerCount(),
+        onlineRosterEntries,
+        score: this.score,
+        courseBuilderButtonDisabled: this.courseComposerLoading,
+        zoom: this.cameras.main.zoom,
+        getRoomDisplayTitle: (title, coordinates) => this.getRoomDisplayTitle(title, coordinates),
+        getCourseGoalSummaryText: (goalType) => this.getCourseGoalSummaryText(goalType),
+        getCourseGoalBadgeText: (goal) => this.getCourseGoalBadgeText(goal),
+        getGoalBadgeText: (goal) => this.getGoalBadgeText(goal),
+        getCourseGoalTimerText: (runState) => this.getCourseGoalTimerText(runState),
+        getPlayGoalTimerText: (runState) => this.getPlayGoalTimerText(runState),
+        getCourseGoalProgressText: (runState) => this.getCourseGoalProgressText(runState),
+        getPlayGoalProgressText: (runState) => this.getPlayGoalProgressText(runState),
+        truncateOverlayText: (text, maxChars) => this.truncateOverlayText(text, maxChars),
+      }),
     );
-    const selectedCreatorUserId =
-      selectedState === 'published'
-      && this.selectedSummary?.creatorUserId
-      && this.selectedSummary.creatorDisplayName
-        ? this.selectedSummary.creatorUserId
-        : null;
-    const selectedCreatorText = selectedCreatorUserId && this.selectedSummary?.creatorDisplayName
-      ? `by ${this.selectedSummary.creatorDisplayName}`
-      : roomIdFromCoordinates(this.selectedCoordinates);
-
-    let selectedMetaText = 'No room here yet';
-    let selectedMetaTone: OverworldHudViewModel['selectedMetaTone'] = 'default';
-    if (selectedState === 'published') {
-      const metaParts: string[] = [];
-      if (selectedCourse) {
-        metaParts.push(
-          selectedCourse.courseTitle?.trim()
-            ? `Part of course: ${selectedCourse.courseTitle}`
-            : `Part of course · ${selectedCourse.roomCount} rooms`
-        );
-        metaParts.push(this.getCourseGoalSummaryText(selectedCourse.goalType));
-        selectedMetaTone = 'challenge';
-      }
-      if (this.selectedSummary?.goalType) {
-        metaParts.push(`${ROOM_GOAL_LABELS[this.selectedSummary.goalType]} challenge`);
-        selectedMetaTone = 'challenge';
-      }
-      if (metaParts.length === 0) {
-        metaParts.push('No challenge');
-      }
-      if (selectedPopulation > 0) {
-        metaParts.push(`${selectedPopulation} here`);
-      }
-      if (selectedEditorCount > 0) {
-        metaParts.push(selectedEditorSummary ?? `${selectedEditorCount} building`);
-      }
-      selectedMetaText = metaParts.join(' · ');
-    } else if (selectedState === 'draft' && selectedDraft) {
-      const metaParts = ['Local draft only'];
-      if (selectedCourse) {
-        metaParts.push(
-          selectedCourse.courseTitle?.trim()
-            ? `Part of course: ${selectedCourse.courseTitle}`
-            : `Part of course · ${selectedCourse.roomCount} rooms`
-        );
-        metaParts.push(this.getCourseGoalSummaryText(selectedCourse.goalType));
-      }
-      if (selectedDraft.goal) {
-        metaParts.push(`${ROOM_GOAL_LABELS[selectedDraft.goal.type]} challenge`);
-      }
-      metaParts.push('publish to make it public');
-      selectedMetaText = metaParts.join(' · ');
-      selectedMetaTone = selectedCourse ? 'challenge' : 'draft';
-    } else if (selectedState === 'frontier') {
-      if (frontierBuildBlocked) {
-        const authState = getAuthDebugState();
-        const limit = authState.roomDailyClaimLimit;
-        selectedMetaText =
-          limit === null
-            ? 'Daily new-room claim limit reached today'
-            : `Daily new-room claim limit reached (${limit}/${limit})`;
-        selectedMetaTone = 'default';
-      } else {
-        selectedMetaText =
-          selectedEditorCount > 0
-            ? `Building in progress · ${
-              selectedEditorSummary
-              ?? `${selectedEditorCount} ${selectedEditorCount === 1 ? 'builder' : 'builders'} here`
-            }`
-            : 'Build a room here';
-        selectedMetaTone = 'frontier';
-      }
-    } else if (selectedState === 'empty') {
-      if (selectedEditorCount > 0) {
-        selectedMetaText = `Building in progress · ${
-          selectedEditorSummary
-          ?? `${selectedEditorCount} ${selectedEditorCount === 1 ? 'builder' : 'builders'} here`
-        }`;
-        selectedMetaTone = 'frontier';
-      } else {
-        selectedMetaText = 'You can only build next to an existing published room';
-        selectedMetaTone = 'default';
-      }
-    }
-
-    let statusText: string;
-    if (statusOverride) {
-      statusText = statusOverride;
-    } else if (transientStatus) {
-      statusText = transientStatus;
-    } else if (this.mode === 'play') {
-      statusText = this.goalRunController.getPersistentStatusText() ?? '';
-    } else {
-      statusText = '';
-    }
-
-    let leaderboardText = '';
-    if (!activeCourseRun && this.mode !== 'play' && roomTop && rankingMode) {
-      const metric =
-        rankingMode === 'time'
-          ? `${(roomTop.elapsedMs / 1000).toFixed(2)}s`
-          : `${roomTop.score} pts`;
-      leaderboardText = `Best: ${roomTop.userDisplayName} · ${metric}`;
-    }
-
-    const saveStatusText =
-      this.mode === 'play'
-        ? `Score ${this.score}`
-        : statusOverride ??
-          transientStatus ??
-          '';
-    const activeGoalRoom = activeRoomGoalRun
-      ? this.getRoomSnapshotForCoordinates(activeRoomGoalRun.roomCoordinates)
-      : null;
-    const goalPanelTone =
-      activeRunResult === 'completed'
-        ? 'complete'
-        : activeRunResult === 'failed'
-          ? 'failed'
-          : 'active';
-
-    return {
-      saveStatusTone,
-      jumpInputValue: roomIdFromCoordinates(this.selectedCoordinates),
-      selectedTitleText,
-      selectedCreatorText,
-      selectedCreatorUserId,
-      selectedStateText:
-        selectedState === 'published'
-          ? 'Published'
-          : selectedState === 'draft'
-            ? 'Draft'
-            : selectedState === 'frontier'
-              ? 'Frontier'
-              : 'Empty',
-      selectedStateTone: selectedState,
-      selectedMetaText,
-      selectedMetaTone,
-      statusText,
-      leaderboardText,
-      zoomLabelText: `${this.cameras.main.zoom.toFixed(2)}x`,
-      playButtonText: activeCourseRun ? 'Play Room' : this.mode === 'play' ? 'Stop' : 'Play Room',
-      playButtonDisabled:
-        activeCourseRun
-          ? true
-          : this.mode === 'play'
-            ? false
-            : selectedState !== 'published' && selectedState !== 'draft',
-      playButtonActive: this.mode === 'play' && !activeCourseRun,
-      playCourseButtonText: activeCourseRun ? 'Stop Course' : 'Play Course',
-      playCourseButtonDisabled: activeCourseRun ? false : !selectedCourse,
-      playCourseButtonHidden: !selectedCourse && !activeCourseRun,
-      playCourseButtonActive: Boolean(activeCourseRun),
-      courseBuilderButtonDisabled:
-        this.courseComposerLoading ||
-        (!selectedRoomInActiveCourseSession && selectedState !== 'published' && !selectedCourse),
-      editButtonDisabled: selectedState !== 'published' && selectedState !== 'draft',
-      buildButtonDisabled: selectedState !== 'frontier' || frontierBuildBlocked,
-      roomCoordinatesText: '',
-      cursorText: '',
-      playersOnlineText:
-        totalPlayerCount === null ? '' : `${totalPlayerCount} ${totalPlayerCount === 1 ? 'player' : 'players'} online`,
-      playersOnlineSummaryText:
-        totalPlayerCount === null
-          ? ''
-          : onlineRosterEntries.length === 0
-            ? 'Live presence in loaded rooms.'
-            : `${onlineRosterEntries.length} ${onlineRosterEntries.length === 1 ? 'player' : 'players'} visible right now`,
-      playersOnlineEntries: onlineRosterEntries,
-      saveStatusText,
-      bottomBarZoomText: `Zoom: ${this.cameras.main.zoom.toFixed(2)}x`,
-      goalPanelVisible: Boolean(activeCourseRun || activeRoomGoalRun),
-      goalPanelTone,
-      goalPanelRoomText: activeCourseRun
-        ? this.truncateOverlayText(
-            (activeCourseRun.course.title?.trim() || 'COURSE').toUpperCase(),
-            22
-          )
-        : activeRoomGoalRun
-        ? this.truncateOverlayText(
-            this.getRoomDisplayTitle(activeGoalRoom?.title ?? null, activeRoomGoalRun.roomCoordinates).toUpperCase(),
-            22
-          )
-        : '',
-      goalPanelGoalText: activeCourseRun
-        ? this.getCourseGoalBadgeText(activeCourseRun.course.goal).toUpperCase()
-        : activeRoomGoalRun
-          ? this.getGoalBadgeText(activeRoomGoalRun.goal).toUpperCase()
-          : '',
-      goalPanelTimerText: activeCourseRun
-        ? this.getCourseGoalTimerText(activeCourseRun)
-        : activeRoomGoalRun
-          ? this.getPlayGoalTimerText(activeRoomGoalRun)
-          : '',
-      goalPanelProgressText: activeCourseRun
-        ? this.getCourseGoalProgressText(activeCourseRun)
-        : activeRoomGoalRun
-          ? this.getPlayGoalProgressText(activeRoomGoalRun)
-          : '',
-    };
+    this.syncGoalOverlayScale();
   }
 
   private getRoomDisplayTitle(title: string | null, coordinates: RoomCoordinates): string {

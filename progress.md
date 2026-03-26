@@ -4012,3 +4012,30 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - artifacts: `output/web-game/editor-chrome-controller-probe/summary.json`, `output/web-game/editor-chrome-controller-probe/editor-open.png`
   - Status:
     - phase 6 is now complete on `safety/course-flow-editor-integration-2026-03-26`; the next maintainability branch should move to the overworld UI boundary work.
+
+- March 26, 2026: completed the phase-7 overworld UI boundary pass.
+  - Added `src/scenes/overworld/hudViewModel.ts` and moved overworld HUD/view-model composition out of `OverworldPlayScene`.
+  - `OverworldPlayScene.renderHud()` now delegates HUD string/tone/button state assembly through `buildOverworldHudViewModel(...)` instead of carrying the full selection/status/goal-panel composition inline.
+  - `src/scenes/overworld/hud.ts` now owns HUD-specific DOM event handling as well as rendering:
+    - world play / play-course / edit / build
+    - course-builder open
+    - world jump submit
+    - footer zoom buttons
+    - leaderboard / controls buttons
+    - fit-world button
+  - `src/ui/setup/sceneCommands.ts` now shrinks down to runtime wiring for those HUD actions plus the remaining non-HUD menu buttons (`About`, chat moderation).
+  - `OverworldPlayScene.ts` is down to 6,659 lines after this cut.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-ui-boundary`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-ui-boundary-skill-smoke/state-0.json`
+      - `output/web-game/overworld-ui-boundary-skill-smoke/shot-0.png`
+    - targeted browser probe clicked the real HUD controls and confirmed:
+      - leaderboard modal opened from `#btn-world-leaderboard`
+      - controls modal opened from `#btn-world-controls`
+      - zoom changed from `0.18` to `0.202` via `#btn-world-zoom-in-footer`
+      - warp changed selected/current room to `1,-4` via `#world-jump-input` + `#btn-world-jump`
+      - no console or page errors
+      - artifacts: `output/web-game/overworld-ui-boundary-probe/summary.json`, `output/web-game/overworld-ui-boundary-probe/after-jump.png`
+  - Status:
+    - phase 7 is complete on `safety/overworld-ui-boundary-2026-03-26`; the next maintainability branch should move to the overworld scene split work.
