@@ -3875,7 +3875,7 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 - March 26, 2026: cleaned up course-setup gating/messaging.
   - The actual `Edit Course` gate was already title + rooms + saved setup only, but setup still leaked goal-dependent disabled reasons and actions, which made it look like choosing a goal was required before entering the editor.
-  - Course setup now hides `Test Draft` / `Publish Course` until a goal exists, and any remaining goal-blocked messages explicitly point the user to `Edit Course` instead of sounding like a setup prerequisite.
+  - Course setup messaging now explicitly points goal-related blockers back to `Edit Course` instead of sounding like a setup prerequisite.
   - Verification: `./node_modules/.bin/tsc --noEmit` and `npm run build` passed in `/tmp/wamp-course-draft-discovery`.
 
 ## March 26, 2026 - Course Flow + Editor Refactor Integration
@@ -3905,3 +3905,17 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - `output/web-game/course-flow-editor-integration-probe/course-composer.png`
     - `output/web-game/course-flow-editor-integration-probe/course-editor.png`
     - `output/web-game/course-flow-editor-integration-probe/composer-after-editor-return.png`
+
+- March 26, 2026: aligned course setup with editor-owned goal authoring.
+  - Removed stale setup-side goal editing and marker-placement plumbing from the course setup panel and scene bridge. `Course Setup` now treats goal state as read-only and leaves goal editing entirely to `Edit Course`.
+  - `Test Draft` and `Publish Course` remain visible in setup and use goal-blocked disabled reasons that explicitly send the user into `Edit Course`.
+  - Verified the intended flow locally against the safety backend:
+    - before setting a goal in `Edit Course`, setup reported `canPublishCourse: false` with the new editor-owned goal message
+    - after setting `defeat_all` in the course editor and returning to setup, setup reported `goalType: "defeat_all"` and `canPublishCourse: true`
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-course-flow-editor-integration`
+    - browser probe artifacts:
+      - `output/web-game/course-setup-goal-owner-probe/summary.json`
+      - `output/web-game/course-setup-goal-owner-probe/before-editor-goal.png`
+      - `output/web-game/course-setup-goal-owner-probe/course-editor-goal-set.png`
+      - `output/web-game/course-setup-goal-owner-probe/after-editor-return.png`

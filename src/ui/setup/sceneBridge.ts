@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { CourseGoalType, CourseRoomRef } from '../../courses/model';
-import type { CourseEditorTool, CourseEditorUiState } from '../../courses/editor/state';
+import type { CourseEditorUiState } from '../../courses/editor/state';
 import type { RoomGoalType } from '../../goals/roomGoals';
 import type { GoalPlacementMode } from '../../scenes/editor/editRuntime';
 import type { RoomCoordinates, RoomRecord, RoomVersionRecord } from '../../persistence/roomModel';
@@ -121,12 +121,6 @@ export interface CourseComposerSceneBridge {
   getCourseEditorState?: () => CourseEditorUiState | null;
   returnToWorld?: () => Promise<void> | void;
   setCourseTitle?: (title: string | null) => void;
-  setCourseGoalType?: (goalType: CourseGoalType | null) => void;
-  setCourseGoalTimeLimitSeconds?: (seconds: number | null) => void;
-  setCourseGoalRequiredCount?: (requiredCount: number) => void;
-  setCourseGoalSurvivalSeconds?: (seconds: number) => void;
-  startMarkerPlacement?: (tool: Exclude<CourseEditorTool, 'select' | 'rooms'> | null) => void;
-  clearMarkers?: () => void;
   centerSelectedRoom?: () => void;
   selectRoom?: (roomId: string) => void;
   toggleSelectedRoomMembership?: () => void;

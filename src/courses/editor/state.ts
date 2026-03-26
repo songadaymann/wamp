@@ -92,21 +92,25 @@ export function getCurrentCourseDraftGoalSetupDisabledReason(
   draft: CourseSnapshot | null
 ): string | null {
   if (!draft?.goal) {
-    return 'Open Edit Course to choose a course goal first.';
+    return 'Course goal is authored in Edit Course. Open Edit Course to choose a goal first.';
   }
 
   if (courseGoalRequiresStartPoint(draft.goal) && !draft.startPoint) {
-    return 'Open Edit Course to place a course start marker first.';
+    return 'Course goal is authored in Edit Course. Open Edit Course to place a course start marker first.';
   }
 
   switch (draft.goal.type) {
     case 'reach_exit':
-      return draft.goal.exit ? null : 'Open Edit Course to place a course exit marker.';
+      return draft.goal.exit
+        ? null
+        : 'Course goal is authored in Edit Course. Open Edit Course to place a course exit marker.';
     case 'checkpoint_sprint':
       if (draft.goal.checkpoints.length === 0) {
-        return 'Open Edit Course to add at least one checkpoint first.';
+        return 'Course goal is authored in Edit Course. Open Edit Course to add at least one checkpoint first.';
       }
-      return draft.goal.finish ? null : 'Open Edit Course to place a course finish marker.';
+      return draft.goal.finish
+        ? null
+        : 'Course goal is authored in Edit Course. Open Edit Course to place a course finish marker.';
     case 'collect_target':
     case 'defeat_all':
     case 'survival':
