@@ -73,6 +73,17 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - room challenge play now renders the existing `spawn_point` sign asset at the ranked start location while a single-room run is still in `practice`
   - the practice marker adds a `START` label and rides the same goal-marker overlay system as exits/checkpoints, so side-entry players can see exactly where they need to go to arm the ranked attempt
   - this also covers legacy rooms without an authored spawn, because it uses the same resolved fallback start point as the ranked-room gating logic
+
+- Punk avatar safety swap on March 26, 2026:
+  - user wanted to test a new player look from `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/GADtrailers/WAMP/punk/4495` on a safety branch
+  - built a new base movement atlas at `public/assets/player/punk4495/Punk4495Base.png` / `.json` from the supplied idle, run, jump, and land frames
+  - kept the existing combat / weapons / FX atlases, and remapped missing movement states to the available punk frames for test purposes
+  - verification:
+    - `./node_modules/.bin/tsc --noEmit`
+    - `npm run build`
+    - local Playwright boot smoke wrote `output/web-game/shot-0.png`, `output/web-game/state-0.json`, and `output/web-game/errors-0.json`
+  - caveat:
+    - the repo still shows the existing headless black-frame WebGL screenshot issue, so the smoke only confirmed clean boot/no missing-frame errors, not visual quality; real browser validation should happen on the safety branch
   - verification:
     - `npm run build` passed
     - targeted browser probe wrote:

@@ -31,8 +31,8 @@ export interface DefaultPlayerAnimationDefinition {
   repeat: number;
 }
 
-const PLAYER_ASSET_ROOT = 'assets/player/default';
-const PLAYER_FRAME_PREFIX = 'Player ';
+const PLAYER_BASE_ASSET_ROOT = 'assets/player/punk4495';
+const PLAYER_SHARED_ASSET_ROOT = 'assets/player/default';
 const PLAYER_COMBAT_FRAME_PREFIX = 'PlayerCombat ';
 const PLAYER_FX_FRAME_PREFIX = 'Effects ';
 
@@ -46,45 +46,45 @@ export const DEFAULT_PLAYER_ATLAS_KEYS = {
 export const DEFAULT_PLAYER_ATLAS_ASSETS: PlayerAtlasAssetEntry[] = [
   {
     key: DEFAULT_PLAYER_ATLAS_KEYS.base,
-    texturePath: `${PLAYER_ASSET_ROOT}/PlayerSheet.png`,
-    atlasPath: `${PLAYER_ASSET_ROOT}/PlayerSheet.json`,
+    texturePath: `${PLAYER_BASE_ASSET_ROOT}/Punk4495Base.png`,
+    atlasPath: `${PLAYER_BASE_ASSET_ROOT}/Punk4495Base.json`,
   },
   {
     key: DEFAULT_PLAYER_ATLAS_KEYS.combat,
-    texturePath: `${PLAYER_ASSET_ROOT}/PlayerCombatActionsSheet.png`,
-    atlasPath: `${PLAYER_ASSET_ROOT}/PlayerCombatActionsSheet.json`,
+    texturePath: `${PLAYER_SHARED_ASSET_ROOT}/PlayerCombatActionsSheet.png`,
+    atlasPath: `${PLAYER_SHARED_ASSET_ROOT}/PlayerCombatActionsSheet.json`,
   },
   {
     key: DEFAULT_PLAYER_ATLAS_KEYS.weapons,
-    texturePath: `${PLAYER_ASSET_ROOT}/WeaponsSheet.png`,
-    atlasPath: `${PLAYER_ASSET_ROOT}/WeaponsSheet.json`,
+    texturePath: `${PLAYER_SHARED_ASSET_ROOT}/WeaponsSheet.png`,
+    atlasPath: `${PLAYER_SHARED_ASSET_ROOT}/WeaponsSheet.json`,
   },
   {
     key: DEFAULT_PLAYER_ATLAS_KEYS.fx,
-    texturePath: `${PLAYER_ASSET_ROOT}/FXSheet.png`,
-    atlasPath: `${PLAYER_ASSET_ROOT}/FXSheet.json`,
+    texturePath: `${PLAYER_SHARED_ASSET_ROOT}/FXSheet.png`,
+    atlasPath: `${PLAYER_SHARED_ASSET_ROOT}/FXSheet.json`,
   },
 ];
 
-function buildFrameNames(prefix: string, indices: number[]): string[] {
+function buildAtlasFrameNames(prefix: string, indices: number[]): string[] {
   return indices.map((index) => `${prefix}${index}.aseprite`);
 }
 
-const IDLE_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [0, 1, 2, 3, 4, 5, 6]);
-const RUN_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [15, 16, 17, 18, 19, 20, 21, 22]);
-const JUMP_RISE_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [32]);
-const JUMP_FALL_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [34]);
-const WALL_SLIDE_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [107, 108, 109, 110, 111, 112]);
-const WALL_JUMP_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123]);
-const LAND_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [35, 36]);
-const LADDER_CLIMB_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [124, 125, 126, 127, 128, 129, 130, 131]);
-const CROUCH_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [51, 52, 53, 54, 55, 56]);
-const CRAWL_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [57, 58, 59, 60, 61, 62, 63, 64]);
-const PUSH_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [262, 263, 264, 265, 266, 267, 268, 269]);
-const PULL_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [270, 271, 272, 273, 274, 275]);
-const SWORD_SLASH_FRAMES = buildFrameNames(PLAYER_COMBAT_FRAME_PREFIX, [89, 90, 91, 92, 93]);
-const AIR_SLASH_DOWN_FRAMES = buildFrameNames(PLAYER_COMBAT_FRAME_PREFIX, [107, 108, 109, 110, 111, 112]);
-const GUN_FIRE_FRAMES = buildFrameNames(PLAYER_COMBAT_FRAME_PREFIX, [233, 234, 235, 236, 237]);
+const IDLE_FRAMES = Array.from({ length: 8 }, (_, index) => `punk-idle-${index}.png`);
+const RUN_FRAMES = Array.from({ length: 8 }, (_, index) => `punk-run-${index}.png`);
+const JUMP_RISE_FRAMES = ['punk-jump-rise.png'];
+const JUMP_FALL_FRAMES = ['punk-jump-fall.png'];
+const WALL_SLIDE_FRAMES = ['punk-jump-fall.png'];
+const WALL_JUMP_FRAMES = ['punk-jump-rise.png', 'punk-jump-fall.png'];
+const LAND_FRAMES = ['punk-land-0.png', 'punk-land-1.png'];
+const LADDER_CLIMB_FRAMES = ['punk-idle-1.png', 'punk-idle-2.png', 'punk-idle-3.png', 'punk-idle-4.png'];
+const CROUCH_FRAMES = ['punk-idle-0.png'];
+const CRAWL_FRAMES = RUN_FRAMES;
+const PUSH_FRAMES = RUN_FRAMES;
+const PULL_FRAMES = RUN_FRAMES;
+const SWORD_SLASH_FRAMES = buildAtlasFrameNames(PLAYER_COMBAT_FRAME_PREFIX, [89, 90, 91, 92, 93]);
+const AIR_SLASH_DOWN_FRAMES = buildAtlasFrameNames(PLAYER_COMBAT_FRAME_PREFIX, [107, 108, 109, 110, 111, 112]);
+const GUN_FIRE_FRAMES = buildAtlasFrameNames(PLAYER_COMBAT_FRAME_PREFIX, [233, 234, 235, 236, 237]);
 
 export const DEFAULT_PLAYER_IDLE_TEXTURE_KEY = DEFAULT_PLAYER_ATLAS_KEYS.base;
 export const DEFAULT_PLAYER_IDLE_FRAME = IDLE_FRAMES[0];
@@ -102,42 +102,42 @@ export const DEFAULT_PLAYER_FX_ANIMATIONS: DefaultPlayerAnimationDefinition[] = 
   {
     key: DEFAULT_PLAYER_FX_ANIMATION_KEYS['jump-dust'],
     atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.fx,
-    frameNames: buildFrameNames(PLAYER_FX_FRAME_PREFIX, [57, 58, 59, 60, 61, 62, 63]),
+    frameNames: buildAtlasFrameNames(PLAYER_FX_FRAME_PREFIX, [57, 58, 59, 60, 61, 62, 63]),
     frameRate: 18,
     repeat: 0,
   },
   {
     key: DEFAULT_PLAYER_FX_ANIMATION_KEYS['landing-dust'],
     atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.fx,
-    frameNames: buildFrameNames(PLAYER_FX_FRAME_PREFIX, [64, 65, 66, 67, 68, 69]),
+    frameNames: buildAtlasFrameNames(PLAYER_FX_FRAME_PREFIX, [64, 65, 66, 67, 68, 69]),
     frameRate: 18,
     repeat: 0,
   },
   {
     key: DEFAULT_PLAYER_FX_ANIMATION_KEYS['run-dust-front'],
     atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.fx,
-    frameNames: buildFrameNames(PLAYER_FX_FRAME_PREFIX, [25, 26, 27, 28, 29, 30, 31, 32]),
+    frameNames: buildAtlasFrameNames(PLAYER_FX_FRAME_PREFIX, [25, 26, 27, 28, 29, 30, 31, 32]),
     frameRate: 18,
     repeat: 0,
   },
   {
     key: DEFAULT_PLAYER_FX_ANIMATION_KEYS['run-dust-back'],
     atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.fx,
-    frameNames: buildFrameNames(PLAYER_FX_FRAME_PREFIX, [33, 34, 35, 36, 37, 38, 39, 40]),
+    frameNames: buildAtlasFrameNames(PLAYER_FX_FRAME_PREFIX, [33, 34, 35, 36, 37, 38, 39, 40]),
     frameRate: 18,
     repeat: 0,
   },
   {
     key: DEFAULT_PLAYER_FX_ANIMATION_KEYS['muzzle-flash'],
     atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.fx,
-    frameNames: buildFrameNames(PLAYER_FX_FRAME_PREFIX, [0, 1, 2, 3, 4, 5, 6, 7, 8]),
+    frameNames: buildAtlasFrameNames(PLAYER_FX_FRAME_PREFIX, [0, 1, 2, 3, 4, 5, 6, 7, 8]),
     frameRate: 24,
     repeat: 0,
   },
   {
     key: DEFAULT_PLAYER_FX_ANIMATION_KEYS['bullet-impact'],
     atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.fx,
-    frameNames: buildFrameNames(PLAYER_FX_FRAME_PREFIX, [9, 10, 11, 12, 13, 14, 15, 16, 17]),
+    frameNames: buildAtlasFrameNames(PLAYER_FX_FRAME_PREFIX, [9, 10, 11, 12, 13, 14, 15, 16, 17]),
     frameRate: 24,
     repeat: 0,
   },
