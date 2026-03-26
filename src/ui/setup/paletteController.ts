@@ -97,20 +97,15 @@ export class PaletteController {
       return;
     }
 
-    const nextSelection: TileSelection = {
-      tilesetKey,
-      startCol,
-      startRow,
-      width: endCol - startCol + 1,
-      height: endRow - startRow + 1,
-      occupiedMask: this.buildSelectionOccupiedMask(
+    const nextSelection = this.normalizeSelection(
+      this.createSelection(
         tilesetKey,
         startCol,
         startRow,
         endCol - startCol + 1,
         endRow - startRow + 1,
       ),
-    };
+    );
     editorState.selection = nextSelection;
     editorState.selectedTileGid = this.getPrimarySelectionGid(nextSelection, ts);
 
@@ -514,11 +509,67 @@ export class PaletteController {
         loadedCount++;
 
         if (loadedCount === TILESETS.length) {
+          this.ensureSelectionIsUsable();
           this.renderPalette();
           this.renderTilePreview();
         }
       };
     }
+  }
+
+  private createSelection(
+    tilesetKey: string,
+    startCol: number,
+    startRow: number,
+    width: number,
+    height: number,
+  ): TileSelection {
+    return {
+      tilesetKey,
+      startCol,
+      startRow,
+      width,
+      height,
+      occupiedMask: this.buildSelectionOccupiedMask(
+        tilesetKey,
+        startCol,
+        startRow,
+        width,
+        height,
+      ),
+    };
+  }
+
+  private ensureSelectionIsUsable(): void {
+    const activeTilesetKey = editorState.selectedTilesetKey;
+    const currentSelection = editorState.selection;
+    const currentSelectionHasOccupiedCell = this.selectionHasOccupiedCells(currentSelection);
+    if (
+      currentSelection.tilesetKey === activeTilesetKey &&
+      currentSelectionHasOccupiedCell
+    ) {
+      return;
+    }
+
+    const fallbackCell = this.findFirstVisibleTile(activeTilesetKey);
+    if (!fallbackCell) {
+      return;
+    }
+
+    const normalizedSelection = this.createSelection(
+      activeTilesetKey,
+      fallbackCell.col,
+      fallbackCell.row,
+      1,
+      1,
+    );
+    const ts = getTilesetByKey(activeTilesetKey);
+    if (!ts) {
+      return;
+    }
+
+    editorState.selection = normalizedSelection;
+    editorState.selectedTileGid = this.getPrimarySelectionGid(normalizedSelection, ts);
   }
 
   private getObjectTooltip(): HTMLDivElement {
@@ -640,6 +691,31 @@ export class PaletteController {
     );
   }
 
+  private normalizeSelection(selection: TileSelection): TileSelection {
+    if (this.selectionHasOccupiedCells(selection)) {
+      return selection;
+    }
+
+    if (selection.width !== 1 || selection.height !== 1) {
+      return selection;
+    }
+
+    const previousSelection = editorState.selection;
+    if (
+      previousSelection.tilesetKey === selection.tilesetKey &&
+      this.selectionHasOccupiedCells(previousSelection)
+    ) {
+      return previousSelection;
+    }
+
+    const fallbackCell = this.findFirstVisibleTile(selection.tilesetKey);
+    if (!fallbackCell) {
+      return selection;
+    }
+
+    return this.createSelection(selection.tilesetKey, fallbackCell.col, fallbackCell.row, 1, 1);
+  }
+
   private countOccupiedSelectionCells(selection: TileSelection): number {
     let occupiedCount = 0;
 
@@ -652,6 +728,31 @@ export class PaletteController {
     }
 
     return occupiedCount;
+  }
+
+  private selectionHasOccupiedCells(selection: TileSelection): boolean {
+    return this.countOccupiedSelectionCells(selection) > 0;
+  }
+
+  private findFirstVisibleTile(tilesetKey: string): { col: number; row: number } | null {
+    const ts = getTilesetByKey(tilesetKey);
+    if (!ts) {
+      return null;
+    }
+
+    const visibility = this.paletteTileVisibility.get(tilesetKey);
+    const occupancy = this.paletteTileOccupancy.get(tilesetKey);
+
+    for (let row = 0; row < ts.rows; row += 1) {
+      for (let col = 0; col < ts.columns; col += 1) {
+        const tileIndex = row * ts.columns + col;
+        if (visibility?.[tileIndex] ?? occupancy?.[tileIndex]) {
+          return { col, row };
+        }
+      }
+    }
+
+    return null;
   }
 
   private getPrimarySelectionGid(selection: TileSelection, ts: TilesetConfig): number {

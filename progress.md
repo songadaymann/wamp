@@ -3614,3 +3614,15 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 - Verification:
   - `npm run build` passed after the editor UI boundary refactor
   - attempted the standard Playwright smoke via the `develop-web-game` client against both `vite preview` and `vite dev`, but local navigation hung waiting for `domcontentloaded` despite the local server returning `200 OK`; treat that as an environment quirk and rely on the successful production build plus manual safety-preview validation for this branch
+
+## March 26, 2026 - Phase 5 Follow-up: Empty Initial Tile Selection Regression
+
+- Fixed the editor palette so a single-cell empty tile cannot become the active paint selection on first load or after switching tilesets
+  - `src/ui/setup/paletteController.ts` now normalizes single-cell empty selections back to the prior valid tile for that tileset, or to the first visible tile in the tileset when there is no valid prior selection
+  - once tileset images finish loading, the palette now also normalizes the current editor selection so a restored/default tileset never starts on an invisible tile
+- Root cause:
+  - the editor was still allowing `updateSelection(..., 0, 0, 0, 0)` to land on empty palette cells for tilesets whose top-left tile is transparent, which left `selectedTileGid = -1` and made the pencil place invisible tiles
+- Verification:
+  - `npm run build` passed in the phase-5 worktree
+  - targeted local browser probe wrote `output/web-game/editor-empty-selection-check/summary.json`
+  - the probe confirmed `#selection-info` stayed blank instead of switching to `(empty)` after fresh-load tileset changes to `dirt` and `snow`
