@@ -3626,3 +3626,11 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - `npm run build` passed in the phase-5 worktree
   - targeted local browser probe wrote `output/web-game/editor-empty-selection-check/summary.json`
   - the probe confirmed `#selection-info` stayed blank instead of switching to `(empty)` after fresh-load tileset changes to `dirt` and `snow`
+
+- March 26 follow-up after preview retest:
+  - root cause for the remaining first-open bug was the editor's hardcoded boot default in `src/config.ts`: `forest` tile `(0,0)` is fully transparent, so a full refresh could still start on an invisible tile before any palette normalization ran
+  - changed the editor default selection to the first visible forest tile `(9,0)` / gid `10`
+  - `src/scenes/EditorScene.ts` now also calls `resetEditorPaletteSelection()` during `resetRuntimeState()` so fresh editor opens inside a running session cannot inherit stale/empty palette state
+  - verification:
+    - `npm run build` passed
+    - `output/web-game/editor-default-selection-fix/summary.json` records the new default selection state

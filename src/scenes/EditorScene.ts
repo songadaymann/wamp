@@ -18,6 +18,7 @@ import {
   editorState,
   getObjectById,
   getPlacedObjectLayer,
+  resetEditorPaletteSelection,
   type LayerName,
   type PlacedObject,
 } from '../config';
@@ -838,6 +839,7 @@ export class EditorScene extends Phaser.Scene {
     this.destroyCourseMarkerOverlays();
     this.roomEditCount = 0;
     this.publishNudgeTriggered = false;
+    resetEditorPaletteSelection();
     editorState.tileFlipX = false;
     editorState.tileFlipY = false;
     editorState.isPlaying = false;
