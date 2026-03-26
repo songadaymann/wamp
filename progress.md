@@ -88,6 +88,9 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - swapped the movement atlas over to the newer cut-out idle set in `4495/4495-idle`
     - rebuilt the whole base strip with `-trim +repage -gravity south -extent 64x64` so the feet/base line up more consistently frame to frame
     - reduced idle/run playback to `6fps` and `10fps` respectively to make the remaining AI-frame wobble read less aggressively in motion
+  - second follow-up:
+    - rebuilt `public/assets/player/punk4495/Punk4495Base.png` again from the fully refreshed source set after the user manually normalized every idle/run/jump/land frame in `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/GADtrailers/WAMP/punk/4495`
+    - used the supplied `64x64` source files as-is for this pass instead of re-trimming them again, so the sheet now preserves the user's manual alignment work directly
   - verification:
     - `npm run build` passed
     - targeted browser probe wrote:
