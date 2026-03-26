@@ -372,9 +372,18 @@ export default {
           auth.user.id,
           record.draft.id,
           record.published?.version ?? record.draft.version,
-          record.versions.length === 1
+          {
+            hasGoal: record.published?.goal !== null,
+            hasPriorGoalPublish: record.versions.some(
+              (version) =>
+                version.version !== (record.published?.version ?? record.draft.version) &&
+                version.snapshot.goal !== null
+            ),
+          }
         );
-        await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
+        if (pointEvent) {
+          await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
+        }
         await upsertUserStats(env, auth.user.id);
         return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
       }
@@ -401,9 +410,18 @@ export default {
           auth.user.id,
           record.draft.id,
           record.published?.version ?? record.draft.version,
-          false
+          {
+            hasGoal: record.published?.goal !== null,
+            hasPriorGoalPublish: record.versions.some(
+              (version) =>
+                version.version !== (record.published?.version ?? record.draft.version) &&
+                version.snapshot.goal !== null
+            ),
+          }
         );
-        await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
+        if (pointEvent) {
+          await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
+        }
         await upsertUserStats(env, auth.user.id);
         return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
       }
