@@ -7,7 +7,6 @@ import { setupButtonFeedback } from './setup/buttonFeedback';
 import { ChatModerationModalController } from './setup/chatModerationModal';
 import { ControlsModalController } from './setup/controlsModal';
 import { CourseModalController } from './setup/courseModal';
-import { setupEditorControls } from './setup/editorControls';
 import { RoomHistoryModalController } from './setup/historyModal';
 import { setupKeyboardShortcutPassthrough } from './setup/keyboardPassthrough';
 import { LeaderboardModalController } from './setup/leaderboardModal';
@@ -16,6 +15,7 @@ import { PaletteController } from './setup/paletteController';
 import { ProfileModalController } from './setup/profileModal';
 import { setupCollapsibleSidebarSections } from './setup/sidebarSections';
 import { setupSceneCommands } from './setup/sceneCommands';
+import { configureEditorUiBridgeRuntime } from '../scenes/editor/uiBridge';
 
 export function setupUI(game: Phaser.Game): void {
   initializeDeviceLayout();
@@ -32,8 +32,19 @@ export function setupUI(game: Phaser.Game): void {
   const mobileUi = new MobileUiController(game);
 
   paletteController.init();
+  configureEditorUiBridgeRuntime({
+    paletteController,
+    closePanels: () => {
+      historyModal.close();
+      leaderboardModal.close();
+      controlsModal.close();
+      aboutModal.close();
+      courseModal.close();
+      chatModerationModal.close();
+    },
+    openHistory: () => historyModal.open(),
+  });
   setupCollapsibleSidebarSections();
-  setupEditorControls(game, paletteController);
   historyModal.init();
   leaderboardModal.init();
   installHelp.init();

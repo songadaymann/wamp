@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import {
-  AUTH_STATE_CHANGED_EVENT,
   getAuthDebugState,
   promptForSignIn,
 } from '../auth/client';
@@ -154,15 +153,6 @@ export class EditorScene extends Phaser.Scene {
     this.updateBottomBar();
     this.updateGoalUi();
   };
-  private readonly handleAuthStateChanged = (): void => {
-    this.refreshEditorPresenceIdentity();
-    this.renderEditorUi();
-  };
-  private readonly handleBackgroundChanged = (): void => {
-    this.updateBackground();
-    this.markRoomDirty();
-    this.renderEditorUi();
-  };
   private readonly handleCanvasContextMenu = (event: Event): void => {
     event.preventDefault();
   };
@@ -290,9 +280,6 @@ export class EditorScene extends Phaser.Scene {
     }
   };
   private readonly handleShutdown = (): void => {
-    window.removeEventListener('background-changed', this.handleBackgroundChanged);
-    window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
-    document.removeEventListener('keydown', this.handleDocumentKeyDown);
     this.events.off('wake', this.handleWake, this);
     this.scale.off('resize', this.handleResize, this);
     this.input.removeAllListeners();
@@ -321,12 +308,6 @@ export class EditorScene extends Phaser.Scene {
         updatedAt: this.roomUpdatedAt,
         publishedAt: this.roomPublishedAt,
       }),
-      updateBackgroundSelectValue: (backgroundId) => {
-        const backgroundSelect = document.getElementById('background-select') as HTMLSelectElement | null;
-        if (backgroundSelect) {
-          backgroundSelect.value = backgroundId;
-        }
-      },
       updateBackground: () => this.updateBackground(),
       updateGoalUi: () => this.updateGoalUi(),
       syncBackgroundCameraIgnores: () => this.syncBackgroundCameraIgnores(),
@@ -724,7 +705,58 @@ export class EditorScene extends Phaser.Scene {
     }
     this.entrySource = data?.source ?? 'direct';
     setAppMode('editor');
-    this.uiBridge = new EditorUiBridge();
+    this.uiBridge = new EditorUiBridge({
+      onRequestRender: () => this.renderEditorUi(),
+      onDocumentKeyDown: this.handleDocumentKeyDown,
+      onAuthStateChanged: () => {
+        this.refreshEditorPresenceIdentity();
+        this.renderEditorUi();
+      },
+      onBack: () => this.handleEditorBackAction(),
+      onStartPlayMode: () => this.startPlayMode(),
+      onSaveDraft: async () => {
+        await this.saveDraft(true, { promptForSignInOnUnauthorized: true });
+      },
+      onPublishRoom: async () => {
+        await this.publishRoom();
+      },
+      onPublishNudge: () => this.handlePublishNudgeAction(),
+      onMintRoom: async () => {
+        await this.mintRoom();
+      },
+      onRefreshMintMetadata: async () => {
+        await this.refreshMintMetadata();
+      },
+      onFitToScreen: () => this.fitToScreen(),
+      onZoomIn: () => this.zoomIn(),
+      onZoomOut: () => this.zoomOut(),
+      onSetRoomTitle: (title) => this.setRoomTitle(title),
+      onSelectTool: (tool) => {
+        editorState.activeTool = tool;
+        this.updateToolUI();
+      },
+      onClearCurrentLayer: () => this.clearCurrentLayer(),
+      onClearAllTiles: () => this.clearAllTiles(),
+      onSelectBackground: () => this.applySelectedBackground(),
+      onSetGoalType: (nextType) => this.setGoalType(nextType),
+      onSetGoalTimeLimitSeconds: (seconds) => this.setGoalTimeLimitSeconds(seconds),
+      onSetGoalRequiredCount: (requiredCount) => this.setGoalRequiredCount(requiredCount),
+      onSetGoalSurvivalSeconds: (seconds) => this.setGoalSurvivalSeconds(seconds),
+      onStartGoalMarkerPlacement: (mode) => this.startGoalMarkerPlacement(mode),
+      onClearGoalMarkers: () => this.clearGoalMarkers(),
+      onSetCourseGoalType: (goalType) => this.setCourseGoalType(goalType),
+      onSetCourseGoalTimeLimitSeconds: (seconds) => this.setCourseGoalTimeLimitSeconds(seconds),
+      onSetCourseGoalRequiredCount: (requiredCount) => this.setCourseGoalRequiredCount(requiredCount),
+      onSetCourseGoalSurvivalSeconds: (seconds) => this.setCourseGoalSurvivalSeconds(seconds),
+      onStartCourseGoalMarkerPlacement: (mode) => this.startCourseGoalMarkerPlacement(mode),
+      onClearCourseGoalMarkers: () => this.clearCourseGoalMarkers(),
+      onEditPreviousCourseRoom: () => this.editPreviousCourseRoom(),
+      onEditNextCourseRoom: () => this.editNextCourseRoom(),
+      onBeginPressurePlateConnection: () => this.beginFocusedPressurePlateConnection(),
+      onClearPressurePlateConnection: () => this.clearFocusedPressurePlateConnection(),
+      onCancelPressurePlateConnection: () => this.cancelPressurePlateConnection(),
+      onClearContainerContents: () => this.clearFocusedContainerContents(),
+    });
 
     this.createBackground();
     this.createTilemap();
@@ -742,9 +774,6 @@ export class EditorScene extends Phaser.Scene {
     this.updateBackgroundPreview();
 
     this.events.on('wake', this.handleWake, this);
-    window.addEventListener('background-changed', this.handleBackgroundChanged);
-    window.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
-    document.addEventListener('keydown', this.handleDocumentKeyDown);
     this.scale.on('resize', this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
 
@@ -812,11 +841,17 @@ export class EditorScene extends Phaser.Scene {
     editorState.tileFlipX = false;
     editorState.tileFlipY = false;
     editorState.isPlaying = false;
-    window.dispatchEvent(new Event('tile-flip-changed'));
+    this.uiBridge?.notifyEditorStateChanged();
   }
 
   updateBackground(): void {
     this.backgroundController.updateBackground(editorState.selectedBackground);
+  }
+
+  private applySelectedBackground(): void {
+    this.updateBackground();
+    this.markRoomDirty();
+    this.renderEditorUi();
   }
 
   private syncBackgroundCameraIgnores(): void {
@@ -2314,29 +2349,6 @@ export class EditorScene extends Phaser.Scene {
       this.interactionController.clearShapePreview();
     }
 
-    document.querySelectorAll<HTMLButtonElement>('.tool-btn[data-tool]').forEach((button) => {
-      button.classList.toggle('active', button.dataset.tool === editorState.activeTool);
-    });
-
-    const moreToolsPanel = document.getElementById('more-tools-panel');
-    const eraseControls = document.getElementById('erase-controls');
-    const showMoreTools =
-      moreToolsPanel?.dataset.open === 'true' ||
-      (editorState.paletteMode === 'tiles' &&
-        (editorState.activeTool === 'rect' || editorState.activeTool === 'fill'));
-    moreToolsPanel?.classList.toggle('hidden', !showMoreTools);
-    if (moreToolsPanel) {
-      moreToolsPanel.dataset.open = showMoreTools ? 'true' : 'false';
-    }
-    eraseControls?.classList.toggle(
-      'hidden',
-      !(editorState.paletteMode === 'tiles' && editorState.activeTool === 'eraser'),
-    );
-
-    document.getElementById('btn-tool-more')?.classList.toggle(
-      'active',
-      showMoreTools || editorState.activeTool === 'rect' || editorState.activeTool === 'fill',
-    );
     this.renderEditorUi();
   }
 
@@ -2537,6 +2549,15 @@ export class EditorScene extends Phaser.Scene {
   }
 
   async returnToCourseBuilder(): Promise<void> {
+    await this.returnToWorld();
+  }
+
+  private async handleEditorBackAction(): Promise<void> {
+    if (this.getCourseEditorState().canReturnToCourseBuilder) {
+      await this.returnToCourseBuilder();
+      return;
+    }
+
     await this.returnToWorld();
   }
 

@@ -88,7 +88,6 @@ export interface EditorClipboardState {
 interface EditorEditRuntimeHost {
   getLayers(): Map<string, Phaser.Tilemaps.TilemapLayer>;
   getRoomSnapshotMetadata(): EditorRoomSnapshotMetadata;
-  updateBackgroundSelectValue(backgroundId: string): void;
   updateBackground(): void;
   updateGoalUi(): void;
   syncBackgroundCameraIgnores(): void;
@@ -250,7 +249,6 @@ export class EditorEditRuntime {
     }
 
     editorState.selectedBackground = room.background;
-    this.host.updateBackgroundSelectValue(room.background);
     this.host.updateBackground();
 
     this.roomGoal = cloneRoomGoal(room.goal);

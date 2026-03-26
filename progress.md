@@ -3598,3 +3598,19 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Playwright boot smoke on `http://127.0.0.1:3100` loaded the overworld; only expected local PartyKit connection-refused errors appeared because PartyKit was not running
   - fresh local worker smoke on `http://127.0.0.1:8910` returned `401` for unauthenticated `POST /api/rooms/:roomId/leaderboard-lineage`, confirming the new route is registered
   - remaining manual verification: authenticated creator flow in the history modal against a room with multiple published versions and existing leaderboard history
+
+## March 25, 2026 - Phase 5 Safety Rollout: Editor UI Boundary
+
+- Moved the editor control cluster into `src/scenes/editor/uiBridge.ts`
+  - `EditorUiBridge` now owns editor-side DOM lookup, editor button/input listeners, and editor chrome syncing for tools, background selection, layer controls, palette tabs, goal controls, course goal controls, inspector actions, and editor action buttons
+  - `src/scenes/EditorScene.ts` no longer touches `document` or `window` directly for editor UI concerns
+- Simplified editor shell wiring
+  - removed the old `src/ui/setup/editorControls.ts` bootstrap path so the app no longer has two competing editor control systems
+  - `src/ui/setup.ts` now configures shared editor UI runtime dependencies instead of binding editor controls directly
+  - `src/ui/setup/sceneCommands.ts` now only owns world/global chrome actions; editor action buttons are handled inside the editor bridge
+- Kept the palette system working with the new bridge boundary
+  - `src/ui/setup/paletteController.ts` now emits a lightweight editor UI refresh event after object selection changes the active tool so the bridge can resync its chrome state
+  - `src/scenes/editor/editRuntime.ts` no longer pushes DOM updates back into `EditorScene`
+- Verification:
+  - `npm run build` passed after the editor UI boundary refactor
+  - attempted the standard Playwright smoke via the `develop-web-game` client against both `vite preview` and `vite dev`, but local navigation hung waiting for `domcontentloaded` despite the local server returning `200 OK`; treat that as an environment quirk and rely on the successful production build plus manual safety-preview validation for this branch

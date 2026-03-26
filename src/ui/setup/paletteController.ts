@@ -11,6 +11,7 @@ import {
   type TileSelection,
   type TilesetConfig,
 } from '../../config';
+import { EDITOR_UI_STATE_CHANGED_EVENT } from '../../scenes/editor/uiEvents';
 import { getDeviceLayoutState, isCoarsePointerDevice } from '../deviceLayout';
 
 const MIN_SELECTION_OPAQUE_PIXELS = 24;
@@ -445,12 +446,9 @@ export class PaletteController {
         item.classList.add('active');
 
         editorState.activeTool = 'pencil';
-        this.doc.querySelectorAll('.tool-btn').forEach((button) => {
-          button.classList.toggle('active', (button as HTMLElement).dataset.tool === 'pencil');
-        });
-
         this.renderObjectFacingControls();
         this.renderTilePreview();
+        this.doc.defaultView?.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
         this.requestPhoneEditorAutoCollapse();
       });
 
