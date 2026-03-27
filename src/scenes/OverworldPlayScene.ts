@@ -158,6 +158,9 @@ import {
   OverworldSessionResetController,
 } from './overworld/sessionReset';
 import {
+  OverworldRoomTransitionController,
+} from './overworld/roomTransition';
+import {
   OverworldPresenceOverlayController,
 } from './overworld/presenceOverlays';
 import {
@@ -393,6 +396,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly movementController: OverworldMovementController;
   private readonly combatController: OverworldCombatController;
   private readonly sessionResetController: OverworldSessionResetController;
+  private readonly roomTransitionController: OverworldRoomTransitionController;
   private readonly presenceOverlayController: OverworldPresenceOverlayController;
   private readonly selectionController: OverworldSelectionController;
   private readonly hudStateController: OverworldHudStateController;
@@ -1155,6 +1159,44 @@ export class OverworldPlayScene extends Phaser.Scene {
       getWindowCenterCoordinates: () => ({ ...this.windowCenterCoordinates }),
       refreshChunkWindowIfNeeded: (coordinates) => this.refreshChunkWindowIfNeeded(coordinates),
     });
+    this.roomTransitionController = new OverworldRoomTransitionController({
+      getMode: () => this.mode,
+      getPlayer: () => this.player,
+      getPlayerBody: () => this.playerBody,
+      getCurrentRoomCoordinates: () => ({ ...this.currentRoomCoordinates }),
+      setCurrentRoomCoordinates: (coordinates) => {
+        this.currentRoomCoordinates = { ...coordinates };
+      },
+      setSelectedCoordinates: (coordinates) => {
+        this.selectedCoordinates = { ...coordinates };
+      },
+      getWindowCenterCoordinates: () => ({ ...this.windowCenterCoordinates }),
+      getRoomCoordinatesForPoint: (x, y) => this.getRoomCoordinatesForPoint(x, y),
+      isNeighborReachable: (roomCoordinates, neighborCoordinates) =>
+        this.runtimeController.isNeighborReachable(roomCoordinates, neighborCoordinates),
+      resetChallengeStateForRoomExit: (nextRoomCoordinates) => {
+        this.sessionResetController.resetChallengeStateForRoomExit(nextRoomCoordinates);
+      },
+      updateSelectedSummary: () => this.updateSelectedSummary(),
+      getActiveCourseRun: () => this.activeCourseRun,
+      syncGoalRunForRoom: (room, entryContext) => {
+        this.objectiveController.syncGoalRunForRoom(room, entryContext);
+      },
+      getRoomSnapshotForCoordinates: (coordinates) => this.getRoomSnapshotForCoordinates(coordinates),
+      refreshLeaderboardForSelection: () => this.refreshLeaderboardForSelection(),
+      refreshCourseComposerSelectedRoomState: () => this.refreshCourseComposerSelectedRoomState(),
+      setFocusedCoordinates: (coordinates) => {
+        setFocusedCoordinatesInUrl(coordinates);
+      },
+      refreshAround: (coordinates) => this.refreshAround(coordinates),
+      redrawWorld: () => this.redrawWorld(),
+      renderHud: () => this.renderHud(),
+      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
+      clearLadderState: () => {
+        this.movementController.clearLadderState();
+      },
+      syncPlayerPickupSensor: () => this.playerPresentationController.syncPlayerPickupSensor(),
+    });
     this.presenceOverlayController = new OverworldPresenceOverlayController({
       scene: this,
       getWorldWindow: () => this.worldWindow,
@@ -1602,7 +1644,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.combatController.updateProjectiles(delta);
     this.movementController.syncLadderClimbSfx(movement.verticalInput);
     this.maybeRespawnFromVoid();
-    this.maybeAdvancePlayerRoom();
+    this.roomTransitionController.maybeAdvancePlayerRoom();
     this.playerPresentationController.syncPlayerVisual();
     this.syncLocalPresence();
     this.objectiveController.update(delta);
@@ -2660,105 +2702,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     return count;
-  }
-
-  private maybeAdvancePlayerRoom(): void {
-    if (this.mode !== 'play' || !this.player) return;
-
-    const nextRoomCoordinates = this.getRoomCoordinatesForPoint(this.player.x, this.player.y);
-    if (
-      nextRoomCoordinates.x === this.currentRoomCoordinates.x &&
-      nextRoomCoordinates.y === this.currentRoomCoordinates.y
-    ) {
-      return;
-    }
-
-    if (
-      this.shouldBlockRoomTransition(this.currentRoomCoordinates, nextRoomCoordinates)
-    ) {
-      this.blockRoomTransition(this.currentRoomCoordinates, nextRoomCoordinates);
-      return;
-    }
-
-    this.sessionResetController.resetChallengeStateForRoomExit(nextRoomCoordinates);
-
-    this.currentRoomCoordinates = { ...nextRoomCoordinates };
-    this.selectedCoordinates = { ...nextRoomCoordinates };
-    this.updateSelectedSummary();
-    if (!this.activeCourseRun) {
-      this.objectiveController.syncGoalRunForRoom(
-        this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates),
-        'transition',
-      );
-      void this.refreshLeaderboardForSelection();
-    }
-    void this.refreshCourseComposerSelectedRoomState();
-    setFocusedCoordinatesInUrl(this.currentRoomCoordinates);
-
-    if (
-      nextRoomCoordinates.x !== this.windowCenterCoordinates.x ||
-      nextRoomCoordinates.y !== this.windowCenterCoordinates.y
-    ) {
-      void this.refreshAround(nextRoomCoordinates);
-      return;
-    }
-
-    this.redrawWorld();
-    this.renderHud();
-  }
-
-  private shouldBlockRoomTransition(
-    currentRoomCoordinates: RoomCoordinates,
-    nextRoomCoordinates: RoomCoordinates
-  ): boolean {
-    const deltaX = nextRoomCoordinates.x - currentRoomCoordinates.x;
-    const deltaY = nextRoomCoordinates.y - currentRoomCoordinates.y;
-    if (Math.abs(deltaX) + Math.abs(deltaY) !== 1) {
-      return false;
-    }
-
-    return !this.isNeighborReachableInCurrentPlayMode(currentRoomCoordinates, nextRoomCoordinates);
-  }
-
-  private isNeighborReachableInCurrentPlayMode(
-    roomCoordinates: RoomCoordinates,
-    neighborCoordinates: RoomCoordinates
-  ): boolean {
-    return this.runtimeController.isNeighborReachable(roomCoordinates, neighborCoordinates);
-  }
-
-  private blockRoomTransition(
-    currentRoomCoordinates: RoomCoordinates,
-    nextRoomCoordinates: RoomCoordinates
-  ): void {
-    if (!this.player || !this.playerBody) {
-      return;
-    }
-
-    const roomOrigin = this.getRoomOrigin(currentRoomCoordinates);
-    const deltaX = nextRoomCoordinates.x - currentRoomCoordinates.x;
-    const deltaY = nextRoomCoordinates.y - currentRoomCoordinates.y;
-    const halfWidth = this.playerBody.width * 0.5;
-    const halfHeight = this.playerBody.height * 0.5;
-    const inset = 1;
-
-    let nextX = this.player.x;
-    let nextY = this.player.y;
-
-    if (deltaX === 1) {
-      nextX = roomOrigin.x + ROOM_PX_WIDTH - halfWidth - inset;
-    } else if (deltaX === -1) {
-      nextX = roomOrigin.x + halfWidth + inset;
-    } else if (deltaY === 1) {
-      nextY = roomOrigin.y + ROOM_PX_HEIGHT - halfHeight - inset;
-    } else if (deltaY === -1) {
-      nextY = roomOrigin.y + halfHeight + inset;
-    }
-
-    this.movementController.clearLadderState();
-    this.playerBody.reset(nextX, nextY);
-    this.player.setPosition(nextX, nextY);
-    this.playerPresentationController.syncPlayerPickupSensor();
   }
 
   private syncBrowseWindowToCamera(

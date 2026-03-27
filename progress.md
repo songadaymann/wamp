@@ -4538,3 +4538,28 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - no console or page errors were recorded
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next clean seam is the remaining room-transition shell (`maybeAdvancePlayerRoom` / transition blocking) before deciding whether phase 8 only needs a final consolidation pass.
+
+- March 27, 2026: extracted the overworld room-transition controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/roomTransition.ts` with `OverworldRoomTransitionController` to own the remaining room-transition shell:
+    - per-frame `maybeAdvancePlayerRoom()` orchestration
+    - neighbor reachability checks for active play mode
+    - blocked-transition clamping back inside the current room
+    - successful room-entry coordination for current/selected room, goal-run sync, leaderboard refresh, and chunk refresh
+  - `OverworldPlayScene.ts` now delegates the old inline transition block through that controller instead of carrying `maybeAdvancePlayerRoom`, `shouldBlockRoomTransition`, `isNeighborReachableInCurrentPlayMode`, and `blockRoomTransition` directly.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke wrote:
+      - `output/web-game/overworld-room-transition-skill-smoke/state-3.json`
+      - `output/web-game/overworld-room-transition-skill-smoke/shot-3.png`
+    - focused canvas probe wrote:
+      - `output/web-game/overworld-room-transition-probe/summary.json`
+      - `output/web-game/overworld-room-transition-probe/before-transition.png`
+      - `output/web-game/overworld-room-transition-probe/after-blocked-transition.png`
+      - `output/web-game/overworld-room-transition-probe/after-successful-transition.png`
+    - targeted checks confirmed:
+      - a published probe room at `0,-3` had both a reachable right neighbor (`1,-3`) and a blocked left neighbor (`-1,-3`)
+      - forcing the player into the blocked left neighbor kept `currentRoom` and `selected` at `0,-3` and clamped the player back inside the current room (`playerRoomAfter = 0,-3`)
+      - forcing the player into the reachable right neighbor advanced both `currentRoom` and `selected` to `1,-3`
+      - no console or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next large remaining seam is the course-composer state/navigation block that still lives in `OverworldPlayScene.ts`.
