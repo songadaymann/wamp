@@ -140,6 +140,9 @@ import {
   type SelectedCourseContext,
 } from './overworld/selection';
 import {
+  OverworldRoomCellController,
+} from './overworld/roomCells';
+import {
   OverworldWorldStreamingController,
   type LoadedFullRoom,
 } from './overworld/worldStreaming';
@@ -343,8 +346,6 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private loadingText!: Phaser.GameObjects.Text;
   private roomGridGraphics!: Phaser.GameObjects.Graphics;
-  private roomFillGraphics!: Phaser.GameObjects.Graphics;
-  private roomFrameGraphics!: Phaser.GameObjects.Graphics;
   private starfieldSprites: Phaser.GameObjects.TileSprite[] = [];
   private backdropCamera: Phaser.Cameras.Scene2D.Camera | null = null;
   private zoomDebugText: Phaser.GameObjects.Text | null = null;
@@ -398,6 +399,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly flowController: OverworldSceneFlowController;
   private readonly inspectInputController: OverworldInspectInputController;
   private readonly browseOverlayController: OverworldBrowseOverlayController;
+  private readonly roomCellController: OverworldRoomCellController;
   private readonly coursePlaybackController: OverworldCoursePlaybackController;
   private readonly goalMarkerController: OverworldGoalMarkerController;
   private readonly presenceOverlayController: OverworldPresenceOverlayController;
@@ -639,6 +641,17 @@ export class OverworldPlayScene extends Phaser.Scene {
       playSelectedRoom: () => this.playSelectedRoom(),
       truncateOverlayText: (value, maxLength) =>
         this.truncateOverlayText(value, maxLength),
+    });
+    this.roomCellController = new OverworldRoomCellController({
+      scene: this,
+      getWorldWindow: () => this.worldWindow,
+      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
+      getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
+      getRoomEditorCount: (coordinates) => this.getRoomEditorCount(coordinates),
+      getCurrentRoomCoordinates: () => ({ ...this.currentRoomCoordinates }),
+      getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
+      getMode: () => this.mode,
+      isRoomInActiveCourse: (coordinates) => this.isRoomInActiveCourse(coordinates),
     });
     this.goalMarkerController = new OverworldGoalMarkerController({
       scene: this,
@@ -1045,12 +1058,9 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     this.createBackdrop();
 
-    this.roomFillGraphics = this.add.graphics();
-    this.roomFillGraphics.setDepth(-5);
     this.roomGridGraphics = this.add.graphics();
     this.roomGridGraphics.setDepth(-4);
-    this.roomFrameGraphics = this.add.graphics();
-    this.roomFrameGraphics.setDepth(20);
+    this.roomCellController.create();
     this.browseOverlayController.create();
     this.loadingText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Loading world...', {
       fontFamily: 'Courier New',
@@ -1510,9 +1520,8 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     const ignoredObjects: Phaser.GameObjects.GameObject[] = [];
 
-    if (this.roomFillGraphics) ignoredObjects.push(this.roomFillGraphics);
     if (this.roomGridGraphics) ignoredObjects.push(this.roomGridGraphics);
-    if (this.roomFrameGraphics) ignoredObjects.push(this.roomFrameGraphics);
+    ignoredObjects.push(...this.roomCellController.getBackdropIgnoredObjects());
     if (this.loadingText) ignoredObjects.push(this.loadingText);
     if (this.zoomDebugGraphics) ignoredObjects.push(this.zoomDebugGraphics);
     if (this.zoomDebugText) ignoredObjects.push(this.zoomDebugText);
@@ -2327,32 +2336,12 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private redrawWorld(): void {
-    this.roomFillGraphics.clear();
-    this.roomFrameGraphics.clear();
+    this.roomCellController.redraw();
 
     if (!this.worldWindow) {
       this.browseOverlayController.redrawBrowseOverlays();
       this.presenceOverlayController.destroy();
       return;
-    }
-
-    const gridSize = this.worldWindow.radius * 2 + 1;
-    for (let row = 0; row < gridSize; row++) {
-      for (let col = 0; col < gridSize; col++) {
-        const coordinates = {
-          x: this.worldWindow.center.x + col - this.worldWindow.radius,
-          y: this.worldWindow.center.y + row - this.worldWindow.radius,
-        };
-        const roomId = roomIdFromCoordinates(coordinates);
-        const origin = this.getRoomOrigin(coordinates);
-        const cellState = this.getCellStateAt(coordinates);
-        const cellFill = this.getCellFillStyle(cellState);
-
-        this.roomFillGraphics.fillStyle(cellFill.color, cellFill.alpha);
-        this.roomFillGraphics.fillRect(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-
-        this.drawCellFrame(coordinates, cellState, origin.x, origin.y);
-      }
     }
 
     this.browseOverlayController.redrawBrowseOverlays();
@@ -2399,97 +2388,6 @@ export class OverworldPlayScene extends Phaser.Scene {
         right - left,
         lineWidth
       );
-    }
-  }
-
-  private drawCellFrame(
-    coordinates: RoomCoordinates,
-    cellState: SelectedCellState,
-    x: number,
-    y: number
-  ): void {
-    if (this.activeCourseSnapshot && this.isRoomInActiveCourse(coordinates)) {
-      this.drawActiveCourseBoundary(coordinates, x, y);
-      return;
-    }
-
-    const editorCount = this.getRoomEditorCount(coordinates);
-    if (cellState === 'draft') {
-      this.roomFrameGraphics.lineStyle(2, RETRO_COLORS.draft, 0.95);
-      this.roomFrameGraphics.strokeRect(x + 4, y + 4, ROOM_PX_WIDTH - 8, ROOM_PX_HEIGHT - 8);
-    } else if (cellState === 'frontier') {
-      this.roomFrameGraphics.lineStyle(2, RETRO_COLORS.frontier, 0.9);
-      this.roomFrameGraphics.strokeRect(x + 4, y + 4, ROOM_PX_WIDTH - 8, ROOM_PX_HEIGHT - 8);
-    } else if (cellState === 'published') {
-      this.roomFrameGraphics.lineStyle(1, RETRO_COLORS.published, 0.45);
-      this.roomFrameGraphics.strokeRect(x + 2, y + 2, ROOM_PX_WIDTH - 4, ROOM_PX_HEIGHT - 4);
-    }
-
-    if (
-      coordinates.x === this.currentRoomCoordinates.x &&
-      coordinates.y === this.currentRoomCoordinates.y &&
-      this.mode === 'play'
-    ) {
-      this.roomFrameGraphics.lineStyle(3, RETRO_COLORS.draft, 0.98);
-      this.roomFrameGraphics.strokeRect(x + 4, y + 4, ROOM_PX_WIDTH - 8, ROOM_PX_HEIGHT - 8);
-    }
-
-    if (
-      coordinates.x === this.selectedCoordinates.x &&
-      coordinates.y === this.selectedCoordinates.y
-    ) {
-      this.roomFrameGraphics.lineStyle(2, RETRO_COLORS.selected, 0.95);
-      this.roomFrameGraphics.strokeRect(x + 8, y + 8, ROOM_PX_WIDTH - 16, ROOM_PX_HEIGHT - 16);
-    }
-
-    if (editorCount > 0 && cellState !== 'draft') {
-      this.roomFrameGraphics.lineStyle(2, RETRO_COLORS.frontier, 0.88);
-      this.roomFrameGraphics.strokeRect(x + 14, y + 14, ROOM_PX_WIDTH - 28, ROOM_PX_HEIGHT - 28);
-    }
-  }
-
-  private drawActiveCourseBoundary(
-    coordinates: RoomCoordinates,
-    x: number,
-    y: number
-  ): void {
-    const lineInset = 4;
-    const left = x + lineInset;
-    const right = x + ROOM_PX_WIDTH - lineInset;
-    const top = y + lineInset;
-    const bottom = y + ROOM_PX_HEIGHT - lineInset;
-    const neighbors = {
-      left: this.isRoomInActiveCourse({ x: coordinates.x - 1, y: coordinates.y }),
-      right: this.isRoomInActiveCourse({ x: coordinates.x + 1, y: coordinates.y }),
-      up: this.isRoomInActiveCourse({ x: coordinates.x, y: coordinates.y - 1 }),
-      down: this.isRoomInActiveCourse({ x: coordinates.x, y: coordinates.y + 1 }),
-    };
-
-    this.roomFrameGraphics.lineStyle(3, RETRO_COLORS.draft, 0.92);
-    if (!neighbors.left) {
-      this.roomFrameGraphics.lineBetween(left, top, left, bottom);
-    }
-    if (!neighbors.right) {
-      this.roomFrameGraphics.lineBetween(right, top, right, bottom);
-    }
-    if (!neighbors.up) {
-      this.roomFrameGraphics.lineBetween(left, top, right, top);
-    }
-    if (!neighbors.down) {
-      this.roomFrameGraphics.lineBetween(left, bottom, right, bottom);
-    }
-  }
-
-  private getCellFillStyle(cellState: SelectedCellState): { color: number; alpha: number } {
-    switch (cellState) {
-      case 'draft':
-        return { color: RETRO_COLORS.draft, alpha: 0.07 };
-      case 'published':
-        return { color: RETRO_COLORS.published, alpha: 0.025 };
-      case 'frontier':
-        return { color: RETRO_COLORS.frontier, alpha: 0.16 };
-      default:
-        return { color: RETRO_COLORS.backgroundNumber, alpha: 0.18 };
     }
   }
 
@@ -4761,10 +4659,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.zoomDebugText = null;
     this.goalMarkerController.destroy();
     this.browseOverlayController.destroy();
+    this.roomCellController.destroy();
     this.presenceOverlayController.destroy();
     this.roomGridGraphics?.destroy();
-    this.roomFillGraphics?.destroy();
-    this.roomFrameGraphics?.destroy();
   };
 
   describeState(): Record<string, unknown> {

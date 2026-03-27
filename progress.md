@@ -4139,6 +4139,34 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming another active overworld subsystem from `OverworldPlayScene`.
 
+- March 27, 2026: extracted the overworld room-cell controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/roomCells.ts` with `OverworldRoomCellController` to own the base room-cell rendering shell:
+    - room fill coloring for draft/published/frontier/empty cells
+    - room border/highlight rendering for selected, current-play, and active-editor states
+    - active-course connected boundary outlines
+    - creation/destruction of the fill/frame graphics pair
+    - backdrop-ignore reporting for those two graphics layers
+  - `OverworldPlayScene.ts` now delegates room fill/frame graphics creation, redraw, backdrop ignore collection, and shutdown teardown through that controller instead of carrying `roomFillGraphics`, `roomFrameGraphics`, `drawCellFrame`, `drawActiveCourseBoundary`, and `getCellFillStyle` inline.
+  - This slice intentionally leaves the grid overlay in-scene; it only moved the room-cell fill/frame layer so the remaining scene shell keeps shrinking in clean visual chunks.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - default WebGL smoke state: `output/web-game/overworld-room-cell-skill-smoke/state-0.json`
+      - canvas smoke state + screenshot: `output/web-game/overworld-room-cell-skill-smoke-canvas/state-0.json`, `output/web-game/overworld-room-cell-skill-smoke-canvas/shot-0.png`
+      - note: the default headless WebGL smoke screenshot stayed black again in this environment, so I reran the smoke with `renderer=canvas` and visually verified that capture
+    - targeted browser/controller probe wrote:
+      - `output/web-game/overworld-room-cell-probe/summary.json`
+      - `output/web-game/overworld-room-cell-probe/browse-selected-room.png`
+      - `output/web-game/overworld-room-cell-probe/frontier-selected-room.png`
+      - `output/web-game/overworld-room-cell-probe/active-course-boundary.png`
+    - targeted probe confirmed:
+      - browse selection at `0,0` stayed `published` with `backdropIgnoredCount = 2` for the extracted fill/frame graphics pair
+      - selecting empty room `20,20` still updated the selected-room render path cleanly
+      - published course playback from `1,0` entered `play` with `activeCourseRoomCount = 3` and the extracted room-cell layer still reporting `backdropIgnoredCount = 2`
+      - no console errors or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next clean seam is the remaining selected-summary / HUD-state derivation block or the still in-scene grid overlay shell.
+
 - March 27, 2026: extracted the overworld browse-overlay controller as the next phase-8 slice.
   - Added `src/scenes/overworld/browseOverlays.ts` with `OverworldBrowseOverlayController` to own the browse-only room overlay layer:
     - semantic goal badges for published/draft rooms with room goals
