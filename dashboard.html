@@ -110,16 +110,17 @@
         flex-wrap: wrap;
         justify-content: center;
         align-items: flex-start;
-        gap: 14px;
+        column-gap: 14px;
+        row-gap: 16px;
         padding: clamp(56px, 14vh, 164px) 0 0;
       }
 
       .stat-card {
         position: relative;
-        flex: 0 1 auto;
+        flex: 0 0 auto;
         width: max-content;
         min-width: 110px;
-        max-width: min(100%, 220px);
+        max-width: 100%;
         min-height: 122px;
         display: grid;
         align-content: space-between;
@@ -201,6 +202,9 @@
       }
 
       .stat-value {
+        display: block;
+        width: max-content;
+        max-width: 100%;
         font-size: clamp(1.4rem, 4.5vw, 2.8rem);
         line-height: 1;
         white-space: nowrap;
@@ -229,7 +233,8 @@
         }
 
         .stats-grid {
-          gap: 12px;
+          column-gap: 12px;
+          row-gap: 14px;
           padding-top: 68px;
         }
 
