@@ -4138,3 +4138,30 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - artifacts: `output/web-game/overworld-selection-probe/summary.json`, `output/web-game/overworld-selection-probe/initial.png`, `output/web-game/overworld-selection-probe/after-selection.png`, `output/web-game/overworld-selection-probe/after-jump.png`
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming another active overworld subsystem from `OverworldPlayScene`.
+
+- March 27, 2026: extracted the overworld presence-overlay controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/presenceOverlays.ts` with `OverworldPresenceOverlayController` to own the active presence-overlay rendering boundary:
+    - visible-room sampling for overlay placement
+    - browse-mode sampled presence dots
+    - play-mode remote room population pip markers
+    - browse-dot interpolation between presence snapshots
+    - overlay size scaling against zoom
+    - backdrop-ignore object reporting for those overlays
+  - `OverworldPlayScene.ts` now delegates overlay syncing, scaling, per-frame browse-dot updates, teardown, and presence ignore-object collection through that controller instead of carrying the overlay renderer inline.
+  - The existing `OverworldPresenceController` still owns networking, snapshot state, ghost rendering, and room/editor count data; this slice only moved the overlay-display layer sitting on top of it.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-presence-overlay-skill-smoke/state-0.json`
+      - `output/web-game/overworld-presence-overlay-skill-smoke/shot-0.png`
+    - targeted browser/controller probe used three separate browser contexts so presence identities were distinct and wrote:
+      - `output/web-game/overworld-presence-overlay-probe/summary.json`
+      - `output/web-game/overworld-presence-overlay-probe/browse-dots.png`
+      - `output/web-game/overworld-presence-overlay-probe/play-room-markers.png`
+    - targeted probe confirmed:
+      - browse page at `0,0` started with `browseDotCount = 0`
+      - after two remote play clients entered `0,0` and `1,0`, browse page rose to `browseDotCount = 2`
+      - both play pages reported `playRoomMarkerCount = 1`
+      - all three pages stayed free of console errors and page errors
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming another active overworld subsystem from `OverworldPlayScene`, with badge rendering or room-goal marker composition as the most likely next boundaries.
