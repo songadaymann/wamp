@@ -41,6 +41,10 @@ import {
   normalizeCustomSpriteKind,
   type CustomSpriteDefinition,
 } from '../customSprites/model';
+import {
+  dedupePlacedObjectsByAnchorCell,
+  resolvePlacedObjectInstanceAlias,
+} from '../placedObjects/occupancy';
 
 export interface RoomCoordinates {
   x: number;
@@ -308,10 +312,14 @@ function clonePlacedObjects(placedObjects: PlacedObject[]): PlacedObject[] {
   const normalized = placedObjects
     .map((placed, index) => normalizePlacedObject(placed, index))
     .filter((placed): placed is PlacedObject => placed !== null);
-  const ids = new Set(normalized.map((placed) => placed.instanceId));
+  const { placedObjects: deduped, replacedInstanceIds } = dedupePlacedObjectsByAnchorCell(normalized);
+  const ids = new Set(deduped.map((placed) => placed.instanceId));
 
-  return normalized.map((placed) => {
-    const target = placed.triggerTargetInstanceId;
+  return deduped.map((placed) => {
+    const target = resolvePlacedObjectInstanceAlias(
+      placed.triggerTargetInstanceId,
+      replacedInstanceIds,
+    );
     const containedObjectId = placed.containedObjectId;
     const validTarget =
       canPlacedObjectTriggerOtherObjects(placed) &&
