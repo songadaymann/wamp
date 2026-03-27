@@ -4167,6 +4167,31 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next clean seam is the remaining selected-summary / HUD-state derivation block or the still in-scene grid overlay shell.
 
+- March 27, 2026: extracted the overworld grid-overlay controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/gridOverlay.ts` with `OverworldGridOverlayController` to own the inspect-mode room grid layer:
+    - grid graphics creation/destruction
+    - redraw against current camera worldView and zoom
+    - backdrop-ignore reporting for the grid graphics object
+  - `OverworldPlayScene.ts` now delegates grid overlay creation, redraw on update/resize/zoom, backdrop ignore collection, and shutdown teardown through that controller instead of carrying `roomGridGraphics` and `redrawGridOverlay()` inline.
+  - This slice intentionally leaves grid redraw call timing in-scene; it only moved the graphics ownership and drawing implementation so the scene continues shrinking in visual-layer chunks.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - default WebGL smoke state: `output/web-game/overworld-grid-overlay-skill-smoke/state-0.json`
+      - canvas smoke state + screenshot: `output/web-game/overworld-grid-overlay-skill-smoke-canvas/state-0.json`, `output/web-game/overworld-grid-overlay-skill-smoke-canvas/shot-0.png`
+      - note: the default headless WebGL smoke screenshot stayed black again in this environment, so I reran the smoke with `renderer=canvas` and visually verified that capture
+    - targeted browser/controller probe wrote:
+      - `output/web-game/overworld-grid-overlay-probe/summary.json`
+      - `output/web-game/overworld-grid-overlay-probe/grid-before-zoom.png`
+      - `output/web-game/overworld-grid-overlay-probe/grid-after-zoom.png`
+    - targeted probe confirmed:
+      - extracted controller reported `hasGridGraphics = true`
+      - backdrop ignore count stayed `1` for the single grid graphics object
+      - inspect zoom changed from `0.18` to `0.252` and the grid still redrew cleanly
+      - no console errors or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next clean seam is the remaining selected-summary / HUD-state derivation block, which is now the biggest non-render chunk still sitting in `OverworldPlayScene`.
+
 - March 27, 2026: extracted the overworld browse-overlay controller as the next phase-8 slice.
   - Added `src/scenes/overworld/browseOverlays.ts` with `OverworldBrowseOverlayController` to own the browse-only room overlay layer:
     - semantic goal badges for published/draft rooms with room goals

@@ -110,6 +110,9 @@ import {
   OverworldBrowseOverlayController,
 } from './overworld/browseOverlays';
 import {
+  OverworldGridOverlayController,
+} from './overworld/gridOverlay';
+import {
   OverworldHudBridge,
 } from './overworld/hud';
 import {
@@ -345,7 +348,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private ladderClimbSfxPlaying = false;
 
   private loadingText!: Phaser.GameObjects.Text;
-  private roomGridGraphics!: Phaser.GameObjects.Graphics;
   private starfieldSprites: Phaser.GameObjects.TileSprite[] = [];
   private backdropCamera: Phaser.Cameras.Scene2D.Camera | null = null;
   private zoomDebugText: Phaser.GameObjects.Text | null = null;
@@ -398,6 +400,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly goalRunController: OverworldGoalRunController;
   private readonly flowController: OverworldSceneFlowController;
   private readonly inspectInputController: OverworldInspectInputController;
+  private readonly gridOverlayController: OverworldGridOverlayController;
   private readonly browseOverlayController: OverworldBrowseOverlayController;
   private readonly roomCellController: OverworldRoomCellController;
   private readonly coursePlaybackController: OverworldCoursePlaybackController;
@@ -621,6 +624,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       countRoomObjectsByCategory: (room, category) =>
         this.countRoomObjectsByCategory(room, category),
       renderHud: () => this.renderHud(),
+    });
+    this.gridOverlayController = new OverworldGridOverlayController({
+      scene: this,
+      getWorldWindow: () => this.worldWindow,
+      getZoom: () => this.cameras.main.zoom,
     });
     this.browseOverlayController = new OverworldBrowseOverlayController({
       scene: this,
@@ -1058,8 +1066,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     this.createBackdrop();
 
-    this.roomGridGraphics = this.add.graphics();
-    this.roomGridGraphics.setDepth(-4);
+    this.gridOverlayController.create();
     this.roomCellController.create();
     this.browseOverlayController.create();
     this.loadingText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Loading world...', {
@@ -1114,7 +1121,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     this.maybeRefreshVisibleChunks();
     this.updateBackdrop();
-    this.redrawGridOverlay();
+    this.gridOverlayController.redraw();
     this.updateLiveObjects(delta);
     this.updateGhosts(delta);
     this.presenceOverlayController.updateBrowseDots(delta);
@@ -1520,7 +1527,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     const ignoredObjects: Phaser.GameObjects.GameObject[] = [];
 
-    if (this.roomGridGraphics) ignoredObjects.push(this.roomGridGraphics);
+    ignoredObjects.push(...this.gridOverlayController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.roomCellController.getBackdropIgnoredObjects());
     if (this.loadingText) ignoredObjects.push(this.loadingText);
     if (this.zoomDebugGraphics) ignoredObjects.push(this.zoomDebugGraphics);
@@ -1583,7 +1590,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     } else {
       this.constrainInspectCamera();
     }
-    this.redrawGridOverlay();
+    this.gridOverlayController.redraw();
     this.renderHud();
   }
 
@@ -1829,7 +1836,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.centerCameraOnCoordinates(this.getZoomFocusCoordinates());
     this.refreshChunkWindowIfNeeded(this.getZoomFocusCoordinates());
     this.updateBackdrop();
-    this.redrawGridOverlay();
+    this.gridOverlayController.redraw();
     this.renderHud();
   }
 
@@ -1859,7 +1866,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     this.refreshChunkWindowIfNeeded(this.getZoomFocusCoordinates());
     this.updateBackdrop();
-    this.redrawGridOverlay();
+    this.gridOverlayController.redraw();
     this.renderHud();
   }
 
@@ -2347,48 +2354,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.browseOverlayController.redrawBrowseOverlays();
     this.presenceOverlayController.syncOverlays();
     this.syncBackdropCameraIgnores();
-  }
-
-  private redrawGridOverlay(): void {
-    this.roomGridGraphics.clear();
-
-    if (!this.worldWindow) {
-      return;
-    }
-
-    const camera = this.cameras.main;
-    const worldView = camera.worldView;
-    const firstCol = Math.floor(worldView.left / ROOM_PX_WIDTH) - 1;
-    const lastCol = Math.ceil(worldView.right / ROOM_PX_WIDTH) + 1;
-    const firstRow = Math.floor(worldView.top / ROOM_PX_HEIGHT) - 1;
-    const lastRow = Math.ceil(worldView.bottom / ROOM_PX_HEIGHT) + 1;
-    const left = firstCol * ROOM_PX_WIDTH;
-    const right = lastCol * ROOM_PX_WIDTH;
-    const top = firstRow * ROOM_PX_HEIGHT;
-    const bottom = lastRow * ROOM_PX_HEIGHT;
-    const lineWidth = 1 / camera.zoom;
-
-    this.roomGridGraphics.fillStyle(RETRO_COLORS.grid, 0.14);
-
-    for (let col = firstCol; col <= lastCol; col++) {
-      const worldX = col * ROOM_PX_WIDTH;
-      this.roomGridGraphics.fillRect(
-        worldX - lineWidth * 0.5,
-        top,
-        lineWidth,
-        bottom - top
-      );
-    }
-
-    for (let row = firstRow; row <= lastRow; row++) {
-      const worldY = row * ROOM_PX_HEIGHT;
-      this.roomGridGraphics.fillRect(
-        left,
-        worldY - lineWidth * 0.5,
-        right - left,
-        lineWidth
-      );
-    }
   }
 
   private updateCameraBounds(): void {
@@ -4658,10 +4623,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.zoomDebugText?.destroy();
     this.zoomDebugText = null;
     this.goalMarkerController.destroy();
+    this.gridOverlayController.destroy();
     this.browseOverlayController.destroy();
     this.roomCellController.destroy();
     this.presenceOverlayController.destroy();
-    this.roomGridGraphics?.destroy();
   };
 
   describeState(): Record<string, unknown> {
