@@ -101,6 +101,14 @@ const TOP_DECOR_INDICES_STANDARD = [
   44, 45, 46,
   49, 50, 51, 52, 53, 54,
 ];
+const TOP_DECOR_INDICES_FOREST = [
+  9, 11,
+  12, 14, 15, 16, 17, 19, 20, 21, 23,
+  25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
+  36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+  48, 49, 50, 51, 52, 53, 54, 55,
+  60, 63, 64, 65, 66, 67, 58, 69, 70, 71,
+];
 const TOP_DECOR_INDICES_SNOW = [
   13, 14, 15, 18,
   23, 24, 25, 26, 27,
@@ -143,6 +151,7 @@ export const TILESETS: TilesetConfig[] = [
     tileCount: 72,
     firstGid: 1,
     terrainCollisionProfiles: {
+      ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_FOREST, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_FOREST, NO_COLLISION_PROFILE),
     },
   },
