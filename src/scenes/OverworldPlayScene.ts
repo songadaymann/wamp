@@ -94,7 +94,6 @@ import {
 import { createRunRepository } from '../runs/runRepository';
 import {
   OverworldGoalRunController,
-  type GoalRunMutationResult,
   type GoalRunState,
 } from './overworld/goalRuns';
 import { OverworldSceneFlowController } from './overworld/flow';
@@ -153,6 +152,9 @@ import {
   type OverworldPlayerPresentationControllerState,
 } from './overworld/playerPresentation';
 import {
+  OverworldObjectiveController,
+} from './overworld/objectiveController';
+import {
   OverworldSessionResetController,
 } from './overworld/sessionReset';
 import {
@@ -169,12 +171,8 @@ import {
   type LoadedFullRoom,
 } from './overworld/worldStreaming';
 import {
-  recordCourseRunCollectibleCollected,
   recordCourseRunDeath,
-  recordCourseRunEnemyDefeated,
-  tickActiveCourseRun,
   type ActiveCourseRunState,
-  type CourseRunMutationResult,
 } from './overworld/courseRuns';
 import {
   getScreenAnchorWorldPoint as calculateScreenAnchorWorldPoint,
@@ -391,6 +389,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly runtimeController: OverworldRuntimeController<LoadedRoomObject>;
   private readonly playerLifecycleController: OverworldPlayerLifecycleController<LoadedRoomObject>;
   private readonly playerPresentationController: OverworldPlayerPresentationController;
+  private readonly objectiveController: OverworldObjectiveController;
   private readonly movementController: OverworldMovementController;
   private readonly combatController: OverworldCombatController;
   private readonly sessionResetController: OverworldSessionResetController;
@@ -616,6 +615,30 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.countRoomObjectsByCategory(room, category),
       renderHud: () => this.renderHud(),
     });
+    this.objectiveController = new OverworldObjectiveController(
+      {
+        goalRunController: this.goalRunController,
+        getActiveCourseRun: () => this.activeCourseRun,
+        getPlayer: () => this.player,
+        getPlayerBody: () => this.playerBody,
+        getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
+        getPlayerEffectOrigin: () => this.getPlayerEffectOrigin(),
+        toWorldGoalPoint: (roomCoordinates, point) =>
+          this.toWorldGoalPoint(roomCoordinates, point),
+        toWorldCoursePoint: (point) => this.toWorldCoursePoint(point),
+        resetChallengeStateForCurrentRun: () =>
+          this.sessionResetController.resetChallengeStateForCurrentRun(),
+        showTransientStatus: (message) => this.showTransientStatus(message),
+        redrawGoalMarkers: () => this.redrawGoalMarkers(),
+        playGoalFx: (effect, x, y, cue) => this.fxController?.playGoalFx(effect, x, y, cue),
+        finalizeActiveCourseRun: (result) => {
+          void this.coursePlaybackController.finalizeActiveCourseRun(result);
+        },
+      },
+      {
+        goalTouchRadius: 18,
+      },
+    );
     this.gridOverlayController = new OverworldGridOverlayController({
       scene: this,
       getWorldWindow: () => this.worldWindow,
@@ -709,7 +732,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           this.goalRunController.clearCurrentRun();
         },
         syncGoalRunForRoom: (room, entryContext) => {
-          this.applyGoalRunMutation(this.goalRunController.syncRunForRoom(room, entryContext));
+          this.objectiveController.syncGoalRunForRoom(room, entryContext);
         },
         redrawGoalMarkers: () => this.redrawGoalMarkers(),
         syncCameraBoundsUsage: () => this.syncCameraBoundsUsage(),
@@ -1022,13 +1045,13 @@ export class OverworldPlayScene extends Phaser.Scene {
         }
       },
       respawnPlayerToCurrentRoom: () => this.respawnPlayerToCurrentRoom(),
-      failCourseRun: (message) => this.failCourseRun(message),
-      failGoalRun: (message) => this.failGoalRun(message),
+      failCourseRun: (message) => this.objectiveController.failCourseRun(message),
+      failGoalRun: (message) => this.objectiveController.failGoalRun(message),
       showTransientStatus: (message) => this.showTransientStatus(message),
       getRoomSnapshotForCoordinates: (coordinates) =>
         this.getRoomSnapshotForCoordinates(coordinates),
       restartGoalRunForRoom: (room) => {
-        this.applyGoalRunMutation(this.goalRunController.restartRunForRoom(room, 'respawn'));
+        this.objectiveController.restartGoalRunForRoom(room, 'respawn');
       },
       refreshLeaderboardForSelection: () => {
         void this.refreshLeaderboardForSelection();
@@ -1582,7 +1605,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.maybeAdvancePlayerRoom();
     this.playerPresentationController.syncPlayerVisual();
     this.syncLocalPresence();
-    this.updateGoalRun(delta);
+    this.objectiveController.update(delta);
     this.renderHud();
   }
 
@@ -2560,177 +2583,12 @@ export class OverworldPlayScene extends Phaser.Scene {
     playSfx('respawn');
   }
 
-  private updateGoalRun(delta: number): void {
-    if (this.activeCourseRun) {
-      this.updateCourseRun(delta);
-      return;
-    }
-
-    if (this.playerBody) {
-      this.applyGoalRunMutation(
-        this.goalRunController.qualifyPracticeRunAt({
-          x: this.playerBody.center.x,
-          y: this.playerBody.bottom,
-        })
-      );
-    }
-
-    this.applyGoalRunMutation(this.goalRunController.tick(delta));
-
-    const runState = this.currentGoalRun;
-    if (!runState || runState.result !== 'active') {
-      return;
-    }
-
-    if (!this.playerBody || !this.player) {
-      return;
-    }
-
-    if (
-      this.currentRoomCoordinates.x !== runState.roomCoordinates.x ||
-      this.currentRoomCoordinates.y !== runState.roomCoordinates.y
-    ) {
-      return;
-    }
-
-    switch (runState.goal.type) {
-      case 'reach_exit':
-        if (
-          runState.goal.exit &&
-          this.playerTouchesGoalPoint(
-            this.toWorldGoalPoint(runState.roomCoordinates, runState.goal.exit)
-          )
-        ) {
-          this.completeGoalRun('Exit reached.');
-        }
-        break;
-      case 'checkpoint_sprint':
-        this.updateCheckpointSprintRun(runState);
-        break;
-      default:
-        break;
-    }
-  }
-
-  private updateCheckpointSprintRun(runState: GoalRunState): void {
-    if (runState.goal.type !== 'checkpoint_sprint') {
-      return;
-    }
-
-    const nextCheckpoint = runState.goal.checkpoints[runState.nextCheckpointIndex] ?? null;
-    if (nextCheckpoint) {
-      const worldPoint = this.toWorldGoalPoint(runState.roomCoordinates, nextCheckpoint);
-      if (this.playerTouchesGoalPoint(worldPoint)) {
-        this.applyGoalRunMutation(this.goalRunController.recordCheckpointReached());
-      }
-      return;
-    }
-
-    if (
-      runState.goal.finish &&
-      this.playerTouchesGoalPoint(this.toWorldGoalPoint(runState.roomCoordinates, runState.goal.finish))
-    ) {
-      this.completeGoalRun('Sprint clear.');
-    }
-  }
-
-  private playerTouchesGoalPoint(point: GoalMarkerPoint): boolean {
-    if (!this.playerBody) {
-      return false;
-    }
-
-    const feetX = this.playerBody.center.x;
-    const feetY = this.playerBody.bottom;
-    return Phaser.Math.Distance.Between(feetX, feetY, point.x, point.y) <= 18;
-  }
-
-  private completeGoalRun(message: string): void {
-    this.applyGoalRunMutation(this.goalRunController.markCompleted(message));
-  }
-
-  private failGoalRun(message: string): void {
-    this.applyGoalRunMutation(this.goalRunController.markFailed(message));
-  }
-
-  private updateCourseRun(delta: number): void {
-    this.applyCourseRunMutation(
-      tickActiveCourseRun(this.activeCourseRun, {
-        delta,
-        touchesCoursePoint: (point) => this.playerTouchesGoalPoint(this.toWorldCoursePoint(point)),
-        getPlayerEffectOrigin: () => this.getPlayerEffectOrigin(),
-      }),
-    );
-  }
-
-  private applyCourseRunMutation(result: CourseRunMutationResult): void {
-    if (!result.changed) {
-      return;
-    }
-
-    if (result.transientStatus) {
-      this.showTransientStatus(result.transientStatus);
-    }
-
-    if (result.checkpointEffectOrigin) {
-      this.fxController?.playGoalFx(
-        'checkpoint',
-        result.checkpointEffectOrigin.x,
-        result.checkpointEffectOrigin.y,
-      );
-    }
-
-    if (result.goalMarkersChanged) {
-      this.redrawGoalMarkers();
-    }
-
-    if (result.terminalResult === 'completed' && result.terminalMessage) {
-      this.completeCourseRun(result.terminalMessage);
-    } else if (result.terminalResult === 'failed' && result.terminalMessage) {
-      this.failCourseRun(result.terminalMessage);
-    }
-  }
-
-  private completeCourseRun(message: string): void {
-    if (!this.activeCourseRun || this.activeCourseRun.result !== 'active') {
-      return;
-    }
-
-    this.activeCourseRun.result = 'completed';
-    this.activeCourseRun.completionMessage = message;
-    this.showTransientStatus(message);
-    this.fxController?.playGoalFx('success', this.player?.x ?? 0, this.playerBody?.bottom ?? 0);
-    this.redrawGoalMarkers();
-    void this.coursePlaybackController.finalizeActiveCourseRun('completed');
-  }
-
-  private failCourseRun(message: string): void {
-    if (!this.activeCourseRun || this.activeCourseRun.result !== 'active') {
-      return;
-    }
-
-    this.activeCourseRun.result = 'failed';
-    this.activeCourseRun.completionMessage = message;
-    this.showTransientStatus(message);
-    this.fxController?.playGoalFx('fail', this.player?.x ?? 0, this.playerBody?.bottom ?? 0, 'goal-fail');
-    this.redrawGoalMarkers();
-    void this.coursePlaybackController.finalizeActiveCourseRun('failed');
-  }
-
   private handleEnemyDefeated(roomId: string, enemyName: string): boolean {
-    this.applyCourseRunMutation(recordCourseRunEnemyDefeated(this.activeCourseRun));
-
-    const result = this.goalRunController.recordEnemyDefeated(
-      roomId,
-      enemyName
-    );
-    this.applyGoalRunMutation(result);
-    return Boolean(result.transientStatus);
+    return this.objectiveController.handleEnemyDefeated(roomId, enemyName);
   }
 
   private handleCollectibleCollected(roomId: string): void {
-    this.applyCourseRunMutation(recordCourseRunCollectibleCollected(this.activeCourseRun));
-
-    this.applyGoalRunMutation(this.goalRunController.recordCollectibleCollected(roomId));
+    this.objectiveController.handleCollectibleCollected(roomId);
   }
 
   private resetTransientPlayState(): void {
@@ -2828,11 +2686,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.selectedCoordinates = { ...nextRoomCoordinates };
     this.updateSelectedSummary();
     if (!this.activeCourseRun) {
-      this.applyGoalRunMutation(
-        this.goalRunController.syncRunForRoom(
-          this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates),
-          'transition'
-        )
+      this.objectiveController.syncGoalRunForRoom(
+        this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates),
+        'transition',
       );
       void this.refreshLeaderboardForSelection();
     }
@@ -3617,62 +3473,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     const lastRoomRef =
       this.courseComposerRecord.draft.roomRefs[this.courseComposerRecord.draft.roomRefs.length - 1];
     return areCourseRoomRefsOrthogonallyAdjacent(meta, lastRoomRef);
-  }
-
-  private applyGoalRunMutation(result: GoalRunMutationResult): void {
-    if (!result.changed) {
-      return;
-    }
-
-    if (result.resetChallengeState) {
-      this.sessionResetController.resetChallengeStateForCurrentRun();
-    }
-
-    this.playGoalRunFx(result);
-
-    if (result.transientStatus) {
-      this.showTransientStatus(result.transientStatus);
-    }
-
-    if (result.goalMarkersChanged) {
-      this.redrawGoalMarkers();
-    }
-  }
-
-  private playGoalRunFx(result: GoalRunMutationResult): void {
-    if (!result.event || !this.fxController) {
-      return;
-    }
-
-    const origin = this.getPlayerEffectOrigin();
-    if (!origin) {
-      return;
-    }
-
-    switch (result.event) {
-      case 'start':
-        this.fxController.playGoalFx('start', origin.x, origin.y);
-        break;
-      case 'checkpoint':
-        this.fxController.playGoalFx('checkpoint', origin.x, origin.y);
-        break;
-      case 'complete':
-        this.fxController.playGoalFx('success', origin.x, origin.y);
-        break;
-      case 'fail':
-        this.fxController.playGoalFx(
-          'fail',
-          origin.x,
-          origin.y,
-          result.transientStatus === 'Time up.' ? 'time-up' : 'goal-fail'
-        );
-        break;
-      case 'abandon':
-        this.fxController.playGoalFx('abandon', origin.x, origin.y, 'challenge-abandon');
-        break;
-      default:
-        break;
-    }
   }
 
   private getPlayerEffectOrigin(): { x: number; y: number } | null {

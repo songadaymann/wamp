@@ -4510,3 +4510,31 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - the focused presentation probe is strongest on the controller-owned run/facing transitions; jump behavior remains covered by the prior movement slice’s canvas-focus check and should still get one quick live-preview sanity pass before calling phase 8 done.
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining room-transition / goal-run gameplay shell in `OverworldPlayScene.ts`, then reassess whether phase 8 needs one final consolidation pass.
+
+- March 27, 2026: extracted the overworld objective controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/objectiveController.ts` with `OverworldObjectiveController` to own the remaining goal-run / course-run gameplay shell:
+    - room goal qualification + per-frame goal ticking
+    - `reach_exit` / `checkpoint_sprint` goal completion checks
+    - course-run ticking and terminal mutation handling
+    - goal-run mutation side effects (challenge reset, transient status, goal FX, goal-marker redraws)
+    - course-run completion/failure side effects
+    - enemy-defeat / collectible-collected progression hooks
+    - public restart/fail entry points used by runtime/session-reset orchestration
+  - `OverworldPlayScene.ts` now delegates all of the old inline goal/course mutation cluster through that controller instead of owning it directly, including the runtime `update(...)` path, session-reset restart/fail hooks, and live-object callbacks.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke wrote:
+      - `output/web-game/overworld-objective-controller-skill-smoke/state-0.json`
+      - `output/web-game/overworld-objective-controller-skill-smoke/shot-0.png`
+    - focused browser probe wrote:
+      - `output/web-game/overworld-objective-controller-probe/summary.json`
+      - `output/web-game/overworld-objective-controller-probe/before-fail.png`
+      - `output/web-game/overworld-objective-controller-probe/after-fail.png`
+      - `output/web-game/overworld-objective-controller-probe/after-restart.png`
+    - targeted checks confirmed in published room `-4,-2`:
+      - entering play produced an active qualified `reach_exit` run
+      - driving `objectiveController.failGoalRun('Probe fail.')` flipped the run to `result = 'failed'`
+      - driving `objectiveController.restartGoalRunForRoom(room, 'respawn')` restored a fresh active run with `elapsedMs = 0`
+      - no console or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next clean seam is the remaining room-transition shell (`maybeAdvancePlayerRoom` / transition blocking) before deciding whether phase 8 only needs a final consolidation pass.
