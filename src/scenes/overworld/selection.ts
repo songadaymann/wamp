@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import { setActiveCourseDraftSessionSelectedRoom } from '../../courses/draftSession';
-import type { CourseGoalType } from '../../courses/model';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
 import { setFocusedCoordinatesInUrl } from '../../navigation/worldNavigation';
 import { roomIdFromCoordinates, type RoomCoordinates, type RoomSnapshot } from '../../persistence/roomModel';
@@ -14,13 +13,6 @@ type PointerPosition = {
   x: number;
   y: number;
 };
-
-export interface SelectedCourseContext {
-  courseId: string;
-  courseTitle: string | null;
-  goalType: CourseGoalType | null;
-  roomCount: number;
-}
 
 interface OverworldSelectionHost {
   getMode(): OverworldMode;
@@ -57,20 +49,6 @@ interface OverworldSelectionHost {
 
 export class OverworldSelectionController {
   constructor(private readonly host: OverworldSelectionHost) {}
-
-  getSelectedCourseContext(selectedSummary: WorldRoomSummary | null): SelectedCourseContext | null {
-    const publishedCourse = selectedSummary?.course ?? null;
-    if (!publishedCourse) {
-      return null;
-    }
-
-    return {
-      courseId: publishedCourse.courseId,
-      courseTitle: publishedCourse.courseTitle,
-      goalType: publishedCourse.goalType,
-      roomCount: publishedCourse.roomCount,
-    };
-  }
 
   selectRoomCoordinates(coordinates: RoomCoordinates): void {
     const nextCoordinates = { ...coordinates };

@@ -24,7 +24,6 @@ import {
   cloneCourseSnapshot,
   createDefaultCourseRecord,
   MAX_COURSE_ROOMS,
-  type CourseGoal,
   type CourseGoalType,
   type CourseMarkerPoint,
   type CourseRecord,
@@ -73,8 +72,6 @@ import {
 import {
   ROOM_GOAL_LABELS,
   type GoalMarkerPoint,
-  type RoomGoal,
-  type RoomGoalType,
 } from '../goals/roomGoals';
 import { setAppMode } from '../ui/appMode';
 import {
@@ -116,10 +113,12 @@ import {
   OverworldHudBridge,
 } from './overworld/hud';
 import {
-  buildOverworldHudViewModel,
-  formatRoomEditorSummary,
   type SelectedCellState,
 } from './overworld/hudViewModel';
+import {
+  OverworldHudStateController,
+  type SelectedRoomContext,
+} from './overworld/hudState';
 import {
   OverworldLiveObjectController,
   isDynamicArcadeBody,
@@ -140,7 +139,6 @@ import {
 } from './overworld/presenceOverlays';
 import {
   OverworldSelectionController,
-  type SelectedCourseContext,
 } from './overworld/selection';
 import {
   OverworldRoomCellController,
@@ -150,9 +148,6 @@ import {
   type LoadedFullRoom,
 } from './overworld/worldStreaming';
 import {
-  getCourseGoalBadgeText,
-  getCourseGoalProgressText,
-  getCourseGoalTimerText,
   recordCourseRunCollectibleCollected,
   recordCourseRunDeath,
   recordCourseRunEnemyDefeated,
@@ -362,7 +357,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private selectedCoordinates: RoomCoordinates = { ...DEFAULT_ROOM_COORDINATES };
   private currentRoomCoordinates: RoomCoordinates = { ...DEFAULT_ROOM_COORDINATES };
   private windowCenterCoordinates: RoomCoordinates = { ...DEFAULT_ROOM_COORDINATES };
-  private selectedSummary: WorldRoomSummary | null = null;
   private inspectZoom = DEFAULT_ZOOM;
   private browseInspectZoom = DEFAULT_ZOOM;
   private transientStatusMessage: string | null = null;
@@ -407,6 +401,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly goalMarkerController: OverworldGoalMarkerController;
   private readonly presenceOverlayController: OverworldPresenceOverlayController;
   private readonly selectionController: OverworldSelectionController;
+  private readonly hudStateController: OverworldHudStateController;
   private readonly liveObjectController: OverworldLiveObjectController<RoomEdgeWall>;
   private readonly worldStreamingController: OverworldWorldStreamingController<
     LoadedRoomObject,
@@ -668,6 +663,38 @@ export class OverworldPlayScene extends Phaser.Scene {
       getActiveCourseSnapshot: () => this.activeCourseSnapshot,
       getCourseComposerRecord: () => this.courseComposerRecord,
     });
+    this.hudStateController = new OverworldHudStateController({
+      getMode: () => this.mode,
+      getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
+      getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
+      getRoomSummary: (roomId) => this.roomSummariesById.get(roomId),
+      getDraftRoom: (roomId) => this.draftRoomsById.get(roomId) ?? null,
+      getRoomPopulation: (coordinates) => this.getRoomPopulation(coordinates),
+      getRoomEditorCount: (coordinates) => this.getRoomEditorCount(coordinates),
+      getRoomEditorDisplayNames: (coordinates) => this.getRoomEditorDisplayNames(coordinates),
+      getActiveCourseRun: () => this.activeCourseRun,
+      getCurrentGoalRun: () => this.currentGoalRun,
+      getRoomSnapshotForCoordinates: (coordinates) => this.getRoomSnapshotForCoordinates(coordinates),
+      getCurrentRoomLeaderboard: () => this.currentRoomLeaderboard,
+      getGoalPersistentStatusText: () => this.goalRunController.getPersistentStatusText() ?? null,
+      getTotalPlayerCount: () => this.presenceController.getTotalPlayerCount(),
+      getOnlineRosterEntries: () =>
+        this.presenceController.getOnlineRoster().map((entry) => ({
+          key: entry.key,
+          userId: entry.userId,
+          displayName: entry.displayName,
+          roomText: `Room ${entry.roomId}`,
+          isSelf: entry.isSelf,
+        })),
+      getScore: () => this.score,
+      isCourseComposerLoading: () => this.courseComposerLoading,
+      getZoom: () => this.cameras.main.zoom,
+      getTransientStatusMessage: () => this.getTransientStatusMessage(),
+      renderHudViewModel: (viewModel) => {
+        this.hudBridge?.render(viewModel);
+      },
+      syncOverlayScale: () => this.syncGoalOverlayScale(),
+    });
     this.selectionController = new OverworldSelectionController({
       getMode: () => this.mode,
       setMode: (mode) => {
@@ -824,8 +851,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.activeCourseRun?.course ?? null;
   }
 
-  private getSelectedCourseContext(): SelectedCourseContext | null {
-    return this.selectionController.getSelectedCourseContext(this.selectedSummary);
+  private getSelectedCourseContext() {
+    return this.hudStateController.getSelectedCourseContext();
   }
 
   private getActiveCourseDraftSessionContextForRoom(roomId: string): EditorCourseEditData | null {
@@ -1365,7 +1392,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.selectedCoordinates = { ...DEFAULT_ROOM_COORDINATES };
     this.currentRoomCoordinates = { ...DEFAULT_ROOM_COORDINATES };
     this.windowCenterCoordinates = { ...DEFAULT_ROOM_COORDINATES };
-    this.selectedSummary = null;
+    this.hudStateController.reset();
     this.inspectZoom = DEFAULT_ZOOM;
     this.browseInspectZoom = DEFAULT_ZOOM;
     this.transientStatusMessage = null;
@@ -3562,7 +3589,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private updateSelectedSummary(): void {
-    this.selectedSummary = this.roomSummariesById.get(roomIdFromCoordinates(this.selectedCoordinates)) ?? null;
+    this.hudStateController.refreshSelectedSummary();
   }
 
   private getCellStateAt(coordinates: RoomCoordinates): SelectedCellState {
@@ -4217,8 +4244,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     if (
-      this.selectedSummary?.course?.courseId &&
-      this.selectedSummary.course.courseId !== this.courseComposerRecord.draft.id
+      this.hudStateController.getSelectedSummary()?.course?.courseId &&
+      this.hudStateController.getSelectedSummary()?.course?.courseId !== this.courseComposerRecord.draft.id
     ) {
       return false;
     }
@@ -4324,75 +4351,18 @@ export class OverworldPlayScene extends Phaser.Scene {
     };
   }
 
-  private getGoalBadgeText(goal: RoomGoal): string {
-    switch (goal.type) {
-      case 'reach_exit':
-        return 'Reach Exit';
-      case 'collect_target':
-        return `Collect ${goal.requiredCount}`;
-      case 'defeat_all':
-        return 'Defeat All';
-      case 'checkpoint_sprint':
-        return `${goal.checkpoints.length || 0} Checkpoints`;
-      case 'survival':
-        return `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))}s`;
-    }
+  private syncGoalOverlayScale(): void {
+    const zoom = this.cameras.main.zoom;
+    this.browseOverlayController.syncScale(zoom);
+    this.presenceOverlayController.syncOverlayScale();
   }
 
-  private getCourseGoalBadgeText(goal: CourseGoal | null): string {
-    return getCourseGoalBadgeText(goal);
+  private renderHud(statusOverride?: string): void {
+    this.hudStateController.renderHud(statusOverride);
   }
 
-  private getPlayGoalTimerText(runState: GoalRunState): string {
-    if (runState.qualificationState === 'practice') {
-      return 'PRACTICE';
-    }
-
-    if (runState.goal.type === 'survival') {
-      return `${this.formatOverlayTimer(Math.max(0, runState.goal.durationMs - runState.elapsedMs))} LEFT`;
-    }
-
-    if (runState.goal.timeLimitMs !== null) {
-      return `${this.formatOverlayTimer(Math.max(0, runState.goal.timeLimitMs - runState.elapsedMs))} LEFT`;
-    }
-
-    return this.formatOverlayTimer(runState.elapsedMs);
-  }
-
-  private getCourseGoalTimerText(runState: ActiveCourseRunState): string {
-    return getCourseGoalTimerText(runState, (ms) => this.formatOverlayTimer(ms));
-  }
-
-  private getPlayGoalProgressText(runState: GoalRunState): string {
-    if (runState.qualificationState === 'practice') {
-      return runState.leaderboardEligible ? 'Reach spawn to rank' : 'Reach spawn to start';
-    }
-
-    switch (runState.goal.type) {
-      case 'reach_exit':
-        return runState.result === 'completed' ? 'Exit reached' : 'Reach the exit';
-      case 'collect_target':
-        return `${runState.collectiblesCollected}/${runState.goal.requiredCount} collected`;
-      case 'defeat_all':
-        return `${runState.enemiesDefeated}/${runState.enemyTarget ?? 0} defeated`;
-      case 'checkpoint_sprint':
-        return `${runState.checkpointsReached}/${runState.checkpointTarget ?? 0} checkpoints`;
-      case 'survival':
-        return runState.result === 'completed' ? 'Survived' : 'Stay alive';
-    }
-  }
-
-  private getCourseGoalProgressText(runState: ActiveCourseRunState): string {
-    return getCourseGoalProgressText(runState);
-  }
-
-  private formatOverlayTimer(ms: number): string {
-    const clampedMs = Math.max(0, Math.round(ms));
-    const totalSeconds = Math.floor(clampedMs / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    const tenths = Math.floor((clampedMs % 1000) / 100);
-    return `${minutes}:${String(seconds).padStart(2, '0')}.${tenths}`;
+  private getRoomDisplayTitle(title: string | null, coordinates: RoomCoordinates): string {
+    return title?.trim() ? title : `Room ${coordinates.x},${coordinates.y}`;
   }
 
   private truncateOverlayText(value: string, maxLength: number): string {
@@ -4401,87 +4371,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     return `${value.slice(0, Math.max(1, maxLength - 1))}\u2026`;
-  }
-
-  private syncGoalOverlayScale(): void {
-    const zoom = this.cameras.main.zoom;
-    this.browseOverlayController.syncScale(zoom);
-    this.presenceOverlayController.syncOverlayScale();
-  }
-
-  private renderHud(statusOverride?: string): void {
-    const selectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
-    const selectedState = this.getCellStateAt(this.selectedCoordinates);
-    const selectedDraft = this.draftRoomsById.get(selectedRoomId) ?? null;
-    const selectedCourse = this.getSelectedCourseContext();
-    const activeCourseRun = this.mode === 'play' ? this.activeCourseRun : null;
-    const activeRoomGoalRun = activeCourseRun ? null : this.mode === 'play' ? this.currentGoalRun : null;
-    const activeGoalRoom = activeRoomGoalRun
-      ? this.getRoomSnapshotForCoordinates(activeRoomGoalRun.roomCoordinates)
-      : null;
-    const onlineRosterEntries = this.presenceController
-      .getOnlineRoster()
-      .map((entry) => ({
-        key: entry.key,
-        userId: entry.userId,
-        displayName: entry.displayName,
-        roomText: `Room ${entry.roomId}`,
-        isSelf: entry.isSelf,
-      }));
-
-    this.hudBridge?.render(
-      buildOverworldHudViewModel({
-        selectedState,
-        selectedCoordinates: this.selectedCoordinates,
-        selectedSummary: this.selectedSummary
-          ? {
-              title: this.selectedSummary.title ?? null,
-              creatorUserId: this.selectedSummary.creatorUserId ?? null,
-              creatorDisplayName: this.selectedSummary.creatorDisplayName ?? null,
-              goalType: this.selectedSummary.goalType ?? null,
-            }
-          : null,
-        selectedDraft,
-        selectedPopulation: this.getRoomPopulation(this.selectedCoordinates),
-        selectedEditorCount: this.getRoomEditorCount(this.selectedCoordinates),
-        selectedEditorSummary: formatRoomEditorSummary(
-          this.getRoomEditorDisplayNames(this.selectedCoordinates),
-        ),
-        selectedCourse,
-        selectedRoomInActiveCourseSession: isRoomInActiveCourseDraftSession(selectedRoomId),
-        frontierBuildBlocked:
-          selectedState === 'frontier' && this.isFrontierBuildBlockedByClaimLimit(),
-        frontierClaimLimit: getAuthDebugState().roomDailyClaimLimit,
-        transientStatus: this.getTransientStatusMessage(),
-        statusOverride,
-        mode: this.mode,
-        goalPersistentStatusText: this.goalRunController.getPersistentStatusText() ?? null,
-        rankingMode: this.currentRoomLeaderboard?.rankingMode ?? null,
-        roomTop: this.currentRoomLeaderboard?.entries[0] ?? null,
-        activeCourseRun,
-        activeRoomGoalRun,
-        activeGoalRoom,
-        totalPlayerCount: this.presenceController.getTotalPlayerCount(),
-        onlineRosterEntries,
-        score: this.score,
-        courseBuilderButtonDisabled: this.courseComposerLoading,
-        zoom: this.cameras.main.zoom,
-        getRoomDisplayTitle: (title, coordinates) => this.getRoomDisplayTitle(title, coordinates),
-        getCourseGoalSummaryText: (goalType) => this.getCourseGoalSummaryText(goalType),
-        getCourseGoalBadgeText: (goal) => this.getCourseGoalBadgeText(goal),
-        getGoalBadgeText: (goal) => this.getGoalBadgeText(goal),
-        getCourseGoalTimerText: (runState) => this.getCourseGoalTimerText(runState),
-        getPlayGoalTimerText: (runState) => this.getPlayGoalTimerText(runState),
-        getCourseGoalProgressText: (runState) => this.getCourseGoalProgressText(runState),
-        getPlayGoalProgressText: (runState) => this.getPlayGoalProgressText(runState),
-        truncateOverlayText: (text, maxChars) => this.truncateOverlayText(text, maxChars),
-      }),
-    );
-    this.syncGoalOverlayScale();
-  }
-
-  private getRoomDisplayTitle(title: string | null, coordinates: RoomCoordinates): string {
-    return title?.trim() ? title : `Room ${coordinates.x},${coordinates.y}`;
   }
 
   private isFrontierBuildBlockedByClaimLimit(): boolean {
@@ -4497,24 +4386,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     setAppMode(this.mode === 'play' ? 'play-world' : 'world');
   }
 
-  getSelectedRoomContext(): {
-    roomId: string;
-    coordinates: RoomCoordinates;
-    state: SelectedCellState;
-    courseId: string | null;
-    courseTitle: string | null;
-    courseGoalType: CourseGoalType | null;
-    courseRoomCount: number | null;
-  } {
-    return {
-      roomId: roomIdFromCoordinates(this.selectedCoordinates),
-      coordinates: { ...this.selectedCoordinates },
-      state: this.getCellStateAt(this.selectedCoordinates),
-      courseId: this.getSelectedCourseContext()?.courseId ?? null,
-      courseTitle: this.getSelectedCourseContext()?.courseTitle ?? null,
-      courseGoalType: this.getSelectedCourseContext()?.goalType ?? null,
-      courseRoomCount: this.getSelectedCourseContext()?.roomCount ?? null,
-    };
+  getSelectedRoomContext(): SelectedRoomContext {
+    return this.hudStateController.getSelectedRoomContext();
   }
 
   private setupZoomDebug(): void {

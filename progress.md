@@ -4269,3 +4269,30 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - no page errors were recorded during the room or course flows
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming another active overworld subsystem from `OverworldPlayScene`.
+
+- March 27, 2026: extracted the overworld HUD-state controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/hudState.ts` with `OverworldHudStateController` to own the selected-summary / selected-course / HUD-state boundary:
+    - selected published-room summary cache for the current selection
+    - selected published-course context derivation from that summary
+    - selected-room context assembly for external callers
+    - browse/play HUD view-model assembly and overlay-scale sync
+    - timer/progress/badge formatting helpers that were previously embedded in `OverworldPlayScene.ts`
+  - `OverworldPlayScene.ts` now delegates selected-summary refresh/reset, selected-course lookups, selected-room context, and HUD rendering through that controller instead of carrying the summary cache and `buildOverworldHudViewModel(...)` assembly inline.
+  - `src/scenes/overworld/selection.ts` no longer owns the duplicate `SelectedCourseContext` type or course-context derivation; it stays focused on room selection and browse-camera coordination.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-hud-state-skill-smoke/state-0.json`
+      - `output/web-game/overworld-hud-state-skill-smoke/shot-0.png`
+    - targeted browser probe wrote:
+      - `output/web-game/overworld-hud-state-probe/summary.json`
+      - `output/web-game/overworld-hud-state-probe/published-0-0.png`
+      - `output/web-game/overworld-hud-state-probe/course-1-0.png`
+      - `output/web-game/overworld-hud-state-probe/frontier-20-20.png`
+    - targeted probe confirmed:
+      - published room `0,0` stayed `selectedState = published` with HUD title `Hello World`, no course metadata, and `Play Course` hidden
+      - course room `1,0` stayed `selectedState = published` with HUD title `Wizzy's Tower - LVL 1`, course meta text (`Part of course: Wizzy's Tower · Checkpoint Sprint course · Collect Target challenge`), and `Play Course` visible/enabled
+      - empty room `20,20` stayed `selectedState = empty` with HUD copy `You can only build next to an existing published room` and `Play Room` disabled
+      - no console errors or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming another active overworld subsystem from `OverworldPlayScene`, with the remaining browse/play scene shell and per-mode runtime orchestration as the cleanest next seams.
