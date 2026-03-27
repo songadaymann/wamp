@@ -4388,3 +4388,30 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - the generic smoke screenshot was black again in headless canvas mode even though `state-0.json` showed a healthy published-room browse state from the safety backend; the targeted probe screenshots rendered correctly and were used as the visual source of truth for this slice.
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target play-session reset and death/reset orchestration around single-room challenge resets and course-run abandonment.
+
+- March 27, 2026: extracted the overworld session-reset controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/sessionReset.ts` with `OverworldSessionResetController` to own the play-session reset/death-reset orchestration boundary:
+    - player-death handling for normal rooms, survival rooms, and survival courses
+    - full play-session teardown/reset when entering play, stopping play, or abandoning an unpublished active course
+    - single-room challenge-state resets for qualification start and room exits
+  - `OverworldPlayScene.ts` now delegates `handlePlayerDeath`, `resetPlaySession`, current-run challenge resets, and room-exit challenge resets through that controller instead of carrying the reset shell inline.
+  - Kept the low-level room rebuild and transient player-state clearing in scene helpers (`resetRoomChallengeState`, `resetTransientPlayState`) so this slice only moves the orchestration layer and does not mix in combat or movement-state logic.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev pointed at the safety backend:
+      - `output/web-game/overworld-session-reset-skill-smoke/state-0.json`
+      - `output/web-game/overworld-session-reset-skill-smoke/shot-0.png`
+    - targeted browser probe wrote:
+      - `output/web-game/overworld-session-reset-probe/summary.json`
+      - `output/web-game/overworld-session-reset-probe/browse-before.png`
+      - `output/web-game/overworld-session-reset-probe/play-before-death.png`
+      - `output/web-game/overworld-session-reset-probe/play-after-death.png`
+      - `output/web-game/overworld-session-reset-probe/browse-after-stop.png`
+    - targeted probe confirmed:
+      - browse at `0,0` stayed `mode = browse`, `cameraMode = inspect`, and `player = null`
+      - `Play Room` entered `mode = play`, `cameraMode = follow`, spawned the player at `328,297`, and started the qualified single-room run for `0,0`
+      - direct `sessionResetController.handlePlayerDeath('Probe death.')` kept the scene in `play`, respawned the player back to `328,297`, and incremented single-room deaths `0 -> 1`
+      - `Stop` returned to `mode = browse`, `cameraMode = inspect`, `player = null`, and `goalRun = null`
+      - no console errors or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining play-state shell, most likely combat / attack-state orchestration and the player movement-state block.

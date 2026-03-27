@@ -143,6 +143,9 @@ import {
   type OverworldPlayerEntities,
 } from './overworld/playerLifecycle';
 import {
+  OverworldSessionResetController,
+} from './overworld/sessionReset';
+import {
   OverworldPresenceOverlayController,
 } from './overworld/presenceOverlays';
 import {
@@ -396,6 +399,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly cameraController: OverworldCameraController;
   private readonly runtimeController: OverworldRuntimeController<LoadedRoomObject>;
   private readonly playerLifecycleController: OverworldPlayerLifecycleController<LoadedRoomObject>;
+  private readonly sessionResetController: OverworldSessionResetController;
   private readonly presenceOverlayController: OverworldPresenceOverlayController;
   private readonly selectionController: OverworldSelectionController;
   private readonly hudStateController: OverworldHudStateController;
@@ -560,7 +564,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         );
       },
       showTransientStatus: (message) => this.showTransientStatus(message),
-      handlePlayerDeath: (reason) => this.handlePlayerDeath(reason),
+      handlePlayerDeath: (reason) => this.sessionResetController.handlePlayerDeath(reason),
       onEnemyDefeated: (roomId, enemyName) => this.handleEnemyDefeated(roomId, enemyName),
       onCollectibleCollected: (roomId) => this.handleCollectibleCollected(roomId),
       playEnemyKillFx: (x, y) => this.fxController?.playEnemyKillFx(x, y),
@@ -752,6 +756,51 @@ export class OverworldPlayScene extends Phaser.Scene {
         playerPickupSensorExtraHeight: this.PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT,
       },
     );
+    this.sessionResetController = new OverworldSessionResetController({
+      getCurrentGoalRun: () => this.currentGoalRun,
+      getActiveCourseRun: () => this.activeCourseRun,
+      setActiveCourseRun: (runState) => {
+        this.activeCourseRun = runState;
+      },
+      recordGoalRunDeath: () => {
+        this.goalRunController.recordDeath();
+      },
+      recordCourseRunDeath: () => {
+        recordCourseRunDeath(this.activeCourseRun);
+      },
+      playPlayerFailFx: () => {
+        if (this.player && this.playerBody) {
+          this.fxController?.playGoalFx('fail', this.player.x, this.playerBody.bottom - 10, null);
+        }
+      },
+      respawnPlayerToCurrentRoom: () => this.respawnPlayerToCurrentRoom(),
+      failCourseRun: (message) => this.failCourseRun(message),
+      failGoalRun: (message) => this.failGoalRun(message),
+      showTransientStatus: (message) => this.showTransientStatus(message),
+      getRoomSnapshotForCoordinates: (coordinates) =>
+        this.getRoomSnapshotForCoordinates(coordinates),
+      restartGoalRunForRoom: (room) => {
+        this.applyGoalRunMutation(this.goalRunController.restartRunForRoom(room, 'respawn'));
+      },
+      refreshLeaderboardForSelection: () => {
+        void this.refreshLeaderboardForSelection();
+      },
+      abandonGoalRun: () => {
+        this.goalRunController.abandonActiveRun();
+      },
+      finalizeActiveCourseRun: (result) => {
+        void this.coursePlaybackController.finalizeActiveCourseRun(result);
+      },
+      clearActiveCourseRoomOverrides: () => {
+        this.coursePlaybackController.clearActiveCourseRoomOverrides();
+      },
+      resetRoomChallengeState: (room) => this.resetRoomChallengeState(room),
+      resetTransientPlayState: () => this.resetTransientPlayState(),
+      resetGoalRunController: () => {
+        this.goalRunController.reset();
+      },
+      redrawGoalMarkers: () => this.redrawGoalMarkers(),
+    });
     this.hudStateController = new OverworldHudStateController({
       getMode: () => this.mode,
       getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
@@ -871,7 +920,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       isFrontierBuildBlockedByClaimLimit: () => this.isFrontierBuildBlockedByClaimLimit(),
       getSelectedRoomSnapshot: (coordinates) => this.getRoomSnapshotForCoordinates(coordinates),
       getActiveCourseEditContext: (roomId) => this.getActiveCourseDraftSessionContextForRoom(roomId),
-      resetPlaySession: () => this.resetPlaySession(),
+      resetPlaySession: () => this.sessionResetController.resetPlaySession(),
       clearTouchGestureState: () => this.clearTouchGestureState(),
       clearGoalRun: () => {
         this.goalRunController.clearCurrentRun();
@@ -1873,7 +1922,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         if (!wasPlaying) {
           this.browseInspectZoom = this.inspectZoom;
         }
-        this.resetPlaySession();
+        this.sessionResetController.resetPlaySession();
         this.cameraMode = 'follow';
       }
       this.mode = data.mode;
@@ -2849,7 +2898,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    this.handlePlayerDeath('You fell.');
+    this.sessionResetController.handlePlayerDeath('You fell.');
   }
 
   private respawnPlayerToCurrentRoom(): void {
@@ -3128,47 +3177,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     void this.coursePlaybackController.finalizeActiveCourseRun('failed');
   }
 
-  private handlePlayerDeath(reason: string): void {
-    const activeRun = this.currentGoalRun;
-    const activeCourseRun = this.activeCourseRun;
-    this.goalRunController.recordDeath();
-    recordCourseRunDeath(activeCourseRun);
-    if (this.player && this.playerBody) {
-      this.fxController?.playGoalFx('fail', this.player.x, this.playerBody.bottom - 10, null);
-    }
-
-    this.respawnPlayerToCurrentRoom();
-
-    if (activeCourseRun?.course.goal?.type === 'survival') {
-      this.failCourseRun('Course survival failed.');
-      this.showTransientStatus(`${reason} Course run failed.`);
-      return;
-    }
-
-    if (activeRun?.goal.type === 'survival') {
-      const goalRoom = this.getRoomSnapshotForCoordinates(activeRun.roomCoordinates);
-      this.failGoalRun('Survival failed.');
-      if (goalRoom?.goal) {
-        this.applyGoalRunMutation(this.goalRunController.restartRunForRoom(goalRoom, 'respawn'));
-        void this.refreshLeaderboardForSelection();
-        this.showTransientStatus(`${reason} Survival run restarted.`);
-      }
-      return;
-    }
-
-    if (activeRun?.qualificationState === 'practice') {
-      const goalRoom = this.getRoomSnapshotForCoordinates(activeRun.roomCoordinates);
-      if (goalRoom?.goal) {
-        this.resetSingleRoomChallengeStateForRun(activeRun);
-        this.applyGoalRunMutation(this.goalRunController.restartRunForRoom(goalRoom, 'respawn'));
-        void this.refreshLeaderboardForSelection();
-        return;
-      }
-    }
-
-    this.showTransientStatus(reason);
-  }
-
   private handleEnemyDefeated(roomId: string, enemyName: string): boolean {
     this.applyCourseRunMutation(recordCourseRunEnemyDefeated(this.activeCourseRun));
 
@@ -3186,21 +3194,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.applyGoalRunMutation(this.goalRunController.recordCollectibleCollected(roomId));
   }
 
-  private resetPlaySession(): void {
-    const singleRoomRunToReset = this.activeCourseRun ? null : this.currentGoalRun;
-    this.goalRunController.abandonActiveRun();
-    if (this.activeCourseRun?.result === 'active') {
-      void this.coursePlaybackController.finalizeActiveCourseRun('abandoned');
-    }
-    if (
-      singleRoomRunToReset &&
-      this.shouldResetSingleRoomChallengeStateForRun(singleRoomRunToReset)
-    ) {
-      this.resetSingleRoomChallengeStateForRun(singleRoomRunToReset);
-    }
-    this.activeCourseRun = null;
-    this.coursePlaybackController.clearActiveCourseRoomOverrides();
-
+  private resetTransientPlayState(): void {
     this.collectedObjectKeys.clear();
     this.heldKeyCount = 0;
     this.score = 0;
@@ -3211,28 +3205,13 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.externalLaunchGraceUntil = 0;
     this.destroyPlayerProjectiles();
     this.playerLandAnimationUntil = 0;
-    this.goalRunController.reset();
-    this.redrawGoalMarkers();
   }
 
   private clearTouchGestureState(): void {
     this.inspectInputController.reset();
   }
 
-  private shouldResetSingleRoomChallengeStateForRun(runState: GoalRunState): boolean {
-    return (
-      runState.result === 'active' ||
-      runState.result === 'completed' ||
-      runState.result === 'failed'
-    );
-  }
-
-  private resetSingleRoomChallengeStateForRun(runState: GoalRunState): void {
-    const room = this.getRoomSnapshotForCoordinates(runState.roomCoordinates);
-    if (!room) {
-      return;
-    }
-
+  private resetRoomChallengeState(room: RoomSnapshot): void {
     const restoredKeyCount = this.clearCollectedObjectKeysForRoom(room);
     if (restoredKeyCount > 0) {
       this.heldKeyCount = Math.max(0, this.heldKeyCount - restoredKeyCount);
@@ -3306,15 +3285,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    const activeGoalRun = this.activeCourseRun ? null : this.currentGoalRun;
-    if (
-      activeGoalRun &&
-      (nextRoomCoordinates.x !== activeGoalRun.roomCoordinates.x ||
-        nextRoomCoordinates.y !== activeGoalRun.roomCoordinates.y) &&
-      this.shouldResetSingleRoomChallengeStateForRun(activeGoalRun)
-    ) {
-      this.resetSingleRoomChallengeStateForRun(activeGoalRun);
-    }
+    this.sessionResetController.resetChallengeStateForRoomExit(nextRoomCoordinates);
 
     this.currentRoomCoordinates = { ...nextRoomCoordinates };
     this.selectedCoordinates = { ...nextRoomCoordinates };
@@ -3911,7 +3882,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.activeCourseRun?.course.id === courseRecord.draft.id;
       if (unpublishedActiveCourse) {
         const returnCoordinates = this.activeCourseRun?.returnCoordinates ?? this.currentRoomCoordinates;
-        this.resetPlaySession();
+        this.sessionResetController.resetPlaySession();
         this.clearTouchGestureState();
         this.mode = 'browse';
         this.cameraMode = 'inspect';
@@ -4116,8 +4087,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    if (result.resetChallengeState && this.currentGoalRun) {
-      this.resetSingleRoomChallengeStateForRun(this.currentGoalRun);
+    if (result.resetChallengeState) {
+      this.sessionResetController.resetChallengeStateForCurrentRun();
     }
 
     this.playGoalRunFx(result);
