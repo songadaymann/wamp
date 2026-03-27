@@ -4690,3 +4690,24 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Status:
     - this is the first phase-9 slice on `safety/secondary-monoliths-and-hygiene-2026-03-27`
     - next likely cleanup target is the worker-admin monolith in `src/cloudflare/worker/admin/suspicious.ts`
+
+- March 27, 2026: split suspicious invalidation/audit handling out of the worker-admin monolith.
+  - Added `src/cloudflare/worker/admin/suspiciousInvalidation.ts` to own the suspicious invalidation subsystem:
+    - preview and execute handlers
+    - recent audit loading
+    - invalidation preview selection/query helpers
+    - invalidation body parsing and audit/point-event mapping helpers
+  - Trimmed `src/cloudflare/worker/admin/suspicious.ts` down to the suspicious-analysis side:
+    - re-exported invalidate handlers from the new module
+    - imported `loadRecentInvalidations(...)` from the new module for summary/detail responses
+    - removed the old inline invalidation, audit, and body-parsing block
+  - Result:
+    - `src/cloudflare/worker/admin/suspicious.ts` dropped from 2,079 lines to 1,355 lines
+    - the extracted invalidation/audit subsystem now lives in a dedicated 786-line module
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-phase9-hygiene`
+    - note:
+      - this clean safety worktree needed a temporary symlink to the main repo `node_modules` to run the build, and that symlink was removed afterward so git state stayed clean
+  - Status:
+    - phase 9 slice 2 is the worker-admin invalidation split
+    - next likely cleanup target is the remaining suspicious-analysis block in `src/cloudflare/worker/admin/suspicious.ts`, or repo hygiene around `progress.md` / stale docs once that feels good enough
