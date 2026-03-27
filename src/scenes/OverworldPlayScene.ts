@@ -63,8 +63,6 @@ import {
 } from '../visuals/starfield';
 import {
   DEFAULT_PLAYER_ANIMATION_KEYS,
-  DEFAULT_PLAYER_IDLE_FRAME,
-  DEFAULT_PLAYER_IDLE_TEXTURE_KEY,
   DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
   type DefaultPlayerAnimationState,
 } from '../player/defaultPlayer';
@@ -141,6 +139,10 @@ import {
   type OverworldRoomEdgeWall,
 } from './overworld/runtimeController';
 import {
+  OverworldPlayerLifecycleController,
+  type OverworldPlayerEntities,
+} from './overworld/playerLifecycle';
+import {
   OverworldPresenceOverlayController,
 } from './overworld/presenceOverlays';
 import {
@@ -169,9 +171,6 @@ import {
 import {
   terrainTileCollidesAtLocalPixel,
 } from './overworld/terrainCollision';
-import {
-  resolveGoalRunStartPoint,
-} from './overworld/goalRunStartGate';
 import type {
   CourseEditorSceneData,
   CourseEditedRoomData,
@@ -197,11 +196,6 @@ const EDGE_WALL_THICKNESS = 12;
 const RESPAWN_FALL_DISTANCE = ROOM_PX_HEIGHT * 2;
 const FOLLOW_CAMERA_LERP = 0.12;
 const MOBILE_PLAY_CAMERA_TARGET_Y = 0.75;
-
-interface PlayerSpawn {
-  x: number;
-  y: number;
-}
 
 type RoomEdgeWall = OverworldRoomEdgeWall;
 
@@ -401,6 +395,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly goalMarkerController: OverworldGoalMarkerController;
   private readonly cameraController: OverworldCameraController;
   private readonly runtimeController: OverworldRuntimeController<LoadedRoomObject>;
+  private readonly playerLifecycleController: OverworldPlayerLifecycleController<LoadedRoomObject>;
   private readonly presenceOverlayController: OverworldPresenceOverlayController;
   private readonly selectionController: OverworldSelectionController;
   private readonly hudStateController: OverworldHudStateController;
@@ -739,6 +734,22 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       {
         edgeWallThickness: EDGE_WALL_THICKNESS,
+      },
+    );
+    this.playerLifecycleController = new OverworldPlayerLifecycleController(
+      {
+        scene: this,
+        getActiveCourseSnapshot: () => this.activeCourseSnapshot,
+        getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
+        clearRoomInteractions: (loadedRoom) =>
+          this.liveObjectController.clearRoomInteractions(loadedRoom),
+        destroyRoomEdgeWalls: (loadedRoom) => this.destroyEdgeWalls(loadedRoom),
+        syncBackdropCameraIgnores: () => this.syncBackdropCameraIgnores(),
+      },
+      {
+        playerWidth: this.PLAYER_WIDTH,
+        playerHeight: this.PLAYER_HEIGHT,
+        playerPickupSensorExtraHeight: this.PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT,
       },
     );
     this.hudStateController = new OverworldHudStateController({
@@ -2251,16 +2262,32 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.goalMarkerController.toWorldCoursePoint(point);
   }
 
+  private getPlayerEntities(): OverworldPlayerEntities | null {
+    if (
+      !this.player ||
+      !this.playerBody ||
+      !this.playerPickupSensor ||
+      !this.playerPickupSensorBody ||
+      !this.playerSprite
+    ) {
+      return null;
+    }
+
+    return {
+      player: this.player,
+      playerBody: this.playerBody,
+      playerPickupSensor: this.playerPickupSensor,
+      playerPickupSensorBody: this.playerPickupSensorBody,
+      playerSprite: this.playerSprite,
+    };
+  }
+
   private destroyPlayer(): void {
     this.destroyPlayerProjectiles();
-    for (const loadedRoom of this.loadedFullRoomsById.values()) {
-      loadedRoom.terrainCollider?.destroy();
-      loadedRoom.terrainCollider = null;
-      loadedRoom.terrainInsetCollider?.destroy();
-      loadedRoom.terrainInsetCollider = null;
-      this.liveObjectController.clearRoomInteractions(loadedRoom);
-      this.destroyEdgeWalls(loadedRoom);
-    }
+    this.playerLifecycleController.destroyPlayer(
+      this.getPlayerEntities(),
+      this.loadedFullRoomsById.values(),
+    );
 
     this.isClimbingLadder = false;
     this.activeLadderKey = null;
@@ -2272,17 +2299,11 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.playerLandAnimationUntil = 0;
     this.playerWasGrounded = false;
     this.externalLaunchGraceUntil = 0;
-    this.playerBody?.destroy();
     this.playerBody = null;
-    this.playerPickupSensorBody?.destroy();
     this.playerPickupSensorBody = null;
-    this.playerPickupSensor?.destroy();
     this.playerPickupSensor = null;
-    this.playerSprite?.destroy();
     this.playerSprite = null;
-    this.player?.destroy();
     this.player = null;
-    this.syncBackdropCameraIgnores();
   }
 
   private syncFullRoomColliders(): void {
@@ -2340,50 +2361,16 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private createPlayer(startRoom: RoomSnapshot): void {
-    const spawn = this.getPlayerSpawn(startRoom);
-
-    this.player = this.add.rectangle(
-      spawn.x,
-      spawn.y,
-      this.PLAYER_WIDTH,
-      this.PLAYER_HEIGHT,
-      RETRO_COLORS.draft
-    );
-    this.player.setVisible(false);
-    this.player.setDepth(25);
-
-    this.physics.add.existing(this.player);
-    this.playerBody = this.player.body as Phaser.Physics.Arcade.Body;
-    this.playerBody.setCollideWorldBounds(false);
-    this.playerBody.setMaxVelocityY(500);
-    this.playerBody.setAllowGravity(true);
-    this.playerPickupSensor = this.add.rectangle(
-      spawn.x,
-      spawn.y,
-      this.PLAYER_WIDTH,
-      this.PLAYER_HEIGHT + this.PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT,
-      RETRO_COLORS.draft
-    );
-    this.playerPickupSensor.setVisible(false);
-    this.physics.add.existing(this.playerPickupSensor);
-    this.playerPickupSensorBody = this.playerPickupSensor.body as Phaser.Physics.Arcade.Body;
-    this.playerPickupSensorBody.setAllowGravity(false);
-    this.playerPickupSensorBody.setImmovable(true);
-    this.playerPickupSensorBody.moves = false;
+    const entities = this.playerLifecycleController.createPlayer(startRoom);
+    this.player = entities.player;
+    this.playerBody = entities.playerBody;
+    this.playerPickupSensor = entities.playerPickupSensor;
+    this.playerPickupSensorBody = entities.playerPickupSensorBody;
+    this.playerSprite = entities.playerSprite;
     this.externalLaunchGraceUntil = 0;
     this.isCrouching = false;
     this.resetWallMovementState();
     this.syncPlayerHitbox();
-    this.playerSprite = this.add.sprite(
-      spawn.x,
-      spawn.y,
-      DEFAULT_PLAYER_IDLE_TEXTURE_KEY,
-      DEFAULT_PLAYER_IDLE_FRAME
-    );
-    this.playerSprite.setOrigin(0.5, 1);
-    this.playerSprite.setDepth(26);
-    this.playerSprite.play(DEFAULT_PLAYER_ANIMATION_KEYS.idle);
-    this.playerSprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.playerAnimationState = 'idle';
     this.playerFacing = 1;
     this.playerWasGrounded = true;
@@ -2394,7 +2381,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.activeLadderKey = null;
     this.setLadderClimbSfxPlaying(false);
     this.syncPlayerVisual();
-    this.syncBackdropCameraIgnores();
   }
 
   private resetWallMovementState(): void {
@@ -2829,22 +2815,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.syncBackdropCameraIgnores();
   }
 
-  private getPlayerSpawn(room: RoomSnapshot): PlayerSpawn {
-    if (this.activeCourseSnapshot?.startPoint?.roomId === room.id) {
-      const origin = this.getRoomOrigin(room.coordinates);
-      return {
-        x: origin.x + this.activeCourseSnapshot.startPoint.x,
-        y: origin.y + this.activeCourseSnapshot.startPoint.y - this.PLAYER_HEIGHT / 2,
-      };
-    }
-
-    const startPoint = resolveGoalRunStartPoint(room, this.PLAYER_HEIGHT);
-    return {
-      x: startPoint.x,
-      y: startPoint.y - this.PLAYER_HEIGHT / 2,
-    };
-  }
-
   private getRoomSnapshotAtWorldPoint(worldX: number, worldY: number): RoomSnapshot | null {
     const coordinates = {
       x: Math.floor(worldX / ROOM_PX_WIDTH),
@@ -2884,9 +2854,9 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private respawnPlayerToCurrentRoom(): void {
     const currentRoom = this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates);
-    if (!currentRoom || !this.player || !this.playerBody) return;
+    const entities = this.getPlayerEntities();
+    if (!currentRoom || !entities) return;
 
-    const spawn = this.getPlayerSpawn(currentRoom);
     this.setPlayerLadderState(null);
     this.isCrouching = false;
     this.activeAttackAnimation = null;
@@ -2897,9 +2867,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.externalLaunchGraceUntil = 0;
     this.resetWallMovementState();
     this.destroyPlayerProjectiles();
-    this.playerBody.reset(spawn.x, spawn.y);
-    this.player.setPosition(spawn.x, spawn.y);
-    this.playerBody.setVelocity(0, 0);
+    this.playerLifecycleController.respawnPlayerToRoom(currentRoom, entities);
     this.syncPlayerHitbox();
     this.playerWasGrounded = false;
     this.setLadderClimbSfxPlaying(false);

@@ -4359,3 +4359,32 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - the generic smoke screenshot still rendered as a sparse starfield even though `state-0.json` showed published rooms loaded from the safety backend; the targeted probe screenshots rendered correctly and were used as the visual source of truth for this slice.
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining player lifecycle shell, especially create/destroy/reset and the room-reset path around deaths and single-room challenge resets.
+
+- March 27, 2026: extracted the overworld player-lifecycle controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/playerLifecycle.ts` with `OverworldPlayerLifecycleController` to own the raw player-entity lifecycle boundary:
+    - spawn-point selection for normal rooms vs course start points
+    - Phaser rectangle/body/sensor/sprite creation for the player
+    - loaded-room collider/interaction teardown during player destruction
+    - raw respawn repositioning/reset of the active player body
+  - `OverworldPlayScene.ts` now delegates `createPlayer`, `destroyPlayer`, and the raw respawn step inside `respawnPlayerToCurrentRoom()` through that controller instead of carrying the entity-construction block inline.
+  - This slice intentionally leaves combat, wall-slide state, ladder state, animation-state selection, and goal/death resolution in `OverworldPlayScene.ts`; it only moves the entity lifecycle and spawn-selection shell.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev pointed at the safety backend:
+      - `output/web-game/overworld-player-lifecycle-skill-smoke/state-0.json`
+      - `output/web-game/overworld-player-lifecycle-skill-smoke/shot-0.png`
+    - targeted browser probe wrote:
+      - `output/web-game/overworld-player-lifecycle-probe/summary.json`
+      - `output/web-game/overworld-player-lifecycle-probe/browse-before.png`
+      - `output/web-game/overworld-player-lifecycle-probe/play-running.png`
+      - `output/web-game/overworld-player-lifecycle-probe/after-respawn.png`
+      - `output/web-game/overworld-player-lifecycle-probe/browse-after-stop.png`
+    - targeted probe confirmed:
+      - browse at `0,0` stayed `mode = browse`, `cameraMode = inspect`, and `player = null`
+      - `Play Room` entered `mode = play`, `cameraMode = follow`, and spawned the player at `328,297`
+      - direct `respawnPlayerToCurrentRoom()` from the scene kept `mode = play`, preserved the active goal run, and restored the player to the same `328,297` spawn with zero velocity
+      - `Stop` returned to `mode = browse`, `cameraMode = inspect`, `player = null`, and `goalRun = null`
+      - no console errors or page errors were recorded
+    - the generic smoke screenshot was black again in headless canvas mode even though `state-0.json` showed a healthy published-room browse state from the safety backend; the targeted probe screenshots rendered correctly and were used as the visual source of truth for this slice.
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target play-session reset and death/reset orchestration around single-room challenge resets and course-run abandonment.
