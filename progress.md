@@ -4480,3 +4480,33 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - headless ladder-path probing remained awkward because keyboard focus initially stays in the HUD after clicking `Play Room`; the extra canvas-focus check proved movement input still reaches the scene, and ladder / wall-slide feel should still get one quick sanity pass on the live preview before calling phase 8 complete.
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining player-play shell, likely the movement-adjacent visual/state glue that is still left inline in `OverworldPlayScene.ts`, then evaluate whether phase 8 is done or needs one final consolidation pass before phase 9.
+
+- March 27, 2026: extracted the overworld player-presentation controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/playerPresentation.ts` with `OverworldPlayerPresentationController` to own the remaining player presentation shell:
+    - pickup-sensor sync
+    - sprite positioning against the collision body and quicksand sink
+    - facing selection from wall-slide / crate interaction / movement velocity
+    - landing dust trigger + landing animation timing
+    - animation-state selection for idle / run / crouch / crawl / jump / wall / ladder / crate / attack cases
+    - presentation-state resets for scene reset, create, destroy, respawn, and transient play reset paths
+  - `OverworldPlayScene.ts` now binds the small presentation state bundle (`playerAnimationState`, `playerFacing`, `playerWasGrounded`, `playerLandAnimationUntil`) into that controller and delegates the old inline presentation methods through it instead of carrying the logic directly.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke wrote:
+      - `output/web-game/overworld-player-presentation-skill-smoke/state-0.json`
+      - `output/web-game/overworld-player-presentation-skill-smoke/shot-0.png`
+    - focused browser probe wrote:
+      - `output/web-game/overworld-player-presentation-probe/summary.json`
+      - `output/web-game/overworld-player-presentation-probe/idle.png`
+      - `output/web-game/overworld-player-presentation-probe/run-right.png`
+      - `output/web-game/overworld-player-presentation-probe/run-left.png`
+      - `output/web-game/overworld-player-presentation-probe/jump.png`
+    - targeted checks confirmed:
+      - in room `1,-5`, play-mode state stayed `idle` at rest
+      - holding right changed the player state to `animation = run`, `facing = 1`, `velocityX = 150`
+      - holding left changed the player state to `animation = run`, `facing = -1`, `velocityX = -150`
+      - no console or page errors were recorded in the kept artifacts
+    - note:
+      - the focused presentation probe is strongest on the controller-owned run/facing transitions; jump behavior remains covered by the prior movement slice’s canvas-focus check and should still get one quick live-preview sanity pass before calling phase 8 done.
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining room-transition / goal-run gameplay shell in `OverworldPlayScene.ts`, then reassess whether phase 8 needs one final consolidation pass.

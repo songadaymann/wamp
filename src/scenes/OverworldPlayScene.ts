@@ -62,7 +62,6 @@ import {
   ensureStarfieldTexture,
 } from '../visuals/starfield';
 import {
-  DEFAULT_PLAYER_ANIMATION_KEYS,
   DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
   type DefaultPlayerAnimationState,
 } from '../player/defaultPlayer';
@@ -149,6 +148,10 @@ import {
   OverworldMovementController,
   type OverworldMovementControllerState,
 } from './overworld/movementController';
+import {
+  OverworldPlayerPresentationController,
+  type OverworldPlayerPresentationControllerState,
+} from './overworld/playerPresentation';
 import {
   OverworldSessionResetController,
 } from './overworld/sessionReset';
@@ -387,6 +390,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly cameraController: OverworldCameraController;
   private readonly runtimeController: OverworldRuntimeController<LoadedRoomObject>;
   private readonly playerLifecycleController: OverworldPlayerLifecycleController<LoadedRoomObject>;
+  private readonly playerPresentationController: OverworldPlayerPresentationController;
   private readonly movementController: OverworldMovementController;
   private readonly combatController: OverworldCombatController;
   private readonly sessionResetController: OverworldSessionResetController;
@@ -747,6 +751,63 @@ export class OverworldPlayScene extends Phaser.Scene {
         playerPickupSensorExtraHeight: this.PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT,
       },
     );
+    const playerPresentationState: OverworldPlayerPresentationControllerState = {
+      get animationState() {
+        return thisScene.playerAnimationState;
+      },
+      set animationState(value: DefaultPlayerAnimationState) {
+        thisScene.playerAnimationState = value;
+      },
+      get facing() {
+        return thisScene.playerFacing as -1 | 1;
+      },
+      set facing(value: -1 | 1) {
+        thisScene.playerFacing = value;
+      },
+      get wasGrounded() {
+        return thisScene.playerWasGrounded;
+      },
+      set wasGrounded(value: boolean) {
+        thisScene.playerWasGrounded = value;
+      },
+      get landAnimationUntil() {
+        return thisScene.playerLandAnimationUntil;
+      },
+      set landAnimationUntil(value: number) {
+        thisScene.playerLandAnimationUntil = value;
+      },
+    };
+    this.playerPresentationController = new OverworldPlayerPresentationController(
+      {
+        state: playerPresentationState,
+        getCurrentTime: () => this.time.now,
+        getPlayer: () => this.player,
+        getPlayerBody: () => this.playerBody,
+        getPlayerSprite: () => this.playerSprite,
+        getPlayerPickupSensor: () => this.playerPickupSensor,
+        getPlayerPickupSensorBody: () => this.playerPickupSensorBody,
+        getQuicksandVisualSink: () => this.quicksandVisualSink,
+        getWeaponKnockbackUntil: () => this.weaponKnockbackUntil,
+        getIsClimbingLadder: () => this.isClimbingLadder,
+        getIsWallSliding: () => this.isWallSliding,
+        getWallContactSide: () => this.wallContactSide,
+        getWallJumpActive: () => this.wallJumpActive,
+        getIsCrouching: () => this.isCrouching,
+        getActiveCrateInteractionMode: () => this.activeCrateInteractionMode,
+        getActiveCrateInteractionFacing: () => this.activeCrateInteractionFacing,
+        getCurrentAttackAnimation: (now) => this.combatController.getCurrentAttackAnimation(now),
+        playLandingDustFx: (x, y, facing) => this.fxController?.playLandingDustFx(x, y, facing),
+      },
+      {
+        playerPickupSensorExtraHeight: this.PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT,
+        playerVisualFeetOffset: DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
+        landingAnimationMs: 120,
+        facingVelocityThreshold: 8,
+        jumpRiseVelocityThreshold: -10,
+        crouchMoveVelocityThreshold: 8,
+        runVelocityThreshold: 12,
+      },
+    );
     const movementState: OverworldMovementControllerState = {
       get isCrouching() {
         return thisScene.isCrouching;
@@ -873,7 +934,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         getWasd: () => this.wasd,
         findOverlappingLadder: () => this.findOverlappingLadder(),
         playJumpDustFx: (x, y, facing) => this.fxController?.playJumpDustFx(x, y, facing),
-        syncPlayerPickupSensor: () => this.syncPlayerPickupSensor(),
+        syncPlayerPickupSensor: () => this.playerPresentationController.syncPlayerPickupSensor(),
       },
       {
         playerWidth: this.PLAYER_WIDTH,
@@ -1519,7 +1580,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.movementController.syncLadderClimbSfx(movement.verticalInput);
     this.maybeRespawnFromVoid();
     this.maybeAdvancePlayerRoom();
-    this.syncPlayerVisual();
+    this.playerPresentationController.syncPlayerVisual();
     this.syncLocalPresence();
     this.updateGoalRun(delta);
     this.renderHud();
@@ -1552,10 +1613,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.collectedObjectKeys = new Set();
     this.score = 0;
     this.goalRunController.reset();
-    this.playerAnimationState = 'idle';
-    this.playerFacing = 1;
-    this.playerWasGrounded = false;
-    this.playerLandAnimationUntil = 0;
+    this.playerPresentationController.reset();
     this.browseOverlayController.destroy();
     this.shouldCenterCamera = false;
     this.shouldRespawnPlayer = false;
@@ -2332,8 +2390,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     this.movementController.handlePlayerDestroyed();
     this.combatController.clearAttackAnimation();
-    this.playerLandAnimationUntil = 0;
-    this.playerWasGrounded = false;
+    this.playerPresentationController.handlePlayerDestroyed();
     this.externalLaunchGraceUntil = 0;
     this.playerBody = null;
     this.playerPickupSensorBody = null;
@@ -2405,12 +2462,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.playerSprite = entities.playerSprite;
     this.externalLaunchGraceUntil = 0;
     this.movementController.handlePlayerCreated();
-    this.playerAnimationState = 'idle';
-    this.playerFacing = 1;
-    this.playerWasGrounded = true;
-    this.playerLandAnimationUntil = 0;
     this.combatController.clearAttackAnimation();
-    this.syncPlayerVisual();
+    this.playerPresentationController.handlePlayerCreated();
   }
 
   private findOverlappingLadder(): LoadedRoomObject | null {
@@ -2503,69 +2556,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.movementController.handleRespawnReset();
     this.combatController.destroyProjectiles();
     this.playerLifecycleController.respawnPlayerToRoom(currentRoom, entities);
-    this.playerWasGrounded = false;
-    this.syncPlayerVisual();
+    this.playerPresentationController.handleRespawned();
     playSfx('respawn');
-  }
-
-  private syncPlayerVisual(): void {
-    if (!this.player || !this.playerBody || !this.playerSprite) {
-      return;
-    }
-
-    this.syncPlayerPickupSensor();
-
-    this.playerSprite.setPosition(
-      this.player.x,
-      this.playerBody.bottom + DEFAULT_PLAYER_VISUAL_FEET_OFFSET + this.quicksandVisualSink
-    );
-
-    const facingLockedByWeaponKnockback = this.time.now < this.weaponKnockbackUntil;
-    if (this.isWallSliding && this.wallContactSide !== 0) {
-      this.playerFacing = this.wallContactSide;
-    } else if (this.activeCrateInteractionFacing !== null) {
-      this.playerFacing = this.activeCrateInteractionFacing;
-    } else if (!facingLockedByWeaponKnockback && Math.abs(this.playerBody.velocity.x) > 8) {
-      this.playerFacing = this.playerBody.velocity.x < 0 ? -1 : 1;
-    }
-    this.playerSprite.setFlipX(this.playerFacing < 0);
-
-    const grounded = this.playerBody.blocked.down || this.playerBody.touching.down;
-    if (!this.isClimbingLadder && grounded && !this.playerWasGrounded) {
-      this.playerLandAnimationUntil = this.time.now + 120;
-      this.fxController?.playLandingDustFx(this.player.x, this.playerBody.bottom, this.playerFacing);
-    }
-
-    let nextAnimation: DefaultPlayerAnimationState = 'idle';
-    const activeAttackAnimation = this.combatController.getCurrentAttackAnimation(this.time.now);
-    if (activeAttackAnimation) {
-      nextAnimation = activeAttackAnimation;
-    } else if (this.isClimbingLadder) {
-      nextAnimation = 'ladder-climb';
-    } else if (this.isWallSliding) {
-      nextAnimation = 'wall-slide';
-    } else if (this.wallJumpActive) {
-      nextAnimation = 'wall-jump';
-    } else if (!grounded) {
-      nextAnimation = this.playerBody.velocity.y < -10 ? 'jump-rise' : 'jump-fall';
-    } else if (this.activeCrateInteractionMode === 'push') {
-      nextAnimation = 'push';
-    } else if (this.activeCrateInteractionMode === 'pull') {
-      nextAnimation = 'pull';
-    } else if (this.isCrouching) {
-      nextAnimation = Math.abs(this.playerBody.velocity.x) > 8 ? 'crawl' : 'crouch';
-    } else if (this.time.now < this.playerLandAnimationUntil) {
-      nextAnimation = 'land';
-    } else if (Math.abs(this.playerBody.velocity.x) > 12) {
-      nextAnimation = 'run';
-    }
-
-    if (nextAnimation !== this.playerAnimationState) {
-      this.playerAnimationState = nextAnimation;
-      this.playerSprite.play(DEFAULT_PLAYER_ANIMATION_KEYS[nextAnimation], true);
-    }
-
-    this.playerWasGrounded = grounded;
   }
 
   private updateGoalRun(delta: number): void {
@@ -2618,21 +2610,6 @@ export class OverworldPlayScene extends Phaser.Scene {
       default:
         break;
     }
-  }
-
-  private syncPlayerPickupSensor(): void {
-    if (!this.playerBody || !this.playerPickupSensor || !this.playerPickupSensorBody) {
-      return;
-    }
-
-    const sensorWidth = this.playerBody.width;
-    const sensorHeight = this.playerBody.height + this.PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT;
-    const sensorX = this.playerBody.center.x;
-    const sensorY = this.playerBody.bottom - sensorHeight * 0.5;
-    this.playerPickupSensor.setSize(sensorWidth, sensorHeight);
-    this.playerPickupSensor.setPosition(sensorX, sensorY);
-    this.playerPickupSensorBody.setSize(sensorWidth, sensorHeight, true);
-    this.playerPickupSensorBody.reset(sensorX, sensorY);
   }
 
   private updateCheckpointSprintRun(runState: GoalRunState): void {
@@ -2764,7 +2741,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.combatController.clearAttackAnimation();
     this.externalLaunchGraceUntil = 0;
     this.combatController.destroyProjectiles();
-    this.playerLandAnimationUntil = 0;
+    this.playerPresentationController.resetTransientPlayState();
   }
 
   private clearTouchGestureState(): void {
@@ -2925,7 +2902,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.movementController.clearLadderState();
     this.playerBody.reset(nextX, nextY);
     this.player.setPosition(nextX, nextY);
-    this.syncPlayerPickupSensor();
+    this.playerPresentationController.syncPlayerPickupSensor();
   }
 
   private syncBrowseWindowToCamera(
