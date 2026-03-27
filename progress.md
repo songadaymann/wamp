@@ -4445,3 +4445,38 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - no console errors or page errors were recorded
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining player movement-state shell, especially wall-slide / wall-jump / ladder / crate movement orchestration.
+
+- March 27, 2026: extracted the overworld movement controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/movementController.ts` with `OverworldMovementController` to own the player movement-state shell:
+    - ladder attach / detach state
+    - crouch / stand-up hitbox sync
+    - crate push / pull interaction detection and movement
+    - coyote-time, jump-buffer, jump, wall-slide, and wall-jump orchestration
+    - ladder-climb SFX toggling
+    - movement-state resets on no-player, spawn, respawn, destroy, and transient play resets
+  - `OverworldPlayScene.ts` now delegates the per-frame movement block plus the old wall / ladder / crate helper cluster through that controller instead of carrying the whole movement shell inline.
+  - Kept the shared movement flags (`isCrouching`, wall state, ladder state, crate interaction state, weapon knockback timing) stored on `OverworldPlayScene.ts` for now via a state binding object so this slice gets a real boundary win without forcing a bigger state-model rewrite in the same commit.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev pointed at the safety backend:
+      - `output/web-game/overworld-movement-controller-skill-smoke/state-0.json`
+      - `output/web-game/overworld-movement-controller-skill-smoke/shot-0.png`
+    - focused movement probe wrote:
+      - `output/web-game/overworld-movement-controller-probe/summary.json`
+      - `output/web-game/overworld-movement-controller-probe/jump-start.png`
+      - `output/web-game/overworld-movement-controller-probe/jump-state.png`
+      - `output/web-game/overworld-movement-controller-probe/ladder-start.png`
+      - `output/web-game/overworld-movement-controller-probe/ladder-probe.png`
+      - `output/web-game/overworld-movement-controller-probe/crate-start.png`
+      - `output/web-game/overworld-movement-controller-probe/crate-probe.png`
+    - extra canvas-focus jump check wrote:
+      - `output/web-game/overworld-movement-focus-check/summary.json`
+      - `output/web-game/overworld-movement-focus-check/jump-focus.png`
+    - targeted checks confirmed:
+      - crouch and crawl still flip correctly in `Pressure Paradisssse` (`-4,-2`): player state changed from `crouching = false` / `animation = idle` to `crouching = true` / `animation = crouch`, then to `animation = crawl` with `velocityX = 70`
+      - a canvas-focused jump check in room `1,-5` still raised `player.velocityY` from `0` to `-280`
+      - no new console or page errors were recorded in the kept artifacts
+    - note:
+      - headless ladder-path probing remained awkward because keyboard focus initially stays in the HUD after clicking `Play Room`; the extra canvas-focus check proved movement input still reaches the scene, and ladder / wall-slide feel should still get one quick sanity pass on the live preview before calling phase 8 complete.
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining player-play shell, likely the movement-adjacent visual/state glue that is still left inline in `OverworldPlayScene.ts`, then evaluate whether phase 8 is done or needs one final consolidation pass before phase 9.

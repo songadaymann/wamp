@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { playSfx, stopSfx } from '../audio/sfx';
+import { playSfx } from '../audio/sfx';
 import { createCourseRepository } from '../courses/courseRepository';
 import {
   clearActiveCourseDraftSessionRoomOverride,
@@ -146,6 +146,10 @@ import {
   OverworldCombatController,
 } from './overworld/combatController';
 import {
+  OverworldMovementController,
+  type OverworldMovementControllerState,
+} from './overworld/movementController';
+import {
   OverworldSessionResetController,
 } from './overworld/sessionReset';
 import {
@@ -204,13 +208,6 @@ const FOLLOW_CAMERA_LERP = 0.12;
 const MOBILE_PLAY_CAMERA_TARGET_Y = 0.75;
 
 type RoomEdgeWall = OverworldRoomEdgeWall;
-
-interface CrateInteraction {
-  crateBody: Phaser.Physics.Arcade.Body;
-  mode: 'push' | 'pull';
-  moveDirectionX: -1 | 1;
-  facing: -1 | 1;
-}
 
 type SceneLoadedFullRoom = LoadedFullRoom<LoadedRoomObject, RoomEdgeWall>;
 
@@ -390,6 +387,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly cameraController: OverworldCameraController;
   private readonly runtimeController: OverworldRuntimeController<LoadedRoomObject>;
   private readonly playerLifecycleController: OverworldPlayerLifecycleController<LoadedRoomObject>;
+  private readonly movementController: OverworldMovementController;
   private readonly combatController: OverworldCombatController;
   private readonly sessionResetController: OverworldSessionResetController;
   private readonly presenceOverlayController: OverworldPresenceOverlayController;
@@ -483,6 +481,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   constructor() {
     super({ key: 'OverworldPlayScene' });
+    const thisScene = this;
     this.goalRunController = new OverworldGoalRunController({
       playerHeight: this.PLAYER_HEIGHT,
       runRepository: createRunRepository(),
@@ -748,6 +747,156 @@ export class OverworldPlayScene extends Phaser.Scene {
         playerPickupSensorExtraHeight: this.PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT,
       },
     );
+    const movementState: OverworldMovementControllerState = {
+      get isCrouching() {
+        return thisScene.isCrouching;
+      },
+      set isCrouching(value: boolean) {
+        thisScene.isCrouching = value;
+      },
+      get activeCrateInteractionMode() {
+        return thisScene.activeCrateInteractionMode;
+      },
+      set activeCrateInteractionMode(value: 'push' | 'pull' | null) {
+        thisScene.activeCrateInteractionMode = value;
+      },
+      get activeCrateInteractionFacing() {
+        return thisScene.activeCrateInteractionFacing;
+      },
+      set activeCrateInteractionFacing(value: -1 | 1 | null) {
+        thisScene.activeCrateInteractionFacing = value;
+      },
+      get weaponKnockbackVelocityX() {
+        return thisScene.weaponKnockbackVelocityX;
+      },
+      set weaponKnockbackVelocityX(value: number) {
+        thisScene.weaponKnockbackVelocityX = value;
+      },
+      get weaponKnockbackUntil() {
+        return thisScene.weaponKnockbackUntil;
+      },
+      set weaponKnockbackUntil(value: number) {
+        thisScene.weaponKnockbackUntil = value;
+      },
+      get ladderClimbSfxPlaying() {
+        return thisScene.ladderClimbSfxPlaying;
+      },
+      set ladderClimbSfxPlaying(value: boolean) {
+        thisScene.ladderClimbSfxPlaying = value;
+      },
+      get coyoteTime() {
+        return thisScene.coyoteTime;
+      },
+      set coyoteTime(value: number) {
+        thisScene.coyoteTime = value;
+      },
+      get jumpBuffered() {
+        return thisScene.jumpBuffered;
+      },
+      set jumpBuffered(value: boolean) {
+        thisScene.jumpBuffered = value;
+      },
+      get jumpBufferTime() {
+        return thisScene.jumpBufferTime;
+      },
+      set jumpBufferTime(value: number) {
+        thisScene.jumpBufferTime = value;
+      },
+      get wallContactSide() {
+        return thisScene.wallContactSide;
+      },
+      set wallContactSide(value: -1 | 1 | 0) {
+        thisScene.wallContactSide = value;
+      },
+      get isWallSliding() {
+        return thisScene.isWallSliding;
+      },
+      set isWallSliding(value: boolean) {
+        thisScene.isWallSliding = value;
+      },
+      get wallJumpLockUntil() {
+        return thisScene.wallJumpLockUntil;
+      },
+      set wallJumpLockUntil(value: number) {
+        thisScene.wallJumpLockUntil = value;
+      },
+      get wallJumpActive() {
+        return thisScene.wallJumpActive;
+      },
+      set wallJumpActive(value: boolean) {
+        thisScene.wallJumpActive = value;
+      },
+      get wallJumpDirection() {
+        return thisScene.wallJumpDirection;
+      },
+      set wallJumpDirection(value: -1 | 1 | 0) {
+        thisScene.wallJumpDirection = value;
+      },
+      get wallJumpBlockedSide() {
+        return thisScene.wallJumpBlockedSide;
+      },
+      set wallJumpBlockedSide(value: -1 | 1 | 0) {
+        thisScene.wallJumpBlockedSide = value;
+      },
+      get isClimbingLadder() {
+        return thisScene.isClimbingLadder;
+      },
+      set isClimbingLadder(value: boolean) {
+        thisScene.isClimbingLadder = value;
+      },
+      get activeLadderKey() {
+        return thisScene.activeLadderKey;
+      },
+      set activeLadderKey(value: string | null) {
+        thisScene.activeLadderKey = value;
+      },
+    };
+    this.movementController = new OverworldMovementController(
+      {
+        state: movementState,
+        getCurrentTime: () => this.time.now,
+        getPlayer: () => this.player,
+        getPlayerBody: () => this.playerBody,
+        getPlayerFacing: () => this.playerFacing as -1 | 1,
+        getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
+        getRoomSnapshotForCoordinates: (coordinates) => this.getRoomSnapshotForCoordinates(coordinates),
+        isSolidTerrainAtWorldPoint: (room, worldX, worldY) =>
+          this.isSolidTerrainAtWorldPoint(room, worldX, worldY),
+        getExternalLaunchGraceUntil: () => this.externalLaunchGraceUntil,
+        getLoadedLiveObjects: function* () {
+          for (const loadedRoom of thisScene.loadedFullRoomsById.values()) {
+            yield* loadedRoom.liveObjects;
+          }
+        },
+        getArcadeBodyBounds: (body) => this.getArcadeBodyBounds(body),
+        getCursors: () => this.cursors,
+        getWasd: () => this.wasd,
+        findOverlappingLadder: () => this.findOverlappingLadder(),
+        playJumpDustFx: (x, y, facing) => this.fxController?.playJumpDustFx(x, y, facing),
+        syncPlayerPickupSensor: () => this.syncPlayerPickupSensor(),
+      },
+      {
+        playerWidth: this.PLAYER_WIDTH,
+        playerHeight: this.PLAYER_HEIGHT,
+        playerCrouchHeight: this.PLAYER_CROUCH_HEIGHT,
+        playerSpeed: this.PLAYER_SPEED,
+        crawlSpeed: this.CRAWL_SPEED,
+        cratePushSpeed: this.CRATE_PUSH_SPEED,
+        cratePullSpeed: this.CRATE_PULL_SPEED,
+        crateInteractionMaxGap: this.CRATE_INTERACTION_MAX_GAP,
+        coyoteMs: this.COYOTE_MS,
+        jumpBufferMs: this.JUMP_BUFFER_MS,
+        jumpVelocity: this.JUMP_VELOCITY,
+        wallSlideMaxFallSpeed: this.WALL_SLIDE_MAX_FALL_SPEED,
+        wallJumpVelocityX: this.WALL_JUMP_VELOCITY_X,
+        wallJumpVelocityY: this.WALL_JUMP_VELOCITY_Y,
+        wallJumpInputLockMs: this.WALL_JUMP_INPUT_LOCK_MS,
+        ladderClimbSpeed: this.LADDER_CLIMB_SPEED,
+        quicksandMoveFactor: this.QUICKSAND_MOVE_FACTOR,
+        quicksandJumpFactor: this.QUICKSAND_JUMP_FACTOR,
+        weaponKnockbackMs: this.WEAPON_KNOCKBACK_MS,
+      },
+    );
     this.combatController = new OverworldCombatController(
       {
         scene: this,
@@ -770,7 +919,7 @@ export class OverworldPlayScene extends Phaser.Scene {
             damage,
           ),
         isProjectileBlocked: (worldX, worldY) => this.isProjectileBlocked(worldX, worldY),
-        applyWeaponKnockback: (velocityX) => this.applyWeaponKnockback(velocityX),
+        applyWeaponKnockback: (velocityX) => this.movementController.applyWeaponKnockback(velocityX),
         playSwordSlashFx: (x, y, facing, downward) =>
           this.fxController?.playSwordSlashFx(x, y, facing, downward),
         playMuzzleFlashFx: (x, y, facing) =>
@@ -1348,205 +1497,26 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     if (!this.playerBody) {
-      this.clearCrateInteractionState();
-      this.resetWallMovementState();
+      this.movementController.handleNoPlayerRuntime();
       this.syncLocalPresence();
       this.renderHud();
       return;
     }
 
-    const touchInput = getTouchInputState();
-    const touchLeft = touchInput.active && touchInput.moveX <= -0.28;
-    const touchRight = touchInput.active && touchInput.moveX >= 0.28;
-    const touchUp = touchInput.active && touchInput.moveY <= -0.42;
-    const touchDown = touchInput.active && touchInput.moveY >= 0.42;
-    const left = this.cursors.left.isDown || this.wasd.A.isDown || touchLeft;
-    const right = this.cursors.right.isDown || this.wasd.D.isDown || touchRight;
-    const horizontalInput = (right ? 1 : 0) - (left ? 1 : 0);
-    const touchJumpPressed = consumeTouchAction('jump');
-    const overlappingLadder = this.findOverlappingLadder();
-    const touchClimbUpHeld = overlappingLadder !== null && (touchUp || touchInput.jumpHeld);
-    const upHeld = this.cursors.up.isDown || this.wasd.W.isDown || touchClimbUpHeld;
-    const downHeld = this.cursors.down.isDown || this.wasd.S.isDown || touchDown;
-    const verticalInput = (downHeld ? 1 : 0) - (upHeld ? 1 : 0);
-    const touchJumpUsedForLadder = touchJumpPressed && overlappingLadder !== null;
-    const upPressed =
-      Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
-      Phaser.Input.Keyboard.JustDown(this.wasd.W) ||
-      touchJumpUsedForLadder;
-    const spacePressed =
-      Phaser.Input.Keyboard.JustDown(this.cursors.space!) ||
-      (touchJumpPressed && !touchJumpUsedForLadder);
-    const stayOnLadder =
-      overlappingLadder !== null &&
-      !spacePressed &&
-      (verticalInput !== 0 || (this.isClimbingLadder && !left && !right));
-    const jumpedOffLadder = this.isClimbingLadder && spacePressed;
     const swordPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.Q) || consumeTouchAction('slash');
     const gunPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E) || consumeTouchAction('shoot');
     const inQuicksand = this.isPlayerInQuicksand();
-
-    if (stayOnLadder && overlappingLadder) {
-      this.setPlayerLadderState(overlappingLadder);
-      const ladderDeltaX = overlappingLadder.sprite.x - (this.player?.x ?? this.playerBody.center.x);
-      this.playerBody.setVelocityX(Phaser.Math.Clamp(ladderDeltaX * 12, -45, 45));
-      this.playerBody.setVelocityY(verticalInput * this.LADDER_CLIMB_SPEED);
-      this.coyoteTime = 0;
-      this.jumpBuffered = false;
-      this.jumpBufferTime = 0;
-      this.isCrouching = false;
-      this.clearCrateInteractionState();
-      this.resetWallMovementState();
-      this.syncPlayerHitbox();
-    } else {
-      if (this.isClimbingLadder) {
-        this.setPlayerLadderState(null);
-      }
-
-      const onFloor = this.playerBody.blocked.down || this.playerBody.touching.down;
-      const crateInteraction =
-        !inQuicksand && onFloor && horizontalInput !== 0
-          ? this.findCrateInteraction(horizontalInput, downHeld)
-          : null;
-      const wantsCrouch = onFloor && downHeld && !crateInteraction;
-      this.isCrouching = wantsCrouch || (this.isCrouching && !this.canPlayerStandUp());
-      this.syncPlayerHitbox();
-      const canWallSlide =
-        !onFloor &&
-        crateInteraction === null &&
-        !this.isCrouching &&
-        this.playerBody.velocity.y >= 0 &&
-        this.time.now >= this.wallJumpLockUntil;
-      this.updateWallMovementState(horizontalInput, onFloor, canWallSlide);
-      if (onFloor) {
-        this.coyoteTime = this.COYOTE_MS;
-      } else {
-        this.coyoteTime = Math.max(0, this.coyoteTime - delta);
-      }
-
-      if (crateInteraction) {
-        const moveSpeed =
-          crateInteraction.mode === 'push' ? this.CRATE_PUSH_SPEED : this.CRATE_PULL_SPEED;
-        this.activeCrateInteractionMode = crateInteraction.mode;
-        this.activeCrateInteractionFacing = crateInteraction.facing;
-        this.playerBody.setVelocityX(crateInteraction.moveDirectionX * moveSpeed);
-        crateInteraction.crateBody.setVelocityX(crateInteraction.moveDirectionX * moveSpeed);
-      } else {
-        this.clearCrateInteractionState();
-        if (this.time.now < this.weaponKnockbackUntil) {
-          this.playerBody.setVelocityX(this.weaponKnockbackVelocityX);
-        } else if (this.time.now < this.wallJumpLockUntil && this.wallJumpDirection !== 0) {
-          this.playerBody.setVelocityX(this.wallJumpDirection * this.WALL_JUMP_VELOCITY_X);
-        } else {
-          this.weaponKnockbackVelocityX = 0;
-          const moveSpeedBase = this.isCrouching ? this.CRAWL_SPEED : this.PLAYER_SPEED;
-          const moveSpeed = inQuicksand ? moveSpeedBase * this.QUICKSAND_MOVE_FACTOR : moveSpeedBase;
-          if (left) {
-            this.playerBody.setVelocityX(-moveSpeed);
-          } else if (right) {
-            this.playerBody.setVelocityX(moveSpeed);
-          } else {
-            this.playerBody.setVelocityX(0);
-          }
-        }
-      }
-
-      const jumpPressed =
-        !this.isCrouching && (spacePressed || (upPressed && overlappingLadder === null));
-
-      if (jumpedOffLadder) {
-        this.playerBody.setVelocityY(
-          inQuicksand ? this.JUMP_VELOCITY * this.QUICKSAND_JUMP_FACTOR : this.JUMP_VELOCITY
-        );
-        this.fxController?.playJumpDustFx(
-          this.player?.x ?? this.playerBody.center.x,
-          this.playerBody.bottom,
-          this.playerFacing
-        );
-        this.jumpBuffered = false;
-        this.jumpBufferTime = 0;
-        this.coyoteTime = 0;
-        this.resetWallMovementState();
-      } else {
-        if (jumpPressed) {
-          if (this.isWallSliding && this.wallContactSide !== 0) {
-            const wallJumpSourceSide = this.wallContactSide;
-            const wallJumpDirection = (wallJumpSourceSide === -1 ? 1 : -1) as -1 | 1;
-            this.playerBody.setVelocityX(wallJumpDirection * this.WALL_JUMP_VELOCITY_X);
-            this.playerBody.setVelocityY(this.WALL_JUMP_VELOCITY_Y);
-            this.fxController?.playJumpDustFx(
-              this.player?.x ?? this.playerBody.center.x,
-              this.playerBody.bottom,
-              this.playerFacing
-            );
-            this.jumpBuffered = false;
-            this.jumpBufferTime = 0;
-            this.coyoteTime = 0;
-            this.clearWallSlideState();
-            this.wallJumpLockUntil = this.time.now + this.WALL_JUMP_INPUT_LOCK_MS;
-            this.wallJumpActive = true;
-            this.wallJumpDirection = wallJumpDirection;
-            this.wallJumpBlockedSide = wallJumpSourceSide;
-          } else {
-            this.jumpBuffered = true;
-            this.jumpBufferTime = this.JUMP_BUFFER_MS;
-          }
-        }
-
-        if (this.jumpBufferTime > 0) {
-          this.jumpBufferTime -= delta;
-          if (this.jumpBufferTime <= 0) {
-            this.jumpBuffered = false;
-          }
-        }
-
-        if (this.jumpBuffered && this.coyoteTime > 0) {
-          this.playerBody.setVelocityY(
-            inQuicksand ? this.JUMP_VELOCITY * this.QUICKSAND_JUMP_FACTOR : this.JUMP_VELOCITY
-          );
-          this.fxController?.playJumpDustFx(
-            this.player?.x ?? this.playerBody.center.x,
-            this.playerBody.bottom,
-            this.playerFacing
-          );
-          this.jumpBuffered = false;
-          this.jumpBufferTime = 0;
-          this.coyoteTime = 0;
-          this.wallJumpActive = false;
-          this.wallJumpDirection = 0;
-          this.wallJumpLockUntil = 0;
-          this.wallJumpBlockedSide = 0;
-        }
-
-        const jumpHeld = upHeld || this.cursors.space!.isDown || touchInput.jumpHeld;
-        if (
-          !jumpHeld &&
-          this.playerBody.velocity.y < 0 &&
-          this.time.now >= this.externalLaunchGraceUntil
-        ) {
-          this.playerBody.setVelocityY(this.playerBody.velocity.y * (inQuicksand ? 0.84 : 0.85));
-        }
-      }
-
-      if (this.isWallSliding && this.playerBody.velocity.y > this.WALL_SLIDE_MAX_FALL_SPEED) {
-        this.playerBody.setVelocityY(this.WALL_SLIDE_MAX_FALL_SPEED);
-      }
-
-      if (inQuicksand && onFloor) {
-        this.playerBody.setVelocityY(Math.max(this.playerBody.velocity.y, 4));
-      }
-
-      this.combatController.handleCombatInput({
-        swordPressed,
-        gunPressed,
-        downHeld,
-        grounded: onFloor,
-      });
-    }
+    const movement = this.movementController.updateMovement(delta, inQuicksand);
+    this.combatController.handleCombatInput({
+      swordPressed,
+      gunPressed,
+      downHeld: movement.downHeld,
+      grounded: movement.grounded,
+    });
 
     this.updateQuicksandVisualSink();
     this.combatController.updateProjectiles(delta);
-    this.syncLadderClimbSfx(verticalInput);
+    this.movementController.syncLadderClimbSfx(movement.verticalInput);
     this.maybeRespawnFromVoid();
     this.maybeAdvancePlayerRoom();
     this.syncPlayerVisual();
@@ -1577,18 +1547,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.quicksandVisualSink = 0;
     this.quicksandStatusCooldownUntil = 0;
     this.inspectInputController.reset();
-    this.coyoteTime = 0;
-    this.jumpBuffered = false;
-    this.jumpBufferTime = 0;
-    this.resetWallMovementState();
-    this.isClimbingLadder = false;
-    this.activeLadderKey = null;
-    this.isCrouching = false;
-    this.clearCrateInteractionState();
+    this.movementController.reset();
     this.combatController.reset();
-    this.weaponKnockbackVelocityX = 0;
-    this.weaponKnockbackUntil = 0;
-    this.setLadderClimbSfxPlaying(false);
     this.collectedObjectKeys = new Set();
     this.score = 0;
     this.goalRunController.reset();
@@ -2370,11 +2330,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.loadedFullRoomsById.values(),
     );
 
-    this.isClimbingLadder = false;
-    this.activeLadderKey = null;
-    this.setLadderClimbSfxPlaying(false);
-    this.isCrouching = false;
-    this.resetWallMovementState();
+    this.movementController.handlePlayerDestroyed();
     this.combatController.clearAttackAnimation();
     this.playerLandAnimationUntil = 0;
     this.playerWasGrounded = false;
@@ -2448,83 +2404,13 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.playerPickupSensorBody = entities.playerPickupSensorBody;
     this.playerSprite = entities.playerSprite;
     this.externalLaunchGraceUntil = 0;
-    this.isCrouching = false;
-    this.resetWallMovementState();
-    this.syncPlayerHitbox();
+    this.movementController.handlePlayerCreated();
     this.playerAnimationState = 'idle';
     this.playerFacing = 1;
     this.playerWasGrounded = true;
     this.playerLandAnimationUntil = 0;
     this.combatController.clearAttackAnimation();
-    this.isClimbingLadder = false;
-    this.activeLadderKey = null;
-    this.setLadderClimbSfxPlaying(false);
     this.syncPlayerVisual();
-  }
-
-  private resetWallMovementState(): void {
-    this.clearWallSlideState();
-    this.wallJumpLockUntil = 0;
-    this.wallJumpActive = false;
-    this.wallJumpDirection = 0;
-    this.wallJumpBlockedSide = 0;
-  }
-
-  private clearWallSlideState(): void {
-    this.wallContactSide = 0;
-    this.isWallSliding = false;
-  }
-
-  private getWallContactSide(horizontalInput: number): -1 | 1 | 0 {
-    if (!this.playerBody || horizontalInput === 0) {
-      return 0;
-    }
-
-    const touchingLeft = this.playerBody.blocked.left || this.playerBody.touching.left;
-    const touchingRight = this.playerBody.blocked.right || this.playerBody.touching.right;
-    if (horizontalInput < 0 && touchingLeft) {
-      return -1;
-    }
-    if (horizontalInput > 0 && touchingRight) {
-      return 1;
-    }
-
-    return 0;
-  }
-
-  private updateWallMovementState(horizontalInput: number, onFloor: boolean, canWallSlide: boolean): void {
-    if (!this.playerBody || onFloor || this.isClimbingLadder) {
-      this.resetWallMovementState();
-      return;
-    }
-
-    if (this.wallJumpActive && this.playerBody.velocity.y >= 0) {
-      this.wallJumpActive = false;
-      this.wallJumpDirection = 0;
-    }
-
-    const rawWallContactSide = canWallSlide ? this.getWallContactSide(horizontalInput) : 0;
-    if (
-      rawWallContactSide !== 0 &&
-      this.wallJumpBlockedSide !== 0 &&
-      rawWallContactSide !== this.wallJumpBlockedSide
-    ) {
-      this.wallJumpBlockedSide = 0;
-    }
-
-    const wallContactSide =
-      rawWallContactSide !== 0 && rawWallContactSide === this.wallJumpBlockedSide
-        ? 0
-        : rawWallContactSide;
-    this.wallContactSide = wallContactSide;
-    this.isWallSliding = wallContactSide !== 0;
-
-    if (this.isWallSliding) {
-      this.wallJumpActive = false;
-      this.wallJumpDirection = 0;
-    } else if (!this.wallJumpActive && this.time.now >= this.wallJumpLockUntil) {
-      this.wallJumpDirection = 0;
-    }
   }
 
   private findOverlappingLadder(): LoadedRoomObject | null {
@@ -2538,159 +2424,6 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.wasd.S.isDown ||
       (touchInput.active && touchInput.moveY >= 0.42)
     );
-  }
-
-  private setPlayerLadderState(ladder: LoadedRoomObject | null): void {
-    if (!this.playerBody) {
-      this.isClimbingLadder = false;
-      this.activeLadderKey = null;
-      this.resetWallMovementState();
-      this.setLadderClimbSfxPlaying(false);
-      return;
-    }
-
-    const nextKey = ladder?.key ?? null;
-    if (this.activeLadderKey === nextKey && this.isClimbingLadder === Boolean(ladder)) {
-      return;
-    }
-
-    const enteringLadder = ladder !== null && !this.isClimbingLadder;
-    this.isClimbingLadder = ladder !== null;
-    this.activeLadderKey = nextKey;
-    this.playerBody.setAllowGravity(!ladder);
-    if (!ladder) {
-      this.setLadderClimbSfxPlaying(false);
-    } else {
-      this.resetWallMovementState();
-    }
-
-    if (enteringLadder) {
-      this.playerBody.setVelocityY(0);
-    }
-  }
-
-  private syncPlayerHitbox(): void {
-    if (!this.playerBody) {
-      return;
-    }
-
-    const nextHeight = this.isCrouching ? this.PLAYER_CROUCH_HEIGHT : this.PLAYER_HEIGHT;
-    if (this.playerBody.height !== nextHeight) {
-      this.playerBody.setSize(this.PLAYER_WIDTH, nextHeight, false);
-      this.playerBody.setOffset(0, this.PLAYER_HEIGHT - nextHeight);
-    }
-    this.syncPlayerPickupSensor();
-  }
-
-  private clearCrateInteractionState(): void {
-    this.activeCrateInteractionMode = null;
-    this.activeCrateInteractionFacing = null;
-  }
-
-  private applyWeaponKnockback(velocityX: number): void {
-    if (!this.playerBody) {
-      return;
-    }
-
-    this.weaponKnockbackVelocityX = velocityX;
-    this.weaponKnockbackUntil = this.time.now + this.WEAPON_KNOCKBACK_MS;
-    this.playerBody.setVelocityX(velocityX);
-  }
-
-  private canPlayerStandUp(): boolean {
-    if (!this.playerBody) {
-      return true;
-    }
-
-    const room = this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates);
-    if (!room) {
-      return true;
-    }
-
-    const topY = this.playerBody.bottom - this.PLAYER_HEIGHT;
-    const sampleXs = [
-      this.playerBody.center.x,
-      this.playerBody.left + 1,
-      this.playerBody.right - 1,
-    ];
-
-    return sampleXs.every((sampleX) => !this.isSolidTerrainAtWorldPoint(room, sampleX, topY + 1));
-  }
-
-  private findCrateInteraction(horizontalInput: number, downHeld: boolean): CrateInteraction | null {
-    if (!this.playerBody || horizontalInput === 0) {
-      return null;
-    }
-
-    const moveDirectionX = horizontalInput > 0 ? 1 : -1;
-    const playerBounds = this.getArcadeBodyBounds(this.playerBody);
-    let bestInteraction: CrateInteraction | null = null;
-    let bestGap = Number.POSITIVE_INFINITY;
-
-    for (const loadedRoom of this.loadedFullRoomsById.values()) {
-      for (const liveObject of loadedRoom.liveObjects) {
-        if (
-          liveObject.config.id !== 'crate' ||
-          !liveObject.sprite.active ||
-          !isDynamicArcadeBody(liveObject.sprite.body as ArcadeObjectBody | null)
-        ) {
-          continue;
-        }
-
-        const crateBody = liveObject.sprite.body as Phaser.Physics.Arcade.Body;
-        const crateBounds = this.getArcadeBodyBounds(crateBody);
-        const verticalOverlap =
-          Math.min(playerBounds.bottom, crateBounds.bottom) -
-          Math.max(playerBounds.top, crateBounds.top);
-        if (verticalOverlap < Math.min(8, playerBounds.height * 0.5)) {
-          continue;
-        }
-
-        let mode: 'push' | 'pull' | null = null;
-        let gap = Number.POSITIVE_INFINITY;
-        let facing: -1 | 1 = moveDirectionX;
-
-        if (moveDirectionX > 0) {
-          const pushGap = crateBounds.left - playerBounds.right;
-          const pullGap = playerBounds.left - crateBounds.right;
-          if (pushGap >= -6 && pushGap <= this.CRATE_INTERACTION_MAX_GAP) {
-            mode = 'push';
-            gap = Math.abs(pushGap);
-            facing = 1;
-          } else if (downHeld && pullGap >= -6 && pullGap <= this.CRATE_INTERACTION_MAX_GAP) {
-            mode = 'pull';
-            gap = Math.abs(pullGap);
-            facing = -1;
-          }
-        } else {
-          const pushGap = playerBounds.left - crateBounds.right;
-          const pullGap = crateBounds.left - playerBounds.right;
-          if (pushGap >= -6 && pushGap <= this.CRATE_INTERACTION_MAX_GAP) {
-            mode = 'push';
-            gap = Math.abs(pushGap);
-            facing = -1;
-          } else if (downHeld && pullGap >= -6 && pullGap <= this.CRATE_INTERACTION_MAX_GAP) {
-            mode = 'pull';
-            gap = Math.abs(pullGap);
-            facing = 1;
-          }
-        }
-
-        if (!mode || gap >= bestGap) {
-          continue;
-        }
-
-        bestGap = gap;
-        bestInteraction = {
-          crateBody,
-          mode,
-          moveDirectionX,
-          facing,
-        };
-      }
-    }
-
-    return bestInteraction;
   }
 
   private isProjectileBlocked(worldX: number, worldY: number): boolean {
@@ -2765,44 +2498,14 @@ export class OverworldPlayScene extends Phaser.Scene {
     const entities = this.getPlayerEntities();
     if (!currentRoom || !entities) return;
 
-    this.setPlayerLadderState(null);
-    this.isCrouching = false;
     this.combatController.clearAttackAnimation();
-    this.clearCrateInteractionState();
-    this.weaponKnockbackVelocityX = 0;
-    this.weaponKnockbackUntil = 0;
     this.externalLaunchGraceUntil = 0;
-    this.resetWallMovementState();
+    this.movementController.handleRespawnReset();
     this.combatController.destroyProjectiles();
     this.playerLifecycleController.respawnPlayerToRoom(currentRoom, entities);
-    this.syncPlayerHitbox();
     this.playerWasGrounded = false;
-    this.setLadderClimbSfxPlaying(false);
     this.syncPlayerVisual();
     playSfx('respawn');
-  }
-
-  private syncLadderClimbSfx(verticalInput: number): void {
-    const shouldPlay =
-      Boolean(this.playerBody) &&
-      this.isClimbingLadder &&
-      verticalInput !== 0 &&
-      Math.abs(this.playerBody?.velocity.y ?? 0) > 6;
-    this.setLadderClimbSfxPlaying(shouldPlay);
-  }
-
-  private setLadderClimbSfxPlaying(playing: boolean): void {
-    if (this.ladderClimbSfxPlaying === playing) {
-      return;
-    }
-
-    this.ladderClimbSfxPlaying = playing;
-    if (playing) {
-      playSfx('ladder-climb');
-      return;
-    }
-
-    stopSfx('ladder-climb');
   }
 
   private syncPlayerVisual(): void {
@@ -3057,8 +2760,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.collectedObjectKeys.clear();
     this.heldKeyCount = 0;
     this.score = 0;
-    this.isCrouching = false;
-    this.resetWallMovementState();
+    this.movementController.resetTransientPlayState();
     this.combatController.clearAttackAnimation();
     this.externalLaunchGraceUntil = 0;
     this.combatController.destroyProjectiles();
@@ -3220,7 +2922,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       nextY = roomOrigin.y + halfHeight + inset;
     }
 
-    this.setPlayerLadderState(null);
+    this.movementController.clearLadderState();
     this.playerBody.reset(nextX, nextY);
     this.player.setPosition(nextX, nextY);
     this.syncPlayerPickupSensor();
