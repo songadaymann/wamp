@@ -66,10 +66,14 @@ async function loadDashboardStats(env: Env): Promise<DashboardStatsResponse> {
         ) AS multi_room_builders,
         (
           SELECT COUNT(*)
-          FROM room_runs
-          WHERE result = 'completed'
-            AND elapsed_ms IS NOT NULL
-            AND elapsed_ms >= ?
+          FROM (
+            SELECT user_id, room_id, room_version
+            FROM room_runs
+            WHERE result = 'completed'
+              AND elapsed_ms IS NOT NULL
+              AND elapsed_ms >= ?
+            GROUP BY user_id, room_id, room_version
+          ) AS distinct_completed_room_runs
         ) AS completed_room_challenges
     `
   )
