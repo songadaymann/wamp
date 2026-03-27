@@ -4594,3 +4594,35 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - no console or page errors were recorded
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the remaining work is now mostly final consolidation / whatever small runtime shell still justifies one more extraction before we call phase 8 complete.
+
+- March 27, 2026: extracted the overworld window controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/windowController.ts` with `OverworldWindowController` to own the remaining world-refresh / wake-data shell:
+    - scene wake/apply-data orchestration
+    - course-edited-room return hydration into the active draft session
+    - forced chunk-window refresh flow
+    - periodic visible-chunk refresh cadence
+    - shared success/failure handling for world loads, HUD redraw, and app-ready state
+  - `OverworldPlayScene.ts` now delegates the old inline shell through that controller instead of carrying:
+    - `handleWakeAsync`
+    - `applySceneData`
+    - `applyCourseEditedRoomReturn`
+    - `refreshAround`
+    - `refreshChunkWindowIfNeeded`
+    - `maybeRefreshVisibleChunks`
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke wrote:
+      - `output/web-game/overworld-window-controller-skill-smoke/state-0.json`
+      - `output/web-game/overworld-window-controller-skill-smoke/shot-0.png`
+    - focused browser probe wrote:
+      - `output/web-game/overworld-window-controller-probe/summary.json`
+      - `output/web-game/overworld-window-controller-probe/before-wake-refresh.png`
+      - `output/web-game/overworld-window-controller-probe/after-wake-refresh.png`
+    - targeted checks confirmed:
+      - waking the scene with `courseEditedRoom` + `draftRoom` updated the active draft session room title to `Probe Window Title`
+      - a forced browse wake to `-4,-2` refreshed the world and left `selected`, `currentRoom`, and `windowCenter` all at `-4,-2`
+      - the overworld remained the active scene after the forced refresh
+      - loading text was hidden again after refresh completion
+      - no console or page errors were recorded
+  - Status:
+    - phase 8 is very close to complete on `safety/overworld-scene-split-2026-03-26`; what remains is basically final consolidation and deciding whether one more small shell extraction is worth it before calling the phase done.

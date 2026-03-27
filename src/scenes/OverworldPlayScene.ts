@@ -164,6 +164,9 @@ import {
   OverworldCourseComposerController,
 } from './overworld/courseComposer';
 import {
+  OverworldWindowController,
+} from './overworld/windowController';
+import {
   OverworldPresenceOverlayController,
 } from './overworld/presenceOverlays';
 import {
@@ -385,6 +388,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly sessionResetController: OverworldSessionResetController;
   private readonly roomTransitionController: OverworldRoomTransitionController;
   private readonly courseComposerController: OverworldCourseComposerController;
+  private readonly windowController: OverworldWindowController;
   private readonly presenceOverlayController: OverworldPresenceOverlayController;
   private readonly selectionController: OverworldSelectionController;
   private readonly hudStateController: OverworldHudStateController;
@@ -397,8 +401,6 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private shouldCenterCamera = false;
   private shouldRespawnPlayer = false;
-  private visibleChunkRefreshInFlight = false;
-  private nextVisibleChunkRefreshAt = 0;
   private readonly handleCanvasWheel = (event: WheelEvent): void => {
     const appMode = document.body.dataset.appMode;
     if (appMode !== 'world' && appMode !== 'play-world') {
@@ -656,6 +658,76 @@ export class OverworldPlayScene extends Phaser.Scene {
       openEditor: (editorData) => this.flowController.openEditor(editorData),
       startDraftCoursePlayback: (snapshot) =>
         this.flowController.startCoursePlayback(snapshot, 'draftPreview'),
+    });
+    this.windowController = new OverworldWindowController(this, {
+      worldStreamingController: this.worldStreamingController,
+      getMode: () => this.mode,
+      setMode: (mode) => {
+        this.mode = mode;
+      },
+      setCameraMode: (mode) => {
+        this.cameraMode = mode;
+      },
+      getInspectZoom: () => this.inspectZoom,
+      setInspectZoom: (zoom) => {
+        this.inspectZoom = zoom;
+      },
+      getBrowseInspectZoom: () => this.browseInspectZoom,
+      setBrowseInspectZoom: (zoom) => {
+        this.browseInspectZoom = zoom;
+      },
+      getFitZoomForRoom: () => this.getFitZoomForRoom(),
+      getRefreshCenterCoordinates: () => this.getZoomFocusCoordinates(),
+      getWindowCenterCoordinates: () => ({ ...this.windowCenterCoordinates }),
+      setWindowCenterCoordinates: (coordinates) => {
+        this.windowCenterCoordinates = { ...coordinates };
+      },
+      setSelectedCoordinates: (coordinates) => {
+        this.selectedCoordinates = { ...coordinates };
+      },
+      setCurrentRoomCoordinates: (coordinates) => {
+        this.currentRoomCoordinates = { ...coordinates };
+      },
+      getCurrentRoomCoordinates: () => ({ ...this.currentRoomCoordinates }),
+      setShouldCenterCamera: (value) => {
+        this.shouldCenterCamera = value;
+      },
+      setShouldRespawnPlayer: (value) => {
+        this.shouldRespawnPlayer = value;
+      },
+      syncAppMode: () => this.syncAppMode(),
+      resetPlaySession: () => {
+        this.sessionResetController.resetPlaySession();
+      },
+      showTransientStatus: (message) => this.showTransientStatus(message),
+      setCourseEditorReturnTarget: (target) => {
+        this.courseEditorReturnTarget = target;
+      },
+      syncCourseComposerRecordFromSession: () => {
+        this.courseComposerController.syncRecordFromSession();
+      },
+      handleCourseEditorReturned: () => {
+        this.courseComposerController.handleCourseEditorReturned();
+      },
+      continueCourseEditorNavigation: (offset) =>
+        this.courseComposerController.continueCourseEditorNavigation(offset),
+      activateDraftCoursePreview: (snapshot, draftRoom) =>
+        this.coursePlaybackController.activateDraftCoursePreview(snapshot, draftRoom),
+      updateSelectedSummary: () => this.updateSelectedSummary(),
+      refreshLeaderboardForSelection: () => this.refreshLeaderboardForSelection(),
+      updateCameraBounds: () => this.updateCameraBounds(),
+      syncModeRuntime: () => this.syncModeRuntime(),
+      syncPreviewVisibility: () => this.syncPreviewVisibility(),
+      syncPresenceSubscriptions: () => this.syncPresenceSubscriptions(),
+      syncGhostVisibility: () => this.syncGhostVisibility(),
+      redrawWorld: () => this.redrawWorld(),
+      renderHud: (statusOverride) => this.renderHud(statusOverride),
+      hideLoadingText: () => {
+        this.loadingText.setVisible(false);
+      },
+      getTimeNow: () => this.time.now,
+      getBrowseRefreshIntervalMs: () => BROWSE_VISIBLE_CHUNK_REFRESH_INTERVAL_MS,
+      getPlayRefreshIntervalMs: () => PLAY_VISIBLE_CHUNK_REFRESH_INTERVAL_MS,
     });
     this.objectiveController = new OverworldObjectiveController(
       {
@@ -1449,8 +1521,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.WAKE, this.handleWake, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
 
-    const initialFocus = data?.centerCoordinates ?? data?.roomCoordinates ?? getFocusedCoordinatesFromUrl();
-    this.applySceneData({
+    const initialFocus =
+      data?.centerCoordinates ?? data?.roomCoordinates ?? getFocusedCoordinatesFromUrl();
+    this.windowController.applySceneData({
       centerCoordinates: initialFocus,
       roomCoordinates: initialFocus,
       mode: data?.mode ?? 'browse',
@@ -1462,13 +1535,13 @@ export class OverworldPlayScene extends Phaser.Scene {
       statusMessage: data?.statusMessage ?? null,
     });
 
-    void this.refreshAround(this.windowCenterCoordinates, {
+    void this.windowController.refreshAround(this.windowCenterCoordinates, {
       forceChunkReload: data?.forceRefreshAround ?? false,
     });
   }
 
   update(_time: number, delta: number): void {
-    this.maybeRefreshVisibleChunks();
+    this.windowController.maybeRefreshVisibleChunks();
     this.updateBackdrop();
     this.gridOverlayController.redraw();
     this.updateLiveObjects(delta);
@@ -1555,6 +1628,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.shouldRespawnPlayer = false;
     this.presenceController.reset();
     this.courseComposerController.reset();
+    this.windowController.reset();
     this.coursePlaybackController.clearActiveCourseRoomOverrides();
     this.activeCourseRun = null;
     this.courseEditorReturnTarget = null;
@@ -1739,7 +1813,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private handleWake = (_sys: Phaser.Scenes.Systems, data?: OverworldPlaySceneData): void => {
-    void this.handleWakeAsync(data);
+    void this.windowController.handleWakeAsync(data);
   };
   private readonly handleAuthStateChanged = (): void => {
     const identityChanged = this.presenceController.refreshIdentity();
@@ -1752,88 +1826,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.renderHud();
   };
 
-  private async handleWakeAsync(data?: OverworldPlaySceneData): Promise<void> {
-    this.applySceneData(data);
-    if (data?.courseEditorNavigateOffset) {
-      await this.continueCourseEditorNavigation(data.courseEditorNavigateOffset);
-      return;
-    }
-    if (data?.courseDraftPreviewId) {
-      const draft = getActiveCourseDraftSessionDraft();
-      if (draft?.id === data.courseDraftPreviewId && draft.goal) {
-        await this.coursePlaybackController.activateDraftCoursePreview(draft, data.draftRoom ?? null);
-      }
-    }
-    this.syncAppMode();
-    if (data?.forceRefreshAround) {
-      this.worldStreamingController.reset();
-      this.updateSelectedSummary();
-      this.renderHud();
-      await this.refreshAround(this.windowCenterCoordinates, {
-        forceChunkReload: true,
-      });
-      return;
-    }
-
-    this.updateSelectedSummary();
-    this.redrawWorld();
-    this.renderHud();
-    await this.refreshAround(this.windowCenterCoordinates, {
-      forceChunkReload: data?.forceRefreshAround ?? false,
-    });
-  }
-
   private showTransientStatus(message: string): void {
     this.transientStatusMessage = message;
     this.transientStatusExpiresAt = this.time.now + 4200;
-  }
-
-  private applyCourseEditedRoomReturn(
-    courseEditedRoom: CourseEditedRoomData,
-    draftRoom: RoomSnapshot | null,
-    publishedRoom: RoomSnapshot | null
-  ): void {
-    if (getActiveCourseDraftSessionCourseId() !== courseEditedRoom.courseId) {
-      return;
-    }
-
-    const currentDraft = getActiveCourseDraftSessionDraft();
-    const currentRoomRef =
-      currentDraft?.roomRefs.find((roomRef) => roomRef.roomId === courseEditedRoom.roomId) ?? null;
-    if (!currentRoomRef) {
-      return;
-    }
-
-    setActiveCourseDraftSessionSelectedRoom(courseEditedRoom.roomId);
-
-    const nextDraftRoom =
-      draftRoom?.id === courseEditedRoom.roomId ? cloneRoomSnapshot(draftRoom) : null;
-    const nextPublishedRoom =
-      publishedRoom?.id === courseEditedRoom.roomId ? cloneRoomSnapshot(publishedRoom) : null;
-
-    if (nextPublishedRoom) {
-      clearActiveCourseDraftSessionRoomOverride(courseEditedRoom.roomId);
-    } else if (nextDraftRoom) {
-      setActiveCourseDraftSessionRoomOverride(nextDraftRoom);
-    }
-
-    const nextTitle = (nextPublishedRoom ?? nextDraftRoom)?.title ?? currentRoomRef.roomTitle ?? null;
-    const nextVersion = nextPublishedRoom?.version ?? currentRoomRef.roomVersion;
-    if (currentRoomRef.roomTitle === nextTitle && currentRoomRef.roomVersion === nextVersion) {
-      return;
-    }
-
-    updateActiveCourseDraftSession((draft) => {
-      const roomRef = draft.roomRefs.find((entry) => entry.roomId === courseEditedRoom.roomId);
-      if (!roomRef) {
-        return;
-      }
-
-      roomRef.roomTitle = nextTitle;
-      if (nextPublishedRoom) {
-        roomRef.roomVersion = nextPublishedRoom.version;
-      }
-    });
   }
 
   private touchQuicksand(): void {
@@ -1857,69 +1852,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.quicksandVisualSink = Phaser.Math.Linear(this.quicksandVisualSink, target, lerp);
     if (Math.abs(this.quicksandVisualSink - target) < 0.08) {
       this.quicksandVisualSink = target;
-    }
-  }
-
-  private applySceneData(data?: OverworldPlaySceneData): void {
-    const fallback = data?.centerCoordinates ?? data?.roomCoordinates ?? getFocusedCoordinatesFromUrl();
-    const wasPlaying = this.mode === 'play';
-
-    if (data?.clearDraftRoomId || data?.draftRoom || data?.publishedRoom || data?.invalidateRoomId) {
-      this.worldStreamingController.applyOptimisticMutation({
-        clearDraftRoomId: data.clearDraftRoomId ?? null,
-        draftRoom: data.draftRoom ? cloneRoomSnapshot(data.draftRoom) : null,
-        publishedRoom: data.publishedRoom ? cloneRoomSnapshot(data.publishedRoom) : null,
-        invalidateRoomId: data.invalidateRoomId ?? null,
-      });
-    }
-
-    if (data?.courseEditedRoom) {
-      this.applyCourseEditedRoomReturn(
-        data.courseEditedRoom,
-        data.draftRoom ? cloneRoomSnapshot(data.draftRoom) : null,
-        data.publishedRoom ? cloneRoomSnapshot(data.publishedRoom) : null
-      );
-    }
-
-    if (data?.statusMessage) {
-      this.showTransientStatus(data.statusMessage);
-    }
-
-    if (data?.courseEditorReturnTarget !== undefined) {
-      this.courseEditorReturnTarget = data.courseEditorReturnTarget ?? null;
-    }
-
-    this.courseComposerController.syncRecordFromSession();
-    if (data?.courseEditorReturned) {
-      this.courseComposerController.handleCourseEditorReturned();
-    }
-
-    if (data?.mode) {
-      if (data.mode === 'play') {
-        if (!wasPlaying) {
-          this.browseInspectZoom = this.inspectZoom;
-        }
-        this.sessionResetController.resetPlaySession();
-        this.cameraMode = 'follow';
-      }
-      this.mode = data.mode;
-      this.syncAppMode();
-    }
-
-    const focusCoordinates = data?.roomCoordinates ?? data?.draftRoom?.coordinates ?? fallback;
-    const centerCoordinates = data?.centerCoordinates ?? focusCoordinates;
-
-    this.selectedCoordinates = { ...focusCoordinates };
-    this.currentRoomCoordinates = { ...focusCoordinates };
-    this.windowCenterCoordinates = { ...centerCoordinates };
-    this.shouldCenterCamera = true;
-    this.shouldRespawnPlayer = this.mode === 'play';
-
-    if (this.mode === 'play') {
-      this.inspectZoom = this.getFitZoomForRoom();
-    } else {
-      this.cameraMode = 'inspect';
-      this.inspectZoom = this.browseInspectZoom;
     }
   }
 
@@ -2042,123 +1974,15 @@ export class OverworldPlayScene extends Phaser.Scene {
     centerCoordinates: RoomCoordinates,
     options: { forceChunkReload?: boolean } = {}
   ): Promise<boolean> {
-    this.windowCenterCoordinates = { ...centerCoordinates };
-    this.renderHud('Loading world...');
-    if (!isAppReady()) {
-      setBootProgress(1);
-      setBootStatus('Loading world...');
-    }
-
-    const refreshed = await this.worldStreamingController.refreshAround(centerCoordinates, options);
-    const sceneAvailable =
-      this.scene.isActive(this.scene.key) ||
-      this.scene.isPaused(this.scene.key);
-    if (refreshed === 'success') {
-      if (!sceneAvailable) {
-        return true;
-      }
-
-      this.updateSelectedSummary();
-      void this.refreshLeaderboardForSelection();
-      this.updateCameraBounds();
-      this.syncModeRuntime();
-      this.syncPreviewVisibility();
-      this.syncPresenceSubscriptions();
-      this.syncGhostVisibility();
-      this.redrawWorld();
-      this.renderHud();
-      this.loadingText.setVisible(false);
-      this.nextVisibleChunkRefreshAt = this.time.now + this.getVisibleChunkRefreshIntervalMs();
-      if (!isAppReady()) {
-        markAppReady();
-      }
-      hideBusyOverlay();
-      return true;
-    }
-
-    if (refreshed === 'cancelled') {
-      return false;
-    }
-
-    if (!sceneAvailable) {
-      return false;
-    }
-
-    console.error('Failed to load overworld window');
-    const retry = async (): Promise<void> => {
-      if (!isAppReady()) {
-        setBootProgress(1);
-        setBootStatus('Retrying world...');
-      } else {
-        showBusyOverlay('Retrying world...', 'Loading world...');
-      }
-      await this.refreshAround(centerCoordinates, { forceChunkReload: true });
-    };
-
-    if (!isAppReady()) {
-      showBootFailure('Failed to load world. Check your connection and retry.', retry);
-    } else if (isBusyOverlayVisible()) {
-      showBusyError('Failed to load world. Check your connection and try again.', {
-        retryHandler: retry,
-      });
-    } else {
-      this.renderHud('Failed to load world.');
-    }
-
-    return false;
+    return this.windowController.refreshAround(centerCoordinates, options);
   }
 
   private refreshChunkWindowIfNeeded(centerCoordinates: RoomCoordinates): void {
-    if (this.worldStreamingController.needsRefreshAround(centerCoordinates)) {
-      void this.refreshAround(centerCoordinates);
-      return;
-    }
-
-    this.worldStreamingController.refreshVisibleSelectionFromCache();
-    this.syncPreviewVisibility();
+    this.windowController.refreshChunkWindowIfNeeded(centerCoordinates);
   }
 
   private maybeRefreshVisibleChunks(): void {
-    if (this.visibleChunkRefreshInFlight) {
-      return;
-    }
-
-    const now = this.time.now;
-    if (now < this.nextVisibleChunkRefreshAt) {
-      return;
-    }
-
-    const centerCoordinates = this.getZoomFocusCoordinates();
-    if (this.worldStreamingController.needsRefreshAround(centerCoordinates)) {
-      return;
-    }
-
-    this.visibleChunkRefreshInFlight = true;
-    void this.worldStreamingController.refreshLoadedChunksIfChanged(centerCoordinates)
-      .then((result) => {
-        if (result !== 'updated') {
-          return;
-        }
-
-        this.updateSelectedSummary();
-        void this.refreshLeaderboardForSelection();
-        this.syncModeRuntime();
-        this.syncPreviewVisibility();
-        this.syncPresenceSubscriptions();
-        this.syncGhostVisibility();
-        this.redrawWorld();
-        this.renderHud();
-      })
-      .finally(() => {
-        this.visibleChunkRefreshInFlight = false;
-        this.nextVisibleChunkRefreshAt = this.time.now + this.getVisibleChunkRefreshIntervalMs();
-      });
-  }
-
-  private getVisibleChunkRefreshIntervalMs(): number {
-    return this.mode === 'browse'
-      ? BROWSE_VISIBLE_CHUNK_REFRESH_INTERVAL_MS
-      : PLAY_VISIBLE_CHUNK_REFRESH_INTERVAL_MS;
+    this.windowController.maybeRefreshVisibleChunks();
   }
 
   private syncPresenceSubscriptions(): void {
