@@ -21,6 +21,10 @@ import {
   type PlacedObject,
 } from '../../config';
 import {
+  createPlacedObjectAnchorCell,
+  findConflictingPlacedObjectAtAnchorCell,
+} from '../../placedObjects/occupancy';
+import {
   cloneRoomGoal,
   createDefaultRoomGoal,
   createGoalMarkerPointFromTile,
@@ -770,7 +774,26 @@ export class EditorEditRuntime {
     };
 
     const previous = this.clonePlacedObjects();
-    const next = [...previous, placed];
+    const targetCell = createPlacedObjectAnchorCell(tileX, tileY, editorState.activeLayer);
+    const conflict = findConflictingPlacedObjectAtAnchorCell(previous, targetCell, placed);
+    if (
+      conflict &&
+      conflict.placed.id === placed.id &&
+      conflict.placed.facing === placed.facing
+    ) {
+      return conflict.placed;
+    }
+
+    const next = conflict
+      ? previous
+          .filter((_, index) => index !== conflict.index)
+          .map((candidate) =>
+            candidate.triggerTargetInstanceId === conflict.placed.instanceId
+              ? { ...candidate, triggerTargetInstanceId: null }
+              : candidate
+          )
+          .concat(placed)
+      : [...previous, placed];
     this.host.setPlacedObjects(next);
     this.undoStack.push({
       kind: 'objects',

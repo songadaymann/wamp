@@ -4711,3 +4711,35 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Status:
     - phase 9 slice 2 is the worker-admin invalidation split
     - next likely cleanup target is the remaining suspicious-analysis block in `src/cloudflare/worker/admin/suspicious.ts`, or repo hygiene around `progress.md` / stale docs once that feels good enough
+
+- March 27, 2026: patched placed-object stacking so same-cell same-layer duplicates no longer accumulate.
+  - Added `src/placedObjects/occupancy.ts` as the shared anchor-cell policy module for placed objects:
+    - computes a placed object's anchor cell from its tile/layer position
+    - finds conflicts in an existing placed-object list
+    - dedupes same-cell same-layer objects while preserving the surviving object's metadata
+    - carries the future extension point for explicit same-cell exceptions via `canPlacedObjectsShareAnchorCell(...)`
+  - Updated `src/scenes/editor/editRuntime.ts` so object placement now respects anchor-cell occupancy:
+    - clicking the same object onto the same tile/layer is a no-op instead of duplicating it
+    - placing a different object onto the same tile/layer replaces the old object instead of stacking
+    - any pressure-plate target links that pointed at a replaced object are cleared when that object is evicted
+  - Updated `src/persistence/roomModel.ts` so cloned room snapshots sanitize existing stacked objects automatically:
+    - room load/clone paths now run `dedupePlacedObjectsByAnchorCell(...)`
+    - replaced instance ids are remapped through `resolvePlacedObjectInstanceAlias(...)` before validating trigger targets
+    - this means already-exploited rooms are normalized without needing a D1 migration
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-stack-fix`
+    - required `develop-web-game` client smoke wrote:
+      - `output/web-game/object-stack-guard-skill-smoke/state-0.json`
+      - `output/web-game/object-stack-guard-skill-smoke/shot-0.png`
+    - focused Playwright probe wrote:
+      - `output/web-game/object-stack-guard-probe/summary.json`
+      - `output/web-game/object-stack-guard-probe/editor-after-stack-guard.png`
+    - targeted checks confirmed:
+      - a direct editor launch with two `coin_gold` objects on the same terrain cell loaded as exactly one placed object
+      - placing `coin_gold` onto that occupied terrain cell again kept the count at `1`
+      - placing `coin_gold` onto a fresh terrain cell raised the count to `2`
+      - placing `coin_silver` onto that same fresh terrain cell kept the count at `2` and replaced the occupant instead of stacking
+      - no console or page errors were recorded during the probe
+  - Status:
+    - this bugfix lives on `safety/object-stack-guard-2026-03-27`
+    - the default rule is now one placed object per anchor cell per layer, with the explicit policy hook ready if we later want narrow exceptions
