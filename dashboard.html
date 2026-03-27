@@ -12,23 +12,16 @@
       }
 
       :root {
-        --sky-top: #78a8ff;
-        --sky-bottom: #5c94fc;
-        --cloud: #f8f8f8;
-        --ground: #c86b1d;
-        --ground-dark: #8d3b0f;
-        --ground-deep: #51210a;
-        --brick: #b55a1c;
-        --brick-dark: #7a3110;
-        --question: #d79b21;
-        --question-light: #f7c960;
-        --pipe: #21a521;
-        --pipe-light: #56d156;
-        --hill: #2fad2f;
-        --hill-shadow: #1b7d1b;
+        color-scheme: light;
+        --sky-top: #89b5ff;
+        --sky-mid: #77a4f8;
+        --sky-bottom: #6b95ee;
+        --panel-light: #f6f8fb;
+        --panel-mid: #d4d8e2;
+        --panel-dark: #636b7f;
+        --panel-deep: #3b4253;
         --text: #ffffff;
-        --shadow: rgba(0, 0, 0, 0.28);
-        --black: #000000;
+        --ink: #05070b;
       }
 
       * {
@@ -41,7 +34,12 @@
         overflow-x: hidden;
         font-family: "Early Gameboy", monospace;
         color: var(--text);
-        background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 72%, #6f9bff 100%);
+        background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 54%, var(--sky-bottom) 100%);
+        image-rendering: pixelated;
+      }
+
+      button {
+        font: inherit;
       }
 
       .scene {
@@ -51,241 +49,229 @@
         pointer-events: none;
       }
 
-      .cloud,
-      .hill,
-      .pipe,
-      .brick-strip,
-      .ground {
-        position: absolute;
-      }
-
-      .cloud {
-        width: 132px;
-        height: 40px;
-        background: var(--cloud);
-        border: 4px solid var(--black);
-        box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.14);
-      }
-
-      .cloud::before,
-      .cloud::after {
+      .scene::after {
         content: "";
         position: absolute;
-        background: var(--cloud);
-        border: 4px solid var(--black);
-      }
-
-      .cloud::before {
-        width: 40px;
-        height: 40px;
-        left: 16px;
-        top: -20px;
-      }
-
-      .cloud::after {
-        width: 52px;
-        height: 52px;
-        right: 18px;
-        top: -28px;
-      }
-
-      .cloud-1 { top: 8vh; left: 6vw; }
-      .cloud-2 { top: 14vh; right: 12vw; transform: scale(0.88); }
-      .cloud-3 { top: 24vh; left: 50%; transform: translateX(-50%) scale(0.72); }
-
-      .hill {
-        bottom: 136px;
-        width: 180px;
-        height: 112px;
-        background: var(--hill);
-        border: 4px solid var(--black);
-        border-bottom: none;
-        border-radius: 90px 90px 0 0;
-        box-shadow: inset -16px 0 0 var(--hill-shadow);
-      }
-
-      .hill-1 { left: -24px; transform: scale(0.88); }
-      .hill-2 { right: 8vw; width: 150px; height: 94px; }
-
-      .pipe {
-        bottom: 116px;
-        width: 96px;
-        height: 148px;
-        background: linear-gradient(90deg, var(--pipe-light) 0 24%, var(--pipe) 24% 76%, #157915 76% 100%);
-        border: 4px solid var(--black);
-        box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.14);
-      }
-
-      .pipe::before {
-        content: "";
-        position: absolute;
-        left: -10px;
-        right: -10px;
-        top: -22px;
-        height: 28px;
-        background: linear-gradient(90deg, #75e675 0 22%, var(--pipe) 22% 74%, #157915 74% 100%);
-        border: 4px solid var(--black);
-      }
-
-      .pipe-1 { left: 16vw; height: 124px; }
-      .pipe-2 { right: 26vw; width: 74px; height: 98px; }
-
-      .brick-strip {
-        height: 28px;
-        border: 4px solid var(--black);
+        inset: 0;
         background:
-          repeating-linear-gradient(90deg, transparent 0 26px, rgba(0, 0, 0, 0.35) 26px 30px),
-          linear-gradient(180deg, #d98a3b 0%, var(--brick) 44%, var(--brick-dark) 100%);
+          linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0) 16%),
+          linear-gradient(180deg, rgba(9, 15, 27, 0) 58%, rgba(9, 15, 27, 0.12) 100%);
       }
 
-      .brick-strip-1 { top: 18vh; left: 18vw; width: 180px; }
-      .brick-strip-2 { top: 12vh; right: 18vw; width: 132px; }
-
-      .ground {
-        left: 0;
-        right: 0;
+      .scene-art {
+        position: absolute;
+        left: 50%;
         bottom: 0;
-        height: 124px;
-        background:
-          linear-gradient(180deg, var(--ground) 0 24%, var(--ground-dark) 24% 66%, var(--ground-deep) 66% 100%);
-        border-top: 4px solid var(--black);
+        width: max(1408px, 112vw);
+        height: auto;
+        transform: translateX(-50%);
+        image-rendering: pixelated;
       }
 
-      .app {
+      .shell {
         position: relative;
         z-index: 1;
-        min-height: 100vh;
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 28px 20px 180px;
         display: grid;
-        place-items: center;
-        padding: 32px 18px 148px;
+        gap: 36px;
       }
 
-      .panel {
-        width: min(1120px, 100%);
-        padding: 22px;
-        border: 4px solid var(--black);
-        background: rgba(0, 0, 0, 0.18);
-        backdrop-filter: blur(3px);
-        box-shadow: 0 20px 0 rgba(0, 0, 0, 0.18);
-      }
-
-      .topbar {
+      .toolbar {
         display: flex;
-        align-items: center;
-        justify-content: space-between;
+        justify-content: flex-end;
         gap: 16px;
-        margin-bottom: 16px;
-      }
-
-      .title {
-        font-size: clamp(18px, 3vw, 28px);
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.36);
       }
 
       .refresh {
-        padding: 10px 14px;
-        border: 4px solid var(--black);
-        color: var(--black);
-        background: linear-gradient(180deg, var(--question-light), var(--question));
+        min-height: 56px;
+        min-width: 168px;
+        padding: 14px 20px;
+        border: 4px solid var(--ink);
+        background:
+          linear-gradient(180deg, #ffffff 0%, #edf0f5 36%, var(--panel-mid) 100%);
+        color: var(--ink);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        box-shadow:
+          inset 0 -6px 0 rgba(0, 0, 0, 0.16),
+          0 8px 0 rgba(0, 0, 0, 0.24);
         cursor: pointer;
       }
 
       .refresh:disabled {
-        cursor: wait;
-        opacity: 0.7;
-      }
-
-      .meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 14px;
-        margin-bottom: 18px;
-        font-size: 11px;
-        text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.32);
+        opacity: 0.65;
+        cursor: default;
       }
 
       .stats-grid {
         display: flex;
         flex-wrap: wrap;
-        gap: 14px;
+        justify-content: center;
         align-items: flex-start;
+        gap: 14px;
+        padding: clamp(56px, 14vh, 164px) 0 0;
       }
 
       .stat-card {
-        display: inline-flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        min-width: 132px;
-        min-height: 98px;
-        padding: 12px 16px;
-        border: 4px solid var(--black);
-        box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.16);
+        position: relative;
+        flex: 0 1 auto;
+        width: max-content;
+        min-width: 110px;
+        max-width: min(100%, 220px);
+        min-height: 122px;
+        display: grid;
+        align-content: space-between;
+        gap: 10px;
+        padding: 12px 12px 14px;
+        border: 4px solid var(--ink);
+        box-shadow:
+          inset 0 -8px 0 rgba(0, 0, 0, 0.16),
+          0 10px 0 rgba(0, 0, 0, 0.2);
+        text-transform: uppercase;
+        overflow: hidden;
       }
 
-      .stat-card[data-tone="question"] {
-        color: var(--black);
-        background: linear-gradient(180deg, var(--question-light), var(--question));
+      .stat-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        opacity: 0.18;
+        pointer-events: none;
       }
 
-      .stat-card[data-tone="brick"] {
-        background: linear-gradient(180deg, #d98a3b 0%, var(--brick) 44%, var(--brick-dark) 100%);
+      .stat-card[data-tone='question'] {
+        background: linear-gradient(180deg, #ffffff 0%, #f0f3f8 34%, var(--panel-mid) 100%);
+        color: var(--ink);
       }
 
-      .stat-card[data-tone="pipe"] {
-        background: linear-gradient(180deg, #75e675 0 18%, var(--pipe) 18% 76%, #157915 76% 100%);
+      .stat-card[data-tone='question']::before {
+        background:
+          linear-gradient(90deg, transparent 0 30%, rgba(7, 8, 12, 0.18) 30% 38%, transparent 38% 62%, rgba(7, 8, 12, 0.18) 62% 70%, transparent 70%),
+          linear-gradient(180deg, transparent 0 30%, rgba(7, 8, 12, 0.18) 30% 38%, transparent 38% 62%, rgba(7, 8, 12, 0.18) 62% 70%, transparent 70%);
+      }
+
+      .stat-card[data-tone='brick'] {
+        background: linear-gradient(180deg, #dde1ea 0%, #c5cad6 32%, #949bae 100%);
+        color: var(--ink);
+      }
+
+      .stat-card[data-tone='brick']::before {
+        background:
+          repeating-linear-gradient(
+            90deg,
+            transparent 0 28px,
+            rgba(7, 8, 12, 0.24) 28px 32px
+          ),
+          repeating-linear-gradient(
+            180deg,
+            transparent 0 28px,
+            rgba(7, 8, 12, 0.18) 28px 32px
+          );
+      }
+
+      .stat-card[data-tone='pipe'] {
+        background: linear-gradient(90deg, #798197 0 18%, var(--panel-dark) 18% 78%, var(--panel-deep) 78% 100%);
+      }
+
+      .stat-card[data-tone='pipe']::before {
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent 52%),
+          linear-gradient(90deg, transparent 0 14%, rgba(255, 255, 255, 0.16) 14% 19%, transparent 19% 82%, rgba(5, 7, 11, 0.22) 82% 86%, transparent 86%);
+      }
+
+      .stat-label,
+      .stat-value {
+        position: relative;
+        z-index: 1;
+        text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.18);
       }
 
       .stat-label {
-        margin-bottom: 10px;
         font-size: 11px;
-        text-align: center;
-        line-height: 1.35;
+        line-height: 1.45;
+        letter-spacing: 0.08em;
+        max-width: 10ch;
+      }
+
+      .stat-card[data-tone='question'] .stat-label,
+      .stat-card[data-tone='question'] .stat-value {
+        text-shadow: 3px 3px 0 rgba(255, 255, 255, 0.26);
       }
 
       .stat-value {
-        white-space: nowrap;
-        font-size: clamp(22px, 4vw, 36px);
+        font-size: clamp(1.4rem, 4.5vw, 2.8rem);
         line-height: 1;
-        text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.28);
+        white-space: nowrap;
+        word-break: break-word;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
       }
 
       @media (max-width: 720px) {
-        .panel { padding: 16px; }
-        .topbar { align-items: stretch; flex-direction: column; }
-        .refresh { width: 100%; }
-        .stat-card { min-width: 112px; min-height: 88px; }
+        .shell {
+          padding: 18px 14px 148px;
+        }
+
+        .toolbar {
+          justify-content: center;
+        }
+
+        .stats-grid {
+          gap: 12px;
+          padding-top: 68px;
+        }
+
+        .stat-card {
+          min-width: 102px;
+          min-height: 114px;
+          padding: 11px 11px 13px;
+        }
+
+        .stat-label {
+          font-size: 10px;
+          max-width: 10ch;
+        }
+
+        .stat-value {
+          font-size: clamp(1.2rem, 6vw, 2.1rem);
+        }
+
+        .scene-art {
+          width: max(1120px, 190vw);
+        }
       }
     </style>
   </head>
   <body>
     <div class="scene" aria-hidden="true">
-      <div class="cloud cloud-1"></div>
-      <div class="cloud cloud-2"></div>
-      <div class="cloud cloud-3"></div>
-      <div class="brick-strip brick-strip-1"></div>
-      <div class="brick-strip brick-strip-2"></div>
-      <div class="pipe pipe-1"></div>
-      <div class="pipe pipe-2"></div>
-      <div class="hill hill-1"></div>
-      <div class="hill hill-2"></div>
-      <div class="ground"></div>
+      <img class="scene-art" src="/assets/dashboard/mario-land-world-1-1.png" alt="" />
     </div>
-    <main class="app">
-      <section class="panel">
-        <div class="topbar">
-          <div class="title">Wampland Dashboard</div>
-          <button id="refresh-button" class="refresh" type="button">Refresh</button>
-        </div>
-        <div class="meta">
-          <div id="last-updated">No snapshot yet</div>
-          <div id="status">Waiting</div>
-        </div>
-        <div id="stats-grid" class="stats-grid" aria-live="polite"></div>
-      </section>
+
+    <main class="shell">
+      <div class="toolbar">
+        <button id="refresh-button" class="refresh" type="button">Refresh</button>
+      </div>
+
+      <section id="stats-grid" class="stats-grid" aria-live="polite"></section>
+
+      <div class="sr-only">
+        <div id="last-updated">No snapshot loaded yet.</div>
+        <div id="status">Fetching current totals.</div>
+      </div>
     </main>
+
     <script type="module" src="/src/dashboard.ts"></script>
   </body>
 </html>
