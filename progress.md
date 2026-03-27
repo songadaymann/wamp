@@ -4296,3 +4296,36 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - no console errors or page errors were recorded
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming another active overworld subsystem from `OverworldPlayScene`, with the remaining browse/play scene shell and per-mode runtime orchestration as the cleanest next seams.
+
+- March 27, 2026: extracted the overworld camera controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/cameraController.ts` with `OverworldCameraController` to own the active camera-mode boundary:
+    - world-window bounds application
+    - browse/play camera bounds usage
+    - follow/inspect mode switching in play
+    - room-centering for browse selection changes
+    - fit-zoom calculation for room framing
+    - inspect-camera constraint after manual/browse camera moves
+    - follow-camera startup using the existing mobile follow-offset helper
+  - `OverworldPlayScene.ts` now delegates `updateCameraBounds`, `toggleCameraMode`, `applyCameraMode`, `centerCameraOnCoordinates`, `startFollowCamera`, `constrainInspectCamera`, `getFitZoomForRoom`, and `syncCameraBoundsUsage` through that controller instead of carrying the camera shell inline.
+  - This slice intentionally does not move player spawn/combat/runtime logic; it only peels the camera/mode shell away from the larger browse/play runtime cluster so the next phase-8 extraction can target that cluster cleanly.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-camera-controller-skill-smoke/state-0.json`
+      - `output/web-game/overworld-camera-controller-skill-smoke/shot-0.png`
+    - targeted browser probe wrote:
+      - `output/web-game/overworld-camera-controller-probe/summary.json`
+      - `output/web-game/overworld-camera-controller-probe/browse-before.png`
+      - `output/web-game/overworld-camera-controller-probe/browse-after-fit.png`
+      - `output/web-game/overworld-camera-controller-probe/play-before-resize.png`
+      - `output/web-game/overworld-camera-controller-probe/play-after-resize.png`
+      - `output/web-game/overworld-camera-controller-probe/browse-after-return.png`
+    - targeted probe confirmed:
+      - browse at `0,0` stayed `mode = browse`, `cameraMode = inspect`, and `zoom = 0.18`
+      - `Fit` changed browse zoom from `0.18` to `0.08` while keeping the same selected room and window center
+      - `Play Room` entered `mode = play` with `cameraMode = follow` and zoom `1.975`
+      - viewport resize during play kept `mode = play`, `cameraMode = follow`, and the same current/selected room
+      - `Stop` returned to `mode = browse`, `cameraMode = inspect`, and kept the fitted browse zoom with no console or page errors
+    - the generic smoke screenshot was still black in headless canvas mode even though `state-0.json` showed healthy runtime state; the targeted probe screenshots rendered correctly and were used as the visual source of truth for this slice.
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining browse/play runtime shell, especially player lifecycle and per-mode collider/runtime sync.

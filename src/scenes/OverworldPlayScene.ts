@@ -135,6 +135,9 @@ import {
   OverworldGoalMarkerController,
 } from './overworld/goalMarkers';
 import {
+  OverworldCameraController,
+} from './overworld/cameraController';
+import {
   OverworldPresenceOverlayController,
 } from './overworld/presenceOverlays';
 import {
@@ -156,9 +159,6 @@ import {
   type CourseRunMutationResult,
 } from './overworld/courseRuns';
 import {
-  constrainInspectCamera,
-  getFitZoomForRoom as calculateFitZoomForRoom,
-  getMobilePlayFollowOffsetY as calculateMobilePlayFollowOffsetY,
   getScreenAnchorWorldPoint as calculateScreenAnchorWorldPoint,
   getScrollForScreenAnchor as calculateScrollForScreenAnchor,
   type CameraMode,
@@ -399,6 +399,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly roomCellController: OverworldRoomCellController;
   private readonly coursePlaybackController: OverworldCoursePlaybackController;
   private readonly goalMarkerController: OverworldGoalMarkerController;
+  private readonly cameraController: OverworldCameraController;
   private readonly presenceOverlayController: OverworldPresenceOverlayController;
   private readonly selectionController: OverworldSelectionController;
   private readonly hudStateController: OverworldHudStateController;
@@ -663,6 +664,28 @@ export class OverworldPlayScene extends Phaser.Scene {
       getActiveCourseSnapshot: () => this.activeCourseSnapshot,
       getCourseComposerRecord: () => this.courseComposerRecord,
     });
+    this.cameraController = new OverworldCameraController(
+      {
+        scene: this,
+        getWorldWindow: () => this.worldWindow,
+        getMode: () => this.mode,
+        getCameraMode: () => this.cameraMode,
+        setCameraMode: (mode) => {
+          this.cameraMode = mode;
+        },
+        getInspectZoom: () => this.inspectZoom,
+        getPlayer: () => this.player,
+        getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
+        renderHud: () => this.renderHud(),
+      },
+      {
+        minZoom: MIN_ZOOM,
+        maxZoom: MAX_ZOOM,
+        playRoomFitPadding: PLAY_ROOM_FIT_PADDING,
+        followCameraLerp: FOLLOW_CAMERA_LERP,
+        mobilePlayCameraTargetY: MOBILE_PLAY_CAMERA_TARGET_Y,
+      },
+    );
     this.hudStateController = new OverworldHudStateController({
       getMode: () => this.mode,
       getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
@@ -2384,98 +2407,31 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private updateCameraBounds(): void {
-    if (!this.worldWindow) return;
-
-    const left = (this.worldWindow.center.x - this.worldWindow.radius) * ROOM_PX_WIDTH;
-    const top = (this.worldWindow.center.y - this.worldWindow.radius) * ROOM_PX_HEIGHT;
-    const width = (this.worldWindow.radius * 2 + 1) * ROOM_PX_WIDTH;
-    const height = (this.worldWindow.radius * 2 + 1) * ROOM_PX_HEIGHT;
-
-    this.cameras.main.setBounds(left, top, width, height);
-    this.syncCameraBoundsUsage();
+    this.cameraController.updateCameraBounds();
   }
 
   private toggleCameraMode(): void {
-    if (this.mode !== 'play') return;
-    this.cameraMode = this.cameraMode === 'inspect' ? 'follow' : 'inspect';
-    this.applyCameraMode(true);
-    this.renderHud();
+    this.cameraController.toggleCameraMode();
   }
 
   private applyCameraMode(forceCenter: boolean = false): void {
-    const camera = this.cameras.main;
-
-    if (!this.player || this.mode !== 'play') {
-      this.syncCameraBoundsUsage();
-      camera.stopFollow();
-      camera.setZoom(this.inspectZoom);
-      return;
-    }
-
-    if (this.cameraMode === 'follow') {
-      this.syncCameraBoundsUsage();
-      this.startFollowCamera(camera);
-      camera.setZoom(this.inspectZoom);
-      return;
-    }
-
-    this.syncCameraBoundsUsage();
-    camera.stopFollow();
-    camera.setZoom(this.inspectZoom);
-    if (forceCenter) {
-      camera.centerOn(this.player.x, this.player.y);
-    }
-    this.constrainInspectCamera();
+    this.cameraController.applyCameraMode(forceCenter);
   }
 
   private centerCameraOnCoordinates(coordinates: RoomCoordinates): void {
-    const camera = this.cameras.main;
-    const origin = this.getRoomOrigin(coordinates);
-    this.syncCameraBoundsUsage();
-    camera.setZoom(this.inspectZoom);
-    camera.stopFollow();
-    camera.centerOn(origin.x + ROOM_PX_WIDTH / 2, origin.y + ROOM_PX_HEIGHT / 2);
-    this.constrainInspectCamera();
+    this.cameraController.centerCameraOnCoordinates(coordinates);
   }
 
   private startFollowCamera(camera: Phaser.Cameras.Scene2D.Camera): void {
-    if (!this.player) {
-      return;
-    }
-
-    camera.startFollow(
-      this.player,
-      true,
-      FOLLOW_CAMERA_LERP,
-      FOLLOW_CAMERA_LERP,
-      0,
-      this.getMobilePlayFollowOffsetY(camera)
-    );
-  }
-
-  private getMobilePlayFollowOffsetY(camera: Phaser.Cameras.Scene2D.Camera): number {
-    return calculateMobilePlayFollowOffsetY(
-      camera,
-      getDeviceLayoutState(),
-      MOBILE_PLAY_CAMERA_TARGET_Y,
-    );
+    this.cameraController.startFollowCamera(camera);
   }
 
   private constrainInspectCamera(): void {
-    if (!this.worldWindow) return;
-    constrainInspectCamera(this.cameras.main);
+    this.cameraController.constrainInspectCamera();
   }
 
   private getFitZoomForRoom(): number {
-    return calculateFitZoomForRoom(
-      this.scale.width,
-      this.scale.height,
-      ROOM_PX_WIDTH,
-      ROOM_PX_HEIGHT,
-      PLAY_ROOM_FIT_PADDING,
-      MIN_ZOOM,
-      MAX_ZOOM,
-    );
+    return this.cameraController.getFitZoomForRoom();
   }
 
   private createPlayer(startRoom: RoomSnapshot): void {
@@ -3569,7 +3525,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private syncCameraBoundsUsage(): void {
-    this.cameras.main.useBounds = this.mode === 'play' && this.cameraMode === 'follow';
+    this.cameraController.syncBoundsUsage();
   }
 
   private getRoomCoordinatesForPoint(x: number, y: number): RoomCoordinates {
