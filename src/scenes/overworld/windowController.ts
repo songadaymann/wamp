@@ -72,7 +72,6 @@ interface OverworldWindowControllerHost {
   ): void;
   syncCourseComposerRecordFromSession(): void;
   handleCourseEditorReturned(): void;
-  continueCourseEditorNavigation(offset: -1 | 1): Promise<void>;
   activateDraftCoursePreview(
     snapshot: CourseSnapshot,
     draftRoom: RoomSnapshot | null
@@ -108,10 +107,6 @@ export class OverworldWindowController {
 
   async handleWakeAsync(data?: OverworldPlaySceneData): Promise<void> {
     this.applySceneData(data);
-    if (data?.courseEditorNavigateOffset) {
-      await this.host.continueCourseEditorNavigation(data.courseEditorNavigateOffset);
-      return;
-    }
     if (data?.courseDraftPreviewId) {
       const draft = getActiveCourseDraftSessionDraft();
       if (draft?.id === data.courseDraftPreviewId && draft.goal) {

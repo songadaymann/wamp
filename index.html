@@ -518,10 +518,6 @@
           <button id="btn-course-editor-clear-markers" class="bar-btn bar-btn-small">Clear Markers</button>
         </div>
         <div id="course-editor-room-step" class="history-modal-meta hidden"></div>
-        <div class="course-room-actions">
-          <button id="btn-course-editor-previous-room" class="bar-btn bar-btn-small" type="button">Previous Room</button>
-          <button id="btn-course-editor-next-room" class="bar-btn bar-btn-small" type="button">Next Room</button>
-        </div>
         <div id="course-editor-placement-hint" class="goal-placement-hint hidden">Click the canvas to place the selected course marker.</div>
         <div id="course-editor-summary" class="goal-summary">No course selected.</div>
       </div>
@@ -973,11 +969,11 @@
 
   <div id="course-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel course-modal-panel" role="dialog" aria-modal="true" aria-labelledby="course-modal-title">
-      <div class="history-modal-header">
+        <div class="history-modal-header">
         <div class="history-modal-title-group">
           <div class="history-modal-kicker">Courses</div>
           <h2 id="course-modal-title" class="history-modal-title">Course Builder</h2>
-          <div id="course-modal-meta" class="history-modal-meta">Select 2-4 adjacent published rooms in authored order.</div>
+          <div id="course-modal-meta" class="history-modal-meta">Select 1-4 adjacent published rooms you authored to extend the course tail.</div>
         </div>
         <button id="btn-course-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
@@ -997,8 +993,6 @@
           <div class="course-room-actions">
             <button id="btn-course-add-selected-room" class="bar-btn bar-btn-small" type="button">Add Selected Room</button>
             <button id="btn-course-remove-selected-room" class="bar-btn bar-btn-small" type="button">Remove Selected Room</button>
-            <button id="btn-course-move-selected-earlier" class="bar-btn bar-btn-small" type="button">Move Earlier</button>
-            <button id="btn-course-move-selected-later" class="bar-btn bar-btn-small" type="button">Move Later</button>
           </div>
           <div id="course-room-list" class="history-version-list"></div>
         </div>

@@ -170,8 +170,6 @@ export function buildEditorUiViewModel(
       addCheckpointActive: courseEditorState.addCheckpointActive,
       placeFinishHidden: courseEditorState.placeFinishHidden,
       placeFinishActive: courseEditorState.placeFinishActive,
-      canEditPreviousRoom: courseEditorState.canEditPreviousRoom,
-      canEditNextRoom: courseEditorState.canEditNextRoom,
     },
   };
 }

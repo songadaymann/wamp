@@ -130,16 +130,6 @@ export function getActiveCourseDraftSessionSelectedRoomId(): string | null {
   return activeCourseRecord?.draft.roomRefs[0]?.roomId ?? null;
 }
 
-export function getActiveCourseDraftSessionSelectedRoomOrder(): number | null {
-  const selectedRoomId = getActiveCourseDraftSessionSelectedRoomId();
-  if (!activeCourseRecord || !selectedRoomId) {
-    return null;
-  }
-
-  const order = getCourseRoomOrder(activeCourseRecord.draft.roomRefs, selectedRoomId);
-  return order >= 0 ? order : null;
-}
-
 export function isRoomInActiveCourseDraftSession(roomId: string): boolean {
   return Boolean(
     activeCourseRecord && getCourseRoomOrder(activeCourseRecord.draft.roomRefs, roomId) >= 0

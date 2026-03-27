@@ -52,8 +52,6 @@ export type EditorCourseUiState = {
   addCheckpointActive: boolean;
   placeFinishHidden: boolean;
   placeFinishActive: boolean;
-  canEditPreviousRoom: boolean;
-  canEditNextRoom: boolean;
 };
 
 export interface EditorSceneBridge {
@@ -95,8 +93,6 @@ export interface EditorSceneBridge {
   setCourseGoalSurvivalSeconds?: (seconds: number) => void;
   startCourseGoalMarkerPlacement?: (mode: EditorMarkerPlacementMode) => void;
   clearCourseGoalMarkers?: () => void;
-  editPreviousCourseRoom?: () => Promise<void> | void;
-  editNextCourseRoom?: () => Promise<void> | void;
   beginFocusedPressurePlateConnection?: () => void;
   clearFocusedPressurePlateConnection?: () => void;
   cancelPressurePlateConnection?: () => void;
@@ -161,9 +157,6 @@ export type CourseComposerState = {
   publishedDraftWarningText: string | null;
   dirty: boolean;
   statusText: string | null;
-  selectedRoomOrder: number | null;
-  canMoveSelectedRoomEarlier: boolean;
-  canMoveSelectedRoomLater: boolean;
   canEditSelectedRoom: boolean;
   canTestDraft: boolean;
   testDraftDisabledReason: string | null;
@@ -195,8 +188,6 @@ export interface OverworldSceneBridge {
   setCourseTitle?: (title: string | null) => void;
   addSelectedRoomToCourseDraft?: () => void;
   removeSelectedRoomFromCourseDraft?: () => void;
-  moveSelectedRoomEarlierInCourseDraft?: () => void;
-  moveSelectedRoomLaterInCourseDraft?: () => void;
   editSelectedCourseRoom?: () => boolean;
   testDraftCourse?: () => Promise<void> | void;
   saveCourseDraft?: () => Promise<void>;

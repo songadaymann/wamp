@@ -645,8 +645,6 @@ export class EditorScene extends Phaser.Scene {
       onSetCourseGoalSurvivalSeconds: (seconds) => this.setCourseGoalSurvivalSeconds(seconds),
       onStartCourseGoalMarkerPlacement: (mode) => this.startCourseGoalMarkerPlacement(mode),
       onClearCourseGoalMarkers: () => this.clearCourseGoalMarkers(),
-      onEditPreviousCourseRoom: () => this.editPreviousCourseRoom(),
-      onEditNextCourseRoom: () => this.editNextCourseRoom(),
       onBeginPressurePlateConnection: () => this.beginFocusedPressurePlateConnection(),
       onClearPressurePlateConnection: () => this.clearFocusedPressurePlateConnection(),
       onCancelPressurePlateConnection: () => this.cancelPressurePlateConnection(),
@@ -1146,14 +1144,6 @@ export class EditorScene extends Phaser.Scene {
       clearDraftRoomId: wakeData.clearDraftRoomId ?? null,
       invalidateRoomId: wakeData.invalidateRoomId ?? null,
     };
-  }
-
-  async editPreviousCourseRoom(): Promise<void> {
-    await this.flowController.editPreviousCourseRoom();
-  }
-
-  async editNextCourseRoom(): Promise<void> {
-    await this.flowController.editNextCourseRoom();
   }
 
   async mintRoom(): Promise<RoomRecord | null> {

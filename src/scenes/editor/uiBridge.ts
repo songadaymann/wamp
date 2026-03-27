@@ -70,8 +70,6 @@ export interface EditorCourseUiViewModel {
   addCheckpointActive: boolean;
   placeFinishHidden: boolean;
   placeFinishActive: boolean;
-  canEditPreviousRoom: boolean;
-  canEditNextRoom: boolean;
 }
 
 export interface EditorInspectorState {
@@ -171,8 +169,6 @@ export interface EditorUiBridgeActions {
   onSetCourseGoalSurvivalSeconds: (seconds: number) => void;
   onStartCourseGoalMarkerPlacement: (mode: EditorMarkerPlacementMode) => void;
   onClearCourseGoalMarkers: () => void;
-  onEditPreviousCourseRoom: () => void | Promise<void>;
-  onEditNextCourseRoom: () => void | Promise<void>;
   onBeginPressurePlateConnection: () => void;
   onClearPressurePlateConnection: () => void;
   onCancelPressurePlateConnection: () => void;
@@ -284,8 +280,6 @@ export class EditorUiBridge {
   private readonly courseAddCheckpointBtn: HTMLButtonElement | null;
   private readonly coursePlaceFinishBtn: HTMLButtonElement | null;
   private readonly courseClearMarkersBtn: HTMLButtonElement | null;
-  private readonly coursePreviousRoomBtn: HTMLButtonElement | null;
-  private readonly courseNextRoomBtn: HTMLButtonElement | null;
   private readonly inspectorRoot: HTMLElement | null;
   private readonly pressurePanel: HTMLElement | null;
   private readonly pressureStatus: HTMLElement | null;
@@ -419,10 +413,6 @@ export class EditorUiBridge {
       this.doc.getElementById('btn-course-editor-place-finish') as HTMLButtonElement | null;
     this.courseClearMarkersBtn =
       this.doc.getElementById('btn-course-editor-clear-markers') as HTMLButtonElement | null;
-    this.coursePreviousRoomBtn =
-      this.doc.getElementById('btn-course-editor-previous-room') as HTMLButtonElement | null;
-    this.courseNextRoomBtn =
-      this.doc.getElementById('btn-course-editor-next-room') as HTMLButtonElement | null;
     this.inspectorRoot = this.doc.getElementById('editor-inspector');
     this.pressurePanel = this.doc.getElementById('pressure-plate-panel');
     this.pressureStatus = this.doc.getElementById('pressure-plate-status');
@@ -528,8 +518,6 @@ export class EditorUiBridge {
     this.setActive(this.courseAddCheckpointBtn, viewModel.course.addCheckpointActive);
     this.setHidden(this.coursePlaceFinishBtn, viewModel.course.placeFinishHidden);
     this.setActive(this.coursePlaceFinishBtn, viewModel.course.placeFinishActive);
-    this.setDisabled(this.coursePreviousRoomBtn, !viewModel.course.canEditPreviousRoom);
-    this.setDisabled(this.courseNextRoomBtn, !viewModel.course.canEditNextRoom);
 
     this.syncEditorChromeState();
   }
@@ -866,12 +854,6 @@ export class EditorUiBridge {
     });
     this.bindButton(this.courseClearMarkersBtn, () => {
       this.actions.onClearCourseGoalMarkers();
-    });
-    this.bindButton(this.coursePreviousRoomBtn, () => {
-      void this.actions.onEditPreviousCourseRoom();
-    });
-    this.bindButton(this.courseNextRoomBtn, () => {
-      void this.actions.onEditNextCourseRoom();
     });
 
     this.bindButton(this.pressureConnectBtn, () => {

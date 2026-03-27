@@ -361,14 +361,6 @@ export class CourseEditorScene extends Phaser.Scene {
       onSetCourseGoalSurvivalSeconds: (seconds) => this.setCourseGoalSurvivalSeconds(seconds),
       onStartCourseGoalMarkerPlacement: (mode) => this.startCourseGoalMarkerPlacement(mode),
       onClearCourseGoalMarkers: () => this.clearCourseGoalMarkers(),
-      onEditPreviousCourseRoom: () => {
-        this.statusText = 'Room order is no longer used in course editing.';
-        this.renderUi();
-      },
-      onEditNextCourseRoom: () => {
-        this.statusText = 'Room order is no longer used in course editing.';
-        this.renderUi();
-      },
       onBeginPressurePlateConnection: () => this.beginFocusedPressurePlateConnection(),
       onClearPressurePlateConnection: () => this.clearFocusedPressurePlateConnection(),
       onCancelPressurePlateConnection: () => this.cancelPressurePlateConnection(),
@@ -449,8 +441,6 @@ export class CourseEditorScene extends Phaser.Scene {
       addCheckpointActive: this.courseGoalPlacementMode === 'checkpoint',
       placeFinishHidden: goal?.type !== 'checkpoint_sprint',
       placeFinishActive: this.courseGoalPlacementMode === 'finish',
-      canEditPreviousRoom: false,
-      canEditNextRoom: false,
     };
   }
 

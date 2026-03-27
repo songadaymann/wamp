@@ -63,6 +63,5 @@ export interface OverworldPlaySceneData {
   courseEditorReturned?: boolean;
   courseDraftPreviewId?: string | null;
   courseEditedRoom?: CourseEditedRoomData | null;
-  courseEditorNavigateOffset?: -1 | 1 | null;
   courseEditorReturnTarget?: CourseComposerReturnTarget | null;
 }

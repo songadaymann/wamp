@@ -8,7 +8,6 @@ import {
   getActiveCourseDraftSessionRecord,
   getActiveCourseDraftSessionRoomOverride,
   getActiveCourseDraftSessionSelectedRoomId,
-  getActiveCourseDraftSessionSelectedRoomOrder,
   isRoomInActiveCourseDraftSession,
   isActiveCourseDraftSessionDirty,
   setActiveCourseDraftSessionRecord,
@@ -547,9 +546,6 @@ export class OverworldPlayScene extends Phaser.Scene {
       setCurrentRoomCoordinates: (coordinates) => {
         this.currentRoomCoordinates = { ...coordinates };
       },
-      setWindowCenterCoordinates: (coordinates) => {
-        this.windowCenterCoordinates = { ...coordinates };
-      },
       setShouldCenterCamera: (value) => {
         this.shouldCenterCamera = value;
       },
@@ -629,8 +625,6 @@ export class OverworldPlayScene extends Phaser.Scene {
       handleCourseEditorReturned: () => {
         this.courseComposerController.handleCourseEditorReturned();
       },
-      continueCourseEditorNavigation: (offset) =>
-        this.courseComposerController.continueCourseEditorNavigation(offset),
       activateDraftCoursePreview: (snapshot, draftRoom) =>
         this.coursePlaybackController.activateDraftCoursePreview(snapshot, draftRoom),
       updateSelectedSummary: () => this.updateSelectedSummary(),
@@ -2362,24 +2356,12 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.courseComposerController.removeSelectedRoomFromCourseDraft();
   }
 
-  moveSelectedRoomEarlierInCourseDraft(): void {
-    this.courseComposerController.moveSelectedRoomEarlierInCourseDraft();
-  }
-
-  moveSelectedRoomLaterInCourseDraft(): void {
-    this.courseComposerController.moveSelectedRoomLaterInCourseDraft();
-  }
-
   selectCourseRoomInComposer(roomId: string): void {
     this.courseComposerController.selectCourseRoomInComposer(roomId);
   }
 
   editSelectedCourseRoom(): boolean {
     return this.courseComposerController.editSelectedCourseRoom();
-  }
-
-  private async continueCourseEditorNavigation(offset: -1 | 1): Promise<void> {
-    await this.courseComposerController.continueCourseEditorNavigation(offset);
   }
 
   async testDraftCourse(): Promise<void> {

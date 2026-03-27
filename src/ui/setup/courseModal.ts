@@ -19,8 +19,6 @@ type CourseModalElements = {
   selectedRoomStatus: HTMLElement | null;
   addSelectedRoomButton: HTMLButtonElement | null;
   removeSelectedRoomButton: HTMLButtonElement | null;
-  moveSelectedRoomEarlierButton: HTMLButtonElement | null;
-  moveSelectedRoomLaterButton: HTMLButtonElement | null;
   editSelectedRoomButton: HTMLButtonElement | null;
   testDraftButton: HTMLButtonElement | null;
   testDraftReason: HTMLElement | null;
@@ -113,8 +111,6 @@ export class CourseModalController {
       selectedRoomStatus: this.doc.getElementById('course-selected-room-status'),
       addSelectedRoomButton: this.doc.getElementById('btn-course-add-selected-room') as HTMLButtonElement | null,
       removeSelectedRoomButton: this.doc.getElementById('btn-course-remove-selected-room') as HTMLButtonElement | null,
-      moveSelectedRoomEarlierButton: this.doc.getElementById('btn-course-move-selected-earlier') as HTMLButtonElement | null,
-      moveSelectedRoomLaterButton: this.doc.getElementById('btn-course-move-selected-later') as HTMLButtonElement | null,
       editSelectedRoomButton: this.doc.getElementById('btn-course-edit-selected-room') as HTMLButtonElement | null,
       testDraftButton: this.doc.getElementById('btn-course-test-draft') as HTMLButtonElement | null,
       testDraftReason: this.doc.getElementById('course-test-draft-reason'),
@@ -146,12 +142,6 @@ export class CourseModalController {
     });
     this.elements.removeSelectedRoomButton?.addEventListener('click', () => {
       getActiveOverworldScene(this.game)?.removeSelectedRoomFromCourseDraft?.();
-    });
-    this.elements.moveSelectedRoomEarlierButton?.addEventListener('click', () => {
-      getActiveOverworldScene(this.game)?.moveSelectedRoomEarlierInCourseDraft?.();
-    });
-    this.elements.moveSelectedRoomLaterButton?.addEventListener('click', () => {
-      getActiveOverworldScene(this.game)?.moveSelectedRoomLaterInCourseDraft?.();
     });
     this.elements.editSelectedRoomButton?.addEventListener('click', () => {
       const opened = getActiveOverworldScene(this.game)?.editSelectedCourseRoom?.() ?? false;
@@ -232,8 +222,8 @@ export class CourseModalController {
       const roomCount = state.roomRefs.length;
       this.elements.meta.textContent =
         roomCount > 0
-          ? `${roomCount} room${roomCount === 1 ? '' : 's'} selected · authored order defines the path`
-          : 'Select 1-4 adjacent published rooms you authored in path order.';
+          ? `${roomCount} room${roomCount === 1 ? '' : 's'} selected · listed order defines the path`
+          : 'Select 1-4 adjacent published rooms you authored to extend the course tail.';
     }
 
     if (this.elements.publishedState) {
@@ -251,11 +241,8 @@ export class CourseModalController {
     this.setInputValue(this.elements.titleInput, state.title);
     if (this.elements.selectedRoomStatus) {
       let selectedText = 'Select a published room in the world to extend this course tail.';
-      if (state.selectedRoomId && state.selectedRoomOrder !== null) {
-        selectedText = `Course room step ${state.selectedRoomOrder + 1} is selected for edit and reorder actions.`;
-      }
-      if (state.selectedRoomInDraft && state.selectedRoomOrder !== null) {
-        selectedText = `World selection is already in the course at step ${state.selectedRoomOrder + 1}.`;
+      if (state.selectedRoomInDraft) {
+        selectedText = 'World selection is already in this course. Use Edit Selected Room to author it.';
       } else if (state.selectedRoomEligible) {
         selectedText = 'World selection can extend the current course tail.';
       } else if (!state.canEdit) {
@@ -272,14 +259,6 @@ export class CourseModalController {
     this.setDisabled(this.elements.titleInput, !state.canEdit);
     this.setButtonDisabled(this.elements.addSelectedRoomButton, !state.canEdit || !state.selectedRoomEligible);
     this.setButtonDisabled(this.elements.removeSelectedRoomButton, !state.canEdit || !state.selectedRoomId);
-    this.setButtonDisabled(
-      this.elements.moveSelectedRoomEarlierButton,
-      !state.canEdit || !state.canMoveSelectedRoomEarlier
-    );
-    this.setButtonDisabled(
-      this.elements.moveSelectedRoomLaterButton,
-      !state.canEdit || !state.canMoveSelectedRoomLater
-    );
     this.setButtonDisabled(
       this.elements.editSelectedRoomButton,
       !state.canEdit || !state.canEditSelectedRoom
@@ -343,7 +322,7 @@ export class CourseModalController {
     state.roomRefs.forEach((roomRef, index) => {
       const row = this.doc.createElement('div');
       row.className = 'history-version-row course-room-row';
-      if (state.selectedRoomOrder === index) {
+      if (state.selectedRoomId === roomRef.roomId) {
         row.classList.add('course-room-row-selected');
       }
       row.tabIndex = 0;

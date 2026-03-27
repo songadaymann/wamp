@@ -185,14 +185,4 @@ export class EditorSceneFlowController {
 
     await this.returnToWorld();
   }
-
-  async editPreviousCourseRoom(): Promise<void> {
-    this.host.setCourseEditorStatusText('Room order is no longer used in course editing.');
-    this.host.updateGoalUi();
-  }
-
-  async editNextCourseRoom(): Promise<void> {
-    this.host.setCourseEditorStatusText('Room order is no longer used in course editing.');
-    this.host.updateGoalUi();
-  }
 }

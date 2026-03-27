@@ -183,8 +183,6 @@ export function buildCourseEditorState(
       addCheckpointActive: false,
       placeFinishHidden: true,
       placeFinishActive: false,
-      canEditPreviousRoom: false,
-      canEditNextRoom: false,
     };
   }
 
@@ -217,8 +215,6 @@ export function buildCourseEditorState(
     addCheckpointActive: false,
     placeFinishHidden: true,
     placeFinishActive: false,
-    canEditPreviousRoom: false,
-    canEditNextRoom: false,
   };
 }
 

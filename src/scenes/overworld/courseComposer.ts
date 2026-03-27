@@ -1,4 +1,3 @@
-import Phaser from 'phaser';
 import { getAuthDebugState } from '../../auth/client';
 import type { CourseRepository } from '../../courses/courseRepository';
 import {
@@ -6,9 +5,7 @@ import {
   getActiveCourseDraftSessionCourseId,
   getActiveCourseDraftSessionDraft,
   getActiveCourseDraftSessionRecord,
-  getActiveCourseDraftSessionRoomOverride,
   getActiveCourseDraftSessionSelectedRoomId,
-  getActiveCourseDraftSessionSelectedRoomOrder,
   isActiveCourseDraftSessionDirty,
   setActiveCourseDraftSessionRecord,
   setActiveCourseDraftSessionSelectedRoom,
@@ -22,12 +19,10 @@ import {
   MAX_COURSE_ROOMS,
   type CourseGoalType,
   type CourseRecord,
-  type CourseRoomRef,
   type CourseSnapshot,
 } from '../../courses/model';
 import { setFocusedCoordinatesInUrl } from '../../navigation/worldNavigation';
 import {
-  cloneRoomSnapshot,
   roomIdFromCoordinates,
   type RoomCoordinates,
   type RoomRecord,
@@ -67,7 +62,6 @@ interface OverworldCourseComposerControllerHost {
   setSelectedCoordinates(coordinates: RoomCoordinates): void;
   getCurrentRoomCoordinates(): RoomCoordinates;
   setCurrentRoomCoordinates(coordinates: RoomCoordinates): void;
-  setWindowCenterCoordinates(coordinates: RoomCoordinates): void;
   setShouldCenterCamera(value: boolean): void;
   setShouldRespawnPlayer(value: boolean): void;
   getBrowseInspectZoom(): number;
@@ -98,7 +92,6 @@ export class OverworldCourseComposerController {
   private statusText: string | null = null;
   private selectedRoomEligible = false;
   private selectedRoomInDraft = false;
-  private selectedRoomOrder: number | null = null;
   private readonly roomMetaByRoomId = new Map<string, CoursePublishedRoomMeta>();
 
   constructor(private readonly host: OverworldCourseComposerControllerHost) {}
@@ -110,7 +103,6 @@ export class OverworldCourseComposerController {
     this.statusText = null;
     this.selectedRoomEligible = false;
     this.selectedRoomInDraft = false;
-    this.selectedRoomOrder = null;
     this.roomMetaByRoomId.clear();
   }
 
@@ -204,9 +196,6 @@ export class OverworldCourseComposerController {
       publishedDraftWarningText: this.getCourseComposerPublishedDraftWarningText(),
       dirty: this.isDirty(),
       statusText: this.loading ? 'Loading course...' : this.statusText,
-      selectedRoomOrder: this.selectedRoomOrder,
-      canMoveSelectedRoomEarlier: this.canMoveSelectedCourseRoom(-1),
-      canMoveSelectedRoomLater: this.canMoveSelectedCourseRoom(1),
       canEditSelectedRoom:
         this.record.permissions.canSaveDraft &&
         getActiveCourseDraftSessionSelectedRoomId() !== null,
@@ -262,14 +251,6 @@ export class OverworldCourseComposerController {
     void this.refreshSelectedRoomState();
   }
 
-  moveSelectedRoomEarlierInCourseDraft(): void {
-    this.moveSelectedRoomInCourseDraft(-1);
-  }
-
-  moveSelectedRoomLaterInCourseDraft(): void {
-    this.moveSelectedRoomInCourseDraft(1);
-  }
-
   selectCourseRoomInComposer(roomId: string): void {
     if (!this.record) {
       return;
@@ -281,7 +262,6 @@ export class OverworldCourseComposerController {
     }
 
     setActiveCourseDraftSessionSelectedRoom(roomId);
-    this.selectedRoomOrder = getActiveCourseDraftSessionSelectedRoomOrder();
     this.host.setSelectedCoordinates({ ...roomRef.coordinates });
     if (this.host.getMode() !== 'play') {
       this.host.setCurrentRoomCoordinates({ ...roomRef.coordinates });
@@ -333,72 +313,6 @@ export class OverworldCourseComposerController {
       },
     });
     return true;
-  }
-
-  async continueCourseEditorNavigation(offset: -1 | 1): Promise<void> {
-    const draft = getActiveCourseDraftSessionDraft();
-    const currentOrder = getActiveCourseDraftSessionSelectedRoomOrder();
-    const nextRoomRef =
-      draft && currentOrder !== null ? draft.roomRefs[currentOrder + offset] ?? null : null;
-    if (!draft || currentOrder === null || !nextRoomRef) {
-      this.statusText =
-        offset < 0
-          ? 'Previous course room is no longer available.'
-          : 'Next course room is no longer available.';
-      await this.refreshSelectedRoomState();
-      this.host.emitStateChanged();
-      hideBusyOverlay();
-      return;
-    }
-
-    setActiveCourseDraftSessionSelectedRoom(nextRoomRef.roomId);
-    this.syncRecordFromSession();
-    this.selectedRoomOrder = getActiveCourseDraftSessionSelectedRoomOrder();
-    this.selectedRoomInDraft = true;
-    this.host.setSelectedCoordinates({ ...nextRoomRef.coordinates });
-    if (this.host.getMode() !== 'play') {
-      this.host.setCurrentRoomCoordinates({ ...nextRoomRef.coordinates });
-    }
-    this.host.setWindowCenterCoordinates({ ...nextRoomRef.coordinates });
-    this.host.setShouldCenterCamera(true);
-    this.host.updateSelectedSummary();
-    this.host.redrawWorld();
-    this.host.renderHud();
-
-    await this.host.refreshAround(nextRoomRef.coordinates, { forceChunkReload: true });
-
-    const roomSnapshot =
-      getActiveCourseDraftSessionRoomOverride(nextRoomRef.roomId) ??
-      this.host.getRoomSnapshotForCoordinates(nextRoomRef.coordinates) ??
-      (await (async () => {
-        const record = await this.host.roomRepository.loadRoom(
-          nextRoomRef.roomId,
-          nextRoomRef.coordinates,
-        );
-        return record.draft ? cloneRoomSnapshot(record.draft) : null;
-      })());
-
-    if (!roomSnapshot) {
-      this.statusText =
-        offset < 0
-          ? 'Failed to reopen the previous course room.'
-          : 'Failed to reopen the next course room.';
-      await this.refreshSelectedRoomState();
-      this.host.emitStateChanged();
-      hideBusyOverlay();
-      return;
-    }
-
-    this.statusText = null;
-    this.host.openEditor({
-      roomCoordinates: { ...nextRoomRef.coordinates },
-      source: 'world',
-      roomSnapshot: cloneRoomSnapshot(roomSnapshot),
-      courseEdit: {
-        courseId: draft.id,
-        roomId: nextRoomRef.roomId,
-      },
-    });
   }
 
   async testDraftCourse(): Promise<void> {
@@ -567,71 +481,6 @@ export class OverworldCourseComposerController {
     }
   }
 
-  private canMoveSelectedCourseRoom(direction: -1 | 1): boolean {
-    const draft = this.record?.draft ?? null;
-    const selectedRoomId = getActiveCourseDraftSessionSelectedRoomId();
-    if (!draft || !selectedRoomId) {
-      return false;
-    }
-
-    return this.buildMovedCourseRoomRefs(draft.roomRefs, selectedRoomId, direction) !== null;
-  }
-
-  private buildMovedCourseRoomRefs(
-    roomRefs: CourseRoomRef[],
-    roomId: string,
-    direction: -1 | 1,
-  ): CourseRoomRef[] | null {
-    const currentIndex = roomRefs.findIndex((roomRef) => roomRef.roomId === roomId);
-    if (currentIndex < 0) {
-      return null;
-    }
-
-    const nextIndex = Phaser.Math.Clamp(currentIndex + direction, 0, roomRefs.length - 1);
-    if (nextIndex === currentIndex) {
-      return null;
-    }
-
-    const nextRoomRefs = [...roomRefs];
-    const [moved] = nextRoomRefs.splice(currentIndex, 1);
-    nextRoomRefs.splice(nextIndex, 0, moved);
-    if (!courseRoomRefsFollowLinearPath(nextRoomRefs)) {
-      return null;
-    }
-
-    return nextRoomRefs;
-  }
-
-  private moveSelectedRoomInCourseDraft(direction: -1 | 1): void {
-    if (!this.record?.permissions.canSaveDraft) {
-      return;
-    }
-
-    const roomId = getActiveCourseDraftSessionSelectedRoomId();
-    if (!roomId) {
-      return;
-    }
-    const nextRoomRefs = this.buildMovedCourseRoomRefs(this.record.draft.roomRefs, roomId, direction);
-    if (!nextRoomRefs) {
-      this.statusText =
-        direction < 0
-          ? 'This room cannot move earlier without breaking the course path.'
-          : 'This room cannot move later without breaking the course path.';
-      this.host.emitStateChanged();
-      this.host.renderHud();
-      return;
-    }
-
-    this.updateCourseComposerDraft((draft) => {
-      draft.roomRefs = nextRoomRefs;
-    });
-    this.statusText =
-      direction < 0 ? 'Moved selected room earlier.' : 'Moved selected room later.';
-    this.host.emitStateChanged();
-    this.host.renderHud();
-    void this.refreshSelectedRoomState();
-  }
-
   private updateCourseComposerDraft(mutator: (draft: CourseSnapshot) => void): void {
     if (!this.record?.permissions.canSaveDraft) {
       return;
@@ -662,7 +511,6 @@ export class OverworldCourseComposerController {
     if (worldSelectedRoomOrder >= 0) {
       setActiveCourseDraftSessionSelectedRoom(worldSelectedRoomId);
     }
-    this.selectedRoomOrder = getActiveCourseDraftSessionSelectedRoomOrder();
 
     const meta = await this.loadPublishedRoomMeta(selectedCoordinates);
     this.selectedRoomEligible = meta !== null && this.canSelectedRoomJoinCourseDraft(meta);

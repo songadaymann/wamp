@@ -4663,3 +4663,30 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Status:
     - phase 8 is complete on `safety/overworld-scene-split-2026-03-26`
     - next planned phase is phase 9: secondary monoliths + repo hygiene
+
+- March 27, 2026: started phase 9 by removing stale course navigation affordances that no longer match the live course-authoring flow.
+  - Removed old course-setup reorder state and dead editor-navigation compatibility paths:
+    - deleted `selectedRoomOrder`, reorder affordance state, and `courseEditorNavigateOffset` from the shared bridge/data layer
+    - removed `move earlier` / `move later` course setup buttons and related copy from `index.html` and `src/ui/setup/courseModal.ts`
+    - removed dead overworld-side compatibility methods from `OverworldPlayScene.ts`, `src/scenes/overworld/courseComposer.ts`, `src/scenes/overworld/windowController.ts`, and `src/courses/draftSession.ts`
+  - Removed unused dedicated course-editor previous/next room affordances:
+    - deleted `Previous Room` / `Next Room` buttons from `index.html`
+    - removed previous/next button bindings and capability flags from `src/scenes/editor/uiBridge.ts`, `src/scenes/editor/viewModel.ts`, `src/scenes/EditorScene.ts`, `src/scenes/CourseEditorScene.ts`, `src/scenes/editor/flow.ts`, `src/scenes/editor/courseEditing.ts`, and `src/ui/setup/sceneBridge.ts`
+  - Updated course setup copy to reflect the real flow:
+    - selected room copy now points to `Edit Selected Room` instead of reorder actions
+    - room-list copy now talks about the listed path rather than authored order
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-phase9-hygiene`
+    - required `develop-web-game` client smoke wrote:
+      - `output/web-game/phase9-course-affordance-skill-smoke/state-0.json`
+      - `output/web-game/phase9-course-affordance-skill-smoke/shot-0.png`
+    - focused browser probe wrote:
+      - `output/web-game/phase9-course-affordance-probe/summary.json`
+      - `output/web-game/phase9-course-affordance-probe/course-composer.png`
+    - targeted checks confirmed:
+      - `btn-course-move-selected-earlier`, `btn-course-move-selected-later`, `btn-course-editor-previous-room`, and `btn-course-editor-next-room` are absent from the DOM
+      - `OverworldPlayScene.openCourseComposer()` still enters `CourseComposerScene`
+      - `body[data-app-mode]` flips to `course-composer`, the course setup shell is visible, and no console or page errors were recorded
+  - Status:
+    - this is the first phase-9 slice on `safety/secondary-monoliths-and-hygiene-2026-03-27`
+    - next likely cleanup target is the worker-admin monolith in `src/cloudflare/worker/admin/suspicious.ts`
