@@ -52,7 +52,6 @@ import {
 import { createRoomRepository } from '../persistence/roomRepository';
 import { createWorldRepository } from '../persistence/worldRepository';
 import {
-  getOrthogonalNeighbors,
   type WorldChunkBounds,
   type WorldChunkWindow,
   type WorldRoomSummary,
@@ -138,6 +137,10 @@ import {
   OverworldCameraController,
 } from './overworld/cameraController';
 import {
+  OverworldRuntimeController,
+  type OverworldRoomEdgeWall,
+} from './overworld/runtimeController';
+import {
   OverworldPresenceOverlayController,
 } from './overworld/presenceOverlays';
 import {
@@ -200,10 +203,7 @@ interface PlayerSpawn {
   y: number;
 }
 
-interface RoomEdgeWall {
-  rect: Phaser.GameObjects.Rectangle;
-  collider: Phaser.Physics.Arcade.Collider;
-}
+type RoomEdgeWall = OverworldRoomEdgeWall;
 
 interface PlayerProjectile {
   rect: Phaser.GameObjects.Rectangle;
@@ -400,6 +400,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly coursePlaybackController: OverworldCoursePlaybackController;
   private readonly goalMarkerController: OverworldGoalMarkerController;
   private readonly cameraController: OverworldCameraController;
+  private readonly runtimeController: OverworldRuntimeController<LoadedRoomObject>;
   private readonly presenceOverlayController: OverworldPresenceOverlayController;
   private readonly selectionController: OverworldSelectionController;
   private readonly hudStateController: OverworldHudStateController;
@@ -684,6 +685,60 @@ export class OverworldPlayScene extends Phaser.Scene {
         playRoomFitPadding: PLAY_ROOM_FIT_PADDING,
         followCameraLerp: FOLLOW_CAMERA_LERP,
         mobilePlayCameraTargetY: MOBILE_PLAY_CAMERA_TARGET_Y,
+      },
+    );
+    this.runtimeController = new OverworldRuntimeController(
+      {
+        scene: this,
+        getLoadedFullRooms: () => this.loadedFullRoomsById.values(),
+        getMode: () => this.mode,
+        setMode: (mode) => {
+          this.mode = mode;
+        },
+        getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
+        getCurrentRoomSnapshot: () => this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates),
+        getActiveCourseSnapshot: () => this.activeCourseSnapshot,
+        getActiveCourseRun: () => this.activeCourseRun,
+        getShouldRespawnPlayer: () => this.shouldRespawnPlayer,
+        setShouldRespawnPlayer: (value) => {
+          this.shouldRespawnPlayer = value;
+        },
+        getPlayer: () => this.player,
+        getPlayerBody: () => this.playerBody,
+        createPlayer: (room) => this.createPlayer(room),
+        destroyPlayer: () => this.destroyPlayer(),
+        syncAppMode: () => this.syncAppMode(),
+        setCameraMode: (mode) => {
+          this.cameraMode = mode;
+        },
+        clearCurrentGoalRun: () => {
+          this.goalRunController.clearCurrentRun();
+        },
+        syncGoalRunForRoom: (room, entryContext) => {
+          this.applyGoalRunMutation(this.goalRunController.syncRunForRoom(room, entryContext));
+        },
+        redrawGoalMarkers: () => this.redrawGoalMarkers(),
+        syncCameraBoundsUsage: () => this.syncCameraBoundsUsage(),
+        syncGhostVisibility: () => this.syncGhostVisibility(),
+        getShouldCenterCamera: () => this.shouldCenterCamera,
+        setShouldCenterCamera: (value) => {
+          this.shouldCenterCamera = value;
+        },
+        centerCameraOnCoordinates: (coordinates) =>
+          this.centerCameraOnCoordinates(coordinates),
+        constrainInspectCamera: () => this.constrainInspectCamera(),
+        applyCameraMode: (forceCenter) => this.applyCameraMode(forceCenter),
+        syncLiveObjectInteractions: (loadedRooms) =>
+          this.liveObjectController.syncLiveObjectInteractions(loadedRooms),
+        clearRoomInteractions: (loadedRoom) =>
+          this.liveObjectController.clearRoomInteractions(loadedRoom),
+        destroyRoomEdgeWalls: (loadedRoom) => this.destroyEdgeWalls(loadedRoom),
+        getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
+        getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
+        syncBackdropCameraIgnores: () => this.syncBackdropCameraIgnores(),
+      },
+      {
+        edgeWallThickness: EDGE_WALL_THICKNESS,
       },
     );
     this.hudStateController = new OverworldHudStateController({
@@ -2140,55 +2195,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private syncModeRuntime(): void {
-    if (this.mode === 'browse') {
-      this.syncAppMode();
-      this.destroyPlayer();
-      this.cameraMode = 'inspect';
-      this.goalRunController.clearCurrentRun();
-      this.redrawGoalMarkers();
-      this.syncCameraBoundsUsage();
-      this.syncEdgeWalls();
-      if (this.shouldCenterCamera) {
-        this.centerCameraOnCoordinates(this.selectedCoordinates);
-        this.shouldCenterCamera = false;
-      } else {
-        this.constrainInspectCamera();
-      }
-      this.syncGhostVisibility();
-      return;
-    }
-
-    const currentRoom = this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates);
-    if (!currentRoom) {
-      this.mode = 'browse';
-      this.cameraMode = 'inspect';
-      this.syncAppMode();
-      this.syncCameraBoundsUsage();
-      this.applyGoalRunMutation(this.goalRunController.syncRunForRoom(null));
-      this.destroyPlayer();
-      this.syncGhostVisibility();
-      return;
-    }
-
-    if (!this.player || this.shouldRespawnPlayer) {
-      this.destroyPlayer();
-      this.createPlayer(currentRoom);
-      this.shouldRespawnPlayer = false;
-    }
-
-    if (this.activeCourseRun) {
-      this.goalRunController.clearCurrentRun();
-      this.redrawGoalMarkers();
-    } else {
-      this.applyGoalRunMutation(this.goalRunController.syncRunForRoom(currentRoom, 'spawn'));
-    }
-
-    this.syncFullRoomColliders();
-    this.syncLiveObjectInteractions();
-    this.syncEdgeWalls();
-    this.applyCameraMode(this.shouldCenterCamera);
-    this.shouldCenterCamera = false;
-    this.syncGhostVisibility();
+    this.runtimeController.syncModeRuntime();
   }
 
   private countRoomObjectsByCategory(room: RoomSnapshot, category: GameObjectConfig['category']): number {
@@ -2279,117 +2286,15 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private syncFullRoomColliders(): void {
-    if (!this.player) return;
-
-    for (const loadedRoom of this.loadedFullRoomsById.values()) {
-      if (!loadedRoom.terrainCollider) {
-        loadedRoom.terrainCollider = this.physics.add.collider(this.player, loadedRoom.terrainLayer);
-      }
-      if (loadedRoom.terrainInsetBodies && !loadedRoom.terrainInsetCollider) {
-        loadedRoom.terrainInsetCollider = this.physics.add.collider(
-          this.player,
-          loadedRoom.terrainInsetBodies
-        );
-      }
-    }
+    this.runtimeController.syncFullRoomColliders();
   }
 
   private syncLiveObjectInteractions(): void {
-    this.liveObjectController.syncLiveObjectInteractions(this.loadedFullRoomsById.values());
+    this.runtimeController.syncLiveObjectInteractions();
   }
 
   private syncEdgeWalls(): void {
-    for (const loadedRoom of this.loadedFullRoomsById.values()) {
-      this.destroyEdgeWalls(loadedRoom);
-
-      if (!this.playerBody || this.mode !== 'play') {
-        continue;
-      }
-
-      for (const neighbor of getOrthogonalNeighbors(loadedRoom.room.coordinates)) {
-        if (this.isNeighborReachableInCurrentPlayMode(loadedRoom.room.coordinates, neighbor)) {
-          continue;
-        }
-
-        const edgeWall = this.createEdgeWall(loadedRoom.room.coordinates, neighbor);
-        if (edgeWall) {
-          loadedRoom.edgeWalls.push(edgeWall);
-        }
-      }
-    }
-  }
-
-  private isNeighborReachableInCurrentPlayMode(
-    roomCoordinates: RoomCoordinates,
-    neighborCoordinates: RoomCoordinates
-  ): boolean {
-    if (this.activeCourseSnapshot) {
-      const deltaX = Math.abs(neighborCoordinates.x - roomCoordinates.x);
-      const deltaY = Math.abs(neighborCoordinates.y - roomCoordinates.y);
-      if (deltaX + deltaY !== 1) {
-        return false;
-      }
-
-      const currentRoomId = roomIdFromCoordinates(roomCoordinates);
-      const neighborRoomId = roomIdFromCoordinates(neighborCoordinates);
-      const currentInCourse = this.activeCourseSnapshot.roomRefs.some(
-        (roomRef) => roomRef.roomId === currentRoomId
-      );
-      const neighborInCourse = this.activeCourseSnapshot.roomRefs.some(
-        (roomRef) => roomRef.roomId === neighborRoomId
-      );
-      return currentInCourse && neighborInCourse;
-    }
-
-    const neighborState = this.getCellStateAt(neighborCoordinates);
-    return neighborState === 'published' || neighborState === 'draft';
-  }
-
-  private createEdgeWall(
-    roomCoordinates: RoomCoordinates,
-    neighborCoordinates: RoomCoordinates
-  ): RoomEdgeWall | null {
-    if (!this.player) return null;
-
-    const roomOrigin = this.getRoomOrigin(roomCoordinates);
-    const deltaX = neighborCoordinates.x - roomCoordinates.x;
-    const deltaY = neighborCoordinates.y - roomCoordinates.y;
-
-    let x = 0;
-    let y = 0;
-    let width = 0;
-    let height = 0;
-
-    if (deltaX === 1) {
-      x = roomOrigin.x + ROOM_PX_WIDTH - EDGE_WALL_THICKNESS / 2;
-      y = roomOrigin.y + ROOM_PX_HEIGHT / 2;
-      width = EDGE_WALL_THICKNESS;
-      height = ROOM_PX_HEIGHT;
-    } else if (deltaX === -1) {
-      x = roomOrigin.x + EDGE_WALL_THICKNESS / 2;
-      y = roomOrigin.y + ROOM_PX_HEIGHT / 2;
-      width = EDGE_WALL_THICKNESS;
-      height = ROOM_PX_HEIGHT;
-    } else if (deltaY === 1) {
-      x = roomOrigin.x + ROOM_PX_WIDTH / 2;
-      y = roomOrigin.y + ROOM_PX_HEIGHT - EDGE_WALL_THICKNESS / 2;
-      width = ROOM_PX_WIDTH;
-      height = EDGE_WALL_THICKNESS;
-    } else if (deltaY === -1) {
-      x = roomOrigin.x + ROOM_PX_WIDTH / 2;
-      y = roomOrigin.y + EDGE_WALL_THICKNESS / 2;
-      width = ROOM_PX_WIDTH;
-      height = EDGE_WALL_THICKNESS;
-    } else {
-      return null;
-    }
-
-    const rect = this.add.rectangle(x, y, width, height, 0xffffff, 0);
-    rect.setDepth(15);
-    this.physics.add.existing(rect, true);
-    const collider = this.physics.add.collider(this.player, rect);
-    this.syncBackdropCameraIgnores();
-    return { rect, collider };
+    this.runtimeController.syncEdgeWalls();
   }
 
   private redrawWorld(): void {
@@ -3481,6 +3386,13 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     return !this.isNeighborReachableInCurrentPlayMode(currentRoomCoordinates, nextRoomCoordinates);
+  }
+
+  private isNeighborReachableInCurrentPlayMode(
+    roomCoordinates: RoomCoordinates,
+    neighborCoordinates: RoomCoordinates
+  ): boolean {
+    return this.runtimeController.isNeighborReachable(roomCoordinates, neighborCoordinates);
   }
 
   private blockRoomTransition(

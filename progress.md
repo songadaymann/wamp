@@ -4329,3 +4329,33 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - the generic smoke screenshot was still black in headless canvas mode even though `state-0.json` showed healthy runtime state; the targeted probe screenshots rendered correctly and were used as the visual source of truth for this slice.
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining browse/play runtime shell, especially player lifecycle and per-mode collider/runtime sync.
+
+- March 27, 2026: extracted the overworld runtime controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/runtimeController.ts` with `OverworldRuntimeController` to own the active browse/play runtime shell around room colliders and edge walls:
+    - mode-runtime orchestration for browse vs play
+    - missing-current-room fallback back to browse
+    - play-entry respawn gating
+    - single-room goal-run sync on room entry
+    - room terrain collider sync for the current player
+    - live-object interaction sync for loaded full rooms
+    - play-mode edge-wall sync and neighbor reachability checks
+  - `OverworldPlayScene.ts` now delegates `syncModeRuntime`, `syncFullRoomColliders`, `syncLiveObjectInteractions`, `syncEdgeWalls`, and room-transition reachability checks through that controller instead of carrying the runtime shell inline.
+  - This slice intentionally leaves player construction/destruction details, combat, wall-slide state, and run-resolution logic in `OverworldPlayScene.ts`; it only moves the orchestration layer that sits above those systems.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev pointed at the safety backend:
+      - `output/web-game/overworld-runtime-controller-skill-smoke/state-0.json`
+      - `output/web-game/overworld-runtime-controller-skill-smoke/shot-0.png`
+    - targeted browser probe wrote:
+      - `output/web-game/overworld-runtime-controller-probe/summary.json`
+      - `output/web-game/overworld-runtime-controller-probe/browse-before.png`
+      - `output/web-game/overworld-runtime-controller-probe/play-running.png`
+      - `output/web-game/overworld-runtime-controller-probe/browse-after-stop.png`
+    - targeted probe confirmed:
+      - browse at `0,0` stayed `mode = browse`, `cameraMode = inspect`, and `player = null`
+      - `Play Room` entered `mode = play`, `cameraMode = follow`, spawned the player at `328,297`, and started the active checkpoint-sprint goal run for room `0,0`
+      - `Stop` returned to `mode = browse`, `cameraMode = inspect`, `player = null`, and `goalRun = null`
+      - no console errors or page errors were recorded
+    - the generic smoke screenshot still rendered as a sparse starfield even though `state-0.json` showed published rooms loaded from the safety backend; the targeted probe screenshots rendered correctly and were used as the visual source of truth for this slice.
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining player lifecycle shell, especially create/destroy/reset and the room-reset path around deaths and single-room challenge resets.
