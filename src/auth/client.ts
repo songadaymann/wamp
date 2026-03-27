@@ -697,8 +697,8 @@ async function ensureWalletModal(): Promise<AppKit> {
       featuredWalletIds: [...FEATURED_REOWN_WALLET_IDS],
       enableCoinbase: false,
       metadata,
-      networks: [baseSepolia, base, mainnet],
-      defaultNetwork: baseSepolia,
+      networks: [base, mainnet, baseSepolia],
+      defaultNetwork: base,
       projectId,
       themeMode: 'dark',
     });
