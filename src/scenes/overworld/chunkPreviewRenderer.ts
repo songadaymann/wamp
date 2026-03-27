@@ -32,8 +32,11 @@ export class OverworldChunkPreviewRenderer {
   private chunkImagesByChunkId = new Map<string, Phaser.GameObjects.Image>();
   private chunkTextureKeysByChunkId = new Map<string, string>();
   private visiblePreviewRoomIds = new Set<string>();
+  private readonly textureNamespace: string;
 
-  constructor(private readonly options: OverworldChunkPreviewRendererOptions) {}
+  constructor(private readonly options: OverworldChunkPreviewRendererOptions) {
+    this.textureNamespace = sanitizeChunkKey(options.scene.sys.settings.key);
+  }
 
   reset(): void {
     this.clear();
@@ -257,7 +260,7 @@ export class OverworldChunkPreviewRenderer {
       .map((room) => `${room.id}:${room.version}:${room.updatedAt}`)
       .join('|');
     const hash = hashStringToSeed(`${chunkId}|${signature}`).toString(36);
-    return `chunk-preview-${sanitizeChunkKey(chunkId)}-${this.options.previewTileSize}-${hash}`;
+    return `chunk-preview-${this.textureNamespace}-${sanitizeChunkKey(chunkId)}-${this.options.previewTileSize}-${hash}`;
   }
 }
 

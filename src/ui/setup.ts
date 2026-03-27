@@ -7,7 +7,7 @@ import { setupButtonFeedback } from './setup/buttonFeedback';
 import { ChatModerationModalController } from './setup/chatModerationModal';
 import { ControlsModalController } from './setup/controlsModal';
 import { CourseModalController } from './setup/courseModal';
-import { setupEditorControls } from './setup/editorControls';
+import { CourseComposerPanelController } from './setup/courseComposerPanel';
 import { RoomHistoryModalController } from './setup/historyModal';
 import { setupKeyboardShortcutPassthrough } from './setup/keyboardPassthrough';
 import { LeaderboardModalController } from './setup/leaderboardModal';
@@ -16,6 +16,7 @@ import { PaletteController } from './setup/paletteController';
 import { ProfileModalController } from './setup/profileModal';
 import { setupCollapsibleSidebarSections } from './setup/sidebarSections';
 import { setupSceneCommands } from './setup/sceneCommands';
+import { configureEditorUiBridgeRuntime } from '../scenes/editor/uiBridge';
 
 export function setupUI(game: Phaser.Game): void {
   initializeDeviceLayout();
@@ -27,13 +28,25 @@ export function setupUI(game: Phaser.Game): void {
   const aboutModal = new AboutModalController();
   const chatModerationModal = new ChatModerationModalController();
   const courseModal = new CourseModalController(game);
+  const courseComposerPanel = new CourseComposerPanelController(game);
   const profileModal = new ProfileModalController(game);
   const chatPanel = new ChatPanelController();
   const mobileUi = new MobileUiController(game);
 
   paletteController.init();
+  configureEditorUiBridgeRuntime({
+    paletteController,
+    closePanels: () => {
+      historyModal.close();
+      leaderboardModal.close();
+      controlsModal.close();
+      aboutModal.close();
+      courseModal.close();
+      chatModerationModal.close();
+    },
+    openHistory: () => historyModal.open(),
+  });
   setupCollapsibleSidebarSections();
-  setupEditorControls(game, paletteController);
   historyModal.init();
   leaderboardModal.init();
   installHelp.init();
@@ -41,6 +54,7 @@ export function setupUI(game: Phaser.Game): void {
   aboutModal.init();
   chatModerationModal.init();
   courseModal.init();
+  courseComposerPanel.init();
   profileModal.init();
   chatPanel.init();
   mobileUi.init();

@@ -9,6 +9,7 @@ import {
 import { cloneRoomSnapshot, type RoomSnapshot } from '../persistence/roomModel';
 
 let activeCourseRecord: CourseRecord | null = null;
+let activePersistedCourseRecord: CourseRecord | null = null;
 let activeSelectedRoomId: string | null = null;
 let activeCourseRoomOverridesByRoomId = new Map<string, RoomSnapshot>();
 
@@ -32,6 +33,7 @@ function pruneActiveCourseRoomOverrides(): void {
 
 export function clearActiveCourseDraftSession(): void {
   activeCourseRecord = null;
+  activePersistedCourseRecord = null;
   activeSelectedRoomId = null;
   activeCourseRoomOverridesByRoomId = new Map();
 }
@@ -58,6 +60,7 @@ export function setActiveCourseDraftSessionRecord(
 ): CourseRecord | null {
   const previousCourseId = activeCourseRecord?.draft.id ?? null;
   activeCourseRecord = cloneRecordOrNull(record);
+  activePersistedCourseRecord = cloneRecordOrNull(record);
   const nextCourseId = activeCourseRecord?.draft.id ?? null;
   if (previousCourseId !== nextCourseId) {
     activeCourseRoomOverridesByRoomId = new Map();
@@ -127,16 +130,6 @@ export function getActiveCourseDraftSessionSelectedRoomId(): string | null {
   return activeCourseRecord?.draft.roomRefs[0]?.roomId ?? null;
 }
 
-export function getActiveCourseDraftSessionSelectedRoomOrder(): number | null {
-  const selectedRoomId = getActiveCourseDraftSessionSelectedRoomId();
-  if (!activeCourseRecord || !selectedRoomId) {
-    return null;
-  }
-
-  const order = getCourseRoomOrder(activeCourseRecord.draft.roomRefs, selectedRoomId);
-  return order >= 0 ? order : null;
-}
-
 export function isRoomInActiveCourseDraftSession(roomId: string): boolean {
   return Boolean(
     activeCourseRecord && getCourseRoomOrder(activeCourseRecord.draft.roomRefs, roomId) >= 0
@@ -172,17 +165,12 @@ export function clearActiveCourseDraftSessionRoomOverride(roomId: string): void 
 }
 
 export function isActiveCourseDraftSessionDirty(): boolean {
-  if (!activeCourseRecord) {
+  if (!activeCourseRecord || !activePersistedCourseRecord) {
     return false;
   }
 
-  const published = activeCourseRecord.published;
-  if (!published) {
-    return activeCourseRecord.draft.roomRefs.length > 0 ||
-      Boolean(activeCourseRecord.draft.title?.trim()) ||
-      activeCourseRecord.draft.goal !== null ||
-      activeCourseRecord.draft.startPoint !== null;
-  }
-
-  return !areCourseSnapshotsEquivalent(activeCourseRecord.draft, published);
+  return !areCourseSnapshotsEquivalent(
+    activeCourseRecord.draft,
+    activePersistedCourseRecord.draft
+  );
 }

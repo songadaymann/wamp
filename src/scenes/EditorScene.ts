@@ -1,26 +1,12 @@
 import Phaser from 'phaser';
 import {
-  AUTH_STATE_CHANGED_EVENT,
-  getAuthDebugState,
-  promptForSignIn,
-} from '../auth/client';
-import {
-  canObjectBeStoredInContainer,
-  canPlacedObjectBeContainer,
   TILE_SIZE,
   ROOM_WIDTH,
   ROOM_HEIGHT,
-  ROOM_PX_WIDTH,
-  ROOM_PX_HEIGHT,
   LAYER_NAMES,
   TILESETS,
-  canPlacedObjectBePressurePlateTarget,
-  canPlacedObjectTriggerOtherObjects,
   editorState,
-  getObjectById,
-  getPlacedObjectLayer,
-  type LayerName,
-  type PlacedObject,
+  resetEditorPaletteSelection,
 } from '../config';
 import {
   DEFAULT_ROOM_COORDINATES,
@@ -36,38 +22,15 @@ import {
   type RoomVersionRecord,
 } from '../persistence/roomRepository';
 import { createWorldRepository } from '../persistence/worldRepository';
-import { roomToChunkCoordinates } from '../persistence/worldModel';
 import {
-  resolveWorldPresenceConfig,
-  resolveWorldPresenceIdentity,
-  WorldPresenceClient,
-  type WorldPresenceIdentity,
-} from '../presence/worldPresence';
-import { RETRO_COLORS } from '../visuals/starfield';
-import {
-  cloneCourseSnapshot,
-  createDefaultCourseGoal,
-  type CourseGoal,
   type CourseGoalType,
-  type CourseMarkerPoint,
   type CourseSnapshot,
 } from '../courses/model';
 import {
-  clearActiveCourseDraftSessionRoomOverride,
-  getActiveCourseDraftSessionCourseId,
-  getActiveCourseDraftSessionDraft,
-  setActiveCourseDraftSessionRoomOverride,
-  updateActiveCourseDraftSession,
-} from '../courses/draftSession';
-import {
   cloneRoomGoal,
-  createGoalMarkerPointFromTile,
   type RoomGoal,
   type RoomGoalType,
 } from '../goals/roomGoals';
-import {
-  createGoalMarkerFlagSprite,
-} from '../goals/markerFlags';
 import { setAppMode } from '../ui/appMode';
 import {
   hideBusyOverlay,
@@ -76,6 +39,7 @@ import {
 } from '../ui/appFeedback';
 import { isTextInputFocused } from '../ui/keyboardFocus';
 import type {
+  CourseEditorSceneData,
   CourseEditedRoomData,
   EditorCourseEditData,
   EditorSceneData,
@@ -84,84 +48,52 @@ import type {
 import { EditorUiBridge } from './editor/uiBridge';
 import { EditorRoomSession } from './editor/roomSession';
 import { EditorBackgroundController } from './editor/backgrounds';
-import { EditorEditRuntime, type EditorClipboardState, type GoalPlacementMode } from './editor/editRuntime';
+import { EditorEditRuntime, type GoalPlacementMode } from './editor/editRuntime';
+import { EditorSceneFlowController } from './editor/flow';
+import { EditorInspectorController } from './editor/inspector';
 import { EditorInteractionController } from './editor/interaction';
-import {
-  buildCourseEditedRoomData as buildCourseEditedRoomDataHelper,
-  buildCourseEditorState,
-  buildCourseMarkerDescriptors,
-} from './editor/courseEditing';
-import {
-  buildEditorPlayModeData,
-  getSelectedCoursePreviewForPlay as getSelectedCoursePreviewForPlayHelper,
-} from './editor/playMode';
-import {
-  buildEditorUiViewModel,
-  shouldShowPublishNudge as shouldShowPublishNudgeHelper,
-} from './editor/viewModel';
+import { EditorPresenceController } from './editor/presence';
+import { EditorPersistenceController } from './editor/persistence';
+import { EditorToolController } from './editor/tools';
+import { EditorCourseController } from './editor/courseController';
+import { EditorOverlayController } from './editor/overlays';
+import { EditorChromeController } from './editor/chrome';
 import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
-import type { EditorInspectorState } from './editor/uiBridge';
 
 const EDITOR_NEIGHBOR_RADIUS = 1;
-type EditorMarkerPlacementMode = GoalPlacementMode | 'start';
+type EditorMarkerPlacementMode = Exclude<GoalPlacementMode, null> | 'start';
 
 export class EditorScene extends Phaser.Scene {
-  private readonly PUBLISH_NUDGE_EDIT_THRESHOLD = 10;
   private uiBridge: EditorUiBridge | null = null;
-  private layerIndicatorText: Phaser.GameObjects.Text | null = null;
-  private layerGuideGraphics: Phaser.GameObjects.Graphics | null = null;
-  private pressurePlateGraphics: Phaser.GameObjects.Graphics | null = null;
-  private containerGraphics: Phaser.GameObjects.Graphics | null = null;
-  private editorPresenceClient: WorldPresenceClient | null = null;
-  private editorPresenceIdentity: WorldPresenceIdentity | null = null;
-  private courseMarkerSprites: Phaser.GameObjects.Sprite[] = [];
-  private courseMarkerLabels: Phaser.GameObjects.Text[] = [];
-  private activeCourseMarkerEdit: EditorCourseEditData | null = null;
-  private courseGoalPlacementMode: EditorMarkerPlacementMode = null;
-  private focusedPressurePlateInstanceId: string | null = null;
-  private connectingPressurePlateInstanceId: string | null = null;
-  private pressurePlateStatusText: string | null = null;
-  private focusedContainerInstanceId: string | null = null;
-  private containerStatusText: string | null = null;
-  private pinnedInspector: { kind: 'pressure' | 'container'; instanceId: string } | null = null;
-  private clipboardPastePreviewActive = false;
-  private lastCopySelection: { x1: number; y1: number; x2: number; y2: number } | null = null;
   private roomEditCount = 0;
-  private publishNudgeTriggered = false;
 
   // Tilemap
   private map!: Phaser.Tilemaps.Tilemap;
   private tilesets: Map<string, Phaser.Tilemaps.Tileset> = new Map();
   private layers: Map<string, Phaser.Tilemaps.TilemapLayer> = new Map();
 
-  // Graphics overlays
-  private gridGraphics!: Phaser.GameObjects.Graphics;
-  private borderGraphics!: Phaser.GameObjects.Graphics;
-
   // Single-room persistence (local-first, ready for a remote adapter later)
   private readonly editRuntime: EditorEditRuntime;
   private readonly roomSession: EditorRoomSession;
   private readonly worldRepository = createWorldRepository();
   private readonly backgroundController: EditorBackgroundController;
+  private readonly courseController: EditorCourseController;
+  private readonly flowController: EditorSceneFlowController;
+  private readonly inspectorController: EditorInspectorController;
   private readonly interactionController: EditorInteractionController;
+  private readonly overlayController: EditorOverlayController;
+  private readonly presenceController: EditorPresenceController;
+  private readonly persistenceController: EditorPersistenceController;
+  private readonly toolController: EditorToolController;
+  private readonly chromeController: EditorChromeController;
   private entrySource: 'world' | 'direct' = 'direct';
   private initialRoomSnapshot: RoomSnapshot | null = null;
-  private courseEditorStatusText: string | null = null;
   private readonly handleWake = (): void => {
     setAppMode('editor');
     editorState.isPlaying = false;
-    this.syncEditorPresence();
+    this.presenceController.sync();
     this.updateBottomBar();
     this.updateGoalUi();
-  };
-  private readonly handleAuthStateChanged = (): void => {
-    this.refreshEditorPresenceIdentity();
-    this.renderEditorUi();
-  };
-  private readonly handleBackgroundChanged = (): void => {
-    this.updateBackground();
-    this.markRoomDirty();
-    this.renderEditorUi();
   };
   private readonly handleCanvasContextMenu = (event: Event): void => {
     event.preventDefault();
@@ -180,18 +112,18 @@ export class EditorScene extends Phaser.Scene {
     if (key === 'escape') {
       event.preventDefault();
       event.stopPropagation();
-      if (this.connectingPressurePlateInstanceId) {
+      if (this.inspectorController.isConnectingPressurePlate()) {
         this.cancelPressurePlateConnection();
         return;
       }
 
-      if (this.clipboardPastePreviewActive) {
-        this.cancelClipboardPastePreview();
+      if (this.toolController.isClipboardPastePreviewActive()) {
+        this.toolController.cancelClipboardPastePreview();
         return;
       }
 
-      if (this.pinnedInspector) {
-        this.clearPinnedInspector();
+      if (this.inspectorController.hasPinnedInspector()) {
+        this.inspectorController.clearPinnedSelection();
         return;
       }
 
@@ -224,22 +156,16 @@ export class EditorScene extends Phaser.Scene {
       }
       event.preventDefault();
       event.stopPropagation();
-      this.beginClipboardPastePreview();
+      this.toolController.beginClipboardPastePreview();
       return;
     }
 
     if (primaryModifier && key === 'c' && editorState.paletteMode === 'tiles' && editorState.activeTool === 'copy') {
-      if (!this.lastCopySelection) {
+      if (!this.toolController.repeatLastCopySelection()) {
         return;
       }
       event.preventDefault();
       event.stopPropagation();
-      this.captureCopySelection(
-        this.lastCopySelection.x1,
-        this.lastCopySelection.y1,
-        this.lastCopySelection.x2,
-        this.lastCopySelection.y2,
-      );
       return;
     }
 
@@ -247,9 +173,9 @@ export class EditorScene extends Phaser.Scene {
       event.preventDefault();
       event.stopPropagation();
       if (event.shiftKey) {
-        this.redo();
+        this.toolController.redo();
       } else {
-        this.undo();
+        this.toolController.undo();
       }
       return;
     }
@@ -257,29 +183,25 @@ export class EditorScene extends Phaser.Scene {
     if (event.ctrlKey && !event.metaKey && key === 'y') {
       event.preventDefault();
       event.stopPropagation();
-      this.redo();
+      this.toolController.redo();
       return;
     }
 
     if (event.code === 'Digit1') {
       event.preventDefault();
-      editorState.activeTool = 'pencil';
-      this.updateToolUI();
+      this.toolController.selectTool('pencil');
       return;
     }
 
     if (event.code === 'Digit2') {
       event.preventDefault();
-      editorState.activeTool = 'eraser';
-      this.cancelClipboardPastePreview();
-      this.updateToolUI();
+      this.toolController.selectTool('eraser');
       return;
     }
 
     if (event.code === 'Digit3') {
       event.preventDefault();
-      editorState.activeTool = 'copy';
-      this.updateToolUI();
+      this.toolController.selectTool('copy');
       return;
     }
 
@@ -290,21 +212,15 @@ export class EditorScene extends Phaser.Scene {
     }
   };
   private readonly handleShutdown = (): void => {
-    window.removeEventListener('background-changed', this.handleBackgroundChanged);
-    window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
-    document.removeEventListener('keydown', this.handleDocumentKeyDown);
     this.events.off('wake', this.handleWake, this);
     this.scale.off('resize', this.handleResize, this);
     this.input.removeAllListeners();
     this.input.keyboard?.removeAllListeners();
     this.game.canvas.removeEventListener('contextmenu', this.handleCanvasContextMenu);
+    this.inspectorController.reset();
     this.uiBridge?.destroy();
     this.uiBridge = null;
-    this.layerIndicatorText?.destroy();
-    this.layerIndicatorText = null;
-    this.editorPresenceClient?.destroy();
-    this.editorPresenceClient = null;
-    this.destroyCourseMarkerOverlays();
+    this.presenceController.destroy();
     this.resetRuntimeState();
   };
 
@@ -321,12 +237,16 @@ export class EditorScene extends Phaser.Scene {
         updatedAt: this.roomUpdatedAt,
         publishedAt: this.roomPublishedAt,
       }),
-      updateBackgroundSelectValue: (backgroundId) => {
-        const backgroundSelect = document.getElementById('background-select') as HTMLSelectElement | null;
-        if (backgroundSelect) {
-          backgroundSelect.value = backgroundId;
-        }
+      getRoomOrigin: () => ({ x: 0, y: 0 }),
+      getSelectedBackground: () => editorState.selectedBackground,
+      setSelectedBackground: (backgroundId) => {
+        editorState.selectedBackground = backgroundId;
       },
+      getPlacedObjects: () => editorState.placedObjects,
+      setPlacedObjects: (placedObjects) => {
+        editorState.placedObjects = placedObjects;
+      },
+      updateBackgroundSelectValue: () => {},
       updateBackground: () => this.updateBackground(),
       updateGoalUi: () => this.updateGoalUi(),
       syncBackgroundCameraIgnores: () => this.syncBackgroundCameraIgnores(),
@@ -350,6 +270,108 @@ export class EditorScene extends Phaser.Scene {
         void this.refreshSurroundingRoomPreviews();
       },
     });
+    this.persistenceController = new EditorPersistenceController(this.roomSession, {
+      getRoomPermissions: () => this.roomPermissions,
+      getRoomTitle: () => this.roomTitle,
+      setRoomTitle: (title) => {
+        this.roomTitle = title;
+      },
+      getRoomDirty: () => this.roomDirty,
+      setRoomDirty: (dirty) => {
+        this.roomDirty = dirty;
+      },
+      getLastDirtyAt: () => this.lastDirtyAt,
+      setLastDirtyAt: (value) => {
+        this.lastDirtyAt = value;
+      },
+      getInitialRoomSnapshot: () => this.initialRoomSnapshot ? cloneRoomSnapshot(this.initialRoomSnapshot) : null,
+      syncActiveCourseRoomSessionSnapshot: (room, options) => {
+        this.syncActiveCourseRoomSessionSnapshot(room, options);
+      },
+      onRoomMarkedDirty: () => {
+        this.roomEditCount += 1;
+        this.flowController.maybeTriggerPublishNudge();
+      },
+    });
+    this.toolController = new EditorToolController(
+      this,
+      this.editRuntime,
+      this.persistenceController,
+      {
+        startRectDrawing: (tileX, tileY) => this.interactionController.startRectDrawing(tileX, tileY),
+        clearShapePreview: () => this.interactionController.clearShapePreview(),
+        clearCoursePlacementMode: () => this.courseController.clearPlacementMode(),
+        renderUi: () => this.renderEditorUi(),
+      },
+    );
+    this.courseController = new EditorCourseController(this, {
+      getRoomId: () => this.roomId,
+      syncBackgroundCameraIgnores: () => this.syncBackgroundCameraIgnores(),
+      updateGoalUi: () => this.updateGoalUi(),
+      clearRoomGoalPlacementMode: () => {
+        this.editRuntime.currentGoalPlacementMode = null;
+      },
+    });
+    this.flowController = new EditorSceneFlowController(this.roomSession, {
+      cancelClipboardPastePreview: () => this.toolController.cancelClipboardPastePreview(),
+      getSelectedCoursePreviewForPlay: () => this.getSelectedCoursePreviewForPlay(),
+      getRoomPermissions: () => this.roomPermissions,
+      saveDraft: (force = false) => this.persistenceController.saveDraft(force),
+      exportRoomSnapshot: () => this.exportRoomSnapshot(),
+      getRoomDirty: () => this.roomDirty,
+      getPublishedVersion: () => this.publishedVersion,
+      getRoomCoordinates: () => ({ ...this.roomCoordinates }),
+      buildCourseEditedRoomData: () => this.buildCourseEditedRoomData(),
+      syncActiveCourseRoomSessionSnapshot: (room, options) => {
+        this.syncActiveCourseRoomSessionSnapshot(room, options);
+      },
+      clearEditorPresence: () => this.presenceController.clear(),
+      sleepEditorScene: () => this.scene.sleep(),
+      stopEditorScene: () => this.scene.stop(),
+      wakeOverworld: (data) => this.scene.wake('OverworldPlayScene', data),
+      wakeCourseComposer: (data) => this.scene.wake('CourseComposerScene', data),
+      updateBottomBar: () => this.updateBottomBar(),
+      hasActiveCourseEdit: () => this.courseController.hasActiveCourseEdit(),
+      canReturnToCourseBuilder: () => this.courseController.getCourseEditorState().canReturnToCourseBuilder,
+      shouldReturnToCourseEditor: () => this.shouldReturnToCourseEditor(),
+      buildCourseEditorWakeData: (wakeData) => this.buildCourseEditorWakeData(wakeData),
+      setCourseEditorStatusText: (text) => this.courseController.setStatusText(text),
+      updateGoalUi: () => this.updateGoalUi(),
+      getPersistenceStatusText: () => this.persistenceController.statusText,
+      getMintedTokenId: () => this.mintedTokenId,
+      getRoomEditCount: () => this.roomEditCount,
+      publishRoom: () => this.persistenceController.publishRoom(),
+    });
+    this.inspectorController = new EditorInspectorController(
+      this,
+      this.editRuntime,
+      (state) => this.uiBridge?.renderInspector(state),
+    );
+    this.chromeController = new EditorChromeController(
+      this.editRuntime,
+      this.flowController,
+      this.persistenceController,
+      this.toolController,
+      this.inspectorController,
+      this.courseController,
+      {
+        getUiBridge: () => this.uiBridge,
+        getRoomTitle: () => this.roomTitle,
+        getRoomCoordinates: () => ({ ...this.roomCoordinates }),
+        getRoomGoal: () => this.roomGoal,
+        getRoomPermissions: () => this.roomPermissions,
+        getMintedTokenId: () => this.mintedTokenId,
+        getRoomVersionHistory: () => this.roomVersionHistory,
+        getEntrySource: () => this.entrySource,
+        getCourseEditorState: () => this.courseController.getCourseEditorState(),
+        getSaveInFlight: () => this.saveInFlight,
+      },
+    );
+    this.presenceController = new EditorPresenceController({
+      getRoomCoordinates: () => ({ ...this.roomCoordinates }),
+      isPlaying: () => editorState.isPlaying,
+      isSceneActive: () => this.scene.isActive(this.scene.key),
+    });
     this.interactionController = new EditorInteractionController(this, {
       getNeighborRadius: () => EDITOR_NEIGHBOR_RADIUS,
       getGoalPlacementMode: () => this.goalPlacementMode as GoalPlacementMode,
@@ -357,24 +379,29 @@ export class EditorScene extends Phaser.Scene {
       handleObjectModeSecondaryAction: (worldX, worldY) =>
         this.handleObjectModeSecondaryAction(worldX, worldY),
       handleObjectPlace: (pointer) => this.handleObjectPlace(pointer),
-      handleToolDown: (pointer) => this.handleToolDown(pointer),
+      handleToolDown: (pointer) => this.toolController.handleToolDown(pointer),
       removeGoalMarkerAt: (worldX, worldY) => this.removeGoalMarkerAt(worldX, worldY),
       removeObjectAt: (worldX, worldY) => this.removeObjectAt(worldX, worldY),
       placeGoalMarker: (tileX, tileY) => this.placeGoalMarker(tileX, tileY),
-      placeTileAt: (worldX, worldY) => this.placeTileAt(worldX, worldY),
-      eraseTileAt: (worldX, worldY) => this.eraseTileAt(worldX, worldY),
-      fillRect: (x1, y1, x2, y2) => this.fillRect(x1, y1, x2, y2),
-      captureCopySelection: (x1, y1, x2, y2) => this.captureCopySelection(x1, y1, x2, y2),
-      getClipboardPreview: () => this.getClipboardPreview(),
-      isClipboardPastePreviewActive: () => this.isClipboardPastePreviewActive(),
-      pasteClipboardAt: (tileX, tileY) => this.pasteClipboardAt(tileX, tileY),
-      cancelClipboardPastePreview: () => this.cancelClipboardPastePreview(),
+      placeTileAt: (worldX, worldY) => this.editRuntime.placeTileAt(worldX, worldY),
+      eraseTileAt: (worldX, worldY) => this.editRuntime.eraseTileAt(worldX, worldY),
+      fillRect: (x1, y1, x2, y2) => this.editRuntime.fillRect(x1, y1, x2, y2),
+      captureCopySelection: (x1, y1, x2, y2) => this.toolController.captureCopySelection(x1, y1, x2, y2),
+      getClipboardPreview: () => this.toolController.getClipboardPreview(),
+      isClipboardPastePreviewActive: () => this.toolController.isClipboardPastePreviewActive(),
+      pasteClipboardAt: (tileX, tileY) => this.toolController.pasteClipboardAt(tileX, tileY),
+      cancelClipboardPastePreview: () => this.toolController.cancelClipboardPastePreview(),
       beginTileBatch: () => this.editRuntime.beginTileBatch(),
       commitTileBatch: () => this.editRuntime.commitTileBatch(),
       startPlayMode: () => this.startPlayMode(),
-      updateToolUi: () => this.updateToolUI(),
+      updateToolUi: () => this.toolController.updateToolUi(),
       updateBackgroundPreview: () => this.updateBackgroundPreview(),
       updateZoomUI: () => this.updateZoomUI(),
+    });
+    this.overlayController = new EditorOverlayController(this, {
+      getLayers: () => this.layers,
+      getPlacedObjects: () => editorState.placedObjects,
+      isClipboardPastePreviewActive: () => this.toolController.isClipboardPastePreviewActive(),
     });
     this.backgroundController = new EditorBackgroundController(this, this.worldRepository, {
       getRoomId: () => this.roomId,
@@ -397,11 +424,11 @@ export class EditorScene extends Phaser.Scene {
         ignored.push(...this.goalMarkerLabels);
 
         const overlays = [
-          this.gridGraphics,
-          this.layerGuideGraphics,
+          this.overlayController.gridOverlay,
+          this.overlayController.layerGuideOverlay,
           this.interactionController.cursorOverlay,
           this.interactionController.rectPreviewOverlay,
-          this.borderGraphics,
+          this.overlayController.borderOverlay,
         ];
         for (const overlay of overlays) {
           if (overlay) {
@@ -424,11 +451,11 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private get goalMarkerSprites(): Phaser.GameObjects.Sprite[] {
-    return [...this.editRuntime.currentGoalMarkerSprites, ...this.courseMarkerSprites];
+    return [...this.editRuntime.currentGoalMarkerSprites, ...this.courseController.getMarkerSprites()];
   }
 
   private get goalMarkerLabels(): Phaser.GameObjects.Text[] {
-    return [...this.editRuntime.currentGoalMarkerLabels, ...this.courseMarkerLabels];
+    return [...this.editRuntime.currentGoalMarkerLabels, ...this.courseController.getMarkerLabels()];
   }
 
   private get roomId(): string {
@@ -511,10 +538,6 @@ export class EditorScene extends Phaser.Scene {
     return this.roomSession.isSaveInFlight;
   }
 
-  private get persistenceStatusText(): string {
-    return this.roomSession.statusText;
-  }
-
   private get roomGoal(): RoomGoal | null {
     return this.editRuntime.currentRoomGoal;
   }
@@ -540,177 +563,33 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private get goalPlacementMode(): EditorMarkerPlacementMode {
-    return this.courseGoalPlacementMode ?? (this.editRuntime.currentGoalPlacementMode as EditorMarkerPlacementMode);
-  }
-
-  private get activeCourseDraft(): CourseSnapshot | null {
-    if (!this.activeCourseMarkerEdit) {
-      return null;
-    }
-
-    if (getActiveCourseDraftSessionCourseId() !== this.activeCourseMarkerEdit.courseId) {
-      return null;
-    }
-
-    return getActiveCourseDraftSessionDraft();
-  }
-
-  private get activeCourseGoal(): CourseGoal | null {
-    return this.activeCourseDraft?.goal ?? null;
-  }
-
-  private destroyCourseMarkerOverlays(): void {
-    for (const sprite of this.courseMarkerSprites) {
-      sprite.destroy();
-    }
-    this.courseMarkerSprites = [];
-    for (const label of this.courseMarkerLabels) {
-      label.destroy();
-    }
-    this.courseMarkerLabels = [];
-  }
-
-  private setActiveCourseDraft(nextDraft: CourseSnapshot): void {
-    if (!this.activeCourseMarkerEdit || getActiveCourseDraftSessionCourseId() !== this.activeCourseMarkerEdit.courseId) {
-      return;
-    }
-
-    const normalized = cloneCourseSnapshot(nextDraft);
-    updateActiveCourseDraftSession((draft) => {
-      draft.title = normalized.title;
-      draft.roomRefs = normalized.roomRefs;
-      draft.startPoint = normalized.startPoint;
-      draft.goal = normalized.goal;
-    });
-    this.updateGoalUi();
+    return this.courseController.getGoalPlacementMode() ?? (this.editRuntime.currentGoalPlacementMode as EditorMarkerPlacementMode);
   }
 
   private buildCourseEditedRoomData(): CourseEditedRoomData | null {
-    return buildCourseEditedRoomDataHelper(this.activeCourseMarkerEdit);
+    return this.courseController.buildCourseEditedRoomData();
   }
 
   private getAdjacentCourseEdit(offset: -1 | 1): EditorCourseEditData | null {
-    const courseEdit = this.activeCourseMarkerEdit;
-    const draft = this.activeCourseDraft;
-    if (!courseEdit || !draft || courseEdit.roomOrder === null) {
-      return null;
-    }
-
-    const nextOrder = courseEdit.roomOrder + offset;
-    const nextRoomRef = draft.roomRefs[nextOrder] ?? null;
-    if (!nextRoomRef) {
-      return null;
-    }
-
-    return {
-      courseId: courseEdit.courseId,
-      roomId: nextRoomRef.roomId,
-      roomOrder: nextOrder,
-    };
+    return null;
   }
 
   private syncActiveCourseRoomSessionSnapshot(
     room: RoomSnapshot,
     options: { published: boolean }
   ): void {
-    const courseEdit = this.activeCourseMarkerEdit;
-    if (!courseEdit || getActiveCourseDraftSessionCourseId() !== courseEdit.courseId) {
-      return;
-    }
-
-    const snapshot = cloneRoomSnapshot(room);
-    if (options.published) {
-      clearActiveCourseDraftSessionRoomOverride(snapshot.id);
-    } else {
-      setActiveCourseDraftSessionRoomOverride(snapshot);
-    }
-
-    const currentDraft = getActiveCourseDraftSessionDraft();
-    const currentRoomRef = currentDraft?.roomRefs.find((entry) => entry.roomId === snapshot.id) ?? null;
-    const nextTitle = snapshot.title ?? null;
-    const needsRecordUpdate =
-      currentRoomRef !== null &&
-      (currentRoomRef.roomTitle !== nextTitle ||
-        (options.published && currentRoomRef.roomVersion !== snapshot.version));
-    if (needsRecordUpdate) {
-      updateActiveCourseDraftSession((draft) => {
-        const roomRef = draft.roomRefs.find((entry) => entry.roomId === snapshot.id);
-        if (!roomRef) {
-          return;
-        }
-
-        roomRef.roomTitle = nextTitle;
-        if (options.published) {
-          roomRef.roomVersion = snapshot.version;
-        }
-      });
-      this.updateGoalUi();
-    }
-  }
-
-  private getCourseGoalUsesMarkers(goal: CourseGoal | null): boolean {
-    return goal !== null;
-  }
-
-  private redrawCourseGoalMarkers(): void {
-    this.destroyCourseMarkerOverlays();
-    const markers = buildCourseMarkerDescriptors(this.activeCourseDraft, this.roomId);
-    if (markers.length === 0) {
-      this.syncBackgroundCameraIgnores();
-      return;
-    }
-
-    for (const marker of markers) {
-      const sprite = createGoalMarkerFlagSprite(
-        this,
-        marker.variant,
-        marker.point.x,
-        marker.point.y + 2,
-        97,
-      );
-      this.courseMarkerSprites.push(sprite);
-
-      if (marker.label) {
-        const label = this.add.text(marker.point.x, marker.point.y - 28, marker.label, {
-          fontFamily: 'Courier New',
-          fontSize: '12px',
-          color: marker.textColor,
-          stroke: '#050505',
-          strokeThickness: 4,
-        });
-        label.setOrigin(0.5, 1);
-        label.setDepth(98);
-        this.courseMarkerLabels.push(label);
-      }
-    }
-
-    this.syncBackgroundCameraIgnores();
+    this.courseController.syncActiveCourseRoomSessionSnapshot(room, options);
   }
 
   getCourseEditorState(): EditorCourseUiState {
-    return buildCourseEditorState({
-      activeCourseMarkerEdit: this.activeCourseMarkerEdit,
-      courseEditorStatusText: this.courseEditorStatusText,
-      draft: this.activeCourseDraft,
-      activeGoal: this.activeCourseGoal,
-      coursePlacementMode: this.courseGoalPlacementMode,
-    });
+    return this.courseController.getCourseEditorState();
   }
 
   create(data?: EditorSceneData): void {
     this.resetRuntimeState();
 
     this.initialRoomSnapshot = data?.roomSnapshot ? cloneRoomSnapshot(data.roomSnapshot) : null;
-    this.activeCourseMarkerEdit = data?.courseEdit
-      ? {
-          courseId: data.courseEdit.courseId,
-          roomId: data.courseEdit.roomId,
-          roomOrder: data.courseEdit.roomOrder,
-        }
-      : null;
-    this.courseEditorStatusText = this.activeCourseMarkerEdit
-      ? null
-      : 'Open this room from the course builder to edit course goals.';
+    this.courseController.initialize(data?.courseEdit ?? null);
 
     if (this.initialRoomSnapshot) {
       this.roomCoordinates = { ...this.initialRoomSnapshot.coordinates };
@@ -724,16 +603,58 @@ export class EditorScene extends Phaser.Scene {
     }
     this.entrySource = data?.source ?? 'direct';
     setAppMode('editor');
-    this.uiBridge = new EditorUiBridge();
+    this.uiBridge = new EditorUiBridge({
+      onRequestRender: () => this.renderEditorUi(),
+      onDocumentKeyDown: this.handleDocumentKeyDown,
+      onAuthStateChanged: () => {
+        this.presenceController.refreshIdentity();
+        this.renderEditorUi();
+      },
+      onBack: () => this.handleEditorBackAction(),
+      onStartPlayMode: () => this.startPlayMode(),
+      onSaveDraft: async () => {
+        await this.persistenceController.saveDraft(true, { promptForSignInOnUnauthorized: true });
+      },
+      onPublishRoom: async () => {
+        await this.persistenceController.publishRoom();
+      },
+      onPublishNudge: () => this.handlePublishNudgeAction(),
+      onMintRoom: async () => {
+        await this.persistenceController.mintRoom();
+      },
+      onRefreshMintMetadata: async () => {
+        await this.persistenceController.refreshMintMetadata();
+      },
+      onFitToScreen: () => this.fitToScreen(),
+      onZoomIn: () => this.zoomIn(),
+      onZoomOut: () => this.zoomOut(),
+      onSetRoomTitle: (title) => this.persistenceController.setRoomTitle(title),
+      onSelectTool: (tool) => this.toolController.selectTool(tool),
+      onClearCurrentLayer: () => this.toolController.clearCurrentLayer(),
+      onClearAllTiles: () => this.toolController.clearAllTiles(),
+      onSelectBackground: () => this.applySelectedBackground(),
+      onSetGoalType: (nextType) => this.toolController.setGoalType(nextType),
+      onSetGoalTimeLimitSeconds: (seconds) => this.toolController.setGoalTimeLimitSeconds(seconds),
+      onSetGoalRequiredCount: (requiredCount) => this.toolController.setGoalRequiredCount(requiredCount),
+      onSetGoalSurvivalSeconds: (seconds) => this.toolController.setGoalSurvivalSeconds(seconds),
+      onStartGoalMarkerPlacement: (mode) => this.toolController.startGoalMarkerPlacement(mode),
+      onClearGoalMarkers: () => this.toolController.clearGoalMarkers(),
+      onSetCourseGoalType: (goalType) => this.setCourseGoalType(goalType),
+      onSetCourseGoalTimeLimitSeconds: (seconds) => this.setCourseGoalTimeLimitSeconds(seconds),
+      onSetCourseGoalRequiredCount: (requiredCount) => this.setCourseGoalRequiredCount(requiredCount),
+      onSetCourseGoalSurvivalSeconds: (seconds) => this.setCourseGoalSurvivalSeconds(seconds),
+      onStartCourseGoalMarkerPlacement: (mode) => this.startCourseGoalMarkerPlacement(mode),
+      onClearCourseGoalMarkers: () => this.clearCourseGoalMarkers(),
+      onBeginPressurePlateConnection: () => this.beginFocusedPressurePlateConnection(),
+      onClearPressurePlateConnection: () => this.clearFocusedPressurePlateConnection(),
+      onCancelPressurePlateConnection: () => this.cancelPressurePlateConnection(),
+      onClearContainerContents: () => this.clearFocusedContainerContents(),
+    });
 
     this.createBackground();
     this.createTilemap();
-    this.drawRoomBorder();
-    this.drawGrid();
     this.createCursorOverlay();
-    this.createPressurePlateOverlay();
-    this.createContainerOverlay();
-    this.createLayerIndicator();
+    this.overlayController.createOverlays();
     this.setupCamera();
     this.setupInput();
     this.setupKeyboard();
@@ -742,9 +663,6 @@ export class EditorScene extends Phaser.Scene {
     this.updateBackgroundPreview();
 
     this.events.on('wake', this.handleWake, this);
-    window.addEventListener('background-changed', this.handleBackgroundChanged);
-    window.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
-    document.addEventListener('keydown', this.handleDocumentKeyDown);
     this.scale.on('resize', this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
 
@@ -756,20 +674,24 @@ export class EditorScene extends Phaser.Scene {
     }
 
     void this.loadPersistedRoom();
-    this.initializeEditorPresence();
+    this.presenceController.initialize();
     this.updateBottomBar();
     this.updateGoalUi();
   }
 
   update(time: number): void {
     this.maybeAutoSave(time);
-    this.syncEditorPresence();
+    this.presenceController.sync();
     this.updateBackgroundPreview();
-    this.updateLayerGuideOverlay();
     this.updateCursorHighlight();
-    this.updatePressurePlateOverlay();
-    this.updateContainerOverlay();
-    this.updateLayerIndicator();
+    this.overlayController.updateLayerGuideOverlay();
+    this.overlayController.updatePressurePlateOverlay((graphics) => {
+      this.inspectorController.updatePressurePlateOverlay(graphics);
+    });
+    this.overlayController.updateContainerOverlay((graphics) => {
+      this.inspectorController.updateContainerOverlay(graphics);
+    });
+    this.overlayController.updateLayerIndicator();
   }
 
   // ══════════════════════════════════════
@@ -783,40 +705,31 @@ export class EditorScene extends Phaser.Scene {
   private resetRuntimeState(): void {
     this.backgroundController.reset();
     this.interactionController.reset();
-    this.layerIndicatorText?.destroy();
-    this.layerIndicatorText = null;
-    this.layerGuideGraphics?.destroy();
-    this.layerGuideGraphics = null;
-    this.pressurePlateGraphics?.destroy();
-    this.pressurePlateGraphics = null;
-    this.containerGraphics?.destroy();
-    this.containerGraphics = null;
+    this.overlayController.reset();
     this.tilesets = new Map();
     this.layers = new Map();
     this.editRuntime.reset();
+    this.flowController.reset();
+    this.inspectorController.reset();
+    this.courseController.reset();
     this.roomSession.reset();
-    this.courseEditorStatusText = null;
-    this.activeCourseMarkerEdit = null;
-    this.courseGoalPlacementMode = null;
-    this.focusedPressurePlateInstanceId = null;
-    this.connectingPressurePlateInstanceId = null;
-    this.pressurePlateStatusText = null;
-    this.focusedContainerInstanceId = null;
-    this.containerStatusText = null;
-    this.pinnedInspector = null;
-    this.clipboardPastePreviewActive = false;
-    this.lastCopySelection = null;
-    this.destroyCourseMarkerOverlays();
+    this.toolController.reset();
     this.roomEditCount = 0;
-    this.publishNudgeTriggered = false;
+    resetEditorPaletteSelection();
     editorState.tileFlipX = false;
     editorState.tileFlipY = false;
     editorState.isPlaying = false;
-    window.dispatchEvent(new Event('tile-flip-changed'));
+    this.uiBridge?.notifyEditorStateChanged();
   }
 
   updateBackground(): void {
     this.backgroundController.updateBackground(editorState.selectedBackground);
+  }
+
+  private applySelectedBackground(): void {
+    this.updateBackground();
+    this.persistenceController.markRoomDirty();
+    this.renderEditorUi();
   }
 
   private syncBackgroundCameraIgnores(): void {
@@ -847,6 +760,17 @@ export class EditorScene extends Phaser.Scene {
           closeHandler: async () => {
             hideBusyOverlay();
             this.scene.stop();
+            if (this.shouldReturnToCourseEditor()) {
+              const courseEdit = this.buildCourseEditedRoomData();
+              this.scene.wake('CourseComposerScene', {
+                courseId: courseEdit?.courseId ?? null,
+                selectedCoordinates: { ...this.roomCoordinates },
+                centerCoordinates: { ...this.roomCoordinates },
+                statusMessage: 'Failed to open room.',
+              } satisfies CourseEditorSceneData);
+              return;
+            }
+
             this.scene.wake('OverworldPlayScene', {
               centerCoordinates: { ...this.roomCoordinates },
               roomCoordinates: { ...this.roomCoordinates },
@@ -868,36 +792,19 @@ export class EditorScene extends Phaser.Scene {
       hideBusyOverlay();
     }
 
-    this.syncEditorPresence();
+    this.presenceController.sync();
     this.updateGoalUi();
   }
 
   private returnToWorldReadOnly(): void {
-    const wakeData: OverworldPlaySceneData = {
-      centerCoordinates: { ...this.roomCoordinates },
-      roomCoordinates: { ...this.roomCoordinates },
-      statusMessage: 'This minted room can only be edited by its token owner.',
-      draftRoom: null,
-      clearDraftRoomId: this.roomId,
-      mode: 'browse',
-    };
-
-    this.scene.stop();
-    this.scene.wake('OverworldPlayScene', wakeData);
+    this.flowController.returnToWorldReadOnly();
   }
 
   private applyRoomSnapshot(room: RoomSnapshot): void {
     this.editRuntime.applyRoomSnapshot(room);
-    this.focusedPressurePlateInstanceId = null;
-    this.connectingPressurePlateInstanceId = null;
-    this.pressurePlateStatusText = null;
-    this.focusedContainerInstanceId = null;
-    this.containerStatusText = null;
-    this.pinnedInspector = null;
-    this.clipboardPastePreviewActive = false;
-    this.lastCopySelection = null;
-    this.renderPressurePlatePanel();
-    this.renderContainerContentsPanel();
+    this.inspectorController.reset();
+    this.inspectorController.handleObjectSpritesRebuilt();
+    this.toolController.reset();
   }
 
   private exportRoomSnapshot(): RoomSnapshot {
@@ -905,62 +812,26 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private maybeAutoSave(_time: number): void {
-    this.roomSession.maybeAutoSave(editorState.isPlaying);
-  }
-
-  private getDirtyPersistenceStatusText(): string {
-    return this.roomPermissions.canSaveDraft
-      ? 'Draft changes...'
-      : 'Read-only minted room. Changes are local only.';
-  }
-
-  private markRoomDirty(): void {
-    this.editRuntime.isRoomDirty = true;
-    this.editRuntime.currentLastDirtyAt = performance.now();
-    this.roomEditCount += 1;
-    this.updatePersistenceStatus(this.getDirtyPersistenceStatusText());
-    this.maybeTriggerPublishNudge();
+    this.persistenceController.maybeAutoSave(editorState.isPlaying);
   }
 
   private updatePersistenceStatus(text: string): void {
-    this.roomSession.setStatusText(text);
-  }
-
-  private restorePersistenceStatus(): void {
-    if (this.roomDirty) {
-      this.updatePersistenceStatus(this.getDirtyPersistenceStatusText());
-      return;
-    }
-
-    this.roomSession.setStatusDetails(this.roomSession.getIdleStatusDetails());
+    this.persistenceController.setStatusText(text);
   }
 
   async saveDraft(
     force: boolean = false,
     options?: { promptForSignInOnUnauthorized?: boolean }
   ): Promise<RoomRecord | null> {
-    const record = await this.roomSession.saveDraft(force, options);
-    if (record?.draft) {
-      this.syncActiveCourseRoomSessionSnapshot(record.draft, { published: false });
-    }
-    return record;
+    return this.persistenceController.saveDraft(force, options);
   }
 
   async publishRoom(successText?: string): Promise<RoomRecord | null> {
-    showBusyOverlay('Publishing room...', 'Saving the latest version...');
-    const record = await this.roomSession.publishRoom(successText);
-    if (record?.published) {
-      this.syncActiveCourseRoomSessionSnapshot(record.published, { published: true });
-    }
-    hideBusyOverlay();
-    return record;
+    return this.persistenceController.publishRoom(successText);
   }
 
   async revertToVersion(targetVersion: number): Promise<RoomRecord | null> {
-    showBusyOverlay(`Reverting room...`, `Loading version ${targetVersion}...`);
-    const record = await this.roomSession.revertToVersion(targetVersion, this.initialRoomSnapshot);
-    hideBusyOverlay();
-    return record;
+    return this.persistenceController.revertToVersion(targetVersion);
   }
 
   // ══════════════════════════════════════
@@ -1006,512 +877,13 @@ export class EditorScene extends Phaser.Scene {
   // GRID & VISUAL OVERLAYS
   // ══════════════════════════════════════
 
-  private drawRoomBorder(): void {
-    this.borderGraphics = this.add.graphics();
-    this.borderGraphics.lineStyle(2, RETRO_COLORS.published, 0.85);
-    this.borderGraphics.strokeRect(0, 0, ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-    this.borderGraphics.setDepth(90);
-  }
-
-  private drawGrid(): void {
-    this.gridGraphics = this.add.graphics();
-    this.gridGraphics.lineStyle(1, RETRO_COLORS.grid, 0.12);
-
-    // Vertical lines
-    for (let x = 0; x <= ROOM_WIDTH; x++) {
-      this.gridGraphics.moveTo(x * TILE_SIZE, 0);
-      this.gridGraphics.lineTo(x * TILE_SIZE, ROOM_PX_HEIGHT);
-    }
-    // Horizontal lines
-    for (let y = 0; y <= ROOM_HEIGHT; y++) {
-      this.gridGraphics.moveTo(0, y * TILE_SIZE);
-      this.gridGraphics.lineTo(ROOM_PX_WIDTH, y * TILE_SIZE);
-    }
-
-    this.gridGraphics.strokePath();
-    this.gridGraphics.setDepth(95);
-  }
-
   private createCursorOverlay(): void {
     this.interactionController.initializeOverlays();
     this.editRuntime.initializeGraphics();
-    this.layerGuideGraphics?.destroy();
-    this.layerGuideGraphics = this.add.graphics();
-    this.layerGuideGraphics.setDepth(97);
-  }
-
-  private createPressurePlateOverlay(): void {
-    this.pressurePlateGraphics?.destroy();
-    this.pressurePlateGraphics = this.add.graphics();
-    this.pressurePlateGraphics.setDepth(99);
-  }
-
-  private createContainerOverlay(): void {
-    this.containerGraphics?.destroy();
-    this.containerGraphics = this.add.graphics();
-    this.containerGraphics.setDepth(98);
-  }
-
-  private createLayerIndicator(): void {
-    this.layerIndicatorText?.destroy();
-    this.layerIndicatorText = this.add.text(0, 0, '', {
-      fontFamily: '"IBM Plex Mono", monospace',
-      fontSize: '13px',
-      fontStyle: 'bold',
-      color: '#f6f1de',
-      backgroundColor: '#121109cc',
-      padding: {
-        x: 12,
-        y: 7,
-      },
-    });
-    this.layerIndicatorText.setDepth(130);
-    this.layerIndicatorText.setScrollFactor(0);
-    this.updateLayerIndicator();
   }
 
   private updateCursorHighlight(): void {
     this.interactionController.updateCursorHighlight();
-  }
-
-  private updatePressurePlateOverlay(): void {
-    this.pressurePlateGraphics?.clear();
-    if (!this.pressurePlateGraphics || editorState.isPlaying) {
-      this.renderPressurePlatePanel();
-      return;
-    }
-
-    if (
-      this.focusedPressurePlateInstanceId &&
-      !this.editRuntime.hasPlacedObjectInstanceId(this.focusedPressurePlateInstanceId)
-    ) {
-      this.focusedPressurePlateInstanceId = null;
-    }
-    if (
-      this.connectingPressurePlateInstanceId &&
-      !this.editRuntime.hasPlacedObjectInstanceId(this.connectingPressurePlateInstanceId)
-    ) {
-      this.connectingPressurePlateInstanceId = null;
-    }
-    if (
-      this.pinnedInspector?.kind === 'pressure' &&
-      !this.editRuntime.hasPlacedObjectInstanceId(this.pinnedInspector.instanceId)
-    ) {
-      this.pinnedInspector = null;
-    }
-
-    const pointer = this.input.activePointer;
-    const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    if (!this.connectingPressurePlateInstanceId) {
-      const hoveredTrigger = this.editRuntime.findPlacedObjectAt(
-        worldPoint.x,
-        worldPoint.y,
-        (placed) => canPlacedObjectTriggerOtherObjects(placed)
-      );
-      if (hoveredTrigger) {
-        if (this.focusedPressurePlateInstanceId !== hoveredTrigger.instanceId) {
-          this.pressurePlateStatusText = null;
-        }
-        this.focusedPressurePlateInstanceId = hoveredTrigger.instanceId;
-      } else if (this.pinnedInspector?.kind !== 'pressure') {
-        this.focusedPressurePlateInstanceId = null;
-      }
-    }
-
-    const source = this.getFocusedPressurePlate();
-    if (!source) {
-      this.renderPressurePlatePanel();
-      return;
-    }
-
-    const currentTarget = this.editRuntime.getPlacedObjectByInstanceId(source.triggerTargetInstanceId ?? null);
-    if (currentTarget) {
-      this.drawPressurePlateLink(source, currentTarget, 0x6dd5ff, 0.9);
-    }
-
-    const sourceBounds = this.editRuntime.getPlacedObjectBounds(source);
-    this.pressurePlateGraphics.lineStyle(2, 0xc3f4ff, 0.88);
-    this.pressurePlateGraphics.strokeRoundedRect(
-      sourceBounds.x,
-      sourceBounds.y,
-      sourceBounds.width,
-      sourceBounds.height,
-      6,
-    );
-
-    if (this.connectingPressurePlateInstanceId === source.instanceId) {
-      const hoveredTarget = this.editRuntime.findPlacedObjectAt(
-        worldPoint.x,
-        worldPoint.y,
-        (placed) => canPlacedObjectBePressurePlateTarget(placed) && placed.instanceId !== source.instanceId
-      );
-      const eligibleTargets = this.editRuntime.getPressurePlateEligibleTargets(source.instanceId);
-      for (const target of eligibleTargets) {
-        const bounds = this.editRuntime.getPlacedObjectBounds(target);
-        this.pressurePlateGraphics.lineStyle(
-          2,
-          hoveredTarget?.instanceId === target.instanceId ? 0x9dff8a : 0x7ad3ff,
-          hoveredTarget?.instanceId === target.instanceId ? 0.95 : 0.55,
-        );
-        this.pressurePlateGraphics.strokeRoundedRect(
-          bounds.x,
-          bounds.y,
-          bounds.width,
-          bounds.height,
-          6,
-        );
-      }
-
-      if (hoveredTarget) {
-        this.drawPressurePlateLink(source, hoveredTarget, 0x9dff8a, 0.95);
-      } else {
-        this.pressurePlateGraphics.lineStyle(2, 0xffd36b, 0.5);
-        this.pressurePlateGraphics.beginPath();
-        this.pressurePlateGraphics.moveTo(source.x, source.y - 4);
-        this.pressurePlateGraphics.lineTo(worldPoint.x, worldPoint.y);
-        this.pressurePlateGraphics.strokePath();
-      }
-    }
-
-    this.renderPressurePlatePanel();
-  }
-
-  private drawPressurePlateLink(
-    source: PlacedObject,
-    target: PlacedObject,
-    color: number,
-    alpha: number,
-  ): void {
-    if (!this.pressurePlateGraphics) {
-      return;
-    }
-
-    this.pressurePlateGraphics.lineStyle(2, color, alpha);
-    this.pressurePlateGraphics.beginPath();
-    this.pressurePlateGraphics.moveTo(source.x, source.y - 4);
-    this.pressurePlateGraphics.lineTo(target.x, target.y - 6);
-    this.pressurePlateGraphics.strokePath();
-    this.pressurePlateGraphics.fillStyle(color, alpha * 0.9);
-    this.pressurePlateGraphics.fillCircle(source.x, source.y - 4, 3);
-    this.pressurePlateGraphics.fillCircle(target.x, target.y - 6, 3);
-  }
-
-  private renderPressurePlatePanel(): void {
-    this.renderInspectorUi();
-  }
-
-  private updateContainerOverlay(): void {
-    this.containerGraphics?.clear();
-    if (
-      !this.containerGraphics ||
-      editorState.isPlaying ||
-      this.connectingPressurePlateInstanceId
-    ) {
-      this.renderContainerContentsPanel();
-      return;
-    }
-
-    if (
-      this.focusedContainerInstanceId &&
-      !this.editRuntime.hasPlacedObjectInstanceId(this.focusedContainerInstanceId)
-    ) {
-      this.focusedContainerInstanceId = null;
-    }
-    if (
-      this.pinnedInspector?.kind === 'container' &&
-      !this.editRuntime.hasPlacedObjectInstanceId(this.pinnedInspector.instanceId)
-    ) {
-      this.pinnedInspector = null;
-    }
-
-    const pointer = this.input.activePointer;
-    const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    const hoveredContainer = this.editRuntime.findPlacedObjectAt(
-      worldPoint.x,
-      worldPoint.y,
-      (placed) => canPlacedObjectBeContainer(placed)
-    );
-    if (hoveredContainer) {
-      if (this.focusedContainerInstanceId !== hoveredContainer.instanceId) {
-        this.containerStatusText = null;
-      }
-      this.focusedContainerInstanceId = hoveredContainer.instanceId;
-    } else if (this.pinnedInspector?.kind !== 'container') {
-      this.focusedContainerInstanceId = null;
-    }
-
-    const focused = this.getFocusedContainer();
-    if (!focused) {
-      this.renderContainerContentsPanel();
-      return;
-    }
-
-    const bounds = this.editRuntime.getPlacedObjectBounds(focused);
-    const selectedObject = editorState.selectedObjectId
-      ? getObjectById(editorState.selectedObjectId)
-      : null;
-    const canStoreSelected = canObjectBeStoredInContainer(focused.id, selectedObject);
-    const selectedObjectLooksLikeContents =
-      selectedObject?.category === 'enemy' || selectedObject?.category === 'collectible';
-    const strokeColor = canStoreSelected
-      ? 0x9dff8a
-      : selectedObjectLooksLikeContents
-        ? 0xffc76b
-        : 0xffe0a6;
-    const strokeAlpha = canStoreSelected ? 0.92 : 0.74;
-    this.containerGraphics.lineStyle(2, strokeColor, strokeAlpha);
-    this.containerGraphics.strokeRoundedRect(
-      bounds.x,
-      bounds.y,
-      bounds.width,
-      bounds.height,
-      6,
-    );
-    this.containerGraphics.fillStyle(strokeColor, 0.86);
-    this.containerGraphics.fillCircle(focused.x, focused.y - 6, 3);
-
-    this.renderContainerContentsPanel();
-  }
-
-  private renderContainerContentsPanel(): void {
-    this.renderInspectorUi();
-  }
-
-  private createEmptyInspectorState(): EditorInspectorState {
-    return {
-      visible: false,
-      pressureVisible: false,
-      pressureStatusText: '',
-      pressureConnectHidden: true,
-      pressureConnectDisabled: true,
-      pressureConnectTitle: '',
-      pressureClearHidden: true,
-      pressureClearDisabled: true,
-      pressureDoneLaterHidden: true,
-      containerVisible: false,
-      containerStatusText: '',
-      containerClearDisabled: true,
-      containerClearTitle: '',
-    };
-  }
-
-  private renderInspectorUi(): void {
-    const hiddenState = this.createEmptyInspectorState();
-    if (editorState.isPlaying) {
-      this.uiBridge?.renderInspector(hiddenState);
-      return;
-    }
-
-    const connectMode = this.connectingPressurePlateInstanceId !== null;
-    const source =
-      this.pinnedInspector?.kind === 'container' && !connectMode
-        ? null
-        : this.getFocusedPressurePlate();
-    if (source && (editorState.paletteMode === 'objects' || connectMode)) {
-      const target = this.editRuntime.getPlacedObjectByInstanceId(source.triggerTargetInstanceId ?? null);
-      const eligibleTargetCount = this.editRuntime.getPressurePlateEligibleTargets(source.instanceId).length;
-      const state: EditorInspectorState = {
-        ...hiddenState,
-        visible: true,
-        pressureVisible: true,
-        pressureStatusText:
-          this.pressurePlateStatusText ??
-          (connectMode
-            ? eligibleTargetCount > 0
-              ? 'Click a door, metal door, cage, or chest to link this pressure plate.'
-              : 'No door, metal door, cage, or chest is in this room yet.'
-            : target
-              ? `Linked to ${this.getPressurePlateTargetLabel(target.id)}.`
-              : 'This pressure plate is not linked yet.'),
-        pressureConnectHidden: connectMode,
-        pressureConnectDisabled: connectMode || eligibleTargetCount === 0,
-        pressureConnectTitle: eligibleTargetCount === 0 ? 'Add a door, metal door, cage, or chest first.' : '',
-        pressureClearHidden: connectMode,
-        pressureClearDisabled: !target,
-        pressureDoneLaterHidden: !connectMode,
-      };
-      this.uiBridge?.renderInspector(state);
-      return;
-    }
-
-    const focusedContainer =
-      this.pinnedInspector?.kind === 'pressure' && !connectMode
-        ? null
-        : this.getFocusedContainer();
-    if (
-      focusedContainer &&
-      editorState.paletteMode === 'objects' &&
-      !this.connectingPressurePlateInstanceId
-    ) {
-      const selectedObject = editorState.selectedObjectId
-        ? getObjectById(editorState.selectedObjectId)
-        : null;
-      const selectedLooksLikeContents =
-        selectedObject?.category === 'enemy' || selectedObject?.category === 'collectible';
-      const canStoreSelected = canObjectBeStoredInContainer(focusedContainer.id, selectedObject);
-      const currentContentsLabel = this.editRuntime.getContainerContentsLabel(focusedContainer);
-      const state: EditorInspectorState = {
-        ...hiddenState,
-        visible: true,
-        containerVisible: true,
-        containerStatusText:
-          this.containerStatusText ??
-          (canStoreSelected && selectedObject
-            ? `Click this ${this.getContainerLabel(focusedContainer.id)} to stash ${selectedObject.name} inside.`
-            : selectedLooksLikeContents && selectedObject
-              ? `${this.getContainerName(focusedContainer.id)} can only hold ${this.getContainerAcceptedContentsLabel(focusedContainer.id)}.`
-              : currentContentsLabel
-                ? `${this.getContainerName(focusedContainer.id)} currently holds ${currentContentsLabel}. Select a ${this.getContainerAcceptedContentsLabel(focusedContainer.id)} and click it to change the contents.`
-                : `${this.getContainerName(focusedContainer.id)} is empty. Select a ${this.getContainerAcceptedContentsLabel(focusedContainer.id)} from the object list, then click it to fill the container.`),
-        containerClearDisabled: !focusedContainer.containedObjectId,
-        containerClearTitle: focusedContainer.containedObjectId ? '' : 'This container is empty.',
-      };
-      this.uiBridge?.renderInspector(state);
-      return;
-    }
-
-    this.uiBridge?.renderInspector(hiddenState);
-  }
-
-  private updateLayerGuideOverlay(): void {
-    this.layerGuideGraphics?.clear();
-    if (!this.layerGuideGraphics || editorState.isPlaying || !editorState.showLayerGuides) {
-      return;
-    }
-
-    for (const layerName of LAYER_NAMES) {
-      const occupiedCells = this.collectLayerGuideCells(layerName);
-      if (occupiedCells.size === 0) {
-        continue;
-      }
-
-      this.layerGuideGraphics.fillStyle(this.getLayerGuideColor(layerName), 0.72);
-      for (const key of occupiedCells) {
-        const [xText, yText] = key.split(':');
-        const tileX = Number.parseInt(xText, 10);
-        const tileY = Number.parseInt(yText, 10);
-        this.layerGuideGraphics.fillCircle(
-          tileX * TILE_SIZE + TILE_SIZE * 0.5,
-          tileY * TILE_SIZE + TILE_SIZE * 0.5,
-          2.5,
-        );
-      }
-    }
-  }
-
-  private collectLayerGuideCells(layerName: LayerName): Set<string> {
-    const occupiedCells = new Set<string>();
-    const layer = this.layers.get(layerName);
-    if (layer) {
-      for (let y = 0; y < ROOM_HEIGHT; y += 1) {
-        for (let x = 0; x < ROOM_WIDTH; x += 1) {
-          if (layer.getTileAt(x, y)) {
-            occupiedCells.add(this.getLayerGuideCellKey(x, y));
-          }
-        }
-      }
-    }
-
-    for (const placedObject of editorState.placedObjects) {
-      const objectConfig = getObjectById(placedObject.id);
-      if (!objectConfig || getPlacedObjectLayer(placedObject) !== layerName) {
-        continue;
-      }
-
-      const previewWidth = objectConfig.previewWidth ?? objectConfig.frameWidth;
-      const previewHeight = objectConfig.previewHeight ?? objectConfig.frameHeight;
-      const previewOffsetX = objectConfig.previewOffsetX ?? 0;
-      const previewOffsetY = objectConfig.previewOffsetY ?? 0;
-      const minTileX = Math.max(
-        0,
-        Math.floor((placedObject.x - objectConfig.frameWidth * 0.5 + previewOffsetX) / TILE_SIZE),
-      );
-      const maxTileX = Math.min(
-        ROOM_WIDTH,
-        Math.ceil((placedObject.x - objectConfig.frameWidth * 0.5 + previewOffsetX + previewWidth) / TILE_SIZE),
-      );
-      const minTileY = Math.max(
-        0,
-        Math.floor((placedObject.y - objectConfig.frameHeight * 0.5 + previewOffsetY) / TILE_SIZE),
-      );
-      const maxTileY = Math.min(
-        ROOM_HEIGHT,
-        Math.ceil((placedObject.y - objectConfig.frameHeight * 0.5 + previewOffsetY + previewHeight) / TILE_SIZE),
-      );
-      for (let tileY = minTileY; tileY < maxTileY; tileY += 1) {
-        for (let tileX = minTileX; tileX < maxTileX; tileX += 1) {
-          occupiedCells.add(this.getLayerGuideCellKey(tileX, tileY));
-        }
-      }
-    }
-
-    return occupiedCells;
-  }
-
-  private getLayerGuideCellKey(x: number, y: number): string {
-    return `${x}:${y}`;
-  }
-
-  private getLayerGuideColor(layerName: LayerName): number {
-    switch (layerName) {
-      case 'background':
-        return 0x2f6b7f;
-      case 'foreground':
-        return 0xff6f3c;
-      case 'terrain':
-      default:
-        return 0x347433;
-    }
-  }
-
-  private updateLayerIndicator(): void {
-    if (!this.layerIndicatorText) {
-      return;
-    }
-
-    const layerLabel =
-      editorState.activeLayer === 'terrain'
-        ? 'Gameplay'
-        : editorState.activeLayer === 'background'
-          ? 'Back'
-          : 'Front';
-    const layerColor =
-      editorState.activeLayer === 'terrain'
-        ? '#347433'
-        : editorState.activeLayer === 'background'
-          ? '#2f6b7f'
-          : '#ff6f3c';
-    const modeLabel = editorState.paletteMode === 'objects' ? 'Objects' : 'Tiles';
-    const toolLabel =
-      editorState.activeTool === 'eraser'
-        ? `Erase ${editorState.eraserBrushSize}x${editorState.eraserBrushSize}`
-        : editorState.activeTool === 'rect'
-          ? 'Rect'
-          : editorState.activeTool === 'fill'
-            ? 'Fill'
-            : editorState.activeTool === 'copy'
-              ? this.clipboardPastePreviewActive
-                ? 'Paste'
-                : 'Copy'
-              : 'Draw';
-    const flipLabels: string[] = [];
-    if (editorState.paletteMode === 'tiles' && editorState.tileFlipX) {
-      flipLabels.push('Flip H');
-    }
-    if (editorState.paletteMode === 'tiles' && editorState.tileFlipY) {
-      flipLabels.push('Flip V');
-    }
-    const detailParts = [toolLabel, ...flipLabels];
-    const text = `${modeLabel} -> ${layerLabel}\n${detailParts.join('  |  ')}`;
-    if (this.layerIndicatorText.text !== text) {
-      this.layerIndicatorText.setText(text);
-    }
-
-    this.layerIndicatorText.setBackgroundColor(`${layerColor}cc`);
-    this.layerIndicatorText.setPosition(
-      this.scale.width - this.layerIndicatorText.width - 18,
-      18,
-    );
   }
 
   // ══════════════════════════════════════
@@ -1559,49 +931,11 @@ export class EditorScene extends Phaser.Scene {
   // ══════════════════════════════════════
 
   private handleObjectModePrimaryAction(pointer: Phaser.Input.Pointer): boolean {
-    const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    if (this.connectingPressurePlateInstanceId) {
-      return this.handlePressurePlateConnectionClick(worldPoint.x, worldPoint.y);
-    }
-
-    const clickedPressurePlate = this.editRuntime.findPlacedObjectAt(
-      worldPoint.x,
-      worldPoint.y,
-      (placed) => canPlacedObjectTriggerOtherObjects(placed)
-    );
-    if (clickedPressurePlate) {
-      this.focusedPressurePlateInstanceId = clickedPressurePlate.instanceId;
-      this.focusedContainerInstanceId = null;
-      this.pinInspector('pressure', clickedPressurePlate.instanceId);
-      this.pressurePlateStatusText = null;
-      this.renderPressurePlatePanel();
-      return true;
-    }
-
-    if (this.handleContainerContentsClick(worldPoint.x, worldPoint.y)) {
-      return true;
-    }
-
-    if (this.pinnedInspector) {
-      const hasSelectedObject = Boolean(editorState.selectedObjectId);
-      this.clearPinnedInspector();
-      return !hasSelectedObject;
-    }
-
-    return false;
+    return this.inspectorController.handleObjectModePrimaryAction(pointer);
   }
 
   private handleObjectModeSecondaryAction(worldX: number, worldY: number): boolean {
-    if (!this.connectingPressurePlateInstanceId) {
-      return false;
-    }
-
-    if (this.editRuntime.canRemoveObjectAt(worldX, worldY)) {
-      return false;
-    }
-
-    this.cancelPressurePlateConnection();
-    return true;
+    return this.inspectorController.handleObjectModeSecondaryAction(worldX, worldY);
   }
 
   private handleObjectPlace(pointer: Phaser.Input.Pointer): void {
@@ -1609,379 +943,81 @@ export class EditorScene extends Phaser.Scene {
     const tileX = Math.floor(worldPoint.x / TILE_SIZE);
     const tileY = Math.floor(worldPoint.y / TILE_SIZE);
     const placed = this.editRuntime.handleObjectPlace(worldPoint.x, worldPoint.y, tileX, tileY);
-    if (placed && canPlacedObjectTriggerOtherObjects(placed)) {
-      this.focusedContainerInstanceId = null;
-      this.focusedPressurePlateInstanceId = placed.instanceId;
-      this.pinInspector('pressure', placed.instanceId);
-      this.beginPressurePlateConnection(placed.instanceId, true);
-    } else if (placed && canPlacedObjectBeContainer(placed)) {
-      this.focusedContainerInstanceId = placed.instanceId;
-      this.focusedPressurePlateInstanceId = null;
-      this.pinInspector('container', placed.instanceId);
-      this.containerStatusText = `${this.getContainerName(placed.id)} placed. Select a ${this.getContainerAcceptedContentsLabel(placed.id)} and click it to fill the container.`;
-      this.renderContainerContentsPanel();
-    }
+    this.inspectorController.handleObjectPlaced(placed);
   }
 
   private removeObjectAt(worldX: number, worldY: number): void {
     const removed = this.editRuntime.removeObjectAt(worldX, worldY);
-    if (!removed) {
-      return;
-    }
-
-    if (removed.instanceId === this.connectingPressurePlateInstanceId) {
-      this.connectingPressurePlateInstanceId = null;
-    }
-    if (removed.instanceId === this.focusedPressurePlateInstanceId) {
-      this.focusedPressurePlateInstanceId = null;
-    }
-    if (removed.instanceId === this.focusedContainerInstanceId) {
-      this.focusedContainerInstanceId = null;
-    }
-    if (this.pinnedInspector?.instanceId === removed.instanceId) {
-      this.pinnedInspector = null;
-    }
-    if (canPlacedObjectBePressurePlateTarget(removed)) {
-      this.pressurePlateStatusText = `${this.getPressurePlateTargetLabel(removed.id)} removed. Linked plates were cleared.`;
-    }
-    if (canPlacedObjectBeContainer(removed)) {
-      this.containerStatusText = `${this.getContainerName(removed.id)} removed.`;
-    }
-    this.renderPressurePlatePanel();
-    this.renderContainerContentsPanel();
+    this.inspectorController.handleObjectRemoved(removed);
   }
 
   rebuildObjectSprites(): void {
     this.editRuntime.rebuildObjectSprites();
-    if (this.pinnedInspector && !this.editRuntime.hasPlacedObjectInstanceId(this.pinnedInspector.instanceId)) {
-      this.pinnedInspector = null;
-    }
-    this.renderPressurePlatePanel();
-    this.renderContainerContentsPanel();
+    this.inspectorController.handleObjectSpritesRebuilt();
   }
 
   beginFocusedPressurePlateConnection(): void {
-    const focused = this.getFocusedPressurePlate();
-    if (!focused) {
-      this.pressurePlateStatusText = 'Hover or place a pressure plate first.';
-      this.renderPressurePlatePanel();
-      return;
-    }
-
-    this.beginPressurePlateConnection(focused.instanceId, false);
+    this.inspectorController.beginFocusedPressurePlateConnection();
   }
 
   clearFocusedPressurePlateConnection(): void {
-    const focused = this.getFocusedPressurePlate();
-    if (!focused || !canPlacedObjectTriggerOtherObjects(focused)) {
-      return;
-    }
-
-    if (this.editRuntime.setPressurePlateTarget(focused.instanceId, null)) {
-      this.pressurePlateStatusText = 'Pressure plate link cleared.';
-      this.connectingPressurePlateInstanceId = null;
-      this.focusedPressurePlateInstanceId = focused.instanceId;
-      this.pinInspector('pressure', focused.instanceId);
-      this.renderPressurePlatePanel();
-    }
+    this.inspectorController.clearFocusedPressurePlateConnection();
   }
 
   cancelPressurePlateConnection(): void {
-    if (!this.connectingPressurePlateInstanceId) {
-      return;
-    }
-
-    this.connectingPressurePlateInstanceId = null;
-    this.pressurePlateStatusText = 'Pressure plate left unlinked for now.';
-    if (this.focusedPressurePlateInstanceId) {
-      this.pinInspector('pressure', this.focusedPressurePlateInstanceId);
-    }
-    this.renderPressurePlatePanel();
+    this.inspectorController.cancelPressurePlateConnection();
   }
 
   clearFocusedContainerContents(): void {
-    const focused = this.getFocusedContainer();
-    if (!focused || !canPlacedObjectBeContainer(focused)) {
-      return;
-    }
-
-    if (this.editRuntime.setContainerContents(focused.instanceId, null)) {
-      this.focusedContainerInstanceId = focused.instanceId;
-      this.pinInspector('container', focused.instanceId);
-      this.containerStatusText = `${this.getContainerName(focused.id)} is now empty.`;
-      this.renderContainerContentsPanel();
-    }
-  }
-
-  private beginPressurePlateConnection(triggerInstanceId: string, autoPlaced: boolean): void {
-    const trigger = this.editRuntime.getPlacedObjectByInstanceId(triggerInstanceId);
-    if (!trigger || !canPlacedObjectTriggerOtherObjects(trigger)) {
-      return;
-    }
-
-    this.focusedPressurePlateInstanceId = trigger.instanceId;
-    this.connectingPressurePlateInstanceId = trigger.instanceId;
-    this.pinInspector('pressure', trigger.instanceId);
-    const eligibleTargets = this.editRuntime.getPressurePlateEligibleTargets(trigger.instanceId);
-    this.pressurePlateStatusText =
-      eligibleTargets.length > 0
-        ? autoPlaced
-          ? 'Pressure plate placed. Click a door, metal door, cage, or chest to link it.'
-          : 'Click a door, metal door, cage, or chest to link this pressure plate.'
-        : 'No door, metal door, cage, or chest is in this room yet. You can link this pressure plate later.';
-    this.renderPressurePlatePanel();
-  }
-
-  private handlePressurePlateConnectionClick(worldX: number, worldY: number): boolean {
-    const source = this.getConnectingPressurePlate();
-    if (!source) {
-      this.connectingPressurePlateInstanceId = null;
-      return false;
-    }
-
-    const target = this.editRuntime.findPlacedObjectAt(
-      worldX,
-      worldY,
-      (placed) => canPlacedObjectBePressurePlateTarget(placed) && placed.instanceId !== source.instanceId
-    );
-    if (!target) {
-      this.pressurePlateStatusText = 'Pick a door, metal door, cage, or chest in this room.';
-      this.renderPressurePlatePanel();
-      return true;
-    }
-
-    if (this.editRuntime.setPressurePlateTarget(source.instanceId, target.instanceId)) {
-      this.connectingPressurePlateInstanceId = null;
-      this.focusedPressurePlateInstanceId = source.instanceId;
-      this.pinInspector('pressure', source.instanceId);
-      this.pressurePlateStatusText = `Pressure plate linked to ${this.getPressurePlateTargetLabel(target.id)}.`;
-      this.renderPressurePlatePanel();
-    }
-    return true;
-  }
-
-  private handleContainerContentsClick(worldX: number, worldY: number): boolean {
-    const focused = this.editRuntime.findPlacedObjectAt(
-      worldX,
-      worldY,
-      (placed) => canPlacedObjectBeContainer(placed)
-    );
-    if (!focused || !focused.instanceId) {
-      return false;
-    }
-
-    this.focusedContainerInstanceId = focused.instanceId;
-    this.focusedPressurePlateInstanceId = null;
-    this.pinInspector('container', focused.instanceId);
-    const selectedObject = editorState.selectedObjectId
-      ? getObjectById(editorState.selectedObjectId)
-      : null;
-    if (!selectedObject) {
-      this.renderContainerContentsPanel();
-      return true;
-    }
-
-    const selectedLooksLikeContents =
-      selectedObject.category === 'enemy' || selectedObject.category === 'collectible';
-    if (!selectedLooksLikeContents) {
-      this.renderContainerContentsPanel();
-      return true;
-    }
-
-    if (!canObjectBeStoredInContainer(focused.id, selectedObject)) {
-      this.containerStatusText = `${this.getContainerName(focused.id)} can only hold ${this.getContainerAcceptedContentsLabel(focused.id)}.`;
-      this.renderContainerContentsPanel();
-      return true;
-    }
-
-    if (this.editRuntime.setContainerContents(focused.instanceId, selectedObject.id)) {
-      this.containerStatusText = `${this.getContainerName(focused.id)} now holds ${selectedObject.name}.`;
-      this.renderContainerContentsPanel();
-      return true;
-    }
-
-    return true;
-  }
-
-  private pinInspector(kind: 'pressure' | 'container', instanceId: string): void {
-    this.pinnedInspector = { kind, instanceId };
-  }
-
-  private clearPinnedInspector(): void {
-    this.pinnedInspector = null;
-    this.focusedPressurePlateInstanceId = null;
-    this.focusedContainerInstanceId = null;
-    this.pressurePlateStatusText = null;
-    this.containerStatusText = null;
-    this.renderInspectorUi();
-  }
-
-  private getFocusedPressurePlate(): PlacedObject | null {
-    const pinnedPressureId = this.pinnedInspector?.kind === 'pressure'
-      ? this.pinnedInspector.instanceId
-      : null;
-    const activeId = this.connectingPressurePlateInstanceId ?? pinnedPressureId ?? this.focusedPressurePlateInstanceId;
-    const focused = this.editRuntime.getPlacedObjectByInstanceId(activeId);
-    if (focused && canPlacedObjectTriggerOtherObjects(focused)) {
-      return focused;
-    }
-
-    return null;
-  }
-
-  private getFocusedContainer(): PlacedObject | null {
-    const pinnedContainerId = this.pinnedInspector?.kind === 'container'
-      ? this.pinnedInspector.instanceId
-      : null;
-    const focused = this.editRuntime.getPlacedObjectByInstanceId(pinnedContainerId ?? this.focusedContainerInstanceId);
-    if (focused && canPlacedObjectBeContainer(focused)) {
-      return focused;
-    }
-
-    return null;
-  }
-
-  private getConnectingPressurePlate(): PlacedObject | null {
-    const focused = this.editRuntime.getPlacedObjectByInstanceId(this.connectingPressurePlateInstanceId);
-    if (focused && canPlacedObjectTriggerOtherObjects(focused)) {
-      return focused;
-    }
-
-    return null;
-  }
-
-  private getPressurePlateTargetLabel(objectId: string): string {
-    switch (objectId) {
-      case 'door_locked':
-        return 'door';
-      case 'door_metal':
-        return 'metal door';
-      case 'treasure_chest':
-        return 'treasure chest';
-      case 'cage':
-        return 'cage';
-      default:
-        return getObjectById(objectId)?.name ?? 'object';
-    }
-  }
-
-  private getContainerLabel(objectId: string): string {
-    return objectId === 'cage' ? 'cage' : 'treasure chest';
-  }
-
-  private getContainerName(objectId: string): string {
-    return objectId === 'cage' ? 'This cage' : 'This treasure chest';
-  }
-
-  private getContainerAcceptedContentsLabel(objectId: string): string {
-    return objectId === 'cage' ? 'enemies' : 'collectibles';
+    this.inspectorController.clearFocusedContainerContents();
   }
 
   setGoalType(nextType: RoomGoalType | null): void {
-    this.editRuntime.setGoalType(nextType);
+    this.toolController.setGoalType(nextType);
   }
 
   setGoalTimeLimitSeconds(seconds: number | null): void {
-    this.editRuntime.setGoalTimeLimitSeconds(seconds);
+    this.toolController.setGoalTimeLimitSeconds(seconds);
   }
 
   setGoalRequiredCount(requiredCount: number): void {
-    this.editRuntime.setGoalRequiredCount(requiredCount);
+    this.toolController.setGoalRequiredCount(requiredCount);
   }
 
   setGoalSurvivalSeconds(seconds: number): void {
-    this.editRuntime.setGoalSurvivalSeconds(seconds);
+    this.toolController.setGoalSurvivalSeconds(seconds);
   }
 
   startGoalMarkerPlacement(mode: EditorMarkerPlacementMode): void {
-    this.courseGoalPlacementMode = null;
-    this.editRuntime.startGoalMarkerPlacement(mode as GoalPlacementMode);
+    this.toolController.startGoalMarkerPlacement(mode);
   }
 
   clearGoalMarkers(): void {
-    this.editRuntime.clearGoalMarkers();
+    this.toolController.clearGoalMarkers();
   }
 
   setCourseGoalType(goalType: CourseGoalType | null): void {
-    const draft = this.activeCourseDraft;
-    if (!draft) {
-      return;
-    }
-
-    const nextDraft = cloneCourseSnapshot(draft);
-    nextDraft.goal = goalType ? createDefaultCourseGoal(goalType) : null;
-    if (!goalType) {
-      nextDraft.startPoint = null;
-    }
-    this.courseGoalPlacementMode = null;
-    this.setActiveCourseDraft(nextDraft);
+    this.courseController.setCourseGoalType(goalType);
   }
 
   setCourseGoalTimeLimitSeconds(seconds: number | null): void {
-    const draft = this.activeCourseDraft;
-    if (!draft?.goal || draft.goal.type === 'survival' || !('timeLimitMs' in draft.goal)) {
-      return;
-    }
-
-    const nextDraft = cloneCourseSnapshot(draft);
-    if (nextDraft.goal && 'timeLimitMs' in nextDraft.goal) {
-      nextDraft.goal.timeLimitMs = seconds === null ? null : Math.max(1, seconds) * 1000;
-      this.setActiveCourseDraft(nextDraft);
-    }
+    this.courseController.setCourseGoalTimeLimitSeconds(seconds);
   }
 
   setCourseGoalRequiredCount(requiredCount: number): void {
-    const draft = this.activeCourseDraft;
-    if (draft?.goal?.type !== 'collect_target') {
-      return;
-    }
-
-    const nextDraft = cloneCourseSnapshot(draft);
-    if (nextDraft.goal?.type === 'collect_target') {
-      nextDraft.goal.requiredCount = Math.max(1, requiredCount);
-      this.setActiveCourseDraft(nextDraft);
-    }
+    this.courseController.setCourseGoalRequiredCount(requiredCount);
   }
 
   setCourseGoalSurvivalSeconds(seconds: number): void {
-    const draft = this.activeCourseDraft;
-    if (draft?.goal?.type !== 'survival') {
-      return;
-    }
-
-    const nextDraft = cloneCourseSnapshot(draft);
-    if (nextDraft.goal?.type === 'survival') {
-      nextDraft.goal.durationMs = Math.max(1, seconds) * 1000;
-      this.setActiveCourseDraft(nextDraft);
-    }
+    this.courseController.setCourseGoalSurvivalSeconds(seconds);
   }
 
   startCourseGoalMarkerPlacement(mode: EditorMarkerPlacementMode): void {
-    if (!this.activeCourseDraft || !this.getCourseGoalUsesMarkers(this.activeCourseGoal)) {
-      return;
-    }
-
-    this.editRuntime.currentGoalPlacementMode = null;
-    this.courseGoalPlacementMode = this.courseGoalPlacementMode === mode ? null : mode;
-    this.updateGoalUi();
+    this.courseController.startCourseGoalMarkerPlacement(mode);
   }
 
   clearCourseGoalMarkers(): void {
-    const draft = this.activeCourseDraft;
-    if (!draft) {
-      return;
-    }
-
-    const nextDraft = cloneCourseSnapshot(draft);
-    nextDraft.startPoint = null;
-    if (nextDraft.goal?.type === 'reach_exit') {
-      nextDraft.goal.exit = null;
-    } else if (nextDraft.goal?.type === 'checkpoint_sprint') {
-      nextDraft.goal.checkpoints = [];
-      nextDraft.goal.finish = null;
-    }
-    this.courseGoalPlacementMode = null;
-    this.setActiveCourseDraft(nextDraft);
+    this.courseController.clearCourseGoalMarkers();
   }
 
   getGoalEditorState(): {
@@ -1990,56 +1026,15 @@ export class EditorScene extends Phaser.Scene {
     availableCollectibles: number;
     availableEnemies: number;
   } {
-    return this.editRuntime.getGoalEditorState();
+    return this.toolController.getGoalEditorState();
   }
 
   private getSelectedCoursePreviewForPlay(): CourseSnapshot | null {
-    return getSelectedCoursePreviewForPlayHelper(this.activeCourseDraft, this.roomId);
+    return this.courseController.getSelectedCoursePreviewForPlay();
   }
 
   private placeGoalMarker(tileX: number, tileY: number): void {
-    if (this.courseGoalPlacementMode !== null) {
-      const draft = this.activeCourseDraft;
-      const goal = this.activeCourseGoal;
-      if (!draft || !goal) {
-        return;
-      }
-
-      const localPoint: CourseMarkerPoint = {
-        roomId: this.roomId,
-        ...createGoalMarkerPointFromTile(tileX, tileY),
-      };
-      const nextDraft = cloneCourseSnapshot(draft);
-
-      if (this.courseGoalPlacementMode === 'start') {
-        nextDraft.startPoint = localPoint;
-        this.courseGoalPlacementMode = null;
-        this.setActiveCourseDraft(nextDraft);
-        return;
-      }
-
-      if (goal.type === 'reach_exit' && this.courseGoalPlacementMode === 'exit' && nextDraft.goal?.type === 'reach_exit') {
-        nextDraft.goal.exit = localPoint;
-        this.courseGoalPlacementMode = null;
-        this.setActiveCourseDraft(nextDraft);
-        return;
-      }
-
-      if (goal.type !== 'checkpoint_sprint' || nextDraft.goal?.type !== 'checkpoint_sprint') {
-        return;
-      }
-
-      if (this.courseGoalPlacementMode === 'checkpoint') {
-        nextDraft.goal.checkpoints = [...nextDraft.goal.checkpoints, localPoint];
-        this.setActiveCourseDraft(nextDraft);
-        return;
-      }
-
-      if (this.courseGoalPlacementMode === 'finish') {
-        nextDraft.goal.finish = localPoint;
-        this.courseGoalPlacementMode = null;
-        this.setActiveCourseDraft(nextDraft);
-      }
+    if (this.courseController.placeGoalMarker(tileX, tileY)) {
       return;
     }
 
@@ -2047,206 +1042,15 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private removeGoalMarkerAt(worldX: number, worldY: number): boolean {
-    if (this.activeCourseDraft) {
-      const draft = this.activeCourseDraft;
-      const goal = this.activeCourseGoal;
-      if (!draft || !goal) {
-        return false;
-      }
-
-      const nextDraft = cloneCourseSnapshot(draft);
-      const tryRemovePoint = (point: CourseMarkerPoint | null): boolean =>
-        Boolean(point && point.roomId === this.roomId && Math.hypot(point.x - worldX, point.y - worldY) < 16);
-
-      if (tryRemovePoint(nextDraft.startPoint)) {
-        nextDraft.startPoint = null;
-        this.setActiveCourseDraft(nextDraft);
-        return true;
-      }
-
-      if (goal.type === 'reach_exit' && nextDraft.goal?.type === 'reach_exit' && tryRemovePoint(nextDraft.goal.exit)) {
-        nextDraft.goal.exit = null;
-        this.setActiveCourseDraft(nextDraft);
-        return true;
-      }
-
-      if (goal.type !== 'checkpoint_sprint' || nextDraft.goal?.type !== 'checkpoint_sprint') {
-        return false;
-      }
-
-      if (tryRemovePoint(nextDraft.goal.finish)) {
-        nextDraft.goal.finish = null;
-        this.setActiveCourseDraft(nextDraft);
-        return true;
-      }
-
-      const index = nextDraft.goal.checkpoints.findIndex(
-        (checkpoint) =>
-          checkpoint.roomId === this.roomId &&
-          Math.hypot(checkpoint.x - worldX, checkpoint.y - worldY) < 16
-      );
-      if (index >= 0) {
-        nextDraft.goal.checkpoints.splice(index, 1);
-        this.setActiveCourseDraft(nextDraft);
-        return true;
-      }
+    if (this.courseController.removeGoalMarkerAt(worldX, worldY)) {
+      return true;
     }
 
     return this.editRuntime.removeGoalMarkerAt(worldX, worldY);
   }
 
-  private goalUsesMarkers(goal: RoomGoal | null): boolean {
-    return this.editRuntime.goalUsesMarkers(goal);
-  }
-
-  private getGoalSummaryText(): string {
-    return this.editRuntime.getGoalSummaryText();
-  }
-
   private updateGoalUi(): void {
-    this.redrawCourseGoalMarkers();
-    this.renderEditorUi();
-  }
-
-  // ══════════════════════════════════════
-  // TOOL HANDLERS
-  // ══════════════════════════════════════
-
-  private handleToolDown(pointer: Phaser.Input.Pointer): void {
-    const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    const tileX = Math.floor(worldPoint.x / TILE_SIZE);
-    const tileY = Math.floor(worldPoint.y / TILE_SIZE);
-
-    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) return;
-
-    switch (editorState.activeTool) {
-      case 'pencil':
-        this.editRuntime.beginTileBatch();
-        this.placeTileAt(worldPoint.x, worldPoint.y);
-        break;
-      case 'eraser':
-        this.editRuntime.beginTileBatch();
-        this.eraseTileAt(worldPoint.x, worldPoint.y);
-        break;
-      case 'rect':
-        this.editRuntime.beginTileBatch();
-        this.interactionController.startRectDrawing(tileX, tileY);
-        break;
-      case 'fill':
-        this.editRuntime.beginTileBatch();
-        this.floodFill(tileX, tileY);
-        this.editRuntime.commitTileBatch();
-        break;
-      case 'copy':
-        this.interactionController.startRectDrawing(tileX, tileY);
-        break;
-    }
-  }
-
-  // ── Pencil (supports multi-tile selection) ──
-
-  private placeTileAt(worldX: number, worldY: number): void {
-    this.editRuntime.placeTileAt(worldX, worldY);
-  }
-
-  // ── Eraser ──
-
-  private eraseTileAt(worldX: number, worldY: number): void {
-    this.editRuntime.eraseTileAt(worldX, worldY);
-  }
-
-  clearCurrentLayer(): void {
-    this.editRuntime.clearCurrentLayer();
-  }
-
-  clearAllTiles(): void {
-    this.editRuntime.clearAllTiles();
-  }
-
-  private fillRect(x1: number, y1: number, x2: number, y2: number): void {
-    this.editRuntime.fillRect(x1, y1, x2, y2);
-  }
-
-  private captureCopySelection(x1: number, y1: number, x2: number, y2: number): void {
-    if (editorState.paletteMode !== 'tiles') {
-      return;
-    }
-
-    this.lastCopySelection = { x1, y1, x2, y2 };
-    const copied = this.editRuntime.copyTilesToClipboard(x1, y1, x2, y2);
-    if (!copied) {
-      this.clipboardPastePreviewActive = false;
-      this.updatePersistenceStatus('No tiles in that selection to copy.');
-      this.renderEditorUi();
-      return;
-    }
-
-    this.beginClipboardPastePreview();
-    this.updatePersistenceStatus('Copied tile region. Move the mouse and click to place it.');
-  }
-
-  private getClipboardPreview(): EditorClipboardState | null {
-    return this.editRuntime.currentClipboardState;
-  }
-
-  private isClipboardPastePreviewActive(): boolean {
-    return this.clipboardPastePreviewActive;
-  }
-
-  private beginClipboardPastePreview(): void {
-    if (!this.editRuntime.hasClipboardTiles() || editorState.paletteMode !== 'tiles') {
-      return;
-    }
-
-    this.clipboardPastePreviewActive = true;
-    editorState.activeTool = 'copy';
-    this.updateToolUI();
-    this.updatePersistenceStatus('Copy preview active. Move the mouse and click to place tiles, or press Esc to cancel.');
-  }
-
-  private cancelClipboardPastePreview(): void {
-    if (!this.clipboardPastePreviewActive) {
-      return;
-    }
-
-    this.clipboardPastePreviewActive = false;
-    this.interactionController.clearShapePreview();
-    this.restorePersistenceStatus();
-  }
-
-  private pasteClipboardAt(tileX: number, tileY: number): void {
-    if (!this.clipboardPastePreviewActive) {
-      return;
-    }
-
-    this.editRuntime.beginTileBatch();
-    const pasted = this.editRuntime.pasteClipboardAt(tileX, tileY);
-    this.editRuntime.commitTileBatch();
-    if (!pasted) {
-      this.updatePersistenceStatus('Nothing to paste at that position.');
-      return;
-    }
-
-    this.updatePersistenceStatus('Pasted tile region. Click again to repeat, or press Esc to stop pasting.');
-    this.renderEditorUi();
-  }
-
-  // ── Flood Fill ──
-
-  private floodFill(startX: number, startY: number): void {
-    this.editRuntime.floodFill(startX, startY);
-  }
-
-  // ══════════════════════════════════════
-  // UNDO / REDO
-  // ══════════════════════════════════════
-
-  private undo(): void {
-    this.editRuntime.undo();
-  }
-
-  private redo(): void {
-    this.editRuntime.redo();
+    this.chromeController.refreshGoalUi();
   }
 
   // ══════════════════════════════════════
@@ -2254,229 +1058,23 @@ export class EditorScene extends Phaser.Scene {
   // ══════════════════════════════════════
 
   async startPlayMode(): Promise<void> {
-    this.cancelClipboardPastePreview();
-    const coursePreview = this.getSelectedCoursePreviewForPlay();
-    if (this.roomPermissions.canSaveDraft) {
-      void this.saveDraft(true);
-    }
-    const currentRoomSnapshot = this.exportRoomSnapshot();
-    // A saved draft on top of a published room is "clean" but still must stay on the draft path.
-    const usePublishedCourseRoomVersion =
-      !this.roomDirty &&
-      this.publishedVersion > 0 &&
-      !this.roomSession.hasDraftPreviewInWorld();
-    this.syncActiveCourseRoomSessionSnapshot(currentRoomSnapshot, {
-      published: usePublishedCourseRoomVersion,
-    });
-    const playData: OverworldPlaySceneData = buildEditorPlayModeData({
-      roomCoordinates: this.roomCoordinates,
-      roomSnapshot: currentRoomSnapshot,
-      usePublishedCourseRoomVersion,
-      coursePreview,
-      courseEditedRoom: this.buildCourseEditedRoomData(),
-    });
-
-    this.editorPresenceClient?.updateLocalPresence(null);
-    this.scene.sleep();
-    this.scene.wake('OverworldPlayScene', playData);
-    this.updateBottomBar();
+    await this.flowController.startPlayMode();
   }
 
   async handlePublishNudgeAction(): Promise<void> {
-    if (!this.shouldShowPublishNudge()) {
-      return;
-    }
-
-    if (!getAuthDebugState().authenticated) {
-      promptForSignIn('People can’t see this room until you publish it. Sign in to publish.');
-      return;
-    }
-
-    if (this.roomPermissions.canPublish) {
-      await this.publishRoom();
-    }
+    await this.flowController.handlePublishNudgeAction();
   }
 
   updateToolUi(): void {
-    this.updateToolUI();
-  }
-
-  // ══════════════════════════════════════
-  // UI SYNC
-  // ══════════════════════════════════════
-
-  private updateToolUI(): void {
-    if (this.clipboardPastePreviewActive && editorState.activeTool !== 'copy') {
-      this.cancelClipboardPastePreview();
-    }
-
-    if (editorState.activeTool !== 'rect' && editorState.activeTool !== 'copy') {
-      this.interactionController.clearShapePreview();
-    }
-
-    document.querySelectorAll<HTMLButtonElement>('.tool-btn[data-tool]').forEach((button) => {
-      button.classList.toggle('active', button.dataset.tool === editorState.activeTool);
-    });
-
-    const moreToolsPanel = document.getElementById('more-tools-panel');
-    const eraseControls = document.getElementById('erase-controls');
-    const showMoreTools =
-      moreToolsPanel?.dataset.open === 'true' ||
-      (editorState.paletteMode === 'tiles' &&
-        (editorState.activeTool === 'rect' || editorState.activeTool === 'fill'));
-    moreToolsPanel?.classList.toggle('hidden', !showMoreTools);
-    if (moreToolsPanel) {
-      moreToolsPanel.dataset.open = showMoreTools ? 'true' : 'false';
-    }
-    eraseControls?.classList.toggle(
-      'hidden',
-      !(editorState.paletteMode === 'tiles' && editorState.activeTool === 'eraser'),
-    );
-
-    document.getElementById('btn-tool-more')?.classList.toggle(
-      'active',
-      showMoreTools || editorState.activeTool === 'rect' || editorState.activeTool === 'fill',
-    );
-    this.renderEditorUi();
+    this.toolController.updateToolUi();
   }
 
   private updateBottomBar(): void {
-    this.renderEditorUi();
+    this.chromeController.refreshBottomBar();
   }
 
   private renderEditorUi(): void {
-    const roomPlacementMode = this.editRuntime.currentGoalPlacementMode;
-    const courseEditorState = this.getCourseEditorState();
-    const saveStatus =
-      this.roomSession.statusDetails.text ||
-      this.roomSession.statusDetails.accentText ||
-      this.roomSession.statusDetails.linkLabel
-        ? this.roomSession.statusDetails
-        : this.roomSession.getIdleStatusDetails();
-    const publishNudgeVisible = this.shouldShowPublishNudge();
-    const publishNudgeText = getAuthDebugState().authenticated
-      ? 'People can’t see this room until you publish it.'
-      : 'People can’t see this room until you sign in and publish it.';
-    const publishNudgeActionText = getAuthDebugState().authenticated
-      ? 'Publish Now'
-      : 'Sign In to Publish';
-    this.uiBridge?.render(
-      buildEditorUiViewModel({
-        roomTitle: this.roomTitle,
-        roomCoordinates: this.roomCoordinates,
-        roomGoal: this.roomGoal,
-        roomPlacementMode,
-        goalUsesMarkers: this.goalUsesMarkers(this.roomGoal),
-        goalSummaryText: this.getGoalSummaryText(),
-        roomPermissions: this.roomPermissions,
-        mintedTokenId: this.mintedTokenId,
-        canRefreshMintMetadata: this.roomSession.getHistoryState().canRefreshMintMetadata,
-        saveInFlight: this.saveInFlight,
-        mintedMetadataCurrent: this.roomSession.getHistoryState().mintedMetadataCurrent,
-        roomVersionHistory: this.roomVersionHistory,
-        entrySource: this.entrySource,
-        zoomText: `Zoom: ${editorState.zoom}x`,
-        saveStatus,
-        publishNudgeVisible,
-        publishNudgeText,
-        publishNudgeActionText,
-        courseEditorState,
-      }),
-    );
-    this.renderInspectorUi();
-  }
-
-  private initializeEditorPresence(): void {
-    this.editorPresenceClient?.destroy();
-    this.editorPresenceClient = null;
-    this.editorPresenceIdentity = null;
-
-    const config = resolveWorldPresenceConfig();
-    if (!config) {
-      return;
-    }
-
-    this.editorPresenceIdentity = resolveWorldPresenceIdentity();
-    this.editorPresenceClient = new WorldPresenceClient({
-      ...config,
-      identity: this.editorPresenceIdentity,
-      onSnapshot: () => {
-        // Editor presence only publishes activity to the overworld.
-      },
-    });
-    this.editorPresenceClient.setSubscribedShards([
-      roomToChunkCoordinates(this.roomCoordinates),
-    ]);
-    this.syncEditorPresence();
-  }
-
-  private refreshEditorPresenceIdentity(): void {
-    const config = resolveWorldPresenceConfig();
-    const nextIdentity = config ? resolveWorldPresenceIdentity() : null;
-    const currentIdentity = this.editorPresenceIdentity;
-    if (!config) {
-      if (!this.editorPresenceClient && !currentIdentity) {
-        return;
-      }
-
-      this.initializeEditorPresence();
-      return;
-    }
-
-    if (
-      currentIdentity &&
-      nextIdentity &&
-      currentIdentity.userId === nextIdentity.userId &&
-      currentIdentity.displayName === nextIdentity.displayName &&
-      currentIdentity.avatarId === nextIdentity.avatarId
-    ) {
-      return;
-    }
-
-    this.initializeEditorPresence();
-  }
-
-  private syncEditorPresence(): void {
-    if (!this.editorPresenceClient || !this.scene.isActive(this.scene.key) || editorState.isPlaying) {
-      this.editorPresenceClient?.updateLocalPresence(null);
-      return;
-    }
-
-    this.editorPresenceClient.updateLocalPresence({
-      roomCoordinates: { ...this.roomCoordinates },
-      x: ROOM_PX_WIDTH * 0.5,
-      y: ROOM_PX_HEIGHT * 0.5,
-      velocityX: 0,
-      velocityY: 0,
-      facing: 1,
-      animationState: 'idle',
-      mode: 'edit',
-      timestamp: Date.now(),
-    });
-  }
-
-  private maybeTriggerPublishNudge(): void {
-    if (this.publishNudgeTriggered || !this.shouldShowPublishNudge()) {
-      return;
-    }
-
-    this.publishNudgeTriggered = true;
-    if (!getAuthDebugState().authenticated) {
-      promptForSignIn('People can’t see this room until you publish it. Sign in to publish.');
-      return;
-    }
-
-    this.roomSession.setStatusText('Draft only. Not visible in the world until published.');
-  }
-
-  private shouldShowPublishNudge(): boolean {
-    return shouldShowPublishNudgeHelper(
-      this.publishedVersion,
-      this.roomPermissions.canSaveDraft,
-      this.mintedTokenId,
-      this.roomEditCount,
-      this.PUBLISH_NUDGE_EDIT_THRESHOLD,
-    );
+    this.chromeController.render();
   }
 
   // ── Public API for UI ──
@@ -2486,14 +1084,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   setRoomTitle(nextTitle: string | null): void {
-    const normalized = typeof nextTitle === 'string' ? nextTitle.trim().slice(0, 40) || null : null;
-    if (this.roomTitle === normalized) {
-      return;
-    }
-
-    this.roomTitle = normalized;
-    this.markRoomDirty();
-    this.renderEditorUi();
+    this.persistenceController.setRoomTitle(nextTitle);
   }
 
   getLayers(): Map<string, Phaser.Tilemaps.TilemapLayer> {
@@ -2516,93 +1107,71 @@ export class EditorScene extends Phaser.Scene {
     mintedMetadataCurrent: boolean;
     versions: RoomVersionRecord[];
   } {
-    return this.roomSession.getHistoryState();
+    return this.persistenceController.getHistoryState();
   }
 
   async returnToWorld(): Promise<void> {
-    showBusyOverlay('Returning to world...', 'Saving room state...');
-    const wakeData = await this.roomSession.buildReturnToWorldWakeData();
-    if (!wakeData) {
-      showBusyError(this.persistenceStatusText || 'Failed to return to world.', {
-        closeHandler: () => hideBusyOverlay(),
-      });
-      return;
-    }
-
-    wakeData.courseEditorReturned = Boolean(this.activeCourseMarkerEdit);
-    wakeData.courseEditedRoom = this.buildCourseEditedRoomData();
-
-    this.scene.stop();
-    this.scene.wake('OverworldPlayScene', wakeData);
+    await this.flowController.returnToWorld();
   }
 
   async returnToCourseBuilder(): Promise<void> {
-    await this.returnToWorld();
+    await this.flowController.returnToCourseBuilder();
   }
 
-  async editPreviousCourseRoom(): Promise<void> {
-    await this.editAdjacentCourseRoom(-1);
+  private async handleEditorBackAction(): Promise<void> {
+    await this.flowController.handleEditorBackAction();
   }
 
-  async editNextCourseRoom(): Promise<void> {
-    await this.editAdjacentCourseRoom(1);
-  }
-
-  private async editAdjacentCourseRoom(offset: -1 | 1): Promise<void> {
-    const adjacent = this.getAdjacentCourseEdit(offset);
-    if (!adjacent) {
-      this.courseEditorStatusText =
-        offset < 0 ? 'Already at the first course room.' : 'Already at the last course room.';
-      this.updateGoalUi();
-      return;
-    }
-
-    showBusyOverlay(
-      offset < 0 ? 'Opening previous room...' : 'Opening next room...',
-      'Saving room state...'
+  private shouldReturnToCourseEditor(): boolean {
+    return Boolean(
+      this.buildCourseEditedRoomData() &&
+        (this.scene.isSleeping('CourseComposerScene') ||
+          this.scene.isPaused('CourseComposerScene') ||
+          this.scene.isActive('CourseComposerScene'))
     );
-    const wakeData = await this.roomSession.buildReturnToWorldWakeData();
-    if (!wakeData) {
-      showBusyError(this.persistenceStatusText || 'Failed to open the adjacent room.', {
-        closeHandler: () => hideBusyOverlay(),
-      });
-      return;
-    }
+  }
 
-    wakeData.courseEditorReturned = false;
-    wakeData.courseEditedRoom = this.buildCourseEditedRoomData();
-    wakeData.courseEditorNavigateOffset = offset;
-
-    this.scene.stop();
-    this.scene.wake('OverworldPlayScene', wakeData);
+  private buildCourseEditorWakeData(wakeData: OverworldPlaySceneData): CourseEditorSceneData {
+    const courseEdit = this.buildCourseEditedRoomData();
+    return {
+      courseId: courseEdit?.courseId ?? null,
+      selectedCoordinates: { ...this.roomCoordinates },
+      centerCoordinates: { ...(wakeData.centerCoordinates ?? this.roomCoordinates) },
+      statusMessage: wakeData.statusMessage ?? null,
+      courseEditedRoom: this.buildCourseEditedRoomData(),
+      draftRoom: wakeData.draftRoom ?? null,
+      publishedRoom: wakeData.publishedRoom ?? null,
+      clearDraftRoomId: wakeData.clearDraftRoomId ?? null,
+      invalidateRoomId: wakeData.invalidateRoomId ?? null,
+    };
   }
 
   async mintRoom(): Promise<RoomRecord | null> {
-    return this.roomSession.mintRoom();
+    return this.persistenceController.mintRoom();
   }
 
   async refreshMintMetadata(): Promise<RoomRecord | null> {
-    return this.roomSession.refreshMintMetadata();
+    return this.persistenceController.refreshMintMetadata();
   }
 
   async setCanonicalVersion(targetVersion: number): Promise<RoomRecord | null> {
-    return this.roomSession.setCanonicalVersion(targetVersion);
+    return this.persistenceController.setCanonicalVersion(targetVersion);
   }
 
   async setLeaderboardSourceVersion(
     targetVersion: number,
     sourceVersion: number | null
   ): Promise<RoomRecord | null> {
-    return this.roomSession.setLeaderboardSourceVersion(targetVersion, sourceVersion);
+    return this.persistenceController.setLeaderboardSourceVersion(targetVersion, sourceVersion);
   }
 
   undoAction(): void {
-    this.undo();
+    this.toolController.undo();
     this.updateBottomBar();
   }
 
   redoAction(): void {
-    this.redo();
+    this.toolController.redo();
     this.updateBottomBar();
   }
 
@@ -2629,13 +1198,7 @@ export class EditorScene extends Phaser.Scene {
       background: editorState.selectedBackground,
       goal: cloneRoomGoal(this.roomGoal),
       goalPlacementMode: this.goalPlacementMode,
-      courseEdit: this.activeCourseMarkerEdit
-        ? {
-            courseId: this.activeCourseMarkerEdit.courseId,
-            roomId: this.activeCourseMarkerEdit.roomId,
-            roomOrder: this.activeCourseMarkerEdit.roomOrder,
-          }
-        : null,
+      courseEdit: this.buildCourseEditedRoomData(),
       spawnPoint: this.roomSpawnPoint ? { ...this.roomSpawnPoint } : null,
       backgroundLayerCount: this.backgroundController.backgroundLayerCount,
       hasBackgroundCamera: this.backgroundController.hasBackgroundCamera,

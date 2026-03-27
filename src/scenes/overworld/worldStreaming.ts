@@ -126,8 +126,10 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private fullRoomBudget = 0;
   private activeChunkRadius = 0;
   private chunkWindowRequestInFlight = false;
+  private readonly textureNamespace: string;
 
   constructor(private readonly options: OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall>) {
+    this.textureNamespace = sanitizeTextureNamespace(options.scene.sys.settings.key);
     this.previewCache = new OverworldPreviewCache(options.worldRepository);
     this.previewRenderer = new OverworldChunkPreviewRenderer({
       scene: options.scene,
@@ -790,12 +792,12 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
     this.destroyFullRoom(room.id);
 
-    const textureKey = buildRoomTextureKey(room, 'full', TILE_SIZE, {
+    const textureKey = this.buildScopedRoomTextureKey(room, {
       includeBackground: false,
       includeObjects: false,
       includedLayers: ['background', 'terrain'],
     });
-    const foregroundTextureKey = buildRoomTextureKey(room, 'full', TILE_SIZE, {
+    const foregroundTextureKey = this.buildScopedRoomTextureKey(room, {
       includeBackground: false,
       includeObjects: false,
       includedLayers: ['foreground'],
@@ -909,6 +911,17 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.previewRenderer.syncPreviewVisibility();
     this.options.onBackdropObjectsChanged?.();
     this.options.onFullRoomVisibilityChanged?.();
+  }
+
+  private buildScopedRoomTextureKey(
+    room: RoomSnapshot,
+    options: {
+      includeBackground?: boolean;
+      includeObjects?: boolean;
+      includedLayers?: ('background' | 'terrain' | 'foreground')[];
+    },
+  ): string {
+    return `${this.textureNamespace}-${buildRoomTextureKey(room, 'full', TILE_SIZE, options)}`;
   }
 
   private unloadFullRoomsOutsideStream(fullRoomIds: Set<string>): void {
@@ -1115,4 +1128,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         : 0;
     }
   }
+}
+
+function sanitizeTextureNamespace(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]+/g, '_');
 }

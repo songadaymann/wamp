@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { CourseGoalType, CourseRoomRef } from '../../courses/model';
+import type { CourseEditorUiState } from '../../courses/editor/state';
 import type { RoomGoalType } from '../../goals/roomGoals';
 import type { GoalPlacementMode } from '../../scenes/editor/editRuntime';
 import type { RoomCoordinates, RoomRecord, RoomVersionRecord } from '../../persistence/roomModel';
@@ -51,8 +52,6 @@ export type EditorCourseUiState = {
   addCheckpointActive: boolean;
   placeFinishHidden: boolean;
   placeFinishActive: boolean;
-  canEditPreviousRoom: boolean;
-  canEditNextRoom: boolean;
 };
 
 export interface EditorSceneBridge {
@@ -94,8 +93,6 @@ export interface EditorSceneBridge {
   setCourseGoalSurvivalSeconds?: (seconds: number) => void;
   startCourseGoalMarkerPlacement?: (mode: EditorMarkerPlacementMode) => void;
   clearCourseGoalMarkers?: () => void;
-  editPreviousCourseRoom?: () => Promise<void> | void;
-  editNextCourseRoom?: () => Promise<void> | void;
   beginFocusedPressurePlateConnection?: () => void;
   clearFocusedPressurePlateConnection?: () => void;
   cancelPressurePlateConnection?: () => void;
@@ -111,9 +108,30 @@ export type OverworldSelectedRoomContext = {
   courseId: string | null;
   courseTitle: string | null;
   courseGoalType: CourseGoalType | null;
-  courseRoomIndex: number | null;
   courseRoomCount: number | null;
 };
+
+export const COURSE_COMPOSER_STATE_CHANGED_EVENT = 'course-composer-state-changed';
+
+export interface CourseComposerSceneBridge {
+  getCourseEditorState?: () => CourseEditorUiState | null;
+  returnToWorld?: () => Promise<void> | void;
+  setCourseTitle?: (title: string | null) => void;
+  centerSelectedRoom?: () => void;
+  selectRoom?: (roomId: string) => void;
+  toggleSelectedRoomMembership?: () => void;
+  openSelectedRoom?: () => Promise<void> | void;
+  openCourseEditor?: () => Promise<void> | void;
+  moveCheckpoint?: (index: number, direction: -1 | 1) => void;
+  removeCheckpoint?: (index: number) => void;
+  zoomIn?: () => void;
+  zoomOut?: () => void;
+  fitCourseToView?: () => void;
+  saveCourseDraft?: () => Promise<void>;
+  publishCourseDraft?: () => Promise<void>;
+  unpublishCourse?: () => Promise<void>;
+  testDraftCourse?: () => Promise<void> | void;
+}
 
 export type CourseMarkerPlacementMode = 'start' | 'checkpoint' | 'finish';
 
@@ -139,9 +157,6 @@ export type CourseComposerState = {
   publishedDraftWarningText: string | null;
   dirty: boolean;
   statusText: string | null;
-  selectedRoomOrder: number | null;
-  canMoveSelectedRoomEarlier: boolean;
-  canMoveSelectedRoomLater: boolean;
   canEditSelectedRoom: boolean;
   canTestDraft: boolean;
   testDraftDisabledReason: string | null;
@@ -153,8 +168,6 @@ export type CourseComposerState = {
   canUnpublishCourse: boolean;
   unpublishCourseDisabledReason: string | null;
 };
-
-export const COURSE_COMPOSER_STATE_CHANGED_EVENT = 'course-composer-state-changed';
 
 export interface OverworldSceneBridge {
   playSelectedRoom?: () => void;
@@ -168,14 +181,13 @@ export interface OverworldSceneBridge {
   returnToWorld?: () => void;
   getSelectedRoomContext?: () => OverworldSelectedRoomContext;
   openCourseComposer?: () => Promise<void> | void;
+  openCourseEditor?: () => Promise<void> | void;
   closeCourseComposer?: () => void;
   getCourseComposerState?: () => CourseComposerState | null;
   selectCourseRoomInComposer?: (roomId: string) => void;
   setCourseTitle?: (title: string | null) => void;
   addSelectedRoomToCourseDraft?: () => void;
   removeSelectedRoomFromCourseDraft?: () => void;
-  moveSelectedRoomEarlierInCourseDraft?: () => void;
-  moveSelectedRoomLaterInCourseDraft?: () => void;
   editSelectedCourseRoom?: () => boolean;
   testDraftCourse?: () => Promise<void> | void;
   saveCourseDraft?: () => Promise<void>;
@@ -195,16 +207,24 @@ export function getEditorScene(game: Phaser.Game): EditorSceneBridge | null {
   return getScene<EditorSceneBridge>(game, 'EditorScene');
 }
 
+export function getCourseWorkspaceScene(game: Phaser.Game): EditorSceneBridge | null {
+  return getScene<EditorSceneBridge>(game, 'CourseEditorScene');
+}
+
 export function getOverworldScene(game: Phaser.Game): OverworldSceneBridge | null {
   return getScene<OverworldSceneBridge>(game, 'OverworldPlayScene');
 }
 
 export function getActiveEditorScene(game: Phaser.Game): EditorSceneBridge | null {
-  if (!game.scene.isActive('EditorScene')) {
-    return null;
+  if (game.scene.isActive('CourseEditorScene')) {
+    return getCourseWorkspaceScene(game);
   }
 
-  return getEditorScene(game);
+  if (game.scene.isActive('EditorScene')) {
+    return getEditorScene(game);
+  }
+
+  return null;
 }
 
 export function getActiveOverworldScene(game: Phaser.Game): OverworldSceneBridge | null {
@@ -213,6 +233,18 @@ export function getActiveOverworldScene(game: Phaser.Game): OverworldSceneBridge
   }
 
   return getOverworldScene(game);
+}
+
+export function getCourseComposerScene(game: Phaser.Game): CourseComposerSceneBridge | null {
+  return getScene<CourseComposerSceneBridge>(game, 'CourseComposerScene');
+}
+
+export function getActiveCourseComposerScene(game: Phaser.Game): CourseComposerSceneBridge | null {
+  if (!game.scene.isActive('CourseComposerScene')) {
+    return null;
+  }
+
+  return getCourseComposerScene(game);
 }
 
 export function withActiveEditorScene(
@@ -232,6 +264,18 @@ export function withActiveOverworldScene(
   callback: (scene: OverworldSceneBridge) => void,
 ): void {
   const scene = getActiveOverworldScene(game);
+  if (!scene) {
+    return;
+  }
+
+  callback(scene);
+}
+
+export function withActiveCourseComposerScene(
+  game: Phaser.Game,
+  callback: (scene: CourseComposerSceneBridge) => void,
+): void {
+  const scene = getActiveCourseComposerScene(game);
   if (!scene) {
     return;
   }

@@ -1,5 +1,6 @@
 @import './sections/base.css';
 @import './sections/editor.css';
+@import './sections/course-editor.css';
 @import './sections/world.css';
 @import './sections/modals.css';
 @import './sections/responsive.css';

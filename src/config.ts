@@ -674,23 +674,36 @@ export interface EditorState {
   placedObjects: PlacedObject[];
 }
 
+const DEFAULT_EDITOR_TILESET_KEY = 'forest';
+const DEFAULT_EDITOR_SELECTION_START_COL = 9;
+const DEFAULT_EDITOR_SELECTION_START_ROW = 0;
+const DEFAULT_EDITOR_TILESET = getTilesetByKey(DEFAULT_EDITOR_TILESET_KEY);
+const DEFAULT_EDITOR_SELECTED_TILE_GID =
+  (DEFAULT_EDITOR_TILESET?.firstGid ?? 1) +
+  DEFAULT_EDITOR_SELECTION_START_ROW * (DEFAULT_EDITOR_TILESET?.columns ?? 0) +
+  DEFAULT_EDITOR_SELECTION_START_COL;
+
+export function createDefaultEditorTileSelection(): TileSelection {
+  return {
+    tilesetKey: DEFAULT_EDITOR_TILESET_KEY,
+    startCol: DEFAULT_EDITOR_SELECTION_START_COL,
+    startRow: DEFAULT_EDITOR_SELECTION_START_ROW,
+    width: 1,
+    height: 1,
+    occupiedMask: [[true]],
+  };
+}
+
 export const editorState: EditorState = {
   activeTool: 'pencil',
   activeLayer: 'terrain',
-  selectedTilesetKey: 'forest',
-  selectedTileGid: 1,  // first tile of forest
+  selectedTilesetKey: DEFAULT_EDITOR_TILESET_KEY,
+  selectedTileGid: DEFAULT_EDITOR_SELECTED_TILE_GID,
   eraserBrushSize: 1,
   tileFlipX: false,
   tileFlipY: false,
   showLayerGuides: false,
-  selection: {
-    tilesetKey: 'forest',
-    startCol: 0,
-    startRow: 0,
-    width: 1,
-    height: 1,
-    occupiedMask: [[true]],
-  },
+  selection: createDefaultEditorTileSelection(),
   zoom: 2,
   isPlaying: false,
   paletteMode: 'tiles',
@@ -699,6 +712,12 @@ export const editorState: EditorState = {
   selectedBackground: 'none',
   placedObjects: [],
 };
+
+export function resetEditorPaletteSelection(): void {
+  editorState.selectedTilesetKey = DEFAULT_EDITOR_TILESET_KEY;
+  editorState.selectedTileGid = DEFAULT_EDITOR_SELECTED_TILE_GID;
+  editorState.selection = createDefaultEditorTileSelection();
+}
 
 export function selectionCellIsOccupied(dx: number, dy: number): boolean {
   const row = editorState.selection.occupiedMask[dy];

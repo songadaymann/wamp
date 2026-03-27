@@ -57,6 +57,44 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Separate course editor pass on March 24, 2026:
+  - replaced the overworld-first course composer launch path with a dedicated `CourseEditorScene` that owns a standalone world-anchored authoring shell, pan/zoom camera, room membership selection, and direct marker placement for `start`, `exit`, `checkpoint`, and `finish`
+  - course validation is now cluster-based instead of linear-order-based: draft/publish paths require unique authored rooms forming one orthogonally connected cluster, while publish validation now follows marker placement rather than first-room / last-room assumptions
+  - course room membership is persisted in deterministic coordinate order only for compatibility; `room_order` is no longer treated as authored progression semantics
+  - room editor course return flow now wakes the sleeping course editor directly, and overworld HUD course copy no longer shows misleading `step X/Y` labels
+  - added the new course-editor scene bridge + UI shell for title/goal editing, room list, checkpoint list, zoom controls, save/publish/test/unpublish actions, and quick-open into the existing room editor
+  - verification:
+    - `./node_modules/.bin/tsc --noEmit` passed in the clean `/tmp/wamp-course-editor` worktree
+    - `npm run build` passed in the clean `/tmp/wamp-course-editor` worktree
+  - remaining check:
+    - browser/runtime smoke is still pending for scene transitions, marker placement, and test-run return-to-course-editor flow
+
+- Separate course editor runtime smoke follow-up on March 24, 2026:
+  - fixed the new scene launch path by giving `CourseEditorScene` an explicit Phaser key; without that, clicking `Course Builder` left the app with no active scene because Phaser could not launch the unnamed scene instance by key
+  - fixed new course-editor transition ordering so handoffs use `run/wake` before `sleep`, matching the rest of the scene stack and preventing transient blank-scene states
+  - changed course-editor return-to-world from `stop` to `sleep` and changed overworld reopen behavior to `wake` an existing sleeping course editor instead of destroying/recreating it; this prevents chunk-preview texture teardown from invalidating the overworld's shared preview images on return
+  - suppressed the generic course-editor helper copy from leaking into the overworld status bar on exit
+  - verification:
+    - `./node_modules/.bin/tsc --noEmit` passed
+    - `npm run build` passed
+    - shared Playwright smoke client confirmed the course editor scene becomes active after `#btn-world-course-builder` and wrote:
+      - `output/web-game/course-editor-smoke-2/state-0.json`
+      - `output/web-game/course-editor-smoke-2/shot-0.png`
+    - smoke caveat:
+      - the shared client still hit the existing black-canvas capture path, so visual verification relied on direct full-page Playwright screenshots instead
+    - direct Playwright DOM/browser checks wrote:
+      - `output/web-game/course-editor-dom-check-3.json`
+      - `output/web-game/course-editor-dom-check-3.png`
+      - `output/web-game/course-editor-return-check-3.json`
+      - `output/web-game/course-editor-return-check-3.png`
+      - `output/web-game/course-editor-reopen-check.json`
+      - `output/web-game/course-editor-reopen-check.png`
+    - those checks confirmed:
+      - overworld `Course Builder` now opens `CourseEditorScene`
+      - selecting a different room in the course editor updates `selectedCoordinates`
+      - `World` returns cleanly to the overworld with no `drawImage` page error
+      - reopening the course editor reuses the sleeping scene and preserves the selected room focus
+
 - Practice-run spawn marker depth follow-up on March 24, 2026:
   - raised play-scene goal marker depth so the practice `START` sign and label now render above the room foreground plane instead of occasionally hiding behind front-layer art
   - verification:
@@ -120,6 +158,23 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - the targeted summary confirms `clipboardPastePreviewActive` flips from `true` to `false` after clicking either `Draw` or `Erase`
     - follow-up status check wrote:
       - `output/web-game/copy-tool-status-check/summary.json`
+
+- Overworld scene split course-playback extraction on March 26, 2026:
+  - extracted the active course-playback block out of `OverworldPlayScene` into `src/scenes/overworld/coursePlayback.ts`
+  - the new controller now owns pinned published room snapshot loading, draft-preview room overrides, active course run state creation, and ranked course run start/finish submission
+  - `OverworldSceneFlowController` now imports the shared `CoursePlaybackRoomSourceMode` from that controller instead of carrying a duplicate local type
+  - `OverworldPlayScene` now delegates course preview activation, play-session override cleanup, and course run finalization through the controller, while the old overworld course-composer modal code remains untouched for a later cleanup slice
+  - verification:
+    - `npm run build` passed
+    - required Playwright skill smoke wrote:
+      - `output/web-game/overworld-course-playback-skill-smoke/state-0.json`
+      - `output/web-game/overworld-course-playback-skill-smoke/shot-0.png`
+    - targeted Playwright probe wrote:
+      - `output/web-game/overworld-course-playback-probe/summary.json`
+      - `output/web-game/overworld-course-playback-probe/before-play-course.png`
+      - `output/web-game/overworld-course-playback-probe/during-play-course.png`
+      - `output/web-game/overworld-course-playback-probe/after-return.png`
+    - targeted probe confirmed a real published safety-backend course room at `1,0` still flips `Play Course -> Stop Course -> Play Course`, stays error-free, and returns cleanly to browse
       - `output/web-game/copy-tool-status-check/after-draw-click.png`
     - the follow-up status check confirms the top status returns to `Claimed by jonathan.` after leaving copy mode
 - Desktop editor sidebar polish follow-up on March 21, 2026:
@@ -3598,3 +3653,1061 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Playwright boot smoke on `http://127.0.0.1:3100` loaded the overworld; only expected local PartyKit connection-refused errors appeared because PartyKit was not running
   - fresh local worker smoke on `http://127.0.0.1:8910` returned `401` for unauthenticated `POST /api/rooms/:roomId/leaderboard-lineage`, confirming the new route is registered
   - remaining manual verification: authenticated creator flow in the history modal against a room with multiple published versions and existing leaderboard history
+
+## March 25, 2026 - Phase 5 Safety Rollout: Editor UI Boundary
+
+- Moved the editor control cluster into `src/scenes/editor/uiBridge.ts`
+  - `EditorUiBridge` now owns editor-side DOM lookup, editor button/input listeners, and editor chrome syncing for tools, background selection, layer controls, palette tabs, goal controls, course goal controls, inspector actions, and editor action buttons
+  - `src/scenes/EditorScene.ts` no longer touches `document` or `window` directly for editor UI concerns
+- Simplified editor shell wiring
+  - removed the old `src/ui/setup/editorControls.ts` bootstrap path so the app no longer has two competing editor control systems
+  - `src/ui/setup.ts` now configures shared editor UI runtime dependencies instead of binding editor controls directly
+  - `src/ui/setup/sceneCommands.ts` now only owns world/global chrome actions; editor action buttons are handled inside the editor bridge
+- Kept the palette system working with the new bridge boundary
+  - `src/ui/setup/paletteController.ts` now emits a lightweight editor UI refresh event after object selection changes the active tool so the bridge can resync its chrome state
+  - `src/scenes/editor/editRuntime.ts` no longer pushes DOM updates back into `EditorScene`
+- Verification:
+  - `npm run build` passed after the editor UI boundary refactor
+  - attempted the standard Playwright smoke via the `develop-web-game` client against both `vite preview` and `vite dev`, but local navigation hung waiting for `domcontentloaded` despite the local server returning `200 OK`; treat that as an environment quirk and rely on the successful production build plus manual safety-preview validation for this branch
+
+## March 26, 2026 - Phase 5 Follow-up: Empty Initial Tile Selection Regression
+
+- Fixed the editor palette so a single-cell empty tile cannot become the active paint selection on first load or after switching tilesets
+  - `src/ui/setup/paletteController.ts` now normalizes single-cell empty selections back to the prior valid tile for that tileset, or to the first visible tile in the tileset when there is no valid prior selection
+  - once tileset images finish loading, the palette now also normalizes the current editor selection so a restored/default tileset never starts on an invisible tile
+- Root cause:
+  - the editor was still allowing `updateSelection(..., 0, 0, 0, 0)` to land on empty palette cells for tilesets whose top-left tile is transparent, which left `selectedTileGid = -1` and made the pencil place invisible tiles
+- Verification:
+  - `npm run build` passed in the phase-5 worktree
+  - targeted local browser probe wrote `output/web-game/editor-empty-selection-check/summary.json`
+  - the probe confirmed `#selection-info` stayed blank instead of switching to `(empty)` after fresh-load tileset changes to `dirt` and `snow`
+
+- March 26 follow-up after preview retest:
+  - root cause for the remaining first-open bug was the editor's hardcoded boot default in `src/config.ts`: `forest` tile `(0,0)` is fully transparent, so a full refresh could still start on an invisible tile before any palette normalization ran
+  - changed the editor default selection to the first visible forest tile `(9,0)` / gid `10`
+  - `src/scenes/EditorScene.ts` now also calls `resetEditorPaletteSelection()` during `resetRuntimeState()` so fresh editor opens inside a running session cannot inherit stale/empty palette state
+  - verification:
+    - `npm run build` passed
+    - `output/web-game/editor-default-selection-fix/summary.json` records the new default selection state
+
+## March 26, 2026 - Phase 6 Safety Rollout: Editor Scene Split (Inspector Extraction)
+
+- Pulled the inspector subsystem out of `src/scenes/EditorScene.ts`
+  - added `src/scenes/editor/inspector.ts` with `EditorInspectorController`
+  - moved pressure-plate focus/linking, container focus/filling, inspector panel state, and the associated overlay rendering into the controller
+  - `EditorScene` now delegates inspector-specific object interactions and overlay updates instead of owning those details directly
+- Kept the scene boundary stable while reducing scene size
+  - `EditorScene` still exposes the same public methods used by the UI bridge and interaction controller, but those methods now forward into the inspector controller where appropriate
+  - `resetRuntimeState()`, `applyRoomSnapshot()`, and `renderEditorUi()` now sync inspector state through the controller instead of manually resetting scattered fields
+- Verification:
+  - `npm run build` passed in the phase-6 worktree
+  - `develop-web-game` boot smoke on `http://127.0.0.1:3000` wrote `output/web-game/editor-scene-split-boot-smoke/state-0.json` and confirmed normal overworld browse boot against the safety backend
+  - targeted local Playwright probe wrote `output/web-game/editor-scene-split-probe/summary.json`
+  - the probe directly transitioned from the dev-exposed overworld scene into `EditorScene` and confirmed `scene=editor`, `roomId=0,0`, `roomVersion=29`, `publishedVersion=29`, `placedObjects=28`, `canSaveDraft=true`, with no new console or page errors
+
+## March 26, 2026 - Phase 6 Follow-up: Editor Scene Flow + Presence Extraction
+
+- Pulled scene-flow and editor-presence responsibilities out of `src/scenes/EditorScene.ts`
+  - added `src/scenes/editor/flow.ts` with `EditorSceneFlowController`
+  - added `src/scenes/editor/presence.ts` with `EditorPresenceController`
+  - `EditorScene` now delegates play-mode handoff, return-to-world navigation, adjacent course-room navigation, publish-nudge logic, and editor presence lifecycle/syncing
+- Kept the public scene surface stable
+  - `EditorScene` still exposes the same methods used by the UI bridge (`startPlayMode`, `returnToWorld`, `editPreviousCourseRoom`, `editNextCourseRoom`, etc.), but those methods now forward into the flow controller
+  - auth-change, wake, update-loop, and shutdown hooks now go through the presence controller instead of owning PartyKit client state directly
+- Verification:
+  - `npm run build` passed after the flow/presence extraction
+  - `develop-web-game` boot smoke on `http://127.0.0.1:3000` wrote `output/web-game/editor-scene-flow-boot-smoke/state-0.json` and confirmed clean overworld browse boot
+  - targeted local Playwright probe wrote `output/web-game/editor-scene-flow-probe/summary.json`
+  - the probe confirmed overworld browse -> editor -> overworld browse handoff with no new console/page errors
+  - caveat: in local headless dev automation, the dev-hook editor entry still materialized room `0,0` as draft `v1` on open before returning to the world as a draft, so treat that probe as a flow sanity check rather than a perfect published-room fidelity check; live safety-preview testing should validate the real entry path
+
+## March 26, 2026 - Phase 6 Follow-up: Course Goal / Course Session Extraction
+
+- Pulled course-edit session state and course-goal mutation logic out of `src/scenes/EditorScene.ts`
+  - added `src/scenes/editor/courseController.ts` with `EditorCourseController`
+  - moved active course edit/session tracking, course goal type/time/count mutations, start/exit/checkpoint/finish marker placement-removal, course marker overlay rendering, and draft-session room snapshot syncing into the controller
+  - `EditorScene` now delegates course-goal methods, course editor UI state, and course preview-for-play resolution to the controller instead of owning duplicated course-session state directly
+- Kept the scene boundary stable while reducing internal coupling
+  - `EditorSceneFlowController` now pulls adjacent-room navigation and course status updates through the course controller instead of touching scene-owned course fields
+  - course marker overlays now flow through the existing background ignore pipeline via controller-owned sprite/label accessors, so the UI boundary and background controller still see the same combined marker set
+- Verification:
+  - `npm run build` passed after the course controller extraction
+  - `develop-web-game` boot smoke on `http://127.0.0.1:3100` wrote:
+    - `output/web-game/editor-course-controller-boot-smoke/shot-0.png`
+    - `output/web-game/editor-course-controller-boot-smoke/shot-1.png`
+    - `output/web-game/editor-course-controller-boot-smoke/state-0.json`
+    - `output/web-game/editor-course-controller-boot-smoke/state-1.json`
+  - targeted local Playwright probe wrote:
+    - `output/web-game/editor-course-controller-probe/summary.json`
+    - `output/web-game/editor-course-controller-probe/editor-course-controller-probe.png`
+  - the targeted probe booted overworld browse, seeded a local draft-session course record for room `0,0`, opened `EditorScene` with `courseEdit`, then exercised `reach_exit` and `checkpoint_sprint` marker placement through the public editor scene methods
+  - probe result:
+    - `reach_exit` summary became `Reach Exit · start set · exit set · 1 room`
+    - `checkpoint_sprint` summary became `Checkpoint Sprint · start set · 1 checkpoint · finish set · 1 room`
+    - no new console or page errors were captured
+
+## March 25, 2026 - Two-Phase Course Authoring Overhaul
+
+- Reframed the old standalone course scene into `CourseComposerScene`
+  - overworld `Course Builder` now launches the dedicated composer scene instead of the legacy in-HUD course modal flow
+  - composer toolbar is reduced to browse/select plus contextual room actions; global `rooms/start/exit/checkpoint/finish` tool row is gone
+  - course marker placement now comes from the goal section, so `reach_exit` and `checkpoint_sprint` expose marker buttons contextually while non-marker goals do not
+  - added the explicit `Edit Course` action from the composer to launch the stitched multi-room editor
+- Added a real `CourseEditorScene` as a seamless multi-room editor
+  - spans the stitched bounds of all course rooms with one camera and explicit room borders/labels
+  - reuses `EditorEditRuntime` per room slice with new host hooks for room origin, room-local backgrounds, and room-local placed object state
+  - painting, erasing, fill, rect/copy, object placement, background changes, and undo/redo all route to the selected room slice; cross-room tile drags commit the current batch and continue in the next slice
+  - editor chrome is reused but adapted for course mode: `Back` becomes `Course`, `Save` becomes `Save All`, `Publish` becomes `Publish Rooms`, room-goal controls stay hidden, and course-goal controls remain the active goal surface
+  - draft test from the course editor returns back to `CourseEditorScene`, not the overworld
+- Removed authoring-time room-order dependence from the active course-edit flow
+  - `EditorCourseEditData` / `CourseEditedRoomData` are now room-id-based only
+  - single-room editor previous/next course navigation is disabled with explicit status text instead of relying on step order
+  - course context text in the room editor now uses room-count messaging rather than `Step X/Y`
+- Verification:
+  - `./node_modules/.bin/tsc --noEmit` passed in `/tmp/wamp-course-overhaul`
+  - `npm run build` passed in `/tmp/wamp-course-overhaul`
+  - local D1 migrations applied cleanly through `0018`
+  - Playwright smoke confirmed `#btn-world-course-builder` now lands in `course-composer`; artifacts:
+    - `output/web-game/course-authoring-overhaul-smoke/state-0.json`
+    - `output/web-game/course-authoring-overhaul-smoke/composer-dom.json`
+    - `output/web-game/course-authoring-overhaul-smoke/composer-dom.png`
+  - deeper local Playwright smoke used debug email auth plus local room claims/publishes to validate the stitched editor end-to-end:
+    - built and published two local rooms
+    - opened course setup, added both rooms, and launched `CourseEditorScene`
+    - edited one room slice and saved it through `Save All`
+    - artifacts:
+      - `output/web-game/course-authoring-overhaul-e2e/summary.json`
+      - `output/web-game/course-authoring-overhaul-e2e/course-editor.png`
+  - remaining polish:
+    - the legacy course modal controller still exists but is dormant because the overworld launch path now goes straight into `CourseComposerScene`
+    - the local browser checks covered the real flow, but a human pass is still worthwhile for course-goal placement UX and multi-room object dragging across room boundaries
+
+## March 25, 2026 - Course Setup / Editor Handoff Refinement
+
+- Simplified `Course Setup` so it only handles setup concerns
+  - removed the goal section from setup entirely; course-goal editing now lives only inside `CourseEditorScene`
+  - removed checkpoint listing from setup
+  - reordered the setup shell so the authoring flow reads: title, selected room, setup actions, rooms, live state
+  - renamed `Save Draft` to `Save Setup`
+- Added explicit setup gating before entering the stitched editor
+  - `Edit Course` is now disabled until the course has a title, at least one selected room, and a saved draft state
+  - save success copy now explicitly points authors back toward `Edit Course` for goal placement and multi-room editing
+  - fixed course draft dirty tracking so draft-only courses compare against the last persisted draft, not just `published`, which means `Save Setup` now actually clears dirty state and unlocks `Edit Course`
+- Clarified the stitched editor copy so it no longer sounds like publishing the course
+  - `Back` now reads `Setup`
+  - `Publish Rooms` now reads `Publish Changed Rooms`
+  - publish tooltip and top status text now explicitly say course publishing still happens from setup
+- Verification:
+  - `./node_modules/.bin/tsc --noEmit` passed in `/tmp/wamp-course-overhaul`
+  - `npm run build` passed in `/tmp/wamp-course-overhaul`
+  - targeted local Playwright smoke confirmed the new handoff:
+    - before save: `Edit Course` disabled with `Save course setup before editing.`
+    - after save: dirty state clears and `Edit Course` unlocks
+    - inside editor: labels show `Setup` and `Publish Changed Rooms`
+    - artifacts:
+      - `output/web-game/course-setup-refine-2/summary.json`
+      - `output/web-game/course-setup-refine-2/course-setup.png`
+
+## March 25, 2026 - Course Return / Adjacency Fixes
+
+- Fixed the course-setup return path back to the overworld
+  - `CourseComposerScene.returnToWorld()` now stops the composer scene instead of leaving it sleeping on shared preview textures
+  - `OverworldPlayScene.handleWakeAsync()` now treats `forceRefreshAround` wakes as a full streaming rebuild and skips the stale pre-refresh redraw that was causing the null-texture crash
+- Fixed course-play room boundary reachability for non-linear course layouts
+  - course edge walls now allow any orthogonally adjacent room that belongs to the active course cluster
+  - this removes the old linear-order assumption that could leave invisible barriers between vertically adjacent course rooms in a 2x2 or other connected cluster
+- Verification:
+  - `./node_modules/.bin/tsc --noEmit` passed in `/tmp/wamp-course-overhaul`
+  - `npm run build` passed in `/tmp/wamp-course-overhaul`
+  - targeted local Playwright smoke covered composer -> world return and stayed console-clean with no Phaser texture crash
+    - artifacts:
+      - `output/web-game/course-return-and-adjacency/summary.json`
+      - `output/web-game/course-return-and-adjacency/after-return.png`
+  - direct browser probe of the active course reachability helper confirmed:
+    - horizontal neighbor: reachable
+    - vertical neighbor: reachable
+    - diagonal: blocked
+    - outside-course neighbor: blocked
+
+## March 25, 2026 - Scene Texture Namespace Fix
+
+- Fixed the remaining first-round-trip Phaser null-texture crash by removing global texture-key collisions between overworld/course scenes
+  - `OverworldPlayScene` and `CourseComposerScene` both use the shared Phaser texture manager for chunk previews and full-room textures
+  - before this fix, both scenes generated the same global keys for the same room/chunk content, so when one scene refreshed or cleared its streaming state it could remove a texture source still bound to live `Image`s in the other scene
+  - that manifested as the lingering first-time `glTexture` / `drawImage` null crash during the real setup -> editor -> test -> publish -> world round trip
+- Implementation:
+  - `src/scenes/overworld/chunkPreviewRenderer.ts`
+    - chunk preview textures are now namespaced by scene key
+  - `src/scenes/overworld/worldStreaming.ts`
+    - full-room texture keys are now namespaced by scene key before being created, reused, or removed
+  - this keeps each scene’s cleanup local instead of letting composer refreshes delete overworld textures or vice versa
+- Verification:
+  - `./node_modules/.bin/tsc --noEmit` passed in `/tmp/wamp-course-overhaul`
+  - `npm run build` passed in `/tmp/wamp-course-overhaul`
+  - deterministic local Playwright repro now completes cleanly for the exact first-time flow:
+    - course setup -> edit course -> test -> return -> save rooms -> publish rooms -> setup -> publish course -> world
+  - repro artifacts:
+    - `output/web-game/course-full-return-repro/summary.json`
+    - `output/web-game/course-full-return-repro/before-world.png`
+    - `output/web-game/course-full-return-repro/after-world.png`
+  - final repro result:
+    - `failure: null`
+    - `consoleErrors: []`
+    - app returns cleanly to browse-mode overworld on room `0,0`
+
+## March 25, 2026 - Course Goal Start + Pressure Plate Follow-ups
+
+- Relaxed course start-marker requirements for non-marker goals
+  - shared course-goal helpers now treat `reach_exit` and `checkpoint_sprint` as the only course goals that require a start point
+  - `collect_target`, `defeat_all`, and `survival` can now save/publish/test without a course start flag
+  - patched both frontend gating and worker publish validation so setup/editor behavior matches the backend:
+    - `src/courses/editor/state.ts`
+    - `src/cloudflare/worker/courses/store.ts`
+    - `src/scenes/editor/playMode.ts`
+    - `src/scenes/overworld/courseRuns.ts`
+    - `src/scenes/OverworldPlayScene.ts`
+- Carried the pressure-plate / container inspector flow into `CourseEditorScene`
+  - the stitched multi-room editor now supports the same hover/pin/connect/clear/done-later pressure-plate workflow as the single-room editor
+  - pressure targets are still room-local on purpose; editing a course across multiple rooms does not imply cross-room trigger wiring
+  - also carried the container inspector so chests/cages can still be filled/cleared from the course editor
+  - key files:
+    - `src/scenes/CourseEditorScene.ts`
+    - `src/scenes/editor/editRuntime.ts`
+- Enabled cross-room tile paste in the stitched editor
+  - copied tile selections are now promoted to scene-level clipboard state instead of being trapped in the source room runtime
+  - paste preview can now target any course room, and `Cmd/Ctrl+V` re-enters paste mode there
+- Verification:
+  - `./node_modules/.bin/tsc --noEmit` passed in `/tmp/wamp-course-overhaul`
+  - `npm run build` passed in `/tmp/wamp-course-overhaul`
+  - Playwright skill client boot smoke against `http://localhost:3000` completed and wrote:
+    - `output/web-game/state-0.json`
+    - `output/web-game/shot-0.png`
+  - note:
+    - the smoke still hit the existing headless/WebGL black-frame screenshot limitation, so it only confirms boot + `render_game_to_text`; the new course interactions still want a manual browser pass
+
+- March 26, 2026: fixed course-setup rediscovery after fresh sessions.
+  - Root cause: unpublished course drafts were saved correctly, but reopening Course Setup from the world only knew how to find published course memberships or the in-memory draft session. After a refresh/day-later revisit, saved unpublished drafts looked lost because the composer opened a brand-new default record.
+  - Added authenticated draft lookup by selected room via `GET /api/courses/drafts/by-room/:roomId`, and CourseComposerScene now reopens the latest saved draft containing the selected room before falling back to a new draft.
+  - Verification: `./node_modules/.bin/tsc --noEmit` and `npm run build` passed in `/tmp/wamp-course-draft-discovery`.
+
+- March 26, 2026: cleaned up course-setup gating/messaging.
+  - The actual `Edit Course` gate was already title + rooms + saved setup only, but setup still leaked goal-dependent disabled reasons and actions, which made it look like choosing a goal was required before entering the editor.
+  - Course setup messaging now explicitly points goal-related blockers back to `Edit Course` instead of sounding like a setup prerequisite.
+  - Verification: `./node_modules/.bin/tsc --noEmit` and `npm run build` passed in `/tmp/wamp-course-draft-discovery`.
+
+## March 26, 2026 - Course Flow + Editor Refactor Integration
+
+- Integrated `origin/safety/course-draft-discovery-2026-03-26` onto the phase-6 editor refactor baseline.
+  - Kept the newer course-authoring model as the source of truth:
+    - `EditorCourseEditData` no longer carries `roomOrder`
+    - room-editor returns during course editing now route back to `CourseComposerScene`
+    - previous/next room controls in room-editor/course-editor now explicitly report that room order is no longer used
+  - Preserved the phase-5/6 seams instead of reintroducing older setup wiring:
+    - kept `EditorUiBridge`
+    - kept extracted editor controllers (`flow`, `presence`, `inspector`, `courseController`)
+    - adapted `CourseEditorScene` to the current `EditorUiBridge` action API
+  - Resolved the overlapping scene/setup merge points in:
+    - `src/scenes/EditorScene.ts`
+    - `src/scenes/editor/editRuntime.ts`
+    - `src/ui/setup.ts`
+    - `src/scenes/CourseEditorScene.ts`
+- Verification:
+  - `npm run build` passed in `/private/tmp/wamp-course-flow-editor-integration`
+  - focused browser probe against local dev + safety backend passed cleanly for:
+    - `CourseComposerScene -> EditorScene -> CourseComposerScene`
+    - `CourseComposerScene -> CourseEditorScene -> CourseComposerScene`
+  - no console errors or page errors in the probe
+  - artifacts:
+    - `output/web-game/course-flow-editor-integration-probe/summary.json`
+    - `output/web-game/course-flow-editor-integration-probe/course-composer.png`
+    - `output/web-game/course-flow-editor-integration-probe/course-editor.png`
+    - `output/web-game/course-flow-editor-integration-probe/composer-after-editor-return.png`
+
+- March 26, 2026: aligned course setup with editor-owned goal authoring.
+  - Removed stale setup-side goal editing and marker-placement plumbing from the course setup panel and scene bridge. `Course Setup` now treats goal state as read-only and leaves goal editing entirely to `Edit Course`.
+  - `Test Draft` and `Publish Course` remain visible in setup and use goal-blocked disabled reasons that explicitly send the user into `Edit Course`.
+  - Verified the intended flow locally against the safety backend:
+    - before setting a goal in `Edit Course`, setup reported `canPublishCourse: false` with the new editor-owned goal message
+    - after setting `defeat_all` in the course editor and returning to setup, setup reported `goalType: "defeat_all"` and `canPublishCourse: true`
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-course-flow-editor-integration`
+    - browser probe artifacts:
+      - `output/web-game/course-setup-goal-owner-probe/summary.json`
+      - `output/web-game/course-setup-goal-owner-probe/before-editor-goal.png`
+      - `output/web-game/course-setup-goal-owner-probe/course-editor-goal-set.png`
+      - `output/web-game/course-setup-goal-owner-probe/after-editor-return.png`
+
+- March 26, 2026: extracted editor persistence/status orchestration from `EditorScene`.
+  - Added `src/scenes/editor/persistence.ts` as the new persistence shell around `EditorRoomSession`.
+  - Moved dirty-state bookkeeping, title mutation, save/publish/revert wrappers, and mint/history passthroughs behind `EditorPersistenceController`.
+  - `EditorScene` now routes UI bridge save/publish/title actions and flow-controller save/publish calls through the new controller instead of carrying that room-session glue inline.
+  - `EditorScene.ts` is down to 1,641 lines after the cut.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-course-flow-editor-integration`
+    - skill smoke booted locally against the safety backend and produced `output/web-game/state-0.json`
+    - targeted browser probe opened `EditorScene` via the real overworld `openEditor(...)` path, changed the room title, and saved successfully:
+      - before: `roomDirty: false`, `statusText: "Claimed by jonathanmann."`
+      - after title change: `roomDirty: true`, `statusText: "Draft changes..."`
+      - after save: `roomDirty: false`, `statusText: "Draft saved locally. Sign in to publish."`
+    - probe artifacts:
+      - `output/web-game/editor-persistence-controller-probe/summary.json`
+      - `output/web-game/editor-persistence-controller-probe/editor-after-save.png`
+
+- March 26, 2026: extracted editor tool/clipboard orchestration from `EditorScene`.
+  - Added `src/scenes/editor/tools.ts` as the new shell for room-goal tool routing, clipboard preview state, copy/paste flow, tool switching side effects, and undo/redo delegation.
+  - `EditorScene` now routes UI bridge tool actions, keyboard tool shortcuts, and interaction-controller clipboard callbacks through `EditorToolController` instead of carrying that tool-state glue inline.
+  - `EditorScene.ts` is down to 1,479 lines after the cut.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-course-flow-editor-integration`
+    - skill smoke booted locally against the safety backend
+    - targeted browser probe opened `EditorScene` via the real overworld `openEditor(...)` path and exercised the new controller:
+      - copy selection on the first occupied terrain tile produced `clipboardPastePreviewActive: true`
+      - paste at an in-bounds target produced `roomDirty: true`, `canUndo: true`, and `statusText: "Pasted tile region. Click again to repeat, or press Esc to stop pasting."`
+      - switching back to `pencil` cleared the clipboard preview
+      - `undoAction()` / `redoAction()` toggled undo/redo availability as expected
+    - probe artifacts:
+      - `output/web-game/editor-tool-controller-probe/summary.json`
+      - `output/web-game/editor-tool-controller-probe/editor-after-tool-probe.png`
+
+- March 26, 2026: extracted the remaining editor overlay shell from `EditorScene`.
+  - Added `src/scenes/editor/overlays.ts` as `EditorOverlayController`.
+  - Moved grid, room border, layer-guide dots, pressure-plate/container overlay graphics, and layer-indicator text ownership out of `EditorScene`.
+  - `EditorScene` now delegates overlay creation/reset and per-frame overlay updates through the controller, and `EditorBackgroundController` camera-ignore wiring now reads overlay objects from that controller instead of scene-owned fields.
+  - `EditorScene.ts` is down to 1,255 lines after this cut.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-course-flow-editor-integration`
+    - required `develop-web-game` client smoke passed against local Vite dev pointed at the safety backend:
+      - `output/web-game/editor-overlay-shell-skill-smoke-canvas/state-0.json`
+      - `output/web-game/editor-overlay-shell-skill-smoke-canvas/shot-0.png`
+    - targeted browser probe forced entry into `EditorScene`, toggled `See Layers`, and confirmed the new controller owns the live overlays:
+      - grid overlay present at depth `95` with `396` draw commands
+      - border overlay present at depth `90` with `43` draw commands
+      - layer-guide overlay present at depth `97`
+      - layer-guide button switched to `Hide Layers` with `aria-pressed="true"`
+      - no console or page errors
+    - probe artifacts:
+      - `output/web-game/editor-overlay-controller-probe/summary.json`
+      - `output/web-game/editor-overlay-controller-probe/editor-after-overlay-probe-page.png`
+  - Note:
+    - direct canvas screenshots of the editor still come back black in this environment, so the overlay probe relied on state inspection plus a full-page screenshot rather than the raw canvas capture.
+
+- March 26, 2026: fixed lingering editor inspector chrome when returning to world.
+  - `EditorScene.handleShutdown()` now clears the inspector controller before tearing down the bridge.
+  - `EditorUiBridge.destroy()` now defensively hides the shared inspector root and its pressure/container panels.
+  - This fixes the case where a selected pressure-plate inspector could remain over the overworld HUD after `Back` / `returnToWorld()`.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-course-flow-editor-integration`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/editor-inspector-return-smoke/state-0.json`
+      - `output/web-game/editor-inspector-return-smoke/shot-0.png`
+    - targeted browser probe forced a visible inspector panel through `EditorUiBridge`, called `returnToWorld()`, and confirmed:
+      - before return: `#editor-inspector` was visible
+      - after return: `#editor-inspector` had the `hidden` class while `OverworldPlayScene` was active
+      - artifacts: `output/web-game/editor-inspector-return-probe/summary.json`, `output/web-game/editor-inspector-return-probe/after-return.png`
+  - Note:
+    - the targeted local probe still logged an unrelated editor room-load background error while booting a synthetic local room; it did not affect the inspector teardown assertion.
+
+- March 26, 2026: finished the last `EditorScene` chrome/render extraction pass for phase 6.
+  - Added `src/scenes/editor/chrome.ts` as `EditorChromeController`.
+  - Moved editor chrome/view-model composition out of `EditorScene`, including:
+    - publish-nudge text/action selection from auth state
+    - save-status selection from persistence state vs idle fallback
+    - final `buildEditorUiViewModel(...)` composition
+    - bridge render + inspector refresh sequencing
+  - `EditorScene.updateGoalUi()`, `updateBottomBar()`, and `renderEditorUi()` now delegate to the chrome controller instead of building view models inline.
+  - `EditorScene.ts` is down to 1,228 lines after this cut.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-course-flow-editor-integration`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/editor-chrome-controller-skill-smoke/state-0.json`
+      - `output/web-game/editor-chrome-controller-skill-smoke/shot-0.png`
+    - targeted browser probe opened the real editor path from `OverworldPlayScene` and confirmed:
+      - active scene switched to `editor`
+      - room chrome showed `Room (0, 0)` with `World` back label
+      - save status rendered `Claimed by jonathanmann.`
+      - no console or page errors
+      - artifacts: `output/web-game/editor-chrome-controller-probe/summary.json`, `output/web-game/editor-chrome-controller-probe/editor-open.png`
+  - Status:
+    - phase 6 is now complete on `safety/course-flow-editor-integration-2026-03-26`; the next maintainability branch should move to the overworld UI boundary work.
+
+- March 26, 2026: completed the phase-7 overworld UI boundary pass.
+  - Added `src/scenes/overworld/hudViewModel.ts` and moved overworld HUD/view-model composition out of `OverworldPlayScene`.
+  - `OverworldPlayScene.renderHud()` now delegates HUD string/tone/button state assembly through `buildOverworldHudViewModel(...)` instead of carrying the full selection/status/goal-panel composition inline.
+  - `src/scenes/overworld/hud.ts` now owns HUD-specific DOM event handling as well as rendering:
+    - world play / play-course / edit / build
+    - course-builder open
+    - world jump submit
+    - footer zoom buttons
+    - leaderboard / controls buttons
+    - fit-world button
+  - `src/ui/setup/sceneCommands.ts` now shrinks down to runtime wiring for those HUD actions plus the remaining non-HUD menu buttons (`About`, chat moderation).
+  - `OverworldPlayScene.ts` is down to 6,659 lines after this cut.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-ui-boundary`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-ui-boundary-skill-smoke/state-0.json`
+      - `output/web-game/overworld-ui-boundary-skill-smoke/shot-0.png`
+    - targeted browser probe clicked the real HUD controls and confirmed:
+      - leaderboard modal opened from `#btn-world-leaderboard`
+      - controls modal opened from `#btn-world-controls`
+      - zoom changed from `0.18` to `0.202` via `#btn-world-zoom-in-footer`
+      - warp changed selected/current room to `1,-4` via `#world-jump-input` + `#btn-world-jump`
+      - no console or page errors
+      - artifacts: `output/web-game/overworld-ui-boundary-probe/summary.json`, `output/web-game/overworld-ui-boundary-probe/after-jump.png`
+  - Status:
+    - phase 7 is complete on `safety/overworld-ui-boundary-2026-03-26`; the next maintainability branch should move to the overworld scene split work.
+
+- March 26, 2026: started the phase-8 overworld scene split with a scene-flow extraction.
+  - Added `src/scenes/overworld/flow.ts` with `OverworldSceneFlowController` to own the active overworld scene-transition cluster:
+    - fit-world zoom calculation
+    - browse/play room transitions
+    - return-to-world handling
+    - world build/edit entry
+    - course playback start
+    - course editor / course composer entry
+  - `OverworldPlayScene.ts` now instantiates that controller and delegates the moved flow methods instead of carrying those transition bodies inline.
+  - `OverworldPlayScene.ts` is down to 6,529 lines after this cut.
+  - Hardened `CourseComposerScene.renderUi()` so the setup HUD can render safely during the pre-camera frame when the composer opens from overworld flow.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-scene-flow-skill-smoke/state-0.json`
+      - `output/web-game/overworld-scene-flow-skill-smoke/shot-0.png`
+    - targeted browser probe exercised the real extracted flow paths and confirmed:
+      - `playSelectedRoom()` switched overworld from `browse` to `play`
+      - `returnToWorld()` restored `browse`
+      - opening `EditorScene` from overworld and backing out returned cleanly to overworld
+      - opening `CourseComposerScene` from overworld and backing out returned cleanly to overworld
+      - no console or page errors
+      - artifacts: `output/web-game/overworld-scene-flow-probe/summary.json`, `output/web-game/overworld-scene-flow-probe/overworld.png`, `output/web-game/overworld-scene-flow-probe/play.png`, `output/web-game/overworld-scene-flow-probe/editor.png`, `output/web-game/overworld-scene-flow-probe/course-composer.png`
+  - Status:
+    - phase 8 is underway on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming `OverworldPlayScene` by extracting another active subsystem boundary rather than touching dormant legacy course-composer state.
+
+- March 26, 2026: extracted the overworld inspect-input controller as the second phase-8 slice.
+  - Added `src/scenes/overworld/inspectInput.ts` with `OverworldInspectInputController` to own the active inspect/browse input boundary:
+    - `F` fit-world hotkey
+    - `P` / `Escape` return-to-world hotkeys while playing
+    - Alt/Space pan mode state
+    - mouse selection vs pan routing
+    - touch tap, drag, and pinch handling
+    - browse-window sync after pans
+  - `OverworldPlayScene.ts` now instantiates that controller, delegates the moved handlers, and resets/destroys the controller during overworld runtime teardown instead of storing those input booleans and touch maps inline.
+  - Replaced the old scene-local pointer selection method with a narrower `selectRoomCoordinates(...)` bridge so the input controller can stay focused on input translation and let the scene keep the downstream selection side effects.
+  - `OverworldPlayScene.ts` is down to 6,198 lines after this cut.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-inspect-input-skill-smoke/state-0.json`
+      - `output/web-game/overworld-inspect-input-skill-smoke/shot-0.png`
+    - targeted browser/controller probe confirmed the extracted input path still drives the expected state transitions:
+      - manual zoom changed from `0.18` to `0.252`
+      - `handleFitWorldKeydown()` reset zoom to `0.08`
+      - selection changed from `0,0` to `-1,-1`
+      - synthetic Alt-pan moved browse window center from `0,0` to `3,0`
+      - the real `#btn-world-play` flow still entered `play`
+      - `handleReturnToWorldKeydown()` restored `browse`
+      - no console or page errors
+      - artifacts: `output/web-game/overworld-inspect-input-probe/summary.json`, `output/web-game/overworld-inspect-input-probe/initial.png`, `output/web-game/overworld-inspect-input-probe/after-selection.png`, `output/web-game/overworld-inspect-input-probe/after-pan.png`
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming `OverworldPlayScene` by extracting another active overworld subsystem rather than touching dormant cleanup.
+
+- March 26, 2026: extracted the overworld selection controller as the third phase-8 slice.
+  - Added `src/scenes/overworld/selection.ts` with `OverworldSelectionController` to own the active room-selection and world-lookup boundary:
+    - selected published-course summary lookup
+    - room-coordinate lookup from world points
+    - room-origin lookup
+    - loaded-room snapshot lookup
+    - selected-cell state classification across published, draft, frontier, and empty rooms
+    - controller-driven room selection
+    - controller-driven jump-to-coordinates browse warp
+    - browse-window center sync after inspect pans
+  - `OverworldPlayScene.ts` now delegates those selection/world-lookup responsibilities through the controller instead of carrying them inline.
+  - `OverworldPlayScene.ts` is down to 6,171 lines after this cut.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-selection-skill-smoke/state-0.json`
+      - `output/web-game/overworld-selection-skill-smoke/shot-0.png`
+    - targeted browser/controller probe confirmed the extracted selection path still drives the expected state transitions:
+      - controller selection changed selected/current room from `0,0` to `-1,-1`
+      - the real `#btn-world-play` flow still entered `play`
+      - controller return restored `browse`
+      - controller jump changed selected/current/window center to `4,-4`
+      - jump target state before refresh was `frontier`
+      - no console or page errors
+      - artifacts: `output/web-game/overworld-selection-probe/summary.json`, `output/web-game/overworld-selection-probe/initial.png`, `output/web-game/overworld-selection-probe/after-selection.png`, `output/web-game/overworld-selection-probe/after-jump.png`
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming another active overworld subsystem from `OverworldPlayScene`.
+
+- March 27, 2026: extracted the overworld room-cell controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/roomCells.ts` with `OverworldRoomCellController` to own the base room-cell rendering shell:
+    - room fill coloring for draft/published/frontier/empty cells
+    - room border/highlight rendering for selected, current-play, and active-editor states
+    - active-course connected boundary outlines
+    - creation/destruction of the fill/frame graphics pair
+    - backdrop-ignore reporting for those two graphics layers
+  - `OverworldPlayScene.ts` now delegates room fill/frame graphics creation, redraw, backdrop ignore collection, and shutdown teardown through that controller instead of carrying `roomFillGraphics`, `roomFrameGraphics`, `drawCellFrame`, `drawActiveCourseBoundary`, and `getCellFillStyle` inline.
+  - This slice intentionally leaves the grid overlay in-scene; it only moved the room-cell fill/frame layer so the remaining scene shell keeps shrinking in clean visual chunks.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - default WebGL smoke state: `output/web-game/overworld-room-cell-skill-smoke/state-0.json`
+      - canvas smoke state + screenshot: `output/web-game/overworld-room-cell-skill-smoke-canvas/state-0.json`, `output/web-game/overworld-room-cell-skill-smoke-canvas/shot-0.png`
+      - note: the default headless WebGL smoke screenshot stayed black again in this environment, so I reran the smoke with `renderer=canvas` and visually verified that capture
+    - targeted browser/controller probe wrote:
+      - `output/web-game/overworld-room-cell-probe/summary.json`
+      - `output/web-game/overworld-room-cell-probe/browse-selected-room.png`
+      - `output/web-game/overworld-room-cell-probe/frontier-selected-room.png`
+      - `output/web-game/overworld-room-cell-probe/active-course-boundary.png`
+    - targeted probe confirmed:
+      - browse selection at `0,0` stayed `published` with `backdropIgnoredCount = 2` for the extracted fill/frame graphics pair
+      - selecting empty room `20,20` still updated the selected-room render path cleanly
+      - published course playback from `1,0` entered `play` with `activeCourseRoomCount = 3` and the extracted room-cell layer still reporting `backdropIgnoredCount = 2`
+      - no console errors or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next clean seam is the remaining selected-summary / HUD-state derivation block or the still in-scene grid overlay shell.
+
+- March 27, 2026: extracted the overworld grid-overlay controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/gridOverlay.ts` with `OverworldGridOverlayController` to own the inspect-mode room grid layer:
+    - grid graphics creation/destruction
+    - redraw against current camera worldView and zoom
+    - backdrop-ignore reporting for the grid graphics object
+  - `OverworldPlayScene.ts` now delegates grid overlay creation, redraw on update/resize/zoom, backdrop ignore collection, and shutdown teardown through that controller instead of carrying `roomGridGraphics` and `redrawGridOverlay()` inline.
+  - This slice intentionally leaves grid redraw call timing in-scene; it only moved the graphics ownership and drawing implementation so the scene continues shrinking in visual-layer chunks.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - default WebGL smoke state: `output/web-game/overworld-grid-overlay-skill-smoke/state-0.json`
+      - canvas smoke state + screenshot: `output/web-game/overworld-grid-overlay-skill-smoke-canvas/state-0.json`, `output/web-game/overworld-grid-overlay-skill-smoke-canvas/shot-0.png`
+      - note: the default headless WebGL smoke screenshot stayed black again in this environment, so I reran the smoke with `renderer=canvas` and visually verified that capture
+    - targeted browser/controller probe wrote:
+      - `output/web-game/overworld-grid-overlay-probe/summary.json`
+      - `output/web-game/overworld-grid-overlay-probe/grid-before-zoom.png`
+      - `output/web-game/overworld-grid-overlay-probe/grid-after-zoom.png`
+    - targeted probe confirmed:
+      - extracted controller reported `hasGridGraphics = true`
+      - backdrop ignore count stayed `1` for the single grid graphics object
+      - inspect zoom changed from `0.18` to `0.252` and the grid still redrew cleanly
+      - no console errors or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next clean seam is the remaining selected-summary / HUD-state derivation block, which is now the biggest non-render chunk still sitting in `OverworldPlayScene`.
+
+- March 27, 2026: extracted the overworld browse-overlay controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/browseOverlays.ts` with `OverworldBrowseOverlayController` to own the browse-only room overlay layer:
+    - semantic goal badges for published/draft rooms with room goals
+    - course badges for rooms that belong to published courses
+    - activity badges for rooms with active editors
+    - selected-room central play affordance visibility, placement, scaling, and click handling
+    - backdrop-ignore reporting for all browse overlay containers
+  - `OverworldPlayScene.ts` now delegates browse overlay creation, redraw, zoom scaling, and shutdown teardown through that controller instead of carrying the badge/play-affordance implementation inline.
+  - This slice deliberately keeps room selection, room state lookup, and room playback flow in their existing controllers; it only moves the browse overlay ownership/rendering boundary.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-browse-overlay-skill-smoke/state-0.json`
+      - `output/web-game/overworld-browse-overlay-skill-smoke/shot-0.png`
+    - targeted browser/controller probe wrote:
+      - `output/web-game/overworld-browse-overlay-probe/summary.json`
+      - `output/web-game/overworld-browse-overlay-probe/browse-badges.png`
+      - `output/web-game/overworld-browse-overlay-probe/frontier-selection.png`
+    - targeted probe confirmed:
+      - browse mode at `0,0` rendered `goalBadgeCount = 55` and `courseBadgeCount = 14`
+      - selected published room `0,0` showed the central play affordance with `selectedPlayVisible = true`
+      - forcing selection to empty room `20,20` hid the affordance with `selectedPlayVisible = false`
+      - no console errors or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming another active overworld subsystem from `OverworldPlayScene`, with world-summary/selected-summary state or the remaining room-frame/fill drawing shell as the cleanest next seams.
+
+- March 27, 2026: extracted the overworld presence-overlay controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/presenceOverlays.ts` with `OverworldPresenceOverlayController` to own the active presence-overlay rendering boundary:
+    - visible-room sampling for overlay placement
+    - browse-mode sampled presence dots
+    - play-mode remote room population pip markers
+    - browse-dot interpolation between presence snapshots
+    - overlay size scaling against zoom
+    - backdrop-ignore object reporting for those overlays
+  - `OverworldPlayScene.ts` now delegates overlay syncing, scaling, per-frame browse-dot updates, teardown, and presence ignore-object collection through that controller instead of carrying the overlay renderer inline.
+  - The existing `OverworldPresenceController` still owns networking, snapshot state, ghost rendering, and room/editor count data; this slice only moved the overlay-display layer sitting on top of it.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-presence-overlay-skill-smoke/state-0.json`
+      - `output/web-game/overworld-presence-overlay-skill-smoke/shot-0.png`
+    - targeted browser/controller probe used three separate browser contexts so presence identities were distinct and wrote:
+      - `output/web-game/overworld-presence-overlay-probe/summary.json`
+      - `output/web-game/overworld-presence-overlay-probe/browse-dots.png`
+      - `output/web-game/overworld-presence-overlay-probe/play-room-markers.png`
+    - targeted probe confirmed:
+      - browse page at `0,0` started with `browseDotCount = 0`
+      - after two remote play clients entered `0,0` and `1,0`, browse page rose to `browseDotCount = 2`
+      - both play pages reported `playRoomMarkerCount = 1`
+      - all three pages stayed free of console errors and page errors
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming another active overworld subsystem from `OverworldPlayScene`, with badge rendering or room-goal marker composition as the most likely next boundaries.
+
+- March 27, 2026: extracted the overworld goal-marker controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/goalMarkers.ts` with `OverworldGoalMarkerController` to own the active goal-marker display boundary:
+    - room-goal marker composition for practice and ranked room runs
+    - course-goal marker composition for active course runs
+    - world-point conversion for room goal points and course marker points
+    - marker sprite/label lifecycle and teardown
+    - backdrop-ignore object reporting for marker overlays
+  - `OverworldPlayScene.ts` now delegates goal-marker redraws, world-point conversion wrappers, backdrop ignore collection, and shutdown cleanup through that controller instead of carrying the marker-display block inline.
+  - This slice keeps `OverworldPlayScene` method names stable for active goal/course runtime call sites; it only moved the marker composition and overlay ownership layer.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-goal-marker-skill-smoke/state-0.json`
+      - `output/web-game/overworld-goal-marker-skill-smoke/shot-0.png`
+    - targeted browser probe wrote:
+      - `output/web-game/overworld-goal-marker-probe/summary.json`
+      - `output/web-game/overworld-goal-marker-probe/room-goal-markers.png`
+      - `output/web-game/overworld-goal-marker-probe/course-goal-markers.png`
+    - targeted probe confirmed:
+      - room play at `-4,-2` entered `play` with `spriteCount = 1` and the expected `goal-marker-flag-checkered` finish flag
+      - course play at `1,0` entered `play` with `spriteCount = 3`, label texts `S` and `1`, and red/checkered course markers
+      - no page errors were recorded during the room or course flows
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming another active overworld subsystem from `OverworldPlayScene`.
+
+- March 27, 2026: extracted the overworld HUD-state controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/hudState.ts` with `OverworldHudStateController` to own the selected-summary / selected-course / HUD-state boundary:
+    - selected published-room summary cache for the current selection
+    - selected published-course context derivation from that summary
+    - selected-room context assembly for external callers
+    - browse/play HUD view-model assembly and overlay-scale sync
+    - timer/progress/badge formatting helpers that were previously embedded in `OverworldPlayScene.ts`
+  - `OverworldPlayScene.ts` now delegates selected-summary refresh/reset, selected-course lookups, selected-room context, and HUD rendering through that controller instead of carrying the summary cache and `buildOverworldHudViewModel(...)` assembly inline.
+  - `src/scenes/overworld/selection.ts` no longer owns the duplicate `SelectedCourseContext` type or course-context derivation; it stays focused on room selection and browse-camera coordination.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-hud-state-skill-smoke/state-0.json`
+      - `output/web-game/overworld-hud-state-skill-smoke/shot-0.png`
+    - targeted browser probe wrote:
+      - `output/web-game/overworld-hud-state-probe/summary.json`
+      - `output/web-game/overworld-hud-state-probe/published-0-0.png`
+      - `output/web-game/overworld-hud-state-probe/course-1-0.png`
+      - `output/web-game/overworld-hud-state-probe/frontier-20-20.png`
+    - targeted probe confirmed:
+      - published room `0,0` stayed `selectedState = published` with HUD title `Hello World`, no course metadata, and `Play Course` hidden
+      - course room `1,0` stayed `selectedState = published` with HUD title `Wizzy's Tower - LVL 1`, course meta text (`Part of course: Wizzy's Tower · Checkpoint Sprint course · Collect Target challenge`), and `Play Course` visible/enabled
+      - empty room `20,20` stayed `selectedState = empty` with HUD copy `You can only build next to an existing published room` and `Play Room` disabled
+      - no console errors or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming another active overworld subsystem from `OverworldPlayScene`, with the remaining browse/play scene shell and per-mode runtime orchestration as the cleanest next seams.
+
+- March 27, 2026: extracted the overworld camera controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/cameraController.ts` with `OverworldCameraController` to own the active camera-mode boundary:
+    - world-window bounds application
+    - browse/play camera bounds usage
+    - follow/inspect mode switching in play
+    - room-centering for browse selection changes
+    - fit-zoom calculation for room framing
+    - inspect-camera constraint after manual/browse camera moves
+    - follow-camera startup using the existing mobile follow-offset helper
+  - `OverworldPlayScene.ts` now delegates `updateCameraBounds`, `toggleCameraMode`, `applyCameraMode`, `centerCameraOnCoordinates`, `startFollowCamera`, `constrainInspectCamera`, `getFitZoomForRoom`, and `syncCameraBoundsUsage` through that controller instead of carrying the camera shell inline.
+  - This slice intentionally does not move player spawn/combat/runtime logic; it only peels the camera/mode shell away from the larger browse/play runtime cluster so the next phase-8 extraction can target that cluster cleanly.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-camera-controller-skill-smoke/state-0.json`
+      - `output/web-game/overworld-camera-controller-skill-smoke/shot-0.png`
+    - targeted browser probe wrote:
+      - `output/web-game/overworld-camera-controller-probe/summary.json`
+      - `output/web-game/overworld-camera-controller-probe/browse-before.png`
+      - `output/web-game/overworld-camera-controller-probe/browse-after-fit.png`
+      - `output/web-game/overworld-camera-controller-probe/play-before-resize.png`
+      - `output/web-game/overworld-camera-controller-probe/play-after-resize.png`
+      - `output/web-game/overworld-camera-controller-probe/browse-after-return.png`
+    - targeted probe confirmed:
+      - browse at `0,0` stayed `mode = browse`, `cameraMode = inspect`, and `zoom = 0.18`
+      - `Fit` changed browse zoom from `0.18` to `0.08` while keeping the same selected room and window center
+      - `Play Room` entered `mode = play` with `cameraMode = follow` and zoom `1.975`
+      - viewport resize during play kept `mode = play`, `cameraMode = follow`, and the same current/selected room
+      - `Stop` returned to `mode = browse`, `cameraMode = inspect`, and kept the fitted browse zoom with no console or page errors
+    - the generic smoke screenshot was still black in headless canvas mode even though `state-0.json` showed healthy runtime state; the targeted probe screenshots rendered correctly and were used as the visual source of truth for this slice.
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining browse/play runtime shell, especially player lifecycle and per-mode collider/runtime sync.
+
+- March 27, 2026: extracted the overworld runtime controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/runtimeController.ts` with `OverworldRuntimeController` to own the active browse/play runtime shell around room colliders and edge walls:
+    - mode-runtime orchestration for browse vs play
+    - missing-current-room fallback back to browse
+    - play-entry respawn gating
+    - single-room goal-run sync on room entry
+    - room terrain collider sync for the current player
+    - live-object interaction sync for loaded full rooms
+    - play-mode edge-wall sync and neighbor reachability checks
+  - `OverworldPlayScene.ts` now delegates `syncModeRuntime`, `syncFullRoomColliders`, `syncLiveObjectInteractions`, `syncEdgeWalls`, and room-transition reachability checks through that controller instead of carrying the runtime shell inline.
+  - This slice intentionally leaves player construction/destruction details, combat, wall-slide state, and run-resolution logic in `OverworldPlayScene.ts`; it only moves the orchestration layer that sits above those systems.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev pointed at the safety backend:
+      - `output/web-game/overworld-runtime-controller-skill-smoke/state-0.json`
+      - `output/web-game/overworld-runtime-controller-skill-smoke/shot-0.png`
+    - targeted browser probe wrote:
+      - `output/web-game/overworld-runtime-controller-probe/summary.json`
+      - `output/web-game/overworld-runtime-controller-probe/browse-before.png`
+      - `output/web-game/overworld-runtime-controller-probe/play-running.png`
+      - `output/web-game/overworld-runtime-controller-probe/browse-after-stop.png`
+    - targeted probe confirmed:
+      - browse at `0,0` stayed `mode = browse`, `cameraMode = inspect`, and `player = null`
+      - `Play Room` entered `mode = play`, `cameraMode = follow`, spawned the player at `328,297`, and started the active checkpoint-sprint goal run for room `0,0`
+      - `Stop` returned to `mode = browse`, `cameraMode = inspect`, `player = null`, and `goalRun = null`
+      - no console errors or page errors were recorded
+    - the generic smoke screenshot still rendered as a sparse starfield even though `state-0.json` showed published rooms loaded from the safety backend; the targeted probe screenshots rendered correctly and were used as the visual source of truth for this slice.
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining player lifecycle shell, especially create/destroy/reset and the room-reset path around deaths and single-room challenge resets.
+
+- March 27, 2026: extracted the overworld player-lifecycle controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/playerLifecycle.ts` with `OverworldPlayerLifecycleController` to own the raw player-entity lifecycle boundary:
+    - spawn-point selection for normal rooms vs course start points
+    - Phaser rectangle/body/sensor/sprite creation for the player
+    - loaded-room collider/interaction teardown during player destruction
+    - raw respawn repositioning/reset of the active player body
+  - `OverworldPlayScene.ts` now delegates `createPlayer`, `destroyPlayer`, and the raw respawn step inside `respawnPlayerToCurrentRoom()` through that controller instead of carrying the entity-construction block inline.
+  - This slice intentionally leaves combat, wall-slide state, ladder state, animation-state selection, and goal/death resolution in `OverworldPlayScene.ts`; it only moves the entity lifecycle and spawn-selection shell.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev pointed at the safety backend:
+      - `output/web-game/overworld-player-lifecycle-skill-smoke/state-0.json`
+      - `output/web-game/overworld-player-lifecycle-skill-smoke/shot-0.png`
+    - targeted browser probe wrote:
+      - `output/web-game/overworld-player-lifecycle-probe/summary.json`
+      - `output/web-game/overworld-player-lifecycle-probe/browse-before.png`
+      - `output/web-game/overworld-player-lifecycle-probe/play-running.png`
+      - `output/web-game/overworld-player-lifecycle-probe/after-respawn.png`
+      - `output/web-game/overworld-player-lifecycle-probe/browse-after-stop.png`
+    - targeted probe confirmed:
+      - browse at `0,0` stayed `mode = browse`, `cameraMode = inspect`, and `player = null`
+      - `Play Room` entered `mode = play`, `cameraMode = follow`, and spawned the player at `328,297`
+      - direct `respawnPlayerToCurrentRoom()` from the scene kept `mode = play`, preserved the active goal run, and restored the player to the same `328,297` spawn with zero velocity
+      - `Stop` returned to `mode = browse`, `cameraMode = inspect`, `player = null`, and `goalRun = null`
+      - no console errors or page errors were recorded
+    - the generic smoke screenshot was black again in headless canvas mode even though `state-0.json` showed a healthy published-room browse state from the safety backend; the targeted probe screenshots rendered correctly and were used as the visual source of truth for this slice.
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target play-session reset and death/reset orchestration around single-room challenge resets and course-run abandonment.
+
+- March 27, 2026: extracted the overworld session-reset controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/sessionReset.ts` with `OverworldSessionResetController` to own the play-session reset/death-reset orchestration boundary:
+    - player-death handling for normal rooms, survival rooms, and survival courses
+    - full play-session teardown/reset when entering play, stopping play, or abandoning an unpublished active course
+    - single-room challenge-state resets for qualification start and room exits
+  - `OverworldPlayScene.ts` now delegates `handlePlayerDeath`, `resetPlaySession`, current-run challenge resets, and room-exit challenge resets through that controller instead of carrying the reset shell inline.
+  - Kept the low-level room rebuild and transient player-state clearing in scene helpers (`resetRoomChallengeState`, `resetTransientPlayState`) so this slice only moves the orchestration layer and does not mix in combat or movement-state logic.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev pointed at the safety backend:
+      - `output/web-game/overworld-session-reset-skill-smoke/state-0.json`
+      - `output/web-game/overworld-session-reset-skill-smoke/shot-0.png`
+    - targeted browser probe wrote:
+      - `output/web-game/overworld-session-reset-probe/summary.json`
+      - `output/web-game/overworld-session-reset-probe/browse-before.png`
+      - `output/web-game/overworld-session-reset-probe/play-before-death.png`
+      - `output/web-game/overworld-session-reset-probe/play-after-death.png`
+      - `output/web-game/overworld-session-reset-probe/browse-after-stop.png`
+    - targeted probe confirmed:
+      - browse at `0,0` stayed `mode = browse`, `cameraMode = inspect`, and `player = null`
+      - `Play Room` entered `mode = play`, `cameraMode = follow`, spawned the player at `328,297`, and started the qualified single-room run for `0,0`
+      - direct `sessionResetController.handlePlayerDeath('Probe death.')` kept the scene in `play`, respawned the player back to `328,297`, and incremented single-room deaths `0 -> 1`
+      - `Stop` returned to `mode = browse`, `cameraMode = inspect`, `player = null`, and `goalRun = null`
+      - no console errors or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining play-state shell, most likely combat / attack-state orchestration and the player movement-state block.
+
+- March 27, 2026: extracted the overworld combat controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/combatController.ts` with `OverworldCombatController` to own the player attack shell:
+    - sword / gun input dispatch
+    - attack animation and cooldown state
+    - sword hitbox resolution against live enemies
+    - gun projectile spawn, travel, collision, and teardown
+    - projectile-backed backdrop-ignore objects
+  - `OverworldPlayScene.ts` now delegates combat input, projectile updates, attack animation queries, cooldown debug state, and projectile teardown through that controller instead of carrying the full combat block inline.
+  - Kept movement-owned knockback timing (`weaponKnockbackVelocityX`, `weaponKnockbackUntil`) in `OverworldPlayScene.ts` on purpose so this slice does not mix combat extraction with the next movement-state extraction.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev pointed at the safety backend:
+      - `output/web-game/overworld-combat-controller-skill-smoke/state-0.json`
+      - `output/web-game/overworld-combat-controller-skill-smoke/shot-0.png`
+    - targeted browser probe wrote:
+      - `output/web-game/overworld-combat-controller-probe/summary.json`
+      - `output/web-game/overworld-combat-controller-probe/play-start.png`
+      - `output/web-game/overworld-combat-controller-probe/after-sword.png`
+      - `output/web-game/overworld-combat-controller-probe/after-gun.png`
+      - `output/web-game/overworld-combat-controller-probe/browse-after-stop.png`
+    - targeted probe confirmed:
+      - `Play Room` entered `play` with player spawn at `328,297` and idle combat state
+      - direct sword input set `combat.activeAttackAnimation = sword-slash`, raised `meleeCooldownMs` to about `195`, and switched the player animation to `sword-slash`
+      - direct gun input set `combat.activeAttackAnimation = gun-fire`, raised `rangedCooldownMs` to about `226`, spawned `projectileCount = 1`, and applied recoil `velocityX = -44`
+      - after projectile lifetime elapsed, `projectileCount` returned to `0`
+      - `Stop` returned to `browse` with `player = null`, zero cooldowns, and zero projectiles
+      - no console errors or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining player movement-state shell, especially wall-slide / wall-jump / ladder / crate movement orchestration.
+
+- March 27, 2026: extracted the overworld movement controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/movementController.ts` with `OverworldMovementController` to own the player movement-state shell:
+    - ladder attach / detach state
+    - crouch / stand-up hitbox sync
+    - crate push / pull interaction detection and movement
+    - coyote-time, jump-buffer, jump, wall-slide, and wall-jump orchestration
+    - ladder-climb SFX toggling
+    - movement-state resets on no-player, spawn, respawn, destroy, and transient play resets
+  - `OverworldPlayScene.ts` now delegates the per-frame movement block plus the old wall / ladder / crate helper cluster through that controller instead of carrying the whole movement shell inline.
+  - Kept the shared movement flags (`isCrouching`, wall state, ladder state, crate interaction state, weapon knockback timing) stored on `OverworldPlayScene.ts` for now via a state binding object so this slice gets a real boundary win without forcing a bigger state-model rewrite in the same commit.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev pointed at the safety backend:
+      - `output/web-game/overworld-movement-controller-skill-smoke/state-0.json`
+      - `output/web-game/overworld-movement-controller-skill-smoke/shot-0.png`
+    - focused movement probe wrote:
+      - `output/web-game/overworld-movement-controller-probe/summary.json`
+      - `output/web-game/overworld-movement-controller-probe/jump-start.png`
+      - `output/web-game/overworld-movement-controller-probe/jump-state.png`
+      - `output/web-game/overworld-movement-controller-probe/ladder-start.png`
+      - `output/web-game/overworld-movement-controller-probe/ladder-probe.png`
+      - `output/web-game/overworld-movement-controller-probe/crate-start.png`
+      - `output/web-game/overworld-movement-controller-probe/crate-probe.png`
+    - extra canvas-focus jump check wrote:
+      - `output/web-game/overworld-movement-focus-check/summary.json`
+      - `output/web-game/overworld-movement-focus-check/jump-focus.png`
+    - targeted checks confirmed:
+      - crouch and crawl still flip correctly in `Pressure Paradisssse` (`-4,-2`): player state changed from `crouching = false` / `animation = idle` to `crouching = true` / `animation = crouch`, then to `animation = crawl` with `velocityX = 70`
+      - a canvas-focused jump check in room `1,-5` still raised `player.velocityY` from `0` to `-280`
+      - no new console or page errors were recorded in the kept artifacts
+    - note:
+      - headless ladder-path probing remained awkward because keyboard focus initially stays in the HUD after clicking `Play Room`; the extra canvas-focus check proved movement input still reaches the scene, and ladder / wall-slide feel should still get one quick sanity pass on the live preview before calling phase 8 complete.
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining player-play shell, likely the movement-adjacent visual/state glue that is still left inline in `OverworldPlayScene.ts`, then evaluate whether phase 8 is done or needs one final consolidation pass before phase 9.
+
+- March 27, 2026: extracted the overworld player-presentation controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/playerPresentation.ts` with `OverworldPlayerPresentationController` to own the remaining player presentation shell:
+    - pickup-sensor sync
+    - sprite positioning against the collision body and quicksand sink
+    - facing selection from wall-slide / crate interaction / movement velocity
+    - landing dust trigger + landing animation timing
+    - animation-state selection for idle / run / crouch / crawl / jump / wall / ladder / crate / attack cases
+    - presentation-state resets for scene reset, create, destroy, respawn, and transient play reset paths
+  - `OverworldPlayScene.ts` now binds the small presentation state bundle (`playerAnimationState`, `playerFacing`, `playerWasGrounded`, `playerLandAnimationUntil`) into that controller and delegates the old inline presentation methods through it instead of carrying the logic directly.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke wrote:
+      - `output/web-game/overworld-player-presentation-skill-smoke/state-0.json`
+      - `output/web-game/overworld-player-presentation-skill-smoke/shot-0.png`
+    - focused browser probe wrote:
+      - `output/web-game/overworld-player-presentation-probe/summary.json`
+      - `output/web-game/overworld-player-presentation-probe/idle.png`
+      - `output/web-game/overworld-player-presentation-probe/run-right.png`
+      - `output/web-game/overworld-player-presentation-probe/run-left.png`
+      - `output/web-game/overworld-player-presentation-probe/jump.png`
+    - targeted checks confirmed:
+      - in room `1,-5`, play-mode state stayed `idle` at rest
+      - holding right changed the player state to `animation = run`, `facing = 1`, `velocityX = 150`
+      - holding left changed the player state to `animation = run`, `facing = -1`, `velocityX = -150`
+      - no console or page errors were recorded in the kept artifacts
+    - note:
+      - the focused presentation probe is strongest on the controller-owned run/facing transitions; jump behavior remains covered by the prior movement slice’s canvas-focus check and should still get one quick live-preview sanity pass before calling phase 8 done.
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining room-transition / goal-run gameplay shell in `OverworldPlayScene.ts`, then reassess whether phase 8 needs one final consolidation pass.
+
+- March 27, 2026: extracted the overworld objective controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/objectiveController.ts` with `OverworldObjectiveController` to own the remaining goal-run / course-run gameplay shell:
+    - room goal qualification + per-frame goal ticking
+    - `reach_exit` / `checkpoint_sprint` goal completion checks
+    - course-run ticking and terminal mutation handling
+    - goal-run mutation side effects (challenge reset, transient status, goal FX, goal-marker redraws)
+    - course-run completion/failure side effects
+    - enemy-defeat / collectible-collected progression hooks
+    - public restart/fail entry points used by runtime/session-reset orchestration
+  - `OverworldPlayScene.ts` now delegates all of the old inline goal/course mutation cluster through that controller instead of owning it directly, including the runtime `update(...)` path, session-reset restart/fail hooks, and live-object callbacks.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke wrote:
+      - `output/web-game/overworld-objective-controller-skill-smoke/state-0.json`
+      - `output/web-game/overworld-objective-controller-skill-smoke/shot-0.png`
+    - focused browser probe wrote:
+      - `output/web-game/overworld-objective-controller-probe/summary.json`
+      - `output/web-game/overworld-objective-controller-probe/before-fail.png`
+      - `output/web-game/overworld-objective-controller-probe/after-fail.png`
+      - `output/web-game/overworld-objective-controller-probe/after-restart.png`
+    - targeted checks confirmed in published room `-4,-2`:
+      - entering play produced an active qualified `reach_exit` run
+      - driving `objectiveController.failGoalRun('Probe fail.')` flipped the run to `result = 'failed'`
+      - driving `objectiveController.restartGoalRunForRoom(room, 'respawn')` restored a fresh active run with `elapsedMs = 0`
+      - no console or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next clean seam is the remaining room-transition shell (`maybeAdvancePlayerRoom` / transition blocking) before deciding whether phase 8 only needs a final consolidation pass.
+
+- March 27, 2026: extracted the overworld room-transition controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/roomTransition.ts` with `OverworldRoomTransitionController` to own the remaining room-transition shell:
+    - per-frame `maybeAdvancePlayerRoom()` orchestration
+    - neighbor reachability checks for active play mode
+    - blocked-transition clamping back inside the current room
+    - successful room-entry coordination for current/selected room, goal-run sync, leaderboard refresh, and chunk refresh
+  - `OverworldPlayScene.ts` now delegates the old inline transition block through that controller instead of carrying `maybeAdvancePlayerRoom`, `shouldBlockRoomTransition`, `isNeighborReachableInCurrentPlayMode`, and `blockRoomTransition` directly.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke wrote:
+      - `output/web-game/overworld-room-transition-skill-smoke/state-3.json`
+      - `output/web-game/overworld-room-transition-skill-smoke/shot-3.png`
+    - focused canvas probe wrote:
+      - `output/web-game/overworld-room-transition-probe/summary.json`
+      - `output/web-game/overworld-room-transition-probe/before-transition.png`
+      - `output/web-game/overworld-room-transition-probe/after-blocked-transition.png`
+      - `output/web-game/overworld-room-transition-probe/after-successful-transition.png`
+    - targeted checks confirmed:
+      - a published probe room at `0,-3` had both a reachable right neighbor (`1,-3`) and a blocked left neighbor (`-1,-3`)
+      - forcing the player into the blocked left neighbor kept `currentRoom` and `selected` at `0,-3` and clamped the player back inside the current room (`playerRoomAfter = 0,-3`)
+      - forcing the player into the reachable right neighbor advanced both `currentRoom` and `selected` to `1,-3`
+      - no console or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next large remaining seam is the course-composer state/navigation block that still lives in `OverworldPlayScene.ts`.
+
+- March 27, 2026: extracted the overworld course-composer controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/courseComposer.ts` with `OverworldCourseComposerController` to own the remaining overworld-side course-composer state/navigation block:
+    - active draft record/session sync from `draftSession`
+    - composer state assembly for the HUD bridge
+    - selected-room membership / eligibility refresh against published room metadata
+    - course-room add/remove/reorder mutations
+    - draft test/save/publish/unpublish actions
+    - room-editor handoff and previous/next course-room navigation after editor returns
+  - `OverworldPlayScene.ts` now delegates the old inline course-composer helpers and bridge methods through that controller instead of carrying:
+    - composer draft/session bookkeeping
+    - save/publish/unpublish status text and disabled-reason derivation
+    - selected-room eligibility / metadata loading
+    - course-room edit and next/previous navigation glue
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke wrote:
+      - `output/web-game/overworld-course-composer-controller-skill-smoke/state-0.json`
+      - `output/web-game/overworld-course-composer-controller-skill-smoke/shot-0.png`
+    - focused browser probe wrote:
+      - `output/web-game/overworld-course-composer-controller-probe/summary.json`
+      - `output/web-game/overworld-course-composer-controller-probe/before-composer-nav.png`
+      - `output/web-game/overworld-course-composer-controller-probe/after-composer-nav.png`
+    - targeted checks confirmed:
+      - a seeded two-room draft (`0,0` -> `-4,-2`) produced a valid composer state with `selectedRoomId = 0,0`
+      - driving `continueCourseEditorNavigation(1)` through the extracted controller moved the active draft selection to `-4,-2`
+      - the controller reopened `EditorScene` for `-4,-2`, with `courseEdit = { courseId: 'probe-course-composer-controller', roomId: '-4,-2' }`
+      - `OverworldPlayScene` slept cleanly while `EditorScene` became the active scene
+      - no console or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the remaining work is now mostly final consolidation / whatever small runtime shell still justifies one more extraction before we call phase 8 complete.
+
+- March 27, 2026: extracted the overworld window controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/windowController.ts` with `OverworldWindowController` to own the remaining world-refresh / wake-data shell:
+    - scene wake/apply-data orchestration
+    - course-edited-room return hydration into the active draft session
+    - forced chunk-window refresh flow
+    - periodic visible-chunk refresh cadence
+    - shared success/failure handling for world loads, HUD redraw, and app-ready state
+  - `OverworldPlayScene.ts` now delegates the old inline shell through that controller instead of carrying:
+    - `handleWakeAsync`
+    - `applySceneData`
+    - `applyCourseEditedRoomReturn`
+    - `refreshAround`
+    - `refreshChunkWindowIfNeeded`
+    - `maybeRefreshVisibleChunks`
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke wrote:
+      - `output/web-game/overworld-window-controller-skill-smoke/state-0.json`
+      - `output/web-game/overworld-window-controller-skill-smoke/shot-0.png`
+    - focused browser probe wrote:
+      - `output/web-game/overworld-window-controller-probe/summary.json`
+      - `output/web-game/overworld-window-controller-probe/before-wake-refresh.png`
+      - `output/web-game/overworld-window-controller-probe/after-wake-refresh.png`
+    - targeted checks confirmed:
+      - waking the scene with `courseEditedRoom` + `draftRoom` updated the active draft session room title to `Probe Window Title`
+      - a forced browse wake to `-4,-2` refreshed the world and left `selected`, `currentRoom`, and `windowCenter` all at `-4,-2`
+      - the overworld remained the active scene after the forced refresh
+      - loading text was hidden again after refresh completion
+      - no console or page errors were recorded
+  - Status:
+    - phase 8 is very close to complete on `safety/overworld-scene-split-2026-03-26`; what remains is basically final consolidation and deciding whether one more small shell extraction is worth it before calling the phase done.
+
+- March 27, 2026: extracted the overworld viewport controller as the final phase-8 slice.
+  - Added `src/scenes/overworld/viewportController.ts` with `OverworldViewportController` to own the remaining viewport shell:
+    - canvas wheel zoom input
+    - button zoom in/out
+    - zoom-anchor preservation across inspect/follow modes
+    - zoom-debug overlay creation, resize, teardown, and `window.get_zoom_debug`
+  - `OverworldPlayScene.ts` now delegates the old inline shell through that controller instead of carrying:
+    - `handleCanvasWheel`
+    - `handleWheelZoom`
+    - `adjustButtonZoom`
+    - `adjustZoomByFactor`
+    - `getScreenAnchorWorldPoint`
+    - `getScrollForScreenAnchor`
+    - `setupZoomDebug`
+    - `updateZoomDebugOverlay`
+    - `recordZoomDebug`
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke wrote:
+      - `output/web-game/overworld-viewport-controller-skill-smoke/state-0.json`
+      - `output/web-game/overworld-viewport-controller-skill-smoke/shot-0.png`
+    - focused browser probe wrote:
+      - `output/web-game/overworld-viewport-controller-probe/summary.json`
+      - `output/web-game/overworld-viewport-controller-probe/before-zoom.png`
+      - `output/web-game/overworld-viewport-controller-probe/after-button-zoom.png`
+      - `output/web-game/overworld-viewport-controller-probe/after-wheel-zoom.png`
+    - targeted checks confirmed:
+      - button zoom still changed inspect zoom from `0.18` to `0.202`
+      - the extracted wheel path advanced zoom from `0.202` to `0.218`
+      - `window.get_zoom_debug()` returned the expected wheel payload including `selected`, `currentRoom`, and updated scroll values
+      - no console or page errors were recorded
+    - note:
+      - synthetic DOM `mouse.wheel()` / `dispatchEvent()` paths were flaky in headless here, so the focused probe invoked the extracted controller handler directly inside the page to verify the controller-owned wheel/debug path deterministically
+  - Status:
+    - phase 8 is complete on `safety/overworld-scene-split-2026-03-26`
+    - next planned phase is phase 9: secondary monoliths + repo hygiene
+
+- March 27, 2026: started phase 9 by removing stale course navigation affordances that no longer match the live course-authoring flow.
+  - Removed old course-setup reorder state and dead editor-navigation compatibility paths:
+    - deleted `selectedRoomOrder`, reorder affordance state, and `courseEditorNavigateOffset` from the shared bridge/data layer
+    - removed `move earlier` / `move later` course setup buttons and related copy from `index.html` and `src/ui/setup/courseModal.ts`
+    - removed dead overworld-side compatibility methods from `OverworldPlayScene.ts`, `src/scenes/overworld/courseComposer.ts`, `src/scenes/overworld/windowController.ts`, and `src/courses/draftSession.ts`
+  - Removed unused dedicated course-editor previous/next room affordances:
+    - deleted `Previous Room` / `Next Room` buttons from `index.html`
+    - removed previous/next button bindings and capability flags from `src/scenes/editor/uiBridge.ts`, `src/scenes/editor/viewModel.ts`, `src/scenes/EditorScene.ts`, `src/scenes/CourseEditorScene.ts`, `src/scenes/editor/flow.ts`, `src/scenes/editor/courseEditing.ts`, and `src/ui/setup/sceneBridge.ts`
+  - Updated course setup copy to reflect the real flow:
+    - selected room copy now points to `Edit Selected Room` instead of reorder actions
+    - room-list copy now talks about the listed path rather than authored order
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-phase9-hygiene`
+    - required `develop-web-game` client smoke wrote:
+      - `output/web-game/phase9-course-affordance-skill-smoke/state-0.json`
+      - `output/web-game/phase9-course-affordance-skill-smoke/shot-0.png`
+    - focused browser probe wrote:
+      - `output/web-game/phase9-course-affordance-probe/summary.json`
+      - `output/web-game/phase9-course-affordance-probe/course-composer.png`
+    - targeted checks confirmed:
+      - `btn-course-move-selected-earlier`, `btn-course-move-selected-later`, `btn-course-editor-previous-room`, and `btn-course-editor-next-room` are absent from the DOM
+      - `OverworldPlayScene.openCourseComposer()` still enters `CourseComposerScene`
+      - `body[data-app-mode]` flips to `course-composer`, the course setup shell is visible, and no console or page errors were recorded
+  - Status:
+    - this is the first phase-9 slice on `safety/secondary-monoliths-and-hygiene-2026-03-27`
+    - next likely cleanup target is the worker-admin monolith in `src/cloudflare/worker/admin/suspicious.ts`
+
+- March 27, 2026: split suspicious invalidation/audit handling out of the worker-admin monolith.
+  - Added `src/cloudflare/worker/admin/suspiciousInvalidation.ts` to own the suspicious invalidation subsystem:
+    - preview and execute handlers
+    - recent audit loading
+    - invalidation preview selection/query helpers
+    - invalidation body parsing and audit/point-event mapping helpers
+  - Trimmed `src/cloudflare/worker/admin/suspicious.ts` down to the suspicious-analysis side:
+    - re-exported invalidate handlers from the new module
+    - imported `loadRecentInvalidations(...)` from the new module for summary/detail responses
+    - removed the old inline invalidation, audit, and body-parsing block
+  - Result:
+    - `src/cloudflare/worker/admin/suspicious.ts` dropped from 2,079 lines to 1,355 lines
+    - the extracted invalidation/audit subsystem now lives in a dedicated 786-line module
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-phase9-hygiene`
+    - note:
+      - this clean safety worktree needed a temporary symlink to the main repo `node_modules` to run the build, and that symlink was removed afterward so git state stayed clean
+  - Status:
+    - phase 9 slice 2 is the worker-admin invalidation split
+    - next likely cleanup target is the remaining suspicious-analysis block in `src/cloudflare/worker/admin/suspicious.ts`, or repo hygiene around `progress.md` / stale docs once that feels good enough

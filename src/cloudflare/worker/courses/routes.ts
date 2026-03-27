@@ -51,6 +51,7 @@ import {
 } from '../runs/points';
 import {
   createCourseDraft,
+  loadLatestEditableDraftCourseForRoom,
   loadCourseRecord,
   loadPublishedCourse,
   publishCourse,
@@ -100,6 +101,31 @@ export async function handleCourseGet(
   }
 
   return jsonResponse(request, sanitizeCourseRecordForPublicRead(record));
+}
+
+export async function handleCourseDraftByRoomLookup(
+  request: Request,
+  env: Env,
+  roomId: string
+): Promise<Response> {
+  const auth = await requireAuthenticatedRequestAuth(
+    env,
+    request,
+    'load editable course drafts',
+    'rooms:write'
+  );
+  const record = await loadLatestEditableDraftCourseForRoom(
+    env,
+    roomId,
+    auth.user.id,
+    auth.isAdmin
+  );
+
+  if (!record) {
+    throw new HttpError(404, 'Draft course not found for this room.');
+  }
+
+  return jsonResponse(request, record);
 }
 
 export async function handleCourseDraftSave(
