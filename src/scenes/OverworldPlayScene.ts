@@ -7,7 +7,6 @@ import {
   getActiveCourseDraftSessionDraft,
   getActiveCourseDraftSessionRecord,
   getActiveCourseDraftSessionRoomOverride,
-  getActiveCourseDraftSessionRoomOverrides,
   getActiveCourseDraftSessionSelectedRoomId,
   getActiveCourseDraftSessionSelectedRoomOrder,
   isRoomInActiveCourseDraftSession,
@@ -32,7 +31,6 @@ import {
   type CourseRoomRef,
   type CourseSnapshot,
 } from '../courses/model';
-import type { CourseRunFinishRequestBody } from '../courses/runModel';
 import { SceneFxController } from '../fx/controller';
 import {
   getObjectById,
@@ -138,6 +136,9 @@ import {
   OverworldPresenceController,
 } from './overworld/presence';
 import {
+  OverworldCoursePlaybackController,
+} from './overworld/coursePlayback';
+import {
   OverworldSelectionController,
   type SelectedCourseContext,
 } from './overworld/selection';
@@ -146,7 +147,6 @@ import {
   type LoadedFullRoom,
 } from './overworld/worldStreaming';
 import {
-  createActiveCourseRunState,
   getCourseGoalBadgeText,
   getCourseGoalProgressText,
   getCourseGoalTimerText,
@@ -321,8 +321,6 @@ interface CoursePublishedRoomMeta {
   publishedByUserId: string | null;
 }
 
-type CoursePlaybackRoomSourceMode = 'published' | 'draftPreview';
-
 interface PlayGoalMarkerDescriptor {
   point: GoalMarkerPoint;
   label: string | null;
@@ -464,7 +462,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private quicksandStatusCooldownUntil = 0;
   private readonly roomRepository = createRoomRepository();
   private readonly courseRepository = createCourseRepository();
-  private readonly activeCourseRoomOverrideIds = new Set<string>();
   private courseComposerOpen = false;
   private courseComposerLoading = false;
   private courseComposerRecord: CourseRecord | null = null;
@@ -493,6 +490,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly goalRunController: OverworldGoalRunController;
   private readonly flowController: OverworldSceneFlowController;
   private readonly inspectInputController: OverworldInspectInputController;
+  private readonly coursePlaybackController: OverworldCoursePlaybackController;
   private readonly selectionController: OverworldSelectionController;
   private readonly roomBadgeScaleConfig: RoomBadgeScaleConfig = {
     hideZoom: ROOM_BADGE_HIDE_ZOOM,
@@ -704,6 +702,24 @@ export class OverworldPlayScene extends Phaser.Scene {
       onRoomActivityChanged: () => this.redrawWorld(),
       onGhostDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
     });
+    this.coursePlaybackController = new OverworldCoursePlaybackController({
+      getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
+      getActiveCourseRun: () => this.activeCourseRun,
+      setActiveCourseRun: (runState) => {
+        this.activeCourseRun = runState;
+      },
+      clearTransientRoomOverride: (roomId) => {
+        this.worldStreamingController.clearTransientRoomOverride(roomId);
+      },
+      setTransientRoomOverride: (snapshot) => {
+        this.worldStreamingController.setTransientRoomOverride(snapshot);
+      },
+      getRoomSnapshotForCoordinates: (coordinates) =>
+        this.getRoomSnapshotForCoordinates(coordinates),
+      countRoomObjectsByCategory: (room, category) =>
+        this.countRoomObjectsByCategory(room, category),
+      renderHud: () => this.renderHud(),
+    });
     this.selectionController = new OverworldSelectionController({
       getMode: () => this.mode,
       setMode: (mode) => {
@@ -743,7 +759,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       refreshAround: (coordinates, options) => this.refreshAround(coordinates, options),
       getRoomSummary: (roomId) => this.roomSummariesById.get(roomId),
       hasDraftRoom: (roomId) => this.draftRoomsById.has(roomId),
-      hasActiveCourseRoomOverride: (roomId) => this.activeCourseRoomOverrideIds.has(roomId),
+      hasActiveCourseRoomOverride: (roomId) =>
+        this.coursePlaybackController.hasActiveCourseRoomOverride(roomId),
       isRoomInActiveCourse: (coordinates) =>
         Boolean(this.activeCourseSnapshot?.roomRefs.some((roomRef) => roomRef.roomId === roomIdFromCoordinates(coordinates))),
       getRoomSnapshotForCoordinates: (coordinates) =>
@@ -802,15 +819,17 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       refreshAround: (coordinates, options) => this.refreshAround(coordinates, options),
       prepareActiveCourseRoomOverrides: (snapshot, options) =>
-        this.prepareActiveCourseRoomOverrides(snapshot, options),
-      createCourseRunState: (snapshot) => this.createCourseRunState(snapshot),
-      getCourseStartRoomRef: (course) => this.getCourseStartRoomRef(course),
+        this.coursePlaybackController.prepareActiveCourseRoomOverrides(snapshot, options),
+      createCourseRunState: (snapshot) =>
+        this.coursePlaybackController.createCourseRunState(snapshot),
+      getCourseStartRoomRef: (course) =>
+        this.coursePlaybackController.getCourseStartRoomRef(course),
       getActiveCourseRun: () => this.activeCourseRun,
       setActiveCourseRun: (runState) => {
         this.activeCourseRun = runState;
       },
       startRemoteCourseRun: (runState) => {
-        void this.startRemoteCourseRun(runState);
+        void this.coursePlaybackController.startRemoteCourseRun(runState);
       },
       setCourseComposerStatusText: (text) => {
         this.courseComposerStatusText = text;
@@ -1437,7 +1456,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.courseComposerSelectedRoomInDraft = false;
     this.courseComposerSelectedRoomOrder = null;
     this.courseRoomMetaByRoomId.clear();
-    this.activeCourseRoomOverrideIds.clear();
+    this.coursePlaybackController.clearActiveCourseRoomOverrides();
     this.activeCourseRun = null;
     this.courseEditorReturnTarget = null;
     this.hudBridge?.destroy();
@@ -1667,7 +1686,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (data?.courseDraftPreviewId) {
       const draft = getActiveCourseDraftSessionDraft();
       if (draft?.id === data.courseDraftPreviewId && draft.goal) {
-        await this.activateDraftCoursePreview(draft, data.draftRoom ?? null);
+        await this.coursePlaybackController.activateDraftCoursePreview(draft, data.draftRoom ?? null);
       }
     }
     this.syncAppMode();
@@ -4422,7 +4441,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.showTransientStatus(message);
     this.fxController?.playGoalFx('success', this.player?.x ?? 0, this.playerBody?.bottom ?? 0);
     this.redrawGoalMarkers();
-    void this.finalizeActiveCourseRun('completed');
+    void this.coursePlaybackController.finalizeActiveCourseRun('completed');
   }
 
   private failCourseRun(message: string): void {
@@ -4435,7 +4454,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.showTransientStatus(message);
     this.fxController?.playGoalFx('fail', this.player?.x ?? 0, this.playerBody?.bottom ?? 0, 'goal-fail');
     this.redrawGoalMarkers();
-    void this.finalizeActiveCourseRun('failed');
+    void this.coursePlaybackController.finalizeActiveCourseRun('failed');
   }
 
   private handlePlayerDeath(reason: string): void {
@@ -4500,7 +4519,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     const singleRoomRunToReset = this.activeCourseRun ? null : this.currentGoalRun;
     this.goalRunController.abandonActiveRun();
     if (this.activeCourseRun?.result === 'active') {
-      void this.finalizeActiveCourseRun('abandoned');
+      void this.coursePlaybackController.finalizeActiveCourseRun('abandoned');
     }
     if (
       singleRoomRunToReset &&
@@ -4509,7 +4528,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.resetSingleRoomChallengeStateForRun(singleRoomRunToReset);
     }
     this.activeCourseRun = null;
-    this.clearActiveCourseRoomOverrides();
+    this.coursePlaybackController.clearActiveCourseRoomOverrides();
 
     this.collectedObjectKeys.clear();
     this.heldKeyCount = 0;
@@ -5412,208 +5431,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     const lastRoomRef =
       this.courseComposerRecord.draft.roomRefs[this.courseComposerRecord.draft.roomRefs.length - 1];
     return areCourseRoomRefsOrthogonallyAdjacent(meta, lastRoomRef);
-  }
-
-  private clearActiveCourseRoomOverrides(): void {
-    for (const roomId of this.activeCourseRoomOverrideIds) {
-      this.worldStreamingController.clearTransientRoomOverride(roomId);
-    }
-    this.activeCourseRoomOverrideIds.clear();
-  }
-
-  private async loadPinnedCourseRoomSnapshot(roomRef: CourseRoomRef): Promise<RoomSnapshot> {
-    const record = await this.roomRepository.loadRoom(roomRef.roomId, roomRef.coordinates);
-    const historicalVersion =
-      record.versions.find((entry) => entry.version === roomRef.roomVersion)?.snapshot ??
-      (record.published?.version === roomRef.roomVersion ? record.published : null);
-    if (!historicalVersion) {
-      const roomLabel =
-        roomRef.roomTitle?.trim() || `Room ${roomRef.coordinates.x},${roomRef.coordinates.y}`;
-      throw new Error(
-        `${roomLabel} is missing published room version v${roomRef.roomVersion}. Reopen the course builder and publish again.`
-      );
-    }
-
-    return cloneRoomSnapshot(historicalVersion);
-  }
-
-  private async prepareActiveCourseRoomOverrides(
-    course: CourseSnapshot,
-    options: {
-      mode: CoursePlaybackRoomSourceMode;
-      roomOverrides?: RoomSnapshot[];
-    },
-  ): Promise<void> {
-    this.clearActiveCourseRoomOverrides();
-    const overrideByRoomId = new Map<string, RoomSnapshot>();
-    if (options.mode === 'draftPreview') {
-      for (const room of options.roomOverrides ?? []) {
-        overrideByRoomId.set(room.id, cloneRoomSnapshot(room));
-      }
-      for (const room of getActiveCourseDraftSessionRoomOverrides()) {
-        overrideByRoomId.set(room.id, cloneRoomSnapshot(room));
-      }
-    }
-
-    const snapshots = await Promise.all(
-      course.roomRefs.map(async (roomRef) => {
-        const draftOverride = overrideByRoomId.get(roomRef.roomId);
-        const snapshot = draftOverride
-          ? cloneRoomSnapshot(draftOverride)
-          : await this.loadPinnedCourseRoomSnapshot(roomRef);
-        snapshot.status = 'published';
-        return snapshot;
-      })
-    );
-
-    for (const snapshot of snapshots) {
-      this.worldStreamingController.setTransientRoomOverride(snapshot);
-      this.activeCourseRoomOverrideIds.add(snapshot.id);
-    }
-  }
-
-  private async activateDraftCoursePreview(
-    course: CourseSnapshot,
-    draftRoom: RoomSnapshot | null,
-  ): Promise<void> {
-    const snapshot = cloneCourseSnapshot(course);
-    await this.prepareActiveCourseRoomOverrides(
-      snapshot,
-      {
-        mode: 'draftPreview',
-        roomOverrides: draftRoom ? [draftRoom] : [],
-      },
-    );
-    this.activeCourseRun = this.createCourseRunState(snapshot);
-  }
-
-  private getCourseStartRoomRef(course: CourseSnapshot): CourseRoomRef | null {
-    if (course.startPoint) {
-      return course.roomRefs.find((roomRef) => roomRef.roomId === course.startPoint?.roomId) ?? null;
-    }
-
-    return course.roomRefs[0] ?? null;
-  }
-
-  private createCourseRunState(course: CourseSnapshot): ActiveCourseRunState {
-    const leaderboardEligible = course.status === 'published' && getAuthDebugState().authenticated;
-    return createActiveCourseRunState({
-      course: cloneCourseSnapshot(course),
-      returnCoordinates: { ...this.selectedCoordinates },
-      enemyTarget:
-        course.goal?.type === 'defeat_all'
-          ? this.countCourseObjectsByCategory(course, 'enemy')
-          : null,
-      leaderboardEligible,
-    });
-  }
-
-  private countCourseObjectsByCategory(
-    course: CourseSnapshot,
-    category: GameObjectConfig['category']
-  ): number {
-    let count = 0;
-    for (const roomRef of course.roomRefs) {
-      const room = this.getCourseRoomSnapshot(course, roomRef.roomId);
-      if (!room) {
-        continue;
-      }
-
-      count += this.countRoomObjectsByCategory(room, category);
-    }
-
-    return count;
-  }
-
-  private getCourseRoomSnapshot(course: CourseSnapshot, roomId: string): RoomSnapshot | null {
-    const roomRef = course.roomRefs.find((entry) => entry.roomId === roomId) ?? null;
-    if (!roomRef) {
-      return null;
-    }
-
-    return this.getRoomSnapshotForCoordinates(roomRef.coordinates);
-  }
-
-  private async startRemoteCourseRun(runState: ActiveCourseRunState): Promise<void> {
-    try {
-      const response = await this.courseRepository.startRun(runState.course.id, {
-        courseId: runState.course.id,
-        courseVersion: runState.course.version,
-        goal: runState.course.goal as CourseGoal,
-        startedAt: new Date().toISOString(),
-      });
-      if (this.activeCourseRun?.course.id !== runState.course.id) {
-        return;
-      }
-
-      this.activeCourseRun.attemptId = response.attemptId;
-      this.activeCourseRun.submissionState = 'active';
-      this.activeCourseRun.submissionMessage = 'Ranked course run active.';
-      this.renderHud();
-    } catch (error) {
-      console.error('Failed to start ranked course run', error);
-      if (this.activeCourseRun?.course.id !== runState.course.id) {
-        return;
-      }
-
-      this.activeCourseRun.submissionState = 'error';
-      this.activeCourseRun.submissionMessage =
-        error instanceof Error ? error.message : 'Ranked course run unavailable.';
-      this.renderHud();
-    }
-  }
-
-  private async finalizeActiveCourseRun(
-    result: 'completed' | 'failed' | 'abandoned'
-  ): Promise<void> {
-    if (!this.activeCourseRun || this.activeCourseRun.pendingResult) {
-      return;
-    }
-
-    this.activeCourseRun.pendingResult = result;
-    const attemptId = this.activeCourseRun.attemptId;
-    if (!attemptId || this.activeCourseRun.submissionState === 'local-only') {
-      this.activeCourseRun.submissionState = 'submitted';
-      this.activeCourseRun.submissionMessage = 'Local course run saved on this client only.';
-      this.renderHud();
-      return;
-    }
-
-    this.activeCourseRun.submissionState = 'finishing';
-    this.activeCourseRun.submissionMessage = 'Submitting course run...';
-    this.renderHud();
-
-    const body: CourseRunFinishRequestBody = {
-      result,
-      elapsedMs: this.activeCourseRun.elapsedMs,
-      deaths: this.activeCourseRun.deaths,
-      collectiblesCollected: this.activeCourseRun.collectiblesCollected,
-      enemiesDefeated: this.activeCourseRun.enemiesDefeated,
-      checkpointsReached: this.activeCourseRun.checkpointsReached,
-      score: null,
-      finishedAt: new Date().toISOString(),
-    };
-
-    try {
-      await this.courseRepository.finishRun(attemptId, body);
-      if (!this.activeCourseRun || this.activeCourseRun.attemptId !== attemptId) {
-        return;
-      }
-
-      this.activeCourseRun.submissionState = 'submitted';
-      this.activeCourseRun.submissionMessage = 'Ranked course run submitted.';
-    } catch (error) {
-      console.error('Failed to finish ranked course run', error);
-      if (!this.activeCourseRun || this.activeCourseRun.attemptId !== attemptId) {
-        return;
-      }
-
-      this.activeCourseRun.submissionState = 'error';
-      this.activeCourseRun.submissionMessage =
-        error instanceof Error ? error.message : 'Failed to submit course run.';
-    } finally {
-      this.renderHud();
-    }
   }
 
   private applyGoalRunMutation(result: GoalRunMutationResult): void {

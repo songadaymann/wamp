@@ -158,6 +158,23 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - the targeted summary confirms `clipboardPastePreviewActive` flips from `true` to `false` after clicking either `Draw` or `Erase`
     - follow-up status check wrote:
       - `output/web-game/copy-tool-status-check/summary.json`
+
+- Overworld scene split course-playback extraction on March 26, 2026:
+  - extracted the active course-playback block out of `OverworldPlayScene` into `src/scenes/overworld/coursePlayback.ts`
+  - the new controller now owns pinned published room snapshot loading, draft-preview room overrides, active course run state creation, and ranked course run start/finish submission
+  - `OverworldSceneFlowController` now imports the shared `CoursePlaybackRoomSourceMode` from that controller instead of carrying a duplicate local type
+  - `OverworldPlayScene` now delegates course preview activation, play-session override cleanup, and course run finalization through the controller, while the old overworld course-composer modal code remains untouched for a later cleanup slice
+  - verification:
+    - `npm run build` passed
+    - required Playwright skill smoke wrote:
+      - `output/web-game/overworld-course-playback-skill-smoke/state-0.json`
+      - `output/web-game/overworld-course-playback-skill-smoke/shot-0.png`
+    - targeted Playwright probe wrote:
+      - `output/web-game/overworld-course-playback-probe/summary.json`
+      - `output/web-game/overworld-course-playback-probe/before-play-course.png`
+      - `output/web-game/overworld-course-playback-probe/during-play-course.png`
+      - `output/web-game/overworld-course-playback-probe/after-return.png`
+    - targeted probe confirmed a real published safety-backend course room at `1,0` still flips `Play Course -> Stop Course -> Play Course`, stays error-free, and returns cleanly to browse
       - `output/web-game/copy-tool-status-check/after-draw-click.png`
     - the follow-up status check confirms the top status returns to `Claimed by jonathan.` after leaving copy mode
 - Desktop editor sidebar polish follow-up on March 21, 2026:

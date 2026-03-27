@@ -22,10 +22,9 @@ import type {
   OverworldMode,
 } from '../sceneData';
 import type { CameraMode } from './camera';
+import type { CoursePlaybackRoomSourceMode } from './coursePlayback';
 import type { ActiveCourseRunState } from './courseRuns';
 import type { SelectedCellState } from './hudViewModel';
-
-type CoursePlaybackRoomSourceMode = 'published' | 'draftPreview';
 
 interface OverworldSceneFlowHost {
   getMode(): OverworldMode;
