@@ -4139,6 +4139,32 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming another active overworld subsystem from `OverworldPlayScene`.
 
+- March 27, 2026: extracted the overworld browse-overlay controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/browseOverlays.ts` with `OverworldBrowseOverlayController` to own the browse-only room overlay layer:
+    - semantic goal badges for published/draft rooms with room goals
+    - course badges for rooms that belong to published courses
+    - activity badges for rooms with active editors
+    - selected-room central play affordance visibility, placement, scaling, and click handling
+    - backdrop-ignore reporting for all browse overlay containers
+  - `OverworldPlayScene.ts` now delegates browse overlay creation, redraw, zoom scaling, and shutdown teardown through that controller instead of carrying the badge/play-affordance implementation inline.
+  - This slice deliberately keeps room selection, room state lookup, and room playback flow in their existing controllers; it only moves the browse overlay ownership/rendering boundary.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-browse-overlay-skill-smoke/state-0.json`
+      - `output/web-game/overworld-browse-overlay-skill-smoke/shot-0.png`
+    - targeted browser/controller probe wrote:
+      - `output/web-game/overworld-browse-overlay-probe/summary.json`
+      - `output/web-game/overworld-browse-overlay-probe/browse-badges.png`
+      - `output/web-game/overworld-browse-overlay-probe/frontier-selection.png`
+    - targeted probe confirmed:
+      - browse mode at `0,0` rendered `goalBadgeCount = 55` and `courseBadgeCount = 14`
+      - selected published room `0,0` showed the central play affordance with `selectedPlayVisible = true`
+      - forcing selection to empty room `20,20` hid the affordance with `selectedPlayVisible = false`
+      - no console errors or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming another active overworld subsystem from `OverworldPlayScene`, with world-summary/selected-summary state or the remaining room-frame/fill drawing shell as the cleanest next seams.
+
 - March 27, 2026: extracted the overworld presence-overlay controller as the next phase-8 slice.
   - Added `src/scenes/overworld/presenceOverlays.ts` with `OverworldPresenceOverlayController` to own the active presence-overlay rendering boundary:
     - visible-room sampling for overlay placement
