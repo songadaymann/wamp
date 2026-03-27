@@ -2,6 +2,8 @@ import type { DashboardStatsResponse } from '../../../dashboard/model';
 import { jsonResponse } from '../core/http';
 import type { Env } from '../core/types';
 
+const MIN_COMPLETED_DASHBOARD_ELAPSED_MS = 50;
+
 interface DashboardStatsRow {
   total_users: number | string | null;
   playfun_linked_users: number | string | null;
@@ -66,9 +68,13 @@ async function loadDashboardStats(env: Env): Promise<DashboardStatsResponse> {
           SELECT COUNT(*)
           FROM room_runs
           WHERE result = 'completed'
+            AND elapsed_ms IS NOT NULL
+            AND elapsed_ms >= ?
         ) AS completed_room_challenges
     `
-  ).first<DashboardStatsRow>();
+  )
+    .bind(MIN_COMPLETED_DASHBOARD_ELAPSED_MS)
+    .first<DashboardStatsRow>();
 
   return {
     generatedAt: new Date().toISOString(),
