@@ -143,6 +143,9 @@ import {
   type OverworldPlayerEntities,
 } from './overworld/playerLifecycle';
 import {
+  OverworldCombatController,
+} from './overworld/combatController';
+import {
   OverworldSessionResetController,
 } from './overworld/sessionReset';
 import {
@@ -201,13 +204,6 @@ const FOLLOW_CAMERA_LERP = 0.12;
 const MOBILE_PLAY_CAMERA_TARGET_Y = 0.75;
 
 type RoomEdgeWall = OverworldRoomEdgeWall;
-
-interface PlayerProjectile {
-  rect: Phaser.GameObjects.Rectangle;
-  directionX: number;
-  speed: number;
-  expiresAt: number;
-}
 
 interface CrateInteraction {
   crateBody: Phaser.Physics.Arcade.Body;
@@ -327,16 +323,11 @@ export class OverworldPlayScene extends Phaser.Scene {
   };
   private cameraToggleKey!: Phaser.Input.Keyboard.Key;
   private isCrouching = false;
-  private activeAttackAnimation: DefaultPlayerAnimationState | null = null;
-  private activeAttackAnimationUntil = 0;
-  private meleeCooldownUntil = 0;
-  private rangedCooldownUntil = 0;
   private activeCrateInteractionMode: 'push' | 'pull' | null = null;
   private activeCrateInteractionFacing: -1 | 1 | null = null;
   private weaponKnockbackVelocityX = 0;
   private weaponKnockbackUntil = 0;
   private externalLaunchGraceUntil = 0;
-  private playerProjectiles: PlayerProjectile[] = [];
   private ladderClimbSfxPlaying = false;
 
   private loadingText!: Phaser.GameObjects.Text;
@@ -399,6 +390,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly cameraController: OverworldCameraController;
   private readonly runtimeController: OverworldRuntimeController<LoadedRoomObject>;
   private readonly playerLifecycleController: OverworldPlayerLifecycleController<LoadedRoomObject>;
+  private readonly combatController: OverworldCombatController;
   private readonly sessionResetController: OverworldSessionResetController;
   private readonly presenceOverlayController: OverworldPresenceOverlayController;
   private readonly selectionController: OverworldSelectionController;
@@ -754,6 +746,52 @@ export class OverworldPlayScene extends Phaser.Scene {
         playerWidth: this.PLAYER_WIDTH,
         playerHeight: this.PLAYER_HEIGHT,
         playerPickupSensorExtraHeight: this.PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT,
+      },
+    );
+    this.combatController = new OverworldCombatController(
+      {
+        scene: this,
+        getCurrentTime: () => this.time.now,
+        getPlayer: () => this.player,
+        getPlayerBody: () => this.playerBody,
+        getPlayerFacing: () => this.playerFacing as -1 | 1,
+        isPlayerCrouching: () => this.isCrouching,
+        attackEnemiesInRect: (attackRect, damage) =>
+          this.liveObjectController.attackEnemiesInRect(
+            this.loadedFullRoomsById.values(),
+            attackRect,
+            damage,
+          ),
+        attackEnemyAtPoint: (worldX, worldY, damage) =>
+          this.liveObjectController.attackEnemyAtPoint(
+            this.loadedFullRoomsById.values(),
+            worldX,
+            worldY,
+            damage,
+          ),
+        isProjectileBlocked: (worldX, worldY) => this.isProjectileBlocked(worldX, worldY),
+        applyWeaponKnockback: (velocityX) => this.applyWeaponKnockback(velocityX),
+        playSwordSlashFx: (x, y, facing, downward) =>
+          this.fxController?.playSwordSlashFx(x, y, facing, downward),
+        playMuzzleFlashFx: (x, y, facing) =>
+          this.fxController?.playMuzzleFlashFx(x, y, facing),
+        playBulletImpactFx: (x, y) => this.fxController?.playBulletImpactFx(x, y),
+        shakeCamera: (durationMs, intensity) => this.cameras.main.shake(durationMs, intensity),
+        syncBackdropCameraIgnores: () => this.syncBackdropCameraIgnores(),
+      },
+      {
+        swordCooldownMs: this.SWORD_COOLDOWN_MS,
+        swordAttackMs: this.SWORD_ATTACK_MS,
+        swordHitDamage: 3,
+        swordHitLungeVelocity: this.SWORD_HIT_LUNGE_VELOCITY,
+        downwardSlashBounceVelocity: this.DOWNWARD_SLASH_BOUNCE_VELOCITY,
+        gunCooldownMs: this.GUN_COOLDOWN_MS,
+        gunAttackMs: this.GUN_ATTACK_MS,
+        gunHitDamage: 5,
+        gunRecoilVelocity: this.GUN_RECOIL_VELOCITY,
+        projectileSpeed: this.PROJECTILE_SPEED,
+        projectileLifetimeMs: this.PROJECTILE_LIFETIME_MS,
+        playerSpeed: this.PLAYER_SPEED,
       },
     );
     this.sessionResetController = new OverworldSessionResetController({
@@ -1498,7 +1536,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.playerBody.setVelocityY(Math.max(this.playerBody.velocity.y, 4));
       }
 
-      this.handleCombatInput({
+      this.combatController.handleCombatInput({
         swordPressed,
         gunPressed,
         downHeld,
@@ -1507,7 +1545,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     this.updateQuicksandVisualSink();
-    this.updatePlayerProjectiles(delta);
+    this.combatController.updateProjectiles(delta);
     this.syncLadderClimbSfx(verticalInput);
     this.maybeRespawnFromVoid();
     this.maybeAdvancePlayerRoom();
@@ -1547,14 +1585,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.activeLadderKey = null;
     this.isCrouching = false;
     this.clearCrateInteractionState();
-    this.activeAttackAnimation = null;
-    this.activeAttackAnimationUntil = 0;
-    this.meleeCooldownUntil = 0;
-    this.rangedCooldownUntil = 0;
+    this.combatController.reset();
     this.weaponKnockbackVelocityX = 0;
     this.weaponKnockbackUntil = 0;
     this.setLadderClimbSfxPlaying(false);
-    this.destroyPlayerProjectiles();
     this.collectedObjectKeys = new Set();
     this.score = 0;
     this.goalRunController.reset();
@@ -1701,9 +1735,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     ignoredObjects.push(...this.browseOverlayController.getBackdropIgnoredObjects());
     if (this.player) ignoredObjects.push(this.player);
     if (this.playerSprite) ignoredObjects.push(this.playerSprite);
-    for (const projectile of this.playerProjectiles) {
-      ignoredObjects.push(projectile.rect);
-    }
+    ignoredObjects.push(...this.combatController.getBackdropIgnoredObjects());
 
     for (const image of this.previewImages) {
       ignoredObjects.push(image);
@@ -2332,7 +2364,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private destroyPlayer(): void {
-    this.destroyPlayerProjectiles();
+    this.combatController.destroyProjectiles();
     this.playerLifecycleController.destroyPlayer(
       this.getPlayerEntities(),
       this.loadedFullRoomsById.values(),
@@ -2343,8 +2375,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.setLadderClimbSfxPlaying(false);
     this.isCrouching = false;
     this.resetWallMovementState();
-    this.activeAttackAnimation = null;
-    this.activeAttackAnimationUntil = 0;
+    this.combatController.clearAttackAnimation();
     this.playerLandAnimationUntil = 0;
     this.playerWasGrounded = false;
     this.externalLaunchGraceUntil = 0;
@@ -2424,8 +2455,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.playerFacing = 1;
     this.playerWasGrounded = true;
     this.playerLandAnimationUntil = 0;
-    this.activeAttackAnimation = null;
-    this.activeAttackAnimationUntil = 0;
+    this.combatController.clearAttackAnimation();
     this.isClimbingLadder = false;
     this.activeLadderKey = null;
     this.setLadderClimbSfxPlaying(false);
@@ -2663,163 +2693,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     return bestInteraction;
   }
 
-  private handleCombatInput(input: {
-    swordPressed: boolean;
-    gunPressed: boolean;
-    downHeld: boolean;
-    grounded: boolean;
-  }): void {
-    if (!this.player || !this.playerBody) {
-      return;
-    }
-
-    if (input.swordPressed && this.time.now >= this.meleeCooldownUntil) {
-      this.performSwordAttack(input.downHeld, input.grounded);
-      return;
-    }
-
-    if (input.gunPressed && this.time.now >= this.rangedCooldownUntil) {
-      this.fireGunProjectile();
-    }
-  }
-
-  private performSwordAttack(downHeld: boolean, grounded: boolean): void {
-    if (!this.player || !this.playerBody) {
-      return;
-    }
-
-    const downward = !grounded && downHeld;
-    const attackAnimation: DefaultPlayerAnimationState = downward ? 'air-slash-down' : 'sword-slash';
-    this.activeAttackAnimation = attackAnimation;
-    this.activeAttackAnimationUntil = this.time.now + this.SWORD_ATTACK_MS;
-    this.meleeCooldownUntil = this.time.now + this.SWORD_COOLDOWN_MS;
-
-    if (downward && this.playerBody.velocity.y < 120) {
-      this.playerBody.setVelocityY(120);
-    }
-
-    const attackRect = downward
-      ? new Phaser.Geom.Rectangle(
-          this.playerBody.center.x - 12,
-          this.playerBody.bottom - 2,
-          24,
-          28
-        )
-      : new Phaser.Geom.Rectangle(
-          this.playerBody.center.x + this.playerFacing * 8 - 14,
-          this.playerBody.top + 2,
-          28,
-          this.playerBody.height + 10
-        );
-
-    const hits = this.liveObjectController.attackEnemiesInRect(
-      this.loadedFullRoomsById.values(),
-      attackRect,
-      3
-    );
-    this.fxController?.playSwordSlashFx(
-      this.player.x,
-      downward ? this.playerBody.bottom - 2 : this.playerBody.center.y,
-      this.playerFacing,
-      downward
-    );
-    if (hits.length > 0) {
-      playSfx('enemy-hit');
-      if (downward) {
-        this.playerBody.setVelocityY(this.DOWNWARD_SLASH_BOUNCE_VELOCITY);
-      } else {
-        this.applyWeaponKnockback(
-          Phaser.Math.Clamp(
-            this.playerBody.velocity.x + this.playerFacing * this.SWORD_HIT_LUNGE_VELOCITY,
-            -this.PLAYER_SPEED * 1.35,
-            this.PLAYER_SPEED * 1.35
-          )
-        );
-      }
-      this.cameras.main.shake(50, 0.002);
-    }
-  }
-
-  private fireGunProjectile(): void {
-    if (!this.player || !this.playerBody) {
-      return;
-    }
-
-    this.activeAttackAnimation = 'gun-fire';
-    this.activeAttackAnimationUntil = this.time.now + this.GUN_ATTACK_MS;
-    this.rangedCooldownUntil = this.time.now + this.GUN_COOLDOWN_MS;
-
-    const muzzleX = this.player.x + this.playerFacing * 10;
-    const muzzleY = this.playerBody.center.y - (this.isCrouching ? 1 : 5);
-    this.fxController?.playMuzzleFlashFx(muzzleX, muzzleY, this.playerFacing);
-
-    const projectile = this.add.rectangle(muzzleX, muzzleY, 8, 3, 0x9deaff, 1);
-    projectile.setDepth(27);
-    this.playerProjectiles.push({
-      rect: projectile,
-      directionX: this.playerFacing,
-      speed: this.PROJECTILE_SPEED,
-      expiresAt: this.time.now + this.PROJECTILE_LIFETIME_MS,
-    });
-    this.applyWeaponKnockback(
-      Phaser.Math.Clamp(
-        this.playerBody.velocity.x - this.playerFacing * this.GUN_RECOIL_VELOCITY,
-        -this.PLAYER_SPEED * 1.2,
-        this.PLAYER_SPEED * 1.2
-      )
-    );
-    this.syncBackdropCameraIgnores();
-  }
-
-  private updatePlayerProjectiles(delta: number): void {
-    if (this.playerProjectiles.length === 0) {
-      return;
-    }
-
-    for (const projectile of [...this.playerProjectiles]) {
-      if (!projectile.rect.active || this.time.now >= projectile.expiresAt) {
-        this.destroyPlayerProjectile(projectile);
-        continue;
-      }
-
-      const startX = projectile.rect.x;
-      const stepDistance = (projectile.speed * delta) / 1000;
-      const nextX = startX + projectile.directionX * stepDistance;
-      const sampleCount = Math.max(1, Math.ceil(Math.abs(nextX - startX) / 6));
-      let destroyed = false;
-
-      for (let index = 1; index <= sampleCount; index += 1) {
-        const sampleX = Phaser.Math.Linear(startX, nextX, index / sampleCount);
-        const sampleY = projectile.rect.y;
-        const enemyHit = this.liveObjectController.attackEnemyAtPoint(
-          this.loadedFullRoomsById.values(),
-          sampleX,
-          sampleY,
-          5
-        );
-        if (enemyHit) {
-          playSfx('enemy-hit');
-          this.fxController?.playBulletImpactFx(enemyHit.x, enemyHit.y - 2);
-          this.cameras.main.shake(40, 0.0015);
-          this.destroyPlayerProjectile(projectile);
-          destroyed = true;
-          break;
-        }
-
-        if (this.isProjectileBlocked(sampleX, sampleY)) {
-          this.fxController?.playBulletImpactFx(sampleX, sampleY);
-          this.destroyPlayerProjectile(projectile);
-          destroyed = true;
-          break;
-        }
-      }
-
-      if (!destroyed) {
-        projectile.rect.x = nextX;
-      }
-    }
-  }
-
   private isProjectileBlocked(worldX: number, worldY: number): boolean {
     const room = this.getRoomSnapshotAtWorldPoint(worldX, worldY);
     if (!room) {
@@ -2848,20 +2721,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     return false;
-  }
-
-  private destroyPlayerProjectiles(): void {
-    for (const projectile of this.playerProjectiles) {
-      projectile.rect.destroy();
-    }
-    this.playerProjectiles = [];
-    this.syncBackdropCameraIgnores();
-  }
-
-  private destroyPlayerProjectile(projectile: PlayerProjectile): void {
-    projectile.rect.destroy();
-    this.playerProjectiles = this.playerProjectiles.filter((candidate) => candidate !== projectile);
-    this.syncBackdropCameraIgnores();
   }
 
   private getRoomSnapshotAtWorldPoint(worldX: number, worldY: number): RoomSnapshot | null {
@@ -2908,14 +2767,13 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     this.setPlayerLadderState(null);
     this.isCrouching = false;
-    this.activeAttackAnimation = null;
-    this.activeAttackAnimationUntil = 0;
+    this.combatController.clearAttackAnimation();
     this.clearCrateInteractionState();
     this.weaponKnockbackVelocityX = 0;
     this.weaponKnockbackUntil = 0;
     this.externalLaunchGraceUntil = 0;
     this.resetWallMovementState();
-    this.destroyPlayerProjectiles();
+    this.combatController.destroyProjectiles();
     this.playerLifecycleController.respawnPlayerToRoom(currentRoom, entities);
     this.syncPlayerHitbox();
     this.playerWasGrounded = false;
@@ -2976,8 +2834,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     let nextAnimation: DefaultPlayerAnimationState = 'idle';
-    if (this.activeAttackAnimation && this.time.now < this.activeAttackAnimationUntil) {
-      nextAnimation = this.activeAttackAnimation;
+    const activeAttackAnimation = this.combatController.getCurrentAttackAnimation(this.time.now);
+    if (activeAttackAnimation) {
+      nextAnimation = activeAttackAnimation;
     } else if (this.isClimbingLadder) {
       nextAnimation = 'ladder-climb';
     } else if (this.isWallSliding) {
@@ -3200,10 +3059,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.score = 0;
     this.isCrouching = false;
     this.resetWallMovementState();
-    this.activeAttackAnimation = null;
-    this.activeAttackAnimationUntil = 0;
+    this.combatController.clearAttackAnimation();
     this.externalLaunchGraceUntil = 0;
-    this.destroyPlayerProjectiles();
+    this.combatController.destroyProjectiles();
     this.playerLandAnimationUntil = 0;
   }
 
@@ -4403,12 +4261,12 @@ export class OverworldPlayScene extends Phaser.Scene {
       enemies: this.countLiveObjectsByCategory('enemy'),
       combat: {
         crouching: this.isCrouching,
-        activeAttackAnimation: this.activeAttackAnimation,
+        activeAttackAnimation: this.combatController.getActiveAttackAnimation(),
         crateInteractionMode: this.activeCrateInteractionMode,
         crateInteractionFacing: this.activeCrateInteractionFacing,
-        meleeCooldownMs: Math.max(0, this.meleeCooldownUntil - this.time.now),
-        rangedCooldownMs: Math.max(0, this.rangedCooldownUntil - this.time.now),
-        projectileCount: this.playerProjectiles.length,
+        meleeCooldownMs: this.combatController.getMeleeCooldownRemainingMs(this.time.now),
+        rangedCooldownMs: this.combatController.getRangedCooldownRemainingMs(this.time.now),
+        projectileCount: this.combatController.getProjectileCount(),
       },
       presence: {
         status: presenceDebug.snapshot?.status ?? 'disabled',

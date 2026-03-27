@@ -4415,3 +4415,33 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - no console errors or page errors were recorded
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining play-state shell, most likely combat / attack-state orchestration and the player movement-state block.
+
+- March 27, 2026: extracted the overworld combat controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/combatController.ts` with `OverworldCombatController` to own the player attack shell:
+    - sword / gun input dispatch
+    - attack animation and cooldown state
+    - sword hitbox resolution against live enemies
+    - gun projectile spawn, travel, collision, and teardown
+    - projectile-backed backdrop-ignore objects
+  - `OverworldPlayScene.ts` now delegates combat input, projectile updates, attack animation queries, cooldown debug state, and projectile teardown through that controller instead of carrying the full combat block inline.
+  - Kept movement-owned knockback timing (`weaponKnockbackVelocityX`, `weaponKnockbackUntil`) in `OverworldPlayScene.ts` on purpose so this slice does not mix combat extraction with the next movement-state extraction.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev pointed at the safety backend:
+      - `output/web-game/overworld-combat-controller-skill-smoke/state-0.json`
+      - `output/web-game/overworld-combat-controller-skill-smoke/shot-0.png`
+    - targeted browser probe wrote:
+      - `output/web-game/overworld-combat-controller-probe/summary.json`
+      - `output/web-game/overworld-combat-controller-probe/play-start.png`
+      - `output/web-game/overworld-combat-controller-probe/after-sword.png`
+      - `output/web-game/overworld-combat-controller-probe/after-gun.png`
+      - `output/web-game/overworld-combat-controller-probe/browse-after-stop.png`
+    - targeted probe confirmed:
+      - `Play Room` entered `play` with player spawn at `328,297` and idle combat state
+      - direct sword input set `combat.activeAttackAnimation = sword-slash`, raised `meleeCooldownMs` to about `195`, and switched the player animation to `sword-slash`
+      - direct gun input set `combat.activeAttackAnimation = gun-fire`, raised `rangedCooldownMs` to about `226`, spawned `projectileCount = 1`, and applied recoil `velocityX = -44`
+      - after projectile lifetime elapsed, `projectileCount` returned to `0`
+      - `Stop` returned to `browse` with `player = null`, zero cooldowns, and zero projectiles
+      - no console errors or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should target the remaining player movement-state shell, especially wall-slide / wall-jump / ladder / crate movement orchestration.
