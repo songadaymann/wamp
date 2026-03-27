@@ -4626,3 +4626,40 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - no console or page errors were recorded
   - Status:
     - phase 8 is very close to complete on `safety/overworld-scene-split-2026-03-26`; what remains is basically final consolidation and deciding whether one more small shell extraction is worth it before calling the phase done.
+
+- March 27, 2026: extracted the overworld viewport controller as the final phase-8 slice.
+  - Added `src/scenes/overworld/viewportController.ts` with `OverworldViewportController` to own the remaining viewport shell:
+    - canvas wheel zoom input
+    - button zoom in/out
+    - zoom-anchor preservation across inspect/follow modes
+    - zoom-debug overlay creation, resize, teardown, and `window.get_zoom_debug`
+  - `OverworldPlayScene.ts` now delegates the old inline shell through that controller instead of carrying:
+    - `handleCanvasWheel`
+    - `handleWheelZoom`
+    - `adjustButtonZoom`
+    - `adjustZoomByFactor`
+    - `getScreenAnchorWorldPoint`
+    - `getScrollForScreenAnchor`
+    - `setupZoomDebug`
+    - `updateZoomDebugOverlay`
+    - `recordZoomDebug`
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke wrote:
+      - `output/web-game/overworld-viewport-controller-skill-smoke/state-0.json`
+      - `output/web-game/overworld-viewport-controller-skill-smoke/shot-0.png`
+    - focused browser probe wrote:
+      - `output/web-game/overworld-viewport-controller-probe/summary.json`
+      - `output/web-game/overworld-viewport-controller-probe/before-zoom.png`
+      - `output/web-game/overworld-viewport-controller-probe/after-button-zoom.png`
+      - `output/web-game/overworld-viewport-controller-probe/after-wheel-zoom.png`
+    - targeted checks confirmed:
+      - button zoom still changed inspect zoom from `0.18` to `0.202`
+      - the extracted wheel path advanced zoom from `0.202` to `0.218`
+      - `window.get_zoom_debug()` returned the expected wheel payload including `selected`, `currentRoom`, and updated scroll values
+      - no console or page errors were recorded
+    - note:
+      - synthetic DOM `mouse.wheel()` / `dispatchEvent()` paths were flaky in headless here, so the focused probe invoked the extracted controller handler directly inside the page to verify the controller-owned wheel/debug path deterministically
+  - Status:
+    - phase 8 is complete on `safety/overworld-scene-split-2026-03-26`
+    - next planned phase is phase 9: secondary monoliths + repo hygiene

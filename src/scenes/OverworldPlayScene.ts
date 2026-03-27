@@ -167,6 +167,9 @@ import {
   OverworldWindowController,
 } from './overworld/windowController';
 import {
+  OverworldViewportController,
+} from './overworld/viewportController';
+import {
   OverworldPresenceOverlayController,
 } from './overworld/presenceOverlays';
 import {
@@ -183,11 +186,7 @@ import {
   recordCourseRunDeath,
   type ActiveCourseRunState,
 } from './overworld/courseRuns';
-import {
-  getScreenAnchorWorldPoint as calculateScreenAnchorWorldPoint,
-  getScrollForScreenAnchor as calculateScrollForScreenAnchor,
-  type CameraMode,
-} from './overworld/camera';
+import { type CameraMode } from './overworld/camera';
 import {
   terrainTileCollidesAtLocalPixel,
 } from './overworld/terrainCollision';
@@ -220,27 +219,6 @@ const MOBILE_PLAY_CAMERA_TARGET_Y = 0.75;
 type RoomEdgeWall = OverworldRoomEdgeWall;
 
 type SceneLoadedFullRoom = LoadedFullRoom<LoadedRoomObject, RoomEdgeWall>;
-
-interface ZoomDebugState {
-  source: 'canvas-wheel';
-  rawClient: { x: number; y: number };
-  screen: { x: number; y: number };
-  phaserPointer: { x: number; y: number };
-  deltaY: number;
-  anchorWorldBefore: { x: number; y: number };
-  anchorWorldAfter: { x: number; y: number };
-  zoom: { before: number; after: number };
-  scroll: {
-    beforeX: number;
-    beforeY: number;
-    afterX: number;
-    afterY: number;
-  };
-  mode: OverworldMode;
-  cameraMode: CameraMode;
-  selected: RoomCoordinates;
-  currentRoom: RoomCoordinates;
-}
 
 export class OverworldPlayScene extends Phaser.Scene {
   private readonly PLAYER_SPEED = 150;
@@ -332,10 +310,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private loadingText!: Phaser.GameObjects.Text;
   private starfieldSprites: Phaser.GameObjects.TileSprite[] = [];
   private backdropCamera: Phaser.Cameras.Scene2D.Camera | null = null;
-  private zoomDebugText: Phaser.GameObjects.Text | null = null;
-  private zoomDebugGraphics: Phaser.GameObjects.Graphics | null = null;
-  private zoomDebugEnabled = false;
-  private lastZoomDebug: ZoomDebugState | null = null;
   private hudBridge: OverworldHudBridge | null = null;
   private fxController: SceneFxController | null = null;
 
@@ -389,6 +363,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly roomTransitionController: OverworldRoomTransitionController;
   private readonly courseComposerController: OverworldCourseComposerController;
   private readonly windowController: OverworldWindowController;
+  private readonly viewportController: OverworldViewportController;
   private readonly presenceOverlayController: OverworldPresenceOverlayController;
   private readonly selectionController: OverworldSelectionController;
   private readonly hudStateController: OverworldHudStateController;
@@ -401,61 +376,6 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private shouldCenterCamera = false;
   private shouldRespawnPlayer = false;
-  private readonly handleCanvasWheel = (event: WheelEvent): void => {
-    const appMode = document.body.dataset.appMode;
-    if (appMode !== 'world' && appMode !== 'play-world') {
-      return;
-    }
-
-    const rect = this.game.canvas.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) {
-      return;
-    }
-
-    const screenX = ((event.clientX - rect.left) / rect.width) * this.scale.width;
-    const screenY = ((event.clientY - rect.top) / rect.height) * this.scale.height;
-
-    if (screenX < 0 || screenX > this.scale.width || screenY < 0 || screenY > this.scale.height) {
-      return;
-    }
-
-    event.preventDefault();
-
-    const camera = this.cameras.main;
-    const beforeZoom = camera.zoom;
-    const beforeScrollX = camera.scrollX;
-    const beforeScrollY = camera.scrollY;
-    const anchorWorldBefore = this.getScreenAnchorWorldPoint(screenX, screenY, camera);
-    const phaserPointer = {
-      x: this.input.activePointer.x,
-      y: this.input.activePointer.y,
-    };
-
-    this.handleWheelZoom(screenX, screenY, event.deltaY);
-
-    const anchorWorldAfter = this.getScreenAnchorWorldPoint(screenX, screenY, camera);
-    this.recordZoomDebug({
-      source: 'canvas-wheel',
-      rawClient: { x: event.clientX, y: event.clientY },
-      screen: { x: screenX, y: screenY },
-      phaserPointer,
-      deltaY: event.deltaY,
-      anchorWorldBefore: { x: anchorWorldBefore.x, y: anchorWorldBefore.y },
-      anchorWorldAfter: { x: anchorWorldAfter.x, y: anchorWorldAfter.y },
-      zoom: { before: beforeZoom, after: camera.zoom },
-      scroll: {
-        beforeX: beforeScrollX,
-        beforeY: beforeScrollY,
-        afterX: camera.scrollX,
-        afterY: camera.scrollY,
-      },
-      mode: this.mode,
-      cameraMode: this.cameraMode,
-      selected: { ...this.selectedCoordinates },
-      currentRoom: { ...this.currentRoomCoordinates },
-    });
-  };
-
   private readonly handlePlayfunGamePause = (): void => {
     this.playfunPauseDepth += 1;
     if (this.playfunPauseApplied) {
@@ -816,6 +736,39 @@ export class OverworldPlayScene extends Phaser.Scene {
         playRoomFitPadding: PLAY_ROOM_FIT_PADDING,
         followCameraLerp: FOLLOW_CAMERA_LERP,
         mobilePlayCameraTargetY: MOBILE_PLAY_CAMERA_TARGET_Y,
+      },
+    );
+    this.viewportController = new OverworldViewportController(
+      {
+        scene: this,
+        getMode: () => this.mode,
+        getCameraMode: () => this.cameraMode,
+        getPlayer: () => this.player,
+        getInspectZoom: () => this.inspectZoom,
+        setInspectZoom: (zoom) => {
+          this.inspectZoom = zoom;
+        },
+        getBrowseInspectZoom: () => this.browseInspectZoom,
+        setBrowseInspectZoom: (zoom) => {
+          this.browseInspectZoom = zoom;
+        },
+        getZoomFocusCoordinates: () => this.getZoomFocusCoordinates(),
+        centerCameraOnCoordinates: (coordinates) => this.centerCameraOnCoordinates(coordinates),
+        startFollowCamera: (camera) => this.startFollowCamera(camera),
+        constrainInspectCamera: () => this.constrainInspectCamera(),
+        refreshChunkWindowIfNeeded: (centerCoordinates) =>
+          this.refreshChunkWindowIfNeeded(centerCoordinates),
+        updateBackdrop: () => this.updateBackdrop(),
+        redrawGridOverlay: () => this.gridOverlayController.redraw(),
+        renderHud: () => this.renderHud(),
+        getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
+        getCurrentRoomCoordinates: () => ({ ...this.currentRoomCoordinates }),
+      },
+      {
+        minZoom: MIN_ZOOM,
+        maxZoom: MAX_ZOOM,
+        buttonZoomFactor: BUTTON_ZOOM_FACTOR,
+        wheelZoomSensitivity: WHEEL_ZOOM_SENSITIVITY,
       },
     );
     this.runtimeController = new OverworldRuntimeController(
@@ -1394,7 +1347,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       fitLoadedWorld: () => this.fitLoadedWorld(),
       returnToWorld: () => this.returnToWorld(),
       adjustZoomByFactor: (factor, screenX, screenY) =>
-        this.adjustZoomByFactor(factor, screenX, screenY),
+        this.viewportController.adjustZoomByFactor(factor, screenX, screenY),
       constrainInspectCamera: () => this.constrainInspectCamera(),
       getRoomCoordinatesForPoint: (x, y) => this.getRoomCoordinatesForPoint(x, y),
       isWithinLoadedRoomBounds: (coordinates) => this.isWithinLoadedRoomBounds(coordinates),
@@ -1481,7 +1434,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   create(data?: OverworldPlaySceneData): void {
     this.resetRuntimeState();
     this.syncAppMode();
-    this.zoomDebugEnabled = this.isDebugQueryEnabled('zoomDebug');
+    this.viewportController.setZoomDebugEnabled(this.isDebugQueryEnabled('zoomDebug'));
 
     this.physics.world.gravity.y = this.GRAVITY;
 
@@ -1498,8 +1451,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.loadingText.setOrigin(0.5);
     this.loadingText.setScrollFactor(0);
     this.loadingText.setDepth(200);
-    this.syncBackdropCameraIgnores();
-    this.setupZoomDebug();
+    this.viewportController.initialize();
     window.addEventListener(PLAYFUN_GAME_PAUSE_EVENT, this.handlePlayfunGamePause);
     window.addEventListener(PLAYFUN_GAME_RESUME_EVENT, this.handlePlayfunGameResume);
     this.hudBridge = new OverworldHudBridge();
@@ -1512,10 +1464,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.inspectInputController.initialize();
     this.setupCamera();
     this.initializePresenceClient();
-    this.game.canvas.addEventListener('wheel', this.handleCanvasWheel, { passive: false });
     window.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
-    (window as Window & { get_zoom_debug?: () => ZoomDebugState | null }).get_zoom_debug = () =>
-      this.lastZoomDebug;
+    this.syncBackdropCameraIgnores();
 
     this.scale.on('resize', this.handleResize, this);
     this.events.on(Phaser.Scenes.Events.WAKE, this.handleWake, this);
@@ -1750,8 +1700,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     ignoredObjects.push(...this.gridOverlayController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.roomCellController.getBackdropIgnoredObjects());
     if (this.loadingText) ignoredObjects.push(this.loadingText);
-    if (this.zoomDebugGraphics) ignoredObjects.push(this.zoomDebugGraphics);
-    if (this.zoomDebugText) ignoredObjects.push(this.zoomDebugText);
+    ignoredObjects.push(...this.viewportController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.goalMarkerController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.browseOverlayController.getBackdropIgnoredObjects());
     if (this.player) ignoredObjects.push(this.player);
@@ -1795,7 +1744,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private handleResize(): void {
     this.loadingText.setPosition(this.scale.width / 2, this.scale.height / 2);
     this.updateBackdrop();
-    this.updateZoomDebugOverlay();
+    this.viewportController.handleResize();
 
     if (this.mode === 'play' && this.cameraMode === 'follow') {
       this.applyCameraMode();
@@ -1874,92 +1823,11 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   zoomIn(): void {
-    this.adjustButtonZoom(BUTTON_ZOOM_FACTOR);
+    this.viewportController.zoomIn();
   }
 
   zoomOut(): void {
-    this.adjustButtonZoom(1 / BUTTON_ZOOM_FACTOR);
-  }
-
-  private handleWheelZoom(screenX: number, screenY: number, deltaY: number): void {
-    const zoomFactor = Phaser.Math.Clamp(
-      Math.exp(-deltaY * WHEEL_ZOOM_SENSITIVITY),
-      0.92,
-      1.08
-    );
-    this.adjustZoomByFactor(zoomFactor, screenX, screenY);
-  }
-
-  private adjustButtonZoom(factor: number): void {
-    if (this.mode === 'play' && this.cameraMode === 'follow' && this.player) {
-      this.adjustZoomByFactor(factor);
-      return;
-    }
-
-    const camera = this.cameras.main;
-    const nextZoom = Phaser.Math.Clamp(camera.zoom * factor, MIN_ZOOM, MAX_ZOOM);
-    if (Math.abs(nextZoom - camera.zoom) < 0.0001) {
-      return;
-    }
-
-    this.inspectZoom = Number(nextZoom.toFixed(3));
-    if (this.mode === 'browse') {
-      this.browseInspectZoom = this.inspectZoom;
-    }
-    camera.setZoom(this.inspectZoom);
-    this.centerCameraOnCoordinates(this.getZoomFocusCoordinates());
-    this.refreshChunkWindowIfNeeded(this.getZoomFocusCoordinates());
-    this.updateBackdrop();
-    this.gridOverlayController.redraw();
-    this.renderHud();
-  }
-
-  private adjustZoomByFactor(factor: number, screenX?: number, screenY?: number): void {
-    const camera = this.cameras.main;
-    const anchorX = screenX ?? camera.width * 0.5;
-    const anchorY = screenY ?? camera.height * 0.5;
-    const nextZoom = Phaser.Math.Clamp(camera.zoom * factor, MIN_ZOOM, MAX_ZOOM);
-    if (Math.abs(nextZoom - camera.zoom) < 0.0001) {
-      return;
-    }
-
-    const anchorWorldPoint = this.getScreenAnchorWorldPoint(anchorX, anchorY, camera);
-    this.inspectZoom = Number(nextZoom.toFixed(3));
-    if (this.mode === 'browse') {
-      this.browseInspectZoom = this.inspectZoom;
-    }
-    camera.setZoom(this.inspectZoom);
-
-    if (this.mode === 'play' && this.cameraMode === 'follow' && this.player) {
-      this.startFollowCamera(camera);
-    } else {
-      const nextScroll = this.getScrollForScreenAnchor(anchorWorldPoint.x, anchorWorldPoint.y, anchorX, anchorY, camera);
-      camera.setScroll(nextScroll.x, nextScroll.y);
-      this.constrainInspectCamera();
-    }
-
-    this.refreshChunkWindowIfNeeded(this.getZoomFocusCoordinates());
-    this.updateBackdrop();
-    this.gridOverlayController.redraw();
-    this.renderHud();
-  }
-
-  private getScreenAnchorWorldPoint(
-    screenX: number,
-    screenY: number,
-    camera: Phaser.Cameras.Scene2D.Camera
-  ): Phaser.Math.Vector2 {
-    return calculateScreenAnchorWorldPoint(screenX, screenY, camera);
-  }
-
-  private getScrollForScreenAnchor(
-    worldX: number,
-    worldY: number,
-    screenX: number,
-    screenY: number,
-    camera: Phaser.Cameras.Scene2D.Camera
-  ): Phaser.Math.Vector2 {
-    return calculateScrollForScreenAnchor(worldX, worldY, screenX, screenY, camera);
+    this.viewportController.zoomOut();
   }
 
   private getZoomFocusCoordinates(): RoomCoordinates {
@@ -2593,69 +2461,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.hudStateController.getSelectedRoomContext();
   }
 
-  private setupZoomDebug(): void {
-    this.zoomDebugGraphics = this.add.graphics();
-    this.zoomDebugGraphics.setDepth(240);
-    this.zoomDebugGraphics.setScrollFactor(0);
-
-    this.zoomDebugText = this.add.text(0, 0, '', {
-      fontFamily: 'Courier New',
-      fontSize: '12px',
-      color: '#7de5ff',
-      backgroundColor: 'rgba(0, 0, 0, 0.7)',
-      padding: { x: 8, y: 6 },
-    });
-    this.zoomDebugText.setDepth(241);
-    this.zoomDebugText.setScrollFactor(0);
-    this.zoomDebugText.setVisible(this.zoomDebugEnabled);
-
-    this.updateZoomDebugOverlay();
-    this.syncBackdropCameraIgnores();
-  }
-
-  private updateZoomDebugOverlay(): void {
-    if (this.zoomDebugText) {
-      this.zoomDebugText.setPosition(Math.max(16, this.scale.width - 320), 16);
-      this.zoomDebugText.setVisible(this.zoomDebugEnabled);
-    }
-
-    if (!this.zoomDebugEnabled && this.zoomDebugGraphics) {
-      this.zoomDebugGraphics.clear();
-    }
-  }
-
-  private recordZoomDebug(debugState: ZoomDebugState): void {
-    this.lastZoomDebug = debugState;
-
-    if (!this.zoomDebugEnabled) {
-      return;
-    }
-
-    if (this.zoomDebugGraphics) {
-      const { x, y } = debugState.screen;
-      this.zoomDebugGraphics.clear();
-      this.zoomDebugGraphics.lineStyle(1, RETRO_COLORS.draft, 0.95);
-      this.zoomDebugGraphics.strokeCircle(x, y, 12);
-      this.zoomDebugGraphics.lineBetween(x - 18, y, x + 18, y);
-      this.zoomDebugGraphics.lineBetween(x, y - 18, x, y + 18);
-    }
-
-    if (this.zoomDebugText) {
-      this.zoomDebugText.setText([
-        `zoomDebug`,
-        `screen ${debugState.screen.x.toFixed(1)}, ${debugState.screen.y.toFixed(1)}`,
-        `phaser ${debugState.phaserPointer.x.toFixed(1)}, ${debugState.phaserPointer.y.toFixed(1)}`,
-        `world ${debugState.anchorWorldBefore.x.toFixed(1)}, ${debugState.anchorWorldBefore.y.toFixed(1)}`,
-        `zoom ${debugState.zoom.before.toFixed(3)} -> ${debugState.zoom.after.toFixed(3)}`,
-        `scroll ${debugState.scroll.beforeX.toFixed(1)}, ${debugState.scroll.beforeY.toFixed(1)}`,
-        `     -> ${debugState.scroll.afterX.toFixed(1)}, ${debugState.scroll.afterY.toFixed(1)}`,
-      ]);
-      this.zoomDebugText.setVisible(true);
-    }
-
-    console.info('[zoom-debug]', debugState);
-  }
-
   private isDebugQueryEnabled(name: string): boolean {
     const value = new URLSearchParams(window.location.search).get(name);
     if (!value) {
@@ -2677,8 +2482,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.inspectInputController.destroy();
     this.input.removeAllListeners();
     this.input.keyboard?.removeAllListeners();
-    this.game.canvas.removeEventListener('wheel', this.handleCanvasWheel);
-    delete (window as Window & { get_zoom_debug?: () => ZoomDebugState | null }).get_zoom_debug;
+    this.viewportController.destroy();
     this.hudBridge?.destroy();
     this.hudBridge = null;
     this.fxController?.destroy();
@@ -2694,10 +2498,6 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.cameras.remove(this.backdropCamera, true);
     }
     this.backdropCamera = null;
-    this.zoomDebugGraphics?.destroy();
-    this.zoomDebugGraphics = null;
-    this.zoomDebugText?.destroy();
-    this.zoomDebugText = null;
     this.goalMarkerController.destroy();
     this.gridOverlayController.destroy();
     this.browseOverlayController.destroy();
