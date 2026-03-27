@@ -4165,3 +4165,28 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - all three pages stayed free of console errors and page errors
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming another active overworld subsystem from `OverworldPlayScene`, with badge rendering or room-goal marker composition as the most likely next boundaries.
+
+- March 27, 2026: extracted the overworld goal-marker controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/goalMarkers.ts` with `OverworldGoalMarkerController` to own the active goal-marker display boundary:
+    - room-goal marker composition for practice and ranked room runs
+    - course-goal marker composition for active course runs
+    - world-point conversion for room goal points and course marker points
+    - marker sprite/label lifecycle and teardown
+    - backdrop-ignore object reporting for marker overlays
+  - `OverworldPlayScene.ts` now delegates goal-marker redraws, world-point conversion wrappers, backdrop ignore collection, and shutdown cleanup through that controller instead of carrying the marker-display block inline.
+  - This slice keeps `OverworldPlayScene` method names stable for active goal/course runtime call sites; it only moved the marker composition and overlay ownership layer.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-goal-marker-skill-smoke/state-0.json`
+      - `output/web-game/overworld-goal-marker-skill-smoke/shot-0.png`
+    - targeted browser probe wrote:
+      - `output/web-game/overworld-goal-marker-probe/summary.json`
+      - `output/web-game/overworld-goal-marker-probe/room-goal-markers.png`
+      - `output/web-game/overworld-goal-marker-probe/course-goal-markers.png`
+    - targeted probe confirmed:
+      - room play at `-4,-2` entered `play` with `spriteCount = 1` and the expected `goal-marker-flag-checkered` finish flag
+      - course play at `1,0` entered `play` with `spriteCount = 3`, label texts `S` and `1`, and red/checkered course markers
+      - no page errors were recorded during the room or course flows
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming another active overworld subsystem from `OverworldPlayScene`.
