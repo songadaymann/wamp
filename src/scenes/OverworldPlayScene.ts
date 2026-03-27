@@ -161,6 +161,9 @@ import {
   OverworldRoomTransitionController,
 } from './overworld/roomTransition';
 import {
+  OverworldCourseComposerController,
+} from './overworld/courseComposer';
+import {
   OverworldPresenceOverlayController,
 } from './overworld/presenceOverlays';
 import {
@@ -234,14 +237,6 @@ interface ZoomDebugState {
   cameraMode: CameraMode;
   selected: RoomCoordinates;
   currentRoom: RoomCoordinates;
-}
-
-interface CoursePublishedRoomMeta {
-  roomId: string;
-  coordinates: RoomCoordinates;
-  roomVersion: number;
-  roomTitle: string | null;
-  publishedByUserId: string | null;
 }
 
 export class OverworldPlayScene extends Phaser.Scene {
@@ -355,14 +350,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private quicksandStatusCooldownUntil = 0;
   private readonly roomRepository = createRoomRepository();
   private readonly courseRepository = createCourseRepository();
-  private courseComposerOpen = false;
-  private courseComposerLoading = false;
-  private courseComposerRecord: CourseRecord | null = null;
-  private courseComposerStatusText: string | null = null;
-  private courseComposerSelectedRoomEligible = false;
-  private courseComposerSelectedRoomInDraft = false;
-  private courseComposerSelectedRoomOrder: number | null = null;
-  private readonly courseRoomMetaByRoomId = new Map<string, CoursePublishedRoomMeta>();
   private activeCourseRun: ActiveCourseRunState | null = null;
   private courseEditorReturnTarget: OverworldPlaySceneData['courseEditorReturnTarget'] = null;
 
@@ -397,6 +384,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly combatController: OverworldCombatController;
   private readonly sessionResetController: OverworldSessionResetController;
   private readonly roomTransitionController: OverworldRoomTransitionController;
+  private readonly courseComposerController: OverworldCourseComposerController;
   private readonly presenceOverlayController: OverworldPresenceOverlayController;
   private readonly selectionController: OverworldSelectionController;
   private readonly hudStateController: OverworldHudStateController;
@@ -619,6 +607,56 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.countRoomObjectsByCategory(room, category),
       renderHud: () => this.renderHud(),
     });
+    this.courseComposerController = new OverworldCourseComposerController({
+      roomRepository: this.roomRepository,
+      courseRepository: this.courseRepository,
+      getMode: () => this.mode,
+      setMode: (mode) => {
+        this.mode = mode;
+      },
+      setCameraMode: (mode) => {
+        this.cameraMode = mode;
+      },
+      getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
+      setSelectedCoordinates: (coordinates) => {
+        this.selectedCoordinates = { ...coordinates };
+      },
+      getCurrentRoomCoordinates: () => ({ ...this.currentRoomCoordinates }),
+      setCurrentRoomCoordinates: (coordinates) => {
+        this.currentRoomCoordinates = { ...coordinates };
+      },
+      setWindowCenterCoordinates: (coordinates) => {
+        this.windowCenterCoordinates = { ...coordinates };
+      },
+      setShouldCenterCamera: (value) => {
+        this.shouldCenterCamera = value;
+      },
+      setShouldRespawnPlayer: (value) => {
+        this.shouldRespawnPlayer = value;
+      },
+      getBrowseInspectZoom: () => this.browseInspectZoom,
+      setInspectZoom: (zoom) => {
+        this.inspectZoom = zoom;
+      },
+      syncAppMode: () => this.syncAppMode(),
+      getRoomSnapshotForCoordinates: (coordinates) => this.getRoomSnapshotForCoordinates(coordinates),
+      getSelectedSummaryCourseId: () =>
+        this.hudStateController.getSelectedSummary()?.course?.courseId ?? null,
+      getActiveCourseRun: () => this.activeCourseRun,
+      resetPlaySession: () => {
+        this.sessionResetController.resetPlaySession();
+      },
+      clearTouchGestureState: () => this.clearTouchGestureState(),
+      showTransientStatus: (message) => this.showTransientStatus(message),
+      updateSelectedSummary: () => this.updateSelectedSummary(),
+      redrawWorld: () => this.redrawWorld(),
+      renderHud: () => this.renderHud(),
+      emitStateChanged: () => this.emitCourseComposerStateChanged(),
+      refreshAround: (coordinates, options) => this.refreshAround(coordinates, options),
+      openEditor: (editorData) => this.flowController.openEditor(editorData),
+      startDraftCoursePlayback: (snapshot) =>
+        this.flowController.startCoursePlayback(snapshot, 'draftPreview'),
+    });
     this.objectiveController = new OverworldObjectiveController(
       {
         goalRunController: this.goalRunController,
@@ -684,7 +722,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
       getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
       getActiveCourseSnapshot: () => this.activeCourseSnapshot,
-      getCourseComposerRecord: () => this.courseComposerRecord,
+      getCourseComposerRecord: () => this.courseComposerController.getRecord(),
     });
     this.cameraController = new OverworldCameraController(
       {
@@ -1100,7 +1138,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           isSelf: entry.isSelf,
         })),
       getScore: () => this.score,
-      isCourseComposerLoading: () => this.courseComposerLoading,
+      isCourseComposerLoading: () => this.courseComposerController.isLoading(),
       getZoom: () => this.cameras.main.zoom,
       getTransientStatusMessage: () => this.getTransientStatusMessage(),
       renderHudViewModel: (viewModel) => {
@@ -1269,7 +1307,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         void this.coursePlaybackController.startRemoteCourseRun(runState);
       },
       setCourseComposerStatusText: (text) => {
-        this.courseComposerStatusText = text;
+        this.courseComposerController.setStatusText(text);
       },
       emitCourseComposerStateChanged: () => this.emitCourseComposerStateChanged(),
       renderHud: () => this.renderHud(),
@@ -1322,173 +1360,6 @@ export class OverworldPlayScene extends Phaser.Scene {
       courseId,
       roomId,
     };
-  }
-
-  private syncCourseComposerRecordFromSession(): void {
-    this.courseComposerRecord = getActiveCourseDraftSessionRecord();
-  }
-
-  private setCourseComposerRecord(
-    record: CourseRecord | null,
-    options: { selectedRoomId?: string | null } = {}
-  ): void {
-    setActiveCourseDraftSessionRecord(record, options);
-    this.syncCourseComposerRecordFromSession();
-  }
-
-  private sanitizeCourseComposerRecord(record: CourseRecord): {
-    record: CourseRecord;
-    resetMessage: string | null;
-  } {
-    if (courseRoomRefsFollowLinearPath(record.draft.roomRefs)) {
-      return {
-        record,
-        resetMessage: null,
-      };
-    }
-
-    if (record.published && courseRoomRefsFollowLinearPath(record.published.roomRefs)) {
-      const nextDraft = cloneCourseSnapshot(record.published);
-      nextDraft.status = 'draft';
-      nextDraft.updatedAt = new Date().toISOString();
-      return {
-        record: {
-          ...record,
-          draft: nextDraft,
-        },
-        resetMessage: 'Old draft reset to the published linear course path.',
-      };
-    }
-
-    const reset = createDefaultCourseRecord(record.draft.id);
-    reset.ownerUserId = record.ownerUserId;
-    reset.ownerDisplayName = record.ownerDisplayName;
-    reset.permissions = { ...record.permissions };
-    reset.versions = record.versions.map((version) => ({ ...version, snapshot: cloneCourseSnapshot(version.snapshot) }));
-    reset.published = record.published ? cloneCourseSnapshot(record.published) : null;
-    if (record.draft.title?.trim()) {
-      reset.draft.title = record.draft.title;
-    }
-    return {
-      record: reset,
-      resetMessage: 'Old draft reset for the new linear course builder.',
-    };
-  }
-
-  private getCurrentCourseDraftGoalSetupDisabledReason(
-    draft: CourseSnapshot | null
-  ): string | null {
-    if (!draft?.goal) {
-      return 'Choose a course goal in the editor first.';
-    }
-
-    if (draft.goal && courseGoalRequiresStartPoint(draft.goal) && !draft.startPoint) {
-      return 'Place a course start marker first.';
-    }
-
-    switch (draft.goal.type) {
-      case 'reach_exit':
-        return draft.goal.exit ? null : 'Place a course exit first.';
-      case 'checkpoint_sprint':
-        if (draft.goal.checkpoints.length === 0) {
-          return 'Add at least one checkpoint first.';
-        }
-        return draft.goal.finish ? null : 'Place a course finish marker first.';
-      case 'collect_target':
-      case 'defeat_all':
-      case 'survival':
-        return null;
-    }
-  }
-
-  private getPublishedCourseStillLiveWarningText(): string | null {
-    const published = this.courseComposerRecord?.published ?? null;
-    if (!published) {
-      return null;
-    }
-
-    return `Published course v${published.version} is still live until you unpublish it.`;
-  }
-
-  private getCourseComposerPublishedStateText(): string {
-    const published = this.courseComposerRecord?.published ?? null;
-    if (!published) {
-      return 'Not published';
-    }
-
-    if (this.isCourseComposerDirty()) {
-      return `Published v${published.version} live · draft has unpublished changes`;
-    }
-
-    return `Published v${published.version} live`;
-  }
-
-  private getCourseComposerPublishedDraftWarningText(): string | null {
-    const published = this.courseComposerRecord?.published ?? null;
-    const draft = this.courseComposerRecord?.draft ?? null;
-    if (!published || !draft || draft.roomRefs.length > 0) {
-      return null;
-    }
-
-    return `Draft is empty. Published course v${published.version} is still live until you unpublish it.`;
-  }
-
-  private getCurrentCourseDraftPreviewDisabledReason(): string | null {
-    const draft = this.courseComposerRecord?.draft ?? null;
-    if (!draft || draft.roomRefs.length === 0) {
-      return this.getCourseComposerPublishedDraftWarningText() ?? 'Add at least one room to the course first.';
-    }
-
-    return this.getCurrentCourseDraftGoalSetupDisabledReason(draft);
-  }
-
-  private getCurrentCourseDraftSaveDisabledReason(): string | null {
-    const draft = this.courseComposerRecord?.draft ?? null;
-    if (!draft || draft.roomRefs.length === 0) {
-      return this.getCourseComposerPublishedDraftWarningText() ?? 'Add at least one room before saving.';
-    }
-
-    if (!draft.title?.trim()) {
-      return 'Add a course title before saving.';
-    }
-
-    if (!this.isCourseComposerDirty()) {
-      return 'No unpublished course changes yet.';
-    }
-
-    return null;
-  }
-
-  private getCurrentCourseDraftPublishDisabledReason(): string | null {
-    const draft = this.courseComposerRecord?.draft ?? null;
-    if (!draft || draft.roomRefs.length < 2) {
-      const published = this.courseComposerRecord?.published ?? null;
-      return published
-        ? `Add at least 2 rooms before publishing. Published course v${published.version} is still live until you republish or unpublish it.`
-        : 'Add at least 2 rooms before publishing.';
-    }
-
-    if (!draft.title?.trim()) {
-      return 'Add a course title before publishing.';
-    }
-
-    return this.getCurrentCourseDraftGoalSetupDisabledReason(draft);
-  }
-
-  private getIsCurrentCourseDraftPreviewReady(): boolean {
-    return this.getCurrentCourseDraftPreviewDisabledReason() === null;
-  }
-
-  private getCourseComposerUnpublishDisabledReason(): string | null {
-    if (!this.courseComposerRecord?.published) {
-      return 'This course is not published yet.';
-    }
-
-    if (!this.courseComposerRecord.permissions.canUnpublish) {
-      return 'This course is read-only for your account.';
-    }
-
-    return null;
   }
 
   private get currentRoomLeaderboard() {
@@ -1683,14 +1554,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.shouldCenterCamera = false;
     this.shouldRespawnPlayer = false;
     this.presenceController.reset();
-    this.courseComposerOpen = false;
-    this.courseComposerLoading = false;
-    this.courseComposerRecord = null;
-    this.courseComposerStatusText = null;
-    this.courseComposerSelectedRoomEligible = false;
-    this.courseComposerSelectedRoomInDraft = false;
-    this.courseComposerSelectedRoomOrder = null;
-    this.courseRoomMetaByRoomId.clear();
+    this.courseComposerController.reset();
     this.coursePlaybackController.clearActiveCourseRoomOverrides();
     this.activeCourseRun = null;
     this.courseEditorReturnTarget = null;
@@ -2025,11 +1889,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.courseEditorReturnTarget = data.courseEditorReturnTarget ?? null;
     }
 
-    this.syncCourseComposerRecordFromSession();
-    if (data?.courseEditorReturned && this.courseComposerRecord) {
-      this.courseComposerStatusText = 'Course draft updated.';
-      void this.refreshCourseComposerSelectedRoomState();
-      this.emitCourseComposerStateChanged();
+    this.courseComposerController.syncRecordFromSession();
+    if (data?.courseEditorReturned) {
+      this.courseComposerController.handleCourseEditorReturned();
     }
 
     if (data?.mode) {
@@ -2789,633 +2651,63 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   closeCourseComposer(): void {
-    this.courseComposerOpen = false;
-    this.emitCourseComposerStateChanged();
-    this.renderHud();
+    this.courseComposerController.close();
   }
 
   getCourseComposerState(): CourseComposerState | null {
-    if (!this.courseComposerOpen || !this.courseComposerRecord) {
-      return null;
-    }
-
-    const draft = this.courseComposerRecord.draft;
-    const testDraftDisabledReason =
-      !this.courseComposerRecord.permissions.canSaveDraft
-        ? 'This course is read-only for your account.'
-        : this.getCurrentCourseDraftPreviewDisabledReason();
-    const saveDraftDisabledReason =
-      !this.courseComposerRecord.permissions.canSaveDraft
-        ? 'This course is read-only for your account.'
-        : this.getCurrentCourseDraftSaveDisabledReason();
-    const publishCourseDisabledReason =
-      !this.courseComposerRecord.permissions.canPublish
-        ? 'This course is read-only for your account.'
-        : this.getCurrentCourseDraftPublishDisabledReason();
-    const unpublishCourseDisabledReason = this.getCourseComposerUnpublishDisabledReason();
-    return {
-      courseId: draft.id,
-      title: draft.title ?? '',
-      roomRefs: draft.roomRefs.map((roomRef) => ({
-        ...roomRef,
-        coordinates: { ...roomRef.coordinates },
-      })),
-      goalType: draft.goal?.type ?? null,
-      timeLimitSeconds:
-        draft.goal && 'timeLimitMs' in draft.goal && draft.goal.timeLimitMs !== null
-          ? Math.max(1, Math.round(draft.goal.timeLimitMs / 1000))
-          : null,
-      requiredCount: draft.goal?.type === 'collect_target' ? draft.goal.requiredCount : null,
-      survivalSeconds:
-        draft.goal?.type === 'survival' ? Math.max(1, Math.round(draft.goal.durationMs / 1000)) : null,
-      startPointRoomId: draft.startPoint?.roomId ?? null,
-      checkpointCount: draft.goal?.type === 'checkpoint_sprint' ? draft.goal.checkpoints.length : 0,
-      finishRoomId:
-        draft.goal?.type === 'checkpoint_sprint'
-          ? draft.goal.finish?.roomId ?? null
-          : draft.goal?.type === 'reach_exit'
-            ? draft.goal.exit?.roomId ?? null
-            : null,
-      selectedRoomInDraft: this.courseComposerSelectedRoomInDraft,
-      selectedRoomEligible: this.courseComposerSelectedRoomEligible,
-      selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
-      canEdit: this.courseComposerRecord.permissions.canSaveDraft,
-      published: Boolean(this.courseComposerRecord.published),
-      publishedVersion: this.courseComposerRecord.published?.version ?? null,
-      publishedRoomCount: this.courseComposerRecord.published?.roomRefs.length ?? 0,
-      publishedStateText: this.getCourseComposerPublishedStateText(),
-      publishedDraftWarningText: this.getCourseComposerPublishedDraftWarningText(),
-      dirty: this.isCourseComposerDirty(),
-      statusText: this.courseComposerLoading
-        ? 'Loading course...'
-        : this.courseComposerStatusText,
-      selectedRoomOrder: this.courseComposerSelectedRoomOrder,
-      canMoveSelectedRoomEarlier: this.canMoveSelectedCourseRoom(-1),
-      canMoveSelectedRoomLater: this.canMoveSelectedCourseRoom(1),
-      canEditSelectedRoom:
-        this.courseComposerRecord.permissions.canSaveDraft &&
-        getActiveCourseDraftSessionSelectedRoomId() !== null,
-      canTestDraft: testDraftDisabledReason === null,
-      testDraftDisabledReason,
-      canSaveDraft: saveDraftDisabledReason === null,
-      saveDraftDisabledReason,
-      canPublishCourse: publishCourseDisabledReason === null,
-      publishCourseDisabledReason,
-      showUnpublishCourse: Boolean(this.courseComposerRecord.published),
-      canUnpublishCourse: unpublishCourseDisabledReason === null,
-      unpublishCourseDisabledReason,
-    };
+    return this.courseComposerController.getState();
   }
 
   setCourseTitle(title: string | null): void {
-    this.updateCourseComposerDraft((draft) => {
-      draft.title = title?.trim() ? title.trim() : null;
-    });
+    this.courseComposerController.setCourseTitle(title);
   }
 
   addSelectedRoomToCourseDraft(): void {
-    void this.addSelectedRoomToCourseDraftAsync();
-  }
-
-  private canMoveSelectedCourseRoom(direction: -1 | 1): boolean {
-    const draft = this.courseComposerRecord?.draft ?? null;
-    const selectedRoomId = getActiveCourseDraftSessionSelectedRoomId();
-    if (!draft || !selectedRoomId) {
-      return false;
-    }
-
-    return this.buildMovedCourseRoomRefs(draft.roomRefs, selectedRoomId, direction) !== null;
-  }
-
-  private buildMovedCourseRoomRefs(
-    roomRefs: CourseRoomRef[],
-    roomId: string,
-    direction: -1 | 1,
-  ): CourseRoomRef[] | null {
-    const currentIndex = roomRefs.findIndex((roomRef) => roomRef.roomId === roomId);
-    if (currentIndex < 0) {
-      return null;
-    }
-
-    const nextIndex = Phaser.Math.Clamp(currentIndex + direction, 0, roomRefs.length - 1);
-    if (nextIndex === currentIndex) {
-      return null;
-    }
-
-    const nextRoomRefs = [...roomRefs];
-    const [moved] = nextRoomRefs.splice(currentIndex, 1);
-    nextRoomRefs.splice(nextIndex, 0, moved);
-    if (!courseRoomRefsFollowLinearPath(nextRoomRefs)) {
-      return null;
-    }
-
-    return nextRoomRefs;
+    this.courseComposerController.addSelectedRoomToCourseDraft();
   }
 
   removeSelectedRoomFromCourseDraft(): void {
-    if (!this.courseComposerRecord?.permissions.canSaveDraft) {
-      return;
-    }
-
-    const selectedRoomId = getActiveCourseDraftSessionSelectedRoomId();
-    if (!selectedRoomId) {
-      return;
-    }
-    this.updateCourseComposerDraft((draft) => {
-      draft.roomRefs = draft.roomRefs.filter((roomRef) => roomRef.roomId !== selectedRoomId);
-      if (draft.startPoint?.roomId === selectedRoomId) {
-        draft.startPoint = null;
-      }
-      if (draft.goal?.type === 'reach_exit' && draft.goal.exit?.roomId === selectedRoomId) {
-        draft.goal.exit = null;
-      }
-      if (draft.goal?.type === 'checkpoint_sprint') {
-        draft.goal.checkpoints = draft.goal.checkpoints.filter(
-          (checkpoint) => checkpoint.roomId !== selectedRoomId
-        );
-        if (draft.goal.finish?.roomId === selectedRoomId) {
-          draft.goal.finish = null;
-        }
-      }
-    });
-    void this.refreshCourseComposerSelectedRoomState();
+    this.courseComposerController.removeSelectedRoomFromCourseDraft();
   }
 
   moveSelectedRoomEarlierInCourseDraft(): void {
-    this.moveSelectedRoomInCourseDraft(-1);
+    this.courseComposerController.moveSelectedRoomEarlierInCourseDraft();
   }
 
   moveSelectedRoomLaterInCourseDraft(): void {
-    this.moveSelectedRoomInCourseDraft(1);
+    this.courseComposerController.moveSelectedRoomLaterInCourseDraft();
   }
 
   selectCourseRoomInComposer(roomId: string): void {
-    if (!this.courseComposerRecord) {
-      return;
-    }
-
-    const roomRef = this.courseComposerRecord.draft.roomRefs.find((candidate) => candidate.roomId === roomId);
-    if (!roomRef) {
-      return;
-    }
-
-    setActiveCourseDraftSessionSelectedRoom(roomId);
-    this.courseComposerSelectedRoomOrder = getActiveCourseDraftSessionSelectedRoomOrder();
-    this.selectedCoordinates = { ...roomRef.coordinates };
-    if (this.mode !== 'play') {
-      this.currentRoomCoordinates = { ...roomRef.coordinates };
-    }
-    this.updateSelectedSummary();
-    this.redrawWorld();
-    this.renderHud();
-    this.emitCourseComposerStateChanged();
+    this.courseComposerController.selectCourseRoomInComposer(roomId);
   }
 
   editSelectedCourseRoom(): boolean {
-    if (!this.courseComposerRecord?.permissions.canSaveDraft) {
-      return false;
-    }
-
-    const roomId = getActiveCourseDraftSessionSelectedRoomId();
-    const roomRef = roomId
-      ? this.courseComposerRecord.draft.roomRefs.find((candidate) => candidate.roomId === roomId) ?? null
-      : null;
-    if (!roomId) {
-      this.courseComposerStatusText = 'Select a room from this course to open it in the editor.';
-      this.emitCourseComposerStateChanged();
-      return false;
-    }
-
-    if (!roomRef) {
-      this.courseComposerStatusText = 'Selected course room is no longer in this draft.';
-      this.emitCourseComposerStateChanged();
-      return false;
-    }
-
-    const roomSnapshot = this.getRoomSnapshotForCoordinates(roomRef.coordinates);
-    if (!roomSnapshot) {
-      this.courseComposerStatusText = 'Selected course room is not loaded yet.';
-      this.emitCourseComposerStateChanged();
-      return false;
-    }
-
-    this.courseComposerStatusText = 'Editing course room in the room editor...';
-    this.emitCourseComposerStateChanged();
-
-    const editorData: EditorSceneData = {
-      roomCoordinates: { ...roomRef.coordinates },
-      source: 'world',
-      roomSnapshot,
-      courseEdit: {
-        courseId: this.courseComposerRecord.draft.id,
-        roomId: roomRef.roomId,
-      },
-    };
-
-    this.flowController.openEditor(editorData);
-    return true;
+    return this.courseComposerController.editSelectedCourseRoom();
   }
 
   private async continueCourseEditorNavigation(offset: -1 | 1): Promise<void> {
-    const draft = getActiveCourseDraftSessionDraft();
-    const currentOrder = getActiveCourseDraftSessionSelectedRoomOrder();
-    const nextRoomRef =
-      draft && currentOrder !== null ? draft.roomRefs[currentOrder + offset] ?? null : null;
-    if (!draft || currentOrder === null || !nextRoomRef) {
-      this.courseComposerStatusText =
-        offset < 0
-          ? 'Previous course room is no longer available.'
-          : 'Next course room is no longer available.';
-      await this.refreshCourseComposerSelectedRoomState();
-      this.emitCourseComposerStateChanged();
-      hideBusyOverlay();
-      return;
-    }
-
-    setActiveCourseDraftSessionSelectedRoom(nextRoomRef.roomId);
-    this.syncCourseComposerRecordFromSession();
-    this.courseComposerSelectedRoomOrder = getActiveCourseDraftSessionSelectedRoomOrder();
-    this.courseComposerSelectedRoomInDraft = true;
-    this.selectedCoordinates = { ...nextRoomRef.coordinates };
-    if (this.mode !== 'play') {
-      this.currentRoomCoordinates = { ...nextRoomRef.coordinates };
-    }
-    this.windowCenterCoordinates = { ...nextRoomRef.coordinates };
-    this.shouldCenterCamera = true;
-    this.updateSelectedSummary();
-    this.redrawWorld();
-    this.renderHud();
-
-    await this.refreshAround(nextRoomRef.coordinates, { forceChunkReload: true });
-
-    const roomSnapshot =
-      getActiveCourseDraftSessionRoomOverride(nextRoomRef.roomId) ??
-      this.getRoomSnapshotForCoordinates(nextRoomRef.coordinates) ??
-      (await (async () => {
-        const record = await this.roomRepository.loadRoom(nextRoomRef.roomId, nextRoomRef.coordinates);
-        return record.draft ? cloneRoomSnapshot(record.draft) : null;
-      })());
-    if (!roomSnapshot) {
-      this.courseComposerStatusText =
-        offset < 0
-          ? 'Failed to reopen the previous course room.'
-          : 'Failed to reopen the next course room.';
-      await this.refreshCourseComposerSelectedRoomState();
-      this.emitCourseComposerStateChanged();
-      hideBusyOverlay();
-      return;
-    }
-
-    this.courseComposerStatusText = null;
-    this.flowController.openEditor({
-      roomCoordinates: { ...nextRoomRef.coordinates },
-      source: 'world',
-      roomSnapshot: cloneRoomSnapshot(roomSnapshot),
-      courseEdit: {
-        courseId: draft.id,
-        roomId: nextRoomRef.roomId,
-      },
-    });
+    await this.courseComposerController.continueCourseEditorNavigation(offset);
   }
 
   async testDraftCourse(): Promise<void> {
-    const draft = this.courseComposerRecord?.draft ?? null;
-    const disabledReason =
-      !this.courseComposerRecord?.permissions.canSaveDraft
-        ? 'This course is read-only for your account.'
-        : this.getCurrentCourseDraftPreviewDisabledReason();
-    if (!draft || disabledReason) {
-      this.courseComposerStatusText = disabledReason ?? 'Course draft is not ready to test.';
-      this.emitCourseComposerStateChanged();
-      this.renderHud();
-      return;
-    }
-
-    showBusyOverlay('Testing draft course...', 'Loading draft...');
-    try {
-      const snapshot = cloneCourseSnapshot(draft);
-      await this.flowController.startCoursePlayback(snapshot, 'draftPreview');
-      this.showTransientStatus('Testing draft course.');
-      hideBusyOverlay();
-    } catch (error) {
-      console.error('Failed to test draft course', error);
-      showBusyError(
-        error instanceof Error ? error.message : 'Failed to test draft course.',
-        {
-          closeHandler: () => hideBusyOverlay(),
-        }
-      );
-    }
+    await this.courseComposerController.testDraftCourse();
   }
 
   async saveCourseDraft(): Promise<void> {
-    const courseRecord = this.courseComposerRecord;
-    const disabledReason =
-      !courseRecord?.permissions.canSaveDraft
-        ? 'This course is read-only for your account.'
-        : this.getCurrentCourseDraftSaveDisabledReason();
-    if (disabledReason) {
-      this.courseComposerStatusText = disabledReason;
-      this.emitCourseComposerStateChanged();
-      this.renderHud();
-      return;
-    }
-    if (!courseRecord) {
-      return;
-    }
-
-    this.courseComposerStatusText = 'Saving course draft...';
-    this.emitCourseComposerStateChanged();
-    try {
-      const saved = await this.courseRepository.saveDraft(courseRecord.draft);
-      this.setCourseComposerRecord(saved, {
-        selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
-      });
-      this.courseComposerStatusText = 'Course draft saved.';
-      await this.refreshCourseComposerSelectedRoomState();
-      await this.refreshAround(this.windowCenterCoordinates, { forceChunkReload: true });
-    } catch (error) {
-      console.error('Failed to save course draft', error);
-      this.courseComposerStatusText =
-        error instanceof Error ? error.message : 'Failed to save course draft.';
-    } finally {
-      this.emitCourseComposerStateChanged();
-      this.renderHud();
-    }
+    await this.courseComposerController.saveCourseDraft();
   }
 
   async publishCourseDraft(): Promise<void> {
-    const courseRecord = this.courseComposerRecord;
-    const disabledReason =
-      !courseRecord?.permissions.canPublish
-        ? 'This course is read-only for your account.'
-        : this.getCurrentCourseDraftPublishDisabledReason();
-    if (disabledReason) {
-      this.courseComposerStatusText = disabledReason;
-      this.emitCourseComposerStateChanged();
-      this.renderHud();
-      return;
-    }
-    if (!courseRecord) {
-      return;
-    }
-
-    this.courseComposerStatusText = 'Publishing course...';
-    this.emitCourseComposerStateChanged();
-    try {
-      const saved = await this.courseRepository.saveDraft(courseRecord.draft);
-      this.setCourseComposerRecord(saved, {
-        selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
-      });
-      const published = await this.courseRepository.publishCourse(courseRecord.draft.id);
-      this.setCourseComposerRecord(published, {
-        selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
-      });
-      this.courseComposerStatusText = 'Course published.';
-      await this.refreshCourseComposerSelectedRoomState();
-      await this.refreshAround(this.windowCenterCoordinates, { forceChunkReload: true });
-    } catch (error) {
-      console.error('Failed to publish course', error);
-      this.courseComposerStatusText =
-        error instanceof Error ? error.message : 'Failed to publish course.';
-    } finally {
-      this.emitCourseComposerStateChanged();
-      this.renderHud();
-    }
+    await this.courseComposerController.publishCourseDraft();
   }
 
   async unpublishCourse(): Promise<void> {
-    const courseRecord = this.courseComposerRecord;
-    const disabledReason = this.getCourseComposerUnpublishDisabledReason();
-    if (disabledReason) {
-      this.courseComposerStatusText = disabledReason;
-      this.emitCourseComposerStateChanged();
-      this.renderHud();
-      return;
-    }
-    if (!courseRecord) {
-      return;
-    }
-
-    this.courseComposerStatusText = 'Unpublishing course...';
-    this.emitCourseComposerStateChanged();
-    try {
-      const unpublished = await this.courseRepository.unpublishCourse(courseRecord.draft.id);
-      const preservedDraft = cloneCourseSnapshot(courseRecord.draft);
-      preservedDraft.status = 'draft';
-      preservedDraft.publishedAt = null;
-      this.setCourseComposerRecord(
-        {
-          ...unpublished,
-          draft: preservedDraft,
-        },
-        {
-          selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
-        }
-      );
-
-      const unpublishedActiveCourse =
-        this.activeCourseRun?.course.id === courseRecord.draft.id;
-      if (unpublishedActiveCourse) {
-        const returnCoordinates = this.activeCourseRun?.returnCoordinates ?? this.currentRoomCoordinates;
-        this.sessionResetController.resetPlaySession();
-        this.clearTouchGestureState();
-        this.mode = 'browse';
-        this.cameraMode = 'inspect';
-        this.inspectZoom = this.browseInspectZoom;
-        this.syncAppMode();
-        this.selectedCoordinates = { ...returnCoordinates };
-        this.currentRoomCoordinates = { ...returnCoordinates };
-        this.shouldCenterCamera = true;
-        this.shouldRespawnPlayer = false;
-        setFocusedCoordinatesInUrl(this.currentRoomCoordinates);
-        this.showTransientStatus('Stopped course because it was unpublished.');
-      }
-
-      this.courseComposerStatusText = 'Course unpublished. The live course is no longer public.';
-      await this.refreshCourseComposerSelectedRoomState();
-      await this.refreshAround(this.currentRoomCoordinates, { forceChunkReload: true });
-    } catch (error) {
-      console.error('Failed to unpublish course', error);
-      this.courseComposerStatusText =
-        error instanceof Error ? error.message : 'Failed to unpublish course.';
-    } finally {
-      this.emitCourseComposerStateChanged();
-      this.renderHud();
-    }
-  }
-
-  private async addSelectedRoomToCourseDraftAsync(): Promise<void> {
-    if (!this.courseComposerRecord?.permissions.canSaveDraft) {
-      return;
-    }
-
-    const meta = await this.loadPublishedRoomMeta(this.selectedCoordinates);
-    if (!meta || !this.canSelectedRoomJoinCourseDraft(meta)) {
-      this.courseComposerStatusText = 'Selected room cannot be added to this course.';
-      this.emitCourseComposerStateChanged();
-      return;
-    }
-
-    this.updateCourseComposerDraft((draft) => {
-      const nextRoomRef = {
-        roomId: meta.roomId,
-        coordinates: { ...meta.coordinates },
-        roomVersion: meta.roomVersion,
-        roomTitle: meta.roomTitle,
-      };
-      if (draft.roomRefs.length === 0) {
-        draft.roomRefs = [nextRoomRef];
-        return;
-      }
-      const lastRoomRef = draft.roomRefs[draft.roomRefs.length - 1];
-      if (areCourseRoomRefsOrthogonallyAdjacent(nextRoomRef, lastRoomRef)) {
-        draft.roomRefs = [...draft.roomRefs, nextRoomRef];
-      }
-    });
-    setActiveCourseDraftSessionSelectedRoom(meta.roomId);
-    await this.refreshCourseComposerSelectedRoomState();
-  }
-
-  private moveSelectedRoomInCourseDraft(direction: -1 | 1): void {
-    if (!this.courseComposerRecord?.permissions.canSaveDraft) {
-      return;
-    }
-
-    const roomId = getActiveCourseDraftSessionSelectedRoomId();
-    if (!roomId) {
-      return;
-    }
-    const nextRoomRefs = this.buildMovedCourseRoomRefs(this.courseComposerRecord.draft.roomRefs, roomId, direction);
-    if (!nextRoomRefs) {
-      this.courseComposerStatusText =
-        direction < 0
-          ? 'This room cannot move earlier without breaking the course path.'
-          : 'This room cannot move later without breaking the course path.';
-      this.emitCourseComposerStateChanged();
-      this.renderHud();
-      return;
-    }
-
-    this.updateCourseComposerDraft((draft) => {
-      draft.roomRefs = nextRoomRefs;
-    });
-    this.courseComposerStatusText =
-      direction < 0 ? 'Moved selected room earlier.' : 'Moved selected room later.';
-    this.emitCourseComposerStateChanged();
-    this.renderHud();
-    void this.refreshCourseComposerSelectedRoomState();
-  }
-
-  private updateCourseComposerDraft(mutator: (draft: CourseSnapshot) => void): void {
-    if (!this.courseComposerRecord?.permissions.canSaveDraft) {
-      return;
-    }
-
-    updateActiveCourseDraftSession((draft) => {
-      mutator(draft);
-    });
-    this.syncCourseComposerRecordFromSession();
-    this.emitCourseComposerStateChanged();
-    this.renderHud();
-  }
-
-  private isCourseComposerDirty(): boolean {
-    return isActiveCourseDraftSessionDirty();
+    await this.courseComposerController.unpublishCourse();
   }
 
   private async refreshCourseComposerSelectedRoomState(): Promise<void> {
-    if (!this.courseComposerOpen || !this.courseComposerRecord) {
-      return;
-    }
-
-    const roomRefs = this.courseComposerRecord.draft.roomRefs;
-    const worldSelectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
-    const worldSelectedRoomOrder = roomRefs.findIndex((roomRef) => roomRef.roomId === worldSelectedRoomId);
-    this.courseComposerSelectedRoomInDraft = worldSelectedRoomOrder >= 0;
-    if (worldSelectedRoomOrder >= 0) {
-      setActiveCourseDraftSessionSelectedRoom(worldSelectedRoomId);
-    }
-    this.courseComposerSelectedRoomOrder = getActiveCourseDraftSessionSelectedRoomOrder();
-
-    const meta = await this.loadPublishedRoomMeta(this.selectedCoordinates);
-    this.courseComposerSelectedRoomEligible =
-      meta !== null && this.canSelectedRoomJoinCourseDraft(meta);
-    this.emitCourseComposerStateChanged();
-  }
-
-  private async loadPublishedRoomMeta(
-    coordinates: RoomCoordinates
-  ): Promise<CoursePublishedRoomMeta | null> {
-    const roomId = roomIdFromCoordinates(coordinates);
-    const cached = this.courseRoomMetaByRoomId.get(roomId);
-    if (cached) {
-      return cached;
-    }
-
-    const record = await this.roomRepository.loadRoom(roomId, coordinates);
-    if (!record.published) {
-      return null;
-    }
-
-    const publishedVersion =
-      record.versions.find((version) => version.version === record.published?.version) ?? null;
-    const meta: CoursePublishedRoomMeta = {
-      roomId,
-      coordinates: { ...coordinates },
-      roomVersion: record.published.version,
-      roomTitle: record.published.title,
-      publishedByUserId:
-        publishedVersion?.publishedByUserId ?? record.lastPublishedByUserId ?? null,
-    };
-    this.courseRoomMetaByRoomId.set(roomId, meta);
-    return meta;
-  }
-
-  private canSelectedRoomJoinCourseDraft(meta: CoursePublishedRoomMeta): boolean {
-    if (!this.courseComposerRecord?.permissions.canSaveDraft) {
-      return false;
-    }
-
-    const authState = getAuthDebugState();
-    if (!authState.authenticated || !authState.user?.id) {
-      return false;
-    }
-
-    if (meta.publishedByUserId !== authState.user.id) {
-      return false;
-    }
-
-    if (
-      this.hudStateController.getSelectedSummary()?.course?.courseId &&
-      this.hudStateController.getSelectedSummary()?.course?.courseId !== this.courseComposerRecord.draft.id
-    ) {
-      return false;
-    }
-
-    if (this.courseComposerRecord.draft.roomRefs.some((roomRef) => roomRef.roomId === meta.roomId)) {
-      return false;
-    }
-
-    if (this.courseComposerRecord.draft.roomRefs.length >= MAX_COURSE_ROOMS) {
-      return false;
-    }
-
-    if (this.courseComposerRecord.ownerUserId && this.courseComposerRecord.ownerUserId !== meta.publishedByUserId) {
-      return false;
-    }
-
-    if (this.courseComposerRecord.draft.roomRefs.length === 0) {
-      return true;
-    }
-
-    if (!courseRoomRefsFollowLinearPath(this.courseComposerRecord.draft.roomRefs)) {
-      return false;
-    }
-
-    const lastRoomRef =
-      this.courseComposerRecord.draft.roomRefs[this.courseComposerRecord.draft.roomRefs.length - 1];
-    return areCourseRoomRefsOrthogonallyAdjacent(meta, lastRoomRef);
+    await this.courseComposerController.refreshSelectedRoomState();
   }
 
   private getPlayerEffectOrigin(): { x: number; y: number } | null {

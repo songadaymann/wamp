@@ -4563,3 +4563,34 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - no console or page errors were recorded
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next large remaining seam is the course-composer state/navigation block that still lives in `OverworldPlayScene.ts`.
+
+- March 27, 2026: extracted the overworld course-composer controller as the next phase-8 slice.
+  - Added `src/scenes/overworld/courseComposer.ts` with `OverworldCourseComposerController` to own the remaining overworld-side course-composer state/navigation block:
+    - active draft record/session sync from `draftSession`
+    - composer state assembly for the HUD bridge
+    - selected-room membership / eligibility refresh against published room metadata
+    - course-room add/remove/reorder mutations
+    - draft test/save/publish/unpublish actions
+    - room-editor handoff and previous/next course-room navigation after editor returns
+  - `OverworldPlayScene.ts` now delegates the old inline course-composer helpers and bridge methods through that controller instead of carrying:
+    - composer draft/session bookkeeping
+    - save/publish/unpublish status text and disabled-reason derivation
+    - selected-room eligibility / metadata loading
+    - course-room edit and next/previous navigation glue
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke wrote:
+      - `output/web-game/overworld-course-composer-controller-skill-smoke/state-0.json`
+      - `output/web-game/overworld-course-composer-controller-skill-smoke/shot-0.png`
+    - focused browser probe wrote:
+      - `output/web-game/overworld-course-composer-controller-probe/summary.json`
+      - `output/web-game/overworld-course-composer-controller-probe/before-composer-nav.png`
+      - `output/web-game/overworld-course-composer-controller-probe/after-composer-nav.png`
+    - targeted checks confirmed:
+      - a seeded two-room draft (`0,0` -> `-4,-2`) produced a valid composer state with `selectedRoomId = 0,0`
+      - driving `continueCourseEditorNavigation(1)` through the extracted controller moved the active draft selection to `-4,-2`
+      - the controller reopened `EditorScene` for `-4,-2`, with `courseEdit = { courseId: 'probe-course-composer-controller', roomId: '-4,-2' }`
+      - `OverworldPlayScene` slept cleanly while `EditorScene` became the active scene
+      - no console or page errors were recorded
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the remaining work is now mostly final consolidation / whatever small runtime shell still justifies one more extraction before we call phase 8 complete.
