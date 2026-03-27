@@ -111,6 +111,7 @@ import {
   type GoalRunState,
 } from './overworld/goalRuns';
 import { OverworldSceneFlowController } from './overworld/flow';
+import { OverworldInspectInputController } from './overworld/inspectInput';
 import {
   getCenteredRoomBadgePosition as calculateCenteredRoomBadgePosition,
   getRoomBadgeOverlayScale as calculateRoomBadgeOverlayScale,
@@ -222,7 +223,6 @@ const SELECTED_ROOM_PLAY_BUTTON_MAX_SCALE = 8;
 const BUTTON_ZOOM_FACTOR = 1.12;
 const WHEEL_ZOOM_SENSITIVITY = 0.003;
 const PLAY_ROOM_FIT_PADDING = 16;
-const PAN_THRESHOLD = 4;
 const EDGE_WALL_THICKNESS = 12;
 const RESPAWN_FALL_DISTANCE = ROOM_PX_HEIGHT * 2;
 const FOLLOW_CAMERA_LERP = 0.12;
@@ -418,10 +418,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     E: Phaser.Input.Keyboard.Key;
   };
   private cameraToggleKey!: Phaser.Input.Keyboard.Key;
-  private modifierKeys!: {
-    ALT: Phaser.Input.Keyboard.Key;
-    SPACE: Phaser.Input.Keyboard.Key;
-  };
   private isCrouching = false;
   private activeAttackAnimation: DefaultPlayerAnimationState | null = null;
   private activeAttackAnimationUntil = 0;
@@ -483,24 +479,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private activeCourseRun: ActiveCourseRunState | null = null;
   private courseEditorReturnTarget: OverworldPlaySceneData['courseEditorReturnTarget'] = null;
 
-  private isPanning = false;
-  private panStartPointer = { x: 0, y: 0 };
-  private panCurrentPointer = { x: 0, y: 0 };
-  private panStartScroll = { x: 0, y: 0 };
-  private touchPointers = new Map<number, { x: number; y: number }>();
-  private activePrimaryTouchId: number | null = null;
-  private touchTapCandidate:
-    | {
-        pointerId: number;
-        startX: number;
-        startY: number;
-      }
-    | null = null;
-  private touchPinchDistance = 0;
-  private touchPinchAnchor = { x: 0, y: 0 };
-  private altDown = false;
-  private spaceDown = false;
-
   private coyoteTime = 0;
   private jumpBuffered = false;
   private jumpBufferTime = 0;
@@ -517,6 +495,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private score = 0;
   private readonly goalRunController: OverworldGoalRunController;
   private readonly flowController: OverworldSceneFlowController;
+  private readonly inspectInputController: OverworldInspectInputController;
   private readonly roomBadgeScaleConfig: RoomBadgeScaleConfig = {
     hideZoom: ROOM_BADGE_HIDE_ZOOM,
     fadeStartZoom: ROOM_BADGE_FADE_START_ZOOM,
@@ -790,6 +769,24 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       emitCourseComposerStateChanged: () => this.emitCourseComposerStateChanged(),
       renderHud: () => this.renderHud(),
+    });
+    this.inspectInputController = new OverworldInspectInputController(this, {
+      getMode: () => this.mode,
+      getCameraMode: () => this.cameraMode,
+      setCameraMode: (mode) => {
+        this.cameraMode = mode;
+      },
+      applyCameraMode: () => this.applyCameraMode(),
+      fitLoadedWorld: () => this.fitLoadedWorld(),
+      returnToWorld: () => this.returnToWorld(),
+      adjustZoomByFactor: (factor, screenX, screenY) =>
+        this.adjustZoomByFactor(factor, screenX, screenY),
+      constrainInspectCamera: () => this.constrainInspectCamera(),
+      getRoomCoordinatesForPoint: (x, y) => this.getRoomCoordinatesForPoint(x, y),
+      isWithinLoadedRoomBounds: (coordinates) => this.isWithinLoadedRoomBounds(coordinates),
+      onSelectCoordinates: (coordinates) => this.selectRoomCoordinates(coordinates),
+      syncBrowseWindowToCamera: (panStartPointer, panCurrentPointer) =>
+        this.syncBrowseWindowToCamera(panStartPointer, panCurrentPointer),
     });
   }
 
@@ -1078,8 +1075,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
     });
 
-    this.setupControls();
-    this.setupPointerControls();
+    this.setupGameplayKeys();
+    this.inspectInputController.initialize();
     this.setupCamera();
     this.initializePresenceClient();
     this.game.canvas.addEventListener('wheel', this.handleCanvasWheel, { passive: false });
@@ -1364,17 +1361,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.quicksandTouchedUntil = 0;
     this.quicksandVisualSink = 0;
     this.quicksandStatusCooldownUntil = 0;
-    this.isPanning = false;
-    this.panStartPointer = { x: 0, y: 0 };
-    this.panCurrentPointer = { x: 0, y: 0 };
-    this.panStartScroll = { x: 0, y: 0 };
-    this.touchPointers = new Map();
-    this.activePrimaryTouchId = null;
-    this.touchTapCandidate = null;
-    this.touchPinchDistance = 0;
-    this.touchPinchAnchor = { x: 0, y: 0 };
-    this.altDown = false;
-    this.spaceDown = false;
+    this.inspectInputController.reset();
     this.coyoteTime = 0;
     this.jumpBuffered = false;
     this.jumpBufferTime = 0;
@@ -1425,7 +1412,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.presenceController.initialize();
   }
 
-  private setupControls(): void {
+  private setupGameplayKeys(): void {
     const keyboard = this.input.keyboard!;
 
     this.cursors = keyboard.createCursorKeys();
@@ -1440,303 +1427,6 @@ export class OverworldPlayScene extends Phaser.Scene {
       E: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
     };
     this.cameraToggleKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.BACKTICK);
-    this.modifierKeys = {
-      ALT: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ALT),
-      SPACE: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
-    };
-    keyboard.on('keydown-F', () => {
-      this.fitLoadedWorld();
-    });
-    keyboard.on('keydown-P', () => {
-      if (this.mode === 'play') {
-        this.returnToWorld();
-      }
-    });
-    keyboard.on('keydown-ESC', () => {
-      if (this.mode === 'play') {
-        this.returnToWorld();
-      }
-    });
-    keyboard.on('keydown-ALT', () => {
-      this.altDown = true;
-    });
-    keyboard.on('keyup-ALT', () => {
-      this.altDown = false;
-      this.isPanning = false;
-    });
-    keyboard.on('keydown-SPACE', () => {
-      this.spaceDown = true;
-    });
-    keyboard.on('keyup-SPACE', () => {
-      this.spaceDown = false;
-      this.isPanning = false;
-    });
-  }
-
-  private setupPointerControls(): void {
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (this.handleTouchPointerDown(pointer)) {
-        return;
-      }
-
-      const wantsPan = this.pointerRequestsPan(pointer);
-      if (wantsPan) {
-        if (this.cameraMode === 'follow') {
-          this.cameraMode = 'inspect';
-          this.applyCameraMode();
-        }
-
-        this.isPanning = true;
-        this.panStartPointer = { x: pointer.x, y: pointer.y };
-        this.panCurrentPointer = { x: pointer.x, y: pointer.y };
-        this.panStartScroll = {
-          x: this.cameras.main.scrollX,
-          y: this.cameras.main.scrollY,
-        };
-        return;
-      }
-
-      this.handleRoomSelection(pointer);
-    });
-
-    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (this.handleTouchPointerMove(pointer)) {
-        return;
-      }
-
-      if (!this.isPanning) return;
-
-      const distance = Phaser.Math.Distance.Between(
-        this.panStartPointer.x,
-        this.panStartPointer.y,
-        pointer.x,
-        pointer.y
-      );
-      if (distance < PAN_THRESHOLD) return;
-
-      this.panCurrentPointer = { x: pointer.x, y: pointer.y };
-
-      const camera = this.cameras.main;
-      const dx = (this.panStartPointer.x - pointer.x) / camera.zoom;
-      const dy = (this.panStartPointer.y - pointer.y) / camera.zoom;
-      camera.setScroll(this.panStartScroll.x + dx, this.panStartScroll.y + dy);
-      this.constrainInspectCamera();
-    });
-
-    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
-      if (this.handleTouchPointerUp(pointer)) {
-        return;
-      }
-
-      const wasPanning = this.isPanning;
-      this.isPanning = false;
-
-      if (wasPanning && this.mode === 'browse') {
-        this.syncBrowseWindowToCamera();
-      }
-    });
-  }
-
-  private handleTouchPointerDown(pointer: Phaser.Input.Pointer): boolean {
-    if (!this.isTouchPointer(pointer)) {
-      return false;
-    }
-
-    this.touchPointers.set(pointer.id, { x: pointer.x, y: pointer.y });
-
-    if (this.touchPointers.size >= 2) {
-      this.touchTapCandidate = null;
-      this.activePrimaryTouchId = null;
-      this.beginTouchPinchGesture();
-      return true;
-    }
-
-    this.activePrimaryTouchId = pointer.id;
-    this.touchTapCandidate = {
-      pointerId: pointer.id,
-      startX: pointer.x,
-      startY: pointer.y,
-    };
-    this.panStartPointer = { x: pointer.x, y: pointer.y };
-    this.panCurrentPointer = { x: pointer.x, y: pointer.y };
-    this.panStartScroll = {
-      x: this.cameras.main.scrollX,
-      y: this.cameras.main.scrollY,
-    };
-    return true;
-  }
-
-  private handleTouchPointerMove(pointer: Phaser.Input.Pointer): boolean {
-    if (!this.isTouchPointer(pointer)) {
-      return false;
-    }
-
-    if (!this.touchPointers.has(pointer.id)) {
-      return true;
-    }
-
-    this.touchPointers.set(pointer.id, { x: pointer.x, y: pointer.y });
-
-    if (this.touchPointers.size >= 2) {
-      this.handleTouchPinchMove();
-      return true;
-    }
-
-    if (this.activePrimaryTouchId !== pointer.id) {
-      return true;
-    }
-
-    this.panCurrentPointer = { x: pointer.x, y: pointer.y };
-    const distance = Phaser.Math.Distance.Between(
-      this.panStartPointer.x,
-      this.panStartPointer.y,
-      pointer.x,
-      pointer.y,
-    );
-
-    if (distance < PAN_THRESHOLD) {
-      return true;
-    }
-
-    if (this.mode === 'browse' || (this.mode === 'play' && this.cameraMode === 'inspect')) {
-      const camera = this.cameras.main;
-      const dx = (this.panStartPointer.x - pointer.x) / camera.zoom;
-      const dy = (this.panStartPointer.y - pointer.y) / camera.zoom;
-      camera.setScroll(this.panStartScroll.x + dx, this.panStartScroll.y + dy);
-      this.constrainInspectCamera();
-      this.touchTapCandidate = null;
-    }
-
-    return true;
-  }
-
-  private handleTouchPointerUp(pointer: Phaser.Input.Pointer): boolean {
-    if (!this.isTouchPointer(pointer)) {
-      return false;
-    }
-
-    const wasPinching = this.touchPointers.size >= 2;
-    this.touchPointers.delete(pointer.id);
-
-    if (wasPinching) {
-      if (this.touchPointers.size === 1) {
-        const [remainingId, remainingPoint] = Array.from(this.touchPointers.entries())[0];
-        this.activePrimaryTouchId = remainingId;
-        this.touchTapCandidate = {
-          pointerId: remainingId,
-          startX: remainingPoint.x,
-          startY: remainingPoint.y,
-        };
-        this.panStartPointer = { ...remainingPoint };
-        this.panCurrentPointer = { ...remainingPoint };
-        this.panStartScroll = {
-          x: this.cameras.main.scrollX,
-          y: this.cameras.main.scrollY,
-        };
-      } else {
-        this.activePrimaryTouchId = null;
-        this.touchTapCandidate = null;
-      }
-      return true;
-    }
-
-    if (this.touchTapCandidate?.pointerId === pointer.id) {
-      const movedDistance = Phaser.Math.Distance.Between(
-        this.touchTapCandidate.startX,
-        this.touchTapCandidate.startY,
-        pointer.x,
-        pointer.y,
-      );
-      if (movedDistance < PAN_THRESHOLD && this.mode === 'browse') {
-        this.handleRoomSelection(pointer);
-      } else if (this.mode === 'browse') {
-        this.syncBrowseWindowToCamera();
-      }
-    } else if (this.mode === 'browse') {
-      this.syncBrowseWindowToCamera();
-    }
-
-    this.touchTapCandidate = null;
-    this.activePrimaryTouchId = null;
-    return true;
-  }
-
-  private beginTouchPinchGesture(): void {
-    const points = Array.from(this.touchPointers.values());
-    if (points.length < 2) {
-      return;
-    }
-
-    const [firstPoint, secondPoint] = points;
-    this.touchPinchDistance = Phaser.Math.Distance.Between(
-      firstPoint.x,
-      firstPoint.y,
-      secondPoint.x,
-      secondPoint.y,
-    );
-    this.touchPinchAnchor = {
-      x: (firstPoint.x + secondPoint.x) * 0.5,
-      y: (firstPoint.y + secondPoint.y) * 0.5,
-    };
-    this.panStartScroll = {
-      x: this.cameras.main.scrollX,
-      y: this.cameras.main.scrollY,
-    };
-  }
-
-  private handleTouchPinchMove(): void {
-    const points = Array.from(this.touchPointers.values());
-    if (points.length < 2) {
-      return;
-    }
-
-    const [firstPoint, secondPoint] = points;
-    const nextDistance = Phaser.Math.Distance.Between(
-      firstPoint.x,
-      firstPoint.y,
-      secondPoint.x,
-      secondPoint.y,
-    );
-    if (this.touchPinchDistance <= 0) {
-      this.touchPinchDistance = nextDistance;
-      return;
-    }
-
-    const anchorX = (firstPoint.x + secondPoint.x) * 0.5;
-    const anchorY = (firstPoint.y + secondPoint.y) * 0.5;
-    const zoomFactor = nextDistance / this.touchPinchDistance;
-    if (Math.abs(zoomFactor - 1) > 0.02) {
-      this.adjustZoomByFactor(zoomFactor, anchorX, anchorY);
-      this.touchPinchDistance = nextDistance;
-    }
-
-    if (this.mode === 'browse' || (this.mode === 'play' && this.cameraMode === 'inspect')) {
-      const camera = this.cameras.main;
-      const centerX = anchorX;
-      const centerY = anchorY;
-      const dx = (this.touchPinchAnchor.x - centerX) / camera.zoom;
-      const dy = (this.touchPinchAnchor.y - centerY) / camera.zoom;
-      camera.setScroll(this.panStartScroll.x + dx, this.panStartScroll.y + dy);
-      this.constrainInspectCamera();
-    }
-  }
-
-  private isTouchPointer(pointer: Phaser.Input.Pointer): boolean {
-    const layout = getDeviceLayoutState();
-    if (!layout.coarsePointer) {
-      return false;
-    }
-
-    const event = pointer.event as PointerEvent | MouseEvent | undefined;
-    if (!event) {
-      return layout.coarsePointer;
-    }
-
-    if ('pointerType' in event && typeof event.pointerType === 'string') {
-      return event.pointerType === 'touch' || event.pointerType === 'pen';
-    }
-
-    return layout.coarsePointer;
   }
 
   private setupCamera(): void {
@@ -1892,21 +1582,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.backdropCamera.ignore(ignoredObjects);
   }
 
-  private pointerRequestsPan(pointer: Phaser.Input.Pointer): boolean {
-    const altPressed =
-      this.altDown ||
-      Boolean((pointer.event as MouseEvent | undefined)?.altKey) ||
-      this.modifierKeys.ALT.isDown;
-    return pointer.middleButtonDown() || this.spaceDown || altPressed;
-  }
-
-  private handleRoomSelection(pointer: Phaser.Input.Pointer): void {
-    const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    const coordinates = this.getRoomCoordinatesForPoint(worldPoint.x, worldPoint.y);
-    if (!this.isWithinLoadedRoomBounds(coordinates)) {
-      return;
-    }
-
+  private selectRoomCoordinates(coordinates: RoomCoordinates): void {
     this.selectedCoordinates = coordinates;
     if (this.mode !== 'play') {
       this.currentRoomCoordinates = { ...coordinates };
@@ -4833,18 +4509,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private clearTouchGestureState(): void {
-    this.isPanning = false;
-    this.panStartPointer = { x: 0, y: 0 };
-    this.panCurrentPointer = { x: 0, y: 0 };
-    this.panStartScroll = {
-      x: this.cameras.main.scrollX,
-      y: this.cameras.main.scrollY,
-    };
-    this.touchPointers.clear();
-    this.activePrimaryTouchId = null;
-    this.touchTapCandidate = null;
-    this.touchPinchDistance = 0;
-    this.touchPinchAnchor = { x: 0, y: 0 };
+    this.inspectInputController.reset();
   }
 
   private shouldResetSingleRoomChallengeStateForRun(runState: GoalRunState): boolean {
@@ -5018,14 +4683,17 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.syncPlayerPickupSensor();
   }
 
-  private syncBrowseWindowToCamera(): void {
+  private syncBrowseWindowToCamera(
+    panStartPointer: { x: number; y: number },
+    panCurrentPointer: { x: number; y: number },
+  ): void {
     if (this.mode !== 'browse') return;
 
     const camera = this.cameras.main;
     const centerWorldPoint = camera.getWorldPoint(camera.width * 0.5, camera.height * 0.5);
     const nextCenterCoordinates = this.getRoomCoordinatesForPoint(centerWorldPoint.x, centerWorldPoint.y);
-    const dragDeltaX = this.panStartPointer.x - this.panCurrentPointer.x;
-    const dragDeltaY = this.panStartPointer.y - this.panCurrentPointer.y;
+    const dragDeltaX = panStartPointer.x - panCurrentPointer.x;
+    const dragDeltaY = panStartPointer.y - panCurrentPointer.y;
 
     if (Math.abs(dragDeltaX) > Math.abs(dragDeltaY) * 1.5) {
       nextCenterCoordinates.y = this.windowCenterCoordinates.y;
@@ -6332,6 +6000,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.playfunPauseApplied = false;
     this.scale.off('resize', this.handleResize, this);
     this.events.off(Phaser.Scenes.Events.WAKE, this.handleWake, this);
+    this.inspectInputController.destroy();
     this.input.removeAllListeners();
     this.input.keyboard?.removeAllListeners();
     this.game.canvas.removeEventListener('wheel', this.handleCanvasWheel);

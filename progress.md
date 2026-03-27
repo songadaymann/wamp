@@ -4065,3 +4065,31 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - artifacts: `output/web-game/overworld-scene-flow-probe/summary.json`, `output/web-game/overworld-scene-flow-probe/overworld.png`, `output/web-game/overworld-scene-flow-probe/play.png`, `output/web-game/overworld-scene-flow-probe/editor.png`, `output/web-game/overworld-scene-flow-probe/course-composer.png`
   - Status:
     - phase 8 is underway on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming `OverworldPlayScene` by extracting another active subsystem boundary rather than touching dormant legacy course-composer state.
+
+- March 26, 2026: extracted the overworld inspect-input controller as the second phase-8 slice.
+  - Added `src/scenes/overworld/inspectInput.ts` with `OverworldInspectInputController` to own the active inspect/browse input boundary:
+    - `F` fit-world hotkey
+    - `P` / `Escape` return-to-world hotkeys while playing
+    - Alt/Space pan mode state
+    - mouse selection vs pan routing
+    - touch tap, drag, and pinch handling
+    - browse-window sync after pans
+  - `OverworldPlayScene.ts` now instantiates that controller, delegates the moved handlers, and resets/destroys the controller during overworld runtime teardown instead of storing those input booleans and touch maps inline.
+  - Replaced the old scene-local pointer selection method with a narrower `selectRoomCoordinates(...)` bridge so the input controller can stay focused on input translation and let the scene keep the downstream selection side effects.
+  - `OverworldPlayScene.ts` is down to 6,198 lines after this cut.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-inspect-input-skill-smoke/state-0.json`
+      - `output/web-game/overworld-inspect-input-skill-smoke/shot-0.png`
+    - targeted browser/controller probe confirmed the extracted input path still drives the expected state transitions:
+      - manual zoom changed from `0.18` to `0.252`
+      - `handleFitWorldKeydown()` reset zoom to `0.08`
+      - selection changed from `0,0` to `-1,-1`
+      - synthetic Alt-pan moved browse window center from `0,0` to `3,0`
+      - the real `#btn-world-play` flow still entered `play`
+      - `handleReturnToWorldKeydown()` restored `browse`
+      - no console or page errors
+      - artifacts: `output/web-game/overworld-inspect-input-probe/summary.json`, `output/web-game/overworld-inspect-input-probe/initial.png`, `output/web-game/overworld-inspect-input-probe/after-selection.png`, `output/web-game/overworld-inspect-input-probe/after-pan.png`
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming `OverworldPlayScene` by extracting another active overworld subsystem rather than touching dormant cleanup.
