@@ -2,7 +2,7 @@ import type { DashboardStatsResponse } from '../../../dashboard/model';
 import { jsonResponse } from '../core/http';
 import type { Env } from '../core/types';
 
-const MIN_COMPLETED_DASHBOARD_ELAPSED_MS = 50;
+const MIN_COMPLETED_DASHBOARD_ELAPSED_MS = 500;
 
 interface DashboardStatsRow {
   total_users: number | string | null;
