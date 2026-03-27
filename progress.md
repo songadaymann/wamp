@@ -4093,3 +4093,31 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - artifacts: `output/web-game/overworld-inspect-input-probe/summary.json`, `output/web-game/overworld-inspect-input-probe/initial.png`, `output/web-game/overworld-inspect-input-probe/after-selection.png`, `output/web-game/overworld-inspect-input-probe/after-pan.png`
   - Status:
     - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming `OverworldPlayScene` by extracting another active overworld subsystem rather than touching dormant cleanup.
+
+- March 26, 2026: extracted the overworld selection controller as the third phase-8 slice.
+  - Added `src/scenes/overworld/selection.ts` with `OverworldSelectionController` to own the active room-selection and world-lookup boundary:
+    - selected published-course summary lookup
+    - room-coordinate lookup from world points
+    - room-origin lookup
+    - loaded-room snapshot lookup
+    - selected-cell state classification across published, draft, frontier, and empty rooms
+    - controller-driven room selection
+    - controller-driven jump-to-coordinates browse warp
+    - browse-window center sync after inspect pans
+  - `OverworldPlayScene.ts` now delegates those selection/world-lookup responsibilities through the controller instead of carrying them inline.
+  - `OverworldPlayScene.ts` is down to 6,171 lines after this cut.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-scene-split`
+    - required `develop-web-game` client smoke passed against local Vite dev + safety backend:
+      - `output/web-game/overworld-selection-skill-smoke/state-0.json`
+      - `output/web-game/overworld-selection-skill-smoke/shot-0.png`
+    - targeted browser/controller probe confirmed the extracted selection path still drives the expected state transitions:
+      - controller selection changed selected/current room from `0,0` to `-1,-1`
+      - the real `#btn-world-play` flow still entered `play`
+      - controller return restored `browse`
+      - controller jump changed selected/current/window center to `4,-4`
+      - jump target state before refresh was `frontier`
+      - no console or page errors
+      - artifacts: `output/web-game/overworld-selection-probe/summary.json`, `output/web-game/overworld-selection-probe/initial.png`, `output/web-game/overworld-selection-probe/after-selection.png`, `output/web-game/overworld-selection-probe/after-jump.png`
+  - Status:
+    - phase 8 is still in progress on `safety/overworld-scene-split-2026-03-26`; the next slice should keep trimming another active overworld subsystem from `OverworldPlayScene`.

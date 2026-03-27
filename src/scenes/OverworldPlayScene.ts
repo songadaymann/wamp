@@ -126,6 +126,7 @@ import {
 import {
   buildOverworldHudViewModel,
   formatRoomEditorSummary,
+  type SelectedCellState,
 } from './overworld/hudViewModel';
 import {
   OverworldLiveObjectController,
@@ -136,6 +137,10 @@ import {
 import {
   OverworldPresenceController,
 } from './overworld/presence';
+import {
+  OverworldSelectionController,
+  type SelectedCourseContext,
+} from './overworld/selection';
 import {
   OverworldWorldStreamingController,
   type LoadedFullRoom,
@@ -227,7 +232,6 @@ const EDGE_WALL_THICKNESS = 12;
 const RESPAWN_FALL_DISTANCE = ROOM_PX_HEIGHT * 2;
 const FOLLOW_CAMERA_LERP = 0.12;
 const MOBILE_PLAY_CAMERA_TARGET_Y = 0.75;
-type SelectedCellState = 'published' | 'draft' | 'frontier' | 'empty';
 
 interface PlayerSpawn {
   x: number;
@@ -315,13 +319,6 @@ interface CoursePublishedRoomMeta {
   roomVersion: number;
   roomTitle: string | null;
   publishedByUserId: string | null;
-}
-
-interface SelectedCourseContext {
-  courseId: string;
-  courseTitle: string | null;
-  goalType: CourseGoalType | null;
-  roomCount: number;
 }
 
 type CoursePlaybackRoomSourceMode = 'published' | 'draftPreview';
@@ -496,6 +493,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly goalRunController: OverworldGoalRunController;
   private readonly flowController: OverworldSceneFlowController;
   private readonly inspectInputController: OverworldInspectInputController;
+  private readonly selectionController: OverworldSelectionController;
   private readonly roomBadgeScaleConfig: RoomBadgeScaleConfig = {
     hideZoom: ROOM_BADGE_HIDE_ZOOM,
     fadeStartZoom: ROOM_BADGE_FADE_START_ZOOM,
@@ -706,6 +704,56 @@ export class OverworldPlayScene extends Phaser.Scene {
       onRoomActivityChanged: () => this.redrawWorld(),
       onGhostDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
     });
+    this.selectionController = new OverworldSelectionController({
+      getMode: () => this.mode,
+      setMode: (mode) => {
+        this.mode = mode;
+      },
+      setCameraMode: (mode) => {
+        this.cameraMode = mode;
+      },
+      getFitZoomForRoom: () => this.getFitZoomForRoom(),
+      setInspectZoom: (zoom) => {
+        this.inspectZoom = zoom;
+      },
+      setBrowseInspectZoom: (zoom) => {
+        this.browseInspectZoom = zoom;
+      },
+      syncAppMode: () => this.syncAppMode(),
+      setSelectedCoordinates: (coordinates) => {
+        this.selectedCoordinates = { ...coordinates };
+      },
+      setCurrentRoomCoordinates: (coordinates) => {
+        this.currentRoomCoordinates = { ...coordinates };
+      },
+      setWindowCenterCoordinates: (coordinates) => {
+        this.windowCenterCoordinates = { ...coordinates };
+      },
+      setShouldCenterCamera: (value) => {
+        this.shouldCenterCamera = value;
+      },
+      setShouldRespawnPlayer: (value) => {
+        this.shouldRespawnPlayer = value;
+      },
+      updateSelectedSummary: () => this.updateSelectedSummary(),
+      refreshCourseComposerSelectedRoomState: () => this.refreshCourseComposerSelectedRoomState(),
+      refreshLeaderboardForSelection: () => this.refreshLeaderboardForSelection(),
+      redrawWorld: () => this.redrawWorld(),
+      renderHud: () => this.renderHud(),
+      refreshAround: (coordinates, options) => this.refreshAround(coordinates, options),
+      getRoomSummary: (roomId) => this.roomSummariesById.get(roomId),
+      hasDraftRoom: (roomId) => this.draftRoomsById.has(roomId),
+      hasActiveCourseRoomOverride: (roomId) => this.activeCourseRoomOverrideIds.has(roomId),
+      isRoomInActiveCourse: (coordinates) =>
+        Boolean(this.activeCourseSnapshot?.roomRefs.some((roomRef) => roomRef.roomId === roomIdFromCoordinates(coordinates))),
+      getRoomSnapshotForCoordinates: (coordinates) =>
+        this.worldStreamingController.getRoomSnapshotForCoordinates(coordinates),
+      isWithinLoadedRoomBounds: (coordinates) =>
+        this.worldStreamingController.isWithinLoadedRoomBounds(coordinates),
+      getMainCamera: () => this.cameras.main,
+      getWindowCenterCoordinates: () => ({ ...this.windowCenterCoordinates }),
+      refreshChunkWindowIfNeeded: (coordinates) => this.refreshChunkWindowIfNeeded(coordinates),
+    });
     this.flowController = new OverworldSceneFlowController(this, {
       getMode: () => this.mode,
       setMode: (mode) => {
@@ -799,17 +847,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private getSelectedCourseContext(): SelectedCourseContext | null {
-    const publishedCourse = this.selectedSummary?.course ?? null;
-    if (publishedCourse) {
-      return {
-        courseId: publishedCourse.courseId,
-        courseTitle: publishedCourse.courseTitle,
-        goalType: publishedCourse.goalType,
-        roomCount: publishedCourse.roomCount,
-      };
-    }
-
-    return null;
+    return this.selectionController.getSelectedCourseContext(this.selectedSummary);
   }
 
   private getActiveCourseDraftSessionContextForRoom(roomId: string): EditorCourseEditData | null {
@@ -1583,16 +1621,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private selectRoomCoordinates(coordinates: RoomCoordinates): void {
-    this.selectedCoordinates = coordinates;
-    if (this.mode !== 'play') {
-      this.currentRoomCoordinates = { ...coordinates };
-    }
-    setActiveCourseDraftSessionSelectedRoom(roomIdFromCoordinates(coordinates));
-    this.updateSelectedSummary();
-    void this.refreshCourseComposerSelectedRoomState();
-    void this.refreshLeaderboardForSelection();
-    this.redrawWorld();
-    this.renderHud();
+    this.selectionController.selectRoomCoordinates(coordinates);
   }
 
   private handleResize(): void {
@@ -1817,19 +1846,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   async jumpToCoordinates(coordinates: RoomCoordinates): Promise<void> {
-    this.mode = 'browse';
-    this.cameraMode = 'inspect';
-    this.inspectZoom = this.getFitZoomForRoom();
-    this.browseInspectZoom = this.inspectZoom;
-    this.syncAppMode();
-    this.selectedCoordinates = { ...coordinates };
-    this.currentRoomCoordinates = { ...coordinates };
-    this.windowCenterCoordinates = { ...coordinates };
-    this.shouldCenterCamera = true;
-    this.shouldRespawnPlayer = false;
-    setFocusedCoordinatesInUrl(this.currentRoomCoordinates);
-    playSfx('warp');
-    await this.refreshAround(coordinates);
+    await this.selectionController.jumpToCoordinates(coordinates);
   }
 
   zoomIn(): void {
@@ -4687,29 +4704,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     panStartPointer: { x: number; y: number },
     panCurrentPointer: { x: number; y: number },
   ): void {
-    if (this.mode !== 'browse') return;
-
-    const camera = this.cameras.main;
-    const centerWorldPoint = camera.getWorldPoint(camera.width * 0.5, camera.height * 0.5);
-    const nextCenterCoordinates = this.getRoomCoordinatesForPoint(centerWorldPoint.x, centerWorldPoint.y);
-    const dragDeltaX = panStartPointer.x - panCurrentPointer.x;
-    const dragDeltaY = panStartPointer.y - panCurrentPointer.y;
-
-    if (Math.abs(dragDeltaX) > Math.abs(dragDeltaY) * 1.5) {
-      nextCenterCoordinates.y = this.windowCenterCoordinates.y;
-    } else if (Math.abs(dragDeltaY) > Math.abs(dragDeltaX) * 1.5) {
-      nextCenterCoordinates.x = this.windowCenterCoordinates.x;
-    }
-
-    if (
-      nextCenterCoordinates.x === this.windowCenterCoordinates.x &&
-      nextCenterCoordinates.y === this.windowCenterCoordinates.y
-    ) {
-      this.refreshChunkWindowIfNeeded(nextCenterCoordinates);
-      return;
-    }
-
-    void this.refreshAround(nextCenterCoordinates);
+    this.selectionController.syncBrowseWindowToCamera(panStartPointer, panCurrentPointer);
   }
 
   private syncCameraBoundsUsage(): void {
@@ -4717,25 +4712,19 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private getRoomCoordinatesForPoint(x: number, y: number): RoomCoordinates {
-    return {
-      x: Math.floor(x / ROOM_PX_WIDTH),
-      y: Math.floor(y / ROOM_PX_HEIGHT),
-    };
+    return this.selectionController.getRoomCoordinatesForPoint(x, y);
   }
 
   private isWithinLoadedRoomBounds(coordinates: RoomCoordinates): boolean {
-    return this.worldStreamingController.isWithinLoadedRoomBounds(coordinates);
+    return this.selectionController.isWithinLoadedRoomBounds(coordinates);
   }
 
   private getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number } {
-    return {
-      x: coordinates.x * ROOM_PX_WIDTH,
-      y: coordinates.y * ROOM_PX_HEIGHT,
-    };
+    return this.selectionController.getRoomOrigin(coordinates);
   }
 
   private getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null {
-    return this.worldStreamingController.getRoomSnapshotForCoordinates(coordinates);
+    return this.selectionController.getRoomSnapshotForCoordinates(coordinates);
   }
 
   private updateSelectedSummary(): void {
@@ -4743,27 +4732,11 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private getCellStateAt(coordinates: RoomCoordinates): SelectedCellState {
-    const roomId = roomIdFromCoordinates(coordinates);
-    if (this.activeCourseRoomOverrideIds.has(roomId)) {
-      return 'published';
-    }
-    if (this.draftRoomsById.has(roomId)) {
-      return 'draft';
-    }
-
-    const summary = this.roomSummariesById.get(roomId);
-    if (summary?.state === 'published') {
-      return 'published';
-    }
-    if (summary?.state === 'frontier') {
-      return 'frontier';
-    }
-    return 'empty';
+    return this.selectionController.getCellStateAt(coordinates);
   }
 
   private isRoomInActiveCourse(coordinates: RoomCoordinates): boolean {
-    const roomId = roomIdFromCoordinates(coordinates);
-    return Boolean(this.activeCourseSnapshot?.roomRefs.some((roomRef) => roomRef.roomId === roomId));
+    return this.selectionController.isRoomInActiveCourse(coordinates);
   }
 
   fitLoadedWorld(): void {
