@@ -39,6 +39,10 @@ import {
   updateActiveCourseDraftSession,
 } from '../courses/draftSession';
 import {
+  getCurrentCourseDraftPublishDisabledReason,
+  getCurrentCourseDraftSaveDisabledReason,
+} from '../courses/editor/state';
+import {
   getCourseWorkspaceBounds,
   getCourseWorkspacePixelSize,
   getCourseWorkspaceRoomOrigin,
@@ -70,6 +74,12 @@ import {
 import { getCourseGoalSummaryText } from './editor/courseEditing';
 import type { CourseComposerSceneData, CourseEditorSceneData, OverworldPlaySceneData } from './sceneData';
 import { RETRO_COLORS } from '../visuals/starfield';
+import {
+  createCourseEditorRoomBackgroundVisuals,
+  destroyCourseEditorRoomBackgroundVisuals,
+  syncCourseEditorRoomBackgroundVisuals,
+  type CourseEditorRoomBackgroundVisuals,
+} from './courseEditorBackgrounds';
 
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 3;
@@ -95,6 +105,7 @@ interface CourseRoomSlice {
   updatedAt: string;
   publishedAt: string | null;
   origin: { x: number; y: number };
+  backgroundVisuals: CourseEditorRoomBackgroundVisuals;
   map: Phaser.Tilemaps.Tilemap;
   layers: Map<string, Phaser.Tilemaps.TilemapLayer>;
   border: Phaser.GameObjects.Graphics;
@@ -166,6 +177,7 @@ export class CourseEditorScene extends Phaser.Scene {
     slice.backgroundId = editorState.selectedBackground;
     slice.runtime.isRoomDirty = true;
     slice.runtime.currentLastDirtyAt = performance.now();
+    this.redrawRoomSliceBackground(slice);
     this.statusText = `Updated background for ${this.getSliceLabel(slice)}.`;
     this.renderUi();
   };
@@ -322,6 +334,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   update(): void {
+    this.syncRoomSliceBackgrounds();
     this.updatePressurePlateOverlay();
     this.updateContainerOverlay();
   }
@@ -614,6 +627,65 @@ export class CourseEditorScene extends Phaser.Scene {
     }
   }
 
+  async saveCourseDraft(): Promise<void> {
+    if (!this.courseRecord) {
+      return;
+    }
+
+    const disabledReason = this.getCourseSaveDisabledReason();
+    if (disabledReason) {
+      this.statusText = disabledReason;
+      this.renderUi();
+      return;
+    }
+
+    showBusyOverlay('Saving course...', 'Saving course goal and setup...');
+    try {
+      const saved = await this.courseRepository.saveDraft(this.courseRecord.draft);
+      setActiveCourseDraftSessionRecord(saved, { selectedRoomId: this.selectedRoomId });
+      this.courseRecord = getActiveCourseDraftSessionRecord();
+      this.statusText = 'Course changes saved.';
+      this.redrawCourseMarkers();
+      this.renderUi();
+    } catch (error) {
+      this.statusText = error instanceof Error ? error.message : 'Failed to save course changes.';
+      this.renderUi();
+    } finally {
+      hideBusyOverlay();
+    }
+  }
+
+  async publishCourseDraft(): Promise<void> {
+    if (!this.courseRecord) {
+      return;
+    }
+
+    const disabledReason = this.getCoursePublishDisabledReason();
+    if (disabledReason) {
+      this.statusText = disabledReason;
+      this.renderUi();
+      return;
+    }
+
+    showBusyOverlay('Publishing course...', 'Saving course goal and publishing the course...');
+    try {
+      const saved = await this.courseRepository.saveDraft(this.courseRecord.draft);
+      setActiveCourseDraftSessionRecord(saved, { selectedRoomId: this.selectedRoomId });
+      this.courseRecord = getActiveCourseDraftSessionRecord();
+      const published = await this.courseRepository.publishCourse(this.courseRecord?.draft.id ?? saved.draft.id);
+      setActiveCourseDraftSessionRecord(published, { selectedRoomId: this.selectedRoomId });
+      this.courseRecord = getActiveCourseDraftSessionRecord();
+      this.statusText = 'Course published.';
+      this.redrawCourseMarkers();
+      this.renderUi();
+    } catch (error) {
+      this.statusText = error instanceof Error ? error.message : 'Failed to publish course.';
+      this.renderUi();
+    } finally {
+      hideBusyOverlay();
+    }
+  }
+
   async startPlayMode(): Promise<void> {
     const draft = this.getActiveCourseDraft();
     if (!draft || draft.roomRefs.length === 0) {
@@ -745,6 +817,7 @@ export class CourseEditorScene extends Phaser.Scene {
   private destroyWorkspace(): void {
     this.clearCourseMarkers();
     for (const slice of this.roomSlices.values()) {
+      destroyCourseEditorRoomBackgroundVisuals(slice.backgroundVisuals);
       slice.runtime.reset();
       slice.map.destroy();
       slice.border.destroy();
@@ -836,6 +909,7 @@ export class CourseEditorScene extends Phaser.Scene {
       updatedAt: '',
       publishedAt: null,
       origin,
+      backgroundVisuals: createCourseEditorRoomBackgroundVisuals(this, origin, 'none'),
       map,
       layers,
       border,
@@ -871,6 +945,7 @@ export class CourseEditorScene extends Phaser.Scene {
           }
         },
         updateBackground: () => {
+          this.redrawRoomSliceBackground(slice);
           this.renderUi();
         },
         updateGoalUi: () => {
@@ -982,6 +1057,26 @@ export class CourseEditorScene extends Phaser.Scene {
     return Array.from(this.roomSlices.values()).filter((slice) => slice.runtime.isRoomDirty);
   }
 
+  private getCourseSaveDisabledReason(): string | null {
+    if (!this.courseRecord) {
+      return 'No course loaded.';
+    }
+
+    return this.courseRecord.permissions.canSaveDraft
+      ? getCurrentCourseDraftSaveDisabledReason(this.courseRecord, isActiveCourseDraftSessionDirty())
+      : 'This course is read-only for your account.';
+  }
+
+  private getCoursePublishDisabledReason(): string | null {
+    if (!this.courseRecord) {
+      return 'No course loaded.';
+    }
+
+    return this.courseRecord.permissions.canPublish
+      ? getCurrentCourseDraftPublishDisabledReason(this.courseRecord)
+      : 'This course is read-only for your account.';
+  }
+
   private getChangedSlicesForPublish(): CourseRoomSlice[] {
     return Array.from(this.roomSlices.values()).filter(
       (slice) =>
@@ -1038,6 +1133,19 @@ export class CourseEditorScene extends Phaser.Scene {
       ROOM_PX_WIDTH - 4,
       ROOM_PX_HEIGHT - 4,
     );
+  }
+
+  private redrawRoomSliceBackground(slice: CourseRoomSlice): void {
+    destroyCourseEditorRoomBackgroundVisuals(slice.backgroundVisuals);
+    slice.backgroundVisuals = createCourseEditorRoomBackgroundVisuals(this, slice.origin, slice.backgroundId);
+    syncCourseEditorRoomBackgroundVisuals(slice.backgroundVisuals, this.cameras.main);
+  }
+
+  private syncRoomSliceBackgrounds(): void {
+    const camera = this.cameras.main;
+    for (const slice of this.roomSlices.values()) {
+      syncCourseEditorRoomBackgroundVisuals(slice.backgroundVisuals, camera);
+    }
   }
 
   private clearCourseMarkers(): void {
@@ -2308,6 +2416,10 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   private syncEditorChrome(draft: CourseSnapshot | null, dirtyRoomCount: number): void {
+    const courseSaveDisabledReason = this.getCourseSaveDisabledReason();
+    const coursePublishDisabledReason = this.getCoursePublishDisabledReason();
+    const courseDirty = isActiveCourseDraftSessionDirty();
+
     document.getElementById('goal-section')?.classList.add('hidden');
     document.getElementById('course-goal-section')?.classList.remove('hidden');
     document.getElementById('room-title-section')?.classList.remove('hidden');
@@ -2318,7 +2430,7 @@ export class CourseEditorScene extends Phaser.Scene {
 
     const saveLabel = document.querySelector('#btn-save-draft .tool-label');
     if (saveLabel) {
-      saveLabel.textContent = 'Save All';
+      saveLabel.textContent = 'Save Rooms';
     }
     const backLabel = document.querySelector('#btn-editor-back .tool-label');
     if (backLabel) {
@@ -2326,7 +2438,7 @@ export class CourseEditorScene extends Phaser.Scene {
     }
     const publishLabel = document.querySelector('#btn-publish-room .tool-label');
     if (publishLabel) {
-      publishLabel.textContent = 'Publish Changed Rooms';
+      publishLabel.textContent = 'Publish Rooms';
     }
     const playLabel = document.querySelector('#btn-test-play .tool-label');
     if (playLabel) {
@@ -2341,14 +2453,28 @@ export class CourseEditorScene extends Phaser.Scene {
     if (publishButton) {
       publishButton.setAttribute(
         'title',
-        'Publish changed room drafts. Publishing the course still happens in Course Setup.'
+        'Publish changed room drafts only. Course goal and course publish actions live in the Course Goal section.'
       );
+    }
+
+    const courseSaveButton = document.getElementById('btn-course-editor-save-course') as HTMLButtonElement | null;
+    if (courseSaveButton) {
+      courseSaveButton.disabled = Boolean(courseSaveDisabledReason);
+      courseSaveButton.title = courseSaveDisabledReason ?? 'Save the course goal, markers, and room membership.';
+    }
+
+    const coursePublishButton = document.getElementById('btn-course-editor-publish-course') as HTMLButtonElement | null;
+    if (coursePublishButton) {
+      coursePublishButton.disabled = Boolean(coursePublishDisabledReason);
+      coursePublishButton.title =
+        coursePublishDisabledReason ??
+        'Publish the course goal and room membership. Room changes still publish separately.';
     }
 
     const topStatus = document.getElementById('editor-top-save-status');
     if (topStatus) {
       topStatus.textContent = draft
-        ? `${dirtyRoomCount} changed room${dirtyRoomCount === 1 ? '' : 's'} · ${draft.roomRefs.length} room${draft.roomRefs.length === 1 ? '' : 's'} in course · publish the course from Setup`
+        ? `${dirtyRoomCount} changed room${dirtyRoomCount === 1 ? '' : 's'} · ${courseDirty ? 'course draft dirty' : 'course saved'} · room edits and course edits publish separately`
         : 'No course loaded.';
     }
   }

@@ -70,6 +70,8 @@ export interface EditorSceneBridge {
     options?: { promptForSignInOnUnauthorized?: boolean }
   ) => Promise<RoomRecord | null>;
   publishRoom?: () => Promise<RoomRecord | null>;
+  saveCourseDraft?: () => Promise<void>;
+  publishCourseDraft?: () => Promise<void>;
   handlePublishNudgeAction?: () => Promise<void>;
   returnToWorld?: () => Promise<void> | void;
   returnToCourseBuilder?: () => Promise<void> | void;

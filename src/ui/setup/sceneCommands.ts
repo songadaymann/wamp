@@ -46,6 +46,8 @@ export function setupSceneCommands(
   const mobileFitBtn = doc.getElementById('btn-mobile-editor-fit');
   const mobileZoomInBtn = doc.getElementById('btn-mobile-editor-zoom-in');
   const mobileZoomOutBtn = doc.getElementById('btn-mobile-editor-zoom-out');
+  const courseSaveBtn = doc.getElementById('btn-course-editor-save-course');
+  const coursePublishBtn = doc.getElementById('btn-course-editor-publish-course');
 
   const closeMenu = () => {
     authPanel?.classList.remove('menu-open');
@@ -212,6 +214,28 @@ export function setupSceneCommands(
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.publishRoom) {
       await editorScene.publishRoom();
+    }
+  });
+
+  courseSaveBtn?.addEventListener('click', async () => {
+    controlsModal.close();
+    aboutModal.close();
+    courseModal.close();
+    chatModerationModal.close();
+    const editorScene = getActiveEditorScene(game);
+    if (editorScene?.saveCourseDraft) {
+      await editorScene.saveCourseDraft();
+    }
+  });
+
+  coursePublishBtn?.addEventListener('click', async () => {
+    controlsModal.close();
+    aboutModal.close();
+    courseModal.close();
+    chatModerationModal.close();
+    const editorScene = getActiveEditorScene(game);
+    if (editorScene?.publishCourseDraft) {
+      await editorScene.publishCourseDraft();
     }
   });
 

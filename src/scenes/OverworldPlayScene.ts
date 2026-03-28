@@ -6178,6 +6178,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     const activeCourseRun = this.mode === 'play' ? this.activeCourseRun : null;
     const activeRoomGoalRun = activeCourseRun ? null : this.mode === 'play' ? this.currentGoalRun : null;
     const activeRunResult = activeCourseRun?.result ?? activeRoomGoalRun?.result ?? null;
+    const suppressRoomGoalMeta = Boolean(activeCourseRun);
     const saveStatusTone =
       this.mode === 'play'
         ? activeCourseRun || activeRoomGoalRun
@@ -6220,7 +6221,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         metaParts.push(this.getCourseGoalSummaryText(selectedCourse.goalType));
         selectedMetaTone = 'challenge';
       }
-      if (this.selectedSummary?.goalType) {
+      if (!suppressRoomGoalMeta && this.selectedSummary?.goalType) {
         metaParts.push(`${ROOM_GOAL_LABELS[this.selectedSummary.goalType]} challenge`);
         selectedMetaTone = 'challenge';
       }
@@ -6244,7 +6245,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         );
         metaParts.push(this.getCourseGoalSummaryText(selectedCourse.goalType));
       }
-      if (selectedDraft.goal) {
+      if (!suppressRoomGoalMeta && selectedDraft.goal) {
         metaParts.push(`${ROOM_GOAL_LABELS[selectedDraft.goal.type]} challenge`);
       }
       metaParts.push('publish to make it public');
