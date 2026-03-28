@@ -13,7 +13,7 @@ import {
 } from '../../config';
 import { getDeviceLayoutState, isCoarsePointerDevice } from '../deviceLayout';
 
-const MIN_SELECTION_OPAQUE_PIXELS = 24;
+const MIN_SELECTION_OPAQUE_PIXELS = 96;
 
 export class PaletteController {
   private readonly doc: Document;
