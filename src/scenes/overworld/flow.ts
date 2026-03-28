@@ -17,6 +17,7 @@ import { hideBusyOverlay, showBusyError, showBusyOverlay } from '../../ui/appFee
 import type {
   CourseComposerReturnTarget,
   CourseComposerSceneData,
+  CourseEditorSceneData,
   EditorCourseEditData,
   EditorSceneData,
   OverworldMode,
@@ -143,11 +144,21 @@ export class OverworldSceneFlowController {
     this.host.setShouldRespawnPlayer(false);
 
     if (courseEditorReturnTarget) {
-      this.scene.scene.wake('CourseEditorScene', {
+      const sceneData: CourseEditorSceneData = {
         courseId: courseEditorReturnTarget.courseId,
         selectedCoordinates: { ...courseEditorReturnTarget.selectedCoordinates },
         centerCoordinates: { ...courseEditorReturnTarget.centerCoordinates },
-      });
+      };
+      if (
+        this.scene.scene.isSleeping('CourseEditorScene')
+        || this.scene.scene.isPaused('CourseEditorScene')
+      ) {
+        this.scene.scene.wake('CourseEditorScene', sceneData);
+      } else if (this.scene.scene.isActive('CourseEditorScene')) {
+        this.scene.scene.bringToTop('CourseEditorScene');
+      } else {
+        this.scene.scene.run('CourseEditorScene', sceneData);
+      }
       this.scene.scene.sleep();
       return;
     }

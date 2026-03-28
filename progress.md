@@ -4770,3 +4770,5 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - after visiting `CourseEditorScene`, the regular room editor restored `World`, `Save Room`, and `Publish Room`
     - expected local-only console errors during the probe:
       - PartyKit websocket connection refusals on `127.0.0.1:1999` because presence was not running locally
+- 2026-03-28: Patched draft-course return flow in `src/scenes/overworld/flow.ts` to reopen `CourseEditorScene` with `run(...)` when the scene is not currently sleeping. This closes the blank-canvas case where overworld slept after trying to `wake` a non-running editor scene.
+- 2026-03-28: Added course-level pressure-plate links for the stitched course editor. Cross-room links now persist on the course snapshot, resolve in the course editor inspector/overlay, and are applied onto live trigger objects during course test/play so cross-room plates can open targets in other course rooms.

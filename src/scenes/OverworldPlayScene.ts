@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { playSfx } from '../audio/sfx';
 import { createCourseRepository } from '../courses/courseRepository';
+import { getCoursePressurePlateLink } from '../courses/pressurePlateLinks';
 import {
   clearActiveCourseDraftSessionRoomOverride,
   getActiveCourseDraftSessionCourseId,
@@ -1899,6 +1900,26 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private createLiveObjects(loadedRoom: SceneLoadedFullRoom): void {
     this.liveObjectController.createLiveObjects(loadedRoom);
+    const activeCourse = this.activeCourseSnapshot;
+    if (!activeCourse) {
+      return;
+    }
+
+    for (const liveObject of loadedRoom.liveObjects) {
+      const sourceInstanceId = liveObject.placedInstanceId;
+      if (liveObject.config.id !== 'floor_trigger' || !sourceInstanceId) {
+        continue;
+      }
+
+      const courseLink = getCoursePressurePlateLink(
+        activeCourse,
+        loadedRoom.room.id,
+        sourceInstanceId,
+      );
+      if (courseLink) {
+        liveObject.linkedTargetInstanceId = courseLink.targetInstanceId;
+      }
+    }
   }
 
   private destroyLiveObjects(loadedRoom: SceneLoadedFullRoom): void {
