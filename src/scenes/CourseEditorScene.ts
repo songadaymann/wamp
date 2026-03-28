@@ -1506,7 +1506,6 @@ export class CourseEditorScene extends Phaser.Scene {
         return;
       }
     }
-
     this.selectRoomById(slice.roomId);
     const localTile = this.getLocalTileForPointer(pointer, slice);
     if (!localTile) {
