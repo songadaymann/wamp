@@ -1360,6 +1360,14 @@ export class CourseEditorScene extends Phaser.Scene {
       return;
     }
 
+    if (editorState.paletteMode === 'objects') {
+      if (this.connectingPressurePlateInstanceId) {
+        this.handlePressurePlateConnectionClick(slice, pointer.worldX, pointer.worldY);
+        this.renderUi();
+        return;
+      }
+    }
+
     this.selectRoomById(slice.roomId);
     const localTile = this.getLocalTileForPointer(pointer, slice);
     if (!localTile) {
@@ -1372,12 +1380,6 @@ export class CourseEditorScene extends Phaser.Scene {
     }
 
     if (editorState.paletteMode === 'objects') {
-      if (this.connectingPressurePlateInstanceId) {
-        this.handlePressurePlateConnectionClick(slice, pointer.worldX, pointer.worldY);
-        this.renderUi();
-        return;
-      }
-
       const clickedPressurePlate = slice.runtime.findPlacedObjectAt(
         pointer.worldX,
         pointer.worldY,
