@@ -847,6 +847,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     loadedRoom.liveObjects.push(liveObject);
     this.syncRoomObjectWorldColliders(loadedRoom);
+    // Trigger-spawned enemies/collectibles need the same player overlap wiring as
+    // room-loaded objects, otherwise they can move but never become interactable.
+    this.syncLiveObjectInteractions([loadedRoom]);
   }
 
   private destroyLiveObjectInteractions(liveObject: LoadedRoomObject): void {
