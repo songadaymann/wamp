@@ -1118,6 +1118,7 @@ export class CourseEditorScene extends Phaser.Scene {
     updateActiveCourseDraftSession((draft) => {
       draft.title = normalized.title;
       draft.roomRefs = normalized.roomRefs;
+      draft.pressurePlateLinks = normalized.pressurePlateLinks;
       draft.startPoint = normalized.startPoint;
       draft.goal = normalized.goal;
     });
@@ -2389,7 +2390,7 @@ export class CourseEditorScene extends Phaser.Scene {
             : target
               ? `Linked to ${this.getPressurePlateTargetSummary(target, source.slice)}.`
               : 'This pressure plate is not linked yet.'),
-        pressureConnectHidden: connectMode,
+        pressureConnectHidden: connectMode || Boolean(target),
         pressureConnectDisabled: connectMode || eligibleTargetCount === 0,
         pressureConnectTitle: eligibleTargetCount === 0 ? 'Add a door, metal door, cage, or chest to this course first.' : '',
         pressureClearHidden: connectMode,
