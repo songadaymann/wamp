@@ -120,8 +120,8 @@ const TOP_DECOR_INDICES_LAVA = [
 const DECO_ONLY_INDICES_FOREST = [2, 3, 5, 18];
 const DECO_ONLY_INDICES_DESERT = [3, 4, 18];
 const DECO_ONLY_INDICES_WATER = [1, 2, 3, 5, 13, 18];
-const DECO_ONLY_INDICES_SNOW = [8, 9, 10];
-const DECO_ONLY_INDICES_LAVA = [8, 10];
+const DECO_ONLY_INDICES_SNOW = [2, 3, 4, 16, 31, 62, 63, 64, 65];
+const DECO_ONLY_INDICES_LAVA = [2, 4, 20, 21, 22, 24, 26, 27, 28, 52, 58];
 
 // firstGid assignments: 0 = empty, then sequential per tileset
 export const TILESETS: TilesetConfig[] = [
