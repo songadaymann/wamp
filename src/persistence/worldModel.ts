@@ -162,6 +162,37 @@ export function createWorldWindowFromRoomBounds(bounds: WorldRoomBounds): WorldW
   };
 }
 
+export function cloneWorldChunkWindow(window: WorldChunkWindow): WorldChunkWindow {
+  return {
+    chunkBounds: { ...window.chunkBounds },
+    roomBounds: { ...window.roomBounds },
+    chunks: window.chunks.map((chunk) => ({
+      id: chunk.id,
+      coordinates: { ...chunk.coordinates },
+      roomBounds: { ...chunk.roomBounds },
+      rooms: chunk.rooms.map((room) => ({
+        ...room,
+        coordinates: { ...room.coordinates },
+        course: room.course ? { ...room.course } : null,
+      })),
+      previewRooms: chunk.previewRooms.map((room) => cloneRoomSnapshot(room)),
+      chunkPreviewHash: chunk.chunkPreviewHash,
+    })),
+  };
+}
+
+export function cloneWorldWindow(window: WorldWindow): WorldWindow {
+  return {
+    center: { ...window.center },
+    radius: window.radius,
+    rooms: window.rooms.map((room) => ({
+      ...room,
+      coordinates: { ...room.coordinates },
+      course: room.course ? { ...room.course } : null,
+    })),
+  };
+}
+
 export function createPublishedRoomSummary(
   room: RoomSnapshot | PublishedWorldRoomSource
 ): WorldRoomSummary {

@@ -7,6 +7,8 @@ import {
   type RoomSnapshot,
 } from './roomModel';
 import {
+  cloneWorldChunkWindow,
+  cloneWorldWindow,
   computeWorldChunkWindow,
   computeWorldWindow,
   type PublishedWorldRoomSource,
@@ -168,7 +170,7 @@ class ApiWorldRepository implements WorldRepository {
       );
     }
 
-    return (await response.json()) as WorldWindow;
+    return cloneWorldWindow((await response.json()) as WorldWindow);
   }
 
   private async requestWorldChunkWindow(path: string): Promise<WorldChunkWindow> {
@@ -184,7 +186,7 @@ class ApiWorldRepository implements WorldRepository {
       );
     }
 
-    return (await response.json()) as WorldChunkWindow;
+    return cloneWorldChunkWindow((await response.json()) as WorldChunkWindow);
   }
 
   private async requestPublishedRoom(path: string): Promise<RoomSnapshot | null> {

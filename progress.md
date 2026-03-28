@@ -4743,3 +4743,45 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Status:
     - this bugfix lives on `safety/object-stack-guard-2026-03-27`
     - the default rule is now one placed object per anchor cell per layer, with the explicit policy hook ready if we later want narrow exceptions
+
+- March 28, 2026: followed up on the placed-object stack guard after confirming a polluted live room still existed.
+  - Investigation:
+    - fetched the live published snapshot for prod room `8,4` into `output/debug-room-8-4/prod-room-8-4.json`
+    - confirmed the stored published JSON itself is polluted, not just the renderer:
+      - `placedObjects`: `1424`
+      - duplicate same-anchor same-layer cells: `437`
+      - example hotspot: `coin_silver` at `344,232` on `terrain` appeared `26` times
+    - note:
+      - the safety backend does not currently have a published room `8,4`, so checking that room against safety and prod are not equivalent checks
+  - Client hardening:
+    - added `cloneWorldChunkWindow(...)` and `cloneWorldWindow(...)` to `src/persistence/worldModel.ts`
+    - updated `src/persistence/worldRepository.ts` so remote world/chunk fetches now clone and normalize payloads before the rest of the client uses them
+    - this gives the world-loading path the same defensive `cloneRoomSnapshot(...)` sanitation that the editor and direct room-load paths already had
+  - Repair tooling:
+    - added `scripts/sanitize_placed_object_stacks.ts`
+    - added `npm run rooms:sanitize-stacks`
+    - the script supports:
+      - D1 mode:
+        - dry run or apply
+        - `--room <x,y>` to target a single room
+        - `--env safety` plus `--remote` / `--local`
+        - optional `--no-versions` to skip `room_versions`
+      - snapshot-file mode:
+        - `--snapshot-file <path>` to inspect a captured room JSON file
+        - optional `--apply` plus `--output-file <path>` to write the sanitized snapshot out
+    - local verification against the captured live room file:
+      - `npx tsx scripts/sanitize_placed_object_stacks.ts --snapshot-file output/debug-room-8-4/prod-room-8-4.json`
+      - result:
+        - `placedObjectCountBefore: 1424`
+        - `placedObjectCountAfter: 758`
+        - `duplicateAnchorCellsBefore: 437`
+        - `duplicateAnchorCellsAfter: 0`
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-stack-fix-followup`
+    - local probe artifacts:
+      - `output/debug-room-8-4/prod-room-8-4.json`
+      - `output/debug-room-8-4/local-client-room-8-4-summary.json`
+      - `output/debug-room-8-4/local-client-room-8-4.png`
+  - Status:
+    - this follow-up lives on `safety/object-stack-guard-followup-2026-03-28`
+    - prevention is patched, and there is now explicit tooling to repair already-polluted stored room rows
