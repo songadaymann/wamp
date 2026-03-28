@@ -1528,7 +1528,6 @@ export class CourseEditorScene extends Phaser.Scene {
         this.renderUi();
         return;
       }
-
       const clickedPressurePlate = slice.runtime.findPlacedObjectAt(
         pointer.worldX,
         pointer.worldY,
