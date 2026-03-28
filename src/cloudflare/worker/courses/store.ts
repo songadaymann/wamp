@@ -90,7 +90,7 @@ export async function loadLatestEditableDraftCourseForRoom(
     `
       SELECT id
       FROM courses
-      WHERE owner_user_id = ?
+      WHERE (? = 1 OR owner_user_id = ?)
         AND EXISTS (
           SELECT 1
           FROM json_each(courses.draft_json, '$.roomRefs') room_ref
@@ -100,7 +100,7 @@ export async function loadLatestEditableDraftCourseForRoom(
       LIMIT 1
     `
   )
-    .bind(viewerUserId, roomId)
+    .bind(viewerIsAdmin ? 1 : 0, viewerUserId, roomId)
     .first<{ id: string }>();
 
   if (!row?.id) {

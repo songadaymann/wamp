@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { getAuthDebugState, promptForSignIn, refreshAuthSession } from '../auth/client';
 import {
   canObjectBeStoredInContainer,
   canPlacedObjectBeContainer,
@@ -56,6 +57,8 @@ import {
 import { createGoalMarkerFlagSprite } from '../goals/markerFlags';
 import {
   cloneRoomSnapshot,
+  createLocalRoomRepository,
+  isRoomApiError,
   createRoomRepository,
   roomIdFromCoordinates,
   type RoomCoordinates,
@@ -64,6 +67,7 @@ import {
   type RoomSnapshot,
   type RoomVersionRecord,
 } from '../persistence/roomRepository';
+import { clearLocalRoomStorageEntry } from '../persistence/browserStorage';
 import { setAppMode } from '../ui/appMode';
 import { hideBusyOverlay, showBusyError, showBusyOverlay } from '../ui/appFeedback';
 import { isTextInputFocused } from '../ui/keyboardFocus';
@@ -126,6 +130,7 @@ interface CoursePlacedObjectRef {
 
 export class CourseEditorScene extends Phaser.Scene {
   private readonly roomRepository = createRoomRepository();
+  private readonly localRoomRepository = createLocalRoomRepository();
   private readonly courseRepository = createCourseRepository();
   private uiBridge: EditorUiBridge | null = null;
   private courseRecord: CourseRecord | null = null;
@@ -230,7 +235,7 @@ export class CourseEditorScene extends Phaser.Scene {
     if (primaryModifier && key === 's') {
       event.preventDefault();
       event.stopPropagation();
-      void this.saveDraft(true);
+      void this.saveDraft(true, { promptForSignInOnUnauthorized: true });
       return;
     }
 
@@ -329,7 +334,7 @@ export class CourseEditorScene extends Phaser.Scene {
         await this.startPlayMode();
       },
       onSaveDraft: async () => {
-        await this.saveDraft(true);
+        await this.saveDraft(true, { promptForSignInOnUnauthorized: true });
       },
       onPublishRoom: async () => {
         await this.publishRoom();
@@ -644,12 +649,32 @@ export class CourseEditorScene extends Phaser.Scene {
     this.renderUi();
   }
 
-  async saveDraft(_force?: boolean): Promise<RoomRecord | null> {
+  async saveDraft(
+    _force?: boolean,
+    options: { promptForSignInOnUnauthorized?: boolean } = {}
+  ): Promise<RoomRecord | null> {
     const dirtySlices = this.getDirtySlices();
     if (dirtySlices.length === 0) {
       this.statusText = 'No room draft changes to save.';
       this.renderUi();
       return null;
+    }
+
+    if (options.promptForSignInOnUnauthorized) {
+      await refreshAuthSession();
+      if (!getAuthDebugState().authenticated) {
+        await this.saveSlicesLocally(
+          dirtySlices,
+          this.getLocalDraftSavedStatusText(
+            dirtySlices.length,
+            'Drafts saved locally. Sign in to save room drafts to your account.',
+            'Draft saved locally. Sign in to save room drafts to your account.'
+          ),
+          { keepOverride: true }
+        );
+        promptForSignIn('Sign in to save drafts to your account. Your local draft is safe.');
+        return null;
+      }
     }
 
     showBusyOverlay('Saving course rooms...', `Saving ${dirtySlices.length} room draft${dirtySlices.length === 1 ? '' : 's'}...`);
@@ -658,12 +683,32 @@ export class CourseEditorScene extends Phaser.Scene {
       for (const slice of dirtySlices) {
         const record = await this.roomRepository.saveDraft(slice.runtime.exportRoomSnapshot());
         this.applyStoredRoomRecordToSlice(slice, record, { keepDirty: false, keepOverride: true });
+        clearLocalRoomStorageEntry(record.draft.id);
         lastRecord = record;
       }
       this.statusText = `Saved ${dirtySlices.length} room draft${dirtySlices.length === 1 ? '' : 's'}.`;
       this.renderUi();
       return lastRecord;
     } catch (error) {
+      if (this.shouldPersistGuestDraftLocally(error)) {
+        await this.saveSlicesLocally(
+          dirtySlices,
+          this.getLocalDraftSavedStatusText(
+            dirtySlices.length,
+            options.promptForSignInOnUnauthorized
+              ? 'Drafts saved locally. Sign in to save room drafts to your account.'
+              : 'Drafts saved locally. Sign in to publish.',
+            options.promptForSignInOnUnauthorized
+              ? 'Draft saved locally. Sign in to save room drafts to your account.'
+              : 'Draft saved locally. Sign in to publish.'
+          ),
+          { keepOverride: true }
+        );
+        if (options.promptForSignInOnUnauthorized) {
+          promptForSignIn('Sign in to save drafts to your account. Your local draft is safe.');
+        }
+        return null;
+      }
       this.statusText = error instanceof Error ? error.message : 'Failed to save course room drafts.';
       this.renderUi();
       return null;
@@ -683,15 +728,45 @@ export class CourseEditorScene extends Phaser.Scene {
     showBusyOverlay('Publishing course rooms...', `Publishing ${targetSlices.length} room${targetSlices.length === 1 ? '' : 's'}...`);
     let lastRecord: RoomRecord | null = null;
     try {
+      await refreshAuthSession();
+      if (!getAuthDebugState().authenticated) {
+        await this.saveSlicesLocally(
+          targetSlices,
+          this.getLocalDraftSavedStatusText(
+            targetSlices.length,
+            'Drafts saved locally. Sign in to publish.',
+            'Draft saved locally. Sign in to publish.'
+          ),
+          { keepOverride: true }
+        );
+        promptForSignIn('Sign in to publish this room. Your local draft is safe.');
+        return null;
+      }
+
       for (const slice of targetSlices) {
         const record = await this.roomRepository.publish(slice.runtime.exportRoomSnapshot());
         this.applyStoredRoomRecordToSlice(slice, record, { keepDirty: false, keepOverride: false });
+        clearLocalRoomStorageEntry(record.draft.id);
         lastRecord = record;
       }
+      await refreshAuthSession();
       this.statusText = `Published ${targetSlices.length} room${targetSlices.length === 1 ? '' : 's'}.`;
       this.renderUi();
       return lastRecord;
     } catch (error) {
+      if (this.shouldPersistGuestDraftLocally(error)) {
+        await this.saveSlicesLocally(
+          targetSlices,
+          this.getLocalDraftSavedStatusText(
+            targetSlices.length,
+            'Drafts saved locally. Sign in to publish.',
+            'Draft saved locally. Sign in to publish.'
+          ),
+          { keepOverride: true }
+        );
+        promptForSignIn('Sign in to publish this room. Your local draft is safe.');
+        return null;
+      }
       this.statusText = error instanceof Error ? error.message : 'Failed to publish changed course rooms.';
       this.renderUi();
       return null;
@@ -1098,6 +1173,37 @@ export class CourseEditorScene extends Phaser.Scene {
       }
     });
     this.redrawCourseMarkers();
+  }
+
+  private shouldPersistGuestDraftLocally(error: unknown): boolean {
+    return isRoomApiError(error) && error.status === 401;
+  }
+
+  private async saveSlicesLocally(
+    slices: CourseRoomSlice[],
+    successText: string,
+    options: { keepOverride: boolean }
+  ): Promise<RoomRecord | null> {
+    let lastRecord: RoomRecord | null = null;
+    for (const slice of slices) {
+      const record = await this.localRoomRepository.saveDraft(slice.runtime.exportRoomSnapshot());
+      this.applyStoredRoomRecordToSlice(slice, record, {
+        keepDirty: false,
+        keepOverride: options.keepOverride,
+      });
+      lastRecord = record;
+    }
+    this.statusText = successText;
+    this.renderUi();
+    return lastRecord;
+  }
+
+  private getLocalDraftSavedStatusText(
+    count: number,
+    pluralText: string,
+    singularText: string
+  ): string {
+    return count === 1 ? singularText : pluralText;
   }
 
   private getActiveCourseDraft(): CourseSnapshot | null {
