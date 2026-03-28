@@ -5056,17 +5056,13 @@ export class OverworldPlayScene extends Phaser.Scene {
         sessionRecord &&
         getCourseRoomOrder(sessionRecord.draft.roomRefs, selectedRoomId) >= 0
       );
-      const selectedCourseId = selectedRoomInSession
-        ? null
-        : this.selectedSummary?.course?.courseId ?? null;
+      const selectedPublishedCourseId = this.selectedSummary?.course?.courseId ?? null;
       let nextRecord: CourseRecord;
       if (selectedRoomInSession && sessionRecord) {
         nextRecord = sessionRecord;
-      } else if (selectedCourseId && sessionRecord?.draft.id !== selectedCourseId) {
-        nextRecord = await this.courseRepository.loadCourse(selectedCourseId);
-      } else if (selectedCourseId && sessionRecord?.draft.id === selectedCourseId) {
-        nextRecord = sessionRecord;
-      } else if (sessionRecord) {
+      } else if (selectedPublishedCourseId && sessionRecord?.draft.id !== selectedPublishedCourseId) {
+        nextRecord = await this.courseRepository.loadCourse(selectedPublishedCourseId);
+      } else if (selectedPublishedCourseId && sessionRecord?.draft.id === selectedPublishedCourseId) {
         nextRecord = sessionRecord;
       } else {
         nextRecord = createDefaultCourseRecord();
@@ -5087,7 +5083,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         sanitized.resetMessage ??
         (selectedRoomInSession
           ? 'Loaded active course draft.'
-          : selectedCourseId
+          : selectedPublishedCourseId
           ? 'Loaded course.'
           : authState.authenticated
             ? 'Build a linear 1-4 room course path.'
