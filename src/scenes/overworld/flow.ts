@@ -281,7 +281,7 @@ export class OverworldSceneFlowController {
     );
     const selectedCourseId = selectedRoomInSession
       ? sessionRecord?.draft.id ?? null
-      : this.host.getSelectedPublishedCourseId() ?? sessionRecord?.draft.id ?? null;
+      : this.host.getSelectedPublishedCourseId() ?? null;
     const wakeData: CourseComposerSceneData = {
       courseId: selectedCourseId,
       selectedCoordinates: { ...selectedCoordinates },

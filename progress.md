@@ -4739,3 +4739,34 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - `output/web-game/caged-enemy-collision-probe/summary.json`
       - `output/web-game/caged-enemy-collision-probe/after-spawn.png`
     - targeted probe confirmed a trigger-spawned `slime_blue` in play mode had `interactions: 1`, `worldColliders: 1`, and no console/page errors.
+
+- March 28, 2026: rebuilt the room-copy and new-course-selection safety fix on top of current `origin/main`.
+  - Context:
+    - the earlier `safety/course-builder-room-copy-fix` branch was cut from stale local `main`, so it missed the newer course-builder architecture already live on remote `main`
+    - current `origin/main` now routes course setup entry through `src/scenes/overworld/flow.ts` and `src/scenes/CourseComposerScene.ts`
+  - Fixes:
+    - `src/scenes/overworld/flow.ts`
+      - stopped `openCourseComposer()` from falling back to the previously active course session when the selected room is not in that session and is not part of a published course
+    - `src/scenes/CourseComposerScene.ts`
+      - removed the final session fallback in `resolveInitialRecord(...)` so selecting a non-course room really opens a fresh empty draft instead of resurrecting the prior course
+    - `src/scenes/editor/uiBridge.ts`
+      - regular room-editor renders now explicitly restore their own button labels/titles (`World`, `Save Room`, `Publish Room`) so course-editor DOM mutations do not leak back into normal room editing
+    - `src/scenes/editor/viewModel.ts`
+      - added the explicit regular room-editor button text/title values used by the UI bridge
+    - `index.html`
+      - updated the default room-editor action labels/titles to match the explicit singular room wording
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-course-builder-room-copy-fix-origin-main`
+    - required `develop-web-game` smoke attempted to write `output/web-game/course-builder-origin-main-smoke/*`, but hit a pre-existing `render_game_to_text` debug failure in `OverworldGoalRunController.getDebugSnapshot(...)`
+    - focused Playwright probe wrote:
+      - `output/web-game/course-builder-origin-main-verify/summary.json`
+      - `output/web-game/course-builder-origin-main-verify/course-room.png`
+      - `output/web-game/course-builder-origin-main-verify/new-course-room.png`
+      - `output/web-game/course-builder-origin-main-verify/course-editor.png`
+      - `output/web-game/course-builder-origin-main-verify/room-editor-after-course-editor.png`
+    - targeted probe confirmed:
+      - room `1,0` reopened existing course `24338926-9004-4a0a-a51f-67b8942972a4` (`Wizzy's Tower`) with `roomCount: 3`
+      - room `0,0` opened a fresh empty draft with `roomCount: 0`
+      - after visiting `CourseEditorScene`, the regular room editor restored `World`, `Save Room`, and `Publish Room`
+    - expected local-only console errors during the probe:
+      - PartyKit websocket connection refusals on `127.0.0.1:1999` because presence was not running locally
