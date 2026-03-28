@@ -57,6 +57,20 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Course editor follow-up fixes on March 28, 2026:
+  - suppressed room-goal copy while a course run is active so the overworld HUD no longer mixes room-level challenge text into course play
+  - added explicit `Save Course` and `Publish Course` actions inside the course goal section of `CourseEditorScene`, while keeping the top action rail focused on room-slice saves/publishes
+  - clarified the room publish rail labels/tooltips in course edit mode so room edits and course edits read as separate flows
+  - added stitched per-room background rendering for the multi-room course editor, so changing a room background now redraws visibly inside the course workspace instead of only mutating hidden state
+  - verification:
+    - `./node_modules/.bin/tsc --noEmit` passed in `/private/tmp/wamp-course-draft-discovery`
+    - `npm run build` passed in `/private/tmp/wamp-course-draft-discovery`
+    - lightweight Playwright boot smoke against a static local `dist` server wrote:
+      - `output/web-game/state-0.json`
+      - `output/web-game/shot-0.png`
+    - smoke caveat:
+      - the static smoke only confirmed the bundle boots cleanly; it did not exercise the authenticated course-authoring flow, which still wants a manual local or safety-branch browser pass
+
 - Separate course editor pass on March 24, 2026:
   - replaced the overworld-first course composer launch path with a dedicated `CourseEditorScene` that owns a standalone world-anchored authoring shell, pan/zoom camera, room membership selection, and direct marker placement for `start`, `exit`, `checkpoint`, and `finish`
   - course validation is now cluster-based instead of linear-order-based: draft/publish paths require unique authored rooms forming one orthogonally connected cluster, while publish validation now follows marker placement rather than first-room / last-room assumptions

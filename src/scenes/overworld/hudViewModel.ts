@@ -132,6 +132,7 @@ export function buildOverworldHudViewModel(
     truncateOverlayText,
   } = options;
   const activeRunResult = activeCourseRun?.result ?? activeRoomGoalRun?.result ?? null;
+  const suppressRoomGoalMeta = Boolean(activeCourseRun);
   const saveStatusTone =
     mode === 'play'
       ? activeCourseRun || activeRoomGoalRun
@@ -173,7 +174,7 @@ export function buildOverworldHudViewModel(
       metaParts.push(getCourseGoalSummaryText(selectedCourse.goalType));
       selectedMetaTone = 'challenge';
     }
-    if (selectedSummary?.goalType) {
+    if (!suppressRoomGoalMeta && selectedSummary?.goalType) {
       metaParts.push(`${ROOM_GOAL_LABELS[selectedSummary.goalType]} challenge`);
       selectedMetaTone = 'challenge';
     }
@@ -197,7 +198,7 @@ export function buildOverworldHudViewModel(
       );
       metaParts.push(getCourseGoalSummaryText(selectedCourse.goalType));
     }
-    if (selectedDraft.goal) {
+    if (!suppressRoomGoalMeta && selectedDraft.goal) {
       metaParts.push(`${ROOM_GOAL_LABELS[selectedDraft.goal.type]} challenge`);
     }
     metaParts.push('publish to make it public');
