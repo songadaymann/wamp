@@ -101,10 +101,15 @@ export interface EditorUiViewModel {
   zoomText: string;
   backButtonHidden: boolean;
   backButtonText: string;
+  backButtonTitle: string;
   playHidden: boolean;
   saveHidden: boolean;
+  saveButtonText: string;
+  saveButtonTitle: string;
   saveDisabled: boolean;
   publishHidden: boolean;
+  publishButtonText: string;
+  publishButtonTitle: string;
   publishDisabled: boolean;
   mintHidden: boolean;
   mintDisabled: boolean;
@@ -449,10 +454,15 @@ export class EditorUiBridge {
 
     this.setHidden(this.backBtn, viewModel.backButtonHidden);
     this.setButtonText(this.backBtn, viewModel.backButtonText);
+    this.setButtonTitle(this.backBtn, viewModel.backButtonTitle);
     this.setHidden(this.playBtn, viewModel.playHidden);
     this.setHidden(this.saveBtn, viewModel.saveHidden);
+    this.setButtonText(this.saveBtn, viewModel.saveButtonText);
+    this.setButtonTitle(this.saveBtn, viewModel.saveButtonTitle);
     this.setDisabled(this.saveBtn, viewModel.saveDisabled);
     this.setHidden(this.publishBtn, viewModel.publishHidden);
+    this.setButtonText(this.publishBtn, viewModel.publishButtonText);
+    this.setButtonTitle(this.publishBtn, viewModel.publishButtonTitle);
     this.setDisabled(this.publishBtn, viewModel.publishDisabled);
     this.setHidden(this.mintBtn, viewModel.mintHidden);
     this.setDisabled(this.mintBtn, viewModel.mintDisabled);
@@ -1151,6 +1161,15 @@ export class EditorUiBridge {
 
     if (element.textContent !== text) {
       element.textContent = text;
+    }
+  }
+
+  private setButtonTitle(element: HTMLButtonElement | null, title: string): void {
+    if (!element) {
+      return;
+    }
+    if (element.title !== title) {
+      element.title = title;
     }
   }
 }
