@@ -4711,3 +4711,17 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Status:
     - phase 9 slice 2 is the worker-admin invalidation split
     - next likely cleanup target is the remaining suspicious-analysis block in `src/cloudflare/worker/admin/suspicious.ts`, or repo hygiene around `progress.md` / stale docs once that feels good enough
+
+- March 28, 2026: fixed trigger-spawned live objects missing player interactions.
+  - Bug: enemies released from cages could move and collide with terrain, but they did not get rebuilt player/live-object overlap handlers, so stomps and other player interactions never fired.
+  - Fix: `src/scenes/overworld/liveObjects.ts` now calls `syncLiveObjectInteractions([loadedRoom])` after `spawnTriggeredObject(...)` adds a trigger-spawned object to the room.
+  - Scope: covers cage-released enemies and chest-spawned collectibles because both use the same trigger spawn path.
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-caged-enemy-collision`
+    - required `develop-web-game` smoke wrote:
+      - `output/web-game/caged-enemy-collision-skill-smoke/state-0.json`
+      - `output/web-game/caged-enemy-collision-skill-smoke/shot-0.png`
+    - focused Playwright probe wrote:
+      - `output/web-game/caged-enemy-collision-probe/summary.json`
+      - `output/web-game/caged-enemy-collision-probe/after-spawn.png`
+    - targeted probe confirmed a trigger-spawned `slime_blue` in play mode had `interactions: 1`, `worldColliders: 1`, and no console/page errors.
