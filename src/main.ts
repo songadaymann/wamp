@@ -173,6 +173,32 @@ window.render_game_to_text = () =>
     },
   });
 
+if (query.get('previewSmoke') === '1') {
+  window.run_preview_smoke_action = async (
+    action: 'selectEditableRoom' | 'playSelectedRoom' | 'returnToWorld' | 'editSelectedRoom',
+    payload?: { roomId?: string | null },
+  ) => {
+    switch (action) {
+      case 'selectEditableRoom':
+        return selectEditableRoomForPreviewSmoke(payload?.roomId ?? null);
+      case 'playSelectedRoom':
+        return runOverworldPreviewSmokeAction((scene) => {
+          scene.playSelectedRoom();
+        });
+      case 'returnToWorld':
+        return runOverworldPreviewSmokeAction((scene) => {
+          scene.returnToWorld();
+        });
+      case 'editSelectedRoom':
+        return runOverworldPreviewSmokeAction((scene) => {
+          scene.editSelectedRoom();
+        }, 1200);
+      default:
+        return { ok: false, reason: `unsupported-action:${action}` };
+    }
+  };
+}
+
 window.capture_debug_info = () => getCaptureDebugInfo();
 window.get_auth_debug_state = () => ({ ...getAuthDebugState() });
 
@@ -267,6 +293,135 @@ function getCaptureDebugInfo(): Record<string, unknown> {
     webgl: gl ? getWebglDebugInfo(gl) : null,
     activeScene: getDebugState(),
   };
+}
+
+type PreviewSmokeScene = {
+  describeState: () => Record<string, unknown>;
+  jumpToCoordinates: (coordinates: { x: number; y: number }) => Promise<void> | void;
+  playSelectedRoom: () => void;
+  returnToWorld: () => void;
+  editSelectedRoom: () => void;
+  roomSummariesById?: Map<string, { id?: string; coordinates?: { x: number; y: number }; state?: string }>;
+  draftRoomsById?: Map<string, { id: string; coordinates: { x: number; y: number } }>;
+};
+
+async function selectEditableRoomForPreviewSmoke(roomId: string | null): Promise<Record<string, unknown>> {
+  const scene = getOverworldSceneForPreviewSmoke();
+  if (!scene) {
+    return { ok: false, reason: 'overworld-scene-missing' };
+  }
+
+  const requestedCoordinates = parsePreviewSmokeRoomId(roomId);
+  const currentState = scene.describeState();
+  const currentSelectedCoordinates = currentState.selected as { x: number; y: number } | undefined;
+  const currentSelectedState = currentState.selectedState;
+  const currentSelectionIsEditable =
+    currentSelectedCoordinates
+    && (currentSelectedState === 'published' || currentSelectedState === 'draft')
+    && requestedCoordinates === null;
+  const target =
+    currentSelectionIsEditable
+      ? {
+          roomId: `${currentSelectedCoordinates.x},${currentSelectedCoordinates.y}`,
+          coordinates: { ...currentSelectedCoordinates },
+          selectedState: currentSelectedState,
+        }
+      : findEditableRoomCandidate(scene, requestedCoordinates);
+  if (!target) {
+    return {
+      ok: false,
+      reason: 'no-editable-room-loaded',
+    };
+  }
+
+  await scene.jumpToCoordinates(target.coordinates);
+  await waitForPreviewSmoke(1200);
+
+  const selectedState = scene.describeState().selectedState;
+  return {
+    ok: true,
+    roomId: target.roomId,
+    coordinates: target.coordinates,
+    selectedState,
+  };
+}
+
+async function runOverworldPreviewSmokeAction(
+  action: (scene: PreviewSmokeScene) => void,
+  waitMs = 900,
+): Promise<Record<string, unknown>> {
+  const scene = getOverworldSceneForPreviewSmoke();
+  if (!scene) {
+    return { ok: false, reason: 'overworld-scene-missing' };
+  }
+
+  action(scene);
+  await waitForPreviewSmoke(waitMs);
+  return {
+    ok: true,
+    activeScene: getDebugState(),
+  };
+}
+
+function getOverworldSceneForPreviewSmoke(): PreviewSmokeScene | null {
+  try {
+    return game.scene.getScene('OverworldPlayScene') as unknown as PreviewSmokeScene;
+  } catch {
+    return null;
+  }
+}
+
+function findEditableRoomCandidate(
+  scene: PreviewSmokeScene,
+  requestedCoordinates: { x: number; y: number } | null,
+): {
+  roomId: string;
+  coordinates: { x: number; y: number };
+} | null {
+  const summaryCandidates = Array.from(scene.roomSummariesById?.values() ?? [])
+    .filter((candidate) => candidate.coordinates && (candidate.state === 'published' || candidate.state === 'draft'))
+    .map((candidate) => ({
+      roomId: candidate.id ?? `${candidate.coordinates!.x},${candidate.coordinates!.y}`,
+      coordinates: { ...candidate.coordinates! },
+    }));
+  const draftCandidates = Array.from(scene.draftRoomsById?.values() ?? []).map((candidate) => ({
+    roomId: candidate.id,
+    coordinates: { ...candidate.coordinates },
+  }));
+  const allCandidates = [...summaryCandidates, ...draftCandidates];
+  if (requestedCoordinates) {
+    return (
+      allCandidates.find(
+        (candidate) =>
+          candidate.coordinates.x === requestedCoordinates.x
+          && candidate.coordinates.y === requestedCoordinates.y
+      ) ?? null
+    );
+  }
+
+  return allCandidates[0] ?? null;
+}
+
+function parsePreviewSmokeRoomId(value: string | null): { x: number; y: number } | null {
+  if (!value || !value.trim()) {
+    return null;
+  }
+
+  const match = /^\s*(-?\d+)\s*,\s*(-?\d+)\s*$/.exec(value);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    x: Number(match[1]),
+    y: Number(match[2]),
+  };
+}
+
+function waitForPreviewSmoke(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 function getCanvasDataUrl(canvas: HTMLCanvasElement): {
