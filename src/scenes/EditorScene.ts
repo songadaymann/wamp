@@ -834,6 +834,10 @@ export class EditorScene extends Phaser.Scene {
     return this.persistenceController.revertToVersion(targetVersion);
   }
 
+  async adminRestoreToVersion(targetVersion: number): Promise<RoomRecord | null> {
+    return this.persistenceController.adminRestoreToVersion(targetVersion);
+  }
+
   // ══════════════════════════════════════
   // TILEMAP SETUP
   // ══════════════════════════════════════

@@ -119,6 +119,18 @@ export class EditorPersistenceController {
     }
   }
 
+  async adminRestoreToVersion(targetVersion: number): Promise<RoomRecord | null> {
+    showBusyOverlay(`Admin restoring room...`, `Loading version ${targetVersion}...`);
+    try {
+      return await this.roomSession.adminRestoreToVersion(
+        targetVersion,
+        this.host.getInitialRoomSnapshot()
+      );
+    } finally {
+      hideBusyOverlay();
+    }
+  }
+
   async mintRoom(): Promise<RoomRecord | null> {
     return this.roomSession.mintRoom();
   }

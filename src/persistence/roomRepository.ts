@@ -37,6 +37,7 @@ export interface RoomRepository {
   saveDraft(room: RoomSnapshot): Promise<RoomRecord>;
   publish(room: RoomSnapshot): Promise<RoomRecord>;
   revert(roomId: string, coordinates: RoomCoordinates, targetVersion: number): Promise<RoomRecord>;
+  adminRestore(roomId: string, coordinates: RoomCoordinates, targetVersion: number): Promise<RoomRecord>;
   setCanonicalVersion(
     roomId: string,
     coordinates: RoomCoordinates,
@@ -284,6 +285,73 @@ class LocalRoomRepository implements RoomRepository {
     return cloneRoomRecord(nextRecord);
   }
 
+  async adminRestore(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    targetVersion: number
+  ): Promise<RoomRecord> {
+    const existing = await this.loadRoom(roomId, coordinates);
+    const target = existing.versions.find((version) => version.version === targetVersion) ?? null;
+    if (!target) {
+      throw new Error(`Version ${targetVersion} was not found.`);
+    }
+
+    const now = new Date().toISOString();
+    const lastPublished = existing.versions[existing.versions.length - 1] ?? null;
+    const nextVersion = (lastPublished?.version ?? 0) + 1;
+    const published: RoomSnapshot = {
+      ...cloneRoomSnapshot(target.snapshot),
+      createdAt: existing.draft.createdAt,
+      updatedAt: now,
+      publishedAt: now,
+      status: 'published',
+      version: nextVersion,
+    };
+
+    const draft: RoomSnapshot = {
+      ...cloneRoomSnapshot(published),
+      status: 'draft',
+    };
+
+    const nextVersionRecord: RoomVersionRecord = createRoomVersionRecord(published, {
+      createdAt: now,
+      publishedByUserId: existing.lastPublishedByUserId,
+      publishedByPrincipalKind: existing.lastPublishedByPrincipalKind,
+      publishedByAgentId: existing.lastPublishedByAgentId,
+      publishedByDisplayName: existing.lastPublishedByDisplayName ?? 'Admin',
+      revertedFromVersion: target.version,
+      leaderboardSourceVersion: null,
+    });
+
+    const nextRecord: RoomRecord = {
+      draft,
+      published,
+      versions: [...existing.versions, nextVersionRecord],
+      canonicalVersion: existing.canonicalVersion,
+      claimerUserId: existing.claimerUserId,
+      claimerPrincipalKind: existing.claimerPrincipalKind,
+      claimerAgentId: existing.claimerAgentId,
+      claimerDisplayName: existing.claimerDisplayName,
+      claimedAt: existing.claimedAt,
+      lastPublishedByUserId: existing.lastPublishedByUserId,
+      lastPublishedByPrincipalKind: existing.lastPublishedByPrincipalKind,
+      lastPublishedByAgentId: existing.lastPublishedByAgentId,
+      lastPublishedByDisplayName: existing.lastPublishedByDisplayName,
+      mintedChainId: existing.mintedChainId,
+      mintedContractAddress: existing.mintedContractAddress,
+      mintedTokenId: existing.mintedTokenId,
+      mintedOwnerWalletAddress: existing.mintedOwnerWalletAddress,
+      mintedOwnerSyncedAt: existing.mintedOwnerSyncedAt,
+      mintedMetadataRoomVersion: existing.mintedMetadataRoomVersion,
+      mintedMetadataUpdatedAt: existing.mintedMetadataUpdatedAt,
+      mintedMetadataHash: existing.mintedMetadataHash,
+      permissions: computeLocalPermissions(existing),
+    };
+
+    localStorage.setItem(getStorageKey(roomId), JSON.stringify(nextRecord));
+    return cloneRoomRecord(nextRecord);
+  }
+
   async setCanonicalVersion(
     roomId: string,
     coordinates: RoomCoordinates,
@@ -515,6 +583,30 @@ class ApiRoomRepository implements RoomRepository {
         return record;
       },
       () => this.fallback?.revert(roomId, coordinates, targetVersion)
+    );
+  }
+
+  async adminRestore(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    targetVersion: number
+  ): Promise<RoomRecord> {
+    const params = new URLSearchParams({
+      x: String(coordinates.x),
+      y: String(coordinates.y),
+    });
+    const body: RoomRevertRequestBody = { targetVersion };
+
+    return this.withFallback(
+      () =>
+        this.request<RoomRecord>(
+          `/api/admin/rooms/${encodeURIComponent(roomId)}/restore?${params.toString()}`,
+          {
+            method: 'POST',
+            body: JSON.stringify(body),
+          }
+        ),
+      () => this.fallback?.adminRestore(roomId, coordinates, targetVersion)
     );
   }
 

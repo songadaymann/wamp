@@ -591,5 +591,6 @@ function buildRoomMutationActor(auth: RequestAuth): RoomMutationActor {
     principalKind: auth.principal.kind,
     principalAgentId: auth.principal.agentId,
     principalDisplayName: auth.principal.displayName,
+    requestAuthSource: auth.source,
   };
 }
