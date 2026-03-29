@@ -561,6 +561,46 @@ export class EditorRoomSession {
     return null;
   }
 
+  async adminRestoreToVersion(
+    targetVersion: number,
+    initialRoomSnapshot: RoomSnapshot | null,
+  ): Promise<RoomRecord | null> {
+    if (this.saveInFlight) {
+      return null;
+    }
+
+    await refreshAuthSession();
+    const moderationRole = getAuthDebugState().chatModeration.role;
+    if (moderationRole !== 'admin' && moderationRole !== 'owner') {
+      this.setStatusText('Only chat moderators can admin-restore rooms.');
+      return null;
+    }
+
+    this.saveInFlight = true;
+    this.setStatusText(`Admin restoring to v${targetVersion}...`);
+
+    try {
+      const record = await this.roomRepository.adminRestore(
+        this.roomId,
+        this.roomCoordinates,
+        targetVersion
+      );
+      this.syncRoomMetadata(record);
+      this.host.applyRoomSnapshot(this.resolveRoomSnapshotForEditing(record, initialRoomSnapshot));
+      this.setStatusText(`Admin restored room to v${targetVersion}.`);
+      return record;
+    } catch (error) {
+      console.error('Failed to admin-restore room version', error);
+      const message = error instanceof Error ? error.message : 'Admin restore failed.';
+      this.setStatusText(message);
+    } finally {
+      this.saveInFlight = false;
+      this.host.refreshUi();
+    }
+
+    return null;
+  }
+
   async setCanonicalVersion(targetVersion: number): Promise<RoomRecord | null> {
     if (this.saveInFlight) {
       return null;

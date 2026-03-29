@@ -86,7 +86,7 @@ export async function handleClaimableFrontierRoomsRequest(
     throw new HttpError(400, 'Radius must be between 0 and 32.');
   }
 
-  const quota = await getRoomClaimQuota(env, auth.user.id);
+  const quota = await getRoomClaimQuota(env, auth.user.id, auth.source);
   const publishedRooms = await loadPublishedRoomsInBounds(
     env,
     centerX - radius - 1,

@@ -1,6 +1,9 @@
+import type { RoomRevertRequestBody } from '../../../persistence/roomModel';
 import { requireAdminRequest } from '../auth/request';
-import { HttpError, jsonResponse } from '../core/http';
+import { requireChatModeratorSession } from '../chat/moderation';
+import { getCoordinatesFromRequest, HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
+import { revertRoom } from '../rooms/store';
 import { upsertUserStats } from '../runs/points';
 import { loadLaunchStats } from './launchStats';
 import {
@@ -75,7 +78,39 @@ export async function handleAdminRequest(
     return handleAdminRoomClear(request, env, decodeURIComponent(clearMatch[1]));
   }
 
+  const restoreMatch = /^\/api\/admin\/rooms\/([^/]+)\/restore$/.exec(url.pathname);
+  if (restoreMatch && request.method === 'POST') {
+    return handleAdminRoomRestore(request, url, env, decodeURIComponent(restoreMatch[1]));
+  }
+
   throw new HttpError(404, 'Admin route not found.');
+}
+
+async function handleAdminRoomRestore(
+  request: Request,
+  url: URL,
+  env: Env,
+  roomId: string
+): Promise<Response> {
+  const { session } = await requireChatModeratorSession(env, request, `restore room ${roomId}`);
+  const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
+  const body = await parseJsonBody<RoomRevertRequestBody>(request);
+  const record = await revertRoom(
+    env,
+    roomId,
+    coordinates,
+    body.targetVersion,
+    {
+      ownerUser: session.user,
+      principalKind: 'user',
+      principalAgentId: null,
+      principalDisplayName: session.user.displayName ?? session.user.email ?? 'Moderator',
+      requestAuthSource: 'session',
+    },
+    true
+  );
+
+  return jsonResponse(request, record);
 }
 
 async function handleAdminRoomClear(

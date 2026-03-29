@@ -34,6 +34,8 @@ export interface Env {
   APP_BASE_URL?: string;
   ENABLE_TEST_RESET?: string;
   ROOM_DAILY_CLAIM_LIMIT?: string;
+  PLAYFUN_ROOM_DAILY_CLAIM_LIMIT?: string;
+  PLAYFUN_ROOM_MAX_PLACED_OBJECTS?: string;
   ROOM_MINT_CHAIN_ID?: string;
   ROOM_MINT_CHAIN_NAME?: string;
   ROOM_MINT_DISABLED?: string;
