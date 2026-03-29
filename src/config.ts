@@ -132,12 +132,6 @@ const DECO_ONLY_INDICES_FOREST = [
   56, 57, 58, 59,
   61, 62,
 ];
-const DECO_ONLY_INDICES_FOREST_2 = [
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 10,
-  13, 18, 22,
-  47, 56, 57, 58, 59,
-  61, 62, 66,
-];
 const DECO_ONLY_INDICES_DESERT = [3, 4, 18];
 const DECO_ONLY_INDICES_DIRT = [58, 59];
 const DECO_ONLY_INDICES_WATER = [1, 2, 3, 5, 13, 18];
@@ -247,21 +241,6 @@ export const TILESETS: TilesetConfig[] = [
     rows: 4,
     tileCount: 32,
     firstGid: 460,
-  },
-  {
-    key: 'forest_2',
-    name: '[WIP] Forest 2',
-    path: 'assets/tilesets/tileset_forest_2.png',
-    imageWidth: 192,
-    imageHeight: 96,
-    columns: 12,
-    rows: 6,
-    tileCount: 72,
-    firstGid: 492,
-    terrainCollisionProfiles: createTilesetCollisionProfiles(
-      DECO_ONLY_INDICES_FOREST_2,
-      NO_COLLISION_PROFILE,
-    ),
   },
 ];
 
