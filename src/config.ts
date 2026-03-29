@@ -250,7 +250,7 @@ export const TILESETS: TilesetConfig[] = [
   },
   {
     key: 'forest_2',
-    name: 'Forest 2',
+    name: '[WIP] Forest 2',
     path: 'assets/tilesets/tileset_forest_2.png',
     imageWidth: 192,
     imageHeight: 96,
