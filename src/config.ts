@@ -101,6 +101,14 @@ const TOP_DECOR_INDICES_STANDARD = [
   44, 45, 46,
   49, 50, 51, 52, 53, 54,
 ];
+const TOP_DECOR_INDICES_FOREST = [
+  9, 11,
+  12, 14, 15, 16, 17, 19, 20, 21, 23,
+  25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
+  36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+  48, 49, 50, 51, 52, 53, 54, 55,
+  60, 63, 64, 65, 66, 67, 58, 69, 70, 71,
+];
 const TOP_DECOR_INDICES_SNOW = [
   13, 14, 15, 18,
   23, 24, 25, 26, 27,
@@ -117,8 +125,15 @@ const TOP_DECOR_INDICES_LAVA = [
   69, 70, 71,
   85,
 ];
-const DECO_ONLY_INDICES_FOREST = [2, 3, 5, 18];
+const DECO_ONLY_INDICES_FOREST = [
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 10,
+  13, 18, 22,
+  24,
+  56, 57, 58, 59,
+  61, 62,
+];
 const DECO_ONLY_INDICES_DESERT = [3, 4, 18];
+const DECO_ONLY_INDICES_DIRT = [58, 59];
 const DECO_ONLY_INDICES_WATER = [1, 2, 3, 5, 13, 18];
 const DECO_ONLY_INDICES_SNOW = [2, 3, 4, 16, 31, 62, 63, 64, 65];
 const DECO_ONLY_INDICES_LAVA = [2, 4, 20, 21, 22, 24, 26, 27, 28, 52, 58];
@@ -136,7 +151,7 @@ export const TILESETS: TilesetConfig[] = [
     tileCount: 72,
     firstGid: 1,
     terrainCollisionProfiles: {
-      ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_STANDARD, DECORATED_TOP_PROFILE),
+      ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_FOREST, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_FOREST, NO_COLLISION_PROFILE),
     },
   },
@@ -165,7 +180,10 @@ export const TILESETS: TilesetConfig[] = [
     rows: 6,
     tileCount: 72,
     firstGid: 145,
-    terrainCollisionProfiles: createTilesetCollisionProfiles(TOP_DECOR_INDICES_STANDARD, DECORATED_TOP_PROFILE),
+    terrainCollisionProfiles: {
+      ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_STANDARD, DECORATED_TOP_PROFILE),
+      ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_DIRT, NO_COLLISION_PROFILE),
+    },
   },
   {
     key: 'lava',
