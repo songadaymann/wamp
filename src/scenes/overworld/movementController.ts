@@ -37,6 +37,7 @@ export interface OverworldMovementControllerState {
   wallJumpActive: boolean;
   wallJumpDirection: -1 | 1 | 0;
   wallJumpBlockedSide: -1 | 1 | 0;
+  wallJumpChainActive: boolean;
   isClimbingLadder: boolean;
   activeLadderKey: string | null;
 }
@@ -319,6 +320,7 @@ export class OverworldMovementController {
           this.host.state.wallJumpActive = true;
           this.host.state.wallJumpDirection = wallJumpDirection;
           this.host.state.wallJumpBlockedSide = wallJumpSourceSide;
+          this.host.state.wallJumpChainActive = true;
         } else {
           this.host.state.jumpBuffered = true;
           this.host.state.jumpBufferTime = this.options.jumpBufferMs;
@@ -344,6 +346,7 @@ export class OverworldMovementController {
         this.host.state.wallJumpDirection = 0;
         this.host.state.wallJumpLockUntil = 0;
         this.host.state.wallJumpBlockedSide = 0;
+        this.host.state.wallJumpChainActive = false;
       }
 
       const jumpHeld = upHeld || cursors.space!.isDown || touchInput.jumpHeld;
@@ -390,6 +393,7 @@ export class OverworldMovementController {
     this.host.state.wallJumpActive = false;
     this.host.state.wallJumpDirection = 0;
     this.host.state.wallJumpBlockedSide = 0;
+    this.host.state.wallJumpChainActive = false;
   }
 
   private clearWallSlideState(): void {
@@ -397,19 +401,35 @@ export class OverworldMovementController {
     this.host.state.isWallSliding = false;
   }
 
-  private getWallContactSide(horizontalInput: number): -1 | 1 | 0 {
+  private getTouchingWallSide(): -1 | 1 | 0 {
     const playerBody = this.host.getPlayerBody();
-    if (!playerBody || horizontalInput === 0) {
+    if (!playerBody) {
       return 0;
     }
 
     const touchingLeft = playerBody.blocked.left || playerBody.touching.left;
     const touchingRight = playerBody.blocked.right || playerBody.touching.right;
-    if (horizontalInput < 0 && touchingLeft) {
+    if (touchingLeft === touchingRight) {
+      return 0;
+    }
+
+    return touchingLeft ? -1 : 1;
+  }
+
+  private getWallContactSide(horizontalInput: number): -1 | 1 | 0 {
+    const touchingWallSide = this.getTouchingWallSide();
+    if (touchingWallSide === 0) {
+      return 0;
+    }
+
+    if (horizontalInput < 0 && touchingWallSide === -1) {
       return -1;
     }
-    if (horizontalInput > 0 && touchingRight) {
+    if (horizontalInput > 0 && touchingWallSide === 1) {
       return 1;
+    }
+    if (this.host.state.wallJumpChainActive) {
+      return touchingWallSide;
     }
 
     return 0;

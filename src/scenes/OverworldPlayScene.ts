@@ -339,6 +339,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private wallJumpActive = false;
   private wallJumpDirection: -1 | 1 | 0 = 0;
   private wallJumpBlockedSide: -1 | 1 | 0 = 0;
+  private wallJumpChainActive = false;
   private isClimbingLadder = false;
   private activeLadderKey: string | null = null;
   private collectedObjectKeys = new Set<string>();
@@ -986,6 +987,12 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       set wallJumpBlockedSide(value: -1 | 1 | 0) {
         thisScene.wallJumpBlockedSide = value;
+      },
+      get wallJumpChainActive() {
+        return thisScene.wallJumpChainActive;
+      },
+      set wallJumpChainActive(value: boolean) {
+        thisScene.wallJumpChainActive = value;
       },
       get isClimbingLadder() {
         return thisScene.isClimbingLadder;
@@ -2668,6 +2675,7 @@ export class OverworldPlayScene extends Phaser.Scene {
             wallContactSide: this.wallContactSide,
             wallJumpBlockedSide: this.wallJumpBlockedSide,
             wallJumpActive: this.wallJumpActive,
+            wallJumpChainActive: this.wallJumpChainActive,
             wallJumpLockMs: Math.max(0, this.wallJumpLockUntil - this.time.now),
             ladderKey: this.activeLadderKey,
             animation: this.playerAnimationState,
