@@ -57,6 +57,31 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Play.fun room guardrails + moderator room restore on March 28, 2026:
+  - added source-aware room guardrails in `src/cloudflare/worker/rooms/guardrails.ts`
+  - room claim quota now distinguishes Play.fun sessions from normal sessions:
+    - `ROOM_DAILY_CLAIM_LIMIT` still governs normal signed-in users
+    - `PLAYFUN_ROOM_DAILY_CLAIM_LIMIT` defaults to `1` and is now used for `auth.source === 'playfun'`
+  - room draft/publish mutations now enforce a Play.fun-only placed-object cap via `PLAYFUN_ROOM_MAX_PLACED_OBJECTS` (default `16`)
+  - the claimable-frontier and auth-session quota responses now both use the request auth source, so Play.fun players see the tighter quota in both UI surfaces
+  - added a moderator-only restore route at `POST /api/admin/rooms/:roomId/restore`, authenticated through the existing chat-moderator session path rather than `x-admin-key`
+  - added `adminRestore(...)` to the room repository bridge and `Admin Restore` actions in the room history modal for chat admins/owners when they are not the normal room owner
+  - local worker sanity check confirmed the new restore route is registered and returns:
+    - `401 {"error":"You must be signed in to restore room 0,0."}`
+      for an unauthenticated POST to `/api/admin/rooms/0,0/restore?x=0&y=0`
+  - verification:
+    - `./node_modules/.bin/tsc --noEmit` passed in `/private/tmp/wamp-playfun-guardrails`
+    - `npm run build` passed in `/private/tmp/wamp-playfun-guardrails`
+    - lightweight static Playwright smoke wrote:
+      - `output/web-game/shot-0.png`
+      - `output/web-game/errors-0.json`
+    - smoke note:
+      - the only captured console issue was a `404` asset miss during static preview boot; the smoke did not exercise authenticated Play.fun or moderator flows end-to-end
+  - follow-up manual checks still wanted:
+    - verify a real Play.fun session sees `1/day` quota on the safety branch
+    - verify Play.fun room saves with > cap objects fail with the expected `429`
+    - verify a signed-in chat admin can restore another user room from `History`
+
 - Course editor follow-up fixes on March 28, 2026:
   - suppressed room-goal copy while a course run is active so the overworld HUD no longer mixes room-level challenge text into course play
   - added explicit `Save Course` and `Publish Course` actions inside the course goal section of `CourseEditorScene`, while keeping the top action rail focused on room-slice saves/publishes

@@ -1,5 +1,5 @@
 import type { AuthUser } from '../../../auth/model';
-import type { PrincipalKind } from '../../../agents/model';
+import type { PrincipalKind, RequestAuthSource } from '../../../agents/model';
 import {
   cloneRoomSnapshot,
   DEFAULT_ROOM_COORDINATES,
@@ -25,8 +25,10 @@ import type {
   RoomVersionRow,
 } from '../core/types';
 import { syncRoomOwnershipFromChain } from '../mint/service';
-
-const DEFAULT_DAILY_ROOM_CLAIM_LIMIT = 1;
+import {
+  enforceRoomMutationGuardrails,
+  getDailyRoomClaimLimitForSource,
+} from './guardrails';
 
 export interface RoomClaimQuota {
   limit: number | null;
@@ -39,6 +41,7 @@ export interface RoomMutationActor {
   principalKind: PrincipalKind;
   principalAgentId: string | null;
   principalDisplayName: string;
+  requestAuthSource: RequestAuthSource | null;
 }
 
 export async function loadRoomRecord(
@@ -282,6 +285,9 @@ export async function saveDraft(
     throw new HttpError(403, 'Only the room token owner can save drafts for this minted room.');
   }
   const now = new Date().toISOString();
+  if (!actorIsAdmin) {
+    enforceRoomMutationGuardrails(env, incomingRoom, actor.requestAuthSource);
+  }
 
   const draft: RoomSnapshot = {
     ...cloneRoomSnapshot(incomingRoom),
@@ -345,6 +351,9 @@ export async function publishRoom(
   if (!existing.permissions.canPublish) {
     throw new HttpError(403, 'Only the room token owner can publish this minted room.');
   }
+  if (!actorIsAdmin) {
+    enforceRoomMutationGuardrails(env, incomingRoom, actor.requestAuthSource);
+  }
 
   const now = new Date().toISOString();
   const lastPublished = existing.versions[existing.versions.length - 1];
@@ -356,7 +365,7 @@ export async function publishRoom(
   const shouldClaim = !existing.claimerUserId && actor.ownerUser !== null;
   if (shouldClaim && !actorIsAdmin) {
     await enforceFrontierClaimRule(env, incomingRoom.coordinates);
-    await enforceDailyRoomClaimLimit(env, actor.ownerUser!.id, now);
+    await enforceDailyRoomClaimLimit(env, actor.ownerUser!.id, now, actor.requestAuthSource);
   }
   const claimerUserId = shouldClaim ? actor.ownerUser!.id : existing.claimerUserId;
   const claimerPrincipalType = shouldClaim ? actor.principalKind : existing.claimerPrincipalKind;
@@ -691,30 +700,13 @@ export function parseStoredSnapshot(raw: string, label: string): RoomSnapshot {
   }
 }
 
-function getDailyRoomClaimLimit(env: Env): number | null {
-  const raw = env.ROOM_DAILY_CLAIM_LIMIT?.trim();
-  if (!raw) {
-    return DEFAULT_DAILY_ROOM_CLAIM_LIMIT;
-  }
-
-  const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed) || Number.isNaN(parsed)) {
-    return DEFAULT_DAILY_ROOM_CLAIM_LIMIT;
-  }
-
-  if (parsed <= 0) {
-    return null;
-  }
-
-  return parsed;
-}
-
 export async function getRoomClaimQuota(
   env: Env,
   userId: string,
+  requestAuthSource: RequestAuthSource | null = 'session',
   nowIso: string = new Date().toISOString()
 ): Promise<RoomClaimQuota> {
-  const limit = getDailyRoomClaimLimit(env);
+  const limit = getDailyRoomClaimLimitForSource(env, requestAuthSource);
   const claimsUsedToday = await countRoomClaimsSince(env, userId, getUtcDayStartIso(nowIso));
 
   return {
@@ -817,9 +809,10 @@ async function enforceFrontierClaimRule(env: Env, coordinates: RoomCoordinates):
 async function enforceDailyRoomClaimLimit(
   env: Env,
   userId: string,
-  nowIso: string
+  nowIso: string,
+  requestAuthSource: RequestAuthSource | null,
 ): Promise<void> {
-  const limit = getDailyRoomClaimLimit(env);
+  const limit = getDailyRoomClaimLimitForSource(env, requestAuthSource);
   if (limit === null) {
     return;
   }

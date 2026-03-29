@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { getAuthDebugState } from '../../auth/client';
 import {
   buildRoomLeaderboardLineage,
   getManualRoomLeaderboardSourceValidationError,
@@ -27,6 +28,7 @@ type HistoryModalElements = {
 export class RoomHistoryModalController {
   private readonly elements: HistoryModalElements;
   private activeTargetVersion: number | null = null;
+  private activeAdminRestoreVersion: number | null = null;
   private activeCanonicalVersion: number | null = null;
   private activeLeaderboardTargetVersion: number | null = null;
   private activeLeaderboardSourceVersion: number | null = null;
@@ -137,6 +139,7 @@ export class RoomHistoryModalController {
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
     this.activeTargetVersion = null;
+    this.activeAdminRestoreVersion = null;
     this.activeCanonicalVersion = null;
     this.activeLeaderboardTargetVersion = null;
     this.activeLeaderboardSourceVersion = null;
@@ -151,6 +154,7 @@ export class RoomHistoryModalController {
     }
 
     this.activeTargetVersion = null;
+    this.activeAdminRestoreVersion = null;
     this.activeCanonicalVersion = null;
     this.activeLeaderboardTargetVersion = null;
     this.activeLeaderboardSourceVersion = null;
@@ -209,6 +213,30 @@ export class RoomHistoryModalController {
 
     if (!result) {
       const statusMessage = this.getEditorStatusText() || `Revert to v${targetVersion} failed.`;
+      this.setError(statusMessage);
+      await this.render();
+      return;
+    }
+
+    this.setError(null);
+    await this.render();
+  }
+
+  private async handleAdminRestore(targetVersion: number): Promise<void> {
+    const editorScene = getActiveEditorScene(this.game);
+    if (!editorScene?.adminRestoreToVersion) {
+      return;
+    }
+
+    this.activeAdminRestoreVersion = targetVersion;
+    this.setError(null);
+    await this.render();
+
+    const result = await editorScene.adminRestoreToVersion(targetVersion);
+    this.activeAdminRestoreVersion = null;
+
+    if (!result) {
+      const statusMessage = this.getEditorStatusText() || `Admin restore to v${targetVersion} failed.`;
       this.setError(statusMessage);
       await this.render();
       return;
@@ -416,6 +444,7 @@ export class RoomHistoryModalController {
 
     const actions = this.doc.createElement('div');
     actions.className = 'history-version-actions';
+    const isChatModerator = ['admin', 'owner'].includes(getAuthDebugState().chatModeration.role);
 
     if (state.canRevert && version.version < latestVersion) {
       const button = this.doc.createElement('button');
@@ -425,6 +454,16 @@ export class RoomHistoryModalController {
       button.disabled = this.hasPendingAction();
       button.addEventListener('click', () => {
         void this.handleRevert(version.version);
+      });
+      actions.appendChild(button);
+    } else if (isChatModerator && version.version < latestVersion) {
+      const button = this.doc.createElement('button');
+      button.className = 'bar-btn bar-btn-small';
+      button.textContent =
+        this.activeAdminRestoreVersion === version.version ? 'Restoring...' : 'Admin Restore';
+      button.disabled = this.hasPendingAction();
+      button.addEventListener('click', () => {
+        void this.handleAdminRestore(version.version);
       });
       actions.appendChild(button);
     }
@@ -562,6 +601,7 @@ export class RoomHistoryModalController {
   private hasPendingAction(): boolean {
     return (
       this.activeTargetVersion !== null ||
+      this.activeAdminRestoreVersion !== null ||
       this.activeCanonicalVersion !== null ||
       this.activeLeaderboardTargetVersion !== null ||
       this.metadataRefreshInFlight

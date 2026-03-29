@@ -75,7 +75,7 @@ export async function handleAuthRequest(request: Request, url: URL, env: Env): P
         ? await resolveChatModerationViewer(env, auth.user)
         : NO_CHAT_MODERATION_VIEWER;
     if (auth?.source === 'session' || auth?.source === 'playfun') {
-      const quota = await getRoomClaimQuota(env, auth.user.id);
+      const quota = await getRoomClaimQuota(env, auth.user.id, auth.source);
       responseBody.roomDailyClaimLimit = quota.limit;
       responseBody.roomClaimsUsedToday = quota.claimsUsedToday;
       responseBody.roomClaimsRemainingToday = quota.claimsRemainingToday;
