@@ -1501,6 +1501,17 @@ export class CourseEditorScene extends Phaser.Scene {
     }
 
     if (editorState.paletteMode === 'objects') {
+      if (editorState.activeTool === 'eraser') {
+        if (this.handleObjectModeSecondaryAction(slice, pointer.worldX, pointer.worldY)) {
+          this.renderUi();
+          return;
+        }
+
+        this.removeObjectAt(slice, pointer.worldX, pointer.worldY);
+        this.renderUi();
+        return;
+      }
+
       const clickedPressurePlate = slice.runtime.findPlacedObjectAt(
         pointer.worldX,
         pointer.worldY,
@@ -1527,11 +1538,7 @@ export class CourseEditorScene extends Phaser.Scene {
         }
       }
 
-      if (editorState.activeTool === 'eraser') {
-        this.removeObjectAt(slice, pointer.worldX, pointer.worldY);
-      } else {
-        this.handleObjectPlace(slice, pointer, localTile.tileX, localTile.tileY);
-      }
+      this.handleObjectPlace(slice, pointer, localTile.tileX, localTile.tileY);
       this.renderUi();
       return;
     }
@@ -1592,6 +1599,23 @@ export class CourseEditorScene extends Phaser.Scene {
       this.pinInspector('container', placed.instanceId ?? '');
       this.containerStatusText = `${this.getContainerName(placed.id)} placed. Select a ${this.getContainerAcceptedContentsLabel(placed.id)} and click it to fill the container.`;
     }
+  }
+
+  private handleObjectModeSecondaryAction(
+    slice: CourseRoomSlice,
+    worldX: number,
+    worldY: number,
+  ): boolean {
+    if (!this.connectingPressurePlateInstanceId) {
+      return false;
+    }
+
+    if (slice.runtime.canRemoveObjectAt(worldX, worldY)) {
+      return false;
+    }
+
+    this.cancelPressurePlateConnection();
+    return true;
   }
 
   private removeObjectAt(slice: CourseRoomSlice, worldX: number, worldY: number): void {

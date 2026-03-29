@@ -57,6 +57,13 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Course pressure-plate follow-up on March 28, 2026:
+  - fixed `CourseEditorScene` object-mode erasing so pressure plates now route through the same remove/cancel ordering as the normal room editor instead of being force-focused first; this restores deleting placed pressure plates in the stitched course editor
+  - added a runtime course pressure-plate relink pass in `OverworldPlayScene` so loaded floor triggers recompute their active course target from the current course snapshot instead of relying only on the one-time room-load attachment
+  - verification:
+    - `npm run check` passed in `/private/tmp/wamp-course-safety-integration`
+    - manual safety D1 inspection confirmed the latest edited course (`9fad7935-807c-48c6-8e3b-f394ec1a1ccb`) persists one cross-room `pressurePlateLinks` entry in both `draft_json` and `published_json`, and the pinned room versions still contain both linked instance ids
+
 - Course course-playback follow-up on March 28, 2026:
   - fixed draft course test handoff so `CourseEditorScene` now persists all loaded room slices into the active course-preview override set before launching play; saved-clean room drafts no longer disappear just because they are not dirty anymore
   - fixed course save/publish in `CourseEditorScene` to resync from the active course draft session before writing to the backend, so room publishes made inside the course editor actually update the course snapshot that gets saved/published
