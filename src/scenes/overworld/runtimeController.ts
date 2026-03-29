@@ -62,6 +62,9 @@ interface OverworldRuntimeControllerHost<TLiveObject> {
   centerCameraOnCoordinates(coordinates: RoomCoordinates): void;
   constrainInspectCamera(): void;
   applyCameraMode(forceCenter?: boolean): void;
+  syncLiveObjectWorldColliders(
+    loadedRooms: Iterable<LoadedFullRoom<TLiveObject, OverworldRoomEdgeWall>>,
+  ): void;
   syncLiveObjectInteractions(
     loadedRooms: Iterable<LoadedFullRoom<TLiveObject, OverworldRoomEdgeWall>>,
   ): void;
@@ -127,6 +130,7 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
     }
 
     this.syncFullRoomColliders();
+    this.syncLiveObjectWorldColliders();
     this.syncLiveObjectInteractions();
     this.syncEdgeWalls();
     this.host.applyCameraMode(this.host.getShouldCenterCamera());
@@ -158,6 +162,10 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
 
   syncLiveObjectInteractions(): void {
     this.host.syncLiveObjectInteractions(this.host.getLoadedFullRooms());
+  }
+
+  syncLiveObjectWorldColliders(): void {
+    this.host.syncLiveObjectWorldColliders(this.host.getLoadedFullRooms());
   }
 
   syncEdgeWalls(): void {

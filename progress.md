@@ -57,6 +57,16 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Course crate seam collision fix on March 29, 2026:
+  - confirmed a stitched-world physics bug in `src/scenes/overworld/liveObjects.ts`: dynamic object world colliders were only being bound to the room that originally spawned the object
+  - this meant a pushed crate could cross into an adjacent course room while still only colliding with the source room terrain, so it could miss the destination room floor and fall straight through
+  - changed dynamic-object collider sync to rebuild against all currently loaded full rooms, not just the source room, and re-run that sync after live-object mutations
+  - wired the global live-object world-collider sync into `OverworldRuntimeController` so chunk / room streaming refreshes also rebuild the stitched collision graph
+  - verification:
+    - `npm run check` passed in `/private/tmp/everybodys-platformer-review`
+  - remaining check:
+    - manual runtime retest still wanted for the exact “push crate across a course room seam onto a lower pressure plate” scenario
+
 - Forest 2 tileset wiring on March 29, 2026:
   - added `forest_2` to `TILESETS` with a new append-only gid range (`firstGid: 492`) so saved room gids stay stable
   - marked the clearly decorative / blank `forest_2` local indices as non-colliding, matching the current terrain-collision model without renumbering any existing tileset

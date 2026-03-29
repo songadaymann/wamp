@@ -74,9 +74,10 @@ interface OverworldLiveObjectSettings {
   enemyStompBounceVelocity: number;
 }
 
-interface OverworldLiveObjectControllerOptions {
+interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   scene: Phaser.Scene;
   settings: OverworldLiveObjectSettings;
+  getLoadedFullRooms: () => Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>;
   getRoomOrigin: (coordinates: RoomCoordinates) => { x: number; y: number };
   getPlacedObjectRuntimeKey: (
     roomId: string,
@@ -155,7 +156,7 @@ const LIGHTNING_ACTIVE_MS = 190;
 const LIGHTNING_COOLDOWN_MS = 1150;
 
 export class OverworldLiveObjectController<TEdgeWall = unknown> {
-  constructor(private readonly options: OverworldLiveObjectControllerOptions) {}
+  constructor(private readonly options: OverworldLiveObjectControllerOptions<TEdgeWall>) {}
 
   createLiveObjects(loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>): void {
     for (let index = 0; index < loadedRoom.room.placedObjects.length; index += 1) {
@@ -189,7 +190,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       }
     }
 
-    this.syncRoomObjectWorldColliders(loadedRoom);
+    this.syncWorldObjectColliders(this.options.getLoadedFullRooms());
   }
 
   destroyLiveObjects(loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>): void {
@@ -207,6 +208,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     for (const liveObject of loadedRoom.liveObjects) {
       this.destroyLiveObjectInteractions(liveObject);
     }
+  }
+
+  syncLoadedWorldColliders(
+    loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
+  ): void {
+    this.syncWorldObjectColliders(loadedRooms);
   }
 
   private createLiveObjectEntry(
@@ -780,7 +787,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         countsTowardGoals: true,
       });
     }
-    this.syncRoomObjectWorldColliders(loadedRoom);
+    this.syncWorldObjectColliders(this.options.getLoadedFullRooms());
   }
 
   private openTriggeredChest(
@@ -855,7 +862,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
 
     loadedRoom.liveObjects.push(liveObject);
-    this.syncRoomObjectWorldColliders(loadedRoom);
+    this.syncWorldObjectColliders(this.options.getLoadedFullRooms());
     // Trigger-spawned enemies/collectibles need the same player overlap wiring as
     // room-loaded objects, otherwise they can move but never become interactable.
     this.syncLiveObjectInteractions([loadedRoom]);
@@ -886,40 +893,49 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     return `${roomId}:${instanceId}`;
   }
 
-  private syncRoomObjectWorldColliders(loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>): void {
-    const solidObstacles = loadedRoom.liveObjects.filter(
-      (candidate) =>
-        candidate.sprite.body &&
-        (candidate.config.category === 'platform' || candidate.config.id === 'door_locked')
+  private syncWorldObjectColliders(
+    loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
+  ): void {
+    const rooms = Array.from(loadedRooms);
+    const solidObstacles = rooms.flatMap((loadedRoom) =>
+      loadedRoom.liveObjects.filter(
+        (candidate) =>
+          candidate.sprite.body &&
+          (candidate.config.category === 'platform' || candidate.config.id === 'door_locked')
+      )
     );
 
-    for (const liveObject of loadedRoom.liveObjects) {
-      this.destroyLiveObjectWorldColliders(liveObject);
+    for (const loadedRoom of rooms) {
+      for (const liveObject of loadedRoom.liveObjects) {
+        this.destroyLiveObjectWorldColliders(liveObject);
 
-      if (!this.usesDynamicObjectBody(liveObject.config) || !liveObject.sprite.body) {
-        continue;
-      }
-
-      liveObject.worldColliders.push(
-        this.options.scene.physics.add.collider(liveObject.sprite, loadedRoom.terrainLayer)
-      );
-      if (loadedRoom.terrainInsetBodies) {
-        liveObject.worldColliders.push(
-          this.options.scene.physics.add.collider(liveObject.sprite, loadedRoom.terrainInsetBodies)
-        );
-      }
-      for (const obstacle of solidObstacles) {
-        if (!obstacle.sprite.active || !obstacle.sprite.body) {
+        if (!this.usesDynamicObjectBody(liveObject.config) || !liveObject.sprite.body) {
           continue;
         }
 
-        if (obstacle === liveObject) {
-          continue;
+        for (const collisionRoom of rooms) {
+          liveObject.worldColliders.push(
+            this.options.scene.physics.add.collider(liveObject.sprite, collisionRoom.terrainLayer)
+          );
+          if (collisionRoom.terrainInsetBodies) {
+            liveObject.worldColliders.push(
+              this.options.scene.physics.add.collider(
+                liveObject.sprite,
+                collisionRoom.terrainInsetBodies,
+              )
+            );
+          }
         }
 
-        liveObject.worldColliders.push(
-          this.options.scene.physics.add.collider(liveObject.sprite, obstacle.sprite)
-        );
+        for (const obstacle of solidObstacles) {
+          if (!obstacle.sprite.active || !obstacle.sprite.body || obstacle === liveObject) {
+            continue;
+          }
+
+          liveObject.worldColliders.push(
+            this.options.scene.physics.add.collider(liveObject.sprite, obstacle.sprite)
+          );
+        }
       }
     }
   }
@@ -1498,6 +1514,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     this.destroyLiveObjectHelpers(liveObject);
     liveObject.sprite.destroy();
     loadedRoom.liveObjects = loadedRoom.liveObjects.filter((candidate) => candidate !== liveObject);
+    this.syncWorldObjectColliders(this.options.getLoadedFullRooms());
   }
 
   private getArcadeBodyBounds(body: ArcadeObjectBody): Phaser.Geom.Rectangle {

@@ -435,6 +435,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         respawnFallDistance: RESPAWN_FALL_DISTANCE,
         enemyStompBounceVelocity: this.JUMP_VELOCITY * 0.58,
       },
+      getLoadedFullRooms: () => this.loadedFullRoomsById.values(),
       getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
       getPlacedObjectRuntimeKey: (roomId, placedObject, placedIndex) =>
         this.getPlacedObjectRuntimeKey(roomId, placedObject, placedIndex),
@@ -807,6 +808,8 @@ export class OverworldPlayScene extends Phaser.Scene {
           this.centerCameraOnCoordinates(coordinates),
         constrainInspectCamera: () => this.constrainInspectCamera(),
         applyCameraMode: (forceCenter) => this.applyCameraMode(forceCenter),
+        syncLiveObjectWorldColliders: (loadedRooms) =>
+          this.liveObjectController.syncLoadedWorldColliders(loadedRooms),
         syncLiveObjectInteractions: (loadedRooms) =>
           this.liveObjectController.syncLiveObjectInteractions(loadedRooms),
         clearRoomInteractions: (loadedRoom) =>
