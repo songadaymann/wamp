@@ -477,7 +477,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   async returnToCourseBuilder(): Promise<void> {
-    this.persistSessionOverridesForDirtySlices();
+    this.persistSessionOverridesForPlayableSlices();
     const selectedSlice = this.getSelectedSlice();
     const wakeData: CourseComposerSceneData = {
       courseId: this.courseRecord?.draft.id ?? null,
@@ -776,7 +776,8 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   async saveCourseDraft(): Promise<void> {
-    if (!this.courseRecord) {
+    const courseRecord = this.syncCourseRecordFromSession();
+    if (!courseRecord) {
       return;
     }
 
@@ -789,7 +790,7 @@ export class CourseEditorScene extends Phaser.Scene {
 
     showBusyOverlay('Saving course...', 'Saving course goal and setup...');
     try {
-      const saved = await this.courseRepository.saveDraft(this.courseRecord.draft);
+      const saved = await this.courseRepository.saveDraft(courseRecord.draft);
       setActiveCourseDraftSessionRecord(saved, { selectedRoomId: this.selectedRoomId });
       this.courseRecord = getActiveCourseDraftSessionRecord();
       this.statusText = 'Course changes saved.';
@@ -804,7 +805,8 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   async publishCourseDraft(): Promise<void> {
-    if (!this.courseRecord) {
+    const courseRecord = this.syncCourseRecordFromSession();
+    if (!courseRecord) {
       return;
     }
 
@@ -817,7 +819,7 @@ export class CourseEditorScene extends Phaser.Scene {
 
     showBusyOverlay('Publishing course...', 'Saving course goal and publishing the course...');
     try {
-      const saved = await this.courseRepository.saveDraft(this.courseRecord.draft);
+      const saved = await this.courseRepository.saveDraft(courseRecord.draft);
       setActiveCourseDraftSessionRecord(saved, { selectedRoomId: this.selectedRoomId });
       this.courseRecord = getActiveCourseDraftSessionRecord();
       const published = await this.courseRepository.publishCourse(this.courseRecord?.draft.id ?? saved.draft.id);
@@ -842,7 +844,7 @@ export class CourseEditorScene extends Phaser.Scene {
       return;
     }
 
-    this.persistSessionOverridesForDirtySlices();
+    this.persistSessionOverridesForPlayableSlices();
     const startRoom =
       (draft.startPoint
         ? draft.roomRefs.find((roomRef) => roomRef.roomId === draft.startPoint?.roomId) ?? null
@@ -1172,7 +1174,22 @@ export class CourseEditorScene extends Phaser.Scene {
         roomRef.roomVersion = record.published?.version ?? roomRef.roomVersion;
       }
     });
+    this.courseRecord = getActiveCourseDraftSessionRecord();
     this.redrawCourseMarkers();
+  }
+
+  private syncCourseRecordFromSession(): CourseRecord | null {
+    const currentCourseId = this.courseRecord?.draft.id ?? null;
+    if (!currentCourseId) {
+      return this.courseRecord;
+    }
+
+    const sessionRecord = getActiveCourseDraftSessionRecord();
+    if (sessionRecord?.draft.id === currentCourseId) {
+      this.courseRecord = sessionRecord;
+    }
+
+    return this.courseRecord;
   }
 
   private shouldPersistGuestDraftLocally(error: unknown): boolean {
@@ -1265,11 +1282,8 @@ export class CourseEditorScene extends Phaser.Scene {
     );
   }
 
-  private persistSessionOverridesForDirtySlices(): void {
+  private persistSessionOverridesForPlayableSlices(): void {
     for (const slice of this.roomSlices.values()) {
-      if (!slice.runtime.isRoomDirty) {
-        continue;
-      }
       setActiveCourseDraftSessionRoomOverride(slice.runtime.exportRoomSnapshot());
     }
   }

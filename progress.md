@@ -57,6 +57,13 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Course course-playback follow-up on March 28, 2026:
+  - fixed draft course test handoff so `CourseEditorScene` now persists all loaded room slices into the active course-preview override set before launching play; saved-clean room drafts no longer disappear just because they are not dirty anymore
+  - fixed course save/publish in `CourseEditorScene` to resync from the active course draft session before writing to the backend, so room publishes made inside the course editor actually update the course snapshot that gets saved/published
+  - fixed runtime course pressure-plate targeting to carry `targetRoomId` alongside `targetInstanceId`, so cross-room trigger activation is keyed to the intended room instead of only a bare instance id
+  - verification:
+    - `npm run check` passed in `/private/tmp/wamp-course-safety-integration`
+
 - Course editor follow-up fixes on March 28, 2026:
   - suppressed room-goal copy while a course run is active so the overworld HUD no longer mixes room-level challenge text into course play
   - added explicit `Save Course` and `Publish Course` actions inside the course goal section of `CourseEditorScene`, while keeping the top action rail focused on room-slice saves/publishes

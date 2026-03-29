@@ -1917,6 +1917,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         sourceInstanceId,
       );
       if (courseLink) {
+        liveObject.linkedTargetRoomId = courseLink.targetRoomId;
         liveObject.linkedTargetInstanceId = courseLink.targetInstanceId;
       }
     }
