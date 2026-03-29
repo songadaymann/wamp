@@ -1,5 +1,6 @@
 import {
   ERASER_BRUSH_SIZES,
+  TILESETS,
   editorState,
   getTilesetByKey,
   type EraserBrushSize,
@@ -186,6 +187,33 @@ const runtimeConfig: EditorUiRuntimeConfig = {
   openHistory: () => {},
 };
 
+const PREFERRED_TILESET_OPTION_ORDER = [
+  'forest',
+  'forest_2',
+  'desert',
+  'dirt',
+  'lava',
+  'snow',
+  'water',
+  'smb_lvl1_3_5',
+] as const;
+
+function getEditorTilesets(): typeof TILESETS {
+  const preferredOrder = new Map<string, number>(
+    PREFERRED_TILESET_OPTION_ORDER.map((key, index) => [key, index])
+  );
+
+  return [...TILESETS].sort((left, right) => {
+    const leftOrder = preferredOrder.get(left.key);
+    const rightOrder = preferredOrder.get(right.key);
+    if (leftOrder !== undefined || rightOrder !== undefined) {
+      return (leftOrder ?? Number.MAX_SAFE_INTEGER) - (rightOrder ?? Number.MAX_SAFE_INTEGER);
+    }
+
+    return left.name.localeCompare(right.name);
+  });
+}
+
 export function configureEditorUiBridgeRuntime(config: Partial<EditorUiRuntimeConfig>): void {
   if (config.paletteController !== undefined) {
     runtimeConfig.paletteController = config.paletteController;
@@ -357,6 +385,7 @@ export class EditorUiBridge {
     this.layerGuideButton =
       this.doc.getElementById('btn-editor-layer-guides') as HTMLButtonElement | null;
     this.tilesetSelect = this.doc.getElementById('tileset-select') as HTMLSelectElement | null;
+    this.populateTilesetOptions();
     this.flipXButton = this.doc.getElementById('btn-tile-flip-x') as HTMLButtonElement | null;
     this.flipYButton = this.doc.getElementById('btn-tile-flip-y') as HTMLButtonElement | null;
     this.paletteTabs = Array.from(this.doc.querySelectorAll<HTMLElement>('.palette-tab'));
@@ -434,6 +463,25 @@ export class EditorUiBridge {
 
     this.bindListeners();
     this.syncEditorChromeState();
+  }
+
+  private populateTilesetOptions(): void {
+    if (!this.tilesetSelect) {
+      return;
+    }
+
+    const editorTilesets = getEditorTilesets();
+    const selectedKey =
+      getTilesetByKey(editorState.selectedTilesetKey)?.key ?? editorTilesets[0]?.key ?? '';
+    this.tilesetSelect.replaceChildren(
+      ...editorTilesets.map((tileset) => {
+        const option = this.doc.createElement('option');
+        option.value = tileset.key;
+        option.textContent = tileset.name;
+        return option;
+      })
+    );
+    this.tilesetSelect.value = selectedKey;
   }
 
   render(viewModel: EditorUiViewModel): void {

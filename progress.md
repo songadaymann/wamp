@@ -57,6 +57,15 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Forest 2 tileset wiring on March 29, 2026:
+  - added `forest_2` to `TILESETS` with a new append-only gid range (`firstGid: 492`) so saved room gids stay stable
+  - marked the clearly decorative / blank `forest_2` local indices as non-colliding, matching the current terrain-collision model without renumbering any existing tileset
+  - removed the stale hardcoded tileset dropdown options from `index.html` and now populate the editor tileset select from `TILESETS` inside `EditorUiBridge`
+  - added a preferred editor dropdown order so `Forest 2` shows next to `Forest`, while runtime `TILESETS` ordering stays gid-safe
+  - verification:
+    - `npm run check` passed in `/private/tmp/everybodys-platformer-review`
+    - headless Chrome `--dump-dom` confirmed the boot page still leaves `#tileset-select` empty before the editor bridge is constructed, which matches the current scene lifecycle
+
 - Play.fun room guardrails + moderator room restore on March 28, 2026:
   - added source-aware room guardrails in `src/cloudflare/worker/rooms/guardrails.ts`
   - room claim quota now distinguishes Play.fun sessions from normal sessions:
