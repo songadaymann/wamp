@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { playSfx } from '../audio/sfx';
 import { createCourseRepository } from '../courses/courseRepository';
+import { getCoursePressurePlateLink } from '../courses/pressurePlateLinks';
 import {
   clearActiveCourseDraftSessionRoomOverride,
   getActiveCourseDraftSessionCourseId,
@@ -1899,6 +1900,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private createLiveObjects(loadedRoom: SceneLoadedFullRoom): void {
     this.liveObjectController.createLiveObjects(loadedRoom);
+    this.syncActiveCoursePressurePlateLinks([loadedRoom]);
   }
 
   private destroyLiveObjects(loadedRoom: SceneLoadedFullRoom): void {
@@ -1910,7 +1912,40 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
+    this.syncActiveCoursePressurePlateLinks(this.loadedFullRoomsById.values());
     this.liveObjectController.updateLiveObjects(this.loadedFullRoomsById.values(), delta);
+  }
+
+  private syncActiveCoursePressurePlateLinks(
+    loadedRooms: Iterable<SceneLoadedFullRoom>,
+  ): void {
+    const activeCourse = this.activeCourseSnapshot;
+
+    for (const loadedRoom of loadedRooms) {
+      for (const liveObject of loadedRoom.liveObjects) {
+        const sourceInstanceId = liveObject.placedInstanceId;
+        if (liveObject.config.id !== 'floor_trigger' || !sourceInstanceId) {
+          continue;
+        }
+
+        const placedTrigger =
+          loadedRoom.room.placedObjects.find((placed) => placed.instanceId === sourceInstanceId) ??
+          null;
+        const localTargetInstanceId = placedTrigger?.triggerTargetInstanceId ?? null;
+        const courseLink = activeCourse
+          ? getCoursePressurePlateLink(activeCourse, loadedRoom.room.id, sourceInstanceId)
+          : null;
+
+        if (courseLink) {
+          liveObject.linkedTargetRoomId = courseLink.targetRoomId;
+          liveObject.linkedTargetInstanceId = courseLink.targetInstanceId;
+          continue;
+        }
+
+        liveObject.linkedTargetRoomId = localTargetInstanceId ? loadedRoom.room.id : null;
+        liveObject.linkedTargetInstanceId = localTargetInstanceId;
+      }
+    }
   }
 
   private syncPreviewVisibility(): void {

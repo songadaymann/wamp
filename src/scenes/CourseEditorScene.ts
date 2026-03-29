@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { getAuthDebugState, promptForSignIn, refreshAuthSession } from '../auth/client';
 import {
   canObjectBeStoredInContainer,
   canPlacedObjectBeContainer,
@@ -26,6 +27,11 @@ import {
   type CourseSnapshot,
 } from '../courses/model';
 import {
+  clearCoursePressurePlateLinksForInstance,
+  getCoursePressurePlateLink,
+  setCoursePressurePlateLink,
+} from '../courses/pressurePlateLinks';
+import {
   clearActiveCourseDraftSessionRoomOverride,
   getActiveCourseDraftSessionCourseId,
   getActiveCourseDraftSessionDraft,
@@ -51,6 +57,8 @@ import {
 import { createGoalMarkerFlagSprite } from '../goals/markerFlags';
 import {
   cloneRoomSnapshot,
+  createLocalRoomRepository,
+  isRoomApiError,
   createRoomRepository,
   roomIdFromCoordinates,
   type RoomCoordinates,
@@ -59,6 +67,7 @@ import {
   type RoomSnapshot,
   type RoomVersionRecord,
 } from '../persistence/roomRepository';
+import { clearLocalRoomStorageEntry } from '../persistence/browserStorage';
 import { setAppMode } from '../ui/appMode';
 import { hideBusyOverlay, showBusyError, showBusyOverlay } from '../ui/appFeedback';
 import { isTextInputFocused } from '../ui/keyboardFocus';
@@ -114,8 +123,14 @@ interface CourseRoomSlice {
   runtime: EditorEditRuntime;
 }
 
+interface CoursePlacedObjectRef {
+  slice: CourseRoomSlice;
+  placed: PlacedObject;
+}
+
 export class CourseEditorScene extends Phaser.Scene {
   private readonly roomRepository = createRoomRepository();
+  private readonly localRoomRepository = createLocalRoomRepository();
   private readonly courseRepository = createCourseRepository();
   private uiBridge: EditorUiBridge | null = null;
   private courseRecord: CourseRecord | null = null;
@@ -220,7 +235,7 @@ export class CourseEditorScene extends Phaser.Scene {
     if (primaryModifier && key === 's') {
       event.preventDefault();
       event.stopPropagation();
-      void this.saveDraft(true);
+      void this.saveDraft(true, { promptForSignInOnUnauthorized: true });
       return;
     }
 
@@ -319,7 +334,7 @@ export class CourseEditorScene extends Phaser.Scene {
         await this.startPlayMode();
       },
       onSaveDraft: async () => {
-        await this.saveDraft(true);
+        await this.saveDraft(true, { promptForSignInOnUnauthorized: true });
       },
       onPublishRoom: async () => {
         await this.publishRoom();
@@ -462,7 +477,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   async returnToCourseBuilder(): Promise<void> {
-    this.persistSessionOverridesForDirtySlices();
+    this.persistSessionOverridesForPlayableSlices();
     const selectedSlice = this.getSelectedSlice();
     const wakeData: CourseComposerSceneData = {
       courseId: this.courseRecord?.draft.id ?? null,
@@ -634,12 +649,32 @@ export class CourseEditorScene extends Phaser.Scene {
     this.renderUi();
   }
 
-  async saveDraft(_force?: boolean): Promise<RoomRecord | null> {
+  async saveDraft(
+    _force?: boolean,
+    options: { promptForSignInOnUnauthorized?: boolean } = {}
+  ): Promise<RoomRecord | null> {
     const dirtySlices = this.getDirtySlices();
     if (dirtySlices.length === 0) {
       this.statusText = 'No room draft changes to save.';
       this.renderUi();
       return null;
+    }
+
+    if (options.promptForSignInOnUnauthorized) {
+      await refreshAuthSession();
+      if (!getAuthDebugState().authenticated) {
+        await this.saveSlicesLocally(
+          dirtySlices,
+          this.getLocalDraftSavedStatusText(
+            dirtySlices.length,
+            'Drafts saved locally. Sign in to save room drafts to your account.',
+            'Draft saved locally. Sign in to save room drafts to your account.'
+          ),
+          { keepOverride: true }
+        );
+        promptForSignIn('Sign in to save drafts to your account. Your local draft is safe.');
+        return null;
+      }
     }
 
     showBusyOverlay('Saving course rooms...', `Saving ${dirtySlices.length} room draft${dirtySlices.length === 1 ? '' : 's'}...`);
@@ -648,12 +683,32 @@ export class CourseEditorScene extends Phaser.Scene {
       for (const slice of dirtySlices) {
         const record = await this.roomRepository.saveDraft(slice.runtime.exportRoomSnapshot());
         this.applyStoredRoomRecordToSlice(slice, record, { keepDirty: false, keepOverride: true });
+        clearLocalRoomStorageEntry(record.draft.id);
         lastRecord = record;
       }
       this.statusText = `Saved ${dirtySlices.length} room draft${dirtySlices.length === 1 ? '' : 's'}.`;
       this.renderUi();
       return lastRecord;
     } catch (error) {
+      if (this.shouldPersistGuestDraftLocally(error)) {
+        await this.saveSlicesLocally(
+          dirtySlices,
+          this.getLocalDraftSavedStatusText(
+            dirtySlices.length,
+            options.promptForSignInOnUnauthorized
+              ? 'Drafts saved locally. Sign in to save room drafts to your account.'
+              : 'Drafts saved locally. Sign in to publish.',
+            options.promptForSignInOnUnauthorized
+              ? 'Draft saved locally. Sign in to save room drafts to your account.'
+              : 'Draft saved locally. Sign in to publish.'
+          ),
+          { keepOverride: true }
+        );
+        if (options.promptForSignInOnUnauthorized) {
+          promptForSignIn('Sign in to save drafts to your account. Your local draft is safe.');
+        }
+        return null;
+      }
       this.statusText = error instanceof Error ? error.message : 'Failed to save course room drafts.';
       this.renderUi();
       return null;
@@ -673,15 +728,45 @@ export class CourseEditorScene extends Phaser.Scene {
     showBusyOverlay('Publishing course rooms...', `Publishing ${targetSlices.length} room${targetSlices.length === 1 ? '' : 's'}...`);
     let lastRecord: RoomRecord | null = null;
     try {
+      await refreshAuthSession();
+      if (!getAuthDebugState().authenticated) {
+        await this.saveSlicesLocally(
+          targetSlices,
+          this.getLocalDraftSavedStatusText(
+            targetSlices.length,
+            'Drafts saved locally. Sign in to publish.',
+            'Draft saved locally. Sign in to publish.'
+          ),
+          { keepOverride: true }
+        );
+        promptForSignIn('Sign in to publish this room. Your local draft is safe.');
+        return null;
+      }
+
       for (const slice of targetSlices) {
         const record = await this.roomRepository.publish(slice.runtime.exportRoomSnapshot());
         this.applyStoredRoomRecordToSlice(slice, record, { keepDirty: false, keepOverride: false });
+        clearLocalRoomStorageEntry(record.draft.id);
         lastRecord = record;
       }
+      await refreshAuthSession();
       this.statusText = `Published ${targetSlices.length} room${targetSlices.length === 1 ? '' : 's'}.`;
       this.renderUi();
       return lastRecord;
     } catch (error) {
+      if (this.shouldPersistGuestDraftLocally(error)) {
+        await this.saveSlicesLocally(
+          targetSlices,
+          this.getLocalDraftSavedStatusText(
+            targetSlices.length,
+            'Drafts saved locally. Sign in to publish.',
+            'Draft saved locally. Sign in to publish.'
+          ),
+          { keepOverride: true }
+        );
+        promptForSignIn('Sign in to publish this room. Your local draft is safe.');
+        return null;
+      }
       this.statusText = error instanceof Error ? error.message : 'Failed to publish changed course rooms.';
       this.renderUi();
       return null;
@@ -691,7 +776,8 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   async saveCourseDraft(): Promise<void> {
-    if (!this.courseRecord) {
+    const courseRecord = this.syncCourseRecordFromSession();
+    if (!courseRecord) {
       return;
     }
 
@@ -704,7 +790,7 @@ export class CourseEditorScene extends Phaser.Scene {
 
     showBusyOverlay('Saving course...', 'Saving course goal and setup...');
     try {
-      const saved = await this.courseRepository.saveDraft(this.courseRecord.draft);
+      const saved = await this.courseRepository.saveDraft(courseRecord.draft);
       setActiveCourseDraftSessionRecord(saved, { selectedRoomId: this.selectedRoomId });
       this.courseRecord = getActiveCourseDraftSessionRecord();
       this.statusText = 'Course changes saved.';
@@ -719,7 +805,8 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   async publishCourseDraft(): Promise<void> {
-    if (!this.courseRecord) {
+    const courseRecord = this.syncCourseRecordFromSession();
+    if (!courseRecord) {
       return;
     }
 
@@ -732,7 +819,7 @@ export class CourseEditorScene extends Phaser.Scene {
 
     showBusyOverlay('Publishing course...', 'Saving course goal and publishing the course...');
     try {
-      const saved = await this.courseRepository.saveDraft(this.courseRecord.draft);
+      const saved = await this.courseRepository.saveDraft(courseRecord.draft);
       setActiveCourseDraftSessionRecord(saved, { selectedRoomId: this.selectedRoomId });
       this.courseRecord = getActiveCourseDraftSessionRecord();
       const published = await this.courseRepository.publishCourse(this.courseRecord?.draft.id ?? saved.draft.id);
@@ -757,7 +844,7 @@ export class CourseEditorScene extends Phaser.Scene {
       return;
     }
 
-    this.persistSessionOverridesForDirtySlices();
+    this.persistSessionOverridesForPlayableSlices();
     const startRoom =
       (draft.startPoint
         ? draft.roomRefs.find((roomRef) => roomRef.roomId === draft.startPoint?.roomId) ?? null
@@ -1087,7 +1174,53 @@ export class CourseEditorScene extends Phaser.Scene {
         roomRef.roomVersion = record.published?.version ?? roomRef.roomVersion;
       }
     });
+    this.courseRecord = getActiveCourseDraftSessionRecord();
     this.redrawCourseMarkers();
+  }
+
+  private syncCourseRecordFromSession(): CourseRecord | null {
+    const currentCourseId = this.courseRecord?.draft.id ?? null;
+    if (!currentCourseId) {
+      return this.courseRecord;
+    }
+
+    const sessionRecord = getActiveCourseDraftSessionRecord();
+    if (sessionRecord?.draft.id === currentCourseId) {
+      this.courseRecord = sessionRecord;
+    }
+
+    return this.courseRecord;
+  }
+
+  private shouldPersistGuestDraftLocally(error: unknown): boolean {
+    return isRoomApiError(error) && error.status === 401;
+  }
+
+  private async saveSlicesLocally(
+    slices: CourseRoomSlice[],
+    successText: string,
+    options: { keepOverride: boolean }
+  ): Promise<RoomRecord | null> {
+    let lastRecord: RoomRecord | null = null;
+    for (const slice of slices) {
+      const record = await this.localRoomRepository.saveDraft(slice.runtime.exportRoomSnapshot());
+      this.applyStoredRoomRecordToSlice(slice, record, {
+        keepDirty: false,
+        keepOverride: options.keepOverride,
+      });
+      lastRecord = record;
+    }
+    this.statusText = successText;
+    this.renderUi();
+    return lastRecord;
+  }
+
+  private getLocalDraftSavedStatusText(
+    count: number,
+    pluralText: string,
+    singularText: string
+  ): string {
+    return count === 1 ? singularText : pluralText;
   }
 
   private getActiveCourseDraft(): CourseSnapshot | null {
@@ -1108,6 +1241,7 @@ export class CourseEditorScene extends Phaser.Scene {
     updateActiveCourseDraftSession((draft) => {
       draft.title = normalized.title;
       draft.roomRefs = normalized.roomRefs;
+      draft.pressurePlateLinks = normalized.pressurePlateLinks;
       draft.startPoint = normalized.startPoint;
       draft.goal = normalized.goal;
     });
@@ -1148,11 +1282,8 @@ export class CourseEditorScene extends Phaser.Scene {
     );
   }
 
-  private persistSessionOverridesForDirtySlices(): void {
+  private persistSessionOverridesForPlayableSlices(): void {
     for (const slice of this.roomSlices.values()) {
-      if (!slice.runtime.isRoomDirty) {
-        continue;
-      }
       setActiveCourseDraftSessionRoomOverride(slice.runtime.exportRoomSnapshot());
     }
   }
@@ -1350,15 +1481,12 @@ export class CourseEditorScene extends Phaser.Scene {
       return;
     }
 
-    const selectedSlice = this.getSelectedSlice();
-    if (
-      this.connectingPressurePlateInstanceId &&
-      selectedSlice &&
-      selectedSlice.roomId !== slice.roomId
-    ) {
-      this.pressurePlateStatusText = 'Pick a door, metal door, cage, or chest in the same room.';
-      this.renderUi();
-      return;
+    if (editorState.paletteMode === 'objects') {
+      if (this.connectingPressurePlateInstanceId) {
+        this.handlePressurePlateConnectionClick(slice, pointer.worldX, pointer.worldY);
+        this.renderUi();
+        return;
+      }
     }
 
     this.selectRoomById(slice.roomId);
@@ -1373,8 +1501,13 @@ export class CourseEditorScene extends Phaser.Scene {
     }
 
     if (editorState.paletteMode === 'objects') {
-      if (this.connectingPressurePlateInstanceId) {
-        this.handlePressurePlateConnectionClick(slice, pointer.worldX, pointer.worldY);
+      if (editorState.activeTool === 'eraser') {
+        if (this.handleObjectModeSecondaryAction(slice, pointer.worldX, pointer.worldY)) {
+          this.renderUi();
+          return;
+        }
+
+        this.removeObjectAt(slice, pointer.worldX, pointer.worldY);
         this.renderUi();
         return;
       }
@@ -1405,11 +1538,7 @@ export class CourseEditorScene extends Phaser.Scene {
         }
       }
 
-      if (editorState.activeTool === 'eraser') {
-        this.removeObjectAt(slice, pointer.worldX, pointer.worldY);
-      } else {
-        this.handleObjectPlace(slice, pointer, localTile.tileX, localTile.tileY);
-      }
+      this.handleObjectPlace(slice, pointer, localTile.tileX, localTile.tileY);
       this.renderUi();
       return;
     }
@@ -1472,11 +1601,30 @@ export class CourseEditorScene extends Phaser.Scene {
     }
   }
 
+  private handleObjectModeSecondaryAction(
+    slice: CourseRoomSlice,
+    worldX: number,
+    worldY: number,
+  ): boolean {
+    if (!this.connectingPressurePlateInstanceId) {
+      return false;
+    }
+
+    if (slice.runtime.canRemoveObjectAt(worldX, worldY)) {
+      return false;
+    }
+
+    this.cancelPressurePlateConnection();
+    return true;
+  }
+
   private removeObjectAt(slice: CourseRoomSlice, worldX: number, worldY: number): void {
     const removed = slice.runtime.removeObjectAt(worldX, worldY);
     if (!removed) {
       return;
     }
+
+    this.pruneCoursePressurePlateLinksForInstance(slice.roomId, removed.instanceId ?? null);
 
     if (removed.instanceId === this.connectingPressurePlateInstanceId) {
       this.connectingPressurePlateInstanceId = null;
@@ -1725,28 +1873,27 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   beginFocusedPressurePlateConnection(): void {
-    const focused = this.getFocusedPressurePlate();
+    const focused = this.getFocusedPressurePlateRef();
     if (!focused) {
       this.pressurePlateStatusText = 'Hover or place a pressure plate first.';
       this.renderInspectorUi();
       return;
     }
 
-    this.beginPressurePlateConnection(focused.instanceId ?? '', false);
+    this.beginPressurePlateConnection(focused.placed.instanceId ?? '', false);
   }
 
   clearFocusedPressurePlateConnection(): void {
-    const slice = this.getSelectedSlice();
-    const focused = this.getFocusedPressurePlate();
-    if (!slice || !focused || !canPlacedObjectTriggerOtherObjects(focused)) {
+    const source = this.getFocusedPressurePlateRef();
+    if (!source || !canPlacedObjectTriggerOtherObjects(source.placed)) {
       return;
     }
 
-    if (slice.runtime.setPressurePlateTarget(focused.instanceId ?? '', null)) {
+    if (this.setCoursePressurePlateTarget(source, null)) {
       this.pressurePlateStatusText = 'Pressure plate link cleared.';
       this.connectingPressurePlateInstanceId = null;
-      this.focusedPressurePlateInstanceId = focused.instanceId ?? null;
-      this.pinInspector('pressure', focused.instanceId ?? '');
+      this.focusedPressurePlateInstanceId = source.placed.instanceId ?? null;
+      this.pinInspector('pressure', source.placed.instanceId ?? '');
       this.renderInspectorUi();
     }
   }
@@ -1815,19 +1962,180 @@ export class CourseEditorScene extends Phaser.Scene {
     this.renderInspectorUi();
   }
 
-  private getFocusedPressurePlate(): PlacedObject | null {
-    const slice = this.getSelectedSlice();
-    if (!slice) {
+  private getPlacedObjectRefByInstanceId(
+    instanceId: string | null | undefined,
+    roomId: string | null | undefined = null,
+  ): CoursePlacedObjectRef | null {
+    if (!instanceId) {
       return null;
     }
 
+    if (roomId) {
+      const slice = this.roomSlices.get(roomId) ?? null;
+      const placed = slice?.runtime.getPlacedObjectByInstanceId(instanceId) ?? null;
+      return slice && placed ? { slice, placed } : null;
+    }
+
+    for (const slice of this.roomSlices.values()) {
+      const placed = slice.runtime.getPlacedObjectByInstanceId(instanceId);
+      if (placed) {
+        return { slice, placed };
+      }
+    }
+
+    return null;
+  }
+
+  private getCoursePressurePlateTargetRef(
+    source: CoursePlacedObjectRef
+  ): CoursePlacedObjectRef | null {
+    const courseLink = getCoursePressurePlateLink(
+      this.getActiveCourseDraft(),
+      source.slice.roomId,
+      source.placed.instanceId ?? '',
+    );
+    if (courseLink) {
+      return this.getPlacedObjectRefByInstanceId(
+        courseLink.targetInstanceId,
+        courseLink.targetRoomId,
+      );
+    }
+
+    return this.getPlacedObjectRefByInstanceId(
+      source.placed.triggerTargetInstanceId ?? null,
+      source.slice.roomId,
+    );
+  }
+
+  private getCoursePressurePlateEligibleTargets(
+    source: CoursePlacedObjectRef
+  ): CoursePlacedObjectRef[] {
+    const eligibleTargets: CoursePlacedObjectRef[] = [];
+    for (const slice of this.roomSlices.values()) {
+      for (const placed of slice.placedObjects) {
+        if (
+          canPlacedObjectBePressurePlateTarget(placed) &&
+          placed.instanceId !== source.placed.instanceId
+        ) {
+          eligibleTargets.push({ slice, placed });
+        }
+      }
+    }
+    return eligibleTargets;
+  }
+
+  private setCoursePressurePlateTarget(
+    source: CoursePlacedObjectRef,
+    target: CoursePlacedObjectRef | null,
+  ): boolean {
+    if (!source.placed.instanceId) {
+      return false;
+    }
+
+    const previousCourseLink = getCoursePressurePlateLink(
+      this.getActiveCourseDraft(),
+      source.slice.roomId,
+      source.placed.instanceId,
+    );
+    let changed = false;
+
+    if (!target || target.slice.roomId === source.slice.roomId) {
+      changed =
+        source.slice.runtime.setPressurePlateTarget(
+          source.placed.instanceId,
+          target?.placed.instanceId ?? null,
+        ) || changed;
+    } else {
+      changed =
+        source.slice.runtime.setPressurePlateTarget(source.placed.instanceId, null) || changed;
+    }
+
+    const draft = this.getActiveCourseDraft();
+    if (!draft) {
+      return changed;
+    }
+
+    const nextDraft = cloneCourseSnapshot(draft);
+    if (
+      target &&
+      target.slice.roomId !== source.slice.roomId &&
+      target.placed.instanceId
+    ) {
+      setCoursePressurePlateLink(
+        nextDraft,
+        {
+          triggerRoomId: source.slice.roomId,
+          triggerInstanceId: source.placed.instanceId,
+          targetRoomId: target.slice.roomId,
+          targetInstanceId: target.placed.instanceId,
+        },
+        {
+          triggerRoomId: source.slice.roomId,
+          triggerInstanceId: source.placed.instanceId,
+        },
+      );
+      changed =
+        changed ||
+        previousCourseLink?.targetRoomId !== target.slice.roomId ||
+        previousCourseLink?.targetInstanceId !== target.placed.instanceId;
+    } else {
+      setCoursePressurePlateLink(
+        nextDraft,
+        null,
+        {
+          triggerRoomId: source.slice.roomId,
+          triggerInstanceId: source.placed.instanceId,
+        },
+      );
+      changed = changed || previousCourseLink !== null;
+    }
+
+    if (changed) {
+      this.setActiveCourseDraft(nextDraft);
+    }
+
+    return changed;
+  }
+
+  private pruneCoursePressurePlateLinksForInstance(
+    roomId: string,
+    instanceId: string | null | undefined,
+  ): void {
+    if (!instanceId) {
+      return;
+    }
+
+    const draft = this.getActiveCourseDraft();
+    if (!draft) {
+      return;
+    }
+
+    const nextDraft = cloneCourseSnapshot(draft);
+    const previousCount = nextDraft.pressurePlateLinks.length;
+    clearCoursePressurePlateLinksForInstance(nextDraft, roomId, instanceId);
+    if (nextDraft.pressurePlateLinks.length !== previousCount) {
+      this.setActiveCourseDraft(nextDraft);
+    }
+  }
+
+  private getPressurePlateTargetSummary(
+    target: CoursePlacedObjectRef,
+    sourceSlice: CourseRoomSlice,
+  ): string {
+    const baseLabel = this.getPressurePlateTargetLabel(target.placed.id);
+    return target.slice.roomId === sourceSlice.roomId
+      ? baseLabel
+      : `${baseLabel} in ${this.getSliceLabel(target.slice)}`;
+  }
+
+  private getFocusedPressurePlateRef(): CoursePlacedObjectRef | null {
     const pinnedPressureId = this.pinnedInspector?.kind === 'pressure'
       ? this.pinnedInspector.instanceId
       : null;
     const activeId =
       this.connectingPressurePlateInstanceId ?? pinnedPressureId ?? this.focusedPressurePlateInstanceId;
-    const focused = slice.runtime.getPlacedObjectByInstanceId(activeId);
-    if (focused && canPlacedObjectTriggerOtherObjects(focused)) {
+    const focused = this.getPlacedObjectRefByInstanceId(activeId);
+    if (focused && canPlacedObjectTriggerOtherObjects(focused.placed)) {
       return focused;
     }
 
@@ -1853,14 +2161,9 @@ export class CourseEditorScene extends Phaser.Scene {
     return null;
   }
 
-  private getConnectingPressurePlate(): PlacedObject | null {
-    const slice = this.getSelectedSlice();
-    if (!slice) {
-      return null;
-    }
-
-    const focused = slice.runtime.getPlacedObjectByInstanceId(this.connectingPressurePlateInstanceId);
-    if (focused && canPlacedObjectTriggerOtherObjects(focused)) {
+  private getConnectingPressurePlateRef(): CoursePlacedObjectRef | null {
+    const focused = this.getPlacedObjectRefByInstanceId(this.connectingPressurePlateInstanceId);
+    if (focused && canPlacedObjectTriggerOtherObjects(focused.placed)) {
       return focused;
     }
 
@@ -1868,26 +2171,21 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   private beginPressurePlateConnection(triggerInstanceId: string, autoPlaced: boolean): void {
-    const slice = this.getSelectedSlice();
-    if (!slice) {
+    const trigger = this.getPlacedObjectRefByInstanceId(triggerInstanceId);
+    if (!trigger || !canPlacedObjectTriggerOtherObjects(trigger.placed)) {
       return;
     }
 
-    const trigger = slice.runtime.getPlacedObjectByInstanceId(triggerInstanceId);
-    if (!trigger || !canPlacedObjectTriggerOtherObjects(trigger)) {
-      return;
-    }
-
-    this.focusedPressurePlateInstanceId = trigger.instanceId ?? null;
-    this.connectingPressurePlateInstanceId = trigger.instanceId ?? null;
-    this.pinInspector('pressure', trigger.instanceId ?? '');
-    const eligibleTargets = slice.runtime.getPressurePlateEligibleTargets(trigger.instanceId);
+    this.focusedPressurePlateInstanceId = trigger.placed.instanceId ?? null;
+    this.connectingPressurePlateInstanceId = trigger.placed.instanceId ?? null;
+    this.pinInspector('pressure', trigger.placed.instanceId ?? '');
+    const eligibleTargets = this.getCoursePressurePlateEligibleTargets(trigger);
     this.pressurePlateStatusText =
       eligibleTargets.length > 0
         ? autoPlaced
           ? 'Pressure plate placed. Click a door, metal door, cage, or chest to link it.'
           : 'Click a door, metal door, cage, or chest to link this pressure plate.'
-        : 'No door, metal door, cage, or chest is in this room yet. You can link this pressure plate later.';
+        : 'No door, metal door, cage, or chest is in this course yet. You can link this pressure plate later.';
     this.renderInspectorUi();
   }
 
@@ -1896,8 +2194,8 @@ export class CourseEditorScene extends Phaser.Scene {
     worldX: number,
     worldY: number,
   ): boolean {
-    const source = this.getConnectingPressurePlate();
-    if (!source || this.getSelectedSlice()?.roomId !== slice.roomId) {
+    const source = this.getConnectingPressurePlateRef();
+    if (!source) {
       this.connectingPressurePlateInstanceId = null;
       return false;
     }
@@ -1905,19 +2203,26 @@ export class CourseEditorScene extends Phaser.Scene {
     const target = slice.runtime.findPlacedObjectAt(
       worldX,
       worldY,
-      (placed) => canPlacedObjectBePressurePlateTarget(placed) && placed.instanceId !== source.instanceId
+      (placed) =>
+        canPlacedObjectBePressurePlateTarget(placed) &&
+        placed.instanceId !== source.placed.instanceId
     );
     if (!target) {
-      this.pressurePlateStatusText = 'Pick a door, metal door, cage, or chest in this room.';
+      this.pressurePlateStatusText = 'Pick a door, metal door, cage, or chest in this course.';
       this.renderInspectorUi();
       return true;
     }
 
-    if (slice.runtime.setPressurePlateTarget(source.instanceId ?? '', target.instanceId ?? null)) {
+    if (
+      this.setCoursePressurePlateTarget(source, {
+        slice,
+        placed: target,
+      })
+    ) {
       this.connectingPressurePlateInstanceId = null;
-      this.focusedPressurePlateInstanceId = source.instanceId ?? null;
-      this.pinInspector('pressure', source.instanceId ?? '');
-      this.pressurePlateStatusText = `Pressure plate linked to ${this.getPressurePlateTargetLabel(target.id)}.`;
+      this.focusedPressurePlateInstanceId = source.placed.instanceId ?? null;
+      this.pinInspector('pressure', source.placed.instanceId ?? '');
+      this.pressurePlateStatusText = `Pressure plate linked to ${this.getPressurePlateTargetSummary({ slice, placed: target }, source.slice)}.`;
       this.renderInspectorUi();
     }
     return true;
@@ -1977,35 +2282,30 @@ export class CourseEditorScene extends Phaser.Scene {
       return;
     }
 
-    const slice = this.getSelectedSlice();
-    if (!slice) {
-      this.renderPressurePlatePanel();
-      return;
-    }
-
     if (
       this.focusedPressurePlateInstanceId &&
-      !slice.runtime.hasPlacedObjectInstanceId(this.focusedPressurePlateInstanceId)
+      !this.getPlacedObjectRefByInstanceId(this.focusedPressurePlateInstanceId)
     ) {
       this.focusedPressurePlateInstanceId = null;
     }
     if (
       this.connectingPressurePlateInstanceId &&
-      !slice.runtime.hasPlacedObjectInstanceId(this.connectingPressurePlateInstanceId)
+      !this.getPlacedObjectRefByInstanceId(this.connectingPressurePlateInstanceId)
     ) {
       this.connectingPressurePlateInstanceId = null;
     }
     if (
       this.pinnedInspector?.kind === 'pressure' &&
-      !slice.runtime.hasPlacedObjectInstanceId(this.pinnedInspector.instanceId)
+      !this.getPlacedObjectRefByInstanceId(this.pinnedInspector.instanceId)
     ) {
       this.pinnedInspector = null;
     }
 
     const pointer = this.input.activePointer;
     const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const hoveredSlice = this.getSliceAtWorldPoint(worldPoint.x, worldPoint.y);
     if (!this.connectingPressurePlateInstanceId) {
-      const hoveredTrigger = slice.runtime.findPlacedObjectAt(
+      const hoveredTrigger = hoveredSlice?.runtime.findPlacedObjectAt(
         worldPoint.x,
         worldPoint.y,
         (placed) => canPlacedObjectTriggerOtherObjects(placed)
@@ -2020,18 +2320,18 @@ export class CourseEditorScene extends Phaser.Scene {
       }
     }
 
-    const source = this.getFocusedPressurePlate();
+    const source = this.getFocusedPressurePlateRef();
     if (!source) {
       this.renderPressurePlatePanel();
       return;
     }
 
-    const currentTarget = slice.runtime.getPlacedObjectByInstanceId(source.triggerTargetInstanceId ?? null);
+    const currentTarget = this.getCoursePressurePlateTargetRef(source);
     if (currentTarget) {
       this.drawPressurePlateLink(source, currentTarget, 0x6dd5ff, 0.9);
     }
 
-    const sourceBounds = slice.runtime.getPlacedObjectBounds(source);
+    const sourceBounds = source.slice.runtime.getPlacedObjectBounds(source.placed);
     this.pressurePlateGraphics.lineStyle(2, 0xc3f4ff, 0.88);
     this.pressurePlateGraphics.strokeRoundedRect(
       sourceBounds.x,
@@ -2041,19 +2341,25 @@ export class CourseEditorScene extends Phaser.Scene {
       6
     );
 
-    if (this.connectingPressurePlateInstanceId === source.instanceId) {
-      const hoveredTarget = slice.runtime.findPlacedObjectAt(
+    if (this.connectingPressurePlateInstanceId === source.placed.instanceId) {
+      const hoveredTargetPlaced = hoveredSlice?.runtime.findPlacedObjectAt(
         worldPoint.x,
         worldPoint.y,
-        (placed) => canPlacedObjectBePressurePlateTarget(placed) && placed.instanceId !== source.instanceId
+        (placed) =>
+          canPlacedObjectBePressurePlateTarget(placed) &&
+          placed.instanceId !== source.placed.instanceId
       );
-      const eligibleTargets = slice.runtime.getPressurePlateEligibleTargets(source.instanceId);
+      const hoveredTarget =
+        hoveredSlice && hoveredTargetPlaced
+          ? { slice: hoveredSlice, placed: hoveredTargetPlaced }
+          : null;
+      const eligibleTargets = this.getCoursePressurePlateEligibleTargets(source);
       for (const target of eligibleTargets) {
-        const bounds = slice.runtime.getPlacedObjectBounds(target);
+        const bounds = target.slice.runtime.getPlacedObjectBounds(target.placed);
         this.pressurePlateGraphics.lineStyle(
           2,
-          hoveredTarget?.instanceId === target.instanceId ? 0x9dff8a : 0x7ad3ff,
-          hoveredTarget?.instanceId === target.instanceId ? 0.95 : 0.55
+          hoveredTarget?.placed.instanceId === target.placed.instanceId ? 0x9dff8a : 0x7ad3ff,
+          hoveredTarget?.placed.instanceId === target.placed.instanceId ? 0.95 : 0.55
         );
         this.pressurePlateGraphics.strokeRoundedRect(
           bounds.x,
@@ -2070,8 +2376,8 @@ export class CourseEditorScene extends Phaser.Scene {
         this.pressurePlateGraphics.lineStyle(2, 0xffd36b, 0.5);
         this.pressurePlateGraphics.beginPath();
         this.pressurePlateGraphics.moveTo(
-          slice.origin.x + source.x,
-          slice.origin.y + source.y - 4
+          source.slice.origin.x + source.placed.x,
+          source.slice.origin.y + source.placed.y - 4
         );
         this.pressurePlateGraphics.lineTo(worldPoint.x, worldPoint.y);
         this.pressurePlateGraphics.strokePath();
@@ -2082,24 +2388,37 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   private drawPressurePlateLink(
-    source: PlacedObject,
-    target: PlacedObject,
+    source: CoursePlacedObjectRef,
+    target: CoursePlacedObjectRef,
     color: number,
     alpha: number,
   ): void {
-    const slice = this.getSelectedSlice();
-    if (!this.pressurePlateGraphics || !slice) {
+    if (!this.pressurePlateGraphics) {
       return;
     }
 
     this.pressurePlateGraphics.lineStyle(2, color, alpha);
     this.pressurePlateGraphics.beginPath();
-    this.pressurePlateGraphics.moveTo(slice.origin.x + source.x, slice.origin.y + source.y - 4);
-    this.pressurePlateGraphics.lineTo(slice.origin.x + target.x, slice.origin.y + target.y - 6);
+    this.pressurePlateGraphics.moveTo(
+      source.slice.origin.x + source.placed.x,
+      source.slice.origin.y + source.placed.y - 4,
+    );
+    this.pressurePlateGraphics.lineTo(
+      target.slice.origin.x + target.placed.x,
+      target.slice.origin.y + target.placed.y - 6,
+    );
     this.pressurePlateGraphics.strokePath();
     this.pressurePlateGraphics.fillStyle(color, alpha * 0.9);
-    this.pressurePlateGraphics.fillCircle(slice.origin.x + source.x, slice.origin.y + source.y - 4, 3);
-    this.pressurePlateGraphics.fillCircle(slice.origin.x + target.x, slice.origin.y + target.y - 6, 3);
+    this.pressurePlateGraphics.fillCircle(
+      source.slice.origin.x + source.placed.x,
+      source.slice.origin.y + source.placed.y - 4,
+      3,
+    );
+    this.pressurePlateGraphics.fillCircle(
+      target.slice.origin.x + target.placed.x,
+      target.slice.origin.y + target.placed.y - 6,
+      3,
+    );
   }
 
   private renderPressurePlatePanel(): void {
@@ -2189,8 +2508,7 @@ export class CourseEditorScene extends Phaser.Scene {
 
   private renderInspectorUi(): void {
     const hiddenState = this.createEmptyInspectorState();
-    const slice = this.getSelectedSlice();
-    if (!slice || editorState.isPlaying) {
+    if (editorState.isPlaying) {
       this.uiBridge?.renderInspector(hiddenState);
       return;
     }
@@ -2199,10 +2517,10 @@ export class CourseEditorScene extends Phaser.Scene {
     const source =
       this.pinnedInspector?.kind === 'container' && !connectMode
         ? null
-        : this.getFocusedPressurePlate();
+        : this.getFocusedPressurePlateRef();
     if (source && (editorState.paletteMode === 'objects' || connectMode)) {
-      const target = slice.runtime.getPlacedObjectByInstanceId(source.triggerTargetInstanceId ?? null);
-      const eligibleTargetCount = slice.runtime.getPressurePlateEligibleTargets(source.instanceId).length;
+      const target = this.getCoursePressurePlateTargetRef(source);
+      const eligibleTargetCount = this.getCoursePressurePlateEligibleTargets(source).length;
       const state: EditorInspectorState = {
         ...hiddenState,
         visible: true,
@@ -2211,14 +2529,14 @@ export class CourseEditorScene extends Phaser.Scene {
           this.pressurePlateStatusText ??
           (connectMode
             ? eligibleTargetCount > 0
-              ? 'Click a door, metal door, cage, or chest to link this pressure plate.'
-              : 'No door, metal door, cage, or chest is in this room yet.'
+              ? 'Click a door, metal door, cage, or chest anywhere in this course to link this pressure plate.'
+              : 'No door, metal door, cage, or chest is in this course yet.'
             : target
-              ? `Linked to ${this.getPressurePlateTargetLabel(target.id)}.`
+              ? `Linked to ${this.getPressurePlateTargetSummary(target, source.slice)}.`
               : 'This pressure plate is not linked yet.'),
-        pressureConnectHidden: connectMode,
+        pressureConnectHidden: connectMode || Boolean(target),
         pressureConnectDisabled: connectMode || eligibleTargetCount === 0,
-        pressureConnectTitle: eligibleTargetCount === 0 ? 'Add a door, metal door, cage, or chest first.' : '',
+        pressureConnectTitle: eligibleTargetCount === 0 ? 'Add a door, metal door, cage, or chest to this course first.' : '',
         pressureClearHidden: connectMode,
         pressureClearDisabled: !target,
         pressureDoneLaterHidden: !connectMode,
@@ -2228,6 +2546,12 @@ export class CourseEditorScene extends Phaser.Scene {
         containerClearTitle: '',
       };
       this.uiBridge?.renderInspector(state);
+      return;
+    }
+
+    const slice = this.getSelectedSlice();
+    if (!slice) {
+      this.uiBridge?.renderInspector(hiddenState);
       return;
     }
 

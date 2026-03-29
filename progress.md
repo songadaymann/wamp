@@ -82,6 +82,20 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - verify Play.fun room saves with > cap objects fail with the expected `429`
     - verify a signed-in chat admin can restore another user room from `History`
 
+- Course pressure-plate follow-up on March 28, 2026:
+  - fixed `CourseEditorScene` object-mode erasing so pressure plates now route through the same remove/cancel ordering as the normal room editor instead of being force-focused first; this restores deleting placed pressure plates in the stitched course editor
+  - added a runtime course pressure-plate relink pass in `OverworldPlayScene` so loaded floor triggers recompute their active course target from the current course snapshot instead of relying only on the one-time room-load attachment
+  - verification:
+    - `npm run check` passed in `/private/tmp/wamp-course-safety-integration`
+    - manual safety D1 inspection confirmed the latest edited course (`9fad7935-807c-48c6-8e3b-f394ec1a1ccb`) persists one cross-room `pressurePlateLinks` entry in both `draft_json` and `published_json`, and the pinned room versions still contain both linked instance ids
+
+- Course course-playback follow-up on March 28, 2026:
+  - fixed draft course test handoff so `CourseEditorScene` now persists all loaded room slices into the active course-preview override set before launching play; saved-clean room drafts no longer disappear just because they are not dirty anymore
+  - fixed course save/publish in `CourseEditorScene` to resync from the active course draft session before writing to the backend, so room publishes made inside the course editor actually update the course snapshot that gets saved/published
+  - fixed runtime course pressure-plate targeting to carry `targetRoomId` alongside `targetInstanceId`, so cross-room trigger activation is keyed to the intended room instead of only a bare instance id
+  - verification:
+    - `npm run check` passed in `/private/tmp/wamp-course-safety-integration`
+
 - Course editor follow-up fixes on March 28, 2026:
   - suppressed room-goal copy while a course run is active so the overworld HUD no longer mixes room-level challenge text into course play
   - added explicit `Save Course` and `Publish Course` actions inside the course goal section of `CourseEditorScene`, while keeping the top action rail focused on room-slice saves/publishes
@@ -4764,3 +4778,36 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - `output/web-game/caged-enemy-collision-probe/summary.json`
       - `output/web-game/caged-enemy-collision-probe/after-spawn.png`
     - targeted probe confirmed a trigger-spawned `slime_blue` in play mode had `interactions: 1`, `worldColliders: 1`, and no console/page errors.
+
+- March 28, 2026: rebuilt the room-copy and new-course-selection safety fix on top of current `origin/main`.
+  - Context:
+    - the earlier `safety/course-builder-room-copy-fix` branch was cut from stale local `main`, so it missed the newer course-builder architecture already live on remote `main`
+    - current `origin/main` now routes course setup entry through `src/scenes/overworld/flow.ts` and `src/scenes/CourseComposerScene.ts`
+  - Fixes:
+    - `src/scenes/overworld/flow.ts`
+      - stopped `openCourseComposer()` from falling back to the previously active course session when the selected room is not in that session and is not part of a published course
+    - `src/scenes/CourseComposerScene.ts`
+      - removed the final session fallback in `resolveInitialRecord(...)` so selecting a non-course room really opens a fresh empty draft instead of resurrecting the prior course
+    - `src/scenes/editor/uiBridge.ts`
+      - regular room-editor renders now explicitly restore their own button labels/titles (`World`, `Save Room`, `Publish Room`) so course-editor DOM mutations do not leak back into normal room editing
+    - `src/scenes/editor/viewModel.ts`
+      - added the explicit regular room-editor button text/title values used by the UI bridge
+    - `index.html`
+      - updated the default room-editor action labels/titles to match the explicit singular room wording
+  - Verification:
+    - `npm run build` passed in `/private/tmp/wamp-course-builder-room-copy-fix-origin-main`
+    - required `develop-web-game` smoke attempted to write `output/web-game/course-builder-origin-main-smoke/*`, but hit a pre-existing `render_game_to_text` debug failure in `OverworldGoalRunController.getDebugSnapshot(...)`
+    - focused Playwright probe wrote:
+      - `output/web-game/course-builder-origin-main-verify/summary.json`
+      - `output/web-game/course-builder-origin-main-verify/course-room.png`
+      - `output/web-game/course-builder-origin-main-verify/new-course-room.png`
+      - `output/web-game/course-builder-origin-main-verify/course-editor.png`
+      - `output/web-game/course-builder-origin-main-verify/room-editor-after-course-editor.png`
+    - targeted probe confirmed:
+      - room `1,0` reopened existing course `24338926-9004-4a0a-a51f-67b8942972a4` (`Wizzy's Tower`) with `roomCount: 3`
+      - room `0,0` opened a fresh empty draft with `roomCount: 0`
+      - after visiting `CourseEditorScene`, the regular room editor restored `World`, `Save Room`, and `Publish Room`
+    - expected local-only console errors during the probe:
+      - PartyKit websocket connection refusals on `127.0.0.1:1999` because presence was not running locally
+- 2026-03-28: Patched draft-course return flow in `src/scenes/overworld/flow.ts` to reopen `CourseEditorScene` with `run(...)` when the scene is not currently sleeping. This closes the blank-canvas case where overworld slept after trying to `wake` a non-running editor scene.
+- 2026-03-28: Added course-level pressure-plate links for the stitched course editor. Cross-room links now persist on the course snapshot, resolve in the course editor inspector/overlay, and are applied onto live trigger objects during course test/play so cross-room plates can open targets in other course rooms.

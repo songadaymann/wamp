@@ -35,6 +35,7 @@ export interface LoadedRoomObjectRuntimeState {
 export interface LoadedRoomObject {
   key: string;
   placedInstanceId: string | null;
+  linkedTargetRoomId: string | null;
   linkedTargetInstanceId: string | null;
   containedObjectId: string | null;
   countsTowardGoals: boolean;
@@ -114,6 +115,7 @@ interface CreateLiveObjectEntryOptions {
   layer?: LayerName;
   baseTimeSeed?: number;
   placedInstanceId: string | null;
+  linkedTargetRoomId: string | null;
   linkedTargetInstanceId: string | null;
   containedObjectId: string | null;
   countsTowardGoals: boolean;
@@ -177,6 +179,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         layer: placedObject.layer,
         baseTimeSeed: placedObject.x + placedObject.y,
         placedInstanceId: placedObject.instanceId,
+        linkedTargetRoomId: placedObject.triggerTargetInstanceId ? loadedRoom.room.id : null,
         linkedTargetInstanceId: placedObject.triggerTargetInstanceId ?? null,
         containedObjectId: placedObject.containedObjectId ?? null,
         countsTowardGoals: true,
@@ -220,6 +223,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       layer,
       baseTimeSeed = 0,
       placedInstanceId,
+      linkedTargetRoomId,
       linkedTargetInstanceId,
       containedObjectId,
       countsTowardGoals,
@@ -290,6 +294,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     return {
       key,
       placedInstanceId,
+      linkedTargetRoomId,
       linkedTargetInstanceId,
       containedObjectId,
       countsTowardGoals,
@@ -626,7 +631,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private updatePressurePlates(
     loadedRooms: LoadedFullRoom<LoadedRoomObject, TEdgeWall>[]
   ): void {
-    const activeTargetIds = new Set<string>();
+    const activeTargetKeys = new Set<string>();
 
     for (const loadedRoom of loadedRooms) {
       for (const liveObject of loadedRoom.liveObjects) {
@@ -644,7 +649,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           playSfx('pressure-plate-down');
         }
         if (pressed && liveObject.linkedTargetInstanceId) {
-          activeTargetIds.add(liveObject.linkedTargetInstanceId);
+          const targetRoomId = liveObject.linkedTargetRoomId ?? loadedRoom.room.id;
+          activeTargetKeys.add(this.getLinkedTargetKey(targetRoomId, liveObject.linkedTargetInstanceId));
         }
       }
     }
@@ -652,7 +658,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     for (const loadedRoom of loadedRooms) {
       for (const liveObject of [...loadedRoom.liveObjects]) {
         const placedInstanceId = liveObject.placedInstanceId;
-        const active = placedInstanceId ? activeTargetIds.has(placedInstanceId) : false;
+        const active = placedInstanceId
+          ? activeTargetKeys.has(this.getLinkedTargetKey(loadedRoom.room.id, placedInstanceId))
+          : false;
 
         switch (liveObject.config.id) {
           case 'door_metal':
@@ -837,6 +845,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       layer: 'terrain',
       baseTimeSeed: options.x + options.y,
       placedInstanceId: null,
+      linkedTargetRoomId: null,
       linkedTargetInstanceId: null,
       containedObjectId: null,
       countsTowardGoals: options.countsTowardGoals,
@@ -871,6 +880,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       collider.destroy();
     }
     liveObject.worldColliders = [];
+  }
+
+  private getLinkedTargetKey(roomId: string, instanceId: string): string {
+    return `${roomId}:${instanceId}`;
   }
 
   private syncRoomObjectWorldColliders(loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>): void {
@@ -1157,6 +1170,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const bullet: LoadedRoomObject = {
       key: `${cannon.key}:bullet:${this.options.getCurrentTime()}`,
       placedInstanceId: null,
+      linkedTargetRoomId: null,
       linkedTargetInstanceId: null,
       containedObjectId: null,
       countsTowardGoals: false,

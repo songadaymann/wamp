@@ -29,6 +29,13 @@ export interface CourseRoomRef {
   roomTitle: string | null;
 }
 
+export interface CoursePressurePlateLink {
+  triggerRoomId: string;
+  triggerInstanceId: string;
+  targetRoomId: string;
+  targetInstanceId: string;
+}
+
 export interface CourseReachExitGoal {
   type: 'reach_exit';
   exit: CourseMarkerPoint | null;
@@ -69,6 +76,7 @@ export interface CourseSnapshot {
   id: string;
   title: string | null;
   roomRefs: CourseRoomRef[];
+  pressurePlateLinks: CoursePressurePlateLink[];
   startPoint: CourseMarkerPoint | null;
   goal: CourseGoal | null;
   version: number;
@@ -204,6 +212,7 @@ export function createDefaultCourseSnapshot(
     id: courseId,
     title: null,
     roomRefs: [],
+    pressurePlateLinks: [],
     startPoint: null,
     goal: null,
     version: 1,
@@ -326,6 +335,17 @@ export function cloneCourseRoomRef(roomRef: CourseRoomRef): CourseRoomRef {
   };
 }
 
+export function cloneCoursePressurePlateLink(
+  link: CoursePressurePlateLink
+): CoursePressurePlateLink {
+  return {
+    triggerRoomId: link.triggerRoomId,
+    triggerInstanceId: link.triggerInstanceId,
+    targetRoomId: link.targetRoomId,
+    targetInstanceId: link.targetInstanceId,
+  };
+}
+
 export function cloneCourseGoal(goal: CourseGoal | null): CourseGoal | null {
   if (!goal) {
     return null;
@@ -369,6 +389,7 @@ export function cloneCourseSnapshot(snapshot: CourseSnapshot): CourseSnapshot {
     ...snapshot,
     title: normalizeCourseTitle(snapshot.title),
     roomRefs: snapshot.roomRefs.map(cloneCourseRoomRef),
+    pressurePlateLinks: snapshot.pressurePlateLinks.map(cloneCoursePressurePlateLink),
     startPoint: snapshot.startPoint ? cloneCourseMarkerPoint(snapshot.startPoint) : null,
     goal: cloneCourseGoal(snapshot.goal),
   };
@@ -425,6 +446,20 @@ export function getComparableCourseSnapshot(snapshot: CourseSnapshot) {
       roomVersion: roomRef.roomVersion,
       roomTitle: roomRef.roomTitle,
     })),
+    pressurePlateLinks: snapshot.pressurePlateLinks
+      .map(cloneCoursePressurePlateLink)
+      .sort((left, right) => {
+        if (left.triggerRoomId !== right.triggerRoomId) {
+          return left.triggerRoomId.localeCompare(right.triggerRoomId);
+        }
+        if (left.triggerInstanceId !== right.triggerInstanceId) {
+          return left.triggerInstanceId.localeCompare(right.triggerInstanceId);
+        }
+        if (left.targetRoomId !== right.targetRoomId) {
+          return left.targetRoomId.localeCompare(right.targetRoomId);
+        }
+        return left.targetInstanceId.localeCompare(right.targetInstanceId);
+      }),
     startPoint: snapshot.startPoint,
     goal: snapshot.goal,
   };
@@ -464,6 +499,68 @@ function isCourseMarkerPointLike(value: unknown): value is CourseMarkerPoint {
     typeof point.y === 'number' &&
     Number.isFinite(point.y)
   );
+}
+
+function isCoursePressurePlateLinkLike(value: unknown): value is CoursePressurePlateLink {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const link = value as Partial<CoursePressurePlateLink>;
+  return (
+    typeof link.triggerRoomId === 'string' &&
+    link.triggerRoomId.trim().length > 0 &&
+    typeof link.triggerInstanceId === 'string' &&
+    link.triggerInstanceId.trim().length > 0 &&
+    typeof link.targetRoomId === 'string' &&
+    link.targetRoomId.trim().length > 0 &&
+    typeof link.targetInstanceId === 'string' &&
+    link.targetInstanceId.trim().length > 0
+  );
+}
+
+export function normalizeCoursePressurePlateLinks(
+  value: unknown,
+  allowedRoomIds: ReadonlySet<string>
+): CoursePressurePlateLink[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const linksByTriggerKey = new Map<string, CoursePressurePlateLink>();
+  for (const entry of value) {
+    if (!isCoursePressurePlateLinkLike(entry)) {
+      continue;
+    }
+
+    const normalized = cloneCoursePressurePlateLink(entry);
+    if (
+      !allowedRoomIds.has(normalized.triggerRoomId) ||
+      !allowedRoomIds.has(normalized.targetRoomId) ||
+      (normalized.triggerRoomId === normalized.targetRoomId &&
+        normalized.triggerInstanceId === normalized.targetInstanceId)
+    ) {
+      continue;
+    }
+
+    linksByTriggerKey.set(
+      `${normalized.triggerRoomId}:${normalized.triggerInstanceId}`,
+      normalized
+    );
+  }
+
+  return Array.from(linksByTriggerKey.values()).sort((left, right) => {
+    if (left.triggerRoomId !== right.triggerRoomId) {
+      return left.triggerRoomId.localeCompare(right.triggerRoomId);
+    }
+    if (left.triggerInstanceId !== right.triggerInstanceId) {
+      return left.triggerInstanceId.localeCompare(right.triggerInstanceId);
+    }
+    if (left.targetRoomId !== right.targetRoomId) {
+      return left.targetRoomId.localeCompare(right.targetRoomId);
+    }
+    return left.targetInstanceId.localeCompare(right.targetInstanceId);
+  });
 }
 
 export function normalizeCourseGoal(value: unknown): CourseGoal | null {
@@ -565,15 +662,21 @@ export function normalizeCourseSnapshot(
   }
 
   const snapshot = value as Partial<CourseSnapshot>;
+  const roomRefs = sortCourseRoomRefsForStorage(
+    Array.isArray(snapshot.roomRefs)
+      ? snapshot.roomRefs
+          .map((roomRef) => normalizeCourseRoomRef(roomRef))
+          .filter((roomRef): roomRef is CourseRoomRef => roomRef !== null)
+      : []
+  );
+  const allowedRoomIds = new Set(roomRefs.map((roomRef) => roomRef.roomId));
   return {
     id: typeof snapshot.id === 'string' && snapshot.id.trim() ? snapshot.id.trim() : fallbackCourseId,
     title: normalizeCourseTitle(snapshot.title),
-    roomRefs: sortCourseRoomRefsForStorage(
-      Array.isArray(snapshot.roomRefs)
-        ? snapshot.roomRefs
-            .map((roomRef) => normalizeCourseRoomRef(roomRef))
-            .filter((roomRef): roomRef is CourseRoomRef => roomRef !== null)
-        : []
+    roomRefs,
+    pressurePlateLinks: normalizeCoursePressurePlateLinks(
+      (snapshot as Partial<CourseSnapshot> & { pressurePlateLinks?: unknown }).pressurePlateLinks,
+      allowedRoomIds
     ),
     startPoint: isCourseMarkerPointLike(snapshot.startPoint)
       ? cloneCourseMarkerPoint(snapshot.startPoint)
