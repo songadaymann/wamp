@@ -1,10 +1,6 @@
 import Phaser from 'phaser';
-import {
-  DEFAULT_PLAYER_ANIMATION_KEYS,
-  DEFAULT_PLAYER_IDLE_FRAME,
-  DEFAULT_PLAYER_IDLE_TEXTURE_KEY,
-  type DefaultPlayerAnimationState,
-} from '../../player/defaultPlayer';
+import type { PlayerAnimationState } from '../../player/avatar/model';
+import { resolvePlayerAvatarPack } from '../../player/avatar/runtime';
 import { roomIdFromCoordinates, type RoomCoordinates } from '../../persistence/roomModel';
 import { type WorldChunkBounds } from '../../persistence/worldModel';
 import {
@@ -57,7 +53,7 @@ interface LocalPresenceInput {
   velocityX: number;
   velocityY: number;
   facing: number;
-  animationState: DefaultPlayerAnimationState;
+  animationState: PlayerAnimationState;
 }
 
 interface PresenceSummaryInput {
@@ -669,12 +665,19 @@ export class OverworldPresenceController {
         continue;
       }
 
+      if (existing.presence.avatarId !== ghost.avatarId) {
+        this.destroyRenderedGhost(existing);
+        this.renderedGhostsByConnectionId.set(ghost.connectionId, this.createRenderedGhost(ghost));
+        structureChanged = true;
+        continue;
+      }
+
       existing.presence = ghost;
       existing.targetX = ghost.x;
       existing.targetY = ghost.y;
       existing.sprite.setFlipX(ghost.facing < 0);
       existing.label.setText(ghost.displayName);
-      const animationKey = DEFAULT_PLAYER_ANIMATION_KEYS[ghost.animationState];
+      const animationKey = resolvePlayerAvatarPack(ghost.avatarId).animationKeys[ghost.animationState];
       if (existing.sprite.anims.currentAnim?.key !== animationKey) {
         existing.sprite.play(animationKey, true);
       }
@@ -769,21 +772,22 @@ export class OverworldPresenceController {
   }
 
   private createRenderedGhost(ghost: WorldGhostPresence): RenderedGhost {
+    const playerAvatarPack = resolvePlayerAvatarPack(ghost.avatarId);
     const halo = this.options.scene.add.ellipse(ghost.x, ghost.y - 2, 18, 8, 0xffffff, 0.28);
     halo.setDepth(22);
 
     const sprite = this.options.scene.add.sprite(
       ghost.x,
       ghost.y,
-      DEFAULT_PLAYER_IDLE_TEXTURE_KEY,
-      DEFAULT_PLAYER_IDLE_FRAME
+      playerAvatarPack.idleTextureKey,
+      playerAvatarPack.idleFrame
     );
     sprite.setOrigin(0.5, 1);
     sprite.setAlpha(0.74);
     sprite.setDepth(24);
     sprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     sprite.setFlipX(ghost.facing < 0);
-    sprite.play(DEFAULT_PLAYER_ANIMATION_KEYS[ghost.animationState]);
+    sprite.play(playerAvatarPack.animationKeys[ghost.animationState]);
 
     const label = this.options.scene.add.text(ghost.x, ghost.y - 28, ghost.displayName, {
       fontFamily: 'Courier New',

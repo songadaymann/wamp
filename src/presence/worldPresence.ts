@@ -1,6 +1,7 @@
 import PartySocket from 'partysocket';
 import { getAuthDebugState } from '../auth/client';
-import type { DefaultPlayerAnimationState } from '../player/defaultPlayer';
+import type { PlayerAnimationState, PlayerAvatarId } from '../player/avatar/model';
+import { resolveActivePlayerAvatarId } from '../player/avatar/storage';
 import { roomIdFromCoordinates, type RoomCoordinates } from '../persistence/roomModel';
 import {
   chunkIdFromCoordinates,
@@ -9,14 +10,14 @@ import {
 } from '../persistence/worldModel';
 
 export type WorldPresenceMode = 'browse' | 'play' | 'edit';
-export type WorldPresenceAnimationState = DefaultPlayerAnimationState;
+export type WorldPresenceAnimationState = PlayerAnimationState;
 
 const PRESENCE_PUBLISH_INTERVAL_MS = 200;
 
 export interface WorldPresenceIdentity {
   userId: string;
   displayName: string;
-  avatarId: string;
+  avatarId: PlayerAvatarId;
 }
 
 export interface WorldPresencePayload {
@@ -35,7 +36,7 @@ export interface WorldGhostPresence extends WorldPresencePayload {
   connectionId: string;
   userId: string;
   displayName: string;
-  avatarId: string;
+  avatarId: PlayerAvatarId;
   shardId: string;
   roomId: string;
 }
@@ -424,12 +425,13 @@ export class WorldPresenceClient {
 }
 
 export function resolveWorldPresenceIdentity(): WorldPresenceIdentity {
+  const activeAvatarId = resolveActivePlayerAvatarId();
   const authState = getAuthDebugState();
   if (authState.authenticated && authState.user) {
     return {
       userId: authState.user.id,
       displayName: authState.user.displayName,
-      avatarId: 'default-player',
+      avatarId: activeAvatarId,
     };
   }
 
@@ -442,7 +444,7 @@ export function resolveWorldPresenceIdentity(): WorldPresenceIdentity {
         return {
           userId: existing.userId,
           displayName: existing.displayName,
-          avatarId: typeof existing.avatarId === 'string' ? existing.avatarId : 'default-player',
+          avatarId: activeAvatarId,
         };
       }
     }
@@ -453,7 +455,7 @@ export function resolveWorldPresenceIdentity(): WorldPresenceIdentity {
   const guestIdentity: WorldPresenceIdentity = {
     userId: `guest-${crypto.randomUUID()}`,
     displayName: `Guest ${Math.random().toString(36).slice(2, 6)}`,
-    avatarId: 'default-player',
+    avatarId: activeAvatarId,
   };
   try {
     window.localStorage.setItem(storageKey, JSON.stringify(guestIdentity));

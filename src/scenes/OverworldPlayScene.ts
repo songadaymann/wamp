@@ -62,9 +62,11 @@ import {
   ensureStarfieldTexture,
 } from '../visuals/starfield';
 import {
-  DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
-  type DefaultPlayerAnimationState,
-} from '../player/defaultPlayer';
+  resolveActivePlayerAvatarPack,
+} from '../player/avatar/runtime';
+import type {
+  PlayerAnimationState,
+} from '../player/avatar/model';
 import {
   ROOM_GOAL_LABELS,
   type GoalMarkerPoint,
@@ -283,7 +285,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private playerPickupSensor: Phaser.GameObjects.Rectangle | null = null;
   private playerPickupSensorBody: Phaser.Physics.Arcade.Body | null = null;
   private playerSprite: Phaser.GameObjects.Sprite | null = null;
-  private playerAnimationState: DefaultPlayerAnimationState = 'idle';
+  private playerAnimationState: PlayerAnimationState = 'idle';
   private playerFacing = 1;
   private playerWasGrounded = false;
   private playerLandAnimationUntil = 0;
@@ -843,7 +845,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       get animationState() {
         return thisScene.playerAnimationState;
       },
-      set animationState(value: DefaultPlayerAnimationState) {
+      set animationState(value: PlayerAnimationState) {
         thisScene.playerAnimationState = value;
       },
       get facing() {
@@ -888,7 +890,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       {
         playerPickupSensorExtraHeight: this.PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT,
-        playerVisualFeetOffset: DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
+        playerVisualFeetOffset: resolveActivePlayerAvatarPack().visualFeetOffset,
         landingAnimationMs: 120,
         facingVelocityThreshold: 8,
         jumpRiseVelocityThreshold: -10,
@@ -1865,7 +1867,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       mode: this.mode,
       roomCoordinates: { ...this.currentRoomCoordinates },
       x: this.player.x,
-      y: this.playerBody.bottom + DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
+      y: this.playerBody.bottom + resolveActivePlayerAvatarPack().visualFeetOffset,
       velocityX: this.playerBody.velocity.x,
       velocityY: this.playerBody.velocity.y,
       facing: this.playerFacing,

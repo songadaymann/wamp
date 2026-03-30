@@ -1,11 +1,9 @@
 import Phaser from 'phaser';
-import {
-  DEFAULT_PLAYER_ANIMATION_KEYS,
-  type DefaultPlayerAnimationState,
-} from '../../player/defaultPlayer';
+import type { PlayerAnimationState } from '../../player/avatar/model';
+import { resolveActivePlayerAvatarPack } from '../../player/avatar/runtime';
 
 export interface OverworldPlayerPresentationControllerState {
-  animationState: DefaultPlayerAnimationState;
+  animationState: PlayerAnimationState;
   facing: -1 | 1;
   wasGrounded: boolean;
   landAnimationUntil: number;
@@ -28,7 +26,7 @@ interface OverworldPlayerPresentationControllerHost {
   getIsCrouching(): boolean;
   getActiveCrateInteractionMode(): 'push' | 'pull' | null;
   getActiveCrateInteractionFacing(): -1 | 1 | null;
-  getCurrentAttackAnimation(now: number): DefaultPlayerAnimationState | null;
+  getCurrentAttackAnimation(now: number): PlayerAnimationState | null;
   playLandingDustFx(x: number, y: number, facing: -1 | 1): void;
 }
 
@@ -120,7 +118,7 @@ export class OverworldPlayerPresentationController {
     });
     if (nextAnimation !== this.host.state.animationState) {
       this.host.state.animationState = nextAnimation;
-      playerSprite.play(DEFAULT_PLAYER_ANIMATION_KEYS[nextAnimation], true);
+      playerSprite.play(resolveActivePlayerAvatarPack().animationKeys[nextAnimation], true);
     }
 
     this.host.state.wasGrounded = grounded;
@@ -148,7 +146,7 @@ export class OverworldPlayerPresentationController {
     now: number;
     grounded: boolean;
     playerBody: Phaser.Physics.Arcade.Body;
-  }): DefaultPlayerAnimationState {
+  }): PlayerAnimationState {
     const activeAttackAnimation = this.host.getCurrentAttackAnimation(input.now);
     if (activeAttackAnimation) {
       return activeAttackAnimation;

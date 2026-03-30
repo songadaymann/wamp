@@ -118,6 +118,25 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 - Course editor follow-up fixes on March 28, 2026:
   - suppressed room-goal copy while a course run is active so the overworld HUD no longer mixes room-level challenge text into course play
   - added explicit `Save Course` and `Publish Course` actions inside the course goal section of `CourseEditorScene`, while keeping the top action rail focused on room-slice saves/publishes
+
+- Punk avatar pack stage-1 integration on March 30, 2026:
+  - generated and checked in a new `punk-465` runtime pack under `public/assets/player/punk-465`
+  - sanitized the generated manifest so it no longer stores machine-local absolute paths
+  - added a dedicated avatar subsystem under `src/player/avatar/*`:
+    - `model.ts` for pack/animation types
+    - `registry.ts` for built-in `default-player` and `punk-465`
+    - `loader.ts` for boot-time atlas/animation registration
+    - `runtime.ts` for avatar pack resolution
+    - `storage.ts` for the stage-1 active-pack hook
+  - `BootScene` now preloads player pack assets and animations through the avatar loader instead of hard-coding only the default player
+  - local player creation, local presence publishing, and ghost rendering now resolve sprite textures/animation keys through the avatar subsystem
+  - stage-1 global active avatar is `punk-465`, while the default pack remains registered as a fallback
+  - verification:
+    - `./node_modules/.bin/tsc --noEmit` passed in `/private/tmp/wamp-punk-465-avatar`
+    - `npm run build` passed in `/private/tmp/wamp-punk-465-avatar`
+    - local remote-data smoke booted the overworld and confirmed presence identity now carries `avatarId: "punk-465"` in `output/web-game/punk-465-remote-smoke/state-0.json`
+  - caveat:
+    - the Playwright canvas captures were black in this environment, so the smoke relied on build output, runtime state JSON, and console logs rather than visual PNG inspection
   - clarified the room publish rail labels/tooltips in course edit mode so room edits and course edits read as separate flows
   - added stitched per-room background rendering for the multi-room course editor, so changing a room background now redraws visibly inside the course workspace instead of only mutating hidden state
   - verification:

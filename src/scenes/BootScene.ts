@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
 import { TILESETS, BACKGROUND_GROUPS, GAME_OBJECTS, getObjectAnimationFrames } from '../config';
 import {
-  DEFAULT_PLAYER_ATLAS_ASSETS,
-  DEFAULT_PLAYER_ANIMATIONS,
   DEFAULT_PLAYER_FX_ANIMATIONS,
 } from '../player/defaultPlayer';
+import {
+  listPlayerAvatarAnimations,
+  listPlayerAvatarAtlasAssets,
+} from '../player/avatar/loader';
 import {
   ROCKY_ROADS_FX_ANIMATIONS,
   ROCKY_ROADS_FX_SPRITESHEETS,
@@ -52,7 +54,7 @@ export class BootScene extends Phaser.Scene {
       frameHeight: 16,
     });
 
-    for (const atlas of DEFAULT_PLAYER_ATLAS_ASSETS) {
+    for (const atlas of listPlayerAvatarAtlasAssets()) {
       this.load.atlas(atlas.key, atlas.texturePath, atlas.atlasPath);
     }
 
@@ -90,7 +92,7 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    for (const animation of DEFAULT_PLAYER_ANIMATIONS) {
+    for (const animation of listPlayerAvatarAnimations()) {
       if (this.anims.exists(animation.key)) {
         continue;
       }

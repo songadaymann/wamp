@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { playSfx } from '../../audio/sfx';
-import type { DefaultPlayerAnimationState } from '../../player/defaultPlayer';
+import type { PlayerAnimationState } from '../../player/avatar/model';
 import type { WeaponHitResult } from './liveObjects';
 
 export interface OverworldPlayerProjectile {
@@ -49,7 +49,7 @@ interface OverworldCombatControllerOptions {
 }
 
 export class OverworldCombatController {
-  private activeAttackAnimation: DefaultPlayerAnimationState | null = null;
+  private activeAttackAnimation: PlayerAnimationState | null = null;
   private activeAttackAnimationUntil = 0;
   private meleeCooldownUntil = 0;
   private rangedCooldownUntil = 0;
@@ -72,7 +72,7 @@ export class OverworldCombatController {
     this.activeAttackAnimationUntil = 0;
   }
 
-  getCurrentAttackAnimation(now: number): DefaultPlayerAnimationState | null {
+  getCurrentAttackAnimation(now: number): PlayerAnimationState | null {
     if (!this.activeAttackAnimation || now >= this.activeAttackAnimationUntil) {
       return null;
     }
@@ -80,7 +80,7 @@ export class OverworldCombatController {
     return this.activeAttackAnimation;
   }
 
-  getActiveAttackAnimation(): DefaultPlayerAnimationState | null {
+  getActiveAttackAnimation(): PlayerAnimationState | null {
     return this.activeAttackAnimation;
   }
 
@@ -185,7 +185,7 @@ export class OverworldCombatController {
   ): void {
     const playerFacing = this.host.getPlayerFacing();
     const downward = !grounded && downHeld;
-    const attackAnimation: DefaultPlayerAnimationState = downward ? 'air-slash-down' : 'sword-slash';
+    const attackAnimation: PlayerAnimationState = downward ? 'air-slash-down' : 'sword-slash';
     this.activeAttackAnimation = attackAnimation;
     this.activeAttackAnimationUntil = now + this.options.swordAttackMs;
     this.meleeCooldownUntil = now + this.options.swordCooldownMs;

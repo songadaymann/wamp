@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "packId": "punk-465",
+  "punkId": 465,
+  "punkType": "Human",
+  "accessories": [
+    "Hoodie",
+    "Pipe",
+    "3D Glasses"
+  ],
+  "assetRoot": "assets/player/punk-465",
+  "assets": {
+    "baseTexture": "assets/player/punk-465/PlayerSheet.png",
+    "baseAtlas": "assets/player/punk-465/PlayerSheet.json",
+    "combatTexture": "assets/player/punk-465/PlayerCombatActionsSheet.png",
+    "combatAtlas": "assets/player/punk-465/PlayerCombatActionsSheet.json"
+  },
+  "sharedAssets": {
+    "weaponsTexture": "assets/player/default/WeaponsSheet.png",
+    "weaponsAtlas": "assets/player/default/WeaponsSheet.json",
+    "fxTexture": "assets/player/default/FXSheet.png",
+    "fxAtlas": "assets/player/default/FXSheet.json"
+  },
+  "backHead": {
+    "mode": "human-class",
+    "classId": "human-hoodie",
+    "needsBackFillColor": false,
+    "seedPunkId": 54,
+    "seedImageName": "16-back-hoodie-54-jmann-edit.png",
+    "templateId": "human-hoodie/template.json"
+  },
+  "notes": "Base/combat atlases are generated per punk. Weapons/FX remain shared from the default player pack unless copied in."
+}
