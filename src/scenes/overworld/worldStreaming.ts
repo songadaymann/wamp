@@ -52,6 +52,7 @@ import {
 
 const PREVIEW_TILE_SIZE = 4;
 const PLAY_ROOM_PARALLAX_MULTIPLIER = 0.2;
+const FULL_ROOM_RELEASE_GRACE_MS = 300;
 
 export interface LoadedFullRoom<TLiveObject = unknown, TEdgeWall = unknown> {
   room: RoomSnapshot;
@@ -117,6 +118,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private readonly previewCache: OverworldPreviewCache;
   private readonly previewRenderer: OverworldChunkPreviewRenderer;
   private loadedFullRoomsById = new Map<string, LoadedFullRoom<TLiveObject, TEdgeWall>>();
+  private fullRoomReleaseAtById = new Map<string, number>();
   private nearLodRoomIds = new Set<string>();
   private midLodRoomIds = new Set<string>();
   private farLodRoomIds = new Set<string>();
@@ -156,6 +158,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.previewCache.reset();
     this.previewRenderer.reset();
     this.loadedFullRoomsById = new Map();
+    this.fullRoomReleaseAtById = new Map();
     this.nearLodRoomIds = new Set();
     this.midLodRoomIds = new Set();
     this.farLodRoomIds = new Set();
@@ -181,6 +184,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.previewCache.reset();
     this.previewRenderer.reset();
     this.loadedFullRoomsById = new Map();
+    this.fullRoomReleaseAtById = new Map();
     this.nearLodRoomIds = new Set();
     this.midLodRoomIds = new Set();
     this.farLodRoomIds = new Set();
@@ -317,7 +321,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
       this.previewRenderer.unloadOutsideWindow(this.visibleRoomIds, previewRoomIds);
       this.previewCache.pruneSnapshots(this.visibleRoomIds, new Set(this.loadedFullRoomsById.keys()));
-      this.unloadFullRoomsOutsideStream(fullRoomIds);
+      this.unloadFullRoomsOutsideStream(
+        this.options.getMode() === 'play'
+          ? this.getRetainedFullRoomIds(fullRoomIds)
+          : fullRoomIds
+      );
       return 'success';
     } catch {
       return 'error';
@@ -596,7 +604,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
     this.previewRenderer.unloadOutsideWindow(this.visibleRoomIds, previewRoomIds);
     this.previewCache.pruneSnapshots(this.visibleRoomIds, new Set(this.loadedFullRoomsById.keys()));
-    this.unloadFullRoomsOutsideStream(fullRoomIds);
+    this.unloadFullRoomsOutsideStream(
+      this.options.getMode() === 'play'
+        ? this.getRetainedFullRoomIds(fullRoomIds)
+        : fullRoomIds
+    );
   }
 
   private collectVisibleRoomCandidates(): Map<string, StreamingRoomCandidate> {
@@ -940,6 +952,37 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
   }
 
+  private getRetainedFullRoomIds(targetFullRoomIds: Set<string>): Set<string> {
+    const retainedRoomIds = new Set<string>(targetFullRoomIds);
+    const now = this.options.scene.time.now;
+
+    for (const roomId of targetFullRoomIds) {
+      this.fullRoomReleaseAtById.delete(roomId);
+    }
+
+    for (const roomId of Array.from(this.fullRoomReleaseAtById.keys())) {
+      if (!this.loadedFullRoomsById.has(roomId)) {
+        this.fullRoomReleaseAtById.delete(roomId);
+      }
+    }
+
+    for (const roomId of this.loadedFullRoomsById.keys()) {
+      if (targetFullRoomIds.has(roomId)) {
+        continue;
+      }
+
+      const releaseAt = this.fullRoomReleaseAtById.get(roomId) ?? (now + FULL_ROOM_RELEASE_GRACE_MS);
+      this.fullRoomReleaseAtById.set(roomId, releaseAt);
+      if (releaseAt > now) {
+        retainedRoomIds.add(roomId);
+      } else {
+        this.fullRoomReleaseAtById.delete(roomId);
+      }
+    }
+
+    return retainedRoomIds;
+  }
+
   private destroyFullRoom(roomId: string): void {
     const loadedRoom = this.loadedFullRoomsById.get(roomId);
     if (!loadedRoom) {
@@ -969,6 +1012,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
 
     this.loadedFullRoomsById.delete(roomId);
+    this.fullRoomReleaseAtById.delete(roomId);
     this.options.onBackdropObjectsChanged?.();
     this.options.onFullRoomVisibilityChanged?.();
   }

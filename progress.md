@@ -73,6 +73,13 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - `npm run build` passed
   - remaining manual check:
     - still wants an in-browser pass around the `0.18x` to `0.24x` browse range and repeated adjacent room crossings
+  - follow-up seam-tuning pass:
+    - trace showed chunk bounds were stable during room crossings, but `loadedFullRoomCount` was dropping at the seam (`7 -> 5`), indicating full-room teardown/rebuild inside the already-loaded chunk window
+    - added a short play-mode grace period in `src/scenes/overworld/worldStreaming.ts` so outgoing full rooms are retained briefly instead of being destroyed immediately on every seam crossing
+    - this keeps the previous full-room set alive while the new target full-room set settles, reducing visible/jarring churn without widening chunk fetch bounds
+    - verification:
+      - `./node_modules/.bin/tsc --noEmit` passed
+      - `npm run build` passed
 
 - Course crate seam collision fix on March 29, 2026:
   - confirmed a stitched-world physics bug in `src/scenes/overworld/liveObjects.ts`: dynamic object world colliders were only being bound to the room that originally spawned the object
