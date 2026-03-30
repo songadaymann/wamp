@@ -57,6 +57,10 @@ interface OverworldSceneFlowHost {
     coordinates: RoomCoordinates,
     options?: { forceChunkReload?: boolean }
   ): Promise<unknown>;
+  refreshAroundIfNeededOrFromCache(
+    coordinates: RoomCoordinates,
+    options?: { forceChunkReload?: boolean; refreshLeaderboards?: boolean }
+  ): void;
   prepareActiveCourseRoomOverrides(
     snapshot: CourseSnapshot,
     options: { mode: CoursePlaybackRoomSourceMode }
@@ -163,7 +167,7 @@ export class OverworldSceneFlowController {
       return;
     }
 
-    void this.host.refreshAround(returnCoordinates);
+    this.host.refreshAroundIfNeededOrFromCache(returnCoordinates);
   }
 
   buildSelectedRoom(): void {

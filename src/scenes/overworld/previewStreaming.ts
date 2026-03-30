@@ -29,9 +29,9 @@ const REDUCED_PLAY_NEAR_MAX_PREVIEW_ROOMS = 25;
 const REDUCED_PLAY_MID_MAX_PREVIEW_ROOMS = 49;
 const REDUCED_PLAY_FAR_MAX_PREVIEW_ROOMS = 81;
 const REDUCED_PLAY_ULTRA_MAX_PREVIEW_ROOMS = 121;
-const BROWSE_NEAR_MAX_PREVIEW_ROOMS = 64;
-const BROWSE_MID_MAX_PREVIEW_ROOMS = 144;
-const BROWSE_FAR_MAX_PREVIEW_ROOMS = 256;
+const BROWSE_NEAR_MAX_PREVIEW_ROOMS = 121;
+const BROWSE_MID_MAX_PREVIEW_ROOMS = 225;
+const BROWSE_FAR_MAX_PREVIEW_ROOMS = 324;
 const PLAY_NEAR_MID_LOD_ROOM_RADIUS = 5;
 const PLAY_MID_MID_LOD_ROOM_RADIUS = 9;
 const PLAY_FAR_MID_LOD_ROOM_RADIUS = 13;
@@ -48,7 +48,7 @@ const FULL_ROOM_BUDGET = (STREAM_RADIUS * 2 + 1) ** 2;
 const PLAY_ULTRA_ZOOM_THRESHOLD = 0.11;
 const PLAY_FAR_ZOOM_THRESHOLD = 0.16;
 const PLAY_MID_ZOOM_THRESHOLD = 0.28;
-const VIEWPORT_ROOM_PADDING = 1;
+const VIEWPORT_ROOM_PADDING = 2;
 
 export interface PreviewSelectionCandidate {
   id: string;
@@ -267,11 +267,11 @@ function getMidLodRoomRadius(
     }
   }
 
-  if (zoom <= 0.12) {
+  if (zoom <= 0.14) {
     return BROWSE_FAR_MID_LOD_ROOM_RADIUS;
   }
 
-  if (zoom <= 0.2) {
+  if (zoom <= 0.24) {
     return BROWSE_MID_MID_LOD_ROOM_RADIUS;
   }
 
@@ -335,14 +335,14 @@ function computeStreamingBudgets(
     }
   }
 
-  if (zoom <= 0.12) {
+  if (zoom <= 0.14) {
     return {
       previewRoomBudget: BROWSE_FAR_MAX_PREVIEW_ROOMS,
       fullRoomBudget: 0,
     };
   }
 
-  if (zoom <= 0.2) {
+  if (zoom <= 0.24) {
     return {
       previewRoomBudget: BROWSE_MID_MAX_PREVIEW_ROOMS,
       fullRoomBudget: 0,

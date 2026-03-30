@@ -278,6 +278,42 @@ export class OverworldWindowController {
     return false;
   }
 
+  refreshAroundIfNeededOrFromCache(
+    centerCoordinates: RoomCoordinates,
+    options: { forceChunkReload?: boolean; refreshLeaderboards?: boolean } = {},
+  ): void {
+    if (
+      options.forceChunkReload
+      || this.host.worldStreamingController.needsRefreshAround(centerCoordinates)
+    ) {
+      void this.refreshAround(centerCoordinates, {
+        forceChunkReload: options.forceChunkReload,
+      });
+      return;
+    }
+
+    this.host.setWindowCenterCoordinates(centerCoordinates);
+    this.host.worldStreamingController.refreshVisibleSelectionFromCache();
+    this.host.updateSelectedSummary();
+    if (options.refreshLeaderboards !== false) {
+      void this.host.refreshLeaderboardForSelection();
+    }
+    this.host.updateCameraBounds();
+    this.host.syncModeRuntime();
+    this.host.syncPreviewVisibility();
+    this.host.syncPresenceSubscriptions();
+    this.host.syncGhostVisibility();
+    this.host.redrawWorld();
+    this.host.renderHud();
+    this.host.hideLoadingText();
+    this.nextVisibleChunkRefreshAt =
+      this.host.getTimeNow() + this.getVisibleChunkRefreshIntervalMs();
+    if (!isAppReady()) {
+      markAppReady();
+    }
+    hideBusyOverlay();
+  }
+
   refreshChunkWindowIfNeeded(centerCoordinates: RoomCoordinates): void {
     if (this.host.worldStreamingController.needsRefreshAround(centerCoordinates)) {
       void this.refreshAround(centerCoordinates);

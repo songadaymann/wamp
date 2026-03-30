@@ -27,6 +27,10 @@ interface OverworldRoomTransitionHost {
   refreshCourseComposerSelectedRoomState(): Promise<void>;
   setFocusedCoordinates(coordinates: RoomCoordinates): void;
   refreshAround(coordinates: RoomCoordinates): Promise<unknown>;
+  refreshAroundIfNeededOrFromCache(
+    coordinates: RoomCoordinates,
+    options?: { forceChunkReload?: boolean; refreshLeaderboards?: boolean }
+  ): void;
   redrawWorld(): void;
   renderHud(): void;
   getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number };
@@ -78,7 +82,9 @@ export class OverworldRoomTransitionController {
       nextRoomCoordinates.x !== windowCenterCoordinates.x ||
       nextRoomCoordinates.y !== windowCenterCoordinates.y
     ) {
-      void this.host.refreshAround(nextRoomCoordinates);
+      this.host.refreshAroundIfNeededOrFromCache(nextRoomCoordinates, {
+        refreshLeaderboards: false,
+      });
       return;
     }
 

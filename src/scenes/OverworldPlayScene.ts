@@ -1250,6 +1250,8 @@ export class OverworldPlayScene extends Phaser.Scene {
         setFocusedCoordinatesInUrl(coordinates);
       },
       refreshAround: (coordinates) => this.refreshAround(coordinates),
+      refreshAroundIfNeededOrFromCache: (coordinates, options) =>
+        this.refreshAroundIfNeededOrFromCache(coordinates, options),
       redrawWorld: () => this.redrawWorld(),
       renderHud: () => this.renderHud(),
       getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
@@ -1316,6 +1318,8 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.shouldRespawnPlayer = value;
       },
       refreshAround: (coordinates, options) => this.refreshAround(coordinates, options),
+      refreshAroundIfNeededOrFromCache: (coordinates, options) =>
+        this.refreshAroundIfNeededOrFromCache(coordinates, options),
       prepareActiveCourseRoomOverrides: (snapshot, options) =>
         this.coursePlaybackController.prepareActiveCourseRoomOverrides(snapshot, options),
       createCourseRunState: (snapshot) =>
@@ -1833,7 +1837,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       return this.currentRoomCoordinates;
     }
 
-    return this.selectedCoordinates;
+    const worldView = this.cameras.main.worldView;
+    return this.getRoomCoordinatesForPoint(worldView.centerX, worldView.centerY);
   }
 
   private async refreshAround(
@@ -1841,6 +1846,13 @@ export class OverworldPlayScene extends Phaser.Scene {
     options: { forceChunkReload?: boolean } = {}
   ): Promise<boolean> {
     return this.windowController.refreshAround(centerCoordinates, options);
+  }
+
+  private refreshAroundIfNeededOrFromCache(
+    centerCoordinates: RoomCoordinates,
+    options: { forceChunkReload?: boolean; refreshLeaderboards?: boolean } = {},
+  ): void {
+    this.windowController.refreshAroundIfNeededOrFromCache(centerCoordinates, options);
   }
 
   private refreshChunkWindowIfNeeded(centerCoordinates: RoomCoordinates): void {

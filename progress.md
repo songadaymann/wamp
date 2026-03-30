@@ -57,6 +57,23 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Overworld browse/play streaming tuning on March 30, 2026:
+  - user reported two related issues:
+    - returning to browse could leave too many still-visible rooms blank
+    - room-to-room play transitions felt more jarring than intended
+  - tuned `src/scenes/overworld/previewStreaming.ts`:
+    - increased browse preview budgets from `64/144/256` to `121/225/324`
+    - widened browse tier thresholds so the mid tier now extends through `0.24x`
+    - increased viewport protection padding from `1` room to `2`
+  - tuned world refresh behavior:
+    - browse-mode streaming focus now follows the camera center instead of the selected room
+    - added a cache-first refresh path so returning from play and adjacent room crossings reuse loaded state when the current chunk window already covers the target room
+  - verification:
+    - `./node_modules/.bin/tsc --noEmit` passed
+    - `npm run build` passed
+  - remaining manual check:
+    - still wants an in-browser pass around the `0.18x` to `0.24x` browse range and repeated adjacent room crossings
+
 - Course crate seam collision fix on March 29, 2026:
   - confirmed a stitched-world physics bug in `src/scenes/overworld/liveObjects.ts`: dynamic object world colliders were only being bound to the room that originally spawned the object
   - this meant a pushed crate could cross into an adjacent course room while still only colliding with the source room terrain, so it could miss the destination room floor and fall straight through
