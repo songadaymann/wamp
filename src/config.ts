@@ -136,7 +136,8 @@ const DECO_ONLY_INDICES_DESERT = [3, 4, 18];
 const DECO_ONLY_INDICES_DIRT = [58, 59];
 const DECO_ONLY_INDICES_WATER = [1, 2, 3, 5, 13, 18];
 const DECO_ONLY_INDICES_SNOW = [2, 3, 4, 16, 31, 62, 63, 64, 65];
-const DECO_ONLY_INDICES_LAVA = [2, 4, 20, 21, 22, 24, 26, 27, 28, 52, 58];
+// Tight lava rollback: keep only the tiny decoration-only embers non-colliding.
+const DECO_ONLY_INDICES_LAVA = [8, 10];
 
 // firstGid assignments: 0 = empty, then sequential per tileset.
 // Keep existing ranges stable because persisted room tile data stores absolute gids.
