@@ -268,6 +268,16 @@ body[data-device-class='phone'] #global-chat {
   bottom: calc(60px + var(--safe-bottom));
 }
 
+body[data-device-class='phone'] .room-chat-composer {
+  bottom: calc(112px + var(--safe-bottom));
+  width: min(320px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
+}
+
+body[data-device-class='phone'] .room-chat-composer-form {
+  padding: 8px 10px;
+  border-radius: 16px;
+}
+
 body[data-device-class='phone'] #global-chat.is-open {
   top: calc(8px + var(--safe-top));
   right: calc(8px + var(--safe-right));
@@ -345,6 +355,17 @@ body[data-device-class='phone'][data-app-mode='play-world'] #global-chat.is-open
 
 body[data-device-class='phone'][data-app-mode='play-world'] #global-chat .chat-toggle {
   margin-left: 0;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-room-chat {
+  position: fixed;
+  right: calc(204px + var(--safe-right));
+  bottom: calc(48px + var(--safe-bottom));
+  z-index: 23;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .room-chat-composer-form {
+  padding: 8px 10px;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] {

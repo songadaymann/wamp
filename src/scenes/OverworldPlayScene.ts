@@ -125,6 +125,9 @@ import {
   OverworldPresenceController,
 } from './overworld/presence';
 import {
+  OverworldRoomChatController,
+} from './overworld/roomChat';
+import {
   OverworldCoursePlaybackController,
 } from './overworld/coursePlayback';
 import {
@@ -374,6 +377,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     RoomEdgeWall
   >;
   private readonly presenceController: OverworldPresenceController;
+  private readonly roomChatController: OverworldRoomChatController;
 
   private shouldCenterCamera = false;
   private shouldRespawnPlayer = false;
@@ -512,6 +516,21 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       onRoomActivityChanged: () => this.redrawWorld(),
       onGhostDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
+    });
+    this.roomChatController = new OverworldRoomChatController({
+      scene: this,
+      getMode: () => this.mode,
+      getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
+      getPlayerAnchor: () =>
+        this.player && this.playerBody
+          ? {
+              x: this.player.x,
+              y: this.playerBody.bottom + DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
+            }
+          : null,
+      getRenderedGhostsByConnectionId: () => this.presenceController.getRenderedGhostsByConnectionId(),
+      showTransientStatus: (message) => this.showTransientStatus(message),
+      onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
     });
     this.coursePlaybackController = new OverworldCoursePlaybackController({
       getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
@@ -1475,6 +1494,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.inspectInputController.initialize();
     this.setupCamera();
     this.initializePresenceClient();
+    this.initializeRoomChatClient();
     window.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
     this.syncBackdropCameraIgnores();
 
@@ -1507,6 +1527,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.gridOverlayController.redraw();
     this.updateLiveObjects(delta);
     this.updateGhosts(delta);
+    this.roomChatController.update();
     this.presenceOverlayController.updateBrowseDots(delta);
 
     if (isMobileLandscapeBlocked()) {
@@ -1588,6 +1609,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.shouldCenterCamera = false;
     this.shouldRespawnPlayer = false;
     this.presenceController.reset();
+    this.roomChatController.reset();
     this.courseComposerController.reset();
     this.windowController.reset();
     this.coursePlaybackController.clearActiveCourseRoomOverrides();
@@ -1601,6 +1623,10 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private initializePresenceClient(): void {
     this.presenceController.initialize();
+  }
+
+  private initializeRoomChatClient(): void {
+    this.roomChatController.initialize();
   }
 
   private setupGameplayKeys(): void {
@@ -1618,6 +1644,16 @@ export class OverworldPlayScene extends Phaser.Scene {
       E: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
     };
     this.cameraToggleKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.BACKTICK);
+    keyboard.on('keydown-T', () => {
+      if (this.mode === 'play') {
+        this.roomChatController.openComposer();
+      }
+    });
+    keyboard.on('keydown-ESC', () => {
+      if (this.roomChatController.handleEscapeKey()) {
+        return;
+      }
+    });
   }
 
   private setupCamera(): void {
@@ -1742,6 +1778,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     ignoredObjects.push(...this.presenceController.getBackdropIgnoredObjects());
+    ignoredObjects.push(...this.roomChatController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.presenceOverlayController.getBackdropIgnoredObjects());
     ignoredObjects.push(...(this.fxController?.getBackdropIgnoredObjects() ?? []));
 
@@ -1777,10 +1814,16 @@ export class OverworldPlayScene extends Phaser.Scene {
   };
   private readonly handleAuthStateChanged = (): void => {
     const identityChanged = this.presenceController.refreshIdentity();
-    if (identityChanged) {
-      if (this.loadedChunkBounds) {
+    const roomChatIdentityChanged = this.roomChatController.refreshIdentity();
+    if (this.loadedChunkBounds) {
+      if (identityChanged) {
         this.presenceController.setSubscribedChunkBounds(this.loadedChunkBounds);
       }
+      if (roomChatIdentityChanged) {
+        this.roomChatController.setSubscribedChunkBounds(this.loadedChunkBounds);
+      }
+    }
+    if (identityChanged || roomChatIdentityChanged) {
       this.syncLocalPresence();
     }
     this.renderHud();
@@ -1874,24 +1917,26 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private syncPresenceSubscriptions(): void {
     this.presenceController.setSubscribedChunkBounds(this.loadedChunkBounds);
+    this.roomChatController.setSubscribedChunkBounds(this.loadedChunkBounds);
   }
 
   private syncLocalPresence(): void {
-    if (!this.player || !this.playerBody || this.mode !== 'play') {
-      this.presenceController.updateLocalPresence(null);
-      return;
-    }
+    const localPresence =
+      !this.player || !this.playerBody || this.mode !== 'play'
+        ? null
+        : {
+            mode: this.mode,
+            roomCoordinates: { ...this.currentRoomCoordinates },
+            x: this.player.x,
+            y: this.playerBody.bottom + DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
+            velocityX: this.playerBody.velocity.x,
+            velocityY: this.playerBody.velocity.y,
+            facing: this.playerFacing,
+            animationState: this.playerAnimationState,
+          };
 
-    this.presenceController.updateLocalPresence({
-      mode: this.mode,
-      roomCoordinates: { ...this.currentRoomCoordinates },
-      x: this.player.x,
-      y: this.playerBody.bottom + DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
-      velocityX: this.playerBody.velocity.x,
-      velocityY: this.playerBody.velocity.y,
-      facing: this.playerFacing,
-      animationState: this.playerAnimationState,
-    });
+    this.presenceController.updateLocalPresence(localPresence);
+    this.roomChatController.updateLocalPresence(localPresence);
   }
 
   private updateGhosts(delta: number): void {
@@ -2441,6 +2486,18 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.courseComposerController.close();
   }
 
+  openRoomChatComposer(): boolean {
+    return this.roomChatController.openComposer();
+  }
+
+  closeRoomChatComposer(): void {
+    this.roomChatController.closeComposer();
+  }
+
+  isRoomChatComposerOpen(): boolean {
+    return this.roomChatController.isComposerOpen();
+  }
+
   getCourseComposerState(): CourseComposerState | null {
     return this.courseComposerController.getState();
   }
@@ -2555,6 +2612,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private handleShutdown = (): void => {
     this.presenceController.destroy();
+    this.roomChatController.destroy();
     window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
     window.removeEventListener(PLAYFUN_GAME_PAUSE_EVENT, this.handlePlayfunGamePause);
     window.removeEventListener(PLAYFUN_GAME_RESUME_EVENT, this.handlePlayfunGameResume);
@@ -2594,6 +2652,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     const goalRunSnapshot = this.goalRunController.getDebugSnapshot();
     const streamingMetrics = this.worldStreamingController.getDebugMetrics();
     const presenceDebug = this.presenceController.getDebugSnapshot();
+    const roomChatDebug = this.roomChatController.getDebugSnapshot();
     const currentLoadedRoom = this.loadedFullRoomsById.get(
       roomIdFromCoordinates(this.currentRoomCoordinates)
     ) ?? null;
@@ -2700,6 +2759,24 @@ export class OverworldPlayScene extends Phaser.Scene {
         browseDotCount: this.presenceOverlayController.getBrowseDotCount(),
         playRoomMarkerCount: this.presenceOverlayController.getPlayRoomMarkerCount(),
       },
+      roomChat: {
+        status: roomChatDebug.snapshot?.status ?? 'disabled',
+        subscribedShardCount: roomChatDebug.snapshot?.subscribedShards.length ?? 0,
+        connectedShardCount: roomChatDebug.snapshot?.connectedShards.length ?? 0,
+        subscribedChunkBounds: roomChatDebug.subscribedChunkBounds,
+        composerOpen: roomChatDebug.composerOpen,
+        messageCount: roomChatDebug.snapshot?.messages.length ?? 0,
+        activeBubbleCount: roomChatDebug.activeBubbleCount,
+        latestMessage: roomChatDebug.latestMessage
+          ? {
+              userId: roomChatDebug.latestMessage.userId,
+              displayName: roomChatDebug.latestMessage.displayName,
+              roomId: roomChatDebug.latestMessage.roomId,
+              text: roomChatDebug.latestMessage.text,
+              expiresAt: roomChatDebug.latestMessage.expiresAt,
+            }
+          : null,
+      },
       zoom: Number(camera.zoom.toFixed(3)),
       camera: {
         scrollX: Math.round(camera.scrollX),
@@ -2738,6 +2815,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           }
         : null,
       presenceDebug: this.presenceController.getDebugSnapshot(),
+      roomChatDebug,
       liveObjects,
     };
   }

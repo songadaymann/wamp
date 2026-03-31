@@ -183,6 +183,9 @@ export interface OverworldSceneBridge {
   fitLoadedWorld?: () => void;
   returnToWorld?: () => void;
   getSelectedRoomContext?: () => OverworldSelectedRoomContext;
+  openRoomChatComposer?: () => boolean;
+  closeRoomChatComposer?: () => void;
+  isRoomChatComposerOpen?: () => boolean;
   openCourseComposer?: () => Promise<void> | void;
   openCourseEditor?: () => Promise<void> | void;
   closeCourseComposer?: () => void;

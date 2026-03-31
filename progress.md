@@ -57,6 +57,18 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Ephemeral in-room PartyKit chat MVP on March 31, 2026:
+  - added lightweight room-local chat for play mode only with no persistence or moderation
+  - implementation:
+    - added shared room-chat message types/constants in `src/chat/roomChatModel.ts`
+    - added a separate PartyKit room-chat client in `src/presence/roomChat.ts`
+    - extended `partykit/presenceServer.ts` with `room-chat:say` / `room-chat:message`, exact-room play-mode delivery, message trimming, `140` char cap, and `1/sec` rate limiting
+    - added `OverworldRoomChatController` in `src/scenes/overworld/roomChat.ts`
+    - wired `OverworldPlayScene` to publish play presence into the room-chat transport, open the composer with `T`, close it on `Esc`, render ephemeral speech bubbles, and expose room-chat debug state
+    - added mobile `Say` button wiring plus room-chat composer styles in the world HUD
+  - verification:
+    - safety deployment manual test confirmed same-room signed-in chat works after updating both the Worker frontend and live PartyKit server
+
 - Dashboard chart readability pass on March 31, 2026:
   - user wanted the public dashboard history charts to expose y-axis values and support hovering bars to see the exact daily count
   - implementation:

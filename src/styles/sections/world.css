@@ -351,6 +351,53 @@ body[data-app-mode="play-world"] #game-container {
   border-color: var(--accent-cool);
 }
 
+.room-chat-composer {
+  position: absolute;
+  left: 50%;
+  bottom: calc(68px + var(--safe-bottom));
+  z-index: 18;
+  width: min(360px, calc(100% - 32px - var(--safe-left) - var(--safe-right)));
+  transform: translateX(-50%);
+}
+
+.room-chat-composer-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 14px;
+  background: rgba(7, 11, 16, 0.92);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(8px);
+}
+
+.room-chat-input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  background: var(--panel-2);
+  border: 1px solid rgba(243, 238, 226, 0.16);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+}
+
+.room-chat-input:focus {
+  outline: none;
+  border-color: rgba(110, 211, 255, 0.56);
+}
+
+.room-chat-input:disabled {
+  color: var(--text-dim);
+  background: #101010;
+}
+
+.room-chat-send {
+  min-width: 58px;
+}
+
 .chat-panel {
   position: absolute;
   right: calc(16px + var(--safe-right));

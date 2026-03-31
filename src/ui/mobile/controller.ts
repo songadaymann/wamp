@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { getDeviceLayoutState, initializeDeviceLayout, DEVICE_LAYOUT_CHANGED_EVENT } from '../deviceLayout';
-import { withActiveEditorScene } from '../setup/sceneBridge';
+import { getActiveOverworldScene, withActiveEditorScene } from '../setup/sceneBridge';
 import {
   pressTouchAction,
   resetTouchInputState,
@@ -27,6 +27,7 @@ type Elements = {
   worldHudToggleButton: HTMLButtonElement | null;
   worldHudMinimizeButton: HTMLButtonElement | null;
   worldChatButton: HTMLButtonElement | null;
+  worldRoomChatButton: HTMLButtonElement | null;
   worldJumpSheetButton: HTMLButtonElement | null;
   worldJumpSheet: HTMLElement | null;
   worldJumpSheetInput: HTMLInputElement | null;
@@ -68,6 +69,7 @@ export class MobileUiController {
       worldHudToggleButton: doc.getElementById('btn-world-hud-toggle') as HTMLButtonElement | null,
       worldHudMinimizeButton: doc.getElementById('btn-mobile-world-hud-minimize') as HTMLButtonElement | null,
       worldChatButton: doc.getElementById('btn-world-chat') as HTMLButtonElement | null,
+      worldRoomChatButton: doc.getElementById('btn-world-room-chat') as HTMLButtonElement | null,
       worldJumpSheetButton: doc.getElementById('btn-world-jump-sheet') as HTMLButtonElement | null,
       worldJumpSheet: doc.getElementById('mobile-jump-sheet'),
       worldJumpSheetInput: doc.getElementById('mobile-world-jump-input') as HTMLInputElement | null,
@@ -219,6 +221,10 @@ export class MobileUiController {
   private bindWorldShortcuts(): void {
     this.elements.worldChatButton?.addEventListener('click', () => {
       this.elements.chatToggleButton?.click();
+    });
+
+    this.elements.worldRoomChatButton?.addEventListener('click', () => {
+      getActiveOverworldScene(this.game)?.openRoomChatComposer?.();
     });
 
     this.elements.worldJumpSheetButton?.addEventListener('click', () => {
@@ -555,6 +561,10 @@ export class MobileUiController {
     this.elements.worldChatButton?.classList.toggle(
       'hidden',
       !(layout.coarsePointer && isWorld) || mobileShortcutOverlayOpen,
+    );
+    this.elements.worldRoomChatButton?.classList.toggle(
+      'hidden',
+      !(layout.coarsePointer && isPlay) || mobileShortcutOverlayOpen,
     );
     this.elements.worldJumpSheetButton?.classList.toggle(
       'hidden',
