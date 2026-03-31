@@ -45,6 +45,7 @@ import { getFocusedCoordinatesFromUrl, setFocusedCoordinatesInUrl } from '../nav
 import {
   cloneRoomSnapshot,
   DEFAULT_ROOM_COORDINATES,
+  isRoomMinted,
   roomIdFromCoordinates,
   type RoomCoordinates,
   type RoomSnapshot,
@@ -1160,6 +1161,14 @@ export class OverworldPlayScene extends Phaser.Scene {
           roomText: `Room ${entry.roomId}`,
           isSelf: entry.isSelf,
         })),
+      loadRoomOwnershipDetails: async (roomId, coordinates) => {
+        const record = await this.roomRepository.loadRoom(roomId, coordinates);
+        return {
+          claimerUserId: record.claimerUserId,
+          isMinted: isRoomMinted(record),
+          mintedOwnerWalletAddress: record.mintedOwnerWalletAddress,
+        };
+      },
       getScore: () => this.score,
       isCourseComposerLoading: () => this.courseComposerController.isLoading(),
       getZoom: () => this.cameras.main.zoom,

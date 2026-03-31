@@ -125,8 +125,14 @@ body[data-app-mode="play-world"] #game-container {
   outline: none;
 }
 
-.world-state-pill {
+.world-state-wrap {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.world-state-pill {
   padding: 2px 6px;
   border-radius: 999px;
   background: rgba(243, 238, 226, 0.08);
@@ -141,6 +147,12 @@ body[data-app-mode="play-world"] #game-container {
   background: var(--success-soft);
   border-color: rgba(52, 116, 51, 0.45);
   color: #d9f3d5;
+}
+
+.world-state-pill[data-world-state-tone='minted'] {
+  background: rgba(58, 139, 120, 0.22);
+  border-color: rgba(126, 224, 191, 0.44);
+  color: #c9fff0;
 }
 
 .world-state-pill[data-world-state-tone='draft'] {
@@ -158,6 +170,59 @@ body[data-app-mode="play-world"] #game-container {
 .world-state-pill[data-world-state-tone='empty'] {
   border-color: rgba(243, 238, 226, 0.14);
   color: var(--text-muted);
+}
+
+.world-state-info-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.world-state-info-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-cool);
+  font: inherit;
+  font-size: 10px;
+  line-height: 1;
+  cursor: help;
+  opacity: 0.9;
+}
+
+.world-state-info-button:hover,
+.world-state-info-button:focus-visible {
+  opacity: 1;
+  outline: none;
+}
+
+.world-state-info-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 28;
+  width: min(220px, calc(100vw - 48px));
+  padding: 10px 12px;
+  border: 1px solid rgba(126, 224, 191, 0.32);
+  border-radius: 12px;
+  background: rgba(7, 11, 16, 0.96);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.34);
+  color: var(--text);
+  font-size: 10px;
+  line-height: 1.45;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+}
+
+.world-state-info-wrap:hover .world-state-info-tooltip,
+.world-state-info-wrap:focus-within .world-state-info-tooltip {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 .world-hud-meta,

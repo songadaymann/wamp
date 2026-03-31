@@ -32,6 +32,12 @@ export interface SelectedCourseContext {
   roomCount: number;
 }
 
+export interface SelectedRoomOwnershipViewData {
+  claimerUserId: string | null;
+  isMinted: boolean;
+  mintedOwnerWalletAddress: string | null;
+}
+
 interface SelectedSummaryViewData {
   title: string | null;
   creatorUserId: string | null;
@@ -43,6 +49,7 @@ export interface BuildOverworldHudViewModelOptions {
   selectedState: SelectedCellState;
   selectedCoordinates: RoomCoordinates;
   selectedSummary: SelectedSummaryViewData | null;
+  selectedOwnership: SelectedRoomOwnershipViewData | null;
   selectedDraft: RoomSnapshot | null;
   selectedPopulation: number;
   selectedEditorCount: number;
@@ -62,6 +69,8 @@ export interface BuildOverworldHudViewModelOptions {
   activeGoalRoom: RoomSnapshot | null;
   totalPlayerCount: number | null;
   onlineRosterEntries: OverworldOnlineRosterViewEntry[];
+  currentUserId: string | null;
+  currentWalletAddress: string | null;
   score: number;
   courseBuilderButtonDisabled: boolean;
   zoom: number;
@@ -99,12 +108,12 @@ export function buildOverworldHudViewModel(
     selectedState,
     selectedCoordinates,
     selectedSummary,
+    selectedOwnership,
     selectedDraft,
     selectedPopulation,
     selectedEditorCount,
     selectedEditorSummary,
     selectedCourse,
-    selectedRoomInActiveCourseSession,
     frontierBuildBlocked,
     frontierClaimLimit,
     transientStatus,
@@ -118,6 +127,8 @@ export function buildOverworldHudViewModel(
     activeGoalRoom,
     totalPlayerCount,
     onlineRosterEntries,
+    currentUserId,
+    currentWalletAddress,
     score,
     courseBuilderButtonDisabled,
     zoom,
@@ -160,6 +171,43 @@ export function buildOverworldHudViewModel(
   const selectedCreatorText = selectedCreatorUserId && selectedSummary?.creatorDisplayName
     ? `by ${selectedSummary.creatorDisplayName}`
     : roomIdFromCoordinates(selectedCoordinates);
+  const selectedRoomMinted = selectedState === 'published' && Boolean(selectedOwnership?.isMinted);
+  const selectedRoomClaimOwnerUserId =
+    selectedOwnership?.claimerUserId
+    ?? (selectedState === 'published' ? selectedSummary?.creatorUserId ?? null : null);
+  const viewerOwnsSelectedRoom = Boolean(
+    currentUserId &&
+    selectedRoomClaimOwnerUserId &&
+    currentUserId === selectedRoomClaimOwnerUserId,
+  );
+  const viewerOwnsMintedRoom = Boolean(
+    selectedOwnership?.mintedOwnerWalletAddress &&
+    currentWalletAddress &&
+    currentWalletAddress === selectedOwnership.mintedOwnerWalletAddress.trim().toLowerCase(),
+  );
+  const canEditSelectedRoom =
+    selectedState === 'draft'
+      ? true
+      : selectedState === 'published'
+        ? selectedOwnership === null || !selectedRoomMinted || viewerOwnsMintedRoom
+        : false;
+  const editButtonTitle =
+    selectedState !== 'published' && selectedState !== 'draft'
+      ? 'Select a published or draft room to edit.'
+      : selectedRoomMinted && !viewerOwnsMintedRoom
+        ? 'Only the room token owner can edit a minted room.'
+        : '';
+  const canOpenCourseBuilder = selectedState === 'published' && viewerOwnsSelectedRoom;
+  const resolvedCourseBuilderButtonDisabled =
+    courseBuilderButtonDisabled || !canOpenCourseBuilder;
+  const courseBuilderButtonTitle =
+    courseBuilderButtonDisabled
+      ? 'Loading course builder...'
+      : selectedState !== 'published'
+        ? 'Only published rooms can start a course.'
+        : !viewerOwnsSelectedRoom
+          ? 'Only the room claimer can build a course from this room.'
+          : '';
 
   let selectedMetaText = 'No room here yet';
   let selectedMetaTone: OverworldHudViewModel['selectedMetaTone'] = 'default';
@@ -270,14 +318,21 @@ export function buildOverworldHudViewModel(
     selectedCreatorText,
     selectedCreatorUserId,
     selectedStateText:
-      selectedState === 'published'
-        ? 'Published'
+      selectedRoomMinted
+        ? 'Minted'
+        : selectedState === 'published'
+          ? 'Published'
         : selectedState === 'draft'
           ? 'Draft'
           : selectedState === 'frontier'
             ? 'Frontier'
             : 'Empty',
-    selectedStateTone: selectedState,
+    selectedStateTone: selectedRoomMinted ? 'minted' : selectedState,
+    selectedStateInfoVisible: selectedRoomMinted,
+    selectedStateInfoText:
+      selectedRoomMinted
+        ? 'Minted rooms are onchain room NFTs. Only the token owner can edit the live room or publish updates.'
+        : '',
     selectedMetaText,
     selectedMetaTone,
     statusText,
@@ -295,10 +350,10 @@ export function buildOverworldHudViewModel(
     playCourseButtonDisabled: activeCourseRun ? false : !selectedCourse,
     playCourseButtonHidden: !selectedCourse && !activeCourseRun,
     playCourseButtonActive: Boolean(activeCourseRun),
-    courseBuilderButtonDisabled:
-      courseBuilderButtonDisabled ||
-      (!selectedRoomInActiveCourseSession && selectedState !== 'published' && !selectedCourse),
-    editButtonDisabled: selectedState !== 'published' && selectedState !== 'draft',
+    courseBuilderButtonDisabled: resolvedCourseBuilderButtonDisabled,
+    courseBuilderButtonTitle,
+    editButtonDisabled: !canEditSelectedRoom,
+    editButtonTitle,
     buildButtonDisabled: selectedState !== 'frontier' || frontierBuildBlocked,
     roomCoordinatesText: '',
     cursorText: '',

@@ -21,6 +21,7 @@ import {
   formatRoomEditorSummary,
   type SelectedCellState,
   type SelectedCourseContext,
+  type SelectedRoomOwnershipViewData,
 } from './hudViewModel';
 import type { GoalRunState } from './goalRuns';
 
@@ -50,6 +51,10 @@ interface OverworldHudStateControllerHost {
   getGoalPersistentStatusText(): string | null;
   getTotalPlayerCount(): number | null;
   getOnlineRosterEntries(): OverworldOnlineRosterViewEntry[];
+  loadRoomOwnershipDetails(
+    roomId: string,
+    coordinates: RoomCoordinates,
+  ): Promise<SelectedRoomOwnershipViewData>;
   getScore(): number;
   isCourseComposerLoading(): boolean;
   getZoom(): number;
@@ -60,11 +65,15 @@ interface OverworldHudStateControllerHost {
 
 export class OverworldHudStateController {
   private selectedSummary: WorldRoomSummary | null = null;
+  private readonly selectedOwnershipByRoomId = new Map<string, SelectedRoomOwnershipViewData>();
+  private readonly loadingOwnershipRoomIds = new Set<string>();
 
   constructor(private readonly host: OverworldHudStateControllerHost) {}
 
   reset(): void {
     this.selectedSummary = null;
+    this.selectedOwnershipByRoomId.clear();
+    this.loadingOwnershipRoomIds.clear();
   }
 
   refreshSelectedSummary(): void {
@@ -109,6 +118,7 @@ export class OverworldHudStateController {
     const selectedCoordinates = this.host.getSelectedCoordinates();
     const selectedRoomId = roomIdFromCoordinates(selectedCoordinates);
     const selectedState = this.host.getCellStateAt(selectedCoordinates);
+    this.ensureSelectedOwnershipLoaded(selectedRoomId, selectedCoordinates, selectedState);
     const selectedDraft = this.host.getDraftRoom(selectedRoomId);
     const selectedCourse = this.getSelectedCourseContext();
     const mode = this.host.getMode();
@@ -119,6 +129,8 @@ export class OverworldHudStateController {
       ? this.host.getRoomSnapshotForCoordinates(activeRoomGoalRun.roomCoordinates)
       : null;
     const authState = getAuthDebugState();
+    const currentUserId = authState.user?.id ?? null;
+    const currentWalletAddress = authState.user?.walletAddress?.trim().toLowerCase() ?? null;
 
     this.host.renderHudViewModel(
       buildOverworldHudViewModel({
@@ -132,6 +144,7 @@ export class OverworldHudStateController {
               goalType: this.selectedSummary.goalType ?? null,
             }
           : null,
+        selectedOwnership: this.selectedOwnershipByRoomId.get(selectedRoomId) ?? null,
         selectedDraft,
         selectedPopulation: this.host.getRoomPopulation(selectedCoordinates),
         selectedEditorCount: this.host.getRoomEditorCount(selectedCoordinates),
@@ -153,6 +166,8 @@ export class OverworldHudStateController {
         activeGoalRoom,
         totalPlayerCount: this.host.getTotalPlayerCount(),
         onlineRosterEntries: this.host.getOnlineRosterEntries(),
+        currentUserId,
+        currentWalletAddress,
         score: this.host.getScore(),
         courseBuilderButtonDisabled: this.host.isCourseComposerLoading(),
         zoom: this.host.getZoom(),
@@ -168,6 +183,36 @@ export class OverworldHudStateController {
       }),
     );
     this.host.syncOverlayScale();
+  }
+
+  private ensureSelectedOwnershipLoaded(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    selectedState: SelectedCellState,
+  ): void {
+    if (selectedState !== 'published' && selectedState !== 'draft') {
+      return;
+    }
+
+    if (this.selectedOwnershipByRoomId.has(roomId) || this.loadingOwnershipRoomIds.has(roomId)) {
+      return;
+    }
+
+    this.loadingOwnershipRoomIds.add(roomId);
+    void this.host
+      .loadRoomOwnershipDetails(roomId, coordinates)
+      .then((details) => {
+        this.loadingOwnershipRoomIds.delete(roomId);
+        this.selectedOwnershipByRoomId.set(roomId, details);
+
+        if (roomId === roomIdFromCoordinates(this.host.getSelectedCoordinates())) {
+          this.renderHud();
+        }
+      })
+      .catch((error) => {
+        this.loadingOwnershipRoomIds.delete(roomId);
+        console.warn('Failed to load selected room ownership details', error);
+      });
   }
 
   private isFrontierBuildBlockedByClaimLimit(authState: ReturnType<typeof getAuthDebugState>): boolean {

@@ -74,7 +74,9 @@ export interface OverworldHudViewModel {
   selectedCreatorText: string;
   selectedCreatorUserId: string | null;
   selectedStateText: string;
-  selectedStateTone: 'published' | 'draft' | 'frontier' | 'empty';
+  selectedStateTone: 'published' | 'minted' | 'draft' | 'frontier' | 'empty';
+  selectedStateInfoVisible: boolean;
+  selectedStateInfoText: string;
   selectedMetaText: string;
   selectedMetaTone: 'default' | 'challenge' | 'draft' | 'frontier';
   statusText: string;
@@ -88,7 +90,9 @@ export interface OverworldHudViewModel {
   playCourseButtonHidden: boolean;
   playCourseButtonActive: boolean;
   courseBuilderButtonDisabled: boolean;
+  courseBuilderButtonTitle: string;
   editButtonDisabled: boolean;
+  editButtonTitle: string;
   buildButtonDisabled: boolean;
   roomCoordinatesText: string;
   cursorText: string;
@@ -118,6 +122,8 @@ export class OverworldHudBridge {
   private readonly selectedTitleEl: HTMLElement | null;
   private readonly selectedCreatorEl: HTMLButtonElement | null;
   private readonly selectedStateEl: HTMLElement | null;
+  private readonly selectedStateInfoWrapEl: HTMLElement | null;
+  private readonly selectedStateInfoTooltipEl: HTMLElement | null;
   private readonly selectedMetaEl: HTMLElement | null;
   private readonly statusEl: HTMLElement | null;
   private readonly leaderboardEl: HTMLElement | null;
@@ -317,6 +323,8 @@ export class OverworldHudBridge {
     this.selectedTitleEl = this.doc.getElementById('world-selected-title');
     this.selectedCreatorEl = this.doc.getElementById('world-selected-coords') as HTMLButtonElement | null;
     this.selectedStateEl = this.doc.getElementById('world-selected-state');
+    this.selectedStateInfoWrapEl = this.doc.getElementById('world-selected-state-info-wrap');
+    this.selectedStateInfoTooltipEl = this.doc.getElementById('world-selected-state-info-tooltip');
     this.selectedMetaEl = this.doc.getElementById('world-selected-meta');
     this.statusEl = this.doc.getElementById('world-status');
     this.leaderboardEl = this.doc.getElementById('world-leaderboard');
@@ -392,6 +400,7 @@ export class OverworldHudBridge {
     this.renderSelectedCreator(viewModel.selectedCreatorText, viewModel.selectedCreatorUserId);
     this.setText(this.selectedStateEl, viewModel.selectedStateText);
     this.setStateTone(viewModel.selectedStateTone);
+    this.renderSelectedStateInfo(viewModel.selectedStateInfoVisible, viewModel.selectedStateInfoText);
     this.setText(this.selectedMetaEl, viewModel.selectedMetaText);
     this.setMetaTone(viewModel.selectedMetaTone);
     this.setText(this.statusEl, viewModel.statusText);
@@ -414,7 +423,9 @@ export class OverworldHudBridge {
     this.setActive(this.playCourseButton, viewModel.playCourseButtonActive);
     this.playCourseButton?.classList.toggle('hidden', viewModel.playCourseButtonHidden);
     this.setDisabled(this.courseBuilderButton, viewModel.courseBuilderButtonDisabled);
+    this.setTitle(this.courseBuilderButton, viewModel.courseBuilderButtonTitle);
     this.setDisabled(this.editButton, viewModel.editButtonDisabled);
+    this.setTitle(this.editButton, viewModel.editButtonTitle);
     this.setDisabled(this.buildButton, viewModel.buildButtonDisabled);
     this.renderGoalPanel(viewModel);
   }
@@ -446,6 +457,21 @@ export class OverworldHudBridge {
   private setText(element: HTMLElement | null, text: string): void {
     if (element && element.textContent !== text) {
       element.textContent = text;
+    }
+  }
+
+  private setTitle(element: HTMLElement | null, title: string): void {
+    if (!element) {
+      return;
+    }
+
+    if (title.trim().length === 0) {
+      element.removeAttribute('title');
+      return;
+    }
+
+    if (element.getAttribute('title') !== title) {
+      element.setAttribute('title', title);
     }
   }
 
@@ -569,6 +595,11 @@ export class OverworldHudBridge {
     this.selectedCreatorEl.disabled = !clickable;
     this.selectedCreatorEl.classList.toggle('is-clickable', clickable);
     this.selectedCreatorEl.title = clickable ? `View ${text.replace(/^by\s+/i, '')}'s profile` : '';
+  }
+
+  private renderSelectedStateInfo(visible: boolean, text: string): void {
+    this.selectedStateInfoWrapEl?.classList.toggle('hidden', !visible);
+    this.setText(this.selectedStateInfoTooltipEl, text);
   }
 
   private canShowPlayersOnlinePopover(): boolean {

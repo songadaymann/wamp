@@ -683,7 +683,20 @@
         <div id="world-selected-title" class="world-room-title">Room 0,0</div>
         <div class="world-hud-row">
           <button id="world-selected-coords" class="world-hud-value world-hud-value-button" type="button">0,0</button>
-          <span id="world-selected-state" class="world-state-pill">Empty</span>
+          <div class="world-state-wrap">
+            <span id="world-selected-state" class="world-state-pill">Empty</span>
+            <div id="world-selected-state-info-wrap" class="world-state-info-wrap hidden">
+              <button
+                id="world-selected-state-info"
+                class="world-state-info-button"
+                type="button"
+                aria-label="What minted room means"
+              >
+                (i)
+              </button>
+              <div id="world-selected-state-info-tooltip" class="world-state-info-tooltip"></div>
+            </div>
+          </div>
         </div>
         <div id="world-selected-meta" class="world-hud-meta">No adjacent published room</div>
         <div id="world-jump-row" class="world-hud-row">
