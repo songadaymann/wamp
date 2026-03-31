@@ -14,9 +14,21 @@ export interface DashboardChallengeStats {
   completed: number;
 }
 
+export interface DashboardDailyCountPoint {
+  date: string;
+  count: number;
+}
+
+export interface DashboardHistoryStats {
+  windowDays: number;
+  nonPlayfunSignupsPerDay: DashboardDailyCountPoint[];
+  roomClaimsPerDay: DashboardDailyCountPoint[];
+}
+
 export interface DashboardStatsResponse {
   generatedAt: string;
   users: DashboardUserStats;
   rooms: DashboardRoomStats;
   challenges: DashboardChallengeStats;
+  history: DashboardHistoryStats;
 }
