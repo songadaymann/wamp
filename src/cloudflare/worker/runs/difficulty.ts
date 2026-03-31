@@ -1,10 +1,10 @@
 import {
-  cloneRoomSnapshot,
   createRoomVersionRecord,
   type RoomSnapshot,
   type RoomVersionRecord,
 } from '../../../persistence/roomModel';
 import { buildRoomLeaderboardLineage } from '../../../persistence/roomLeaderboardLineage';
+import { ROOM_GOAL_TYPES, type RoomGoalType } from '../../../goals/roomGoals';
 import type {
   RoomDifficulty,
   RoomDifficultyCounts,
@@ -25,7 +25,12 @@ interface RoomDifficultyAggregateRow {
 
 interface PublishedRoomDiscoveryRow {
   id: string;
-  published_json: string;
+  x: number;
+  y: number;
+  published_title: string | null;
+  published_goal_type: string | null;
+  current_published_version: number;
+  published_at: string;
   canonical_version: number | null;
 }
 
@@ -180,27 +185,40 @@ export async function loadRoomDiscoveryResponse(
 ): Promise<RoomDiscoveryResponse> {
   const publishedRooms = await env.DB.prepare(
     `
-      SELECT id, published_json, canonical_version
+      SELECT
+        rooms.id,
+        rooms.x,
+        rooms.y,
+        rooms.published_title,
+        rooms.published_goal_type,
+        latest.version AS current_published_version,
+        latest.created_at AS published_at,
+        rooms.canonical_version
       FROM rooms
-      WHERE published_json IS NOT NULL
+      INNER JOIN (
+        SELECT room_id, MAX(version) AS version
+        FROM room_versions
+        GROUP BY room_id
+      ) AS latest_index
+        ON latest_index.room_id = rooms.id
+      INNER JOIN room_versions AS latest
+        ON latest.room_id = latest_index.room_id
+       AND latest.version = latest_index.version
+      WHERE rooms.published_json IS NOT NULL
+        AND rooms.published_goal_type IS NOT NULL
     `
   ).all<PublishedRoomDiscoveryRow>();
 
-  const challengeSnapshots = publishedRooms.results
-    .map((row) => ({
-      snapshot: parseStoredSnapshot(row.published_json),
-      canonicalVersion: row.canonical_version,
-    }))
-    .filter((entry) => entry.snapshot.goal !== null);
+  const challengeRooms = publishedRooms.results.map((row) => mapPublishedRoomDiscoveryRow(row));
 
-  if (challengeSnapshots.length === 0) {
+  if (challengeRooms.length === 0) {
     return {
       difficultyFilter,
       results: [],
     };
   }
 
-  const roomIds = challengeSnapshots.map((entry) => entry.snapshot.id);
+  const roomIds = challengeRooms.map((entry) => entry.roomId);
   const versionRows = await env.DB.prepare(
     `
       SELECT
@@ -271,29 +289,33 @@ export async function loadRoomDiscoveryResponse(
     }
   }
 
-  const results = challengeSnapshots
-    .map<RoomDiscoveryEntry>(({ snapshot, canonicalVersion }) => {
-      const versions = versionsByRoomId.get(snapshot.id) ?? [createRoomVersionRecord(snapshot)];
-      const lineage = buildRoomLeaderboardLineage(versions, canonicalVersion, snapshot.version);
-      const lineageEntry = lineage.byVersion.get(snapshot.version) ?? null;
-      const leaderboardFamilyVersions = lineageEntry?.leaderboardFamilyVersions ?? [snapshot.version];
-      const votes = (votesByRoomId.get(snapshot.id) ?? []).filter((vote) =>
+  const results = challengeRooms
+    .map<RoomDiscoveryEntry>((room) => {
+      const versions = versionsByRoomId.get(room.roomId) ?? [];
+      const lineage = buildRoomLeaderboardLineage(
+        versions,
+        room.canonicalRoomVersion,
+        room.roomVersion
+      );
+      const lineageEntry = lineage.byVersion.get(room.roomVersion) ?? null;
+      const leaderboardFamilyVersions = lineageEntry?.leaderboardFamilyVersions ?? [room.roomVersion];
+      const votes = (votesByRoomId.get(room.roomId) ?? []).filter((vote) =>
         leaderboardFamilyVersions.includes(vote.room_version)
       );
       const counts = summarizeDifficultyVotes(dedupeLatestDifficultyVotesByUser(votes));
 
       return {
-        roomId: snapshot.id,
-        roomCoordinates: { ...snapshot.coordinates },
-        roomTitle: snapshot.title,
-        roomVersion: snapshot.version,
-        displayRoomVersion: lineageEntry?.representativeVersion ?? snapshot.version,
+        roomId: room.roomId,
+        roomCoordinates: { ...room.roomCoordinates },
+        roomTitle: room.roomTitle,
+        roomVersion: room.roomVersion,
+        displayRoomVersion: lineageEntry?.representativeVersion ?? room.roomVersion,
         leaderboardSourceVersion: lineageEntry?.leaderboardSourceRepresentativeVersion ?? null,
-        canonicalRoomVersion: canonicalVersion,
-        goalType: snapshot.goal!.type,
+        canonicalRoomVersion: room.canonicalRoomVersion,
+        goalType: room.goalType,
         consensusDifficulty: resolveRoomDifficultyConsensus(counts),
         voteCount: getRoomDifficultyVoteTotal(counts),
-        publishedAt: snapshot.publishedAt ?? null,
+        publishedAt: room.publishedAt,
       };
     })
     .filter((entry) => difficultyFilter === null || entry.consensusDifficulty === difficultyFilter)
@@ -389,9 +411,45 @@ function summarizeDifficultyVotes(rows: RoomDifficultyVoteRow[]): RoomDifficulty
   return counts;
 }
 
+function mapPublishedRoomDiscoveryRow(
+  row: PublishedRoomDiscoveryRow
+): {
+  roomId: string;
+  roomCoordinates: { x: number; y: number };
+  roomTitle: string | null;
+  roomVersion: number;
+  canonicalRoomVersion: number | null;
+  goalType: RoomGoalType;
+  publishedAt: string;
+} {
+  const goalType = parseRoomGoalType(row.published_goal_type);
+  if (!goalType) {
+    throw new HttpError(500, 'Failed to parse published room goal type.');
+  }
+
+  return {
+    roomId: row.id,
+    roomCoordinates: {
+      x: row.x,
+      y: row.y,
+    },
+    roomTitle: row.published_title,
+    roomVersion: row.current_published_version,
+    canonicalRoomVersion: row.canonical_version,
+    goalType,
+    publishedAt: row.published_at,
+  };
+}
+
+function parseRoomGoalType(value: string | null): RoomGoalType | null {
+  return value && ROOM_GOAL_TYPES.includes(value as RoomGoalType)
+    ? (value as RoomGoalType)
+    : null;
+}
+
 function parseStoredSnapshot(raw: string): RoomSnapshot {
   try {
-    return cloneRoomSnapshot(JSON.parse(raw) as RoomSnapshot);
+    return JSON.parse(raw) as RoomSnapshot;
   } catch {
     throw new HttpError(500, 'Failed to parse published room snapshot.');
   }

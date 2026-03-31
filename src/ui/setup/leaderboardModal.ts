@@ -73,7 +73,14 @@ export class LeaderboardModalController {
   private globalLeaderboard: GlobalLeaderboardResponse | null = null;
   private roomContext: OverworldSelectedRoomContext | null = null;
   private loading = false;
+  private roomLoading = false;
+  private roomLoaded = false;
   private discoverLoading = false;
+  private discoverLoaded = false;
+  private courseLoading = false;
+  private courseLoaded = false;
+  private globalLoading = false;
+  private globalLoaded = false;
   private voteSubmitting = false;
   private discoverFilter: RoomDifficulty | null = null;
 
@@ -144,23 +151,19 @@ export class LeaderboardModalController {
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
     this.elements.roomTabButton?.addEventListener('click', () => {
       if (!this.elements.roomTabButton?.disabled) {
-        this.activeTab = 'room';
-        this.render();
+        void this.activateTab('room');
       }
     });
     this.elements.discoverTabButton?.addEventListener('click', () => {
-      this.activeTab = 'discover';
-      this.render();
+      void this.activateTab('discover');
     });
     this.elements.courseTabButton?.addEventListener('click', () => {
       if (!this.elements.courseTabButton?.disabled) {
-        this.activeTab = 'course';
-        this.render();
+        void this.activateTab('course');
       }
     });
     this.elements.globalTabButton?.addEventListener('click', () => {
-      this.activeTab = 'global';
-      this.render();
+      void this.activateTab('global');
     });
     this.elements.versionSelect?.addEventListener('change', () => {
       const nextVersion = Number.parseInt(this.elements.versionSelect?.value ?? '', 10);
@@ -200,7 +203,14 @@ export class LeaderboardModalController {
     this.elements.modal.setAttribute('aria-hidden', 'false');
     this.setError(null);
     this.loading = true;
-    this.discoverLoading = true;
+    this.roomLoading = false;
+    this.roomLoaded = false;
+    this.discoverLoading = false;
+    this.discoverLoaded = false;
+    this.courseLoading = false;
+    this.courseLoaded = false;
+    this.globalLoading = false;
+    this.globalLoaded = false;
     this.voteSubmitting = false;
     this.roomLeaderboard = null;
     this.roomDiscovery = null;
@@ -226,34 +236,55 @@ export class LeaderboardModalController {
     this.setError(null);
   }
 
+  private async activateTab(nextTab: LeaderboardTab): Promise<void> {
+    this.activeTab = nextTab;
+    this.render();
+    await this.ensureTabLoaded(nextTab);
+  }
+
+  private async ensureTabLoaded(tab: LeaderboardTab): Promise<void> {
+    switch (tab) {
+      case 'room':
+        if (!this.roomLoaded && !this.roomLoading) {
+          await this.loadRoomLeaderboard();
+        }
+        return;
+      case 'discover':
+        if (!this.discoverLoaded && !this.discoverLoading) {
+          await this.loadDiscoveryResults();
+        }
+        return;
+      case 'course':
+        if (!this.courseLoaded && !this.courseLoading) {
+          await this.loadCourseLeaderboard();
+        }
+        return;
+      case 'global':
+        if (!this.globalLoaded && !this.globalLoading) {
+          await this.loadGlobalLeaderboard();
+        }
+        return;
+    }
+  }
+
   private async load(): Promise<void> {
     try {
       const scene = getActiveOverworldScene(this.game);
       this.roomContext = scene?.getSelectedRoomContext?.() ?? null;
-      const [globalLeaderboard, roomVersions] = await Promise.all([
-        this.runRepository.loadGlobalLeaderboard(25),
-        this.loadRoomVersions(),
-      ]);
-
-      this.globalLeaderboard = globalLeaderboard;
-      this.roomVersions = roomVersions;
+      this.roomVersions = await this.loadRoomVersions();
       this.activeTab =
         this.roomVersions.length > 0 && this.roomContext?.state === 'published'
           ? 'room'
           : this.roomContext?.courseId
             ? 'course'
             : 'discover';
-      await Promise.all([
-        this.loadRoomLeaderboard(),
-        this.loadCourseLeaderboard(),
-        this.loadDiscoveryResults(),
-      ]);
+      this.render();
+      await this.ensureTabLoaded(this.activeTab);
     } catch (error) {
       console.error('Failed to load leaderboards', error);
       this.setError(error instanceof Error ? error.message : 'Failed to load leaderboards.');
     } finally {
       this.loading = false;
-      this.discoverLoading = false;
       this.render();
     }
   }
@@ -281,10 +312,15 @@ export class LeaderboardModalController {
   private async loadRoomLeaderboard(): Promise<void> {
     if (!this.roomContext || this.roomContext.state !== 'published' || this.selectedVersion === null) {
       this.roomLeaderboard = null;
+      this.roomLoading = false;
+      this.roomLoaded = true;
       this.render();
       return;
     }
 
+    this.roomLoading = true;
+    this.roomLoaded = false;
+    this.render();
     try {
       this.roomLeaderboard = await this.runRepository.loadRoomLeaderboard(
         this.roomContext.roomId,
@@ -298,6 +334,8 @@ export class LeaderboardModalController {
       this.roomLeaderboard = null;
       this.setError(error instanceof Error ? error.message : 'Failed to load room leaderboard.');
     } finally {
+      this.roomLoading = false;
+      this.roomLoaded = true;
       this.render();
     }
   }
@@ -305,10 +343,15 @@ export class LeaderboardModalController {
   private async loadCourseLeaderboard(): Promise<void> {
     if (!this.roomContext?.courseId) {
       this.courseLeaderboard = null;
+      this.courseLoading = false;
+      this.courseLoaded = true;
       this.render();
       return;
     }
 
+    this.courseLoading = true;
+    this.courseLoaded = false;
+    this.render();
     try {
       this.courseLeaderboard = await this.courseRepository.loadCourseLeaderboard(
         this.roomContext.courseId,
@@ -321,12 +364,15 @@ export class LeaderboardModalController {
       this.courseLeaderboard = null;
       this.setError(error instanceof Error ? error.message : 'Failed to load course leaderboard.');
     } finally {
+      this.courseLoading = false;
+      this.courseLoaded = true;
       this.render();
     }
   }
 
   private async loadDiscoveryResults(): Promise<void> {
     this.discoverLoading = true;
+    this.discoverLoaded = false;
     this.render();
     try {
       this.roomDiscovery = await this.runRepository.loadRoomDiscovery(this.discoverFilter, 100);
@@ -337,6 +383,25 @@ export class LeaderboardModalController {
       this.setError(error instanceof Error ? error.message : 'Failed to load room discovery.');
     } finally {
       this.discoverLoading = false;
+      this.discoverLoaded = true;
+      this.render();
+    }
+  }
+
+  private async loadGlobalLeaderboard(): Promise<void> {
+    this.globalLoading = true;
+    this.globalLoaded = false;
+    this.render();
+    try {
+      this.globalLeaderboard = await this.runRepository.loadGlobalLeaderboard(25);
+      this.setError(null);
+    } catch (error) {
+      console.error('Failed to load global leaderboard', error);
+      this.globalLeaderboard = null;
+      this.setError(error instanceof Error ? error.message : 'Failed to load global leaderboard.');
+    } finally {
+      this.globalLoading = false;
+      this.globalLoaded = true;
       this.render();
     }
   }
@@ -354,7 +419,10 @@ export class LeaderboardModalController {
         roomVersion: this.roomLeaderboard.roomVersion,
         difficulty,
       });
-      await Promise.all([this.loadRoomLeaderboard(), this.loadDiscoveryResults()]);
+      await Promise.all([
+        this.loadRoomLeaderboard(),
+        this.discoverLoaded ? this.loadDiscoveryResults() : Promise.resolve(),
+      ]);
       this.setError(null);
     } catch (error) {
       console.error('Failed to submit room difficulty vote', error);
@@ -474,16 +542,18 @@ export class LeaderboardModalController {
       return;
     }
 
+    const roomPending =
+      this.loading || this.roomLoading || (this.activeTab === 'room' && !this.roomLoaded);
     this.elements.roomList.replaceChildren();
-    this.elements.roomSummary.textContent = this.loading
+    this.elements.roomSummary.textContent = roomPending
       ? 'Loading room leaderboard...'
       : this.roomLeaderboard
         ? `${this.roomLeaderboard.entries.length} ranked run${this.roomLeaderboard.entries.length === 1 ? '' : 's'} · ${this.roomLeaderboard.rankingMode === 'time' ? 'fastest time wins' : 'highest score wins'}`
         : 'No published room leaderboard available.';
 
     const viewer = this.roomLeaderboard?.viewerBest ?? null;
-    this.elements.roomViewer.classList.toggle('hidden', viewer === null);
-    if (viewer) {
+    this.elements.roomViewer.classList.toggle('hidden', roomPending || viewer === null);
+    if (!roomPending && viewer) {
       this.elements.roomViewer.textContent =
         `You: #${this.roomLeaderboard?.viewerRank ?? viewer.rank} · ${this.formatRoomMetric(viewer, this.roomLeaderboard?.rankingMode ?? 'time')} · ${viewer.deaths} deaths`;
     } else {
@@ -492,13 +562,15 @@ export class LeaderboardModalController {
 
     const difficulty = this.roomLeaderboard?.difficulty ?? null;
     const consensusText =
-      difficulty === null || difficulty.totalVotes === 0
-        ? 'No difficulty ratings yet.'
-        : `Consensus: ${
-            difficulty.consensus ? ROOM_DIFFICULTY_LABELS[difficulty.consensus] : 'Unrated'
-          } · ${difficulty.totalVotes} vote${difficulty.totalVotes === 1 ? '' : 's'}`;
+      roomPending
+        ? 'Loading difficulty ratings...'
+        : difficulty === null || difficulty.totalVotes === 0
+          ? 'No difficulty ratings yet.'
+          : `Consensus: ${
+              difficulty.consensus ? ROOM_DIFFICULTY_LABELS[difficulty.consensus] : 'Unrated'
+            } · ${difficulty.totalVotes} vote${difficulty.totalVotes === 1 ? '' : 's'}`;
     this.elements.roomDifficultySummary.textContent = consensusText;
-    this.elements.roomDifficultyStatus.textContent = this.getDifficultyStatusText();
+    this.elements.roomDifficultyStatus.textContent = roomPending ? '' : this.getDifficultyStatusText();
     for (const button of this.elements.roomDifficultyButtons) {
       const difficultyValue = this.parseDifficultyButtonValue(button.dataset.roomDifficulty);
       if (!difficultyValue) {
@@ -509,7 +581,15 @@ export class LeaderboardModalController {
       const count = difficulty?.counts[difficultyValue] ?? 0;
       button.textContent = `${ROOM_DIFFICULTY_LABELS[difficultyValue]} · ${count}`;
       button.classList.toggle('active', difficulty?.viewerVote === difficultyValue);
-      button.disabled = this.voteSubmitting || !difficulty?.viewerCanVote;
+      button.disabled = roomPending || this.voteSubmitting || !difficulty?.viewerCanVote;
+    }
+
+    if (roomPending) {
+      const loading = this.doc.createElement('div');
+      loading.className = 'leaderboard-empty';
+      loading.textContent = 'Loading room leaderboard...';
+      this.elements.roomList.appendChild(loading);
+      return;
     }
 
     if (!this.roomLeaderboard || this.roomLeaderboard.entries.length === 0) {
@@ -534,13 +614,15 @@ export class LeaderboardModalController {
       return;
     }
 
+    const discoverPending =
+      this.loading || this.discoverLoading || (this.activeTab === 'discover' && !this.discoverLoaded);
     this.elements.discoverList.replaceChildren();
     for (const button of this.elements.discoverFilterButtons) {
       const difficulty = this.parseDifficultyButtonValue(button.dataset.discoverDifficulty);
       button.classList.toggle('active', difficulty === this.discoverFilter);
     }
 
-    if (this.discoverLoading) {
+    if (discoverPending) {
       this.elements.discoverSummary.textContent = 'Loading room discovery...';
       return;
     }
@@ -572,20 +654,30 @@ export class LeaderboardModalController {
       return;
     }
 
+    const coursePending =
+      this.loading || this.courseLoading || (this.activeTab === 'course' && !this.courseLoaded);
     this.elements.courseList.replaceChildren();
-    this.elements.courseSummary.textContent = this.loading
+    this.elements.courseSummary.textContent = coursePending
       ? 'Loading course leaderboard...'
       : this.courseLeaderboard
         ? `${this.courseLeaderboard.entries.length} ranked run${this.courseLeaderboard.entries.length === 1 ? '' : 's'} · ${this.courseLeaderboard.rankingMode === 'time' ? 'fastest time wins' : 'highest score wins'}`
         : 'No published course leaderboard available.';
 
     const viewer = this.courseLeaderboard?.viewerBest ?? null;
-    this.elements.courseViewer.classList.toggle('hidden', viewer === null);
-    if (viewer && this.courseLeaderboard) {
+    this.elements.courseViewer.classList.toggle('hidden', coursePending || viewer === null);
+    if (!coursePending && viewer && this.courseLeaderboard) {
       this.elements.courseViewer.textContent =
         `You: #${this.courseLeaderboard.viewerRank ?? viewer.rank} · ${this.formatCourseMetric(viewer, this.courseLeaderboard.rankingMode)} · ${viewer.deaths} deaths`;
     } else {
       this.elements.courseViewer.textContent = '';
+    }
+
+    if (coursePending) {
+      const loading = this.doc.createElement('div');
+      loading.className = 'leaderboard-empty';
+      loading.textContent = 'Loading course leaderboard...';
+      this.elements.courseList.appendChild(loading);
+      return;
     }
 
     if (!this.courseLeaderboard || this.courseLeaderboard.entries.length === 0) {
@@ -610,18 +702,28 @@ export class LeaderboardModalController {
       return;
     }
 
+    const globalPending =
+      this.loading || this.globalLoading || (this.activeTab === 'global' && !this.globalLoaded);
     this.elements.globalList.replaceChildren();
-    this.elements.globalSummary.textContent = this.loading
+    this.elements.globalSummary.textContent = globalPending
       ? 'Loading global leaderboard...'
       : 'Points for publishing rooms and finishing challenges.';
 
     const viewer = this.globalLeaderboard?.viewerEntry ?? null;
-    this.elements.globalViewer.classList.toggle('hidden', viewer === null);
-    if (viewer) {
+    this.elements.globalViewer.classList.toggle('hidden', globalPending || viewer === null);
+    if (!globalPending && viewer) {
       this.elements.globalViewer.textContent =
         `You: #${viewer.rank} · ${viewer.totalPoints} pts · ${viewer.completedRuns} clears · ${viewer.totalRoomsPublished} rooms`;
     } else {
       this.elements.globalViewer.textContent = '';
+    }
+
+    if (globalPending) {
+      const loading = this.doc.createElement('div');
+      loading.className = 'leaderboard-empty';
+      loading.textContent = 'Loading global leaderboard...';
+      this.elements.globalList.appendChild(loading);
+      return;
     }
 
     if (!this.globalLeaderboard || this.globalLeaderboard.entries.length === 0) {
