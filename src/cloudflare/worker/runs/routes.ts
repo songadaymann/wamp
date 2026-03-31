@@ -35,6 +35,10 @@ import {
   loadPlayfunUserLink,
 } from '../playfun/service';
 import {
+  assertWampLeaderboardWriteAllowed,
+  sqlIsNotPlayfunLinkedUser,
+} from '../playfun/leaderboardIsolation';
+import {
   awardRoomCreatorCompletionPoints,
   awardRunFinalizePoints,
   clampRunMetricsToSnapshot,
@@ -63,6 +67,7 @@ export async function handleRunStart(request: Request, env: Env): Promise<Respon
     'submit leaderboard runs',
     'runs:write'
   );
+  await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const body = await parseRunStartBody(request);
   const record = await loadRoomRecord(env, body.roomId, body.roomCoordinates, auth.user.id);
   const snapshot = resolveRoomSnapshotForVersion(record, body.roomVersion);
@@ -150,6 +155,7 @@ export async function handleRunFinish(
     'submit leaderboard runs',
     'runs:write'
   );
+  await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const body = await parseRunFinishBody(request);
   const existing = await loadRoomRunByAttemptId(env, attemptId);
 
@@ -591,6 +597,7 @@ export async function loadCompletedRoomRuns(
       WHERE room_id = ?
         AND room_version = ?
         AND result = 'completed'
+        AND ${sqlIsNotPlayfunLinkedUser('room_runs.user_id')}
     `
   )
     .bind(roomId, roomVersion)
@@ -864,6 +871,7 @@ export async function buildGlobalLeaderboardResponse(
         fastest_clear_ms,
         updated_at
       FROM user_stats
+      WHERE ${sqlIsNotPlayfunLinkedUser('user_stats.user_id')}
     `
   ).all<UserStatsRow>();
 

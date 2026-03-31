@@ -1,5 +1,6 @@
 import { getAuthDebugState } from '../../auth/client';
 import { createCourseRepository } from '../../courses/courseRepository';
+import { isCourseApiError } from '../../courses/courseRepository';
 import { getActiveCourseDraftSessionRoomOverrides } from '../../courses/draftSession';
 import {
   cloneCourseSnapshot,
@@ -19,6 +20,10 @@ import {
   createActiveCourseRunState,
   type ActiveCourseRunState,
 } from './courseRuns';
+import {
+  isPlayfunSurfaceAuth,
+  isWampLeaderboardEligibleAuth,
+} from '../../playfun/leaderboardPolicy';
 
 export type CoursePlaybackRoomSourceMode = 'published' | 'draftPreview';
 
@@ -107,7 +112,18 @@ export class OverworldCoursePlaybackController {
   }
 
   createCourseRunState(course: CourseSnapshot): ActiveCourseRunState {
-    const leaderboardEligible = course.status === 'published' && getAuthDebugState().authenticated;
+    const authState = getAuthDebugState();
+    const leaderboardEligible =
+      course.status === 'published' &&
+      isWampLeaderboardEligibleAuth(authState.authenticated, authState.source ?? null);
+    const localOnlyMessage =
+      course.status !== 'published'
+        ? 'Draft course run stays local.'
+        : isPlayfunSurfaceAuth(authState.source ?? null)
+          ? 'Play.fun course runs stay local on WAMP.'
+          : authState.authenticated
+            ? 'Ranked course submission unavailable.'
+            : 'Sign in to rank course runs.';
     return createActiveCourseRunState({
       course: cloneCourseSnapshot(course),
       returnCoordinates: { ...this.host.getSelectedCoordinates() },
@@ -116,6 +132,7 @@ export class OverworldCoursePlaybackController {
           ? this.countCourseObjectsByCategory(course, 'enemy')
           : null,
       leaderboardEligible,
+      localOnlyMessage,
     });
   }
 
@@ -143,9 +160,14 @@ export class OverworldCoursePlaybackController {
         return;
       }
 
-      activeCourseRun.submissionState = 'error';
-      activeCourseRun.submissionMessage =
-        error instanceof Error ? error.message : 'Ranked course run unavailable.';
+      if (isCourseApiError(error) && error.status === 403) {
+        activeCourseRun.submissionState = 'local-only';
+        activeCourseRun.submissionMessage = error.message;
+      } else {
+        activeCourseRun.submissionState = 'error';
+        activeCourseRun.submissionMessage =
+          error instanceof Error ? error.message : 'Ranked course run unavailable.';
+      }
       this.host.renderHud();
     }
   }

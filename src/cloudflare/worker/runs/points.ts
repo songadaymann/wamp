@@ -5,6 +5,7 @@ import type { RoomSnapshot } from '../../../persistence/roomModel';
 import type { RoomRunRecord, UserStatsRecord } from '../../../runs/model';
 import { compareLeaderboardEntries } from '../../../runs/scoring';
 import type { CourseRunRow, Env, PointEventRow, RoomRunRow, UserRow, UserStatsRow } from '../core/types';
+import { isPlayfunLinkedUser } from '../playfun/leaderboardIsolation';
 
 export type PointEventType =
   | 'room_first_publish'
@@ -294,6 +295,18 @@ export async function upsertUserStats(env: Env, userId: string): Promise<void> {
     .first<UserRow>();
 
   if (!user) {
+    return;
+  }
+
+  if (await isPlayfunLinkedUser(env, userId)) {
+    await env.DB.batch([
+      env.DB.prepare(
+        `
+          DELETE FROM user_stats
+          WHERE user_id = ?
+        `
+      ).bind(userId),
+    ]);
     return;
   }
 

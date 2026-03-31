@@ -35,6 +35,7 @@ export interface CreateActiveCourseRunStateOptions {
   returnCoordinates: RoomCoordinates;
   leaderboardEligible: boolean;
   enemyTarget: number | null;
+  localOnlyMessage?: string | null;
 }
 
 export interface CourseRunMutationResult {
@@ -64,7 +65,13 @@ const NOOP_MUTATION_RESULT: CourseRunMutationResult = {
 export function createActiveCourseRunState(
   options: CreateActiveCourseRunStateOptions,
 ): ActiveCourseRunState {
-  const { course, returnCoordinates, leaderboardEligible, enemyTarget } = options;
+  const {
+    course,
+    returnCoordinates,
+    leaderboardEligible,
+    enemyTarget,
+    localOnlyMessage,
+  } = options;
   return {
     course,
     returnCoordinates: { ...returnCoordinates },
@@ -84,7 +91,7 @@ export function createActiveCourseRunState(
     submissionState: leaderboardEligible ? 'starting' : 'local-only',
     submissionMessage: leaderboardEligible
       ? 'Starting ranked course run...'
-      : 'Course run stays local.',
+      : localOnlyMessage ?? 'Course run stays local.',
     pendingResult: null,
     submittedScore: null,
     leaderboardEligible,

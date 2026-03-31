@@ -57,6 +57,15 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Play.fun leaderboard isolation on March 31, 2026:
+  - main WAMP leaderboard participation is now local-only for Play.fun-linked accounts
+  - worker read paths exclude Play.fun-linked users from room/course/global leaderboard and `user_stats` reads
+  - worker run start/finish handlers reject Play.fun-linked leaderboard submissions instead of writing `room_runs` / `course_runs`
+  - overworld goal/course run UX now surfaces Play.fun-specific local-only status copy
+  - added admin cleanup route plus `scripts/cleanup_playfun_leaderboards.mjs` for dry-run/apply removal of Play.fun leaderboard pollution and `user_stats` rebuilds
+  - verification:
+    - `npm run build` passed
+
 - Dashboard chart readability pass on March 31, 2026:
   - user wanted the public dashboard history charts to expose y-axis values and support hovering bars to see the exact daily count
   - implementation:

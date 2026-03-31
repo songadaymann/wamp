@@ -405,6 +405,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       runRepository: createRunRepository(),
       getScore: () => this.score,
       getAuthenticated: () => getAuthDebugState().authenticated,
+      getAuthSource: () => getAuthDebugState().source ?? null,
       countRoomObjectsByCategory: (room, category) =>
         this.countRoomObjectsByCategory(room, category),
     });
