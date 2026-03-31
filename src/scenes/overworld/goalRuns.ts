@@ -1,6 +1,10 @@
 import type { GameObjectConfig } from '../../config';
 import { cloneRoomGoal, ROOM_GOAL_LABELS, type GoalMarkerPoint } from '../../goals/roomGoals';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
+import { isPlayfunLeaderboardExcludedDisplayName } from '../../playfun/identity';
+import {
+  isWampLeaderboardEligibleAuth,
+} from '../../playfun/leaderboardPolicy';
 import type {
   GlobalLeaderboardResponse,
   RoomLeaderboardResponse,
@@ -71,6 +75,7 @@ interface OverworldGoalRunControllerOptions {
   runRepository: RunRepository;
   getScore: () => number;
   getAuthenticated: () => boolean;
+  getAuthDisplayName: () => string | null;
   countRoomObjectsByCategory: (
     room: RoomSnapshot,
     category: GameObjectConfig['category']
@@ -147,7 +152,13 @@ export class OverworldGoalRunController {
     }
 
     this.clearRunForRoomExit();
-    const leaderboardEligible = room.status === 'published' && this.options.getAuthenticated();
+    const leaderboardEligible =
+      room.status === 'published' &&
+      isWampLeaderboardEligibleAuth(
+        this.options.getAuthenticated(),
+        null,
+        this.options.getAuthDisplayName()
+      );
     const qualificationState = goalRunEntryStartsQualifiedAttempt(entryContext)
       ? 'qualified'
       : 'practice';
@@ -695,6 +706,9 @@ export class OverworldGoalRunController {
       if (isRunApiError(error) && error.status === 401) {
         runState.submissionState = 'local-only';
         runState.submissionMessage = 'Sign in to submit ranked runs.';
+      } else if (isRunApiError(error) && error.status === 403) {
+        runState.submissionState = 'local-only';
+        runState.submissionMessage = error.message;
       } else {
         runState.submissionState = 'error';
         runState.submissionMessage = 'Ranked run start failed.';
@@ -815,6 +829,10 @@ export class OverworldGoalRunController {
       return 'Practice run. Reach spawn to start ranked attempt.';
     }
 
+    if (isPlayfunLeaderboardExcludedDisplayName(this.options.getAuthDisplayName())) {
+      return 'Practice run. Reach spawn to start a local Play.fun attempt.';
+    }
+
     return roomStatus === 'draft'
       ? 'Practice run. Reach spawn to start playtest.'
       : 'Practice run. Reach spawn to start challenge.';
@@ -826,6 +844,10 @@ export class OverworldGoalRunController {
   ): string {
     if (leaderboardEligible) {
       return 'Starting ranked run...';
+    }
+
+    if (isPlayfunLeaderboardExcludedDisplayName(this.options.getAuthDisplayName())) {
+      return 'Play.fun runs stay local on WAMP.';
     }
 
     return roomStatus !== 'published'

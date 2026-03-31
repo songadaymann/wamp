@@ -81,6 +81,7 @@ async function loadDashboardStats(env: Env): Promise<DashboardStatsResponse> {
               WHERE result = 'completed'
                 AND elapsed_ms IS NOT NULL
                 AND elapsed_ms >= ?
+                AND room_runs.user_display_name NOT LIKE 'playfun-%'
               GROUP BY user_id, room_id, room_version
             ) AS distinct_completed_room_runs
           ) AS completed_room_challenges

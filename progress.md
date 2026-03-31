@@ -68,6 +68,20 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - added mobile `Say` button wiring plus room-chat composer styles in the world HUD
   - verification:
     - safety deployment manual test confirmed same-room signed-in chat works after updating both the Worker frontend and live PartyKit server
+- Play.fun leaderboard isolation on March 31, 2026:
+  - main WAMP leaderboard participation is now local-only for Play.fun-linked accounts
+  - worker read paths exclude Play.fun-linked users from room/course/global leaderboard and `user_stats` reads
+  - worker run start/finish handlers reject Play.fun-linked leaderboard submissions instead of writing `room_runs` / `course_runs`
+  - overworld goal/course run UX now surfaces Play.fun-specific local-only status copy
+  - added admin cleanup route plus `scripts/cleanup_playfun_leaderboards.mjs` for dry-run/apply removal of Play.fun leaderboard pollution and `user_stats` rebuilds
+  - verification:
+    - `npm run build` passed
+
+- Play.fun leaderboard hardening follow-up on March 31, 2026:
+  - narrowed the exclusion rule from `playfun_user_links` to burner-style `playfun-%` display names after confirming linked real-user accounts should not be swept
+  - worker room/course/global leaderboard reads now exclude stored `playfun-%` run/stat display names instead of every linked account
+  - creator-completion rewards now skip finishers whose persisted user display name starts with `playfun-`
+  - admin cleanup route/script now targets burner-style `playfun-%` data instead of every linked Play.fun account
 
 - Dashboard chart readability pass on March 31, 2026:
   - user wanted the public dashboard history charts to expose y-axis values and support hovering bars to see the exact daily count

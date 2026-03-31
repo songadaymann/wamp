@@ -44,6 +44,10 @@ import {
   loadPlayfunUserLink,
 } from '../playfun/service';
 import {
+  assertWampLeaderboardWriteAllowed,
+  sqlDoesNotHavePlayfunDisplayNamePrefix,
+} from '../playfun/leaderboardIsolation';
+import {
   awardCoursePublishPoints,
   awardCourseCreatorCompletionPoints,
   awardRunFinalizePoints,
@@ -199,6 +203,7 @@ export async function handleCourseRunStart(
     'submit course runs',
     'runs:write'
   );
+  await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const body = await parseCourseRunStartBody(request, courseId);
   const snapshot = await resolvePublishedCourseVersion(env, body.courseId, body.courseVersion);
   if (!snapshot.goal) {
@@ -272,6 +277,7 @@ export async function handleCourseRunFinish(
     'submit course runs',
     'runs:write'
   );
+  await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const body = await parseCourseRunFinishBody(request);
   const existing = await loadCourseRunByAttemptId(env, attemptId);
   if (!existing) {
@@ -645,6 +651,7 @@ async function loadCompletedCourseRuns(
       WHERE course_id = ?
         AND course_version = ?
         AND result = 'completed'
+        AND ${sqlDoesNotHavePlayfunDisplayNamePrefix('course_runs.user_display_name')}
     `
   )
     .bind(courseId, courseVersion)
