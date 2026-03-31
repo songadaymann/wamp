@@ -9,6 +9,11 @@ function parseCoordinate(value: string | null): number | null {
   return Number.isInteger(parsed) ? parsed : null;
 }
 
+export function hasFocusedCoordinatesInUrl(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  return parseCoordinate(params.get('x')) !== null && parseCoordinate(params.get('y')) !== null;
+}
+
 export function getFocusedCoordinatesFromUrl(): RoomCoordinates {
   const params = new URLSearchParams(window.location.search);
   const x = parseCoordinate(params.get('x'));

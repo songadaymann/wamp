@@ -41,7 +41,11 @@ import {
   ROOM_WIDTH,
   TILE_SIZE,
 } from '../config';
-import { getFocusedCoordinatesFromUrl, setFocusedCoordinatesInUrl } from '../navigation/worldNavigation';
+import {
+  getFocusedCoordinatesFromUrl,
+  hasFocusedCoordinatesInUrl,
+  setFocusedCoordinatesInUrl,
+} from '../navigation/worldNavigation';
 import {
   cloneRoomSnapshot,
   DEFAULT_ROOM_COORDINATES,
@@ -1503,6 +1507,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.WAKE, this.handleWake, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
 
+    const deepLinkedInitialFocus =
+      !data?.centerCoordinates && !data?.roomCoordinates && hasFocusedCoordinatesInUrl();
     const initialFocus =
       data?.centerCoordinates ?? data?.roomCoordinates ?? getFocusedCoordinatesFromUrl();
     this.windowController.applySceneData({
@@ -1516,6 +1522,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       forceRefreshAround: data?.forceRefreshAround ?? false,
       statusMessage: data?.statusMessage ?? null,
     });
+    if (deepLinkedInitialFocus && (data?.mode ?? 'browse') === 'browse') {
+      const fitZoom = this.getFitZoomForRoom();
+      this.inspectZoom = fitZoom;
+      this.browseInspectZoom = fitZoom;
+    }
 
     void this.windowController.refreshAround(this.windowCenterCoordinates, {
       forceChunkReload: data?.forceRefreshAround ?? false,
