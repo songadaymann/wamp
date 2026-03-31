@@ -57,6 +57,14 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Adjoining-room audio merge cleanup on April 3, 2026:
+  - confirmed current `main` already contained the core adjoining-room audio bleed path
+  - applied the later low-pass tuning values from the ready audio branch so adjacent-room cues now use:
+    - primary low-pass: `1500 Hz`
+    - echo tails: `1350 Hz` then `1200 Hz`
+  - verification:
+    - `npm run build` passed in `/private/tmp/wamp-lava-collision-fix` after linking that worktree to the shared dependency install
+
 - Brick box editor/runtime pass on April 3, 2026:
   - fixed `brick_box` to use the intact frame as its default/editor representation instead of a mid-break animation frame
   - added object placement helpers in `src/config.ts` so opted-in objects can anchor to their preview bounds rather than the full spritesheet frame
