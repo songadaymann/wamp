@@ -2225,14 +2225,8 @@ export class OverworldPlayScene extends Phaser.Scene {
         ? this.coursePlaybackController.getCourseStartRoomRef(activeCourseRun.course)
         : null;
 
-    if (
-      courseStartRoom &&
-      (
-        courseStartRoom.coordinates.x !== this.currentRoomCoordinates.x ||
-        courseStartRoom.coordinates.y !== this.currentRoomCoordinates.y
-      )
-    ) {
-      this.respawnPlayerToCourseStartRoom(courseStartRoom.coordinates);
+    if (courseStartRoom) {
+      this.respawnPlayerToCourseStartRoom(courseStartRoom);
       return;
     }
 
@@ -2249,14 +2243,33 @@ export class OverworldPlayScene extends Phaser.Scene {
     playSfx('respawn');
   }
 
-  private respawnPlayerToCourseStartRoom(coordinates: RoomCoordinates): void {
-    this.destroyPlayer();
+  private respawnPlayerToCourseStartRoom(courseStartRoom: CourseRoomRef): void {
+    const coordinates = courseStartRoom.coordinates;
+    const startRoom = this.getRoomSnapshotForCoordinates(coordinates);
+    const entities = this.getPlayerEntities();
+
+    this.combatController.clearAttackAnimation();
+    this.externalLaunchGraceUntil = 0;
+    this.movementController.handleRespawnReset();
+    this.combatController.destroyProjectiles();
     this.currentRoomCoordinates = { ...coordinates };
     this.selectedCoordinates = { ...coordinates };
     this.updateSelectedSummary();
     this.shouldCenterCamera = true;
-    this.shouldRespawnPlayer = true;
     setFocusedCoordinatesInUrl(coordinates);
+
+    if (startRoom && entities) {
+      this.playerLifecycleController.respawnPlayerToRoom(startRoom, entities);
+      this.playerPresentationController.handleRespawned();
+      this.refreshAroundIfNeededOrFromCache(coordinates, {
+        refreshLeaderboards: false,
+      });
+      playSfx('respawn');
+      return;
+    }
+
+    this.destroyPlayer();
+    this.shouldRespawnPlayer = true;
     void this.refreshAround(coordinates, { forceChunkReload: true });
     playSfx('respawn');
   }
