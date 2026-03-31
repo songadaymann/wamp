@@ -9,6 +9,12 @@ type CueConfig = {
   fadeOutMs?: number;
 };
 
+export type SfxPlaybackOptions = {
+  volumeMultiplier?: number;
+  playbackRateMultiplier?: number;
+  ignoreCooldown?: boolean;
+};
+
 export type SfxCue =
   | 'ui-click'
   | 'ui-hover'
@@ -305,7 +311,7 @@ export class SfxController {
     };
   }
 
-  play(cue: SfxCue): void {
+  play(cue: SfxCue, playbackOptions?: SfxPlaybackOptions): void {
     const config = SFX_CUES[cue];
     if (!config) {
       this.record(cue, 'missing');
@@ -313,13 +319,16 @@ export class SfxController {
     }
 
     const now = performance.now();
-    const cooldownMs = config.cooldownMs ?? 0;
-    const lastPlayedAt = this.lastPlayedAt.get(cue) ?? -Infinity;
-    if (now - lastPlayedAt < cooldownMs) {
-      this.record(cue, 'cooldown');
-      return;
+    const ignoreCooldown = playbackOptions?.ignoreCooldown ?? false;
+    if (!ignoreCooldown) {
+      const cooldownMs = config.cooldownMs ?? 0;
+      const lastPlayedAt = this.lastPlayedAt.get(cue) ?? -Infinity;
+      if (now - lastPlayedAt < cooldownMs) {
+        this.record(cue, 'cooldown');
+        return;
+      }
+      this.lastPlayedAt.set(cue, now);
     }
-    this.lastPlayedAt.set(cue, now);
 
     if (this.muted) {
       this.record(cue, 'blocked');
@@ -338,9 +347,17 @@ export class SfxController {
     }
 
     const player = baseAudio.cloneNode() as HTMLAudioElement;
-    const baseVolume = PhaserClamp(config.volume, 0, 1);
+    const baseVolume = PhaserClamp(
+      config.volume * Math.max(0, playbackOptions?.volumeMultiplier ?? 1),
+      0,
+      1
+    );
     player.volume = baseVolume;
-    player.playbackRate = config.playbackRate ?? 1;
+    player.playbackRate = PhaserClamp(
+      (config.playbackRate ?? 1) * Math.max(0.05, playbackOptions?.playbackRateMultiplier ?? 1),
+      0.05,
+      4
+    );
     player.currentTime = 0;
     player.loop = Boolean(config.loop);
 
@@ -456,8 +473,8 @@ export function initSfx(doc: Document = document, windowObj: Window = window): v
   globalSfxController.init(windowObj);
 }
 
-export function playSfx(cue: SfxCue): void {
-  globalSfxController.play(cue);
+export function playSfx(cue: SfxCue, playbackOptions?: SfxPlaybackOptions): void {
+  globalSfxController.play(cue, playbackOptions);
 }
 
 export function stopSfx(cue: SfxCue): void {

@@ -131,6 +131,7 @@ import {
 import {
   OverworldRoomChatController,
 } from './overworld/roomChat';
+import { OverworldRoomAudioController } from './overworld/roomAudio';
 import {
   OverworldCoursePlaybackController,
 } from './overworld/coursePlayback';
@@ -354,6 +355,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private heldKeyCount = 0;
   private score = 0;
   private readonly goalRunController: OverworldGoalRunController;
+  private readonly roomAudioController: OverworldRoomAudioController;
   private readonly flowController: OverworldSceneFlowController;
   private readonly inspectInputController: OverworldInspectInputController;
   private readonly gridOverlayController: OverworldGridOverlayController;
@@ -417,6 +419,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       getAuthDisplayName: () => getAuthDebugState().user?.displayName ?? null,
       countRoomObjectsByCategory: (room, category) =>
         this.countRoomObjectsByCategory(room, category),
+    });
+    this.roomAudioController = new OverworldRoomAudioController({
+      scene: this,
+      getMode: () => this.mode,
+      getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
     });
     this.liveObjectController = new OverworldLiveObjectController({
       scene: this,
@@ -487,11 +494,34 @@ export class OverworldPlayScene extends Phaser.Scene {
       handlePlayerDeath: (reason) => this.sessionResetController.handlePlayerDeath(reason),
       onEnemyDefeated: (roomId, enemyName) => this.handleEnemyDefeated(roomId, enemyName),
       onCollectibleCollected: (roomId) => this.handleCollectibleCollected(roomId),
-      playEnemyKillFx: (x, y) => this.fxController?.playEnemyKillFx(x, y),
-      playCollectFx: (x, y, scoreDelta, cue) =>
-        this.fxController?.playCollectFx(x, y, scoreDelta, cue),
-      playBounceFx: (x, y) => this.fxController?.playBounceFx(x, y),
-      playBombExplosionFx: (x, y) => this.fxController?.playBombExplosionFx(x, y),
+      playRoomSfx: (cue, roomCoordinates) =>
+        this.roomAudioController.playRoomSfx(cue, roomCoordinates),
+      playEnemyKillFx: (x, y, roomCoordinates) =>
+        this.fxController?.playEnemyKillFx(
+          x,
+          y,
+          this.roomAudioController.getPlaybackOptionsForRoom(roomCoordinates)
+        ),
+      playCollectFx: (x, y, scoreDelta, roomCoordinates, cue) =>
+        this.fxController?.playCollectFx(
+          x,
+          y,
+          scoreDelta,
+          cue,
+          this.roomAudioController.getPlaybackOptionsForRoom(roomCoordinates)
+        ),
+      playBounceFx: (x, y, roomCoordinates) =>
+        this.fxController?.playBounceFx(
+          x,
+          y,
+          this.roomAudioController.getPlaybackOptionsForRoom(roomCoordinates)
+        ),
+      playBombExplosionFx: (x, y, roomCoordinates) =>
+        this.fxController?.playBombExplosionFx(
+          x,
+          y,
+          this.roomAudioController.getPlaybackOptionsForRoom(roomCoordinates)
+        ),
     });
     this.worldStreamingController = new OverworldWorldStreamingController({
       scene: this,
@@ -2650,6 +2680,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private handleShutdown = (): void => {
     this.presenceController.destroy();
     this.roomChatController.destroy();
+    this.roomAudioController.destroy();
     window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
     window.removeEventListener(PLAYFUN_GAME_PAUSE_EVENT, this.handlePlayfunGamePause);
     window.removeEventListener(PLAYFUN_GAME_RESUME_EVENT, this.handlePlayfunGameResume);
@@ -2690,6 +2721,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     const streamingMetrics = this.worldStreamingController.getDebugMetrics();
     const presenceDebug = this.presenceController.getDebugSnapshot();
     const roomChatDebug = this.roomChatController.getDebugSnapshot();
+    const roomAudioDebug = this.roomAudioController.getDebugSnapshot();
     const currentLoadedRoom = this.loadedFullRoomsById.get(
       roomIdFromCoordinates(this.currentRoomCoordinates)
     ) ?? null;
@@ -2814,6 +2846,7 @@ export class OverworldPlayScene extends Phaser.Scene {
             }
           : null,
       },
+      roomAudio: roomAudioDebug,
       zoom: Number(camera.zoom.toFixed(3)),
       camera: {
         scrollX: Math.round(camera.scrollX),
