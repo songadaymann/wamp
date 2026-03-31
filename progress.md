@@ -66,6 +66,12 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - verification:
     - `npm run build` passed
 
+- Play.fun leaderboard hardening follow-up on March 31, 2026:
+  - narrowed the exclusion rule from `playfun_user_links` to burner-style `playfun-%` display names after confirming linked real-user accounts should not be swept
+  - worker room/course/global leaderboard reads now exclude stored `playfun-%` run/stat display names instead of every linked account
+  - creator-completion rewards now skip finishers whose persisted user display name starts with `playfun-`
+  - admin cleanup route/script now targets burner-style `playfun-%` data instead of every linked Play.fun account
+
 - Dashboard chart readability pass on March 31, 2026:
   - user wanted the public dashboard history charts to expose y-axis values and support hovering bars to see the exact daily count
   - implementation:

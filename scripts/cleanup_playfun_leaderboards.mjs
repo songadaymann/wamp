@@ -63,7 +63,7 @@ async function main() {
       {
         targetEnv,
         apply: args.apply,
-        linkedUserCount: payload.linkedUserCount ?? null,
+        burnerUserCount: payload.burnerUserCount ?? null,
         roomRunCount: payload.roomRunCount ?? null,
         courseRunCount: payload.courseRunCount ?? null,
         creatorPointEventCount: payload.creatorPointEventCount ?? null,

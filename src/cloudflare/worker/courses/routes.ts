@@ -45,7 +45,7 @@ import {
 } from '../playfun/service';
 import {
   assertWampLeaderboardWriteAllowed,
-  sqlIsNotPlayfunLinkedUser,
+  sqlDoesNotHavePlayfunDisplayNamePrefix,
 } from '../playfun/leaderboardIsolation';
 import {
   awardCoursePublishPoints,
@@ -651,7 +651,7 @@ async function loadCompletedCourseRuns(
       WHERE course_id = ?
         AND course_version = ?
         AND result = 'completed'
-        AND ${sqlIsNotPlayfunLinkedUser('course_runs.user_id')}
+        AND ${sqlDoesNotHavePlayfunDisplayNamePrefix('course_runs.user_display_name')}
     `
   )
     .bind(courseId, courseVersion)

@@ -1,10 +1,9 @@
 import type { GameObjectConfig } from '../../config';
 import { cloneRoomGoal, ROOM_GOAL_LABELS, type GoalMarkerPoint } from '../../goals/roomGoals';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
+import { isPlayfunLeaderboardExcludedDisplayName } from '../../playfun/identity';
 import {
-  isPlayfunSurfaceAuth,
   isWampLeaderboardEligibleAuth,
-  type SurfaceAuthSource,
 } from '../../playfun/leaderboardPolicy';
 import type {
   GlobalLeaderboardResponse,
@@ -76,7 +75,7 @@ interface OverworldGoalRunControllerOptions {
   runRepository: RunRepository;
   getScore: () => number;
   getAuthenticated: () => boolean;
-  getAuthSource: () => SurfaceAuthSource;
+  getAuthDisplayName: () => string | null;
   countRoomObjectsByCategory: (
     room: RoomSnapshot,
     category: GameObjectConfig['category']
@@ -153,10 +152,13 @@ export class OverworldGoalRunController {
     }
 
     this.clearRunForRoomExit();
-    const authSource = this.options.getAuthSource();
     const leaderboardEligible =
       room.status === 'published' &&
-      isWampLeaderboardEligibleAuth(this.options.getAuthenticated(), authSource);
+      isWampLeaderboardEligibleAuth(
+        this.options.getAuthenticated(),
+        null,
+        this.options.getAuthDisplayName()
+      );
     const qualificationState = goalRunEntryStartsQualifiedAttempt(entryContext)
       ? 'qualified'
       : 'practice';
@@ -193,8 +195,8 @@ export class OverworldGoalRunController {
             : 'local-only',
       submissionMessage:
         qualificationState === 'practice'
-          ? this.getPracticeStatusMessage(room.status, leaderboardEligible, authSource)
-          : this.getQualifiedSubmissionMessage(room.status, leaderboardEligible, authSource),
+          ? this.getPracticeStatusMessage(room.status, leaderboardEligible)
+          : this.getQualifiedSubmissionMessage(room.status, leaderboardEligible),
       pendingResult: null,
       submittedScore: null,
       leaderboardEligible,
@@ -744,8 +746,7 @@ export class OverworldGoalRunController {
     runState.submissionState = runState.leaderboardEligible ? 'starting' : 'local-only';
     runState.submissionMessage = this.getQualifiedSubmissionMessage(
       runState.roomStatus,
-      runState.leaderboardEligible,
-      this.options.getAuthSource()
+      runState.leaderboardEligible
     );
 
     if (runState.leaderboardEligible) {
@@ -822,14 +823,13 @@ export class OverworldGoalRunController {
 
   private getPracticeStatusMessage(
     roomStatus: RoomSnapshot['status'],
-    leaderboardEligible: boolean,
-    authSource: SurfaceAuthSource
+    leaderboardEligible: boolean
   ): string {
     if (leaderboardEligible) {
       return 'Practice run. Reach spawn to start ranked attempt.';
     }
 
-    if (isPlayfunSurfaceAuth(authSource)) {
+    if (isPlayfunLeaderboardExcludedDisplayName(this.options.getAuthDisplayName())) {
       return 'Practice run. Reach spawn to start a local Play.fun attempt.';
     }
 
@@ -840,14 +840,13 @@ export class OverworldGoalRunController {
 
   private getQualifiedSubmissionMessage(
     roomStatus: RoomSnapshot['status'],
-    leaderboardEligible: boolean,
-    authSource: SurfaceAuthSource
+    leaderboardEligible: boolean
   ): string {
     if (leaderboardEligible) {
       return 'Starting ranked run...';
     }
 
-    if (isPlayfunSurfaceAuth(authSource)) {
+    if (isPlayfunLeaderboardExcludedDisplayName(this.options.getAuthDisplayName())) {
       return 'Play.fun runs stay local on WAMP.';
     }
 

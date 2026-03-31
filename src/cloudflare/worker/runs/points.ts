@@ -2,10 +2,11 @@ import { placedObjectContributesToCategory } from '../../../config';
 import type { CourseRunRecord } from '../../../courses/runModel';
 import type { RoomGoal } from '../../../goals/roomGoals';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
+import { isPlayfunLeaderboardExcludedDisplayName } from '../../../playfun/identity';
 import type { RoomRunRecord, UserStatsRecord } from '../../../runs/model';
 import { compareLeaderboardEntries } from '../../../runs/scoring';
 import type { CourseRunRow, Env, PointEventRow, RoomRunRow, UserRow, UserStatsRow } from '../core/types';
-import { isPlayfunLinkedUser } from '../playfun/leaderboardIsolation';
+import { isPlayfunLeaderboardExcludedUserId } from '../playfun/leaderboardIsolation';
 
 export type PointEventType =
   | 'room_first_publish'
@@ -158,6 +159,10 @@ export async function awardRoomCreatorCompletionPoints(
     return null;
   }
 
+  if (await isPlayfunLeaderboardExcludedUserId(env, input.finisherUserId)) {
+    return null;
+  }
+
   if (!(await hasMinimumAccountAgeForCreatorReward(env, input.finisherUserId))) {
     return null;
   }
@@ -188,6 +193,10 @@ export async function awardCourseCreatorCompletionPoints(
   }
 ): Promise<PointEventRow | null> {
   if (!input.creatorUserId || input.creatorUserId === input.finisherUserId) {
+    return null;
+  }
+
+  if (await isPlayfunLeaderboardExcludedUserId(env, input.finisherUserId)) {
     return null;
   }
 
@@ -298,7 +307,7 @@ export async function upsertUserStats(env: Env, userId: string): Promise<void> {
     return;
   }
 
-  if (await isPlayfunLinkedUser(env, userId)) {
+  if (isPlayfunLeaderboardExcludedDisplayName(user.display_name)) {
     await env.DB.batch([
       env.DB.prepare(
         `

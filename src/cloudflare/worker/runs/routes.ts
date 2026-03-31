@@ -36,7 +36,7 @@ import {
 } from '../playfun/service';
 import {
   assertWampLeaderboardWriteAllowed,
-  sqlIsNotPlayfunLinkedUser,
+  sqlDoesNotHavePlayfunDisplayNamePrefix,
 } from '../playfun/leaderboardIsolation';
 import {
   awardRoomCreatorCompletionPoints,
@@ -597,7 +597,7 @@ export async function loadCompletedRoomRuns(
       WHERE room_id = ?
         AND room_version = ?
         AND result = 'completed'
-        AND ${sqlIsNotPlayfunLinkedUser('room_runs.user_id')}
+        AND ${sqlDoesNotHavePlayfunDisplayNamePrefix('room_runs.user_display_name')}
     `
   )
     .bind(roomId, roomVersion)
@@ -871,7 +871,7 @@ export async function buildGlobalLeaderboardResponse(
         fastest_clear_ms,
         updated_at
       FROM user_stats
-      WHERE ${sqlIsNotPlayfunLinkedUser('user_stats.user_id')}
+      WHERE ${sqlDoesNotHavePlayfunDisplayNamePrefix('user_stats.user_display_name')}
     `
   ).all<UserStatsRow>();
 
