@@ -44,8 +44,6 @@ import {
   clampRunMetricsToSnapshot,
   getRunMetricCapsForSnapshot,
   loadBestCompletedRunForUserAndRoomVersion,
-  mapUserStatsRow,
-  compareGlobalLeaderboardEntries,
   upsertUserStats,
 } from './points';
 import {
@@ -640,12 +638,324 @@ export async function loadCompletedRoomRunsForVersions(
       WHERE room_id = ?
         AND room_version IN (${roomVersions.map(() => '?').join(', ')})
         AND result = 'completed'
+        AND ${sqlDoesNotHavePlayfunDisplayNamePrefix('room_runs.user_display_name')}
     `
   )
     .bind(roomId, ...roomVersions)
     .all<RoomRunRow>();
 
   return result.results.map(mapRoomRunRow);
+}
+
+interface RankedRoomLeaderboardRow {
+  attempt_id: string;
+  room_version: number;
+  user_id: string;
+  user_display_name: string;
+  elapsed_ms: number;
+  deaths: number;
+  score: number;
+  finished_at: string;
+  overall_rank: number | string | null;
+}
+
+interface RankedGlobalLeaderboardRow extends UserStatsRow {
+  overall_rank: number | string | null;
+}
+
+function getRoomLeaderboardSqlOrderClause(goal: RoomGoal): string {
+  return getLeaderboardRankingMode(goal) === 'time'
+    ? 'elapsed_ms ASC, deaths ASC, score DESC, finished_at ASC, attempt_id ASC'
+    : 'score DESC, deaths ASC, elapsed_ms ASC, finished_at ASC, attempt_id ASC';
+}
+
+function getGlobalLeaderboardSqlOrderClause(): string {
+  return 'total_points DESC, completed_runs DESC, total_rooms_published DESC, user_display_name ASC, user_id ASC';
+}
+
+function buildRankedRoomLeaderboardCte(goal: RoomGoal, versionCount: number): string {
+  const versionPlaceholders = Array.from({ length: versionCount }, () => '?').join(', ');
+  const orderClause = getRoomLeaderboardSqlOrderClause(goal);
+  return `
+    WITH candidate_runs AS (
+      SELECT
+        attempt_id,
+        room_version,
+        user_id,
+        user_display_name,
+        elapsed_ms,
+        deaths,
+        score,
+        finished_at,
+        ROW_NUMBER() OVER (
+          PARTITION BY user_id
+          ORDER BY ${orderClause}
+        ) AS user_row_num
+      FROM room_runs
+      WHERE room_id = ?
+        AND room_version IN (${versionPlaceholders})
+        AND result = 'completed'
+        AND elapsed_ms IS NOT NULL
+        AND finished_at IS NOT NULL
+        AND ${sqlDoesNotHavePlayfunDisplayNamePrefix('room_runs.user_display_name')}
+    ),
+    best_runs AS (
+      SELECT
+        attempt_id,
+        room_version,
+        user_id,
+        user_display_name,
+        elapsed_ms,
+        deaths,
+        score,
+        finished_at
+      FROM candidate_runs
+      WHERE user_row_num = 1
+    ),
+    ranked_runs AS (
+      SELECT
+        attempt_id,
+        room_version,
+        user_id,
+        user_display_name,
+        elapsed_ms,
+        deaths,
+        score,
+        finished_at,
+        ROW_NUMBER() OVER (
+          ORDER BY ${orderClause}
+        ) AS overall_rank
+      FROM best_runs
+    )
+  `;
+}
+
+async function loadRankedRoomLeaderboardRows(
+  env: Env,
+  roomId: string,
+  roomVersions: number[],
+  goal: RoomGoal,
+  limit: number
+): Promise<RankedRoomLeaderboardRow[]> {
+  if (roomVersions.length === 0 || limit <= 0) {
+    return [];
+  }
+
+  const cte = buildRankedRoomLeaderboardCte(goal, roomVersions.length);
+  const result = await env.DB.prepare(
+    `
+      ${cte}
+      SELECT
+        attempt_id,
+        room_version,
+        user_id,
+        user_display_name,
+        elapsed_ms,
+        deaths,
+        score,
+        finished_at,
+        overall_rank
+      FROM ranked_runs
+      ORDER BY overall_rank
+      LIMIT ?
+    `
+  )
+    .bind(roomId, ...roomVersions, limit)
+    .all<RankedRoomLeaderboardRow>();
+
+  return result.results;
+}
+
+async function loadViewerRankedRoomLeaderboardRow(
+  env: Env,
+  roomId: string,
+  roomVersions: number[],
+  goal: RoomGoal,
+  viewerUserId: string
+): Promise<RankedRoomLeaderboardRow | null> {
+  if (roomVersions.length === 0) {
+    return null;
+  }
+
+  const cte = buildRankedRoomLeaderboardCte(goal, roomVersions.length);
+  const row = await env.DB.prepare(
+    `
+      ${cte}
+      SELECT
+        attempt_id,
+        room_version,
+        user_id,
+        user_display_name,
+        elapsed_ms,
+        deaths,
+        score,
+        finished_at,
+        overall_rank
+      FROM ranked_runs
+      WHERE user_id = ?
+      LIMIT 1
+    `
+  )
+    .bind(roomId, ...roomVersions, viewerUserId)
+    .first<RankedRoomLeaderboardRow>();
+
+  return row ?? null;
+}
+
+function mapRankedRoomLeaderboardEntry(
+  row: RankedRoomLeaderboardRow,
+  snapshot: RoomSnapshot
+): RoomLeaderboardEntry {
+  return {
+    rank: Number(row.overall_rank),
+    userId: row.user_id,
+    userDisplayName: row.user_display_name,
+    attemptId: row.attempt_id,
+    roomId: snapshot.id,
+    roomVersion: row.room_version,
+    goalType: snapshot.goal!.type,
+    elapsedMs: row.elapsed_ms,
+    deaths: row.deaths,
+    score: row.score,
+    finishedAt: row.finished_at,
+  };
+}
+
+async function loadRankedGlobalLeaderboardRows(
+  env: Env,
+  limit: number
+): Promise<RankedGlobalLeaderboardRow[]> {
+  if (limit <= 0) {
+    return [];
+  }
+
+  const orderClause = getGlobalLeaderboardSqlOrderClause();
+  const result = await env.DB.prepare(
+    `
+      WITH ranked_stats AS (
+        SELECT
+          user_id,
+          user_display_name,
+          total_points,
+          total_score,
+          total_deaths,
+          total_collectibles,
+          total_enemies_defeated,
+          total_checkpoints,
+          total_rooms_published,
+          completed_runs,
+          failed_runs,
+          abandoned_runs,
+          best_score,
+          fastest_clear_ms,
+          updated_at,
+          ROW_NUMBER() OVER (
+            ORDER BY ${orderClause}
+          ) AS overall_rank
+        FROM user_stats
+        WHERE ${sqlDoesNotHavePlayfunDisplayNamePrefix('user_stats.user_display_name')}
+      )
+      SELECT
+        user_id,
+        user_display_name,
+        total_points,
+        total_score,
+        total_deaths,
+        total_collectibles,
+        total_enemies_defeated,
+        total_checkpoints,
+        total_rooms_published,
+        completed_runs,
+        failed_runs,
+        abandoned_runs,
+        best_score,
+        fastest_clear_ms,
+        updated_at,
+        overall_rank
+      FROM ranked_stats
+      ORDER BY overall_rank
+      LIMIT ?
+    `
+  )
+    .bind(limit)
+    .all<RankedGlobalLeaderboardRow>();
+
+  return result.results;
+}
+
+async function loadViewerRankedGlobalLeaderboardRow(
+  env: Env,
+  viewerUserId: string
+): Promise<RankedGlobalLeaderboardRow | null> {
+  const orderClause = getGlobalLeaderboardSqlOrderClause();
+  const row = await env.DB.prepare(
+    `
+      WITH ranked_stats AS (
+        SELECT
+          user_id,
+          user_display_name,
+          total_points,
+          total_score,
+          total_deaths,
+          total_collectibles,
+          total_enemies_defeated,
+          total_checkpoints,
+          total_rooms_published,
+          completed_runs,
+          failed_runs,
+          abandoned_runs,
+          best_score,
+          fastest_clear_ms,
+          updated_at,
+          ROW_NUMBER() OVER (
+            ORDER BY ${orderClause}
+          ) AS overall_rank
+        FROM user_stats
+        WHERE ${sqlDoesNotHavePlayfunDisplayNamePrefix('user_stats.user_display_name')}
+      )
+      SELECT
+        user_id,
+        user_display_name,
+        total_points,
+        total_score,
+        total_deaths,
+        total_collectibles,
+        total_enemies_defeated,
+        total_checkpoints,
+        total_rooms_published,
+        completed_runs,
+        failed_runs,
+        abandoned_runs,
+        best_score,
+        fastest_clear_ms,
+        updated_at,
+        overall_rank
+      FROM ranked_stats
+      WHERE user_id = ?
+      LIMIT 1
+    `
+  )
+    .bind(viewerUserId)
+    .first<RankedGlobalLeaderboardRow>();
+
+  return row ?? null;
+}
+
+function mapRankedGlobalLeaderboardEntry(row: RankedGlobalLeaderboardRow): GlobalLeaderboardEntry {
+  return {
+    rank: Number(row.overall_rank),
+    userId: row.user_id,
+    userDisplayName: row.user_display_name,
+    totalPoints: row.total_points,
+    totalScore: row.total_score,
+    totalRoomsPublished: row.total_rooms_published,
+    completedRuns: row.completed_runs,
+    failedRuns: row.failed_runs,
+    abandonedRuns: row.abandoned_runs,
+    bestScore: row.best_score,
+    fastestClearMs: row.fastest_clear_ms,
+    updatedAt: row.updated_at,
+  };
 }
 
 export function mapRoomRunRow(row: RoomRunRow): RoomRunRecord {
@@ -765,21 +1075,23 @@ export async function buildRoomLeaderboardResponse(
     throw new HttpError(404, 'This room version does not have a leaderboard goal.');
   }
 
-  const runs = await loadCompletedRoomRunsForVersions(
+  const entriesRows = await loadRankedRoomLeaderboardRows(
     env,
     snapshot.id,
-    selection.leaderboardFamilyVersions
+    selection.leaderboardFamilyVersions,
+    snapshot.goal,
+    limit
   );
-  const sortedAll = selectBestCompletedRunPerUser(runs, snapshot.goal);
-  const viewerBestRun =
+  const viewerBestRow =
     viewerUserId === null
       ? null
-      : sortedAll.find((run) => run.userId === viewerUserId) ?? null;
-  const viewerRank =
-    viewerBestRun === null
-      ? null
-      : sortedAll.findIndex((run) => run.attemptId === viewerBestRun.attemptId) + 1;
-  const sorted = sortedAll.slice(0, limit);
+      : await loadViewerRankedRoomLeaderboardRow(
+          env,
+          snapshot.id,
+          selection.leaderboardFamilyVersions,
+          snapshot.goal,
+          viewerUserId
+        );
   const difficulty = await buildRoomDifficultySummary(
     env,
     snapshot,
@@ -788,19 +1100,9 @@ export async function buildRoomLeaderboardResponse(
     selection.roomVersion,
     selection.leaderboardFamilyVersions
   );
-  const entries: RoomLeaderboardEntry[] = sorted.map((run, index) => ({
-    rank: index + 1,
-    userId: run.userId,
-    userDisplayName: run.userDisplayName,
-    attemptId: run.attemptId,
-    roomId: run.roomId,
-    roomVersion: run.roomVersion,
-    goalType: run.goalType,
-    elapsedMs: run.elapsedMs ?? 0,
-    deaths: run.deaths,
-    score: run.score,
-    finishedAt: run.finishedAt ?? run.startedAt,
-  }));
+  const entries = entriesRows.map((row) => mapRankedRoomLeaderboardEntry(row, snapshot));
+  const viewerBest =
+    viewerBestRow === null ? null : mapRankedRoomLeaderboardEntry(viewerBestRow, snapshot);
 
   return {
     roomId: snapshot.id,
@@ -816,35 +1118,9 @@ export async function buildRoomLeaderboardResponse(
     rankingMode: getLeaderboardRankingMode(snapshot.goal),
     difficulty,
     entries,
-    viewerBest:
-      viewerBestRun === null
-        ? null
-        : {
-            rank: viewerRank ?? 0,
-            userId: viewerBestRun.userId,
-            userDisplayName: viewerBestRun.userDisplayName,
-            attemptId: viewerBestRun.attemptId,
-            roomId: viewerBestRun.roomId,
-            roomVersion: viewerBestRun.roomVersion,
-            goalType: viewerBestRun.goalType,
-            elapsedMs: viewerBestRun.elapsedMs ?? 0,
-            deaths: viewerBestRun.deaths,
-            score: viewerBestRun.score,
-            finishedAt: viewerBestRun.finishedAt ?? viewerBestRun.startedAt,
-          },
-    viewerRank: viewerRank || null,
+    viewerBest,
+    viewerRank: viewerBest?.rank ?? null,
   };
-}
-
-function selectBestCompletedRunPerUser(runs: RoomRunRecord[], goal: RoomGoal): RoomRunRecord[] {
-  const sorted = sortCompletedRunsForLeaderboard(runs, goal);
-  const unique = new Map<string, RoomRunRecord>();
-  for (const run of sorted) {
-    if (!unique.has(run.userId)) {
-      unique.set(run.userId, run);
-    }
-  }
-  return [...unique.values()];
 }
 
 export async function buildGlobalLeaderboardResponse(
@@ -852,54 +1128,20 @@ export async function buildGlobalLeaderboardResponse(
   limit: number,
   viewerUserId: string | null = null
 ): Promise<GlobalLeaderboardResponse> {
-  const result = await env.DB.prepare(
-    `
-      SELECT
-        user_id,
-        user_display_name,
-        total_points,
-        total_score,
-        total_deaths,
-        total_collectibles,
-        total_enemies_defeated,
-        total_checkpoints,
-        total_rooms_published,
-        completed_runs,
-        failed_runs,
-        abandoned_runs,
-        best_score,
-        fastest_clear_ms,
-        updated_at
-      FROM user_stats
-      WHERE ${sqlDoesNotHavePlayfunDisplayNamePrefix('user_stats.user_display_name')}
-    `
-  ).all<UserStatsRow>();
-
-  const entries = result.results
-    .map(mapUserStatsRow)
-    .sort(compareGlobalLeaderboardEntries)
-    .map<GlobalLeaderboardEntry>((entry, index) => ({
-      rank: index + 1,
-      userId: entry.userId,
-      userDisplayName: entry.userDisplayName,
-      totalPoints: entry.totalPoints,
-      totalScore: entry.totalScore,
-      totalRoomsPublished: entry.totalRoomsPublished,
-      completedRuns: entry.completedRuns,
-      failedRuns: entry.failedRuns,
-      abandonedRuns: entry.abandonedRuns,
-      bestScore: entry.bestScore,
-      fastestClearMs: entry.fastestClearMs,
-      updatedAt: entry.updatedAt,
-    }));
-
-  const viewerEntry =
-    viewerUserId === null
-      ? null
-      : entries.find((entry) => entry.userId === viewerUserId) ?? null;
+  const entries = (await loadRankedGlobalLeaderboardRows(env, limit)).map(
+    mapRankedGlobalLeaderboardEntry
+  );
+  let viewerEntry: GlobalLeaderboardEntry | null = null;
+  if (viewerUserId !== null) {
+    viewerEntry = entries.find((entry) => entry.userId === viewerUserId) ?? null;
+    if (viewerEntry === null) {
+      const viewerRow = await loadViewerRankedGlobalLeaderboardRow(env, viewerUserId);
+      viewerEntry = viewerRow ? mapRankedGlobalLeaderboardEntry(viewerRow) : null;
+    }
+  }
 
   return {
-    entries: entries.slice(0, limit),
+    entries,
     viewerEntry,
   };
 }

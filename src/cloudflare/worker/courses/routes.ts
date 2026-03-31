@@ -3,6 +3,7 @@ import {
   cloneCourseSnapshot,
   normalizeCourseGoal,
   normalizeCourseSnapshot,
+  type CourseGoal,
   type CourseRecord,
   type CourseSnapshot,
 } from '../../../courses/model';
@@ -623,41 +624,165 @@ async function loadCourseRunByAttemptId(
   return row ? mapCourseRunRow(row) : null;
 }
 
-async function loadCompletedCourseRuns(
-  env: Env,
-  courseId: string,
-  courseVersion: number
-): Promise<CourseRunRecord[]> {
-  const result = await env.DB.prepare(
-    `
+interface RankedCourseLeaderboardRow {
+  attempt_id: string;
+  course_version: number;
+  user_id: string;
+  user_display_name: string;
+  elapsed_ms: number;
+  deaths: number;
+  score: number;
+  finished_at: string;
+  overall_rank: number | string | null;
+}
+
+function getCourseLeaderboardSqlOrderClause(goal: CourseGoal): string {
+  return getCourseLeaderboardRankingMode(goal) === 'time'
+    ? 'elapsed_ms ASC, deaths ASC, score DESC, finished_at ASC, attempt_id ASC'
+    : 'score DESC, elapsed_ms ASC, deaths ASC, finished_at ASC, attempt_id ASC';
+}
+
+function buildRankedCourseLeaderboardCte(goal: CourseGoal): string {
+  const orderClause = getCourseLeaderboardSqlOrderClause(goal);
+  return `
+    WITH candidate_runs AS (
       SELECT
         attempt_id,
-        course_id,
         course_version,
-        goal_type,
-        goal_json,
         user_id,
         user_display_name,
-        started_at,
-        finished_at,
-        result,
         elapsed_ms,
         deaths,
         score,
-        collectibles_collected,
-        enemies_defeated,
-        checkpoints_reached
+        finished_at,
+        ROW_NUMBER() OVER (
+          PARTITION BY user_id
+          ORDER BY ${orderClause}
+        ) AS user_row_num
       FROM course_runs
       WHERE course_id = ?
         AND course_version = ?
         AND result = 'completed'
+        AND elapsed_ms IS NOT NULL
+        AND finished_at IS NOT NULL
         AND ${sqlDoesNotHavePlayfunDisplayNamePrefix('course_runs.user_display_name')}
+    ),
+    best_runs AS (
+      SELECT
+        attempt_id,
+        course_version,
+        user_id,
+        user_display_name,
+        elapsed_ms,
+        deaths,
+        score,
+        finished_at
+      FROM candidate_runs
+      WHERE user_row_num = 1
+    ),
+    ranked_runs AS (
+      SELECT
+        attempt_id,
+        course_version,
+        user_id,
+        user_display_name,
+        elapsed_ms,
+        deaths,
+        score,
+        finished_at,
+        ROW_NUMBER() OVER (
+          ORDER BY ${orderClause}
+        ) AS overall_rank
+      FROM best_runs
+    )
+  `;
+}
+
+async function loadRankedCourseLeaderboardRows(
+  env: Env,
+  courseId: string,
+  courseVersion: number,
+  goal: CourseGoal,
+  limit: number
+): Promise<RankedCourseLeaderboardRow[]> {
+  if (limit <= 0) {
+    return [];
+  }
+
+  const cte = buildRankedCourseLeaderboardCte(goal);
+  const result = await env.DB.prepare(
+    `
+      ${cte}
+      SELECT
+        attempt_id,
+        course_version,
+        user_id,
+        user_display_name,
+        elapsed_ms,
+        deaths,
+        score,
+        finished_at,
+        overall_rank
+      FROM ranked_runs
+      ORDER BY overall_rank
+      LIMIT ?
     `
   )
-    .bind(courseId, courseVersion)
-    .all<CourseRunRow>();
+    .bind(courseId, courseVersion, limit)
+    .all<RankedCourseLeaderboardRow>();
 
-  return result.results.map(mapCourseRunRow);
+  return result.results;
+}
+
+async function loadViewerRankedCourseLeaderboardRow(
+  env: Env,
+  courseId: string,
+  courseVersion: number,
+  goal: CourseGoal,
+  viewerUserId: string
+): Promise<RankedCourseLeaderboardRow | null> {
+  const cte = buildRankedCourseLeaderboardCte(goal);
+  const row = await env.DB.prepare(
+    `
+      ${cte}
+      SELECT
+        attempt_id,
+        course_version,
+        user_id,
+        user_display_name,
+        elapsed_ms,
+        deaths,
+        score,
+        finished_at,
+        overall_rank
+      FROM ranked_runs
+      WHERE user_id = ?
+      LIMIT 1
+    `
+  )
+    .bind(courseId, courseVersion, viewerUserId)
+    .first<RankedCourseLeaderboardRow>();
+
+  return row ?? null;
+}
+
+function mapRankedCourseLeaderboardEntry(
+  row: RankedCourseLeaderboardRow,
+  snapshot: CourseSnapshot
+): CourseLeaderboardEntry {
+  return {
+    rank: Number(row.overall_rank),
+    userId: row.user_id,
+    userDisplayName: row.user_display_name,
+    attemptId: row.attempt_id,
+    courseId: snapshot.id,
+    courseVersion: row.course_version,
+    goalType: snapshot.goal!.type,
+    elapsedMs: row.elapsed_ms,
+    deaths: row.deaths,
+    score: row.score,
+    finishedAt: row.finished_at,
+  };
 }
 
 function mapCourseRunRow(row: CourseRunRow): CourseRunRecord {
@@ -704,29 +829,26 @@ async function buildCourseLeaderboardResponse(
     throw new HttpError(404, 'This course version does not have a leaderboard goal.');
   }
 
-  const runs = await loadCompletedCourseRuns(env, snapshot.id, snapshot.version);
-  const sortedAll = selectBestCompletedCourseRunPerUser(runs, snapshot.goal);
-  const viewerBestRun =
+  const entryRows = await loadRankedCourseLeaderboardRows(
+    env,
+    snapshot.id,
+    snapshot.version,
+    snapshot.goal,
+    limit
+  );
+  const viewerBestRow =
     viewerUserId === null
       ? null
-      : sortedAll.find((run) => run.userId === viewerUserId) ?? null;
-  const viewerRank =
-    viewerBestRun === null
-      ? null
-      : sortedAll.findIndex((run) => run.attemptId === viewerBestRun.attemptId) + 1;
-  const entries: CourseLeaderboardEntry[] = sortedAll.slice(0, limit).map((run, index) => ({
-    rank: index + 1,
-    userId: run.userId,
-    userDisplayName: run.userDisplayName,
-    attemptId: run.attemptId,
-    courseId: run.courseId,
-    courseVersion: run.courseVersion,
-    goalType: run.goalType,
-    elapsedMs: run.elapsedMs ?? 0,
-    deaths: run.deaths,
-    score: run.score,
-    finishedAt: run.finishedAt ?? run.startedAt,
-  }));
+      : await loadViewerRankedCourseLeaderboardRow(
+          env,
+          snapshot.id,
+          snapshot.version,
+          snapshot.goal,
+          viewerUserId
+        );
+  const entries = entryRows.map((row) => mapRankedCourseLeaderboardEntry(row, snapshot));
+  const viewerBest =
+    viewerBestRow === null ? null : mapRankedCourseLeaderboardEntry(viewerBestRow, snapshot);
 
   return {
     courseId: snapshot.id,
@@ -735,42 +857,9 @@ async function buildCourseLeaderboardResponse(
     goalType: snapshot.goal.type,
     rankingMode: getCourseLeaderboardRankingMode(snapshot.goal),
     entries,
-    viewerBest:
-      viewerBestRun === null
-        ? null
-        : {
-            rank: viewerRank ?? 0,
-            userId: viewerBestRun.userId,
-            userDisplayName: viewerBestRun.userDisplayName,
-            attemptId: viewerBestRun.attemptId,
-            courseId: viewerBestRun.courseId,
-            courseVersion: viewerBestRun.courseVersion,
-            goalType: viewerBestRun.goalType,
-            elapsedMs: viewerBestRun.elapsedMs ?? 0,
-            deaths: viewerBestRun.deaths,
-            score: viewerBestRun.score,
-            finishedAt: viewerBestRun.finishedAt ?? viewerBestRun.startedAt,
-          },
-    viewerRank: viewerRank || null,
+    viewerBest,
+    viewerRank: viewerBest?.rank ?? null,
   };
-}
-
-function selectBestCompletedCourseRunPerUser(
-  runs: CourseRunRecord[],
-  goal: CourseSnapshot['goal']
-): CourseRunRecord[] {
-  if (!goal) {
-    return [];
-  }
-
-  const sorted = sortCompletedCourseRunsForLeaderboard(runs, goal);
-  const unique = new Map<string, CourseRunRecord>();
-  for (const run of sorted) {
-    if (!unique.has(run.userId)) {
-      unique.set(run.userId, run);
-    }
-  }
-  return [...unique.values()];
 }
 
 async function loadBestCompletedCourseRunForUserAndVersion(

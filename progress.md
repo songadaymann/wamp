@@ -57,6 +57,14 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Leaderboard SQL hardening on March 31, 2026:
+  - room and course leaderboard endpoints no longer load every completed run into JS before deduping/ranking
+  - replaced the in-memory `.all() -> sort -> unique-per-user -> slice` path with SQL CTE/window-function ranking for top entries and viewer rank/best
+  - global leaderboard now also ranks and limits in SQL instead of pulling the full `user_stats` table into memory
+  - intent: eliminate intermittent D1 `memory limit would be exceeded before EOF` failures on polluted or high-traffic boards while preserving the current ranking rules
+  - verification:
+    - `npm run build` passed
+
 - Ephemeral in-room PartyKit chat MVP on March 31, 2026:
   - added lightweight room-local chat for play mode only with no persistence or moderation
   - implementation:
