@@ -328,6 +328,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private windowCenterCoordinates: RoomCoordinates = { ...DEFAULT_ROOM_COORDINATES };
   private inspectZoom = DEFAULT_ZOOM;
   private browseInspectZoom = DEFAULT_ZOOM;
+  private shouldAutoPlayDeepLinkedRoomOnBoot = false;
   private transientStatusMessage: string | null = null;
   private transientStatusExpiresAt = 0;
   private quicksandTouchedUntil = 0;
@@ -1509,6 +1510,8 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     const deepLinkedInitialFocus =
       !data?.centerCoordinates && !data?.roomCoordinates && hasFocusedCoordinatesInUrl();
+    this.shouldAutoPlayDeepLinkedRoomOnBoot =
+      deepLinkedInitialFocus && (data?.mode ?? 'browse') === 'browse';
     const initialFocus =
       data?.centerCoordinates ?? data?.roomCoordinates ?? getFocusedCoordinatesFromUrl();
     this.windowController.applySceneData({
@@ -1528,9 +1531,13 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.browseInspectZoom = fitZoom;
     }
 
-    void this.windowController.refreshAround(this.windowCenterCoordinates, {
-      forceChunkReload: data?.forceRefreshAround ?? false,
-    });
+    void this.windowController
+      .refreshAround(this.windowCenterCoordinates, {
+        forceChunkReload: data?.forceRefreshAround ?? false,
+      })
+      .then((refreshed) => {
+        this.maybeAutoPlayDeepLinkedRoomOnBoot(refreshed);
+      });
   }
 
   update(_time: number, delta: number): void {
@@ -1886,6 +1893,24 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   async jumpToCoordinates(coordinates: RoomCoordinates): Promise<void> {
     await this.selectionController.jumpToCoordinates(coordinates);
+  }
+
+  private maybeAutoPlayDeepLinkedRoomOnBoot(refreshed: boolean): void {
+    if (!this.shouldAutoPlayDeepLinkedRoomOnBoot) {
+      return;
+    }
+
+    this.shouldAutoPlayDeepLinkedRoomOnBoot = false;
+    if (!refreshed || this.mode !== 'browse') {
+      return;
+    }
+
+    const selectedState = this.getCellStateAt(this.selectedCoordinates);
+    if (selectedState !== 'published' && selectedState !== 'draft') {
+      return;
+    }
+
+    this.flowController.playSelectedRoom();
   }
 
   zoomIn(): void {
