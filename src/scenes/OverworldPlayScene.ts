@@ -2219,6 +2219,23 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private respawnPlayerToCurrentRoom(): void {
+    const activeCourseRun = this.activeCourseRun;
+    const courseStartRoom =
+      activeCourseRun
+        ? this.coursePlaybackController.getCourseStartRoomRef(activeCourseRun.course)
+        : null;
+
+    if (
+      courseStartRoom &&
+      (
+        courseStartRoom.coordinates.x !== this.currentRoomCoordinates.x ||
+        courseStartRoom.coordinates.y !== this.currentRoomCoordinates.y
+      )
+    ) {
+      this.respawnPlayerToCourseStartRoom(courseStartRoom.coordinates);
+      return;
+    }
+
     const currentRoom = this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates);
     const entities = this.getPlayerEntities();
     if (!currentRoom || !entities) return;
@@ -2229,6 +2246,18 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.combatController.destroyProjectiles();
     this.playerLifecycleController.respawnPlayerToRoom(currentRoom, entities);
     this.playerPresentationController.handleRespawned();
+    playSfx('respawn');
+  }
+
+  private respawnPlayerToCourseStartRoom(coordinates: RoomCoordinates): void {
+    this.destroyPlayer();
+    this.currentRoomCoordinates = { ...coordinates };
+    this.selectedCoordinates = { ...coordinates };
+    this.updateSelectedSummary();
+    this.shouldCenterCamera = true;
+    this.shouldRespawnPlayer = true;
+    setFocusedCoordinatesInUrl(coordinates);
+    void this.refreshAround(coordinates, { forceChunkReload: true });
     playSfx('respawn');
   }
 
