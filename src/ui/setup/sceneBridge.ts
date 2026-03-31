@@ -71,6 +71,7 @@ export interface EditorSceneBridge {
   fitToScreen?: () => void;
   zoomIn?: () => void;
   zoomOut?: () => void;
+  updateToolUi?: () => void;
   clearCurrentLayer?: () => void;
   clearAllTiles?: () => void;
   setRoomTitle?: (title: string | null) => void;
@@ -89,6 +90,10 @@ export interface EditorSceneBridge {
   clearCourseGoalMarkers?: () => void;
   editPreviousCourseRoom?: () => Promise<void> | void;
   editNextCourseRoom?: () => Promise<void> | void;
+  beginFocusedPressurePlateConnection?: () => void;
+  clearFocusedPressurePlateConnection?: () => void;
+  cancelPressurePlateConnection?: () => void;
+  clearFocusedContainerContents?: () => void;
   undoAction?: () => void;
   redoAction?: () => void;
 }
@@ -156,6 +161,9 @@ export interface OverworldSceneBridge {
   fitLoadedWorld?: () => void;
   returnToWorld?: () => void;
   getSelectedRoomContext?: () => OverworldSelectedRoomContext;
+  openRoomChatComposer?: () => boolean;
+  closeRoomChatComposer?: () => void;
+  isRoomChatComposerOpen?: () => boolean;
   openCourseComposer?: () => Promise<void> | void;
   closeCourseComposer?: () => void;
   getCourseComposerState?: () => CourseComposerState | null;

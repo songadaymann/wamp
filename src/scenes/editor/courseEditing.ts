@@ -175,7 +175,7 @@ export function buildCourseEditorState(
     draft !== null &&
     roomOrder < draft.roomRefs.length - 1;
   return {
-    visible: Boolean(activeCourseMarkerEdit || courseEditorStatusText),
+    visible: Boolean(activeCourseMarkerEdit),
     statusHidden: !getCourseEditorContextStatusText(activeCourseMarkerEdit, draft, courseEditorStatusText),
     statusText: getCourseEditorContextStatusText(activeCourseMarkerEdit, draft, courseEditorStatusText),
     roomStepText,

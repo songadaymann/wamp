@@ -1,4 +1,4 @@
-import { getObjectById } from '../../../config';
+import { placedObjectContributesToCategory } from '../../../config';
 import type { CourseRunRecord } from '../../../courses/runModel';
 import type { RoomGoal } from '../../../goals/roomGoals';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
@@ -21,6 +21,8 @@ const COURSE_FIRST_PUBLISH_POINTS = ROOM_FIRST_PUBLISH_POINTS;
 const COURSE_PUBLISH_UPDATE_POINTS = ROOM_PUBLISH_UPDATE_POINTS;
 const ROOM_CREATOR_COMPLETION_POINTS = 50;
 const COURSE_CREATOR_COMPLETION_POINTS = 50;
+const DAILY_CREATOR_COMPLETION_POINTS_LIMIT = 100;
+const MIN_ACCOUNT_AGE_FOR_CREATOR_REWARD_MS = 60 * 60 * 1000;
 const RUN_COLLECTIBLE_POINTS = 2;
 const RUN_ENEMY_POINTS = 5;
 const RUN_CHECKPOINT_POINTS = 10;
@@ -33,10 +35,17 @@ export async function awardRoomPublishPoints(
   userId: string,
   roomId: string,
   roomVersion: number,
-  isFirstPublish: boolean,
-): Promise<PointEventRow> {
-  const eventType: PointEventType = isFirstPublish ? 'room_first_publish' : 'room_publish_update';
-  const points = isFirstPublish ? ROOM_FIRST_PUBLISH_POINTS : ROOM_PUBLISH_UPDATE_POINTS;
+  options: {
+    hasGoal: boolean;
+    hasPriorGoalPublish: boolean;
+  },
+): Promise<PointEventRow | null> {
+  if (!options.hasGoal || options.hasPriorGoalPublish) {
+    return null;
+  }
+
+  const eventType: PointEventType = 'room_first_publish';
+  const points = ROOM_FIRST_PUBLISH_POINTS;
   return recordPointEvent(env, {
     userId,
     eventType,
@@ -45,7 +54,7 @@ export async function awardRoomPublishPoints(
     breakdown: {
       roomId,
       roomVersion,
-      firstPublish: isFirstPublish,
+      rewardedForChallengePublish: true,
     },
   });
 }
@@ -62,33 +71,41 @@ export async function awardRunFinalizePoints(
     | 'result'
     | 'deaths'
   >,
-  isNewPersonalBest: boolean,
+  options: {
+    isFirstCompletion: boolean;
+    isNewPersonalBest: boolean;
+  },
 ): Promise<PointEventRow> {
   let points = 0;
   const breakdown = {
-    collectibles: Math.max(0, run.collectiblesCollected) * RUN_COLLECTIBLE_POINTS,
-    enemies: Math.max(0, run.enemiesDefeated) * RUN_ENEMY_POINTS,
-    checkpoints: Math.max(0, run.checkpointsReached) * RUN_CHECKPOINT_POINTS,
+    collectibles: 0,
+    enemies: 0,
+    checkpoints: 0,
     clear: 0,
     zeroDeath: 0,
     personalBest: 0,
+    awardMode: 'none' as 'none' | 'first_completion' | 'personal_best',
   };
 
-  points += breakdown.collectibles + breakdown.enemies + breakdown.checkpoints;
-
-  if (run.result === 'completed') {
+  if (run.result === 'completed' && options.isFirstCompletion) {
+    breakdown.awardMode = 'first_completion';
+    breakdown.collectibles = Math.max(0, run.collectiblesCollected) * RUN_COLLECTIBLE_POINTS;
+    breakdown.enemies = Math.max(0, run.enemiesDefeated) * RUN_ENEMY_POINTS;
+    breakdown.checkpoints = Math.max(0, run.checkpointsReached) * RUN_CHECKPOINT_POINTS;
     breakdown.clear = RUN_CLEAR_POINTS;
-    points += RUN_CLEAR_POINTS;
+    points +=
+      breakdown.collectibles + breakdown.enemies + breakdown.checkpoints + breakdown.clear;
 
     if (run.deaths === 0) {
       breakdown.zeroDeath = RUN_ZERO_DEATH_CLEAR_POINTS;
       points += RUN_ZERO_DEATH_CLEAR_POINTS;
     }
+  }
 
-    if (isNewPersonalBest) {
-      breakdown.personalBest = RUN_PERSONAL_BEST_POINTS;
-      points += RUN_PERSONAL_BEST_POINTS;
-    }
+  if (run.result === 'completed' && options.isNewPersonalBest) {
+    breakdown.awardMode = options.isFirstCompletion ? 'first_completion' : 'personal_best';
+    breakdown.personalBest = RUN_PERSONAL_BEST_POINTS;
+    points += RUN_PERSONAL_BEST_POINTS;
   }
 
   return recordPointEvent(env, {
@@ -140,10 +157,15 @@ export async function awardRoomCreatorCompletionPoints(
     return null;
   }
 
-  return recordPointEvent(env, {
+  if (!(await hasMinimumAccountAgeForCreatorReward(env, input.finisherUserId))) {
+    return null;
+  }
+
+  const sourceKey = `${input.roomId}:${input.roomVersion}:${input.finisherUserId}`;
+  return recordCreatorCompletionPointEvent(env, {
     userId: input.creatorUserId,
     eventType: 'room_creator_completion',
-    sourceKey: `${input.roomId}:${input.roomVersion}:${input.finisherUserId}`,
+    sourceKey,
     points: ROOM_CREATOR_COMPLETION_POINTS,
     breakdown: {
       roomId: input.roomId,
@@ -168,10 +190,15 @@ export async function awardCourseCreatorCompletionPoints(
     return null;
   }
 
-  return recordPointEvent(env, {
+  if (!(await hasMinimumAccountAgeForCreatorReward(env, input.finisherUserId))) {
+    return null;
+  }
+
+  const sourceKey = `${input.courseId}:${input.courseVersion}:${input.finisherUserId}`;
+  return recordCreatorCompletionPointEvent(env, {
     userId: input.creatorUserId,
     eventType: 'course_creator_completion',
-    sourceKey: `${input.courseId}:${input.courseVersion}:${input.finisherUserId}`,
+    sourceKey,
     points: COURSE_CREATOR_COMPLETION_POINTS,
     breakdown: {
       courseId: input.courseId,
@@ -480,19 +507,158 @@ export function clampRunMetricsToSnapshot(
   };
 }
 
+export function getRunMetricCapsForSnapshot(room: RoomSnapshot): {
+  maxCollectibles: number;
+  maxEnemies: number;
+  maxCheckpoints: number;
+} {
+  return {
+    maxCollectibles: countRoomObjectsByCategory(room, 'collectible'),
+    maxEnemies: countRoomObjectsByCategory(room, 'enemy'),
+    maxCheckpoints: room.goal?.type === 'checkpoint_sprint' ? room.goal.checkpoints.length : 0,
+  };
+}
+
 function clampMetric(value: number, max: number): number {
   return Math.max(0, Math.min(Math.round(value), Math.max(0, max)));
 }
 
-function countRoomObjectsByCategory(room: RoomSnapshot, category: string): number {
+function countRoomObjectsByCategory(room: RoomSnapshot, category: 'collectible' | 'enemy'): number {
   let count = 0;
   for (const placed of room.placedObjects) {
-    const object = getObjectById(placed.id);
-    if (object?.category === category) {
+    if (placedObjectContributesToCategory(placed, category)) {
       count += 1;
     }
   }
   return count;
+}
+
+function getUtcDayStartIso(isoTimestamp: string): string {
+  const date = new Date(isoTimestamp);
+  date.setUTCHours(0, 0, 0, 0);
+  return date.toISOString();
+}
+
+async function hasMinimumAccountAgeForCreatorReward(env: Env, userId: string): Promise<boolean> {
+  const row = await env.DB.prepare(
+    `
+      SELECT created_at
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+    `
+  )
+    .bind(userId)
+    .first<Pick<UserRow, 'created_at'>>();
+
+  if (!row?.created_at) {
+    return false;
+  }
+
+  const createdAtMs = Date.parse(row.created_at);
+  if (!Number.isFinite(createdAtMs)) {
+    return false;
+  }
+
+  return Date.now() - createdAtMs >= MIN_ACCOUNT_AGE_FOR_CREATOR_REWARD_MS;
+}
+
+async function loadPointEventByTypeAndSource(
+  env: Env,
+  eventType: PointEventType,
+  sourceKey: string
+): Promise<PointEventRow | null> {
+  return env.DB.prepare(
+    `
+      SELECT
+        id,
+        user_id,
+        event_type,
+        source_key,
+        points,
+        breakdown_json,
+        created_at
+      FROM point_events
+      WHERE event_type = ?
+        AND source_key = ?
+      LIMIT 1
+    `
+  )
+    .bind(eventType, sourceKey)
+    .first<PointEventRow>();
+}
+
+async function recordCreatorCompletionPointEvent(
+  env: Env,
+  input: {
+    userId: string;
+    eventType: 'room_creator_completion' | 'course_creator_completion';
+    sourceKey: string;
+    points: number;
+    breakdown: Record<string, unknown>;
+  }
+): Promise<PointEventRow | null> {
+  const existing = await loadPointEventByTypeAndSource(env, input.eventType, input.sourceKey);
+  if (existing) {
+    return existing;
+  }
+
+  const eventId = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  const dayStartIso = getUtcDayStartIso(createdAt);
+  await env.DB.batch([
+    env.DB.prepare(
+      `
+        INSERT OR IGNORE INTO point_events (
+          id,
+          user_id,
+          event_type,
+          source_key,
+          points,
+          breakdown_json,
+          created_at
+        )
+        SELECT ?, ?, ?, ?, ?, ?, ?
+        WHERE (
+          SELECT COUNT(*)
+          FROM point_events
+          WHERE user_id = ?
+            AND event_type IN ('room_creator_completion', 'course_creator_completion')
+            AND created_at >= ?
+        ) < ?
+      `
+    ).bind(
+      eventId,
+      input.userId,
+      input.eventType,
+      input.sourceKey,
+      Math.max(0, Math.round(input.points)),
+      JSON.stringify(input.breakdown),
+      createdAt,
+      input.userId,
+      dayStartIso,
+      DAILY_CREATOR_COMPLETION_POINTS_LIMIT
+    ),
+  ]);
+
+  return env.DB.prepare(
+    `
+      SELECT
+        id,
+        user_id,
+        event_type,
+        source_key,
+        points,
+        breakdown_json,
+        created_at
+      FROM point_events
+      WHERE event_type = ?
+        AND source_key = ?
+      LIMIT 1
+    `
+  )
+    .bind(input.eventType, input.sourceKey)
+    .first<PointEventRow>();
 }
 
 function mapRoomRunRow(row: RoomRunRow): RoomRunRecord {

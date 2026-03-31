@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wampland Dashboard</title>
+    <style>
+      @font-face {
+        font-family: "Early Gameboy";
+        src: url("/assets/fonts/early-gameboy.ttf") format("truetype");
+        font-display: swap;
+      }
+
+      :root {
+        color-scheme: light;
+        --sky-top: #89b5ff;
+        --sky-mid: #77a4f8;
+        --sky-bottom: #6b95ee;
+        --panel-light: #f6f8fb;
+        --panel-mid: #d4d8e2;
+        --panel-dark: #636b7f;
+        --panel-deep: #3b4253;
+        --text: #ffffff;
+        --ink: #05070b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        overflow-x: hidden;
+        font-family: "Early Gameboy", monospace;
+        color: var(--text);
+        background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 54%, var(--sky-bottom) 100%);
+        image-rendering: pixelated;
+      }
+
+      button {
+        font: inherit;
+      }
+
+      .scene {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+      }
+
+      .scene::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0) 16%),
+          linear-gradient(180deg, rgba(9, 15, 27, 0) 58%, rgba(9, 15, 27, 0.12) 100%);
+      }
+
+      .scene-art {
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        width: max(1408px, 112vw);
+        height: auto;
+        transform: translateX(-50%);
+        image-rendering: pixelated;
+      }
+
+      .shell {
+        position: relative;
+        z-index: 1;
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 28px 20px 180px;
+        display: grid;
+        gap: 36px;
+      }
+
+      .toolbar {
+        display: flex;
+        justify-content: flex-end;
+        gap: 16px;
+      }
+
+      .refresh {
+        min-height: 56px;
+        min-width: 168px;
+        padding: 14px 20px;
+        border: 4px solid var(--ink);
+        background:
+          linear-gradient(180deg, #ffffff 0%, #edf0f5 36%, var(--panel-mid) 100%);
+        color: var(--ink);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        box-shadow:
+          inset 0 -6px 0 rgba(0, 0, 0, 0.16),
+          0 8px 0 rgba(0, 0, 0, 0.24);
+        cursor: pointer;
+      }
+
+      .refresh:disabled {
+        opacity: 0.65;
+        cursor: default;
+      }
+
+      .stats-grid {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: flex-start;
+        column-gap: 14px;
+        row-gap: 16px;
+        padding: clamp(56px, 14vh, 164px) 0 0;
+      }
+
+      .stat-card {
+        position: relative;
+        flex: 0 0 auto;
+        width: max-content;
+        min-width: 110px;
+        max-width: 100%;
+        min-height: 122px;
+        display: grid;
+        align-content: space-between;
+        gap: 10px;
+        padding: 12px 12px 14px;
+        border: 4px solid var(--ink);
+        box-shadow:
+          inset 0 -8px 0 rgba(0, 0, 0, 0.16),
+          0 10px 0 rgba(0, 0, 0, 0.2);
+        text-transform: uppercase;
+        overflow: hidden;
+      }
+
+      .stat-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        opacity: 0.18;
+        pointer-events: none;
+      }
+
+      .stat-card[data-tone='question'] {
+        background: linear-gradient(180deg, #ffffff 0%, #f0f3f8 34%, var(--panel-mid) 100%);
+        color: var(--ink);
+      }
+
+      .stat-card[data-tone='question']::before {
+        background:
+          linear-gradient(90deg, transparent 0 30%, rgba(7, 8, 12, 0.18) 30% 38%, transparent 38% 62%, rgba(7, 8, 12, 0.18) 62% 70%, transparent 70%),
+          linear-gradient(180deg, transparent 0 30%, rgba(7, 8, 12, 0.18) 30% 38%, transparent 38% 62%, rgba(7, 8, 12, 0.18) 62% 70%, transparent 70%);
+      }
+
+      .stat-card[data-tone='brick'] {
+        background: linear-gradient(180deg, #dde1ea 0%, #c5cad6 32%, #949bae 100%);
+        color: var(--ink);
+      }
+
+      .stat-card[data-tone='brick']::before {
+        background:
+          repeating-linear-gradient(
+            90deg,
+            transparent 0 28px,
+            rgba(7, 8, 12, 0.24) 28px 32px
+          ),
+          repeating-linear-gradient(
+            180deg,
+            transparent 0 28px,
+            rgba(7, 8, 12, 0.18) 28px 32px
+          );
+      }
+
+      .stat-card[data-tone='pipe'] {
+        background: linear-gradient(90deg, #798197 0 18%, var(--panel-dark) 18% 78%, var(--panel-deep) 78% 100%);
+      }
+
+      .stat-card[data-tone='pipe']::before {
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent 52%),
+          linear-gradient(90deg, transparent 0 14%, rgba(255, 255, 255, 0.16) 14% 19%, transparent 19% 82%, rgba(5, 7, 11, 0.22) 82% 86%, transparent 86%);
+      }
+
+      .stat-label,
+      .stat-value {
+        position: relative;
+        z-index: 1;
+        text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.18);
+      }
+
+      .stat-label {
+        font-size: 11px;
+        line-height: 1.45;
+        letter-spacing: 0.08em;
+        max-width: 10ch;
+      }
+
+      .stat-card[data-tone='question'] .stat-label,
+      .stat-card[data-tone='question'] .stat-value {
+        text-shadow: 3px 3px 0 rgba(255, 255, 255, 0.26);
+      }
+
+      .stat-value {
+        display: block;
+        width: max-content;
+        max-width: 100%;
+        font-size: clamp(1.4rem, 4.5vw, 2.8rem);
+        line-height: 1;
+        white-space: nowrap;
+        word-break: break-word;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      @media (max-width: 720px) {
+        .shell {
+          padding: 18px 14px 148px;
+        }
+
+        .toolbar {
+          justify-content: center;
+        }
+
+        .stats-grid {
+          column-gap: 12px;
+          row-gap: 14px;
+          padding-top: 68px;
+        }
+
+        .stat-card {
+          min-width: 102px;
+          min-height: 114px;
+          padding: 11px 11px 13px;
+        }
+
+        .stat-label {
+          font-size: 10px;
+          max-width: 10ch;
+        }
+
+        .stat-value {
+          font-size: clamp(1.2rem, 6vw, 2.1rem);
+        }
+
+        .scene-art {
+          width: max(1120px, 190vw);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="scene" aria-hidden="true">
+      <img class="scene-art" src="/assets/dashboard/mario-land-world-1-1.png" alt="" />
+    </div>
+
+    <main class="shell">
+      <div class="toolbar">
+        <button id="refresh-button" class="refresh" type="button">Refresh</button>
+      </div>
+
+      <section id="stats-grid" class="stats-grid" aria-live="polite"></section>
+
+      <div class="sr-only">
+        <div id="last-updated">No snapshot loaded yet.</div>
+        <div id="status">Fetching current totals.</div>
+      </div>
+    </main>
+
+    <script type="module" src="/src/dashboard.ts"></script>
+  </body>
+</html>

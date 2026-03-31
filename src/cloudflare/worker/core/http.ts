@@ -21,7 +21,7 @@ export function corsHeaders(request: Request): HeadersInit {
   const origin = request.headers.get('Origin');
   const headers: Record<string, string> = {
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Key, X-Playfun-Session-Token',
-    'Access-Control-Allow-Methods': 'GET,PUT,POST,DELETE,OPTIONS',
+    'Access-Control-Allow-Methods': 'GET,PUT,POST,PATCH,DELETE,OPTIONS',
   };
 
   if (origin) {
