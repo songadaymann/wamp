@@ -57,6 +57,17 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Snow / ice decorative collision rollback on March 30, 2026:
+  - user noticed the snow/ice tiles had the same kind of collision regression we previously fixed for lava
+  - traced `origin/main` to the broad no-collision snow list in `src/config.ts`:
+    - `DECO_ONLY_INDICES_SNOW = [2, 3, 4, 16, 31, 62, 63, 64, 65]`
+  - visually checking those indices against `public/assets/tilesets/tileset_snow.png` showed they include substantial solid snow/ice pieces, not just tiny decorative shards
+  - applied the same tight-fix strategy as lava:
+    - restored `DECO_ONLY_INDICES_SNOW` to only the genuinely tiny decoration-only tiles: `[8, 9, 10]`
+  - verification:
+    - `./node_modules/.bin/tsc --noEmit` passed
+    - `npm run build` passed
+
 - Overworld browse/play streaming tuning on March 30, 2026:
   - user reported two related issues:
     - returning to browse could leave too many still-visible rooms blank

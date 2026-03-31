@@ -135,7 +135,8 @@ const DECO_ONLY_INDICES_FOREST = [
 const DECO_ONLY_INDICES_DESERT = [3, 4, 18];
 const DECO_ONLY_INDICES_DIRT = [58, 59];
 const DECO_ONLY_INDICES_WATER = [1, 2, 3, 5, 13, 18];
-const DECO_ONLY_INDICES_SNOW = [2, 3, 4, 16, 31, 62, 63, 64, 65];
+// Tight snow rollback: keep only the tiny decoration-only snow tiles non-colliding.
+const DECO_ONLY_INDICES_SNOW = [8, 9, 10];
 // Tight lava rollback: keep only the tiny decoration-only embers non-colliding.
 const DECO_ONLY_INDICES_LAVA = [8, 10];
 
