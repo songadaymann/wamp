@@ -1078,7 +1078,10 @@ body[data-app-mode="play-world"] .world-only-control {
 .world-online-wrap {
   position: relative;
   display: inline-flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
+  gap: 4px;
 }
 
 .world-online-pill {
@@ -1155,6 +1158,19 @@ body[data-app-mode="play-world"] .world-only-control {
 .world-online-popover-list {
   display: grid;
   gap: 6px;
+}
+
+.world-online-hints {
+  display: grid;
+  gap: 2px;
+  text-align: center;
+}
+
+.world-online-hint {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  line-height: 1.2;
 }
 
 .world-online-popover-entry {

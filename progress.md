@@ -65,6 +65,12 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - verification:
     - `npm run build` passed
 
+- Overworld chat discoverability hint on March 31, 2026:
+  - added small desktop keyboard hints under the bottom-bar players-online pill:
+    - `Press T to chat in a room`
+    - `Press Return to open global chat`
+  - kept the change in the HUD markup/styles only and hid the hints on coarse-pointer layouts so mobile HUD space stays unchanged
+
 - Ephemeral in-room PartyKit chat MVP on March 31, 2026:
   - added lightweight room-local chat for play mode only with no persistence or moderation
   - implementation:

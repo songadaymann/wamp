@@ -110,6 +110,10 @@ body[data-device-class='phone'] .world-online-popover {
   max-height: min(260px, 36vh);
 }
 
+body[data-coarse-pointer='true'] .world-online-hints {
+  display: none;
+}
+
 body[data-device-class='phone'][data-app-mode='play-world'] #room-save-status {
   max-width: 46vw;
   overflow: hidden;
