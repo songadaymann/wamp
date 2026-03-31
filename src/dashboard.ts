@@ -28,6 +28,38 @@ refreshButton?.addEventListener('click', () => {
   void refreshDashboard(true);
 });
 
+historyGrid?.addEventListener('pointermove', (event) => {
+  const target = event.target instanceof Element ? event.target.closest('.history-bar-hit') : null;
+  if (!(target instanceof SVGElement)) {
+    hideAllHistoryTooltips();
+    return;
+  }
+
+  showHistoryTooltip(target, event.clientX, event.clientY);
+});
+
+historyGrid?.addEventListener('pointerleave', () => {
+  hideAllHistoryTooltips();
+});
+
+historyGrid?.addEventListener('focusin', (event) => {
+  const target = event.target instanceof Element ? event.target.closest('.history-bar-hit') : null;
+  if (!(target instanceof SVGElement)) {
+    return;
+  }
+
+  showHistoryTooltip(target);
+});
+
+historyGrid?.addEventListener('focusout', () => {
+  window.requestAnimationFrame(() => {
+    const active = document.activeElement;
+    if (!(active instanceof Element) || !active.closest('.history-chart-wrap')) {
+      hideAllHistoryTooltips();
+    }
+  });
+});
+
 document.addEventListener('visibilitychange', () => {
   syncRefreshTimer();
   if (document.visibilityState === 'visible') {
@@ -204,6 +236,7 @@ function createHistoryCardMarkup(
       </div>
       <div class="history-chart-wrap">
         ${createHistoryChartMarkup(points, tone)}
+        <div class="history-tooltip" hidden></div>
       </div>
       <div class="history-axis">
         <span>${escapeHtml(startLabel)}</span>
@@ -219,21 +252,56 @@ function createHistoryChartMarkup(
 ): string {
   const chartWidth = 320;
   const chartHeight = 112;
-  const innerHeight = 84;
+  const leftAxisWidth = 30;
+  const topPadding = 8;
+  const rightPadding = 4;
+  const bottomPadding = 16;
+  const plotHeight = chartHeight - topPadding - bottomPadding;
+  const plotWidth = chartWidth - leftAxisWidth - rightPadding;
   const gap = 2;
-  const barWidth = points.length > 0 ? (chartWidth - gap * Math.max(0, points.length - 1)) / points.length : chartWidth;
+  const barWidth = points.length > 0
+    ? (plotWidth - gap * Math.max(0, points.length - 1)) / points.length
+    : plotWidth;
   const maxCount = Math.max(1, ...points.map((point) => point.count));
   const fill = tone === 'pipe' ? '#f7fbff' : '#1b2437';
   const accent = tone === 'pipe' ? 'rgba(255,255,255,0.22)' : 'rgba(17,24,39,0.14)';
+  const gridStroke = tone === 'pipe' ? 'rgba(247,251,255,0.24)' : 'rgba(27,36,55,0.18)';
+  const labelFill = tone === 'pipe' ? '#f7fbff' : '#1b2437';
+  const tickValues = Array.from(new Set([maxCount, Math.ceil(maxCount / 2), 0]));
 
-  const bars = points.map((point, index) => {
-    const height = point.count <= 0 ? 4 : Math.max(8, (point.count / maxCount) * innerHeight);
-    const x = index * (barWidth + gap);
-    const y = chartHeight - height - 16;
+  const grid = tickValues.map((tick) => {
+    const y = topPadding + plotHeight - (tick / maxCount) * plotHeight;
     return `
       <g>
-        <title>${escapeHtml(`${formatChartDay(point.date)}: ${numberFormatter.format(point.count)}`)}</title>
+        <text x="${leftAxisWidth - 4}" y="${(y + 3).toFixed(2)}" text-anchor="end" fill="${labelFill}" fill-opacity="0.88" font-size="7">${escapeHtml(numberFormatter.format(tick))}</text>
+        <line x1="${leftAxisWidth}" y1="${y.toFixed(2)}" x2="${(chartWidth - rightPadding).toFixed(2)}" y2="${y.toFixed(2)}" stroke="${gridStroke}" stroke-width="2" />
+      </g>
+    `;
+  }).join('');
+
+  const bars = points.map((point, index) => {
+    const height = point.count <= 0 ? 4 : Math.max(8, (point.count / maxCount) * plotHeight);
+    const x = leftAxisWidth + index * (barWidth + gap);
+    const y = topPadding + plotHeight - height;
+    const tooltip = `${formatChartDay(point.date)} · ${numberFormatter.format(point.count)}`;
+    return `
+      <g>
         <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${barWidth.toFixed(2)}" height="${height.toFixed(2)}" rx="2" ry="2" fill="${fill}" />
+        <rect
+          class="history-bar-hit"
+          x="${x.toFixed(2)}"
+          y="${topPadding}"
+          width="${barWidth.toFixed(2)}"
+          height="${plotHeight.toFixed(2)}"
+          rx="2"
+          ry="2"
+          fill="transparent"
+          tabindex="0"
+          data-tooltip="${escapeHtml(tooltip)}"
+          aria-label="${escapeHtml(tooltip)}"
+        >
+          <title>${escapeHtml(tooltip)}</title>
+        </rect>
       </g>
     `;
   }).join('');
@@ -241,10 +309,53 @@ function createHistoryChartMarkup(
   return `
     <svg class="history-chart" viewBox="0 0 ${chartWidth} ${chartHeight}" role="img" aria-label="${escapeHtml(labelSeries(points))}">
       <rect x="0" y="0" width="${chartWidth}" height="${chartHeight}" rx="12" ry="12" fill="${accent}" />
-      <line x1="0" y1="${chartHeight - 16}" x2="${chartWidth}" y2="${chartHeight - 16}" stroke="${fill}" stroke-opacity="0.24" stroke-width="2" />
+      ${grid}
       ${bars}
     </svg>
   `;
+}
+
+function showHistoryTooltip(target: SVGElement, clientX?: number, clientY?: number): void {
+  const wrap = target.closest('.history-chart-wrap');
+  if (!(wrap instanceof HTMLElement)) {
+    return;
+  }
+
+  hideAllHistoryTooltips();
+
+  const tooltip = wrap.querySelector('.history-tooltip');
+  if (!(tooltip instanceof HTMLDivElement)) {
+    return;
+  }
+
+  const text = target.getAttribute('data-tooltip');
+  if (!text) {
+    return;
+  }
+
+  tooltip.textContent = text;
+  tooltip.hidden = false;
+
+  const wrapRect = wrap.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const x = clientX !== undefined
+    ? clientX - wrapRect.left
+    : targetRect.left - wrapRect.left + targetRect.width / 2;
+  const y = clientY !== undefined
+    ? clientY - wrapRect.top - 12
+    : targetRect.top - wrapRect.top - 8;
+
+  const clampedX = clamp(x, 48, Math.max(48, wrapRect.width - 48));
+  const clampedY = Math.max(10, y);
+
+  tooltip.style.left = `${clampedX}px`;
+  tooltip.style.top = `${clampedY}px`;
+}
+
+function hideAllHistoryTooltips(): void {
+  document.querySelectorAll<HTMLDivElement>('.history-tooltip').forEach((tooltip) => {
+    tooltip.hidden = true;
+  });
 }
 
 function summarizeSeries(points: DashboardStatsResponse['history']['nonPlayfunSignupsPerDay']): { total: number } {
@@ -287,6 +398,10 @@ function escapeHtml(value: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }
 
 type DashboardTone = 'question' | 'brick' | 'pipe';

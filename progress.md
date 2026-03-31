@@ -57,6 +57,21 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Dashboard chart readability pass on March 31, 2026:
+  - user wanted the public dashboard history charts to expose y-axis values and support hovering bars to see the exact daily count
+  - implementation:
+    - added left-side y-axis tick labels and horizontal grid lines to both dashboard history SVG charts
+    - added focusable/hoverable chart hit targets plus a custom pixel-style tooltip that shows `date · count` for each daily bar
+    - kept the existing 30-day non-Playfun signup and room-claim series unchanged; this was a presentation/interaction improvement only
+  - verification:
+    - `npm run build` passed
+    - local dashboard smoke against live API wrote:
+      - `output/web-game/dashboard-tooltips-smoke/shot-0.png`
+      - confirms y-axis labels render on both charts
+    - targeted Playwright hover capture wrote:
+      - `output/web-game/dashboard-tooltips-hover/hover.png`
+      - confirms tooltip text appears over the hovered bar (`MAR 21 · 7`)
+
 - Snow / ice decorative collision rollback on March 30, 2026:
   - user noticed the snow/ice tiles had the same kind of collision regression we previously fixed for lava
   - traced `origin/main` to the broad no-collision snow list in `src/config.ts`:
