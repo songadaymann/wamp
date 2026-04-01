@@ -76,6 +76,7 @@ interface OverworldGoalRunControllerOptions {
   getScore: () => number;
   getAuthenticated: () => boolean;
   getAuthDisplayName: () => string | null;
+  showTransientStatus?: (message: string) => void;
   countRoomObjectsByCategory: (
     room: RoomSnapshot,
     category: GameObjectConfig['category']
@@ -795,9 +796,18 @@ export class OverworldGoalRunController {
             ? 'Failed run submitted.'
             : 'Run marked abandoned.';
     } catch (error) {
-      console.error('Failed to finish ranked run', error);
+      console.error('Failed to finish ranked run', {
+        attemptId: runState.attemptId,
+        result,
+        payload,
+        error,
+      });
+      const message = formatGoalRunSubmissionErrorMessage(error, result);
       runState.submissionState = 'error';
-      runState.submissionMessage = 'Run submission failed.';
+      runState.submissionMessage = message;
+      if (result === 'completed') {
+        this.options.showTransientStatus?.(message);
+      }
     }
   }
 
@@ -874,4 +884,24 @@ export class OverworldGoalRunController {
   private nowIso(): string {
     return this.options.getNowIso ? this.options.getNowIso() : new Date().toISOString();
   }
+}
+
+function formatGoalRunSubmissionErrorMessage(
+  error: unknown,
+  result: Exclude<RunResult, 'active'>
+): string {
+  const detail =
+    error instanceof Error && error.message.trim()
+      ? error.message.trim()
+      : 'Run submission failed.';
+
+  if (result === 'completed') {
+    return `Ranked clear not recorded: ${detail}`;
+  }
+
+  if (result === 'failed') {
+    return `Ranked failed run not recorded: ${detail}`;
+  }
+
+  return `Run abandon did not sync: ${detail}`;
 }

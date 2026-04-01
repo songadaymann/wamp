@@ -4920,3 +4920,18 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - PartyKit websocket connection refusals on `127.0.0.1:1999` because presence was not running locally
 - 2026-03-28: Patched draft-course return flow in `src/scenes/overworld/flow.ts` to reopen `CourseEditorScene` with `run(...)` when the scene is not currently sleeping. This closes the blank-canvas case where overworld slept after trying to `wake` a non-running editor scene.
 - 2026-03-28: Added course-level pressure-plate links for the stitched course editor. Cross-room links now persist on the course snapshot, resolve in the course editor inspector/overlay, and are applied onto live trigger objects during course test/play so cross-room plates can open targets in other course rooms.
+- 2026-04-01: Investigated ranked clear submissions that showed local success FX but never appeared on room leaderboards.
+  - Production D1 findings:
+    - room `2,6` has no `completed` `room_runs` for the reported attempts even when the client showed success
+    - recent attempts that looked successful stayed `active` in D1 instead of finalizing, while nearby failed attempts finalized as `abandoned`
+    - latest published room version `6` uses `collect_target` with `required_count = 7`, so the missing clear was not caused by the optional `key`
+  - Likely production cause:
+    - backend/frontend drift around newer collectible objects, with `kitkat` the leading suspect because local room logic counts it while the live worker may still be running code from before that object existed
+  - Patch on current `main` worktree:
+    - `src/scenes/overworld/goalRuns.ts`
+      - surface precise room-run finish errors as `Ranked clear not recorded: ...` instead of the generic `Run submission failed.`
+      - log the ranked finish payload together with the attempt id and result for easier production debugging
+    - `src/scenes/overworld/coursePlayback.ts`
+      - mirror the same explicit error messaging for course run submission failures
+    - `src/scenes/OverworldPlayScene.ts`
+      - wire both controllers into the existing transient-status banner so failed ranked clears are visible immediately in the HUD

@@ -417,6 +417,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getScore: () => this.score,
       getAuthenticated: () => getAuthDebugState().authenticated,
       getAuthDisplayName: () => getAuthDebugState().user?.displayName ?? null,
+      showTransientStatus: (message) => this.showTransientStatus(message),
       countRoomObjectsByCategory: (room, category) =>
         this.countRoomObjectsByCategory(room, category),
     });
@@ -584,6 +585,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.getRoomSnapshotForCoordinates(coordinates),
       countRoomObjectsByCategory: (room, category) =>
         this.countRoomObjectsByCategory(room, category),
+      showTransientStatus: (message) => this.showTransientStatus(message),
       renderHud: () => this.renderHud(),
     });
     this.courseComposerController = new OverworldCourseComposerController({

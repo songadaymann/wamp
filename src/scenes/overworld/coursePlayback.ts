@@ -35,6 +35,7 @@ interface OverworldCoursePlaybackHost {
   setTransientRoomOverride(snapshot: RoomSnapshot): void;
   getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null;
   countRoomObjectsByCategory(room: RoomSnapshot, category: GameObjectConfig['category']): number;
+  showTransientStatus(message: string): void;
   renderHud(): void;
 }
 
@@ -218,15 +219,23 @@ export class OverworldCoursePlaybackController {
       currentActiveCourseRun.submissionState = 'submitted';
       currentActiveCourseRun.submissionMessage = 'Ranked course run submitted.';
     } catch (error) {
-      console.error('Failed to finish ranked course run', error);
+      console.error('Failed to finish ranked course run', {
+        attemptId,
+        result,
+        body,
+        error,
+      });
       const currentActiveCourseRun = this.host.getActiveCourseRun();
       if (!currentActiveCourseRun || currentActiveCourseRun.attemptId !== attemptId) {
         return;
       }
 
+      const message = formatCourseRunSubmissionErrorMessage(error, result);
       currentActiveCourseRun.submissionState = 'error';
-      currentActiveCourseRun.submissionMessage =
-        error instanceof Error ? error.message : 'Failed to submit course run.';
+      currentActiveCourseRun.submissionMessage = message;
+      if (result === 'completed') {
+        this.host.showTransientStatus(message);
+      }
     } finally {
       this.host.renderHud();
     }
@@ -273,4 +282,24 @@ export class OverworldCoursePlaybackController {
 
     return this.host.getRoomSnapshotForCoordinates(roomRef.coordinates);
   }
+}
+
+function formatCourseRunSubmissionErrorMessage(
+  error: unknown,
+  result: 'completed' | 'failed' | 'abandoned'
+): string {
+  const detail =
+    error instanceof Error && error.message.trim()
+      ? error.message.trim()
+      : 'Course run submission failed.';
+
+  if (result === 'completed') {
+    return `Ranked course clear not recorded: ${detail}`;
+  }
+
+  if (result === 'failed') {
+    return `Ranked failed course run not recorded: ${detail}`;
+  }
+
+  return `Course run abandon did not sync: ${detail}`;
 }
