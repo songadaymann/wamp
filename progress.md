@@ -4960,3 +4960,18 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - mirror the same explicit error messaging for course run submission failures
     - `src/scenes/OverworldPlayScene.ts`
       - wire both controllers into the existing transient-status banner so failed ranked clears are visible immediately in the HUD
+- 2026-04-01: Rebuilt room-lighting v1 on top of current `origin/main` after the first safety branch was cut from a stale March 20 base.
+  - Architecture:
+    - kept room lighting in the dedicated `src/lighting/` subsystem and rethreaded it through the current editor/play scene controller seams instead of reviving deleted editor UI wiring
+    - updated the shared editor runtime contract so lighting selection is host-owned per room, which keeps the course editor’s multi-room slices from leaking a global lighting mode into each other
+  - Behavior:
+    - editor and overworld play now expose `lighting` debug state via `describeState()`
+    - course editor now preserves each slice’s `lightingMode` even though it does not render the room-darkening overlay itself
+    - tuned `playerAuraDark` to a smaller aura (`176`) with darker ambient fill (`0.92`)
+  - Verification:
+    - `npm run build` passed in `/tmp/wamp-room-lighting-mainbase-2026-04-01`
+    - required `develop-web-game` client smoke wrote:
+      - `output/web-game/room-lighting-client-smoke/state-0.json`
+      - `output/web-game/room-lighting-client-smoke/shot-0.png`
+    - smoke confirmed clean overworld boot plus the new `lighting` debug block in `render_game_to_text`
+    - headless screenshot is still black in this environment, and the local preview window had no editable room loaded, so editor/play lighting visuals still need manual browser validation on the safety deploy

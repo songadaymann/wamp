@@ -11,6 +11,8 @@ import {
 import type { CourseGoalType } from '../../courses/model';
 import type { RoomGoalType } from '../../goals/roomGoals';
 import type { RoomBoundarySide } from '../../persistence/roomRepository';
+import type { RoomLightingMode } from '../../lighting/model';
+import type { RoomBoundarySide } from '../../persistence/roomRepository';
 import { AUTH_STATE_CHANGED_EVENT } from '../../auth/client';
 import type { EditorMarkerPlacementMode } from '../../ui/setup/sceneBridge';
 import { EDITOR_UI_STATE_CHANGED_EVENT } from './uiEvents';
@@ -184,6 +186,7 @@ export interface EditorUiBridgeActions {
     entityType: EditorBoundaryIngressEntityType,
     allowed: boolean
   ) => void;
+  onSelectLighting: (mode: RoomLightingMode) => void;
   onSetGoalType: (nextType: RoomGoalType | null) => void;
   onSetGoalTimeLimitSeconds: (seconds: number | null) => void;
   onSetGoalRequiredCount: (requiredCount: number) => void;
@@ -299,6 +302,7 @@ export class EditorUiBridge {
   private readonly objectPaletteSection: HTMLElement | null;
   private readonly objectCategoryTabs: HTMLElement[];
   private readonly backgroundSelect: HTMLSelectElement | null;
+  private readonly lightingSelect: HTMLSelectElement | null;
   private readonly backgroundButtons: HTMLButtonElement[];
   private readonly boundaryIngressObjectChecks: Record<RoomBoundarySide, HTMLInputElement | null>;
   private readonly boundaryIngressEnemyChecks: Record<RoomBoundarySide, HTMLInputElement | null>;
@@ -418,6 +422,8 @@ export class EditorUiBridge {
     this.objectCategoryTabs = Array.from(this.doc.querySelectorAll<HTMLElement>('.obj-cat-tab'));
     this.backgroundSelect =
       this.doc.getElementById('background-select') as HTMLSelectElement | null;
+    this.lightingSelect =
+      this.doc.getElementById('lighting-mode-select') as HTMLSelectElement | null;
     this.backgroundButtons = Array.from(
       this.doc.querySelectorAll<HTMLButtonElement>('[data-background-id]')
     );
@@ -863,6 +869,19 @@ export class EditorUiBridge {
       );
     }
 
+    const handleLightingSelectChange = () => {
+      if (!this.lightingSelect) {
+        return;
+      }
+      this.applyLightingSelection(this.lightingSelect.value as RoomLightingMode);
+    };
+    this.lightingSelect?.addEventListener('change', handleLightingSelectChange);
+    if (this.lightingSelect) {
+      this.cleanupCallbacks.push(() =>
+        this.lightingSelect?.removeEventListener('change', handleLightingSelectChange)
+      );
+    }
+
     for (const button of this.backgroundButtons) {
       const handler = () => {
         const nextBackground = button.dataset.backgroundId;
@@ -1098,6 +1117,16 @@ export class EditorUiBridge {
     this.requestPhoneEditorAutoCollapse();
   }
 
+  private applyLightingSelection(nextLightingMode: RoomLightingMode): void {
+    if (!nextLightingMode || editorState.selectedLightingMode === nextLightingMode) {
+      return;
+    }
+    editorState.selectedLightingMode = nextLightingMode;
+    this.actions.onSelectLighting(nextLightingMode);
+    this.syncEditorChromeState();
+    this.requestPhoneEditorAutoCollapse();
+  }
+
   private requestPhoneEditorAutoCollapse(): void {
     this.windowObj.dispatchEvent(new Event('mobile-editor-auto-collapse'));
   }
@@ -1175,6 +1204,7 @@ export class EditorUiBridge {
     }
 
     this.setValue(this.backgroundSelect, editorState.selectedBackground);
+    this.setValue(this.lightingSelect, editorState.selectedLightingMode);
     for (const button of this.backgroundButtons) {
       const active = button.dataset.backgroundId === editorState.selectedBackground;
       button.classList.toggle('active', active);
