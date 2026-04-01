@@ -18,8 +18,10 @@ interface RoomAudioDebugSnapshot {
 }
 
 const ADJACENT_ROOM_PRIMARY_PLAYBACK: SfxPlaybackOptions = {
-  volumeMultiplier: 0.34,
-  playbackRateMultiplier: 0.95,
+  volumeMultiplier: 0.26,
+  playbackRateMultiplier: 0.93,
+  lowPassFrequencyHz: 1500,
+  lowPassQ: 0.85,
 };
 
 const ADJACENT_ROOM_ECHO_PLAYBACKS: Array<{
@@ -29,16 +31,20 @@ const ADJACENT_ROOM_ECHO_PLAYBACKS: Array<{
   {
     delayMs: 110,
     playback: {
-      volumeMultiplier: 0.14,
-      playbackRateMultiplier: 0.88,
+      volumeMultiplier: 0.1,
+      playbackRateMultiplier: 0.84,
+      lowPassFrequencyHz: 1350,
+      lowPassQ: 0.95,
       ignoreCooldown: true,
     },
   },
   {
     delayMs: 210,
     playback: {
-      volumeMultiplier: 0.08,
-      playbackRateMultiplier: 0.82,
+      volumeMultiplier: 0.05,
+      playbackRateMultiplier: 0.8,
+      lowPassFrequencyHz: 1200,
+      lowPassQ: 1.05,
       ignoreCooldown: true,
     },
   },
