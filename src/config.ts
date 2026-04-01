@@ -160,7 +160,7 @@ export const TILESETS: TilesetConfig[] = [
   {
     key: 'desert',
     name: 'Desert',
-    path: 'assets/tilesets/tileset_desert.png',
+    path: 'assets/tilesets/tileset_desert.png?v=2026-04-01-desert-tiles',
     imageWidth: 192,
     imageHeight: 96,
     columns: 12,
