@@ -4,6 +4,7 @@ import {
   DEFAULT_PLAYER_ATLAS_ASSETS,
   DEFAULT_PLAYER_ANIMATIONS,
   DEFAULT_PLAYER_FX_ANIMATIONS,
+  DEFAULT_PLAYER_IMAGE_ASSETS,
 } from '../player/defaultPlayer';
 import {
   ROCKY_ROADS_FX_ANIMATIONS,
@@ -56,6 +57,10 @@ export class BootScene extends Phaser.Scene {
       this.load.atlas(atlas.key, atlas.texturePath, atlas.atlasPath);
     }
 
+    for (const image of DEFAULT_PLAYER_IMAGE_ASSETS) {
+      this.load.image(image.key, image.path);
+    }
+
     for (const effectSheet of ROCKY_ROADS_FX_SPRITESHEETS) {
       this.load.spritesheet(effectSheet.key, effectSheet.path, {
         frameWidth: effectSheet.frameWidth,
@@ -97,10 +102,7 @@ export class BootScene extends Phaser.Scene {
 
       this.anims.create({
         key: animation.key,
-        frames: animation.frameNames.map((frameName) => ({
-          key: animation.atlasKey,
-          frame: frameName,
-        })),
+        frames: animation.frames,
         frameRate: animation.frameRate,
         repeat: animation.repeat,
       });
@@ -113,10 +115,7 @@ export class BootScene extends Phaser.Scene {
 
       this.anims.create({
         key: animation.key,
-        frames: animation.frameNames.map((frameName) => ({
-          key: animation.atlasKey,
-          frame: frameName,
-        })),
+        frames: animation.frames,
         frameRate: animation.frameRate,
         repeat: animation.repeat,
       });

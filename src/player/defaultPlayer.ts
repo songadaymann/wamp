@@ -23,15 +23,25 @@ export interface PlayerAtlasAssetEntry {
   atlasPath: string;
 }
 
+export interface PlayerImageAssetEntry {
+  key: string;
+  path: string;
+}
+
+export interface PlayerAnimationFrameEntry {
+  key: string;
+  frame?: string | number;
+}
+
 export interface DefaultPlayerAnimationDefinition {
   key: string;
-  atlasKey: string;
-  frameNames: string[];
+  frames: PlayerAnimationFrameEntry[];
   frameRate: number;
   repeat: number;
 }
 
 const PLAYER_ASSET_ROOT = 'assets/player/default';
+const PLAYER_CHONK_MOTION_ASSET_ROOT = 'assets/player/chonk-motion';
 const PLAYER_FRAME_PREFIX = 'Player ';
 const PLAYER_COMBAT_FRAME_PREFIX = 'PlayerCombat ';
 const PLAYER_FX_FRAME_PREFIX = 'Effects ';
@@ -41,6 +51,20 @@ export const DEFAULT_PLAYER_ATLAS_KEYS = {
   combat: 'player-default-combat-atlas',
   weapons: 'player-default-weapons-atlas',
   fx: 'player-default-fx-atlas',
+} as const;
+
+export const DEFAULT_PLAYER_IMAGE_KEYS = {
+  'chonk-run-01': 'player-chonk-run-01',
+  'chonk-run-02': 'player-chonk-run-02',
+  'chonk-run-03': 'player-chonk-run-03',
+  'chonk-run-04': 'player-chonk-run-04',
+  'chonk-run-05': 'player-chonk-run-05',
+  'chonk-run-06': 'player-chonk-run-06',
+  'chonk-run-07': 'player-chonk-run-07',
+  'chonk-run-08': 'player-chonk-run-08',
+  'chonk-jump-rise-01': 'player-chonk-jump-rise-01',
+  'chonk-jump-fall-01': 'player-chonk-jump-fall-01',
+  'chonk-land-01': 'player-chonk-land-01',
 } as const;
 
 export const DEFAULT_PLAYER_ATLAS_ASSETS: PlayerAtlasAssetEntry[] = [
@@ -66,8 +90,66 @@ export const DEFAULT_PLAYER_ATLAS_ASSETS: PlayerAtlasAssetEntry[] = [
   },
 ];
 
+export const DEFAULT_PLAYER_IMAGE_ASSETS: PlayerImageAssetEntry[] = [
+  {
+    key: DEFAULT_PLAYER_IMAGE_KEYS['chonk-run-01'],
+    path: `${PLAYER_CHONK_MOTION_ASSET_ROOT}/Run/Run01.png`,
+  },
+  {
+    key: DEFAULT_PLAYER_IMAGE_KEYS['chonk-run-02'],
+    path: `${PLAYER_CHONK_MOTION_ASSET_ROOT}/Run/Run02.png`,
+  },
+  {
+    key: DEFAULT_PLAYER_IMAGE_KEYS['chonk-run-03'],
+    path: `${PLAYER_CHONK_MOTION_ASSET_ROOT}/Run/Run03.png`,
+  },
+  {
+    key: DEFAULT_PLAYER_IMAGE_KEYS['chonk-run-04'],
+    path: `${PLAYER_CHONK_MOTION_ASSET_ROOT}/Run/Run04.png`,
+  },
+  {
+    key: DEFAULT_PLAYER_IMAGE_KEYS['chonk-run-05'],
+    path: `${PLAYER_CHONK_MOTION_ASSET_ROOT}/Run/Run05.png`,
+  },
+  {
+    key: DEFAULT_PLAYER_IMAGE_KEYS['chonk-run-06'],
+    path: `${PLAYER_CHONK_MOTION_ASSET_ROOT}/Run/Run06.png`,
+  },
+  {
+    key: DEFAULT_PLAYER_IMAGE_KEYS['chonk-run-07'],
+    path: `${PLAYER_CHONK_MOTION_ASSET_ROOT}/Run/Run07.png`,
+  },
+  {
+    key: DEFAULT_PLAYER_IMAGE_KEYS['chonk-run-08'],
+    path: `${PLAYER_CHONK_MOTION_ASSET_ROOT}/Run/Run08.png`,
+  },
+  {
+    key: DEFAULT_PLAYER_IMAGE_KEYS['chonk-jump-rise-01'],
+    path: `${PLAYER_CHONK_MOTION_ASSET_ROOT}/JumpRise/JumpRise01.png`,
+  },
+  {
+    key: DEFAULT_PLAYER_IMAGE_KEYS['chonk-jump-fall-01'],
+    path: `${PLAYER_CHONK_MOTION_ASSET_ROOT}/JumpFall/JumpFall01.png`,
+  },
+  {
+    key: DEFAULT_PLAYER_IMAGE_KEYS['chonk-land-01'],
+    path: `${PLAYER_CHONK_MOTION_ASSET_ROOT}/Land/Land01.png`,
+  },
+];
+
 function buildFrameNames(prefix: string, indices: number[]): string[] {
   return indices.map((index) => `${prefix}${index}.aseprite`);
+}
+
+function buildAtlasFrames(atlasKey: string, frameNames: string[]): PlayerAnimationFrameEntry[] {
+  return frameNames.map((frameName) => ({
+    key: atlasKey,
+    frame: frameName,
+  }));
+}
+
+function buildImageFrames(keys: string[]): PlayerAnimationFrameEntry[] {
+  return keys.map((key) => ({ key }));
 }
 
 const IDLE_FRAMES = buildFrameNames(PLAYER_FRAME_PREFIX, [0, 1, 2, 3, 4, 5, 6]);
@@ -101,43 +183,55 @@ export const DEFAULT_PLAYER_FX_ANIMATION_KEYS = {
 export const DEFAULT_PLAYER_FX_ANIMATIONS: DefaultPlayerAnimationDefinition[] = [
   {
     key: DEFAULT_PLAYER_FX_ANIMATION_KEYS['jump-dust'],
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.fx,
-    frameNames: buildFrameNames(PLAYER_FX_FRAME_PREFIX, [57, 58, 59, 60, 61, 62, 63]),
+    frames: buildAtlasFrames(
+      DEFAULT_PLAYER_ATLAS_KEYS.fx,
+      buildFrameNames(PLAYER_FX_FRAME_PREFIX, [57, 58, 59, 60, 61, 62, 63]),
+    ),
     frameRate: 18,
     repeat: 0,
   },
   {
     key: DEFAULT_PLAYER_FX_ANIMATION_KEYS['landing-dust'],
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.fx,
-    frameNames: buildFrameNames(PLAYER_FX_FRAME_PREFIX, [64, 65, 66, 67, 68, 69]),
+    frames: buildAtlasFrames(
+      DEFAULT_PLAYER_ATLAS_KEYS.fx,
+      buildFrameNames(PLAYER_FX_FRAME_PREFIX, [64, 65, 66, 67, 68, 69]),
+    ),
     frameRate: 18,
     repeat: 0,
   },
   {
     key: DEFAULT_PLAYER_FX_ANIMATION_KEYS['run-dust-front'],
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.fx,
-    frameNames: buildFrameNames(PLAYER_FX_FRAME_PREFIX, [25, 26, 27, 28, 29, 30, 31, 32]),
+    frames: buildAtlasFrames(
+      DEFAULT_PLAYER_ATLAS_KEYS.fx,
+      buildFrameNames(PLAYER_FX_FRAME_PREFIX, [25, 26, 27, 28, 29, 30, 31, 32]),
+    ),
     frameRate: 18,
     repeat: 0,
   },
   {
     key: DEFAULT_PLAYER_FX_ANIMATION_KEYS['run-dust-back'],
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.fx,
-    frameNames: buildFrameNames(PLAYER_FX_FRAME_PREFIX, [33, 34, 35, 36, 37, 38, 39, 40]),
+    frames: buildAtlasFrames(
+      DEFAULT_PLAYER_ATLAS_KEYS.fx,
+      buildFrameNames(PLAYER_FX_FRAME_PREFIX, [33, 34, 35, 36, 37, 38, 39, 40]),
+    ),
     frameRate: 18,
     repeat: 0,
   },
   {
     key: DEFAULT_PLAYER_FX_ANIMATION_KEYS['muzzle-flash'],
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.fx,
-    frameNames: buildFrameNames(PLAYER_FX_FRAME_PREFIX, [0, 1, 2, 3, 4, 5, 6, 7, 8]),
+    frames: buildAtlasFrames(
+      DEFAULT_PLAYER_ATLAS_KEYS.fx,
+      buildFrameNames(PLAYER_FX_FRAME_PREFIX, [0, 1, 2, 3, 4, 5, 6, 7, 8]),
+    ),
     frameRate: 24,
     repeat: 0,
   },
   {
     key: DEFAULT_PLAYER_FX_ANIMATION_KEYS['bullet-impact'],
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.fx,
-    frameNames: buildFrameNames(PLAYER_FX_FRAME_PREFIX, [9, 10, 11, 12, 13, 14, 15, 16, 17]),
+    frames: buildAtlasFrames(
+      DEFAULT_PLAYER_ATLAS_KEYS.fx,
+      buildFrameNames(PLAYER_FX_FRAME_PREFIX, [9, 10, 11, 12, 13, 14, 15, 16, 17]),
+    ),
     frameRate: 24,
     repeat: 0,
   },
@@ -164,106 +258,100 @@ export const DEFAULT_PLAYER_ANIMATION_KEYS: Record<PlayerAnimationState, string>
 export const DEFAULT_PLAYER_ANIMATIONS: DefaultPlayerAnimationDefinition[] = [
   {
     key: DEFAULT_PLAYER_ANIMATION_KEYS.idle,
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.base,
-    frameNames: IDLE_FRAMES,
+    frames: buildAtlasFrames(DEFAULT_PLAYER_ATLAS_KEYS.base, IDLE_FRAMES),
     frameRate: 8,
     repeat: -1,
   },
   {
     key: DEFAULT_PLAYER_ANIMATION_KEYS.run,
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.base,
-    frameNames: RUN_FRAMES,
+    frames: buildImageFrames([
+      DEFAULT_PLAYER_IMAGE_KEYS['chonk-run-01'],
+      DEFAULT_PLAYER_IMAGE_KEYS['chonk-run-02'],
+      DEFAULT_PLAYER_IMAGE_KEYS['chonk-run-03'],
+      DEFAULT_PLAYER_IMAGE_KEYS['chonk-run-04'],
+      DEFAULT_PLAYER_IMAGE_KEYS['chonk-run-05'],
+      DEFAULT_PLAYER_IMAGE_KEYS['chonk-run-06'],
+      DEFAULT_PLAYER_IMAGE_KEYS['chonk-run-07'],
+      DEFAULT_PLAYER_IMAGE_KEYS['chonk-run-08'],
+    ]),
     frameRate: 12,
     repeat: -1,
   },
   {
     key: DEFAULT_PLAYER_ANIMATION_KEYS['jump-rise'],
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.base,
-    frameNames: JUMP_RISE_FRAMES,
+    frames: buildImageFrames([DEFAULT_PLAYER_IMAGE_KEYS['chonk-jump-rise-01']]),
     frameRate: 1,
     repeat: -1,
   },
   {
     key: DEFAULT_PLAYER_ANIMATION_KEYS['jump-fall'],
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.base,
-    frameNames: JUMP_FALL_FRAMES,
+    frames: buildImageFrames([DEFAULT_PLAYER_IMAGE_KEYS['chonk-jump-fall-01']]),
     frameRate: 1,
     repeat: -1,
   },
   {
     key: DEFAULT_PLAYER_ANIMATION_KEYS['wall-slide'],
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.base,
-    frameNames: WALL_SLIDE_FRAMES,
+    frames: buildAtlasFrames(DEFAULT_PLAYER_ATLAS_KEYS.base, WALL_SLIDE_FRAMES),
     frameRate: 10,
     repeat: -1,
   },
   {
     key: DEFAULT_PLAYER_ANIMATION_KEYS['wall-jump'],
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.base,
-    frameNames: WALL_JUMP_FRAMES,
+    frames: buildAtlasFrames(DEFAULT_PLAYER_ATLAS_KEYS.base, WALL_JUMP_FRAMES),
     frameRate: 14,
     repeat: -1,
   },
   {
     key: DEFAULT_PLAYER_ANIMATION_KEYS.land,
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.base,
-    frameNames: LAND_FRAMES,
+    frames: buildImageFrames([DEFAULT_PLAYER_IMAGE_KEYS['chonk-land-01']]),
     frameRate: 14,
     repeat: 0,
   },
   {
     key: DEFAULT_PLAYER_ANIMATION_KEYS['ladder-climb'],
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.base,
-    frameNames: LADDER_CLIMB_FRAMES,
+    frames: buildAtlasFrames(DEFAULT_PLAYER_ATLAS_KEYS.base, LADDER_CLIMB_FRAMES),
     frameRate: 10,
     repeat: -1,
   },
   {
     key: DEFAULT_PLAYER_ANIMATION_KEYS.crouch,
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.base,
-    frameNames: CROUCH_FRAMES,
+    frames: buildAtlasFrames(DEFAULT_PLAYER_ATLAS_KEYS.base, CROUCH_FRAMES),
     frameRate: 10,
     repeat: 0,
   },
   {
     key: DEFAULT_PLAYER_ANIMATION_KEYS.crawl,
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.base,
-    frameNames: CRAWL_FRAMES,
+    frames: buildAtlasFrames(DEFAULT_PLAYER_ATLAS_KEYS.base, CRAWL_FRAMES),
     frameRate: 12,
     repeat: -1,
   },
   {
     key: DEFAULT_PLAYER_ANIMATION_KEYS.push,
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.base,
-    frameNames: PUSH_FRAMES,
+    frames: buildAtlasFrames(DEFAULT_PLAYER_ATLAS_KEYS.base, PUSH_FRAMES),
     frameRate: 12,
     repeat: -1,
   },
   {
     key: DEFAULT_PLAYER_ANIMATION_KEYS.pull,
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.base,
-    frameNames: PULL_FRAMES,
+    frames: buildAtlasFrames(DEFAULT_PLAYER_ATLAS_KEYS.base, PULL_FRAMES),
     frameRate: 12,
     repeat: -1,
   },
   {
     key: DEFAULT_PLAYER_ANIMATION_KEYS['sword-slash'],
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.combat,
-    frameNames: SWORD_SLASH_FRAMES,
+    frames: buildAtlasFrames(DEFAULT_PLAYER_ATLAS_KEYS.combat, SWORD_SLASH_FRAMES),
     frameRate: 18,
     repeat: 0,
   },
   {
     key: DEFAULT_PLAYER_ANIMATION_KEYS['air-slash-down'],
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.combat,
-    frameNames: AIR_SLASH_DOWN_FRAMES,
+    frames: buildAtlasFrames(DEFAULT_PLAYER_ATLAS_KEYS.combat, AIR_SLASH_DOWN_FRAMES),
     frameRate: 18,
     repeat: 0,
   },
   {
     key: DEFAULT_PLAYER_ANIMATION_KEYS['gun-fire'],
-    atlasKey: DEFAULT_PLAYER_ATLAS_KEYS.combat,
-    frameNames: GUN_FIRE_FRAMES,
+    frames: buildAtlasFrames(DEFAULT_PLAYER_ATLAS_KEYS.combat, GUN_FIRE_FRAMES),
     frameRate: 18,
     repeat: 0,
   },
