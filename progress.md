@@ -8,6 +8,9 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 - Current build includes overworld browse/play, room and course authoring, persistence/auth, leaderboards, chat, agent tokens, and mint-gated room ownership flows.
 - PRD direction is still editor-first and zero-friction, but minimap/topology navigation, course/challenge polish, richer social systems, and broader operator/report tooling are still future work.
 
+- April 1, 2026 quick music trim:
+  - lowered the room-music master gain to 60% of the prior level so all stems and picker previews come down together without changing lane balance
+
 - Room music follow-up on April 1, 2026:
   - room music arrangements now store 4 per-bar clip choices per lane, and older single-clip lane saves normalize into all 4 bars so existing rooms stay playable
   - music playback now auto-balances lanes with pack-defined default gains and builds each lane as a composite 4-bar buffer from decoded clip slices, which keeps per-bar authoring aligned without relying on MP3 loop padding

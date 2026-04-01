@@ -34,6 +34,7 @@ type PreviewClipPlayback = {
 };
 
 const IMMEDIATE_FADE_DURATION_SEC = 0.12;
+const GLOBAL_MUSIC_VOLUME_MULTIPLIER = 0.6;
 
 function resolveAssetUrl(path: string): string {
   const base = import.meta.env.BASE_URL || '/';
@@ -330,7 +331,7 @@ export class RoomMusicController {
     }
 
     this.masterGain = audioContext.createGain();
-    this.masterGain.gain.setValueAtTime(0.82, audioContext.currentTime);
+    this.masterGain.gain.setValueAtTime(0.82 * GLOBAL_MUSIC_VOLUME_MULTIPLIER, audioContext.currentTime);
     this.masterGain.connect(audioContext.destination);
     return this.masterGain;
   }
