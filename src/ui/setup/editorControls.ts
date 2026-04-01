@@ -15,6 +15,7 @@ import { PaletteController } from './paletteController';
 
 const TILE_FLIP_CHANGED_EVENT = 'tile-flip-changed';
 const EDITOR_LAYER_CHANGED_EVENT = 'editor-layer-changed';
+const LIGHTING_CHANGED_EVENT = 'lighting-changed';
 
 export function setupEditorControls(
   game: Phaser.Game,
@@ -32,6 +33,7 @@ export function setupEditorControls(
   setupEraserControls(game, doc);
   setupBackgroundSelector(doc, windowObj);
   setupBackgroundCards(doc, windowObj);
+  setupLightingSelector(doc, windowObj);
   setupGoalControls(game, doc);
   setupPaletteModeTabs(paletteController, doc);
   setupObjectCategoryTabs(paletteController, doc);
@@ -98,6 +100,19 @@ function setupBackgroundSelector(doc: Document, windowObj: Window): void {
     editorState.selectedBackground = select.value;
     syncBackgroundCardSelection(doc, select.value);
     windowObj.dispatchEvent(new Event('background-changed'));
+    requestPhoneEditorAutoCollapse(doc);
+  });
+}
+
+function setupLightingSelector(doc: Document, windowObj: Window): void {
+  const select = doc.getElementById('lighting-mode-select') as HTMLSelectElement | null;
+  if (!select) {
+    return;
+  }
+
+  select.addEventListener('change', () => {
+    editorState.selectedLightingMode = select.value === 'playerAuraDark' ? 'playerAuraDark' : 'off';
+    windowObj.dispatchEvent(new Event(LIGHTING_CHANGED_EVENT));
     requestPhoneEditorAutoCollapse(doc);
   });
 }

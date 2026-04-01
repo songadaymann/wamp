@@ -80,6 +80,7 @@ import { EditorRoomSession } from './editor/roomSession';
 import { EditorBackgroundController } from './editor/backgrounds';
 import { EditorEditRuntime, type GoalPlacementMode } from './editor/editRuntime';
 import { EditorInteractionController } from './editor/interaction';
+import { RoomLightingController } from '../lighting/controller';
 import {
   buildCourseEditedRoomData as buildCourseEditedRoomDataHelper,
   buildCourseEditorState,
@@ -125,6 +126,7 @@ export class EditorScene extends Phaser.Scene {
   private readonly roomSession: EditorRoomSession;
   private readonly worldRepository = createWorldRepository();
   private readonly backgroundController: EditorBackgroundController;
+  private readonly lightingController: RoomLightingController;
   private readonly interactionController: EditorInteractionController;
   private entrySource: 'world' | 'direct' = 'direct';
   private initialRoomSnapshot: RoomSnapshot | null = null;
@@ -141,6 +143,11 @@ export class EditorScene extends Phaser.Scene {
   };
   private readonly handleBackgroundChanged = (): void => {
     this.updateBackground();
+    this.markRoomDirty();
+    this.renderEditorUi();
+  };
+  private readonly handleLightingChanged = (): void => {
+    this.updateLightingPreview();
     this.markRoomDirty();
     this.renderEditorUi();
   };
@@ -178,6 +185,7 @@ export class EditorScene extends Phaser.Scene {
   };
   private readonly handleShutdown = (): void => {
     window.removeEventListener('background-changed', this.handleBackgroundChanged);
+    window.removeEventListener('lighting-changed', this.handleLightingChanged);
     window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
     document.removeEventListener('keydown', this.handleDocumentKeyDown);
     this.events.off('wake', this.handleWake, this);
@@ -212,6 +220,12 @@ export class EditorScene extends Phaser.Scene {
         const backgroundSelect = document.getElementById('background-select') as HTMLSelectElement | null;
         if (backgroundSelect) {
           backgroundSelect.value = backgroundId;
+        }
+      },
+      updateLightingSelectValue: (mode) => {
+        const lightingSelect = document.getElementById('lighting-mode-select') as HTMLSelectElement | null;
+        if (lightingSelect) {
+          lightingSelect.value = mode;
         }
       },
       updateBackground: () => this.updateBackground(),
@@ -274,6 +288,7 @@ export class EditorScene extends Phaser.Scene {
         }
         ignored.push(...this.goalMarkerSprites);
         ignored.push(...this.goalMarkerLabels);
+        ignored.push(...this.lightingController.getBackdropIgnoredObjects());
 
         const overlays = [
           this.gridGraphics,
@@ -291,6 +306,10 @@ export class EditorScene extends Phaser.Scene {
         return ignored;
       },
       isSceneActive: () => this.scene.isActive(this.scene.key),
+    });
+    this.lightingController = new RoomLightingController({
+      scene: this,
+      overlayDepth: 80,
     });
   }
 
@@ -617,9 +636,11 @@ export class EditorScene extends Phaser.Scene {
     this.rebuildObjectSprites();
     this.syncBackgroundCameraIgnores();
     this.updateBackgroundPreview();
+    this.updateLightingPreview();
 
     this.events.on('wake', this.handleWake, this);
     window.addEventListener('background-changed', this.handleBackgroundChanged);
+    window.addEventListener('lighting-changed', this.handleLightingChanged);
     window.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
     document.addEventListener('keydown', this.handleDocumentKeyDown);
     this.scale.on('resize', this.handleResize, this);
@@ -642,6 +663,7 @@ export class EditorScene extends Phaser.Scene {
     this.maybeAutoSave(time);
     this.syncEditorPresence();
     this.updateBackgroundPreview();
+    this.updateLightingPreview();
     this.updateLayerGuideOverlay();
     this.updateCursorHighlight();
     this.updateLayerIndicator();
@@ -656,6 +678,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private resetRuntimeState(): void {
+    this.lightingController.reset();
     this.backgroundController.reset();
     this.interactionController.reset();
     this.layerIndicatorText?.destroy();
@@ -675,6 +698,7 @@ export class EditorScene extends Phaser.Scene {
     editorState.tileFlipX = false;
     editorState.tileFlipY = false;
     editorState.isPlaying = false;
+    editorState.selectedLightingMode = 'off';
     window.dispatchEvent(new Event('tile-flip-changed'));
   }
 
@@ -688,6 +712,35 @@ export class EditorScene extends Phaser.Scene {
 
   private updateBackgroundPreview(): void {
     this.backgroundController.updateBackgroundPreview();
+  }
+
+  private updateLightingPreview(): void {
+    const emitter = this.roomSpawnPoint
+      ? {
+          x: this.roomSpawnPoint.x,
+          y: this.roomSpawnPoint.y,
+        }
+      : {
+          x: ROOM_PX_WIDTH * 0.5,
+          y: ROOM_PX_HEIGHT * 0.5,
+        };
+    const structureChanged = this.lightingController.sync({
+      roomId: this.roomId,
+      bounds: {
+        x: 0,
+        y: 0,
+        width: ROOM_PX_WIDTH,
+        height: ROOM_PX_HEIGHT,
+      },
+      lighting: {
+        mode: editorState.selectedLightingMode,
+      },
+      emitters: [emitter],
+    });
+
+    if (structureChanged) {
+      this.syncBackgroundCameraIgnores();
+    }
   }
 
   private async refreshSurroundingRoomPreviews(): Promise<void> {
@@ -1710,6 +1763,7 @@ export class EditorScene extends Phaser.Scene {
       canRevert: this.roomPermissions.canRevert,
       canMint: this.roomPermissions.canMint,
       background: editorState.selectedBackground,
+      lighting: this.lightingController.getDebugState(),
       goal: cloneRoomGoal(this.roomGoal),
       goalPlacementMode: this.goalPlacementMode,
       courseEdit: this.activeCourseMarkerEdit

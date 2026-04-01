@@ -28,6 +28,7 @@ import {
   createGoalMarkerFlagSprite,
   type GoalMarkerFlagVariant,
 } from '../../goals/markerFlags';
+import { cloneRoomLightingSettings } from '../../lighting/model';
 import type { RoomCoordinates, RoomSnapshot, RoomSpawnPoint, RoomTileData } from '../../persistence/roomRepository';
 
 interface TileAction {
@@ -76,6 +77,7 @@ interface EditorEditRuntimeHost {
   getLayers(): Map<string, Phaser.Tilemaps.TilemapLayer>;
   getRoomSnapshotMetadata(): EditorRoomSnapshotMetadata;
   updateBackgroundSelectValue(backgroundId: string): void;
+  updateLightingSelectValue(mode: RoomSnapshot['lighting']['mode']): void;
   updateBackground(): void;
   updateGoalUi(): void;
   syncBackgroundCameraIgnores(): void;
@@ -224,6 +226,8 @@ export class EditorEditRuntime {
 
     editorState.selectedBackground = room.background;
     this.host.updateBackgroundSelectValue(room.background);
+    editorState.selectedLightingMode = room.lighting.mode;
+    this.host.updateLightingSelectValue(room.lighting.mode);
     this.host.updateBackground();
 
     this.roomGoal = cloneRoomGoal(room.goal);
@@ -247,6 +251,9 @@ export class EditorEditRuntime {
       coordinates: { ...metadata.coordinates },
       title: metadata.title,
       background: editorState.selectedBackground,
+      lighting: cloneRoomLightingSettings({
+        mode: editorState.selectedLightingMode,
+      }),
       goal: cloneRoomGoal(this.roomGoal),
       spawnPoint: this.roomSpawnPoint ? { ...this.roomSpawnPoint } : null,
       tileData: this.serializeTileData(),

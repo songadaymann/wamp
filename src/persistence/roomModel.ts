@@ -6,6 +6,11 @@ import {
   type PlacedObject,
 } from '../config';
 import { normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
+import {
+  cloneRoomLightingSettings,
+  normalizeRoomLightingSettings,
+  type RoomLightingSettings,
+} from '../lighting/model';
 
 export interface RoomCoordinates {
   x: number;
@@ -41,6 +46,7 @@ export interface RoomSnapshot {
   coordinates: RoomCoordinates;
   title: string | null;
   background: string;
+  lighting: RoomLightingSettings;
   goal: RoomGoal | null;
   spawnPoint: RoomSpawnPoint | null;
   tileData: RoomTileData;
@@ -150,6 +156,7 @@ export function createDefaultRoomSnapshot(
     coordinates: { ...coordinates },
     title: null,
     background: 'none',
+    lighting: cloneRoomLightingSettings(null),
     goal: null,
     spawnPoint: null,
     tileData: createEmptyTileData(),
@@ -187,6 +194,7 @@ export function cloneRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
     coordinates: { ...room.coordinates },
     title: normalizeRoomTitle(room.title),
     background: room.background,
+    lighting: normalizeRoomLightingSettings(room.lighting),
     goal: normalizeRoomGoal(room.goal),
     spawnPoint: room.spawnPoint ? { ...room.spawnPoint } : null,
     tileData: cloneTileData(room.tileData),
@@ -303,6 +311,10 @@ export function isRoomSnapshotBlank(room: RoomSnapshot): boolean {
   }
 
   if (room.background !== 'none') {
+    return false;
+  }
+
+  if (room.lighting.mode !== 'off') {
     return false;
   }
 
