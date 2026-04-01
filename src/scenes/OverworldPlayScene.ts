@@ -66,6 +66,7 @@ import {
   RETRO_COLORS,
   ensureStarfieldTexture,
 } from '../visuals/starfield';
+import { RoomLightingController } from '../lighting/controller';
 import {
   DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
   type DefaultPlayerAnimationState,
@@ -356,6 +357,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private score = 0;
   private readonly goalRunController: OverworldGoalRunController;
   private readonly roomAudioController: OverworldRoomAudioController;
+  private readonly lightingController: RoomLightingController;
   private readonly flowController: OverworldSceneFlowController;
   private readonly inspectInputController: OverworldInspectInputController;
   private readonly gridOverlayController: OverworldGridOverlayController;
@@ -424,6 +426,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       scene: this,
       getMode: () => this.mode,
       getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
+    });
+    this.lightingController = new RoomLightingController({
+      scene: this,
+      overlayDepth: 35,
     });
     this.liveObjectController = new OverworldLiveObjectController({
       scene: this,
@@ -1581,6 +1587,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     if (isMobileLandscapeBlocked()) {
       this.syncLocalPresence();
+      this.updateRoomLighting();
       this.renderHud();
       return;
     }
@@ -1600,6 +1607,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (!this.playerBody) {
       this.movementController.handleNoPlayerRuntime();
       this.syncLocalPresence();
+      this.updateRoomLighting();
       this.renderHud();
       return;
     }
@@ -1622,8 +1630,67 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.roomTransitionController.maybeAdvancePlayerRoom();
     this.playerPresentationController.syncPlayerVisual();
     this.syncLocalPresence();
+    this.updateRoomLighting();
     this.objectiveController.update(delta);
     this.renderHud();
+  }
+
+  private updateRoomLighting(): void {
+    if (this.mode !== 'play' || !this.player || !this.playerBody) {
+      const structureChanged = this.lightingController.sync({
+        roomId: null,
+        bounds: null,
+        lighting: null,
+        emitters: [],
+      });
+      if (structureChanged) {
+        this.syncBackdropCameraIgnores();
+      }
+      return;
+    }
+
+    const currentRoom = this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates);
+    if (!currentRoom) {
+      const structureChanged = this.lightingController.sync({
+        roomId: null,
+        bounds: null,
+        lighting: null,
+        emitters: [],
+      });
+      if (structureChanged) {
+        this.syncBackdropCameraIgnores();
+      }
+      return;
+    }
+
+    const roomOrigin = this.getRoomOrigin(currentRoom.coordinates);
+    const emitters = [
+      {
+        x: this.playerBody.center.x,
+        y: this.playerBody.bottom - this.PLAYER_HEIGHT * 0.65,
+      },
+      ...Array.from(this.presenceController.getRenderedGhostsByConnectionId().values())
+        .filter((ghost) => ghost.presence.roomId === currentRoom.id)
+        .map((ghost) => ({
+          x: ghost.sprite.x,
+          y: ghost.sprite.y - this.PLAYER_HEIGHT * 0.65,
+        })),
+    ];
+    const structureChanged = this.lightingController.sync({
+      roomId: currentRoom.id,
+      bounds: {
+        x: roomOrigin.x,
+        y: roomOrigin.y,
+        width: ROOM_PX_WIDTH,
+        height: ROOM_PX_HEIGHT,
+      },
+      lighting: currentRoom.lighting,
+      emitters,
+    });
+
+    if (structureChanged) {
+      this.syncBackdropCameraIgnores();
+    }
   }
 
   private resetRuntimeState(): void {
@@ -1632,6 +1699,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     this.worldStreamingController.reset();
+    this.lightingController.reset();
     this.starfieldSprites = [];
     this.backdropCamera = null;
     this.mode = 'browse';
@@ -1802,6 +1870,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (this.player) ignoredObjects.push(this.player);
     if (this.playerSprite) ignoredObjects.push(this.playerSprite);
     ignoredObjects.push(...this.combatController.getBackdropIgnoredObjects());
+    ignoredObjects.push(...this.lightingController.getBackdropIgnoredObjects());
 
     for (const image of this.previewImages) {
       ignoredObjects.push(image);
@@ -2681,6 +2750,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.presenceController.destroy();
     this.roomChatController.destroy();
     this.roomAudioController.destroy();
+    this.lightingController.destroy();
     window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
     window.removeEventListener(PLAYFUN_GAME_PAUSE_EVENT, this.handlePlayfunGamePause);
     window.removeEventListener(PLAYFUN_GAME_RESUME_EVENT, this.handlePlayfunGameResume);
@@ -2722,6 +2792,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     const presenceDebug = this.presenceController.getDebugSnapshot();
     const roomChatDebug = this.roomChatController.getDebugSnapshot();
     const roomAudioDebug = this.roomAudioController.getDebugSnapshot();
+    const lightingDebug = this.lightingController.getDebugState();
     const currentLoadedRoom = this.loadedFullRoomsById.get(
       roomIdFromCoordinates(this.currentRoomCoordinates)
     ) ?? null;
@@ -2847,6 +2918,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           : null,
       },
       roomAudio: roomAudioDebug,
+      lighting: lightingDebug,
       zoom: Number(camera.zoom.toFixed(3)),
       camera: {
         scrollX: Math.round(camera.scrollX),
