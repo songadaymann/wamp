@@ -1628,6 +1628,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         return 3;
       case 'coin_silver':
         return 2;
+      case 'kitkat':
+        return 2;
       case 'coin_small_gold':
         return 2;
       case 'coin_small_silver':
@@ -1645,6 +1647,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         return 'collect-key';
       case 'apple':
       case 'banana':
+      case 'kitkat':
       case 'heart':
         return 'collect-fruit';
       default:
