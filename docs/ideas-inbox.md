@@ -59,5 +59,8 @@ Start from a template - empty canvas is hard
 
 other ideas: i think the badges as we have them currently 
 
+generate rooms and assets
+
+
 bugs: 
 

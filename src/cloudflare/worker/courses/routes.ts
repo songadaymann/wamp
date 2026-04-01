@@ -47,8 +47,10 @@ import {
   awardCoursePublishPoints,
   awardCourseCreatorCompletionPoints,
   awardRunFinalizePoints,
+  calculateRunFinalizeAward,
   upsertUserStats,
 } from '../runs/points';
+import { assertRunSubmissionAllowed, evaluateCompletedCourseRunHold } from '../runs/guard';
 import {
   createCourseDraft,
   loadCourseRecord,
@@ -173,6 +175,7 @@ export async function handleCourseRunStart(
     'submit course runs',
     'runs:write'
   );
+  await assertRunSubmissionAllowed(env, auth.user.id);
   const body = await parseCourseRunStartBody(request, courseId);
   const snapshot = await resolvePublishedCourseVersion(env, body.courseId, body.courseVersion);
   if (!snapshot.goal) {
@@ -185,7 +188,7 @@ export async function handleCourseRunStart(
   }
 
   const attemptId = crypto.randomUUID();
-  const startedAt = normalizeIsoTimestamp(body.startedAt) ?? new Date().toISOString();
+  const startedAt = new Date().toISOString();
 
   await env.DB.batch([
     env.DB.prepare(
@@ -247,6 +250,9 @@ export async function handleCourseRunFinish(
     'runs:write'
   );
   const body = await parseCourseRunFinishBody(request);
+  if (body.result === 'completed') {
+    await assertRunSubmissionAllowed(env, auth.user.id);
+  }
   const existing = await loadCourseRunByAttemptId(env, attemptId);
   if (!existing) {
     throw new HttpError(404, 'Course run attempt was not found.');
@@ -265,12 +271,17 @@ export async function handleCourseRunFinish(
     throw new HttpError(409, 'This course version no longer has a leaderboard goal.');
   }
 
-  const finishedAt = normalizeIsoTimestamp(body.finishedAt) ?? new Date().toISOString();
+  const finishedAt = new Date().toISOString();
+  const reportedElapsedMs = body.elapsedMs;
   const clampedBody: CourseRunFinishRequestBody = {
-    ...body,
+    ...normalizeFinalizedCourseRunBody(snapshot.goal, {
+      ...body,
+      elapsedMs: computeEffectiveElapsedMs(existing.startedAt, finishedAt, reportedElapsedMs),
+    }, reportedElapsedMs),
     finishedAt,
   };
-  const score = computeCourseRunScore(snapshot.goal, clampedBody);
+  const score =
+    clampedBody.result === 'completed' ? computeCourseRunScore(snapshot.goal, clampedBody) : 0;
 
   await env.DB.batch([
     env.DB.prepare(
@@ -284,18 +295,21 @@ export async function handleCourseRunFinish(
           score = ?,
           collectibles_collected = ?,
           enemies_defeated = ?,
-          checkpoints_reached = ?
+          checkpoints_reached = ?,
+          is_held = 0,
+          held_at = NULL,
+          hold_reason = NULL
         WHERE attempt_id = ?
       `
     ).bind(
       finishedAt,
-      body.result,
-      body.elapsedMs,
-      body.deaths,
+      clampedBody.result,
+      clampedBody.elapsedMs,
+      clampedBody.deaths,
       score,
-      body.collectiblesCollected,
-      body.enemiesDefeated,
-      body.checkpointsReached,
+      clampedBody.collectiblesCollected,
+      clampedBody.enemiesDefeated,
+      clampedBody.checkpointsReached,
       attemptId
     ),
   ]);
@@ -305,20 +319,50 @@ export async function handleCourseRunFinish(
     throw new HttpError(500, 'Failed to reload finalized course run.');
   }
 
-  const previousBest = await loadBestCompletedCourseRunForUserAndVersion(
-    env,
-    auth.user.id,
-    finalizedRun.courseId,
-    finalizedRun.courseVersion,
-    attemptId
-  );
-  const isNewPersonalBest =
-    finalizedRun.result === 'completed' &&
-    (previousBest === null ||
+  let isFirstCompletion = false;
+  let isNewPersonalBest = false;
+  if (finalizedRun.result === 'completed') {
+    const previousBest = await loadBestCompletedCourseRunForUserAndVersion(
+      env,
+      auth.user.id,
+      finalizedRun.courseId,
+      finalizedRun.courseVersion,
+      attemptId
+    );
+    isFirstCompletion = previousBest === null;
+    isNewPersonalBest =
+      previousBest === null ||
       sortCompletedCourseRunsForLeaderboard([finalizedRun, previousBest], snapshot.goal)[0]?.attemptId ===
-        finalizedRun.attemptId);
+        finalizedRun.attemptId;
+  }
 
-  const pointEvent = await awardRunFinalizePoints(env, finalizedRun, isNewPersonalBest);
+  const award = calculateRunFinalizeAward(finalizedRun, {
+    isFirstCompletion,
+    isNewPersonalBest,
+  });
+  if (finalizedRun.result === 'completed') {
+    const holdDecision = await evaluateCompletedCourseRunHold(env, {
+      userId: auth.user.id,
+      elapsedMs: finalizedRun.elapsedMs ?? 0,
+      finishedAt: finalizedRun.finishedAt ?? finishedAt,
+      projectedPoints: award.points,
+    });
+    if (holdDecision.shouldHold) {
+      await holdCourseRun(
+        env,
+        finalizedRun.attemptId,
+        finalizedRun.finishedAt ?? finishedAt,
+        holdDecision.reasonJson
+      );
+      await upsertUserStats(env, auth.user.id);
+      return noContentResponse(request);
+    }
+  }
+
+  const pointEvent = await awardRunFinalizePoints(env, finalizedRun, {
+    isFirstCompletion,
+    isNewPersonalBest,
+  });
   await maybeMirrorAuthenticatedPointEventToPlayfun(env, request, auth.user.id, pointEvent);
 
   const creatorPointEvent =
@@ -451,6 +495,70 @@ async function parseCourseRunFinishBody(
   };
 }
 
+function computeEffectiveElapsedMs(
+  startedAt: string,
+  finishedAt: string,
+  reportedElapsedMs: number
+): number {
+  const observedStart = Date.parse(startedAt);
+  const observedFinish = Date.parse(finishedAt);
+  const observedElapsedMs =
+    Number.isFinite(observedStart) && Number.isFinite(observedFinish)
+      ? Math.max(0, observedFinish - observedStart)
+      : 0;
+  return Math.max(Math.round(reportedElapsedMs), observedElapsedMs);
+}
+
+function normalizeFinalizedCourseRunBody(
+  goal: CourseSnapshot['goal'],
+  body: CourseRunFinishRequestBody,
+  reportedElapsedMs: number
+): CourseRunFinishRequestBody {
+  if (!goal) {
+    return body;
+  }
+
+  if (body.result !== 'completed') {
+    return {
+      ...body,
+      collectiblesCollected: 0,
+      enemiesDefeated: 0,
+      checkpointsReached: 0,
+    };
+  }
+
+  if (
+    'timeLimitMs' in goal &&
+    goal.timeLimitMs !== null &&
+    reportedElapsedMs > goal.timeLimitMs
+  ) {
+    throw new HttpError(409, 'Completed course runs must finish within the published time limit.');
+  }
+
+  switch (goal.type) {
+    case 'collect_target':
+      if (body.collectiblesCollected < goal.requiredCount) {
+        throw new HttpError(409, 'Completed collect-target course runs must meet the published goal.');
+      }
+      break;
+    case 'checkpoint_sprint':
+      if (body.checkpointsReached < goal.checkpoints.length) {
+        throw new HttpError(409, 'Completed checkpoint course runs must hit every checkpoint.');
+      }
+      break;
+    case 'survival':
+      if (body.elapsedMs < goal.durationMs) {
+        throw new HttpError(409, 'Completed survival course runs must last the full published duration.');
+      }
+      break;
+    case 'defeat_all':
+    case 'reach_exit':
+      break;
+  }
+
+  return body;
+}
+
 async function resolvePublishedCourseVersion(
   env: Env,
   courseId: string,
@@ -539,6 +647,7 @@ async function loadCompletedCourseRuns(
       WHERE course_id = ?
         AND course_version = ?
         AND result = 'completed'
+        AND is_held = 0
     `
   )
     .bind(courseId, courseVersion)
@@ -592,7 +701,7 @@ async function buildCourseLeaderboardResponse(
   }
 
   const runs = await loadCompletedCourseRuns(env, snapshot.id, snapshot.version);
-  const sortedAll = sortCompletedCourseRunsForLeaderboard(runs, snapshot.goal);
+  const sortedAll = selectBestCompletedCourseRunPerUser(runs, snapshot.goal);
   const viewerBestRun =
     viewerUserId === null
       ? null
@@ -642,6 +751,44 @@ async function buildCourseLeaderboardResponse(
   };
 }
 
+function selectBestCompletedCourseRunPerUser(
+  runs: CourseRunRecord[],
+  goal: CourseSnapshot['goal']
+): CourseRunRecord[] {
+  if (!goal) {
+    return [];
+  }
+
+  const sorted = sortCompletedCourseRunsForLeaderboard(runs, goal);
+  const unique = new Map<string, CourseRunRecord>();
+  for (const run of sorted) {
+    if (!unique.has(run.userId)) {
+      unique.set(run.userId, run);
+    }
+  }
+  return [...unique.values()];
+}
+
+async function holdCourseRun(
+  env: Env,
+  attemptId: string,
+  heldAt: string,
+  reasonJson: string | null
+): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(
+      `
+        UPDATE course_runs
+        SET
+          is_held = 1,
+          held_at = ?,
+          hold_reason = ?
+        WHERE attempt_id = ?
+      `
+    ).bind(heldAt, reasonJson, attemptId),
+  ]);
+}
+
 async function loadBestCompletedCourseRunForUserAndVersion(
   env: Env,
   userId: string,
@@ -673,6 +820,7 @@ async function loadBestCompletedCourseRunForUserAndVersion(
         AND course_id = ?
         AND course_version = ?
         AND result = 'completed'
+        AND is_held = 0
         AND (? IS NULL OR attempt_id != ?)
     `
   )

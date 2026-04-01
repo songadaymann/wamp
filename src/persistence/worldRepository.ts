@@ -9,6 +9,7 @@ import {
 import {
   computeWorldChunkWindow,
   computeWorldWindow,
+  type PublishedWorldRoomSource,
   type WorldChunkBounds,
   type WorldChunkWindow,
   type WorldWindow,
@@ -85,8 +86,8 @@ class LocalWorldRepository implements WorldRepository {
     return cloneRoomSnapshot(stored.published);
   }
 
-  private loadAllPublishedRooms(): RoomSnapshot[] {
-    const publishedRooms: RoomSnapshot[] = [];
+  private loadAllPublishedRooms(): PublishedWorldRoomSource[] {
+    const publishedRooms: PublishedWorldRoomSource[] = [];
 
     for (let index = 0; index < localStorage.length; index++) {
       const key = localStorage.key(index);
@@ -98,7 +99,11 @@ class LocalWorldRepository implements WorldRepository {
       const stored = parseStoredRecord(localStorage.getItem(key), roomId, coordinates);
       if (!stored?.published) continue;
 
-      publishedRooms.push(cloneRoomSnapshot(stored.published));
+      publishedRooms.push({
+        snapshot: cloneRoomSnapshot(stored.published),
+        creatorUserId: stored.claimerUserId ?? stored.lastPublishedByUserId,
+        creatorDisplayName: stored.claimerDisplayName ?? stored.lastPublishedByDisplayName,
+      });
     }
 
     return publishedRooms;

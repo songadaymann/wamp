@@ -3,6 +3,7 @@ import type { RoomRevertRequestBody } from '../persistence/roomModel';
 import { handleAuthRequest } from './worker/auth/routes';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth, requireOptionalScope } from './worker/auth/request';
 import { handleAgentRequest } from './worker/agents/routes';
+import { handleDashboardStatsRequest } from './worker/dashboard/routes';
 import { handleChatRequest } from './worker/chat/routes';
 import {
   handleCourseCreate,
@@ -25,6 +26,7 @@ import {
 } from './worker/mint/routes';
 import { syncRoomOwnershipFromChain } from './worker/mint/service';
 import { handlePlayfunConfig, handlePlayfunFlush } from './worker/playfun/routes';
+import { handleProfileGet, handleProfileUpdateMe } from './worker/profiles/routes';
 import {
   enqueuePlayfunPointSync,
   flushPlayfunPointSync,
@@ -67,6 +69,11 @@ import {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    const assetAlias = resolvePublicAssetAlias(url.pathname);
+
+    if (assetAlias && (request.method === 'GET' || request.method === 'HEAD')) {
+      return env.ASSETS.fetch(new Request(new URL(assetAlias, request.url), request));
+    }
 
     if (url.pathname === '/agent-tilesets.md' && request.method === 'GET') {
       return new Response(renderAgentTilesetMarkdown(), {
@@ -103,6 +110,10 @@ export default {
             },
           }
         );
+      }
+
+      if (url.pathname === '/api/dashboard/stats' && request.method === 'GET') {
+        return await handleDashboardStatsRequest(request, env);
       }
 
       if (url.pathname.startsWith('/api/auth')) {
@@ -157,6 +168,15 @@ export default {
 
       if (url.pathname === '/api/playfun/flush' && request.method === 'POST') {
         return await handlePlayfunFlush(request, env);
+      }
+
+      if (url.pathname === '/api/profiles/me' && request.method === 'PATCH') {
+        return await handleProfileUpdateMe(request, env);
+      }
+
+      const profileMatch = /^\/api\/profiles\/([^/]+)$/.exec(url.pathname);
+      if (profileMatch && request.method === 'GET') {
+        return await handleProfileGet(request, env, decodeURIComponent(profileMatch[1]));
       }
 
       if (url.pathname === '/api/runs/start' && request.method === 'POST') {
@@ -346,9 +366,18 @@ export default {
           auth.user.id,
           record.draft.id,
           record.published?.version ?? record.draft.version,
-          record.versions.length === 1
+          {
+            hasGoal: record.published?.goal !== null,
+            hasPriorGoalPublish: record.versions.some(
+              (version) =>
+                version.version !== (record.published?.version ?? record.draft.version) &&
+                version.snapshot.goal !== null
+            ),
+          }
         );
-        await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
+        if (pointEvent) {
+          await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
+        }
         await upsertUserStats(env, auth.user.id);
         return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
       }
@@ -375,9 +404,18 @@ export default {
           auth.user.id,
           record.draft.id,
           record.published?.version ?? record.draft.version,
-          false
+          {
+            hasGoal: record.published?.goal !== null,
+            hasPriorGoalPublish: record.versions.some(
+              (version) =>
+                version.version !== (record.published?.version ?? record.draft.version) &&
+                version.snapshot.goal !== null
+            ),
+          }
         );
-        await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
+        if (pointEvent) {
+          await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
+        }
         await upsertUserStats(env, auth.user.id);
         return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
       }
@@ -458,6 +496,14 @@ export default {
     }
   },
 };
+
+function resolvePublicAssetAlias(pathname: string): string | null {
+  if (pathname === '/dashboard' || pathname === '/dashboard/') {
+    return '/dashboard.html';
+  }
+
+  return null;
+}
 
 async function maybeMirrorPointEventToPlayfun(
   env: Env,

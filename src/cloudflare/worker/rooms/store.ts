@@ -11,6 +11,7 @@ import {
   type RoomSnapshot,
   type RoomVersionRecord,
 } from '../../../persistence/roomModel';
+import type { PublishedWorldRoomSource } from '../../../persistence/worldModel';
 import { normalizeAddress } from '../auth/store';
 import { HttpError } from '../core/http';
 import type {
@@ -191,10 +192,15 @@ export async function loadPublishedRoomsInBounds(
   maxX: number,
   minY: number,
   maxY: number
-): Promise<RoomSnapshot[]> {
+): Promise<PublishedWorldRoomSource[]> {
   const result = await env.DB.prepare(
     `
-      SELECT published_json
+      SELECT
+        published_json,
+        claimer_user_id,
+        claimer_display_name,
+        last_published_by_user_id,
+        last_published_by_display_name
       FROM rooms
       WHERE published_json IS NOT NULL
         AND x BETWEEN ? AND ?
@@ -202,11 +208,19 @@ export async function loadPublishedRoomsInBounds(
     `
   )
     .bind(minX, maxX, minY, maxY)
-    .all<{ published_json: string }>();
+    .all<{
+      published_json: string;
+      claimer_user_id: string | null;
+      claimer_display_name: string | null;
+      last_published_by_user_id: string | null;
+      last_published_by_display_name: string | null;
+    }>();
 
-  return result.results.map((row) =>
-    parseStoredSnapshot(row.published_json, 'published room')
-  );
+  return result.results.map((row) => ({
+    snapshot: parseStoredSnapshot(row.published_json, 'published room'),
+    creatorUserId: row.claimer_user_id ?? row.last_published_by_user_id,
+    creatorDisplayName: row.claimer_display_name ?? row.last_published_by_display_name,
+  }));
 }
 
 export async function loadRoomVersions(env: Env, roomId: string): Promise<RoomVersionRecord[]> {

@@ -12,6 +12,7 @@ import type { ChatModerationViewer } from '../chat/model';
 import { clearLocalRoomStorage } from '../persistence/browserStorage';
 import { getApiBaseUrl } from '../api/baseUrl';
 import { appendPlayfunRequestHeaders } from '../playfun/state';
+import { isOpenableProfileUserId, requestProfileOpen } from '../ui/setup/profileEvents';
 import type {
   PreparedWalletTransaction,
   RoomMintChainInfo,
@@ -108,6 +109,10 @@ const FEATURED_REOWN_WALLET_IDS = [
   'ecc4036f814562b41a5268adc86270fba1365471402006302e70169465b7ac18', // Zerion
 ] as const;
 
+const DEFAULT_GUEST_STATUS = 'Sign in to build rooms, publish them, and save your runs.';
+const DEFAULT_SIGN_IN_PROMPT_STATUS = 'Sign in to build rooms, publish them, chat, and climb the leaderboards.';
+let guestPanelAutoOpened = false;
+
 export async function setupAuthUi(): Promise<void> {
   authPanel = document.getElementById('auth-panel');
   authIdentity = document.getElementById('auth-identity');
@@ -137,6 +142,21 @@ export async function setupAuthUi(): Promise<void> {
     if (authPanel && authPanel.classList.contains('menu-open') && !authPanel.contains(e.target as Node)) {
       authPanel.classList.remove('menu-open');
     }
+  });
+  authIdentity?.addEventListener('click', () => {
+    if (!isOpenableProfileUserId(state.user?.id)) {
+      return;
+    }
+
+    requestProfileOpen(state.user.id);
+  });
+  authIdentity?.addEventListener('keydown', (event) => {
+    if ((event.key !== 'Enter' && event.key !== ' ') || !isOpenableProfileUserId(state.user?.id)) {
+      return;
+    }
+
+    event.preventDefault();
+    requestProfileOpen(state.user.id);
   });
 
   authEmailButton?.addEventListener('click', () => {
@@ -174,6 +194,7 @@ export async function setupAuthUi(): Promise<void> {
   bindSessionRefreshListeners();
   await initializeWalletConnect();
   await refreshSession();
+  maybeAutoOpenGuestPanel();
   renderAuthUi();
 }
 
@@ -201,7 +222,7 @@ export function syncChatModerationState(viewer: ChatModerationViewer): void {
   renderAuthUi();
 }
 
-export function promptForSignIn(status: string = 'Sign in with email or wallet to publish this room.'): void {
+export function promptForSignIn(status: string = DEFAULT_SIGN_IN_PROMPT_STATUS): void {
   state.status = status;
   renderAuthUi();
   authPanel?.classList.add('menu-open');
@@ -257,7 +278,7 @@ async function initializeWalletConnect(): Promise<void> {
     return;
   }
 
-  state.status = 'Use email, wallet, or both.';
+  state.status = DEFAULT_GUEST_STATUS;
 }
 
 async function refreshSession(): Promise<void> {
@@ -289,7 +310,7 @@ async function refreshSession(): Promise<void> {
       lastDisplayNameAvailability = null;
     } else {
       state.source = null;
-      state.status = 'Use email, wallet, or both.';
+      state.status = DEFAULT_GUEST_STATUS;
       lastCheckedDisplayName = '';
       lastDisplayNameAvailability = null;
     }
@@ -606,9 +627,7 @@ async function waitForWalletConnection(timeoutMs: number = 60_000): Promise<stri
     return existing;
   }
 
-  await walletModal.open({ view: 'Connect', namespace: 'eip155' });
-
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let settled = false;
     const finish = (value: string | null) => {
       if (settled) return;
@@ -616,6 +635,13 @@ async function waitForWalletConnection(timeoutMs: number = 60_000): Promise<stri
       window.clearTimeout(timer);
       unsubscribe();
       resolve(value);
+    };
+    const fail = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      unsubscribe();
+      reject(error instanceof Error ? error : new Error('Failed to open wallet connection modal.'));
     };
 
     const unsubscribe = walletModal.subscribeAccount((account) => {
@@ -625,6 +651,16 @@ async function waitForWalletConnection(timeoutMs: number = 60_000): Promise<stri
     }, 'eip155');
 
     const timer = window.setTimeout(() => finish(null), timeoutMs);
+
+    const current = walletModal.getAddress('eip155');
+    if (current) {
+      finish(current);
+      return;
+    }
+
+    void walletModal.open({ view: 'Connect', namespace: 'eip155' }).catch((error) => {
+      fail(error);
+    });
   });
 }
 
@@ -661,8 +697,8 @@ async function ensureWalletModal(): Promise<AppKit> {
       featuredWalletIds: [...FEATURED_REOWN_WALLET_IDS],
       enableCoinbase: false,
       metadata,
-      networks: [baseSepolia, base, mainnet],
-      defaultNetwork: baseSepolia,
+      networks: [mainnet, base, baseSepolia],
+      defaultNetwork: mainnet,
       projectId,
       themeMode: 'dark',
     });
@@ -742,6 +778,17 @@ function renderAuthUi(): void {
     authIdentity.textContent = state.authenticated
       ? buildIdentityText(state.user)
       : 'Guest';
+    const canOpenProfile = isOpenableProfileUserId(state.user?.id);
+    authIdentity.classList.toggle('profile-trigger', canOpenProfile);
+    authIdentity.classList.toggle('auth-identity-clickable', canOpenProfile);
+    if (canOpenProfile) {
+      authIdentity.setAttribute('role', 'button');
+      authIdentity.setAttribute('tabindex', '0');
+    } else {
+      authIdentity.removeAttribute('role');
+      authIdentity.setAttribute('tabindex', '-1');
+    }
+    authIdentity.setAttribute('aria-label', canOpenProfile ? 'Open profile' : 'Account identity');
   }
 
   if (authStatus) {
@@ -760,6 +807,8 @@ function renderAuthUi(): void {
     authWalletButton.disabled = state.loading || !state.walletProjectConfigured;
     authWalletButton.textContent = getWalletButtonLabel();
   }
+
+  authPanel.classList.toggle('auth-panel-guest', !state.authenticated);
 
   if (authLogoutButton) {
     authLogoutButton.classList.toggle('hidden', !state.authenticated || state.source === 'playfun');
@@ -868,10 +917,30 @@ function getWalletButtonLabel(): string {
   }
 
   if (state.walletConnected) {
-    return 'Sign In Wallet';
+    return 'Sign In With Wallet';
   }
 
-  return 'Sign In Wallet';
+  return 'Sign In With Wallet';
+}
+
+function maybeAutoOpenGuestPanel(): void {
+  if (guestPanelAutoOpened || state.authenticated || state.loading || !authPanel || isPlayfunVisitor()) {
+    return;
+  }
+
+  guestPanelAutoOpened = true;
+  authPanel.classList.add('menu-open');
+  authEmailInput?.focus();
+  authEmailInput?.select();
+}
+
+function isPlayfunVisitor(): boolean {
+  if (document.body.dataset.playfunMode === 'true') {
+    return true;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  return params.get('pf') === '1';
 }
 
 function getStorageBackend(): 'auto' | 'local' | 'remote' {

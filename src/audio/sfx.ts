@@ -9,6 +9,14 @@ type CueConfig = {
   fadeOutMs?: number;
 };
 
+export type SfxPlaybackOptions = {
+  volumeMultiplier?: number;
+  playbackRateMultiplier?: number;
+  ignoreCooldown?: boolean;
+  lowPassFrequencyHz?: number;
+  lowPassQ?: number;
+};
+
 export type SfxCue =
   | 'ui-click'
   | 'ui-hover'
@@ -37,6 +45,9 @@ export type SfxCue =
   | 'ladder-climb'
   | 'respawn'
   | 'warp'
+  | 'pressure-plate-down'
+  | 'treasure-open'
+  | 'cage-open'
   | 'chat-send'
   | 'chat-receive';
 
@@ -203,6 +214,21 @@ const SFX_CUES: Record<SfxCue, CueConfig> = {
     volume: 0.56,
     cooldownMs: 180,
   },
+  'pressure-plate-down': {
+    path: 'assets/sfx/world/pressure-plate-down.wav',
+    volume: 0.42,
+    cooldownMs: 45,
+  },
+  'treasure-open': {
+    path: 'assets/sfx/world/treasure-open.wav',
+    volume: 0.48,
+    cooldownMs: 90,
+  },
+  'cage-open': {
+    path: 'assets/sfx/world/cage-open.wav',
+    volume: 0.52,
+    cooldownMs: 90,
+  },
   'chat-send': {
     path: 'assets/sfx/ui/ui-click.wav',
     volume: 0.28,
@@ -228,6 +254,7 @@ export class SfxController {
   private muted = false;
   private initialized = false;
   private userInteracted = false;
+  private audioContext: AudioContext | null = null;
   private readonly baseAudioByPath = new Map<string, HTMLAudioElement>();
   private readonly activeAudio = new Set<HTMLAudioElement>();
   private readonly activeAudioByCue = new Map<SfxCue, Set<HTMLAudioElement>>();
@@ -245,6 +272,7 @@ export class SfxController {
 
     const markInteracted = () => {
       this.userInteracted = true;
+      void this.resumeAudioContext();
     };
 
     windowObj.addEventListener('pointerdown', markInteracted, { passive: true });
@@ -287,7 +315,7 @@ export class SfxController {
     };
   }
 
-  play(cue: SfxCue): void {
+  play(cue: SfxCue, playbackOptions?: SfxPlaybackOptions): void {
     const config = SFX_CUES[cue];
     if (!config) {
       this.record(cue, 'missing');
@@ -295,13 +323,16 @@ export class SfxController {
     }
 
     const now = performance.now();
-    const cooldownMs = config.cooldownMs ?? 0;
-    const lastPlayedAt = this.lastPlayedAt.get(cue) ?? -Infinity;
-    if (now - lastPlayedAt < cooldownMs) {
-      this.record(cue, 'cooldown');
-      return;
+    const ignoreCooldown = playbackOptions?.ignoreCooldown ?? false;
+    if (!ignoreCooldown) {
+      const cooldownMs = config.cooldownMs ?? 0;
+      const lastPlayedAt = this.lastPlayedAt.get(cue) ?? -Infinity;
+      if (now - lastPlayedAt < cooldownMs) {
+        this.record(cue, 'cooldown');
+        return;
+      }
+      this.lastPlayedAt.set(cue, now);
     }
-    this.lastPlayedAt.set(cue, now);
 
     if (this.muted) {
       this.record(cue, 'blocked');
@@ -320,11 +351,35 @@ export class SfxController {
     }
 
     const player = baseAudio.cloneNode() as HTMLAudioElement;
-    const baseVolume = PhaserClamp(config.volume, 0, 1);
+    const baseVolume = PhaserClamp(
+      config.volume * Math.max(0, playbackOptions?.volumeMultiplier ?? 1),
+      0,
+      1
+    );
     player.volume = baseVolume;
-    player.playbackRate = config.playbackRate ?? 1;
+    player.playbackRate = PhaserClamp(
+      (config.playbackRate ?? 1) * Math.max(0.05, playbackOptions?.playbackRateMultiplier ?? 1),
+      0.05,
+      4
+    );
     player.currentTime = 0;
     player.loop = Boolean(config.loop);
+
+    let mediaSourceNode: MediaElementAudioSourceNode | null = null;
+    let filterNode: BiquadFilterNode | null = null;
+    if ((playbackOptions?.lowPassFrequencyHz ?? 0) > 0) {
+      const audioContext = this.getAudioContext();
+      if (audioContext) {
+        mediaSourceNode = audioContext.createMediaElementSource(player);
+        filterNode = audioContext.createBiquadFilter();
+        filterNode.type = 'lowpass';
+        filterNode.frequency.value = Math.max(20, playbackOptions?.lowPassFrequencyHz ?? 1500);
+        filterNode.Q.value = Math.max(0.0001, playbackOptions?.lowPassQ ?? 0.9);
+        mediaSourceNode.connect(filterNode);
+        filterNode.connect(audioContext.destination);
+        void this.resumeAudioContext();
+      }
+    }
 
     this.activeAudio.add(player);
     const cuePlayers = this.activeAudioByCue.get(cue) ?? new Set<HTMLAudioElement>();
@@ -357,6 +412,16 @@ export class SfxController {
       }
       player.removeEventListener('ended', cleanup);
       player.removeEventListener('error', cleanup);
+      try {
+        mediaSourceNode?.disconnect();
+      } catch {
+        void 0;
+      }
+      try {
+        filterNode?.disconnect();
+      } catch {
+        void 0;
+      }
     };
     this.cleanupByAudio.set(player, cleanup);
     player.addEventListener('ended', cleanup);
@@ -425,6 +490,34 @@ export class SfxController {
       this.history.splice(0, this.history.length - 40);
     }
   }
+
+  private getAudioContext(): AudioContext | null {
+    if (this.audioContext) {
+      return this.audioContext;
+    }
+
+    const AudioContextCtor =
+      window.AudioContext ??
+      ((window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext ?? null);
+    if (!AudioContextCtor) {
+      return null;
+    }
+
+    this.audioContext = new AudioContextCtor();
+    return this.audioContext;
+  }
+
+  private async resumeAudioContext(): Promise<void> {
+    if (!this.audioContext || this.audioContext.state === 'running') {
+      return;
+    }
+
+    try {
+      await this.audioContext.resume();
+    } catch {
+      void 0;
+    }
+  }
 }
 
 function PhaserClamp(value: number, min: number, max: number): number {
@@ -438,8 +531,8 @@ export function initSfx(doc: Document = document, windowObj: Window = window): v
   globalSfxController.init(windowObj);
 }
 
-export function playSfx(cue: SfxCue): void {
-  globalSfxController.play(cue);
+export function playSfx(cue: SfxCue, playbackOptions?: SfxPlaybackOptions): void {
+  globalSfxController.play(cue, playbackOptions);
 }
 
 export function stopSfx(cue: SfxCue): void {

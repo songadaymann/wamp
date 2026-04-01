@@ -1,3 +1,5 @@
+import type { RoomMusicLaneId } from '../../music/model';
+
 export interface EditorGoalUiViewModel {
   goalTypeValue: string;
   goalTypeDisabled: boolean;
@@ -59,6 +61,71 @@ export interface EditorCourseUiViewModel {
   canEditNextRoom: boolean;
 }
 
+export interface EditorInspectorState {
+  visible: boolean;
+  pressureVisible: boolean;
+  pressureStatusText: string;
+  pressureConnectHidden: boolean;
+  pressureConnectDisabled: boolean;
+  pressureConnectTitle: string;
+  pressureClearHidden: boolean;
+  pressureClearDisabled: boolean;
+  pressureDoneLaterHidden: boolean;
+  containerVisible: boolean;
+  containerStatusText: string;
+  containerClearDisabled: boolean;
+  containerClearTitle: string;
+}
+
+export interface EditorMusicCellUiViewModel {
+  laneId: RoomMusicLaneId;
+  barIndex: number;
+  barNumber: number;
+  clipLabel: string;
+  clipAssigned: boolean;
+}
+
+export interface EditorMusicLaneUiViewModel {
+  laneId: RoomMusicLaneId;
+  label: string;
+  cells: EditorMusicCellUiViewModel[];
+}
+
+export interface EditorMusicPickerClipUiViewModel {
+  clipId: string;
+  label: string;
+  selected: boolean;
+  previewing: boolean;
+}
+
+export interface EditorMusicPickerUiViewModel {
+  open: boolean;
+  laneId: RoomMusicLaneId | null;
+  barIndex: number | null;
+  barNumber: number | null;
+  laneLabel: string;
+  currentClipLabel: string;
+  clearDisabled: boolean;
+  clips: EditorMusicPickerClipUiViewModel[];
+}
+
+export interface EditorMusicUiViewModel {
+  sectionHidden: boolean;
+  modeButtonText: string;
+  modeButtonActive: boolean;
+  summaryText: string;
+  overlayVisible: boolean;
+  packLabel: string;
+  modeStatusText: string;
+  previewButtonText: string;
+  stopDisabled: boolean;
+  arrangeTabActive: boolean;
+  advancedTabActive: boolean;
+  advancedDisabled: boolean;
+  lanes: EditorMusicLaneUiViewModel[];
+  picker: EditorMusicPickerUiViewModel;
+}
+
 export interface EditorUiViewModel {
   roomTitleValue: string;
   roomCoordinatesText: string;
@@ -66,12 +133,14 @@ export interface EditorUiViewModel {
   saveStatusAccentText: string;
   saveStatusLinkText: string;
   saveStatusLinkHref: string | null;
+  saveButtonTitle: string;
+  publishButtonTitle: string;
   publishNudgeVisible: boolean;
   publishNudgeText: string;
   publishNudgeActionText: string;
   zoomText: string;
-  backToWorldHidden: boolean;
-  backToCourseBuilderHidden: boolean;
+  backButtonHidden: boolean;
+  backButtonText: string;
   playHidden: boolean;
   saveHidden: boolean;
   saveDisabled: boolean;
@@ -86,6 +155,7 @@ export interface EditorUiViewModel {
   historyHidden: boolean;
   historyDisabled: boolean;
   fitHidden: boolean;
+  music: EditorMusicUiViewModel;
   goal: EditorGoalUiViewModel;
   course: EditorCourseUiViewModel;
 }
@@ -99,8 +169,7 @@ export class EditorUiBridge {
   private readonly publishNudgeTextEl: HTMLElement | null;
   private readonly publishNudgeActionBtn: HTMLButtonElement | null;
   private readonly zoomEls: HTMLElement[];
-  private readonly backToWorldBtn: HTMLButtonElement | null;
-  private readonly backToCourseBuilderBtn: HTMLButtonElement | null;
+  private readonly backBtn: HTMLButtonElement | null;
   private readonly playBtn: HTMLButtonElement | null;
   private readonly saveBtn: HTMLButtonElement | null;
   private readonly publishBtn: HTMLButtonElement | null;
@@ -108,6 +177,22 @@ export class EditorUiBridge {
   private readonly refreshMetadataBtn: HTMLButtonElement | null;
   private readonly historyBtn: HTMLButtonElement | null;
   private readonly fitBtns: HTMLButtonElement[];
+  private readonly musicSection: HTMLElement | null;
+  private readonly musicModeBtn: HTMLButtonElement | null;
+  private readonly musicSummary: HTMLElement | null;
+  private readonly musicOverlay: HTMLElement | null;
+  private readonly musicPackLabel: HTMLElement | null;
+  private readonly musicModeStatus: HTMLElement | null;
+  private readonly musicPreviewBtn: HTMLButtonElement | null;
+  private readonly musicStopBtn: HTMLButtonElement | null;
+  private readonly musicArrangeTabBtn: HTMLButtonElement | null;
+  private readonly musicAdvancedTabBtn: HTMLButtonElement | null;
+  private readonly musicLaneList: HTMLElement | null;
+  private readonly musicPickerModal: HTMLElement | null;
+  private readonly musicPickerTitle: HTMLElement | null;
+  private readonly musicPickerCurrent: HTMLElement | null;
+  private readonly musicPickerClearBtn: HTMLButtonElement | null;
+  private readonly musicPickerList: HTMLElement | null;
   private readonly goalTypeSelect: HTMLSelectElement | null;
   private readonly goalContextNote: HTMLElement | null;
   private readonly timeLimitRow: HTMLElement | null;
@@ -142,6 +227,15 @@ export class EditorUiBridge {
   private readonly coursePlaceFinishBtn: HTMLButtonElement | null;
   private readonly coursePreviousRoomBtn: HTMLButtonElement | null;
   private readonly courseNextRoomBtn: HTMLButtonElement | null;
+  private readonly inspectorRoot: HTMLElement | null;
+  private readonly pressurePanel: HTMLElement | null;
+  private readonly pressureStatus: HTMLElement | null;
+  private readonly pressureConnectBtn: HTMLButtonElement | null;
+  private readonly pressureClearBtn: HTMLButtonElement | null;
+  private readonly pressureDoneLaterBtn: HTMLButtonElement | null;
+  private readonly containerPanel: HTMLElement | null;
+  private readonly containerStatus: HTMLElement | null;
+  private readonly containerClearBtn: HTMLButtonElement | null;
   private readonly backgroundButtons: HTMLButtonElement[];
   private destroyed = false;
 
@@ -153,6 +247,7 @@ export class EditorUiBridge {
     ].filter((element): element is HTMLElement => Boolean(element));
     this.separatorEl = this.doc.querySelector('#bottom-bar .separator');
     this.saveStatusEls = [
+      this.doc.getElementById('editor-top-save-status'),
       this.doc.getElementById('room-save-status'),
       this.doc.getElementById('mobile-editor-save-status'),
     ].filter((element): element is HTMLElement => Boolean(element));
@@ -163,8 +258,7 @@ export class EditorUiBridge {
       this.doc.getElementById('zoom-level'),
       this.doc.getElementById('mobile-editor-zoom-level'),
     ].filter((element): element is HTMLElement => Boolean(element));
-    this.backToWorldBtn = this.doc.getElementById('btn-back-to-world') as HTMLButtonElement | null;
-    this.backToCourseBuilderBtn = this.doc.getElementById('btn-back-to-course-builder') as HTMLButtonElement | null;
+    this.backBtn = this.doc.getElementById('btn-editor-back') as HTMLButtonElement | null;
     this.playBtn = this.doc.getElementById('btn-test-play') as HTMLButtonElement | null;
     this.saveBtn = this.doc.getElementById('btn-save-draft') as HTMLButtonElement | null;
     this.publishBtn = this.doc.getElementById('btn-publish-room') as HTMLButtonElement | null;
@@ -175,6 +269,22 @@ export class EditorUiBridge {
       this.doc.getElementById('btn-fit-screen') as HTMLButtonElement | null,
       this.doc.getElementById('btn-mobile-editor-fit') as HTMLButtonElement | null,
     ].filter((element): element is HTMLButtonElement => Boolean(element));
+    this.musicSection = this.doc.getElementById('music-section');
+    this.musicModeBtn = this.doc.getElementById('btn-editor-music-mode') as HTMLButtonElement | null;
+    this.musicSummary = this.doc.getElementById('music-summary');
+    this.musicOverlay = this.doc.getElementById('editor-music-overlay');
+    this.musicPackLabel = this.doc.getElementById('editor-music-pack-label');
+    this.musicModeStatus = this.doc.getElementById('editor-music-mode-status');
+    this.musicPreviewBtn = this.doc.getElementById('btn-editor-music-preview-toggle') as HTMLButtonElement | null;
+    this.musicStopBtn = this.doc.getElementById('btn-editor-music-preview-stop') as HTMLButtonElement | null;
+    this.musicArrangeTabBtn = this.doc.getElementById('btn-editor-music-tab-arrange') as HTMLButtonElement | null;
+    this.musicAdvancedTabBtn = this.doc.getElementById('btn-editor-music-tab-advanced') as HTMLButtonElement | null;
+    this.musicLaneList = this.doc.getElementById('editor-music-lane-list');
+    this.musicPickerModal = this.doc.getElementById('editor-music-picker-modal');
+    this.musicPickerTitle = this.doc.getElementById('editor-music-picker-title');
+    this.musicPickerCurrent = this.doc.getElementById('editor-music-picker-current');
+    this.musicPickerClearBtn = this.doc.getElementById('btn-editor-music-picker-clear') as HTMLButtonElement | null;
+    this.musicPickerList = this.doc.getElementById('editor-music-picker-list');
     this.goalTypeSelect = this.doc.getElementById('goal-type-select') as HTMLSelectElement | null;
     this.goalContextNote = this.doc.getElementById('goal-context-note');
     this.timeLimitRow = this.doc.getElementById('goal-time-limit-row');
@@ -209,6 +319,15 @@ export class EditorUiBridge {
     this.coursePlaceFinishBtn = this.doc.getElementById('btn-course-editor-place-finish') as HTMLButtonElement | null;
     this.coursePreviousRoomBtn = this.doc.getElementById('btn-course-editor-previous-room') as HTMLButtonElement | null;
     this.courseNextRoomBtn = this.doc.getElementById('btn-course-editor-next-room') as HTMLButtonElement | null;
+    this.inspectorRoot = this.doc.getElementById('editor-inspector');
+    this.pressurePanel = this.doc.getElementById('pressure-plate-panel');
+    this.pressureStatus = this.doc.getElementById('pressure-plate-status');
+    this.pressureConnectBtn = this.doc.getElementById('btn-pressure-plate-connect') as HTMLButtonElement | null;
+    this.pressureClearBtn = this.doc.getElementById('btn-pressure-plate-clear') as HTMLButtonElement | null;
+    this.pressureDoneLaterBtn = this.doc.getElementById('btn-pressure-plate-done-later') as HTMLButtonElement | null;
+    this.containerPanel = this.doc.getElementById('container-contents-panel');
+    this.containerStatus = this.doc.getElementById('container-contents-status');
+    this.containerClearBtn = this.doc.getElementById('btn-container-clear') as HTMLButtonElement | null;
     this.backgroundButtons = Array.from(
       this.doc.querySelectorAll<HTMLButtonElement>('[data-background-id]')
     );
@@ -230,13 +349,15 @@ export class EditorUiBridge {
     this.setText(this.zoomEls, viewModel.zoomText);
     this.syncBackgroundSelection();
 
-    this.setHidden(this.backToWorldBtn, viewModel.backToWorldHidden);
-    this.setHidden(this.backToCourseBuilderBtn, viewModel.backToCourseBuilderHidden);
+    this.setHidden(this.backBtn, viewModel.backButtonHidden);
+    this.setButtonText(this.backBtn, viewModel.backButtonText);
     this.setHidden(this.playBtn, viewModel.playHidden);
     this.setHidden(this.saveBtn, viewModel.saveHidden);
     this.setDisabled(this.saveBtn, viewModel.saveDisabled);
+    this.setTitle(this.saveBtn, viewModel.saveButtonTitle);
     this.setHidden(this.publishBtn, viewModel.publishHidden);
     this.setDisabled(this.publishBtn, viewModel.publishDisabled);
+    this.setTitle(this.publishBtn, viewModel.publishButtonTitle);
     this.setHidden(this.mintBtn, viewModel.mintHidden);
     this.setDisabled(this.mintBtn, viewModel.mintDisabled);
     this.setButtonText(this.mintBtn, viewModel.mintButtonText);
@@ -246,6 +367,7 @@ export class EditorUiBridge {
     this.setHidden(this.historyBtn, viewModel.historyHidden);
     this.setDisabled(this.historyBtn, viewModel.historyDisabled);
     this.setHidden(this.fitBtns, viewModel.fitHidden);
+    this.renderMusic(viewModel.music);
 
     this.setValue(this.goalTypeSelect, viewModel.goal.goalTypeValue);
     this.setDisabled(this.goalTypeSelect, viewModel.goal.goalTypeDisabled);
@@ -304,6 +426,158 @@ export class EditorUiBridge {
     this.setActive(this.coursePlaceFinishBtn, viewModel.course.placeFinishActive);
     this.setDisabled(this.coursePreviousRoomBtn, !viewModel.course.canEditPreviousRoom);
     this.setDisabled(this.courseNextRoomBtn, !viewModel.course.canEditNextRoom);
+  }
+
+  renderInspector(state: EditorInspectorState): void {
+    if (this.destroyed) {
+      return;
+    }
+
+    this.setHidden(this.inspectorRoot, !state.visible);
+    this.setHidden(this.pressurePanel, !state.pressureVisible);
+    this.setText(this.pressureStatus, state.pressureStatusText);
+    this.setHidden(this.pressureConnectBtn, state.pressureConnectHidden);
+    this.setDisabled(this.pressureConnectBtn, state.pressureConnectDisabled);
+    if (this.pressureConnectBtn) {
+      this.pressureConnectBtn.title = state.pressureConnectTitle;
+    }
+    this.setHidden(this.pressureClearBtn, state.pressureClearHidden);
+    this.setDisabled(this.pressureClearBtn, state.pressureClearDisabled);
+    this.setHidden(this.pressureDoneLaterBtn, state.pressureDoneLaterHidden);
+    this.setHidden(this.containerPanel, !state.containerVisible);
+    this.setText(this.containerStatus, state.containerStatusText);
+    this.setDisabled(this.containerClearBtn, state.containerClearDisabled);
+    if (this.containerClearBtn) {
+      this.containerClearBtn.title = state.containerClearTitle;
+    }
+  }
+
+  private renderMusic(viewModel: EditorMusicUiViewModel): void {
+    this.setHidden(this.musicSection, viewModel.sectionHidden);
+    this.setButtonText(this.musicModeBtn, viewModel.modeButtonText);
+    this.setActive(this.musicModeBtn, viewModel.modeButtonActive);
+    this.setText(this.musicSummary, viewModel.summaryText);
+    this.setHidden(this.musicOverlay, !viewModel.overlayVisible);
+    this.setText(this.musicPackLabel, viewModel.packLabel);
+    this.setText(this.musicModeStatus, viewModel.modeStatusText);
+    this.setButtonText(this.musicPreviewBtn, viewModel.previewButtonText);
+    this.setDisabled(this.musicStopBtn, viewModel.stopDisabled);
+    if (this.musicPreviewBtn) {
+      this.musicPreviewBtn.dataset.previewState =
+        viewModel.previewButtonText === 'Pause'
+          ? 'playing'
+          : viewModel.previewButtonText === 'Resume'
+            ? 'paused'
+            : 'stopped';
+    }
+    this.setActive(this.musicArrangeTabBtn, viewModel.arrangeTabActive);
+    this.setActive(this.musicAdvancedTabBtn, viewModel.advancedTabActive);
+    this.setDisabled(this.musicAdvancedTabBtn, viewModel.advancedDisabled);
+    this.doc.body.dataset.editorMusicMode = viewModel.overlayVisible ? 'true' : 'false';
+    this.doc.body.dataset.editorMusicUiLocked = viewModel.overlayVisible ? 'true' : 'false';
+    this.doc.body.dataset.editorMusicTab = viewModel.arrangeTabActive ? 'arrange' : 'advanced';
+
+    if (this.musicLaneList) {
+      this.musicLaneList.replaceChildren(
+        ...viewModel.lanes.map((lane) => {
+          const row = this.doc.createElement('div');
+          row.className = 'editor-music-lane-row';
+
+          const label = this.doc.createElement('div');
+          label.className = 'editor-music-lane-label';
+          label.textContent = lane.label;
+
+          const cellGrid = this.doc.createElement('div');
+          cellGrid.className = 'editor-music-cell-grid';
+
+          for (const cell of lane.cells) {
+            const cellButton = this.doc.createElement('button');
+            cellButton.type = 'button';
+            cellButton.className = 'editor-music-cell';
+            if (cell.clipAssigned) {
+              cellButton.classList.add('is-assigned');
+            }
+            cellButton.dataset.roomMusicLane = cell.laneId;
+            cellButton.dataset.roomMusicBar = String(cell.barIndex);
+
+            const barLabel = this.doc.createElement('span');
+            barLabel.className = 'editor-music-cell-bar';
+            barLabel.textContent = `Bar ${cell.barNumber}`;
+
+            const clipLabel = this.doc.createElement('span');
+            clipLabel.className = 'editor-music-cell-label';
+            clipLabel.textContent = cell.clipLabel;
+
+            cellButton.append(barLabel, clipLabel);
+            cellGrid.append(cellButton);
+          }
+
+          row.append(label, cellGrid);
+          return row;
+        }),
+      );
+    }
+
+    this.setHidden(this.musicPickerModal, !viewModel.picker.open);
+    this.setText(
+      this.musicPickerTitle,
+      viewModel.picker.open && viewModel.picker.barNumber !== null
+        ? `${viewModel.picker.laneLabel} Clips - Bar ${viewModel.picker.barNumber}`
+        : 'Music Picker',
+    );
+    this.setText(this.musicPickerCurrent, viewModel.picker.currentClipLabel);
+    this.setDisabled(this.musicPickerClearBtn, viewModel.picker.clearDisabled);
+    if (
+      this.musicPickerClearBtn &&
+      viewModel.picker.laneId &&
+      viewModel.picker.barIndex !== null
+    ) {
+      this.musicPickerClearBtn.dataset.roomMusicClearLane = viewModel.picker.laneId;
+      this.musicPickerClearBtn.dataset.roomMusicClearBar = String(viewModel.picker.barIndex);
+    } else if (this.musicPickerClearBtn) {
+      delete this.musicPickerClearBtn.dataset.roomMusicClearLane;
+      delete this.musicPickerClearBtn.dataset.roomMusicClearBar;
+    }
+
+    if (this.musicPickerList) {
+      this.musicPickerList.replaceChildren(
+        ...viewModel.picker.clips.map((clip) => {
+          const row = this.doc.createElement('div');
+          row.className = 'editor-music-picker-item';
+
+          const label = this.doc.createElement('div');
+          label.className = 'editor-music-picker-label';
+          label.textContent = clip.label;
+          if (clip.selected) {
+            label.classList.add('is-selected');
+          }
+
+          const actions = this.doc.createElement('div');
+          actions.className = 'editor-music-picker-actions';
+
+          const previewButton = this.doc.createElement('button');
+          previewButton.type = 'button';
+          previewButton.className = 'bar-btn bar-btn-small';
+          previewButton.dataset.roomMusicPreviewClip = clip.clipId;
+          previewButton.textContent = clip.previewing ? 'Stop' : 'Preview';
+
+          const assignButton = this.doc.createElement('button');
+          assignButton.type = 'button';
+          assignButton.className = 'bar-btn bar-btn-small';
+          assignButton.dataset.roomMusicAssignClip = clip.clipId;
+          if (viewModel.picker.laneId && viewModel.picker.barIndex !== null) {
+            assignButton.dataset.roomMusicAssignLane = viewModel.picker.laneId;
+            assignButton.dataset.roomMusicAssignBar = String(viewModel.picker.barIndex);
+          }
+          assignButton.textContent = clip.selected ? 'Selected' : 'Use';
+          assignButton.disabled = clip.selected;
+
+          actions.append(previewButton, assignButton);
+          row.append(label, actions);
+          return row;
+        }),
+      );
+    }
   }
 
   destroy(): void {
@@ -410,8 +684,30 @@ export class EditorUiBridge {
   }
 
   private setButtonText(element: HTMLButtonElement | null, text: string): void {
-    if (element && element.textContent !== text) {
+    if (!element) {
+      return;
+    }
+
+    const labelTarget = element.querySelector<HTMLElement>('[data-button-label]');
+    if (labelTarget) {
+      if (labelTarget.textContent !== text) {
+        labelTarget.textContent = text;
+      }
+      return;
+    }
+
+    if (element.textContent !== text) {
       element.textContent = text;
+    }
+  }
+
+  private setTitle(element: HTMLElement | null, title: string): void {
+    if (!element) {
+      return;
+    }
+
+    if (element.title !== title) {
+      element.title = title;
     }
   }
 }

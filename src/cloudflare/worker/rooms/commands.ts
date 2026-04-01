@@ -3,6 +3,7 @@ import {
   ROOM_HEIGHT,
   ROOM_WIDTH,
   TILE_SIZE,
+  createPlacedObjectInstanceId,
   getObjectById,
   type LayerName,
   type PlacedObject,
@@ -557,8 +558,11 @@ function placeObjectAtTile(command: PlaceObjectCommand): PlacedObject {
     id: command.objectId,
     x: command.tileX * TILE_SIZE + objectConfig.frameWidth / 2,
     y: command.tileY * TILE_SIZE + TILE_SIZE - objectConfig.frameHeight / 2,
+    instanceId: createPlacedObjectInstanceId(),
     facing: objectConfig.facingDirection ? command.facing : undefined,
     layer: command.layer,
+    triggerTargetInstanceId: null,
+    containedObjectId: null,
   };
 }
 

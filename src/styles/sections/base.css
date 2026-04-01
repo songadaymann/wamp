@@ -576,6 +576,15 @@ body[data-install-help-open='true'] .rotate-gate {
   line-height: 1.35;
 }
 
+#auth-panel.auth-panel-guest #menu-body {
+  border-color: rgba(52, 116, 51, 0.34);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+}
+
+#auth-panel.auth-panel-guest .auth-copy {
+  color: #d8ead2;
+}
+
 .auth-menu-action-row {
   width: 100%;
 }
@@ -647,6 +656,32 @@ body[data-install-help-open='true'] .rotate-gate {
   text-align: right;
 }
 
+.auth-identity-clickable {
+  cursor: pointer;
+}
+
+.profile-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-trigger:hover,
+.profile-trigger:focus-visible {
+  color: var(--accent-cool);
+  text-decoration: underline;
+  outline: none;
+}
+
 #auth-email-input {
   flex: 1;
   min-width: 0;
@@ -683,6 +718,31 @@ body[data-install-help-open='true'] .rotate-gate {
 
 #btn-auth-wallet {
   flex: 1;
+}
+
+#auth-panel.auth-panel-guest #btn-auth-email {
+  border-color: rgba(143, 216, 255, 0.4);
+  color: #dff6ff;
+  background: rgba(15, 38, 52, 0.5);
+}
+
+#auth-panel.auth-panel-guest #btn-auth-email:hover {
+  background: rgba(21, 51, 70, 0.66);
+  border-color: rgba(143, 216, 255, 0.58);
+}
+
+#auth-panel.auth-panel-guest #btn-auth-wallet {
+  border-color: rgba(52, 116, 51, 0.68);
+  color: #e9ffef;
+  background: rgba(52, 116, 51, 0.24);
+  box-shadow:
+    inset 0 0 0 1px rgba(52, 116, 51, 0.14),
+    0 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+#auth-panel.auth-panel-guest #btn-auth-wallet:hover {
+  background: rgba(52, 116, 51, 0.34);
+  border-color: rgba(88, 164, 87, 0.76);
 }
 
 .auth-status {

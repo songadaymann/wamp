@@ -23,7 +23,7 @@ export function setupEditorControls(
   doc: Document = document,
   windowObj: Window = window,
 ): void {
-  setupToolButtons(doc);
+  setupToolButtons(game, doc);
   setupLayerButtons(doc);
   setupLayerStatusChip(doc);
   setupLayerGuideToggle(doc);
@@ -35,9 +35,44 @@ export function setupEditorControls(
   setupBackgroundCards(doc, windowObj);
   setupLightingSelector(doc, windowObj);
   setupGoalControls(game, doc);
+  setupPressurePlateControls(game, doc);
+  setupContainerContentsControls(game, doc);
   setupPaletteModeTabs(paletteController, doc);
   setupObjectCategoryTabs(paletteController, doc);
   syncEditorToolPanels(doc);
+}
+
+function getLayerUiLabel(layer: LayerName): string {
+  switch (layer) {
+    case 'background':
+      return 'Back';
+    case 'foreground':
+      return 'Front';
+    case 'terrain':
+    default:
+      return 'Gameplay';
+  }
+}
+
+function syncToolButtonState(doc: Document): void {
+  doc.querySelectorAll<HTMLButtonElement>('.tool-btn[data-tool]').forEach((button) => {
+    button.classList.toggle('active', button.dataset.tool === editorState.activeTool);
+  });
+
+  const moreButton = doc.getElementById('btn-tool-more');
+  const moreToolsPanel = doc.getElementById('more-tools-panel');
+  const rectOrFillActive = editorState.activeTool === 'rect' || editorState.activeTool === 'fill';
+  const popoverOpen = moreToolsPanel?.dataset.open === 'true';
+  moreButton?.classList.toggle('active', rectOrFillActive || popoverOpen);
+}
+
+function setActiveEditorTool(game: Phaser.Game, doc: Document, tool: ToolName): void {
+  editorState.activeTool = tool;
+  syncToolButtonState(doc);
+  syncEditorToolPanels(doc);
+  withActiveEditorScene(game, (scene) => {
+    scene.updateToolUi?.();
+  });
 }
 
 function setupRoomTitleInput(game: Phaser.Game, doc: Document): void {
@@ -56,28 +91,78 @@ function setupRoomTitleInput(game: Phaser.Game, doc: Document): void {
   input.addEventListener('change', commit);
 }
 
-function setupToolButtons(doc: Document): void {
-  doc.querySelectorAll('.tool-btn').forEach((button) => {
-    button.addEventListener('click', () => {
-      const tool = (button as HTMLElement).dataset.tool as ToolName;
-      editorState.activeTool = tool;
+function setupToolButtons(game: Phaser.Game, doc: Document): void {
+  const moreToolsButton = doc.getElementById('btn-tool-more') as HTMLButtonElement | null;
+  const moreToolsPanel = doc.getElementById('more-tools-panel') as HTMLElement | null;
 
-      doc.querySelectorAll('.tool-btn').forEach((item) => item.classList.remove('active'));
-      button.classList.add('active');
-      syncEditorToolPanels(doc);
+  const closeMoreTools = () => {
+    if (!moreToolsPanel) {
+      return;
+    }
+    moreToolsPanel.classList.add('hidden');
+    moreToolsPanel.dataset.open = 'false';
+    syncToolButtonState(doc);
+  };
+
+  const toggleMoreTools = () => {
+    if (!moreToolsPanel) {
+      return;
+    }
+    const open = moreToolsPanel.dataset.open === 'true';
+    moreToolsPanel.dataset.open = open ? 'false' : 'true';
+    moreToolsPanel.classList.toggle('hidden', open);
+    syncToolButtonState(doc);
+  };
+
+  doc.querySelectorAll<HTMLButtonElement>('.tool-btn').forEach((button) => {
+    button.addEventListener('click', () => {
+      const tool = button.dataset.tool as ToolName | undefined;
+      if (!tool) {
+        return;
+      }
+
+      setActiveEditorTool(game, doc, tool);
+      if (tool !== 'rect' && tool !== 'fill') {
+        closeMoreTools();
+      }
     });
   });
+
+  moreToolsButton?.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleMoreTools();
+  });
+
+  doc.addEventListener('click', (event) => {
+    if (!moreToolsPanel || moreToolsPanel.dataset.open !== 'true') {
+      return;
+    }
+
+    const target = event.target as Node | null;
+    if (target && (moreToolsPanel.contains(target) || moreToolsButton?.contains(target))) {
+      return;
+    }
+
+    closeMoreTools();
+  });
+
+  syncToolButtonState(doc);
 }
 
 function setupLayerButtons(doc: Document): void {
   const sync = () => {
-    doc.querySelectorAll('.layer-btn').forEach((button) => {
+    doc.querySelectorAll<HTMLElement>('.layer-btn').forEach((button) => {
       const layer = (button as HTMLElement).dataset.layer as LayerName;
       button.classList.toggle('active', layer === editorState.activeLayer);
     });
+    doc.querySelectorAll<HTMLElement>('.layer-stack-mini-btn').forEach((previewButton) => {
+      const layer = previewButton.dataset.layer as LayerName | undefined;
+      previewButton.classList.toggle('active', layer === editorState.activeLayer);
+    });
   };
 
-  doc.querySelectorAll('.layer-btn').forEach((button) => {
+  doc.querySelectorAll<HTMLElement>('.layer-btn, .layer-stack-mini-btn').forEach((button) => {
     button.addEventListener('click', () => {
       const layer = (button as HTMLElement).dataset.layer as LayerName;
       editorState.activeLayer = layer;
@@ -165,7 +250,7 @@ function setupEraserControls(game: Phaser.Game, doc: Document): void {
   }
 
   clearLayerButton?.addEventListener('click', () => {
-    if (!window.confirm('Clear every terrain tile on the current layer?')) {
+    if (!window.confirm('Clear every tile on the current layer?')) {
       return;
     }
 
@@ -175,7 +260,7 @@ function setupEraserControls(game: Phaser.Game, doc: Document): void {
   });
 
   clearAllButton?.addEventListener('click', () => {
-    if (!window.confirm('Remove all terrain from background, terrain, and foreground?')) {
+    if (!window.confirm('Remove all tiles from Back, Gameplay, and Front?')) {
       return;
     }
 
@@ -192,12 +277,7 @@ function setupLayerStatusChip(doc: Document): void {
   }
 
   const sync = () => {
-    const label =
-      editorState.activeLayer === 'terrain'
-        ? 'Terrain'
-        : editorState.activeLayer === 'background'
-          ? 'Background'
-          : 'Foreground';
+    const label = getLayerUiLabel(editorState.activeLayer);
     chip.textContent = `Placing on ${label}`;
     chip.setAttribute('data-layer-tone', editorState.activeLayer);
   };
@@ -411,6 +491,40 @@ function setupGoalControls(game: Phaser.Game, doc: Document): void {
   });
 }
 
+function setupPressurePlateControls(game: Phaser.Game, doc: Document): void {
+  const connectBtn = doc.getElementById('btn-pressure-plate-connect');
+  const clearBtn = doc.getElementById('btn-pressure-plate-clear');
+  const doneLaterBtn = doc.getElementById('btn-pressure-plate-done-later');
+
+  connectBtn?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.beginFocusedPressurePlateConnection?.();
+    });
+    requestPhoneEditorAutoCollapse(doc);
+  });
+
+  clearBtn?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.clearFocusedPressurePlateConnection?.();
+    });
+  });
+
+  doneLaterBtn?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.cancelPressurePlateConnection?.();
+    });
+  });
+}
+
+function setupContainerContentsControls(game: Phaser.Game, doc: Document): void {
+  const clearBtn = doc.getElementById('btn-container-clear');
+  clearBtn?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.clearFocusedContainerContents?.();
+    });
+  });
+}
+
 function requestPhoneEditorAutoCollapse(doc: Document): void {
   doc.defaultView?.dispatchEvent(new Event('mobile-editor-auto-collapse'));
 }
@@ -459,9 +573,7 @@ function setupPaletteModeTabs(paletteController: PaletteController, doc: Documen
         objectPaletteSection?.classList.remove('hidden');
         if (editorState.activeTool !== 'eraser') {
           editorState.activeTool = 'pencil';
-          doc.querySelectorAll('.tool-btn').forEach((button) => {
-            button.classList.toggle('active', (button as HTMLElement).dataset.tool === 'pencil');
-          });
+          syncToolButtonState(doc);
         }
       }
 
@@ -502,7 +614,17 @@ function setupTilesetSelector(paletteController: PaletteController, doc: Documen
 
 function syncEditorToolPanels(doc: Document): void {
   const eraseControls = doc.getElementById('erase-controls');
+  const moreToolsPanel = doc.getElementById('more-tools-panel');
+  const showMoreTools =
+    moreToolsPanel?.dataset.open === 'true' ||
+    (editorState.paletteMode === 'tiles' &&
+      (editorState.activeTool === 'rect' || editorState.activeTool === 'fill'));
   const showEraseControls =
     editorState.paletteMode === 'tiles' && editorState.activeTool === 'eraser';
   eraseControls?.classList.toggle('hidden', !showEraseControls);
+  moreToolsPanel?.classList.toggle('hidden', !showMoreTools);
+  if (moreToolsPanel) {
+    moreToolsPanel.dataset.open = showMoreTools ? 'true' : 'false';
+  }
+  syncToolButtonState(doc);
 }

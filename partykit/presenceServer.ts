@@ -1,5 +1,13 @@
 import type * as Party from 'partykit/server';
 import type { PartyKitLaunchStats, PartyKitShardHeartbeat } from '../src/admin/model';
+import {
+  ROOM_CHAT_MESSAGE_LIFETIME_MS,
+  ROOM_CHAT_MESSAGE_MAX_LENGTH,
+  ROOM_CHAT_SEND_RATE_LIMIT_MS,
+  type RoomChatBroadcastMessage,
+  type RoomChatSayMessage,
+  type RoomChatTransportChannel,
+} from '../src/chat/roomChatModel';
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 const STALE_HEARTBEAT_MS = 120_000;
@@ -34,10 +42,12 @@ interface PresencePayload {
 }
 
 interface ConnectionPresenceState {
+  channel: RoomChatTransportChannel;
   userId: string;
   displayName: string;
   avatarId: string;
   presence: PresencePayload | null;
+  lastRoomChatSentAt: number;
 }
 
 interface WorldGhostPresence extends PresencePayload {
@@ -56,7 +66,8 @@ type IncomingMessage =
     }
   | {
       type: 'presence:leave';
-    };
+    }
+  | RoomChatSayMessage;
 
 interface HeartbeatMutationResponse {
   ok: true;
@@ -121,16 +132,19 @@ export default class PresenceServer implements Party.Server {
     connection.setState({
       ...identity,
       presence: null,
+      lastRoomChatSentAt: 0,
     });
 
-    connection.send(
-      JSON.stringify({
-        type: 'snapshot',
-        peers: this.listPeers(connection.id),
-        roomPopulations: this.computeRoomPopulations(),
-        roomEditors: this.computeRoomEditors(),
-      })
-    );
+    if (identity.channel === 'presence') {
+      connection.send(
+        JSON.stringify({
+          type: 'snapshot',
+          peers: this.listPeers(connection.id),
+          roomPopulations: this.computeRoomPopulations(),
+          roomEditors: this.computeRoomEditors(),
+        })
+      );
+    }
 
     this.broadcastPopulations();
     this.syncHeartbeatTimer();
@@ -155,6 +169,11 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
+    if (parsed.type === 'room-chat:say') {
+      this.handleRoomChatSay(sender, parsed);
+      return;
+    }
+
     if (parsed.type !== 'presence:update') {
       return;
     }
@@ -175,46 +194,48 @@ export default class PresenceServer implements Party.Server {
       presence,
     });
 
-    if (previousPresence?.mode === 'play' && presence.mode !== 'play') {
-      this.room.broadcast(
-        JSON.stringify({
-          type: 'remove',
-          connectionId: sender.id,
-        }),
-        [sender.id]
-      );
-    }
+    if (current.channel === 'presence') {
+      if (previousPresence?.mode === 'play' && presence.mode !== 'play') {
+        this.sendPresenceMessage(
+          {
+            type: 'remove',
+            connectionId: sender.id,
+          },
+          { excludeConnectionIds: [sender.id] }
+        );
+      }
 
-    const peer = this.toGhostPresence(sender);
-    if (peer) {
-      this.room.broadcast(
-        JSON.stringify({
-          type: 'upsert',
-          peer,
-        }),
-        [sender.id]
-      );
-    }
+      const peer = this.toGhostPresence(sender);
+      if (peer) {
+        this.sendPresenceMessage(
+          {
+            type: 'upsert',
+            peer,
+          },
+          { excludeConnectionIds: [sender.id] }
+        );
+      }
 
-    const shouldBroadcast = this.shouldBroadcastPopulations(previousPresence, presence);
-    if (shouldBroadcast) {
-      this.broadcastPopulations();
-      void this.maybeSendShardHeartbeat(true);
+      const shouldBroadcast = this.shouldBroadcastPopulations(previousPresence, presence);
+      if (shouldBroadcast) {
+        this.broadcastPopulations();
+        void this.maybeSendShardHeartbeat(true);
+      }
     }
   }
 
   onClose(connection: Party.Connection<ConnectionPresenceState>): void {
     const presence = connection.state?.presence;
-    if (presence?.mode === 'play') {
-      this.room.broadcast(
-        JSON.stringify({
-          type: 'remove',
-          connectionId: connection.id,
-        })
-      );
+    if (connection.state?.channel === 'presence' && presence?.mode === 'play') {
+      this.sendPresenceMessage({
+        type: 'remove',
+        connectionId: connection.id,
+      });
     }
 
-    this.broadcastPopulations();
+    if (connection.state?.channel === 'presence') {
+      this.broadcastPopulations();
+    }
     this.syncHeartbeatTimer();
     void this.maybeSendShardHeartbeat(true);
   }
@@ -239,17 +260,20 @@ export default class PresenceServer implements Party.Server {
       presence: null,
     });
 
-    if (previousPresence.mode === 'play') {
-      this.room.broadcast(
-        JSON.stringify({
+    if (current?.channel === 'presence' && previousPresence.mode === 'play') {
+      this.sendPresenceMessage(
+        {
           type: 'remove',
           connectionId: connection.id,
-        }),
-        [connection.id]
+        },
+        { excludeConnectionIds: [connection.id] }
       );
     }
 
-    if (this.shouldBroadcastPopulations(previousPresence, null)) {
+    if (
+      current?.channel === 'presence' &&
+      this.shouldBroadcastPopulations(previousPresence, null)
+    ) {
       this.broadcastPopulations();
       void this.maybeSendShardHeartbeat(true);
     }
@@ -294,7 +318,7 @@ export default class PresenceServer implements Party.Server {
 
     for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
       const presence = connection.state?.presence;
-      if (!presence || presence.mode !== 'edit') {
+      if (connection.state?.channel !== 'presence' || !presence || presence.mode !== 'edit') {
         continue;
       }
 
@@ -308,20 +332,18 @@ export default class PresenceServer implements Party.Server {
   }
 
   private broadcastPopulations(): void {
-    this.room.broadcast(
-      JSON.stringify({
-        type: 'populations',
-        roomPopulations: this.computeRoomPopulations(),
-        roomEditors: this.computeRoomEditors(),
-      })
-    );
+    this.sendPresenceMessage({
+      type: 'populations',
+      roomPopulations: this.computeRoomPopulations(),
+      roomEditors: this.computeRoomEditors(),
+    });
   }
 
   private toGhostPresence(
     connection: Party.Connection<ConnectionPresenceState>
   ): WorldGhostPresence | null {
     const state = connection.state;
-    if (!state?.presence || state.presence.mode !== 'play') {
+    if (state?.channel !== 'presence' || !state.presence || state.presence.mode !== 'play') {
       return null;
     }
 
@@ -402,6 +424,10 @@ export default class PresenceServer implements Party.Server {
     let editConnections = 0;
 
     for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
+      if (connection.state?.channel !== 'presence') {
+        continue;
+      }
+
       totalConnections += 1;
 
       const mode = connection.state?.presence?.mode ?? null;
@@ -434,7 +460,7 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    const hasConnections = this.hasAnyConnections();
+    const hasConnections = this.hasAnyPresenceConnections();
     if (!hasConnections) {
       if (this.heartbeatTimer !== null) {
         clearInterval(this.heartbeatTimer);
@@ -450,8 +476,14 @@ export default class PresenceServer implements Party.Server {
     }
   }
 
-  private hasAnyConnections(): boolean {
-    return this.room.getConnections<ConnectionPresenceState>()[Symbol.iterator]().next().done === false;
+  private hasAnyPresenceConnections(): boolean {
+    for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
+      if (connection.state?.channel === 'presence') {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private async handleHeartbeat(req: Party.Request): Promise<Response> {
@@ -560,17 +592,132 @@ export default class PresenceServer implements Party.Server {
     });
   }
 
-  private parseIdentity(urlString: string): Omit<ConnectionPresenceState, 'presence'> {
+  private parseIdentity(
+    urlString: string
+  ): Omit<ConnectionPresenceState, 'presence' | 'lastRoomChatSentAt'> {
     const url = new URL(urlString);
     const userId = (url.searchParams.get('userId') ?? '').trim() || crypto.randomUUID();
     const displayName = (url.searchParams.get('displayName') ?? '').trim() || 'Guest';
     const avatarId = (url.searchParams.get('avatarId') ?? '').trim() || 'default-player';
+    const channel = this.parseChannel(url.searchParams.get('channel'));
 
     return {
+      channel,
       userId,
       displayName: displayName.slice(0, 32),
       avatarId: avatarId.slice(0, 32),
     };
+  }
+
+  private parseChannel(rawChannel: string | null): RoomChatTransportChannel {
+    return rawChannel === 'room-chat' ? 'room-chat' : 'presence';
+  }
+
+  private handleRoomChatSay(
+    sender: Party.Connection<ConnectionPresenceState>,
+    message: RoomChatSayMessage
+  ): void {
+    const state = sender.state;
+    if (!state || state.channel !== 'room-chat') {
+      return;
+    }
+
+    const presence = state.presence;
+    if (!presence || presence.mode !== 'play') {
+      return;
+    }
+
+    const text = this.normalizeRoomChatText(message.text);
+    if (!text) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - state.lastRoomChatSentAt < ROOM_CHAT_SEND_RATE_LIMIT_MS) {
+      return;
+    }
+
+    sender.setState({
+      ...state,
+      lastRoomChatSentAt: now,
+    });
+
+    const roomId = this.getRoomId(presence.roomCoordinates);
+    const payload = {
+      type: 'room-chat:message',
+      message: {
+        id: crypto.randomUUID(),
+        shardId: this.room.id,
+        userId: state.userId,
+        displayName: state.displayName,
+        avatarId: state.avatarId,
+        roomCoordinates: {
+          x: presence.roomCoordinates.x,
+          y: presence.roomCoordinates.y,
+        },
+        roomId,
+        text,
+        createdAt: now,
+        expiresAt: now + ROOM_CHAT_MESSAGE_LIFETIME_MS,
+      },
+    } satisfies RoomChatBroadcastMessage;
+
+    this.sendRoomChatMessage(payload, (connection) => {
+      const peerPresence = connection.state?.presence;
+      return (
+        connection.state?.channel === 'room-chat' &&
+        peerPresence?.mode === 'play' &&
+        this.getRoomId(peerPresence.roomCoordinates) === roomId
+      );
+    });
+  }
+
+  private normalizeRoomChatText(rawText: unknown): string | null {
+    if (typeof rawText !== 'string') {
+      return null;
+    }
+
+    const text = rawText.trim();
+    if (text.length === 0 || text.length > ROOM_CHAT_MESSAGE_MAX_LENGTH) {
+      return null;
+    }
+
+    return text;
+  }
+
+  private sendPresenceMessage(
+    payload: unknown,
+    options: { excludeConnectionIds?: string[] } = {}
+  ): void {
+    this.sendToConnections(
+      payload,
+      (connection) => connection.state?.channel === 'presence',
+      options.excludeConnectionIds
+    );
+  }
+
+  private sendRoomChatMessage(
+    payload: RoomChatBroadcastMessage,
+    predicate: (connection: Party.Connection<ConnectionPresenceState>) => boolean
+  ): void {
+    this.sendToConnections(payload, predicate);
+  }
+
+  private sendToConnections(
+    payload: unknown,
+    predicate: (connection: Party.Connection<ConnectionPresenceState>) => boolean,
+    excludeConnectionIds: string[] = []
+  ): void {
+    const excluded = new Set(excludeConnectionIds);
+    const serialized = JSON.stringify(payload);
+
+    for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
+      if (excluded.has(connection.id) || !predicate(connection)) {
+        continue;
+      }
+
+      connection.send(serialized);
+    }
   }
 
   private normalizePresencePayload(value: unknown): PresencePayload | null {

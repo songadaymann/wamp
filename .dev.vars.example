@@ -1,7 +1,7 @@
 RESEND_API_KEY=
 AUTH_EMAIL_FROM="Everybody's Platformer <onboarding@resend.dev>"
 # Public app base URL used when constructing auth links from the Worker.
-APP_BASE_URL="http://127.0.0.1:3000"
+APP_BASE_URL="http://127.0.0.1:3232"
 # Debug-only local mode: return the magic link in the API response instead of sending email.
 AUTH_DEBUG_MAGIC_LINKS=1
 # Dev-only reset route for wiping test data through the Worker UI button.

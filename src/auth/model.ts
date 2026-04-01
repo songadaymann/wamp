@@ -7,6 +7,8 @@ export interface AuthUser {
   walletAddress: string | null;
   displayName: string;
   createdAt?: string;
+  avatarUrl?: string | null;
+  bio?: string | null;
 }
 
 export const API_TOKEN_SCOPES = [

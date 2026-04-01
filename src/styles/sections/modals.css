@@ -153,6 +153,47 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   width: min(640px, calc(100vw - 40px));
 }
 
+.editor-music-picker-panel {
+  width: min(760px, calc(100vw - 40px));
+}
+
+.editor-music-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.editor-music-picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  border-radius: 10px;
+  background: rgba(243, 238, 226, 0.03);
+}
+
+.editor-music-picker-label {
+  min-width: 0;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.editor-music-picker-label.is-selected {
+  color: var(--accent-warm);
+}
+
+.editor-music-picker-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .chat-moderation-section {
   display: flex;
   flex-direction: column;
@@ -532,6 +573,165 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   padding: 6px 0;
 }
 
+.profile-modal-panel {
+  max-width: min(760px, calc(100vw - 32px));
+}
+
+.profile-modal-header {
+  justify-content: flex-end;
+  gap: 0;
+}
+
+.profile-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.profile-hero {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.profile-avatar-shell {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  flex: 0 0 auto;
+}
+
+.profile-avatar-image,
+.profile-avatar-fallback {
+  width: 84px;
+  height: 84px;
+  border-radius: 18px;
+  border: 1px solid rgba(243, 238, 226, 0.1);
+}
+
+.profile-avatar-image {
+  display: block;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.profile-avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at top, rgba(143, 216, 255, 0.22), transparent 65%),
+    rgba(15, 17, 24, 0.92);
+  color: var(--accent-cool);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.profile-hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.profile-display-name {
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.profile-overview-bio {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.profile-overview-bio-empty {
+  color: var(--text-muted);
+}
+
+.profile-edit-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.profile-bio-input {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.profile-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.profile-tabs {
+  padding: 0;
+}
+
+.profile-modal-panel .leaderboard-panel {
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
+  padding: 0;
+}
+
+.profile-modal-panel .history-version-list {
+  flex: 0 0 auto;
+  min-height: auto;
+  max-height: none;
+}
+
+.profile-room-row {
+  width: 100%;
+}
+
+.profile-stats-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.profile-stats-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.profile-stats-label {
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.profile-stats-value {
+  color: var(--text);
+  font-size: 13px;
+}
+
 @media (max-width: 700px) {
   .leaderboard-row,
   .leaderboard-row.leaderboard-global-row {
@@ -541,6 +741,14 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   .leaderboard-row > :nth-child(4),
   .leaderboard-row > :nth-child(5) {
     display: none;
+  }
+
+  .profile-hero {
+    flex-direction: column;
+  }
+
+  .profile-stats-list {
+    grid-template-columns: 1fr;
   }
 }
 
