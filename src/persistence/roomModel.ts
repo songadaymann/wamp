@@ -2,10 +2,27 @@ import {
   LAYER_NAMES,
   ROOM_HEIGHT,
   ROOM_WIDTH,
+  canObjectBeStoredInContainer,
+  canPlacedObjectBeContainer,
+  canPlacedObjectBePressurePlateTarget,
+  canPlacedObjectTriggerOtherObjects,
+  getPlacedObjectInstanceId,
+  getObjectById,
   type LayerName,
   type PlacedObject,
 } from '../config';
 import { normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
+import {
+  cloneRoomLightingSettings,
+  normalizeRoomLightingSettings,
+  type RoomLightingSettings,
+} from '../lighting/model';
+import {
+  cloneRoomMusic,
+  isRoomMusicEmpty,
+  normalizeRoomMusic,
+  type RoomMusic,
+} from '../music/model';
 
 export interface RoomCoordinates {
   x: number;
@@ -41,6 +58,8 @@ export interface RoomSnapshot {
   coordinates: RoomCoordinates;
   title: string | null;
   background: string;
+  lighting: RoomLightingSettings;
+  music: RoomMusic | null;
   goal: RoomGoal | null;
   spawnPoint: RoomSpawnPoint | null;
   tileData: RoomTileData;
@@ -150,6 +169,8 @@ export function createDefaultRoomSnapshot(
     coordinates: { ...coordinates },
     title: null,
     background: 'none',
+    lighting: cloneRoomLightingSettings(null),
+    music: null,
     goal: null,
     spawnPoint: null,
     tileData: createEmptyTileData(),
@@ -181,16 +202,94 @@ function cloneTileData(tileData: RoomTileData): RoomTileData {
   return next;
 }
 
+function normalizePlacedObject(
+  placed: Partial<PlacedObject> | null | undefined,
+  index: number,
+): PlacedObject | null {
+  if (
+    !placed ||
+    typeof placed.id !== 'string' ||
+    typeof placed.x !== 'number' ||
+    typeof placed.y !== 'number'
+  ) {
+    return null;
+  }
+
+  return {
+    id: placed.id,
+    x: placed.x,
+    y: placed.y,
+    instanceId: getPlacedObjectInstanceId(
+      {
+        id: placed.id,
+        x: placed.x,
+        y: placed.y,
+        facing: placed.facing,
+        layer: placed.layer,
+        instanceId: placed.instanceId ?? '',
+      },
+      index,
+    ),
+    facing: placed.facing === 'left' || placed.facing === 'right' ? placed.facing : undefined,
+    layer:
+      placed.layer === 'background' || placed.layer === 'terrain' || placed.layer === 'foreground'
+        ? placed.layer
+        : undefined,
+    triggerTargetInstanceId:
+      typeof placed.triggerTargetInstanceId === 'string' && placed.triggerTargetInstanceId.trim()
+        ? placed.triggerTargetInstanceId
+        : null,
+    containedObjectId:
+      typeof placed.containedObjectId === 'string' && placed.containedObjectId.trim()
+        ? placed.containedObjectId
+        : null,
+  };
+}
+
+function clonePlacedObjects(placedObjects: PlacedObject[]): PlacedObject[] {
+  const normalized = placedObjects
+    .map((placed, index) => normalizePlacedObject(placed, index))
+    .filter((placed): placed is PlacedObject => placed !== null);
+  const ids = new Set(normalized.map((placed) => placed.instanceId));
+
+  return normalized.map((placed) => {
+    const target = placed.triggerTargetInstanceId;
+    const containedObjectId = placed.containedObjectId;
+    const validTarget =
+      canPlacedObjectTriggerOtherObjects(placed) &&
+      typeof target === 'string' &&
+      target.trim().length > 0 &&
+      target !== placed.instanceId &&
+      ids.has(target) &&
+      canPlacedObjectBePressurePlateTarget(
+        normalized.find((candidate) => candidate.instanceId === target) ?? null
+      );
+    const validContainedObjectId =
+      canPlacedObjectBeContainer(placed) &&
+      typeof containedObjectId === 'string' &&
+      containedObjectId.trim().length > 0 &&
+      canObjectBeStoredInContainer(placed.id, getObjectById(containedObjectId));
+
+    return {
+      ...placed,
+      triggerTargetInstanceId: validTarget ? target : null,
+      containedObjectId: validContainedObjectId ? containedObjectId : null,
+    };
+  });
+}
+
 export function cloneRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
   return {
     id: room.id,
     coordinates: { ...room.coordinates },
     title: normalizeRoomTitle(room.title),
     background: room.background,
+    lighting: normalizeRoomLightingSettings(room.lighting),
+    music: cloneRoomMusic(room.music),
     goal: normalizeRoomGoal(room.goal),
     spawnPoint: room.spawnPoint ? { ...room.spawnPoint } : null,
     tileData: cloneTileData(room.tileData),
-    placedObjects: room.placedObjects.map((placed) => ({ ...placed })),
+    placedObjects: clonePlacedObjects(room.placedObjects),
     version: room.version,
     status: room.status,
     createdAt: room.createdAt,
@@ -306,11 +405,19 @@ export function isRoomSnapshotBlank(room: RoomSnapshot): boolean {
     return false;
   }
 
+  if (room.lighting.mode !== 'off') {
+    return false;
+  }
+
   if (room.spawnPoint) {
     return false;
   }
 
   if (room.goal) {
+    return false;
+  }
+
+  if (!isRoomMusicEmpty(room.music)) {
     return false;
   }
 

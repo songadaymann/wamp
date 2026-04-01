@@ -1,9 +1,15 @@
 import { goalSupportsTimeLimit, type RoomGoal } from '../../goals/roomGoals';
+import {
+  getDefaultRoomMusicPack,
+  getRoomMusicClip,
+  getRoomMusicClipsForLane,
+} from '../../music/catalog';
+import type { RoomMusic, RoomMusicLaneId } from '../../music/model';
 import type { RoomCoordinates, RoomPermissions, RoomVersionRecord } from '../../persistence/roomRepository';
 import type { EditorUiViewModel } from './uiBridge';
 import type { GoalPlacementMode } from './editRuntime';
 import type { EditorStatusDetails } from './roomSession';
-import type { EditorCourseUiState } from '../../ui/setup/sceneBridge';
+import type { EditorCourseUiState, EditorMusicTab } from '../../ui/setup/sceneBridge';
 
 export interface BuildEditorUiViewModelOptions {
   roomTitle: string | null;
@@ -25,6 +31,12 @@ export interface BuildEditorUiViewModelOptions {
   publishNudgeText: string;
   publishNudgeActionText: string;
   courseEditorState: EditorCourseUiState;
+  roomMusic: RoomMusic | null;
+  musicModeActive: boolean;
+  musicPreviewState: 'stopped' | 'playing' | 'paused';
+  musicEditorTab: EditorMusicTab;
+  musicPickerLaneId: RoomMusicLaneId | null;
+  musicPickerPreviewClipId: string | null;
 }
 
 export function shouldShowPublishNudge(
@@ -40,6 +52,89 @@ export function shouldShowPublishNudge(
     !mintedTokenId &&
     roomEditCount >= threshold
   );
+}
+
+function buildMusicUiViewModel(
+  roomMusic: RoomMusic | null,
+  options: {
+    musicModeActive: boolean;
+    musicPreviewState: 'stopped' | 'playing' | 'paused';
+    musicEditorTab: EditorMusicTab;
+    musicPickerLaneId: RoomMusicLaneId | null;
+    musicPickerPreviewClipId: string | null;
+  },
+): EditorUiViewModel['music'] {
+  const pack = getDefaultRoomMusicPack();
+  const laneAssignments = roomMusic?.arrangement.laneAssignments ?? {
+    drums: null,
+    bass: null,
+    arp: null,
+    hold: null,
+    melody: null,
+  };
+  const assignedCount = pack.lanes.reduce(
+    (count, lane) => count + (laneAssignments[lane.id] ? 1 : 0),
+    0,
+  );
+  const pickerLane = options.musicPickerLaneId
+    ? pack.lanes.find((lane) => lane.id === options.musicPickerLaneId) ?? null
+    : null;
+  const pickerClipId = pickerLane ? laneAssignments[pickerLane.id] : null;
+  const pickerClipLabel =
+    pickerClipId && pickerLane
+      ? getRoomMusicClip(pack, pickerClipId)?.label ?? 'Assigned clip'
+      : 'No clip assigned.';
+
+  return {
+    sectionHidden: false,
+    modeButtonText: options.musicModeActive ? 'Close Music' : 'Edit Music',
+    modeButtonActive: options.musicModeActive,
+    summaryText:
+      assignedCount > 0
+        ? `${assignedCount}/${pack.lanes.length} lanes assigned in ${pack.label}.`
+        : 'No room music yet. Pick stems to give this room its own loop.',
+    overlayVisible: options.musicModeActive,
+    packLabel: pack.label,
+    modeStatusText:
+      options.musicEditorTab === 'advanced'
+        ? 'Advanced grid is reserved for phase two. Arrange stems here for now.'
+        : 'Music grid active. Room editing is paused while this overlay is open.',
+    previewButtonText:
+      options.musicPreviewState === 'playing'
+        ? 'Pause'
+        : options.musicPreviewState === 'paused'
+          ? 'Resume'
+          : 'Play',
+    stopDisabled: options.musicPreviewState === 'stopped',
+    arrangeTabActive: options.musicEditorTab === 'arrange',
+    advancedTabActive: options.musicEditorTab === 'advanced',
+    advancedDisabled: false,
+    lanes: pack.lanes.map((lane) => ({
+      laneId: lane.id,
+      label: lane.label,
+      clipLabel:
+        laneAssignments[lane.id]
+          ? getRoomMusicClip(pack, laneAssignments[lane.id] ?? '')?.label ?? 'Assigned clip'
+          : `Choose ${lane.label}`,
+      clipAssigned: Boolean(laneAssignments[lane.id]),
+    })),
+    picker: {
+      open: pickerLane !== null,
+      laneId: pickerLane?.id ?? null,
+      laneLabel: pickerLane?.label ?? '',
+      currentClipLabel: pickerClipLabel,
+      clearDisabled: pickerClipId === null,
+      clips:
+        pickerLane
+          ? getRoomMusicClipsForLane(pack, pickerLane.id).map((clip) => ({
+              clipId: clip.id,
+              label: clip.label,
+              selected: clip.id === pickerClipId,
+              previewing: clip.id === options.musicPickerPreviewClipId,
+            }))
+          : [],
+    },
+  };
 }
 
 export function buildEditorUiViewModel(
@@ -65,7 +160,14 @@ export function buildEditorUiViewModel(
     publishNudgeText,
     publishNudgeActionText,
     courseEditorState,
+    roomMusic,
+    musicModeActive,
+    musicPreviewState,
+    musicEditorTab,
+    musicPickerLaneId,
+    musicPickerPreviewClipId,
   } = options;
+  const canReturnToCourseBuilder = courseEditorState.canReturnToCourseBuilder;
 
   return {
     roomTitleValue: roomTitle ?? '',
@@ -74,12 +176,14 @@ export function buildEditorUiViewModel(
     saveStatusAccentText: saveStatus.accentText,
     saveStatusLinkText: saveStatus.linkLabel,
     saveStatusLinkHref: saveStatus.linkHref,
+    saveButtonTitle: 'Save Room Draft (Cmd/Ctrl+S)',
+    publishButtonTitle: 'Publish Room (Cmd/Ctrl+Shift+P)',
     publishNudgeVisible,
     publishNudgeText,
     publishNudgeActionText,
     zoomText,
-    backToWorldHidden: entrySource !== 'world',
-    backToCourseBuilderHidden: !courseEditorState.canReturnToCourseBuilder,
+    backButtonHidden: entrySource !== 'world' && !canReturnToCourseBuilder,
+    backButtonText: canReturnToCourseBuilder ? 'Course' : 'World',
     playHidden: false,
     saveHidden: false,
     saveDisabled: !roomPermissions.canSaveDraft,
@@ -96,6 +200,13 @@ export function buildEditorUiViewModel(
     historyHidden: false,
     historyDisabled: roomVersionHistory.length === 0,
     fitHidden: false,
+    music: buildMusicUiViewModel(roomMusic, {
+      musicModeActive,
+      musicPreviewState,
+      musicEditorTab,
+      musicPickerLaneId,
+      musicPickerPreviewClipId,
+    }),
     goal: {
       goalTypeValue: roomGoal?.type ?? '',
       goalTypeDisabled: false,

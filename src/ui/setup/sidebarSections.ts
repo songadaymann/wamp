@@ -3,6 +3,17 @@ function isPhoneEditorActive(doc: Document): boolean {
   return body.dataset.appMode === 'editor' && body.dataset.deviceClass === 'phone';
 }
 
+function shouldCollapseSectionByDefault(section: HTMLElement, doc: Document): boolean {
+  const defaultCollapsed = section.dataset.sidebarDefaultCollapsed;
+  if (defaultCollapsed === 'desktop') {
+    return !isPhoneEditorActive(doc);
+  }
+  if (defaultCollapsed === 'phone') {
+    return isPhoneEditorActive(doc);
+  }
+  return defaultCollapsed === 'true';
+}
+
 function toggleSidebarSection(section: HTMLElement): void {
   section.classList.toggle('is-collapsed');
   const toggle = section.querySelector<HTMLButtonElement>(':scope > .section-label > .sidebar-section-toggle');
@@ -72,6 +83,9 @@ export function setupCollapsibleSidebarSections(doc: Document = document): void 
     label.setAttribute('role', 'button');
     label.setAttribute('aria-expanded', 'true');
     section.classList.add('is-collapsible');
+    if (shouldCollapseSectionByDefault(section, doc)) {
+      section.classList.add('is-collapsed');
+    }
     section.dataset.sidebarCollapsibleReady = 'true';
     syncExpandedState();
   }

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { CourseGoalType, CourseRoomRef } from '../../courses/model';
 import type { RoomGoalType } from '../../goals/roomGoals';
+import type { RoomMusicLaneId } from '../../music/model';
 import type { GoalPlacementMode } from '../../scenes/editor/editRuntime';
 import type { RoomCoordinates, RoomRecord, RoomVersionRecord } from '../../persistence/roomModel';
 
@@ -21,6 +22,7 @@ export type EditorHistoryState = {
 };
 
 export type EditorMarkerPlacementMode = Exclude<GoalPlacementMode, null> | 'start';
+export type EditorMusicTab = 'arrange' | 'advanced';
 export type EditorCourseUiState = {
   visible: boolean;
   statusHidden: boolean;
@@ -71,6 +73,7 @@ export interface EditorSceneBridge {
   fitToScreen?: () => void;
   zoomIn?: () => void;
   zoomOut?: () => void;
+  updateToolUi?: () => void;
   clearCurrentLayer?: () => void;
   clearAllTiles?: () => void;
   setRoomTitle?: (title: string | null) => void;
@@ -89,6 +92,22 @@ export interface EditorSceneBridge {
   clearCourseGoalMarkers?: () => void;
   editPreviousCourseRoom?: () => Promise<void> | void;
   editNextCourseRoom?: () => Promise<void> | void;
+  beginFocusedPressurePlateConnection?: () => void;
+  clearFocusedPressurePlateConnection?: () => void;
+  cancelPressurePlateConnection?: () => void;
+  clearFocusedContainerContents?: () => void;
+  setMusicModeActive?: (active: boolean) => void;
+  toggleMusicMode?: () => void;
+  setMusicEditorTab?: (tab: EditorMusicTab) => void;
+  playRoomMusicPreview?: () => void;
+  pauseRoomMusicPreview?: () => void;
+  stopRoomMusicPreview?: () => void;
+  openRoomMusicPicker?: (laneId: RoomMusicLaneId) => void;
+  closeRoomMusicPicker?: () => void;
+  assignRoomMusicLaneClip?: (laneId: RoomMusicLaneId, clipId: string) => void;
+  clearRoomMusicLaneClip?: (laneId: RoomMusicLaneId) => void;
+  previewRoomMusicClip?: (clipId: string) => void;
+  stopRoomMusicClipPreview?: () => void;
   undoAction?: () => void;
   redoAction?: () => void;
 }
@@ -156,6 +175,9 @@ export interface OverworldSceneBridge {
   fitLoadedWorld?: () => void;
   returnToWorld?: () => void;
   getSelectedRoomContext?: () => OverworldSelectedRoomContext;
+  openRoomChatComposer?: () => boolean;
+  closeRoomChatComposer?: () => void;
+  isRoomChatComposerOpen?: () => boolean;
   openCourseComposer?: () => Promise<void> | void;
   closeCourseComposer?: () => void;
   getCourseComposerState?: () => CourseComposerState | null;

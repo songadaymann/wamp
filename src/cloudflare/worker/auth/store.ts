@@ -9,6 +9,7 @@ import type {
   RequestAuth,
   SessionJoinRow,
   UserRow,
+  UserStatsRow,
   WalletChallengeRow,
 } from '../core/types';
 
@@ -22,7 +23,15 @@ const API_TOKEN_SCOPE_SET = new Set<string>(API_TOKEN_SCOPES);
 export async function findUserByEmail(env: Env, email: string): Promise<AuthUser | null> {
   const row = await env.DB.prepare(
     `
-      SELECT id, email, wallet_address, display_name, created_at, updated_at
+      SELECT
+        id,
+        email,
+        wallet_address,
+        display_name,
+        NULL AS avatar_url,
+        NULL AS bio,
+        created_at,
+        updated_at
       FROM users
       WHERE email = ?
       LIMIT 1
@@ -31,13 +40,21 @@ export async function findUserByEmail(env: Env, email: string): Promise<AuthUser
     .bind(email)
     .first<UserRow>();
 
-  return row ? mapUserRow(row) : null;
+  return row ? mapUserRow(await withUserProfileFields(env, row, row.id)) : null;
 }
 
 export async function findUserByWallet(env: Env, walletAddress: string): Promise<AuthUser | null> {
   const row = await env.DB.prepare(
     `
-      SELECT id, email, wallet_address, display_name, created_at, updated_at
+      SELECT
+        id,
+        email,
+        wallet_address,
+        display_name,
+        NULL AS avatar_url,
+        NULL AS bio,
+        created_at,
+        updated_at
       FROM users
       WHERE wallet_address = ?
       LIMIT 1
@@ -46,13 +63,21 @@ export async function findUserByWallet(env: Env, walletAddress: string): Promise
     .bind(walletAddress)
     .first<UserRow>();
 
-  return row ? mapUserRow(row) : null;
+  return row ? mapUserRow(await withUserProfileFields(env, row, row.id)) : null;
 }
 
 export async function findUserById(env: Env, userId: string): Promise<AuthUser | null> {
   const row = await env.DB.prepare(
     `
-      SELECT id, email, wallet_address, display_name, created_at, updated_at
+      SELECT
+        id,
+        email,
+        wallet_address,
+        display_name,
+        NULL AS avatar_url,
+        NULL AS bio,
+        created_at,
+        updated_at
       FROM users
       WHERE id = ?
       LIMIT 1
@@ -61,13 +86,21 @@ export async function findUserById(env: Env, userId: string): Promise<AuthUser |
     .bind(userId)
     .first<UserRow>();
 
-  return row ? mapUserRow(row) : null;
+  return row ? mapUserRow(await withUserProfileFields(env, row, row.id)) : null;
 }
 
 export async function findUserByDisplayName(env: Env, displayName: string): Promise<AuthUser | null> {
   const row = await env.DB.prepare(
     `
-      SELECT id, email, wallet_address, display_name, created_at, updated_at
+      SELECT
+        id,
+        email,
+        wallet_address,
+        display_name,
+        NULL AS avatar_url,
+        NULL AS bio,
+        created_at,
+        updated_at
       FROM users
       WHERE lower(display_name) = lower(?)
       LIMIT 1
@@ -76,7 +109,7 @@ export async function findUserByDisplayName(env: Env, displayName: string): Prom
     .bind(displayName)
     .first<UserRow>();
 
-  return row ? mapUserRow(row) : null;
+  return row ? mapUserRow(await withUserProfileFields(env, row, row.id)) : null;
 }
 
 export async function createUserForEmail(env: Env, email: string): Promise<AuthUser> {
@@ -187,73 +220,204 @@ export async function updateUserDisplayName(
   user: AuthUser,
   displayName: string
 ): Promise<AuthUser> {
+  return updateUserProfile(env, user, { displayName });
+}
+
+export async function updateUserProfile(
+  env: Env,
+  user: AuthUser,
+  updates: {
+    displayName?: string;
+    avatarUrl?: string | null;
+    bio?: string | null;
+  }
+): Promise<AuthUser> {
   const updatedAt = new Date().toISOString();
-  await env.DB.batch([
+  const nextDisplayName = updates.displayName ?? user.displayName;
+  const nextAvatarUrl =
+    updates.avatarUrl === undefined ? (user.avatarUrl ?? null) : updates.avatarUrl;
+  const nextBio = updates.bio === undefined ? (user.bio ?? null) : updates.bio;
+  const statements = [
     env.DB.prepare(
       `
         UPDATE users
-        SET display_name = ?, updated_at = ?
+        SET display_name = ?, avatar_url = ?, bio = ?, updated_at = ?
         WHERE id = ?
       `
-    ).bind(displayName, updatedAt, user.id),
-    env.DB.prepare(
-      `
-        UPDATE chat_messages
-        SET user_display_name = ?
-        WHERE user_id = ?
-      `
-    ).bind(displayName, user.id),
-    env.DB.prepare(
-      `
-        UPDATE room_runs
-        SET user_display_name = ?
-        WHERE user_id = ?
-      `
-    ).bind(displayName, user.id),
-    env.DB.prepare(
-      `
-        UPDATE user_stats
-        SET user_display_name = ?, updated_at = ?
-        WHERE user_id = ?
-      `
-    ).bind(displayName, updatedAt, user.id),
-    env.DB.prepare(
-      `
-        UPDATE rooms
-        SET claimer_display_name = ?
-        WHERE claimer_user_id = ?
-          AND COALESCE(claimer_principal_type, 'user') = 'user'
-      `
-    ).bind(displayName, user.id),
-    env.DB.prepare(
-      `
-        UPDATE rooms
-        SET last_published_by_display_name = ?
-        WHERE last_published_by_user_id = ?
-          AND COALESCE(last_published_by_principal_type, 'user') = 'user'
-      `
-    ).bind(displayName, user.id),
-    env.DB.prepare(
-      `
-        UPDATE room_versions
-        SET published_by_display_name = ?
-        WHERE published_by_user_id = ?
-          AND COALESCE(published_by_principal_type, 'user') = 'user'
-      `
-    ).bind(displayName, user.id),
-  ]);
+    ).bind(nextDisplayName, nextAvatarUrl, nextBio, updatedAt, user.id),
+  ];
+
+  if (nextDisplayName !== user.displayName) {
+    statements.push(
+      env.DB.prepare(
+        `
+          UPDATE chat_messages
+          SET user_display_name = ?
+          WHERE user_id = ?
+        `
+      ).bind(nextDisplayName, user.id),
+      env.DB.prepare(
+        `
+          UPDATE room_runs
+          SET user_display_name = ?
+          WHERE user_id = ?
+        `
+      ).bind(nextDisplayName, user.id),
+      env.DB.prepare(
+        `
+          UPDATE user_stats
+          SET user_display_name = ?, updated_at = ?
+          WHERE user_id = ?
+        `
+      ).bind(nextDisplayName, updatedAt, user.id),
+      env.DB.prepare(
+        `
+          UPDATE rooms
+          SET claimer_display_name = ?
+          WHERE claimer_user_id = ?
+            AND COALESCE(claimer_principal_type, 'user') = 'user'
+        `
+      ).bind(nextDisplayName, user.id),
+      env.DB.prepare(
+        `
+          UPDATE rooms
+          SET last_published_by_display_name = ?
+          WHERE last_published_by_user_id = ?
+            AND COALESCE(last_published_by_principal_type, 'user') = 'user'
+        `
+      ).bind(nextDisplayName, user.id),
+      env.DB.prepare(
+        `
+          UPDATE room_versions
+          SET published_by_display_name = ?
+          WHERE published_by_user_id = ?
+            AND COALESCE(published_by_principal_type, 'user') = 'user'
+        `
+      ).bind(nextDisplayName, user.id),
+    );
+  }
+
+  try {
+    await env.DB.batch(statements);
+  } catch (error) {
+    if (isMissingUserProfileColumnError(error)) {
+      throw new HttpError(
+        503,
+        'Profile editing needs the latest database migration before avatar and bio fields can be saved.'
+      );
+    }
+
+    throw error;
+  }
 
   return {
     ...user,
-    displayName,
+    displayName: nextDisplayName,
+    avatarUrl: nextAvatarUrl,
+    bio: nextBio,
   };
+}
+
+export async function loadPublicUserProfileCourseCount(env: Env, userId: string): Promise<number> {
+  const row = await env.DB.prepare(
+    `
+      SELECT COUNT(*) AS count
+      FROM courses
+      WHERE owner_user_id = ?
+        AND published_json IS NOT NULL
+    `
+  )
+    .bind(userId)
+    .first<{ count: number | string | null }>();
+
+  return Number(row?.count ?? 0) || 0;
+}
+
+export async function loadUserStatsRow(env: Env, userId: string) {
+  return env.DB.prepare(
+    `
+      SELECT
+        user_id,
+        user_display_name,
+        total_points,
+        total_score,
+        total_deaths,
+        total_collectibles,
+        total_enemies_defeated,
+        total_checkpoints,
+        total_rooms_published,
+        completed_runs,
+        failed_runs,
+        abandoned_runs,
+        best_score,
+        fastest_clear_ms,
+        updated_at
+      FROM user_stats
+      WHERE user_id = ?
+      LIMIT 1
+    `
+  )
+    .bind(userId)
+    .first<UserStatsRow>();
+}
+
+export async function loadAllUserStatsRows(env: Env) {
+  const result = await env.DB.prepare(
+    `
+      SELECT
+        user_id,
+        user_display_name,
+        total_points,
+        total_score,
+        total_deaths,
+        total_collectibles,
+        total_enemies_defeated,
+        total_checkpoints,
+        total_rooms_published,
+        completed_runs,
+        failed_runs,
+        abandoned_runs,
+        best_score,
+        fastest_clear_ms,
+        updated_at
+      FROM user_stats
+    `
+  ).all<UserStatsRow>();
+
+  return result.results;
+}
+
+export async function loadPublishedRoomsByCreator(env: Env, userId: string) {
+  const result = await env.DB.prepare(
+    `
+      SELECT
+        id,
+        x,
+        y,
+        published_title,
+        published_json
+      FROM rooms
+      WHERE published_json IS NOT NULL
+        AND COALESCE(claimer_user_id, last_published_by_user_id) = ?
+    `
+  )
+    .bind(userId)
+    .all<{
+      id: string;
+      x: number;
+      y: number;
+      published_title: string | null;
+      published_json: string;
+    }>();
+
+  return result.results;
 }
 
 export async function loadMagicLinkByTokenHash(
   env: Env,
   tokenHash: string
 ): Promise<MagicLinkJoinRow | null> {
-  return env.DB.prepare(
+  const row = await env.DB.prepare(
     `
       SELECT
         m.id,
@@ -265,6 +429,8 @@ export async function loadMagicLinkByTokenHash(
         m.created_at,
         u.wallet_address,
         u.display_name,
+        NULL AS avatar_url,
+        NULL AS bio,
         u.created_at AS user_created_at
       FROM magic_link_tokens m
       JOIN users u ON u.id = m.user_id
@@ -274,6 +440,8 @@ export async function loadMagicLinkByTokenHash(
   )
     .bind(tokenHash)
     .first<MagicLinkJoinRow>();
+
+  return row ? withUserProfileFields(env, row, row.user_id) : null;
 }
 
 export async function createMagicLinkToken(
@@ -435,6 +603,8 @@ export async function loadSessionFromToken(env: Env, token: string): Promise<Aut
         u.email,
         u.wallet_address,
         u.display_name,
+        NULL AS avatar_url,
+        NULL AS bio,
         u.created_at AS user_created_at
       FROM sessions s
       JOIN users u ON u.id = s.user_id
@@ -454,18 +624,21 @@ export async function loadSessionFromToken(env: Env, token: string): Promise<Aut
     return null;
   }
 
+  const hydratedRow = await withUserProfileFields(env, row, row.user_id);
   return {
-    sessionId: row.id,
-    userId: row.user_id,
-    expiresAt: row.expires_at,
-    createdAt: row.created_at,
-    lastSeenAt: row.last_seen_at,
+    sessionId: hydratedRow.id,
+    userId: hydratedRow.user_id,
+    expiresAt: hydratedRow.expires_at,
+    createdAt: hydratedRow.created_at,
+    lastSeenAt: hydratedRow.last_seen_at,
     user: {
-      id: row.user_id,
-      email: row.email,
-      walletAddress: row.wallet_address,
-      displayName: row.display_name,
-      createdAt: row.user_created_at,
+      id: hydratedRow.user_id,
+      email: hydratedRow.email,
+      walletAddress: hydratedRow.wallet_address,
+      displayName: hydratedRow.display_name,
+      createdAt: hydratedRow.user_created_at,
+      avatarUrl: hydratedRow.avatar_url,
+      bio: hydratedRow.bio,
     },
   };
 }
@@ -488,6 +661,8 @@ export async function loadApiTokenAuth(
         u.email,
         u.wallet_address,
         u.display_name,
+        NULL AS avatar_url,
+        NULL AS bio,
         u.created_at AS user_created_at
       FROM api_tokens t
       JOIN users u ON u.id = t.user_id
@@ -502,13 +677,16 @@ export async function loadApiTokenAuth(
     return null;
   }
 
+  const hydratedRow = await withUserProfileFields(env, row, row.user_id);
   const scopes = parseApiTokenScopes(row.scopes_json);
   const user: AuthUser = {
-    id: row.user_id,
-    email: row.email,
-    walletAddress: row.wallet_address,
-    displayName: row.display_name,
-    createdAt: row.user_created_at,
+    id: hydratedRow.user_id,
+    email: hydratedRow.email,
+    walletAddress: hydratedRow.wallet_address,
+    displayName: hydratedRow.display_name,
+    createdAt: hydratedRow.user_created_at,
+    avatarUrl: hydratedRow.avatar_url,
+    bio: hydratedRow.bio,
   };
 
   const lastUsedAt = new Date().toISOString();
@@ -657,7 +835,62 @@ export function mapUserRow(row: UserRow): AuthUser {
     walletAddress: row.wallet_address,
     displayName: row.display_name,
     createdAt: row.created_at,
+    avatarUrl: row.avatar_url,
+    bio: row.bio,
   };
+}
+
+async function withUserProfileFields<
+  T extends {
+    avatar_url: string | null;
+    bio: string | null;
+  },
+>(
+  env: Env,
+  row: T,
+  userId: string
+): Promise<T> {
+  const profileFields = await loadOptionalUserProfileFields(env, userId);
+  return {
+    ...row,
+    ...profileFields,
+  };
+}
+
+async function loadOptionalUserProfileFields(
+  env: Env,
+  userId: string
+): Promise<{ avatar_url: string | null; bio: string | null }> {
+  try {
+    const row = await env.DB.prepare(
+      `
+        SELECT avatar_url, bio
+        FROM users
+        WHERE id = ?
+        LIMIT 1
+      `
+    )
+      .bind(userId)
+      .first<{ avatar_url: string | null; bio: string | null }>();
+
+    return {
+      avatar_url: row?.avatar_url ?? null,
+      bio: row?.bio ?? null,
+    };
+  } catch (error) {
+    if (isMissingUserProfileColumnError(error)) {
+      return {
+        avatar_url: null,
+        bio: null,
+      };
+    }
+
+    throw error;
+  }
+}
+
+function isMissingUserProfileColumnError(error: unknown): boolean {
+  return error instanceof Error && /no such column:\s*(avatar_url|bio)/i.test(error.message);
 }
 
 export function resolvePublicBaseUrl(request: Request, env: Env): string {

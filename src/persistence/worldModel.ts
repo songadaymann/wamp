@@ -20,7 +20,15 @@ export interface WorldRoomSummary {
   goalType: RoomGoalType | null;
   version: number | null;
   publishedAt: string | null;
+  creatorUserId: string | null;
+  creatorDisplayName: string | null;
   course: CourseMembershipSummary | null;
+}
+
+export interface PublishedWorldRoomSource {
+  snapshot: RoomSnapshot;
+  creatorUserId: string | null;
+  creatorDisplayName: string | null;
 }
 
 export interface WorldChunkCoordinates {
@@ -152,16 +160,21 @@ export function createWorldWindowFromRoomBounds(bounds: WorldRoomBounds): WorldW
   };
 }
 
-export function createPublishedRoomSummary(room: RoomSnapshot): WorldRoomSummary {
+export function createPublishedRoomSummary(
+  room: RoomSnapshot | PublishedWorldRoomSource
+): WorldRoomSummary {
+  const snapshot = getPublishedWorldRoomSnapshot(room);
   return {
-    id: room.id,
-    coordinates: { ...room.coordinates },
-    title: room.title,
+    id: snapshot.id,
+    coordinates: { ...snapshot.coordinates },
+    title: snapshot.title,
     state: 'published',
-    background: room.background,
-    goalType: room.goal?.type ?? null,
-    version: room.version,
-    publishedAt: room.publishedAt,
+    background: snapshot.background,
+    goalType: snapshot.goal?.type ?? null,
+    version: snapshot.version,
+    publishedAt: snapshot.publishedAt,
+    creatorUserId: isPublishedWorldRoomSource(room) ? room.creatorUserId : null,
+    creatorDisplayName: isPublishedWorldRoomSource(room) ? room.creatorDisplayName : null,
     course: null,
   };
 }
@@ -176,12 +189,14 @@ export function createFrontierRoomSummary(coordinates: RoomCoordinates): WorldRo
     goalType: null,
     version: null,
     publishedAt: null,
+    creatorUserId: null,
+    creatorDisplayName: null,
     course: null,
   };
 }
 
 export function computeWorldChunk(
-  publishedRooms: RoomSnapshot[],
+  publishedRooms: Array<RoomSnapshot | PublishedWorldRoomSource>,
   coordinates: WorldChunkCoordinates
 ): WorldChunk {
   const roomBounds = getChunkRoomBounds(coordinates);
@@ -199,7 +214,7 @@ export function computeWorldChunk(
 }
 
 export function computeWorldChunkWindow(
-  publishedRooms: RoomSnapshot[],
+  publishedRooms: Array<RoomSnapshot | PublishedWorldRoomSource>,
   chunkBounds: WorldChunkBounds
 ): WorldChunkWindow {
   const chunks: WorldChunk[] = [];
@@ -217,7 +232,7 @@ export function computeWorldChunkWindow(
 }
 
 export function computeWorldWindow(
-  publishedRooms: RoomSnapshot[],
+  publishedRooms: Array<RoomSnapshot | PublishedWorldRoomSource>,
   center: RoomCoordinates,
   radius: number
 ): WorldWindow {
@@ -277,18 +292,20 @@ export function computeWorldSummariesFromPublishedSummariesInBounds(
 }
 
 function computeWorldSummariesInBounds(
-  publishedRooms: RoomSnapshot[],
+  publishedRooms: Array<RoomSnapshot | PublishedWorldRoomSource>,
   bounds: WorldRoomBounds
 ): WorldRoomSummary[] {
-  const publishedById = new Map<string, RoomSnapshot>();
+  const publishedById = new Map<string, RoomSnapshot | PublishedWorldRoomSource>();
   for (const room of publishedRooms) {
-    publishedById.set(room.id, room);
+    const snapshot = getPublishedWorldRoomSnapshot(room);
+    publishedById.set(snapshot.id, room);
   }
 
   const roomsById = new Map<string, WorldRoomSummary>();
   for (const room of publishedRooms) {
-    if (isWithinRoomBounds(room.coordinates, bounds)) {
-      roomsById.set(room.id, createPublishedRoomSummary(room));
+    const snapshot = getPublishedWorldRoomSnapshot(room);
+    if (isWithinRoomBounds(snapshot.coordinates, bounds)) {
+      roomsById.set(snapshot.id, createPublishedRoomSummary(room));
     }
   }
 
@@ -302,7 +319,8 @@ function computeWorldSummariesInBounds(
   }
 
   for (const room of publishedRooms) {
-    for (const neighbor of getOrthogonalNeighbors(room.coordinates)) {
+    const snapshot = getPublishedWorldRoomSnapshot(room);
+    for (const neighbor of getOrthogonalNeighbors(snapshot.coordinates)) {
       const neighborId = roomIdFromCoordinates(neighbor);
       if (publishedById.has(neighborId)) continue;
       if (!isWithinRoomBounds(neighbor, bounds)) continue;
@@ -332,14 +350,15 @@ function compareRoomSnapshots(a: RoomSnapshot, b: RoomSnapshot): number {
 }
 
 function computePublishedRoomPreviewSnapshotsInBounds(
-  publishedRooms: RoomSnapshot[],
+  publishedRooms: Array<RoomSnapshot | PublishedWorldRoomSource>,
   bounds: WorldRoomBounds
 ): RoomSnapshot[] {
   const roomsById = new Map<string, RoomSnapshot>();
 
   for (const room of publishedRooms) {
-    if (isWithinRoomBounds(room.coordinates, bounds)) {
-      roomsById.set(room.id, cloneRoomSnapshot(room));
+    const snapshot = getPublishedWorldRoomSnapshot(room);
+    if (isWithinRoomBounds(snapshot.coordinates, bounds)) {
+      roomsById.set(snapshot.id, cloneRoomSnapshot(snapshot));
     }
   }
 
@@ -358,6 +377,8 @@ export function computeWorldChunkPreviewHash(
         room.state,
         room.version ?? '',
         room.publishedAt ?? '',
+        room.creatorUserId ?? '',
+        room.creatorDisplayName ?? '',
         room.title ?? '',
         room.background ?? '',
         room.goalType ?? '',
@@ -385,4 +406,16 @@ function hashChunkSignature(value: string): string {
   }
 
   return (hash >>> 0).toString(36);
+}
+
+function isPublishedWorldRoomSource(
+  value: RoomSnapshot | PublishedWorldRoomSource
+): value is PublishedWorldRoomSource {
+  return 'snapshot' in value;
+}
+
+function getPublishedWorldRoomSnapshot(
+  value: RoomSnapshot | PublishedWorldRoomSource
+): RoomSnapshot {
+  return isPublishedWorldRoomSource(value) ? value.snapshot : value;
 }

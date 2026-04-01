@@ -1,4 +1,5 @@
 import {
+  getPlacedObjectInstanceId,
   LAYER_NAMES,
   ROOM_HEIGHT,
   ROOM_WIDTH,
@@ -9,6 +10,7 @@ import {
   type PlacedObject,
 } from '../config';
 import { cloneRoomGoal, normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
+import { cloneRoomLightingSettings, type RoomLightingSettings } from '../lighting/model';
 import {
   createDefaultRoomSnapshot,
   normalizeRoomTitle,
@@ -19,12 +21,14 @@ import {
 
 export const WAMP_MINTED_ROOM_SCHEMA_VERSION_V1 = 1 as const;
 export const WAMP_MINTED_ROOM_SCHEMA_VERSION_V2 = 2 as const;
-export const WAMP_MINTED_ROOM_SCHEMA_VERSION = WAMP_MINTED_ROOM_SCHEMA_VERSION_V2;
+export const WAMP_MINTED_ROOM_SCHEMA_VERSION_V3 = 3 as const;
+export const WAMP_MINTED_ROOM_SCHEMA_VERSION = WAMP_MINTED_ROOM_SCHEMA_VERSION_V3;
 export const ROOM_TOKEN_METADATA_MIME = 'data:application/json;base64,';
 
 type WampMintedRoomPayloadVersion =
   | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V1
-  | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V2;
+  | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V2
+  | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V3;
 type WampV2LayerKey = 'b' | 't' | 'f';
 type WampGoalCode = 'e' | 'c' | 'd' | 'k' | 's';
 
@@ -34,6 +38,7 @@ export interface WampMintedRoomObject {
   y: number;
   facing: 'left' | 'right' | null;
   layer: LayerName;
+  containedObjectId?: string | null;
 }
 
 export interface WampMintedRoomPayload {
@@ -42,6 +47,7 @@ export interface WampMintedRoomPayload {
   coordinates: [number, number];
   title: string | null;
   background: string;
+  lighting: RoomLightingSettings;
   goal: RoomGoal | null;
   spawnPoint: [number, number] | null;
   tiles: Record<LayerName, string>;
@@ -95,12 +101,30 @@ export interface WampMintedRoomPayloadV2 {
   s?: [number, number];
   t?: Partial<Record<WampV2LayerKey, string>>;
   k?: string[];
-  o?: Array<[number, number, number, number]>;
+  o?: Array<[number, number, number, number, number?]>;
   pv: number;
   pt?: string;
 }
 
-export type StoredWampMintedRoomPayload = WampMintedRoomPayload | WampMintedRoomPayloadV2;
+export interface WampMintedRoomPayloadV3 {
+  v: typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V3;
+  c: [number, number];
+  n?: string;
+  b: string;
+  l?: 1;
+  g?: WampMintedRoomGoalV2;
+  s?: [number, number];
+  t?: Partial<Record<WampV2LayerKey, string>>;
+  k?: string[];
+  o?: Array<[number, number, number, number, number?]>;
+  pv: number;
+  pt?: string;
+}
+
+export type StoredWampMintedRoomPayload =
+  | WampMintedRoomPayload
+  | WampMintedRoomPayloadV2
+  | WampMintedRoomPayloadV3;
 
 export interface WampRoomTokenAttribute {
   trait_type: string;
@@ -178,6 +202,7 @@ export function buildWampMintedRoomPayload(snapshot: RoomSnapshot): WampMintedRo
     coordinates: [snapshot.coordinates.x, snapshot.coordinates.y],
     title: normalizeRoomTitle(snapshot.title),
     background: snapshot.background,
+    lighting: cloneRoomLightingSettings(snapshot.lighting),
     goal: cloneRoomGoal(snapshot.goal),
     spawnPoint: snapshot.spawnPoint ? [snapshot.spawnPoint.x, snapshot.spawnPoint.y] : null,
     tiles: {
@@ -191,6 +216,7 @@ export function buildWampMintedRoomPayload(snapshot: RoomSnapshot): WampMintedRo
       y: placed.y,
       facing: placed.facing === 'left' || placed.facing === 'right' ? placed.facing : null,
       layer: getPlacedObjectLayer(placed),
+      containedObjectId: placed.containedObjectId ?? null,
     })),
     version: snapshot.version,
     publishedAt: snapshot.publishedAt,
@@ -208,6 +234,7 @@ export function buildRoomSnapshotFromMintedPayload(
 
   snapshot.title = normalizeRoomTitle(payload.title);
   snapshot.background = payload.background;
+  snapshot.lighting = cloneRoomLightingSettings(payload.lighting);
   snapshot.goal = normalizeRoomGoal(payload.goal);
   snapshot.spawnPoint = payload.spawnPoint
     ? {
@@ -216,12 +243,25 @@ export function buildRoomSnapshotFromMintedPayload(
       }
     : null;
   snapshot.tileData = decodeMintedTileData(payload.v, payload.tiles);
-  snapshot.placedObjects = payload.placedObjects.map((placed) => ({
+  snapshot.placedObjects = payload.placedObjects.map((placed, index) => ({
     id: placed.id,
     x: placed.x,
     y: placed.y,
+    instanceId: getPlacedObjectInstanceId(
+      {
+        id: placed.id,
+        x: placed.x,
+        y: placed.y,
+        facing: placed.facing ?? undefined,
+        layer: placed.layer,
+        instanceId: '',
+      },
+      index,
+    ),
     facing: placed.facing ?? undefined,
     layer: placed.layer,
+    triggerTargetInstanceId: null,
+    containedObjectId: placed.containedObjectId ?? null,
   }));
   snapshot.version = payload.version;
   snapshot.status = 'published';
@@ -298,7 +338,7 @@ export async function sha256Hex(value: string): Promise<string> {
 function serializeMintedRoomPayload(payload: WampMintedRoomPayload): StoredWampMintedRoomPayload {
   const dictionary: string[] = [];
   const objectIdToIndex = new Map<string, number>();
-  const serializedObjects: Array<[number, number, number, number]> = [];
+  const serializedObjects: Array<[number, number, number, number, number?]> = [];
 
   for (const placed of payload.placedObjects) {
     let dictionaryIndex = objectIdToIndex.get(placed.id);
@@ -308,20 +348,32 @@ function serializeMintedRoomPayload(payload: WampMintedRoomPayload): StoredWampM
       objectIdToIndex.set(placed.id, dictionaryIndex);
     }
 
+    let containedDictionaryIndex: number | undefined;
+    if (typeof placed.containedObjectId === 'string' && placed.containedObjectId.trim()) {
+      containedDictionaryIndex = objectIdToIndex.get(placed.containedObjectId);
+      if (containedDictionaryIndex === undefined) {
+        containedDictionaryIndex = dictionary.length;
+        dictionary.push(placed.containedObjectId);
+        objectIdToIndex.set(placed.containedObjectId, containedDictionaryIndex);
+      }
+    }
+
     serializedObjects.push([
       dictionaryIndex,
       Math.round(placed.x),
       Math.round(placed.y),
       packObjectFlags(placed),
+      containedDictionaryIndex,
     ]);
   }
 
   const tiles = serializeMintedRoomTilesV2(payload.tiles);
   return {
-    v: WAMP_MINTED_ROOM_SCHEMA_VERSION_V2,
+    v: WAMP_MINTED_ROOM_SCHEMA_VERSION_V3,
     c: [...payload.coordinates],
     ...(payload.title ? { n: payload.title } : {}),
     b: payload.background,
+    ...(payload.lighting.mode === 'playerAuraDark' ? { l: 1 as const } : {}),
     ...(payload.goal ? { g: serializeRoomGoalV2(payload.goal) } : {}),
     ...(payload.spawnPoint ? { s: [...payload.spawnPoint] as [number, number] } : {}),
     ...(tiles ? { t: tiles } : {}),
@@ -403,20 +455,30 @@ function normalizeMintedRoomPayload(value: unknown): WampMintedRoomPayload {
   }
 
   const payload = value as Partial<StoredWampMintedRoomPayload>;
+  if ('roomId' in payload || 'coordinates' in payload || 'tiles' in payload) {
+    return normalizeMintedFullRoomPayload(payload as Partial<WampMintedRoomPayload>);
+  }
+
+  if (payload.v === WAMP_MINTED_ROOM_SCHEMA_VERSION_V3) {
+    return normalizeMintedRoomPayloadV3(payload as Partial<WampMintedRoomPayloadV3>);
+  }
+
   if (payload.v === WAMP_MINTED_ROOM_SCHEMA_VERSION_V2) {
     return normalizeMintedRoomPayloadV2(payload as Partial<WampMintedRoomPayloadV2>);
   }
 
-  return normalizeMintedRoomPayloadV1(payload);
+  return normalizeMintedFullRoomPayload(payload as Partial<WampMintedRoomPayload>);
 }
 
-function normalizeMintedRoomPayloadV1(value: Partial<WampMintedRoomPayload>): WampMintedRoomPayload {
+function normalizeMintedFullRoomPayload(value: Partial<WampMintedRoomPayload>): WampMintedRoomPayload {
   const coordinates = Array.isArray(value.coordinates) ? value.coordinates : [];
   const spawnPoint = Array.isArray(value.spawnPoint) ? value.spawnPoint : null;
   const tiles = value.tiles as Record<string, unknown> | undefined;
 
   if (
-    value.v !== WAMP_MINTED_ROOM_SCHEMA_VERSION_V1 ||
+    (value.v !== WAMP_MINTED_ROOM_SCHEMA_VERSION_V1 &&
+      value.v !== WAMP_MINTED_ROOM_SCHEMA_VERSION_V2 &&
+      value.v !== WAMP_MINTED_ROOM_SCHEMA_VERSION_V3) ||
     typeof value.roomId !== 'string' ||
     coordinates.length !== 2 ||
     typeof coordinates[0] !== 'number' ||
@@ -429,11 +491,12 @@ function normalizeMintedRoomPayloadV1(value: Partial<WampMintedRoomPayload>): Wa
   }
 
   return {
-    v: WAMP_MINTED_ROOM_SCHEMA_VERSION_V1,
+    v: value.v,
     roomId: value.roomId,
     coordinates: [coordinates[0], coordinates[1]],
     title: normalizeRoomTitle(value.title),
     background: value.background,
+    lighting: cloneRoomLightingSettings(value.lighting),
     goal: normalizeRoomGoal(value.goal),
     spawnPoint:
       spawnPoint &&
@@ -456,6 +519,10 @@ function normalizeMintedRoomPayloadV1(value: Partial<WampMintedRoomPayload>): Wa
             y: placed.y,
             facing: placed.facing ?? null,
             layer: placed.layer,
+            containedObjectId:
+              typeof placed.containedObjectId === 'string' && placed.containedObjectId.trim()
+                ? placed.containedObjectId
+                : null,
           }))
       : [],
     version: value.version,
@@ -487,6 +554,55 @@ function normalizeMintedRoomPayloadV2(value: Partial<WampMintedRoomPayloadV2>): 
     coordinates: [coordinates[0], coordinates[1]],
     title: normalizeRoomTitle(value.n),
     background: value.b,
+    lighting: cloneRoomLightingSettings(null),
+    goal: normalizeRoomGoalV2(value.g),
+    spawnPoint:
+      spawnPoint &&
+      spawnPoint.length === 2 &&
+      typeof spawnPoint[0] === 'number' &&
+      typeof spawnPoint[1] === 'number'
+        ? [spawnPoint[0], spawnPoint[1]]
+        : null,
+    tiles: {
+      background: typeof tiles?.b === 'string' ? tiles.b : '',
+      terrain: typeof tiles?.t === 'string' ? tiles.t : '',
+      foreground: typeof tiles?.f === 'string' ? tiles.f : '',
+    },
+    placedObjects: serializedObjects
+      .map((entry) => normalizeMintedRoomObjectV2(entry, dictionary))
+      .filter((entry): entry is WampMintedRoomObject => Boolean(entry)),
+    version: value.pv,
+    publishedAt: typeof value.pt === 'string' ? value.pt : null,
+  };
+}
+
+function normalizeMintedRoomPayloadV3(value: Partial<WampMintedRoomPayloadV3>): WampMintedRoomPayload {
+  const coordinates = Array.isArray(value.c) ? value.c : [];
+  const spawnPoint = Array.isArray(value.s) ? value.s : null;
+  const tiles = value.t as Record<string, unknown> | undefined;
+  const dictionary = Array.isArray(value.k) ? value.k.filter((entry) => typeof entry === 'string') : [];
+  const serializedObjects = Array.isArray(value.o) ? value.o : [];
+
+  if (
+    value.v !== WAMP_MINTED_ROOM_SCHEMA_VERSION_V3 ||
+    coordinates.length !== 2 ||
+    typeof coordinates[0] !== 'number' ||
+    typeof coordinates[1] !== 'number' ||
+    typeof value.b !== 'string' ||
+    typeof value.pv !== 'number'
+  ) {
+    throw new Error('Invalid wamp_room payload.');
+  }
+
+  return {
+    v: WAMP_MINTED_ROOM_SCHEMA_VERSION_V3,
+    roomId: `${coordinates[0]},${coordinates[1]}`,
+    coordinates: [coordinates[0], coordinates[1]],
+    title: normalizeRoomTitle(value.n),
+    background: value.b,
+    lighting: cloneRoomLightingSettings({
+      mode: value.l === 1 ? 'playerAuraDark' : 'off',
+    }),
     goal: normalizeRoomGoalV2(value.g),
     spawnPoint:
       spawnPoint &&
@@ -591,16 +707,17 @@ function normalizeMintedRoomObjectV2(
   value: unknown,
   dictionary: string[]
 ): WampMintedRoomObject | null {
-  if (!Array.isArray(value) || value.length !== 4) {
+  if (!Array.isArray(value) || (value.length !== 4 && value.length !== 5)) {
     return null;
   }
 
-  const [dictionaryIndex, x, y, packedFlags] = value;
+  const [dictionaryIndex, x, y, packedFlags, containedDictionaryIndex] = value;
   if (
     typeof dictionaryIndex !== 'number' ||
     typeof x !== 'number' ||
     typeof y !== 'number' ||
-    typeof packedFlags !== 'number'
+    typeof packedFlags !== 'number' ||
+    (containedDictionaryIndex !== undefined && typeof containedDictionaryIndex !== 'number')
   ) {
     return null;
   }
@@ -617,6 +734,8 @@ function normalizeMintedRoomObjectV2(
     y,
     facing,
     layer,
+    containedObjectId:
+      typeof containedDictionaryIndex === 'number' ? dictionary[containedDictionaryIndex] ?? null : null,
   };
 }
 

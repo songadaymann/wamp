@@ -100,8 +100,40 @@ body[data-app-mode="play-world"] #game-container {
   color: var(--text);
 }
 
-.world-state-pill {
+.world-hud-value-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.world-hud-value-button:disabled {
+  cursor: default;
+  opacity: 1;
+  color: var(--text);
+}
+
+.world-hud-value-button.is-clickable {
+  cursor: pointer;
+}
+
+.world-hud-value-button.is-clickable:hover,
+.world-hud-value-button.is-clickable:focus-visible {
+  color: var(--accent-cool);
+  text-decoration: underline;
+  outline: none;
+}
+
+.world-state-wrap {
   margin-left: auto;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.world-state-pill {
   padding: 2px 6px;
   border-radius: 999px;
   background: rgba(243, 238, 226, 0.08);
@@ -116,6 +148,12 @@ body[data-app-mode="play-world"] #game-container {
   background: var(--success-soft);
   border-color: rgba(52, 116, 51, 0.45);
   color: #d9f3d5;
+}
+
+.world-state-pill[data-world-state-tone='minted'] {
+  background: rgba(58, 139, 120, 0.22);
+  border-color: rgba(126, 224, 191, 0.44);
+  color: #c9fff0;
 }
 
 .world-state-pill[data-world-state-tone='draft'] {
@@ -133,6 +171,59 @@ body[data-app-mode="play-world"] #game-container {
 .world-state-pill[data-world-state-tone='empty'] {
   border-color: rgba(243, 238, 226, 0.14);
   color: var(--text-muted);
+}
+
+.world-state-info-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.world-state-info-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-cool);
+  font: inherit;
+  font-size: 10px;
+  line-height: 1;
+  cursor: help;
+  opacity: 0.9;
+}
+
+.world-state-info-button:hover,
+.world-state-info-button:focus-visible {
+  opacity: 1;
+  outline: none;
+}
+
+.world-state-info-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 28;
+  width: min(220px, calc(100vw - 48px));
+  padding: 10px 12px;
+  border: 1px solid rgba(126, 224, 191, 0.32);
+  border-radius: 12px;
+  background: rgba(7, 11, 16, 0.96);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.34);
+  color: var(--text);
+  font-size: 10px;
+  line-height: 1.45;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+}
+
+.world-state-info-wrap:hover .world-state-info-tooltip,
+.world-state-info-wrap:focus-within .world-state-info-tooltip {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 .world-hud-meta,
@@ -259,6 +350,53 @@ body[data-app-mode="play-world"] #game-container {
 #world-jump-input:focus {
   outline: none;
   border-color: var(--accent-cool);
+}
+
+.room-chat-composer {
+  position: absolute;
+  left: 50%;
+  bottom: calc(68px + var(--safe-bottom));
+  z-index: 18;
+  width: min(360px, calc(100% - 32px - var(--safe-left) - var(--safe-right)));
+  transform: translateX(-50%);
+}
+
+.room-chat-composer-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 14px;
+  background: rgba(7, 11, 16, 0.92);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(8px);
+}
+
+.room-chat-input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  background: var(--panel-2);
+  border: 1px solid rgba(243, 238, 226, 0.16);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+}
+
+.room-chat-input:focus {
+  outline: none;
+  border-color: rgba(110, 211, 255, 0.56);
+}
+
+.room-chat-input:disabled {
+  color: var(--text-dim);
+  background: #101010;
+}
+
+.room-chat-send {
+  min-width: 58px;
 }
 
 .chat-panel {
@@ -938,8 +1076,19 @@ body[data-app-mode="play-world"] .world-only-control {
   color: #ffe7a0;
 }
 
-.world-online-pill {
+.world-online-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.world-online-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 24px;
   padding: 3px 10px;
   border-radius: 999px;
@@ -947,4 +1096,110 @@ body[data-app-mode="play-world"] .world-only-control {
   background: var(--success-soft);
   color: #d9f3d5;
   font-size: 11px;
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease,
+    transform 0.08s ease;
+}
+
+.world-online-pill:hover,
+.world-online-wrap.is-open .world-online-pill {
+  background: rgba(52, 116, 51, 0.32);
+  border-color: rgba(52, 116, 51, 0.62);
+}
+
+.world-online-pill:focus-visible {
+  outline: 1px solid rgba(217, 243, 213, 0.72);
+  outline-offset: 2px;
+}
+
+.world-online-popover {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  width: min(320px, calc(100vw - 32px));
+  max-height: min(320px, 42vh);
+  overflow: auto;
+  z-index: 26;
+  padding: 12px;
+  border: 1px solid rgba(52, 116, 51, 0.48);
+  border-radius: 14px;
+  background: rgba(7, 11, 16, 0.94);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(10px);
+}
+
+.world-online-popover-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.world-online-popover-title {
+  color: var(--text);
+  font-size: 12px;
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.world-online-popover-summary,
+.world-online-popover-empty,
+.world-online-popover-room {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.world-online-popover-list {
+  display: grid;
+  gap: 6px;
+}
+
+.world-online-hints {
+  display: grid;
+  gap: 2px;
+  text-align: center;
+}
+
+.world-online-hint {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  line-height: 1.2;
+}
+
+.world-online-popover-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.world-online-popover-entry-name {
+  min-width: 0;
+  color: var(--text);
+  font-size: 11px;
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.world-online-popover-entry-name.profile-trigger {
+  text-decoration: none;
+}
+
+.world-online-popover-entry-name[data-online-self='true'] {
+  color: #d9f3d5;
 }

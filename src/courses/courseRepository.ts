@@ -15,6 +15,7 @@ import {
   appendPlayfunRequestHeaders,
   notifyPlayfunEligibleActionSuccess,
 } from '../playfun/client';
+import { filterCourseLeaderboardForCurrentSurface } from '../playfun/leaderboards';
 
 export interface CourseRepository {
   createCourse(snapshot: CourseSnapshot): Promise<CourseRecord>;
@@ -106,9 +107,10 @@ class ApiCourseRepository implements CourseRepository {
       params.set('version', String(version));
     }
 
-    return this.request<CourseLeaderboardResponse>(
+    const response = await this.request<CourseLeaderboardResponse>(
       `/api/leaderboards/courses/${encodeURIComponent(courseId)}?${params.toString()}`
     );
+    return filterCourseLeaderboardForCurrentSurface(response);
   }
 
   private async request<T = void>(path: string, init?: RequestInit): Promise<T> {

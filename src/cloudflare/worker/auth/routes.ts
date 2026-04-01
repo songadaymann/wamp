@@ -196,6 +196,8 @@ export async function handleVerifyMagicLink(
     walletAddress: row.wallet_address,
     displayName: row.display_name,
     createdAt: row.user_created_at,
+    avatarUrl: row.avatar_url,
+    bio: row.bio,
   };
 
   const sessionToken = await createSession(env, user.id);

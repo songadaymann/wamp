@@ -14,6 +14,10 @@ import {
   appendPlayfunRequestHeaders,
   notifyPlayfunEligibleActionSuccess,
 } from '../playfun/client';
+import {
+  filterGlobalLeaderboardForCurrentSurface,
+  filterRoomLeaderboardForCurrentSurface,
+} from '../playfun/leaderboards';
 
 export interface RunRepository {
   startRun(body: RunStartRequestBody): Promise<RunStartResponse>;
@@ -75,9 +79,10 @@ class ApiRunRepository implements RunRepository {
       params.set('version', String(version));
     }
 
-    return this.request<RoomLeaderboardResponse>(
+    const response = await this.request<RoomLeaderboardResponse>(
       `/api/leaderboards/rooms/${encodeURIComponent(roomId)}?${params.toString()}`
     );
+    return filterRoomLeaderboardForCurrentSurface(response);
   }
 
   async submitRoomDifficultyVote(
@@ -111,7 +116,8 @@ class ApiRunRepository implements RunRepository {
       limit: String(limit),
     });
 
-    return this.request<GlobalLeaderboardResponse>(`/api/leaderboards/global?${params.toString()}`);
+    const response = await this.request<GlobalLeaderboardResponse>(`/api/leaderboards/global?${params.toString()}`);
+    return filterGlobalLeaderboardForCurrentSurface(response);
   }
 
   private async request<T = void>(path: string, init?: RequestInit): Promise<T> {

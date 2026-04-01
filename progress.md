@@ -57,6 +57,759 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Room music Stem MVP on April 1, 2026:
+  - added a dedicated `src/music/` subsystem instead of pushing room music into the editor scene monolith:
+    - `model.ts` owns room-music types, normalization, cloning, and blank checks
+    - `catalog.ts` owns the curated `wamp-v1` pack metadata, lane definitions, and clip manifest
+    - `controller.ts` owns Web Audio transport, decoded-buffer caching, preview playback, and bar-aligned room-to-room transitions
+  - copied the current WAMP loop stems into repo-owned assets at `public/assets/music/wamp-v1/`
+  - room data now persists `music` on every `RoomSnapshot` with:
+    - `packId: 'wamp-v1'`
+    - lane assignments for `drums`, `bass`, `arp`, `hold`, and `melody`
+    - normalization back to `null` / empty-lane defaults anywhere older room data omits music
+  - editor/runtime wiring:
+    - added a `Music` sidebar section plus a phone `Music` sheet/tab
+    - added a full-room music overlay with transport controls, `Arrange | Advanced` tabs, a fixed 4-bar ruler, and lane slots
+    - added a music picker modal for per-lane clip preview / assign / clear
+    - music edits now participate in room dirty state and undo/redo through dedicated music actions in `editRuntime`
+    - normal room painting/object interaction is suspended while music mode is active
+  - world/runtime playback:
+    - editor preview uses the shared music controller in `editor-preview` mode
+    - overworld `play` mode now syncs the current room's saved arrangement, while `browse` mode stays silent
+    - room changes diff the current vs next arrangement so unchanged lanes continue and changed lanes fade on bar boundaries
+    - silent rooms now quantize a fade-to-silence instead of hard-cutting
+  - debug-state additions:
+    - `EditorScene.describeState()` now exposes music UI/runtime state including mode, tab, picker, room arrangement, and playback debug
+    - `OverworldPlayScene.describeState()` now exposes the active room-music playback debug block
+    - `window.render_game_to_text()` now includes top-level music debug plus `window.get_room_music_debug_state()`
+  - verification:
+    - `npm run build` passed after the room-music integration
+    - browser/debug artifacts now exist at:
+      - `output/web-game/room-music-smoke-initial/`
+      - `output/web-game/room-music-visibility-check/`
+      - `output/web-game/room-music-dom-check/`
+    - the visibility probe confirmed the editor-side music section/button render in the real app shell and that editor debug state includes the new music block
+    - the stronger forced-editor interaction probe is still flaky because the boot/app-ready overlay and scene-forcing path interfere with reliable Playwright click-through; no product bug is confirmed from that harness alone
+  - follow-up:
+    - do one manual in-browser pass on desktop + phone for picker assignment / preview / save-reload now that the feature is wired end-to-end
+    - add a more stable dev-only editor-entry hook later if we want deterministic scene-forced browser probes without fighting the boot overlay
+
+- Room lighting v1 on April 1, 2026:
+  - added a dedicated `src/lighting/` subsystem instead of pushing more rendering logic into the large scene files:
+    - `model.ts` owns room-lighting types/defaults/normalization
+    - `presets.ts` holds the dark-aura tuning
+    - `controller.ts` owns the room-scoped overlay renderer plus Canvas fallback/debug state
+  - room data now persists `lighting` on every `RoomSnapshot` with:
+    - `mode: 'off' | 'playerAuraDark'`
+    - default normalization back to `off` anywhere old room data omits lighting
+  - editor/runtime wiring:
+    - added a `Lighting` control group near background controls with `Normal` and `Dark Aura`
+    - editor preview now darkens only the active room and uses spawn point or room center as the preview emitter
+    - live play now darkens only the current room in `play` mode and ignores adjacent visible rooms until entered
+    - browse mode stays fully lit
+    - Canvas renderer now disables dynamic lighting cleanly and reports the fallback in debug state instead of breaking the room
+  - persistence / metadata wiring:
+    - local room clone/default/blank checks now include lighting
+    - minted room payload schema bumped to v3 with compact lighting storage while keeping v1/v2 decode backward-compatible by defaulting lighting to `off`
+    - no SQL / D1 migration was needed because room JSON already stores the snapshot payload
+  - debug-state additions:
+    - `EditorScene.describeState()` and `OverworldPlayScene.describeState()` now expose lighting debug info with `mode`, `rendererPath`, `activeRoomId`, `emitterCount`, and `fallbackReason`
+  - verification:
+    - `npm run build` passed
+    - deterministic browser artifacts are in `output/web-game/room-lighting-probe/`
+    - `output/web-game/room-lighting-probe/summary-combined.json` confirms:
+      - editor WebGL preview uses `playerAuraDark` in room `0,0`
+      - editor Canvas falls back with `rendererPath: "canvas-disabled"` and the expected fallback reason
+      - play in lit room `0,0` reports `playerAuraDark`
+      - entering unlit room `1,0` reports lighting `off`
+      - adding one same-room ghost and one other-room ghost moves the emitter count from `1` to `2`, confirming the same-room ghost contributes and the other-room ghost is ignored
+    - tuned the dark-room preset once after the first WebGL editor capture came out too close to black; the final editor screenshots in that folder reflect the lighter ambient pass
+
+- Added `KitKat` collectible on April 1, 2026:
+  - registered `public/assets/objects/kitkat.png` in `src/config.ts` as a normal collectible so it now preloads, appears in the editor object palette, and can be placed in rooms
+  - tuned it as a static pickup using the source image's full frame size with a smaller centered collision body so it behaves like a pickup instead of a blocker
+  - gave it a `2` point value in `src/scenes/overworld/liveObjects.ts`
+  - routed it through the fruit pickup cue so it uses the lighter collectible SFX path
+
+- Adjacent-room world SFX bleed on March 31, 2026:
+  - added `src/scenes/overworld/roomAudio.ts` as a small overworld-only audio router for room-aware world/object sounds
+  - extended `src/audio/sfx.ts` so SFX playback can apply per-play volume/rate overrides and bypass cooldown for delayed echo tails
+  - routed overworld live-object/world cues through room-aware callbacks in:
+    - `src/scenes/overworld/liveObjects.ts`
+    - `src/fx/controller.ts`
+    - `src/scenes/OverworldPlayScene.ts`
+  - play-mode behavior now is:
+    - same-room world sounds stay unchanged
+    - directly adjacent-room world sounds play quieter/slower with two delayed low-volume repeats for a muffled/echo-y bleed
+    - rooms farther than one orthogonal step away are ignored for these routed world cues
+  - intentionally left UI/chat/player-local sounds alone; the routing is scoped to overworld world/object sound sources only
+  - exposed compact room-audio debug state through `OverworldPlayScene.describeState()` so automated state dumps show the last routed cue and pending echo count
+  - verification:
+    - `npm run build` passed
+    - plain Vite Playwright smoke wrote `output/web-game/adjoining-room-audio-smoke/*` but failed on expected local-origin CORS for auth/world fetches, so it is not the trusted artifact
+    - worker-surface Playwright smoke via `wrangler dev --remote` wrote:
+      - `output/web-game/adjoining-room-audio-worker-smoke/shot-0.png`
+      - `output/web-game/adjoining-room-audio-worker-smoke/state-0.json`
+    - worker-surface smoke confirmed the app booted cleanly on the correct same-origin surface and the state dump includes the new `roomAudio` debug block
+  - remaining follow-up:
+    - do a real in-browser ear-test with an actual adjacent-room trigger (pressure plate / chest / cage / bounce interaction) and tune the bleed/echo multipliers by feel if needed
+  - follow-up tuning later on March 31, 2026:
+    - replaced the adjacent-room-only fake muffle with a real Web Audio low-pass path in `src/audio/sfx.ts`
+    - treated the user's `high pass around 1500k` note as the likely intended `low-pass around 1.5 kHz` muffling target
+    - current adjacent-room tuning:
+      - primary bleed: `lowPassFrequencyHz: 1500`, `Q: 0.85`, lower volume, slight rate drop
+      - echo tails: `1350 Hz` then `1200 Hz`, both quieter and slower than the primary bleed
+    - verification:
+      - `npm run build` passed again after the low-pass change
+      - worker-surface Playwright smoke wrote:
+        - `output/web-game/adjoining-room-audio-lowpass-smoke/shot-0.png`
+        - `output/web-game/adjoining-room-audio-lowpass-smoke/state-0.json`
+
+- Overworld chat discoverability hint on March 31, 2026:
+  - added small desktop keyboard hints under the bottom-bar players-online pill:
+    - `Press T to chat in a room`
+    - `Press Return to open global chat`
+  - kept the change in the HUD markup/styles only and hid the hints on coarse-pointer layouts so mobile HUD space stays unchanged
+
+- Ephemeral in-room PartyKit chat MVP on March 31, 2026:
+  - implemented lightweight room-local chat for play mode only with no persistence or moderation
+  - transport/server work:
+    - added shared room-chat wire/message model in `src/chat/roomChatModel.ts`
+    - added separate PartyKit room-chat client in `src/presence/roomChat.ts`
+    - extended `partykit/presenceServer.ts` with:
+      - `room-chat:say` client messages
+      - `room-chat:message` broadcasts
+      - exact-room / play-mode-only delivery
+      - trimmed text, blank rejection, `140` char cap, and `1/sec` per-connection rate limiting
+    - room-chat sockets now publish their own play presence so the server derives the sender room from live connection state instead of trusting the client payload
+  - overworld/UI work:
+    - added isolated `OverworldRoomChatController` in `src/scenes/overworld/roomChat.ts`
+    - wired `OverworldPlayScene` to:
+      - keep room-chat chunk subscriptions and local play presence in sync
+      - open room chat with `T`
+      - close the composer on `Esc` before normal play-mode escape handling
+      - keep `Enter` on global world chat unchanged
+      - expose room-chat debug state through `describeState()`
+    - added ephemeral speech bubbles above the local player / remote ghosts:
+      - one active bubble per sender
+      - replacement on repeat message
+      - `6s` expiry
+      - immediate cleanup when the sender is no longer renderable in the current room
+    - added mobile/coarse-pointer `Say` control plus DOM composer styling
+    - guests are blocked from opening the composer and instead get the transient status `Sign in to chat in-room.`
+  - verification:
+    - `npm run build` passed after the room-chat implementation and again after the mobile visibility follow-up
+    - Playwright skill smoke wrote:
+      - `output/web-game/room-chat-smoke/shot-0.png`
+      - `output/web-game/room-chat-smoke/state-0.json`
+    - targeted two-client local probe with local Worker + PartyKit + Vite wrote:
+      - `output/web-game/room-chat-probe/summary.json`
+      - `output/web-game/room-chat-probe/guest-gating.png`
+      - `output/web-game/room-chat-probe/remote-bubble.png`
+      - `output/web-game/room-chat-probe/mobile-say-button.png`
+    - that probe confirmed:
+      - guest `T` chat gating with the world status prompt
+      - `Enter` still opens global chat
+      - same-room authenticated delivery works
+      - repeated sends replace the prior bubble instead of stacking
+      - bubbles expire back to `0` active messages / bubbles
+      - moving one player to another published room prevents later delivery
+    - follow-up mobile-only check after narrowing the shortcut-visibility logic wrote:
+      - `output/web-game/room-chat-mobile-check/summary.json`
+      - `output/web-game/room-chat-mobile-check/mobile-say-button.png`
+    - follow-up mobile check confirmed `btn-world-room-chat` toggles from hidden in browse to visible in `play-world`; on guest phone layouts the auth panel still auto-opens over much of the HUD, so the check was based on the button visibility state plus the captured screenshot/state artifact
+
+- XP / trust progression PRD revision on March 31, 2026:
+  - incorporated partner feedback into `docs/xp-badges-ratings-prd.md`
+  - clarified the split into three layers:
+    - Play.fun-facing `points`
+    - main-site `XP` for player identity, cosmetics, and flair
+    - separate creator `trust` for caps, tools, unlocks, and steering weight
+  - added explicit guidance that:
+    - collectible / object / claim caps should scale with trust, not raw XP alone
+    - streaks remain only a gentle XP multiplier
+    - ratings and some creator-reward inputs may be weighted by account age / trust
+    - WAMP should avoid uncapped or whaleable reward sources entirely
+  - added bootstrap guidance for elevated steward / moderator weighting early on while the community is still small
+
+- XP / badges / ratings progression PRD on March 30, 2026:
+  - wrote `docs/xp-badges-ratings-prd.md` as a working product/design doc for:
+    - main-site XP, levels, badges, streaks, and WAMP-number identity
+    - Play.fun points vs main-site XP surface split
+    - room/course 1-to-5 star ratings alongside difficulty
+    - creator/player/curator XP sources
+    - streaks as a gentle XP multiplier
+    - leaderboard-related XP for PB improvements and top-spot holding
+    - trust-based unlock strategy so risky creation powers are not tied to raw XP alone
+  - document also includes:
+    - recommended starter formulas
+    - badge categories
+    - level bands
+    - rollout phases
+    - anti-abuse rules
+    - open product questions for future iteration
+
+- Overworld browse/play streaming tuning on March 30, 2026:
+  - user reported two related issues:
+    - returning to browse could leave too many still-visible rooms blank
+    - room-to-room play transitions felt more jarring than intended
+  - traced the current behavior:
+    - browse preview tiers were dropping too hard above `0.2x` zoom (`64` preview rooms) even though the viewport could still justify far more
+    - browse chunk refresh was centered on the selected room, not the camera center, so zoomed/panned browse views could drift outside the loaded chunk window
+    - adjacent room transitions in play mode were always kicking off a full async `refreshAround(...)`, even when the needed rooms were already cached and loaded
+  - tuned `src/scenes/overworld/previewStreaming.ts`:
+    - increased browse preview budgets from `64/144/256` to `121/225/324`
+    - widened browse tier thresholds so the mid tier now extends through `0.24x`
+    - increased viewport protection padding from `1` room to `2` rooms
+  - tuned `src/scenes/OverworldPlayScene.ts`:
+    - browse-mode streaming focus now follows the camera center instead of the selected room
+    - added a cache-first world refresh helper so:
+      - returning from play to browse reuses loaded room/cache state when possible instead of always forcing a heavier async refresh
+      - adjacent room crossings in play use the cache path when the current chunk window already covers the next room
+  - verification:
+    - `./node_modules/.bin/tsc --noEmit` passed
+    - `npm run build` passed
+  - remaining manual check:
+    - still wants a real in-browser pass around the `0.18x` to `0.24x` browse range and repeated adjacent room transitions to confirm the seam feeling is materially reduced
+
+- Catch-up summary for the last few rounds on March 29, 2026:
+  - main/live now includes the room-version lineage work:
+    - canonical published room versions
+    - exact-content leaderboard lineage for identical reverts/republishes
+    - manual leaderboard adoption so a newer room version can intentionally use an older version's leaderboard family without rewriting runs
+    - related D1 migrations (`0017_room_canonical_version.sql` and `0018_room_version_leaderboard_source.sql`) were already applied before promotion
+  - main/live also includes the overworld preview-culling fix:
+    - visible room previews are now protected by viewport-based selection instead of purely distance-based budget selection
+    - this fixed the bug where zooming in could make still-visible rooms disappear at chunk/preview boundaries
+  - course authoring was substantially reworked:
+    - the old overworld-first course builder was replaced by the new two-step `Course Setup` + stitched multi-room `Course Editor` flow
+    - setup is now title/room selection/save focused, while the editor handles room-slice edits and course goal editing
+    - follow-up fixes already promoted to main include:
+      - room-goal UI suppression during course play
+      - course-level `Save Course` / `Publish Course` actions inside the editor
+      - stitched room background redraws
+      - course-builder selection reset so opening the builder from a non-course room starts a fresh draft instead of reopening the last course
+  - Play.fun room griefing guardrails are now live on main:
+    - Play.fun-authenticated users use a stricter room-claim quota (`PLAYFUN_ROOM_DAILY_CLAIM_LIMIT`, default `1`)
+    - Play.fun-authenticated room saves/publishes enforce a placed-object cap (`PLAYFUN_ROOM_MAX_PLACED_OBJECTS`, default `16`)
+    - added a moderator-only room restore path via room history using existing chat-moderator auth
+    - no migration was required for that guardrail pass; it was promoted directly to main and the production worker was redeployed
+  - safety-only work still pending promotion:
+    - cross-room course pressure-plate links plus the `test course -> return to editor` blank-page fix were iterated on and deployed to safety, but were not part of the later main promotion in this branch snapshot
+    - punk avatar swaps/rebuilds were tested on a safety avatar branch only and were not promoted
+  - current dirty branch state is ahead of main in Play.fun integration hardening:
+    - embedded iframe auto-detect for Play.fun mode
+    - SDK/session debug logging
+    - HMAC timestamp fix
+    - batch-save points payload fix
+    - D1 batching / SQL variable-limit / retry hardening for Play.fun point sync
+    - selective tileset import updates
+  - practical takeaway:
+    - if resuming room/course systems, start from main/live behavior plus the still-pending safety-only course-pressure-plate work
+    - if resuming Play.fun integration, note that this branch already contains additional unmerged Play.fun fixes beyond the live guardrail deployment
+
+- Course-builder selection reset + room-action copy hardening on March 28, 2026:
+  - user asked to fix two regressions before resuming cross-room pressure plate debugging:
+    - `Course Builder` reopened the previously loaded course even after switching to a non-course room
+    - room-editor top action copy had reportedly drifted to plural `rooms` wording
+  - implementation:
+    - changed `OverworldPlayScene.openCourseComposer()` so selection now drives the builder source of truth:
+      - if the selected room is in the active course draft session, reopen that active draft
+      - else if the selected room belongs to a published course, load that course
+      - else start a fresh empty course draft instead of reusing the previous session
+    - hardened room-editor save/publish copy to explicit singular room wording by setting the rendered button titles from the editor view-model (`Save Room Draft`, `Publish Room`) instead of relying only on static DOM attributes
+  - verification:
+    - `npm run build` passed
+    - targeted browser probe against local frontend + remote API confirmed:
+      - selecting course room `1,0` opens `Wizzy's Tower`
+      - switching to non-course room `0,0` now opens a new empty course draft with no carried-over room list
+      - room-editor save/publish button titles read `Save Room Draft (Cmd/Ctrl+S)` and `Publish Room (Cmd/Ctrl+Shift+P)` in course and non-course edit flows
+    - Playwright skill smoke wrote:
+      - `output/web-game/course-builder-regression-smoke/shot-0.png`
+      - `output/web-game/course-builder-regression-smoke/state-0.json`
+      - `output/web-game/course-builder-regression-smoke/errors-0.json`
+  - remaining gap:
+    - the smoke still logs expected local PartyKit `127.0.0.1:1999` connection-refused errors because presence was not running for this check
+    - cross-room pressure plate wiring inside courses is still the next unfinished task
+
+- Room creator reward tightening on March 26, 2026:
+  - user wanted room publish rewards to attach to challenge creation rather than empty-room publishing, and wanted creator-completion payouts capped to reduce dummy-account farming
+  - implementation:
+    - room publish rewards now only fire when the published version has a challenge goal and no earlier published version of that room had a challenge goal
+    - challenge-less room publishes now award no room publish points
+    - room publish updates and reverts no longer generate additional room publish rewards once a room has already had a rewarded challenge publish
+    - creator-completion payouts are now capped at `100` per UTC day per creator across both room and course completion rewards
+    - creator-completion payouts now also require the finisher account to be at least `1 hour` old before the creator can earn the reward
+    - the creator-completion cap is enforced in the insert path itself so parallel finish requests cannot trivially race past the cap
+  - verification:
+    - `npm run build` passed
+
+- Run-finalization hardening pass on March 26, 2026:
+  - user asked for an emergency patch after live investigation strongly suggested repeated forged perfect clears were driving suspicious point spikes, especially on high-collectible challenge rooms
+  - implementation:
+    - worker run-start endpoints for both rooms and courses now stamp `startedAt` from server time instead of trusting the client payload
+    - worker run-finish endpoints now stamp `finishedAt` from server time and clamp the stored `elapsedMs` to at least the server-observed attempt duration
+    - failed / abandoned room and course finishes now zero out collectible / enemy / checkpoint progress before persistence, so partial or fabricated non-completions no longer award run-finalization points
+    - room and course completion submission now rejects obvious goal mismatches:
+      - room: collect-target, defeat-all, checkpoint-sprint, survival, and time-limit overruns
+      - course: collect-target, checkpoint-sprint, survival, and time-limit overruns
+    - `awardRunFinalizePoints()` now pays full run points only on a user's first completion of a given room/course version; later improved PB clears only pay the personal-best bonus, and non-completions pay zero
+    - public room/course leaderboards now collapse to one best completed run per user instead of showing duplicate clears from the same player
+  - verification:
+    - `npm run build` passed
+  - remaining caveat:
+    - this is an emergency hardening pass, not full cryptographic/authoritative anti-cheat; the backend still does not have per-object server proof for collectibles, enemies, checkpoints, or exit touches, so one forged first-clear per room/course version is still theoretically possible until run progress is validated more authoritatively
+
+- Mario Land dashboard art refresh on March 25, 2026:
+  - user wanted the public dashboard restyled to use actual local Mario Land tiles from `/Users/jonathanmann/Downloads/mario-land-tiles` as the background basis instead of the earlier CSS-drawn SMB-inspired props
+  - implementation:
+    - downloaded the original source sheet plus a matching world-layout reference from Spriters Resource to identify tile roles and use a real World 1-1-style composition as the layout guide
+    - generated a new composed pixel-art background asset at `public/assets/dashboard/mario-land-world-1-1.png` using the supplied local 8x8 tile PNGs for ground, clouds, pyramid/hill forms, pipes, stair stack, flagpole, and floating blocks
+    - replaced the dashboard scene markup in `dashboard.html` so `/dashboard` now renders the composed Mario Land scene image instead of CSS clouds/hills/pipes/ground
+    - retuned the dashboard palette to grayscale/Game Boy-adjacent tones so the stat cards and refresh button match the tile art and the early Game Boy font already used on the page
+    - tightened stat-card sizing again after a real-data browser pass so all seven stats fit on one row more often at desktop widths while still expanding for larger values
+  - verification:
+    - Playwright skill client smoke against local dev wrote:
+      - `output/web-game/dashboard-mario-land-smoke/shot-0.png`
+      - first pass hit a local `404` because the dashboard was pointing at same-origin `/api/dashboard/stats` with no local worker running, so values stayed at placeholders
+    - reran local dev with `VITE_ROOM_API_BASE_URL='https://api.wamp.land'` and captured:
+      - `output/web-game/dashboard-mario-land-live-stats/shot-0.png`
+      - `output/web-game/dashboard-mario-land-live-stats-tight/shot-0.png`
+      - final screenshot confirms the tighter card sizing with live counts (`184`, `99`, `85`, `110`, `28`, `12`, `805`) and the new Mario Land background scene
+    - direct narrow-viewport browser check wrote:
+      - `output/web-game/dashboard-mario-land-mobile/mobile.png`
+      - confirms the scene and stat cards still read cleanly at mobile width
+    - `npm run build` passed
+  - notes:
+    - this change is local only until the user asks to deploy it
+
+- Presence identity auth-refresh fix on March 25, 2026:
+  - user report: a wallet-only user could still edit and publish, but their in-game identity had fallen back to `Guest` and their nickname stopped rendering in presence
+  - diagnosis:
+    - this looked like a client-side presence identity race rather than a PartyKit backend failure
+    - the game boots before auth is fully settled, so world/editor presence could initialize with a guest identity
+    - overworld and editor presence were not rebinding themselves when `AUTH_STATE_CHANGED_EVENT` fired later with the real signed-in user
+  - implementation:
+    - added `PresenceController.refreshIdentity()` in `src/scenes/overworld/presence.ts` so overworld presence destroys and recreates its `WorldPresenceClient` when the resolved identity changes, while restoring subscribed chunk bounds
+    - wired `OverworldPlayScene` to listen for `AUTH_STATE_CHANGED_EVENT`, refresh presence identity, resubscribe chunk bounds, republish local presence, and rerender the HUD
+    - wired `EditorScene` to track its current presence identity and recreate editor presence on auth-state changes when the identity changes
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client smoke against local preview wrote:
+      - `output/web-game/presence-auth-refresh-smoke/shot-0.png`
+      - `output/web-game/presence-auth-refresh-smoke/state-0.json`
+    - headless canvas capture is still black in this repo, but the smoke produced no `errors-0.json` and the state output showed normal overworld boot
+    - final PartyKit-enabled rebuild + smoke wrote:
+      - `output/web-game/presence-auth-refresh-smoke-final/shot-0.png`
+      - `output/web-game/presence-auth-refresh-smoke-final/state-0.json`
+      - state output shows overworld boot with presence `connected`, `subscribedShardCount: 9`, and a live guest presence identity
+    - targeted browser probe with PartyKit enabled wrote:
+      - `output/web-game/presence-auth-rebind-check/result.json`
+      - probe mutated the stored guest identity, dispatched `auth-state-changed`, and confirmed overworld presence identity rebounded from a random guest identity to `guest-presence-rebind-test / Guest Rebind` with no console/page errors
+  - remaining gap:
+    - this verifies the rebinding mechanism and no-regression boot path, but not a full real-wallet sign-in -> PartyKit nickname E2E session against production services
+
+- Wallet auth connection-race fix on March 25, 2026:
+  - user report: friends were intermittently struggling to sign in with wallet; one shared console logs that mostly looked like browser-extension noise plus repeated websocket close warnings
+  - diagnosis:
+    - `bootstrap-autofill-overlay.js` stack is not app code; it is injected by a browser/password-manager extension
+    - the wallet auth path in `src/auth/client.ts` had a real race: `waitForWalletConnection()` called `walletModal.open(...)` before subscribing to account updates, so a fast wallet connect could happen before the subscription existed and the flow would incorrectly time out as if the wallet connection were cancelled
+  - implementation:
+    - changed `waitForWalletConnection()` to subscribe first, immediately re-check the current account after subscribing, and only then open the wallet modal
+    - if opening the wallet modal itself fails, the promise now rejects with the real error instead of silently waiting for the timeout path
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client smoke against local preview wrote:
+      - `output/web-game/wallet-auth-race-smoke/shot-0.png`
+      - `output/web-game/wallet-auth-race-smoke/state-0.json`
+    - smoke produced no new console errors; state output still shows normal guest boot with `walletProjectConfigured: true`
+  - remaining gap:
+    - no fully automated end-to-end wallet signature test was possible in headless Playwright without a real wallet, so the verification here is code-path analysis + successful build/smoke rather than an actual signed session
+
+- Wall-jump lock-duration tuning on March 24, 2026:
+  - user wanted a stronger forced push away from the jump wall so holding back into the same wall does not immediately blunt the kick-off
+  - kept the existing wall-jump input lock as the tuning knob and increased `WALL_JUMP_INPUT_LOCK_MS` in `OverworldPlayScene` from `120` to `240`
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client smoke against local preview wrote:
+      - `output/web-game/wall-jump-lock-preview-smoke/shot-0.png`
+      - `output/web-game/wall-jump-lock-preview-smoke/state-0.json`
+    - state output confirms the app still boots into the normal overworld browse scene after the tuning-only change
+  - note:
+    - headless screenshot capture is still black in this repo's preview smoke, so this pass relied on build success plus `render_game_to_text` output rather than visible frame inspection
+
+- Wall-jump feel follow-up on March 24, 2026:
+  - user feedback: the first wall-jump pass still let the player climb a single wall repeatedly, which did not feel Mario-like
+  - design direction after source check:
+    - Mario references emphasize a wall slide + jump-off flow, and platformer tutorials note that more Mario-like wall jumps either push outward hard enough that the same wall cannot be re-caught or otherwise prevent same-wall climbing
+    - translated that into a same-wall regrab gate: after a wall jump, the wall you kicked off is blocked for wall-slide / wall-jump until you land or reach the opposite wall
+  - implementation:
+    - added `wallJumpBlockedSide` to `OverworldPlayScene`
+    - wall-slide detection now ignores the blocked wall side, while touching the opposite side clears the block
+    - landing / laddering / normal grounded jumps clear the block through the existing reset paths
+    - debug state now exposes `wallJumpBlockedSide`
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client smoke still boots play mode and writes:
+      - `output/web-game/wall-jump-same-wall-smoke/shot-0.png`
+      - `output/web-game/wall-jump-same-wall-smoke/state-0.json`
+    - targeted blocked-side probe wrote:
+      - `output/web-game/wall-jump-blocked-side-check/blocked-side.png`
+      - `output/web-game/wall-jump-blocked-side-check/blocked-side-state.json`
+      - confirms same wall contact now reports `wallSliding: false`, `wallContactSide: 0`, `wallJumpBlockedSide: 1`, `animation: "jump-fall"` while still pressing into that wall
+    - targeted state bundle for comparison wrote:
+      - `output/web-game/wall-jump-same-wall-check/states.json`
+      - confirms ordinary wall contact still reaches `wallSliding: true` before the block is applied
+  - remaining gap:
+    - Playwright focus quirks made it awkward to automate the full keyboard-triggered post-slide jump in this exact repro, so the exploit fix itself was validated directly via state rather than a full same-run keyboard loop
+
+- Wall slide + wall jump implementation pass on March 24, 2026:
+  - added `wall-slide` / `wall-jump` to the default player animation union and mapped them to the already-shipped base atlas frames `Player 107..112` and `Player 113..123`
+  - added wall-contact, wall-slide, wall-jump lockout, and wall-jump animation state to `OverworldPlayScene`
+  - movement rules now allow SMB-style wall sliding on any solid side contact while airborne and pressing into the wall, plus a jump-away kick with a brief horizontal input lock
+  - ladders, crouch/crawl, crate push/pull, combat animation precedence, respawn resets, and presence animation state all still route through the existing systems
+  - verification:
+    - `npm run build` passed after the final movement/debug-state patch
+    - Playwright skill client smoke against local dev + remote API wrote:
+      - `output/web-game/wall-jump-smoke-canvas/shot-0.png`
+      - `output/web-game/wall-jump-smoke-canvas/state-0.json`
+      - `output/web-game/wall-jump-play-enter/shot-0.png`
+      - `output/web-game/wall-jump-play-enter/state-0.json`
+    - targeted dev-mode probe found a deterministic clean wall contact in room `1,0` by teleporting the player to `x=820, y=220` and holding right:
+      - `output/web-game/wall-jump-targeted-keyinject/wall-slide.png`
+      - `output/web-game/wall-jump-targeted-keyinject/wall-slide-state.json`
+      - confirms `wallSliding: true`, `wallContactSide: 1`, `velocityY: 70`, `animation: "wall-slide"`
+      - `output/web-game/wall-jump-targeted-keyinject/wall-jump.png`
+      - `output/web-game/wall-jump-targeted-keyinject/wall-jump-state.json`
+      - confirms wall jump kicks away with `velocityX: -205`, `velocityY: -225`, `wallJumpActive: true`, `wallJumpLockMs: 120`, and `animation: "wall-jump"` while right input is still being held
+    - targeted ladder regression probe wrote:
+      - `output/web-game/wall-jump-ladder-check/ladder.png`
+      - `output/web-game/wall-jump-ladder-check/ladder-state.json`
+      - confirms `climbing: true`, `wallSliding: false`, `animation: "ladder-climb"`
+  - remaining validation gap:
+    - did not run a separate touch-control-specific wall-jump probe; keyboard path and ladder exclusion were verified directly
+
+- Practice-run spawn marker pass on March 24, 2026:
+  - room challenge play now renders the existing `spawn_point` sign asset at the ranked start location while a single-room run is still in `practice`
+  - the practice marker adds a `START` label and rides the same goal-marker overlay system as exits/checkpoints, so side-entry players can see exactly where they need to go to arm the ranked attempt
+  - this also covers legacy rooms without an authored spawn, because it uses the same resolved fallback start point as the ranked-room gating logic
+  - verification:
+    - `npm run build` passed
+    - targeted browser probe wrote:
+      - `output/web-game/practice-spawn-sign-check/summary.json`
+      - `output/web-game/practice-spawn-sign-check/practice-spawn-sign.png`
+    - targeted probe confirmed:
+      - practice-mode markers now include `spawn_point` at the ranked start location
+      - the `START` label renders above that sign
+      - the existing finish flag still renders alongside it
+    - shared Playwright smoke client also ran against local preview and wrote:
+      - `output/web-game/practice-spawn-sign-smoke/shot-0.png`
+      - `output/web-game/practice-spawn-sign-smoke/state-0.json`
+    - smoke caveat:
+      - the generic client capture landed during early boot and stayed black, so the real visual confirmation for this change is the targeted `practice-spawn-sign-check` artifact
+
+- Creator identity switched to claimer-first on March 23, 2026:
+  - changed published-room creator identity in world summaries so the HUD byline now resolves from `claimer_user_id` / `claimer_display_name` first and only falls back to `last_published_by_*` for legacy rooms without claim data
+  - local fallback world loading now uses the same claimer-first creator identity so profile/HUD behavior stays consistent between remote and local storage modes
+  - changed profile `Created Rooms` to query published rooms by `COALESCE(claimer_user_id, last_published_by_user_id)` instead of only `last_published_by_user_id`
+  - aligned the profile room-count stat label/value with that same creator query so `Created Rooms` and the summary count do not drift apart
+  - verification:
+    - `npm run build` passed
+  - remaining gap:
+    - not yet deployed, so the live HUD byline and profile modal still need a real browser check after push/deploy
+
+- Profile system + HUD creator byline pass on March 23, 2026:
+  - replaced the duplicated world-HUD coordinate line with a creator byline fed from published room summaries; published rooms now surface `publishedByUserId` / `publishedByDisplayName` through both remote world APIs and local-storage fallback world loading
+  - added a new profile system with:
+    - `GET /api/profiles/:userId`
+    - `PATCH /api/profiles/me`
+    - new `users.avatar_url` / `users.bio` migration in `migrations/0016_user_profiles.sql`
+    - published-room creator lists, leaderboard stats summary, and published-course count aggregation
+  - added the new profile modal shell in `index.html` plus `ProfileModalController`, including overview / created rooms / stats tabs, self-edit fields for display name / avatar URL / bio, avatar fallback rendering, and click-to-warp created room entries
+  - made these username surfaces open the profile modal via a shared `profile-open-request` event:
+    - main HUD creator byline
+    - room / course / global leaderboard rows
+    - online-roster names
+    - chat author names
+    - signed-in account identity in the auth panel
+  - made the read path backward-compatible with older local DBs that have not applied the new migration yet by falling back to `NULL` avatar/bio fields instead of hard-failing the whole auth/profile read path
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client smoke wrote `output/web-game/profile-system-smoke/shot-0.png`, `state-0.json`, and `errors-0.json`
+    - targeted profile probe wrote `output/web-game/profile-system-check/summary.json` and `profile-modal.png`
+    - probe confirmed:
+      - `/api/world` includes `publishedByUserId` / `publishedByDisplayName`
+  - profile modal scroll follow-up on March 23, 2026:
+    - fixed the profile modal so the modal body becomes the scroll container and profile-tab panels no longer inherit the leaderboard modal's shrink-and-hide overflow behavior
+    - verification:
+      - `npm run build` passed
+      - Playwright skill client wrote `output/web-game/profile-modal-scroll-fix/shot-0.png` and `state-0.json`
+      - targeted DOM probe against local preview confirmed `.profile-modal-body` now reports `overflowY: auto`, `scrollHeight: 950`, `clientHeight: 610`, and accepts `scrollTop = 300` while the active profile stats panel uses `overflow: visible` and `flex: 0 0 auto`
+  - profile modal hierarchy cleanup on March 23, 2026:
+    - removed the redundant profile modal title/meta header so the modal now opens with only the close button above the hero card
+    - removed the separate `Overview` tab and the duplicate overview stat chips; the hero card now serves as the overview and `Created Rooms` is the default tab
+    - verification:
+      - `npm run build` passed
+      - Playwright skill client wrote `output/web-game/profile-modal-layout-pass/shot-0.png` and `state-0.json`
+      - targeted DOM probe against local preview confirmed:
+        - `Created Rooms` tab exists and is selected by default
+        - `Stats` remains available but hidden initially
+        - the old header title group no longer exists
+        - the old overview stat chip container no longer exists
+        - the profile header justifies to `flex-end`
+      - warping to `-2,-2` switched the HUD line to `by jonathan`
+      - clicking that byline opened the profile modal
+      - modal rendered joined date, stats, and `16` created-room entries for that user
+    - only console noise during the probe was the expected local PartyKit `127.0.0.1:1999` websocket refusals
+  - remaining gaps:
+    - did not manually sign in and exercise self-profile editing end to end against a DB with the `0016_user_profiles.sql` migration applied
+    - did not manually click every secondary username surface (leaderboard rows, chat authors, auth identity) in the browser, though they now share the same DOM event/helper path as the verified HUD byline
+- World HUD warp affordance + room framing pass on March 23, 2026:
+  - renamed the coordinate-jump UI in `index.html` from `Jump` to `Warp` across the desktop world HUD, the mobile sheet CTA, and the controls copy so the terminology is consistent
+  - updated `jumpToCoordinates()` in `src/scenes/OverworldPlayScene.ts` to reuse the existing single-room fit zoom before refreshing, so warping now lands on a centered room-focused inspect view instead of preserving the far zoomed-out browse scale
+  - warping now also updates the focused-room URL immediately via `setFocusedCoordinatesInUrl(...)`
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client booted cleanly and wrote `output/web-game/warp-hud-smoke/state-0.json`, `state-1.json`, `shot-0.png`, and `shot-1.png`
+    - targeted Playwright probe wrote `output/web-game/warp-room-focus-check/summary.json` and `warp-room-focus.png`
+    - the probe confirms `Warp` text is present in the desktop/mobile coordinate UI and that warping to `3,0` changed browse zoom from `0.18` to `1.898` with the camera centered on that room
+    - only console errors were the expected local PartyKit `127.0.0.1:1999` websocket refusals
+- Icicle spritesheet follow-up on March 22, 2026:
+  - inspected `public/assets/enemies/icicle.png` and confirmed it is a single-row `6x1` sheet, but frames `4` and `5` are break/fall states rather than part of the hanging idle loop
+  - restricted `icicle` animation playback in `src/config.ts` to `animationFrames: [0, 1, 2, 3]` so it no longer cycles into the detached/shatter frames during normal idle playback
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client booted cleanly and refreshed `output/web-game/state-0.json` / `errors-0.json`
+    - only console errors were the expected local PartyKit `127.0.0.1:1999` websocket refusals
+    - no dedicated live icicle room repro was run, so the remaining check is a manual in-game look at the hanging animation
+- Chicken/fish facing follow-up on March 22, 2026:
+  - traced enemy movement-facing to `facingDirection` in `src/config.ts`, applied through `applyDirectionalFacing()` in `src/scenes/overworld/liveObjects.ts`
+  - confirmed the active chicken animation frames (`7..13`) are authored facing left, so `chicken` now uses `facingDirection: 'left'`
+  - changed `fish` to `facingDirection: 'right'` to match the reported in-game backward swim behavior
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client booted cleanly and refreshed `output/web-game/state-0.json` / `errors-0.json`
+    - only console errors were the expected local PartyKit `127.0.0.1:1999` websocket refusals
+    - no deterministic live room repro was run for actual fish/chicken movement, so the remaining check is a manual in-game pass
+- Saw hazard footprint follow-up on March 22, 2026:
+  - confirmed the first saw fix only tightened the runtime Arcade body; the editor layer-guide / placement footprint was still using the full `34x34` sprite bounds because `saw` had no explicit preview bounds
+  - added centered saw preview bounds (`24x24` with `previewOffsetX/Y: 5`) so editor occupancy dots, placement preview, and runtime collider now agree on the tighter `2x2` footprint
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client booted cleanly and refreshed `output/web-game/state-0.json`, `output/web-game/errors-0.json`, and `output/web-game/shot-0.png`
+    - screenshot is still black from the existing headless WebGL capture issue, so this specific saw-guide fix was verified by code path plus successful boot rather than a reliable rendered capture
+- Mario1-mix tileset + question-block object pass on March 22, 2026:
+  - added a new `Mario1-mix` terrain tileset built as a `7x7` sheet from the loose sprites in `Sprites-and-Things/Mario1Mix`
+  - exposed `Mario1-mix` in the editor tileset selector and registered it in `TILESETS` with a conservative non-collision set for obvious deco-only tiles like bushes, clouds, chain, railing, and water
+  - kept the animated Mario question block out of the terrain sheet and turned it into a separate `Question Block` platform object using the four provided frames (`question1/2/3` + `question-spend`)
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client wrote:
+      - `output/web-game/mario1mix-smoke/shot-0.png`
+      - `output/web-game/mario1mix-smoke/state-0.json`
+      - the only console errors were the expected local PartyKit `127.0.0.1:1999` websocket refusals
+    - targeted editor probe wrote:
+      - `output/web-game/mario1mix-check/summary.json`
+      - `output/web-game/mario1mix-check/editor-question-block.png`
+      - summary confirms `mario1_mix` appears in `#tileset-select` and the object palette includes `Question Block`
+- Guest onboarding auth-first pass on March 21, 2026:
+  - stopped desktop world chat from auto-opening on first visit so the first screen no longer defaults to chat
+  - guest visitors now auto-open the account/sign-in panel once on startup instead, unless they are in Play.fun mode
+  - updated the guest account copy to push building/publishing/leaderboards, and restyled the guest email/wallet sign-in buttons so wallet is the stronger green CTA
+  - verification:
+    - `npm run build` passed
+    - local preview + Playwright DOM probe confirmed:
+      - `authMenuOpen: true`
+      - `authGuestClass: true`
+      - `walletText: "Sign In With Wallet"`
+      - `emailText: "Sign In With Email"`
+      - `chatDebug.open: false`
+      - `walletBackground: rgba(52, 116, 51, 0.24)`
+    - artifact: `output/web-game/auth-first-guest-flow.png`
+- Object palette density pass on March 21, 2026:
+  - removed visible object/enemy names from the editor object grid to reclaim space for the thumbnails
+  - object palette items now keep names through `aria-label` / `title`, while the visible sprite previews are slightly larger
+  - desktop object tiles now compute to `56px` min height with `56x40` thumbnail bounds; phone object tiles compute to `74px` min height with `60x44` thumbnail bounds
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client wrote:
+      - `output/web-game/object-palette-thumbnail-check/shot-0.png`
+      - `output/web-game/object-palette-thumbnail-check/shot-1.png`
+      - `output/web-game/object-palette-thumbnail-check/state-0.json`
+      - `output/web-game/object-palette-thumbnail-check/state-1.json`
+    - targeted DOM probe confirmed:
+      - `labelCount: 0`
+      - object section visible in editor mode
+      - first object item styles: `minHeight: 56px`, `paddingTop/Bottom: 6px`
+      - first image styles: `maxWidth: 56px`, `maxHeight: 40px`
+- Object palette hover copy trim on March 21, 2026:
+  - changed the editor object-grid hover tooltip to show only the object name, not `name — description`
+  - left the full object description available elsewhere in the editor UI; this only trims the hover copy
+  - verification:
+    - `npm run build` passed
+    - source check confirms the hover handler now passes only `objectConfig.name` in `src/ui/setup/paletteController.ts`
+- Initial empty tile selection fix on March 21, 2026:
+  - fixed the first-open editor state where the default tile selection could look empty in the palette but still keep a stale positive `selectedTileGid`, causing first clicks to place invisible tiles
+  - palette image loading now re-runs `updateSelection()` for the active selection as soon as the current tileset image finishes loading, so the initial selection state is reconciled against the real visibility mask
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client wrote:
+      - `output/web-game/initial-empty-selection-check/shot-0.png`
+      - `output/web-game/initial-empty-selection-check/state-0.json`
+    - targeted live-scene probe confirmed on first editor open:
+      - `selectionInfo: "(empty)"`
+      - clicked empty terrain cell at `(0,0)`
+      - `beforeTile: null -> afterTile: null`
+      - `roomDirty: false -> false`
+      - `canUndo: false -> false`
+- Object delete hitbox fix on March 21, 2026:
+  - changed editor object deletion to reuse the existing bounds-aware placed-object hit test instead of requiring a tiny radius around the object center
+  - this makes tall or oddly-shaped objects like `lightning` removable from any visible occupied part of their footprint
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client reopened the editor and wrote:
+      - `output/web-game/object-delete-hitbox-skill-client/state-0.json`
+      - `output/web-game/object-delete-hitbox-skill-client/shot-0.png`
+    - targeted Playwright probe wrote:
+      - `output/web-game/object-delete-footprint-check/summary.json`
+      - `output/web-game/object-delete-footprint-check/editor.png`
+    - the targeted summary confirms `placedObjects` changed `4 -> 5 -> 4` after placing a `lightning` object and deleting it from a point well above its center
+- Pressure-target delete fix on March 21, 2026:
+  - changed object-mode secondary action so pressure-plate connect mode no longer swallows eraser deletes when the pointer is over a removable target
+  - eraser clicks now prioritize actual object removal and only fall back to `cancelPressurePlateConnection()` on empty space
+  - added `EditorEditRuntime.canRemoveObjectAt()` so `EditorScene` can distinguish real delete targets from empty-space cancel clicks
+  - verification:
+    - `npm run build` passed
+    - targeted browser probe wrote:
+      - `output/web-game/pressure-target-delete-check/summary.json`
+      - `output/web-game/pressure-target-delete-check/editor.png`
+    - the targeted summary confirms a target object still deletes cleanly in object eraser mode with no console errors
+  - follow-up note:
+    - there is still a separate editor UX quirk where a pinned container/pressure inspector can consume the next object-placement click just to clear the pin instead of placing the newly selected object
+- Desktop object-eraser parity fix on March 21, 2026:
+  - root cause: desktop object mode ignored the selected `eraser` tool and only deleted on right-click, while mobile object mode already used the selected tool correctly
+  - changed desktop object-mode left click to follow the same branch as mobile:
+    - `eraser` tool removes objects
+    - other tools still run inspector/place behavior
+  - also updated pinned-inspector behavior so selecting a new object and clicking empty canvas clears the pin and places in one click instead of consuming that click
+  - verification:
+    - `npm run build` passed
+    - targeted desktop left-click erase probe wrote:
+      - `output/web-game/desktop-leftclick-object-erase-check/summary.json`
+      - `output/web-game/desktop-leftclick-object-erase-check/editor.png`
+    - the targeted summary confirms `placedObjects` changed `2 -> 3 -> 2` using object-mode `eraser` with a normal left click on desktop
+    - pinned-inspector placement probe still passes:
+      - `output/web-game/pinned-inspector-place-check/summary.json`
+      - `output/web-game/pinned-inspector-place-check/editor.png`
+- Collapsed layer image-button pass on March 21, 2026:
+  - copied the supplied layer reference images into `public/assets/ui/layers/foreground.png`, `terrain.png`, and `background.png`
+  - replaced the CSS-drawn collapsed `Layers` mini-stack with those actual PNGs, while keeping the expanded layer controls and tooltips unchanged
+  - kept the collapsed mini-stack interactive for power users: the image buttons still switch the active layer even while the section stays collapsed
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client reopened the editor via `#btn-world-edit` and wrote:
+      - `output/web-game/layer-image-buttons-smoke/state-0.json`
+      - `output/web-game/layer-image-buttons-smoke/shot-0.png`
+    - targeted collapsed-layer check wrote:
+      - `output/web-game/layer-image-buttons-check/summary.json`
+      - `output/web-game/layer-image-buttons-check/layers-collapsed.png`
+      - `output/web-game/layer-image-buttons-check/layers-collapsed-background-selected.png`
+    - the targeted summary confirms the collapsed buttons load the three PNGs and clicking the collapsed `background` button switches `selectedLayer` to `background`
+- Copy-tool exit fix on March 21, 2026:
+  - fixed the desktop tool-button path for leaving copy/paste preview mode
+  - root cause: the sidebar tool buttons were calling the `updateToolUi` scene-bridge name, but `EditorScene` only exposed the internal `updateToolUI` method name, so button clicks changed the highlighted tool without clearing `clipboardPastePreviewActive`
+  - added an `EditorScene.updateToolUi()` bridge wrapper so clicking `Draw` or `Erase` now runs the same copy-preview teardown path as the keyboard tool shortcuts
+  - follow-up status cleanup:
+    - canceling copy preview now restores the normal editor status (`Claimed by ...` / `Draft changes...`) instead of leaving the temporary copy hint stuck in the top bar
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client reopened the editor via `#btn-world-edit` and wrote:
+      - `output/web-game/copy-tool-exit-smoke/state-0.json`
+      - `output/web-game/copy-tool-exit-smoke/shot-0.png`
+    - targeted Playwright probe wrote:
+      - `output/web-game/copy-tool-exit-check/summary.json`
+      - `output/web-game/copy-tool-exit-check/copy-active.png`
+      - `output/web-game/copy-tool-exit-check/after-draw-click.png`
+    - the targeted summary confirms `clipboardPastePreviewActive` flips from `true` to `false` after clicking either `Draw` or `Erase`
+    - follow-up status check wrote:
+      - `output/web-game/copy-tool-status-check/summary.json`
+      - `output/web-game/copy-tool-status-check/after-draw-click.png`
+    - the follow-up status check confirms the top status returns to `Claimed by jonathan.` after leaving copy mode
+- Desktop editor sidebar polish follow-up on March 21, 2026:
+  - turned the desktop action rail into icon + label buttons for `Back`, `Test`, `Save`, and `Publish`, and aligned the tool row onto the same IBM Plex Mono label styling so both rows now read as one system
+  - simplified the visible layer button copy down to `In front of player`, `Main solid layer`, and `Behind player`, then added per-layer info buttons with hover/focus tooltips that explain occlusion and collision behavior
+  - added a collapsed mini-stack preview for the `Layers` section so collapsing it still leaves a compact three-layer rendering visible instead of removing the section entirely
+  - moved the floating object inspector to the left edge of the game area beside the sidebar instead of pinning it to the far upper-right corner
+  - changed tile copy so a successful drag-copy immediately enters follow-cursor placement mode instead of waiting for a separate paste command
+  - follow-up tweak pass:
+    - swapped the layer info glyph to the standard circled `ⓘ`
+    - restyled the collapsed layer preview into three overlapping-square buttons based on the shared reference image
+    - changed the top action icons to use a diskette for save and a rocket for publish
+    - fixed the copy teardown bug by making actual tool changes notify the active editor scene and clear any lingering copy/rect overlay state when leaving those tools
+    - follow-up copy preview pass:
+      - changed tile and clipboard cursor previews to render only occupied cells from the active selection mask instead of always drawing a full bounding rectangle
+      - this makes large irregular terrain stamps read as their actual shape when returning to `Draw`, which avoids the “stuck copy rectangle” look from the earlier bounding-box preview
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client reopened the editor via `#btn-world-edit` and wrote `output/web-game/editor-sidebar-polish-smoke/client/state-0.json`
+    - targeted DOM + screenshot check wrote:
+      - `output/web-game/editor-sidebar-polish-smoke/summary.json`
+      - `output/web-game/editor-sidebar-polish-smoke/editor-full.png`
+    - the DOM check confirms the new action icons/labels, matching tool/action fonts, layer tooltip visibility, collapsed layer mini-stack visibility, and the inspector now using `left: 18px`
+    - follow-up Playwright check wrote:
+      - `output/web-game/editor-layer-copy-check/summary.json`
+      - `output/web-game/editor-layer-copy-check/layers-collapsed.png`
+      - `output/web-game/editor-layer-copy-check/copy-preview.png`
+      - `output/web-game/editor-layer-copy-check/after-draw-switch.png`
+    - the follow-up check confirms the `ⓘ` glyphs, the new diskette/rocket icons, the collapsed layer buttons, and that `clipboardPastePreviewActive` is `false` again after switching from copy back to draw
+    - latest targeted check wrote:
+      - `output/web-game/copy-preview-shape-check/large-selection-draw-preview.png`
+      - the large-selection preview now follows the occupied terrain cells of the brush instead of showing a generic full rectangle
+- Overworld online roster popover pass on March 21, 2026:
+  - turned the bottom-bar `x players online` pill into a hover/click target with a lightweight roster popover instead of plain text
+  - the roster is powered by the existing subscribed presence snapshot, so it lists currently visible live players by display name and room without adding a new global-online backend surface
+  - the HUD bridge now supports hover preview on desktop, click/tap pinning, outside-click dismissal, and `Esc` dismissal; when the local player is the missing entry in play mode it inserts `You` so the roster matches the count
+  - verification:
+    - `npm run build` passed
+    - targeted browser check wrote:
+      - `output/web-game/online-roster-popover/hover.png`
+      - `output/web-game/online-roster-popover/pinned.png`
+      - `output/web-game/online-roster-popover/summary.json`
+    - the targeted check confirms hover opens the roster, click pins it open, outside click closes it, and the sample rows render as `jonathan (You)`, `Alex`, and `Kami`
+- Collapsed layer dark-tile asset refresh on March 21, 2026:
+  - replaced the collapsed `Layers` mini-button PNGs with the updated inverted versions from `GADtrailers/WAMP/layers-images`
+  - restored the mini-button tiles to the dark editor panel background so the new white icon shapes carry the contrast instead of relying on a light tile fill
+  - kept the stronger green active ring so the selected layer still reads clearly while the section is collapsed
+  - verification:
+    - `npm run build` passed
+    - Playwright skill client wrote:
+      - `output/web-game/layer-dark-images-smoke/state-0.json`
+      - `output/web-game/layer-dark-images-smoke/shot-0.png`
+    - targeted sidebar capture wrote:
+      - `output/web-game/layer-dark-images-check/layers-collapsed.png`
+- Desktop editor layout refactor pass on March 20, 2026:
+  - rebuilt the desktop editor hierarchy around a sticky top action rail (`back`, `test`, `save`, `publish`), then moved room title, tools, layers, palette/background, goal, and advanced actions into a stable order that no longer buries the core build controls under contextual panels
+  - replaced the inline pressure-plate and chest/cage controls with a floating contextual inspector in the canvas area; hovering previews the relevant object controls, clicking pins them, and `Esc` now dismisses connect mode, paste preview, pinned inspector, or finally returns to world/course builder in that order
+  - added the new tile-only `Copy` tool with `1/2/3` tool shortcuts, `R`/`G` for rect/fill, `Enter`/`P` for test play, `Cmd/Ctrl+S` for save draft, `Cmd/Ctrl+Shift+P` for publish, drag-to-copy tile selection, and `Cmd/Ctrl+V` paste preview mode
+  - demoted mint/history into a desktop-collapsed `Advanced` section, renamed the visible layer copy to `Back`, `Gameplay`, and `Front`, renamed `Terrain` palette copy to `Tiles` / `Tileset`, and kept `Course Goal` hidden unless the room was actually opened from course editing
+  - removed the extra shared layer explainer from the top of the `Layers` section so the only layer guidance now lives on the individual layer buttons
+  - verification:
+    - `npm run build` passed
+    - local Playwright desktop editor smoke passed with no console errors and wrote:
+      - `output/web-game/editor-layout-refactor-smoke/state.json`
+      - `output/web-game/editor-layout-refactor-smoke/summary.json`
+      - `output/web-game/editor-layout-refactor-smoke/editor-desktop.png`
+    - the smoke confirms the new desktop order (`actions -> room title -> tools -> layers -> background/palette -> goal -> advanced`), that `Advanced` starts collapsed on desktop, and that `Course Goal` stays hidden in a normal overworld-opened room edit
+- Course consistency pass on March 19, 2026:
+  - published course playback now resolves only the exact room versions pinned into the published course; normal room drafts and active course draft overrides no longer bleed into `Play Course`
+  - draft course preview keeps the draft-only override path, but pinned room-version fallback is now strict and throws a visible error instead of silently substituting the latest published room
+  - added explicit course unpublish support across client + Worker; unpublishing clears the live published snapshot/membership while preserving draft state in the active builder session, historical versions, and existing run history
+  - course builder now shows a dedicated live-state panel (`Not published`, `Published vN live`, or `Published vN live · draft has unpublished changes`) plus an explicit empty-draft warning when a published course still exists
+  - added `Unpublish Course` to the builder and forced a world refresh after publish/unpublish so room course badges, `Play Course`, and published course meta clear/update immediately
+  - verification:
+    - `npm run build` passed
+    - Playwright smoke against `http://127.0.0.1:4174` wrote `output/web-game/course-consistency-smoke/state-0.json` through `state-2.json` with a clean anonymous overworld boot state
+    - screenshot capture still hit the existing black-frame/WebGL limitation, so the course-builder/unpublish UX still wants a real authenticated manual browser pass
 - Standalone portrait rotation + control spacing pass on March 18, 2026:
   - promoted standalone/PWA launch detection into shared device-layout state so installed launches now suppress the portrait install gate and install-help surfaces consistently instead of only relying on the install-help controller's local check
   - installed portrait launches now auto-rotate the app shell into landscape by rotating the new top-level `#shell-root` and swapping the effective mobile viewport/orientation fed into layout, HUD, and control logic
@@ -3353,3 +4106,137 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Playwright smoke on `http://127.0.0.1:4317/?renderer=canvas` booted the overworld with no new runtime errors and the auth state remained stable
   - Playwright smoke on `http://127.0.0.1:4317/?pf=1&renderer=canvas` booted with `playfun.mode: true`, `sdkReady: true`, and `hasSessionToken: false`
   - the `?pf=1` smoke logged Play.fun SDK errors about missing embed/Privy context, which is expected outside a real Play.fun embed and is still the remaining gap for true end-to-end points verification
+
+- Tablet chat placement pass on March 19, 2026:
+  - added a tablet coarse-pointer override so `#global-chat` now anchors in the upper-right under the auth/menu button instead of inheriting the shared bottom-right placement
+  - the tablet chat panel body now uses a slightly softer translucent background and a capped height sized for the remaining screen under the menu
+  - verification:
+    - `npm run build` passed
+    - Playwright smoke client on `http://127.0.0.1:4317/?renderer=canvas` completed with no new runtime errors and wrote `output/web-game/ipad-chat-smoke/shot-0.png`
+    - targeted forced-tablet layout capture confirmed the chat panel now sits at `top: 76px` / `right: 12px` in `output/web-game/ipad-chat-forced-layout/forced-tablet-play-chat.png`
+
+## March 20, 2026 - Chest / Cage Contents Authoring Pass
+
+- Added authored container contents to room objects via `containedObjectId`
+  - cages can now hold exactly one enemy
+  - treasure chests can now hold exactly one collectible
+  - invalid stored ids are sanitized during room snapshot normalization and mint-payload round-trips
+- Editor object workflow now supports direct container filling
+  - hover a cage or treasure chest to see its current contents and instructions
+  - select an enemy or collectible in the object palette, then click the cage/chest to assign it
+  - added a `Clear Contents` action in the object sidebar panel for the focused container
+- Runtime trigger behavior now uses authored contents instead of hardcoded defaults
+  - triggered cages open to their open frame and only spawn their stored enemy
+  - triggered treasure chests open and only spawn their stored collectible
+  - spawned contents now count toward goal/completion math
+- Goal-count helpers now treat hidden chest/cage contents as part of the room inventory in both runtime UI and run-point clamping
+- Verification:
+  - `npm run build` passed
+  - remaining manual check: author a chest and cage in the editor, assign contents, trigger them in play, and confirm the exact spawn/goal behavior feels right
+
+## March 22, 2026 - Focused Mobile + iPad Pass
+
+- Extended the play/world HUD collapse flow from phone to coarse-pointer tablets
+  - iPad/tablet play mode now auto-collapses the room HUD just like phone
+  - the same `Room +` restore button and external red `Stop` button now work for tablets in collapsed play mode
+- Fixed the mobile/tablet D-pad `Up` button
+  - touch `Up` now feeds climb-up behavior when the player is overlapping a ladder
+  - `Up` no longer acts like a broken no-op, and it still does not trigger a ground jump
+  - the green jump button remains the only touch jump control, while still climbing ladders when held on them
+- Added a shared tablet-only reduced performance profile in device layout state
+  - coarse-pointer tablets now report `performanceProfile: reduced`
+  - play-mode preview budgets are reduced to `25 / 49 / 81 / 121` while keeping the 3x3 full-room budget at `9`
+  - reduced profile also lowers play-mode chunk reach / mid-LOD reach and freezes full-room background parallax updates during play
+  - tablet reduced profile removes expensive blur from key world/play HUD and chat surfaces
+- Verification:
+  - `npm run build` passed
+  - standard Playwright smoke client ran against `http://127.0.0.1:4317/?renderer=canvas` and wrote `output/web-game/mobile-ipad-pass-smoke`
+  - targeted iPad-emulated probe against the dev server wrote `output/web-game/mobile-ipad-focused-pass/summary.json` and `output/web-game/mobile-ipad-focused-pass/ipad-play.png`
+  - the tablet probe confirmed:
+    - `deviceClass: tablet`
+    - `performanceProfile: reduced`
+    - `mobileWorldHudCollapsed: true` in play mode
+    - `previewBudget: 25`
+    - D-pad `Up` leaves the grounded player unchanged without a ladder
+    - D-pad `Up` produces `climbing: true`, `ladderKey: test-ladder`, and `velocityY: -90` when a ladder overlap is present
+    - reduced-profile room background tile position stayed unchanged while moving right in play mode
+
+## March 22, 2026 - Question Block Container + Triggered Collectible Fix
+
+- Extended container authoring to `question_block_mario`
+  - question blocks now use the same authored `containedObjectId` flow as cages and treasure chests
+  - the editor container inspector now treats chests, cages, and question blocks as one shared "Container" workflow
+  - question blocks only accept collectibles as contents
+- Fixed triggered spawned-item interactions
+  - collectibles spawned out of treasure chests now immediately get pickup overlaps and can actually be collected
+  - the same runtime rebinding covers future trigger-spawned live objects in the room
+- Added Mario-style question block runtime behavior
+  - bumping a question block from below now spends the block, plays the bump FX, and spawns its stored collectible above it
+  - empty question blocks now default to spawning a `coin_gold` if no explicit `containedObjectId` was authored
+  - editor container labels and clear/reset copy now surface that default coin instead of implying the block is empty
+  - follow-up hit-detection hardening on March 23, 2026:
+    - root cause: the original question-block trigger path relied on `playerBody.velocity.y` and a center-point test inside the collider callback, but Arcade could already zero the upward velocity and nudge the body by the time that callback ran
+    - moved the first-pass underside detection into the collider `processCallback`, where the player is still in the pre-separation contact state
+    - widened the underside acceptance band and taught the helper to trust `touching.up` / `blocked.up` / `wasTouching.up` when those flags clearly indicate a head-hit, even if `deltaY()` or `velocity.y` have already been flattened
+- Verification:
+  - `npm run build` passed
+  - targeted browser rig wrote `output/web-game/question-block-runtime-check/summary.json`
+  - targeted browser rig screenshots:
+    - `output/web-game/question-block-runtime-check/editor-rig.png`
+    - `output/web-game/question-block-runtime-check/after-chest-spawn.png`
+    - `output/web-game/question-block-runtime-check/after-question-block-spawn.png`
+    - `output/web-game/question-block-runtime-check/after-question-block-collect.png`
+  - verified in the rig:
+    - editor container authoring accepts both `chest -> gem` and `question_block_mario -> coin_gold`
+    - chest-open spawn produced `gemsInRoom0: 1`, then pickup reduced it to `0` and raised score `0 -> 5`
+    - question-block activation produced `coinsInRoom0: 1`, set spent frame `3`, latched `true`, then pickup reduced it to `0` and raised score `5 -> 8`
+  - default-coin follow-up rig wrote `output/web-game/question-block-default-coin-check/summary.json`
+  - default-coin follow-up screenshots:
+    - `output/web-game/question-block-default-coin-check/before-hit.png`
+    - `output/web-game/question-block-default-coin-check/after-hit.png`
+    - `output/web-game/question-block-default-coin-check/after-collect.png`
+  - verified in the follow-up rig:
+    - an unconfigured `question_block_mario` reports `Gold Coin (default)` in the editor-side container label
+    - a simulated upward hit from below spawned one coin at the block, changed the block frame `0 -> 3`, and latched the trigger `false -> true`
+    - moving the player into that spawned coin reduced the nearby coin count `1 -> 0` and raised score `0 -> 3`
+    - the only non-gameplay browser noise left in that anonymous run was an unrelated `401 Unauthorized` auth request
+  - hit-detection follow-up rig wrote `output/web-game/question-block-contact-fix-check/summary.json`
+  - hit-detection follow-up screenshots:
+    - `output/web-game/question-block-contact-fix-check/before-contact-fix.png`
+    - `output/web-game/question-block-contact-fix-check/after-contact-fix.png`
+  - verified in the hit-detection follow-up:
+    - simulated resolved-collision head-hit states at offsets `-4`, `0`, and `4` now all trigger the block, spend it to frame `3`, and spawn a coin at `y: 80`
+    - moving the player into the spawned coin still collects it correctly and raises score `0 -> 3`
+    - `npm run build` passed again after the hit-detection change
+
+## March 23, 2026 - Ranked Room Start Gating
+
+- Single-room challenge runs now stay in `practice` until the player starts from that room's spawn
+  - entering a goal room from a neighboring room no longer creates a ranked attempt immediately
+  - the room run promotes to ranked only after the player reaches the resolved room start point
+  - promotion resets timer/counters and reinitializes room challenge state so pre-spawn progress cannot carry into the ranked run
+- Kept the policy out of `OverworldPlayScene` as much as possible
+  - added `src/scenes/overworld/goalRunStartGate.ts` for spawn/start-point resolution and qualification checks
+  - expanded `src/scenes/overworld/goalRuns.ts` to track `practice` vs `qualified` room-run state and delay remote run creation until qualification
+  - `OverworldPlayScene` now only passes entry context, forwards feet-position checks, and uses the shared start-point resolver for room spawn fallback
+- HUD/play-state changes
+  - practice-mode room runs now surface `Practice run. Reach spawn to start ranked attempt.`
+  - room-goal timer/progress copy switches to practice messaging until the run is qualified
+- Verification:
+  - `npm run build` passed
+  - targeted seeded browser rig wrote `output/web-game/ranked-room-start-gating-check/summary.json`
+  - targeted seeded browser rig screenshots:
+    - `output/web-game/ranked-room-start-gating-check/practice-side-entry.png`
+    - `output/web-game/ranked-room-start-gating-check/qualified-at-spawn.png`
+    - `output/web-game/ranked-room-start-gating-check/completed-ranked-run.png`
+    - `output/web-game/ranked-room-start-gating-check/legacy-spawn-room.png`
+  - verified in that rig:
+    - side-entry into a published exit room leaves the run in `practice` with `attemptId: null`, `submissionState: waiting`, and `elapsedMs: 0`
+    - reaching the room spawn promotes the same run to `qualified` and starts the ranked attempt
+    - returning to the exit after qualification completes and submits the run normally
+    - a published room with no authored `spawnPoint` still starts correctly from the shared fallback surface spawn
+  - remaining manual check:
+    - side-enter a challenge room, die before reaching spawn, and confirm the respawned run feels correct in live play
+
+- 2026-03-31: Added selected-room minted HUD state, disabled Edit Room for non-owner minted rooms, and disabled Course Builder for non-claimer selected rooms.
+- 2026-03-31: Verified HUD against live API on local dev. Selected room 0,0 rendered as Minted, showed the new info tooltip, and disabled Edit Room/Course Builder for guest.
