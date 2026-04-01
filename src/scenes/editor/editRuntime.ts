@@ -34,6 +34,7 @@ import {
   createGoalMarkerFlagSprite,
   type GoalMarkerFlagVariant,
 } from '../../goals/markerFlags';
+import { cloneRoomLightingSettings } from '../../lighting/model';
 import type { RoomCoordinates, RoomSnapshot, RoomSpawnPoint, RoomTileData } from '../../persistence/roomRepository';
 
 interface TileAction {
@@ -91,9 +92,12 @@ interface EditorEditRuntimeHost {
   getRoomOrigin(): { x: number; y: number };
   getSelectedBackground(): string;
   setSelectedBackground(backgroundId: string): void;
+  getSelectedLightingMode(): RoomSnapshot['lighting']['mode'];
+  setSelectedLightingMode(mode: RoomSnapshot['lighting']['mode']): void;
   getPlacedObjects(): PlacedObject[];
   setPlacedObjects(placedObjects: PlacedObject[]): void;
   updateBackgroundSelectValue(backgroundId: string): void;
+  updateLightingSelectValue(mode: RoomSnapshot['lighting']['mode']): void;
   updateBackground(): void;
   updateGoalUi(): void;
   syncBackgroundCameraIgnores(): void;
@@ -288,6 +292,8 @@ export class EditorEditRuntime {
 
     this.host.setSelectedBackground(room.background);
     this.host.updateBackgroundSelectValue(room.background);
+    this.host.setSelectedLightingMode(room.lighting.mode);
+    this.host.updateLightingSelectValue(room.lighting.mode);
     this.host.updateBackground();
 
     this.roomGoal = cloneRoomGoal(room.goal);
@@ -424,6 +430,9 @@ export class EditorEditRuntime {
       coordinates: { ...metadata.coordinates },
       title: metadata.title,
       background: this.host.getSelectedBackground(),
+      lighting: cloneRoomLightingSettings({
+        mode: this.host.getSelectedLightingMode(),
+      }),
       goal: cloneRoomGoal(this.roomGoal),
       spawnPoint: this.roomSpawnPoint ? { ...this.roomSpawnPoint } : null,
       tileData: this.serializeTileData(),

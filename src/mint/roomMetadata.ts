@@ -10,6 +10,7 @@ import {
   type PlacedObject,
 } from '../config';
 import { cloneRoomGoal, normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
+import { cloneRoomLightingSettings, type RoomLightingSettings } from '../lighting/model';
 import {
   createDefaultRoomSnapshot,
   normalizeRoomTitle,
@@ -20,12 +21,14 @@ import {
 
 export const WAMP_MINTED_ROOM_SCHEMA_VERSION_V1 = 1 as const;
 export const WAMP_MINTED_ROOM_SCHEMA_VERSION_V2 = 2 as const;
-export const WAMP_MINTED_ROOM_SCHEMA_VERSION = WAMP_MINTED_ROOM_SCHEMA_VERSION_V2;
+export const WAMP_MINTED_ROOM_SCHEMA_VERSION_V3 = 3 as const;
+export const WAMP_MINTED_ROOM_SCHEMA_VERSION = WAMP_MINTED_ROOM_SCHEMA_VERSION_V3;
 export const ROOM_TOKEN_METADATA_MIME = 'data:application/json;base64,';
 
 type WampMintedRoomPayloadVersion =
   | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V1
-  | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V2;
+  | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V2
+  | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V3;
 type WampV2LayerKey = 'b' | 't' | 'f';
 type WampGoalCode = 'e' | 'c' | 'd' | 'k' | 's';
 
@@ -44,6 +47,7 @@ export interface WampMintedRoomPayload {
   coordinates: [number, number];
   title: string | null;
   background: string;
+  lighting: RoomLightingSettings;
   goal: RoomGoal | null;
   spawnPoint: [number, number] | null;
   tiles: Record<LayerName, string>;
@@ -102,7 +106,25 @@ export interface WampMintedRoomPayloadV2 {
   pt?: string;
 }
 
-export type StoredWampMintedRoomPayload = WampMintedRoomPayload | WampMintedRoomPayloadV2;
+export interface WampMintedRoomPayloadV3 {
+  v: typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V3;
+  c: [number, number];
+  n?: string;
+  b: string;
+  l?: 1;
+  g?: WampMintedRoomGoalV2;
+  s?: [number, number];
+  t?: Partial<Record<WampV2LayerKey, string>>;
+  k?: string[];
+  o?: Array<[number, number, number, number, number?]>;
+  pv: number;
+  pt?: string;
+}
+
+export type StoredWampMintedRoomPayload =
+  | WampMintedRoomPayload
+  | WampMintedRoomPayloadV2
+  | WampMintedRoomPayloadV3;
 
 export interface WampRoomTokenAttribute {
   trait_type: string;
@@ -180,6 +202,7 @@ export function buildWampMintedRoomPayload(snapshot: RoomSnapshot): WampMintedRo
     coordinates: [snapshot.coordinates.x, snapshot.coordinates.y],
     title: normalizeRoomTitle(snapshot.title),
     background: snapshot.background,
+    lighting: cloneRoomLightingSettings(snapshot.lighting),
     goal: cloneRoomGoal(snapshot.goal),
     spawnPoint: snapshot.spawnPoint ? [snapshot.spawnPoint.x, snapshot.spawnPoint.y] : null,
     tiles: {
@@ -211,6 +234,7 @@ export function buildRoomSnapshotFromMintedPayload(
 
   snapshot.title = normalizeRoomTitle(payload.title);
   snapshot.background = payload.background;
+  snapshot.lighting = cloneRoomLightingSettings(payload.lighting);
   snapshot.goal = normalizeRoomGoal(payload.goal);
   snapshot.spawnPoint = payload.spawnPoint
     ? {
@@ -345,10 +369,11 @@ function serializeMintedRoomPayload(payload: WampMintedRoomPayload): StoredWampM
 
   const tiles = serializeMintedRoomTilesV2(payload.tiles);
   return {
-    v: WAMP_MINTED_ROOM_SCHEMA_VERSION_V2,
+    v: WAMP_MINTED_ROOM_SCHEMA_VERSION_V3,
     c: [...payload.coordinates],
     ...(payload.title ? { n: payload.title } : {}),
     b: payload.background,
+    ...(payload.lighting.mode === 'playerAuraDark' ? { l: 1 as const } : {}),
     ...(payload.goal ? { g: serializeRoomGoalV2(payload.goal) } : {}),
     ...(payload.spawnPoint ? { s: [...payload.spawnPoint] as [number, number] } : {}),
     ...(tiles ? { t: tiles } : {}),
@@ -430,6 +455,9 @@ function normalizeMintedRoomPayload(value: unknown): WampMintedRoomPayload {
   }
 
   const payload = value as Partial<StoredWampMintedRoomPayload>;
+  if (payload.v === WAMP_MINTED_ROOM_SCHEMA_VERSION_V3) {
+    return normalizeMintedRoomPayloadV3(payload as Partial<WampMintedRoomPayloadV3>);
+  }
   if (payload.v === WAMP_MINTED_ROOM_SCHEMA_VERSION_V2) {
     return normalizeMintedRoomPayloadV2(payload as Partial<WampMintedRoomPayloadV2>);
   }
@@ -461,6 +489,7 @@ function normalizeMintedRoomPayloadV1(value: Partial<WampMintedRoomPayload>): Wa
     coordinates: [coordinates[0], coordinates[1]],
     title: normalizeRoomTitle(value.title),
     background: value.background,
+    lighting: cloneRoomLightingSettings(value.lighting),
     goal: normalizeRoomGoal(value.goal),
     spawnPoint:
       spawnPoint &&
@@ -518,6 +547,55 @@ function normalizeMintedRoomPayloadV2(value: Partial<WampMintedRoomPayloadV2>): 
     coordinates: [coordinates[0], coordinates[1]],
     title: normalizeRoomTitle(value.n),
     background: value.b,
+    lighting: cloneRoomLightingSettings(null),
+    goal: normalizeRoomGoalV2(value.g),
+    spawnPoint:
+      spawnPoint &&
+      spawnPoint.length === 2 &&
+      typeof spawnPoint[0] === 'number' &&
+      typeof spawnPoint[1] === 'number'
+        ? [spawnPoint[0], spawnPoint[1]]
+        : null,
+    tiles: {
+      background: typeof tiles?.b === 'string' ? tiles.b : '',
+      terrain: typeof tiles?.t === 'string' ? tiles.t : '',
+      foreground: typeof tiles?.f === 'string' ? tiles.f : '',
+    },
+    placedObjects: serializedObjects
+      .map((entry) => normalizeMintedRoomObjectV2(entry, dictionary))
+      .filter((entry): entry is WampMintedRoomObject => Boolean(entry)),
+    version: value.pv,
+    publishedAt: typeof value.pt === 'string' ? value.pt : null,
+  };
+}
+
+function normalizeMintedRoomPayloadV3(value: Partial<WampMintedRoomPayloadV3>): WampMintedRoomPayload {
+  const coordinates = Array.isArray(value.c) ? value.c : [];
+  const spawnPoint = Array.isArray(value.s) ? value.s : null;
+  const tiles = value.t as Record<string, unknown> | undefined;
+  const dictionary = Array.isArray(value.k) ? value.k.filter((entry) => typeof entry === 'string') : [];
+  const serializedObjects = Array.isArray(value.o) ? value.o : [];
+
+  if (
+    value.v !== WAMP_MINTED_ROOM_SCHEMA_VERSION_V3 ||
+    coordinates.length !== 2 ||
+    typeof coordinates[0] !== 'number' ||
+    typeof coordinates[1] !== 'number' ||
+    typeof value.b !== 'string' ||
+    typeof value.pv !== 'number'
+  ) {
+    throw new Error('Invalid wamp_room payload.');
+  }
+
+  return {
+    v: WAMP_MINTED_ROOM_SCHEMA_VERSION_V3,
+    roomId: `${coordinates[0]},${coordinates[1]}`,
+    coordinates: [coordinates[0], coordinates[1]],
+    title: normalizeRoomTitle(value.n),
+    background: value.b,
+    lighting: cloneRoomLightingSettings({
+      mode: value.l === 1 ? 'playerAuraDark' : 'off',
+    }),
     goal: normalizeRoomGoalV2(value.g),
     spawnPoint:
       spawnPoint &&

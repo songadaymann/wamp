@@ -105,6 +105,7 @@ interface CourseRoomSlice {
   coordinates: RoomCoordinates;
   roomTitle: string | null;
   backgroundId: string;
+  lightingMode: RoomSnapshot['lighting']['mode'];
   placedObjects: PlacedObject[];
   permissions: RoomPermissions;
   roomVersionHistory: RoomVersionRecord[];
@@ -375,6 +376,14 @@ export class CourseEditorScene extends Phaser.Scene {
       onSelectBackground: (backgroundId) => {
         editorState.selectedBackground = backgroundId;
         this.handleBackgroundChanged();
+      },
+      onSelectLighting: (mode) => {
+        editorState.selectedLightingMode = mode;
+        const slice = this.getSelectedSlice();
+        if (slice) {
+          slice.lightingMode = mode;
+        }
+        this.renderUi();
       },
       onSetGoalType: (goalType) => this.setGoalType(goalType),
       onSetGoalTimeLimitSeconds: (seconds) => this.setGoalTimeLimitSeconds(seconds),
@@ -1045,6 +1054,7 @@ export class CourseEditorScene extends Phaser.Scene {
       coordinates: { ...roomRef.coordinates },
       roomTitle: roomRef.roomTitle,
       backgroundId: 'none',
+      lightingMode: 'off',
       placedObjects: [],
       permissions: {
         canSaveDraft: true,
@@ -1081,6 +1091,10 @@ export class CourseEditorScene extends Phaser.Scene {
         setSelectedBackground: (backgroundId) => {
           slice.backgroundId = backgroundId;
         },
+        getSelectedLightingMode: () => slice.lightingMode,
+        setSelectedLightingMode: (mode) => {
+          slice.lightingMode = mode;
+        },
         getPlacedObjects: () => slice.placedObjects,
         setPlacedObjects: (placedObjects) => {
           slice.placedObjects = placedObjects.map((placed) => ({ ...placed }));
@@ -1092,6 +1106,17 @@ export class CourseEditorScene extends Phaser.Scene {
           const select = document.getElementById('background-select') as HTMLSelectElement | null;
           if (select) {
             select.value = backgroundId;
+          }
+        },
+        updateLightingSelectValue: (mode) => {
+          if (this.selectedRoomId !== slice.roomId) {
+            return;
+          }
+          const select = document.getElementById(
+            'lighting-mode-select'
+          ) as HTMLSelectElement | null;
+          if (select) {
+            select.value = mode;
           }
         },
         updateBackground: () => {
@@ -1154,6 +1179,7 @@ export class CourseEditorScene extends Phaser.Scene {
     slice.updatedAt = snapshot.updatedAt;
     slice.publishedAt = snapshot.publishedAt;
     slice.backgroundId = snapshot.background;
+    slice.lightingMode = snapshot.lighting.mode;
     slice.placedObjects = snapshot.placedObjects.map((placed) => ({ ...placed }));
     slice.label.setText(slice.roomTitle?.trim() || `${slice.coordinates.x},${slice.coordinates.y}`);
     slice.runtime.applyRoomSnapshot(cloneRoomSnapshot(snapshot));
@@ -1304,9 +1330,16 @@ export class CourseEditorScene extends Phaser.Scene {
     const slice = this.getSelectedSlice();
     if (slice) {
       editorState.selectedBackground = slice.backgroundId;
+      editorState.selectedLightingMode = slice.lightingMode;
       const select = document.getElementById('background-select') as HTMLSelectElement | null;
       if (select) {
         select.value = slice.backgroundId;
+      }
+      const lightingSelect = document.getElementById(
+        'lighting-mode-select'
+      ) as HTMLSelectElement | null;
+      if (lightingSelect) {
+        lightingSelect.value = slice.lightingMode;
       }
     }
     this.redrawSelection();
