@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { playSfx, type SfxCue } from '../../audio/sfx';
+import type { SfxCue } from '../../audio/sfx';
 import {
   getObjectById,
   getObjectDefaultFrame,
@@ -101,10 +101,17 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   handlePlayerDeath: (reason: string) => void;
   onEnemyDefeated: (roomId: string, enemyName: string) => boolean;
   onCollectibleCollected: (roomId: string) => void;
-  playEnemyKillFx: (x: number, y: number) => void;
-  playCollectFx: (x: number, y: number, scoreDelta: number, cue?: SfxCue) => void;
-  playBounceFx: (x: number, y: number) => void;
-  playBombExplosionFx: (x: number, y: number) => void;
+  playRoomSfx: (cue: SfxCue, roomCoordinates: RoomCoordinates) => void;
+  playEnemyKillFx: (x: number, y: number, roomCoordinates: RoomCoordinates) => void;
+  playCollectFx: (
+    x: number,
+    y: number,
+    scoreDelta: number,
+    roomCoordinates: RoomCoordinates,
+    cue?: SfxCue
+  ) => void;
+  playBounceFx: (x: number, y: number, roomCoordinates: RoomCoordinates) => void;
+  playBombExplosionFx: (x: number, y: number, roomCoordinates: RoomCoordinates) => void;
 }
 
 interface CreateLiveObjectEntryOptions {
@@ -365,13 +372,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             } else if (liveObject.config.id === 'bomb') {
               liveObject.interactions.push(
                 this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
-                  this.triggerBombExplosion(liveObject);
+                  this.triggerBombExplosion(loadedRoom, liveObject);
                 })
               );
             } else if (liveObject.config.id === 'tornado' || liveObject.config.id === 'tornado_sand') {
               liveObject.interactions.push(
                 this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
-                  this.triggerTornadoLaunch(liveObject);
+                  this.triggerTornadoLaunch(loadedRoom, liveObject);
                 })
               );
             } else {
@@ -433,7 +440,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
                     this.options.getCurrentTime() + this.options.settings.bouncePadActiveMs;
                   activePlayerBody.setVelocityY(this.options.settings.bouncePadVelocity);
                   this.options.grantExternalLaunchGrace(BOUNCE_PAD_LAUNCH_GRACE_MS);
-                  this.options.playBounceFx(liveObject.sprite.x, liveObject.sprite.y - 2);
+                  this.options.playBounceFx(
+                    liveObject.sprite.x,
+                    liveObject.sprite.y - 2,
+                    loadedRoom.room.coordinates
+                  );
                   this.options.showTransientStatus('Bounce pad launched you.');
                 })
               );
@@ -441,7 +452,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
               liveObject.interactions.push(
                 this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
                   if (this.options.tryConsumeHeldKey()) {
-                    this.options.playBounceFx(liveObject.sprite.x, liveObject.sprite.y - 6);
+                    this.options.playBounceFx(
+                      liveObject.sprite.x,
+                      liveObject.sprite.y - 6,
+                      loadedRoom.room.coordinates
+                    );
                     this.options.showTransientStatus('Unlocked the door.');
                     this.removeLiveObject(loadedRoom, liveObject);
                     return;
@@ -653,7 +668,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           liveObject.sprite.setFrame(pressed ? 1 : 0);
         }
         if (pressed && !wasPressed) {
-          playSfx('pressure-plate-down');
+          this.options.playRoomSfx('pressure-plate-down', loadedRoom.room.coordinates);
         }
         if (pressed && liveObject.linkedTargetInstanceId) {
           const targetRoomId = liveObject.linkedTargetRoomId ?? loadedRoom.room.id;
@@ -761,7 +776,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
 
     liveObject.runtime.triggerLatched = true;
-    this.options.playBounceFx(liveObject.sprite.x, liveObject.sprite.y - 6);
+    this.options.playBounceFx(
+      liveObject.sprite.x,
+      liveObject.sprite.y - 6,
+      loadedRoom.room.coordinates
+    );
     this.removeLiveObject(loadedRoom, liveObject);
   }
 
@@ -774,7 +793,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
 
     liveObject.runtime.triggerLatched = true;
-    playSfx('cage-open');
+    this.options.playRoomSfx('cage-open', loadedRoom.room.coordinates);
     if (liveObject.config.frameCount > 0) {
       liveObject.sprite.setFrame(Math.max(0, liveObject.config.frameCount - 1));
     }
@@ -799,7 +818,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
 
     liveObject.runtime.triggerLatched = true;
-    playSfx('treasure-open');
+    this.options.playRoomSfx('treasure-open', loadedRoom.room.coordinates);
     if (liveObject.config.frameCount > 0) {
       liveObject.sprite.setFrame(Math.max(0, liveObject.config.frameCount - 1));
     }
@@ -1114,7 +1133,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
   }
 
-  private triggerTornadoLaunch(liveObject: LoadedRoomObject): void {
+  private triggerTornadoLaunch(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject
+  ): void {
     if (this.options.getCurrentTime() < liveObject.runtime.cooldownUntil) {
       return;
     }
@@ -1143,18 +1165,29 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       )
     );
     this.options.grantExternalLaunchGrace(TORNADO_LAUNCH_GRACE_MS);
-    this.options.playBounceFx(liveObject.sprite.x, liveObject.sprite.y - 4);
+    this.options.playBounceFx(
+      liveObject.sprite.x,
+      liveObject.sprite.y - 4,
+      loadedRoom.room.coordinates
+    );
     this.options.showTransientStatus('Tornado tossed you.');
   }
 
-  private triggerBombExplosion(liveObject: LoadedRoomObject): void {
+  private triggerBombExplosion(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject
+  ): void {
     if (this.options.getCurrentTime() < liveObject.runtime.cooldownUntil) {
       return;
     }
 
     liveObject.runtime.activatedUntil = this.options.getCurrentTime() + 240;
     liveObject.runtime.cooldownUntil = this.options.getCurrentTime() + 1500;
-    this.options.playBombExplosionFx(liveObject.sprite.x, liveObject.sprite.y);
+    this.options.playBombExplosionFx(
+      liveObject.sprite.x,
+      liveObject.sprite.y,
+      loadedRoom.room.coordinates
+    );
     this.options.handlePlayerDeath('Bomb exploded.');
   }
 
@@ -1263,7 +1296,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const stomped = playerBody.velocity.y > 40 && playerBody.bottom <= bulletBody.top + 8;
     if (stomped) {
       playerBody.setVelocityY(this.options.settings.enemyStompBounceVelocity);
-      this.options.playBounceFx(bullet.sprite.x, bullet.sprite.y);
+      this.options.playBounceFx(bullet.sprite.x, bullet.sprite.y, loadedRoom.room.coordinates);
       this.removeLiveObject(loadedRoom, bullet);
       return;
     }
@@ -1561,6 +1594,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       liveObject.sprite.x,
       liveObject.sprite.y,
       scoreDelta,
+      loadedRoom.room.coordinates,
       this.getCollectibleCue(liveObject.config.id)
     );
     this.options.showTransientStatus(`${liveObject.config.name} collected.`);
@@ -1631,7 +1665,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const enemyName = liveObject.config.name;
 
     this.options.addScore(10);
-    this.options.playEnemyKillFx(x, y);
+    this.options.playEnemyKillFx(x, y, loadedRoom.room.coordinates);
     this.destroyLiveObjectInteractions(liveObject);
     this.destroyLiveObjectWorldColliders(liveObject);
     liveObject.sprite.destroy();

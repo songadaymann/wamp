@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { playSfx, type SfxCue } from '../audio/sfx';
+import { playSfx, type SfxCue, type SfxPlaybackOptions } from '../audio/sfx';
 import { FX_ANIMATION_KEYS } from './manifest';
 
 type GoalFxKind = 'start' | 'checkpoint' | 'success' | 'fail' | 'abandon';
@@ -25,7 +25,13 @@ export class SceneFxController {
     return Array.from(this.displayObjects);
   }
 
-  playCollectFx(x: number, y: number, scoreDelta: number, cue: SfxCue = 'collect'): void {
+  playCollectFx(
+    x: number,
+    y: number,
+    scoreDelta: number,
+    cue: SfxCue = 'collect',
+    playbackOptions?: SfxPlaybackOptions | null
+  ): void {
     this.playAnimatedFx(FX_ANIMATION_KEYS['coin-collect'], x, y - 8, {
       scale: 1.4,
       depth: 29,
@@ -36,10 +42,12 @@ export class SceneFxController {
       depth: 28,
     });
     this.spawnScorePopup(`+${scoreDelta}`, x, y - 18, '#ffe599');
-    playSfx(cue);
+    if (playbackOptions !== null) {
+      playSfx(cue, playbackOptions);
+    }
   }
 
-  playEnemyKillFx(x: number, y: number): void {
+  playEnemyKillFx(x: number, y: number, playbackOptions?: SfxPlaybackOptions | null): void {
     this.playAnimatedFx(FX_ANIMATION_KEYS.hit, x, y - 8, {
       scale: 1.6,
       depth: 29,
@@ -49,19 +57,23 @@ export class SceneFxController {
       depth: 28,
     });
     this.spawnFlash(x, y - 8, 28, 0xfff0b3, 0.3);
-    playSfx('enemy-kill');
+    if (playbackOptions !== null) {
+      playSfx('enemy-kill', playbackOptions);
+    }
   }
 
-  playBounceFx(x: number, y: number): void {
+  playBounceFx(x: number, y: number, playbackOptions?: SfxPlaybackOptions | null): void {
     this.playAnimatedFx(FX_ANIMATION_KEYS.boing, x, y - 4, {
       scale: 1.2,
       depth: 28,
     });
     this.spawnFlash(x, y - 4, 24, 0x9deaff, 0.22);
-    playSfx('bounce');
+    if (playbackOptions !== null) {
+      playSfx('bounce', playbackOptions);
+    }
   }
 
-  playBombExplosionFx(x: number, y: number): void {
+  playBombExplosionFx(x: number, y: number, playbackOptions?: SfxPlaybackOptions | null): void {
     this.playAnimatedFx(FX_ANIMATION_KEYS['bomb-explosion'], x, y - 10, {
       scale: 1.4,
       depth: 30,
@@ -72,7 +84,9 @@ export class SceneFxController {
       tint: 0xffd27a,
     });
     this.spawnFlash(x, y - 8, 30, 0xffd27a, 0.28);
-    playSfx('enemy-kill');
+    if (playbackOptions !== null) {
+      playSfx('enemy-kill', playbackOptions);
+    }
   }
 
   playJumpDustFx(x: number, y: number, facing: number): void {
