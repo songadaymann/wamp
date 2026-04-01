@@ -1,4 +1,5 @@
 // ── Room Dimensions ──
+import type { RoomLightingMode } from './lighting/model';
 export const TILE_SIZE = 16;
 export const ROOM_WIDTH = 40;   // tiles
 export const ROOM_HEIGHT = 22;  // tiles
@@ -755,6 +756,7 @@ export interface EditorState {
   objectFacing: 'left' | 'right';
   selectedBackground: string;        // BackgroundGroup.id or solid:#RRGGBB
   selectedSolidBackgroundColor: string;
+  selectedLightingMode: RoomLightingMode;
   placedObjects: PlacedObject[];
 }
 
@@ -795,6 +797,7 @@ export const editorState: EditorState = {
   objectFacing: 'right',
   selectedBackground: 'none',
   selectedSolidBackgroundColor: '#24324a',
+  selectedLightingMode: 'off',
   placedObjects: [],
 };
 

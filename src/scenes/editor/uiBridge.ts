@@ -18,6 +18,7 @@ import {
 } from '../../backgrounds/model';
 import type { CourseGoalType } from '../../courses/model';
 import type { RoomGoalType } from '../../goals/roomGoals';
+import type { RoomLightingMode } from '../../lighting/model';
 import { AUTH_STATE_CHANGED_EVENT } from '../../auth/client';
 import type { EditorMarkerPlacementMode } from '../../ui/setup/sceneBridge';
 import { EDITOR_UI_STATE_CHANGED_EVENT } from './uiEvents';
@@ -171,6 +172,7 @@ export interface EditorUiBridgeActions {
   onClearCurrentLayer: () => void;
   onClearAllTiles: () => void;
   onSelectBackground: (backgroundId: string) => void;
+  onSelectLighting: (mode: RoomLightingMode) => void;
   onSetGoalType: (nextType: RoomGoalType | null) => void;
   onSetGoalTimeLimitSeconds: (seconds: number | null) => void;
   onSetGoalRequiredCount: (requiredCount: number) => void;
@@ -290,6 +292,7 @@ export class EditorUiBridge {
   private readonly backgroundSolidColorInput: HTMLInputElement | null;
   private readonly backgroundSolidColorValue: HTMLElement | null;
   private readonly backgroundSolidCard: HTMLButtonElement | null;
+  private readonly lightingSelect: HTMLSelectElement | null;
   private readonly backgroundButtons: HTMLButtonElement[];
   private readonly goalTypeSelect: HTMLSelectElement | null;
   private readonly goalContextNote: HTMLElement | null;
@@ -413,6 +416,8 @@ export class EditorUiBridge {
     this.backgroundSolidColorValue = this.doc.getElementById('background-solid-color-value');
     this.backgroundSolidCard =
       this.doc.getElementById('background-solid-card') as HTMLButtonElement | null;
+    this.lightingSelect =
+      this.doc.getElementById('lighting-mode-select') as HTMLSelectElement | null;
     this.backgroundButtons = Array.from(
       this.doc.querySelectorAll<HTMLButtonElement>('[data-background-id]')
     );
@@ -858,6 +863,19 @@ export class EditorUiBridge {
       });
     }
 
+    const handleLightingSelectChange = () => {
+      if (!this.lightingSelect) {
+        return;
+      }
+      this.applyLightingSelection(this.lightingSelect.value as RoomLightingMode);
+    };
+    this.lightingSelect?.addEventListener('change', handleLightingSelectChange);
+    if (this.lightingSelect) {
+      this.cleanupCallbacks.push(() =>
+        this.lightingSelect?.removeEventListener('change', handleLightingSelectChange)
+      );
+    }
+
     for (const button of this.backgroundButtons) {
       const handler = () => {
         const nextBackground = button.dataset.backgroundId;
@@ -1087,6 +1105,16 @@ export class EditorUiBridge {
     }
   }
 
+  private applyLightingSelection(nextLightingMode: RoomLightingMode): void {
+    if (!nextLightingMode || editorState.selectedLightingMode === nextLightingMode) {
+      return;
+    }
+    editorState.selectedLightingMode = nextLightingMode;
+    this.actions.onSelectLighting(nextLightingMode);
+    this.syncEditorChromeState();
+    this.requestPhoneEditorAutoCollapse();
+  }
+
   private requestPhoneEditorAutoCollapse(): void {
     this.windowObj.dispatchEvent(new Event('mobile-editor-auto-collapse'));
   }
@@ -1178,6 +1206,7 @@ export class EditorUiBridge {
     if (this.backgroundSolidCard) {
       this.backgroundSolidCard.style.setProperty('--background-card-solid', solidColor);
     }
+    this.setValue(this.lightingSelect, editorState.selectedLightingMode);
     for (const button of this.backgroundButtons) {
       const active = button.dataset.backgroundId === activeBackgroundId;
       button.classList.toggle('active', active);
