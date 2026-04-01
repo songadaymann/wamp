@@ -132,7 +132,6 @@ const DECO_ONLY_INDICES_FOREST = [
   56, 57, 58, 59,
   61, 62,
 ];
-const DECO_ONLY_INDICES_DESERT = [3, 4, 18];
 const DECO_ONLY_INDICES_DIRT = [58, 59];
 const DECO_ONLY_INDICES_WATER = [1, 2, 3, 5, 13, 18];
 // Tight snow rollback: keep only the tiny decoration-only snow tiles non-colliding.
@@ -169,8 +168,8 @@ export const TILESETS: TilesetConfig[] = [
     tileCount: 72,
     firstGid: 73,
     terrainCollisionProfiles: {
-      ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_STANDARD, DECORATED_TOP_PROFILE),
-      ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_DESERT, NO_COLLISION_PROFILE),
+      ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_FOREST, DECORATED_TOP_PROFILE),
+      ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_FOREST, NO_COLLISION_PROFILE),
     },
   },
   {
