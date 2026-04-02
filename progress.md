@@ -57,6 +57,22 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Main-based room music sequencer integration on April 2, 2026:
+  - rebuilt the room-grid music feature on top of current `origin/main` in a clean worktree instead of trying to push the older snapshot branch
+  - ported the new `RoomSnapshot.music` schema, editor sequencer UI/controllers, shared music runtime, WAMP audio assets, and local-draft recovery fix
+  - added world-play room music syncing on the main-based branch so saved room music starts and stops with the active room instead of only working in the editor
+  - verification:
+    - `npx tsc --noEmit` passed
+    - `npm run build` passed
+    - `develop-web-game` client run wrote `output/web-game/main-based-room-sequencer-smoke/`
+    - direct Playwright probe wrote `output/web-game/main-based-room-sequencer-direct-check/` and confirmed:
+      - synthetic editor booted successfully
+      - `#btn-editor-music-mode` opened the overlay
+      - body datasets flipped to `editorMusicMode=true` and `editorMusicUiLocked=true`
+  - caveat:
+    - local PartyKit was offline during validation, so the browser logs contain the expected `127.0.0.1:1999` websocket connection-refused noise
+    - the generic headless screenshot from the stock client was black even though `render_game_to_text` reported the app ready; the direct Playwright probe produced a usable editor screenshot
+    - local unauthenticated remote save/publish still depends on backend auth, so the shipped local recovery fix only preserves newer fallback drafts after refresh
 - Desktop world HUD play-mode collapse on April 2, 2026:
   - collapsed the desktop `play-world` HUD down to the active stop control only, so normal browse keeps the full overworld card while gameplay shrinks it to a compact top-left stop pill
   - kept the change in HUD markup/style only by adding semantic action-row classes in `index.html` and desktop-only play-mode rules in `src/styles/sections/world.css`

@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { playSfx } from '../audio/sfx';
 import { createCourseRepository } from '../courses/courseRepository';
+import { globalRoomMusicController } from '../music/controller';
+import { getRoomMusicKey } from '../music/model';
 import { getCoursePressurePlateLink } from '../courses/pressurePlateLinks';
 import {
   clearActiveCourseDraftSessionRoomOverride,
@@ -331,6 +333,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private inspectZoom = DEFAULT_ZOOM;
   private browseInspectZoom = DEFAULT_ZOOM;
   private shouldAutoPlayDeepLinkedRoomOnBoot = false;
+  private lastRoomMusicSyncSignature = '';
   private transientStatusMessage: string | null = null;
   private transientStatusExpiresAt = 0;
   private quicksandTouchedUntil = 0;
@@ -1586,6 +1589,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.updateGhosts(delta);
     this.roomChatController.update();
     this.presenceOverlayController.updateBrowseDots(delta);
+    this.maybeSyncRoomMusicPlayback();
 
     if (isMobileLandscapeBlocked()) {
       this.syncLocalPresence();
@@ -1700,6 +1704,13 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.cameras.remove(this.backdropCamera, true);
     }
 
+    this.lastRoomMusicSyncSignature = '';
+    globalRoomMusicController.stopArrangement({
+      transition: 'immediate',
+      fadeDurationSec: 0.08,
+      mode: 'idle',
+      resetTransport: true,
+    });
     this.worldStreamingController.reset();
     this.lightingController.reset();
     this.starfieldSprites = [];
@@ -2161,6 +2172,50 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private syncModeRuntime(): void {
     this.runtimeController.syncModeRuntime();
+  }
+
+  private maybeSyncRoomMusicPlayback(): void {
+    if (this.mode !== 'play') {
+      const signature = `mode:${this.mode}`;
+      if (this.lastRoomMusicSyncSignature === signature) {
+        return;
+      }
+
+      this.lastRoomMusicSyncSignature = signature;
+      globalRoomMusicController.stopArrangement({
+        transition: 'immediate',
+        fadeDurationSec: 0.08,
+        mode: 'idle',
+        resetTransport: true,
+      });
+      return;
+    }
+
+    const currentRoom = this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates);
+    if (!currentRoom) {
+      return;
+    }
+
+    const roomMusicKey = getRoomMusicKey(currentRoom.music) ?? 'none';
+    const signature = `mode:play|room:${currentRoom.id}|music:${roomMusicKey}`;
+    if (this.lastRoomMusicSyncSignature === signature) {
+      return;
+    }
+
+    this.lastRoomMusicSyncSignature = signature;
+    if (!currentRoom.music) {
+      globalRoomMusicController.stopArrangement({
+        transition: 'bar',
+        fadeDurationSec: 0.18,
+        mode: 'world-play',
+      });
+      return;
+    }
+
+    void globalRoomMusicController.playArrangement(currentRoom.music, {
+      mode: 'world-play',
+      transition: 'bar',
+    });
   }
 
   private countRoomObjectsByCategory(room: RoomSnapshot, category: GameObjectConfig['category']): number {
@@ -2749,6 +2804,12 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private handleShutdown = (): void => {
+    globalRoomMusicController.stopArrangement({
+      transition: 'immediate',
+      fadeDurationSec: 0.08,
+      mode: 'idle',
+      resetTransport: true,
+    });
     this.presenceController.destroy();
     this.roomChatController.destroy();
     this.roomAudioController.destroy();

@@ -28,6 +28,11 @@ function getEditorLayerAccent(): { stroke: number; fillAlpha: number } {
 interface EditorInteractionHost {
   getNeighborRadius(): number;
   getGoalPlacementMode(): GoalPlacementMode;
+  isMusicModeActive(): boolean;
+  handleMusicPointerDown(pointer: Phaser.Input.Pointer): void;
+  handleMusicPointerMove(pointer: Phaser.Input.Pointer): void;
+  handleMusicPointerUp(pointer: Phaser.Input.Pointer): void;
+  updateMusicCursorHighlight(graphics: Phaser.GameObjects.Graphics): boolean;
   handleObjectModePrimaryAction(pointer: Phaser.Input.Pointer): boolean;
   handleObjectModeSecondaryAction(worldX: number, worldY: number): boolean;
   handleObjectPlace(pointer: Phaser.Input.Pointer): void;
@@ -218,6 +223,11 @@ export class EditorInteractionController {
       return;
     }
 
+    if (this.host.isMusicModeActive()) {
+      this.host.updateMusicCursorHighlight(this.cursorGraphics);
+      return;
+    }
+
     const pointer = this.scene.input.activePointer;
     const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
     const tileX = Math.floor(worldPoint.x / TILE_SIZE);
@@ -355,6 +365,11 @@ export class EditorInteractionController {
         return;
       }
 
+      if (this.host.isMusicModeActive()) {
+        this.host.handleMusicPointerDown(pointer);
+        return;
+      }
+
       if (pointer.middleButtonDown() || this.spaceDown) {
         this.isPanning = true;
         this.panStartPointer = { x: pointer.x, y: pointer.y };
@@ -435,6 +450,11 @@ export class EditorInteractionController {
         return;
       }
 
+      if (this.host.isMusicModeActive()) {
+        this.host.handleMusicPointerMove(pointer);
+        return;
+      }
+
       if (this.isPanning) {
         const dx = (this.panStartPointer.x - pointer.x) / this.scene.cameras.main.zoom;
         const dy = (this.panStartPointer.y - pointer.y) / this.scene.cameras.main.zoom;
@@ -482,6 +502,11 @@ export class EditorInteractionController {
 
       if (this.isPanning) {
         this.isPanning = false;
+        return;
+      }
+
+      if (this.host.isMusicModeActive()) {
+        this.host.handleMusicPointerUp(pointer);
         return;
       }
 

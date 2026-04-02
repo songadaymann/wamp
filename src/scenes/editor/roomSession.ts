@@ -963,19 +963,35 @@ export class EditorRoomSession {
       return null;
     }
 
-    if (localRecord.published !== null) {
+    const localDraftUpdatedAt = this.getSnapshotTimestamp(localRecord.draft);
+    const remoteDraftUpdatedAt = this.getSnapshotTimestamp(remoteRecord.draft);
+    if (localDraftUpdatedAt <= remoteDraftUpdatedAt) {
       return null;
     }
 
-    if (remoteRecord.published !== null) {
-      return null;
+    return {
+      ...remoteRecord,
+      draft: cloneRoomSnapshot(localRecord.draft),
+    };
+  }
+
+  private getSnapshotTimestamp(snapshot: RoomSnapshot | null): number {
+    if (!snapshot) {
+      return 0;
     }
 
-    if (!isRoomSnapshotBlank(remoteRecord.draft)) {
-      return null;
+    const updatedAt = Date.parse(snapshot.updatedAt);
+    if (!Number.isNaN(updatedAt) && updatedAt > 0) {
+      return updatedAt;
     }
 
-    return localRecord;
+    const publishedAt = snapshot.publishedAt ? Date.parse(snapshot.publishedAt) : Number.NaN;
+    if (!Number.isNaN(publishedAt) && publishedAt > 0) {
+      return publishedAt;
+    }
+
+    const createdAt = Date.parse(snapshot.createdAt);
+    return Number.isNaN(createdAt) ? 0 : createdAt;
   }
 
   private shouldPersistGuestDraftLocally(error: unknown): boolean {

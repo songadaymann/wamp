@@ -43,6 +43,13 @@ import {
   type RoomLightingSettings,
 } from '../../lighting/model';
 import {
+  cloneRoomMusic,
+  createDefaultRoomPatternMusic,
+  getRoomMusicKey,
+  isRoomMusicEmpty,
+  type RoomMusic,
+} from '../../music/model';
+import {
   cloneRoomBoundaryIngressSettings,
   createDefaultRoomBoundaryIngressSettings,
   type RoomBoundaryIngressSettings,
@@ -76,6 +83,11 @@ interface GoalAction {
   next: RoomGoal | null;
 }
 
+interface MusicAction {
+  previous: RoomMusic | null;
+  next: RoomMusic | null;
+}
+
 interface BoundaryIngressAction {
   previous: RoomBoundaryIngressSettings;
   next: RoomBoundaryIngressSettings;
@@ -86,6 +98,7 @@ type UndoAction =
   | { kind: 'objects'; action: ObjectsAction }
   | { kind: 'spawn'; action: SpawnAction }
   | { kind: 'goal'; action: GoalAction }
+  | { kind: 'music'; action: MusicAction }
   | { kind: 'boundaryIngress'; action: BoundaryIngressAction };
 
 export type GoalPlacementMode = 'exit' | 'checkpoint' | 'finish' | null;
@@ -135,6 +148,7 @@ export class EditorEditRuntime {
   private roomGoal: RoomGoal | null = null;
   private roomBoundaryIngress = createDefaultRoomBoundaryIngressSettings();
   private roomSpawnPoint: RoomSpawnPoint | null = null;
+  private roomMusic: RoomMusic | null = null;
   private roomDirty = false;
   private lastDirtyAt = 0;
   private goalPlacementMode: GoalPlacementMode = null;
@@ -174,6 +188,10 @@ export class EditorEditRuntime {
 
   get currentRoomSpawnPoint(): RoomSpawnPoint | null {
     return this.roomSpawnPoint;
+  }
+
+  get currentRoomMusic(): RoomMusic | null {
+    return cloneRoomMusic(this.roomMusic);
   }
 
   get isRoomDirty(): boolean {
@@ -283,6 +301,7 @@ export class EditorEditRuntime {
     this.roomGoal = null;
     this.roomBoundaryIngress = createDefaultRoomBoundaryIngressSettings();
     this.roomSpawnPoint = null;
+    this.roomMusic = null;
     this.roomDirty = false;
     this.lastDirtyAt = 0;
     this.goalPlacementMode = null;
@@ -331,6 +350,7 @@ export class EditorEditRuntime {
     this.roomBoundaryIngress = cloneRoomBoundaryIngressSettings(room.boundaryIngress);
     this.roomGoal = cloneRoomGoal(room.goal);
     this.roomSpawnPoint = room.spawnPoint ? { ...room.spawnPoint } : null;
+    this.roomMusic = cloneRoomMusic(room.music);
     this.host.setPlacedObjects(room.placedObjects.map((placed) => ({ ...placed })));
     this.rebuildObjectSprites();
     this.host.updateGoalUi();
@@ -465,6 +485,7 @@ export class EditorEditRuntime {
       background: normalizeRoomBackground(this.host.getSelectedBackground()),
       boundaryIngress: cloneRoomBoundaryIngressSettings(this.roomBoundaryIngress),
       lighting: cloneRoomLightingSettings(this.host.getSelectedLightingSettings()),
+      music: cloneRoomMusic(this.roomMusic),
       goal: cloneRoomGoal(this.roomGoal),
       spawnPoint: this.roomSpawnPoint ? { ...this.roomSpawnPoint } : null,
       tileData: this.serializeTileData(),
@@ -498,6 +519,37 @@ export class EditorEditRuntime {
 
   clearTileBatch(): void {
     this.currentBatch = [];
+  }
+
+  setRoomMusic(nextMusic: RoomMusic | null): RoomMusic | null {
+    if (!this.guardEditable()) {
+      return cloneRoomMusic(this.roomMusic);
+    }
+
+    const previous = cloneRoomMusic(this.roomMusic);
+    const normalizedNext =
+      nextMusic && !isRoomMusicEmpty(nextMusic)
+        ? cloneRoomMusic(nextMusic)
+        : null;
+    if (!this.roomMusicChanged(previous, normalizedNext)) {
+      return cloneRoomMusic(this.roomMusic);
+    }
+
+    this.roomMusic = cloneRoomMusic(normalizedNext);
+    this.undoStack.push({
+      kind: 'music',
+      action: {
+        previous,
+        next: cloneRoomMusic(normalizedNext),
+      },
+    });
+    this.redoStack = [];
+    this.markRoomDirty();
+    return cloneRoomMusic(this.roomMusic);
+  }
+
+  replaceRoomMusicWithPattern(): RoomMusic | null {
+    return this.setRoomMusic(createDefaultRoomPatternMusic());
   }
 
   private clonePlacedObjects(placedObjects: PlacedObject[] = this.host.getPlacedObjects()): PlacedObject[] {
@@ -1513,6 +1565,19 @@ export class EditorEditRuntime {
       return;
     }
 
+    if (action.kind === 'music') {
+      this.roomMusic = cloneRoomMusic(action.action.previous);
+      this.redoStack.push({
+        kind: 'music',
+        action: {
+          previous: cloneRoomMusic(action.action.next),
+          next: cloneRoomMusic(action.action.previous),
+        },
+      });
+      this.markRoomDirty();
+      return;
+    }
+
     this.roomGoal = cloneRoomGoal(action.action.previous);
     this.goalPlacementMode = null;
     this.redoStack.push({
@@ -1608,6 +1673,19 @@ export class EditorEditRuntime {
       return;
     }
 
+    if (action.kind === 'music') {
+      this.roomMusic = cloneRoomMusic(action.action.previous);
+      this.undoStack.push({
+        kind: 'music',
+        action: {
+          previous: cloneRoomMusic(action.action.next),
+          next: cloneRoomMusic(action.action.previous),
+        },
+      });
+      this.markRoomDirty();
+      return;
+    }
+
     this.roomGoal = cloneRoomGoal(action.action.previous);
     this.goalPlacementMode = null;
     this.undoStack.push({
@@ -1649,6 +1727,10 @@ export class EditorEditRuntime {
         ? 'Draft changes...'
         : 'Read-only minted room. Changes are local only.',
     );
+  }
+
+  private roomMusicChanged(previous: RoomMusic | null, next: RoomMusic | null): boolean {
+    return getRoomMusicKey(previous) !== getRoomMusicKey(next);
   }
 
   private placeSpawnPoint(tileX: number, tileY: number): void {

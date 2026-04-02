@@ -427,6 +427,7 @@ body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet
 body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='palette'] #sidebar .sidebar-section[data-mobile-panel='palette'],
 body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='objects'] #sidebar .sidebar-section[data-mobile-panel='objects'],
 body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='objects'] #sidebar .sidebar-section[data-mobile-panel-alt='objects'],
+body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='music'] #sidebar .sidebar-section[data-mobile-panel='music'],
 body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='goal'] #sidebar .sidebar-section[data-mobile-panel='goal'],
 body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='actions'] #sidebar .sidebar-section[data-mobile-panel='actions'] {
   display: block;
@@ -573,12 +574,54 @@ body[data-device-class='phone'][data-app-mode='editor'] .palette-hint {
   padding-top: 2px;
 }
 
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-overlay {
+  z-index: 24;
+  padding:
+    calc(8px + var(--safe-top))
+    calc(8px + var(--safe-right))
+    calc(84px + var(--safe-bottom))
+    calc(8px + var(--safe-left));
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-shell {
+  width: calc(100% - 8px);
+  padding: 8px 10px 10px;
+  gap: 8px;
+  border-radius: 16px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-strip {
+  gap: 8px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-tab-dock {
+  width: 100%;
+  margin-top: -14px;
+  padding-top: 14px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-tab-strip {
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-control-cluster {
+  width: 100%;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-legacy-notice {
+  flex-direction: column;
+  align-items: stretch;
+}
+
 body[data-device-class='phone'][data-app-mode='editor'] #room-title-section,
+body[data-device-class='phone'][data-app-mode='editor'] #music-section,
 body[data-device-class='phone'][data-app-mode='editor'] #goal-section {
   max-height: calc(var(--phone-editor-sheet-height) - 26px);
   overflow: auto;
 }
 
+body[data-device-class='phone'][data-app-mode='editor'] #music-section,
 body[data-device-class='phone'][data-app-mode='editor'] #goal-section {
   display: grid;
   gap: 10px;

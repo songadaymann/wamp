@@ -1136,6 +1136,164 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #editor-advanced {
   backdrop-filter: blur(8px);
 }
 
+#music-summary {
+  line-height: 1.45;
+}
+
+body[data-app-mode='editor']:not([data-device-class='phone']) #music-section {
+  order: 2;
+}
+
+body[data-editor-music-mode='true'] #game-container canvas {
+  opacity: 1;
+  filter: none;
+  transition: opacity 0.18s ease, filter 0.18s ease;
+}
+
+body[data-editor-music-mode='true'] #editor-inspector {
+  opacity: 0.18;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #sidebar > .sidebar-section:not(#music-section) {
+  opacity: 0.26;
+  pointer-events: none;
+  filter: saturate(0.55);
+  transition: opacity 0.18s ease, filter 0.18s ease;
+}
+
+body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-tab:not([data-mobile-editor-sheet='music']),
+body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #btn-mobile-editor-undo,
+body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #btn-mobile-editor-toggle {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.editor-music-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 14;
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding:
+    calc(6px + var(--safe-top))
+    calc(14px + var(--safe-right))
+    calc(18px + var(--safe-bottom))
+    calc(14px + var(--safe-left));
+  pointer-events: none;
+}
+
+.editor-music-overlay:not(.hidden) {
+  display: flex;
+}
+
+.editor-music-shell {
+  width: min(1000px, calc(100% - 8px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px 10px;
+  border: 1px solid rgba(243, 238, 226, 0.1);
+  border-radius: 18px;
+  background: rgba(10, 10, 10, 0.72);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+
+.editor-music-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  pointer-events: none;
+}
+
+.editor-music-tab-dock {
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  margin-top: -20px;
+  padding-top: 20px;
+  pointer-events: none;
+}
+
+.editor-music-tab-strip {
+  display: flex;
+  gap: 6px;
+}
+
+.editor-music-tab-button {
+  border-radius: 16px 16px 10px 10px;
+  padding: 10px 14px 8px;
+  background: rgba(18, 18, 18, 0.92);
+  border-color: rgba(243, 238, 226, 0.14);
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.22);
+}
+
+.editor-music-tab-button:not(.active) {
+  background: rgba(12, 12, 12, 0.82);
+  color: rgba(246, 232, 201, 0.74);
+}
+
+.editor-music-button-strip,
+.editor-music-control-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.editor-music-control-cluster {
+  padding: 6px 8px;
+  border: 1px solid rgba(243, 238, 226, 0.1);
+  border-radius: 14px;
+  background: rgba(14, 14, 14, 0.82);
+}
+
+.editor-music-pitch-cluster {
+  max-width: min(100%, 320px);
+}
+
+.editor-music-chip-button {
+  border-radius: 999px;
+}
+
+.editor-music-octave-controls {
+  flex-wrap: nowrap;
+}
+
+.editor-music-octave-label {
+  min-width: 84px;
+  padding: 0 4px;
+  color: #f6e8c9;
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  text-align: center;
+}
+
+.editor-music-legacy-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid rgba(121, 199, 255, 0.25);
+  border-radius: 12px;
+  background: rgba(38, 87, 119, 0.2);
+  pointer-events: auto;
+}
+
+.editor-music-legacy-text {
+  color: #bde5ff;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 /* Tile Preview */
 
 #tile-preview {

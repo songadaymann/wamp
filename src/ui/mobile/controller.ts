@@ -9,7 +9,7 @@ import {
   setTouchMove,
 } from './touchControls';
 
-type EditorSheetId = 'tools' | 'background' | 'palette' | 'objects' | 'goal' | 'actions';
+type EditorSheetId = 'tools' | 'background' | 'palette' | 'objects' | 'music' | 'goal' | 'actions';
 type MoveDirection = 'up' | 'left' | 'right' | 'down';
 
 type Elements = {
@@ -134,7 +134,7 @@ export class MobileUiController {
   private bindAppMode(): void {
     this.mutationObserver.observe(this.doc.body, {
       attributes: true,
-      attributeFilter: ['data-app-mode'],
+      attributeFilter: ['data-app-mode', 'data-editor-music-mode', 'data-editor-music-ui-locked'],
     });
     this.observeClassChanges(this.doc.getElementById('auth-panel'));
     this.observeClassChanges(this.doc.getElementById('global-chat'));
@@ -163,6 +163,10 @@ export class MobileUiController {
           return;
         }
 
+        if (this.doc.body.dataset.editorMusicMode === 'true' && nextSheet !== 'music') {
+          return;
+        }
+
         this.syncEditorPaletteMode(nextSheet);
 
         if (this.activeEditorSheet !== nextSheet || this.editorSheetCollapsed) {
@@ -184,6 +188,10 @@ export class MobileUiController {
     });
 
     this.elements.mobileEditorToggleButton?.addEventListener('click', () => {
+      if (this.doc.body.dataset.editorMusicMode === 'true') {
+        return;
+      }
+
       if (!this.editorSheetCollapsed) {
         this.editorSheetCollapsed = true;
         this.doc.body.dataset.mobileEditorCollapsed = 'true';
@@ -484,6 +492,7 @@ export class MobileUiController {
     const appMode = this.doc.body.dataset.appMode ?? 'world';
     const isPhone = layout.deviceClass === 'phone';
     const isEditor = appMode === 'editor';
+    const musicModeActive = this.doc.body.dataset.editorMusicMode === 'true';
     const isWorld = appMode === 'world' || appMode === 'play-world';
     const isPlay = appMode === 'play-world';
     const isCollapsibleWorldHud =
@@ -501,6 +510,12 @@ export class MobileUiController {
 
     if (!isEditor && this.editorSheetCollapsed) {
       this.editorSheetCollapsed = false;
+    }
+
+    if (isEditor && musicModeActive) {
+      this.activeEditorSheet = 'music';
+      this.editorSheetCollapsed = false;
+      this.doc.body.dataset.mobileEditorSheet = 'music';
     }
 
     if (this.previousAppMode !== appMode) {
@@ -528,10 +543,17 @@ export class MobileUiController {
         .querySelectorAll<HTMLButtonElement>('[data-mobile-editor-sheet]')
         .forEach((button) => {
           button.classList.toggle('active', button.dataset.mobileEditorSheet === this.activeEditorSheet);
+          button.disabled = musicModeActive && button.dataset.mobileEditorSheet !== 'music';
         });
     }
 
     this.doc.body.dataset.mobileEditorCollapsed = this.editorSheetCollapsed ? 'true' : 'false';
+    if (this.elements.mobileEditorUndoButton) {
+      this.elements.mobileEditorUndoButton.disabled = musicModeActive;
+    }
+    if (this.elements.mobileEditorToggleButton) {
+      this.elements.mobileEditorToggleButton.disabled = musicModeActive;
+    }
 
     this.elements.rotateGate?.classList.toggle(
       'hidden',

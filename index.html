@@ -450,6 +450,12 @@
         <input id="room-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Room title (optional)" />
       </div>
 
+      <div class="sidebar-section" id="music-section" data-mobile-panel="music" data-sidebar-collapsible="true">
+        <div class="section-label">Music</div>
+        <button id="btn-editor-music-mode" class="bar-btn" type="button">Edit Music</button>
+        <div id="music-summary" class="goal-summary">No room music yet. Click on the room grid to start a sequencer loop.</div>
+      </div>
+
       <div class="sidebar-section" id="goal-section" data-mobile-panel="goal" data-sidebar-collapsible="true">
         <div class="section-label">Goal</div>
         <div id="goal-context-note" class="goal-context-note hidden"></div>
@@ -728,6 +734,35 @@
           </div>
         </div>
       </div>
+      <div id="editor-music-overlay" class="editor-music-overlay hidden">
+        <div class="editor-music-shell">
+          <div class="editor-music-strip">
+            <div class="editor-music-tab-dock">
+              <div id="editor-music-instrument-tabs" class="editor-music-button-strip editor-music-tab-strip"></div>
+            </div>
+            <div class="editor-music-control-cluster">
+              <button id="btn-editor-music-preview-toggle" class="bar-btn bar-btn-small" type="button">Play</button>
+              <button id="btn-editor-music-overlay-close" class="bar-btn bar-btn-small" type="button">Close</button>
+            </div>
+            <div class="editor-music-control-cluster editor-music-pitch-cluster">
+              <div id="editor-music-pitch-modes" class="editor-music-button-strip"></div>
+            </div>
+            <div id="editor-music-octave-controls" class="editor-music-control-cluster editor-music-octave-controls">
+              <button id="btn-editor-music-octave-down" class="bar-btn bar-btn-small" type="button">-</button>
+              <div id="editor-music-octave-label" class="editor-music-octave-label">Octave +0</div>
+              <button id="btn-editor-music-octave-up" class="bar-btn bar-btn-small" type="button">+</button>
+            </div>
+          </div>
+          <div id="editor-music-legacy-notice" class="editor-music-legacy-notice hidden">
+            <div id="editor-music-legacy-text" class="editor-music-legacy-text">
+              This room has saved WAMP stems. Replace them to edit on the sequencer grid.
+            </div>
+            <button id="btn-editor-music-replace-legacy" class="bar-btn bar-btn-small" type="button">
+              Replace With Sequencer
+            </button>
+          </div>
+        </div>
+      </div>
       <div id="course-editor-shell" class="course-editor-shell hidden">
         <div class="course-editor-panel">
           <div class="course-editor-header">
@@ -952,6 +987,7 @@
       <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="background">Background</button>
       <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="palette">Palette</button>
       <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="objects">Objects</button>
+      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="music">Music</button>
       <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="goal">Goal</button>
       <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="actions">Actions</button>
       <button id="btn-mobile-editor-undo" class="bar-btn bar-btn-small mobile-editor-utility" type="button">Undo</button>
