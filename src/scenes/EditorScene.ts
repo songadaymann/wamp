@@ -63,7 +63,6 @@ import { EditorCourseController } from './editor/courseController';
 import { EditorOverlayController } from './editor/overlays';
 import { EditorChromeController } from './editor/chrome';
 import { RoomLightingController } from '../lighting/controller';
-import { cloneRoomLightingSettings, type RoomLightingSettings } from '../lighting/model';
 import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
 
 const EDITOR_NEIGHBOR_RADIUS = 1;
@@ -253,17 +252,22 @@ export class EditorScene extends Phaser.Scene {
           editorState.selectedSolidBackgroundColor,
         );
       },
-      getSelectedLightingSettings: () => this.getSelectedLightingSettings(),
-      setSelectedLightingSettings: (lighting) => {
-        this.setSelectedLightingSettings(lighting);
+      getSelectedLightingMode: () => editorState.selectedLightingMode,
+      setSelectedLightingMode: (mode) => {
+        editorState.selectedLightingMode = mode;
       },
       getPlacedObjects: () => editorState.placedObjects,
       setPlacedObjects: (placedObjects) => {
         editorState.placedObjects = placedObjects;
       },
       updateBackgroundSelectValue: () => {},
-      updateLightingControlsValue: (lighting) => {
-        this.syncLightingControls(lighting);
+      updateLightingSelectValue: (mode) => {
+        const lightingSelect = document.getElementById(
+          'lighting-mode-select'
+        ) as HTMLSelectElement | null;
+        if (lightingSelect) {
+          lightingSelect.value = mode;
+        }
       },
       updateBackground: () => this.updateBackground(),
       updateGoalUi: () => this.updateGoalUi(),
@@ -664,9 +668,7 @@ export class EditorScene extends Phaser.Scene {
       onSelectBackground: () => this.applySelectedBackground(),
       onSetBoundaryIngress: (side, entityType, allowed) =>
         this.toolController.setBoundaryIngress(side, entityType, allowed),
-      onSelectLighting: (mode) => this.applySelectedLightingMode(mode),
-      onSetLightingDarkness: (darkness) => this.applySelectedLightingDarkness(darkness),
-      onSetLightingRadius: (radius) => this.applySelectedLightingRadius(radius),
+      onSelectLighting: (mode) => this.applySelectedLighting(mode),
       onSetGoalType: (nextType) => this.toolController.setGoalType(nextType),
       onSetGoalTimeLimitSeconds: (seconds) => this.toolController.setGoalTimeLimitSeconds(seconds),
       onSetGoalRequiredCount: (requiredCount) => this.toolController.setGoalRequiredCount(requiredCount),
@@ -755,7 +757,7 @@ export class EditorScene extends Phaser.Scene {
     resetEditorPaletteSelection();
     editorState.tileFlipX = false;
     editorState.tileFlipY = false;
-    this.setSelectedLightingSettings(null);
+    editorState.selectedLightingMode = 'off';
     editorState.isPlaying = false;
     this.uiBridge?.notifyEditorStateChanged();
   }
@@ -770,59 +772,8 @@ export class EditorScene extends Phaser.Scene {
     this.renderEditorUi();
   }
 
-  private getSelectedLightingSettings(): RoomLightingSettings {
-    return cloneRoomLightingSettings({
-      mode: editorState.selectedLightingMode,
-      darkness: editorState.selectedLightingDarkness,
-      radius: editorState.selectedLightingRadius,
-    });
-  }
-
-  private setSelectedLightingSettings(lighting: RoomLightingSettings | null | undefined): void {
-    const normalized = cloneRoomLightingSettings(lighting);
-    editorState.selectedLightingMode = normalized.mode;
-    editorState.selectedLightingDarkness = normalized.darkness;
-    editorState.selectedLightingRadius = normalized.radius;
-  }
-
-  private syncLightingControls(lighting: RoomLightingSettings | null | undefined): void {
-    const normalized = cloneRoomLightingSettings(lighting);
-    const lightingSelect = document.getElementById(
-      'lighting-mode-select'
-    ) as HTMLSelectElement | null;
-    const darknessRange = document.getElementById(
-      'lighting-darkness-range'
-    ) as HTMLInputElement | null;
-    const radiusRange = document.getElementById(
-      'lighting-radius-range'
-    ) as HTMLInputElement | null;
-    if (lightingSelect) {
-      lightingSelect.value = normalized.mode;
-    }
-    if (darknessRange) {
-      darknessRange.value = String(normalized.darkness);
-    }
-    if (radiusRange) {
-      radiusRange.value = String(normalized.radius);
-    }
-  }
-
-  private applySelectedLightingMode(mode: RoomSnapshot['lighting']['mode']): void {
+  private applySelectedLighting(mode: RoomSnapshot['lighting']['mode']): void {
     editorState.selectedLightingMode = mode;
-    this.updateLightingPreview();
-    this.persistenceController.markRoomDirty();
-    this.renderEditorUi();
-  }
-
-  private applySelectedLightingDarkness(darkness: number): void {
-    editorState.selectedLightingDarkness = darkness;
-    this.updateLightingPreview();
-    this.persistenceController.markRoomDirty();
-    this.renderEditorUi();
-  }
-
-  private applySelectedLightingRadius(radius: number): void {
-    editorState.selectedLightingRadius = radius;
     this.updateLightingPreview();
     this.persistenceController.markRoomDirty();
     this.renderEditorUi();
@@ -854,7 +805,9 @@ export class EditorScene extends Phaser.Scene {
         width: ROOM_PX_WIDTH,
         height: ROOM_PX_HEIGHT,
       },
-      lighting: this.getSelectedLightingSettings(),
+      lighting: {
+        mode: editorState.selectedLightingMode,
+      },
       emitters: [emitter],
     });
 

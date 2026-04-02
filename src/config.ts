@@ -1,9 +1,5 @@
 // ── Room Dimensions ──
-import {
-  DEFAULT_ROOM_LIGHTING_DARKNESS,
-  DEFAULT_ROOM_LIGHTING_RADIUS,
-  type RoomLightingMode,
-} from './lighting/model';
+import type { RoomLightingMode } from './lighting/model';
 export const TILE_SIZE = 16;
 export const ROOM_WIDTH = 40;   // tiles
 export const ROOM_HEIGHT = 22;  // tiles
@@ -699,8 +695,6 @@ export interface EditorState {
   selectedBackground: string;        // BackgroundGroup.id or solid:#RRGGBB
   selectedSolidBackgroundColor: string;
   selectedLightingMode: RoomLightingMode;
-  selectedLightingDarkness: number;
-  selectedLightingRadius: number;
   placedObjects: PlacedObject[];
 }
 
@@ -742,8 +736,6 @@ export const editorState: EditorState = {
   selectedBackground: 'none',
   selectedSolidBackgroundColor: '#24324a',
   selectedLightingMode: 'off',
-  selectedLightingDarkness: DEFAULT_ROOM_LIGHTING_DARKNESS,
-  selectedLightingRadius: DEFAULT_ROOM_LIGHTING_RADIUS,
   placedObjects: [],
 };
 

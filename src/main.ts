@@ -16,14 +16,12 @@ import {
   getAppFeedbackDebugState,
   initializeAppFeedback,
   isAppReady,
-  markAppReady,
   showBootSplash,
 } from './ui/appFeedback';
 import { getDeviceLayoutState } from './ui/deviceLayout';
 import { syncGameKeyboardFocus } from './ui/keyboardFocus';
 import { getTouchInputDebugState } from './ui/mobile/touchControls';
 import { setupUI } from './ui/setup';
-import { createDefaultRoomSnapshot } from './persistence/roomModel';
 
 const gameContainer = document.getElementById('game-container')!;
 const query = new URLSearchParams(window.location.search);
@@ -177,7 +175,7 @@ window.render_game_to_text = () =>
 
 if (query.get('previewSmoke') === '1') {
   window.run_preview_smoke_action = async (
-    action: 'selectEditableRoom' | 'playSelectedRoom' | 'returnToWorld' | 'editSelectedRoom' | 'openSyntheticEditor',
+    action: 'selectEditableRoom' | 'playSelectedRoom' | 'returnToWorld' | 'editSelectedRoom',
     payload?: { roomId?: string | null },
   ) => {
     switch (action) {
@@ -195,8 +193,6 @@ if (query.get('previewSmoke') === '1') {
         return runOverworldPreviewSmokeAction((scene) => {
           scene.editSelectedRoom();
         }, 1200);
-      case 'openSyntheticEditor':
-        return openSyntheticEditorForPreviewSmoke();
       default:
         return { ok: false, reason: `unsupported-action:${action}` };
     }
@@ -373,51 +369,6 @@ function getOverworldSceneForPreviewSmoke(): PreviewSmokeScene | null {
   } catch {
     return null;
   }
-}
-
-async function openSyntheticEditorForPreviewSmoke(): Promise<Record<string, unknown>> {
-  const editorScene = game.scene.keys.EditorScene as unknown as {
-    roomSession?: {
-      loadPersistedRoom: (initialRoomSnapshot: unknown) => Promise<boolean>;
-    };
-  };
-  if (!editorScene?.roomSession) {
-    return { ok: false, reason: 'editor-scene-missing' };
-  }
-
-  editorScene.roomSession.loadPersistedRoom = async () => true;
-
-  const roomSnapshot = createDefaultRoomSnapshot('99,99', { x: 99, y: 99 });
-  roomSnapshot.background = 'cave';
-  roomSnapshot.spawnPoint = { x: 320, y: 176 };
-  roomSnapshot.lighting = {
-    mode: 'playerAuraDark',
-    darkness: 88,
-    radius: 24,
-  };
-
-  if (
-    game.scene.isActive('EditorScene')
-    || game.scene.isSleeping('EditorScene')
-    || game.scene.isPaused('EditorScene')
-  ) {
-    game.scene.stop('EditorScene');
-  }
-
-  game.scene.run('EditorScene', {
-    source: 'direct',
-    roomSnapshot,
-  });
-  if (game.scene.isActive('OverworldPlayScene')) {
-    game.scene.sleep('OverworldPlayScene');
-  }
-  markAppReady();
-  await waitForPreviewSmoke(1200);
-
-  return {
-    ok: true,
-    activeScene: getDebugState(),
-  };
 }
 
 function findEditableRoomCandidate(

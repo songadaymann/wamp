@@ -23,15 +23,13 @@ import {
 export const WAMP_MINTED_ROOM_SCHEMA_VERSION_V1 = 1 as const;
 export const WAMP_MINTED_ROOM_SCHEMA_VERSION_V2 = 2 as const;
 export const WAMP_MINTED_ROOM_SCHEMA_VERSION_V3 = 3 as const;
-export const WAMP_MINTED_ROOM_SCHEMA_VERSION_V4 = 4 as const;
-export const WAMP_MINTED_ROOM_SCHEMA_VERSION = WAMP_MINTED_ROOM_SCHEMA_VERSION_V4;
+export const WAMP_MINTED_ROOM_SCHEMA_VERSION = WAMP_MINTED_ROOM_SCHEMA_VERSION_V3;
 export const ROOM_TOKEN_METADATA_MIME = 'data:application/json;base64,';
 
 type WampMintedRoomPayloadVersion =
   | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V1
   | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V2
-  | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V3
-  | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V4;
+  | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V3;
 type WampV2LayerKey = 'b' | 't' | 'f';
 type WampGoalCode = 'e' | 'c' | 'd' | 'k' | 's';
 
@@ -124,26 +122,10 @@ export interface WampMintedRoomPayloadV3 {
   pt?: string;
 }
 
-export interface WampMintedRoomPayloadV4 {
-  v: typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V4;
-  c: [number, number];
-  n?: string;
-  b: string;
-  l?: [number, number];
-  g?: WampMintedRoomGoalV2;
-  s?: [number, number];
-  t?: Partial<Record<WampV2LayerKey, string>>;
-  k?: string[];
-  o?: Array<[number, number, number, number, number?]>;
-  pv: number;
-  pt?: string;
-}
-
 export type StoredWampMintedRoomPayload =
   | WampMintedRoomPayload
   | WampMintedRoomPayloadV2
-  | WampMintedRoomPayloadV3
-  | WampMintedRoomPayloadV4;
+  | WampMintedRoomPayloadV3;
 
 export interface WampRoomTokenAttribute {
   trait_type: string;
@@ -388,13 +370,11 @@ function serializeMintedRoomPayload(payload: WampMintedRoomPayload): StoredWampM
 
   const tiles = serializeMintedRoomTilesV2(payload.tiles);
   return {
-    v: WAMP_MINTED_ROOM_SCHEMA_VERSION_V4,
+    v: WAMP_MINTED_ROOM_SCHEMA_VERSION_V3,
     c: [...payload.coordinates],
     ...(payload.title ? { n: payload.title } : {}),
     b: payload.background,
-    ...(payload.lighting.mode === 'playerAuraDark'
-      ? { l: [payload.lighting.darkness, payload.lighting.radius] as [number, number] }
-      : {}),
+    ...(payload.lighting.mode === 'playerAuraDark' ? { l: 1 as const } : {}),
     ...(payload.goal ? { g: serializeRoomGoalV2(payload.goal) } : {}),
     ...(payload.spawnPoint ? { s: [...payload.spawnPoint] as [number, number] } : {}),
     ...(tiles ? { t: tiles } : {}),
@@ -476,9 +456,6 @@ function normalizeMintedRoomPayload(value: unknown): WampMintedRoomPayload {
   }
 
   const payload = value as Partial<StoredWampMintedRoomPayload>;
-  if (payload.v === WAMP_MINTED_ROOM_SCHEMA_VERSION_V4) {
-    return normalizeMintedRoomPayloadV4(payload as Partial<WampMintedRoomPayloadV4>);
-  }
   if (payload.v === WAMP_MINTED_ROOM_SCHEMA_VERSION_V3) {
     return normalizeMintedRoomPayloadV3(payload as Partial<WampMintedRoomPayloadV3>);
   }
@@ -701,7 +678,6 @@ function normalizeMintedRoomPayloadV4(value: Partial<WampMintedRoomPayloadV4>): 
     publishedAt: typeof value.pt === 'string' ? value.pt : null,
   };
 }
-
 function normalizeRoomGoalV2(value: unknown): RoomGoal | null {
   if (!value || typeof value !== 'object') {
     return null;

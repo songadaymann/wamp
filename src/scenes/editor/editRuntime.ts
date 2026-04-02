@@ -39,10 +39,6 @@ import {
   type GoalMarkerFlagVariant,
 } from '../../goals/markerFlags';
 import {
-  cloneRoomLightingSettings,
-  type RoomLightingSettings,
-} from '../../lighting/model';
-import {
   cloneRoomBoundaryIngressSettings,
   createDefaultRoomBoundaryIngressSettings,
   type RoomBoundaryIngressSettings,
@@ -51,6 +47,7 @@ import {
   type RoomSpawnPoint,
   type RoomTileData,
 } from '../../persistence/roomRepository';
+import { cloneRoomLightingSettings } from '../../lighting/model';
 
 interface TileAction {
   layer: LayerName;
@@ -113,12 +110,12 @@ interface EditorEditRuntimeHost {
   getRoomOrigin(): { x: number; y: number };
   getSelectedBackground(): string;
   setSelectedBackground(backgroundId: string): void;
-  getSelectedLightingSettings(): RoomLightingSettings;
-  setSelectedLightingSettings(lighting: RoomLightingSettings): void;
+  getSelectedLightingMode(): RoomSnapshot['lighting']['mode'];
+  setSelectedLightingMode(mode: RoomSnapshot['lighting']['mode']): void;
   getPlacedObjects(): PlacedObject[];
   setPlacedObjects(placedObjects: PlacedObject[]): void;
   updateBackgroundSelectValue(backgroundId: string): void;
-  updateLightingControlsValue(lighting: RoomLightingSettings): void;
+  updateLightingSelectValue(mode: RoomSnapshot['lighting']['mode']): void;
   updateBackground(): void;
   updateGoalUi(): void;
   syncBackgroundCameraIgnores(): void;
@@ -323,8 +320,8 @@ export class EditorEditRuntime {
       editorState.selectedSolidBackgroundColor,
     );
     this.host.updateBackgroundSelectValue(normalizeRoomBackground(room.background));
-    this.host.setSelectedLightingSettings(room.lighting);
-    this.host.updateLightingControlsValue(room.lighting);
+    this.host.setSelectedLightingMode(room.lighting.mode);
+    this.host.updateLightingSelectValue(room.lighting.mode);
     this.host.updateBackground();
 
     this.roomBoundaryIngress = cloneRoomBoundaryIngressSettings(room.boundaryIngress);
@@ -463,7 +460,9 @@ export class EditorEditRuntime {
       title: metadata.title,
       background: normalizeRoomBackground(this.host.getSelectedBackground()),
       boundaryIngress: cloneRoomBoundaryIngressSettings(this.roomBoundaryIngress),
-      lighting: cloneRoomLightingSettings(this.host.getSelectedLightingSettings()),
+      lighting: cloneRoomLightingSettings({
+        mode: this.host.getSelectedLightingMode(),
+      }),
       goal: cloneRoomGoal(this.roomGoal),
       spawnPoint: this.roomSpawnPoint ? { ...this.roomSpawnPoint } : null,
       tileData: this.serializeTileData(),
