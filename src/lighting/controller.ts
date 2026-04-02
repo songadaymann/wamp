@@ -1,16 +1,18 @@
 import Phaser from 'phaser';
 import {
+  DEFAULT_ROOM_LIGHTING_DARKNESS,
+  DEFAULT_ROOM_LIGHTING_RADIUS,
   cloneRoomLightingSettings,
   roomLightingUsesDynamicOverlay,
   type RoomLightingSettings,
 } from './model';
-import { PLAYER_AURA_DARK_LIGHTING_PRESET } from './presets';
+import {
+  resolvePlayerAuraDarkAmbientAlpha,
+  resolvePlayerAuraDarkAuraDiameter,
+} from './presets';
 import { RETRO_COLORS } from '../visuals/starfield';
 
-const ROOM_LIGHT_AURA_TEXTURE_KEY = '__room_light_aura';
-const ROOM_LIGHT_AURA_DIAMETER = PLAYER_AURA_DARK_LIGHTING_PRESET.auraDiameter;
-const ROOM_LIGHT_AURA_RADIUS = ROOM_LIGHT_AURA_DIAMETER * 0.5;
-const ROOM_LIGHT_AMBIENT_ALPHA = PLAYER_AURA_DARK_LIGHTING_PRESET.ambientAlpha;
+const ROOM_LIGHT_AURA_TEXTURE_KEY_PREFIX = '__room_light_aura';
 
 export interface RoomLightingBounds {
   x: number;
@@ -33,6 +35,8 @@ export interface RoomLightingFrameInput {
 
 export interface RoomLightingDebugState {
   mode: RoomLightingSettings['mode'];
+  darkness: number;
+  radius: number;
   rendererPath: 'off' | 'webgl' | 'canvas-disabled';
   activeRoomId: string | null;
   emitterCount: number;
@@ -48,6 +52,8 @@ export class RoomLightingController {
   private overlay: Phaser.GameObjects.RenderTexture | null = null;
   private debugState: RoomLightingDebugState = {
     mode: 'off',
+    darkness: DEFAULT_ROOM_LIGHTING_DARKNESS,
+    radius: DEFAULT_ROOM_LIGHTING_RADIUS,
     rendererPath: 'off',
     activeRoomId: null,
     emitterCount: 0,
@@ -60,6 +66,8 @@ export class RoomLightingController {
     const structureChanged = this.destroyOverlay();
     this.debugState = {
       mode: 'off',
+      darkness: DEFAULT_ROOM_LIGHTING_DARKNESS,
+      radius: DEFAULT_ROOM_LIGHTING_RADIUS,
       rendererPath: 'off',
       activeRoomId: null,
       emitterCount: 0,
@@ -82,6 +90,8 @@ export class RoomLightingController {
       structureChanged = this.destroyOverlay();
       this.debugState = {
         mode: lighting.mode,
+        darkness: lighting.darkness,
+        radius: lighting.radius,
         rendererPath: 'off',
         activeRoomId,
         emitterCount: 0,
@@ -94,6 +104,8 @@ export class RoomLightingController {
       structureChanged = this.destroyOverlay();
       this.debugState = {
         mode: lighting.mode,
+        darkness: lighting.darkness,
+        radius: lighting.radius,
         rendererPath: 'off',
         activeRoomId,
         emitterCount,
@@ -106,6 +118,8 @@ export class RoomLightingController {
       structureChanged = this.destroyOverlay();
       this.debugState = {
         mode: lighting.mode,
+        darkness: lighting.darkness,
+        radius: lighting.radius,
         rendererPath: 'canvas-disabled',
         activeRoomId,
         emitterCount,
@@ -118,6 +132,8 @@ export class RoomLightingController {
     if (!this.overlay) {
       this.debugState = {
         mode: lighting.mode,
+        darkness: lighting.darkness,
+        radius: lighting.radius,
         rendererPath: 'canvas-disabled',
         activeRoomId,
         emitterCount,
@@ -126,11 +142,14 @@ export class RoomLightingController {
       return structureChanged;
     }
 
-    const auraTextureKey = ensureRoomLightAuraTexture(this.options.scene);
+    const auraDiameter = resolvePlayerAuraDarkAuraDiameter(lighting.radius);
+    const auraRadius = auraDiameter * 0.5;
+    const ambientAlpha = resolvePlayerAuraDarkAmbientAlpha(lighting.darkness);
+    const auraTextureKey = ensureRoomLightAuraTexture(this.options.scene, auraDiameter);
     this.overlay.clear();
     this.overlay.fill(
       RETRO_COLORS.backgroundNumber,
-      ROOM_LIGHT_AMBIENT_ALPHA,
+      ambientAlpha,
       0,
       0,
       input.bounds.width,
@@ -138,13 +157,15 @@ export class RoomLightingController {
     );
 
     for (const emitter of input.emitters) {
-      const localX = emitter.x - input.bounds.x - ROOM_LIGHT_AURA_RADIUS;
-      const localY = emitter.y - input.bounds.y - ROOM_LIGHT_AURA_RADIUS;
+      const localX = emitter.x - input.bounds.x - auraRadius;
+      const localY = emitter.y - input.bounds.y - auraRadius;
       this.overlay.erase(auraTextureKey, localX, localY);
     }
 
     this.debugState = {
       mode: lighting.mode,
+      darkness: lighting.darkness,
+      radius: lighting.radius,
       rendererPath: 'webgl',
       activeRoomId,
       emitterCount,
@@ -198,16 +219,17 @@ export class RoomLightingController {
 
 function ensureRoomLightAuraTexture(
   scene: Phaser.Scene,
-  textureKey: string = ROOM_LIGHT_AURA_TEXTURE_KEY,
+  diameter: number,
 ): string {
+  const textureKey = `${ROOM_LIGHT_AURA_TEXTURE_KEY_PREFIX}_${Math.max(1, Math.round(diameter))}`;
   if (scene.textures.exists(textureKey)) {
     return textureKey;
   }
 
   const canvasTexture = scene.textures.createCanvas(
     textureKey,
-    ROOM_LIGHT_AURA_DIAMETER,
-    ROOM_LIGHT_AURA_DIAMETER,
+    diameter,
+    diameter,
   );
   if (!canvasTexture) {
     return textureKey;
@@ -219,15 +241,15 @@ function ensureRoomLightAuraTexture(
     return textureKey;
   }
 
-  const center = ROOM_LIGHT_AURA_DIAMETER * 0.5;
+  const center = diameter * 0.5;
   const gradient = context.createRadialGradient(center, center, center * 0.1, center, center, center);
   gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
   gradient.addColorStop(0.32, 'rgba(255, 255, 255, 0.98)');
   gradient.addColorStop(0.62, 'rgba(255, 255, 255, 0.55)');
   gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-  context.clearRect(0, 0, ROOM_LIGHT_AURA_DIAMETER, ROOM_LIGHT_AURA_DIAMETER);
+  context.clearRect(0, 0, diameter, diameter);
   context.fillStyle = gradient;
-  context.fillRect(0, 0, ROOM_LIGHT_AURA_DIAMETER, ROOM_LIGHT_AURA_DIAMETER);
+  context.fillRect(0, 0, diameter, diameter);
   canvasTexture.refresh();
 
   return textureKey;
