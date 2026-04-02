@@ -605,25 +605,28 @@ body[data-device-class='phone'][data-app-mode='editor'] .editor-music-overlay {
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] .editor-music-shell {
-  padding: 14px;
-  gap: 12px;
+  width: calc(100% - 8px);
+  padding: 8px 10px 10px;
+  gap: 8px;
   border-radius: 16px;
 }
 
-body[data-device-class='phone'][data-app-mode='editor'] .editor-music-header {
-  flex-direction: column;
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-strip {
+  gap: 8px;
 }
 
-body[data-device-class='phone'][data-app-mode='editor'] .editor-music-toolbar {
-  grid-template-columns: 1fr;
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-tab-dock {
+  width: 100%;
+  margin-top: -14px;
+  padding-top: 14px;
 }
 
-body[data-device-class='phone'][data-app-mode='editor'] .editor-music-pack-label {
-  font-size: 18px;
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-tab-strip {
+  width: 100%;
 }
 
-body[data-device-class='phone'][data-app-mode='editor'] .editor-music-mode-status {
-  max-width: none;
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-control-cluster {
+  width: 100%;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] .editor-music-legacy-notice {
@@ -804,9 +807,23 @@ body[data-device-class='phone'][data-app-mode='editor'] .background-card-none .b
   background-size: auto, auto, cover;
 }
 
+body[data-device-class='phone'][data-app-mode='editor'] .background-card-solid .background-card-art {
+  background-color: var(--background-card-solid, #24324a);
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(11, 11, 11, 0.18)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.14), transparent 55%);
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat;
+}
+
 body[data-device-class='phone'][data-app-mode='editor'] .background-card-label {
   font-size: 11px;
   text-align: left;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .background-solid-controls {
+  margin-top: 12px;
 }
 
 body[data-device-class='phone'] .chat-form,

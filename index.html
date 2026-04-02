@@ -273,6 +273,7 @@
         <div class="section-label">Background</div>
         <select id="background-select">
           <option value="none">None</option>
+          <option value="solid_color">Solid Color</option>
           <option value="forest">Forest</option>
           <option value="dark_forest">Dark Forest</option>
           <option value="grassland">Grassland</option>
@@ -286,6 +287,16 @@
           <button class="background-card background-card-none active" type="button" data-background-id="none">
             <span class="background-card-art" aria-hidden="true"></span>
             <span class="background-card-label">None</span>
+          </button>
+          <button
+            id="background-solid-card"
+            class="background-card background-card-solid"
+            type="button"
+            data-background-id="solid_color"
+            style="--background-card-solid: #24324a;"
+          >
+            <span class="background-card-art" aria-hidden="true"></span>
+            <span class="background-card-label">Solid Color</span>
           </button>
           <button
             class="background-card"
@@ -359,6 +370,19 @@
             <span class="background-card-art" aria-hidden="true"></span>
             <span class="background-card-label">Desert</span>
           </button>
+        </div>
+        <div id="background-solid-controls" class="background-solid-controls hidden">
+          <label class="background-solid-color-row" for="background-solid-color-input">
+            <span class="background-solid-color-label">Color</span>
+            <span id="background-solid-color-value" class="background-solid-color-value">#24324A</span>
+          </label>
+          <input
+            id="background-solid-color-input"
+            class="background-solid-color-input"
+            type="color"
+            value="#24324a"
+            aria-label="Solid background color"
+          />
         </div>
       </div>
 
@@ -634,43 +658,22 @@
       </div>
       <div id="editor-music-overlay" class="editor-music-overlay hidden">
         <div class="editor-music-shell">
-          <div class="editor-music-header">
-            <div class="editor-music-title-group">
-              <div class="editor-music-kicker">Room Music</div>
-              <div id="editor-music-pack-label" class="editor-music-pack-label">Pattern Kit v1</div>
-              <div id="editor-music-mode-status" class="editor-music-mode-status">
-                Room grid sequencer active. Room editing is paused while this overlay is open.
-              </div>
+          <div class="editor-music-strip">
+            <div class="editor-music-tab-dock">
+              <div id="editor-music-instrument-tabs" class="editor-music-button-strip editor-music-tab-strip"></div>
             </div>
-            <div class="editor-music-header-actions">
+            <div class="editor-music-control-cluster">
               <button id="btn-editor-music-preview-toggle" class="bar-btn bar-btn-small" type="button">Play</button>
-              <button id="btn-editor-music-preview-stop" class="bar-btn bar-btn-small" type="button">Stop</button>
               <button id="btn-editor-music-overlay-close" class="bar-btn bar-btn-small" type="button">Close</button>
             </div>
-          </div>
-          <div class="editor-music-toolbar">
-            <div>
-              <div class="editor-music-toolbar-label">Instrument</div>
-              <div id="editor-music-instrument-tabs" class="editor-music-button-strip"></div>
-            </div>
-            <div>
-              <div class="editor-music-toolbar-label">Pitch</div>
+            <div class="editor-music-control-cluster editor-music-pitch-cluster">
               <div id="editor-music-pitch-modes" class="editor-music-button-strip"></div>
             </div>
-            <div id="editor-music-octave-controls" class="editor-music-octave-controls">
-              <div class="editor-music-toolbar-label">Octave</div>
-              <div class="editor-music-octave-row">
-                <button id="btn-editor-music-octave-down" class="bar-btn bar-btn-small" type="button">-</button>
-                <div id="editor-music-octave-label" class="editor-music-octave-label">Octave +0</div>
-                <button id="btn-editor-music-octave-up" class="bar-btn bar-btn-small" type="button">+</button>
-              </div>
+            <div id="editor-music-octave-controls" class="editor-music-control-cluster editor-music-octave-controls">
+              <button id="btn-editor-music-octave-down" class="bar-btn bar-btn-small" type="button">-</button>
+              <div id="editor-music-octave-label" class="editor-music-octave-label">Octave +0</div>
+              <button id="btn-editor-music-octave-up" class="bar-btn bar-btn-small" type="button">+</button>
             </div>
-          </div>
-          <div id="editor-music-grid-summary" class="editor-music-grid-summary">
-            32 steps · 2 bars · 4 steps per beat · 120 BPM
-          </div>
-          <div id="editor-music-tool-hint" class="editor-music-tool-hint">
-            Use Draw, Erase, and Copy on the room grid. Cmd/Ctrl+V pastes the current instrument clipboard.
           </div>
           <div id="editor-music-legacy-notice" class="editor-music-legacy-notice hidden">
             <div id="editor-music-legacy-text" class="editor-music-legacy-text">
@@ -713,16 +716,16 @@
           <input id="world-jump-input" type="text" value="0,0" spellcheck="false" />
           <button id="btn-world-jump" class="bar-btn bar-btn-small">Warp</button>
         </div>
-        <div class="world-hud-row">
+        <div class="world-hud-row world-hud-row-primary-actions">
           <button id="btn-world-play" class="bar-btn bar-btn-small world-btn-play" disabled>Play Room</button>
           <button id="btn-world-play-course" class="bar-btn bar-btn-small world-btn-play hidden" disabled>Play Course</button>
           <button id="btn-world-edit" class="bar-btn bar-btn-small world-btn-edit" disabled>Edit Room</button>
           <button id="btn-world-build" class="bar-btn bar-btn-small world-btn-build" disabled>Build Here</button>
         </div>
-        <div class="world-hud-row">
+        <div class="world-hud-row world-hud-row-secondary-actions">
           <button id="btn-world-course-builder" class="bar-btn bar-btn-small world-btn-controls" disabled>Course Builder</button>
         </div>
-        <div class="world-hud-row">
+        <div class="world-hud-row world-hud-row-tertiary-actions">
           <button id="btn-world-leaderboard" class="bar-btn bar-btn-small world-btn-leaderboard">Leaderboard</button>
           <button id="btn-world-chat" class="bar-btn bar-btn-small world-btn-controls hidden">Chat</button>
           <button id="btn-world-room-chat" class="bar-btn bar-btn-small world-btn-controls hidden" type="button">Say</button>

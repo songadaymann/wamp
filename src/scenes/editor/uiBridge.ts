@@ -100,6 +100,7 @@ export interface EditorMusicUiViewModel {
   packLabel: string;
   modeStatusText: string;
   previewButtonText: string;
+  playDisabled: boolean;
   stopDisabled: boolean;
   gridSummaryText: string;
   toolHintText: string;
@@ -455,17 +456,10 @@ export class EditorUiBridge {
     this.setText(this.musicPackLabel, viewModel.packLabel);
     this.setText(this.musicModeStatus, viewModel.modeStatusText);
     this.setButtonText(this.musicPreviewBtn, viewModel.previewButtonText);
+    this.setDisabled(this.musicPreviewBtn, viewModel.playDisabled);
     this.setDisabled(this.musicStopBtn, viewModel.stopDisabled);
     this.setText(this.musicGridSummary, viewModel.gridSummaryText);
     this.setText(this.musicToolHint, viewModel.toolHintText);
-    if (this.musicPreviewBtn) {
-      this.musicPreviewBtn.dataset.previewState =
-        viewModel.previewButtonText === 'Pause'
-          ? 'playing'
-          : viewModel.previewButtonText === 'Resume'
-            ? 'paused'
-            : 'stopped';
-    }
     this.doc.body.dataset.editorMusicMode = viewModel.overlayVisible ? 'true' : 'false';
     this.doc.body.dataset.editorMusicUiLocked = viewModel.overlayVisible ? 'true' : 'false';
     this.doc.body.dataset.editorMusicTab = 'advanced';
@@ -483,7 +477,7 @@ export class EditorUiBridge {
         ...viewModel.instrumentTabs.map((tab) => {
           const button = this.doc.createElement('button');
           button.type = 'button';
-          button.className = 'bar-btn bar-btn-small';
+          button.className = 'bar-btn bar-btn-small editor-music-tab-button';
           button.textContent = tab.label;
           button.disabled = tab.disabled;
           button.classList.toggle('active', tab.active);
@@ -498,7 +492,7 @@ export class EditorUiBridge {
         ...viewModel.pitchModes.map((mode) => {
           const button = this.doc.createElement('button');
           button.type = 'button';
-          button.className = 'bar-btn bar-btn-small';
+          button.className = 'bar-btn bar-btn-small editor-music-chip-button';
           button.textContent = mode.label;
           button.disabled = mode.disabled;
           button.classList.toggle('active', mode.active);
