@@ -49,6 +49,7 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-se
 body[data-app-mode='editor']:not([data-device-class='phone']) #goal-section { order: 8; }
 body[data-app-mode='editor']:not([data-device-class='phone']) #course-goal-section { order: 9; }
 body[data-app-mode='editor']:not([data-device-class='phone']) #editor-advanced { order: 10; }
+body[data-app-mode='editor']:not([data-device-class='phone']) #lighting-section { order: 11; }
 
 .editor-action-rail {
   display: grid;
@@ -81,12 +82,6 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #editor-advanced {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 6px;
-}
-
-.editor-advanced-subsection {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(243, 238, 226, 0.08);
 }
 
 .boundary-ingress-note {
