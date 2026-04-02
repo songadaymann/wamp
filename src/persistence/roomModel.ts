@@ -13,11 +13,6 @@ import {
 } from '../config';
 import { DEFAULT_ROOM_BACKGROUND, normalizeRoomBackground } from '../backgrounds/model';
 import { normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
-import {
-  cloneRoomLightingSettings,
-  normalizeRoomLightingSettings,
-  type RoomLightingSettings,
-} from '../lighting/model';
 
 export interface RoomCoordinates {
   x: number;
@@ -65,7 +60,6 @@ export interface RoomSnapshot {
   title: string | null;
   background: string;
   boundaryIngress: RoomBoundaryIngressSettings;
-  lighting: RoomLightingSettings;
   goal: RoomGoal | null;
   spawnPoint: RoomSpawnPoint | null;
   tileData: RoomTileData;
@@ -235,7 +229,6 @@ export function createDefaultRoomSnapshot(
     title: null,
     background: DEFAULT_ROOM_BACKGROUND,
     boundaryIngress: createDefaultRoomBoundaryIngressSettings(),
-    lighting: cloneRoomLightingSettings(null),
     goal: null,
     spawnPoint: null,
     tileData: createEmptyTileData(),
@@ -350,7 +343,6 @@ export function cloneRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
     title: normalizeRoomTitle(room.title),
     background: normalizeRoomBackground(room.background),
     boundaryIngress: cloneRoomBoundaryIngressSettings(room.boundaryIngress),
-    lighting: normalizeRoomLightingSettings(room.lighting),
     goal: normalizeRoomGoal(room.goal),
     spawnPoint: room.spawnPoint ? { ...room.spawnPoint } : null,
     tileData: cloneTileData(room.tileData),
@@ -475,10 +467,6 @@ export function isRoomSnapshotBlank(room: RoomSnapshot): boolean {
     return false;
   }
 
-  if (!roomBoundaryIngressSettingsAreDefault(room.boundaryIngress)) {
-  if (room.lighting.mode !== 'off') {
-    return false;
-  }
   if (!roomBoundaryIngressSettingsAreDefault(room.boundaryIngress)) {
     return false;
   }

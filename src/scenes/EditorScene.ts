@@ -3,8 +3,6 @@ import {
   TILE_SIZE,
   ROOM_WIDTH,
   ROOM_HEIGHT,
-  ROOM_PX_WIDTH,
-  ROOM_PX_HEIGHT,
   LAYER_NAMES,
   TILESETS,
   editorState,
@@ -62,7 +60,6 @@ import { EditorToolController } from './editor/tools';
 import { EditorCourseController } from './editor/courseController';
 import { EditorOverlayController } from './editor/overlays';
 import { EditorChromeController } from './editor/chrome';
-import { RoomLightingController } from '../lighting/controller';
 import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
 
 const EDITOR_NEIGHBOR_RADIUS = 1;
@@ -91,7 +88,6 @@ export class EditorScene extends Phaser.Scene {
   private readonly persistenceController: EditorPersistenceController;
   private readonly toolController: EditorToolController;
   private readonly chromeController: EditorChromeController;
-  private readonly lightingController: RoomLightingController;
   private entrySource: 'world' | 'direct' = 'direct';
   private initialRoomSnapshot: RoomSnapshot | null = null;
   private readonly handleWake = (): void => {
@@ -252,23 +248,11 @@ export class EditorScene extends Phaser.Scene {
           editorState.selectedSolidBackgroundColor,
         );
       },
-      getSelectedLightingMode: () => editorState.selectedLightingMode,
-      setSelectedLightingMode: (mode) => {
-        editorState.selectedLightingMode = mode;
-      },
       getPlacedObjects: () => editorState.placedObjects,
       setPlacedObjects: (placedObjects) => {
         editorState.placedObjects = placedObjects;
       },
       updateBackgroundSelectValue: () => {},
-      updateLightingSelectValue: (mode) => {
-        const lightingSelect = document.getElementById(
-          'lighting-mode-select'
-        ) as HTMLSelectElement | null;
-        if (lightingSelect) {
-          lightingSelect.value = mode;
-        }
-      },
       updateBackground: () => this.updateBackground(),
       updateGoalUi: () => this.updateGoalUi(),
       syncBackgroundCameraIgnores: () => this.syncBackgroundCameraIgnores(),
@@ -459,15 +443,9 @@ export class EditorScene extends Phaser.Scene {
           }
         }
 
-        ignored.push(...this.lightingController.getBackdropIgnoredObjects());
-
         return ignored;
       },
       isSceneActive: () => this.scene.isActive(this.scene.key),
-    });
-    this.lightingController = new RoomLightingController({
-      scene: this,
-      overlayDepth: 80,
     });
   }
 
@@ -668,7 +646,6 @@ export class EditorScene extends Phaser.Scene {
       onSelectBackground: () => this.applySelectedBackground(),
       onSetBoundaryIngress: (side, entityType, allowed) =>
         this.toolController.setBoundaryIngress(side, entityType, allowed),
-      onSelectLighting: (mode) => this.applySelectedLighting(mode),
       onSetGoalType: (nextType) => this.toolController.setGoalType(nextType),
       onSetGoalTimeLimitSeconds: (seconds) => this.toolController.setGoalTimeLimitSeconds(seconds),
       onSetGoalRequiredCount: (requiredCount) => this.toolController.setGoalRequiredCount(requiredCount),
@@ -697,7 +674,6 @@ export class EditorScene extends Phaser.Scene {
     this.rebuildObjectSprites();
     this.syncBackgroundCameraIgnores();
     this.updateBackgroundPreview();
-    this.updateLightingPreview();
 
     this.events.on('wake', this.handleWake, this);
     this.scale.on('resize', this.handleResize, this);
@@ -720,7 +696,6 @@ export class EditorScene extends Phaser.Scene {
     this.maybeAutoSave(time);
     this.presenceController.sync();
     this.updateBackgroundPreview();
-    this.updateLightingPreview();
     this.updateCursorHighlight();
     this.overlayController.updateLayerGuideOverlay();
     this.overlayController.updatePressurePlateOverlay((graphics) => {
@@ -741,7 +716,6 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private resetRuntimeState(): void {
-    this.lightingController.reset();
     this.backgroundController.reset();
     this.interactionController.reset();
     this.overlayController.reset();
@@ -757,7 +731,6 @@ export class EditorScene extends Phaser.Scene {
     resetEditorPaletteSelection();
     editorState.tileFlipX = false;
     editorState.tileFlipY = false;
-    editorState.selectedLightingMode = 'off';
     editorState.isPlaying = false;
     this.uiBridge?.notifyEditorStateChanged();
   }
@@ -772,48 +745,12 @@ export class EditorScene extends Phaser.Scene {
     this.renderEditorUi();
   }
 
-  private applySelectedLighting(mode: RoomSnapshot['lighting']['mode']): void {
-    editorState.selectedLightingMode = mode;
-    this.updateLightingPreview();
-    this.persistenceController.markRoomDirty();
-    this.renderEditorUi();
-  }
-
   private syncBackgroundCameraIgnores(): void {
     this.backgroundController.syncBackgroundCameraIgnores();
   }
 
   private updateBackgroundPreview(): void {
     this.backgroundController.updateBackgroundPreview();
-  }
-
-  private updateLightingPreview(): void {
-    const emitter = this.roomSpawnPoint
-      ? {
-          x: this.roomSpawnPoint.x,
-          y: this.roomSpawnPoint.y,
-        }
-      : {
-          x: ROOM_PX_WIDTH * 0.5,
-          y: ROOM_PX_HEIGHT * 0.5,
-        };
-    const structureChanged = this.lightingController.sync({
-      roomId: this.roomId,
-      bounds: {
-        x: 0,
-        y: 0,
-        width: ROOM_PX_WIDTH,
-        height: ROOM_PX_HEIGHT,
-      },
-      lighting: {
-        mode: editorState.selectedLightingMode,
-      },
-      emitters: [emitter],
-    });
-
-    if (structureChanged) {
-      this.syncBackgroundCameraIgnores();
-    }
   }
 
   private async refreshSurroundingRoomPreviews(): Promise<void> {
@@ -881,7 +818,6 @@ export class EditorScene extends Phaser.Scene {
     this.inspectorController.reset();
     this.inspectorController.handleObjectSpritesRebuilt();
     this.toolController.reset();
-    this.updateLightingPreview();
   }
 
   private exportRoomSnapshot(): RoomSnapshot {
@@ -1284,7 +1220,6 @@ export class EditorScene extends Phaser.Scene {
       spawnPoint: this.roomSpawnPoint ? { ...this.roomSpawnPoint } : null,
       backgroundLayerCount: this.backgroundController.backgroundLayerCount,
       hasBackgroundCamera: this.backgroundController.hasBackgroundCamera,
-      lighting: this.lightingController.getDebugState(),
       activeTool: editorState.activeTool,
       selectedLayer: editorState.activeLayer,
       zoom: editorState.zoom,
