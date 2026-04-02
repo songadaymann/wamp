@@ -474,10 +474,10 @@ export function isRoomSnapshotBlank(room: RoomSnapshot): boolean {
     return false;
   }
 
-  if (!roomBoundaryIngressSettingsAreDefault(room.boundaryIngress)) {
   if (room.lighting.mode !== 'off') {
     return false;
   }
+
   if (!roomBoundaryIngressSettingsAreDefault(room.boundaryIngress)) {
     return false;
   }

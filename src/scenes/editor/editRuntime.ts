@@ -43,6 +43,7 @@ import {
   createDefaultRoomBoundaryIngressSettings,
   type RoomBoundaryIngressSettings,
   type RoomCoordinates,
+  type RoomBoundarySide,
   type RoomSnapshot,
   type RoomSpawnPoint,
   type RoomTileData,
