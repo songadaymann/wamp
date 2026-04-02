@@ -137,6 +137,17 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - `output/web-game/dashboard-tooltips-hover/hover.png`
       - confirms tooltip text appears over the hovered bar (`MAR 21 · 7`)
 
+- Lighting section ordering pass on April 2, 2026:
+  - moved the editor Lighting section from the upper background area to below Advanced in the sidebar
+  - changed the desktop sidebar order rule so Lighting stays below Advanced even with explicit flex ordering
+  - moved the section onto the mobile `actions` panel to match its new placement
+  - verification:
+    - `npm run build` passed
+    - targeted local editor capture wrote:
+      - `output/web-game/lighting-section-order-check/summary.json`
+      - `output/web-game/lighting-section-order-check/editor-order.png`
+      - confirms `lightingAfterAdvanced: true`
+
 - Snow / ice decorative collision rollback on March 30, 2026:
   - user noticed the snow/ice tiles had the same kind of collision regression we previously fixed for lava
   - traced `origin/main` to the broad no-collision snow list in `src/config.ts`:
