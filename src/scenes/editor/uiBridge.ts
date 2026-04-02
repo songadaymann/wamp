@@ -1,4 +1,4 @@
-import type { RoomMusicLaneId } from '../../music/model';
+import type { RoomPatternInstrumentId, RoomPatternPitchMode } from '../../music/model';
 
 export interface EditorGoalUiViewModel {
   goalTypeValue: string;
@@ -77,36 +77,18 @@ export interface EditorInspectorState {
   containerClearTitle: string;
 }
 
-export interface EditorMusicCellUiViewModel {
-  laneId: RoomMusicLaneId;
-  barIndex: number;
-  barNumber: number;
-  clipLabel: string;
-  clipAssigned: boolean;
-}
-
-export interface EditorMusicLaneUiViewModel {
-  laneId: RoomMusicLaneId;
+export interface EditorMusicInstrumentTabUiViewModel {
+  instrumentId: RoomPatternInstrumentId;
   label: string;
-  cells: EditorMusicCellUiViewModel[];
+  active: boolean;
+  disabled: boolean;
 }
 
-export interface EditorMusicPickerClipUiViewModel {
-  clipId: string;
+export interface EditorMusicPitchModeUiViewModel {
+  mode: RoomPatternPitchMode;
   label: string;
-  selected: boolean;
-  previewing: boolean;
-}
-
-export interface EditorMusicPickerUiViewModel {
-  open: boolean;
-  laneId: RoomMusicLaneId | null;
-  barIndex: number | null;
-  barNumber: number | null;
-  laneLabel: string;
-  currentClipLabel: string;
-  clearDisabled: boolean;
-  clips: EditorMusicPickerClipUiViewModel[];
+  active: boolean;
+  disabled: boolean;
 }
 
 export interface EditorMusicUiViewModel {
@@ -119,11 +101,17 @@ export interface EditorMusicUiViewModel {
   modeStatusText: string;
   previewButtonText: string;
   stopDisabled: boolean;
-  arrangeTabActive: boolean;
-  advancedTabActive: boolean;
-  advancedDisabled: boolean;
-  lanes: EditorMusicLaneUiViewModel[];
-  picker: EditorMusicPickerUiViewModel;
+  gridSummaryText: string;
+  toolHintText: string;
+  legacyNoticeVisible: boolean;
+  legacyNoticeText: string;
+  replaceLegacyDisabled: boolean;
+  instrumentTabs: EditorMusicInstrumentTabUiViewModel[];
+  pitchModes: EditorMusicPitchModeUiViewModel[];
+  octaveControlsVisible: boolean;
+  octaveText: string;
+  octaveDownDisabled: boolean;
+  octaveUpDisabled: boolean;
 }
 
 export interface EditorUiViewModel {
@@ -185,14 +173,17 @@ export class EditorUiBridge {
   private readonly musicModeStatus: HTMLElement | null;
   private readonly musicPreviewBtn: HTMLButtonElement | null;
   private readonly musicStopBtn: HTMLButtonElement | null;
-  private readonly musicArrangeTabBtn: HTMLButtonElement | null;
-  private readonly musicAdvancedTabBtn: HTMLButtonElement | null;
-  private readonly musicLaneList: HTMLElement | null;
-  private readonly musicPickerModal: HTMLElement | null;
-  private readonly musicPickerTitle: HTMLElement | null;
-  private readonly musicPickerCurrent: HTMLElement | null;
-  private readonly musicPickerClearBtn: HTMLButtonElement | null;
-  private readonly musicPickerList: HTMLElement | null;
+  private readonly musicGridSummary: HTMLElement | null;
+  private readonly musicToolHint: HTMLElement | null;
+  private readonly musicInstrumentTabs: HTMLElement | null;
+  private readonly musicPitchModes: HTMLElement | null;
+  private readonly musicOctaveControls: HTMLElement | null;
+  private readonly musicOctaveLabel: HTMLElement | null;
+  private readonly musicOctaveDownBtn: HTMLButtonElement | null;
+  private readonly musicOctaveUpBtn: HTMLButtonElement | null;
+  private readonly musicLegacyNotice: HTMLElement | null;
+  private readonly musicLegacyText: HTMLElement | null;
+  private readonly musicReplaceLegacyBtn: HTMLButtonElement | null;
   private readonly goalTypeSelect: HTMLSelectElement | null;
   private readonly goalContextNote: HTMLElement | null;
   private readonly timeLimitRow: HTMLElement | null;
@@ -277,14 +268,17 @@ export class EditorUiBridge {
     this.musicModeStatus = this.doc.getElementById('editor-music-mode-status');
     this.musicPreviewBtn = this.doc.getElementById('btn-editor-music-preview-toggle') as HTMLButtonElement | null;
     this.musicStopBtn = this.doc.getElementById('btn-editor-music-preview-stop') as HTMLButtonElement | null;
-    this.musicArrangeTabBtn = this.doc.getElementById('btn-editor-music-tab-arrange') as HTMLButtonElement | null;
-    this.musicAdvancedTabBtn = this.doc.getElementById('btn-editor-music-tab-advanced') as HTMLButtonElement | null;
-    this.musicLaneList = this.doc.getElementById('editor-music-lane-list');
-    this.musicPickerModal = this.doc.getElementById('editor-music-picker-modal');
-    this.musicPickerTitle = this.doc.getElementById('editor-music-picker-title');
-    this.musicPickerCurrent = this.doc.getElementById('editor-music-picker-current');
-    this.musicPickerClearBtn = this.doc.getElementById('btn-editor-music-picker-clear') as HTMLButtonElement | null;
-    this.musicPickerList = this.doc.getElementById('editor-music-picker-list');
+    this.musicGridSummary = this.doc.getElementById('editor-music-grid-summary');
+    this.musicToolHint = this.doc.getElementById('editor-music-tool-hint');
+    this.musicInstrumentTabs = this.doc.getElementById('editor-music-instrument-tabs');
+    this.musicPitchModes = this.doc.getElementById('editor-music-pitch-modes');
+    this.musicOctaveControls = this.doc.getElementById('editor-music-octave-controls');
+    this.musicOctaveLabel = this.doc.getElementById('editor-music-octave-label');
+    this.musicOctaveDownBtn = this.doc.getElementById('btn-editor-music-octave-down') as HTMLButtonElement | null;
+    this.musicOctaveUpBtn = this.doc.getElementById('btn-editor-music-octave-up') as HTMLButtonElement | null;
+    this.musicLegacyNotice = this.doc.getElementById('editor-music-legacy-notice');
+    this.musicLegacyText = this.doc.getElementById('editor-music-legacy-text');
+    this.musicReplaceLegacyBtn = this.doc.getElementById('btn-editor-music-replace-legacy') as HTMLButtonElement | null;
     this.goalTypeSelect = this.doc.getElementById('goal-type-select') as HTMLSelectElement | null;
     this.goalContextNote = this.doc.getElementById('goal-context-note');
     this.timeLimitRow = this.doc.getElementById('goal-time-limit-row');
@@ -462,6 +456,8 @@ export class EditorUiBridge {
     this.setText(this.musicModeStatus, viewModel.modeStatusText);
     this.setButtonText(this.musicPreviewBtn, viewModel.previewButtonText);
     this.setDisabled(this.musicStopBtn, viewModel.stopDisabled);
+    this.setText(this.musicGridSummary, viewModel.gridSummaryText);
+    this.setText(this.musicToolHint, viewModel.toolHintText);
     if (this.musicPreviewBtn) {
       this.musicPreviewBtn.dataset.previewState =
         viewModel.previewButtonText === 'Pause'
@@ -470,111 +466,44 @@ export class EditorUiBridge {
             ? 'paused'
             : 'stopped';
     }
-    this.setActive(this.musicArrangeTabBtn, viewModel.arrangeTabActive);
-    this.setActive(this.musicAdvancedTabBtn, viewModel.advancedTabActive);
-    this.setDisabled(this.musicAdvancedTabBtn, viewModel.advancedDisabled);
     this.doc.body.dataset.editorMusicMode = viewModel.overlayVisible ? 'true' : 'false';
     this.doc.body.dataset.editorMusicUiLocked = viewModel.overlayVisible ? 'true' : 'false';
-    this.doc.body.dataset.editorMusicTab = viewModel.arrangeTabActive ? 'arrange' : 'advanced';
+    this.doc.body.dataset.editorMusicTab = 'advanced';
 
-    if (this.musicLaneList) {
-      this.musicLaneList.replaceChildren(
-        ...viewModel.lanes.map((lane) => {
-          const row = this.doc.createElement('div');
-          row.className = 'editor-music-lane-row';
+    this.setHidden(this.musicLegacyNotice, !viewModel.legacyNoticeVisible);
+    this.setText(this.musicLegacyText, viewModel.legacyNoticeText);
+    this.setDisabled(this.musicReplaceLegacyBtn, viewModel.replaceLegacyDisabled);
+    this.setHidden(this.musicOctaveControls, !viewModel.octaveControlsVisible);
+    this.setText(this.musicOctaveLabel, viewModel.octaveText);
+    this.setDisabled(this.musicOctaveDownBtn, viewModel.octaveDownDisabled);
+    this.setDisabled(this.musicOctaveUpBtn, viewModel.octaveUpDisabled);
 
-          const label = this.doc.createElement('div');
-          label.className = 'editor-music-lane-label';
-          label.textContent = lane.label;
-
-          const cellGrid = this.doc.createElement('div');
-          cellGrid.className = 'editor-music-cell-grid';
-
-          for (const cell of lane.cells) {
-            const cellButton = this.doc.createElement('button');
-            cellButton.type = 'button';
-            cellButton.className = 'editor-music-cell';
-            if (cell.clipAssigned) {
-              cellButton.classList.add('is-assigned');
-            }
-            cellButton.dataset.roomMusicLane = cell.laneId;
-            cellButton.dataset.roomMusicBar = String(cell.barIndex);
-
-            const barLabel = this.doc.createElement('span');
-            barLabel.className = 'editor-music-cell-bar';
-            barLabel.textContent = `Bar ${cell.barNumber}`;
-
-            const clipLabel = this.doc.createElement('span');
-            clipLabel.className = 'editor-music-cell-label';
-            clipLabel.textContent = cell.clipLabel;
-
-            cellButton.append(barLabel, clipLabel);
-            cellGrid.append(cellButton);
-          }
-
-          row.append(label, cellGrid);
-          return row;
+    if (this.musicInstrumentTabs) {
+      this.musicInstrumentTabs.replaceChildren(
+        ...viewModel.instrumentTabs.map((tab) => {
+          const button = this.doc.createElement('button');
+          button.type = 'button';
+          button.className = 'bar-btn bar-btn-small';
+          button.textContent = tab.label;
+          button.disabled = tab.disabled;
+          button.classList.toggle('active', tab.active);
+          button.dataset.roomMusicInstrumentTab = tab.instrumentId;
+          return button;
         }),
       );
     }
 
-    this.setHidden(this.musicPickerModal, !viewModel.picker.open);
-    this.setText(
-      this.musicPickerTitle,
-      viewModel.picker.open && viewModel.picker.barNumber !== null
-        ? `${viewModel.picker.laneLabel} Clips - Bar ${viewModel.picker.barNumber}`
-        : 'Music Picker',
-    );
-    this.setText(this.musicPickerCurrent, viewModel.picker.currentClipLabel);
-    this.setDisabled(this.musicPickerClearBtn, viewModel.picker.clearDisabled);
-    if (
-      this.musicPickerClearBtn &&
-      viewModel.picker.laneId &&
-      viewModel.picker.barIndex !== null
-    ) {
-      this.musicPickerClearBtn.dataset.roomMusicClearLane = viewModel.picker.laneId;
-      this.musicPickerClearBtn.dataset.roomMusicClearBar = String(viewModel.picker.barIndex);
-    } else if (this.musicPickerClearBtn) {
-      delete this.musicPickerClearBtn.dataset.roomMusicClearLane;
-      delete this.musicPickerClearBtn.dataset.roomMusicClearBar;
-    }
-
-    if (this.musicPickerList) {
-      this.musicPickerList.replaceChildren(
-        ...viewModel.picker.clips.map((clip) => {
-          const row = this.doc.createElement('div');
-          row.className = 'editor-music-picker-item';
-
-          const label = this.doc.createElement('div');
-          label.className = 'editor-music-picker-label';
-          label.textContent = clip.label;
-          if (clip.selected) {
-            label.classList.add('is-selected');
-          }
-
-          const actions = this.doc.createElement('div');
-          actions.className = 'editor-music-picker-actions';
-
-          const previewButton = this.doc.createElement('button');
-          previewButton.type = 'button';
-          previewButton.className = 'bar-btn bar-btn-small';
-          previewButton.dataset.roomMusicPreviewClip = clip.clipId;
-          previewButton.textContent = clip.previewing ? 'Stop' : 'Preview';
-
-          const assignButton = this.doc.createElement('button');
-          assignButton.type = 'button';
-          assignButton.className = 'bar-btn bar-btn-small';
-          assignButton.dataset.roomMusicAssignClip = clip.clipId;
-          if (viewModel.picker.laneId && viewModel.picker.barIndex !== null) {
-            assignButton.dataset.roomMusicAssignLane = viewModel.picker.laneId;
-            assignButton.dataset.roomMusicAssignBar = String(viewModel.picker.barIndex);
-          }
-          assignButton.textContent = clip.selected ? 'Selected' : 'Use';
-          assignButton.disabled = clip.selected;
-
-          actions.append(previewButton, assignButton);
-          row.append(label, actions);
-          return row;
+    if (this.musicPitchModes) {
+      this.musicPitchModes.replaceChildren(
+        ...viewModel.pitchModes.map((mode) => {
+          const button = this.doc.createElement('button');
+          button.type = 'button';
+          button.className = 'bar-btn bar-btn-small';
+          button.textContent = mode.label;
+          button.disabled = mode.disabled;
+          button.classList.toggle('active', mode.active);
+          button.dataset.roomMusicPitchMode = mode.mode;
+          return button;
         }),
       );
     }

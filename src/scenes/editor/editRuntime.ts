@@ -45,6 +45,9 @@ import {
   ROOM_MUSIC_LANE_IDS,
   cloneRoomMusic,
   createDefaultRoomMusic,
+  createDefaultRoomPatternMusic,
+  getRoomMusicKey,
+  isStemArrangementRoomMusic,
   isRoomMusicEmpty,
   type RoomMusic,
   type RoomMusicLaneId,
@@ -462,41 +465,20 @@ export class EditorEditRuntime {
       return null;
     }
 
-    return this.roomMusic?.arrangement.laneAssignments[laneId][barIndex] ?? null;
+    if (!isStemArrangementRoomMusic(this.roomMusic)) {
+      return null;
+    }
+
+    return this.roomMusic.arrangement.laneAssignments[laneId][barIndex] ?? null;
   }
 
-  setRoomMusicLaneBarClip(
-    laneId: RoomMusicLaneId,
-    barIndex: number,
-    clipId: string | null,
-  ): RoomMusic | null {
+  setRoomMusic(nextMusic: RoomMusic | null): RoomMusic | null {
     if (!this.guardEditable()) {
       return cloneRoomMusic(this.roomMusic);
     }
 
-    if (barIndex < 0) {
-      return cloneRoomMusic(this.roomMusic);
-    }
-
-    const pack = getRoomMusicPack(this.roomMusic?.packId ?? getDefaultRoomMusicPack().id)
-      ?? getDefaultRoomMusicPack();
-    if (!isRoomMusicClipIdValidForLane(pack, laneId, clipId)) {
-      return cloneRoomMusic(this.roomMusic);
-    }
-
     const previous = cloneRoomMusic(this.roomMusic);
-    const next = previous ? cloneRoomMusic(previous) : createDefaultRoomMusic(pack.id);
-    if (!next) {
-      return cloneRoomMusic(this.roomMusic);
-    }
-
-    next.packId = pack.id;
-    if (barIndex >= pack.barCount) {
-      return cloneRoomMusic(this.roomMusic);
-    }
-
-    next.arrangement.laneAssignments[laneId][barIndex] = clipId;
-    const normalizedNext = isRoomMusicEmpty(next) ? null : next;
+    const normalizedNext = nextMusic && !isRoomMusicEmpty(nextMusic) ? cloneRoomMusic(nextMusic) : null;
     if (!this.roomMusicChanged(previous, normalizedNext)) {
       return cloneRoomMusic(this.roomMusic);
     }
@@ -512,6 +494,51 @@ export class EditorEditRuntime {
     this.redoStack = [];
     this.markRoomDirty();
     return cloneRoomMusic(this.roomMusic);
+  }
+
+  replaceRoomMusicWithPattern(): RoomMusic | null {
+    return this.setRoomMusic(createDefaultRoomPatternMusic());
+  }
+
+  setRoomMusicLaneBarClip(
+    laneId: RoomMusicLaneId,
+    barIndex: number,
+    clipId: string | null,
+  ): RoomMusic | null {
+    if (!this.guardEditable()) {
+      return cloneRoomMusic(this.roomMusic);
+    }
+
+    if (barIndex < 0) {
+      return cloneRoomMusic(this.roomMusic);
+    }
+
+    if (this.roomMusic && !isStemArrangementRoomMusic(this.roomMusic)) {
+      return cloneRoomMusic(this.roomMusic);
+    }
+
+    const pack = getRoomMusicPack(this.roomMusic?.packId ?? getDefaultRoomMusicPack().id)
+      ?? getDefaultRoomMusicPack();
+    if (!isRoomMusicClipIdValidForLane(pack, laneId, clipId)) {
+      return cloneRoomMusic(this.roomMusic);
+    }
+
+    const previous = cloneRoomMusic(this.roomMusic);
+    const next =
+      previous && isStemArrangementRoomMusic(previous)
+        ? cloneRoomMusic(previous)
+        : createDefaultRoomMusic(pack.id);
+    if (!next || !isStemArrangementRoomMusic(next)) {
+      return cloneRoomMusic(this.roomMusic);
+    }
+
+    next.packId = pack.id;
+    if (barIndex >= pack.barCount) {
+      return cloneRoomMusic(this.roomMusic);
+    }
+
+    next.arrangement.laneAssignments[laneId][barIndex] = clipId;
+    return this.setRoomMusic(next);
   }
 
   private clonePlacedObjects(placedObjects: PlacedObject[] = editorState.placedObjects): PlacedObject[] {
@@ -1639,27 +1666,7 @@ export class EditorEditRuntime {
   }
 
   private roomMusicChanged(previous: RoomMusic | null, next: RoomMusic | null): boolean {
-    if (!previous && !next) {
-      return false;
-    }
-
-    if (!previous || !next) {
-      return true;
-    }
-
-    if (previous.packId !== next.packId) {
-      return true;
-    }
-
-    return ROOM_MUSIC_LANE_IDS.some((laneId) => {
-      const previousAssignments = previous.arrangement.laneAssignments[laneId];
-      const nextAssignments = next.arrangement.laneAssignments[laneId];
-      if (previousAssignments.length !== nextAssignments.length) {
-        return true;
-      }
-
-      return previousAssignments.some((clipId, barIndex) => clipId !== nextAssignments[barIndex]);
-    });
+    return getRoomMusicKey(previous) !== getRoomMusicKey(next);
   }
 
   private placeSpawnPoint(tileX: number, tileY: number): void {

@@ -1,19 +1,17 @@
 import { goalSupportsTimeLimit, type RoomGoal } from '../../goals/roomGoals';
 import {
-  getDefaultRoomMusicPack,
-  getRoomMusicClip,
-  getRoomMusicClipsForLane,
-} from '../../music/catalog';
-import {
-  createEmptyRoomMusicLaneAssignments,
+  createDefaultRoomPatternMusic,
+  getPatternInstrumentLabel,
+  isPatternRoomMusic,
+  isStemArrangementRoomMusic,
   type RoomMusic,
-  type RoomMusicLaneId,
+  type RoomPatternInstrumentId,
 } from '../../music/model';
 import type { RoomCoordinates, RoomPermissions, RoomVersionRecord } from '../../persistence/roomRepository';
 import type { EditorUiViewModel } from './uiBridge';
 import type { GoalPlacementMode } from './editRuntime';
 import type { EditorStatusDetails } from './roomSession';
-import type { EditorCourseUiState, EditorMusicTab } from '../../ui/setup/sceneBridge';
+import type { EditorCourseUiState } from '../../ui/setup/sceneBridge';
 
 export interface BuildEditorUiViewModelOptions {
   roomTitle: string | null;
@@ -38,10 +36,7 @@ export interface BuildEditorUiViewModelOptions {
   roomMusic: RoomMusic | null;
   musicModeActive: boolean;
   musicPreviewState: 'stopped' | 'playing' | 'paused';
-  musicEditorTab: EditorMusicTab;
-  musicPickerLaneId: RoomMusicLaneId | null;
-  musicPickerBarIndex: number | null;
-  musicPickerPreviewClipId: string | null;
+  musicPatternInstrumentTab: RoomPatternInstrumentId;
 }
 
 export function shouldShowPublishNudge(
@@ -64,48 +59,45 @@ function buildMusicUiViewModel(
   options: {
     musicModeActive: boolean;
     musicPreviewState: 'stopped' | 'playing' | 'paused';
-    musicEditorTab: EditorMusicTab;
-    musicPickerLaneId: RoomMusicLaneId | null;
-    musicPickerBarIndex: number | null;
-    musicPickerPreviewClipId: string | null;
+    musicPatternInstrumentTab: RoomPatternInstrumentId;
   },
 ): EditorUiViewModel['music'] {
-  const pack = getDefaultRoomMusicPack();
-  const laneAssignments =
-    roomMusic?.arrangement.laneAssignments ?? createEmptyRoomMusicLaneAssignments(pack.barCount);
-  const assignedCount = pack.lanes.reduce((count, lane) => {
-    return count + laneAssignments[lane.id].filter((clipId) => Boolean(clipId)).length;
-  }, 0);
-  const pickerLane = options.musicPickerLaneId
-    ? pack.lanes.find((lane) => lane.id === options.musicPickerLaneId) ?? null
-    : null;
-  const pickerBarIndex =
-    pickerLane && options.musicPickerBarIndex !== null && options.musicPickerBarIndex >= 0
-      ? Math.min(pack.barCount - 1, options.musicPickerBarIndex)
-      : null;
-  const pickerClipId =
-    pickerLane !== null && pickerBarIndex !== null
-      ? laneAssignments[pickerLane.id][pickerBarIndex] ?? null
-      : null;
-  const pickerClipLabel =
-    pickerClipId && pickerLane && pickerBarIndex !== null
-      ? `Bar ${pickerBarIndex + 1}: ${getRoomMusicClip(pack, pickerClipId)?.label ?? 'Assigned clip'}`
-      : 'No clip assigned for this bar.';
+  const instrumentTabs: RoomPatternInstrumentId[] = ['drums', 'triangle', 'saw', 'square'];
+  const displayPattern = isPatternRoomMusic(roomMusic) ? roomMusic : createDefaultRoomPatternMusic();
+  const activeInstrumentTab = options.musicPatternInstrumentTab;
+  const activeOctaveShift =
+    activeInstrumentTab === 'drums'
+      ? null
+      : displayPattern.octaveShift[activeInstrumentTab];
+
+  let totalPatternCellCount = 0;
+  if (isPatternRoomMusic(roomMusic)) {
+    totalPatternCellCount += roomMusic.tabs.triangle.steps.filter((rowIndex) => rowIndex !== null).length;
+    totalPatternCellCount += roomMusic.tabs.saw.steps.filter((rowIndex) => rowIndex !== null).length;
+    totalPatternCellCount += roomMusic.tabs.square.steps.filter((rowIndex) => rowIndex !== null).length;
+    totalPatternCellCount += Object.values(roomMusic.tabs.drums).reduce(
+      (count, steps) => count + steps.length,
+      0,
+    );
+  }
+
+  const legacyStemVisible = isStemArrangementRoomMusic(roomMusic);
+  const summaryText = legacyStemVisible
+    ? 'This room still uses the older stem loop. Replace it to edit with the room sequencer.'
+    : isPatternRoomMusic(roomMusic)
+      ? `${totalPatternCellCount} programmed notes and hits in this room sequencer.`
+      : 'No room music yet. Draw directly on the room grid to start a sequencer loop.';
 
   return {
     sectionHidden: false,
     modeButtonText: options.musicModeActive ? 'Close Music' : 'Edit Music',
     modeButtonActive: options.musicModeActive,
-    summaryText:
-      assignedCount > 0
-        ? `${assignedCount}/${pack.lanes.length * pack.barCount} bar slots assigned in ${pack.label}.`
-        : 'No room music yet. Pick stems for each bar to give this room its own loop.',
+    summaryText,
     overlayVisible: options.musicModeActive,
-    packLabel: pack.label,
-    modeStatusText:
-      options.musicEditorTab === 'advanced'
-        ? 'Advanced grid is reserved for phase two. Arrange stems here for now.'
-        : 'Arrange mode is bar-based. Room editing stays locked until you close this overlay.',
+    packLabel: legacyStemVisible ? 'Legacy Stem Loop' : 'Pattern Kit v1',
+    modeStatusText: legacyStemVisible
+      ? 'Legacy room music still plays, but the room-grid sequencer stays locked until you explicitly replace it.'
+      : `Room grid sequencer active. ${getPatternInstrumentLabel(activeInstrumentTab)} is selected, with 32 playable steps and columns 33-40 dimmed.`,
     previewButtonText:
       options.musicPreviewState === 'playing'
         ? 'Pause'
@@ -113,43 +105,25 @@ function buildMusicUiViewModel(
           ? 'Resume'
           : 'Play',
     stopDisabled: options.musicPreviewState === 'stopped',
-    arrangeTabActive: options.musicEditorTab === 'arrange',
-    advancedTabActive: options.musicEditorTab === 'advanced',
-    advancedDisabled: false,
-    lanes: pack.lanes.map((lane) => ({
-      laneId: lane.id,
-      label: lane.label,
-      cells: Array.from({ length: pack.barCount }, (_value, barIndex) => {
-        const clipId = laneAssignments[lane.id][barIndex] ?? null;
-        return {
-          laneId: lane.id,
-          barIndex,
-          barNumber: barIndex + 1,
-          clipLabel: clipId
-            ? getRoomMusicClip(pack, clipId)?.label ?? 'Assigned clip'
-            : `Choose ${lane.label}`,
-          clipAssigned: Boolean(clipId),
-        };
-      }),
+    gridSummaryText: '32 steps · 2 bars · 4 steps per beat · 120 BPM',
+    toolHintText: 'Use Draw, Erase, and Copy on the room grid. Cmd/Ctrl+V pastes the current instrument clipboard.',
+    legacyNoticeVisible: legacyStemVisible,
+    legacyNoticeText: 'This room has saved WAMP stems. Playback is preserved, but sequencer editing is locked until you replace them with a new pattern.',
+    replaceLegacyDisabled: false,
+    instrumentTabs: instrumentTabs.map((instrumentId) => ({
+      instrumentId,
+      label: getPatternInstrumentLabel(instrumentId),
+      active: instrumentId === activeInstrumentTab,
+      disabled: false,
     })),
-    picker: {
-      open: pickerLane !== null && pickerBarIndex !== null,
-      laneId: pickerLane?.id ?? null,
-      barIndex: pickerBarIndex,
-      barNumber: pickerBarIndex === null ? null : pickerBarIndex + 1,
-      laneLabel: pickerLane?.label ?? '',
-      currentClipLabel: pickerClipLabel,
-      clearDisabled: pickerClipId === null,
-      clips:
-        pickerLane
-          ? getRoomMusicClipsForLane(pack, pickerLane.id).map((clip) => ({
-              clipId: clip.id,
-              label: clip.label,
-              selected: clip.id === pickerClipId,
-              previewing: clip.id === options.musicPickerPreviewClipId,
-            }))
-          : [],
-    },
+    pitchModes: [
+      { mode: 'scale', label: 'Scale Lock', active: displayPattern.pitchMode === 'scale', disabled: legacyStemVisible },
+      { mode: 'chromatic', label: 'Chromatic', active: displayPattern.pitchMode === 'chromatic', disabled: legacyStemVisible },
+    ],
+    octaveControlsVisible: activeOctaveShift !== null,
+    octaveText: activeOctaveShift === null ? '' : `Octave ${activeOctaveShift >= 0 ? '+' : ''}${activeOctaveShift}`,
+    octaveDownDisabled: legacyStemVisible || activeOctaveShift === null || activeOctaveShift <= -2,
+    octaveUpDisabled: legacyStemVisible || activeOctaveShift === null || activeOctaveShift >= 2,
   };
 }
 
@@ -179,10 +153,7 @@ export function buildEditorUiViewModel(
     roomMusic,
     musicModeActive,
     musicPreviewState,
-    musicEditorTab,
-    musicPickerLaneId,
-    musicPickerBarIndex,
-    musicPickerPreviewClipId,
+    musicPatternInstrumentTab,
   } = options;
   const canReturnToCourseBuilder = courseEditorState.canReturnToCourseBuilder;
 
@@ -220,10 +191,7 @@ export function buildEditorUiViewModel(
     music: buildMusicUiViewModel(roomMusic, {
       musicModeActive,
       musicPreviewState,
-      musicEditorTab,
-      musicPickerLaneId,
-      musicPickerBarIndex,
-      musicPickerPreviewClipId,
+      musicPatternInstrumentTab,
     }),
     goal: {
       goalTypeValue: roomGoal?.type ?? '',

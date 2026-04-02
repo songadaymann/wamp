@@ -1,3 +1,68 @@
+import { getRoomMusicPack } from './catalog';
+import {
+  cloneRoomPatternMusic,
+  createDefaultRoomPatternMusic,
+  getRoomPatternBarDurationSec,
+  getRoomPatternKey,
+  getRoomPatternLoopDurationSec,
+  isRoomPatternMusicEmpty,
+  normalizeRoomPatternMusic,
+  type RoomPatternDrumRowDefinition,
+  type RoomPatternDrumRowId,
+  type RoomPatternInstrumentId,
+  type RoomPatternMusic,
+  type RoomPatternPitchMode,
+  type RoomPatternRowNote,
+  type RoomPatternScaleId,
+  type RoomPatternTonalInstrumentId,
+} from './pattern';
+
+export {
+  DEFAULT_ROOM_PATTERN_OCTAVE_SHIFT,
+  ROOM_PATTERN_ACTIVE_STEP_COLUMNS,
+  ROOM_PATTERN_BAR_COUNT,
+  ROOM_PATTERN_BEATS_PER_BAR,
+  ROOM_PATTERN_BPM,
+  ROOM_PATTERN_DRUM_GRID_START_ROW,
+  ROOM_PATTERN_DRUM_ROWS,
+  ROOM_PATTERN_GRID_ROWS,
+  ROOM_PATTERN_INSTRUMENT_IDS,
+  ROOM_PATTERN_INSTRUMENT_LABELS,
+  ROOM_PATTERN_MARGIN_COLUMNS,
+  ROOM_PATTERN_MARGIN_START_STEP,
+  ROOM_PATTERN_MAX_OCTAVE_SHIFT,
+  ROOM_PATTERN_MIN_OCTAVE_SHIFT,
+  ROOM_PATTERN_PITCH_MODES,
+  ROOM_PATTERN_SCALE_IDS,
+  ROOM_PATTERN_STEP_COUNT,
+  ROOM_PATTERN_STEPS_PER_BEAT,
+  ROOM_PATTERN_TONAL_INSTRUMENT_IDS,
+  cloneRoomPatternDrumTrack,
+  cloneRoomPatternMusic,
+  cloneRoomPatternTonalSteps,
+  createDefaultRoomPatternMusic,
+  createEmptyRoomPatternDrumTrack,
+  createEmptyRoomPatternTonalSteps,
+  getPatternDrumRowForGridRow,
+  getPatternInstrumentLabel,
+  getPatternRowLabel,
+  getPatternRowNote,
+  getRoomPatternBarDurationSec,
+  getRoomPatternKey,
+  getRoomPatternLoopDurationSec,
+  isPatternDrumGridRowPlayable,
+  isRoomPatternMusicEmpty,
+  normalizeRoomPatternMusic,
+  type RoomPatternDrumRowDefinition,
+  type RoomPatternDrumRowId,
+  type RoomPatternInstrumentId,
+  type RoomPatternMusic,
+  type RoomPatternPitchMode,
+  type RoomPatternRowNote,
+  type RoomPatternScaleId,
+  type RoomPatternTonalInstrumentId,
+} from './pattern';
+
 export const ROOM_MUSIC_LANE_IDS = ['drums', 'bass', 'arp', 'hold', 'melody'] as const;
 export type RoomMusicLaneId = typeof ROOM_MUSIC_LANE_IDS[number];
 
@@ -5,7 +70,7 @@ export const ROOM_MUSIC_PACK_IDS = ['wamp-v1'] as const;
 export type RoomMusicPackId = typeof ROOM_MUSIC_PACK_IDS[number];
 export const DEFAULT_ROOM_MUSIC_BAR_COUNT = 4;
 
-export type RoomMusicKind = 'stemArrangement';
+export type RoomMusicKind = 'stemArrangement' | 'pattern';
 
 export interface RoomMusicLane {
   id: RoomMusicLaneId;
@@ -40,10 +105,24 @@ export interface RoomMusicArrangement {
   laneAssignments: RoomMusicLaneAssignments;
 }
 
-export interface RoomMusic {
-  kind: RoomMusicKind;
+export interface StemArrangementRoomMusic {
+  kind: 'stemArrangement';
   packId: RoomMusicPackId;
   arrangement: RoomMusicArrangement;
+}
+
+export type RoomMusic = StemArrangementRoomMusic | RoomPatternMusic;
+
+export function isStemArrangementRoomMusic(
+  music: RoomMusic | null | undefined,
+): music is StemArrangementRoomMusic {
+  return Boolean(music && music.kind === 'stemArrangement');
+}
+
+export function isPatternRoomMusic(
+  music: RoomMusic | null | undefined,
+): music is RoomPatternMusic {
+  return Boolean(music && music.kind === 'pattern');
 }
 
 export function getRoomMusicPackBarCount(
@@ -101,7 +180,7 @@ export function createEmptyRoomMusicArrangement(
   };
 }
 
-export function createDefaultRoomMusic(packId: RoomMusicPackId = 'wamp-v1'): RoomMusic {
+export function createDefaultRoomMusic(packId: RoomMusicPackId = 'wamp-v1'): StemArrangementRoomMusic {
   const barCount = getRoomMusicPackBarCount(packId);
   return {
     kind: 'stemArrangement',
@@ -150,7 +229,9 @@ function normalizeLaneAssignments(value: unknown, barCount: number): RoomMusicLa
   };
 }
 
-export function cloneRoomMusic(music: RoomMusic | null | undefined): RoomMusic | null {
+function cloneStemArrangementRoomMusic(
+  music: StemArrangementRoomMusic | null | undefined,
+): StemArrangementRoomMusic | null {
   if (!music) {
     return null;
   }
@@ -166,21 +247,30 @@ export function cloneRoomMusic(music: RoomMusic | null | undefined): RoomMusic |
   };
 }
 
-export function normalizeRoomMusic(value: unknown): RoomMusic | null {
-  if (!value || typeof value !== 'object') {
+export function cloneRoomMusic(music: RoomMusic | null | undefined): RoomMusic | null {
+  if (!music) {
     return null;
   }
 
-  const candidate = value as Partial<RoomMusic> & {
+  if (music.kind === 'pattern') {
+    return cloneRoomPatternMusic(music);
+  }
+
+  return cloneStemArrangementRoomMusic(music);
+}
+
+function normalizeStemArrangementRoomMusic(
+  value: Partial<StemArrangementRoomMusic> & {
     laneAssignments?: Partial<Record<RoomMusicLaneId, unknown>>;
-  };
-  const packId = candidate.packId === 'wamp-v1' ? 'wamp-v1' : null;
+  },
+): StemArrangementRoomMusic | null {
+  const packId = value.packId === 'wamp-v1' ? 'wamp-v1' : null;
   if (!packId) {
     return null;
   }
 
   const barCount = getRoomMusicPackBarCount(packId);
-  const laneAssignments = candidate.arrangement?.laneAssignments ?? candidate.laneAssignments;
+  const laneAssignments = value.arrangement?.laneAssignments ?? value.laneAssignments;
   return {
     kind: 'stemArrangement',
     packId,
@@ -190,12 +280,83 @@ export function normalizeRoomMusic(value: unknown): RoomMusic | null {
   };
 }
 
+export function normalizeRoomMusic(value: unknown): RoomMusic | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const candidate = value as Partial<RoomMusic> & {
+    laneAssignments?: Partial<Record<RoomMusicLaneId, unknown>>;
+  };
+
+  if (
+    candidate.kind === 'pattern' ||
+    (
+      candidate.kind !== 'stemArrangement' &&
+      'tabs' in candidate &&
+      Boolean((candidate as { tabs?: unknown }).tabs) &&
+      typeof (candidate as { tabs?: unknown }).tabs === 'object'
+    )
+  ) {
+    return normalizeRoomPatternMusic(candidate);
+  }
+
+  return normalizeStemArrangementRoomMusic(candidate as Partial<StemArrangementRoomMusic> & {
+    laneAssignments?: Partial<Record<RoomMusicLaneId, unknown>>;
+  });
+}
+
 export function isRoomMusicEmpty(music: RoomMusic | null | undefined): boolean {
   if (!music) {
     return true;
   }
 
+  if (music.kind === 'pattern') {
+    return isRoomPatternMusicEmpty(music);
+  }
+
   return ROOM_MUSIC_LANE_IDS.every((laneId) =>
     music.arrangement.laneAssignments[laneId].every((clipId) => clipId === null)
   );
+}
+
+export function getRoomMusicBarDurationSec(music: RoomMusic | null | undefined): number {
+  if (!music) {
+    return 0;
+  }
+
+  if (music.kind === 'pattern') {
+    return getRoomPatternBarDurationSec(music);
+  }
+
+  const pack = getRoomMusicPack(music.packId);
+  return pack ? (60 / pack.bpm) * pack.beatsPerBar : 0;
+}
+
+export function getRoomMusicLoopDurationSec(music: RoomMusic | null | undefined): number {
+  if (!music) {
+    return 0;
+  }
+
+  if (music.kind === 'pattern') {
+    return getRoomPatternLoopDurationSec(music);
+  }
+
+  return getRoomMusicPack(music.packId)?.loopDurationSec ?? 0;
+}
+
+export function getRoomMusicKey(music: RoomMusic | null | undefined): string | null {
+  if (!music) {
+    return null;
+  }
+
+  if (music.kind === 'pattern') {
+    return getRoomPatternKey(music);
+  }
+
+  return [
+    music.kind,
+    music.packId,
+    ...ROOM_MUSIC_LANE_IDS.map((laneId) => music.arrangement.laneAssignments[laneId].map((clipId) => clipId ?? '-').join(',')),
+  ].join('|');
 }

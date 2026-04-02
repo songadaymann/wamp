@@ -1,32 +1,27 @@
 import Phaser from 'phaser';
-import type { RoomMusicLaneId } from '../../music/model';
+import type { RoomPatternInstrumentId, RoomPatternPitchMode } from '../../music/model';
 import { withActiveEditorScene } from './sceneBridge';
 
-function withLaneId(value: string | undefined, callback: (laneId: RoomMusicLaneId) => void): void {
-  if (
-    value !== 'drums' &&
-    value !== 'bass' &&
-    value !== 'arp' &&
-    value !== 'hold' &&
-    value !== 'melody'
-  ) {
+function withInstrumentId(
+  value: string | undefined,
+  callback: (instrumentId: RoomPatternInstrumentId) => void,
+): void {
+  if (value !== 'drums' && value !== 'triangle' && value !== 'saw' && value !== 'square') {
     return;
   }
 
   callback(value);
 }
 
-function withBarIndex(value: string | undefined, callback: (barIndex: number) => void): void {
-  if (!value) {
+function withPitchMode(
+  value: string | undefined,
+  callback: (mode: RoomPatternPitchMode) => void,
+): void {
+  if (value !== 'scale' && value !== 'chromatic') {
     return;
   }
 
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isInteger(parsed) || parsed < 0) {
-    return;
-  }
-
-  callback(parsed);
+  callback(value);
 }
 
 export function setupRoomMusicControls(
@@ -37,9 +32,9 @@ export function setupRoomMusicControls(
   const closeOverlayButton = doc.getElementById('btn-editor-music-overlay-close');
   const previewToggleButton = doc.getElementById('btn-editor-music-preview-toggle') as HTMLButtonElement | null;
   const previewStopButton = doc.getElementById('btn-editor-music-preview-stop');
-  const arrangeTabButton = doc.getElementById('btn-editor-music-tab-arrange');
-  const advancedTabButton = doc.getElementById('btn-editor-music-tab-advanced');
-  const pickerModal = doc.getElementById('editor-music-picker-modal');
+  const octaveDownButton = doc.getElementById('btn-editor-music-octave-down');
+  const octaveUpButton = doc.getElementById('btn-editor-music-octave-up');
+  const replaceLegacyButton = doc.getElementById('btn-editor-music-replace-legacy');
 
   modeButton?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
@@ -71,25 +66,21 @@ export function setupRoomMusicControls(
     });
   });
 
-  arrangeTabButton?.addEventListener('click', () => {
+  octaveDownButton?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
-      scene.setMusicEditorTab?.('arrange');
+      scene.shiftRoomMusicOctave?.(-1);
     });
   });
 
-  advancedTabButton?.addEventListener('click', () => {
+  octaveUpButton?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
-      scene.setMusicEditorTab?.('advanced');
+      scene.shiftRoomMusicOctave?.(1);
     });
   });
 
-  pickerModal?.addEventListener('click', (event) => {
-    if (event.target !== pickerModal) {
-      return;
-    }
-
+  replaceLegacyButton?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
-      scene.closeRoomMusicPicker?.();
+      scene.replaceLegacyRoomMusicWithPattern?.();
     });
   });
 
@@ -99,63 +90,21 @@ export function setupRoomMusicControls(
       return;
     }
 
-    const closePickerButton = target.closest<HTMLElement>('[data-room-music-picker-close]');
-    if (closePickerButton) {
-      withActiveEditorScene(game, (scene) => {
-        scene.closeRoomMusicPicker?.();
-      });
-      return;
-    }
-
-    const laneButton = target.closest<HTMLButtonElement>('[data-room-music-lane]');
-    if (laneButton) {
-      withLaneId(laneButton.dataset.roomMusicLane, (laneId) => {
-        withBarIndex(laneButton.dataset.roomMusicBar, (barIndex) => {
-          withActiveEditorScene(game, (scene) => {
-            scene.openRoomMusicPicker?.(laneId, barIndex);
-          });
+    const instrumentButton = target.closest<HTMLElement>('[data-room-music-instrument-tab]');
+    if (instrumentButton) {
+      withInstrumentId(instrumentButton.dataset.roomMusicInstrumentTab, (instrumentId) => {
+        withActiveEditorScene(game, (scene) => {
+          scene.setMusicPatternInstrumentTab?.(instrumentId);
         });
       });
       return;
     }
 
-    const clearLaneButton = target.closest<HTMLButtonElement>('[data-room-music-clear-lane]');
-    if (clearLaneButton) {
-      withLaneId(clearLaneButton.dataset.roomMusicClearLane, (laneId) => {
-        withBarIndex(clearLaneButton.dataset.roomMusicClearBar, (barIndex) => {
-          withActiveEditorScene(game, (scene) => {
-            scene.clearRoomMusicBarClip?.(laneId, barIndex);
-          });
-        });
-      });
-      return;
-    }
-
-    const previewClipButton = target.closest<HTMLButtonElement>('[data-room-music-preview-clip]');
-    if (previewClipButton) {
-      const clipId = previewClipButton.dataset.roomMusicPreviewClip;
-      if (!clipId) {
-        return;
-      }
-
-      withActiveEditorScene(game, (scene) => {
-        scene.previewRoomMusicClip?.(clipId);
-      });
-      return;
-    }
-
-    const assignClipButton = target.closest<HTMLButtonElement>('[data-room-music-assign-clip]');
-    if (assignClipButton) {
-      const clipId = assignClipButton.dataset.roomMusicAssignClip;
-      if (!clipId) {
-        return;
-      }
-
-      withLaneId(assignClipButton.dataset.roomMusicAssignLane, (laneId) => {
-        withBarIndex(assignClipButton.dataset.roomMusicAssignBar, (barIndex) => {
-          withActiveEditorScene(game, (scene) => {
-            scene.assignRoomMusicBarClip?.(laneId, barIndex, clipId);
-          });
+    const pitchModeButton = target.closest<HTMLElement>('[data-room-music-pitch-mode]');
+    if (pitchModeButton) {
+      withPitchMode(pitchModeButton.dataset.roomMusicPitchMode, (mode) => {
+        withActiveEditorScene(game, (scene) => {
+          scene.setRoomMusicPitchMode?.(mode);
         });
       });
     }

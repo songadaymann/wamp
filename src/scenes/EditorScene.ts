@@ -70,7 +70,12 @@ import {
   createGoalMarkerFlagSprite,
 } from '../goals/markerFlags';
 import { globalRoomMusicController } from '../music/controller';
-import type { RoomMusic, RoomMusicLaneId } from '../music/model';
+import type {
+  RoomMusic,
+  RoomMusicLaneId,
+  RoomPatternInstrumentId,
+  RoomPatternPitchMode,
+} from '../music/model';
 import { setAppMode } from '../ui/appMode';
 import {
   hideBusyOverlay,
@@ -89,6 +94,7 @@ import { EditorRoomSession } from './editor/roomSession';
 import { EditorBackgroundController } from './editor/backgrounds';
 import { EditorEditRuntime, type EditorClipboardState, type GoalPlacementMode } from './editor/editRuntime';
 import { EditorInteractionController } from './editor/interaction';
+import { EditorMusicPatternController } from './editor/musicPatternEditor';
 import { RoomLightingController } from '../lighting/controller';
 import {
   buildCourseEditedRoomData as buildCourseEditedRoomDataHelper,
@@ -133,7 +139,7 @@ export class EditorScene extends Phaser.Scene {
   private roomEditCount = 0;
   private publishNudgeTriggered = false;
   private musicModeActive = false;
-  private musicEditorTab: EditorMusicTab = 'arrange';
+  private musicEditorTab: EditorMusicTab = 'advanced';
   private musicPickerLaneId: RoomMusicLaneId | null = null;
   private musicPickerBarIndex: number | null = null;
   private musicPreviewState: 'stopped' | 'playing' | 'paused' = 'stopped';
@@ -155,6 +161,7 @@ export class EditorScene extends Phaser.Scene {
   private readonly backgroundController: EditorBackgroundController;
   private readonly lightingController: RoomLightingController;
   private readonly interactionController: EditorInteractionController;
+  private readonly musicPatternController: EditorMusicPatternController;
   private entrySource: 'world' | 'direct' = 'direct';
   private initialRoomSnapshot: RoomSnapshot | null = null;
   private courseEditorStatusText: string | null = null;
@@ -202,6 +209,12 @@ export class EditorScene extends Phaser.Scene {
       }
 
       if (this.musicModeActive) {
+        if (this.musicPatternController.isPastePreviewActive()) {
+          this.musicPatternController.cancelPastePreview();
+          this.renderEditorUi();
+          return;
+        }
+
         this.setMusicModeActive(false);
         return;
       }
@@ -235,13 +248,76 @@ export class EditorScene extends Phaser.Scene {
         event.preventDefault();
         event.stopPropagation();
         void this.saveDraft(true, { promptForSignInOnUnauthorized: true });
+        return;
       }
 
       if (primaryModifier && event.shiftKey && key === 'p') {
         event.preventDefault();
         event.stopPropagation();
         void this.publishRoom();
+        return;
       }
+
+      if (primaryModifier && key === 'v') {
+        event.preventDefault();
+        event.stopPropagation();
+        this.musicPatternController.beginPastePreview();
+        this.renderEditorUi();
+        return;
+      }
+
+      if (primaryModifier && key === 'z') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.shiftKey) {
+          this.redo();
+        } else {
+          this.undo();
+        }
+        return;
+      }
+
+      if (event.ctrlKey && !event.metaKey && key === 'y') {
+        event.preventDefault();
+        event.stopPropagation();
+        this.redo();
+        return;
+      }
+
+      if (event.code === 'Digit1') {
+        event.preventDefault();
+        editorState.activeTool = 'pencil';
+        this.updateToolUI();
+        return;
+      }
+
+      if (event.code === 'Digit2') {
+        event.preventDefault();
+        editorState.activeTool = 'eraser';
+        this.musicPatternController.cancelPastePreview();
+        this.updateToolUI();
+        return;
+      }
+
+      if (event.code === 'Digit3') {
+        event.preventDefault();
+        editorState.activeTool = 'copy';
+        this.musicPatternController.cancelPastePreview();
+        this.updateToolUI();
+        return;
+      }
+
+      if (event.code === 'Space') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (this.musicPreviewState === 'playing') {
+          this.pauseRoomMusicPreview();
+        } else {
+          this.playRoomMusicPreview();
+        }
+        return;
+      }
+
       return;
     }
 
@@ -342,6 +418,7 @@ export class EditorScene extends Phaser.Scene {
     this.game.canvas.removeEventListener('contextmenu', this.handleCanvasContextMenu);
     this.uiBridge?.destroy();
     this.uiBridge = null;
+    this.musicPatternController.destroy();
     this.layerIndicatorText?.destroy();
     this.layerIndicatorText = null;
     this.editorPresenceClient?.destroy();
@@ -402,6 +479,10 @@ export class EditorScene extends Phaser.Scene {
       getNeighborRadius: () => EDITOR_NEIGHBOR_RADIUS,
       getGoalPlacementMode: () => this.goalPlacementMode as GoalPlacementMode,
       isMusicModeActive: () => this.musicModeActive,
+      handleMusicPointerDown: (pointer) => this.handleMusicPointerDown(pointer),
+      handleMusicPointerMove: (pointer) => this.handleMusicPointerMove(pointer),
+      handleMusicPointerUp: (pointer) => this.handleMusicPointerUp(pointer),
+      updateMusicCursorHighlight: (graphics) => this.updateMusicCursorHighlight(graphics),
       handleObjectModePrimaryAction: (pointer) => this.handleObjectModePrimaryAction(pointer),
       handleObjectModeSecondaryAction: (worldX, worldY) =>
         this.handleObjectModeSecondaryAction(worldX, worldY),
@@ -452,6 +533,7 @@ export class EditorScene extends Phaser.Scene {
           this.interactionController.cursorOverlay,
           this.interactionController.rectPreviewOverlay,
           this.borderGraphics,
+          ...this.musicPatternController.getIgnoredObjects(),
         ];
         for (const overlay of overlays) {
           if (overlay) {
@@ -466,6 +548,14 @@ export class EditorScene extends Phaser.Scene {
     this.lightingController = new RoomLightingController({
       scene: this,
       overlayDepth: 80,
+    });
+    this.musicPatternController = new EditorMusicPatternController(this, {
+      getRoomMusic: () => this.roomMusic,
+      commitRoomMusic: (nextMusic) => this.commitRoomMusic(nextMusic),
+      replaceLegacyRoomMusicWithPattern: () => this.commitLegacyRoomMusicPatternReplacement(),
+      renderUi: () => this.renderEditorUi(),
+      getMusicPlaybackDebugState: () => globalRoomMusicController.getDebugState(),
+      getMusicPreviewState: () => this.musicPreviewState,
     });
   }
 
@@ -789,6 +879,7 @@ export class EditorScene extends Phaser.Scene {
     this.drawRoomBorder();
     this.drawGrid();
     this.createCursorOverlay();
+    this.musicPatternController.create();
     this.createPressurePlateOverlay();
     this.createContainerOverlay();
     this.createLayerIndicator();
@@ -827,6 +918,7 @@ export class EditorScene extends Phaser.Scene {
     this.updateBackgroundPreview();
     this.updateLightingPreview();
     this.updateLayerGuideOverlay();
+    this.musicPatternController.updateOverlay(this.musicModeActive);
     this.updateCursorHighlight();
     this.updatePressurePlateOverlay();
     this.updateContainerOverlay();
@@ -845,6 +937,7 @@ export class EditorScene extends Phaser.Scene {
     this.lightingController.reset();
     this.backgroundController.reset();
     this.interactionController.reset();
+    this.musicPatternController.reset();
     this.layerIndicatorText?.destroy();
     this.layerIndicatorText = null;
     this.layerGuideGraphics?.destroy();
@@ -872,7 +965,7 @@ export class EditorScene extends Phaser.Scene {
     this.roomEditCount = 0;
     this.publishNudgeTriggered = false;
     this.musicModeActive = false;
-    this.musicEditorTab = 'arrange';
+    this.musicEditorTab = 'advanced';
     this.musicPickerLaneId = null;
     this.musicPickerBarIndex = null;
     this.musicPreviewState = 'stopped';
@@ -992,7 +1085,7 @@ export class EditorScene extends Phaser.Scene {
   private applyRoomSnapshot(room: RoomSnapshot): void {
     this.editRuntime.applyRoomSnapshot(room);
     this.musicModeActive = false;
-    this.musicEditorTab = 'arrange';
+    this.musicEditorTab = 'advanced';
     this.musicPickerLaneId = null;
     this.musicPickerBarIndex = null;
     this.musicPreviewState = 'stopped';
@@ -2290,10 +2383,14 @@ export class EditorScene extends Phaser.Scene {
 
   setMusicModeActive(active: boolean): void {
     this.musicModeActive = active;
+    this.musicEditorTab = 'advanced';
+    if (active && editorState.activeTool !== 'pencil' && editorState.activeTool !== 'eraser' && editorState.activeTool !== 'copy') {
+      editorState.activeTool = 'pencil';
+    }
     if (!active) {
-      this.musicEditorTab = 'arrange';
       this.musicPickerLaneId = null;
       this.musicPickerBarIndex = null;
+      this.musicPatternController.cancelPastePreview();
       this.stopRoomMusicClipPreview();
       if (this.musicPreviewState !== 'stopped') {
         this.musicPreviewState = 'stopped';
@@ -2312,8 +2409,26 @@ export class EditorScene extends Phaser.Scene {
   }
 
   setMusicEditorTab(tab: EditorMusicTab): void {
-    this.musicEditorTab = tab;
+    this.musicEditorTab = 'advanced';
     this.renderEditorUi();
+  }
+
+  setMusicPatternInstrumentTab(instrumentId: RoomPatternInstrumentId): void {
+    this.musicPatternController.setActiveInstrumentTab(instrumentId);
+    this.musicEditorTab = 'advanced';
+    this.renderEditorUi();
+  }
+
+  setRoomMusicPitchMode(mode: RoomPatternPitchMode): void {
+    this.musicPatternController.setPitchMode(mode);
+  }
+
+  shiftRoomMusicOctave(delta: number): void {
+    this.musicPatternController.shiftActiveOctave(delta);
+  }
+
+  replaceLegacyRoomMusicWithPattern(): void {
+    this.musicPatternController.replaceLegacyWithPattern();
   }
 
   playRoomMusicPreview(): void {
@@ -2392,6 +2507,40 @@ export class EditorScene extends Phaser.Scene {
       }
     });
     this.renderEditorUi();
+  }
+
+  private commitRoomMusic(nextMusic: RoomMusic | null): RoomMusic | null {
+    const committed = this.editRuntime.setRoomMusic(nextMusic);
+    if (this.musicPreviewState === 'playing') {
+      this.syncRoomMusicPreviewPlayback();
+    }
+    this.renderEditorUi();
+    return committed;
+  }
+
+  private commitLegacyRoomMusicPatternReplacement(): RoomMusic | null {
+    const committed = this.editRuntime.replaceRoomMusicWithPattern();
+    if (this.musicPreviewState === 'playing') {
+      this.syncRoomMusicPreviewPlayback();
+    }
+    this.renderEditorUi();
+    return committed;
+  }
+
+  private handleMusicPointerDown(pointer: Phaser.Input.Pointer): void {
+    this.musicPatternController.handlePointerDown(pointer);
+  }
+
+  private handleMusicPointerMove(pointer: Phaser.Input.Pointer): void {
+    this.musicPatternController.handlePointerMove(pointer);
+  }
+
+  private handleMusicPointerUp(pointer: Phaser.Input.Pointer): void {
+    this.musicPatternController.handlePointerUp(pointer);
+  }
+
+  private updateMusicCursorHighlight(graphics: Phaser.GameObjects.Graphics): boolean {
+    return this.musicPatternController.updateCursorHighlight(graphics);
   }
 
   // ══════════════════════════════════════
@@ -2685,10 +2834,7 @@ export class EditorScene extends Phaser.Scene {
         roomMusic: this.roomMusic,
         musicModeActive: this.musicModeActive,
         musicPreviewState: this.musicPreviewState,
-        musicEditorTab: this.musicEditorTab,
-        musicPickerLaneId: this.musicPickerLaneId,
-        musicPickerBarIndex: this.musicPickerBarIndex,
-        musicPickerPreviewClipId: this.musicPickerPreviewClipId,
+        musicPatternInstrumentTab: this.musicPatternController.getActiveInstrumentTab(),
       }),
     );
     this.renderInspectorUi();
@@ -2903,6 +3049,8 @@ export class EditorScene extends Phaser.Scene {
   }
 
   describeState(): Record<string, unknown> {
+    const mainCamera = this.cameras?.main ?? null;
+
     return {
       scene: 'editor',
       roomId: this.roomId,
@@ -2921,6 +3069,9 @@ export class EditorScene extends Phaser.Scene {
       music: {
         modeActive: this.musicModeActive,
         editorTab: this.musicEditorTab,
+        instrumentTab: this.musicPatternController.getActiveInstrumentTab(),
+        legacyStemNoticeVisible: this.musicPatternController.getLegacyStemNoticeVisible(),
+        pastePreviewActive: this.musicPatternController.isPastePreviewActive(),
         previewState: this.musicPreviewState,
         pickerLaneId: this.musicPickerLaneId,
         pickerBarIndex: this.musicPickerBarIndex,
@@ -2949,10 +3100,12 @@ export class EditorScene extends Phaser.Scene {
       activeTool: editorState.activeTool,
       selectedLayer: editorState.activeLayer,
       zoom: editorState.zoom,
-      camera: {
-        scrollX: Math.round(this.cameras.main.scrollX),
-        scrollY: Math.round(this.cameras.main.scrollY),
-      },
+      camera: mainCamera
+        ? {
+            scrollX: Math.round(mainCamera.scrollX),
+            scrollY: Math.round(mainCamera.scrollY),
+          }
+        : null,
       placedObjects: editorState.placedObjects.length,
       canUndo: this.editRuntime.hasUndoHistory(),
       canRedo: this.editRuntime.hasRedoHistory(),

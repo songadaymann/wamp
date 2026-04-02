@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { CourseGoalType, CourseRoomRef } from '../../courses/model';
 import type { RoomGoalType } from '../../goals/roomGoals';
-import type { RoomMusicLaneId } from '../../music/model';
+import type { RoomMusicLaneId, RoomPatternInstrumentId, RoomPatternPitchMode } from '../../music/model';
 import type { GoalPlacementMode } from '../../scenes/editor/editRuntime';
 import type { RoomCoordinates, RoomRecord, RoomVersionRecord } from '../../persistence/roomModel';
 
@@ -99,6 +99,10 @@ export interface EditorSceneBridge {
   setMusicModeActive?: (active: boolean) => void;
   toggleMusicMode?: () => void;
   setMusicEditorTab?: (tab: EditorMusicTab) => void;
+  setMusicPatternInstrumentTab?: (instrumentId: RoomPatternInstrumentId) => void;
+  setRoomMusicPitchMode?: (mode: RoomPatternPitchMode) => void;
+  shiftRoomMusicOctave?: (delta: number) => void;
+  replaceLegacyRoomMusicWithPattern?: () => void;
   playRoomMusicPreview?: () => void;
   pauseRoomMusicPreview?: () => void;
   stopRoomMusicPreview?: () => void;

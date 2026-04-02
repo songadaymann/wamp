@@ -6,25 +6,31 @@ import {
 import {
   ROOM_MUSIC_LANE_IDS,
   cloneRoomMusic,
+  getRoomMusicBarDurationSec,
+  getRoomMusicKey,
+  getRoomMusicLoopDurationSec,
+  isPatternRoomMusic,
   isRoomMusicEmpty,
+  isStemArrangementRoomMusic,
   type RoomMusic,
   type RoomMusicBarClipId,
   type RoomMusicLaneBarAssignments,
   type RoomMusicLaneId,
+  type StemArrangementRoomMusic,
 } from './model';
+import { renderRoomPatternLoopBuffer } from './patternRenderer';
 
 type TransitionMode = 'immediate' | 'bar';
 type PlaybackMode = 'idle' | 'editor-preview' | 'world-play';
 
-type ActiveLanePlayback = {
-  laneId: RoomMusicLaneId;
-  patternKey: string;
-  packId: string;
+type ActiveLoopPlayback = {
+  playbackId: string;
   source: AudioBufferSourceNode;
   gain: GainNode;
   startTime: number;
   stopTime: number | null;
   baseGain: number;
+  loopDurationSec: number;
 };
 
 type PreviewClipPlayback = {
@@ -49,10 +55,12 @@ export class RoomMusicController {
   private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private transportStartTime = 0;
-  private activeLanes = new Map<RoomMusicLaneId, ActiveLanePlayback>();
+  private activeLanes = new Map<RoomMusicLaneId, ActiveLoopPlayback>();
+  private activePattern: ActiveLoopPlayback | null = null;
   private previewClipPlayback: PreviewClipPlayback | null = null;
   private readonly bufferPromises = new Map<string, Promise<AudioBuffer>>();
   private readonly laneLoopBufferPromises = new Map<string, Promise<AudioBuffer>>();
+  private readonly patternLoopBufferPromises = new Map<string, Promise<AudioBuffer>>();
   private currentArrangement: RoomMusic | null = null;
   private mode: PlaybackMode = 'idle';
 
@@ -92,16 +100,6 @@ export class RoomMusicController {
       return;
     }
 
-    const pack = getRoomMusicPack(music.packId);
-    if (!pack) {
-      this.stopArrangement({
-        transition: 'immediate',
-        mode: options.mode,
-        fadeDurationSec: options.fadeDurationSec,
-      });
-      return;
-    }
-
     const nextArrangement = cloneRoomMusic(music);
     if (!nextArrangement) {
       this.stopArrangement({
@@ -112,64 +110,12 @@ export class RoomMusicController {
       return;
     }
 
-    const audioContext = this.getAudioContext();
-    if (!audioContext) {
+    if (isPatternRoomMusic(nextArrangement)) {
+      await this.playPatternArrangement(nextArrangement, options);
       return;
     }
 
-    const clipIds = this.collectArrangementClipIds(nextArrangement);
-    await Promise.all([...clipIds].map((clipId) => this.loadBuffer(nextArrangement.packId, clipId)));
-
-    this.ensureTransport(audioContext.currentTime);
-    const now = audioContext.currentTime;
-    const hasActiveLanes = this.activeLanes.size > 0;
-    const transition = options.transition ?? 'bar';
-    const quantizeToBar = transition === 'bar' && hasActiveLanes;
-    const startAt = quantizeToBar ? this.getNextBarBoundary(pack, now) : now + 0.02;
-    const fadeDuration =
-      options.fadeDurationSec
-      ?? (quantizeToBar ? this.getBarDuration(pack) : IMMEDIATE_FADE_DURATION_SEC);
-    const loopOffset = this.getLoopOffsetAtTime(pack.loopDurationSec, startAt);
-
-    for (const laneId of ROOM_MUSIC_LANE_IDS) {
-      const nextBarClipIds = nextArrangement.arrangement.laneAssignments[laneId];
-      const nextPatternKey = this.getLanePatternKey(nextArrangement.packId, laneId, nextBarClipIds);
-      const currentPlayback = this.activeLanes.get(laneId) ?? null;
-      if (
-        currentPlayback &&
-        currentPlayback.packId === nextArrangement.packId &&
-        currentPlayback.patternKey === nextPatternKey &&
-        (currentPlayback.stopTime === null || currentPlayback.stopTime > now)
-      ) {
-        continue;
-      }
-
-      if (currentPlayback) {
-        this.scheduleStopPlayback(currentPlayback, {
-          stopAt: quantizeToBar ? startAt : now,
-          fadeDuration,
-        });
-        this.activeLanes.delete(laneId);
-      }
-
-      if (this.isLaneAssignmentsEmpty(nextBarClipIds)) {
-        continue;
-      }
-
-      const buffer = await this.loadLaneLoopBuffer(nextArrangement.packId, laneId, nextBarClipIds);
-      const lane = getRoomMusicLane(pack, laneId);
-      const playback = this.startLoopPlayback(nextArrangement.packId, laneId, nextPatternKey, buffer, {
-        loopDurationSec: pack.loopDurationSec,
-        startAt,
-        offsetSec: loopOffset,
-        fadeInDuration: hasActiveLanes ? fadeDuration : 0.08,
-        startSilent: hasActiveLanes,
-        baseGain: lane?.defaultGain ?? 0.6,
-      });
-      this.activeLanes.set(laneId, playback);
-    }
-
-    this.currentArrangement = nextArrangement;
+    await this.playStemArrangement(nextArrangement, options);
   }
 
   stopArrangement(options?: {
@@ -180,25 +126,31 @@ export class RoomMusicController {
     const audioContext = this.audioContext;
     if (!audioContext) {
       this.activeLanes.clear();
+      this.activePattern = null;
       this.currentArrangement = null;
       this.mode = options?.mode ?? 'idle';
       return;
     }
 
-    const packId = this.currentArrangement?.packId ?? 'wamp-v1';
-    const pack = getRoomMusicPack(packId);
     const now = audioContext.currentTime;
     const transition = options?.transition ?? 'bar';
-    const quantizeToBar = transition === 'bar' && this.activeLanes.size > 0 && pack !== null;
-    const stopAt = quantizeToBar && pack ? this.getNextBarBoundary(pack, now) : now;
+    const activeBarDuration = getRoomMusicBarDurationSec(this.currentArrangement);
+    const quantizeToBar = transition === 'bar' && this.hasActivePlaybacks() && activeBarDuration > 0;
+    const stopAt = quantizeToBar ? this.getNextBarBoundary(activeBarDuration, now) : now;
     const fadeDuration =
       options?.fadeDurationSec
-      ?? (quantizeToBar && pack ? this.getBarDuration(pack) : IMMEDIATE_FADE_DURATION_SEC);
+      ?? (quantizeToBar ? activeBarDuration : IMMEDIATE_FADE_DURATION_SEC);
 
     for (const playback of this.activeLanes.values()) {
       this.scheduleStopPlayback(playback, { stopAt, fadeDuration });
     }
     this.activeLanes.clear();
+
+    if (this.activePattern) {
+      this.scheduleStopPlayback(this.activePattern, { stopAt, fadeDuration });
+      this.activePattern = null;
+    }
+
     this.currentArrangement = null;
     this.mode = options?.mode ?? 'idle';
   }
@@ -264,24 +216,189 @@ export class RoomMusicController {
   }
 
   getDebugState(): Record<string, unknown> {
+    const currentTime = this.audioContext?.currentTime ?? 0;
     return {
       initialized: this.initialized,
       userInteracted: this.userInteracted,
       mode: this.mode,
       transportStartTime: this.transportStartTime,
-      activeLanes: Array.from(this.activeLanes.values()).map((playback) => ({
-        laneId: playback.laneId,
-        patternKey: playback.patternKey,
+      audioCurrentTime: Number(currentTime.toFixed(3)),
+      activeLanes: Array.from(this.activeLanes.entries()).map(([laneId, playback]) => ({
+        laneId,
+        playbackId: playback.playbackId,
         startTime: Number(playback.startTime.toFixed(3)),
         stopTime: playback.stopTime === null ? null : Number(playback.stopTime.toFixed(3)),
         baseGain: Number(playback.baseGain.toFixed(3)),
       })),
+      activePattern: this.activePattern
+        ? {
+            playbackId: this.activePattern.playbackId,
+            startTime: Number(this.activePattern.startTime.toFixed(3)),
+            stopTime: this.activePattern.stopTime === null ? null : Number(this.activePattern.stopTime.toFixed(3)),
+            baseGain: Number(this.activePattern.baseGain.toFixed(3)),
+            loopDurationSec: Number(this.activePattern.loopDurationSec.toFixed(3)),
+          }
+        : null,
       currentArrangement: cloneRoomMusic(this.currentArrangement),
+      currentArrangementKey: getRoomMusicKey(this.currentArrangement),
       previewClipId: this.previewClipPlayback?.clipId ?? null,
     };
   }
 
-  private collectArrangementClipIds(arrangement: RoomMusic): Set<string> {
+  private async playStemArrangement(
+    nextArrangement: StemArrangementRoomMusic,
+    options: {
+      mode: PlaybackMode;
+      transition?: TransitionMode;
+      fadeDurationSec?: number;
+    },
+  ): Promise<void> {
+    const pack = getRoomMusicPack(nextArrangement.packId);
+    if (!pack) {
+      this.stopArrangement({
+        transition: 'immediate',
+        mode: options.mode,
+        fadeDurationSec: options.fadeDurationSec,
+      });
+      return;
+    }
+
+    const audioContext = this.getAudioContext();
+    if (!audioContext) {
+      return;
+    }
+
+    const clipIds = this.collectStemArrangementClipIds(nextArrangement);
+    await Promise.all([...clipIds].map((clipId) => this.loadBuffer(nextArrangement.packId, clipId)));
+
+    this.ensureTransport(audioContext.currentTime);
+    const now = audioContext.currentTime;
+    const transition = options.transition ?? 'bar';
+    const quantizeToBar = transition === 'bar' && this.hasActivePlaybacks();
+    const startAt = quantizeToBar ? this.getNextBarBoundary(this.getBarDuration(pack), now) : now + 0.02;
+    const fadeDuration =
+      options.fadeDurationSec
+      ?? (quantizeToBar ? this.getBarDuration(pack) : IMMEDIATE_FADE_DURATION_SEC);
+    const loopOffset = this.getLoopOffsetAtTime(pack.loopDurationSec, startAt);
+    const hasPriorPlayback = this.hasActivePlaybacks();
+
+    if (this.activePattern) {
+      this.scheduleStopPlayback(this.activePattern, {
+        stopAt: quantizeToBar ? startAt : now,
+        fadeDuration,
+      });
+      this.activePattern = null;
+    }
+
+    for (const laneId of ROOM_MUSIC_LANE_IDS) {
+      const nextBarClipIds = nextArrangement.arrangement.laneAssignments[laneId];
+      const nextPatternKey = this.getLanePatternKey(nextArrangement.packId, laneId, nextBarClipIds);
+      const currentPlayback = this.activeLanes.get(laneId) ?? null;
+      if (
+        currentPlayback &&
+        currentPlayback.playbackId === nextPatternKey &&
+        (currentPlayback.stopTime === null || currentPlayback.stopTime > now)
+      ) {
+        continue;
+      }
+
+      if (currentPlayback) {
+        this.scheduleStopPlayback(currentPlayback, {
+          stopAt: quantizeToBar ? startAt : now,
+          fadeDuration,
+        });
+        this.activeLanes.delete(laneId);
+      }
+
+      if (this.isLaneAssignmentsEmpty(nextBarClipIds)) {
+        continue;
+      }
+
+      const buffer = await this.loadLaneLoopBuffer(nextArrangement.packId, laneId, nextBarClipIds);
+      const lane = getRoomMusicLane(pack, laneId);
+      const playback = this.startLoopPlayback(nextPatternKey, buffer, {
+        loopDurationSec: pack.loopDurationSec,
+        startAt,
+        offsetSec: loopOffset,
+        fadeInDuration: hasPriorPlayback ? fadeDuration : 0.08,
+        startSilent: hasPriorPlayback,
+        baseGain: lane?.defaultGain ?? 0.6,
+      });
+      this.activeLanes.set(laneId, playback);
+    }
+
+    this.currentArrangement = nextArrangement;
+  }
+
+  private async playPatternArrangement(
+    nextArrangement: Extract<RoomMusic, { kind: 'pattern' }>,
+    options: {
+      mode: PlaybackMode;
+      transition?: TransitionMode;
+      fadeDurationSec?: number;
+    },
+  ): Promise<void> {
+    const audioContext = this.getAudioContext();
+    if (!audioContext) {
+      return;
+    }
+
+    const nextPatternKey = getRoomMusicKey(nextArrangement) ?? 'pattern';
+    if (
+      this.activePattern &&
+      this.activePattern.playbackId === nextPatternKey &&
+      (this.activePattern.stopTime === null || this.activePattern.stopTime > audioContext.currentTime)
+    ) {
+      this.currentArrangement = cloneRoomMusic(nextArrangement);
+      return;
+    }
+
+    const loopDurationSec = getRoomMusicLoopDurationSec(nextArrangement);
+    const barDurationSec = getRoomMusicBarDurationSec(nextArrangement);
+    const buffer = await this.loadPatternLoopBuffer(nextArrangement);
+    this.ensureTransport(audioContext.currentTime);
+    const now = audioContext.currentTime;
+    const transition = options.transition ?? 'bar';
+    const quantizeToBar = transition === 'bar' && this.hasActivePlaybacks();
+    const startAt = quantizeToBar ? this.getNextBarBoundary(barDurationSec, now) : now + 0.02;
+    const fadeDuration =
+      options.fadeDurationSec
+      ?? (quantizeToBar ? barDurationSec : IMMEDIATE_FADE_DURATION_SEC);
+    const loopOffset = this.getLoopOffsetAtTime(loopDurationSec, startAt);
+    const hasPriorPlayback = this.hasActivePlaybacks();
+
+    for (const playback of this.activeLanes.values()) {
+      this.scheduleStopPlayback(playback, {
+        stopAt: quantizeToBar ? startAt : now,
+        fadeDuration,
+      });
+    }
+    this.activeLanes.clear();
+
+    if (this.activePattern) {
+      this.scheduleStopPlayback(this.activePattern, {
+        stopAt: quantizeToBar ? startAt : now,
+        fadeDuration,
+      });
+      this.activePattern = null;
+    }
+
+    this.activePattern = this.startLoopPlayback(nextPatternKey, buffer, {
+      loopDurationSec,
+      startAt,
+      offsetSec: loopOffset,
+      fadeInDuration: hasPriorPlayback ? fadeDuration : 0.08,
+      startSilent: hasPriorPlayback,
+      baseGain: 1,
+    });
+    this.currentArrangement = nextArrangement;
+  }
+
+  private hasActivePlaybacks(): boolean {
+    return this.activePattern !== null || this.activeLanes.size > 0;
+  }
+
+  private collectStemArrangementClipIds(arrangement: StemArrangementRoomMusic): Set<string> {
     const clipIds = new Set<string>();
     for (const laneId of ROOM_MUSIC_LANE_IDS) {
       for (const clipId of arrangement.arrangement.laneAssignments[laneId]) {
@@ -455,10 +572,30 @@ export class RoomMusicController {
     return laneBufferPromise;
   }
 
+  private async loadPatternLoopBuffer(
+    pattern: Extract<RoomMusic, { kind: 'pattern' }>,
+  ): Promise<AudioBuffer> {
+    const cacheKey = getRoomMusicKey(pattern) ?? 'pattern';
+    const cached = this.patternLoopBufferPromises.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const bufferPromise = Promise.resolve().then(() => {
+      const audioContext = this.getAudioContext();
+      if (!audioContext) {
+        throw new Error('Web Audio is unavailable.');
+      }
+
+      return renderRoomPatternLoopBuffer(audioContext, pattern);
+    });
+
+    this.patternLoopBufferPromises.set(cacheKey, bufferPromise);
+    return bufferPromise;
+  }
+
   private startLoopPlayback(
-    packId: string,
-    laneId: RoomMusicLaneId,
-    patternKey: string,
+    playbackId: string,
     buffer: AudioBuffer,
     options: {
       loopDurationSec: number;
@@ -468,7 +605,7 @@ export class RoomMusicController {
       startSilent: boolean;
       baseGain: number;
     },
-  ): ActiveLanePlayback {
+  ): ActiveLoopPlayback {
     const audioContext = this.getAudioContext();
     const masterGain = this.ensureMasterGain(audioContext);
     if (!audioContext || !masterGain) {
@@ -495,19 +632,18 @@ export class RoomMusicController {
     void this.resumeAudioContext();
 
     return {
-      laneId,
-      patternKey,
-      packId,
+      playbackId,
       source,
       gain,
       startTime: options.startAt,
       stopTime: null,
       baseGain: options.baseGain,
+      loopDurationSec: options.loopDurationSec,
     };
   }
 
   private scheduleStopPlayback(
-    playback: ActiveLanePlayback,
+    playback: ActiveLoopPlayback,
     options: {
       stopAt: number;
       fadeDuration: number;
@@ -552,14 +688,14 @@ export class RoomMusicController {
     return (60 / pack.bpm) * pack.beatsPerBar;
   }
 
-  private getNextBarBoundary(
-    pack: { bpm: number; beatsPerBar: number },
-    currentTime: number,
-  ): number {
-    const barDuration = this.getBarDuration(pack);
+  private getNextBarBoundary(barDurationSec: number, currentTime: number): number {
+    if (barDurationSec <= 0) {
+      return currentTime;
+    }
+
     const elapsed = Math.max(0, currentTime - this.transportStartTime);
-    const nextBarIndex = Math.floor(elapsed / barDuration) + 1;
-    return this.transportStartTime + nextBarIndex * barDuration;
+    const nextBarIndex = Math.floor(elapsed / barDurationSec) + 1;
+    return this.transportStartTime + nextBarIndex * barDurationSec;
   }
 
   private getLoopOffsetAtTime(loopDurationSec: number, atTime: number): number {

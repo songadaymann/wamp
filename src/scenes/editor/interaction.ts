@@ -29,6 +29,10 @@ interface EditorInteractionHost {
   getNeighborRadius(): number;
   getGoalPlacementMode(): GoalPlacementMode;
   isMusicModeActive(): boolean;
+  handleMusicPointerDown(pointer: Phaser.Input.Pointer): void;
+  handleMusicPointerMove(pointer: Phaser.Input.Pointer): void;
+  handleMusicPointerUp(pointer: Phaser.Input.Pointer): void;
+  updateMusicCursorHighlight(graphics: Phaser.GameObjects.Graphics): boolean;
   handleObjectModePrimaryAction(pointer: Phaser.Input.Pointer): boolean;
   handleObjectModeSecondaryAction(worldX: number, worldY: number): boolean;
   handleObjectPlace(pointer: Phaser.Input.Pointer): void;
@@ -216,6 +220,9 @@ export class EditorInteractionController {
   updateCursorHighlight(): void {
     this.cursorGraphics?.clear();
     if (!this.cursorGraphics || editorState.isPlaying || isMobileLandscapeBlocked() || this.host.isMusicModeActive()) {
+      if (this.cursorGraphics && this.host.isMusicModeActive()) {
+        this.host.updateMusicCursorHighlight(this.cursorGraphics);
+      }
       return;
     }
 
@@ -357,6 +364,7 @@ export class EditorInteractionController {
       }
 
       if (this.host.isMusicModeActive()) {
+        this.host.handleMusicPointerDown(pointer);
         return;
       }
 
@@ -441,6 +449,7 @@ export class EditorInteractionController {
       }
 
       if (this.host.isMusicModeActive()) {
+        this.host.handleMusicPointerMove(pointer);
         return;
       }
 
@@ -491,6 +500,11 @@ export class EditorInteractionController {
 
       if (this.isPanning) {
         this.isPanning = false;
+        return;
+      }
+
+      if (this.host.isMusicModeActive()) {
+        this.host.handleMusicPointerUp(pointer);
         return;
       }
 
@@ -656,6 +670,7 @@ export class EditorInteractionController {
     }
 
     if (this.host.isMusicModeActive()) {
+      this.host.handleMusicPointerDown(pointer);
       return true;
     }
 
@@ -731,6 +746,11 @@ export class EditorInteractionController {
       return false;
     }
 
+    if (this.host.isMusicModeActive()) {
+      this.host.handleMusicPointerMove(pointer);
+      return true;
+    }
+
     if (!this.touchPointers.has(pointer.id)) {
       return true;
     }
@@ -770,6 +790,11 @@ export class EditorInteractionController {
 
     const wasPinching = this.touchPointers.size >= 2;
     this.touchPointers.delete(pointer.id);
+
+    if (this.host.isMusicModeActive()) {
+      this.host.handleMusicPointerUp(pointer);
+      return true;
+    }
 
     if (wasPinching) {
       if (this.touchPointers.size === 1) {

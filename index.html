@@ -449,7 +449,7 @@
       <div class="sidebar-section" id="music-section" data-mobile-panel="music" data-sidebar-collapsible="true">
         <div class="section-label">Music</div>
         <button id="btn-editor-music-mode" class="bar-btn" type="button">Edit Music</button>
-        <div id="music-summary" class="goal-summary">No room music yet. Pick stems to give this room its own loop.</div>
+        <div id="music-summary" class="goal-summary">No room music yet. Draw directly on the room grid to start a sequencer loop.</div>
       </div>
 
       <div class="sidebar-section" id="goal-section" data-mobile-panel="goal" data-sidebar-collapsible="true">
@@ -637,9 +637,9 @@
           <div class="editor-music-header">
             <div class="editor-music-title-group">
               <div class="editor-music-kicker">Room Music</div>
-              <div id="editor-music-pack-label" class="editor-music-pack-label">WAMP Pack 1</div>
+              <div id="editor-music-pack-label" class="editor-music-pack-label">Pattern Kit v1</div>
               <div id="editor-music-mode-status" class="editor-music-mode-status">
-                Music grid active. Room editing is paused while this overlay is open.
+                Room grid sequencer active. Room editing is paused while this overlay is open.
               </div>
             </div>
             <div class="editor-music-header-actions">
@@ -648,20 +648,38 @@
               <button id="btn-editor-music-overlay-close" class="bar-btn bar-btn-small" type="button">Close</button>
             </div>
           </div>
-          <div class="editor-music-tabs">
-            <button id="btn-editor-music-tab-arrange" class="bar-btn bar-btn-small active" type="button">Arrange</button>
-            <button id="btn-editor-music-tab-advanced" class="bar-btn bar-btn-small" type="button">Advanced</button>
-          </div>
-          <div class="editor-music-ruler">
-            <div class="editor-music-ruler-spacer"></div>
-            <div class="editor-music-ruler-cells">
-              <div class="editor-music-ruler-cell">Bar 1</div>
-              <div class="editor-music-ruler-cell">Bar 2</div>
-              <div class="editor-music-ruler-cell">Bar 3</div>
-              <div class="editor-music-ruler-cell">Bar 4</div>
+          <div class="editor-music-toolbar">
+            <div>
+              <div class="editor-music-toolbar-label">Instrument</div>
+              <div id="editor-music-instrument-tabs" class="editor-music-button-strip"></div>
+            </div>
+            <div>
+              <div class="editor-music-toolbar-label">Pitch</div>
+              <div id="editor-music-pitch-modes" class="editor-music-button-strip"></div>
+            </div>
+            <div id="editor-music-octave-controls" class="editor-music-octave-controls">
+              <div class="editor-music-toolbar-label">Octave</div>
+              <div class="editor-music-octave-row">
+                <button id="btn-editor-music-octave-down" class="bar-btn bar-btn-small" type="button">-</button>
+                <div id="editor-music-octave-label" class="editor-music-octave-label">Octave +0</div>
+                <button id="btn-editor-music-octave-up" class="bar-btn bar-btn-small" type="button">+</button>
+              </div>
             </div>
           </div>
-          <div id="editor-music-lane-list" class="editor-music-lane-list"></div>
+          <div id="editor-music-grid-summary" class="editor-music-grid-summary">
+            32 steps · 2 bars · 4 steps per beat · 120 BPM
+          </div>
+          <div id="editor-music-tool-hint" class="editor-music-tool-hint">
+            Use Draw, Erase, and Copy on the room grid. Cmd/Ctrl+V pastes the current instrument clipboard.
+          </div>
+          <div id="editor-music-legacy-notice" class="editor-music-legacy-notice hidden">
+            <div id="editor-music-legacy-text" class="editor-music-legacy-text">
+              This room has saved WAMP stems. Replace them to edit on the sequencer grid.
+            </div>
+            <button id="btn-editor-music-replace-legacy" class="bar-btn bar-btn-small" type="button">
+              Replace With Sequencer
+            </button>
+          </div>
         </div>
       </div>
       <div id="world-hud" class="hidden">
