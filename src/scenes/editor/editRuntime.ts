@@ -34,7 +34,16 @@ import {
   createGoalMarkerFlagSprite,
   type GoalMarkerFlagVariant,
 } from '../../goals/markerFlags';
-import type { RoomCoordinates, RoomSnapshot, RoomSpawnPoint, RoomTileData } from '../../persistence/roomRepository';
+import {
+  cloneRoomBoundaryIngressSettings,
+  createDefaultRoomBoundaryIngressSettings,
+  type RoomBoundaryIngressSettings,
+  type RoomBoundarySide,
+  type RoomCoordinates,
+  type RoomSnapshot,
+  type RoomSpawnPoint,
+  type RoomTileData,
+} from '../../persistence/roomRepository';
 
 interface TileAction {
   layer: LayerName;
@@ -59,11 +68,17 @@ interface GoalAction {
   next: RoomGoal | null;
 }
 
+interface BoundaryIngressAction {
+  previous: RoomBoundaryIngressSettings;
+  next: RoomBoundaryIngressSettings;
+}
+
 type UndoAction =
   | { kind: 'tiles'; actions: TileAction[] }
   | { kind: 'objects'; action: ObjectsAction }
   | { kind: 'spawn'; action: SpawnAction }
-  | { kind: 'goal'; action: GoalAction };
+  | { kind: 'goal'; action: GoalAction }
+  | { kind: 'boundaryIngress'; action: BoundaryIngressAction };
 
 export type GoalPlacementMode = 'exit' | 'checkpoint' | 'finish' | null;
 
@@ -107,6 +122,7 @@ export class EditorEditRuntime {
   private goalMarkerSprites: Phaser.GameObjects.Sprite[] = [];
   private goalMarkerLabels: Phaser.GameObjects.Text[] = [];
   private roomGoal: RoomGoal | null = null;
+  private roomBoundaryIngress = createDefaultRoomBoundaryIngressSettings();
   private roomSpawnPoint: RoomSpawnPoint | null = null;
   private roomDirty = false;
   private lastDirtyAt = 0;
@@ -139,6 +155,10 @@ export class EditorEditRuntime {
 
   get currentRoomGoal(): RoomGoal | null {
     return this.roomGoal;
+  }
+
+  get currentRoomBoundaryIngress(): RoomBoundaryIngressSettings {
+    return cloneRoomBoundaryIngressSettings(this.roomBoundaryIngress);
   }
 
   get currentRoomSpawnPoint(): RoomSpawnPoint | null {
@@ -250,6 +270,7 @@ export class EditorEditRuntime {
     this.spawnMarkerSprite = null;
 
     this.roomGoal = null;
+    this.roomBoundaryIngress = createDefaultRoomBoundaryIngressSettings();
     this.roomSpawnPoint = null;
     this.roomDirty = false;
     this.lastDirtyAt = 0;
@@ -290,6 +311,7 @@ export class EditorEditRuntime {
     this.host.updateBackgroundSelectValue(room.background);
     this.host.updateBackground();
 
+    this.roomBoundaryIngress = cloneRoomBoundaryIngressSettings(room.boundaryIngress);
     this.roomGoal = cloneRoomGoal(room.goal);
     this.roomSpawnPoint = room.spawnPoint ? { ...room.spawnPoint } : null;
     this.host.setPlacedObjects(room.placedObjects.map((placed) => ({ ...placed })));
@@ -424,6 +446,7 @@ export class EditorEditRuntime {
       coordinates: { ...metadata.coordinates },
       title: metadata.title,
       background: this.host.getSelectedBackground(),
+      boundaryIngress: cloneRoomBoundaryIngressSettings(this.roomBoundaryIngress),
       goal: cloneRoomGoal(this.roomGoal),
       spawnPoint: this.roomSpawnPoint ? { ...this.roomSpawnPoint } : null,
       tileData: this.serializeTileData(),
@@ -1132,6 +1155,26 @@ export class EditorEditRuntime {
     this.updateRoomGoal(nextType ? createDefaultRoomGoal(nextType) : null);
   }
 
+  setBoundaryIngress(
+    side: RoomBoundarySide,
+    entityType: 'objects' | 'enemies',
+    allowed: boolean
+  ): void {
+    if (!this.guardEditable()) {
+      return;
+    }
+
+    const nextBoundaryIngress = cloneRoomBoundaryIngressSettings(this.roomBoundaryIngress);
+    const key = entityType === 'objects' ? 'allowObjectsIn' : 'allowEnemiesIn';
+    if (nextBoundaryIngress[side][key] === allowed) {
+      this.host.updateGoalUi();
+      return;
+    }
+
+    nextBoundaryIngress[side][key] = allowed;
+    this.updateBoundaryIngress(nextBoundaryIngress);
+  }
+
   setGoalTimeLimitSeconds(seconds: number | null): void {
     if (!this.guardEditable()) {
       return;
@@ -1437,6 +1480,21 @@ export class EditorEditRuntime {
       return;
     }
 
+    if (action.kind === 'boundaryIngress') {
+      this.roomBoundaryIngress = cloneRoomBoundaryIngressSettings(action.action.previous);
+      this.goalPlacementMode = null;
+      this.redoStack.push({
+        kind: 'boundaryIngress',
+        action: {
+          previous: cloneRoomBoundaryIngressSettings(action.action.next),
+          next: cloneRoomBoundaryIngressSettings(action.action.previous),
+        },
+      });
+      this.host.updateGoalUi();
+      this.markRoomDirty();
+      return;
+    }
+
     this.roomGoal = cloneRoomGoal(action.action.previous);
     this.goalPlacementMode = null;
     this.redoStack.push({
@@ -1513,6 +1571,21 @@ export class EditorEditRuntime {
         },
       });
       this.rebuildObjectSprites();
+      this.markRoomDirty();
+      return;
+    }
+
+    if (action.kind === 'boundaryIngress') {
+      this.roomBoundaryIngress = cloneRoomBoundaryIngressSettings(action.action.previous);
+      this.goalPlacementMode = null;
+      this.undoStack.push({
+        kind: 'boundaryIngress',
+        action: {
+          previous: cloneRoomBoundaryIngressSettings(action.action.next),
+          next: cloneRoomBoundaryIngressSettings(action.action.previous),
+        },
+      });
+      this.host.updateGoalUi();
       this.markRoomDirty();
       return;
     }
@@ -1692,6 +1765,35 @@ export class EditorEditRuntime {
     }
 
     this.rebuildObjectSprites();
+    this.markRoomDirty();
+  }
+
+  private updateBoundaryIngress(
+    nextBoundaryIngress: RoomBoundaryIngressSettings,
+    trackUndo: boolean = true
+  ): void {
+    const previous = cloneRoomBoundaryIngressSettings(this.roomBoundaryIngress);
+    const normalizedNext = cloneRoomBoundaryIngressSettings(nextBoundaryIngress);
+
+    if (JSON.stringify(previous) === JSON.stringify(normalizedNext)) {
+      this.host.updateGoalUi();
+      return;
+    }
+
+    this.roomBoundaryIngress = normalizedNext;
+
+    if (trackUndo) {
+      this.undoStack.push({
+        kind: 'boundaryIngress',
+        action: {
+          previous,
+          next: cloneRoomBoundaryIngressSettings(normalizedNext),
+        },
+      });
+      this.redoStack = [];
+    }
+
+    this.host.updateGoalUi();
     this.markRoomDirty();
   }
 

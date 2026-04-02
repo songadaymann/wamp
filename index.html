@@ -578,6 +578,54 @@
         data-sidebar-default-collapsed="desktop"
       >
         <div class="section-label">Advanced</div>
+        <div class="goal-context-note boundary-ingress-note">
+          Control what can enter this room from each adjacent side.
+        </div>
+        <div class="boundary-ingress-grid" role="group" aria-label="Boundary ingress controls">
+          <div class="boundary-ingress-header"></div>
+          <div class="boundary-ingress-header">Objects</div>
+          <div class="boundary-ingress-header">Enemies</div>
+
+          <div class="boundary-ingress-label">From Above</div>
+          <label class="boundary-ingress-toggle" for="boundary-up-objects">
+            <input id="boundary-up-objects" type="checkbox" checked />
+            <span>Allow</span>
+          </label>
+          <label class="boundary-ingress-toggle" for="boundary-up-enemies">
+            <input id="boundary-up-enemies" type="checkbox" checked />
+            <span>Allow</span>
+          </label>
+
+          <div class="boundary-ingress-label">From Right</div>
+          <label class="boundary-ingress-toggle" for="boundary-right-objects">
+            <input id="boundary-right-objects" type="checkbox" checked />
+            <span>Allow</span>
+          </label>
+          <label class="boundary-ingress-toggle" for="boundary-right-enemies">
+            <input id="boundary-right-enemies" type="checkbox" checked />
+            <span>Allow</span>
+          </label>
+
+          <div class="boundary-ingress-label">From Below</div>
+          <label class="boundary-ingress-toggle" for="boundary-down-objects">
+            <input id="boundary-down-objects" type="checkbox" checked />
+            <span>Allow</span>
+          </label>
+          <label class="boundary-ingress-toggle" for="boundary-down-enemies">
+            <input id="boundary-down-enemies" type="checkbox" checked />
+            <span>Allow</span>
+          </label>
+
+          <div class="boundary-ingress-label">From Left</div>
+          <label class="boundary-ingress-toggle" for="boundary-left-objects">
+            <input id="boundary-left-objects" type="checkbox" checked />
+            <span>Allow</span>
+          </label>
+          <label class="boundary-ingress-toggle" for="boundary-left-enemies">
+            <input id="boundary-left-enemies" type="checkbox" checked />
+            <span>Allow</span>
+          </label>
+        </div>
         <div class="editor-advanced-grid">
           <button id="btn-mint-room" class="bar-btn">Mint Room</button>
           <button id="btn-refresh-room-metadata" class="bar-btn hidden">Refresh NFT Metadata</button>

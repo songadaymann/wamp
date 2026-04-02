@@ -57,6 +57,7 @@ import {
 import { createGoalMarkerFlagSprite } from '../goals/markerFlags';
 import {
   cloneRoomSnapshot,
+  createDefaultRoomBoundaryIngressSettings,
   createLocalRoomRepository,
   isRoomApiError,
   createRoomRepository,
@@ -376,6 +377,7 @@ export class CourseEditorScene extends Phaser.Scene {
         editorState.selectedBackground = backgroundId;
         this.handleBackgroundChanged();
       },
+      onSetBoundaryIngress: () => {},
       onSetGoalType: (goalType) => this.setGoalType(goalType),
       onSetGoalTimeLimitSeconds: (seconds) => this.setGoalTimeLimitSeconds(seconds),
       onSetGoalRequiredCount: (requiredCount) => this.setGoalRequiredCount(requiredCount),
@@ -2779,6 +2781,7 @@ export class CourseEditorScene extends Phaser.Scene {
       buildEditorUiViewModel({
         roomTitle: selectedSlice?.roomTitle ?? '',
         roomCoordinates: selectedSlice?.coordinates ?? { x: 0, y: 0 },
+        roomBoundaryIngress: createDefaultRoomBoundaryIngressSettings(),
         roomGoal: null,
         roomPlacementMode: null as GoalPlacementMode,
         goalUsesMarkers: false,

@@ -10,6 +10,7 @@ import {
 } from '../../config';
 import type { CourseGoalType } from '../../courses/model';
 import type { RoomGoalType } from '../../goals/roomGoals';
+import type { RoomBoundarySide } from '../../persistence/roomRepository';
 import { AUTH_STATE_CHANGED_EVENT } from '../../auth/client';
 import type { EditorMarkerPlacementMode } from '../../ui/setup/sceneBridge';
 import { EDITOR_UI_STATE_CHANGED_EVENT } from './uiEvents';
@@ -89,6 +90,20 @@ export interface EditorInspectorState {
   containerClearTitle: string;
 }
 
+export interface EditorBoundaryIngressSideUiViewModel {
+  allowObjectsIn: boolean;
+  allowEnemiesIn: boolean;
+}
+
+export interface EditorBoundaryIngressUiViewModel {
+  up: EditorBoundaryIngressSideUiViewModel;
+  right: EditorBoundaryIngressSideUiViewModel;
+  down: EditorBoundaryIngressSideUiViewModel;
+  left: EditorBoundaryIngressSideUiViewModel;
+}
+
+export type EditorBoundaryIngressEntityType = 'objects' | 'enemies';
+
 export interface EditorUiViewModel {
   roomTitleValue: string;
   roomCoordinatesText: string;
@@ -121,6 +136,7 @@ export interface EditorUiViewModel {
   historyHidden: boolean;
   historyDisabled: boolean;
   fitHidden: boolean;
+  boundaryIngress: EditorBoundaryIngressUiViewModel;
   goal: EditorGoalUiViewModel;
   course: EditorCourseUiViewModel;
 }
@@ -163,6 +179,11 @@ export interface EditorUiBridgeActions {
   onClearCurrentLayer: () => void;
   onClearAllTiles: () => void;
   onSelectBackground: (backgroundId: string) => void;
+  onSetBoundaryIngress: (
+    side: RoomBoundarySide,
+    entityType: EditorBoundaryIngressEntityType,
+    allowed: boolean
+  ) => void;
   onSetGoalType: (nextType: RoomGoalType | null) => void;
   onSetGoalTimeLimitSeconds: (seconds: number | null) => void;
   onSetGoalRequiredCount: (requiredCount: number) => void;
@@ -279,6 +300,8 @@ export class EditorUiBridge {
   private readonly objectCategoryTabs: HTMLElement[];
   private readonly backgroundSelect: HTMLSelectElement | null;
   private readonly backgroundButtons: HTMLButtonElement[];
+  private readonly boundaryIngressObjectChecks: Record<RoomBoundarySide, HTMLInputElement | null>;
+  private readonly boundaryIngressEnemyChecks: Record<RoomBoundarySide, HTMLInputElement | null>;
   private readonly goalTypeSelect: HTMLSelectElement | null;
   private readonly goalContextNote: HTMLElement | null;
   private readonly timeLimitRow: HTMLElement | null;
@@ -398,6 +421,18 @@ export class EditorUiBridge {
     this.backgroundButtons = Array.from(
       this.doc.querySelectorAll<HTMLButtonElement>('[data-background-id]')
     );
+    this.boundaryIngressObjectChecks = {
+      up: this.doc.getElementById('boundary-up-objects') as HTMLInputElement | null,
+      right: this.doc.getElementById('boundary-right-objects') as HTMLInputElement | null,
+      down: this.doc.getElementById('boundary-down-objects') as HTMLInputElement | null,
+      left: this.doc.getElementById('boundary-left-objects') as HTMLInputElement | null,
+    };
+    this.boundaryIngressEnemyChecks = {
+      up: this.doc.getElementById('boundary-up-enemies') as HTMLInputElement | null,
+      right: this.doc.getElementById('boundary-right-enemies') as HTMLInputElement | null,
+      down: this.doc.getElementById('boundary-down-enemies') as HTMLInputElement | null,
+      left: this.doc.getElementById('boundary-left-enemies') as HTMLInputElement | null,
+    };
     this.goalTypeSelect = this.doc.getElementById('goal-type-select') as HTMLSelectElement | null;
     this.goalContextNote = this.doc.getElementById('goal-context-note');
     this.timeLimitRow = this.doc.getElementById('goal-time-limit-row');
@@ -521,6 +556,26 @@ export class EditorUiBridge {
     this.setHidden(this.historyBtn, viewModel.historyHidden);
     this.setDisabled(this.historyBtn, viewModel.historyDisabled);
     this.setHidden(this.fitBtns, viewModel.fitHidden);
+    this.setChecked(this.boundaryIngressObjectChecks.up, viewModel.boundaryIngress.up.allowObjectsIn);
+    this.setChecked(this.boundaryIngressEnemyChecks.up, viewModel.boundaryIngress.up.allowEnemiesIn);
+    this.setChecked(
+      this.boundaryIngressObjectChecks.right,
+      viewModel.boundaryIngress.right.allowObjectsIn
+    );
+    this.setChecked(
+      this.boundaryIngressEnemyChecks.right,
+      viewModel.boundaryIngress.right.allowEnemiesIn
+    );
+    this.setChecked(
+      this.boundaryIngressObjectChecks.down,
+      viewModel.boundaryIngress.down.allowObjectsIn
+    );
+    this.setChecked(
+      this.boundaryIngressEnemyChecks.down,
+      viewModel.boundaryIngress.down.allowEnemiesIn
+    );
+    this.setChecked(this.boundaryIngressObjectChecks.left, viewModel.boundaryIngress.left.allowObjectsIn);
+    this.setChecked(this.boundaryIngressEnemyChecks.left, viewModel.boundaryIngress.left.allowEnemiesIn);
 
     this.setValue(this.goalTypeSelect, viewModel.goal.goalTypeValue);
     this.setDisabled(this.goalTypeSelect, viewModel.goal.goalTypeDisabled);
@@ -819,6 +874,30 @@ export class EditorUiBridge {
       button.addEventListener('click', handler);
       this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
     }
+
+    const bindBoundaryIngressCheck = (
+      input: HTMLInputElement | null,
+      side: RoomBoundarySide,
+      entityType: EditorBoundaryIngressEntityType
+    ) => {
+      if (!input) {
+        return;
+      }
+      const handler = () => {
+        this.actions.onSetBoundaryIngress(side, entityType, input.checked);
+      };
+      input.addEventListener('change', handler);
+      this.cleanupCallbacks.push(() => input.removeEventListener('change', handler));
+    };
+
+    bindBoundaryIngressCheck(this.boundaryIngressObjectChecks.up, 'up', 'objects');
+    bindBoundaryIngressCheck(this.boundaryIngressEnemyChecks.up, 'up', 'enemies');
+    bindBoundaryIngressCheck(this.boundaryIngressObjectChecks.right, 'right', 'objects');
+    bindBoundaryIngressCheck(this.boundaryIngressEnemyChecks.right, 'right', 'enemies');
+    bindBoundaryIngressCheck(this.boundaryIngressObjectChecks.down, 'down', 'objects');
+    bindBoundaryIngressCheck(this.boundaryIngressEnemyChecks.down, 'down', 'enemies');
+    bindBoundaryIngressCheck(this.boundaryIngressObjectChecks.left, 'left', 'objects');
+    bindBoundaryIngressCheck(this.boundaryIngressEnemyChecks.left, 'left', 'enemies');
 
     const handleGoalTypeChange = () => {
       this.actions.onSetGoalType(
@@ -1163,6 +1242,12 @@ export class EditorUiBridge {
 
     if (element.value !== value) {
       element.value = value;
+    }
+  }
+
+  private setChecked(input: HTMLInputElement | null, checked: boolean): void {
+    if (input && input.checked !== checked) {
+      input.checked = checked;
     }
   }
 

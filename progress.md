@@ -57,6 +57,19 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Room boundary ingress controls on April 2, 2026:
+  - added per-room inbound seam settings for `up`, `right`, `down`, and `left`
+  - each side now independently controls whether incoming `objects` and `enemies` may cross into the room
+  - editor implementation:
+    - new `Advanced` section controls with per-side object/enemy checkboxes
+    - state is saved in `RoomSnapshot.boundaryIngress`
+    - changes participate in undo/redo and room-version fingerprinting
+  - runtime implementation:
+    - dynamic live objects now respect one-way ingress gates at room seams
+    - player traversal is unchanged; the setting only affects dynamic objects and enemies
+  - verification:
+    - `npm run build` passed in the clean safety worktree after linking the existing repo `node_modules`
+
 - Leaderboard SQL hardening on March 31, 2026:
   - room and course leaderboard endpoints no longer load every completed run into JS before deduping/ranking
   - replaced the in-memory `.all() -> sort -> unique-per-user -> slice` path with SQL CTE/window-function ranking for top entries and viewer rank/best
