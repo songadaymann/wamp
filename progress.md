@@ -57,6 +57,18 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Desktop world HUD play-mode collapse on April 2, 2026:
+  - collapsed the desktop `play-world` HUD down to the active stop control only, so normal browse keeps the full overworld card while gameplay shrinks it to a compact top-left stop pill
+  - kept the change in HUD markup/style only by adding semantic action-row classes in `index.html` and desktop-only play-mode rules in `src/styles/sections/world.css`
+  - mobile behavior was left on the existing `MobileUiController` collapse path
+  - verification:
+    - `npm run build` passed
+    - browser artifacts in `output/web-game/world-hud-play-collapse-check/` confirm:
+      - `browse.png`: full world HUD in browse mode
+      - `play.png`: compact `Stop` card only in play mode
+      - `browse-restored.png`: full HUD returns after stopping play
+    - `output/web-game/world-hud-play-collapse-check/play.json` reports the play HUD at roughly `144x60` with only `btn-world-play: Stop` visible
+
 - Room boundary ingress controls on April 2, 2026:
   - added per-room inbound seam settings for `up`, `right`, `down`, and `left`
   - each side now independently controls whether incoming `objects` and `enemies` may cross into the room
