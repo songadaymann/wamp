@@ -23,6 +23,7 @@ import {
   normalizeRoomLightingSliderValue,
   type RoomLightingMode,
 } from '../../lighting/model';
+import type { RoomBoundarySide } from '../../persistence/roomRepository';
 import { AUTH_STATE_CHANGED_EVENT } from '../../auth/client';
 import type { EditorMarkerPlacementMode } from '../../ui/setup/sceneBridge';
 import { EDITOR_UI_STATE_CHANGED_EVENT } from './uiEvents';
