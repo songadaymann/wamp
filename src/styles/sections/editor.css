@@ -49,6 +49,7 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-se
 body[data-app-mode='editor']:not([data-device-class='phone']) #goal-section { order: 8; }
 body[data-app-mode='editor']:not([data-device-class='phone']) #course-goal-section { order: 9; }
 body[data-app-mode='editor']:not([data-device-class='phone']) #editor-advanced { order: 10; }
+body[data-app-mode='editor']:not([data-device-class='phone']) #lighting-section { order: 11; }
 
 .editor-action-rail {
   display: grid;
