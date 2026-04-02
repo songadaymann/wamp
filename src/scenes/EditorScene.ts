@@ -14,7 +14,6 @@ import {
   cloneRoomSnapshot,
   createRoomRepository,
   roomIdFromCoordinates,
-  type RoomBoundaryIngressSettings,
   type RoomCoordinates,
   type RoomPermissions,
   type RoomRecord,
@@ -364,7 +363,6 @@ export class EditorScene extends Phaser.Scene {
         getUiBridge: () => this.uiBridge,
         getRoomTitle: () => this.roomTitle,
         getRoomCoordinates: () => ({ ...this.roomCoordinates }),
-        getRoomBoundaryIngress: () => this.roomBoundaryIngress,
         getRoomGoal: () => this.roomGoal,
         getRoomPermissions: () => this.roomPermissions,
         getMintedTokenId: () => this.mintedTokenId,
@@ -549,10 +547,6 @@ export class EditorScene extends Phaser.Scene {
     return this.editRuntime.currentRoomGoal;
   }
 
-  private get roomBoundaryIngress(): RoomBoundaryIngressSettings {
-    return this.editRuntime.currentRoomBoundaryIngress;
-  }
-
   private get roomSpawnPoint(): RoomSpawnPoint | null {
     return this.editRuntime.currentRoomSpawnPoint;
   }
@@ -644,8 +638,6 @@ export class EditorScene extends Phaser.Scene {
       onClearCurrentLayer: () => this.toolController.clearCurrentLayer(),
       onClearAllTiles: () => this.toolController.clearAllTiles(),
       onSelectBackground: () => this.applySelectedBackground(),
-      onSetBoundaryIngress: (side, entityType, allowed) =>
-        this.toolController.setBoundaryIngress(side, entityType, allowed),
       onSetGoalType: (nextType) => this.toolController.setGoalType(nextType),
       onSetGoalTimeLimitSeconds: (seconds) => this.toolController.setGoalTimeLimitSeconds(seconds),
       onSetGoalRequiredCount: (requiredCount) => this.toolController.setGoalRequiredCount(requiredCount),
@@ -1213,7 +1205,6 @@ export class EditorScene extends Phaser.Scene {
       canRevert: this.roomPermissions.canRevert,
       canMint: this.roomPermissions.canMint,
       background: editorState.selectedBackground,
-      boundaryIngress: this.roomBoundaryIngress,
       goal: cloneRoomGoal(this.roomGoal),
       goalPlacementMode: this.goalPlacementMode,
       courseEdit: this.buildCourseEditedRoomData(),

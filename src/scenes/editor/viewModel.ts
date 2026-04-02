@@ -1,10 +1,5 @@
 import { goalSupportsTimeLimit, type RoomGoal } from '../../goals/roomGoals';
-import type {
-  RoomBoundaryIngressSettings,
-  RoomCoordinates,
-  RoomPermissions,
-  RoomVersionRecord,
-} from '../../persistence/roomRepository';
+import type { RoomCoordinates, RoomPermissions, RoomVersionRecord } from '../../persistence/roomRepository';
 import type { EditorUiViewModel } from './uiBridge';
 import type { GoalPlacementMode } from './editRuntime';
 import type { EditorStatusDetails } from './roomSession';
@@ -13,7 +8,6 @@ import type { EditorCourseUiState } from '../../ui/setup/sceneBridge';
 export interface BuildEditorUiViewModelOptions {
   roomTitle: string | null;
   roomCoordinates: RoomCoordinates;
-  roomBoundaryIngress: RoomBoundaryIngressSettings;
   roomGoal: RoomGoal | null;
   roomPlacementMode: GoalPlacementMode;
   goalUsesMarkers: boolean;
@@ -54,7 +48,6 @@ export function buildEditorUiViewModel(
   const {
     roomTitle,
     roomCoordinates,
-    roomBoundaryIngress,
     roomGoal,
     roomPlacementMode,
     goalUsesMarkers,
@@ -109,12 +102,6 @@ export function buildEditorUiViewModel(
     historyHidden: false,
     historyDisabled: roomVersionHistory.length === 0,
     fitHidden: false,
-    boundaryIngress: {
-      up: { ...roomBoundaryIngress.up },
-      right: { ...roomBoundaryIngress.right },
-      down: { ...roomBoundaryIngress.down },
-      left: { ...roomBoundaryIngress.left },
-    },
     goal: {
       goalTypeValue: roomGoal?.type ?? '',
       goalTypeDisabled: false,

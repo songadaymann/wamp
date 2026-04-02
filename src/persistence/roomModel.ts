@@ -24,17 +24,6 @@ export interface RoomSpawnPoint {
   y: number;
 }
 
-export const ROOM_BOUNDARY_SIDES = ['up', 'right', 'down', 'left'] as const;
-
-export type RoomBoundarySide = typeof ROOM_BOUNDARY_SIDES[number];
-
-export interface RoomBoundaryIngressRule {
-  allowObjectsIn: boolean;
-  allowEnemiesIn: boolean;
-}
-
-export type RoomBoundaryIngressSettings = Record<RoomBoundarySide, RoomBoundaryIngressRule>;
-
 export type RoomStatus = 'draft' | 'published';
 export type RoomAuthorPrincipalKind = 'user' | 'agent';
 export type RoomTileData = Record<LayerName, (number | -1)[][]>;
@@ -59,7 +48,6 @@ export interface RoomSnapshot {
   coordinates: RoomCoordinates;
   title: string | null;
   background: string;
-  boundaryIngress: RoomBoundaryIngressSettings;
   goal: RoomGoal | null;
   spawnPoint: RoomSpawnPoint | null;
   tileData: RoomTileData;
@@ -169,54 +157,6 @@ export function createEmptyTileData(): RoomTileData {
   };
 }
 
-export function createDefaultRoomBoundaryIngressSettings(): RoomBoundaryIngressSettings {
-  return {
-    up: { allowObjectsIn: true, allowEnemiesIn: true },
-    right: { allowObjectsIn: true, allowEnemiesIn: true },
-    down: { allowObjectsIn: true, allowEnemiesIn: true },
-    left: { allowObjectsIn: true, allowEnemiesIn: true },
-  };
-}
-
-export function normalizeRoomBoundaryIngressSettings(value: unknown): RoomBoundaryIngressSettings {
-  const incoming = value as Partial<Record<RoomBoundarySide, Partial<RoomBoundaryIngressRule>>> | null;
-  const defaults = createDefaultRoomBoundaryIngressSettings();
-  const normalized = {} as RoomBoundaryIngressSettings;
-
-  for (const side of ROOM_BOUNDARY_SIDES) {
-    const rule = incoming?.[side];
-    normalized[side] = {
-      allowObjectsIn:
-        typeof rule?.allowObjectsIn === 'boolean'
-          ? rule.allowObjectsIn
-          : defaults[side].allowObjectsIn,
-      allowEnemiesIn:
-        typeof rule?.allowEnemiesIn === 'boolean'
-          ? rule.allowEnemiesIn
-          : defaults[side].allowEnemiesIn,
-    };
-  }
-
-  return normalized;
-}
-
-export function cloneRoomBoundaryIngressSettings(
-  value: RoomBoundaryIngressSettings | null | undefined
-): RoomBoundaryIngressSettings {
-  return normalizeRoomBoundaryIngressSettings(value);
-}
-
-export function roomBoundaryIngressSettingsAreDefault(
-  value: RoomBoundaryIngressSettings | null | undefined
-): boolean {
-  const normalized = normalizeRoomBoundaryIngressSettings(value);
-  return ROOM_BOUNDARY_SIDES.every(
-    (side) =>
-      normalized[side].allowObjectsIn &&
-      normalized[side].allowEnemiesIn
-  );
-}
-
 export function createDefaultRoomSnapshot(
   roomId: string = DEFAULT_ROOM_ID,
   coordinates: RoomCoordinates = DEFAULT_ROOM_COORDINATES
@@ -228,7 +168,6 @@ export function createDefaultRoomSnapshot(
     coordinates: { ...coordinates },
     title: null,
     background: DEFAULT_ROOM_BACKGROUND,
-    boundaryIngress: createDefaultRoomBoundaryIngressSettings(),
     goal: null,
     spawnPoint: null,
     tileData: createEmptyTileData(),
@@ -342,7 +281,6 @@ export function cloneRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
     coordinates: { ...room.coordinates },
     title: normalizeRoomTitle(room.title),
     background: normalizeRoomBackground(room.background),
-    boundaryIngress: cloneRoomBoundaryIngressSettings(room.boundaryIngress),
     goal: normalizeRoomGoal(room.goal),
     spawnPoint: room.spawnPoint ? { ...room.spawnPoint } : null,
     tileData: cloneTileData(room.tileData),
@@ -464,10 +402,6 @@ export function isRoomSnapshotBlank(room: RoomSnapshot): boolean {
   }
 
   if (normalizeRoomBackground(room.background) !== DEFAULT_ROOM_BACKGROUND) {
-    return false;
-  }
-
-  if (!roomBoundaryIngressSettingsAreDefault(room.boundaryIngress)) {
     return false;
   }
 

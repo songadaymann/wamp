@@ -13,7 +13,7 @@ import {
   type LayerName,
   type PlacedObject,
 } from '../../config';
-import type { RoomBoundarySide, RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
+import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import type { LoadedFullRoom } from './worldStreaming';
 import { terrainTileCollidesAtLocalPixel } from './terrainCollision';
 
@@ -140,11 +140,6 @@ export interface WeaponHitResult {
   y: number;
 }
 
-interface BoundaryIngressGate {
-  side: RoomBoundarySide;
-  rect: Phaser.GameObjects.Rectangle;
-}
-
 const CANNON_BULLET_CONFIG: GameObjectConfig = {
   id: 'cannon_bullet',
   name: 'Cannon Bullet',
@@ -166,11 +161,8 @@ const BOUNCE_PAD_LAUNCH_GRACE_MS = 180;
 const TORNADO_LAUNCH_GRACE_MS = 280;
 const LIGHTNING_ACTIVE_MS = 190;
 const LIGHTNING_COOLDOWN_MS = 1150;
-const BOUNDARY_INGRESS_GATE_THICKNESS = 12;
 
 export class OverworldLiveObjectController<TEdgeWall = unknown> {
-  private readonly boundaryIngressGatesByRoomId = new Map<string, BoundaryIngressGate[]>();
-
   constructor(private readonly options: OverworldLiveObjectControllerOptions<TEdgeWall>) {}
 
   createLiveObjects(loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>): void {
@@ -924,7 +916,6 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
   ): void {
     const rooms = Array.from(loadedRooms);
-    this.syncBoundaryIngressGates(rooms);
     const solidObstacles = rooms.flatMap((loadedRoom) =>
       loadedRoom.liveObjects.filter(
         (candidate) =>
@@ -953,23 +944,6 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
               )
             );
           }
-
-          const boundaryGates = this.boundaryIngressGatesByRoomId.get(collisionRoom.room.id) ?? [];
-          for (const boundaryGate of boundaryGates) {
-            liveObject.worldColliders.push(
-              this.options.scene.physics.add.collider(
-                liveObject.sprite,
-                boundaryGate.rect,
-                undefined,
-                () =>
-                  this.shouldCollideWithBoundaryIngressGate(
-                    liveObject,
-                    collisionRoom.room,
-                    boundaryGate.side
-                  )
-              )
-            );
-          }
         }
 
         for (const obstacle of solidObstacles) {
@@ -982,167 +956,6 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           );
         }
       }
-    }
-  }
-
-  private syncBoundaryIngressGates(
-    rooms: LoadedFullRoom<LoadedRoomObject, TEdgeWall>[]
-  ): void {
-    const activeRoomIds = new Set(rooms.map((loadedRoom) => loadedRoom.room.id));
-
-    for (const [roomId, gates] of this.boundaryIngressGatesByRoomId.entries()) {
-      if (activeRoomIds.has(roomId)) {
-        continue;
-      }
-      this.destroyBoundaryIngressGates(gates);
-      this.boundaryIngressGatesByRoomId.delete(roomId);
-    }
-
-    for (const loadedRoom of rooms) {
-      if (this.boundaryIngressGatesByRoomId.has(loadedRoom.room.id)) {
-        continue;
-      }
-      this.boundaryIngressGatesByRoomId.set(
-        loadedRoom.room.id,
-        this.createBoundaryIngressGates(loadedRoom.room)
-      );
-    }
-  }
-
-  private createBoundaryIngressGates(
-    room: RoomSnapshot
-  ): BoundaryIngressGate[] {
-    const roomOrigin = this.options.getRoomOrigin(room.coordinates);
-    const thickness = BOUNDARY_INGRESS_GATE_THICKNESS;
-    const descriptors: Array<{
-      side: RoomBoundarySide;
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-    }> = [
-      {
-        side: 'up',
-        x: roomOrigin.x + ROOM_PX_WIDTH / 2,
-        y: roomOrigin.y + thickness / 2,
-        width: ROOM_PX_WIDTH,
-        height: thickness,
-      },
-      {
-        side: 'right',
-        x: roomOrigin.x + ROOM_PX_WIDTH - thickness / 2,
-        y: roomOrigin.y + ROOM_PX_HEIGHT / 2,
-        width: thickness,
-        height: ROOM_PX_HEIGHT,
-      },
-      {
-        side: 'down',
-        x: roomOrigin.x + ROOM_PX_WIDTH / 2,
-        y: roomOrigin.y + ROOM_PX_HEIGHT - thickness / 2,
-        width: ROOM_PX_WIDTH,
-        height: thickness,
-      },
-      {
-        side: 'left',
-        x: roomOrigin.x + thickness / 2,
-        y: roomOrigin.y + ROOM_PX_HEIGHT / 2,
-        width: thickness,
-        height: ROOM_PX_HEIGHT,
-      },
-    ];
-
-    return descriptors.map((descriptor) => {
-      const rect = this.options.scene.add.rectangle(
-        descriptor.x,
-        descriptor.y,
-        descriptor.width,
-        descriptor.height,
-        0xffffff,
-        0
-      );
-      rect.setVisible(false);
-      this.options.scene.physics.add.existing(rect, true);
-      return {
-        side: descriptor.side,
-        rect,
-      };
-    });
-  }
-
-  private destroyBoundaryIngressGates(gates: BoundaryIngressGate[]): void {
-    for (const gate of gates) {
-      gate.rect.destroy();
-    }
-  }
-
-  private shouldCollideWithBoundaryIngressGate(
-    liveObject: LoadedRoomObject,
-    room: RoomSnapshot,
-    side: RoomBoundarySide
-  ): boolean {
-    const moverType = this.getBoundaryIngressMoverType(liveObject);
-    if (!moverType) {
-      return false;
-    }
-
-    const rule = room.boundaryIngress[side];
-    if (!rule) {
-      return false;
-    }
-
-    if (moverType === 'objects' && rule.allowObjectsIn) {
-      return false;
-    }
-    if (moverType === 'enemies' && rule.allowEnemiesIn) {
-      return false;
-    }
-
-    const body = liveObject.sprite.body as ArcadeObjectBody | null;
-    if (!isDynamicArcadeBody(body)) {
-      return false;
-    }
-
-    return this.isEnteringRoomFromSide(body, room, side);
-  }
-
-  private getBoundaryIngressMoverType(
-    liveObject: LoadedRoomObject
-  ): 'objects' | 'enemies' | null {
-    if (liveObject.config.category === 'enemy' || liveObject.config.id === 'cannon_bullet') {
-      return 'enemies';
-    }
-
-    if (this.usesDynamicObjectBody(liveObject.config)) {
-      return 'objects';
-    }
-
-    return null;
-  }
-
-  private isEnteringRoomFromSide(
-    body: Phaser.Physics.Arcade.Body,
-    room: RoomSnapshot,
-    side: RoomBoundarySide
-  ): boolean {
-    const roomOrigin = this.options.getRoomOrigin(room.coordinates);
-    const roomLeft = roomOrigin.x;
-    const roomRight = roomOrigin.x + ROOM_PX_WIDTH;
-    const roomTop = roomOrigin.y;
-    const roomBottom = roomOrigin.y + ROOM_PX_HEIGHT;
-    const verticalLeeway = Math.max(4, body.height * 0.5);
-    const horizontalLeeway = Math.max(4, body.width * 0.5);
-
-    switch (side) {
-      case 'up':
-        return body.velocity.y > 6 && body.center.y <= roomTop + verticalLeeway;
-      case 'right':
-        return body.velocity.x < -6 && body.center.x >= roomRight - horizontalLeeway;
-      case 'down':
-        return body.velocity.y < -6 && body.center.y >= roomBottom - verticalLeeway;
-      case 'left':
-        return body.velocity.x > 6 && body.center.x <= roomLeft + horizontalLeeway;
-      default:
-        return false;
     }
   }
 

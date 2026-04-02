@@ -2,7 +2,6 @@ import { getAuthDebugState } from '../../auth/client';
 import { editorState } from '../../config';
 import type { RoomGoal } from '../../goals/roomGoals';
 import type {
-  RoomBoundaryIngressSettings,
   RoomCoordinates,
   RoomPermissions,
   RoomVersionRecord,
@@ -24,7 +23,6 @@ interface EditorChromeControllerHost {
   getUiBridge(): EditorUiBridge | null;
   getRoomTitle(): string | null;
   getRoomCoordinates(): RoomCoordinates;
-  getRoomBoundaryIngress(): RoomBoundaryIngressSettings;
   getRoomGoal(): RoomGoal | null;
   getRoomPermissions(): RoomPermissions;
   getMintedTokenId(): string | null;
@@ -59,7 +57,6 @@ export class EditorChromeController {
       buildEditorUiViewModel({
         roomTitle: this.host.getRoomTitle(),
         roomCoordinates: this.host.getRoomCoordinates(),
-        roomBoundaryIngress: this.host.getRoomBoundaryIngress(),
         roomGoal,
         roomPlacementMode: this.editRuntime.currentGoalPlacementMode,
         goalUsesMarkers: this.editRuntime.goalUsesMarkers(roomGoal),

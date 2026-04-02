@@ -8,7 +8,6 @@ import {
 } from '../../config';
 import type { RoomGoal } from '../../goals/roomGoals';
 import type { RoomGoalType } from '../../goals/roomGoals';
-import type { RoomBoundarySide } from '../../persistence/roomRepository';
 import type { EditorMarkerPlacementMode } from '../../ui/setup/sceneBridge';
 import type { EditorClipboardState, EditorEditRuntime, GoalPlacementMode } from './editRuntime';
 import type { EditorPersistenceController } from './persistence';
@@ -51,14 +50,6 @@ export class EditorToolController {
 
   setGoalType(nextType: RoomGoalType | null): void {
     this.editRuntime.setGoalType(nextType);
-  }
-
-  setBoundaryIngress(
-    side: RoomBoundarySide,
-    entityType: 'objects' | 'enemies',
-    allowed: boolean
-  ): void {
-    this.editRuntime.setBoundaryIngress(side, entityType, allowed);
   }
 
   setGoalTimeLimitSeconds(seconds: number | null): void {

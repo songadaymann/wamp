@@ -6,13 +6,7 @@ import {
   type PlacedObject,
 } from '../config';
 import { normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
-import {
-  ROOM_BOUNDARY_SIDES,
-  normalizeRoomBoundaryIngressSettings,
-  type RoomBoundaryIngressSettings,
-  type RoomSnapshot,
-  type RoomVersionRecord,
-} from './roomModel';
+import type { RoomSnapshot, RoomVersionRecord } from './roomModel';
 
 type CanonicalGoalPayload =
   | {
@@ -51,7 +45,6 @@ type CanonicalPlacedObjectPayload = {
 };
 
 type CanonicalRoomFingerprintPayload = {
-  boundaryIngress: Record<string, [boolean, boolean]>;
   goal: CanonicalGoalPayload | null;
   spawnPoint: [number, number] | null;
   tileData: Record<LayerName, number[]>;
@@ -89,7 +82,6 @@ export interface RoomVersionLineage {
 
 export function buildRoomVersionFingerprint(snapshot: RoomSnapshot): string {
   const payload: CanonicalRoomFingerprintPayload = {
-    boundaryIngress: normalizeBoundaryIngressForFingerprint(snapshot.boundaryIngress),
     goal: normalizeGoalForFingerprint(snapshot.goal),
     spawnPoint: snapshot.spawnPoint
       ? [Math.round(snapshot.spawnPoint.x), Math.round(snapshot.spawnPoint.y)]
@@ -196,20 +188,6 @@ function buildTileFingerprint(snapshot: RoomSnapshot): Record<LayerName, number[
     tileData[layerName] = snapshot.tileData[layerName].flat().map((value) => Number(value));
   }
   return tileData;
-}
-
-function normalizeBoundaryIngressForFingerprint(
-  boundaryIngress: RoomBoundaryIngressSettings
-): Record<string, [boolean, boolean]> {
-  const normalized = normalizeRoomBoundaryIngressSettings(boundaryIngress);
-  const payload: Record<string, [boolean, boolean]> = {};
-  for (const side of ROOM_BOUNDARY_SIDES) {
-    payload[side] = [
-      normalized[side].allowObjectsIn,
-      normalized[side].allowEnemiesIn,
-    ];
-  }
-  return payload;
 }
 
 function normalizeGoalForFingerprint(goal: RoomGoal | null): CanonicalGoalPayload | null {
