@@ -11,7 +11,10 @@ import {
 import type { CourseGoalType } from '../../courses/model';
 import type { RoomGoalType } from '../../goals/roomGoals';
 import type { RoomBoundarySide } from '../../persistence/roomRepository';
-import type { RoomLightingMode } from '../../lighting/model';
+import {
+  normalizeRoomLightingSliderValue,
+  type RoomLightingMode,
+} from '../../lighting/model';
 import type { RoomBoundarySide } from '../../persistence/roomRepository';
 import { AUTH_STATE_CHANGED_EVENT } from '../../auth/client';
 import type { EditorMarkerPlacementMode } from '../../ui/setup/sceneBridge';
@@ -187,6 +190,8 @@ export interface EditorUiBridgeActions {
     allowed: boolean
   ) => void;
   onSelectLighting: (mode: RoomLightingMode) => void;
+  onSetLightingDarkness: (darkness: number) => void;
+  onSetLightingRadius: (radius: number) => void;
   onSetGoalType: (nextType: RoomGoalType | null) => void;
   onSetGoalTimeLimitSeconds: (seconds: number | null) => void;
   onSetGoalRequiredCount: (requiredCount: number) => void;
@@ -303,6 +308,11 @@ export class EditorUiBridge {
   private readonly objectCategoryTabs: HTMLElement[];
   private readonly backgroundSelect: HTMLSelectElement | null;
   private readonly lightingSelect: HTMLSelectElement | null;
+  private readonly lightingTuningControls: HTMLElement | null;
+  private readonly lightingDarknessInput: HTMLInputElement | null;
+  private readonly lightingDarknessValue: HTMLElement | null;
+  private readonly lightingRadiusInput: HTMLInputElement | null;
+  private readonly lightingRadiusValue: HTMLElement | null;
   private readonly backgroundButtons: HTMLButtonElement[];
   private readonly boundaryIngressObjectChecks: Record<RoomBoundarySide, HTMLInputElement | null>;
   private readonly boundaryIngressEnemyChecks: Record<RoomBoundarySide, HTMLInputElement | null>;
@@ -424,6 +434,13 @@ export class EditorUiBridge {
       this.doc.getElementById('background-select') as HTMLSelectElement | null;
     this.lightingSelect =
       this.doc.getElementById('lighting-mode-select') as HTMLSelectElement | null;
+    this.lightingTuningControls = this.doc.getElementById('lighting-tuning-controls');
+    this.lightingDarknessInput =
+      this.doc.getElementById('lighting-darkness-range') as HTMLInputElement | null;
+    this.lightingDarknessValue = this.doc.getElementById('lighting-darkness-value');
+    this.lightingRadiusInput =
+      this.doc.getElementById('lighting-radius-range') as HTMLInputElement | null;
+    this.lightingRadiusValue = this.doc.getElementById('lighting-radius-value');
     this.backgroundButtons = Array.from(
       this.doc.querySelectorAll<HTMLButtonElement>('[data-background-id]')
     );
@@ -881,6 +898,12 @@ export class EditorUiBridge {
         this.lightingSelect?.removeEventListener('change', handleLightingSelectChange)
       );
     }
+    this.bindRangeInput(this.lightingDarknessInput, (value) => {
+      this.applyLightingDarkness(value);
+    });
+    this.bindRangeInput(this.lightingRadiusInput, (value) => {
+      this.applyLightingRadius(value);
+    });
 
     for (const button of this.backgroundButtons) {
       const handler = () => {
@@ -1087,6 +1110,28 @@ export class EditorUiBridge {
     });
   }
 
+  private bindRangeInput(
+    input: HTMLInputElement | null,
+    onCommit: (value: number) => void,
+  ): void {
+    if (!input) {
+      return;
+    }
+    const handleCommit = () => {
+      const fallback =
+        input === this.lightingDarknessInput
+          ? editorState.selectedLightingDarkness
+          : editorState.selectedLightingRadius;
+      onCommit(normalizeRoomLightingSliderValue(Number.parseInt(input.value, 10), fallback));
+    };
+    input.addEventListener('input', handleCommit);
+    input.addEventListener('change', handleCommit);
+    this.cleanupCallbacks.push(() => {
+      input.removeEventListener('input', handleCommit);
+      input.removeEventListener('change', handleCommit);
+    });
+  }
+
   private bindButton(
     button: HTMLButtonElement | HTMLElement | null,
     handler: () => void,
@@ -1125,6 +1170,24 @@ export class EditorUiBridge {
     this.actions.onSelectLighting(nextLightingMode);
     this.syncEditorChromeState();
     this.requestPhoneEditorAutoCollapse();
+  }
+
+  private applyLightingDarkness(nextDarkness: number): void {
+    if (editorState.selectedLightingDarkness === nextDarkness) {
+      return;
+    }
+    editorState.selectedLightingDarkness = nextDarkness;
+    this.actions.onSetLightingDarkness(nextDarkness);
+    this.syncEditorChromeState();
+  }
+
+  private applyLightingRadius(nextRadius: number): void {
+    if (editorState.selectedLightingRadius === nextRadius) {
+      return;
+    }
+    editorState.selectedLightingRadius = nextRadius;
+    this.actions.onSetLightingRadius(nextRadius);
+    this.syncEditorChromeState();
   }
 
   private requestPhoneEditorAutoCollapse(): void {
@@ -1205,6 +1268,14 @@ export class EditorUiBridge {
 
     this.setValue(this.backgroundSelect, editorState.selectedBackground);
     this.setValue(this.lightingSelect, editorState.selectedLightingMode);
+    this.setHidden(
+      this.lightingTuningControls,
+      editorState.selectedLightingMode !== 'playerAuraDark'
+    );
+    this.setValue(this.lightingDarknessInput, String(editorState.selectedLightingDarkness));
+    this.setValue(this.lightingRadiusInput, String(editorState.selectedLightingRadius));
+    this.setText(this.lightingDarknessValue, `${editorState.selectedLightingDarkness}%`);
+    this.setText(this.lightingRadiusValue, `${editorState.selectedLightingRadius}%`);
     for (const button of this.backgroundButtons) {
       const active = button.dataset.backgroundId === editorState.selectedBackground;
       button.classList.toggle('active', active);

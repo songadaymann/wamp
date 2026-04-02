@@ -84,6 +84,7 @@ import {
 import { getCourseGoalSummaryText } from './editor/courseEditing';
 import type { CourseComposerSceneData, CourseEditorSceneData, OverworldPlaySceneData } from './sceneData';
 import { RETRO_COLORS } from '../visuals/starfield';
+import { cloneRoomLightingSettings, type RoomLightingSettings } from '../lighting/model';
 import {
   createCourseEditorRoomBackgroundVisuals,
   destroyCourseEditorRoomBackgroundVisuals,
@@ -106,7 +107,7 @@ interface CourseRoomSlice {
   coordinates: RoomCoordinates;
   roomTitle: string | null;
   backgroundId: string;
-  lightingMode: RoomSnapshot['lighting']['mode'];
+  lighting: RoomLightingSettings;
   placedObjects: PlacedObject[];
   permissions: RoomPermissions;
   roomVersionHistory: RoomVersionRecord[];
@@ -383,7 +384,32 @@ export class CourseEditorScene extends Phaser.Scene {
         editorState.selectedLightingMode = mode;
         const slice = this.getSelectedSlice();
         if (slice) {
-          slice.lightingMode = mode;
+          slice.lighting = cloneRoomLightingSettings({
+            ...slice.lighting,
+            mode,
+          });
+        }
+        this.renderUi();
+      },
+      onSetLightingDarkness: (darkness) => {
+        editorState.selectedLightingDarkness = darkness;
+        const slice = this.getSelectedSlice();
+        if (slice) {
+          slice.lighting = cloneRoomLightingSettings({
+            ...slice.lighting,
+            darkness,
+          });
+        }
+        this.renderUi();
+      },
+      onSetLightingRadius: (radius) => {
+        editorState.selectedLightingRadius = radius;
+        const slice = this.getSelectedSlice();
+        if (slice) {
+          slice.lighting = cloneRoomLightingSettings({
+            ...slice.lighting,
+            radius,
+          });
         }
         this.renderUi();
       },
@@ -1056,7 +1082,7 @@ export class CourseEditorScene extends Phaser.Scene {
       coordinates: { ...roomRef.coordinates },
       roomTitle: roomRef.roomTitle,
       backgroundId: 'none',
-      lightingMode: 'off',
+      lighting: cloneRoomLightingSettings(null),
       placedObjects: [],
       permissions: {
         canSaveDraft: true,
@@ -1093,9 +1119,9 @@ export class CourseEditorScene extends Phaser.Scene {
         setSelectedBackground: (backgroundId) => {
           slice.backgroundId = backgroundId;
         },
-        getSelectedLightingMode: () => slice.lightingMode,
-        setSelectedLightingMode: (mode) => {
-          slice.lightingMode = mode;
+        getSelectedLightingSettings: () => cloneRoomLightingSettings(slice.lighting),
+        setSelectedLightingSettings: (lighting) => {
+          slice.lighting = cloneRoomLightingSettings(lighting);
         },
         getPlacedObjects: () => slice.placedObjects,
         setPlacedObjects: (placedObjects) => {
@@ -1110,15 +1136,28 @@ export class CourseEditorScene extends Phaser.Scene {
             select.value = backgroundId;
           }
         },
-        updateLightingSelectValue: (mode) => {
+        updateLightingControlsValue: (lighting) => {
           if (this.selectedRoomId !== slice.roomId) {
             return;
           }
           const select = document.getElementById(
             'lighting-mode-select'
           ) as HTMLSelectElement | null;
+          const darknessRange = document.getElementById(
+            'lighting-darkness-range'
+          ) as HTMLInputElement | null;
+          const radiusRange = document.getElementById(
+            'lighting-radius-range'
+          ) as HTMLInputElement | null;
+          const normalizedLighting = cloneRoomLightingSettings(lighting);
           if (select) {
-            select.value = mode;
+            select.value = normalizedLighting.mode;
+          }
+          if (darknessRange) {
+            darknessRange.value = String(normalizedLighting.darkness);
+          }
+          if (radiusRange) {
+            radiusRange.value = String(normalizedLighting.radius);
           }
         },
         updateBackground: () => {
@@ -1181,7 +1220,7 @@ export class CourseEditorScene extends Phaser.Scene {
     slice.updatedAt = snapshot.updatedAt;
     slice.publishedAt = snapshot.publishedAt;
     slice.backgroundId = snapshot.background;
-    slice.lightingMode = snapshot.lighting.mode;
+    slice.lighting = cloneRoomLightingSettings(snapshot.lighting);
     slice.placedObjects = snapshot.placedObjects.map((placed) => ({ ...placed }));
     slice.label.setText(slice.roomTitle?.trim() || `${slice.coordinates.x},${slice.coordinates.y}`);
     slice.runtime.applyRoomSnapshot(cloneRoomSnapshot(snapshot));
@@ -1332,7 +1371,9 @@ export class CourseEditorScene extends Phaser.Scene {
     const slice = this.getSelectedSlice();
     if (slice) {
       editorState.selectedBackground = slice.backgroundId;
-      editorState.selectedLightingMode = slice.lightingMode;
+      editorState.selectedLightingMode = slice.lighting.mode;
+      editorState.selectedLightingDarkness = slice.lighting.darkness;
+      editorState.selectedLightingRadius = slice.lighting.radius;
       const select = document.getElementById('background-select') as HTMLSelectElement | null;
       if (select) {
         select.value = slice.backgroundId;
@@ -1340,8 +1381,20 @@ export class CourseEditorScene extends Phaser.Scene {
       const lightingSelect = document.getElementById(
         'lighting-mode-select'
       ) as HTMLSelectElement | null;
+      const darknessRange = document.getElementById(
+        'lighting-darkness-range'
+      ) as HTMLInputElement | null;
+      const radiusRange = document.getElementById(
+        'lighting-radius-range'
+      ) as HTMLInputElement | null;
       if (lightingSelect) {
-        lightingSelect.value = slice.lightingMode;
+        lightingSelect.value = slice.lighting.mode;
+      }
+      if (darknessRange) {
+        darknessRange.value = String(slice.lighting.darkness);
+      }
+      if (radiusRange) {
+        radiusRange.value = String(slice.lighting.radius);
       }
     }
     this.redrawSelection();

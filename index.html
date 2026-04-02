@@ -368,6 +368,46 @@
           <option value="off">Normal</option>
           <option value="playerAuraDark">Dark Aura</option>
         </select>
+        <div id="lighting-tuning-controls" class="lighting-tuning-controls hidden">
+          <div class="lighting-slider-group">
+            <div class="lighting-slider-header">
+              <span class="lighting-slider-label">Darkness</span>
+              <span id="lighting-darkness-value" class="lighting-slider-value">80%</span>
+            </div>
+            <input
+              id="lighting-darkness-range"
+              class="lighting-slider-input"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value="80"
+            />
+            <div class="lighting-slider-endpoints" aria-hidden="true">
+              <span>Barely dark</span>
+              <span>Pitch black</span>
+            </div>
+          </div>
+          <div class="lighting-slider-group">
+            <div class="lighting-slider-header">
+              <span class="lighting-slider-label">Spotlight Radius</span>
+              <span id="lighting-radius-value" class="lighting-slider-value">50%</span>
+            </div>
+            <input
+              id="lighting-radius-range"
+              class="lighting-slider-input"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value="50"
+            />
+            <div class="lighting-slider-endpoints" aria-hidden="true">
+              <span>Tight</span>
+              <span>Wide</span>
+            </div>
+          </div>
+        </div>
         <div class="room-lighting-note">
           Dark Aura previews the active room as dim and opens light from the spawn point.
         </div>
