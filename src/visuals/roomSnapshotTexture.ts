@@ -8,13 +8,13 @@ import {
   ROOM_WIDTH,
   TILESETS,
   TILE_SIZE,
-  getBackgroundGroup,
   getObjectById,
   getObjectDefaultFrame,
   getObjectFrameSourceRect,
   getPlacedObjectLayer,
   type LayerName,
 } from '../config';
+import { resolveRoomBackground } from '../backgrounds/model';
 import type { RoomSnapshot } from '../persistence/roomModel';
 import { RETRO_COLORS, drawStarfieldToContext, hashStringToSeed } from './starfield';
 
@@ -122,8 +122,8 @@ export function drawRoomBackground(
   offsetX = 0,
   offsetY = 0,
 ): void {
-  const backgroundGroup = getBackgroundGroup(room.background);
-  if (!backgroundGroup || backgroundGroup.layers.length === 0) {
+  const resolved = resolveRoomBackground(room.background);
+  if (resolved.kind === 'none') {
     context.save();
     context.translate(offsetX, offsetY);
     drawStarfieldToContext(
@@ -136,10 +136,16 @@ export function drawRoomBackground(
     return;
   }
 
-  context.fillStyle = backgroundGroup.bgColor ?? RETRO_COLORS.background;
+  if (resolved.kind === 'solid') {
+    context.fillStyle = resolved.color;
+    context.fillRect(offsetX, offsetY, width, height);
+    return;
+  }
+
+  context.fillStyle = resolved.group.bgColor ?? RETRO_COLORS.background;
   context.fillRect(offsetX, offsetY, width, height);
 
-  for (const layer of backgroundGroup.layers) {
+  for (const layer of resolved.group.layers) {
     const sourceImage = getTextureSource(scene, layer.key);
     if (!sourceImage) continue;
 

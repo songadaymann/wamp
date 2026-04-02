@@ -9,6 +9,10 @@ import {
   type PlacedObject,
 } from '../../../config';
 import {
+  isSolidColorBackgroundValue,
+  normalizeRoomBackground,
+} from '../../../backgrounds/model';
+import {
   createGoalMarkerPointFromTile,
   normalizeRoomGoal,
   type GoalMarkerPoint,
@@ -323,12 +327,16 @@ function normalizeCommand(value: unknown, index: number): RoomDraftCommand {
       if (typeof command.background !== 'string') {
         throw new HttpError(400, `commands[${index}].background must be a string.`);
       }
-      if (!BACKGROUND_GROUPS.some((group) => group.id === command.background)) {
+      const background = command.background.trim();
+      if (
+        !BACKGROUND_GROUPS.some((group) => group.id === background) &&
+        !isSolidColorBackgroundValue(background)
+      ) {
         throw new HttpError(400, `Unknown background "${command.background}".`);
       }
       return {
         type: 'set_background',
-        background: command.background,
+        background: normalizeRoomBackground(background),
       };
     }
     case 'set_spawn':
@@ -587,7 +595,7 @@ function applyCommand(room: RoomSnapshot, command: RoomDraftCommand): void {
       room.title = command.title;
       return;
     case 'set_background':
-      room.background = command.background;
+      room.background = normalizeRoomBackground(command.background);
       return;
     case 'set_spawn':
       room.spawnPoint = normalizeGoalMarkerPoint({ tileX: command.tileX, tileY: command.tileY });

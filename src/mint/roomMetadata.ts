@@ -9,6 +9,7 @@ import {
   type LayerName,
   type PlacedObject,
 } from '../config';
+import { getRoomBackgroundLabel, normalizeRoomBackground } from '../backgrounds/model';
 import { cloneRoomGoal, normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
 import { cloneRoomLightingSettings, type RoomLightingSettings } from '../lighting/model';
 import {
@@ -219,7 +220,7 @@ export function buildWampMintedRoomPayload(snapshot: RoomSnapshot): WampMintedRo
     roomId: snapshot.id,
     coordinates: [snapshot.coordinates.x, snapshot.coordinates.y],
     title: normalizeRoomTitle(snapshot.title),
-    background: snapshot.background,
+    background: normalizeRoomBackground(snapshot.background),
     lighting: cloneRoomLightingSettings(snapshot.lighting),
     goal: cloneRoomGoal(snapshot.goal),
     spawnPoint: snapshot.spawnPoint ? [snapshot.spawnPoint.x, snapshot.spawnPoint.y] : null,
@@ -251,7 +252,7 @@ export function buildRoomSnapshotFromMintedPayload(
   const snapshot = createDefaultRoomSnapshot(payload.roomId, coordinates);
 
   snapshot.title = normalizeRoomTitle(payload.title);
-  snapshot.background = payload.background;
+  snapshot.background = normalizeRoomBackground(payload.background);
   snapshot.lighting = cloneRoomLightingSettings(payload.lighting);
   snapshot.goal = normalizeRoomGoal(payload.goal);
   snapshot.spawnPoint = payload.spawnPoint
@@ -511,7 +512,7 @@ function normalizeMintedRoomPayloadV1(value: Partial<WampMintedRoomPayload>): Wa
     roomId: value.roomId,
     coordinates: [coordinates[0], coordinates[1]],
     title: normalizeRoomTitle(value.title),
-    background: value.background,
+    background: normalizeRoomBackground(value.background),
     lighting: cloneRoomLightingSettings(value.lighting),
     goal: normalizeRoomGoal(value.goal),
     spawnPoint:
@@ -569,7 +570,7 @@ function normalizeMintedRoomPayloadV2(value: Partial<WampMintedRoomPayloadV2>): 
     roomId: `${coordinates[0]},${coordinates[1]}`,
     coordinates: [coordinates[0], coordinates[1]],
     title: normalizeRoomTitle(value.n),
-    background: value.b,
+    background: normalizeRoomBackground(value.b),
     lighting: cloneRoomLightingSettings(null),
     goal: normalizeRoomGoalV2(value.g),
     spawnPoint:
@@ -615,7 +616,7 @@ function normalizeMintedRoomPayloadV3(value: Partial<WampMintedRoomPayloadV3>): 
     roomId: `${coordinates[0]},${coordinates[1]}`,
     coordinates: [coordinates[0], coordinates[1]],
     title: normalizeRoomTitle(value.n),
-    background: value.b,
+    background: normalizeRoomBackground(value.b),
     lighting: cloneRoomLightingSettings({
       mode: value.l === 1 ? 'playerAuraDark' : 'off',
     }),
@@ -670,7 +671,7 @@ function normalizeMintedRoomPayloadV4(value: Partial<WampMintedRoomPayloadV4>): 
     roomId: `${coordinates[0]},${coordinates[1]}`,
     coordinates: [coordinates[0], coordinates[1]],
     title: normalizeRoomTitle(value.n),
-    background: value.b,
+    background: normalizeRoomBackground(value.b),
     lighting: cloneRoomLightingSettings(
       lightingTuple
         ? {
@@ -827,7 +828,7 @@ function buildRoomTokenAttributes(snapshot: RoomSnapshot): WampRoomTokenAttribut
     { trait_type: 'Room X', value: snapshot.coordinates.x, display_type: 'number' },
     { trait_type: 'Room Y', value: snapshot.coordinates.y, display_type: 'number' },
     { trait_type: 'Version', value: snapshot.version, display_type: 'number' },
-    { trait_type: 'Background', value: snapshot.background },
+    { trait_type: 'Background', value: getRoomBackgroundLabel(snapshot.background) },
     { trait_type: 'Goal', value: snapshot.goal?.type ?? 'none' },
     { trait_type: 'Placed Objects', value: snapshot.placedObjects.length, display_type: 'number' },
     { trait_type: 'Solid Tiles', value: countSolidTiles(snapshot), display_type: 'number' },

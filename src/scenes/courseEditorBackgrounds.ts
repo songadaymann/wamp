@@ -2,9 +2,9 @@ import Phaser from 'phaser';
 import {
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
-  getBackgroundGroup,
   type BackgroundLayer,
 } from '../config';
+import { resolveRoomBackground } from '../backgrounds/model';
 import { RETRO_COLORS, ensureStarfieldTexture } from '../visuals/starfield';
 
 export interface CourseEditorRoomBackgroundVisuals {
@@ -27,7 +27,7 @@ export function createCourseEditorRoomBackgroundVisuals(
   origin: { x: number; y: number },
   backgroundId: string,
 ): CourseEditorRoomBackgroundVisuals {
-  const group = getBackgroundGroup(backgroundId);
+  const resolved = resolveRoomBackground(backgroundId);
   const visuals: CourseEditorRoomBackgroundVisuals = {
     origin: { ...origin },
     colorRect: null,
@@ -35,7 +35,7 @@ export function createCourseEditorRoomBackgroundVisuals(
     fallbackSprites: [],
   };
 
-  if (!group || group.layers.length === 0) {
+  if (resolved.kind === 'none') {
     const textureKey = ensureStarfieldTexture(scene);
     visuals.colorRect = scene.add.rectangle(
       origin.x,
@@ -58,15 +58,23 @@ export function createCourseEditorRoomBackgroundVisuals(
     return visuals;
   }
 
-  if (group.bgColor) {
-    const color = Phaser.Display.Color.HexStringToColor(group.bgColor).color;
+  if (resolved.kind === 'solid') {
+    const color = Phaser.Display.Color.HexStringToColor(resolved.color).color;
+    visuals.colorRect = scene.add.rectangle(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT, color);
+    visuals.colorRect.setOrigin(0, 0);
+    visuals.colorRect.setDepth(-40);
+    return visuals;
+  }
+
+  if (resolved.group.bgColor) {
+    const color = Phaser.Display.Color.HexStringToColor(resolved.group.bgColor).color;
     visuals.colorRect = scene.add.rectangle(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT, color);
     visuals.colorRect.setOrigin(0, 0);
     visuals.colorRect.setDepth(-40);
   }
 
-  for (let index = 0; index < group.layers.length; index += 1) {
-    const layer = group.layers[index];
+  for (let index = 0; index < resolved.group.layers.length; index += 1) {
+    const layer = resolved.group.layers[index];
     const sprite = scene.add.tileSprite(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT, layer.key);
     sprite.setOrigin(0, 0);
     sprite.setDepth(-39 + index);

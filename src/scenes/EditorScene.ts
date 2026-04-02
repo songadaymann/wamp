@@ -25,6 +25,7 @@ import {
   type RoomVersionRecord,
 } from '../persistence/roomRepository';
 import { createWorldRepository } from '../persistence/worldRepository';
+import { getSolidColorFromBackgroundValue } from '../backgrounds/model';
 import {
   type CourseGoalType,
   type CourseSnapshot,
@@ -247,6 +248,10 @@ export class EditorScene extends Phaser.Scene {
       getSelectedBackground: () => editorState.selectedBackground,
       setSelectedBackground: (backgroundId) => {
         editorState.selectedBackground = backgroundId;
+        editorState.selectedSolidBackgroundColor = getSolidColorFromBackgroundValue(
+          backgroundId,
+          editorState.selectedSolidBackgroundColor,
+        );
       },
       getSelectedLightingSettings: () => this.getSelectedLightingSettings(),
       setSelectedLightingSettings: (lighting) => {

@@ -696,7 +696,8 @@ export interface EditorState {
   paletteMode: PaletteMode;
   selectedObjectId: string | null;
   objectFacing: 'left' | 'right';
-  selectedBackground: string;        // BackgroundGroup.id
+  selectedBackground: string;        // BackgroundGroup.id or solid:#RRGGBB
+  selectedSolidBackgroundColor: string;
   selectedLightingMode: RoomLightingMode;
   selectedLightingDarkness: number;
   selectedLightingRadius: number;
@@ -739,6 +740,7 @@ export const editorState: EditorState = {
   selectedObjectId: null,
   objectFacing: 'right',
   selectedBackground: 'none',
+  selectedSolidBackgroundColor: '#24324a',
   selectedLightingMode: 'off',
   selectedLightingDarkness: DEFAULT_ROOM_LIGHTING_DARKNESS,
   selectedLightingRadius: DEFAULT_ROOM_LIGHTING_RADIUS,

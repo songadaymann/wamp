@@ -1,5 +1,9 @@
 import Phaser from 'phaser';
 import {
+  getSolidColorFromBackgroundValue,
+  normalizeRoomBackground,
+} from '../../backgrounds/model';
+import {
   canObjectBeStoredInContainer,
   canPlacedObjectBeContainer,
   canPlacedObjectBePressurePlateTarget,
@@ -314,8 +318,12 @@ export class EditorEditRuntime {
       }
     }
 
-    this.host.setSelectedBackground(room.background);
-    this.host.updateBackgroundSelectValue(room.background);
+    this.host.setSelectedBackground(normalizeRoomBackground(room.background));
+    editorState.selectedSolidBackgroundColor = getSolidColorFromBackgroundValue(
+      room.background,
+      editorState.selectedSolidBackgroundColor,
+    );
+    this.host.updateBackgroundSelectValue(normalizeRoomBackground(room.background));
     this.host.setSelectedLightingSettings(room.lighting);
     this.host.updateLightingControlsValue(room.lighting);
     this.host.updateBackground();
@@ -454,7 +462,7 @@ export class EditorEditRuntime {
       id: metadata.roomId,
       coordinates: { ...metadata.coordinates },
       title: metadata.title,
-      background: this.host.getSelectedBackground(),
+      background: normalizeRoomBackground(this.host.getSelectedBackground()),
       boundaryIngress: cloneRoomBoundaryIngressSettings(this.roomBoundaryIngress),
       lighting: cloneRoomLightingSettings(this.host.getSelectedLightingSettings()),
       goal: cloneRoomGoal(this.roomGoal),

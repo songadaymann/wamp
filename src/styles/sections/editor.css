@@ -588,6 +588,55 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #editor-advanced {
   background: var(--panel);
 }
 
+.background-solid-controls {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(243, 238, 226, 0.08);
+}
+
+.background-solid-color-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.background-solid-color-value {
+  color: var(--text);
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.background-solid-color-input {
+  width: 100%;
+  height: 34px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  cursor: pointer;
+}
+
+.background-solid-color-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.background-solid-color-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
+.background-solid-color-input::-moz-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
 #lighting-mode-select {
   width: 100%;
   padding: 5px 8px;

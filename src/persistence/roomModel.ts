@@ -11,6 +11,7 @@ import {
   type LayerName,
   type PlacedObject,
 } from '../config';
+import { DEFAULT_ROOM_BACKGROUND, normalizeRoomBackground } from '../backgrounds/model';
 import { normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
 import {
   cloneRoomLightingSettings,
@@ -232,7 +233,7 @@ export function createDefaultRoomSnapshot(
     id: roomId,
     coordinates: { ...coordinates },
     title: null,
-    background: 'none',
+    background: DEFAULT_ROOM_BACKGROUND,
     boundaryIngress: createDefaultRoomBoundaryIngressSettings(),
     lighting: cloneRoomLightingSettings(null),
     goal: null,
@@ -347,7 +348,7 @@ export function cloneRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
     id: room.id,
     coordinates: { ...room.coordinates },
     title: normalizeRoomTitle(room.title),
-    background: room.background,
+    background: normalizeRoomBackground(room.background),
     boundaryIngress: cloneRoomBoundaryIngressSettings(room.boundaryIngress),
     lighting: normalizeRoomLightingSettings(room.lighting),
     goal: normalizeRoomGoal(room.goal),
@@ -470,7 +471,7 @@ export function isRoomSnapshotBlank(room: RoomSnapshot): boolean {
     return false;
   }
 
-  if (room.background !== 'none') {
+  if (normalizeRoomBackground(room.background) !== DEFAULT_ROOM_BACKGROUND) {
     return false;
   }
 

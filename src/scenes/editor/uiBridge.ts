@@ -8,6 +8,14 @@ import {
   type PaletteMode,
   type ToolName,
 } from '../../config';
+import {
+  SOLID_COLOR_BACKGROUND_ID,
+  buildSolidColorBackgroundValue,
+  getBackgroundSelectionValue,
+  getSolidColorFromBackgroundValue,
+  normalizeRoomBackground,
+  normalizeSolidBackgroundColor,
+} from '../../backgrounds/model';
 import type { CourseGoalType } from '../../courses/model';
 import type { RoomGoalType } from '../../goals/roomGoals';
 import type { RoomBoundarySide } from '../../persistence/roomRepository';
@@ -306,6 +314,10 @@ export class EditorUiBridge {
   private readonly objectPaletteSection: HTMLElement | null;
   private readonly objectCategoryTabs: HTMLElement[];
   private readonly backgroundSelect: HTMLSelectElement | null;
+  private readonly backgroundSolidControls: HTMLElement | null;
+  private readonly backgroundSolidColorInput: HTMLInputElement | null;
+  private readonly backgroundSolidColorValue: HTMLElement | null;
+  private readonly backgroundSolidCard: HTMLButtonElement | null;
   private readonly lightingSelect: HTMLSelectElement | null;
   private readonly lightingTuningControls: HTMLElement | null;
   private readonly lightingDarknessInput: HTMLInputElement | null;
@@ -431,6 +443,12 @@ export class EditorUiBridge {
     this.objectCategoryTabs = Array.from(this.doc.querySelectorAll<HTMLElement>('.obj-cat-tab'));
     this.backgroundSelect =
       this.doc.getElementById('background-select') as HTMLSelectElement | null;
+    this.backgroundSolidControls = this.doc.getElementById('background-solid-controls');
+    this.backgroundSolidColorInput =
+      this.doc.getElementById('background-solid-color-input') as HTMLInputElement | null;
+    this.backgroundSolidColorValue = this.doc.getElementById('background-solid-color-value');
+    this.backgroundSolidCard =
+      this.doc.getElementById('background-solid-card') as HTMLButtonElement | null;
     this.lightingSelect =
       this.doc.getElementById('lighting-mode-select') as HTMLSelectElement | null;
     this.lightingTuningControls = this.doc.getElementById('lighting-tuning-controls');
@@ -884,6 +902,38 @@ export class EditorUiBridge {
         this.backgroundSelect?.removeEventListener('change', handleBackgroundSelectChange)
       );
     }
+    const handleBackgroundSolidColorChange = () => {
+      if (!this.backgroundSolidColorInput) {
+        return;
+      }
+      const nextColor = normalizeSolidBackgroundColor(
+        this.backgroundSolidColorInput.value,
+        editorState.selectedSolidBackgroundColor,
+      );
+      editorState.selectedSolidBackgroundColor = nextColor;
+      if (getBackgroundSelectionValue(editorState.selectedBackground) === SOLID_COLOR_BACKGROUND_ID) {
+        const nextBackground = buildSolidColorBackgroundValue(nextColor);
+        if (editorState.selectedBackground !== nextBackground) {
+          editorState.selectedBackground = nextBackground;
+          this.actions.onSelectBackground(nextBackground);
+        }
+      }
+      this.syncEditorChromeState();
+    };
+    this.backgroundSolidColorInput?.addEventListener('input', handleBackgroundSolidColorChange);
+    this.backgroundSolidColorInput?.addEventListener('change', handleBackgroundSolidColorChange);
+    if (this.backgroundSolidColorInput) {
+      this.cleanupCallbacks.push(() => {
+        this.backgroundSolidColorInput?.removeEventListener(
+          'input',
+          handleBackgroundSolidColorChange,
+        );
+        this.backgroundSolidColorInput?.removeEventListener(
+          'change',
+          handleBackgroundSolidColorChange,
+        );
+      });
+    }
 
     const handleLightingSelectChange = () => {
       if (!this.lightingSelect) {
@@ -1152,13 +1202,31 @@ export class EditorUiBridge {
   }
 
   private applyBackgroundSelection(nextBackgroundId: string): void {
-    if (!nextBackgroundId || editorState.selectedBackground === nextBackgroundId) {
+    if (!nextBackgroundId) {
       return;
     }
-    editorState.selectedBackground = nextBackgroundId;
-    this.actions.onSelectBackground(nextBackgroundId);
+    const normalizedSelection =
+      nextBackgroundId === SOLID_COLOR_BACKGROUND_ID
+        ? SOLID_COLOR_BACKGROUND_ID
+        : normalizeRoomBackground(nextBackgroundId);
+    const currentSelection = getBackgroundSelectionValue(editorState.selectedBackground);
+    const nextBackground =
+      normalizedSelection === SOLID_COLOR_BACKGROUND_ID
+        ? buildSolidColorBackgroundValue(editorState.selectedSolidBackgroundColor)
+        : normalizedSelection;
+    if (
+      currentSelection === normalizedSelection &&
+      editorState.selectedBackground === nextBackground
+    ) {
+      this.syncEditorChromeState();
+      return;
+    }
+    editorState.selectedBackground = nextBackground;
+    this.actions.onSelectBackground(nextBackground);
     this.syncEditorChromeState();
-    this.requestPhoneEditorAutoCollapse();
+    if (normalizedSelection !== SOLID_COLOR_BACKGROUND_ID) {
+      this.requestPhoneEditorAutoCollapse();
+    }
   }
 
   private applyLightingSelection(nextLightingMode: RoomLightingMode): void {
@@ -1265,7 +1333,21 @@ export class EditorUiBridge {
       tab.classList.toggle('active', (tab.dataset.category || 'all') === this.currentObjectCategory);
     }
 
-    this.setValue(this.backgroundSelect, editorState.selectedBackground);
+    const activeBackgroundId = getBackgroundSelectionValue(editorState.selectedBackground);
+    const solidColor = getSolidColorFromBackgroundValue(
+      editorState.selectedBackground,
+      editorState.selectedSolidBackgroundColor,
+    );
+    this.setValue(this.backgroundSelect, activeBackgroundId);
+    this.setHidden(
+      this.backgroundSolidControls,
+      activeBackgroundId !== SOLID_COLOR_BACKGROUND_ID
+    );
+    this.setValue(this.backgroundSolidColorInput, solidColor);
+    this.setText(this.backgroundSolidColorValue, solidColor.toUpperCase());
+    if (this.backgroundSolidCard) {
+      this.backgroundSolidCard.style.setProperty('--background-card-solid', solidColor);
+    }
     this.setValue(this.lightingSelect, editorState.selectedLightingMode);
     this.setHidden(
       this.lightingTuningControls,
@@ -1276,7 +1358,7 @@ export class EditorUiBridge {
     this.setText(this.lightingDarknessValue, `${editorState.selectedLightingDarkness}%`);
     this.setText(this.lightingRadiusValue, `${editorState.selectedLightingRadius}%`);
     for (const button of this.backgroundButtons) {
-      const active = button.dataset.backgroundId === editorState.selectedBackground;
+      const active = button.dataset.backgroundId === activeBackgroundId;
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
     }

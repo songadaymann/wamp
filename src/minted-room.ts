@@ -1,5 +1,6 @@
 import { createPublicClient, getAddress, http } from 'viem';
 import { base, baseSepolia, mainnet } from 'viem/chains';
+import { getRoomBackgroundLabel } from './backgrounds/model';
 import { parseRoomTokenMetadataUri } from './mint/roomMetadata';
 import { renderWampMintedRoomToCanvas } from './mint/roomMetadataRender';
 import {
@@ -62,7 +63,7 @@ async function bootstrap(): Promise<void> {
       Token: tokenId,
       Room: payload.roomId,
       Coordinates: `${payload.coordinates[0]}, ${payload.coordinates[1]}`,
-      Background: payload.background,
+      Background: getRoomBackgroundLabel(payload.background),
       Version: String(payload.version),
       Published: payload.publishedAt ?? 'Unknown',
       Animation: metadata.animation_url,

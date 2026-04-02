@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import {
   decodeTileDataValue,
-  getBackgroundGroup,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
@@ -9,6 +8,7 @@ import {
   TILESETS,
   TILE_SIZE,
 } from '../../config';
+import { resolveRoomBackground } from '../../backgrounds/model';
 import {
   cloneRoomSnapshot,
   roomIdFromCoordinates,
@@ -1065,11 +1065,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     colorRect: Phaser.GameObjects.Rectangle | null;
     sprites: LoadedRoomBackgroundSprite[];
   } {
-    const group = getBackgroundGroup(room.background);
+    const resolved = resolveRoomBackground(room.background);
     let colorRect: Phaser.GameObjects.Rectangle | null = null;
     const sprites: LoadedRoomBackgroundSprite[] = [];
 
-    if (!group || group.layers.length === 0) {
+    if (resolved.kind === 'none') {
       const textureKey = ensureStarfieldTexture(this.options.scene);
 
       colorRect = this.options.scene.add.rectangle(
@@ -1120,15 +1120,23 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       return { colorRect, sprites };
     }
 
-    if (group.bgColor) {
-      const color = Phaser.Display.Color.HexStringToColor(group.bgColor).color;
+    if (resolved.kind === 'solid') {
+      const color = Phaser.Display.Color.HexStringToColor(resolved.color).color;
+      colorRect = this.options.scene.add.rectangle(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT, color);
+      colorRect.setOrigin(0, 0);
+      colorRect.setDepth(8);
+      return { colorRect, sprites };
+    }
+
+    if (resolved.group.bgColor) {
+      const color = Phaser.Display.Color.HexStringToColor(resolved.group.bgColor).color;
       colorRect = this.options.scene.add.rectangle(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT, color);
       colorRect.setOrigin(0, 0);
       colorRect.setDepth(8);
     }
 
-    for (let index = 0; index < group.layers.length; index += 1) {
-      const layer = group.layers[index];
+    for (let index = 0; index < resolved.group.layers.length; index += 1) {
+      const layer = resolved.group.layers[index];
       const sprite = this.options.scene.add.tileSprite(
         origin.x,
         origin.y,

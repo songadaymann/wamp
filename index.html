@@ -273,6 +273,7 @@
         <div class="section-label">Background</div>
         <select id="background-select">
           <option value="none">None</option>
+          <option value="solid_color">Solid Color</option>
           <option value="forest">Forest</option>
           <option value="dark_forest">Dark Forest</option>
           <option value="grassland">Grassland</option>
@@ -286,6 +287,16 @@
           <button class="background-card background-card-none active" type="button" data-background-id="none">
             <span class="background-card-art" aria-hidden="true"></span>
             <span class="background-card-label">None</span>
+          </button>
+          <button
+            id="background-solid-card"
+            class="background-card background-card-solid"
+            type="button"
+            data-background-id="solid_color"
+            style="--background-card-solid: #24324a;"
+          >
+            <span class="background-card-art" aria-hidden="true"></span>
+            <span class="background-card-label">Solid Color</span>
           </button>
           <button
             class="background-card"
@@ -359,6 +370,19 @@
             <span class="background-card-art" aria-hidden="true"></span>
             <span class="background-card-label">Desert</span>
           </button>
+        </div>
+        <div id="background-solid-controls" class="background-solid-controls hidden">
+          <label class="background-solid-color-row" for="background-solid-color-input">
+            <span class="background-solid-color-label">Color</span>
+            <span id="background-solid-color-value" class="background-solid-color-value">#24324A</span>
+          </label>
+          <input
+            id="background-solid-color-input"
+            class="background-solid-color-input"
+            type="color"
+            value="#24324a"
+            aria-label="Solid background color"
+          />
         </div>
       </div>
 

@@ -27,6 +27,10 @@ import {
   type CourseSnapshot,
 } from '../courses/model';
 import {
+  getBackgroundSelectionValue,
+  getSolidColorFromBackgroundValue,
+} from '../backgrounds/model';
+import {
   clearCoursePressurePlateLinksForInstance,
   getCoursePressurePlateLink,
   setCoursePressurePlateLink,
@@ -1118,6 +1122,10 @@ export class CourseEditorScene extends Phaser.Scene {
         getSelectedBackground: () => slice.backgroundId,
         setSelectedBackground: (backgroundId) => {
           slice.backgroundId = backgroundId;
+          editorState.selectedSolidBackgroundColor = getSolidColorFromBackgroundValue(
+            backgroundId,
+            editorState.selectedSolidBackgroundColor,
+          );
         },
         getSelectedLightingSettings: () => cloneRoomLightingSettings(slice.lighting),
         setSelectedLightingSettings: (lighting) => {
@@ -1133,7 +1141,7 @@ export class CourseEditorScene extends Phaser.Scene {
           }
           const select = document.getElementById('background-select') as HTMLSelectElement | null;
           if (select) {
-            select.value = backgroundId;
+            select.value = getBackgroundSelectionValue(backgroundId);
           }
         },
         updateLightingControlsValue: (lighting) => {
@@ -1371,12 +1379,22 @@ export class CourseEditorScene extends Phaser.Scene {
     const slice = this.getSelectedSlice();
     if (slice) {
       editorState.selectedBackground = slice.backgroundId;
+      editorState.selectedSolidBackgroundColor = getSolidColorFromBackgroundValue(
+        slice.backgroundId,
+        editorState.selectedSolidBackgroundColor,
+      );
       editorState.selectedLightingMode = slice.lighting.mode;
       editorState.selectedLightingDarkness = slice.lighting.darkness;
       editorState.selectedLightingRadius = slice.lighting.radius;
       const select = document.getElementById('background-select') as HTMLSelectElement | null;
       if (select) {
-        select.value = slice.backgroundId;
+        select.value = getBackgroundSelectionValue(slice.backgroundId);
+      }
+      const colorInput = document.getElementById(
+        'background-solid-color-input'
+      ) as HTMLInputElement | null;
+      if (colorInput) {
+        colorInput.value = editorState.selectedSolidBackgroundColor;
       }
       const lightingSelect = document.getElementById(
         'lighting-mode-select'
