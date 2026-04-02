@@ -219,6 +219,42 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - smoke caveat:
       - the static smoke only confirmed the bundle boots cleanly; it did not exercise the authenticated course-authoring flow, which still wants a manual local or safety-branch browser pass
 
+- Room lighting tuning v2 in progress on April 2, 2026:
+  - expanded `RoomLightingSettings` from mode-only to `{ mode, darkness, radius }` with normalized `0-100` authored slider values and defaults of `darkness: 80`, `radius: 50`
+  - replaced the old fixed dark-aura preset with mapping helpers in `src/lighting/presets.ts`:
+    - darkness `0-100` -> ambient alpha `0.08-0.97`
+    - radius `0-100` -> aura diameter `96-384px`
+  - updated `RoomLightingController` to cache aura textures by resolved diameter and expose `darkness` / `radius` in debug state
+  - moved editor runtime lighting ownership onto the shared `EditorEditRuntime` host contract so snapshots import/export full lighting settings instead of only the mode
+  - wired the shared editor UI to show live `Darkness` and `Spotlight Radius` sliders only when `Dark Aura` is active
+  - mirrored the full lighting settings through both `EditorScene` and `CourseEditorScene` so the multi-room course editor keeps per-room lighting values instead of collapsing to a mode-only global
+  - bumped minted room payload work toward schema `v4` with compact lighting tuple storage for dark-aura rooms while keeping `v1-v3` decode paths backward-compatible
+  - next steps:
+    - finish any compile fixes from the host/UI/schema changes
+    - run `npm run build`
+    - run the Playwright smoke loop and inspect state/screenshots
+
+- Room lighting tuning v2 verification on April 2, 2026:
+  - `npm run build` passed after the final preview-smoke helper patch; only the existing Rollup third-party warnings remained
+  - added a `previewSmoke`-only helper in `src/main.ts` to open a synthetic editor room without relying on live room ownership; this is only for automated verification and marks the app ready so screenshots are usable
+  - browser smoke artifacts:
+    - `output/web-game/lighting-tuning-v2-smoke/summary.json`
+    - `output/web-game/lighting-tuning-v2-smoke/editor-webgl.json`
+    - `output/web-game/lighting-tuning-v2-smoke/editor-webgl.png`
+    - `output/web-game/lighting-tuning-v2-smoke/editor-canvas.json`
+    - `output/web-game/lighting-tuning-v2-smoke/editor-canvas.png`
+  - smoke results:
+    - WebGL editor state reports `lighting.mode: playerAuraDark`, `darkness: 93`, `radius: 18`, `rendererPath: webgl`, `activeRoomId: 99,99`, `emitterCount: 1`
+    - Canvas editor state reports the same authored values with `rendererPath: canvas-disabled` and fallback reason `Dynamic room lighting requires WebGL.`
+    - minted metadata round-trip in the browser confirmed schema `v4`, stored lighting tuple `[91, 23]`, and parsed lighting `{ mode: 'playerAuraDark', darkness: 91, radius: 23 }`
+  - shared Playwright client run artifacts:
+    - `output/web-game/lighting-tuning-v2-client/state-0.json`
+    - `output/web-game/lighting-tuning-v2-client/shot-0.png`
+  - client smoke note:
+    - `render_game_to_text` showed a healthy overworld browse state with no captured JS errors, but the generic headless screenshot stayed black; the targeted editor smoke screenshots are the more reliable visual artifact in this repo right now
+  - residual verification gap:
+    - same-room ghost emitter behavior in play mode was not exercised in this automated run because the synthetic smoke focused on editor tuning/fallback and there were no rendered ghosts available in the harness
+
 - Separate course editor pass on March 24, 2026:
   - replaced the overworld-first course composer launch path with a dedicated `CourseEditorScene` that owns a standalone world-anchored authoring shell, pan/zoom camera, room membership selection, and direct marker placement for `start`, `exit`, `checkpoint`, and `finish`
   - course validation is now cluster-based instead of linear-order-based: draft/publish paths require unique authored rooms forming one orthogonally connected cluster, while publish validation now follows marker placement rather than first-room / last-room assumptions

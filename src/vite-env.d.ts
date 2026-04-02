@@ -23,7 +23,12 @@ interface Window {
   play_sfx_debug?: (cue: import('./audio/sfx').SfxCue) => void;
   run_overworld_lod_stress?: () => Promise<Record<string, unknown>>;
   run_preview_smoke_action?: (
-    action: 'selectEditableRoom' | 'playSelectedRoom' | 'returnToWorld' | 'editSelectedRoom',
+    action:
+      | 'selectEditableRoom'
+      | 'playSelectedRoom'
+      | 'returnToWorld'
+      | 'editSelectedRoom'
+      | 'openSyntheticEditor',
     payload?: { roomId?: string | null },
   ) => Promise<Record<string, unknown>>;
   __EVERYBODYS_PLATFORMER_GAME__?: import('phaser').Game;
