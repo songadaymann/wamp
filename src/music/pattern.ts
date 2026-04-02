@@ -36,6 +36,20 @@ export const ROOM_PATTERN_INSTRUMENT_LABELS: Record<RoomPatternInstrumentId, str
   square: 'Square',
 };
 
+export interface RoomPatternInstrumentMixSettings {
+  volume: number;
+  pan: number;
+}
+
+export type RoomPatternInstrumentMix = Record<RoomPatternInstrumentId, RoomPatternInstrumentMixSettings>;
+
+export const DEFAULT_ROOM_PATTERN_INSTRUMENT_MIX: RoomPatternInstrumentMix = {
+  drums: { volume: 1, pan: 0 },
+  triangle: { volume: 1, pan: 0 },
+  saw: { volume: 0.6, pan: 0 },
+  square: { volume: 0.5, pan: 0 },
+};
+
 export type RoomPatternDrumRowId =
   | 'fx-click'
   | 'tambourine'
@@ -83,6 +97,7 @@ export const ROOM_PATTERN_DRUM_ROWS: RoomPatternDrumRowDefinition[] = [
 
 export interface RoomPatternTonalTrack {
   steps: (number | null)[];
+  ties: boolean[];
 }
 
 export type RoomPatternDrumTrack = Record<RoomPatternDrumRowId, number[]>;
@@ -97,6 +112,7 @@ export interface RoomPatternMusic {
   pitchMode: RoomPatternPitchMode;
   scaleId: RoomPatternScaleId;
   octaveShift: Record<RoomPatternTonalInstrumentId, number>;
+  mix: RoomPatternInstrumentMix;
   tabs: {
     drums: RoomPatternDrumTrack;
     triangle: RoomPatternTonalTrack;
@@ -154,6 +170,40 @@ function normalizeOctaveShift(value: unknown): number {
   return clampInteger(value, ROOM_PATTERN_MIN_OCTAVE_SHIFT, ROOM_PATTERN_MAX_OCTAVE_SHIFT);
 }
 
+function normalizeMixValue(
+  value: unknown,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.max(min, Math.min(max, value));
+}
+
+function cloneRoomPatternInstrumentMixSettings(
+  value: Partial<RoomPatternInstrumentMixSettings> | null | undefined,
+  fallback: RoomPatternInstrumentMixSettings,
+): RoomPatternInstrumentMixSettings {
+  return {
+    volume: normalizeMixValue(value?.volume, 0, 1, fallback.volume),
+    pan: normalizeMixValue(value?.pan, -1, 1, fallback.pan),
+  };
+}
+
+export function cloneRoomPatternInstrumentMix(
+  value: Partial<Record<RoomPatternInstrumentId, Partial<RoomPatternInstrumentMixSettings>>> | null | undefined,
+): RoomPatternInstrumentMix {
+  return {
+    drums: cloneRoomPatternInstrumentMixSettings(value?.drums, DEFAULT_ROOM_PATTERN_INSTRUMENT_MIX.drums),
+    triangle: cloneRoomPatternInstrumentMixSettings(value?.triangle, DEFAULT_ROOM_PATTERN_INSTRUMENT_MIX.triangle),
+    saw: cloneRoomPatternInstrumentMixSettings(value?.saw, DEFAULT_ROOM_PATTERN_INSTRUMENT_MIX.saw),
+    square: cloneRoomPatternInstrumentMixSettings(value?.square, DEFAULT_ROOM_PATTERN_INSTRUMENT_MIX.square),
+  };
+}
+
 function noteLabelFromMidi(midi: number): string {
   const noteName = NOTE_NAMES[((midi % 12) + 12) % 12];
   const octave = Math.floor(midi / 12) - 1;
@@ -170,6 +220,17 @@ function getBaseMidiForInstrument(instrumentId: RoomPatternTonalInstrumentId): n
 
 export function createEmptyRoomPatternTonalSteps(): (number | null)[] {
   return Array.from({ length: ROOM_PATTERN_STEP_COUNT }, () => null);
+}
+
+export function createEmptyRoomPatternTonalTies(): boolean[] {
+  return Array.from({ length: ROOM_PATTERN_STEP_COUNT }, () => false);
+}
+
+export function createEmptyRoomPatternTonalTrack(): RoomPatternTonalTrack {
+  return {
+    steps: createEmptyRoomPatternTonalSteps(),
+    ties: createEmptyRoomPatternTonalTies(),
+  };
 }
 
 export function createEmptyRoomPatternDrumTrack(): RoomPatternDrumTrack {
@@ -194,11 +255,12 @@ export function createDefaultRoomPatternMusic(): RoomPatternMusic {
       saw: DEFAULT_ROOM_PATTERN_OCTAVE_SHIFT.saw,
       square: DEFAULT_ROOM_PATTERN_OCTAVE_SHIFT.square,
     },
+    mix: cloneRoomPatternInstrumentMix(DEFAULT_ROOM_PATTERN_INSTRUMENT_MIX),
     tabs: {
       drums: createEmptyRoomPatternDrumTrack(),
-      triangle: { steps: createEmptyRoomPatternTonalSteps() },
-      saw: { steps: createEmptyRoomPatternTonalSteps() },
-      square: { steps: createEmptyRoomPatternTonalSteps() },
+      triangle: createEmptyRoomPatternTonalTrack(),
+      saw: createEmptyRoomPatternTonalTrack(),
+      square: createEmptyRoomPatternTonalTrack(),
     },
   };
 }
@@ -224,11 +286,12 @@ export function cloneRoomPatternMusic(
       saw: normalizeOctaveShift(value.octaveShift?.saw ?? DEFAULT_ROOM_PATTERN_OCTAVE_SHIFT.saw),
       square: normalizeOctaveShift(value.octaveShift?.square ?? DEFAULT_ROOM_PATTERN_OCTAVE_SHIFT.square),
     },
+    mix: cloneRoomPatternInstrumentMix(value.mix),
     tabs: {
       drums: cloneRoomPatternDrumTrack(value.tabs?.drums),
-      triangle: { steps: cloneRoomPatternTonalSteps(value.tabs?.triangle?.steps) },
-      saw: { steps: cloneRoomPatternTonalSteps(value.tabs?.saw?.steps) },
-      square: { steps: cloneRoomPatternTonalSteps(value.tabs?.square?.steps) },
+      triangle: cloneRoomPatternTonalTrack(value.tabs?.triangle),
+      saw: cloneRoomPatternTonalTrack(value.tabs?.saw),
+      square: cloneRoomPatternTonalTrack(value.tabs?.square),
     },
   };
 }
@@ -246,6 +309,26 @@ export function cloneRoomPatternTonalSteps(
   }
 
   return steps;
+}
+
+export function cloneRoomPatternTonalTrack(
+  value: Partial<RoomPatternTonalTrack> | null | undefined,
+): RoomPatternTonalTrack {
+  const steps = cloneRoomPatternTonalSteps(value?.steps);
+  const preserveLegacyTies = !Array.isArray(value?.ties);
+  const ties = createEmptyRoomPatternTonalTies();
+
+  for (let index = 1; index < ROOM_PATTERN_STEP_COUNT; index += 1) {
+    const currentRow = steps[index];
+    const previousRow = steps[index - 1];
+    if (currentRow === null || previousRow === null || currentRow !== previousRow) {
+      continue;
+    }
+
+    ties[index] = preserveLegacyTies ? true : value?.ties?.[index] === true;
+  }
+
+  return { steps, ties };
 }
 
 export function cloneRoomPatternDrumTrack(
@@ -300,11 +383,12 @@ export function normalizeRoomPatternMusic(value: unknown): RoomPatternMusic | nu
       saw: normalizeOctaveShift(candidate.octaveShift?.saw ?? DEFAULT_ROOM_PATTERN_OCTAVE_SHIFT.saw),
       square: normalizeOctaveShift(candidate.octaveShift?.square ?? DEFAULT_ROOM_PATTERN_OCTAVE_SHIFT.square),
     },
+    mix: cloneRoomPatternInstrumentMix(candidate.mix),
     tabs: {
       drums: cloneRoomPatternDrumTrack((tabs as RoomPatternMusic['tabs']).drums),
-      triangle: { steps: cloneRoomPatternTonalSteps((tabs as RoomPatternMusic['tabs']).triangle?.steps) },
-      saw: { steps: cloneRoomPatternTonalSteps((tabs as RoomPatternMusic['tabs']).saw?.steps) },
-      square: { steps: cloneRoomPatternTonalSteps((tabs as RoomPatternMusic['tabs']).square?.steps) },
+      triangle: cloneRoomPatternTonalTrack((tabs as RoomPatternMusic['tabs']).triangle),
+      saw: cloneRoomPatternTonalTrack((tabs as RoomPatternMusic['tabs']).saw),
+      square: cloneRoomPatternTonalTrack((tabs as RoomPatternMusic['tabs']).square),
     },
   };
 }
@@ -397,9 +481,17 @@ export function getRoomPatternKey(pattern: RoomPatternMusic): string {
     String(pattern.octaveShift.triangle),
     String(pattern.octaveShift.saw),
     String(pattern.octaveShift.square),
+    ...ROOM_PATTERN_INSTRUMENT_IDS.flatMap((instrumentId) => [
+      instrumentId,
+      pattern.mix[instrumentId].volume.toFixed(3),
+      pattern.mix[instrumentId].pan.toFixed(3),
+    ]),
     pattern.tabs.triangle.steps.map((value) => value ?? '-').join(','),
+    pattern.tabs.triangle.ties.map((value) => (value ? '1' : '0')).join(''),
     pattern.tabs.saw.steps.map((value) => value ?? '-').join(','),
+    pattern.tabs.saw.ties.map((value) => (value ? '1' : '0')).join(''),
     pattern.tabs.square.steps.map((value) => value ?? '-').join(','),
+    pattern.tabs.square.ties.map((value) => (value ? '1' : '0')).join(''),
     ...ROOM_PATTERN_DRUM_ROWS.map((row) => `${row.id}:${pattern.tabs.drums[row.id].join(',')}`),
   ];
   return parts.join('|');

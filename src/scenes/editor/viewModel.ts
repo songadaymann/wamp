@@ -98,15 +98,11 @@ function buildMusicUiViewModel(
     modeStatusText: legacyStemVisible
       ? 'Legacy room music still plays, but the room-grid sequencer stays locked until you explicitly replace it.'
       : `Room grid sequencer active. ${getPatternInstrumentLabel(activeInstrumentTab)} is selected, with 32 playable steps and columns 33-40 dimmed.`,
-    previewButtonText:
-      options.musicPreviewState === 'playing'
-        ? 'Pause'
-        : options.musicPreviewState === 'paused'
-          ? 'Resume'
-          : 'Play',
-    stopDisabled: options.musicPreviewState === 'stopped',
+    previewButtonText: options.musicPreviewState === 'playing' ? 'Stop' : 'Play',
+    playDisabled: false,
+    stopDisabled: true,
     gridSummaryText: '32 steps · 2 bars · 4 steps per beat · 120 BPM',
-    toolHintText: 'Use Draw, Erase, and Copy on the room grid. Cmd/Ctrl+V pastes the current instrument clipboard.',
+    toolHintText: 'Click for discrete notes. Drag across cells to tie them together. Click the same square again to erase it. Cmd/Ctrl+V pastes the current instrument clipboard.',
     legacyNoticeVisible: legacyStemVisible,
     legacyNoticeText: 'This room has saved WAMP stems. Playback is preserved, but sequencer editing is locked until you replace them with a new pattern.',
     replaceLegacyDisabled: false,

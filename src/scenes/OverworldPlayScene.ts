@@ -6858,6 +6858,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         transition: 'immediate',
         fadeDurationSec: 0.08,
         mode: 'idle',
+        resetTransport: true,
       });
       return;
     }
@@ -6975,6 +6976,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     globalRoomMusicController.stopArrangement({
       transition: 'immediate',
       mode: 'idle',
+      resetTransport: true,
     });
     this.presenceController.destroy();
     this.roomChatController.destroy();

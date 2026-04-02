@@ -122,6 +122,7 @@ export class RoomMusicController {
     transition?: TransitionMode;
     mode?: PlaybackMode;
     fadeDurationSec?: number;
+    resetTransport?: boolean;
   }): void {
     const audioContext = this.audioContext;
     if (!audioContext) {
@@ -129,6 +130,9 @@ export class RoomMusicController {
       this.activePattern = null;
       this.currentArrangement = null;
       this.mode = options?.mode ?? 'idle';
+      if (options?.resetTransport) {
+        this.transportStartTime = 0;
+      }
       return;
     }
 
@@ -153,6 +157,9 @@ export class RoomMusicController {
 
     this.currentArrangement = null;
     this.mode = options?.mode ?? 'idle';
+    if (options?.resetTransport) {
+      this.transportStartTime = 0;
+    }
   }
 
   async previewClip(packId: string, clipId: string): Promise<void> {
@@ -271,15 +278,16 @@ export class RoomMusicController {
     const clipIds = this.collectStemArrangementClipIds(nextArrangement);
     await Promise.all([...clipIds].map((clipId) => this.loadBuffer(nextArrangement.packId, clipId)));
 
-    this.ensureTransport(audioContext.currentTime);
     const now = audioContext.currentTime;
+    const transportAlreadyRunning = this.transportStartTime > 0;
     const transition = options.transition ?? 'bar';
     const quantizeToBar = transition === 'bar' && this.hasActivePlaybacks();
     const startAt = quantizeToBar ? this.getNextBarBoundary(this.getBarDuration(pack), now) : now + 0.02;
+    this.ensureTransport(transportAlreadyRunning ? now : startAt);
     const fadeDuration =
       options.fadeDurationSec
       ?? (quantizeToBar ? this.getBarDuration(pack) : IMMEDIATE_FADE_DURATION_SEC);
-    const loopOffset = this.getLoopOffsetAtTime(pack.loopDurationSec, startAt);
+    const loopOffset = transportAlreadyRunning ? this.getLoopOffsetAtTime(pack.loopDurationSec, startAt) : 0;
     const hasPriorPlayback = this.hasActivePlaybacks();
 
     if (this.activePattern) {
@@ -356,15 +364,16 @@ export class RoomMusicController {
     const loopDurationSec = getRoomMusicLoopDurationSec(nextArrangement);
     const barDurationSec = getRoomMusicBarDurationSec(nextArrangement);
     const buffer = await this.loadPatternLoopBuffer(nextArrangement);
-    this.ensureTransport(audioContext.currentTime);
     const now = audioContext.currentTime;
+    const transportAlreadyRunning = this.transportStartTime > 0;
     const transition = options.transition ?? 'bar';
     const quantizeToBar = transition === 'bar' && this.hasActivePlaybacks();
     const startAt = quantizeToBar ? this.getNextBarBoundary(barDurationSec, now) : now + 0.02;
+    this.ensureTransport(transportAlreadyRunning ? now : startAt);
     const fadeDuration =
       options.fadeDurationSec
       ?? (quantizeToBar ? barDurationSec : IMMEDIATE_FADE_DURATION_SEC);
-    const loopOffset = this.getLoopOffsetAtTime(loopDurationSec, startAt);
+    const loopOffset = transportAlreadyRunning ? this.getLoopOffsetAtTime(loopDurationSec, startAt) : 0;
     const hasPriorPlayback = this.hasActivePlaybacks();
 
     for (const playback of this.activeLanes.values()) {

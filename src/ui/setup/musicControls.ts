@@ -31,7 +31,6 @@ export function setupRoomMusicControls(
   const modeButton = doc.getElementById('btn-editor-music-mode');
   const closeOverlayButton = doc.getElementById('btn-editor-music-overlay-close');
   const previewToggleButton = doc.getElementById('btn-editor-music-preview-toggle') as HTMLButtonElement | null;
-  const previewStopButton = doc.getElementById('btn-editor-music-preview-stop');
   const octaveDownButton = doc.getElementById('btn-editor-music-octave-down');
   const octaveUpButton = doc.getElementById('btn-editor-music-octave-up');
   const replaceLegacyButton = doc.getElementById('btn-editor-music-replace-legacy');
@@ -50,19 +49,7 @@ export function setupRoomMusicControls(
 
   previewToggleButton?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
-      const previewState = previewToggleButton.dataset.previewState;
-      if (previewState === 'playing') {
-        scene.pauseRoomMusicPreview?.();
-        return;
-      }
-
-      scene.playRoomMusicPreview?.();
-    });
-  });
-
-  previewStopButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.stopRoomMusicPreview?.();
+      scene.toggleRoomMusicPreview?.();
     });
   });
 

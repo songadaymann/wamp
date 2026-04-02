@@ -104,6 +104,7 @@ export interface EditorSceneBridge {
   shiftRoomMusicOctave?: (delta: number) => void;
   replaceLegacyRoomMusicWithPattern?: () => void;
   playRoomMusicPreview?: () => void;
+  toggleRoomMusicPreview?: () => void;
   pauseRoomMusicPreview?: () => void;
   stopRoomMusicPreview?: () => void;
   openRoomMusicPicker?: (laneId: RoomMusicLaneId, barIndex: number) => void;

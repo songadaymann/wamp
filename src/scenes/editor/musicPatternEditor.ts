@@ -16,11 +16,13 @@ import {
   cloneRoomMusic,
   createDefaultRoomPatternMusic,
   getPatternDrumRowForGridRow,
+  getPatternInstrumentLabel,
   getPatternRowLabel,
   isPatternDrumGridRowPlayable,
   isPatternRoomMusic,
   isStemArrangementRoomMusic,
   type RoomMusic,
+  type RoomPatternInstrumentMixSettings,
   type RoomPatternInstrumentId,
   type RoomPatternMusic,
   type RoomPatternPitchMode,
@@ -50,7 +52,24 @@ interface EditorMusicPatternClipboardState {
   width: number;
   height: number;
   tonalStepRows: (number | null)[] | null;
+  tonalStepTies: boolean[] | null;
   drumMask: boolean[][] | null;
+}
+
+interface MixControlLayout {
+  panelX: number;
+  panelY: number;
+  panelWidth: number;
+  panelHeight: number;
+  panTrackX: number;
+  panTrackY: number;
+  panTrackWidth: number;
+  panTrackHeight: number;
+  volumeTrackX: number;
+  volumeTrackY: number;
+  volumeTrackWidth: number;
+  volumeTrackHeight: number;
+  centerX: number;
 }
 
 const INSTRUMENT_COLORS: Record<RoomPatternInstrumentId, number> = {
@@ -59,6 +78,17 @@ const INSTRUMENT_COLORS: Record<RoomPatternInstrumentId, number> = {
   saw: 0xff9356,
   square: 0xc4f36f,
 };
+
+const MIX_PANEL_WIDTH = 96;
+const MIX_PANEL_PADDING = 12;
+const MIX_TITLE_Y = 18;
+const MIX_READOUT_Y = 34;
+const MIX_PAN_TRACK_Y = 52;
+const MIX_PAN_TRACK_WIDTH = 72;
+const MIX_PAN_TRACK_HEIGHT = 8;
+const MIX_VOLUME_TRACK_Y = 82;
+const MIX_VOLUME_TRACK_WIDTH = 18;
+const MIX_VOLUME_TRACK_HEIGHT = ROOM_PX_HEIGHT - 112;
 
 function normalizeRect(rect: MusicRect): MusicRect {
   return {
@@ -88,12 +118,17 @@ export class EditorMusicPatternController {
   private overlayGrid: Phaser.GameObjects.Graphics | null = null;
   private overlayCells: Phaser.GameObjects.Graphics | null = null;
   private overlayPlayhead: Phaser.GameObjects.Graphics | null = null;
+  private overlayMixControls: Phaser.GameObjects.Graphics | null = null;
   private rowLabels: Phaser.GameObjects.Text[] = [];
+  private mixTitleLabel: Phaser.GameObjects.Text | null = null;
+  private mixReadoutLabel: Phaser.GameObjects.Text | null = null;
   private activeInstrumentTab: RoomPatternInstrumentId = 'drums';
   private dragMode: 'draw' | 'erase' | 'copy' | null = null;
+  private mixDragMode: 'volume' | 'pan' | null = null;
   private dragStartCell: { step: number; row: number } | null = null;
   private dragCurrentCell: { step: number; row: number } | null = null;
   private lastDragCellKey: string | null = null;
+  private lastAppliedCell: { step: number; row: number } | null = null;
   private clipboard: EditorMusicPatternClipboardState | null = null;
   private pastePreviewOrigin: { step: number; row: number } | null = null;
 
@@ -112,6 +147,8 @@ export class EditorMusicPatternController {
     this.overlayCells.setDepth(110);
     this.overlayPlayhead = this.scene.add.graphics();
     this.overlayPlayhead.setDepth(111);
+    this.overlayMixControls = this.scene.add.graphics();
+    this.overlayMixControls.setDepth(112);
 
     this.rowLabels = Array.from({ length: ROOM_PATTERN_GRID_ROWS }, () => {
       const text = this.scene.add.text(-10, 0, '', {
@@ -125,14 +162,38 @@ export class EditorMusicPatternController {
       text.setOrigin(1, 0.5);
       return text;
     });
+
+    this.mixTitleLabel = this.scene.add.text(0, 0, '', {
+      fontFamily: '"IBM Plex Mono", monospace',
+      fontSize: '11px',
+      color: '#f6e8c9',
+      stroke: '#090909',
+      strokeThickness: 2,
+      align: 'center',
+    });
+    this.mixTitleLabel.setDepth(113);
+    this.mixTitleLabel.setOrigin(0.5, 0.5);
+
+    this.mixReadoutLabel = this.scene.add.text(0, 0, '', {
+      fontFamily: '"IBM Plex Mono", monospace',
+      fontSize: '10px',
+      color: '#d7d2c4',
+      stroke: '#090909',
+      strokeThickness: 2,
+      align: 'center',
+    });
+    this.mixReadoutLabel.setDepth(113);
+    this.mixReadoutLabel.setOrigin(0.5, 0.5);
   }
 
   reset(): void {
     this.activeInstrumentTab = 'drums';
     this.dragMode = null;
+    this.mixDragMode = null;
     this.dragStartCell = null;
     this.dragCurrentCell = null;
     this.lastDragCellKey = null;
+    this.lastAppliedCell = null;
     this.clipboard = null;
     this.pastePreviewOrigin = null;
     this.updateOverlay(false);
@@ -148,7 +209,10 @@ export class EditorMusicPatternController {
       this.overlayGrid,
       this.overlayCells,
       this.overlayPlayhead,
+      this.overlayMixControls,
       ...this.rowLabels,
+      this.mixTitleLabel,
+      this.mixReadoutLabel,
     ].filter(Boolean) as Phaser.GameObjects.GameObject[]);
   }
 
@@ -162,6 +226,7 @@ export class EditorMusicPatternController {
     }
 
     this.activeInstrumentTab = instrumentId;
+    this.mixDragMode = null;
     this.pastePreviewOrigin = null;
     this.host.renderUi();
   }
@@ -186,6 +251,10 @@ export class EditorMusicPatternController {
 
     const instrumentId = this.activeInstrumentTab as RoomPatternTonalInstrumentId;
     return this.getDisplayPattern().octaveShift[instrumentId];
+  }
+
+  getActiveInstrumentMix(): RoomPatternInstrumentMixSettings {
+    return this.getDisplayPattern().mix[this.activeInstrumentTab];
   }
 
   getActiveCellCount(): number {
@@ -246,6 +315,33 @@ export class EditorMusicPatternController {
     this.commitPattern(pattern);
   }
 
+  setActiveInstrumentMix(nextValues: Partial<RoomPatternInstrumentMixSettings>): void {
+    const pattern = this.getEditablePattern();
+    if (!pattern) {
+      return;
+    }
+
+    const current = pattern.mix[this.activeInstrumentTab];
+    const nextVolume =
+      nextValues.volume === undefined
+        ? current.volume
+        : Phaser.Math.Clamp(Math.round(nextValues.volume * 50) / 50, 0, 1);
+    const nextPan =
+      nextValues.pan === undefined
+        ? current.pan
+        : Phaser.Math.Clamp(Math.round(nextValues.pan * 20) / 20, -1, 1);
+
+    if (nextVolume === current.volume && nextPan === current.pan) {
+      return;
+    }
+
+    pattern.mix[this.activeInstrumentTab] = {
+      volume: nextVolume,
+      pan: nextPan,
+    };
+    this.commitPattern(pattern);
+  }
+
   beginPastePreview(): void {
     if (!this.hasClipboardData()) {
       return;
@@ -266,6 +362,15 @@ export class EditorMusicPatternController {
 
   handlePointerDown(pointer: Phaser.Input.Pointer): void {
     if (this.getLegacyStemNoticeVisible()) {
+      return;
+    }
+
+    const mixControlHit = this.getMixControlHit(pointer);
+    if (mixControlHit) {
+      this.mixDragMode = mixControlHit.control;
+      this.setActiveInstrumentMix({
+        [mixControlHit.control]: mixControlHit.value,
+      });
       return;
     }
 
@@ -290,15 +395,31 @@ export class EditorMusicPatternController {
       return;
     }
 
-    this.dragMode = tool === 'eraser' ? 'erase' : 'draw';
+    const dragMode =
+      tool === 'eraser'
+        ? 'erase'
+        : this.isCellActive(this.getDisplayPattern(), cell.step, cell.row)
+          ? 'erase'
+          : 'draw';
+    this.dragMode = dragMode;
     this.dragStartCell = cell;
     this.dragCurrentCell = cell;
     this.lastDragCellKey = null;
-    this.applyToolToCell(tool, cell.step, cell.row);
+    this.applyToolToCell(dragMode === 'erase' ? 'eraser' : 'pencil', cell.step, cell.row);
   }
 
   handlePointerMove(pointer: Phaser.Input.Pointer): void {
     if (this.getLegacyStemNoticeVisible()) {
+      return;
+    }
+
+    if (this.mixDragMode) {
+      const mixControlHit = this.getMixControlHit(pointer, this.mixDragMode);
+      if (mixControlHit) {
+        this.setActiveInstrumentMix({
+          [mixControlHit.control]: mixControlHit.value,
+        });
+      }
       return;
     }
 
@@ -324,7 +445,19 @@ export class EditorMusicPatternController {
 
   handlePointerUp(pointer: Phaser.Input.Pointer): void {
     if (this.getLegacyStemNoticeVisible()) {
+      this.mixDragMode = null;
       this.clearDrag();
+      return;
+    }
+
+    if (this.mixDragMode) {
+      const mixControlHit = this.getMixControlHit(pointer, this.mixDragMode);
+      if (mixControlHit) {
+        this.setActiveInstrumentMix({
+          [mixControlHit.control]: mixControlHit.value,
+        });
+      }
+      this.mixDragMode = null;
       return;
     }
 
@@ -355,6 +488,46 @@ export class EditorMusicPatternController {
     }
 
     const pointer = this.scene.input.activePointer;
+    const mixControlHit = this.getMixControlHit(pointer);
+    if (mixControlHit) {
+      const layout = this.getMixControlLayout();
+      const color = INSTRUMENT_COLORS[this.activeInstrumentTab];
+      graphics.lineStyle(2, color, 0.7);
+      graphics.fillStyle(color, 0.08);
+      if (mixControlHit.control === 'pan') {
+        graphics.fillRoundedRect(
+          layout.panTrackX - 8,
+          layout.panTrackY - 8,
+          layout.panTrackWidth + 16,
+          layout.panTrackHeight + 16,
+          10,
+        );
+        graphics.strokeRoundedRect(
+          layout.panTrackX - 8,
+          layout.panTrackY - 8,
+          layout.panTrackWidth + 16,
+          layout.panTrackHeight + 16,
+          10,
+        );
+      } else {
+        graphics.fillRoundedRect(
+          layout.volumeTrackX - 12,
+          layout.volumeTrackY - 8,
+          layout.volumeTrackWidth + 24,
+          layout.volumeTrackHeight + 16,
+          10,
+        );
+        graphics.strokeRoundedRect(
+          layout.volumeTrackX - 12,
+          layout.volumeTrackY - 8,
+          layout.volumeTrackWidth + 24,
+          layout.volumeTrackHeight + 16,
+          10,
+        );
+      }
+      return true;
+    }
+
     const cell = this.getCellFromPointer(pointer);
     if (this.pastePreviewOrigin && this.hasClipboardData()) {
       const previewOrigin = cell ?? this.pastePreviewOrigin;
@@ -379,9 +552,13 @@ export class EditorMusicPatternController {
       return true;
     }
 
-    const color = resolveSequencerTool() === 'eraser' ? 0xff6f61 : INSTRUMENT_COLORS[this.activeInstrumentTab];
+    const hoveredActiveCell = this.isCellActive(this.getDisplayPattern(), cell.step, cell.row);
+    const color =
+      hoveredActiveCell && resolveSequencerTool() !== 'copy'
+        ? 0xff6f61
+        : INSTRUMENT_COLORS[this.activeInstrumentTab];
     graphics.lineStyle(2, color, 0.9);
-    graphics.fillStyle(color, resolveSequencerTool() === 'eraser' ? 0.08 : 0.18);
+    graphics.fillStyle(color, hoveredActiveCell ? 0.08 : 0.18);
     graphics.fillRect(cell.step * TILE_SIZE, cell.row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
     graphics.strokeRect(cell.step * TILE_SIZE, cell.row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
     return true;
@@ -398,7 +575,9 @@ export class EditorMusicPatternController {
     this.drawGrid();
     this.drawCells();
     this.drawPlayhead();
+    this.drawMixControls();
     this.updateRowLabels();
+    this.updateMixLabels();
   }
 
   private destroyGraphics(): void {
@@ -410,10 +589,16 @@ export class EditorMusicPatternController {
     this.overlayCells = null;
     this.overlayPlayhead?.destroy();
     this.overlayPlayhead = null;
+    this.overlayMixControls?.destroy();
+    this.overlayMixControls = null;
     for (const label of this.rowLabels) {
       label.destroy();
     }
     this.rowLabels = [];
+    this.mixTitleLabel?.destroy();
+    this.mixTitleLabel = null;
+    this.mixReadoutLabel?.destroy();
+    this.mixReadoutLabel = null;
   }
 
   private setOverlayVisible(visible: boolean): void {
@@ -421,15 +606,19 @@ export class EditorMusicPatternController {
     this.overlayGrid?.setVisible(visible);
     this.overlayCells?.setVisible(visible);
     this.overlayPlayhead?.setVisible(visible);
+    this.overlayMixControls?.setVisible(visible);
     for (const label of this.rowLabels) {
       label.setVisible(visible);
     }
+    this.mixTitleLabel?.setVisible(visible);
+    this.mixReadoutLabel?.setVisible(visible);
 
     if (!visible) {
       this.overlayBackdrop?.clear();
       this.overlayGrid?.clear();
       this.overlayCells?.clear();
       this.overlayPlayhead?.clear();
+      this.overlayMixControls?.clear();
     }
   }
 
@@ -511,7 +700,8 @@ export class EditorMusicPatternController {
     }
 
     this.overlayCells.fillStyle(color, 0.86);
-    const steps = pattern.tabs[this.activeInstrumentTab].steps;
+    const track = pattern.tabs[this.activeInstrumentTab as RoomPatternTonalInstrumentId];
+    const steps = track.steps;
     let step = 0;
     while (step < steps.length) {
       const rowIndex = steps[step];
@@ -521,7 +711,7 @@ export class EditorMusicPatternController {
       }
 
       let endStep = step + 1;
-      while (endStep < steps.length && steps[endStep] === rowIndex) {
+      while (endStep < steps.length && steps[endStep] === rowIndex && track.ties[endStep] === true) {
         endStep += 1;
       }
       this.overlayCells.fillRect(
@@ -556,6 +746,95 @@ export class EditorMusicPatternController {
     this.overlayPlayhead.moveTo(playheadStep * TILE_SIZE, 0);
     this.overlayPlayhead.lineTo(playheadStep * TILE_SIZE, ROOM_PX_HEIGHT);
     this.overlayPlayhead.strokePath();
+  }
+
+  private drawMixControls(): void {
+    if (!this.overlayMixControls) {
+      return;
+    }
+
+    this.overlayMixControls.clear();
+    const layout = this.getMixControlLayout();
+    const mix = this.getActiveInstrumentMix();
+    const disabled = this.getLegacyStemNoticeVisible();
+    const color = INSTRUMENT_COLORS[this.activeInstrumentTab];
+    const panelAlpha = disabled ? 0.16 : 0.28;
+    const accentAlpha = disabled ? 0.32 : 0.9;
+    const trackAlpha = disabled ? 0.16 : 0.34;
+
+    this.overlayMixControls.fillStyle(0x080808, 0.48);
+    this.overlayMixControls.fillRoundedRect(
+      layout.panelX,
+      layout.panelY,
+      layout.panelWidth,
+      layout.panelHeight,
+      14,
+    );
+    this.overlayMixControls.lineStyle(1, 0xf2ecd9, panelAlpha);
+    this.overlayMixControls.strokeRoundedRect(
+      layout.panelX,
+      layout.panelY,
+      layout.panelWidth,
+      layout.panelHeight,
+      14,
+    );
+
+    this.overlayMixControls.fillStyle(0xf2ecd9, trackAlpha);
+    this.overlayMixControls.fillRoundedRect(
+      layout.panTrackX,
+      layout.panTrackY,
+      layout.panTrackWidth,
+      layout.panTrackHeight,
+      5,
+    );
+    this.overlayMixControls.lineStyle(1, 0xf2ecd9, 0.24);
+    this.overlayMixControls.beginPath();
+    this.overlayMixControls.moveTo(layout.centerX, layout.panTrackY - 5);
+    this.overlayMixControls.lineTo(layout.centerX, layout.panTrackY + layout.panTrackHeight + 5);
+    this.overlayMixControls.strokePath();
+
+    const panX = layout.panTrackX + ((mix.pan + 1) * 0.5) * layout.panTrackWidth;
+    this.overlayMixControls.fillStyle(color, accentAlpha);
+    this.overlayMixControls.fillCircle(panX, layout.panTrackY + layout.panTrackHeight * 0.5, 8);
+    this.overlayMixControls.lineStyle(2, 0x090909, disabled ? 0.28 : 0.55);
+    this.overlayMixControls.strokeCircle(panX, layout.panTrackY + layout.panTrackHeight * 0.5, 8);
+
+    this.overlayMixControls.fillStyle(0xf2ecd9, trackAlpha);
+    this.overlayMixControls.fillRoundedRect(
+      layout.volumeTrackX,
+      layout.volumeTrackY,
+      layout.volumeTrackWidth,
+      layout.volumeTrackHeight,
+      6,
+    );
+    const filledHeight = layout.volumeTrackHeight * mix.volume;
+    const fillY = layout.volumeTrackY + layout.volumeTrackHeight - filledHeight;
+    this.overlayMixControls.fillStyle(color, disabled ? 0.18 : 0.42);
+    this.overlayMixControls.fillRoundedRect(
+      layout.volumeTrackX,
+      fillY,
+      layout.volumeTrackWidth,
+      Math.max(10, filledHeight),
+      6,
+    );
+
+    const volumeY = layout.volumeTrackY + (1 - mix.volume) * layout.volumeTrackHeight;
+    this.overlayMixControls.fillStyle(color, accentAlpha);
+    this.overlayMixControls.fillRoundedRect(
+      layout.volumeTrackX - 6,
+      volumeY - 5,
+      layout.volumeTrackWidth + 12,
+      10,
+      5,
+    );
+    this.overlayMixControls.lineStyle(2, 0x090909, disabled ? 0.28 : 0.55);
+    this.overlayMixControls.strokeRoundedRect(
+      layout.volumeTrackX - 6,
+      volumeY - 5,
+      layout.volumeTrackWidth + 12,
+      10,
+      5,
+    );
   }
 
   private resolvePlayheadStep(): number | null {
@@ -619,6 +898,26 @@ export class EditorMusicPatternController {
           : '#d7d2c4'
       );
     }
+  }
+
+  private updateMixLabels(): void {
+    const layout = this.getMixControlLayout();
+    const mix = this.getActiveInstrumentMix();
+    const panLabel =
+      mix.pan <= -0.05
+        ? `L${Math.round(Math.abs(mix.pan) * 100)}`
+        : mix.pan >= 0.05
+          ? `R${Math.round(mix.pan * 100)}`
+          : 'C';
+    const disabled = this.getLegacyStemNoticeVisible();
+
+    this.mixTitleLabel?.setPosition(layout.centerX, MIX_TITLE_Y);
+    this.mixTitleLabel?.setText(getPatternInstrumentLabel(this.activeInstrumentTab));
+    this.mixTitleLabel?.setAlpha(disabled ? 0.4 : 0.92);
+
+    this.mixReadoutLabel?.setPosition(layout.centerX, MIX_READOUT_Y);
+    this.mixReadoutLabel?.setText(`PAN ${panLabel} · VOL ${Math.round(mix.volume * 100)}%`);
+    this.mixReadoutLabel?.setAlpha(disabled ? 0.34 : 0.78);
   }
 
   private drawSelectionRect(graphics: Phaser.GameObjects.Graphics, rect: MusicRect): void {
@@ -692,6 +991,75 @@ export class EditorMusicPatternController {
     }
   }
 
+  private getMixControlLayout(): MixControlLayout {
+    const marginWidth = ROOM_PX_WIDTH - ROOM_PATTERN_MARGIN_START_STEP * TILE_SIZE;
+    const panelWidth = Math.min(MIX_PANEL_WIDTH, marginWidth - MIX_PANEL_PADDING * 2);
+    const panelX = ROOM_PATTERN_MARGIN_START_STEP * TILE_SIZE + (marginWidth - panelWidth) * 0.5;
+    const centerX = panelX + panelWidth * 0.5;
+    return {
+      panelX,
+      panelY: 8,
+      panelWidth,
+      panelHeight: ROOM_PX_HEIGHT - 16,
+      panTrackX: centerX - MIX_PAN_TRACK_WIDTH * 0.5,
+      panTrackY: MIX_PAN_TRACK_Y,
+      panTrackWidth: MIX_PAN_TRACK_WIDTH,
+      panTrackHeight: MIX_PAN_TRACK_HEIGHT,
+      volumeTrackX: centerX - MIX_VOLUME_TRACK_WIDTH * 0.5,
+      volumeTrackY: MIX_VOLUME_TRACK_Y,
+      volumeTrackWidth: MIX_VOLUME_TRACK_WIDTH,
+      volumeTrackHeight: MIX_VOLUME_TRACK_HEIGHT,
+      centerX,
+    };
+  }
+
+  private getMixControlHit(
+    pointer: Phaser.Input.Pointer,
+    preferredControl?: 'volume' | 'pan',
+  ): { control: 'volume' | 'pan'; value: number } | null {
+    const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const layout = this.getMixControlLayout();
+    const panHitRect = new Phaser.Geom.Rectangle(
+      layout.panTrackX - 10,
+      layout.panTrackY - 12,
+      layout.panTrackWidth + 20,
+      layout.panTrackHeight + 24,
+    );
+    const volumeHitRect = new Phaser.Geom.Rectangle(
+      layout.volumeTrackX - 18,
+      layout.volumeTrackY - 8,
+      layout.volumeTrackWidth + 36,
+      layout.volumeTrackHeight + 16,
+    );
+
+    const panValue = Phaser.Math.Clamp(
+      ((worldPoint.x - layout.panTrackX) / layout.panTrackWidth) * 2 - 1,
+      -1,
+      1,
+    );
+    const volumeValue = Phaser.Math.Clamp(
+      1 - ((worldPoint.y - layout.volumeTrackY) / layout.volumeTrackHeight),
+      0,
+      1,
+    );
+
+    if (preferredControl === 'pan') {
+      return { control: 'pan', value: panValue };
+    }
+    if (preferredControl === 'volume') {
+      return { control: 'volume', value: volumeValue };
+    }
+
+    if (Phaser.Geom.Rectangle.Contains(panHitRect, worldPoint.x, worldPoint.y)) {
+      return { control: 'pan', value: panValue };
+    }
+    if (Phaser.Geom.Rectangle.Contains(volumeHitRect, worldPoint.x, worldPoint.y)) {
+      return { control: 'volume', value: volumeValue };
+    }
+
+    return null;
+  }
+
   private getCellFromPointer(pointer: Phaser.Input.Pointer): { step: number; row: number } | null {
     const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
     const step = Math.floor(worldPoint.x / TILE_SIZE);
@@ -726,6 +1094,15 @@ export class EditorMusicPatternController {
     }
 
     return createDefaultRoomPatternMusic();
+  }
+
+  private isCellActive(pattern: RoomPatternMusic, step: number, row: number): boolean {
+    if (this.activeInstrumentTab === 'drums') {
+      const drumRow = getPatternDrumRowForGridRow(row);
+      return Boolean(drumRow && pattern.tabs.drums[drumRow.id].includes(step));
+    }
+
+    return pattern.tabs[this.activeInstrumentTab].steps[step] === row;
   }
 
   private commitPattern(pattern: RoomPatternMusic): void {
@@ -766,24 +1143,40 @@ export class EditorMusicPatternController {
 
       pattern.tabs.drums[drumRow.id] = steps;
       this.commitPattern(pattern);
+      this.lastAppliedCell = { step, row };
       return;
     }
 
-    const currentRow = pattern.tabs[this.activeInstrumentTab].steps[step];
+    const track = pattern.tabs[this.activeInstrumentTab as RoomPatternTonalInstrumentId];
+    const currentRow = track.steps[step];
     if (tool === 'eraser') {
       if (currentRow !== row) {
         return;
       }
-      pattern.tabs[this.activeInstrumentTab].steps[step] = null;
+      track.steps[step] = null;
+      track.ties[step] = false;
+      this.normalizeTonalTrackTies(track);
       this.commitPattern(pattern);
+      this.lastAppliedCell = { step, row };
       return;
     }
 
-    if (currentRow === row) {
+    const shouldTieFromPrevious =
+      this.dragMode === 'draw' &&
+      this.lastAppliedCell !== null &&
+      this.lastAppliedCell.row === row &&
+      Math.abs(this.lastAppliedCell.step - step) === 1;
+    const currentTie = track.ties[step] === true;
+    if (currentRow === row && currentTie === shouldTieFromPrevious) {
+      this.lastAppliedCell = { step, row };
       return;
     }
-    pattern.tabs[this.activeInstrumentTab].steps[step] = row;
+
+    track.steps[step] = row;
+    track.ties[step] = shouldTieFromPrevious;
+    this.normalizeTonalTrackTies(track);
     this.commitPattern(pattern);
+    this.lastAppliedCell = { step, row };
   }
 
   private captureSelection(rect: MusicRect): void {
@@ -815,6 +1208,7 @@ export class EditorMusicPatternController {
         width,
         height,
         tonalStepRows: null,
+        tonalStepTies: null,
         drumMask,
       };
       this.host.renderUi();
@@ -822,15 +1216,19 @@ export class EditorMusicPatternController {
     }
 
     const width = normalized.x2 - normalized.x1 + 1;
+    const track = pattern.tabs[this.activeInstrumentTab as RoomPatternTonalInstrumentId];
     const tonalStepRows = Array.from({ length: width }, () => null as number | null);
+    const tonalStepTies = Array.from({ length: width }, () => false);
     let hasAny = false;
     for (let stepOffset = 0; stepOffset < width; stepOffset += 1) {
       const absoluteStep = normalized.x1 + stepOffset;
-      const absoluteRow = pattern.tabs[this.activeInstrumentTab].steps[absoluteStep];
+      const absoluteRow = track.steps[absoluteStep];
       if (absoluteRow === null || absoluteRow < normalized.y1 || absoluteRow > normalized.y2) {
         continue;
       }
       tonalStepRows[stepOffset] = absoluteRow - normalized.y1;
+      tonalStepTies[stepOffset] =
+        stepOffset > 0 && track.ties[absoluteStep] === true && tonalStepRows[stepOffset - 1] !== null;
       hasAny = true;
     }
     if (!hasAny) {
@@ -841,6 +1239,7 @@ export class EditorMusicPatternController {
       width,
       height: normalized.y2 - normalized.y1 + 1,
       tonalStepRows,
+      tonalStepTies,
       drumMask: null,
     };
     this.host.renderUi();
@@ -859,6 +1258,7 @@ export class EditorMusicPatternController {
 
     let changed = false;
     if (clipboard.tonalStepRows) {
+      const track = pattern.tabs[this.activeInstrumentTab as RoomPatternTonalInstrumentId];
       for (let stepOffset = 0; stepOffset < clipboard.tonalStepRows.length; stepOffset += 1) {
         const relativeRow = clipboard.tonalStepRows[stepOffset];
         if (relativeRow === null) {
@@ -871,10 +1271,18 @@ export class EditorMusicPatternController {
           continue;
         }
 
-        if (pattern.tabs[this.activeInstrumentTab as RoomPatternTonalInstrumentId].steps[targetStep] !== targetRow) {
-          pattern.tabs[this.activeInstrumentTab as RoomPatternTonalInstrumentId].steps[targetStep] = targetRow;
+        const targetTie =
+          stepOffset > 0 &&
+          clipboard.tonalStepTies?.[stepOffset] === true &&
+          clipboard.tonalStepRows[stepOffset - 1] !== null;
+        if (track.steps[targetStep] !== targetRow || track.ties[targetStep] !== targetTie) {
+          track.steps[targetStep] = targetRow;
+          track.ties[targetStep] = targetTie;
           changed = true;
         }
+      }
+      if (changed) {
+        this.normalizeTonalTrackTies(track);
       }
     } else if (clipboard.drumMask) {
       for (let rowOffset = 0; rowOffset < clipboard.drumMask.length; rowOffset += 1) {
@@ -916,8 +1324,27 @@ export class EditorMusicPatternController {
 
   private clearDrag(): void {
     this.dragMode = null;
+    this.mixDragMode = null;
     this.dragStartCell = null;
     this.dragCurrentCell = null;
     this.lastDragCellKey = null;
+    this.lastAppliedCell = null;
+  }
+
+  private normalizeTonalTrackTies(
+    track: RoomPatternMusic['tabs'][RoomPatternTonalInstrumentId],
+  ): void {
+    for (let index = 0; index < track.ties.length; index += 1) {
+      if (index === 0) {
+        track.ties[index] = false;
+        continue;
+      }
+
+      track.ties[index] =
+        track.ties[index] === true &&
+        track.steps[index] !== null &&
+        track.steps[index - 1] !== null &&
+        track.steps[index] === track.steps[index - 1];
+    }
   }
 }

@@ -310,11 +310,7 @@ export class EditorScene extends Phaser.Scene {
       if (event.code === 'Space') {
         event.preventDefault();
         event.stopPropagation();
-        if (this.musicPreviewState === 'playing') {
-          this.pauseRoomMusicPreview();
-        } else {
-          this.playRoomMusicPreview();
-        }
+        this.toggleRoomMusicPreview();
         return;
       }
 
@@ -2360,6 +2356,7 @@ export class EditorScene extends Phaser.Scene {
         transition: 'immediate',
         fadeDurationSec: 0.08,
         mode: 'editor-preview',
+        resetTransport: this.musicPreviewState === 'stopped',
       });
       return;
     }
@@ -2371,6 +2368,7 @@ export class EditorScene extends Phaser.Scene {
         transition: 'immediate',
         fadeDurationSec: 0.08,
         mode: 'editor-preview',
+        resetTransport: true,
       });
       return;
     }
@@ -2398,6 +2396,7 @@ export class EditorScene extends Phaser.Scene {
           transition: 'immediate',
           fadeDurationSec: 0.08,
           mode: 'editor-preview',
+          resetTransport: true,
         });
       }
     }
@@ -2438,6 +2437,15 @@ export class EditorScene extends Phaser.Scene {
     this.renderEditorUi();
   }
 
+  toggleRoomMusicPreview(): void {
+    if (this.musicPreviewState === 'playing') {
+      this.stopRoomMusicPreview();
+      return;
+    }
+
+    this.playRoomMusicPreview();
+  }
+
   pauseRoomMusicPreview(): void {
     this.musicPreviewState = 'paused';
     globalRoomMusicController.stopArrangement({
@@ -2454,6 +2462,7 @@ export class EditorScene extends Phaser.Scene {
       transition: 'immediate',
       fadeDurationSec: 0.08,
       mode: 'editor-preview',
+      resetTransport: true,
     });
     this.renderEditorUi();
   }
