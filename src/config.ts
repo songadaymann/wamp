@@ -428,6 +428,8 @@ export interface GameObjectConfig {
   previewOffsetX?: number;
   /** optional editor preview y offset inside the frame */
   previewOffsetY?: number;
+  /** align placement to the preview bounds rather than the full frame box */
+  placeUsingPreviewBounds?: boolean;
   /** behavior hint for runtime object logic */
   behavior: 'static' | 'patrol' | 'fly' | 'bounce' | 'animated' | 'shooter';
   /** short tooltip description for the editor palette */
@@ -502,7 +504,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'door_locked', name: 'Locked Door', category: 'interactive', path: 'assets/objects/door_locked.png', frameWidth: 32, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 44, bodyOffsetX: 2, bodyOffsetY: 4, behavior: 'static',   description: 'A key-gated door. Collect a key to unlock and pass through.' },
   { id: 'door_metal',  name: 'Metal Door',  category: 'platform',    path: 'assets/objects/door_locked.png', frameWidth: 32, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 44, bodyOffsetX: 2, bodyOffsetY: 4, behavior: 'static',   description: 'Pressure-plate door. Opens while its linked plate stays pressed.' },
   { id: 'crate',       name: 'Crate',       category: 'platform',    path: 'assets/objects/crate_static.png', frameWidth: 32, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 0, bodyOffsetY: 16, previewWidth: 16, previewHeight: 16, previewOffsetX: 0, previewOffsetY: 16, behavior: 'static',   description: 'Solid block. Stand on it or push it.' },
-  { id: 'brick_box',   name: 'Brick Box',   category: 'platform',    path: 'assets/objects/brick_box.png',   frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 0,  defaultFrame: 3, bodyWidth: 16, bodyHeight: 17, bodyOffsetX: 8, bodyOffsetY: 7, previewWidth: 16, previewHeight: 17, previewOffsetX: 8, previewOffsetY: 7, behavior: 'static',   description: 'Solid brick block. Stand on it like a platform.' },
+  { id: 'brick_box',   name: 'Brick Box',   category: 'platform',    path: 'assets/objects/brick_box.png',   frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 0,  defaultFrame: 5, bodyWidth: 16, bodyHeight: 13, bodyOffsetX: 8, bodyOffsetY: 11, previewWidth: 16, previewHeight: 13, previewOffsetX: 8, previewOffsetY: 11, placeUsingPreviewBounds: true, behavior: 'static',   description: 'Solid brick block. Stand on it like a platform.' },
   { id: 'treasure_chest', name: 'Treasure Chest', category: 'platform', path: 'assets/objects/treasure_chest.png', frameWidth: 32, frameHeight: 32, frameCount: 4, fps: 0, defaultFrame: 0, bodyWidth: 28, bodyHeight: 18, bodyOffsetX: 2, bodyOffsetY: 14, behavior: 'static', description: 'Solid chest prop. Good for treasure rooms.' },
   { id: 'log_wall',    name: 'Log Wall',    category: 'platform',    path: 'assets/deco/log_wall.png',       frameWidth: 32, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 44, bodyOffsetX: 2, bodyOffsetY: 4, behavior: 'static',   description: 'Tall wooden wall segment. Solid collision.' },
   { id: 'cage',        name: 'Cage',        category: 'platform',    path: 'assets/objects/cage.png',        frameWidth: 16, frameHeight: 32, frameCount: 5,  fps: 0,  defaultFrame: 0, bodyWidth: 14, bodyHeight: 30, bodyOffsetX: 1, bodyOffsetY: 2, behavior: 'static',   description: 'Tall cage prop. Solid collision.' },
@@ -541,6 +543,66 @@ export function getObjectDefaultFrame(config: GameObjectConfig): number {
   }
 
   return getObjectAnimationFrames(config)[0] ?? 0;
+}
+
+export function getObjectPreviewBounds(config: GameObjectConfig): {
+  width: number;
+  height: number;
+  offsetX: number;
+  offsetY: number;
+} {
+  return {
+    width: config.previewWidth ?? config.frameWidth,
+    height: config.previewHeight ?? config.frameHeight,
+    offsetX: config.previewOffsetX ?? 0,
+    offsetY: config.previewOffsetY ?? 0,
+  };
+}
+
+export function getObjectPlacementPointForTile(
+  config: GameObjectConfig,
+  tileX: number,
+  tileY: number,
+): { x: number; y: number } {
+  if (!config.placeUsingPreviewBounds) {
+    return {
+      x: tileX * TILE_SIZE + config.frameWidth / 2,
+      y: tileY * TILE_SIZE + TILE_SIZE - config.frameHeight / 2,
+    };
+  }
+
+  const preview = getObjectPreviewBounds(config);
+  const previewLeft = tileX * TILE_SIZE + Math.max(0, (TILE_SIZE - preview.width) / 2);
+  const previewTop = tileY * TILE_SIZE + TILE_SIZE - preview.height;
+
+  return {
+    x: previewLeft + config.frameWidth / 2 - preview.offsetX,
+    y: previewTop + config.frameHeight / 2 - preview.offsetY,
+  };
+}
+
+export function getObjectPreviewRectForTile(
+  config: GameObjectConfig,
+  tileX: number,
+  tileY: number,
+): { x: number; y: number; width: number; height: number } {
+  const preview = getObjectPreviewBounds(config);
+
+  if (!config.placeUsingPreviewBounds) {
+    return {
+      x: tileX * TILE_SIZE + preview.offsetX,
+      y: tileY * TILE_SIZE + TILE_SIZE - config.frameHeight + preview.offsetY,
+      width: preview.width,
+      height: preview.height,
+    };
+  }
+
+  return {
+    x: tileX * TILE_SIZE + Math.max(0, (TILE_SIZE - preview.width) / 2),
+    y: tileY * TILE_SIZE + TILE_SIZE - preview.height,
+    width: preview.width,
+    height: preview.height,
+  };
 }
 
 export function getObjectFrameSourceRect(

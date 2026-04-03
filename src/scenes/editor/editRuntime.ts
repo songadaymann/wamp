@@ -19,6 +19,7 @@ import {
   getPlacedObjectLayer,
   getObjectById,
   getObjectDefaultFrame,
+  getObjectPlacementPointForTile,
   placedObjectContributesToCategory,
   getSelectionTileValue,
   type LayerName,
@@ -766,10 +767,11 @@ export class EditorEditRuntime {
       return null;
     }
 
+    const placementPoint = getObjectPlacementPointForTile(objectConfig, tileX, tileY);
     const placed: PlacedObject = {
       id: editorState.selectedObjectId,
-      x: tileX * TILE_SIZE + objectConfig.frameWidth / 2,
-      y: tileY * TILE_SIZE + TILE_SIZE - objectConfig.frameHeight / 2,
+      x: placementPoint.x,
+      y: placementPoint.y,
       instanceId: createPlacedObjectInstanceId(),
       facing: objectConfig.facingDirection ? editorState.objectFacing : undefined,
       layer: editorState.activeLayer,

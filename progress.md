@@ -57,6 +57,23 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Brick box editor/runtime pass on April 3, 2026:
+  - fixed `brick_box` to use the intact frame as its default/editor representation instead of a mid-break animation frame
+  - added object placement helpers in `src/config.ts` so opted-in objects can anchor to their preview bounds rather than the full spritesheet frame
+  - opted `brick_box` into that placement mode and tightened its preview/body bounds so it snaps into a tile cell instead of straddling grid intersections
+  - updated editor placement, cursor preview, worker object placement, and legacy room normalization so newly placed and previously saved brick boxes land on tile-center coordinates
+  - updated palette rendering so `brick_box` uses cropped preview bounds in the object grid and tile preview, which makes the palette icon show the solid block art instead of padded animation space
+  - added a dedicated `brick_box_break_anim` and runtime head-bump handling so the block breaks from below and consumes the existing animation frames
+  - verification:
+    - `npm run build` passed in `/private/tmp/wamp-brick-block-fix`
+    - Playwright smoke artifacts in `output/web-game/brick-box-targeted/` confirm:
+    - `brick-selected.png`: object palette shows the intact brick icon
+    - `brick-placed.png`: placed brick aligns to the room grid and stored coordinates snap to tile-center (`x % 16 === 8`, `y % 16 === 8`)
+    - `brick-broken.png`: brick disappears after a play-test head bump from below
+  - local smoke caveats:
+    - local dev still logs expected PartyKit connection failures on `127.0.0.1:1999` when presence/chat are not running
+    - local preview smoke still sees leaderboard/API noise if the local worker DB schema is behind prod migrations
+
 - Desktop world HUD play-mode collapse on April 2, 2026:
   - collapsed the desktop `play-world` HUD down to the active stop control only, so normal browse keeps the full overworld card while gameplay shrinks it to a compact top-left stop pill
   - kept the change in HUD markup/style only by adding semantic action-row classes in `index.html` and desktop-only play-mode rules in `src/styles/sections/world.css`

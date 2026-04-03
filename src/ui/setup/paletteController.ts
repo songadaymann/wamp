@@ -6,6 +6,7 @@ import {
   getObjectById,
   getObjectDefaultFrame,
   getObjectFrameSourceRect,
+  getObjectPreviewBounds,
   getTilesetByKey,
   type GameObjectConfig,
   type TileSelection,
@@ -275,9 +276,10 @@ export class PaletteController {
           this.tilePreviewCanvas!.height = 64;
           ctx.clearRect(0, 0, 64, 64);
 
-          const previewScale = Math.min(64 / selectedObject.frameWidth, 64 / selectedObject.frameHeight);
-          const drawWidth = Math.floor(selectedObject.frameWidth * previewScale);
-          const drawHeight = Math.floor(selectedObject.frameHeight * previewScale);
+          const sourceSize = this.getObjectPreviewSourceSize(selectedObject);
+          const previewScale = Math.min(64 / sourceSize.width, 64 / sourceSize.height);
+          const drawWidth = Math.floor(sourceSize.width * previewScale);
+          const drawHeight = Math.floor(sourceSize.height * previewScale);
           const offsetX = Math.floor((64 - drawWidth) / 2);
           const offsetY = Math.floor((64 - drawHeight) / 2);
 
@@ -417,15 +419,21 @@ export class PaletteController {
           }
 
           ctx.imageSmoothingEnabled = false;
+          const sourceSize = this.getObjectPreviewSourceSize(objectConfig);
+          const previewScale = Math.min(canvas.width / sourceSize.width, canvas.height / sourceSize.height);
+          const drawWidth = Math.max(1, Math.floor(sourceSize.width * previewScale));
+          const drawHeight = Math.max(1, Math.floor(sourceSize.height * previewScale));
+          const offsetX = Math.floor((canvas.width - drawWidth) / 2);
+          const offsetY = Math.floor((canvas.height - drawHeight) / 2);
           this.drawObjectFrame(
             ctx,
             objectConfig,
             srcImg,
             getObjectDefaultFrame(objectConfig),
-            0,
-            0,
-            objectConfig.frameWidth,
-            objectConfig.frameHeight,
+            offsetX,
+            offsetY,
+            drawWidth,
+            drawHeight,
             false,
           );
           img.src = canvas.toDataURL();
@@ -854,6 +862,21 @@ export class PaletteController {
     return objectConfig.facingDirection !== editorState.objectFacing;
   }
 
+  private getObjectPreviewSourceSize(objectConfig: GameObjectConfig): { width: number; height: number } {
+    if (objectConfig.placeUsingPreviewBounds) {
+      const preview = getObjectPreviewBounds(objectConfig);
+      return {
+        width: preview.width,
+        height: preview.height,
+      };
+    }
+
+    return {
+      width: objectConfig.frameWidth,
+      height: objectConfig.frameHeight,
+    };
+  }
+
   private drawObjectFrame(
     context: CanvasRenderingContext2D,
     objectConfig: GameObjectConfig,
@@ -865,11 +888,16 @@ export class PaletteController {
     destHeight: number,
     flipX: boolean,
   ): void {
-    const { sx, sy, sw, sh } = getObjectFrameSourceRect(
+    const sourceRect = getObjectFrameSourceRect(
       objectConfig,
       frame,
       image.naturalWidth || image.width || objectConfig.frameWidth,
     );
+    const preview = objectConfig.placeUsingPreviewBounds ? getObjectPreviewBounds(objectConfig) : null;
+    const sx = sourceRect.sx + (preview?.offsetX ?? 0);
+    const sy = sourceRect.sy + (preview?.offsetY ?? 0);
+    const sw = preview?.width ?? sourceRect.sw;
+    const sh = preview?.height ?? sourceRect.sh;
     context.save();
 
     if (flipX) {

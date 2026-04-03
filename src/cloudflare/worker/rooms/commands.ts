@@ -5,6 +5,7 @@ import {
   TILE_SIZE,
   createPlacedObjectInstanceId,
   getObjectById,
+  getObjectPlacementPointForTile,
   type LayerName,
   type PlacedObject,
 } from '../../../config';
@@ -561,11 +562,12 @@ function placeObjectAtTile(command: PlaceObjectCommand): PlacedObject {
   if (!objectConfig) {
     throw new HttpError(400, `Unknown objectId "${command.objectId}".`);
   }
+  const placementPoint = getObjectPlacementPointForTile(objectConfig, command.tileX, command.tileY);
 
   return {
     id: command.objectId,
-    x: command.tileX * TILE_SIZE + objectConfig.frameWidth / 2,
-    y: command.tileY * TILE_SIZE + TILE_SIZE - objectConfig.frameHeight / 2,
+    x: placementPoint.x,
+    y: placementPoint.y,
     instanceId: createPlacedObjectInstanceId(),
     facing: objectConfig.facingDirection ? command.facing : undefined,
     layer: command.layer,

@@ -90,6 +90,18 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
+    if (!this.anims.exists('brick_box_break_anim')) {
+      this.anims.create({
+        key: 'brick_box_break_anim',
+        frames: [5, 4, 3, 2, 1, 0].map((frame) => ({
+          key: 'brick_box',
+          frame,
+        })),
+        frameRate: 18,
+        repeat: 0,
+      });
+    }
+
     for (const animation of DEFAULT_PLAYER_ANIMATIONS) {
       if (this.anims.exists(animation.key)) {
         continue;

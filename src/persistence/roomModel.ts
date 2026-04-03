@@ -2,6 +2,7 @@ import {
   LAYER_NAMES,
   ROOM_HEIGHT,
   ROOM_WIDTH,
+  TILE_SIZE,
   canObjectBeStoredInContainer,
   canPlacedObjectBeContainer,
   canPlacedObjectBePressurePlateTarget,
@@ -212,7 +213,7 @@ function normalizePlacedObject(
     return null;
   }
 
-  return {
+  const normalized: PlacedObject = {
     id: placed.id,
     x: placed.x,
     y: placed.y,
@@ -241,6 +242,17 @@ function normalizePlacedObject(
         ? placed.containedObjectId
         : null,
   };
+
+  if (
+    normalized.id === 'brick_box' &&
+    normalized.x % TILE_SIZE === 0 &&
+    normalized.y % TILE_SIZE === 0
+  ) {
+    normalized.x -= TILE_SIZE / 2;
+    normalized.y += TILE_SIZE / 2;
+  }
+
+  return normalized;
 }
 
 function clonePlacedObjects(placedObjects: PlacedObject[]): PlacedObject[] {

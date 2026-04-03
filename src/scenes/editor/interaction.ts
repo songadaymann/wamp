@@ -7,6 +7,7 @@ import {
   TILE_SIZE,
   editorState,
   getObjectById,
+  getObjectPreviewRectForTile,
 } from '../../config';
 import { isTextInputFocused } from '../../ui/keyboardFocus';
 import { RETRO_COLORS } from '../../visuals/starfield';
@@ -240,23 +241,20 @@ export class EditorInteractionController {
       const objectConfig = editorState.selectedObjectId ? getObjectById(editorState.selectedObjectId) : null;
       const layerAccent = getEditorLayerAccent();
       if (objectConfig && editorState.activeTool !== 'eraser') {
-        const previewWidth = objectConfig.previewWidth ?? objectConfig.frameWidth;
-        const previewHeight = objectConfig.previewHeight ?? objectConfig.frameHeight;
-        const previewOffsetX = objectConfig.previewOffsetX ?? 0;
-        const previewOffsetY = objectConfig.previewOffsetY ?? 0;
+        const previewRect = getObjectPreviewRectForTile(objectConfig, tileX, tileY);
         this.cursorGraphics.fillStyle(layerAccent.stroke, layerAccent.fillAlpha);
         this.cursorGraphics.fillRect(
-          tileX * TILE_SIZE + previewOffsetX,
-          tileY * TILE_SIZE + TILE_SIZE - objectConfig.frameHeight + previewOffsetY,
-          previewWidth,
-          previewHeight,
+          previewRect.x,
+          previewRect.y,
+          previewRect.width,
+          previewRect.height,
         );
         this.cursorGraphics.lineStyle(1, layerAccent.stroke, 0.9);
         this.cursorGraphics.strokeRect(
-          tileX * TILE_SIZE + previewOffsetX,
-          tileY * TILE_SIZE + TILE_SIZE - objectConfig.frameHeight + previewOffsetY,
-          previewWidth,
-          previewHeight,
+          previewRect.x,
+          previewRect.y,
+          previewRect.width,
+          previewRect.height,
         );
       } else {
         this.cursorGraphics.lineStyle(2, RETRO_COLORS.danger, 0.85);

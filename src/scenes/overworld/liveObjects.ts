@@ -397,7 +397,17 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             );
             break;
           case 'platform':
-            liveObject.interactions.push(this.options.scene.physics.add.collider(player, liveObject.sprite));
+            if (liveObject.config.id === 'brick_box') {
+              liveObject.interactions.push(
+                this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
+                  this.maybeBreakBrickBox(loadedRoom, liveObject);
+                })
+              );
+            } else {
+              liveObject.interactions.push(
+                this.options.scene.physics.add.collider(player, liveObject.sprite)
+              );
+            }
             break;
           case 'interactive':
             if (liveObject.config.id === 'ladder') {
@@ -1536,6 +1546,61 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       default:
         return this.options.settings.snakeSpeed;
     }
+  }
+
+  private maybeBreakBrickBox(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+  ): void {
+    if (liveObject.config.id !== 'brick_box' || !liveObject.sprite.active) {
+      return;
+    }
+
+    const playerBody = this.options.getPlayerBody();
+    const brickBody = liveObject.sprite.body as ArcadeObjectBody | null;
+    if (!playerBody || !brickBody) {
+      return;
+    }
+
+    const upwardDelta =
+      typeof playerBody.deltaY === 'function'
+        ? playerBody.deltaY()
+        : playerBody.y - (playerBody.prev?.y ?? playerBody.y);
+    const hitFromBelow =
+      upwardDelta < -0.5 &&
+      playerBody.center.y >= brickBody.center.y - 2 &&
+      playerBody.top <= brickBody.bottom + 2;
+    if (!hitFromBelow) {
+      return;
+    }
+
+    if (playerBody.velocity.y < -40) {
+      playerBody.setVelocityY(-40);
+    }
+
+    this.breakBrickBox(loadedRoom, liveObject);
+  }
+
+  private breakBrickBox(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+  ): void {
+    const sprite = liveObject.sprite;
+    const body = sprite.body as ArcadeObjectBody | null;
+
+    this.destroyLiveObjectInteractions(liveObject);
+    this.destroyLiveObjectWorldColliders(liveObject);
+    this.destroyLiveObjectHelpers(liveObject);
+    if (body) {
+      body.enable = false;
+    }
+    loadedRoom.liveObjects = loadedRoom.liveObjects.filter((candidate) => candidate !== liveObject);
+    this.syncWorldObjectColliders(this.options.getLoadedFullRooms());
+
+    sprite.play('brick_box_break_anim');
+    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      sprite.destroy();
+    });
   }
 
   private removeLiveObject(
