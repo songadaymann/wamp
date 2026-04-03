@@ -1208,10 +1208,26 @@ body[data-app-mode="play-world"] .world-only-control {
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
+  width: 100%;
   padding: 8px 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.world-online-popover-entry:hover,
+.world-online-popover-entry:focus-visible {
+  border-color: rgba(126, 224, 191, 0.28);
+  background: rgba(126, 224, 191, 0.08);
+  outline: none;
+}
+
+.world-online-popover-entry:disabled {
+  cursor: default;
+  opacity: 0.82;
 }
 
 .world-online-popover-entry-name {

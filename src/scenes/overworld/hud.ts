@@ -1,5 +1,5 @@
 import type { RoomCoordinates } from '../../persistence/roomModel';
-import { createProfileTriggerElement, isOpenableProfileUserId, requestProfileOpen } from '../../ui/setup/profileEvents';
+import { isOpenableProfileUserId, requestProfileOpen } from '../../ui/setup/profileEvents';
 
 interface OverworldHudRuntimeConfig {
   onPlayRoom: () => void | Promise<void>;
@@ -114,6 +114,7 @@ export interface OverworldOnlineRosterViewEntry {
   userId: string | null;
   displayName: string;
   roomText: string;
+  roomCoordinates: RoomCoordinates;
   isSelf: boolean;
 }
 
@@ -563,17 +564,28 @@ export class OverworldHudBridge {
   }
 
   private createPlayersOnlineEntry(entry: OverworldOnlineRosterViewEntry): HTMLElement {
-    const row = this.doc.createElement('div');
+    const row = this.doc.createElement('button');
+    row.type = 'button';
     row.className = 'world-online-popover-entry';
     row.dataset.onlineKey = entry.key;
+    row.disabled = entry.isSelf;
+    row.title = entry.isSelf ? '' : `Join ${entry.displayName} in ${entry.roomText}`;
+    row.addEventListener('click', () => {
+      if (entry.isSelf) {
+        return;
+      }
 
-    const name = createProfileTriggerElement(
-      this.doc,
-      entry.userId,
-      entry.isSelf ? `${entry.displayName} (You)` : entry.displayName,
-      'world-online-popover-entry-name',
-      'div'
-    );
+      this.playersOnlinePinned = false;
+      this.setPlayersOnlinePopoverOpen(false);
+      void (async () => {
+        await runtimeConfig.onJumpToCoordinates(entry.roomCoordinates);
+        await runtimeConfig.onPlayRoom();
+      })();
+    });
+
+    const name = this.doc.createElement('div');
+    name.className = 'world-online-popover-entry-name';
+    name.textContent = entry.isSelf ? `${entry.displayName} (You)` : entry.displayName;
     name.dataset.onlineSelf = entry.isSelf ? 'true' : 'false';
 
     const room = this.doc.createElement('div');

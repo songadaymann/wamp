@@ -1216,6 +1216,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           userId: entry.userId,
           displayName: entry.displayName,
           roomText: `Room ${entry.roomId}`,
+          roomCoordinates: entry.roomCoordinates,
           isSelf: entry.isSelf,
         })),
       loadRoomOwnershipDetails: async (roomId, coordinates) => {

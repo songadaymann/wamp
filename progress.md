@@ -57,6 +57,13 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Profile ownership + roster-join merge on April 3, 2026:
+  - changed profile room sourcing so profile `Published Rooms` only includes rooms claimed by that user and currently published
+  - updated the profile UI copy/stat labels from `Created Rooms` to `Published Rooms` / `Published rooms`
+  - changed the bottom-bar online roster so clicking another player's entry jumps to their room and starts play there
+  - verification:
+    - `npm run build` passed in `/private/tmp/wamp-lava-collision-fix`
+
 - Adjoining-room audio merge cleanup on April 3, 2026:
   - confirmed current `main` already contained the core adjoining-room audio bleed path
   - applied the later low-pass tuning values from the ready audio branch so adjacent-room cues now use:

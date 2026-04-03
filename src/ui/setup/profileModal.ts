@@ -503,7 +503,7 @@ export class ProfileModalController {
     const items: Array<[string, string]> = [
       ['Total points', String(stats?.totalPoints ?? 0)],
       ['Total score', String(stats?.totalScore ?? 0)],
-      ['Created rooms', String(stats?.totalRoomsPublished ?? 0)],
+      ['Published rooms', String(stats?.totalRoomsPublished ?? 0)],
       ['Published courses', String(publishedCourseCount)],
       ['Completed runs', String(stats?.completedRuns ?? 0)],
       ['Failed runs', String(stats?.failedRuns ?? 0)],
