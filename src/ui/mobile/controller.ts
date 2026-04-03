@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { getDeviceLayoutState, initializeDeviceLayout, DEVICE_LAYOUT_CHANGED_EVENT } from '../deviceLayout';
-import { withActiveEditorScene } from '../setup/sceneBridge';
+import { getActiveOverworldScene, withActiveEditorScene } from '../setup/sceneBridge';
 import {
   pressTouchAction,
   resetTouchInputState,
@@ -9,7 +9,7 @@ import {
   setTouchMove,
 } from './touchControls';
 
-type EditorSheetId = 'tools' | 'background' | 'palette' | 'objects' | 'goal' | 'actions';
+type EditorSheetId = 'tools' | 'background' | 'palette' | 'objects' | 'music' | 'goal' | 'actions';
 type MoveDirection = 'up' | 'left' | 'right' | 'down';
 
 type Elements = {
@@ -27,6 +27,7 @@ type Elements = {
   worldHudToggleButton: HTMLButtonElement | null;
   worldHudMinimizeButton: HTMLButtonElement | null;
   worldChatButton: HTMLButtonElement | null;
+  worldRoomChatButton: HTMLButtonElement | null;
   worldJumpSheetButton: HTMLButtonElement | null;
   worldJumpSheet: HTMLElement | null;
   worldJumpSheetInput: HTMLInputElement | null;
@@ -68,6 +69,7 @@ export class MobileUiController {
       worldHudToggleButton: doc.getElementById('btn-world-hud-toggle') as HTMLButtonElement | null,
       worldHudMinimizeButton: doc.getElementById('btn-mobile-world-hud-minimize') as HTMLButtonElement | null,
       worldChatButton: doc.getElementById('btn-world-chat') as HTMLButtonElement | null,
+      worldRoomChatButton: doc.getElementById('btn-world-room-chat') as HTMLButtonElement | null,
       worldJumpSheetButton: doc.getElementById('btn-world-jump-sheet') as HTMLButtonElement | null,
       worldJumpSheet: doc.getElementById('mobile-jump-sheet'),
       worldJumpSheetInput: doc.getElementById('mobile-world-jump-input') as HTMLInputElement | null,
@@ -132,7 +134,7 @@ export class MobileUiController {
   private bindAppMode(): void {
     this.mutationObserver.observe(this.doc.body, {
       attributes: true,
-      attributeFilter: ['data-app-mode'],
+      attributeFilter: ['data-app-mode', 'data-editor-music-mode', 'data-editor-music-ui-locked'],
     });
     this.observeClassChanges(this.doc.getElementById('auth-panel'));
     this.observeClassChanges(this.doc.getElementById('global-chat'));
@@ -161,6 +163,13 @@ export class MobileUiController {
           return;
         }
 
+        if (
+          this.doc.body.dataset.editorMusicMode === 'true'
+          && nextSheet !== 'music'
+        ) {
+          return;
+        }
+
         this.syncEditorPaletteMode(nextSheet);
 
         if (this.activeEditorSheet !== nextSheet || this.editorSheetCollapsed) {
@@ -182,6 +191,10 @@ export class MobileUiController {
     });
 
     this.elements.mobileEditorToggleButton?.addEventListener('click', () => {
+      if (this.doc.body.dataset.editorMusicMode === 'true') {
+        return;
+      }
+
       if (!this.editorSheetCollapsed) {
         this.editorSheetCollapsed = true;
         this.doc.body.dataset.mobileEditorCollapsed = 'true';
@@ -219,6 +232,10 @@ export class MobileUiController {
   private bindWorldShortcuts(): void {
     this.elements.worldChatButton?.addEventListener('click', () => {
       this.elements.chatToggleButton?.click();
+    });
+
+    this.elements.worldRoomChatButton?.addEventListener('click', () => {
+      getActiveOverworldScene(this.game)?.openRoomChatComposer?.();
     });
 
     this.elements.worldJumpSheetButton?.addEventListener('click', () => {
@@ -480,21 +497,32 @@ export class MobileUiController {
     const isEditor = appMode === 'editor';
     const isWorld = appMode === 'world' || appMode === 'play-world';
     const isPlay = appMode === 'play-world';
-    const isPhoneWorld = layout.deviceClass === 'phone' && layout.coarsePointer && !layout.mobileLandscapeBlocked && isWorld;
+    const musicModeActive = this.doc.body.dataset.editorMusicMode === 'true';
+    const isCollapsibleWorldHud =
+      layout.coarsePointer &&
+      layout.deviceClass !== 'desktop' &&
+      !layout.mobileLandscapeBlocked &&
+      isWorld;
     const chatOpen = this.doc.getElementById('global-chat')?.classList.contains('is-open') ?? false;
     const jumpSheetOpen = !(this.elements.worldJumpSheet?.classList.contains('hidden') ?? true);
     const menuOpen = this.doc.getElementById('auth-panel')?.classList.contains('menu-open') ?? false;
     const busyOverlayOpen = !(this.doc.getElementById('busy-overlay')?.classList.contains('hidden') ?? true);
     const nonJumpModalOpen = this.hasVisibleNonJumpModal();
     const mobileShortcutOverlayOpen =
-      chatOpen || jumpSheetOpen || menuOpen || busyOverlayOpen || nonJumpModalOpen;
+      chatOpen || jumpSheetOpen || busyOverlayOpen || nonJumpModalOpen;
 
     if (!isEditor && this.editorSheetCollapsed) {
       this.editorSheetCollapsed = false;
     }
 
+    if (isEditor && musicModeActive) {
+      this.activeEditorSheet = 'music';
+      this.editorSheetCollapsed = false;
+      this.doc.body.dataset.mobileEditorSheet = 'music';
+    }
+
     if (this.previousAppMode !== appMode) {
-      if (layout.deviceClass === 'phone' && layout.coarsePointer) {
+      if (layout.coarsePointer && layout.deviceClass !== 'desktop') {
         if (appMode === 'play-world') {
           this.worldHudCollapsed = true;
         } else if (appMode === 'world') {
@@ -518,10 +546,20 @@ export class MobileUiController {
         .querySelectorAll<HTMLButtonElement>('[data-mobile-editor-sheet]')
         .forEach((button) => {
           button.classList.toggle('active', button.dataset.mobileEditorSheet === this.activeEditorSheet);
+          button.disabled =
+            musicModeActive
+            && button.dataset.mobileEditorSheet !== 'music';
         });
     }
 
+    this.doc.body.dataset.mobileEditorSheet = this.activeEditorSheet;
     this.doc.body.dataset.mobileEditorCollapsed = this.editorSheetCollapsed ? 'true' : 'false';
+    if (this.elements.mobileEditorUndoButton) {
+      this.elements.mobileEditorUndoButton.disabled = musicModeActive;
+    }
+    if (this.elements.mobileEditorToggleButton) {
+      this.elements.mobileEditorToggleButton.disabled = musicModeActive;
+    }
 
     this.elements.rotateGate?.classList.toggle(
       'hidden',
@@ -534,17 +572,27 @@ export class MobileUiController {
     );
     this.elements.mobileWorldStopButton?.classList.toggle(
       'hidden',
-      !(isPhoneWorld && isPlay && this.worldHudCollapsed),
+      !(isCollapsibleWorldHud && isPlay && this.worldHudCollapsed),
     );
 
     this.doc.body.dataset.mobileWorldHudCollapsed =
-      isPhoneWorld && this.worldHudCollapsed ? 'true' : 'false';
-    this.elements.worldHudToggleButton?.classList.toggle('hidden', !(isPhoneWorld && this.worldHudCollapsed));
-    this.elements.worldHudMinimizeButton?.classList.toggle('hidden', !(isPhoneWorld && !this.worldHudCollapsed));
+      isCollapsibleWorldHud && this.worldHudCollapsed ? 'true' : 'false';
+    this.elements.worldHudToggleButton?.classList.toggle(
+      'hidden',
+      !(isCollapsibleWorldHud && this.worldHudCollapsed),
+    );
+    this.elements.worldHudMinimizeButton?.classList.toggle(
+      'hidden',
+      !(isCollapsibleWorldHud && !this.worldHudCollapsed),
+    );
 
     this.elements.worldChatButton?.classList.toggle(
       'hidden',
       !(layout.coarsePointer && isWorld) || mobileShortcutOverlayOpen,
+    );
+    this.elements.worldRoomChatButton?.classList.toggle(
+      'hidden',
+      !(layout.coarsePointer && isPlay) || mobileShortcutOverlayOpen,
     );
     this.elements.worldJumpSheetButton?.classList.toggle(
       'hidden',

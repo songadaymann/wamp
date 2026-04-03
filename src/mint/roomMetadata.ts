@@ -1,4 +1,5 @@
 import {
+  getPlacedObjectInstanceId,
   LAYER_NAMES,
   ROOM_HEIGHT,
   ROOM_WIDTH,
@@ -8,6 +9,7 @@ import {
   type LayerName,
   type PlacedObject,
 } from '../config';
+import { getRoomBackgroundLabel, normalizeRoomBackground } from '../backgrounds/model';
 import { cloneRoomGoal, normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
 import { cloneRoomLightingSettings, type RoomLightingSettings } from '../lighting/model';
 import {
@@ -37,6 +39,7 @@ export interface WampMintedRoomObject {
   y: number;
   facing: 'left' | 'right' | null;
   layer: LayerName;
+  containedObjectId?: string | null;
 }
 
 export interface WampMintedRoomPayload {
@@ -99,7 +102,7 @@ export interface WampMintedRoomPayloadV2 {
   s?: [number, number];
   t?: Partial<Record<WampV2LayerKey, string>>;
   k?: string[];
-  o?: Array<[number, number, number, number]>;
+  o?: Array<[number, number, number, number, number?]>;
   pv: number;
   pt?: string;
 }
@@ -114,7 +117,7 @@ export interface WampMintedRoomPayloadV3 {
   s?: [number, number];
   t?: Partial<Record<WampV2LayerKey, string>>;
   k?: string[];
-  o?: Array<[number, number, number, number]>;
+  o?: Array<[number, number, number, number, number?]>;
   pv: number;
   pt?: string;
 }
@@ -199,7 +202,7 @@ export function buildWampMintedRoomPayload(snapshot: RoomSnapshot): WampMintedRo
     roomId: snapshot.id,
     coordinates: [snapshot.coordinates.x, snapshot.coordinates.y],
     title: normalizeRoomTitle(snapshot.title),
-    background: snapshot.background,
+    background: normalizeRoomBackground(snapshot.background),
     lighting: cloneRoomLightingSettings(snapshot.lighting),
     goal: cloneRoomGoal(snapshot.goal),
     spawnPoint: snapshot.spawnPoint ? [snapshot.spawnPoint.x, snapshot.spawnPoint.y] : null,
@@ -214,6 +217,7 @@ export function buildWampMintedRoomPayload(snapshot: RoomSnapshot): WampMintedRo
       y: placed.y,
       facing: placed.facing === 'left' || placed.facing === 'right' ? placed.facing : null,
       layer: getPlacedObjectLayer(placed),
+      containedObjectId: placed.containedObjectId ?? null,
     })),
     version: snapshot.version,
     publishedAt: snapshot.publishedAt,
@@ -230,7 +234,7 @@ export function buildRoomSnapshotFromMintedPayload(
   const snapshot = createDefaultRoomSnapshot(payload.roomId, coordinates);
 
   snapshot.title = normalizeRoomTitle(payload.title);
-  snapshot.background = payload.background;
+  snapshot.background = normalizeRoomBackground(payload.background);
   snapshot.lighting = cloneRoomLightingSettings(payload.lighting);
   snapshot.goal = normalizeRoomGoal(payload.goal);
   snapshot.spawnPoint = payload.spawnPoint
@@ -240,12 +244,25 @@ export function buildRoomSnapshotFromMintedPayload(
       }
     : null;
   snapshot.tileData = decodeMintedTileData(payload.v, payload.tiles);
-  snapshot.placedObjects = payload.placedObjects.map((placed) => ({
+  snapshot.placedObjects = payload.placedObjects.map((placed, index) => ({
     id: placed.id,
     x: placed.x,
     y: placed.y,
+    instanceId: getPlacedObjectInstanceId(
+      {
+        id: placed.id,
+        x: placed.x,
+        y: placed.y,
+        facing: placed.facing ?? undefined,
+        layer: placed.layer,
+        instanceId: '',
+      },
+      index,
+    ),
     facing: placed.facing ?? undefined,
     layer: placed.layer,
+    triggerTargetInstanceId: null,
+    containedObjectId: placed.containedObjectId ?? null,
   }));
   snapshot.version = payload.version;
   snapshot.status = 'published';
@@ -322,7 +339,7 @@ export async function sha256Hex(value: string): Promise<string> {
 function serializeMintedRoomPayload(payload: WampMintedRoomPayload): StoredWampMintedRoomPayload {
   const dictionary: string[] = [];
   const objectIdToIndex = new Map<string, number>();
-  const serializedObjects: Array<[number, number, number, number]> = [];
+  const serializedObjects: Array<[number, number, number, number, number?]> = [];
 
   for (const placed of payload.placedObjects) {
     let dictionaryIndex = objectIdToIndex.get(placed.id);
@@ -332,11 +349,22 @@ function serializeMintedRoomPayload(payload: WampMintedRoomPayload): StoredWampM
       objectIdToIndex.set(placed.id, dictionaryIndex);
     }
 
+    let containedDictionaryIndex: number | undefined;
+    if (typeof placed.containedObjectId === 'string' && placed.containedObjectId.trim()) {
+      containedDictionaryIndex = objectIdToIndex.get(placed.containedObjectId);
+      if (containedDictionaryIndex === undefined) {
+        containedDictionaryIndex = dictionary.length;
+        dictionary.push(placed.containedObjectId);
+        objectIdToIndex.set(placed.containedObjectId, containedDictionaryIndex);
+      }
+    }
+
     serializedObjects.push([
       dictionaryIndex,
       Math.round(placed.x),
       Math.round(placed.y),
       packObjectFlags(placed),
+      containedDictionaryIndex,
     ]);
   }
 
@@ -428,23 +456,30 @@ function normalizeMintedRoomPayload(value: unknown): WampMintedRoomPayload {
   }
 
   const payload = value as Partial<StoredWampMintedRoomPayload>;
+  if ('roomId' in payload || 'coordinates' in payload || 'tiles' in payload) {
+    return normalizeMintedFullRoomPayload(payload as Partial<WampMintedRoomPayload>);
+  }
+
   if (payload.v === WAMP_MINTED_ROOM_SCHEMA_VERSION_V3) {
     return normalizeMintedRoomPayloadV3(payload as Partial<WampMintedRoomPayloadV3>);
   }
+
   if (payload.v === WAMP_MINTED_ROOM_SCHEMA_VERSION_V2) {
     return normalizeMintedRoomPayloadV2(payload as Partial<WampMintedRoomPayloadV2>);
   }
 
-  return normalizeMintedRoomPayloadV1(payload);
+  return normalizeMintedFullRoomPayload(payload as Partial<WampMintedRoomPayload>);
 }
 
-function normalizeMintedRoomPayloadV1(value: Partial<WampMintedRoomPayload>): WampMintedRoomPayload {
+function normalizeMintedFullRoomPayload(value: Partial<WampMintedRoomPayload>): WampMintedRoomPayload {
   const coordinates = Array.isArray(value.coordinates) ? value.coordinates : [];
   const spawnPoint = Array.isArray(value.spawnPoint) ? value.spawnPoint : null;
   const tiles = value.tiles as Record<string, unknown> | undefined;
 
   if (
-    value.v !== WAMP_MINTED_ROOM_SCHEMA_VERSION_V1 ||
+    (value.v !== WAMP_MINTED_ROOM_SCHEMA_VERSION_V1 &&
+      value.v !== WAMP_MINTED_ROOM_SCHEMA_VERSION_V2 &&
+      value.v !== WAMP_MINTED_ROOM_SCHEMA_VERSION_V3) ||
     typeof value.roomId !== 'string' ||
     coordinates.length !== 2 ||
     typeof coordinates[0] !== 'number' ||
@@ -457,11 +492,11 @@ function normalizeMintedRoomPayloadV1(value: Partial<WampMintedRoomPayload>): Wa
   }
 
   return {
-    v: WAMP_MINTED_ROOM_SCHEMA_VERSION_V1,
+    v: value.v,
     roomId: value.roomId,
     coordinates: [coordinates[0], coordinates[1]],
     title: normalizeRoomTitle(value.title),
-    background: value.background,
+    background: normalizeRoomBackground(value.background),
     lighting: cloneRoomLightingSettings(value.lighting),
     goal: normalizeRoomGoal(value.goal),
     spawnPoint:
@@ -485,6 +520,10 @@ function normalizeMintedRoomPayloadV1(value: Partial<WampMintedRoomPayload>): Wa
             y: placed.y,
             facing: placed.facing ?? null,
             layer: placed.layer,
+            containedObjectId:
+              typeof placed.containedObjectId === 'string' && placed.containedObjectId.trim()
+                ? placed.containedObjectId
+                : null,
           }))
       : [],
     version: value.version,
@@ -515,7 +554,7 @@ function normalizeMintedRoomPayloadV2(value: Partial<WampMintedRoomPayloadV2>): 
     roomId: `${coordinates[0]},${coordinates[1]}`,
     coordinates: [coordinates[0], coordinates[1]],
     title: normalizeRoomTitle(value.n),
-    background: value.b,
+    background: normalizeRoomBackground(value.b),
     lighting: cloneRoomLightingSettings(null),
     goal: normalizeRoomGoalV2(value.g),
     spawnPoint:
@@ -561,7 +600,7 @@ function normalizeMintedRoomPayloadV3(value: Partial<WampMintedRoomPayloadV3>): 
     roomId: `${coordinates[0]},${coordinates[1]}`,
     coordinates: [coordinates[0], coordinates[1]],
     title: normalizeRoomTitle(value.n),
-    background: value.b,
+    background: normalizeRoomBackground(value.b),
     lighting: cloneRoomLightingSettings({
       mode: value.l === 1 ? 'playerAuraDark' : 'off',
     }),
@@ -669,16 +708,17 @@ function normalizeMintedRoomObjectV2(
   value: unknown,
   dictionary: string[]
 ): WampMintedRoomObject | null {
-  if (!Array.isArray(value) || value.length !== 4) {
+  if (!Array.isArray(value) || (value.length !== 4 && value.length !== 5)) {
     return null;
   }
 
-  const [dictionaryIndex, x, y, packedFlags] = value;
+  const [dictionaryIndex, x, y, packedFlags, containedDictionaryIndex] = value;
   if (
     typeof dictionaryIndex !== 'number' ||
     typeof x !== 'number' ||
     typeof y !== 'number' ||
-    typeof packedFlags !== 'number'
+    typeof packedFlags !== 'number' ||
+    (containedDictionaryIndex !== undefined && typeof containedDictionaryIndex !== 'number')
   ) {
     return null;
   }
@@ -695,6 +735,8 @@ function normalizeMintedRoomObjectV2(
     y,
     facing,
     layer,
+    containedObjectId:
+      typeof containedDictionaryIndex === 'number' ? dictionary[containedDictionaryIndex] ?? null : null,
   };
 }
 
@@ -709,7 +751,7 @@ function buildRoomTokenAttributes(snapshot: RoomSnapshot): WampRoomTokenAttribut
     { trait_type: 'Room X', value: snapshot.coordinates.x, display_type: 'number' },
     { trait_type: 'Room Y', value: snapshot.coordinates.y, display_type: 'number' },
     { trait_type: 'Version', value: snapshot.version, display_type: 'number' },
-    { trait_type: 'Background', value: snapshot.background },
+    { trait_type: 'Background', value: getRoomBackgroundLabel(snapshot.background) },
     { trait_type: 'Goal', value: snapshot.goal?.type ?? 'none' },
     { trait_type: 'Placed Objects', value: snapshot.placedObjects.length, display_type: 'number' },
     { trait_type: 'Solid Tiles', value: countSolidTiles(snapshot), display_type: 'number' },

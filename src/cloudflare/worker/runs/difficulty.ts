@@ -1,4 +1,5 @@
-import { cloneRoomSnapshot, type RoomSnapshot } from '../../../persistence/roomModel';
+import { ROOM_GOAL_TYPES, type RoomGoalType } from '../../../goals/roomGoals';
+import type { RoomSnapshot } from '../../../persistence/roomModel';
 import type {
   RoomDifficulty,
   RoomDifficultyCounts,
@@ -20,8 +21,15 @@ interface RoomDifficultyAggregateRow {
 }
 
 interface PublishedRoomDiscoveryRow {
-  id: string;
-  published_json: string;
+  room_id: string;
+  room_x: number;
+  room_y: number;
+  room_title: string | null;
+  room_version: number | string | null;
+  goal_type: string | null;
+  consensus_difficulty: string | null;
+  vote_count: number | string | null;
+  published_at: string | null;
 }
 
 export function createEmptyRoomDifficultyCounts(): RoomDifficultyCounts {
@@ -119,6 +127,7 @@ export async function hasViewerRatedRoomVersion(
         AND room_version = ?
         AND user_id = ?
         AND result != 'active'
+        AND is_held = 0
       LIMIT 1
     `
   )
@@ -241,76 +250,113 @@ export async function loadRoomDiscoveryResponse(
 ): Promise<RoomDiscoveryResponse> {
   const publishedRooms = await env.DB.prepare(
     `
-      SELECT id, published_json
-      FROM rooms
-      WHERE published_json IS NOT NULL
+      WITH latest_versions AS (
+        SELECT room_versions.room_id, room_versions.version, room_versions.created_at
+        FROM room_versions
+        INNER JOIN (
+          SELECT room_id, MAX(version) AS version
+          FROM room_versions
+          GROUP BY room_id
+        ) AS latest
+          ON latest.room_id = room_versions.room_id
+         AND latest.version = room_versions.version
+      ),
+      vote_aggregates AS (
+        SELECT
+          room_id,
+          room_version,
+          SUM(CASE WHEN difficulty = 'easy' THEN 1 ELSE 0 END) AS easy_votes,
+          SUM(CASE WHEN difficulty = 'medium' THEN 1 ELSE 0 END) AS medium_votes,
+          SUM(CASE WHEN difficulty = 'hard' THEN 1 ELSE 0 END) AS hard_votes,
+          SUM(CASE WHEN difficulty = 'extreme' THEN 1 ELSE 0 END) AS extreme_votes
+        FROM room_difficulty_votes
+        GROUP BY room_id, room_version
+      ),
+      room_vote_counts AS (
+        SELECT
+          rooms.id AS room_id,
+          rooms.x AS room_x,
+          rooms.y AS room_y,
+          rooms.published_title AS room_title,
+          latest_versions.version AS room_version,
+          rooms.published_goal_type AS goal_type,
+          latest_versions.created_at AS published_at,
+          COALESCE(vote_aggregates.easy_votes, 0) AS easy_votes,
+          COALESCE(vote_aggregates.medium_votes, 0) AS medium_votes,
+          COALESCE(vote_aggregates.hard_votes, 0) AS hard_votes,
+          COALESCE(vote_aggregates.extreme_votes, 0) AS extreme_votes
+        FROM rooms
+        INNER JOIN latest_versions
+          ON latest_versions.room_id = rooms.id
+        LEFT JOIN vote_aggregates
+          ON vote_aggregates.room_id = rooms.id
+         AND vote_aggregates.room_version = latest_versions.version
+        WHERE rooms.published_json IS NOT NULL
+          AND rooms.published_goal_type IS NOT NULL
+      ),
+      challenge_rooms AS (
+        SELECT
+          room_id,
+          room_x,
+          room_y,
+          room_title,
+          room_version,
+          goal_type,
+          published_at,
+          easy_votes + medium_votes + hard_votes + extreme_votes AS vote_count,
+          CASE
+            WHEN easy_votes > 0
+              AND easy_votes >= medium_votes
+              AND easy_votes >= hard_votes
+              AND easy_votes >= extreme_votes
+            THEN 'easy'
+            WHEN medium_votes > easy_votes
+              AND medium_votes > 0
+              AND medium_votes >= hard_votes
+              AND medium_votes >= extreme_votes
+            THEN 'medium'
+            WHEN hard_votes > easy_votes
+              AND hard_votes > medium_votes
+              AND hard_votes > 0
+              AND hard_votes >= extreme_votes
+            THEN 'hard'
+            WHEN extreme_votes > easy_votes
+              AND extreme_votes > medium_votes
+              AND extreme_votes > hard_votes
+            THEN 'extreme'
+            ELSE NULL
+          END AS consensus_difficulty
+        FROM room_vote_counts
+      )
+      SELECT
+        room_id,
+        room_x,
+        room_y,
+        room_title,
+        room_version,
+        goal_type,
+        consensus_difficulty,
+        vote_count,
+        published_at
+      FROM challenge_rooms
+      WHERE (? IS NULL OR consensus_difficulty = ?)
+      ORDER BY vote_count DESC, published_at DESC
+      LIMIT ?
     `
-  ).all<PublishedRoomDiscoveryRow>();
+  )
+    .bind(difficultyFilter, difficultyFilter, limit)
+    .all<PublishedRoomDiscoveryRow>();
 
-  const challengeSnapshots = publishedRooms.results
-    .map((row) => parseStoredSnapshot(row.published_json))
-    .filter((snapshot) => snapshot.goal !== null);
-
-  if (challengeSnapshots.length === 0) {
+  if (publishedRooms.results.length === 0) {
     return {
       difficultyFilter,
       results: [],
     };
   }
 
-  const roomIds = challengeSnapshots.map((snapshot) => snapshot.id);
-  const aggregates = await env.DB.prepare(
-    `
-      SELECT
-        room_id,
-        room_version,
-        SUM(CASE WHEN difficulty = 'easy' THEN 1 ELSE 0 END) AS easy_votes,
-        SUM(CASE WHEN difficulty = 'medium' THEN 1 ELSE 0 END) AS medium_votes,
-        SUM(CASE WHEN difficulty = 'hard' THEN 1 ELSE 0 END) AS hard_votes,
-        SUM(CASE WHEN difficulty = 'extreme' THEN 1 ELSE 0 END) AS extreme_votes
-      FROM room_difficulty_votes
-      WHERE room_id IN (${roomIds.map(() => '?').join(', ')})
-      GROUP BY room_id, room_version
-    `
-  )
-    .bind(...roomIds)
-    .all<RoomDifficultyAggregateRow>();
-
-  const aggregateByVersion = new Map<string, RoomDifficultyCounts>();
-  for (const row of aggregates.results) {
-    aggregateByVersion.set(`${row.room_id}:${row.room_version}`, mapDifficultyAggregateRow(row));
-  }
-
-  const results = challengeSnapshots
-    .map<RoomDiscoveryEntry>((snapshot) => {
-      const counts =
-        aggregateByVersion.get(`${snapshot.id}:${snapshot.version}`) ?? createEmptyRoomDifficultyCounts();
-      return {
-        roomId: snapshot.id,
-        roomCoordinates: { ...snapshot.coordinates },
-        roomTitle: snapshot.title,
-        roomVersion: snapshot.version,
-        goalType: snapshot.goal!.type,
-        consensusDifficulty: resolveRoomDifficultyConsensus(counts),
-        voteCount: getRoomDifficultyVoteTotal(counts),
-        publishedAt: snapshot.publishedAt ?? null,
-      };
-    })
-    .filter((entry) => difficultyFilter === null || entry.consensusDifficulty === difficultyFilter)
-    .sort((left, right) => {
-      if (right.voteCount !== left.voteCount) {
-        return right.voteCount - left.voteCount;
-      }
-
-      const rightPublishedAt = right.publishedAt ? Date.parse(right.publishedAt) : 0;
-      const leftPublishedAt = left.publishedAt ? Date.parse(left.publishedAt) : 0;
-      return rightPublishedAt - leftPublishedAt;
-    })
-    .slice(0, limit);
-
   return {
     difficultyFilter,
-    results,
+    results: publishedRooms.results.map(mapRoomDiscoveryRow),
   };
 }
 
@@ -332,10 +378,29 @@ function mapDifficultyAggregateRow(row: RoomDifficultyAggregateRow): RoomDifficu
   };
 }
 
-function parseStoredSnapshot(raw: string): RoomSnapshot {
-  try {
-    return cloneRoomSnapshot(JSON.parse(raw) as RoomSnapshot);
-  } catch {
-    throw new HttpError(500, 'Failed to parse published room snapshot.');
+function mapRoomDiscoveryRow(row: PublishedRoomDiscoveryRow): RoomDiscoveryEntry {
+  const goalType = parseRoomGoalType(row.goal_type);
+  if (!goalType) {
+    throw new HttpError(500, 'Failed to parse published room goal type.');
   }
+
+  return {
+    roomId: row.room_id,
+    roomCoordinates: {
+      x: Number(row.room_x),
+      y: Number(row.room_y),
+    },
+    roomTitle: row.room_title,
+    roomVersion: Number(row.room_version ?? 0),
+    goalType,
+    consensusDifficulty: normalizeRoomDifficulty(row.consensus_difficulty),
+    voteCount: Number(row.vote_count ?? 0),
+    publishedAt: row.published_at,
+  };
+}
+
+function parseRoomGoalType(value: string | null): RoomGoalType | null {
+  return value && ROOM_GOAL_TYPES.includes(value as RoomGoalType)
+    ? (value as RoomGoalType)
+    : null;
 }

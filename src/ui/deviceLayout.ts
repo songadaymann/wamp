@@ -1,10 +1,12 @@
 export type DeviceClass = 'desktop' | 'tablet' | 'phone';
 export type OrientationState = 'landscape' | 'portrait';
+export type PerformanceProfile = 'default' | 'reduced';
 
 export interface DeviceLayoutState {
   deviceClass: DeviceClass;
   orientationState: OrientationState;
   coarsePointer: boolean;
+  performanceProfile: PerformanceProfile;
   standaloneLaunch: boolean;
   standalonePortrait: boolean;
   mobileLandscapeRequired: boolean;
@@ -21,6 +23,7 @@ const DEFAULT_STATE: DeviceLayoutState = {
   deviceClass: 'desktop',
   orientationState: 'landscape',
   coarsePointer: false,
+  performanceProfile: 'default',
   standaloneLaunch: false,
   standalonePortrait: false,
   mobileLandscapeRequired: false,
@@ -59,6 +62,13 @@ function classifyDeviceClass(width: number, height: number, coarsePointer: boole
   return shortestEdge <= 540 ? 'phone' : 'tablet';
 }
 
+function resolvePerformanceProfile(
+  deviceClass: DeviceClass,
+  coarsePointer: boolean,
+): PerformanceProfile {
+  return coarsePointer && deviceClass === 'tablet' ? 'reduced' : 'default';
+}
+
 function computeState(): DeviceLayoutState {
   const viewport = window.visualViewport;
   const width = Math.max(0, Math.round(viewport?.width ?? window.innerWidth));
@@ -69,12 +79,14 @@ function computeState(): DeviceLayoutState {
   const standalonePortrait = standaloneLaunch && coarsePointer && width < height;
   const orientationState: OrientationState = width >= height ? 'landscape' : 'portrait';
   const deviceClass = classifyDeviceClass(width, height, coarsePointer);
+  const performanceProfile = resolvePerformanceProfile(deviceClass, coarsePointer);
   const mobileLandscapeRequired = coarsePointer && deviceClass !== 'desktop';
 
   return {
     deviceClass,
     orientationState,
     coarsePointer,
+    performanceProfile,
     standaloneLaunch,
     standalonePortrait,
     mobileLandscapeRequired,
@@ -90,6 +102,7 @@ function applyStateToDom(nextState: DeviceLayoutState): void {
   document.body.dataset.deviceClass = nextState.deviceClass;
   document.body.dataset.orientationState = nextState.orientationState;
   document.body.dataset.coarsePointer = nextState.coarsePointer ? 'true' : 'false';
+  document.body.dataset.performanceProfile = nextState.performanceProfile;
   document.body.dataset.standaloneLaunch = nextState.standaloneLaunch ? 'true' : 'false';
   document.body.dataset.standalonePortrait = nextState.standalonePortrait ? 'true' : 'false';
   document.body.dataset.mobileLandscapeBlocked = nextState.mobileLandscapeBlocked ? 'true' : 'false';
@@ -102,6 +115,7 @@ function statesEqual(a: DeviceLayoutState, b: DeviceLayoutState): boolean {
     a.deviceClass === b.deviceClass &&
     a.orientationState === b.orientationState &&
     a.coarsePointer === b.coarsePointer &&
+    a.performanceProfile === b.performanceProfile &&
     a.standaloneLaunch === b.standaloneLaunch &&
     a.standalonePortrait === b.standalonePortrait &&
     a.mobileLandscapeRequired === b.mobileLandscapeRequired &&
@@ -148,6 +162,10 @@ export function getDeviceLayoutState(): DeviceLayoutState {
 
 export function isCoarsePointerDevice(): boolean {
   return state.coarsePointer;
+}
+
+export function getPerformanceProfile(): PerformanceProfile {
+  return state.performanceProfile;
 }
 
 export function isMobileLandscapeBlocked(): boolean {

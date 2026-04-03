@@ -6,7 +6,6 @@ import {
   TILESETS,
   TILE_SIZE,
   decodeTileDataValue,
-  getBackgroundGroup,
   getObjectById,
   getObjectDefaultFrame,
   getObjectFrameSourceRect,
@@ -14,6 +13,7 @@ import {
   getTilesetByGid,
   type LayerName,
 } from '../config';
+import { resolveRoomBackground } from '../backgrounds/model';
 import type { RoomSnapshot } from '../persistence/roomModel';
 import { buildRoomSnapshotFromMintedPayload, type WampMintedRoomPayload } from './roomMetadata';
 import { RETRO_COLORS, drawStarfieldToContext, hashStringToSeed } from '../visuals/starfield';
@@ -105,8 +105,8 @@ async function drawRoomBackground(
   width: number,
   height: number
 ): Promise<void> {
-  const backgroundGroup = getBackgroundGroup(snapshot.background);
-  if (!backgroundGroup || backgroundGroup.layers.length === 0) {
+  const resolved = resolveRoomBackground(snapshot.background);
+  if (resolved.kind === 'none') {
     drawStarfieldToContext(
       context,
       width,
@@ -116,10 +116,16 @@ async function drawRoomBackground(
     return;
   }
 
-  context.fillStyle = backgroundGroup.bgColor ?? RETRO_COLORS.background;
+  if (resolved.kind === 'solid') {
+    context.fillStyle = resolved.color;
+    context.fillRect(0, 0, width, height);
+    return;
+  }
+
+  context.fillStyle = resolved.group.bgColor ?? RETRO_COLORS.background;
   context.fillRect(0, 0, width, height);
 
-  for (const layer of backgroundGroup.layers) {
+  for (const layer of resolved.group.layers) {
     const image = await loadAssetImage(layer.path);
     const scale = height / layer.height;
     const drawWidth = Math.max(1, Math.ceil(layer.width * scale));

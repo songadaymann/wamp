@@ -389,6 +389,8 @@ export class PaletteController {
     for (const objectConfig of filteredObjects) {
       const item = this.doc.createElement('div');
       item.className = 'object-item';
+      item.setAttribute('aria-label', objectConfig.name);
+      item.title = objectConfig.name;
       if (editorState.selectedObjectId === objectConfig.id) {
         item.classList.add('active');
       }
@@ -398,7 +400,7 @@ export class PaletteController {
         item.addEventListener('mouseenter', (event) => {
           this.showObjectTooltip(
             event.currentTarget as HTMLElement,
-            `${objectConfig.name} — ${objectConfig.description}`,
+            objectConfig.name,
           );
         });
         item.addEventListener('mouseleave', () => this.hideObjectTooltip());
@@ -434,12 +436,7 @@ export class PaletteController {
         };
       }
 
-      const label = this.doc.createElement('div');
-      label.className = 'object-item-label';
-      label.textContent = objectConfig.name;
-
       item.appendChild(img);
-      item.appendChild(label);
 
       item.addEventListener('click', () => {
         editorState.selectedObjectId = objectConfig.id;
@@ -517,6 +514,18 @@ export class PaletteController {
         this.paletteTileOccupancy.set(ts.key, this.computeTilesetOccupancy(ts, img));
         this.paletteTileVisibility.set(ts.key, this.computeTilesetVisibility(ts, img));
         loadedCount++;
+
+        if (ts.key === editorState.selection.tilesetKey) {
+          const selection = editorState.selection;
+          this.updateSelection(
+            selection.tilesetKey,
+            selection.startCol,
+            selection.startRow,
+            selection.startCol + selection.width - 1,
+            selection.startRow + selection.height - 1,
+          );
+          return;
+        }
 
         if (loadedCount === TILESETS.length) {
           this.renderPalette();

@@ -1,5 +1,5 @@
 import type { GameObjectConfig } from '../../config';
-import { cloneRoomGoal, ROOM_GOAL_LABELS } from '../../goals/roomGoals';
+import { cloneRoomGoal, ROOM_GOAL_LABELS, type GoalMarkerPoint } from '../../goals/roomGoals';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import type {
   GlobalLeaderboardResponse,
@@ -9,15 +9,26 @@ import type {
 } from '../../runs/model';
 import { isRunApiError, type RunRepository } from '../../runs/runRepository';
 import { computeRunScore } from '../../runs/scoring';
+import {
+  goalRunEntryStartsQualifiedAttempt,
+  playerTouchesGoalRunStartPoint,
+  resolveGoalRunStartPoint,
+  type GoalRunEntryContext,
+  type GoalRunStartPoint,
+} from './goalRunStartGate';
 
 export type GoalRunLeaderboardState = 'idle' | 'loading' | 'ready' | 'error';
 export type GoalRunMutationEvent = 'start' | 'checkpoint' | 'complete' | 'fail' | 'abandon';
+export type GoalRunQualificationState = 'practice' | 'qualified';
 
 export interface GoalRunState {
   roomId: string;
   roomCoordinates: RoomCoordinates;
   roomVersion: number;
+  roomStatus: RoomSnapshot['status'];
   goal: NonNullable<RoomSnapshot['goal']>;
+  qualificationState: GoalRunQualificationState;
+  rankedStartPoint: GoalRunStartPoint;
   elapsedMs: number;
   deaths: number;
   collectiblesCollected: number;
@@ -30,7 +41,7 @@ export interface GoalRunState {
   result: 'active' | 'completed' | 'failed';
   completionMessage: string | null;
   attemptId: string | null;
-  submissionState: 'local-only' | 'starting' | 'active' | 'finishing' | 'submitted' | 'error';
+  submissionState: 'waiting' | 'local-only' | 'starting' | 'active' | 'finishing' | 'submitted' | 'error';
   submissionMessage: string | null;
   pendingResult: Exclude<RunResult, 'active'> | null;
   submittedScore: number | null;
@@ -40,6 +51,7 @@ export interface GoalRunState {
 export interface GoalRunMutationResult {
   changed: boolean;
   goalMarkersChanged: boolean;
+  resetChallengeState: boolean;
   transientStatus: string | null;
   event: GoalRunMutationEvent | null;
 }
@@ -55,6 +67,7 @@ export interface OverworldGoalRunSnapshot {
 }
 
 interface OverworldGoalRunControllerOptions {
+  playerHeight: number;
   runRepository: RunRepository;
   getScore: () => number;
   getAuthenticated: () => boolean;
@@ -68,6 +81,7 @@ interface OverworldGoalRunControllerOptions {
 const NOOP_MUTATION_RESULT: GoalRunMutationResult = {
   changed: false,
   goalMarkersChanged: false,
+  resetChallengeState: false,
   transientStatus: null,
   event: null,
 };
@@ -120,7 +134,10 @@ export class OverworldGoalRunController {
     return this.leaderboardMessage;
   }
 
-  syncRunForRoom(room: RoomSnapshot | null): GoalRunMutationResult {
+  syncRunForRoom(
+    room: RoomSnapshot | null,
+    entryContext: GoalRunEntryContext = 'transition'
+  ): GoalRunMutationResult {
     if (!room || !room.goal) {
       return this.clearRunForRoomExit();
     }
@@ -131,12 +148,18 @@ export class OverworldGoalRunController {
 
     this.clearRunForRoomExit();
     const leaderboardEligible = room.status === 'published' && this.options.getAuthenticated();
+    const qualificationState = goalRunEntryStartsQualifiedAttempt(entryContext)
+      ? 'qualified'
+      : 'practice';
 
     this.currentGoalRun = {
       roomId: room.id,
       roomCoordinates: { ...room.coordinates },
       roomVersion: room.version,
+      roomStatus: room.status,
       goal: cloneRoomGoal(room.goal)!,
+      qualificationState,
+      rankedStartPoint: resolveGoalRunStartPoint(room, this.options.playerHeight),
       elapsedMs: 0,
       deaths: 0,
       collectiblesCollected: 0,
@@ -153,37 +176,40 @@ export class OverworldGoalRunController {
       result: 'active',
       completionMessage: null,
       attemptId: null,
-      submissionState: leaderboardEligible ? 'starting' : 'local-only',
-      submissionMessage: leaderboardEligible
-        ? 'Starting ranked run...'
-        : room.status !== 'published'
-          ? 'Draft room run stays local.'
-          : this.options.getAuthenticated()
-            ? 'Ranked submission unavailable.'
-            : 'Sign in to submit ranked runs.',
+      submissionState:
+        qualificationState === 'practice'
+          ? 'waiting'
+          : leaderboardEligible
+            ? 'starting'
+            : 'local-only',
+      submissionMessage:
+        qualificationState === 'practice'
+          ? this.getPracticeStatusMessage(room.status, leaderboardEligible)
+          : this.getQualifiedSubmissionMessage(room.status, leaderboardEligible),
       pendingResult: null,
       submittedScore: null,
       leaderboardEligible,
     };
 
-    if (leaderboardEligible) {
-      void this.startRemoteGoalRun(this.currentGoalRun);
+    if (qualificationState === 'practice') {
+      return {
+        changed: true,
+        goalMarkersChanged: true,
+        resetChallengeState: false,
+        transientStatus: this.currentGoalRun.submissionMessage,
+        event: null,
+      };
     }
 
-    if (this.currentGoalRun.goal.type === 'defeat_all' && this.currentGoalRun.enemyTarget === 0) {
-      return this.markCompleted('No enemies remain.');
-    }
-
-    return {
-      changed: true,
-      goalMarkersChanged: true,
-      transientStatus: `${ROOM_GOAL_LABELS[room.goal.type]} started.`,
-      event: 'start',
-    };
+    return this.activateQualifiedRun(this.currentGoalRun, false);
   }
 
   tick(delta: number): GoalRunMutationResult {
-    if (!this.currentGoalRun || this.currentGoalRun.result !== 'active') {
+    if (
+      !this.currentGoalRun ||
+      this.currentGoalRun.result !== 'active' ||
+      this.currentGoalRun.qualificationState !== 'qualified'
+    ) {
       return NOOP_MUTATION_RESULT;
     }
 
@@ -204,20 +230,44 @@ export class OverworldGoalRunController {
   }
 
   recordDeath(): void {
-    if (this.currentGoalRun && this.currentGoalRun.result === 'active') {
+    if (
+      this.currentGoalRun &&
+      this.currentGoalRun.result === 'active' &&
+      this.currentGoalRun.qualificationState === 'qualified'
+    ) {
       this.currentGoalRun.deaths += 1;
     }
   }
 
-  restartRunForRoom(room: RoomSnapshot | null): GoalRunMutationResult {
+  restartRunForRoom(
+    room: RoomSnapshot | null,
+    entryContext: GoalRunEntryContext = 'spawn'
+  ): GoalRunMutationResult {
     this.currentGoalRun = null;
-    return this.syncRunForRoom(room);
+    return this.syncRunForRoom(room, entryContext);
+  }
+
+  qualifyPracticeRunAt(playerFeet: GoalMarkerPoint): GoalRunMutationResult {
+    if (
+      !this.currentGoalRun ||
+      this.currentGoalRun.result !== 'active' ||
+      this.currentGoalRun.qualificationState !== 'practice'
+    ) {
+      return NOOP_MUTATION_RESULT;
+    }
+
+    if (!playerTouchesGoalRunStartPoint(playerFeet, this.currentGoalRun.rankedStartPoint)) {
+      return NOOP_MUTATION_RESULT;
+    }
+
+    return this.activateQualifiedRun(this.currentGoalRun, true);
   }
 
   recordEnemyDefeated(roomId: string, enemyName: string): GoalRunMutationResult {
     if (
       !this.currentGoalRun ||
       this.currentGoalRun.result !== 'active' ||
+      this.currentGoalRun.qualificationState !== 'qualified' ||
       this.currentGoalRun.goal.type !== 'defeat_all' ||
       this.currentGoalRun.roomId !== roomId
     ) {
@@ -235,6 +285,7 @@ export class OverworldGoalRunController {
     return {
       changed: true,
       goalMarkersChanged: false,
+      resetChallengeState: false,
       transientStatus: `${enemyName} defeated.`,
       event: null,
     };
@@ -244,6 +295,7 @@ export class OverworldGoalRunController {
     if (
       !this.currentGoalRun ||
       this.currentGoalRun.result !== 'active' ||
+      this.currentGoalRun.qualificationState !== 'qualified' ||
       this.currentGoalRun.goal.type !== 'collect_target' ||
       this.currentGoalRun.roomId !== roomId
     ) {
@@ -258,6 +310,7 @@ export class OverworldGoalRunController {
     return {
       changed: true,
       goalMarkersChanged: false,
+      resetChallengeState: false,
       transientStatus: null,
       event: null,
     };
@@ -267,6 +320,7 @@ export class OverworldGoalRunController {
     if (
       !this.currentGoalRun ||
       this.currentGoalRun.result !== 'active' ||
+      this.currentGoalRun.qualificationState !== 'qualified' ||
       this.currentGoalRun.goal.type !== 'checkpoint_sprint'
     ) {
       return NOOP_MUTATION_RESULT;
@@ -277,13 +331,18 @@ export class OverworldGoalRunController {
     return {
       changed: true,
       goalMarkersChanged: true,
+      resetChallengeState: false,
       transientStatus: `Checkpoint ${this.currentGoalRun.checkpointsReached} reached.`,
       event: 'checkpoint',
     };
   }
 
   markCompleted(message: string): GoalRunMutationResult {
-    if (!this.currentGoalRun || this.currentGoalRun.result !== 'active') {
+    if (
+      !this.currentGoalRun ||
+      this.currentGoalRun.result !== 'active' ||
+      this.currentGoalRun.qualificationState !== 'qualified'
+    ) {
       return NOOP_MUTATION_RESULT;
     }
 
@@ -294,13 +353,18 @@ export class OverworldGoalRunController {
     return {
       changed: true,
       goalMarkersChanged: true,
+      resetChallengeState: false,
       transientStatus: message,
       event: 'complete',
     };
   }
 
   markFailed(message: string): GoalRunMutationResult {
-    if (!this.currentGoalRun || this.currentGoalRun.result !== 'active') {
+    if (
+      !this.currentGoalRun ||
+      this.currentGoalRun.result !== 'active' ||
+      this.currentGoalRun.qualificationState !== 'qualified'
+    ) {
       return NOOP_MUTATION_RESULT;
     }
 
@@ -311,6 +375,7 @@ export class OverworldGoalRunController {
     return {
       changed: true,
       goalMarkersChanged: true,
+      resetChallengeState: false,
       transientStatus: message,
       event: 'fail',
     };
@@ -327,6 +392,7 @@ export class OverworldGoalRunController {
     return {
       changed: true,
       goalMarkersChanged: true,
+      resetChallengeState: false,
       transientStatus: message,
       event: 'abandon',
     };
@@ -427,6 +493,10 @@ export class OverworldGoalRunController {
   }
 
   getLeaderboardSummaryText(): string | null {
+    if (this.currentGoalRun?.qualificationState === 'practice') {
+      return this.currentGoalRun.submissionMessage;
+    }
+
     if (this.currentGoalRun?.leaderboardEligible === false && this.currentGoalRun?.submissionState === 'local-only') {
       return this.currentGoalRun.submissionMessage;
     }
@@ -459,6 +529,14 @@ export class OverworldGoalRunController {
     return this.leaderboardMessage;
   }
 
+  getPersistentStatusText(): string | null {
+    if (this.currentGoalRun?.qualificationState === 'practice') {
+      return this.currentGoalRun.submissionMessage;
+    }
+
+    return null;
+  }
+
   getDebugSnapshot(): OverworldGoalRunSnapshot {
     const roomDifficulty = this.currentRoomLeaderboard?.difficulty ?? {
       consensus: null,
@@ -481,7 +559,10 @@ export class OverworldGoalRunController {
             roomId: this.currentGoalRun.roomId,
             roomCoordinates: { ...this.currentGoalRun.roomCoordinates },
             roomVersion: this.currentGoalRun.roomVersion,
+            roomStatus: this.currentGoalRun.roomStatus,
             goal: cloneRoomGoal(this.currentGoalRun.goal)!,
+            qualificationState: this.currentGoalRun.qualificationState,
+            rankedStartPoint: { ...this.currentGoalRun.rankedStartPoint },
             elapsedMs: Math.round(this.currentGoalRun.elapsedMs),
             deaths: this.currentGoalRun.deaths,
             collectiblesCollected: this.currentGoalRun.collectiblesCollected,
@@ -550,6 +631,7 @@ export class OverworldGoalRunController {
     return {
       changed: true,
       goalMarkersChanged: true,
+      resetChallengeState: false,
       transientStatus: abandoned.transientStatus,
       event: abandoned.event,
     };
@@ -572,7 +654,11 @@ export class OverworldGoalRunController {
   }
 
   private async startRemoteGoalRun(runState: GoalRunState): Promise<void> {
-    if (!runState.leaderboardEligible || runState.submissionState === 'local-only') {
+    if (
+      runState.qualificationState !== 'qualified' ||
+      !runState.leaderboardEligible ||
+      runState.submissionState === 'local-only'
+    ) {
       return;
     }
 
@@ -617,6 +703,7 @@ export class OverworldGoalRunController {
     }
 
     if (
+      runState.submissionState === 'waiting' ||
       runState.submissionState === 'local-only' ||
       runState.submissionState === 'submitted' ||
       runState.submissionState === 'finishing'
@@ -629,6 +716,39 @@ export class OverworldGoalRunController {
     }
 
     void this.finishRemoteGoalRun(runState, runState.pendingResult);
+  }
+
+  private activateQualifiedRun(
+    runState: GoalRunState,
+    resetChallengeState: boolean
+  ): GoalRunMutationResult {
+    this.resetRunProgress(runState);
+    runState.qualificationState = 'qualified';
+    runState.submissionState = runState.leaderboardEligible ? 'starting' : 'local-only';
+    runState.submissionMessage = this.getQualifiedSubmissionMessage(
+      runState.roomStatus,
+      runState.leaderboardEligible
+    );
+
+    if (runState.leaderboardEligible) {
+      void this.startRemoteGoalRun(runState);
+    }
+
+    if (runState.goal.type === 'defeat_all' && runState.enemyTarget === 0) {
+      const completed = this.markCompleted('No enemies remain.');
+      return {
+        ...completed,
+        resetChallengeState,
+      };
+    }
+
+    return {
+      changed: true,
+      goalMarkersChanged: true,
+      resetChallengeState,
+      transientStatus: `${ROOM_GOAL_LABELS[runState.goal.type]} started.`,
+      event: 'start',
+    };
   }
 
   private async finishRemoteGoalRun(
@@ -680,6 +800,48 @@ export class OverworldGoalRunController {
 
   private getGoalSubmissionStatusText(_runState: GoalRunState): string {
     return '';
+  }
+
+  private getPracticeStatusMessage(
+    roomStatus: RoomSnapshot['status'],
+    leaderboardEligible: boolean
+  ): string {
+    if (leaderboardEligible) {
+      return 'Practice run. Reach spawn to start ranked attempt.';
+    }
+
+    return roomStatus === 'draft'
+      ? 'Practice run. Reach spawn to start playtest.'
+      : 'Practice run. Reach spawn to start challenge.';
+  }
+
+  private getQualifiedSubmissionMessage(
+    roomStatus: RoomSnapshot['status'],
+    leaderboardEligible: boolean
+  ): string {
+    if (leaderboardEligible) {
+      return 'Starting ranked run...';
+    }
+
+    return roomStatus !== 'published'
+      ? 'Draft room run stays local.'
+      : this.options.getAuthenticated()
+        ? 'Ranked submission unavailable.'
+        : 'Sign in to submit ranked runs.';
+  }
+
+  private resetRunProgress(runState: GoalRunState): void {
+    runState.elapsedMs = 0;
+    runState.deaths = 0;
+    runState.collectiblesCollected = 0;
+    runState.enemiesDefeated = 0;
+    runState.checkpointsReached = 0;
+    runState.nextCheckpointIndex = 0;
+    runState.result = 'active';
+    runState.completionMessage = null;
+    runState.attemptId = null;
+    runState.pendingResult = null;
+    runState.submittedScore = null;
   }
 
   private nowIso(): string {

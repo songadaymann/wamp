@@ -1,10 +1,16 @@
+import type { RoomCoordinates } from '../../persistence/roomModel';
+import { isOpenableProfileUserId, requestProfileOpen } from '../../ui/setup/profileEvents';
+
 export interface OverworldHudViewModel {
   saveStatusTone: 'default' | 'play-score' | 'challenge-active' | 'challenge-complete' | 'challenge-failed';
   jumpInputValue: string;
   selectedTitleText: string;
-  selectedCoordinatesText: string;
+  selectedCreatorText: string;
+  selectedCreatorUserId: string | null;
   selectedStateText: string;
-  selectedStateTone: 'published' | 'draft' | 'frontier' | 'empty';
+  selectedStateTone: 'published' | 'minted' | 'draft' | 'frontier' | 'empty';
+  selectedStateInfoVisible: boolean;
+  selectedStateInfoText: string;
   selectedMetaText: string;
   selectedMetaTone: 'default' | 'challenge' | 'draft' | 'frontier';
   statusText: string;
@@ -18,11 +24,15 @@ export interface OverworldHudViewModel {
   playCourseButtonHidden: boolean;
   playCourseButtonActive: boolean;
   courseBuilderButtonDisabled: boolean;
+  courseBuilderButtonTitle: string;
   editButtonDisabled: boolean;
+  editButtonTitle: string;
   buildButtonDisabled: boolean;
   roomCoordinatesText: string;
   cursorText: string;
   playersOnlineText: string;
+  playersOnlineSummaryText: string;
+  playersOnlineEntries: OverworldOnlineRosterViewEntry[];
   saveStatusText: string;
   bottomBarZoomText: string;
   goalPanelVisible: boolean;
@@ -33,11 +43,26 @@ export interface OverworldHudViewModel {
   goalPanelProgressText: string;
 }
 
+export interface OverworldOnlineRosterViewEntry {
+  key: string;
+  userId: string | null;
+  displayName: string;
+  roomText: string;
+  roomCoordinates: RoomCoordinates;
+  isSelf: boolean;
+}
+
+interface OverworldHudBridgeOptions {
+  onPlayersOnlineEntryJoin?: (entry: OverworldOnlineRosterViewEntry) => void | Promise<void>;
+}
+
 export class OverworldHudBridge {
   private readonly hudRoot: HTMLElement | null;
   private readonly selectedTitleEl: HTMLElement | null;
-  private readonly selectedCoordinatesEl: HTMLElement | null;
+  private readonly selectedCreatorEl: HTMLButtonElement | null;
   private readonly selectedStateEl: HTMLElement | null;
+  private readonly selectedStateInfoWrapEl: HTMLElement | null;
+  private readonly selectedStateInfoTooltipEl: HTMLElement | null;
   private readonly selectedMetaEl: HTMLElement | null;
   private readonly statusEl: HTMLElement | null;
   private readonly leaderboardEl: HTMLElement | null;
@@ -51,7 +76,12 @@ export class OverworldHudBridge {
   private readonly roomCoordinatesEl: HTMLElement | null;
   private readonly separatorEl: HTMLElement | null;
   private readonly cursorEl: HTMLElement | null;
-  private readonly playersOnlineEl: HTMLElement | null;
+  private readonly playersOnlineWrapEl: HTMLElement | null;
+  private readonly playersOnlineEl: HTMLButtonElement | null;
+  private readonly playersOnlinePopoverEl: HTMLElement | null;
+  private readonly playersOnlinePopoverSummaryEl: HTMLElement | null;
+  private readonly playersOnlinePopoverEmptyEl: HTMLElement | null;
+  private readonly playersOnlinePopoverListEl: HTMLElement | null;
   private readonly saveStatusEl: HTMLElement | null;
   private readonly fitButton: HTMLElement | null;
   private readonly bottomBarZoomEl: HTMLElement | null;
@@ -65,12 +95,109 @@ export class OverworldHudBridge {
   private readonly mobileGoalFooterProgressEl: HTMLElement | null;
   private readonly mobileGoalFooterTimerEl: HTMLElement | null;
   private destroyed = false;
+  private playersOnlinePinned = false;
+  private selectedCreatorUserId: string | null = null;
 
-  constructor(private readonly doc: Document = document) {
+  private readonly handleSelectedCreatorClick = (event: MouseEvent): void => {
+    if (!isOpenableProfileUserId(this.selectedCreatorUserId)) {
+      return;
+    }
+
+    event.preventDefault();
+    requestProfileOpen(this.selectedCreatorUserId);
+  };
+
+  private readonly handlePlayersOnlineClick = (event: MouseEvent): void => {
+    if (!this.canShowPlayersOnlinePopover()) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.playersOnlinePinned = !this.playersOnlinePinned;
+    this.setPlayersOnlinePopoverOpen(this.playersOnlinePinned);
+  };
+
+  private readonly handlePlayersOnlinePointerEnter = (): void => {
+    if (this.playersOnlinePinned || !this.canShowPlayersOnlinePopover()) {
+      return;
+    }
+
+    this.setPlayersOnlinePopoverOpen(true);
+  };
+
+  private readonly handlePlayersOnlinePointerLeave = (event: PointerEvent): void => {
+    if (this.playersOnlinePinned || !this.playersOnlineWrapEl) {
+      return;
+    }
+
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && this.playersOnlineWrapEl.contains(nextTarget)) {
+      return;
+    }
+
+    this.setPlayersOnlinePopoverOpen(false);
+  };
+
+  private readonly handlePlayersOnlineFocusIn = (): void => {
+    if (this.playersOnlinePinned || !this.canShowPlayersOnlinePopover()) {
+      return;
+    }
+
+    this.setPlayersOnlinePopoverOpen(true);
+  };
+
+  private readonly handlePlayersOnlineFocusOut = (event: FocusEvent): void => {
+    if (this.playersOnlinePinned || !this.playersOnlineWrapEl) {
+      return;
+    }
+
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && this.playersOnlineWrapEl.contains(nextTarget)) {
+      return;
+    }
+
+    this.setPlayersOnlinePopoverOpen(false);
+  };
+
+  private readonly handleDocumentPointerDown = (event: PointerEvent): void => {
+    if (!this.playersOnlinePinned || !this.playersOnlineWrapEl) {
+      return;
+    }
+
+    const target = event.target;
+    if (target instanceof Node && this.playersOnlineWrapEl.contains(target)) {
+      return;
+    }
+
+    this.playersOnlinePinned = false;
+    this.setPlayersOnlinePopoverOpen(false);
+  };
+
+  private readonly handleDocumentKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape') {
+      return;
+    }
+
+    const popoverOpen = this.playersOnlinePopoverEl?.classList.contains('hidden') === false;
+    if (!this.playersOnlinePinned && !popoverOpen) {
+      return;
+    }
+
+    this.playersOnlinePinned = false;
+    this.setPlayersOnlinePopoverOpen(false);
+  };
+
+  constructor(
+    private readonly options: OverworldHudBridgeOptions = {},
+    private readonly doc: Document = document
+  ) {
     this.hudRoot = this.doc.getElementById('world-hud');
     this.selectedTitleEl = this.doc.getElementById('world-selected-title');
-    this.selectedCoordinatesEl = this.doc.getElementById('world-selected-coords');
+    this.selectedCreatorEl = this.doc.getElementById('world-selected-coords') as HTMLButtonElement | null;
     this.selectedStateEl = this.doc.getElementById('world-selected-state');
+    this.selectedStateInfoWrapEl = this.doc.getElementById('world-selected-state-info-wrap');
+    this.selectedStateInfoTooltipEl = this.doc.getElementById('world-selected-state-info-tooltip');
     this.selectedMetaEl = this.doc.getElementById('world-selected-meta');
     this.statusEl = this.doc.getElementById('world-status');
     this.leaderboardEl = this.doc.getElementById('world-leaderboard');
@@ -84,7 +211,12 @@ export class OverworldHudBridge {
     this.roomCoordinatesEl = this.doc.getElementById('room-coords');
     this.separatorEl = this.doc.querySelector('#bottom-bar .separator');
     this.cursorEl = this.doc.getElementById('cursor-coords');
-    this.playersOnlineEl = this.doc.getElementById('world-online-count');
+    this.playersOnlineWrapEl = this.doc.getElementById('world-online-wrap');
+    this.playersOnlineEl = this.doc.getElementById('world-online-count') as HTMLButtonElement | null;
+    this.playersOnlinePopoverEl = this.doc.getElementById('world-online-popover');
+    this.playersOnlinePopoverSummaryEl = this.doc.getElementById('world-online-popover-summary');
+    this.playersOnlinePopoverEmptyEl = this.doc.getElementById('world-online-popover-empty');
+    this.playersOnlinePopoverListEl = this.doc.getElementById('world-online-popover-list');
     this.saveStatusEl = this.doc.getElementById('room-save-status');
     this.fitButton = this.doc.getElementById('btn-fit-screen');
     this.bottomBarZoomEl = this.doc.getElementById('zoom-level');
@@ -97,6 +229,15 @@ export class OverworldHudBridge {
     this.mobileGoalFooterGoalEl = this.doc.getElementById('mobile-goal-footer-goal');
     this.mobileGoalFooterProgressEl = this.doc.getElementById('mobile-goal-footer-progress');
     this.mobileGoalFooterTimerEl = this.doc.getElementById('mobile-goal-footer-timer');
+
+    this.playersOnlineWrapEl?.addEventListener('pointerenter', this.handlePlayersOnlinePointerEnter);
+    this.playersOnlineWrapEl?.addEventListener('pointerleave', this.handlePlayersOnlinePointerLeave);
+    this.playersOnlineWrapEl?.addEventListener('focusin', this.handlePlayersOnlineFocusIn);
+    this.playersOnlineWrapEl?.addEventListener('focusout', this.handlePlayersOnlineFocusOut);
+    this.playersOnlineEl?.addEventListener('click', this.handlePlayersOnlineClick);
+    this.selectedCreatorEl?.addEventListener('click', this.handleSelectedCreatorClick);
+    this.doc.addEventListener('pointerdown', this.handleDocumentPointerDown, true);
+    this.doc.addEventListener('keydown', this.handleDocumentKeyDown, true);
   }
 
   render(viewModel: OverworldHudViewModel): void {
@@ -112,9 +253,10 @@ export class OverworldHudBridge {
     }
 
     this.setText(this.selectedTitleEl, viewModel.selectedTitleText);
-    this.setText(this.selectedCoordinatesEl, viewModel.selectedCoordinatesText);
+    this.renderSelectedCreator(viewModel.selectedCreatorText, viewModel.selectedCreatorUserId);
     this.setText(this.selectedStateEl, viewModel.selectedStateText);
     this.setStateTone(viewModel.selectedStateTone);
+    this.renderSelectedStateInfo(viewModel.selectedStateInfoVisible, viewModel.selectedStateInfoText);
     this.setText(this.selectedMetaEl, viewModel.selectedMetaText);
     this.setMetaTone(viewModel.selectedMetaTone);
     this.setText(this.statusEl, viewModel.statusText);
@@ -123,7 +265,7 @@ export class OverworldHudBridge {
     this.setText(this.roomCoordinatesEl, viewModel.roomCoordinatesText);
     this.setText(this.cursorEl, viewModel.cursorText);
     this.setSeparatorVisible(Boolean(viewModel.roomCoordinatesText && viewModel.cursorText));
-    this.setText(this.playersOnlineEl, viewModel.playersOnlineText);
+    this.renderPlayersOnline(viewModel);
     this.setText(this.saveStatusEl, viewModel.saveStatusText);
     this.setSaveStatusTone(viewModel.saveStatusTone);
     this.setText(this.bottomBarZoomEl, viewModel.bottomBarZoomText);
@@ -137,18 +279,43 @@ export class OverworldHudBridge {
     this.setActive(this.playCourseButton, viewModel.playCourseButtonActive);
     this.playCourseButton?.classList.toggle('hidden', viewModel.playCourseButtonHidden);
     this.setDisabled(this.courseBuilderButton, viewModel.courseBuilderButtonDisabled);
+    this.setTitle(this.courseBuilderButton, viewModel.courseBuilderButtonTitle);
     this.setDisabled(this.editButton, viewModel.editButtonDisabled);
+    this.setTitle(this.editButton, viewModel.editButtonTitle);
     this.setDisabled(this.buildButton, viewModel.buildButtonDisabled);
     this.renderGoalPanel(viewModel);
   }
 
   destroy(): void {
     this.destroyed = true;
+    this.playersOnlineWrapEl?.removeEventListener('pointerenter', this.handlePlayersOnlinePointerEnter);
+    this.playersOnlineWrapEl?.removeEventListener('pointerleave', this.handlePlayersOnlinePointerLeave);
+    this.playersOnlineWrapEl?.removeEventListener('focusin', this.handlePlayersOnlineFocusIn);
+    this.playersOnlineWrapEl?.removeEventListener('focusout', this.handlePlayersOnlineFocusOut);
+    this.playersOnlineEl?.removeEventListener('click', this.handlePlayersOnlineClick);
+    this.selectedCreatorEl?.removeEventListener('click', this.handleSelectedCreatorClick);
+    this.doc.removeEventListener('pointerdown', this.handleDocumentPointerDown, true);
+    this.doc.removeEventListener('keydown', this.handleDocumentKeyDown, true);
   }
 
   private setText(element: HTMLElement | null, text: string): void {
     if (element && element.textContent !== text) {
       element.textContent = text;
+    }
+  }
+
+  private setTitle(element: HTMLElement | null, title: string): void {
+    if (!element) {
+      return;
+    }
+
+    if (title.trim().length === 0) {
+      element.removeAttribute('title');
+      return;
+    }
+
+    if (element.getAttribute('title') !== title) {
+      element.setAttribute('title', title);
     }
   }
 
@@ -213,6 +380,93 @@ export class OverworldHudBridge {
 
   private setSeparatorVisible(visible: boolean): void {
     this.separatorEl?.classList.toggle('hidden', !visible);
+  }
+
+  private renderPlayersOnline(viewModel: OverworldHudViewModel): void {
+    this.setText(this.playersOnlineEl, viewModel.playersOnlineText);
+    this.setText(this.playersOnlinePopoverSummaryEl, viewModel.playersOnlineSummaryText);
+
+    const showPlayersOnline = viewModel.playersOnlineText.trim().length > 0;
+    this.playersOnlineWrapEl?.classList.toggle('hidden', !showPlayersOnline);
+
+    if (!showPlayersOnline) {
+      this.playersOnlinePinned = false;
+      this.setPlayersOnlinePopoverOpen(false);
+      return;
+    }
+
+    if (this.playersOnlinePopoverEmptyEl) {
+      this.playersOnlinePopoverEmptyEl.classList.toggle('hidden', viewModel.playersOnlineEntries.length > 0);
+    }
+
+    if (this.playersOnlinePopoverListEl) {
+      this.playersOnlinePopoverListEl.replaceChildren(
+        ...viewModel.playersOnlineEntries.map((entry) => this.createPlayersOnlineEntry(entry))
+      );
+    }
+  }
+
+  private createPlayersOnlineEntry(entry: OverworldOnlineRosterViewEntry): HTMLElement {
+    const row = this.doc.createElement('button');
+    row.type = 'button';
+    row.className = 'world-online-popover-entry';
+    row.dataset.onlineKey = entry.key;
+    row.disabled = entry.isSelf;
+    row.title = entry.isSelf
+      ? 'You are already in this room.'
+      : `Join ${entry.displayName} in ${entry.roomText}`;
+    row.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (entry.isSelf) {
+        return;
+      }
+
+      this.playersOnlinePinned = false;
+      this.setPlayersOnlinePopoverOpen(false);
+      void this.options.onPlayersOnlineEntryJoin?.(entry);
+    });
+
+    const name = this.doc.createElement('div');
+    name.className = 'world-online-popover-entry-name';
+    name.textContent = entry.isSelf ? `${entry.displayName} (You)` : entry.displayName;
+    name.dataset.onlineSelf = entry.isSelf ? 'true' : 'false';
+
+    const room = this.doc.createElement('div');
+    room.className = 'world-online-popover-room';
+    room.textContent = entry.roomText;
+
+    row.append(name, room);
+    return row;
+  }
+
+  private renderSelectedCreator(text: string, userId: string | null): void {
+    if (!this.selectedCreatorEl) {
+      return;
+    }
+
+    this.selectedCreatorUserId = userId;
+    this.selectedCreatorEl.textContent = text;
+    const clickable = isOpenableProfileUserId(userId);
+    this.selectedCreatorEl.disabled = !clickable;
+    this.selectedCreatorEl.classList.toggle('is-clickable', clickable);
+    this.selectedCreatorEl.title = clickable ? `View ${text.replace(/^by\s+/i, '')}'s profile` : '';
+  }
+
+  private renderSelectedStateInfo(visible: boolean, text: string): void {
+    this.selectedStateInfoWrapEl?.classList.toggle('hidden', !visible);
+    this.setText(this.selectedStateInfoTooltipEl, text);
+  }
+
+  private canShowPlayersOnlinePopover(): boolean {
+    return Boolean(this.playersOnlineWrapEl && !this.playersOnlineWrapEl.classList.contains('hidden'));
+  }
+
+  private setPlayersOnlinePopoverOpen(open: boolean): void {
+    this.playersOnlineWrapEl?.classList.toggle('is-open', open);
+    this.playersOnlinePopoverEl?.classList.toggle('hidden', !open);
+    this.playersOnlinePopoverEl?.setAttribute('aria-hidden', open ? 'false' : 'true');
+    this.playersOnlineEl?.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
 
   private renderGoalPanel(viewModel: OverworldHudViewModel): void {

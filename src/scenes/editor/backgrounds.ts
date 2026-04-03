@@ -3,9 +3,9 @@ import {
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
   TILE_SIZE,
-  getBackgroundGroup,
   type BackgroundLayer,
 } from '../../config';
+import { resolveRoomBackground } from '../../backgrounds/model';
 import type { RoomCoordinates } from '../../persistence/roomRepository';
 import type { WorldRepository } from '../../persistence/worldRepository';
 import { RETRO_COLORS, ensureStarfieldTexture } from '../../visuals/starfield';
@@ -91,11 +91,11 @@ export class EditorBackgroundController {
       this.bgColorRect = null;
     }
 
-    const group = getBackgroundGroup(selectedBackground);
+    const resolved = resolveRoomBackground(selectedBackground);
     const w = ROOM_PX_WIDTH;
     const h = ROOM_PX_HEIGHT;
 
-    if (!group || group.layers.length === 0) {
+    if (resolved.kind === 'none') {
       const textureKey = ensureStarfieldTexture(this.scene);
 
       this.bgColorRect = this.scene.add.rectangle(0, 0, w, h, RETRO_COLORS.backgroundNumber);
@@ -119,15 +119,25 @@ export class EditorBackgroundController {
       return;
     }
 
-    if (group.bgColor) {
-      const color = Phaser.Display.Color.HexStringToColor(group.bgColor).color;
+    if (resolved.kind === 'solid') {
+      const color = Phaser.Display.Color.HexStringToColor(resolved.color).color;
+      this.bgColorRect = this.scene.add.rectangle(0, 0, w, h, color);
+      this.bgColorRect.setOrigin(0, 0);
+      this.bgColorRect.setDepth(-20);
+      this.syncBackgroundCameraIgnores();
+      this.updateBackgroundPreview();
+      return;
+    }
+
+    if (resolved.group.bgColor) {
+      const color = Phaser.Display.Color.HexStringToColor(resolved.group.bgColor).color;
       this.bgColorRect = this.scene.add.rectangle(0, 0, w, h, color);
       this.bgColorRect.setOrigin(0, 0);
       this.bgColorRect.setDepth(-20);
     }
 
-    for (let index = 0; index < group.layers.length; index += 1) {
-      const layer = group.layers[index];
+    for (let index = 0; index < resolved.group.layers.length; index += 1) {
+      const layer = resolved.group.layers[index];
       const sprite = this.scene.add.tileSprite(0, 0, w, h, layer.key);
       sprite.setOrigin(0, 0);
       sprite.setDepth(-10 + index);

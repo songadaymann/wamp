@@ -3,6 +3,13 @@ import { HttpError, jsonResponse } from '../core/http';
 import type { Env } from '../core/types';
 import { upsertUserStats } from '../runs/points';
 import { loadLaunchStats } from './launchStats';
+import {
+  handleAdminSuspiciousInvalidate,
+  handleAdminSuspiciousInvalidatePreview,
+  handleAdminSuspiciousSummary,
+  handleAdminSuspiciousUserDetail,
+  handleAdminSuspiciousUsers,
+} from './suspicious';
 
 export async function handleAdminRequest(
   request: Request,
@@ -11,6 +18,46 @@ export async function handleAdminRequest(
 ): Promise<Response> {
   if (url.pathname === '/api/admin/launch-stats' && request.method === 'GET') {
     return handleAdminLaunchStats(request, env);
+  }
+
+  if (url.pathname === '/api/admin/suspicious/summary' && request.method === 'GET') {
+    return handleAdminSuspiciousSummary(request, url, env);
+  }
+
+  if (url.pathname === '/api/admin/suspicious/users' && request.method === 'GET') {
+    return handleAdminSuspiciousUsers(request, url, env);
+  }
+
+  const suspiciousUserDetailMatch = /^\/api\/admin\/suspicious\/users\/([^/]+)$/.exec(url.pathname);
+  if (suspiciousUserDetailMatch && request.method === 'GET') {
+    return handleAdminSuspiciousUserDetail(
+      request,
+      url,
+      env,
+      decodeURIComponent(suspiciousUserDetailMatch[1])
+    );
+  }
+
+  const suspiciousPreviewMatch = /^\/api\/admin\/suspicious\/users\/([^/]+)\/invalidate-preview$/.exec(
+    url.pathname
+  );
+  if (suspiciousPreviewMatch && request.method === 'POST') {
+    return handleAdminSuspiciousInvalidatePreview(
+      request,
+      env,
+      decodeURIComponent(suspiciousPreviewMatch[1])
+    );
+  }
+
+  const suspiciousInvalidateMatch = /^\/api\/admin\/suspicious\/users\/([^/]+)\/invalidate$/.exec(
+    url.pathname
+  );
+  if (suspiciousInvalidateMatch && request.method === 'POST') {
+    return handleAdminSuspiciousInvalidate(
+      request,
+      env,
+      decodeURIComponent(suspiciousInvalidateMatch[1])
+    );
   }
 
   const clearMatch = /^\/api\/admin\/rooms\/([^/]+)\/clear$/.exec(url.pathname);

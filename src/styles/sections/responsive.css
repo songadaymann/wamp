@@ -41,6 +41,22 @@ body[data-device-class='tablet'][data-coarse-pointer='true'] #global-chat .chat-
   backdrop-filter: blur(8px);
 }
 
+body[data-device-class='tablet'][data-coarse-pointer='true'][data-performance-profile='reduced'] #world-hud {
+  background: rgba(11, 11, 11, 0.95);
+  backdrop-filter: none;
+}
+
+body[data-device-class='tablet'][data-coarse-pointer='true'][data-performance-profile='reduced'] .world-goal-panel {
+  background: rgba(5, 5, 5, 0.95);
+  backdrop-filter: none;
+}
+
+body[data-device-class='tablet'][data-coarse-pointer='true'][data-performance-profile='reduced'] #bottom-bar,
+body[data-device-class='tablet'][data-coarse-pointer='true'][data-performance-profile='reduced'] #global-chat .chat-panel-body,
+body[data-device-class='tablet'][data-coarse-pointer='true'][data-performance-profile='reduced'] .world-online-popover {
+  backdrop-filter: none;
+}
+
 body[data-device-class='phone'] #app {
   grid-template-columns: 1fr;
   grid-template-rows: minmax(0, 1fr) auto;
@@ -103,6 +119,15 @@ body[data-device-class='phone'][data-app-mode='play-world'] #room-save-status {
   padding: 2px 7px;
   font-size: 10px;
   backdrop-filter: blur(4px);
+}
+
+body[data-device-class='phone'] .world-online-popover {
+  width: min(280px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
+  max-height: min(260px, 36vh);
+}
+
+body[data-coarse-pointer='true'] .world-online-hints {
+  display: none;
 }
 
 body[data-device-class='phone'][data-app-mode='play-world'] #room-save-status {
@@ -204,7 +229,7 @@ body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-ti
   font-size: 12px;
 }
 
-body[data-device-class='phone'][data-mobile-world-hud-collapsed='true'] #world-hud {
+body[data-coarse-pointer='true']:not([data-device-class='desktop'])[data-mobile-world-hud-collapsed='true'] #world-hud {
   transform: translateY(calc(-100% - 14px));
   opacity: 0;
   pointer-events: none;
@@ -261,6 +286,16 @@ body[data-device-class='phone'] #global-chat {
   left: calc(8px + var(--safe-left));
   width: auto;
   bottom: calc(60px + var(--safe-bottom));
+}
+
+body[data-device-class='phone'] .room-chat-composer {
+  bottom: calc(112px + var(--safe-bottom));
+  width: min(320px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
+}
+
+body[data-device-class='phone'] .room-chat-composer-form {
+  padding: 8px 10px;
+  border-radius: 16px;
 }
 
 body[data-device-class='phone'] #global-chat.is-open {
@@ -342,6 +377,17 @@ body[data-device-class='phone'][data-app-mode='play-world'] #global-chat .chat-t
   margin-left: 0;
 }
 
+body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-room-chat {
+  position: fixed;
+  right: calc(204px + var(--safe-right));
+  bottom: calc(48px + var(--safe-bottom));
+  z-index: 23;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .room-chat-composer-form {
+  padding: 8px 10px;
+}
+
 body[data-device-class='phone'][data-app-mode='editor'] {
   --phone-editor-sheet-height: min(46vh, 344px);
 }
@@ -380,6 +426,10 @@ body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-only {
   display: block;
 }
 
+body[data-device-class='phone'] .desktop-editor-only {
+  display: none !important;
+}
+
 body[data-device-class='phone'][data-app-mode='editor'] .background-card-grid {
   display: grid;
 }
@@ -393,15 +443,10 @@ body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet
 body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='palette'] #sidebar .sidebar-section[data-mobile-panel='palette'],
 body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='objects'] #sidebar .sidebar-section[data-mobile-panel='objects'],
 body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='objects'] #sidebar .sidebar-section[data-mobile-panel-alt='objects'],
+body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='music'] #sidebar .sidebar-section[data-mobile-panel='music'],
 body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='goal'] #sidebar .sidebar-section[data-mobile-panel='goal'],
 body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='actions'] #sidebar .sidebar-section[data-mobile-panel='actions'] {
   display: block;
-}
-
-body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='actions'] #sidebar .editor-action-stack {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] #sidebar .sidebar-section {
@@ -415,6 +460,10 @@ body[data-device-class='phone'][data-app-mode='editor'] #sidebar .section-label 
 
 body[data-device-class='phone'][data-app-mode='editor'] .sidebar-section-toggle {
   display: none;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #sidebar .sidebar-section.is-collapsed .sidebar-section-body {
+  display: block;
 }
 
 body[data-app-mode='editor']:not([data-device-class='phone']) #tile-palette-section,
@@ -534,17 +583,67 @@ body[data-device-class='phone'][data-app-mode='editor'] #object-grid {
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] .object-item {
-  min-height: 70px;
+  min-height: 74px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .object-item img {
+  max-width: 60px;
+  max-height: 44px;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] .palette-hint {
   padding-top: 2px;
 }
 
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-overlay {
+  z-index: 24;
+  padding:
+    calc(8px + var(--safe-top))
+    calc(8px + var(--safe-right))
+    calc(84px + var(--safe-bottom))
+    calc(8px + var(--safe-left));
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-shell {
+  width: calc(100% - 8px);
+  padding: 8px 10px 10px;
+  gap: 8px;
+  border-radius: 16px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-strip {
+  gap: 8px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-tab-dock {
+  width: 100%;
+  margin-top: -14px;
+  padding-top: 14px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-tab-strip {
+  width: 100%;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-control-cluster {
+  width: 100%;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-legacy-notice {
+  flex-direction: column;
+  align-items: stretch;
+}
+
 body[data-device-class='phone'][data-app-mode='editor'] #room-title-section,
+body[data-device-class='phone'][data-app-mode='editor'] #music-section,
 body[data-device-class='phone'][data-app-mode='editor'] #goal-section {
   max-height: calc(var(--phone-editor-sheet-height) - 26px);
   overflow: auto;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #music-section {
+  display: grid;
+  gap: 10px;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] #goal-section {
@@ -574,7 +673,22 @@ body[data-device-class='phone'][data-app-mode='editor'] #editor-actions {
   gap: 10px;
 }
 
+body[data-device-class='phone'][data-app-mode='editor'] .editor-action-rail {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .editor-top-save-status {
+  margin-top: 0;
+}
+
 body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-actions-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #editor-advanced {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -693,9 +807,23 @@ body[data-device-class='phone'][data-app-mode='editor'] .background-card-none .b
   background-size: auto, auto, cover;
 }
 
+body[data-device-class='phone'][data-app-mode='editor'] .background-card-solid .background-card-art {
+  background-color: var(--background-card-solid, #24324a);
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(11, 11, 11, 0.18)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.14), transparent 55%);
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat;
+}
+
 body[data-device-class='phone'][data-app-mode='editor'] .background-card-label {
   font-size: 11px;
   text-align: left;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .background-solid-controls {
+  margin-top: 12px;
 }
 
 body[data-device-class='phone'] .chat-form,
@@ -775,6 +903,7 @@ body[data-device-class='tablet'][data-coarse-pointer='true'] .bar-btn:hover {
   }
 
   .history-modal-header,
+  .editor-music-picker-item,
   .history-version-row {
     flex-direction: column;
     align-items: stretch;

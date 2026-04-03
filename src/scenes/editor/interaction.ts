@@ -8,9 +8,10 @@ import {
   editorState,
   getObjectById,
 } from '../../config';
+import { isTextInputFocused } from '../../ui/keyboardFocus';
 import { RETRO_COLORS } from '../../visuals/starfield';
 import { getDeviceLayoutState, isMobileLandscapeBlocked } from '../../ui/deviceLayout';
-import type { GoalPlacementMode } from './editRuntime';
+import type { EditorClipboardState, GoalPlacementMode } from './editRuntime';
 
 function getEditorLayerAccent(): { stroke: number; fillAlpha: number } {
   switch (editorState.activeLayer) {
@@ -27,6 +28,13 @@ function getEditorLayerAccent(): { stroke: number; fillAlpha: number } {
 interface EditorInteractionHost {
   getNeighborRadius(): number;
   getGoalPlacementMode(): GoalPlacementMode;
+  isMusicModeActive(): boolean;
+  handleMusicPointerDown(pointer: Phaser.Input.Pointer): void;
+  handleMusicPointerMove(pointer: Phaser.Input.Pointer): void;
+  handleMusicPointerUp(pointer: Phaser.Input.Pointer): void;
+  updateMusicCursorHighlight(graphics: Phaser.GameObjects.Graphics): boolean;
+  handleObjectModePrimaryAction(pointer: Phaser.Input.Pointer): boolean;
+  handleObjectModeSecondaryAction(worldX: number, worldY: number): boolean;
   handleObjectPlace(pointer: Phaser.Input.Pointer): void;
   handleToolDown(pointer: Phaser.Input.Pointer): void;
   removeGoalMarkerAt(worldX: number, worldY: number): boolean;
@@ -35,6 +43,11 @@ interface EditorInteractionHost {
   placeTileAt(worldX: number, worldY: number): void;
   eraseTileAt(worldX: number, worldY: number): void;
   fillRect(x1: number, y1: number, x2: number, y2: number): void;
+  captureCopySelection(x1: number, y1: number, x2: number, y2: number): void;
+  getClipboardPreview(): EditorClipboardState | null;
+  isClipboardPastePreviewActive(): boolean;
+  pasteClipboardAt(tileX: number, tileY: number): void;
+  cancelClipboardPastePreview(): void;
   beginTileBatch(): void;
   commitTileBatch(): void;
   startPlayMode(): void;
@@ -85,6 +98,59 @@ export class EditorInteractionController {
 
     this.rectPreviewGraphics = this.scene.add.graphics();
     this.rectPreviewGraphics.setDepth(98);
+  }
+
+  clearShapePreview(): void {
+    this.rectStart = null;
+    this.rectPreviewGraphics?.clear();
+  }
+
+  private drawOccupiedCellPreview(
+    originX: number,
+    originY: number,
+    width: number,
+    height: number,
+    occupiedMask: boolean[][],
+    stroke: number,
+    fillAlpha: number,
+    lineAlpha: number,
+    lineWidth: number,
+  ): void {
+    if (!this.cursorGraphics) {
+      return;
+    }
+
+    let drewAnyCell = false;
+    this.cursorGraphics.fillStyle(stroke, fillAlpha);
+    this.cursorGraphics.lineStyle(lineWidth, stroke, lineAlpha);
+    for (let dy = 0; dy < height; dy += 1) {
+      for (let dx = 0; dx < width; dx += 1) {
+        if (!occupiedMask[dy]?.[dx]) {
+          continue;
+        }
+
+        drewAnyCell = true;
+        this.cursorGraphics.fillRect(
+          (originX + dx) * TILE_SIZE,
+          (originY + dy) * TILE_SIZE,
+          TILE_SIZE,
+          TILE_SIZE,
+        );
+        this.cursorGraphics.strokeRect(
+          (originX + dx) * TILE_SIZE,
+          (originY + dy) * TILE_SIZE,
+          TILE_SIZE,
+          TILE_SIZE,
+        );
+      }
+    }
+
+    if (drewAnyCell) {
+      return;
+    }
+
+    this.cursorGraphics.fillRect(originX * TILE_SIZE, originY * TILE_SIZE, width * TILE_SIZE, height * TILE_SIZE);
+    this.cursorGraphics.strokeRect(originX * TILE_SIZE, originY * TILE_SIZE, width * TILE_SIZE, height * TILE_SIZE);
   }
 
   reset(): void {
@@ -153,7 +219,10 @@ export class EditorInteractionController {
 
   updateCursorHighlight(): void {
     this.cursorGraphics?.clear();
-    if (!this.cursorGraphics || editorState.isPlaying || isMobileLandscapeBlocked()) {
+    if (!this.cursorGraphics || editorState.isPlaying || isMobileLandscapeBlocked() || this.host.isMusicModeActive()) {
+      if (this.cursorGraphics && this.host.isMusicModeActive()) {
+        this.host.updateMusicCursorHighlight(this.cursorGraphics);
+      }
       return;
     }
 
@@ -205,6 +274,26 @@ export class EditorInteractionController {
       return;
     }
 
+    if (editorState.paletteMode === 'tiles' && this.host.isClipboardPastePreviewActive()) {
+      const clipboard = this.host.getClipboardPreview();
+      if (clipboard) {
+        const layerAccent = getEditorLayerAccent();
+        this.drawOccupiedCellPreview(
+          tileX,
+          tileY,
+          clipboard.width,
+          clipboard.height,
+          clipboard.occupiedMask,
+          layerAccent.stroke,
+          0.12,
+          0.95,
+          2,
+        );
+        this.updateCursorCoords(tileX, tileY);
+        return;
+      }
+    }
+
     const selection = editorState.selection;
     const stampOrigin =
       editorState.activeTool === 'pencil'
@@ -244,19 +333,20 @@ export class EditorInteractionController {
       );
     } else {
       const layerAccent = getEditorLayerAccent();
-      this.cursorGraphics.fillStyle(layerAccent.stroke, layerAccent.fillAlpha);
-      this.cursorGraphics.fillRect(
-        cursorOrigin.x * TILE_SIZE,
-        cursorOrigin.y * TILE_SIZE,
-        cursorW * TILE_SIZE,
-        cursorH * TILE_SIZE,
-      );
-      this.cursorGraphics.lineStyle(1, layerAccent.stroke, 0.92);
-      this.cursorGraphics.strokeRect(
-        cursorOrigin.x * TILE_SIZE,
-        cursorOrigin.y * TILE_SIZE,
-        cursorW * TILE_SIZE,
-        cursorH * TILE_SIZE,
+      const occupiedMask =
+        editorState.activeTool === 'pencil'
+          ? editorState.selection.occupiedMask
+          : Array.from({ length: cursorH }, () => Array.from({ length: cursorW }, () => true));
+      this.drawOccupiedCellPreview(
+        cursorOrigin.x,
+        cursorOrigin.y,
+        cursorW,
+        cursorH,
+        occupiedMask,
+        layerAccent.stroke,
+        layerAccent.fillAlpha,
+        0.92,
+        1,
       );
     }
 
@@ -270,6 +360,11 @@ export class EditorInteractionController {
       }
 
       if (editorState.isPlaying) {
+        return;
+      }
+
+      if (this.host.isMusicModeActive()) {
+        this.host.handleMusicPointerDown(pointer);
         return;
       }
 
@@ -290,6 +385,9 @@ export class EditorInteractionController {
         }
 
         if (editorState.paletteMode === 'objects') {
+          if (this.host.handleObjectModeSecondaryAction(worldPoint.x, worldPoint.y)) {
+            return;
+          }
           this.host.removeObjectAt(worldPoint.x, worldPoint.y);
         } else {
           this.isDrawing = true;
@@ -317,8 +415,22 @@ export class EditorInteractionController {
       }
 
       if (editorState.paletteMode === 'objects') {
-        this.host.handleObjectPlace(pointer);
+        if (editorState.activeTool === 'eraser') {
+          if (this.host.handleObjectModeSecondaryAction(worldPoint.x, worldPoint.y)) {
+            return;
+          }
+          this.host.removeObjectAt(worldPoint.x, worldPoint.y);
+        } else {
+          if (this.host.handleObjectModePrimaryAction(pointer)) {
+            return;
+          }
+          this.host.handleObjectPlace(pointer);
+        }
       } else {
+        if (this.host.isClipboardPastePreviewActive()) {
+          this.host.pasteClipboardAt(tileX, tileY);
+          return;
+        }
         this.host.handleToolDown(pointer);
         if (editorState.activeTool !== 'fill') {
           this.isDrawing = true;
@@ -333,6 +445,11 @@ export class EditorInteractionController {
       }
 
       if (editorState.isPlaying) {
+        return;
+      }
+
+      if (this.host.isMusicModeActive()) {
+        this.host.handleMusicPointerMove(pointer);
         return;
       }
 
@@ -364,7 +481,11 @@ export class EditorInteractionController {
         this.host.eraseTileAt(worldPoint.x, worldPoint.y);
       }
 
-      if (editorState.activeTool === 'rect' && this.rectStart && pointer.leftButtonDown()) {
+      if (
+        (editorState.activeTool === 'rect' || editorState.activeTool === 'copy') &&
+        this.rectStart &&
+        pointer.leftButtonDown()
+      ) {
         const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
         const endX = Math.floor(worldPoint.x / TILE_SIZE);
         const endY = Math.floor(worldPoint.y / TILE_SIZE);
@@ -382,21 +503,37 @@ export class EditorInteractionController {
         return;
       }
 
+      if (this.host.isMusicModeActive()) {
+        this.host.handleMusicPointerUp(pointer);
+        return;
+      }
+
       if (!this.isDrawing) {
         return;
       }
 
-      if (editorState.activeTool === 'rect' && this.rectStart && pointer.leftButtonReleased()) {
+      if (
+        (editorState.activeTool === 'rect' || editorState.activeTool === 'copy') &&
+        this.rectStart &&
+        pointer.leftButtonReleased()
+      ) {
         const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
         const endX = Math.floor(worldPoint.x / TILE_SIZE);
         const endY = Math.floor(worldPoint.y / TILE_SIZE);
-        this.host.fillRect(this.rectStart.x, this.rectStart.y, endX, endY);
+        if (editorState.activeTool === 'copy') {
+          this.host.captureCopySelection(this.rectStart.x, this.rectStart.y, endX, endY);
+        } else {
+          this.host.fillRect(this.rectStart.x, this.rectStart.y, endX, endY);
+        }
         this.rectStart = null;
         this.rectPreviewGraphics?.clear();
       }
 
-      this.host.commitTileBatch();
+      if (editorState.activeTool !== 'copy') {
+        this.host.commitTileBatch();
+      }
       this.isDrawing = false;
+      this.clearShapePreview();
       this.clearTileDrag();
     });
 
@@ -414,14 +551,46 @@ export class EditorInteractionController {
 
   setupKeyboard(): void {
     const keyboard = this.scene.input.keyboard!;
-    keyboard.on('keydown-B', () => { editorState.activeTool = 'pencil'; this.host.updateToolUi(); });
-    keyboard.on('keydown-R', () => { editorState.activeTool = 'rect'; this.host.updateToolUi(); });
-    keyboard.on('keydown-G', () => { editorState.activeTool = 'fill'; this.host.updateToolUi(); });
-    keyboard.on('keydown-E', () => { editorState.activeTool = 'eraser'; this.host.updateToolUi(); });
-    keyboard.on('keydown-F', () => { this.fitToScreen(); });
+    keyboard.on('keydown-R', () => {
+      if (isTextInputFocused()) {
+        return;
+      }
+      if (this.host.isMusicModeActive()) {
+        return;
+      }
+      editorState.activeTool = 'rect';
+      this.host.updateToolUi();
+    });
+    keyboard.on('keydown-G', () => {
+      if (isTextInputFocused()) {
+        return;
+      }
+      if (this.host.isMusicModeActive()) {
+        return;
+      }
+      editorState.activeTool = 'fill';
+      this.host.updateToolUi();
+    });
+    keyboard.on('keydown-F', () => {
+      if (isTextInputFocused()) {
+        return;
+      }
+      if (this.host.isMusicModeActive()) {
+        return;
+      }
+      this.fitToScreen();
+    });
     keyboard.on('keydown-SPACE', () => { this.spaceDown = true; });
     keyboard.on('keyup-SPACE', () => { this.spaceDown = false; this.isPanning = false; });
-    keyboard.on('keydown-P', () => { this.host.startPlayMode(); });
+    keyboard.on('keydown-P', () => {
+      if (isTextInputFocused()) {
+        return;
+      }
+      if (this.host.isMusicModeActive()) {
+        return;
+      }
+      this.host.startPlayMode();
+    });
   }
 
   private constrainEditorCamera(): void {
@@ -500,6 +669,11 @@ export class EditorInteractionController {
       return true;
     }
 
+    if (this.host.isMusicModeActive()) {
+      this.host.handleMusicPointerDown(pointer);
+      return true;
+    }
+
     this.touchPointers.set(pointer.id, { x: pointer.x, y: pointer.y });
     if (this.touchPointers.size >= 2) {
       this.finishCurrentTouchDraw();
@@ -532,20 +706,29 @@ export class EditorInteractionController {
 
     if (editorState.paletteMode === 'objects') {
       if (editorState.activeTool === 'eraser') {
+        if (this.host.handleObjectModeSecondaryAction(worldPoint.x, worldPoint.y)) {
+          return true;
+        }
         this.host.removeObjectAt(worldPoint.x, worldPoint.y);
       } else {
+        if (this.host.handleObjectModePrimaryAction(pointer)) {
+          return true;
+        }
         this.host.handleObjectPlace(pointer);
       }
       return true;
     }
 
-    if (editorState.activeTool === 'rect') {
+    if (editorState.activeTool === 'rect' || editorState.activeTool === 'copy') {
       if (!this.rectStart) {
         this.rectStart = { x: tileX, y: tileY };
       } else {
-        this.host.fillRect(this.rectStart.x, this.rectStart.y, tileX, tileY);
-        this.rectStart = null;
-        this.rectPreviewGraphics?.clear();
+        if (editorState.activeTool === 'copy') {
+          this.host.captureCopySelection(this.rectStart.x, this.rectStart.y, tileX, tileY);
+        } else {
+          this.host.fillRect(this.rectStart.x, this.rectStart.y, tileX, tileY);
+        }
+        this.clearShapePreview();
       }
       return true;
     }
@@ -561,6 +744,11 @@ export class EditorInteractionController {
   private handleTouchPointerMove(pointer: Phaser.Input.Pointer): boolean {
     if (!this.isTouchPointer(pointer)) {
       return false;
+    }
+
+    if (this.host.isMusicModeActive()) {
+      this.host.handleMusicPointerMove(pointer);
+      return true;
     }
 
     if (!this.touchPointers.has(pointer.id)) {
@@ -586,6 +774,10 @@ export class EditorInteractionController {
       this.placeDraggedTileStamp(worldPoint.x, worldPoint.y);
     } else if (editorState.activeTool === 'eraser') {
       this.host.eraseTileAt(worldPoint.x, worldPoint.y);
+    } else if ((editorState.activeTool === 'rect' || editorState.activeTool === 'copy') && this.rectStart) {
+      const tileX = Math.floor(worldPoint.x / TILE_SIZE);
+      const tileY = Math.floor(worldPoint.y / TILE_SIZE);
+      this.drawRectPreview(this.rectStart.x, this.rectStart.y, tileX, tileY);
     }
 
     return true;
@@ -598,6 +790,11 @@ export class EditorInteractionController {
 
     const wasPinching = this.touchPointers.size >= 2;
     this.touchPointers.delete(pointer.id);
+
+    if (this.host.isMusicModeActive()) {
+      this.host.handleMusicPointerUp(pointer);
+      return true;
+    }
 
     if (wasPinching) {
       if (this.touchPointers.size === 1) {
@@ -621,9 +818,12 @@ export class EditorInteractionController {
 
   private finishCurrentTouchDraw(): void {
     if (this.isDrawing) {
-      this.host.commitTileBatch();
+      if (editorState.activeTool !== 'copy') {
+        this.host.commitTileBatch();
+      }
       this.isDrawing = false;
     }
+    this.clearShapePreview();
     this.clearTileDrag();
   }
 

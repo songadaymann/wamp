@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { getAuthDebugState, setupAuthUi } from './auth/client';
 import { initSfx, globalSfxController } from './audio/sfx';
 import { runOverworldLodStress } from './debug/overworldLodStress';
+import { globalRoomMusicController, initRoomMusic } from './music/controller';
 import {
   bootstrapPlayfunModeFromUrl,
   getPlayfunDebugState,
@@ -62,6 +63,7 @@ initializeAppFeedback();
 showBootSplash('Loading assets...', 0);
 const game = new Phaser.Game(config);
 initSfx();
+initRoomMusic();
 
 if (import.meta.env.DEV) {
   (window as Window & { __EVERYBODYS_PLATFORMER_GAME__?: Phaser.Game }).__EVERYBODYS_PLATFORMER_GAME__ = game;
@@ -165,6 +167,7 @@ window.render_game_to_text = () =>
     touch: getTouchInputDebugState(),
     playfun: getPlayfunDebugState(),
     sfx: window.get_sfx_debug_state?.() ?? globalSfxController.getDebugState(),
+    music: globalRoomMusicController.getDebugState(),
     appFeedback: {
       ready: isAppReady(),
       ...getAppFeedbackDebugState(),
@@ -173,6 +176,7 @@ window.render_game_to_text = () =>
 
 window.capture_debug_info = () => getCaptureDebugInfo();
 window.get_auth_debug_state = () => ({ ...getAuthDebugState() });
+window.get_room_music_debug_state = () => globalRoomMusicController.getDebugState();
 
 if (typeof window.advanceTime !== 'function') {
   window.advanceTime = async (ms: number) => {

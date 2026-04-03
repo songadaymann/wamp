@@ -1,5 +1,13 @@
 import Phaser from 'phaser';
 import {
+  SOLID_COLOR_BACKGROUND_ID,
+  buildSolidColorBackgroundValue,
+  getBackgroundSelectionValue,
+  getSolidColorFromBackgroundValue,
+  normalizeRoomBackground,
+  normalizeSolidBackgroundColor,
+} from '../../backgrounds/model';
+import {
   ERASER_BRUSH_SIZES,
   editorState,
   getTilesetByKey,
@@ -15,6 +23,7 @@ import { PaletteController } from './paletteController';
 
 const TILE_FLIP_CHANGED_EVENT = 'tile-flip-changed';
 const EDITOR_LAYER_CHANGED_EVENT = 'editor-layer-changed';
+export const BACKGROUND_CHANGED_EVENT = 'background-changed';
 const LIGHTING_CHANGED_EVENT = 'lighting-changed';
 
 export function setupEditorControls(
@@ -23,7 +32,7 @@ export function setupEditorControls(
   doc: Document = document,
   windowObj: Window = window,
 ): void {
-  setupToolButtons(doc);
+  setupToolButtons(game, doc);
   setupLayerButtons(doc);
   setupLayerStatusChip(doc);
   setupLayerGuideToggle(doc);
@@ -33,11 +42,47 @@ export function setupEditorControls(
   setupEraserControls(game, doc);
   setupBackgroundSelector(doc, windowObj);
   setupBackgroundCards(doc, windowObj);
+  setupBackgroundSolidColorPicker(doc, windowObj);
   setupLightingSelector(doc, windowObj);
   setupGoalControls(game, doc);
+  setupPressurePlateControls(game, doc);
+  setupContainerContentsControls(game, doc);
   setupPaletteModeTabs(paletteController, doc);
   setupObjectCategoryTabs(paletteController, doc);
   syncEditorToolPanels(doc);
+}
+
+function getLayerUiLabel(layer: LayerName): string {
+  switch (layer) {
+    case 'background':
+      return 'Back';
+    case 'foreground':
+      return 'Front';
+    case 'terrain':
+    default:
+      return 'Gameplay';
+  }
+}
+
+function syncToolButtonState(doc: Document): void {
+  doc.querySelectorAll<HTMLButtonElement>('.tool-btn[data-tool]').forEach((button) => {
+    button.classList.toggle('active', button.dataset.tool === editorState.activeTool);
+  });
+
+  const moreButton = doc.getElementById('btn-tool-more');
+  const moreToolsPanel = doc.getElementById('more-tools-panel');
+  const rectOrFillActive = editorState.activeTool === 'rect' || editorState.activeTool === 'fill';
+  const popoverOpen = moreToolsPanel?.dataset.open === 'true';
+  moreButton?.classList.toggle('active', rectOrFillActive || popoverOpen);
+}
+
+function setActiveEditorTool(game: Phaser.Game, doc: Document, tool: ToolName): void {
+  editorState.activeTool = tool;
+  syncToolButtonState(doc);
+  syncEditorToolPanels(doc);
+  withActiveEditorScene(game, (scene) => {
+    scene.updateToolUi?.();
+  });
 }
 
 function setupRoomTitleInput(game: Phaser.Game, doc: Document): void {
@@ -56,28 +101,78 @@ function setupRoomTitleInput(game: Phaser.Game, doc: Document): void {
   input.addEventListener('change', commit);
 }
 
-function setupToolButtons(doc: Document): void {
-  doc.querySelectorAll('.tool-btn').forEach((button) => {
-    button.addEventListener('click', () => {
-      const tool = (button as HTMLElement).dataset.tool as ToolName;
-      editorState.activeTool = tool;
+function setupToolButtons(game: Phaser.Game, doc: Document): void {
+  const moreToolsButton = doc.getElementById('btn-tool-more') as HTMLButtonElement | null;
+  const moreToolsPanel = doc.getElementById('more-tools-panel') as HTMLElement | null;
 
-      doc.querySelectorAll('.tool-btn').forEach((item) => item.classList.remove('active'));
-      button.classList.add('active');
-      syncEditorToolPanels(doc);
+  const closeMoreTools = () => {
+    if (!moreToolsPanel) {
+      return;
+    }
+    moreToolsPanel.classList.add('hidden');
+    moreToolsPanel.dataset.open = 'false';
+    syncToolButtonState(doc);
+  };
+
+  const toggleMoreTools = () => {
+    if (!moreToolsPanel) {
+      return;
+    }
+    const open = moreToolsPanel.dataset.open === 'true';
+    moreToolsPanel.dataset.open = open ? 'false' : 'true';
+    moreToolsPanel.classList.toggle('hidden', open);
+    syncToolButtonState(doc);
+  };
+
+  doc.querySelectorAll<HTMLButtonElement>('.tool-btn').forEach((button) => {
+    button.addEventListener('click', () => {
+      const tool = button.dataset.tool as ToolName | undefined;
+      if (!tool) {
+        return;
+      }
+
+      setActiveEditorTool(game, doc, tool);
+      if (tool !== 'rect' && tool !== 'fill') {
+        closeMoreTools();
+      }
     });
   });
+
+  moreToolsButton?.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleMoreTools();
+  });
+
+  doc.addEventListener('click', (event) => {
+    if (!moreToolsPanel || moreToolsPanel.dataset.open !== 'true') {
+      return;
+    }
+
+    const target = event.target as Node | null;
+    if (target && (moreToolsPanel.contains(target) || moreToolsButton?.contains(target))) {
+      return;
+    }
+
+    closeMoreTools();
+  });
+
+  syncToolButtonState(doc);
 }
 
 function setupLayerButtons(doc: Document): void {
   const sync = () => {
-    doc.querySelectorAll('.layer-btn').forEach((button) => {
+    doc.querySelectorAll<HTMLElement>('.layer-btn').forEach((button) => {
       const layer = (button as HTMLElement).dataset.layer as LayerName;
       button.classList.toggle('active', layer === editorState.activeLayer);
     });
+    doc.querySelectorAll<HTMLElement>('.layer-stack-mini-btn').forEach((previewButton) => {
+      const layer = previewButton.dataset.layer as LayerName | undefined;
+      previewButton.classList.toggle('active', layer === editorState.activeLayer);
+    });
   };
 
-  doc.querySelectorAll('.layer-btn').forEach((button) => {
+  doc.querySelectorAll<HTMLElement>('.layer-btn, .layer-stack-mini-btn').forEach((button) => {
     button.addEventListener('click', () => {
       const layer = (button as HTMLElement).dataset.layer as LayerName;
       editorState.activeLayer = layer;
@@ -97,11 +192,10 @@ function setupBackgroundSelector(doc: Document, windowObj: Window): void {
   }
 
   select.addEventListener('change', () => {
-    editorState.selectedBackground = select.value;
-    syncBackgroundCardSelection(doc, select.value);
-    windowObj.dispatchEvent(new Event('background-changed'));
-    requestPhoneEditorAutoCollapse(doc);
+    applyBackgroundSelection(doc, windowObj, select.value);
   });
+
+  syncBackgroundControls(doc, editorState.selectedBackground);
 }
 
 function setupLightingSelector(doc: Document, windowObj: Window): void {
@@ -165,7 +259,7 @@ function setupEraserControls(game: Phaser.Game, doc: Document): void {
   }
 
   clearLayerButton?.addEventListener('click', () => {
-    if (!window.confirm('Clear every terrain tile on the current layer?')) {
+    if (!window.confirm('Clear every tile on the current layer?')) {
       return;
     }
 
@@ -175,7 +269,7 @@ function setupEraserControls(game: Phaser.Game, doc: Document): void {
   });
 
   clearAllButton?.addEventListener('click', () => {
-    if (!window.confirm('Remove all terrain from background, terrain, and foreground?')) {
+    if (!window.confirm('Remove all tiles from Back, Gameplay, and Front?')) {
       return;
     }
 
@@ -192,12 +286,7 @@ function setupLayerStatusChip(doc: Document): void {
   }
 
   const sync = () => {
-    const label =
-      editorState.activeLayer === 'terrain'
-        ? 'Terrain'
-        : editorState.activeLayer === 'background'
-          ? 'Background'
-          : 'Foreground';
+    const label = getLayerUiLabel(editorState.activeLayer);
     chip.textContent = `Placing on ${label}`;
     chip.setAttribute('data-layer-tone', editorState.activeLayer);
   };
@@ -227,27 +316,55 @@ function setupLayerGuideToggle(doc: Document): void {
 }
 
 function setupBackgroundCards(doc: Document, windowObj: Window): void {
-  const select = doc.getElementById('background-select') as HTMLSelectElement | null;
   const cards = Array.from(doc.querySelectorAll<HTMLButtonElement>('[data-background-id]'));
-  if (!select || cards.length === 0) {
+  if (cards.length === 0) {
     return;
   }
 
-  syncBackgroundCardSelection(doc, select.value);
+  syncBackgroundControls(doc, editorState.selectedBackground);
   for (const card of cards) {
     card.addEventListener('click', () => {
       const nextBackground = card.dataset.backgroundId;
-      if (!nextBackground || select.value === nextBackground) {
+      if (!nextBackground) {
         return;
       }
 
-      select.value = nextBackground;
-      editorState.selectedBackground = nextBackground;
-      syncBackgroundCardSelection(doc, nextBackground);
-      windowObj.dispatchEvent(new Event('background-changed'));
-      requestPhoneEditorAutoCollapse(doc);
+      applyBackgroundSelection(doc, windowObj, nextBackground);
     });
   }
+}
+
+function setupBackgroundSolidColorPicker(doc: Document, windowObj: Window): void {
+  const input = doc.getElementById('background-solid-color-input') as HTMLInputElement | null;
+  if (!input) {
+    return;
+  }
+
+  const commit = () => {
+    const normalizedColor = normalizeSolidBackgroundColor(
+      input.value,
+      editorState.selectedSolidBackgroundColor,
+    );
+    editorState.selectedSolidBackgroundColor = normalizedColor;
+
+    const isSolidSelection =
+      getBackgroundSelectionValue(editorState.selectedBackground) === SOLID_COLOR_BACKGROUND_ID;
+    if (isSolidSelection) {
+      const nextBackground = buildSolidColorBackgroundValue(normalizedColor);
+      if (editorState.selectedBackground !== nextBackground) {
+        editorState.selectedBackground = nextBackground;
+        windowObj.dispatchEvent(new Event(BACKGROUND_CHANGED_EVENT));
+      }
+      syncBackgroundControls(doc, nextBackground);
+      return;
+    }
+
+    syncBackgroundControls(doc, editorState.selectedBackground);
+  };
+
+  input.addEventListener('input', commit);
+  input.addEventListener('change', commit);
+  syncBackgroundControls(doc, editorState.selectedBackground);
 }
 
 function setupGoalControls(game: Phaser.Game, doc: Document): void {
@@ -411,16 +528,107 @@ function setupGoalControls(game: Phaser.Game, doc: Document): void {
   });
 }
 
+function setupPressurePlateControls(game: Phaser.Game, doc: Document): void {
+  const connectBtn = doc.getElementById('btn-pressure-plate-connect');
+  const clearBtn = doc.getElementById('btn-pressure-plate-clear');
+  const doneLaterBtn = doc.getElementById('btn-pressure-plate-done-later');
+
+  connectBtn?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.beginFocusedPressurePlateConnection?.();
+    });
+    requestPhoneEditorAutoCollapse(doc);
+  });
+
+  clearBtn?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.clearFocusedPressurePlateConnection?.();
+    });
+  });
+
+  doneLaterBtn?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.cancelPressurePlateConnection?.();
+    });
+  });
+}
+
+function setupContainerContentsControls(game: Phaser.Game, doc: Document): void {
+  const clearBtn = doc.getElementById('btn-container-clear');
+  clearBtn?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.clearFocusedContainerContents?.();
+    });
+  });
+}
+
 function requestPhoneEditorAutoCollapse(doc: Document): void {
   doc.defaultView?.dispatchEvent(new Event('mobile-editor-auto-collapse'));
 }
 
-function syncBackgroundCardSelection(doc: Document, activeBackgroundId: string): void {
+export function syncBackgroundControls(doc: Document, backgroundValue: string): void {
+  const normalizedBackground = normalizeRoomBackground(backgroundValue);
+  const activeBackgroundId = getBackgroundSelectionValue(normalizedBackground);
+  const solidColor = getSolidColorFromBackgroundValue(
+    normalizedBackground,
+    editorState.selectedSolidBackgroundColor,
+  );
+  const select = doc.getElementById('background-select') as HTMLSelectElement | null;
+  const colorInput = doc.getElementById('background-solid-color-input') as HTMLInputElement | null;
+  const colorValue = doc.getElementById('background-solid-color-value');
+  const solidControls = doc.getElementById('background-solid-controls');
+  const solidCard = doc.getElementById('background-solid-card');
+
+  if (select && doc.activeElement !== select && select.value !== activeBackgroundId) {
+    select.value = activeBackgroundId;
+  }
+
   doc.querySelectorAll<HTMLButtonElement>('[data-background-id]').forEach((button) => {
     const active = button.dataset.backgroundId === activeBackgroundId;
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
+
+  if (colorInput && doc.activeElement !== colorInput && colorInput.value !== solidColor) {
+    colorInput.value = solidColor;
+  }
+
+  if (colorValue && colorValue.textContent !== solidColor.toUpperCase()) {
+    colorValue.textContent = solidColor.toUpperCase();
+  }
+
+  solidControls?.classList.toggle('hidden', activeBackgroundId !== SOLID_COLOR_BACKGROUND_ID);
+  solidCard?.style.setProperty('--background-card-solid', solidColor);
+}
+
+function applyBackgroundSelection(doc: Document, windowObj: Window, selectionValue: string): void {
+  const normalizedSelection =
+    selectionValue === SOLID_COLOR_BACKGROUND_ID
+      ? SOLID_COLOR_BACKGROUND_ID
+      : normalizeRoomBackground(selectionValue);
+  const currentSelection = getBackgroundSelectionValue(editorState.selectedBackground);
+  const nextBackground =
+    normalizedSelection === SOLID_COLOR_BACKGROUND_ID
+      ? buildSolidColorBackgroundValue(editorState.selectedSolidBackgroundColor)
+      : normalizedSelection;
+
+  if (
+    editorState.selectedBackground === nextBackground &&
+    currentSelection === normalizedSelection
+  ) {
+    syncBackgroundControls(doc, nextBackground);
+    return;
+  }
+
+  if (editorState.selectedBackground !== nextBackground) {
+    editorState.selectedBackground = nextBackground;
+    windowObj.dispatchEvent(new Event(BACKGROUND_CHANGED_EVENT));
+  }
+
+  syncBackgroundControls(doc, nextBackground);
+  if (normalizedSelection !== SOLID_COLOR_BACKGROUND_ID) {
+    requestPhoneEditorAutoCollapse(doc);
+  }
 }
 
 function bindNumericGoalInput(
@@ -459,9 +667,7 @@ function setupPaletteModeTabs(paletteController: PaletteController, doc: Documen
         objectPaletteSection?.classList.remove('hidden');
         if (editorState.activeTool !== 'eraser') {
           editorState.activeTool = 'pencil';
-          doc.querySelectorAll('.tool-btn').forEach((button) => {
-            button.classList.toggle('active', (button as HTMLElement).dataset.tool === 'pencil');
-          });
+          syncToolButtonState(doc);
         }
       }
 
@@ -502,7 +708,17 @@ function setupTilesetSelector(paletteController: PaletteController, doc: Documen
 
 function syncEditorToolPanels(doc: Document): void {
   const eraseControls = doc.getElementById('erase-controls');
+  const moreToolsPanel = doc.getElementById('more-tools-panel');
+  const showMoreTools =
+    moreToolsPanel?.dataset.open === 'true' ||
+    (editorState.paletteMode === 'tiles' &&
+      (editorState.activeTool === 'rect' || editorState.activeTool === 'fill'));
   const showEraseControls =
     editorState.paletteMode === 'tiles' && editorState.activeTool === 'eraser';
   eraseControls?.classList.toggle('hidden', !showEraseControls);
+  moreToolsPanel?.classList.toggle('hidden', !showMoreTools);
+  if (moreToolsPanel) {
+    moreToolsPanel.dataset.open = showMoreTools ? 'true' : 'false';
+  }
+  syncToolButtonState(doc);
 }

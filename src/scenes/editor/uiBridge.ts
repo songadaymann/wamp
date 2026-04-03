@@ -1,3 +1,5 @@
+import type { RoomPatternInstrumentId, RoomPatternPitchMode } from '../../music/model';
+
 export interface EditorGoalUiViewModel {
   goalTypeValue: string;
   goalTypeDisabled: boolean;
@@ -59,6 +61,60 @@ export interface EditorCourseUiViewModel {
   canEditNextRoom: boolean;
 }
 
+export interface EditorInspectorState {
+  visible: boolean;
+  pressureVisible: boolean;
+  pressureStatusText: string;
+  pressureConnectHidden: boolean;
+  pressureConnectDisabled: boolean;
+  pressureConnectTitle: string;
+  pressureClearHidden: boolean;
+  pressureClearDisabled: boolean;
+  pressureDoneLaterHidden: boolean;
+  containerVisible: boolean;
+  containerStatusText: string;
+  containerClearDisabled: boolean;
+  containerClearTitle: string;
+}
+
+export interface EditorMusicInstrumentTabUiViewModel {
+  instrumentId: RoomPatternInstrumentId;
+  label: string;
+  active: boolean;
+  disabled: boolean;
+}
+
+export interface EditorMusicPitchModeUiViewModel {
+  mode: RoomPatternPitchMode;
+  label: string;
+  active: boolean;
+  disabled: boolean;
+}
+
+export interface EditorMusicUiViewModel {
+  sectionHidden: boolean;
+  modeButtonText: string;
+  modeButtonActive: boolean;
+  summaryText: string;
+  overlayVisible: boolean;
+  packLabel: string;
+  modeStatusText: string;
+  previewButtonText: string;
+  playDisabled: boolean;
+  stopDisabled: boolean;
+  gridSummaryText: string;
+  toolHintText: string;
+  legacyNoticeVisible: boolean;
+  legacyNoticeText: string;
+  replaceLegacyDisabled: boolean;
+  instrumentTabs: EditorMusicInstrumentTabUiViewModel[];
+  pitchModes: EditorMusicPitchModeUiViewModel[];
+  octaveControlsVisible: boolean;
+  octaveText: string;
+  octaveDownDisabled: boolean;
+  octaveUpDisabled: boolean;
+}
+
 export interface EditorUiViewModel {
   roomTitleValue: string;
   roomCoordinatesText: string;
@@ -66,12 +122,14 @@ export interface EditorUiViewModel {
   saveStatusAccentText: string;
   saveStatusLinkText: string;
   saveStatusLinkHref: string | null;
+  saveButtonTitle: string;
+  publishButtonTitle: string;
   publishNudgeVisible: boolean;
   publishNudgeText: string;
   publishNudgeActionText: string;
   zoomText: string;
-  backToWorldHidden: boolean;
-  backToCourseBuilderHidden: boolean;
+  backButtonHidden: boolean;
+  backButtonText: string;
   playHidden: boolean;
   saveHidden: boolean;
   saveDisabled: boolean;
@@ -86,6 +144,7 @@ export interface EditorUiViewModel {
   historyHidden: boolean;
   historyDisabled: boolean;
   fitHidden: boolean;
+  music: EditorMusicUiViewModel;
   goal: EditorGoalUiViewModel;
   course: EditorCourseUiViewModel;
 }
@@ -99,8 +158,7 @@ export class EditorUiBridge {
   private readonly publishNudgeTextEl: HTMLElement | null;
   private readonly publishNudgeActionBtn: HTMLButtonElement | null;
   private readonly zoomEls: HTMLElement[];
-  private readonly backToWorldBtn: HTMLButtonElement | null;
-  private readonly backToCourseBuilderBtn: HTMLButtonElement | null;
+  private readonly backBtn: HTMLButtonElement | null;
   private readonly playBtn: HTMLButtonElement | null;
   private readonly saveBtn: HTMLButtonElement | null;
   private readonly publishBtn: HTMLButtonElement | null;
@@ -108,6 +166,25 @@ export class EditorUiBridge {
   private readonly refreshMetadataBtn: HTMLButtonElement | null;
   private readonly historyBtn: HTMLButtonElement | null;
   private readonly fitBtns: HTMLButtonElement[];
+  private readonly musicSection: HTMLElement | null;
+  private readonly musicModeBtn: HTMLButtonElement | null;
+  private readonly musicSummary: HTMLElement | null;
+  private readonly musicOverlay: HTMLElement | null;
+  private readonly musicPackLabel: HTMLElement | null;
+  private readonly musicModeStatus: HTMLElement | null;
+  private readonly musicPreviewBtn: HTMLButtonElement | null;
+  private readonly musicStopBtn: HTMLButtonElement | null;
+  private readonly musicGridSummary: HTMLElement | null;
+  private readonly musicToolHint: HTMLElement | null;
+  private readonly musicInstrumentTabs: HTMLElement | null;
+  private readonly musicPitchModes: HTMLElement | null;
+  private readonly musicOctaveControls: HTMLElement | null;
+  private readonly musicOctaveLabel: HTMLElement | null;
+  private readonly musicOctaveDownBtn: HTMLButtonElement | null;
+  private readonly musicOctaveUpBtn: HTMLButtonElement | null;
+  private readonly musicLegacyNotice: HTMLElement | null;
+  private readonly musicLegacyText: HTMLElement | null;
+  private readonly musicReplaceLegacyBtn: HTMLButtonElement | null;
   private readonly goalTypeSelect: HTMLSelectElement | null;
   private readonly goalContextNote: HTMLElement | null;
   private readonly timeLimitRow: HTMLElement | null;
@@ -142,6 +219,15 @@ export class EditorUiBridge {
   private readonly coursePlaceFinishBtn: HTMLButtonElement | null;
   private readonly coursePreviousRoomBtn: HTMLButtonElement | null;
   private readonly courseNextRoomBtn: HTMLButtonElement | null;
+  private readonly inspectorRoot: HTMLElement | null;
+  private readonly pressurePanel: HTMLElement | null;
+  private readonly pressureStatus: HTMLElement | null;
+  private readonly pressureConnectBtn: HTMLButtonElement | null;
+  private readonly pressureClearBtn: HTMLButtonElement | null;
+  private readonly pressureDoneLaterBtn: HTMLButtonElement | null;
+  private readonly containerPanel: HTMLElement | null;
+  private readonly containerStatus: HTMLElement | null;
+  private readonly containerClearBtn: HTMLButtonElement | null;
   private readonly backgroundButtons: HTMLButtonElement[];
   private destroyed = false;
 
@@ -153,6 +239,7 @@ export class EditorUiBridge {
     ].filter((element): element is HTMLElement => Boolean(element));
     this.separatorEl = this.doc.querySelector('#bottom-bar .separator');
     this.saveStatusEls = [
+      this.doc.getElementById('editor-top-save-status'),
       this.doc.getElementById('room-save-status'),
       this.doc.getElementById('mobile-editor-save-status'),
     ].filter((element): element is HTMLElement => Boolean(element));
@@ -163,8 +250,7 @@ export class EditorUiBridge {
       this.doc.getElementById('zoom-level'),
       this.doc.getElementById('mobile-editor-zoom-level'),
     ].filter((element): element is HTMLElement => Boolean(element));
-    this.backToWorldBtn = this.doc.getElementById('btn-back-to-world') as HTMLButtonElement | null;
-    this.backToCourseBuilderBtn = this.doc.getElementById('btn-back-to-course-builder') as HTMLButtonElement | null;
+    this.backBtn = this.doc.getElementById('btn-editor-back') as HTMLButtonElement | null;
     this.playBtn = this.doc.getElementById('btn-test-play') as HTMLButtonElement | null;
     this.saveBtn = this.doc.getElementById('btn-save-draft') as HTMLButtonElement | null;
     this.publishBtn = this.doc.getElementById('btn-publish-room') as HTMLButtonElement | null;
@@ -175,6 +261,25 @@ export class EditorUiBridge {
       this.doc.getElementById('btn-fit-screen') as HTMLButtonElement | null,
       this.doc.getElementById('btn-mobile-editor-fit') as HTMLButtonElement | null,
     ].filter((element): element is HTMLButtonElement => Boolean(element));
+    this.musicSection = this.doc.getElementById('music-section');
+    this.musicModeBtn = this.doc.getElementById('btn-editor-music-mode') as HTMLButtonElement | null;
+    this.musicSummary = this.doc.getElementById('music-summary');
+    this.musicOverlay = this.doc.getElementById('editor-music-overlay');
+    this.musicPackLabel = this.doc.getElementById('editor-music-pack-label');
+    this.musicModeStatus = this.doc.getElementById('editor-music-mode-status');
+    this.musicPreviewBtn = this.doc.getElementById('btn-editor-music-preview-toggle') as HTMLButtonElement | null;
+    this.musicStopBtn = this.doc.getElementById('btn-editor-music-preview-stop') as HTMLButtonElement | null;
+    this.musicGridSummary = this.doc.getElementById('editor-music-grid-summary');
+    this.musicToolHint = this.doc.getElementById('editor-music-tool-hint');
+    this.musicInstrumentTabs = this.doc.getElementById('editor-music-instrument-tabs');
+    this.musicPitchModes = this.doc.getElementById('editor-music-pitch-modes');
+    this.musicOctaveControls = this.doc.getElementById('editor-music-octave-controls');
+    this.musicOctaveLabel = this.doc.getElementById('editor-music-octave-label');
+    this.musicOctaveDownBtn = this.doc.getElementById('btn-editor-music-octave-down') as HTMLButtonElement | null;
+    this.musicOctaveUpBtn = this.doc.getElementById('btn-editor-music-octave-up') as HTMLButtonElement | null;
+    this.musicLegacyNotice = this.doc.getElementById('editor-music-legacy-notice');
+    this.musicLegacyText = this.doc.getElementById('editor-music-legacy-text');
+    this.musicReplaceLegacyBtn = this.doc.getElementById('btn-editor-music-replace-legacy') as HTMLButtonElement | null;
     this.goalTypeSelect = this.doc.getElementById('goal-type-select') as HTMLSelectElement | null;
     this.goalContextNote = this.doc.getElementById('goal-context-note');
     this.timeLimitRow = this.doc.getElementById('goal-time-limit-row');
@@ -209,6 +314,15 @@ export class EditorUiBridge {
     this.coursePlaceFinishBtn = this.doc.getElementById('btn-course-editor-place-finish') as HTMLButtonElement | null;
     this.coursePreviousRoomBtn = this.doc.getElementById('btn-course-editor-previous-room') as HTMLButtonElement | null;
     this.courseNextRoomBtn = this.doc.getElementById('btn-course-editor-next-room') as HTMLButtonElement | null;
+    this.inspectorRoot = this.doc.getElementById('editor-inspector');
+    this.pressurePanel = this.doc.getElementById('pressure-plate-panel');
+    this.pressureStatus = this.doc.getElementById('pressure-plate-status');
+    this.pressureConnectBtn = this.doc.getElementById('btn-pressure-plate-connect') as HTMLButtonElement | null;
+    this.pressureClearBtn = this.doc.getElementById('btn-pressure-plate-clear') as HTMLButtonElement | null;
+    this.pressureDoneLaterBtn = this.doc.getElementById('btn-pressure-plate-done-later') as HTMLButtonElement | null;
+    this.containerPanel = this.doc.getElementById('container-contents-panel');
+    this.containerStatus = this.doc.getElementById('container-contents-status');
+    this.containerClearBtn = this.doc.getElementById('btn-container-clear') as HTMLButtonElement | null;
     this.backgroundButtons = Array.from(
       this.doc.querySelectorAll<HTMLButtonElement>('[data-background-id]')
     );
@@ -230,13 +344,15 @@ export class EditorUiBridge {
     this.setText(this.zoomEls, viewModel.zoomText);
     this.syncBackgroundSelection();
 
-    this.setHidden(this.backToWorldBtn, viewModel.backToWorldHidden);
-    this.setHidden(this.backToCourseBuilderBtn, viewModel.backToCourseBuilderHidden);
+    this.setHidden(this.backBtn, viewModel.backButtonHidden);
+    this.setButtonText(this.backBtn, viewModel.backButtonText);
     this.setHidden(this.playBtn, viewModel.playHidden);
     this.setHidden(this.saveBtn, viewModel.saveHidden);
     this.setDisabled(this.saveBtn, viewModel.saveDisabled);
+    this.setTitle(this.saveBtn, viewModel.saveButtonTitle);
     this.setHidden(this.publishBtn, viewModel.publishHidden);
     this.setDisabled(this.publishBtn, viewModel.publishDisabled);
+    this.setTitle(this.publishBtn, viewModel.publishButtonTitle);
     this.setHidden(this.mintBtn, viewModel.mintHidden);
     this.setDisabled(this.mintBtn, viewModel.mintDisabled);
     this.setButtonText(this.mintBtn, viewModel.mintButtonText);
@@ -246,6 +362,7 @@ export class EditorUiBridge {
     this.setHidden(this.historyBtn, viewModel.historyHidden);
     this.setDisabled(this.historyBtn, viewModel.historyDisabled);
     this.setHidden(this.fitBtns, viewModel.fitHidden);
+    this.renderMusic(viewModel.music);
 
     this.setValue(this.goalTypeSelect, viewModel.goal.goalTypeValue);
     this.setDisabled(this.goalTypeSelect, viewModel.goal.goalTypeDisabled);
@@ -304,6 +421,86 @@ export class EditorUiBridge {
     this.setActive(this.coursePlaceFinishBtn, viewModel.course.placeFinishActive);
     this.setDisabled(this.coursePreviousRoomBtn, !viewModel.course.canEditPreviousRoom);
     this.setDisabled(this.courseNextRoomBtn, !viewModel.course.canEditNextRoom);
+  }
+
+  renderInspector(state: EditorInspectorState): void {
+    if (this.destroyed) {
+      return;
+    }
+
+    this.setHidden(this.inspectorRoot, !state.visible);
+    this.setHidden(this.pressurePanel, !state.pressureVisible);
+    this.setText(this.pressureStatus, state.pressureStatusText);
+    this.setHidden(this.pressureConnectBtn, state.pressureConnectHidden);
+    this.setDisabled(this.pressureConnectBtn, state.pressureConnectDisabled);
+    if (this.pressureConnectBtn) {
+      this.pressureConnectBtn.title = state.pressureConnectTitle;
+    }
+    this.setHidden(this.pressureClearBtn, state.pressureClearHidden);
+    this.setDisabled(this.pressureClearBtn, state.pressureClearDisabled);
+    this.setHidden(this.pressureDoneLaterBtn, state.pressureDoneLaterHidden);
+    this.setHidden(this.containerPanel, !state.containerVisible);
+    this.setText(this.containerStatus, state.containerStatusText);
+    this.setDisabled(this.containerClearBtn, state.containerClearDisabled);
+    if (this.containerClearBtn) {
+      this.containerClearBtn.title = state.containerClearTitle;
+    }
+  }
+
+  private renderMusic(viewModel: EditorMusicUiViewModel): void {
+    this.setHidden(this.musicSection, viewModel.sectionHidden);
+    this.setButtonText(this.musicModeBtn, viewModel.modeButtonText);
+    this.setActive(this.musicModeBtn, viewModel.modeButtonActive);
+    this.setText(this.musicSummary, viewModel.summaryText);
+    this.setHidden(this.musicOverlay, !viewModel.overlayVisible);
+    this.setText(this.musicPackLabel, viewModel.packLabel);
+    this.setText(this.musicModeStatus, viewModel.modeStatusText);
+    this.setButtonText(this.musicPreviewBtn, viewModel.previewButtonText);
+    this.setDisabled(this.musicPreviewBtn, viewModel.playDisabled);
+    this.setDisabled(this.musicStopBtn, viewModel.stopDisabled);
+    this.setText(this.musicGridSummary, viewModel.gridSummaryText);
+    this.setText(this.musicToolHint, viewModel.toolHintText);
+    this.doc.body.dataset.editorMusicMode = viewModel.overlayVisible ? 'true' : 'false';
+    this.doc.body.dataset.editorMusicUiLocked = viewModel.overlayVisible ? 'true' : 'false';
+    this.doc.body.dataset.editorMusicTab = 'advanced';
+
+    this.setHidden(this.musicLegacyNotice, !viewModel.legacyNoticeVisible);
+    this.setText(this.musicLegacyText, viewModel.legacyNoticeText);
+    this.setDisabled(this.musicReplaceLegacyBtn, viewModel.replaceLegacyDisabled);
+    this.setHidden(this.musicOctaveControls, !viewModel.octaveControlsVisible);
+    this.setText(this.musicOctaveLabel, viewModel.octaveText);
+    this.setDisabled(this.musicOctaveDownBtn, viewModel.octaveDownDisabled);
+    this.setDisabled(this.musicOctaveUpBtn, viewModel.octaveUpDisabled);
+
+    if (this.musicInstrumentTabs) {
+      this.musicInstrumentTabs.replaceChildren(
+        ...viewModel.instrumentTabs.map((tab) => {
+          const button = this.doc.createElement('button');
+          button.type = 'button';
+          button.className = 'bar-btn bar-btn-small editor-music-tab-button';
+          button.textContent = tab.label;
+          button.disabled = tab.disabled;
+          button.classList.toggle('active', tab.active);
+          button.dataset.roomMusicInstrumentTab = tab.instrumentId;
+          return button;
+        }),
+      );
+    }
+
+    if (this.musicPitchModes) {
+      this.musicPitchModes.replaceChildren(
+        ...viewModel.pitchModes.map((mode) => {
+          const button = this.doc.createElement('button');
+          button.type = 'button';
+          button.className = 'bar-btn bar-btn-small editor-music-chip-button';
+          button.textContent = mode.label;
+          button.disabled = mode.disabled;
+          button.classList.toggle('active', mode.active);
+          button.dataset.roomMusicPitchMode = mode.mode;
+          return button;
+        }),
+      );
+    }
   }
 
   destroy(): void {
@@ -410,8 +607,30 @@ export class EditorUiBridge {
   }
 
   private setButtonText(element: HTMLButtonElement | null, text: string): void {
-    if (element && element.textContent !== text) {
+    if (!element) {
+      return;
+    }
+
+    const labelTarget = element.querySelector<HTMLElement>('[data-button-label]');
+    if (labelTarget) {
+      if (labelTarget.textContent !== text) {
+        labelTarget.textContent = text;
+      }
+      return;
+    }
+
+    if (element.textContent !== text) {
       element.textContent = text;
+    }
+  }
+
+  private setTitle(element: HTMLElement | null, title: string): void {
+    if (!element) {
+      return;
+    }
+
+    if (element.title !== title) {
+      element.title = title;
     }
   }
 }

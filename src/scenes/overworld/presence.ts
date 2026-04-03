@@ -40,6 +40,15 @@ export interface PlayRoomPresenceMarkerDescriptor {
   population: number;
 }
 
+export interface OnlineRosterEntry {
+  key: string;
+  userId: string | null;
+  displayName: string;
+  roomId: string;
+  roomCoordinates: RoomCoordinates;
+  isSelf: boolean;
+}
+
 interface LocalPresenceInput {
   mode: OverworldMode;
   roomCoordinates: RoomCoordinates;
@@ -121,6 +130,53 @@ export class OverworldPresenceController {
         this.options.onSnapshotUpdated?.();
       },
     });
+  }
+
+  refreshIdentity(): boolean {
+    const config = resolveWorldPresenceConfig();
+    const nextIdentity = config ? resolveWorldPresenceIdentity() : null;
+    const currentIdentity = this.identity;
+    const existingBounds = this.subscribedChunkBounds ? { ...this.subscribedChunkBounds } : null;
+
+    if (!config) {
+      if (!this.client && !currentIdentity) {
+        return false;
+      }
+
+      this.destroy();
+      this.snapshot = {
+        enabled: false,
+        status: 'disabled',
+        subscribedShards: [],
+        connectedShards: [],
+        publishedShard: null,
+        ghosts: [],
+        roomPopulations: {},
+        roomEditors: {},
+      };
+      this.roomPopulationsById = new Map();
+      this.roomEditorsById = new Map();
+      this.options.onSnapshotUpdated?.();
+      this.options.onRoomActivityChanged?.();
+      return true;
+    }
+
+    if (
+      currentIdentity &&
+      nextIdentity &&
+      currentIdentity.userId === nextIdentity.userId &&
+      currentIdentity.displayName === nextIdentity.displayName &&
+      currentIdentity.avatarId === nextIdentity.avatarId
+    ) {
+      return false;
+    }
+
+    this.destroy();
+    this.initialize();
+    if (existingBounds) {
+      this.setSubscribedChunkBounds(existingBounds);
+    }
+    return true;
   }
 
   reset(): void {
@@ -268,6 +324,30 @@ export class OverworldPresenceController {
     return this.roomEditorsById.get(roomIdFromCoordinates(coordinates)) ?? 0;
   }
 
+  getRoomEditorDisplayNames(coordinates: RoomCoordinates): string[] {
+    if (!this.snapshot?.enabled) {
+      return [];
+    }
+
+    const roomId = roomIdFromCoordinates(coordinates);
+    const names = new Set<string>();
+
+    for (const ghost of this.snapshot.ghosts ?? []) {
+      if (
+        ghost.mode !== 'edit' ||
+        ghost.roomId !== roomId ||
+        !this.isPresenceFresh(ghost.timestamp) ||
+        !ghost.displayName.trim()
+      ) {
+        continue;
+      }
+
+      names.add(ghost.displayName.trim());
+    }
+
+    return [...names].sort((left, right) => left.localeCompare(right));
+  }
+
   getTotalPlayerCount(): number | null {
     if (!this.snapshot?.enabled) {
       return null;
@@ -279,6 +359,50 @@ export class OverworldPresenceController {
     }
 
     return total;
+  }
+
+  getOnlineRoster(): OnlineRosterEntry[] {
+    if (!this.snapshot?.enabled) {
+      return [];
+    }
+
+    const entries: OnlineRosterEntry[] = (this.snapshot.ghosts ?? [])
+      .filter((ghost) => ghost.mode === 'play' && this.isPresenceFresh(ghost.timestamp))
+      .sort((left, right) => {
+        if (left.timestamp !== right.timestamp) {
+          return right.timestamp - left.timestamp;
+        }
+
+        return left.displayName.localeCompare(right.displayName);
+      })
+      .map((ghost) => ({
+        key: ghost.connectionId,
+        userId: ghost.userId,
+        displayName: ghost.displayName,
+        roomId: ghost.roomId,
+        roomCoordinates: { ...ghost.roomCoordinates },
+        isSelf: false,
+      }));
+
+    const totalPlayerCount = this.getTotalPlayerCount();
+    if (
+      totalPlayerCount !== null &&
+      totalPlayerCount > entries.length &&
+      this.options.getMode() === 'play' &&
+      this.identity
+    ) {
+      const roomCoordinates = this.options.getCurrentRoomCoordinates();
+      entries.unshift({
+        key: `self:${this.identity.userId}`,
+        userId: this.identity.userId,
+        displayName: this.identity.displayName,
+        roomId: roomIdFromCoordinates(roomCoordinates),
+        roomCoordinates: { ...roomCoordinates },
+        isSelf: true,
+      });
+    }
+
+    return entries;
   }
 
   getPresenceSummaryText(input: PresenceSummaryInput): string | null {

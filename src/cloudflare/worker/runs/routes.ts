@@ -25,7 +25,7 @@ import {
   parseOptionalPositiveIntegerQueryParam,
   parsePositiveIntegerQueryParam,
 } from '../core/http';
-import type { Env, RoomRunRow, UserStatsRow } from '../core/types';
+import type { Env, RoomRunRow } from '../core/types';
 import { requireAuthenticatedRequestAuth, loadOptionalRequestAuth, requireOptionalScope } from '../auth/request';
 import { loadRoomRecord } from '../rooms/store';
 import {
@@ -37,12 +37,14 @@ import {
 import {
   awardRoomCreatorCompletionPoints,
   awardRunFinalizePoints,
+  calculateRunFinalizeAward,
   clampRunMetricsToSnapshot,
+  getRunMetricCapsForSnapshot,
+  hasCompletedRoomRunForUser,
   loadBestCompletedRunForUserAndRoomVersion,
-  mapUserStatsRow,
-  compareGlobalLeaderboardEntries,
   upsertUserStats,
 } from './points';
+import { assertRunSubmissionAllowed, evaluateCompletedRoomRunHold } from './guard';
 import {
   buildRoomDifficultySummary,
   hasViewerRatedRoomVersion,
@@ -58,6 +60,7 @@ export async function handleRunStart(request: Request, env: Env): Promise<Respon
     'submit leaderboard runs',
     'runs:write'
   );
+  await assertRunSubmissionAllowed(env, auth.user.id);
   const body = await parseRunStartBody(request);
   const record = await loadRoomRecord(env, body.roomId, body.roomCoordinates, auth.user.id);
   const snapshot = resolveRoomSnapshotForVersion(record, body.roomVersion);
@@ -76,7 +79,7 @@ export async function handleRunStart(request: Request, env: Env): Promise<Respon
   }
 
   const attemptId = crypto.randomUUID();
-  const startedAt = normalizeIsoTimestamp(body.startedAt) ?? new Date().toISOString();
+  const startedAt = new Date().toISOString();
 
   await env.DB.batch([
     env.DB.prepare(
@@ -146,6 +149,9 @@ export async function handleRunFinish(
     'runs:write'
   );
   const body = await parseRunFinishBody(request);
+  if (body.result === 'completed') {
+    await assertRunSubmissionAllowed(env, auth.user.id);
+  }
   const existing = await loadRoomRunByAttemptId(env, attemptId);
 
   if (!existing) {
@@ -172,20 +178,25 @@ export async function handleRunFinish(
     throw new HttpError(409, 'This room version no longer has a leaderboard goal.');
   }
 
+  const metricCaps = getRunMetricCapsForSnapshot(snapshot);
   const clampedMetrics = clampRunMetricsToSnapshot(snapshot, {
     collectiblesCollected: body.collectiblesCollected,
     enemiesDefeated: body.enemiesDefeated,
     checkpointsReached: body.checkpointsReached,
   });
-  const finishedAt = normalizeIsoTimestamp(body.finishedAt) ?? new Date().toISOString();
+  const finishedAt = new Date().toISOString();
+  const reportedElapsedMs = body.elapsedMs;
   const clampedBody: RunFinishRequestBody = {
-    ...body,
-    collectiblesCollected: clampedMetrics.collectiblesCollected,
-    enemiesDefeated: clampedMetrics.enemiesDefeated,
-    checkpointsReached: clampedMetrics.checkpointsReached,
+    ...normalizeFinalizedRunBody(snapshot.goal, {
+      ...body,
+      elapsedMs: computeEffectiveElapsedMs(existing.startedAt, finishedAt, reportedElapsedMs),
+      collectiblesCollected: clampedMetrics.collectiblesCollected,
+      enemiesDefeated: clampedMetrics.enemiesDefeated,
+      checkpointsReached: clampedMetrics.checkpointsReached,
+    }, metricCaps, reportedElapsedMs),
     finishedAt,
   };
-  const score = computeRunScore(snapshot.goal, clampedBody);
+  const score = clampedBody.result === 'completed' ? computeRunScore(snapshot.goal, clampedBody) : 0;
 
   await env.DB.batch([
     env.DB.prepare(
@@ -199,14 +210,17 @@ export async function handleRunFinish(
           score = ?,
           collectibles_collected = ?,
           enemies_defeated = ?,
-          checkpoints_reached = ?
+          checkpoints_reached = ?,
+          is_held = 0,
+          held_at = NULL,
+          hold_reason = NULL
         WHERE attempt_id = ?
       `
     ).bind(
       finishedAt,
-      body.result,
-      body.elapsedMs,
-      body.deaths,
+      clampedBody.result,
+      clampedBody.elapsedMs,
+      clampedBody.deaths,
       score,
       clampedBody.collectiblesCollected,
       clampedBody.enemiesDefeated,
@@ -220,21 +234,57 @@ export async function handleRunFinish(
     throw new HttpError(500, 'Failed to reload finalized run.');
   }
 
-  const previousBest = await loadBestCompletedRunForUserAndRoomVersion(
-    env,
-    auth.user.id,
-    finalizedRun.roomId,
-    finalizedRun.roomVersion,
-    snapshot.goal,
-    finalizedRun.attemptId
-  );
-  const isNewPersonalBest =
-    finalizedRun.result === 'completed' &&
-    (previousBest === null ||
+  let isFirstCompletion = false;
+  let isNewPersonalBest = false;
+  if (finalizedRun.result === 'completed') {
+    isFirstCompletion = !(await hasCompletedRoomRunForUser(
+      env,
+      auth.user.id,
+      finalizedRun.roomId,
+      finalizedRun.attemptId
+    ));
+    const previousBest = await loadBestCompletedRunForUserAndRoomVersion(
+      env,
+      auth.user.id,
+      finalizedRun.roomId,
+      finalizedRun.roomVersion,
+      snapshot.goal,
+      finalizedRun.attemptId
+    );
+    isNewPersonalBest =
+      previousBest === null ||
       sortCompletedRunsForLeaderboard([finalizedRun, previousBest], snapshot.goal)[0]?.attemptId ===
-        finalizedRun.attemptId);
+        finalizedRun.attemptId;
+  }
 
-  const pointEvent = await awardRunFinalizePoints(env, finalizedRun, isNewPersonalBest);
+  const award = calculateRunFinalizeAward(finalizedRun, {
+    isFirstCompletion,
+    isNewPersonalBest,
+  });
+  if (finalizedRun.result === 'completed') {
+    const holdDecision = await evaluateCompletedRoomRunHold(env, {
+      userId: auth.user.id,
+      roomId: finalizedRun.roomId,
+      elapsedMs: finalizedRun.elapsedMs ?? 0,
+      finishedAt: finalizedRun.finishedAt ?? finishedAt,
+      projectedPoints: award.points,
+    });
+    if (holdDecision.shouldHold) {
+      await holdRoomRun(
+        env,
+        finalizedRun.attemptId,
+        finalizedRun.finishedAt ?? finishedAt,
+        holdDecision.reasonJson
+      );
+      await upsertUserStats(env, auth.user.id);
+      return noContentResponse(request);
+    }
+  }
+
+  const pointEvent = await awardRunFinalizePoints(env, finalizedRun, {
+    isFirstCompletion,
+    isNewPersonalBest,
+  });
   await maybeMirrorRunPointEventToPlayfun(env, request, auth.user.id, pointEvent);
   const creatorPointEvent =
     finalizedRun.result === 'completed'
@@ -575,6 +625,7 @@ export async function loadCompletedRoomRuns(
       WHERE room_id = ?
         AND room_version = ?
         AND result = 'completed'
+        AND is_held = 0
     `
   )
     .bind(roomId, roomVersion)
@@ -620,6 +671,75 @@ export function parseStoredGoal(raw: string, label: string): RoomGoal {
   }
 }
 
+function computeEffectiveElapsedMs(
+  startedAt: string,
+  finishedAt: string,
+  reportedElapsedMs: number
+): number {
+  const observedStart = Date.parse(startedAt);
+  const observedFinish = Date.parse(finishedAt);
+  const observedElapsedMs =
+    Number.isFinite(observedStart) && Number.isFinite(observedFinish)
+      ? Math.max(0, observedFinish - observedStart)
+      : 0;
+  return Math.max(Math.round(reportedElapsedMs), observedElapsedMs);
+}
+
+function normalizeFinalizedRunBody(
+  goal: RoomGoal,
+  body: RunFinishRequestBody,
+  metricCaps: {
+    maxCollectibles: number;
+    maxEnemies: number;
+    maxCheckpoints: number;
+  },
+  reportedElapsedMs: number
+): RunFinishRequestBody {
+  if (body.result !== 'completed') {
+    return {
+      ...body,
+      collectiblesCollected: 0,
+      enemiesDefeated: 0,
+      checkpointsReached: 0,
+    };
+  }
+
+  if (
+    'timeLimitMs' in goal &&
+    goal.timeLimitMs !== null &&
+    reportedElapsedMs > goal.timeLimitMs
+  ) {
+    throw new HttpError(409, 'Completed runs must finish within the published time limit.');
+  }
+
+  switch (goal.type) {
+    case 'collect_target':
+      if (body.collectiblesCollected < goal.requiredCount) {
+        throw new HttpError(409, 'Completed collect-target runs must meet the published goal.');
+      }
+      break;
+    case 'defeat_all':
+      if (body.enemiesDefeated < metricCaps.maxEnemies) {
+        throw new HttpError(409, 'Completed defeat-all runs must clear every published enemy.');
+      }
+      break;
+    case 'checkpoint_sprint':
+      if (body.checkpointsReached < metricCaps.maxCheckpoints) {
+        throw new HttpError(409, 'Completed checkpoint-sprint runs must hit every checkpoint.');
+      }
+      break;
+    case 'survival':
+      if (body.elapsedMs < goal.durationMs) {
+        throw new HttpError(409, 'Completed survival runs must last the full published duration.');
+      }
+      break;
+    case 'reach_exit':
+      break;
+  }
+
+  return body;
+}
+
 export async function buildRoomLeaderboardResponse(
   env: Env,
   snapshot: RoomSnapshot,
@@ -632,7 +752,7 @@ export async function buildRoomLeaderboardResponse(
   }
 
   const runs = await loadCompletedRoomRuns(env, snapshot.id, snapshot.version);
-  const sortedAll = sortCompletedRunsForLeaderboard(runs, snapshot.goal);
+  const sortedAll = selectBestCompletedRunPerUser(runs, snapshot.goal);
   const viewerBestRun =
     viewerUserId === null
       ? null
@@ -691,6 +811,32 @@ export async function buildRoomLeaderboardResponse(
   };
 }
 
+function selectBestCompletedRunPerUser(runs: RoomRunRecord[], goal: RoomGoal): RoomRunRecord[] {
+  const sorted = sortCompletedRunsForLeaderboard(runs, goal);
+  const unique = new Map<string, RoomRunRecord>();
+  for (const run of sorted) {
+    if (!unique.has(run.userId)) {
+      unique.set(run.userId, run);
+    }
+  }
+  return [...unique.values()];
+}
+
+interface GlobalLeaderboardQueryRow {
+  rank: number | string | null;
+  user_id: string;
+  user_display_name: string;
+  total_points: number;
+  total_score: number;
+  total_rooms_published: number;
+  completed_runs: number;
+  failed_runs: number;
+  abandoned_runs: number;
+  best_score: number;
+  fastest_clear_ms: number | null;
+  updated_at: string;
+}
+
 export async function buildGlobalLeaderboardResponse(
   env: Env,
   limit: number,
@@ -698,15 +844,34 @@ export async function buildGlobalLeaderboardResponse(
 ): Promise<GlobalLeaderboardResponse> {
   const result = await env.DB.prepare(
     `
+      WITH ranked_stats AS (
+        SELECT
+          ROW_NUMBER() OVER (
+            ORDER BY
+              total_points DESC,
+              completed_runs DESC,
+              total_rooms_published DESC,
+              user_display_name ASC
+          ) AS rank,
+          user_id,
+          user_display_name,
+          total_points,
+          total_score,
+          total_rooms_published,
+          completed_runs,
+          failed_runs,
+          abandoned_runs,
+          best_score,
+          fastest_clear_ms,
+          updated_at
+        FROM user_stats
+      )
       SELECT
+        rank,
         user_id,
         user_display_name,
         total_points,
         total_score,
-        total_deaths,
-        total_collectibles,
-        total_enemies_defeated,
-        total_checkpoints,
         total_rooms_published,
         completed_runs,
         failed_runs,
@@ -714,35 +879,67 @@ export async function buildGlobalLeaderboardResponse(
         best_score,
         fastest_clear_ms,
         updated_at
-      FROM user_stats
+      FROM ranked_stats
+      WHERE rank <= ?
+        OR (? IS NOT NULL AND user_id = ?)
+      ORDER BY rank ASC
     `
-  ).all<UserStatsRow>();
+  )
+    .bind(limit, viewerUserId, viewerUserId)
+    .all<GlobalLeaderboardQueryRow>();
 
-  const entries = result.results
-    .map(mapUserStatsRow)
-    .sort(compareGlobalLeaderboardEntries)
-    .map<GlobalLeaderboardEntry>((entry, index) => ({
-      rank: index + 1,
-      userId: entry.userId,
-      userDisplayName: entry.userDisplayName,
-      totalPoints: entry.totalPoints,
-      totalScore: entry.totalScore,
-      totalRoomsPublished: entry.totalRoomsPublished,
-      completedRuns: entry.completedRuns,
-      failedRuns: entry.failedRuns,
-      abandonedRuns: entry.abandonedRuns,
-      bestScore: entry.bestScore,
-      fastestClearMs: entry.fastestClearMs,
-      updatedAt: entry.updatedAt,
-    }));
+  const entries: GlobalLeaderboardEntry[] = [];
+  let viewerEntry: GlobalLeaderboardEntry | null = null;
 
-  const viewerEntry =
-    viewerUserId === null
-      ? null
-      : entries.find((entry) => entry.userId === viewerUserId) ?? null;
+  for (const row of result.results) {
+    const entry = mapGlobalLeaderboardEntry(row);
+    if (entry.rank <= limit) {
+      entries.push(entry);
+    }
+    if (viewerUserId !== null && entry.userId === viewerUserId) {
+      viewerEntry = entry;
+    }
+  }
 
   return {
-    entries: entries.slice(0, limit),
+    entries,
     viewerEntry,
   };
+}
+
+function mapGlobalLeaderboardEntry(row: GlobalLeaderboardQueryRow): GlobalLeaderboardEntry {
+  return {
+    rank: Number(row.rank ?? 0),
+    userId: row.user_id,
+    userDisplayName: row.user_display_name,
+    totalPoints: row.total_points,
+    totalScore: row.total_score,
+    totalRoomsPublished: row.total_rooms_published,
+    completedRuns: row.completed_runs,
+    failedRuns: row.failed_runs,
+    abandonedRuns: row.abandoned_runs,
+    bestScore: row.best_score,
+    fastestClearMs: row.fastest_clear_ms,
+    updatedAt: row.updated_at,
+  };
+}
+
+async function holdRoomRun(
+  env: Env,
+  attemptId: string,
+  heldAt: string,
+  reasonJson: string | null
+): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(
+      `
+        UPDATE room_runs
+        SET
+          is_held = 1,
+          held_at = ?,
+          hold_reason = ?
+        WHERE attempt_id = ?
+      `
+    ).bind(heldAt, reasonJson, attemptId),
+  ]);
 }
