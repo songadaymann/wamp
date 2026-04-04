@@ -76,8 +76,8 @@ export const TERRAIN_COLLISION_PROFILES: Record<
   decoratedTop: {
     id: 'decoratedTop',
     hasCollision: true,
-    // Decorative caps like grass, snow trim, and lava lips should not collide as full tiles.
-    topInset: 4,
+    // Keep ordinary walkable tops at full height; decoration-only overlays should use the `none` profile instead.
+    topInset: 0,
   },
   none: {
     id: 'none',
