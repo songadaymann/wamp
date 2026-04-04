@@ -76,7 +76,8 @@ export const TERRAIN_COLLISION_PROFILES: Record<
   decoratedTop: {
     id: 'decoratedTop',
     hasCollision: true,
-    topInset: 0,
+    // Decorative caps like grass, snow trim, and lava lips should not collide as full tiles.
+    topInset: 4,
   },
   none: {
     id: 'none',
@@ -139,10 +140,10 @@ const DECO_ONLY_INDICES_FOREST = [
 ];
 const DECO_ONLY_INDICES_DIRT = [58, 59];
 const DECO_ONLY_INDICES_WATER = [1, 2, 3, 5, 13, 18];
-// Tight snow rollback: keep only the tiny decoration-only snow tiles non-colliding.
-const DECO_ONLY_INDICES_SNOW = [8, 9, 10];
-// Tight lava rollback: keep only the tiny decoration-only embers non-colliding.
-const DECO_ONLY_INDICES_LAVA = [8, 10];
+// Snow still has three bottom-anchored cap overlays above the main platform tops.
+const DECO_ONLY_INDICES_SNOW = [2, 3, 4, 8, 9, 10];
+// Lava has three matching bottom-anchored cap overlays that should not block the air above the ledge.
+const DECO_ONLY_INDICES_LAVA = [2, 4, 8, 10, 20];
 
 // firstGid assignments: 0 = empty, then sequential per tileset.
 // Keep existing ranges stable because persisted room tile data stores absolute gids.
