@@ -1,5 +1,6 @@
 import type {
   LaunchStatsActivityWindow,
+  LaunchStatsRecentEvent,
   LaunchStatsResponse,
   PartyKitShardHeartbeat,
 } from './admin/model';
@@ -20,6 +21,7 @@ const warnings = document.getElementById('warnings') as HTMLDivElement | null;
 const configChips = document.getElementById('config-chips') as HTMLDivElement | null;
 const totalsGrid = document.getElementById('totals-grid') as HTMLDivElement | null;
 const activityGrid = document.getElementById('activity-grid') as HTMLDivElement | null;
+const activityFeed = document.getElementById('activity-feed') as HTMLDivElement | null;
 const partykitSummary = document.getElementById('partykit-summary') as HTMLDivElement | null;
 const partykitShardsBody = document.getElementById('partykit-shards-body') as HTMLTableSectionElement | null;
 
@@ -309,6 +311,9 @@ function renderActivity(): void {
 
   if (!lastSnapshot) {
     activityGrid.innerHTML = '<div class="meta">No activity yet.</div>';
+    if (activityFeed) {
+      activityFeed.innerHTML = '<div class="meta">No recent events yet.</div>';
+    }
     return;
   }
 
@@ -335,6 +340,31 @@ function renderActivity(): void {
           <div class="meta">Course runs ${formatNumber(
             windowStats.courseRunStarts
           )} start / ${formatNumber(windowStats.courseRunFinishes)} finish</div>
+        </article>
+      `
+    )
+    .join('');
+
+  if (!activityFeed) {
+    return;
+  }
+
+  const events = lastSnapshot.recentEvents ?? [];
+  if (events.length === 0) {
+    activityFeed.innerHTML = '<div class="meta">No recent events yet.</div>';
+    return;
+  }
+
+  activityFeed.innerHTML = events
+    .map(
+      (event) => `
+        <article class="card activity-row">
+          <div class="activity-head">
+            <span class="label">${escapeHtml(renderEventKindLabel(event.kind))}</span>
+            <span class="meta">${escapeHtml(formatTimestamp(event.at))}</span>
+          </div>
+          <div>${escapeHtml(renderEventSummary(event))}</div>
+          <div class="meta">${escapeHtml(renderEventDetail(event))}</div>
         </article>
       `
     )
@@ -438,6 +468,62 @@ function summarizeShardAges(shards: PartyKitShardHeartbeat[]): {
 
 function buildChip(label: string, value: string, tone: 'good' | 'warn' | 'danger'): string {
   return `<span class="chip ${tone}">${escapeHtml(label)}: ${escapeHtml(value)}</span>`;
+}
+
+function renderEventKindLabel(kind: LaunchStatsRecentEvent['kind']): string {
+  switch (kind) {
+    case 'room_claim':
+      return 'Room Claim';
+    case 'room_publish':
+      return 'Room Publish';
+    case 'room_attempt_burst':
+      return 'Attempt Burst';
+    default:
+      return 'Event';
+  }
+}
+
+function renderEventSummary(event: LaunchStatsRecentEvent): string {
+  const actor = event.actorDisplayName || 'Unknown';
+  const roomLabel = formatRoomLabel(event);
+
+  switch (event.kind) {
+    case 'room_claim':
+      return `${actor} claimed ${roomLabel}.`;
+    case 'room_publish':
+      return `${actor} published ${roomLabel}${event.roomVersion ? ` v${event.roomVersion}` : ''}.`;
+    case 'room_attempt_burst': {
+      const attempts = event.attemptCount ?? 0;
+      const completions = event.completedCount ?? 0;
+      const completionSuffix =
+        completions > 0 ? `, including ${completions} completion${completions === 1 ? '' : 's'}` : '';
+      return `${actor} did ${attempts} attempt${attempts === 1 ? '' : 's'} in ${roomLabel}${completionSuffix}.`;
+    }
+    default:
+      return `${actor} did something in ${roomLabel}.`;
+  }
+}
+
+function renderEventDetail(event: LaunchStatsRecentEvent): string {
+  const parts: string[] = [];
+  if (event.roomId) {
+    parts.push(`room ${event.roomId}`);
+  }
+  if (event.roomX !== null && event.roomY !== null) {
+    parts.push(`${event.roomX},${event.roomY}`);
+  }
+  return parts.join(' · ') || 'No additional detail.';
+}
+
+function formatRoomLabel(event: LaunchStatsRecentEvent): string {
+  const title = event.roomTitle?.trim();
+  if (title) {
+    return `"${title}"`;
+  }
+  if (event.roomX !== null && event.roomY !== null) {
+    return `room ${event.roomX},${event.roomY}`;
+  }
+  return 'a room';
 }
 
 function formatTimestamp(value: string): string {

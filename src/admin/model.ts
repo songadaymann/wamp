@@ -53,6 +53,25 @@ export interface LaunchStatsActivity {
   last60m: LaunchStatsActivityWindow;
 }
 
+export type LaunchStatsRecentEventKind =
+  | 'room_claim'
+  | 'room_publish'
+  | 'room_attempt_burst';
+
+export interface LaunchStatsRecentEvent {
+  kind: LaunchStatsRecentEventKind;
+  at: string;
+  actorUserId: string | null;
+  actorDisplayName: string;
+  roomId: string | null;
+  roomTitle: string | null;
+  roomX: number | null;
+  roomY: number | null;
+  roomVersion: number | null;
+  attemptCount: number | null;
+  completedCount: number | null;
+}
+
 export interface LaunchStatsPartykitStatus {
   configured: boolean;
   reachable: boolean;
@@ -65,6 +84,7 @@ export interface LaunchStatsResponse {
   config: LaunchStatsConfig;
   totals: LaunchStatsTotals;
   activity: LaunchStatsActivity;
+  recentEvents: LaunchStatsRecentEvent[];
   partykit: LaunchStatsPartykitStatus;
 }
 

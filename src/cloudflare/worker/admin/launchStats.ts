@@ -1,5 +1,6 @@
 import type {
   LaunchStatsActivityWindow,
+  LaunchStatsRecentEvent,
   LaunchStatsPartykitStatus,
   LaunchStatsResponse,
   LaunchStatsTotals,
@@ -8,6 +9,9 @@ import type {
 import type { Env } from '../core/types';
 
 const METRICS_ROOM_ID = '__launch-stats__';
+const RECENT_EVENT_LIMIT = 24;
+const ATTEMPT_BURST_MIN_ATTEMPTS = 3;
+const ATTEMPT_BURST_WINDOW_HOURS = 6;
 
 export async function loadLaunchStats(env: Env): Promise<LaunchStatsResponse> {
   const now = new Date();
@@ -19,11 +23,12 @@ export async function loadLaunchStats(env: Env): Promise<LaunchStatsResponse> {
     partykitConfigured: isPartykitConfigured(env),
   };
 
-  const [totals, last5m, last15m, last60m, partykit] = await Promise.all([
+  const [totals, last5m, last15m, last60m, recentEvents, partykit] = await Promise.all([
     loadTotals(env, generatedAt),
     loadActivityWindow(env, minutesAgoIso(now, 5)),
     loadActivityWindow(env, minutesAgoIso(now, 15)),
     loadActivityWindow(env, minutesAgoIso(now, 60)),
+    loadRecentEvents(env, generatedAt),
     loadPartykitStatus(env),
   ]);
 
@@ -36,6 +41,7 @@ export async function loadLaunchStats(env: Env): Promise<LaunchStatsResponse> {
       last15m,
       last60m,
     },
+    recentEvents,
     partykit,
   };
 }
@@ -129,6 +135,184 @@ async function loadActivityWindow(
     courseRunStarts,
     courseRunFinishes,
   };
+}
+
+interface RoomClaimEventRow {
+  at: string;
+  actor_user_id: string | null;
+  actor_display_name: string | null;
+  room_id: string;
+  room_title: string | null;
+  room_x: number;
+  room_y: number;
+}
+
+interface RoomPublishEventRow {
+  at: string;
+  actor_user_id: string | null;
+  actor_display_name: string | null;
+  room_id: string;
+  room_title: string | null;
+  room_x: number;
+  room_y: number;
+  room_version: number;
+}
+
+interface RoomAttemptBurstRow {
+  at: string;
+  actor_user_id: string;
+  actor_display_name: string;
+  room_id: string;
+  room_title: string | null;
+  room_x: number;
+  room_y: number;
+  room_version: number;
+  attempt_count: number;
+  completed_count: number;
+}
+
+async function loadRecentEvents(env: Env, nowIso: string): Promise<LaunchStatsRecentEvent[]> {
+  const attemptSinceIso = new Date(
+    Date.parse(nowIso) - ATTEMPT_BURST_WINDOW_HOURS * 60 * 60 * 1000
+  ).toISOString();
+
+  const [claims, publishes, attemptBursts] = await Promise.all([
+    env.DB.prepare(
+      `
+        SELECT
+          rooms.claimed_at AS at,
+          rooms.claimer_user_id AS actor_user_id,
+          rooms.claimer_display_name AS actor_display_name,
+          rooms.id AS room_id,
+          COALESCE(rooms.published_title, rooms.draft_title) AS room_title,
+          rooms.x AS room_x,
+          rooms.y AS room_y
+        FROM rooms
+        WHERE rooms.claimed_at IS NOT NULL
+          AND rooms.claimer_display_name IS NOT NULL
+        ORDER BY rooms.claimed_at DESC
+        LIMIT ?
+      `
+    )
+      .bind(RECENT_EVENT_LIMIT)
+      .all<RoomClaimEventRow>(),
+    env.DB.prepare(
+      `
+        SELECT
+          room_versions.created_at AS at,
+          room_versions.published_by_user_id AS actor_user_id,
+          room_versions.published_by_display_name AS actor_display_name,
+          room_versions.room_id AS room_id,
+          COALESCE(room_versions.title, rooms.published_title, rooms.draft_title) AS room_title,
+          rooms.x AS room_x,
+          rooms.y AS room_y,
+          room_versions.version AS room_version
+        FROM room_versions
+        JOIN rooms ON rooms.id = room_versions.room_id
+        WHERE room_versions.published_by_display_name IS NOT NULL
+        ORDER BY room_versions.created_at DESC
+        LIMIT ?
+      `
+    )
+      .bind(RECENT_EVENT_LIMIT)
+      .all<RoomPublishEventRow>(),
+    env.DB.prepare(
+      `
+        SELECT
+          MAX(COALESCE(room_runs.finished_at, room_runs.started_at)) AS at,
+          room_runs.user_id AS actor_user_id,
+          room_runs.user_display_name AS actor_display_name,
+          room_runs.room_id AS room_id,
+          COALESCE(rooms.published_title, rooms.draft_title) AS room_title,
+          room_runs.room_x AS room_x,
+          room_runs.room_y AS room_y,
+          room_runs.room_version AS room_version,
+          COUNT(*) AS attempt_count,
+          SUM(CASE WHEN room_runs.result = 'completed' THEN 1 ELSE 0 END) AS completed_count
+        FROM room_runs
+        LEFT JOIN rooms ON rooms.id = room_runs.room_id
+        WHERE room_runs.started_at >= ?
+        GROUP BY
+          room_runs.user_id,
+          room_runs.user_display_name,
+          room_runs.room_id,
+          room_runs.room_x,
+          room_runs.room_y,
+          room_runs.room_version,
+          COALESCE(rooms.published_title, rooms.draft_title)
+        HAVING COUNT(*) >= ?
+        ORDER BY at DESC
+        LIMIT ?
+      `
+    )
+      .bind(attemptSinceIso, ATTEMPT_BURST_MIN_ATTEMPTS, RECENT_EVENT_LIMIT)
+      .all<RoomAttemptBurstRow>(),
+  ]);
+
+  const items: LaunchStatsRecentEvent[] = [];
+
+  for (const row of claims.results) {
+    if (!row.at || !row.actor_display_name) {
+      continue;
+    }
+
+    items.push({
+      kind: 'room_claim',
+      at: row.at,
+      actorUserId: row.actor_user_id,
+      actorDisplayName: row.actor_display_name,
+      roomId: row.room_id,
+      roomTitle: row.room_title,
+      roomX: Number(row.room_x),
+      roomY: Number(row.room_y),
+      roomVersion: null,
+      attemptCount: null,
+      completedCount: null,
+    });
+  }
+
+  for (const row of publishes.results) {
+    if (!row.at || !row.actor_display_name) {
+      continue;
+    }
+
+    items.push({
+      kind: 'room_publish',
+      at: row.at,
+      actorUserId: row.actor_user_id,
+      actorDisplayName: row.actor_display_name,
+      roomId: row.room_id,
+      roomTitle: row.room_title,
+      roomX: Number(row.room_x),
+      roomY: Number(row.room_y),
+      roomVersion: Number(row.room_version),
+      attemptCount: null,
+      completedCount: null,
+    });
+  }
+
+  for (const row of attemptBursts.results) {
+    if (!row.at || !row.actor_display_name) {
+      continue;
+    }
+
+    items.push({
+      kind: 'room_attempt_burst',
+      at: row.at,
+      actorUserId: row.actor_user_id,
+      actorDisplayName: row.actor_display_name,
+      roomId: row.room_id,
+      roomTitle: row.room_title,
+      roomX: Number(row.room_x),
+      roomY: Number(row.room_y),
+      roomVersion: Number(row.room_version),
+      attemptCount: Number(row.attempt_count),
+      completedCount: Number(row.completed_count),
+    });
+  }
+
+  items.sort((left, right) => right.at.localeCompare(left.at));
+  return items.slice(0, RECENT_EVENT_LIMIT);
 }
 
 async function loadPartykitStatus(env: Env): Promise<LaunchStatsPartykitStatus> {

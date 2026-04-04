@@ -224,6 +224,24 @@
         font-size: 14px;
       }
 
+      .activity-feed {
+        display: grid;
+        gap: 10px;
+      }
+
+      .activity-row {
+        display: grid;
+        gap: 8px;
+      }
+
+      .activity-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: baseline;
+        flex-wrap: wrap;
+      }
+
       @media (max-width: 720px) {
         .shell {
           padding: 16px 14px 32px;
@@ -287,6 +305,7 @@
       <section class="panel stack">
         <h2>Recent Activity</h2>
         <div id="activity-grid" class="grid cards"></div>
+        <div id="activity-feed" class="activity-feed"></div>
       </section>
 
       <section class="panel stack">
