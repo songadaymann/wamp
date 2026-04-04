@@ -32,6 +32,8 @@ import {
 
 export * from './roomModel';
 
+export type RoomPersistenceTarget = 'local' | 'remote';
+
 export interface RoomRepository {
   loadRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomRecord>;
   saveDraft(room: RoomSnapshot): Promise<RoomRecord>;
@@ -65,6 +67,7 @@ export interface RoomRepository {
     coordinates: RoomCoordinates,
     request: RoomMetadataRefreshConfirmRequestBody
   ): Promise<RoomRecord>;
+  getLastPersistenceTarget(): RoomPersistenceTarget | null;
 }
 
 function getStorageKey(roomId: string): string {
@@ -95,6 +98,10 @@ function computeLocalPermissions(record: RoomRecord): RoomRecord['permissions'] 
 }
 
 class LocalRoomRepository implements RoomRepository {
+  getLastPersistenceTarget(): RoomPersistenceTarget {
+    return 'local';
+  }
+
   async loadRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomRecord> {
     const stored = parseStoredRecord(localStorage.getItem(getStorageKey(roomId)), roomId, coordinates);
     if (stored) {
@@ -524,10 +531,16 @@ function getRoomStorageBackend(): RoomStorageBackend {
 }
 
 class ApiRoomRepository implements RoomRepository {
+  private lastPersistenceTarget: RoomPersistenceTarget | null = null;
+
   constructor(
     private readonly baseUrl: string,
     private readonly fallback: RoomRepository | null
   ) {}
+
+  getLastPersistenceTarget(): RoomPersistenceTarget | null {
+    return this.lastPersistenceTarget;
+  }
 
   async loadRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomRecord> {
     const params = new URLSearchParams({
@@ -777,7 +790,9 @@ class ApiRoomRepository implements RoomRepository {
     fallbackOperation: (() => Promise<RoomRecord> | undefined) | undefined
   ): Promise<RoomRecord> {
     try {
-      return await remoteOperation();
+      const remoteResult = await remoteOperation();
+      this.lastPersistenceTarget = 'remote';
+      return remoteResult;
     } catch (error) {
       if (!this.shouldFallback(error) || !fallbackOperation) {
         throw error;
@@ -788,6 +803,7 @@ class ApiRoomRepository implements RoomRepository {
         throw error;
       }
 
+      this.lastPersistenceTarget = 'local';
       return fallbackResult;
     }
   }

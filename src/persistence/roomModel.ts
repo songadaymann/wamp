@@ -19,6 +19,12 @@ import {
   normalizeRoomLightingSettings,
   type RoomLightingSettings,
 } from '../lighting/model';
+import {
+  cloneRoomMusic,
+  isRoomMusicEmpty,
+  normalizeRoomMusic,
+  type RoomMusic,
+} from '../music/model';
 
 export interface RoomCoordinates {
   x: number;
@@ -55,6 +61,7 @@ export interface RoomSnapshot {
   title: string | null;
   background: string;
   lighting: RoomLightingSettings;
+  music: RoomMusic | null;
   goal: RoomGoal | null;
   spawnPoint: RoomSpawnPoint | null;
   tileData: RoomTileData;
@@ -176,6 +183,7 @@ export function createDefaultRoomSnapshot(
     title: null,
     background: DEFAULT_ROOM_BACKGROUND,
     lighting: cloneRoomLightingSettings(null),
+    music: null,
     goal: null,
     spawnPoint: null,
     tileData: createEmptyTileData(),
@@ -301,6 +309,7 @@ export function cloneRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
     title: normalizeRoomTitle(room.title),
     background: normalizeRoomBackground(room.background),
     lighting: normalizeRoomLightingSettings(room.lighting),
+    music: normalizeRoomMusic(room.music),
     goal: normalizeRoomGoal(room.goal),
     spawnPoint: room.spawnPoint ? { ...room.spawnPoint } : null,
     tileData: cloneTileData(room.tileData),
@@ -434,6 +443,10 @@ export function isRoomSnapshotBlank(room: RoomSnapshot): boolean {
   }
 
   if (room.goal) {
+    return false;
+  }
+
+  if (!isRoomMusicEmpty(room.music)) {
     return false;
   }
 

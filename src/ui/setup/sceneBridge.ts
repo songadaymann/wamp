@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { CourseGoalType, CourseRoomRef } from '../../courses/model';
 import type { CourseEditorUiState } from '../../courses/editor/state';
 import type { RoomGoalType } from '../../goals/roomGoals';
+import type { RoomPatternInstrumentId, RoomPatternPitchMode } from '../../music/model';
 import type { GoalPlacementMode } from '../../scenes/editor/editRuntime';
 import type { RoomCoordinates, RoomRecord, RoomVersionRecord } from '../../persistence/roomModel';
 
@@ -100,6 +101,13 @@ export interface EditorSceneBridge {
   clearFocusedPressurePlateConnection?: () => void;
   cancelPressurePlateConnection?: () => void;
   clearFocusedContainerContents?: () => void;
+  setMusicModeActive?: (active: boolean) => void;
+  toggleMusicMode?: () => void;
+  setMusicPatternInstrumentTab?: (instrumentId: RoomPatternInstrumentId) => void;
+  setRoomMusicPitchMode?: (mode: RoomPatternPitchMode) => void;
+  shiftRoomMusicOctave?: (delta: number) => void;
+  replaceLegacyRoomMusicWithPattern?: () => void;
+  toggleRoomMusicPreview?: () => void;
   undoAction?: () => void;
   redoAction?: () => void;
 }
