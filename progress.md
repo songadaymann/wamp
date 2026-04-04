@@ -57,6 +57,45 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Snow and lava top-cap overlay collision restore on April 4, 2026:
+  - after the Pages redeploy, production still showed invisible full-tile collision in the marked air cells above specific lava and snow cap overlays
+  - the user-marked problem cells matched the old overlay-only local indices we had previously rolled back too aggressively:
+    - snow contiguous trio: local indices `2, 3, 4`
+    - lava non-contiguous trio: local indices `2, 4, 20`
+  - restored those exact tiles to the `none` collision map in `src/config.ts` without reopening the broader snow/lava rollback lists
+  - verification:
+    - `npm run build` passed
+
+- Decorative top terrain collision restore on April 4, 2026:
+  - user reported that decorative top-cap terrain tiles on production were acting like full solid blocks again
+  - traced the current behavior to `src/config.ts`, where the shared `decoratedTop` collision profile was still set to `topInset: 0`
+  - repo memory confirmed this was not a random revert:
+    - March 15 verification originally expected a trimmed surface at `tileTop + 4px`
+    - the same day the shared inset was later tuned from `4px` to `2px`, then to `0px`
+  - restored `decoratedTop.topInset` to `4px` so metadata-marked decorative-top tiles no longer collide as full-height terrain
+  - verification:
+    - `npm run build` passed
+    - standard Playwright smoke run completed against a local preview at `output/web-game/decor-top-collision-smoke/`
+    - smoke only captured `BootScene`, so it did not validate terrain interaction end-to-end; treat the build plus the earlier March 15 collision artifacts as the main evidence for this fix
+
+- Local repo memory restore on April 4, 2026:
+  - restored `feature-ledger.md` into the current workspace from the preserved local ledger branch so branch/feature cleanup state can keep evolving locally alongside `progress.md`
+  - left the ledger local-only; it has not been pushed to `main`
+
+- Production redeploy verification on April 4, 2026:
+  - traced the missing live `lighting` field to stale production deployment state rather than the current repo code
+  - confirmed this repo serves app assets and `/api/*` from the same Cloudflare Worker via `wrangler.jsonc`
+  - `npm run build` passed on `main`
+  - ran `npx wrangler deploy` from `main`
+  - deploy succeeded with Worker version `57db5bb0-6c9e-44f3-ad53-00f24d43cab6`
+  - post-deploy remote verification:
+    - `https://everybodys-platformer.novox-robot.workers.dev/api/rooms/-6%2C2?x=-6&y=2`
+    - `https://api.wamp.land/api/rooms/-6%2C2?x=-6&y=2`
+    - both now return `draft.lighting` and `published.lighting` as `{ mode: 'off', darkness: 80, radius: 50 }`
+  - implication:
+    - production had been behind the current `main` lighting snapshot model
+    - if custom lighting still fails after this redeploy, the remaining bug is now in the save/update path rather than the live deployment version
+
 - Profile ownership + roster-join merge on April 3, 2026:
   - changed profile room sourcing so profile `Published Rooms` only includes rooms claimed by that user and currently published
   - updated the profile UI copy/stat labels from `Created Rooms` to `Published Rooms` / `Published rooms`
