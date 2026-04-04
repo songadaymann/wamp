@@ -57,6 +57,41 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Wall-jump feel follow-up on April 4, 2026:
+  - started a clean continuation branch/worktree for this pass:
+    - branch: `wip/wall-jump-feel-2026-04-04`
+    - worktree: `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-wall-jump-feel`
+  - movement-controller changes:
+    - restored a `wallJumpChainActive` latch so once the player earns the first wall jump, later wall contacts in the same airborne chain no longer require a fresh horizontal re-press
+    - split wall contact from wall sliding so wall-jump eligibility can re-acquire before the player is fully falling, while slide visuals / fall-speed clamping still remain descent-only
+    - moved buffered wall-jump consumption ahead of buffer expiry so valid buffered presses can convert on the contact frame instead of dying first
+    - widened the airborne wall-jump buffer to `240ms` while leaving the ground/coyote jump buffer at `100ms`
+    - added movement debug state to `render_game_to_text` for:
+      - `jumpBuffered`
+      - `jumpBufferMs`
+      - `coyoteMs`
+      - `wallJumpChainActive`
+  - quick research notes for feel direction:
+    - Celeste’s published forgiveness notes emphasize widening timing and position windows, including generous wall-jump leniency
+    - the Slow Rush and GMTK platforming writeups both reinforce that buffering/coyote-style forgiveness is a core part of responsive movement feel, not a hack
+  - verification:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - readonly preview smoke still passed at `output/web-game/wall-jump-preview-smoke/summary.json`
+    - Pages preview branch deploy is live at `https://safety-wall-jump-feel-2026-0.wampland.pages.dev`
+    - lightweight deployed-browser probe confirmed overworld boot plus browse -> play transition on that URL
+    - required `develop-web-game` smoke wrote:
+      - `output/web-game/wall-jump-skill-smoke-final/state-0.json`
+      - `output/web-game/wall-jump-skill-smoke-final/shot-0.png`
+    - targeted page-level movement probes wrote:
+      - `output/web-game/wall-jump-right-probe/states.json`
+      - `output/web-game/wall-jump-frame-probe/timeline.json`
+    - the saved page-level probes were enough to confirm live wall-slide / wall-jump states during this pass, but the exact buffered-contact probe remained timing-sensitive
+    - the stock deployed readonly smoke failed only on the editor step because the selected published room kept `#btn-world-edit` disabled; treat that as a preview-script mismatch rather than a wall-jump regression signal
+  - remaining follow-up:
+    - the headless page-timed buffer probe is still noisy because this repo’s `window.advanceTime(...)` fallback is real-time based rather than a deterministic scene-step hook
+    - next tuning pass should validate the new wall buffer in a tighter shaft or a purpose-built local test room, then decide whether the `240ms` window feels right or needs to be tightened back down
+
 - Lighting neighbor ambient darkening on April 4, 2026:
   - started a fresh clean continuation branch for lighting work at `feature/lighting-followups-2026-04-04` from current `main`
   - extended the lighting controller so dark play rooms can render:

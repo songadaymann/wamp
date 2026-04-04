@@ -244,6 +244,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly CRATE_INTERACTION_MAX_GAP = 14;
   private readonly COYOTE_MS = 80;
   private readonly JUMP_BUFFER_MS = 100;
+  private readonly WALL_JUMP_BUFFER_MS = 240;
   private readonly WALL_SLIDE_MAX_FALL_SPEED = 70;
   private readonly WALL_JUMP_VELOCITY_X = 205;
   private readonly WALL_JUMP_VELOCITY_Y = -265;
@@ -350,6 +351,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private wallJumpActive = false;
   private wallJumpDirection: -1 | 1 | 0 = 0;
   private wallJumpBlockedSide: -1 | 1 | 0 = 0;
+  private wallJumpChainActive = false;
   private isClimbingLadder = false;
   private activeLadderKey: string | null = null;
   private collectedObjectKeys = new Set<string>();
@@ -1052,6 +1054,12 @@ export class OverworldPlayScene extends Phaser.Scene {
       set wallJumpBlockedSide(value: -1 | 1 | 0) {
         thisScene.wallJumpBlockedSide = value;
       },
+      get wallJumpChainActive() {
+        return thisScene.wallJumpChainActive;
+      },
+      set wallJumpChainActive(value: boolean) {
+        thisScene.wallJumpChainActive = value;
+      },
       get isClimbingLadder() {
         return thisScene.isClimbingLadder;
       },
@@ -1100,6 +1108,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         crateInteractionMaxGap: this.CRATE_INTERACTION_MAX_GAP,
         coyoteMs: this.COYOTE_MS,
         jumpBufferMs: this.JUMP_BUFFER_MS,
+        wallJumpBufferMs: this.WALL_JUMP_BUFFER_MS,
         jumpVelocity: this.JUMP_VELOCITY,
         wallSlideMaxFallSpeed: this.WALL_SLIDE_MAX_FALL_SPEED,
         wallJumpVelocityX: this.WALL_JUMP_VELOCITY_X,
@@ -3003,10 +3012,14 @@ export class OverworldPlayScene extends Phaser.Scene {
             velocityY: Math.round(this.playerBody.velocity.y),
             crouching: this.isCrouching,
             climbing: this.isClimbingLadder,
+            jumpBuffered: this.jumpBuffered,
+            jumpBufferMs: Math.max(0, Math.round(this.jumpBufferTime)),
+            coyoteMs: Math.max(0, Math.round(this.coyoteTime)),
             wallSliding: this.isWallSliding,
             wallContactSide: this.wallContactSide,
             wallJumpBlockedSide: this.wallJumpBlockedSide,
             wallJumpActive: this.wallJumpActive,
+            wallJumpChainActive: this.wallJumpChainActive,
             wallJumpLockMs: Math.max(0, this.wallJumpLockUntil - this.time.now),
             ladderKey: this.activeLadderKey,
             animation: this.playerAnimationState,

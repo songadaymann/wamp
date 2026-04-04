@@ -37,6 +37,7 @@ export interface OverworldMovementControllerState {
   wallJumpActive: boolean;
   wallJumpDirection: -1 | 1 | 0;
   wallJumpBlockedSide: -1 | 1 | 0;
+  wallJumpChainActive: boolean;
   isClimbingLadder: boolean;
   activeLadderKey: string | null;
 }
@@ -76,6 +77,7 @@ interface OverworldMovementControllerOptions {
   crateInteractionMaxGap: number;
   coyoteMs: number;
   jumpBufferMs: number;
+  wallJumpBufferMs: number;
   jumpVelocity: number;
   wallSlideMaxFallSpeed: number;
   wallJumpVelocityX: number;
@@ -243,13 +245,11 @@ export class OverworldMovementController {
     const wantsCrouch = grounded && downHeld && !crateInteraction;
     this.host.state.isCrouching = wantsCrouch || (this.host.state.isCrouching && !this.canPlayerStandUp());
     this.syncPlayerHitbox();
-    const canWallSlide =
+    const canWallAttach =
       !grounded &&
       crateInteraction === null &&
-      !this.host.state.isCrouching &&
-      playerBody.velocity.y >= 0 &&
-      this.host.getCurrentTime() >= this.host.state.wallJumpLockUntil;
-    this.updateWallMovementState(horizontalInput, grounded, canWallSlide);
+      !this.host.state.isCrouching;
+    this.updateWallMovementState(horizontalInput, grounded, canWallAttach);
     if (grounded) {
       this.host.state.coyoteTime = this.options.coyoteMs;
     } else {
@@ -300,39 +300,18 @@ export class OverworldMovementController {
       this.resetWallMovementState();
     } else {
       if (jumpPressed) {
-        if (this.host.state.isWallSliding && this.host.state.wallContactSide !== 0) {
-          const wallJumpSourceSide = this.host.state.wallContactSide;
-          const wallJumpDirection = (wallJumpSourceSide === -1 ? 1 : -1) as -1 | 1;
-          playerBody.setVelocityX(wallJumpDirection * this.options.wallJumpVelocityX);
-          playerBody.setVelocityY(this.options.wallJumpVelocityY);
-          this.host.playJumpDustFx(
-            player.x ?? playerBody.center.x,
-            playerBody.bottom,
-            this.host.getPlayerFacing(),
-          );
-          this.host.state.jumpBuffered = false;
-          this.host.state.jumpBufferTime = 0;
-          this.host.state.coyoteTime = 0;
-          this.clearWallSlideState();
-          this.host.state.wallJumpLockUntil =
-            this.host.getCurrentTime() + this.options.wallJumpInputLockMs;
-          this.host.state.wallJumpActive = true;
-          this.host.state.wallJumpDirection = wallJumpDirection;
-          this.host.state.wallJumpBlockedSide = wallJumpSourceSide;
-        } else {
+        if (!this.tryPerformWallJump(player, playerBody)) {
           this.host.state.jumpBuffered = true;
-          this.host.state.jumpBufferTime = this.options.jumpBufferMs;
+          this.host.state.jumpBufferTime =
+            !grounded && this.host.state.coyoteTime <= 0
+              ? this.options.wallJumpBufferMs
+              : this.options.jumpBufferMs;
         }
       }
 
-      if (this.host.state.jumpBufferTime > 0) {
-        this.host.state.jumpBufferTime -= delta;
-        if (this.host.state.jumpBufferTime <= 0) {
-          this.host.state.jumpBuffered = false;
-        }
-      }
-
-      if (this.host.state.jumpBuffered && this.host.state.coyoteTime > 0) {
+      if (this.host.state.jumpBuffered && this.tryPerformWallJump(player, playerBody)) {
+        // Wall-jump buffering lets the player press jump just before reaching the next wall.
+      } else if (this.host.state.jumpBuffered && this.host.state.coyoteTime > 0) {
         playerBody.setVelocityY(
           inQuicksand ? this.options.jumpVelocity * this.options.quicksandJumpFactor : this.options.jumpVelocity,
         );
@@ -344,6 +323,14 @@ export class OverworldMovementController {
         this.host.state.wallJumpDirection = 0;
         this.host.state.wallJumpLockUntil = 0;
         this.host.state.wallJumpBlockedSide = 0;
+        this.host.state.wallJumpChainActive = false;
+      }
+
+      if (this.host.state.jumpBufferTime > 0) {
+        this.host.state.jumpBufferTime -= delta;
+        if (this.host.state.jumpBufferTime <= 0) {
+          this.host.state.jumpBuffered = false;
+        }
       }
 
       const jumpHeld = upHeld || cursors.space!.isDown || touchInput.jumpHeld;
@@ -390,6 +377,7 @@ export class OverworldMovementController {
     this.host.state.wallJumpActive = false;
     this.host.state.wallJumpDirection = 0;
     this.host.state.wallJumpBlockedSide = 0;
+    this.host.state.wallJumpChainActive = false;
   }
 
   private clearWallSlideState(): void {
@@ -397,25 +385,71 @@ export class OverworldMovementController {
     this.host.state.isWallSliding = false;
   }
 
-  private getWallContactSide(horizontalInput: number): -1 | 1 | 0 {
+  private tryPerformWallJump(
+    player: Phaser.GameObjects.Rectangle,
+    playerBody: Phaser.Physics.Arcade.Body,
+  ): boolean {
+    const wallJumpSourceSide = this.host.state.wallContactSide;
+    if (wallJumpSourceSide === 0) {
+      return false;
+    }
+
+    const wallJumpDirection = (wallJumpSourceSide === -1 ? 1 : -1) as -1 | 1;
+    playerBody.setVelocityX(wallJumpDirection * this.options.wallJumpVelocityX);
+    playerBody.setVelocityY(this.options.wallJumpVelocityY);
+    this.host.playJumpDustFx(
+      player.x ?? playerBody.center.x,
+      playerBody.bottom,
+      this.host.getPlayerFacing(),
+    );
+    this.host.state.jumpBuffered = false;
+    this.host.state.jumpBufferTime = 0;
+    this.host.state.coyoteTime = 0;
+    this.clearWallSlideState();
+    this.host.state.wallJumpLockUntil =
+      this.host.getCurrentTime() + this.options.wallJumpInputLockMs;
+    this.host.state.wallJumpActive = true;
+    this.host.state.wallJumpDirection = wallJumpDirection;
+    this.host.state.wallJumpBlockedSide = wallJumpSourceSide;
+    this.host.state.wallJumpChainActive = true;
+    return true;
+  }
+
+  private getTouchingWallSide(): -1 | 1 | 0 {
     const playerBody = this.host.getPlayerBody();
-    if (!playerBody || horizontalInput === 0) {
+    if (!playerBody) {
       return 0;
     }
 
     const touchingLeft = playerBody.blocked.left || playerBody.touching.left;
     const touchingRight = playerBody.blocked.right || playerBody.touching.right;
-    if (horizontalInput < 0 && touchingLeft) {
+    if (touchingLeft === touchingRight) {
+      return 0;
+    }
+
+    return touchingLeft ? -1 : 1;
+  }
+
+  private getWallContactSide(horizontalInput: number): -1 | 1 | 0 {
+    const touchingWallSide = this.getTouchingWallSide();
+    if (touchingWallSide === 0) {
+      return 0;
+    }
+
+    if (horizontalInput < 0 && touchingWallSide === -1) {
       return -1;
     }
-    if (horizontalInput > 0 && touchingRight) {
+    if (horizontalInput > 0 && touchingWallSide === 1) {
       return 1;
+    }
+    if (this.host.state.wallJumpChainActive) {
+      return touchingWallSide;
     }
 
     return 0;
   }
 
-  private updateWallMovementState(horizontalInput: number, grounded: boolean, canWallSlide: boolean): void {
+  private updateWallMovementState(horizontalInput: number, grounded: boolean, canWallAttach: boolean): void {
     const playerBody = this.host.getPlayerBody();
     if (!playerBody || grounded || this.host.state.isClimbingLadder) {
       this.resetWallMovementState();
@@ -427,7 +461,7 @@ export class OverworldMovementController {
       this.host.state.wallJumpDirection = 0;
     }
 
-    const rawWallContactSide = canWallSlide ? this.getWallContactSide(horizontalInput) : 0;
+    const rawWallContactSide = canWallAttach ? this.getWallContactSide(horizontalInput) : 0;
     if (
       rawWallContactSide !== 0 &&
       this.host.state.wallJumpBlockedSide !== 0 &&
@@ -441,7 +475,7 @@ export class OverworldMovementController {
         ? 0
         : rawWallContactSide;
     this.host.state.wallContactSide = wallContactSide;
-    this.host.state.isWallSliding = wallContactSide !== 0;
+    this.host.state.isWallSliding = wallContactSide !== 0 && playerBody.velocity.y >= 0;
 
     if (this.host.state.isWallSliding) {
       this.host.state.wallJumpActive = false;
