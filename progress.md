@@ -57,6 +57,39 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Lighting neighbor ambient darkening on April 4, 2026:
+  - started a fresh clean continuation branch for lighting work at `feature/lighting-followups-2026-04-04` from current `main`
+  - extended the lighting controller so dark play rooms can render:
+    - the existing active-room aura mask
+    - separate ambient dark overlays for the surrounding one-room ring
+  - surrounding-room darkening is client-local only:
+    - no room snapshot mutation is persisted
+    - no presence or network state changes are broadcast
+    - other players in those neighboring rooms are unaffected
+  - implementation details:
+    - `src/lighting/controller.ts`
+      - added optional `ambientBounds` input
+      - manages both the active aura render texture and a reusable pool of ambient rectangle overlays
+      - exposes `ambientOverlayCount` in lighting debug state
+    - `src/scenes/OverworldPlayScene.ts`
+      - computes the immediate surrounding published/draft room ring around the current play room
+      - passes those bounds into the lighting controller during play
+  - verification:
+    - `npm run build` passed in `/private/tmp/wamp-lighting-followups-2026-04-04` after temporarily linking the shared dependency install
+    - required `develop-web-game` client run wrote:
+      - `output/web-game/lighting-neighbor-ambient-skill-smoke/shot-0.png`
+      - `output/web-game/lighting-neighbor-ambient-skill-smoke/state-0.json`
+    - targeted remote-backed Playwright probe wrote:
+      - `output/web-game/lighting-neighbor-ambient-probe/summary.json`
+      - `output/web-game/lighting-neighbor-ambient-probe/play-dark-neighbors.png`
+    - probe selected room `2,-6`, forced local dark lighting in live play, and confirmed:
+      - `rendererPath: 'webgl'`
+      - `ambientOverlayCount: 8`
+      - `consoleErrors: 0`
+      - `pageErrors: 0`
+  - follow-up idea:
+    - if the visual feels too heavy, tune the neighbor ring separately from the active room by applying a slightly lower ambient alpha to the surrounding overlays instead of a perfect match
+
 - Snow and lava top-cap overlay collision restore on April 4, 2026:
   - after the Pages redeploy, production still showed invisible full-tile collision in the marked air cells above specific lava and snow cap overlays
   - the user-marked problem cells matched the old overlay-only local indices we had previously rolled back too aggressively:
