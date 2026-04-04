@@ -7,11 +7,16 @@ import type {
   PartyKitLaunchStats,
 } from '../../../admin/model';
 import type { Env } from '../core/types';
+import {
+  sqlHasPlayfunDisplayNamePrefix,
+  sqlUserIdIsPlayfunOnly,
+} from '../playfun/leaderboardIsolation';
 
 const METRICS_ROOM_ID = '__launch-stats__';
-const RECENT_EVENT_LIMIT = 24;
+const RECENT_EVENT_LIMIT = 48;
+const RECENT_EVENT_WINDOW_DAYS = 7;
 const ATTEMPT_BURST_MIN_ATTEMPTS = 3;
-const ATTEMPT_BURST_WINDOW_HOURS = 6;
+const ATTEMPT_BURST_WINDOW_HOURS = RECENT_EVENT_WINDOW_DAYS * 24;
 
 export async function loadLaunchStats(env: Env): Promise<LaunchStatsResponse> {
   const now = new Date();
@@ -52,6 +57,27 @@ function isPartykitConfigured(env: Env): boolean {
 
 function minutesAgoIso(base: Date, minutes: number): string {
   return new Date(base.getTime() - minutes * 60 * 1000).toISOString();
+}
+
+function daysAgoIso(base: Date, days: number): string {
+  return new Date(base.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function sqlLaunchActivityIsPlayfunIdentity(
+  userIdExpression: string,
+  displayNameExpression: string
+): string {
+  return `(
+    ${sqlUserIdIsPlayfunOnly(userIdExpression)}
+    OR COALESCE(${sqlHasPlayfunDisplayNamePrefix(displayNameExpression)}, 0)
+  )`;
+}
+
+function sqlLaunchActivityIsNotPlayfunIdentity(
+  userIdExpression: string,
+  displayNameExpression: string
+): string {
+  return `NOT ${sqlLaunchActivityIsPlayfunIdentity(userIdExpression, displayNameExpression)}`;
 }
 
 async function loadTotals(env: Env, nowIso: string): Promise<LaunchStatsTotals> {
@@ -107,20 +133,103 @@ async function loadActivityWindow(
     courseRunStarts,
     courseRunFinishes,
   ] = await Promise.all([
-    countQuery(env, 'SELECT COUNT(*) AS count FROM users WHERE created_at >= ?', [sinceIso]),
-    countQuery(env, 'SELECT COUNT(*) AS count FROM magic_link_tokens WHERE created_at >= ?', [sinceIso]),
-    countQuery(env, 'SELECT COUNT(*) AS count FROM chat_messages WHERE created_at >= ?', [sinceIso]),
-    countQuery(env, 'SELECT COUNT(*) AS count FROM room_versions WHERE created_at >= ?', [sinceIso]),
-    countQuery(env, 'SELECT COUNT(*) AS count FROM room_runs WHERE started_at >= ?', [sinceIso]),
     countQuery(
       env,
-      'SELECT COUNT(*) AS count FROM room_runs WHERE finished_at IS NOT NULL AND finished_at >= ?',
+      `
+        SELECT COUNT(*) AS count
+        FROM users
+        WHERE created_at >= ?
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity('users.id', 'users.display_name')}
+      `,
       [sinceIso]
     ),
-    countQuery(env, 'SELECT COUNT(*) AS count FROM course_runs WHERE started_at >= ?', [sinceIso]),
     countQuery(
       env,
-      'SELECT COUNT(*) AS count FROM course_runs WHERE finished_at IS NOT NULL AND finished_at >= ?',
+      `
+        SELECT COUNT(*) AS count
+        FROM magic_link_tokens
+        JOIN users ON users.id = magic_link_tokens.user_id
+        WHERE magic_link_tokens.created_at >= ?
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity('users.id', 'users.display_name')}
+      `,
+      [sinceIso]
+    ),
+    countQuery(
+      env,
+      `
+        SELECT COUNT(*) AS count
+        FROM chat_messages
+        WHERE created_at >= ?
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity('chat_messages.user_id', 'chat_messages.user_display_name')}
+      `,
+      [sinceIso]
+    ),
+    countQuery(
+      env,
+      `
+        SELECT COUNT(*) AS count
+        FROM room_versions
+        WHERE created_at >= ?
+          AND published_by_display_name IS NOT NULL
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+            'room_versions.published_by_user_id',
+            'room_versions.published_by_display_name'
+          )}
+      `,
+      [sinceIso]
+    ),
+    countQuery(
+      env,
+      `
+        SELECT COUNT(*) AS count
+        FROM room_runs
+        WHERE started_at >= ?
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+            'room_runs.user_id',
+            'room_runs.user_display_name'
+          )}
+      `,
+      [sinceIso]
+    ),
+    countQuery(
+      env,
+      `
+        SELECT COUNT(*) AS count
+        FROM room_runs
+        WHERE finished_at IS NOT NULL
+          AND finished_at >= ?
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+            'room_runs.user_id',
+            'room_runs.user_display_name'
+          )}
+      `,
+      [sinceIso]
+    ),
+    countQuery(
+      env,
+      `
+        SELECT COUNT(*) AS count
+        FROM course_runs
+        WHERE started_at >= ?
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+            'course_runs.user_id',
+            'course_runs.user_display_name'
+          )}
+      `,
+      [sinceIso]
+    ),
+    countQuery(
+      env,
+      `
+        SELECT COUNT(*) AS count
+        FROM course_runs
+        WHERE finished_at IS NOT NULL
+          AND finished_at >= ?
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+            'course_runs.user_id',
+            'course_runs.user_display_name'
+          )}
+      `,
       [sinceIso]
     ),
   ]);
@@ -172,6 +281,7 @@ interface RoomAttemptBurstRow {
 }
 
 async function loadRecentEvents(env: Env, nowIso: string): Promise<LaunchStatsRecentEvent[]> {
+  const recentSinceIso = daysAgoIso(new Date(nowIso), RECENT_EVENT_WINDOW_DAYS);
   const attemptSinceIso = new Date(
     Date.parse(nowIso) - ATTEMPT_BURST_WINDOW_HOURS * 60 * 60 * 1000
   ).toISOString();
@@ -190,11 +300,16 @@ async function loadRecentEvents(env: Env, nowIso: string): Promise<LaunchStatsRe
         FROM rooms
         WHERE rooms.claimed_at IS NOT NULL
           AND rooms.claimer_display_name IS NOT NULL
+          AND rooms.claimed_at >= ?
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+            'rooms.claimer_user_id',
+            'rooms.claimer_display_name'
+          )}
         ORDER BY rooms.claimed_at DESC
         LIMIT ?
       `
     )
-      .bind(RECENT_EVENT_LIMIT)
+      .bind(recentSinceIso, RECENT_EVENT_LIMIT)
       .all<RoomClaimEventRow>(),
     env.DB.prepare(
       `
@@ -210,11 +325,16 @@ async function loadRecentEvents(env: Env, nowIso: string): Promise<LaunchStatsRe
         FROM room_versions
         JOIN rooms ON rooms.id = room_versions.room_id
         WHERE room_versions.published_by_display_name IS NOT NULL
+          AND room_versions.created_at >= ?
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+            'room_versions.published_by_user_id',
+            'room_versions.published_by_display_name'
+          )}
         ORDER BY room_versions.created_at DESC
         LIMIT ?
       `
     )
-      .bind(RECENT_EVENT_LIMIT)
+      .bind(recentSinceIso, RECENT_EVENT_LIMIT)
       .all<RoomPublishEventRow>(),
     env.DB.prepare(
       `
@@ -232,6 +352,10 @@ async function loadRecentEvents(env: Env, nowIso: string): Promise<LaunchStatsRe
         FROM room_runs
         LEFT JOIN rooms ON rooms.id = room_runs.room_id
         WHERE room_runs.started_at >= ?
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+            'room_runs.user_id',
+            'room_runs.user_display_name'
+          )}
         GROUP BY
           room_runs.user_id,
           room_runs.user_display_name,
