@@ -2,6 +2,17 @@
 
 ## Frontend Redeploy
 
+CLI shortcuts now available from the repo root:
+
+- `npm run deploy:prod`
+  - requires clean local `main`
+  - fetches `origin/main` and refuses to deploy unless `HEAD === origin/main`
+  - builds once, deploys the Worker, deploys the `wampland` Pages frontend, then runs `npm run smoke:prod`
+- `npm run pages:deploy:prod`
+  - same clean-`main` preflight, but redeploys only the `wampland` Pages frontend
+- `npm run smoke:prod`
+  - checks `wamp.land`, verifies the frontend API target, and verifies JSON health/session responses from `api.wamp.land`
+
 Best-guess stable setup for the Pages frontend:
 
 - Pages project serving `wamp.land`: `wampland`

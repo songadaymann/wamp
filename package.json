@@ -15,6 +15,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "smoke:preview:readonly": "npx --yes --quiet -p playwright node scripts/preview_smoke_readonly.mjs",
+    "smoke:prod": "node scripts/smoke_prod.mjs",
     "contracts:build": "npm --prefix contracts run build",
     "contracts:test": "npm --prefix contracts run test",
     "contracts:deploy:base-sepolia": "npm --prefix contracts run deploy:base-sepolia",
@@ -26,6 +27,8 @@
     "cf:d1:migrate:safety": "wrangler d1 migrations apply DB --env safety --remote",
     "cf:deploy": "npm run build && wrangler deploy",
     "cf:deploy:safety": "npm run build && wrangler deploy --env safety",
+    "pages:deploy:prod": "node scripts/deploy_prod.mjs --pages-only --skip-smoke",
+    "deploy:prod": "node scripts/deploy_prod.mjs",
     "presence:deploy:safety": "partykit deploy --config partykit.safety.json"
   },
   "dependencies": {
