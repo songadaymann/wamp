@@ -13,7 +13,7 @@ import {
 } from '../playfun/leaderboardIsolation';
 
 const METRICS_ROOM_ID = '__launch-stats__';
-const RECENT_EVENT_LIMIT = 48;
+const RECENT_EVENT_LIMIT = 120;
 const RECENT_EVENT_WINDOW_DAYS = 7;
 const ATTEMPT_BURST_MIN_ATTEMPTS = 3;
 const ATTEMPT_BURST_WINDOW_HOURS = RECENT_EVENT_WINDOW_DAYS * 24;
@@ -280,13 +280,25 @@ interface RoomAttemptBurstRow {
   completed_count: number;
 }
 
+interface RoomRunFinishRow {
+  at: string;
+  actor_user_id: string;
+  actor_display_name: string;
+  room_id: string;
+  room_title: string | null;
+  room_x: number;
+  room_y: number;
+  room_version: number;
+  result: string;
+}
+
 async function loadRecentEvents(env: Env, nowIso: string): Promise<LaunchStatsRecentEvent[]> {
   const recentSinceIso = daysAgoIso(new Date(nowIso), RECENT_EVENT_WINDOW_DAYS);
   const attemptSinceIso = new Date(
     Date.parse(nowIso) - ATTEMPT_BURST_WINDOW_HOURS * 60 * 60 * 1000
   ).toISOString();
 
-  const [claims, publishes, attemptBursts] = await Promise.all([
+  const [claims, publishes, attemptBursts, runFinishes] = await Promise.all([
     env.DB.prepare(
       `
         SELECT
@@ -371,6 +383,33 @@ async function loadRecentEvents(env: Env, nowIso: string): Promise<LaunchStatsRe
     )
       .bind(attemptSinceIso, ATTEMPT_BURST_MIN_ATTEMPTS, RECENT_EVENT_LIMIT)
       .all<RoomAttemptBurstRow>(),
+    env.DB.prepare(
+      `
+        SELECT
+          room_runs.finished_at AS at,
+          room_runs.user_id AS actor_user_id,
+          room_runs.user_display_name AS actor_display_name,
+          room_runs.room_id AS room_id,
+          COALESCE(rooms.published_title, rooms.draft_title) AS room_title,
+          room_runs.room_x AS room_x,
+          room_runs.room_y AS room_y,
+          room_runs.room_version AS room_version,
+          room_runs.result AS result
+        FROM room_runs
+        LEFT JOIN rooms ON rooms.id = room_runs.room_id
+        WHERE room_runs.finished_at IS NOT NULL
+          AND room_runs.finished_at >= ?
+          AND room_runs.result IN ('completed', 'abandoned', 'failed')
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+            'room_runs.user_id',
+            'room_runs.user_display_name'
+          )}
+        ORDER BY room_runs.finished_at DESC
+        LIMIT ?
+      `
+    )
+      .bind(recentSinceIso, RECENT_EVENT_LIMIT)
+      .all<RoomRunFinishRow>(),
   ]);
 
   const items: LaunchStatsRecentEvent[] = [];
@@ -390,6 +429,7 @@ async function loadRecentEvents(env: Env, nowIso: string): Promise<LaunchStatsRe
       roomX: Number(row.room_x),
       roomY: Number(row.room_y),
       roomVersion: null,
+      result: null,
       attemptCount: null,
       completedCount: null,
     });
@@ -410,6 +450,7 @@ async function loadRecentEvents(env: Env, nowIso: string): Promise<LaunchStatsRe
       roomX: Number(row.room_x),
       roomY: Number(row.room_y),
       roomVersion: Number(row.room_version),
+      result: null,
       attemptCount: null,
       completedCount: null,
     });
@@ -430,8 +471,30 @@ async function loadRecentEvents(env: Env, nowIso: string): Promise<LaunchStatsRe
       roomX: Number(row.room_x),
       roomY: Number(row.room_y),
       roomVersion: Number(row.room_version),
+      result: null,
       attemptCount: Number(row.attempt_count),
       completedCount: Number(row.completed_count),
+    });
+  }
+
+  for (const row of runFinishes.results) {
+    if (!row.at || !row.actor_display_name) {
+      continue;
+    }
+
+    items.push({
+      kind: 'room_run_finish',
+      at: row.at,
+      actorUserId: row.actor_user_id,
+      actorDisplayName: row.actor_display_name,
+      roomId: row.room_id,
+      roomTitle: row.room_title,
+      roomX: Number(row.room_x),
+      roomY: Number(row.room_y),
+      roomVersion: Number(row.room_version),
+      result: row.result,
+      attemptCount: null,
+      completedCount: null,
     });
   }
 

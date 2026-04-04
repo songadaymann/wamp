@@ -56,7 +56,8 @@ export interface LaunchStatsActivity {
 export type LaunchStatsRecentEventKind =
   | 'room_claim'
   | 'room_publish'
-  | 'room_attempt_burst';
+  | 'room_attempt_burst'
+  | 'room_run_finish';
 
 export interface LaunchStatsRecentEvent {
   kind: LaunchStatsRecentEventKind;
@@ -68,6 +69,7 @@ export interface LaunchStatsRecentEvent {
   roomX: number | null;
   roomY: number | null;
   roomVersion: number | null;
+  result: string | null;
   attemptCount: number | null;
   completedCount: number | null;
 }

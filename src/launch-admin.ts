@@ -478,6 +478,8 @@ function renderEventKindLabel(kind: LaunchStatsRecentEvent['kind']): string {
       return 'Room Publish';
     case 'room_attempt_burst':
       return 'Attempt Burst';
+    case 'room_run_finish':
+      return 'Room Run';
     default:
       return 'Event';
   }
@@ -499,6 +501,10 @@ function renderEventSummary(event: LaunchStatsRecentEvent): string {
         completions > 0 ? `, including ${completions} completion${completions === 1 ? '' : 's'}` : '';
       return `${actor} did ${attempts} attempt${attempts === 1 ? '' : 's'} in ${roomLabel}${completionSuffix}.`;
     }
+    case 'room_run_finish': {
+      const result = (event.result ?? 'finished').toLowerCase();
+      return `${actor} ${result} ${roomLabel}${event.roomVersion ? ` v${event.roomVersion}` : ''}.`;
+    }
     default:
       return `${actor} did something in ${roomLabel}.`;
   }
@@ -506,6 +512,9 @@ function renderEventSummary(event: LaunchStatsRecentEvent): string {
 
 function renderEventDetail(event: LaunchStatsRecentEvent): string {
   const parts: string[] = [];
+  if (event.result) {
+    parts.push(event.result);
+  }
   if (event.roomId) {
     parts.push(`room ${event.roomId}`);
   }
