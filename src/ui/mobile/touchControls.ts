@@ -1,4 +1,4 @@
-export type TouchActionName = 'jump' | 'slash' | 'shoot' | 'cameraToggle' | 'stop';
+export type TouchActionName = 'jump' | 'slash' | 'shoot' | 'cameraToggle' | 'stop' | 'restart';
 
 export interface TouchInputState {
   active: boolean;
@@ -24,6 +24,7 @@ const pressedActions: Record<TouchActionName, boolean> = {
   shoot: false,
   cameraToggle: false,
   stop: false,
+  restart: false,
 };
 
 export function setTouchControlsActive(active: boolean): void {

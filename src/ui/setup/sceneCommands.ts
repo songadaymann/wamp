@@ -73,6 +73,10 @@ export function setupSceneCommands(
       closeWorldPanels();
       getActiveOverworldScene(game)?.playSelectedRoom?.();
     },
+    onRestartRun: () => {
+      closeWorldPanels();
+      void getActiveOverworldScene(game)?.restartCurrentRun?.();
+    },
     onPlayCourse: () => {
       closeWorldPanels();
       void getActiveOverworldScene(game)?.playSelectedCourse?.();

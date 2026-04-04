@@ -1607,6 +1607,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
+    if (this.mode === 'play' && consumeTouchAction('restart')) {
+      void this.restartCurrentRun();
+      return;
+    }
+
     if (!this.playerBody) {
       this.movementController.handleNoPlayerRuntime();
       this.syncLocalPresence();
@@ -2591,6 +2596,10 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   playSelectedRoom(): void {
     this.flowController.playSelectedRoom();
+  }
+
+  async restartCurrentRun(): Promise<void> {
+    await this.flowController.restartCurrentRun();
   }
 
   returnToWorld(): void {

@@ -24,6 +24,7 @@ type Elements = {
   mobileSlashButton: HTMLButtonElement | null;
   mobileShootButton: HTMLButtonElement | null;
   mobileWorldStopButton: HTMLButtonElement | null;
+  mobileWorldRestartButton: HTMLButtonElement | null;
   worldHudToggleButton: HTMLButtonElement | null;
   worldHudMinimizeButton: HTMLButtonElement | null;
   worldChatButton: HTMLButtonElement | null;
@@ -66,6 +67,7 @@ export class MobileUiController {
       mobileSlashButton: doc.getElementById('btn-mobile-slash') as HTMLButtonElement | null,
       mobileShootButton: doc.getElementById('btn-mobile-shoot') as HTMLButtonElement | null,
       mobileWorldStopButton: doc.getElementById('btn-mobile-world-stop') as HTMLButtonElement | null,
+      mobileWorldRestartButton: doc.getElementById('btn-mobile-world-restart') as HTMLButtonElement | null,
       worldHudToggleButton: doc.getElementById('btn-world-hud-toggle') as HTMLButtonElement | null,
       worldHudMinimizeButton: doc.getElementById('btn-mobile-world-hud-minimize') as HTMLButtonElement | null,
       worldChatButton: doc.getElementById('btn-world-chat') as HTMLButtonElement | null,
@@ -397,6 +399,11 @@ export class MobileUiController {
         pressTouchAction('stop');
       }
     });
+    this.elements.mobileWorldRestartButton?.addEventListener('click', () => {
+      if (this.doc.body.dataset.appMode === 'play-world') {
+        pressTouchAction('restart');
+      }
+    });
   }
 
   private bindHoldButton(button: HTMLButtonElement | null, action: 'jump' | 'slash' | 'shoot'): void {
@@ -543,6 +550,10 @@ export class MobileUiController {
       !(layout.coarsePointer && !layout.mobileLandscapeBlocked && isPlay),
     );
     this.elements.mobileWorldStopButton?.classList.toggle(
+      'hidden',
+      !(isCollapsibleWorldHud && isPlay && this.worldHudCollapsed),
+    );
+    this.elements.mobileWorldRestartButton?.classList.toggle(
       'hidden',
       !(isCollapsibleWorldHud && isPlay && this.worldHudCollapsed),
     );
