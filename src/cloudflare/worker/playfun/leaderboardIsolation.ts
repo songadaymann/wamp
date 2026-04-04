@@ -55,6 +55,23 @@ export async function assertWampLeaderboardWriteAllowed(
   }
 }
 
+export async function assertPlayfunOnlyDisplayNameChangeAllowed(
+  env: Env,
+  user: Pick<RequestAuth['user'], 'id' | 'displayName'>,
+  nextDisplayName: string
+): Promise<void> {
+  if (user.displayName === nextDisplayName) {
+    return;
+  }
+
+  if (await isPlayfunLeaderboardExcludedUserId(env, user.id)) {
+    throw new HttpError(
+      403,
+      'Link an email or wallet before changing your display name.'
+    );
+  }
+}
+
 export function sqlUserIdHasPlayfunLink(userIdExpression: string): string {
   return `EXISTS (
     SELECT 1

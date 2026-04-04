@@ -64,6 +64,7 @@ import {
   requireCurrentSession,
 } from './request';
 import { NO_CHAT_MODERATION_VIEWER, resolveChatModerationViewer } from '../chat/moderation';
+import { assertPlayfunOnlyDisplayNameChangeAllowed } from '../playfun/leaderboardIsolation';
 import { getRoomClaimQuota } from '../rooms/store';
 
 export async function handleAuthRequest(request: Request, url: URL, env: Env): Promise<Response> {
@@ -238,6 +239,8 @@ export async function handleUpdateDisplayName(request: Request, env: Env): Promi
   if (displayName.length > 24) {
     throw new HttpError(400, 'Display name must be 24 characters or fewer.');
   }
+
+  await assertPlayfunOnlyDisplayNameChangeAllowed(env, auth.user, displayName);
 
   const existingUser = await findUserByDisplayName(env, displayName);
   if (existingUser && existingUser.id !== auth.user.id) {
