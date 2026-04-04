@@ -46,7 +46,7 @@ import {
 } from '../playfun/service';
 import {
   assertWampLeaderboardWriteAllowed,
-  sqlDoesNotHavePlayfunDisplayNamePrefix,
+  sqlUserIdIsNotPlayfunOnly,
 } from '../playfun/leaderboardIsolation';
 import {
   awardCoursePublishPoints,
@@ -665,7 +665,7 @@ function buildRankedCourseLeaderboardCte(goal: CourseGoal): string {
         AND result = 'completed'
         AND elapsed_ms IS NOT NULL
         AND finished_at IS NOT NULL
-        AND ${sqlDoesNotHavePlayfunDisplayNamePrefix('course_runs.user_display_name')}
+        AND ${sqlUserIdIsNotPlayfunOnly('course_runs.user_id')}
     ),
     best_runs AS (
       SELECT

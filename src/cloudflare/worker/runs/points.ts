@@ -2,7 +2,6 @@ import { placedObjectContributesToCategory } from '../../../config';
 import type { CourseRunRecord } from '../../../courses/runModel';
 import type { RoomGoal } from '../../../goals/roomGoals';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
-import { isPlayfunLeaderboardExcludedDisplayName } from '../../../playfun/identity';
 import type { RoomRunRecord, UserStatsRecord } from '../../../runs/model';
 import { compareLeaderboardEntries } from '../../../runs/scoring';
 import type { CourseRunRow, Env, PointEventRow, RoomRunRow, UserRow, UserStatsRow } from '../core/types';
@@ -307,7 +306,7 @@ export async function upsertUserStats(env: Env, userId: string): Promise<void> {
     return;
   }
 
-  if (isPlayfunLeaderboardExcludedDisplayName(user.display_name)) {
+  if (await isPlayfunLeaderboardExcludedUserId(env, userId)) {
     await env.DB.batch([
       env.DB.prepare(
         `

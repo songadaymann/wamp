@@ -1,6 +1,7 @@
 import type { DashboardStatsResponse } from '../../../dashboard/model';
 import { jsonResponse } from '../core/http';
 import type { Env } from '../core/types';
+import { sqlUserIdIsNotPlayfunOnly } from '../playfun/leaderboardIsolation';
 
 const MIN_COMPLETED_DASHBOARD_ELAPSED_MS = 500;
 const DASHBOARD_HISTORY_DAYS = 30;
@@ -81,7 +82,7 @@ async function loadDashboardStats(env: Env): Promise<DashboardStatsResponse> {
               WHERE result = 'completed'
                 AND elapsed_ms IS NOT NULL
                 AND elapsed_ms >= ?
-                AND room_runs.user_display_name NOT LIKE 'playfun-%'
+                AND ${sqlUserIdIsNotPlayfunOnly('room_runs.user_id')}
               GROUP BY user_id, room_id, room_version
             ) AS distinct_completed_room_runs
           ) AS completed_room_challenges
