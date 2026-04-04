@@ -1650,6 +1650,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         bounds: null,
         lighting: null,
         emitters: [],
+        ambientBounds: [],
       });
       if (structureChanged) {
         this.syncBackdropCameraIgnores();
@@ -1664,6 +1665,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         bounds: null,
         lighting: null,
         emitters: [],
+        ambientBounds: [],
       });
       if (structureChanged) {
         this.syncBackdropCameraIgnores();
@@ -1694,11 +1696,53 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       lighting: currentRoom.lighting,
       emitters,
+      ambientBounds: this.getAmbientRoomLightingBounds(currentRoom.coordinates),
     });
 
     if (structureChanged) {
       this.syncBackdropCameraIgnores();
     }
+  }
+
+  private getAmbientRoomLightingBounds(roomCoordinates: RoomCoordinates): Array<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }> {
+    const bounds: Array<{
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }> = [];
+
+    for (let deltaY = -1; deltaY <= 1; deltaY += 1) {
+      for (let deltaX = -1; deltaX <= 1; deltaX += 1) {
+        if (deltaX === 0 && deltaY === 0) {
+          continue;
+        }
+
+        const coordinates = {
+          x: roomCoordinates.x + deltaX,
+          y: roomCoordinates.y + deltaY,
+        };
+        const state = this.getCellStateAt(coordinates);
+        if (state !== 'published' && state !== 'draft') {
+          continue;
+        }
+
+        const origin = this.getRoomOrigin(coordinates);
+        bounds.push({
+          x: origin.x,
+          y: origin.y,
+          width: ROOM_PX_WIDTH,
+          height: ROOM_PX_HEIGHT,
+        });
+      }
+    }
+
+    return bounds;
   }
 
   private resetRuntimeState(): void {

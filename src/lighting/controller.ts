@@ -31,6 +31,7 @@ export interface RoomLightingFrameInput {
   bounds: RoomLightingBounds | null;
   lighting: RoomLightingSettings | null | undefined;
   emitters: RoomLightingEmitter[];
+  ambientBounds?: RoomLightingBounds[];
 }
 
 export interface RoomLightingDebugState {
@@ -40,6 +41,7 @@ export interface RoomLightingDebugState {
   rendererPath: 'off' | 'webgl' | 'canvas-disabled';
   activeRoomId: string | null;
   emitterCount: number;
+  ambientOverlayCount: number;
   fallbackReason: string | null;
 }
 
@@ -50,6 +52,7 @@ interface RoomLightingControllerOptions {
 
 export class RoomLightingController {
   private overlay: Phaser.GameObjects.RenderTexture | null = null;
+  private ambientOverlays: Phaser.GameObjects.Rectangle[] = [];
   private debugState: RoomLightingDebugState = {
     mode: 'off',
     darkness: DEFAULT_ROOM_LIGHTING_DARKNESS,
@@ -57,13 +60,14 @@ export class RoomLightingController {
     rendererPath: 'off',
     activeRoomId: null,
     emitterCount: 0,
+    ambientOverlayCount: 0,
     fallbackReason: null,
   };
 
   constructor(private readonly options: RoomLightingControllerOptions) {}
 
   reset(): boolean {
-    const structureChanged = this.destroyOverlay();
+    const structureChanged = this.destroyOverlays();
     this.debugState = {
       mode: 'off',
       darkness: DEFAULT_ROOM_LIGHTING_DARKNESS,
@@ -71,6 +75,7 @@ export class RoomLightingController {
       rendererPath: 'off',
       activeRoomId: null,
       emitterCount: 0,
+      ambientOverlayCount: 0,
       fallbackReason: null,
     };
     return structureChanged;
@@ -84,10 +89,11 @@ export class RoomLightingController {
     const lighting = cloneRoomLightingSettings(input.lighting ?? null);
     const activeRoomId = input.roomId ?? null;
     const emitterCount = input.emitters.length;
+    const ambientBounds = input.ambientBounds ?? [];
     let structureChanged = false;
 
     if (!activeRoomId || !input.bounds) {
-      structureChanged = this.destroyOverlay();
+      structureChanged = this.destroyOverlays();
       this.debugState = {
         mode: lighting.mode,
         darkness: lighting.darkness,
@@ -95,13 +101,14 @@ export class RoomLightingController {
         rendererPath: 'off',
         activeRoomId,
         emitterCount: 0,
+        ambientOverlayCount: 0,
         fallbackReason: null,
       };
       return structureChanged;
     }
 
     if (!roomLightingUsesDynamicOverlay(lighting)) {
-      structureChanged = this.destroyOverlay();
+      structureChanged = this.destroyOverlays();
       this.debugState = {
         mode: lighting.mode,
         darkness: lighting.darkness,
@@ -109,13 +116,14 @@ export class RoomLightingController {
         rendererPath: 'off',
         activeRoomId,
         emitterCount,
+        ambientOverlayCount: 0,
         fallbackReason: null,
       };
       return structureChanged;
     }
 
     if (!this.supportsDynamicLighting()) {
-      structureChanged = this.destroyOverlay();
+      structureChanged = this.destroyOverlays();
       this.debugState = {
         mode: lighting.mode,
         darkness: lighting.darkness,
@@ -123,6 +131,7 @@ export class RoomLightingController {
         rendererPath: 'canvas-disabled',
         activeRoomId,
         emitterCount,
+        ambientOverlayCount: 0,
         fallbackReason: 'Dynamic room lighting requires WebGL.',
       };
       return structureChanged;
@@ -137,6 +146,7 @@ export class RoomLightingController {
         rendererPath: 'canvas-disabled',
         activeRoomId,
         emitterCount,
+        ambientOverlayCount: 0,
         fallbackReason: 'Unable to create lighting overlay.',
       };
       return structureChanged;
@@ -161,6 +171,7 @@ export class RoomLightingController {
       const localY = emitter.y - input.bounds.y - auraRadius;
       this.overlay.erase(auraTextureKey, localX, localY);
     }
+    structureChanged = this.syncAmbientOverlays(ambientBounds, ambientAlpha) || structureChanged;
 
     this.debugState = {
       mode: lighting.mode,
@@ -169,13 +180,19 @@ export class RoomLightingController {
       rendererPath: 'webgl',
       activeRoomId,
       emitterCount,
+      ambientOverlayCount: ambientBounds.length,
       fallbackReason: null,
     };
     return structureChanged;
   }
 
   getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return this.overlay ? [this.overlay] : [];
+    const objects: Phaser.GameObjects.GameObject[] = [];
+    if (this.overlay) {
+      objects.push(this.overlay);
+    }
+    objects.push(...this.ambientOverlays);
+    return objects;
   }
 
   getDebugState(): RoomLightingDebugState {
@@ -199,21 +216,77 @@ export class RoomLightingController {
       return false;
     }
 
-    this.destroyOverlay();
+    if (this.overlay) {
+      this.overlay.destroy();
+      this.overlay = null;
+    }
     this.overlay = this.options.scene.add.renderTexture(bounds.x, bounds.y, bounds.width, bounds.height);
     this.overlay.setOrigin(0, 0);
-    this.overlay.setDepth(this.options.overlayDepth);
+    this.overlay.setDepth(this.options.overlayDepth + 1);
     return true;
   }
 
-  private destroyOverlay(): boolean {
-    if (!this.overlay) {
-      return false;
+  private syncAmbientOverlays(boundsList: RoomLightingBounds[], ambientAlpha: number): boolean {
+    let structureChanged = false;
+
+    while (this.ambientOverlays.length > boundsList.length) {
+      const overlay = this.ambientOverlays.pop();
+      overlay?.destroy();
+      structureChanged = true;
     }
 
-    this.overlay.destroy();
-    this.overlay = null;
-    return true;
+    while (this.ambientOverlays.length < boundsList.length) {
+      const bounds = boundsList[this.ambientOverlays.length];
+      const overlay = this.options.scene.add.rectangle(
+        bounds.x,
+        bounds.y,
+        bounds.width,
+        bounds.height,
+        RETRO_COLORS.backgroundNumber,
+        ambientAlpha,
+      );
+      overlay.setOrigin(0, 0);
+      overlay.setDepth(this.options.overlayDepth);
+      this.ambientOverlays.push(overlay);
+      structureChanged = true;
+    }
+
+    for (let index = 0; index < boundsList.length; index += 1) {
+      const bounds = boundsList[index];
+      const overlay = this.ambientOverlays[index];
+      if (!overlay) {
+        continue;
+      }
+      overlay.setPosition(bounds.x, bounds.y);
+      if (
+        Math.round(overlay.width) !== Math.round(bounds.width)
+        || Math.round(overlay.height) !== Math.round(bounds.height)
+      ) {
+        overlay.setSize(bounds.width, bounds.height);
+      }
+      overlay.setFillStyle(RETRO_COLORS.backgroundNumber, ambientAlpha);
+      overlay.setVisible(true);
+    }
+
+    return structureChanged;
+  }
+
+  private destroyOverlays(): boolean {
+    let structureChanged = false;
+
+    if (this.overlay) {
+      this.overlay.destroy();
+      this.overlay = null;
+      structureChanged = true;
+    }
+
+    for (const overlay of this.ambientOverlays) {
+      overlay.destroy();
+      structureChanged = true;
+    }
+    this.ambientOverlays = [];
+
+    return structureChanged;
   }
 }
 
