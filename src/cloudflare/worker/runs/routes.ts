@@ -36,7 +36,7 @@ import {
 } from '../playfun/service';
 import {
   assertWampLeaderboardWriteAllowed,
-  sqlDoesNotHavePlayfunDisplayNamePrefix,
+  sqlUserIdIsNotPlayfunOnly,
 } from '../playfun/leaderboardIsolation';
 import {
   awardRoomCreatorCompletionPoints,
@@ -595,7 +595,7 @@ export async function loadCompletedRoomRuns(
       WHERE room_id = ?
         AND room_version = ?
         AND result = 'completed'
-        AND ${sqlDoesNotHavePlayfunDisplayNamePrefix('room_runs.user_display_name')}
+        AND ${sqlUserIdIsNotPlayfunOnly('room_runs.user_id')}
     `
   )
     .bind(roomId, roomVersion)
@@ -638,7 +638,7 @@ export async function loadCompletedRoomRunsForVersions(
       WHERE room_id = ?
         AND room_version IN (${roomVersions.map(() => '?').join(', ')})
         AND result = 'completed'
-        AND ${sqlDoesNotHavePlayfunDisplayNamePrefix('room_runs.user_display_name')}
+        AND ${sqlUserIdIsNotPlayfunOnly('room_runs.user_id')}
     `
   )
     .bind(roomId, ...roomVersions)
@@ -697,7 +697,7 @@ function buildRankedRoomLeaderboardCte(goal: RoomGoal, versionCount: number): st
         AND result = 'completed'
         AND elapsed_ms IS NOT NULL
         AND finished_at IS NOT NULL
-        AND ${sqlDoesNotHavePlayfunDisplayNamePrefix('room_runs.user_display_name')}
+        AND ${sqlUserIdIsNotPlayfunOnly('room_runs.user_id')}
     ),
     best_runs AS (
       SELECT
@@ -853,7 +853,7 @@ async function loadRankedGlobalLeaderboardRows(
             ORDER BY ${orderClause}
           ) AS overall_rank
         FROM user_stats
-        WHERE ${sqlDoesNotHavePlayfunDisplayNamePrefix('user_stats.user_display_name')}
+        WHERE ${sqlUserIdIsNotPlayfunOnly('user_stats.user_id')}
       )
       SELECT
         user_id,
@@ -911,7 +911,7 @@ async function loadViewerRankedGlobalLeaderboardRow(
             ORDER BY ${orderClause}
           ) AS overall_rank
         FROM user_stats
-        WHERE ${sqlDoesNotHavePlayfunDisplayNamePrefix('user_stats.user_display_name')}
+        WHERE ${sqlUserIdIsNotPlayfunOnly('user_stats.user_id')}
       )
       SELECT
         user_id,

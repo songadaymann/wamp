@@ -1,4 +1,3 @@
-import { isPlayfunLeaderboardExcludedDisplayName } from '../../../playfun/identity';
 import { HttpError } from '../core/http';
 import type { Env, RequestAuth } from '../core/types';
 
@@ -25,9 +24,15 @@ export async function isPlayfunLeaderboardExcludedUserId(
   const row = await env.DB.prepare(
     `
       SELECT 1 AS found
-      FROM users
-      WHERE id = ?
-        AND display_name LIKE 'playfun-%'
+      FROM users users_playfun_filter
+      WHERE users_playfun_filter.id = ?
+        AND users_playfun_filter.email IS NULL
+        AND users_playfun_filter.wallet_address IS NULL
+        AND EXISTS (
+          SELECT 1
+          FROM playfun_user_links playfun_user_links
+          WHERE playfun_user_links.user_id = users_playfun_filter.id
+        )
       LIMIT 1
     `
   )
@@ -38,16 +43,39 @@ export async function isPlayfunLeaderboardExcludedUserId(
 }
 
 export async function assertWampLeaderboardWriteAllowed(
-  _env: Env,
+  env: Env,
   auth: Pick<RequestAuth, 'source' | 'user'>,
   actionLabel: string
 ): Promise<void> {
-  if (isPlayfunLeaderboardExcludedDisplayName(auth.user.displayName)) {
+  if (await isPlayfunLeaderboardExcludedUserId(env, auth.user.id)) {
     throw new HttpError(
       403,
-      `Accounts using Play.fun burner names can still ${actionLabel}, but WAMP leaderboard participation stays local-only.`
+      `Play.fun-only accounts can still ${actionLabel}, but WAMP leaderboard participation stays local-only.`
     );
   }
+}
+
+export function sqlUserIdHasPlayfunLink(userIdExpression: string): string {
+  return `EXISTS (
+    SELECT 1
+    FROM playfun_user_links playfun_user_links
+    WHERE playfun_user_links.user_id = ${userIdExpression}
+  )`;
+}
+
+export function sqlUserIdIsPlayfunOnly(userIdExpression: string): string {
+  return `EXISTS (
+    SELECT 1
+    FROM users users_playfun_filter
+    WHERE users_playfun_filter.id = ${userIdExpression}
+      AND users_playfun_filter.email IS NULL
+      AND users_playfun_filter.wallet_address IS NULL
+      AND ${sqlUserIdHasPlayfunLink('users_playfun_filter.id')}
+  )`;
+}
+
+export function sqlUserIdIsNotPlayfunOnly(userIdExpression: string): string {
+  return `NOT (${sqlUserIdIsPlayfunOnly(userIdExpression)})`;
 }
 
 export function sqlHasPlayfunDisplayNamePrefix(displayNameExpression: string): string {

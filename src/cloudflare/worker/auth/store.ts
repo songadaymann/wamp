@@ -12,7 +12,7 @@ import type {
   UserStatsRow,
   WalletChallengeRow,
 } from '../core/types';
-import { sqlDoesNotHavePlayfunDisplayNamePrefix } from '../playfun/leaderboardIsolation';
+import { sqlUserIdIsNotPlayfunOnly } from '../playfun/leaderboardIsolation';
 
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 export const MAGIC_LINK_TTL_MS = 1000 * 60 * 15;
@@ -355,7 +355,7 @@ export async function loadUserStatsRow(env: Env, userId: string) {
         updated_at
       FROM user_stats
       WHERE user_id = ?
-        AND ${sqlDoesNotHavePlayfunDisplayNamePrefix('user_stats.user_display_name')}
+        AND ${sqlUserIdIsNotPlayfunOnly('user_stats.user_id')}
       LIMIT 1
     `
   )
@@ -383,7 +383,7 @@ export async function loadAllUserStatsRows(env: Env) {
         fastest_clear_ms,
         updated_at
       FROM user_stats
-      WHERE ${sqlDoesNotHavePlayfunDisplayNamePrefix('user_stats.user_display_name')}
+      WHERE ${sqlUserIdIsNotPlayfunOnly('user_stats.user_id')}
     `
   ).all<UserStatsRow>();
 

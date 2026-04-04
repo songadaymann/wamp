@@ -5,7 +5,7 @@ import type { Env, PointEventRow } from '../core/types';
 import { upsertUserStats } from '../runs/points';
 import {
   sqlHasPlayfunDisplayNamePrefix,
-  sqlUserIdHasPlayfunDisplayNamePrefix,
+  sqlUserIdIsPlayfunOnly,
 } from '../playfun/leaderboardIsolation';
 
 interface CleanupRequestBody {
@@ -69,7 +69,7 @@ export async function previewPlayfunLeaderboardCleanup(
     `
       SELECT id AS user_id
       FROM users
-      WHERE ${sqlHasPlayfunDisplayNamePrefix('display_name')}
+      WHERE ${sqlUserIdIsPlayfunOnly('id')}
       ORDER BY id ASC
     `
   ).all<PlayfunDisplayNameUserRow>();
@@ -77,7 +77,7 @@ export async function previewPlayfunLeaderboardCleanup(
     `
       SELECT attempt_id, user_id
       FROM room_runs
-      WHERE ${sqlHasPlayfunDisplayNamePrefix('room_runs.user_display_name')}
+      WHERE ${sqlUserIdIsPlayfunOnly('room_runs.user_id')}
       ORDER BY attempt_id ASC
     `
   ).all<PlayfunRunRow>();
@@ -85,7 +85,7 @@ export async function previewPlayfunLeaderboardCleanup(
     `
       SELECT attempt_id, user_id
       FROM course_runs
-      WHERE ${sqlHasPlayfunDisplayNamePrefix('course_runs.user_display_name')}
+      WHERE ${sqlUserIdIsPlayfunOnly('course_runs.user_id')}
       ORDER BY attempt_id ASC
     `
   ).all<PlayfunRunRow>();
@@ -95,7 +95,7 @@ export async function previewPlayfunLeaderboardCleanup(
       FROM point_events
       WHERE event_type IN ('room_creator_completion', 'course_creator_completion')
         AND breakdown_json IS NOT NULL
-        AND ${sqlUserIdHasPlayfunDisplayNamePrefix(`json_extract(breakdown_json, '$.finisherUserId')`)}
+        AND ${sqlUserIdIsPlayfunOnly(`json_extract(breakdown_json, '$.finisherUserId')`)}
       ORDER BY created_at ASC, id ASC
     `
   ).all<PointEventRow>();
@@ -149,13 +149,13 @@ export async function applyPlayfunLeaderboardCleanup(
     env.DB.prepare(
       `
         DELETE FROM room_runs
-        WHERE ${sqlHasPlayfunDisplayNamePrefix('room_runs.user_display_name')}
+        WHERE ${sqlUserIdIsPlayfunOnly('room_runs.user_id')}
       `
     ),
     env.DB.prepare(
       `
         DELETE FROM course_runs
-        WHERE ${sqlHasPlayfunDisplayNamePrefix('course_runs.user_display_name')}
+        WHERE ${sqlUserIdIsPlayfunOnly('course_runs.user_id')}
       `
     ),
     env.DB.prepare(
@@ -163,7 +163,7 @@ export async function applyPlayfunLeaderboardCleanup(
         DELETE FROM point_events
         WHERE event_type IN ('room_creator_completion', 'course_creator_completion')
           AND breakdown_json IS NOT NULL
-          AND ${sqlUserIdHasPlayfunDisplayNamePrefix(`json_extract(breakdown_json, '$.finisherUserId')`)}
+          AND ${sqlUserIdIsPlayfunOnly(`json_extract(breakdown_json, '$.finisherUserId')`)}
       `
     ),
   ]);

@@ -16,14 +16,14 @@ import {
   type RoomSnapshot,
 } from '../../persistence/roomModel';
 import { createRoomRepository } from '../../persistence/roomRepository';
-import { isPlayfunLeaderboardExcludedDisplayName } from '../../playfun/identity';
+import {
+  isPlayfunSurfaceAuth,
+  isWampLeaderboardEligibleAuth,
+} from '../../playfun/leaderboardPolicy';
 import {
   createActiveCourseRunState,
   type ActiveCourseRunState,
 } from './courseRuns';
-import {
-  isWampLeaderboardEligibleAuth,
-} from '../../playfun/leaderboardPolicy';
 
 export type CoursePlaybackRoomSourceMode = 'published' | 'draftPreview';
 
@@ -124,7 +124,7 @@ export class OverworldCoursePlaybackController {
     const localOnlyMessage =
       course.status !== 'published'
         ? 'Draft course run stays local.'
-        : isPlayfunLeaderboardExcludedDisplayName(authState.user?.displayName ?? null)
+        : isPlayfunSurfaceAuth(authState.source ?? null)
           ? 'Play.fun course runs stay local on WAMP.'
           : authState.authenticated
             ? 'Ranked course submission unavailable.'
