@@ -91,6 +91,46 @@ export interface RoomVersionRow {
   leaderboard_source_version: number | null;
 }
 
+export interface MusicPhraseBatchRow {
+  id: string;
+  room_id: string;
+  room_version: number;
+  room_title: string | null;
+  room_x: number;
+  room_y: number;
+  creator_user_id: string | null;
+  creator_principal_type: 'user' | 'agent' | null;
+  creator_agent_id: string | null;
+  creator_display_name: string;
+  created_at: string;
+}
+
+export interface MusicPhraseRow {
+  id: string;
+  batch_id: string;
+  room_id: string;
+  room_version: number;
+  room_title: string | null;
+  room_x: number;
+  room_y: number;
+  creator_user_id: string | null;
+  creator_principal_type: 'user' | 'agent' | null;
+  creator_agent_id: string | null;
+  creator_display_name: string;
+  instrument_id: string;
+  ordinal: number;
+  label: string;
+  fingerprint: string;
+  payload_json: string;
+  source_key_tonic: string | null;
+  source_key_mode: string | null;
+  created_at: string;
+}
+
+export interface MusicPhraseJoinRow extends MusicPhraseRow {
+  source_phrase_ids_csv: string | null;
+}
+
 export interface AgentRow {
   id: string;
   owner_user_id: string;

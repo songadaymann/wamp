@@ -2,12 +2,15 @@ import {
   TILESETS,
   TILE_SIZE,
   GAME_OBJECTS,
+  colorNumberToCssHex,
+  colorNumberToCssRgba,
   editorState,
   getObjectById,
   getObjectDefaultFrame,
   getObjectFrameSourceRect,
   getObjectPreviewBounds,
   getTilesetByKey,
+  getTilesetUiTheme,
   type GameObjectConfig,
   type TileSelection,
   type TilesetConfig,
@@ -182,9 +185,10 @@ export class PaletteController {
 
     const selection = editorState.selection;
     if (selection.tilesetKey === ts.key) {
-      ctx.strokeStyle = '#5577ff';
+      const theme = getTilesetUiTheme(editorState.selectedTilesetKey);
+      ctx.strokeStyle = colorNumberToCssHex(theme.accentCool);
       ctx.lineWidth = 2;
-      ctx.fillStyle = 'rgba(85, 119, 255, 0.15)';
+      ctx.fillStyle = colorNumberToCssRgba(theme.accentCool, 0.15);
 
       const sx = Math.floor(selection.startCol * scaledTile) + 1;
       const sy = Math.floor(selection.startRow * scaledTile) + 1;

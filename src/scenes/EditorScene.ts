@@ -7,18 +7,33 @@ import {
   ROOM_PX_HEIGHT,
   LAYER_NAMES,
   TILESETS,
+  getTilesetMusicInstrumentColorCss,
+  getTilesetMusicInstrumentColorRgbCss,
   editorState,
   resetEditorPaletteSelection,
 } from '../config';
 import { globalRoomMusicController } from '../music/controller';
+import type { MusicPhraseRecord } from '../music/library';
+import { getMusicPhrase, listMusicPhrases } from '../music/libraryClient';
 import {
+  ROOM_MUSIC_KEY_MODES,
+  ROOM_MUSIC_KEY_TONICS,
   ROOM_PATTERN_INSTRUMENT_IDS,
+  ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT,
+  cloneRoomPhraseArrangementMusic,
+  createDefaultRoomPhraseArrangementMusic,
+  getPatternInstrumentIcon,
   getPatternInstrumentLabel,
   isPatternRoomMusic,
+  isPhraseArrangementRoomMusic,
+  isRoomPhraseArrangementEmpty,
   isStemArrangementRoomMusic,
   type RoomMusic,
+  type RoomMusicKeyMode,
+  type RoomMusicKeyTonic,
   type RoomPatternInstrumentId,
   type RoomPatternPitchMode,
+  type RoomPhraseArrangementMusic,
 } from '../music/model';
 import {
   DEFAULT_ROOM_COORDINATES,
@@ -78,12 +93,29 @@ import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
 
 const EDITOR_NEIGHBOR_RADIUS = 1;
 type EditorMarkerPlacementMode = Exclude<GoalPlacementMode, null> | 'start';
+type EditorMusicComposerMode = 'sequencer' | 'arrangement';
+type EditorMusicArrangementSelection = {
+  instrumentId: RoomPatternInstrumentId;
+  slotIndex: number;
+};
 
 export class EditorScene extends Phaser.Scene {
   private uiBridge: EditorUiBridge | null = null;
   private roomEditCount = 0;
   private musicModeActive = false;
+  private musicComposerMode: EditorMusicComposerMode = 'sequencer';
   private musicPreviewState: 'stopped' | 'playing' = 'stopped';
+  private musicPhraseLibraryInstrument: RoomPatternInstrumentId = 'drums';
+  private musicPhraseLibraryItems: MusicPhraseRecord[] = [];
+  private musicPhraseLibraryNextCursor: string | null = null;
+  private musicPhraseLibraryLoading = false;
+  private musicPhraseLibraryLoadingMore = false;
+  private musicPhraseLibraryLoaded = false;
+  private musicPhraseLibraryError: string | null = null;
+  private musicPhraseLibraryRequestId = 0;
+  private musicArrangementSelection: EditorMusicArrangementSelection | null = null;
+  private readonly musicPhraseRecordCache = new Map<string, MusicPhraseRecord>();
+  private readonly musicPhraseDetailLoading = new Set<string>();
 
   // Tilemap
   private map!: Phaser.Tilemaps.Tilemap;
@@ -167,7 +199,7 @@ export class EditorScene extends Phaser.Scene {
     }
 
     const primaryModifier = event.metaKey || event.ctrlKey;
-    if (this.musicModeActive && primaryModifier && key === 'v') {
+    if (this.musicModeActive && this.musicComposerMode === 'sequencer' && primaryModifier && key === 'v') {
       event.preventDefault();
       event.stopPropagation();
       this.musicPatternController.beginPastePreview();
@@ -380,7 +412,7 @@ export class EditorScene extends Phaser.Scene {
       cancelClipboardPastePreview: () => this.toolController.cancelClipboardPastePreview(),
       getSelectedCoursePreviewForPlay: () => this.getSelectedCoursePreviewForPlay(),
       getRoomPermissions: () => this.roomPermissions,
-      saveDraft: (force = false) => this.persistenceController.saveDraft(force),
+      saveDraft: (force = false) => this.saveDraft(force),
       exportRoomSnapshot: () => this.exportRoomSnapshot(),
       getRoomDirty: () => this.roomDirty,
       getPublishedVersion: () => this.publishedVersion,
@@ -404,7 +436,7 @@ export class EditorScene extends Phaser.Scene {
       getPersistenceStatusText: () => this.persistenceController.statusText,
       getMintedTokenId: () => this.mintedTokenId,
       getRoomEditCount: () => this.roomEditCount,
-      publishRoom: () => this.persistenceController.publishRoom(),
+      publishRoom: () => this.publishRoom(),
     });
     this.inspectorController = new EditorInspectorController(
       this,
@@ -701,10 +733,10 @@ export class EditorScene extends Phaser.Scene {
       onBack: () => this.handleEditorBackAction(),
       onStartPlayMode: () => this.startPlayMode(),
       onSaveDraft: async () => {
-        await this.persistenceController.saveDraft(true, { promptForSignInOnUnauthorized: true });
+        await this.saveDraft(true, { promptForSignInOnUnauthorized: true });
       },
       onPublishRoom: async () => {
-        await this.persistenceController.publishRoom();
+        await this.publishRoom();
       },
       onPublishNudge: () => this.handlePublishNudgeAction(),
       onMintRoom: async () => {
@@ -787,7 +819,7 @@ export class EditorScene extends Phaser.Scene {
       this.inspectorController.updateContainerOverlay(graphics);
     });
     this.overlayController.updateLayerIndicator();
-    this.musicPatternController.updateOverlay(this.musicModeActive);
+    this.musicPatternController.updateOverlay(this.musicModeActive && this.musicComposerMode === 'sequencer');
   }
 
   // ══════════════════════════════════════
@@ -1027,7 +1059,16 @@ export class EditorScene extends Phaser.Scene {
   }
 
   async publishRoom(successText?: string): Promise<RoomRecord | null> {
-    return this.persistenceController.publishRoom(successText);
+    const record = await this.persistenceController.publishRoom(successText);
+    if (record?.published) {
+      this.musicPhraseLibraryLoaded = false;
+      this.musicPhraseLibraryError = null;
+      this.musicPhraseLibraryNextCursor = null;
+      if (this.musicModeActive) {
+        await this.loadMusicPhraseLibrary(true);
+      }
+    }
+    return record;
   }
 
   async revertToVersion(targetVersion: number): Promise<RoomRecord | null> {
@@ -1386,11 +1427,201 @@ export class EditorScene extends Phaser.Scene {
     this.updateBottomBar();
   }
 
+  private getDisplayPhraseArrangement(): RoomPhraseArrangementMusic {
+    return isPhraseArrangementRoomMusic(this.roomMusic)
+      ? this.roomMusic
+      : createDefaultRoomPhraseArrangementMusic();
+  }
+
+  private getEditablePhraseArrangement(): RoomPhraseArrangementMusic | null {
+    if (isStemArrangementRoomMusic(this.roomMusic)) {
+      return null;
+    }
+
+    return isPhraseArrangementRoomMusic(this.roomMusic)
+      ? cloneRoomPhraseArrangementMusic(this.roomMusic)
+      : createDefaultRoomPhraseArrangementMusic();
+  }
+
+  private getActiveMusicKeyTonic(): RoomMusicKeyTonic {
+    return this.musicComposerMode === 'arrangement'
+      ? this.getDisplayPhraseArrangement().keyTonic
+      : this.musicPatternController.getKeyTonic();
+  }
+
+  private getActiveMusicKeyMode(): RoomMusicKeyMode {
+    return this.musicComposerMode === 'arrangement'
+      ? this.getDisplayPhraseArrangement().keyMode
+      : this.musicPatternController.getKeyMode();
+  }
+
+  private getActiveMusicPitchMode(): RoomPatternPitchMode {
+    return this.musicComposerMode === 'arrangement'
+      ? this.getDisplayPhraseArrangement().pitchMode
+      : this.musicPatternController.getPitchMode();
+  }
+
+  private getActiveMusicOctaveShift(): number | null {
+    if (this.musicComposerMode === 'arrangement') {
+      const instrumentId = this.musicPatternController.getActiveInstrumentTab();
+      if (instrumentId === 'drums') {
+        return null;
+      }
+
+      return this.getDisplayPhraseArrangement().octaveShift[instrumentId];
+    }
+
+    return this.musicPatternController.getActiveOctaveShift();
+  }
+
+  private rememberMusicPhrases(phrases: readonly MusicPhraseRecord[]): void {
+    for (const phrase of phrases) {
+      this.musicPhraseRecordCache.set(phrase.id, phrase);
+    }
+  }
+
+  private ensureArrangementSelection(instrumentId: RoomPatternInstrumentId): void {
+    if (!this.musicArrangementSelection || this.musicArrangementSelection.instrumentId !== instrumentId) {
+      this.musicArrangementSelection = {
+        instrumentId,
+        slotIndex: 0,
+      };
+    }
+  }
+
+  private getArrangementSelection(): EditorMusicArrangementSelection {
+    const instrumentId = this.musicPatternController.getActiveInstrumentTab();
+    this.ensureArrangementSelection(instrumentId);
+    return this.musicArrangementSelection as EditorMusicArrangementSelection;
+  }
+
+  private async loadMusicPhraseLibrary(reset: boolean): Promise<void> {
+    const instrumentId = this.musicPatternController.getActiveInstrumentTab();
+    const requestId = this.musicPhraseLibraryRequestId + 1;
+    this.musicPhraseLibraryRequestId = requestId;
+    this.musicPhraseLibraryInstrument = instrumentId;
+    if (reset) {
+      this.musicPhraseLibraryLoading = true;
+      this.musicPhraseLibraryLoadingMore = false;
+      this.musicPhraseLibraryLoaded = false;
+      this.musicPhraseLibraryItems = [];
+      this.musicPhraseLibraryNextCursor = null;
+      this.musicPhraseLibraryError = null;
+    } else {
+      if (!this.musicPhraseLibraryNextCursor) {
+        return;
+      }
+      this.musicPhraseLibraryLoadingMore = true;
+      this.musicPhraseLibraryError = null;
+    }
+    this.renderEditorUi();
+
+    try {
+      const response = await listMusicPhrases({
+        instrumentId,
+        cursor: reset ? null : this.musicPhraseLibraryNextCursor,
+        limit: 24,
+      });
+      if (requestId !== this.musicPhraseLibraryRequestId) {
+        return;
+      }
+
+      this.rememberMusicPhrases(response.items);
+      this.musicPhraseLibraryLoaded = true;
+      this.musicPhraseLibraryItems = reset
+        ? [...response.items]
+        : [...this.musicPhraseLibraryItems, ...response.items];
+      this.musicPhraseLibraryNextCursor = response.nextCursor;
+      this.musicPhraseLibraryError = null;
+    } catch (error) {
+      if (requestId !== this.musicPhraseLibraryRequestId) {
+        return;
+      }
+      this.musicPhraseLibraryError =
+        error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : 'Failed to load music phrases.';
+    } finally {
+      if (requestId === this.musicPhraseLibraryRequestId) {
+        this.musicPhraseLibraryLoading = false;
+        this.musicPhraseLibraryLoadingMore = false;
+        this.renderEditorUi();
+      }
+    }
+  }
+
+  private ensureMusicPhraseLibraryLoaded(force = false): void {
+    const instrumentId = this.musicPatternController.getActiveInstrumentTab();
+    const instrumentChanged = this.musicPhraseLibraryInstrument !== instrumentId;
+    if (force || instrumentChanged) {
+      void this.loadMusicPhraseLibrary(true);
+      return;
+    }
+
+    if (
+      !this.musicPhraseLibraryLoading &&
+      !this.musicPhraseLibraryLoadingMore &&
+      !this.musicPhraseLibraryLoaded &&
+      !this.musicPhraseLibraryError
+    ) {
+      void this.loadMusicPhraseLibrary(true);
+    }
+  }
+
+  private ensureArrangementPhraseCache(): void {
+    if (!isPhraseArrangementRoomMusic(this.roomMusic)) {
+      return;
+    }
+
+    for (const instrumentId of ROOM_PATTERN_INSTRUMENT_IDS) {
+      for (const phraseId of this.roomMusic.slots[instrumentId]) {
+        if (!phraseId || this.musicPhraseRecordCache.has(phraseId) || this.musicPhraseDetailLoading.has(phraseId)) {
+          continue;
+        }
+
+        this.musicPhraseDetailLoading.add(phraseId);
+        void getMusicPhrase(phraseId)
+          .then((phrase) => {
+            this.musicPhraseRecordCache.set(phrase.id, phrase);
+            this.renderEditorUi();
+          })
+          .catch(() => {
+            void 0;
+          })
+          .finally(() => {
+            this.musicPhraseDetailLoading.delete(phraseId);
+          });
+      }
+    }
+  }
+
+  private getArrangementSlotLabel(phraseId: string | null): string {
+    if (!phraseId) {
+      return 'Empty';
+    }
+
+    const phrase = this.musicPhraseRecordCache.get(phraseId) ?? null;
+    if (!phrase) {
+      return `Phrase ${phraseId.slice(0, 6)}`;
+    }
+
+    return phrase.label;
+  }
+
   setMusicModeActive(active: boolean): void {
     this.musicModeActive = active;
+    if (active) {
+      this.musicComposerMode = isPhraseArrangementRoomMusic(this.roomMusic)
+        ? 'arrangement'
+        : 'sequencer';
+    }
     if (active && editorState.activeTool !== 'pencil' && editorState.activeTool !== 'eraser' && editorState.activeTool !== 'copy') {
       editorState.activeTool = 'pencil';
       this.toolController.updateToolUi();
+    }
+    if (active) {
+      this.ensureArrangementSelection(this.musicPatternController.getActiveInstrumentTab());
+      this.ensureMusicPhraseLibraryLoaded();
     }
     if (!active) {
       this.musicPatternController.cancelPastePreview();
@@ -1406,21 +1637,197 @@ export class EditorScene extends Phaser.Scene {
     this.setMusicModeActive(!this.musicModeActive);
   }
 
+  setMusicComposerMode(mode: EditorMusicComposerMode): void {
+    if (this.musicComposerMode === mode) {
+      return;
+    }
+
+    this.musicComposerMode = mode;
+    if (mode === 'arrangement') {
+      this.ensureArrangementSelection(this.musicPatternController.getActiveInstrumentTab());
+    }
+    this.ensureMusicPhraseLibraryLoaded();
+    this.renderEditorUi();
+  }
+
   setMusicPatternInstrumentTab(instrumentId: RoomPatternInstrumentId): void {
     this.musicPatternController.setActiveInstrumentTab(instrumentId);
+    if (this.musicComposerMode === 'arrangement') {
+      this.ensureArrangementSelection(instrumentId);
+    }
+    this.ensureMusicPhraseLibraryLoaded();
     this.renderEditorUi();
   }
 
   setRoomMusicPitchMode(mode: RoomPatternPitchMode): void {
+    if (this.musicComposerMode === 'arrangement') {
+      const arrangement = this.getEditablePhraseArrangement();
+      if (!arrangement || arrangement.pitchMode === mode) {
+        return;
+      }
+
+      arrangement.pitchMode = mode;
+      this.commitRoomMusic(arrangement);
+      return;
+    }
+
     this.musicPatternController.setPitchMode(mode);
   }
 
+  setRoomMusicKeyTonic(tonic: RoomMusicKeyTonic): void {
+    if (this.musicComposerMode === 'arrangement') {
+      const arrangement = this.getEditablePhraseArrangement();
+      if (!arrangement || arrangement.keyTonic === tonic) {
+        return;
+      }
+
+      arrangement.keyTonic = tonic;
+      this.commitRoomMusic(arrangement);
+      return;
+    }
+
+    this.musicPatternController.setKeyTonic(tonic);
+  }
+
+  setRoomMusicKeyMode(mode: RoomMusicKeyMode): void {
+    if (this.musicComposerMode === 'arrangement') {
+      const arrangement = this.getEditablePhraseArrangement();
+      if (!arrangement || arrangement.keyMode === mode) {
+        return;
+      }
+
+      arrangement.keyMode = mode;
+      this.commitRoomMusic(arrangement);
+      return;
+    }
+
+    this.musicPatternController.setKeyMode(mode);
+  }
+
   shiftRoomMusicOctave(delta: number): void {
+    if (this.musicComposerMode === 'arrangement') {
+      const instrumentId = this.musicPatternController.getActiveInstrumentTab();
+      if (instrumentId === 'drums') {
+        return;
+      }
+
+      const arrangement = this.getEditablePhraseArrangement();
+      if (!arrangement) {
+        return;
+      }
+
+      const nextValue = Phaser.Math.Clamp(arrangement.octaveShift[instrumentId] + delta, -2, 2);
+      if (nextValue === arrangement.octaveShift[instrumentId]) {
+        return;
+      }
+
+      arrangement.octaveShift[instrumentId] = nextValue;
+      this.commitRoomMusic(arrangement);
+      return;
+    }
+
     this.musicPatternController.shiftActiveOctave(delta);
   }
 
   replaceLegacyRoomMusicWithPattern(): void {
     this.musicPatternController.replaceLegacyWithPattern();
+  }
+
+  refreshMusicPhraseLibrary(): void {
+    this.ensureMusicPhraseLibraryLoaded(true);
+  }
+
+  loadMoreMusicPhrases(): void {
+    if (this.musicPhraseLibraryLoading || this.musicPhraseLibraryLoadingMore || !this.musicPhraseLibraryNextCursor) {
+      return;
+    }
+
+    void this.loadMusicPhraseLibrary(false);
+  }
+
+  async useMusicPhrase(phraseId: string): Promise<void> {
+    try {
+      const phrase = await getMusicPhrase(phraseId);
+      this.rememberMusicPhrases([phrase]);
+      if (this.musicComposerMode === 'arrangement') {
+        await this.assignPhraseToArrangementSlot(phrase);
+      } else {
+        this.musicPatternController.insertPhrase(phrase);
+      }
+      this.renderEditorUi();
+    } catch (error) {
+      this.musicPhraseLibraryError =
+        error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : 'Failed to load music phrase.';
+      this.renderEditorUi();
+    }
+  }
+
+  selectArrangementSlot(instrumentId: RoomPatternInstrumentId, slotIndex: number): void {
+    if (slotIndex < 0 || slotIndex >= ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT) {
+      return;
+    }
+
+    this.musicArrangementSelection = { instrumentId, slotIndex };
+    this.musicPatternController.setActiveInstrumentTab(instrumentId);
+    this.ensureMusicPhraseLibraryLoaded();
+    this.renderEditorUi();
+  }
+
+  clearSelectedArrangementSlot(): void {
+    const arrangement = this.getEditablePhraseArrangement();
+    if (!arrangement) {
+      return;
+    }
+
+    const selection = this.getArrangementSelection();
+    if (arrangement.slots[selection.instrumentId][selection.slotIndex] === null) {
+      return;
+    }
+
+    arrangement.slots[selection.instrumentId][selection.slotIndex] = null;
+    this.commitRoomMusic(arrangement);
+  }
+
+  async assignMusicPhraseToArrangementSlot(
+    phraseId: string,
+    instrumentId: RoomPatternInstrumentId,
+    slotIndex: number,
+  ): Promise<void> {
+    if (slotIndex < 0 || slotIndex >= ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT) {
+      return;
+    }
+
+    this.musicArrangementSelection = { instrumentId, slotIndex };
+    this.musicPatternController.setActiveInstrumentTab(instrumentId);
+    this.ensureMusicPhraseLibraryLoaded();
+    this.renderEditorUi();
+    await this.useMusicPhrase(phraseId);
+  }
+
+  private async assignPhraseToArrangementSlot(phrase: MusicPhraseRecord): Promise<void> {
+    const selection = this.getArrangementSelection();
+    if (phrase.instrumentId !== selection.instrumentId) {
+      this.musicPhraseLibraryError = `Selected slot expects ${getPatternInstrumentLabel(selection.instrumentId)} phrases.`;
+      return;
+    }
+
+    const arrangement = this.getEditablePhraseArrangement();
+    if (!arrangement) {
+      return;
+    }
+
+    if (
+      isRoomPhraseArrangementEmpty(arrangement) &&
+      phrase.payload.kind === 'tonal'
+    ) {
+      arrangement.keyTonic = phrase.sourceKeyTonic ?? phrase.payload.keyTonic;
+      arrangement.keyMode = phrase.sourceKeyMode ?? phrase.payload.keyMode;
+    }
+
+    arrangement.slots[selection.instrumentId][selection.slotIndex] = phrase.id;
+    this.commitRoomMusic(arrangement);
   }
 
   toggleRoomMusicPreview(): void {
@@ -1497,25 +1904,259 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private handleMusicPointerDown(pointer: Phaser.Input.Pointer): void {
+    if (this.musicComposerMode !== 'sequencer') {
+      return;
+    }
     this.musicPatternController.handlePointerDown(pointer);
   }
 
   private handleMusicPointerMove(pointer: Phaser.Input.Pointer): void {
+    if (this.musicComposerMode !== 'sequencer') {
+      return;
+    }
     this.musicPatternController.handlePointerMove(pointer);
   }
 
   private handleMusicPointerUp(pointer: Phaser.Input.Pointer): void {
+    if (this.musicComposerMode !== 'sequencer') {
+      return;
+    }
     this.musicPatternController.handlePointerUp(pointer);
   }
 
   private updateMusicCursorHighlight(graphics: Phaser.GameObjects.Graphics): boolean {
+    if (this.musicComposerMode !== 'sequencer') {
+      return false;
+    }
     return this.musicPatternController.updateCursorHighlight(graphics);
+  }
+
+  private renderMusicWorkbenchModeButtons(legacyLocked: boolean): void {
+    const modeRoot = document.getElementById('editor-music-composer-modes');
+    if (!modeRoot) {
+      return;
+    }
+
+    modeRoot.replaceChildren(
+      ...([
+        { mode: 'sequencer', label: 'Sequencer' },
+        { mode: 'arrangement', label: 'Arrange' },
+      ] as const).map(({ mode, label }) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'bar-btn bar-btn-small editor-music-chip-button';
+        if (mode === this.musicComposerMode) {
+          button.classList.add('active');
+        }
+        button.dataset.roomMusicComposerMode = mode;
+        button.textContent = label;
+        button.disabled = legacyLocked;
+        return button;
+      }),
+    );
+  }
+
+  private renderMusicWorkbenchKeyControls(legacyLocked: boolean): void {
+    const tonicSelect = document.getElementById('editor-music-key-tonic-select') as HTMLSelectElement | null;
+    const modeSelect = document.getElementById('editor-music-key-mode-select') as HTMLSelectElement | null;
+    const activeTonic = this.getActiveMusicKeyTonic();
+    const activeMode = this.getActiveMusicKeyMode();
+
+    if (tonicSelect) {
+      tonicSelect.replaceChildren(
+        ...ROOM_MUSIC_KEY_TONICS.map((tonic) => {
+          const option = document.createElement('option');
+          option.value = tonic;
+          option.textContent = tonic;
+          return option;
+        }),
+      );
+      tonicSelect.value = activeTonic;
+      tonicSelect.disabled = legacyLocked;
+    }
+
+    if (modeSelect) {
+      modeSelect.replaceChildren(
+        ...ROOM_MUSIC_KEY_MODES.map((mode) => {
+          const option = document.createElement('option');
+          option.value = mode;
+          option.textContent = mode === 'major' ? 'Major' : 'Minor';
+          return option;
+        }),
+      );
+      modeSelect.value = activeMode;
+      modeSelect.disabled = legacyLocked;
+    }
+  }
+
+  private renderMusicArrangementPanel(legacyLocked: boolean): void {
+    const panel = document.getElementById('editor-music-arrangement-panel');
+    const grid = document.getElementById('editor-music-arrangement-grid');
+    const status = document.getElementById('editor-music-arrangement-status');
+    const clearButton = document.getElementById('btn-editor-music-arrangement-clear-slot') as HTMLButtonElement | null;
+    if (!panel || !grid || !status) {
+      return;
+    }
+
+    const showPanel = this.musicComposerMode === 'arrangement';
+    panel.classList.toggle('hidden', !showPanel);
+    if (!showPanel) {
+      return;
+    }
+
+    const arrangement = this.getDisplayPhraseArrangement();
+    const selection = this.getArrangementSelection();
+    const selectedPhraseId = arrangement.slots[selection.instrumentId][selection.slotIndex] ?? null;
+    status.textContent = selectedPhraseId
+      ? `Selected ${getPatternInstrumentLabel(selection.instrumentId)} slot ${selection.slotIndex + 1}. Drag in a phrase, click a library phrase, or use Clear Slot.`
+      : `Selected ${getPatternInstrumentLabel(selection.instrumentId)} slot ${selection.slotIndex + 1}. Drag a phrase in or click a library phrase to assign it here.`;
+
+    grid.replaceChildren(
+      ...ROOM_PATTERN_INSTRUMENT_IDS.map((instrumentId) => {
+        const row = document.createElement('div');
+        row.className = 'editor-music-arrangement-row';
+        row.dataset.roomMusicArrangementInstrument = instrumentId;
+        row.style.setProperty('--editor-music-instrument-accent', getTilesetMusicInstrumentColorCss(editorState.selectedTilesetKey, instrumentId));
+        row.style.setProperty('--editor-music-instrument-rgb', getTilesetMusicInstrumentColorRgbCss(editorState.selectedTilesetKey, instrumentId));
+
+        const label = document.createElement('div');
+        label.className = 'editor-music-arrangement-label';
+        label.textContent = getPatternInstrumentLabel(instrumentId);
+        row.append(label);
+
+        const cells = document.createElement('div');
+        cells.className = 'editor-music-arrangement-cells';
+        for (let slotIndex = 0; slotIndex < ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT; slotIndex += 1) {
+          const phraseId = arrangement.slots[instrumentId][slotIndex] ?? null;
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'editor-music-arrangement-slot';
+          if (
+            selection.instrumentId === instrumentId &&
+            selection.slotIndex === slotIndex
+          ) {
+            button.classList.add('active');
+          }
+          if (phraseId) {
+            button.classList.add('filled');
+          }
+          button.dataset.roomMusicArrangementInstrument = instrumentId;
+          button.dataset.roomMusicArrangementSlot = String(slotIndex);
+          button.disabled = legacyLocked;
+          button.title = phraseId ? this.getArrangementSlotLabel(phraseId) : `Empty ${getPatternInstrumentLabel(instrumentId)} slot ${slotIndex + 1}`;
+
+          const slotNumber = document.createElement('span');
+          slotNumber.className = 'editor-music-arrangement-slot-index';
+          slotNumber.textContent = `Slot ${slotIndex + 1}`;
+          button.append(slotNumber);
+
+          const slotLabel = document.createElement('span');
+          slotLabel.className = 'editor-music-arrangement-slot-label';
+          slotLabel.textContent = this.getArrangementSlotLabel(phraseId);
+          button.append(slotLabel);
+
+          cells.append(button);
+        }
+
+        row.append(cells);
+        return row;
+      }),
+    );
+
+    if (clearButton) {
+      clearButton.disabled = legacyLocked || selectedPhraseId === null;
+    }
+  }
+
+  private renderMusicLibraryPanel(legacyLocked: boolean): void {
+    const listRoot = document.getElementById('editor-music-library-list');
+    const status = document.getElementById('editor-music-library-status');
+    const moreButton = document.getElementById('btn-editor-music-library-more') as HTMLButtonElement | null;
+    const instrumentId = this.musicPatternController.getActiveInstrumentTab();
+    const actionLabel =
+      this.musicComposerMode === 'arrangement'
+        ? `Drag or click a ${getPatternInstrumentLabel(instrumentId)} phrase into the selected slot.`
+        : `Insert ${getPatternInstrumentLabel(instrumentId)} phrase into the sequencer lane.`;
+
+    if (status) {
+      if (this.musicPhraseLibraryLoading) {
+        status.textContent = `Loading ${getPatternInstrumentLabel(instrumentId)} phrases...`;
+      } else if (this.musicPhraseLibraryError) {
+        status.textContent = this.musicPhraseLibraryError;
+      } else if (this.musicPhraseLibraryItems.length === 0) {
+        status.textContent = `No published ${getPatternInstrumentLabel(instrumentId).toLowerCase()} phrases yet.`;
+      } else {
+        status.textContent = actionLabel;
+      }
+    }
+
+    if (!listRoot) {
+      return;
+    }
+
+    if (this.musicPhraseLibraryLoading && this.musicPhraseLibraryItems.length === 0) {
+      listRoot.replaceChildren();
+    } else if (this.musicPhraseLibraryItems.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'editor-music-library-empty';
+      empty.textContent = 'Publish a sequencer loop to start building the library.';
+      listRoot.replaceChildren(empty);
+    } else {
+      listRoot.replaceChildren(
+        ...this.musicPhraseLibraryItems.map((phrase) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'editor-music-library-item';
+          button.dataset.roomMusicPhraseId = phrase.id;
+          button.dataset.roomMusicInstrument = phrase.instrumentId;
+          button.draggable = !legacyLocked;
+          button.disabled = legacyLocked;
+          button.title = phrase.label;
+          button.style.setProperty('--editor-music-instrument-accent', getTilesetMusicInstrumentColorCss(editorState.selectedTilesetKey, phrase.instrumentId));
+          button.style.setProperty('--editor-music-instrument-rgb', getTilesetMusicInstrumentColorRgbCss(editorState.selectedTilesetKey, phrase.instrumentId));
+
+          const header = document.createElement('span');
+          header.className = 'editor-music-library-item-header';
+
+          const icon = document.createElement('span');
+          icon.className = 'editor-music-library-item-icon';
+          icon.textContent = getPatternInstrumentIcon(phrase.instrumentId);
+          header.append(icon);
+
+          const title = document.createElement('span');
+          title.className = 'editor-music-library-item-title';
+          title.textContent = phrase.label;
+          header.append(title);
+          button.append(header);
+
+          const meta = document.createElement('span');
+          meta.className = 'editor-music-library-item-meta';
+          meta.textContent =
+            phrase.payload.kind === 'drums'
+              ? `Drums · published ${phrase.createdAt.slice(0, 10)}`
+              : `${phrase.payload.keyTonic} ${phrase.payload.keyMode} · ${phrase.payload.pitchMode} · published ${phrase.createdAt.slice(0, 10)}`;
+          button.append(meta);
+
+          return button;
+        }),
+      );
+    }
+
+    if (moreButton) {
+      moreButton.classList.toggle('hidden', !this.musicPhraseLibraryNextCursor);
+      moreButton.disabled = legacyLocked || this.musicPhraseLibraryLoadingMore;
+      moreButton.textContent = this.musicPhraseLibraryLoadingMore ? 'Loading...' : 'Load More';
+    }
   }
 
   private renderMusicUi(): void {
     const body = document.body;
     body.dataset.editorMusicMode = this.musicModeActive ? 'true' : 'false';
     body.dataset.editorMusicUiLocked = this.musicModeActive ? 'true' : 'false';
+    if (this.musicModeActive) {
+      this.ensureMusicPhraseLibraryLoaded();
+      this.ensureArrangementPhraseCache();
+    }
 
     const modeButton = document.getElementById('btn-editor-music-mode') as HTMLButtonElement | null;
     if (modeButton) {
@@ -1527,25 +2168,54 @@ export class EditorScene extends Phaser.Scene {
     if (summary) {
       if (isStemArrangementRoomMusic(this.roomMusic)) {
         summary.textContent = 'Legacy WAMP stem music is saved in this room. Replace it to edit on the room grid.';
+      } else if (isPhraseArrangementRoomMusic(this.roomMusic)) {
+        const arrangement = this.roomMusic;
+        const filledSlotCount = ROOM_PATTERN_INSTRUMENT_IDS.reduce(
+          (count, instrumentId) =>
+            count + arrangement.slots[instrumentId].filter((phraseId: string | null) => phraseId !== null).length,
+          0,
+        );
+        summary.textContent = `${filledSlotCount} phrase slots arranged across ${ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT} segments.`;
       } else if (isPatternRoomMusic(this.roomMusic)) {
         summary.textContent = `${this.musicPatternController.getActiveCellCount()} notes and hits on ${getPatternInstrumentLabel(this.musicPatternController.getActiveInstrumentTab())}.`;
       } else {
-        summary.textContent = 'No room music yet. Click on the room grid to start a sequencer loop.';
+        summary.textContent =
+          this.musicComposerMode === 'arrangement'
+            ? 'No phrase arrangement yet. Pick a slot, then click a phrase from the library.'
+            : 'No room music yet. Click on the room grid to start a sequencer loop.';
       }
     }
 
     const overlay = document.getElementById('editor-music-overlay');
     overlay?.classList.toggle('hidden', !this.musicModeActive);
+    const workbench = document.getElementById('editor-music-workbench');
+    workbench?.classList.toggle('hidden', !this.musicModeActive);
 
     const previewToggleButton = document.getElementById('btn-editor-music-preview-toggle') as HTMLButtonElement | null;
     if (previewToggleButton) {
-      previewToggleButton.textContent = this.musicPreviewState === 'playing' ? 'Stop' : 'Play';
-      previewToggleButton.disabled = this.musicPreviewState === 'stopped' && !this.roomMusic;
+      const isPlaying = this.musicPreviewState === 'playing';
+      previewToggleButton.textContent = isPlaying ? '⏹' : '▶';
+      previewToggleButton.title = isPlaying ? 'Stop room music preview' : 'Play room music preview';
+      previewToggleButton.ariaLabel = previewToggleButton.title;
+      previewToggleButton.disabled = (this.musicPreviewState === 'stopped' && !this.roomMusic) || this.saveInFlight;
     }
 
-    const overlayCloseButton = document.getElementById('btn-editor-music-overlay-close') as HTMLButtonElement | null;
-    if (overlayCloseButton) {
-      overlayCloseButton.disabled = !this.musicModeActive;
+    const saveButton = document.getElementById('btn-editor-music-save') as HTMLButtonElement | null;
+    if (saveButton) {
+      saveButton.disabled = !this.roomPermissions.canSaveDraft || this.saveInFlight;
+      saveButton.title = this.roomPermissions.canSaveDraft
+        ? 'Save Room Draft (Cmd/Ctrl+S)'
+        : 'You cannot save drafts for this room.';
+      saveButton.ariaLabel = saveButton.title;
+    }
+
+    const publishButton = document.getElementById('btn-editor-music-publish') as HTMLButtonElement | null;
+    if (publishButton) {
+      publishButton.disabled = !this.roomPermissions.canPublish || this.saveInFlight;
+      publishButton.title = this.roomPermissions.canPublish
+        ? 'Publish Room (Cmd/Ctrl+Shift+P)'
+        : 'You cannot publish this room.';
+      publishButton.ariaLabel = publishButton.title;
     }
 
     const instrumentTabsRoot = document.getElementById('editor-music-instrument-tabs');
@@ -1554,12 +2224,17 @@ export class EditorScene extends Phaser.Scene {
         ...ROOM_PATTERN_INSTRUMENT_IDS.map((instrumentId) => {
           const button = document.createElement('button');
           button.type = 'button';
-          button.className = 'bar-btn bar-btn-small editor-music-tab-button';
+          button.className = 'bar-btn bar-btn-small editor-music-tab-button editor-music-icon-button';
           if (instrumentId === this.musicPatternController.getActiveInstrumentTab()) {
             button.classList.add('active');
           }
           button.dataset.roomMusicInstrumentTab = instrumentId;
-          button.textContent = getPatternInstrumentLabel(instrumentId);
+          button.dataset.roomMusicInstrument = instrumentId;
+          button.style.setProperty('--editor-music-instrument-accent', getTilesetMusicInstrumentColorCss(editorState.selectedTilesetKey, instrumentId));
+          button.style.setProperty('--editor-music-instrument-rgb', getTilesetMusicInstrumentColorRgbCss(editorState.selectedTilesetKey, instrumentId));
+          button.textContent = getPatternInstrumentIcon(instrumentId);
+          button.title = getPatternInstrumentLabel(instrumentId);
+          button.ariaLabel = getPatternInstrumentLabel(instrumentId);
           return button;
         }),
       );
@@ -1567,7 +2242,7 @@ export class EditorScene extends Phaser.Scene {
 
     const pitchModesRoot = document.getElementById('editor-music-pitch-modes');
     if (pitchModesRoot) {
-      const pitchMode = this.musicPatternController.getPitchMode();
+      const pitchMode = this.getActiveMusicPitchMode();
       const legacyLocked = this.musicPatternController.getLegacyStemNoticeVisible();
       pitchModesRoot.replaceChildren(
         ...(['scale', 'chromatic'] as const).map((mode) => {
@@ -1587,7 +2262,7 @@ export class EditorScene extends Phaser.Scene {
 
     const octaveControls = document.getElementById('editor-music-octave-controls');
     const octaveLabel = document.getElementById('editor-music-octave-label');
-    const activeOctaveShift = this.musicPatternController.getActiveOctaveShift();
+    const activeOctaveShift = this.getActiveMusicOctaveShift();
     if (octaveControls) {
       octaveControls.classList.toggle('hidden', activeOctaveShift === null);
     }
@@ -1608,7 +2283,12 @@ export class EditorScene extends Phaser.Scene {
     }
 
     const legacyNotice = document.getElementById('editor-music-legacy-notice');
-    legacyNotice?.classList.toggle('hidden', !this.musicPatternController.getLegacyStemNoticeVisible());
+    const legacyLocked = this.musicPatternController.getLegacyStemNoticeVisible();
+    legacyNotice?.classList.toggle('hidden', !legacyLocked);
+    this.renderMusicWorkbenchModeButtons(legacyLocked);
+    this.renderMusicWorkbenchKeyControls(legacyLocked);
+    this.renderMusicArrangementPanel(legacyLocked);
+    this.renderMusicLibraryPanel(legacyLocked);
   }
 
   describeState(): Record<string, unknown> {

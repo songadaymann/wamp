@@ -2,7 +2,12 @@ import Phaser from 'phaser';
 import type { CourseGoalType, CourseRoomRef } from '../../courses/model';
 import type { CourseEditorUiState } from '../../courses/editor/state';
 import type { RoomGoalType } from '../../goals/roomGoals';
-import type { RoomPatternInstrumentId, RoomPatternPitchMode } from '../../music/model';
+import type {
+  RoomMusicKeyMode,
+  RoomMusicKeyTonic,
+  RoomPatternInstrumentId,
+  RoomPatternPitchMode,
+} from '../../music/model';
 import type { GoalPlacementMode } from '../../scenes/editor/editRuntime';
 import type { RoomCoordinates, RoomRecord, RoomVersionRecord } from '../../persistence/roomModel';
 
@@ -104,10 +109,23 @@ export interface EditorSceneBridge {
   setMusicModeActive?: (active: boolean) => void;
   toggleMusicMode?: () => void;
   setMusicPatternInstrumentTab?: (instrumentId: RoomPatternInstrumentId) => void;
+  setMusicComposerMode?: (mode: 'sequencer' | 'arrangement') => void;
   setRoomMusicPitchMode?: (mode: RoomPatternPitchMode) => void;
+  setRoomMusicKeyTonic?: (tonic: RoomMusicKeyTonic) => void;
+  setRoomMusicKeyMode?: (mode: RoomMusicKeyMode) => void;
   shiftRoomMusicOctave?: (delta: number) => void;
   replaceLegacyRoomMusicWithPattern?: () => void;
   toggleRoomMusicPreview?: () => void;
+  refreshMusicPhraseLibrary?: () => void;
+  loadMoreMusicPhrases?: () => void;
+  useMusicPhrase?: (phraseId: string) => Promise<void> | void;
+  assignMusicPhraseToArrangementSlot?: (
+    phraseId: string,
+    instrumentId: RoomPatternInstrumentId,
+    slotIndex: number,
+  ) => Promise<void> | void;
+  selectArrangementSlot?: (instrumentId: RoomPatternInstrumentId, slotIndex: number) => void;
+  clearSelectedArrangementSlot?: () => void;
   undoAction?: () => void;
   redoAction?: () => void;
 }

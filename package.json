@@ -35,10 +35,12 @@
     "@ethersproject/sha2": "^5.8.0",
     "@reown/appkit": "^1.8.19",
     "@reown/appkit-adapter-ethers": "^1.8.19",
+    "@tonaljs/key": "^4.11.2",
     "ethers": "^6.16.0",
     "partysocket": "^1.1.16",
     "phaser": "^3.87.0",
     "resend": "^6.9.3",
+    "tonal": "^6.4.3",
     "viem": "^2.47.0"
   },
   "devDependencies": {

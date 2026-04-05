@@ -25,6 +25,7 @@ import type {
   RoomVersionRow,
 } from '../core/types';
 import { syncRoomOwnershipFromChain } from '../mint/service';
+import { prepareMusicPhrasePublishStatements } from '../music/store';
 import {
   enforceRoomMutationGuardrails,
   getDailyRoomClaimLimitForSource,
@@ -387,6 +388,13 @@ export async function publishRoom(
     status: 'draft',
   };
 
+  const musicPhraseStatements = await prepareMusicPhrasePublishStatements(env, published, {
+    userId: publishedByUserId,
+    principalKind: actor.principalKind,
+    agentId: actor.principalAgentId,
+    displayName: publishedByDisplayName,
+  });
+
   await env.DB.batch([
     preparePersistRoomRecordStatement(env, {
       draft,
@@ -421,6 +429,7 @@ export async function publishRoom(
       leaderboardSourceVersion: null,
       onConflictUpdate: true,
     }),
+    ...musicPhraseStatements,
   ]);
 
   return loadRoomRecord(

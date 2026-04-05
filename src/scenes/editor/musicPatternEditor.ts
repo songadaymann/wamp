@@ -4,8 +4,16 @@ import {
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
   TILE_SIZE,
+  colorNumberToCssHex,
   editorState,
+  getTilesetMusicInstrumentColor,
+  getTilesetUiTheme,
 } from '../../config';
+import {
+  materializeMusicPhraseDrumTrack,
+  materializeMusicPhraseTonalTrack,
+  type MusicPhraseRecord,
+} from '../../music/library';
 import {
   ROOM_PATTERN_ACTIVE_STEP_COLUMNS,
   ROOM_PATTERN_DRUM_GRID_START_ROW,
@@ -22,6 +30,8 @@ import {
   isPatternRoomMusic,
   isStemArrangementRoomMusic,
   type RoomMusic,
+  type RoomMusicKeyMode,
+  type RoomMusicKeyTonic,
   type RoomPatternInstrumentMixSettings,
   type RoomPatternInstrumentId,
   type RoomPatternMusic,
@@ -71,13 +81,6 @@ interface MixControlLayout {
   volumeTrackHeight: number;
   centerX: number;
 }
-
-const INSTRUMENT_COLORS: Record<RoomPatternInstrumentId, number> = {
-  drums: 0xf7b54a,
-  triangle: 0x79c7ff,
-  saw: 0xff9356,
-  square: 0xc4f36f,
-};
 
 const MIX_PANEL_WIDTH = 96;
 const MIX_PANEL_PADDING = 12;
@@ -244,6 +247,14 @@ export class EditorMusicPatternController {
     return this.getDisplayPattern().pitchMode;
   }
 
+  getKeyTonic(): RoomMusicKeyTonic {
+    return this.getDisplayPattern().keyTonic;
+  }
+
+  getKeyMode(): RoomMusicKeyMode {
+    return this.getDisplayPattern().keyMode;
+  }
+
   getActiveOctaveShift(): number | null {
     if (this.activeInstrumentTab === 'drums') {
       return null;
@@ -295,6 +306,26 @@ export class EditorMusicPatternController {
     this.commitPattern(pattern);
   }
 
+  setKeyTonic(tonic: RoomMusicKeyTonic): void {
+    const pattern = this.getEditablePattern();
+    if (!pattern || pattern.keyTonic === tonic) {
+      return;
+    }
+
+    pattern.keyTonic = tonic;
+    this.commitPattern(pattern);
+  }
+
+  setKeyMode(mode: RoomMusicKeyMode): void {
+    const pattern = this.getEditablePattern();
+    if (!pattern || pattern.keyMode === mode) {
+      return;
+    }
+
+    pattern.keyMode = mode;
+    this.commitPattern(pattern);
+  }
+
   shiftActiveOctave(delta: number): void {
     if (this.activeInstrumentTab === 'drums') {
       return;
@@ -339,6 +370,32 @@ export class EditorMusicPatternController {
       volume: nextVolume,
       pan: nextPan,
     };
+    this.commitPattern(pattern);
+  }
+
+  insertPhrase(phrase: MusicPhraseRecord): void {
+    const pattern = this.getEditablePattern();
+    if (!pattern || phrase.instrumentId !== this.activeInstrumentTab) {
+      return;
+    }
+
+    if (this.activeInstrumentTab === 'drums') {
+      pattern.tabs.drums = materializeMusicPhraseDrumTrack(phrase);
+    } else {
+      const instrumentId = this.activeInstrumentTab as RoomPatternTonalInstrumentId;
+      pattern.tabs[instrumentId] = materializeMusicPhraseTonalTrack(
+        phrase,
+        pattern.pitchMode,
+        pattern.keyTonic,
+        pattern.keyMode,
+        pattern.octaveShift[instrumentId],
+      );
+    }
+
+    pattern.sourcePhraseIds[this.activeInstrumentTab] = [
+      phrase.id,
+      ...phrase.sourcePhraseIds,
+    ].filter((value, index, sourceIds) => sourceIds.indexOf(value) === index);
     this.commitPattern(pattern);
   }
 
@@ -491,7 +548,7 @@ export class EditorMusicPatternController {
     const mixControlHit = this.getMixControlHit(pointer);
     if (mixControlHit) {
       const layout = this.getMixControlLayout();
-      const color = INSTRUMENT_COLORS[this.activeInstrumentTab];
+      const color = this.getInstrumentColor();
       graphics.lineStyle(2, color, 0.7);
       graphics.fillStyle(color, 0.08);
       if (mixControlHit.control === 'pan') {
@@ -553,10 +610,11 @@ export class EditorMusicPatternController {
     }
 
     const hoveredActiveCell = this.isCellActive(this.getDisplayPattern(), cell.step, cell.row);
+    const theme = this.getTilesetTheme();
     const color =
       hoveredActiveCell && resolveSequencerTool() !== 'copy'
-        ? 0xff6f61
-        : INSTRUMENT_COLORS[this.activeInstrumentTab];
+        ? theme.accentHot
+        : this.getInstrumentColor();
     graphics.lineStyle(2, color, 0.9);
     graphics.fillStyle(color, hoveredActiveCell ? 0.08 : 0.18);
     graphics.fillRect(cell.step * TILE_SIZE, cell.row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
@@ -622,15 +680,24 @@ export class EditorMusicPatternController {
     }
   }
 
+  private getTilesetTheme() {
+    return getTilesetUiTheme(editorState.selectedTilesetKey);
+  }
+
+  private getInstrumentColor(instrumentId: RoomPatternInstrumentId = this.activeInstrumentTab): number {
+    return getTilesetMusicInstrumentColor(editorState.selectedTilesetKey, instrumentId);
+  }
+
   private drawBackdrop(): void {
     if (!this.overlayBackdrop) {
       return;
     }
 
+    const theme = this.getTilesetTheme();
     this.overlayBackdrop.clear();
     this.overlayBackdrop.fillStyle(0x050506, 0.68);
     this.overlayBackdrop.fillRect(0, 0, ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-    this.overlayBackdrop.fillStyle(0x000000, 0.3);
+    this.overlayBackdrop.fillStyle(theme.accentAlt, 0.08);
     this.overlayBackdrop.fillRect(
       ROOM_PATTERN_MARGIN_START_STEP * TILE_SIZE,
       0,
@@ -639,7 +706,7 @@ export class EditorMusicPatternController {
     );
 
     if (this.activeInstrumentTab === 'drums') {
-      this.overlayBackdrop.fillStyle(0x000000, 0.26);
+      this.overlayBackdrop.fillStyle(theme.accentWarm, 0.08);
       this.overlayBackdrop.fillRect(0, 0, ROOM_PATTERN_ACTIVE_STEP_COLUMNS * TILE_SIZE, ROOM_PATTERN_DRUM_GRID_START_ROW * TILE_SIZE);
     }
   }
@@ -649,11 +716,12 @@ export class EditorMusicPatternController {
       return;
     }
 
+    const theme = this.getTilesetTheme();
     this.overlayGrid.clear();
     for (let x = 0; x <= ROOM_PATTERN_ACTIVE_STEP_COLUMNS; x += 1) {
       const lineAlpha = x === 16 ? 0.76 : x % 4 === 0 ? 0.4 : 0.14;
       const lineWidth = x === 16 ? 3 : x % 4 === 0 ? 2 : 1;
-      const color = x === 16 ? 0xffd073 : 0xf2ecd9;
+      const color = x === 16 ? theme.accentHot : x % 4 === 0 ? theme.accentWarm : 0xf2ecd9;
       this.overlayGrid.lineStyle(lineWidth, color, lineAlpha);
       this.overlayGrid.beginPath();
       this.overlayGrid.moveTo(x * TILE_SIZE, 0);
@@ -666,14 +734,14 @@ export class EditorMusicPatternController {
         this.activeInstrumentTab === 'drums' && y <= ROOM_PATTERN_DRUM_GRID_START_ROW
           ? 0.08
           : 0.18;
-      this.overlayGrid.lineStyle(1, 0xf2ecd9, rowAlpha);
+      this.overlayGrid.lineStyle(1, theme.accentAlt, rowAlpha);
       this.overlayGrid.beginPath();
       this.overlayGrid.moveTo(0, y * TILE_SIZE);
       this.overlayGrid.lineTo(ROOM_PATTERN_ACTIVE_STEP_COLUMNS * TILE_SIZE, y * TILE_SIZE);
       this.overlayGrid.strokePath();
     }
 
-    this.overlayGrid.lineStyle(2, 0x86bde8, 0.3);
+    this.overlayGrid.lineStyle(2, theme.accentCool, 0.42);
     this.overlayGrid.strokeRect(0, 0, ROOM_PATTERN_ACTIVE_STEP_COLUMNS * TILE_SIZE, ROOM_PX_HEIGHT);
   }
 
@@ -688,7 +756,7 @@ export class EditorMusicPatternController {
     }
 
     const pattern = this.getDisplayPattern();
-    const color = INSTRUMENT_COLORS[this.activeInstrumentTab];
+    const color = this.getInstrumentColor();
     if (this.activeInstrumentTab === 'drums') {
       this.overlayCells.fillStyle(color, 0.88);
       for (const row of ROOM_PATTERN_DRUM_ROWS) {
@@ -739,9 +807,10 @@ export class EditorMusicPatternController {
       return;
     }
 
-    this.overlayPlayhead.fillStyle(0xfef3cf, 0.12);
+    const theme = this.getTilesetTheme();
+    this.overlayPlayhead.fillStyle(theme.accentWarm, 0.12);
     this.overlayPlayhead.fillRect(playheadStep * TILE_SIZE, 0, TILE_SIZE, ROOM_PX_HEIGHT);
-    this.overlayPlayhead.lineStyle(2, 0xfff6d6, 0.88);
+    this.overlayPlayhead.lineStyle(2, theme.accentWarm, 0.9);
     this.overlayPlayhead.beginPath();
     this.overlayPlayhead.moveTo(playheadStep * TILE_SIZE, 0);
     this.overlayPlayhead.lineTo(playheadStep * TILE_SIZE, ROOM_PX_HEIGHT);
@@ -757,12 +826,13 @@ export class EditorMusicPatternController {
     const layout = this.getMixControlLayout();
     const mix = this.getActiveInstrumentMix();
     const disabled = this.getLegacyStemNoticeVisible();
-    const color = INSTRUMENT_COLORS[this.activeInstrumentTab];
+    const theme = this.getTilesetTheme();
+    const color = this.getInstrumentColor();
     const panelAlpha = disabled ? 0.16 : 0.28;
     const accentAlpha = disabled ? 0.32 : 0.9;
     const trackAlpha = disabled ? 0.16 : 0.34;
 
-    this.overlayMixControls.fillStyle(0x080808, 0.48);
+    this.overlayMixControls.fillStyle(0x0a0a0a, 0.82);
     this.overlayMixControls.fillRoundedRect(
       layout.panelX,
       layout.panelY,
@@ -770,7 +840,7 @@ export class EditorMusicPatternController {
       layout.panelHeight,
       14,
     );
-    this.overlayMixControls.lineStyle(1, 0xf2ecd9, panelAlpha);
+    this.overlayMixControls.lineStyle(2, theme.accentAlt, panelAlpha);
     this.overlayMixControls.strokeRoundedRect(
       layout.panelX,
       layout.panelY,
@@ -779,7 +849,7 @@ export class EditorMusicPatternController {
       14,
     );
 
-    this.overlayMixControls.fillStyle(0xf2ecd9, trackAlpha);
+    this.overlayMixControls.fillStyle(theme.accentAlt, trackAlpha);
     this.overlayMixControls.fillRoundedRect(
       layout.panTrackX,
       layout.panTrackY,
@@ -787,7 +857,7 @@ export class EditorMusicPatternController {
       layout.panTrackHeight,
       5,
     );
-    this.overlayMixControls.lineStyle(1, 0xf2ecd9, 0.24);
+    this.overlayMixControls.lineStyle(1, theme.accentWarm, 0.3);
     this.overlayMixControls.beginPath();
     this.overlayMixControls.moveTo(layout.centerX, layout.panTrackY - 5);
     this.overlayMixControls.lineTo(layout.centerX, layout.panTrackY + layout.panTrackHeight + 5);
@@ -799,7 +869,7 @@ export class EditorMusicPatternController {
     this.overlayMixControls.lineStyle(2, 0x090909, disabled ? 0.28 : 0.55);
     this.overlayMixControls.strokeCircle(panX, layout.panTrackY + layout.panTrackHeight * 0.5, 8);
 
-    this.overlayMixControls.fillStyle(0xf2ecd9, trackAlpha);
+    this.overlayMixControls.fillStyle(theme.accentAlt, trackAlpha);
     this.overlayMixControls.fillRoundedRect(
       layout.volumeTrackX,
       layout.volumeTrackY,
@@ -873,6 +943,7 @@ export class EditorMusicPatternController {
 
   private updateRowLabels(): void {
     const pattern = this.getDisplayPattern();
+    const theme = this.getTilesetTheme();
     for (let rowIndex = 0; rowIndex < this.rowLabels.length; rowIndex += 1) {
       const label = this.rowLabels[rowIndex];
       label.setVisible(this.overlayBackdrop?.visible ?? false);
@@ -885,6 +956,8 @@ export class EditorMusicPatternController {
           this.activeInstrumentTab === 'drums'
             ? 0
             : pattern.octaveShift[this.activeInstrumentTab as RoomPatternTonalInstrumentId],
+          pattern.keyTonic,
+          pattern.keyMode,
         ),
       );
       label.setAlpha(
@@ -894,8 +967,8 @@ export class EditorMusicPatternController {
       );
       label.setColor(
         this.activeInstrumentTab === 'drums' && rowIndex < ROOM_PATTERN_DRUM_GRID_START_ROW
-          ? '#6f6c66'
-          : '#d7d2c4'
+          ? colorNumberToCssHex(theme.accentAlt)
+          : colorNumberToCssHex(this.getInstrumentColor())
       );
     }
   }
@@ -903,6 +976,7 @@ export class EditorMusicPatternController {
   private updateMixLabels(): void {
     const layout = this.getMixControlLayout();
     const mix = this.getActiveInstrumentMix();
+    const theme = this.getTilesetTheme();
     const panLabel =
       mix.pan <= -0.05
         ? `L${Math.round(Math.abs(mix.pan) * 100)}`
@@ -914,15 +988,18 @@ export class EditorMusicPatternController {
     this.mixTitleLabel?.setPosition(layout.centerX, MIX_TITLE_Y);
     this.mixTitleLabel?.setText(getPatternInstrumentLabel(this.activeInstrumentTab));
     this.mixTitleLabel?.setAlpha(disabled ? 0.4 : 0.92);
+    this.mixTitleLabel?.setColor(colorNumberToCssHex(this.getInstrumentColor()));
 
     this.mixReadoutLabel?.setPosition(layout.centerX, MIX_READOUT_Y);
     this.mixReadoutLabel?.setText(`PAN ${panLabel} · VOL ${Math.round(mix.volume * 100)}%`);
     this.mixReadoutLabel?.setAlpha(disabled ? 0.34 : 0.78);
+    this.mixReadoutLabel?.setColor(colorNumberToCssHex(theme.accentWarm));
   }
 
   private drawSelectionRect(graphics: Phaser.GameObjects.Graphics, rect: MusicRect): void {
-    graphics.lineStyle(2, 0xf7e3af, 0.92);
-    graphics.fillStyle(0xf7e3af, 0.1);
+    const theme = this.getTilesetTheme();
+    graphics.lineStyle(2, theme.accentWarm, 0.92);
+    graphics.fillStyle(theme.accentWarm, 0.1);
     graphics.fillRect(
       rect.x1 * TILE_SIZE,
       rect.y1 * TILE_SIZE,
@@ -947,7 +1024,7 @@ export class EditorMusicPatternController {
       return;
     }
 
-    const color = INSTRUMENT_COLORS[this.activeInstrumentTab];
+    const color = this.getInstrumentColor();
     graphics.lineStyle(2, color, 0.92);
     graphics.fillStyle(color, 0.18);
     if (clipboard.tonalStepRows) {

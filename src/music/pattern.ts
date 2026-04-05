@@ -1,3 +1,13 @@
+import {
+  DEFAULT_ROOM_MUSIC_KEY_MODE,
+  DEFAULT_ROOM_MUSIC_KEY_TONIC,
+  getRoomMusicKeySemitone,
+  normalizeRoomMusicKeyMode,
+  normalizeRoomMusicKeyTonic,
+  type RoomMusicKeyMode,
+  type RoomMusicKeyTonic,
+} from './key';
+
 export const ROOM_PATTERN_INSTRUMENT_IDS = ['drums', 'triangle', 'saw', 'square'] as const;
 export type RoomPatternInstrumentId = typeof ROOM_PATTERN_INSTRUMENT_IDS[number];
 
@@ -6,9 +16,6 @@ export type RoomPatternTonalInstrumentId = typeof ROOM_PATTERN_TONAL_INSTRUMENT_
 
 export const ROOM_PATTERN_PITCH_MODES = ['scale', 'chromatic'] as const;
 export type RoomPatternPitchMode = typeof ROOM_PATTERN_PITCH_MODES[number];
-
-export const ROOM_PATTERN_SCALE_IDS = ['c-major'] as const;
-export type RoomPatternScaleId = typeof ROOM_PATTERN_SCALE_IDS[number];
 
 export const ROOM_PATTERN_BPM = 120;
 export const ROOM_PATTERN_BEATS_PER_BAR = 4;
@@ -34,6 +41,20 @@ export const ROOM_PATTERN_INSTRUMENT_LABELS: Record<RoomPatternInstrumentId, str
   triangle: 'Triangle',
   saw: 'Saw',
   square: 'Square',
+};
+
+export const ROOM_PATTERN_INSTRUMENT_ICONS: Record<RoomPatternInstrumentId, string> = {
+  drums: '🥁',
+  triangle: '▲',
+  saw: '🪚',
+  square: '■',
+};
+
+export const ROOM_PATTERN_INSTRUMENT_COLORS: Record<RoomPatternInstrumentId, number> = {
+  drums: 0xf7b54a,
+  triangle: 0x79c7ff,
+  saw: 0xff9356,
+  square: 0xc4f36f,
 };
 
 export interface RoomPatternInstrumentMixSettings {
@@ -101,16 +122,17 @@ export interface RoomPatternTonalTrack {
 }
 
 export type RoomPatternDrumTrack = Record<RoomPatternDrumRowId, number[]>;
+export type RoomPatternPhraseSources = Record<RoomPatternInstrumentId, string[]>;
 
-export interface RoomPatternMusic {
-  kind: 'pattern';
+export interface RoomPatternPlaybackSequence {
   bpm: number;
   beatsPerBar: number;
   stepsPerBeat: number;
   stepCount: number;
   barCount: number;
   pitchMode: RoomPatternPitchMode;
-  scaleId: RoomPatternScaleId;
+  keyTonic: RoomMusicKeyTonic;
+  keyMode: RoomMusicKeyMode;
   octaveShift: Record<RoomPatternTonalInstrumentId, number>;
   mix: RoomPatternInstrumentMix;
   tabs: {
@@ -121,6 +143,11 @@ export interface RoomPatternMusic {
   };
 }
 
+export interface RoomPatternMusic extends RoomPatternPlaybackSequence {
+  kind: 'pattern';
+  sourcePhraseIds: RoomPatternPhraseSources;
+}
+
 export interface RoomPatternRowNote {
   rowIndex: number;
   midi: number;
@@ -129,6 +156,7 @@ export interface RoomPatternRowNote {
 }
 
 const MAJOR_SCALE_INTERVALS = [0, 2, 4, 5, 7, 9, 11] as const;
+const MINOR_SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10] as const;
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 
 function clampInteger(value: number, min: number, max: number): number {
@@ -158,8 +186,24 @@ function normalizePitchMode(value: unknown): RoomPatternPitchMode {
   return value === 'chromatic' ? 'chromatic' : 'scale';
 }
 
-function normalizeScaleId(value: unknown): RoomPatternScaleId {
-  return value === 'c-major' ? 'c-major' : 'c-major';
+function normalizeSourcePhraseIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const normalized = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== 'string') {
+      continue;
+    }
+    const trimmed = item.trim();
+    if (!trimmed) {
+      continue;
+    }
+    normalized.add(trimmed);
+  }
+
+  return [...normalized];
 }
 
 function normalizeOctaveShift(value: unknown): number {
@@ -249,13 +293,15 @@ export function createDefaultRoomPatternMusic(): RoomPatternMusic {
     stepCount: ROOM_PATTERN_STEP_COUNT,
     barCount: ROOM_PATTERN_BAR_COUNT,
     pitchMode: 'scale',
-    scaleId: 'c-major',
+    keyTonic: DEFAULT_ROOM_MUSIC_KEY_TONIC,
+    keyMode: DEFAULT_ROOM_MUSIC_KEY_MODE,
     octaveShift: {
       triangle: DEFAULT_ROOM_PATTERN_OCTAVE_SHIFT.triangle,
       saw: DEFAULT_ROOM_PATTERN_OCTAVE_SHIFT.saw,
       square: DEFAULT_ROOM_PATTERN_OCTAVE_SHIFT.square,
     },
     mix: cloneRoomPatternInstrumentMix(DEFAULT_ROOM_PATTERN_INSTRUMENT_MIX),
+    sourcePhraseIds: createEmptyRoomPatternPhraseSources(),
     tabs: {
       drums: createEmptyRoomPatternDrumTrack(),
       triangle: createEmptyRoomPatternTonalTrack(),
@@ -280,19 +326,41 @@ export function cloneRoomPatternMusic(
     stepCount: ROOM_PATTERN_STEP_COUNT,
     barCount: ROOM_PATTERN_BAR_COUNT,
     pitchMode: normalizePitchMode(value.pitchMode),
-    scaleId: normalizeScaleId(value.scaleId),
+    keyTonic: normalizeRoomMusicKeyTonic((value as Partial<RoomPatternMusic> & { scaleId?: unknown }).keyTonic ?? (value as { scaleId?: unknown }).scaleId),
+    keyMode: normalizeRoomMusicKeyMode((value as Partial<RoomPatternMusic>).keyMode),
     octaveShift: {
       triangle: normalizeOctaveShift(value.octaveShift?.triangle ?? DEFAULT_ROOM_PATTERN_OCTAVE_SHIFT.triangle),
       saw: normalizeOctaveShift(value.octaveShift?.saw ?? DEFAULT_ROOM_PATTERN_OCTAVE_SHIFT.saw),
       square: normalizeOctaveShift(value.octaveShift?.square ?? DEFAULT_ROOM_PATTERN_OCTAVE_SHIFT.square),
     },
     mix: cloneRoomPatternInstrumentMix(value.mix),
+    sourcePhraseIds: cloneRoomPatternPhraseSources(value.sourcePhraseIds),
     tabs: {
       drums: cloneRoomPatternDrumTrack(value.tabs?.drums),
       triangle: cloneRoomPatternTonalTrack(value.tabs?.triangle),
       saw: cloneRoomPatternTonalTrack(value.tabs?.saw),
       square: cloneRoomPatternTonalTrack(value.tabs?.square),
     },
+  };
+}
+
+export function createEmptyRoomPatternPhraseSources(): RoomPatternPhraseSources {
+  return {
+    drums: [],
+    triangle: [],
+    saw: [],
+    square: [],
+  };
+}
+
+export function cloneRoomPatternPhraseSources(
+  value: Partial<Record<RoomPatternInstrumentId, readonly string[]>> | null | undefined,
+): RoomPatternPhraseSources {
+  return {
+    drums: normalizeSourcePhraseIds(value?.drums),
+    triangle: normalizeSourcePhraseIds(value?.triangle),
+    saw: normalizeSourcePhraseIds(value?.saw),
+    square: normalizeSourcePhraseIds(value?.square),
   };
 }
 
@@ -377,13 +445,15 @@ export function normalizeRoomPatternMusic(value: unknown): RoomPatternMusic | nu
     stepCount: ROOM_PATTERN_STEP_COUNT,
     barCount: ROOM_PATTERN_BAR_COUNT,
     pitchMode: normalizePitchMode(candidate.pitchMode),
-    scaleId: normalizeScaleId(candidate.scaleId),
+    keyTonic: normalizeRoomMusicKeyTonic((candidate as Partial<RoomPatternMusic> & { scaleId?: unknown }).keyTonic ?? (candidate as { scaleId?: unknown }).scaleId),
+    keyMode: normalizeRoomMusicKeyMode(candidate.keyMode),
     octaveShift: {
       triangle: normalizeOctaveShift(candidate.octaveShift?.triangle ?? DEFAULT_ROOM_PATTERN_OCTAVE_SHIFT.triangle),
       saw: normalizeOctaveShift(candidate.octaveShift?.saw ?? DEFAULT_ROOM_PATTERN_OCTAVE_SHIFT.saw),
       square: normalizeOctaveShift(candidate.octaveShift?.square ?? DEFAULT_ROOM_PATTERN_OCTAVE_SHIFT.square),
     },
     mix: cloneRoomPatternInstrumentMix(candidate.mix),
+    sourcePhraseIds: cloneRoomPatternPhraseSources(candidate.sourcePhraseIds),
     tabs: {
       drums: cloneRoomPatternDrumTrack((tabs as RoomPatternMusic['tabs']).drums),
       triangle: cloneRoomPatternTonalTrack((tabs as RoomPatternMusic['tabs']).triangle),
@@ -432,25 +502,51 @@ export function getPatternInstrumentLabel(instrumentId: RoomPatternInstrumentId)
   return ROOM_PATTERN_INSTRUMENT_LABELS[instrumentId];
 }
 
+export function getPatternInstrumentIcon(instrumentId: RoomPatternInstrumentId): string {
+  return ROOM_PATTERN_INSTRUMENT_ICONS[instrumentId];
+}
+
+export function getPatternInstrumentColor(instrumentId: RoomPatternInstrumentId): number {
+  return ROOM_PATTERN_INSTRUMENT_COLORS[instrumentId];
+}
+
+export function getPatternInstrumentColorCss(instrumentId: RoomPatternInstrumentId): string {
+  return `#${ROOM_PATTERN_INSTRUMENT_COLORS[instrumentId].toString(16).padStart(6, '0')}`;
+}
+
+export function getPatternInstrumentColorRgbCss(instrumentId: RoomPatternInstrumentId): string {
+  const color = ROOM_PATTERN_INSTRUMENT_COLORS[instrumentId];
+  const red = (color >> 16) & 0xff;
+  const green = (color >> 8) & 0xff;
+  const blue = color & 0xff;
+  return `${red}, ${green}, ${blue}`;
+}
+
 export function getPatternRowNote(
   instrumentId: RoomPatternTonalInstrumentId,
   rowIndex: number,
   pitchMode: RoomPatternPitchMode,
   octaveShift: number,
+  keyTonic: RoomMusicKeyTonic,
+  keyMode: RoomMusicKeyMode,
 ): RoomPatternRowNote | null {
   const normalizedRow = normalizeRowIndex(rowIndex);
   if (normalizedRow === null) {
     return null;
   }
 
-  const baseMidi = getBaseMidiForInstrument(instrumentId) + normalizeOctaveShift(octaveShift) * 12;
+  const scaleIntervals = keyMode === 'minor' ? MINOR_SCALE_INTERVALS : MAJOR_SCALE_INTERVALS;
+  const baseMidi =
+    getBaseMidiForInstrument(instrumentId)
+    + normalizeOctaveShift(octaveShift) * 12
+    + getRoomMusicKeySemitone(keyTonic);
   const ascendingIndex = ROOM_PATTERN_GRID_ROWS - 1 - normalizedRow;
   const midi =
     pitchMode === 'chromatic'
       ? baseMidi + ascendingIndex
       : baseMidi
-        + Math.floor(ascendingIndex / MAJOR_SCALE_INTERVALS.length) * 12
-        + MAJOR_SCALE_INTERVALS[ascendingIndex % MAJOR_SCALE_INTERVALS.length];
+        + Math.floor(ascendingIndex / scaleIntervals.length) * 12
+        + scaleIntervals[ascendingIndex % scaleIntervals.length];
 
   return {
     rowIndex: normalizedRow,
@@ -465,19 +561,48 @@ export function getPatternRowLabel(
   rowIndex: number,
   pitchMode: RoomPatternPitchMode,
   octaveShift: number,
+  keyTonic: RoomMusicKeyTonic,
+  keyMode: RoomMusicKeyMode,
 ): string {
   if (instrumentId === 'drums') {
     return getPatternDrumRowForGridRow(rowIndex)?.shortLabel ?? '';
   }
 
-  return getPatternRowNote(instrumentId, rowIndex, pitchMode, octaveShift)?.label ?? '';
+  return getPatternRowNote(instrumentId, rowIndex, pitchMode, octaveShift, keyTonic, keyMode)?.label ?? '';
+}
+
+export function findClosestPatternRowIndexForMidi(
+  instrumentId: RoomPatternTonalInstrumentId,
+  midi: number,
+  pitchMode: RoomPatternPitchMode,
+  octaveShift: number,
+  keyTonic: RoomMusicKeyTonic,
+  keyMode: RoomMusicKeyMode,
+): number | null {
+  let bestRowIndex: number | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (let rowIndex = 0; rowIndex < ROOM_PATTERN_GRID_ROWS; rowIndex += 1) {
+    const note = getPatternRowNote(instrumentId, rowIndex, pitchMode, octaveShift, keyTonic, keyMode);
+    if (!note) {
+      continue;
+    }
+
+    const distance = Math.abs(note.midi - midi);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestRowIndex = rowIndex;
+    }
+  }
+
+  return bestRowIndex;
 }
 
 export function getRoomPatternKey(pattern: RoomPatternMusic): string {
   const parts = [
     pattern.kind,
     pattern.pitchMode,
-    pattern.scaleId,
+    pattern.keyTonic,
+    pattern.keyMode,
     String(pattern.octaveShift.triangle),
     String(pattern.octaveShift.saw),
     String(pattern.octaveShift.square),
@@ -488,10 +613,14 @@ export function getRoomPatternKey(pattern: RoomPatternMusic): string {
     ]),
     pattern.tabs.triangle.steps.map((value) => value ?? '-').join(','),
     pattern.tabs.triangle.ties.map((value) => (value ? '1' : '0')).join(''),
+    `sources:${pattern.sourcePhraseIds.triangle.join(',')}`,
     pattern.tabs.saw.steps.map((value) => value ?? '-').join(','),
     pattern.tabs.saw.ties.map((value) => (value ? '1' : '0')).join(''),
+    `sources:${pattern.sourcePhraseIds.saw.join(',')}`,
     pattern.tabs.square.steps.map((value) => value ?? '-').join(','),
     pattern.tabs.square.ties.map((value) => (value ? '1' : '0')).join(''),
+    `sources:${pattern.sourcePhraseIds.square.join(',')}`,
+    `sources:${pattern.sourcePhraseIds.drums.join(',')}`,
     ...ROOM_PATTERN_DRUM_ROWS.map((row) => `${row.id}:${pattern.tabs.drums[row.id].join(',')}`),
   ];
   return parts.join('|');

@@ -24,6 +24,10 @@ import { corsHeaders, getCoordinatesFromRequest, HttpError, jsonResponse, parseJ
 import type { Env, RequestAuth } from './worker/core/types';
 import { handleTestReset } from './worker/maintenance/routes';
 import {
+  handleMusicPhraseGetRequest,
+  handleMusicPhraseListRequest,
+} from './worker/music/routes';
+import {
   handleRoomMintConfirm,
   handleRoomMintPrepare,
   handleRoomTokenMetadataConfirm,
@@ -167,6 +171,19 @@ export default {
 
       if (url.pathname === '/api/playfun/config' && request.method === 'GET') {
         return await handlePlayfunConfig(request, env);
+      }
+
+      if (url.pathname === '/api/music/phrases' && request.method === 'GET') {
+        return await handleMusicPhraseListRequest(request, url, env);
+      }
+
+      const musicPhraseMatch = /^\/api\/music\/phrases\/([^/]+)$/.exec(url.pathname);
+      if (musicPhraseMatch && request.method === 'GET') {
+        return await handleMusicPhraseGetRequest(
+          request,
+          env,
+          decodeURIComponent(musicPhraseMatch[1])
+        );
       }
 
       if (url.pathname === '/api/tilesets' && request.method === 'GET') {

@@ -4,7 +4,7 @@ import {
   ROOM_PATTERN_TONAL_INSTRUMENT_IDS,
   getPatternRowNote,
   getRoomPatternLoopDurationSec,
-  type RoomPatternMusic,
+  type RoomPatternPlaybackSequence,
   type RoomPatternTonalInstrumentId,
 } from './pattern';
 
@@ -92,7 +92,7 @@ function envelopeAt(
 
 function renderTonalTrack(
   target: Float32Array,
-  pattern: RoomPatternMusic,
+  pattern: RoomPatternPlaybackSequence,
   instrumentId: RoomPatternTonalInstrumentId,
   sampleRate: number,
   stepDurationSec: number,
@@ -125,6 +125,8 @@ function renderTonalTrack(
       rowIndex,
       pattern.pitchMode,
       pattern.octaveShift[instrumentId],
+      pattern.keyTonic,
+      pattern.keyMode,
     );
     if (!note) {
       stepIndex = endStepIndex;
@@ -173,7 +175,7 @@ function applySoftDrive(
 
 function renderDrumTrack(
   target: Float32Array,
-  pattern: RoomPatternMusic,
+  pattern: RoomPatternPlaybackSequence,
   sampleRate: number,
   stepDurationSec: number,
 ): void {
@@ -228,7 +230,7 @@ function mixMonoTrackIntoStereo(
 
 export function renderRoomPatternLoopBuffer(
   audioContext: AudioContext,
-  pattern: RoomPatternMusic,
+  pattern: RoomPatternPlaybackSequence,
 ): AudioBuffer {
   const sampleRate = audioContext.sampleRate;
   const loopDurationSec = getRoomPatternLoopDurationSec(pattern);

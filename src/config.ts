@@ -54,6 +54,16 @@ export interface TilesetConfig {
   tileCount: number;
   firstGid: number;
   terrainCollisionProfiles?: Partial<Record<number, TerrainCollisionProfileId>>;
+  uiTheme?: TilesetUiThemeConfig;
+}
+
+export type TilesetMusicColorRole = 'drums' | 'triangle' | 'saw' | 'square';
+
+export interface TilesetUiThemeConfig {
+  accentCool: number;
+  accentWarm: number;
+  accentHot: number;
+  accentAlt: number;
 }
 
 export type TerrainCollisionProfileId = 'full' | 'decoratedTop' | 'none';
@@ -145,6 +155,13 @@ const DECO_ONLY_INDICES_SNOW = [2, 3, 4, 8, 9, 10];
 // Lava has three matching bottom-anchored cap overlays that should not block the air above the ledge.
 const DECO_ONLY_INDICES_LAVA = [2, 4, 8, 10, 20];
 
+const DEFAULT_TILESET_UI_THEME: TilesetUiThemeConfig = {
+  accentCool: 0x5dc16b,
+  accentWarm: 0xd7ac63,
+  accentHot: 0xff7a5c,
+  accentAlt: 0x63d6cb,
+};
+
 // firstGid assignments: 0 = empty, then sequential per tileset.
 // Keep existing ranges stable because persisted room tile data stores absolute gids.
 export const TILESETS: TilesetConfig[] = [
@@ -162,6 +179,7 @@ export const TILESETS: TilesetConfig[] = [
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_FOREST, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_FOREST, NO_COLLISION_PROFILE),
     },
+    uiTheme: DEFAULT_TILESET_UI_THEME,
   },
   {
     key: 'desert',
@@ -176,6 +194,12 @@ export const TILESETS: TilesetConfig[] = [
     terrainCollisionProfiles: {
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_FOREST, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_FOREST, NO_COLLISION_PROFILE),
+    },
+    uiTheme: {
+      accentCool: 0x62c8ad,
+      accentWarm: 0xf0c06b,
+      accentHot: 0xff8f60,
+      accentAlt: 0xc98a54,
     },
   },
   {
@@ -192,6 +216,12 @@ export const TILESETS: TilesetConfig[] = [
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_STANDARD, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_DIRT, NO_COLLISION_PROFILE),
     },
+    uiTheme: {
+      accentCool: 0x84b95d,
+      accentWarm: 0xcd9158,
+      accentHot: 0xe76f50,
+      accentAlt: 0xd8b373,
+    },
   },
   {
     key: 'lava',
@@ -206,6 +236,12 @@ export const TILESETS: TilesetConfig[] = [
     terrainCollisionProfiles: {
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_LAVA, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_LAVA, NO_COLLISION_PROFILE),
+    },
+    uiTheme: {
+      accentCool: 0xce6bff,
+      accentWarm: 0xffb15a,
+      accentHot: 0xff5f7f,
+      accentAlt: 0xff8e63,
     },
   },
   {
@@ -222,6 +258,12 @@ export const TILESETS: TilesetConfig[] = [
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_SNOW, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_SNOW, NO_COLLISION_PROFILE),
     },
+    uiTheme: {
+      accentCool: 0x7fd4ff,
+      accentWarm: 0xdfeaff,
+      accentHot: 0xffb36b,
+      accentAlt: 0xa4b8ff,
+    },
   },
   {
     key: 'water',
@@ -237,6 +279,12 @@ export const TILESETS: TilesetConfig[] = [
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_STANDARD, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_WATER, NO_COLLISION_PROFILE),
     },
+    uiTheme: {
+      accentCool: 0x60d7ff,
+      accentWarm: 0x91f0d0,
+      accentHot: 0x5b9dff,
+      accentAlt: 0x6ee6d4,
+    },
   },
   {
     key: 'smb_lvl1_3_5',
@@ -248,11 +296,67 @@ export const TILESETS: TilesetConfig[] = [
     rows: 4,
     tileCount: 32,
     firstGid: 460,
+    uiTheme: {
+      accentCool: 0x5ca9ff,
+      accentWarm: 0xfbd45b,
+      accentHot: 0xff7865,
+      accentAlt: 0x86d54a,
+    },
   },
 ];
 
 export function getTilesetByKey(key: string): TilesetConfig | undefined {
   return TILESETS.find(ts => ts.key === key);
+}
+
+export function getTilesetUiTheme(key: string | null | undefined): TilesetUiThemeConfig {
+  return getTilesetByKey(key ?? '')?.uiTheme ?? DEFAULT_TILESET_UI_THEME;
+}
+
+export function colorNumberToCssHex(value: number): string {
+  return `#${value.toString(16).padStart(6, '0')}`;
+}
+
+export function colorNumberToCssRgb(value: number): string {
+  const red = (value >> 16) & 0xff;
+  const green = (value >> 8) & 0xff;
+  const blue = value & 0xff;
+  return `${red}, ${green}, ${blue}`;
+}
+
+export function colorNumberToCssRgba(value: number, alpha: number): string {
+  return `rgba(${colorNumberToCssRgb(value)}, ${alpha})`;
+}
+
+export function getTilesetMusicInstrumentColor(
+  key: string | null | undefined,
+  role: TilesetMusicColorRole,
+): number {
+  const theme = getTilesetUiTheme(key);
+  if (role === 'drums') {
+    return theme.accentWarm;
+  }
+  if (role === 'triangle') {
+    return theme.accentCool;
+  }
+  if (role === 'saw') {
+    return theme.accentHot;
+  }
+  return theme.accentAlt;
+}
+
+export function getTilesetMusicInstrumentColorCss(
+  key: string | null | undefined,
+  role: TilesetMusicColorRole,
+): string {
+  return colorNumberToCssHex(getTilesetMusicInstrumentColor(key, role));
+}
+
+export function getTilesetMusicInstrumentColorRgbCss(
+  key: string | null | undefined,
+  role: TilesetMusicColorRole,
+): string {
+  return colorNumberToCssRgb(getTilesetMusicInstrumentColor(key, role));
 }
 
 export function getTilesetByGid(gid: number): TilesetConfig | undefined {

@@ -10,15 +10,22 @@ import {
   getRoomMusicKey,
   getRoomMusicLoopDurationSec,
   isPatternRoomMusic,
+  isPhraseArrangementRoomMusic,
   isRoomMusicEmpty,
   isStemArrangementRoomMusic,
   type RoomMusic,
   type RoomMusicBarClipId,
   type RoomMusicLaneBarAssignments,
   type RoomMusicLaneId,
+  type RoomPhraseArrangementMusic,
   type StemArrangementRoomMusic,
 } from './model';
+import { loadMusicPhrasesById } from './libraryClient';
 import { renderRoomPatternLoopBuffer } from './patternRenderer';
+import {
+  buildPlaybackSequenceFromPhraseArrangement,
+  collectRoomPhraseArrangementPhraseIds,
+} from './phraseArrangement';
 
 type TransitionMode = 'immediate' | 'bar';
 type PlaybackMode = 'idle' | 'editor-preview' | 'world-play';
@@ -112,6 +119,11 @@ export class RoomMusicController {
 
     if (isPatternRoomMusic(nextArrangement)) {
       await this.playPatternArrangement(nextArrangement, options);
+      return;
+    }
+
+    if (isPhraseArrangementRoomMusic(nextArrangement)) {
+      await this.playPhraseArrangement(nextArrangement, options);
       return;
     }
 
@@ -403,6 +415,71 @@ export class RoomMusicController {
     this.currentArrangement = nextArrangement;
   }
 
+  private async playPhraseArrangement(
+    nextArrangement: RoomPhraseArrangementMusic,
+    options: {
+      mode: PlaybackMode;
+      transition?: TransitionMode;
+      fadeDurationSec?: number;
+    },
+  ): Promise<void> {
+    const audioContext = this.getAudioContext();
+    if (!audioContext) {
+      return;
+    }
+
+    const nextArrangementKey = getRoomMusicKey(nextArrangement) ?? 'phraseArrangement';
+    if (
+      this.activePattern &&
+      this.activePattern.playbackId === nextArrangementKey &&
+      (this.activePattern.stopTime === null || this.activePattern.stopTime > audioContext.currentTime)
+    ) {
+      this.currentArrangement = cloneRoomMusic(nextArrangement);
+      return;
+    }
+
+    const loopDurationSec = getRoomMusicLoopDurationSec(nextArrangement);
+    const barDurationSec = getRoomMusicBarDurationSec(nextArrangement);
+    const buffer = await this.loadPhraseArrangementLoopBuffer(nextArrangement);
+    const now = audioContext.currentTime;
+    const transportAlreadyRunning = this.transportStartTime > 0;
+    const transition = options.transition ?? 'bar';
+    const quantizeToBar = transition === 'bar' && this.hasActivePlaybacks();
+    const startAt = quantizeToBar ? this.getNextBarBoundary(barDurationSec, now) : now + 0.02;
+    this.ensureTransport(transportAlreadyRunning ? now : startAt);
+    const fadeDuration =
+      options.fadeDurationSec
+      ?? (quantizeToBar ? barDurationSec : IMMEDIATE_FADE_DURATION_SEC);
+    const loopOffset = transportAlreadyRunning ? this.getLoopOffsetAtTime(loopDurationSec, startAt) : 0;
+    const hasPriorPlayback = this.hasActivePlaybacks();
+
+    for (const playback of this.activeLanes.values()) {
+      this.scheduleStopPlayback(playback, {
+        stopAt: quantizeToBar ? startAt : now,
+        fadeDuration,
+      });
+    }
+    this.activeLanes.clear();
+
+    if (this.activePattern) {
+      this.scheduleStopPlayback(this.activePattern, {
+        stopAt: quantizeToBar ? startAt : now,
+        fadeDuration,
+      });
+      this.activePattern = null;
+    }
+
+    this.activePattern = this.startLoopPlayback(nextArrangementKey, buffer, {
+      loopDurationSec,
+      startAt,
+      offsetSec: loopOffset,
+      fadeInDuration: hasPriorPlayback ? fadeDuration : 0.08,
+      startSilent: hasPriorPlayback,
+      baseGain: 1,
+    });
+    this.currentArrangement = nextArrangement;
+  }
+
   private hasActivePlaybacks(): boolean {
     return this.activePattern !== null || this.activeLanes.size > 0;
   }
@@ -597,6 +674,31 @@ export class RoomMusicController {
       }
 
       return renderRoomPatternLoopBuffer(audioContext, pattern);
+    });
+
+    this.patternLoopBufferPromises.set(cacheKey, bufferPromise);
+    return bufferPromise;
+  }
+
+  private async loadPhraseArrangementLoopBuffer(
+    arrangement: RoomPhraseArrangementMusic,
+  ): Promise<AudioBuffer> {
+    const cacheKey = `phrase:${getRoomMusicKey(arrangement) ?? 'phraseArrangement'}`;
+    const cached = this.patternLoopBufferPromises.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const bufferPromise = Promise.resolve().then(async () => {
+      const audioContext = this.getAudioContext();
+      if (!audioContext) {
+        throw new Error('Web Audio is unavailable.');
+      }
+
+      const phraseIds = collectRoomPhraseArrangementPhraseIds(arrangement);
+      const phraseById = await loadMusicPhrasesById(phraseIds);
+      const sequence = buildPlaybackSequenceFromPhraseArrangement(arrangement, phraseById);
+      return renderRoomPatternLoopBuffer(audioContext, sequence);
     });
 
     this.patternLoopBufferPromises.set(cacheKey, bufferPromise);
