@@ -14,10 +14,15 @@ Use a published non-survival room/course if you want the verifier to trigger rel
 (function installWampRankedRunSpoof() {
   const DEFAULT_SAFETY_API_BASE = 'https://everybodys-platformer-safety.novox-robot.workers.dev';
   const SAFETY_HOST_PATTERN = /safety/i;
+  const PAGES_PREVIEW_HOST_PATTERN = /\.wampland\.pages\.dev$/i;
+
+  function isSafetyLikeHost(hostname) {
+    return SAFETY_HOST_PATTERN.test(hostname) || PAGES_PREVIEW_HOST_PATTERN.test(hostname);
+  }
 
   function ensureSafetyTarget(apiBase) {
     if (
-      !SAFETY_HOST_PATTERN.test(location.hostname) &&
+      !isSafetyLikeHost(location.hostname) &&
       !SAFETY_HOST_PATTERN.test(apiBase) &&
       window.ALLOW_WAMP_NON_SAFETY !== true
     ) {
@@ -29,7 +34,7 @@ Use a published non-survival room/course if you want the verifier to trigger rel
   }
 
   function getApiBase() {
-    if (SAFETY_HOST_PATTERN.test(location.hostname)) {
+    if (isSafetyLikeHost(location.hostname)) {
       return DEFAULT_SAFETY_API_BASE;
     }
     const metaBase = document
