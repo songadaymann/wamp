@@ -94,8 +94,10 @@ export function setupRoomMusicControls(
   const replaceLegacyButton = doc.getElementById('btn-editor-music-replace-legacy');
   const keyTonicSelect = doc.getElementById('editor-music-key-tonic-select') as HTMLSelectElement | null;
   const keyModeSelect = doc.getElementById('editor-music-key-mode-select') as HTMLSelectElement | null;
+  const phraseNewButton = doc.getElementById('btn-editor-music-phrase-new');
+  const phraseEditButton = doc.getElementById('btn-editor-music-phrase-edit');
+  const phraseSaveButton = doc.getElementById('btn-editor-music-phrase-save');
   const phraseNameInput = doc.getElementById('editor-music-phrase-name-input') as HTMLInputElement | null;
-  const phraseNameSaveButton = doc.getElementById('btn-editor-music-phrase-name-save');
   const libraryRefreshButton = doc.getElementById('btn-editor-music-library-refresh');
   const libraryMoreButton = doc.getElementById('btn-editor-music-library-more');
   const arrangementClearButton = doc.getElementById('btn-editor-music-arrangement-clear-slot');
@@ -150,6 +152,15 @@ export function setupRoomMusicControls(
   const clearArrangementDropTarget = () => {
     activeDropTarget?.classList.remove('drag-target');
     activeDropTarget = null;
+  };
+
+  const focusPhraseNameInput = () => {
+    window.requestAnimationFrame(() => {
+      const nextInput = doc.getElementById('editor-music-phrase-name-input') as HTMLInputElement | null;
+      nextInput?.focus();
+      nextInput?.select();
+      syncGameKeyboardFocus(game);
+    });
   };
 
   modeButton?.addEventListener('click', () => {
@@ -234,6 +245,26 @@ export function setupRoomMusicControls(
     });
   });
 
+  phraseNewButton?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      const result = scene.startNewRoomMusicPhrase?.();
+      if (result && typeof (result as Promise<unknown>).finally === 'function') {
+        void (result as Promise<unknown>).finally(() => {
+          focusPhraseNameInput();
+        });
+        return;
+      }
+      focusPhraseNameInput();
+    });
+  });
+
+  phraseEditButton?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.toggleRoomMusicPhraseMetadataEditor?.();
+      focusPhraseNameInput();
+    });
+  });
+
   phraseNameInput?.addEventListener('input', () => {
     withActiveEditorScene(game, (scene) => {
       scene.setRoomMusicPhraseNameSuffix?.(phraseNameInput.value);
@@ -259,7 +290,7 @@ export function setupRoomMusicControls(
     syncGameKeyboardFocus(game);
   });
 
-  phraseNameSaveButton?.addEventListener('click', () => {
+  phraseSaveButton?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
       void scene.saveActiveRoomMusicPhrase?.();
     });

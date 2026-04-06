@@ -116,6 +116,8 @@ export interface EditorSceneBridge {
   shiftRoomMusicOctave?: (delta: number) => void;
   shiftRoomMusicTempo?: (delta: number) => void;
   shiftRoomMusicSwing?: (delta: number) => void;
+  startNewRoomMusicPhrase?: () => Promise<void>;
+  toggleRoomMusicPhraseMetadataEditor?: () => void;
   setRoomMusicPhraseNameSuffix?: (value: string) => void;
   saveRoomMusicDraftAndPhrases?: (
     options?: { instrumentId?: RoomPatternInstrumentId | null }

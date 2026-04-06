@@ -100,3 +100,90 @@ export function getRoomMusicKeyLabel(
 ): string {
   return `${tonic} ${mode === 'major' ? 'Major' : 'Minor'}`;
 }
+
+function getCandidateScaleSemitones(
+  tonic: RoomMusicKeyTonic,
+  mode: RoomMusicKeyMode,
+): Set<number> {
+  const scaleNotes = mode === 'major'
+    ? majorKey(tonic).scale
+    : minorKey(tonic).natural.scale;
+  return new Set(
+    scaleNotes
+      .map((note) => normalizeEnharmonicPitchClass(note))
+      .filter((candidate): candidate is RoomMusicKeyTonic => candidate !== null)
+      .map((note) => getRoomMusicKeySemitone(note)),
+  );
+}
+
+export function detectRoomMusicKeyFromMidiSequence(
+  values: readonly number[],
+): { tonic: RoomMusicKeyTonic; mode: RoomMusicKeyMode } | null {
+  const midis = values
+    .filter((value) => Number.isFinite(value))
+    .map((value) => Math.round(value));
+  if (midis.length === 0) {
+    return null;
+  }
+
+  const semitones = midis.map((midi) => ((midi % 12) + 12) % 12);
+  const firstSemitone = semitones[0] ?? null;
+  const lastSemitone = semitones.at(-1) ?? null;
+  const lowestSemitone = ((Math.min(...midis) % 12) + 12) % 12;
+  const pitchClassCounts = new Map<number, number>();
+  for (const semitone of semitones) {
+    pitchClassCounts.set(semitone, (pitchClassCounts.get(semitone) ?? 0) + 1);
+  }
+  const mostFrequentCount = Math.max(...pitchClassCounts.values());
+
+  let bestMatch:
+    | {
+        tonic: RoomMusicKeyTonic;
+        mode: RoomMusicKeyMode;
+        score: number;
+        tiebreak: number;
+      }
+    | null = null;
+
+  for (const tonic of ROOM_MUSIC_KEY_TONICS) {
+    const tonicSemitone = getRoomMusicKeySemitone(tonic);
+    for (const mode of ROOM_MUSIC_KEY_MODES) {
+      const candidateScale = getCandidateScaleSemitones(tonic, mode);
+      let score = 0;
+      for (const semitone of semitones) {
+        score += candidateScale.has(semitone) ? 3 : -4;
+        if (semitone === tonicSemitone) {
+          score += 2;
+        }
+      }
+
+      const tonicCount = pitchClassCounts.get(tonicSemitone) ?? 0;
+      const tiebreak =
+        (lastSemitone === tonicSemitone ? 12 : 0) +
+        (firstSemitone === tonicSemitone ? 6 : 0) +
+        (lowestSemitone === tonicSemitone ? 4 : 0) +
+        tonicCount * 2 +
+        (tonicCount === mostFrequentCount ? 3 : 0);
+
+      if (
+        !bestMatch ||
+        score > bestMatch.score ||
+        (score === bestMatch.score && tiebreak > bestMatch.tiebreak)
+      ) {
+        bestMatch = {
+          tonic,
+          mode,
+          score,
+          tiebreak,
+        };
+      }
+    }
+  }
+
+  return bestMatch
+    ? {
+        tonic: bestMatch.tonic,
+        mode: bestMatch.mode,
+      }
+    : null;
+}
