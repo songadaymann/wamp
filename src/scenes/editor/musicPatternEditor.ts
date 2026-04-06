@@ -22,6 +22,8 @@ import {
   ROOM_PATTERN_TONAL_INSTRUMENT_IDS,
   cloneRoomMusic,
   createDefaultRoomPatternMusic,
+  createEmptyRoomPatternDrumTrack,
+  createEmptyRoomPatternTonalTrack,
   getPatternInstrumentColor,
   getPatternDrumRowForGridRow,
   getPatternInstrumentLabel,
@@ -397,6 +399,30 @@ export class EditorMusicPatternController {
       phrase.id,
       ...phrase.sourcePhraseIds,
     ].filter((value, index, sourceIds) => sourceIds.indexOf(value) === index);
+    this.commitPattern(pattern);
+  }
+
+  clearActivePhrase(): void {
+    const pattern = this.getEditablePattern();
+    if (!pattern) {
+      return;
+    }
+
+    if (this.activeInstrumentTab === 'drums') {
+      pattern.tabs.drums = createEmptyRoomPatternDrumTrack();
+    } else {
+      pattern.tabs[this.activeInstrumentTab as RoomPatternTonalInstrumentId] = createEmptyRoomPatternTonalTrack();
+    }
+
+    pattern.phraseNameSuffixes[this.activeInstrumentTab] = null;
+    pattern.sourcePhraseIds[this.activeInstrumentTab] = [];
+    this.clipboard = null;
+    this.pastePreviewOrigin = null;
+    this.dragMode = null;
+    this.dragStartCell = null;
+    this.dragCurrentCell = null;
+    this.lastDragCellKey = null;
+    this.lastAppliedCell = null;
     this.commitPattern(pattern);
   }
 

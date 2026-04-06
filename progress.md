@@ -5742,3 +5742,43 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - direct deployment URL: `https://0a8eeeb5.wampland.pages.dev`
   - Verification:
     - `curl -I` returned `HTTP/2 200` for both Pages URLs
+
+- 2026-04-06: post-main phrase UX follow-up on `feature/music-phrase-ux-2026-04-06`
+  - Original prompt for this follow-up:
+    - replace the inline publish-name save affordance with `New`, `Edit`, and `Save`
+    - `New` should autosave current work and open a fresh sequence, even when starting from arrangement mode
+    - `Edit` should let the user adjust phrase metadata, with key + tempo still controlled from the existing music workbench controls
+    - `Save` should infer the actual key of the current phrase and update the chooser before saving
+  - Implementation:
+    - replaced the old inline publish-name + icon-button UI in `index.html` with a dedicated phrase action row and a collapsible phrase-name metadata row
+    - wired new scene bridge hooks in `src/ui/setup/musicControls.ts` / `src/ui/setup/sceneBridge.ts` for `startNewRoomMusicPhrase()` and `toggleRoomMusicPhraseMetadataEditor()`
+    - added `musicPhraseMetadataEditing` state plus new flow methods in `src/scenes/EditorScene.ts`
+    - `New` now:
+      - autosaves the arrangement draft and switches to sequencer when invoked from arrangement mode
+      - autosaves the active phrase when already in sequencer mode
+      - clears only the active instrument phrase, not the whole room music document
+      - reopens metadata editing for the fresh phrase
+    - `Edit` now toggles the phrase metadata row while leaving key / tempo / swing in the existing top workbench controls
+    - `Save` now calls a new key-inference pass before phrase save
+    - added key detection in `src/music/key.ts` and pattern helpers in `src/music/pattern.ts`:
+      - `detectRoomMusicKeyFromMidiSequence()`
+      - `detectRoomPatternTrackKey()`
+      - `rekeyRoomPatternMusicPreservingMidi()`
+    - the rekey helper updates the visible key chooser without changing the actual played MIDI content, so the detected key reflects the phrase while preserving how it sounds
+    - added `clearActivePhrase()` to `src/scenes/editor/musicPatternEditor.ts` for the fresh-phrase path
+    - tightened `cloneRoomPatternMusic()` typing with overloads so non-null pattern callers keep non-null results
+  - Validation:
+    - `npm run build` passed
+    - direct key inference probe passed:
+      - `C major detect -> { tonic: 'C', mode: 'major' }`
+      - `A minor detect -> { tonic: 'A', mode: 'minor' }`
+      - rekey-preserve probe kept MIDI `[48,52,55,48]` unchanged while updating pattern key metadata
+    - required web-game client smoke ran against `http://127.0.0.1:4300/?previewSmoke=1`
+      - artifacts: `output/web-game/music-phrase-ux-smoke/`
+      - screenshot still hit the known black-frame canvas artifact in headless preview
+    - attempted a deeper Playwright DOM/editor probe against the synthetic editor path
+      - `window.run_preview_smoke_action('openSyntheticEditor')` returns `{ ok: true }` in this environment, but the headless preview never surfaced a reachable editor scene instance or visible editor transition for deeper automation
+      - treat browser verification here as partial; the code-path and build validation are good, but local headless editor QA is still incomplete
+  - Next suggestions:
+    - verify the `New / Edit / Save` flow in a real browser session with an actual signed-in editable room
+    - if this UX feels right in live editor QA, commit this branch as a narrow post-launch follow-up rather than mixing it into unrelated gameplay work

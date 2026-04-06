@@ -1,6 +1,7 @@
 import {
   DEFAULT_ROOM_MUSIC_KEY_MODE,
   DEFAULT_ROOM_MUSIC_KEY_TONIC,
+  detectRoomMusicKeyFromMidiSequence,
   getRoomMusicKeySemitone,
   normalizeRoomMusicKeyMode,
   normalizeRoomMusicKeyTonic,
@@ -352,6 +353,10 @@ export function createDefaultRoomPatternMusic(): RoomPatternMusic {
   };
 }
 
+export function cloneRoomPatternMusic(value: RoomPatternMusic): RoomPatternMusic;
+export function cloneRoomPatternMusic(
+  value: RoomPatternMusic | null | undefined,
+): RoomPatternMusic | null;
 export function cloneRoomPatternMusic(
   value: RoomPatternMusic | null | undefined,
 ): RoomPatternMusic | null {
@@ -624,6 +629,116 @@ export function getPatternInstrumentColorRgbCss(instrumentId: RoomPatternInstrum
   const green = (color >> 8) & 0xff;
   const blue = color & 0xff;
   return `${red}, ${green}, ${blue}`;
+}
+
+function normalizeTonalTrackTies(track: RoomPatternTonalTrack): void {
+  if (track.ties.length > track.steps.length) {
+    track.ties.length = track.steps.length;
+  }
+
+  if (track.ties.length < track.steps.length) {
+    while (track.ties.length < track.steps.length) {
+      track.ties.push(false);
+    }
+  }
+
+  for (let index = 0; index < track.steps.length; index += 1) {
+    if (index === 0) {
+      track.ties[index] = false;
+      continue;
+    }
+
+    track.ties[index] =
+      track.ties[index] === true &&
+      track.steps[index] !== null &&
+      track.steps[index - 1] !== null &&
+      track.steps[index] === track.steps[index - 1];
+  }
+}
+
+export function collectRoomPatternTrackMidis(
+  pattern: RoomPatternMusic,
+  instrumentId: RoomPatternTonalInstrumentId,
+): number[] {
+  const track = pattern.tabs[instrumentId];
+  const midis: number[] = [];
+  for (let stepIndex = 0; stepIndex < track.steps.length; stepIndex += 1) {
+    const rowIndex = track.steps[stepIndex];
+    if (rowIndex === null) {
+      continue;
+    }
+
+    const note = getPatternRowNote(
+      instrumentId,
+      rowIndex,
+      pattern.pitchMode,
+      pattern.octaveShift[instrumentId],
+      pattern.keyTonic,
+      pattern.keyMode,
+    );
+    if (note) {
+      midis.push(note.midi);
+    }
+  }
+  return midis;
+}
+
+export function detectRoomPatternTrackKey(
+  pattern: RoomPatternMusic,
+  instrumentId: RoomPatternTonalInstrumentId,
+): { tonic: RoomMusicKeyTonic; mode: RoomMusicKeyMode } | null {
+  return detectRoomMusicKeyFromMidiSequence(collectRoomPatternTrackMidis(pattern, instrumentId));
+}
+
+export function rekeyRoomPatternMusicPreservingMidi(
+  pattern: RoomPatternMusic,
+  targetKeyTonic: RoomMusicKeyTonic,
+  targetKeyMode: RoomMusicKeyMode,
+): RoomPatternMusic {
+  const nextPattern = cloneRoomPatternMusic(pattern);
+  if (pattern.keyTonic === targetKeyTonic && pattern.keyMode === targetKeyMode) {
+    return nextPattern;
+  }
+
+  for (const instrumentId of ROOM_PATTERN_TONAL_INSTRUMENT_IDS) {
+    const sourceTrack = pattern.tabs[instrumentId];
+    const targetTrack = createEmptyRoomPatternTonalTrack();
+    for (let stepIndex = 0; stepIndex < sourceTrack.steps.length; stepIndex += 1) {
+      const rowIndex = sourceTrack.steps[stepIndex];
+      if (rowIndex === null) {
+        continue;
+      }
+
+      const sourceNote = getPatternRowNote(
+        instrumentId,
+        rowIndex,
+        pattern.pitchMode,
+        pattern.octaveShift[instrumentId],
+        pattern.keyTonic,
+        pattern.keyMode,
+      );
+      if (!sourceNote) {
+        continue;
+      }
+
+      targetTrack.steps[stepIndex] = findClosestPatternRowIndexForMidi(
+        instrumentId,
+        sourceNote.midi,
+        pattern.pitchMode,
+        pattern.octaveShift[instrumentId],
+        targetKeyTonic,
+        targetKeyMode,
+      );
+      targetTrack.ties[stepIndex] = sourceTrack.ties[stepIndex] === true;
+    }
+
+    normalizeTonalTrackTies(targetTrack);
+    nextPattern.tabs[instrumentId] = targetTrack;
+  }
+
+  nextPattern.keyTonic = targetKeyTonic;
+  nextPattern.keyMode = targetKeyMode;
+  return nextPattern;
 }
 
 export function getPatternRowNote(
