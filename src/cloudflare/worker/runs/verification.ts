@@ -28,6 +28,13 @@ const MAX_HORIZONTAL_SPEED_PX_PER_SEC = 900;
 const MAX_VERTICAL_SPEED_PX_PER_SEC = 1_500;
 const MAX_TOTAL_SPEED_PX_PER_SEC = 1_800;
 const POSITION_SLACK_PX = 80;
+const GOAL_EVENT_OBJECT_RADIUS_PX = 64;
+const GOAL_EVENT_INTERPOLATED_PATH_RADIUS_PX = 112;
+const GOAL_EVENT_NEAREST_PATH_RADIUS_PX = 208;
+const GOAL_EVENT_BURST_MIN_COUNT = 128;
+const GOAL_EVENT_BURST_MIN_RATIO = 0.9;
+const GOAL_EVENT_BURST_STATIONARY_LOOKBACK_MS = 4_000;
+const GOAL_EVENT_BURST_STATIONARY_MAX_TRAVEL_PX = 48;
 
 export type RunVerificationStatus = 'not_required' | 'passed' | 'failed' | 'timeout';
 export type RunVerificationTriggerReason =
@@ -87,6 +94,11 @@ interface VerificationComparableEntry {
   score: number;
   finishedAt: string;
   overallRank: number | null;
+}
+
+interface TraceObjectBinding {
+  x: number;
+  y: number;
 }
 
 export interface RunVerificationTriggerResult {
@@ -204,7 +216,12 @@ export async function verifyRoomRunTrace(input: {
     return pathCheck;
   }
 
-  const derivedMetrics = deriveRoomMetricsFromTrace(input.room, trace.goalEvents, deadline);
+  const derivedMetrics = deriveRoomMetricsFromTrace(
+    input.room,
+    trace.breadcrumbs,
+    trace.goalEvents,
+    deadline,
+  );
   if ('status' in derivedMetrics) {
     return derivedMetrics;
   }
@@ -243,7 +260,13 @@ export async function verifyCourseRunTrace(input: {
     return pathCheck;
   }
 
-  const derivedMetrics = deriveCourseMetricsFromTrace(input.course, input.roomsById, trace.goalEvents, deadline);
+  const derivedMetrics = deriveCourseMetricsFromTrace(
+    input.course,
+    input.roomsById,
+    trace.breadcrumbs,
+    trace.goalEvents,
+    deadline,
+  );
   if ('status' in derivedMetrics) {
     return derivedMetrics;
   }
@@ -536,34 +559,50 @@ function verifyPath(
 
 function deriveRoomMetricsFromTrace(
   room: RoomSnapshot,
+  breadcrumbs: RankedRunTraceBreadcrumb[],
   goalEvents: RankedRunTraceGoalEvent[],
   deadline: number
 ): RunVerificationDerivedMetrics | RunVerificationResult {
-  const collectibleIds = new Set(
-    room.placedObjects
-      .filter((placed) => placedObjectContributesToCategory(placed, 'collectible'))
-      .map((placed) => placed.instanceId)
-  );
-  const enemyIds = new Set(
-    room.placedObjects
-      .filter((placed) => placedObjectContributesToCategory(placed, 'enemy'))
-      .map((placed) => placed.instanceId)
-  );
+  const collectibleIds = new Set<string>();
+  const enemyIds = new Set<string>();
+  const collectibleBindings = new Map<string, TraceObjectBinding>();
+  const enemyBindings = new Map<string, TraceObjectBinding>();
+
+  for (const placed of room.placedObjects) {
+    if (placedObjectContributesToCategory(placed, 'collectible')) {
+      collectibleIds.add(placed.instanceId);
+      collectibleBindings.set(placed.instanceId, {
+        x: placed.x,
+        y: placed.y,
+      });
+    }
+    if (placedObjectContributesToCategory(placed, 'enemy')) {
+      enemyIds.add(placed.instanceId);
+      enemyBindings.set(placed.instanceId, {
+        x: placed.x,
+        y: placed.y,
+      });
+    }
+  }
 
   return deriveMetricsForGoal({
     goal: room.goal,
+    breadcrumbs,
     goalEvents,
     deadline,
     allowedRoomIds: new Set([room.id]),
     roomCoordinatesById: new Map([[room.id, room.coordinates]]),
     collectibleIdsByRoomId: new Map([[room.id, collectibleIds]]),
     enemyIdsByRoomId: new Map([[room.id, enemyIds]]),
+    collectibleBindingsByRoomId: new Map([[room.id, collectibleBindings]]),
+    enemyBindingsByRoomId: new Map([[room.id, enemyBindings]]),
   });
 }
 
 function deriveCourseMetricsFromTrace(
   course: CourseSnapshot,
   roomsById: Map<string, RoomSnapshot>,
+  breadcrumbs: RankedRunTraceBreadcrumb[],
   goalEvents: RankedRunTraceGoalEvent[],
   deadline: number
 ): RunVerificationDerivedMetrics | RunVerificationResult {
@@ -571,6 +610,8 @@ function deriveCourseMetricsFromTrace(
   const roomCoordinatesById = new Map<string, RoomCoordinates>();
   const collectibleIdsByRoomId = new Map<string, Set<string>>();
   const enemyIdsByRoomId = new Map<string, Set<string>>();
+  const collectibleBindingsByRoomId = new Map<string, Map<string, TraceObjectBinding>>();
+  const enemyBindingsByRoomId = new Map<string, Map<string, TraceObjectBinding>>();
 
   for (const roomRef of course.roomRefs) {
     const room = roomsById.get(roomRef.roomId);
@@ -587,6 +628,20 @@ function deriveCourseMetricsFromTrace(
           .map((placed) => placed.instanceId)
       )
     );
+    collectibleBindingsByRoomId.set(
+      room.id,
+      new Map(
+        room.placedObjects
+          .filter((placed) => placedObjectContributesToCategory(placed, 'collectible'))
+          .map((placed) => [
+            placed.instanceId,
+            {
+              x: placed.x,
+              y: placed.y,
+            } satisfies TraceObjectBinding,
+          ])
+      )
+    );
     enemyIdsByRoomId.set(
       room.id,
       new Set(
@@ -595,33 +650,58 @@ function deriveCourseMetricsFromTrace(
           .map((placed) => placed.instanceId)
       )
     );
+    enemyBindingsByRoomId.set(
+      room.id,
+      new Map(
+        room.placedObjects
+          .filter((placed) => placedObjectContributesToCategory(placed, 'enemy'))
+          .map((placed) => [
+            placed.instanceId,
+            {
+              x: placed.x,
+              y: placed.y,
+            } satisfies TraceObjectBinding,
+          ])
+      )
+    );
   }
 
   return deriveMetricsForGoal({
     goal: course.goal,
+    breadcrumbs,
     goalEvents,
     deadline,
     allowedRoomIds,
     roomCoordinatesById,
     collectibleIdsByRoomId,
     enemyIdsByRoomId,
+    collectibleBindingsByRoomId,
+    enemyBindingsByRoomId,
   });
 }
 
 function deriveMetricsForGoal(input: {
   goal: RoomSnapshot['goal'] | CourseSnapshot['goal'];
+  breadcrumbs: RankedRunTraceBreadcrumb[];
   goalEvents: RankedRunTraceGoalEvent[];
   deadline: number;
   allowedRoomIds: Set<string>;
   roomCoordinatesById: Map<string, RoomCoordinates>;
   collectibleIdsByRoomId: Map<string, Set<string>>;
   enemyIdsByRoomId: Map<string, Set<string>>;
+  collectibleBindingsByRoomId: Map<string, Map<string, TraceObjectBinding>>;
+  enemyBindingsByRoomId: Map<string, Map<string, TraceObjectBinding>>;
 }): RunVerificationDerivedMetrics | RunVerificationResult {
   const collectibleIds = new Set<string>();
   const enemyIds = new Set<string>();
   const checkpoints = new Set<number>();
   let reachedExit = false;
   let reachedFinish = false;
+
+  const burstCheck = verifyGoalEventBurstPattern(input.goalEvents, input.breadcrumbs);
+  if (burstCheck) {
+    return burstCheck;
+  }
 
   for (const event of input.goalEvents) {
     if (Date.now() > input.deadline) {
@@ -652,6 +732,18 @@ function deriveMetricsForGoal(input: {
       }
     }
 
+    const pathDistance = getGoalEventPathDistance(event, input.breadcrumbs);
+    if (pathDistance === null || pathDistance.distancePx > pathDistance.maxDistancePx) {
+      return createFailedVerification('failed', 'trace_goal', {
+        issue: 'goal_event_path_mismatch',
+        type: event.type,
+        roomId: event.roomId,
+        atMs: event.atMs,
+        distancePx: pathDistance?.distancePx ?? null,
+        maxDistancePx: pathDistance?.maxDistancePx ?? null,
+      });
+    }
+
     switch (event.type) {
       case 'collectible':
         if (!event.roomId || !event.instanceId) {
@@ -665,6 +757,23 @@ function deriveMetricsForGoal(input: {
             roomId: event.roomId,
             instanceId: event.instanceId,
           });
+        }
+        {
+          const binding = input.collectibleBindingsByRoomId.get(event.roomId)?.get(event.instanceId);
+          if (
+            !binding ||
+            !isEventNearBoundObject(event, binding)
+          ) {
+            return createFailedVerification('failed', 'trace_goal', {
+              issue: 'collectible_position_mismatch',
+              roomId: event.roomId,
+              instanceId: event.instanceId,
+              eventX: event.x,
+              eventY: event.y,
+              bindingX: binding?.x ?? null,
+              bindingY: binding?.y ?? null,
+            });
+          }
         }
         collectibleIds.add(`${event.roomId}:${event.instanceId}`);
         break;
@@ -680,6 +789,23 @@ function deriveMetricsForGoal(input: {
             roomId: event.roomId,
             instanceId: event.instanceId,
           });
+        }
+        {
+          const binding = input.enemyBindingsByRoomId.get(event.roomId)?.get(event.instanceId);
+          if (
+            !binding ||
+            !isEventNearBoundObject(event, binding)
+          ) {
+            return createFailedVerification('failed', 'trace_goal', {
+              issue: 'enemy_position_mismatch',
+              roomId: event.roomId,
+              instanceId: event.instanceId,
+              eventX: event.x,
+              eventY: event.y,
+              bindingX: binding?.x ?? null,
+              bindingY: binding?.y ?? null,
+            });
+          }
         }
         enemyIds.add(`${event.roomId}:${event.instanceId}`);
         break;
@@ -777,6 +903,125 @@ function hasGoalEventNearMarker(
       Math.abs(event.x - point.x) <= GOAL_EVENT_RADIUS_PX &&
       Math.abs(event.y - point.y) <= GOAL_EVENT_RADIUS_PX
   );
+}
+
+function isEventNearBoundObject(
+  event: RankedRunTraceGoalEvent,
+  binding: TraceObjectBinding,
+): boolean {
+  return (
+    Math.abs(event.x - binding.x) <= GOAL_EVENT_OBJECT_RADIUS_PX &&
+    Math.abs(event.y - binding.y) <= GOAL_EVENT_OBJECT_RADIUS_PX
+  );
+}
+
+function getGoalEventPathDistance(
+  event: RankedRunTraceGoalEvent,
+  breadcrumbs: RankedRunTraceBreadcrumb[],
+): { distancePx: number; maxDistancePx: number } | null {
+  const matching = breadcrumbs.filter(
+    (breadcrumb) => breadcrumb.roomX === event.roomX && breadcrumb.roomY === event.roomY,
+  );
+  if (matching.length === 0) {
+    return null;
+  }
+
+  let previous: RankedRunTraceBreadcrumb | null = null;
+  let next: RankedRunTraceBreadcrumb | null = null;
+  for (const breadcrumb of matching) {
+    if (breadcrumb.atMs <= event.atMs) {
+      previous = breadcrumb;
+      continue;
+    }
+    next = breadcrumb;
+    break;
+  }
+
+  if (previous && next && next.atMs > previous.atMs) {
+    const progress = (event.atMs - previous.atMs) / (next.atMs - previous.atMs);
+    const estimatedX = previous.x + (next.x - previous.x) * progress;
+    const estimatedY = previous.y + (next.y - previous.y) * progress;
+    return {
+      distancePx: Math.hypot(event.x - estimatedX, event.y - estimatedY),
+      maxDistancePx: GOAL_EVENT_INTERPOLATED_PATH_RADIUS_PX,
+    };
+  }
+
+  let nearest = matching[0];
+  let nearestTimeDelta = Math.abs(event.atMs - nearest.atMs);
+  for (let index = 1; index < matching.length; index += 1) {
+    const breadcrumb = matching[index];
+    const delta = Math.abs(event.atMs - breadcrumb.atMs);
+    if (delta < nearestTimeDelta) {
+      nearest = breadcrumb;
+      nearestTimeDelta = delta;
+    }
+  }
+
+  return {
+    distancePx: Math.hypot(event.x - nearest.x, event.y - nearest.y),
+    maxDistancePx: GOAL_EVENT_NEAREST_PATH_RADIUS_PX,
+  };
+}
+
+function verifyGoalEventBurstPattern(
+  goalEvents: RankedRunTraceGoalEvent[],
+  breadcrumbs: RankedRunTraceBreadcrumb[],
+): RunVerificationResult | null {
+  if (goalEvents.length < GOAL_EVENT_BURST_MIN_COUNT || breadcrumbs.length === 0) {
+    return null;
+  }
+
+  const countsByAtMs = new Map<number, number>();
+  for (const event of goalEvents) {
+    countsByAtMs.set(event.atMs, (countsByAtMs.get(event.atMs) ?? 0) + 1);
+  }
+
+  let dominantAtMs = 0;
+  let dominantCount = 0;
+  for (const [atMs, count] of countsByAtMs) {
+    if (count > dominantCount) {
+      dominantAtMs = atMs;
+      dominantCount = count;
+    }
+  }
+
+  const dominantRatio = dominantCount / goalEvents.length;
+  if (
+    dominantCount < GOAL_EVENT_BURST_MIN_COUNT ||
+    dominantRatio < GOAL_EVENT_BURST_MIN_RATIO
+  ) {
+    return null;
+  }
+
+  const windowStart = Math.max(0, dominantAtMs - GOAL_EVENT_BURST_STATIONARY_LOOKBACK_MS);
+  const windowBreadcrumbs = breadcrumbs.filter(
+    (breadcrumb) => breadcrumb.atMs >= windowStart && breadcrumb.atMs <= dominantAtMs,
+  );
+  if (windowBreadcrumbs.length < 2) {
+    return null;
+  }
+
+  let travelPx = 0;
+  for (let index = 1; index < windowBreadcrumbs.length; index += 1) {
+    const previous = windowBreadcrumbs[index - 1];
+    const current = windowBreadcrumbs[index];
+    const delta = getWorldDelta(previous, current);
+    travelPx += Math.hypot(delta.dx, delta.dy);
+  }
+
+  if (travelPx > GOAL_EVENT_BURST_STATIONARY_MAX_TRAVEL_PX) {
+    return null;
+  }
+
+  return createFailedVerification('failed', 'trace_goal', {
+    issue: 'goal_event_burst_while_stationary',
+    dominantAtMs,
+    dominantCount,
+    dominantRatio,
+    stationaryLookbackMs: GOAL_EVENT_BURST_STATIONARY_LOOKBACK_MS,
+    stationaryTravelPx: travelPx,
+  });
 }
 
 function totalCountFromMap(map: Map<string, Set<string>>): number {
