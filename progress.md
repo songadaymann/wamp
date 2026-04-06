@@ -107,6 +107,341 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - `mainBundleContainsPartyKitHost: true`
     - implication:
       - the zoom tilemap collider cleanup is now live on production alongside the rest of `main`
+- Added room-music design principles note on April 6, 2026:
+  - created `docs/room-music-design-principles.md`
+  - captures the session’s product/design conclusions around:
+    - flat retro UI direction
+    - tileset-driven color use
+    - over-the-room composition surfaces
+    - clearer binary empty/filled states
+    - immediate musical feedback
+    - compact top-strip controls
+    - phrase-library information hierarchy
+    - implementation guardrails for metadata persistence and safety-stack alignment
+
+- Safety Pages redeploy for phrase-name save fix on April 6, 2026:
+  - rebuilt `/private/tmp/everybodys-platformer-music-latest-main-port` against the safety backend:
+    - `VITE_ROOM_API_BASE_URL=https://everybodys-platformer-safety.novox-robot.workers.dev`
+    - `VITE_PARTYKIT_HOST=everybodys-platformer-presence-safety.songadaymann.partykit.dev`
+    - `VITE_PARTYKIT_PARTY=main`
+  - `npm run build` passed
+  - redeployed Pages-only to branch alias `safety-music-tileset-theme`
+  - live URLs after deploy:
+    - alias: `https://safety-music-tileset-theme.wampland.pages.dev`
+    - direct deployment: `https://33d61a43.wampland.pages.dev`
+  - verification:
+    - `curl -I` returned `HTTP/2 200` for both URLs
+
+- Phrase-name save bug fix on April 6, 2026:
+  - root cause:
+    - phrase-name-only edits were being dropped before save because editor room-music dirty detection compared `RoomMusic` using the playback cache key
+    - that key intentionally ignored `pattern.phraseNameSuffixes`, so typing a new phrase suffix did not count as a room-music edit unless note data also changed
+    - this made phrase naming behave differently from direct field-save flows like profile display name or room title
+  - fix:
+    - updated `src/scenes/editor/editRuntime.ts`
+    - `roomMusicChanged(...)` now compares cloned persisted room-music JSON instead of `getRoomMusicKey(...)`
+    - this preserves the existing playback cache key behavior while making metadata-only music edits, including phrase-name suffixes, mark the room dirty and persist correctly
+  - validation:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+
+- Phrase-name display cleanup on April 6, 2026:
+  - root cause:
+    - the `Publish Name` field was still being treated like a suffix in `createMusicPhraseLabel(...)`
+    - custom names therefore rendered as `drums beatbox` / `triangle arpy` instead of the actual sample name the creator typed
+    - default auto names also used zero-based ordinals, which surfaced labels like `drums 0`
+  - fix:
+    - updated `src/music/library.ts`
+    - added `createMusicPhraseSampleName(...)` so custom names become the real sample name and default names become human-friendly `Instrument N` labels
+    - `createMusicPhraseLabel(...)` now stores `creator · room · sample-name` instead of prefixing the instrument id into the sample-name segment
+    - updated `src/scenes/EditorScene.ts` so arrangement slot chips use the sample name for their visible label
+    - updated the publish-name placeholder to match the new default naming shape
+  - validation:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - `npx --yes tsx -e ...` confirmed:
+      - custom label -> `Jon · Room · beatbox`
+      - default label -> `Jon · Room · Drums 1`
+      - parsed sample name -> `beatbox`
+    - required `develop-web-game` client smoke ran against `http://127.0.0.1:4591/?previewSmoke=1`
+      - artifacts: `output/web-game/music-phrase-name-smoke/`
+      - screenshot still hit the known black-frame preview artifact, so naming-specific UI verification remains primarily code-path based rather than visual
+    - direct code probe:
+      - `npx --yes tsx -e "import { createDefaultRoomPatternMusic } from './src/music/pattern.ts'; const a=createDefaultRoomPatternMusic(); const b=createDefaultRoomPatternMusic(); b.phraseNameSuffixes.drums='kick'; console.log(JSON.stringify(a)===JSON.stringify(b) ? 'same' : 'different');"`
+      - output: `different`
+    - required `develop-web-game` smoke wrote `output/web-game/phrase-name-save-smoke/`
+      - `state-0.json` shows the safety preview still booted into the app shell
+      - screenshot `shot-0.png` came back black again, so the useful signal here is build + state capture, not the image
+      - only console noise was the known Cloudflare Insights RUM CORS error
+
+- Safety full-stack redeploy for MT-32 drum spike on April 6, 2026:
+  - scope:
+    - full safety redeploy from `/private/tmp/everybodys-platformer-music-latest-main-port`
+    - included both:
+      - safety Worker redeploy, because the current music worktree still includes backend changes in `src/cloudflare/worker/music/store.ts`
+      - safety Pages redeploy, so the frontend and worker stay aligned for phrase-library + sequencer testing
+    - no new D1 migration was needed for this pass
+    - no PartyKit deploy was needed
+  - build:
+    - rebuilt the frontend against the safety backend:
+      - `VITE_ROOM_API_BASE_URL=https://everybodys-platformer-safety.novox-robot.workers.dev`
+      - `VITE_PARTYKIT_HOST=everybodys-platformer-presence-safety.songadaymann.partykit.dev`
+      - `VITE_PARTYKIT_PARTY=main`
+    - `npm run build` passed
+  - Worker:
+    - command used:
+      - `node node_modules/wrangler/bin/wrangler.js deploy --env safety --keep-vars --var APP_BASE_URL:https://safety-music-tileset-theme.wampland.pages.dev`
+    - URL: `https://everybodys-platformer-safety.novox-robot.workers.dev`
+    - version: `0367e767-6120-4382-af7d-912934801135`
+  - Pages:
+    - command used:
+      - `node node_modules/wrangler/bin/wrangler.js pages deploy dist --project-name wampland --branch safety-music-tileset-theme`
+    - branch alias: `https://safety-music-tileset-theme.wampland.pages.dev`
+    - direct deployment URL: `https://0eb1812d.wampland.pages.dev`
+  - verification:
+    - `curl -I` returned `HTTP/2 200` for both Pages URLs
+    - `GET https://everybodys-platformer-safety.novox-robot.workers.dev/api/music/phrases?instrument=drums` returned phrase JSON successfully after redeploy
+
+- Strudel-adjacent Roland MT-32 drum kit spike on April 6, 2026:
+  - replaced the procedural drum source path with a local sample-backed MT-32 kit while keeping the existing sequencer, transport, pattern renderer, and synth voices intact
+  - vendored a small curated set of MT-32 one-shots into `public/assets/music/roland-mt32/` from the Strudel-adjacent `dough-samples` / `tidal-drum-machines` source tree:
+    - bassdrum, snare, clap, rimshot, low/mid/high toms, closed/open hat, ride, crash, cowbell, shaker, tambourine, fx-click
+  - added `src/music/rolandMt32DrumKit.ts`
+    - resolves the local asset URLs
+    - fetches and decodes the WAVs with `decodeAudioData`
+    - mixes them to mono, trims silence, normalizes peak level, and applies a tighter playback-rate variant for `kick-2`
+  - updated `src/music/patternKit.ts`
+    - `getPatternDrumSamples` is now async and sample-backed
+    - sample maps are cached per output sample rate
+    - procedural synthesis remains as the fallback if a sample fails to load
+  - updated `src/music/patternRenderer.ts`
+    - pattern loop rendering now awaits the decoded drum sample map before offline mixdown
+  - updated `src/music/controller.ts`
+    - drum-cell preview now loads decoded drum samples asynchronously before firing the one-shot
+  - validation:
+    - `npm run build` passed
+    - verified the new built assets exist under `dist/assets/music/roland-mt32/`
+    - verified direct asset serving on a clean local static port:
+      - `curl -I http://127.0.0.1:4321/assets/music/roland-mt32/bassdrum.wav` -> `200`, `Content-type: audio/x-wav`
+      - `curl -I http://127.0.0.1:4321/assets/music/roland-mt32/snare-02.wav` -> `200`, `Content-type: audio/x-wav`
+    - required `develop-web-game` client smoke wrote `output/web-game/mt32-drum-smoke/`
+      - the screenshot was not trustworthy for this change because the app booted into a generic local runtime error page; the useful verification from this pass is build + bundled asset serving, not the static-root screenshot
+
+- Retro music strip + TR-808 phrase arrangement pass on April 5, 2026:
+  - widened the top music shell and switched the strip to a single scrolling row on desktop so `Octave` stays up top even with the pixel font
+  - added real persisted room-music tempo controls in the strip for both sequencer patterns and phrase arrangements
+    - `pattern` and `phraseArrangement` music now preserve/clamp `bpm` instead of silently resetting to `120`
+    - added shared tempo bounds in `src/music/pattern.ts` and routed the new controls through `EditorScene` + `musicControls`
+  - reworked the arrangement overlay toward a flatter TR-808 look in `src/styles/sections/editor.css`
+    - outer shell and arrangement outline are now white instead of warm yellow
+    - arrangement rows keep strong instrument-color rails, but slots are now hard-edged square pads
+    - empty pads are fully empty, filled pads are fully filled, and borders stay fully opaque
+    - removed the visible full phrase text from pads; hover/title still carries the full phrase label
+  - swapped the music UI instrument accents to a bold retro palette based on Lospec `Super Colorful 3`
+    - drums `#ffe86b`
+    - triangle `#56cfde`
+    - saw `#ff533f`
+    - square `#c9de3e`
+    - source referenced during the pass: `https://lospec.com/palette-list/super-colorful-3`
+  - tightened the library cards to match the same flat treatment instead of using low-opacity glass variants
+  - kept the general editor tileset-theme work from the previous pass intact outside the music-specific instrument palette
+  - verification:
+    - `npm run build` passed after the final cleanup
+    - required `develop-web-game` smoke wrote `output/web-game/music-ui-retro-final-smoke/`
+    - focused DOM/screenshot probe wrote:
+      - `output/web-game/music-ui-retro-check/summary.json`
+      - `output/web-game/music-ui-retro-check/music-ui-retro-check.png`
+    - probe confirmed:
+      - shell width expanded to `1128px`
+      - `Octave` and `Tempo` render on the same toolbar line when a tonal tab is active
+      - arrangement rows render as `4` instrument lanes with `8` square pads each
+      - first-slot `borderRadius` is `0px`
+  - cleanup:
+    - removed the temporary Playwright probe files after capture; only product code + generated artifacts remain
+
+- Safety Pages redeploy for retro music UI on April 5, 2026:
+  - rebuilt `/private/tmp/everybodys-platformer-music-latest-main-port` against the safety backend:
+    - `VITE_ROOM_API_BASE_URL=https://everybodys-platformer-safety.novox-robot.workers.dev`
+    - `VITE_PARTYKIT_HOST=everybodys-platformer-presence-safety.songadaymann.partykit.dev`
+  - `npm run build` passed for the safety-targeted frontend bundle
+  - redeployed Pages-only to branch alias `safety-music-tileset-theme`
+  - live URLs after deploy:
+    - alias: `https://safety-music-tileset-theme.wampland.pages.dev`
+    - direct deployment: `https://46a8f36e.wampland.pages.dev`
+  - verification:
+    - `curl -I` returned `HTTP/2 200` for both URLs
+  - note:
+    - this deploy was done specifically because hard-refreshing the existing branch preview was not reliable; the direct deployment URL is the clean cache-busting test target
+
+- Tileset-driven editor highlights + flatter music UI on April 5, 2026:
+  - replaced the hardcoded music instrument accent colors with colors derived from the currently selected tileset
+  - added explicit `uiTheme` palette tokens to each tileset config in `src/config.ts`
+    - global editor accent vars now follow the selected tileset via `src/scenes/editor/uiBridge.ts`
+    - palette selection highlight now follows the same tileset accent in `src/ui/setup/paletteController.ts`
+    - music arrangement rows, slots, library cards, and instrument tabs now pull from the tileset-derived instrument palette in `src/scenes/EditorScene.ts`
+    - sequencer overlay grid / mix controls / playhead now use the same tileset-driven colors in `src/scenes/editor/musicPatternEditor.ts`
+  - flattened the music art direction in `src/styles/sections/editor.css`
+    - removed the glassy blur/gradient treatment from the music shell and arrangement overlay
+    - switched to stronger borders, tighter radii, darker solid fills, and pixel-font labels for the music chrome
+    - kept phrase titles/meta readable in the regular UI font while moving the section labels and mode chips toward a more retro look
+  - updated `src/styles/sections/base.css` with theme-friendly accent variables and added `--editor-pixel-font` / `--editor-ui-font`
+  - verification:
+    - `npm run build` passed
+    - required `develop-web-game` smoke wrote `output/web-game/music-tileset-theme-skill-smoke/`
+    - focused editor/music probe wrote:
+      - `output/web-game/music-tileset-theme-check/summary.json`
+      - `output/web-game/music-tileset-theme-check/music-tileset-theme.png`
+    - probe confirmed:
+      - root accent vars matched the current forest tileset theme
+      - arrangement rows and slots now tint as forest-derived gold / green / coral / aqua instead of the old hardcoded palette
+      - music shell is now flat: `borderRadius: 10px`, `backdropFilter: none`
+  - caveat:
+    - the local preview probe still reported the expected local phrase-library `404 Route not found.` because the local preview was not backed by the music Worker routes during this visual pass
+
+- Phrase arrangement lane tinting on April 5, 2026:
+  - styled each arrangement instrument row with its own accent border and soft gradient fill using the existing sequencer instrument colors
+  - tinted the slots themselves per instrument instead of leaving every slot on the same neutral card treatment
+  - kept the selected slot state on top of the lane tint so it still reads as the active target within each instrument section
+  - implementation:
+    - added shared `getPatternInstrumentColorRgbCss(...)` in `src/music/pattern.ts`
+    - `src/scenes/EditorScene.ts` now applies per-row instrument accent CSS variables while rendering arrangement rows
+    - `src/styles/sections/editor.css` now styles arrangement rows and slots from those per-instrument CSS variables
+  - verification:
+    - `npm run build` passed
+    - required `develop-web-game` smoke wrote `output/web-game/music-arrangement-tint-skill-smoke/`
+    - focused style probe wrote:
+      - `output/web-game/music-arrangement-tint-check/summary.json`
+      - `output/web-game/music-arrangement-tint-check/arrangement-tint.png`
+    - probe confirmed:
+      - drums row border/background render in gold
+      - triangle row border/background render in blue
+      - slots inherit the lane tint instead of rendering as plain neutral cards
+  - debugging note:
+    - the first pass failed because the CSS RGB custom property used space-separated channel values with `rgba(...)`; switching the helper to comma-separated channels fixed the row/slot tint rendering
+
+- Safety stack redeploy for 8-slot phrase arrangement on April 5, 2026:
+  - rebuilt the music worktree against the safety backend:
+    - `VITE_ROOM_API_BASE_URL=https://everybodys-platformer-safety.novox-robot.workers.dev`
+    - `VITE_PARTYKIT_HOST=everybodys-platformer-presence-safety.songadaymann.partykit.dev`
+  - `npm run build` passed for the safety-targeted bundle
+  - redeployed the safety Worker from `/private/tmp/everybodys-platformer-music-latest-main-port`
+    - Worker URL: `https://everybodys-platformer-safety.novox-robot.workers.dev`
+    - Worker version: `4efc122c-5734-4466-8622-ed175afff82e`
+  - no D1 migration was needed for the 8-slot change
+  - redeployed Pages on branch `safety-music-phrase-library`
+    - direct deployment: `https://9228b38c.wampland.pages.dev`
+    - branch alias: `https://safety-music-phrase-library-ss8c.wampland.pages.dev`
+    - existing short alias still returns `200`: `https://safety-music-phrase-library.wampland.pages.dev`
+  - live verification:
+    - `GET /api/music/phrases?instrument=drums&limit=1` on the safety Worker returned phrase JSON successfully
+    - both the short safety alias and direct deployment URL returned `HTTP 200`
+
+- Phrase arranger expanded to 8 slots on April 4, 2026:
+  - increased `ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT` from `4` to `8` in `src/music/phraseArrangement.ts`
+  - because the arrangement row already uses a `4`-column CSS grid, the extra slots automatically wrap into a second visible row per instrument instead of introducing horizontal scrolling
+  - impact:
+    - total arrangement length is now `8` phrase segments per instrument
+    - the arrangement summary text and playback sequence length follow the new slot count through the existing shared constants
+  - verification:
+    - `npm run build` passed
+    - required `develop-web-game` smoke wrote `output/web-game/music-arrangement-8-slot-skill-smoke/`
+    - focused arrangement probe wrote:
+      - `output/web-game/music-arrangement-8-slot-check/summary.json`
+      - `output/web-game/music-arrangement-8-slot-check/arrangement-8-slots.png`
+    - probe confirmed:
+      - arrangement overlay remains visible and readable
+      - all `4` instrument rows render
+      - each row now contains `8` slots
+      - total visible arrangement slots: `32`
+  - caveat:
+    - the local probe still logged the expected `Route not found.` phrase-library error because the local preview was not backed by the music worker routes during this check; that did not affect the arrangement layout validation
+
+- Safety Pages redeploy for the music dock follow-up on April 4, 2026:
+  - rebuilt `/private/tmp/everybodys-platformer-music-latest-main-port` with:
+    - `VITE_ROOM_API_BASE_URL=https://everybodys-platformer-safety.novox-robot.workers.dev`
+    - `VITE_PARTYKIT_HOST=everybodys-platformer-presence-safety.songadaymann.partykit.dev`
+  - `npm run build` passed for the safety-targeted frontend bundle
+  - redeployed Pages-only to the `wampland` project on branch `safety-music-phrase-library`
+  - current live URLs after deploy:
+    - direct deployment: `https://8b984b88.wampland.pages.dev`
+    - branch alias: `https://safety-music-phrase-library-ss8c.wampland.pages.dev`
+    - existing short safety alias still returns `200`: `https://safety-music-phrase-library.wampland.pages.dev`
+  - scope:
+    - frontend-only redeploy; no new Worker, D1, or PartyKit deploy was needed for the top music strip / save-publish / phrase-library refresh follow-up
+
+- Music dock save/publish + instant phrase refresh on April 4, 2026:
+  - moved `Sequencer | Arrange` out of the sidebar workbench and into the compact top music strip
+  - removed the dedicated top-strip close button so the sidebar `Close Music` control is the only exit affordance
+  - switched the top music strip to compact symbol buttons:
+    - instrument tabs now use icon-only buttons (`🥁`, `▲`, `🪚`, `■`) with the sequencer instrument accent colors
+    - preview is a single `▶ / ⏹` toggle button
+    - save/publish now appear directly in the strip as `💾` / `🚀`
+  - added shared pattern UI metadata for instrument icons/colors in `src/music/pattern.ts` so the DOM strip and the canvas sequencer use the same instrument identity
+  - colored phrase-library entries by instrument with an accent rail and title/icon tint, instead of leaving them as generic neutral cards
+  - changed phrase-library list fetching to use `cache: 'no-store'` plus a timestamp query so freshly published phrases do not get stuck behind browser/CDN reuse
+  - changed `EditorScene.publishRoom()` to invalidate and reload the current phrase library after a successful publish, and routed the normal editor publish/save actions through that wrapper so music publishes and top-level editor publishes both get the same refresh behavior
+  - verification:
+    - `npm run build` passed in `/private/tmp/everybodys-platformer-music-latest-main-port`
+    - required `develop-web-game` client run wrote `output/web-game/music-top-strip-skill-smoke/`
+    - targeted Playwright probe wrote:
+      - `output/web-game/music-strip-publish-refresh-check/summary.json`
+      - `output/web-game/music-strip-publish-refresh-check/music-strip-publish-refresh.png`
+    - the targeted probe opened the synthetic editor, entered music mode, placed a sequencer hit, mocked a successful publish, and confirmed:
+      - top strip shows icon-only preview/save/publish controls
+      - `Sequencer | Arrange` render in the strip instead of the sidebar
+      - phrase library item count changes from `0` to `1` after publish
+      - music phrase list endpoint was requested twice (`before` load + post-publish refresh)
+      - no console errors or page errors in that probe
+
+- Music phrase library + arranger implementation on April 4, 2026:
+  - rebased the music continuation line onto the latest-main graft and kept that branch as the canonical local music line in `feature-ledger.md`
+  - generalized sequencer tonality from fixed `c-major` to explicit `keyTonic + keyMode`, keeping `scale` / `chromatic` pitch modes
+  - added new shared music modules:
+    - `src/music/key.ts`
+    - `src/music/library.ts`
+    - `src/music/libraryClient.ts`
+    - `src/music/phraseArrangement.ts`
+  - `RoomMusic` now supports three persisted branches:
+    - legacy `stemArrangement`
+    - sequencer `pattern`
+    - library-backed `phraseArrangement`
+  - pattern rooms now track imported phrase provenance per instrument via `sourcePhraseIds`
+  - added D1 phrase-library schema in `migrations/0019_music_phrase_library.sql`:
+    - `music_phrase_batches`
+    - `music_phrases`
+    - `music_phrase_sources`
+  - extended the Worker with public phrase endpoints:
+    - `GET /api/music/phrases?instrument=...&cursor=...`
+    - `GET /api/music/phrases/:id`
+  - publishing a `pattern` room now extracts one immutable phrase per changed non-empty instrument tab and writes provenance edges in the same publish transaction
+  - room-music playback now resolves `phraseArrangement` rooms by fetching phrase ids from the new API, building an 8-bar playback sequence, and rendering it through the existing synth/drum pattern renderer
+  - editor authoring updates:
+    - compact top music strip still handles transport/instrument/pitch controls
+    - sidebar music section now hosts the phrase-library workbench
+    - added `Sequencer | Arrange` mode buttons
+    - added key tonic/mode selectors
+    - added a 4-lane x 4-slot phrase arrangement grid
+    - added phrase-library browsing scoped to the active instrument
+    - clicking a phrase now either inserts it into the sequencer lane or assigns it to the selected arrangement slot
+  - sequencer import now records provenance by storing the imported phrase id plus its inherited source ids on the edited instrument tab
+  - verification:
+    - `npx tsc --noEmit` passed
+    - `npm run build` passed
+    - local browser validation used a Vite preview on `http://127.0.0.1:5111/?previewSmoke=1`
+    - synthetic-editor music workbench probe wrote:
+      - `output/web-game/music-phrase-library-editor-check/summary.json`
+      - `output/web-game/music-phrase-library-editor-check/editor-music-workbench.png`
+      - confirmed music mode opens, the sidebar workbench renders, sequencer/arrange mode buttons render, and key controls show `C / major`
+    - arrange-mode probe wrote:
+      - `output/web-game/music-phrase-arrange-check/summary.json`
+      - `output/web-game/music-phrase-arrange-check/arrangement-mode.png`
+      - confirmed the arranger grid renders all `16` slot buttons with the default selected slot at `drums / slot 0`
+  - validation caveats:
+    - the local phrase library was empty in the synthetic-editor probe because no phrases had been published into the backing API yet
+    - the arrange-mode headless pass logged one WebGL `Framebuffer status: Incomplete Attachment` page error while still rendering the DOM state correctly; treat that as a headless-rendering caveat to retest on a real browser/safety deploy
+    - both browser probes logged a single `404` resource error that did not block the editor/music UI checks
+  - next clean test:
+    - deploy the latest-main music branch to safety, publish a non-empty sequencer room there, then verify the library list populates and phrase-arrangement playback survives refresh
 
 - Lighting neighbor ambient darkening on April 4, 2026:
   - started a fresh clean continuation branch for lighting work at `feature/lighting-followups-2026-04-04` from current `main`
@@ -5101,3 +5436,309 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - mirror the same explicit error messaging for course run submission failures
     - `src/scenes/OverworldPlayScene.ts`
       - wire both controllers into the existing transient-status banner so failed ranked clears are visible immediately in the HUD
+- 2026-04-04: Safety-deployed the latest-main music phrase-library stack from `/private/tmp/everybodys-platformer-music-latest-main-port` for end-to-end QA.
+  - D1 / Worker:
+    - `npm run cf:d1:migrate:safety` succeeded and applied `migrations/0019_music_phrase_library.sql` to `everybodys-platformer-safety-db`
+    - deployed Worker/API with the phrase-library routes to `https://everybodys-platformer-safety.novox-robot.workers.dev`
+    - final safety Worker version after the `APP_BASE_URL` alias fix: `7a8423bf-9cf0-465a-94ce-bc159b61e341`
+    - verified `GET /api/music/phrases?instrument=drums` returns `{"items":[],"nextCursor":null}` on safety
+  - Pages:
+    - built with `VITE_ROOM_API_BASE_URL=https://everybodys-platformer-safety.novox-robot.workers.dev`
+    - built with `VITE_PARTYKIT_HOST=everybodys-platformer-presence-safety.songadaymann.partykit.dev`
+    - deployed Pages preview alias: `https://safety-music-phrase-library.wampland.pages.dev`
+    - note: the longer expected alias `https://safety-music-phrase-library-2026-04-04.wampland.pages.dev` returned `404`, so the Worker was redeployed with `APP_BASE_URL` pointed at the real shorter alias
+  - Remote browser probe:
+    - `output/web-game/safety-music-phrase-library-deploy-check/state-0.json` confirms the deployed client booted into `overworld-play` on the live preview
+    - `output/web-game/safety-music-phrase-library-deploy-check/errors-0.json` only showed the known Cloudflare Insights RUM CORS noise
+    - `output/web-game/safety-music-phrase-library-deploy-check/shot-0.png` came back black in headless capture, so deployed UI-level visual confirmation is still weaker than the JSON/API checks
+  - Next:
+    - use the safety preview to verify actual room publish -> phrase extraction -> library listing -> import/persistence behavior, because the remote library is still empty until someone publishes a non-empty music room into safety
+- 2026-04-04: Fixed the empty music-library refetch loop that made the sidebar feel stuck on `Loading drum phrases...` and caused repeated hover SFX.
+  - Cause:
+    - `EditorScene.ensureMusicPhraseLibraryLoaded()` treated an empty successful response the same as “not loaded yet”
+    - when the safety library returned zero drum phrases, the music workbench immediately fetched again on the next render
+    - that repeated fetch/render cycle kept replacing the same music DOM buttons, which retriggered hover SFX and made controls like `Arrange` / `Refresh` feel unclickable
+  - Patch:
+    - `src/scenes/EditorScene.ts`
+      - added `musicPhraseLibraryLoaded` to distinguish “loaded empty” from “not yet requested”
+      - reset the flag on fresh library loads
+      - set the flag after a successful response, even when `items.length === 0`
+      - changed the auto-load guard to key off `musicPhraseLibraryLoaded` instead of `musicPhraseLibraryItems.length === 0`
+  - Verification:
+    - rebuilt against safety API / PartyKit env and served locally via `vite preview`
+    - required `develop-web-game` smoke wrote:
+      - `output/web-game/music-library-empty-loop-skill-smoke/state-0.json`
+      - `output/web-game/music-library-empty-loop-skill-smoke/shot-0.png`
+    - focused local editor probe wrote:
+      - `output/web-game/music-library-empty-loop-check/summary.json`
+      - `output/web-game/music-library-empty-loop-check/editor-music-empty-library.png`
+      - confirmed exactly `1` drums phrase-list request, stable empty-state text, and clickable `Arrange` mode with `16` arrangement slots
+    - redeployed Pages safety preview at `https://safety-music-phrase-library.wampland.pages.dev`
+    - focused remote probe wrote:
+      - `output/web-game/music-library-empty-loop-remote-check/summary.json`
+      - `output/web-game/music-library-empty-loop-remote-check/remote-editor-music-empty-library.png`
+      - confirmed the live preview also makes exactly `1` drums phrase-list request and `Arrange` remains clickable
+- 2026-04-04: Moved phrase arrangement back onto the room overlay and added drag/drop phrase assignment.
+  - UI changes:
+    - `index.html`
+      - removed the phrase arrangement card from the music sidebar workbench
+      - added the arrangement panel into `#editor-music-overlay` so arrangement mode now lays over the room surface like the sequencer
+    - `src/styles/sections/editor.css`
+      - styled the overlay arrangement panel as a wide room-surface card with larger slot cells
+      - added visible drag-target states for slots and drag styling for library phrases
+    - `src/styles/sections/responsive.css`
+      - added phone-safe layout rules for the overlay arrangement panel
+  - Interaction changes:
+    - `src/scenes/EditorScene.ts`
+      - added `assignMusicPhraseToArrangementSlot(...)` for direct slot assignment by phrase id
+      - updated arrangement status copy and library helper copy to mention drag/drop
+      - made library phrase buttons draggable
+    - `src/ui/setup/sceneBridge.ts`
+      - exposed `assignMusicPhraseToArrangementSlot(...)` on the editor scene bridge
+    - `src/ui/setup/musicControls.ts`
+      - wired HTML5 dragstart/dragover/drop/dragend handling from library phrases into overlay arrangement slots
+      - kept click-to-assign as the fallback path
+  - Verification:
+    - `npm run build` passed
+    - required `develop-web-game` smoke wrote:
+      - `output/web-game/music-arrangement-overlay-skill-smoke/state-0.json`
+      - `output/web-game/music-arrangement-overlay-skill-smoke/shot-0.png`
+    - focused mocked-library probe wrote:
+      - `output/web-game/music-arrangement-overlay-drag-check/summary.json`
+      - `output/web-game/music-arrangement-overlay-drag-check/arrangement-overlay-drag.png`
+      - confirmed:
+        - arrangement panel is visible in the overlay
+        - the sidebar no longer contains the arrangement grid
+        - dragging `phrase-drums-1` into drums slot 2 fills that slot with `Jon · Beat Lab · drums 0`
+- 2026-04-04: Redeployed the updated music UI to the existing safety Pages preview.
+  - Pages:
+    - branch deploy command targeted `safety-music-phrase-library-2026-04-04`
+    - deployment URL: `https://65d8f8a0.wampland.pages.dev`
+    - stable alias remains: `https://safety-music-phrase-library.wampland.pages.dev`
+    - both URLs returned `200` immediately after deploy
+  - Scope:
+    - Pages-only redeploy; no Worker or D1 changes were needed for the arrangement overlay / drag-drop UI pass
+- 2026-04-04: Fixed the safety preview `Route not found.` phrase-library regression.
+  - Cause:
+    - the prior Pages redeploy for the arrangement overlay was built without `VITE_ROOM_API_BASE_URL`, so the client fell back to the default `https://api.wamp.land` backend
+    - after correcting that client build, the shared safety Worker had also drifted and initially served a stale `404` on `/api/music/phrases` until the music worker was redeployed again
+  - Fix:
+    - rebuilt the client with:
+      - `VITE_ROOM_API_BASE_URL=https://everybodys-platformer-safety.novox-robot.workers.dev`
+      - `VITE_PARTYKIT_HOST=everybodys-platformer-presence-safety.songadaymann.partykit.dev`
+    - redeployed Pages alias `https://safety-music-phrase-library.wampland.pages.dev`
+    - redeployed the safety Worker/API from this music worktree with `APP_BASE_URL` pinned to the same Pages alias
+    - final safety Worker version after the restore: `88f70a99-b496-4576-955b-b5bd5bcb0894`
+  - Verification:
+    - direct worker probe with cache-busting query returned `200` from `/api/music/phrases?instrument=drums`
+    - live preview probe on `https://safety-music-phrase-library.wampland.pages.dev/?previewSmoke=1` confirmed:
+      - `libraryStatus: "Drag or click a Drums phrase into the selected slot."`
+      - `phraseCount: 1`
+      - `arrangementVisible: true`
+- 2026-04-05: Safety redeployed the arrangement lane tinting pass.
+  - Scope:
+    - Pages-only redeploy from the latest-main music worktree; no Worker, D1, or PartyKit changes were required
+    - includes the instrument-tinted arrangement rows and slot backgrounds for the 8-slot phrase arranger
+  - Build:
+    - rebuilt the frontend with:
+      - `VITE_ROOM_API_BASE_URL=https://everybodys-platformer-safety.novox-robot.workers.dev`
+      - `VITE_PARTYKIT_HOST=everybodys-platformer-presence-safety.songadaymann.partykit.dev`
+    - `npm run build` passed
+  - Pages:
+    - deployment URL: `https://04704d4d.wampland.pages.dev`
+    - branch alias: `https://safety-music-phrase-library-ss8c.wampland.pages.dev`
+    - stable alias: `https://safety-music-phrase-library.wampland.pages.dev`
+  - Verification:
+    - all three URLs returned `200` immediately after deploy
+- 2026-04-05: Followed up the music editor with shared sequencer colors, arrangement SFX, clear-all, tooltip restyle, and tempo/runtime wiring.
+  - UI / audio:
+    - switched sequencer square colors over to the same `ROOM_PATTERN_INSTRUMENT_COLORS` palette used by the arrangement overlay so the two music authoring surfaces share one instrument identity system
+    - added hover/click button feedback coverage for arrangement slots and library phrase cards
+    - added a phrase assignment cue using `goal-checkpoint`
+    - added a custom immediate music tooltip for arrangement slots and removed the native delayed browser tooltip there
+    - restyled the arrangement/library instruction notes with the retro music palette (`#ff8b97` border on `#1c0911`) and `var(--editor-ui-font)` to match the flatter UI pass
+    - added `Clear All` alongside `Clear Slot` in the arrangement overlay
+  - Playback / data:
+    - fixed music playback cache keys so both `pattern` and `phraseArrangement` include `bpm`; tempo changes now produce a new playback identity and actually reschedule playback
+    - added per-cell audio preview plumbing in the room music controller and wired sequencer placement to call it when a note or drum hit is added
+    - exposed `oneShotCount` in room-music debug state to help inspect preview-trigger behavior
+  - Verification:
+    - `npm run build` passed in `/private/tmp/everybodys-platformer-music-latest-main-port`
+    - required `develop-web-game` client run wrote `output/web-game/music-sfx-tooltip-skill-smoke/`
+      - the skill smoke still hit the known `boot-splash` click interception and produced a black capture, so it was not the trusted validation artifact
+    - targeted Playwright probe wrote:
+      - `output/web-game/music-ui-audio-followup-check/summary.json`
+      - `output/web-game/music-ui-audio-followup-check/music-ui-audio-followup-check.png`
+    - the targeted probe confirmed:
+      - arrangement slot hover now records `ui-hover`
+      - phrase assignment records `goal-checkpoint`
+      - `Clear All` empties the arrangement and disables itself when no filled slots remain
+      - the custom tooltip appears immediately and uses the new pink-on-maroon retro styling
+      - tempo changes move the active playback id from `bpm:120` to `bpm:125`
+    - caveat:
+      - the headless probe still did not land a reliable sequencer canvas click, so the new place-note/place-drum preview sound remains a manual-feel check even though the runtime hook is wired
+- 2026-04-05: Safety redeployed the music editor follow-up pass for live testing.
+  - Scope:
+    - Pages-only redeploy from `/private/tmp/everybodys-platformer-music-latest-main-port`
+    - no Worker, D1, or PartyKit deploy was needed; this pass is frontend/runtime-only and still targets the existing safety backend
+  - Build:
+    - rebuilt the frontend with:
+      - `VITE_ROOM_API_BASE_URL=https://everybodys-platformer-safety.novox-robot.workers.dev`
+      - `VITE_PARTYKIT_HOST=everybodys-platformer-presence-safety.songadaymann.partykit.dev`
+    - `npm run build` passed
+  - Pages:
+    - deployment URL: `https://41efb07d.wampland.pages.dev`
+    - stable alias: `https://safety-music-tileset-theme.wampland.pages.dev`
+  - Verification:
+    - both URLs returned `HTTP/2 200` immediately after deploy
+- 2026-04-05: Added Mario Paint arrangement cues, auto-advance slot flow, swing control, and sequencer publish-name persistence fixes.
+  - Scope:
+    - imported Mario Paint SFX into repo-owned assets:
+      - `public/assets/sfx/music-editor/clear-slot.wav` from `explode.wav`
+      - `public/assets/sfx/music-editor/clear-all-slots.wav` from `explode2.wav`
+      - `public/assets/sfx/music-editor/place-phrase.wav` from `musicnote12.wav`
+    - wired new cues in `src/audio/sfx.ts`:
+      - `music-slot-clear`
+      - `music-slot-clear-all`
+      - `music-phrase-place`
+    - arrangement flow changes in `src/scenes/EditorScene.ts`:
+      - assigning a phrase into a slot now advances selection to the next slot on the same instrument row
+      - phrase assignment uses the new `music-phrase-place` cue
+      - `Clear Slot` / `Clear All` use the imported Mario Paint explosions
+    - added swing controls and persistence:
+      - `RoomPatternMusic.swingPercent`
+      - `RoomPhraseArrangementMusic.swingPercent`
+      - playback/render cache keys now include `swing`
+      - offline pattern renderer now offsets 16th-step timing by swing percentage instead of treating steps as evenly spaced
+    - added sequencer publish-name storage:
+      - `RoomPatternMusic.phraseNameSuffixes`
+      - publish-time phrase labels now use the stored suffix instead of only the auto ordinal
+      - when a room republishes the same phrase fingerprint but the suffix changed, the Worker updates the existing phrase label in place instead of minting a duplicate row
+    - fixed an empty-music persistence bug:
+      - `isRoomPatternMusicEmpty` and `isRoomPhraseArrangementEmpty` used to drop metadata-only music state
+      - key/mode/tempo/swing/mix/octave/publish-name edits now persist even before notes or phrase slots exist
+  - UI wiring:
+    - added swing buttons next to tempo in the top strip
+    - added sequencer-only `Publish Name` input in the left music workbench
+  - Build:
+    - `npm run build` passed in `/private/tmp/everybodys-platformer-music-latest-main-port`
+  - Verification:
+    - required `develop-web-game` smoke wrote:
+      - `output/web-game/music-swing-rename-skill-smoke/`
+      - the generic smoke still landed on the browse world and produced the known black-frame artifact, so it was not treated as the trusted result
+    - targeted Chrome Playwright probe wrote:
+      - `output/web-game/music-swing-rename-direct-check/summary.json`
+      - `output/web-game/music-swing-rename-direct-check/music-swing-rename-direct-check.png`
+    - the targeted probe confirmed:
+      - first arrangement assignment fills `drums` slot 1 and auto-advances selection to slot 2
+      - second assignment auto-advances again to slot 3
+      - phrase assignment records `music-phrase-place`
+      - `Clear Slot` records `music-slot-clear`
+      - `Clear All` records `music-slot-clear-all`
+      - active arrangement playback id changes from `swing:50` to `swing:51` after one increment
+      - sequencer `Publish Name` now survives rerender on an otherwise empty pattern and the input retains `beatbox`
+    - remaining validation caveat:
+      - the direct probe still did not land a trustworthy sequencer-grid click for the per-note/per-drum placement preview, so the runtime hook remains implemented but still best treated as a manual-feel check until a stronger canvas-targeted probe lands
+- 2026-04-06: Safety redeployed the latest music follow-up pass for live QA.
+  - Scope:
+    - full safety redeploy from `/private/tmp/everybodys-platformer-music-latest-main-port`
+    - included both:
+      - safety Worker redeploy, because this pass changes `src/cloudflare/worker/music/store.ts`
+      - safety Pages redeploy, so the current frontend matches the Worker/API behavior
+    - no new D1 migration was needed for this pass
+    - no PartyKit deploy was needed
+  - Build:
+    - rebuilt the frontend against the safety backend:
+      - `VITE_ROOM_API_BASE_URL=https://everybodys-platformer-safety.novox-robot.workers.dev`
+      - `VITE_PARTYKIT_HOST=everybodys-platformer-presence-safety.songadaymann.partykit.dev`
+      - `VITE_PARTYKIT_PARTY=main`
+    - `npm run build` passed
+  - Worker:
+    - command used:
+      - `node node_modules/wrangler/bin/wrangler.js deploy --env safety --keep-vars --var APP_BASE_URL:https://safety-music-tileset-theme.wampland.pages.dev`
+    - URL: `https://everybodys-platformer-safety.novox-robot.workers.dev`
+    - version: `44d1a98d-7e71-4bc1-93f3-077462736d37`
+  - Pages:
+    - redeployed branch alias: `safety-music-tileset-theme`
+    - alias URL: `https://safety-music-tileset-theme.wampland.pages.dev`
+    - direct deployment URL: `https://5307b58f.wampland.pages.dev`
+  - Verification:
+    - `curl -I` returned `HTTP/2 200` for both Pages URLs
+    - `GET https://everybodys-platformer-safety.novox-robot.workers.dev/api/music/phrases?instrument=drums` returned phrase JSON successfully, confirming the safety Worker music route is live after redeploy
+
+- 2026-04-06: toolbar overlap + arrangement loop-length follow-up
+  - Fixed the top music strip so switching from `drums` to melodic tabs no longer lets the `Sequencer/Arrange` cluster overlap the instrument tabs.
+    - root cause: `.editor-music-tab-dock` was shrinking to ~43px while the tab buttons overflowed out of it, so the mode cluster could sit on top of the triangle/saw/square tabs
+    - fix: reserve the tab dock's real width with `flex: 0 0 auto` + `min-width: max-content`, widen the shell, and keep the octave cluster footprint reserved with `is-inactive` instead of removing it from layout
+  - Changed phrase-arrangement playback to stop at the last filled slot instead of always looping all 8 saved slots.
+    - new helper computes active slot count across all instruments
+    - playback sequence step/bar count now derives from that active slot count
+    - room music loop duration for `phraseArrangement` now uses the active step count too, so controller scheduling matches the rendered buffer length
+  - Validation:
+    - `npm run build` passed
+    - `npx --yes tsx /tmp/music_arrangement_loop_check.ts` confirmed a room with content in slots 1 and 4 now builds a 4-segment / 128-step playback loop
+    - Playwright DOM probe showed the tab overlap go from `21.7px` to `0px`, and instrument switching from `drums` to `triangle` now succeeds with `stripScrollLeft: 0`
+    - ran the web-game smoke client against `http://127.0.0.1:3240/?previewSmoke=1`; artifacts written to `output/web-game/music-toolbar-followup-smoke/`
+
+- 2026-04-06: phrase library card copy reshuffle
+  - Reworked phrase-library cards to show:
+    - top line: sample name, key, original BPM
+    - bottom line: creator and room
+  - Added `bpm` to music phrase payload JSON so the library can show the original publish tempo without needing a schema migration.
+    - kept BPM out of the phrase fingerprint so tempo-only changes do not mint duplicate phrase rows
+    - when a publish matches the latest phrase fingerprint, the worker now refreshes `payload_json` and source-key fields in place so BPM metadata stays current
+  - Validation:
+    - `npm run build` passed
+    - local browser probe reached the music UI but the local phrase library was empty, so there was no populated card to inspect until the next safety test
+
+- 2026-04-06: draft-save phrases + inline phrase-name save
+  - Added a draft-time phrase save path so sequencer save is no longer publish-only.
+    - new worker route: `POST /api/rooms/:roomId/music/phrases`
+    - route requires the same authenticated room-write permission as draft saves
+    - saves can target one instrument via `?instrument=...` or all non-empty pattern instruments
+  - Added store-side upsert logic for draft phrase saves.
+    - unchanged fingerprints now update label/payload/source-key fields in place
+    - source provenance edges are replaced on update so renames or imports do not leave stale source rows behind
+    - changed fingerprints still mint the next ordinal for that room/instrument
+  - Editor flow changes:
+    - top music save button now does `save draft -> save phrases -> reload current phrase library` while in sequencer mode
+    - added an inline disk button inside the publish-name field to save just the active instrument phrase
+    - pressing `Enter` in the publish-name field triggers the same active-phrase save
+    - `Cmd/Ctrl+S` in music mode now follows the same music-aware save flow instead of the generic room-draft path
+  - Validation:
+    - `npx tsc --noEmit` passed
+    - `npm run build` passed
+    - required web-game client smoke ran against `http://127.0.0.1:3334/?previewSmoke=1`; artifacts written to `output/web-game/music-phrase-save-client-smoke/`
+    - attempted a deeper local Playwright probe for mocked phrase-save / rename behavior, but that script hung in this environment before producing artifacts, so browser validation for the new save path is partial rather than complete
+
+- 2026-04-06: safety deploy for draft-time phrase saves
+  - Rebuilt the music worktree against the safety stack:
+    - `VITE_ROOM_API_BASE_URL=https://everybodys-platformer-safety.novox-robot.workers.dev`
+    - `VITE_PARTYKIT_HOST=everybodys-platformer-presence-safety.songadaymann.partykit.dev`
+    - `VITE_PARTYKIT_PARTY=main`
+    - `npm run build` passed
+  - Redeployed safety Worker with the existing safety Pages alias as `APP_BASE_URL`:
+    - command: `node node_modules/wrangler/bin/wrangler.js deploy --env safety --keep-vars --var APP_BASE_URL:https://safety-music-tileset-theme.wampland.pages.dev`
+    - Worker URL: `https://everybodys-platformer-safety.novox-robot.workers.dev`
+    - Worker version: `a6e59e43-d457-4b25-9ddb-51f2f2ef9da0`
+  - Redeployed safety Pages alias:
+    - command: `node node_modules/wrangler/bin/wrangler.js pages deploy dist --project-name wampland --branch safety-music-tileset-theme`
+    - alias URL: `https://safety-music-tileset-theme.wampland.pages.dev`
+    - direct deployment URL: `https://4edfd47b.wampland.pages.dev`
+  - Verification:
+    - `curl -I` returned `HTTP/2 200` for both Pages URLs
+    - `GET https://everybodys-platformer-safety.novox-robot.workers.dev/api/music/phrases?instrument=drums` returned phrase JSON
+    - `POST /api/rooms/99,99/music/phrases` with no auth returned `401`, which confirms the new phrase-save route is live on safety and behind auth rather than missing
+
+- 2026-04-06: safety Pages redeploy for immediate phrase-rename UI refresh
+  - Frontend fix only: after saving a phrase name, the library now patches visible items directly from the save response instead of relying only on an immediate refetch.
+  - Rebuilt against the safety backend:
+    - `VITE_ROOM_API_BASE_URL=https://everybodys-platformer-safety.novox-robot.workers.dev`
+    - `VITE_PARTYKIT_HOST=everybodys-platformer-presence-safety.songadaymann.partykit.dev`
+    - `VITE_PARTYKIT_PARTY=main`
+  - Pages-only deploy:
+    - command: `node node_modules/wrangler/bin/wrangler.js pages deploy dist --project-name wampland --branch safety-music-tileset-theme`
+    - alias URL: `https://safety-music-tileset-theme.wampland.pages.dev`
+    - direct deployment URL: `https://0a8eeeb5.wampland.pages.dev`
+  - Verification:
+    - `curl -I` returned `HTTP/2 200` for both Pages URLs

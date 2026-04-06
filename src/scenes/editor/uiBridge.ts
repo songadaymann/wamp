@@ -1,8 +1,12 @@
 import {
   ERASER_BRUSH_SIZES,
   TILESETS,
+  colorNumberToCssHex,
+  colorNumberToCssRgba,
+  colorNumberToCssRgb,
   editorState,
   getTilesetByKey,
+  getTilesetUiTheme,
   type EraserBrushSize,
   type LayerName,
   type PaletteMode,
@@ -1233,6 +1237,7 @@ export class EditorUiBridge {
     }
 
     this.setValue(this.tilesetSelect, editorState.selectedTilesetKey);
+    this.applyTilesetTheme();
     if (this.flipXButton) {
       this.flipXButton.classList.toggle('active', editorState.tileFlipX);
       this.flipXButton.setAttribute('aria-pressed', editorState.tileFlipX ? 'true' : 'false');
@@ -1292,6 +1297,24 @@ export class EditorUiBridge {
         element.textContent = text;
       }
     }
+  }
+
+  private applyTilesetTheme(): void {
+    const root = this.doc.documentElement;
+    const theme = getTilesetUiTheme(editorState.selectedTilesetKey);
+    root.style.setProperty('--accent-cool', colorNumberToCssHex(theme.accentCool));
+    root.style.setProperty('--accent-cool-rgb', colorNumberToCssRgb(theme.accentCool));
+    root.style.setProperty('--accent-cool-soft', colorNumberToCssRgba(theme.accentCool, 0.18));
+    root.style.setProperty('--accent-warm', colorNumberToCssHex(theme.accentWarm));
+    root.style.setProperty('--accent-warm-rgb', colorNumberToCssRgb(theme.accentWarm));
+    root.style.setProperty('--accent-warm-soft', colorNumberToCssRgba(theme.accentWarm, 0.18));
+    root.style.setProperty('--accent-hot', colorNumberToCssHex(theme.accentHot));
+    root.style.setProperty('--accent-hot-rgb', colorNumberToCssRgb(theme.accentHot));
+    root.style.setProperty('--accent-hot-soft', colorNumberToCssRgba(theme.accentHot, 0.18));
+    root.style.setProperty('--accent-alt', colorNumberToCssHex(theme.accentAlt));
+    root.style.setProperty('--accent-alt-rgb', colorNumberToCssRgb(theme.accentAlt));
+    root.style.setProperty('--accent-alt-soft', colorNumberToCssRgba(theme.accentAlt, 0.18));
+    root.style.setProperty('--accent-soft', colorNumberToCssHex(theme.accentAlt));
   }
 
   private renderSaveStatus(elements: HTMLElement[], viewModel: EditorUiViewModel): void {

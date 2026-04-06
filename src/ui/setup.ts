@@ -13,6 +13,7 @@ import { setupKeyboardShortcutPassthrough } from './setup/keyboardPassthrough';
 import { LeaderboardModalController } from './setup/leaderboardModal';
 import { InstallHelpController } from './setup/installHelp';
 import { PaletteController } from './setup/paletteController';
+import { setupRoomMusicControls } from './setup/musicControls';
 import { ProfileModalController } from './setup/profileModal';
 import { setupCollapsibleSidebarSections } from './setup/sidebarSections';
 import { setupSceneCommands } from './setup/sceneCommands';
@@ -67,6 +68,7 @@ export function setupUI(game: Phaser.Game): void {
     chatModerationModal,
     courseModal
   );
+  setupRoomMusicControls(game);
   setupButtonFeedback();
   setupKeyboardShortcutPassthrough();
 

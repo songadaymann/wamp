@@ -24,6 +24,15 @@ import { corsHeaders, getCoordinatesFromRequest, HttpError, jsonResponse, parseJ
 import type { Env, RequestAuth } from './worker/core/types';
 import { handleTestReset } from './worker/maintenance/routes';
 import {
+  handleMusicPhraseGetRequest,
+  handleMusicPhraseListRequest,
+} from './worker/music/routes';
+import {
+  parseMusicPhraseInstrumentQuery,
+  upsertMusicPhrasesForSnapshot,
+  type MusicPhrasePublishActor,
+} from './worker/music/store';
+import {
   handleRoomMintConfirm,
   handleRoomMintPrepare,
   handleRoomTokenMetadataConfirm,
@@ -167,6 +176,19 @@ export default {
 
       if (url.pathname === '/api/playfun/config' && request.method === 'GET') {
         return await handlePlayfunConfig(request, env);
+      }
+
+      if (url.pathname === '/api/music/phrases' && request.method === 'GET') {
+        return await handleMusicPhraseListRequest(request, url, env);
+      }
+
+      const musicPhraseMatch = /^\/api\/music\/phrases\/([^/]+)$/.exec(url.pathname);
+      if (musicPhraseMatch && request.method === 'GET') {
+        return await handleMusicPhraseGetRequest(
+          request,
+          env,
+          decodeURIComponent(musicPhraseMatch[1])
+        );
       }
 
       if (url.pathname === '/api/tilesets' && request.method === 'GET') {
@@ -341,6 +363,40 @@ export default {
         );
         const record = await saveDraft(env, snapshot, buildRoomMutationActor(auth), auth.isAdmin);
         return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
+      }
+
+      if (segments.length === 5 && segments[3] === 'music' && segments[4] === 'phrases' && request.method === 'POST') {
+        const snapshot = await parseRoomSnapshot(request, roomId);
+        const auth = await requireAuthenticatedRequestAuth(
+          env,
+          request,
+          'save music phrases',
+          'rooms:write'
+        );
+        const record = await loadRoomRecord(
+          env,
+          snapshot.id,
+          snapshot.coordinates,
+          auth.user.id,
+          auth.user.walletAddress,
+          auth.isAdmin
+        );
+        if (!record.permissions.canSaveDraft) {
+          throw new HttpError(403, 'Only the room token owner can save music phrases for this room.');
+        }
+
+        const instrument = url.searchParams.get('instrument');
+        const response = await upsertMusicPhrasesForSnapshot(
+          env,
+          snapshot,
+          buildMusicPhraseActor(auth),
+          instrument
+            ? {
+                instrumentIds: [parseMusicPhraseInstrumentQuery(instrument)],
+              }
+            : undefined,
+        );
+        return jsonResponse(request, response);
       }
 
       if (segments.length === 5 && segments[3] === 'draft' && segments[4] === 'commands' && request.method === 'POST') {
@@ -592,5 +648,15 @@ function buildRoomMutationActor(auth: RequestAuth): RoomMutationActor {
     principalAgentId: auth.principal.agentId,
     principalDisplayName: auth.principal.displayName,
     requestAuthSource: auth.source,
+  };
+}
+
+function buildMusicPhraseActor(auth: RequestAuth): MusicPhrasePublishActor {
+  const roomActor = buildRoomMutationActor(auth);
+  return {
+    userId: roomActor.ownerUser?.id ?? null,
+    principalKind: roomActor.principalKind === 'agent' ? 'agent' : 'user',
+    agentId: roomActor.principalAgentId,
+    displayName: roomActor.principalDisplayName || roomActor.ownerUser?.displayName || 'Guest',
   };
 }
