@@ -39,11 +39,27 @@ Use a published non-survival room/course if you want the verifier to trigger rel
     return metaBase || DEFAULT_SAFETY_API_BASE;
   }
 
-  function getScene() {
-    const game = window.Phaser?.GAMES?.[0] ?? null;
+  function getOverworldDebugState() {
+    if (typeof window.render_game_to_text !== 'function') {
+      throw new Error('render_game_to_text is not available on this build.');
+    }
+    const raw = window.render_game_to_text();
+    const parsed = JSON.parse(raw);
+    const activeScene = parsed?.activeScene ?? null;
+    if (!activeScene || activeScene.scene !== 'overworld-play') {
+      throw new Error('Open the overworld play scene on the safety preview first.');
+    }
+    return activeScene;
+  }
+
+  function getSceneForCourseOnly() {
+    const game = window.__EVERYBODYS_PLATFORMER_GAME__ ?? window.Phaser?.GAMES?.[0] ?? null;
     const scene = game?.scene?.keys?.OverworldPlayScene ?? null;
     if (!scene) {
-      throw new Error('OverworldPlayScene not found. Open a safety preview with the game loaded first.');
+      throw new Error(
+        'Direct scene access is not exposed on this build. Room spoofing works from debug state; ' +
+          'course spoofing still needs a dev-exposed scene.'
+      );
     }
     return scene;
   }
@@ -78,13 +94,6 @@ Use a published non-survival room/course if you want the verifier to trigger rel
     };
   }
 
-  function countRoomObjectsByCategory(scene, room, category) {
-    if (typeof scene.countRoomObjectsByCategory === 'function') {
-      return scene.countRoomObjectsByCategory(room, category);
-    }
-    return 0;
-  }
-
   function buildBadTrace(binding, coordinates, elapsedMs) {
     return {
       schemaVersion: binding.verificationSchemaVersion,
@@ -109,9 +118,9 @@ Use a published non-survival room/course if you want the verifier to trigger rel
     };
   }
 
-  function buildRoomFinishBody(scene, room, startData, options) {
+  function buildRoomFinishBody(goalRun, startData, options) {
     const elapsedMs = Math.max(1, Math.trunc(options.elapsedMs ?? 250));
-    const goal = room.goal;
+    const goal = goalRun.goal;
     const body = {
       result: 'completed',
       elapsedMs,
@@ -125,13 +134,13 @@ Use a published non-survival room/course if you want the verifier to trigger rel
 
     switch (goal.type) {
       case 'collect_target':
-        body.collectiblesCollected = goal.requiredCount;
+        body.collectiblesCollected = Number(goalRun.collectibleTarget ?? goal.requiredCount ?? 0);
         break;
       case 'defeat_all':
-        body.enemiesDefeated = countRoomObjectsByCategory(scene, room, 'enemy');
+        body.enemiesDefeated = Number(goalRun.enemyTarget ?? 0);
         break;
       case 'checkpoint_sprint':
-        body.checkpointsReached = goal.checkpoints.length;
+        body.checkpointsReached = Number(goalRun.checkpointTarget ?? goal.checkpoints.length ?? 0);
         break;
       case 'survival':
         body.elapsedMs = Math.max(elapsedMs, goal.durationMs);
@@ -146,7 +155,7 @@ Use a published non-survival room/course if you want the verifier to trigger rel
     }
 
     if (options.traceMode === 'bad-trace') {
-      body.verificationTrace = buildBadTrace(startData, room.coordinates, body.elapsedMs);
+      body.verificationTrace = buildBadTrace(startData, goalRun.roomCoordinates, body.elapsedMs);
     }
 
     return body;
@@ -206,20 +215,20 @@ Use a published non-survival room/course if you want the verifier to trigger rel
   }
 
   async function spoofCurrentRoomRun(options = {}) {
-    const scene = getScene();
+    const debugState = getOverworldDebugState();
     const apiBase = getApiBase();
     ensureSafetyTarget(apiBase);
 
-    const room = scene.getRoomSnapshotForCoordinates(scene.currentRoomCoordinates);
-    if (!room || room.status !== 'published' || !room.goal) {
-      throw new Error('Stand in a published room with an active goal first.');
+    const goalRun = debugState.goalRun;
+    if (!goalRun || goalRun.roomStatus !== 'published' || !goalRun.goal) {
+      throw new Error('Stand in a published room with an active ranked goal first.');
     }
 
     const startBody = {
-      roomId: room.id,
-      roomCoordinates: clone(room.coordinates),
-      roomVersion: room.version,
-      goal: clone(room.goal),
+      roomId: goalRun.roomId,
+      roomCoordinates: clone(goalRun.roomCoordinates),
+      roomVersion: goalRun.roomVersion,
+      goal: clone(goalRun.goal),
       startedAt: new Date().toISOString(),
     };
 
@@ -229,7 +238,7 @@ Use a published non-survival room/course if you want the verifier to trigger rel
       return start;
     }
 
-    const finishBody = buildRoomFinishBody(scene, room, start.data, {
+    const finishBody = buildRoomFinishBody(goalRun, start.data, {
       elapsedMs: options.elapsedMs ?? 250,
       scoreOverride: options.scoreOverride ?? null,
       traceMode: options.traceMode ?? 'bad-trace',
@@ -247,8 +256,8 @@ Use a published non-survival room/course if you want the verifier to trigger rel
 
     const result = {
       kind: 'room',
-      roomId: room.id,
-      roomVersion: room.version,
+      roomId: goalRun.roomId,
+      roomVersion: goalRun.roomVersion,
       attemptId: start.data.attemptId,
       traceMode: options.traceMode ?? 'bad-trace',
       start,
@@ -259,7 +268,7 @@ Use a published non-survival room/course if you want the verifier to trigger rel
   }
 
   async function spoofCurrentCourseRun(options = {}) {
-    const scene = getScene();
+    const scene = getSceneForCourseOnly();
     const apiBase = getApiBase();
     ensureSafetyTarget(apiBase);
 
