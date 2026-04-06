@@ -30,7 +30,11 @@ const MAX_TOTAL_SPEED_PX_PER_SEC = 1_800;
 const POSITION_SLACK_PX = 80;
 
 export type RunVerificationStatus = 'not_required' | 'passed' | 'failed' | 'timeout';
-export type RunVerificationTriggerReason = 'take_top_1' | 'enter_top_10' | 'record_gap';
+export type RunVerificationTriggerReason =
+  | 'take_top_1'
+  | 'enter_top_10'
+  | 'record_gap'
+  | 'point_gain';
 export type RunVerificationFailureReason =
   | 'missing_trace'
   | 'trace_invalid'
@@ -95,6 +99,7 @@ export interface RunVerificationTriggerResult {
   improvementScore: number | null;
   previousBestElapsedMs: number | null;
   previousBestScore: number | null;
+  pointAwardPotential: boolean;
 }
 
 export async function computeRoomSnapshotVerificationHash(snapshot: RoomSnapshot): Promise<string> {
@@ -155,6 +160,7 @@ export function createRoomVerificationTrigger(
     candidate: Omit<VerificationComparableEntry, 'overallRank'>;
     currentTopEntries: VerificationComparableEntry[];
     viewerEntry: VerificationComparableEntry | null;
+    pointAwardPotential?: boolean;
   }
 ): RunVerificationTriggerResult {
   return createGenericVerificationTrigger({
@@ -170,6 +176,7 @@ export function createCourseVerificationTrigger(
     candidate: Omit<VerificationComparableEntry, 'overallRank'>;
     currentTopEntries: VerificationComparableEntry[];
     viewerEntry: VerificationComparableEntry | null;
+    pointAwardPotential?: boolean;
   }
 ): RunVerificationTriggerResult {
   return createGenericVerificationTrigger({
@@ -294,6 +301,7 @@ function createGenericVerificationTrigger(input: {
   viewerEntry: VerificationComparableEntry | null;
   rankingMode: LeaderboardRankingMode;
   compare: (left: VerificationComparableEntry, right: VerificationComparableEntry) => number;
+  pointAwardPotential?: boolean;
 }): RunVerificationTriggerResult {
   const currentBest = input.currentTopEntries[0] ?? null;
   const previousRank = input.viewerEntry?.overallRank ?? null;
@@ -340,9 +348,19 @@ function createGenericVerificationTrigger(input: {
     }
   }
 
+  const pointAwardPotential = Boolean(input.pointAwardPotential);
+
   return {
-    required: takesTopOne || entersTopTen || recordGap,
-    reason: takesTopOne ? 'take_top_1' : entersTopTen ? 'enter_top_10' : recordGap ? 'record_gap' : null,
+    required: takesTopOne || entersTopTen || recordGap || pointAwardPotential,
+    reason: takesTopOne
+      ? 'take_top_1'
+      : entersTopTen
+        ? 'enter_top_10'
+        : recordGap
+          ? 'record_gap'
+          : pointAwardPotential
+            ? 'point_gain'
+            : null,
     predictedRank: normalizedPredictedRank,
     previousRank,
     improvementMs,
@@ -350,6 +368,7 @@ function createGenericVerificationTrigger(input: {
     improvementScore,
     previousBestElapsedMs: currentBest?.elapsedMs ?? null,
     previousBestScore: currentBest?.score ?? null,
+    pointAwardPotential,
   };
 }
 

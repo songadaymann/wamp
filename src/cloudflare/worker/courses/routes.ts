@@ -57,6 +57,7 @@ import {
   awardCoursePublishPoints,
   awardCourseCreatorCompletionPoints,
   awardRunFinalizePoints,
+  previewRunFinalizePoints,
   upsertUserStats,
 } from '../runs/points';
 import {
@@ -339,6 +340,53 @@ export async function handleCourseRunFinish(
   };
   const provisionalScore =
     clampedBody.result === 'completed' ? computeCourseRunScore(snapshot.goal, clampedBody) : 0;
+  const provisionalPreviousBest =
+    clampedBody.result === 'completed'
+      ? await loadBestCompletedCourseRunForUserAndVersion(
+          env,
+          auth.user.id,
+          existing.courseId,
+          existing.courseVersion,
+          null,
+        )
+      : null;
+  const provisionalIsFirstCompletion =
+    clampedBody.result === 'completed' && provisionalPreviousBest === null;
+  const provisionalCandidateRun: CourseRunRecord | null =
+    clampedBody.result === 'completed'
+      ? {
+          attemptId,
+          courseId: existing.courseId,
+          courseVersion: existing.courseVersion,
+          goalType: existing.goalType,
+          goal: snapshot.goal,
+          userId: auth.user.id,
+          userDisplayName: auth.user.displayName,
+          startedAt: existing.startedAt,
+          finishedAt,
+          result: clampedBody.result,
+          elapsedMs: clampedBody.elapsedMs,
+          deaths: clampedBody.deaths,
+          score: provisionalScore,
+          collectiblesCollected: clampedBody.collectiblesCollected,
+          enemiesDefeated: clampedBody.enemiesDefeated,
+          checkpointsReached: clampedBody.checkpointsReached,
+        }
+      : null;
+  const provisionalIsNewPersonalBest =
+    provisionalCandidateRun !== null &&
+    (provisionalPreviousBest === null ||
+      sortCompletedCourseRunsForLeaderboard(
+        [provisionalCandidateRun, provisionalPreviousBest],
+        snapshot.goal,
+      )[0]?.attemptId === provisionalCandidateRun.attemptId);
+  const provisionalPointAward =
+    provisionalCandidateRun !== null
+      ? previewRunFinalizePoints(provisionalCandidateRun, {
+          isFirstCompletion: provisionalIsFirstCompletion,
+          isNewPersonalBest: provisionalIsNewPersonalBest,
+        })
+      : null;
   const currentTopRows =
     clampedBody.result === 'completed'
       ? await loadRankedCourseLeaderboardRows(
@@ -392,6 +440,7 @@ export async function handleCourseRunFinish(
                   overallRank:
                     viewerBestRow.overall_rank === null ? null : Number(viewerBestRow.overall_rank),
                 },
+          pointAwardPotential: (provisionalPointAward?.points ?? 0) > 0,
         })
       : null;
 
