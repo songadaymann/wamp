@@ -90,6 +90,9 @@ interface OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall> {
   createLiveObjects: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
   destroyLiveObjects: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
   destroyEdgeWalls: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
+  syncLiveObjectWorldColliders?: (
+    loadedRooms: Iterable<LoadedFullRoom<TLiveObject, TEdgeWall>>,
+  ) => void;
   onBackdropObjectsChanged?: () => void;
   onFullRoomVisibilityChanged?: () => void;
 }
@@ -784,6 +787,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
   private invalidateRoomArtifacts(roomId: string, dropPublishedSnapshot: boolean): void {
     this.destroyFullRoom(roomId);
+    this.syncLiveObjectWorldColliders();
     this.previewRenderer.invalidateRoomPreview(roomId);
     this.previewCache.invalidateRoom(roomId, dropPublishedSnapshot);
   }
@@ -948,6 +952,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
 
     if (changed) {
+      this.syncLiveObjectWorldColliders();
       this.previewRenderer.syncPreviewVisibility();
     }
   }
@@ -1015,6 +1020,10 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.fullRoomReleaseAtById.delete(roomId);
     this.options.onBackdropObjectsChanged?.();
     this.options.onFullRoomVisibilityChanged?.();
+  }
+
+  private syncLiveObjectWorldColliders(): void {
+    this.options.syncLiveObjectWorldColliders?.(this.loadedFullRoomsById.values());
   }
 
   private createTerrainInsetBodies(

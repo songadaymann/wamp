@@ -57,6 +57,43 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Overworld zoom tilemap collision fix on April 6, 2026:
+  - created dedicated `main`-based worktree branch `fix/overworld-zoom-tilemap-collision-2026-04-06`
+  - traced the `Cannot read properties of undefined (reading 'tileWidth')` crash to stale Arcade colliders held by live objects in still-loaded rooms after world streaming unloaded another room's `terrainLayer`
+  - added a world-streaming callback so whenever a full room is unloaded or invalidated, remaining live-object world colliders are rebuilt against the current loaded-room set
+  - this keeps dynamic overworld objects from retaining references to destroyed `TilemapLayer` instances during zoom-driven LOD/full-room transitions
+  - verification:
+    - `npm run build` passed in `/private/tmp/wamp-overworld-zoom-tilemap-collision-fix-2026-04-06`
+    - shared Playwright client baseline wrote:
+      - `output/web-game/overworld-zoom-tilemap-collision-fix-baseline/shot-0.png`
+      - `output/web-game/overworld-zoom-tilemap-collision-fix-baseline/state-0.json`
+    - instrumented local Playwright browse zoom repro clicked the real overworld footer zoom buttons repeatedly with `error count 0`
+    - filtered local Playwright play-mode repro wrote:
+      - `output/web-game/overworld-zoom-tilemap-collision-play-check/final.png`
+      - `output/web-game/overworld-zoom-tilemap-collision-play-check/state.json`
+      - `output/web-game/overworld-zoom-tilemap-collision-play-check/errors.json` (`[]`)
+  - local verification caveat:
+    - entering play still triggers the already-known local leaderboard API schema-drift noise (`room_runs.verification_status` missing in the preview backend); that error is unrelated to this collision fix and was filtered out for the play-mode zoom check
+  - deployed for quick safety QA:
+    - safety DB migrations checked with `npm run cf:d1:migrate:safety` and were already up to date
+    - deployed Worker via `wrangler deploy --env safety`
+      - Worker URL: `https://everybodys-platformer-safety.novox-robot.workers.dev`
+      - Worker version: `41d0467b-1927-4913-bcea-a9b41ec5393c`
+    - built frontend against the safety backend:
+      - `VITE_ROOM_API_BASE_URL=https://everybodys-platformer-safety.novox-robot.workers.dev`
+      - `VITE_PARTYKIT_HOST=everybodys-platformer-presence-safety.songadaymann.partykit.dev`
+      - `VITE_PARTYKIT_PARTY=main`
+    - deployed Pages preview branch:
+      - branch alias: `https://safety-overworld-zoom-tilema.wampland.pages.dev`
+      - deployment URL: `https://f0ce105e.wampland.pages.dev`
+    - preview verification:
+      - repo `smoke:preview:readonly` reached boot + play on the deployed preview and wrote browse/play artifacts, but failed on the editor step because the selected room (`0,0`) was minted and `#btn-world-edit` was disabled for the smoke user
+      - targeted deployed-preview zoom repro wrote:
+        - `output/web-game/deployed-overworld-zoom-tilemap-collision-check/final.png`
+        - `output/web-game/deployed-overworld-zoom-tilemap-collision-check/state.json`
+        - `output/web-game/deployed-overworld-zoom-tilemap-collision-check/relevant-errors.json` (`[]`)
+      - this targeted preview check exercised browse + play zoom controls on the live preview without reproducing the `tileWidth` crash
+
 - Lighting neighbor ambient darkening on April 4, 2026:
   - started a fresh clean continuation branch for lighting work at `feature/lighting-followups-2026-04-04` from current `main`
   - extended the lighting controller so dark play rooms can render:

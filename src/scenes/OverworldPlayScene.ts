@@ -543,6 +543,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       createLiveObjects: (loadedRoom) => this.createLiveObjects(loadedRoom),
       destroyLiveObjects: (loadedRoom) => this.destroyLiveObjects(loadedRoom),
       destroyEdgeWalls: (loadedRoom) => this.destroyEdgeWalls(loadedRoom),
+      syncLiveObjectWorldColliders: (loadedRooms) =>
+        this.liveObjectController.syncLoadedWorldColliders(loadedRooms),
       onBackdropObjectsChanged: () => this.syncBackdropCameraIgnores(),
       onFullRoomVisibilityChanged: () => this.syncGhostVisibility(),
     });
