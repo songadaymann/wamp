@@ -139,6 +139,11 @@
         border-color: rgba(255, 109, 109, 0.26);
       }
 
+      button.active-filter-tab {
+        background: rgba(126, 201, 255, 0.22);
+        border-color: rgba(126, 201, 255, 0.38);
+      }
+
       button:disabled {
         opacity: 0.55;
         cursor: default;
@@ -414,6 +419,11 @@
             <h2>Suspicious Users</h2>
             <div id="queue-count" class="meta">0 users</div>
           </div>
+          <div id="queue-tabs" class="actions">
+            <button type="button" class="secondary active-filter-tab" data-queue-tab="all">All (0)</button>
+            <button type="button" class="secondary" data-queue-tab="real_players">Real Players (0)</button>
+            <button type="button" class="secondary" data-queue-tab="playfun_signals">Known / Heuristic Play.fun (0)</button>
+          </div>
           <div id="queue-list" class="queue-list">
             <div class="empty">Load the queue to begin.</div>
           </div>
@@ -464,12 +474,13 @@
                     <th></th>
                     <th>Room</th>
                     <th>Metric</th>
+                    <th>Points</th>
                     <th>Signals</th>
                     <th>Finished</th>
                   </tr>
                 </thead>
                 <tbody id="detail-room-runs">
-                  <tr><td colspan="5" class="meta">No room runs.</td></tr>
+                  <tr><td colspan="6" class="meta">No room runs.</td></tr>
                 </tbody>
               </table>
             </section>
@@ -482,12 +493,13 @@
                     <th></th>
                     <th>Course</th>
                     <th>Metric</th>
+                    <th>Points</th>
                     <th>Signals</th>
                     <th>Finished</th>
                   </tr>
                 </thead>
                 <tbody id="detail-course-runs">
-                  <tr><td colspan="5" class="meta">No course runs.</td></tr>
+                  <tr><td colspan="6" class="meta">No course runs.</td></tr>
                 </tbody>
               </table>
             </section>

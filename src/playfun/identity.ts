@@ -1,5 +1,6 @@
 const PLAYFUN_DISPLAY_NAME_PREFIX = 'playfun-';
 const AUTO_GENERATED_PLAYFUN_DISPLAY_NAME_PATTERN = /^playfun-(?:[a-z0-9]{16}|player)$/i;
+const HEX_TRIPLET_PLAYFUN_HANDLE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{3}$/i;
 
 export function hasPlayfunDisplayNamePrefix(
   displayName: string | null | undefined
@@ -17,4 +18,17 @@ export function isPlayfunLeaderboardExcludedDisplayName(
   displayName: string | null | undefined
 ): boolean {
   return hasPlayfunDisplayNamePrefix(displayName);
+}
+
+export function isHeuristicPlayfunCharacterDisplayName(
+  displayName: string | null | undefined
+): boolean {
+  if (typeof displayName !== 'string') {
+    return false;
+  }
+  const normalized = displayName.trim();
+  return (
+    hasPlayfunDisplayNamePrefix(normalized) ||
+    HEX_TRIPLET_PLAYFUN_HANDLE_PATTERN.test(normalized)
+  );
 }

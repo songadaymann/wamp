@@ -92,6 +92,14 @@ export interface LaunchStatsResponse {
 
 export type SuspiciousSeverity = 'high' | 'medium' | 'low';
 
+export type SuspiciousUserBucket = 'real_players' | 'playfun_signals';
+
+export type SuspiciousUserIdentityKind =
+  | 'no_playfun_signal'
+  | 'playfun_linked'
+  | 'playfun_only'
+  | 'playfun_name_heuristic';
+
 export type SuspiciousSignalCode =
   | 'record_gap'
   | 'too_fast_absolute'
@@ -109,6 +117,13 @@ export interface SuspiciousSignal {
   relatedAttemptIds: string[];
 }
 
+export interface SuspiciousUserIdentity {
+  bucket: SuspiciousUserBucket;
+  kind: SuspiciousUserIdentityKind;
+  label: string;
+  summary: string;
+}
+
 export interface SuspiciousUserCase {
   userId: string;
   userDisplayName: string;
@@ -122,6 +137,7 @@ export interface SuspiciousUserCase {
   strongestSeverity: SuspiciousSeverity;
   signalCodes: SuspiciousSignalCode[];
   signals: SuspiciousSignal[];
+  identity: SuspiciousUserIdentity;
   lastActivityAt: string | null;
 }
 
@@ -143,6 +159,9 @@ export interface SuspiciousRunCase {
   elapsedMs: number | null;
   deaths: number;
   score: number;
+  runFinalizedPoints: number | null;
+  runFinalizedPointEventId: string | null;
+  runFinalizedPointCreatedAt: string | null;
   severity: SuspiciousSeverity;
   ruleCodes: SuspiciousSignalCode[];
   previousBestElapsedMs: number | null;

@@ -5,6 +5,7 @@ import type {
   SuspiciousSignal,
   SuspiciousSignalCode,
   SuspiciousSummaryResponse,
+  SuspiciousUserIdentity,
   SuspiciousUserCase,
   SuspiciousUserDetailResponse,
   SuspiciousUsersResponse,
@@ -22,6 +23,7 @@ import {
   compareLeaderboardEntries,
   getLeaderboardRankingMode,
 } from '../../../runs/scoring';
+import { isHeuristicPlayfunCharacterDisplayName } from '../../../playfun/identity';
 import { requireAdminRequest } from '../auth/request';
 import { HttpError, jsonResponse, parsePositiveIntegerQueryParam } from '../core/http';
 import type {
@@ -64,20 +66,32 @@ const NEW_ACCOUNT_COMPLETED_RUNS_THRESHOLD = 20;
 interface JoinedRoomRunRow extends RoomRunRow {
   title: string | null;
   user_created_at: string;
+  email: string | null;
+  wallet_address: string | null;
   ogp_id: string | null;
   player_id: string | null;
+  run_finalized_point_event_id: string | null;
+  run_finalized_points: number | string | null;
+  run_finalized_point_created_at: string | null;
 }
 
 interface JoinedCourseRunRow extends CourseRunRow {
   title: string | null;
   user_created_at: string;
+  email: string | null;
+  wallet_address: string | null;
   ogp_id: string | null;
   player_id: string | null;
+  run_finalized_point_event_id: string | null;
+  run_finalized_points: number | string | null;
+  run_finalized_point_created_at: string | null;
 }
 
 interface JoinedPointEventRow extends PointEventRow {
   user_display_name: string;
   user_created_at: string;
+  email: string | null;
+  wallet_address: string | null;
   ogp_id: string | null;
   player_id: string | null;
 }
@@ -88,6 +102,8 @@ interface CombinedRunBase {
   userId: string;
   userDisplayName: string;
   userCreatedAt: string;
+  email: string | null;
+  walletAddress: string | null;
   ogpId: string | null;
   playerId: string | null;
   sourceId: string;
@@ -103,6 +119,9 @@ interface CombinedRunBase {
   elapsedMs: number;
   deaths: number;
   score: number;
+  runFinalizedPoints: number | null;
+  runFinalizedPointEventId: string | null;
+  runFinalizedPointCreatedAt: string | null;
 }
 
 interface HistoricalComparableRun {
@@ -118,6 +137,8 @@ interface UserAccumulator {
   userId: string;
   userDisplayName: string;
   userCreatedAt: string;
+  email: string | null;
+  walletAddress: string | null;
   ogpId: string | null;
   playerId: string | null;
   totalPoints: number;
@@ -272,6 +293,8 @@ async function loadSuspiciousAnalysis(
     const accumulator = getOrCreateAccumulator(accumulators, row.user_id, {
       userDisplayName: row.user_display_name,
       userCreatedAt: row.user_created_at,
+      email: row.email,
+      walletAddress: row.wallet_address,
       ogpId: row.ogp_id,
       playerId: row.player_id,
       stats: userStatsById.get(row.user_id) ?? null,
@@ -304,6 +327,8 @@ async function loadSuspiciousAnalysis(
       userId: row.user_id,
       userDisplayName: row.user_display_name,
       userCreatedAt: row.user_created_at,
+      email: row.email,
+      walletAddress: row.wallet_address,
       ogpId: row.ogp_id,
       playerId: row.player_id,
       sourceId: row.room_id,
@@ -319,11 +344,16 @@ async function loadSuspiciousAnalysis(
       elapsedMs: row.elapsed_ms,
       deaths: row.deaths,
       score: row.score,
+      runFinalizedPoints: parseNullableNumber(row.run_finalized_points),
+      runFinalizedPointEventId: row.run_finalized_point_event_id,
+      runFinalizedPointCreatedAt: row.run_finalized_point_created_at,
     };
     roomRunLookup.set(run.attemptId, run);
     const accumulator = getOrCreateAccumulator(accumulators, run.userId, {
       userDisplayName: run.userDisplayName,
       userCreatedAt: run.userCreatedAt,
+      email: run.email,
+      walletAddress: run.walletAddress,
       ogpId: run.ogpId,
       playerId: run.playerId,
       stats: userStatsById.get(run.userId) ?? null,
@@ -347,6 +377,8 @@ async function loadSuspiciousAnalysis(
       userId: row.user_id,
       userDisplayName: row.user_display_name,
       userCreatedAt: row.user_created_at,
+      email: row.email,
+      walletAddress: row.wallet_address,
       ogpId: row.ogp_id,
       playerId: row.player_id,
       sourceId: row.course_id,
@@ -362,11 +394,16 @@ async function loadSuspiciousAnalysis(
       elapsedMs: row.elapsed_ms,
       deaths: row.deaths,
       score: row.score,
+      runFinalizedPoints: parseNullableNumber(row.run_finalized_points),
+      runFinalizedPointEventId: row.run_finalized_point_event_id,
+      runFinalizedPointCreatedAt: row.run_finalized_point_created_at,
     };
     courseRunLookup.set(run.attemptId, run);
     const accumulator = getOrCreateAccumulator(accumulators, run.userId, {
       userDisplayName: run.userDisplayName,
       userCreatedAt: run.userCreatedAt,
+      email: run.email,
+      walletAddress: run.walletAddress,
       ogpId: run.ogpId,
       playerId: run.playerId,
       stats: userStatsById.get(run.userId) ?? null,
@@ -404,6 +441,7 @@ async function loadSuspiciousAnalysis(
 
     const totalPoints = Math.max(accumulator.totalPoints, accumulator.recentPoints);
     const completedRuns = Math.max(accumulator.completedRuns, accumulator.recentCompletedRuns);
+    const identity = classifySuspiciousUserIdentity(accumulator);
     const userCase: SuspiciousUserCase = {
       userId: accumulator.userId,
       userDisplayName: accumulator.userDisplayName,
@@ -417,6 +455,7 @@ async function loadSuspiciousAnalysis(
       strongestSeverity,
       signalCodes: signals.map((signal) => signal.code),
       signals,
+      identity,
       lastActivityAt: accumulator.lastActivityAt,
     };
 
@@ -850,8 +889,13 @@ async function loadRecentCompletedRoomRuns(
         r.checkpoints_reached,
         v.title AS title,
         u.created_at AS user_created_at,
+        u.email,
+        u.wallet_address,
         l.ogp_id,
-        l.player_id
+        l.player_id,
+        p.id AS run_finalized_point_event_id,
+        p.points AS run_finalized_points,
+        p.created_at AS run_finalized_point_created_at
       FROM room_runs r
       INNER JOIN users u
         ON u.id = r.user_id
@@ -860,6 +904,10 @@ async function loadRecentCompletedRoomRuns(
        AND v.version = r.room_version
       LEFT JOIN playfun_user_links l
         ON l.user_id = r.user_id
+      LEFT JOIN point_events p
+        ON p.user_id = r.user_id
+       AND p.event_type = 'run_finalized'
+       AND p.source_key = r.attempt_id
       WHERE r.result = 'completed'
         AND r.finished_at IS NOT NULL
         AND r.finished_at >= ?
@@ -898,8 +946,13 @@ async function loadRecentCompletedCourseRuns(
         r.checkpoints_reached,
         v.title AS title,
         u.created_at AS user_created_at,
+        u.email,
+        u.wallet_address,
         l.ogp_id,
-        l.player_id
+        l.player_id,
+        p.id AS run_finalized_point_event_id,
+        p.points AS run_finalized_points,
+        p.created_at AS run_finalized_point_created_at
       FROM course_runs r
       INNER JOIN users u
         ON u.id = r.user_id
@@ -908,6 +961,10 @@ async function loadRecentCompletedCourseRuns(
        AND v.version = r.course_version
       LEFT JOIN playfun_user_links l
         ON l.user_id = r.user_id
+      LEFT JOIN point_events p
+        ON p.user_id = r.user_id
+       AND p.event_type = 'run_finalized'
+       AND p.source_key = r.attempt_id
       WHERE r.result = 'completed'
         AND r.finished_at IS NOT NULL
         AND r.finished_at >= ?
@@ -937,6 +994,8 @@ async function loadRecentPositivePointEvents(
         e.created_at,
         u.display_name AS user_display_name,
         u.created_at AS user_created_at,
+        u.email,
+        u.wallet_address,
         l.ogp_id,
         l.player_id
       FROM point_events e
@@ -1083,6 +1142,8 @@ function getOrCreateAccumulator(
   input: {
     userDisplayName: string;
     userCreatedAt: string;
+    email: string | null;
+    walletAddress: string | null;
     ogpId: string | null;
     playerId: string | null;
     stats: UserStatsRecord | null;
@@ -1092,6 +1153,8 @@ function getOrCreateAccumulator(
   if (existing) {
     existing.userDisplayName = input.userDisplayName || existing.userDisplayName;
     existing.userCreatedAt = input.userCreatedAt || existing.userCreatedAt;
+    existing.email = input.email ?? existing.email;
+    existing.walletAddress = input.walletAddress ?? existing.walletAddress;
     existing.ogpId = input.ogpId ?? existing.ogpId;
     existing.playerId = input.playerId ?? existing.playerId;
     if (input.stats) {
@@ -1105,6 +1168,8 @@ function getOrCreateAccumulator(
     userId,
     userDisplayName: input.userDisplayName,
     userCreatedAt: input.userCreatedAt,
+    email: input.email,
+    walletAddress: input.walletAddress,
     ogpId: input.ogpId,
     playerId: input.playerId,
     totalPoints: input.stats?.totalPoints ?? 0,
@@ -1118,6 +1183,46 @@ function getOrCreateAccumulator(
   };
   accumulators.set(userId, created);
   return created;
+}
+
+function classifySuspiciousUserIdentity(accumulator: UserAccumulator): SuspiciousUserIdentity {
+  const hasPlayfunLink = Boolean(accumulator.ogpId || accumulator.playerId);
+  const hasIdentityBacking = Boolean(accumulator.email || accumulator.walletAddress);
+  const hasHeuristicName = isHeuristicPlayfunCharacterDisplayName(accumulator.userDisplayName);
+
+  if (hasPlayfunLink && !hasIdentityBacking) {
+    return {
+      bucket: 'playfun_signals',
+      kind: 'playfun_only',
+      label: 'Known Play.fun-only',
+      summary: 'Linked in Play.fun and still missing both email and wallet identity.',
+    };
+  }
+
+  if (hasPlayfunLink) {
+    return {
+      bucket: 'playfun_signals',
+      kind: 'playfun_linked',
+      label: 'Play.fun-linked',
+      summary: 'Linked in Play.fun, but also backed by email or wallet identity.',
+    };
+  }
+
+  if (hasHeuristicName) {
+    return {
+      bucket: 'playfun_signals',
+      kind: 'playfun_name_heuristic',
+      label: 'Play.fun name heuristic',
+      summary: 'Display name matches the current Play.fun burner-name heuristic.',
+    };
+  }
+
+  return {
+    bucket: 'real_players',
+    kind: 'no_playfun_signal',
+    label: 'Real player, as far as we know',
+    summary: 'No Play.fun link or current burner-name heuristic on this account.',
+  };
 }
 
 function addOrReplaceSignal(accumulator: UserAccumulator, signal: SuspiciousSignal): void {
@@ -1161,6 +1266,9 @@ function markRun(
     elapsedMs: run.elapsedMs,
     deaths: run.deaths,
     score: run.score,
+    runFinalizedPoints: run.runFinalizedPoints,
+    runFinalizedPointEventId: run.runFinalizedPointEventId,
+    runFinalizedPointCreatedAt: run.runFinalizedPointCreatedAt,
     severity,
     ruleCodes: [],
     previousBestElapsedMs: null,
@@ -1256,6 +1364,14 @@ function parseJsonSafely(raw: string | null): unknown {
   } catch {
     return null;
   }
+}
+
+function parseNullableNumber(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function parseWindowHours(url: URL): number {

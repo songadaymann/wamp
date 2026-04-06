@@ -27,6 +27,7 @@ const applyFiltersButton = document.getElementById('apply-filters-button') as HT
 const summaryGrid = document.getElementById('summary-grid') as HTMLDivElement | null;
 const recentInvalidations = document.getElementById('recent-invalidations') as HTMLDivElement | null;
 const queueCount = document.getElementById('queue-count') as HTMLDivElement | null;
+const queueTabs = document.getElementById('queue-tabs') as HTMLDivElement | null;
 const queueList = document.getElementById('queue-list') as HTMLDivElement | null;
 
 const detailEmpty = document.getElementById('detail-empty') as HTMLDivElement | null;
@@ -53,6 +54,7 @@ const previewUsers = document.getElementById('preview-users') as HTMLDivElement 
 const previewPointEvents = document.getElementById('preview-point-events') as HTMLTableSectionElement | null;
 
 type SeverityFilter = 'all' | SuspiciousSeverity;
+type QueueTab = 'all' | 'real_players' | 'playfun_signals';
 
 interface ViewState {
   adminKey: string;
@@ -62,6 +64,7 @@ interface ViewState {
   query: string;
   summary: SuspiciousSummaryResponse | null;
   users: SuspiciousUserCase[];
+  queueTab: QueueTab;
   selectedUserId: string | null;
   detail: SuspiciousUserDetailResponse | null;
   preview: SuspiciousInvalidationPreviewResponse | SuspiciousInvalidationResult | null;
@@ -83,6 +86,7 @@ const state: ViewState = {
   query: '',
   summary: null,
   users: [],
+  queueTab: 'all',
   selectedUserId: null,
   detail: null,
   preview: null,
@@ -162,6 +166,22 @@ queueList?.addEventListener('click', (event) => {
     return;
   }
   void loadDetail(userId);
+});
+
+queueTabs?.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+  const button = target.closest<HTMLButtonElement>('button[data-queue-tab]');
+  if (!button) {
+    return;
+  }
+  const nextTab = button.dataset.queueTab;
+  if (nextTab === 'all' || nextTab === 'real_players' || nextTab === 'playfun_signals') {
+    state.queueTab = nextTab;
+    render();
+  }
 });
 
 detailRoomRuns?.addEventListener('change', handleSelectionChange);
@@ -425,6 +445,7 @@ function render(): void {
   renderMeta();
   renderSummary();
   renderRecentInvalidations();
+  renderQueueTabs();
   renderQueue();
   renderDetail();
   renderPreview();
@@ -512,36 +533,49 @@ function renderRecentInvalidations(): void {
 }
 
 function renderQueue(): void {
+  const visibleUsers = getVisibleUsers();
   if (queueCount) {
-    queueCount.textContent = `${state.users.length} user${state.users.length === 1 ? '' : 's'}`;
+    queueCount.textContent = `${visibleUsers.length} user${visibleUsers.length === 1 ? '' : 's'}`;
   }
   if (!queueList) {
     return;
   }
 
   queueList.replaceChildren();
-  if (state.loading && state.users.length === 0) {
+  if (state.loading && visibleUsers.length === 0) {
     queueList.appendChild(buildEmpty('Loading suspicious users...'));
     return;
   }
-  if (state.users.length === 0) {
-    queueList.appendChild(buildEmpty('No suspicious users in the selected window.'));
+  if (visibleUsers.length === 0) {
+    queueList.appendChild(
+      buildEmpty(
+        state.queueTab === 'real_players'
+          ? 'No real-player cases in the selected window.'
+          : state.queueTab === 'playfun_signals'
+            ? 'No known or heuristic Play.fun cases in the selected window.'
+            : 'No suspicious users in the selected window.'
+      )
+    );
     return;
   }
 
-  for (const user of state.users) {
+  for (const user of visibleUsers) {
     const row = document.createElement('div');
     row.className = `queue-row${user.userId === state.selectedUserId ? ' active' : ''}`;
     row.innerHTML = `
       <button type="button" data-user-id="${escapeHtml(user.userId)}">
         <div class="queue-title">
           <strong>${escapeHtml(user.userDisplayName)}</strong>
-          <span class="chip ${user.strongestSeverity}">${escapeHtml(user.strongestSeverity.toUpperCase())}</span>
+          <div class="chips">
+            <span class="chip ${identityChipClass(user)}">${escapeHtml(user.identity.label)}</span>
+            <span class="chip ${user.strongestSeverity}">${escapeHtml(user.strongestSeverity.toUpperCase())}</span>
+          </div>
         </div>
         <div class="queue-meta">
           <div>${user.recentCompletedRuns} recent runs · ${user.recentPoints} recent pts</div>
           <div>${escapeHtml(user.userId)}</div>
           <div>${escapeHtml(user.ogpId ?? 'No Play.fun link')} · ${user.lastActivityAt ? formatTimestamp(user.lastActivityAt) : 'No activity timestamp'}</div>
+          <div>${escapeHtml(user.identity.summary)}</div>
           <div class="chips">${user.signals
             .slice(0, 3)
             .map((signal) => `<span class="chip ${signal.severity}">${escapeHtml(signal.label)}</span>`)
@@ -579,6 +613,7 @@ function renderDetail(): void {
   if (detailUserMeta) {
     detailUserMeta.innerHTML = `
       <div>User id: ${escapeHtml(detail.user.userId)}</div>
+      <div>Identity: ${escapeHtml(detail.user.identity.label)} · ${escapeHtml(detail.user.identity.summary)}</div>
       <div>OGP: ${escapeHtml(detail.user.ogpId ?? 'none')} · Player: ${escapeHtml(detail.user.playerId ?? 'none')}</div>
       <div>Created: ${formatTimestamp(detail.user.userCreatedAt)} · Last activity: ${detail.user.lastActivityAt ? formatTimestamp(detail.user.lastActivityAt) : 'n/a'}</div>
       <div>Total points: ${detail.user.totalPoints} · Completed runs: ${detail.user.completedRuns} · Recent points: ${detail.user.recentPoints}</div>
@@ -608,7 +643,7 @@ function renderRunTable(
   body.replaceChildren();
   if (runs.length === 0) {
     const row = document.createElement('tr');
-    row.innerHTML = `<td colspan="5" class="meta">No suspicious ${kind} runs.</td>`;
+    row.innerHTML = `<td colspan="6" class="meta">No suspicious ${kind} runs.</td>`;
     body.appendChild(row);
     return;
   }
@@ -623,6 +658,7 @@ function renderRunTable(
         <span class="meta">${kind === 'room' ? `${run.roomX},${run.roomY} · ` : ''}v${run.version}</span>
       </td>
       <td>${escapeHtml(formatRunMetric(run))}</td>
+      <td>${escapeHtml(formatRunPoints(run))}</td>
       <td>${run.ruleCodes.map((code) => `<span class="chip ${run.severity}">${escapeHtml(code)}</span>`).join(' ')}</td>
       <td>${run.finishedAt ? formatTimestamp(run.finishedAt) : 'n/a'}</td>
     `;
@@ -744,6 +780,29 @@ function renderSelectionSummary(): void {
   selectionSummary.textContent = `${roomCount} room runs, ${courseCount} course runs, and ${pointCount} point events selected.`;
 }
 
+function renderQueueTabs(): void {
+  if (!queueTabs) {
+    return;
+  }
+
+  const counts = getQueueTabCounts();
+  const tabs: Array<{ id: QueueTab; label: string }> = [
+    { id: 'all', label: `All (${counts.all})` },
+    { id: 'real_players', label: `Real Players (${counts.real_players})` },
+    { id: 'playfun_signals', label: `Known / Heuristic Play.fun (${counts.playfun_signals})` },
+  ];
+
+  queueTabs.replaceChildren();
+  for (const tab of tabs) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.queueTab = tab.id;
+    button.className = `secondary${state.queueTab === tab.id ? ' active-filter-tab' : ''}`;
+    button.textContent = tab.label;
+    queueTabs.appendChild(button);
+  }
+}
+
 function formatRunMetric(run: SuspiciousUserDetailResponse['roomRuns'][number]): string {
   const primary = run.rankingMode === 'time'
     ? `${formatDuration(run.elapsedMs)} · ${run.deaths} deaths`
@@ -755,6 +814,13 @@ function formatRunMetric(run: SuspiciousUserDetailResponse['roomRuns'][number]):
     return `${primary} · ${run.repeatGroupCount} repeats`;
   }
   return primary;
+}
+
+function formatRunPoints(run: SuspiciousUserDetailResponse['roomRuns'][number]): string {
+  if (run.runFinalizedPoints === null) {
+    return 'No point event';
+  }
+  return `${run.runFinalizedPoints} pts`;
 }
 
 function formatDuration(value: number | null): string {
@@ -780,6 +846,34 @@ function buildEmpty(message: string): HTMLDivElement {
   element.className = 'empty';
   element.textContent = message;
   return element;
+}
+
+function getVisibleUsers(): SuspiciousUserCase[] {
+  if (state.queueTab === 'all') {
+    return state.users;
+  }
+  return state.users.filter((user) => user.identity.bucket === state.queueTab);
+}
+
+function getQueueTabCounts(): Record<QueueTab, number> {
+  return {
+    all: state.users.length,
+    real_players: state.users.filter((user) => user.identity.bucket === 'real_players').length,
+    playfun_signals: state.users.filter((user) => user.identity.bucket === 'playfun_signals').length,
+  };
+}
+
+function identityChipClass(user: SuspiciousUserCase): SuspiciousSeverity {
+  switch (user.identity.kind) {
+    case 'playfun_only':
+      return 'high';
+    case 'playfun_linked':
+    case 'playfun_name_heuristic':
+      return 'medium';
+    case 'no_playfun_signal':
+    default:
+      return 'low';
+  }
 }
 
 function setStatus(element: HTMLDivElement | null, message: string, isError: boolean, isSuccess = false): void {
