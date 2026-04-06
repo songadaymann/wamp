@@ -9,7 +9,7 @@ import {
   setTouchMove,
 } from './touchControls';
 
-type EditorSheetId = 'tools' | 'background' | 'palette' | 'objects' | 'music' | 'goal' | 'actions';
+type EditorSheetId = 'tools' | 'background' | 'palette' | 'objects' | 'goal' | 'actions';
 type MoveDirection = 'up' | 'left' | 'right' | 'down';
 
 type Elements = {
@@ -165,7 +165,7 @@ export class MobileUiController {
           return;
         }
 
-        if (this.doc.body.dataset.editorMusicMode === 'true' && nextSheet !== 'music') {
+        if (this.doc.body.dataset.editorMusicMode === 'true' && nextSheet !== 'actions') {
           return;
         }
 
@@ -520,9 +520,9 @@ export class MobileUiController {
     }
 
     if (isEditor && musicModeActive) {
-      this.activeEditorSheet = 'music';
+      this.activeEditorSheet = 'actions';
       this.editorSheetCollapsed = false;
-      this.doc.body.dataset.mobileEditorSheet = 'music';
+      this.doc.body.dataset.mobileEditorSheet = 'actions';
     }
 
     if (this.previousAppMode !== appMode) {
@@ -550,7 +550,7 @@ export class MobileUiController {
         .querySelectorAll<HTMLButtonElement>('[data-mobile-editor-sheet]')
         .forEach((button) => {
           button.classList.toggle('active', button.dataset.mobileEditorSheet === this.activeEditorSheet);
-          button.disabled = musicModeActive && button.dataset.mobileEditorSheet !== 'music';
+          button.disabled = musicModeActive && button.dataset.mobileEditorSheet !== 'actions';
         });
     }
 
