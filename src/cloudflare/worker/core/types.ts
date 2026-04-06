@@ -280,6 +280,10 @@ export interface CourseRunRow {
   collectibles_collected: number;
   enemies_defeated: number;
   checkpoints_reached: number;
+  verification_status?: 'not_required' | 'passed' | 'failed' | 'timeout' | null;
+  verification_reason?: string | null;
+  verification_nonce?: string | null;
+  verification_snapshot_hash?: string | null;
 }
 
 export interface RoomRunRow {
@@ -301,6 +305,10 @@ export interface RoomRunRow {
   collectibles_collected: number;
   enemies_defeated: number;
   checkpoints_reached: number;
+  verification_status?: 'not_required' | 'passed' | 'failed' | 'timeout' | null;
+  verification_reason?: string | null;
+  verification_nonce?: string | null;
+  verification_snapshot_hash?: string | null;
 }
 
 export interface RoomDifficultyVoteRow {

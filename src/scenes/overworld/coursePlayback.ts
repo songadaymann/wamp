@@ -24,6 +24,7 @@ import {
   createActiveCourseRunState,
   type ActiveCourseRunState,
 } from './courseRuns';
+import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
 
 export type CoursePlaybackRoomSourceMode = 'published' | 'draftPreview';
 
@@ -37,6 +38,17 @@ interface OverworldCoursePlaybackHost {
   countRoomObjectsByCategory(room: RoomSnapshot, category: GameObjectConfig['category']): number;
   showTransientStatus(message: string): void;
   renderHud(): void;
+  onRankedRunStarted?(binding: {
+    kind: 'course';
+    verificationSchemaVersion: number;
+    verificationNonce: string;
+    snapshotHash: string;
+  }): void;
+  buildVerificationTrace?: (
+    runState: ActiveCourseRunState,
+    result: 'completed' | 'failed' | 'abandoned',
+  ) => RankedRunVerificationTrace | null;
+  clearVerificationTrace?: () => void;
 }
 
 export class OverworldCoursePlaybackController {
@@ -155,8 +167,17 @@ export class OverworldCoursePlaybackController {
       }
 
       activeCourseRun.attemptId = response.attemptId;
+      activeCourseRun.verificationSchemaVersion = response.verificationSchemaVersion;
+      activeCourseRun.verificationNonce = response.verificationNonce;
+      activeCourseRun.snapshotHash = response.snapshotHash;
       activeCourseRun.submissionState = 'active';
       activeCourseRun.submissionMessage = 'Ranked course run active.';
+      this.host.onRankedRunStarted?.({
+        kind: 'course',
+        verificationSchemaVersion: response.verificationSchemaVersion,
+        verificationNonce: response.verificationNonce,
+        snapshotHash: response.snapshotHash,
+      });
       this.host.renderHud();
     } catch (error) {
       console.error('Failed to start ranked course run', error);
@@ -190,6 +211,7 @@ export class OverworldCoursePlaybackController {
     if (!attemptId || activeCourseRun.submissionState === 'local-only') {
       activeCourseRun.submissionState = 'submitted';
       activeCourseRun.submissionMessage = 'Local course run saved on this client only.';
+      this.host.clearVerificationTrace?.();
       this.host.renderHud();
       return;
     }
@@ -207,6 +229,7 @@ export class OverworldCoursePlaybackController {
       checkpointsReached: activeCourseRun.checkpointsReached,
       score: null,
       finishedAt: new Date().toISOString(),
+      verificationTrace: this.host.buildVerificationTrace?.(activeCourseRun, result) ?? null,
     };
 
     try {
@@ -218,6 +241,7 @@ export class OverworldCoursePlaybackController {
 
       currentActiveCourseRun.submissionState = 'submitted';
       currentActiveCourseRun.submissionMessage = 'Ranked course run submitted.';
+      this.host.clearVerificationTrace?.();
     } catch (error) {
       console.error('Failed to finish ranked course run', {
         attemptId,
@@ -233,6 +257,7 @@ export class OverworldCoursePlaybackController {
       const message = formatCourseRunSubmissionErrorMessage(error, result);
       currentActiveCourseRun.submissionState = 'error';
       currentActiveCourseRun.submissionMessage = message;
+      this.host.clearVerificationTrace?.();
       if (result === 'completed') {
         this.host.showTransientStatus(message);
       }
