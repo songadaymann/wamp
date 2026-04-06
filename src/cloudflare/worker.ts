@@ -24,6 +24,7 @@ import { corsHeaders, getCoordinatesFromRequest, HttpError, jsonResponse, parseJ
 import type { Env, RequestAuth } from './worker/core/types';
 import { handleTestReset } from './worker/maintenance/routes';
 import {
+  handleMusicPhraseDeleteRequest,
   handleMusicPhraseGetRequest,
   handleMusicPhraseListRequest,
 } from './worker/music/routes';
@@ -187,6 +188,20 @@ export default {
         return await handleMusicPhraseGetRequest(
           request,
           env,
+          decodeURIComponent(musicPhraseMatch[1])
+        );
+      }
+      if (musicPhraseMatch && request.method === 'DELETE') {
+        const auth = await requireAuthenticatedRequestAuth(
+          env,
+          request,
+          'delete music phrases',
+          'rooms:write'
+        );
+        return await handleMusicPhraseDeleteRequest(
+          request,
+          env,
+          auth,
           decodeURIComponent(musicPhraseMatch[1])
         );
       }

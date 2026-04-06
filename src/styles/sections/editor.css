@@ -1141,7 +1141,13 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #lighting-section 
 }
 
 .editor-music-phrase-name-input-wrap {
-  position: relative;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.editor-music-phrase-name-input-wrap .goal-input {
+  flex: 1 1 auto;
 }
 
 .editor-music-workbench-card {

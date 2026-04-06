@@ -57,6 +57,44 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Owner-only phrase delete follow-up on April 6, 2026:
+  - branched cleanly from `main` on `feature/music-phrase-delete-2026-04-06`
+  - extended the phrase edit row so edit mode can surface a `Delete` action for the active saved phrase
+  - delete affordance is only shown in sequencer edit mode and only enabled when the active source phrase belongs to the signed-in user
+  - added frontend delete wiring in `src/music/libraryClient.ts` and `src/ui/setup/musicControls.ts`
+  - added scene logic in `src/scenes/EditorScene.ts` to:
+    - resolve the active source phrase id
+    - lazily fetch phrase details when entering edit mode
+    - gate deletion by `creatorUserId === current auth user`
+    - clear the active phrase after a successful delete and remove the phrase from the in-memory library/cache
+  - added authenticated Worker support for `DELETE /api/music/phrases/:id`
+  - server delete is owner-enforced and also strips lineage references plus empty batch rows
+  - validation:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - required `develop-web-game` local smoke wrote `output/web-game/music-phrase-delete-smoke/`
+    - `state-0.json` reached `activeScene: "overworld-play"`
+    - screenshot still hit the known black-frame artifact
+  - safety deploy:
+    - built with:
+      - `VITE_ROOM_API_BASE_URL=https://everybodys-platformer-safety.novox-robot.workers.dev`
+      - `VITE_PARTYKIT_HOST=everybodys-platformer-presence-safety.songadaymann.partykit.dev`
+      - `VITE_PARTYKIT_PARTY=main`
+    - Pages alias: `https://safety-music-phrase-delete.wampland.pages.dev`
+    - direct Pages URL: `https://4c5a592a.wampland.pages.dev`
+    - safety Worker URL: `https://everybodys-platformer-safety.novox-robot.workers.dev`
+    - safety Worker version: `8ad7f8c4-81a3-4f38-a86a-6ff1f6f0b3ae`
+  - safety verification:
+    - `curl -I` returned `HTTP/2 200` for both Pages URLs
+    - `GET /api/health` on the safety Worker returned healthy JSON
+    - `GET /api/music/phrases?instrument=triangle&limit=1` returned live JSON
+    - deployed preview smoke wrote `output/web-game/safety-music-phrase-delete-deploy-check/`
+    - `state-0.json` reached `activeScene: "overworld-play"`
+    - `errors-0.json` only showed the known Cloudflare Insights RUM CORS noise
+    - deployed screenshot still hit the known black-frame artifact
+  - TODO:
+    - real signed-in editor QA should confirm the delete button appears only for self-owned phrases and that deleting clears the active phrase as intended
+
 - Overworld zoom tilemap collision fix on April 6, 2026:
   - created dedicated `main`-based worktree branch `fix/overworld-zoom-tilemap-collision-2026-04-06`
   - traced the `Cannot read properties of undefined (reading 'tileWidth')` crash to stale Arcade colliders held by live objects in still-loaded rooms after world streaming unloaded another room's `terrainLayer`

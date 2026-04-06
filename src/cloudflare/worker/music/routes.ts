@@ -1,6 +1,7 @@
-import { jsonResponse, parsePositiveIntegerQueryParam, HttpError } from '../core/http';
-import type { Env } from '../core/types';
+import { jsonResponse, noContentResponse, parsePositiveIntegerQueryParam, HttpError } from '../core/http';
+import type { Env, RequestAuth } from '../core/types';
 import {
+  deleteMusicPhrase,
   listMusicPhrases,
   loadMusicPhrase,
   parseMusicPhraseInstrumentQuery,
@@ -38,4 +39,19 @@ export async function handleMusicPhraseGetRequest(
   }
 
   return jsonResponse(request, { item: phrase });
+}
+
+export async function handleMusicPhraseDeleteRequest(
+  request: Request,
+  env: Env,
+  auth: RequestAuth,
+  phraseId: string,
+): Promise<Response> {
+  const trimmedId = phraseId.trim();
+  if (!trimmedId) {
+    throw new HttpError(400, 'Phrase id is required.');
+  }
+
+  await deleteMusicPhrase(env, trimmedId, auth.user.id);
+  return noContentResponse(request);
 }

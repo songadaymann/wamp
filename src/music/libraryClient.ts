@@ -128,3 +128,22 @@ export async function saveMusicPhrases(
 
   return { items };
 }
+
+export async function deleteMusicPhrase(id: string): Promise<void> {
+  const trimmedId = id.trim();
+  if (!trimmedId) {
+    throw new Error('Phrase id is required.');
+  }
+
+  const response = await fetch(getMusicApiUrl(`/api/music/phrases/${encodeURIComponent(trimmedId)}`), {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => response.statusText);
+    throw new Error(message || `Music request failed with ${response.status}.`);
+  }
+
+  phrasePromiseCache.delete(trimmedId);
+}

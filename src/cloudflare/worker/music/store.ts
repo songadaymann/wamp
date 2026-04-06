@@ -102,6 +102,27 @@ const DELETE_MUSIC_PHRASE_SOURCES_SQL = `
   WHERE child_phrase_id = ?
 `;
 
+const DELETE_MUSIC_PHRASE_SOURCE_REFERENCES_SQL = `
+  DELETE FROM music_phrase_sources
+  WHERE source_phrase_id = ?
+`;
+
+const DELETE_MUSIC_PHRASE_SQL = `
+  DELETE FROM music_phrases
+  WHERE id = ?
+`;
+
+const DELETE_EMPTY_MUSIC_PHRASE_BATCH_SQL = `
+  DELETE FROM music_phrase_batches
+  WHERE id = ?
+    AND NOT EXISTS (
+      SELECT 1
+      FROM music_phrases
+      WHERE batch_id = ?
+      LIMIT 1
+    )
+`;
+
 const UPDATE_MUSIC_PHRASE_LABEL_SQL = `
   UPDATE music_phrases
   SET
@@ -690,6 +711,28 @@ export async function loadMusicPhrase(
     .first<MusicPhraseJoinRow>();
 
   return row ? materializeMusicPhraseRecord(row) : null;
+}
+
+export async function deleteMusicPhrase(
+  env: Env,
+  phraseId: string,
+  actorUserId: string,
+): Promise<void> {
+  const phrase = await loadMusicPhrase(env, phraseId);
+  if (!phrase) {
+    throw new HttpError(404, 'Music phrase not found.');
+  }
+
+  if (!actorUserId || phrase.creatorUserId !== actorUserId) {
+    throw new HttpError(403, 'Only the phrase creator can delete this phrase.');
+  }
+
+  await env.DB.batch([
+    env.DB.prepare(DELETE_MUSIC_PHRASE_SOURCES_SQL).bind(phrase.id),
+    env.DB.prepare(DELETE_MUSIC_PHRASE_SOURCE_REFERENCES_SQL).bind(phrase.id),
+    env.DB.prepare(DELETE_MUSIC_PHRASE_SQL).bind(phrase.id),
+    env.DB.prepare(DELETE_EMPTY_MUSIC_PHRASE_BATCH_SQL).bind(phrase.batchId, phrase.batchId),
+  ]);
 }
 
 export function parseMusicPhraseInstrumentQuery(value: string | null): RoomPatternInstrumentId {

@@ -97,6 +97,7 @@ export function setupRoomMusicControls(
   const phraseNewButton = doc.getElementById('btn-editor-music-phrase-new');
   const phraseEditButton = doc.getElementById('btn-editor-music-phrase-edit');
   const phraseSaveButton = doc.getElementById('btn-editor-music-phrase-save');
+  const phraseDeleteButton = doc.getElementById('btn-editor-music-phrase-delete');
   const phraseNameInput = doc.getElementById('editor-music-phrase-name-input') as HTMLInputElement | null;
   const libraryRefreshButton = doc.getElementById('btn-editor-music-library-refresh');
   const libraryMoreButton = doc.getElementById('btn-editor-music-library-more');
@@ -293,6 +294,16 @@ export function setupRoomMusicControls(
   phraseSaveButton?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
       void scene.saveActiveRoomMusicPhrase?.();
+    });
+  });
+
+  phraseDeleteButton?.addEventListener('click', () => {
+    if (!window.confirm('Delete this phrase? This only removes your saved phrase entry.')) {
+      return;
+    }
+
+    withActiveEditorScene(game, (scene) => {
+      void scene.deleteActiveRoomMusicPhrase?.();
     });
   });
 

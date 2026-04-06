@@ -123,6 +123,7 @@ export interface EditorSceneBridge {
     options?: { instrumentId?: RoomPatternInstrumentId | null }
   ) => Promise<RoomRecord | null>;
   saveActiveRoomMusicPhrase?: () => Promise<RoomRecord | null>;
+  deleteActiveRoomMusicPhrase?: () => Promise<void>;
   replaceLegacyRoomMusicWithPattern?: () => void;
   toggleRoomMusicPreview?: () => void;
   refreshMusicPhraseLibrary?: () => void;
