@@ -301,12 +301,14 @@ function createGenericVerificationTrigger(input: {
     ...input.candidate,
     overallRank: null,
   };
-  const predictionPool = [
-    ...input.currentTopEntries.filter((entry) => entry.userId !== candidate.userId),
-    candidate,
-  ].sort(input.compare);
-  const predictedRank = predictionPool.findIndex((entry) => entry.attemptId === candidate.attemptId);
-  const normalizedPredictedRank = predictedRank >= 0 ? predictedRank + 1 : null;
+  const comparisonPool = input.currentTopEntries.filter((entry) => entry.userId !== candidate.userId);
+  let betterEntryCount = 0;
+  for (const entry of comparisonPool) {
+    if (input.compare(entry, candidate) < 0) {
+      betterEntryCount += 1;
+    }
+  }
+  const normalizedPredictedRank = betterEntryCount + 1;
 
   const takesTopOne = normalizedPredictedRank === 1 && previousRank !== 1;
   const entersTopTen =
