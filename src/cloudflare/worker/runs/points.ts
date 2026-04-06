@@ -31,6 +31,19 @@ const RUN_CLEAR_POINTS = 100;
 const RUN_ZERO_DEATH_CLEAR_POINTS = 25;
 const RUN_PERSONAL_BEST_POINTS = 25;
 
+export interface RunFinalizePointPreview {
+  points: number;
+  breakdown: {
+    collectibles: number;
+    enemies: number;
+    checkpoints: number;
+    clear: number;
+    zeroDeath: number;
+    personalBest: number;
+    awardMode: 'none' | 'first_completion' | 'personal_best';
+  };
+}
+
 export async function awardRoomPublishPoints(
   env: Env,
   userId: string,
@@ -77,6 +90,32 @@ export async function awardRunFinalizePoints(
     isNewPersonalBest: boolean;
   },
 ): Promise<PointEventRow> {
+  const preview = previewRunFinalizePoints(run, options);
+  return recordPointEvent(env, {
+    userId: run.userId,
+    eventType: 'run_finalized',
+    sourceKey: run.attemptId,
+    points: preview.points,
+    breakdown: preview.breakdown,
+  });
+}
+
+export function previewRunFinalizePoints(
+  run: Pick<
+    RoomRunRecord | CourseRunRecord,
+    | 'attemptId'
+    | 'userId'
+    | 'collectiblesCollected'
+    | 'enemiesDefeated'
+    | 'checkpointsReached'
+    | 'result'
+    | 'deaths'
+  >,
+  options: {
+    isFirstCompletion: boolean;
+    isNewPersonalBest: boolean;
+  },
+): RunFinalizePointPreview {
   let points = 0;
   const breakdown = {
     collectibles: 0,
@@ -109,13 +148,10 @@ export async function awardRunFinalizePoints(
     points += RUN_PERSONAL_BEST_POINTS;
   }
 
-  return recordPointEvent(env, {
-    userId: run.userId,
-    eventType: 'run_finalized',
-    sourceKey: run.attemptId,
+  return {
     points,
     breakdown,
-  });
+  };
 }
 
 export async function awardCoursePublishPoints(
