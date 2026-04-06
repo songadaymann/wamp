@@ -99,8 +99,21 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   grantExternalLaunchGrace: (durationMs: number) => void;
   showTransientStatus: (message: string) => void;
   handlePlayerDeath: (reason: string) => void;
-  onEnemyDefeated: (roomId: string, enemyName: string) => boolean;
-  onCollectibleCollected: (roomId: string) => void;
+  onEnemyDefeated: (event: {
+    roomId: string;
+    roomCoordinates: RoomCoordinates;
+    enemyName: string;
+    instanceId: string | null;
+    x: number;
+    y: number;
+  }) => boolean;
+  onCollectibleCollected: (event: {
+    roomId: string;
+    roomCoordinates: RoomCoordinates;
+    instanceId: string | null;
+    x: number;
+    y: number;
+  }) => void;
   playRoomSfx: (cue: SfxCue, roomCoordinates: RoomCoordinates) => void;
   playEnemyKillFx: (x: number, y: number, roomCoordinates: RoomCoordinates) => void;
   playCollectFx: (
@@ -1681,7 +1694,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     loadedRoom.liveObjects = loadedRoom.liveObjects.filter((candidate) => candidate !== liveObject);
     if (liveObject.countsTowardGoals) {
-      this.options.onCollectibleCollected(loadedRoom.room.id);
+      this.options.onCollectibleCollected({
+        roomId: loadedRoom.room.id,
+        roomCoordinates: loadedRoom.room.coordinates,
+        instanceId: liveObject.placedInstanceId,
+        x: liveObject.sprite.x - this.options.getRoomOrigin(loadedRoom.room.coordinates).x,
+        y: liveObject.sprite.y - this.options.getRoomOrigin(loadedRoom.room.coordinates).y,
+      });
     }
   }
 
@@ -1740,7 +1759,14 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     loadedRoom.liveObjects = loadedRoom.liveObjects.filter((candidate) => candidate !== liveObject);
 
     const handledStatus = liveObject.countsTowardGoals
-      ? this.options.onEnemyDefeated(loadedRoom.room.id, enemyName)
+      ? this.options.onEnemyDefeated({
+          roomId: loadedRoom.room.id,
+          roomCoordinates: loadedRoom.room.coordinates,
+          enemyName,
+          instanceId: liveObject.placedInstanceId,
+          x: liveObject.sprite.x - this.options.getRoomOrigin(loadedRoom.room.coordinates).x,
+          y: liveObject.sprite.y - this.options.getRoomOrigin(loadedRoom.room.coordinates).y,
+        })
       : false;
     if (!handledStatus) {
       this.options.showTransientStatus(`${enemyName} defeated.`);

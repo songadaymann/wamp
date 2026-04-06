@@ -1,5 +1,6 @@
 import type { CourseGoal, CourseGoalType } from './model';
 import type { LeaderboardRankingMode, RunResult } from '../runs/model';
+import type { RankedRunVerificationTrace } from '../runs/verificationTrace';
 
 export interface CourseRunStartRequestBody {
   courseId: string;
@@ -16,6 +17,9 @@ export interface CourseRunStartResponse {
   startedAt: string;
   userId: string;
   userDisplayName: string;
+  verificationSchemaVersion: number;
+  verificationNonce: string;
+  snapshotHash: string;
 }
 
 export interface CourseRunFinishRequestBody {
@@ -27,6 +31,7 @@ export interface CourseRunFinishRequestBody {
   checkpointsReached: number;
   score?: number | null;
   finishedAt?: string | null;
+  verificationTrace?: RankedRunVerificationTrace | null;
 }
 
 export interface CourseRunRecord {
@@ -46,6 +51,10 @@ export interface CourseRunRecord {
   collectiblesCollected: number;
   enemiesDefeated: number;
   checkpointsReached: number;
+  verificationStatus?: 'not_required' | 'passed' | 'failed' | 'timeout';
+  verificationReason?: string | null;
+  verificationNonce?: string | null;
+  verificationSnapshotHash?: string | null;
 }
 
 export interface CourseLeaderboardEntry {

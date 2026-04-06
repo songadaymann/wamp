@@ -196,6 +196,12 @@ import {
   recordCourseRunDeath,
   type ActiveCourseRunState,
 } from './overworld/courseRuns';
+import {
+  RankedRunTraceRecorder,
+  type RankedRunTraceBinding,
+  type RankedRunTraceFrameInput,
+} from './overworld/rankedRunTraceRecorder';
+import type { RankedRunVerificationTrace } from '../runs/verificationTrace';
 import { type CameraMode } from './overworld/camera';
 import {
   terrainTileCollidesAtLocalPixel,
@@ -355,6 +361,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private collectedObjectKeys = new Set<string>();
   private heldKeyCount = 0;
   private score = 0;
+  private readonly rankedRunTraceRecorder = new RankedRunTraceRecorder();
   private readonly goalRunController: OverworldGoalRunController;
   private readonly roomAudioController: OverworldRoomAudioController;
   private readonly lightingController: RoomLightingController;
@@ -423,6 +430,14 @@ export class OverworldPlayScene extends Phaser.Scene {
       showTransientStatus: (message) => this.showTransientStatus(message),
       countRoomObjectsByCategory: (room, category) =>
         this.countRoomObjectsByCategory(room, category),
+      onRankedRunStarted: (binding) => {
+        this.startRankedRunTrace(binding.kind, binding);
+      },
+      buildVerificationTrace: (runState, result) =>
+        this.buildRankedRunVerificationTrace('room', runState.elapsedMs, result),
+      clearVerificationTrace: () => {
+        this.clearRankedRunTrace();
+      },
     });
     this.roomAudioController = new OverworldRoomAudioController({
       scene: this,
@@ -500,8 +515,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       showTransientStatus: (message) => this.showTransientStatus(message),
       handlePlayerDeath: (reason) => this.sessionResetController.handlePlayerDeath(reason),
-      onEnemyDefeated: (roomId, enemyName) => this.handleEnemyDefeated(roomId, enemyName),
-      onCollectibleCollected: (roomId) => this.handleCollectibleCollected(roomId),
+      onEnemyDefeated: (event) => this.handleEnemyDefeated(event),
+      onCollectibleCollected: (event) => this.handleCollectibleCollected(event),
       playRoomSfx: (cue, roomCoordinates) =>
         this.roomAudioController.playRoomSfx(cue, roomCoordinates),
       playEnemyKillFx: (x, y, roomCoordinates) =>
@@ -596,6 +611,14 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.countRoomObjectsByCategory(room, category),
       showTransientStatus: (message) => this.showTransientStatus(message),
       renderHud: () => this.renderHud(),
+      onRankedRunStarted: (binding) => {
+        this.startRankedRunTrace(binding.kind, binding);
+      },
+      buildVerificationTrace: (runState, result) =>
+        this.buildRankedRunVerificationTrace('course', runState.elapsedMs, result),
+      clearVerificationTrace: () => {
+        this.clearRankedRunTrace();
+      },
     });
     this.courseComposerController = new OverworldCourseComposerController({
       roomRepository: this.roomRepository,
@@ -730,6 +753,9 @@ export class OverworldPlayScene extends Phaser.Scene {
         playGoalFx: (effect, x, y, cue) => this.fxController?.playGoalFx(effect, x, y, cue),
         finalizeActiveCourseRun: (result) => {
           void this.coursePlaybackController.finalizeActiveCourseRun(result);
+        },
+        recordRankedGoalEvent: (event) => {
+          this.recordRankedGoalEvent(event);
         },
       },
       {
@@ -1639,6 +1665,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.movementController.syncLadderClimbSfx(movement.verticalInput);
     this.maybeRespawnFromVoid();
     this.roomTransitionController.maybeAdvancePlayerRoom();
+    this.recordRankedRunTraceFrame(delta, movement);
     this.playerPresentationController.syncPlayerVisual();
     this.syncLocalPresence();
     this.updateRoomLighting();
@@ -1775,6 +1802,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.combatController.reset();
     this.collectedObjectKeys = new Set();
     this.score = 0;
+    this.clearRankedRunTrace();
     this.goalRunController.reset();
     this.playerPresentationController.reset();
     this.browseOverlayController.destroy();
@@ -2510,18 +2538,142 @@ export class OverworldPlayScene extends Phaser.Scene {
     playSfx('respawn');
   }
 
-  private handleEnemyDefeated(roomId: string, enemyName: string): boolean {
-    return this.objectiveController.handleEnemyDefeated(roomId, enemyName);
+  private startRankedRunTrace(kind: 'room' | 'course', binding: RankedRunTraceBinding): void {
+    const initialFrame = this.getCurrentRankedRunTraceFrame();
+    this.rankedRunTraceRecorder.start(kind, binding, initialFrame);
   }
 
-  private handleCollectibleCollected(roomId: string): void {
-    this.objectiveController.handleCollectibleCollected(roomId);
+  private buildRankedRunVerificationTrace(
+    kind: 'room' | 'course',
+    elapsedMs: number,
+    _result: 'completed' | 'failed' | 'abandoned',
+  ): RankedRunVerificationTrace | null {
+    if (!this.rankedRunTraceRecorder.isActive(kind)) {
+      return null;
+    }
+
+    return this.rankedRunTraceRecorder.buildTrace(elapsedMs);
+  }
+
+  private clearRankedRunTrace(): void {
+    this.rankedRunTraceRecorder.clear();
+  }
+
+  private recordRankedRunTraceFrame(
+    delta: number,
+    movement: {
+      grounded: boolean;
+      horizontalInput: number;
+      verticalInput: number;
+      jumpPressed: boolean;
+    },
+  ): void {
+    const frame = this.getCurrentRankedRunTraceFrame(movement);
+    if (!frame) {
+      return;
+    }
+
+    this.rankedRunTraceRecorder.recordFrame(delta, frame);
+  }
+
+  private getCurrentRankedRunTraceFrame(
+    movement?: {
+      grounded: boolean;
+      horizontalInput: number;
+      verticalInput: number;
+      jumpPressed: boolean;
+    },
+  ): RankedRunTraceFrameInput | null {
+    if (!this.playerBody) {
+      return null;
+    }
+
+    const roomCoordinates = { ...this.currentRoomCoordinates };
+    const roomOrigin = this.getRoomOrigin(roomCoordinates);
+    return {
+      roomCoordinates,
+      x: this.playerBody.center.x - roomOrigin.x,
+      y: this.playerBody.bottom - roomOrigin.y,
+      vx: this.playerBody.velocity.x,
+      vy: this.playerBody.velocity.y,
+      grounded:
+        movement?.grounded ??
+        Boolean(this.playerBody.blocked.down || this.playerBody.touching.down),
+      horizontalInput: movement?.horizontalInput ?? 0,
+      verticalInput: movement?.verticalInput ?? 0,
+      jumpPressed: movement?.jumpPressed ?? false,
+    };
+  }
+
+  private recordRankedGoalEvent(event: {
+    type: 'collectible' | 'enemy' | 'checkpoint' | 'reach_exit' | 'finish' | 'complete';
+    roomId: string | null;
+    roomCoordinates: RoomCoordinates;
+    x: number;
+    y: number;
+    instanceId?: string | null;
+    checkpointIndex?: number | null;
+  }): void {
+    if (!this.rankedRunTraceRecorder.isActive()) {
+      return;
+    }
+
+    this.rankedRunTraceRecorder.recordGoalEvent({
+      type: event.type,
+      roomId: event.roomId,
+      roomX: event.roomCoordinates.x,
+      roomY: event.roomCoordinates.y,
+      x: event.x,
+      y: event.y,
+      instanceId: event.instanceId ?? null,
+      checkpointIndex: event.checkpointIndex ?? null,
+    });
+  }
+
+  private handleEnemyDefeated(event: {
+    roomId: string;
+    roomCoordinates: RoomCoordinates;
+    enemyName: string;
+    instanceId: string | null;
+    x: number;
+    y: number;
+  }): boolean {
+    this.recordRankedGoalEvent({
+      type: 'enemy',
+      roomId: event.roomId,
+      roomCoordinates: event.roomCoordinates,
+      x: event.x,
+      y: event.y,
+      instanceId: event.instanceId,
+      checkpointIndex: null,
+    });
+    return this.objectiveController.handleEnemyDefeated(event.roomId, event.enemyName);
+  }
+
+  private handleCollectibleCollected(event: {
+    roomId: string;
+    roomCoordinates: RoomCoordinates;
+    instanceId: string | null;
+    x: number;
+    y: number;
+  }): void {
+    this.recordRankedGoalEvent({
+      type: 'collectible',
+      roomId: event.roomId,
+      roomCoordinates: event.roomCoordinates,
+      x: event.x,
+      y: event.y,
+      instanceId: event.instanceId,
+      checkpointIndex: null,
+    });
+    this.objectiveController.handleCollectibleCollected(event.roomId);
   }
 
   private resetTransientPlayState(): void {
     this.collectedObjectKeys.clear();
     this.heldKeyCount = 0;
     this.score = 0;
+    this.clearRankedRunTrace();
     this.movementController.resetTransientPlayState();
     this.combatController.clearAttackAnimation();
     this.externalLaunchGraceUntil = 0;

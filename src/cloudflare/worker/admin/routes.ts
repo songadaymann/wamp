@@ -37,6 +37,10 @@ export async function handleAdminRequest(
     return handleAdminPlayfunLeaderboardCleanup(request, env);
   }
 
+  if (url.pathname === '/api/admin/run-verification/audit' && request.method === 'GET') {
+    return handleAdminRunVerificationAudit(request, url, env);
+  }
+
   if (url.pathname === '/api/admin/snapshot/reset' && request.method === 'POST') {
     return handleAdminSnapshotReset(request, env);
   }
@@ -234,6 +238,70 @@ async function handleAdminRoomClear(
     },
     affectedUsers: [...affectedUserIds],
   });
+}
+
+async function handleAdminRunVerificationAudit(
+  request: Request,
+  url: URL,
+  env: Env
+): Promise<Response> {
+  requireAdminRequest(env, request, 'read run verification audit');
+  const limitParam = Number(url.searchParams.get('limit') ?? 50);
+  const limit = Number.isFinite(limitParam)
+    ? Math.max(1, Math.min(200, Math.trunc(limitParam)))
+    : 50;
+
+  const result = await env.DB.prepare(
+    `
+      SELECT
+        id,
+        attempt_id,
+        run_kind,
+        status,
+        trigger_reason,
+        verification_reason,
+        summary_json,
+        trace_json,
+        created_at
+      FROM run_verification_audit
+      ORDER BY created_at DESC
+      LIMIT ?
+    `
+  )
+    .bind(limit)
+    .all<{
+      id: number;
+      attempt_id: string;
+      run_kind: 'room' | 'course';
+      status: 'passed' | 'failed' | 'timeout';
+      trigger_reason: string;
+      verification_reason: string | null;
+      summary_json: string | null;
+      trace_json: string | null;
+      created_at: string;
+    }>();
+
+  return jsonResponse(request, {
+    entries: result.results.map((row) => ({
+      id: row.id,
+      attemptId: row.attempt_id,
+      runKind: row.run_kind,
+      status: row.status,
+      triggerReason: row.trigger_reason,
+      verificationReason: row.verification_reason,
+      summary: row.summary_json ? safeJsonParse(row.summary_json) : null,
+      trace: row.trace_json ? safeJsonParse(row.trace_json) : null,
+      createdAt: row.created_at,
+    })),
+  });
+}
+
+function safeJsonParse(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
 }
 
 async function handleAdminLaunchStats(request: Request, env: Env): Promise<Response> {

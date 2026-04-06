@@ -1,6 +1,10 @@
 import { cloneRoomGoal, normalizeRoomGoal, type RoomGoal } from '../../../goals/roomGoals';
 import { cloneRoomSnapshot, roomIdFromCoordinates, type RoomRecord, type RoomSnapshot } from '../../../persistence/roomModel';
 import { computeRunScore, getLeaderboardRankingMode, sortCompletedRunsForLeaderboard } from '../../../runs/scoring';
+import {
+  RANKED_RUN_TRACE_SCHEMA_VERSION,
+  normalizeRankedRunVerificationTrace,
+} from '../../../runs/verificationTrace';
 import type {
   GlobalLeaderboardEntry,
   GlobalLeaderboardResponse,
@@ -57,6 +61,15 @@ import {
   resolveAggregatedRoomLeaderboardSelection,
   type AggregatedRoomLeaderboardSelection,
 } from './roomLeaderboardAggregation';
+import {
+  computeRoomSnapshotVerificationHash,
+  createRoomVerificationTrigger,
+  createRunVerificationNonce,
+  recordRunVerificationAudit,
+  requireVerificationTrace,
+  type RunVerificationFailureReason,
+  verifyRoomRunTrace,
+} from './verification';
 
 export async function handleRunStart(request: Request, env: Env): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
@@ -85,6 +98,8 @@ export async function handleRunStart(request: Request, env: Env): Promise<Respon
 
   const attemptId = crypto.randomUUID();
   const startedAt = new Date().toISOString();
+  const verificationNonce = createRunVerificationNonce();
+  const snapshotHash = await computeRoomSnapshotVerificationHash(snapshot);
 
   await env.DB.batch([
     env.DB.prepare(
@@ -107,9 +122,13 @@ export async function handleRunStart(request: Request, env: Env): Promise<Respon
           score,
           collectibles_collected,
           enemies_defeated,
-          checkpoints_reached
+          checkpoints_reached,
+          verification_status,
+          verification_reason,
+          verification_nonce,
+          verification_snapshot_hash
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'active', NULL, 0, 0, 0, 0, 0)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'active', NULL, 0, 0, 0, 0, 0, 'not_required', NULL, ?, ?)
       `
     ).bind(
       attemptId,
@@ -121,7 +140,9 @@ export async function handleRunStart(request: Request, env: Env): Promise<Respon
       JSON.stringify(canonicalGoal),
       auth.user.id,
       auth.user.displayName,
-      startedAt
+      startedAt,
+      verificationNonce,
+      snapshotHash
     ),
   ]);
 
@@ -133,6 +154,9 @@ export async function handleRunStart(request: Request, env: Env): Promise<Respon
     startedAt,
     userId: auth.user.id,
     userDisplayName: auth.user.displayName,
+    verificationSchemaVersion: RANKED_RUN_TRACE_SCHEMA_VERSION,
+    verificationNonce,
+    snapshotHash,
   };
 
   return jsonResponse(request, responseBody);
@@ -204,7 +228,131 @@ export async function handleRunFinish(
     ),
     finishedAt,
   };
-  const score = clampedBody.result === 'completed' ? computeRunScore(snapshot.goal, clampedBody) : 0;
+  const leaderboardSelection = resolveAggregatedRoomLeaderboardSelection(
+    roomRecord,
+    existing.roomVersion,
+  );
+  const provisionalScore =
+    clampedBody.result === 'completed' ? computeRunScore(snapshot.goal, clampedBody) : 0;
+  const currentTopRows =
+    clampedBody.result === 'completed'
+      ? await loadRankedRoomLeaderboardRows(
+          env,
+          snapshot.id,
+          leaderboardSelection.leaderboardFamilyVersions,
+          snapshot.goal,
+          10
+        )
+      : [];
+  const viewerBestRow =
+    clampedBody.result === 'completed'
+      ? await loadViewerRankedRoomLeaderboardRow(
+          env,
+          snapshot.id,
+          leaderboardSelection.leaderboardFamilyVersions,
+          snapshot.goal,
+          auth.user.id
+        )
+      : null;
+  const verificationTrigger =
+    clampedBody.result === 'completed'
+      ? createRoomVerificationTrigger(snapshot.goal, {
+          candidate: {
+            attemptId,
+            userId: auth.user.id,
+            elapsedMs: clampedBody.elapsedMs,
+            deaths: clampedBody.deaths,
+            score: provisionalScore,
+            finishedAt,
+          },
+          currentTopEntries: currentTopRows.map((row) => ({
+            attemptId: row.attempt_id,
+            userId: row.user_id,
+            elapsedMs: row.elapsed_ms,
+            deaths: row.deaths,
+            score: row.score,
+            finishedAt: row.finished_at,
+            overallRank: row.overall_rank === null ? null : Number(row.overall_rank),
+          })),
+          viewerEntry:
+            viewerBestRow === null
+              ? null
+              : {
+                  attemptId: viewerBestRow.attempt_id,
+                  userId: viewerBestRow.user_id,
+                  elapsedMs: viewerBestRow.elapsed_ms,
+                  deaths: viewerBestRow.deaths,
+                  score: viewerBestRow.score,
+                  finishedAt: viewerBestRow.finished_at,
+                  overallRank:
+                    viewerBestRow.overall_rank === null ? null : Number(viewerBestRow.overall_rank),
+                },
+        })
+      : null;
+
+  let finalBody = clampedBody;
+  let finalScore = provisionalScore;
+  let verificationStatus: 'not_required' | 'passed' | 'failed' | 'timeout' = 'not_required';
+  let verificationReason: RunVerificationFailureReason | null = null;
+  let verificationAudit:
+    | {
+        status: 'passed' | 'failed' | 'timeout';
+        reason: RunVerificationFailureReason | null;
+        summary: Record<string, unknown>;
+      }
+    | null = null;
+
+  if (verificationTrigger?.required) {
+    let verificationResult;
+    try {
+      verificationResult = await verifyRoomRunTrace({
+        trace: requireVerificationTrace(clampedBody.verificationTrace),
+        binding: {
+          verificationNonce: existing.verificationNonce ?? null,
+          verificationSnapshotHash: existing.verificationSnapshotHash ?? null,
+        },
+        room: snapshot,
+        elapsedMs: clampedBody.elapsedMs,
+      });
+    } catch (error) {
+      if (!(error instanceof HttpError)) {
+        throw error;
+      }
+      verificationResult = {
+        status: 'failed' as const,
+        reason: 'trace_client_outdated' as const,
+        derivedMetrics: {
+          collectiblesCollected: 0,
+          enemiesDefeated: 0,
+          checkpointsReached: 0,
+        },
+        summary: {
+          issue: 'missing_trace',
+        },
+      };
+    }
+
+    verificationStatus = verificationResult.status;
+    verificationReason = verificationResult.reason;
+    verificationAudit = {
+      status: verificationResult.status,
+      reason: verificationResult.reason,
+      summary: {
+        trigger: verificationTrigger,
+        verifier: verificationResult.summary,
+      },
+    };
+
+    if (verificationResult.status === 'passed') {
+      finalBody = {
+        ...clampedBody,
+        collectiblesCollected: verificationResult.derivedMetrics.collectiblesCollected,
+        enemiesDefeated: verificationResult.derivedMetrics.enemiesDefeated,
+        checkpointsReached: verificationResult.derivedMetrics.checkpointsReached,
+      };
+      finalScore = computeRunScore(snapshot.goal, finalBody);
+    }
+  }
 
   await env.DB.batch([
     env.DB.prepare(
@@ -218,21 +366,51 @@ export async function handleRunFinish(
           score = ?,
           collectibles_collected = ?,
           enemies_defeated = ?,
-          checkpoints_reached = ?
+          checkpoints_reached = ?,
+          verification_status = ?,
+          verification_reason = ?
         WHERE attempt_id = ?
       `
     ).bind(
       finishedAt,
-      clampedBody.result,
-      clampedBody.elapsedMs,
-      clampedBody.deaths,
-      score,
-      clampedBody.collectiblesCollected,
-      clampedBody.enemiesDefeated,
-      clampedBody.checkpointsReached,
+      finalBody.result,
+      finalBody.elapsedMs,
+      finalBody.deaths,
+      finalScore,
+      finalBody.collectiblesCollected,
+      finalBody.enemiesDefeated,
+      finalBody.checkpointsReached,
+      verificationStatus,
+      verificationReason,
       attemptId
     ),
   ]);
+
+  if (verificationTrigger?.required && verificationAudit) {
+    await recordRunVerificationAudit(env, {
+      attemptId,
+      kind: 'room',
+      status: verificationAudit.status,
+      triggerReason: verificationTrigger.reason ?? 'record_gap',
+      verificationReason: verificationAudit.reason,
+      summary: verificationAudit.summary,
+      trace: finalBody.verificationTrace ?? null,
+      createdAt: finishedAt,
+    });
+  }
+
+  if (verificationStatus === 'failed') {
+    throw new HttpError(
+      409,
+      verificationReason === 'trace_client_outdated'
+        ? 'Client update required for ranked verification.'
+        : 'Ranked run could not be verified.',
+    );
+  }
+
+  if (verificationStatus === 'timeout') {
+    throw new HttpError(409, 'Ranked run verification timed out.');
+  }
 
   const finalizedRun = await loadRoomRunByAttemptId(env, attemptId);
   if (!finalizedRun) {
@@ -477,6 +655,10 @@ export async function parseRunStartBody(request: Request): Promise<RunStartReque
 
 export async function parseRunFinishBody(request: Request): Promise<RunFinishRequestBody> {
   const body = await parseJsonBody<RunFinishRequestBody>(request);
+  const verificationTrace =
+    body.verificationTrace === undefined
+      ? null
+      : normalizeRankedRunVerificationTrace(body.verificationTrace);
 
   if (body.result !== 'completed' && body.result !== 'failed' && body.result !== 'abandoned') {
     throw new HttpError(400, 'result must be completed, failed, or abandoned.');
@@ -497,6 +679,7 @@ export async function parseRunFinishBody(request: Request): Promise<RunFinishReq
     ),
     score: null,
     finishedAt: normalizeIsoTimestamp(body.finishedAt),
+    verificationTrace,
   };
 }
 
@@ -553,7 +736,11 @@ export async function loadRoomRunByAttemptId(
         score,
         collectibles_collected,
         enemies_defeated,
-        checkpoints_reached
+        checkpoints_reached,
+        verification_status,
+        verification_reason,
+        verification_nonce,
+        verification_snapshot_hash
       FROM room_runs
       WHERE attempt_id = ?
       LIMIT 1
@@ -595,6 +782,7 @@ export async function loadCompletedRoomRuns(
       WHERE room_id = ?
         AND room_version = ?
         AND result = 'completed'
+        AND ${sqlIsVerificationAccepted('room_runs')}
         AND ${sqlUserIdIsNotPlayfunOnly('room_runs.user_id')}
     `
   )
@@ -638,6 +826,7 @@ export async function loadCompletedRoomRunsForVersions(
       WHERE room_id = ?
         AND room_version IN (${roomVersions.map(() => '?').join(', ')})
         AND result = 'completed'
+        AND ${sqlIsVerificationAccepted('room_runs')}
         AND ${sqlUserIdIsNotPlayfunOnly('room_runs.user_id')}
     `
   )
@@ -661,6 +850,10 @@ interface RankedRoomLeaderboardRow {
 
 interface RankedGlobalLeaderboardRow extends UserStatsRow {
   overall_rank: number | string | null;
+}
+
+function sqlIsVerificationAccepted(tableName: string): string {
+  return `COALESCE(${tableName}.verification_status, 'not_required') IN ('not_required', 'passed')`;
 }
 
 function getRoomLeaderboardSqlOrderClause(goal: RoomGoal): string {
@@ -697,6 +890,7 @@ function buildRankedRoomLeaderboardCte(goal: RoomGoal, versionCount: number): st
         AND result = 'completed'
         AND elapsed_ms IS NOT NULL
         AND finished_at IS NOT NULL
+        AND ${sqlIsVerificationAccepted('room_runs')}
         AND ${sqlUserIdIsNotPlayfunOnly('room_runs.user_id')}
     ),
     best_runs AS (
@@ -980,6 +1174,10 @@ export function mapRoomRunRow(row: RoomRunRow): RoomRunRecord {
     collectiblesCollected: row.collectibles_collected,
     enemiesDefeated: row.enemies_defeated,
     checkpointsReached: row.checkpoints_reached,
+    verificationStatus: row.verification_status ?? 'not_required',
+    verificationReason: row.verification_reason ?? null,
+    verificationNonce: row.verification_nonce ?? null,
+    verificationSnapshotHash: row.verification_snapshot_hash ?? null,
   };
 }
 
