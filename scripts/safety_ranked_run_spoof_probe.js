@@ -29,6 +29,9 @@ Use a published non-survival room/course if you want the verifier to trigger rel
   }
 
   function getApiBase() {
+    if (SAFETY_HOST_PATTERN.test(location.hostname)) {
+      return DEFAULT_SAFETY_API_BASE;
+    }
     const metaBase = document
       .querySelector('meta[name="ai-api-base"]')
       ?.getAttribute('content')
