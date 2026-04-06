@@ -39,19 +39,6 @@ Use a published non-survival room/course if you want the verifier to trigger rel
     return metaBase || DEFAULT_SAFETY_API_BASE;
   }
 
-  function getOverworldDebugState() {
-    if (typeof window.render_game_to_text !== 'function') {
-      throw new Error('render_game_to_text is not available on this build.');
-    }
-    const raw = window.render_game_to_text();
-    const parsed = JSON.parse(raw);
-    const activeScene = parsed?.activeScene ?? null;
-    if (!activeScene || activeScene.scene !== 'overworld-play') {
-      throw new Error('Open the overworld play scene on the safety preview first.');
-    }
-    return activeScene;
-  }
-
   function getSceneForCourseOnly() {
     const game = window.__EVERYBODYS_PLATFORMER_GAME__ ?? window.Phaser?.GAMES?.[0] ?? null;
     const scene = game?.scene?.keys?.OverworldPlayScene ?? null;
@@ -66,6 +53,20 @@ Use a published non-survival room/course if you want the verifier to trigger rel
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
+  }
+
+  function parseRoomId(roomId) {
+    const match = /^\s*(-?\d+)\s*,\s*(-?\d+)\s*$/.exec(String(roomId ?? ''));
+    if (!match) {
+      throw new Error(`Invalid roomId "${roomId}". Expected format "x,y".`);
+    }
+    return {
+      roomId: `${Number(match[1])},${Number(match[2])}`,
+      coordinates: {
+        x: Number(match[1]),
+        y: Number(match[2]),
+      },
+    };
   }
 
   async function requestJson(apiBase, path, body) {
@@ -92,6 +93,45 @@ Use a published non-survival room/course if you want the verifier to trigger rel
       data: parsed,
       raw,
     };
+  }
+
+  async function requestText(apiBase, path) {
+    const response = await fetch(`${apiBase}${path}`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    const raw = await response.text();
+    let parsed = null;
+    try {
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch {
+      parsed = raw;
+    }
+    return {
+      ok: response.ok,
+      status: response.status,
+      data: parsed,
+      raw,
+    };
+  }
+
+  async function loadPublishedRoom(apiBase, roomIdInput) {
+    const parsed = parseRoomId(roomIdInput);
+    const query = new URLSearchParams({
+      x: String(parsed.coordinates.x),
+      y: String(parsed.coordinates.y),
+    });
+    const result = await requestText(
+      apiBase,
+      `/api/rooms/${encodeURIComponent(parsed.roomId)}/published?${query.toString()}`
+    );
+    if (!result.ok) {
+      throw new Error(`Failed to load published room ${parsed.roomId}: ${result.status}`);
+    }
+    if (!result.data?.goal) {
+      throw new Error(`Room ${parsed.roomId} has no published goal.`);
+    }
+    return result.data;
   }
 
   function buildBadTrace(binding, coordinates, elapsedMs) {
@@ -215,20 +255,19 @@ Use a published non-survival room/course if you want the verifier to trigger rel
   }
 
   async function spoofCurrentRoomRun(options = {}) {
-    const debugState = getOverworldDebugState();
     const apiBase = getApiBase();
     ensureSafetyTarget(apiBase);
-
-    const goalRun = debugState.goalRun;
-    if (!goalRun || goalRun.roomStatus !== 'published' || !goalRun.goal) {
-      throw new Error('Stand in a published room with an active ranked goal first.');
+    if (!options.roomId) {
+      throw new Error('Pass a target room id, e.g. { roomId: "-3,-3" }.');
     }
 
+    const room = await loadPublishedRoom(apiBase, options.roomId);
+
     const startBody = {
-      roomId: goalRun.roomId,
-      roomCoordinates: clone(goalRun.roomCoordinates),
-      roomVersion: goalRun.roomVersion,
-      goal: clone(goalRun.goal),
+      roomId: room.id,
+      roomCoordinates: clone(room.coordinates),
+      roomVersion: room.version,
+      goal: clone(room.goal),
       startedAt: new Date().toISOString(),
     };
 
@@ -238,11 +277,24 @@ Use a published non-survival room/course if you want the verifier to trigger rel
       return start;
     }
 
-    const finishBody = buildRoomFinishBody(goalRun, start.data, {
-      elapsedMs: options.elapsedMs ?? 250,
-      scoreOverride: options.scoreOverride ?? null,
-      traceMode: options.traceMode ?? 'bad-trace',
-    });
+    const finishBody = buildRoomFinishBody(
+      {
+        goal: room.goal,
+        roomCoordinates: room.coordinates,
+        collectibleTarget:
+          room.goal?.type === 'collect_target' ? room.goal.requiredCount : null,
+        enemyTarget:
+          room.goal?.type === 'defeat_all' ? 999 : null,
+        checkpointTarget:
+          room.goal?.type === 'checkpoint_sprint' ? room.goal.checkpoints.length : null,
+      },
+      start.data,
+      {
+        elapsedMs: options.elapsedMs ?? 250,
+        scoreOverride: options.scoreOverride ?? null,
+        traceMode: options.traceMode ?? 'bad-trace',
+      }
+    );
 
     if ((options.traceMode ?? 'bad-trace') === 'none') {
       delete finishBody.verificationTrace;
@@ -256,8 +308,8 @@ Use a published non-survival room/course if you want the verifier to trigger rel
 
     const result = {
       kind: 'room',
-      roomId: goalRun.roomId,
-      roomVersion: goalRun.roomVersion,
+      roomId: room.id,
+      roomVersion: room.version,
       attemptId: start.data.attemptId,
       traceMode: options.traceMode ?? 'bad-trace',
       start,
@@ -332,7 +384,7 @@ Use a published non-survival room/course if you want the verifier to trigger rel
   console.log(
     'wampRankedRunSpoof ready.',
     'Use:',
-    "await wampRankedRunSpoof.spoofCurrentRoomRun({ traceMode: 'none', elapsedMs: 250 })",
-    "or await wampRankedRunSpoof.spoofCurrentRoomRun({ traceMode: 'bad-trace', elapsedMs: 250 })",
+    "await wampRankedRunSpoof.spoofCurrentRoomRun({ roomId: '-3,-3', traceMode: 'none', elapsedMs: 250 })",
+    "or await wampRankedRunSpoof.spoofCurrentRoomRun({ roomId: '-3,-3', traceMode: 'bad-trace', elapsedMs: 250 })",
   );
 })();
