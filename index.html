@@ -465,12 +465,25 @@
               <select id="editor-music-key-mode-select" class="editor-music-select"></select>
             </label>
           </div>
+          <div id="editor-music-phrase-name-row" class="editor-music-select-group hidden">
+            <label id="editor-music-phrase-name-label" class="editor-music-select-label" for="editor-music-phrase-name-input">Publish Name</label>
+            <div class="editor-music-phrase-name-input-wrap">
+              <input id="editor-music-phrase-name-input" class="goal-input" type="text" maxlength="24" placeholder="Auto numbering" />
+              <button
+                id="btn-editor-music-phrase-name-save"
+                class="bar-btn bar-btn-small editor-music-phrase-name-save"
+                type="button"
+                title="Save phrase"
+                aria-label="Save phrase"
+              >&#128190;</button>
+            </div>
+          </div>
           <div id="editor-music-library-panel" class="editor-music-workbench-card">
             <div class="editor-music-workbench-header">
               <div class="section-label">Phrase Library</div>
               <button id="btn-editor-music-library-refresh" class="bar-btn bar-btn-small" type="button">Refresh</button>
             </div>
-            <div id="editor-music-library-status" class="goal-context-note"></div>
+            <div id="editor-music-library-status" class="editor-music-status-note"></div>
             <div id="editor-music-library-list" class="editor-music-library-list"></div>
             <button id="btn-editor-music-library-more" class="bar-btn bar-btn-small hidden" type="button">Load More</button>
           </div>
@@ -730,6 +743,16 @@
               <div id="editor-music-octave-label" class="editor-music-octave-label">Octave +0</div>
               <button id="btn-editor-music-octave-up" class="bar-btn bar-btn-small" type="button">+</button>
             </div>
+            <div id="editor-music-tempo-controls" class="editor-music-control-cluster editor-music-tempo-controls">
+              <button id="btn-editor-music-tempo-down" class="bar-btn bar-btn-small" type="button">-</button>
+              <div id="editor-music-tempo-label" class="editor-music-tempo-label">Tempo 120</div>
+              <button id="btn-editor-music-tempo-up" class="bar-btn bar-btn-small" type="button">+</button>
+            </div>
+            <div id="editor-music-swing-controls" class="editor-music-control-cluster editor-music-swing-controls">
+              <button id="btn-editor-music-swing-down" class="bar-btn bar-btn-small" type="button">-</button>
+              <div id="editor-music-swing-label" class="editor-music-tempo-label">Swing 50%</div>
+              <button id="btn-editor-music-swing-up" class="bar-btn bar-btn-small" type="button">+</button>
+            </div>
           </div>
           <div id="editor-music-legacy-notice" class="editor-music-legacy-notice hidden">
             <div id="editor-music-legacy-text" class="editor-music-legacy-text">
@@ -742,9 +765,12 @@
           <div id="editor-music-arrangement-panel" class="editor-music-arrangement-overlay hidden">
             <div class="editor-music-arrangement-overlay-copy">
               <div class="section-label">Phrase Arrangement</div>
-              <div id="editor-music-arrangement-status" class="goal-context-note"></div>
+              <div id="editor-music-arrangement-status" class="editor-music-status-note"></div>
             </div>
-            <button id="btn-editor-music-arrangement-clear-slot" class="bar-btn bar-btn-small" type="button">Clear Slot</button>
+            <div class="editor-music-arrangement-actions">
+              <button id="btn-editor-music-arrangement-clear-slot" class="bar-btn bar-btn-small" type="button">Clear Slot</button>
+              <button id="btn-editor-music-arrangement-clear-all" class="bar-btn bar-btn-small" type="button">Clear All</button>
+            </div>
             <div id="editor-music-arrangement-grid" class="editor-music-arrangement-grid"></div>
           </div>
         </div>

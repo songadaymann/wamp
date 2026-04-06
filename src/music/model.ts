@@ -12,12 +12,16 @@ import {
 } from './key';
 import {
   cloneRoomPatternMusic,
+  cloneRoomPatternPhraseNameSuffixes,
   createDefaultRoomPatternMusic,
+  createEmptyRoomPatternPhraseNameSuffixes,
   findClosestPatternRowIndexForMidi,
   getRoomPatternBarDurationSec,
   getRoomPatternKey,
   getRoomPatternLoopDurationSec,
   isRoomPatternMusicEmpty,
+  normalizeRoomPatternBpm,
+  normalizeRoomPatternSwingPercent,
   normalizeRoomPatternMusic,
   type RoomPatternDrumRowDefinition,
   type RoomPatternDrumRowId,
@@ -27,6 +31,7 @@ import {
   type RoomPatternMusic,
   type RoomPatternPitchMode,
   type RoomPatternPlaybackSequence,
+  type RoomPatternPhraseNameSuffixes,
   type RoomPatternRowNote,
   type RoomPatternTonalInstrumentId,
 } from './pattern';
@@ -40,6 +45,9 @@ import {
   cloneRoomPhraseArrangementMusic,
   collectRoomPhraseArrangementPhraseIds,
   createDefaultRoomPhraseArrangementMusic,
+  getRoomPhraseArrangementActiveBarCount,
+  getRoomPhraseArrangementActiveSlotCount,
+  getRoomPhraseArrangementActiveStepCount,
   getRoomPhraseArrangementKey,
   isRoomPhraseArrangementEmpty,
   normalizeRoomPhraseArrangementMusic,
@@ -66,6 +74,13 @@ export {
   ROOM_PATTERN_BAR_COUNT,
   ROOM_PATTERN_BEATS_PER_BAR,
   ROOM_PATTERN_BPM,
+  ROOM_PATTERN_MAX_BPM,
+  ROOM_PATTERN_MIN_BPM,
+  ROOM_PATTERN_TEMPO_STEP,
+  ROOM_PATTERN_SWING_PERCENT,
+  ROOM_PATTERN_MAX_SWING_PERCENT,
+  ROOM_PATTERN_MIN_SWING_PERCENT,
+  ROOM_PATTERN_SWING_STEP,
   ROOM_PATTERN_INSTRUMENT_COLORS,
   ROOM_PATTERN_INSTRUMENT_ICONS,
   ROOM_PATTERN_DRUM_GRID_START_ROW,
@@ -83,10 +98,12 @@ export {
   ROOM_PATTERN_TONAL_INSTRUMENT_IDS,
   cloneRoomPatternDrumTrack,
   cloneRoomPatternMusic,
+  cloneRoomPatternPhraseNameSuffixes,
   cloneRoomPatternPhraseSources,
   cloneRoomPatternTonalSteps,
   createDefaultRoomPatternMusic,
   createEmptyRoomPatternDrumTrack,
+  createEmptyRoomPatternPhraseNameSuffixes,
   createEmptyRoomPatternPhraseSources,
   createEmptyRoomPatternTonalSteps,
   findClosestPatternRowIndexForMidi,
@@ -103,6 +120,8 @@ export {
   getRoomPatternLoopDurationSec,
   isPatternDrumGridRowPlayable,
   isRoomPatternMusicEmpty,
+  normalizeRoomPatternBpm,
+  normalizeRoomPatternSwingPercent,
   normalizeRoomPatternMusic,
   type RoomPatternDrumRowDefinition,
   type RoomPatternDrumRowId,
@@ -112,6 +131,7 @@ export {
   type RoomPatternMusic,
   type RoomPatternPitchMode,
   type RoomPatternPlaybackSequence,
+  type RoomPatternPhraseNameSuffixes,
   type RoomPatternRowNote,
   type RoomPatternTonalInstrumentId,
 } from './pattern';
@@ -125,6 +145,9 @@ export {
   cloneRoomPhraseArrangementMusic,
   collectRoomPhraseArrangementPhraseIds,
   createDefaultRoomPhraseArrangementMusic,
+  getRoomPhraseArrangementActiveBarCount,
+  getRoomPhraseArrangementActiveSlotCount,
+  getRoomPhraseArrangementActiveStepCount,
   getRoomPhraseArrangementKey,
   isRoomPhraseArrangementEmpty,
   normalizeRoomPhraseArrangementMusic,
@@ -443,7 +466,7 @@ export function getRoomMusicLoopDurationSec(music: RoomMusic | null | undefined)
   }
 
   if (music.kind === 'phraseArrangement') {
-    return (60 / music.bpm) * (music.stepCount / music.stepsPerBeat);
+    return (60 / music.bpm) * (getRoomPhraseArrangementActiveStepCount(music) / music.stepsPerBeat);
   }
 
   return getRoomMusicPack(music.packId)?.loopDurationSec ?? 0;

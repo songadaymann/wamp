@@ -7,10 +7,13 @@ import {
   ROOM_PATTERN_INSTRUMENT_IDS,
   ROOM_PATTERN_STEP_COUNT,
   ROOM_PATTERN_STEPS_PER_BEAT,
+  ROOM_PATTERN_SWING_PERCENT,
   ROOM_PATTERN_TONAL_INSTRUMENT_IDS,
   cloneRoomPatternInstrumentMix,
   createEmptyRoomPatternDrumTrack,
   createEmptyRoomPatternPhraseSources,
+  normalizeRoomPatternBpm,
+  normalizeRoomPatternSwingPercent,
   type RoomPatternInstrumentId,
   type RoomPatternInstrumentMix,
   type RoomPatternPitchMode,
@@ -45,6 +48,7 @@ export type RoomPhraseArrangementSlots = Record<RoomPatternInstrumentId, RoomPhr
 export interface RoomPhraseArrangementMusic {
   kind: 'phraseArrangement';
   bpm: number;
+  swingPercent: number;
   beatsPerBar: number;
   stepsPerBeat: number;
   stepCount: number;
@@ -73,6 +77,7 @@ export function createDefaultRoomPhraseArrangementMusic(): RoomPhraseArrangement
   return {
     kind: 'phraseArrangement',
     bpm: ROOM_PATTERN_BPM,
+    swingPercent: ROOM_PATTERN_SWING_PERCENT,
     beatsPerBar: ROOM_PATTERN_BEATS_PER_BAR,
     stepsPerBeat: ROOM_PATTERN_STEPS_PER_BEAT,
     stepCount: ROOM_PHRASE_ARRANGEMENT_STEP_COUNT,
@@ -124,7 +129,8 @@ export function cloneRoomPhraseArrangementMusic(
 
   return {
     kind: 'phraseArrangement',
-    bpm: ROOM_PATTERN_BPM,
+    bpm: normalizeRoomPatternBpm(value.bpm),
+    swingPercent: normalizeRoomPatternSwingPercent(value.swingPercent),
     beatsPerBar: ROOM_PATTERN_BEATS_PER_BAR,
     stepsPerBeat: ROOM_PATTERN_STEPS_PER_BEAT,
     stepCount: ROOM_PHRASE_ARRANGEMENT_STEP_COUNT,
@@ -165,6 +171,32 @@ export function isRoomPhraseArrangementEmpty(
     return true;
   }
 
+  const defaults = createDefaultRoomPhraseArrangementMusic();
+  if (
+    value.bpm !== defaults.bpm
+    || value.swingPercent !== defaults.swingPercent
+    || value.pitchMode !== defaults.pitchMode
+    || value.keyTonic !== defaults.keyTonic
+    || value.keyMode !== defaults.keyMode
+  ) {
+    return false;
+  }
+
+  for (const instrumentId of ROOM_PATTERN_TONAL_INSTRUMENT_IDS) {
+    if (value.octaveShift[instrumentId] !== defaults.octaveShift[instrumentId]) {
+      return false;
+    }
+  }
+
+  for (const instrumentId of ROOM_PATTERN_INSTRUMENT_IDS) {
+    if (
+      value.mix[instrumentId].volume !== defaults.mix[instrumentId].volume
+      || value.mix[instrumentId].pan !== defaults.mix[instrumentId].pan
+    ) {
+      return false;
+    }
+  }
+
   return ROOM_PATTERN_INSTRUMENT_IDS.every((instrumentId) =>
     value.slots[instrumentId].every((phraseId) => phraseId === null),
   );
@@ -175,6 +207,8 @@ export function getRoomPhraseArrangementKey(
 ): string {
   return [
     value.kind,
+    `bpm:${value.bpm}`,
+    `swing:${value.swingPercent}`,
     value.pitchMode,
     value.keyTonic,
     value.keyMode,
@@ -206,6 +240,37 @@ export function collectRoomPhraseArrangementPhraseIds(
     }
   }
   return [...phraseIds];
+}
+
+export function getRoomPhraseArrangementActiveSlotCount(
+  value: RoomPhraseArrangementMusic | null | undefined,
+): number {
+  if (!value) {
+    return 1;
+  }
+
+  let highestFilledSlotIndex = -1;
+  for (const instrumentId of ROOM_PATTERN_INSTRUMENT_IDS) {
+    for (let slotIndex = 0; slotIndex < value.slotCount; slotIndex += 1) {
+      if (value.slots[instrumentId][slotIndex] !== null) {
+        highestFilledSlotIndex = Math.max(highestFilledSlotIndex, slotIndex);
+      }
+    }
+  }
+
+  return highestFilledSlotIndex >= 0 ? highestFilledSlotIndex + 1 : 1;
+}
+
+export function getRoomPhraseArrangementActiveStepCount(
+  value: RoomPhraseArrangementMusic | null | undefined,
+): number {
+  return getRoomPhraseArrangementActiveSlotCount(value) * ROOM_PHRASE_ARRANGEMENT_SEGMENT_STEP_COUNT;
+}
+
+export function getRoomPhraseArrangementActiveBarCount(
+  value: RoomPhraseArrangementMusic | null | undefined,
+): number {
+  return getRoomPhraseArrangementActiveSlotCount(value) * ROOM_PHRASE_ARRANGEMENT_SEGMENT_BAR_COUNT;
 }
 
 function createDynamicTonalTrack(stepCount: number): { steps: (number | null)[]; ties: boolean[] } {
@@ -263,12 +328,16 @@ export function buildPlaybackSequenceFromPhraseArrangement(
   arrangement: RoomPhraseArrangementMusic,
   phraseById: ReadonlyMap<string, MusicPhraseRecord>,
 ): RoomPatternPlaybackSequence {
+  const activeSlotCount = getRoomPhraseArrangementActiveSlotCount(arrangement);
+  const activeStepCount = getRoomPhraseArrangementActiveStepCount(arrangement);
+  const activeBarCount = getRoomPhraseArrangementActiveBarCount(arrangement);
   const sequence: RoomPatternPlaybackSequence = {
     bpm: arrangement.bpm,
+    swingPercent: arrangement.swingPercent,
     beatsPerBar: arrangement.beatsPerBar,
     stepsPerBeat: arrangement.stepsPerBeat,
-    stepCount: arrangement.stepCount,
-    barCount: arrangement.barCount,
+    stepCount: activeStepCount,
+    barCount: activeBarCount,
     pitchMode: arrangement.pitchMode,
     keyTonic: arrangement.keyTonic,
     keyMode: arrangement.keyMode,
@@ -280,14 +349,14 @@ export function buildPlaybackSequenceFromPhraseArrangement(
     mix: cloneRoomPatternInstrumentMix(arrangement.mix),
     tabs: {
       drums: createEmptyRoomPatternDrumTrack(),
-      triangle: createDynamicTonalTrack(arrangement.stepCount),
-      saw: createDynamicTonalTrack(arrangement.stepCount),
-      square: createDynamicTonalTrack(arrangement.stepCount),
+      triangle: createDynamicTonalTrack(activeStepCount),
+      saw: createDynamicTonalTrack(activeStepCount),
+      square: createDynamicTonalTrack(activeStepCount),
     },
   };
 
   for (const instrumentId of ROOM_PATTERN_INSTRUMENT_IDS) {
-    for (let slotIndex = 0; slotIndex < arrangement.slotCount; slotIndex += 1) {
+    for (let slotIndex = 0; slotIndex < activeSlotCount; slotIndex += 1) {
       const phraseId = arrangement.slots[instrumentId][slotIndex] ?? null;
       if (!phraseId) {
         continue;

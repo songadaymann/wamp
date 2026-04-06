@@ -6,7 +6,6 @@ import {
   TILE_SIZE,
   colorNumberToCssHex,
   editorState,
-  getTilesetMusicInstrumentColor,
   getTilesetUiTheme,
 } from '../../config';
 import {
@@ -23,6 +22,7 @@ import {
   ROOM_PATTERN_TONAL_INSTRUMENT_IDS,
   cloneRoomMusic,
   createDefaultRoomPatternMusic,
+  getPatternInstrumentColor,
   getPatternDrumRowForGridRow,
   getPatternInstrumentLabel,
   getPatternRowLabel,
@@ -48,6 +48,7 @@ interface EditorMusicPatternHost {
   renderUi(): void;
   getMusicPlaybackDebugState(): Record<string, unknown>;
   getMusicPreviewState(): EditorMusicPreviewState;
+  previewPatternCell(pattern: RoomPatternMusic, instrumentId: RoomPatternInstrumentId, row: number): void;
 }
 
 interface MusicRect {
@@ -685,7 +686,7 @@ export class EditorMusicPatternController {
   }
 
   private getInstrumentColor(instrumentId: RoomPatternInstrumentId = this.activeInstrumentTab): number {
-    return getTilesetMusicInstrumentColor(editorState.selectedTilesetKey, instrumentId);
+    return getPatternInstrumentColor(instrumentId);
   }
 
   private drawBackdrop(): void {
@@ -1220,6 +1221,7 @@ export class EditorMusicPatternController {
 
       pattern.tabs.drums[drumRow.id] = steps;
       this.commitPattern(pattern);
+      this.host.previewPatternCell(pattern, this.activeInstrumentTab, row);
       this.lastAppliedCell = { step, row };
       return;
     }
@@ -1253,6 +1255,7 @@ export class EditorMusicPatternController {
     track.ties[step] = shouldTieFromPrevious;
     this.normalizeTonalTrackTies(track);
     this.commitPattern(pattern);
+    this.host.previewPatternCell(pattern, this.activeInstrumentTab, row);
     this.lastAppliedCell = { step, row };
   }
 

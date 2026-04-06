@@ -8,6 +8,7 @@ import {
   type MusicPhraseListResponse,
   type MusicPhrasePayload,
   type MusicPhraseRecord,
+  type MusicPhraseSaveResponse,
 } from '../../../music/library';
 import {
   normalizeRoomMusicKeyMode,
@@ -38,8 +39,10 @@ type MusicPhraseCursor = {
 };
 
 type LatestMusicPhraseSummary = {
+  id: string;
   ordinal: number;
   fingerprint: string;
+  label: string;
 } | null;
 
 const INSERT_MUSIC_PHRASE_BATCH_SQL = `
@@ -92,6 +95,21 @@ const INSERT_MUSIC_PHRASE_SOURCE_SQL = `
   )
   VALUES (?, ?, ?)
   ON CONFLICT(child_phrase_id, source_phrase_id) DO NOTHING
+`;
+
+const DELETE_MUSIC_PHRASE_SOURCES_SQL = `
+  DELETE FROM music_phrase_sources
+  WHERE child_phrase_id = ?
+`;
+
+const UPDATE_MUSIC_PHRASE_LABEL_SQL = `
+  UPDATE music_phrases
+  SET
+    label = ?,
+    payload_json = ?,
+    source_key_tonic = ?,
+    source_key_mode = ?
+  WHERE room_id = ? AND instrument_id = ? AND ordinal = ?
 `;
 
 function normalizeMusicPhraseInstrumentId(value: unknown): RoomPatternInstrumentId {
@@ -194,7 +212,7 @@ async function loadLatestMusicPhraseSummary(
 ): Promise<LatestMusicPhraseSummary> {
   const row = await env.DB.prepare(
     `
-      SELECT ordinal, fingerprint
+      SELECT id, ordinal, fingerprint, label
       FROM music_phrases
       WHERE room_id = ?
         AND instrument_id = ?
@@ -203,15 +221,224 @@ async function loadLatestMusicPhraseSummary(
     `,
   )
     .bind(roomId, instrumentId)
-    .first<{ ordinal: number | string | null; fingerprint: string | null }>();
+    .first<{ id: string | null; ordinal: number | string | null; fingerprint: string | null; label: string | null }>();
 
-  if (!row || typeof row.fingerprint !== 'string') {
+  if (!row || typeof row.id !== 'string' || typeof row.fingerprint !== 'string') {
     return null;
   }
 
   return {
+    id: row.id,
     ordinal: Math.max(0, Number(row.ordinal ?? 0)),
     fingerprint: row.fingerprint,
+    label: row.label?.trim() ?? '',
+  };
+}
+
+async function loadExistingMusicPhraseBatchId(
+  env: Env,
+  roomId: string,
+  roomVersion: number,
+): Promise<string | null> {
+  const row = await env.DB.prepare(
+    `
+      SELECT id
+      FROM music_phrase_batches
+      WHERE room_id = ?
+        AND room_version = ?
+      LIMIT 1
+    `,
+  )
+    .bind(roomId, roomVersion)
+    .first<{ id: string | null }>();
+
+  return row && typeof row.id === 'string' && row.id.trim() ? row.id : null;
+}
+
+function normalizeInstrumentIdFilter(
+  instrumentIds: readonly RoomPatternInstrumentId[] | null | undefined,
+): RoomPatternInstrumentId[] {
+  if (!instrumentIds || instrumentIds.length === 0) {
+    return [...ROOM_PATTERN_INSTRUMENT_IDS];
+  }
+
+  const allowed = new Set<RoomPatternInstrumentId>(ROOM_PATTERN_INSTRUMENT_IDS);
+  const seen = new Set<RoomPatternInstrumentId>();
+  for (const instrumentId of instrumentIds) {
+    if (allowed.has(instrumentId)) {
+      seen.add(instrumentId);
+    }
+  }
+
+  return ROOM_PATTERN_INSTRUMENT_IDS.filter((instrumentId) => seen.has(instrumentId));
+}
+
+export async function upsertMusicPhrasesForSnapshot(
+  env: Env,
+  snapshot: RoomSnapshot,
+  actor: MusicPhrasePublishActor,
+  options?: {
+    instrumentIds?: readonly RoomPatternInstrumentId[] | null;
+  },
+): Promise<MusicPhraseSaveResponse> {
+  if (!isPatternRoomMusic(snapshot.music)) {
+    return { items: [] };
+  }
+
+  const pattern = snapshot.music;
+  const createdAt = snapshot.updatedAt ?? new Date().toISOString();
+  const creatorDisplayName = actor.displayName.trim() || 'Guest';
+  const instrumentIds = normalizeInstrumentIdFilter(options?.instrumentIds);
+  const statements: D1PreparedStatement[] = [];
+  const savedPhraseIds: string[] = [];
+  let batchId = await loadExistingMusicPhraseBatchId(env, snapshot.id, snapshot.version);
+
+  for (const instrumentId of instrumentIds) {
+    const payload = extractMusicPhrasePayloadFromPattern(pattern, instrumentId);
+    if (!payload) {
+      continue;
+    }
+
+    const fingerprint = getMusicPhraseFingerprint(payload);
+    const latestPhrase = await loadLatestMusicPhraseSummary(env, snapshot.id, instrumentId);
+    const desiredOrdinal = latestPhrase && latestPhrase.fingerprint === fingerprint
+      ? latestPhrase.ordinal
+      : latestPhrase
+        ? latestPhrase.ordinal + 1
+        : 0;
+    const desiredLabel = createMusicPhraseLabel(
+      creatorDisplayName,
+      snapshot.title,
+      snapshot.coordinates,
+      instrumentId,
+      desiredOrdinal,
+      pattern.phraseNameSuffixes[instrumentId] ?? null,
+    );
+    const sourcePhraseIds = pattern.sourcePhraseIds[instrumentId];
+    const sourceKeyTonic = payload.kind === 'tonal' ? payload.keyTonic : null;
+    const sourceKeyMode = payload.kind === 'tonal' ? payload.keyMode : null;
+
+    if (latestPhrase && latestPhrase.fingerprint === fingerprint) {
+      statements.push(
+        env.DB.prepare(UPDATE_MUSIC_PHRASE_LABEL_SQL).bind(
+          desiredLabel,
+          JSON.stringify(payload),
+          sourceKeyTonic,
+          sourceKeyMode,
+          snapshot.id,
+          instrumentId,
+          latestPhrase.ordinal,
+        ),
+      );
+      statements.push(
+        env.DB.prepare(DELETE_MUSIC_PHRASE_SOURCES_SQL).bind(latestPhrase.id),
+      );
+      for (const sourcePhraseId of sourcePhraseIds) {
+        statements.push(
+          env.DB.prepare(INSERT_MUSIC_PHRASE_SOURCE_SQL).bind(
+            latestPhrase.id,
+            sourcePhraseId,
+            createdAt,
+          ),
+        );
+      }
+      savedPhraseIds.push(latestPhrase.id);
+      continue;
+    }
+
+    if (!batchId) {
+      batchId = crypto.randomUUID();
+      statements.push(
+        env.DB.prepare(INSERT_MUSIC_PHRASE_BATCH_SQL).bind(
+          batchId,
+          snapshot.id,
+          snapshot.version,
+          snapshot.title,
+          snapshot.coordinates.x,
+          snapshot.coordinates.y,
+          actor.userId,
+          actor.principalKind,
+          actor.agentId,
+          creatorDisplayName,
+          createdAt,
+        ),
+      );
+    }
+
+    const phraseId = crypto.randomUUID();
+    const phrase = cloneMusicPhraseRecord({
+      id: phraseId,
+      batchId,
+      roomId: snapshot.id,
+      roomVersion: snapshot.version,
+      roomTitle: snapshot.title,
+      roomX: snapshot.coordinates.x,
+      roomY: snapshot.coordinates.y,
+      creatorUserId: actor.userId,
+      creatorPrincipalKind: actor.principalKind,
+      creatorAgentId: actor.agentId,
+      creatorDisplayName,
+      instrumentId,
+      ordinal: desiredOrdinal,
+      label: desiredLabel,
+      fingerprint,
+      payload,
+      sourceKeyTonic,
+      sourceKeyMode,
+      sourcePhraseIds,
+      createdAt,
+    });
+
+    if (!phrase) {
+      throw new HttpError(500, 'Failed to save music phrase.');
+    }
+
+    statements.push(
+      env.DB.prepare(INSERT_MUSIC_PHRASE_SQL).bind(
+        phrase.id,
+        phrase.batchId,
+        phrase.roomId,
+        phrase.roomVersion,
+        phrase.roomTitle,
+        phrase.roomX,
+        phrase.roomY,
+        phrase.creatorUserId,
+        phrase.creatorPrincipalKind,
+        phrase.creatorAgentId,
+        phrase.creatorDisplayName,
+        phrase.instrumentId,
+        phrase.ordinal,
+        phrase.label,
+        phrase.fingerprint,
+        JSON.stringify(phrase.payload),
+        phrase.sourceKeyTonic,
+        phrase.sourceKeyMode,
+        phrase.createdAt,
+      ),
+    );
+
+    for (const sourcePhraseId of phrase.sourcePhraseIds) {
+      statements.push(
+        env.DB.prepare(INSERT_MUSIC_PHRASE_SOURCE_SQL).bind(
+          phrase.id,
+          sourcePhraseId,
+          createdAt,
+        ),
+      );
+    }
+
+    savedPhraseIds.push(phrase.id);
+  }
+
+  if (statements.length === 0) {
+    return { items: [] };
+  }
+
+  await env.DB.batch(statements);
+
+  const savedPhrases = await Promise.all(savedPhraseIds.map((phraseId) => loadMusicPhrase(env, phraseId)));
+  return {
+    items: savedPhrases.filter((phrase): phrase is MusicPhraseRecord => phrase !== null),
   };
 }
 
@@ -238,7 +465,31 @@ export async function prepareMusicPhrasePublishStatements(
 
     const fingerprint = getMusicPhraseFingerprint(payload);
     const latestPhrase = await loadLatestMusicPhraseSummary(env, published.id, instrumentId);
+    const desiredOrdinal = latestPhrase && latestPhrase.fingerprint === fingerprint
+      ? latestPhrase.ordinal
+      : latestPhrase
+        ? latestPhrase.ordinal + 1
+        : 0;
+    const desiredLabel = createMusicPhraseLabel(
+      creatorDisplayName,
+      published.title,
+      published.coordinates,
+      instrumentId,
+      desiredOrdinal,
+      pattern.phraseNameSuffixes[instrumentId] ?? null,
+    );
     if (latestPhrase && latestPhrase.fingerprint === fingerprint) {
+      statements.push(
+        env.DB.prepare(UPDATE_MUSIC_PHRASE_LABEL_SQL).bind(
+          desiredLabel,
+          JSON.stringify(payload),
+          payload.kind === 'tonal' ? payload.keyTonic : null,
+          payload.kind === 'tonal' ? payload.keyMode : null,
+          published.id,
+          instrumentId,
+          latestPhrase.ordinal,
+        ),
+      );
       continue;
     }
 
@@ -261,7 +512,7 @@ export async function prepareMusicPhrasePublishStatements(
       );
     }
 
-    const ordinal = latestPhrase ? latestPhrase.ordinal + 1 : 0;
+    const ordinal = desiredOrdinal;
     const sourcePhraseIds = pattern.sourcePhraseIds[instrumentId];
     const sourceKeyTonic = payload.kind === 'tonal' ? payload.keyTonic : null;
     const sourceKeyMode = payload.kind === 'tonal' ? payload.keyMode : null;
@@ -280,13 +531,7 @@ export async function prepareMusicPhrasePublishStatements(
       creatorDisplayName,
       instrumentId,
       ordinal,
-      label: createMusicPhraseLabel(
-        creatorDisplayName,
-        published.title,
-        published.coordinates,
-        instrumentId,
-        ordinal,
-      ),
+      label: desiredLabel,
       fingerprint,
       payload,
       sourceKeyTonic,

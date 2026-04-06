@@ -46,7 +46,6 @@ import {
 import {
   cloneRoomMusic,
   createDefaultRoomPatternMusic,
-  getRoomMusicKey,
   isRoomMusicEmpty,
   type RoomMusic,
 } from '../../music/model';
@@ -1659,7 +1658,7 @@ export class EditorEditRuntime {
   }
 
   private roomMusicChanged(previous: RoomMusic | null, next: RoomMusic | null): boolean {
-    return getRoomMusicKey(previous) !== getRoomMusicKey(next);
+    return JSON.stringify(cloneRoomMusic(previous)) !== JSON.stringify(cloneRoomMusic(next));
   }
 
   private placeSpawnPoint(tileX: number, tileY: number): void {

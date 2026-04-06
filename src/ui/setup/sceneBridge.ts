@@ -114,6 +114,13 @@ export interface EditorSceneBridge {
   setRoomMusicKeyTonic?: (tonic: RoomMusicKeyTonic) => void;
   setRoomMusicKeyMode?: (mode: RoomMusicKeyMode) => void;
   shiftRoomMusicOctave?: (delta: number) => void;
+  shiftRoomMusicTempo?: (delta: number) => void;
+  shiftRoomMusicSwing?: (delta: number) => void;
+  setRoomMusicPhraseNameSuffix?: (value: string) => void;
+  saveRoomMusicDraftAndPhrases?: (
+    options?: { instrumentId?: RoomPatternInstrumentId | null }
+  ) => Promise<RoomRecord | null>;
+  saveActiveRoomMusicPhrase?: () => Promise<RoomRecord | null>;
   replaceLegacyRoomMusicWithPattern?: () => void;
   toggleRoomMusicPreview?: () => void;
   refreshMusicPhraseLibrary?: () => void;
@@ -126,6 +133,7 @@ export interface EditorSceneBridge {
   ) => Promise<void> | void;
   selectArrangementSlot?: (instrumentId: RoomPatternInstrumentId, slotIndex: number) => void;
   clearSelectedArrangementSlot?: () => void;
+  clearAllArrangementSlots?: () => void;
   undoAction?: () => void;
   redoAction?: () => void;
 }

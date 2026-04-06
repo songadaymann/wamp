@@ -36,6 +36,9 @@ export type SfxCue =
   | 'goal-checkpoint'
   | 'goal-success'
   | 'goal-fail'
+  | 'music-slot-clear'
+  | 'music-slot-clear-all'
+  | 'music-phrase-place'
   | 'challenge-abandon'
   | 'time-up'
   | 'bounce'
@@ -151,6 +154,24 @@ const SFX_CUES: Record<SfxCue, CueConfig> = {
     path: 'assets/sfx/goals/goal-checkpoint.wav',
     volume: 0.5,
     cooldownMs: 60,
+  },
+  'music-slot-clear': {
+    path: 'assets/sfx/music-editor/clear-slot.wav',
+    volume: 0.42,
+    playbackRate: 1.04,
+    cooldownMs: 40,
+  },
+  'music-slot-clear-all': {
+    path: 'assets/sfx/music-editor/clear-all-slots.wav',
+    volume: 0.5,
+    playbackRate: 0.98,
+    cooldownMs: 55,
+  },
+  'music-phrase-place': {
+    path: 'assets/sfx/music-editor/place-phrase.wav',
+    volume: 0.34,
+    playbackRate: 1.02,
+    cooldownMs: 35,
   },
   'goal-success': {
     path: 'assets/sfx/goals/goal-success.wav',

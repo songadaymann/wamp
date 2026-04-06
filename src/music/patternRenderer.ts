@@ -1,5 +1,6 @@
 import { getPatternDrumSamples } from './patternKit';
 import {
+  ROOM_PATTERN_SWING_PERCENT,
   ROOM_PATTERN_DRUM_ROWS,
   ROOM_PATTERN_TONAL_INSTRUMENT_IDS,
   getPatternRowNote,
@@ -95,7 +96,8 @@ function renderTonalTrack(
   pattern: RoomPatternPlaybackSequence,
   instrumentId: RoomPatternTonalInstrumentId,
   sampleRate: number,
-  stepDurationSec: number,
+  stepStartTimesSec: readonly number[],
+  loopDurationSec: number,
 ): void {
   const settings = TONAL_RENDER_SETTINGS[instrumentId];
   const track = pattern.tabs[instrumentId];
@@ -133,8 +135,11 @@ function renderTonalTrack(
       continue;
     }
 
-    const startSample = Math.max(0, Math.round(stepIndex * stepDurationSec * sampleRate));
-    const noteSamples = Math.max(1, Math.round((endStepIndex - stepIndex) * stepDurationSec * sampleRate));
+    const startSample = Math.max(0, Math.round(stepStartTimesSec[stepIndex] * sampleRate));
+    const noteEndTimeSec = endStepIndex < pattern.stepCount
+      ? stepStartTimesSec[endStepIndex]
+      : loopDurationSec;
+    const noteSamples = Math.max(1, Math.round((noteEndTimeSec - stepStartTimesSec[stepIndex]) * sampleRate));
     const totalSamples = Math.min(target.length - startSample, noteSamples + releaseSamples);
     if (totalSamples <= 0) {
       break;
@@ -173,13 +178,14 @@ function applySoftDrive(
   }
 }
 
-function renderDrumTrack(
+async function renderDrumTrack(
   target: Float32Array,
+  audioContext: AudioContext,
   pattern: RoomPatternPlaybackSequence,
-  sampleRate: number,
-  stepDurationSec: number,
-): void {
-  const drumSamples = getPatternDrumSamples(sampleRate);
+  stepStartTimesSec: readonly number[],
+): Promise<void> {
+  const sampleRate = audioContext.sampleRate;
+  const drumSamples = await getPatternDrumSamples(audioContext);
   for (const row of ROOM_PATTERN_DRUM_ROWS) {
     const sample = drumSamples.get(row.id);
     if (!sample) {
@@ -187,13 +193,48 @@ function renderDrumTrack(
     }
 
     for (const stepIndex of pattern.tabs.drums[row.id]) {
-      const startSample = Math.max(0, Math.round(stepIndex * stepDurationSec * sampleRate));
+      const startSample = Math.max(0, Math.round(stepStartTimesSec[stepIndex] * sampleRate));
       const copyLength = Math.min(sample.length, target.length - startSample);
       for (let sampleIndex = 0; sampleIndex < copyLength; sampleIndex += 1) {
         target[startSample + sampleIndex] += sample[sampleIndex] * row.defaultGain;
       }
     }
   }
+}
+
+function getStepTimingSec(
+  pattern: Pick<RoomPatternPlaybackSequence, 'stepCount' | 'bpm' | 'stepsPerBeat'> & { swingPercent?: number },
+): { startTimesSec: number[]; durationsSec: number[] } {
+  const loopDurationSec = getRoomPatternLoopDurationSec(pattern);
+  const baseStepDurationSec = loopDurationSec / pattern.stepCount;
+  const startTimesSec = Array.from({ length: pattern.stepCount }, () => 0);
+  const durationsSec = Array.from({ length: pattern.stepCount }, () => baseStepDurationSec);
+  const swingRatio = Math.max(0.5, Math.min(0.95, (pattern.swingPercent ?? ROOM_PATTERN_SWING_PERCENT) / 100));
+
+  let stepIndex = 0;
+  let currentTimeSec = 0;
+  while (stepIndex < pattern.stepCount) {
+    if (stepIndex + 1 >= pattern.stepCount) {
+      startTimesSec[stepIndex] = currentTimeSec;
+      durationsSec[stepIndex] = baseStepDurationSec;
+      currentTimeSec += baseStepDurationSec;
+      stepIndex += 1;
+      continue;
+    }
+
+    const pairDurationSec = baseStepDurationSec * 2;
+    const firstStepDurationSec = pairDurationSec * swingRatio;
+    const secondStepDurationSec = pairDurationSec - firstStepDurationSec;
+    startTimesSec[stepIndex] = currentTimeSec;
+    durationsSec[stepIndex] = firstStepDurationSec;
+    currentTimeSec += firstStepDurationSec;
+    startTimesSec[stepIndex + 1] = currentTimeSec;
+    durationsSec[stepIndex + 1] = secondStepDurationSec;
+    currentTimeSec += secondStepDurationSec;
+    stepIndex += 2;
+  }
+
+  return { startTimesSec, durationsSec };
 }
 
 function finalizeBuffer(target: Float32Array): void {
@@ -228,20 +269,27 @@ function mixMonoTrackIntoStereo(
   }
 }
 
-export function renderRoomPatternLoopBuffer(
+export async function renderRoomPatternLoopBuffer(
   audioContext: AudioContext,
   pattern: RoomPatternPlaybackSequence,
-): AudioBuffer {
+): Promise<AudioBuffer> {
   const sampleRate = audioContext.sampleRate;
   const loopDurationSec = getRoomPatternLoopDurationSec(pattern);
   const totalSamples = Math.max(1, Math.round(loopDurationSec * sampleRate));
-  const stepDurationSec = loopDurationSec / pattern.stepCount;
+  const { startTimesSec } = getStepTimingSec(pattern);
   const leftMixdown = new Float32Array(totalSamples);
   const rightMixdown = new Float32Array(totalSamples);
 
   for (const instrumentId of ROOM_PATTERN_TONAL_INSTRUMENT_IDS) {
     const instrumentMixdown = new Float32Array(totalSamples);
-    renderTonalTrack(instrumentMixdown, pattern, instrumentId, sampleRate, stepDurationSec);
+    renderTonalTrack(
+      instrumentMixdown,
+      pattern,
+      instrumentId,
+      sampleRate,
+      startTimesSec,
+      loopDurationSec,
+    );
     if (instrumentId === 'triangle') {
       applySoftDrive(instrumentMixdown, 1.75, 1.08);
     }
@@ -257,7 +305,7 @@ export function renderRoomPatternLoopBuffer(
   }
 
   const drumMixdown = new Float32Array(totalSamples);
-  renderDrumTrack(drumMixdown, pattern, sampleRate, stepDurationSec);
+  await renderDrumTrack(drumMixdown, audioContext, pattern, startTimesSec);
   applySoftDrive(drumMixdown, 2.1, 1.06);
   const drumMix = pattern.mix.drums;
   mixMonoTrackIntoStereo(

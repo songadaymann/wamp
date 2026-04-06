@@ -26,6 +26,15 @@ import {
   buildPlaybackSequenceFromPhraseArrangement,
   collectRoomPhraseArrangementPhraseIds,
 } from './phraseArrangement';
+import { getPatternDrumSamples } from './patternKit';
+import {
+  getPatternDrumRowForGridRow,
+  getPatternRowNote,
+  type RoomPatternDrumRowId,
+  type RoomPatternInstrumentId,
+  type RoomPatternMusic,
+  type RoomPatternTonalInstrumentId,
+} from './pattern';
 
 type TransitionMode = 'immediate' | 'bar';
 type PlaybackMode = 'idle' | 'editor-preview' | 'world-play';
@@ -44,6 +53,10 @@ type PreviewClipPlayback = {
   clipId: string;
   source: AudioBufferSourceNode;
   gain: GainNode;
+};
+
+type OneShotPlayback = {
+  stop: () => void;
 };
 
 const IMMEDIATE_FADE_DURATION_SEC = 0.12;
@@ -65,6 +78,7 @@ export class RoomMusicController {
   private activeLanes = new Map<RoomMusicLaneId, ActiveLoopPlayback>();
   private activePattern: ActiveLoopPlayback | null = null;
   private previewClipPlayback: PreviewClipPlayback | null = null;
+  private readonly oneShotPlaybacks = new Set<OneShotPlayback>();
   private readonly bufferPromises = new Map<string, Promise<AudioBuffer>>();
   private readonly laneLoopBufferPromises = new Map<string, Promise<AudioBuffer>>();
   private readonly patternLoopBufferPromises = new Map<string, Promise<AudioBuffer>>();
@@ -234,6 +248,176 @@ export class RoomMusicController {
     this.previewClipPlayback = null;
   }
 
+  previewPatternCell(
+    pattern: RoomPatternMusic,
+    instrumentId: RoomPatternInstrumentId,
+    row: number,
+  ): void {
+    this.init();
+    const audioContext = this.getAudioContext();
+    const masterGain = this.ensureMasterGain(audioContext);
+    if (!audioContext || !masterGain) {
+      return;
+    }
+
+    if (instrumentId === 'drums') {
+      const drumRow = getPatternDrumRowForGridRow(row);
+      if (!drumRow) {
+        return;
+      }
+
+      void this.previewDrumPatternCell(
+        audioContext,
+        masterGain,
+        pattern,
+        drumRow.id,
+        drumRow.defaultGain,
+      );
+      return;
+    }
+
+    const note = getPatternRowNote(
+      instrumentId as RoomPatternTonalInstrumentId,
+      row,
+      pattern.pitchMode,
+      pattern.octaveShift[instrumentId as RoomPatternTonalInstrumentId],
+      pattern.keyTonic,
+      pattern.keyMode,
+    );
+    if (!note) {
+      return;
+    }
+
+    const waveform =
+      instrumentId === 'triangle'
+        ? 'triangle'
+        : instrumentId === 'saw'
+          ? 'sawtooth'
+          : 'square';
+    const now = audioContext.currentTime + 0.005;
+    const osc = audioContext.createOscillator();
+    osc.type = waveform;
+    osc.frequency.setValueAtTime(note.frequencyHz, now);
+
+    const gain = audioContext.createGain();
+    const mix = pattern.mix[instrumentId as RoomPatternTonalInstrumentId];
+    const previewGain =
+      instrumentId === 'triangle'
+        ? 0.18
+        : instrumentId === 'saw'
+          ? 0.14
+          : 0.12;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(Math.max(0.02, mix.volume * previewGain), now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+
+    let outputNode: AudioNode = gain;
+    if (typeof audioContext.createStereoPanner === 'function') {
+      const panner = audioContext.createStereoPanner();
+      panner.pan.setValueAtTime(mix.pan, now);
+      gain.connect(panner);
+      panner.connect(masterGain);
+      outputNode = panner;
+    } else {
+      gain.connect(masterGain);
+    }
+
+    osc.connect(gain);
+    osc.start(now);
+    osc.stop(now + 0.2);
+
+    const oneShot: OneShotPlayback = {
+      stop: () => {
+        try {
+          osc.stop();
+        } catch {
+          void 0;
+        }
+      },
+    };
+    this.oneShotPlaybacks.add(oneShot);
+    osc.addEventListener(
+      'ended',
+      () => {
+        this.oneShotPlaybacks.delete(oneShot);
+        try {
+          osc.disconnect();
+        } catch {
+          void 0;
+        }
+        try {
+          gain.disconnect();
+        } catch {
+          void 0;
+        }
+        if (outputNode !== gain) {
+          try {
+            outputNode.disconnect();
+          } catch {
+            void 0;
+          }
+        }
+      },
+      { once: true },
+    );
+    void this.resumeAudioContext();
+  }
+
+  private async previewDrumPatternCell(
+    audioContext: AudioContext,
+    masterGain: GainNode,
+    pattern: RoomPatternMusic,
+    rowId: RoomPatternDrumRowId,
+    defaultGain: number,
+  ): Promise<void> {
+    const sample = (await getPatternDrumSamples(audioContext)).get(rowId);
+    if (!sample) {
+      return;
+    }
+
+    const buffer = audioContext.createBuffer(1, sample.length, audioContext.sampleRate);
+    buffer.getChannelData(0).set(sample);
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+
+    const gain = audioContext.createGain();
+    const mix = pattern.mix.drums;
+    gain.gain.setValueAtTime(Math.max(0.04, mix.volume * defaultGain * 0.52), audioContext.currentTime);
+
+    source.connect(gain);
+    gain.connect(masterGain);
+    source.start(audioContext.currentTime + 0.005);
+
+    const oneShot: OneShotPlayback = {
+      stop: () => {
+        try {
+          source.stop();
+        } catch {
+          void 0;
+        }
+      },
+    };
+    this.oneShotPlaybacks.add(oneShot);
+    source.addEventListener(
+      'ended',
+      () => {
+        this.oneShotPlaybacks.delete(oneShot);
+        try {
+          source.disconnect();
+        } catch {
+          void 0;
+        }
+        try {
+          gain.disconnect();
+        } catch {
+          void 0;
+        }
+      },
+      { once: true },
+    );
+    void this.resumeAudioContext();
+  }
+
   getDebugState(): Record<string, unknown> {
     const currentTime = this.audioContext?.currentTime ?? 0;
     return {
@@ -242,6 +426,7 @@ export class RoomMusicController {
       mode: this.mode,
       transportStartTime: this.transportStartTime,
       audioCurrentTime: Number(currentTime.toFixed(3)),
+      oneShotCount: this.oneShotPlaybacks.size,
       activeLanes: Array.from(this.activeLanes.entries()).map(([laneId, playback]) => ({
         laneId,
         playbackId: playback.playbackId,

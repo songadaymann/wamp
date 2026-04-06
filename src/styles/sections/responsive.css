@@ -592,11 +592,13 @@ body[data-device-class='phone'][data-app-mode='editor'] .editor-music-shell {
   width: calc(100% - 8px);
   padding: 8px 10px 10px;
   gap: 8px;
-  border-radius: 10px;
+  border-radius: 4px;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] .editor-music-strip {
   gap: 8px;
+  flex-wrap: wrap;
+  overflow-x: visible;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] .editor-music-tab-dock {
@@ -642,6 +644,12 @@ body[data-device-class='phone'][data-app-mode='editor'] #goal-section {
 body[data-device-class='phone'][data-app-mode='editor'] .editor-music-key-grid,
 body[data-device-class='phone'][data-app-mode='editor'] .editor-music-arrangement-row {
   grid-template-columns: 1fr;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-arrangement-cells {
+  grid-template-columns: repeat(8, 48px);
+  overflow-x: auto;
+  padding-bottom: 2px;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] .editor-music-arrangement-overlay .bar-btn {

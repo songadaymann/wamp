@@ -1,9 +1,11 @@
 import { getApiBaseUrl } from '../api/baseUrl';
+import type { RoomSnapshot } from '../persistence/roomModel';
 import type { RoomPatternInstrumentId } from './pattern';
 import {
   cloneMusicPhraseRecord,
   type MusicPhraseListResponse,
   type MusicPhraseRecord,
+  type MusicPhraseSaveResponse,
 } from './library';
 
 type ListMusicPhrasesOptions = {
@@ -95,4 +97,34 @@ export async function loadMusicPhrasesById(
   const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
   const phrases = await Promise.all(uniqueIds.map((id) => getMusicPhrase(id)));
   return new Map(phrases.map((phrase) => [phrase.id, phrase]));
+}
+
+export async function saveMusicPhrases(
+  snapshot: RoomSnapshot,
+  options?: { instrumentId?: RoomPatternInstrumentId | null },
+): Promise<MusicPhraseSaveResponse> {
+  const searchParams = new URLSearchParams();
+  if (options?.instrumentId) {
+    searchParams.set('instrument', options.instrumentId);
+  }
+  searchParams.set('_ts', String(Date.now()));
+  const path = `/api/rooms/${encodeURIComponent(snapshot.id)}/music/phrases?${searchParams.toString()}`;
+  const response = await fetch(getMusicApiUrl(path), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify(snapshot),
+  });
+  const payload = await parseJsonResponse<MusicPhraseSaveResponse>(response);
+  const items = payload.items
+    .map((item) => cloneMusicPhraseRecord(item))
+    .filter((item): item is MusicPhraseRecord => item !== null);
+
+  for (const item of items) {
+    phrasePromiseCache.set(item.id, Promise.resolve(item));
+  }
+
+  return { items };
 }

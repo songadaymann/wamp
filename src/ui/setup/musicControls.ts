@@ -5,6 +5,8 @@ import type {
   RoomPatternInstrumentId,
   RoomPatternPitchMode,
 } from '../../music/model';
+import { isCoarsePointerDevice } from '../deviceLayout';
+import { syncGameKeyboardFocus } from '../keyboardFocus';
 import { withActiveEditorScene } from './sceneBridge';
 
 function withInstrumentId(
@@ -85,15 +87,65 @@ export function setupRoomMusicControls(
   const publishButton = doc.getElementById('btn-editor-music-publish') as HTMLButtonElement | null;
   const octaveDownButton = doc.getElementById('btn-editor-music-octave-down');
   const octaveUpButton = doc.getElementById('btn-editor-music-octave-up');
+  const tempoDownButton = doc.getElementById('btn-editor-music-tempo-down');
+  const tempoUpButton = doc.getElementById('btn-editor-music-tempo-up');
+  const swingDownButton = doc.getElementById('btn-editor-music-swing-down');
+  const swingUpButton = doc.getElementById('btn-editor-music-swing-up');
   const replaceLegacyButton = doc.getElementById('btn-editor-music-replace-legacy');
   const keyTonicSelect = doc.getElementById('editor-music-key-tonic-select') as HTMLSelectElement | null;
   const keyModeSelect = doc.getElementById('editor-music-key-mode-select') as HTMLSelectElement | null;
+  const phraseNameInput = doc.getElementById('editor-music-phrase-name-input') as HTMLInputElement | null;
+  const phraseNameSaveButton = doc.getElementById('btn-editor-music-phrase-name-save');
   const libraryRefreshButton = doc.getElementById('btn-editor-music-library-refresh');
   const libraryMoreButton = doc.getElementById('btn-editor-music-library-more');
   const arrangementClearButton = doc.getElementById('btn-editor-music-arrangement-clear-slot');
+  const arrangementClearAllButton = doc.getElementById('btn-editor-music-arrangement-clear-all');
   let draggedPhraseId: string | null = null;
   let draggedPhraseButton: HTMLElement | null = null;
   let activeDropTarget: HTMLElement | null = null;
+  let activeTooltipTarget: HTMLElement | null = null;
+
+  const getMusicTooltip = (): HTMLDivElement => {
+    let tooltip = doc.getElementById('editor-music-tooltip') as HTMLDivElement | null;
+    if (!tooltip) {
+      tooltip = doc.createElement('div');
+      tooltip.id = 'editor-music-tooltip';
+      doc.body.append(tooltip);
+    }
+    return tooltip;
+  };
+
+  const hideMusicTooltip = () => {
+    activeTooltipTarget = null;
+    const tooltip = doc.getElementById('editor-music-tooltip');
+    tooltip?.classList.remove('visible');
+  };
+
+  const positionMusicTooltip = (target: HTMLElement, clientX?: number, clientY?: number) => {
+    const tooltip = getMusicTooltip();
+    const rect = target.getBoundingClientRect();
+    const x = clientX ?? rect.left + rect.width * 0.5;
+    const y = clientY ?? rect.top - 8;
+    tooltip.style.left = `${Math.round(x)}px`;
+    tooltip.style.top = `${Math.round(y)}px`;
+  };
+
+  const showMusicTooltip = (target: HTMLElement, clientX?: number, clientY?: number) => {
+    if (isCoarsePointerDevice()) {
+      return;
+    }
+    const text = target.dataset.roomMusicTooltip?.trim();
+    if (!text) {
+      hideMusicTooltip();
+      return;
+    }
+
+    const tooltip = getMusicTooltip();
+    tooltip.textContent = text;
+    activeTooltipTarget = target;
+    positionMusicTooltip(target, clientX, clientY);
+    tooltip.classList.add('visible');
+  };
 
   const clearArrangementDropTarget = () => {
     activeDropTarget?.classList.remove('drag-target');
@@ -114,7 +166,7 @@ export function setupRoomMusicControls(
 
   saveButton?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
-      void scene.saveDraft?.(true, { promptForSignInOnUnauthorized: true });
+      void scene.saveRoomMusicDraftAndPhrases?.();
     });
   });
 
@@ -133,6 +185,30 @@ export function setupRoomMusicControls(
   octaveUpButton?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
       scene.shiftRoomMusicOctave?.(1);
+    });
+  });
+
+  tempoDownButton?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.shiftRoomMusicTempo?.(-5);
+    });
+  });
+
+  tempoUpButton?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.shiftRoomMusicTempo?.(5);
+    });
+  });
+
+  swingDownButton?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.shiftRoomMusicSwing?.(-1);
+    });
+  });
+
+  swingUpButton?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.shiftRoomMusicSwing?.(1);
     });
   });
 
@@ -158,6 +234,37 @@ export function setupRoomMusicControls(
     });
   });
 
+  phraseNameInput?.addEventListener('input', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.setRoomMusicPhraseNameSuffix?.(phraseNameInput.value);
+    });
+  });
+
+  phraseNameInput?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') {
+      return;
+    }
+
+    event.preventDefault();
+    withActiveEditorScene(game, (scene) => {
+      void scene.saveActiveRoomMusicPhrase?.();
+    });
+  });
+
+  phraseNameInput?.addEventListener('focus', () => {
+    syncGameKeyboardFocus(game);
+  });
+
+  phraseNameInput?.addEventListener('blur', () => {
+    syncGameKeyboardFocus(game);
+  });
+
+  phraseNameSaveButton?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      void scene.saveActiveRoomMusicPhrase?.();
+    });
+  });
+
   libraryRefreshButton?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
       scene.refreshMusicPhraseLibrary?.();
@@ -173,6 +280,12 @@ export function setupRoomMusicControls(
   arrangementClearButton?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
       scene.clearSelectedArrangementSlot?.();
+    });
+  });
+
+  arrangementClearAllButton?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.clearAllArrangementSlots?.();
     });
   });
 
@@ -264,9 +377,57 @@ export function setupRoomMusicControls(
     draggedPhraseButton = null;
     draggedPhraseId = null;
     clearArrangementDropTarget();
+    hideMusicTooltip();
+  });
+
+  doc.addEventListener('pointerover', (event) => {
+    const target = event.target as HTMLElement | null;
+    const tooltipTarget = target?.closest<HTMLElement>('[data-room-music-tooltip]');
+    if (!tooltipTarget || (tooltipTarget instanceof HTMLButtonElement && tooltipTarget.disabled)) {
+      return;
+    }
+    showMusicTooltip(tooltipTarget, (event as PointerEvent).clientX, (event as PointerEvent).clientY);
+  });
+
+  doc.addEventListener('pointermove', (event) => {
+    if (!activeTooltipTarget) {
+      return;
+    }
+    positionMusicTooltip(activeTooltipTarget, (event as PointerEvent).clientX, (event as PointerEvent).clientY);
+  });
+
+  doc.addEventListener('pointerout', (event) => {
+    if (!activeTooltipTarget) {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    const tooltipTarget = target?.closest<HTMLElement>('[data-room-music-tooltip]');
+    const relatedTarget = (event as PointerEvent).relatedTarget as HTMLElement | null;
+    const relatedTooltipTarget = relatedTarget?.closest<HTMLElement>('[data-room-music-tooltip]') ?? null;
+    if (tooltipTarget && tooltipTarget === activeTooltipTarget && relatedTooltipTarget !== activeTooltipTarget) {
+      hideMusicTooltip();
+    }
+  });
+
+  doc.addEventListener('focusin', (event) => {
+    const target = event.target as HTMLElement | null;
+    const tooltipTarget = target?.closest<HTMLElement>('[data-room-music-tooltip]');
+    if (!tooltipTarget || (tooltipTarget instanceof HTMLButtonElement && tooltipTarget.disabled)) {
+      return;
+    }
+    showMusicTooltip(tooltipTarget);
+  });
+
+  doc.addEventListener('focusout', (event) => {
+    const target = event.target as HTMLElement | null;
+    const tooltipTarget = target?.closest<HTMLElement>('[data-room-music-tooltip]');
+    if (tooltipTarget && tooltipTarget === activeTooltipTarget) {
+      hideMusicTooltip();
+    }
   });
 
   doc.addEventListener('click', (event) => {
+    hideMusicTooltip();
     const target = event.target as HTMLElement | null;
     if (!target) {
       return;

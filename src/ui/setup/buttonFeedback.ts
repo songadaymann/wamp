@@ -8,6 +8,8 @@ const PRESSABLE_SELECTOR = [
   '.palette-tab',
   '.obj-cat-tab',
   '.object-item',
+  '.editor-music-arrangement-slot',
+  '.editor-music-library-item',
   '#menu-toggle',
   '.mobile-action-btn',
 ].join(', ');

@@ -3,8 +3,11 @@ import {
   createEmptyRoomPatternDrumTrack,
   cloneRoomPatternTonalTrack,
   findClosestPatternRowIndexForMidi,
+  getPatternInstrumentLabel,
   getPatternRowNote,
   isRoomPatternMusicEmpty,
+  normalizeRoomPatternBpm,
+  ROOM_PATTERN_BPM,
   type RoomPatternDrumTrack,
   type RoomPatternInstrumentId,
   type RoomPatternMusic,
@@ -38,6 +41,7 @@ export interface MusicPhraseBatchRecord {
 export interface MusicPhraseDrumPayload {
   kind: 'drums';
   instrumentId: 'drums';
+  bpm: number;
   barCount: number;
   stepCount: number;
   stepsPerBeat: number;
@@ -47,6 +51,7 @@ export interface MusicPhraseDrumPayload {
 export interface MusicPhraseTonalPayload {
   kind: 'tonal';
   instrumentId: RoomPatternTonalInstrumentId;
+  bpm: number;
   barCount: number;
   stepCount: number;
   stepsPerBeat: number;
@@ -87,6 +92,10 @@ export interface MusicPhraseListResponse {
   nextCursor: string | null;
 }
 
+export interface MusicPhraseSaveResponse {
+  items: MusicPhraseRecord[];
+}
+
 export function cloneMusicPhraseSourceIds(value: readonly string[] | null | undefined): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -118,6 +127,7 @@ export function cloneMusicPhrasePayload(
     return {
       kind: 'drums',
       instrumentId: 'drums',
+      bpm: normalizeRoomPatternBpm(value.bpm ?? ROOM_PATTERN_BPM),
       barCount: Math.max(1, Math.floor(value.barCount) || 1),
       stepCount: Math.max(1, Math.floor(value.stepCount) || 1),
       stepsPerBeat: Math.max(1, Math.floor(value.stepsPerBeat) || 1),
@@ -128,6 +138,7 @@ export function cloneMusicPhrasePayload(
   return {
     kind: 'tonal',
     instrumentId: value.instrumentId,
+    bpm: normalizeRoomPatternBpm(value.bpm ?? ROOM_PATTERN_BPM),
     barCount: Math.max(1, Math.floor(value.barCount) || 1),
     stepCount: Math.max(1, Math.floor(value.stepCount) || 1),
     stepsPerBeat: Math.max(1, Math.floor(value.stepsPerBeat) || 1),
@@ -201,13 +212,41 @@ export function createMusicPhraseLabel(
   coordinates: { x: number; y: number },
   instrumentId: RoomPatternInstrumentId,
   ordinal: number,
+  nameSuffix?: string | null,
 ): string {
   const roomLabel = roomTitle && roomTitle.trim() ? roomTitle.trim() : `${coordinates.x},${coordinates.y}`;
-  return `${creatorDisplayName} · ${roomLabel} · ${instrumentId} ${ordinal}`;
+  const sampleName = createMusicPhraseSampleName(instrumentId, ordinal, nameSuffix);
+  return `${creatorDisplayName} · ${roomLabel} · ${sampleName}`;
+}
+
+export function createMusicPhraseSampleName(
+  instrumentId: RoomPatternInstrumentId,
+  ordinal: number,
+  nameSuffix?: string | null,
+): string {
+  const trimmedName = typeof nameSuffix === 'string' ? nameSuffix.trim() : '';
+  if (trimmedName) {
+    return trimmedName;
+  }
+
+  return `${getPatternInstrumentLabel(instrumentId)} ${Math.max(1, Math.floor(ordinal) + 1)}`;
+}
+
+export function getMusicPhraseSampleName(phrase: Pick<MusicPhraseRecord, 'label'>): string {
+  const parts = phrase.label.split('·').map((part) => part.trim()).filter(Boolean);
+  return parts.at(-1) ?? phrase.label;
 }
 
 export function getMusicPhraseFingerprint(payload: MusicPhrasePayload): string {
-  return JSON.stringify(cloneMusicPhrasePayload(payload));
+  const normalized = cloneMusicPhrasePayload(payload);
+  if (!normalized) {
+    return '';
+  }
+
+  return JSON.stringify({
+    ...normalized,
+    bpm: undefined,
+  });
 }
 
 export function isMusicPhrasePayloadEmpty(payload: MusicPhrasePayload | null | undefined): boolean {
@@ -246,6 +285,7 @@ export function extractMusicPhrasePayloadFromPattern(
     const payload: MusicPhraseDrumPayload = {
       kind: 'drums',
       instrumentId: 'drums',
+      bpm: pattern.bpm,
       barCount: pattern.barCount,
       stepCount: pattern.stepCount,
       stepsPerBeat: pattern.stepsPerBeat,
@@ -258,6 +298,7 @@ export function extractMusicPhrasePayloadFromPattern(
   const payload: MusicPhraseTonalPayload = {
     kind: 'tonal',
     instrumentId: tonalInstrumentId,
+    bpm: pattern.bpm,
     barCount: pattern.barCount,
     stepCount: pattern.stepCount,
     stepsPerBeat: pattern.stepsPerBeat,

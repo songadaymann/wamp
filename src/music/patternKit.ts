@@ -3,8 +3,9 @@ import {
   type RoomPatternDrumRowDefinition,
   type RoomPatternDrumRowId,
 } from './pattern';
+import { loadRolandMt32DrumSample } from './rolandMt32DrumKit';
 
-const drumSampleCache = new Map<string, Map<RoomPatternDrumRowId, Float32Array>>();
+const drumSampleCache = new Map<string, Promise<Map<RoomPatternDrumRowId, Float32Array>>>();
 
 function createBuffer(length: number): Float32Array {
   return new Float32Array(Math.max(1, Math.floor(length)));
@@ -289,19 +290,25 @@ function renderDrumSample(rowId: RoomPatternDrumRowId, sampleRate: number): Floa
   }
 }
 
-export function getPatternDrumSamples(sampleRate: number): Map<RoomPatternDrumRowId, Float32Array> {
-  const cacheKey = String(Math.max(1, Math.floor(sampleRate)));
+export async function getPatternDrumSamples(
+  audioContext: AudioContext,
+): Promise<Map<RoomPatternDrumRowId, Float32Array>> {
+  const cacheKey = String(Math.max(1, Math.floor(audioContext.sampleRate)));
   const cached = drumSampleCache.get(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const samples = new Map<RoomPatternDrumRowId, Float32Array>();
-  for (const row of ROOM_PATTERN_DRUM_ROWS) {
-    samples.set(row.id, renderDrumSample(row.id, sampleRate));
-  }
-  drumSampleCache.set(cacheKey, samples);
-  return samples;
+  const samplePromise = Promise.resolve().then(async () => {
+    const samples = new Map<RoomPatternDrumRowId, Float32Array>();
+    for (const row of ROOM_PATTERN_DRUM_ROWS) {
+      const loadedSample = await loadRolandMt32DrumSample(audioContext, row.id);
+      samples.set(row.id, loadedSample ?? renderDrumSample(row.id, audioContext.sampleRate));
+    }
+    return samples;
+  });
+  drumSampleCache.set(cacheKey, samplePromise);
+  return samplePromise;
 }
 
 export function getPatternDrumRowDefinition(rowId: RoomPatternDrumRowId): RoomPatternDrumRowDefinition | null {
