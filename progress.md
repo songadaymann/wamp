@@ -93,6 +93,20 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
         - `output/web-game/deployed-overworld-zoom-tilemap-collision-check/state.json`
         - `output/web-game/deployed-overworld-zoom-tilemap-collision-check/relevant-errors.json` (`[]`)
       - this targeted preview check exercised browse + play zoom controls on the live preview without reproducing the `tileWidth` crash
+  - landed on `main` and deployed to production on April 6, 2026:
+    - fast-forwarded `main` to commit `58cdf12` (`Fix overworld zoom tilemap collider cleanup`) and pushed to `origin/main`
+    - production deploy via `node scripts/deploy_prod.mjs` succeeded
+      - Worker URL: `https://everybodys-platformer.novox-robot.workers.dev`
+      - Worker version: `9ba3d99a-5b50-41ba-ba1d-df97c59ce173`
+      - Pages deployment URL: `https://2962a1db.wampland.pages.dev`
+    - production smoke returned:
+      - `ok: true`
+      - `frontendUrl: https://wamp.land`
+      - `apiBaseUrl: https://api.wamp.land`
+      - `mainBundleUrl: https://wamp.land/assets/main-CtVMuA5m.js`
+      - `mainBundleContainsPartyKitHost: true`
+    - implication:
+      - the zoom tilemap collider cleanup is now live on production alongside the rest of `main`
 
 - Lighting neighbor ambient darkening on April 4, 2026:
   - started a fresh clean continuation branch for lighting work at `feature/lighting-followups-2026-04-04` from current `main`
