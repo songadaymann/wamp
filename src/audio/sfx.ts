@@ -60,6 +60,10 @@ type SfxHistoryEntry = {
   status: 'played' | 'blocked' | 'missing' | 'cooldown' | 'error';
 };
 
+// Music already runs through its own master gain, so SFX need a shared trim to
+// stop common gameplay cues from sitting on top of the room mix.
+const GLOBAL_SFX_VOLUME_MULTIPLIER = 0.55;
+
 declare global {
   interface Window {
     get_sfx_debug_state?: () => Record<string, unknown>;
@@ -373,7 +377,7 @@ export class SfxController {
 
     const player = baseAudio.cloneNode() as HTMLAudioElement;
     const baseVolume = PhaserClamp(
-      config.volume * Math.max(0, playbackOptions?.volumeMultiplier ?? 1),
+      config.volume * GLOBAL_SFX_VOLUME_MULTIPLIER * Math.max(0, playbackOptions?.volumeMultiplier ?? 1),
       0,
       1
     );

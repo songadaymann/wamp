@@ -57,6 +57,21 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Global SFX balance trim on April 6, 2026:
+  - branched from `main` on `feature/sfx-balance-2026-04-06`
+  - added `GLOBAL_SFX_VOLUME_MULTIPLIER = 0.55` in `src/audio/sfx.ts`
+  - applied the multiplier at the shared SFX playback layer so UI, movement, combat, pickups, room audio, and music-editor cues all come down together relative to the music bed
+  - goal was to make the whole SFX mix sit under the room music instead of competing with it cue-by-cue
+  - validation:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - required `develop-web-game` local smoke wrote `output/web-game/sfx-balance-smoke/`
+    - local preview smoke hit the expected missing-local-API failure path (`Failed to load world`) because this run did not also start a local Worker backend
+    - screenshot still hit the known black-frame artifact
+  - TODO:
+    - real subjective QA should check whether `0.55` is the right global trim or whether the game still wants a little more/less attenuation
+    - if needed later, promote especially loud cues like `warp`, `respawn`, and `goal-success` to secondary per-cue tuning after this global pass
+
 - Owner-only phrase delete follow-up on April 6, 2026:
   - branched cleanly from `main` on `feature/music-phrase-delete-2026-04-06`
   - extended the phrase edit row so edit mode can surface a `Delete` action for the active saved phrase
