@@ -1,0 +1,50 @@
+import type { RoomCoordinates } from '../persistence/roomModel';
+import type { ProgressionDifficulty } from './model';
+
+export const POST_RUN_RATING_REQUEST_EVENT = 'post-run-rating-request';
+export const POST_RUN_RATING_SUBMITTED_EVENT = 'post-run-rating-submitted';
+
+interface BasePostRunRatingRequestDetail {
+  contentType: 'room' | 'course';
+  contentId: string;
+  contentTitle: string | null;
+  version: number;
+  elapsedMs: number;
+  deaths: number;
+  score: number | null;
+  autoSuggestedDifficulty: ProgressionDifficulty;
+}
+
+export interface RoomPostRunRatingRequestDetail extends BasePostRunRatingRequestDetail {
+  contentType: 'room';
+  roomCoordinates: RoomCoordinates;
+}
+
+export interface CoursePostRunRatingRequestDetail extends BasePostRunRatingRequestDetail {
+  contentType: 'course';
+}
+
+export type PostRunRatingRequestDetail =
+  | RoomPostRunRatingRequestDetail
+  | CoursePostRunRatingRequestDetail;
+
+export interface PostRunRatingSubmittedDetail {
+  contentType: 'room' | 'course';
+  contentId: string;
+}
+
+export function requestPostRunRating(detail: PostRunRatingRequestDetail): void {
+  window.dispatchEvent(
+    new CustomEvent<PostRunRatingRequestDetail>(POST_RUN_RATING_REQUEST_EVENT, {
+      detail,
+    })
+  );
+}
+
+export function notifyPostRunRatingSubmitted(detail: PostRunRatingSubmittedDetail): void {
+  window.dispatchEvent(
+    new CustomEvent<PostRunRatingSubmittedDetail>(POST_RUN_RATING_SUBMITTED_EVENT, {
+      detail,
+    })
+  );
+}

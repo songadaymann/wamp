@@ -40,6 +40,14 @@ interface OverworldObjectiveControllerHost {
     cue?: SfxCue | null,
   ): void;
   finalizeActiveCourseRun(result: 'completed' | 'failed'): void;
+  recordRankedGoalEvent(event: {
+    type: 'checkpoint' | 'reach_exit' | 'finish' | 'complete';
+    roomId: string | null;
+    roomCoordinates: RoomCoordinates;
+    x: number;
+    y: number;
+    checkpointIndex?: number | null;
+  }): void;
 }
 
 export class OverworldObjectiveController {
@@ -106,6 +114,14 @@ export class OverworldObjectiveController {
             this.host.toWorldGoalPoint(runState.roomCoordinates, runState.goal.exit),
           )
         ) {
+          this.host.recordRankedGoalEvent({
+            type: 'reach_exit',
+            roomId: runState.roomId,
+            roomCoordinates: runState.roomCoordinates,
+            x: runState.goal.exit.x,
+            y: runState.goal.exit.y,
+            checkpointIndex: null,
+          });
           this.completeGoalRun('Exit reached.');
         }
         break;
@@ -164,6 +180,14 @@ export class OverworldObjectiveController {
     if (nextCheckpoint) {
       const worldPoint = this.host.toWorldGoalPoint(runState.roomCoordinates, nextCheckpoint);
       if (this.playerTouchesGoalPoint(worldPoint)) {
+        this.host.recordRankedGoalEvent({
+          type: 'checkpoint',
+          roomId: runState.roomId,
+          roomCoordinates: runState.roomCoordinates,
+          x: nextCheckpoint.x,
+          y: nextCheckpoint.y,
+          checkpointIndex: runState.nextCheckpointIndex,
+        });
         this.applyGoalRunMutation(this.host.goalRunController.recordCheckpointReached());
       }
       return;
@@ -175,6 +199,14 @@ export class OverworldObjectiveController {
         this.host.toWorldGoalPoint(runState.roomCoordinates, runState.goal.finish),
       )
     ) {
+      this.host.recordRankedGoalEvent({
+        type: 'finish',
+        roomId: runState.roomId,
+        roomCoordinates: runState.roomCoordinates,
+        x: runState.goal.finish.x,
+        y: runState.goal.finish.y,
+        checkpointIndex: null,
+      });
       this.completeGoalRun('Sprint clear.');
     }
   }
@@ -221,6 +253,17 @@ export class OverworldObjectiveController {
       );
     }
 
+    if (result.verificationGoalEvent) {
+      this.host.recordRankedGoalEvent({
+        type: result.verificationGoalEvent.type,
+        roomId: result.verificationGoalEvent.marker.roomId,
+        roomCoordinates: this.host.getCurrentRoomCoordinates(),
+        x: result.verificationGoalEvent.marker.x,
+        y: result.verificationGoalEvent.marker.y,
+        checkpointIndex: result.verificationGoalEvent.checkpointIndex,
+      });
+    }
+
     if (result.goalMarkersChanged) {
       this.host.redrawGoalMarkers();
     }
@@ -238,6 +281,17 @@ export class OverworldObjectiveController {
       return;
     }
 
+    const playerOrigin = this.host.getPlayerEffectOrigin();
+    if (playerOrigin) {
+      this.host.recordRankedGoalEvent({
+        type: 'complete',
+        roomId: null,
+        roomCoordinates: this.host.getCurrentRoomCoordinates(),
+        x: playerOrigin.x,
+        y: playerOrigin.y,
+        checkpointIndex: null,
+      });
+    }
     activeCourseRun.result = 'completed';
     activeCourseRun.completionMessage = message;
     this.host.showTransientStatus(message);
@@ -251,6 +305,21 @@ export class OverworldObjectiveController {
   private applyGoalRunMutation(result: GoalRunMutationResult): void {
     if (!result.changed) {
       return;
+    }
+
+    if (result.event === 'complete') {
+      const runState = this.host.goalRunController.getCurrentRun();
+      const origin = this.host.getPlayerEffectOrigin();
+      if (runState && origin) {
+        this.host.recordRankedGoalEvent({
+          type: 'complete',
+          roomId: runState.roomId,
+          roomCoordinates: runState.roomCoordinates,
+          x: origin.x,
+          y: origin.y,
+          checkpointIndex: null,
+        });
+      }
     }
 
     if (result.resetChallengeState) {

@@ -1,6 +1,9 @@
 import type {
+  AdminProgressionCapsUpdateRequest,
+  AdminProgressionUserCapsResponse,
+  AdminProgressionUserLookupEntry,
+  AdminProgressionUserLookupResponse,
   LaunchStatsActivityWindow,
-  LaunchStatsRecentEvent,
   LaunchStatsResponse,
   PartyKitShardHeartbeat,
 } from './admin/model';
@@ -21,9 +24,21 @@ const warnings = document.getElementById('warnings') as HTMLDivElement | null;
 const configChips = document.getElementById('config-chips') as HTMLDivElement | null;
 const totalsGrid = document.getElementById('totals-grid') as HTMLDivElement | null;
 const activityGrid = document.getElementById('activity-grid') as HTMLDivElement | null;
-const activityFeed = document.getElementById('activity-feed') as HTMLDivElement | null;
 const partykitSummary = document.getElementById('partykit-summary') as HTMLDivElement | null;
 const partykitShardsBody = document.getElementById('partykit-shards-body') as HTMLTableSectionElement | null;
+const progressionQueryInput = document.getElementById('progression-query-input') as HTMLInputElement | null;
+const progressionSearchButton = document.getElementById('progression-search-button') as HTMLButtonElement | null;
+const progressionOperatorInput = document.getElementById('progression-operator-input') as HTMLInputElement | null;
+const progressionStatus = document.getElementById('progression-status') as HTMLDivElement | null;
+const progressionResults = document.getElementById('progression-results') as HTMLDivElement | null;
+const progressionSelected = document.getElementById('progression-selected') as HTMLDivElement | null;
+const progressionClaimInput = document.getElementById('progression-claim-input') as HTMLInputElement | null;
+const progressionPublishInput = document.getElementById('progression-publish-input') as HTMLInputElement | null;
+const progressionObjectInput = document.getElementById('progression-object-input') as HTMLInputElement | null;
+const progressionCollectibleInput = document.getElementById('progression-collectible-input') as HTMLInputElement | null;
+const progressionReasonInput = document.getElementById('progression-reason-input') as HTMLTextAreaElement | null;
+const progressionSaveButton = document.getElementById('progression-save-button') as HTMLButtonElement | null;
+const progressionClearButton = document.getElementById('progression-clear-button') as HTMLButtonElement | null;
 
 let adminKey = window.sessionStorage.getItem(ADMIN_KEY_STORAGE_KEY) ?? '';
 let lastSnapshot: LaunchStatsResponse | null = null;
@@ -31,6 +46,9 @@ let lastError: string | null = null;
 let lastGoodSnapshotAt: string | null = null;
 let pollingTimer: number | null = null;
 let refreshInFlight = false;
+let progressionStatusMessage = 'Search for a user to inspect or raise their builder caps.';
+let progressionResultsSnapshot: AdminProgressionUserLookupEntry[] = [];
+let selectedProgressionUser: AdminProgressionUserCapsResponse | null = null;
 
 if (adminKeyInput) {
   adminKeyInput.value = adminKey;
@@ -62,6 +80,26 @@ clearKeyButton?.addEventListener('click', () => {
   }
   syncPolling();
   render();
+});
+
+progressionSearchButton?.addEventListener('click', () => {
+  void searchProgressionUsers();
+});
+
+progressionQueryInput?.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') {
+    return;
+  }
+  event.preventDefault();
+  void searchProgressionUsers();
+});
+
+progressionSaveButton?.addEventListener('click', () => {
+  void saveProgressionOverride(false);
+});
+
+progressionClearButton?.addEventListener('click', () => {
+  void saveProgressionOverride(true);
 });
 
 document.addEventListener('visibilitychange', () => {
@@ -140,11 +178,229 @@ async function refreshSnapshot(force = false): Promise<void> {
 function render(): void {
   renderMeta();
   renderWarnings();
+  renderProgressionAdmin();
   renderConfig();
   renderTotals();
   renderActivity();
   renderPartykitSummary();
   renderShards();
+}
+
+async function searchProgressionUsers(): Promise<void> {
+  if (!adminKey) {
+    progressionStatusMessage = 'Paste the admin key before searching for progression users.';
+    render();
+    return;
+  }
+
+  const query = progressionQueryInput?.value.trim() ?? '';
+  if (!query) {
+    progressionResultsSnapshot = [];
+    selectedProgressionUser = null;
+    progressionStatusMessage = 'Enter a user id, email, or display name.';
+    populateProgressionForm(null);
+    render();
+    return;
+  }
+
+  progressionStatusMessage = `Searching for "${query}"...`;
+  render();
+
+  try {
+    const response = await fetch(
+      `${getApiBaseUrl()}/api/admin/progression/users?query=${encodeURIComponent(query)}`,
+      {
+        headers: {
+          'x-admin-key': adminKey,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      const text = (await response.text()).trim();
+      throw new Error(text || `Search failed with status ${response.status}.`);
+    }
+
+    const payload = (await response.json()) as AdminProgressionUserLookupResponse;
+    progressionResultsSnapshot = payload.items;
+    progressionStatusMessage =
+      payload.items.length > 0
+        ? `Found ${payload.items.length} matching ${payload.items.length === 1 ? 'user' : 'users'}.`
+        : `No progression users matched "${query}".`;
+    render();
+  } catch (error) {
+    progressionStatusMessage =
+      error instanceof Error ? error.message : 'Unknown progression search failure.';
+    render();
+  }
+}
+
+async function loadProgressionUser(userId: string): Promise<void> {
+  if (!adminKey) {
+    progressionStatusMessage = 'Paste the admin key before loading a user.';
+    render();
+    return;
+  }
+
+  progressionStatusMessage = 'Loading progression caps...';
+  render();
+
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/admin/progression/users/${encodeURIComponent(userId)}/caps`, {
+      headers: {
+        'x-admin-key': adminKey,
+      },
+    });
+
+    if (!response.ok) {
+      const text = (await response.text()).trim();
+      throw new Error(text || `Load failed with status ${response.status}.`);
+    }
+
+    selectedProgressionUser = (await response.json()) as AdminProgressionUserCapsResponse;
+    populateProgressionForm(selectedProgressionUser);
+    progressionStatusMessage = `Loaded ${selectedProgressionUser.displayName}.`;
+    render();
+  } catch (error) {
+    progressionStatusMessage =
+      error instanceof Error ? error.message : 'Unknown progression load failure.';
+    render();
+  }
+}
+
+function populateProgressionForm(user: AdminProgressionUserCapsResponse | null): void {
+  if (progressionClaimInput) {
+    progressionClaimInput.value = user?.override.claimLimitPerDay ? String(user.override.claimLimitPerDay) : '';
+  }
+  if (progressionPublishInput) {
+    progressionPublishInput.value = user?.override.publishLimitPerDay ? String(user.override.publishLimitPerDay) : '';
+  }
+  if (progressionObjectInput) {
+    progressionObjectInput.value = user?.override.objectLimit ? String(user.override.objectLimit) : '';
+  }
+  if (progressionCollectibleInput) {
+    progressionCollectibleInput.value = user?.override.collectibleLimit ? String(user.override.collectibleLimit) : '';
+  }
+  if (progressionReasonInput) {
+    progressionReasonInput.value = user?.override.reason ?? '';
+  }
+}
+
+async function saveProgressionOverride(clear: boolean): Promise<void> {
+  if (!adminKey) {
+    progressionStatusMessage = 'Paste the admin key before saving overrides.';
+    render();
+    return;
+  }
+  if (!selectedProgressionUser) {
+    progressionStatusMessage = 'Load a user before saving overrides.';
+    render();
+    return;
+  }
+
+  const operatorLabel = progressionOperatorInput?.value.trim() || 'Admin';
+  const body: AdminProgressionCapsUpdateRequest = clear
+    ? {
+        claimLimitPerDay: null,
+        publishLimitPerDay: null,
+        objectLimit: null,
+        collectibleLimit: null,
+        reason: null,
+        operatorLabel,
+      }
+    : {
+        claimLimitPerDay: readOptionalPositiveInteger(progressionClaimInput),
+        publishLimitPerDay: readOptionalPositiveInteger(progressionPublishInput),
+        objectLimit: readOptionalPositiveInteger(progressionObjectInput),
+        collectibleLimit: readOptionalPositiveInteger(progressionCollectibleInput),
+        reason: progressionReasonInput?.value.trim() || null,
+        operatorLabel,
+      };
+
+  progressionStatusMessage = clear ? 'Clearing cap override...' : 'Saving cap override...';
+  render();
+
+  try {
+    const response = await fetch(
+      `${getApiBaseUrl()}/api/admin/progression/users/${encodeURIComponent(selectedProgressionUser.userId)}/caps`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-admin-key': adminKey,
+        },
+        body: JSON.stringify(body),
+      },
+    );
+
+    if (!response.ok) {
+      const text = (await response.text()).trim();
+      throw new Error(text || `Save failed with status ${response.status}.`);
+    }
+
+    selectedProgressionUser = (await response.json()) as AdminProgressionUserCapsResponse;
+    progressionResultsSnapshot = progressionResultsSnapshot.map((entry) =>
+      entry.userId === selectedProgressionUser?.userId ? selectedProgressionUser : entry,
+    );
+    populateProgressionForm(selectedProgressionUser);
+    progressionStatusMessage = clear
+      ? `Cleared override for ${selectedProgressionUser.displayName}.`
+      : `Saved override for ${selectedProgressionUser.displayName}.`;
+    render();
+  } catch (error) {
+    progressionStatusMessage =
+      error instanceof Error ? error.message : 'Unknown progression save failure.';
+    render();
+  }
+}
+
+function renderProgressionAdmin(): void {
+  if (progressionStatus) {
+    progressionStatus.textContent = progressionStatusMessage;
+  }
+
+  if (progressionResults) {
+    progressionResults.innerHTML =
+      progressionResultsSnapshot.length > 0
+        ? progressionResultsSnapshot
+            .map(
+              (item) => `
+                <button class="result-button" type="button" data-user-id="${escapeHtml(item.userId)}">
+                  <strong>${escapeHtml(item.displayName)}</strong>
+                  <div class="meta">${escapeHtml(item.email ?? item.userId)}</div>
+                  <div class="meta">Caps ${formatCapSummary(item.builderCaps)} · founder ${
+                    item.founderNumber === null ? 'unassigned' : `#${item.founderNumber}`
+                  }</div>
+                </button>
+              `,
+            )
+            .join('')
+        : '<div class="meta">No search results yet.</div>';
+
+    for (const button of progressionResults.querySelectorAll<HTMLButtonElement>('[data-user-id]')) {
+      button.addEventListener('click', () => {
+        const userId = button.dataset.userId?.trim();
+        if (!userId) {
+          return;
+        }
+        void loadProgressionUser(userId);
+      });
+    }
+  }
+
+  if (progressionSelected) {
+    progressionSelected.innerHTML = selectedProgressionUser
+      ? `
+          <strong>${escapeHtml(selectedProgressionUser.displayName)}</strong>
+          <div class="meta">${escapeHtml(selectedProgressionUser.email ?? selectedProgressionUser.userId)}</div>
+          <div class="meta">Effective caps: ${escapeHtml(formatCapSummary(selectedProgressionUser.builderCaps))}</div>
+          <div class="meta">Trust tier ${escapeHtml(selectedProgressionUser.builderCaps.trustTier)}${
+            selectedProgressionUser.builderCaps.overrideActive ? ' · admin boost active' : ''
+          }</div>
+          <div class="meta">Override: ${escapeHtml(formatOverrideSummary(selectedProgressionUser))}</div>
+        `
+      : 'No user selected.';
+  }
 }
 
 function renderMeta(): void {
@@ -311,9 +567,6 @@ function renderActivity(): void {
 
   if (!lastSnapshot) {
     activityGrid.innerHTML = '<div class="meta">No activity yet.</div>';
-    if (activityFeed) {
-      activityFeed.innerHTML = '<div class="meta">No recent events yet.</div>';
-    }
     return;
   }
 
@@ -340,31 +593,6 @@ function renderActivity(): void {
           <div class="meta">Course runs ${formatNumber(
             windowStats.courseRunStarts
           )} start / ${formatNumber(windowStats.courseRunFinishes)} finish</div>
-        </article>
-      `
-    )
-    .join('');
-
-  if (!activityFeed) {
-    return;
-  }
-
-  const events = lastSnapshot.recentEvents ?? [];
-  if (events.length === 0) {
-    activityFeed.innerHTML = '<div class="meta">No recent events yet.</div>';
-    return;
-  }
-
-  activityFeed.innerHTML = events
-    .map(
-      (event) => `
-        <article class="card activity-row">
-          <div class="activity-head">
-            <span class="label">${escapeHtml(renderEventKindLabel(event.kind))}</span>
-            <span class="meta">${escapeHtml(formatTimestamp(event.at))}</span>
-          </div>
-          <div>${escapeHtml(renderEventSummary(event))}</div>
-          <div class="meta">${escapeHtml(renderEventDetail(event))}</div>
         </article>
       `
     )
@@ -470,71 +698,6 @@ function buildChip(label: string, value: string, tone: 'good' | 'warn' | 'danger
   return `<span class="chip ${tone}">${escapeHtml(label)}: ${escapeHtml(value)}</span>`;
 }
 
-function renderEventKindLabel(kind: LaunchStatsRecentEvent['kind']): string {
-  switch (kind) {
-    case 'room_claim':
-      return 'Room Claim';
-    case 'room_publish':
-      return 'Room Publish';
-    case 'room_attempt_burst':
-      return 'Attempt Burst';
-    case 'room_run_finish':
-      return 'Room Run';
-    default:
-      return 'Event';
-  }
-}
-
-function renderEventSummary(event: LaunchStatsRecentEvent): string {
-  const actor = event.actorDisplayName || 'Unknown';
-  const roomLabel = formatRoomLabel(event);
-
-  switch (event.kind) {
-    case 'room_claim':
-      return `${actor} claimed ${roomLabel}.`;
-    case 'room_publish':
-      return `${actor} published ${roomLabel}${event.roomVersion ? ` v${event.roomVersion}` : ''}.`;
-    case 'room_attempt_burst': {
-      const attempts = event.attemptCount ?? 0;
-      const completions = event.completedCount ?? 0;
-      const completionSuffix =
-        completions > 0 ? `, including ${completions} completion${completions === 1 ? '' : 's'}` : '';
-      return `${actor} did ${attempts} attempt${attempts === 1 ? '' : 's'} in ${roomLabel}${completionSuffix}.`;
-    }
-    case 'room_run_finish': {
-      const result = (event.result ?? 'finished').toLowerCase();
-      return `${actor} ${result} ${roomLabel}${event.roomVersion ? ` v${event.roomVersion}` : ''}.`;
-    }
-    default:
-      return `${actor} did something in ${roomLabel}.`;
-  }
-}
-
-function renderEventDetail(event: LaunchStatsRecentEvent): string {
-  const parts: string[] = [];
-  if (event.result) {
-    parts.push(event.result);
-  }
-  if (event.roomId) {
-    parts.push(`room ${event.roomId}`);
-  }
-  if (event.roomX !== null && event.roomY !== null) {
-    parts.push(`${event.roomX},${event.roomY}`);
-  }
-  return parts.join(' · ') || 'No additional detail.';
-}
-
-function formatRoomLabel(event: LaunchStatsRecentEvent): string {
-  const title = event.roomTitle?.trim();
-  if (title) {
-    return `"${title}"`;
-  }
-  if (event.roomX !== null && event.roomY !== null) {
-    return `room ${event.roomX},${event.roomY}`;
-  }
-  return 'a room';
-}
-
 function formatTimestamp(value: string): string {
   const parsed = Date.parse(value);
   if (!Number.isFinite(parsed)) {
@@ -557,6 +720,41 @@ function formatAge(ageMs: number): string {
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat().format(value);
+}
+
+function readOptionalPositiveInteger(input: HTMLInputElement | null): number | null {
+  const trimmed = input?.value.trim() ?? '';
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isFinite(parsed) || Number.isNaN(parsed) || parsed <= 0) {
+    throw new Error(`Invalid positive integer: "${trimmed}".`);
+  }
+  return parsed;
+}
+
+function formatCapSummary(caps: AdminProgressionUserLookupEntry['builderCaps']): string {
+  return `${formatNumber(caps.objectLimit)} objects · ${formatNumber(caps.collectibleLimit)} collectibles · ${formatNumber(
+    caps.publishLimitPerDay,
+  )} publish/day · ${formatNumber(caps.claimLimitPerDay)} claim/day`;
+}
+
+function formatOverrideSummary(user: AdminProgressionUserCapsResponse): string {
+  if (!user.builderCaps.overrideActive) {
+    return 'none';
+  }
+
+  const parts = [
+    user.override.objectLimit !== null ? `${formatNumber(user.override.objectLimit)} objects` : null,
+    user.override.collectibleLimit !== null ? `${formatNumber(user.override.collectibleLimit)} collectibles` : null,
+    user.override.publishLimitPerDay !== null ? `${formatNumber(user.override.publishLimitPerDay)} publish/day` : null,
+    user.override.claimLimitPerDay !== null ? `${formatNumber(user.override.claimLimitPerDay)} claim/day` : null,
+    user.override.reason,
+    user.override.updatedBy ? `by ${user.override.updatedBy}` : null,
+  ].filter((value): value is string => Boolean(value));
+
+  return parts.join(' · ');
 }
 
 function escapeHtml(value: string): string {

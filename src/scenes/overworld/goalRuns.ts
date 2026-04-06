@@ -1,10 +1,9 @@
 import type { GameObjectConfig } from '../../config';
 import { cloneRoomGoal, ROOM_GOAL_LABELS, type GoalMarkerPoint } from '../../goals/roomGoals';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
+import { isPlayfunLeaderboardExcludedDisplayName } from '../../playfun/identity';
 import {
-  isPlayfunSurfaceAuth,
   isWampLeaderboardEligibleAuth,
-  type SurfaceAuthSource,
 } from '../../playfun/leaderboardPolicy';
 import type {
   GlobalLeaderboardResponse,
@@ -21,6 +20,9 @@ import {
   type GoalRunEntryContext,
   type GoalRunStartPoint,
 } from './goalRunStartGate';
+import { suggestProgressionDifficulty } from '../../progression/autoDifficulty';
+import { requestPostRunRating } from '../../progression/postRunRatingEvents';
+import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
 
 export type GoalRunLeaderboardState = 'idle' | 'loading' | 'ready' | 'error';
 export type GoalRunMutationEvent = 'start' | 'checkpoint' | 'complete' | 'fail' | 'abandon';
@@ -51,6 +53,9 @@ export interface GoalRunState {
   pendingResult: Exclude<RunResult, 'active'> | null;
   submittedScore: number | null;
   leaderboardEligible: boolean;
+  verificationSchemaVersion: number | null;
+  verificationNonce: string | null;
+  snapshotHash: string | null;
 }
 
 export interface GoalRunMutationResult {
@@ -76,7 +81,6 @@ interface OverworldGoalRunControllerOptions {
   runRepository: RunRepository;
   getScore: () => number;
   getAuthenticated: () => boolean;
-  getAuthSource: () => SurfaceAuthSource;
   getAuthDisplayName: () => string | null;
   showTransientStatus?: (message: string) => void;
   countRoomObjectsByCategory: (
@@ -84,6 +88,17 @@ interface OverworldGoalRunControllerOptions {
     category: GameObjectConfig['category']
   ) => number;
   getNowIso?: () => string;
+  onRankedRunStarted?: (binding: {
+    kind: 'room';
+    verificationSchemaVersion: number;
+    verificationNonce: string;
+    snapshotHash: string;
+  }) => void;
+  buildVerificationTrace?: (
+    runState: GoalRunState,
+    result: Exclude<RunResult, 'active'>
+  ) => RankedRunVerificationTrace | null;
+  clearVerificationTrace?: () => void;
 }
 
 const NOOP_MUTATION_RESULT: GoalRunMutationResult = {
@@ -111,6 +126,7 @@ export class OverworldGoalRunController {
     this.leaderboardState = 'idle';
     this.leaderboardMessage = null;
     this.leaderboardRequestKey = null;
+    this.options.clearVerificationTrace?.();
   }
 
   clearCurrentRun(): boolean {
@@ -119,6 +135,7 @@ export class OverworldGoalRunController {
     }
 
     this.currentGoalRun = null;
+    this.options.clearVerificationTrace?.();
     return true;
   }
 
@@ -159,7 +176,7 @@ export class OverworldGoalRunController {
       room.status === 'published' &&
       isWampLeaderboardEligibleAuth(
         this.options.getAuthenticated(),
-        this.options.getAuthSource(),
+        null,
         this.options.getAuthDisplayName()
       );
     const qualificationState = goalRunEntryStartsQualifiedAttempt(entryContext)
@@ -203,6 +220,9 @@ export class OverworldGoalRunController {
       pendingResult: null,
       submittedScore: null,
       leaderboardEligible,
+      verificationSchemaVersion: null,
+      verificationNonce: null,
+      snapshotHash: null,
     };
 
     if (qualificationState === 'practice') {
@@ -594,6 +614,9 @@ export class OverworldGoalRunController {
             pendingResult: this.currentGoalRun.pendingResult,
             submittedScore: this.currentGoalRun.submittedScore,
             leaderboardEligible: this.currentGoalRun.leaderboardEligible,
+            verificationSchemaVersion: this.currentGoalRun.verificationSchemaVersion,
+            verificationNonce: this.currentGoalRun.verificationNonce,
+            snapshotHash: this.currentGoalRun.snapshotHash,
           }
         : null,
       leaderboards: {
@@ -621,6 +644,16 @@ export class OverworldGoalRunController {
                 viewerCanVote: roomDifficulty.viewerCanVote,
                 viewerNeedsRun: roomDifficulty.viewerNeedsRun,
               },
+              quality: {
+                ...this.currentRoomLeaderboard.quality,
+                counts: { ...this.currentRoomLeaderboard.quality.counts },
+              },
+              viewerRating: this.currentRoomLeaderboard.viewerRating
+                ? { ...this.currentRoomLeaderboard.viewerRating }
+                : null,
+              trophy: this.currentRoomLeaderboard.trophy
+                ? { ...this.currentRoomLeaderboard.trophy }
+                : null,
               entries: this.currentRoomLeaderboard.entries.map((entry) => ({ ...entry })),
               viewerBest: this.currentRoomLeaderboard.viewerBest
                 ? { ...this.currentRoomLeaderboard.viewerBest }
@@ -694,8 +727,17 @@ export class OverworldGoalRunController {
       });
 
       runState.attemptId = response.attemptId;
+      runState.verificationSchemaVersion = response.verificationSchemaVersion;
+      runState.verificationNonce = response.verificationNonce;
+      runState.snapshotHash = response.snapshotHash;
       runState.submissionState = 'active';
       runState.submissionMessage = `Ranked run live as ${response.userDisplayName}.`;
+      this.options.onRankedRunStarted?.({
+        kind: 'room',
+        verificationSchemaVersion: response.verificationSchemaVersion,
+        verificationNonce: response.verificationNonce,
+        snapshotHash: response.snapshotHash,
+      });
       await this.refreshLeaderboardsForRoom({
         id: runState.roomId,
         coordinates: { ...runState.roomCoordinates },
@@ -791,12 +833,32 @@ export class OverworldGoalRunController {
       runState.pendingResult = null;
       runState.submissionState = 'submitted';
       runState.submittedScore = computeRunScore(runState.goal, payload);
+      this.options.clearVerificationTrace?.();
       runState.submissionMessage =
         result === 'completed'
           ? `Submitted score ${runState.submittedScore}.`
           : result === 'failed'
             ? 'Failed run submitted.'
             : 'Run marked abandoned.';
+      if (result === 'completed') {
+        requestPostRunRating({
+          contentType: 'room',
+          contentId: runState.roomId,
+          contentTitle: null,
+          roomCoordinates: { ...runState.roomCoordinates },
+          version: runState.roomVersion,
+          elapsedMs: payload.elapsedMs,
+          deaths: payload.deaths,
+          score: payload.score ?? null,
+          autoSuggestedDifficulty: suggestProgressionDifficulty({
+            elapsedMs: payload.elapsedMs,
+            deaths: payload.deaths,
+            collectiblesCollected: payload.collectiblesCollected,
+            enemiesDefeated: payload.enemiesDefeated,
+            checkpointsReached: payload.checkpointsReached,
+          }),
+        });
+      }
     } catch (error) {
       console.error('Failed to finish ranked run', {
         attemptId: runState.attemptId,
@@ -807,6 +869,7 @@ export class OverworldGoalRunController {
       const message = formatGoalRunSubmissionErrorMessage(error, result);
       runState.submissionState = 'error';
       runState.submissionMessage = message;
+      this.options.clearVerificationTrace?.();
       if (result === 'completed') {
         this.options.showTransientStatus?.(message);
       }
@@ -826,6 +889,7 @@ export class OverworldGoalRunController {
       checkpointsReached: runState.checkpointsReached,
       score: this.options.getScore(),
       finishedAt: this.nowIso(),
+      verificationTrace: this.options.buildVerificationTrace?.(runState, result) ?? null,
     };
   }
 
@@ -841,7 +905,7 @@ export class OverworldGoalRunController {
       return 'Practice run. Reach spawn to start ranked attempt.';
     }
 
-    if (isPlayfunSurfaceAuth(this.options.getAuthSource())) {
+    if (isPlayfunLeaderboardExcludedDisplayName(this.options.getAuthDisplayName())) {
       return 'Practice run. Reach spawn to start a local Play.fun attempt.';
     }
 
@@ -858,7 +922,7 @@ export class OverworldGoalRunController {
       return 'Starting ranked run...';
     }
 
-    if (isPlayfunSurfaceAuth(this.options.getAuthSource())) {
+    if (isPlayfunLeaderboardExcludedDisplayName(this.options.getAuthDisplayName())) {
       return 'Play.fun runs stay local on WAMP.';
     }
 
@@ -881,6 +945,9 @@ export class OverworldGoalRunController {
     runState.attemptId = null;
     runState.pendingResult = null;
     runState.submittedScore = null;
+    runState.verificationSchemaVersion = null;
+    runState.verificationNonce = null;
+    runState.snapshotHash = null;
   }
 
   private nowIso(): string {

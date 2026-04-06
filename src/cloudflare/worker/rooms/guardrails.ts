@@ -2,79 +2,38 @@ import type { RequestAuthSource } from '../../../agents/model';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
 import { HttpError } from '../core/http';
 import type { Env } from '../core/types';
+import {
+  resolveRoomCapabilities,
+  validateRoomObjectsAgainstCapabilities,
+} from '../progression/store';
 
-const DEFAULT_ROOM_DAILY_CLAIM_LIMIT = 1;
-const DEFAULT_PLAYFUN_ROOM_DAILY_CLAIM_LIMIT = 1;
-const DEFAULT_PLAYFUN_MAX_PLACED_OBJECTS = 16;
-
-function parseOptionalPositiveInteger(
-  raw: string | undefined,
-  fallback: number | null,
-): number | null {
-  const trimmed = raw?.trim();
-  if (!trimmed) {
-    return fallback;
-  }
-
-  const parsed = Number.parseInt(trimmed, 10);
-  if (!Number.isFinite(parsed) || Number.isNaN(parsed)) {
-    return fallback;
-  }
-
-  if (parsed <= 0) {
-    return null;
-  }
-
-  return parsed;
-}
-
-export function getDailyRoomClaimLimitForSource(
+export async function getDailyRoomClaimLimitForUser(
   env: Env,
+  userId: string,
   requestAuthSource: RequestAuthSource | null,
-): number | null {
-  if (requestAuthSource === 'playfun') {
-    return parseOptionalPositiveInteger(
-      env.PLAYFUN_ROOM_DAILY_CLAIM_LIMIT,
-      DEFAULT_PLAYFUN_ROOM_DAILY_CLAIM_LIMIT,
-    );
-  }
-
-  return parseOptionalPositiveInteger(
-    env.ROOM_DAILY_CLAIM_LIMIT,
-    DEFAULT_ROOM_DAILY_CLAIM_LIMIT,
-  );
+): Promise<number | null> {
+  const capabilities = await resolveRoomCapabilities(env, userId, requestAuthSource);
+  return capabilities.claimLimitPerDay;
 }
 
-export function getPlacedObjectLimitForSource(
-  env: Env,
-  requestAuthSource: RequestAuthSource | null,
-): number | null {
-  if (requestAuthSource !== 'playfun') {
-    return null;
-  }
-
-  return parseOptionalPositiveInteger(
-    env.PLAYFUN_ROOM_MAX_PLACED_OBJECTS,
-    DEFAULT_PLAYFUN_MAX_PLACED_OBJECTS,
-  );
-}
-
-export function enforceRoomMutationGuardrails(
+export async function enforceRoomMutationGuardrails(
   env: Env,
   room: RoomSnapshot,
+  userId: string,
   requestAuthSource: RequestAuthSource | null,
-): void {
-  const placedObjectLimit = getPlacedObjectLimitForSource(env, requestAuthSource);
-  if (placedObjectLimit === null) {
-    return;
-  }
+  previousRoom: RoomSnapshot | null,
+): Promise<void> {
+  const capabilities = await resolveRoomCapabilities(env, userId, requestAuthSource);
+  validateRoomObjectsAgainstCapabilities(room, capabilities, previousRoom);
+}
 
-  if (room.placedObjects.length <= placedObjectLimit) {
-    return;
+export async function enforcePublishLimitForUser(
+  env: Env,
+  userId: string,
+  requestAuthSource: RequestAuthSource | null,
+): Promise<void> {
+  const capabilities = await resolveRoomCapabilities(env, userId, requestAuthSource);
+  if (capabilities.publishLimitPerDay <= 0) {
+    throw new HttpError(429, 'Publishing is unavailable for this trust tier.');
   }
-
-  throw new HttpError(
-    429,
-    `Play.fun room edits are limited to ${placedObjectLimit} placed objects per room right now.`,
-  );
 }

@@ -1,3 +1,5 @@
+import type { BuilderCapabilitySummary } from '../progression/model';
+
 export interface PartyKitShardHeartbeat {
   shardId: string;
   totalConnections: number;
@@ -53,27 +55,6 @@ export interface LaunchStatsActivity {
   last60m: LaunchStatsActivityWindow;
 }
 
-export type LaunchStatsRecentEventKind =
-  | 'room_claim'
-  | 'room_publish'
-  | 'room_attempt_burst'
-  | 'room_run_finish';
-
-export interface LaunchStatsRecentEvent {
-  kind: LaunchStatsRecentEventKind;
-  at: string;
-  actorUserId: string | null;
-  actorDisplayName: string;
-  roomId: string | null;
-  roomTitle: string | null;
-  roomX: number | null;
-  roomY: number | null;
-  roomVersion: number | null;
-  result: string | null;
-  attemptCount: number | null;
-  completedCount: number | null;
-}
-
 export interface LaunchStatsPartykitStatus {
   configured: boolean;
   reachable: boolean;
@@ -86,7 +67,6 @@ export interface LaunchStatsResponse {
   config: LaunchStatsConfig;
   totals: LaunchStatsTotals;
   activity: LaunchStatsActivity;
-  recentEvents: LaunchStatsRecentEvent[];
   partykit: LaunchStatsPartykitStatus;
 }
 
@@ -250,4 +230,43 @@ export interface SuspiciousInvalidationResult extends SuspiciousInvalidationPrev
   ok: true;
   auditId: string;
   operatorLabel: string;
+}
+
+export interface AdminBuilderCapOverride {
+  claimLimitPerDay: number | null;
+  publishLimitPerDay: number | null;
+  objectLimit: number | null;
+  collectibleLimit: number | null;
+  reason: string | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+export interface AdminProgressionUserLookupEntry {
+  userId: string;
+  displayName: string;
+  email: string | null;
+  founderNumber: number | null;
+  builderCaps: BuilderCapabilitySummary;
+  override: AdminBuilderCapOverride;
+}
+
+export interface AdminProgressionUserLookupResponse {
+  query: string;
+  items: AdminProgressionUserLookupEntry[];
+}
+
+export interface AdminProgressionUserCapsResponse extends AdminProgressionUserLookupEntry {}
+
+export interface AdminProgressionCapsUpdateRequest {
+  claimLimitPerDay: number | null;
+  publishLimitPerDay: number | null;
+  objectLimit: number | null;
+  collectibleLimit: number | null;
+  reason: string | null;
+  operatorLabel: string;
+}
+
+export interface AdminProgressionCapsUpdateResponse extends AdminProgressionUserCapsResponse {
+  ok: true;
 }

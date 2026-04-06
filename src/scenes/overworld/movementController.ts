@@ -90,7 +90,9 @@ interface OverworldMovementControllerOptions {
 export interface OverworldMovementStepResult {
   grounded: boolean;
   downHeld: boolean;
+  horizontalInput: number;
   verticalInput: number;
+  jumpPressed: boolean;
 }
 
 export class OverworldMovementController {
@@ -178,7 +180,9 @@ export class OverworldMovementController {
       return {
         grounded: false,
         downHeld: false,
+        horizontalInput: 0,
         verticalInput: 0,
+        jumpPressed: false,
       };
     }
 
@@ -227,7 +231,9 @@ export class OverworldMovementController {
       return {
         grounded: false,
         downHeld,
+        horizontalInput,
         verticalInput,
+        jumpPressed: spacePressed || upPressed,
       };
     }
 
@@ -370,7 +376,9 @@ export class OverworldMovementController {
     return {
       grounded,
       downHeld,
+      horizontalInput,
       verticalInput,
+      jumpPressed: spacePressed || upPressed,
     };
   }
 

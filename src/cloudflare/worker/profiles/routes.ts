@@ -3,7 +3,6 @@ import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
 import { findUserByDisplayName, updateUserProfile } from '../auth/store';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth } from '../auth/request';
-import { assertPlayfunOnlyDisplayNameChangeAllowed } from '../playfun/leaderboardIsolation';
 import { loadUserProfile } from './store';
 
 const MAX_PROFILE_BIO_LENGTH = 280;
@@ -26,8 +25,6 @@ export async function handleProfileGet(
 export async function handleProfileUpdateMe(request: Request, env: Env): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(env, request, 'update your profile');
   const body = await parseProfileUpdateBody(request);
-
-  await assertPlayfunOnlyDisplayNameChangeAllowed(env, auth.user, body.displayName);
 
   const existingUser = await findUserByDisplayName(env, body.displayName);
   if (existingUser && existingUser.id !== auth.user.id) {

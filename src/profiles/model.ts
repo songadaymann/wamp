@@ -1,6 +1,7 @@
 import type { AuthUser } from '../auth/model';
 import type { RoomGoalType } from '../goals/roomGoals';
 import type { RoomCoordinates } from '../persistence/roomModel';
+import type { ProgressionSummary } from '../progression/model';
 
 export interface ProfilePublishedRoomEntry {
   roomId: string;
@@ -36,6 +37,7 @@ export interface UserProfileResponse {
   isSelf: boolean;
   canEdit: boolean;
   stats: ProfileStatsSummary;
+  progression: ProgressionSummary;
   publishedRooms: ProfilePublishedRoomEntry[];
   publishedCourseCount: number;
 }

@@ -14,6 +14,7 @@ import { LeaderboardModalController } from './setup/leaderboardModal';
 import { InstallHelpController } from './setup/installHelp';
 import { PaletteController } from './setup/paletteController';
 import { ProfileModalController } from './setup/profileModal';
+import { RunRatingModalController } from './setup/runRatingModal';
 import { setupCollapsibleSidebarSections } from './setup/sidebarSections';
 import { setupSceneCommands } from './setup/sceneCommands';
 import { configureEditorUiBridgeRuntime } from '../scenes/editor/uiBridge';
@@ -30,6 +31,7 @@ export function setupUI(game: Phaser.Game): void {
   const courseModal = new CourseModalController(game);
   const courseComposerPanel = new CourseComposerPanelController(game);
   const profileModal = new ProfileModalController(game);
+  const runRatingModal = new RunRatingModalController(game);
   const chatPanel = new ChatPanelController();
   const mobileUi = new MobileUiController(game);
 
@@ -56,6 +58,7 @@ export function setupUI(game: Phaser.Game): void {
   courseModal.init();
   courseComposerPanel.init();
   profileModal.init();
+  runRatingModal.init();
   chatPanel.init();
   mobileUi.init();
   setupSceneCommands(

@@ -9,10 +9,16 @@ import { renderRoomSnapshotToPngDataUrl } from '../../mint/roomMetadataRender';
 import { createWorldRepository, type WorldRepository } from '../../persistence/worldRepository';
 import type { ProfilePublishedRoomEntry, ProfileStatsSummary, UserProfileResponse } from '../../profiles/model';
 import { createProfileRepository, type ProfileRepository } from '../../profiles/profileRepository';
+import type { ProgressionSummary } from '../../progression/model';
 import { getActiveOverworldScene } from './sceneBridge';
-import { PROFILE_OPEN_REQUEST_EVENT, type ProfileOpenRequestDetail } from './profileEvents';
+import {
+  PROFILE_INVALIDATED_EVENT,
+  PROFILE_OPEN_REQUEST_EVENT,
+  type ProfileInvalidatedDetail,
+  type ProfileOpenRequestDetail,
+} from './profileEvents';
 
-type ProfileTabId = 'rooms' | 'stats';
+type ProfileTabId = 'rooms' | 'progress' | 'stats';
 
 type ProfileModalElements = {
   modal: HTMLElement | null;
@@ -24,6 +30,7 @@ type ProfileModalElements = {
   avatarFallback: HTMLElement | null;
   displayName: HTMLElement | null;
   joinedDate: HTMLElement | null;
+  heroProgress: HTMLElement | null;
   overviewBio: HTMLElement | null;
   editFields: HTMLElement | null;
   displayNameInput: HTMLInputElement | null;
@@ -35,6 +42,7 @@ type ProfileModalElements = {
   panels: Record<ProfileTabId, HTMLElement | null>;
   roomsList: HTMLElement | null;
   roomsEmpty: HTMLElement | null;
+  progressList: HTMLElement | null;
   statsList: HTMLElement | null;
 };
 
@@ -92,6 +100,21 @@ export class ProfileModalController {
     this.render();
   };
 
+  private readonly handleProfileInvalidated = (event: Event) => {
+    const detail =
+      event instanceof CustomEvent
+        ? (event.detail as ProfileInvalidatedDetail | undefined)
+        : undefined;
+    if (!detail?.userId) {
+      return;
+    }
+
+    this.profileCache.delete(detail.userId);
+    if (this.currentProfileUserId === detail.userId && !this.loading) {
+      void this.open(detail.userId);
+    }
+  };
+
   private readonly handleAvatarImageError = () => {
     this.avatarPreviewBroken = true;
     this.renderAvatar();
@@ -114,6 +137,7 @@ export class ProfileModalController {
       avatarFallback: this.doc.getElementById('profile-avatar-fallback'),
       displayName: this.doc.getElementById('profile-display-name'),
       joinedDate: this.doc.getElementById('profile-joined-date'),
+      heroProgress: this.doc.getElementById('profile-hero-progress'),
       overviewBio: this.doc.getElementById('profile-overview-bio'),
       editFields: this.doc.getElementById('profile-edit-fields'),
       displayNameInput: this.doc.getElementById('profile-display-name-input') as HTMLInputElement | null,
@@ -123,14 +147,17 @@ export class ProfileModalController {
       saveStatus: this.doc.getElementById('profile-save-status'),
       tabButtons: {
         rooms: this.doc.getElementById('btn-profile-tab-rooms') as HTMLButtonElement | null,
+        progress: this.doc.getElementById('btn-profile-tab-progress') as HTMLButtonElement | null,
         stats: this.doc.getElementById('btn-profile-tab-stats') as HTMLButtonElement | null,
       },
       panels: {
         rooms: this.doc.getElementById('profile-rooms-panel'),
+        progress: this.doc.getElementById('profile-progress-panel'),
         stats: this.doc.getElementById('profile-stats-panel'),
       },
       roomsList: this.doc.getElementById('profile-rooms-list'),
       roomsEmpty: this.doc.getElementById('profile-rooms-empty'),
+      progressList: this.doc.getElementById('profile-progress-list'),
       statsList: this.doc.getElementById('profile-stats-list'),
     };
   }
@@ -140,6 +167,7 @@ export class ProfileModalController {
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
     this.windowObj.addEventListener(PROFILE_OPEN_REQUEST_EVENT, this.handleProfileOpenRequest as EventListener);
+    this.windowObj.addEventListener(PROFILE_INVALIDATED_EVENT, this.handleProfileInvalidated as EventListener);
     this.windowObj.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
     this.elements.avatarImage?.addEventListener('error', this.handleAvatarImageError);
     this.elements.saveButton?.addEventListener('click', () => {
@@ -331,6 +359,7 @@ export class ProfileModalController {
 
     this.renderAvatar();
     this.renderRooms(profile?.publishedRooms ?? []);
+    this.renderProgress(profile?.progression ?? null);
     this.renderStats(profile?.stats ?? null, profile?.publishedCourseCount ?? 0);
     this.renderTabs();
   }
@@ -531,6 +560,102 @@ export class ProfileModalController {
         return row;
       })
     );
+  }
+
+  private renderProgress(progression: ProgressionSummary | null): void {
+    if (this.elements.heroProgress) {
+      const heroText = progression
+        ? [
+            progression.founderNumber !== null ? `WAMP #${progression.founderNumber}` : null,
+            progression.player.medalLabel,
+            progression.builder.medalLabel,
+            progression.curator.medalLabel,
+          ]
+            .filter((value): value is string => Boolean(value))
+            .join(' · ')
+        : '';
+      this.elements.heroProgress.textContent = heroText;
+      this.elements.heroProgress.classList.toggle('hidden', !heroText);
+    }
+
+    if (!this.elements.progressList) {
+      return;
+    }
+
+    const items: Array<[string, string]> = progression
+      ? [
+          ['Founder', progression.founderNumber !== null ? `WAMP #${progression.founderNumber}` : 'Unassigned'],
+          ['Player lane', `${progression.player.xp} PXP · ${progression.player.medalLabel}`],
+          ['Builder lane', `${progression.builder.xp} BXP · ${progression.builder.medalLabel}`],
+          ['Curator lane', `${progression.curator.xp} CXP · ${progression.curator.medalLabel}`],
+          [
+            'Builder capacity',
+            `${progression.builderCaps.objectLimit} placed objects · ${progression.builderCaps.collectibleLimit} collectibles`,
+          ],
+          [
+            'Builder cadence',
+            `${progression.builderCaps.publishLimitPerDay} publish/day · ${progression.builderCaps.claimLimitPerDay} claim/day`,
+          ],
+          ['Badges', String(progression.badgeCount)],
+          ['Trophies', String(progression.trophyCount)],
+        ]
+      : [['Progression', 'No progression data yet.']];
+
+    const rows = items.map(([label, value]) => {
+      const row = this.doc.createElement('div');
+      row.className = 'profile-stats-row';
+      const labelEl = this.doc.createElement('div');
+      labelEl.className = 'profile-stats-label';
+      labelEl.textContent = label;
+      const valueEl = this.doc.createElement('div');
+      valueEl.className = 'profile-stats-value';
+      valueEl.textContent = value;
+      row.append(labelEl, valueEl);
+      return row;
+    });
+
+    if (progression) {
+      if (progression.builderCaps.overrideActive) {
+        const row = this.doc.createElement('div');
+        row.className = 'profile-stats-row';
+        const labelEl = this.doc.createElement('div');
+        labelEl.className = 'profile-stats-label';
+        labelEl.textContent = 'Cap boost';
+        const valueEl = this.doc.createElement('div');
+        valueEl.className = 'profile-stats-value';
+        valueEl.textContent = 'Admin boost active';
+        row.append(labelEl, valueEl);
+        rows.push(row);
+      }
+
+      for (const badge of progression.featuredBadges) {
+        const row = this.doc.createElement('div');
+        row.className = 'profile-stats-row';
+        const labelEl = this.doc.createElement('div');
+        labelEl.className = 'profile-stats-label';
+        labelEl.textContent = badge.category;
+        const valueEl = this.doc.createElement('div');
+        valueEl.className = 'profile-stats-value';
+        valueEl.textContent = `${badge.label} · ${badge.description}`;
+        row.append(labelEl, valueEl);
+        rows.push(row);
+      }
+
+      for (const trophy of progression.recentTrophies) {
+        const row = this.doc.createElement('div');
+        row.className = 'profile-stats-row';
+        const labelEl = this.doc.createElement('div');
+        labelEl.className = 'profile-stats-label';
+        labelEl.textContent = 'Trophy';
+        const valueEl = this.doc.createElement('div');
+        valueEl.className = 'profile-stats-value';
+        valueEl.textContent = `${trophy.contentType} ${trophy.contentId} v${trophy.versionKey} · ${trophy.trophyType}`;
+        row.append(labelEl, valueEl);
+        rows.push(row);
+      }
+    }
+
+    this.elements.progressList.replaceChildren(...rows);
   }
 
   private renderTabs(): void {

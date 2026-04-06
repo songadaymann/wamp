@@ -2,6 +2,7 @@ import { placedObjectContributesToCategory } from '../../../config';
 import type { CourseRunRecord } from '../../../courses/runModel';
 import type { RoomGoal } from '../../../goals/roomGoals';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
+import { isPlayfunLeaderboardExcludedDisplayName } from '../../../playfun/identity';
 import type { RoomRunRecord, UserStatsRecord } from '../../../runs/model';
 import { compareLeaderboardEntries } from '../../../runs/scoring';
 import type { CourseRunRow, Env, PointEventRow, RoomRunRow, UserRow, UserStatsRow } from '../core/types';
@@ -252,6 +253,7 @@ export async function loadBestCompletedRunForUserAndRoomVersion(
         AND room_id = ?
         AND room_version = ?
         AND result = 'completed'
+        AND COALESCE(verification_status, 'not_required') IN ('not_required', 'passed')
         AND (? IS NULL OR attempt_id != ?)
     `
   )
@@ -306,7 +308,7 @@ export async function upsertUserStats(env: Env, userId: string): Promise<void> {
     return;
   }
 
-  if (await isPlayfunLeaderboardExcludedUserId(env, userId)) {
+  if (isPlayfunLeaderboardExcludedDisplayName(user.display_name)) {
     await env.DB.batch([
       env.DB.prepare(
         `
@@ -331,6 +333,7 @@ export async function upsertUserStats(env: Env, userId: string): Promise<void> {
       FROM course_runs
       WHERE user_id = ?
         AND result != 'active'
+        AND COALESCE(verification_status, 'not_required') IN ('not_required', 'passed')
       UNION ALL
       SELECT
         result,
@@ -343,6 +346,7 @@ export async function upsertUserStats(env: Env, userId: string): Promise<void> {
       FROM room_runs
       WHERE user_id = ?
         AND result != 'active'
+        AND COALESCE(verification_status, 'not_required') IN ('not_required', 'passed')
     `
   )
     .bind(userId, userId)

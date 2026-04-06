@@ -1,12 +1,14 @@
+import { isPlayfunLeaderboardExcludedDisplayName } from './identity';
+
 export type SurfaceAuthSource = 'session' | 'playfun' | 'api_token' | 'agent_token' | null;
 
 export function isWampLeaderboardEligibleAuth(
   authenticated: boolean,
-  source: SurfaceAuthSource,
-  _displayName: string | null | undefined
+  _source: SurfaceAuthSource,
+  displayName: string | null | undefined
 ): boolean {
   return authenticated
-    && !isPlayfunSurfaceAuth(source);
+    && !isPlayfunLeaderboardExcludedDisplayName(displayName);
 }
 
 export function isPlayfunSurfaceAuth(source: SurfaceAuthSource): boolean {

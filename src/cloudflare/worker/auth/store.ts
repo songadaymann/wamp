@@ -12,7 +12,8 @@ import type {
   UserStatsRow,
   WalletChallengeRow,
 } from '../core/types';
-import { sqlUserIdIsNotPlayfunOnly } from '../playfun/leaderboardIsolation';
+import { sqlDoesNotHavePlayfunDisplayNamePrefix } from '../playfun/leaderboardIsolation';
+import { ensureFounderIdentityQualification } from '../progression/store';
 
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 export const MAGIC_LINK_TTL_MS = 1000 * 60 * 15;
@@ -132,6 +133,8 @@ export async function createUserForEmail(env: Env, email: string): Promise<AuthU
     ).bind(user.id, user.email, user.displayName, now, now),
   ]);
 
+  await ensureFounderIdentityQualification(env, user.id, now);
+
   return user;
 }
 
@@ -153,6 +156,8 @@ export async function createUserForWallet(env: Env, walletAddress: string): Prom
       `
     ).bind(user.id, walletAddress, user.displayName, now, now),
   ]);
+
+  await ensureFounderIdentityQualification(env, user.id, now);
 
   return user;
 }
@@ -209,6 +214,8 @@ export async function attachWalletToUser(
       `
     ).bind(normalizedWallet, updatedAt, user.id),
   ]);
+
+  await ensureFounderIdentityQualification(env, user.id, updatedAt);
 
   return {
     ...user,
@@ -355,7 +362,7 @@ export async function loadUserStatsRow(env: Env, userId: string) {
         updated_at
       FROM user_stats
       WHERE user_id = ?
-        AND ${sqlUserIdIsNotPlayfunOnly('user_stats.user_id')}
+        AND ${sqlDoesNotHavePlayfunDisplayNamePrefix('user_stats.user_display_name')}
       LIMIT 1
     `
   )
@@ -383,7 +390,7 @@ export async function loadAllUserStatsRows(env: Env) {
         fastest_clear_ms,
         updated_at
       FROM user_stats
-      WHERE ${sqlUserIdIsNotPlayfunOnly('user_stats.user_id')}
+      WHERE ${sqlDoesNotHavePlayfunDisplayNamePrefix('user_stats.user_display_name')}
     `
   ).all<UserStatsRow>();
 
