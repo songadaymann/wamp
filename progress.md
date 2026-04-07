@@ -80,6 +80,7 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - synthetic editor sign placement opens the modal
       - saved sign text persists into the room snapshot
       - entering play mode exposes `activeSign.text === "Hello from sign"` in overworld debug state
+  - merged to `main` on April 7, 2026
 
 - XP / ratings / trust / badges merge to main on April 6, 2026:
   - merged `feature/progression-xp-ratings-trust-badges` into `main`
