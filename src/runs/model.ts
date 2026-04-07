@@ -1,6 +1,15 @@
 import type { RoomCoordinates } from '../persistence/roomModel';
 import type { RoomGoal, RoomGoalType } from '../goals/roomGoals';
 import type { RankedRunVerificationTrace } from './verificationTrace';
+import type {
+  DifficultyRatingSummary,
+  ProgressionDifficulty,
+  QualityRatingSummary,
+  RoomRatingRequestBody,
+  RoomRatingResponse,
+  TrophyAwardSummary,
+  ViewerRatingSummary,
+} from '../progression/model';
 
 export type RunResult = 'active' | 'completed' | 'failed' | 'abandoned';
 export type LeaderboardRankingMode = 'time' | 'score';
@@ -115,6 +124,9 @@ export interface RoomLeaderboardResponse {
   goalType: RoomGoalType;
   rankingMode: LeaderboardRankingMode;
   difficulty: RoomDifficultySummary;
+  quality: QualityRatingSummary;
+  viewerRating: ViewerRatingSummary | null;
+  trophy: TrophyAwardSummary | null;
   entries: RoomLeaderboardEntry[];
   viewerBest: RoomLeaderboardEntry | null;
   viewerRank: number | null;
@@ -137,6 +149,8 @@ export interface RoomDiscoveryEntry {
   goalType: RoomGoalType;
   consensusDifficulty: RoomDifficulty | null;
   voteCount: number;
+  quality: QualityRatingSummary;
+  trophy: TrophyAwardSummary | null;
   publishedAt: string | null;
 }
 
@@ -144,6 +158,9 @@ export interface RoomDiscoveryResponse {
   difficultyFilter: RoomDifficulty | null;
   results: RoomDiscoveryEntry[];
 }
+
+export type RoomProgressRatingRequestBody = RoomRatingRequestBody;
+export type RoomProgressRatingResponse = RoomRatingResponse;
 
 export interface GlobalLeaderboardEntry {
   rank: number;

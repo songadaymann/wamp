@@ -57,6 +57,20 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- XP / ratings / trust / badges merge to main on April 6, 2026:
+  - merged `feature/progression-xp-ratings-trust-badges` into `main`
+  - main now includes:
+    - progression schema migrations `0019` through `0021`
+    - room/course rating APIs plus the post-run rating modal flow
+    - profile progression summaries, builder-cap gating, and admin override tooling
+    - ranked run verification trace plumbing
+    - suspicious-admin identity tabs / per-run point surfacing
+    - `scripts/deploy_safety_branch.mjs` safety deploy helper
+  - validation on merged state:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - local build failure around `aes-js` turned out to be a broken local install artifact (`node_modules/node_modules`); clearing that stray directory and reinstalling fixed the build
+
 - Global SFX balance trim on April 6, 2026:
   - branched from `main` on `feature/sfx-balance-2026-04-06`
   - added `GLOBAL_SFX_VOLUME_MULTIPLIER = 0.55` in `src/audio/sfx.ts`

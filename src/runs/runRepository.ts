@@ -6,6 +6,8 @@ import type {
   RoomDiscoveryResponse,
   RoomLeaderboardResponse,
   RoomDifficultyVoteRequestBody,
+  RoomProgressRatingRequestBody,
+  RoomProgressRatingResponse,
   RunFinishRequestBody,
   RunStartRequestBody,
   RunStartResponse,
@@ -29,6 +31,7 @@ export interface RunRepository {
     limit?: number
   ): Promise<RoomLeaderboardResponse>;
   submitRoomDifficultyVote(roomId: string, body: RoomDifficultyVoteRequestBody): Promise<void>;
+  submitRoomRating(roomId: string, body: RoomProgressRatingRequestBody): Promise<RoomProgressRatingResponse>;
   loadRoomDiscovery(
     difficulty: RoomDifficulty | null,
     limit?: number
@@ -90,6 +93,16 @@ class ApiRunRepository implements RunRepository {
     body: RoomDifficultyVoteRequestBody
   ): Promise<void> {
     await this.request(`/api/leaderboards/rooms/${encodeURIComponent(roomId)}/difficulty-vote`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async submitRoomRating(
+    roomId: string,
+    body: RoomProgressRatingRequestBody
+  ): Promise<RoomProgressRatingResponse> {
+    return this.request<RoomProgressRatingResponse>(`/api/rooms/${encodeURIComponent(roomId)}/ratings`, {
       method: 'POST',
       body: JSON.stringify(body),
     });

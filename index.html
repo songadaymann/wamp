@@ -1209,6 +1209,7 @@
           <div class="profile-hero-copy">
             <div id="profile-display-name" class="profile-display-name">Profile</div>
             <div id="profile-joined-date" class="history-modal-meta">Joined recently</div>
+            <div id="profile-hero-progress" class="history-modal-meta hidden"></div>
             <div id="profile-overview-bio" class="profile-overview-bio">No bio yet.</div>
           </div>
         </div>
@@ -1226,6 +1227,7 @@
         </div>
         <div class="leaderboard-tabs profile-tabs">
           <button id="btn-profile-tab-rooms" class="bar-btn bar-btn-small active" type="button" aria-selected="true">Published Rooms</button>
+          <button id="btn-profile-tab-progress" class="bar-btn bar-btn-small" type="button" aria-selected="false">Progress</button>
           <button id="btn-profile-tab-stats" class="bar-btn bar-btn-small" type="button" aria-selected="false">Stats</button>
         </div>
         <div id="profile-rooms-panel" class="leaderboard-panel">
@@ -1233,9 +1235,61 @@
           <div id="profile-rooms-empty" class="leaderboard-empty">No claimed published rooms yet.</div>
           <div id="profile-rooms-list" class="history-version-list profile-room-grid"></div>
         </div>
+        <div id="profile-progress-panel" class="leaderboard-panel hidden">
+          <div class="history-modal-meta">Visible WAMP progression lanes, founder identity, badges, and trophies.</div>
+          <div id="profile-progress-list" class="profile-stats-list"></div>
+        </div>
         <div id="profile-stats-panel" class="leaderboard-panel hidden">
           <div class="history-modal-meta">Current leaderboard and progression summary.</div>
           <div id="profile-stats-list" class="profile-stats-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="run-rating-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel leaderboard-modal-panel run-rating-modal-panel" role="dialog" aria-modal="true" aria-labelledby="run-rating-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Run Complete</div>
+          <h2 id="run-rating-title" class="history-modal-title">Post-Run Rating</h2>
+          <div id="run-rating-meta" class="history-modal-meta">Rate the run you just finished.</div>
+        </div>
+        <button id="btn-run-rating-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div id="run-rating-error" class="history-modal-error hidden"></div>
+      <div class="leaderboard-panel run-rating-panel">
+        <div id="run-rating-result" class="run-rating-result"></div>
+        <div id="run-rating-leaderboard" class="history-modal-meta">Loading latest leaderboard summary...</div>
+        <div id="run-rating-suggestion" class="history-modal-meta">Suggested difficulty: Medium.</div>
+
+        <div class="run-rating-section">
+          <div class="run-rating-section-label">Quality</div>
+          <div id="run-rating-quality-actions" class="run-rating-quality-actions">
+            <button class="bar-btn bar-btn-small" type="button" data-quality-stars="1">1 Star</button>
+            <button class="bar-btn bar-btn-small" type="button" data-quality-stars="2">2 Stars</button>
+            <button class="bar-btn bar-btn-small" type="button" data-quality-stars="3">3 Stars</button>
+            <button class="bar-btn bar-btn-small" type="button" data-quality-stars="4">4 Stars</button>
+            <button class="bar-btn bar-btn-small" type="button" data-quality-stars="5">5 Stars</button>
+          </div>
+        </div>
+
+        <div class="run-rating-section">
+          <div class="run-rating-section-label">Difficulty</div>
+          <div id="run-rating-difficulty-actions" class="leaderboard-difficulty-actions">
+            <button class="bar-btn bar-btn-small" type="button" data-progression-difficulty="easy">Easy</button>
+            <button class="bar-btn bar-btn-small" type="button" data-progression-difficulty="medium">Medium</button>
+            <button class="bar-btn bar-btn-small" type="button" data-progression-difficulty="hard">Hard</button>
+            <button class="bar-btn bar-btn-small" type="button" data-progression-difficulty="extreme">Extreme</button>
+          </div>
+        </div>
+
+        <div id="run-rating-status" class="leaderboard-secondary">Rate the content quality and tweak the suggested difficulty if needed.</div>
+        <div id="run-rating-reward" class="history-modal-meta hidden"></div>
+
+        <div class="run-rating-actions">
+          <button id="btn-run-rating-skip" class="bar-btn bar-btn-small" type="button">Skip</button>
+          <button id="btn-run-rating-submit" class="bar-btn" type="button">Submit Rating</button>
         </div>
       </div>
     </div>

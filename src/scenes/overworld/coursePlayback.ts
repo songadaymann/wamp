@@ -24,6 +24,8 @@ import {
   createActiveCourseRunState,
   type ActiveCourseRunState,
 } from './courseRuns';
+import { suggestProgressionDifficulty } from '../../progression/autoDifficulty';
+import { requestPostRunRating } from '../../progression/postRunRatingEvents';
 import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
 
 export type CoursePlaybackRoomSourceMode = 'published' | 'draftPreview';
@@ -242,6 +244,24 @@ export class OverworldCoursePlaybackController {
       currentActiveCourseRun.submissionState = 'submitted';
       currentActiveCourseRun.submissionMessage = 'Ranked course run submitted.';
       this.host.clearVerificationTrace?.();
+      if (result === 'completed') {
+        requestPostRunRating({
+          contentType: 'course',
+          contentId: currentActiveCourseRun.course.id,
+          contentTitle: currentActiveCourseRun.course.title,
+          version: currentActiveCourseRun.course.version,
+          elapsedMs: body.elapsedMs,
+          deaths: body.deaths,
+          score: body.score ?? null,
+          autoSuggestedDifficulty: suggestProgressionDifficulty({
+            elapsedMs: body.elapsedMs,
+            deaths: body.deaths,
+            collectiblesCollected: body.collectiblesCollected,
+            enemiesDefeated: body.enemiesDefeated,
+            checkpointsReached: body.checkpointsReached,
+          }),
+        });
+      }
     } catch (error) {
       console.error('Failed to finish ranked course run', {
         attemptId,

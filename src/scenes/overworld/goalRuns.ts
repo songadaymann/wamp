@@ -21,6 +21,8 @@ import {
   type GoalRunEntryContext,
   type GoalRunStartPoint,
 } from './goalRunStartGate';
+import { suggestProgressionDifficulty } from '../../progression/autoDifficulty';
+import { requestPostRunRating } from '../../progression/postRunRatingEvents';
 import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
 
 export type GoalRunLeaderboardState = 'idle' | 'loading' | 'ready' | 'error';
@@ -644,6 +646,16 @@ export class OverworldGoalRunController {
                 viewerCanVote: roomDifficulty.viewerCanVote,
                 viewerNeedsRun: roomDifficulty.viewerNeedsRun,
               },
+              quality: {
+                ...this.currentRoomLeaderboard.quality,
+                counts: { ...this.currentRoomLeaderboard.quality.counts },
+              },
+              viewerRating: this.currentRoomLeaderboard.viewerRating
+                ? { ...this.currentRoomLeaderboard.viewerRating }
+                : null,
+              trophy: this.currentRoomLeaderboard.trophy
+                ? { ...this.currentRoomLeaderboard.trophy }
+                : null,
               entries: this.currentRoomLeaderboard.entries.map((entry) => ({ ...entry })),
               viewerBest: this.currentRoomLeaderboard.viewerBest
                 ? { ...this.currentRoomLeaderboard.viewerBest }
@@ -830,6 +842,25 @@ export class OverworldGoalRunController {
           : result === 'failed'
             ? 'Failed run submitted.'
             : 'Run marked abandoned.';
+      if (result === 'completed') {
+        requestPostRunRating({
+          contentType: 'room',
+          contentId: runState.roomId,
+          contentTitle: null,
+          roomCoordinates: { ...runState.roomCoordinates },
+          version: runState.roomVersion,
+          elapsedMs: payload.elapsedMs,
+          deaths: payload.deaths,
+          score: payload.score ?? null,
+          autoSuggestedDifficulty: suggestProgressionDifficulty({
+            elapsedMs: payload.elapsedMs,
+            deaths: payload.deaths,
+            collectiblesCollected: payload.collectiblesCollected,
+            enemiesDefeated: payload.enemiesDefeated,
+            checkpointsReached: payload.checkpointsReached,
+          }),
+        });
+      }
     } catch (error) {
       console.error('Failed to finish ranked run', {
         attemptId: runState.attemptId,

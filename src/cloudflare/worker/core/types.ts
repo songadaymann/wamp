@@ -321,6 +321,101 @@ export interface RoomDifficultyVoteRow {
   carried_from_version: number | null;
 }
 
+export interface UserProgressRow {
+  user_id: string;
+  total_pxp: number;
+  total_bxp: number;
+  total_cxp: number;
+  player_level: number;
+  builder_level: number;
+  curator_level: number;
+  hidden_trust_score: number;
+  trust_tier_internal: string;
+  founder_number: number | null;
+  builder_claim_limit_override: number | null;
+  builder_publish_limit_override: number | null;
+  builder_object_limit_override: number | null;
+  builder_collectible_limit_override: number | null;
+  builder_cap_override_reason: string | null;
+  builder_cap_override_updated_at: string | null;
+  builder_cap_override_updated_by: string | null;
+  badge_count: number;
+  trophy_count: number;
+  first_identity_qualified_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProgressEventRow {
+  id: string;
+  user_id: string;
+  event_type: string;
+  source_type: string;
+  source_id: string;
+  dedupe_key: string;
+  amount: number;
+  breakdown_json: string | null;
+  created_at: string;
+}
+
+export interface RoomRatingRow {
+  room_id: string;
+  lineage_key: string;
+  version_key: number;
+  user_id: string;
+  quality_stars: number | null;
+  difficulty_choice: string | null;
+  auto_difficulty_choice: string | null;
+  trust_weight: number;
+  completed_attempt_id: string | null;
+  first_rated_at: string;
+  updated_at: string;
+  rewarded_at: string | null;
+}
+
+export interface CourseRatingRow {
+  course_id: string;
+  lineage_key: string;
+  version_key: number;
+  user_id: string;
+  quality_stars: number | null;
+  difficulty_choice: string | null;
+  auto_difficulty_choice: string | null;
+  trust_weight: number;
+  completed_attempt_id: string | null;
+  first_rated_at: string;
+  updated_at: string;
+  rewarded_at: string | null;
+}
+
+export interface ContentTrophyRow {
+  content_type: string;
+  content_id: string;
+  version_key: number;
+  trophy_type: string;
+  metric_value: number;
+  weighted_vote_count: number;
+  awarded_at: string;
+}
+
+export interface BadgeAwardRow {
+  user_id: string;
+  badge_id: string;
+  source_type: string;
+  source_id: string;
+  metadata_json: string | null;
+  awarded_at: string;
+}
+
+export interface RoomVersionAttributionRow {
+  room_id: string;
+  version_key: number;
+  prior_version_key: number | null;
+  percent_change: number;
+  contributor_weight_breakdown: string;
+  created_at: string;
+}
+
 export interface UserStatsRow {
   user_id: string;
   user_display_name: string;

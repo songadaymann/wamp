@@ -15,6 +15,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "smoke:preview:readonly": "npx --yes --quiet -p playwright node scripts/preview_smoke_readonly.mjs",
+    "smoke:progression-rating": "npx --yes --quiet -p playwright node scripts/smoke_progression_rating_modal.mjs",
+    "smoke:progression-api:local": "node scripts/smoke_progression_api_flow.mjs",
     "smoke:prod": "node scripts/smoke_prod.mjs",
     "contracts:build": "npm --prefix contracts run build",
     "contracts:test": "npm --prefix contracts run test",
@@ -27,6 +29,7 @@
     "cf:d1:migrate:safety": "wrangler d1 migrations apply DB --env safety --remote",
     "cf:deploy": "npm run build && wrangler deploy",
     "cf:deploy:safety": "npm run build && wrangler deploy --env safety",
+    "deploy:safety:branch": "node scripts/deploy_safety_branch.mjs",
     "pages:deploy:prod": "node scripts/deploy_prod.mjs --pages-only --skip-smoke",
     "deploy:prod": "node scripts/deploy_prod.mjs",
     "presence:deploy:safety": "partykit deploy --config partykit.safety.json"

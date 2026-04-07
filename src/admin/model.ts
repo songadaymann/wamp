@@ -1,3 +1,5 @@
+import type { BuilderCapabilitySummary } from '../progression/model';
+
 export interface PartyKitShardHeartbeat {
   shardId: string;
   totalConnections: number;
@@ -269,4 +271,43 @@ export interface SuspiciousInvalidationResult extends SuspiciousInvalidationPrev
   ok: true;
   auditId: string;
   operatorLabel: string;
+}
+
+export interface AdminBuilderCapOverride {
+  claimLimitPerDay: number | null;
+  publishLimitPerDay: number | null;
+  objectLimit: number | null;
+  collectibleLimit: number | null;
+  reason: string | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+export interface AdminProgressionUserLookupEntry {
+  userId: string;
+  displayName: string;
+  email: string | null;
+  founderNumber: number | null;
+  builderCaps: BuilderCapabilitySummary;
+  override: AdminBuilderCapOverride;
+}
+
+export interface AdminProgressionUserLookupResponse {
+  query: string;
+  items: AdminProgressionUserLookupEntry[];
+}
+
+export interface AdminProgressionUserCapsResponse extends AdminProgressionUserLookupEntry {}
+
+export interface AdminProgressionCapsUpdateRequest {
+  claimLimitPerDay: number | null;
+  publishLimitPerDay: number | null;
+  objectLimit: number | null;
+  collectibleLimit: number | null;
+  reason: string | null;
+  operatorLabel: string;
+}
+
+export interface AdminProgressionCapsUpdateResponse extends AdminProgressionUserCapsResponse {
+  ok: true;
 }

@@ -7,12 +7,12 @@ import {
   type CourseRecord,
   type CourseSnapshot,
 } from '../../../courses/model';
+import { cloneRoomSnapshot, type RoomSnapshot } from '../../../persistence/roomModel';
 import {
   computeCourseRunScore,
   getCourseLeaderboardRankingMode,
   sortCompletedCourseRunsForLeaderboard,
 } from '../../../courses/scoring';
-import { cloneRoomSnapshot, type RoomSnapshot } from '../../../persistence/roomModel';
 import {
   RANKED_RUN_TRACE_SCHEMA_VERSION,
   normalizeRankedRunVerificationTrace,
@@ -20,6 +20,7 @@ import {
 import type {
   CourseLeaderboardEntry,
   CourseLeaderboardResponse,
+  CourseProgressRatingRequestBody,
   CourseRunFinishRequestBody,
   CourseRunRecord,
   CourseRunStartRequestBody,
@@ -60,6 +61,13 @@ import {
   previewRunFinalizePoints,
   upsertUserStats,
 } from '../runs/points';
+import {
+  assertUserCanPublishContent,
+  awardCoursePublishProgression,
+  awardCourseRunProgression,
+  loadCourseAggregateRatingSummaryForVersion,
+  submitCourseRating,
+} from '../progression/store';
 import {
   createCourseDraft,
   loadLatestEditableDraftCourseForRoom,
@@ -181,6 +189,7 @@ export async function handleCoursePublish(
     throw new HttpError(404, 'Course draft not found.');
   }
 
+  await assertUserCanPublishContent(env, auth.user.id, auth.source);
   const record = await publishCourse(env, courseId, auth.user, auth.isAdmin);
   const pointEvent = await awardCoursePublishPoints(
     env,
@@ -190,6 +199,15 @@ export async function handleCoursePublish(
     !existing.published
   );
   await maybeMirrorAuthenticatedPointEventToPlayfun(env, request, auth.user.id, pointEvent);
+  await awardCoursePublishProgression(env, {
+    userId: auth.user.id,
+    courseId: record.draft.id,
+    courseVersion: record.published?.version ?? record.draft.version,
+    publishedSnapshot: record.published ?? record.draft,
+    previousPublishedSnapshot: existing.published,
+    publishedAt: record.published?.publishedAt ?? new Date().toISOString(),
+    isFirstPublish: !existing.published,
+  });
   await upsertUserStats(env, auth.user.id);
   return jsonResponse(request, record);
 }
@@ -274,7 +292,7 @@ export async function handleCourseRunStart(
       auth.user.displayName,
       startedAt,
       verificationNonce,
-      snapshotHash
+      snapshotHash,
     ),
   ]);
 
@@ -323,6 +341,10 @@ export async function handleCourseRunFinish(
   const snapshot = await resolvePublishedCourseVersion(env, existing.courseId, existing.courseVersion);
   if (!snapshot.goal) {
     throw new HttpError(409, 'This course version no longer has a leaderboard goal.');
+  }
+  const courseRecord = await loadCourseRecord(env, existing.courseId, auth.user.id, auth.isAdmin);
+  if (!courseRecord) {
+    throw new HttpError(404, 'Course record not found.');
   }
 
   const finishedAt = new Date().toISOString();
@@ -394,7 +416,7 @@ export async function handleCourseRunFinish(
           snapshot.id,
           snapshot.version,
           snapshot.goal,
-          10
+          10,
         )
       : [];
   const viewerBestRow =
@@ -404,7 +426,7 @@ export async function handleCourseRunFinish(
           snapshot.id,
           snapshot.version,
           snapshot.goal,
-          auth.user.id
+          auth.user.id,
         )
       : null;
   const verificationTrigger =
@@ -616,6 +638,15 @@ export async function handleCourseRunFinish(
     await upsertUserStats(env, creatorPointEvent.user_id);
   }
 
+  await awardCourseRunProgression(env, {
+    run: finalizedRun,
+    goal: snapshot.goal,
+    isFirstCompletion,
+    isNewPersonalBest,
+    creatorUserId: await resolvePublishedCourseOwnerUserId(env, finalizedRun.courseId),
+    courseRecord,
+    completedAt: finishedAt,
+  });
   await upsertUserStats(env, auth.user.id);
   return noContentResponse(request);
 }
@@ -634,14 +665,44 @@ export async function handleCourseLeaderboard(
   if (!snapshot.goal) {
     throw new HttpError(404, 'This course version does not have a leaderboard goal.');
   }
+  const record = await loadCourseRecord(env, courseId, auth?.user.id ?? null, auth?.isAdmin ?? false);
+  if (!record) {
+    throw new HttpError(404, 'Course not found.');
+  }
 
   const leaderboard = await buildCourseLeaderboardResponse(
     env,
+    record,
     snapshot,
     limit,
     auth?.user.id ?? null
   );
   return jsonResponse(request, leaderboard);
+}
+
+export async function handleCourseRatingSubmit(
+  request: Request,
+  env: Env,
+  courseId: string,
+): Promise<Response> {
+  const auth = await requireAuthenticatedRequestAuth(
+    env,
+    request,
+    'rate courses',
+    'runs:write',
+  );
+  const body = await parseCourseRatingBody(request);
+  const record = await loadCourseRecord(env, courseId, auth.user.id, auth.isAdmin);
+  if (!record) {
+    throw new HttpError(404, 'Course not found.');
+  }
+
+  const responseBody = await submitCourseRating(env, {
+    courseRecord: record,
+    userId: auth.user.id,
+    body,
+  });
+  return jsonResponse(request, responseBody);
 }
 
 function sanitizeCourseRecordForPublicRead(record: CourseRecord): CourseRecord {
@@ -733,6 +794,35 @@ async function parseCourseRunFinishBody(
     finishedAt: normalizeIsoTimestamp(body.finishedAt),
     verificationTrace,
   };
+}
+
+async function parseCourseRatingBody(
+  request: Request
+): Promise<CourseProgressRatingRequestBody> {
+  const body = await parseJsonBody<CourseProgressRatingRequestBody>(request);
+  return {
+    courseVersion: normalizePositiveInteger(body.courseVersion, 'courseVersion'),
+    qualityStars:
+      body.qualityStars === null || body.qualityStars === undefined
+        ? null
+        : normalizePositiveInteger(body.qualityStars, 'qualityStars'),
+    difficultyChoice: body.difficultyChoice ? parseCourseDifficulty(body.difficultyChoice) : null,
+    autoSuggestedDifficulty: body.autoSuggestedDifficulty
+      ? parseCourseDifficulty(body.autoSuggestedDifficulty)
+      : null,
+  };
+}
+
+function parseCourseDifficulty(value: unknown) {
+  const normalized =
+    typeof value === 'string' && ['easy', 'medium', 'hard', 'extreme'].includes(value)
+      ? (value as CourseProgressRatingRequestBody['difficultyChoice'])
+      : null;
+  if (!normalized) {
+    throw new HttpError(400, 'difficultyChoice must be easy, medium, hard, extreme, or null.');
+  }
+
+  return normalized;
 }
 
 function computeEffectiveElapsedMs(
@@ -829,7 +919,7 @@ async function loadCourseVerificationRoomsById(
   env: Env,
   course: CourseSnapshot,
   viewerUserId: string | null,
-  viewerWalletAddress: string | null
+  viewerWalletAddress: string | null,
 ): Promise<Map<string, RoomSnapshot>> {
   const roomsById = new Map<string, RoomSnapshot>();
   for (const roomRef of course.roomRefs) {
@@ -1100,6 +1190,7 @@ function parseStoredCourseGoal(raw: string, label: string) {
 
 async function buildCourseLeaderboardResponse(
   env: Env,
+  record: CourseRecord,
   snapshot: CourseSnapshot,
   limit: number,
   viewerUserId: string | null = null
@@ -1128,6 +1219,12 @@ async function buildCourseLeaderboardResponse(
   const entries = entryRows.map((row) => mapRankedCourseLeaderboardEntry(row, snapshot));
   const viewerBest =
     viewerBestRow === null ? null : mapRankedCourseLeaderboardEntry(viewerBestRow, snapshot);
+  const ratings = await loadCourseAggregateRatingSummaryForVersion(
+    env,
+    record,
+    snapshot.version,
+    viewerUserId,
+  );
 
   return {
     courseId: snapshot.id,
@@ -1135,6 +1232,10 @@ async function buildCourseLeaderboardResponse(
     courseVersion: snapshot.version,
     goalType: snapshot.goal.type,
     rankingMode: getCourseLeaderboardRankingMode(snapshot.goal),
+    quality: ratings.quality,
+    difficulty: ratings.difficulty,
+    viewerRating: ratings.viewerRating,
+    trophy: ratings.trophy,
     entries,
     viewerBest,
     viewerRank: viewerBest?.rank ?? null,

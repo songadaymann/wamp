@@ -1,6 +1,14 @@
 import type { CourseGoal, CourseGoalType } from './model';
 import type { LeaderboardRankingMode, RunResult } from '../runs/model';
 import type { RankedRunVerificationTrace } from '../runs/verificationTrace';
+import type {
+  CourseRatingRequestBody,
+  CourseRatingResponse,
+  DifficultyRatingSummary,
+  QualityRatingSummary,
+  TrophyAwardSummary,
+  ViewerRatingSummary,
+} from '../progression/model';
 
 export interface CourseRunStartRequestBody {
   courseId: string;
@@ -77,7 +85,14 @@ export interface CourseLeaderboardResponse {
   courseVersion: number;
   goalType: CourseGoalType;
   rankingMode: LeaderboardRankingMode;
+  quality: QualityRatingSummary;
+  difficulty: DifficultyRatingSummary;
+  viewerRating: ViewerRatingSummary | null;
+  trophy: TrophyAwardSummary | null;
   entries: CourseLeaderboardEntry[];
   viewerBest: CourseLeaderboardEntry | null;
   viewerRank: number | null;
 }
+
+export type CourseProgressRatingRequestBody = CourseRatingRequestBody;
+export type CourseProgressRatingResponse = CourseRatingResponse;

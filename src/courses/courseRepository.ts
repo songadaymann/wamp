@@ -7,6 +7,8 @@ import {
 } from './model';
 import type {
   CourseLeaderboardResponse,
+  CourseProgressRatingRequestBody,
+  CourseProgressRatingResponse,
   CourseRunFinishRequestBody,
   CourseRunStartRequestBody,
   CourseRunStartResponse,
@@ -26,6 +28,10 @@ export interface CourseRepository {
   unpublishCourse(courseId: string): Promise<CourseRecord>;
   startRun(courseId: string, body: CourseRunStartRequestBody): Promise<CourseRunStartResponse>;
   finishRun(attemptId: string, body: CourseRunFinishRequestBody): Promise<void>;
+  submitCourseRating(
+    courseId: string,
+    body: CourseProgressRatingRequestBody
+  ): Promise<CourseProgressRatingResponse>;
   loadCourseLeaderboard(
     courseId: string,
     version?: number | null,
@@ -106,6 +112,16 @@ class ApiCourseRepository implements CourseRepository {
       body: JSON.stringify(body),
     });
     notifyPlayfunEligibleActionSuccess();
+  }
+
+  async submitCourseRating(
+    courseId: string,
+    body: CourseProgressRatingRequestBody
+  ): Promise<CourseProgressRatingResponse> {
+    return this.request<CourseProgressRatingResponse>(`/api/courses/${encodeURIComponent(courseId)}/ratings`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
   }
 
   async loadCourseLeaderboard(

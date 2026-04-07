@@ -1,8 +1,15 @@
+import type {
+  AdminProgressionCapsUpdateRequest,
+  AdminProgressionCapsUpdateResponse,
+  AdminProgressionUserCapsResponse,
+  AdminProgressionUserLookupResponse,
+} from '../../../admin/model';
 import type { RoomRevertRequestBody } from '../../../persistence/roomModel';
 import { requireAdminRequest } from '../auth/request';
 import { requireChatModeratorSession } from '../chat/moderation';
 import { getCoordinatesFromRequest, HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
+import { loadAdminProgressionUser, searchAdminProgressionUsers, updateAdminBuilderCapOverride } from '../progression/store';
 import { revertRoom } from '../rooms/store';
 import { upsertUserStats } from '../runs/points';
 import { loadLaunchStats } from './launchStats';
@@ -41,6 +48,9 @@ export async function handleAdminRequest(
     return handleAdminRunVerificationAudit(request, url, env);
   }
 
+  if (url.pathname === '/api/admin/progression/users' && request.method === 'GET') {
+    return handleAdminProgressionUserSearch(request, url, env);
+  }
   if (url.pathname === '/api/admin/snapshot/reset' && request.method === 'POST') {
     return handleAdminSnapshotReset(request, env);
   }
@@ -80,6 +90,14 @@ export async function handleAdminRequest(
       env,
       decodeURIComponent(suspiciousInvalidateMatch[1])
     );
+  }
+
+  const adminProgressionUserMatch = /^\/api\/admin\/progression\/users\/([^/]+)\/caps$/.exec(url.pathname);
+  if (adminProgressionUserMatch && request.method === 'GET') {
+    return handleAdminProgressionUserCaps(request, env, decodeURIComponent(adminProgressionUserMatch[1]));
+  }
+  if (adminProgressionUserMatch && request.method === 'POST') {
+    return handleAdminProgressionUserCapsUpdate(request, env, decodeURIComponent(adminProgressionUserMatch[1]));
   }
 
   const clearMatch = /^\/api\/admin\/rooms\/([^/]+)\/clear$/.exec(url.pathname);
@@ -307,4 +325,50 @@ function safeJsonParse(value: string): unknown {
 async function handleAdminLaunchStats(request: Request, env: Env): Promise<Response> {
   requireAdminRequest(env, request, 'read launch stats');
   return jsonResponse(request, await loadLaunchStats(env));
+}
+
+async function handleAdminProgressionUserSearch(
+  request: Request,
+  url: URL,
+  env: Env,
+): Promise<Response> {
+  requireAdminRequest(env, request, 'search progression users');
+  const query = url.searchParams.get('query')?.trim() ?? '';
+  const response: AdminProgressionUserLookupResponse = {
+    query,
+    items: await searchAdminProgressionUsers(env, query),
+  };
+  return jsonResponse(request, response);
+}
+
+async function handleAdminProgressionUserCaps(
+  request: Request,
+  env: Env,
+  userId: string,
+): Promise<Response> {
+  requireAdminRequest(env, request, `read progression caps for ${userId}`);
+  const response: AdminProgressionUserCapsResponse = await loadAdminProgressionUser(env, userId);
+  return jsonResponse(request, response);
+}
+
+async function handleAdminProgressionUserCapsUpdate(
+  request: Request,
+  env: Env,
+  userId: string,
+): Promise<Response> {
+  requireAdminRequest(env, request, `update progression caps for ${userId}`);
+  const body = await parseJsonBody<AdminProgressionCapsUpdateRequest>(request);
+  const response: AdminProgressionCapsUpdateResponse = {
+    ok: true,
+    ...(await updateAdminBuilderCapOverride(env, {
+      userId,
+      claimLimitPerDay: body.claimLimitPerDay,
+      publishLimitPerDay: body.publishLimitPerDay,
+      objectLimit: body.objectLimit,
+      collectibleLimit: body.collectibleLimit,
+      reason: body.reason,
+      operatorLabel: body.operatorLabel,
+    })),
+  };
+  return jsonResponse(request, response);
 }

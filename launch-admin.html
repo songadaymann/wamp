@@ -82,13 +82,21 @@
         align-items: center;
       }
 
-      input[type="password"] {
+      input[type="password"],
+      input[type="text"],
+      input[type="number"],
+      textarea {
         min-width: min(420px, 100%);
         padding: 12px 14px;
         background: rgba(7, 11, 16, 0.9);
         border: 1px solid var(--panel-strong);
         border-radius: 12px;
         color: var(--text);
+      }
+
+      textarea {
+        min-height: 88px;
+        resize: vertical;
       }
 
       button {
@@ -192,6 +200,37 @@
         gap: 12px;
       }
 
+      .admin-grid {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      }
+
+      .field {
+        display: grid;
+        gap: 8px;
+      }
+
+      .field .label {
+        margin-bottom: 0;
+      }
+
+      .search-results {
+        display: grid;
+        gap: 10px;
+      }
+
+      .result-button {
+        width: 100%;
+        text-align: left;
+        background: rgba(7, 11, 16, 0.65);
+      }
+
+      .result-button strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+
       table {
         width: 100%;
         border-collapse: collapse;
@@ -280,6 +319,49 @@
         </div>
         <div id="auth-status" class="meta">Paste the admin key to start polling.</div>
         <div id="warnings" class="warning-list"></div>
+      </section>
+
+      <section class="panel stack">
+        <h2>Builder Cap Overrides</h2>
+        <div class="controls">
+          <input id="progression-query-input" type="text" autocomplete="off" placeholder="Search by user id, email, or display name" />
+          <button id="progression-search-button" type="button">Search</button>
+        </div>
+        <div class="field">
+          <label class="label" for="progression-operator-input">Operator Label</label>
+          <input id="progression-operator-input" type="text" autocomplete="off" placeholder="Jonathan" />
+        </div>
+        <div id="progression-status" class="meta">Search for a user to inspect or raise their builder caps.</div>
+        <div id="progression-results" class="search-results">
+          <div class="meta">No search yet.</div>
+        </div>
+        <div id="progression-selected" class="meta">No user selected.</div>
+        <div class="admin-grid">
+          <label class="field">
+            <span class="label">Claim / day</span>
+            <input id="progression-claim-input" type="number" min="1" step="1" placeholder="blank = trust tier" />
+          </label>
+          <label class="field">
+            <span class="label">Publish / day</span>
+            <input id="progression-publish-input" type="number" min="1" step="1" placeholder="blank = trust tier" />
+          </label>
+          <label class="field">
+            <span class="label">Placed objects</span>
+            <input id="progression-object-input" type="number" min="1" step="1" placeholder="blank = trust tier" />
+          </label>
+          <label class="field">
+            <span class="label">Collectibles</span>
+            <input id="progression-collectible-input" type="number" min="1" step="1" placeholder="blank = trust tier" />
+          </label>
+        </div>
+        <label class="field">
+          <span class="label">Reason</span>
+          <textarea id="progression-reason-input" placeholder="Trusted early builder, custom showcase room, etc."></textarea>
+        </label>
+        <div class="controls">
+          <button id="progression-save-button" type="button">Save Override</button>
+          <button id="progression-clear-button" type="button" class="secondary">Clear Override</button>
+        </div>
       </section>
 
       <section class="panel stack">

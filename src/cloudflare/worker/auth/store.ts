@@ -13,6 +13,7 @@ import type {
   WalletChallengeRow,
 } from '../core/types';
 import { sqlUserIdIsNotPlayfunOnly } from '../playfun/leaderboardIsolation';
+import { ensureFounderIdentityQualification } from '../progression/store';
 
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 export const MAGIC_LINK_TTL_MS = 1000 * 60 * 15;
@@ -132,6 +133,8 @@ export async function createUserForEmail(env: Env, email: string): Promise<AuthU
     ).bind(user.id, user.email, user.displayName, now, now),
   ]);
 
+  await ensureFounderIdentityQualification(env, user.id, now);
+
   return user;
 }
 
@@ -153,6 +156,8 @@ export async function createUserForWallet(env: Env, walletAddress: string): Prom
       `
     ).bind(user.id, walletAddress, user.displayName, now, now),
   ]);
+
+  await ensureFounderIdentityQualification(env, user.id, now);
 
   return user;
 }
@@ -209,6 +214,8 @@ export async function attachWalletToUser(
       `
     ).bind(normalizedWallet, updatedAt, user.id),
   ]);
+
+  await ensureFounderIdentityQualification(env, user.id, updatedAt);
 
   return {
     ...user,

@@ -100,7 +100,6 @@ interface TraceObjectBinding {
   x: number;
   y: number;
 }
-
 export interface RunVerificationTriggerResult {
   required: boolean;
   reason: RunVerificationTriggerReason | null;
@@ -380,7 +379,7 @@ function createGenericVerificationTrigger(input: {
       : entersTopTen
         ? 'enter_top_10'
         : recordGap
-          ? 'record_gap'
+        ? 'record_gap'
           : pointAwardPotential
             ? 'point_gain'
             : null,
@@ -702,7 +701,6 @@ function deriveMetricsForGoal(input: {
   if (burstCheck) {
     return burstCheck;
   }
-
   for (const event of input.goalEvents) {
     if (Date.now() > input.deadline) {
       return createFailedVerification('timeout', 'trace_timeout', {
@@ -745,7 +743,6 @@ function deriveMetricsForGoal(input: {
         });
       }
     }
-
     switch (event.type) {
       case 'collectible':
         if (!event.roomId || !event.instanceId) {
@@ -1025,7 +1022,6 @@ function verifyGoalEventBurstPattern(
     stationaryTravelPx: travelPx,
   });
 }
-
 function totalCountFromMap(map: Map<string, Set<string>>): number {
   let total = 0;
   for (const value of map.values()) {

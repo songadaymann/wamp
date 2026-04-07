@@ -11,6 +11,8 @@ import type {
   RoomDifficultyVoteRequestBody,
   RoomLeaderboardEntry,
   RoomLeaderboardResponse,
+  RoomProgressRatingRequestBody,
+  RoomProgressRatingResponse,
   RoomRunRecord,
   RunFinishRequestBody,
   RunStartRequestBody,
@@ -52,16 +54,18 @@ import {
   upsertUserStats,
 } from './points';
 import {
-  buildRoomDifficultySummary,
-  hasViewerRatedRoomVersion,
   loadRoomDiscoveryResponse,
   parseRoomDifficultyOrThrow,
-  upsertRoomDifficultyVote,
 } from './difficulty';
 import {
   resolveAggregatedRoomLeaderboardSelection,
   type AggregatedRoomLeaderboardSelection,
 } from './roomLeaderboardAggregation';
+import {
+  awardRoomRunProgression,
+  loadRoomAggregateRatingSummaryForVersion,
+  submitRoomRating,
+} from '../progression/store';
 import {
   computeRoomSnapshotVerificationHash,
   createRoomVerificationTrigger,
@@ -290,7 +294,7 @@ export async function handleRunFinish(
           snapshot.id,
           leaderboardSelection.leaderboardFamilyVersions,
           snapshot.goal,
-          10
+          10,
         )
       : [];
   const viewerBestRow =
@@ -300,7 +304,7 @@ export async function handleRunFinish(
           snapshot.id,
           leaderboardSelection.leaderboardFamilyVersions,
           snapshot.goal,
-          auth.user.id
+          auth.user.id,
         )
       : null;
   const verificationTrigger =
@@ -504,6 +508,15 @@ export async function handleRunFinish(
     await maybeMirrorPointEventToLinkedPlayfunUser(env, creatorPointEvent.user_id, creatorPointEvent);
     await upsertUserStats(env, creatorPointEvent.user_id);
   }
+  await awardRoomRunProgression(env, {
+    run: finalizedRun,
+    goal: snapshot.goal,
+    isFirstCompletion,
+    isNewPersonalBest,
+    creatorUserId: resolveRoomVersionPublisherUserId(roomRecord, finalizedRun.roomVersion),
+    roomRecord,
+    completedAt: finishedAt,
+  });
   await upsertUserStats(env, auth.user.id);
   return noContentResponse(request);
 }
@@ -535,6 +548,7 @@ export async function handleRoomLeaderboard(
 
   const leaderboard = await buildRoomLeaderboardResponse(
     env,
+    record,
     selection,
     limit,
     auth?.user.id ?? null
@@ -573,27 +587,47 @@ export async function handleRoomDifficultyVote(
     throw new HttpError(409, 'Only published challenge rooms can receive difficulty votes.');
   }
 
-  const hasPlayedVersion = await hasViewerRatedRoomVersion(
-    env,
-    snapshot.id,
-    selection.leaderboardFamilyVersions,
-    auth.user.id
-  );
-  if (!hasPlayedVersion) {
-    throw new HttpError(409, 'Play this published version once before rating its difficulty.');
-  }
-
-  const now = new Date().toISOString();
-  await upsertRoomDifficultyVote(
-    env,
-    snapshot.id,
-    selection.roomVersion,
-    auth.user.id,
-    body.difficulty,
-    now
-  );
+  await submitRoomRating(env, {
+    roomRecord: record,
+    userId: auth.user.id,
+    body: {
+      roomCoordinates: body.roomCoordinates,
+      roomVersion: selection.roomVersion,
+      qualityStars: null,
+      difficultyChoice: body.difficulty,
+      autoSuggestedDifficulty: body.difficulty,
+    },
+  });
 
   return noContentResponse(request);
+}
+
+export async function handleRoomRatingSubmit(
+  request: Request,
+  env: Env,
+  roomId: string,
+): Promise<Response> {
+  const auth = await requireAuthenticatedRequestAuth(
+    env,
+    request,
+    'rate rooms',
+    'runs:write',
+  );
+  const body = await parseRoomRatingBody(request);
+  const record = await loadRoomRecord(
+    env,
+    roomId,
+    body.roomCoordinates,
+    auth.user.id,
+    auth.user.walletAddress ?? null,
+    auth.isAdmin,
+  );
+  const responseBody = await submitRoomRating(env, {
+    roomRecord: record,
+    userId: auth.user.id,
+    body,
+  });
+  return jsonResponse(request, responseBody);
 }
 
 export async function handleRoomDiscovery(
@@ -745,6 +779,24 @@ export async function parseRoomDifficultyVoteBody(
   };
 }
 
+export async function parseRoomRatingBody(
+  request: Request
+): Promise<RoomProgressRatingRequestBody> {
+  const body = await parseJsonBody<RoomProgressRatingRequestBody>(request);
+  return {
+    roomCoordinates: normalizeRoomCoordinates(body.roomCoordinates),
+    roomVersion: normalizePositiveInteger(body.roomVersion, 'roomVersion'),
+    qualityStars:
+      body.qualityStars === null || body.qualityStars === undefined
+        ? null
+        : normalizePositiveInteger(body.qualityStars, 'qualityStars'),
+    difficultyChoice: body.difficultyChoice ? parseRoomDifficultyOrThrow(body.difficultyChoice) : null,
+    autoSuggestedDifficulty: body.autoSuggestedDifficulty
+      ? parseRoomDifficultyOrThrow(body.autoSuggestedDifficulty)
+      : null,
+  };
+}
+
 export function resolveRoomSnapshotForVersion(
   record: RoomRecord,
   version: number
@@ -827,7 +879,11 @@ export async function loadCompletedRoomRuns(
         score,
         collectibles_collected,
         enemies_defeated,
-        checkpoints_reached
+        checkpoints_reached,
+        verification_status,
+        verification_reason,
+        verification_nonce,
+        verification_snapshot_hash
       FROM room_runs
       WHERE room_id = ?
         AND room_version = ?
@@ -871,7 +927,11 @@ export async function loadCompletedRoomRunsForVersions(
         score,
         collectibles_collected,
         enemies_defeated,
-        checkpoints_reached
+        checkpoints_reached,
+        verification_status,
+        verification_reason,
+        verification_nonce,
+        verification_snapshot_hash
       FROM room_runs
       WHERE room_id = ?
         AND room_version IN (${roomVersions.map(() => '?').join(', ')})
@@ -1314,6 +1374,7 @@ function normalizeFinalizedRunBody(
 
 export async function buildRoomLeaderboardResponse(
   env: Env,
+  record: RoomRecord,
   selection: AggregatedRoomLeaderboardSelection,
   limit: number,
   viewerUserId: string | null = null
@@ -1340,13 +1401,12 @@ export async function buildRoomLeaderboardResponse(
           snapshot.goal,
           viewerUserId
         );
-  const difficulty = await buildRoomDifficultySummary(
+  const ratings = await loadRoomAggregateRatingSummaryForVersion(
     env,
-    snapshot,
+    record,
+    selection.roomVersion,
     viewerUserId,
     selection.currentPublishedVersion,
-    selection.roomVersion,
-    selection.leaderboardFamilyVersions
   );
   const entries = entriesRows.map((row) => mapRankedRoomLeaderboardEntry(row, snapshot));
   const viewerBest =
@@ -1364,7 +1424,10 @@ export async function buildRoomLeaderboardResponse(
     canonicalRoomVersion: selection.canonicalRoomVersion,
     goalType: snapshot.goal.type,
     rankingMode: getLeaderboardRankingMode(snapshot.goal),
-    difficulty,
+    difficulty: ratings.difficulty,
+    quality: ratings.quality,
+    viewerRating: ratings.viewerRating,
+    trophy: ratings.trophy,
     entries,
     viewerBest,
     viewerRank: viewerBest?.rank ?? null,

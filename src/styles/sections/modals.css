@@ -666,6 +666,52 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   max-height: none;
 }
 
+.run-rating-modal-panel {
+  max-width: min(620px, calc(100vw - 32px));
+}
+
+.run-rating-panel {
+  gap: 14px;
+}
+
+.run-rating-result {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.run-rating-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.run-rating-section-label {
+  color: var(--accent-warm);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.run-rating-quality-actions,
+.run-rating-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.run-rating-quality-actions .bar-btn.active,
+#run-rating-difficulty-actions .bar-btn.active {
+  border-color: var(--accent-cool);
+  color: var(--accent-cool);
+}
+
+.run-rating-actions {
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
 .profile-room-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
