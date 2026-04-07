@@ -5933,3 +5933,50 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - missing modules `@tonaljs/key` and `tonal`
       - existing implicit-`any` errors in that file
     - `npm run build` fails for the same pre-existing reason
+
+- 2026-04-07: trust penalties and verification gating on `feature/trust-penalties-verification-gating-2026-04-07`
+  - Prompt:
+    - use suspicious-admin invalidations as a major negative trust signal
+    - make chat bans another negative trust signal
+    - every such moderation hit should effectively put trust at `0` for at least `30 days`
+    - relax ranked-run anti-cheat enforcement by trust tier:
+      - `T0`: current strict verification behavior
+      - `T1`: extremely lax
+      - `T2+`: verification off
+    - the real moderation surface is `https://wamp.land/suspicious-admin`
+  - Implementation:
+    - `migrations/0022_trust_penalties_and_chat_ban_audit.sql`
+      - adds `chat_ban_audit`
+      - backfills audit rows for any currently active chat bans
+    - `src/cloudflare/worker/chat/store.ts`
+      - creating a chat ban now writes both the active `chat_bans` row and a durable `chat_ban_audit` row
+    - `src/cloudflare/worker/progression/store.ts`
+      - adds an effective-trust layer on top of raw `hidden_trust_score`
+      - effective trust is clamped to `0` when the user has:
+        - a suspicious-admin invalidation in the last `30 days`
+        - a chat ban in the last `30 days`
+        - or an active chat ban
+      - builder caps, creator weighting, and rating weighting now use effective trust rather than raw trust
+    - `src/cloudflare/worker/runs/verification.ts`
+      - adds trust-tier-based verification relaxation:
+        - `T0`: unchanged
+        - `T1`: trace/client verification is skipped entirely, but high-impact runs still get audit rows with status `skipped`
+        - `T2/T3/T4`: verification trigger is suppressed entirely
+    - `src/cloudflare/worker/runs/routes.ts`
+    - `src/cloudflare/worker/courses/routes.ts`
+      - room/course finish routes now apply verification relaxation using effective trust tier
+      - `T1` trust writes audit-only entries for runs that would previously have triggered verification, without blocking the run or requiring a trace
+    - `src/cloudflare/worker/admin/snapshot.ts`
+      - snapshot admin tooling now includes `chat_ban_audit`
+  - Verification:
+    - `npm ci --ignore-scripts`
+      - needed in the clean worktree because `node_modules` was absent and `sharp` failed under normal install scripts in this environment
+    - `npm run typecheck`
+      - passed
+    - `npm run build`
+      - passed
+    - `npm run cf:d1:migrate:local`
+      - passed and applied `0022_trust_penalties_and_chat_ban_audit.sql`
+  - Notes:
+    - this intentionally preserves the raw trust ledger in `user_progress`; the moderation penalty is enforced through effective trust, so trust recovers automatically after the penalty window without rewriting historical trust events
+    - active chat bans continue to clamp effective trust even if the ban is older than the 30-day penalty window
