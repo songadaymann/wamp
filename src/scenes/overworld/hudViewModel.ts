@@ -346,6 +346,10 @@ export function buildOverworldHudViewModel(
           ? false
           : selectedState !== 'published' && selectedState !== 'draft',
     playButtonActive: mode === 'play' && !activeCourseRun,
+    restartButtonText: 'Restart',
+    restartButtonDisabled: mode !== 'play',
+    restartButtonActive: mode === 'play',
+    restartButtonHidden: mode !== 'play',
     playCourseButtonText: activeCourseRun ? 'Stop Course' : 'Play Course',
     playCourseButtonDisabled: activeCourseRun ? false : !selectedCourse,
     playCourseButtonHidden: !selectedCourse && !activeCourseRun,

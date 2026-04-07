@@ -1,6 +1,11 @@
 export const PROFILE_OPEN_REQUEST_EVENT = 'profile-open-request';
+export const PROFILE_INVALIDATED_EVENT = 'profile-invalidated';
 
 export interface ProfileOpenRequestDetail {
+  userId: string;
+}
+
+export interface ProfileInvalidatedDetail {
   userId: string;
 }
 
@@ -19,6 +24,19 @@ export function requestProfileOpen(userId: string | null | undefined): boolean {
 
   window.dispatchEvent(
     new CustomEvent<ProfileOpenRequestDetail>(PROFILE_OPEN_REQUEST_EVENT, {
+      detail: { userId },
+    })
+  );
+  return true;
+}
+
+export function requestProfileInvalidation(userId: string | null | undefined): boolean {
+  if (!isOpenableProfileUserId(userId)) {
+    return false;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent<ProfileInvalidatedDetail>(PROFILE_INVALIDATED_EVENT, {
       detail: { userId },
     })
   );

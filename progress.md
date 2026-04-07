@@ -57,6 +57,77 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Safety branch deploy helper on April 4, 2026:
+  - added `scripts/deploy_safety_branch.mjs` and `npm run deploy:safety:branch`
+  - the helper:
+    - builds the frontend against the safety Worker URL and safety PartyKit host
+    - runs safety D1 migrations by default before the Worker deploy
+    - deploys the safety Worker with `APP_BASE_URL` overridden to the Pages preview URL so auth/save flows point back at the right branch preview
+    - optionally deploys the safety PartyKit presence server
+    - deploys the built frontend to a Pages branch preview derived from the current git branch unless `--branch` is provided
+  - validation:
+    - `node scripts/deploy_safety_branch.mjs --help` passed
+    - `node scripts/deploy_safety_branch.mjs --dry-run --branch safety-save-test` printed the expected build / migrate / worker / presence / pages commands without mutating remote infrastructure
+
+- Decorative top collision grounding rollback on April 4, 2026:
+  - user-reported regression showed the player avatar visually settling below ordinary terrain after `decoratedTop.topInset` had been restored to `4px`
+  - repo history already recorded that this shared inset was tuned from `4px` to `2px` and then to `0px` on March 15 after visual review
+  - restored `src/config.ts` `decoratedTop.topInset` to `0px` so normal walkable tops no longer sink the avatar while explicit overlay-only tiles continue to use the `none` profile
+
+- XP / ratings / trust / badges foundation on April 4, 2026:
+  - added progression schema migration `migrations/0019_progression.sql` for:
+    - `pxp_events`
+    - `bxp_events`
+    - `cxp_events`
+    - `trust_events`
+    - `user_progress`
+    - `room_ratings`
+    - `course_ratings`
+    - `badge_awards`
+    - `content_trophies`
+    - `room_version_attribution`
+  - migrated legacy `room_difficulty_votes` into `room_ratings` with `quality_stars = NULL`
+  - added Worker-side progression domain in `src/cloudflare/worker/progression/store.ts`:
+    - progression/trust read model bootstrap
+    - room/course publish awards
+    - room/course run awards
+    - room/course rating submission
+    - trust-tier capability resolution for room claim/publish/object/collectible caps
+    - badge/trophy aggregation
+  - profile API now returns `progression` summary alongside the existing room/stats payload
+  - room/course leaderboard payloads now include:
+    - quality summary
+    - difficulty summary sourced from the new ratings tables
+    - viewer rating state
+    - trophy summary
+  - added new authenticated rating routes:
+    - `POST /api/rooms/:roomId/ratings`
+    - `POST /api/courses/:courseId/ratings`
+  - client/UI changes:
+    - profile modal now has a `Progress` tab
+    - leaderboard/discovery rows now surface quality/trophy metadata
+    - added post-run rating modal driven by completion events with quality stars + difficulty selection
+    - leaderboard difficulty quick-vote now submits through the new rating API so it no longer wipes existing quality ratings
+  - verification:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - Playwright bundle smoke against a fresh local preview on `127.0.0.1:4175` wrote:
+      - `output/web-game/progression-rating-smoke-4175/shot-0.png`
+      - `output/web-game/progression-rating-smoke-4175/state-0.json`
+    - targeted Playwright DOM verification wrote:
+      - `output/web-game/progression-rating-modal-4175/modal.png`
+      - confirms the post-run rating modal renders with the intended controls/state
+    - added reusable manual smoke harness:
+      - `npm run smoke:progression-rating -- http://127.0.0.1:4175`
+  - current backend smoke caveat:
+    - the modal summary fetch against the live API returned `D1_ERROR: no such column: canonical_version`
+    - this indicates the API/database being queried by the preview does not yet have the expected newer leaderboard schema
+    - local `wrangler d1 migrations apply DB --local` also could not be verified yet because the local D1 database was locked (`SQLITE_BUSY`)
+  - next clean follow-up:
+    - apply the new DB migration in the target environment
+    - rerun the modal smoke against an API with the upgraded schema
+    - add a tighter backend verification pass once the schema drift is gone
+
 - Snow and lava top-cap overlay collision restore on April 4, 2026:
   - after the Pages redeploy, production still showed invisible full-tile collision in the marked air cells above specific lava and snow cap overlays
   - the user-marked problem cells matched the old overlay-only local indices we had previously rolled back too aggressively:
@@ -5017,3 +5088,97 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - mirror the same explicit error messaging for course run submission failures
     - `src/scenes/OverworldPlayScene.ts`
       - wire both controllers into the existing transient-status banner so failed ranked clears are visible immediately in the HUD
+- 2026-04-04: verified the new progression stack against a migrated local D1 and hardened the smoke tooling.
+  - Local stack:
+    - stopped the stale `wrangler dev` process that was holding local D1 open
+    - applied local migrations successfully with `npm run cf:d1:migrate:local`
+    - restarted the local API on `127.0.0.1:8787`
+    - ran Vite against the local API on `http://localhost:3001/`
+  - Verified backend flow:
+    - debug magic-link auth works locally with `AUTH_DEBUG_MAGIC_LINKS=1`
+    - a full authenticated course flow now succeeds end to end:
+      - request debug magic link
+      - verify and establish `ep_session`
+      - `POST /api/courses/:courseId/runs/start`
+      - `POST /api/course-runs/:attemptId/finish`
+      - `POST /api/courses/:courseId/ratings`
+      - `GET /api/profiles/:userId`
+      - `GET /api/leaderboards/courses/:courseId`
+    - observed results on the seeded published course `5d16d080-7f72-43f8-99e2-d4e71f1b62d0` version `5`:
+      - course completion awarded player progression before rating
+      - rating response returned progression delta `+5 PXP`, `+10 CXP`, `+1 Trust`
+      - profile progression updated immediately after rating
+      - course leaderboard reflected the saved viewer rating, quality vote count, and difficulty consensus
+  - Tooling:
+    - added `scripts/smoke_progression_api_flow.mjs`
+    - added `npm run smoke:progression-api:local`
+    - updated `scripts/smoke_progression_rating_modal.mjs` to open the real seeded course instead of the stale debug room `-6,2`
+    - updated the post-run modal copy so course flows say `Rate the course quality...` instead of `Rate the room quality...`
+  - Verification artifacts:
+    - `output/web-game/progression-api-flow/summary.json`
+    - `output/web-game/progression-rating-modal/modal.png`
+    - `output/web-game/progression-rating-modal/body.txt`
+    - `output/web-game/progression-rating-modal/errors.json`
+  - Verification commands:
+    - `npm run typecheck`
+    - `npm run smoke:progression-api:local`
+    - `npm run smoke:progression-rating -- http://localhost:3001/`
+  - Caveats:
+    - the seeded published room discovery sample `0,-1` currently advertises a `collect_target` goal with `requiredCount = 3` but has no collectible objects in the snapshot, so a synthetic room clear cannot satisfy its publish-time validation and is not a good room-rating smoke fixture
+    - the UI smoke still logs expected PartyKit websocket connection refusals on `127.0.0.1:1999` when presence is not running locally
+- 2026-04-04: added visible builder caps plus admin overrides on the local progression stack.
+  - Profile / public progression:
+    - `src/ui/setup/profileModal.ts`
+      - `Progress` now shows effective builder capacity (`placed objects`, `collectibles`) and cadence (`publish/day`, `claim/day`)
+      - if a builder cap override is active, the profile shows a simple `Admin boost active` row without exposing operator metadata
+    - `placed objects` in the cap logic means `room.placedObjects.length`; tiles are not counted
+  - Backend / schema:
+    - `migrations/0020_builder_cap_overrides.sql`
+      - added durable override columns to `user_progress` for claim/day, publish/day, placed objects, collectibles, plus admin reason/updated metadata
+    - `src/cloudflare/worker/progression/store.ts`
+      - centralized effective cap resolution so trust-tier caps and admin overrides flow through the same server-side enforcement path
+      - `resolveRoomCapabilities(...)` now applies overrides before the existing request-source ceilings
+      - added admin helpers to search users, inspect effective caps, and set/clear overrides
+  - Admin surface:
+    - `launch-admin.html`
+    - `src/launch-admin.ts`
+      - added a `Builder Cap Overrides` panel
+      - operators can search by user id, email, or display name, inspect current effective caps, and save or clear overrides with a human operator label and reason
+    - `src/cloudflare/worker/admin/routes.ts`
+      - added:
+        - `GET /api/admin/progression/users?query=...`
+        - `GET /api/admin/progression/users/:userId/caps`
+        - `POST /api/admin/progression/users/:userId/caps`
+  - Verification:
+    - `npm run typecheck`
+    - `npm run build`
+    - `npm run cf:d1:migrate:local`
+    - local live-checks against `127.0.0.1:8787` confirmed:
+      - progression user search returns cap summaries
+      - saving an override changes the effective caps in both the admin response and the public profile payload
+      - clearing the override returns the user to trust-tier defaults
+- 2026-04-04: moved the in-progress XP / ratings / trust / badges work off `main` and onto the dedicated local branch `feature/progression-xp-ratings-trust-badges` so further progression changes stop accumulating on `main`.
+- 2026-04-06: upgraded the suspicious activity admin view to separate likely real players from known / heuristic Play.fun accounts and to show per-run local point awards directly in the suspicious run tables.
+  - Backend / shared model:
+    - `src/admin/model.ts`
+      - added suspicious-user identity metadata (`real_players` vs `playfun_signals`) and per-run `runFinalizedPoints` fields on suspicious room/course runs
+    - `src/playfun/identity.ts`
+      - added a shared heuristic helper for Play.fun-style burner display names, including the observed `xxxxxxxx-xxx` hex handle format
+    - `src/cloudflare/worker/admin/suspicious.ts`
+      - enriched suspicious-user payloads with identity bucketing based on Play.fun link presence, wallet/email backing, and burner-name heuristic matches
+      - joined `run_finalized` point events into suspicious room/course run rows so the admin UI can show `0 pts` vs positive earned points for each completed run
+    - `src/cloudflare/worker/admin/suspiciousInvalidation.ts`
+      - mirrored the same per-run point-event fields when loading selected room/course runs for invalidation preview/execution
+  - Admin UI:
+    - `suspicious-admin.html`
+      - added queue tabs for `All`, `Real Players`, and `Known / Heuristic Play.fun`
+      - added a `Points` column to suspicious room/course run tables
+    - `src/suspicious-admin.ts`
+      - added client-side tab filtering for the suspicious-user queue
+      - surfaced identity labels/summaries in the queue and detail header
+      - rendered per-run point totals (`No point event`, `0 pts`, `182 pts`, etc.) in the suspicious run tables
+  - Verification:
+    - `npm run typecheck` passed
+    - static Playwright shell capture confirmed the new tabs and points column render in `output/suspicious-admin-tabs-shell.png`
+  - Known blocker:
+    - `npm run build` and `vite` dev startup still fail on an existing dependency-resolution issue: `ethers` imports `aes-js`, which is not resolving in the current local install. This does not appear to be caused by the suspicious-admin changes.

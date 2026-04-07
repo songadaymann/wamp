@@ -131,6 +131,48 @@ export class OverworldSceneFlowController {
     void this.host.refreshAround(selectedCoordinates);
   }
 
+  async restartCurrentRun(): Promise<void> {
+    if (this.host.getMode() !== 'play') {
+      return;
+    }
+
+    const activeCourseRun = this.host.getActiveCourseRun();
+    if (activeCourseRun) {
+      showBusyOverlay('Restarting course...', 'Resetting run...');
+      try {
+        await this.startCoursePlayback(
+          cloneCourseSnapshot(activeCourseRun.course),
+          activeCourseRun.course.status === 'published' ? 'published' : 'draftPreview',
+        );
+        hideBusyOverlay();
+      } catch (error) {
+        console.error('Failed to restart course', error);
+        showBusyError(error instanceof Error ? error.message : 'Failed to restart course.', {
+          closeHandler: () => hideBusyOverlay(),
+        });
+      }
+      return;
+    }
+
+    const restartCoordinates = this.host.getCurrentRoomCoordinates();
+    const restartState = this.host.getCellStateAt(restartCoordinates);
+    if (restartState !== 'published' && restartState !== 'draft') {
+      return;
+    }
+
+    this.host.resetPlaySession();
+    this.host.clearTouchGestureState();
+    this.host.setSelectedCoordinates({ ...restartCoordinates });
+    this.host.setCurrentRoomCoordinates({ ...restartCoordinates });
+    this.host.setCameraMode('follow');
+    this.host.setInspectZoom(this.host.getFitZoomForRoom());
+    this.host.syncAppMode();
+    this.host.setShouldCenterCamera(true);
+    this.host.setShouldRespawnPlayer(true);
+    setFocusedCoordinatesInUrl(restartCoordinates);
+    await this.host.refreshAround(restartCoordinates, { forceChunkReload: true });
+  }
+
   returnToWorld(): void {
     const returnCoordinates =
       this.host.getActiveCourseRun()?.returnCoordinates ?? this.host.getCurrentRoomCoordinates();

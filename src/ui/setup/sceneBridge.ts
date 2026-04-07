@@ -174,6 +174,7 @@ export type CourseComposerState = {
 
 export interface OverworldSceneBridge {
   playSelectedRoom?: () => void;
+  restartCurrentRun?: () => Promise<void> | void;
   playSelectedCourse?: () => Promise<void> | void;
   editSelectedRoom?: () => void;
   buildSelectedRoom?: () => void;

@@ -265,6 +265,11 @@ body[data-device-class='phone'] .mobile-world-stop {
   left: calc(8px + var(--safe-left));
 }
 
+body[data-device-class='phone'] .mobile-world-restart {
+  top: calc(48px + var(--safe-top));
+  left: calc(84px + var(--safe-left));
+}
+
 body[data-device-class='phone'] #global-chat {
   right: calc(8px + var(--safe-right));
   left: calc(8px + var(--safe-left));

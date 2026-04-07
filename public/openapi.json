@@ -843,9 +843,14 @@
           "roomCoordinates",
           "roomTitle",
           "roomVersion",
+          "displayRoomVersion",
+          "leaderboardSourceVersion",
+          "canonicalRoomVersion",
           "goalType",
           "consensusDifficulty",
           "voteCount",
+          "quality",
+          "trophy",
           "publishedAt"
         ],
         "properties": {
@@ -853,6 +858,9 @@
           "roomCoordinates": { "$ref": "#/components/schemas/RoomCoordinates" },
           "roomTitle": { "type": ["string", "null"] },
           "roomVersion": { "type": "integer" },
+          "displayRoomVersion": { "type": "integer" },
+          "leaderboardSourceVersion": { "type": ["integer", "null"] },
+          "canonicalRoomVersion": { "type": ["integer", "null"] },
           "goalType": { "type": "string" },
           "consensusDifficulty": {
             "oneOf": [
@@ -861,6 +869,13 @@
             ]
           },
           "voteCount": { "type": "integer" },
+          "quality": { "$ref": "#/components/schemas/QualityRatingSummary" },
+          "trophy": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/TrophyAwardSummary" },
+              { "type": "null" }
+            ]
+          },
           "publishedAt": { "type": ["string", "null"], "format": "date-time" }
         }
       },
@@ -887,9 +902,17 @@
           "roomCoordinates",
           "roomTitle",
           "roomVersion",
+          "displayRoomVersion",
+          "equivalentRoomVersions",
+          "leaderboardFamilyVersions",
+          "leaderboardSourceVersion",
+          "canonicalRoomVersion",
           "goalType",
           "rankingMode",
           "difficulty",
+          "quality",
+          "viewerRating",
+          "trophy",
           "entries",
           "viewerBest",
           "viewerRank"
@@ -899,12 +922,36 @@
           "roomCoordinates": { "$ref": "#/components/schemas/RoomCoordinates" },
           "roomTitle": { "type": ["string", "null"] },
           "roomVersion": { "type": "integer" },
+          "displayRoomVersion": { "type": "integer" },
+          "equivalentRoomVersions": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "leaderboardFamilyVersions": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "leaderboardSourceVersion": { "type": ["integer", "null"] },
+          "canonicalRoomVersion": { "type": ["integer", "null"] },
           "goalType": { "type": "string" },
           "rankingMode": {
             "type": "string",
             "enum": ["time", "score"]
           },
           "difficulty": { "$ref": "#/components/schemas/RoomDifficultySummary" },
+          "quality": { "$ref": "#/components/schemas/QualityRatingSummary" },
+          "viewerRating": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/ViewerRatingSummary" },
+              { "type": "null" }
+            ]
+          },
+          "trophy": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/TrophyAwardSummary" },
+              { "type": "null" }
+            ]
+          },
           "entries": {
             "type": "array",
             "items": { "$ref": "#/components/schemas/RoomLeaderboardEntry" }
@@ -916,6 +963,445 @@
             ]
           },
           "viewerRank": { "type": ["integer", "null"] }
+        }
+      },
+      "ProgressionQualityCounts": {
+        "type": "object",
+        "required": ["oneStar", "twoStar", "threeStar", "fourStar", "fiveStar"],
+        "properties": {
+          "oneStar": { "type": "integer" },
+          "twoStar": { "type": "integer" },
+          "threeStar": { "type": "integer" },
+          "fourStar": { "type": "integer" },
+          "fiveStar": { "type": "integer" }
+        }
+      },
+      "QualityRatingSummary": {
+        "type": "object",
+        "required": ["adjustedAverage", "rawAverage", "voteCount", "weightedVoteCount", "counts"],
+        "properties": {
+          "adjustedAverage": { "type": ["number", "null"] },
+          "rawAverage": { "type": ["number", "null"] },
+          "voteCount": { "type": "integer" },
+          "weightedVoteCount": { "type": "number" },
+          "counts": { "$ref": "#/components/schemas/ProgressionQualityCounts" }
+        }
+      },
+      "ViewerRatingSummary": {
+        "type": "object",
+        "required": ["qualityStars", "difficultyChoice", "autoSuggestedDifficulty", "updatedAt"],
+        "properties": {
+          "qualityStars": { "type": ["integer", "null"], "minimum": 1, "maximum": 5 },
+          "difficultyChoice": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/RoomDifficulty" },
+              { "type": "null" }
+            ]
+          },
+          "autoSuggestedDifficulty": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/RoomDifficulty" },
+              { "type": "null" }
+            ]
+          },
+          "updatedAt": { "type": ["string", "null"], "format": "date-time" }
+        }
+      },
+      "TrophyAwardSummary": {
+        "type": "object",
+        "required": ["contentType", "contentId", "versionKey", "trophyType", "awardedAt"],
+        "properties": {
+          "contentType": {
+            "type": "string",
+            "enum": ["room", "course"]
+          },
+          "contentId": { "type": "string" },
+          "versionKey": { "type": "integer" },
+          "trophyType": { "type": "string" },
+          "awardedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ProgressionDelta": {
+        "type": "object",
+        "required": ["pxp", "bxp", "cxp", "trust"],
+        "properties": {
+          "pxp": { "type": "integer" },
+          "bxp": { "type": "integer" },
+          "cxp": { "type": "integer" },
+          "trust": { "type": "integer" }
+        }
+      },
+      "ProgressionLaneSummary": {
+        "type": "object",
+        "required": [
+          "lane",
+          "xp",
+          "level",
+          "currentLevelStartXp",
+          "nextLevelXp",
+          "progressFraction",
+          "medalLabel",
+          "medalTint",
+          "emblem",
+          "crown",
+          "ribbons"
+        ],
+        "properties": {
+          "lane": {
+            "type": "string",
+            "enum": ["player", "builder", "curator"]
+          },
+          "xp": { "type": "integer" },
+          "level": { "type": "integer" },
+          "currentLevelStartXp": { "type": "integer" },
+          "nextLevelXp": { "type": "integer" },
+          "progressFraction": { "type": "number" },
+          "medalLabel": { "type": "string" },
+          "medalTint": { "type": "string" },
+          "emblem": { "type": "string" },
+          "crown": { "type": "boolean" },
+          "ribbons": { "type": "integer" }
+        }
+      },
+      "BadgeAwardSummary": {
+        "type": "object",
+        "required": ["badgeId", "category", "label", "description", "awardedAt"],
+        "properties": {
+          "badgeId": { "type": "string" },
+          "category": {
+            "type": "string",
+            "enum": ["founder", "player", "builder", "curator"]
+          },
+          "label": { "type": "string" },
+          "description": { "type": "string" },
+          "awardedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ProgressionSummary": {
+        "type": "object",
+        "required": [
+          "founderNumber",
+          "player",
+          "builder",
+          "curator",
+          "featuredBadges",
+          "badgeCount",
+          "trophyCount",
+          "recentTrophies"
+        ],
+        "properties": {
+          "founderNumber": { "type": ["integer", "null"] },
+          "player": { "$ref": "#/components/schemas/ProgressionLaneSummary" },
+          "builder": { "$ref": "#/components/schemas/ProgressionLaneSummary" },
+          "curator": { "$ref": "#/components/schemas/ProgressionLaneSummary" },
+          "featuredBadges": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/BadgeAwardSummary" }
+          },
+          "badgeCount": { "type": "integer" },
+          "trophyCount": { "type": "integer" },
+          "recentTrophies": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TrophyAwardSummary" }
+          }
+        }
+      },
+      "RatingAggregateSummary": {
+        "type": "object",
+        "required": ["quality", "difficulty", "viewerRating", "trophy"],
+        "properties": {
+          "quality": { "$ref": "#/components/schemas/QualityRatingSummary" },
+          "difficulty": { "$ref": "#/components/schemas/RoomDifficultySummary" },
+          "viewerRating": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/ViewerRatingSummary" },
+              { "type": "null" }
+            ]
+          },
+          "trophy": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/TrophyAwardSummary" },
+              { "type": "null" }
+            ]
+          }
+        }
+      },
+      "RoomRatingRequestBody": {
+        "type": "object",
+        "required": [
+          "roomCoordinates",
+          "roomVersion",
+          "qualityStars",
+          "difficultyChoice",
+          "autoSuggestedDifficulty"
+        ],
+        "properties": {
+          "roomCoordinates": { "$ref": "#/components/schemas/RoomCoordinates" },
+          "roomVersion": { "type": "integer" },
+          "qualityStars": { "type": ["integer", "null"], "minimum": 1, "maximum": 5 },
+          "difficultyChoice": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/RoomDifficulty" },
+              { "type": "null" }
+            ]
+          },
+          "autoSuggestedDifficulty": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/RoomDifficulty" },
+              { "type": "null" }
+            ]
+          }
+        }
+      },
+      "RoomRatingResponse": {
+        "type": "object",
+        "required": ["ok", "roomId", "roomVersion", "progressionDelta", "summary", "progression"],
+        "properties": {
+          "ok": { "type": "boolean" },
+          "roomId": { "type": "string" },
+          "roomVersion": { "type": "integer" },
+          "progressionDelta": { "$ref": "#/components/schemas/ProgressionDelta" },
+          "summary": { "$ref": "#/components/schemas/RatingAggregateSummary" },
+          "progression": { "$ref": "#/components/schemas/ProgressionSummary" }
+        }
+      },
+      "CourseRunStartRequestBody": {
+        "type": "object",
+        "required": ["courseId", "courseVersion", "goal"],
+        "properties": {
+          "courseId": { "type": "string" },
+          "courseVersion": { "type": "integer" },
+          "goal": { "$ref": "#/components/schemas/CourseGoal" },
+          "startedAt": { "type": ["string", "null"], "format": "date-time" }
+        }
+      },
+      "CourseRunStartResponse": {
+        "type": "object",
+        "required": [
+          "attemptId",
+          "courseId",
+          "courseVersion",
+          "goalType",
+          "startedAt",
+          "userId",
+          "userDisplayName"
+        ],
+        "properties": {
+          "attemptId": { "type": "string" },
+          "courseId": { "type": "string" },
+          "courseVersion": { "type": "integer" },
+          "goalType": { "type": "string" },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "userId": { "type": "string" },
+          "userDisplayName": { "type": "string" }
+        }
+      },
+      "CourseLeaderboardEntry": {
+        "type": "object",
+        "required": [
+          "rank",
+          "userId",
+          "userDisplayName",
+          "attemptId",
+          "courseId",
+          "courseVersion",
+          "goalType",
+          "elapsedMs",
+          "deaths",
+          "score",
+          "finishedAt"
+        ],
+        "properties": {
+          "rank": { "type": "integer" },
+          "userId": { "type": "string" },
+          "userDisplayName": { "type": "string" },
+          "attemptId": { "type": "string" },
+          "courseId": { "type": "string" },
+          "courseVersion": { "type": "integer" },
+          "goalType": { "type": "string" },
+          "elapsedMs": { "type": "integer" },
+          "deaths": { "type": "integer" },
+          "score": { "type": "integer" },
+          "finishedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CourseLeaderboardResponse": {
+        "type": "object",
+        "required": [
+          "courseId",
+          "courseTitle",
+          "courseVersion",
+          "goalType",
+          "rankingMode",
+          "quality",
+          "difficulty",
+          "viewerRating",
+          "trophy",
+          "entries",
+          "viewerBest",
+          "viewerRank"
+        ],
+        "properties": {
+          "courseId": { "type": "string" },
+          "courseTitle": { "type": ["string", "null"] },
+          "courseVersion": { "type": "integer" },
+          "goalType": { "type": "string" },
+          "rankingMode": {
+            "type": "string",
+            "enum": ["time", "score"]
+          },
+          "quality": { "$ref": "#/components/schemas/QualityRatingSummary" },
+          "difficulty": { "$ref": "#/components/schemas/RoomDifficultySummary" },
+          "viewerRating": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/ViewerRatingSummary" },
+              { "type": "null" }
+            ]
+          },
+          "trophy": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/TrophyAwardSummary" },
+              { "type": "null" }
+            ]
+          },
+          "entries": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/CourseLeaderboardEntry" }
+          },
+          "viewerBest": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/CourseLeaderboardEntry" },
+              { "type": "null" }
+            ]
+          },
+          "viewerRank": { "type": ["integer", "null"] }
+        }
+      },
+      "CourseRatingRequestBody": {
+        "type": "object",
+        "required": ["courseVersion", "qualityStars", "difficultyChoice", "autoSuggestedDifficulty"],
+        "properties": {
+          "courseVersion": { "type": "integer" },
+          "qualityStars": { "type": ["integer", "null"], "minimum": 1, "maximum": 5 },
+          "difficultyChoice": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/RoomDifficulty" },
+              { "type": "null" }
+            ]
+          },
+          "autoSuggestedDifficulty": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/RoomDifficulty" },
+              { "type": "null" }
+            ]
+          }
+        }
+      },
+      "CourseRatingResponse": {
+        "type": "object",
+        "required": ["ok", "courseId", "courseVersion", "progressionDelta", "summary", "progression"],
+        "properties": {
+          "ok": { "type": "boolean" },
+          "courseId": { "type": "string" },
+          "courseVersion": { "type": "integer" },
+          "progressionDelta": { "$ref": "#/components/schemas/ProgressionDelta" },
+          "summary": { "$ref": "#/components/schemas/RatingAggregateSummary" },
+          "progression": { "$ref": "#/components/schemas/ProgressionSummary" }
+        }
+      },
+      "ProfilePublishedRoomEntry": {
+        "type": "object",
+        "required": ["roomId", "roomCoordinates", "roomTitle", "roomVersion", "goalType", "publishedAt"],
+        "properties": {
+          "roomId": { "type": "string" },
+          "roomCoordinates": { "$ref": "#/components/schemas/RoomCoordinates" },
+          "roomTitle": { "type": ["string", "null"] },
+          "roomVersion": { "type": "integer" },
+          "goalType": { "type": ["string", "null"] },
+          "publishedAt": { "type": ["string", "null"], "format": "date-time" }
+        }
+      },
+      "ProfileStatsSummary": {
+        "type": "object",
+        "required": [
+          "totalPoints",
+          "totalScore",
+          "totalDeaths",
+          "totalCollectibles",
+          "totalEnemiesDefeated",
+          "totalCheckpoints",
+          "totalRoomsPublished",
+          "completedRuns",
+          "failedRuns",
+          "abandonedRuns",
+          "bestScore",
+          "fastestClearMs",
+          "globalRank"
+        ],
+        "properties": {
+          "totalPoints": { "type": "integer" },
+          "totalScore": { "type": "integer" },
+          "totalDeaths": { "type": "integer" },
+          "totalCollectibles": { "type": "integer" },
+          "totalEnemiesDefeated": { "type": "integer" },
+          "totalCheckpoints": { "type": "integer" },
+          "totalRoomsPublished": { "type": "integer" },
+          "completedRuns": { "type": "integer" },
+          "failedRuns": { "type": "integer" },
+          "abandonedRuns": { "type": "integer" },
+          "bestScore": { "type": "integer" },
+          "fastestClearMs": { "type": ["integer", "null"] },
+          "globalRank": { "type": ["integer", "null"] }
+        }
+      },
+      "UserProfileResponse": {
+        "type": "object",
+        "required": [
+          "userId",
+          "displayName",
+          "createdAt",
+          "avatarUrl",
+          "bio",
+          "isSelf",
+          "canEdit",
+          "stats",
+          "progression",
+          "publishedRooms",
+          "publishedCourseCount"
+        ],
+        "properties": {
+          "userId": { "type": "string" },
+          "displayName": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "avatarUrl": { "type": ["string", "null"] },
+          "bio": { "type": ["string", "null"] },
+          "isSelf": { "type": "boolean" },
+          "canEdit": { "type": "boolean" },
+          "stats": { "$ref": "#/components/schemas/ProfileStatsSummary" },
+          "progression": { "$ref": "#/components/schemas/ProgressionSummary" },
+          "publishedRooms": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProfilePublishedRoomEntry" }
+          },
+          "publishedCourseCount": { "type": "integer" }
+        }
+      },
+      "UserProfileUpdateRequestBody": {
+        "type": "object",
+        "required": ["displayName", "avatarUrl", "bio"],
+        "properties": {
+          "displayName": { "type": "string" },
+          "avatarUrl": { "type": ["string", "null"] },
+          "bio": { "type": ["string", "null"] }
+        }
+      },
+      "UserProfileUpdateResponse": {
+        "type": "object",
+        "required": ["ok", "user", "profile"],
+        "properties": {
+          "ok": { "type": "boolean" },
+          "user": { "$ref": "#/components/schemas/AuthUser" },
+          "profile": { "$ref": "#/components/schemas/UserProfileResponse" }
         }
       },
       "GlobalLeaderboardEntry": {
@@ -2086,6 +2572,173 @@
         }
       }
     },
+    "/api/rooms/{roomId}/ratings": {
+      "post": {
+        "summary": "Submit or update a room post-run rating",
+        "description": "Requires a signed-in completion on the published room version family being rated.",
+        "security": [
+          { "cookieSession": [] }
+        ],
+        "parameters": [
+          {
+            "name": "roomId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RoomRatingRequestBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rating saved",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RoomRatingResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing session",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "409": {
+            "description": "Completion required for this rating window",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/courses/{courseId}/runs/start": {
+      "post": {
+        "summary": "Start a ranked course run attempt",
+        "description": "Requires auth. Session cookies only.",
+        "security": [
+          { "cookieSession": [] }
+        ],
+        "parameters": [
+          {
+            "name": "courseId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CourseRunStartRequestBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Course run attempt created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CourseRunStartResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/course-runs/{attemptId}/finish": {
+      "post": {
+        "summary": "Finish a ranked course run attempt",
+        "description": "Requires auth. Session cookies only.",
+        "security": [
+          { "cookieSession": [] }
+        ],
+        "parameters": [
+          {
+            "name": "attemptId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RunFinishRequestBody" }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Course run finalized"
+          }
+        }
+      }
+    },
+    "/api/courses/{courseId}/ratings": {
+      "post": {
+        "summary": "Submit or update a course post-run rating",
+        "description": "Requires a signed-in completion on the published course version family being rated.",
+        "security": [
+          { "cookieSession": [] }
+        ],
+        "parameters": [
+          {
+            "name": "courseId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CourseRatingRequestBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rating saved",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CourseRatingResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing session",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "409": {
+            "description": "Completion required for this rating window",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/leaderboards/rooms/{roomId}": {
       "get": {
         "summary": "Read a room leaderboard",
@@ -2126,6 +2779,46 @@
         }
       }
     },
+    "/api/leaderboards/courses/{courseId}": {
+      "get": {
+        "summary": "Read a course leaderboard",
+        "description": "Public read. If a bearer token is supplied, it must include leaderboards:read.",
+        "security": [
+          { "bearerAuth": [] },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "courseId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 50, "default": 10 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Course leaderboard",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CourseLeaderboardResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/leaderboards/rooms/discover": {
       "get": {
         "summary": "Discover published challenge rooms by difficulty",
@@ -2159,6 +2852,75 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/RoomDiscoveryResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles/{userId}": {
+      "get": {
+        "summary": "Read a public user profile",
+        "security": [
+          { "cookieSession": [] },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public profile",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserProfileResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Profile not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles/me": {
+      "patch": {
+        "summary": "Update the signed-in user's profile",
+        "security": [
+          { "cookieSession": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UserProfileUpdateRequestBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated profile",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserProfileUpdateResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing session",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
           }

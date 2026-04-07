@@ -147,49 +147,66 @@
       <div class="sidebar-section" id="tools-section" data-mobile-panel="tools" data-sidebar-collapsible="true">
         <div class="section-label">Tools</div>
         <div id="tools" class="tools-primary-row">
-          <button class="tool-btn active" data-tool="pencil" title="Draw (1)">
+          <button class="tool-btn active" data-tool="pencil" type="button" title="Draw (1)">
             <span class="tool-icon">&#9998;</span>
             <span class="tool-label">Draw</span>
           </button>
-          <button class="tool-btn" data-tool="eraser" title="Erase (2)">
+          <button class="tool-btn" data-tool="eraser" type="button" title="Erase (2)">
             <span class="tool-icon">&#9003;</span>
             <span class="tool-label">Erase</span>
           </button>
-          <button class="tool-btn" data-tool="copy" title="Copy (3)">
+          <button class="tool-btn" data-tool="copy" type="button" title="Copy (3)">
             <span class="tool-icon">&#10697;</span>
             <span class="tool-label">Copy</span>
           </button>
-          <button id="btn-tool-more" class="tool-btn tool-btn-more" type="button" title="More Tools">
+          <button
+            id="btn-tool-more"
+            class="tool-btn tool-btn-more editor-more-tools-toggle"
+            type="button"
+            title="More Tools"
+          >
             <span class="tool-icon">&#8942;</span>
             <span class="tool-label">More</span>
           </button>
         </div>
-        <div id="more-tools-panel" class="editor-tool-popover hidden">
+        <div id="more-tools-panel" class="editor-tool-popover editor-more-tools-panel hidden">
           <div class="editor-tool-popover-label">More Tools</div>
           <div class="editor-tool-popover-grid">
-            <button class="tool-btn tool-btn-compact" data-tool="rect" title="Rectangle (R)">
+            <button class="tool-btn tool-btn-compact" data-tool="rect" type="button" title="Rectangle (R)">
               <span class="tool-icon">&#9634;</span>
               <span class="tool-label">Rect</span>
             </button>
-            <button class="tool-btn tool-btn-compact" data-tool="fill" title="Fill (G)">
+            <button class="tool-btn tool-btn-compact" data-tool="fill" type="button" title="Fill (G)">
               <span class="tool-icon">&#9687;</span>
               <span class="tool-label">Fill</span>
             </button>
           </div>
         </div>
-        <div id="erase-controls" class="erase-controls editor-tool-popover hidden">
+        <div id="erase-controls" class="erase-controls editor-tool-popover editor-eraser-controls hidden">
           <div class="editor-tool-popover-label">Eraser</div>
           <div class="erase-controls-row">
             <label class="erase-controls-label" for="erase-brush-select">Brush</label>
-            <select id="erase-brush-select">
+            <select id="erase-brush-select" class="editor-erase-brush-select">
               <option value="1">1x1</option>
               <option value="3">3x3</option>
               <option value="5">5x5</option>
             </select>
           </div>
           <div class="erase-action-grid">
-            <button id="btn-erase-clear-layer" class="bar-btn bar-btn-small" type="button">Clear Layer</button>
-            <button id="btn-erase-clear-all" class="bar-btn bar-btn-small bar-btn-danger" type="button">Nuke Terrain</button>
+            <button
+              id="btn-erase-clear-layer"
+              class="bar-btn bar-btn-small editor-clear-layer-btn"
+              type="button"
+            >
+              Clear Layer
+            </button>
+            <button
+              id="btn-erase-clear-all"
+              class="bar-btn bar-btn-small bar-btn-danger editor-clear-all-btn"
+              type="button"
+            >
+              Nuke Terrain
+            </button>
           </div>
         </div>
       </div>
@@ -560,6 +577,72 @@
             <span class="tool-label" data-button-label>Publish Room</span>
           </button>
         </div>
+        <div class="editor-top-tools desktop-editor-only">
+          <div class="editor-top-tools-label">Tools</div>
+          <div class="editor-top-tools-rail">
+            <button class="tool-btn editor-top-tool-btn active" data-tool="pencil" type="button" title="Draw (1)">
+              <span class="tool-icon">&#9998;</span>
+              <span class="tool-label">Draw</span>
+            </button>
+            <button class="tool-btn editor-top-tool-btn" data-tool="eraser" type="button" title="Erase (2)">
+              <span class="tool-icon">&#9003;</span>
+              <span class="tool-label">Erase</span>
+            </button>
+            <button class="tool-btn editor-top-tool-btn" data-tool="copy" type="button" title="Copy (3)">
+              <span class="tool-icon">&#10697;</span>
+              <span class="tool-label">Copy</span>
+            </button>
+            <button
+              id="btn-editor-top-tool-more"
+              class="tool-btn tool-btn-more editor-more-tools-toggle editor-top-tool-btn"
+              type="button"
+              title="More Tools"
+            >
+              <span class="tool-icon">&#8942;</span>
+              <span class="tool-label">More</span>
+            </button>
+          </div>
+          <div id="editor-top-more-tools-panel" class="editor-tool-popover editor-more-tools-panel hidden">
+            <div class="editor-tool-popover-label">More Tools</div>
+            <div class="editor-tool-popover-grid">
+              <button class="tool-btn tool-btn-compact editor-top-tool-btn" data-tool="rect" type="button" title="Rectangle (R)">
+                <span class="tool-icon">&#9634;</span>
+                <span class="tool-label">Rect</span>
+              </button>
+              <button class="tool-btn tool-btn-compact editor-top-tool-btn" data-tool="fill" type="button" title="Fill (G)">
+                <span class="tool-icon">&#9687;</span>
+                <span class="tool-label">Fill</span>
+              </button>
+            </div>
+          </div>
+          <div id="editor-top-erase-controls" class="erase-controls editor-tool-popover editor-eraser-controls hidden">
+            <div class="editor-tool-popover-label">Eraser</div>
+            <div class="erase-controls-row">
+              <label class="erase-controls-label" for="editor-top-erase-brush-select">Brush</label>
+              <select id="editor-top-erase-brush-select" class="editor-erase-brush-select">
+                <option value="1">1x1</option>
+                <option value="3">3x3</option>
+                <option value="5">5x5</option>
+              </select>
+            </div>
+            <div class="erase-action-grid">
+              <button
+                id="btn-editor-top-erase-clear-layer"
+                class="bar-btn bar-btn-small editor-clear-layer-btn"
+                type="button"
+              >
+                Clear Layer
+              </button>
+              <button
+                id="btn-editor-top-erase-clear-all"
+                class="bar-btn bar-btn-small bar-btn-danger editor-clear-all-btn"
+                type="button"
+              >
+                Nuke Terrain
+              </button>
+            </div>
+          </div>
+        </div>
         <div id="editor-top-save-status" class="editor-top-save-status">Draft ready.</div>
         <div id="editor-publish-nudge" class="editor-publish-nudge hidden">
           <div class="editor-publish-nudge-kicker">Draft Only</div>
@@ -603,60 +686,64 @@
       >
         <div class="section-label">Advanced</div>
         <div class="editor-advanced-grid">
-          <button id="btn-mint-room" class="bar-btn">Mint Room</button>
-          <button id="btn-refresh-room-metadata" class="bar-btn hidden">Refresh NFT Metadata</button>
-          <button id="btn-room-history" class="bar-btn">History</button>
-        </div>
-      </div>
-
-      <div class="sidebar-section" id="lighting-section" data-mobile-panel="actions" data-sidebar-collapsible="true">
-        <div class="section-label">Lighting</div>
-        <select id="lighting-mode-select">
-          <option value="off">Normal</option>
-          <option value="playerAuraDark">Dark Aura</option>
-        </select>
-        <div id="lighting-tuning-controls" class="lighting-tuning-controls hidden">
-          <div class="lighting-slider-group">
-            <div class="lighting-slider-header">
-              <span class="lighting-slider-label">Darkness</span>
-              <span id="lighting-darkness-value" class="lighting-slider-value">80%</span>
-            </div>
-            <input
-              id="lighting-darkness-range"
-              class="lighting-slider-input"
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              value="80"
-            />
-            <div class="lighting-slider-endpoints" aria-hidden="true">
-              <span>Barely dark</span>
-              <span>Pitch black</span>
+          <div class="editor-advanced-block">
+            <div class="editor-advanced-block-label">Room</div>
+            <div class="editor-advanced-actions">
+              <button id="btn-mint-room" class="bar-btn">Mint Room</button>
+              <button id="btn-refresh-room-metadata" class="bar-btn hidden">Refresh NFT Metadata</button>
+              <button id="btn-room-history" class="bar-btn">History</button>
             </div>
           </div>
-          <div class="lighting-slider-group">
-            <div class="lighting-slider-header">
-              <span class="lighting-slider-label">Spotlight Radius</span>
-              <span id="lighting-radius-value" class="lighting-slider-value">50%</span>
+          <div class="editor-advanced-block">
+            <div class="editor-advanced-block-label">Lighting</div>
+            <select id="lighting-mode-select">
+              <option value="off">Normal</option>
+              <option value="playerAuraDark">Dark Aura</option>
+            </select>
+            <div id="lighting-tuning-controls" class="lighting-tuning-controls hidden">
+              <div class="lighting-slider-group">
+                <div class="lighting-slider-header">
+                  <span class="lighting-slider-label">Darkness</span>
+                  <span id="lighting-darkness-value" class="lighting-slider-value">80%</span>
+                </div>
+                <input
+                  id="lighting-darkness-range"
+                  class="lighting-slider-input"
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value="80"
+                />
+                <div class="lighting-slider-endpoints" aria-hidden="true">
+                  <span>Barely dark</span>
+                  <span>Pitch black</span>
+                </div>
+              </div>
+              <div class="lighting-slider-group">
+                <div class="lighting-slider-header">
+                  <span class="lighting-slider-label">Spotlight Radius</span>
+                  <span id="lighting-radius-value" class="lighting-slider-value">50%</span>
+                </div>
+                <input
+                  id="lighting-radius-range"
+                  class="lighting-slider-input"
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value="50"
+                />
+                <div class="lighting-slider-endpoints" aria-hidden="true">
+                  <span>Tight</span>
+                  <span>Wide</span>
+                </div>
+              </div>
             </div>
-            <input
-              id="lighting-radius-range"
-              class="lighting-slider-input"
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              value="50"
-            />
-            <div class="lighting-slider-endpoints" aria-hidden="true">
-              <span>Tight</span>
-              <span>Wide</span>
+            <div class="room-lighting-note">
+              Dark Aura previews the active room as dim and opens light from the spawn point.
             </div>
           </div>
-        </div>
-        <div class="room-lighting-note">
-          Dark Aura previews the active room as dim and opens light from the spawn point.
         </div>
       </div>
     </div>
@@ -780,6 +867,7 @@
         </div>
         <div class="world-hud-row world-hud-row-primary-actions">
           <button id="btn-world-play" class="bar-btn bar-btn-small world-btn-play" disabled>Play Room</button>
+          <button id="btn-world-restart" class="bar-btn bar-btn-small world-btn-play hidden" type="button">Restart</button>
           <button id="btn-world-play-course" class="bar-btn bar-btn-small world-btn-play hidden" disabled>Play Course</button>
           <button id="btn-world-edit" class="bar-btn bar-btn-small world-btn-edit" disabled>Edit Room</button>
           <button id="btn-world-build" class="bar-btn bar-btn-small world-btn-build" disabled>Build Here</button>
@@ -812,6 +900,13 @@
         type="button"
       >
         Stop
+      </button>
+      <button
+        id="btn-mobile-world-restart"
+        class="bar-btn bar-btn-small world-btn-play active mobile-world-restart hidden"
+        type="button"
+      >
+        Restart
       </button>
       <div id="mobile-play-controls" class="mobile-play-controls hidden">
         <div id="mobile-dpad" class="mobile-dpad" aria-label="Move">
@@ -1023,6 +1118,7 @@
           <div class="profile-hero-copy">
             <div id="profile-display-name" class="profile-display-name">Profile</div>
             <div id="profile-joined-date" class="history-modal-meta">Joined recently</div>
+            <div id="profile-hero-progress" class="history-modal-meta hidden"></div>
             <div id="profile-overview-bio" class="profile-overview-bio">No bio yet.</div>
           </div>
         </div>
@@ -1040,6 +1136,7 @@
         </div>
         <div class="leaderboard-tabs profile-tabs">
           <button id="btn-profile-tab-rooms" class="bar-btn bar-btn-small active" type="button" aria-selected="true">Published Rooms</button>
+          <button id="btn-profile-tab-progress" class="bar-btn bar-btn-small" type="button" aria-selected="false">Progress</button>
           <button id="btn-profile-tab-stats" class="bar-btn bar-btn-small" type="button" aria-selected="false">Stats</button>
         </div>
         <div id="profile-rooms-panel" class="leaderboard-panel">
@@ -1047,9 +1144,61 @@
           <div id="profile-rooms-empty" class="leaderboard-empty">No claimed published rooms yet.</div>
           <div id="profile-rooms-list" class="history-version-list profile-room-grid"></div>
         </div>
+        <div id="profile-progress-panel" class="leaderboard-panel hidden">
+          <div class="history-modal-meta">Visible WAMP progression lanes, founder identity, badges, and trophies.</div>
+          <div id="profile-progress-list" class="profile-stats-list"></div>
+        </div>
         <div id="profile-stats-panel" class="leaderboard-panel hidden">
           <div class="history-modal-meta">Current leaderboard and progression summary.</div>
           <div id="profile-stats-list" class="profile-stats-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="run-rating-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel leaderboard-modal-panel run-rating-modal-panel" role="dialog" aria-modal="true" aria-labelledby="run-rating-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Run Complete</div>
+          <h2 id="run-rating-title" class="history-modal-title">Post-Run Rating</h2>
+          <div id="run-rating-meta" class="history-modal-meta">Rate the run you just finished.</div>
+        </div>
+        <button id="btn-run-rating-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div id="run-rating-error" class="history-modal-error hidden"></div>
+      <div class="leaderboard-panel run-rating-panel">
+        <div id="run-rating-result" class="run-rating-result"></div>
+        <div id="run-rating-leaderboard" class="history-modal-meta">Loading latest leaderboard summary...</div>
+        <div id="run-rating-suggestion" class="history-modal-meta">Suggested difficulty: Medium.</div>
+
+        <div class="run-rating-section">
+          <div class="run-rating-section-label">Quality</div>
+          <div id="run-rating-quality-actions" class="run-rating-quality-actions">
+            <button class="bar-btn bar-btn-small" type="button" data-quality-stars="1">1 Star</button>
+            <button class="bar-btn bar-btn-small" type="button" data-quality-stars="2">2 Stars</button>
+            <button class="bar-btn bar-btn-small" type="button" data-quality-stars="3">3 Stars</button>
+            <button class="bar-btn bar-btn-small" type="button" data-quality-stars="4">4 Stars</button>
+            <button class="bar-btn bar-btn-small" type="button" data-quality-stars="5">5 Stars</button>
+          </div>
+        </div>
+
+        <div class="run-rating-section">
+          <div class="run-rating-section-label">Difficulty</div>
+          <div id="run-rating-difficulty-actions" class="leaderboard-difficulty-actions">
+            <button class="bar-btn bar-btn-small" type="button" data-progression-difficulty="easy">Easy</button>
+            <button class="bar-btn bar-btn-small" type="button" data-progression-difficulty="medium">Medium</button>
+            <button class="bar-btn bar-btn-small" type="button" data-progression-difficulty="hard">Hard</button>
+            <button class="bar-btn bar-btn-small" type="button" data-progression-difficulty="extreme">Extreme</button>
+          </div>
+        </div>
+
+        <div id="run-rating-status" class="leaderboard-secondary">Rate the content quality and tweak the suggested difficulty if needed.</div>
+        <div id="run-rating-reward" class="history-modal-meta hidden"></div>
+
+        <div class="run-rating-actions">
+          <button id="btn-run-rating-skip" class="bar-btn bar-btn-small" type="button">Skip</button>
+          <button id="btn-run-rating-submit" class="bar-btn" type="button">Submit Rating</button>
         </div>
       </div>
     </div>

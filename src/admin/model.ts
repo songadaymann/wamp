@@ -1,3 +1,5 @@
+import type { BuilderCapabilitySummary } from '../progression/model';
+
 export interface PartyKitShardHeartbeat {
   shardId: string;
   totalConnections: number;
@@ -70,6 +72,14 @@ export interface LaunchStatsResponse {
 
 export type SuspiciousSeverity = 'high' | 'medium' | 'low';
 
+export type SuspiciousUserBucket = 'real_players' | 'playfun_signals';
+
+export type SuspiciousUserIdentityKind =
+  | 'no_playfun_signal'
+  | 'playfun_linked'
+  | 'playfun_only'
+  | 'playfun_name_heuristic';
+
 export type SuspiciousSignalCode =
   | 'record_gap'
   | 'too_fast_absolute'
@@ -87,6 +97,13 @@ export interface SuspiciousSignal {
   relatedAttemptIds: string[];
 }
 
+export interface SuspiciousUserIdentity {
+  bucket: SuspiciousUserBucket;
+  kind: SuspiciousUserIdentityKind;
+  label: string;
+  summary: string;
+}
+
 export interface SuspiciousUserCase {
   userId: string;
   userDisplayName: string;
@@ -100,6 +117,7 @@ export interface SuspiciousUserCase {
   strongestSeverity: SuspiciousSeverity;
   signalCodes: SuspiciousSignalCode[];
   signals: SuspiciousSignal[];
+  identity: SuspiciousUserIdentity;
   lastActivityAt: string | null;
 }
 
@@ -121,6 +139,9 @@ export interface SuspiciousRunCase {
   elapsedMs: number | null;
   deaths: number;
   score: number;
+  runFinalizedPoints: number | null;
+  runFinalizedPointEventId: string | null;
+  runFinalizedPointCreatedAt: string | null;
   severity: SuspiciousSeverity;
   ruleCodes: SuspiciousSignalCode[];
   previousBestElapsedMs: number | null;
@@ -228,4 +249,43 @@ export interface SuspiciousInvalidationResult extends SuspiciousInvalidationPrev
   ok: true;
   auditId: string;
   operatorLabel: string;
+}
+
+export interface AdminBuilderCapOverride {
+  claimLimitPerDay: number | null;
+  publishLimitPerDay: number | null;
+  objectLimit: number | null;
+  collectibleLimit: number | null;
+  reason: string | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+export interface AdminProgressionUserLookupEntry {
+  userId: string;
+  displayName: string;
+  email: string | null;
+  founderNumber: number | null;
+  builderCaps: BuilderCapabilitySummary;
+  override: AdminBuilderCapOverride;
+}
+
+export interface AdminProgressionUserLookupResponse {
+  query: string;
+  items: AdminProgressionUserLookupEntry[];
+}
+
+export interface AdminProgressionUserCapsResponse extends AdminProgressionUserLookupEntry {}
+
+export interface AdminProgressionCapsUpdateRequest {
+  claimLimitPerDay: number | null;
+  publishLimitPerDay: number | null;
+  objectLimit: number | null;
+  collectibleLimit: number | null;
+  reason: string | null;
+  operatorLabel: string;
+}
+
+export interface AdminProgressionCapsUpdateResponse extends AdminProgressionUserCapsResponse {
+  ok: true;
 }

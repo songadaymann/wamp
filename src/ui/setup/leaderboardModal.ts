@@ -26,6 +26,10 @@ import {
   buildRoomLeaderboardVersionSelectionState,
   type RoomLeaderboardVersionOption,
 } from './leaderboardRoomVersions';
+import {
+  POST_RUN_RATING_SUBMITTED_EVENT,
+  type PostRunRatingSubmittedDetail,
+} from '../../progression/postRunRatingEvents';
 
 type LeaderboardTab = 'room' | 'discover' | 'course' | 'global';
 
@@ -102,6 +106,34 @@ export class LeaderboardModalController {
     this.close();
   };
 
+  private readonly handleRunRatingSubmitted = (event: Event) => {
+    const detail =
+      event instanceof CustomEvent
+        ? (event.detail as PostRunRatingSubmittedDetail | undefined)
+        : undefined;
+    if (!detail || this.elements.modal?.classList.contains('hidden')) {
+      return;
+    }
+
+    if (detail.contentType === 'room') {
+      const shouldRefreshRoom =
+        this.roomLoaded && this.roomLeaderboard?.roomId === detail.contentId;
+      const shouldRefreshDiscover = this.discoverLoaded;
+      if (!shouldRefreshRoom && !shouldRefreshDiscover) {
+        return;
+      }
+      void Promise.allSettled([
+        shouldRefreshRoom ? this.loadRoomLeaderboard() : Promise.resolve(),
+        shouldRefreshDiscover ? this.loadDiscoveryResults() : Promise.resolve(),
+      ]);
+      return;
+    }
+
+    if (this.courseLoaded && this.courseLeaderboard?.courseId === detail.contentId) {
+      void this.loadCourseLeaderboard();
+    }
+  };
+
   constructor(
     private readonly game: Phaser.Game,
     private readonly runRepository: RunRepository = createRunRepository(),
@@ -149,6 +181,7 @@ export class LeaderboardModalController {
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
+    window.addEventListener(POST_RUN_RATING_SUBMITTED_EVENT, this.handleRunRatingSubmitted as EventListener);
     this.elements.roomTabButton?.addEventListener('click', () => {
       if (!this.elements.roomTabButton?.disabled) {
         void this.activateTab('room');
@@ -191,6 +224,7 @@ export class LeaderboardModalController {
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
+    window.removeEventListener(POST_RUN_RATING_SUBMITTED_EVENT, this.handleRunRatingSubmitted as EventListener);
     this.close();
   }
 
@@ -414,10 +448,13 @@ export class LeaderboardModalController {
     this.voteSubmitting = true;
     this.render();
     try {
-      await this.runRepository.submitRoomDifficultyVote(this.roomLeaderboard.roomId, {
+      await this.runRepository.submitRoomRating(this.roomLeaderboard.roomId, {
         roomCoordinates: this.roomLeaderboard.roomCoordinates,
         roomVersion: this.roomLeaderboard.roomVersion,
-        difficulty,
+        qualityStars: this.roomLeaderboard.viewerRating?.qualityStars ?? null,
+        difficultyChoice: difficulty,
+        autoSuggestedDifficulty:
+          this.roomLeaderboard.viewerRating?.autoSuggestedDifficulty ?? difficulty,
       });
       await Promise.all([
         this.loadRoomLeaderboard(),
@@ -548,7 +585,7 @@ export class LeaderboardModalController {
     this.elements.roomSummary.textContent = roomPending
       ? 'Loading room leaderboard...'
       : this.roomLeaderboard
-        ? `${this.roomLeaderboard.entries.length} ranked run${this.roomLeaderboard.entries.length === 1 ? '' : 's'} · ${this.roomLeaderboard.rankingMode === 'time' ? 'fastest time wins' : 'highest score wins'}`
+        ? `${this.roomLeaderboard.entries.length} ranked run${this.roomLeaderboard.entries.length === 1 ? '' : 's'} · ${this.roomLeaderboard.rankingMode === 'time' ? 'fastest time wins' : 'highest score wins'} · ${this.formatQualitySummary(this.roomLeaderboard.quality)}${this.formatTrophySuffix(this.roomLeaderboard.trophy)}`
         : 'No published room leaderboard available.';
 
     const viewer = this.roomLeaderboard?.viewerBest ?? null;
@@ -565,10 +602,10 @@ export class LeaderboardModalController {
       roomPending
         ? 'Loading difficulty ratings...'
         : difficulty === null || difficulty.totalVotes === 0
-          ? 'No difficulty ratings yet.'
+          ? `${this.formatQualitySummary(this.roomLeaderboard?.quality ?? null)}`
           : `Consensus: ${
               difficulty.consensus ? ROOM_DIFFICULTY_LABELS[difficulty.consensus] : 'Unrated'
-            } · ${difficulty.totalVotes} vote${difficulty.totalVotes === 1 ? '' : 's'}`;
+            } · ${difficulty.totalVotes} vote${difficulty.totalVotes === 1 ? '' : 's'} · ${this.formatQualitySummary(this.roomLeaderboard?.quality ?? null)}`;
     this.elements.roomDifficultySummary.textContent = consensusText;
     this.elements.roomDifficultyStatus.textContent = roomPending ? '' : this.getDifficultyStatusText();
     for (const button of this.elements.roomDifficultyButtons) {
@@ -660,7 +697,7 @@ export class LeaderboardModalController {
     this.elements.courseSummary.textContent = coursePending
       ? 'Loading course leaderboard...'
       : this.courseLeaderboard
-        ? `${this.courseLeaderboard.entries.length} ranked run${this.courseLeaderboard.entries.length === 1 ? '' : 's'} · ${this.courseLeaderboard.rankingMode === 'time' ? 'fastest time wins' : 'highest score wins'}`
+        ? `${this.courseLeaderboard.entries.length} ranked run${this.courseLeaderboard.entries.length === 1 ? '' : 's'} · ${this.courseLeaderboard.rankingMode === 'time' ? 'fastest time wins' : 'highest score wins'} · ${this.formatQualitySummary(this.courseLeaderboard.quality)} · ${this.formatDifficultyConsensus(this.courseLeaderboard.difficulty)}${this.formatTrophySuffix(this.courseLeaderboard.trophy)}`
         : 'No published course leaderboard available.';
 
     const viewer = this.courseLeaderboard?.viewerBest ?? null;
@@ -813,7 +850,7 @@ export class LeaderboardModalController {
         : '';
     meta.textContent = `${entry.goalType.replace('_', ' ')} · ${versionLabel}${canonicalLabel} · ${difficultyLabel} · ${
       entry.voteCount
-    } vote${entry.voteCount === 1 ? '' : 's'} · ${entry.roomCoordinates.x},${entry.roomCoordinates.y}`;
+    } vote${entry.voteCount === 1 ? '' : 's'} · ${this.formatQualitySummary(entry.quality)}${this.formatTrophySuffix(entry.trophy)} · ${entry.roomCoordinates.x},${entry.roomCoordinates.y}`;
     button.appendChild(meta);
     return button;
   }
@@ -873,6 +910,32 @@ export class LeaderboardModalController {
       month: 'short',
       day: 'numeric',
     }).format(date);
+  }
+
+  private formatQualitySummary(
+    quality: RoomLeaderboardResponse['quality'] | CourseLeaderboardResponse['quality'] | RoomDiscoveryEntry['quality'] | null
+  ): string {
+    if (!quality || quality.adjustedAverage === null) {
+      return 'quality unrated';
+    }
+
+    return `quality ${quality.adjustedAverage.toFixed(2)}/5`;
+  }
+
+  private formatDifficultyConsensus(
+    difficulty: CourseLeaderboardResponse['difficulty'] | RoomLeaderboardResponse['difficulty'] | null
+  ): string {
+    if (!difficulty || difficulty.consensus === null || difficulty.totalVotes === 0) {
+      return 'difficulty unrated';
+    }
+
+    return `difficulty ${ROOM_DIFFICULTY_LABELS[difficulty.consensus]}`;
+  }
+
+  private formatTrophySuffix(
+    trophy: RoomLeaderboardResponse['trophy'] | CourseLeaderboardResponse['trophy'] | RoomDiscoveryEntry['trophy'] | null
+  ): string {
+    return trophy ? ' · trophy' : '';
   }
 
   private getDifficultyStatusText(): string {

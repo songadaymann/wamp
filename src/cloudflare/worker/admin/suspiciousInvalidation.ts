@@ -54,6 +54,11 @@ type SelectedRoomRunRow = Pick<
   | 'deaths'
   | 'score'
 > & { title: string | null };
+type SelectedRoomRunWithPointsRow = SelectedRoomRunRow & {
+  run_finalized_point_event_id: string | null;
+  run_finalized_points: number | string | null;
+  run_finalized_point_created_at: string | null;
+};
 
 type SelectedCourseRunRow = Pick<
   CourseRunRow,
@@ -71,6 +76,11 @@ type SelectedCourseRunRow = Pick<
   | 'deaths'
   | 'score'
 > & { title: string | null };
+type SelectedCourseRunWithPointsRow = SelectedCourseRunRow & {
+  run_finalized_point_event_id: string | null;
+  run_finalized_points: number | string | null;
+  run_finalized_point_created_at: string | null;
+};
 
 export async function handleAdminSuspiciousInvalidatePreview(
   request: Request,
@@ -386,17 +396,24 @@ async function loadSelectedRoomRuns(
           r.elapsed_ms,
           r.deaths,
           r.score,
-          v.title AS title
+          v.title AS title,
+          p.id AS run_finalized_point_event_id,
+          p.points AS run_finalized_points,
+          p.created_at AS run_finalized_point_created_at
         FROM room_runs r
         LEFT JOIN room_versions v
           ON v.room_id = r.room_id
          AND v.version = r.room_version
+        LEFT JOIN point_events p
+          ON p.user_id = r.user_id
+         AND p.event_type = 'run_finalized'
+         AND p.source_key = r.attempt_id
         WHERE r.user_id = ?
           AND r.attempt_id IN (${placeholders})
       `
     )
       .bind(userId, ...chunk)
-      .all<SelectedRoomRunRow>();
+      .all<SelectedRoomRunWithPointsRow>();
 
     for (const row of result.results) {
       const goal = normalizeRoomGoal(parseJsonSafely(row.goal_json));
@@ -421,6 +438,9 @@ async function loadSelectedRoomRuns(
         elapsedMs: row.elapsed_ms,
         deaths: row.deaths,
         score: row.score,
+        runFinalizedPoints: parseNullableNumber(row.run_finalized_points),
+        runFinalizedPointEventId: row.run_finalized_point_event_id,
+        runFinalizedPointCreatedAt: row.run_finalized_point_created_at,
         severity: 'medium',
         ruleCodes: [],
         previousBestElapsedMs: null,
@@ -498,17 +518,24 @@ async function loadSelectedCourseRuns(
           r.elapsed_ms,
           r.deaths,
           r.score,
-          v.title AS title
+          v.title AS title,
+          p.id AS run_finalized_point_event_id,
+          p.points AS run_finalized_points,
+          p.created_at AS run_finalized_point_created_at
         FROM course_runs r
         LEFT JOIN course_versions v
           ON v.course_id = r.course_id
          AND v.version = r.course_version
+        LEFT JOIN point_events p
+          ON p.user_id = r.user_id
+         AND p.event_type = 'run_finalized'
+         AND p.source_key = r.attempt_id
         WHERE r.user_id = ?
           AND r.attempt_id IN (${placeholders})
       `
     )
       .bind(userId, ...chunk)
-      .all<SelectedCourseRunRow>();
+      .all<SelectedCourseRunWithPointsRow>();
 
     for (const row of result.results) {
       const goal = normalizeCourseGoal(parseJsonSafely(row.goal_json));
@@ -533,6 +560,9 @@ async function loadSelectedCourseRuns(
         elapsedMs: row.elapsed_ms,
         deaths: row.deaths,
         score: row.score,
+        runFinalizedPoints: parseNullableNumber(row.run_finalized_points),
+        runFinalizedPointEventId: row.run_finalized_point_event_id,
+        runFinalizedPointCreatedAt: row.run_finalized_point_created_at,
         severity: 'medium',
         ruleCodes: [],
         previousBestElapsedMs: null,
@@ -755,6 +785,14 @@ function parseJsonSafely(raw: string | null): unknown {
   } catch {
     return null;
   }
+}
+
+function parseNullableNumber(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function severityRank(value: SuspiciousSeverity): number {

@@ -7,14 +7,20 @@ import {
   type CourseRecord,
   type CourseSnapshot,
 } from '../../../courses/model';
+import { cloneRoomSnapshot, type RoomSnapshot } from '../../../persistence/roomModel';
 import {
   computeCourseRunScore,
   getCourseLeaderboardRankingMode,
   sortCompletedCourseRunsForLeaderboard,
 } from '../../../courses/scoring';
+import {
+  RANKED_RUN_TRACE_SCHEMA_VERSION,
+  normalizeRankedRunVerificationTrace,
+} from '../../../runs/verificationTrace';
 import type {
   CourseLeaderboardEntry,
   CourseLeaderboardResponse,
+  CourseProgressRatingRequestBody,
   CourseRunFinishRequestBody,
   CourseRunRecord,
   CourseRunStartRequestBody,
@@ -55,6 +61,13 @@ import {
   upsertUserStats,
 } from '../runs/points';
 import {
+  assertUserCanPublishContent,
+  awardCoursePublishProgression,
+  awardCourseRunProgression,
+  loadCourseAggregateRatingSummaryForVersion,
+  submitCourseRating,
+} from '../progression/store';
+import {
   createCourseDraft,
   loadLatestEditableDraftCourseForRoom,
   loadCourseRecord,
@@ -63,6 +76,16 @@ import {
   saveCourseDraft,
   unpublishCourse,
 } from './store';
+import { loadRoomRecord } from '../rooms/store';
+import {
+  computeCourseSnapshotVerificationHash,
+  createCourseVerificationTrigger,
+  createRunVerificationNonce,
+  recordRunVerificationAudit,
+  requireVerificationTrace,
+  type RunVerificationFailureReason,
+  verifyCourseRunTrace,
+} from '../runs/verification';
 
 export async function handleCourseCreate(
   request: Request,
@@ -165,6 +188,7 @@ export async function handleCoursePublish(
     throw new HttpError(404, 'Course draft not found.');
   }
 
+  await assertUserCanPublishContent(env, auth.user.id, auth.source);
   const record = await publishCourse(env, courseId, auth.user, auth.isAdmin);
   const pointEvent = await awardCoursePublishPoints(
     env,
@@ -174,6 +198,15 @@ export async function handleCoursePublish(
     !existing.published
   );
   await maybeMirrorAuthenticatedPointEventToPlayfun(env, request, auth.user.id, pointEvent);
+  await awardCoursePublishProgression(env, {
+    userId: auth.user.id,
+    courseId: record.draft.id,
+    courseVersion: record.published?.version ?? record.draft.version,
+    publishedSnapshot: record.published ?? record.draft,
+    previousPublishedSnapshot: existing.published,
+    publishedAt: record.published?.publishedAt ?? new Date().toISOString(),
+    isFirstPublish: !existing.published,
+  });
   await upsertUserStats(env, auth.user.id);
   return jsonResponse(request, record);
 }
@@ -218,6 +251,8 @@ export async function handleCourseRunStart(
 
   const attemptId = crypto.randomUUID();
   const startedAt = new Date().toISOString();
+  const verificationNonce = createRunVerificationNonce();
+  const snapshotHash = await computeCourseSnapshotVerificationHash(snapshot);
 
   await env.DB.batch([
     env.DB.prepare(
@@ -238,9 +273,13 @@ export async function handleCourseRunStart(
           score,
           collectibles_collected,
           enemies_defeated,
-          checkpoints_reached
+          checkpoints_reached,
+          verification_status,
+          verification_reason,
+          verification_nonce,
+          verification_snapshot_hash
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 'active', NULL, 0, 0, 0, 0, 0)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 'active', NULL, 0, 0, 0, 0, 0, 'not_required', NULL, ?, ?)
       `
     ).bind(
       attemptId,
@@ -250,7 +289,9 @@ export async function handleCourseRunStart(
       JSON.stringify(canonicalGoal),
       auth.user.id,
       auth.user.displayName,
-      startedAt
+      startedAt,
+      verificationNonce,
+      snapshotHash,
     ),
   ]);
 
@@ -262,6 +303,9 @@ export async function handleCourseRunStart(
     startedAt,
     userId: auth.user.id,
     userDisplayName: auth.user.displayName,
+    verificationSchemaVersion: RANKED_RUN_TRACE_SCHEMA_VERSION,
+    verificationNonce,
+    snapshotHash,
   };
 
   return jsonResponse(request, responseBody);
@@ -297,6 +341,10 @@ export async function handleCourseRunFinish(
   if (!snapshot.goal) {
     throw new HttpError(409, 'This course version no longer has a leaderboard goal.');
   }
+  const courseRecord = await loadCourseRecord(env, existing.courseId, auth.user.id, auth.isAdmin);
+  if (!courseRecord) {
+    throw new HttpError(404, 'Course record not found.');
+  }
 
   const finishedAt = new Date().toISOString();
   const reportedElapsedMs = body.elapsedMs;
@@ -311,8 +359,133 @@ export async function handleCourseRunFinish(
     ),
     finishedAt,
   };
-  const score =
+  const provisionalScore =
     clampedBody.result === 'completed' ? computeCourseRunScore(snapshot.goal, clampedBody) : 0;
+  const currentTopRows =
+    clampedBody.result === 'completed'
+      ? await loadRankedCourseLeaderboardRows(
+          env,
+          snapshot.id,
+          snapshot.version,
+          snapshot.goal,
+          10,
+        )
+      : [];
+  const viewerBestRow =
+    clampedBody.result === 'completed'
+      ? await loadViewerRankedCourseLeaderboardRow(
+          env,
+          snapshot.id,
+          snapshot.version,
+          snapshot.goal,
+          auth.user.id,
+        )
+      : null;
+  const verificationTrigger =
+    clampedBody.result === 'completed'
+      ? createCourseVerificationTrigger(snapshot.goal, {
+          candidate: {
+            attemptId,
+            userId: auth.user.id,
+            elapsedMs: clampedBody.elapsedMs,
+            deaths: clampedBody.deaths,
+            score: provisionalScore,
+            finishedAt,
+          },
+          currentTopEntries: currentTopRows.map((row) => ({
+            attemptId: row.attempt_id,
+            userId: row.user_id,
+            elapsedMs: row.elapsed_ms,
+            deaths: row.deaths,
+            score: row.score,
+            finishedAt: row.finished_at,
+            overallRank: row.overall_rank === null ? null : Number(row.overall_rank),
+          })),
+          viewerEntry:
+            viewerBestRow === null
+              ? null
+              : {
+                  attemptId: viewerBestRow.attempt_id,
+                  userId: viewerBestRow.user_id,
+                  elapsedMs: viewerBestRow.elapsed_ms,
+                  deaths: viewerBestRow.deaths,
+                  score: viewerBestRow.score,
+                  finishedAt: viewerBestRow.finished_at,
+                  overallRank:
+                    viewerBestRow.overall_rank === null ? null : Number(viewerBestRow.overall_rank),
+                },
+        })
+      : null;
+
+  let finalBody = clampedBody;
+  let finalScore = provisionalScore;
+  let verificationStatus: 'not_required' | 'passed' | 'failed' | 'timeout' = 'not_required';
+  let verificationReason: RunVerificationFailureReason | null = null;
+  let verificationAudit:
+    | {
+        status: 'passed' | 'failed' | 'timeout';
+        reason: RunVerificationFailureReason | null;
+        summary: Record<string, unknown>;
+      }
+    | null = null;
+
+  if (verificationTrigger?.required) {
+    let verificationResult;
+    try {
+      verificationResult = await verifyCourseRunTrace({
+        trace: requireVerificationTrace(clampedBody.verificationTrace),
+        binding: {
+          verificationNonce: existing.verificationNonce ?? null,
+          verificationSnapshotHash: existing.verificationSnapshotHash ?? null,
+        },
+        course: snapshot,
+        roomsById: await loadCourseVerificationRoomsById(
+          env,
+          snapshot,
+          auth.user.id,
+          auth.user.walletAddress ?? null,
+        ),
+        elapsedMs: clampedBody.elapsedMs,
+      });
+    } catch (error) {
+      if (!(error instanceof HttpError)) {
+        throw error;
+      }
+      verificationResult = {
+        status: 'failed' as const,
+        reason: 'trace_client_outdated' as const,
+        derivedMetrics: {
+          collectiblesCollected: 0,
+          enemiesDefeated: 0,
+          checkpointsReached: 0,
+        },
+        summary: {
+          issue: 'missing_trace',
+        },
+      };
+    }
+
+    verificationStatus = verificationResult.status;
+    verificationReason = verificationResult.reason;
+    verificationAudit = {
+      status: verificationResult.status,
+      reason: verificationResult.reason,
+      summary: {
+        trigger: verificationTrigger,
+        verifier: verificationResult.summary,
+      },
+    };
+
+    if (verificationResult.status === 'passed') {
+      finalBody = {
+        ...clampedBody,
+        collectiblesCollected: verificationResult.derivedMetrics.collectiblesCollected,
+        enemiesDefeated: verificationResult.derivedMetrics.enemiesDefeated,
+        checkpointsReached: verificationResult.derivedMetrics.checkpointsReached,
+      };
+      finalScore = computeCourseRunScore(snapshot.goal, finalBody);
+    }
+  }
 
   await env.DB.batch([
     env.DB.prepare(
@@ -326,21 +499,51 @@ export async function handleCourseRunFinish(
           score = ?,
           collectibles_collected = ?,
           enemies_defeated = ?,
-          checkpoints_reached = ?
+          checkpoints_reached = ?,
+          verification_status = ?,
+          verification_reason = ?
         WHERE attempt_id = ?
       `
     ).bind(
       finishedAt,
-      clampedBody.result,
-      clampedBody.elapsedMs,
-      clampedBody.deaths,
-      score,
-      clampedBody.collectiblesCollected,
-      clampedBody.enemiesDefeated,
-      clampedBody.checkpointsReached,
+      finalBody.result,
+      finalBody.elapsedMs,
+      finalBody.deaths,
+      finalScore,
+      finalBody.collectiblesCollected,
+      finalBody.enemiesDefeated,
+      finalBody.checkpointsReached,
+      verificationStatus,
+      verificationReason,
       attemptId
     ),
   ]);
+
+  if (verificationTrigger?.required && verificationAudit) {
+    await recordRunVerificationAudit(env, {
+      attemptId,
+      kind: 'course',
+      status: verificationAudit.status,
+      triggerReason: verificationTrigger.reason ?? 'record_gap',
+      verificationReason: verificationAudit.reason,
+      summary: verificationAudit.summary,
+      trace: finalBody.verificationTrace ?? null,
+      createdAt: finishedAt,
+    });
+  }
+
+  if (verificationStatus === 'failed') {
+    throw new HttpError(
+      409,
+      verificationReason === 'trace_client_outdated'
+        ? 'Client update required for ranked verification.'
+        : 'Ranked course run could not be verified.',
+    );
+  }
+
+  if (verificationStatus === 'timeout') {
+    throw new HttpError(409, 'Ranked run verification timed out.');
+  }
 
   const finalizedRun = await loadCourseRunByAttemptId(env, attemptId);
   if (!finalizedRun) {
@@ -386,6 +589,15 @@ export async function handleCourseRunFinish(
     await upsertUserStats(env, creatorPointEvent.user_id);
   }
 
+  await awardCourseRunProgression(env, {
+    run: finalizedRun,
+    goal: snapshot.goal,
+    isFirstCompletion,
+    isNewPersonalBest,
+    creatorUserId: await resolvePublishedCourseOwnerUserId(env, finalizedRun.courseId),
+    courseRecord,
+    completedAt: finishedAt,
+  });
   await upsertUserStats(env, auth.user.id);
   return noContentResponse(request);
 }
@@ -404,14 +616,44 @@ export async function handleCourseLeaderboard(
   if (!snapshot.goal) {
     throw new HttpError(404, 'This course version does not have a leaderboard goal.');
   }
+  const record = await loadCourseRecord(env, courseId, auth?.user.id ?? null, auth?.isAdmin ?? false);
+  if (!record) {
+    throw new HttpError(404, 'Course not found.');
+  }
 
   const leaderboard = await buildCourseLeaderboardResponse(
     env,
+    record,
     snapshot,
     limit,
     auth?.user.id ?? null
   );
   return jsonResponse(request, leaderboard);
+}
+
+export async function handleCourseRatingSubmit(
+  request: Request,
+  env: Env,
+  courseId: string,
+): Promise<Response> {
+  const auth = await requireAuthenticatedRequestAuth(
+    env,
+    request,
+    'rate courses',
+    'runs:write',
+  );
+  const body = await parseCourseRatingBody(request);
+  const record = await loadCourseRecord(env, courseId, auth.user.id, auth.isAdmin);
+  if (!record) {
+    throw new HttpError(404, 'Course not found.');
+  }
+
+  const responseBody = await submitCourseRating(env, {
+    courseRecord: record,
+    userId: auth.user.id,
+    body,
+  });
+  return jsonResponse(request, responseBody);
 }
 
 function sanitizeCourseRecordForPublicRead(record: CourseRecord): CourseRecord {
@@ -477,6 +719,10 @@ async function parseCourseRunFinishBody(
   request: Request
 ): Promise<CourseRunFinishRequestBody> {
   const body = await parseJsonBody<CourseRunFinishRequestBody>(request);
+  const verificationTrace =
+    body.verificationTrace === undefined
+      ? null
+      : normalizeRankedRunVerificationTrace(body.verificationTrace);
 
   if (body.result !== 'completed' && body.result !== 'failed' && body.result !== 'abandoned') {
     throw new HttpError(400, 'result must be completed, failed, or abandoned.');
@@ -497,7 +743,37 @@ async function parseCourseRunFinishBody(
     ),
     score: null,
     finishedAt: normalizeIsoTimestamp(body.finishedAt),
+    verificationTrace,
   };
+}
+
+async function parseCourseRatingBody(
+  request: Request
+): Promise<CourseProgressRatingRequestBody> {
+  const body = await parseJsonBody<CourseProgressRatingRequestBody>(request);
+  return {
+    courseVersion: normalizePositiveInteger(body.courseVersion, 'courseVersion'),
+    qualityStars:
+      body.qualityStars === null || body.qualityStars === undefined
+        ? null
+        : normalizePositiveInteger(body.qualityStars, 'qualityStars'),
+    difficultyChoice: body.difficultyChoice ? parseCourseDifficulty(body.difficultyChoice) : null,
+    autoSuggestedDifficulty: body.autoSuggestedDifficulty
+      ? parseCourseDifficulty(body.autoSuggestedDifficulty)
+      : null,
+  };
+}
+
+function parseCourseDifficulty(value: unknown) {
+  const normalized =
+    typeof value === 'string' && ['easy', 'medium', 'hard', 'extreme'].includes(value)
+      ? (value as CourseProgressRatingRequestBody['difficultyChoice'])
+      : null;
+  if (!normalized) {
+    throw new HttpError(400, 'difficultyChoice must be easy, medium, hard, extreme, or null.');
+  }
+
+  return normalized;
 }
 
 function computeEffectiveElapsedMs(
@@ -590,6 +866,37 @@ async function resolvePublishedCourseVersion(
   return cloneCourseSnapshot(historicalVersion.snapshot);
 }
 
+async function loadCourseVerificationRoomsById(
+  env: Env,
+  course: CourseSnapshot,
+  viewerUserId: string | null,
+  viewerWalletAddress: string | null,
+): Promise<Map<string, RoomSnapshot>> {
+  const roomsById = new Map<string, RoomSnapshot>();
+  for (const roomRef of course.roomRefs) {
+    const roomRecord = await loadRoomRecord(
+      env,
+      roomRef.roomId,
+      roomRef.coordinates,
+      viewerUserId,
+      viewerWalletAddress,
+    );
+    const historicalVersion =
+      roomRecord.versions.find((entry) => entry.version === roomRef.roomVersion)?.snapshot ??
+      (roomRecord.published?.version === roomRef.roomVersion ? roomRecord.published : null);
+    if (!historicalVersion) {
+      throw new HttpError(
+        409,
+        `Course room ${roomRef.roomId} version ${roomRef.roomVersion} is unavailable for verification.`,
+      );
+    }
+
+    roomsById.set(roomRef.roomId, cloneRoomSnapshot(historicalVersion));
+  }
+
+  return roomsById;
+}
+
 async function loadCourseRunByAttemptId(
   env: Env,
   attemptId: string
@@ -612,7 +919,11 @@ async function loadCourseRunByAttemptId(
         score,
         collectibles_collected,
         enemies_defeated,
-        checkpoints_reached
+        checkpoints_reached,
+        verification_status,
+        verification_reason,
+        verification_nonce,
+        verification_snapshot_hash
       FROM course_runs
       WHERE attempt_id = ?
       LIMIT 1
@@ -634,6 +945,10 @@ interface RankedCourseLeaderboardRow {
   score: number;
   finished_at: string;
   overall_rank: number | string | null;
+}
+
+function sqlIsVerificationAccepted(tableName: string): string {
+  return `COALESCE(${tableName}.verification_status, 'not_required') IN ('not_required', 'passed')`;
 }
 
 function getCourseLeaderboardSqlOrderClause(goal: CourseGoal): string {
@@ -665,6 +980,7 @@ function buildRankedCourseLeaderboardCte(goal: CourseGoal): string {
         AND result = 'completed'
         AND elapsed_ms IS NOT NULL
         AND finished_at IS NOT NULL
+        AND ${sqlIsVerificationAccepted('course_runs')}
         AND ${sqlDoesNotHavePlayfunDisplayNamePrefix('course_runs.user_display_name')}
     ),
     best_runs AS (
@@ -804,6 +1120,10 @@ function mapCourseRunRow(row: CourseRunRow): CourseRunRecord {
     collectiblesCollected: row.collectibles_collected,
     enemiesDefeated: row.enemies_defeated,
     checkpointsReached: row.checkpoints_reached,
+    verificationStatus: row.verification_status ?? 'not_required',
+    verificationReason: row.verification_reason ?? null,
+    verificationNonce: row.verification_nonce ?? null,
+    verificationSnapshotHash: row.verification_snapshot_hash ?? null,
   };
 }
 
@@ -821,6 +1141,7 @@ function parseStoredCourseGoal(raw: string, label: string) {
 
 async function buildCourseLeaderboardResponse(
   env: Env,
+  record: CourseRecord,
   snapshot: CourseSnapshot,
   limit: number,
   viewerUserId: string | null = null
@@ -849,6 +1170,12 @@ async function buildCourseLeaderboardResponse(
   const entries = entryRows.map((row) => mapRankedCourseLeaderboardEntry(row, snapshot));
   const viewerBest =
     viewerBestRow === null ? null : mapRankedCourseLeaderboardEntry(viewerBestRow, snapshot);
+  const ratings = await loadCourseAggregateRatingSummaryForVersion(
+    env,
+    record,
+    snapshot.version,
+    viewerUserId,
+  );
 
   return {
     courseId: snapshot.id,
@@ -856,6 +1183,10 @@ async function buildCourseLeaderboardResponse(
     courseVersion: snapshot.version,
     goalType: snapshot.goal.type,
     rankingMode: getCourseLeaderboardRankingMode(snapshot.goal),
+    quality: ratings.quality,
+    difficulty: ratings.difficulty,
+    viewerRating: ratings.viewerRating,
+    trophy: ratings.trophy,
     entries,
     viewerBest,
     viewerRank: viewerBest?.rank ?? null,
@@ -893,6 +1224,7 @@ async function loadBestCompletedCourseRunForUserAndVersion(
         AND course_id = ?
         AND course_version = ?
         AND result = 'completed'
+        AND ${sqlIsVerificationAccepted('course_runs')}
         AND (? IS NULL OR attempt_id != ?)
     `
   )

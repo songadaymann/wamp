@@ -3,6 +3,7 @@ import { isOpenableProfileUserId, requestProfileOpen } from '../../ui/setup/prof
 
 interface OverworldHudRuntimeConfig {
   onPlayRoom: () => void | Promise<void>;
+  onRestartRun: () => void | Promise<void>;
   onPlayCourse: () => void | Promise<void>;
   onEditRoom: () => void | Promise<void>;
   onBuildRoom: () => void | Promise<void>;
@@ -17,6 +18,7 @@ interface OverworldHudRuntimeConfig {
 
 const runtimeConfig: OverworldHudRuntimeConfig = {
   onPlayRoom: () => {},
+  onRestartRun: () => {},
   onPlayCourse: () => {},
   onEditRoom: () => {},
   onBuildRoom: () => {},
@@ -34,6 +36,9 @@ export function configureOverworldHudBridgeRuntime(
 ): void {
   if (config.onPlayRoom) {
     runtimeConfig.onPlayRoom = config.onPlayRoom;
+  }
+  if (config.onRestartRun) {
+    runtimeConfig.onRestartRun = config.onRestartRun;
   }
   if (config.onPlayCourse) {
     runtimeConfig.onPlayCourse = config.onPlayCourse;
@@ -85,6 +90,10 @@ export interface OverworldHudViewModel {
   playButtonText: string;
   playButtonDisabled: boolean;
   playButtonActive: boolean;
+  restartButtonText: string;
+  restartButtonDisabled: boolean;
+  restartButtonActive: boolean;
+  restartButtonHidden: boolean;
   playCourseButtonText: string;
   playCourseButtonDisabled: boolean;
   playCourseButtonHidden: boolean;
@@ -129,6 +138,7 @@ export class OverworldHudBridge {
   private readonly statusEl: HTMLElement | null;
   private readonly leaderboardEl: HTMLElement | null;
   private readonly playButton: HTMLButtonElement | null;
+  private readonly restartButton: HTMLButtonElement | null;
   private readonly playCourseButton: HTMLButtonElement | null;
   private readonly courseBuilderButton: HTMLButtonElement | null;
   private readonly editButton: HTMLButtonElement | null;
@@ -259,6 +269,10 @@ export class OverworldHudBridge {
     void runtimeConfig.onPlayRoom();
   };
 
+  private readonly handleRestartRunClick = (): void => {
+    void runtimeConfig.onRestartRun();
+  };
+
   private readonly handlePlayCourseClick = (): void => {
     void runtimeConfig.onPlayCourse();
   };
@@ -330,6 +344,7 @@ export class OverworldHudBridge {
     this.statusEl = this.doc.getElementById('world-status');
     this.leaderboardEl = this.doc.getElementById('world-leaderboard');
     this.playButton = this.doc.getElementById('btn-world-play') as HTMLButtonElement | null;
+    this.restartButton = this.doc.getElementById('btn-world-restart') as HTMLButtonElement | null;
     this.playCourseButton = this.doc.getElementById('btn-world-play-course') as HTMLButtonElement | null;
     this.courseBuilderButton = this.doc.getElementById('btn-world-course-builder') as HTMLButtonElement | null;
     this.editButton = this.doc.getElementById('btn-world-edit') as HTMLButtonElement | null;
@@ -370,6 +385,7 @@ export class OverworldHudBridge {
     this.playersOnlineEl?.addEventListener('click', this.handlePlayersOnlineClick);
     this.selectedCreatorEl?.addEventListener('click', this.handleSelectedCreatorClick);
     this.playButton?.addEventListener('click', this.handlePlayRoomClick);
+    this.restartButton?.addEventListener('click', this.handleRestartRunClick);
     this.playCourseButton?.addEventListener('click', this.handlePlayCourseClick);
     this.editButton?.addEventListener('click', this.handleEditRoomClick);
     this.buildButton?.addEventListener('click', this.handleBuildRoomClick);
@@ -416,6 +432,9 @@ export class OverworldHudBridge {
     this.setText(this.bottomBarZoomEl, viewModel.bottomBarZoomText);
     this.setButton(this.playButton, viewModel.playButtonText, viewModel.playButtonDisabled);
     this.setActive(this.playButton, viewModel.playButtonActive);
+    this.setButton(this.restartButton, viewModel.restartButtonText, viewModel.restartButtonDisabled);
+    this.setActive(this.restartButton, viewModel.restartButtonActive);
+    this.restartButton?.classList.toggle('hidden', viewModel.restartButtonHidden);
     this.setButton(
       this.playCourseButton,
       viewModel.playCourseButtonText,
@@ -440,6 +459,7 @@ export class OverworldHudBridge {
     this.playersOnlineEl?.removeEventListener('click', this.handlePlayersOnlineClick);
     this.selectedCreatorEl?.removeEventListener('click', this.handleSelectedCreatorClick);
     this.playButton?.removeEventListener('click', this.handlePlayRoomClick);
+    this.restartButton?.removeEventListener('click', this.handleRestartRunClick);
     this.playCourseButton?.removeEventListener('click', this.handlePlayCourseClick);
     this.editButton?.removeEventListener('click', this.handleEditRoomClick);
     this.buildButton?.removeEventListener('click', this.handleBuildRoomClick);

@@ -16,6 +16,7 @@ import {
   handleCourseGet,
   handleCourseLeaderboard,
   handleCoursePublish,
+  handleCourseRatingSubmit,
   handleCourseRunFinish,
   handleCourseRunStart,
   handleCourseUnpublish,
@@ -42,6 +43,7 @@ import {
   handleRoomDifficultyVote,
   handleRoomDiscovery,
   handleRoomLeaderboard,
+  handleRoomRatingSubmit,
   handleRunFinish,
   handleRunStart,
 } from './worker/runs/routes';
@@ -67,6 +69,10 @@ import {
   setRoomVersionLeaderboardSource,
   type RoomMutationActor,
 } from './worker/rooms/store';
+import {
+  assertUserCanPublishContent,
+  awardRoomPublishProgression,
+} from './worker/progression/store';
 import {
   handleClaimableFrontierRoomsRequest,
   handleWorldChunksRequest,
@@ -263,6 +269,15 @@ export default {
         );
       }
 
+      const roomRatingMatch = /^\/api\/rooms\/([^/]+)\/ratings$/.exec(url.pathname);
+      if (roomRatingMatch && request.method === 'POST') {
+        return await handleRoomRatingSubmit(
+          request,
+          env,
+          decodeURIComponent(roomRatingMatch[1]),
+        );
+      }
+
       const courseLeaderboardMatch = /^\/api\/leaderboards\/courses\/([^/]+)$/.exec(url.pathname);
       if (courseLeaderboardMatch && request.method === 'GET') {
         return await handleCourseLeaderboard(
@@ -270,6 +285,15 @@ export default {
           url,
           env,
           decodeURIComponent(courseLeaderboardMatch[1])
+        );
+      }
+
+      const courseRatingMatch = /^\/api\/courses\/([^/]+)\/ratings$/.exec(url.pathname);
+      if (courseRatingMatch && request.method === 'POST') {
+        return await handleCourseRatingSubmit(
+          request,
+          env,
+          decodeURIComponent(courseRatingMatch[1]),
         );
       }
 
@@ -371,6 +395,15 @@ export default {
           'publish rooms',
           'rooms:write'
         );
+        await assertUserCanPublishContent(env, auth.user.id, auth.source);
+        const previousRecord = await loadRoomRecord(
+          env,
+          snapshot.id,
+          snapshot.coordinates,
+          auth.user.id,
+          auth.user.walletAddress ?? null,
+          auth.isAdmin,
+        );
         const record = await publishRoom(
           env,
           snapshot,
@@ -394,6 +427,16 @@ export default {
         if (pointEvent) {
           await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
         }
+        await awardRoomPublishProgression(env, {
+          userId: auth.user.id,
+          roomId: record.draft.id,
+          roomVersion: record.published?.version ?? record.draft.version,
+          publishedSnapshot: record.published ?? record.draft,
+          previousPublishedSnapshot: previousRecord.published,
+          hasGoal: record.published?.goal !== null,
+          hasPriorGoalPublish: previousRecord.versions.some((version) => version.snapshot.goal !== null),
+          publishedAt: record.published?.publishedAt ?? new Date().toISOString(),
+        });
         await upsertUserStats(env, auth.user.id);
         return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
       }
@@ -406,6 +449,15 @@ export default {
           request,
           'revert rooms',
           'rooms:write'
+        );
+        await assertUserCanPublishContent(env, auth.user.id, auth.source);
+        const previousRecord = await loadRoomRecord(
+          env,
+          roomId,
+          coordinates,
+          auth.user.id,
+          auth.user.walletAddress ?? null,
+          auth.isAdmin,
         );
         const record = await revertRoom(
           env,
@@ -432,6 +484,16 @@ export default {
         if (pointEvent) {
           await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
         }
+        await awardRoomPublishProgression(env, {
+          userId: auth.user.id,
+          roomId: record.draft.id,
+          roomVersion: record.published?.version ?? record.draft.version,
+          publishedSnapshot: record.published ?? record.draft,
+          previousPublishedSnapshot: previousRecord.published,
+          hasGoal: record.published?.goal !== null,
+          hasPriorGoalPublish: previousRecord.versions.some((version) => version.snapshot.goal !== null),
+          publishedAt: record.published?.publishedAt ?? new Date().toISOString(),
+        });
         await upsertUserStats(env, auth.user.id);
         return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
       }

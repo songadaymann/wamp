@@ -28,6 +28,9 @@ export interface ActiveCourseRunState {
   pendingResult: 'completed' | 'failed' | 'abandoned' | null;
   submittedScore: number | null;
   leaderboardEligible: boolean;
+  verificationSchemaVersion: number | null;
+  verificationNonce: string | null;
+  snapshotHash: string | null;
 }
 
 export interface CreateActiveCourseRunStateOptions {
@@ -45,6 +48,13 @@ export interface CourseRunMutationResult {
   terminalResult: 'completed' | 'failed' | null;
   terminalMessage: string | null;
   checkpointEffectOrigin: GoalMarkerPoint | null;
+  verificationGoalEvent:
+    | {
+        type: 'checkpoint' | 'reach_exit' | 'finish';
+        marker: CourseMarkerPoint;
+        checkpointIndex: number | null;
+      }
+    | null;
 }
 
 export interface TickActiveCourseRunOptions {
@@ -60,6 +70,7 @@ const NOOP_MUTATION_RESULT: CourseRunMutationResult = {
   terminalResult: null,
   terminalMessage: null,
   checkpointEffectOrigin: null,
+  verificationGoalEvent: null,
 };
 
 export function createActiveCourseRunState(
@@ -95,6 +106,9 @@ export function createActiveCourseRunState(
     pendingResult: null,
     submittedScore: null,
     leaderboardEligible,
+    verificationSchemaVersion: null,
+    verificationNonce: null,
+    snapshotHash: null,
   };
 }
 
@@ -121,7 +135,14 @@ export function tickActiveCourseRun(
   }
 
   if (goal.type === 'reach_exit' && goal.exit && options.touchesCoursePoint(goal.exit)) {
-    return createTerminalMutation('completed', 'Exit reached.');
+    return {
+      ...createTerminalMutation('completed', 'Exit reached.'),
+      verificationGoalEvent: {
+        type: 'reach_exit',
+        marker: goal.exit,
+        checkpointIndex: null,
+      },
+    };
   }
 
   if (goal.type !== 'checkpoint_sprint') {
@@ -139,6 +160,11 @@ export function tickActiveCourseRun(
       terminalResult: null,
       terminalMessage: null,
       checkpointEffectOrigin: options.getPlayerEffectOrigin(),
+      verificationGoalEvent: {
+        type: 'checkpoint',
+        marker: nextCheckpoint,
+        checkpointIndex: runState.nextCheckpointIndex - 1,
+      },
     };
   }
 
@@ -147,7 +173,14 @@ export function tickActiveCourseRun(
     goal.finish &&
     options.touchesCoursePoint(goal.finish)
   ) {
-    return createTerminalMutation('completed', 'Sprint clear.');
+    return {
+      ...createTerminalMutation('completed', 'Sprint clear.'),
+      verificationGoalEvent: {
+        type: 'finish',
+        marker: goal.finish,
+        checkpointIndex: null,
+      },
+    };
   }
 
   return NOOP_MUTATION_RESULT;
@@ -180,6 +213,7 @@ export function recordCourseRunEnemyDefeated(
     terminalResult: null,
     terminalMessage: null,
     checkpointEffectOrigin: null,
+    verificationGoalEvent: null,
   };
 }
 
@@ -202,6 +236,7 @@ export function recordCourseRunCollectibleCollected(
     terminalResult: null,
     terminalMessage: null,
     checkpointEffectOrigin: null,
+    verificationGoalEvent: null,
   };
 }
 
@@ -310,5 +345,6 @@ function createTerminalMutation(
     terminalResult,
     terminalMessage,
     checkpointEffectOrigin: null,
+    verificationGoalEvent: null,
   };
 }

@@ -27,7 +27,7 @@ import type {
 import { syncRoomOwnershipFromChain } from '../mint/service';
 import {
   enforceRoomMutationGuardrails,
-  getDailyRoomClaimLimitForSource,
+  getDailyRoomClaimLimitForUser,
 } from './guardrails';
 
 export interface RoomClaimQuota {
@@ -286,7 +286,16 @@ export async function saveDraft(
   }
   const now = new Date().toISOString();
   if (!actorIsAdmin) {
-    enforceRoomMutationGuardrails(env, incomingRoom, actor.requestAuthSource);
+    if (!actor.ownerUser) {
+      throw new HttpError(401, 'Sign in to save room drafts.');
+    }
+    await enforceRoomMutationGuardrails(
+      env,
+      incomingRoom,
+      actor.ownerUser.id,
+      actor.requestAuthSource,
+      existing.draft,
+    );
   }
 
   const draft: RoomSnapshot = {
@@ -352,7 +361,16 @@ export async function publishRoom(
     throw new HttpError(403, 'Only the room token owner can publish this minted room.');
   }
   if (!actorIsAdmin) {
-    enforceRoomMutationGuardrails(env, incomingRoom, actor.requestAuthSource);
+    if (!actor.ownerUser) {
+      throw new HttpError(401, 'Sign in to publish rooms.');
+    }
+    await enforceRoomMutationGuardrails(
+      env,
+      incomingRoom,
+      actor.ownerUser.id,
+      actor.requestAuthSource,
+      existing.draft,
+    );
   }
 
   const now = new Date().toISOString();
@@ -706,7 +724,7 @@ export async function getRoomClaimQuota(
   requestAuthSource: RequestAuthSource | null = 'session',
   nowIso: string = new Date().toISOString()
 ): Promise<RoomClaimQuota> {
-  const limit = getDailyRoomClaimLimitForSource(env, requestAuthSource);
+  const limit = await getDailyRoomClaimLimitForUser(env, userId, requestAuthSource);
   const claimsUsedToday = await countRoomClaimsSince(env, userId, getUtcDayStartIso(nowIso));
 
   return {
@@ -812,7 +830,7 @@ async function enforceDailyRoomClaimLimit(
   nowIso: string,
   requestAuthSource: RequestAuthSource | null,
 ): Promise<void> {
-  const limit = getDailyRoomClaimLimitForSource(env, requestAuthSource);
+  const limit = await getDailyRoomClaimLimitForUser(env, userId, requestAuthSource);
   if (limit === null) {
     return;
   }

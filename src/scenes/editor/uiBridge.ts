@@ -274,12 +274,12 @@ export class EditorUiBridge {
   private readonly mobileZoomInBtn: HTMLButtonElement | null;
   private readonly mobileZoomOutBtn: HTMLButtonElement | null;
   private readonly toolButtons: HTMLButtonElement[];
-  private readonly moreToolsButton: HTMLButtonElement | null;
-  private readonly moreToolsPanel: HTMLElement | null;
-  private readonly eraseControls: HTMLElement | null;
-  private readonly eraseBrushSelect: HTMLSelectElement | null;
-  private readonly clearLayerButton: HTMLButtonElement | null;
-  private readonly clearAllButton: HTMLButtonElement | null;
+  private readonly moreToolsButtons: HTMLButtonElement[];
+  private readonly moreToolsPanels: HTMLElement[];
+  private readonly eraseControls: HTMLElement[];
+  private readonly eraseBrushSelects: HTMLSelectElement[];
+  private readonly clearLayerButtons: HTMLButtonElement[];
+  private readonly clearAllButtons: HTMLButtonElement[];
   private readonly layerButtons: HTMLElement[];
   private readonly layerMiniButtons: HTMLElement[];
   private readonly layerChip: HTMLElement | null;
@@ -395,13 +395,24 @@ export class EditorUiBridge {
     this.toolButtons = Array.from(
       this.doc.querySelectorAll<HTMLButtonElement>('.tool-btn[data-tool]')
     );
-    this.moreToolsButton = this.doc.getElementById('btn-tool-more') as HTMLButtonElement | null;
-    this.moreToolsPanel = this.doc.getElementById('more-tools-panel');
-    this.eraseControls = this.doc.getElementById('erase-controls');
-    this.eraseBrushSelect = this.doc.getElementById('erase-brush-select') as HTMLSelectElement | null;
-    this.clearLayerButton =
-      this.doc.getElementById('btn-erase-clear-layer') as HTMLButtonElement | null;
-    this.clearAllButton = this.doc.getElementById('btn-erase-clear-all') as HTMLButtonElement | null;
+    this.moreToolsButtons = Array.from(
+      this.doc.querySelectorAll<HTMLButtonElement>('.editor-more-tools-toggle')
+    );
+    this.moreToolsPanels = Array.from(
+      this.doc.querySelectorAll<HTMLElement>('.editor-more-tools-panel')
+    );
+    this.eraseControls = Array.from(
+      this.doc.querySelectorAll<HTMLElement>('.editor-eraser-controls')
+    );
+    this.eraseBrushSelects = Array.from(
+      this.doc.querySelectorAll<HTMLSelectElement>('.editor-erase-brush-select')
+    );
+    this.clearLayerButtons = Array.from(
+      this.doc.querySelectorAll<HTMLButtonElement>('.editor-clear-layer-btn')
+    );
+    this.clearAllButtons = Array.from(
+      this.doc.querySelectorAll<HTMLButtonElement>('.editor-clear-all-btn')
+    );
     this.layerButtons = Array.from(this.doc.querySelectorAll<HTMLElement>('.layer-btn'));
     this.layerMiniButtons = Array.from(
       this.doc.querySelectorAll<HTMLElement>('.layer-stack-mini-btn')
@@ -700,27 +711,26 @@ export class EditorUiBridge {
       this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
     }
 
-    if (this.moreToolsButton) {
+    for (const button of this.moreToolsButtons) {
       const toggleMoreTools = (event: Event) => {
         event.preventDefault();
         event.stopPropagation();
         this.moreToolsOpen = !this.moreToolsOpen;
         this.syncEditorChromeState();
       };
-      this.moreToolsButton.addEventListener('click', toggleMoreTools);
-      this.cleanupCallbacks.push(() =>
-        this.moreToolsButton?.removeEventListener('click', toggleMoreTools)
-      );
+      button.addEventListener('click', toggleMoreTools);
+      this.cleanupCallbacks.push(() => button.removeEventListener('click', toggleMoreTools));
     }
 
     const closeMoreToolsOnOutsideClick = (event: Event) => {
-      if (!this.moreToolsPanel || !this.moreToolsOpen) {
+      if (this.moreToolsPanels.length === 0 || !this.moreToolsOpen) {
         return;
       }
       const target = event.target as Node | null;
       if (
         target &&
-        (this.moreToolsPanel.contains(target) || this.moreToolsButton?.contains(target))
+        (this.moreToolsPanels.some((panel) => panel.contains(target)) ||
+          this.moreToolsButtons.some((button) => button.contains(target)))
       ) {
         return;
       }
@@ -733,31 +743,38 @@ export class EditorUiBridge {
     );
 
     const handleEraserBrushChange = () => {
-      const nextSize = Number.parseInt(this.eraseBrushSelect?.value ?? '', 10);
+      const target = this.doc.activeElement;
+      const selectedInput = this.eraseBrushSelects.find((input) => input === target) ?? this.eraseBrushSelects[0];
+      const nextSize = Number.parseInt(selectedInput?.value ?? '', 10);
       if (ERASER_BRUSH_SIZES.includes(nextSize as EraserBrushSize)) {
         editorState.eraserBrushSize = nextSize as EraserBrushSize;
+        this.syncEditorChromeState();
       }
     };
-    this.eraseBrushSelect?.addEventListener('change', handleEraserBrushChange);
-    if (this.eraseBrushSelect) {
+    for (const input of this.eraseBrushSelects) {
+      input.addEventListener('change', handleEraserBrushChange);
       this.cleanupCallbacks.push(() =>
-        this.eraseBrushSelect?.removeEventListener('change', handleEraserBrushChange)
+        input.removeEventListener('change', handleEraserBrushChange)
       );
     }
 
-    this.bindButton(this.clearLayerButton, () => {
-      if (!this.windowObj.confirm('Clear every tile on the current layer?')) {
-        return;
-      }
-      this.actions.onClearCurrentLayer();
-    });
+    for (const button of this.clearLayerButtons) {
+      this.bindButton(button, () => {
+        if (!this.windowObj.confirm('Clear every tile on the current layer?')) {
+          return;
+        }
+        this.actions.onClearCurrentLayer();
+      });
+    }
 
-    this.bindButton(this.clearAllButton, () => {
-      if (!this.windowObj.confirm('Remove all tiles from Back, Gameplay, and Front?')) {
-        return;
-      }
-      this.actions.onClearAllTiles();
-    });
+    for (const button of this.clearAllButtons) {
+      this.bindButton(button, () => {
+        if (!this.windowObj.confirm('Remove all tiles from Back, Gameplay, and Front?')) {
+          return;
+        }
+        this.actions.onClearAllTiles();
+      });
+    }
 
     const handleLayerClick = (button: HTMLElement) => {
       const layer = button.dataset.layer as LayerName | undefined;
@@ -1195,20 +1212,25 @@ export class EditorUiBridge {
       this.moreToolsOpen ||
       (editorState.paletteMode === 'tiles' &&
         (editorState.activeTool === 'rect' || editorState.activeTool === 'fill'));
-    this.moreToolsButton?.classList.toggle(
-      'active',
-      showMoreTools || editorState.activeTool === 'rect' || editorState.activeTool === 'fill'
-    );
-    this.moreToolsPanel?.classList.toggle('hidden', !showMoreTools);
-    if (this.moreToolsPanel) {
-      this.moreToolsPanel.dataset.open = showMoreTools ? 'true' : 'false';
+    const moreToolsActive =
+      showMoreTools || editorState.activeTool === 'rect' || editorState.activeTool === 'fill';
+    for (const button of this.moreToolsButtons) {
+      button.classList.toggle('active', moreToolsActive);
+    }
+    for (const panel of this.moreToolsPanels) {
+      panel.classList.toggle('hidden', !showMoreTools);
+      panel.dataset.open = showMoreTools ? 'true' : 'false';
     }
 
     const showEraseControls =
       editorState.paletteMode === 'tiles' && editorState.activeTool === 'eraser';
-    this.eraseControls?.classList.toggle('hidden', !showEraseControls);
-    if (this.eraseBrushSelect && this.eraseBrushSelect.value !== String(editorState.eraserBrushSize)) {
-      this.eraseBrushSelect.value = String(editorState.eraserBrushSize);
+    for (const controls of this.eraseControls) {
+      controls.classList.toggle('hidden', !showEraseControls);
+    }
+    for (const input of this.eraseBrushSelects) {
+      if (input.value !== String(editorState.eraserBrushSize)) {
+        input.value = String(editorState.eraserBrushSize);
+      }
     }
 
     for (const button of this.layerButtons) {

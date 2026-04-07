@@ -15,6 +15,7 @@ import type {
 import { normalizeRoomDifficulty, ROOM_DIFFICULTIES } from '../../../runs/model';
 import { HttpError } from '../core/http';
 import type { Env, RoomDifficultyVoteRow, RoomVersionRow } from '../core/types';
+import { loadRoomAggregateRatingSummaryFromVersions } from '../progression/store';
 
 interface RoomDifficultyAggregateRow {
   easy_votes: number | string | null;
@@ -262,35 +263,9 @@ export async function loadRoomDiscoveryResponse(
     }
   }
 
-  const voteRows = await env.DB.prepare(
-    `
-      SELECT
-        room_id,
-        room_version,
-        user_id,
-        difficulty,
-        created_at,
-        updated_at,
-        carried_from_version
-      FROM room_difficulty_votes
-      WHERE room_id IN (${roomIds.map(() => '?').join(', ')})
-    `
-  )
-    .bind(...roomIds)
-    .all<RoomDifficultyVoteRow>();
-
-  const votesByRoomId = new Map<string, RoomDifficultyVoteRow[]>();
-  for (const row of voteRows.results) {
-    const bucket = votesByRoomId.get(row.room_id);
-    if (bucket) {
-      bucket.push(row);
-    } else {
-      votesByRoomId.set(row.room_id, [row]);
-    }
-  }
-
-  const results = challengeRooms
-    .map<RoomDiscoveryEntry>((room) => {
+  const results = (
+    await Promise.all(
+      challengeRooms.map(async (room): Promise<RoomDiscoveryEntry> => {
       const versions = versionsByRoomId.get(room.roomId) ?? [];
       const lineage = buildRoomLeaderboardLineage(
         versions,
@@ -298,11 +273,15 @@ export async function loadRoomDiscoveryResponse(
         room.roomVersion
       );
       const lineageEntry = lineage.byVersion.get(room.roomVersion) ?? null;
-      const leaderboardFamilyVersions = lineageEntry?.leaderboardFamilyVersions ?? [room.roomVersion];
-      const votes = (votesByRoomId.get(room.roomId) ?? []).filter((vote) =>
-        leaderboardFamilyVersions.includes(vote.room_version)
+      const ratings = await loadRoomAggregateRatingSummaryFromVersions(
+        env,
+        room.roomId,
+        versions,
+        room.roomVersion,
+        null,
+        room.roomVersion,
       );
-      const counts = summarizeDifficultyVotes(dedupeLatestDifficultyVotesByUser(votes));
+      const voteCount = Math.max(ratings.difficulty.totalVotes, ratings.quality.voteCount);
 
       return {
         roomId: room.roomId,
@@ -313,11 +292,15 @@ export async function loadRoomDiscoveryResponse(
         leaderboardSourceVersion: lineageEntry?.leaderboardSourceRepresentativeVersion ?? null,
         canonicalRoomVersion: room.canonicalRoomVersion,
         goalType: room.goalType,
-        consensusDifficulty: resolveRoomDifficultyConsensus(counts),
-        voteCount: getRoomDifficultyVoteTotal(counts),
+        consensusDifficulty: ratings.difficulty.consensus,
+        voteCount,
+        quality: ratings.quality,
+        trophy: ratings.trophy,
         publishedAt: room.publishedAt,
       };
     })
+    )
+  )
     .filter((entry) => difficultyFilter === null || entry.consensusDifficulty === difficultyFilter)
     .sort((left, right) => {
       if (right.voteCount !== left.voteCount) {

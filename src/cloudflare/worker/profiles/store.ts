@@ -2,6 +2,7 @@ import type { UserProfileResponse, ProfilePublishedRoomEntry, ProfileStatsSummar
 import { isPlayfunLeaderboardExcludedDisplayName } from '../../../playfun/identity';
 import type { Env } from '../core/types';
 import { findUserById, loadAllUserStatsRows, loadPublicUserProfileCourseCount, loadPublishedRoomsByCreator, loadUserStatsRow } from '../auth/store';
+import { loadPublicProgressionSummary } from '../progression/store';
 import { parseStoredSnapshot } from '../rooms/store';
 import { compareGlobalLeaderboardEntries, mapUserStatsRow } from '../runs/points';
 
@@ -41,6 +42,7 @@ export async function loadUserProfile(
   const stats = buildProfileStats(statsRow, allStatsRows, publishedRoomRows.length);
   const publishedRooms = buildPublishedRooms(publishedRoomRows);
   const isSelf = viewerUserId === targetUserId;
+  const progression = await loadPublicProgressionSummary(env, targetUserId);
 
   return {
     userId: user.id,
@@ -51,6 +53,7 @@ export async function loadUserProfile(
     isSelf,
     canEdit: isSelf,
     stats,
+    progression,
     publishedRooms,
     publishedCourseCount,
   };
