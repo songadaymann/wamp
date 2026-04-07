@@ -102,7 +102,16 @@ import { EditorCourseController } from './editor/courseController';
 import { EditorOverlayController } from './editor/overlays';
 import { EditorChromeController } from './editor/chrome';
 import { RoomLightingController } from '../lighting/controller';
-import { cloneRoomLightingSettings, type RoomLightingSettings } from '../lighting/model';
+import {
+  extractRoomStaticLightingEmitters,
+  type RoomStaticLightingEmitters,
+} from '../lighting/emissiveSources';
+import {
+  cloneRoomLightingSettings,
+  type RoomLightingEmitter,
+  type RoomLightingSettings,
+} from '../lighting/model';
+import { resolvePlayerAuraDarkAuraDiameter } from '../lighting/presets';
 import { playSfx } from '../audio/sfx';
 import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
 
@@ -160,6 +169,12 @@ export class EditorScene extends Phaser.Scene {
   private readonly toolController: EditorToolController;
   private readonly chromeController: EditorChromeController;
   private readonly lightingController: RoomLightingController;
+  private lightingPreviewStaticEmitters: RoomStaticLightingEmitters = {
+    emitters: [],
+    objectCount: 0,
+    tileCount: 0,
+  };
+  private lightingPreviewCacheKey = '';
   private entrySource: 'world' | 'direct' = 'direct';
   private initialRoomSnapshot: RoomSnapshot | null = null;
   private readonly handleWake = (): void => {
@@ -860,6 +875,12 @@ export class EditorScene extends Phaser.Scene {
 
   private resetRuntimeState(): void {
     this.lightingController.reset();
+    this.lightingPreviewStaticEmitters = {
+      emitters: [],
+      objectCount: 0,
+      tileCount: 0,
+    };
+    this.lightingPreviewCacheKey = '';
     this.backgroundController.reset();
     this.interactionController.reset();
     this.overlayController.reset();
@@ -969,6 +990,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private updateLightingPreview(): void {
+    const lighting = this.getSelectedLightingSettings();
     const emitter = this.roomSpawnPoint
       ? {
           x: this.roomSpawnPoint.x,
@@ -978,6 +1000,16 @@ export class EditorScene extends Phaser.Scene {
           x: ROOM_PX_WIDTH * 0.5,
           y: ROOM_PX_HEIGHT * 0.5,
         };
+    const playerRevealRadiusPx = resolvePlayerAuraDarkAuraDiameter(lighting.radius) * 0.5;
+    const emitters: RoomLightingEmitter[] = [
+      {
+        sourceType: 'player',
+        x: emitter.x,
+        y: emitter.y,
+        revealRadiusPx: playerRevealRadiusPx,
+      },
+      ...this.getLightingPreviewStaticEmitters().emitters,
+    ];
     const structureChanged = this.lightingController.sync({
       roomId: this.roomId,
       bounds: {
@@ -986,8 +1018,13 @@ export class EditorScene extends Phaser.Scene {
         width: ROOM_PX_WIDTH,
         height: ROOM_PX_HEIGHT,
       },
-      lighting: this.getSelectedLightingSettings(),
-      emitters: [emitter],
+      lighting,
+      emitters,
+      debugCounts: {
+        playerGhostEmitterCount: 1,
+        staticObjectEmitterCount: this.lightingPreviewStaticEmitters.objectCount,
+        staticTileEmitterCount: this.lightingPreviewStaticEmitters.tileCount,
+      },
     });
 
     if (structureChanged) {
@@ -997,6 +1034,22 @@ export class EditorScene extends Phaser.Scene {
 
   private async refreshSurroundingRoomPreviews(): Promise<void> {
     await this.backgroundController.refreshSurroundingRoomPreviews(EDITOR_NEIGHBOR_RADIUS);
+  }
+
+  private getLightingPreviewStaticEmitters(): RoomStaticLightingEmitters {
+    const cacheKey = [
+      this.roomId,
+      this.roomVersion,
+      this.roomUpdatedAt,
+      this.lastDirtyAt,
+    ].join(':');
+    if (cacheKey === this.lightingPreviewCacheKey) {
+      return this.lightingPreviewStaticEmitters;
+    }
+
+    this.lightingPreviewStaticEmitters = extractRoomStaticLightingEmitters(this.exportRoomSnapshot());
+    this.lightingPreviewCacheKey = cacheKey;
+    return this.lightingPreviewStaticEmitters;
   }
 
   // ══════════════════════════════════════
@@ -1057,6 +1110,12 @@ export class EditorScene extends Phaser.Scene {
 
   private applyRoomSnapshot(room: RoomSnapshot): void {
     this.editRuntime.applyRoomSnapshot(room);
+    this.lightingPreviewStaticEmitters = {
+      emitters: [],
+      objectCount: 0,
+      tileCount: 0,
+    };
+    this.lightingPreviewCacheKey = '';
     this.inspectorController.reset();
     this.inspectorController.handleObjectSpritesRebuilt();
     this.toolController.reset();

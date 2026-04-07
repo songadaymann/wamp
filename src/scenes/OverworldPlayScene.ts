@@ -69,6 +69,8 @@ import {
   ensureStarfieldTexture,
 } from '../visuals/starfield';
 import { RoomLightingController } from '../lighting/controller';
+import { type RoomLightingEmitter } from '../lighting/model';
+import { resolvePlayerAuraDarkAuraDiameter } from '../lighting/presets';
 import {
   DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
   type DefaultPlayerAnimationState,
@@ -1726,17 +1728,27 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     const roomOrigin = this.getRoomOrigin(currentRoom.coordinates);
-    const emitters = [
+    const currentLoadedRoom = this.loadedFullRoomsById.get(currentRoom.id) ?? null;
+    const playerRevealRadiusPx = resolvePlayerAuraDarkAuraDiameter(currentRoom.lighting.radius) * 0.5;
+    const ghostEmitters: RoomLightingEmitter[] = Array.from(
+      this.presenceController.getRenderedGhostsByConnectionId().values(),
+    )
+      .filter((ghost) => ghost.presence.roomId === currentRoom.id)
+      .map((ghost) => ({
+        sourceType: 'ghost',
+        x: ghost.sprite.x,
+        y: ghost.sprite.y - this.PLAYER_HEIGHT * 0.65,
+        revealRadiusPx: playerRevealRadiusPx,
+      }));
+    const emitters: RoomLightingEmitter[] = [
       {
+        sourceType: 'player',
         x: this.playerBody.center.x,
         y: this.playerBody.bottom - this.PLAYER_HEIGHT * 0.65,
+        revealRadiusPx: playerRevealRadiusPx,
       },
-      ...Array.from(this.presenceController.getRenderedGhostsByConnectionId().values())
-        .filter((ghost) => ghost.presence.roomId === currentRoom.id)
-        .map((ghost) => ({
-          x: ghost.sprite.x,
-          y: ghost.sprite.y - this.PLAYER_HEIGHT * 0.65,
-        })),
+      ...ghostEmitters,
+      ...(currentLoadedRoom?.staticLighting.emitters ?? []),
     ];
     const structureChanged = this.lightingController.sync({
       roomId: currentRoom.id,
@@ -1749,6 +1761,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       lighting: currentRoom.lighting,
       emitters,
       ambientBounds: this.getAmbientRoomLightingBounds(currentRoom.coordinates),
+      debugCounts: {
+        playerGhostEmitterCount: 1 + ghostEmitters.length,
+        staticObjectEmitterCount: currentLoadedRoom?.staticLighting.objectCount ?? 0,
+        staticTileEmitterCount: currentLoadedRoom?.staticLighting.tileCount ?? 0,
+      },
     });
 
     if (structureChanged) {

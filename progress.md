@@ -57,6 +57,61 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Emissive object + tile lighting follow-up on April 7, 2026:
+  - started a clean `main`-based continuation branch/worktree for this pass:
+    - branch: `feature/lighting-followups-2026-04-07`
+    - worktree: `/private/tmp/wamp-lighting-followups-2026-04-07`
+  - lighting config / data model changes:
+    - added shared emissive-light config types in `src/lighting/model.ts`
+    - `GameObjectConfig` now supports optional `lightEmission`
+    - `TilesetConfig` now supports optional `lightEmissionProfiles`, keyed by local tile index like collision profiles
+    - tagged emissive defaults for:
+      - `fire`
+      - `fire_big`
+      - `lava_surface`
+      - lava tileset local indices `31` through `35` via `surfaceStrip` aggregation
+  - runtime extraction + renderer changes:
+    - added `src/lighting/emissiveSources.ts` so both editor preview and play mode resolve static emissive sources from the same room snapshot rules
+    - object lights come from placed-object config; tile lights come from tileset metadata, not new room persistence fields
+    - surface-strip tile aggregation merges top-exposed marked lava runs into chunked emitters instead of emitting one light per tile
+    - room lighting controller now supports:
+      - per-emitter reveal radius
+      - additive colored glow
+      - deterministic flicker seeds
+      - debug counts for player/ghost emitters, static object emitters, static tile emitters, and glow emitters
+    - overworld play now precomputes static room emitters during full-room load and combines them with player / ghost emitters
+    - editor preview now reuses the same static-emitter extraction path
+  - important bug found and fixed during validation:
+    - the first editor implementation cached preview emitters from the blank room before the real snapshot loaded
+    - because untouched draft rooms can keep the same `roomId/version/updatedAt/lastDirtyAt` tuple, the editor preview stayed stuck at zero static emitters even though play mode was correct
+    - fixed by clearing the lighting preview cache whenever editor runtime state resets or a room snapshot is applied
+  - validation:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - required `develop-web-game` local smoke wrote:
+      - `output/web-game/lighting-emissive-baseline/shot-0.png`
+      - `output/web-game/lighting-emissive-baseline/state-0.json`
+    - targeted synthetic dark-room probe wrote:
+      - `output/web-game/lighting-emissive-runtime-check/editor-state.json`
+      - `output/web-game/lighting-emissive-runtime-check/play-state.json`
+      - `output/web-game/lighting-emissive-runtime-check/editor.png`
+      - `output/web-game/lighting-emissive-runtime-check/play.png`
+      - `output/web-game/lighting-emissive-runtime-check/summary.json`
+    - final synthetic probe confirmed both editor preview and play mode at:
+      - `staticObjectEmitterCount: 3`
+      - `staticTileEmitterCount: 2`
+      - `glowEmitterCount: 5`
+      - `rendererPath: "webgl"`
+  - scope / non-goals for this pass:
+    - no `RoomSnapshot` schema change
+    - no D1 migration
+    - no Worker/API persistence change
+    - cave lantern tile indices are not authored yet; the tile-emissive plumbing is ready for them once the cave tileset lands
+  - follow-up correction after local visual QA:
+    - removed the placeholder emissive tags from the current lava tileset because none of those existing lava sheet tiles are actually meant to emit light
+    - object-based fire / lava emissive lighting stays live
+    - tile-emissive plumbing remains ready for future real emissive tiles like cave lanterns
+
 - Sign text modal + nearby readout on April 7, 2026:
   - started a clean `main`-based branch/worktree for this pass:
     - branch: `feature/sign-text-modal-2026-04-07`

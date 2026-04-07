@@ -4,6 +4,7 @@ import {
   DEFAULT_ROOM_LIGHTING_RADIUS,
   cloneRoomLightingSettings,
   roomLightingUsesDynamicOverlay,
+  type RoomLightingEmitter,
   type RoomLightingSettings,
 } from './model';
 import {
@@ -13,6 +14,7 @@ import {
 import { RETRO_COLORS } from '../visuals/starfield';
 
 const ROOM_LIGHT_AURA_TEXTURE_KEY_PREFIX = '__room_light_aura';
+const ROOM_LIGHT_GLOW_TEXTURE_KEY_PREFIX = '__room_light_glow';
 
 export interface RoomLightingBounds {
   x: number;
@@ -21,9 +23,10 @@ export interface RoomLightingBounds {
   height: number;
 }
 
-export interface RoomLightingEmitter {
-  x: number;
-  y: number;
+export interface RoomLightingFrameDebugCounts {
+  playerGhostEmitterCount: number;
+  staticObjectEmitterCount: number;
+  staticTileEmitterCount: number;
 }
 
 export interface RoomLightingFrameInput {
@@ -32,6 +35,7 @@ export interface RoomLightingFrameInput {
   lighting: RoomLightingSettings | null | undefined;
   emitters: RoomLightingEmitter[];
   ambientBounds?: RoomLightingBounds[];
+  debugCounts?: Partial<RoomLightingFrameDebugCounts>;
 }
 
 export interface RoomLightingDebugState {
@@ -41,8 +45,18 @@ export interface RoomLightingDebugState {
   rendererPath: 'off' | 'webgl' | 'canvas-disabled';
   activeRoomId: string | null;
   emitterCount: number;
+  playerGhostEmitterCount: number;
+  staticObjectEmitterCount: number;
+  staticTileEmitterCount: number;
+  glowEmitterCount: number;
   ambientOverlayCount: number;
   fallbackReason: string | null;
+}
+
+interface ResolvedEmitterState {
+  revealRadiusPx: number;
+  glowRadiusPx: number;
+  glowAlpha: number;
 }
 
 interface RoomLightingControllerOptions {
@@ -52,6 +66,7 @@ interface RoomLightingControllerOptions {
 
 export class RoomLightingController {
   private overlay: Phaser.GameObjects.RenderTexture | null = null;
+  private glowOverlay: Phaser.GameObjects.RenderTexture | null = null;
   private ambientOverlays: Phaser.GameObjects.Rectangle[] = [];
   private debugState: RoomLightingDebugState = {
     mode: 'off',
@@ -60,6 +75,10 @@ export class RoomLightingController {
     rendererPath: 'off',
     activeRoomId: null,
     emitterCount: 0,
+    playerGhostEmitterCount: 0,
+    staticObjectEmitterCount: 0,
+    staticTileEmitterCount: 0,
+    glowEmitterCount: 0,
     ambientOverlayCount: 0,
     fallbackReason: null,
   };
@@ -75,6 +94,10 @@ export class RoomLightingController {
       rendererPath: 'off',
       activeRoomId: null,
       emitterCount: 0,
+      playerGhostEmitterCount: 0,
+      staticObjectEmitterCount: 0,
+      staticTileEmitterCount: 0,
+      glowEmitterCount: 0,
       ambientOverlayCount: 0,
       fallbackReason: null,
     };
@@ -88,8 +111,9 @@ export class RoomLightingController {
   sync(input: RoomLightingFrameInput): boolean {
     const lighting = cloneRoomLightingSettings(input.lighting ?? null);
     const activeRoomId = input.roomId ?? null;
-    const emitterCount = input.emitters.length;
     const ambientBounds = input.ambientBounds ?? [];
+    const emitterCount = input.emitters.length;
+    const debugCounts = resolveDebugCounts(input.emitters, input.debugCounts);
     let structureChanged = false;
 
     if (!activeRoomId || !input.bounds) {
@@ -101,6 +125,10 @@ export class RoomLightingController {
         rendererPath: 'off',
         activeRoomId,
         emitterCount: 0,
+        playerGhostEmitterCount: 0,
+        staticObjectEmitterCount: 0,
+        staticTileEmitterCount: 0,
+        glowEmitterCount: 0,
         ambientOverlayCount: 0,
         fallbackReason: null,
       };
@@ -116,6 +144,10 @@ export class RoomLightingController {
         rendererPath: 'off',
         activeRoomId,
         emitterCount,
+        playerGhostEmitterCount: debugCounts.playerGhostEmitterCount,
+        staticObjectEmitterCount: debugCounts.staticObjectEmitterCount,
+        staticTileEmitterCount: debugCounts.staticTileEmitterCount,
+        glowEmitterCount: 0,
         ambientOverlayCount: 0,
         fallbackReason: null,
       };
@@ -131,14 +163,18 @@ export class RoomLightingController {
         rendererPath: 'canvas-disabled',
         activeRoomId,
         emitterCount,
+        playerGhostEmitterCount: debugCounts.playerGhostEmitterCount,
+        staticObjectEmitterCount: debugCounts.staticObjectEmitterCount,
+        staticTileEmitterCount: debugCounts.staticTileEmitterCount,
+        glowEmitterCount: 0,
         ambientOverlayCount: 0,
         fallbackReason: 'Dynamic room lighting requires WebGL.',
       };
       return structureChanged;
     }
 
-    structureChanged = this.ensureOverlay(input.bounds);
-    if (!this.overlay) {
+    structureChanged = this.ensureOverlays(input.bounds);
+    if (!this.overlay || !this.glowOverlay) {
       this.debugState = {
         mode: lighting.mode,
         darkness: lighting.darkness,
@@ -146,16 +182,18 @@ export class RoomLightingController {
         rendererPath: 'canvas-disabled',
         activeRoomId,
         emitterCount,
+        playerGhostEmitterCount: debugCounts.playerGhostEmitterCount,
+        staticObjectEmitterCount: debugCounts.staticObjectEmitterCount,
+        staticTileEmitterCount: debugCounts.staticTileEmitterCount,
+        glowEmitterCount: 0,
         ambientOverlayCount: 0,
         fallbackReason: 'Unable to create lighting overlay.',
       };
       return structureChanged;
     }
 
-    const auraDiameter = resolvePlayerAuraDarkAuraDiameter(lighting.radius);
-    const auraRadius = auraDiameter * 0.5;
+    const defaultRevealRadiusPx = resolvePlayerAuraDarkAuraDiameter(lighting.radius) * 0.5;
     const ambientAlpha = resolvePlayerAuraDarkAmbientAlpha(lighting.darkness);
-    const auraTextureKey = ensureRoomLightAuraTexture(this.options.scene, auraDiameter);
     this.overlay.clear();
     this.overlay.fill(
       RETRO_COLORS.backgroundNumber,
@@ -165,12 +203,62 @@ export class RoomLightingController {
       input.bounds.width,
       input.bounds.height,
     );
+    this.glowOverlay.clear();
 
+    let glowEmitterCount = 0;
     for (const emitter of input.emitters) {
-      const localX = emitter.x - input.bounds.x - auraRadius;
-      const localY = emitter.y - input.bounds.y - auraRadius;
-      this.overlay.erase(auraTextureKey, localX, localY);
+      const resolved = resolveEmitterState(
+        emitter,
+        defaultRevealRadiusPx,
+        this.options.scene.time.now * 0.001,
+      );
+      const revealDiameter = Math.max(2, Math.round(resolved.revealRadiusPx * 2));
+      const auraTextureKey = ensureRoomLightTexture(
+        this.options.scene,
+        ROOM_LIGHT_AURA_TEXTURE_KEY_PREFIX,
+        revealDiameter,
+        [
+          [0, 'rgba(255, 255, 255, 1)'],
+          [0.32, 'rgba(255, 255, 255, 0.98)'],
+          [0.62, 'rgba(255, 255, 255, 0.55)'],
+          [1, 'rgba(255, 255, 255, 0)'],
+        ],
+      );
+      const localRevealX = emitter.x - input.bounds.x - revealDiameter * 0.5;
+      const localRevealY = emitter.y - input.bounds.y - revealDiameter * 0.5;
+      this.overlay.erase(auraTextureKey, localRevealX, localRevealY);
+
+      if (
+        typeof emitter.glowColor === 'number'
+        && resolved.glowRadiusPx > 0
+        && resolved.glowAlpha > 0.001
+      ) {
+        const glowDiameter = Math.max(2, Math.round(resolved.glowRadiusPx * 2));
+        const glowTextureKey = ensureRoomLightTexture(
+          this.options.scene,
+          ROOM_LIGHT_GLOW_TEXTURE_KEY_PREFIX,
+          glowDiameter,
+          [
+            [0, 'rgba(255, 255, 255, 1)'],
+            [0.2, 'rgba(255, 255, 255, 0.92)'],
+            [0.58, 'rgba(255, 255, 255, 0.36)'],
+            [1, 'rgba(255, 255, 255, 0)'],
+          ],
+        );
+        const localGlowX = emitter.x - input.bounds.x - glowDiameter * 0.5;
+        const localGlowY = emitter.y - input.bounds.y - glowDiameter * 0.5;
+        this.glowOverlay.drawFrame(
+          glowTextureKey,
+          undefined,
+          localGlowX,
+          localGlowY,
+          resolved.glowAlpha,
+          emitter.glowColor,
+        );
+        glowEmitterCount += 1;
+      }
     }
+
     structureChanged = this.syncAmbientOverlays(ambientBounds, ambientAlpha) || structureChanged;
 
     this.debugState = {
@@ -180,6 +268,10 @@ export class RoomLightingController {
       rendererPath: 'webgl',
       activeRoomId,
       emitterCount,
+      playerGhostEmitterCount: debugCounts.playerGhostEmitterCount,
+      staticObjectEmitterCount: debugCounts.staticObjectEmitterCount,
+      staticTileEmitterCount: debugCounts.staticTileEmitterCount,
+      glowEmitterCount,
       ambientOverlayCount: ambientBounds.length,
       fallbackReason: null,
     };
@@ -190,6 +282,9 @@ export class RoomLightingController {
     const objects: Phaser.GameObjects.GameObject[] = [];
     if (this.overlay) {
       objects.push(this.overlay);
+    }
+    if (this.glowOverlay) {
+      objects.push(this.glowOverlay);
     }
     objects.push(...this.ambientOverlays);
     return objects;
@@ -205,25 +300,46 @@ export class RoomLightingController {
     return this.options.scene.game.renderer.type === Phaser.WEBGL;
   }
 
-  private ensureOverlay(bounds: RoomLightingBounds): boolean {
+  private ensureOverlays(bounds: RoomLightingBounds): boolean {
+    let structureChanged = false;
+
     if (
-      this.overlay &&
-      Math.round(this.overlay.width) === Math.round(bounds.width) &&
-      Math.round(this.overlay.height) === Math.round(bounds.height)
+      this.overlay
+      && Math.round(this.overlay.width) === Math.round(bounds.width)
+      && Math.round(this.overlay.height) === Math.round(bounds.height)
     ) {
       this.overlay.setPosition(bounds.x, bounds.y);
       this.overlay.setVisible(true);
-      return false;
+    } else {
+      this.overlay?.destroy();
+      this.overlay = this.options.scene.add.renderTexture(bounds.x, bounds.y, bounds.width, bounds.height);
+      this.overlay.setOrigin(0, 0);
+      this.overlay.setDepth(this.options.overlayDepth + 1);
+      structureChanged = true;
     }
 
-    if (this.overlay) {
-      this.overlay.destroy();
-      this.overlay = null;
+    if (
+      this.glowOverlay
+      && Math.round(this.glowOverlay.width) === Math.round(bounds.width)
+      && Math.round(this.glowOverlay.height) === Math.round(bounds.height)
+    ) {
+      this.glowOverlay.setPosition(bounds.x, bounds.y);
+      this.glowOverlay.setVisible(true);
+    } else {
+      this.glowOverlay?.destroy();
+      this.glowOverlay = this.options.scene.add.renderTexture(
+        bounds.x,
+        bounds.y,
+        bounds.width,
+        bounds.height,
+      );
+      this.glowOverlay.setOrigin(0, 0);
+      this.glowOverlay.setDepth(this.options.overlayDepth + 2);
+      this.glowOverlay.setBlendMode(Phaser.BlendModes.ADD);
+      structureChanged = true;
     }
-    this.overlay = this.options.scene.add.renderTexture(bounds.x, bounds.y, bounds.width, bounds.height);
-    this.overlay.setOrigin(0, 0);
-    this.overlay.setDepth(this.options.overlayDepth + 1);
-    return true;
+
+    return structureChanged;
   }
 
   private syncAmbientOverlays(boundsList: RoomLightingBounds[], ambientAlpha: number): boolean {
@@ -280,6 +396,12 @@ export class RoomLightingController {
       structureChanged = true;
     }
 
+    if (this.glowOverlay) {
+      this.glowOverlay.destroy();
+      this.glowOverlay = null;
+      structureChanged = true;
+    }
+
     for (const overlay of this.ambientOverlays) {
       overlay.destroy();
       structureChanged = true;
@@ -290,19 +412,71 @@ export class RoomLightingController {
   }
 }
 
-function ensureRoomLightAuraTexture(
+function resolveDebugCounts(
+  emitters: RoomLightingEmitter[],
+  input?: Partial<RoomLightingFrameDebugCounts>,
+): RoomLightingFrameDebugCounts {
+  return {
+    playerGhostEmitterCount:
+      input?.playerGhostEmitterCount
+      ?? emitters.filter((emitter) => emitter.sourceType === 'player' || emitter.sourceType === 'ghost').length,
+    staticObjectEmitterCount:
+      input?.staticObjectEmitterCount
+      ?? emitters.filter((emitter) => emitter.sourceType === 'object').length,
+    staticTileEmitterCount:
+      input?.staticTileEmitterCount
+      ?? emitters.filter((emitter) => emitter.sourceType === 'tile').length,
+  };
+}
+
+function resolveEmitterState(
+  emitter: RoomLightingEmitter,
+  defaultRevealRadiusPx: number,
+  nowSeconds: number,
+): ResolvedEmitterState {
+  const baseRevealRadiusPx = Math.max(2, emitter.revealRadiusPx ?? defaultRevealRadiusPx);
+  const baseGlowRadiusPx = Math.max(0, emitter.glowRadiusPx ?? 0);
+  const baseGlowAlpha = Math.max(0, Math.min(1, emitter.glowAlpha ?? 0));
+  if (!emitter.flicker) {
+    return {
+      revealRadiusPx: baseRevealRadiusPx,
+      glowRadiusPx: baseGlowRadiusPx,
+      glowAlpha: baseGlowAlpha,
+    };
+  }
+
+  const { flicker } = emitter;
+  const primaryWave = Math.sin(nowSeconds * flicker.speedHz * Math.PI * 2 + flicker.phaseSeed);
+  const secondaryWave = Math.sin(
+    nowSeconds * flicker.speedHz * Math.PI * 2 * 1.73 + flicker.phaseSeed * 1.61,
+  );
+  const wave = primaryWave * 0.65 + secondaryWave * 0.35;
+  const radiusScale = Math.max(0.6, 1 + wave * flicker.radiusAmplitude);
+  const alphaScale = Math.max(0.45, 1 + wave * flicker.alphaAmplitude);
+
+  return {
+    revealRadiusPx: baseRevealRadiusPx * radiusScale,
+    glowRadiusPx: baseGlowRadiusPx * radiusScale,
+    glowAlpha: Math.max(0, Math.min(1, baseGlowAlpha * alphaScale)),
+  };
+}
+
+function ensureRoomLightTexture(
   scene: Phaser.Scene,
+  prefix: string,
   diameter: number,
+  colorStops: Array<[number, string]>,
 ): string {
-  const textureKey = `${ROOM_LIGHT_AURA_TEXTURE_KEY_PREFIX}_${Math.max(1, Math.round(diameter))}`;
+  const roundedDiameter = Math.max(2, Math.round(diameter));
+  const textureKey = `${prefix}_${roundedDiameter}`;
   if (scene.textures.exists(textureKey)) {
     return textureKey;
   }
 
   const canvasTexture = scene.textures.createCanvas(
     textureKey,
-    diameter,
-    diameter,
+    roundedDiameter,
+    roundedDiameter,
   );
   if (!canvasTexture) {
     return textureKey;
@@ -314,15 +488,14 @@ function ensureRoomLightAuraTexture(
     return textureKey;
   }
 
-  const center = diameter * 0.5;
+  const center = roundedDiameter * 0.5;
   const gradient = context.createRadialGradient(center, center, center * 0.1, center, center, center);
-  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  gradient.addColorStop(0.32, 'rgba(255, 255, 255, 0.98)');
-  gradient.addColorStop(0.62, 'rgba(255, 255, 255, 0.55)');
-  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-  context.clearRect(0, 0, diameter, diameter);
+  for (const [offset, color] of colorStops) {
+    gradient.addColorStop(offset, color);
+  }
+  context.clearRect(0, 0, roundedDiameter, roundedDiameter);
   context.fillStyle = gradient;
-  context.fillRect(0, 0, diameter, diameter);
+  context.fillRect(0, 0, roundedDiameter, roundedDiameter);
   canvasTexture.refresh();
 
   return textureKey;
