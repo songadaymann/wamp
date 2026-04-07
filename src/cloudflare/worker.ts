@@ -425,15 +425,25 @@ export default {
         }
 
         const instrument = url.searchParams.get('instrument');
+        const saveMode = url.searchParams.get('mode');
+        if (saveMode !== null && saveMode !== 'overwrite' && saveMode !== 'save-as') {
+          throw new HttpError(400, 'mode must be overwrite or save-as.');
+        }
+        const overwritePhraseId = url.searchParams.get('overwritePhraseId')?.trim() ?? null;
+        if (overwritePhraseId && !instrument) {
+          throw new HttpError(400, 'overwritePhraseId requires an instrument.');
+        }
         const response = await upsertMusicPhrasesForSnapshot(
           env,
           snapshot,
           buildMusicPhraseActor(auth),
-          instrument
-            ? {
-                instrumentIds: [parseMusicPhraseInstrumentQuery(instrument)],
-              }
-            : undefined,
+          {
+            instrumentIds: instrument
+              ? [parseMusicPhraseInstrumentQuery(instrument)]
+              : undefined,
+            saveMode: saveMode ?? undefined,
+            overwritePhraseId,
+          },
         );
         return jsonResponse(request, response);
       }

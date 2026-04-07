@@ -153,6 +153,10 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   width: min(640px, calc(100vw - 40px));
 }
 
+.editor-music-phrase-save-modal-panel {
+  width: min(520px, calc(100vw - 40px));
+}
+
 .chat-moderation-section {
   display: flex;
   flex-direction: column;

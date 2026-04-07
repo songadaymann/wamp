@@ -121,9 +121,17 @@ export interface EditorSceneBridge {
   toggleRoomMusicPhraseMetadataEditor?: () => void;
   setRoomMusicPhraseNameSuffix?: (value: string) => void;
   saveRoomMusicDraftAndPhrases?: (
-    options?: { instrumentId?: RoomPatternInstrumentId | null }
+    options?: {
+      instrumentId?: RoomPatternInstrumentId | null;
+      saveMode?: 'overwrite' | 'save-as' | null;
+      overwritePhraseId?: string | null;
+    }
   ) => Promise<RoomRecord | null>;
   saveActiveRoomMusicPhrase?: () => Promise<RoomRecord | null>;
+  saveAsActiveRoomMusicPhrase?: () => void;
+  closeRoomMusicPhraseSavePrompt?: () => void;
+  setRoomMusicPhraseSavePromptName?: (value: string) => void;
+  confirmRoomMusicPhraseSavePrompt?: () => Promise<void>;
   deleteActiveRoomMusicPhrase?: () => Promise<void>;
   replaceLegacyRoomMusicWithPattern?: () => void;
   toggleRoomMusicPreview?: () => void;

@@ -5980,3 +5980,59 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Notes:
     - this intentionally preserves the raw trust ledger in `user_progress`; the moderation penalty is enforced through effective trust, so trust recovers automatically after the penalty window without rewriting historical trust events
     - active chat bans continue to clamp effective trust even if the ban is older than the 30-day penalty window
+- 2026-04-07: music transport follow-up on `feature/music-followups-2026-04-07`
+  - Prompt:
+    - remove key/BPM editing from the phrase edit flow because it is too confusing
+    - when a saved phrase is brought back into the sequencer or arranger, the first loaded phrase should set BPM and swing
+    - later phrases should not overwrite that transport; they should adapt to the current BPM/swing instead
+  - Implementation:
+    - `src/music/library.ts`
+      - added `swingPercent` to saved phrase payloads for both drum and tonal phrases
+      - older stored phrases without swing now normalize to the default swing on read
+      - phrase fingerprinting now ignores swing the same way it already ignored BPM, so feel-only changes do not mint a new phrase ordinal
+    - `src/scenes/editor/musicPatternEditor.ts`
+      - added `isPatternWorkspaceEmpty()` so sequencer phrase loads can tell whether they are the first phrase in the current composition
+      - `insertPhrase()` now accepts `adoptPhraseTiming` and applies the phrase BPM/swing before inserting when the current sequencer workspace is otherwise empty
+    - `src/scenes/EditorScene.ts`
+      - sequencer phrase loads now pass `adoptPhraseTiming` only when the overall pattern workspace is content-empty
+      - arrangement phrase placement now uses active slot count, not the broader “arrangement is fully default-valued” check, to decide whether the first phrase should set arrangement BPM/swing (and tonal key)
+      - phrase library rows now show swing alongside BPM
+      - phrase metadata edit mode now hides the key, tempo, and swing controls and no longer claims “key and tempo stay in the controls above”
+    - `index.html`
+      - added an explicit `editor-music-key-grid` id so the key controls can be hidden cleanly during phrase metadata editing
+  - Verification:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - required web-game client smoke ran against local preview output:
+      - artifacts: `output/web-game/music-phrase-transport-smoke/`
+      - `state-0.json` shows boot reached with the expected local no-backend auth failure path, not a new crash from the music changes
+      - `errors-0.json` only shows the expected local `/api/auth/session` failure because preview was running without a backend
+      - `shot-0.png` hit the known black-frame canvas artifact again
+    - headed rerun could not stay open in this environment (`page.goto: Target page, context or browser has been closed`), so local browser verification remains partial
+  - Next suggestions:
+    - verify the phrase-load behavior in a real signed-in editor session, especially:
+      - load first phrase into an empty sequencer and confirm BPM/swing adopt
+      - load a second mismatched phrase and confirm the notes adapt while transport stays fixed
+      - place first phrase into an empty arrangement and confirm the arrangement transport adopts its BPM/swing
+    - if that feels right, push this branch to safety before doing more music UX cleanup
+  - 2026-04-07 follow-up refinement:
+    - removed the key/mode dropdowns from the music workbench entirely
+    - removed swing from the phrase library detail line; phrases now show key + BPM only
+    - kept the existing save-time key detection path in `saveActiveRoomMusicPhrase()` so phrase saves still infer tonal key from the phrase notes before persisting
+    - verification:
+      - `npm run typecheck` passed
+      - `npm run build` passed
+  - 2026-04-07 save-flow rewrite:
+    - loaded sequencer phrases now copy their saved sample name into the local editable pattern state, which prevents a later plain `Save` from silently reverting the phrase name to default numbering
+    - phrase save semantics are now explicit:
+      - `Save` overwrites the current owned phrase in place
+      - `Save As` creates a new phrase/version
+      - first save and `Save As` open a small phrase-name prompt instead of relying on implicit default naming
+    - the overwrite path is now explicit all the way through the Worker API:
+      - `saveMusicPhrases()` can send `mode=overwrite|save-as` and `overwritePhraseId`
+      - the Worker/store path updates the targeted owned phrase by id instead of only reusing the latest phrase when fingerprints happen to match
+      - save-as still creates a fresh ordinal even if the payload fingerprint matches the latest phrase
+    - successful phrase saves now sync the active sequencer pattern back to the saved phrase id and name so future saves keep targeting the same phrase
+    - verification:
+      - `npm run typecheck` passed
+      - `npm run build` passed
