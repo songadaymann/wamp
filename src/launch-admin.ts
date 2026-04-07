@@ -28,6 +28,7 @@ const activityGrid = document.getElementById('activity-grid') as HTMLDivElement 
 const activityFeed = document.getElementById('activity-feed') as HTMLDivElement | null;
 const partykitSummary = document.getElementById('partykit-summary') as HTMLDivElement | null;
 const partykitShardsBody = document.getElementById('partykit-shards-body') as HTMLTableSectionElement | null;
+const progressionPanel = document.getElementById('progression-admin-panel') as HTMLElement | null;
 const progressionQueryInput = document.getElementById('progression-query-input') as HTMLInputElement | null;
 const progressionSearchButton = document.getElementById('progression-search-button') as HTMLButtonElement | null;
 const progressionOperatorInput = document.getElementById('progression-operator-input') as HTMLInputElement | null;
@@ -246,6 +247,7 @@ async function loadProgressionUser(userId: string): Promise<void> {
 
   progressionStatusMessage = 'Loading progression caps...';
   render();
+  scrollProgressionPanelIntoView();
 
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/admin/progression/users/${encodeURIComponent(userId)}/caps`, {
@@ -263,10 +265,12 @@ async function loadProgressionUser(userId: string): Promise<void> {
     populateProgressionForm(selectedProgressionUser);
     progressionStatusMessage = `Loaded ${selectedProgressionUser.displayName}.`;
     render();
+    emphasizeProgressionSelection();
   } catch (error) {
     progressionStatusMessage =
       error instanceof Error ? error.message : 'Unknown progression load failure.';
     render();
+    emphasizeProgressionSelection();
   }
 }
 
@@ -939,6 +943,23 @@ function wireProgressionLookupButtons(root: ParentNode): void {
       void loadProgressionUser(userId);
     });
   }
+}
+
+function scrollProgressionPanelIntoView(): void {
+  progressionPanel?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start',
+  });
+}
+
+function emphasizeProgressionSelection(): void {
+  if (!progressionSelected) {
+    return;
+  }
+
+  progressionSelected.classList.remove('selected-flash');
+  void progressionSelected.offsetWidth;
+  progressionSelected.classList.add('selected-flash');
 }
 
 function escapeHtml(value: string): string {
