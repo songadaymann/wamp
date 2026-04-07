@@ -145,6 +145,23 @@ interface AdminProgressionIdentitySummary {
   displayName: string;
   email: string | null;
   founderNumber: number | null;
+  trust: {
+    rawScore: number;
+    rawTier: TrustTier;
+    effectiveScore: number;
+    effectiveTier: TrustTier;
+    penaltyActive: boolean;
+    suspiciousPenaltyActive: boolean;
+    chatPenaltyActive: boolean;
+  };
+  stats: {
+    player: ProgressionLaneSummary;
+    builder: ProgressionLaneSummary;
+    curator: ProgressionLaneSummary;
+    badgeCount: number;
+    trophyCount: number;
+    firstIdentityQualifiedAt: string | null;
+  };
   builderCaps: BuilderCapabilitySummary;
   override: {
     claimLimitPerDay: number | null;
@@ -1943,11 +1960,29 @@ async function buildAdminProgressionIdentitySummary(
   identity: UserRow,
   progress: UserProgressRow,
 ): Promise<AdminProgressionIdentitySummary> {
+  const effectiveTrust = await loadEffectiveTrustState(env, identity.id, progress);
   return {
     userId: identity.id,
     displayName: identity.display_name,
     email: identity.email,
     founderNumber: progress.founder_number,
+    trust: {
+      rawScore: effectiveTrust.rawScore,
+      rawTier: effectiveTrust.rawTier,
+      effectiveScore: effectiveTrust.effectiveScore,
+      effectiveTier: effectiveTrust.effectiveTier,
+      penaltyActive: effectiveTrust.penaltyActive,
+      suspiciousPenaltyActive: effectiveTrust.suspiciousPenaltyActive,
+      chatPenaltyActive: effectiveTrust.chatPenaltyActive,
+    },
+    stats: {
+      player: buildLaneSummary('player', progress.total_pxp),
+      builder: buildLaneSummary('builder', progress.total_bxp),
+      curator: buildLaneSummary('curator', progress.total_cxp),
+      badgeCount: progress.badge_count,
+      trophyCount: progress.trophy_count,
+      firstIdentityQualifiedAt: progress.first_identity_qualified_at,
+    },
     builderCaps: await loadBuilderCapabilitySummary(env, progress, 'session'),
     override: {
       claimLimitPerDay: progress.builder_claim_limit_override,

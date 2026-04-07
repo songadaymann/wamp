@@ -370,6 +370,11 @@ function renderProgressionAdmin(): void {
                 <button class="result-button" type="button" data-user-id="${escapeHtml(item.userId)}">
                   <strong>${escapeHtml(item.displayName)}</strong>
                   <div class="meta">${escapeHtml(item.email ?? item.userId)}</div>
+                  <div class="meta">Trust ${escapeHtml(item.trust.effectiveTier)} (${formatNumber(
+                    item.trust.effectiveScore,
+                  )}) · Player ${formatNumber(item.stats.player.level)} · Builder ${formatNumber(
+                    item.stats.builder.level,
+                  )} · Curator ${formatNumber(item.stats.curator.level)}</div>
                   <div class="meta">Caps ${formatCapSummary(item.builderCaps)} · founder ${
                     item.founderNumber === null ? 'unassigned' : `#${item.founderNumber}`
                   }</div>
@@ -395,6 +400,20 @@ function renderProgressionAdmin(): void {
       ? `
           <strong>${escapeHtml(selectedProgressionUser.displayName)}</strong>
           <div class="meta">${escapeHtml(selectedProgressionUser.email ?? selectedProgressionUser.userId)}</div>
+          <div class="meta">Founder ${
+            selectedProgressionUser.founderNumber === null ? 'unassigned' : `#${escapeHtml(String(selectedProgressionUser.founderNumber))}`
+          }${
+            selectedProgressionUser.stats.firstIdentityQualifiedAt
+              ? ` · qualified ${escapeHtml(formatTimestamp(selectedProgressionUser.stats.firstIdentityQualifiedAt))}`
+              : ''
+          }</div>
+          <div class="meta">Trust ${escapeHtml(formatTrustSummary(selectedProgressionUser.trust))}</div>
+          <div class="meta">Player ${escapeHtml(formatLaneSummary(selectedProgressionUser.stats.player))}</div>
+          <div class="meta">Builder ${escapeHtml(formatLaneSummary(selectedProgressionUser.stats.builder))}</div>
+          <div class="meta">Curator ${escapeHtml(formatLaneSummary(selectedProgressionUser.stats.curator))}</div>
+          <div class="meta">Badges ${escapeHtml(formatNumber(selectedProgressionUser.stats.badgeCount))} · Trophies ${escapeHtml(
+            formatNumber(selectedProgressionUser.stats.trophyCount),
+          )}</div>
           <div class="meta">Effective caps: ${escapeHtml(formatCapSummary(selectedProgressionUser.builderCaps))}</div>
           <div class="meta">Trust tier ${escapeHtml(selectedProgressionUser.builderCaps.trustTier)}${
             selectedProgressionUser.builderCaps.overrideActive ? ' · admin boost active' : ''
@@ -833,6 +852,27 @@ function formatCapSummary(caps: AdminProgressionUserLookupEntry['builderCaps']):
   return `${formatNumber(caps.objectLimit)} objects · ${formatNumber(caps.collectibleLimit)} collectibles · ${formatNumber(
     caps.publishLimitPerDay,
   )} publish/day · ${formatNumber(caps.claimLimitPerDay)} claim/day`;
+}
+
+function formatLaneSummary(lane: AdminProgressionUserCapsResponse['stats']['player']): string {
+  return `L${formatNumber(lane.level)} · ${formatNumber(lane.xp)} XP · ${lane.medalLabel}`;
+}
+
+function formatTrustSummary(trust: AdminProgressionUserCapsResponse['trust']): string {
+  const parts = [
+    `effective ${trust.effectiveTier} (${formatNumber(trust.effectiveScore)})`,
+    `raw ${trust.rawTier} (${formatNumber(trust.rawScore)})`,
+  ];
+
+  if (trust.penaltyActive) {
+    const reasons = [
+      trust.suspiciousPenaltyActive ? 'suspicious-admin hold' : null,
+      trust.chatPenaltyActive ? 'chat-ban hold' : null,
+    ].filter((value): value is string => Boolean(value));
+    parts.push(reasons.length > 0 ? reasons.join(' + ') : 'penalty active');
+  }
+
+  return parts.join(' · ');
 }
 
 function formatOverrideSummary(user: AdminProgressionUserCapsResponse): string {
