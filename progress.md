@@ -112,6 +112,35 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - object-based fire / lava emissive lighting stays live
     - tile-emissive plumbing remains ready for future real emissive tiles like cave lanterns
 
+- Wallet project-id runtime config hardening on April 7, 2026:
+  - started a clean `main`-based branch/worktree for this pass:
+    - branch: `fix/wallet-project-id-resolution-2026-04-07`
+    - worktree: `/private/tmp/wamp-wallet-project-id-fix-2026-04-07`
+  - root cause:
+    - wallet auth on `wamp.land` was relying on frontend build-time `VITE_REOWN_PROJECT_ID`
+    - that value existed on the `wampland` website config, but the real API Worker `everybodys-platformer` / `api.wamp.land` did not expose any runtime wallet project id
+    - local/CLI prebuilt frontend deploys can bypass Cloudflare's Pages build env, so the website could regress to `Wallet ID Missing` whenever a bundle was built without that local/frontend Vite var
+  - fix:
+    - `GET /api/auth/session` now includes `walletProjectId`, sourced from Worker env `REOWN_PROJECT_ID` with legacy aliases accepted as fallbacks
+    - the auth client now falls back to that runtime `walletProjectId` whenever the bundled `VITE_REOWN_PROJECT_ID` / `VITE_WALLET_CONNECT_PROJECT_ID` is absent
+    - auth debug state now exposes `walletProjectSource: "build" | "runtime" | "missing"` so future diagnosis is explicit
+    - `scripts/smoke_prod.mjs` now fails if `api.wamp.land/api/auth/session` does not expose a wallet project id
+    - docs/examples now point deployed wallet auth at Worker env `REOWN_PROJECT_ID`, with `env.local` treated as a local override only
+  - verification:
+    - Wrangler prod secret list now shows `REOWN_PROJECT_ID` on `everybodys-platformer`
+    - local `wrangler dev` with `--var REOWN_PROJECT_ID:test-wallet-project` returned `walletProjectId: "test-wallet-project"` from `/api/auth/session`
+    - required `develop-web-game` browser probe against a no-`env.local` frontend plus that local API wrote `output/web-game/wallet-project-runtime-api-check/`
+    - `state-0.json` reports `auth.walletProjectConfigured: true` and `auth.walletProjectSource: "runtime"`
+    - no `errors-0.json` was produced by that probe
+    - `npm run build` passed in the clean worktree under `nvm use 20.19.4`
+    - screenshot still hit the known black-frame artifact, so state JSON was the reliable source of truth for this verification
+  - rollout:
+    - rebased the fix onto latest `origin/main`, committed it as `c5d0a1e` (`Fix runtime wallet project id resolution`), fast-forwarded `main`, and pushed
+    - production API now returns `walletProjectId` from `https://api.wamp.land/api/auth/session`
+    - production frontend `https://wamp.land` now serves a bundle containing the runtime wallet fallback path
+    - `node scripts/smoke_prod.mjs` passed against live production with `sessionWalletProjectConfigured: true`
+    - the wrapper `npm run deploy:prod` appeared to hang inside Wrangler after the rollout was already live, so final validation was completed with direct live checks plus the standalone prod smoke
+
 - Sign text modal + nearby readout on April 7, 2026:
   - started a clean `main`-based branch/worktree for this pass:
     - branch: `feature/sign-text-modal-2026-04-07`
