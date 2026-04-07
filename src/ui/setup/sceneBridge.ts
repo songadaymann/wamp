@@ -106,6 +106,7 @@ export interface EditorSceneBridge {
   clearFocusedPressurePlateConnection?: () => void;
   cancelPressurePlateConnection?: () => void;
   clearFocusedContainerContents?: () => void;
+  setPlacedSignText?: (instanceId: string, text: string | null) => boolean | Promise<boolean>;
   setMusicModeActive?: (active: boolean) => void;
   toggleMusicMode?: () => void;
   setMusicPatternInstrumentTab?: (instrumentId: RoomPatternInstrumentId) => void;

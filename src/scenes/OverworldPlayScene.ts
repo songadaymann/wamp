@@ -187,6 +187,7 @@ import {
 import {
   OverworldSelectionController,
 } from './overworld/selection';
+import { OverworldSignController } from './overworld/signPosts';
 import {
   OverworldRoomCellController,
 } from './overworld/roomCells';
@@ -393,6 +394,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly selectionController: OverworldSelectionController;
   private readonly hudStateController: OverworldHudStateController;
   private readonly liveObjectController: OverworldLiveObjectController<RoomEdgeWall>;
+  private readonly signController: OverworldSignController<RoomEdgeWall>;
   private readonly worldStreamingController: OverworldWorldStreamingController<
     LoadedRoomObject,
     RoomEdgeWall
@@ -550,6 +552,11 @@ export class OverworldPlayScene extends Phaser.Scene {
           y,
           this.roomAudioController.getPlaybackOptionsForRoom(roomCoordinates)
         ),
+    });
+    this.signController = new OverworldSignController({
+      getMode: () => this.mode,
+      getPlayerBody: () => this.playerBody,
+      getLoadedFullRooms: () => this.loadedFullRoomsById.values(),
     });
     this.worldStreamingController = new OverworldWorldStreamingController({
       scene: this,
@@ -1266,6 +1273,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           roomCoordinates: entry.roomCoordinates,
           isSelf: entry.isSelf,
         })),
+      getActiveSignState: () => this.signController.getActiveSign(),
       loadRoomOwnershipDetails: async (roomId, coordinates) => {
         const record = await this.roomRepository.loadRoom(roomId, coordinates);
         return {
@@ -1625,6 +1633,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.updateBackdrop();
     this.gridOverlayController.redraw();
     this.updateLiveObjects(delta);
+    this.signController.update();
     this.updateGhosts(delta);
     this.roomChatController.update();
     this.presenceOverlayController.updateBrowseDots(delta);
@@ -3253,6 +3262,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         : null,
       presenceDebug: this.presenceController.getDebugSnapshot(),
       roomChatDebug,
+      activeSign: this.signController.getActiveSign(),
       liveObjects,
     };
   }

@@ -742,6 +742,7 @@ export interface PlacedObject {
   layer?: LayerName;
   triggerTargetInstanceId?: string | null;
   containedObjectId?: string | null;
+  signText?: string | null;
 }
 
 export function getPlacedObjectLayer(
