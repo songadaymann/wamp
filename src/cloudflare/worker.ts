@@ -466,7 +466,6 @@ export default {
           'publish rooms',
           'rooms:write'
         );
-        await assertUserCanPublishContent(env, auth.user.id, auth.source);
         const previousRecord = await loadRoomRecord(
           env,
           snapshot.id,
@@ -475,6 +474,11 @@ export default {
           auth.user.walletAddress ?? null,
           auth.isAdmin,
         );
+        const bypassDailyPublishLimit =
+          previousRecord.published !== null && previousRecord.claimerUserId === auth.user.id;
+        if (!bypassDailyPublishLimit) {
+          await assertUserCanPublishContent(env, auth.user.id, auth.source);
+        }
         const record = await publishRoom(
           env,
           snapshot,
@@ -521,7 +525,6 @@ export default {
           'revert rooms',
           'rooms:write'
         );
-        await assertUserCanPublishContent(env, auth.user.id, auth.source);
         const previousRecord = await loadRoomRecord(
           env,
           roomId,

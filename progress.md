@@ -5885,3 +5885,26 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Next suggestions:
     - verify the `New / Edit / Save` flow in a real browser session with an actual signed-in editable room
     - if this UX feels right in live editor QA, commit this branch as a narrow post-launch follow-up rather than mixing it into unrelated gameplay work
+
+- 2026-04-07: progression publish-limit follow-up on `feature/progression-publish-limit-followup-2026-04-07`
+  - Prompt:
+    - if someone reverts changes to their room, that should not count toward daily publish limits
+    - editing and publishing on your own rooms that are already published should stay unlimited
+    - cut the work from current `main`, not from the older progression branch, because `main` had moved ahead
+  - Implementation:
+    - `src/cloudflare/worker.ts`
+      - room publish now loads the previous room record first and bypasses the daily publish-limit guard when the room is already published and the current user is the claimer
+      - room revert no longer calls the daily publish-limit guard at all
+    - `src/cloudflare/worker/progression/store.ts`
+      - daily publish counting now counts only first room publishes for a room (`room_versions` rows with no prior version), so room republish/revert actions stop consuming the quota that still applies to first room publishes and course publishes
+  - Intended behavior after this patch:
+    - first publish of a room still counts against the daily publish cap
+    - publishing updates to your own already-published room does not count against the cap
+    - reverting your own room does not count against the cap
+    - course publish limits remain unchanged
+  - Verification:
+    - focused diff check passed; patch is limited to `src/cloudflare/worker.ts` and `src/cloudflare/worker/progression/store.ts`
+    - `npm run typecheck` is currently blocked on pre-existing `main` issues in `src/music/key.ts`:
+      - missing modules `@tonaljs/key` and `tonal`
+      - existing implicit-`any` errors in that file
+    - `npm run build` fails for the same pre-existing reason

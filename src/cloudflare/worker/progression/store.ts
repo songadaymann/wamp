@@ -1999,6 +1999,12 @@ async function countDailyRoomPublishes(env: Env, userId: string, dayStartIso: st
         FROM room_versions
         WHERE published_by_user_id = ?
           AND created_at >= ?
+          AND NOT EXISTS (
+            SELECT 1
+            FROM room_versions AS prior_versions
+            WHERE prior_versions.room_id = room_versions.room_id
+              AND prior_versions.version < room_versions.version
+          )
       `
     )
       .bind(userId, dayStartIso)
