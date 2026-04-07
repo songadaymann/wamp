@@ -2,7 +2,9 @@
 import {
   DEFAULT_ROOM_LIGHTING_DARKNESS,
   DEFAULT_ROOM_LIGHTING_RADIUS,
+  type LightEmissionConfig,
   type RoomLightingMode,
+  type TileLightEmissionConfig,
 } from './lighting/model';
 export const TILE_SIZE = 16;
 export const ROOM_WIDTH = 40;   // tiles
@@ -54,6 +56,7 @@ export interface TilesetConfig {
   tileCount: number;
   firstGid: number;
   terrainCollisionProfiles?: Partial<Record<number, TerrainCollisionProfileId>>;
+  lightEmissionProfiles?: Partial<Record<number, TileLightEmissionConfig>>;
   uiTheme?: TilesetUiThemeConfig;
 }
 
@@ -103,6 +106,17 @@ function createTilesetCollisionProfiles(
   const result: Partial<Record<number, TerrainCollisionProfileId>> = {};
   for (const index of indices) {
     result[index] = profile;
+  }
+  return result;
+}
+
+export function createTilesetLightEmissionProfiles(
+  indices: number[],
+  profile: TileLightEmissionConfig,
+): Partial<Record<number, TileLightEmissionConfig>> {
+  const result: Partial<Record<number, TileLightEmissionConfig>> = {};
+  for (const index of indices) {
+    result[index] = { ...profile };
   }
   return result;
 }
@@ -161,6 +175,51 @@ const DEFAULT_TILESET_UI_THEME: TilesetUiThemeConfig = {
   accentHot: 0xff7a5c,
   accentAlt: 0x63d6cb,
 };
+
+const FIRE_LIGHT_FLICKER = Object.freeze({
+  radiusAmplitude: 0.14,
+  alphaAmplitude: 0.16,
+  speedHz: 2.1,
+} satisfies LightEmissionConfig['flicker']);
+
+const FIRE_BIG_LIGHT_FLICKER = Object.freeze({
+  radiusAmplitude: 0.17,
+  alphaAmplitude: 0.19,
+  speedHz: 1.7,
+} satisfies LightEmissionConfig['flicker']);
+
+const LAVA_LIGHT_FLICKER = Object.freeze({
+  radiusAmplitude: 0.08,
+  alphaAmplitude: 0.1,
+  speedHz: 0.95,
+} satisfies LightEmissionConfig['flicker']);
+
+const FIRE_LIGHT_EMISSION = Object.freeze({
+  offsetY: -2,
+  revealRadiusPx: 25,
+  glowRadiusPx: 37,
+  glowColor: 0xffa347,
+  glowAlpha: 0.52,
+  flicker: FIRE_LIGHT_FLICKER,
+} satisfies LightEmissionConfig);
+
+const FIRE_BIG_LIGHT_EMISSION = Object.freeze({
+  offsetY: -6,
+  revealRadiusPx: 32,
+  glowRadiusPx: 51,
+  glowColor: 0xffa347,
+  glowAlpha: 0.62,
+  flicker: FIRE_BIG_LIGHT_FLICKER,
+} satisfies LightEmissionConfig);
+
+const LAVA_OBJECT_LIGHT_EMISSION = Object.freeze({
+  offsetY: -10,
+  revealRadiusPx: 38,
+  glowRadiusPx: 65,
+  glowColor: 0xff6a36,
+  glowAlpha: 0.5,
+  flicker: LAVA_LIGHT_FLICKER,
+} satisfies LightEmissionConfig);
 
 // firstGid assignments: 0 = empty, then sequential per tileset.
 // Keep existing ranges stable because persisted room tile data stores absolute gids.
@@ -542,6 +601,8 @@ export interface GameObjectConfig {
   placeUsingPreviewBounds?: boolean;
   /** behavior hint for runtime object logic */
   behavior: 'static' | 'patrol' | 'fly' | 'bounce' | 'animated' | 'shooter';
+  /** optional emissive lighting behavior for dark rooms */
+  lightEmission?: LightEmissionConfig;
   /** short tooltip description for the editor palette */
   description: string;
 }
@@ -573,14 +634,14 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   // ── Hazards ──
   { id: 'spikes',      name: 'Spikes',      category: 'hazard',      path: 'assets/enemies/spikes.png',      frameWidth: 16, frameHeight: 16, frameCount: 4,  fps: 8,  bodyWidth: 14, bodyHeight: 10, behavior: 'animated', description: 'Animated spike trap. Kills on contact.' },
   { id: 'saw',         name: 'Saw',         category: 'hazard',      path: 'assets/enemies/saw.png',         frameWidth: 34, frameHeight: 34, frameCount: 4,  fps: 8,  animationFrames: [0, 2, 3, 2], bodyWidth: 24, bodyHeight: 24, previewWidth: 24, previewHeight: 24, previewOffsetX: 5, previewOffsetY: 5, behavior: 'animated', description: 'Spinning blade. Orbits in a circle.' },
-  { id: 'fire',        name: 'Fire',        category: 'hazard',      path: 'assets/enemies/fire.png',        frameWidth: 16, frameHeight: 16, frameCount: 6,  fps: 10, bodyWidth: 12, bodyHeight: 14, behavior: 'animated', description: 'Stationary flame. Burns on contact.' },
+  { id: 'fire',        name: 'Fire',        category: 'hazard',      path: 'assets/enemies/fire.png',        frameWidth: 16, frameHeight: 16, frameCount: 6,  fps: 10, bodyWidth: 12, bodyHeight: 14, behavior: 'animated', lightEmission: FIRE_LIGHT_EMISSION, description: 'Stationary flame. Burns on contact.' },
   { id: 'fireball',    name: 'Fireball',    category: 'hazard',      path: 'assets/enemies/fireball.png',    frameWidth: 16, frameHeight: 16, frameCount: 4,  fps: 10, bodyWidth: 12, bodyHeight: 12, behavior: 'animated', description: 'Shoots in a direction. Kills on contact.' },
   { id: 'bomb',        name: 'Bomb',        category: 'hazard',      path: 'assets/enemies/bomb.png',        frameWidth: 32, frameHeight: 48, frameCount: 15, fps: 8,  bodyWidth: 18, bodyHeight: 22, bodyOffsetX: 7, bodyOffsetY: 18, behavior: 'animated', description: 'Bomb hazard. Touching it is lethal.' },
   { id: 'wood_stakes', name: 'Wood Stakes', category: 'hazard',      path: 'assets/enemies/wood_stakes.png', frameWidth: 32, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 28, behavior: 'static',   description: 'Sharpened stakes. Kills on contact.' },
   { id: 'cannon',      name: 'Cannon',      category: 'hazard',      path: 'assets/enemies/cannon.png',      frameWidth: 32, frameHeight: 32, frameCount: 1,  fps: 0,  defaultFrame: 2, facingDirection: 'left', bodyWidth: 24, bodyHeight: 18, behavior: 'shooter',  description: 'Shoots bullets in the direction it faces.' },
   { id: 'cactus',      name: 'Cactus',      category: 'hazard',      path: 'assets/enemies/cactus.png',      frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 8,  bodyWidth: 16, bodyHeight: 26, behavior: 'animated', description: 'Animated cactus hazard. Hurts on contact.' },
   { id: 'tornado',     name: 'Tornado',     category: 'hazard',      path: 'assets/enemies/tornado.png',     frameWidth: 48, frameHeight: 48, frameCount: 8,  fps: 10, bodyWidth: 28, bodyHeight: 40, behavior: 'animated', description: 'Animated whirlwind hazard. Hurts on contact.' },
-  { id: 'fire_big',    name: 'Big Fire',    category: 'hazard',      path: 'assets/enemies/fire_big.png',    frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 10, bodyWidth: 18, bodyHeight: 20, behavior: 'animated', description: 'Large flame hazard. Burns on contact.' },
+  { id: 'fire_big',    name: 'Big Fire',    category: 'hazard',      path: 'assets/enemies/fire_big.png',    frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 10, bodyWidth: 18, bodyHeight: 20, behavior: 'animated', lightEmission: FIRE_BIG_LIGHT_EMISSION, description: 'Large flame hazard. Burns on contact.' },
   { id: 'ice_spikes',  name: 'Ice Spikes',  category: 'hazard',      path: 'assets/enemies/ice_spikes.png',  frameWidth: 16, frameHeight: 16, frameCount: 8,  fps: 8,  bodyWidth: 14, bodyHeight: 10, behavior: 'animated', description: 'Frozen spike trap. Kills on contact.' },
   { id: 'icicle',      name: 'Icicle',      category: 'hazard',      path: 'assets/enemies/icicle.png',      frameWidth: 48, frameHeight: 48, frameCount: 6,  fps: 8,  animationFrames: [0, 1, 2, 3], bodyWidth: 14, bodyHeight: 40, bodyOffsetX: 17, bodyOffsetY: 4, behavior: 'animated', description: 'Hanging icicle. Touching it is lethal.' },
   { id: 'lightning',   name: 'Lightning',   category: 'hazard',      path: 'assets/enemies/lightning.png',   frameWidth: 64, frameHeight: 96, frameCount: 4,  fps: 10, animationFrames: [0, 1], defaultFrame: 1, bodyWidth: 18, bodyHeight: 84, bodyOffsetX: 23, bodyOffsetY: 6, behavior: 'animated', description: 'Lightning strike hazard. Periodically flashes and is deadly while active.' },
@@ -588,7 +649,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'quicksand',   name: 'Quicksand',   category: 'hazard',      path: 'assets/enemies/quicksand.png',   frameWidth: 32, frameHeight: 32, frameCount: 8,  fps: 8,  bodyWidth: 28, bodyHeight: 18, behavior: 'animated', description: 'Viscous sand that drags you down and slows movement.' },
   { id: 'cactus_spike',name: 'Cactus Spike',category: 'hazard',      path: 'assets/enemies/cactus_spike.png',frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 8,  bodyHeight: 7,  bodyOffsetX: 4, bodyOffsetY: 5, previewWidth: 8, previewHeight: 7, previewOffsetX: 4, previewOffsetY: 5, behavior: 'static',   description: 'Single cactus spike. Kills on contact.' },
   { id: 'tornado_sand',name: 'Sand Tornado',category: 'hazard',      path: 'assets/enemies/tornado_sand.png',frameWidth: 48, frameHeight: 48, frameCount: 8,  fps: 10, bodyWidth: 28, bodyHeight: 40, behavior: 'animated', description: 'Desert whirlwind. Launches and kills on contact.' },
-  { id: 'lava_surface',name: 'Lava Pool',   category: 'hazard',      path: 'assets/deco/lava_surface.png',   frameWidth: 48, frameHeight: 48, frameCount: 8,  fps: 8,  bodyWidth: 44, bodyHeight: 22, bodyOffsetX: 2, bodyOffsetY: 24, behavior: 'animated', description: 'Animated lava surface. There is no swimming, only death.' },
+  { id: 'lava_surface',name: 'Lava Pool',   category: 'hazard',      path: 'assets/deco/lava_surface.png',   frameWidth: 48, frameHeight: 48, frameCount: 8,  fps: 8,  bodyWidth: 44, bodyHeight: 22, bodyOffsetX: 2, bodyOffsetY: 24, behavior: 'animated', lightEmission: LAVA_OBJECT_LIGHT_EMISSION, description: 'Animated lava surface. There is no swimming, only death.' },
   { id: 'water_surface_a', name: 'Water Pool', category: 'hazard',   path: 'assets/deco/water_surface_a.png',frameWidth: 32, frameHeight: 32, frameCount: 8,  fps: 8,  bodyWidth: 28, bodyHeight: 16, bodyOffsetX: 2, bodyOffsetY: 16, behavior: 'animated', description: 'Animated water surface. No swim move exists yet, so it is lethal.' },
   { id: 'water_surface_b', name: 'Water Ripple', category: 'hazard', path: 'assets/deco/water_surface_b.png',frameWidth: 16, frameHeight: 16, frameCount: 5,  fps: 8,  bodyWidth: 14, bodyHeight: 8,  bodyOffsetX: 1, bodyOffsetY: 8,  behavior: 'animated', description: 'Small water hazard. Touching it is lethal for now.' },
 

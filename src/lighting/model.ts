@@ -6,6 +6,48 @@ export interface RoomLightingSettings {
   radius: number;
 }
 
+export interface LightEmissionFlickerConfig {
+  radiusAmplitude: number;
+  alphaAmplitude: number;
+  speedHz: number;
+}
+
+export interface LightEmissionConfig {
+  offsetX?: number;
+  offsetY?: number;
+  revealRadiusPx: number;
+  glowRadiusPx: number;
+  glowColor: number;
+  glowAlpha: number;
+  flicker?: LightEmissionFlickerConfig;
+}
+
+export type TileLightEmissionAggregation = 'perTile' | 'surfaceStrip';
+
+export interface TileLightEmissionConfig extends LightEmissionConfig {
+  aggregation?: TileLightEmissionAggregation;
+}
+
+export type RoomLightingEmitterSourceType = 'player' | 'ghost' | 'object' | 'tile';
+
+export interface RoomLightingEmitterFlicker {
+  radiusAmplitude: number;
+  alphaAmplitude: number;
+  speedHz: number;
+  phaseSeed: number;
+}
+
+export interface RoomLightingEmitter {
+  x: number;
+  y: number;
+  sourceType: RoomLightingEmitterSourceType;
+  revealRadiusPx?: number;
+  glowRadiusPx?: number;
+  glowColor?: number;
+  glowAlpha?: number;
+  flicker?: RoomLightingEmitterFlicker | null;
+}
+
 export const ROOM_LIGHTING_SLIDER_MIN = 0;
 export const ROOM_LIGHTING_SLIDER_MAX = 100;
 export const DEFAULT_ROOM_LIGHTING_DARKNESS = 80;
