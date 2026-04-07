@@ -882,6 +882,21 @@ export class OverworldGoalRunController {
     runState: GoalRunState,
     result: Exclude<RunResult, 'active'>
   ): RunFinishRequestBody {
+    const verificationTrace = this.options.buildVerificationTrace?.(runState, result) ?? null;
+    if (!verificationTrace) {
+      console.warn('Submitting ranked room finish without verification trace', {
+        attemptId: runState.attemptId,
+        roomId: runState.roomId,
+        roomVersion: runState.roomVersion,
+        result,
+        elapsedMs: Math.round(runState.elapsedMs),
+        submissionState: runState.submissionState,
+        verificationSchemaVersion: runState.verificationSchemaVersion,
+        hasVerificationNonce: Boolean(runState.verificationNonce),
+        hasSnapshotHash: Boolean(runState.snapshotHash),
+      });
+    }
+
     return {
       result,
       elapsedMs: Math.round(runState.elapsedMs),
@@ -891,7 +906,7 @@ export class OverworldGoalRunController {
       checkpointsReached: runState.checkpointsReached,
       score: this.options.getScore(),
       finishedAt: this.nowIso(),
-      verificationTrace: this.options.buildVerificationTrace?.(runState, result) ?? null,
+      verificationTrace,
     };
   }
 

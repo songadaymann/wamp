@@ -2601,9 +2601,19 @@ export class OverworldPlayScene extends Phaser.Scene {
   private buildRankedRunVerificationTrace(
     kind: 'room' | 'course',
     elapsedMs: number,
-    _result: 'completed' | 'failed' | 'abandoned',
+    result: 'completed' | 'failed' | 'abandoned',
   ): RankedRunVerificationTrace | null {
     if (!this.rankedRunTraceRecorder.isActive(kind)) {
+      console.warn('Ranked verification trace inactive at finish build', {
+        kind,
+        result,
+        elapsedMs: Math.round(elapsedMs),
+        mode: this.mode,
+        currentRoomCoordinates: { ...this.currentRoomCoordinates },
+        hasPlayerBody: Boolean(this.playerBody),
+        roomTraceActive: this.rankedRunTraceRecorder.isActive('room'),
+        courseTraceActive: this.rankedRunTraceRecorder.isActive('course'),
+      });
       return null;
     }
 

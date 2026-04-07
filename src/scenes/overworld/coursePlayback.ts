@@ -222,6 +222,21 @@ export class OverworldCoursePlaybackController {
     activeCourseRun.submissionMessage = 'Submitting course run...';
     this.host.renderHud();
 
+    const verificationTrace = this.host.buildVerificationTrace?.(activeCourseRun, result) ?? null;
+    if (!verificationTrace) {
+      console.warn('Submitting ranked course finish without verification trace', {
+        attemptId,
+        courseId: activeCourseRun.course.id,
+        courseVersion: activeCourseRun.course.version,
+        result,
+        elapsedMs: Math.round(activeCourseRun.elapsedMs),
+        submissionState: activeCourseRun.submissionState,
+        verificationSchemaVersion: activeCourseRun.verificationSchemaVersion,
+        hasVerificationNonce: Boolean(activeCourseRun.verificationNonce),
+        hasSnapshotHash: Boolean(activeCourseRun.snapshotHash),
+      });
+    }
+
     const body: CourseRunFinishRequestBody = {
       result,
       elapsedMs: activeCourseRun.elapsedMs,
@@ -231,7 +246,7 @@ export class OverworldCoursePlaybackController {
       checkpointsReached: activeCourseRun.checkpointsReached,
       score: null,
       finishedAt: new Date().toISOString(),
-      verificationTrace: this.host.buildVerificationTrace?.(activeCourseRun, result) ?? null,
+      verificationTrace,
     };
 
     try {

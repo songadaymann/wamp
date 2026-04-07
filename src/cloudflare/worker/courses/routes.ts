@@ -502,7 +502,7 @@ export async function handleCourseRunFinish(
       }
       verificationResult = {
         status: 'failed' as const,
-        reason: 'trace_client_outdated' as const,
+        reason: 'missing_trace' as const,
         derivedMetrics: {
           collectiblesCollected: 0,
           enemiesDefeated: 0,
@@ -584,9 +584,11 @@ export async function handleCourseRunFinish(
   if (verificationStatus === 'failed') {
     throw new HttpError(
       409,
-      verificationReason === 'trace_client_outdated'
-        ? 'Client update required for ranked verification.'
-        : 'Ranked course run could not be verified.',
+      verificationReason === 'missing_trace'
+        ? 'Missing verification trace for ranked course run.'
+        : verificationReason === 'trace_client_outdated'
+          ? 'Client update required for ranked verification.'
+          : 'Ranked course run could not be verified.',
     );
   }
 
