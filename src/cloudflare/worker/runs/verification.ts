@@ -732,16 +732,18 @@ function deriveMetricsForGoal(input: {
       }
     }
 
-    const pathDistance = getGoalEventPathDistance(event, input.breadcrumbs);
-    if (pathDistance === null || pathDistance.distancePx > pathDistance.maxDistancePx) {
-      return createFailedVerification('failed', 'trace_goal', {
-        issue: 'goal_event_path_mismatch',
-        type: event.type,
-        roomId: event.roomId,
-        atMs: event.atMs,
-        distancePx: pathDistance?.distancePx ?? null,
-        maxDistancePx: pathDistance?.maxDistancePx ?? null,
-      });
+    if (event.type !== 'enemy') {
+      const pathDistance = getGoalEventPathDistance(event, input.breadcrumbs);
+      if (pathDistance === null || pathDistance.distancePx > pathDistance.maxDistancePx) {
+        return createFailedVerification('failed', 'trace_goal', {
+          issue: 'goal_event_path_mismatch',
+          type: event.type,
+          roomId: event.roomId,
+          atMs: event.atMs,
+          distancePx: pathDistance?.distancePx ?? null,
+          maxDistancePx: pathDistance?.maxDistancePx ?? null,
+        });
+      }
     }
 
     switch (event.type) {
