@@ -817,6 +817,59 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   font-size: 13px;
 }
 
+.sign-text-modal-panel {
+  width: min(560px, calc(100vw - 24px));
+}
+
+.sign-text-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sign-text-modal-label {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sign-text-modal-input {
+  min-height: 140px;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: rgba(10, 12, 16, 0.92);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.4;
+}
+
+.sign-text-modal-input:focus {
+  outline: none;
+  border-color: var(--accent-cool);
+  box-shadow: 0 0 0 1px rgba(126, 224, 191, 0.24);
+}
+
+.sign-text-modal-footer,
+.sign-text-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sign-text-modal-actions {
+  justify-content: flex-end;
+}
+
+.sign-text-modal-counter {
+  color: var(--text-muted);
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 @media (max-width: 700px) {
   .leaderboard-row,
   .leaderboard-row.leaderboard-global-row {

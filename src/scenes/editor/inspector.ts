@@ -8,6 +8,8 @@ import {
   getObjectById,
   type PlacedObject,
 } from '../../config';
+import { requestSignTextEdit } from '../../signs/events';
+import { canPlacedObjectHaveSignText, getPlacedObjectSignText } from '../../signs/model';
 import { type EditorEditRuntime } from './editRuntime';
 import type { EditorInspectorState } from './uiBridge';
 
@@ -220,6 +222,16 @@ export class EditorInspectorController {
       return this.handlePressurePlateConnectionClick(worldPoint.x, worldPoint.y);
     }
 
+    const clickedSign = this.editRuntime.findPlacedObjectAt(
+      worldPoint.x,
+      worldPoint.y,
+      (placed) => canPlacedObjectHaveSignText(placed),
+    );
+    if (clickedSign?.instanceId) {
+      this.openSignTextEditor(clickedSign);
+      return true;
+    }
+
     const clickedPressurePlate = this.editRuntime.findPlacedObjectAt(
       worldPoint.x,
       worldPoint.y,
@@ -261,6 +273,11 @@ export class EditorInspectorController {
   }
 
   handleObjectPlaced(placed: PlacedObject | null): void {
+    if (placed?.instanceId && canPlacedObjectHaveSignText(placed)) {
+      this.openSignTextEditor(placed);
+      return;
+    }
+
     if (placed && canPlacedObjectTriggerOtherObjects(placed)) {
       this.focusedContainerInstanceId = null;
       this.focusedPressurePlateInstanceId = placed.instanceId;
@@ -638,5 +655,19 @@ export class EditorInspectorController {
 
   private getContainerAcceptedContentsLabel(objectId: string): string {
     return objectId === 'cage' ? 'enemies' : 'collectibles';
+  }
+
+  private openSignTextEditor(placed: PlacedObject): void {
+    if (!placed.instanceId) {
+      return;
+    }
+
+    requestSignTextEdit({
+      instanceId: placed.instanceId,
+      objectId: placed.id,
+      objectLabel: getObjectById(placed.id)?.name ?? 'Sign',
+      currentText: getPlacedObjectSignText(placed) ?? '',
+      contextHint: null,
+    });
   }
 }

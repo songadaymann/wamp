@@ -984,6 +984,10 @@
           <div id="world-goal-panel-timer" class="world-goal-panel-timer">0:00.0</div>
         </div>
       </div>
+      <div id="world-sign-panel" class="world-sign-panel hidden" aria-live="polite">
+        <div id="world-sign-panel-label" class="world-sign-panel-label">SIGN</div>
+        <div id="world-sign-panel-text" class="world-sign-panel-text"></div>
+      </div>
       <button id="btn-world-hud-toggle" class="bar-btn bar-btn-small world-hud-toggle hidden" type="button">Room +</button>
       <button
         id="btn-mobile-world-stop"
@@ -1291,6 +1295,42 @@
           <button id="btn-run-rating-skip" class="bar-btn bar-btn-small" type="button">Skip</button>
           <button id="btn-run-rating-submit" class="bar-btn" type="button">Submit Rating</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sign-text-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel sign-text-modal-panel" role="dialog" aria-modal="true" aria-labelledby="sign-text-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Signs</div>
+          <h2 id="sign-text-title" class="history-modal-title">Sign Text</h2>
+          <div id="sign-text-meta" class="history-modal-meta">Players see this when they walk by.</div>
+        </div>
+        <div class="history-modal-header-actions">
+          <button id="btn-sign-text-close" class="bar-btn bar-btn-small" type="button">Close</button>
+        </div>
+      </div>
+      <div id="sign-text-error" class="history-modal-error hidden"></div>
+      <label class="sign-text-modal-field" for="sign-text-input">
+        <span class="sign-text-modal-label">Message</span>
+        <textarea
+          id="sign-text-input"
+          class="sign-text-modal-input"
+          rows="5"
+          maxlength="140"
+          placeholder="Write something players can read..."
+          spellcheck="true"
+        ></textarea>
+      </label>
+      <div class="sign-text-modal-footer">
+        <div id="sign-text-status" class="history-modal-meta">Leave it blank to keep the sign silent during play.</div>
+        <div id="sign-text-counter" class="sign-text-modal-counter">0/140</div>
+      </div>
+      <div class="sign-text-modal-actions">
+        <button id="btn-sign-text-clear" class="bar-btn bar-btn-small" type="button">Clear</button>
+        <button id="btn-sign-text-cancel" class="bar-btn bar-btn-small" type="button">Cancel</button>
+        <button id="btn-sign-text-save" class="bar-btn bar-btn-small" type="button">Save Text</button>
       </div>
     </div>
   </div>

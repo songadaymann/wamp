@@ -38,6 +38,7 @@ export interface LoadedRoomObject {
   linkedTargetRoomId: string | null;
   linkedTargetInstanceId: string | null;
   containedObjectId: string | null;
+  signText: string | null;
   countsTowardGoals: boolean;
   config: GameObjectConfig;
   sprite: Phaser.GameObjects.Sprite;
@@ -139,6 +140,7 @@ interface CreateLiveObjectEntryOptions {
   linkedTargetRoomId: string | null;
   linkedTargetInstanceId: string | null;
   containedObjectId: string | null;
+  signText: string | null;
   countsTowardGoals: boolean;
 }
 
@@ -203,6 +205,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         linkedTargetRoomId: placedObject.triggerTargetInstanceId ? loadedRoom.room.id : null,
         linkedTargetInstanceId: placedObject.triggerTargetInstanceId ?? null,
         containedObjectId: placedObject.containedObjectId ?? null,
+        signText: placedObject.signText ?? null,
         countsTowardGoals: true,
       });
       if (liveObject) {
@@ -253,6 +256,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       linkedTargetRoomId,
       linkedTargetInstanceId,
       containedObjectId,
+      signText,
       countsTowardGoals,
     } = options;
     const sprite = this.options.scene.add.sprite(
@@ -324,6 +328,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       linkedTargetRoomId,
       linkedTargetInstanceId,
       containedObjectId,
+      signText,
       countsTowardGoals,
       config,
       sprite,
@@ -897,6 +902,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       linkedTargetRoomId: null,
       linkedTargetInstanceId: null,
       containedObjectId: null,
+      signText: null,
       countsTowardGoals: options.countsTowardGoals,
     });
     if (!liveObject) {
@@ -1245,6 +1251,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       linkedTargetRoomId: null,
       linkedTargetInstanceId: null,
       containedObjectId: null,
+      signText: null,
       countsTowardGoals: false,
       config: CANNON_BULLET_CONFIG,
       sprite,

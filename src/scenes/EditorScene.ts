@@ -1421,6 +1421,14 @@ export class EditorScene extends Phaser.Scene {
     this.inspectorController.clearFocusedContainerContents();
   }
 
+  setPlacedSignText(instanceId: string, text: string | null): boolean {
+    const updated = this.editRuntime.setSignText(instanceId, text);
+    if (updated) {
+      this.renderEditorUi();
+    }
+    return updated;
+  }
+
   setGoalType(nextType: RoomGoalType | null): void {
     this.toolController.setGoalType(nextType);
   }

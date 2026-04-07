@@ -25,6 +25,7 @@ import {
   normalizeRoomMusic,
   type RoomMusic,
 } from '../music/model';
+import { canPlacedObjectHaveSignText, normalizeSignText } from '../signs/model';
 
 export interface RoomCoordinates {
   x: number;
@@ -256,6 +257,9 @@ function normalizePlacedObject(
       typeof placed.containedObjectId === 'string' && placed.containedObjectId.trim()
         ? placed.containedObjectId
         : null,
+    signText: canPlacedObjectHaveSignText({ id: placed.id })
+      ? normalizeSignText(placed.signText)
+      : null,
   };
 
   if (
@@ -298,6 +302,7 @@ function clonePlacedObjects(placedObjects: PlacedObject[]): PlacedObject[] {
       ...placed,
       triggerTargetInstanceId: validTarget ? target : null,
       containedObjectId: validContainedObjectId ? containedObjectId : null,
+      signText: canPlacedObjectHaveSignText(placed) ? normalizeSignText(placed.signText) : null,
     };
   });
 }

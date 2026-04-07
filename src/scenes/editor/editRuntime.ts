@@ -50,6 +50,7 @@ import {
   type RoomMusic,
 } from '../../music/model';
 import type { RoomCoordinates, RoomSnapshot, RoomSpawnPoint, RoomTileData } from '../../persistence/roomRepository';
+import { canPlacedObjectHaveSignText, normalizeSignText } from '../../signs/model';
 
 interface TileAction {
   layer: LayerName;
@@ -838,6 +839,7 @@ export class EditorEditRuntime {
       layer: editorState.activeLayer,
       triggerTargetInstanceId: null,
       containedObjectId: null,
+      signText: null,
     };
 
     const previous = this.clonePlacedObjects();
@@ -1075,6 +1077,46 @@ export class EditorEditRuntime {
     });
     this.redoStack = [];
     this.rebuildObjectSprites();
+    this.markRoomDirty();
+    return true;
+  }
+
+  setSignText(
+    signInstanceId: string,
+    signText: string | null,
+  ): boolean {
+    const placedObjects = this.host.getPlacedObjects();
+    const signIndex = placedObjects.findIndex((placed) => placed.instanceId === signInstanceId);
+    if (signIndex < 0) {
+      return false;
+    }
+
+    const sign = placedObjects[signIndex];
+    if (!canPlacedObjectHaveSignText(sign)) {
+      return false;
+    }
+
+    const normalizedText = normalizeSignText(signText);
+    const previous = this.clonePlacedObjects();
+    const previousText = normalizeSignText(previous[signIndex]?.signText);
+    if (previousText === normalizedText) {
+      return true;
+    }
+
+    const next = previous.map((placed, index) =>
+      index === signIndex
+        ? {
+            ...placed,
+            signText: normalizedText,
+          }
+        : placed
+    );
+    this.host.setPlacedObjects(next);
+    this.undoStack.push({
+      kind: 'objects',
+      action: { previous, next: this.clonePlacedObjects(next) },
+    });
+    this.redoStack = [];
     this.markRoomDirty();
     return true;
   }

@@ -359,6 +359,38 @@ body[data-app-mode="play-world"]:not([data-coarse-pointer="true"]) #world-hud .w
   white-space: nowrap;
 }
 
+.world-sign-panel {
+  position: absolute;
+  left: 50%;
+  bottom: calc(84px + var(--safe-bottom));
+  z-index: 10;
+  width: min(460px, calc(100vw - 32px - var(--safe-left) - var(--safe-right)));
+  padding: 14px 16px;
+  border-radius: 0;
+  border: 2px solid #1c0911;
+  background: #fff3db;
+  box-shadow: 0 12px 28px rgba(28, 9, 17, 0.22);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  pointer-events: none;
+}
+
+.world-sign-panel-label {
+  display: none;
+}
+
+.world-sign-panel-text {
+  color: #1c0911;
+  font-family: 'Super Mario Bros. NES', 'Early GameBoy', monospace;
+  font-size: 14px;
+  line-height: 1.7;
+  letter-spacing: 0.03em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .room-title-input {
   width: 100%;
 }
@@ -883,6 +915,18 @@ body[data-app-mode="play-world"]:not([data-coarse-pointer="true"]) #world-hud .w
 .mobile-goal-footer[data-goal-panel-tone='failed'] .mobile-goal-footer-goal,
 .mobile-goal-footer[data-goal-panel-tone='failed'] .mobile-goal-footer-timer {
   color: #ff9c91;
+}
+
+@media (max-width: 900px) {
+  .world-sign-panel {
+    bottom: calc(156px + var(--safe-bottom));
+    width: calc(100vw - 24px - var(--safe-left) - var(--safe-right));
+    padding: 10px 12px;
+  }
+
+  .world-sign-panel-text {
+    font-size: 13px;
+  }
 }
 
 .mobile-editor-tab,

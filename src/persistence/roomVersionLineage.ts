@@ -6,6 +6,7 @@ import {
   type PlacedObject,
 } from '../config';
 import { normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
+import { getPlacedObjectSignText } from '../signs/model';
 import type { RoomSnapshot, RoomVersionRecord } from './roomModel';
 
 type CanonicalGoalPayload =
@@ -41,6 +42,7 @@ type CanonicalPlacedObjectPayload = {
   layer: LayerName;
   facing: 'left' | 'right' | 'none';
   containedObjectId: string | null;
+  signText: string | null;
   triggerTarget: string | null;
 };
 
@@ -248,6 +250,7 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
       id: placed.id,
       instanceId: getPlacedObjectInstanceId(placed, index),
       layer: getPlacedObjectLayer(placed),
+      signText: getPlacedObjectSignText(placed),
       signature,
       triggerTargetInstanceId:
         typeof placed.triggerTargetInstanceId === 'string' && placed.triggerTargetInstanceId.trim().length > 0
@@ -275,6 +278,7 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
       layer: placed.layer,
       facing: placed.facing,
       containedObjectId: placed.containedObjectId,
+      signText: placed.signText,
       triggerTarget: placed.triggerTargetInstanceId
         ? canonicalIdentityByInstanceId.get(placed.triggerTargetInstanceId) ?? null
         : null,
@@ -295,6 +299,7 @@ function buildPlacedObjectSignature(placed: PlacedObject): string {
       typeof placed.containedObjectId === 'string' && placed.containedObjectId.trim().length > 0
         ? placed.containedObjectId
         : null,
+    signText: getPlacedObjectSignText(placed),
   });
 }
 
@@ -309,6 +314,7 @@ function compareCanonicalPlacedObjects(
     left.layer.localeCompare(right.layer) ||
     left.facing.localeCompare(right.facing) ||
     (left.containedObjectId ?? '').localeCompare(right.containedObjectId ?? '') ||
+    (left.signText ?? '').localeCompare(right.signText ?? '') ||
     (left.triggerTarget ?? '').localeCompare(right.triggerTarget ?? '')
   );
 }
@@ -321,6 +327,7 @@ function compareNormalizedPlacedObjects(
     layer: LayerName;
     facing: CanonicalPlacedObjectPayload['facing'];
     containedObjectId: string | null;
+    signText: string | null;
     signature: string;
   },
   right: {
@@ -330,6 +337,7 @@ function compareNormalizedPlacedObjects(
     layer: LayerName;
     facing: CanonicalPlacedObjectPayload['facing'];
     containedObjectId: string | null;
+    signText: string | null;
     signature: string;
   }
 ): number {
@@ -340,6 +348,7 @@ function compareNormalizedPlacedObjects(
     left.id.localeCompare(right.id) ||
     left.layer.localeCompare(right.layer) ||
     left.facing.localeCompare(right.facing) ||
-    (left.containedObjectId ?? '').localeCompare(right.containedObjectId ?? '')
+    (left.containedObjectId ?? '').localeCompare(right.containedObjectId ?? '') ||
+    (left.signText ?? '').localeCompare(right.signText ?? '')
   );
 }

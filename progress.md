@@ -57,6 +57,30 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Sign text modal + nearby readout on April 7, 2026:
+  - started a clean `main`-based branch/worktree for this pass:
+    - branch: `feature/sign-text-modal-2026-04-07`
+    - worktree: `/private/tmp/wamp-sign-text-modal-2026-04-07`
+  - room/object data changes:
+    - `PlacedObject` now supports optional `signText`
+    - sign text is normalized and capped to `140` chars
+    - room snapshot cloning / normalization / version-lineage fingerprints now preserve sign text so sign edits count as real room changes
+  - editor authoring changes:
+    - placing a `sign` or `sign_arrow` opens a dedicated sign-text modal
+    - clicking an existing sign in object mode reopens the same modal for editing
+    - modal supports clear / save flow and routes through new `setPlacedSignText(...)` scene bridge methods in both single-room and course room editors
+  - play-mode changes:
+    - live overworld objects now carry sign text
+    - new sign controller finds the nearest authored sign while in play mode
+    - HUD now renders a sign panel that shows the nearby sign label plus authored text when the player walks by
+  - validation:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - targeted local Playwright probe against `?previewSmoke=1` confirmed:
+      - synthetic editor sign placement opens the modal
+      - saved sign text persists into the room snapshot
+      - entering play mode exposes `activeSign.text === "Hello from sign"` in overworld debug state
+
 - XP / ratings / trust / badges merge to main on April 6, 2026:
   - merged `feature/progression-xp-ratings-trust-badges` into `main`
   - main now includes:

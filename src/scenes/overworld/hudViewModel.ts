@@ -22,6 +22,7 @@ import type {
 } from './hud';
 import type { ActiveCourseRunState } from './courseRuns';
 import type { GoalRunState } from './goalRuns';
+import type { ActiveSignState } from './signPosts';
 
 export type SelectedCellState = 'published' | 'draft' | 'frontier' | 'empty';
 
@@ -61,6 +62,7 @@ export interface BuildOverworldHudViewModelOptions {
   transientStatus: string | null;
   statusOverride?: string;
   mode: 'browse' | 'play';
+  activeSignState: ActiveSignState | null;
   goalPersistentStatusText: string | null;
   rankingMode: LeaderboardRankingMode | null;
   roomTop: RoomLeaderboardEntry | null;
@@ -119,6 +121,7 @@ export function buildOverworldHudViewModel(
     transientStatus,
     statusOverride,
     mode,
+    activeSignState,
     goalPersistentStatusText,
     rankingMode,
     roomTop,
@@ -399,5 +402,8 @@ export function buildOverworldHudViewModel(
       : activeRoomGoalRun
         ? getPlayGoalProgressText(activeRoomGoalRun)
         : '',
+    signPanelVisible: mode === 'play' && Boolean(activeSignState?.text),
+    signPanelLabelText: '',
+    signPanelText: activeSignState?.text ?? '',
   };
 }
