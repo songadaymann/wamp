@@ -367,7 +367,7 @@ function renderProgressionAdmin(): void {
         ? progressionResultsSnapshot
             .map(
               (item) => `
-                <button class="result-button" type="button" data-user-id="${escapeHtml(item.userId)}">
+                <button class="result-button" type="button" data-progression-user-id="${escapeHtml(item.userId)}">
                   <strong>${escapeHtml(item.displayName)}</strong>
                   <div class="meta">${escapeHtml(item.email ?? item.userId)}</div>
                   <div class="meta">Trust ${escapeHtml(item.trust.effectiveTier)} (${formatNumber(
@@ -384,15 +384,7 @@ function renderProgressionAdmin(): void {
             .join('')
         : '<div class="meta">No search results yet.</div>';
 
-    for (const button of progressionResults.querySelectorAll<HTMLButtonElement>('[data-user-id]')) {
-      button.addEventListener('click', () => {
-        const userId = button.dataset.userId?.trim();
-        if (!userId) {
-          return;
-        }
-        void loadProgressionUser(userId);
-      });
-    }
+    wireProgressionLookupButtons(progressionResults);
   }
 
   if (progressionSelected) {
@@ -640,12 +632,14 @@ function renderActivity(): void {
             <span class="label">${escapeHtml(renderEventKindLabel(event.kind))}</span>
             <span class="meta">${escapeHtml(formatTimestamp(event.at))}</span>
           </div>
-          <div>${escapeHtml(renderEventSummary(event))}</div>
+          <div>${renderEventSummaryMarkup(event)}</div>
           <div class="meta">${escapeHtml(renderEventDetail(event))}</div>
         </article>
       `
     )
     .join('');
+
+  wireProgressionLookupButtons(activityFeed);
 }
 
 function renderPartykitSummary(): void {
@@ -787,6 +781,44 @@ function renderEventSummary(event: LaunchStatsRecentEvent): string {
   }
 }
 
+function renderEventSummaryMarkup(event: LaunchStatsRecentEvent): string {
+  const actorMarkup = renderEventActorMarkup(event);
+  return `${actorMarkup} ${escapeHtml(renderEventSummaryBody(event))}`;
+}
+
+function renderEventActorMarkup(event: LaunchStatsRecentEvent): string {
+  const actor = escapeHtml(event.actorDisplayName || 'Unknown');
+  if (!event.actorUserId) {
+    return `<span class="activity-actor">${actor}</span>`;
+  }
+
+  return `<button class="activity-actor-button" type="button" data-progression-user-id="${escapeHtml(event.actorUserId)}">${actor}</button>`;
+}
+
+function renderEventSummaryBody(event: LaunchStatsRecentEvent): string {
+  const roomLabel = formatRoomLabel(event);
+
+  switch (event.kind) {
+    case 'room_claim':
+      return `claimed ${roomLabel}.`;
+    case 'room_publish':
+      return `published ${roomLabel}${event.roomVersion ? ` v${event.roomVersion}` : ''}.`;
+    case 'room_attempt_burst': {
+      const attempts = event.attemptCount ?? 0;
+      const completions = event.completedCount ?? 0;
+      const completionSuffix =
+        completions > 0 ? `, including ${completions} completion${completions === 1 ? '' : 's'}` : '';
+      return `did ${attempts} attempt${attempts === 1 ? '' : 's'} in ${roomLabel}${completionSuffix}.`;
+    }
+    case 'room_run_finish': {
+      const result = (event.result ?? 'finished').toLowerCase();
+      return `${result} ${roomLabel}${event.roomVersion ? ` v${event.roomVersion}` : ''}.`;
+    }
+    default:
+      return `did something in ${roomLabel}.`;
+  }
+}
+
 function renderEventDetail(event: LaunchStatsRecentEvent): string {
   const parts: string[] = [];
   if (event.result) {
@@ -890,6 +922,23 @@ function formatOverrideSummary(user: AdminProgressionUserCapsResponse): string {
   ].filter((value): value is string => Boolean(value));
 
   return parts.join(' · ');
+}
+
+function wireProgressionLookupButtons(root: ParentNode): void {
+  for (const button of root.querySelectorAll<HTMLButtonElement>('[data-progression-user-id]')) {
+    if (button.dataset.progressionLookupBound === '1') {
+      continue;
+    }
+
+    button.dataset.progressionLookupBound = '1';
+    button.addEventListener('click', () => {
+      const userId = button.dataset.progressionUserId?.trim();
+      if (!userId) {
+        return;
+      }
+      void loadProgressionUser(userId);
+    });
+  }
 }
 
 function escapeHtml(value: string): string {
