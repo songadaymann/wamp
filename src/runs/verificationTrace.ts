@@ -1,4 +1,5 @@
 export const RANKED_RUN_TRACE_SCHEMA_VERSION = 1;
+export const RANKED_RUN_TRACE_BREADCRUMB_INTERVAL_MS = 250;
 
 export type RankedRunTraceControl = 'moveX' | 'moveY' | 'jump';
 

@@ -1,5 +1,6 @@
 import type { RoomCoordinates } from '../../persistence/roomModel';
 import {
+  RANKED_RUN_TRACE_BREADCRUMB_INTERVAL_MS,
   RANKED_RUN_TRACE_SCHEMA_VERSION,
   type RankedRunTraceBreadcrumb,
   type RankedRunTraceGoalEvent,
@@ -7,8 +8,6 @@ import {
   type RankedRunTraceRoomTransition,
   type RankedRunVerificationTrace,
 } from '../../runs/verificationTrace';
-
-const BREADCRUMB_INTERVAL_MS = 250;
 
 export interface RankedRunTraceBinding {
   verificationSchemaVersion: number;
@@ -118,7 +117,8 @@ export class RankedRunTraceRecorder {
 
     if (
       this.active.breadcrumbs.length === 0 ||
-      this.active.elapsedMs - this.active.lastBreadcrumbAtMs >= BREADCRUMB_INTERVAL_MS
+      this.active.elapsedMs - this.active.lastBreadcrumbAtMs >=
+        RANKED_RUN_TRACE_BREADCRUMB_INTERVAL_MS
     ) {
       this.active.breadcrumbs.push({
         atMs: Math.round(this.active.elapsedMs),

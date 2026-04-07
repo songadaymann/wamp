@@ -7,6 +7,7 @@ import type { RoomCoordinates, RoomSnapshot } from '../../../persistence/roomMod
 import type { LeaderboardRankingMode } from '../../../runs/model';
 import { compareLeaderboardEntries } from '../../../runs/scoring';
 import {
+  RANKED_RUN_TRACE_BREADCRUMB_INTERVAL_MS,
   RANKED_RUN_TRACE_SCHEMA_VERSION,
   type RankedRunTraceBreadcrumb,
   type RankedRunTraceGoalEvent,
@@ -28,6 +29,9 @@ const MAX_HORIZONTAL_SPEED_PX_PER_SEC = 900;
 const MAX_VERTICAL_SPEED_PX_PER_SEC = 1_500;
 const MAX_TOTAL_SPEED_PX_PER_SEC = 1_800;
 const POSITION_SLACK_PX = 80;
+const BREADCRUMB_INTERVAL_EARLY_SLACK_MS = 40;
+const MIN_BREADCRUMB_INTERVAL_MS =
+  RANKED_RUN_TRACE_BREADCRUMB_INTERVAL_MS - BREADCRUMB_INTERVAL_EARLY_SLACK_MS;
 
 export type RunVerificationStatus = 'not_required' | 'passed' | 'failed' | 'timeout';
 export type RunVerificationTriggerReason = 'take_top_1' | 'enter_top_10' | 'record_gap';
@@ -456,6 +460,15 @@ function verifyPath(
       return createFailedVerification('failed', 'trace_time', {
         field: 'breadcrumbs',
         atIndex: index,
+      });
+    }
+    if (deltaMs < MIN_BREADCRUMB_INTERVAL_MS) {
+      return createFailedVerification('failed', 'trace_time', {
+        field: 'breadcrumbs',
+        issue: 'cadence_too_fast',
+        atIndex: index,
+        deltaMs,
+        minimumDeltaMs: MIN_BREADCRUMB_INTERVAL_MS,
       });
     }
 
