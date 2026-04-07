@@ -24,6 +24,7 @@ export interface AuthSessionResponse {
   authenticated: boolean;
   user: AuthUser | null;
   source?: RequestAuthSource | null;
+  walletProjectId?: string | null;
   scopes?: ApiTokenScope[] | null;
   principal?: RequestPrincipal | null;
   agent?: AgentAccount | null;

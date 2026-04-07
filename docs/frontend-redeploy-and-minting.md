@@ -11,7 +11,7 @@ CLI shortcuts now available from the repo root:
 - `npm run pages:deploy:prod`
   - same clean-`main` preflight, but redeploys only the `wampland` Pages frontend
 - `npm run smoke:prod`
-  - checks `wamp.land`, verifies the frontend API target, and verifies JSON health/session responses from `api.wamp.land`
+  - checks `wamp.land`, verifies the frontend API target, verifies JSON health/session responses from `api.wamp.land`, and fails if the API session payload no longer exposes a wallet project id
 
 Best-guess stable setup for the Pages frontend:
 
@@ -22,9 +22,14 @@ Best-guess stable setup for the Pages frontend:
 - Clear build cache on the first retry after dependency or env changes
 - Note: there is also a separate Pages project named `wamp`, but it is not the project currently attached to `wamp.land`
 
-Frontend env vars Pages should have:
+Recommended source of truth for wallet sign-in:
 
-- `VITE_REOWN_PROJECT_ID=<your reown project id>`
+- set `REOWN_PROJECT_ID=<your reown project id>` on the Worker environment
+- `/api/auth/session` now returns that public id so deployed frontends do not depend on whoever ran `vite build`
+- keep `VITE_REOWN_PROJECT_ID` only as an optional local/frontend build override for development or unusual Pages-only builds
+
+Frontend env vars Pages should still have when needed:
+
 - `VITE_PARTYKIT_HOST=everybodys-platformer-presence.songadaymann.partykit.dev`
 
 Frontend API base guidance:
@@ -70,7 +75,7 @@ What is required to test real minting:
 - a Base Sepolia RPC URL
 - a wallet with a little Base Sepolia ETH for the actual mint test
 - remote Worker env configured with the deployed contract
-- frontend wallet connect env already configured (`VITE_REOWN_PROJECT_ID`)
+- remote Worker wallet project id configured (`REOWN_PROJECT_ID`)
 
 ### 1. Deploy the contract
 

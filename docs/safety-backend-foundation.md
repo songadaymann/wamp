@@ -142,9 +142,13 @@ For safety branches, set branch preview env vars in the `wampland` Pages project
 - `VITE_ROOM_API_BASE_URL=https://<your-safety-worker>.workers.dev`
 - `VITE_PARTYKIT_HOST=<your-safety-partykit>.partykit.dev`
 - `VITE_PARTYKIT_PARTY=main`
-- `VITE_REOWN_PROJECT_ID=<existing project id>`
 
 Keep production Pages env unchanged.
+
+Wallet sign-in for safety previews should come from the safety Worker config instead:
+
+- set `REOWN_PROJECT_ID=<existing project id>` on the safety Worker
+- the preview frontend will pick it up from `GET /api/auth/session`
 
 ## Verification Commands
 

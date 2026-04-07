@@ -40,6 +40,14 @@ assert(
   `Expected JSON from auth session, got ${sessionContentType || 'unknown content type'}.`
 );
 const sessionJson = await sessionResponse.json();
+const sessionWalletProjectId =
+  typeof sessionJson?.walletProjectId === 'string'
+    ? sessionJson.walletProjectId.trim()
+    : '';
+assert(
+  sessionWalletProjectId.length > 0,
+  'Auth session did not expose a wallet project id. Configure REOWN_PROJECT_ID on the API Worker.'
+);
 
 const healthResponse = await fetch(`${API_BASE_URL}/api/health`, {
   headers: {
@@ -80,6 +88,7 @@ const summary = {
   mainBundleContainsPartyKitHost,
   expectedPartykitHost: EXPECTED_PARTYKIT_HOST,
   sessionAuthenticated: sessionJson?.authenticated ?? null,
+  sessionWalletProjectConfigured: sessionWalletProjectId.length > 0,
   health: healthJson,
   checkedAt: new Date().toISOString(),
 };
