@@ -310,6 +310,14 @@
         gap: 8px;
       }
 
+      .activity-summary {
+        line-height: 1.5;
+      }
+
+      .activity-detail {
+        line-height: 1.5;
+      }
+
       .activity-head {
         display: flex;
         justify-content: space-between;
@@ -423,7 +431,7 @@
 
       <section class="panel stack">
         <h2>Recent Activity</h2>
-        <div class="meta">Last 7 days. Play.fun-only and playfun-* fallback activity excluded.</div>
+        <div class="meta">Last 7 days, grouped by person and activity type. Play.fun-only and playfun-* fallback activity excluded.</div>
         <div id="activity-grid" class="grid cards"></div>
         <div id="activity-feed" class="activity-feed"></div>
       </section>
