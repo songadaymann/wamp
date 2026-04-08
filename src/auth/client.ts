@@ -33,6 +33,7 @@ export interface AuthDebugState {
   walletConnected: boolean;
   walletAddress: string | null;
   walletProjectConfigured: boolean;
+  walletProjectSource: 'build' | 'runtime' | 'missing';
   storageBackend: 'auto' | 'local' | 'remote';
   testResetEnabled: boolean;
   chatModeration: ChatModerationViewer;
@@ -73,6 +74,7 @@ const state: AuthDebugState = {
   walletConnected: false,
   walletAddress: null,
   walletProjectConfigured: false,
+  walletProjectSource: 'missing',
   storageBackend: getStorageBackend(),
   testResetEnabled: isTestResetEnabled(),
   chatModeration: {
@@ -103,6 +105,7 @@ let displayNameCheckTimer: number | null = null;
 let displayNameCheckToken = 0;
 let lastCheckedDisplayName = '';
 let lastDisplayNameAvailability: DisplayNameAvailabilityResponse | null = null;
+let runtimeWalletProjectId = '';
 
 const FEATURED_REOWN_WALLET_IDS = [
   'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96', // MetaMask
@@ -113,6 +116,7 @@ const FEATURED_REOWN_WALLET_IDS = [
 
 const DEFAULT_GUEST_STATUS = 'Use email or wallet.';
 const DEFAULT_SIGN_IN_PROMPT_STATUS = 'Sign in to continue.';
+const WALLET_NOT_CONFIGURED_MESSAGE = 'Wallet sign-in is not configured on this deployment.';
 let guestPanelAutoOpened = false;
 
 export async function setupAuthUi(): Promise<void> {
@@ -239,7 +243,7 @@ export async function sendPreparedWalletTransaction(
   chain: RoomMintChainInfo
 ): Promise<{ hash: string; from: string }> {
   if (!state.walletProjectConfigured) {
-    throw new Error('Wallet connect is not configured.');
+    throw new Error(WALLET_NOT_CONFIGURED_MESSAGE);
   }
 
   const walletModal = await ensureWalletModal();
@@ -273,21 +277,13 @@ export async function sendPreparedWalletTransaction(
 }
 
 async function initializeWalletConnect(): Promise<void> {
-  const projectId = getWalletProjectId();
-  state.walletProjectConfigured = Boolean(projectId);
-
-  if (!projectId) {
-    state.status =
-      'Add VITE_REOWN_PROJECT_ID or VITE_WALLET_CONNECT_PROJECT_ID to env.local to enable wallet sign-in.';
-    return;
-  }
-
-  state.status = DEFAULT_GUEST_STATUS;
+  refreshWalletProjectConfiguration();
 }
 
 async function refreshSession(): Promise<void> {
   try {
     const session = await apiRequest<AuthSessionResponse>('/api/auth/session');
+    setRuntimeWalletProjectId(session.walletProjectId);
     state.authenticated = session.authenticated;
     state.user = session.user;
     state.source = session.source ?? null;
@@ -544,8 +540,7 @@ async function checkDisplayNameAvailability(displayName: string): Promise<void> 
 
 async function handleWalletButton(): Promise<void> {
   if (!state.walletProjectConfigured) {
-    state.status =
-      'Wallet connect is not configured. Add the project ID to env.local and restart Vite.';
+    state.status = WALLET_NOT_CONFIGURED_MESSAGE;
     renderAuthUi();
     return;
   }
@@ -679,7 +674,7 @@ async function ensureWalletModal(): Promise<AppKit> {
 
   const projectId = getWalletProjectId();
   if (!projectId) {
-    throw new Error('Wallet connect is not configured.');
+    throw new Error(WALLET_NOT_CONFIGURED_MESSAGE);
   }
 
   walletBootstrapPromise = (async () => {
@@ -1026,11 +1021,38 @@ function initializeStatusFromQuery(): void {
 }
 
 function getWalletProjectId(): string {
+  const bundledProjectId = getBundledWalletProjectId();
+  return bundledProjectId || runtimeWalletProjectId;
+}
+
+function getBundledWalletProjectId(): string {
   return (
     import.meta.env.VITE_REOWN_PROJECT_ID?.trim() ||
     import.meta.env.VITE_WALLET_CONNECT_PROJECT_ID?.trim() ||
     ''
   );
+}
+
+function setRuntimeWalletProjectId(projectId: string | null | undefined): void {
+  runtimeWalletProjectId = projectId?.trim() ?? '';
+  refreshWalletProjectConfiguration();
+}
+
+function refreshWalletProjectConfiguration(): void {
+  state.walletProjectConfigured = Boolean(getWalletProjectId());
+  state.walletProjectSource = getWalletProjectIdSource();
+}
+
+function getWalletProjectIdSource(): 'build' | 'runtime' | 'missing' {
+  if (getBundledWalletProjectId()) {
+    return 'build';
+  }
+
+  if (runtimeWalletProjectId) {
+    return 'runtime';
+  }
+
+  return 'missing';
 }
 
 function shortenAddress(address: string): string {

@@ -291,7 +291,7 @@ async function handleAdminRunVerificationAudit(
       id: number;
       attempt_id: string;
       run_kind: 'room' | 'course';
-      status: 'passed' | 'failed' | 'timeout';
+      status: 'passed' | 'failed' | 'timeout' | 'skipped';
       trigger_reason: string;
       verification_reason: string | null;
       summary_json: string | null;

@@ -9,6 +9,7 @@ const SNAPSHOT_TABLES = [
   'agents',
   'api_tokens',
   'chat_admins',
+  'chat_ban_audit',
   'chat_bans',
   'chat_messages',
   'course_room_refs',

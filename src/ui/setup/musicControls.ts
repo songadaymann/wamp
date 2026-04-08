@@ -1,7 +1,5 @@
 import Phaser from 'phaser';
 import type {
-  RoomMusicKeyMode,
-  RoomMusicKeyTonic,
   RoomPatternInstrumentId,
   RoomPatternPitchMode,
 } from '../../music/model';
@@ -42,41 +40,6 @@ function withComposerMode(
   callback(value);
 }
 
-function withKeyTonic(
-  value: string | undefined,
-  callback: (tonic: RoomMusicKeyTonic) => void,
-): void {
-  if (
-    value !== 'C' &&
-    value !== 'C#' &&
-    value !== 'D' &&
-    value !== 'D#' &&
-    value !== 'E' &&
-    value !== 'F' &&
-    value !== 'F#' &&
-    value !== 'G' &&
-    value !== 'G#' &&
-    value !== 'A' &&
-    value !== 'A#' &&
-    value !== 'B'
-  ) {
-    return;
-  }
-
-  callback(value);
-}
-
-function withKeyMode(
-  value: string | undefined,
-  callback: (mode: RoomMusicKeyMode) => void,
-): void {
-  if (value !== 'major' && value !== 'minor') {
-    return;
-  }
-
-  callback(value);
-}
-
 export function setupRoomMusicControls(
   game: Phaser.Game,
   doc: Document = document,
@@ -92,13 +55,16 @@ export function setupRoomMusicControls(
   const swingDownButton = doc.getElementById('btn-editor-music-swing-down');
   const swingUpButton = doc.getElementById('btn-editor-music-swing-up');
   const replaceLegacyButton = doc.getElementById('btn-editor-music-replace-legacy');
-  const keyTonicSelect = doc.getElementById('editor-music-key-tonic-select') as HTMLSelectElement | null;
-  const keyModeSelect = doc.getElementById('editor-music-key-mode-select') as HTMLSelectElement | null;
   const phraseNewButton = doc.getElementById('btn-editor-music-phrase-new');
   const phraseEditButton = doc.getElementById('btn-editor-music-phrase-edit');
   const phraseSaveButton = doc.getElementById('btn-editor-music-phrase-save');
+  const phraseSaveAsButton = doc.getElementById('btn-editor-music-phrase-save-as');
   const phraseDeleteButton = doc.getElementById('btn-editor-music-phrase-delete');
   const phraseNameInput = doc.getElementById('editor-music-phrase-name-input') as HTMLInputElement | null;
+  const phraseSavePromptCloseButton = doc.getElementById('btn-editor-music-phrase-save-close');
+  const phraseSavePromptCancelButton = doc.getElementById('btn-editor-music-phrase-save-cancel');
+  const phraseSavePromptConfirmButton = doc.getElementById('btn-editor-music-phrase-save-confirm');
+  const phraseSavePromptInput = doc.getElementById('editor-music-phrase-save-name-input') as HTMLInputElement | null;
   const libraryRefreshButton = doc.getElementById('btn-editor-music-library-refresh');
   const libraryMoreButton = doc.getElementById('btn-editor-music-library-more');
   const arrangementClearButton = doc.getElementById('btn-editor-music-arrangement-clear-slot');
@@ -230,22 +196,6 @@ export function setupRoomMusicControls(
     });
   });
 
-  keyTonicSelect?.addEventListener('change', () => {
-    withKeyTonic(keyTonicSelect.value, (tonic) => {
-      withActiveEditorScene(game, (scene) => {
-        scene.setRoomMusicKeyTonic?.(tonic);
-      });
-    });
-  });
-
-  keyModeSelect?.addEventListener('change', () => {
-    withKeyMode(keyModeSelect.value, (mode) => {
-      withActiveEditorScene(game, (scene) => {
-        scene.setRoomMusicKeyMode?.(mode);
-      });
-    });
-  });
-
   phraseNewButton?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
       const result = scene.startNewRoomMusicPhrase?.();
@@ -297,6 +247,12 @@ export function setupRoomMusicControls(
     });
   });
 
+  phraseSaveAsButton?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.saveAsActiveRoomMusicPhrase?.();
+    });
+  });
+
   phraseDeleteButton?.addEventListener('click', () => {
     if (!window.confirm('Delete this phrase? This only removes your saved phrase entry.')) {
       return;
@@ -304,6 +260,41 @@ export function setupRoomMusicControls(
 
     withActiveEditorScene(game, (scene) => {
       void scene.deleteActiveRoomMusicPhrase?.();
+    });
+  });
+
+  phraseSavePromptInput?.addEventListener('input', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.setRoomMusicPhraseSavePromptName?.(phraseSavePromptInput.value);
+    });
+  });
+
+  phraseSavePromptInput?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') {
+      return;
+    }
+
+    event.preventDefault();
+    withActiveEditorScene(game, (scene) => {
+      void scene.confirmRoomMusicPhraseSavePrompt?.();
+    });
+  });
+
+  phraseSavePromptCloseButton?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.closeRoomMusicPhraseSavePrompt?.();
+    });
+  });
+
+  phraseSavePromptCancelButton?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      scene.closeRoomMusicPhraseSavePrompt?.();
+    });
+  });
+
+  phraseSavePromptConfirmButton?.addEventListener('click', () => {
+    withActiveEditorScene(game, (scene) => {
+      void scene.confirmRoomMusicPhraseSavePrompt?.();
     });
   });
 

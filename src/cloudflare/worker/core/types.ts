@@ -32,6 +32,10 @@ export interface Env {
   AUTH_DEBUG_MAGIC_LINKS?: string;
   AUTH_TRUSTED_REDIRECT_HOSTS?: string;
   APP_BASE_URL?: string;
+  REOWN_PROJECT_ID?: string;
+  VITE_REOWN_PROJECT_ID?: string;
+  WALLET_CONNECT_PROJECT_ID?: string;
+  VITE_WALLET_CONNECT_PROJECT_ID?: string;
   ENABLE_TEST_RESET?: string;
   ROOM_DAILY_CLAIM_LIMIT?: string;
   PLAYFUN_ROOM_DAILY_CLAIM_LIMIT?: string;

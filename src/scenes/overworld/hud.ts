@@ -129,6 +129,9 @@ export interface OverworldHudViewModel {
   goalPanelGoalText: string;
   goalPanelTimerText: string;
   goalPanelProgressText: string;
+  signPanelVisible: boolean;
+  signPanelLabelText: string;
+  signPanelText: string;
 }
 
 export interface OverworldOnlineRosterViewEntry {
@@ -191,6 +194,9 @@ export class OverworldHudBridge {
   private readonly goalPanelGoalEl: HTMLElement | null;
   private readonly goalPanelTimerEl: HTMLElement | null;
   private readonly goalPanelProgressEl: HTMLElement | null;
+  private readonly signPanelEl: HTMLElement | null;
+  private readonly signPanelLabelEl: HTMLElement | null;
+  private readonly signPanelTextEl: HTMLElement | null;
   private readonly mobileGoalFooterEl: HTMLElement | null;
   private readonly mobileGoalFooterGoalEl: HTMLElement | null;
   private readonly mobileGoalFooterProgressEl: HTMLElement | null;
@@ -408,6 +414,9 @@ export class OverworldHudBridge {
     this.goalPanelGoalEl = this.doc.getElementById('world-goal-panel-goal');
     this.goalPanelTimerEl = this.doc.getElementById('world-goal-panel-timer');
     this.goalPanelProgressEl = this.doc.getElementById('world-goal-panel-progress');
+    this.signPanelEl = this.doc.getElementById('world-sign-panel');
+    this.signPanelLabelEl = this.doc.getElementById('world-sign-panel-label');
+    this.signPanelTextEl = this.doc.getElementById('world-sign-panel-text');
     this.mobileGoalFooterEl = this.doc.getElementById('mobile-goal-footer');
     this.mobileGoalFooterGoalEl = this.doc.getElementById('mobile-goal-footer-goal');
     this.mobileGoalFooterProgressEl = this.doc.getElementById('mobile-goal-footer-progress');
@@ -500,6 +509,7 @@ export class OverworldHudBridge {
     this.setTitle(this.editButton, viewModel.editButtonTitle);
     this.setDisabled(this.buildButton, viewModel.buildButtonDisabled);
     this.renderGoalPanel(viewModel);
+    this.renderSignPanel(viewModel);
   }
 
   destroy(): void {
@@ -833,5 +843,16 @@ export class OverworldHudBridge {
     this.setText(this.mobileGoalFooterGoalEl, viewModel.goalPanelGoalText || viewModel.goalPanelRoomText);
     this.setText(this.mobileGoalFooterProgressEl, viewModel.goalPanelProgressText || viewModel.goalPanelRoomText);
     this.setText(this.mobileGoalFooterTimerEl, viewModel.goalPanelTimerText);
+  }
+
+  private renderSignPanel(viewModel: OverworldHudViewModel): void {
+    if (!this.signPanelEl) {
+      return;
+    }
+
+    this.signPanelEl.classList.toggle('hidden', !viewModel.signPanelVisible);
+    this.signPanelLabelEl?.classList.toggle('hidden', !viewModel.signPanelLabelText);
+    this.setText(this.signPanelLabelEl, viewModel.signPanelLabelText);
+    this.setText(this.signPanelTextEl, viewModel.signPanelText);
   }
 }

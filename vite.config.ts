@@ -71,7 +71,6 @@ function loadRepoEnvFile(filename: string): Record<string, string> {
 
   return parseEnvFile(readFileSync(filepath, 'utf8'));
 }
-
 function parseEnvFile(raw: string): Record<string, string> {
   const env: Record<string, string> = {};
 

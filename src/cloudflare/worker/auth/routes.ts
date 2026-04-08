@@ -71,6 +71,7 @@ export async function handleAuthRequest(request: Request, url: URL, env: Env): P
   if (url.pathname === '/api/auth/session' && request.method === 'GET') {
     const auth = await loadOptionalRequestAuth(env, request);
     const responseBody: AuthSessionResponse = createSessionResponse(auth);
+    responseBody.walletProjectId = resolvePublicWalletProjectId(env);
     responseBody.chatModeration =
       auth?.source === 'session' || auth?.source === 'playfun'
         ? await resolveChatModerationViewer(env, auth.user)
@@ -126,6 +127,17 @@ export async function handleAuthRequest(request: Request, url: URL, env: Env): P
   }
 
   throw new HttpError(404, 'Auth route not found.');
+}
+
+function resolvePublicWalletProjectId(env: Env): string | null {
+  const projectId =
+    env.REOWN_PROJECT_ID?.trim()
+    || env.VITE_REOWN_PROJECT_ID?.trim()
+    || env.WALLET_CONNECT_PROJECT_ID?.trim()
+    || env.VITE_WALLET_CONNECT_PROJECT_ID?.trim()
+    || '';
+
+  return projectId || null;
 }
 
 export async function handleRequestMagicLink(request: Request, env: Env): Promise<Response> {

@@ -28,6 +28,7 @@ const activityGrid = document.getElementById('activity-grid') as HTMLDivElement 
 const activityFeed = document.getElementById('activity-feed') as HTMLDivElement | null;
 const partykitSummary = document.getElementById('partykit-summary') as HTMLDivElement | null;
 const partykitShardsBody = document.getElementById('partykit-shards-body') as HTMLTableSectionElement | null;
+const progressionPanel = document.getElementById('progression-admin-panel') as HTMLElement | null;
 const progressionQueryInput = document.getElementById('progression-query-input') as HTMLInputElement | null;
 const progressionSearchButton = document.getElementById('progression-search-button') as HTMLButtonElement | null;
 const progressionOperatorInput = document.getElementById('progression-operator-input') as HTMLInputElement | null;
@@ -246,6 +247,7 @@ async function loadProgressionUser(userId: string): Promise<void> {
 
   progressionStatusMessage = 'Loading progression caps...';
   render();
+  scrollProgressionPanelIntoView();
 
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/admin/progression/users/${encodeURIComponent(userId)}/caps`, {
@@ -263,10 +265,12 @@ async function loadProgressionUser(userId: string): Promise<void> {
     populateProgressionForm(selectedProgressionUser);
     progressionStatusMessage = `Loaded ${selectedProgressionUser.displayName}.`;
     render();
+    emphasizeProgressionSelection();
   } catch (error) {
     progressionStatusMessage =
       error instanceof Error ? error.message : 'Unknown progression load failure.';
     render();
+    emphasizeProgressionSelection();
   }
 }
 
@@ -367,9 +371,14 @@ function renderProgressionAdmin(): void {
         ? progressionResultsSnapshot
             .map(
               (item) => `
-                <button class="result-button" type="button" data-user-id="${escapeHtml(item.userId)}">
+                <button class="result-button" type="button" data-progression-user-id="${escapeHtml(item.userId)}">
                   <strong>${escapeHtml(item.displayName)}</strong>
                   <div class="meta">${escapeHtml(item.email ?? item.userId)}</div>
+                  <div class="meta">Trust ${escapeHtml(item.trust.effectiveTier)} (${formatNumber(
+                    item.trust.effectiveScore,
+                  )}) · Player ${formatNumber(item.stats.player.level)} · Builder ${formatNumber(
+                    item.stats.builder.level,
+                  )} · Curator ${formatNumber(item.stats.curator.level)}</div>
                   <div class="meta">Caps ${formatCapSummary(item.builderCaps)} · founder ${
                     item.founderNumber === null ? 'unassigned' : `#${item.founderNumber}`
                   }</div>
@@ -379,15 +388,7 @@ function renderProgressionAdmin(): void {
             .join('')
         : '<div class="meta">No search results yet.</div>';
 
-    for (const button of progressionResults.querySelectorAll<HTMLButtonElement>('[data-user-id]')) {
-      button.addEventListener('click', () => {
-        const userId = button.dataset.userId?.trim();
-        if (!userId) {
-          return;
-        }
-        void loadProgressionUser(userId);
-      });
-    }
+    wireProgressionLookupButtons(progressionResults);
   }
 
   if (progressionSelected) {
@@ -395,6 +396,20 @@ function renderProgressionAdmin(): void {
       ? `
           <strong>${escapeHtml(selectedProgressionUser.displayName)}</strong>
           <div class="meta">${escapeHtml(selectedProgressionUser.email ?? selectedProgressionUser.userId)}</div>
+          <div class="meta">Founder ${
+            selectedProgressionUser.founderNumber === null ? 'unassigned' : `#${escapeHtml(String(selectedProgressionUser.founderNumber))}`
+          }${
+            selectedProgressionUser.stats.firstIdentityQualifiedAt
+              ? ` · qualified ${escapeHtml(formatTimestamp(selectedProgressionUser.stats.firstIdentityQualifiedAt))}`
+              : ''
+          }</div>
+          <div class="meta">Trust ${escapeHtml(formatTrustSummary(selectedProgressionUser.trust))}</div>
+          <div class="meta">Player ${escapeHtml(formatLaneSummary(selectedProgressionUser.stats.player))}</div>
+          <div class="meta">Builder ${escapeHtml(formatLaneSummary(selectedProgressionUser.stats.builder))}</div>
+          <div class="meta">Curator ${escapeHtml(formatLaneSummary(selectedProgressionUser.stats.curator))}</div>
+          <div class="meta">Badges ${escapeHtml(formatNumber(selectedProgressionUser.stats.badgeCount))} · Trophies ${escapeHtml(
+            formatNumber(selectedProgressionUser.stats.trophyCount),
+          )}</div>
           <div class="meta">Effective caps: ${escapeHtml(formatCapSummary(selectedProgressionUser.builderCaps))}</div>
           <div class="meta">Trust tier ${escapeHtml(selectedProgressionUser.builderCaps.trustTier)}${
             selectedProgressionUser.builderCaps.overrideActive ? ' · admin boost active' : ''
@@ -621,12 +636,14 @@ function renderActivity(): void {
             <span class="label">${escapeHtml(renderEventKindLabel(event.kind))}</span>
             <span class="meta">${escapeHtml(formatTimestamp(event.at))}</span>
           </div>
-          <div>${escapeHtml(renderEventSummary(event))}</div>
+          <div>${renderEventSummaryMarkup(event)}</div>
           <div class="meta">${escapeHtml(renderEventDetail(event))}</div>
         </article>
       `
     )
     .join('');
+
+  wireProgressionLookupButtons(activityFeed);
 }
 
 function renderPartykitSummary(): void {
@@ -768,6 +785,44 @@ function renderEventSummary(event: LaunchStatsRecentEvent): string {
   }
 }
 
+function renderEventSummaryMarkup(event: LaunchStatsRecentEvent): string {
+  const actorMarkup = renderEventActorMarkup(event);
+  return `${actorMarkup} ${escapeHtml(renderEventSummaryBody(event))}`;
+}
+
+function renderEventActorMarkup(event: LaunchStatsRecentEvent): string {
+  const actor = escapeHtml(event.actorDisplayName || 'Unknown');
+  if (!event.actorUserId) {
+    return `<span class="activity-actor">${actor}</span>`;
+  }
+
+  return `<button class="activity-actor-button" type="button" data-progression-user-id="${escapeHtml(event.actorUserId)}">${actor}</button>`;
+}
+
+function renderEventSummaryBody(event: LaunchStatsRecentEvent): string {
+  const roomLabel = formatRoomLabel(event);
+
+  switch (event.kind) {
+    case 'room_claim':
+      return `claimed ${roomLabel}.`;
+    case 'room_publish':
+      return `published ${roomLabel}${event.roomVersion ? ` v${event.roomVersion}` : ''}.`;
+    case 'room_attempt_burst': {
+      const attempts = event.attemptCount ?? 0;
+      const completions = event.completedCount ?? 0;
+      const completionSuffix =
+        completions > 0 ? `, including ${completions} completion${completions === 1 ? '' : 's'}` : '';
+      return `did ${attempts} attempt${attempts === 1 ? '' : 's'} in ${roomLabel}${completionSuffix}.`;
+    }
+    case 'room_run_finish': {
+      const result = (event.result ?? 'finished').toLowerCase();
+      return `${result} ${roomLabel}${event.roomVersion ? ` v${event.roomVersion}` : ''}.`;
+    }
+    default:
+      return `did something in ${roomLabel}.`;
+  }
+}
+
 function renderEventDetail(event: LaunchStatsRecentEvent): string {
   const parts: string[] = [];
   if (event.result) {
@@ -835,6 +890,27 @@ function formatCapSummary(caps: AdminProgressionUserLookupEntry['builderCaps']):
   )} publish/day · ${formatNumber(caps.claimLimitPerDay)} claim/day`;
 }
 
+function formatLaneSummary(lane: AdminProgressionUserCapsResponse['stats']['player']): string {
+  return `L${formatNumber(lane.level)} · ${formatNumber(lane.xp)} XP · ${lane.medalLabel}`;
+}
+
+function formatTrustSummary(trust: AdminProgressionUserCapsResponse['trust']): string {
+  const parts = [
+    `effective ${trust.effectiveTier} (${formatNumber(trust.effectiveScore)})`,
+    `raw ${trust.rawTier} (${formatNumber(trust.rawScore)})`,
+  ];
+
+  if (trust.penaltyActive) {
+    const reasons = [
+      trust.suspiciousPenaltyActive ? 'suspicious-admin hold' : null,
+      trust.chatPenaltyActive ? 'chat-ban hold' : null,
+    ].filter((value): value is string => Boolean(value));
+    parts.push(reasons.length > 0 ? reasons.join(' + ') : 'penalty active');
+  }
+
+  return parts.join(' · ');
+}
+
 function formatOverrideSummary(user: AdminProgressionUserCapsResponse): string {
   if (!user.builderCaps.overrideActive) {
     return 'none';
@@ -850,6 +926,40 @@ function formatOverrideSummary(user: AdminProgressionUserCapsResponse): string {
   ].filter((value): value is string => Boolean(value));
 
   return parts.join(' · ');
+}
+
+function wireProgressionLookupButtons(root: ParentNode): void {
+  for (const button of root.querySelectorAll<HTMLButtonElement>('[data-progression-user-id]')) {
+    if (button.dataset.progressionLookupBound === '1') {
+      continue;
+    }
+
+    button.dataset.progressionLookupBound = '1';
+    button.addEventListener('click', () => {
+      const userId = button.dataset.progressionUserId?.trim();
+      if (!userId) {
+        return;
+      }
+      void loadProgressionUser(userId);
+    });
+  }
+}
+
+function scrollProgressionPanelIntoView(): void {
+  progressionPanel?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start',
+  });
+}
+
+function emphasizeProgressionSelection(): void {
+  if (!progressionSelected) {
+    return;
+  }
+
+  progressionSelected.classList.remove('selected-flash');
+  void progressionSelected.offsetWidth;
+  progressionSelected.classList.add('selected-flash');
 }
 
 function escapeHtml(value: string): string {

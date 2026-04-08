@@ -3,6 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="ai-api-base" content="https://api.wamp.land" />
+    <meta name="ai-skill" content="https://api.wamp.land/skill.md" />
+    <meta name="ai-openapi" content="https://api.wamp.land/openapi.json" />
     <title>Launch Admin</title>
     <style>
       :root {
@@ -224,11 +227,28 @@
         width: 100%;
         text-align: left;
         background: rgba(7, 11, 16, 0.65);
+        cursor: pointer;
       }
 
       .result-button strong {
         display: block;
         margin-bottom: 4px;
+      }
+
+      .activity-actor-button {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--accent);
+        cursor: pointer;
+        font: inherit;
+        font-weight: 700;
+        text-decoration: underline;
+      }
+
+      .activity-actor {
+        color: var(--text);
+        font-weight: 700;
       }
 
       table {
@@ -261,6 +281,23 @@
       .meta {
         color: var(--muted);
         font-size: 14px;
+      }
+
+      #progression-selected.selected-flash {
+        outline: 2px solid rgba(126, 201, 255, 0.9);
+        outline-offset: 10px;
+        border-radius: 10px;
+        animation: selected-flash 1.2s ease;
+      }
+
+      @keyframes selected-flash {
+        0% {
+          box-shadow: 0 0 0 0 rgba(126, 201, 255, 0.45);
+        }
+
+        100% {
+          box-shadow: 0 0 0 18px rgba(126, 201, 255, 0);
+        }
       }
 
       .activity-feed {
@@ -321,7 +358,7 @@
         <div id="warnings" class="warning-list"></div>
       </section>
 
-      <section class="panel stack">
+      <section id="progression-admin-panel" class="panel stack">
         <h2>Builder Cap Overrides</h2>
         <div class="controls">
           <input id="progression-query-input" type="text" autocomplete="off" placeholder="Search by user id, email, or display name" />

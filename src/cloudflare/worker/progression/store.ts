@@ -91,12 +91,23 @@ interface DifficultyAccumulator {
   extreme: number;
 }
 
+interface EffectiveTrustState {
+  rawScore: number;
+  rawTier: TrustTier;
+  effectiveScore: number;
+  effectiveTier: TrustTier;
+  penaltyActive: boolean;
+  suspiciousPenaltyActive: boolean;
+  chatPenaltyActive: boolean;
+}
+
 const QUALITY_PRIOR_MEAN = 3.5;
 const QUALITY_PRIOR_WEIGHT = 5;
 const TROPHY_THRESHOLD = 4.2;
 const TROPHY_MIN_WEIGHTED_VOTES = 10;
 const ROOM_SIGNIFICANT_CHANGE_THRESHOLD = 0.1;
 const COURSE_SIGNIFICANT_CHANGE_THRESHOLD = 0.1;
+const TRUST_PENALTY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const UTC_WEEK_PREFIX = 'UTC';
 
 const LANE_BASE_XP = {
@@ -134,6 +145,23 @@ interface AdminProgressionIdentitySummary {
   displayName: string;
   email: string | null;
   founderNumber: number | null;
+  trust: {
+    rawScore: number;
+    rawTier: TrustTier;
+    effectiveScore: number;
+    effectiveTier: TrustTier;
+    penaltyActive: boolean;
+    suspiciousPenaltyActive: boolean;
+    chatPenaltyActive: boolean;
+  };
+  stats: {
+    player: ProgressionLaneSummary;
+    builder: ProgressionLaneSummary;
+    curator: ProgressionLaneSummary;
+    badgeCount: number;
+    trophyCount: number;
+    firstIdentityQualifiedAt: string | null;
+  };
   builderCaps: BuilderCapabilitySummary;
   override: {
     claimLimitPerDay: number | null;
@@ -345,6 +373,96 @@ function trustWeightFromTier(tier: TrustTier): number {
   }
 }
 
+function isPenaltyWindowActive(timestamp: string | null, nowMs: number): boolean {
+  if (!timestamp) {
+    return false;
+  }
+  const parsedMs = Date.parse(timestamp);
+  return Number.isFinite(parsedMs) && parsedMs + TRUST_PENALTY_WINDOW_MS > nowMs;
+}
+
+function pickLatestTimestamp(left: string | null, right: string | null): string | null {
+  if (!left) {
+    return right;
+  }
+  if (!right) {
+    return left;
+  }
+  return Date.parse(left) >= Date.parse(right) ? left : right;
+}
+
+async function loadEffectiveTrustState(
+  env: Env,
+  userId: string,
+  progress?: UserProgressRow,
+): Promise<EffectiveTrustState> {
+  const resolvedProgress = progress ?? await loadOrBackfillUserProgress(env, userId);
+  const [suspiciousRow, chatBanAuditRow, activeChatBanRow] = await Promise.all([
+    env.DB.prepare(
+      `
+        SELECT created_at
+        FROM admin_suspicious_invalidation_audit
+        WHERE target_user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 1
+      `
+    )
+      .bind(userId)
+      .first<{ created_at: string | null }>(),
+    env.DB.prepare(
+      `
+        SELECT created_at
+        FROM chat_ban_audit
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 1
+      `
+    )
+      .bind(userId)
+      .first<{ created_at: string | null }>(),
+    env.DB.prepare(
+      `
+        SELECT created_at
+        FROM chat_bans
+        WHERE user_id = ?
+        LIMIT 1
+      `
+    )
+      .bind(userId)
+      .first<{ created_at: string | null }>(),
+  ]);
+
+  const nowMs = Date.now();
+  const latestChatBanAt = pickLatestTimestamp(
+    chatBanAuditRow?.created_at ?? null,
+    activeChatBanRow?.created_at ?? null,
+  );
+  const suspiciousPenaltyActive = isPenaltyWindowActive(suspiciousRow?.created_at ?? null, nowMs);
+  const chatPenaltyActive =
+    activeChatBanRow !== null || isPenaltyWindowActive(latestChatBanAt, nowMs);
+  const penaltyActive = suspiciousPenaltyActive || chatPenaltyActive;
+  const rawScore = resolvedProgress.hidden_trust_score;
+  const effectiveScore = penaltyActive ? 0 : rawScore;
+
+  return {
+    rawScore,
+    rawTier: trustTierFromScore(rawScore),
+    effectiveScore,
+    effectiveTier: trustTierFromScore(effectiveScore),
+    penaltyActive,
+    suspiciousPenaltyActive,
+    chatPenaltyActive,
+  };
+}
+
+export async function loadEffectiveTrustTier(
+  env: Env,
+  userId: string,
+  progress?: UserProgressRow,
+): Promise<TrustTier> {
+  return (await loadEffectiveTrustState(env, userId, progress)).effectiveTier;
+}
+
 function sanitizeOptionalOverride(value: number | string | null | undefined): number | null {
   if (value === null || value === undefined || value === '') {
     return null;
@@ -369,8 +487,8 @@ function buildBuilderCapabilitySummary(
   env: Env,
   progress: UserProgressRow,
   requestAuthSource: 'session' | 'playfun' | 'api_token' | 'agent_token' | null,
+  trustTier: TrustTier,
 ): BuilderCapabilitySummary {
-  const trustTier = trustTierFromScore(progress.hidden_trust_score);
   const base = TRUST_TIER_CAPABILITIES[trustTier];
   const roomClaimCap =
     requestAuthSource === 'playfun'
@@ -394,6 +512,19 @@ function buildBuilderCapabilitySummary(
     collectibleLimit,
     overrideActive: hasBuilderCapOverride(progress),
   };
+}
+
+async function loadBuilderCapabilitySummary(
+  env: Env,
+  progress: UserProgressRow,
+  requestAuthSource: 'session' | 'playfun' | 'api_token' | 'agent_token' | null,
+): Promise<BuilderCapabilitySummary> {
+  return buildBuilderCapabilitySummary(
+    env,
+    progress,
+    requestAuthSource,
+    await loadEffectiveTrustTier(env, progress.user_id, progress),
+  );
 }
 
 function builderContributionWeightFromTier(tier: TrustTier): number {
@@ -1794,7 +1925,7 @@ export async function loadPublicProgressionSummary(
   const recentTrophies = [...roomTrophies, ...courseTrophies]
     .sort((left, right) => Date.parse(right.awardedAt) - Date.parse(left.awardedAt))
     .slice(0, 6);
-  const builderCaps = buildBuilderCapabilitySummary(env, progress, 'session');
+  const builderCaps = await loadBuilderCapabilitySummary(env, progress, 'session');
 
   return {
     founderNumber: progress.founder_number,
@@ -1824,17 +1955,35 @@ export async function loadPublicProgressionSummary(
   };
 }
 
-function buildAdminProgressionIdentitySummary(
+async function buildAdminProgressionIdentitySummary(
   env: Env,
   identity: UserRow,
   progress: UserProgressRow,
-): AdminProgressionIdentitySummary {
+): Promise<AdminProgressionIdentitySummary> {
+  const effectiveTrust = await loadEffectiveTrustState(env, identity.id, progress);
   return {
     userId: identity.id,
     displayName: identity.display_name,
     email: identity.email,
     founderNumber: progress.founder_number,
-    builderCaps: buildBuilderCapabilitySummary(env, progress, 'session'),
+    trust: {
+      rawScore: effectiveTrust.rawScore,
+      rawTier: effectiveTrust.rawTier,
+      effectiveScore: effectiveTrust.effectiveScore,
+      effectiveTier: effectiveTrust.effectiveTier,
+      penaltyActive: effectiveTrust.penaltyActive,
+      suspiciousPenaltyActive: effectiveTrust.suspiciousPenaltyActive,
+      chatPenaltyActive: effectiveTrust.chatPenaltyActive,
+    },
+    stats: {
+      player: buildLaneSummary('player', progress.total_pxp),
+      builder: buildLaneSummary('builder', progress.total_bxp),
+      curator: buildLaneSummary('curator', progress.total_cxp),
+      badgeCount: progress.badge_count,
+      trophyCount: progress.trophy_count,
+      firstIdentityQualifiedAt: progress.first_identity_qualified_at,
+    },
+    builderCaps: await loadBuilderCapabilitySummary(env, progress, 'session'),
     override: {
       claimLimitPerDay: progress.builder_claim_limit_override,
       publishLimitPerDay: progress.builder_publish_limit_override,
@@ -1893,7 +2042,7 @@ export async function searchAdminProgressionUsers(
   return Promise.all(
     rows.results.map(async (identity) => {
       const progress = await loadOrBackfillUserProgress(env, identity.id);
-      return buildAdminProgressionIdentitySummary(env, identity, progress);
+      return await buildAdminProgressionIdentitySummary(env, identity, progress);
     }),
   );
 }
@@ -1981,7 +2130,7 @@ export async function resolveRoomCapabilities(
   requestAuthSource: 'session' | 'playfun' | 'api_token' | 'agent_token' | null,
 ): Promise<RoomCapabilitySnapshot> {
   const progress = await loadOrBackfillUserProgress(env, userId);
-  const summary = buildBuilderCapabilitySummary(env, progress, requestAuthSource);
+  const summary = await loadBuilderCapabilitySummary(env, progress, requestAuthSource);
   return {
     trustTier: summary.trustTier,
     claimLimitPerDay: summary.claimLimitPerDay,
@@ -1999,6 +2148,12 @@ async function countDailyRoomPublishes(env: Env, userId: string, dayStartIso: st
         FROM room_versions
         WHERE published_by_user_id = ?
           AND created_at >= ?
+          AND NOT EXISTS (
+            SELECT 1
+            FROM room_versions AS prior_versions
+            WHERE prior_versions.room_id = room_versions.room_id
+              AND prior_versions.version < room_versions.version
+          )
       `
     )
       .bind(userId, dayStartIso)
@@ -2431,7 +2586,9 @@ export async function awardRoomRunProgression(
   if (params.creatorUserId && params.creatorUserId !== params.run.userId) {
     const ratingWindow = buildRoomRatingWindow(params.roomRecord.versions, params.run.roomVersion);
     const creatorProgress = await loadOrBackfillUserProgress(env, params.creatorUserId);
-    const creatorWeight = builderContributionWeightFromTier(trustTierFromScore(creatorProgress.hidden_trust_score));
+    const creatorWeight = builderContributionWeightFromTier(
+      await loadEffectiveTrustTier(env, params.creatorUserId, creatorProgress),
+    );
     const creatorBxp = Math.max(1, Math.round(LANE_BASE_XP.uniqueRoomCompletion * creatorWeight));
     delta.bxp += await awardLaneDelta(
       env,
@@ -2594,7 +2751,9 @@ export async function awardCourseRunProgression(
   if (params.creatorUserId && params.creatorUserId !== params.run.userId) {
     const ratingWindow = buildCourseRatingWindow(params.courseRecord.versions, params.run.courseVersion, params.run.courseId);
     const creatorProgress = await loadOrBackfillUserProgress(env, params.creatorUserId);
-    const creatorWeight = builderContributionWeightFromTier(trustTierFromScore(creatorProgress.hidden_trust_score));
+    const creatorWeight = builderContributionWeightFromTier(
+      await loadEffectiveTrustTier(env, params.creatorUserId, creatorProgress),
+    );
     const creatorBxp = Math.max(1, Math.round(LANE_BASE_XP.uniqueCourseCompletion * creatorWeight));
     const creatorDelta: ProgressionDelta = {
       pxp: 0,
@@ -2910,8 +3069,9 @@ export async function submitRoomRating(
   }
 
   const progress = await loadOrBackfillUserProgress(env, params.userId);
-  const trustTier = trustTierFromScore(progress.hidden_trust_score);
-  const trustWeight = trustWeightFromTier(trustTier);
+  const trustWeight = trustWeightFromTier(
+    await loadEffectiveTrustTier(env, params.userId, progress),
+  );
   const existingRows = await loadRoomRatingsForVersionKey(env, published.id, ratingWindow.versionKey);
   const existingViewerRow = existingRows.find((row) => row.user_id === params.userId) ?? null;
 
@@ -3069,7 +3229,9 @@ export async function submitCourseRating(
   }
 
   const progress = await loadOrBackfillUserProgress(env, params.userId);
-  const trustWeight = trustWeightFromTier(trustTierFromScore(progress.hidden_trust_score));
+  const trustWeight = trustWeightFromTier(
+    await loadEffectiveTrustTier(env, params.userId, progress),
+  );
   const existingRows = await loadCourseRatingsForVersionKey(env, published.id, ratingWindow.versionKey);
   const existingViewerRow = existingRows.find((row) => row.user_id === params.userId) ?? null;
 

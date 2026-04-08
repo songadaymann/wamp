@@ -63,6 +63,7 @@ import {
 } from './roomLeaderboardAggregation';
 import {
   awardRoomRunProgression,
+  loadEffectiveTrustTier,
   loadRoomAggregateRatingSummaryForVersion,
   submitRoomRating,
 } from '../progression/store';
@@ -70,6 +71,7 @@ import {
   computeRoomSnapshotVerificationHash,
   createRoomVerificationTrigger,
   createRunVerificationNonce,
+  relaxVerificationTriggerForTrustTier,
   recordRunVerificationAudit,
   requireVerificationTrace,
   type RunVerificationFailureReason,
@@ -307,7 +309,7 @@ export async function handleRunFinish(
           auth.user.id,
         )
       : null;
-  const verificationTrigger =
+  const baseVerificationTrigger =
     clampedBody.result === 'completed'
       ? createRoomVerificationTrigger(snapshot.goal, {
           candidate: {
@@ -343,6 +345,19 @@ export async function handleRunFinish(
           pointAwardPotential: (provisionalPointAward?.points ?? 0) > 0,
         })
       : null;
+  const effectiveTrustTier =
+    baseVerificationTrigger === null
+      ? 'T0'
+      : await loadEffectiveTrustTier(env, auth.user.id);
+  const verificationTrigger =
+    baseVerificationTrigger === null
+      ? null
+      : relaxVerificationTriggerForTrustTier(
+          baseVerificationTrigger,
+          effectiveTrustTier,
+        );
+  const shouldAuditRelaxedVerification =
+    effectiveTrustTier === 'T1' && Boolean(baseVerificationTrigger?.required);
 
   let finalBody = clampedBody;
   let finalScore = provisionalScore;
@@ -449,6 +464,22 @@ export async function handleRunFinish(
       verificationReason: verificationAudit.reason,
       summary: verificationAudit.summary,
       trace: finalBody.verificationTrace ?? null,
+      createdAt: finishedAt,
+    });
+  } else if (shouldAuditRelaxedVerification && baseVerificationTrigger) {
+    await recordRunVerificationAudit(env, {
+      attemptId,
+      kind: 'room',
+      status: 'skipped',
+      triggerReason: baseVerificationTrigger.reason ?? 'record_gap',
+      verificationReason: null,
+      summary: {
+        trigger: baseVerificationTrigger,
+        policy: 't1_audit_only',
+        trustTier: effectiveTrustTier,
+        verifier: null,
+      },
+      trace: null,
       createdAt: finishedAt,
     });
   }

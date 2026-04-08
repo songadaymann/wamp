@@ -20,6 +20,7 @@ import type {
   OverworldHudViewModel,
   OverworldOnlineRosterViewEntry,
 } from './hud';
+import type { ActiveSignState } from './signPosts';
 import {
   buildOverworldHudViewModel,
   formatRoomEditorSummary,
@@ -56,6 +57,7 @@ interface OverworldHudStateControllerHost {
   getGoalPersistentStatusText(): string | null;
   getTotalPlayerCount(): number | null;
   getOnlineRosterEntries(): OverworldOnlineRosterViewEntry[];
+  getActiveSignState(): ActiveSignState | null;
   loadRoomOwnershipDetails(
     roomId: string,
     coordinates: RoomCoordinates,
@@ -194,6 +196,7 @@ export class OverworldHudStateController {
         transientStatus: this.host.getTransientStatusMessage(),
         statusOverride,
         mode,
+        activeSignState: this.host.getActiveSignState(),
         goalPersistentStatusText: this.host.getGoalPersistentStatusText(),
         rankingMode: this.host.getCurrentRoomLeaderboard()?.rankingMode ?? null,
         roomTop: this.host.getCurrentRoomLeaderboard()?.entries[0] ?? null,

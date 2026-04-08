@@ -1,4 +1,4 @@
-import type { BuilderCapabilitySummary } from '../progression/model';
+import type { BuilderCapabilitySummary, ProgressionLaneSummary, TrustTier } from '../progression/model';
 
 export interface PartyKitShardHeartbeat {
   shardId: string;
@@ -283,11 +283,32 @@ export interface AdminBuilderCapOverride {
   updatedBy: string | null;
 }
 
+export interface AdminTrustSummary {
+  rawScore: number;
+  rawTier: TrustTier;
+  effectiveScore: number;
+  effectiveTier: TrustTier;
+  penaltyActive: boolean;
+  suspiciousPenaltyActive: boolean;
+  chatPenaltyActive: boolean;
+}
+
+export interface AdminProgressionStatsSummary {
+  player: ProgressionLaneSummary;
+  builder: ProgressionLaneSummary;
+  curator: ProgressionLaneSummary;
+  badgeCount: number;
+  trophyCount: number;
+  firstIdentityQualifiedAt: string | null;
+}
+
 export interface AdminProgressionUserLookupEntry {
   userId: string;
   displayName: string;
   email: string | null;
   founderNumber: number | null;
+  trust: AdminTrustSummary;
+  stats: AdminProgressionStatsSummary;
   builderCaps: BuilderCapabilitySummary;
   override: AdminBuilderCapOverride;
 }

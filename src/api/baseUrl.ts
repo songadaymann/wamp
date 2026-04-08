@@ -18,7 +18,12 @@ export function getApiBaseUrl(): string {
     ?.getAttribute('content')
     ?.trim();
 
-  return metaBase ? metaBase.replace(/\/+$/, '') : '';
+  if (metaBase) {
+    return metaBase.replace(/\/+$/, '');
+  }
+
+  const knownProductionApiBase = getKnownProductionApiBase(hostname);
+  return knownProductionApiBase ? knownProductionApiBase.replace(/\/+$/, '') : '';
 }
 
 function isSameOriginApiHost(hostname: string): boolean {
@@ -29,4 +34,16 @@ function isSameOriginApiHost(hostname: string): boolean {
     hostname.endsWith('.workers.dev') ||
     hostname === 'api.wamp.land'
   );
+}
+
+function getKnownProductionApiBase(hostname: string): string {
+  if (
+    hostname === 'wamp.land' ||
+    hostname === 'wampland.pages.dev' ||
+    hostname.endsWith('.wampland.pages.dev')
+  ) {
+    return 'https://api.wamp.land';
+  }
+
+  return '';
 }

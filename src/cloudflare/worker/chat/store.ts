@@ -284,6 +284,12 @@ export async function createChatBan(
         VALUES (?, ?, ?)
       `
     ).bind(userId, bannedByUserId, createdAt),
+    env.DB.prepare(
+      `
+        INSERT INTO chat_ban_audit (id, user_id, banned_by_user_id, created_at)
+        VALUES (?, ?, ?, ?)
+      `
+    ).bind(crypto.randomUUID(), userId, bannedByUserId, createdAt),
   ]);
 }
 

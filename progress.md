@@ -124,6 +124,114 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - lock icon wrapper is visible
       - lock tooltip text is present
       - old state pill row stays hidden for that minted room
+- Emissive object + tile lighting follow-up on April 7, 2026:
+  - started a clean `main`-based continuation branch/worktree for this pass:
+    - branch: `feature/lighting-followups-2026-04-07`
+    - worktree: `/private/tmp/wamp-lighting-followups-2026-04-07`
+  - lighting config / data model changes:
+    - added shared emissive-light config types in `src/lighting/model.ts`
+    - `GameObjectConfig` now supports optional `lightEmission`
+    - `TilesetConfig` now supports optional `lightEmissionProfiles`, keyed by local tile index like collision profiles
+    - tagged emissive defaults for:
+      - `fire`
+      - `fire_big`
+      - `lava_surface`
+      - lava tileset local indices `31` through `35` via `surfaceStrip` aggregation
+  - runtime extraction + renderer changes:
+    - added `src/lighting/emissiveSources.ts` so both editor preview and play mode resolve static emissive sources from the same room snapshot rules
+    - object lights come from placed-object config; tile lights come from tileset metadata, not new room persistence fields
+    - surface-strip tile aggregation merges top-exposed marked lava runs into chunked emitters instead of emitting one light per tile
+    - room lighting controller now supports:
+      - per-emitter reveal radius
+      - additive colored glow
+      - deterministic flicker seeds
+      - debug counts for player/ghost emitters, static object emitters, static tile emitters, and glow emitters
+    - overworld play now precomputes static room emitters during full-room load and combines them with player / ghost emitters
+    - editor preview now reuses the same static-emitter extraction path
+  - important bug found and fixed during validation:
+    - the first editor implementation cached preview emitters from the blank room before the real snapshot loaded
+    - because untouched draft rooms can keep the same `roomId/version/updatedAt/lastDirtyAt` tuple, the editor preview stayed stuck at zero static emitters even though play mode was correct
+    - fixed by clearing the lighting preview cache whenever editor runtime state resets or a room snapshot is applied
+  - validation:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - required `develop-web-game` local smoke wrote:
+      - `output/web-game/lighting-emissive-baseline/shot-0.png`
+      - `output/web-game/lighting-emissive-baseline/state-0.json`
+    - targeted synthetic dark-room probe wrote:
+      - `output/web-game/lighting-emissive-runtime-check/editor-state.json`
+      - `output/web-game/lighting-emissive-runtime-check/play-state.json`
+      - `output/web-game/lighting-emissive-runtime-check/editor.png`
+      - `output/web-game/lighting-emissive-runtime-check/play.png`
+      - `output/web-game/lighting-emissive-runtime-check/summary.json`
+    - final synthetic probe confirmed both editor preview and play mode at:
+      - `staticObjectEmitterCount: 3`
+      - `staticTileEmitterCount: 2`
+      - `glowEmitterCount: 5`
+      - `rendererPath: "webgl"`
+  - scope / non-goals for this pass:
+    - no `RoomSnapshot` schema change
+    - no D1 migration
+    - no Worker/API persistence change
+    - cave lantern tile indices are not authored yet; the tile-emissive plumbing is ready for them once the cave tileset lands
+  - follow-up correction after local visual QA:
+    - removed the placeholder emissive tags from the current lava tileset because none of those existing lava sheet tiles are actually meant to emit light
+    - object-based fire / lava emissive lighting stays live
+    - tile-emissive plumbing remains ready for future real emissive tiles like cave lanterns
+
+- Wallet project-id runtime config hardening on April 7, 2026:
+  - started a clean `main`-based branch/worktree for this pass:
+    - branch: `fix/wallet-project-id-resolution-2026-04-07`
+    - worktree: `/private/tmp/wamp-wallet-project-id-fix-2026-04-07`
+  - root cause:
+    - wallet auth on `wamp.land` was relying on frontend build-time `VITE_REOWN_PROJECT_ID`
+    - that value existed on the `wampland` website config, but the real API Worker `everybodys-platformer` / `api.wamp.land` did not expose any runtime wallet project id
+    - local/CLI prebuilt frontend deploys can bypass Cloudflare's Pages build env, so the website could regress to `Wallet ID Missing` whenever a bundle was built without that local/frontend Vite var
+  - fix:
+    - `GET /api/auth/session` now includes `walletProjectId`, sourced from Worker env `REOWN_PROJECT_ID` with legacy aliases accepted as fallbacks
+    - the auth client now falls back to that runtime `walletProjectId` whenever the bundled `VITE_REOWN_PROJECT_ID` / `VITE_WALLET_CONNECT_PROJECT_ID` is absent
+    - auth debug state now exposes `walletProjectSource: "build" | "runtime" | "missing"` so future diagnosis is explicit
+    - `scripts/smoke_prod.mjs` now fails if `api.wamp.land/api/auth/session` does not expose a wallet project id
+    - docs/examples now point deployed wallet auth at Worker env `REOWN_PROJECT_ID`, with `env.local` treated as a local override only
+  - verification:
+    - Wrangler prod secret list now shows `REOWN_PROJECT_ID` on `everybodys-platformer`
+    - local `wrangler dev` with `--var REOWN_PROJECT_ID:test-wallet-project` returned `walletProjectId: "test-wallet-project"` from `/api/auth/session`
+    - required `develop-web-game` browser probe against a no-`env.local` frontend plus that local API wrote `output/web-game/wallet-project-runtime-api-check/`
+    - `state-0.json` reports `auth.walletProjectConfigured: true` and `auth.walletProjectSource: "runtime"`
+    - no `errors-0.json` was produced by that probe
+    - `npm run build` passed in the clean worktree under `nvm use 20.19.4`
+    - screenshot still hit the known black-frame artifact, so state JSON was the reliable source of truth for this verification
+  - rollout:
+    - rebased the fix onto latest `origin/main`, committed it as `c5d0a1e` (`Fix runtime wallet project id resolution`), fast-forwarded `main`, and pushed
+    - production API now returns `walletProjectId` from `https://api.wamp.land/api/auth/session`
+    - production frontend `https://wamp.land` now serves a bundle containing the runtime wallet fallback path
+    - `node scripts/smoke_prod.mjs` passed against live production with `sessionWalletProjectConfigured: true`
+    - the wrapper `npm run deploy:prod` appeared to hang inside Wrangler after the rollout was already live, so final validation was completed with direct live checks plus the standalone prod smoke
+
+- Sign text modal + nearby readout on April 7, 2026:
+  - started a clean `main`-based branch/worktree for this pass:
+    - branch: `feature/sign-text-modal-2026-04-07`
+    - worktree: `/private/tmp/wamp-sign-text-modal-2026-04-07`
+  - room/object data changes:
+    - `PlacedObject` now supports optional `signText`
+    - sign text is normalized and capped to `140` chars
+    - room snapshot cloning / normalization / version-lineage fingerprints now preserve sign text so sign edits count as real room changes
+  - editor authoring changes:
+    - placing a `sign` or `sign_arrow` opens a dedicated sign-text modal
+    - clicking an existing sign in object mode reopens the same modal for editing
+    - modal supports clear / save flow and routes through new `setPlacedSignText(...)` scene bridge methods in both single-room and course room editors
+  - play-mode changes:
+    - live overworld objects now carry sign text
+    - new sign controller finds the nearest authored sign while in play mode
+    - HUD now renders a sign panel that shows the nearby sign label plus authored text when the player walks by
+  - validation:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - targeted local Playwright probe against `?previewSmoke=1` confirmed:
+      - synthetic editor sign placement opens the modal
+      - saved sign text persists into the room snapshot
+      - entering play mode exposes `activeSign.text === "Hello from sign"` in overworld debug state
+  - merged to `main` on April 7, 2026
 
 - XP / ratings / trust / badges merge to main on April 6, 2026:
   - merged `feature/progression-xp-ratings-trust-badges` into `main`
@@ -6350,3 +6458,128 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - `output/web-game/world-chat-retro-check/errors-0.json`
     - validation caveat:
       - the skill client still hit the known black-frame capture issue for the live canvas screenshot, so this pass was verified by the live running app plus state output and not by a trustworthy automated image capture
+- 2026-04-07: progression publish-limit follow-up on `feature/progression-publish-limit-followup-2026-04-07`
+  - Prompt:
+    - if someone reverts changes to their room, that should not count toward daily publish limits
+    - editing and publishing on your own rooms that are already published should stay unlimited
+    - cut the work from current `main`, not from the older progression branch, because `main` had moved ahead
+  - Implementation:
+    - `src/cloudflare/worker.ts`
+      - room publish now loads the previous room record first and bypasses the daily publish-limit guard when the room is already published and the current user is the claimer
+      - room revert no longer calls the daily publish-limit guard at all
+    - `src/cloudflare/worker/progression/store.ts`
+      - daily publish counting now counts only first room publishes for a room (`room_versions` rows with no prior version), so room republish/revert actions stop consuming the quota that still applies to first room publishes and course publishes
+  - Intended behavior after this patch:
+    - first publish of a room still counts against the daily publish cap
+    - publishing updates to your own already-published room does not count against the cap
+    - reverting your own room does not count against the cap
+    - course publish limits remain unchanged
+  - Verification:
+    - focused diff check passed; patch is limited to `src/cloudflare/worker.ts` and `src/cloudflare/worker/progression/store.ts`
+    - `npm run typecheck` is currently blocked on pre-existing `main` issues in `src/music/key.ts`:
+      - missing modules `@tonaljs/key` and `tonal`
+      - existing implicit-`any` errors in that file
+    - `npm run build` fails for the same pre-existing reason
+
+- 2026-04-07: trust penalties and verification gating on `feature/trust-penalties-verification-gating-2026-04-07`
+  - Prompt:
+    - use suspicious-admin invalidations as a major negative trust signal
+    - make chat bans another negative trust signal
+    - every such moderation hit should effectively put trust at `0` for at least `30 days`
+    - relax ranked-run anti-cheat enforcement by trust tier:
+      - `T0`: current strict verification behavior
+      - `T1`: extremely lax
+      - `T2+`: verification off
+    - the real moderation surface is `https://wamp.land/suspicious-admin`
+  - Implementation:
+    - `migrations/0022_trust_penalties_and_chat_ban_audit.sql`
+      - adds `chat_ban_audit`
+      - backfills audit rows for any currently active chat bans
+    - `src/cloudflare/worker/chat/store.ts`
+      - creating a chat ban now writes both the active `chat_bans` row and a durable `chat_ban_audit` row
+    - `src/cloudflare/worker/progression/store.ts`
+      - adds an effective-trust layer on top of raw `hidden_trust_score`
+      - effective trust is clamped to `0` when the user has:
+        - a suspicious-admin invalidation in the last `30 days`
+        - a chat ban in the last `30 days`
+        - or an active chat ban
+      - builder caps, creator weighting, and rating weighting now use effective trust rather than raw trust
+    - `src/cloudflare/worker/runs/verification.ts`
+      - adds trust-tier-based verification relaxation:
+        - `T0`: unchanged
+        - `T1`: trace/client verification is skipped entirely, but high-impact runs still get audit rows with status `skipped`
+        - `T2/T3/T4`: verification trigger is suppressed entirely
+    - `src/cloudflare/worker/runs/routes.ts`
+    - `src/cloudflare/worker/courses/routes.ts`
+      - room/course finish routes now apply verification relaxation using effective trust tier
+      - `T1` trust writes audit-only entries for runs that would previously have triggered verification, without blocking the run or requiring a trace
+    - `src/cloudflare/worker/admin/snapshot.ts`
+      - snapshot admin tooling now includes `chat_ban_audit`
+  - Verification:
+    - `npm ci --ignore-scripts`
+      - needed in the clean worktree because `node_modules` was absent and `sharp` failed under normal install scripts in this environment
+    - `npm run typecheck`
+      - passed
+    - `npm run build`
+      - passed
+    - `npm run cf:d1:migrate:local`
+      - passed and applied `0022_trust_penalties_and_chat_ban_audit.sql`
+  - Notes:
+    - this intentionally preserves the raw trust ledger in `user_progress`; the moderation penalty is enforced through effective trust, so trust recovers automatically after the penalty window without rewriting historical trust events
+    - active chat bans continue to clamp effective trust even if the ban is older than the 30-day penalty window
+- 2026-04-07: music transport follow-up on `feature/music-followups-2026-04-07`
+  - Prompt:
+    - remove key/BPM editing from the phrase edit flow because it is too confusing
+    - when a saved phrase is brought back into the sequencer or arranger, the first loaded phrase should set BPM and swing
+    - later phrases should not overwrite that transport; they should adapt to the current BPM/swing instead
+  - Implementation:
+    - `src/music/library.ts`
+      - added `swingPercent` to saved phrase payloads for both drum and tonal phrases
+      - older stored phrases without swing now normalize to the default swing on read
+      - phrase fingerprinting now ignores swing the same way it already ignored BPM, so feel-only changes do not mint a new phrase ordinal
+    - `src/scenes/editor/musicPatternEditor.ts`
+      - added `isPatternWorkspaceEmpty()` so sequencer phrase loads can tell whether they are the first phrase in the current composition
+      - `insertPhrase()` now accepts `adoptPhraseTiming` and applies the phrase BPM/swing before inserting when the current sequencer workspace is otherwise empty
+    - `src/scenes/EditorScene.ts`
+      - sequencer phrase loads now pass `adoptPhraseTiming` only when the overall pattern workspace is content-empty
+      - arrangement phrase placement now uses active slot count, not the broader “arrangement is fully default-valued” check, to decide whether the first phrase should set arrangement BPM/swing (and tonal key)
+      - phrase library rows now show swing alongside BPM
+      - phrase metadata edit mode now hides the key, tempo, and swing controls and no longer claims “key and tempo stay in the controls above”
+    - `index.html`
+      - added an explicit `editor-music-key-grid` id so the key controls can be hidden cleanly during phrase metadata editing
+  - Verification:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - required web-game client smoke ran against local preview output:
+      - artifacts: `output/web-game/music-phrase-transport-smoke/`
+      - `state-0.json` shows boot reached with the expected local no-backend auth failure path, not a new crash from the music changes
+      - `errors-0.json` only shows the expected local `/api/auth/session` failure because preview was running without a backend
+      - `shot-0.png` hit the known black-frame canvas artifact again
+    - headed rerun could not stay open in this environment (`page.goto: Target page, context or browser has been closed`), so local browser verification remains partial
+  - Next suggestions:
+    - verify the phrase-load behavior in a real signed-in editor session, especially:
+      - load first phrase into an empty sequencer and confirm BPM/swing adopt
+      - load a second mismatched phrase and confirm the notes adapt while transport stays fixed
+      - place first phrase into an empty arrangement and confirm the arrangement transport adopts its BPM/swing
+    - if that feels right, push this branch to safety before doing more music UX cleanup
+  - 2026-04-07 follow-up refinement:
+    - removed the key/mode dropdowns from the music workbench entirely
+    - removed swing from the phrase library detail line; phrases now show key + BPM only
+    - kept the existing save-time key detection path in `saveActiveRoomMusicPhrase()` so phrase saves still infer tonal key from the phrase notes before persisting
+    - verification:
+      - `npm run typecheck` passed
+      - `npm run build` passed
+  - 2026-04-07 save-flow rewrite:
+    - loaded sequencer phrases now copy their saved sample name into the local editable pattern state, which prevents a later plain `Save` from silently reverting the phrase name to default numbering
+    - phrase save semantics are now explicit:
+      - `Save` overwrites the current owned phrase in place
+      - `Save As` creates a new phrase/version
+      - first save and `Save As` open a small phrase-name prompt instead of relying on implicit default naming
+    - the overwrite path is now explicit all the way through the Worker API:
+      - `saveMusicPhrases()` can send `mode=overwrite|save-as` and `overwritePhraseId`
+      - the Worker/store path updates the targeted owned phrase by id instead of only reusing the latest phrase when fingerprints happen to match
+      - save-as still creates a fresh ordinal even if the payload fingerprint matches the latest phrase
+    - successful phrase saves now sync the active sequencer pattern back to the saved phrase id and name so future saves keep targeting the same phrase
+    - verification:
+      - `npm run typecheck` passed
+      - `npm run build` passed

@@ -30,6 +30,10 @@ import {
 } from '../../persistence/worldModel';
 import { RETRO_COLORS, ensureStarfieldTexture } from '../../visuals/starfield';
 import { buildRoomSnapshotTexture, buildRoomTextureKey } from '../../visuals/roomSnapshotTexture';
+import {
+  extractRoomStaticLightingEmitters,
+  type RoomStaticLightingEmitters,
+} from '../../lighting/emissiveSources';
 import type { OverworldMode } from '../sceneData';
 import { OverworldChunkPreviewRenderer } from './chunkPreviewRenderer';
 import {
@@ -56,6 +60,7 @@ const FULL_ROOM_RELEASE_GRACE_MS = 300;
 
 export interface LoadedFullRoom<TLiveObject = unknown, TEdgeWall = unknown> {
   room: RoomSnapshot;
+  staticLighting: RoomStaticLightingEmitters;
   backgroundColorRect: Phaser.GameObjects.Rectangle | null;
   backgroundSprites: LoadedRoomBackgroundSprite[];
   image: Phaser.GameObjects.Image;
@@ -900,10 +905,12 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     terrainLayer.setCollisionByExclusion([-1]);
     terrainLayer.setVisible(false);
     const terrainInsetBodies = this.createTerrainInsetBodies(room, origin, terrainLayer);
+    const staticLighting = extractRoomStaticLightingEmitters(room, origin);
 
     const player = this.options.getPlayer();
     const loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall> = {
       room,
+      staticLighting,
       backgroundColorRect: roomBackground.colorRect,
       backgroundSprites: roomBackground.sprites,
       image,

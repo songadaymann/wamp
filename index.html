@@ -697,20 +697,11 @@
             <button id="btn-editor-music-mode" class="bar-btn editor-advanced-primary-action" type="button">Edit Music</button>
             <div id="music-summary" class="goal-summary">No room music yet. Click on the room grid to start a sequencer loop.</div>
             <div id="editor-music-workbench" class="editor-music-workbench hidden">
-              <div class="editor-music-key-grid">
-                <label class="editor-music-select-group" for="editor-music-key-tonic-select">
-                  <span class="editor-music-select-label">Key</span>
-                  <select id="editor-music-key-tonic-select" class="editor-music-select"></select>
-                </label>
-                <label class="editor-music-select-group" for="editor-music-key-mode-select">
-                  <span class="editor-music-select-label">Mode</span>
-                  <select id="editor-music-key-mode-select" class="editor-music-select"></select>
-                </label>
-              </div>
               <div id="editor-music-phrase-action-row" class="editor-music-button-row hidden">
                 <button id="btn-editor-music-phrase-new" class="bar-btn bar-btn-small" type="button">New</button>
                 <button id="btn-editor-music-phrase-edit" class="bar-btn bar-btn-small" type="button">Edit</button>
                 <button id="btn-editor-music-phrase-save" class="bar-btn bar-btn-small" type="button">Save</button>
+                <button id="btn-editor-music-phrase-save-as" class="bar-btn bar-btn-small" type="button">Save As</button>
               </div>
               <div id="editor-music-phrase-name-row" class="editor-music-select-group hidden">
                 <label id="editor-music-phrase-name-label" class="editor-music-select-label" for="editor-music-phrase-name-input">Phrase Name</label>
@@ -1047,6 +1038,10 @@
           <div id="world-goal-panel-timer" class="world-goal-panel-timer">0:00.0</div>
         </div>
       </div>
+      <div id="world-sign-panel" class="world-sign-panel hidden" aria-live="polite">
+        <div id="world-sign-panel-label" class="world-sign-panel-label">SIGN</div>
+        <div id="world-sign-panel-text" class="world-sign-panel-text"></div>
+      </div>
       <button id="btn-world-hud-toggle" class="bar-btn bar-btn-small world-hud-toggle hidden" type="button">Room +</button>
       <button
         id="btn-mobile-world-stop"
@@ -1307,6 +1302,30 @@
     </div>
   </div>
 
+  <div id="editor-music-phrase-save-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel editor-music-phrase-save-modal-panel" role="dialog" aria-modal="true" aria-labelledby="editor-music-phrase-save-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Music Phrase</div>
+          <h2 id="editor-music-phrase-save-title" class="history-modal-title">Name Phrase</h2>
+          <div id="editor-music-phrase-save-meta" class="history-modal-meta">Name this phrase before saving it to your library.</div>
+        </div>
+        <button id="btn-editor-music-phrase-save-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div id="editor-music-phrase-save-error" class="history-modal-error hidden"></div>
+      <div class="about-copy">
+        <div class="about-section">
+          <div class="about-section-title">Phrase Name</div>
+          <input id="editor-music-phrase-save-name-input" class="goal-input room-title-input" type="text" maxlength="24" placeholder="Phrase name" spellcheck="false" />
+        </div>
+        <div class="course-room-actions">
+          <button id="btn-editor-music-phrase-save-cancel" class="bar-btn bar-btn-small" type="button">Cancel</button>
+          <button id="btn-editor-music-phrase-save-confirm" class="bar-btn" type="button">Save Phrase</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="run-rating-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel run-rating-modal-panel" role="dialog" aria-modal="true" aria-labelledby="run-rating-title">
       <div class="history-modal-header">
@@ -1351,6 +1370,42 @@
           <button id="btn-run-rating-skip" class="bar-btn bar-btn-small" type="button">Skip</button>
           <button id="btn-run-rating-submit" class="bar-btn" type="button">Submit Rating</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sign-text-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel sign-text-modal-panel" role="dialog" aria-modal="true" aria-labelledby="sign-text-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Signs</div>
+          <h2 id="sign-text-title" class="history-modal-title">Sign Text</h2>
+          <div id="sign-text-meta" class="history-modal-meta">Players see this when they walk by.</div>
+        </div>
+        <div class="history-modal-header-actions">
+          <button id="btn-sign-text-close" class="bar-btn bar-btn-small" type="button">Close</button>
+        </div>
+      </div>
+      <div id="sign-text-error" class="history-modal-error hidden"></div>
+      <label class="sign-text-modal-field" for="sign-text-input">
+        <span class="sign-text-modal-label">Message</span>
+        <textarea
+          id="sign-text-input"
+          class="sign-text-modal-input"
+          rows="5"
+          maxlength="140"
+          placeholder="Write something players can read..."
+          spellcheck="true"
+        ></textarea>
+      </label>
+      <div class="sign-text-modal-footer">
+        <div id="sign-text-status" class="history-modal-meta">Leave it blank to keep the sign silent during play.</div>
+        <div id="sign-text-counter" class="sign-text-modal-counter">0/140</div>
+      </div>
+      <div class="sign-text-modal-actions">
+        <button id="btn-sign-text-clear" class="bar-btn bar-btn-small" type="button">Clear</button>
+        <button id="btn-sign-text-cancel" class="bar-btn bar-btn-small" type="button">Cancel</button>
+        <button id="btn-sign-text-save" class="bar-btn bar-btn-small" type="button">Save Text</button>
       </div>
     </div>
   </div>

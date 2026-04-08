@@ -4,6 +4,7 @@ import { compareCourseLeaderboardEntries, getCourseLeaderboardRankingMode } from
 import type { CourseMarkerPoint } from '../../../courses/model';
 import type { RoomGoal, GoalMarkerPoint } from '../../../goals/roomGoals';
 import type { RoomCoordinates, RoomSnapshot } from '../../../persistence/roomModel';
+import type { TrustTier } from '../../../progression/model';
 import type { LeaderboardRankingMode } from '../../../runs/model';
 import { compareLeaderboardEntries } from '../../../runs/scoring';
 import {
@@ -37,6 +38,7 @@ const GOAL_EVENT_BURST_STATIONARY_LOOKBACK_MS = 4_000;
 const GOAL_EVENT_BURST_STATIONARY_MAX_TRAVEL_PX = 48;
 
 export type RunVerificationStatus = 'not_required' | 'passed' | 'failed' | 'timeout';
+export type RunVerificationAuditStatus = Exclude<RunVerificationStatus, 'not_required'> | 'skipped';
 export type RunVerificationTriggerReason =
   | 'take_top_1'
   | 'enter_top_10'
@@ -78,7 +80,7 @@ export interface RunVerificationResult {
 export interface RunVerificationAuditInput {
   attemptId: string;
   kind: 'room' | 'course';
-  status: Exclude<RunVerificationStatus, 'not_required'>;
+  status: RunVerificationAuditStatus;
   triggerReason: RunVerificationTriggerReason;
   verificationReason: RunVerificationFailureReason | null;
   summary: Record<string, unknown>;
@@ -195,6 +197,28 @@ export function createCourseVerificationTrigger(
     rankingMode: getCourseLeaderboardRankingMode(goal),
     compare: (left, right) => compareCourseLeaderboardEntries(left, right, goal),
   });
+}
+
+export function relaxVerificationTriggerForTrustTier(
+  trigger: RunVerificationTriggerResult,
+  trustTier: TrustTier,
+): RunVerificationTriggerResult {
+  if (!trigger.required || trustTier === 'T0') {
+    return trigger;
+  }
+
+  if (trustTier === 'T1') {
+    return {
+      ...trigger,
+      required: false,
+    };
+  }
+
+  return {
+    ...trigger,
+    required: false,
+    reason: null,
+  };
 }
 
 export async function verifyRoomRunTrace(input: {

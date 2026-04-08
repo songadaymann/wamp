@@ -5,6 +5,7 @@ import {
   createMusicPhraseLabel,
   extractMusicPhrasePayloadFromPattern,
   getMusicPhraseFingerprint,
+  getMusicPhraseSampleName,
   type MusicPhraseListResponse,
   type MusicPhrasePayload,
   type MusicPhraseRecord,
@@ -126,11 +127,33 @@ const DELETE_EMPTY_MUSIC_PHRASE_BATCH_SQL = `
 const UPDATE_MUSIC_PHRASE_LABEL_SQL = `
   UPDATE music_phrases
   SET
+    room_version = ?,
+    room_title = ?,
+    room_x = ?,
+    room_y = ?,
+    creator_display_name = ?,
     label = ?,
+    fingerprint = ?,
     payload_json = ?,
     source_key_tonic = ?,
     source_key_mode = ?
   WHERE room_id = ? AND instrument_id = ? AND ordinal = ?
+`;
+
+const UPDATE_MUSIC_PHRASE_BY_ID_SQL = `
+  UPDATE music_phrases
+  SET
+    room_version = ?,
+    room_title = ?,
+    room_x = ?,
+    room_y = ?,
+    creator_display_name = ?,
+    label = ?,
+    fingerprint = ?,
+    payload_json = ?,
+    source_key_tonic = ?,
+    source_key_mode = ?
+  WHERE id = ?
 `;
 
 function normalizeMusicPhraseInstrumentId(value: unknown): RoomPatternInstrumentId {
@@ -294,12 +317,50 @@ function normalizeInstrumentIdFilter(
   return ROOM_PATTERN_INSTRUMENT_IDS.filter((instrumentId) => seen.has(instrumentId));
 }
 
+function resolveMusicPhraseNameSuffix(
+  requestedNameSuffix: string | null | undefined,
+  fallbackLabel: string | null | undefined,
+): string | null {
+  const trimmedRequested = typeof requestedNameSuffix === 'string' ? requestedNameSuffix.trim() : '';
+  if (trimmedRequested) {
+    return trimmedRequested;
+  }
+
+  const trimmedLabel = typeof fallbackLabel === 'string' ? fallbackLabel.trim() : '';
+  if (!trimmedLabel) {
+    return null;
+  }
+
+  const sampleName = getMusicPhraseSampleName({ label: trimmedLabel }).trim();
+  return sampleName || null;
+}
+
+function buildMusicPhraseSourceIdsForWrite(
+  sourcePhraseIds: readonly string[],
+  targetPhraseId?: string | null,
+): string[] {
+  const trimmedTargetPhraseId = typeof targetPhraseId === 'string' ? targetPhraseId.trim() : '';
+  const seen = new Set<string>();
+  const next: string[] = [];
+  for (const sourcePhraseId of sourcePhraseIds) {
+    const trimmed = sourcePhraseId.trim();
+    if (!trimmed || trimmed === trimmedTargetPhraseId || seen.has(trimmed)) {
+      continue;
+    }
+    seen.add(trimmed);
+    next.push(trimmed);
+  }
+  return next;
+}
+
 export async function upsertMusicPhrasesForSnapshot(
   env: Env,
   snapshot: RoomSnapshot,
   actor: MusicPhrasePublishActor,
   options?: {
     instrumentIds?: readonly RoomPatternInstrumentId[] | null;
+    saveMode?: 'overwrite' | 'save-as';
+    overwritePhraseId?: string | null;
   },
 ): Promise<MusicPhraseSaveResponse> {
   if (!isPatternRoomMusic(snapshot.music)) {
@@ -313,6 +374,7 @@ export async function upsertMusicPhrasesForSnapshot(
   const statements: D1PreparedStatement[] = [];
   const savedPhraseIds: string[] = [];
   let batchId = await loadExistingMusicPhraseBatchId(env, snapshot.id, snapshot.version);
+  const requestedOverwritePhraseId = options?.overwritePhraseId?.trim() || null;
 
   for (const instrumentId of instrumentIds) {
     const payload = extractMusicPhrasePayloadFromPattern(pattern, instrumentId);
@@ -322,27 +384,97 @@ export async function upsertMusicPhrasesForSnapshot(
 
     const fingerprint = getMusicPhraseFingerprint(payload);
     const latestPhrase = await loadLatestMusicPhraseSummary(env, snapshot.id, instrumentId);
-    const desiredOrdinal = latestPhrase && latestPhrase.fingerprint === fingerprint
-      ? latestPhrase.ordinal
-      : latestPhrase
-        ? latestPhrase.ordinal + 1
-        : 0;
+    const sourcePhraseIds = pattern.sourcePhraseIds[instrumentId];
+    const sourceKeyTonic = payload.kind === 'tonal' ? payload.keyTonic : null;
+    const sourceKeyMode = payload.kind === 'tonal' ? payload.keyMode : null;
+    const shouldCreateNewVersion = options?.saveMode === 'save-as';
+
+    if (options?.saveMode === 'overwrite' && requestedOverwritePhraseId) {
+      const targetPhrase = await loadMusicPhrase(env, requestedOverwritePhraseId);
+      if (!targetPhrase) {
+        throw new HttpError(404, 'Music phrase not found.');
+      }
+      if (!actor.userId || targetPhrase.creatorUserId !== actor.userId) {
+        throw new HttpError(403, 'Only the phrase creator can overwrite this phrase.');
+      }
+      if (targetPhrase.roomId !== snapshot.id || targetPhrase.instrumentId !== instrumentId) {
+        throw new HttpError(400, 'overwritePhraseId does not match the active room phrase.');
+      }
+
+      const desiredLabel = createMusicPhraseLabel(
+        creatorDisplayName,
+        snapshot.title,
+        snapshot.coordinates,
+        instrumentId,
+        targetPhrase.ordinal,
+        resolveMusicPhraseNameSuffix(
+          pattern.phraseNameSuffixes[instrumentId] ?? null,
+          targetPhrase.label,
+        ),
+      );
+      const nextSourcePhraseIds = buildMusicPhraseSourceIdsForWrite(sourcePhraseIds, targetPhrase.id);
+      statements.push(
+        env.DB.prepare(UPDATE_MUSIC_PHRASE_BY_ID_SQL).bind(
+          snapshot.version,
+          snapshot.title,
+          snapshot.coordinates.x,
+          snapshot.coordinates.y,
+          creatorDisplayName,
+          desiredLabel,
+          fingerprint,
+          JSON.stringify(payload),
+          sourceKeyTonic,
+          sourceKeyMode,
+          targetPhrase.id,
+        ),
+      );
+      statements.push(
+        env.DB.prepare(DELETE_MUSIC_PHRASE_SOURCES_SQL).bind(targetPhrase.id),
+      );
+      for (const sourcePhraseId of nextSourcePhraseIds) {
+        statements.push(
+          env.DB.prepare(INSERT_MUSIC_PHRASE_SOURCE_SQL).bind(
+            targetPhrase.id,
+            sourcePhraseId,
+            createdAt,
+          ),
+        );
+      }
+      savedPhraseIds.push(targetPhrase.id);
+      continue;
+    }
+
+    const desiredOrdinal =
+      !shouldCreateNewVersion && latestPhrase && latestPhrase.fingerprint === fingerprint
+        ? latestPhrase.ordinal
+        : latestPhrase
+          ? latestPhrase.ordinal + 1
+          : 0;
     const desiredLabel = createMusicPhraseLabel(
       creatorDisplayName,
       snapshot.title,
       snapshot.coordinates,
       instrumentId,
       desiredOrdinal,
-      pattern.phraseNameSuffixes[instrumentId] ?? null,
+      resolveMusicPhraseNameSuffix(
+        pattern.phraseNameSuffixes[instrumentId] ?? null,
+        !shouldCreateNewVersion && latestPhrase && latestPhrase.fingerprint === fingerprint
+          ? latestPhrase.label
+          : null,
+      ),
     );
-    const sourcePhraseIds = pattern.sourcePhraseIds[instrumentId];
-    const sourceKeyTonic = payload.kind === 'tonal' ? payload.keyTonic : null;
-    const sourceKeyMode = payload.kind === 'tonal' ? payload.keyMode : null;
 
-    if (latestPhrase && latestPhrase.fingerprint === fingerprint) {
+    if (!shouldCreateNewVersion && latestPhrase && latestPhrase.fingerprint === fingerprint) {
+      const nextSourcePhraseIds = buildMusicPhraseSourceIdsForWrite(sourcePhraseIds, latestPhrase.id);
       statements.push(
         env.DB.prepare(UPDATE_MUSIC_PHRASE_LABEL_SQL).bind(
+          snapshot.version,
+          snapshot.title,
+          snapshot.coordinates.x,
+          snapshot.coordinates.y,
+          creatorDisplayName,
           desiredLabel,
+          fingerprint,
           JSON.stringify(payload),
           sourceKeyTonic,
           sourceKeyMode,
@@ -354,7 +486,7 @@ export async function upsertMusicPhrasesForSnapshot(
       statements.push(
         env.DB.prepare(DELETE_MUSIC_PHRASE_SOURCES_SQL).bind(latestPhrase.id),
       );
-      for (const sourcePhraseId of sourcePhraseIds) {
+      for (const sourcePhraseId of nextSourcePhraseIds) {
         statements.push(
           env.DB.prepare(INSERT_MUSIC_PHRASE_SOURCE_SQL).bind(
             latestPhrase.id,
@@ -438,7 +570,7 @@ export async function upsertMusicPhrasesForSnapshot(
       ),
     );
 
-    for (const sourcePhraseId of phrase.sourcePhraseIds) {
+    for (const sourcePhraseId of buildMusicPhraseSourceIdsForWrite(phrase.sourcePhraseIds)) {
       statements.push(
         env.DB.prepare(INSERT_MUSIC_PHRASE_SOURCE_SQL).bind(
           phrase.id,

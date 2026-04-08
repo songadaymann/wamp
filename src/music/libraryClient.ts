@@ -101,11 +101,21 @@ export async function loadMusicPhrasesById(
 
 export async function saveMusicPhrases(
   snapshot: RoomSnapshot,
-  options?: { instrumentId?: RoomPatternInstrumentId | null },
+  options?: {
+    instrumentId?: RoomPatternInstrumentId | null;
+    saveMode?: 'overwrite' | 'save-as' | null;
+    overwritePhraseId?: string | null;
+  },
 ): Promise<MusicPhraseSaveResponse> {
   const searchParams = new URLSearchParams();
   if (options?.instrumentId) {
     searchParams.set('instrument', options.instrumentId);
+  }
+  if (options?.saveMode) {
+    searchParams.set('mode', options.saveMode);
+  }
+  if (options?.overwritePhraseId?.trim()) {
+    searchParams.set('overwritePhraseId', options.overwritePhraseId.trim());
   }
   searchParams.set('_ts', String(Date.now()));
   const path = `/api/rooms/${encodeURIComponent(snapshot.id)}/music/phrases?${searchParams.toString()}`;

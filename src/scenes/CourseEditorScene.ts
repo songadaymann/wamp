@@ -75,6 +75,8 @@ import { clearLocalRoomStorageEntry } from '../persistence/browserStorage';
 import { setAppMode } from '../ui/appMode';
 import { hideBusyOverlay, showBusyError, showBusyOverlay } from '../ui/appFeedback';
 import { isTextInputFocused } from '../ui/keyboardFocus';
+import { requestSignTextEdit } from '../signs/events';
+import { canPlacedObjectHaveSignText, getPlacedObjectSignText } from '../signs/model';
 import type { EditorCourseUiState, EditorMarkerPlacementMode } from '../ui/setup/sceneBridge';
 import { EditorUiBridge, type EditorInspectorState } from './editor/uiBridge';
 import type { EditorStatusDetails } from './editor/roomSession';
@@ -1619,6 +1621,16 @@ export class CourseEditorScene extends Phaser.Scene {
         pointer.worldY,
         (placed) => canPlacedObjectTriggerOtherObjects(placed)
       );
+      const clickedSign = slice.runtime.findPlacedObjectAt(
+        pointer.worldX,
+        pointer.worldY,
+        (placed) => canPlacedObjectHaveSignText(placed),
+      );
+      if (clickedSign?.instanceId) {
+        this.openPlacedSignTextEditor(clickedSign, this.getSliceLabel(slice));
+        this.renderUi();
+        return;
+      }
       if (clickedPressurePlate) {
         this.focusedPressurePlateInstanceId = clickedPressurePlate.instanceId ?? null;
         this.focusedContainerInstanceId = null;
@@ -1700,6 +1712,11 @@ export class CourseEditorScene extends Phaser.Scene {
       this.focusedPressurePlateInstanceId = null;
       this.pinInspector('container', placed.instanceId ?? '');
       this.containerStatusText = `${this.getContainerName(placed.id)} placed. Select a ${this.getContainerAcceptedContentsLabel(placed.id)} and click it to fill the container.`;
+      return;
+    }
+
+    if (placed?.instanceId && canPlacedObjectHaveSignText(placed)) {
+      this.openPlacedSignTextEditor(placed, this.getSliceLabel(slice));
     }
   }
 
@@ -2086,6 +2103,22 @@ export class CourseEditorScene extends Phaser.Scene {
     }
 
     return null;
+  }
+
+  setPlacedSignText(instanceId: string, text: string | null): boolean {
+    const target = this.getPlacedObjectRefByInstanceId(instanceId);
+    if (!target) {
+      return false;
+    }
+
+    const updated = target.slice.runtime.setSignText(instanceId, text);
+    if (!updated) {
+      return false;
+    }
+
+    this.statusText = `Updated sign text in ${this.getSliceLabel(target.slice)}.`;
+    this.renderUi();
+    return true;
   }
 
   private getCoursePressurePlateTargetRef(
@@ -2970,6 +3003,20 @@ export class CourseEditorScene extends Phaser.Scene {
 
   private getSliceLabel(slice: CourseRoomSlice): string {
     return slice.roomTitle?.trim() || `Room ${slice.coordinates.x},${slice.coordinates.y}`;
+  }
+
+  private openPlacedSignTextEditor(placed: PlacedObject, sliceLabel: string): void {
+    if (!placed.instanceId) {
+      return;
+    }
+
+    requestSignTextEdit({
+      instanceId: placed.instanceId,
+      objectId: placed.id,
+      objectLabel: getObjectById(placed.id)?.name ?? 'Sign',
+      currentText: getPlacedObjectSignText(placed) ?? '',
+      contextHint: sliceLabel,
+    });
   }
 
   private handleShutdown = (): void => {

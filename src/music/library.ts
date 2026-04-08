@@ -7,7 +7,9 @@ import {
   getPatternRowNote,
   isRoomPatternMusicEmpty,
   normalizeRoomPatternBpm,
+  normalizeRoomPatternSwingPercent,
   ROOM_PATTERN_BPM,
+  ROOM_PATTERN_SWING_PERCENT,
   type RoomPatternDrumTrack,
   type RoomPatternInstrumentId,
   type RoomPatternMusic,
@@ -42,6 +44,7 @@ export interface MusicPhraseDrumPayload {
   kind: 'drums';
   instrumentId: 'drums';
   bpm: number;
+  swingPercent: number;
   barCount: number;
   stepCount: number;
   stepsPerBeat: number;
@@ -52,6 +55,7 @@ export interface MusicPhraseTonalPayload {
   kind: 'tonal';
   instrumentId: RoomPatternTonalInstrumentId;
   bpm: number;
+  swingPercent: number;
   barCount: number;
   stepCount: number;
   stepsPerBeat: number;
@@ -128,6 +132,7 @@ export function cloneMusicPhrasePayload(
       kind: 'drums',
       instrumentId: 'drums',
       bpm: normalizeRoomPatternBpm(value.bpm ?? ROOM_PATTERN_BPM),
+      swingPercent: normalizeRoomPatternSwingPercent(value.swingPercent ?? ROOM_PATTERN_SWING_PERCENT),
       barCount: Math.max(1, Math.floor(value.barCount) || 1),
       stepCount: Math.max(1, Math.floor(value.stepCount) || 1),
       stepsPerBeat: Math.max(1, Math.floor(value.stepsPerBeat) || 1),
@@ -139,6 +144,7 @@ export function cloneMusicPhrasePayload(
     kind: 'tonal',
     instrumentId: value.instrumentId,
     bpm: normalizeRoomPatternBpm(value.bpm ?? ROOM_PATTERN_BPM),
+    swingPercent: normalizeRoomPatternSwingPercent(value.swingPercent ?? ROOM_PATTERN_SWING_PERCENT),
     barCount: Math.max(1, Math.floor(value.barCount) || 1),
     stepCount: Math.max(1, Math.floor(value.stepCount) || 1),
     stepsPerBeat: Math.max(1, Math.floor(value.stepsPerBeat) || 1),
@@ -246,6 +252,7 @@ export function getMusicPhraseFingerprint(payload: MusicPhrasePayload): string {
   return JSON.stringify({
     ...normalized,
     bpm: undefined,
+    swingPercent: undefined,
   });
 }
 
@@ -286,6 +293,7 @@ export function extractMusicPhrasePayloadFromPattern(
       kind: 'drums',
       instrumentId: 'drums',
       bpm: pattern.bpm,
+      swingPercent: pattern.swingPercent,
       barCount: pattern.barCount,
       stepCount: pattern.stepCount,
       stepsPerBeat: pattern.stepsPerBeat,
@@ -299,6 +307,7 @@ export function extractMusicPhrasePayloadFromPattern(
     kind: 'tonal',
     instrumentId: tonalInstrumentId,
     bpm: pattern.bpm,
+    swingPercent: pattern.swingPercent,
     barCount: pattern.barCount,
     stepCount: pattern.stepCount,
     stepsPerBeat: pattern.stepsPerBeat,

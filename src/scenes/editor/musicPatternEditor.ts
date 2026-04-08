@@ -9,6 +9,7 @@ import {
   getTilesetUiTheme,
 } from '../../config';
 import {
+  getMusicPhraseSampleName,
   materializeMusicPhraseDrumTrack,
   materializeMusicPhraseTonalTrack,
   type MusicPhraseRecord,
@@ -18,6 +19,7 @@ import {
   ROOM_PATTERN_DRUM_GRID_START_ROW,
   ROOM_PATTERN_DRUM_ROWS,
   ROOM_PATTERN_GRID_ROWS,
+  ROOM_PATTERN_INSTRUMENT_IDS,
   ROOM_PATTERN_MARGIN_START_STEP,
   ROOM_PATTERN_TONAL_INSTRUMENT_IDS,
   cloneRoomMusic,
@@ -31,6 +33,8 @@ import {
   isPatternDrumGridRowPlayable,
   isPatternRoomMusic,
   isStemArrangementRoomMusic,
+  normalizeRoomPatternBpm,
+  normalizeRoomPatternSwingPercent,
   type RoomMusic,
   type RoomMusicKeyMode,
   type RoomMusicKeyTonic,
@@ -376,10 +380,43 @@ export class EditorMusicPatternController {
     this.commitPattern(pattern);
   }
 
-  insertPhrase(phrase: MusicPhraseRecord): void {
+  isPatternWorkspaceEmpty(): boolean {
+    const pattern = this.getEditablePattern();
+    if (!pattern) {
+      return true;
+    }
+
+    const hasDrumContent = ROOM_PATTERN_DRUM_ROWS.some((row) => pattern.tabs.drums[row.id].length > 0);
+    if (hasDrumContent) {
+      return false;
+    }
+
+    const hasTonalContent = ROOM_PATTERN_TONAL_INSTRUMENT_IDS.some((instrumentId) =>
+      pattern.tabs[instrumentId].steps.some((rowIndex) => rowIndex !== null),
+    );
+    if (hasTonalContent) {
+      return false;
+    }
+
+    return ROOM_PATTERN_INSTRUMENT_IDS.every((instrumentId) =>
+      (pattern.sourcePhraseIds[instrumentId]?.length ?? 0) === 0,
+    );
+  }
+
+  insertPhrase(
+    phrase: MusicPhraseRecord,
+    options?: {
+      adoptPhraseTiming?: boolean;
+    },
+  ): void {
     const pattern = this.getEditablePattern();
     if (!pattern || phrase.instrumentId !== this.activeInstrumentTab) {
       return;
+    }
+
+    if (options?.adoptPhraseTiming) {
+      pattern.bpm = normalizeRoomPatternBpm(phrase.payload.bpm);
+      pattern.swingPercent = normalizeRoomPatternSwingPercent(phrase.payload.swingPercent);
     }
 
     if (this.activeInstrumentTab === 'drums') {
@@ -399,6 +436,7 @@ export class EditorMusicPatternController {
       phrase.id,
       ...phrase.sourcePhraseIds,
     ].filter((value, index, sourceIds) => sourceIds.indexOf(value) === index);
+    pattern.phraseNameSuffixes[this.activeInstrumentTab] = getMusicPhraseSampleName(phrase);
     this.commitPattern(pattern);
   }
 
