@@ -83,7 +83,23 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - `output/web-game/reward-stings-player-timing-check-live/shot-0.png`
       - `output/web-game/reward-stings-top10-timing-check-live/shot-0.png`
     - those screenshots confirm the player level-up card is still visible mid-fill at `1.3s` and the top-ten card is still visible at `2.2s`
-
+- Launch-admin activity summary regrouping on April 8, 2026:
+  - branched from `main` into `feature/launch-admin-activity-summary-2026-04-08`
+  - replaced the old raw launch-admin recent-event feed with grouped per-person summaries from the Worker:
+    - new signups
+    - visit-only logins for people who showed up but did not build or play in the last 7 days
+    - room-play rollups with completion / fail / abandon counts plus top room labels
+    - room-build rollups with claim + publish counts plus room coordinates
+    - course-build rollups with published course counts plus room-coordinate spans
+  - updated the launch-admin activity-window cards to surface people/logins/build/play/support counts instead of the older chat + magic-link-heavy emphasis
+  - updated the Recent Activity section copy to clarify that the feed is grouped by person and activity type
+  - validation:
+    - repo-wide `npm run typecheck` and `vite build` are still blocked by the known unrelated music dependency drift in `src/music/key.ts` (`@tonaljs/key` / `tonal`)
+    - targeted temporary-tsconfig compile for the launch-admin frontend surface passed
+    - targeted temporary-tsconfig compile for the launch-admin Worker surface passed after stubbing the unrelated music-only missing modules in the temporary config
+    - mocked browser verification passed against a bundled temp launch-admin page, with DOM + screenshot artifacts written to:
+      - `output/web-game/launch-admin-activity-summary-check/dom.html`
+      - `output/web-game/launch-admin-activity-summary-check/launch-admin.png`
 - HUD font trial on April 7, 2026:
   - branched from `main` into `feature/hud-font-trial-2026-04-07`
   - copied the local trial fonts into the worktree `public/assets/fonts/`

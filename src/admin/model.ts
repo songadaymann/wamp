@@ -40,9 +40,12 @@ export interface LaunchStatsTotals {
 
 export interface LaunchStatsActivityWindow {
   newUsers: number;
+  logins: number;
   magicLinksCreated: number;
   chatMessages: number;
+  roomClaims: number;
   roomPublishes: number;
+  coursePublishes: number;
   roomRunStarts: number;
   roomRunFinishes: number;
   courseRunStarts: number;
@@ -55,25 +58,55 @@ export interface LaunchStatsActivity {
   last60m: LaunchStatsActivityWindow;
 }
 
-export type LaunchStatsRecentEventKind =
-  | 'room_claim'
-  | 'room_publish'
-  | 'room_attempt_burst'
-  | 'room_run_finish';
+export type LaunchStatsRecentSummaryKind =
+  | 'signup'
+  | 'visit_only'
+  | 'room_play'
+  | 'room_build'
+  | 'course_build';
 
-export interface LaunchStatsRecentEvent {
-  kind: LaunchStatsRecentEventKind;
-  at: string;
-  actorUserId: string | null;
-  actorDisplayName: string;
+export type LaunchStatsSignupSource = 'email' | 'wallet' | 'unknown';
+
+export interface LaunchStatsActivityCoordinate {
+  x: number;
+  y: number;
+}
+
+export interface LaunchStatsRecentRoomReference {
   roomId: string | null;
   roomTitle: string | null;
   roomX: number | null;
   roomY: number | null;
-  roomVersion: number | null;
-  result: string | null;
+  attemptCount: number | null;
+  claimCount: number | null;
+  publishCount: number | null;
+}
+
+export interface LaunchStatsRecentCourseReference {
+  courseId: string;
+  courseTitle: string | null;
+  coordinates: LaunchStatsActivityCoordinate[];
+  publishCount: number | null;
+}
+
+export interface LaunchStatsRecentSummary {
+  kind: LaunchStatsRecentSummaryKind;
+  at: string;
+  actorUserId: string | null;
+  actorDisplayName: string;
+  signupSource: LaunchStatsSignupSource | null;
+  sessionCount: number | null;
+  roomCount: number | null;
+  courseCount: number | null;
+  claimCount: number | null;
+  roomPublishCount: number | null;
+  coursePublishCount: number | null;
   attemptCount: number | null;
   completedCount: number | null;
+  failedCount: number | null;
+  abandonedCount: number | null;
+  topRooms: LaunchStatsRecentRoomReference[];
+  topCourses: LaunchStatsRecentCourseReference[];
 }
 
 export interface LaunchStatsPartykitStatus {
@@ -88,7 +121,7 @@ export interface LaunchStatsResponse {
   config: LaunchStatsConfig;
   totals: LaunchStatsTotals;
   activity: LaunchStatsActivity;
-  recentEvents: LaunchStatsRecentEvent[];
+  recentSummaries: LaunchStatsRecentSummary[];
   partykit: LaunchStatsPartykitStatus;
 }
 
