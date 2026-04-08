@@ -38,17 +38,17 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #editor-actions::a
 }
 
 body[data-app-mode='editor']:not([data-device-class='phone']) #editor-actions { order: 0; }
-body[data-app-mode='editor']:not([data-device-class='phone']) #room-title-section { order: 1; }
+body[data-app-mode='editor']:not([data-device-class='phone']) #room-title-section { order: 0; }
 body[data-app-mode='editor']:not([data-device-class='phone']) #tools-section { display: none; }
-body[data-app-mode='editor']:not([data-device-class='phone']) #layers-section { order: 2; }
-body[data-app-mode='editor']:not([data-device-class='phone']) #background-section { order: 3; }
-body[data-app-mode='editor']:not([data-device-class='phone']) #sidebar > .sidebar-section[data-mobile-panel='palette']:not(#tileset-section):not(#tile-palette-section):not(#object-palette-section) { order: 4; }
-body[data-app-mode='editor']:not([data-device-class='phone']) #tileset-section { order: 5; }
+body[data-app-mode='editor']:not([data-device-class='phone']) #layers-section { order: 4; }
+body[data-app-mode='editor']:not([data-device-class='phone']) #background-section { order: 5; }
+body[data-app-mode='editor']:not([data-device-class='phone']) #sidebar > .sidebar-section[data-mobile-panel='palette']:not(#tileset-section):not(#tile-palette-section):not(#object-palette-section) { order: 1; }
+body[data-app-mode='editor']:not([data-device-class='phone']) #tileset-section { order: 2; }
 body[data-app-mode='editor']:not([data-device-class='phone']) #tile-palette-section,
-body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section { order: 6; }
-body[data-app-mode='editor']:not([data-device-class='phone']) #goal-section { order: 7; }
-body[data-app-mode='editor']:not([data-device-class='phone']) #course-goal-section { order: 8; }
-body[data-app-mode='editor']:not([data-device-class='phone']) #editor-advanced { order: 9; }
+body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section { order: 3; }
+body[data-app-mode='editor']:not([data-device-class='phone']) #goal-section { order: 6; }
+body[data-app-mode='editor']:not([data-device-class='phone']) #course-goal-section { order: 7; }
+body[data-app-mode='editor']:not([data-device-class='phone']) #editor-advanced { order: 8; }
 
 .editor-action-rail {
   display: grid;
@@ -1471,7 +1471,7 @@ body[data-editor-music-mode='true'] #editor-inspector {
   transition: opacity 0.18s ease;
 }
 
-body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #sidebar > .sidebar-section:not(#editor-advanced) {
+body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #sidebar .sidebar-section:not(#editor-advanced) {
   opacity: 0.26;
   pointer-events: none;
   filter: saturate(0.55);
@@ -1703,3 +1703,583 @@ body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #btn-mobile-edi
 }
 
 /* ── Game Container ── */
+
+body[data-app-mode='editor'] {
+  --editor-retro-cream: #fff3db;
+  --editor-retro-paper: #fffaf0;
+  --editor-retro-blue: #79ccde;
+  --editor-retro-blue-deep: #2c5071;
+  --editor-retro-green: #277b30;
+  --editor-retro-yellow: #fcea7c;
+  --editor-retro-red: #ed5f4b;
+  --editor-retro-shadow: #18161c;
+  --editor-retro-ink: #18161c;
+  --editor-ui-font: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+}
+
+body[data-app-mode='editor']:not([data-device-class='phone']) #sidebar {
+  padding: 10px;
+  gap: 10px;
+  background: #0b0b0b;
+  border-right: 2px solid var(--editor-retro-cream);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+#editor-fixed-stack,
+#editor-sidebar-scroll {
+  display: contents;
+}
+
+body[data-app-mode='editor']:not([data-device-class='phone']) #editor-fixed-stack {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+body[data-app-mode='editor']:not([data-device-class='phone']) #editor-sidebar-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 14px;
+  scrollbar-gutter: stable;
+}
+
+body[data-app-mode='editor'] #sidebar {
+  color: var(--editor-retro-ink);
+  scrollbar-color: var(--editor-retro-blue-deep) #0b0b0b;
+}
+
+body[data-app-mode='editor']:not([data-device-class='phone']) #editor-actions {
+  position: relative;
+  top: auto;
+  background: var(--editor-retro-cream);
+  backdrop-filter: none;
+  z-index: auto;
+  isolation: auto;
+  overflow: visible;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+body[data-app-mode='editor']:not([data-device-class='phone']) #editor-actions::after {
+  content: none;
+}
+
+body[data-app-mode='editor']:not([data-device-class='phone']) #editor-actions::before {
+  content: none;
+}
+
+body[data-app-mode='editor'] #sidebar .sidebar-section {
+  padding: 12px;
+  border: 2px solid var(--editor-retro-blue);
+  border-radius: 0;
+  border-bottom: 2px solid var(--editor-retro-blue);
+  background: var(--editor-retro-cream);
+  color: var(--editor-retro-ink);
+  box-shadow: 3px 3px 0 var(--editor-retro-shadow);
+  overflow: visible;
+}
+
+body[data-app-mode='editor'] #room-title-section,
+body[data-app-mode='editor'] #goal-section,
+body[data-app-mode='editor'] #course-goal-section {
+  border-color: var(--editor-retro-yellow);
+}
+
+body[data-app-mode='editor'] #sidebar .section-label,
+body[data-app-mode='editor'] #sidebar .editor-top-tools-label,
+body[data-app-mode='editor'] #sidebar .editor-tool-popover-label,
+body[data-app-mode='editor'] #sidebar .goal-control-label,
+body[data-app-mode='editor'] #sidebar .erase-controls-label,
+body[data-app-mode='editor'] #sidebar .object-facing-label,
+body[data-app-mode='editor'] #sidebar .background-solid-color-row,
+body[data-app-mode='editor'] #sidebar .lighting-slider-label {
+  color: var(--editor-retro-blue-deep);
+  font-family: var(--editor-ui-font);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+body[data-app-mode='editor'] #sidebar .section-label {
+  margin-bottom: 8px;
+}
+
+body[data-app-mode='editor'] #sidebar .editor-advanced-block-label {
+  color: var(--editor-retro-blue-deep);
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 11px;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+}
+
+body[data-app-mode='editor'] #sidebar .sidebar-section-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  border: 2px solid var(--editor-retro-shadow);
+  background: var(--editor-retro-blue);
+  color: #000;
+  box-shadow: 2px 2px 0 var(--editor-retro-shadow);
+  font-family: var(--editor-pixel-font);
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+body[data-app-mode='editor'] #sidebar .sidebar-section-toggle:hover {
+  filter: brightness(1.05);
+  transform: none;
+}
+
+body[data-app-mode='editor'] #sidebar .sidebar-section.is-collapsed .sidebar-section-toggle {
+  background: var(--editor-retro-yellow);
+  color: #000;
+}
+
+body[data-app-mode='editor'] #sidebar .bar-btn,
+body[data-app-mode='editor'] #sidebar .tool-btn,
+body[data-app-mode='editor'] #sidebar .palette-tab,
+body[data-app-mode='editor'] #sidebar .obj-cat-tab,
+body[data-app-mode='editor'] #sidebar .layer-btn,
+body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn,
+body[data-app-mode='editor'] #sidebar .object-item,
+body[data-app-mode='editor'] #sidebar .layer-info-button {
+  appearance: none;
+  -webkit-appearance: none;
+  border-width: 2px;
+  border-radius: 0;
+  border-color: var(--editor-retro-shadow);
+  box-shadow: 2px 2px 0 var(--editor-retro-shadow);
+}
+
+body[data-app-mode='editor'] #sidebar .bar-btn {
+  min-height: 32px;
+  padding: 6px 10px 5px;
+  background: var(--editor-retro-blue) !important;
+  background-color: var(--editor-retro-blue) !important;
+  background-image: none !important;
+  box-shadow: inset 0 0 0 999px var(--editor-retro-blue), 2px 2px 0 var(--editor-retro-shadow) !important;
+  color: #000 !important;
+  font-family: var(--editor-ui-font);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+body[data-app-mode='editor'] #sidebar .bar-btn:hover,
+body[data-app-mode='editor'] #sidebar .tool-btn:hover,
+body[data-app-mode='editor'] #sidebar .palette-tab:hover,
+body[data-app-mode='editor'] #sidebar .obj-cat-tab:hover,
+body[data-app-mode='editor'] #sidebar .layer-btn:hover,
+body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn:hover,
+body[data-app-mode='editor'] #sidebar .object-item:hover,
+body[data-app-mode='editor'] #sidebar .layer-info-button:hover,
+body[data-app-mode='editor'] #sidebar .layer-info-button:focus-visible {
+  filter: brightness(1.05);
+}
+
+body[data-app-mode='editor'] #sidebar .bar-btn:disabled {
+  background: #d2caba;
+  border-color: #8d877c;
+  color: #5f5a53;
+  box-shadow: inset 0 0 0 999px #d2caba !important;
+}
+
+body[data-app-mode='editor'] #sidebar .bar-btn.active,
+body[data-app-mode='editor'] #sidebar .tool-btn.active,
+body[data-app-mode='editor'] #sidebar .layer-btn.active,
+body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn.active,
+body[data-app-mode='editor'] #sidebar .object-item.active {
+  background: var(--editor-retro-green) !important;
+  background-color: var(--editor-retro-green) !important;
+  background-image: none !important;
+  border-color: var(--editor-retro-shadow) !important;
+  color: var(--editor-retro-cream) !important;
+  box-shadow: inset 0 0 0 999px var(--editor-retro-green), 2px 2px 0 var(--editor-retro-shadow) !important;
+}
+
+body[data-app-mode='editor'] #sidebar .bar-btn-danger {
+  background: var(--editor-retro-red) !important;
+  background-color: var(--editor-retro-red) !important;
+  background-image: none !important;
+  border-color: var(--editor-retro-shadow) !important;
+  box-shadow: inset 0 0 0 999px var(--editor-retro-red), 2px 2px 0 var(--editor-retro-shadow) !important;
+  color: var(--editor-retro-cream) !important;
+}
+
+body[data-app-mode='editor'] #sidebar .tool-btn,
+body[data-app-mode='editor'] #sidebar .palette-tab,
+body[data-app-mode='editor'] #sidebar .obj-cat-tab,
+body[data-app-mode='editor'] #sidebar .layer-btn,
+body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn,
+body[data-app-mode='editor'] #sidebar .object-item {
+  background: var(--editor-retro-paper) !important;
+  background-color: var(--editor-retro-paper) !important;
+  background-image: none !important;
+  box-shadow: inset 0 0 0 999px var(--editor-retro-paper), 2px 2px 0 var(--editor-retro-shadow) !important;
+  color: var(--editor-retro-ink) !important;
+}
+
+body[data-app-mode='editor'] #sidebar .tool-btn,
+body[data-app-mode='editor'] #sidebar .palette-tab,
+body[data-app-mode='editor'] #sidebar .obj-cat-tab {
+  font-family: var(--editor-ui-font);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+}
+
+body[data-app-mode='editor'] #sidebar .tool-btn {
+  height: 42px;
+  min-width: 56px;
+}
+
+body[data-app-mode='editor'] #sidebar .tool-icon {
+  font-size: 14px;
+}
+
+body[data-app-mode='editor'] #sidebar .tool-label {
+  font-family: var(--editor-ui-font);
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  line-height: 1.25;
+}
+
+body[data-app-mode='editor'] #sidebar .palette-tab.active,
+body[data-app-mode='editor'] #sidebar .obj-cat-tab.active {
+  background: var(--editor-retro-yellow) !important;
+  background-color: var(--editor-retro-yellow) !important;
+  background-image: none !important;
+  border-color: var(--editor-retro-shadow) !important;
+  box-shadow: inset 0 0 0 999px var(--editor-retro-yellow), 2px 2px 0 var(--editor-retro-shadow) !important;
+  color: #000 !important;
+}
+
+body[data-app-mode='editor'] #sidebar .layer-btn {
+  background: var(--editor-retro-paper) !important;
+  background-color: var(--editor-retro-paper) !important;
+  background-image: none !important;
+  box-shadow: inset 0 0 0 999px var(--editor-retro-paper), 2px 2px 0 var(--editor-retro-shadow) !important;
+  color: var(--editor-retro-ink) !important;
+}
+
+body[data-app-mode='editor'] #sidebar .layer-btn-summary {
+  color: inherit;
+  font-family: var(--editor-ui-font);
+  font-size: 12px;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+body[data-app-mode='editor'] #sidebar .layer-info-button {
+  width: 28px;
+  min-width: 28px;
+  background: var(--editor-retro-blue) !important;
+  background-color: var(--editor-retro-blue) !important;
+  background-image: none !important;
+  box-shadow: inset 0 0 0 999px var(--editor-retro-blue), 2px 2px 0 var(--editor-retro-shadow) !important;
+  color: #000 !important;
+  font-family: var(--editor-ui-font);
+}
+
+body[data-app-mode='editor'] #sidebar .layer-info-tooltip,
+body[data-app-mode='editor'] #object-tooltip,
+body[data-app-mode='editor'] #sidebar .editor-tool-popover,
+body[data-app-mode='editor'] #sidebar .pressure-plate-panel,
+body[data-app-mode='editor'] #sidebar #container-contents-panel {
+  border: 2px solid var(--editor-retro-blue);
+  border-radius: 0;
+  background: var(--editor-retro-paper);
+  color: var(--editor-retro-ink);
+  box-shadow: 3px 3px 0 var(--editor-retro-shadow);
+  font-family: var(--editor-ui-font);
+}
+
+body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn.active {
+  box-shadow: inset 0 0 0 999px var(--editor-retro-green), 2px 2px 0 var(--editor-retro-shadow) !important;
+}
+
+body[data-app-mode='editor'] #sidebar select,
+body[data-app-mode='editor'] #sidebar .goal-input,
+body[data-app-mode='editor'] #sidebar .object-search-input,
+body[data-app-mode='editor'] #sidebar .editor-erase-brush-select {
+  width: 100%;
+  padding: 8px 10px 6px;
+  border: 2px solid var(--editor-retro-blue-deep);
+  border-radius: 0;
+  background: #0b0b0b;
+  color: var(--editor-retro-cream);
+  font-family: var(--editor-ui-font);
+  font-size: 12px;
+  box-shadow: none;
+}
+
+body[data-app-mode='editor'] #sidebar select:focus,
+body[data-app-mode='editor'] #sidebar .goal-input:focus,
+body[data-app-mode='editor'] #sidebar .object-search-input:focus,
+body[data-app-mode='editor'] #sidebar .editor-erase-brush-select:focus {
+  outline: none;
+  border-color: var(--editor-retro-blue);
+  box-shadow: 0 0 0 2px rgba(121, 204, 222, 0.2);
+}
+
+body[data-app-mode='editor'] #sidebar select option {
+  background: #18161c;
+  color: var(--editor-retro-cream);
+}
+
+body[data-app-mode='editor'] #sidebar .object-search-input::placeholder {
+  color: rgba(255, 243, 219, 0.68);
+}
+
+body[data-app-mode='editor'] #sidebar #palette-container,
+body[data-app-mode='editor'] #sidebar #object-grid {
+  border: 2px solid var(--editor-retro-blue-deep);
+  border-radius: 0;
+  background: #0b0b0b;
+}
+
+body[data-app-mode='editor'] #sidebar #object-grid {
+  padding: 4px;
+}
+
+body[data-app-mode='editor'] #sidebar .object-grid-empty {
+  border: 2px dashed var(--editor-retro-blue);
+  border-radius: 0;
+  color: var(--editor-retro-blue);
+  font-family: var(--editor-ui-font);
+  font-size: 11px;
+}
+
+body[data-app-mode='editor'] #sidebar .editor-layer-chip {
+  margin-top: 8px;
+  padding: 6px 8px 5px;
+  border: 2px solid var(--editor-retro-blue-deep);
+  border-radius: 0;
+  background: var(--editor-retro-paper);
+  color: var(--editor-retro-blue-deep);
+  box-shadow: none;
+  font-family: var(--editor-ui-font);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+body[data-app-mode='editor'] #sidebar .editor-layer-chip[data-layer-tone='background'] {
+  border-color: var(--editor-retro-blue-deep);
+  background: #eefbfd;
+  color: var(--editor-retro-blue-deep);
+}
+
+body[data-app-mode='editor'] #sidebar .editor-layer-chip[data-layer-tone='terrain'] {
+  border-color: var(--editor-retro-green);
+  background: #eef7dd;
+  color: var(--editor-retro-shadow);
+}
+
+body[data-app-mode='editor'] #sidebar .editor-layer-chip[data-layer-tone='foreground'] {
+  border-color: var(--editor-retro-red);
+  background: #fde8e2;
+  color: var(--editor-retro-shadow);
+}
+
+body[data-app-mode='editor'] #sidebar .selection-info,
+body[data-app-mode='editor'] #sidebar .background-solid-color-value,
+body[data-app-mode='editor'] #sidebar .lighting-slider-value {
+  color: var(--editor-retro-blue-deep);
+  font-family: var(--editor-ui-font);
+  font-size: 11px;
+}
+
+body[data-app-mode='editor'] #sidebar .palette-hint,
+body[data-app-mode='editor'] #sidebar .goal-summary,
+body[data-app-mode='editor'] #sidebar .room-lighting-note,
+body[data-app-mode='editor'] #sidebar .history-modal-meta,
+body[data-app-mode='editor'] #sidebar #music-summary,
+body[data-app-mode='editor'] #sidebar .lighting-slider-endpoints,
+body[data-app-mode='editor'] #sidebar .editor-top-save-status,
+body[data-app-mode='editor'] #sidebar .editor-publish-nudge-text {
+  color: var(--editor-retro-blue-deep);
+  font-family: var(--editor-ui-font);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+body[data-app-mode='editor'] #sidebar .goal-summary,
+body[data-app-mode='editor'] #sidebar .editor-top-save-status {
+  padding: 9px 10px;
+  border: 2px solid var(--editor-retro-blue-deep);
+  background: var(--editor-retro-paper);
+  box-shadow: 2px 2px 0 var(--editor-retro-shadow);
+}
+
+body[data-app-mode='editor'] #sidebar .editor-top-save-status a {
+  color: var(--editor-retro-blue-deep);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+body[data-app-mode='editor'] #sidebar .goal-context-note {
+  border: 2px solid var(--editor-retro-shadow);
+  border-radius: 0;
+  background: var(--editor-retro-blue);
+  color: #000;
+  font-family: var(--editor-ui-font);
+  font-size: 11px;
+  line-height: 1.4;
+  box-shadow: 2px 2px 0 var(--editor-retro-shadow);
+}
+
+body[data-app-mode='editor'] #sidebar .goal-placement-hint {
+  padding: 8px 10px;
+  border: 2px solid var(--editor-retro-shadow);
+  border-radius: 0;
+  background: var(--editor-retro-yellow);
+  color: #000;
+  font-family: var(--editor-ui-font);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+body[data-app-mode='editor'] #sidebar .editor-action-rail {
+  gap: 8px;
+}
+
+body[data-app-mode='editor'] #sidebar .editor-action-rail-btn {
+  min-height: 46px;
+  padding: 6px 4px 5px;
+}
+
+body[data-app-mode='editor'] #sidebar #btn-editor-back {
+  background: var(--editor-retro-blue) !important;
+  background-color: var(--editor-retro-blue) !important;
+  box-shadow: inset 0 0 0 999px var(--editor-retro-blue), 2px 2px 0 var(--editor-retro-shadow) !important;
+  color: #000 !important;
+}
+
+body[data-app-mode='editor'] #sidebar #btn-test-play {
+  background: var(--editor-retro-green) !important;
+  background-color: var(--editor-retro-green) !important;
+  box-shadow: inset 0 0 0 999px var(--editor-retro-green), 2px 2px 0 var(--editor-retro-shadow) !important;
+  color: var(--editor-retro-cream) !important;
+}
+
+body[data-app-mode='editor'] #sidebar #btn-save-draft,
+body[data-app-mode='editor'] #sidebar #btn-course-editor-save-course {
+  background: var(--editor-retro-yellow) !important;
+  background-color: var(--editor-retro-yellow) !important;
+  box-shadow: inset 0 0 0 999px var(--editor-retro-yellow), 2px 2px 0 var(--editor-retro-shadow) !important;
+  color: #000 !important;
+}
+
+body[data-app-mode='editor'] #sidebar #btn-publish-room,
+body[data-app-mode='editor'] #sidebar #btn-course-editor-publish-course,
+body[data-app-mode='editor'] #sidebar #btn-editor-publish-nudge,
+body[data-app-mode='editor'] #sidebar #btn-mint-room {
+  background: var(--editor-retro-red) !important;
+  background-color: var(--editor-retro-red) !important;
+  box-shadow: inset 0 0 0 999px var(--editor-retro-red), 2px 2px 0 var(--editor-retro-shadow) !important;
+  color: var(--editor-retro-cream) !important;
+}
+
+body[data-app-mode='editor'] #sidebar #btn-editor-publish-nudge {
+  font-family: var(--editor-ui-font);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+body[data-app-mode='editor'] #sidebar .editor-top-tools {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 2px solid var(--editor-retro-blue);
+}
+
+body[data-app-mode='editor'] #sidebar .editor-publish-nudge {
+  padding: 12px;
+  border: 2px solid var(--editor-retro-shadow);
+  border-radius: 0;
+  background: var(--editor-retro-yellow);
+  box-shadow: 3px 3px 0 var(--editor-retro-shadow);
+}
+
+body[data-app-mode='editor'] #sidebar .editor-publish-nudge-kicker {
+  color: var(--editor-retro-blue-deep);
+  font-family: var(--editor-ui-font);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+body[data-app-mode='editor'] #sidebar .editor-advanced-grid {
+  gap: 12px;
+}
+
+body[data-app-mode='editor'] #sidebar .editor-advanced-block {
+  padding: 10px;
+  border: 2px solid var(--editor-retro-blue);
+  border-radius: 0;
+  background: var(--editor-retro-paper);
+  box-shadow: 2px 2px 0 var(--editor-retro-shadow);
+}
+
+body[data-app-mode='editor'] #sidebar .editor-advanced-block[data-advanced-block='music'] {
+  border-color: var(--accent-alt);
+}
+
+body[data-app-mode='editor'] #sidebar .editor-advanced-block[data-advanced-block='lighting'] {
+  border-color: var(--editor-retro-yellow);
+}
+
+body[data-app-mode='editor'] #sidebar .background-solid-color-input {
+  border: 2px solid var(--editor-retro-blue-deep);
+  border-radius: 0;
+  background: #0b0b0b;
+  box-shadow: none;
+}
+
+body[data-app-mode='editor'] #sidebar .background-solid-color-input::-webkit-color-swatch,
+body[data-app-mode='editor'] #sidebar .background-solid-color-input::-moz-color-swatch {
+  border-radius: 0;
+}
+
+body[data-app-mode='editor'] #sidebar .lighting-slider-input {
+  accent-color: var(--editor-retro-yellow);
+}
+
+body[data-app-mode='editor'] #sidebar .editor-music-workbench-card,
+body[data-app-mode='editor'] #sidebar .editor-music-status-note {
+  box-shadow: 2px 2px 0 var(--editor-retro-shadow);
+}
+
+body[data-app-mode='editor'] #sidebar .editor-music-workbench .section-label,
+body[data-app-mode='editor'] #sidebar .editor-music-workbench .editor-music-select-label {
+  color: #fff3db;
+}
+
+body[data-app-mode='editor'] #sidebar #editor-music-phrase-name-row .goal-input {
+  border-color: #fff3db;
+}
+
+body[data-app-mode='editor'] #sidebar #editor-music-phrase-action-row .bar-btn.active {
+  background: var(--editor-retro-yellow) !important;
+  background-color: var(--editor-retro-yellow) !important;
+  background-image: none !important;
+  border-color: var(--editor-retro-shadow) !important;
+  color: #000 !important;
+  box-shadow: inset 0 0 0 999px var(--editor-retro-yellow), 2px 2px 0 var(--editor-retro-shadow) !important;
+}

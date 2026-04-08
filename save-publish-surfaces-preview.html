@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WAMP Save / Publish Surfaces Preview</title>
+    <link rel="stylesheet" href="/src/styles/main.css" />
+    <style>
+      body.save-publish-preview {
+        margin: 0;
+        min-height: 100vh;
+        padding: 28px;
+        background:
+          linear-gradient(180deg, rgba(44, 80, 113, 0.22), rgba(24, 22, 28, 0)),
+          #18161c;
+        color: #fff3db;
+      }
+
+      .preview-shell {
+        width: min(1360px, 100%);
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      .preview-header {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .preview-kicker {
+        color: #79ccde;
+        font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .preview-title {
+        color: #fff3db;
+        font-family: 'Super Mario Bros. NES', monospace;
+        font-size: clamp(22px, 4vw, 34px);
+        line-height: 1.1;
+      }
+
+      .preview-copy {
+        max-width: 760px;
+        color: #fff3db;
+        font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .preview-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 22px;
+        align-items: start;
+      }
+
+      .preview-stage {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+        border: 2px solid #2c5071;
+        background: rgba(9, 9, 11, 0.64);
+        box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.4);
+      }
+
+      .preview-stage-title {
+        color: #fff3db;
+        font-family: 'Super Mario Bros. NES', monospace;
+        font-size: 17px;
+        line-height: 1.2;
+      }
+
+      .preview-stage-copy {
+        color: #fff3db;
+        font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .preview-stage #busy-overlay,
+      .preview-stage #room-history-modal,
+      .preview-stage #course-modal,
+      .preview-stage #course-editor-shell {
+        position: static !important;
+        inset: auto !important;
+        display: block !important;
+        padding: 0 !important;
+        background: transparent !important;
+        pointer-events: auto !important;
+      }
+
+      .preview-stage #busy-overlay .app-busy-card,
+      .preview-stage #room-history-modal .history-modal-panel,
+      .preview-stage #course-modal .course-modal-panel,
+      .preview-stage #course-editor-shell .course-editor-panel {
+        width: 100% !important;
+        max-height: none !important;
+        margin: 0 !important;
+        box-sizing: border-box;
+      }
+
+      .preview-stage #course-modal .course-modal-panel {
+        position: static !important;
+      }
+
+      .preview-stage #course-editor-shell {
+        pointer-events: auto !important;
+      }
+
+      .preview-stage #sidebar {
+        position: static !important;
+        top: auto !important;
+        right: auto !important;
+        width: min(380px, 100%) !important;
+        max-height: none !important;
+        margin: 0 auto 0 0;
+        border: 3px solid #79ccde;
+        box-shadow: 6px 6px 0 #18161c;
+      }
+
+      .preview-stage #editor-card-shell,
+      .preview-stage #editor-sidebar-scroll,
+      .preview-stage #editor-fixed-stack {
+        max-height: none !important;
+        overflow: visible !important;
+      }
+
+      .preview-stage #editor-sidebar-scroll {
+        display: flex !important;
+        flex-direction: column !important;
+      }
+
+      .preview-hidden {
+        display: none !important;
+      }
+
+      @media (max-width: 780px) {
+        body.save-publish-preview {
+          padding: 16px;
+        }
+
+        .preview-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body class="save-publish-preview" data-app-mode="editor" data-device-class="desktop">
+    <div class="preview-shell">
+      <div class="preview-header">
+        <div class="preview-kicker">Save / Publish Review</div>
+        <div class="preview-title">Editor And Course Publishing Surfaces</div>
+        <div class="preview-copy">
+          This page lays out the save, publish, history, and course setup surfaces together so you
+          can review the whole family quickly. The actual modal flows still exist in the running
+          game; this is just the concentrated gallery.
+        </div>
+      </div>
+
+      <div class="preview-grid">
+        <section class="preview-stage">
+          <div class="preview-stage-title">Busy Overlay</div>
+          <div class="preview-stage-copy">What save and publish blocking states look like mid-action.</div>
+          <div id="busy-overlay" class="app-feedback app-busy-overlay" aria-live="polite">
+            <div class="app-feedback-card app-busy-card">
+              <div id="busy-overlay-title" class="app-busy-title">Publishing Room</div>
+              <div id="busy-overlay-status" class="app-feedback-status">
+                Validating the goal, refreshing published data, and locking in the latest version.
+              </div>
+              <div id="busy-overlay-spinner" class="app-busy-spinner" aria-hidden="true"></div>
+              <div class="app-busy-actions">
+                <button id="btn-busy-retry" class="bar-btn preview-hidden" type="button">Retry</button>
+                <button id="btn-busy-close" class="bar-btn preview-hidden" type="button">Close</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="preview-stage">
+          <div class="preview-stage-title">Editor Save Rail</div>
+          <div class="preview-stage-copy">The draft-status rail and publish nudge that stay in the editor shell.</div>
+          <div id="sidebar">
+            <div id="editor-card-shell">
+              <div id="editor-fixed-stack">
+                <div id="editor-actions" class="sidebar-section">
+                  <div class="editor-top-save-status" id="editor-top-save-status">
+                    Draft saved. Published version is one update behind.
+                  </div>
+                  <div id="editor-publish-nudge" class="editor-publish-nudge">
+                    <div class="editor-publish-nudge-kicker">Draft Only</div>
+                    <div id="editor-publish-nudge-text" class="editor-publish-nudge-text">
+                      People still see the older published room until you publish this draft.
+                    </div>
+                    <button id="btn-editor-publish-nudge" class="bar-btn bar-btn-small" type="button">
+                      Publish Now
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div id="editor-sidebar-scroll"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="preview-stage">
+          <div class="preview-stage-title">Room History</div>
+          <div class="preview-stage-copy">Version restore and canonical actions in the updated history treatment.</div>
+          <div id="room-history-modal" class="history-modal" aria-hidden="false">
+            <div class="history-modal-panel" role="dialog" aria-modal="false" aria-labelledby="room-history-title">
+              <div class="history-modal-header">
+                <div class="history-modal-title-group">
+                  <div class="history-modal-kicker">Room History</div>
+                  <h2 id="room-history-title" class="history-modal-title">Versions</h2>
+                  <div id="room-history-meta" class="history-modal-meta">
+                    Room 0,0 | 4 versions | Claimed by jonathan on Apr 8, 2026, 9:20 AM | Canonical v4 | Token #6
+                  </div>
+                </div>
+                <div class="history-modal-header-actions">
+                  <button id="btn-room-history-restore-canonical" class="bar-btn bar-btn-small" type="button">
+                    Restore Canonical
+                  </button>
+                  <button id="btn-room-history-refresh-metadata" class="bar-btn bar-btn-small" type="button">
+                    Refresh NFT Metadata
+                  </button>
+                  <button id="btn-room-history-close" class="bar-btn bar-btn-small" type="button">Close</button>
+                </div>
+              </div>
+              <div id="room-history-error" class="history-modal-error">
+                NFT metadata is still pointing at v3. Refreshing will push it to the latest minted room version.
+              </div>
+              <div id="room-history-list" class="history-version-list">
+                <div class="history-version-row">
+                  <div class="history-version-copy">
+                    <div class="history-version-line">
+                      <div class="history-version-label">v4</div>
+                      <span class="history-version-badge">Latest</span>
+                      <span class="history-version-badge">Canonical</span>
+                    </div>
+                    <div class="history-version-meta">Published Apr 8, 2026, 9:18 AM by jonathan</div>
+                  </div>
+                </div>
+                <div class="history-version-row">
+                  <div class="history-version-copy">
+                    <div class="history-version-line">
+                      <div class="history-version-label">v3</div>
+                      <span class="history-version-badge">Leaderboard from v3</span>
+                    </div>
+                    <div class="history-version-meta">Published Apr 7, 2026, 5:03 PM by jonathan</div>
+                  </div>
+                  <div class="history-version-actions">
+                    <button class="bar-btn bar-btn-small" type="button">Revert</button>
+                    <button class="bar-btn bar-btn-small" type="button">Mark Canonical</button>
+                    <button class="bar-btn bar-btn-small" type="button">Using Leaderboard</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="preview-stage">
+          <div class="preview-stage-title">Course Builder Modal</div>
+          <div class="preview-stage-copy">Save, test, and publish actions inside the course builder modal.</div>
+          <div id="course-modal" class="history-modal" aria-hidden="false">
+            <div class="history-modal-panel leaderboard-modal-panel course-modal-panel" role="dialog" aria-modal="false" aria-labelledby="course-modal-title">
+              <div class="history-modal-header">
+                <div class="history-modal-title-group">
+                  <div class="history-modal-kicker">Courses</div>
+                  <h2 id="course-modal-title" class="history-modal-title">Course Builder</h2>
+                  <div id="course-modal-meta" class="history-modal-meta">3 rooms selected · listed order defines the path</div>
+                </div>
+                <button id="btn-course-close" class="bar-btn bar-btn-small" type="button">Close</button>
+              </div>
+              <div class="about-copy">
+                <div class="about-section">
+                  <div class="about-section-title">Title</div>
+                  <input id="course-title-input" class="goal-input room-title-input" type="text" value="Race To The Top" />
+                </div>
+                <div class="about-section">
+                  <div class="about-section-title">Live State</div>
+                  <div id="course-published-state" class="goal-summary">Published · 3 rooms</div>
+                  <div id="course-published-warning" class="history-modal-meta">Draft setup changed. Re-publish when you are ready.</div>
+                </div>
+                <div class="about-section">
+                  <div class="about-section-title">Publish</div>
+                  <div class="course-room-actions">
+                    <button id="btn-course-save-draft" class="bar-btn" type="button">Save Draft</button>
+                    <button id="btn-course-publish" class="bar-btn" type="button">Publish Course</button>
+                    <button id="btn-course-unpublish" class="bar-btn" type="button">Unpublish Course</button>
+                    <button id="btn-course-test-draft" class="bar-btn" type="button">Test Draft</button>
+                  </div>
+                  <div id="course-save-draft-reason" class="history-modal-meta">Save the latest room list before opening the course editor again.</div>
+                  <div id="course-publish-reason" class="history-modal-meta">Publishing will replace the currently visible course path.</div>
+                  <div id="course-modal-status" class="history-modal-meta">Draft saved successfully.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="preview-stage">
+          <div class="preview-stage-title">Course Setup Workbench</div>
+          <div class="preview-stage-copy">The full authoring shell for setup, testing, and publishing before the room editor opens.</div>
+          <div id="course-editor-shell" class="course-editor-shell" aria-hidden="false">
+            <div class="course-editor-panel">
+              <div class="course-editor-header">
+                <div class="course-editor-header-copy">
+                  <div class="history-modal-kicker">Courses</div>
+                  <div class="history-modal-title">Course Setup</div>
+                  <div id="course-workbench-status" class="history-modal-meta">Draft saved successfully.</div>
+                </div>
+                <button id="btn-course-workbench-back-world" class="bar-btn bar-btn-small" type="button">World</button>
+              </div>
+              <div class="course-editor-toolbar">
+                <div class="course-editor-zoom-row">
+                  <button id="btn-course-workbench-zoom-out" class="bar-btn bar-btn-small" type="button">-</button>
+                  <div id="course-workbench-zoom-text" class="course-editor-zoom-text">Zoom: 0.18x</div>
+                  <button id="btn-course-workbench-zoom-in" class="bar-btn bar-btn-small" type="button">+</button>
+                  <button id="btn-course-workbench-fit" class="bar-btn bar-btn-small" type="button">Fit</button>
+                </div>
+              </div>
+              <div class="course-editor-scroll">
+                <div class="about-section">
+                  <div class="about-section-title">Selected Room</div>
+                  <div id="course-workbench-selected-room-summary" class="goal-summary">Room 1,-8 · Race To The Top</div>
+                  <div id="course-workbench-selected-room-status" class="history-modal-meta">Selected room already belongs to this course and can be opened in the editor.</div>
+                  <div id="course-workbench-selected-room-actions" class="course-room-actions">
+                    <button id="btn-course-workbench-toggle-room" class="bar-btn bar-btn-small" type="button">Remove Room</button>
+                    <button id="btn-course-workbench-open-room" class="bar-btn bar-btn-small" type="button">Open Room</button>
+                    <button id="btn-course-workbench-center-room" class="bar-btn bar-btn-small" type="button">Center</button>
+                    <button id="btn-course-workbench-edit-course" class="bar-btn bar-btn-small" type="button">Edit Course</button>
+                  </div>
+                </div>
+                <div class="about-section">
+                  <div class="about-section-title">Setup</div>
+                  <div class="course-room-actions">
+                    <button id="btn-course-workbench-save" class="bar-btn" type="button">Save Setup</button>
+                    <button id="btn-course-workbench-test" class="bar-btn" type="button">Test Draft</button>
+                    <button id="btn-course-workbench-publish" class="bar-btn" type="button">Publish Course</button>
+                    <button id="btn-course-workbench-unpublish" class="bar-btn" type="button">Unpublish Course</button>
+                  </div>
+                  <div id="course-workbench-save-reason" class="history-modal-meta">Save before leaving this screen so the course editor picks up the latest room list.</div>
+                  <div id="course-workbench-publish-reason" class="history-modal-meta">Publishing will replace the current public version.</div>
+                </div>
+                <div class="about-section">
+                  <div class="about-section-title">Rooms</div>
+                  <div id="course-workbench-room-list" class="course-editor-list">
+                    <button type="button" class="course-editor-room-entry active">
+                      <div class="course-editor-room-entry-title">Race To The Top</div>
+                      <div class="course-editor-room-entry-meta">1,-8 · v7 · start</div>
+                    </button>
+                    <button type="button" class="course-editor-room-entry">
+                      <div class="course-editor-room-entry-title">Branch Jump</div>
+                      <div class="course-editor-room-entry-meta">1,-9 · v4 · checkpoint 1</div>
+                    </button>
+                    <button type="button" class="course-editor-room-entry">
+                      <div class="course-editor-room-entry-title">Final Stretch</div>
+                      <div class="course-editor-room-entry-meta">2,-9 · v5 · finish</div>
+                    </button>
+                  </div>
+                </div>
+                <div class="about-section">
+                  <div class="about-section-title">Live State</div>
+                  <div id="course-workbench-published-state" class="goal-summary">Published · 3 rooms</div>
+                  <div id="course-workbench-published-warning" class="history-modal-meta">The live course is still using the older room order.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </body>
+</html>

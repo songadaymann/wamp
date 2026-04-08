@@ -16,7 +16,7 @@ import { PaletteController } from './setup/paletteController';
 import { setupRoomMusicControls } from './setup/musicControls';
 import { ProfileModalController } from './setup/profileModal';
 import { RunRatingModalController } from './setup/runRatingModal';
-import { setupCollapsibleSidebarSections } from './setup/sidebarSections';
+import { setupCollapsibleSidebarSections, setupEditorSidebarShell } from './setup/sidebarSections';
 import { setupSceneCommands } from './setup/sceneCommands';
 import { configureEditorUiBridgeRuntime } from '../scenes/editor/uiBridge';
 
@@ -49,6 +49,7 @@ export function setupUI(game: Phaser.Game): void {
     },
     openHistory: () => historyModal.open(),
   });
+  setupEditorSidebarShell();
   setupCollapsibleSidebarSections();
   historyModal.init();
   leaderboardModal.init();

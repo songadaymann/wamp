@@ -57,6 +57,74 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- HUD font trial on April 7, 2026:
+  - branched from `main` into `feature/hud-font-trial-2026-04-07`
+  - copied the local trial fonts into the worktree `public/assets/fonts/`
+  - updated the world/play HUD stack so:
+    - `Early GameBoy` stays on the top brand kicker
+    - `Super Mario Bros. NES` is used only for the selected room title
+    - `HomeVideo` is used for the rest of the HUD utility text, including HUD controls, goal panel text, bottom bar, and related world HUD labels
+  - added room-title size buckets in the overworld HUD view model + bridge:
+    - `normal` for titles up to 16 chars
+    - `compact` for titles from 17 to 24 chars
+    - `tiny` for titles above 24 chars
+  - responsive override on phone also scales those title buckets down further
+  - validation:
+    - `npm run typecheck` passed
+    - local Vite trial server running on `http://127.0.0.1:4593/`
+    - targeted Playwright browse capture written to:
+      - `output/web-game/hud-font-trial-smoke/browse.png`
+  - HUD hierarchy + color pass later on April 7, 2026:
+    - increased all browse-HUD action buttons to `11.5px`, including `Course Builder`, `Leaderboard`, and `Warp`
+    - switched the `BETA` badge to `Early GameBoy`
+    - removed the HUD `Controls` button
+    - added a second title line slot so course rooms can show a main course title with an optional room subtitle
+    - selected published course details now hydrate on demand in the overworld HUD so the course-title treatment can use real `roomRefs` data instead of only chunk-summary metadata
+    - moved the room goal summary into its own lower HUD line and rewrote the copy to be concrete:
+      - `Reach exit`
+      - `Collect X`
+      - `Reach X checkpoints`
+      - `Defeat X enemies`
+      - `Survive X seconds`
+    - kept the `Best:` line separate and switched it to white
+    - restyled the browse HUD controls and state badge toward the music-arrangement palette:
+      - square corners
+      - green for play/published
+      - yellow for edit/course builder and goal text
+      - blue for leaderboard / warp / creator name
+      - red for build / stop states
+    - flattened the HUD shell + goal panel away from rounded glass toward hard-edged framed panels
+  - follow-up validation for the hierarchy + color pass:
+    - `npm run typecheck` passed after the HUD data-model and CSS changes
+    - headless canvas screenshots still hit the known black-frame artifact, so verification also used live DOM/computed-style inspection in Playwright
+    - DOM audit confirmed:
+      - `Play Room`, `Course Builder`, `Leaderboard`, and `Warp` render at `11.5px`
+      - creator line renders at `12.5px` in the blue accent
+      - `Published/Minted` state badge is square and filled
+      - `BETA` renders with the pixel font
+      - HUD `Controls` button is absent
+      - selected room `0,0` showed `Reach 4 checkpoints` in the new goal line and `Best: jonathan · 14.85s` in white
+    - targeted course-room DOM check selected room `1,-8` and confirmed the course-title path:
+      - HUD main title became `Race To The Top`
+      - subtitle stayed empty for that room
+      - goal line showed `Defeat 10 enemies`
+  - minted-room title treatment later on April 7, 2026:
+    - removed the visible `Published` pill from published-room HUD states; only draft/frontier/empty still surface the hard-edged state badge row
+    - minted rooms now move their status treatment up into the title row instead of sharing the creator/meta row
+    - added a lock icon beside the selected room title using `public/assets/ui-locked-door.png`
+    - minted room titles now switch to pink `#f65699`
+    - hovering or focusing the lock reveals the old minted-room explainer as a tooltip
+    - the old inline `Minted` pill + info affordance is now hidden for minted rooms
+  - follow-up validation for the minted-title treatment:
+    - `npm run typecheck` passed
+    - live API probe confirmed room `0,0` (`Hello World`) is minted, so the default HUD selection now exercises the minted path
+    - Playwright DOM/computed-style inspection on `http://127.0.0.1:4593/` confirmed:
+      - title `Hello World` renders with `data-world-title-tone="minted"`
+      - title color resolves to `rgb(246, 86, 153)`
+      - lock icon wrapper is visible
+      - lock tooltip text is present
+      - old state pill row stays hidden for that minted room
+
 - XP / ratings / trust / badges merge to main on April 6, 2026:
   - merged `feature/progression-xp-ratings-trust-badges` into `main`
   - main now includes:
@@ -5885,3 +5953,400 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - Next suggestions:
     - verify the `New / Edit / Save` flow in a real browser session with an actual signed-in editable room
     - if this UX feels right in live editor QA, commit this branch as a narrow post-launch follow-up rather than mixing it into unrelated gameplay work
+
+- 2026-04-07: HUD minted icon swap on `feature/hud-font-trial-2026-04-07`
+  - replaced the minted-room title icon asset from the locked door sprite to the Mario key sprite
+  - copied `Sprites-and-Things/MARIO-2/key.png` into the HUD trial worktree as `public/assets/ui-room-key.png`
+  - updated the minted title-row icon to load `/assets/ui-room-key.png`
+  - validation:
+    - live Playwright DOM check against `http://127.0.0.1:4593/` confirmed the HUD lock image now resolves to `/assets/ui-room-key.png`
+    - served image natural size reports `14x16`
+
+- 2026-04-07: creator stats card in HUD on `feature/hud-font-trial-2026-04-07`
+  - replaced the published-room creator line with a new HUD creator card while keeping the old coordinates fallback for non-published states
+  - creator card now includes:
+    - static avatar from `player/Sprites/Idle/Idle01.png`
+    - creator display name
+    - `Stats` label
+    - three icon rows for player / curator / builder progression levels
+  - added lazy profile-summary loading in the overworld HUD state controller so published rooms can fetch public progression levels without inventing a second API path
+  - copied the progression row sprites into the worktree:
+    - `public/assets/ui-progress-player.png`
+    - `public/assets/ui-progress-curator.png`
+    - `public/assets/ui-progress-builder.png`
+  - copied the creator avatar sprite into the worktree:
+    - `public/assets/ui-creator-idle.png`
+  - validation:
+    - `npm run typecheck` passed
+    - direct profile probe for room `0,0` creator returned:
+      - display name `jonathan`
+      - player level `6`
+      - curator level `1`
+      - builder level `9`
+    - live Playwright DOM check against `http://127.0.0.1:4593/` confirmed:
+      - creator card is visible
+      - fallback coordinates button is hidden for the published room
+      - card renders `jonathan` with levels `6 / 1 / 9`
+      - avatar asset loads from `/assets/ui-creator-idle.png`
+    - mobile-width DOM check at `390x844` confirmed the creator card still fits inside the HUD panel
+  - follow-up refinement later on April 7, 2026:
+    - changed the three progression rows from `icon + level number` into wrapped icon strips, so the HUD now shows one icon per level
+    - increased the avatar frame and avatar image size for a stronger portrait read without changing the card width
+  - follow-up validation:
+    - `npm run typecheck` passed
+    - desktop DOM check confirmed the selected `0,0` room creator renders:
+      - `6` player icons
+      - `1` curator icon
+      - `9` builder icons
+      - avatar frame `66x58`
+      - avatar image `54x47.25`
+    - mobile-width DOM check at `390x844` still fits inside the HUD panel with the larger avatar and icon strips
+  - later HUD refinement on April 7, 2026:
+    - reverted the repeated icon strips back to a single icon plus `LVL [number]`
+    - kept the `Early GameBoy` font for the `LVL` label and number
+    - added simple per-lane progress bars under each stat row:
+      - player uses green
+      - curator uses blue
+      - builder uses yellow
+    - wired the bars to public profile `progressFraction` values so each row now shows progress toward the next level
+  - refinement validation:
+    - `npm run typecheck` passed
+    - live Playwright DOM check against `http://127.0.0.1:4593/` confirmed:
+      - rows render as `LVL 6`, `LVL 1`, and `LVL 9`
+      - label font resolves to `Early GameBoy`
+      - player fill width `11.6%` in green
+      - curator fill width `50%` in blue
+      - builder fill width `69.9%` in yellow
+  - creator-card cleanup later on April 7, 2026:
+    - removed the `Stats` label from the HUD creator card
+    - pulled the level rows upward by tightening the body and stats stack gaps
+    - reduced the creator-card top/bottom padding slightly so the outer rectangle is shorter
+    - mirrored the same vertical trim in the phone rules
+  - cleanup validation:
+    - ran the Playwright client against `http://127.0.0.1:4593/` with output in:
+      - `output/web-game/hud-creator-card-tighten/`
+    - no console error artifact was produced
+    - live DOM/computed-style probe confirmed:
+      - `.world-creator-card-stats-label` is absent
+      - creator-card padding now resolves to `7px` top and bottom on desktop
+      - creator-card body gap now resolves to `2px`
+      - stats stack gap now resolves to `2px`
+  - frontier-cell visual pass later on April 7, 2026:
+    - changed overworld frontier rooms from a translucent orange fill into a hollow treatment
+    - frontier room frames now use the HUD `Build Here` red `#ed5f4b`
+    - frontier room interiors now render transparent so the starfield shows through
+  - frontier-cell validation:
+    - `npm run typecheck` passed
+    - headless Playwright still stalled on the loading screen, so this pass was code-verified at the canvas renderer level rather than screenshot-verified
+  - frontier-cell label experiment later on April 7, 2026:
+    - changed frontier rooms again from hollow red outlines to a solid `Build Here` red fill
+    - added centered `BUILD / HERE` labels inside frontier rooms using Phaser text with the `Early GameBoy` font
+    - kept the outer frontier frame red and aligned the inner live-editor highlight to the same red so the tile does not mix red and orange accents
+  - frontier label validation:
+    - `npm run typecheck` passed
+  - frontier fill tweak later on April 7, 2026:
+    - reduced the red `BUILD / HERE` frontier fill from near-solid to `50%` opacity while keeping the label and border treatment unchanged
+  - frontier follow-up later on April 7, 2026:
+    - reverted frontier rooms back to hollow red outlines
+    - kept the centered `BUILD / HERE` label so the affordance stays explicit without the red block fill
+  - zoom-outline stability fix later on April 7, 2026:
+    - replaced room-cell `strokeRect` / `lineBetween` outlines with fill-based frame segments sized from `screen px / zoom`
+    - applied that constant-screen-thickness treatment to:
+      - published room outlines
+      - draft outlines
+      - frontier outlines
+      - selected-room outline
+      - current-room play outline
+      - active-course boundaries
+      - inner live-editor highlight outline
+    - viewport zoom changes now explicitly redraw the room-cell layer so outline thickness updates immediately at each zoom step
+  - zoom-outline validation:
+    - `npm run typecheck` passed
+    - ran the Playwright client against `http://127.0.0.1:4593/` with output in:
+      - `output/web-game/outline-zoom-stability-check/`
+    - state capture confirmed the app reached `overworld-play` browse mode at `zoom: 0.18`
+    - the headless canvas screenshot still hit the known black-frame artifact, so this pass is validated by loaded-world state plus the renderer change rather than by a trustworthy image capture
+  - zoom-outline performance follow-up later on April 7, 2026:
+    - frontier `BUILD / HERE` labels are now cached by room coordinates instead of being destroyed and recreated on each redraw
+    - zoom-triggered room-cell redraws now short-circuit unless the outline thickness changes to a new zoom bucket
+    - ordinary non-zoom world redraws still rebuild the room-cell layer immediately so state changes remain correct
+  - zoom-outline performance validation:
+    - `npm run typecheck` passed
+    - ran the Playwright client against `http://127.0.0.1:4593/` with output in:
+      - `output/web-game/outline-zoom-performance-followup/`
+    - that follow-up run completed without console errors, but the captured state landed during an incomplete/empty load path, so this optimization pass is primarily code-verified
+  - creator stat icon refresh later on April 7, 2026:
+    - replaced the HUD creator-card progression sprites with the new provided assets from `Sprites-and-Things/`
+    - kept the existing asset URLs by overwriting:
+      - `public/assets/ui-progress-player.png`
+      - `public/assets/ui-progress-curator.png`
+      - `public/assets/ui-progress-builder.png`
+    - widened the creator stat icon slot to fit the new square icons:
+      - desktop `16x16`
+      - phone `14x14`
+  - creator stat icon validation:
+    - `npm run typecheck` passed
+    - captured a full-page live HUD screenshot to:
+      - `output/web-game/hud-icon-refresh-fullpage.png`
+  - overworld room outline color tweak later on April 7, 2026:
+    - changed the neutral overworld room outline color to `#2c5071`
+    - applied it to both:
+      - the general room grid overlay
+      - the published-room inset frame
+    - left draft, frontier, selected, and current-room accent colors unchanged
+  - room outline color validation:
+    - `npm run typecheck` passed
+  - overworld outline color correction later on April 7, 2026:
+    - reverted the neutral room-outline treatment back to the original light/white map lines
+    - reassigned the frontier outline color itself to `#2c5071`
+    - kept the `BUILD / HERE` label treatment unchanged
+  - outline color correction validation:
+    - `npm run typecheck` passed
+  - overworld footer `Players Online` restyle later on April 7, 2026:
+    - removed the always-visible footer chat hint block so the `Players Online` control sits cleanly in the black footer
+    - restyled the footer control as a filled green rectangular button with off-white text in `Early GameBoy`
+    - restyled the hover popover into a flat cream rectangle with a green outline
+    - popover typography now splits by role:
+      - title uses `Super Mario Bros. NES`
+      - body text uses `HomeVideo`
+  - footer popover validation:
+    - `npm run typecheck` passed
+    - captured a live hover screenshot to:
+      - `output/web-game/world-online-footer-popover.png`
+    - DOM/computed-style check confirmed:
+      - footer hint block is gone
+      - button background resolves to `rgb(39, 123, 48)`
+      - button font resolves to `Early GameBoy`
+      - popover background resolves to `rgb(255, 243, 219)`
+      - popover border resolves to the same green
+  - overworld footer controls return later on April 7, 2026:
+    - added the full `Controls` button back to the bottom footer, next to `Players Online`
+    - styled the footer button as a filled blue rectangle with black text in `Early GameBoy`
+    - kept the two footer world controls centered together inside the bar-center region
+    - restyled the controls modal away from the generic dark glass treatment:
+      - cream `#fff3db` panel
+      - blue outline `#79ccde`
+      - square corners and hard shadow
+      - `Early GameBoy` for kicker, close button, and key pills
+      - `Super Mario Bros. NES` for the modal title
+      - `HomeVideo` for the meta copy and control descriptions
+  - footer controls validation:
+    - `npm run typecheck` passed
+    - DOM/computed-style check confirmed:
+      - footer `Controls` button background resolves to `rgb(121, 204, 222)`
+      - footer `Controls` button font resolves to `Early GameBoy`
+      - controls modal opens from the footer button
+      - modal panel background resolves to `rgb(255, 243, 219)`
+      - modal panel outline resolves to `rgb(121, 204, 222)`
+      - modal title resolves to `Super Mario Bros. NES`
+      - modal body copy resolves to `HomeVideo`
+    - captured fresh element screenshots to:
+      - `output/web-game/footer-controls-bottom-bar.png`
+      - `output/web-game/footer-controls-modal-panel.png`
+  - controls modal follow-up later on April 7, 2026:
+    - fixed the cream controls panel so it stays inside the viewport instead of falling off the bottom edge
+    - made the controls panel itself handle overflow with internal scrolling when needed
+    - added `T` -> `Chat in room` to the Play section
+  - controls modal follow-up validation:
+    - `npm run typecheck` passed
+    - DOM check confirmed:
+      - modal panel bottom stays inside the viewport
+      - modal panel uses `overflow-y: auto`
+      - `T Chat in room` appears in the Play section
+    - captured updated modal panel screenshot to:
+      - `output/web-game/footer-controls-modal-panel-v2.png`
+  - auth menu + about modal retro pass later on April 7, 2026:
+    - restyled the hamburger button into a filled blue square control
+    - converted the auth menu into a cream retro panel with square corners, blue outline, and hard shadow
+    - removed the old top `Account` / identity block and removed the explanatory sign-in copy
+    - kept the top of the panel as the `About WAMP` + Discord row
+    - changed button families inside the auth menu:
+      - utility/info buttons blue
+      - email / wallet / save-name buttons green
+      - logout / reset buttons red
+    - simplified auth identity presentation:
+      - display-name entry only shows until a name exists
+      - removed the `Current display name` state copy
+      - added one bottom signed-in summary line as the only persistent identity display
+    - restyled the About modal to match the controls modal family:
+      - cream panel
+      - blue outline
+      - square corners
+      - `Early GameBoy` kicker / button labels
+      - `Super Mario Bros. NES` title
+      - `HomeVideo` body copy
+    - tightened phone auth-menu behavior with a capped menu height and smaller signed-in footer text
+  - auth menu + about modal validation:
+    - `npm run typecheck` passed
+    - DOM/computed-style checks confirmed:
+      - hamburger button background resolves to `rgb(121, 204, 222)` with `0px` radius
+      - auth menu panel background resolves to `rgb(255, 243, 219)` with a blue outline and `0px` radius
+      - `About WAMP` resolves blue with `Early GameBoy`
+      - `Sign In With Email` resolves green with off-white text
+      - wallet button stays in the green family even when disabled in the local guest/headless state
+      - auth status text resolves to `HomeVideo`
+      - About modal resolves to cream + blue and fits inside the viewport
+      - About modal typography resolves to `Super Mario Bros. NES` title, `Early GameBoy` kicker/section labels, and `HomeVideo` body copy
+    - captured refreshed About modal screenshot to:
+      - `output/web-game/about-modal-panel.png`
+  - editor sidebar retro pass later on April 7, 2026:
+    - swapped the HUD curator icon asset to the newly provided `Sprites-and-Things/curator.png`
+    - swapped the minted room title icon to a new `public/assets/ui-room-minted.png` sourced from `Sprites-and-Things/minted.png`
+    - added a broad retro restyle for the desktop editor sidebar in `src/styles/sections/editor.css`:
+      - cream section cards with blue or yellow outlines
+      - square corners and hard shadows
+      - `Early GameBoy` for labels/buttons, `HomeVideo` for form/body copy, `Super Mario Bros. NES` for advanced block labels
+      - dark retro inputs/selects and stronger note/publish-nudge treatments
+  - editor sidebar retro validation:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - ran the required Playwright client against `http://127.0.0.1:4593/` with output in:
+      - `output/web-game/editor-modal-retro-client/`
+    - direct browser probes against the trial server confirmed:
+      - the new editor card shell is loading
+      - editor inputs/selects are picking up the retro restyle
+      - the new icon asset path `/assets/ui-room-minted.png` is in the live DOM
+    - remaining validation gap:
+      - headless forced-editor captures are not a faithful stand-in for the real initialized editor scene, so the final visual call on the redesigned action/tool button treatment should be made by checking the live editor manually
+  - editor sticky/header follow-up later on April 7, 2026:
+    - tightened the desktop editor sticky stack again so the pinned top action block sits on a higher layer than the scrolling sections beneath it
+    - moved the cream card underlay and bottom mask onto positive z-index pseudo-elements so they actually cover the content scrolling below
+    - added explicit stacking to the sticky action block children and reset sibling section stacking to keep lower cards under the pinned shell
+    - changed the sidebar collapse `+ / -` toggles back to `Early GameBoy` instead of `HomeVideo`
+  - editor sticky/header follow-up validation:
+    - ran the required Playwright client against `http://127.0.0.1:4593/`
+    - direct Playwright probe against the live trial confirmed:
+      - `#editor-actions` resolves to `z-index: 30`
+      - sticky underlay pseudo-elements resolve above sibling content at `z-index: 1` and `2`
+      - sidebar toggle glyphs resolve to `Early GameBoy` at `10px`
+    - captured a forced-editor sidebar screenshot to:
+      - `output/web-game/editor-sticky-followup-sidebar.png`
+  - editor sidebar shell split later on April 7, 2026:
+    - replaced the desktop sticky approach with a structural split:
+      - `room-title-section` and `editor-actions` now live in a fixed editor sidebar stack
+      - all remaining sidebar sections now live inside a dedicated `#editor-sidebar-scroll` scroller
+    - added a setup-time DOM shell pass in `sidebarSections.ts` so the split is created automatically without hand-moving the HTML blocks
+    - removed the desktop sticky/mask pseudo-element treatment from `#editor-actions`
+    - kept the `+ / -` toggles on `Early GameBoy`
+    - updated the music-lock dimming selector so it still reaches sections inside the new wrapper
+  - editor sidebar shell split validation:
+    - `npm run typecheck` passed
+    - ran the required Playwright client against `http://127.0.0.1:4593/`
+    - direct Playwright probe confirmed:
+      - `#editor-fixed-stack` resolves as a real flex column
+      - `#editor-sidebar-scroll` resolves as the only scrolling region with `overflow-y: auto`
+      - `room-title-section` and `editor-actions` stay in the fixed stack while the lower sections scroll
+    - captured a forced-editor sidebar screenshot to:
+      - `output/web-game/editor-shell-split-sidebar.png`
+  - editor order + background follow-up on April 8, 2026:
+    - moved `room-title-section` out of the fixed stack so only the top action/tools block remains frozen
+    - reordered the desktop editor scroll stack to:
+      - room title
+      - tiles/objects mode tabs
+      - tileset
+      - selection/object palette
+      - layers
+      - background
+      - goal
+      - advanced
+    - changed the main editor card background token from off-white to `#aaa4a5`
+  - editor order + background validation:
+    - `npm run typecheck` passed
+    - ran the required Playwright client against `http://127.0.0.1:4593/`
+    - direct Playwright probe confirmed:
+      - fixed stack now contains only `editor-actions`
+      - scroll shell begins with `room-title-section`, then palette mode, tileset, selection, layers, background, goal, and advanced
+      - `--editor-retro-cream` resolves to `#aaa4a5`
+    - captured a forced-editor sidebar screenshot to:
+      - `output/web-game/editor-order-gray-sidebar.png`
+  - editor background token revert on April 8, 2026:
+    - changed the main editor card background token back from `#aaa4a5` to `#fff3db`
+    - kept the new shell split and reordered desktop section stack intact
+  - editor background token revert validation:
+    - ran the required Playwright client against `http://127.0.0.1:4593/`
+    - direct Playwright probe confirmed `--editor-retro-cream` resolves back to `#fff3db`
+    - captured a forced-editor sidebar screenshot to:
+      - `output/web-game/editor-order-cream-sidebar.png`
+  - editor selection height follow-up on April 8, 2026:
+    - reduced the desktop `Selection` card height by trimming `#tile-palette-section` from `280-340px` down to `220-270px`
+    - left the object palette height unchanged
+  - editor selection height validation:
+    - ran the required Playwright client against `http://127.0.0.1:4593/`
+    - direct Playwright probe confirmed:
+      - `#tile-palette-section` now resolves to `min-height: 220px`
+      - current forced-editor height resolves to `220px`
+      - `#palette-container` now renders at about `130px` tall in the forced-editor shell
+    - captured a forced-editor sidebar screenshot to:
+      - `output/web-game/editor-selection-height-sidebar.png`
+  - save / publish surface retro pass on April 8, 2026:
+    - rethemed the blocking busy overlay into the current retro language:
+      - cream panel
+      - blue frame
+      - hard shadow
+      - larger Mario title
+      - HomeVideo status copy and action buttons
+      - segmented palette loading bar
+    - tightened the room history modal around the same system:
+      - stronger cream card shell
+      - HomeVideo kicker / body copy
+      - larger version rows
+      - yellow GameBoy badges
+      - flatter, filled action buttons
+    - refined the course builder modal save/publish sections:
+      - paper section cards
+      - cream text inputs
+      - filled yellow / blue / green / red reason and status blocks
+      - action buttons matched to save, test, publish, and remove semantics
+    - redesigned the course setup workbench shell from dark glass into the same retro family:
+      - cream panel with blue frame and hard shadow
+      - paper subsection cards
+      - color-coded save / test / publish buttons
+      - filled status and warning blocks
+      - paper room-entry cards with green active state
+    - tightened the inline editor save surfaces:
+      - larger save-status rail copy
+      - hard-shadowed save rail card
+      - stronger publish nudge spacing
+      - publish nudge button typography switched to the editor UI font
+    - added a dedicated save/publish review page at:
+      - `save-publish-surfaces-preview.html`
+  - save / publish surface validation:
+    - `npm run typecheck` passed
+    - direct local checks confirmed both routes return `200`:
+      - `http://127.0.0.1:4593/`
+      - `http://127.0.0.1:4593/save-publish-surfaces-preview.html`
+    - installed Playwright Chromium locally for this worktree so browser captures could run again
+    - captured the save/publish gallery page to:
+      - `output/web-game/save-publish-surfaces-preview-check/save-publish-surfaces-preview-full.png`
+    - captured the live app root after a 12s browser wait to:
+      - `output/web-game/save-publish-live-root-check/live-root-after-wait.png`
+    - validation note:
+      - the existing `npm run smoke:preview:readonly` script is still blocked in this worktree because the repo does not have `playwright` installed as a project dependency, so this pass used direct Playwright CLI browser captures instead of the normal scripted smoke flow
+  - world chat retro pass:
+    - restyled the world chat shell into the same flat retro family as the HUD and modals:
+      - blue filled chat toggle
+      - cream panel with blue frame and hard shadow
+      - Mario panel title
+      - HomeVideo body, status, input, and moderation/action text
+      - flat paper message cards with square corners
+      - green send buttons and red danger actions
+    - restyled the in-room chat composer to match:
+      - cream shell
+      - blue frame
+      - paper input
+      - filled green send button
+    - carried the same treatment into phone/tablet world chat overrides so the opened mobile sheet keeps the cream / blue / square treatment instead of dark glass
+  - world chat validation:
+    - ran the `develop-web-game` Playwright client against:
+      - `http://127.0.0.1:4593/?previewSmoke=1`
+    - client state confirmed:
+      - global chat open
+      - 50 messages loaded
+      - latest message present
+      - room chat and presence sockets still fail locally because PartyKit is not running on `127.0.0.1:1999`
+    - artifacts:
+      - `output/web-game/world-chat-retro-check/shot-0.png`
+      - `output/web-game/world-chat-retro-check/state-0.json`
+      - `output/web-game/world-chat-retro-check/errors-0.json`
+    - validation caveat:
+      - the skill client still hit the known black-frame capture issue for the live canvas screenshot, so this pass was verified by the live running app plus state output and not by a trustworthy automated image capture

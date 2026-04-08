@@ -6,6 +6,26 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: 'HomeVideo';
+  src: url('/assets/fonts/HomeVideo-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'HomeVideo';
+  src: url('/assets/fonts/HomeVideo-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Super Mario Bros. NES';
+  src: url('/assets/fonts/Super%20Mario%20Bros.%20NES.ttf') format('truetype');
+  font-display: swap;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -42,6 +62,8 @@
   --success-soft: rgba(52, 116, 51, 0.18);
   --editor-pixel-font: 'Early GameBoy', monospace;
   --editor-ui-font: 'IBM Plex Mono', 'Courier New', monospace;
+  --hud-ui-font: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  --hud-room-title-font: 'Super Mario Bros. NES', 'Early GameBoy', monospace;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -171,7 +193,8 @@ body {
 
 .app-busy-overlay {
   z-index: 135;
-  background: rgba(5, 5, 5, 0.76);
+  background: rgba(24, 22, 28, 0.8);
+  backdrop-filter: none;
 }
 
 body[data-playfun-mode='true'] .app-feedback {
@@ -183,37 +206,115 @@ body[data-playfun-mode='true'] .app-busy-overlay {
 }
 
 .app-busy-card {
-  width: min(360px, calc(100vw - 48px));
+  width: min(460px, calc(100vw - 40px));
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 18px 18px;
+  border: 3px solid #79ccde;
+  border-radius: 0;
+  background: #fff3db;
+  box-shadow: 6px 6px 0 #18161c;
 }
 
 .app-busy-title {
+  color: #18161c;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 18px;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+}
+
+.app-busy-overlay .app-feedback-status {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
   font-size: 13px;
-  letter-spacing: 0.12em;
+  line-height: 1.5;
 }
 
 .app-busy-spinner {
-  width: 34px;
-  height: 34px;
-  border: 3px solid rgba(243, 238, 226, 0.15);
-  border-top-color: var(--accent-warm);
-  border-radius: 999px;
-  animation: busy-spin 0.8s linear infinite;
+  position: relative;
+  width: 164px;
+  height: 20px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #fffaf0;
+  box-shadow: 3px 3px 0 #18161c;
+  overflow: hidden;
+}
+
+.app-busy-spinner::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: 36px;
+  background: #277b30;
+  box-shadow:
+    40px 0 0 #79ccde,
+    80px 0 0 #fcea7c,
+    120px 0 0 #ed5f4b;
+  animation: busy-load 1s steps(4) infinite;
 }
 
 .app-busy-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .app-busy-actions .bar-btn {
-  min-width: 92px;
+  min-width: 104px;
+  padding: 8px 12px 7px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #79ccde;
+  color: #000;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+.app-busy-actions .bar-btn:hover {
+  filter: brightness(1.06);
+}
+
+.app-busy-actions #btn-busy-retry {
+  background: #277b30;
+  color: #fff3db;
+}
+
+.app-busy-actions #btn-busy-close {
+  background: #ed5f4b;
+  color: #fff3db;
 }
 
 .app-busy-overlay[data-busy-state='error'] .app-busy-title {
-  color: #ffd2d2;
+  color: #ed5f4b;
+}
+
+.app-busy-overlay[data-busy-state='error'] .app-busy-card {
+  border-color: #ed5f4b;
+}
+
+.app-busy-overlay[data-busy-state='error'] .app-busy-spinner {
+  display: none;
+}
+
+@keyframes busy-load {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(40px);
+  }
 }
 
 body[data-app-ready='false'] #app,
@@ -246,6 +347,12 @@ body[data-app-mode="play-world"] #global-chat {
 }
 
 #auth-panel {
+  --auth-retro-cream: #fff3db;
+  --auth-retro-blue: #79ccde;
+  --auth-retro-green: #277b30;
+  --auth-retro-red: #ed5f4b;
+  --auth-retro-shadow: #18161c;
+  --auth-retro-ink: #18161c;
   position: fixed;
   top: calc(16px + var(--safe-top));
   right: calc(16px + var(--safe-right));
@@ -509,20 +616,22 @@ body[data-install-help-open='true'] .rotate-gate {
   height: 36px;
   margin-left: auto;
   padding: 0;
-  background: rgba(11, 11, 11, 0.92);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  background: var(--auth-retro-blue);
+  border: 2px solid var(--auth-retro-shadow);
+  border-radius: 0;
   cursor: pointer;
-  backdrop-filter: blur(4px);
+  backdrop-filter: none;
   transition:
     background 0.15s,
     transform 0.06s ease,
-    box-shadow 0.06s ease;
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+    box-shadow 0.06s ease,
+    filter 0.12s ease;
+  box-shadow: 2px 2px 0 var(--auth-retro-shadow);
 }
 
 #menu-toggle:hover {
-  background: rgba(30, 30, 30, 0.95);
+  background: var(--auth-retro-blue);
+  filter: brightness(1.06);
 }
 
 #menu-toggle.is-pressed {
@@ -533,9 +642,9 @@ body[data-install-help-open='true'] .rotate-gate {
 .hamburger-line {
   display: block;
   width: 18px;
-  height: 2px;
-  background: var(--text);
-  border-radius: 1px;
+  height: 3px;
+  background: var(--auth-retro-ink);
+  border-radius: 0;
   transition: transform 0.2s, opacity 0.2s;
 }
 
@@ -556,12 +665,16 @@ body[data-install-help-open='true'] .rotate-gate {
   gap: 10px;
   width: 312px;
   max-width: calc(100vw - 32px);
-  margin-top: 6px;
+  max-height: calc(100vh - 84px - var(--safe-top) - var(--safe-bottom));
+  margin-top: 8px;
   padding: 12px;
-  background: rgba(11, 11, 11, 0.92);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  backdrop-filter: blur(4px);
+  overflow-y: auto;
+  background: var(--auth-retro-cream);
+  border: 2px solid var(--auth-retro-blue);
+  border-radius: 0;
+  backdrop-filter: none;
+  box-shadow: 4px 4px 0 var(--auth-retro-shadow);
+  color: var(--auth-retro-ink);
 }
 
 #auth-panel.menu-open #menu-body {
@@ -571,8 +684,9 @@ body[data-install-help-open='true'] .rotate-gate {
 .auth-header,
 .auth-row {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .auth-header {
@@ -580,18 +694,16 @@ body[data-install-help-open='true'] .rotate-gate {
 }
 
 .auth-copy {
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.35;
+  display: none;
 }
 
 #auth-panel.auth-panel-guest #menu-body {
-  border-color: rgba(52, 116, 51, 0.34);
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+  border-color: var(--auth-retro-blue);
+  box-shadow: 4px 4px 0 var(--auth-retro-shadow);
 }
 
 #auth-panel.auth-panel-guest .auth-copy {
-  color: #d8ead2;
+  display: none;
 }
 
 .auth-menu-action-row {
@@ -602,48 +714,44 @@ body[data-install-help-open='true'] .rotate-gate {
   flex: 1 1 auto;
   width: auto;
   justify-content: center;
-  border-color: rgba(227, 187, 77, 0.4);
-  color: var(--accent-warm);
-}
-
-.auth-menu-action-btn:hover {
-  background: rgba(227, 187, 77, 0.12);
 }
 
 .auth-discord-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
   padding: 0;
-  border: 1px solid rgba(88, 101, 242, 0.45);
-  border-radius: 3px;
-  background: rgba(88, 101, 242, 0.14);
-  color: #c7cfff;
+  border: 2px solid var(--auth-retro-shadow);
+  border-radius: 0;
+  background: var(--auth-retro-blue);
+  color: #000;
   text-decoration: none;
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+  box-shadow: 2px 2px 0 var(--auth-retro-shadow);
   transition:
     background 0.1s,
     border-color 0.1s,
     color 0.1s,
     transform 0.06s ease,
-    box-shadow 0.06s ease;
+    box-shadow 0.06s ease,
+    filter 0.12s ease;
 }
 
 .auth-discord-link:hover {
-  background: rgba(88, 101, 242, 0.22);
-  border-color: rgba(132, 145, 255, 0.7);
-  color: #ffffff;
+  background: var(--auth-retro-blue);
+  border-color: var(--auth-retro-shadow);
+  color: #000;
+  filter: brightness(1.06);
 }
 
 .auth-discord-link:focus-visible {
   outline: none;
-  border-color: var(--accent-cool);
+  border-color: var(--auth-retro-shadow);
   box-shadow:
-    0 0 0 2px rgba(143, 216, 255, 0.22),
-    0 2px 0 rgba(0, 0, 0, 0.3);
+    0 0 0 2px rgba(121, 204, 222, 0.24),
+    2px 2px 0 var(--auth-retro-shadow);
 }
 
 .auth-discord-link svg {
@@ -653,14 +761,14 @@ body[data-install-help-open='true'] .rotate-gate {
 }
 
 .auth-title {
-  color: var(--text);
+  color: var(--auth-retro-ink);
   font-size: 12px;
   letter-spacing: 1px;
   text-transform: uppercase;
 }
 
 .auth-identity {
-  color: var(--text-muted);
+  color: var(--auth-retro-ink);
   font-size: 11px;
   text-align: right;
 }
@@ -694,94 +802,166 @@ body[data-install-help-open='true'] .rotate-gate {
 #auth-email-input {
   flex: 1;
   min-width: 0;
-  padding: 5px 8px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  color: var(--text);
+  padding: 8px 10px 6px;
+  background: #fffaf0;
+  border: 2px solid var(--auth-retro-shadow);
+  border-radius: 0;
+  color: var(--auth-retro-ink);
   font-size: 11px;
-  font-family: 'Courier New', monospace;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
 }
 
 #auth-display-name-input {
   flex: 1;
   min-width: 0;
-  padding: 5px 8px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  color: var(--text);
+  padding: 8px 10px 6px;
+  background: #fffaf0;
+  border: 2px solid var(--auth-retro-shadow);
+  border-radius: 0;
+  color: var(--auth-retro-ink);
   font-size: 11px;
-  font-family: 'Courier New', monospace;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
 }
 
 #auth-email-input:focus {
   outline: none;
-  border-color: var(--accent-cool);
+  border-color: var(--auth-retro-blue);
+  box-shadow: 0 0 0 2px rgba(121, 204, 222, 0.2);
 }
 
 #auth-display-name-input:focus {
   outline: none;
-  border-color: var(--accent-cool);
+  border-color: var(--auth-retro-blue);
+  box-shadow: 0 0 0 2px rgba(121, 204, 222, 0.2);
 }
 
 #btn-auth-wallet {
   flex: 1;
 }
 
-#auth-panel.auth-panel-guest #btn-auth-email {
-  border-color: rgba(143, 216, 255, 0.4);
-  color: #dff6ff;
-  background: rgba(15, 38, 52, 0.5);
+#menu-body .bar-btn {
+  min-height: 32px;
+  justify-content: center;
+  padding: 6px 10px 5px;
+  border: 2px solid var(--auth-retro-shadow);
+  border-radius: 0;
+  background: var(--auth-retro-blue);
+  color: #000;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  box-shadow: 2px 2px 0 var(--auth-retro-shadow);
 }
 
-#auth-panel.auth-panel-guest #btn-auth-email:hover {
-  background: rgba(21, 51, 70, 0.66);
-  border-color: rgba(143, 216, 255, 0.58);
+#menu-body .bar-btn:hover {
+  filter: brightness(1.06);
 }
 
-#auth-panel.auth-panel-guest #btn-auth-wallet {
-  border-color: rgba(52, 116, 51, 0.68);
-  color: #e9ffef;
-  background: rgba(52, 116, 51, 0.24);
-  box-shadow:
-    inset 0 0 0 1px rgba(52, 116, 51, 0.14),
-    0 2px 0 rgba(0, 0, 0, 0.3);
+#menu-body .bar-btn:disabled {
+  background: #c7c1b4;
+  border-color: #7f7b74;
+  color: #5d5851;
+  box-shadow: none;
 }
 
-#auth-panel.auth-panel-guest #btn-auth-wallet:hover {
-  background: rgba(52, 116, 51, 0.34);
-  border-color: rgba(88, 164, 87, 0.76);
+#menu-body #btn-auth-email,
+#menu-body #btn-auth-wallet,
+#menu-body #btn-auth-display-name {
+  background: var(--auth-retro-green);
+  color: #fff3db;
+}
+
+#menu-body #btn-auth-email:hover,
+#menu-body #btn-auth-wallet:hover,
+#menu-body #btn-auth-display-name:hover {
+  background: var(--auth-retro-green);
+}
+
+#menu-body #btn-auth-email:disabled,
+#menu-body #btn-auth-wallet:disabled,
+#menu-body #btn-auth-display-name:disabled {
+  background: rgba(39, 123, 48, 0.72);
+  border-color: var(--auth-retro-shadow);
+  color: #fff3db;
+  box-shadow: none;
+}
+
+#menu-body #btn-auth-logout,
+#menu-body #btn-test-reset {
+  background: var(--auth-retro-red);
+  color: #fff3db;
+}
+
+#menu-body #btn-auth-logout:hover,
+#menu-body #btn-test-reset:hover {
+  background: var(--auth-retro-red);
+}
+
+#menu-body #btn-auth-logout:disabled,
+#menu-body #btn-test-reset:disabled {
+  background: rgba(237, 95, 75, 0.72);
+  border-color: var(--auth-retro-shadow);
+  color: #fff3db;
+  box-shadow: none;
 }
 
 .auth-status {
-  color: var(--text-muted);
+  color: var(--auth-retro-ink);
   font-size: 11px;
-  line-height: 1.3;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  line-height: 1.35;
 }
 
 .auth-display-name-status {
-  color: var(--text-muted);
+  color: var(--auth-retro-ink);
   font-size: 11px;
-  line-height: 1.3;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  line-height: 1.35;
 }
 
 .auth-display-name-status.is-available {
-  color: #89e28f;
+  color: var(--auth-retro-green);
 }
 
 .auth-display-name-status.is-taken {
-  color: #ff8b78;
+  color: var(--auth-retro-red);
 }
 
 .auth-debug-link {
-  color: var(--accent-cool);
+  color: #2c5071;
   font-size: 11px;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
   text-decoration: none;
 }
 
 .auth-debug-link:hover {
   text-decoration: underline;
+}
+
+.auth-session-summary {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--auth-retro-green);
+}
+
+.auth-session-summary-label {
+  color: var(--auth-retro-green);
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.auth-session-summary-value {
+  color: var(--auth-retro-green);
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 10px;
+  line-height: 1.3;
 }
 
 #app {

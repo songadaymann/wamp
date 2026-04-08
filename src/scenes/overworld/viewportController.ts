@@ -44,6 +44,7 @@ interface OverworldViewportControllerHost {
   constrainInspectCamera(): void;
   refreshChunkWindowIfNeeded(centerCoordinates: RoomCoordinates): void;
   updateBackdrop(): void;
+  redrawWorldCells(): void;
   redrawGridOverlay(): void;
   renderHud(): void;
   getSelectedCoordinates(): RoomCoordinates;
@@ -226,6 +227,7 @@ export class OverworldViewportController {
 
     this.host.refreshChunkWindowIfNeeded(this.host.getZoomFocusCoordinates());
     this.host.updateBackdrop();
+    this.host.redrawWorldCells();
     this.host.redrawGridOverlay();
     this.host.renderHud();
   }
@@ -258,6 +260,7 @@ export class OverworldViewportController {
     this.host.centerCameraOnCoordinates(this.host.getZoomFocusCoordinates());
     this.host.refreshChunkWindowIfNeeded(this.host.getZoomFocusCoordinates());
     this.host.updateBackdrop();
+    this.host.redrawWorldCells();
     this.host.redrawGridOverlay();
     this.host.renderHud();
   }

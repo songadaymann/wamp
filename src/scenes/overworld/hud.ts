@@ -76,14 +76,27 @@ export interface OverworldHudViewModel {
   saveStatusTone: 'default' | 'play-score' | 'challenge-active' | 'challenge-complete' | 'challenge-failed';
   jumpInputValue: string;
   selectedTitleText: string;
-  selectedCreatorText: string;
+  selectedSubtitleText: string;
+  selectedTitleSize: 'normal' | 'compact' | 'tiny';
+  selectedTitleTone: 'default' | 'minted';
+  selectedCreatorCardVisible: boolean;
+  selectedCreatorNameText: string;
+  selectedCreatorFallbackText: string;
+  selectedCreatorPlayerLevelText: string;
+  selectedCreatorPlayerProgressFraction: number;
+  selectedCreatorCuratorLevelText: string;
+  selectedCreatorCuratorProgressFraction: number;
+  selectedCreatorBuilderLevelText: string;
+  selectedCreatorBuilderProgressFraction: number;
   selectedCreatorUserId: string | null;
+  selectedStateVisible: boolean;
   selectedStateText: string;
   selectedStateTone: 'published' | 'minted' | 'draft' | 'frontier' | 'empty';
   selectedStateInfoVisible: boolean;
   selectedStateInfoText: string;
   selectedMetaText: string;
   selectedMetaTone: 'default' | 'challenge' | 'draft' | 'frontier';
+  selectedGoalText: string;
   statusText: string;
   leaderboardText: string;
   zoomLabelText: string;
@@ -130,12 +143,23 @@ export interface OverworldOnlineRosterViewEntry {
 export class OverworldHudBridge {
   private readonly hudRoot: HTMLElement | null;
   private readonly selectedTitleEl: HTMLElement | null;
+  private readonly selectedSubtitleEl: HTMLElement | null;
+  private readonly selectedCreatorCardEl: HTMLButtonElement | null;
+  private readonly selectedCreatorNameEl: HTMLElement | null;
+  private readonly selectedCreatorPlayerLevelEl: HTMLElement | null;
+  private readonly selectedCreatorPlayerProgressEl: HTMLElement | null;
+  private readonly selectedCreatorCuratorLevelEl: HTMLElement | null;
+  private readonly selectedCreatorCuratorProgressEl: HTMLElement | null;
+  private readonly selectedCreatorBuilderLevelEl: HTMLElement | null;
+  private readonly selectedCreatorBuilderProgressEl: HTMLElement | null;
   private readonly selectedCreatorEl: HTMLButtonElement | null;
+  private readonly selectedStateWrapEl: HTMLElement | null;
   private readonly selectedStateEl: HTMLElement | null;
   private readonly selectedStateInfoWrapEl: HTMLElement | null;
   private readonly selectedStateInfoTooltipEl: HTMLElement | null;
   private readonly selectedMetaEl: HTMLElement | null;
   private readonly statusEl: HTMLElement | null;
+  private readonly selectedGoalEl: HTMLElement | null;
   private readonly leaderboardEl: HTMLElement | null;
   private readonly playButton: HTMLButtonElement | null;
   private readonly restartButton: HTMLButtonElement | null;
@@ -336,12 +360,23 @@ export class OverworldHudBridge {
   constructor(private readonly doc: Document = document) {
     this.hudRoot = this.doc.getElementById('world-hud');
     this.selectedTitleEl = this.doc.getElementById('world-selected-title');
+    this.selectedSubtitleEl = this.doc.getElementById('world-selected-subtitle');
+    this.selectedCreatorCardEl = this.doc.getElementById('world-selected-creator-card') as HTMLButtonElement | null;
+    this.selectedCreatorNameEl = this.doc.getElementById('world-selected-creator-name');
+    this.selectedCreatorPlayerLevelEl = this.doc.getElementById('world-selected-creator-player-level');
+    this.selectedCreatorPlayerProgressEl = this.doc.getElementById('world-selected-creator-player-progress');
+    this.selectedCreatorCuratorLevelEl = this.doc.getElementById('world-selected-creator-curator-level');
+    this.selectedCreatorCuratorProgressEl = this.doc.getElementById('world-selected-creator-curator-progress');
+    this.selectedCreatorBuilderLevelEl = this.doc.getElementById('world-selected-creator-builder-level');
+    this.selectedCreatorBuilderProgressEl = this.doc.getElementById('world-selected-creator-builder-progress');
     this.selectedCreatorEl = this.doc.getElementById('world-selected-coords') as HTMLButtonElement | null;
+    this.selectedStateWrapEl = this.doc.getElementById('world-selected-state-wrap');
     this.selectedStateEl = this.doc.getElementById('world-selected-state');
     this.selectedStateInfoWrapEl = this.doc.getElementById('world-selected-state-info-wrap');
     this.selectedStateInfoTooltipEl = this.doc.getElementById('world-selected-state-info-tooltip');
     this.selectedMetaEl = this.doc.getElementById('world-selected-meta');
     this.statusEl = this.doc.getElementById('world-status');
+    this.selectedGoalEl = this.doc.getElementById('world-selected-goal');
     this.leaderboardEl = this.doc.getElementById('world-leaderboard');
     this.playButton = this.doc.getElementById('btn-world-play') as HTMLButtonElement | null;
     this.restartButton = this.doc.getElementById('btn-world-restart') as HTMLButtonElement | null;
@@ -383,6 +418,7 @@ export class OverworldHudBridge {
     this.playersOnlineWrapEl?.addEventListener('focusin', this.handlePlayersOnlineFocusIn);
     this.playersOnlineWrapEl?.addEventListener('focusout', this.handlePlayersOnlineFocusOut);
     this.playersOnlineEl?.addEventListener('click', this.handlePlayersOnlineClick);
+    this.selectedCreatorCardEl?.addEventListener('click', this.handleSelectedCreatorClick);
     this.selectedCreatorEl?.addEventListener('click', this.handleSelectedCreatorClick);
     this.playButton?.addEventListener('click', this.handlePlayRoomClick);
     this.restartButton?.addEventListener('click', this.handleRestartRunClick);
@@ -414,13 +450,29 @@ export class OverworldHudBridge {
     }
 
     this.setText(this.selectedTitleEl, viewModel.selectedTitleText);
-    this.renderSelectedCreator(viewModel.selectedCreatorText, viewModel.selectedCreatorUserId);
+    this.setText(this.selectedSubtitleEl, viewModel.selectedSubtitleText);
+    this.setTitleSize(this.selectedTitleEl, viewModel.selectedTitleSize);
+    this.setTitleTone(viewModel.selectedTitleTone);
+    this.renderSelectedCreator(
+      viewModel.selectedCreatorCardVisible,
+      viewModel.selectedCreatorNameText,
+      viewModel.selectedCreatorFallbackText,
+      viewModel.selectedCreatorPlayerLevelText,
+      viewModel.selectedCreatorPlayerProgressFraction,
+      viewModel.selectedCreatorCuratorLevelText,
+      viewModel.selectedCreatorCuratorProgressFraction,
+      viewModel.selectedCreatorBuilderLevelText,
+      viewModel.selectedCreatorBuilderProgressFraction,
+      viewModel.selectedCreatorUserId,
+    );
+    this.setStateVisible(viewModel.selectedStateVisible);
     this.setText(this.selectedStateEl, viewModel.selectedStateText);
     this.setStateTone(viewModel.selectedStateTone);
     this.renderSelectedStateInfo(viewModel.selectedStateInfoVisible, viewModel.selectedStateInfoText);
     this.setText(this.selectedMetaEl, viewModel.selectedMetaText);
     this.setMetaTone(viewModel.selectedMetaTone);
     this.setText(this.statusEl, viewModel.statusText);
+    this.setText(this.selectedGoalEl, viewModel.selectedGoalText);
     this.setText(this.leaderboardEl, viewModel.leaderboardText);
     this.setText(this.zoomLabelEl, viewModel.zoomLabelText);
     this.setText(this.roomCoordinatesEl, viewModel.roomCoordinatesText);
@@ -457,6 +509,7 @@ export class OverworldHudBridge {
     this.playersOnlineWrapEl?.removeEventListener('focusin', this.handlePlayersOnlineFocusIn);
     this.playersOnlineWrapEl?.removeEventListener('focusout', this.handlePlayersOnlineFocusOut);
     this.playersOnlineEl?.removeEventListener('click', this.handlePlayersOnlineClick);
+    this.selectedCreatorCardEl?.removeEventListener('click', this.handleSelectedCreatorClick);
     this.selectedCreatorEl?.removeEventListener('click', this.handleSelectedCreatorClick);
     this.playButton?.removeEventListener('click', this.handlePlayRoomClick);
     this.restartButton?.removeEventListener('click', this.handleRestartRunClick);
@@ -479,6 +532,29 @@ export class OverworldHudBridge {
     if (element && element.textContent !== text) {
       element.textContent = text;
     }
+  }
+
+  private setTitleSize(
+    element: HTMLElement | null,
+    size: OverworldHudViewModel['selectedTitleSize'],
+  ): void {
+    if (!element) {
+      return;
+    }
+
+    if (element.dataset.titleSize !== size) {
+      element.dataset.titleSize = size;
+    }
+  }
+
+  private setTitleTone(
+    tone: OverworldHudViewModel['selectedTitleTone'],
+  ): void {
+    if (!this.selectedTitleEl) {
+      return;
+    }
+
+    this.selectedTitleEl.dataset.worldTitleTone = tone;
   }
 
   private setTitle(element: HTMLElement | null, title: string): void {
@@ -543,6 +619,10 @@ export class OverworldHudBridge {
     }
 
     this.selectedStateEl.setAttribute('data-world-state-tone', tone);
+  }
+
+  private setStateVisible(visible: boolean): void {
+    this.selectedStateWrapEl?.classList.toggle('hidden', !visible);
   }
 
   private setMetaTone(
@@ -616,17 +696,100 @@ export class OverworldHudBridge {
     return row;
   }
 
-  private renderSelectedCreator(text: string, userId: string | null): void {
+  private renderSelectedCreator(
+    cardVisible: boolean,
+    nameText: string,
+    fallbackText: string,
+    playerLevelText: string,
+    playerProgressFraction: number,
+    curatorLevelText: string,
+    curatorProgressFraction: number,
+    builderLevelText: string,
+    builderProgressFraction: number,
+    userId: string | null,
+  ): void {
+    this.selectedCreatorUserId = userId;
+    const clickable = isOpenableProfileUserId(userId);
+    const profileTitle = clickable && nameText.trim().length > 0
+      ? `View ${nameText}'s profile`
+      : '';
+
+    if (this.selectedCreatorCardEl) {
+      this.selectedCreatorCardEl.classList.toggle('hidden', !cardVisible);
+      this.selectedCreatorCardEl.disabled = !clickable;
+      this.selectedCreatorCardEl.classList.toggle('is-clickable', clickable);
+      this.selectedCreatorCardEl.title = cardVisible ? profileTitle : '';
+    }
+    this.setText(this.selectedCreatorNameEl, nameText);
+    this.renderCreatorStatLevel(this.selectedCreatorPlayerLevelEl, playerLevelText);
+    this.renderCreatorStatProgress(this.selectedCreatorPlayerProgressEl, playerProgressFraction);
+    this.renderCreatorStatLevel(this.selectedCreatorCuratorLevelEl, curatorLevelText);
+    this.renderCreatorStatProgress(this.selectedCreatorCuratorProgressEl, curatorProgressFraction);
+    this.renderCreatorStatLevel(this.selectedCreatorBuilderLevelEl, builderLevelText);
+    this.renderCreatorStatProgress(this.selectedCreatorBuilderProgressEl, builderProgressFraction);
+
     if (!this.selectedCreatorEl) {
       return;
     }
 
-    this.selectedCreatorUserId = userId;
-    this.selectedCreatorEl.textContent = text;
-    const clickable = isOpenableProfileUserId(userId);
+    this.selectedCreatorEl.textContent = fallbackText;
+    this.selectedCreatorEl.classList.toggle('hidden', cardVisible);
     this.selectedCreatorEl.disabled = !clickable;
     this.selectedCreatorEl.classList.toggle('is-clickable', clickable);
-    this.selectedCreatorEl.title = clickable ? `View ${text.replace(/^by\s+/i, '')}'s profile` : '';
+    this.selectedCreatorEl.title = !cardVisible ? profileTitle : '';
+  }
+
+  private renderCreatorStatLevel(element: HTMLElement | null, levelText: string): void {
+    if (!element) {
+      return;
+    }
+
+    const level = Number.parseInt(levelText, 10);
+    const iconSrc = element.dataset.iconSrc?.trim() ?? '';
+    const iconLabel = element.dataset.iconLabel?.trim() ?? 'Level';
+
+    if (!Number.isFinite(level) || level <= 0 || !iconSrc) {
+      element.dataset.placeholder = 'true';
+      element.setAttribute('aria-label', `${iconLabel} level unavailable`);
+      if (element.textContent !== '--') {
+        element.replaceChildren(this.doc.createTextNode('--'));
+      }
+      return;
+    }
+
+    if (element.dataset.levelValue === String(level) && element.dataset.placeholder !== 'true') {
+      return;
+    }
+
+    const icon = this.doc.createElement('img');
+    icon.className = 'world-creator-stat-level-icon';
+    icon.src = iconSrc;
+    icon.alt = '';
+    icon.setAttribute('aria-hidden', 'true');
+
+    const label = this.doc.createElement('span');
+    label.className = 'world-creator-stat-level-label';
+    label.textContent = `LVL ${level}`;
+
+    element.dataset.levelValue = String(level);
+    element.dataset.placeholder = 'false';
+    element.setAttribute('aria-label', `${iconLabel} level ${level}`);
+    element.replaceChildren(icon, label);
+  }
+
+  private renderCreatorStatProgress(element: HTMLElement | null, fraction: number): void {
+    if (!element) {
+      return;
+    }
+
+    const clamped = Math.max(0, Math.min(1, fraction));
+    const width = `${(clamped * 100).toFixed(1)}%`;
+    if (element.style.width !== width) {
+      element.style.width = width;
+    }
+    element.setAttribute('aria-valuemin', '0');
+    element.setAttribute('aria-valuemax', '100');
+    element.setAttribute('aria-valuenow', String(Math.round(clamped * 100)));
   }
 
   private renderSelectedStateInfo(visible: boolean, text: string): void {

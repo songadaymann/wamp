@@ -1,12 +1,9 @@
 import type {
   CourseGoal,
   CourseGoalType,
+  CourseSnapshot,
 } from '../../courses/model';
-import type {
-  RoomGoal,
-  RoomGoalType,
-} from '../../goals/roomGoals';
-import { ROOM_GOAL_LABELS } from '../../goals/roomGoals';
+import type { RoomGoal } from '../../goals/roomGoals';
 import {
   roomIdFromCoordinates,
   type RoomCoordinates,
@@ -38,19 +35,31 @@ export interface SelectedRoomOwnershipViewData {
   mintedOwnerWalletAddress: string | null;
 }
 
+export interface SelectedCreatorProfileViewData {
+  displayName: string;
+  playerLevel: number;
+  playerProgressFraction: number;
+  curatorLevel: number;
+  curatorProgressFraction: number;
+  builderLevel: number;
+  builderProgressFraction: number;
+}
+
 interface SelectedSummaryViewData {
   title: string | null;
   creatorUserId: string | null;
   creatorDisplayName: string | null;
-  goalType: RoomGoalType | null;
 }
 
 export interface BuildOverworldHudViewModelOptions {
   selectedState: SelectedCellState;
   selectedCoordinates: RoomCoordinates;
   selectedSummary: SelectedSummaryViewData | null;
+  selectedCreatorProfile: SelectedCreatorProfileViewData | null;
   selectedOwnership: SelectedRoomOwnershipViewData | null;
   selectedDraft: RoomSnapshot | null;
+  selectedPublishedRoom: RoomSnapshot | null;
+  selectedPublishedCourse: CourseSnapshot | null;
   selectedPopulation: number;
   selectedEditorCount: number;
   selectedEditorSummary: string | null;
@@ -75,9 +84,9 @@ export interface BuildOverworldHudViewModelOptions {
   courseBuilderButtonDisabled: boolean;
   zoom: number;
   getRoomDisplayTitle: (title: string | null, coordinates: RoomCoordinates) => string;
-  getCourseGoalSummaryText: (goalType: CourseGoalType | null) => string;
   getCourseGoalBadgeText: (goal: CourseGoal | null) => string;
   getGoalBadgeText: (goal: RoomGoal) => string;
+  getSelectedRoomGoalText: (room: RoomSnapshot) => string;
   getCourseGoalTimerText: (runState: ActiveCourseRunState) => string;
   getPlayGoalTimerText: (runState: GoalRunState) => string;
   getCourseGoalProgressText: (runState: ActiveCourseRunState) => string;
@@ -108,8 +117,11 @@ export function buildOverworldHudViewModel(
     selectedState,
     selectedCoordinates,
     selectedSummary,
+    selectedCreatorProfile,
     selectedOwnership,
     selectedDraft,
+    selectedPublishedRoom,
+    selectedPublishedCourse,
     selectedPopulation,
     selectedEditorCount,
     selectedEditorSummary,
@@ -133,9 +145,9 @@ export function buildOverworldHudViewModel(
     courseBuilderButtonDisabled,
     zoom,
     getRoomDisplayTitle,
-    getCourseGoalSummaryText,
     getCourseGoalBadgeText,
     getGoalBadgeText,
+    getSelectedRoomGoalText,
     getCourseGoalTimerText,
     getPlayGoalTimerText,
     getCourseGoalProgressText,
@@ -143,7 +155,6 @@ export function buildOverworldHudViewModel(
     truncateOverlayText,
   } = options;
   const activeRunResult = activeCourseRun?.result ?? activeRoomGoalRun?.result ?? null;
-  const suppressRoomGoalMeta = Boolean(activeCourseRun);
   const saveStatusTone =
     mode === 'play'
       ? activeCourseRun || activeRoomGoalRun
@@ -154,24 +165,64 @@ export function buildOverworldHudViewModel(
             : 'challenge-active'
         : 'play-score'
       : 'default';
-  const selectedTitleText = getRoomDisplayTitle(
+  const selectedRoomTitle =
     selectedState === 'published'
-      ? selectedSummary?.title ?? null
+      ? selectedPublishedRoom?.title?.trim() || selectedSummary?.title?.trim() || null
       : selectedState === 'draft'
-        ? selectedDraft?.title ?? null
-        : null,
-    selectedCoordinates,
+        ? selectedDraft?.title?.trim() || null
+        : null;
+  const selectedRoomTitleText = getRoomDisplayTitle(selectedRoomTitle, selectedCoordinates);
+  const selectedPublishedCourseTitle = selectedPublishedCourse?.title?.trim() || null;
+  const selectedCourseTitle = selectedPublishedCourseTitle || selectedCourse?.courseTitle?.trim() || null;
+  const selectedCourseHasNamedRooms = Boolean(
+    selectedCourseTitle &&
+    selectedPublishedCourse &&
+    selectedPublishedCourse.roomRefs.length > 0 &&
+    selectedPublishedCourse.roomRefs.every((roomRef) => Boolean(roomRef.roomTitle?.trim()))
   );
+  const selectedTitleText = selectedCourseTitle || selectedRoomTitleText;
+  const selectedSubtitleText =
+    selectedCourseHasNamedRooms &&
+    selectedRoomTitle &&
+    selectedRoomTitle !== selectedTitleText
+      ? selectedRoomTitle
+      : '';
+  const selectedTitleSize =
+    selectedTitleText.length > 24 ? 'tiny' : selectedTitleText.length > 16 ? 'compact' : 'normal';
   const selectedCreatorUserId =
     selectedState === 'published'
     && selectedSummary?.creatorUserId
     && selectedSummary.creatorDisplayName
       ? selectedSummary.creatorUserId
       : null;
-  const selectedCreatorText = selectedCreatorUserId && selectedSummary?.creatorDisplayName
-    ? `by ${selectedSummary.creatorDisplayName}`
-    : roomIdFromCoordinates(selectedCoordinates);
+  const selectedCreatorCardVisible =
+    selectedState === 'published' && Boolean(selectedSummary?.creatorDisplayName?.trim());
+  const selectedCreatorNameText =
+    selectedCreatorProfile?.displayName?.trim()
+    || selectedSummary?.creatorDisplayName?.trim()
+    || '';
+  const selectedCreatorFallbackText = roomIdFromCoordinates(selectedCoordinates);
+  const selectedCreatorPlayerLevelText = selectedCreatorProfile
+    ? String(selectedCreatorProfile.playerLevel)
+    : '--';
+  const selectedCreatorPlayerProgressFraction = selectedCreatorProfile
+    ? Math.max(0, Math.min(1, selectedCreatorProfile.playerProgressFraction))
+    : 0;
+  const selectedCreatorCuratorLevelText = selectedCreatorProfile
+    ? String(selectedCreatorProfile.curatorLevel)
+    : '--';
+  const selectedCreatorCuratorProgressFraction = selectedCreatorProfile
+    ? Math.max(0, Math.min(1, selectedCreatorProfile.curatorProgressFraction))
+    : 0;
+  const selectedCreatorBuilderLevelText = selectedCreatorProfile
+    ? String(selectedCreatorProfile.builderLevel)
+    : '--';
+  const selectedCreatorBuilderProgressFraction = selectedCreatorProfile
+    ? Math.max(0, Math.min(1, selectedCreatorProfile.builderProgressFraction))
+    : 0;
   const selectedRoomMinted = selectedState === 'published' && Boolean(selectedOwnership?.isMinted);
+  const selectedTitleTone: OverworldHudViewModel['selectedTitleTone'] =
+    selectedRoomMinted ? 'minted' : 'default';
   const selectedRoomClaimOwnerUserId =
     selectedOwnership?.claimerUserId
     ?? (selectedState === 'published' ? selectedSummary?.creatorUserId ?? null : null);
@@ -208,27 +259,18 @@ export function buildOverworldHudViewModel(
         : !viewerOwnsSelectedRoom
           ? 'Only the room claimer can build a course from this room.'
           : '';
+  const selectedGoalText =
+    selectedState === 'published' && selectedPublishedRoom?.goal
+      ? getSelectedRoomGoalText(selectedPublishedRoom)
+      : selectedState === 'draft' && selectedDraft?.goal
+        ? getSelectedRoomGoalText(selectedDraft)
+        : '';
+  const selectedStateVisible = selectedState !== 'published' && !selectedRoomMinted;
 
-  let selectedMetaText = 'No room here yet';
+  let selectedMetaText = '';
   let selectedMetaTone: OverworldHudViewModel['selectedMetaTone'] = 'default';
   if (selectedState === 'published') {
     const metaParts: string[] = [];
-    if (selectedCourse) {
-      metaParts.push(
-        selectedCourse.courseTitle?.trim()
-          ? `Part of course: ${selectedCourse.courseTitle}`
-          : `Part of course · ${selectedCourse.roomCount} rooms`,
-      );
-      metaParts.push(getCourseGoalSummaryText(selectedCourse.goalType));
-      selectedMetaTone = 'challenge';
-    }
-    if (!suppressRoomGoalMeta && selectedSummary?.goalType) {
-      metaParts.push(`${ROOM_GOAL_LABELS[selectedSummary.goalType]} challenge`);
-      selectedMetaTone = 'challenge';
-    }
-    if (metaParts.length === 0) {
-      metaParts.push('No challenge');
-    }
     if (selectedPopulation > 0) {
       metaParts.push(`${selectedPopulation} here`);
     }
@@ -238,20 +280,9 @@ export function buildOverworldHudViewModel(
     selectedMetaText = metaParts.join(' · ');
   } else if (selectedState === 'draft' && selectedDraft) {
     const metaParts = ['Local draft only'];
-    if (selectedCourse) {
-      metaParts.push(
-        selectedCourse.courseTitle?.trim()
-          ? `Part of course: ${selectedCourse.courseTitle}`
-          : `Part of course · ${selectedCourse.roomCount} rooms`,
-      );
-      metaParts.push(getCourseGoalSummaryText(selectedCourse.goalType));
-    }
-    if (!suppressRoomGoalMeta && selectedDraft.goal) {
-      metaParts.push(`${ROOM_GOAL_LABELS[selectedDraft.goal.type]} challenge`);
-    }
     metaParts.push('publish to make it public');
     selectedMetaText = metaParts.join(' · ');
-    selectedMetaTone = selectedCourse ? 'challenge' : 'draft';
+    selectedMetaTone = 'draft';
   } else if (selectedState === 'frontier') {
     if (frontierBuildBlocked) {
       selectedMetaText =
@@ -315,8 +346,20 @@ export function buildOverworldHudViewModel(
     saveStatusTone,
     jumpInputValue: roomIdFromCoordinates(selectedCoordinates),
     selectedTitleText,
-    selectedCreatorText,
+    selectedSubtitleText,
+    selectedTitleSize,
+    selectedTitleTone,
+    selectedCreatorCardVisible,
+    selectedCreatorNameText,
+    selectedCreatorFallbackText,
+    selectedCreatorPlayerLevelText,
+    selectedCreatorPlayerProgressFraction,
+    selectedCreatorCuratorLevelText,
+    selectedCreatorCuratorProgressFraction,
+    selectedCreatorBuilderLevelText,
+    selectedCreatorBuilderProgressFraction,
     selectedCreatorUserId,
+    selectedStateVisible,
     selectedStateText:
       selectedRoomMinted
         ? 'Minted'
@@ -331,10 +374,11 @@ export function buildOverworldHudViewModel(
     selectedStateInfoVisible: selectedRoomMinted,
     selectedStateInfoText:
       selectedRoomMinted
-        ? 'Minted rooms are onchain room NFTs. Only the token owner can edit the live room or publish updates.'
+        ? "Anyone can edit anyone else's room, but the one exception is that you can buy a room as a collectible. This locks the room from being edited."
         : '',
     selectedMetaText,
     selectedMetaTone,
+    selectedGoalText,
     statusText,
     leaderboardText,
     zoomLabelText: `${zoom.toFixed(2)}x`,

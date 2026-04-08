@@ -1,6 +1,10 @@
 import { getAuthDebugState } from '../../auth/client';
 import { isRoomInActiveCourseDraftSession } from '../../courses/draftSession';
-import { COURSE_GOAL_LABELS, type CourseGoal, type CourseGoalType } from '../../courses/model';
+import {
+  type CourseGoal,
+  type CourseGoalType,
+  type CourseSnapshot,
+} from '../../courses/model';
 import {
   getCourseGoalBadgeText as formatCourseGoalBadgeText,
   getCourseGoalProgressText as formatCourseGoalProgressText,
@@ -20,6 +24,7 @@ import {
   buildOverworldHudViewModel,
   formatRoomEditorSummary,
   type SelectedCellState,
+  type SelectedCreatorProfileViewData,
   type SelectedCourseContext,
   type SelectedRoomOwnershipViewData,
 } from './hudViewModel';
@@ -55,6 +60,9 @@ interface OverworldHudStateControllerHost {
     roomId: string,
     coordinates: RoomCoordinates,
   ): Promise<SelectedRoomOwnershipViewData>;
+  loadPublicProfileSummary(userId: string): Promise<SelectedCreatorProfileViewData | null>;
+  loadPublishedCourseSnapshot(courseId: string): Promise<CourseSnapshot | null>;
+  countRoomEnemies(room: RoomSnapshot): number;
   getScore(): number;
   isCourseComposerLoading(): boolean;
   getZoom(): number;
@@ -66,14 +74,22 @@ interface OverworldHudStateControllerHost {
 export class OverworldHudStateController {
   private selectedSummary: WorldRoomSummary | null = null;
   private readonly selectedOwnershipByRoomId = new Map<string, SelectedRoomOwnershipViewData>();
+  private readonly selectedCreatorProfileByUserId = new Map<string, SelectedCreatorProfileViewData | null>();
+  private readonly selectedPublishedCourseById = new Map<string, CourseSnapshot>();
   private readonly loadingOwnershipRoomIds = new Set<string>();
+  private readonly loadingCreatorProfileUserIds = new Set<string>();
+  private readonly loadingCourseIds = new Set<string>();
 
   constructor(private readonly host: OverworldHudStateControllerHost) {}
 
   reset(): void {
     this.selectedSummary = null;
     this.selectedOwnershipByRoomId.clear();
+    this.selectedCreatorProfileByUserId.clear();
+    this.selectedPublishedCourseById.clear();
     this.loadingOwnershipRoomIds.clear();
+    this.loadingCreatorProfileUserIds.clear();
+    this.loadingCourseIds.clear();
   }
 
   refreshSelectedSummary(): void {
@@ -121,6 +137,22 @@ export class OverworldHudStateController {
     this.ensureSelectedOwnershipLoaded(selectedRoomId, selectedCoordinates, selectedState);
     const selectedDraft = this.host.getDraftRoom(selectedRoomId);
     const selectedCourse = this.getSelectedCourseContext();
+    const selectedCreatorUserId =
+      selectedState === 'published' && this.selectedSummary?.creatorUserId
+        ? this.selectedSummary.creatorUserId
+        : null;
+    if (selectedCreatorUserId) {
+      this.ensureSelectedCreatorProfileLoaded(selectedCreatorUserId);
+    }
+    if (selectedCourse) {
+      this.ensureSelectedCourseLoaded(selectedCourse.courseId);
+    }
+    const selectedPublishedRoom =
+      selectedState === 'published'
+        ? this.host.getRoomSnapshotForCoordinates(selectedCoordinates)
+        : null;
+    const selectedPublishedCourse =
+      selectedCourse ? this.selectedPublishedCourseById.get(selectedCourse.courseId) ?? null : null;
     const mode = this.host.getMode();
     const activeCourseRun = mode === 'play' ? this.host.getActiveCourseRun() : null;
     const activeRoomGoalRun =
@@ -141,11 +173,15 @@ export class OverworldHudStateController {
               title: this.selectedSummary.title ?? null,
               creatorUserId: this.selectedSummary.creatorUserId ?? null,
               creatorDisplayName: this.selectedSummary.creatorDisplayName ?? null,
-              goalType: this.selectedSummary.goalType ?? null,
             }
+          : null,
+        selectedCreatorProfile: selectedCreatorUserId
+          ? this.selectedCreatorProfileByUserId.get(selectedCreatorUserId) ?? null
           : null,
         selectedOwnership: this.selectedOwnershipByRoomId.get(selectedRoomId) ?? null,
         selectedDraft,
+        selectedPublishedRoom,
+        selectedPublishedCourse,
         selectedPopulation: this.host.getRoomPopulation(selectedCoordinates),
         selectedEditorCount: this.host.getRoomEditorCount(selectedCoordinates),
         selectedEditorSummary: formatRoomEditorSummary(
@@ -172,9 +208,9 @@ export class OverworldHudStateController {
         courseBuilderButtonDisabled: this.host.isCourseComposerLoading(),
         zoom: this.host.getZoom(),
         getRoomDisplayTitle: (title, coordinates) => this.getRoomDisplayTitle(title, coordinates),
-        getCourseGoalSummaryText: (goalType) => this.getCourseGoalSummaryText(goalType),
         getCourseGoalBadgeText: (goal) => this.getCourseGoalBadgeText(goal),
         getGoalBadgeText: (goal) => this.getGoalBadgeText(goal),
+        getSelectedRoomGoalText: (room) => this.getSelectedRoomGoalText(room),
         getCourseGoalTimerText: (runState) => this.getCourseGoalTimerText(runState),
         getPlayGoalTimerText: (runState) => this.getPlayGoalTimerText(runState),
         getCourseGoalProgressText: (runState) => this.getCourseGoalProgressText(runState),
@@ -215,6 +251,64 @@ export class OverworldHudStateController {
       });
   }
 
+  private ensureSelectedCreatorProfileLoaded(userId: string): void {
+    if (
+      this.selectedCreatorProfileByUserId.has(userId)
+      || this.loadingCreatorProfileUserIds.has(userId)
+    ) {
+      return;
+    }
+
+    this.loadingCreatorProfileUserIds.add(userId);
+    void this.host
+      .loadPublicProfileSummary(userId)
+      .then((profile) => {
+        this.loadingCreatorProfileUserIds.delete(userId);
+        this.selectedCreatorProfileByUserId.set(userId, profile);
+
+        if (userId === this.getSelectedCreatorUserId()) {
+          this.renderHud();
+        }
+      })
+      .catch((error) => {
+        this.loadingCreatorProfileUserIds.delete(userId);
+        console.warn('Failed to load selected creator profile summary', error);
+      });
+  }
+
+  private ensureSelectedCourseLoaded(courseId: string): void {
+    if (this.selectedPublishedCourseById.has(courseId) || this.loadingCourseIds.has(courseId)) {
+      return;
+    }
+
+    this.loadingCourseIds.add(courseId);
+    void this.host
+      .loadPublishedCourseSnapshot(courseId)
+      .then((snapshot) => {
+        this.loadingCourseIds.delete(courseId);
+        if (snapshot) {
+          this.selectedPublishedCourseById.set(courseId, snapshot);
+        }
+
+        if (courseId === this.getSelectedCourseContext()?.courseId) {
+          this.renderHud();
+        }
+      })
+      .catch((error) => {
+        this.loadingCourseIds.delete(courseId);
+        console.warn('Failed to load selected course snapshot', error);
+      });
+  }
+
+  private getSelectedCreatorUserId(): string | null {
+    const selectedCoordinates = this.host.getSelectedCoordinates();
+    if (this.host.getCellStateAt(selectedCoordinates) !== 'published') {
+      return null;
+    }
+
+    return this.selectedSummary?.creatorUserId ?? null;
+  }
+
   private isFrontierBuildBlockedByClaimLimit(authState: ReturnType<typeof getAuthDebugState>): boolean {
     return (
       authState.authenticated &&
@@ -227,22 +321,39 @@ export class OverworldHudStateController {
     return title?.trim() ? title : `Room ${coordinates.x},${coordinates.y}`;
   }
 
-  private getCourseGoalSummaryText(goalType: CourseGoalType | null): string {
-    return goalType ? `${COURSE_GOAL_LABELS[goalType]} course` : 'Course objective missing';
-  }
-
   private getGoalBadgeText(goal: RoomGoal): string {
     switch (goal.type) {
       case 'reach_exit':
-        return 'Reach Exit';
+        return 'Reach exit';
       case 'collect_target':
         return `Collect ${goal.requiredCount}`;
       case 'defeat_all':
-        return 'Defeat All';
+        return 'Defeat all enemies';
       case 'checkpoint_sprint':
-        return `${goal.checkpoints.length || 0} Checkpoints`;
+        return `Reach ${goal.checkpoints.length || 0} ${goal.checkpoints.length === 1 ? 'checkpoint' : 'checkpoints'}`;
       case 'survival':
-        return `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))}s`;
+        return `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds`;
+    }
+  }
+
+  private getSelectedRoomGoalText(room: RoomSnapshot): string {
+    if (!room.goal) {
+      return '';
+    }
+
+    switch (room.goal.type) {
+      case 'reach_exit':
+        return 'Reach exit';
+      case 'collect_target':
+        return `Collect ${room.goal.requiredCount}`;
+      case 'defeat_all': {
+        const enemyCount = this.host.countRoomEnemies(room);
+        return `Defeat ${enemyCount} ${enemyCount === 1 ? 'enemy' : 'enemies'}`;
+      }
+      case 'checkpoint_sprint':
+        return `Reach ${room.goal.checkpoints.length} ${room.goal.checkpoints.length === 1 ? 'checkpoint' : 'checkpoints'}`;
+      case 'survival':
+        return `Survive ${Math.max(1, Math.round(room.goal.durationMs / 1000))} seconds`;
     }
   }
 

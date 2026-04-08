@@ -247,15 +247,15 @@ export function getCourseGoalBadgeText(goal: CourseGoal | null): string {
 
   switch (goal.type) {
     case 'reach_exit':
-      return 'Reach Exit';
+      return 'Reach exit';
     case 'collect_target':
       return `Collect ${goal.requiredCount}`;
     case 'defeat_all':
-      return 'Defeat All';
+      return 'Defeat all enemies';
     case 'checkpoint_sprint':
-      return `${goal.checkpoints.length || 0} Checkpoints`;
+      return `Reach ${goal.checkpoints.length || 0} ${goal.checkpoints.length === 1 ? 'checkpoint' : 'checkpoints'}`;
     case 'survival':
-      return `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))}s`;
+      return `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds`;
   }
 }
 

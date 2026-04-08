@@ -20,6 +20,80 @@ function toggleSidebarSection(section: HTMLElement): void {
   toggle?.setAttribute('aria-expanded', section.classList.contains('is-collapsed') ? 'false' : 'true');
 }
 
+export function setupEditorSidebarShell(doc: Document = document): void {
+  const sidebar = doc.getElementById('sidebar');
+  const editorActions = doc.getElementById('editor-actions');
+  if (!sidebar || !editorActions) {
+    return;
+  }
+
+  let fixedStack = doc.getElementById('editor-fixed-stack') as HTMLElement | null;
+  if (!fixedStack) {
+    fixedStack = doc.createElement('div');
+    fixedStack.id = 'editor-fixed-stack';
+  }
+
+  let scrollShell = doc.getElementById('editor-sidebar-scroll') as HTMLElement | null;
+  if (!scrollShell) {
+    scrollShell = doc.createElement('div');
+    scrollShell.id = 'editor-sidebar-scroll';
+  }
+
+  if (fixedStack.parentElement !== sidebar) {
+    sidebar.insertBefore(fixedStack, sidebar.firstChild);
+  }
+  if (scrollShell.parentElement !== sidebar) {
+    sidebar.append(scrollShell);
+  }
+
+  const sections = Array.from(sidebar.querySelectorAll<HTMLElement>('.sidebar-section'));
+  const sectionById = new Map<string, HTMLElement>();
+  let paletteModeSection: HTMLElement | null = null;
+  for (const section of sections) {
+    if (section.id) {
+      sectionById.set(section.id, section);
+    } else if (
+      !paletteModeSection &&
+      section.dataset.mobilePanel === 'palette' &&
+      section.id !== 'tileset-section' &&
+      section.id !== 'tile-palette-section' &&
+      section.id !== 'object-palette-section'
+    ) {
+      paletteModeSection = section;
+    }
+  }
+
+  const used = new Set<HTMLElement>();
+  const appendSection = (container: HTMLElement, section: HTMLElement | null | undefined) => {
+    if (!section || used.has(section)) {
+      return;
+    }
+    container.append(section);
+    used.add(section);
+  };
+
+  appendSection(fixedStack, editorActions);
+
+  appendSection(scrollShell, sectionById.get('room-title-section'));
+  appendSection(scrollShell, paletteModeSection);
+  appendSection(scrollShell, sectionById.get('tileset-section'));
+  appendSection(scrollShell, sectionById.get('tile-palette-section'));
+  appendSection(scrollShell, sectionById.get('object-palette-section'));
+  appendSection(scrollShell, sectionById.get('layers-section'));
+  appendSection(scrollShell, sectionById.get('background-section'));
+  appendSection(scrollShell, sectionById.get('goal-section'));
+  appendSection(scrollShell, sectionById.get('course-goal-section'));
+  appendSection(scrollShell, sectionById.get('editor-advanced'));
+  appendSection(scrollShell, sectionById.get('tools-section'));
+
+  for (const section of sections) {
+    if (used.has(section)) {
+      continue;
+    }
+    appendSection(scrollShell, section);
+  }
+}
+
 export function setupCollapsibleSidebarSections(doc: Document = document): void {
   const sections = Array.from(
     doc.querySelectorAll<HTMLElement>('#sidebar .sidebar-section[data-sidebar-collapsible="true"]')

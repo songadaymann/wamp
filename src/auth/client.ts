@@ -68,7 +68,7 @@ const state: AuthDebugState = {
   roomDailyClaimLimit: null,
   roomClaimsUsedToday: 0,
   roomClaimsRemainingToday: null,
-  status: 'Guest mode.',
+  status: 'Use email or wallet.',
   debugMagicLink: null,
   walletConnected: false,
   walletAddress: null,
@@ -93,6 +93,8 @@ let authDisplayNameButton: HTMLButtonElement | null = null;
 let authDisplayNameStatus: HTMLElement | null = null;
 let testResetButton: HTMLButtonElement | null = null;
 let authStatus: HTMLElement | null = null;
+let authSessionSummary: HTMLElement | null = null;
+let authSessionSummaryValue: HTMLElement | null = null;
 let authDebugLink: HTMLAnchorElement | null = null;
 let appKit: AppKit | null = null;
 let walletBootstrapPromise: Promise<AppKit> | null = null;
@@ -109,8 +111,8 @@ const FEATURED_REOWN_WALLET_IDS = [
   'ecc4036f814562b41a5268adc86270fba1365471402006302e70169465b7ac18', // Zerion
 ] as const;
 
-const DEFAULT_GUEST_STATUS = 'Sign in to build rooms, publish them, and save your runs.';
-const DEFAULT_SIGN_IN_PROMPT_STATUS = 'Sign in to build rooms, publish them, chat, and climb the leaderboards.';
+const DEFAULT_GUEST_STATUS = 'Use email or wallet.';
+const DEFAULT_SIGN_IN_PROMPT_STATUS = 'Sign in to continue.';
 let guestPanelAutoOpened = false;
 
 export async function setupAuthUi(): Promise<void> {
@@ -126,6 +128,8 @@ export async function setupAuthUi(): Promise<void> {
   authDisplayNameStatus = document.getElementById('auth-display-name-status');
   testResetButton = document.getElementById('btn-test-reset') as HTMLButtonElement | null;
   authStatus = document.getElementById('auth-status');
+  authSessionSummary = document.getElementById('auth-session-summary');
+  authSessionSummaryValue = document.getElementById('auth-session-summary-value');
   authDebugLink = document.getElementById('auth-debug-link') as HTMLAnchorElement | null;
 
   if (!authPanel) {
@@ -293,9 +297,9 @@ async function refreshSession(): Promise<void> {
     state.chatModeration = normalizeChatModerationViewer(session.chatModeration);
 
     if (session.authenticated) {
-      state.status = session.source === 'playfun'
-        ? `Signed in via Play.fun as ${session.user?.displayName ?? 'player'}.`
-        : `Signed in as ${session.user?.displayName ?? 'player'}.`;
+      if (state.status.length === 0 || state.status === DEFAULT_GUEST_STATUS || isGenericSignedInStatus(state.status)) {
+        state.status = '';
+      }
       lastCheckedDisplayName = session.user?.displayName ?? '';
       lastDisplayNameAvailability = session.user
         ? {
@@ -354,7 +358,7 @@ async function requestMagicLink(): Promise<void> {
   const email = authEmailInput?.value.trim() ?? '';
 
   if (!email) {
-    state.status = 'Enter an email address, or sign in with wallet.';
+    state.status = 'Enter an email address.';
     renderAuthUi();
     return;
   }
@@ -370,7 +374,7 @@ async function requestMagicLink(): Promise<void> {
     state.debugMagicLink = response.debugMagicLink ?? null;
     state.status =
       response.delivery === 'email'
-        ? 'Check your email for the sign-in link. Wallet-only sign-in also works.'
+        ? 'Check your email for the sign-in link.'
         : 'Debug sign-in link generated below.';
   } catch (error) {
     console.error('Failed to request magic link', error);
@@ -474,7 +478,7 @@ async function updateDisplayName(): Promise<void> {
       body: JSON.stringify({ displayName }),
     });
     state.user = response.user;
-    state.status = `Display name updated to ${response.user.displayName}.`;
+    state.status = 'Display name saved.';
     lastCheckedDisplayName = response.user.displayName;
     lastDisplayNameAvailability = {
       available: true,
@@ -591,8 +595,8 @@ async function authenticateWithWallet(): Promise<void> {
     state.user = response.user;
     state.source = 'session';
     state.status = response.linkedWallet
-      ? `Wallet linked to ${response.user.displayName}.`
-      : `Signed in with wallet ${shortenAddress(signerAddress)}.`;
+      ? 'Wallet linked.'
+      : 'Wallet sign-in complete.';
     state.debugMagicLink = null;
   } catch (error) {
     console.error('Wallet authentication failed', error);
@@ -774,25 +778,10 @@ function renderAuthUi(): void {
     return;
   }
 
-  if (authIdentity) {
-    authIdentity.textContent = state.authenticated
-      ? buildIdentityText(state.user)
-      : 'Guest';
-    const canOpenProfile = isOpenableProfileUserId(state.user?.id);
-    authIdentity.classList.toggle('profile-trigger', canOpenProfile);
-    authIdentity.classList.toggle('auth-identity-clickable', canOpenProfile);
-    if (canOpenProfile) {
-      authIdentity.setAttribute('role', 'button');
-      authIdentity.setAttribute('tabindex', '0');
-    } else {
-      authIdentity.removeAttribute('role');
-      authIdentity.setAttribute('tabindex', '-1');
-    }
-    authIdentity.setAttribute('aria-label', canOpenProfile ? 'Open profile' : 'Account identity');
-  }
-
   if (authStatus) {
-    authStatus.textContent = state.status;
+    const statusText = getAuthStatusText();
+    authStatus.textContent = statusText;
+    authStatus.classList.toggle('hidden', statusText.length === 0);
   }
 
   if (authEmailButton) {
@@ -809,6 +798,8 @@ function renderAuthUi(): void {
   }
 
   authPanel.classList.toggle('auth-panel-guest', !state.authenticated);
+  const hasSavedDisplayName = Boolean(state.user?.displayName?.trim());
+  const showDisplayNameRow = state.authenticated && !hasSavedDisplayName;
 
   if (authLogoutButton) {
     authLogoutButton.classList.toggle('hidden', !state.authenticated || state.source === 'playfun');
@@ -816,47 +807,49 @@ function renderAuthUi(): void {
   }
 
   if (authDisplayNameRow) {
-    authDisplayNameRow.classList.toggle('hidden', !state.authenticated);
+    authDisplayNameRow.classList.toggle('hidden', !showDisplayNameRow);
   }
 
   if (authDisplayNameInput) {
-    const desiredValue = state.user?.displayName ?? '';
+    const desiredValue = showDisplayNameRow ? (state.user?.displayName ?? '') : '';
     if (authDisplayNameInput !== document.activeElement) {
       authDisplayNameInput.value = desiredValue;
     }
-    authDisplayNameInput.disabled = state.loading || !state.authenticated;
+    authDisplayNameInput.disabled = state.loading || !showDisplayNameRow;
   }
 
   if (authDisplayNameButton) {
-    authDisplayNameButton.classList.toggle('hidden', !state.authenticated);
-    authDisplayNameButton.disabled = state.loading || !state.authenticated;
+    authDisplayNameButton.classList.toggle('hidden', !showDisplayNameRow);
+    authDisplayNameButton.disabled = state.loading || !showDisplayNameRow;
   }
 
   if (authDisplayNameStatus) {
-    authDisplayNameStatus.classList.toggle('hidden', !state.authenticated);
     authDisplayNameStatus.classList.remove('is-available', 'is-taken');
 
     const draftValue = authDisplayNameInput?.value.replace(/\s+/g, ' ').trim() ?? '';
-    if (!state.authenticated || !draftValue) {
-      authDisplayNameStatus.textContent = '';
-    } else if (draftValue === state.user?.displayName) {
-      authDisplayNameStatus.textContent = 'Current display name.';
-      authDisplayNameStatus.classList.add('is-available');
+    let displayNameStatusText = '';
+    if (!showDisplayNameRow || !draftValue) {
+      displayNameStatusText = '';
     } else if (lastCheckedDisplayName === draftValue && lastDisplayNameAvailability) {
       if (lastDisplayNameAvailability.available) {
-        authDisplayNameStatus.textContent = lastDisplayNameAvailability.claimedByCurrentUser
-          ? 'Current display name.'
-          : 'Display name is available.';
+        displayNameStatusText = 'Display name is available.';
         authDisplayNameStatus.classList.add('is-available');
       } else {
-        authDisplayNameStatus.textContent = 'That display name has already been claimed.';
+        displayNameStatusText = 'That display name has already been claimed.';
         authDisplayNameStatus.classList.add('is-taken');
       }
     } else if (authDisplayNameInput === document.activeElement) {
-      authDisplayNameStatus.textContent = 'Checking availability...';
-    } else {
-      authDisplayNameStatus.textContent = '';
+      displayNameStatusText = 'Checking availability...';
     }
+
+    authDisplayNameStatus.textContent = displayNameStatusText;
+    authDisplayNameStatus.classList.toggle('hidden', displayNameStatusText.length === 0);
+  }
+
+  if (authSessionSummary && authSessionSummaryValue) {
+    const summaryText = state.authenticated ? buildSessionSummaryValue(state.user) : '';
+    authSessionSummaryValue.textContent = summaryText;
+    authSessionSummary.classList.toggle('hidden', summaryText.length === 0);
   }
 
   if (testResetButton) {
@@ -883,24 +876,39 @@ function renderAuthUi(): void {
   );
 }
 
-function buildIdentityText(user: AuthUser | null): string {
+function getAuthStatusText(): string {
+  if (!state.authenticated) {
+    return state.status;
+  }
+
+  if (!state.status || isGenericSignedInStatus(state.status)) {
+    return '';
+  }
+
+  return state.status;
+}
+
+function isGenericSignedInStatus(status: string): boolean {
+  return (
+    status.length === 0
+    || status.startsWith('Signed in as ')
+    || status.startsWith('Signed in via Play.fun as ')
+    || status.startsWith('Signed in with wallet ')
+    || status.startsWith('Wallet linked to ')
+  );
+}
+
+function buildSessionSummaryValue(user: AuthUser | null): string {
   if (!user) {
-    return 'Guest';
+    return '';
   }
 
-  if (user.email && user.walletAddress) {
-    return `${user.displayName} · ${shortenAddress(user.walletAddress)}`;
-  }
-
-  if (user.email) {
-    return `${user.displayName} · ${user.email}`;
-  }
-
+  const primary = user.displayName?.trim() || user.email?.trim() || 'player';
   if (user.walletAddress) {
-    return `${user.displayName} · ${shortenAddress(user.walletAddress)}`;
+    return `${primary} and ${shortenAddress(user.walletAddress)}`;
   }
 
-  return user.displayName;
+  return primary;
 }
 
 function getWalletButtonLabel(): string {

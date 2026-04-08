@@ -90,6 +90,7 @@ import {
   showBusyOverlay,
 } from '../ui/appFeedback';
 import { getDeviceLayoutState, isMobileLandscapeBlocked } from '../ui/deviceLayout';
+import { createProfileRepository } from '../profiles/profileRepository';
 import {
   COURSE_COMPOSER_STATE_CHANGED_EVENT,
   type CourseComposerState,
@@ -348,6 +349,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private quicksandStatusCooldownUntil = 0;
   private readonly roomRepository = createRoomRepository();
   private readonly courseRepository = createCourseRepository();
+  private readonly profileRepository = createProfileRepository();
   private activeCourseRun: ActiveCourseRunState | null = null;
   private courseEditorReturnTarget: OverworldPlaySceneData['courseEditorReturnTarget'] = null;
 
@@ -795,6 +797,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.roomCellController = new OverworldRoomCellController({
       scene: this,
       getWorldWindow: () => this.worldWindow,
+      getZoom: () => this.cameras.main.zoom,
       getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
       getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
       getRoomEditorCount: (coordinates) => this.getRoomEditorCount(coordinates),
@@ -853,6 +856,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         refreshChunkWindowIfNeeded: (centerCoordinates) =>
           this.refreshChunkWindowIfNeeded(centerCoordinates),
         updateBackdrop: () => this.updateBackdrop(),
+        redrawWorldCells: () => this.roomCellController.redrawForZoom(),
         redrawGridOverlay: () => this.gridOverlayController.redraw(),
         renderHud: () => this.renderHud(),
         getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
@@ -1274,6 +1278,23 @@ export class OverworldPlayScene extends Phaser.Scene {
           mintedOwnerWalletAddress: record.mintedOwnerWalletAddress,
         };
       },
+      loadPublicProfileSummary: async (userId) => {
+        const profile = await this.profileRepository.loadProfile(userId);
+        return {
+          displayName: profile.displayName,
+          playerLevel: profile.progression.player.level,
+          playerProgressFraction: profile.progression.player.progressFraction,
+          curatorLevel: profile.progression.curator.level,
+          curatorProgressFraction: profile.progression.curator.progressFraction,
+          builderLevel: profile.progression.builder.level,
+          builderProgressFraction: profile.progression.builder.progressFraction,
+        };
+      },
+      loadPublishedCourseSnapshot: async (courseId) => {
+        const record = await this.courseRepository.loadCourse(courseId);
+        return record.published ? cloneCourseSnapshot(record.published) : null;
+      },
+      countRoomEnemies: (room) => this.countRoomObjectsByCategory(room, 'enemy'),
       getScore: () => this.score,
       isCourseComposerLoading: () => this.courseComposerController.isLoading(),
       getZoom: () => this.cameras.main.zoom,

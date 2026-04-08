@@ -37,8 +37,8 @@ body[data-device-class='tablet'][data-coarse-pointer='true'] #global-chat.is-ope
 
 body[data-device-class='tablet'][data-coarse-pointer='true'] #global-chat .chat-panel-body {
   max-height: min(420px, calc(100vh - 104px - var(--safe-top) - var(--safe-bottom)));
-  background: rgba(11, 11, 11, 0.84);
-  backdrop-filter: blur(8px);
+  background: #fff3db;
+  backdrop-filter: none;
 }
 
 body[data-device-class='phone'] #app {
@@ -98,20 +98,20 @@ body[data-device-class='phone'][data-app-mode='play-world'] #zoom-level {
 }
 
 body[data-device-class='phone'][data-app-mode='play-world'] #world-online-count,
+body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-controls,
 body[data-device-class='phone'][data-app-mode='play-world'] #room-save-status {
   min-height: 20px;
-  padding: 2px 7px;
-  font-size: 10px;
-  backdrop-filter: blur(4px);
+  padding: 3px 7px;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] #world-online-count,
+body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-controls {
+  font-size: 7px;
 }
 
 body[data-device-class='phone'] .world-online-popover {
   width: min(280px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
   max-height: min(260px, 36vh);
-}
-
-body[data-coarse-pointer='true'] .world-online-hints {
-  display: none;
 }
 
 body[data-device-class='phone'][data-app-mode='play-world'] #room-save-status {
@@ -147,8 +147,7 @@ body[data-device-class='phone'] #world-hud {
   max-width: calc(100vw - 96px - var(--safe-left) - var(--safe-right));
   padding: 12px;
   gap: 10px;
-  background: rgba(11, 11, 11, 0.78);
-  backdrop-filter: blur(8px);
+  background: #0b0b0b;
   transition: transform 0.16s ease, opacity 0.16s ease;
 }
 
@@ -162,8 +161,7 @@ body[data-device-class='phone'] .world-goal-panel {
   max-width: calc(100vw - 120px - var(--safe-left) - var(--safe-right));
   padding: 10px 12px;
   gap: 4px;
-  background: rgba(5, 5, 5, 0.74);
-  backdrop-filter: blur(8px);
+  background: #050505;
 }
 
 body[data-device-class='phone'] .world-goal-panel-goal,
@@ -181,7 +179,7 @@ body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel {
   max-width: calc(100vw - 128px - var(--safe-left) - var(--safe-right));
   padding: 8px 12px;
   gap: 3px;
-  border-radius: 16px;
+  border-radius: 0;
 }
 
 body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-room {
@@ -228,10 +226,32 @@ body[data-device-class='phone'] #auth-panel {
 body[data-device-class='phone'] #menu-body {
   width: 100%;
   max-width: none;
+  max-height: calc(100vh - 72px - var(--safe-top) - var(--safe-bottom));
+  padding: 10px;
+}
+
+body[data-device-class='phone'] #menu-body .bar-btn {
+  width: 100%;
+}
+
+body[data-device-class='phone'] .auth-session-summary-value {
+  font-size: 9px;
 }
 
 body[data-device-class='phone'] .world-room-title {
-  font-size: 18px;
+  font-size: 16px;
+}
+
+body[data-device-class='phone'] .world-room-title[data-title-size='compact'] {
+  font-size: 14px;
+}
+
+body[data-device-class='phone'] .world-room-title[data-title-size='tiny'] {
+  font-size: 12px;
+}
+
+body[data-device-class='phone'] .world-room-subtitle {
+  font-size: 11px;
 }
 
 body[data-device-class='phone'] .world-hud-title {
@@ -249,6 +269,49 @@ body[data-device-class='phone'] .world-hud-beta {
 
 body[data-device-class='phone'] .world-hud-row {
   gap: 6px;
+}
+
+body[data-device-class='phone'] .world-creator-card {
+  padding: 6px 8px;
+  gap: 8px;
+}
+
+body[data-device-class='phone'] .world-creator-card-avatar-frame {
+  width: 54px;
+  min-width: 54px;
+  height: 48px;
+}
+
+body[data-device-class='phone'] .world-creator-card-avatar {
+  width: auto;
+  height: 44px;
+  max-width: none;
+  max-height: none;
+}
+
+body[data-device-class='phone'] .world-creator-card-name {
+  font-size: 12px;
+}
+
+body[data-device-class='phone'] .world-creator-stat-icons {
+  gap: 5px;
+}
+
+body[data-device-class='phone'] .world-creator-stat-level-icon {
+  width: 14px;
+  height: 14px;
+}
+
+body[data-device-class='phone'] .world-creator-stat-level-label {
+  font-size: 7px;
+}
+
+body[data-device-class='phone'] .world-creator-stat-row {
+  gap: 6px;
+}
+
+body[data-device-class='phone'] .world-creator-stat-progress {
+  min-width: 68px;
 }
 
 body[data-device-class='phone'] #world-jump-row {
@@ -284,7 +347,7 @@ body[data-device-class='phone'] .room-chat-composer {
 
 body[data-device-class='phone'] .room-chat-composer-form {
   padding: 8px 10px;
-  border-radius: 16px;
+  border-radius: 0;
 }
 
 body[data-device-class='phone'] #global-chat.is-open {
@@ -303,9 +366,9 @@ body[data-device-class='phone'] #global-chat.is-open .chat-toggle {
 body[data-device-class='phone'] #global-chat .chat-panel-body {
   min-height: 0;
   max-height: 78vh;
-  border-radius: 14px;
-  background: rgba(11, 11, 11, 0.8);
-  backdrop-filter: blur(8px);
+  border-radius: 0;
+  background: #fff3db;
+  backdrop-filter: none;
 }
 
 body[data-device-class='phone'] #global-chat.is-open .chat-panel-body {
@@ -321,9 +384,9 @@ body[data-device-class='phone'] #global-chat .chat-panel-header {
   top: 0;
   z-index: 1;
   padding: 12px 12px 8px;
-  background: rgba(11, 11, 11, 0.94);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(243, 238, 226, 0.08);
+  background: #fff3db;
+  backdrop-filter: none;
+  border-bottom: 2px solid #79ccde;
 }
 
 body[data-device-class='phone'] #global-chat .chat-messages {
@@ -334,7 +397,7 @@ body[data-device-class='phone'] #global-chat .chat-messages {
 body[data-device-class='phone'] #global-chat.is-open .chat-messages {
   flex: 1 1 auto;
   max-height: none;
-  padding: 0 12px 0 0;
+  padding: 10px;
   margin: 0 12px;
 }
 
@@ -461,8 +524,8 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-se
 }
 
 body[data-app-mode='editor']:not([data-device-class='phone']) #tile-palette-section {
-  min-height: 280px;
-  max-height: 340px;
+  min-height: 220px;
+  max-height: 270px;
 }
 
 body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section {
