@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reward Stings Preview</title>
+  <link rel="stylesheet" href="/src/styles/main.css">
+  <style>
+    body.reward-stings-preview {
+      min-height: 100vh;
+      margin: 0;
+      padding: 32px 20px;
+      background:
+        radial-gradient(circle at top, rgba(121, 204, 222, 0.16), transparent 42%),
+        linear-gradient(180deg, #1a1820 0%, #111015 100%);
+      color: #fff3db;
+      font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+    }
+
+    .reward-preview-shell {
+      width: min(880px, 100%);
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .reward-preview-card {
+      padding: 18px;
+      border: 3px solid #79ccde;
+      background: #fff3db;
+      color: #18161c;
+      box-shadow: 6px 6px 0 #18161c;
+    }
+
+    .reward-preview-kicker {
+      font-family: 'Early GameBoy', monospace;
+      font-size: 9px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #2c5071;
+    }
+
+    .reward-preview-title {
+      margin-top: 10px;
+      font-family: 'Super Mario Bros. NES', monospace;
+      font-size: 22px;
+      line-height: 1.2;
+    }
+
+    .reward-preview-copy {
+      margin-top: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+      max-width: 56ch;
+    }
+
+    .reward-preview-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .reward-preview-actions .bar-btn {
+      min-height: 38px;
+      padding: 10px 14px 8px;
+      border: 2px solid #18161c;
+      border-radius: 0;
+      box-shadow: 3px 3px 0 #18161c;
+      font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    #preview-reward-queue {
+      background: #277b30;
+      color: #fff3db;
+    }
+
+    #preview-reward-player {
+      background: #277b30;
+      color: #fff3db;
+    }
+
+    #preview-reward-builder {
+      background: #fcea7c;
+      color: #000;
+    }
+
+    #preview-reward-curator {
+      background: #79ccde;
+      color: #000;
+    }
+
+    #preview-reward-badge {
+      background: #f65699;
+      color: #fff3db;
+    }
+
+    #preview-reward-trophy {
+      background: #fcea7c;
+      color: #000;
+    }
+
+    #preview-reward-top10 {
+      background: #79ccde;
+      color: #000;
+    }
+
+    #preview-reward-takeover {
+      background: #ed5f4b;
+      color: #fff3db;
+    }
+  </style>
+</head>
+<body class="reward-stings-preview">
+  <div class="reward-preview-shell">
+    <div class="reward-preview-card">
+      <div class="reward-preview-kicker">Preview</div>
+      <div class="reward-preview-title">Reward Sting Queue</div>
+      <div class="reward-preview-copy">
+        This page exercises the short celebration cards for progression, badges, trophies, and leaderboard takeovers.
+        Use the buttons below or open <code>?autoplay=1</code> to run the whole queue automatically.
+      </div>
+    </div>
+    <div class="reward-preview-actions">
+      <button id="preview-reward-queue" class="bar-btn" type="button">Play Full Queue</button>
+      <button id="preview-reward-player" class="bar-btn" type="button">Player LVL</button>
+      <button id="preview-reward-builder" class="bar-btn" type="button">Builder LVL</button>
+      <button id="preview-reward-curator" class="bar-btn" type="button">Curator LVL</button>
+      <button id="preview-reward-badge" class="bar-btn" type="button">Badge</button>
+      <button id="preview-reward-trophy" class="bar-btn" type="button">Trophy</button>
+      <button id="preview-reward-top10" class="bar-btn" type="button">Top 10</button>
+      <button id="preview-reward-takeover" class="bar-btn" type="button">#1 Takeover</button>
+    </div>
+  </div>
+
+  <div id="reward-sting-layer" class="reward-sting-layer hidden" aria-live="polite" aria-atomic="true" aria-hidden="true">
+    <div id="reward-sting-card" class="reward-sting-card" role="status">
+      <div class="reward-sting-particles" aria-hidden="true">
+        <span class="reward-sting-particle reward-sting-particle--1"></span>
+        <span class="reward-sting-particle reward-sting-particle--2"></span>
+        <span class="reward-sting-particle reward-sting-particle--3"></span>
+        <span class="reward-sting-particle reward-sting-particle--4"></span>
+        <span class="reward-sting-particle reward-sting-particle--5"></span>
+        <span class="reward-sting-particle reward-sting-particle--6"></span>
+      </div>
+      <div class="reward-sting-icon-frame" aria-hidden="true">
+        <img id="reward-sting-icon" class="reward-sting-icon" alt="" />
+      </div>
+      <div class="reward-sting-copy">
+        <div id="reward-sting-kicker" class="reward-sting-kicker">Progress</div>
+        <div id="reward-sting-title" class="reward-sting-title">YOU LEVELED UP!</div>
+        <div id="reward-sting-subtitle" class="reward-sting-subtitle">LVL 4 -> LVL 5</div>
+        <div id="reward-sting-meter" class="reward-sting-meter hidden" aria-hidden="true">
+          <div id="reward-sting-meter-fill" class="reward-sting-meter-fill"></div>
+        </div>
+        <div id="reward-sting-detail" class="reward-sting-detail">120 / 150 XP</div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initSfx } from '/src/audio/sfx.ts';
+    import { RewardStingController } from '/src/ui/setup/rewardStings.ts';
+    import {
+      getRewardStingDurationMs,
+      getRewardStingSfxCue,
+      notifyRewardStings,
+    } from '/src/progression/rewardStings.ts';
+
+    initSfx(document, window);
+    const controller = new RewardStingController(document, window);
+    controller.init();
+
+    const rewards = {
+      player: {
+        kind: 'player-level-up',
+        tone: 'player',
+        kicker: 'Progress',
+        title: 'YOU LEVELED UP!',
+        subtitle: 'LVL 5 -> LVL 6',
+        detail: '120 / 150 XP',
+        progressValue: 0.8,
+        iconSrc: '/assets/ui-progress-player.png',
+        iconAlt: 'Player icon',
+        emphasis: 'normal',
+        durationMs: getRewardStingDurationMs('player-level-up', 'player'),
+        sfxCue: getRewardStingSfxCue('player-level-up', 'player'),
+      },
+      builder: {
+        kind: 'builder-level-up',
+        tone: 'builder',
+        kicker: 'Progress',
+        title: 'YOU LEVELED UP!',
+        subtitle: 'LVL 8 -> LVL 9',
+        detail: '412 / 460 XP',
+        progressValue: 0.9,
+        iconSrc: '/assets/ui-progress-builder.png',
+        iconAlt: 'Builder icon',
+        emphasis: 'normal',
+        durationMs: getRewardStingDurationMs('builder-level-up', 'builder'),
+        sfxCue: getRewardStingSfxCue('builder-level-up', 'builder'),
+      },
+      curator: {
+        kind: 'curator-level-up',
+        tone: 'curator',
+        kicker: 'Progress',
+        title: 'YOU LEVELED UP!',
+        subtitle: 'LVL 2 -> LVL 3',
+        detail: '88 / 120 XP',
+        progressValue: 0.73,
+        iconSrc: '/assets/ui-progress-curator.png',
+        iconAlt: 'Curator icon',
+        emphasis: 'normal',
+        durationMs: getRewardStingDurationMs('curator-level-up', 'curator'),
+        sfxCue: getRewardStingSfxCue('curator-level-up', 'curator'),
+      },
+      badge: {
+        kind: 'badge-earned',
+        tone: 'curator',
+        kicker: 'Badge',
+        title: 'YOU EARNED A BADGE!',
+        subtitle: 'Top 10',
+        detail: 'Broke into a top-10 leaderboard.',
+        iconSrc: '/assets/ui-progress-curator.png',
+        iconAlt: 'Badge icon',
+        emphasis: 'normal',
+        durationMs: getRewardStingDurationMs('badge-earned', 'curator'),
+        sfxCue: getRewardStingSfxCue('badge-earned', 'curator'),
+      },
+      trophy: {
+        kind: 'trophy-earned',
+        tone: 'trophy',
+        kicker: 'Trophy',
+        title: 'YOU EARNED A TROPHY!',
+        subtitle: 'Quality',
+        detail: 'Hello World',
+        iconSrc: '/assets/objects/flag-checkered-gold.png',
+        iconAlt: 'Trophy icon',
+        emphasis: 'normal',
+        durationMs: getRewardStingDurationMs('trophy-earned', 'trophy'),
+        sfxCue: getRewardStingSfxCue('trophy-earned', 'trophy'),
+      },
+      top10: {
+        kind: 'top-10-entry',
+        tone: 'leaderboard',
+        kicker: 'Leaderboard',
+        title: 'YOU MADE THE TOP TEN!',
+        subtitle: 'HELLO WORLD',
+        detail: '#18 -> #8',
+        iconSrc: '/assets/ui-progress-player.png',
+        iconAlt: 'Top 10 icon',
+        emphasis: 'normal',
+        durationMs: getRewardStingDurationMs('top-10-entry', 'leaderboard'),
+        sfxCue: getRewardStingSfxCue('top-10-entry', 'leaderboard'),
+      },
+      takeover: {
+        kind: 'number-one-takeover',
+        tone: 'takeover',
+        kicker: 'Leaderboard',
+        title: 'YOU GOT FIRST PLACE!',
+        subtitle: 'HELLO WORLD',
+        detail: '#7 -> #1',
+        iconSrc: '/assets/objects/flag-checkered-gold.png',
+        iconAlt: 'Gold flag',
+        emphasis: 'hero',
+        durationMs: getRewardStingDurationMs('number-one-takeover', 'takeover'),
+        sfxCue: getRewardStingSfxCue('number-one-takeover', 'takeover'),
+      },
+    };
+
+    const queue = [rewards.player, rewards.badge, rewards.trophy, rewards.takeover];
+
+    function playRewards(items) {
+      notifyRewardStings(items.map((item) => ({ ...item })));
+    }
+
+    document.getElementById('preview-reward-queue')?.addEventListener('click', () => playRewards(queue));
+    document.getElementById('preview-reward-player')?.addEventListener('click', () => playRewards([rewards.player]));
+    document.getElementById('preview-reward-builder')?.addEventListener('click', () => playRewards([rewards.builder]));
+    document.getElementById('preview-reward-curator')?.addEventListener('click', () => playRewards([rewards.curator]));
+    document.getElementById('preview-reward-badge')?.addEventListener('click', () => playRewards([rewards.badge]));
+    document.getElementById('preview-reward-trophy')?.addEventListener('click', () => playRewards([rewards.trophy]));
+    document.getElementById('preview-reward-top10')?.addEventListener('click', () => playRewards([rewards.top10]));
+    document.getElementById('preview-reward-takeover')?.addEventListener('click', () => playRewards([rewards.takeover]));
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('autoplay') === '1') {
+      window.setTimeout(() => playRewards(queue), 120);
+    }
+  </script>
+</body>
+</html>

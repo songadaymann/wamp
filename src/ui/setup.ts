@@ -15,6 +15,7 @@ import { InstallHelpController } from './setup/installHelp';
 import { PaletteController } from './setup/paletteController';
 import { setupRoomMusicControls } from './setup/musicControls';
 import { ProfileModalController } from './setup/profileModal';
+import { RewardStingController } from './setup/rewardStings';
 import { RunRatingModalController } from './setup/runRatingModal';
 import { SignTextModalController } from './setup/signTextModal';
 import { setupCollapsibleSidebarSections, setupEditorSidebarShell } from './setup/sidebarSections';
@@ -33,6 +34,7 @@ export function setupUI(game: Phaser.Game): void {
   const courseModal = new CourseModalController(game);
   const courseComposerPanel = new CourseComposerPanelController(game);
   const profileModal = new ProfileModalController(game);
+  const rewardStings = new RewardStingController();
   const runRatingModal = new RunRatingModalController(game);
   const signTextModal = new SignTextModalController(game);
   const chatPanel = new ChatPanelController();
@@ -62,6 +64,7 @@ export function setupUI(game: Phaser.Game): void {
   courseModal.init();
   courseComposerPanel.init();
   profileModal.init();
+  rewardStings.init();
   runRatingModal.init();
   signTextModal.init();
   chatPanel.init();

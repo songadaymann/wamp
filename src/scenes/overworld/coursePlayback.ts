@@ -265,6 +265,7 @@ export class OverworldCoursePlaybackController {
           contentId: currentActiveCourseRun.course.id,
           contentTitle: currentActiveCourseRun.course.title,
           version: currentActiveCourseRun.course.version,
+          previousViewerRank: null,
           elapsedMs: body.elapsedMs,
           deaths: body.deaths,
           score: body.score ?? null,

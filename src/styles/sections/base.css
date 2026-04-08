@@ -111,23 +111,36 @@ body {
 .app-boot-splash-card {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   text-align: center;
+  width: min(520px, calc(100vw - 40px));
+  padding: 20px 18px 18px;
+  border: 3px solid #79ccde;
+  border-radius: 0;
+  background: #fff3db;
+  box-shadow: 6px 6px 0 #18161c;
+}
+
+.app-boot-splash {
+  background: rgba(24, 22, 28, 0.82);
+  backdrop-filter: none;
 }
 
 .app-boot-splash-kicker,
 .app-busy-title {
-  color: var(--accent-warm);
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
   font-size: 11px;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
   text-transform: uppercase;
 }
 
 .app-boot-splash-title {
-  color: var(--text);
-  font-family: 'Early GameBoy', monospace;
-  font-size: 20px;
-  line-height: 1.7;
+  color: #18161c;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 21px;
+  line-height: 1.2;
 }
 
 .app-boot-splash-title-wrap {
@@ -141,21 +154,22 @@ body {
 
 .app-boot-splash-beta {
   position: absolute;
-  top: -8px;
-  right: -8px;
-  padding: 2px 8px;
-  border: 1px solid rgba(255, 111, 60, 0.55);
-  border-radius: 999px;
-  background: rgba(255, 111, 60, 0.14);
-  color: var(--accent-hot);
-  font-family: 'IBM Plex Mono', 'Courier New', monospace;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
+  top: -10px;
+  right: -10px;
+  padding: 5px 8px 4px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #ed5f4b;
+  color: #fff3db;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
   line-height: 1;
-  transform: rotate(-14deg);
+  text-transform: uppercase;
+  transform: rotate(-8deg);
   transform-origin: center;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+  box-shadow: 3px 3px 0 #18161c;
 }
 
 .app-feedback-status {
@@ -164,31 +178,71 @@ body {
   line-height: 1.45;
 }
 
+.app-boot-splash .app-feedback-status {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .app-boot-progress {
   width: 100%;
-  height: 10px;
+  height: 18px;
   overflow: hidden;
-  border: 1px solid rgba(52, 116, 51, 0.38);
-  border-radius: 999px;
-  background: rgba(52, 116, 51, 0.12);
+  padding: 2px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #18161c;
+  box-shadow: 3px 3px 0 #18161c;
 }
 
 .app-boot-progress-bar {
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, var(--accent-cool), var(--accent-warm));
+  background:
+    linear-gradient(
+      90deg,
+      #277b30 0%,
+      #277b30 25%,
+      #79ccde 25%,
+      #79ccde 50%,
+      #fcea7c 50%,
+      #fcea7c 75%,
+      #ed5f4b 75%,
+      #ed5f4b 100%
+    );
   transform-origin: left center;
   transform: scaleX(0);
   transition: transform 0.14s ease-out;
 }
 
 .app-boot-splash[data-boot-state='failed'] .app-boot-progress {
-  border-color: rgba(178, 34, 34, 0.42);
-  background: rgba(178, 34, 34, 0.12);
+  background: #2a0e10;
+  border-color: #ed5f4b;
 }
 
 .app-boot-splash[data-boot-state='failed'] .app-feedback-status {
-  color: #ffd2d2;
+  color: #ed5f4b;
+}
+
+#btn-boot-retry {
+  align-self: center;
+  min-width: 128px;
+  padding: 8px 12px 7px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #277b30;
+  color: #fff3db;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#btn-boot-retry:hover {
+  filter: brightness(1.06);
 }
 
 .app-busy-overlay {

@@ -849,6 +849,7 @@ export class OverworldGoalRunController {
           contentTitle: null,
           roomCoordinates: { ...runState.roomCoordinates },
           version: runState.roomVersion,
+          previousViewerRank: this.currentRoomLeaderboard?.viewerRank ?? null,
           elapsedMs: payload.elapsedMs,
           deaths: payload.deaths,
           score: payload.score ?? null,

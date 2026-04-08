@@ -52,7 +52,12 @@ export type SfxCue =
   | 'treasure-open'
   | 'cage-open'
   | 'chat-send'
-  | 'chat-receive';
+  | 'chat-receive'
+  | 'progression-player-level-up'
+  | 'progression-builder-level-up'
+  | 'progression-curator-level-up'
+  | 'progression-top-10'
+  | 'progression-first-place';
 
 type SfxHistoryEntry = {
   cue: SfxCue;
@@ -265,6 +270,36 @@ const SFX_CUES: Record<SfxCue, CueConfig> = {
     volume: 0.24,
     playbackRate: 1.16,
     cooldownMs: 120,
+  },
+  'progression-player-level-up': {
+    path: 'assets/sfx/progression/player-lvlUp.mp3',
+    volume: 0.76,
+    cooldownMs: 90,
+    allowOverlap: false,
+  },
+  'progression-builder-level-up': {
+    path: 'assets/sfx/progression/builder-lvlUp.mp3',
+    volume: 0.78,
+    cooldownMs: 90,
+    allowOverlap: false,
+  },
+  'progression-curator-level-up': {
+    path: 'assets/sfx/progression/curator-lvlUp.mp3',
+    volume: 0.76,
+    cooldownMs: 90,
+    allowOverlap: false,
+  },
+  'progression-top-10': {
+    path: 'assets/sfx/progression/leaderboard-top10.mp3',
+    volume: 0.78,
+    cooldownMs: 120,
+    allowOverlap: false,
+  },
+  'progression-first-place': {
+    path: 'assets/sfx/progression/leaderboard-1st-place.mp3',
+    volume: 0.8,
+    cooldownMs: 120,
+    allowOverlap: false,
   },
 };
 

@@ -57,6 +57,33 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Progression reward-sting audio timing on April 8, 2026:
+  - copied the new local progression MP3s into the clean reward-stings worktree:
+    - `public/assets/sfx/progression/player-lvlUp.mp3`
+    - `public/assets/sfx/progression/builder-lvlUp.mp3`
+    - `public/assets/sfx/progression/curator-lvlUp.mp3`
+    - `public/assets/sfx/progression/leaderboard-top10.mp3`
+    - `public/assets/sfx/progression/leaderboard-1st-place.mp3`
+  - measured sting lengths with `ffprobe` and wired those exact durations into reward-card timing:
+    - player level-up: `2325ms`
+    - builder level-up: `3213ms`
+    - curator level-up: `2638ms`
+    - top ten: `4101ms`
+    - first place: `2351ms`
+  - added shared progression SFX cues in `src/audio/sfx.ts` and made the reward sting controller play them when each reward card appears
+  - reward timing now comes from shared helpers in `src/progression/rewardStings.ts` instead of scattered literals
+  - badge/trophy rewards currently reuse the closest lane celebration sting as a placeholder until dedicated badge/trophy audio exists:
+    - badge uses lane-specific player/builder/curator sting based on category
+    - trophy uses the player celebration sting
+  - updated `reward-stings-preview.html` to initialize SFX and use the shared timing/cue helpers so the preview stays in sync with the real app
+  - validation:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - required `develop-web-game` browser probe outputs:
+      - `output/web-game/reward-stings-player-timing-check-live/shot-0.png`
+      - `output/web-game/reward-stings-top10-timing-check-live/shot-0.png`
+    - those screenshots confirm the player level-up card is still visible mid-fill at `1.3s` and the top-ten card is still visible at `2.2s`
+
 - HUD font trial on April 7, 2026:
   - branched from `main` into `feature/hud-font-trial-2026-04-07`
   - copied the local trial fonts into the worktree `public/assets/fonts/`
@@ -6748,3 +6775,48 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - self profile opened on `Progress`
       - other profile opened on `Levels`
       - hero lane count rendered as `3`
+
+## 2026-04-08 13:34:00 EDT - Progression reward sting overlay
+
+- added a dedicated queued celebration overlay for post-run progression rewards:
+  - player / builder / curator level-up
+  - badge earned
+  - trophy earned
+  - top 10 leaderboard entry
+  - `#1` takeover
+- implementation:
+  - added `src/progression/rewardStings.ts` to diff baseline progression against the post-rating response and emit reward-sting events
+  - extended post-run rating request payloads with `previousViewerRank`
+  - room runs now pass the real pre-run room leaderboard rank into the rating flow
+  - `RunRatingModalController` now loads a baseline self-profile progression snapshot, ensures summary data is available, and emits the reward queue after a successful rating save
+  - added `RewardStingController` plus a fixed overlay root in `index.html`
+  - styled the cards in `src/styles/sections/modals.css` with queueable top-center and center-hero variants, lane colors, and light particle bursts
+  - added `reward-stings-preview.html` as a standalone dev preview surface for the sting queue
+- verification:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - local preview served at `http://127.0.0.1:4595/`
+  - headless Chrome captures written to:
+    - `output/reward-stings-check/reward-preview-first.png`
+    - `output/reward-stings-check/reward-preview-hero.png`
+  - DOM confirmation:
+    - early queue state rendered `PLAYER LVL UP`
+    - later queue state rendered hero `#1 TAKEOVER`
+
+## 2026-04-08 13:43:00 EDT - Reward sting copy and level-up meter
+
+- updated reward-sting copy:
+  - level-up title: `YOU LEVELED UP!`
+  - badge title: `YOU EARNED A BADGE!`
+  - trophy title: `YOU EARNED A TROPHY!`
+  - top-10 title: `YOU MADE THE TOP TEN!`
+  - first-place title: `YOU GOT FIRST PLACE!`
+- added an animated progress meter for level-up rewards:
+  - level-up cards now show a white-framed fill bar that animates to the new lane progress fraction
+  - non-level rewards hide the meter
+- verification:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - preview DOM confirmed:
+    - level-up state showed `YOU LEVELED UP!` with visible meter fill target `0.8`
+    - hero state showed `YOU GOT FIRST PLACE!` with the meter hidden

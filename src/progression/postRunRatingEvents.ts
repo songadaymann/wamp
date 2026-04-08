@@ -9,6 +9,7 @@ interface BasePostRunRatingRequestDetail {
   contentId: string;
   contentTitle: string | null;
   version: number;
+  previousViewerRank: number | null;
   elapsedMs: number;
   deaths: number;
   score: number | null;

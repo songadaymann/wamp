@@ -22,6 +22,8 @@ import {
   type PostRunRatingRequestDetail,
   type RoomPostRunRatingRequestDetail,
 } from '../../progression/postRunRatingEvents';
+import { buildRewardStings, notifyRewardStings } from '../../progression/rewardStings';
+import { createProfileRepository, type ProfileRepository } from '../../profiles/profileRepository';
 import { requestProfileInvalidation } from './profileEvents';
 import {
   ROOM_DIFFICULTIES,
@@ -59,6 +61,8 @@ export class RunRatingModalController {
   private loadToken = 0;
   private savedProgression: ProgressionSummary | null = null;
   private savedDeltaText: string | null = null;
+  private baselineProgression: ProgressionSummary | null = null;
+  private baselineProgressionLoad: Promise<void> | null = null;
 
   private readonly handleCloseClick = () => {
     this.close();
@@ -94,6 +98,7 @@ export class RunRatingModalController {
     private readonly game: Phaser.Game,
     private readonly runRepository: RunRepository = createRunRepository(),
     private readonly courseRepository: CourseRepository = createCourseRepository(),
+    private readonly profileRepository: ProfileRepository = createProfileRepository(),
     private readonly doc: Document = document,
     private readonly windowObj: Window = window
   ) {
@@ -176,12 +181,15 @@ export class RunRatingModalController {
     this.loadingSummary = true;
     this.savedProgression = null;
     this.savedDeltaText = null;
+    this.baselineProgression = null;
+    this.baselineProgressionLoad = null;
     this.setError(null);
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
     this.render();
 
     const loadToken = ++this.loadToken;
+    this.baselineProgressionLoad = this.loadBaselineProgression(loadToken);
     try {
       if (detail.contentType === 'room') {
         const summary = await this.runRepository.loadRoomLeaderboard(
@@ -236,6 +244,8 @@ export class RunRatingModalController {
     this.loadingSummary = false;
     this.savedProgression = null;
     this.savedDeltaText = null;
+    this.baselineProgression = null;
+    this.baselineProgressionLoad = null;
     this.setError(null);
   }
 
@@ -252,8 +262,9 @@ export class RunRatingModalController {
   }
 
   private async submit(): Promise<void> {
+    const request = this.activeRequest;
     if (
-      !this.activeRequest ||
+      !request ||
       this.submitting ||
       this.currentQualityStars === null ||
       this.currentDifficultyChoice === null
@@ -266,34 +277,40 @@ export class RunRatingModalController {
     this.render();
 
     try {
-      if (this.activeRequest.contentType === 'room') {
-        const response = await this.runRepository.submitRoomRating(this.activeRequest.contentId, {
-          roomCoordinates: this.activeRequest.roomCoordinates,
-          roomVersion: this.activeRequest.version,
+      if (request.contentType === 'room') {
+        const response = await this.runRepository.submitRoomRating(request.contentId, {
+          roomCoordinates: request.roomCoordinates,
+          roomVersion: request.version,
           qualityStars: this.currentQualityStars,
           difficultyChoice: this.currentDifficultyChoice,
-          autoSuggestedDifficulty: this.activeRequest.autoSuggestedDifficulty,
+          autoSuggestedDifficulty: request.autoSuggestedDifficulty,
         });
         this.roomSummary = this.mergeRoomSummary(response);
         this.savedProgression = response.progression;
         this.savedDeltaText = formatProgressionDelta(response.progressionDelta);
+        await this.baselineProgressionLoad;
+        await this.ensureCurrentSummary(request);
+        notifyRewardStings(this.buildRewardQueue(request, response.progression));
       } else {
-        const response = await this.courseRepository.submitCourseRating(this.activeRequest.contentId, {
-          courseVersion: this.activeRequest.version,
+        const response = await this.courseRepository.submitCourseRating(request.contentId, {
+          courseVersion: request.version,
           qualityStars: this.currentQualityStars,
           difficultyChoice: this.currentDifficultyChoice,
-          autoSuggestedDifficulty: this.activeRequest.autoSuggestedDifficulty,
+          autoSuggestedDifficulty: request.autoSuggestedDifficulty,
         });
         this.courseSummary = this.mergeCourseSummary(response);
         this.savedProgression = response.progression;
         this.savedDeltaText = formatProgressionDelta(response.progressionDelta);
+        await this.baselineProgressionLoad;
+        await this.ensureCurrentSummary(request);
+        notifyRewardStings(this.buildRewardQueue(request, response.progression));
       }
 
       const authState = getAuthDebugState();
       requestProfileInvalidation(authState.user?.id);
       notifyPostRunRatingSubmitted({
-        contentType: this.activeRequest.contentType,
-        contentId: this.activeRequest.contentId,
+        contentType: request.contentType,
+        contentId: request.contentId,
       });
     } catch (error) {
       this.setError(error instanceof Error ? error.message : 'Failed to save your rating.');
@@ -412,6 +429,74 @@ export class RunRatingModalController {
     const normalized = message?.trim() ?? '';
     this.elements.error.textContent = normalized;
     this.elements.error.classList.toggle('hidden', normalized.length === 0);
+  }
+
+  private async loadBaselineProgression(loadToken: number): Promise<void> {
+    const userId = getAuthDebugState().user?.id?.trim();
+    if (!userId) {
+      return;
+    }
+
+    try {
+      const profile = await this.profileRepository.loadProfile(userId);
+      if (loadToken !== this.loadToken || !this.activeRequest) {
+        return;
+      }
+      this.baselineProgression = profile.progression;
+    } catch {
+      // Keep reward stings optional when profile baselines are unavailable.
+    }
+  }
+
+  private buildRewardQueue(
+    request: PostRunRatingRequestDetail,
+    progression: ProgressionSummary,
+  ) {
+    const resolvedTitle =
+      request.contentType === 'room'
+        ? this.roomSummary?.roomTitle ?? request.contentTitle
+        : this.courseSummary?.courseTitle ?? request.contentTitle;
+
+    return buildRewardStings({
+      previousProgression: this.baselineProgression,
+      currentProgression: progression,
+      previousViewerRank: request.previousViewerRank,
+      currentViewerRank:
+        request.contentType === 'room'
+          ? this.roomSummary?.viewerRank ?? null
+          : this.courseSummary?.viewerRank ?? null,
+      contentType: request.contentType,
+      contentId: request.contentId,
+      contentTitle: resolvedTitle,
+    });
+  }
+
+  private async ensureCurrentSummary(request: PostRunRatingRequestDetail): Promise<void> {
+    try {
+      if (request.contentType === 'room') {
+        if (this.roomSummary) {
+          return;
+        }
+        this.roomSummary = await this.runRepository.loadRoomLeaderboard(
+          request.contentId,
+          request.roomCoordinates,
+          request.version,
+          5,
+        );
+        return;
+      }
+
+      if (this.courseSummary) {
+        return;
+      }
+      this.courseSummary = await this.courseRepository.loadCourseLeaderboard(
+        request.contentId,
+        request.version,
+        5,
+      );
+    } catch {
+      // Reward rank stings can silently skip when the summary is unavailable.
+    }
   }
 }
 
