@@ -4,7 +4,9 @@ import type {
   AdminProgressionUserLookupEntry,
   AdminProgressionUserLookupResponse,
   LaunchStatsActivityWindow,
-  LaunchStatsRecentEvent,
+  LaunchStatsRecentCourseReference,
+  LaunchStatsRecentRoomReference,
+  LaunchStatsRecentSummary,
   LaunchStatsResponse,
   PartyKitShardHeartbeat,
 } from './admin/model';
@@ -585,7 +587,7 @@ function renderActivity(): void {
   if (!lastSnapshot) {
     activityGrid.innerHTML = '<div class="meta">No activity yet.</div>';
     if (activityFeed) {
-      activityFeed.innerHTML = '<div class="meta">No recent events yet.</div>';
+      activityFeed.innerHTML = '<div class="meta">No recent summaries yet.</div>';
     }
     return;
   }
@@ -601,18 +603,18 @@ function renderActivity(): void {
       ([label, windowStats]) => `
         <article class="card stack">
           <span class="label">${escapeHtml(label)}</span>
-          <div class="meta">Users ${formatNumber(windowStats.newUsers)} · Magic links ${formatNumber(
-            windowStats.magicLinksCreated
-          )}</div>
-          <div class="meta">Chat ${formatNumber(windowStats.chatMessages)} · Room publishes ${formatNumber(
+          <div class="meta">People ${formatNumber(windowStats.newUsers)} signups · ${formatNumber(windowStats.logins)} logins</div>
+          <div class="meta">Build ${formatNumber(windowStats.roomClaims)} claims · ${formatNumber(
             windowStats.roomPublishes
-          )}</div>
-          <div class="meta">Room runs ${formatNumber(windowStats.roomRunStarts)} start / ${formatNumber(
-            windowStats.roomRunFinishes
-          )} finish</div>
-          <div class="meta">Course runs ${formatNumber(
+          )} room publishes · ${formatNumber(windowStats.coursePublishes)} course publishes</div>
+          <div class="meta">Play room ${formatNumber(
+            windowStats.roomRunStarts
+          )}/${formatNumber(windowStats.roomRunFinishes)} start/finish · course ${formatNumber(
             windowStats.courseRunStarts
-          )} start / ${formatNumber(windowStats.courseRunFinishes)} finish</div>
+          )}/${formatNumber(windowStats.courseRunFinishes)} start/finish</div>
+          <div class="meta">Support ${formatNumber(windowStats.chatMessages)} chat · ${formatNumber(
+            windowStats.magicLinksCreated
+          )} magic links</div>
         </article>
       `
     )
@@ -622,25 +624,27 @@ function renderActivity(): void {
     return;
   }
 
-  const events = lastSnapshot.recentEvents ?? [];
-  if (events.length === 0) {
-    activityFeed.innerHTML = '<div class="meta">No recent events yet.</div>';
+  const summaries = lastSnapshot.recentSummaries ?? [];
+  if (summaries.length === 0) {
+    activityFeed.innerHTML = '<div class="meta">No recent summaries yet.</div>';
     return;
   }
 
-  activityFeed.innerHTML = events
-    .map(
-      (event) => `
+  activityFeed.innerHTML = summaries
+    .map((summary) => {
+      const detail = renderRecentSummaryDetail(summary);
+
+      return `
         <article class="card activity-row">
           <div class="activity-head">
-            <span class="label">${escapeHtml(renderEventKindLabel(event.kind))}</span>
-            <span class="meta">${escapeHtml(formatTimestamp(event.at))}</span>
+            <span class="label">${escapeHtml(renderRecentSummaryKindLabel(summary.kind))}</span>
+            <span class="meta">${escapeHtml(formatTimestamp(summary.at))}</span>
           </div>
-          <div>${renderEventSummaryMarkup(event)}</div>
-          <div class="meta">${escapeHtml(renderEventDetail(event))}</div>
+          <div class="activity-summary">${renderRecentSummaryMarkup(summary)}</div>
+          ${detail ? `<div class="meta activity-detail">${escapeHtml(detail)}</div>` : ''}
         </article>
-      `
-    )
+      `;
+    })
     .join('');
 
   wireProgressionLookupButtons(activityFeed);
@@ -745,107 +749,219 @@ function buildChip(label: string, value: string, tone: 'good' | 'warn' | 'danger
   return `<span class="chip ${tone}">${escapeHtml(label)}: ${escapeHtml(value)}</span>`;
 }
 
-function renderEventKindLabel(kind: LaunchStatsRecentEvent['kind']): string {
+function renderRecentSummaryKindLabel(kind: LaunchStatsRecentSummary['kind']): string {
   switch (kind) {
-    case 'room_claim':
-      return 'Room Claim';
-    case 'room_publish':
-      return 'Room Publish';
-    case 'room_attempt_burst':
-      return 'Attempt Burst';
-    case 'room_run_finish':
-      return 'Room Run';
+    case 'signup':
+      return 'Sign Up';
+    case 'visit_only':
+      return 'Visit Only';
+    case 'room_play':
+      return 'Room Play';
+    case 'room_build':
+      return 'Room Build';
+    case 'course_build':
+      return 'Course Build';
     default:
-      return 'Event';
+      return 'Activity';
   }
 }
 
-function renderEventSummary(event: LaunchStatsRecentEvent): string {
-  const actor = event.actorDisplayName || 'Unknown';
-  const roomLabel = formatRoomLabel(event);
-
-  switch (event.kind) {
-    case 'room_claim':
-      return `${actor} claimed ${roomLabel}.`;
-    case 'room_publish':
-      return `${actor} published ${roomLabel}${event.roomVersion ? ` v${event.roomVersion}` : ''}.`;
-    case 'room_attempt_burst': {
-      const attempts = event.attemptCount ?? 0;
-      const completions = event.completedCount ?? 0;
-      const completionSuffix =
-        completions > 0 ? `, including ${completions} completion${completions === 1 ? '' : 's'}` : '';
-      return `${actor} did ${attempts} attempt${attempts === 1 ? '' : 's'} in ${roomLabel}${completionSuffix}.`;
-    }
-    case 'room_run_finish': {
-      const result = (event.result ?? 'finished').toLowerCase();
-      return `${actor} ${result} ${roomLabel}${event.roomVersion ? ` v${event.roomVersion}` : ''}.`;
-    }
-    default:
-      return `${actor} did something in ${roomLabel}.`;
-  }
+function renderRecentSummaryMarkup(summary: LaunchStatsRecentSummary): string {
+  const actorMarkup = renderRecentSummaryActorMarkup(summary);
+  return `${actorMarkup} ${escapeHtml(renderRecentSummaryBody(summary))}`;
 }
 
-function renderEventSummaryMarkup(event: LaunchStatsRecentEvent): string {
-  const actorMarkup = renderEventActorMarkup(event);
-  return `${actorMarkup} ${escapeHtml(renderEventSummaryBody(event))}`;
-}
-
-function renderEventActorMarkup(event: LaunchStatsRecentEvent): string {
-  const actor = escapeHtml(event.actorDisplayName || 'Unknown');
-  if (!event.actorUserId) {
+function renderRecentSummaryActorMarkup(summary: LaunchStatsRecentSummary): string {
+  const actor = escapeHtml(summary.actorDisplayName || 'Unknown');
+  if (!summary.actorUserId) {
     return `<span class="activity-actor">${actor}</span>`;
   }
 
-  return `<button class="activity-actor-button" type="button" data-progression-user-id="${escapeHtml(event.actorUserId)}">${actor}</button>`;
+  return `<button class="activity-actor-button" type="button" data-progression-user-id="${escapeHtml(summary.actorUserId)}">${actor}</button>`;
 }
 
-function renderEventSummaryBody(event: LaunchStatsRecentEvent): string {
-  const roomLabel = formatRoomLabel(event);
-
-  switch (event.kind) {
-    case 'room_claim':
-      return `claimed ${roomLabel}.`;
-    case 'room_publish':
-      return `published ${roomLabel}${event.roomVersion ? ` v${event.roomVersion}` : ''}.`;
-    case 'room_attempt_burst': {
-      const attempts = event.attemptCount ?? 0;
-      const completions = event.completedCount ?? 0;
-      const completionSuffix =
-        completions > 0 ? `, including ${completions} completion${completions === 1 ? '' : 's'}` : '';
-      return `did ${attempts} attempt${attempts === 1 ? '' : 's'} in ${roomLabel}${completionSuffix}.`;
+function renderRecentSummaryBody(summary: LaunchStatsRecentSummary): string {
+  switch (summary.kind) {
+    case 'signup':
+      return summary.signupSource === 'wallet'
+        ? 'signed up with a wallet.'
+        : summary.signupSource === 'email'
+          ? 'signed up with email.'
+          : 'signed up.';
+    case 'visit_only': {
+      const sessions = summary.sessionCount ?? 0;
+      return sessions <= 1
+        ? 'logged in and did not build or play anything yet.'
+        : `logged in ${formatNumber(sessions)} times and did not build or play anything yet.`;
     }
-    case 'room_run_finish': {
-      const result = (event.result ?? 'finished').toLowerCase();
-      return `${result} ${roomLabel}${event.roomVersion ? ` v${event.roomVersion}` : ''}.`;
+    case 'room_play': {
+      const attempts = summary.attemptCount ?? 0;
+      const roomCount = summary.roomCount ?? summary.topRooms.length;
+      return `did ${formatNumber(attempts)} room attempt${attempts === 1 ? '' : 's'} across ${formatNumber(
+        roomCount
+      )} room${roomCount === 1 ? '' : 's'}.`;
+    }
+    case 'room_build': {
+      const claims = summary.claimCount ?? 0;
+      const publishes = summary.roomPublishCount ?? 0;
+      const roomCount = summary.roomCount ?? summary.topRooms.length;
+
+      if (claims > 0 && publishes > 0) {
+        return `claimed ${formatNumber(claims)} room${claims === 1 ? '' : 's'} and published ${formatNumber(
+          publishes
+        )} room version${publishes === 1 ? '' : 's'} across ${formatNumber(roomCount)} room${
+          roomCount === 1 ? '' : 's'
+        }.`;
+      }
+
+      if (claims > 0) {
+        return `claimed ${formatNumber(claims)} room${claims === 1 ? '' : 's'}.`;
+      }
+
+      return `published ${formatNumber(publishes)} room version${publishes === 1 ? '' : 's'} across ${formatNumber(
+        roomCount
+      )} room${roomCount === 1 ? '' : 's'}.`;
+    }
+    case 'course_build': {
+      const courses = summary.courseCount ?? summary.topCourses.length;
+      const publishes = summary.coursePublishCount ?? courses;
+      if (publishes > courses) {
+        return `published ${formatNumber(publishes)} course version${publishes === 1 ? '' : 's'} across ${formatNumber(
+          courses
+        )} course${courses === 1 ? '' : 's'}.`;
+      }
+
+      return `published ${formatNumber(courses)} course${courses === 1 ? '' : 's'}.`;
     }
     default:
-      return `did something in ${roomLabel}.`;
+      return 'showed up recently.';
   }
 }
 
-function renderEventDetail(event: LaunchStatsRecentEvent): string {
-  const parts: string[] = [];
-  if (event.result) {
-    parts.push(event.result);
+function renderRecentSummaryDetail(summary: LaunchStatsRecentSummary): string | null {
+  switch (summary.kind) {
+    case 'signup':
+      return summary.signupSource === 'wallet'
+        ? 'New wallet account.'
+        : summary.signupSource === 'email'
+          ? 'New email account.'
+          : 'New account.';
+    case 'visit_only': {
+      const sessions = summary.sessionCount ?? 0;
+      return `${formatNumber(sessions)} login session${sessions === 1 ? '' : 's'} · no room or course play/build in the last 7 days.`;
+    }
+    case 'room_play': {
+      const parts = [
+        `${formatNumber(summary.completedCount ?? 0)} completed`,
+        `${formatNumber(summary.failedCount ?? 0)} failed`,
+        `${formatNumber(summary.abandonedCount ?? 0)} abandoned`,
+      ];
+      const rooms = formatRoomReferenceList(summary.topRooms, summary.roomCount);
+      if (rooms) {
+        parts.push(`Rooms: ${rooms}`);
+      }
+      return parts.join(' · ');
+    }
+    case 'room_build': {
+      const parts: string[] = [];
+      if ((summary.claimCount ?? 0) > 0) {
+        parts.push(`${formatNumber(summary.claimCount ?? 0)} claim${summary.claimCount === 1 ? '' : 's'}`);
+      }
+      if ((summary.roomPublishCount ?? 0) > 0) {
+        parts.push(
+          `${formatNumber(summary.roomPublishCount ?? 0)} publish${summary.roomPublishCount === 1 ? '' : 'es'}`
+        );
+      }
+      const rooms = formatRoomReferenceList(summary.topRooms, summary.roomCount);
+      if (rooms) {
+        parts.push(`Rooms: ${rooms}`);
+      }
+      return parts.join(' · ') || null;
+    }
+    case 'course_build': {
+      const parts: string[] = [];
+      if (
+        summary.coursePublishCount !== null &&
+        summary.courseCount !== null &&
+        summary.coursePublishCount > summary.courseCount
+      ) {
+        parts.push(`${formatNumber(summary.coursePublishCount)} publish versions`);
+      }
+      const courses = formatCourseReferenceList(summary.topCourses, summary.courseCount);
+      if (courses) {
+        parts.push(`Courses: ${courses}`);
+      }
+      return parts.join(' · ') || null;
+    }
+    default:
+      return null;
   }
-  if (event.roomId) {
-    parts.push(`room ${event.roomId}`);
-  }
-  if (event.roomX !== null && event.roomY !== null) {
-    parts.push(`${event.roomX},${event.roomY}`);
-  }
-  return parts.join(' · ') || 'No additional detail.';
 }
 
-function formatRoomLabel(event: LaunchStatsRecentEvent): string {
-  const title = event.roomTitle?.trim();
+function formatRoomReferenceList(
+  rooms: LaunchStatsRecentRoomReference[],
+  totalCount: number | null
+): string {
+  if (rooms.length === 0) {
+    return '';
+  }
+
+  const labels = rooms.map((room) => formatRoomReference(room));
+  const remainingCount = totalCount !== null ? Math.max(0, totalCount - rooms.length) : 0;
+  if (remainingCount > 0) {
+    labels.push(`+${formatNumber(remainingCount)} more`);
+  }
+
+  return labels.join(' · ');
+}
+
+function formatCourseReferenceList(
+  courses: LaunchStatsRecentCourseReference[],
+  totalCount: number | null
+): string {
+  if (courses.length === 0) {
+    return '';
+  }
+
+  const labels = courses.map((course) => formatCourseReference(course));
+  const remainingCount = totalCount !== null ? Math.max(0, totalCount - courses.length) : 0;
+  if (remainingCount > 0) {
+    labels.push(`+${formatNumber(remainingCount)} more`);
+  }
+
+  return labels.join(' · ');
+}
+
+function formatRoomReference(room: LaunchStatsRecentRoomReference): string {
+  const title = room.roomTitle?.trim();
+  const coordinates =
+    room.roomX !== null && room.roomY !== null ? `${room.roomX},${room.roomY}` : null;
+
   if (title) {
-    return `"${title}"`;
+    return coordinates ? `"${title}" (${coordinates})` : `"${title}"`;
   }
-  if (event.roomX !== null && event.roomY !== null) {
-    return `room ${event.roomX},${event.roomY}`;
+
+  if (coordinates) {
+    return coordinates;
   }
-  return 'a room';
+
+  return room.roomId ? `room ${room.roomId}` : 'unknown room';
+}
+
+function formatCourseReference(course: LaunchStatsRecentCourseReference): string {
+  const title = course.courseTitle?.trim();
+  const coordinateLabels = course.coordinates.map((coordinate) => `${coordinate.x},${coordinate.y}`);
+  const coordinateSummary = coordinateLabels.join(' · ');
+
+  if (title) {
+    return coordinateSummary ? `"${title}" (${coordinateSummary})` : `"${title}"`;
+  }
+
+  if (coordinateSummary) {
+    return coordinateSummary;
+  }
+
+  return `course ${course.courseId}`;
 }
 
 function formatTimestamp(value: string): string {
@@ -929,7 +1045,7 @@ function formatOverrideSummary(user: AdminProgressionUserCapsResponse): string {
 }
 
 function wireProgressionLookupButtons(root: ParentNode): void {
-  for (const button of root.querySelectorAll<HTMLButtonElement>('[data-progression-user-id]')) {
+  for (const button of Array.from(root.querySelectorAll<HTMLButtonElement>('[data-progression-user-id]'))) {
     if (button.dataset.progressionLookupBound === '1') {
       continue;
     }
