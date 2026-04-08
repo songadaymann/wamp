@@ -57,6 +57,12 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Reward stings preview page build entry on April 8, 2026:
+  - added `reward-stings-preview.html` to the Vite multi-page build inputs in `vite.config.ts`
+  - this fixes production serving the normal app shell at `/reward-stings-preview.html` instead of the actual preview page
+  - intended share URL after deploy:
+    - `https://wamp.land/reward-stings-preview.html`
+
 - Progression reward-sting audio timing on April 8, 2026:
   - copied the new local progression MP3s into the clean reward-stings worktree:
     - `public/assets/sfx/progression/player-lvlUp.mp3`
