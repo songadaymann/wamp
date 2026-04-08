@@ -9,7 +9,7 @@ import { renderRoomSnapshotToPngDataUrl } from '../../mint/roomMetadataRender';
 import { createWorldRepository, type WorldRepository } from '../../persistence/worldRepository';
 import type { ProfilePublishedRoomEntry, ProfileStatsSummary, UserProfileResponse } from '../../profiles/model';
 import { createProfileRepository, type ProfileRepository } from '../../profiles/profileRepository';
-import type { ProgressionSummary } from '../../progression/model';
+import type { ProgressionLaneSummary, ProgressionSummary } from '../../progression/model';
 import { getActiveOverworldScene } from './sceneBridge';
 import {
   PROFILE_INVALIDATED_EVENT,
@@ -30,11 +30,11 @@ type ProfileModalElements = {
   avatarFallback: HTMLElement | null;
   displayName: HTMLElement | null;
   joinedDate: HTMLElement | null;
+  heroLanes: HTMLElement | null;
   heroProgress: HTMLElement | null;
   overviewBio: HTMLElement | null;
   editFields: HTMLElement | null;
   displayNameInput: HTMLInputElement | null;
-  avatarUrlInput: HTMLInputElement | null;
   bioInput: HTMLTextAreaElement | null;
   saveButton: HTMLButtonElement | null;
   saveStatus: HTMLElement | null;
@@ -44,6 +44,43 @@ type ProfileModalElements = {
   roomsEmpty: HTMLElement | null;
   progressList: HTMLElement | null;
   statsList: HTMLElement | null;
+};
+
+type ProfileTone = 'player' | 'builder' | 'curator';
+
+const PROFILE_DEFAULT_AVATAR_SRC = '/assets/ui-creator-idle-tight.png';
+
+const PROFILE_LANE_VISUALS: Record<
+  ProfileTone,
+  { iconSrc: string; iconLabel: string; fillClass: string }
+> = {
+  player: {
+    iconSrc: '/assets/ui-progress-player.png',
+    iconLabel: 'Player',
+    fillClass: 'profile-hero-lane-fill-player',
+  },
+  builder: {
+    iconSrc: '/assets/ui-progress-builder.png',
+    iconLabel: 'Builder',
+    fillClass: 'profile-hero-lane-fill-builder',
+  },
+  curator: {
+    iconSrc: '/assets/ui-progress-curator.png',
+    iconLabel: 'Curator',
+    fillClass: 'profile-hero-lane-fill-curator',
+  },
+};
+
+type ProfileInfoItem = {
+  label: string;
+  value: string;
+  iconSrc?: string;
+};
+
+type ProfileInfoCard = {
+  tone: ProfileTone;
+  title: string;
+  items: ProfileInfoItem[];
 };
 
 export class ProfileModalController {
@@ -59,6 +96,7 @@ export class ProfileModalController {
   private saving = false;
   private avatarPreviewBroken = false;
   private loadToken = 0;
+  private activeTabAutoSelected = false;
 
   private readonly handleCloseClick = () => {
     this.close();
@@ -137,11 +175,11 @@ export class ProfileModalController {
       avatarFallback: this.doc.getElementById('profile-avatar-fallback'),
       displayName: this.doc.getElementById('profile-display-name'),
       joinedDate: this.doc.getElementById('profile-joined-date'),
+      heroLanes: this.doc.getElementById('profile-hero-lanes'),
       heroProgress: this.doc.getElementById('profile-hero-progress'),
       overviewBio: this.doc.getElementById('profile-overview-bio'),
       editFields: this.doc.getElementById('profile-edit-fields'),
       displayNameInput: this.doc.getElementById('profile-display-name-input') as HTMLInputElement | null,
-      avatarUrlInput: this.doc.getElementById('profile-avatar-url-input') as HTMLInputElement | null,
       bioInput: this.doc.getElementById('profile-bio-input') as HTMLTextAreaElement | null,
       saveButton: this.doc.getElementById('btn-profile-save') as HTMLButtonElement | null,
       saveStatus: this.doc.getElementById('profile-save-status'),
@@ -176,15 +214,12 @@ export class ProfileModalController {
     this.elements.displayNameInput?.addEventListener('input', () => {
       this.renderAvatar();
     });
-    this.elements.avatarUrlInput?.addEventListener('input', () => {
-      this.avatarPreviewBroken = false;
-      this.renderAvatar();
-    });
     for (const [tabId, button] of Object.entries(this.elements.tabButtons) as Array<
       [ProfileTabId, HTMLButtonElement | null]
     >) {
       button?.addEventListener('click', () => {
         this.activeTab = tabId;
+        this.activeTabAutoSelected = true;
         this.renderTabs();
       });
     }
@@ -197,6 +232,7 @@ export class ProfileModalController {
 
     this.currentProfileUserId = userId;
     this.activeTab = 'rooms';
+    this.activeTabAutoSelected = false;
     this.loading = true;
     this.avatarPreviewBroken = false;
     this.setError(null);
@@ -209,6 +245,7 @@ export class ProfileModalController {
     if (cached) {
       this.currentProfile = cached;
       this.loading = false;
+      this.selectDefaultTab(cached);
     }
 
     this.render();
@@ -223,6 +260,7 @@ export class ProfileModalController {
       this.profileCache.set(userId, profile);
       this.currentProfile = profile;
       this.loading = false;
+      this.selectDefaultTab(profile);
       this.render();
     } catch (error) {
       if (loadToken !== this.loadToken || this.currentProfileUserId !== userId) {
@@ -258,7 +296,6 @@ export class ProfileModalController {
     }
 
     const displayName = this.elements.displayNameInput?.value.trim() ?? '';
-    const avatarUrl = this.elements.avatarUrlInput?.value.trim() || null;
     const bio = this.elements.bioInput?.value ?? '';
 
     this.saving = true;
@@ -269,7 +306,7 @@ export class ProfileModalController {
     try {
       const response = await this.profileRepository.updateMyProfile({
         displayName,
-        avatarUrl,
+        avatarUrl: null,
         bio,
       });
       this.profileCache.set(response.profile.userId, response.profile);
@@ -305,9 +342,7 @@ export class ProfileModalController {
       this.elements.meta.textContent = this.loading
         ? 'Loading public profile, rooms, and stats.'
         : profile
-          ? profile.isSelf
-            ? 'Edit your public profile.'
-            : 'View creator profile, rooms, and stats.'
+          ? ''
           : 'Profile unavailable.';
     }
 
@@ -330,13 +365,6 @@ export class ProfileModalController {
         this.elements.displayNameInput.value = profile.displayName;
       }
       this.elements.displayNameInput.disabled = this.saving;
-    }
-
-    if (this.elements.avatarUrlInput && profile?.canEdit) {
-      if (this.doc.activeElement !== this.elements.avatarUrlInput) {
-        this.elements.avatarUrlInput.value = profile.avatarUrl ?? '';
-      }
-      this.elements.avatarUrlInput.disabled = this.saving;
     }
 
     if (this.elements.bioInput && profile?.canEdit) {
@@ -370,21 +398,17 @@ export class ProfileModalController {
       this.currentProfile?.canEdit
         ? this.elements.displayNameInput?.value.trim() || profile?.displayName || 'Profile'
         : profile?.displayName || 'Profile';
-    const avatarUrl =
-      this.currentProfile?.canEdit
-        ? this.elements.avatarUrlInput?.value.trim() || profile?.avatarUrl || ''
-        : profile?.avatarUrl || '';
 
     if (this.elements.avatarFallback) {
       this.elements.avatarFallback.textContent = initialsFromDisplayName(nameDraft);
     }
 
-    const canShowImage = Boolean(avatarUrl) && !this.avatarPreviewBroken;
+    const canShowImage = !this.avatarPreviewBroken;
     this.elements.avatarImage?.classList.toggle('hidden', !canShowImage);
     this.elements.avatarFallback?.classList.toggle('hidden', canShowImage);
 
-    if (this.elements.avatarImage && canShowImage && this.elements.avatarImage.src !== avatarUrl) {
-      this.elements.avatarImage.src = avatarUrl;
+    if (this.elements.avatarImage && canShowImage && this.elements.avatarImage.src !== PROFILE_DEFAULT_AVATAR_SRC) {
+      this.elements.avatarImage.src = PROFILE_DEFAULT_AVATAR_SRC;
       this.elements.avatarImage.alt = `${nameDraft} avatar`;
     }
   }
@@ -529,133 +553,326 @@ export class ProfileModalController {
       return;
     }
 
-    const items: Array<[string, string]> = [
-      ['Total points', String(stats?.totalPoints ?? 0)],
-      ['Total score', String(stats?.totalScore ?? 0)],
-      ['Published rooms', String(stats?.totalRoomsPublished ?? 0)],
-      ['Published courses', String(publishedCourseCount)],
-      ['Completed runs', String(stats?.completedRuns ?? 0)],
-      ['Failed runs', String(stats?.failedRuns ?? 0)],
-      ['Abandoned runs', String(stats?.abandonedRuns ?? 0)],
-      ['Best score', String(stats?.bestScore ?? 0)],
-      ['Fastest clear', stats?.fastestClearMs ? formatDuration(stats.fastestClearMs) : 'None yet'],
-      ['Global rank', stats?.globalRank ? `#${stats.globalRank}` : 'Unranked'],
-      ['Collectibles', String(stats?.totalCollectibles ?? 0)],
-      ['Enemies defeated', String(stats?.totalEnemiesDefeated ?? 0)],
-      ['Checkpoints', String(stats?.totalCheckpoints ?? 0)],
-      ['Deaths', String(stats?.totalDeaths ?? 0)],
+    if (!stats) {
+      this.elements.statsList.replaceChildren(
+        this.createInfoCard({
+          tone: 'curator',
+          title: 'Stats',
+          items: [{ label: 'Status', value: 'No stats yet.' }],
+        }),
+      );
+      return;
+    }
+
+    const cards: ProfileInfoCard[] = [
+      {
+        tone: 'player',
+        title: 'Runs',
+        items: [
+          {
+            label: 'Completed',
+            value: String(stats.completedRuns),
+            iconSrc: '/assets/ui-progress-player.png',
+          },
+          {
+            label: 'Failed',
+            value: String(stats.failedRuns),
+            iconSrc: '/assets/enemies/saw.png',
+          },
+          {
+            label: 'Abandoned',
+            value: String(stats.abandonedRuns),
+            iconSrc: '/assets/objects/sign_arrow.png',
+          },
+          {
+            label: 'Best score',
+            value: String(stats.bestScore),
+            iconSrc: '/assets/objects/flag-checkered-gold.png',
+          },
+          {
+            label: 'Fastest clear',
+            value: stats.fastestClearMs ? formatDuration(stats.fastestClearMs) : 'None yet',
+            iconSrc: '/assets/objects/flag-checkered.png',
+          },
+        ],
+      },
+      {
+        tone: 'builder',
+        title: 'Built',
+        items: [
+          {
+            label: 'Rooms published',
+            value: String(stats.totalRoomsPublished),
+            iconSrc: '/assets/ui-progress-builder.png',
+          },
+          {
+            label: 'Courses published',
+            value: String(publishedCourseCount),
+            iconSrc: '/assets/objects/flag-green.png',
+          },
+        ],
+      },
+      {
+        tone: 'curator',
+        title: 'World',
+        items: [
+          {
+            label: 'Total points',
+            value: String(stats.totalPoints),
+            iconSrc: '/assets/ui-progress-curator.png',
+          },
+          {
+            label: 'Global rank',
+            value: stats.globalRank ? `#${stats.globalRank}` : 'Unranked',
+            iconSrc: '/assets/objects/flag-checkered-gold.png',
+          },
+          {
+            label: 'Collectibles',
+            value: String(stats.totalCollectibles),
+            iconSrc: '/assets/objects/coin_small_gold.png',
+          },
+          {
+            label: 'Enemies',
+            value: String(stats.totalEnemiesDefeated),
+            iconSrc: '/assets/enemies/slime_red.png',
+          },
+          {
+            label: 'Checkpoints',
+            value: String(stats.totalCheckpoints),
+            iconSrc: '/assets/objects/flag-green.png',
+          },
+          {
+            label: 'Deaths',
+            value: String(stats.totalDeaths),
+            iconSrc: '/assets/enemies/saw.png',
+          },
+        ],
+      },
     ];
 
-    this.elements.statsList.replaceChildren(
-      ...items.map(([label, value]) => {
-        const row = this.doc.createElement('div');
-        row.className = 'profile-stats-row';
-        const labelEl = this.doc.createElement('div');
-        labelEl.className = 'profile-stats-label';
-        labelEl.textContent = label;
-        const valueEl = this.doc.createElement('div');
-        valueEl.className = 'profile-stats-value';
-        valueEl.textContent = value;
-        row.append(labelEl, valueEl);
-        return row;
-      })
-    );
+    this.elements.statsList.replaceChildren(...cards.map((card) => this.createInfoCard(card)));
   }
 
   private renderProgress(progression: ProgressionSummary | null): void {
+    if (this.elements.heroLanes) {
+      if (!progression) {
+        this.elements.heroLanes.replaceChildren();
+      } else {
+        this.elements.heroLanes.replaceChildren(
+          this.createHeroLaneRow(progression.player, 'player'),
+          this.createHeroLaneRow(progression.builder, 'builder'),
+          this.createHeroLaneRow(progression.curator, 'curator'),
+        );
+      }
+    }
+
     if (this.elements.heroProgress) {
-      const heroText = progression
-        ? [
-            progression.founderNumber !== null ? `WAMP #${progression.founderNumber}` : null,
-            progression.player.medalLabel,
-            progression.builder.medalLabel,
-            progression.curator.medalLabel,
-          ]
-            .filter((value): value is string => Boolean(value))
-            .join(' · ')
-        : '';
-      this.elements.heroProgress.textContent = heroText;
-      this.elements.heroProgress.classList.toggle('hidden', !heroText);
+      const chips: HTMLElement[] = [];
+      if (progression && progression.founderNumber !== null) {
+        chips.push(this.createHeroSummaryChip(`WAMP #${progression.founderNumber}`, 'curator'));
+      }
+      if (progression) {
+        chips.push(this.createHeroSummaryChip(`${progression.badgeCount} ${pluralize('badge', progression.badgeCount)}`, 'builder'));
+        chips.push(this.createHeroSummaryChip(`${progression.trophyCount} ${pluralize('trophy', progression.trophyCount)}`, 'player'));
+      }
+      this.elements.heroProgress.replaceChildren(...chips);
+      this.elements.heroProgress.classList.toggle('hidden', chips.length === 0);
     }
 
     if (!this.elements.progressList) {
       return;
     }
 
-    const items: Array<[string, string]> = progression
-      ? [
-          ['Founder', progression.founderNumber !== null ? `WAMP #${progression.founderNumber}` : 'Unassigned'],
-          ['Player lane', `${progression.player.xp} PXP · ${progression.player.medalLabel}`],
-          ['Builder lane', `${progression.builder.xp} BXP · ${progression.builder.medalLabel}`],
-          ['Curator lane', `${progression.curator.xp} CXP · ${progression.curator.medalLabel}`],
-          [
-            'Builder capacity',
-            `${progression.builderCaps.objectLimit} placed objects · ${progression.builderCaps.collectibleLimit} collectibles`,
-          ],
-          [
-            'Builder cadence',
-            `${progression.builderCaps.publishLimitPerDay} publish/day · ${progression.builderCaps.claimLimitPerDay} claim/day`,
-          ],
-          ['Badges', String(progression.badgeCount)],
-          ['Trophies', String(progression.trophyCount)],
-        ]
-      : [['Progression', 'No progression data yet.']];
-
-    const rows = items.map(([label, value]) => {
-      const row = this.doc.createElement('div');
-      row.className = 'profile-stats-row';
-      const labelEl = this.doc.createElement('div');
-      labelEl.className = 'profile-stats-label';
-      labelEl.textContent = label;
-      const valueEl = this.doc.createElement('div');
-      valueEl.className = 'profile-stats-value';
-      valueEl.textContent = value;
-      row.append(labelEl, valueEl);
-      return row;
-    });
-
-    if (progression) {
-      if (progression.builderCaps.overrideActive) {
-        const row = this.doc.createElement('div');
-        row.className = 'profile-stats-row';
-        const labelEl = this.doc.createElement('div');
-        labelEl.className = 'profile-stats-label';
-        labelEl.textContent = 'Cap boost';
-        const valueEl = this.doc.createElement('div');
-        valueEl.className = 'profile-stats-value';
-        valueEl.textContent = 'Admin boost active';
-        row.append(labelEl, valueEl);
-        rows.push(row);
-      }
-
-      for (const badge of progression.featuredBadges) {
-        const row = this.doc.createElement('div');
-        row.className = 'profile-stats-row';
-        const labelEl = this.doc.createElement('div');
-        labelEl.className = 'profile-stats-label';
-        labelEl.textContent = badge.category;
-        const valueEl = this.doc.createElement('div');
-        valueEl.className = 'profile-stats-value';
-        valueEl.textContent = `${badge.label} · ${badge.description}`;
-        row.append(labelEl, valueEl);
-        rows.push(row);
-      }
-
-      for (const trophy of progression.recentTrophies) {
-        const row = this.doc.createElement('div');
-        row.className = 'profile-stats-row';
-        const labelEl = this.doc.createElement('div');
-        labelEl.className = 'profile-stats-label';
-        labelEl.textContent = 'Trophy';
-        const valueEl = this.doc.createElement('div');
-        valueEl.className = 'profile-stats-value';
-        valueEl.textContent = `${trophy.contentType} ${trophy.contentId} v${trophy.versionKey} · ${trophy.trophyType}`;
-        row.append(labelEl, valueEl);
-        rows.push(row);
-      }
+    if (!progression) {
+      this.elements.progressList.replaceChildren(
+        this.createInfoCard({
+          tone: 'curator',
+          title: 'Progress',
+          items: [{ label: 'Status', value: 'No progression data yet.' }],
+        }),
+      );
+      return;
     }
 
-    this.elements.progressList.replaceChildren(...rows);
+    const milestoneItems: ProfileInfoItem[] = [];
+    if (progression.builderCaps.overrideActive) {
+      milestoneItems.push({
+        label: 'Cap boost',
+        value: 'Admin boost active',
+        iconSrc: '/assets/ui-progress-builder.png',
+      });
+    }
+    for (const badge of progression.featuredBadges.slice(0, 3)) {
+      milestoneItems.push({
+        label: badge.category,
+        value: `${badge.label} · ${badge.description}`,
+        iconSrc: '/assets/ui-progress-curator.png',
+      });
+    }
+    for (const trophy of progression.recentTrophies.slice(0, 3)) {
+      milestoneItems.push({
+        label: 'Trophy',
+        value: `${trophy.contentType} ${trophy.contentId} v${trophy.versionKey} · ${trophy.trophyType}`,
+        iconSrc: '/assets/objects/flag-checkered-gold.png',
+      });
+    }
+
+    const cards: ProfileInfoCard[] = [
+      {
+        tone: 'builder',
+        title: 'Build Limits',
+        items: [
+          {
+            label: 'Placed objects',
+            value: String(progression.builderCaps.objectLimit),
+            iconSrc: '/assets/ui-progress-builder.png',
+          },
+          {
+            label: 'Collectibles',
+            value: String(progression.builderCaps.collectibleLimit),
+            iconSrc: '/assets/objects/coin_small_gold.png',
+          },
+        ],
+      },
+      {
+        tone: 'builder',
+        title: 'Daily Rhythm',
+        items: [
+          {
+            label: 'Publish / day',
+            value: String(progression.builderCaps.publishLimitPerDay),
+            iconSrc: '/assets/objects/flag-green.png',
+          },
+          {
+            label: 'Claim / day',
+            value: String(progression.builderCaps.claimLimitPerDay),
+            iconSrc: '/assets/objects/key.png',
+          },
+        ],
+      },
+    ];
+
+    if (milestoneItems.length > 0) {
+      cards.push({
+        tone: 'curator',
+        title: 'Milestones',
+        items: milestoneItems,
+      });
+    }
+
+    this.elements.progressList.replaceChildren(...cards.map((card) => this.createInfoCard(card)));
+  }
+
+  private selectDefaultTab(profile: UserProfileResponse): void {
+    if (this.activeTabAutoSelected) {
+      return;
+    }
+
+    this.activeTab = profile.isSelf ? 'progress' : 'rooms';
+    this.activeTabAutoSelected = true;
+  }
+
+  private createHeroLaneRow(
+    lane: ProgressionLaneSummary,
+    tone: ProfileTone,
+  ): HTMLElement {
+    const visual = PROFILE_LANE_VISUALS[tone];
+    const row = this.doc.createElement('div');
+    row.className = `profile-hero-lane profile-hero-lane-${tone}`;
+
+    const labelWrap = this.doc.createElement('div');
+    labelWrap.className = 'profile-hero-lane-label-wrap';
+
+    const icon = this.doc.createElement('img');
+    icon.className = 'profile-hero-lane-icon';
+    icon.src = visual.iconSrc;
+    icon.alt = '';
+    icon.setAttribute('aria-hidden', 'true');
+
+    const label = this.doc.createElement('span');
+    label.className = 'profile-hero-lane-label';
+    label.textContent = `LVL ${lane.level}`;
+
+    labelWrap.append(icon, label);
+
+    const progress = this.doc.createElement('div');
+    progress.className = 'profile-hero-lane-progress';
+
+    const fill = this.doc.createElement('div');
+    fill.className = `profile-hero-lane-fill ${visual.fillClass}`;
+    fill.style.width = `${(Math.max(0, Math.min(1, lane.progressFraction)) * 100).toFixed(1)}%`;
+    progress.appendChild(fill);
+
+    const total = this.doc.createElement('span');
+    total.className = 'profile-hero-lane-total';
+    total.textContent = formatLaneTarget(lane);
+
+    row.append(labelWrap, progress, total);
+    row.setAttribute('aria-label', `${visual.iconLabel} level ${lane.level}, ${formatLaneTarget(lane)} to next level`);
+    return row;
+  }
+
+  private createHeroSummaryChip(text: string, tone: ProfileTone): HTMLElement {
+    const chip = this.doc.createElement('div');
+    chip.className = `profile-hero-summary-chip profile-hero-summary-chip-${tone}`;
+    chip.textContent = text;
+    return chip;
+  }
+
+  private createInfoCard(card: ProfileInfoCard): HTMLElement {
+    const visual = PROFILE_LANE_VISUALS[card.tone];
+    const section = this.doc.createElement('section');
+    section.className = `profile-info-card profile-info-card-${card.tone}`;
+
+    const header = this.doc.createElement('div');
+    header.className = 'profile-info-card-header';
+
+    const icon = this.doc.createElement('img');
+    icon.className = 'profile-info-card-header-icon';
+    icon.src = visual.iconSrc;
+    icon.alt = '';
+    icon.setAttribute('aria-hidden', 'true');
+
+    const title = this.doc.createElement('div');
+    title.className = 'profile-info-card-title';
+    title.textContent = card.title;
+
+    header.append(icon, title);
+
+    const grid = this.doc.createElement('div');
+    grid.className = 'profile-info-card-grid';
+
+    for (const item of card.items) {
+      const row = this.doc.createElement('div');
+      row.className = 'profile-info-item';
+
+      if (item.iconSrc) {
+        const rowIcon = this.doc.createElement('img');
+        rowIcon.className = 'profile-info-item-icon';
+        rowIcon.src = item.iconSrc;
+        rowIcon.alt = '';
+        rowIcon.setAttribute('aria-hidden', 'true');
+        row.appendChild(rowIcon);
+      }
+
+      const copy = this.doc.createElement('div');
+      copy.className = 'profile-info-item-copy';
+
+      const label = this.doc.createElement('div');
+      label.className = 'profile-info-item-label';
+      label.textContent = item.label;
+
+      const value = this.doc.createElement('div');
+      value.className = 'profile-info-item-value';
+      value.textContent = item.value;
+
+      copy.append(label, value);
+      row.appendChild(copy);
+      grid.appendChild(row);
+    }
+
+    section.append(header, grid);
+    return section;
   }
 
   private renderTabs(): void {
@@ -738,4 +955,14 @@ function formatDuration(milliseconds: number): string {
   const seconds = totalSeconds % 60;
   const hundredths = Math.floor((milliseconds % 1000) / 10);
   return `${minutes}:${seconds.toString().padStart(2, '0')}.${hundredths.toString().padStart(2, '0')}`;
+}
+
+function formatLaneTarget(lane: ProgressionLaneSummary): string {
+  const span = Math.max(1, lane.nextLevelXp - lane.currentLevelStartXp);
+  const current = Math.max(0, Math.min(span, lane.xp - lane.currentLevelStartXp));
+  return `${current}/${span}`;
+}
+
+function pluralize(label: string, count: number): string {
+  return count === 1 ? label : `${label}s`;
 }

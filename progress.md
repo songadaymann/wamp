@@ -6583,3 +6583,168 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - verification:
       - `npm run typecheck` passed
       - `npm run build` passed
+
+- 2026-04-08: post-run rating modal retrofit on `feature/post-run-rating-modal-2026-04-08`
+  - prompt:
+    - give the post-run room/course rating modal the same flat retro treatment as the newer HUD/editor/modal work
+    - audit the rest of the modal family for any holdouts that still use the older dark rounded look
+  - implementation:
+    - `index.html`
+      - added semantic helper classes for the rating modal summary cards and for the quality/difficulty sections so they can be styled independently without fragile structural selectors
+    - `src/styles/sections/modals.css`
+      - added a dedicated `#run-rating-modal` treatment:
+        - cream panel
+        - blue frame
+        - square corners
+        - hard shadow
+        - Mario title
+        - HomeVideo kicker/body/button typography
+      - converted the result / leaderboard / suggestion / status / reward rows into flat paper cards with colored borders instead of plain inherited leaderboard text
+      - turned the quality and difficulty groups into distinct framed sections
+      - restyled the quality buttons as filled yellow chips with green active state
+      - restyled the difficulty buttons as filled blue chips with colored active states:
+        - easy green
+        - medium yellow
+        - hard red
+        - extreme deep blue
+      - restyled modal actions so:
+        - `Close` and `Skip` are blue
+        - `Submit Rating` is green
+      - restyled the error strip into the same hard-edged red alert family as the other retro surfaces
+  - verification:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - local Vite preview ran at `http://127.0.0.1:4594/`
+    - forced-open Playwright visual probe wrote:
+      - `output/web-game/run-rating-modal-check/run-rating-modal-visible.png`
+      - `output/web-game/run-rating-modal-check/summary.json`
+    - computed-style summary confirmed:
+      - panel background `rgb(255, 243, 219)`
+      - panel border `rgb(121, 204, 222)`
+      - title font `Super Mario Bros. NES`
+      - meta font `HomeVideo`
+      - active quality button background `rgb(39, 123, 48)`
+      - active difficulty button background `rgb(252, 234, 124)`
+      - submit button background `rgb(39, 123, 48)`
+  - modal audit after this pass:
+    - already in the retro family:
+      - controls modal
+      - about modal
+      - room history modal
+      - course builder modal
+      - post-run rating modal
+    - still using mostly older dark/rounded modal treatments:
+      - leaderboard modal
+      - profile modal
+      - install-help modal
+      - chat moderation modal
+      - sign-text modal
+      - editor music phrase save modal
+
+- 2026-04-08: leaderboard/profile/music phrase save modal first pass on `feature/post-run-rating-modal-2026-04-08`
+  - prompt:
+    - give the leaderboard modal, profile modal, and music phrase save modal a first-pass retrofit into the same cream/blue hard-edged retro family as the newer HUD/editor/modal work
+  - implementation:
+    - `index.html`
+      - added a real title/meta group to the profile modal header so the profile controller can populate `#profile-modal-title` and `#profile-modal-meta`
+      - added semantic helper classes for the music phrase save body, section, and action row so the prompt can be styled independently from the generic about/course blocks
+    - `src/styles/sections/modals.css`
+      - added shared targeted styling for:
+        - `#leaderboard-modal`
+        - `#profile-modal`
+        - `#editor-music-phrase-save-modal`
+      - converted all three to:
+        - cream panel
+        - blue frame
+        - square corners
+        - hard shadow
+        - Mario titles
+        - HomeVideo body / button copy
+        - flat framed section cards instead of dark rounded glass panels
+      - leaderboard modal first pass:
+        - restyled tabs as filled blue chips with yellow active state
+        - restyled the room difficulty block as a flat yellow framed section
+        - restyled summary/viewer strips and leaderboard rows into cream paper cards with blue borders
+        - restyled discover rows and empty states into the same flat card family
+        - styled difficulty filter active states by difficulty color
+      - profile modal first pass:
+        - added header title/meta support
+        - restyled the hero block, edit fields, save status, tab bar, room cards, and stats cards into the retro family
+        - moved the display name to the Mario title role while keeping descriptive/body copy in HomeVideo
+        - restyled inputs and save action into the same hard-edged system
+      - music phrase save modal first pass:
+        - turned the phrase-name prompt into a compact cream/blue save card
+        - styled phrase input, cancel, save, and close controls into the shared modal family
+  - verification:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - required Playwright client run completed with:
+      - `output/web-game/modal-family-client/shot-0.png`
+      - `output/web-game/modal-family-client/state-0.json`
+      - `output/web-game/modal-family-client/errors-0.json`
+    - note:
+      - the client run still shows the existing local auth-session `500` in guest state because this local preview is not backed by a healthy local auth API session; that predates this modal pass
+    - forced-open visual probes wrote:
+      - `output/web-game/modal-first-pass-check/leaderboard-modal-first-pass.png`
+      - `output/web-game/modal-first-pass-check/profile-modal-first-pass.png`
+      - `output/web-game/modal-first-pass-check/music-phrase-save-modal-first-pass.png`
+      - `output/web-game/modal-first-pass-check/summary.json`
+    - computed-style summary confirmed:
+      - leaderboard panel background `rgb(255, 243, 219)`
+      - leaderboard panel border `rgb(121, 204, 222)`
+      - profile title font `Super Mario Bros. NES`
+      - active leaderboard tab background `rgb(252, 234, 124)`
+      - music save confirm button background `rgb(39, 123, 48)`
+  - modal audit after this pass:
+    - now in the retro family:
+      - controls modal
+      - about modal
+      - room history modal
+      - course builder modal
+      - post-run rating modal
+      - leaderboard modal
+      - profile modal
+      - editor music phrase save modal
+    - still obvious holdouts:
+      - install-help modal
+      - chat moderation modal
+      - sign-text modal
+
+- 2026-04-08 12:25 PM
+  - profile modal overhaul pass:
+    - changed default tab behavior:
+      - self profile now defaults to `Progress`
+      - other profiles now default to `Levels`
+    - replaced profile-picture handling with the shared HUD avatar treatment:
+      - the profile hero now uses the same cropped player idle sprite instead of editable avatar URLs
+    - rebuilt the hero summary so progression reads like the HUD:
+      - added larger player / builder / curator icon rows
+      - added longer color-coded progress bars
+      - added `current/next` xp totals at the end of each lane
+      - moved founder number, badges, and trophies into top hero chips
+    - simplified the top copy:
+      - removed the old profile-header title/meta treatment
+      - kept the name, join date, avatar, progression lanes, chips, and bio as the main hero
+    - reorganized the progress tab into clearer grouped cards:
+      - `Build Limits`
+      - `Daily Rhythm`
+      - `Milestones`
+    - reorganized the stats tab into tone-coded cards:
+      - `Runs`
+      - `Built`
+      - `World`
+      - swapped several text-only rows for icon-led rows so the categories read faster
+    - renamed the rooms tab to `Levels`
+    - removed avatar editing from the self-profile form for now
+  - verification:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - synthetic profile screenshots written to:
+      - `output/web-game/profile-overhaul-check/profile-self-progress.png`
+      - `output/web-game/profile-overhaul-check/profile-other-rooms.png`
+      - `output/web-game/profile-overhaul-check/profile-other-stats.png`
+      - `output/web-game/profile-overhaul-check/summary.json`
+    - visual confirmation from those probes:
+      - self profile opened on `Progress`
+      - other profile opened on `Levels`
+      - hero lane count rendered as `3`

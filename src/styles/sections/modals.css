@@ -1204,12 +1204,881 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   max-height: none;
 }
 
+#leaderboard-modal,
+#profile-modal,
+#editor-music-phrase-save-modal {
+  background: rgba(24, 22, 28, 0.8);
+  backdrop-filter: none;
+}
+
+#leaderboard-modal .history-modal-panel,
+#profile-modal .history-modal-panel,
+#editor-music-phrase-save-modal .history-modal-panel {
+  gap: 16px;
+  padding: 20px 18px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #fff3db;
+  border: 3px solid #79ccde;
+  border-radius: 0;
+  box-shadow: 6px 6px 0 #18161c;
+}
+
+#leaderboard-modal .leaderboard-modal-panel {
+  width: min(760px, calc(100vw - 36px));
+  max-height: calc(100vh - 32px);
+}
+
+#profile-modal .profile-modal-panel {
+  width: min(780px, calc(100vw - 36px));
+  max-height: calc(100vh - 32px);
+}
+
+#editor-music-phrase-save-modal .editor-music-phrase-save-modal-panel {
+  width: min(540px, calc(100vw - 36px));
+  max-height: calc(100vh - 32px);
+}
+
+#leaderboard-modal .history-modal-kicker,
+#profile-modal .history-modal-kicker,
+#editor-music-phrase-save-modal .history-modal-kicker {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+#leaderboard-modal .history-modal-title,
+#profile-modal .history-modal-title,
+#editor-music-phrase-save-modal .history-modal-title {
+  margin-top: 6px;
+  color: #18161c;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 19px;
+  line-height: 1.25;
+}
+
+#leaderboard-modal .history-modal-meta,
+#profile-modal .history-modal-meta,
+#editor-music-phrase-save-modal .history-modal-meta,
+#leaderboard-modal .leaderboard-secondary,
+#profile-modal .leaderboard-secondary {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#leaderboard-modal .history-modal-error,
+#profile-modal .history-modal-error,
+#editor-music-phrase-save-modal .history-modal-error {
+  padding: 12px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #ed5f4b;
+  color: #fff3db;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#leaderboard-modal .history-modal-header > .bar-btn,
+#profile-modal .history-modal-header > .bar-btn,
+#editor-music-phrase-save-modal .history-modal-header > .bar-btn,
+#leaderboard-modal .leaderboard-tabs .bar-btn,
+#leaderboard-modal .leaderboard-difficulty-actions .bar-btn,
+#leaderboard-modal .leaderboard-discover-filters .bar-btn,
+#profile-modal .profile-tabs .bar-btn,
+#profile-modal .profile-edit-actions .bar-btn,
+#editor-music-phrase-save-modal .music-phrase-save-actions .bar-btn {
+  min-height: 34px;
+  padding: 8px 12px 7px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #79ccde;
+  color: #000;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#leaderboard-modal .history-modal-header > .bar-btn:hover,
+#profile-modal .history-modal-header > .bar-btn:hover,
+#editor-music-phrase-save-modal .history-modal-header > .bar-btn:hover,
+#leaderboard-modal .leaderboard-tabs .bar-btn:hover,
+#leaderboard-modal .leaderboard-difficulty-actions .bar-btn:hover,
+#leaderboard-modal .leaderboard-discover-filters .bar-btn:hover,
+#profile-modal .profile-tabs .bar-btn:hover,
+#profile-modal .profile-edit-actions .bar-btn:hover,
+#editor-music-phrase-save-modal .music-phrase-save-actions .bar-btn:hover,
+#leaderboard-modal .leaderboard-discover-row:hover,
+#leaderboard-modal .leaderboard-discover-row:focus-visible,
+#profile-modal .profile-room-card:hover,
+#profile-modal .profile-room-card:focus-visible {
+  filter: brightness(1.04);
+}
+
+#leaderboard-modal .history-modal-header > .bar-btn:disabled,
+#profile-modal .history-modal-header > .bar-btn:disabled,
+#editor-music-phrase-save-modal .history-modal-header > .bar-btn:disabled,
+#leaderboard-modal .leaderboard-tabs .bar-btn:disabled,
+#leaderboard-modal .leaderboard-difficulty-actions .bar-btn:disabled,
+#leaderboard-modal .leaderboard-discover-filters .bar-btn:disabled,
+#profile-modal .profile-tabs .bar-btn:disabled,
+#profile-modal .profile-edit-actions .bar-btn:disabled,
+#editor-music-phrase-save-modal .music-phrase-save-actions .bar-btn:disabled {
+  background: #c2bbb6;
+  color: #6d6768;
+  box-shadow: none;
+}
+
+#leaderboard-modal #btn-leaderboard-close,
+#profile-modal #btn-profile-close,
+#editor-music-phrase-save-modal #btn-editor-music-phrase-save-close,
+#editor-music-phrase-save-modal #btn-editor-music-phrase-save-cancel {
+  background: #79ccde;
+  color: #000;
+}
+
+#profile-modal #btn-profile-save,
+#editor-music-phrase-save-modal #btn-editor-music-phrase-save-confirm {
+  background: #277b30;
+  color: #fff3db;
+}
+
+#leaderboard-modal .leaderboard-tabs,
+#profile-modal .profile-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0;
+}
+
+#profile-modal .profile-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#leaderboard-modal .leaderboard-tabs .bar-btn.active,
+#profile-modal .profile-tabs .bar-btn.active {
+  background: #fcea7c;
+  color: #000;
+}
+
+#leaderboard-modal .leaderboard-panel,
+#profile-modal .leaderboard-panel {
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
+  gap: 12px;
+  padding: 14px;
+  background: #fffaf0;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#leaderboard-modal .history-version-list,
+#profile-modal .history-version-list {
+  gap: 12px;
+  padding-right: 2px;
+}
+
+#leaderboard-modal .leaderboard-controls,
+#profile-modal .profile-edit-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px;
+  background: #fff3db;
+  border: 2px solid #2c5071;
+  border-radius: 0;
+}
+
+#profile-modal .profile-edit-fields {
+  flex-direction: column;
+}
+
+#leaderboard-modal .goal-control-label,
+#profile-modal .goal-control-label,
+#editor-music-phrase-save-modal .music-phrase-save-section-title {
+  color: #2c5071;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+#leaderboard-modal select,
+#profile-modal .goal-input,
+#editor-music-phrase-save-modal #editor-music-phrase-save-name-input {
+  min-height: 38px;
+  padding: 9px 10px;
+  border: 2px solid #2c5071;
+  border-radius: 0;
+  background: #fff3db;
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  box-shadow: inset 0 0 0 1px rgba(121, 204, 222, 0.22);
+}
+
+#leaderboard-modal select:focus,
+#profile-modal .goal-input:focus,
+#editor-music-phrase-save-modal #editor-music-phrase-save-name-input:focus {
+  outline: none;
+  border-color: #79ccde;
+  box-shadow:
+    inset 0 0 0 1px rgba(121, 204, 222, 0.35),
+    0 0 0 1px rgba(121, 204, 222, 0.42);
+}
+
+#leaderboard-modal .leaderboard-controls label {
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+#leaderboard-modal .leaderboard-controls select {
+  min-width: 180px;
+}
+
+#leaderboard-modal #leaderboard-room-summary,
+#leaderboard-modal #leaderboard-room-viewer,
+#leaderboard-modal #leaderboard-discover-summary,
+#leaderboard-modal #leaderboard-course-summary,
+#leaderboard-modal #leaderboard-course-viewer,
+#leaderboard-modal #leaderboard-global-summary,
+#leaderboard-modal #leaderboard-global-viewer,
+#profile-modal #profile-hero-progress,
+#profile-modal #profile-save-status,
+#profile-modal #profile-rooms-panel > .history-modal-meta,
+#profile-modal #profile-progress-panel > .history-modal-meta,
+#profile-modal #profile-stats-panel > .history-modal-meta {
+  margin-top: 0;
+  padding: 10px 12px;
+  border: 2px solid #2c5071;
+  border-radius: 0;
+  background: #fff3db;
+  box-shadow: 2px 2px 0 #18161c;
+}
+
+#leaderboard-modal #leaderboard-room-viewer,
+#leaderboard-modal #leaderboard-course-viewer,
+#leaderboard-modal #leaderboard-global-viewer,
+#profile-modal #profile-hero-progress {
+  border-color: #79ccde;
+  background: rgba(121, 204, 222, 0.14);
+}
+
+#profile-modal #profile-save-status {
+  border-color: #277b30;
+  background: rgba(39, 123, 48, 0.14);
+}
+
+#leaderboard-modal .leaderboard-difficulty {
+  gap: 10px;
+  padding: 12px;
+  border: 2px solid #fcea7c;
+  border-radius: 0;
+  background: #fff7cf;
+}
+
+#leaderboard-modal .leaderboard-difficulty-actions,
+#leaderboard-modal .leaderboard-discover-filters,
+#editor-music-phrase-save-modal .music-phrase-save-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+#leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='easy'],
+#leaderboard-modal .leaderboard-discover-filters .bar-btn.active[data-discover-difficulty='easy'] {
+  background: #277b30;
+  color: #fff3db;
+}
+
+#leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='medium'],
+#leaderboard-modal .leaderboard-discover-filters .bar-btn.active[data-discover-difficulty='medium'],
+#leaderboard-modal .leaderboard-discover-filters .bar-btn.active[data-discover-difficulty=''] {
+  background: #fcea7c;
+  color: #000;
+}
+
+#leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='hard'],
+#leaderboard-modal .leaderboard-discover-filters .bar-btn.active[data-discover-difficulty='hard'] {
+  background: #ed5f4b;
+  color: #fff3db;
+}
+
+#leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='extreme'],
+#leaderboard-modal .leaderboard-discover-filters .bar-btn.active[data-discover-difficulty='extreme'] {
+  background: #2c5071;
+  color: #fff3db;
+}
+
+#leaderboard-modal .history-version-row,
+#profile-modal .profile-room-card {
+  align-items: center;
+  padding: 14px 12px;
+  background: #fffaf0;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#leaderboard-modal .leaderboard-discover-row {
+  width: 100%;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  background: #fffaf0;
+  color: inherit;
+  text-align: left;
+  padding: 12px;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#leaderboard-modal .leaderboard-discover-row:hover,
+#leaderboard-modal .leaderboard-discover-row:focus-visible,
+#profile-modal .profile-room-card:hover,
+#profile-modal .profile-room-card:focus-visible {
+  border-color: #277b30;
+  outline: none;
+}
+
+#leaderboard-modal .leaderboard-discover-title,
+#leaderboard-modal .leaderboard-primary,
+#profile-modal .profile-room-card-title,
+#profile-modal .profile-display-name,
+#profile-modal .profile-stats-value {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+}
+
+#leaderboard-modal .leaderboard-discover-title,
+#leaderboard-modal .leaderboard-primary,
+#profile-modal .profile-room-card-title {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+#profile-modal .profile-display-name {
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+#leaderboard-modal .leaderboard-rank,
+#profile-modal .profile-stats-label {
+  color: #2c5071;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  line-height: 1.35;
+}
+
+#leaderboard-modal .leaderboard-secondary,
+#leaderboard-modal .leaderboard-discover-meta,
+#profile-modal .profile-room-card-meta,
+#profile-modal .profile-overview-bio,
+#profile-modal .profile-stats-value {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#leaderboard-modal .leaderboard-empty,
+#profile-modal .leaderboard-empty {
+  padding: 12px;
+  border: 2px dashed #79ccde;
+  background: #fffaf0;
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#profile-modal .profile-modal-header {
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+#profile-modal .profile-modal-body {
+  gap: 12px;
+  padding-right: 2px;
+}
+
+#profile-modal .profile-hero {
+  gap: 14px;
+  align-items: flex-start;
+  padding: 14px;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  background: #fffaf0;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#profile-modal .profile-avatar-shell {
+  width: 82px;
+  height: 96px;
+  flex: 0 0 auto;
+}
+
+#profile-modal .profile-avatar-image,
+#profile-modal .profile-avatar-fallback {
+  width: 82px;
+  height: 96px;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#profile-modal .profile-avatar-image {
+  background: #18161c;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+#profile-modal .profile-avatar-fallback {
+  background: #fff3db;
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+#profile-modal .profile-hero-copy {
+  min-width: 0;
+  gap: 8px;
+}
+
+#profile-modal .profile-joined-date {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+#profile-modal .profile-hero-lanes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#profile-modal .profile-hero-lane {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+#profile-modal .profile-hero-lane-label-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 96px;
+}
+
+#profile-modal .profile-hero-lane-icon {
+  width: 18px;
+  height: 18px;
+  image-rendering: pixelated;
+  flex: 0 0 auto;
+}
+
+#profile-modal .profile-hero-lane-label,
+#profile-modal .profile-hero-lane-total {
+  color: #18161c;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+}
+
+#profile-modal .profile-hero-lane-progress {
+  flex: 1 1 auto;
+  min-width: 100px;
+  height: 10px;
+  border: 2px solid #fff3db;
+  background: #050505;
+  box-shadow:
+    2px 2px 0 #18161c,
+    inset 1px 1px 0 rgba(255, 243, 219, 0.06);
+  overflow: hidden;
+}
+
+#profile-modal .profile-hero-lane-fill {
+  height: 100%;
+  width: 0;
+}
+
+#profile-modal .profile-hero-lane-fill-player {
+  background: #277b30;
+}
+
+#profile-modal .profile-hero-lane-fill-builder {
+  background: #fcea7c;
+}
+
+#profile-modal .profile-hero-lane-fill-curator {
+  background: #79ccde;
+}
+
+#profile-modal .profile-hero-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#profile-modal .profile-hero-summary-chip {
+  padding: 5px 8px 4px;
+  border: 2px solid #18161c;
+  background: #fff3db;
+  color: #18161c;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  line-height: 1.25;
+  box-shadow: 2px 2px 0 #18161c;
+}
+
+#profile-modal .profile-hero-summary-chip-player {
+  background: #277b30;
+  color: #fff3db;
+}
+
+#profile-modal .profile-hero-summary-chip-builder {
+  background: #fcea7c;
+  color: #000;
+}
+
+#profile-modal .profile-hero-summary-chip-curator {
+  background: #79ccde;
+  color: #000;
+}
+
+#profile-modal .profile-overview-bio {
+  color: #18161c;
+}
+
+#profile-modal #profile-hero-progress {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#profile-modal .profile-edit-fields {
+  gap: 10px;
+}
+
+#profile-modal .profile-room-preview {
+  border: 2px solid #2c5071;
+  border-radius: 0;
+  background: #18161c;
+}
+
+#profile-modal .profile-room-preview-fallback {
+  color: #fff3db;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+#profile-modal .profile-stats-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+#profile-modal .profile-info-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  background: #fffaf0;
+  box-shadow: 2px 2px 0 #18161c;
+}
+
+#profile-modal .profile-info-card-curator {
+  grid-column: 1 / -1;
+}
+
+#profile-modal .profile-info-card-player {
+  border-color: #277b30;
+  background: #eef7dd;
+}
+
+#profile-modal .profile-info-card-builder {
+  border-color: #fcea7c;
+  background: #fff7cf;
+}
+
+#profile-modal .profile-info-card-curator {
+  border-color: #79ccde;
+  background: #eefbfd;
+}
+
+#profile-modal .profile-info-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#profile-modal .profile-info-card-header-icon {
+  width: 18px;
+  height: 18px;
+  image-rendering: pixelated;
+  flex: 0 0 auto;
+}
+
+#profile-modal .profile-info-card-title {
+  color: #18161c;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+#profile-modal .profile-info-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+#profile-modal .profile-info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 2px solid #18161c;
+  background: rgba(255, 243, 219, 0.78);
+}
+
+#profile-modal .profile-info-item-icon {
+  width: 16px;
+  height: 16px;
+  image-rendering: pixelated;
+  flex: 0 0 auto;
+}
+
+#profile-modal .profile-info-item-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#profile-modal .profile-info-item-label {
+  color: #2c5071;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  line-height: 1.3;
+}
+
+#profile-modal .profile-info-item-value {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+#editor-music-phrase-save-modal .music-phrase-save-body {
+  gap: 14px;
+}
+
+#editor-music-phrase-save-modal .music-phrase-save-section {
+  gap: 10px;
+  padding: 14px;
+  background: #fffaf0;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#editor-music-phrase-save-modal .music-phrase-save-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 700px) {
+  #leaderboard-modal .leaderboard-tabs,
+  #profile-modal .profile-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #leaderboard-modal .leaderboard-panel,
+  #profile-modal .leaderboard-panel,
+  #leaderboard-modal .leaderboard-controls,
+  #profile-modal .profile-edit-fields,
+  #profile-modal .profile-hero,
+  #editor-music-phrase-save-modal .music-phrase-save-section {
+    padding: 12px;
+  }
+
+  #profile-modal .profile-display-name {
+    font-size: 18px;
+  }
+
+  #profile-modal .profile-hero-lane {
+    flex-wrap: wrap;
+  }
+
+  #profile-modal .profile-hero-lane-label-wrap {
+    min-width: 0;
+  }
+
+  #profile-modal .profile-hero-lane-progress {
+    min-width: 0;
+    width: 100%;
+  }
+
+  #profile-modal .profile-stats-list,
+  #profile-modal .profile-info-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #profile-modal .profile-info-card-curator {
+    grid-column: auto;
+  }
+
+  #editor-music-phrase-save-modal .music-phrase-save-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+#run-rating-modal {
+  background: rgba(24, 22, 28, 0.8);
+  backdrop-filter: none;
+}
+
+#run-rating-modal .run-rating-modal-panel {
+  width: min(760px, calc(100vw - 36px));
+  max-height: calc(100vh - 32px);
+  gap: 16px;
+  padding: 20px 18px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #fff3db;
+  border: 3px solid #79ccde;
+  border-radius: 0;
+  box-shadow: 6px 6px 0 #18161c;
+}
+
+#run-rating-modal .history-modal-kicker {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+#run-rating-modal .history-modal-title {
+  margin-top: 6px;
+  color: #18161c;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 19px;
+  line-height: 1.25;
+}
+
+#run-rating-modal .history-modal-meta,
+#run-rating-modal .leaderboard-secondary {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#run-rating-modal #btn-run-rating-close,
+#run-rating-modal #btn-run-rating-skip {
+  min-height: 34px;
+  padding: 8px 12px 7px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #79ccde;
+  color: #000;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#run-rating-modal #btn-run-rating-submit {
+  min-height: 34px;
+  padding: 8px 14px 7px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #277b30;
+  color: #fff3db;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#run-rating-modal #btn-run-rating-close:hover,
+#run-rating-modal #btn-run-rating-skip:hover,
+#run-rating-modal #btn-run-rating-submit:hover {
+  filter: brightness(1.06);
+}
+
+#run-rating-modal #btn-run-rating-close:disabled,
+#run-rating-modal #btn-run-rating-skip:disabled,
+#run-rating-modal #btn-run-rating-submit:disabled {
+  background: #c2bbb6;
+  color: #6d6768;
+  box-shadow: none;
+}
+
+#run-rating-modal .history-modal-error {
+  padding: 10px 12px;
+  border: 2px solid #ed5f4b;
+  border-radius: 0;
+  background: rgba(237, 95, 75, 0.18);
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#run-rating-modal .leaderboard-panel.run-rating-panel {
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
+  gap: 14px;
+  padding: 0;
+}
+
 .run-rating-modal-panel {
   max-width: min(620px, calc(100vw - 32px));
 }
 
 .run-rating-panel {
   gap: 14px;
+}
+
+#run-rating-modal .run-rating-result {
+  padding: 10px 12px;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  background: rgba(121, 204, 222, 0.14);
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
 }
 
 .run-rating-result {
@@ -1219,10 +2088,67 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   letter-spacing: 0.02em;
 }
 
+#run-rating-modal .run-rating-summary-card {
+  margin-top: 0;
+  padding: 10px 12px;
+  border: 2px solid #2c5071;
+  border-radius: 0;
+  background: #fffaf0;
+  box-shadow: 2px 2px 0 #18161c;
+}
+
+#run-rating-modal .run-rating-summary-card-leaderboard {
+  border-color: #79ccde;
+  background: rgba(121, 204, 222, 0.14);
+}
+
+#run-rating-modal .run-rating-summary-card-suggestion {
+  border-color: #fcea7c;
+  background: rgba(252, 234, 124, 0.5);
+}
+
+#run-rating-modal .run-rating-summary-card-status {
+  border-color: #2c5071;
+  background: #fffaf0;
+}
+
+#run-rating-modal .run-rating-summary-card-reward {
+  border-color: #277b30;
+  background: rgba(39, 123, 48, 0.14);
+}
+
+#run-rating-modal .run-rating-section {
+  gap: 10px;
+  padding: 12px;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  background: rgba(121, 204, 222, 0.12);
+  box-shadow: 2px 2px 0 #18161c;
+}
+
+#run-rating-modal .run-rating-section-quality {
+  border-color: #fcea7c;
+  background: rgba(252, 234, 124, 0.24);
+}
+
+#run-rating-modal .run-rating-section-difficulty {
+  border-color: #79ccde;
+  background: rgba(121, 204, 222, 0.18);
+}
+
 .run-rating-section {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+#run-rating-modal .run-rating-section-label {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 
 .run-rating-section-label {
@@ -1230,6 +2156,80 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+#run-rating-modal .run-rating-quality-actions,
+#run-rating-modal .run-rating-actions,
+#run-rating-modal #run-rating-difficulty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#run-rating-modal .run-rating-quality-actions .bar-btn,
+#run-rating-modal #run-rating-difficulty-actions .bar-btn {
+  min-height: 34px;
+  padding: 8px 12px 7px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#run-rating-modal .run-rating-quality-actions .bar-btn {
+  background: #fcea7c;
+  color: #000;
+}
+
+#run-rating-modal #run-rating-difficulty-actions .bar-btn {
+  background: #79ccde;
+  color: #000;
+}
+
+#run-rating-modal .run-rating-quality-actions .bar-btn.active {
+  background: #277b30;
+  color: #fff3db;
+}
+
+#run-rating-modal #run-rating-difficulty-actions .bar-btn[data-progression-difficulty='easy'].active {
+  background: #277b30;
+  color: #fff3db;
+}
+
+#run-rating-modal #run-rating-difficulty-actions .bar-btn[data-progression-difficulty='medium'].active {
+  background: #fcea7c;
+  color: #000;
+}
+
+#run-rating-modal #run-rating-difficulty-actions .bar-btn[data-progression-difficulty='hard'].active {
+  background: #ed5f4b;
+  color: #fff3db;
+}
+
+#run-rating-modal #run-rating-difficulty-actions .bar-btn[data-progression-difficulty='extreme'].active {
+  background: #2c5071;
+  color: #fff3db;
+}
+
+#run-rating-modal .run-rating-quality-actions .bar-btn.active,
+#run-rating-modal #run-rating-difficulty-actions .bar-btn.active {
+  border-color: #18161c;
+}
+
+#run-rating-modal .run-rating-quality-actions .bar-btn:hover,
+#run-rating-modal #run-rating-difficulty-actions .bar-btn:hover {
+  filter: brightness(1.04);
+}
+
+#run-rating-modal .run-rating-quality-actions .bar-btn:disabled,
+#run-rating-modal #run-rating-difficulty-actions .bar-btn:disabled {
+  background: #c2bbb6;
+  color: #6d6768;
+  box-shadow: none;
 }
 
 .run-rating-quality-actions,
