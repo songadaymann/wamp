@@ -421,12 +421,14 @@ body[data-app-mode="play-world"]:not([data-coarse-pointer="true"]) #world-hud .w
   --hud-trial-green: #277b30;
   --hud-trial-red: #ed5f4b;
   --hud-trial-ink-dark: #000;
+  --world-goal-panel-anchor-span: 16px;
+  --world-goal-panel-available-width: calc(100vw - 32px - var(--safe-left) - var(--safe-right));
   position: absolute;
   top: calc(16px + var(--safe-top));
-  right: calc(16px + var(--safe-right));
+  right: calc(var(--world-goal-panel-anchor-span) + 12px);
   z-index: 10;
   min-width: 210px;
-  max-width: min(320px, calc(100vw - 32px - var(--safe-left) - var(--safe-right)));
+  max-width: min(320px, var(--world-goal-panel-available-width));
   padding: 12px 14px;
   border-radius: 0;
   background: #050505;

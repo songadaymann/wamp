@@ -67,8 +67,11 @@ interface AuthIdentityProfileView {
   userId: string;
   displayName: string;
   playerLevel: number | null;
+  playerProgressFraction: number | null;
   curatorLevel: number | null;
+  curatorProgressFraction: number | null;
   builderLevel: number | null;
+  builderProgressFraction: number | null;
 }
 
 const state: AuthDebugState = {
@@ -97,8 +100,11 @@ let authPanel: HTMLElement | null = null;
 let authIdentity: HTMLButtonElement | null = null;
 let authIdentityName: HTMLElement | null = null;
 let authIdentityPlayerLevel: HTMLElement | null = null;
+let authIdentityPlayerProgress: HTMLElement | null = null;
 let authIdentityCuratorLevel: HTMLElement | null = null;
+let authIdentityCuratorProgress: HTMLElement | null = null;
 let authIdentityBuilderLevel: HTMLElement | null = null;
+let authIdentityBuilderProgress: HTMLElement | null = null;
 let authEmailInput: HTMLInputElement | null = null;
 let authEmailButton: HTMLButtonElement | null = null;
 let authWalletButton: HTMLButtonElement | null = null;
@@ -142,8 +148,11 @@ export async function setupAuthUi(): Promise<void> {
   authIdentity = document.getElementById('auth-identity') as HTMLButtonElement | null;
   authIdentityName = document.getElementById('auth-identity-name');
   authIdentityPlayerLevel = document.getElementById('auth-identity-player-level');
+  authIdentityPlayerProgress = document.getElementById('auth-identity-player-progress');
   authIdentityCuratorLevel = document.getElementById('auth-identity-curator-level');
+  authIdentityCuratorProgress = document.getElementById('auth-identity-curator-progress');
   authIdentityBuilderLevel = document.getElementById('auth-identity-builder-level');
+  authIdentityBuilderProgress = document.getElementById('auth-identity-builder-progress');
   authEmailInput = document.getElementById('auth-email-input') as HTMLInputElement | null;
   authEmailButton = document.getElementById('btn-auth-email') as HTMLButtonElement | null;
   authWalletButton = document.getElementById('btn-auth-wallet') as HTMLButtonElement | null;
@@ -404,8 +413,11 @@ function syncAuthIdentityProfileFromSession(user: AuthUser | null): void {
       userId: user.id,
       displayName: fallbackName,
       playerLevel: null,
+      playerProgressFraction: null,
       curatorLevel: null,
+      curatorProgressFraction: null,
       builderLevel: null,
+      builderProgressFraction: null,
     };
     return;
   }
@@ -450,8 +462,11 @@ async function ensureAuthIdentityProfileLoaded(force: boolean = false): Promise<
       userId,
       displayName: profile.displayName?.trim() || authIdentityProfile?.displayName || 'Player',
       playerLevel: profile.progression.player.level,
+      playerProgressFraction: profile.progression.player.progressFraction,
       curatorLevel: profile.progression.curator.level,
+      curatorProgressFraction: profile.progression.curator.progressFraction,
       builderLevel: profile.progression.builder.level,
+      builderProgressFraction: profile.progression.builder.progressFraction,
     };
   } catch (error) {
     console.warn('Failed to load auth identity profile summary', error);
@@ -1026,8 +1041,14 @@ function renderAuthIdentity(): void {
     authIdentityName.textContent = authIdentityProfile.displayName;
   }
   renderMiniProfileStatLevel(authIdentityPlayerLevel, authIdentityProfile.playerLevel);
+  renderMiniProfileProgress(authIdentityPlayerProgress, authIdentityProfile.playerProgressFraction);
   renderMiniProfileStatLevel(authIdentityCuratorLevel, authIdentityProfile.curatorLevel);
+  renderMiniProfileProgress(authIdentityCuratorProgress, authIdentityProfile.curatorProgressFraction);
   renderMiniProfileStatLevel(authIdentityBuilderLevel, authIdentityProfile.builderLevel);
+  renderMiniProfileProgress(authIdentityBuilderProgress, authIdentityProfile.builderProgressFraction);
+  authIdentity.dataset.playerProgress = formatProgressFraction(authIdentityProfile.playerProgressFraction);
+  authIdentity.dataset.curatorProgress = formatProgressFraction(authIdentityProfile.curatorProgressFraction);
+  authIdentity.dataset.builderProgress = formatProgressFraction(authIdentityProfile.builderProgressFraction);
 }
 
 function renderMiniProfileStatLevel(element: HTMLElement | null, level: number | null): void {
@@ -1065,6 +1086,19 @@ function renderMiniProfileStatLevel(element: HTMLElement | null, level: number |
   element.dataset.placeholder = 'false';
   element.setAttribute('aria-label', `${iconLabel} level ${level}`);
   element.replaceChildren(icon, label);
+}
+
+function renderMiniProfileProgress(element: HTMLElement | null, fraction: number | null): void {
+  if (!element) {
+    return;
+  }
+
+  element.style.transition = 'none';
+  element.style.width = `${Math.max(0, Math.min(1, fraction ?? 0)) * 100}%`;
+}
+
+function formatProgressFraction(fraction: number | null): string {
+  return String(Math.max(0, Math.min(1, fraction ?? 0)));
 }
 
 function getAuthStatusText(): string {

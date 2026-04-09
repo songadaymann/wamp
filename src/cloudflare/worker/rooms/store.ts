@@ -298,26 +298,40 @@ export async function saveDraft(
       existing.draft,
     );
   }
+  const shouldClaim = !existing.claimerUserId && actor.ownerUser !== null;
+  if (shouldClaim && !actorIsAdmin) {
+    await enforceFrontierClaimRule(env, incomingRoom.coordinates);
+    await enforceDailyRoomClaimLimit(env, actor.ownerUser!.id, now, actor.requestAuthSource);
+  }
 
   const draft: RoomSnapshot = {
     ...cloneRoomSnapshot(incomingRoom),
     createdAt: existing.draft.createdAt,
     updatedAt: now,
-    publishedAt: existing.published?.publishedAt ?? null,
-    status: 'draft',
-    version: existing.draft.version || 1,
+      publishedAt: existing.published?.publishedAt ?? null,
+      status: 'draft',
+      version: existing.draft.version || 1,
   };
+
+  const claimerUserId = shouldClaim ? actor.ownerUser!.id : existing.claimerUserId;
+  const claimerPrincipalType = shouldClaim ? actor.principalKind : existing.claimerPrincipalKind;
+  const claimerAgentId = shouldClaim ? actor.principalAgentId : existing.claimerAgentId;
+  const claimerDisplayName =
+    shouldClaim
+      ? actor.principalDisplayName || actor.ownerUser?.displayName || existing.claimerDisplayName
+      : existing.claimerDisplayName;
+  const claimedAt = shouldClaim ? now : existing.claimedAt;
 
   await env.DB.batch([
     preparePersistRoomRecordStatement(env, {
       draft,
       published: existing.published,
       canonicalVersion: existing.canonicalVersion,
-      claimerUserId: existing.claimerUserId,
-      claimerPrincipalType: existing.claimerPrincipalKind,
-      claimerAgentId: existing.claimerAgentId,
-      claimerDisplayName: existing.claimerDisplayName,
-      claimedAt: existing.claimedAt,
+      claimerUserId,
+      claimerPrincipalType,
+      claimerAgentId,
+      claimerDisplayName,
+      claimedAt,
       lastPublishedByUserId: existing.lastPublishedByUserId,
       lastPublishedByPrincipalType: existing.lastPublishedByPrincipalKind,
       lastPublishedByAgentId: existing.lastPublishedByAgentId,

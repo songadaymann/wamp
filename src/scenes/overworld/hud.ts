@@ -850,6 +850,7 @@ export class OverworldHudBridge {
       return;
     }
 
+    this.updateGoalPanelDockPosition();
     this.goalPanelEl.classList.toggle('hidden', !viewModel.goalPanelVisible);
     this.goalPanelEl.setAttribute('data-goal-panel-tone', viewModel.goalPanelTone);
     this.setText(this.goalPanelRoomEl, viewModel.goalPanelRoomText);
@@ -869,6 +870,27 @@ export class OverworldHudBridge {
     this.setText(this.mobileGoalFooterGoalEl, viewModel.goalPanelGoalText || viewModel.goalPanelRoomText);
     this.setText(this.mobileGoalFooterProgressEl, viewModel.goalPanelProgressText || viewModel.goalPanelRoomText);
     this.setText(this.mobileGoalFooterTimerEl, viewModel.goalPanelTimerText);
+  }
+
+  private updateGoalPanelDockPosition(): void {
+    if (!this.goalPanelEl) {
+      return;
+    }
+
+    const authTopline = this.doc.querySelector('.auth-panel-topline');
+    if (!(authTopline instanceof HTMLElement)) {
+      this.goalPanelEl.style.removeProperty('--world-goal-panel-anchor-span');
+      this.goalPanelEl.style.removeProperty('--world-goal-panel-available-width');
+      return;
+    }
+
+    const viewportWidth = this.doc.documentElement.clientWidth || this.doc.body.clientWidth;
+    const rect = authTopline.getBoundingClientRect();
+    const anchorSpan = Math.max(16, viewportWidth - rect.left);
+    const availableWidth = Math.max(210, rect.left - 28);
+
+    this.goalPanelEl.style.setProperty('--world-goal-panel-anchor-span', `${anchorSpan}px`);
+    this.goalPanelEl.style.setProperty('--world-goal-panel-available-width', `${availableWidth}px`);
   }
 
   private renderSignPanel(viewModel: OverworldHudViewModel): void {

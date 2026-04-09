@@ -146,6 +146,8 @@ export interface RoomDiscoveryEntry {
   roomTitle: string | null;
   builderUserId: string | null;
   builderDisplayName: string | null;
+  builderLevel: number | null;
+  builderTotalBxp: number | null;
   roomVersion: number;
   displayRoomVersion: number;
   leaderboardSourceVersion: number | null;

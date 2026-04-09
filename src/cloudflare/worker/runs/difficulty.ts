@@ -42,6 +42,12 @@ interface FeaturedRoomRow {
   featured_at: string;
 }
 
+interface BuilderProgressionRow {
+  user_id: string;
+  total_bxp: number | string | null;
+  builder_level: number | string | null;
+}
+
 interface RoomDiscoveryRatingAggregateRow {
   room_id: string;
   quality_vote_count: number | string | null;
@@ -256,14 +262,22 @@ export async function loadRoomDiscoveryResponse(
   }
 
   const roomIds = challengeRooms.map((entry) => entry.roomId);
+  const builderUserIds = Array.from(
+    new Set(
+      challengeRooms
+        .map((entry) => entry.builderUserId?.trim() ?? '')
+        .filter((value) => value.length > 0),
+    ),
+  );
   const roomVersionKeys = challengeRooms.map((entry) => ({
     roomId: entry.roomId,
     roomVersion: entry.roomVersion,
   }));
-  const [featuredRows, ratingRows, trophyRows] = await Promise.all([
+  const [featuredRows, ratingRows, trophyRows, builderRows] = await Promise.all([
     loadFeaturedRoomRows(env, roomIds),
     loadRoomDiscoveryRatingAggregateRows(env, roomVersionKeys),
     loadRoomDiscoveryTrophyRows(env, roomVersionKeys),
+    loadBuilderProgressionRows(env, builderUserIds),
   ]);
   const featuredByRoomId = new Map(
     featuredRows.results.map((row) => [row.room_id, row] as const),
@@ -284,6 +298,15 @@ export async function loadRoomDiscoveryResponse(
       awardedAt: row.awarded_at,
     });
   }
+  const builderProgressByUserId = new Map(
+    builderRows.results.map((row) => [
+      row.user_id,
+      {
+        builderLevel: parseRowNumber(row.builder_level),
+        builderTotalBxp: parseRowNumber(row.total_bxp),
+      },
+    ] as const),
+  );
 
   const results = challengeRooms
     .map((room): RoomDiscoveryEntry => {
@@ -291,6 +314,8 @@ export async function loadRoomDiscoveryResponse(
       const ratingSummary = buildDiscoveryRatingSummary(
         ratingByRoomId.get(room.roomId) ?? null,
       );
+      const builderProgress =
+        room.builderUserId ? (builderProgressByUserId.get(room.builderUserId) ?? null) : null;
       const voteCount = Math.max(
         ratingSummary.quality.voteCount,
         ratingSummary.totalDifficultyVotes,
@@ -302,6 +327,8 @@ export async function loadRoomDiscoveryResponse(
         roomTitle: room.roomTitle,
         builderUserId: room.builderUserId,
         builderDisplayName: room.builderDisplayName,
+        builderLevel: builderProgress?.builderLevel ?? null,
+        builderTotalBxp: builderProgress?.builderTotalBxp ?? null,
         roomVersion: room.roomVersion,
         displayRoomVersion: room.roomVersion,
         leaderboardSourceVersion: null,
@@ -388,10 +415,23 @@ function compareRoomDiscoveryEntries(
   }
 
   if (sort === 'builder') {
-    const builderCompare = compareNullableStringsAsc(
-      left.builderDisplayName,
-      right.builderDisplayName,
-    );
+    const builderLevelCompare = (right.builderLevel ?? 0) - (left.builderLevel ?? 0);
+    if (builderLevelCompare !== 0) {
+      return builderLevelCompare;
+    }
+    const builderXpCompare = (right.builderTotalBxp ?? 0) - (left.builderTotalBxp ?? 0);
+    if (builderXpCompare !== 0) {
+      return builderXpCompare;
+    }
+    const qualityCompare = compareQualityDesc(left, right);
+    if (qualityCompare !== 0) {
+      return qualityCompare;
+    }
+    const voteCompare = right.voteCount - left.voteCount;
+    if (voteCompare !== 0) {
+      return voteCompare;
+    }
+    const builderCompare = compareNullableStringsAsc(left.builderDisplayName, right.builderDisplayName);
     if (builderCompare !== 0) {
       return builderCompare;
     }
@@ -440,6 +480,34 @@ function compareNullableStringsAsc(left: string | null, right: string | null): n
     return -1;
   }
   return leftValue.localeCompare(rightValue, undefined, { sensitivity: 'base' });
+}
+
+async function loadBuilderProgressionRows(
+  env: Env,
+  userIds: string[],
+): Promise<{ results: BuilderProgressionRow[] }> {
+  if (userIds.length === 0) {
+    return { results: [] };
+  }
+
+  const results: BuilderProgressionRow[] = [];
+  for (const userIdChunk of chunkValues(userIds, 50)) {
+    const chunkRows = await env.DB.prepare(
+      `
+        SELECT
+          user_id,
+          total_bxp,
+          builder_level
+        FROM user_progress
+        WHERE user_id IN (${userIdChunk.map(() => '?').join(', ')})
+      `
+    )
+      .bind(...userIdChunk)
+      .all<BuilderProgressionRow>();
+    results.push(...chunkRows.results);
+  }
+
+  return { results };
 }
 
 async function loadFeaturedRoomRows(

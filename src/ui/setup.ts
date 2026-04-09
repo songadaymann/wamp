@@ -23,6 +23,7 @@ import { SignTextModalController } from './setup/signTextModal';
 import { setupCollapsibleSidebarSections, setupEditorSidebarShell } from './setup/sidebarSections';
 import { setupSceneCommands } from './setup/sceneCommands';
 import { XpReceiptController } from './setup/xpReceipts';
+import { WelcomeModalController } from './setup/welcomeModal';
 import { configureEditorUiBridgeRuntime } from '../scenes/editor/uiBridge';
 
 export function setupUI(game: Phaser.Game): void {
@@ -43,6 +44,7 @@ export function setupUI(game: Phaser.Game): void {
   const rewardStingCatchup = new RewardStingCatchupController();
   const runRatingModal = new RunRatingModalController(game);
   const signTextModal = new SignTextModalController(game);
+  const welcomeModal = new WelcomeModalController(game);
   const chatPanel = new ChatPanelController();
   const mobileUi = new MobileUiController(game);
 
@@ -77,6 +79,7 @@ export function setupUI(game: Phaser.Game): void {
   rewardStingCatchup.init();
   runRatingModal.init();
   signTextModal.init();
+  welcomeModal.init();
   chatPanel.init();
   mobileUi.init();
   setupSceneCommands(

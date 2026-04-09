@@ -7105,3 +7105,149 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - synthetic self chip fit beside the hamburger without overlap
 - caveat:
   - the local browser run was guest-state, so the self chip interaction was code-verified plus synthetic-layout verified rather than exercised through a real authenticated click path
+
+## 2026-04-09 12:31:00 EDT - XP receipts retargeted to the top-right mini profile chip
+
+- started a fresh follow-up branch/worktree from deployed `main`:
+  - branch: `feature/xp-receipt-hud-followup-2026-04-09`
+  - worktree: `/private/tmp/wamp-xp-receipt-hud-followup-2026-04-09`
+- retargeted overworld XP receipts away from the left HUD and into the top-right self mini-profile chip
+- added transient per-lane progress bars to the auth identity chip:
+  - bars stay hidden in the normal compact state
+  - the chip expands slightly during an XP receipt
+  - the active lane bar animates from the pre-award fraction to the post-award fraction
+  - the active lane `LVL` label updates during the receipt
+  - after the final receipt lands, the chip collapses back to the compact form
+- validation:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - required Playwright client smoke still passed against `http://127.0.0.1:4597/`
+  - targeted DOM/browser verification wrote:
+    - `output/web-game/xp-receipt-right-target-check-v2/during-receipt.png`
+    - `output/web-game/xp-receipt-right-target-check-v2/after-impact.png`
+    - `output/web-game/xp-receipt-right-target-check-v2/summary.json`
+  - DOM/browser confirmation:
+    - the auth chip expanded during the receipt event
+    - the builder lane bar animated while the receipt card was active
+    - the receipt layer hid after the fly/impact sequence
+    - the auth chip collapsed back after the last impact (`authExpanded: false`)
+
+## 2026-04-09 13:12:00 EDT - Goal HUD dock, leaderboard quality controls, and builder-ranked explore sort
+
+- moved the in-run goal/timer panel so it docks to the left of the new top-right auth/profile chip instead of hiding beneath it
+- expanded the leaderboard room-rating section to support both quality and difficulty updates after a clear
+  - added a `Quality and Difficulty Rating` label
+  - added `1` through `5` star quality buttons beside the existing difficulty controls
+  - updated status copy to talk about quality and difficulty together
+- changed Explore modal `Builder` sorting to rank builders by progression first:
+  - higher builder level first
+  - then higher total builder XP
+  - then builder name as a fallback
+- validation:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - DOM/browser verification wrote:
+    - `output/web-game/hud-goal-leaderboard-check/goal-and-leaderboard.png`
+    - `output/web-game/hud-goal-leaderboard-check/summary.json`
+  - DOM/browser confirmation:
+    - the goal panel rendered clear of the auth chip while visible during a run
+    - the leaderboard modal exposed the new `Quality and Difficulty Rating` controls
+    - the current preview still points at production API, so builder-rank ordering is implemented in code but only visible when the frontend is paired with a backend that includes this branch's worker change
+
+## 2026-04-09 13:34:00 EDT - Builder sort tie-breaks and local worker alignment
+
+- tightened Explore `Builder` sorting so once builder rank ties, better rooms rise first:
+  - quality descending
+  - then vote count descending
+  - then builder name and room title fallbacks
+- fixed the builder discovery progression lookup to read from `user_progress` instead of the nonexistent `user_progression` table
+- restarted the local safety-backed worker from this branch on `127.0.0.1:8787` so the `4597` frontend now exercises the actual builder-sort code instead of an older `main` worker
+- validation:
+  - `npm run typecheck` passed
+  - direct `GET /api/leaderboards/rooms/discover?limit=20&sort=builder` now returns `200`
+
+## 2026-04-09 14:18:00 EDT - First-visit welcome modal with Explore / Play / Build actions
+
+- added a first-visit `WELCOME TO WAMP` modal with three lane cards:
+  - `Explore` using the curator lane and blue treatment
+  - `Play` using the player lane and green treatment
+  - `Build` using the builder lane and yellow treatment
+- the modal auto-opens once on first visit after the app is ready in overworld browse mode
+- added `?welcome=1` query support to force the modal open again for testing even after dismissal
+- action behavior:
+  - `Explore` closes the modal and leaves the visitor in the overworld
+  - `Play` picks a random highly rated easy-or-medium room and starts the run
+  - `Build` picks an open frontier room and enters the editor
+    - signed-in users now claim the room on first draft save before the editor opens
+    - guests still get dropped directly into the chosen frontier room editor flow
+- implementation:
+  - new controller in `src/ui/setup/welcomeModal.ts`
+  - modal markup in `index.html`
+  - retro card styling in `src/styles/sections/modals.css`
+  - startup wiring in `src/ui/setup.ts`
+  - added `/api/world/claimable` access to the frontend world repository
+  - updated backend draft-save flow so first draft save can claim a frontier room
+- validation:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - local safety-backed worker restarted from this branch on `127.0.0.1:8787`
+  - browser verification confirmed:
+    - the welcome modal auto-opens on `?welcome=1`
+    - `Explore` closes the modal and keeps app mode at `world`
+    - `Play` transitions app mode to `play-world`
+    - `Build` transitions app mode to `editor`
+  - artifacts:
+    - `output/web-game/welcome-modal-check/welcome-modal-visible-v2.png`
+    - `output/web-game/welcome-modal-check/welcome-play-after-v3.png`
+    - `output/web-game/welcome-modal-check/welcome-build-after-v3.png`
+
+## 2026-04-09 15:18:00 EDT - Welcome modal visual hierarchy refinement
+
+- refined the first-visit welcome modal to match the newer retro UI language more closely instead of inheriting the older shared modal typography
+- styling changes:
+  - widened the panel to `1160px` max
+  - switched the panel to cream `#fff3db` with a white outer border and hard shadow
+  - made `WELCOME TO WAMP` the dominant `Early GameBoy` headline
+  - moved `We All Make A Platformer` to `Super Mario Bros. NES`
+  - switched lane titles and lane buttons to `Super Mario Bros. NES`
+  - kept lane body copy on `HomeVideo`
+  - moved XP payoff copy to `Early GameBoy`
+  - rebuilt the green play icon so it renders reliably inside the play lane card
+- validation:
+  - `npm run build` passed
+  - ran the required Playwright web-game client against `http://127.0.0.1:4597/?welcome=1`
+  - direct DOM/style verification confirmed:
+    - kicker font `Early GameBoy` at `26px`
+    - title font `Super Mario Bros. NES` at `24px`
+    - panel background `#fff3db`
+    - panel border white
+    - play icon box `32x32` with the triangle visible
+  - artifacts:
+    - `output/web-game/welcome-modal-dom-check-v2/welcome-modal-panel.png`
+    - `output/web-game/welcome-modal-dom-check-v2/summary.json`
+
+## 2026-04-09 15:30:00 EDT - Welcome modal headline emphasis and real play icon
+
+- updated the welcome modal headline again based on live review:
+  - changed `WELCOME TO WAMP` to `WELCOME TO WAMP!`
+  - made the GameBoy headline much larger and switched it to the hot red `#ed5f4b`
+  - reduced the `We All Make A Platformer` Mario line so it reads as secondary instead of competing with the headline
+- replaced the temporary play-triangle treatment with the real player XP icon asset `/assets/ui-progress-player.png` in the Play lane card
+- validation:
+  - `npm run build` passed
+  - direct DOM/style verification confirmed:
+    - kicker text `WELCOME TO WAMP!`
+    - kicker size `34px`
+    - kicker color `rgb(237, 95, 75)`
+    - title size `18px`
+    - play icon source `/assets/ui-progress-player.png`
+  - artifacts:
+    - `output/web-game/welcome-modal-dom-check-v3/welcome-modal-panel.png`
+    - `output/web-game/welcome-modal-dom-check-v3/summary.json`
+
+## 2026-04-09 15:40:00 EDT - Welcome play action pinned to room 1,1
+
+- changed the welcome modal `Play` action from the discovery-based random easy/medium picker to a fixed jump target at room coordinates `1,1`
+- removed the now-unused room discovery helper/imports from `src/ui/setup/welcomeModal.ts`
+- validation:
+  - `npm run typecheck` passed

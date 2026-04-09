@@ -62,6 +62,7 @@ type LeaderboardModalElements = {
   roomViewer: HTMLElement | null;
   roomDifficultySummary: HTMLElement | null;
   roomDifficultyStatus: HTMLElement | null;
+  roomQualityButtons: HTMLButtonElement[];
   roomDifficultyButtons: HTMLButtonElement[];
   roomList: HTMLElement | null;
   discoverFilterButtons: HTMLButtonElement[];
@@ -176,6 +177,9 @@ export class LeaderboardModalController {
       roomViewer: this.doc.getElementById('leaderboard-room-viewer'),
       roomDifficultySummary: this.doc.getElementById('leaderboard-room-difficulty-summary'),
       roomDifficultyStatus: this.doc.getElementById('leaderboard-room-difficulty-status'),
+      roomQualityButtons: Array.from(
+        this.doc.querySelectorAll<HTMLButtonElement>('#leaderboard-room-quality-actions [data-room-quality-stars]')
+      ),
       roomDifficultyButtons: Array.from(
         this.doc.querySelectorAll<HTMLButtonElement>('#leaderboard-room-difficulty-actions [data-room-difficulty]')
       ),
@@ -228,6 +232,14 @@ export class LeaderboardModalController {
         const difficulty = this.parseDifficultyButtonValue(button.dataset.roomDifficulty);
         if (difficulty) {
           void this.submitRoomDifficultyVote(difficulty);
+        }
+      });
+    }
+    for (const button of this.elements.roomQualityButtons) {
+      button.addEventListener('click', () => {
+        const qualityStars = this.parseQualityStars(button.dataset.roomQualityStars);
+        if (qualityStars !== null) {
+          void this.submitRoomQualityVote(qualityStars);
         }
       });
     }
@@ -478,6 +490,23 @@ export class LeaderboardModalController {
   }
 
   private async submitRoomDifficultyVote(difficulty: RoomDifficulty): Promise<void> {
+    await this.submitRoomRatingUpdate({
+      difficultyChoice: difficulty,
+    });
+  }
+
+  private async submitRoomQualityVote(qualityStars: number): Promise<void> {
+    await this.submitRoomRatingUpdate({
+      qualityStars,
+    });
+  }
+
+  private async submitRoomRatingUpdate(
+    update: {
+      qualityStars?: number | null;
+      difficultyChoice?: RoomDifficulty | null;
+    },
+  ): Promise<void> {
     if (!this.roomLeaderboard || this.voteSubmitting) {
       return;
     }
@@ -492,16 +521,29 @@ export class LeaderboardModalController {
     this.voteSubmitting = true;
     this.render();
     try {
+      const nextDifficultyChoice =
+        update.difficultyChoice
+        ?? this.roomLeaderboard.viewerRating?.difficultyChoice
+        ?? this.roomLeaderboard.difficulty.viewerVote
+        ?? null;
+      const nextQualityStars =
+        update.qualityStars
+        ?? this.roomLeaderboard.viewerRating?.qualityStars
+        ?? null;
+      const nextAutoSuggestedDifficulty =
+        this.roomLeaderboard.viewerRating?.autoSuggestedDifficulty
+        ?? nextDifficultyChoice
+        ?? this.roomLeaderboard.difficulty.consensus
+        ?? 'medium';
       const previousProgression = authUserId
         ? await this.loadBaselineProgression(authUserId)
         : null;
       const response = await this.runRepository.submitRoomRating(roomId, {
         roomCoordinates,
         roomVersion,
-        qualityStars: this.roomLeaderboard.viewerRating?.qualityStars ?? null,
-        difficultyChoice: difficulty,
-        autoSuggestedDifficulty:
-          this.roomLeaderboard.viewerRating?.autoSuggestedDifficulty ?? difficulty,
+        qualityStars: nextQualityStars,
+        difficultyChoice: nextDifficultyChoice,
+        autoSuggestedDifficulty: nextAutoSuggestedDifficulty,
       });
       if (authUserId) {
         saveSeenRewardProgression(authUserId, response.progression);
@@ -524,9 +566,9 @@ export class LeaderboardModalController {
       });
       this.setError(null);
     } catch (error) {
-      console.error('Failed to submit room difficulty vote', error);
+      console.error('Failed to submit room rating update', error);
       this.setError(
-        error instanceof Error ? error.message : 'Failed to submit room difficulty vote.'
+        error instanceof Error ? error.message : 'Failed to submit room rating update.'
       );
     } finally {
       this.voteSubmitting = false;
@@ -678,14 +720,26 @@ export class LeaderboardModalController {
     const difficulty = this.roomLeaderboard?.difficulty ?? null;
     const consensusText =
       roomPending
-        ? 'Loading difficulty ratings...'
+        ? 'Loading quality and difficulty ratings...'
         : difficulty === null || difficulty.totalVotes === 0
           ? `${this.formatQualitySummary(this.roomLeaderboard?.quality ?? null)}`
           : `Consensus: ${
               difficulty.consensus ? ROOM_DIFFICULTY_LABELS[difficulty.consensus] : 'Unrated'
             } · ${difficulty.totalVotes} vote${difficulty.totalVotes === 1 ? '' : 's'} · ${this.formatQualitySummary(this.roomLeaderboard?.quality ?? null)}`;
     this.elements.roomDifficultySummary.textContent = consensusText;
-    this.elements.roomDifficultyStatus.textContent = roomPending ? '' : this.getDifficultyStatusText();
+    this.elements.roomDifficultyStatus.textContent = roomPending ? '' : this.getRoomRatingStatusText();
+    for (const button of this.elements.roomQualityButtons) {
+      const qualityStars = this.parseQualityStars(button.dataset.roomQualityStars);
+      if (qualityStars === null) {
+        button.disabled = true;
+        continue;
+      }
+
+      const count = this.getQualityVoteCount(qualityStars);
+      button.textContent = `${qualityStars} Star${qualityStars === 1 ? '' : 's'} · ${count}`;
+      button.classList.toggle('active', this.roomLeaderboard?.viewerRating?.qualityStars === qualityStars);
+      button.disabled = roomPending || this.voteSubmitting || !difficulty?.viewerCanVote;
+    }
     for (const button of this.elements.roomDifficultyButtons) {
       const difficultyValue = this.parseDifficultyButtonValue(button.dataset.roomDifficulty);
       if (!difficultyValue) {
@@ -1063,38 +1117,72 @@ export class LeaderboardModalController {
 
   private getDifficultyStatusText(): string {
     if (!this.roomLeaderboard) {
-      return 'Select a published challenge room to rate difficulty.';
+      return 'Select a published challenge room to rate quality and difficulty.';
     }
 
     if (this.voteSubmitting) {
-      return 'Saving your difficulty vote...';
+      return 'Saving your quality and difficulty rating...';
     }
 
     const difficulty = this.roomLeaderboard.difficulty;
     if (!difficulty) {
-      return 'Difficulty data unavailable for this room yet.';
+      return 'Quality and difficulty data are unavailable for this room yet.';
     }
 
     const currentVersion = this.currentPublishedVersion;
     if (!difficulty.viewerSignedIn) {
-      return 'Sign in and play this published version to rate its difficulty.';
+      return 'Sign in and play this published version to rate its quality and difficulty.';
     }
 
     if (currentVersion !== this.roomLeaderboard.roomVersion) {
-      return 'Difficulty votes can only be updated on the current published version.';
+      return 'Quality and difficulty ratings can only be updated on the current published version.';
     }
 
     if (difficulty.viewerNeedsRun) {
-      return difficulty.viewerVote
-        ? 'Play this published version to update your carried-forward rating.'
-        : 'Play this published version once to rate its difficulty.';
+      return this.roomLeaderboard.viewerRating?.qualityStars !== null || difficulty.viewerVote
+        ? 'Play this published version to update your carried-forward quality and difficulty rating.'
+        : 'Play this published version once to rate its quality and difficulty.';
     }
 
-    if (difficulty.viewerVote) {
-      return `Your current rating: ${ROOM_DIFFICULTY_LABELS[difficulty.viewerVote]}.`;
+    const qualityStars = this.roomLeaderboard.viewerRating?.qualityStars ?? null;
+    if (difficulty.viewerVote || qualityStars !== null) {
+      const parts: string[] = [];
+      if (qualityStars !== null) {
+        parts.push(`${qualityStars} star${qualityStars === 1 ? '' : 's'}`);
+      }
+      if (difficulty.viewerVote) {
+        parts.push(ROOM_DIFFICULTY_LABELS[difficulty.viewerVote]);
+      }
+      return `Your current rating: ${parts.join(' · ')}.`;
     }
 
     return 'Rate this room based on your run.';
+  }
+
+  private getRoomRatingStatusText(): string {
+    return this.getDifficultyStatusText();
+  }
+
+  private getQualityVoteCount(stars: number): number {
+    const counts = this.roomLeaderboard?.quality.counts;
+    if (!counts) {
+      return 0;
+    }
+
+    switch (stars) {
+      case 1:
+        return counts.oneStar;
+      case 2:
+        return counts.twoStar;
+      case 3:
+        return counts.threeStar;
+      case 4:
+        return counts.fourStar;
+      case 5:
+        return counts.fiveStar;
+      default:
+        return 0;
+    }
   }
 
   private parseDifficultyButtonValue(value: string | undefined): RoomDifficulty | null {
@@ -1103,6 +1191,11 @@ export class LeaderboardModalController {
     }
 
     return ROOM_DIFFICULTIES.includes(value as RoomDifficulty) ? (value as RoomDifficulty) : null;
+  }
+
+  private parseQualityStars(value: string | undefined): number | null {
+    const parsed = Number.parseInt(value ?? '', 10);
+    return Number.isInteger(parsed) && parsed >= 1 && parsed <= 5 ? parsed : null;
   }
 
   private parseDiscoverSortButtonValue(value: string | undefined): RoomDiscoverySort | null {

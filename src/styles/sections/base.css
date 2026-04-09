@@ -434,6 +434,12 @@ body[data-playfun-mode='true'] #auth-panel {
 
 #auth-identity {
   max-width: min(252px, calc(100vw - 88px - var(--safe-left) - var(--safe-right)));
+  position: relative;
+  transition:
+    transform 0.14s steps(8, end),
+    box-shadow 0.14s steps(8, end),
+    max-width 0.14s steps(8, end),
+    padding 0.14s steps(8, end);
 }
 
 .mini-profile-card {
@@ -494,6 +500,33 @@ body[data-playfun-mode='true'] #auth-panel {
   gap: 3px;
 }
 
+#auth-identity.mini-profile-card--progress-active {
+  max-width: min(276px, calc(100vw - 88px - var(--safe-left) - var(--safe-right)));
+  padding-bottom: 8px;
+  transform: translate(-1px, -1px);
+}
+
+#auth-identity[data-xp-lane='player'] {
+  --xp-lane-color: #277b30;
+}
+
+#auth-identity[data-xp-lane='builder'] {
+  --xp-lane-color: #fcea7c;
+}
+
+#auth-identity[data-xp-lane='curator'] {
+  --xp-lane-color: #79ccde;
+}
+
+#auth-identity.xp-target-pulse {
+  animation: xp-target-pulse 520ms steps(8, end);
+  box-shadow: 0 0 0 2px var(--xp-lane-color, #79ccde), 4px 4px 0 #18161c;
+}
+
+#auth-identity.mini-profile-card--progress-active .mini-profile-body {
+  gap: 5px;
+}
+
 .mini-profile-name-row {
   display: flex;
   align-items: center;
@@ -526,6 +559,52 @@ body[data-playfun-mode='true'] #auth-panel {
   flex-wrap: wrap;
   gap: 7px;
   min-width: 0;
+}
+
+.mini-profile-progress {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  width: 100%;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transform: translateY(-2px);
+  transition:
+    max-height 0.12s steps(8, end),
+    opacity 0.12s steps(8, end),
+    transform 0.12s steps(8, end);
+}
+
+#auth-identity.mini-profile-card--progress-active .mini-profile-progress {
+  max-height: 12px;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.mini-profile-progress-track {
+  height: 6px;
+  border: 2px solid #fff3db;
+  background: #050505;
+  overflow: hidden;
+}
+
+.mini-profile-progress-fill {
+  height: 100%;
+  width: 0;
+  transition: none;
+}
+
+.mini-profile-progress-fill--player {
+  background: #277b30;
+}
+
+.mini-profile-progress-fill--builder {
+  background: #fcea7c;
+}
+
+.mini-profile-progress-fill--curator {
+  background: #79ccde;
 }
 
 .mini-profile-stat-row {

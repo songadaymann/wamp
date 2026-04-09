@@ -22,6 +22,20 @@ const HOLD_DURATION_MS = 920;
 const FLY_DURATION_MS = 520;
 const IMPACT_DURATION_MS = 540;
 const RECEIPT_APP_MODE = 'world';
+const AUTH_IDENTITY_TARGET_ID = 'auth-identity';
+const WORLD_HUD_TARGET_ID = 'world-hud';
+
+const AUTH_PROGRESS_FILL_IDS = {
+  player: 'auth-identity-player-progress',
+  curator: 'auth-identity-curator-progress',
+  builder: 'auth-identity-builder-progress',
+} as const;
+
+const AUTH_LEVEL_IDS = {
+  player: 'auth-identity-player-level',
+  curator: 'auth-identity-curator-level',
+  builder: 'auth-identity-builder-level',
+} as const;
 
 export class XpReceiptController {
   private readonly elements: XpReceiptElements;
@@ -31,6 +45,7 @@ export class XpReceiptController {
   private flyTimer: number | null = null;
   private impactTimer: number | null = null;
   private targetPulseTimer: number | null = null;
+  private authCollapseTimer: number | null = null;
 
   private readonly handleReceiptRequest = (event: Event) => {
     const detail =
@@ -80,6 +95,10 @@ export class XpReceiptController {
       this.windowObj.clearTimeout(this.targetPulseTimer);
       this.targetPulseTimer = null;
     }
+    if (this.authCollapseTimer !== null) {
+      this.windowObj.clearTimeout(this.authCollapseTimer);
+      this.authCollapseTimer = null;
+    }
     this.clearTargetPulse();
     this.elements.impact?.classList.remove('xp-receipt-impact--active');
     this.queue.length = 0;
@@ -101,6 +120,7 @@ export class XpReceiptController {
     }
 
     this.clearTimers();
+    this.clearTargetPulse(false);
     this.activeReceipt = nextReceipt;
     this.render(nextReceipt);
     this.elements.layer.classList.remove('hidden');
@@ -114,6 +134,7 @@ export class XpReceiptController {
       }
 
       this.primeMeter(nextReceipt);
+      this.primeTargetProgress(nextReceipt);
       this.updateFlyTarget(nextReceipt);
       this.holdTimer = this.windowObj.setTimeout(() => {
         this.beginFly(nextReceipt);
@@ -170,7 +191,11 @@ export class XpReceiptController {
     const targetElement = this.getReceiptTargetElement();
     const targetRect = targetElement?.getBoundingClientRect() ?? null;
     const targetX = targetRect ? targetRect.left + targetRect.width / 2 : fallbackTargetX;
-    const targetY = targetRect ? targetRect.top + Math.min(54, Math.max(42, targetRect.height * 0.18)) : fallbackTargetY;
+    const targetY = targetRect
+      ? targetElement?.id === AUTH_IDENTITY_TARGET_ID
+        ? targetRect.top + targetRect.height / 2
+        : targetRect.top + Math.min(54, Math.max(42, targetRect.height * 0.18))
+      : fallbackTargetY;
     const sourceX = sourceRect.left + sourceRect.width / 2;
     const sourceY = sourceRect.top + sourceRect.height / 2;
 
@@ -210,6 +235,7 @@ export class XpReceiptController {
       this.targetPulseTimer = this.windowObj.setTimeout(() => {
         this.clearTargetPulse();
       }, IMPACT_DURATION_MS);
+      this.scheduleAuthCollapse(targetElement);
     }
 
     if (!this.elements.impact) {
@@ -276,12 +302,20 @@ export class XpReceiptController {
       return null;
     }
 
-    const target = this.doc.getElementById('world-hud');
-    return target instanceof HTMLElement ? target : null;
+    return this.getAuthIdentityTargetElement() ?? this.getWorldHudTargetElement();
   }
 
-  private clearTargetPulse(): void {
-    for (const targetId of ['world-hud', 'menu-toggle']) {
+  private clearTargetPulse(collapseAuthIdentity: boolean = true): void {
+    if (this.targetPulseTimer !== null) {
+      this.windowObj.clearTimeout(this.targetPulseTimer);
+      this.targetPulseTimer = null;
+    }
+    if (collapseAuthIdentity && this.authCollapseTimer !== null) {
+      this.windowObj.clearTimeout(this.authCollapseTimer);
+      this.authCollapseTimer = null;
+    }
+
+    for (const targetId of [WORLD_HUD_TARGET_ID, 'menu-toggle', AUTH_IDENTITY_TARGET_ID]) {
       const target = this.doc.getElementById(targetId);
       if (!(target instanceof HTMLElement)) {
         continue;
@@ -290,6 +324,100 @@ export class XpReceiptController {
       target.classList.remove('xp-target-pulse');
       target.removeAttribute('data-xp-lane');
       target.style.removeProperty('--xp-target-progress');
+      if (collapseAuthIdentity && target.id === AUTH_IDENTITY_TARGET_ID && !this.activeReceipt && this.queue.length === 0) {
+        target.classList.remove('mini-profile-card--progress-active');
+      }
     }
+  }
+
+  private primeTargetProgress(receipt: XpReceipt): void {
+    const authIdentity = this.getAuthIdentityTargetElement();
+    if (!authIdentity) {
+      return;
+    }
+
+    if (this.authCollapseTimer !== null) {
+      this.windowObj.clearTimeout(this.authCollapseTimer);
+      this.authCollapseTimer = null;
+    }
+
+    authIdentity.classList.add('mini-profile-card--progress-active');
+    authIdentity.dataset.xpLane = receipt.lane;
+    this.seedAuthProgressFill(authIdentity, 'player');
+    this.seedAuthProgressFill(authIdentity, 'curator');
+    this.seedAuthProgressFill(authIdentity, 'builder');
+
+    const activeFill = this.doc.getElementById(AUTH_PROGRESS_FILL_IDS[receipt.lane]);
+    if (!(activeFill instanceof HTMLElement)) {
+      return;
+    }
+
+    authIdentity.dataset[`${receipt.lane}Progress`] = String(Math.max(0, Math.min(1, receipt.progressTo)));
+    this.updateAuthLevelLabel(receipt);
+    activeFill.style.transition = 'none';
+    activeFill.style.width = `${Math.max(0, Math.min(1, receipt.progressFrom)) * 100}%`;
+
+    this.windowObj.requestAnimationFrame(() => {
+      if (!(this.activeReceipt && this.activeReceipt === receipt)) {
+        return;
+      }
+      activeFill.style.transition = 'width 780ms steps(14, end)';
+      activeFill.style.width = `${Math.max(0, Math.min(1, receipt.progressTo)) * 100}%`;
+    });
+  }
+
+  private seedAuthProgressFill(
+    authIdentity: HTMLElement,
+    lane: 'player' | 'curator' | 'builder',
+  ): void {
+    const fill = this.doc.getElementById(AUTH_PROGRESS_FILL_IDS[lane]);
+    if (!(fill instanceof HTMLElement)) {
+      return;
+    }
+
+    const stored = Number.parseFloat(authIdentity.dataset[`${lane}Progress`] ?? '0');
+    const normalized = Math.max(0, Math.min(1, Number.isFinite(stored) ? stored : 0));
+    fill.style.transition = 'none';
+    fill.style.width = `${normalized * 100}%`;
+  }
+
+  private updateAuthLevelLabel(receipt: XpReceipt): void {
+    const levelNode = this.doc.getElementById(AUTH_LEVEL_IDS[receipt.lane]);
+    const label = levelNode?.querySelector('.mini-profile-stat-level-label');
+    if (label instanceof HTMLElement) {
+      label.textContent = receipt.levelText;
+    }
+  }
+
+  private getAuthIdentityTargetElement(): HTMLElement | null {
+    const target = this.doc.getElementById(AUTH_IDENTITY_TARGET_ID);
+    if (!(target instanceof HTMLElement) || target.classList.contains('hidden')) {
+      return null;
+    }
+    return target;
+  }
+
+  private getWorldHudTargetElement(): HTMLElement | null {
+    const target = this.doc.getElementById(WORLD_HUD_TARGET_ID);
+    return target instanceof HTMLElement ? target : null;
+  }
+
+  private scheduleAuthCollapse(targetElement: HTMLElement): void {
+    if (targetElement.id !== AUTH_IDENTITY_TARGET_ID) {
+      return;
+    }
+
+    if (this.authCollapseTimer !== null) {
+      this.windowObj.clearTimeout(this.authCollapseTimer);
+    }
+
+    this.authCollapseTimer = this.windowObj.setTimeout(() => {
+      if (this.activeReceipt || this.queue.length > 0) {
+        return;
+      }
+
+      targetElement.classList.remove('mini-profile-card--progress-active');
+      this.authCollapseTimer = null;
+    }, Math.max(220, IMPACT_DURATION_MS - 120));
   }
 }

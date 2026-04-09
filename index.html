@@ -166,6 +166,17 @@
               data-icon-label="Builder"
             >--</div>
           </div>
+          <div class="mini-profile-progress" aria-hidden="true">
+            <div class="mini-profile-progress-track mini-profile-progress-track--player">
+              <div id="auth-identity-player-progress" class="mini-profile-progress-fill mini-profile-progress-fill--player"></div>
+            </div>
+            <div class="mini-profile-progress-track mini-profile-progress-track--curator">
+              <div id="auth-identity-curator-progress" class="mini-profile-progress-fill mini-profile-progress-fill--curator"></div>
+            </div>
+            <div class="mini-profile-progress-track mini-profile-progress-track--builder">
+              <div id="auth-identity-builder-progress" class="mini-profile-progress-fill mini-profile-progress-fill--builder"></div>
+            </div>
+          </div>
         </div>
       </button>
       <button id="menu-toggle" type="button" aria-label="Menu">
@@ -1287,7 +1298,15 @@
         <div id="leaderboard-room-summary" class="history-modal-meta">No room leaderboard selected.</div>
         <div id="leaderboard-room-viewer" class="history-modal-meta hidden"></div>
         <div id="leaderboard-room-difficulty" class="leaderboard-difficulty">
-          <div id="leaderboard-room-difficulty-summary" class="history-modal-meta">No difficulty ratings yet.</div>
+          <div class="leaderboard-rating-label">Quality and Difficulty Rating</div>
+          <div id="leaderboard-room-difficulty-summary" class="history-modal-meta">No quality or difficulty ratings yet.</div>
+          <div id="leaderboard-room-quality-actions" class="leaderboard-difficulty-actions leaderboard-quality-actions">
+            <button class="bar-btn bar-btn-small" type="button" data-room-quality-stars="1">1 Star</button>
+            <button class="bar-btn bar-btn-small" type="button" data-room-quality-stars="2">2 Stars</button>
+            <button class="bar-btn bar-btn-small" type="button" data-room-quality-stars="3">3 Stars</button>
+            <button class="bar-btn bar-btn-small" type="button" data-room-quality-stars="4">4 Stars</button>
+            <button class="bar-btn bar-btn-small" type="button" data-room-quality-stars="5">5 Stars</button>
+          </div>
           <div id="leaderboard-room-difficulty-actions" class="leaderboard-difficulty-actions">
             <button class="bar-btn bar-btn-small" type="button" data-room-difficulty="easy">Easy</button>
             <button class="bar-btn bar-btn-small" type="button" data-room-difficulty="medium">Medium</button>
@@ -1307,6 +1326,64 @@
         <div id="leaderboard-global-summary" class="history-modal-meta">World points leaderboard.</div>
         <div id="leaderboard-global-viewer" class="history-modal-meta hidden"></div>
         <div id="leaderboard-global-list" class="history-version-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="welcome-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel welcome-modal-panel" role="dialog" aria-modal="true" aria-labelledby="welcome-modal-title">
+        <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">WELCOME TO WAMP!</div>
+          <h2 id="welcome-modal-title" class="history-modal-title">We All Make A Platformer</h2>
+        </div>
+        <div class="history-modal-header-actions">
+          <button id="btn-welcome-close" class="bar-btn bar-btn-small" type="button">Close</button>
+        </div>
+      </div>
+      <div id="welcome-modal-status" class="history-modal-meta hidden"></div>
+      <div class="welcome-modal-body">
+        <section class="welcome-lane-card" data-lane="explore">
+          <div class="welcome-lane-icon-wrap">
+            <img class="welcome-lane-icon" src="/assets/ui-progress-curator.png" alt="" />
+          </div>
+          <div class="welcome-lane-title">EXPLORE</div>
+          <div class="welcome-lane-copy">
+            Explore the overworld and find cool levels. Have fun running from room to room, completing challenges.
+          </div>
+          <div class="welcome-lane-subcopy">
+            Rate the levels you've beat to earn Curator XP.
+          </div>
+          <button id="btn-welcome-explore" class="bar-btn welcome-lane-button" type="button">Explore</button>
+        </section>
+
+        <section class="welcome-lane-card" data-lane="play">
+          <div class="welcome-lane-icon-wrap">
+            <img class="welcome-lane-icon" src="/assets/ui-progress-player.png" alt="" />
+          </div>
+          <div class="welcome-lane-title">PLAY</div>
+          <div class="welcome-lane-copy">
+            Some rooms are easy, some are devilishly difficult, and new ones are being built every day.
+          </div>
+          <div class="welcome-lane-subcopy">
+            Beat as many as you can to earn Player XP.
+          </div>
+          <button id="btn-welcome-play" class="bar-btn welcome-lane-button" type="button">Play</button>
+        </section>
+
+        <section class="welcome-lane-card" data-lane="build">
+          <div class="welcome-lane-icon-wrap">
+            <img class="welcome-lane-icon" src="/assets/ui-progress-builder.png" alt="" />
+          </div>
+          <div class="welcome-lane-title">BUILD</div>
+          <div class="welcome-lane-copy">
+            Every level is created by someone just like you. Pick an open room and start making your own challenge.
+          </div>
+          <div class="welcome-lane-subcopy">
+            The more people beat your level, the higher your XP. Build rooms to earn Builder XP.
+          </div>
+          <button id="btn-welcome-build" class="bar-btn welcome-lane-button" type="button">Build</button>
+        </section>
       </div>
     </div>
   </div>

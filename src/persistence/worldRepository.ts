@@ -9,6 +9,7 @@ import {
 import {
   computeWorldChunkWindow,
   computeWorldWindow,
+  type ClaimableFrontierRoomWindow,
   type PublishedWorldRoomSource,
   type WorldChunkBounds,
   type WorldChunkWindow,
@@ -21,6 +22,7 @@ export interface WorldRepository {
   loadWorldWindow(center: RoomCoordinates, radius: number): Promise<WorldWindow>;
   loadWorldChunkWindow(chunkBounds: WorldChunkBounds): Promise<WorldChunkWindow>;
   loadPublishedRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomSnapshot | null>;
+  loadClaimableFrontierWindow(center: RoomCoordinates, radius: number): Promise<ClaimableFrontierRoomWindow>;
 }
 
 class WorldApiError extends Error {
@@ -84,6 +86,21 @@ class LocalWorldRepository implements WorldRepository {
     }
 
     return cloneRoomSnapshot(stored.published);
+  }
+
+  async loadClaimableFrontierWindow(
+    center: RoomCoordinates,
+    radius: number
+  ): Promise<ClaimableFrontierRoomWindow> {
+    const worldWindow = computeWorldWindow(this.loadAllPublishedRooms(), center, radius);
+    return {
+      center: { ...center },
+      radius,
+      rooms: worldWindow.rooms.filter((room) => room.state === 'frontier'),
+      roomDailyClaimLimit: null,
+      roomClaimsUsedToday: 0,
+      roomClaimsRemainingToday: null,
+    };
   }
 
   private loadAllPublishedRooms(): PublishedWorldRoomSource[] {
@@ -155,6 +172,22 @@ class ApiWorldRepository implements WorldRepository {
     );
   }
 
+  async loadClaimableFrontierWindow(
+    center: RoomCoordinates,
+    radius: number
+  ): Promise<ClaimableFrontierRoomWindow> {
+    const params = new URLSearchParams({
+      centerX: String(center.x),
+      centerY: String(center.y),
+      radius: String(radius),
+    });
+
+    return this.withFallback(
+      () => this.requestClaimableFrontierWindow(`/api/world/claimable?${params.toString()}`),
+      () => this.fallback?.loadClaimableFrontierWindow(center, radius)
+    );
+  }
+
   private async requestWorldWindow(path: string): Promise<WorldWindow> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       credentials: 'include',
@@ -206,6 +239,22 @@ class ApiWorldRepository implements WorldRepository {
 
     const room = (await response.json()) as RoomSnapshot;
     return cloneRoomSnapshot(room);
+  }
+
+  private async requestClaimableFrontierWindow(path: string): Promise<ClaimableFrontierRoomWindow> {
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const details = await response.text();
+      throw new WorldApiError(
+        details || `World API request failed with status ${response.status}.`,
+        response.status
+      );
+    }
+
+    return (await response.json()) as ClaimableFrontierRoomWindow;
   }
 
   private async withFallback<T>(

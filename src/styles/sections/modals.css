@@ -1537,6 +1537,14 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   background: #fff7cf;
 }
 
+#leaderboard-modal .leaderboard-rating-label {
+  color: #2c5071;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
 #leaderboard-modal .leaderboard-difficulty-actions,
 #leaderboard-modal .leaderboard-discover-filters,
 #explore-modal .leaderboard-discover-filters,
@@ -1569,6 +1577,11 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
 #leaderboard-modal .leaderboard-discover-filters .bar-btn.active[data-discover-difficulty='extreme'] {
   background: #2c5071;
   color: #fff3db;
+}
+
+#leaderboard-modal .leaderboard-quality-actions .bar-btn.active {
+  background: #79ccde;
+  color: #000;
 }
 
 #leaderboard-modal .leaderboard-discover-sorts .bar-btn.active[data-discover-sort='featured'] {
@@ -2577,6 +2590,197 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
 #run-rating-modal #run-rating-difficulty-actions .bar-btn[data-progression-difficulty='medium'].active {
   background: #fcea7c;
   color: #000;
+}
+
+#welcome-modal .welcome-modal-panel {
+  width: min(1160px, calc(100vw - 28px));
+  max-width: min(1160px, calc(100vw - 28px));
+  gap: 18px;
+  padding: 22px 22px 20px;
+  background: #fff3db;
+  border: 3px solid #fff;
+  border-radius: 0;
+  box-shadow: 8px 8px 0 #18161c;
+}
+
+#welcome-modal .history-modal-header {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+#welcome-modal .history-modal-kicker {
+  color: #ed5f4b;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 34px;
+  line-height: 1.08;
+  letter-spacing: 0.04em;
+}
+
+#welcome-modal .history-modal-title {
+  margin-top: 8px;
+  color: #18161c;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+#welcome-modal .history-modal-meta {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+#welcome-modal #welcome-modal-status {
+  margin-bottom: 12px;
+}
+
+#welcome-modal .history-modal-header-actions .bar-btn {
+  min-height: 34px;
+  padding: 8px 12px 7px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #79ccde;
+  color: #000;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#welcome-modal .welcome-modal-body {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+#welcome-modal .welcome-lane-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 100%;
+  padding: 18px 16px 18px;
+  border: 2px solid #18161c;
+  background: #fffaf0;
+  box-shadow: 6px 6px 0 rgba(24, 22, 28, 0.95);
+}
+
+#welcome-modal .welcome-lane-card[data-lane='explore'] {
+  border-color: #79ccde;
+}
+
+#welcome-modal .welcome-lane-card[data-lane='play'] {
+  border-color: #277b30;
+}
+
+#welcome-modal .welcome-lane-card[data-lane='build'] {
+  border-color: #fcea7c;
+}
+
+#welcome-modal .welcome-lane-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 62px;
+  height: 62px;
+  border: 2px solid #18161c;
+  background: #111;
+  box-shadow: 4px 4px 0 rgba(24, 22, 28, 0.85);
+}
+
+#welcome-modal .welcome-lane-card[data-lane='explore'] .welcome-lane-icon-wrap {
+  background: #79ccde;
+}
+
+#welcome-modal .welcome-lane-card[data-lane='play'] .welcome-lane-icon-wrap {
+  background: #277b30;
+}
+
+#welcome-modal .welcome-lane-card[data-lane='build'] .welcome-lane-icon-wrap {
+  background: #fcea7c;
+}
+
+#welcome-modal .welcome-lane-icon {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+#welcome-modal .welcome-lane-title {
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 22px;
+  line-height: 1.2;
+  color: #18161c;
+}
+
+#welcome-modal .welcome-lane-copy {
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.58;
+  color: #18161c;
+}
+
+#welcome-modal .welcome-lane-subcopy {
+  font-family: 'Early GameBoy', monospace;
+  font-size: 9px;
+  line-height: 1.45;
+  color: #18161c;
+  margin-top: auto;
+}
+
+#welcome-modal .welcome-lane-button {
+  width: 100%;
+  justify-content: center;
+  margin-top: 4px;
+  min-height: 40px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 13px;
+  line-height: 1.1;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#welcome-modal .welcome-lane-card[data-lane='explore'] .welcome-lane-button {
+  background: #79ccde;
+  color: #000;
+}
+
+#welcome-modal .welcome-lane-card[data-lane='play'] .welcome-lane-button {
+  background: #277b30;
+  color: #fff;
+}
+
+#welcome-modal .welcome-lane-card[data-lane='build'] .welcome-lane-button {
+  background: #fcea7c;
+  color: #000;
+}
+
+@media (max-width: 920px) {
+  #welcome-modal .welcome-modal-panel {
+    width: min(720px, calc(100vw - 24px));
+    max-width: min(720px, calc(100vw - 24px));
+    padding: 18px 16px 16px;
+  }
+
+  #welcome-modal .history-modal-kicker {
+    font-size: 24px;
+  }
+
+  #welcome-modal .history-modal-title {
+    font-size: 15px;
+  }
+
+  #welcome-modal .welcome-modal-body {
+    grid-template-columns: 1fr;
+  }
+
+  #welcome-modal .welcome-lane-card {
+    min-height: 0;
+  }
 }
 
 #run-rating-modal #run-rating-difficulty-actions .bar-btn[data-progression-difficulty='hard'].active {

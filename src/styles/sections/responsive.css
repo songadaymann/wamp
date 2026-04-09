@@ -231,6 +231,10 @@ body[data-device-class='phone'] #auth-identity {
   max-width: calc(100vw - 74px - var(--safe-left) - var(--safe-right));
 }
 
+body[data-device-class='phone'] #auth-identity.mini-profile-card--progress-active {
+  max-width: calc(100vw - 74px - var(--safe-left) - var(--safe-right));
+}
+
 body[data-device-class='phone'] #menu-body {
   width: 100%;
   max-width: none;
@@ -313,6 +317,14 @@ body[data-device-class='phone'] .mini-profile-stat-level-icon {
 
 body[data-device-class='phone'] .mini-profile-stat-level-label {
   font-size: 6px;
+}
+
+body[data-device-class='phone'] .mini-profile-progress {
+  gap: 3px;
+}
+
+body[data-device-class='phone'] .mini-profile-progress-track {
+  height: 5px;
 }
 
 body[data-device-class='phone'] #world-jump-row {
