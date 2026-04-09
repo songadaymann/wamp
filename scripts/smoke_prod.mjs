@@ -44,9 +44,17 @@ const sessionWalletProjectId =
   typeof sessionJson?.walletProjectId === 'string'
     ? sessionJson.walletProjectId.trim()
     : '';
+const sessionPartykitHost =
+  typeof sessionJson?.partykitHost === 'string'
+    ? sessionJson.partykitHost.trim()
+    : '';
 assert(
   sessionWalletProjectId.length > 0,
   'Auth session did not expose a wallet project id. Configure REOWN_PROJECT_ID on the API Worker.'
+);
+assert(
+  sessionPartykitHost === EXPECTED_PARTYKIT_HOST,
+  `Auth session did not expose the expected PartyKit host. Expected ${EXPECTED_PARTYKIT_HOST}, got ${sessionPartykitHost || 'missing'}.`
 );
 
 const healthResponse = await fetch(`${API_BASE_URL}/api/health`, {
@@ -87,6 +95,11 @@ const summary = {
   mainBundleUrl,
   mainBundleContainsPartyKitHost,
   expectedPartykitHost: EXPECTED_PARTYKIT_HOST,
+  sessionPartykitHost: sessionPartykitHost || null,
+  sessionPartykitParty:
+    typeof sessionJson?.partykitParty === 'string' && sessionJson.partykitParty.trim()
+      ? sessionJson.partykitParty.trim()
+      : null,
   sessionAuthenticated: sessionJson?.authenticated ?? null,
   sessionWalletProjectConfigured: sessionWalletProjectId.length > 0,
   health: healthJson,
