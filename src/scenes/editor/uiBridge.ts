@@ -128,6 +128,7 @@ export interface EditorUiViewModel {
   publishButtonText: string;
   publishButtonTitle: string;
   publishDisabled: boolean;
+  publishButtonAriaDisabled: boolean;
   mintHidden: boolean;
   mintDisabled: boolean;
   mintButtonText: string;
@@ -567,6 +568,7 @@ export class EditorUiBridge {
     this.setButtonText(this.publishBtn, viewModel.publishButtonText);
     this.setButtonTitle(this.publishBtn, viewModel.publishButtonTitle);
     this.setDisabled(this.publishBtn, viewModel.publishDisabled);
+    this.setAriaDisabled(this.publishBtn, viewModel.publishButtonAriaDisabled);
     this.setHidden(this.mintBtn, viewModel.mintHidden);
     this.setDisabled(this.mintBtn, viewModel.mintDisabled);
     this.setButtonText(this.mintBtn, viewModel.mintButtonText);
@@ -1401,6 +1403,19 @@ export class EditorUiBridge {
     if (element && element.disabled !== disabled) {
       element.disabled = disabled;
     }
+  }
+
+  private setAriaDisabled(element: HTMLElement | null, disabled: boolean): void {
+    if (!element) {
+      return;
+    }
+
+    if (disabled) {
+      element.setAttribute('aria-disabled', 'true');
+      return;
+    }
+
+    element.removeAttribute('aria-disabled');
   }
 
   private setHidden(element: HTMLElement | HTMLElement[] | null, hidden: boolean): void {

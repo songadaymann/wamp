@@ -395,6 +395,7 @@ export class EditorScene extends Phaser.Scene {
         this.applyRoomSnapshot(room);
       },
       exportRoomSnapshot: () => this.exportRoomSnapshot(),
+      getPublishValidationError: () => this.editRuntime.getPublishValidationError(),
       getRoomDirty: () => this.roomDirty,
       setRoomDirty: (dirty) => {
         this.roomDirty = dirty;
@@ -2933,10 +2934,16 @@ export class EditorScene extends Phaser.Scene {
 
     const publishButton = document.getElementById('btn-editor-music-publish') as HTMLButtonElement | null;
     if (publishButton) {
+      const publishValidationError = this.editRuntime.getPublishValidationError();
       publishButton.disabled = !this.roomPermissions.canPublish || this.saveInFlight;
-      publishButton.title = this.roomPermissions.canPublish
-        ? 'Publish Room (Cmd/Ctrl+Shift+P)'
-        : 'You cannot publish this room.';
+      if (publishValidationError) {
+        publishButton.setAttribute('aria-disabled', 'true');
+      } else {
+        publishButton.removeAttribute('aria-disabled');
+      }
+      publishButton.title = !this.roomPermissions.canPublish
+        ? 'You cannot publish this room.'
+        : publishValidationError ?? 'Publish Room (Cmd/Ctrl+Shift+P)';
       publishButton.ariaLabel = publishButton.title;
     }
 

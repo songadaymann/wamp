@@ -16,7 +16,7 @@ const PRESSABLE_SELECTOR = [
 
 function isDisabled(target: HTMLElement): boolean {
   if (target instanceof HTMLButtonElement) {
-    return target.disabled;
+    return target.disabled || target.getAttribute('aria-disabled') === 'true';
   }
 
   return target.getAttribute('aria-disabled') === 'true';

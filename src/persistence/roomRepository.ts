@@ -3,6 +3,7 @@ import {
   cloneRoomSnapshot,
   createRoomVersionRecord,
   createDefaultRoomRecord,
+  getRoomPublishValidationError,
   isRoomMinted,
   normalizeRoomRecord,
   type RoomLeaderboardLineageRequestBody,
@@ -161,16 +162,21 @@ class LocalRoomRepository implements RoomRepository {
     if (!existing.permissions.canPublish) {
       throw new Error('Publishing is locked for minted rooms.');
     }
+    const normalizedRoom = cloneRoomSnapshot(room);
+    const publishValidationError = getRoomPublishValidationError(normalizedRoom);
+    if (publishValidationError) {
+      throw new Error(publishValidationError);
+    }
 
     const now = new Date().toISOString();
     const lastPublished = existing.versions[existing.versions.length - 1] ?? null;
     const lastPublishedVersion = lastPublished?.version ?? 0;
     const nextVersion = lastPublishedVersion > 0
       ? lastPublishedVersion + 1
-      : Math.max(1, room.version);
+      : Math.max(1, normalizedRoom.version);
 
     const published: RoomSnapshot = {
-      ...cloneRoomSnapshot(room),
+      ...normalizedRoom,
       createdAt: existing.draft.createdAt,
       updatedAt: now,
       publishedAt: now,

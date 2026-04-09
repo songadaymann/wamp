@@ -9,11 +9,16 @@ import {
   canPlacedObjectTriggerOtherObjects,
   getPlacedObjectInstanceId,
   getObjectById,
+  placedObjectContributesToCategory,
   type LayerName,
   type PlacedObject,
 } from '../config';
 import { DEFAULT_ROOM_BACKGROUND, normalizeRoomBackground } from '../backgrounds/model';
-import { normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
+import {
+  getRoomGoalPublishValidationError,
+  normalizeRoomGoal,
+  type RoomGoal,
+} from '../goals/roomGoals';
 import {
   cloneRoomLightingSettings,
   normalizeRoomLightingSettings,
@@ -470,6 +475,27 @@ export function isRoomSnapshotBlank(room: RoomSnapshot): boolean {
   }
 
   return true;
+}
+
+export function countRoomPlacedObjectsByCategory(
+  placedObjects: PlacedObject[],
+  category: 'collectible' | 'enemy',
+): number {
+  let count = 0;
+  for (const placed of placedObjects) {
+    if (placedObjectContributesToCategory(placed, category)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+export function getRoomPublishValidationError(
+  room: Pick<RoomSnapshot, 'goal' | 'placedObjects'>,
+): string | null {
+  return getRoomGoalPublishValidationError(room.goal, {
+    collectiblesPlaced: countRoomPlacedObjectsByCategory(room.placedObjects, 'collectible'),
+  });
 }
 
 export function createDefaultRoomRecord(

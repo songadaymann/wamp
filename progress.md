@@ -7136,3 +7136,58 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - synthetic self chip fit beside the hamburger without overlap
 - caveat:
   - the local browser run was guest-state, so the self chip interaction was code-verified plus synthetic-layout verified rather than exercised through a real authenticated click path
+
+## 2026-04-09 12:24:00 EDT - Collect-target publish guard
+
+- branched cleanly from `main` on `fix/publish-collectible-goal-guard-2026-04-09`
+- worktree: `/private/tmp/everybodys-platformer-publish-collectible-goal-guard-2026-04-09`
+- added a shared publish validation for room goals so `collect_target` rooms cannot publish when the authored goal exceeds the number of placed collectibles
+- wired the guard through:
+  - editor runtime + room session status text
+  - standard editor publish button tooltip/disabled state
+  - music editor publish button tooltip/disabled state
+  - local room repository publish path
+  - Worker `publishRoom(...)` so direct API calls or stale clients cannot bypass the rule
+- validation:
+  - initial `npm run typecheck` failed only because the clean worktree had no `node_modules`
+  - plain `npm ci` failed in this environment on a transitive `sharp` source-build step
+  - `npm ci --ignore-scripts` succeeded and was enough for repo verification here
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - required `develop-web-game` preview smoke wrote:
+    - `output/web-game/publish-collectible-goal-guard-smoke/shot-0.png`
+    - `output/web-game/publish-collectible-goal-guard-smoke/state-0.json`
+  - smoke state reached `activeScene.scene = "overworld-play"` / `mode = "browse"`
+- caveat:
+  - the Playwright smoke screenshot still hit the repo's known black-frame capture artifact, so this pass only confirms boot/runtime health rather than visually proving the publish-button state
+  - real signed-in editor QA is still needed to confirm: set collect goal above placed count -> publish blocked, then place enough collectibles -> publish succeeds
+
+## 2026-04-09 12:36:00 EDT - Collect-target publish feedback wording
+
+- adjusted the collect-target publish guard so the publish buttons stay clickable when this validation fails
+- blocked publish still routes through the normal publish action and now surfaces the requested status text:
+  - `You've set the collect goal for x objects, but you've only placed y.`
+- kept the same validation message on the button tooltip/title for extra context before clicking
+- validation:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+
+## 2026-04-09 12:57:04 EDT - Collect-target publish error modal
+
+- changed the collect-target publish feedback from footer/status text to a real blocking modal using the shared busy-overlay shell
+- added a danger variant for busy-overlay errors so the publish failure uses:
+  - red modal background
+  - white outline
+  - white title/message/action text
+- restored the "blocked" feel on publish without using the actual `disabled` attribute for this validation case:
+  - publish buttons now set `aria-disabled='true'` when the collect-target guard fails
+  - button feedback + shared button styles treat `aria-disabled='true'` the same as disabled for visuals and click/sound feedback
+  - click handlers still run so the modal can open instead of silently ignoring the press
+- wired the modal to both editor publish paths:
+  - normal editor persistence publish flow
+  - direct room-session publish flow used by internal publish callers
+- validation:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+- caveat:
+  - real signed-in editor QA is still needed to confirm the live click path feels right end-to-end on the running local branch
