@@ -1,5 +1,5 @@
 import PartySocket from 'partysocket';
-import { getAuthDebugState } from '../auth/client';
+import { getAuthDebugState, getResolvedPartykitConfig } from '../auth/client';
 import type { DefaultPlayerAnimationState } from '../player/defaultPlayer';
 import { roomIdFromCoordinates, type RoomCoordinates } from '../persistence/roomModel';
 import {
@@ -469,8 +469,8 @@ export function resolveWorldPresenceConfig(): {
   protocol: 'ws' | 'wss';
   party: string;
 } | null {
-  const rawHost = import.meta.env.VITE_PARTYKIT_HOST?.trim()
-    || (import.meta.env.DEV ? '127.0.0.1:1999' : '');
+  const runtimeConfig = getResolvedPartykitConfig();
+  const rawHost = runtimeConfig?.host || (import.meta.env.DEV ? '127.0.0.1:1999' : '');
   if (!rawHost) {
     return null;
   }
@@ -490,6 +490,6 @@ export function resolveWorldPresenceConfig(): {
     host,
     protocol,
     // Single-server PartyKit projects default to the implicit `main` party route.
-    party: import.meta.env.VITE_PARTYKIT_PARTY?.trim() || 'main',
+    party: runtimeConfig?.party || 'main',
   };
 }

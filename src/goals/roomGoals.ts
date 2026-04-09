@@ -44,6 +44,10 @@ export interface SurvivalGoal {
   durationMs: number;
 }
 
+export interface RoomGoalPublishValidationContext {
+  collectiblesPlaced: number;
+}
+
 export type RoomGoal =
   | ReachExitGoal
   | CollectTargetGoal
@@ -217,4 +221,19 @@ export function normalizeRoomGoal(value: unknown): RoomGoal | null {
 
 export function goalSupportsTimeLimit(goalType: RoomGoalType): boolean {
   return goalType !== 'survival';
+}
+
+export function getRoomGoalPublishValidationError(
+  goal: RoomGoal | null,
+  context: RoomGoalPublishValidationContext,
+): string | null {
+  if (!goal) {
+    return null;
+  }
+
+  if (goal.type === 'collect_target' && context.collectiblesPlaced < goal.requiredCount) {
+    return `You've set the collect goal for ${goal.requiredCount} object${goal.requiredCount === 1 ? '' : 's'}, but you've only placed ${context.collectiblesPlaced}.`;
+  }
+
+  return null;
 }

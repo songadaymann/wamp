@@ -5,6 +5,7 @@ import type {
   SuspiciousSummaryResponse,
   SuspiciousUserCase,
   SuspiciousUserDetailResponse,
+  SuspiciousUserListScope,
   SuspiciousUsersResponse,
 } from './admin/model';
 import { getApiBaseUrl } from './api/baseUrl';
@@ -26,6 +27,7 @@ const applyFiltersButton = document.getElementById('apply-filters-button') as HT
 
 const summaryGrid = document.getElementById('summary-grid') as HTMLDivElement | null;
 const recentInvalidations = document.getElementById('recent-invalidations') as HTMLDivElement | null;
+const queueHeading = document.getElementById('queue-heading') as HTMLHeadingElement | null;
 const queueCount = document.getElementById('queue-count') as HTMLDivElement | null;
 const queueTabs = document.getElementById('queue-tabs') as HTMLDivElement | null;
 const queueList = document.getElementById('queue-list') as HTMLDivElement | null;
@@ -63,6 +65,7 @@ interface ViewState {
   signal: string;
   query: string;
   summary: SuspiciousSummaryResponse | null;
+  usersScope: SuspiciousUserListScope;
   users: SuspiciousUserCase[];
   queueTab: QueueTab;
   selectedUserId: string | null;
@@ -85,6 +88,7 @@ const state: ViewState = {
   signal: 'all',
   query: '',
   summary: null,
+  usersScope: 'review_window',
   users: [],
   queueTab: 'all',
   selectedUserId: null,
@@ -133,6 +137,7 @@ clearKeyButton?.addEventListener('click', () => {
   state.adminKey = '';
   state.lastError = null;
   state.summary = null;
+  state.usersScope = 'review_window';
   state.users = [];
   state.selectedUserId = null;
   state.detail = null;
@@ -228,6 +233,7 @@ async function refreshAll(force = false): Promise<void> {
       adminRequest<SuspiciousUsersResponse>(buildAdminPath('/api/admin/suspicious/users')),
     ]);
     state.summary = summary;
+    state.usersScope = usersResponse.scope;
     state.users = usersResponse.items;
 
     if (state.selectedUserId && !state.users.some((user) => user.userId === state.selectedUserId)) {
@@ -261,17 +267,24 @@ async function loadDetail(userId: string, preserveSelection = false): Promise<vo
   render();
 
   try {
+    const previousScope = state.detail?.scope ?? null;
     const detail = await adminRequest<SuspiciousUserDetailResponse>(
-      buildAdminPath(`/api/admin/suspicious/users/${encodeURIComponent(userId)}`)
+      buildDetailPath(userId)
     );
     state.detail = detail;
-    if (!preserveSelection) {
-      state.selectedRoomRunIds = new Set(detail.roomRuns.map((run) => run.attemptId));
-      state.selectedCourseRunIds = new Set(detail.courseRuns.map((run) => run.attemptId));
-      state.selectedPointEventIds =
-        detail.roomRuns.length === 0 && detail.courseRuns.length === 0
-          ? new Set(detail.recentPointEvents.map((event) => event.id))
-          : new Set();
+    if (!preserveSelection || previousScope !== detail.scope) {
+      if (detail.scope === 'review_window') {
+        state.selectedRoomRunIds = new Set(detail.roomRuns.map((run) => run.attemptId));
+        state.selectedCourseRunIds = new Set(detail.courseRuns.map((run) => run.attemptId));
+        state.selectedPointEventIds =
+          detail.roomRuns.length === 0 && detail.courseRuns.length === 0
+            ? new Set(detail.recentPointEvents.map((event) => event.id))
+            : new Set();
+      } else {
+        state.selectedRoomRunIds.clear();
+        state.selectedCourseRunIds.clear();
+        state.selectedPointEventIds.clear();
+      }
     }
   } catch (error) {
     state.detail = null;
@@ -418,7 +431,7 @@ async function adminRequest<T>(path: string, init: RequestInit = {}): Promise<T>
   return (await response.json()) as T;
 }
 
-function buildAdminPath(pathname: string): string {
+function buildAdminParams(): URLSearchParams {
   const params = new URLSearchParams();
   params.set('windowHours', String(state.windowHours));
   if (state.severity !== 'all') {
@@ -431,7 +444,19 @@ function buildAdminPath(pathname: string): string {
   if (query) {
     params.set('q', query);
   }
-  return `${pathname}?${params.toString()}`;
+  return params;
+}
+
+function buildAdminPath(pathname: string): string {
+  return `${pathname}?${buildAdminParams().toString()}`;
+}
+
+function buildDetailPath(userId: string): string {
+  const params = buildAdminParams();
+  if (state.query) {
+    params.set('history', '1');
+  }
+  return `/api/admin/suspicious/users/${encodeURIComponent(userId)}?${params.toString()}`;
 }
 
 function syncFiltersFromInputs(): void {
@@ -534,8 +559,14 @@ function renderRecentInvalidations(): void {
 
 function renderQueue(): void {
   const visibleUsers = getVisibleUsers();
+  if (queueHeading) {
+    queueHeading.textContent = state.usersScope === 'player_history_search' ? 'Player Search' : 'Suspicious Users';
+  }
   if (queueCount) {
-    queueCount.textContent = `${visibleUsers.length} user${visibleUsers.length === 1 ? '' : 's'}`;
+    queueCount.textContent =
+      state.usersScope === 'player_history_search'
+        ? `${visibleUsers.length} match${visibleUsers.length === 1 ? '' : 'es'}`
+        : `${visibleUsers.length} user${visibleUsers.length === 1 ? '' : 's'}`;
   }
   if (!queueList) {
     return;
@@ -549,7 +580,9 @@ function renderQueue(): void {
   if (visibleUsers.length === 0) {
     queueList.appendChild(
       buildEmpty(
-        state.queueTab === 'real_players'
+        state.usersScope === 'player_history_search'
+          ? 'No players matched this search.'
+          : state.queueTab === 'real_players'
           ? 'No real-player cases in the selected window.'
           : state.queueTab === 'playfun_signals'
             ? 'No known or heuristic Play.fun cases in the selected window.'
@@ -560,6 +593,19 @@ function renderQueue(): void {
   }
 
   for (const user of visibleUsers) {
+    const runSummary =
+      state.usersScope === 'player_history_search'
+        ? `${user.completedRuns} total runs · ${user.totalPoints} total pts`
+        : `${user.recentCompletedRuns} recent runs · ${user.recentPoints} recent pts`;
+    const signalChips =
+      user.signals.length > 0
+        ? user.signals
+            .slice(0, 3)
+            .map((signal) => `<span class="chip ${signal.severity}">${escapeHtml(signal.label)}</span>`)
+            .join('')
+        : state.usersScope === 'player_history_search'
+          ? '<span class="chip low">No current flags</span>'
+          : '';
     const row = document.createElement('div');
     row.className = `queue-row${user.userId === state.selectedUserId ? ' active' : ''}`;
     row.innerHTML = `
@@ -572,14 +618,11 @@ function renderQueue(): void {
           </div>
         </div>
         <div class="queue-meta">
-          <div>${user.recentCompletedRuns} recent runs · ${user.recentPoints} recent pts</div>
+          <div>${runSummary}</div>
           <div>${escapeHtml(user.userId)}</div>
           <div>${escapeHtml(user.ogpId ?? 'No Play.fun link')} · ${user.lastActivityAt ? formatTimestamp(user.lastActivityAt) : 'No activity timestamp'}</div>
           <div>${escapeHtml(user.identity.summary)}</div>
-          <div class="chips">${user.signals
-            .slice(0, 3)
-            .map((signal) => `<span class="chip ${signal.severity}">${escapeHtml(signal.label)}</span>`)
-            .join('')}</div>
+          <div class="chips">${signalChips}</div>
         </div>
       </button>
     `;
@@ -601,7 +644,15 @@ function renderDetail(): void {
 
   detailShell.hidden = false;
   detailEmpty.hidden = true;
-  setStatus(detailStatus, state.detailLoading ? 'Loading detail…' : '', false);
+  setStatus(
+    detailStatus,
+    state.detailLoading
+      ? 'Loading detail…'
+      : detail.scope === 'player_history'
+        ? 'Showing full player history. Review-window flags are visible, but nothing is auto-selected.'
+        : '',
+    false
+  );
 
   if (detailUserName) {
     detailUserName.textContent = detail.user.userDisplayName;
@@ -617,16 +668,20 @@ function renderDetail(): void {
       <div>OGP: ${escapeHtml(detail.user.ogpId ?? 'none')} · Player: ${escapeHtml(detail.user.playerId ?? 'none')}</div>
       <div>Created: ${formatTimestamp(detail.user.userCreatedAt)} · Last activity: ${detail.user.lastActivityAt ? formatTimestamp(detail.user.lastActivityAt) : 'n/a'}</div>
       <div>Total points: ${detail.user.totalPoints} · Completed runs: ${detail.user.completedRuns} · Recent points: ${detail.user.recentPoints}</div>
+      <div>${detail.scope === 'player_history' ? 'Scope: full player history' : `Scope: flagged review window (${detail.windowHours}h)`}</div>
     `;
   }
   if (detailSignals) {
-    detailSignals.innerHTML = detail.user.signals
-      .map((signal) => `<span class="chip ${signal.severity}" title="${escapeHtml(signal.summary)}">${escapeHtml(signal.label)}</span>`)
-      .join('');
+    detailSignals.innerHTML =
+      detail.user.signals.length > 0
+        ? detail.user.signals
+            .map((signal) => `<span class="chip ${signal.severity}" title="${escapeHtml(signal.summary)}">${escapeHtml(signal.label)}</span>`)
+            .join('')
+        : '<span class="chip low">No current review-window flags</span>';
   }
 
-  renderRunTable(detailRoomRuns, detail.roomRuns, 'room');
-  renderRunTable(detailCourseRuns, detail.courseRuns, 'course');
+  renderRunTable(detailRoomRuns, detail.roomRuns, 'room', detail.scope);
+  renderRunTable(detailCourseRuns, detail.courseRuns, 'course', detail.scope);
   renderPointEvents(detailPointEvents, detail.recentPointEvents);
   renderAuditList(detailInvalidations, detail.recentInvalidations, 'No prior invalidations for this user.');
   renderSelectionSummary();
@@ -635,7 +690,8 @@ function renderDetail(): void {
 function renderRunTable(
   body: HTMLTableSectionElement | null,
   runs: SuspiciousUserDetailResponse['roomRuns'] | SuspiciousUserDetailResponse['courseRuns'],
-  kind: 'room' | 'course'
+  kind: 'room' | 'course',
+  scope: SuspiciousUserDetailResponse['scope']
 ): void {
   if (!body) {
     return;
@@ -643,7 +699,7 @@ function renderRunTable(
   body.replaceChildren();
   if (runs.length === 0) {
     const row = document.createElement('tr');
-    row.innerHTML = `<td colspan="6" class="meta">No suspicious ${kind} runs.</td>`;
+    row.innerHTML = `<td colspan="6" class="meta">${scope === 'player_history' ? `No ${kind} runs found.` : `No suspicious ${kind} runs.`}</td>`;
     body.appendChild(row);
     return;
   }
@@ -659,7 +715,7 @@ function renderRunTable(
       </td>
       <td>${escapeHtml(formatRunMetric(run))}</td>
       <td>${escapeHtml(formatRunPoints(run))}</td>
-      <td>${run.ruleCodes.map((code) => `<span class="chip ${run.severity}">${escapeHtml(code)}</span>`).join(' ')}</td>
+      <td>${run.ruleCodes.length > 0 ? run.ruleCodes.map((code) => `<span class="chip ${run.severity}">${escapeHtml(code)}</span>`).join(' ') : '<span class="meta">No current flags</span>'}</td>
       <td>${run.finishedAt ? formatTimestamp(run.finishedAt) : 'n/a'}</td>
     `;
     body.appendChild(row);
@@ -777,7 +833,10 @@ function renderSelectionSummary(): void {
   const roomCount = state.selectedRoomRunIds.size;
   const courseCount = state.selectedCourseRunIds.size;
   const pointCount = state.selectedPointEventIds.size;
-  selectionSummary.textContent = `${roomCount} room runs, ${courseCount} course runs, and ${pointCount} point events selected.`;
+  selectionSummary.textContent =
+    state.detail?.scope === 'player_history'
+      ? `${roomCount} room runs, ${courseCount} course runs, and ${pointCount} point events selected. Full history mode starts with nothing selected.`
+      : `${roomCount} room runs, ${courseCount} course runs, and ${pointCount} point events selected.`;
 }
 
 function renderQueueTabs(): void {
@@ -804,9 +863,10 @@ function renderQueueTabs(): void {
 }
 
 function formatRunMetric(run: SuspiciousUserDetailResponse['roomRuns'][number]): string {
+  const resultLabel = run.result === 'completed' ? '' : `${run.result} · `;
   const primary = run.rankingMode === 'time'
-    ? `${formatDuration(run.elapsedMs)} · ${run.deaths} deaths`
-    : `${run.score} score · ${run.deaths} deaths`;
+    ? `${resultLabel}${formatDuration(run.elapsedMs)} · ${run.deaths} deaths`
+    : `${resultLabel}${run.score} score · ${run.deaths} deaths`;
   if (run.improvementMs !== null && run.improvementRatio !== null) {
     return `${primary} · ${formatDuration(run.improvementMs)} faster (${Math.round(run.improvementRatio * 100)}%)`;
   }

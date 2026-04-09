@@ -5,6 +5,7 @@ import type {
 } from '../../persistence/roomRepository';
 import {
   hideBusyOverlay,
+  showBusyError,
   showBusyOverlay,
 } from '../../ui/appFeedback';
 import type {
@@ -98,6 +99,16 @@ export class EditorPersistenceController {
   }
 
   async publishRoom(successText?: string): Promise<RoomRecord | null> {
+    const publishValidationError = this.roomSession.getPublishValidationError();
+    if (publishValidationError) {
+      showBusyError(publishValidationError, {
+        title: 'Cannot Publish Room',
+        variant: 'danger',
+        closeLabel: 'OK',
+      });
+      return null;
+    }
+
     showBusyOverlay('Publishing room...', 'Saving the latest version...');
     try {
       const record = await this.roomSession.publishRoom(successText);

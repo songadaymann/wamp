@@ -29,6 +29,8 @@ interface PublishedRoomDiscoveryRow {
   y: number;
   published_title: string | null;
   published_goal_type: string | null;
+  claimer_user_id: string | null;
+  claimer_display_name: string | null;
   last_published_by_user_id: string | null;
   last_published_by_display_name: string | null;
   current_published_version: number;
@@ -231,6 +233,8 @@ export async function loadRoomDiscoveryResponse(
         rooms.y,
         rooms.published_title,
         rooms.published_goal_type,
+        rooms.claimer_user_id,
+        rooms.claimer_display_name,
         rooms.last_published_by_user_id,
         rooms.last_published_by_display_name,
         latest.version AS current_published_version,
@@ -812,8 +816,8 @@ function mapPublishedRoomDiscoveryRow(
       y: row.y,
     },
     roomTitle: row.published_title,
-    builderUserId: row.last_published_by_user_id,
-    builderDisplayName: row.last_published_by_display_name,
+    builderUserId: row.claimer_user_id ?? row.last_published_by_user_id,
+    builderDisplayName: row.claimer_display_name ?? row.last_published_by_display_name,
     roomVersion: row.current_published_version,
     canonicalRoomVersion: row.canonical_version,
     goalType,

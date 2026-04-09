@@ -57,6 +57,36 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Runtime PartyKit host fallback fix on April 9, 2026:
+  - created dedicated `main`-based worktree branch `fix/runtime-partykit-host-fallback-2026-04-09`
+  - traced missing live-player count / ghost presence on `wamp.land` to a frontend build missing `VITE_PARTYKIT_HOST`, not to a PartyKit outage
+  - confirmed the PartyKit service itself was healthy by opening a real websocket to `wss://everybodys-platformer-presence.songadaymann.partykit.dev/parties/main/...`
+  - confirmed current production was serving the broken config path:
+    - `node scripts/smoke_prod.mjs` against live prod reported `mainBundleContainsPartyKitHost: false`
+    - the tightened smoke now fails live prod with `Auth session did not expose the expected PartyKit host`
+  - hardened runtime presence config:
+    - `GET /api/auth/session` now exposes public `partykitHost` / `partykitParty`
+    - the auth client stores runtime PartyKit config alongside the existing runtime wallet-project-id fallback
+    - `resolveWorldPresenceConfig()` now falls back to runtime session config when the bundled Vite PartyKit host is missing
+    - `wrangler.jsonc` now carries checked-in production `PARTYKIT_HOST` / `PARTYKIT_PARTY` vars for the Worker
+    - `scripts/smoke_prod.mjs` now fails when the API session does not expose the expected PartyKit host
+  - validation:
+    - `npm run typecheck` passed in `/private/tmp/wamp-runtime-partykit-host-fix-2026-04-09`
+    - `vite build` passed directly and produced `dist/assets/main-BHNuz7ns.js` with `containsProdPartykitHost: false`, which is the exact regression case we needed to recover from
+    - local `wrangler dev` from the built `dist` returned `/api/auth/session` with `partykitHost: "everybodys-platformer-presence.songadaymann.partykit.dev"` and `partykitParty: "main"`
+    - required `develop-web-game` Playwright client wrote:
+      - `output/web-game/runtime-partykit-host-check/state-0.json`
+      - `output/web-game/runtime-partykit-host-check/shot-0.png`
+    - that state artifact confirms:
+      - `auth.partykitConfigured: true`
+      - `auth.partykitSource: "runtime"`
+      - `activeScene.presenceDebug.snapshot.enabled: true`
+      - `activeScene.presenceDebug.snapshot.status: "connected"`
+    - updated local smoke `PROD_FRONTEND_URL=http://127.0.0.1:8787 PROD_API_BASE_URL=http://127.0.0.1:8787 node scripts/smoke_prod.mjs` passed with:
+      - `mainBundleContainsPartyKitHost: false`
+      - `sessionPartykitHost: "everybodys-platformer-presence.songadaymann.partykit.dev"`
+    - screenshot artifact still hit the known black-frame capture issue, but JSON state and smoke both confirmed the runtime fallback path
+
 - Room Explore modal on April 8, 2026:
   - continued on `feature/reward-sting-catchup-2026-04-08` in `/private/tmp/wamp-reward-sting-catchup-2026-04-08`
   - turned the old leaderboard `Discover` flow into a real HUD-launched room explorer
@@ -185,7 +215,38 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - targeted proof confirmed:
       - synthetic app-open/session-refresh reconciliation showed `YOU LEVELED UP!` -> `YOU EARNED A BADGE!` -> `YOU EARNED A TROPHY!`
       - `replayVisible: false` after a second synthetic session refresh once the stored snapshot had been updated
-
+- Suspicious-admin player-history search on April 9, 2026:
+  - branched from `main` into `feature/suspicious-admin-player-history-2026-04-09`
+  - changed suspicious-admin search so a non-empty `q` no longer filters only the current suspicious review window:
+    - `/api/admin/suspicious/users` now switches into global player search mode and can return matched users even when they have no current suspicious signals
+    - `/api/admin/suspicious/users/:userId?history=1` now returns full player history detail instead of 404ing outside the selected review window
+  - full-history detail now includes all room runs and course runs for the matched user, with current-window suspicious flags overlaid when relevant
+  - suspicious-admin UI now:
+    - labels direct search results as `Player Search`
+    - loads full player history when a user is opened from search
+    - keeps history-mode invalidation selections empty by default instead of auto-selecting every returned run
+    - updates copy so operators understand search bypasses the review window
+  - invalidation preview wording now says `Select at least one run or point event.` so history mode is not described as suspicious-only
+  - validation:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - mocked worker probe confirmed empty-window search still returns a matched user with `scope: \"player_history_search\"`, and detail returns `scope: \"player_history\"` plus mixed failed/completed history runs
+    - required `develop-web-game` baseline probe ran against the built page with no captured console errors:
+      - `output/web-game/suspicious-admin-baseline/shot-0.png`
+    - targeted Playwright UI probe with mocked admin API responses passed and wrote:
+      - `output/web-game/suspicious-admin-player-history-ui-check/summary.json`
+      - `output/web-game/suspicious-admin-player-history-ui-check/dom.html`
+      - `output/web-game/suspicious-admin-player-history-ui-check/suspicious-admin-history.png`
+  - rollout later on April 9, 2026:
+    - rebased the feature branch onto current `origin/main`, merged it back with merge commit `f847572`, and pushed `origin/main`
+    - production deploy succeeded from clean `main`
+      - Worker version: `028b0f1d-0d48-4910-9bfb-2206c4fa0a0c`
+      - Pages preview: `https://666c96f2.wampland.pages.dev`
+    - production smoke in `deploy_prod.mjs` passed with `ok: true`
+    - live verification confirmed:
+      - `https://wamp.land/suspicious-admin` returns `200`
+      - the live page points at `./assets/suspiciousAdmin-BQBI_oOh.js`
+      - that live bundle contains the new `Player Search`, `full player history`, and empty-selection history-mode strings
 - Reward stings preview page build entry on April 8, 2026:
   - added `reward-stings-preview.html` to the Vite multi-page build inputs in `vite.config.ts`
   - this fixes production serving the normal app shell at `/reward-stings-preview.html` instead of the actual preview page
@@ -7251,3 +7312,88 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 - removed the now-unused room discovery helper/imports from `src/ui/setup/welcomeModal.ts`
 - validation:
   - `npm run typecheck` passed
+
+## 2026-04-09 12:24:00 EDT - Collect-target publish guard
+
+- branched cleanly from `main` on `fix/publish-collectible-goal-guard-2026-04-09`
+- worktree: `/private/tmp/everybodys-platformer-publish-collectible-goal-guard-2026-04-09`
+- added a shared publish validation for room goals so `collect_target` rooms cannot publish when the authored goal exceeds the number of placed collectibles
+- wired the guard through:
+  - editor runtime + room session status text
+  - standard editor publish button tooltip/disabled state
+  - music editor publish button tooltip/disabled state
+  - local room repository publish path
+  - Worker `publishRoom(...)` so direct API calls or stale clients cannot bypass the rule
+- validation:
+  - initial `npm run typecheck` failed only because the clean worktree had no `node_modules`
+  - plain `npm ci` failed in this environment on a transitive `sharp` source-build step
+  - `npm ci --ignore-scripts` succeeded and was enough for repo verification here
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - required `develop-web-game` preview smoke wrote:
+    - `output/web-game/publish-collectible-goal-guard-smoke/shot-0.png`
+    - `output/web-game/publish-collectible-goal-guard-smoke/state-0.json`
+  - smoke state reached `activeScene.scene = "overworld-play"` / `mode = "browse"`
+- caveat:
+  - the Playwright smoke screenshot still hit the repo's known black-frame capture artifact, so this pass only confirms boot/runtime health rather than visually proving the publish-button state
+  - real signed-in editor QA is still needed to confirm: set collect goal above placed count -> publish blocked, then place enough collectibles -> publish succeeds
+
+## 2026-04-09 12:36:00 EDT - Collect-target publish feedback wording
+
+- adjusted the collect-target publish guard so the publish buttons stay clickable when this validation fails
+- blocked publish still routes through the normal publish action and now surfaces the requested status text:
+  - `You've set the collect goal for x objects, but you've only placed y.`
+- kept the same validation message on the button tooltip/title for extra context before clicking
+- validation:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+
+## 2026-04-09 12:57:04 EDT - Collect-target publish error modal
+
+- changed the collect-target publish feedback from footer/status text to a real blocking modal using the shared busy-overlay shell
+- added a danger variant for busy-overlay errors so the publish failure uses:
+  - red modal background
+  - white outline
+  - white title/message/action text
+- restored the "blocked" feel on publish without using the actual `disabled` attribute for this validation case:
+  - publish buttons now set `aria-disabled='true'` when the collect-target guard fails
+  - button feedback + shared button styles treat `aria-disabled='true'` the same as disabled for visuals and click/sound feedback
+  - click handlers still run so the modal can open instead of silently ignoring the press
+- wired the modal to both editor publish paths:
+  - normal editor persistence publish flow
+  - direct room-session publish flow used by internal publish callers
+- validation:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+- caveat:
+  - real signed-in editor QA is still needed to confirm the live click path feels right end-to-end on the running local branch
+
+## 2026-04-09 13:18:01 EDT - Claimer-first room builder attribution
+
+- deleted the now-merged branch `fix/publish-collectible-goal-guard-2026-04-09`
+- branched cleanly from `main` on `fix/room-builder-attribution-2026-04-09`
+- worktree: `/private/tmp/wamp-room-builder-attribution-2026-04-09`
+- traced the current builder attribution split before changing code:
+  - world / selected-room HUD already used `claimer ?? last published`
+  - Explore discovery still showed `last_published_by_*`
+  - course-composer ownership checks mixed claimer-based world summaries with one overworld path that still preferred latest publisher
+- made claimer the frontend source of truth everywhere this branch touches:
+  - discovery SQL now loads `claimer_user_id` / `claimer_display_name`
+  - Explore room cards map builder identity from `claimer ?? last published`
+  - course composer metadata now uses explicit `builderUserId` fields instead of `publishedByUserId`
+  - both course-composer ownership gates now compare against claimer-first builder identity, so "you can only add rooms you authored" and same-owner checks follow the claimer rather than the latest republisher
+- validation:
+  - clean worktree initially had no dependencies, so `npm run typecheck` failed with missing `tsc`
+  - `npm ci --ignore-scripts` succeeded in this environment
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - required `develop-web-game` smoke against `http://localhost:3009` wrote:
+    - `output/web-game/room-builder-attribution-smoke/shot-0.png`
+    - `output/web-game/room-builder-attribution-smoke/state-0.json`
+    - `output/web-game/room-builder-attribution-smoke/errors-0.json`
+  - smoke state reached:
+    - `activeScene.scene = "overworld-play"`
+    - `mode = "browse"`
+    - `selectedState = "published"`
+- caveat:
+  - the smoke run used the local frontend against the normal remote API path, so `errors-0.json` contains expected local presence/chat websocket connection refusals rather than a gameplay crash

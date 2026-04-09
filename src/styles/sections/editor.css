@@ -1893,7 +1893,8 @@ body[data-app-mode='editor'] #sidebar .layer-info-button:focus-visible {
   filter: brightness(1.05);
 }
 
-body[data-app-mode='editor'] #sidebar .bar-btn:disabled {
+body[data-app-mode='editor'] #sidebar .bar-btn:disabled,
+body[data-app-mode='editor'] #sidebar .bar-btn[aria-disabled='true'] {
   background: #d2caba;
   border-color: #8d877c;
   color: #5f5a53;

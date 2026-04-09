@@ -293,7 +293,7 @@ async function loadInvalidationSelection(
   pointEventIds: string[]
 ): Promise<InvalidationSelection> {
   if (roomRunAttemptIds.length === 0 && courseRunAttemptIds.length === 0 && pointEventIds.length === 0) {
-    throw new HttpError(400, 'Select at least one suspicious run or point event.');
+    throw new HttpError(400, 'Select at least one run or point event.');
   }
 
   const roomRuns = await loadSelectedRoomRuns(env, userId, roomRunAttemptIds);

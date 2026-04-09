@@ -10,6 +10,10 @@
     "run_worker_first": ["/api/*"],
     "not_found_handling": "single-page-application"
   },
+  "vars": {
+    "PARTYKIT_HOST": "everybodys-platformer-presence.songadaymann.partykit.dev",
+    "PARTYKIT_PARTY": "main"
+  },
   "d1_databases": [
     {
       "binding": "DB",

@@ -62,6 +62,7 @@ export class EditorChromeController {
         goalUsesMarkers: this.editRuntime.goalUsesMarkers(roomGoal),
         goalSummaryText: this.toolController.getGoalSummaryText(),
         roomPermissions: this.host.getRoomPermissions(),
+        publishValidationError: this.editRuntime.getPublishValidationError(),
         mintedTokenId: this.host.getMintedTokenId(),
         canRefreshMintMetadata: historyState.canRefreshMintMetadata,
         saveInFlight: this.host.getSaveInFlight(),

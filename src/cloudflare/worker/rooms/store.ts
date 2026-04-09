@@ -5,6 +5,7 @@ import {
   DEFAULT_ROOM_COORDINATES,
   createDefaultRoomRecord,
   createRoomVersionRecord,
+  getRoomPublishValidationError,
   isRoomMinted,
   type RoomCoordinates,
   type RoomRecord,
@@ -387,12 +388,17 @@ export async function publishRoom(
       existing.draft,
     );
   }
+  const normalizedIncomingRoom = cloneRoomSnapshot(incomingRoom);
+  const publishValidationError = getRoomPublishValidationError(normalizedIncomingRoom);
+  if (publishValidationError) {
+    throw new HttpError(409, publishValidationError);
+  }
 
   const now = new Date().toISOString();
   const lastPublished = existing.versions[existing.versions.length - 1];
   const lastPublishedVersion = lastPublished ? lastPublished.version : 0;
   const nextVersion =
-    lastPublishedVersion > 0 ? lastPublishedVersion + 1 : Math.max(1, incomingRoom.version);
+    lastPublishedVersion > 0 ? lastPublishedVersion + 1 : Math.max(1, normalizedIncomingRoom.version);
   const publishedByUserId = actor.ownerUser?.id ?? null;
   const publishedByDisplayName = actor.principalDisplayName || actor.ownerUser?.displayName || 'Guest';
   const shouldClaim = !existing.claimerUserId && actor.ownerUser !== null;
@@ -407,7 +413,7 @@ export async function publishRoom(
   const claimedAt = shouldClaim ? now : existing.claimedAt;
 
   const published: RoomSnapshot = {
-    ...cloneRoomSnapshot(incomingRoom),
+    ...normalizedIncomingRoom,
     createdAt: existing.draft.createdAt,
     updatedAt: now,
     publishedAt: now,

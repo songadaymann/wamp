@@ -31,6 +31,7 @@ import type {
   Env,
   PointEventRow,
   RoomRunRow,
+  UserRow,
   UserStatsRow,
 } from '../core/types';
 import { mapUserStatsRow } from '../runs/points';
@@ -47,6 +48,7 @@ const DEFAULT_USER_LIMIT = 50;
 const MAX_USER_LIMIT = 200;
 const MAX_RECENT_RUNS = 5_000;
 const MAX_RECENT_POINT_EVENTS = 5_000;
+const MAX_PLAYER_HISTORY_POINT_EVENTS = 100;
 
 const TOO_FAST_ABSOLUTE_MS = 1_000;
 const RECORD_GAP_MIN_IMPROVEMENT_MS = 3_000;
@@ -94,6 +96,14 @@ interface JoinedPointEventRow extends PointEventRow {
   wallet_address: string | null;
   ogp_id: string | null;
   player_id: string | null;
+}
+
+interface SuspiciousUserSearchRow extends Pick<UserRow, 'id' | 'email' | 'wallet_address' | 'display_name' | 'created_at'> {
+  ogp_id: string | null;
+  player_id: string | null;
+  total_points: number | string | null;
+  completed_runs: number | string | null;
+  last_activity_at: string | null;
 }
 
 interface CombinedRunBase {
@@ -208,6 +218,18 @@ export async function handleAdminSuspiciousUsers(
   const search = normalizeSearch(url.searchParams.get('q'));
   const analysis = await loadSuspiciousAnalysis(env, windowHours);
 
+  if (search) {
+    const items = await searchSuspiciousUsers(env, analysis, search, limit);
+    const response: SuspiciousUsersResponse = {
+      generatedAt: analysis.generatedAt,
+      windowHours,
+      scope: 'player_history_search',
+      total: items.length,
+      items,
+    };
+    return jsonResponse(request, response);
+  }
+
   const filtered = analysis.items.filter((item) => {
     if (severity && item.strongestSeverity !== severity) {
       return false;
@@ -215,18 +237,13 @@ export async function handleAdminSuspiciousUsers(
     if (signal && !item.signalCodes.includes(signal)) {
       return false;
     }
-    if (search) {
-      const haystack = `${item.userDisplayName}\n${item.userId}\n${item.ogpId ?? ''}\n${item.playerId ?? ''}`.toLowerCase();
-      if (!haystack.includes(search)) {
-        return false;
-      }
-    }
     return true;
   });
 
   const response: SuspiciousUsersResponse = {
     generatedAt: analysis.generatedAt,
     windowHours,
+    scope: 'review_window',
     total: filtered.length,
     items: filtered.slice(0, limit),
   };
@@ -241,7 +258,31 @@ export async function handleAdminSuspiciousUserDetail(
 ): Promise<Response> {
   requireAdminRequest(env, request, `read suspicious activity for ${userId}`);
   const windowHours = parseWindowHours(url);
+  const detailScope = parseDetailScope(url);
   const analysis = await loadSuspiciousAnalysis(env, windowHours);
+
+  if (detailScope === 'player_history') {
+    const user = await loadPlayerHistoryUser(env, analysis, userId);
+    const [roomRuns, courseRuns, recentPointEvents, recentInvalidations] = await Promise.all([
+      loadPlayerHistoryRoomRuns(env, userId, analysis.roomRunsByUserId.get(userId) ?? []),
+      loadPlayerHistoryCourseRuns(env, userId, analysis.courseRunsByUserId.get(userId) ?? []),
+      loadRecentPointEventsForUser(env, userId),
+      loadRecentInvalidations(env, userId),
+    ]);
+
+    const response: SuspiciousUserDetailResponse = {
+      generatedAt: analysis.generatedAt,
+      windowHours,
+      scope: 'player_history',
+      user,
+      roomRuns,
+      courseRuns,
+      recentPointEvents,
+      recentInvalidations,
+    };
+    return jsonResponse(request, response);
+  }
+
   const user = analysis.byUserId.get(userId);
   if (!user) {
     throw new HttpError(404, 'Suspicious user not found in the selected review window.');
@@ -250,6 +291,7 @@ export async function handleAdminSuspiciousUserDetail(
   const response: SuspiciousUserDetailResponse = {
     generatedAt: analysis.generatedAt,
     windowHours,
+    scope: 'review_window',
     user,
     roomRuns: analysis.roomRunsByUserId.get(userId) ?? [],
     courseRuns: analysis.courseRunsByUserId.get(userId) ?? [],
@@ -433,31 +475,7 @@ async function loadSuspiciousAnalysis(
     if (signals.length === 0) {
       continue;
     }
-
-    const strongestSeverity = signals.reduce<SuspiciousSeverity>(
-      (current, signal) => (severityRank(signal.severity) > severityRank(current) ? signal.severity : current),
-      'low'
-    );
-
-    const totalPoints = Math.max(accumulator.totalPoints, accumulator.recentPoints);
-    const completedRuns = Math.max(accumulator.completedRuns, accumulator.recentCompletedRuns);
-    const identity = classifySuspiciousUserIdentity(accumulator);
-    const userCase: SuspiciousUserCase = {
-      userId: accumulator.userId,
-      userDisplayName: accumulator.userDisplayName,
-      userCreatedAt: accumulator.userCreatedAt,
-      ogpId: accumulator.ogpId,
-      playerId: accumulator.playerId,
-      totalPoints,
-      completedRuns,
-      recentPoints: accumulator.recentPoints,
-      recentCompletedRuns: accumulator.recentCompletedRuns,
-      strongestSeverity,
-      signalCodes: signals.map((signal) => signal.code),
-      signals,
-      identity,
-      lastActivityAt: accumulator.lastActivityAt,
-    };
+    const userCase = buildSuspiciousUserCaseFromAccumulator(accumulator);
 
     const suspiciousRoomRuns = [...accumulator.roomRuns.values()].sort(compareRunCases);
     const suspiciousCourseRuns = [...accumulator.courseRuns.values()].sort(compareRunCases);
@@ -479,6 +497,33 @@ async function loadSuspiciousAnalysis(
     courseRunsByUserId,
     recentPointEventsByUserId,
   };
+}
+
+async function searchSuspiciousUsers(
+  env: Env,
+  analysis: SuspiciousAnalysis,
+  search: string,
+  limit: number
+): Promise<SuspiciousUserCase[]> {
+  const rows = await loadSuspiciousUserSearchRows(env, search, limit);
+  return rows.map((row) => analysis.byUserId.get(row.id) ?? buildUnsuspiciousUserCase(row));
+}
+
+async function loadPlayerHistoryUser(
+  env: Env,
+  analysis: SuspiciousAnalysis,
+  userId: string
+): Promise<SuspiciousUserCase> {
+  const windowUser = analysis.byUserId.get(userId);
+  if (windowUser) {
+    return windowUser;
+  }
+
+  const row = await loadSuspiciousUserSearchRowById(env, userId);
+  if (!row) {
+    throw new HttpError(404, 'User not found.');
+  }
+  return buildUnsuspiciousUserCase(row);
 }
 
 async function applyRecordGapSignals(
@@ -1015,6 +1060,189 @@ async function loadRecentPositivePointEvents(
   return result.results;
 }
 
+async function loadRecentPointEventsForUser(
+  env: Env,
+  userId: string
+): Promise<SuspiciousPointEventRecord[]> {
+  const result = await env.DB.prepare(
+    `
+      SELECT
+        id,
+        user_id,
+        event_type,
+        source_key,
+        points,
+        breakdown_json,
+        created_at,
+        '' AS user_display_name,
+        '' AS user_created_at,
+        NULL AS email,
+        NULL AS wallet_address,
+        NULL AS ogp_id,
+        NULL AS player_id
+      FROM point_events
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `
+  )
+    .bind(userId, MAX_PLAYER_HISTORY_POINT_EVENTS)
+    .all<JoinedPointEventRow>();
+
+  return result.results.map((row) => ({
+    id: row.id,
+    eventType: row.event_type,
+    sourceKey: row.source_key,
+    points: Number(row.points ?? 0),
+    createdAt: row.created_at,
+  }));
+}
+
+async function loadSuspiciousUserSearchRows(
+  env: Env,
+  search: string,
+  limit: number
+): Promise<SuspiciousUserSearchRow[]> {
+  const like = `%${search}%`;
+  const rows = await env.DB.prepare(
+    `
+      SELECT
+        u.id,
+        u.email,
+        u.wallet_address,
+        u.display_name,
+        u.created_at,
+        l.ogp_id,
+        l.player_id,
+        s.total_points,
+        s.completed_runs,
+        (
+          SELECT MAX(at)
+          FROM (
+            SELECT MAX(COALESCE(room_runs.finished_at, room_runs.started_at)) AS at
+            FROM room_runs
+            WHERE room_runs.user_id = u.id
+            UNION ALL
+            SELECT MAX(COALESCE(course_runs.finished_at, course_runs.started_at)) AS at
+            FROM course_runs
+            WHERE course_runs.user_id = u.id
+            UNION ALL
+            SELECT MAX(point_events.created_at) AS at
+            FROM point_events
+            WHERE point_events.user_id = u.id
+          )
+        ) AS last_activity_at
+      FROM users u
+      LEFT JOIN playfun_user_links l
+        ON l.user_id = u.id
+      LEFT JOIN user_stats s
+        ON s.user_id = u.id
+      WHERE lower(u.id) = ?
+         OR lower(u.display_name) = ?
+         OR lower(COALESCE(u.email, '')) = ?
+         OR lower(COALESCE(u.wallet_address, '')) = ?
+         OR lower(COALESCE(l.ogp_id, '')) = ?
+         OR lower(COALESCE(l.player_id, '')) = ?
+         OR lower(u.id) LIKE ?
+         OR lower(u.display_name) LIKE ?
+         OR lower(COALESCE(u.email, '')) LIKE ?
+         OR lower(COALESCE(u.wallet_address, '')) LIKE ?
+         OR lower(COALESCE(l.ogp_id, '')) LIKE ?
+         OR lower(COALESCE(l.player_id, '')) LIKE ?
+      ORDER BY
+        CASE
+          WHEN lower(u.id) = ? THEN 0
+          WHEN lower(u.display_name) = ? THEN 1
+          WHEN lower(COALESCE(u.email, '')) = ? THEN 2
+          WHEN lower(COALESCE(u.wallet_address, '')) = ? THEN 3
+          WHEN lower(COALESCE(l.ogp_id, '')) = ? THEN 4
+          WHEN lower(COALESCE(l.player_id, '')) = ? THEN 5
+          ELSE 6
+        END,
+        last_activity_at DESC,
+        u.created_at DESC
+      LIMIT ?
+    `
+  )
+    .bind(
+      search,
+      search,
+      search,
+      search,
+      search,
+      search,
+      like,
+      like,
+      like,
+      like,
+      like,
+      like,
+      search,
+      search,
+      search,
+      search,
+      search,
+      search,
+      limit
+    )
+    .all<SuspiciousUserSearchRow>();
+
+  return rows.results;
+}
+
+async function loadSuspiciousUserSearchRowById(
+  env: Env,
+  userId: string
+): Promise<SuspiciousUserSearchRow | null> {
+  const rows = await loadSuspiciousUserSearchRows(env, userId.trim().toLowerCase(), 1);
+  const match = rows.find((row) => row.id === userId);
+  if (match) {
+    return match;
+  }
+
+  const result = await env.DB.prepare(
+    `
+      SELECT
+        u.id,
+        u.email,
+        u.wallet_address,
+        u.display_name,
+        u.created_at,
+        l.ogp_id,
+        l.player_id,
+        s.total_points,
+        s.completed_runs,
+        (
+          SELECT MAX(at)
+          FROM (
+            SELECT MAX(COALESCE(room_runs.finished_at, room_runs.started_at)) AS at
+            FROM room_runs
+            WHERE room_runs.user_id = u.id
+            UNION ALL
+            SELECT MAX(COALESCE(course_runs.finished_at, course_runs.started_at)) AS at
+            FROM course_runs
+            WHERE course_runs.user_id = u.id
+            UNION ALL
+            SELECT MAX(point_events.created_at) AS at
+            FROM point_events
+            WHERE point_events.user_id = u.id
+          )
+        ) AS last_activity_at
+      FROM users u
+      LEFT JOIN playfun_user_links l
+        ON l.user_id = u.id
+      LEFT JOIN user_stats s
+        ON s.user_id = u.id
+      WHERE u.id = ?
+      LIMIT 1
+    `
+  )
+    .bind(userId)
+    .first<SuspiciousUserSearchRow>();
+
+  return result ?? null;
+}
+
 async function loadUserStatsByUserIds(
   env: Env,
   userIds: string[]
@@ -1136,6 +1364,166 @@ async function loadHistoricalCourseRunsForVersion(
     }));
 }
 
+async function loadPlayerHistoryRoomRuns(
+  env: Env,
+  userId: string,
+  flaggedRuns: SuspiciousRunCase[]
+): Promise<SuspiciousRunCase[]> {
+  const result = await env.DB.prepare(
+    `
+      SELECT
+        r.attempt_id,
+        r.room_id,
+        r.room_x,
+        r.room_y,
+        r.room_version,
+        r.goal_type,
+        r.goal_json,
+        r.user_id,
+        r.user_display_name,
+        r.started_at,
+        r.finished_at,
+        r.result,
+        r.elapsed_ms,
+        r.deaths,
+        r.score,
+        v.title AS title,
+        p.id AS run_finalized_point_event_id,
+        p.points AS run_finalized_points,
+        p.created_at AS run_finalized_point_created_at
+      FROM room_runs r
+      LEFT JOIN room_versions v
+        ON v.room_id = r.room_id
+       AND v.version = r.room_version
+      LEFT JOIN point_events p
+        ON p.user_id = r.user_id
+       AND p.event_type = 'run_finalized'
+       AND p.source_key = r.attempt_id
+      WHERE r.user_id = ?
+      ORDER BY COALESCE(r.finished_at, r.started_at) DESC, r.attempt_id DESC
+    `
+  )
+    .bind(userId)
+    .all<JoinedRoomRunRow>();
+
+  const runs: SuspiciousRunCase[] = [];
+  for (const row of result.results) {
+    const goal = normalizeRoomGoal(parseJsonSafely(row.goal_json));
+    if (!goal) {
+      continue;
+    }
+    runs.push({
+      kind: 'room',
+      attemptId: row.attempt_id,
+      sourceId: row.room_id,
+      title: row.title,
+      version: row.room_version,
+      roomX: row.room_x,
+      roomY: row.room_y,
+      goalType: row.goal_type,
+      rankingMode: getLeaderboardRankingMode(goal),
+      userId: row.user_id,
+      userDisplayName: row.user_display_name,
+      startedAt: row.started_at,
+      finishedAt: row.finished_at,
+      result: row.result,
+      elapsedMs: row.elapsed_ms,
+      deaths: row.deaths,
+      score: row.score,
+      runFinalizedPoints: parseNullableNumber(row.run_finalized_points),
+      runFinalizedPointEventId: row.run_finalized_point_event_id,
+      runFinalizedPointCreatedAt: row.run_finalized_point_created_at,
+      severity: 'low',
+      ruleCodes: [],
+      previousBestElapsedMs: null,
+      improvementMs: null,
+      improvementRatio: null,
+      repeatGroupCount: null,
+    });
+  }
+
+  return mergeFlaggedRunsIntoHistory(runs, flaggedRuns);
+}
+
+async function loadPlayerHistoryCourseRuns(
+  env: Env,
+  userId: string,
+  flaggedRuns: SuspiciousRunCase[]
+): Promise<SuspiciousRunCase[]> {
+  const result = await env.DB.prepare(
+    `
+      SELECT
+        r.attempt_id,
+        r.course_id,
+        r.course_version,
+        r.goal_type,
+        r.goal_json,
+        r.user_id,
+        r.user_display_name,
+        r.started_at,
+        r.finished_at,
+        r.result,
+        r.elapsed_ms,
+        r.deaths,
+        r.score,
+        v.title AS title,
+        p.id AS run_finalized_point_event_id,
+        p.points AS run_finalized_points,
+        p.created_at AS run_finalized_point_created_at
+      FROM course_runs r
+      LEFT JOIN course_versions v
+        ON v.course_id = r.course_id
+       AND v.version = r.course_version
+      LEFT JOIN point_events p
+        ON p.user_id = r.user_id
+       AND p.event_type = 'run_finalized'
+       AND p.source_key = r.attempt_id
+      WHERE r.user_id = ?
+      ORDER BY COALESCE(r.finished_at, r.started_at) DESC, r.attempt_id DESC
+    `
+  )
+    .bind(userId)
+    .all<JoinedCourseRunRow>();
+
+  const runs: SuspiciousRunCase[] = [];
+  for (const row of result.results) {
+    const goal = normalizeCourseGoal(parseJsonSafely(row.goal_json));
+    if (!goal) {
+      continue;
+    }
+    runs.push({
+      kind: 'course',
+      attemptId: row.attempt_id,
+      sourceId: row.course_id,
+      title: row.title,
+      version: row.course_version,
+      roomX: null,
+      roomY: null,
+      goalType: row.goal_type,
+      rankingMode: getCourseLeaderboardRankingMode(goal),
+      userId: row.user_id,
+      userDisplayName: row.user_display_name,
+      startedAt: row.started_at,
+      finishedAt: row.finished_at,
+      result: row.result,
+      elapsedMs: row.elapsed_ms,
+      deaths: row.deaths,
+      score: row.score,
+      runFinalizedPoints: parseNullableNumber(row.run_finalized_points),
+      runFinalizedPointEventId: row.run_finalized_point_event_id,
+      runFinalizedPointCreatedAt: row.run_finalized_point_created_at,
+      severity: 'low',
+      ruleCodes: [],
+      previousBestElapsedMs: null,
+      improvementMs: null,
+      improvementRatio: null,
+      repeatGroupCount: null,
+    });
+  }
+
+  return mergeFlaggedRunsIntoHistory(runs, flaggedRuns);
+}
+
 function getOrCreateAccumulator(
   accumulators: Map<string, UserAccumulator>,
   userId: string,
@@ -1183,6 +1571,68 @@ function getOrCreateAccumulator(
   };
   accumulators.set(userId, created);
   return created;
+}
+
+function buildSuspiciousUserCaseFromAccumulator(accumulator: UserAccumulator): SuspiciousUserCase {
+  const signals = [...accumulator.signals.values()].sort(compareSignals);
+  const strongestSeverity = signals.reduce<SuspiciousSeverity>(
+    (current, signal) => (severityRank(signal.severity) > severityRank(current) ? signal.severity : current),
+    'low'
+  );
+
+  return {
+    userId: accumulator.userId,
+    userDisplayName: accumulator.userDisplayName,
+    userCreatedAt: accumulator.userCreatedAt,
+    ogpId: accumulator.ogpId,
+    playerId: accumulator.playerId,
+    totalPoints: Math.max(accumulator.totalPoints, accumulator.recentPoints),
+    completedRuns: Math.max(accumulator.completedRuns, accumulator.recentCompletedRuns),
+    recentPoints: accumulator.recentPoints,
+    recentCompletedRuns: accumulator.recentCompletedRuns,
+    strongestSeverity,
+    signalCodes: signals.map((signal) => signal.code),
+    signals,
+    identity: classifySuspiciousUserIdentity(accumulator),
+    lastActivityAt: accumulator.lastActivityAt,
+  };
+}
+
+function buildUnsuspiciousUserCase(row: SuspiciousUserSearchRow): SuspiciousUserCase {
+  const accumulator: UserAccumulator = {
+    userId: row.id,
+    userDisplayName: row.display_name,
+    userCreatedAt: row.created_at,
+    email: row.email,
+    walletAddress: row.wallet_address,
+    ogpId: row.ogp_id,
+    playerId: row.player_id,
+    totalPoints: parseNullableNumber(row.total_points) ?? 0,
+    completedRuns: parseNullableNumber(row.completed_runs) ?? 0,
+    recentPoints: 0,
+    recentCompletedRuns: 0,
+    lastActivityAt: row.last_activity_at,
+    signals: new Map(),
+    roomRuns: new Map(),
+    courseRuns: new Map(),
+  };
+
+  return {
+    userId: accumulator.userId,
+    userDisplayName: accumulator.userDisplayName,
+    userCreatedAt: accumulator.userCreatedAt,
+    ogpId: accumulator.ogpId,
+    playerId: accumulator.playerId,
+    totalPoints: accumulator.totalPoints,
+    completedRuns: accumulator.completedRuns,
+    recentPoints: 0,
+    recentCompletedRuns: 0,
+    strongestSeverity: 'low',
+    signalCodes: [],
+    signals: [],
+    identity: classifySuspiciousUserIdentity(accumulator),
+    lastActivityAt: accumulator.lastActivityAt,
+  };
 }
 
 function classifySuspiciousUserIdentity(accumulator: UserAccumulator): SuspiciousUserIdentity {
@@ -1384,6 +1834,17 @@ function parseWindowHours(url: URL): number {
   );
 }
 
+function parseDetailScope(url: URL): 'review_window' | 'player_history' {
+  const raw = (url.searchParams.get('history') ?? '').trim().toLowerCase();
+  if (!raw) {
+    return 'review_window';
+  }
+  if (raw === '1' || raw === 'true' || raw === 'all') {
+    return 'player_history';
+  }
+  throw new HttpError(400, 'history must be one of: 1, true, all.');
+}
+
 function parseSeverityFilter(raw: string | null): SuspiciousSeverity | null {
   if (!raw || raw === 'all') {
     return null;
@@ -1437,12 +1898,44 @@ function compareRunCases(left: SuspiciousRunCase, right: SuspiciousRunCase): num
   );
 }
 
+function compareRunHistory(left: SuspiciousRunCase, right: SuspiciousRunCase): number {
+  return (
+    (right.finishedAt ?? right.startedAt).localeCompare(left.finishedAt ?? left.startedAt) ||
+    right.startedAt.localeCompare(left.startedAt) ||
+    left.attemptId.localeCompare(right.attemptId)
+  );
+}
+
 function compareUserCases(left: SuspiciousUserCase, right: SuspiciousUserCase): number {
   return (
     severityRank(right.strongestSeverity) - severityRank(left.strongestSeverity) ||
     (right.lastActivityAt ?? '').localeCompare(left.lastActivityAt ?? '') ||
     left.userDisplayName.localeCompare(right.userDisplayName)
   );
+}
+
+function mergeFlaggedRunsIntoHistory(
+  runs: SuspiciousRunCase[],
+  flaggedRuns: SuspiciousRunCase[]
+): SuspiciousRunCase[] {
+  const flaggedByAttemptId = new Map(flaggedRuns.map((run) => [run.attemptId, run]));
+  return runs
+    .map((run) => {
+      const flagged = flaggedByAttemptId.get(run.attemptId);
+      if (!flagged) {
+        return run;
+      }
+      return {
+        ...run,
+        severity: flagged.severity,
+        ruleCodes: [...flagged.ruleCodes],
+        previousBestElapsedMs: flagged.previousBestElapsedMs,
+        improvementMs: flagged.improvementMs,
+        improvementRatio: flagged.improvementRatio,
+        repeatGroupCount: flagged.repeatGroupCount,
+      };
+    })
+    .sort(compareRunHistory);
 }
 
 function maxIso(left: string | null, right: string | null): string | null {
