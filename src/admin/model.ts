@@ -238,9 +238,13 @@ export interface SuspiciousSummaryResponse {
   recentInvalidations: SuspiciousInvalidationAuditSummary[];
 }
 
+export type SuspiciousUserListScope = 'review_window' | 'player_history_search';
+export type SuspiciousUserDetailScope = 'review_window' | 'player_history';
+
 export interface SuspiciousUsersResponse {
   generatedAt: string;
   windowHours: number;
+  scope: SuspiciousUserListScope;
   total: number;
   items: SuspiciousUserCase[];
 }
@@ -248,6 +252,7 @@ export interface SuspiciousUsersResponse {
 export interface SuspiciousUserDetailResponse {
   generatedAt: string;
   windowHours: number;
+  scope: SuspiciousUserDetailScope;
   user: SuspiciousUserCase;
   roomRuns: SuspiciousRunCase[];
   courseRuns: SuspiciousRunCase[];

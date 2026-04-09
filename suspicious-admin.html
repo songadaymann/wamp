@@ -393,7 +393,7 @@
           </label>
           <label style="flex: 1 1 260px">
             Search
-            <input id="search-input" type="text" placeholder="Display name, user id, OGP id" />
+            <input id="search-input" type="text" placeholder="Display name, email, wallet, user id, OGP id" />
           </label>
           <button id="apply-filters-button" type="button">Apply Filters</button>
         </div>
@@ -419,7 +419,7 @@
       <section class="workspace">
         <section class="panel stack">
           <div class="queue-title">
-            <h2>Suspicious Users</h2>
+            <h2 id="queue-heading">Suspicious Users</h2>
             <div id="queue-count" class="meta">0 users</div>
           </div>
           <div id="queue-tabs" class="actions">
@@ -438,7 +438,7 @@
             <div id="detail-status" class="status"></div>
           </div>
 
-          <div id="detail-empty" class="empty">Select a suspicious user to inspect flagged runs and local point impact.</div>
+          <div id="detail-empty" class="empty">Select a suspicious user, or search by name to inspect a player's full run history.</div>
 
           <div id="detail-shell" class="detail-grid" hidden>
             <section class="card stack">
@@ -470,7 +470,7 @@
             </section>
 
             <section class="card stack">
-              <h3>Suspicious Room Runs</h3>
+              <h3>Room Runs</h3>
               <table>
                 <thead>
                   <tr>
@@ -489,7 +489,7 @@
             </section>
 
             <section class="card stack">
-              <h3>Suspicious Course Runs</h3>
+              <h3>Course Runs</h3>
               <table>
                 <thead>
                   <tr>
