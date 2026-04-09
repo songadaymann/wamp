@@ -57,6 +57,36 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Runtime PartyKit host fallback fix on April 9, 2026:
+  - created dedicated `main`-based worktree branch `fix/runtime-partykit-host-fallback-2026-04-09`
+  - traced missing live-player count / ghost presence on `wamp.land` to a frontend build missing `VITE_PARTYKIT_HOST`, not to a PartyKit outage
+  - confirmed the PartyKit service itself was healthy by opening a real websocket to `wss://everybodys-platformer-presence.songadaymann.partykit.dev/parties/main/...`
+  - confirmed current production was serving the broken config path:
+    - `node scripts/smoke_prod.mjs` against live prod reported `mainBundleContainsPartyKitHost: false`
+    - the tightened smoke now fails live prod with `Auth session did not expose the expected PartyKit host`
+  - hardened runtime presence config:
+    - `GET /api/auth/session` now exposes public `partykitHost` / `partykitParty`
+    - the auth client stores runtime PartyKit config alongside the existing runtime wallet-project-id fallback
+    - `resolveWorldPresenceConfig()` now falls back to runtime session config when the bundled Vite PartyKit host is missing
+    - `wrangler.jsonc` now carries checked-in production `PARTYKIT_HOST` / `PARTYKIT_PARTY` vars for the Worker
+    - `scripts/smoke_prod.mjs` now fails when the API session does not expose the expected PartyKit host
+  - validation:
+    - `npm run typecheck` passed in `/private/tmp/wamp-runtime-partykit-host-fix-2026-04-09`
+    - `vite build` passed directly and produced `dist/assets/main-BHNuz7ns.js` with `containsProdPartykitHost: false`, which is the exact regression case we needed to recover from
+    - local `wrangler dev` from the built `dist` returned `/api/auth/session` with `partykitHost: "everybodys-platformer-presence.songadaymann.partykit.dev"` and `partykitParty: "main"`
+    - required `develop-web-game` Playwright client wrote:
+      - `output/web-game/runtime-partykit-host-check/state-0.json`
+      - `output/web-game/runtime-partykit-host-check/shot-0.png`
+    - that state artifact confirms:
+      - `auth.partykitConfigured: true`
+      - `auth.partykitSource: "runtime"`
+      - `activeScene.presenceDebug.snapshot.enabled: true`
+      - `activeScene.presenceDebug.snapshot.status: "connected"`
+    - updated local smoke `PROD_FRONTEND_URL=http://127.0.0.1:8787 PROD_API_BASE_URL=http://127.0.0.1:8787 node scripts/smoke_prod.mjs` passed with:
+      - `mainBundleContainsPartyKitHost: false`
+      - `sessionPartykitHost: "everybodys-platformer-presence.songadaymann.partykit.dev"`
+    - screenshot artifact still hit the known black-frame capture issue, but JSON state and smoke both confirmed the runtime fallback path
+
 - Room Explore modal on April 8, 2026:
   - continued on `feature/reward-sting-catchup-2026-04-08` in `/private/tmp/wamp-reward-sting-catchup-2026-04-08`
   - turned the old leaderboard `Discover` flow into a real HUD-launched room explorer

@@ -36,6 +36,10 @@ export interface AuthDebugState {
   walletAddress: string | null;
   walletProjectConfigured: boolean;
   walletProjectSource: 'build' | 'runtime' | 'missing';
+  partykitConfigured: boolean;
+  partykitHost: string | null;
+  partykitParty: string | null;
+  partykitSource: 'build' | 'runtime' | 'missing';
   storageBackend: 'auto' | 'local' | 'remote';
   testResetEnabled: boolean;
   chatModeration: ChatModerationViewer;
@@ -85,6 +89,10 @@ const state: AuthDebugState = {
   walletAddress: null,
   walletProjectConfigured: false,
   walletProjectSource: 'missing',
+  partykitConfigured: false,
+  partykitHost: null,
+  partykitParty: null,
+  partykitSource: 'missing',
   storageBackend: getStorageBackend(),
   testResetEnabled: isTestResetEnabled(),
   chatModeration: {
@@ -120,6 +128,8 @@ let displayNameCheckToken = 0;
 let lastCheckedDisplayName = '';
 let lastDisplayNameAvailability: DisplayNameAvailabilityResponse | null = null;
 let runtimeWalletProjectId = '';
+let runtimePartykitHost = '';
+let runtimePartykitParty = '';
 let authIdentityProfile: AuthIdentityProfileView | null = null;
 let authIdentityProfileLoadingUserId: string | null = null;
 let identityRefreshListenersBound = false;
@@ -306,12 +316,14 @@ export async function sendPreparedWalletTransaction(
 
 async function initializeWalletConnect(): Promise<void> {
   refreshWalletProjectConfiguration();
+  refreshPartykitConfiguration();
 }
 
 async function refreshSession(): Promise<void> {
   try {
     const session = await apiRequest<AuthSessionResponse>('/api/auth/session');
     setRuntimeWalletProjectId(session.walletProjectId);
+    setRuntimePartykitConfig(session.partykitHost, session.partykitParty);
     state.authenticated = session.authenticated;
     state.user = session.user;
     state.source = session.source ?? null;
@@ -1221,6 +1233,24 @@ function getWalletProjectId(): string {
   return bundledProjectId || runtimeWalletProjectId;
 }
 
+export function getResolvedPartykitConfig(): {
+  host: string;
+  party: string;
+  source: 'build' | 'runtime';
+} | null {
+  const bundledHost = getBundledPartykitHost();
+  const host = bundledHost || runtimePartykitHost;
+  if (!host) {
+    return null;
+  }
+
+  return {
+    host,
+    party: getBundledPartykitParty() || runtimePartykitParty || 'main',
+    source: bundledHost ? 'build' : 'runtime',
+  };
+}
+
 function getBundledWalletProjectId(): string {
   return (
     import.meta.env.VITE_REOWN_PROJECT_ID?.trim() ||
@@ -1234,9 +1264,31 @@ function setRuntimeWalletProjectId(projectId: string | null | undefined): void {
   refreshWalletProjectConfiguration();
 }
 
+function getBundledPartykitHost(): string {
+  return import.meta.env.VITE_PARTYKIT_HOST?.trim() || '';
+}
+
+function getBundledPartykitParty(): string {
+  return import.meta.env.VITE_PARTYKIT_PARTY?.trim() || '';
+}
+
+function setRuntimePartykitConfig(host: string | null | undefined, party: string | null | undefined): void {
+  runtimePartykitHost = host?.trim() ?? '';
+  runtimePartykitParty = party?.trim() ?? '';
+  refreshPartykitConfiguration();
+}
+
 function refreshWalletProjectConfiguration(): void {
   state.walletProjectConfigured = Boolean(getWalletProjectId());
   state.walletProjectSource = getWalletProjectIdSource();
+}
+
+function refreshPartykitConfiguration(): void {
+  const config = getResolvedPartykitConfig();
+  state.partykitConfigured = Boolean(config);
+  state.partykitHost = config?.host ?? null;
+  state.partykitParty = config?.party ?? null;
+  state.partykitSource = getPartykitConfigSource();
 }
 
 function getWalletProjectIdSource(): 'build' | 'runtime' | 'missing' {
@@ -1245,6 +1297,18 @@ function getWalletProjectIdSource(): 'build' | 'runtime' | 'missing' {
   }
 
   if (runtimeWalletProjectId) {
+    return 'runtime';
+  }
+
+  return 'missing';
+}
+
+function getPartykitConfigSource(): 'build' | 'runtime' | 'missing' {
+  if (getBundledPartykitHost()) {
+    return 'build';
+  }
+
+  if (runtimePartykitHost) {
     return 'runtime';
   }
 

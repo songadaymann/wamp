@@ -72,6 +72,10 @@ export async function handleAuthRequest(request: Request, url: URL, env: Env): P
     const auth = await loadOptionalRequestAuth(env, request);
     const responseBody: AuthSessionResponse = createSessionResponse(auth);
     responseBody.walletProjectId = resolvePublicWalletProjectId(env);
+    responseBody.partykitHost = resolvePublicPartykitHost(env);
+    responseBody.partykitParty = responseBody.partykitHost
+      ? resolvePublicPartykitParty(env)
+      : null;
     responseBody.chatModeration =
       auth?.source === 'session' || auth?.source === 'playfun'
         ? await resolveChatModerationViewer(env, auth.user)
@@ -127,6 +131,15 @@ export async function handleAuthRequest(request: Request, url: URL, env: Env): P
   }
 
   throw new HttpError(404, 'Auth route not found.');
+}
+
+function resolvePublicPartykitHost(env: Env): string | null {
+  const host = env.PARTYKIT_HOST?.trim();
+  return host ? host : null;
+}
+
+function resolvePublicPartykitParty(env: Env): string {
+  return env.PARTYKIT_PARTY?.trim() || 'main';
 }
 
 function resolvePublicWalletProjectId(env: Env): string | null {
