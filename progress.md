@@ -7191,3 +7191,33 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - `npm run build` passed
 - caveat:
   - real signed-in editor QA is still needed to confirm the live click path feels right end-to-end on the running local branch
+
+## 2026-04-09 13:18:01 EDT - Claimer-first room builder attribution
+
+- deleted the now-merged branch `fix/publish-collectible-goal-guard-2026-04-09`
+- branched cleanly from `main` on `fix/room-builder-attribution-2026-04-09`
+- worktree: `/private/tmp/wamp-room-builder-attribution-2026-04-09`
+- traced the current builder attribution split before changing code:
+  - world / selected-room HUD already used `claimer ?? last published`
+  - Explore discovery still showed `last_published_by_*`
+  - course-composer ownership checks mixed claimer-based world summaries with one overworld path that still preferred latest publisher
+- made claimer the frontend source of truth everywhere this branch touches:
+  - discovery SQL now loads `claimer_user_id` / `claimer_display_name`
+  - Explore room cards map builder identity from `claimer ?? last published`
+  - course composer metadata now uses explicit `builderUserId` fields instead of `publishedByUserId`
+  - both course-composer ownership gates now compare against claimer-first builder identity, so "you can only add rooms you authored" and same-owner checks follow the claimer rather than the latest republisher
+- validation:
+  - clean worktree initially had no dependencies, so `npm run typecheck` failed with missing `tsc`
+  - `npm ci --ignore-scripts` succeeded in this environment
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - required `develop-web-game` smoke against `http://localhost:3009` wrote:
+    - `output/web-game/room-builder-attribution-smoke/shot-0.png`
+    - `output/web-game/room-builder-attribution-smoke/state-0.json`
+    - `output/web-game/room-builder-attribution-smoke/errors-0.json`
+  - smoke state reached:
+    - `activeScene.scene = "overworld-play"`
+    - `mode = "browse"`
+    - `selectedState = "published"`
+- caveat:
+  - the smoke run used the local frontend against the normal remote API path, so `errors-0.json` contains expected local presence/chat websocket connection refusals rather than a gameplay crash
