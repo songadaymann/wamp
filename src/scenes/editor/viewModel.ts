@@ -13,6 +13,7 @@ export interface BuildEditorUiViewModelOptions {
   goalUsesMarkers: boolean;
   goalSummaryText: string;
   roomPermissions: RoomPermissions;
+  publishValidationError: string | null;
   mintedTokenId: string | null;
   canRefreshMintMetadata: boolean;
   saveInFlight: boolean;
@@ -53,6 +54,7 @@ export function buildEditorUiViewModel(
     goalUsesMarkers,
     goalSummaryText,
     roomPermissions,
+    publishValidationError,
     mintedTokenId,
     canRefreshMintMetadata,
     saveInFlight,
@@ -89,8 +91,11 @@ export function buildEditorUiViewModel(
     saveDisabled: !roomPermissions.canSaveDraft,
     publishHidden: false,
     publishButtonText: 'Publish Room',
-    publishButtonTitle: 'Publish Room (Cmd/Ctrl+Shift+P)',
-    publishDisabled: !roomPermissions.canPublish,
+    publishButtonTitle: !roomPermissions.canPublish
+      ? 'You cannot publish this room.'
+      : publishValidationError ?? 'Publish Room (Cmd/Ctrl+Shift+P)',
+    publishDisabled: !roomPermissions.canPublish || saveInFlight,
+    publishButtonAriaDisabled: Boolean(publishValidationError),
     mintHidden: false,
     mintDisabled: Boolean(mintedTokenId) || saveInFlight,
     mintButtonText: mintedTokenId ? 'Minted' : 'Mint Room',

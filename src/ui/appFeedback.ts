@@ -13,6 +13,8 @@ type FeedbackElements = {
   busyClose: HTMLButtonElement | null;
 };
 
+type BusyErrorVariant = 'default' | 'danger';
+
 let elements: FeedbackElements | null = null;
 let initialized = false;
 let appReady = false;
@@ -133,6 +135,7 @@ export function showBusyOverlay(title: string, status = 'Please wait...'): void 
   const refs = getElements();
   refs.busyRoot?.classList.remove('hidden');
   refs.busyRoot?.removeAttribute('data-busy-state');
+  refs.busyRoot?.removeAttribute('data-busy-variant');
   if (refs.busyTitle) {
     refs.busyTitle.textContent = title;
   }
@@ -159,15 +162,21 @@ export function updateBusyOverlay(title: string, status = 'Please wait...'): voi
 export function showBusyError(
   message: string,
   options: {
+    title?: string;
+    variant?: BusyErrorVariant;
+    closeLabel?: string;
     retryHandler?: (() => void | Promise<void>) | null;
     closeHandler?: (() => void | Promise<void>) | null;
   } = {}
 ): void {
   const refs = getElements();
+  const title = options.title?.trim() || 'Something went wrong';
+  const variant = options.variant ?? 'default';
   refs.busyRoot?.classList.remove('hidden');
   refs.busyRoot?.setAttribute('data-busy-state', 'error');
+  refs.busyRoot?.setAttribute('data-busy-variant', variant);
   if (refs.busyTitle) {
-    refs.busyTitle.textContent = 'Something went wrong';
+    refs.busyTitle.textContent = title;
   }
   if (refs.busyStatus) {
     refs.busyStatus.textContent = message;
@@ -175,6 +184,9 @@ export function showBusyError(
   refs.busySpinner?.classList.add('hidden');
   busyRetryHandler = options.retryHandler ?? null;
   busyCloseHandler = options.closeHandler ?? (() => hideBusyOverlay());
+  if (refs.busyClose) {
+    refs.busyClose.textContent = options.closeLabel?.trim() || 'Close';
+  }
   refs.busyRetry?.classList.toggle('hidden', !busyRetryHandler);
   refs.busyClose?.classList.toggle('hidden', !busyCloseHandler);
 }
@@ -183,8 +195,12 @@ export function hideBusyOverlay(): void {
   const refs = getElements();
   refs.busyRoot?.classList.add('hidden');
   refs.busyRoot?.removeAttribute('data-busy-state');
+  refs.busyRoot?.removeAttribute('data-busy-variant');
   busyRetryHandler = null;
   busyCloseHandler = null;
+  if (refs.busyClose) {
+    refs.busyClose.textContent = 'Close';
+  }
 }
 
 export function isBusyOverlayVisible(): boolean {
@@ -200,6 +216,7 @@ export function getAppFeedbackDebugState(): Record<string, unknown> {
     busyVisible: Boolean(refs.busyRoot && !refs.busyRoot.classList.contains('hidden')),
     bootState: refs.bootRoot?.getAttribute('data-boot-state') ?? null,
     busyState: refs.busyRoot?.getAttribute('data-busy-state') ?? null,
+    busyVariant: refs.busyRoot?.getAttribute('data-busy-variant') ?? null,
     bootStatus: refs.bootStatus?.textContent ?? null,
     busyTitle: refs.busyTitle?.textContent ?? null,
     busyStatus: refs.busyStatus?.textContent ?? null,

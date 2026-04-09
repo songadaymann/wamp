@@ -29,6 +29,7 @@ import {
   cloneRoomGoal,
   createDefaultRoomGoal,
   createGoalMarkerPointFromTile,
+  getRoomGoalPublishValidationError,
   goalSupportsTimeLimit,
   type CheckpointSprintGoal,
   type GoalMarkerPoint,
@@ -1473,6 +1474,12 @@ export class EditorEditRuntime {
       case 'survival':
         return `Stay alive for ${Math.round(this.roomGoal.durationMs / 1000)} seconds.`;
     }
+  }
+
+  getPublishValidationError(): string | null {
+    return getRoomGoalPublishValidationError(this.roomGoal, {
+      collectiblesPlaced: this.countPlacedObjectsByCategory('collectible'),
+    });
   }
 
   hasUndoHistory(): boolean {

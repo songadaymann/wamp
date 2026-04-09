@@ -28,6 +28,7 @@ import { renderRoomSnapshotToPngDataUrl } from '../../mint/roomMetadataRender';
 import {
   hideBusyOverlay,
   showBusyOverlay,
+  showBusyError,
   updateBusyOverlay,
 } from '../../ui/appFeedback';
 import type { OverworldPlaySceneData } from '../sceneData';
@@ -35,6 +36,7 @@ import type { OverworldPlaySceneData } from '../sceneData';
 interface EditorRoomSessionHost {
   applyRoomSnapshot(room: RoomSnapshot): void;
   exportRoomSnapshot(): RoomSnapshot;
+  getPublishValidationError(): string | null;
   getRoomDirty(): boolean;
   setRoomDirty(dirty: boolean): void;
   getLastDirtyAt(): number;
@@ -206,6 +208,10 @@ export class EditorRoomSession {
 
   get statusDetails(): EditorStatusDetails {
     return { ...this.persistenceStatus };
+  }
+
+  getPublishValidationError(): string | null {
+    return this.host.getPublishValidationError();
   }
 
   hasDraftPreviewInWorld(): boolean {
@@ -469,6 +475,15 @@ export class EditorRoomSession {
 
   async publishRoom(successText?: string): Promise<RoomRecord | null> {
     if (this.saveInFlight) {
+      return null;
+    }
+    const publishValidationError = this.host.getPublishValidationError();
+    if (publishValidationError) {
+      showBusyError(publishValidationError, {
+        title: 'Cannot Publish Room',
+        variant: 'danger',
+        closeLabel: 'OK',
+      });
       return null;
     }
     if (!this.roomPermissions.canPublish) {

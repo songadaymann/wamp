@@ -2919,6 +2919,7 @@ export class CourseEditorScene extends Phaser.Scene {
         goalUsesMarkers: false,
         goalSummaryText: 'Room goals are hidden while editing the whole course.',
         roomPermissions: selectedPermissions,
+        publishValidationError: null,
         mintedTokenId: null,
         canRefreshMintMetadata: false,
         saveInFlight: this.loading,

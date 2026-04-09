@@ -357,6 +357,26 @@ body[data-playfun-mode='true'] .app-busy-overlay {
   border-color: #ed5f4b;
 }
 
+.app-busy-overlay[data-busy-state='error'][data-busy-variant='danger'] .app-busy-card {
+  border-color: #fff;
+  background: #ed5f4b;
+}
+
+.app-busy-overlay[data-busy-state='error'][data-busy-variant='danger'] .app-busy-title,
+.app-busy-overlay[data-busy-state='error'][data-busy-variant='danger'] .app-feedback-status {
+  color: #fff;
+}
+
+.app-busy-overlay[data-busy-state='error'][data-busy-variant='danger'] .app-busy-actions .bar-btn {
+  border-color: #fff;
+  background: transparent;
+  color: #fff;
+}
+
+.app-busy-overlay[data-busy-state='error'][data-busy-variant='danger'] .app-busy-actions .bar-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
 .app-busy-overlay[data-busy-state='error'] .app-busy-spinner {
   display: none;
 }
