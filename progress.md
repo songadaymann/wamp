@@ -185,7 +185,28 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - targeted proof confirmed:
       - synthetic app-open/session-refresh reconciliation showed `YOU LEVELED UP!` -> `YOU EARNED A BADGE!` -> `YOU EARNED A TROPHY!`
       - `replayVisible: false` after a second synthetic session refresh once the stored snapshot had been updated
-
+- Suspicious-admin player-history search on April 9, 2026:
+  - branched from `main` into `feature/suspicious-admin-player-history-2026-04-09`
+  - changed suspicious-admin search so a non-empty `q` no longer filters only the current suspicious review window:
+    - `/api/admin/suspicious/users` now switches into global player search mode and can return matched users even when they have no current suspicious signals
+    - `/api/admin/suspicious/users/:userId?history=1` now returns full player history detail instead of 404ing outside the selected review window
+  - full-history detail now includes all room runs and course runs for the matched user, with current-window suspicious flags overlaid when relevant
+  - suspicious-admin UI now:
+    - labels direct search results as `Player Search`
+    - loads full player history when a user is opened from search
+    - keeps history-mode invalidation selections empty by default instead of auto-selecting every returned run
+    - updates copy so operators understand search bypasses the review window
+  - invalidation preview wording now says `Select at least one run or point event.` so history mode is not described as suspicious-only
+  - validation:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - mocked worker probe confirmed empty-window search still returns a matched user with `scope: \"player_history_search\"`, and detail returns `scope: \"player_history\"` plus mixed failed/completed history runs
+    - required `develop-web-game` baseline probe ran against the built page with no captured console errors:
+      - `output/web-game/suspicious-admin-baseline/shot-0.png`
+    - targeted Playwright UI probe with mocked admin API responses passed and wrote:
+      - `output/web-game/suspicious-admin-player-history-ui-check/summary.json`
+      - `output/web-game/suspicious-admin-player-history-ui-check/dom.html`
+      - `output/web-game/suspicious-admin-player-history-ui-check/suspicious-admin-history.png`
 - Reward stings preview page build entry on April 8, 2026:
   - added `reward-stings-preview.html` to the Vite multi-page build inputs in `vite.config.ts`
   - this fixes production serving the normal app shell at `/reward-stings-preview.html` instead of the actual preview page
