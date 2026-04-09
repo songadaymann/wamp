@@ -23,6 +23,7 @@ import {
 } from './goalRunStartGate';
 import { suggestProgressionDifficulty } from '../../progression/autoDifficulty';
 import { requestPostRunRating } from '../../progression/postRunRatingEvents';
+import { createPostRunClearReward, notifyRewardStings } from '../../progression/rewardStings';
 import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
 
 export type GoalRunLeaderboardState = 'idle' | 'loading' | 'ready' | 'error';
@@ -843,24 +844,38 @@ export class OverworldGoalRunController {
             ? 'Failed run submitted.'
             : 'Run marked abandoned.';
       if (result === 'completed') {
-        requestPostRunRating({
-          contentType: 'room',
-          contentId: runState.roomId,
-          contentTitle: null,
-          roomCoordinates: { ...runState.roomCoordinates },
-          version: runState.roomVersion,
-          previousViewerRank: this.currentRoomLeaderboard?.viewerRank ?? null,
-          elapsedMs: payload.elapsedMs,
-          deaths: payload.deaths,
-          score: payload.score ?? null,
-          autoSuggestedDifficulty: suggestProgressionDifficulty({
+        const shouldPromptForRating =
+          this.currentRoomLeaderboard === null
+          || this.currentRoomLeaderboard.viewerBest === null;
+        if (shouldPromptForRating) {
+          notifyRewardStings([
+            createPostRunClearReward({
+              contentType: 'room',
+              contentTitle: this.currentRoomLeaderboard?.roomTitle ?? null,
+              elapsedMs: payload.elapsedMs,
+              deaths: payload.deaths,
+              score: payload.score ?? null,
+            }),
+          ]);
+          requestPostRunRating({
+            contentType: 'room',
+            contentId: runState.roomId,
+            contentTitle: null,
+            roomCoordinates: { ...runState.roomCoordinates },
+            version: runState.roomVersion,
+            previousViewerRank: this.currentRoomLeaderboard?.viewerRank ?? null,
             elapsedMs: payload.elapsedMs,
             deaths: payload.deaths,
-            collectiblesCollected: payload.collectiblesCollected,
-            enemiesDefeated: payload.enemiesDefeated,
-            checkpointsReached: payload.checkpointsReached,
-          }),
-        });
+            score: payload.score ?? null,
+            autoSuggestedDifficulty: suggestProgressionDifficulty({
+              elapsedMs: payload.elapsedMs,
+              deaths: payload.deaths,
+              collectiblesCollected: payload.collectiblesCollected,
+              enemiesDefeated: payload.enemiesDefeated,
+              checkpointsReached: payload.checkpointsReached,
+            }),
+          });
+        }
       }
     } catch (error) {
       console.error('Failed to finish ranked run', {

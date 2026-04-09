@@ -12,6 +12,7 @@ import {
 import type {
   LeaderboardRankingMode,
   RoomLeaderboardEntry,
+  RoomLeaderboardResponse,
 } from '../../runs/model';
 import type {
   OverworldHudViewModel,
@@ -75,6 +76,7 @@ export interface BuildOverworldHudViewModelOptions {
   goalPersistentStatusText: string | null;
   rankingMode: LeaderboardRankingMode | null;
   roomTop: RoomLeaderboardEntry | null;
+  currentRoomLeaderboard: RoomLeaderboardResponse | null;
   activeCourseRun: ActiveCourseRunState | null;
   activeRoomGoalRun: GoalRunState | null;
   activeGoalRoom: RoomSnapshot | null;
@@ -137,6 +139,7 @@ export function buildOverworldHudViewModel(
     goalPersistentStatusText,
     rankingMode,
     roomTop,
+    currentRoomLeaderboard,
     activeCourseRun,
     activeRoomGoalRun,
     activeGoalRoom,
@@ -338,6 +341,12 @@ export function buildOverworldHudViewModel(
     mode === 'play'
       ? `Score ${score}`
       : statusOverride ?? transientStatus ?? '';
+  const rateRoomButtonVisible = Boolean(
+    mode !== 'play'
+    && selectedState === 'published'
+    && currentRoomLeaderboard?.difficulty.viewerCanVote
+    && (!selectedSummary?.creatorUserId || selectedSummary.creatorUserId !== currentUserId),
+  );
   const goalPanelTone =
     activeRunResult === 'completed'
       ? 'complete'
@@ -384,6 +393,9 @@ export function buildOverworldHudViewModel(
     selectedGoalText,
     statusText,
     leaderboardText,
+    rateRoomButtonVisible,
+    rateRoomButtonText: 'Rate Room',
+    rateRoomButtonDisabled: false,
     zoomLabelText: `${zoom.toFixed(2)}x`,
     playButtonText: activeCourseRun ? 'Play Room' : mode === 'play' ? 'Stop' : 'Play Room',
     playButtonDisabled:

@@ -55,6 +55,7 @@ import {
 } from './points';
 import {
   loadRoomDiscoveryResponse,
+  parseRoomDiscoverySortOrThrow,
   parseRoomDifficultyOrThrow,
 } from './difficulty';
 import {
@@ -673,8 +674,10 @@ export async function handleRoomDiscovery(
   const rawDifficulty = url.searchParams.get('difficulty');
   const difficultyFilter =
     rawDifficulty && rawDifficulty.trim() ? parseRoomDifficultyOrThrow(rawDifficulty) : null;
+  const rawSort = url.searchParams.get('sort');
+  const sort = rawSort && rawSort.trim() ? parseRoomDiscoverySortOrThrow(rawSort) : 'featured';
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 100, 1, 200);
-  const response = await loadRoomDiscoveryResponse(env, difficultyFilter, limit);
+  const response = await loadRoomDiscoveryResponse(env, difficultyFilter, limit, sort);
   return jsonResponse(request, response);
 }
 

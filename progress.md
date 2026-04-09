@@ -57,6 +57,135 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Room Explore modal on April 8, 2026:
+  - continued on `feature/reward-sting-catchup-2026-04-08` in `/private/tmp/wamp-reward-sting-catchup-2026-04-08`
+  - turned the old leaderboard `Discover` flow into a real HUD-launched room explorer
+    - added a new blue `Explore` button beside `Leaderboard` in the world HUD
+    - HUD wiring now supports `onOpenExplore`, which opens the existing leaderboard modal directly on the explore tab
+    - the leaderboard modal header now switches to `Explore Rooms` when that tab is active
+  - expanded room discovery to support sort modes and featured-room metadata
+    - `src/runs/model.ts` now defines `RoomDiscoverySort` (`featured`, `quality`, `newest`)
+    - `RoomDiscoveryEntry` / `RoomDiscoveryResponse` now carry `featured`, `featuredAt`, and `sort`
+    - `src/runs/runRepository.ts` now sends `sort` to `/api/leaderboards/rooms/discover`
+    - Worker discovery parsing in `src/cloudflare/worker/runs/routes.ts` now accepts `sort`
+    - Worker discovery building in `src/cloudflare/worker/runs/difficulty.ts` now returns featured metadata and sorts by:
+      - featured first
+      - top rated
+      - newest
+  - added admin-backed featured-room persistence
+    - new migration `migrations/0023_featured_rooms.sql`
+    - new admin endpoint `POST /api/admin/rooms/:roomId/feature` in `src/cloudflare/worker/admin/routes.ts`
+    - new frontend helper `src/admin/featuredRoomsClient.ts` uses the existing `ep_launch_admin_api_key` session-storage admin key pattern
+  - fixed a discovery backend scalability bug found during browser validation
+    - the first explore run hit D1 `too many SQL variables`
+    - `src/cloudflare/worker/runs/difficulty.ts` now chunks featured-room and room-version fetches in batches of `50` room ids so discovery does not exceed SQLite placeholder limits as the published room count grows
+  - upgraded the modal UI for the new explore behavior
+    - added discover sort buttons: `Featured`, `Top Rated`, `Newest`
+    - discovery rows now render as framed cards with:
+      - featured badge
+      - title + room metadata
+      - optional admin `Feature` / `Unfeature` button when an admin key is present
+    - styles live in `src/styles/sections/modals.css`
+  - validation:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - required `develop-web-game` client was run against `http://127.0.0.1:4596/`
+      - its raw screenshot still hit the known black-frame canvas artifact
+    - targeted Playwright DOM/UI validation with a mocked discovery API response wrote:
+      - `output/web-game/explore-modal-dom-check/explore-modal.png`
+      - `output/web-game/explore-modal-dom-check/summary.json`
+    - that targeted check confirmed:
+      - `Explore` HUD button opens the modal on the explore tab
+      - modal header becomes `Explore Rooms`
+      - sort controls render and switch active state
+      - featured badge renders
+      - admin `Feature` / `Unfeature` buttons render when an admin key exists in session storage
+  - important local-preview caveat:
+    - this Vite preview is still pointed at production API, so the final UI proof used a mocked `/api/leaderboards/rooms/discover` response
+    - the new local Worker discovery/admin code itself is build-validated, but end-to-end backend behavior will need either a local Worker run or a deploy before it can be exercised from the browser
+
+- XP receipt retarget + overworld-only gate on April 9, 2026:
+  - kept working on `feature/reward-sting-catchup-2026-04-08`
+  - changed `src/ui/setup/xpReceipts.ts` so XP receipts no longer fly to `#menu-toggle`
+    - they now target `#world-hud`
+    - the HUD itself gets the lane-colored pulse + tiny top-edge progress meter when the receipt lands
+  - gated receipts to `data-app-mode='world'`
+    - they now show in overworld browse mode only
+    - they are suppressed in `play-world`, so you no longer get XP receipt popups while inside a room/course run
+    - when suppressed, the controller still emits the idle event so queued reward stings can continue normally
+  - added HUD target styling in `src/styles/sections/world.css`
+  - validation:
+    - `npm run typecheck` passed
+    - targeted Playwright DOM proof wrote:
+      - `output/web-game/xp-receipt-hud-check/world-mode.png`
+      - `output/web-game/xp-receipt-hud-check/summary.json`
+      - `output/web-game/xp-receipt-hud-check/late-summary.json`
+    - that proof confirmed:
+      - in `world` mode the receipt appears, then lands on `#world-hud`
+      - after the fly completes, `#world-hud` has `xp-target-pulse` and the correct lane data
+      - in `play-world` mode the receipt layer stays hidden and no target pulse is applied
+
+- First-clear post-run rating flow on April 8, 2026:
+  - kept working in `feature/reward-sting-catchup-2026-04-08`
+  - room/course completions now show a short clear sting before the post-run rating modal opens
+    - added `room-clear` / `course-clear` reward variants plus an idle event in `src/progression/rewardStings.ts` and `src/ui/setup/rewardStings.ts`
+    - `RunRatingModalController` now defers auto-open requests while the reward overlay is visible, then opens once the reward queue drains
+  - post-run rating auto-open is now first-clear only
+    - room path in `src/scenes/overworld/goalRuns.ts` now gates auto-prompting off the pre-run room leaderboard state
+    - course path in `src/scenes/overworld/flow.ts`, `src/scenes/overworld/courseRuns.ts`, and `src/scenes/overworld/coursePlayback.ts` now preloads whether the viewer had a prior course completion and only auto-prompts on the first one
+  - added a blue `Rate Room` HUD button beside `Leaderboard`
+    - button only shows in browse mode for published rooms where `viewerCanVote` is true and the selected room is not your own
+    - button reuses the existing leaderboard modal instead of introducing a second room-rating surface
+  - validation:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - required `develop-web-game` smoke wrote:
+      - `output/web-game/reward-sting-first-clear-smoke/shot-0.png`
+      - `output/web-game/reward-sting-first-clear-smoke/state-0.json`
+    - targeted browser deferral proof wrote:
+      - `output/web-game/post-run-rating-deferral-check/summary.json`
+      - `output/web-game/post-run-rating-deferral-check/before-modal.png`
+      - `output/web-game/post-run-rating-deferral-check/after-modal.png`
+    - targeted HUD gate logic proof via `npx tsx` confirmed:
+      - `Rate Room` visible for a beaten published room by a non-owner
+      - hidden for own rooms, non-voters, and play mode
+
+- Passive reward-sting catch-up on April 8, 2026:
+  - started fresh main-based branch/worktree:
+    - branch: `feature/reward-sting-catchup-2026-04-08`
+    - worktree: `/private/tmp/wamp-reward-sting-catchup-2026-04-08`
+  - added persisted last-seen progression storage in `src/progression/rewardStingSeenState.ts`
+    - stores `ProgressionSummary` by authenticated user id in `localStorage`
+    - used as the baseline for “missed while away” celebration detection
+  - added `AUTH_SESSION_REFRESHED_EVENT` in `src/auth/client.ts`
+    - fires only after a real session refresh completes
+    - avoids tying reward catch-up to every auth-panel repaint
+  - added `RewardStingCatchupController` in `src/ui/setup/rewardStingCatchup.ts`
+    - listens to session refreshes and self-profile invalidations
+    - loads the current profile progression for the signed-in user
+    - compares it against the persisted seen snapshot
+    - queues missed celebration cards through the existing reward-sting event flow
+    - saves the new progression snapshot after reconciliation
+  - updated the post-run rating save path in `src/ui/setup/runRatingModal.ts`
+    - writes the new progression snapshot before invalidating the profile
+    - prevents the same rewards from replaying on the next profile/session refresh
+  - expanded reward construction in `src/progression/rewardStings.ts`
+    - if rank data is unavailable but new `top 10` / `#1` badges appear, reward building can still promote those to the leaderboard-style stings instead of generic badge cards
+  - validation:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - required `develop-web-game` smoke wrote:
+      - `output/web-game/reward-sting-catchup-smoke/shot-0.png`
+      - `output/web-game/reward-sting-catchup-smoke/state-0.json`
+    - targeted Playwright catch-up proof wrote:
+      - `output/web-game/reward-sting-catchup-check/reward-1.png`
+      - `output/web-game/reward-sting-catchup-check/reward-2.png`
+      - `output/web-game/reward-sting-catchup-check/reward-3.png`
+      - `output/web-game/reward-sting-catchup-check/summary.json`
+    - targeted proof confirmed:
+      - synthetic app-open/session-refresh reconciliation showed `YOU LEVELED UP!` -> `YOU EARNED A BADGE!` -> `YOU EARNED A TROPHY!`
+      - `replayVisible: false` after a second synthetic session refresh once the stored snapshot had been updated
+
 - Reward stings preview page build entry on April 8, 2026:
   - added `reward-stings-preview.html` to the Vite multi-page build inputs in `vite.config.ts`
   - this fixes production serving the normal app shell at `/reward-stings-preview.html` instead of the actual preview page
@@ -6842,3 +6971,137 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - preview DOM confirmed:
     - level-up state showed `YOU LEVELED UP!` with visible meter fill target `0.8`
     - hero state showed `YOU GOT FIRST PLACE!` with the meter hidden
+
+## 2026-04-08 16:05:00 EDT - XP receipt fly-to-HUD feedback
+
+- completed the small XP receipt system in `feature/reward-sting-catchup-2026-04-08`
+  - added a dedicated queued XP receipt overlay with lane icons, amount copy, a stepped progress fill, and a fly-to-target exit
+  - the receipt now lands on the always-visible menu/profile button, triggers an 8-bit impact burst there, and briefly pulses a tiny lane-colored progress strip under the button
+- implementation:
+  - finished the shared progression feedback path in `src/progression/progressionFeedback.ts`
+    - XP receipts now fire first
+    - larger reward stings wait for the `xp-receipts-idle` event before playing
+  - wired the new `XpReceiptController` into `src/ui/setup.ts`
+  - routed post-run rating saves through the shared feedback dispatcher in `src/ui/setup/runRatingModal.ts`
+  - routed room rating / difficulty votes from the leaderboard modal through the same dispatcher in `src/ui/setup/leaderboardModal.ts`
+  - routed passive progression catch-up on session/profile refresh through the same dispatcher in `src/ui/setup/rewardStingCatchup.ts`
+  - finished the missing XP receipt styling in `src/styles/sections/modals.css`
+- UX note:
+  - the receipt currently flies to the hamburger/profile button because that is the only always-visible stable shell target for player progression across browse, play, and editor surfaces
+  - if the HUD later gains a persistent self-progression anchor, the landing target can be retargeted there without changing the receipt event model
+- verification:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - required `develop-web-game` smoke wrote:
+    - `output/web-game/xp-receipt-smoke/shot-0.png`
+    - `output/web-game/xp-receipt-smoke/state-0.json`
+  - targeted browser checks wrote:
+    - `output/web-game/xp-receipt-targeted-check/receipt-popup-crop.png`
+    - `output/web-game/xp-receipt-targeted-check/summary.json`
+  - DOM/browser confirmation:
+    - synthetic `+5 BXP` receipt rendered with icon, stepped bar, and builder lane styling
+    - the queue reached the menu target and set `data-xp-lane="builder"` plus `--xp-target-progress`
+
+## 2026-04-09 11:55:00 EDT - Separate room explorer modal + cheaper discovery path
+
+- continued on `feature/reward-sting-catchup-2026-04-08` in `/private/tmp/wamp-reward-sting-catchup-2026-04-08`
+- separated room discovery from leaderboard:
+  - removed the old folded-in `Discover` tab flow from the leaderboard UI
+  - added a dedicated `Explore` modal opened from the HUD button beside `Leaderboard`
+  - wired `setup.ts`, `sceneCommands.ts`, and the overworld HUD bridge so the explorer opens/closes as its own panel
+- simplified the room cards to the user-requested discovery payload:
+  - visible fields are now title, quality stars / label, difficulty badge, and low-res room preview
+  - hidden from the card UI: coordinates, room version, live-as status, and vote-count copy
+  - admin-only `Feature` / `Unfeature` still appears when a session admin key is present
+- reduced backend discovery cost in `src/cloudflare/worker/runs/difficulty.ts`:
+  - stopped walking full room-version lineages for discovery
+  - discovery now summarizes only the current published room version
+  - rating aggregates and trophy lookups are chunked in batches to stay under SQLite / D1 variable limits
+  - current published challenge-room discovery on the safety-backed local worker now returns `48` results in about `0.59s`
+- added low-res room previews in the explorer:
+  - reuses published room snapshots plus `renderRoomSnapshotToPngDataUrl(...)`
+  - preview images are lazy-loaded with `IntersectionObserver`
+- fixed the local validation environment:
+  - Vite preview on `http://127.0.0.1:4596/` had been accidentally pinned to `https://api.wamp.land`; it was restarted so `/api` now proxies locally
+  - Wrangler dev on `http://127.0.0.1:8787/` now runs `--env safety --remote`
+  - applied missing safety migrations:
+    - `0022_trust_penalties_and_chat_ban_audit.sql`
+    - `0023_featured_rooms.sql`
+- verification:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - required `develop-web-game` client ran against `http://127.0.0.1:4596/` and wrote:
+    - `output/web-game/explore-separate-modal-check-2/shot-0.png`
+    - `output/web-game/explore-separate-modal-check-2/state-0.json`
+  - direct DOM/browser verification wrote:
+    - `output/web-game/explore-dom-verify/explore-modal.png`
+    - `output/web-game/explore-dom-verify/summary.json`
+  - DOM/browser confirmation:
+    - `Explore` opens as its own modal while `Leaderboard` remains closed
+    - first card rendered `Shark(s) In The Pond`
+    - first card rendered only `Not rated yet` quality + `Extreme` difficulty + preview image
+    - hidden metadata checks for coordinates, version, live-as, and vote-count text all returned `false`
+- next likely performance step if discovery still feels heavy after this:
+  - add a precomputed room-discovery summary table or cached JSON snapshot for rated / featured challenge rooms so the explorer does not need to aggregate live on every open
+
+## 2026-04-09 12:35:00 EDT - Explore modal builder pass
+
+- kept working on `feature/reward-sting-catchup-2026-04-08`
+- refined the Explore modal content and sorting:
+  - removed the extra `Explore` kicker at the top of the modal
+  - removed the `published challenge rooms...` meta line
+  - removed the top count summary row
+  - added a new `Builder` sort mode
+- added builder identity to discovery cards:
+  - discovery entries now include `builderUserId` and `builderDisplayName` from the room's current published record
+  - each card now shows `By <builder>`
+  - clicking the builder name opens the profile modal instead of jumping to the room
+  - the room card itself still jumps to the selected coordinates when clicked elsewhere
+- updated the Explore filter styling:
+  - `Easy`, `Medium`, `Hard`, and `Extreme` buttons now stay color-coded in the modal itself, matching the room difficulty palette
+  - added active styling for the new `Builder` sort button
+- validation:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - direct DOM/browser verification wrote:
+    - `output/web-game/explore-builder-pass-check/explore-builder-sort.png`
+    - `output/web-game/explore-builder-pass-check/explore-profile-open.png`
+    - `output/web-game/explore-builder-pass-check/summary.json`
+  - DOM/browser confirmation:
+    - difficulty filter buttons rendered with green / yellow / orange / red fills
+  - modal no longer rendered kicker/meta/summary rows
+  - `Builder` became the only active sort after switching
+  - clicking a builder name opened the profile modal while leaving Explore open underneath
+
+## 2026-04-09 11:59:00 EDT - HUD compact creator + self profile chips
+
+- kept working on `feature/reward-sting-catchup-2026-04-08`
+- reshaped the selected-room creator card into a compact identity chip:
+  - added a `by` prefix before the creator name
+  - removed the per-lane progress bars from the world HUD card
+  - kept the creator card clickable so it still routes to profile open through the existing HUD handler
+- added a matching compact self-profile chip beside the hamburger menu:
+  - shows the logged-in player's display name plus player / curator / builder `LVL` rows
+  - clicking it routes to the viewer's own profile when authenticated
+  - seeded it from session data first, then hydrates exact levels from the profile repository
+- consolidated the compact chip styling into shared `.mini-profile-*` rules used by both:
+  - world selected creator card
+  - auth-panel identity chip
+- validation:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - required Playwright client run wrote:
+    - `output/web-game/hud-mini-profile-smoke/shot-0.png`
+    - `output/web-game/hud-mini-profile-smoke/shot-1.png`
+    - `output/web-game/hud-mini-profile-smoke/state-0.json`
+    - `output/web-game/hud-mini-profile-smoke/state-1.json`
+  - DOM/browser verification wrote:
+    - `output/web-game/hud-mini-profile-dom-check/fullpage.png`
+    - `output/web-game/hud-mini-profile-dom-check/summary.json`
+  - DOM/browser confirmation:
+    - world creator chip rendered visible with `by jonathan`
+    - creator stat rows rendered as compact `LVL` text only
+    - no creator progress bar nodes remained in the HUD card
+    - synthetic self chip fit beside the hamburger without overlap
+- caveat:
+  - the local browser run was guest-state, so the self chip interaction was code-verified plus synthetic-layout verified rather than exercised through a real authenticated click path

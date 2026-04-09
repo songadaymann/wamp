@@ -8,6 +8,7 @@ import { ChatModerationModalController } from './setup/chatModerationModal';
 import { ControlsModalController } from './setup/controlsModal';
 import { CourseModalController } from './setup/courseModal';
 import { CourseComposerPanelController } from './setup/courseComposerPanel';
+import { ExploreModalController } from './setup/exploreModal';
 import { RoomHistoryModalController } from './setup/historyModal';
 import { setupKeyboardShortcutPassthrough } from './setup/keyboardPassthrough';
 import { LeaderboardModalController } from './setup/leaderboardModal';
@@ -16,10 +17,12 @@ import { PaletteController } from './setup/paletteController';
 import { setupRoomMusicControls } from './setup/musicControls';
 import { ProfileModalController } from './setup/profileModal';
 import { RewardStingController } from './setup/rewardStings';
+import { RewardStingCatchupController } from './setup/rewardStingCatchup';
 import { RunRatingModalController } from './setup/runRatingModal';
 import { SignTextModalController } from './setup/signTextModal';
 import { setupCollapsibleSidebarSections, setupEditorSidebarShell } from './setup/sidebarSections';
 import { setupSceneCommands } from './setup/sceneCommands';
+import { XpReceiptController } from './setup/xpReceipts';
 import { configureEditorUiBridgeRuntime } from '../scenes/editor/uiBridge';
 
 export function setupUI(game: Phaser.Game): void {
@@ -27,6 +30,7 @@ export function setupUI(game: Phaser.Game): void {
   const paletteController = new PaletteController();
   const historyModal = new RoomHistoryModalController(game);
   const leaderboardModal = new LeaderboardModalController(game);
+  const exploreModal = new ExploreModalController(game);
   const installHelp = new InstallHelpController();
   const controlsModal = new ControlsModalController();
   const aboutModal = new AboutModalController();
@@ -35,6 +39,8 @@ export function setupUI(game: Phaser.Game): void {
   const courseComposerPanel = new CourseComposerPanelController(game);
   const profileModal = new ProfileModalController(game);
   const rewardStings = new RewardStingController();
+  const xpReceipts = new XpReceiptController();
+  const rewardStingCatchup = new RewardStingCatchupController();
   const runRatingModal = new RunRatingModalController(game);
   const signTextModal = new SignTextModalController(game);
   const chatPanel = new ChatPanelController();
@@ -46,6 +52,7 @@ export function setupUI(game: Phaser.Game): void {
     closePanels: () => {
       historyModal.close();
       leaderboardModal.close();
+      exploreModal.close();
       controlsModal.close();
       aboutModal.close();
       courseModal.close();
@@ -57,6 +64,7 @@ export function setupUI(game: Phaser.Game): void {
   setupCollapsibleSidebarSections();
   historyModal.init();
   leaderboardModal.init();
+  exploreModal.init();
   installHelp.init();
   controlsModal.init();
   aboutModal.init();
@@ -65,6 +73,8 @@ export function setupUI(game: Phaser.Game): void {
   courseComposerPanel.init();
   profileModal.init();
   rewardStings.init();
+  xpReceipts.init();
+  rewardStingCatchup.init();
   runRatingModal.init();
   signTextModal.init();
   chatPanel.init();
@@ -73,6 +83,7 @@ export function setupUI(game: Phaser.Game): void {
     game,
     historyModal,
     leaderboardModal,
+    exploreModal,
     controlsModal,
     aboutModal,
     chatModerationModal,

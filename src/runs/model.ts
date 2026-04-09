@@ -15,6 +15,8 @@ export type RunResult = 'active' | 'completed' | 'failed' | 'abandoned';
 export type LeaderboardRankingMode = 'time' | 'score';
 export const ROOM_DIFFICULTIES = ['easy', 'medium', 'hard', 'extreme'] as const;
 export type RoomDifficulty = typeof ROOM_DIFFICULTIES[number];
+export const ROOM_DISCOVERY_SORTS = ['featured', 'quality', 'newest', 'builder'] as const;
+export type RoomDiscoverySort = typeof ROOM_DISCOVERY_SORTS[number];
 
 export const ROOM_DIFFICULTY_LABELS: Record<RoomDifficulty, string> = {
   easy: 'Easy',
@@ -142,6 +144,8 @@ export interface RoomDiscoveryEntry {
   roomId: string;
   roomCoordinates: RoomCoordinates;
   roomTitle: string | null;
+  builderUserId: string | null;
+  builderDisplayName: string | null;
   roomVersion: number;
   displayRoomVersion: number;
   leaderboardSourceVersion: number | null;
@@ -152,10 +156,13 @@ export interface RoomDiscoveryEntry {
   quality: QualityRatingSummary;
   trophy: TrophyAwardSummary | null;
   publishedAt: string | null;
+  featured: boolean;
+  featuredAt: string | null;
 }
 
 export interface RoomDiscoveryResponse {
   difficultyFilter: RoomDifficulty | null;
+  sort: RoomDiscoverySort;
   results: RoomDiscoveryEntry[];
 }
 
@@ -203,5 +210,11 @@ export interface UserStatsRecord {
 export function normalizeRoomDifficulty(value: unknown): RoomDifficulty | null {
   return typeof value === 'string' && ROOM_DIFFICULTIES.includes(value as RoomDifficulty)
     ? (value as RoomDifficulty)
+    : null;
+}
+
+export function normalizeRoomDiscoverySort(value: unknown): RoomDiscoverySort | null {
+  return typeof value === 'string' && ROOM_DISCOVERY_SORTS.includes(value as RoomDiscoverySort)
+    ? (value as RoomDiscoverySort)
     : null;
 }

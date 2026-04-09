@@ -7,7 +7,13 @@ import type {
 import type { RoomRevertRequestBody } from '../../../persistence/roomModel';
 import { requireAdminRequest } from '../auth/request';
 import { requireChatModeratorSession } from '../chat/moderation';
-import { getCoordinatesFromRequest, HttpError, jsonResponse, parseJsonBody } from '../core/http';
+import {
+  getCoordinatesFromRequest,
+  HttpError,
+  jsonResponse,
+  normalizePositiveInteger,
+  parseJsonBody,
+} from '../core/http';
 import type { Env } from '../core/types';
 import { loadAdminProgressionUser, searchAdminProgressionUsers, updateAdminBuilderCapOverride } from '../progression/store';
 import { revertRoom } from '../rooms/store';
@@ -110,7 +116,17 @@ export async function handleAdminRequest(
     return handleAdminRoomRestore(request, url, env, decodeURIComponent(restoreMatch[1]));
   }
 
+  const featureMatch = /^\/api\/admin\/rooms\/([^/]+)\/feature$/.exec(url.pathname);
+  if (featureMatch && request.method === 'POST') {
+    return handleAdminRoomFeature(request, env, decodeURIComponent(featureMatch[1]));
+  }
+
   throw new HttpError(404, 'Admin route not found.');
+}
+
+interface AdminRoomFeatureRequestBody {
+  roomVersion: number;
+  featured: boolean;
 }
 
 async function handleAdminRoomRestore(
@@ -255,6 +271,90 @@ async function handleAdminRoomClear(
       runPointEvents: attemptIds.length,
     },
     affectedUsers: [...affectedUserIds],
+  });
+}
+
+async function handleAdminRoomFeature(
+  request: Request,
+  env: Env,
+  roomId: string,
+): Promise<Response> {
+  requireAdminRequest(env, request, `feature room ${roomId}`);
+  const body = await parseJsonBody<AdminRoomFeatureRequestBody>(request);
+  const roomVersion = normalizePositiveInteger(body.roomVersion, 'roomVersion');
+  if (typeof body.featured !== 'boolean') {
+    throw new HttpError(400, 'featured must be true or false.');
+  }
+
+  const roomRow = await env.DB.prepare(
+    `
+      SELECT
+        rooms.id,
+        rooms.published_json,
+        latest.version AS current_published_version
+      FROM rooms
+      INNER JOIN (
+        SELECT room_id, MAX(version) AS version
+        FROM room_versions
+        GROUP BY room_id
+      ) AS latest_index
+        ON latest_index.room_id = rooms.id
+      INNER JOIN room_versions AS latest
+        ON latest.room_id = latest_index.room_id
+       AND latest.version = latest_index.version
+      WHERE rooms.id = ?
+      LIMIT 1
+    `
+  )
+    .bind(roomId)
+    .first<{
+      id: string;
+      published_json: string | null;
+      current_published_version: number;
+    }>();
+
+  if (!roomRow || !roomRow.published_json) {
+    throw new HttpError(404, 'Published room not found.');
+  }
+
+  if (roomVersion !== roomRow.current_published_version) {
+    throw new HttpError(409, 'Only the current published room version can be featured.');
+  }
+
+  const now = new Date().toISOString();
+  if (body.featured) {
+    await env.DB.prepare(
+      `
+        INSERT INTO featured_rooms (
+          room_id,
+          room_version,
+          featured_at
+        )
+        VALUES (?, ?, ?)
+        ON CONFLICT(room_id) DO UPDATE SET
+          room_version = excluded.room_version,
+          featured_at = excluded.featured_at
+      `
+    )
+      .bind(roomId, roomVersion, now)
+      .all();
+  } else {
+    await env.DB.prepare(
+      `
+        DELETE FROM featured_rooms
+        WHERE room_id = ?
+      `
+    )
+      .bind(roomId)
+      .all();
+  }
+
+  return jsonResponse(request, {
+    ok: true,
+    roomId,
+    roomVersion,
+    featured: body.featured,
+    featuredAt: body.featured ? now : null,
   });
 }
 

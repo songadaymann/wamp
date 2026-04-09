@@ -9,6 +9,7 @@ import type {
   CourseProgressRatingResponse,
 } from '../../courses/runModel';
 import type {
+  ProgressionDelta,
   ProgressionDifficulty,
   ProgressionSummary,
   QualityRatingSummary,
@@ -22,7 +23,9 @@ import {
   type PostRunRatingRequestDetail,
   type RoomPostRunRatingRequestDetail,
 } from '../../progression/postRunRatingEvents';
-import { buildRewardStings, notifyRewardStings } from '../../progression/rewardStings';
+import { REWARD_STINGS_IDLE_EVENT } from '../../progression/rewardStings';
+import { dispatchProgressionFeedback } from '../../progression/progressionFeedback';
+import { saveSeenRewardProgression } from '../../progression/rewardStingSeenState';
 import { createProfileRepository, type ProfileRepository } from '../../profiles/profileRepository';
 import { requestProfileInvalidation } from './profileEvents';
 import {
@@ -63,6 +66,7 @@ export class RunRatingModalController {
   private savedDeltaText: string | null = null;
   private baselineProgression: ProgressionSummary | null = null;
   private baselineProgressionLoad: Promise<void> | null = null;
+  private pendingOpenRequest: PostRunRatingRequestDetail | null = null;
 
   private readonly handleCloseClick = () => {
     this.close();
@@ -91,6 +95,21 @@ export class RunRatingModalController {
       return;
     }
 
+    if (this.isRewardStingVisible()) {
+      this.pendingOpenRequest = detail;
+      return;
+    }
+
+    void this.open(detail);
+  };
+
+  private readonly handleRewardStingsIdle = () => {
+    if (!this.pendingOpenRequest || this.isRewardStingVisible()) {
+      return;
+    }
+
+    const detail = this.pendingOpenRequest;
+    this.pendingOpenRequest = null;
     void this.open(detail);
   };
 
@@ -136,6 +155,7 @@ export class RunRatingModalController {
       POST_RUN_RATING_REQUEST_EVENT,
       this.handleOpenRequest as EventListener
     );
+    this.windowObj.addEventListener(REWARD_STINGS_IDLE_EVENT, this.handleRewardStingsIdle);
     for (const button of this.elements.qualityButtons) {
       button.addEventListener('click', () => {
         const value = Number.parseInt(button.dataset.qualityStars ?? '', 10);
@@ -165,6 +185,7 @@ export class RunRatingModalController {
       POST_RUN_RATING_REQUEST_EVENT,
       this.handleOpenRequest as EventListener
     );
+    this.windowObj.removeEventListener(REWARD_STINGS_IDLE_EVENT, this.handleRewardStingsIdle);
   }
 
   private async open(detail: PostRunRatingRequestDetail): Promise<void> {
@@ -246,7 +267,13 @@ export class RunRatingModalController {
     this.savedDeltaText = null;
     this.baselineProgression = null;
     this.baselineProgressionLoad = null;
+    this.pendingOpenRequest = null;
     this.setError(null);
+  }
+
+  private isRewardStingVisible(): boolean {
+    const layer = this.doc.getElementById('reward-sting-layer');
+    return Boolean(layer && !layer.classList.contains('hidden'));
   }
 
   private adoptViewerRating(viewerRating: ViewerRatingSummary | null): void {
@@ -277,6 +304,7 @@ export class RunRatingModalController {
     this.render();
 
     try {
+      const authUserId = getAuthDebugState().user?.id?.trim() ?? null;
       if (request.contentType === 'room') {
         const response = await this.runRepository.submitRoomRating(request.contentId, {
           roomCoordinates: request.roomCoordinates,
@@ -290,7 +318,11 @@ export class RunRatingModalController {
         this.savedDeltaText = formatProgressionDelta(response.progressionDelta);
         await this.baselineProgressionLoad;
         await this.ensureCurrentSummary(request);
-        notifyRewardStings(this.buildRewardQueue(request, response.progression));
+        if (authUserId) {
+          saveSeenRewardProgression(authUserId, response.progression);
+        }
+        requestProfileInvalidation(authUserId);
+        this.emitProgressionFeedback(request, response.progression, response.progressionDelta);
       } else {
         const response = await this.courseRepository.submitCourseRating(request.contentId, {
           courseVersion: request.version,
@@ -303,11 +335,13 @@ export class RunRatingModalController {
         this.savedDeltaText = formatProgressionDelta(response.progressionDelta);
         await this.baselineProgressionLoad;
         await this.ensureCurrentSummary(request);
-        notifyRewardStings(this.buildRewardQueue(request, response.progression));
+        if (authUserId) {
+          saveSeenRewardProgression(authUserId, response.progression);
+        }
+        requestProfileInvalidation(authUserId);
+        this.emitProgressionFeedback(request, response.progression, response.progressionDelta);
       }
 
-      const authState = getAuthDebugState();
-      requestProfileInvalidation(authState.user?.id);
       notifyPostRunRatingSubmitted({
         contentType: request.contentType,
         contentId: request.contentId,
@@ -448,18 +482,20 @@ export class RunRatingModalController {
     }
   }
 
-  private buildRewardQueue(
+  private emitProgressionFeedback(
     request: PostRunRatingRequestDetail,
     progression: ProgressionSummary,
-  ) {
+    progressionDelta: ProgressionDelta,
+  ): void {
     const resolvedTitle =
       request.contentType === 'room'
         ? this.roomSummary?.roomTitle ?? request.contentTitle
         : this.courseSummary?.courseTitle ?? request.contentTitle;
 
-    return buildRewardStings({
+    dispatchProgressionFeedback({
       previousProgression: this.baselineProgression,
       currentProgression: progression,
+      progressionDelta,
       previousViewerRank: request.previousViewerRank,
       currentViewerRank:
         request.contentType === 'room'
@@ -468,7 +504,20 @@ export class RunRatingModalController {
       contentType: request.contentType,
       contentId: request.contentId,
       contentTitle: resolvedTitle,
+      reason: this.buildXpReason(request.contentType, resolvedTitle),
+      windowObj: this.windowObj,
     });
+  }
+
+  private buildXpReason(
+    contentType: PostRunRatingRequestDetail['contentType'],
+    resolvedTitle: string | null | undefined,
+  ): string {
+    const normalizedTitle = resolvedTitle?.trim();
+    if (normalizedTitle) {
+      return `Rated ${normalizedTitle}`;
+    }
+    return contentType === 'course' ? 'Rated a course' : 'Rated a room';
   }
 
   private async ensureCurrentSummary(request: PostRunRatingRequestDetail): Promise<void> {

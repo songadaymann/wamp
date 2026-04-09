@@ -28,6 +28,7 @@ export interface ActiveCourseRunState {
   pendingResult: 'completed' | 'failed' | 'abandoned' | null;
   submittedScore: number | null;
   leaderboardEligible: boolean;
+  hadPreviousCompletion: boolean;
   verificationSchemaVersion: number | null;
   verificationNonce: string | null;
   snapshotHash: string | null;
@@ -37,6 +38,7 @@ export interface CreateActiveCourseRunStateOptions {
   course: CourseSnapshot;
   returnCoordinates: RoomCoordinates;
   leaderboardEligible: boolean;
+  hadPreviousCompletion?: boolean;
   enemyTarget: number | null;
   localOnlyMessage?: string | null;
 }
@@ -80,6 +82,7 @@ export function createActiveCourseRunState(
     course,
     returnCoordinates,
     leaderboardEligible,
+    hadPreviousCompletion = false,
     enemyTarget,
     localOnlyMessage,
   } = options;
@@ -106,6 +109,7 @@ export function createActiveCourseRunState(
     pendingResult: null,
     submittedScore: null,
     leaderboardEligible,
+    hadPreviousCompletion,
     verificationSchemaVersion: null,
     verificationNonce: null,
     snapshotHash: null,

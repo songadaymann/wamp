@@ -1467,8 +1467,8 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.refreshAroundIfNeededOrFromCache(coordinates, options),
       prepareActiveCourseRoomOverrides: (snapshot, options) =>
         this.coursePlaybackController.prepareActiveCourseRoomOverrides(snapshot, options),
-      createCourseRunState: (snapshot) =>
-        this.coursePlaybackController.createCourseRunState(snapshot),
+      createCourseRunState: (snapshot, options) =>
+        this.coursePlaybackController.createCourseRunState(snapshot, options),
       getCourseStartRoomRef: (course) =>
         this.coursePlaybackController.getCourseStartRoomRef(course),
       getActiveCourseRun: () => this.activeCourseRun,

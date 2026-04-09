@@ -1,21 +1,20 @@
-import {
-  createRoomVersionRecord,
-  type RoomSnapshot,
-  type RoomVersionRecord,
-} from '../../../persistence/roomModel';
-import { buildRoomLeaderboardLineage } from '../../../persistence/roomLeaderboardLineage';
+import type { RoomSnapshot } from '../../../persistence/roomModel';
 import { ROOM_GOAL_TYPES, type RoomGoalType } from '../../../goals/roomGoals';
-import type {
-  RoomDifficulty,
+import type { RoomDifficulty,
   RoomDifficultyCounts,
   RoomDifficultySummary,
   RoomDiscoveryEntry,
   RoomDiscoveryResponse,
+  RoomDiscoverySort,
 } from '../../../runs/model';
-import { normalizeRoomDifficulty, ROOM_DIFFICULTIES } from '../../../runs/model';
+import type { QualityRatingSummary, TrophyAwardSummary } from '../../../progression/model';
+import {
+  normalizeRoomDifficulty,
+  normalizeRoomDiscoverySort,
+  ROOM_DIFFICULTIES,
+} from '../../../runs/model';
 import { HttpError } from '../core/http';
-import type { Env, RoomDifficultyVoteRow, RoomVersionRow } from '../core/types';
-import { loadRoomAggregateRatingSummaryFromVersions } from '../progression/store';
+import type { ContentTrophyRow, Env, RoomDifficultyVoteRow } from '../core/types';
 
 interface RoomDifficultyAggregateRow {
   easy_votes: number | string | null;
@@ -30,14 +29,47 @@ interface PublishedRoomDiscoveryRow {
   y: number;
   published_title: string | null;
   published_goal_type: string | null;
+  last_published_by_user_id: string | null;
+  last_published_by_display_name: string | null;
   current_published_version: number;
   published_at: string;
   canonical_version: number | null;
 }
 
-interface RoomVersionDiscoveryRow extends RoomVersionRow {
+interface FeaturedRoomRow {
   room_id: string;
+  room_version: number;
+  featured_at: string;
 }
+
+interface RoomDiscoveryRatingAggregateRow {
+  room_id: string;
+  quality_vote_count: number | string | null;
+  quality_raw_sum: number | string | null;
+  quality_weighted_sum: number | string | null;
+  quality_weighted_vote_count: number | string | null;
+  one_star_count: number | string | null;
+  two_star_count: number | string | null;
+  three_star_count: number | string | null;
+  four_star_count: number | string | null;
+  five_star_count: number | string | null;
+  easy_count: number | string | null;
+  medium_count: number | string | null;
+  hard_count: number | string | null;
+  extreme_count: number | string | null;
+  easy_weight: number | string | null;
+  medium_weight: number | string | null;
+  hard_weight: number | string | null;
+  extreme_weight: number | string | null;
+}
+
+interface DiscoveryRoomVersionKey {
+  roomId: string;
+  roomVersion: number;
+}
+
+const QUALITY_PRIOR_MEAN = 3.5;
+const QUALITY_PRIOR_WEIGHT = 5;
 
 export function createEmptyRoomDifficultyCounts(): RoomDifficultyCounts {
   return {
@@ -182,7 +214,8 @@ export async function upsertRoomDifficultyVote(
 export async function loadRoomDiscoveryResponse(
   env: Env,
   difficultyFilter: RoomDifficulty | null,
-  limit: number
+  limit: number,
+  sort: RoomDiscoverySort,
 ): Promise<RoomDiscoveryResponse> {
   const publishedRooms = await env.DB.prepare(
     `
@@ -192,6 +225,8 @@ export async function loadRoomDiscoveryResponse(
         rooms.y,
         rooms.published_title,
         rooms.published_goal_type,
+        rooms.last_published_by_user_id,
+        rooms.last_published_by_display_name,
         latest.version AS current_published_version,
         latest.created_at AS published_at,
         rooms.canonical_version
@@ -215,106 +250,84 @@ export async function loadRoomDiscoveryResponse(
   if (challengeRooms.length === 0) {
     return {
       difficultyFilter,
+      sort,
       results: [],
     };
   }
 
   const roomIds = challengeRooms.map((entry) => entry.roomId);
-  const versionRows = await env.DB.prepare(
-    `
-      SELECT
-        room_id,
-        version,
-        snapshot_json,
-        title,
-        created_at,
-        published_by_user_id,
-        published_by_principal_type,
-        published_by_agent_id,
-        published_by_display_name,
-        reverted_from_version,
-        leaderboard_source_version
-      FROM room_versions
-      WHERE room_id IN (${roomIds.map(() => '?').join(', ')})
-      ORDER BY room_id ASC, version ASC
-    `
-  )
-    .bind(...roomIds)
-    .all<RoomVersionDiscoveryRow>();
-
-  const versionsByRoomId = new Map<string, RoomVersionRecord[]>();
-  for (const row of versionRows.results) {
-    const snapshot = parseStoredSnapshot(row.snapshot_json);
-    const version = createRoomVersionRecord(snapshot, {
-      version: row.version,
-      createdAt: row.created_at,
-      publishedByUserId: row.published_by_user_id,
-      publishedByPrincipalKind: row.published_by_principal_type,
-      publishedByAgentId: row.published_by_agent_id,
-      publishedByDisplayName: row.published_by_display_name,
-      revertedFromVersion: row.reverted_from_version,
-      leaderboardSourceVersion: row.leaderboard_source_version,
-    });
-    const bucket = versionsByRoomId.get(row.room_id);
-    if (bucket) {
-      bucket.push(version);
-    } else {
-      versionsByRoomId.set(row.room_id, [version]);
+  const roomVersionKeys = challengeRooms.map((entry) => ({
+    roomId: entry.roomId,
+    roomVersion: entry.roomVersion,
+  }));
+  const [featuredRows, ratingRows, trophyRows] = await Promise.all([
+    loadFeaturedRoomRows(env, roomIds),
+    loadRoomDiscoveryRatingAggregateRows(env, roomVersionKeys),
+    loadRoomDiscoveryTrophyRows(env, roomVersionKeys),
+  ]);
+  const featuredByRoomId = new Map(
+    featuredRows.results.map((row) => [row.room_id, row] as const),
+  );
+  const ratingByRoomId = new Map(
+    ratingRows.results.map((row) => [row.room_id, row] as const),
+  );
+  const trophyByRoomId = new Map<string, TrophyAwardSummary>();
+  for (const row of trophyRows.results) {
+    if (trophyByRoomId.has(row.content_id)) {
+      continue;
     }
+    trophyByRoomId.set(row.content_id, {
+      contentType: 'room',
+      contentId: row.content_id,
+      versionKey: parseRowNumber(row.version_key),
+      trophyType: row.trophy_type,
+      awardedAt: row.awarded_at,
+    });
   }
 
-  const results = (
-    await Promise.all(
-      challengeRooms.map(async (room): Promise<RoomDiscoveryEntry> => {
-      const versions = versionsByRoomId.get(room.roomId) ?? [];
-      const lineage = buildRoomLeaderboardLineage(
-        versions,
-        room.canonicalRoomVersion,
-        room.roomVersion
+  const results = challengeRooms
+    .map((room): RoomDiscoveryEntry => {
+      const featured = featuredByRoomId.get(room.roomId) ?? null;
+      const ratingSummary = buildDiscoveryRatingSummary(
+        ratingByRoomId.get(room.roomId) ?? null,
       );
-      const lineageEntry = lineage.byVersion.get(room.roomVersion) ?? null;
-      const ratings = await loadRoomAggregateRatingSummaryFromVersions(
-        env,
-        room.roomId,
-        versions,
-        room.roomVersion,
-        null,
-        room.roomVersion,
+      const voteCount = Math.max(
+        ratingSummary.quality.voteCount,
+        ratingSummary.totalDifficultyVotes,
       );
-      const voteCount = Math.max(ratings.difficulty.totalVotes, ratings.quality.voteCount);
 
       return {
         roomId: room.roomId,
         roomCoordinates: { ...room.roomCoordinates },
         roomTitle: room.roomTitle,
+        builderUserId: room.builderUserId,
+        builderDisplayName: room.builderDisplayName,
         roomVersion: room.roomVersion,
-        displayRoomVersion: lineageEntry?.representativeVersion ?? room.roomVersion,
-        leaderboardSourceVersion: lineageEntry?.leaderboardSourceRepresentativeVersion ?? null,
+        displayRoomVersion: room.roomVersion,
+        leaderboardSourceVersion: null,
         canonicalRoomVersion: room.canonicalRoomVersion,
         goalType: room.goalType,
-        consensusDifficulty: ratings.difficulty.consensus,
+        consensusDifficulty: ratingSummary.consensusDifficulty,
         voteCount,
-        quality: ratings.quality,
-        trophy: ratings.trophy,
+        quality: ratingSummary.quality,
+        trophy: trophyByRoomId.get(room.roomId) ?? null,
         publishedAt: room.publishedAt,
+        featured:
+          featured !== null
+          && featured.room_version === room.roomVersion,
+        featuredAt:
+          featured !== null && featured.room_version === room.roomVersion
+            ? featured.featured_at
+            : null,
       };
     })
-    )
-  )
     .filter((entry) => difficultyFilter === null || entry.consensusDifficulty === difficultyFilter)
-    .sort((left, right) => {
-      if (right.voteCount !== left.voteCount) {
-        return right.voteCount - left.voteCount;
-      }
-
-      const rightPublishedAt = right.publishedAt ? Date.parse(right.publishedAt) : 0;
-      const leftPublishedAt = left.publishedAt ? Date.parse(left.publishedAt) : 0;
-      return rightPublishedAt - leftPublishedAt;
-    })
+    .sort((left, right) => compareRoomDiscoveryEntries(left, right, sort))
     .slice(0, limit);
 
   return {
     difficultyFilter,
+    sort,
     results,
   };
 }
@@ -326,6 +339,318 @@ export function parseRoomDifficultyOrThrow(value: unknown): RoomDifficulty {
   }
 
   return normalized;
+}
+
+export function parseRoomDiscoverySortOrThrow(value: unknown): RoomDiscoverySort {
+  const normalized = normalizeRoomDiscoverySort(value);
+  if (!normalized) {
+    throw new HttpError(400, 'sort must be featured, quality, newest, or builder.');
+  }
+
+  return normalized;
+}
+
+function compareRoomDiscoveryEntries(
+  left: RoomDiscoveryEntry,
+  right: RoomDiscoveryEntry,
+  sort: RoomDiscoverySort,
+): number {
+  if (sort === 'featured') {
+    const featuredCompare = compareBooleansDesc(left.featured, right.featured);
+    if (featuredCompare !== 0) {
+      return featuredCompare;
+    }
+    const featuredAtCompare = compareTimestampsDesc(left.featuredAt, right.featuredAt);
+    if (featuredAtCompare !== 0) {
+      return featuredAtCompare;
+    }
+    const qualityCompare = compareQualityDesc(left, right);
+    if (qualityCompare !== 0) {
+      return qualityCompare;
+    }
+    const voteCompare = right.voteCount - left.voteCount;
+    if (voteCompare !== 0) {
+      return voteCompare;
+    }
+    return compareTimestampsDesc(left.publishedAt, right.publishedAt);
+  }
+
+  if (sort === 'quality') {
+    const qualityCompare = compareQualityDesc(left, right);
+    if (qualityCompare !== 0) {
+      return qualityCompare;
+    }
+    const voteCompare = right.voteCount - left.voteCount;
+    if (voteCompare !== 0) {
+      return voteCompare;
+    }
+    return compareTimestampsDesc(left.publishedAt, right.publishedAt);
+  }
+
+  if (sort === 'builder') {
+    const builderCompare = compareNullableStringsAsc(
+      left.builderDisplayName,
+      right.builderDisplayName,
+    );
+    if (builderCompare !== 0) {
+      return builderCompare;
+    }
+    const titleCompare = compareNullableStringsAsc(left.roomTitle, right.roomTitle);
+    if (titleCompare !== 0) {
+      return titleCompare;
+    }
+    return compareTimestampsDesc(left.publishedAt, right.publishedAt);
+  }
+
+  return compareTimestampsDesc(left.publishedAt, right.publishedAt);
+}
+
+function compareQualityDesc(left: RoomDiscoveryEntry, right: RoomDiscoveryEntry): number {
+  const leftQuality = left.quality.adjustedAverage ?? -1;
+  const rightQuality = right.quality.adjustedAverage ?? -1;
+  if (rightQuality !== leftQuality) {
+    return rightQuality - leftQuality;
+  }
+  return 0;
+}
+
+function compareTimestampsDesc(left: string | null, right: string | null): number {
+  const leftMs = left ? Date.parse(left) : 0;
+  const rightMs = right ? Date.parse(right) : 0;
+  return rightMs - leftMs;
+}
+
+function compareBooleansDesc(left: boolean, right: boolean): number {
+  if (left === right) {
+    return 0;
+  }
+  return right ? 1 : -1;
+}
+
+function compareNullableStringsAsc(left: string | null, right: string | null): number {
+  const leftValue = left?.trim() || '';
+  const rightValue = right?.trim() || '';
+  if (!leftValue && !rightValue) {
+    return 0;
+  }
+  if (!leftValue) {
+    return 1;
+  }
+  if (!rightValue) {
+    return -1;
+  }
+  return leftValue.localeCompare(rightValue, undefined, { sensitivity: 'base' });
+}
+
+async function loadFeaturedRoomRows(
+  env: Env,
+  roomIds: string[],
+): Promise<{ results: FeaturedRoomRow[] }> {
+  const results: FeaturedRoomRow[] = [];
+  for (const roomIdChunk of chunkValues(roomIds, 50)) {
+    const chunkRows = await env.DB.prepare(
+      `
+        SELECT
+          room_id,
+          room_version,
+          featured_at
+        FROM featured_rooms
+        WHERE room_id IN (${roomIdChunk.map(() => '?').join(', ')})
+      `
+    )
+      .bind(...roomIdChunk)
+      .all<FeaturedRoomRow>();
+    results.push(...chunkRows.results);
+  }
+
+  return { results };
+}
+
+async function loadRoomDiscoveryRatingAggregateRows(
+  env: Env,
+  roomVersionKeys: DiscoveryRoomVersionKey[],
+): Promise<{ results: RoomDiscoveryRatingAggregateRow[] }> {
+  const results: RoomDiscoveryRatingAggregateRow[] = [];
+  for (const roomVersionChunk of chunkValues(roomVersionKeys, 40)) {
+    const whereClause = roomVersionChunk
+      .map(() => '(room_id = ? AND version_key = ?)')
+      .join(' OR ');
+    const bindings = roomVersionChunk.flatMap((entry) => [entry.roomId, entry.roomVersion]);
+    const chunkRows = await env.DB.prepare(
+      `
+        SELECT
+          room_id,
+          SUM(CASE WHEN quality_stars IS NOT NULL THEN 1 ELSE 0 END) AS quality_vote_count,
+          SUM(CASE WHEN quality_stars IS NOT NULL THEN quality_stars ELSE 0 END) AS quality_raw_sum,
+          SUM(CASE WHEN quality_stars IS NOT NULL THEN quality_stars * trust_weight ELSE 0 END) AS quality_weighted_sum,
+          SUM(CASE WHEN quality_stars IS NOT NULL THEN trust_weight ELSE 0 END) AS quality_weighted_vote_count,
+          SUM(CASE WHEN quality_stars = 1 THEN 1 ELSE 0 END) AS one_star_count,
+          SUM(CASE WHEN quality_stars = 2 THEN 1 ELSE 0 END) AS two_star_count,
+          SUM(CASE WHEN quality_stars = 3 THEN 1 ELSE 0 END) AS three_star_count,
+          SUM(CASE WHEN quality_stars = 4 THEN 1 ELSE 0 END) AS four_star_count,
+          SUM(CASE WHEN quality_stars = 5 THEN 1 ELSE 0 END) AS five_star_count,
+          SUM(CASE WHEN difficulty_choice = 'easy' THEN 1 ELSE 0 END) AS easy_count,
+          SUM(CASE WHEN difficulty_choice = 'medium' THEN 1 ELSE 0 END) AS medium_count,
+          SUM(CASE WHEN difficulty_choice = 'hard' THEN 1 ELSE 0 END) AS hard_count,
+          SUM(CASE WHEN difficulty_choice = 'extreme' THEN 1 ELSE 0 END) AS extreme_count,
+          SUM(CASE WHEN difficulty_choice = 'easy' THEN trust_weight ELSE 0 END) AS easy_weight,
+          SUM(CASE WHEN difficulty_choice = 'medium' THEN trust_weight ELSE 0 END) AS medium_weight,
+          SUM(CASE WHEN difficulty_choice = 'hard' THEN trust_weight ELSE 0 END) AS hard_weight,
+          SUM(CASE WHEN difficulty_choice = 'extreme' THEN trust_weight ELSE 0 END) AS extreme_weight
+        FROM room_ratings
+        WHERE ${whereClause}
+        GROUP BY room_id
+      `
+    )
+      .bind(...bindings)
+      .all<RoomDiscoveryRatingAggregateRow>();
+    results.push(...chunkRows.results);
+  }
+
+  return { results };
+}
+
+async function loadRoomDiscoveryTrophyRows(
+  env: Env,
+  roomVersionKeys: DiscoveryRoomVersionKey[],
+): Promise<{ results: ContentTrophyRow[] }> {
+  const results: ContentTrophyRow[] = [];
+  for (const roomVersionChunk of chunkValues(roomVersionKeys, 40)) {
+    const whereClause = roomVersionChunk
+      .map(() => '(content_id = ? AND version_key = ?)')
+      .join(' OR ');
+    const bindings = roomVersionChunk.flatMap((entry) => [entry.roomId, entry.roomVersion]);
+    const chunkRows = await env.DB.prepare(
+      `
+        SELECT
+          content_type,
+          content_id,
+          version_key,
+          trophy_type,
+          metric_value,
+          weighted_vote_count,
+          awarded_at
+        FROM content_trophies
+        WHERE content_type = 'room'
+          AND (${whereClause})
+        ORDER BY awarded_at DESC
+      `
+    )
+      .bind(...bindings)
+      .all<ContentTrophyRow>();
+    results.push(...chunkRows.results);
+  }
+
+  return { results };
+}
+
+function chunkValues<T>(values: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function buildDiscoveryRatingSummary(row: RoomDiscoveryRatingAggregateRow | null): {
+  quality: QualityRatingSummary;
+  consensusDifficulty: RoomDifficulty | null;
+  totalDifficultyVotes: number;
+} {
+  if (!row) {
+    return {
+      quality: createEmptyDiscoveryQualitySummary(),
+      consensusDifficulty: null,
+      totalDifficultyVotes: 0,
+    };
+  }
+
+  const qualityVoteCount = parseRowNumber(row.quality_vote_count);
+  const qualityWeightedVoteCount = parseRowFloat(row.quality_weighted_vote_count);
+  const qualityCounts = {
+    oneStar: parseRowNumber(row.one_star_count),
+    twoStar: parseRowNumber(row.two_star_count),
+    threeStar: parseRowNumber(row.three_star_count),
+    fourStar: parseRowNumber(row.four_star_count),
+    fiveStar: parseRowNumber(row.five_star_count),
+  };
+  const quality =
+    qualityVoteCount === 0 || qualityWeightedVoteCount <= 0
+      ? createEmptyDiscoveryQualitySummary()
+      : {
+          adjustedAverage: roundQuality(
+            (QUALITY_PRIOR_MEAN * QUALITY_PRIOR_WEIGHT + parseRowFloat(row.quality_weighted_sum)) /
+              (QUALITY_PRIOR_WEIGHT + qualityWeightedVoteCount),
+          ),
+          rawAverage: roundQuality(parseRowFloat(row.quality_raw_sum) / qualityVoteCount),
+          voteCount: qualityVoteCount,
+          weightedVoteCount: roundQuality(qualityWeightedVoteCount),
+          counts: qualityCounts,
+        };
+
+  const difficultyCounts = {
+    easy: parseRowNumber(row.easy_count),
+    medium: parseRowNumber(row.medium_count),
+    hard: parseRowNumber(row.hard_count),
+    extreme: parseRowNumber(row.extreme_count),
+  };
+  const weightedDifficulty = {
+    easy: parseRowFloat(row.easy_weight),
+    medium: parseRowFloat(row.medium_weight),
+    hard: parseRowFloat(row.hard_weight),
+    extreme: parseRowFloat(row.extreme_weight),
+  };
+  const totalDifficultyVotes =
+    difficultyCounts.easy + difficultyCounts.medium + difficultyCounts.hard + difficultyCounts.extreme;
+  let consensusDifficulty: RoomDifficulty | null = null;
+  let bestWeight = 0;
+  for (const difficulty of ROOM_DIFFICULTIES) {
+    if (weightedDifficulty[difficulty] > bestWeight) {
+      bestWeight = weightedDifficulty[difficulty];
+      consensusDifficulty = difficulty;
+    }
+  }
+
+  return {
+    quality,
+    consensusDifficulty: totalDifficultyVotes > 0 ? consensusDifficulty : null,
+    totalDifficultyVotes,
+  };
+}
+
+function createEmptyDiscoveryQualitySummary(): QualityRatingSummary {
+  return {
+    adjustedAverage: null,
+    rawAverage: null,
+    voteCount: 0,
+    weightedVoteCount: 0,
+    counts: {
+      oneStar: 0,
+      twoStar: 0,
+      threeStar: 0,
+      fourStar: 0,
+      fiveStar: 0,
+    },
+  };
+}
+
+function roundQuality(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function parseRowNumber(value: number | string | null | undefined): number {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function parseRowFloat(value: number | string | null | undefined): number {
+  return parseRowNumber(value);
 }
 
 async function loadLatestDifficultyVotesByUser(
@@ -400,6 +725,8 @@ function mapPublishedRoomDiscoveryRow(
   roomId: string;
   roomCoordinates: { x: number; y: number };
   roomTitle: string | null;
+  builderUserId: string | null;
+  builderDisplayName: string | null;
   roomVersion: number;
   canonicalRoomVersion: number | null;
   goalType: RoomGoalType;
@@ -417,6 +744,8 @@ function mapPublishedRoomDiscoveryRow(
       y: row.y,
     },
     roomTitle: row.published_title,
+    builderUserId: row.last_published_by_user_id,
+    builderDisplayName: row.last_published_by_display_name,
     roomVersion: row.current_published_version,
     canonicalRoomVersion: row.canonical_version,
     goalType,
@@ -428,12 +757,4 @@ function parseRoomGoalType(value: string | null): RoomGoalType | null {
   return value && ROOM_GOAL_TYPES.includes(value as RoomGoalType)
     ? (value as RoomGoalType)
     : null;
-}
-
-function parseStoredSnapshot(raw: string): RoomSnapshot {
-  try {
-    return JSON.parse(raw) as RoomSnapshot;
-  } catch {
-    throw new HttpError(500, 'Failed to parse published room snapshot.');
-  }
 }

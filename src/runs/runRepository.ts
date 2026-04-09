@@ -4,6 +4,7 @@ import type {
   GlobalLeaderboardResponse,
   RoomDifficulty,
   RoomDiscoveryResponse,
+  RoomDiscoverySort,
   RoomLeaderboardResponse,
   RoomDifficultyVoteRequestBody,
   RoomProgressRatingRequestBody,
@@ -34,6 +35,7 @@ export interface RunRepository {
   submitRoomRating(roomId: string, body: RoomProgressRatingRequestBody): Promise<RoomProgressRatingResponse>;
   loadRoomDiscovery(
     difficulty: RoomDifficulty | null,
+    sort?: RoomDiscoverySort,
     limit?: number
   ): Promise<RoomDiscoveryResponse>;
   loadGlobalLeaderboard(limit?: number): Promise<GlobalLeaderboardResponse>;
@@ -110,10 +112,12 @@ class ApiRunRepository implements RunRepository {
 
   async loadRoomDiscovery(
     difficulty: RoomDifficulty | null,
+    sort: RoomDiscoverySort = 'featured',
     limit: number = 100
   ): Promise<RoomDiscoveryResponse> {
     const params = new URLSearchParams({
       limit: String(limit),
+      sort,
     });
     if (difficulty) {
       params.set('difficulty', difficulty);

@@ -26,6 +26,7 @@ import {
 } from './courseRuns';
 import { suggestProgressionDifficulty } from '../../progression/autoDifficulty';
 import { requestPostRunRating } from '../../progression/postRunRatingEvents';
+import { createPostRunClearReward, notifyRewardStings } from '../../progression/rewardStings';
 import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
 
 export type CoursePlaybackRoomSourceMode = 'published' | 'draftPreview';
@@ -126,7 +127,10 @@ export class OverworldCoursePlaybackController {
     return course.roomRefs[0] ?? null;
   }
 
-  createCourseRunState(course: CourseSnapshot): ActiveCourseRunState {
+  createCourseRunState(
+    course: CourseSnapshot,
+    options?: { hadPreviousCompletion?: boolean },
+  ): ActiveCourseRunState {
     const authState = getAuthDebugState();
     const leaderboardEligible =
       course.status === 'published' &&
@@ -151,6 +155,7 @@ export class OverworldCoursePlaybackController {
           ? this.countCourseObjectsByCategory(course, 'enemy')
           : null,
       leaderboardEligible,
+      hadPreviousCompletion: options?.hadPreviousCompletion ?? false,
       localOnlyMessage,
     });
   }
@@ -259,7 +264,16 @@ export class OverworldCoursePlaybackController {
       currentActiveCourseRun.submissionState = 'submitted';
       currentActiveCourseRun.submissionMessage = 'Ranked course run submitted.';
       this.host.clearVerificationTrace?.();
-      if (result === 'completed') {
+      if (result === 'completed' && !currentActiveCourseRun.hadPreviousCompletion) {
+        notifyRewardStings([
+          createPostRunClearReward({
+            contentType: 'course',
+            contentTitle: currentActiveCourseRun.course.title,
+            elapsedMs: body.elapsedMs,
+            deaths: body.deaths,
+            score: body.score ?? null,
+          }),
+        ]);
         requestPostRunRating({
           contentType: 'course',
           contentId: currentActiveCourseRun.course.id,

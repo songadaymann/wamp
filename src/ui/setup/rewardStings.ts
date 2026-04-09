@@ -1,6 +1,7 @@
 import { playSfx } from '../../audio/sfx';
 import {
   REWARD_STINGS_EVENT,
+  REWARD_STINGS_IDLE_EVENT,
   type RewardSting,
   type RewardStingsDetail,
 } from '../../progression/rewardStings';
@@ -135,6 +136,7 @@ export class RewardStingController {
     this.elements.layer.classList.add('hidden');
     this.elements.layer.classList.remove('reward-sting-layer--hero');
     this.elements.layer.setAttribute('aria-hidden', 'true');
+    this.windowObj.dispatchEvent(new CustomEvent(REWARD_STINGS_IDLE_EVENT));
   }
 
   private render(reward: RewardSting): void {

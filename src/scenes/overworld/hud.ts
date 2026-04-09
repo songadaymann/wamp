@@ -11,6 +11,7 @@ interface OverworldHudRuntimeConfig {
   onJumpToCoordinates: (coordinates: RoomCoordinates) => void | Promise<void>;
   onZoomIn: () => void;
   onZoomOut: () => void;
+  onOpenExplore: () => void | Promise<void>;
   onOpenLeaderboard: () => void | Promise<void>;
   onOpenControls: () => void | Promise<void>;
   onFitWorld: () => void;
@@ -26,6 +27,7 @@ const runtimeConfig: OverworldHudRuntimeConfig = {
   onJumpToCoordinates: () => {},
   onZoomIn: () => {},
   onZoomOut: () => {},
+  onOpenExplore: () => {},
   onOpenLeaderboard: () => {},
   onOpenControls: () => {},
   onFitWorld: () => {},
@@ -60,6 +62,9 @@ export function configureOverworldHudBridgeRuntime(
   }
   if (config.onZoomOut) {
     runtimeConfig.onZoomOut = config.onZoomOut;
+  }
+  if (config.onOpenExplore) {
+    runtimeConfig.onOpenExplore = config.onOpenExplore;
   }
   if (config.onOpenLeaderboard) {
     runtimeConfig.onOpenLeaderboard = config.onOpenLeaderboard;
@@ -99,6 +104,9 @@ export interface OverworldHudViewModel {
   selectedGoalText: string;
   statusText: string;
   leaderboardText: string;
+  rateRoomButtonVisible: boolean;
+  rateRoomButtonText: string;
+  rateRoomButtonDisabled: boolean;
   zoomLabelText: string;
   playButtonText: string;
   playButtonDisabled: boolean;
@@ -175,6 +183,8 @@ export class OverworldHudBridge {
   private readonly zoomInButton: HTMLButtonElement | null;
   private readonly zoomOutButton: HTMLButtonElement | null;
   private readonly leaderboardButton: HTMLButtonElement | null;
+  private readonly exploreButton: HTMLButtonElement | null;
+  private readonly rateRoomButton: HTMLButtonElement | null;
   private readonly controlsButton: HTMLButtonElement | null;
   private readonly zoomLabelEl: HTMLElement | null;
   private readonly roomCoordinatesEl: HTMLElement | null;
@@ -331,6 +341,10 @@ export class OverworldHudBridge {
     void runtimeConfig.onOpenLeaderboard();
   };
 
+  private readonly handleExploreClick = (): void => {
+    void runtimeConfig.onOpenExplore();
+  };
+
   private readonly handleControlsClick = (): void => {
     void runtimeConfig.onOpenControls();
   };
@@ -394,7 +408,9 @@ export class OverworldHudBridge {
     this.jumpButton = this.doc.getElementById('btn-world-jump') as HTMLButtonElement | null;
     this.zoomInButton = this.doc.getElementById('btn-world-zoom-in-footer') as HTMLButtonElement | null;
     this.zoomOutButton = this.doc.getElementById('btn-world-zoom-out-footer') as HTMLButtonElement | null;
+    this.exploreButton = this.doc.getElementById('btn-world-explore') as HTMLButtonElement | null;
     this.leaderboardButton = this.doc.getElementById('btn-world-leaderboard') as HTMLButtonElement | null;
+    this.rateRoomButton = this.doc.getElementById('btn-world-rate-room') as HTMLButtonElement | null;
     this.controlsButton = this.doc.getElementById('btn-world-controls') as HTMLButtonElement | null;
     this.zoomLabelEl = this.doc.getElementById('world-zoom-label');
     this.roomCoordinatesEl = this.doc.getElementById('room-coords');
@@ -439,7 +455,9 @@ export class OverworldHudBridge {
     this.jumpInput?.addEventListener('keydown', this.handleJumpInputKeyDown);
     this.zoomInButton?.addEventListener('click', this.handleZoomInClick);
     this.zoomOutButton?.addEventListener('click', this.handleZoomOutClick);
+    this.exploreButton?.addEventListener('click', this.handleExploreClick);
     this.leaderboardButton?.addEventListener('click', this.handleLeaderboardClick);
+    this.rateRoomButton?.addEventListener('click', this.handleLeaderboardClick);
     this.controlsButton?.addEventListener('click', this.handleControlsClick);
     this.fitButton?.addEventListener('click', this.handleFitWorldClick);
     this.doc.addEventListener('pointerdown', this.handleDocumentPointerDown, true);
@@ -483,6 +501,12 @@ export class OverworldHudBridge {
     this.setText(this.statusEl, viewModel.statusText);
     this.setText(this.selectedGoalEl, viewModel.selectedGoalText);
     this.setText(this.leaderboardEl, viewModel.leaderboardText);
+    this.setButton(
+      this.rateRoomButton,
+      viewModel.rateRoomButtonText,
+      viewModel.rateRoomButtonDisabled,
+    );
+    this.rateRoomButton?.classList.toggle('hidden', !viewModel.rateRoomButtonVisible);
     this.setText(this.zoomLabelEl, viewModel.zoomLabelText);
     this.setText(this.roomCoordinatesEl, viewModel.roomCoordinatesText);
     this.setText(this.cursorEl, viewModel.cursorText);
@@ -531,7 +555,9 @@ export class OverworldHudBridge {
     this.jumpInput?.removeEventListener('keydown', this.handleJumpInputKeyDown);
     this.zoomInButton?.removeEventListener('click', this.handleZoomInClick);
     this.zoomOutButton?.removeEventListener('click', this.handleZoomOutClick);
+    this.exploreButton?.removeEventListener('click', this.handleExploreClick);
     this.leaderboardButton?.removeEventListener('click', this.handleLeaderboardClick);
+    this.rateRoomButton?.removeEventListener('click', this.handleLeaderboardClick);
     this.controlsButton?.removeEventListener('click', this.handleControlsClick);
     this.fitButton?.removeEventListener('click', this.handleFitWorldClick);
     this.doc.removeEventListener('pointerdown', this.handleDocumentPointerDown, true);
@@ -772,13 +798,13 @@ export class OverworldHudBridge {
     }
 
     const icon = this.doc.createElement('img');
-    icon.className = 'world-creator-stat-level-icon';
+    icon.className = 'mini-profile-stat-level-icon';
     icon.src = iconSrc;
     icon.alt = '';
     icon.setAttribute('aria-hidden', 'true');
 
     const label = this.doc.createElement('span');
-    label.className = 'world-creator-stat-level-label';
+    label.className = 'mini-profile-stat-level-label';
     label.textContent = `LVL ${level}`;
 
     element.dataset.levelValue = String(level);

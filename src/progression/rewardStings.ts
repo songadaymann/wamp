@@ -8,8 +8,11 @@ import type {
 } from './model';
 
 export const REWARD_STINGS_EVENT = 'reward-stings';
+export const REWARD_STINGS_IDLE_EVENT = 'reward-stings-idle';
 
 export type RewardStingKind =
+  | 'room-clear'
+  | 'course-clear'
   | 'player-level-up'
   | 'builder-level-up'
   | 'curator-level-up'
@@ -63,6 +66,8 @@ const TROPHY_ICON_SRC = '/assets/objects/flag-checkered-gold.png';
 const TOP_TEN_BADGE_ID = 'player_top10_entrant';
 const NUMBER_ONE_BADGE_ID = 'player_top1_finisher';
 const DEFAULT_REWARD_STING_DURATIONS_MS: Record<RewardStingKind, number> = {
+  'room-clear': 1550,
+  'course-clear': 1550,
   'player-level-up': 1800,
   'builder-level-up': 1800,
   'curator-level-up': 1800,
@@ -94,41 +99,26 @@ export function notifyRewardStings(rewards: RewardSting[]): void {
 export function buildRewardStings(options: BuildRewardStingsOptions): RewardSting[] {
   const rewards: RewardSting[] = [];
   const suppressedBadgeIds = new Set<string>();
+  const newBadges = options.previousProgression
+    ? getNewBadges(options.previousProgression, options.currentProgression)
+    : [];
 
   if (options.currentViewerRank !== null && options.currentViewerRank === 1 && options.previousViewerRank !== 1) {
     suppressedBadgeIds.add(NUMBER_ONE_BADGE_ID);
-    rewards.push({
-      kind: 'number-one-takeover',
-      tone: 'takeover',
-      kicker: 'Leaderboard',
-      title: 'YOU GOT FIRST PLACE!',
-      subtitle: options.contentTitle?.trim() || 'New World Leader',
-      detail: buildRankShiftText(options.previousViewerRank, options.currentViewerRank),
-      iconSrc: TROPHY_ICON_SRC,
-      iconAlt: 'Gold flag trophy',
-      emphasis: 'hero',
-      durationMs: getRewardStingDurationMs('number-one-takeover', 'takeover'),
-      sfxCue: getRewardStingSfxCue('number-one-takeover', 'takeover'),
-    });
+    rewards.push(createNumberOneReward(options.contentTitle, buildRankShiftText(options.previousViewerRank, options.currentViewerRank)));
   } else if (
     options.currentViewerRank !== null &&
     options.currentViewerRank <= 10 &&
     (options.previousViewerRank === null || options.previousViewerRank > 10)
   ) {
     suppressedBadgeIds.add(TOP_TEN_BADGE_ID);
-    rewards.push({
-      kind: 'top-10-entry',
-      tone: 'leaderboard',
-      kicker: 'Leaderboard',
-      title: 'YOU MADE THE TOP TEN!',
-      subtitle: options.contentTitle?.trim() || 'New leaderboard entry',
-      detail: buildRankShiftText(options.previousViewerRank, options.currentViewerRank),
-      iconSrc: PLAYER_ICON_SRC,
-      iconAlt: 'Player rank badge',
-      emphasis: 'normal',
-      durationMs: getRewardStingDurationMs('top-10-entry', 'leaderboard'),
-      sfxCue: getRewardStingSfxCue('top-10-entry', 'leaderboard'),
-    });
+    rewards.push(createTopTenReward(options.contentTitle, buildRankShiftText(options.previousViewerRank, options.currentViewerRank)));
+  } else if (newBadges.some((badge) => badge.badgeId === NUMBER_ONE_BADGE_ID)) {
+    suppressedBadgeIds.add(NUMBER_ONE_BADGE_ID);
+    rewards.push(createNumberOneReward(options.contentTitle, null));
+  } else if (newBadges.some((badge) => badge.badgeId === TOP_TEN_BADGE_ID)) {
+    suppressedBadgeIds.add(TOP_TEN_BADGE_ID);
+    rewards.push(createTopTenReward(options.contentTitle, null));
   }
 
   if (!options.previousProgression) {
@@ -144,7 +134,7 @@ export function buildRewardStings(options: BuildRewardStingsOptions): RewardStin
     ...buildLaneLevelRewards(previous.curator, current.curator),
   );
 
-  for (const badge of getNewBadges(previous, current)) {
+  for (const badge of newBadges) {
     if (suppressedBadgeIds.has(badge.badgeId)) {
       continue;
     }
@@ -156,6 +146,61 @@ export function buildRewardStings(options: BuildRewardStingsOptions): RewardStin
   }
 
   return rewards;
+}
+
+export function createPostRunClearReward(options: {
+  contentType: 'room' | 'course';
+  contentTitle: string | null;
+  elapsedMs: number;
+  deaths: number;
+  score: number | null;
+}): RewardSting {
+  const isCourse = options.contentType === 'course';
+  return {
+    kind: isCourse ? 'course-clear' : 'room-clear',
+    tone: isCourse ? 'curator' : 'player',
+    kicker: isCourse ? 'Course Clear' : 'Room Clear',
+    title: isCourse ? 'COURSE CLEAR!' : 'ROOM CLEAR!',
+    subtitle: options.contentTitle?.trim() || (isCourse ? 'Course complete' : 'Room complete'),
+    detail: formatPostRunClearDetail(options.elapsedMs, options.deaths, options.score),
+    iconSrc: isCourse ? CURATOR_ICON_SRC : PLAYER_ICON_SRC,
+    iconAlt: isCourse ? 'Course clear icon' : 'Room clear icon',
+    emphasis: 'normal',
+    durationMs: getRewardStingDurationMs(isCourse ? 'course-clear' : 'room-clear', isCourse ? 'curator' : 'player'),
+    sfxCue: 'goal-success',
+  };
+}
+
+function createTopTenReward(contentTitle: string | null | undefined, detail: string | null): RewardSting {
+  return {
+    kind: 'top-10-entry',
+    tone: 'leaderboard',
+    kicker: 'Leaderboard',
+    title: 'YOU MADE THE TOP TEN!',
+    subtitle: contentTitle?.trim() || 'New leaderboard entry',
+    detail,
+    iconSrc: PLAYER_ICON_SRC,
+    iconAlt: 'Player rank badge',
+    emphasis: 'normal',
+    durationMs: getRewardStingDurationMs('top-10-entry', 'leaderboard'),
+    sfxCue: getRewardStingSfxCue('top-10-entry', 'leaderboard'),
+  };
+}
+
+function createNumberOneReward(contentTitle: string | null | undefined, detail: string | null): RewardSting {
+  return {
+    kind: 'number-one-takeover',
+    tone: 'takeover',
+    kicker: 'Leaderboard',
+    title: 'YOU GOT FIRST PLACE!',
+    subtitle: contentTitle?.trim() || 'New World Leader',
+    detail,
+    iconSrc: TROPHY_ICON_SRC,
+    iconAlt: 'Gold flag trophy',
+    emphasis: 'hero',
+    durationMs: getRewardStingDurationMs('number-one-takeover', 'takeover'),
+    sfxCue: getRewardStingSfxCue('number-one-takeover', 'takeover'),
+  };
 }
 
 function buildLaneLevelRewards(
@@ -222,6 +267,9 @@ function createTrophyReward(
 
 export function getRewardStingSfxCue(kind: RewardStingKind, tone: RewardStingTone): SfxCue | null {
   switch (kind) {
+    case 'room-clear':
+    case 'course-clear':
+      return 'goal-success';
     case 'player-level-up':
       return 'progression-player-level-up';
     case 'builder-level-up':
@@ -346,4 +394,25 @@ function formatTrophyDetail(
       ? `Course ${trophy.contentId}`
       : `Room ${trophy.contentId}`;
   return `${targetLabel} v${trophy.versionKey}`;
+}
+
+function formatPostRunClearDetail(
+  elapsedMs: number,
+  deaths: number,
+  score: number | null,
+): string {
+  const parts = [formatElapsedMs(elapsedMs), `${deaths} death${deaths === 1 ? '' : 's'}`];
+  if (typeof score === 'number') {
+    parts.push(`${score} pts`);
+  }
+  return parts.join(' · ');
+}
+
+function formatElapsedMs(elapsedMs: number): string {
+  const totalMs = Math.max(0, Math.round(elapsedMs));
+  const totalSeconds = Math.floor(totalMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const tenths = Math.floor((totalMs % 1000) / 100);
+  return `${minutes}:${seconds.toString().padStart(2, '0')}.${tenths}`;
 }

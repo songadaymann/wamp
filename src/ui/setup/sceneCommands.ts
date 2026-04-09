@@ -3,6 +3,7 @@ import { AboutModalController } from './aboutModal';
 import { ChatModerationModalController } from './chatModerationModal';
 import { ControlsModalController } from './controlsModal';
 import { CourseModalController } from './courseModal';
+import { ExploreModalController } from './exploreModal';
 import { RoomHistoryModalController } from './historyModal';
 import { LeaderboardModalController } from './leaderboardModal';
 import {
@@ -15,6 +16,7 @@ export function setupSceneCommands(
   game: Phaser.Game,
   historyModal: RoomHistoryModalController,
   leaderboardModal: LeaderboardModalController,
+  exploreModal: ExploreModalController,
   controlsModal: ControlsModalController,
   aboutModal: AboutModalController,
   chatModerationModal: ChatModerationModalController,
@@ -45,6 +47,7 @@ export function setupSceneCommands(
   };
   const closeWorldPanels = () => {
     leaderboardModal.close();
+    exploreModal.close();
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
@@ -103,7 +106,16 @@ export function setupSceneCommands(
     onZoomOut: () => {
       getActiveOverworldScene(game)?.zoomOut?.();
     },
+    onOpenExplore: () => {
+      leaderboardModal.close();
+      controlsModal.close();
+      aboutModal.close();
+      courseModal.close();
+      chatModerationModal.close();
+      void exploreModal.open();
+    },
     onOpenLeaderboard: () => {
+      exploreModal.close();
       controlsModal.close();
       aboutModal.close();
       courseModal.close();
@@ -112,6 +124,7 @@ export function setupSceneCommands(
     },
     onOpenControls: () => {
       leaderboardModal.close();
+      exploreModal.close();
       historyModal.close();
       aboutModal.close();
       courseModal.close();
@@ -135,6 +148,7 @@ export function setupSceneCommands(
     closeMenu();
     historyModal.close();
     leaderboardModal.close();
+    exploreModal.close();
     controlsModal.close();
     courseModal.close();
     chatModerationModal.close();
@@ -145,6 +159,7 @@ export function setupSceneCommands(
     closeMenu();
     historyModal.close();
     leaderboardModal.close();
+    exploreModal.close();
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
@@ -160,6 +175,7 @@ export function setupSceneCommands(
   playBtn?.addEventListener('click', () => {
     historyModal.close();
     leaderboardModal.close();
+    exploreModal.close();
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
@@ -170,6 +186,7 @@ export function setupSceneCommands(
   editorBackBtn?.addEventListener('click', () => {
     historyModal.close();
     leaderboardModal.close();
+    exploreModal.close();
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
@@ -194,6 +211,7 @@ export function setupSceneCommands(
     aboutModal.close();
     courseModal.close();
     chatModerationModal.close();
+    exploreModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.saveDraft) {
       await editorScene.saveDraft(true, { promptForSignInOnUnauthorized: true });
@@ -205,6 +223,7 @@ export function setupSceneCommands(
     aboutModal.close();
     courseModal.close();
     chatModerationModal.close();
+    exploreModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.publishRoom) {
       await editorScene.publishRoom();
@@ -216,6 +235,7 @@ export function setupSceneCommands(
     aboutModal.close();
     courseModal.close();
     chatModerationModal.close();
+    exploreModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.saveCourseDraft) {
       await editorScene.saveCourseDraft();

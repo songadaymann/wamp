@@ -65,7 +65,10 @@ interface OverworldSceneFlowHost {
     snapshot: CourseSnapshot,
     options: { mode: CoursePlaybackRoomSourceMode }
   ): Promise<void>;
-  createCourseRunState(snapshot: CourseSnapshot): ActiveCourseRunState;
+  createCourseRunState(
+    snapshot: CourseSnapshot,
+    options?: { hadPreviousCompletion?: boolean }
+  ): ActiveCourseRunState;
   getCourseStartRoomRef(course: CourseSnapshot): CourseRoomRef | null;
   getActiveCourseRun(): ActiveCourseRunState | null;
   setActiveCourseRun(runState: ActiveCourseRunState | null): void;
@@ -292,11 +295,26 @@ export class OverworldSceneFlowController {
     snapshot: CourseSnapshot,
     roomSourceMode: CoursePlaybackRoomSourceMode,
   ): Promise<void> {
+    const authState = getAuthDebugState();
+    let hadPreviousCompletion = false;
+    if (snapshot.status === 'published' && authState.authenticated) {
+      try {
+        const leaderboard = await this.courseRepository.loadCourseLeaderboard(
+          snapshot.id,
+          snapshot.version,
+          5,
+        );
+        hadPreviousCompletion = leaderboard.viewerBest !== null;
+      } catch (error) {
+        console.warn('Failed to preload course completion history', error);
+      }
+    }
+
     this.host.resetPlaySession();
     this.host.clearTouchGestureState();
     this.host.clearGoalRun();
     await this.host.prepareActiveCourseRoomOverrides(snapshot, { mode: roomSourceMode });
-    const runState = this.host.createCourseRunState(snapshot);
+    const runState = this.host.createCourseRunState(snapshot, { hadPreviousCompletion });
     this.host.setActiveCourseRun(runState);
 
     if (runState.leaderboardEligible) {

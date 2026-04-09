@@ -200,6 +200,7 @@ export class OverworldHudStateController {
         goalPersistentStatusText: this.host.getGoalPersistentStatusText(),
         rankingMode: this.host.getCurrentRoomLeaderboard()?.rankingMode ?? null,
         roomTop: this.host.getCurrentRoomLeaderboard()?.entries[0] ?? null,
+        currentRoomLeaderboard: this.host.getCurrentRoomLeaderboard(),
         activeCourseRun,
         activeRoomGoalRun,
         activeGoalRoom,

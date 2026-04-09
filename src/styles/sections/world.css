@@ -24,6 +24,7 @@ body[data-app-mode="play-world"] #game-container {
   --hud-trial-green: #277b30;
   --hud-trial-red: #ed5f4b;
   --hud-trial-ink-dark: #000;
+  --xp-lane-color: #79ccde;
   position: absolute;
   top: calc(16px + var(--safe-top));
   left: calc(16px + var(--safe-left));
@@ -39,6 +40,65 @@ body[data-app-mode="play-world"] #game-container {
   gap: 12px;
   box-shadow: 4px 4px 0 #18161c;
   font-family: var(--hud-ui-font);
+}
+
+#world-hud::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: -10px;
+  height: 6px;
+  border: 2px solid #18161c;
+  background:
+    linear-gradient(
+      90deg,
+      var(--xp-lane-color, #79ccde) 0,
+      var(--xp-lane-color, #79ccde) calc(var(--xp-target-progress, 0) * 100%),
+      #fffaf0 calc(var(--xp-target-progress, 0) * 100%),
+      #fffaf0 100%
+    );
+  opacity: 0;
+  transform: scaleX(0.35);
+  transform-origin: center;
+  pointer-events: none;
+}
+
+#world-hud[data-xp-lane='player'] {
+  --xp-lane-color: #277b30;
+}
+
+#world-hud[data-xp-lane='builder'] {
+  --xp-lane-color: #fcea7c;
+}
+
+#world-hud[data-xp-lane='curator'] {
+  --xp-lane-color: #79ccde;
+}
+
+#world-hud.xp-target-pulse {
+  animation: xp-hud-target-pulse 520ms steps(8, end);
+}
+
+#world-hud.xp-target-pulse::after {
+  animation: xp-target-meter 520ms steps(10, end) forwards;
+}
+
+@keyframes xp-hud-target-pulse {
+  0% {
+    transform: translate(0, 0);
+    box-shadow: 4px 4px 0 #18161c;
+  }
+
+  35% {
+    transform: translate(-1px, -1px);
+    box-shadow: 0 0 0 2px var(--xp-lane-color, #79ccde), 6px 6px 0 #18161c;
+  }
+
+  100% {
+    transform: translate(0, 0);
+    box-shadow: 4px 4px 0 #18161c;
+  }
 }
 
 .world-hud-topline {
@@ -203,145 +263,14 @@ body[data-app-mode="play-world"]:not([data-coarse-pointer="true"]) #world-hud .w
 }
 
 .world-creator-card {
-  flex: 1 1 auto;
-  min-width: 0;
-  width: 100%;
-  padding: 7px 10px;
-  border: 2px solid #fff3db;
-  border-radius: 0;
-  background: #0f0f0f;
-  box-shadow: 2px 2px 0 #18161c;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-}
-
-.world-creator-card:disabled {
-  opacity: 1;
-  cursor: default;
-}
-
-.world-creator-card.is-clickable {
-  cursor: pointer;
+  flex: 0 1 auto;
+  width: auto;
+  max-width: 100%;
 }
 
 .world-creator-card.is-clickable:hover,
 .world-creator-card.is-clickable:focus-visible {
   border-color: var(--hud-trial-blue);
-  outline: none;
-}
-
-.world-creator-card-avatar-frame {
-  width: 66px;
-  min-width: 66px;
-  height: 58px;
-  border: 2px solid #fff3db;
-  background: #050505;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.world-creator-card-avatar {
-  display: block;
-  width: auto;
-  height: 54px;
-  max-width: none;
-  max-height: none;
-  image-rendering: pixelated;
-}
-
-.world-creator-card-body {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.world-creator-card-name {
-  color: var(--hud-trial-blue);
-  font-size: 13px;
-  line-height: 1.1;
-  overflow-wrap: anywhere;
-}
-
-.world-creator-card-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.world-creator-stat-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 15px;
-}
-
-.world-creator-stat-icons {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 16px;
-  color: #fff;
-  line-height: 1;
-  flex: 0 0 auto;
-}
-
-.world-creator-stat-icons[data-placeholder='true'] {
-  color: var(--text-muted);
-}
-
-.world-creator-stat-level-icon {
-  display: block;
-  width: 16px;
-  height: 16px;
-  image-rendering: pixelated;
-  flex: 0 0 auto;
-}
-
-.world-creator-stat-level-label {
-  color: #fff3db;
-  font-family: 'Early GameBoy', monospace;
-  font-size: 8px;
-  line-height: 1.15;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-
-.world-creator-stat-progress {
-  flex: 1 1 auto;
-  min-width: 84px;
-  height: 6px;
-  margin-top: 0;
-  border: 1px solid #fff3db;
-  background: #050505;
-  box-shadow:
-    1px 1px 0 #18161c,
-    inset 1px 1px 0 rgba(255, 243, 219, 0.06);
-  overflow: hidden;
-}
-
-.world-creator-stat-progress-fill {
-  height: 100%;
-  width: 0;
-  background: #fff3db;
-}
-
-.world-creator-stat-progress-fill-player {
-  background: #277b30;
-}
-
-.world-creator-stat-progress-fill-curator {
-  background: #79ccde;
-}
-
-.world-creator-stat-progress-fill-builder {
-  background: #fcea7c;
 }
 
 .world-state-wrap {

@@ -75,6 +75,32 @@
       </div>
     </div>
   </div>
+  <div id="xp-receipt-layer" class="xp-receipt-layer hidden" aria-live="polite" aria-atomic="true" aria-hidden="true">
+    <div id="xp-receipt-card" class="xp-receipt-card" role="status">
+      <div class="xp-receipt-icon-frame" aria-hidden="true">
+        <img id="xp-receipt-icon" class="xp-receipt-icon" alt="" />
+      </div>
+      <div class="xp-receipt-copy">
+        <div id="xp-receipt-amount" class="xp-receipt-amount">+5 PXP</div>
+        <div id="xp-receipt-reason" class="xp-receipt-reason">Rated a room</div>
+        <div class="xp-receipt-meta">
+          <div id="xp-receipt-level" class="xp-receipt-level">LVL 1</div>
+          <div id="xp-receipt-detail" class="xp-receipt-detail">10 / 25 XP</div>
+        </div>
+        <div class="xp-receipt-meter" aria-hidden="true">
+          <div id="xp-receipt-meter-fill" class="xp-receipt-meter-fill"></div>
+        </div>
+      </div>
+    </div>
+    <div id="xp-receipt-impact" class="xp-receipt-impact" aria-hidden="true">
+      <span class="xp-receipt-impact-pixel xp-receipt-impact-pixel--1"></span>
+      <span class="xp-receipt-impact-pixel xp-receipt-impact-pixel--2"></span>
+      <span class="xp-receipt-impact-pixel xp-receipt-impact-pixel--3"></span>
+      <span class="xp-receipt-impact-pixel xp-receipt-impact-pixel--4"></span>
+      <span class="xp-receipt-impact-pixel xp-receipt-impact-pixel--5"></span>
+      <span class="xp-receipt-impact-pixel xp-receipt-impact-pixel--6"></span>
+    </div>
+  </div>
   <div id="rotate-gate" class="rotate-gate hidden" aria-hidden="true">
     <div class="rotate-gate-target rotate-gate-target-share" aria-hidden="true">
       <div class="rotate-gate-target-label">Tap Share</div>
@@ -106,11 +132,48 @@
     </div>
   </div>
   <div id="auth-panel">
-    <button id="menu-toggle" type="button" aria-label="Menu">
-      <span class="hamburger-line"></span>
-      <span class="hamburger-line"></span>
-      <span class="hamburger-line"></span>
-    </button>
+    <div class="auth-panel-topline">
+      <button id="auth-identity" class="auth-identity-card mini-profile-card hidden" type="button" aria-label="Open your profile">
+        <div class="mini-profile-avatar-frame" aria-hidden="true">
+          <img
+            id="auth-identity-avatar"
+            class="mini-profile-avatar"
+            src="/assets/ui-creator-idle-tight.png"
+            alt=""
+          />
+        </div>
+        <div class="mini-profile-body">
+          <div class="mini-profile-name-row">
+            <div id="auth-identity-name" class="mini-profile-name">Player</div>
+          </div>
+          <div class="mini-profile-stats">
+            <div
+              id="auth-identity-player-level"
+              class="mini-profile-stat-icons"
+              data-icon-src="/assets/ui-progress-player.png"
+              data-icon-label="Player"
+            >--</div>
+            <div
+              id="auth-identity-curator-level"
+              class="mini-profile-stat-icons"
+              data-icon-src="/assets/ui-progress-curator.png"
+              data-icon-label="Curator"
+            >--</div>
+            <div
+              id="auth-identity-builder-level"
+              class="mini-profile-stat-icons"
+              data-icon-src="/assets/ui-progress-builder.png"
+              data-icon-label="Builder"
+            >--</div>
+          </div>
+        </div>
+      </button>
+      <button id="menu-toggle" type="button" aria-label="Menu">
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+      </button>
+    </div>
       <div id="menu-body">
         <div class="auth-row auth-menu-action-row">
           <button id="btn-about-open" class="bar-btn auth-menu-action-btn" type="button">About WAMP</button>
@@ -967,59 +1030,44 @@
         </div>
         <div id="world-selected-subtitle" class="world-room-subtitle"></div>
         <div class="world-hud-row world-hud-row-selected-owner">
-          <button id="world-selected-creator-card" class="world-creator-card hidden" type="button">
-            <div class="world-creator-card-avatar-frame" aria-hidden="true">
+          <button id="world-selected-creator-card" class="world-creator-card mini-profile-card hidden" type="button">
+            <div class="mini-profile-avatar-frame" aria-hidden="true">
               <img
                 id="world-selected-creator-avatar"
-                class="world-creator-card-avatar"
+                class="mini-profile-avatar"
                 src="/assets/ui-creator-idle-tight.png"
                 alt=""
               />
             </div>
-            <div class="world-creator-card-body">
-              <div id="world-selected-creator-name" class="world-creator-card-name">Creator</div>
-              <div class="world-creator-card-stats">
-                <div class="world-creator-stat-row">
+            <div class="mini-profile-body">
+              <div class="mini-profile-name-row">
+                <span class="mini-profile-byline">by</span>
+                <div id="world-selected-creator-name" class="mini-profile-name">Creator</div>
+              </div>
+              <div class="mini-profile-stats">
+                <div class="mini-profile-stat-row">
                   <div
                     id="world-selected-creator-player-level"
-                    class="world-creator-stat-icons"
+                    class="mini-profile-stat-icons"
                     data-icon-src="/assets/ui-progress-player.png"
                     data-icon-label="Player"
                   >--</div>
-                  <div class="world-creator-stat-progress" aria-hidden="true">
-                    <div
-                      id="world-selected-creator-player-progress"
-                      class="world-creator-stat-progress-fill world-creator-stat-progress-fill-player"
-                    ></div>
-                  </div>
                 </div>
-                <div class="world-creator-stat-row">
+                <div class="mini-profile-stat-row">
                   <div
                     id="world-selected-creator-curator-level"
-                    class="world-creator-stat-icons"
+                    class="mini-profile-stat-icons"
                     data-icon-src="/assets/ui-progress-curator.png"
                     data-icon-label="Curator"
                   >--</div>
-                  <div class="world-creator-stat-progress" aria-hidden="true">
-                    <div
-                      id="world-selected-creator-curator-progress"
-                      class="world-creator-stat-progress-fill world-creator-stat-progress-fill-curator"
-                    ></div>
-                  </div>
                 </div>
-                <div class="world-creator-stat-row">
+                <div class="mini-profile-stat-row">
                   <div
                     id="world-selected-creator-builder-level"
-                    class="world-creator-stat-icons"
+                    class="mini-profile-stat-icons"
                     data-icon-src="/assets/ui-progress-builder.png"
                     data-icon-label="Builder"
                   >--</div>
-                  <div class="world-creator-stat-progress" aria-hidden="true">
-                    <div
-                      id="world-selected-creator-builder-progress"
-                      class="world-creator-stat-progress-fill world-creator-stat-progress-fill-builder"
-                    ></div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -1045,7 +1093,9 @@
           <button id="btn-world-course-builder" class="bar-btn bar-btn-small world-btn-course-builder" disabled>Course Builder</button>
         </div>
         <div class="world-hud-row world-hud-row-tertiary-actions">
+          <button id="btn-world-explore" class="bar-btn bar-btn-small world-btn-leaderboard" type="button">Explore</button>
           <button id="btn-world-leaderboard" class="bar-btn bar-btn-small world-btn-leaderboard">Leaderboard</button>
+          <button id="btn-world-rate-room" class="bar-btn bar-btn-small world-btn-leaderboard hidden" type="button">Rate Room</button>
           <button id="btn-world-chat" class="bar-btn bar-btn-small world-btn-controls hidden">Chat</button>
           <button id="btn-world-room-chat" class="bar-btn bar-btn-small world-btn-controls hidden" type="button">Say</button>
           <button id="btn-world-jump-sheet" class="bar-btn bar-btn-small world-btn-controls hidden">Warp</button>
@@ -1225,7 +1275,6 @@
       </div>
       <div class="leaderboard-tabs">
         <button id="btn-leaderboard-tab-room" class="bar-btn bar-btn-small active" type="button">Room</button>
-        <button id="btn-leaderboard-tab-discover" class="bar-btn bar-btn-small" type="button">Discover</button>
         <button id="btn-leaderboard-tab-course" class="bar-btn bar-btn-small" type="button">Course</button>
         <button id="btn-leaderboard-tab-global" class="bar-btn bar-btn-small" type="button">Global</button>
       </div>
@@ -1249,17 +1298,6 @@
         </div>
         <div id="leaderboard-room-list" class="history-version-list"></div>
       </div>
-      <div id="leaderboard-discover-panel" class="leaderboard-panel hidden">
-        <div id="leaderboard-discover-filters" class="leaderboard-discover-filters">
-          <button class="bar-btn bar-btn-small active" type="button" data-discover-difficulty="">All</button>
-          <button class="bar-btn bar-btn-small" type="button" data-discover-difficulty="easy">Easy</button>
-          <button class="bar-btn bar-btn-small" type="button" data-discover-difficulty="medium">Medium</button>
-          <button class="bar-btn bar-btn-small" type="button" data-discover-difficulty="hard">Hard</button>
-          <button class="bar-btn bar-btn-small" type="button" data-discover-difficulty="extreme">Extreme</button>
-        </div>
-        <div id="leaderboard-discover-summary" class="history-modal-meta">Browse published room challenges by difficulty.</div>
-        <div id="leaderboard-discover-list" class="history-version-list"></div>
-      </div>
       <div id="leaderboard-course-panel" class="leaderboard-panel hidden">
         <div id="leaderboard-course-summary" class="history-modal-meta">No published course selected.</div>
         <div id="leaderboard-course-viewer" class="history-modal-meta hidden"></div>
@@ -1270,6 +1308,32 @@
         <div id="leaderboard-global-viewer" class="history-modal-meta hidden"></div>
         <div id="leaderboard-global-list" class="history-version-list"></div>
       </div>
+    </div>
+  </div>
+
+  <div id="explore-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel leaderboard-modal-panel explore-modal-panel" role="dialog" aria-modal="true" aria-labelledby="explore-modal-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <h2 id="explore-modal-title" class="history-modal-title">Explore Levels</h2>
+        </div>
+        <button id="btn-explore-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div id="explore-filters" class="leaderboard-discover-filters explore-filters">
+        <button class="bar-btn bar-btn-small active" type="button" data-explore-difficulty="">All</button>
+        <button class="bar-btn bar-btn-small" type="button" data-explore-difficulty="easy">Easy</button>
+        <button class="bar-btn bar-btn-small" type="button" data-explore-difficulty="medium">Medium</button>
+        <button class="bar-btn bar-btn-small" type="button" data-explore-difficulty="hard">Hard</button>
+        <button class="bar-btn bar-btn-small" type="button" data-explore-difficulty="extreme">Extreme</button>
+      </div>
+      <div id="explore-sorts" class="leaderboard-discover-filters leaderboard-discover-sorts explore-sorts">
+        <button class="bar-btn bar-btn-small active" type="button" data-explore-sort="featured">Featured</button>
+        <button class="bar-btn bar-btn-small" type="button" data-explore-sort="quality">Top Rated</button>
+        <button class="bar-btn bar-btn-small" type="button" data-explore-sort="newest">Newest</button>
+        <button class="bar-btn bar-btn-small" type="button" data-explore-sort="builder">Builder</button>
+      </div>
+      <div id="explore-modal-error" class="history-modal-error hidden"></div>
+      <div id="explore-list" class="history-version-list explore-room-list"></div>
     </div>
   </div>
 

@@ -12,13 +12,15 @@ import type { ChatModerationViewer } from '../chat/model';
 import { clearLocalRoomStorage } from '../persistence/browserStorage';
 import { getApiBaseUrl } from '../api/baseUrl';
 import { appendPlayfunRequestHeaders } from '../playfun/state';
-import { isOpenableProfileUserId, requestProfileOpen } from '../ui/setup/profileEvents';
+import { createProfileRepository } from '../profiles/profileRepository';
+import { isOpenableProfileUserId, PROFILE_INVALIDATED_EVENT, requestProfileOpen } from '../ui/setup/profileEvents';
 import type {
   PreparedWalletTransaction,
   RoomMintChainInfo,
 } from '../mint/roomOwnership';
 
 export const AUTH_STATE_CHANGED_EVENT = 'auth-state-changed';
+export const AUTH_SESSION_REFRESHED_EVENT = 'auth-session-refreshed';
 
 export interface AuthDebugState {
   loading: boolean;
@@ -61,6 +63,14 @@ interface Eip1193Provider {
   request(args: { method: string; params?: unknown[] | object }): Promise<unknown>;
 }
 
+interface AuthIdentityProfileView {
+  userId: string;
+  displayName: string;
+  playerLevel: number | null;
+  curatorLevel: number | null;
+  builderLevel: number | null;
+}
+
 const state: AuthDebugState = {
   loading: false,
   authenticated: false,
@@ -84,7 +94,11 @@ const state: AuthDebugState = {
 };
 
 let authPanel: HTMLElement | null = null;
-let authIdentity: HTMLElement | null = null;
+let authIdentity: HTMLButtonElement | null = null;
+let authIdentityName: HTMLElement | null = null;
+let authIdentityPlayerLevel: HTMLElement | null = null;
+let authIdentityCuratorLevel: HTMLElement | null = null;
+let authIdentityBuilderLevel: HTMLElement | null = null;
 let authEmailInput: HTMLInputElement | null = null;
 let authEmailButton: HTMLButtonElement | null = null;
 let authWalletButton: HTMLButtonElement | null = null;
@@ -106,6 +120,10 @@ let displayNameCheckToken = 0;
 let lastCheckedDisplayName = '';
 let lastDisplayNameAvailability: DisplayNameAvailabilityResponse | null = null;
 let runtimeWalletProjectId = '';
+let authIdentityProfile: AuthIdentityProfileView | null = null;
+let authIdentityProfileLoadingUserId: string | null = null;
+let identityRefreshListenersBound = false;
+const profileRepository = createProfileRepository();
 
 const FEATURED_REOWN_WALLET_IDS = [
   'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96', // MetaMask
@@ -121,7 +139,11 @@ let guestPanelAutoOpened = false;
 
 export async function setupAuthUi(): Promise<void> {
   authPanel = document.getElementById('auth-panel');
-  authIdentity = document.getElementById('auth-identity');
+  authIdentity = document.getElementById('auth-identity') as HTMLButtonElement | null;
+  authIdentityName = document.getElementById('auth-identity-name');
+  authIdentityPlayerLevel = document.getElementById('auth-identity-player-level');
+  authIdentityCuratorLevel = document.getElementById('auth-identity-curator-level');
+  authIdentityBuilderLevel = document.getElementById('auth-identity-builder-level');
   authEmailInput = document.getElementById('auth-email-input') as HTMLInputElement | null;
   authEmailButton = document.getElementById('btn-auth-email') as HTMLButtonElement | null;
   authWalletButton = document.getElementById('btn-auth-wallet') as HTMLButtonElement | null;
@@ -200,10 +222,16 @@ export async function setupAuthUi(): Promise<void> {
 
   initializeStatusFromQuery();
   bindSessionRefreshListeners();
+  bindIdentityRefreshListeners();
   await initializeWalletConnect();
   await refreshSession();
   maybeAutoOpenGuestPanel();
   renderAuthUi();
+  window.dispatchEvent(
+    new CustomEvent(AUTH_SESSION_REFRESHED_EVENT, {
+      detail: getAuthDebugState(),
+    })
+  );
 }
 
 export function getAuthDebugState(): AuthDebugState {
@@ -293,6 +321,8 @@ async function refreshSession(): Promise<void> {
     state.chatModeration = normalizeChatModerationViewer(session.chatModeration);
 
     if (session.authenticated) {
+      syncAuthIdentityProfileFromSession(session.user);
+      void ensureAuthIdentityProfileLoaded();
       if (state.status.length === 0 || state.status === DEFAULT_GUEST_STATUS || isGenericSignedInStatus(state.status)) {
         state.status = '';
       }
@@ -306,11 +336,15 @@ async function refreshSession(): Promise<void> {
     } else if (window.location.search.includes('auth=')) {
       // Preserve status set from query params.
       state.source = null;
+      authIdentityProfile = null;
+      authIdentityProfileLoadingUserId = null;
       lastCheckedDisplayName = '';
       lastDisplayNameAvailability = null;
     } else {
       state.source = null;
       state.status = DEFAULT_GUEST_STATUS;
+      authIdentityProfile = null;
+      authIdentityProfileLoadingUserId = null;
       lastCheckedDisplayName = '';
       lastDisplayNameAvailability = null;
     }
@@ -325,11 +359,108 @@ async function refreshSession(): Promise<void> {
       role: 'none',
       banned: false,
     };
+    authIdentityProfile = null;
+    authIdentityProfileLoadingUserId = null;
     lastCheckedDisplayName = '';
     lastDisplayNameAvailability = null;
   }
 
   renderAuthUi();
+}
+
+function bindIdentityRefreshListeners(): void {
+  if (identityRefreshListenersBound) {
+    return;
+  }
+
+  identityRefreshListenersBound = true;
+  window.addEventListener(PROFILE_INVALIDATED_EVENT, (event) => {
+    const detail =
+      event instanceof CustomEvent
+        ? (event.detail as { userId?: string } | undefined)
+        : undefined;
+    if (!detail?.userId || detail.userId !== state.user?.id) {
+      return;
+    }
+
+    void ensureAuthIdentityProfileLoaded(true);
+  });
+}
+
+function syncAuthIdentityProfileFromSession(user: AuthUser | null): void {
+  if (!user) {
+    authIdentityProfile = null;
+    authIdentityProfileLoadingUserId = null;
+    return;
+  }
+
+  const fallbackName =
+    user.displayName?.trim()
+    || user.email?.trim()
+    || (user.walletAddress ? shortenAddress(user.walletAddress) : 'Player');
+
+  if (authIdentityProfile?.userId !== user.id) {
+    authIdentityProfile = {
+      userId: user.id,
+      displayName: fallbackName,
+      playerLevel: null,
+      curatorLevel: null,
+      builderLevel: null,
+    };
+    return;
+  }
+
+  authIdentityProfile = {
+    ...authIdentityProfile,
+    displayName: fallbackName,
+  };
+}
+
+async function ensureAuthIdentityProfileLoaded(force: boolean = false): Promise<void> {
+  if (!state.authenticated || !state.user) {
+    authIdentityProfile = null;
+    authIdentityProfileLoadingUserId = null;
+    renderAuthUi();
+    return;
+  }
+
+  const userId = state.user.id;
+  if (!force) {
+    if (authIdentityProfileLoadingUserId === userId) {
+      return;
+    }
+    if (
+      authIdentityProfile?.userId === userId
+      && authIdentityProfile.playerLevel !== null
+      && authIdentityProfile.curatorLevel !== null
+      && authIdentityProfile.builderLevel !== null
+    ) {
+      return;
+    }
+  }
+
+  authIdentityProfileLoadingUserId = userId;
+  try {
+    const profile = await profileRepository.loadProfile(userId);
+    if (state.user?.id !== userId) {
+      return;
+    }
+
+    authIdentityProfile = {
+      userId,
+      displayName: profile.displayName?.trim() || authIdentityProfile?.displayName || 'Player',
+      playerLevel: profile.progression.player.level,
+      curatorLevel: profile.progression.curator.level,
+      builderLevel: profile.progression.builder.level,
+    };
+  } catch (error) {
+    console.warn('Failed to load auth identity profile summary', error);
+  } finally {
+    if (authIdentityProfileLoadingUserId === userId) {
+      authIdentityProfileLoadingUserId = null;
+    }
+    renderAuthUi();
+  }
 }
 
 function bindSessionRefreshListeners(): void {
@@ -773,6 +904,8 @@ function renderAuthUi(): void {
     return;
   }
 
+  renderAuthIdentity();
+
   if (authStatus) {
     const statusText = getAuthStatusText();
     authStatus.textContent = statusText;
@@ -869,6 +1002,69 @@ function renderAuthUi(): void {
       detail: getAuthDebugState(),
     })
   );
+}
+
+function renderAuthIdentity(): void {
+  if (!authIdentity) {
+    return;
+  }
+
+  const showIdentity = state.authenticated && Boolean(authIdentityProfile);
+  const clickable = isOpenableProfileUserId(state.user?.id);
+  authIdentity.classList.toggle('hidden', !showIdentity);
+  authIdentity.disabled = !clickable;
+  authIdentity.title =
+    showIdentity && clickable && authIdentityProfile
+      ? `View ${authIdentityProfile.displayName}'s profile`
+      : '';
+
+  if (!showIdentity || !authIdentityProfile) {
+    return;
+  }
+
+  if (authIdentityName) {
+    authIdentityName.textContent = authIdentityProfile.displayName;
+  }
+  renderMiniProfileStatLevel(authIdentityPlayerLevel, authIdentityProfile.playerLevel);
+  renderMiniProfileStatLevel(authIdentityCuratorLevel, authIdentityProfile.curatorLevel);
+  renderMiniProfileStatLevel(authIdentityBuilderLevel, authIdentityProfile.builderLevel);
+}
+
+function renderMiniProfileStatLevel(element: HTMLElement | null, level: number | null): void {
+  if (!element) {
+    return;
+  }
+
+  const iconSrc = element.dataset.iconSrc?.trim() ?? '';
+  const iconLabel = element.dataset.iconLabel?.trim() ?? 'Level';
+
+  if (!Number.isFinite(level) || !level || level <= 0 || !iconSrc) {
+    element.dataset.placeholder = 'true';
+    element.setAttribute('aria-label', `${iconLabel} level unavailable`);
+    if (element.textContent !== '--') {
+      element.replaceChildren(document.createTextNode('--'));
+    }
+    return;
+  }
+
+  if (element.dataset.levelValue === String(level) && element.dataset.placeholder !== 'true') {
+    return;
+  }
+
+  const icon = document.createElement('img');
+  icon.className = 'mini-profile-stat-level-icon';
+  icon.src = iconSrc;
+  icon.alt = '';
+  icon.setAttribute('aria-hidden', 'true');
+
+  const label = document.createElement('span');
+  label.className = 'mini-profile-stat-level-label';
+  label.textContent = `LVL ${level}`;
+
+  element.dataset.levelValue = String(level);
+  element.dataset.placeholder = 'false';
+  element.setAttribute('aria-label', `${iconLabel} level ${level}`);
+  element.replaceChildren(icon, label);
 }
 
 function getAuthStatusText(): string {
