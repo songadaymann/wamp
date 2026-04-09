@@ -207,6 +207,16 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - `output/web-game/suspicious-admin-player-history-ui-check/summary.json`
       - `output/web-game/suspicious-admin-player-history-ui-check/dom.html`
       - `output/web-game/suspicious-admin-player-history-ui-check/suspicious-admin-history.png`
+  - rollout later on April 9, 2026:
+    - rebased the feature branch onto current `origin/main`, merged it back with merge commit `f847572`, and pushed `origin/main`
+    - production deploy succeeded from clean `main`
+      - Worker version: `028b0f1d-0d48-4910-9bfb-2206c4fa0a0c`
+      - Pages preview: `https://666c96f2.wampland.pages.dev`
+    - production smoke in `deploy_prod.mjs` passed with `ok: true`
+    - live verification confirmed:
+      - `https://wamp.land/suspicious-admin` returns `200`
+      - the live page points at `./assets/suspiciousAdmin-BQBI_oOh.js`
+      - that live bundle contains the new `Player Search`, `full player history`, and empty-selection history-mode strings
 - Reward stings preview page build entry on April 8, 2026:
   - added `reward-stings-preview.html` to the Vite multi-page build inputs in `vite.config.ts`
   - this fixes production serving the normal app shell at `/reward-stings-preview.html` instead of the actual preview page
