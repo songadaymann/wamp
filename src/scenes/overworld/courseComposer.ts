@@ -49,7 +49,7 @@ interface CoursePublishedRoomMeta {
   coordinates: RoomCoordinates;
   roomVersion: number;
   roomTitle: string | null;
-  publishedByUserId: string | null;
+  builderUserId: string | null;
 }
 
 interface OverworldCourseComposerControllerHost {
@@ -538,8 +538,8 @@ export class OverworldCourseComposerController {
       coordinates: { ...coordinates },
       roomVersion: record.published.version,
       roomTitle: record.published.title,
-      publishedByUserId:
-        publishedVersion?.publishedByUserId ?? record.lastPublishedByUserId ?? null,
+      builderUserId:
+        record.claimerUserId ?? publishedVersion?.publishedByUserId ?? record.lastPublishedByUserId ?? null,
     };
     this.roomMetaByRoomId.set(roomId, meta);
     return meta;
@@ -555,7 +555,7 @@ export class OverworldCourseComposerController {
       return false;
     }
 
-    if (meta.publishedByUserId !== authState.user.id) {
+    if (meta.builderUserId !== authState.user.id) {
       return false;
     }
 
@@ -574,7 +574,7 @@ export class OverworldCourseComposerController {
       return false;
     }
 
-    if (this.record.ownerUserId && this.record.ownerUserId !== meta.publishedByUserId) {
+    if (this.record.ownerUserId && this.record.ownerUserId !== meta.builderUserId) {
       return false;
     }
 

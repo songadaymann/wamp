@@ -74,7 +74,7 @@ interface CoursePublishedRoomMeta {
   coordinates: RoomCoordinates;
   roomVersion: number;
   roomTitle: string | null;
-  publishedByUserId: string | null;
+  builderUserId: string | null;
   courseId: string | null;
 }
 
@@ -829,7 +829,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       coordinates: { ...summary.coordinates },
       roomVersion: summary.version ?? 1,
       roomTitle: summary.title,
-      publishedByUserId: summary.publishedByUserId ?? summary.creatorUserId ?? null,
+      builderUserId: summary.creatorUserId ?? summary.publishedByUserId ?? null,
       courseId: summary.course?.courseId ?? null,
     };
     this.roomMetaByRoomId.set(roomId, meta);
@@ -933,7 +933,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       return 'Sign in to edit courses.';
     }
 
-    if (meta.publishedByUserId !== authState.user.id) {
+    if (meta.builderUserId !== authState.user.id) {
       return 'You can only add rooms you authored.';
     }
 
@@ -941,7 +941,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       return 'This room is already published in another course.';
     }
 
-    if (this.record.ownerUserId && this.record.ownerUserId !== meta.publishedByUserId) {
+    if (this.record.ownerUserId && this.record.ownerUserId !== meta.builderUserId) {
       return 'All course rooms must belong to the same creator.';
     }
 
