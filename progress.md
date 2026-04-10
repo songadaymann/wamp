@@ -7484,3 +7484,32 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - this roster is still shard-local / nearby, not a true sitewide roster; it reflects the currently subscribed overworld chunk window
   - local automated validation for true `play` rows remains noisy because headless play transitions sometimes leave `render_game_to_text().activeScene` at `scene: none`; that is a known automation quirk outside this roster patch
   - the shared main-checkout `node_modules` was missing `@tonaljs/key` / `tonal`, so I installed those declared dependencies into the shared install to get `typecheck` / `build` green again
+
+## April 10, 2026 - cave tileset port from friend branch
+
+- reviewed `origin/cave-tiles` in a clean worktree:
+  - branch tip: `d3d1b40`
+  - narrow scope: new `public/assets/tilesets/tileset_cave.png` plus `src/config.ts` swap from the old `dirt` tileset entry to `cave`
+  - cave sheet visibly includes lantern-style tiles and cave props, so it is the right art pack for future tile-emissive lighting work
+- merged the friend branch onto current `main` in clean worktree `/private/tmp/wamp-main-cave-merge-2026-04-10`
+- added a follow-up compatibility pass on top of the merge so the live editor/runtime stays coherent:
+  - updated editor tileset ordering from `dirt` to `cave`
+  - updated agent tileset catalog metadata from `dirt` to `cave`
+  - kept legacy `dirt -> cave` key resolution in config and room-command style handling so older command callers do not hard-fail immediately
+- validation:
+  - `npm run build` passed in the clean merge worktree
+  - required `develop-web-game` client smoke ran against local remote-backed frontend and wrote:
+    - `output/web-game/shot-0.png`
+    - `output/web-game/state-0.json`
+  - targeted synthetic-editor cave probe wrote:
+    - `output/web-game/cave-tiles-editor-probe/summary.json`
+    - `output/web-game/cave-tiles-editor-probe/tileset-section.png`
+    - `output/web-game/cave-tiles-editor-probe/tile-palette-section.png`
+    - `output/web-game/cave-tiles-editor-probe/editor-full.png`
+  - probe confirmed:
+    - editor scene opened cleanly without auth via `previewSmoke=1`
+    - `tileset-select` includes `Cave`
+    - selected tileset value is `cave`
+    - palette canvas rendered non-empty cave art with no console/page errors
+- follow-up note:
+  - this pass lands the cave tileset art/config only; the lantern tiles are not yet wired as tile emissive sources in dark rooms, but the art is now live for that next lighting pass

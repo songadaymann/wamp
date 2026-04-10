@@ -215,7 +215,7 @@ const PREFERRED_TILESET_OPTION_ORDER = [
   'forest',
   'forest_2',
   'desert',
-  'dirt',
+  'cave',
   'lava',
   'snow',
   'water',

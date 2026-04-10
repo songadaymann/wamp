@@ -363,8 +363,13 @@ export const TILESETS: TilesetConfig[] = [
   },
 ];
 
+const LEGACY_TILESET_KEY_ALIASES: Record<string, string> = {
+  dirt: 'cave',
+};
+
 export function getTilesetByKey(key: string): TilesetConfig | undefined {
-  return TILESETS.find(ts => ts.key === key);
+  const normalizedKey = LEGACY_TILESET_KEY_ALIASES[key] ?? key;
+  return TILESETS.find(ts => ts.key === normalizedKey);
 }
 
 export function getTilesetUiTheme(key: string | null | undefined): TilesetUiThemeConfig {

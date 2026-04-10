@@ -62,11 +62,11 @@ const AGENT_TILESET_BUILD_STYLE_DEFINITIONS: Record<string, AgentTilesetBuildSty
       fillLocalIndices: [27, 28, 39, 40],
     },
   ],
-  dirt: [
+  cave: [
     {
-      id: 'dirt_flat',
-      label: 'Dirt Flat',
-      description: 'Neutral dirt platforms that use the shared standard top edge and fill blocks.',
+      id: 'cave_flat',
+      label: 'Cave Flat',
+      description: 'Rocky cave platforms that use the shared standard top edge and fill blocks.',
       surfaceLocalIndices: [14, 15, 16, 17],
       fillLocalIndices: [27, 28, 39, 40],
     },
@@ -108,6 +108,14 @@ const AGENT_TILESET_BUILD_STYLE_DEFINITIONS: Record<string, AgentTilesetBuildSty
     },
   ],
 };
+
+const LEGACY_AGENT_TILESET_KEY_ALIASES: Record<string, string> = {
+  dirt: 'cave',
+};
+
+function normalizeAgentTilesetKey(key: string): string {
+  return LEGACY_AGENT_TILESET_KEY_ALIASES[key] ?? key;
+}
 
 function sortIndicesAscending(values: Iterable<number>): number[] {
   return Array.from(values).sort((left, right) => left - right);
@@ -172,7 +180,8 @@ export function getAgentTilesetCatalog(): AgentTilesetCatalogEntry[] {
 }
 
 export function getAgentTilesetCatalogEntry(key: string): AgentTilesetCatalogEntry | null {
-  const entry = AGENT_TILESET_CATALOG.find((candidate) => candidate.key === key);
+  const normalizedKey = normalizeAgentTilesetKey(key);
+  const entry = AGENT_TILESET_CATALOG.find((candidate) => candidate.key === normalizedKey);
   if (!entry) {
     return null;
   }

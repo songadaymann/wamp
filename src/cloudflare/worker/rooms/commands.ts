@@ -304,7 +304,11 @@ function getBuildStyleOrThrow(tilesetKey: string, styleId: string): AgentTileset
     throw new HttpError(400, `Unknown tilesetKey "${tilesetKey}".`);
   }
 
-  const style = entry.buildStyles.find((candidate) => candidate.id === styleId);
+  const normalizedStyleId =
+    (entry.key === 'cave' && styleId === 'dirt_flat')
+      ? 'cave_flat'
+      : styleId;
+  const style = entry.buildStyles.find((candidate) => candidate.id === normalizedStyleId);
   if (!style) {
     throw new HttpError(400, `Unknown styleId "${styleId}" for tileset "${tilesetKey}".`);
   }
