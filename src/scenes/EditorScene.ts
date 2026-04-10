@@ -796,6 +796,7 @@ export class EditorScene extends Phaser.Scene {
       onSelectTool: (tool) => this.toolController.selectTool(tool),
       onClearCurrentLayer: () => this.toolController.clearCurrentLayer(),
       onClearAllTiles: () => this.toolController.clearAllTiles(),
+      onClearAllObjects: () => this.toolController.clearAllObjects(),
       onSelectBackground: () => this.applySelectedBackground(),
       onSelectLighting: (mode) => this.applySelectedLightingMode(mode),
       onSetLightingDarkness: (darkness) => this.applySelectedLightingDarkness(darkness),

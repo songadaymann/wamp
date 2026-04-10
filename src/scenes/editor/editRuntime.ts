@@ -718,6 +718,26 @@ export class EditorEditRuntime {
     this.markRoomDirty();
   }
 
+  clearAllObjects(): void {
+    if (!this.guardEditable()) {
+      return;
+    }
+
+    const previous = this.clonePlacedObjects();
+    if (previous.length === 0) {
+      return;
+    }
+
+    this.host.setPlacedObjects([]);
+    this.undoStack.push({
+      kind: 'objects',
+      action: { previous, next: [] },
+    });
+    this.redoStack = [];
+    this.rebuildObjectSprites();
+    this.markRoomDirty();
+  }
+
   fillRect(x1: number, y1: number, x2: number, y2: number): void {
     if (!this.guardEditable()) {
       return;

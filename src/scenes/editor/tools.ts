@@ -48,6 +48,10 @@ export class EditorToolController {
     this.editRuntime.clearAllTiles();
   }
 
+  clearAllObjects(): void {
+    this.editRuntime.clearAllObjects();
+  }
+
   setGoalType(nextType: RoomGoalType | null): void {
     this.editRuntime.setGoalType(nextType);
   }

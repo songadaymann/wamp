@@ -182,6 +182,7 @@ export interface EditorUiBridgeActions {
   onSelectTool: (tool: ToolName) => void;
   onClearCurrentLayer: () => void;
   onClearAllTiles: () => void;
+  onClearAllObjects: () => void;
   onSelectBackground: (backgroundId: string) => void;
   onSelectLighting: (mode: RoomLightingMode) => void;
   onSetLightingDarkness: (darkness: number) => void;
@@ -286,9 +287,11 @@ export class EditorUiBridge {
   private readonly moreToolsButtons: HTMLButtonElement[];
   private readonly moreToolsPanels: HTMLElement[];
   private readonly eraseControls: HTMLElement[];
+  private readonly tileEraseControls: HTMLElement[];
   private readonly eraseBrushSelects: HTMLSelectElement[];
   private readonly clearLayerButtons: HTMLButtonElement[];
   private readonly clearAllButtons: HTMLButtonElement[];
+  private readonly clearObjectButtons: HTMLButtonElement[];
   private readonly layerButtons: HTMLElement[];
   private readonly layerMiniButtons: HTMLElement[];
   private readonly layerChip: HTMLElement | null;
@@ -415,6 +418,9 @@ export class EditorUiBridge {
     this.eraseControls = Array.from(
       this.doc.querySelectorAll<HTMLElement>('.editor-eraser-controls')
     );
+    this.tileEraseControls = Array.from(
+      this.doc.querySelectorAll<HTMLElement>('.editor-tile-erase-control')
+    );
     this.eraseBrushSelects = Array.from(
       this.doc.querySelectorAll<HTMLSelectElement>('.editor-erase-brush-select')
     );
@@ -423,6 +429,9 @@ export class EditorUiBridge {
     );
     this.clearAllButtons = Array.from(
       this.doc.querySelectorAll<HTMLButtonElement>('.editor-clear-all-btn')
+    );
+    this.clearObjectButtons = Array.from(
+      this.doc.querySelectorAll<HTMLButtonElement>('.editor-clear-objects-btn')
     );
     this.layerButtons = Array.from(this.doc.querySelectorAll<HTMLElement>('.layer-btn'));
     this.layerMiniButtons = Array.from(
@@ -792,6 +801,15 @@ export class EditorUiBridge {
           return;
         }
         this.actions.onClearAllTiles();
+      });
+    }
+
+    for (const button of this.clearObjectButtons) {
+      this.bindButton(button, () => {
+        if (!this.windowObj.confirm('Remove all placed objects from this room?')) {
+          return;
+        }
+        this.actions.onClearAllObjects();
       });
     }
 
@@ -1260,11 +1278,11 @@ export class EditorUiBridge {
       panel.dataset.open = showMoreTools ? 'true' : 'false';
     }
 
-    const showEraseControls =
-      editorState.paletteMode === 'tiles' && editorState.activeTool === 'eraser';
+    const showEraseControls = editorState.activeTool === 'eraser';
     for (const controls of this.eraseControls) {
       controls.classList.toggle('hidden', !showEraseControls);
     }
+    this.setHidden(this.tileEraseControls, editorState.paletteMode !== 'tiles');
     for (const input of this.eraseBrushSelects) {
       if (input.value !== String(editorState.eraserBrushSize)) {
         input.value = String(editorState.eraserBrushSize);

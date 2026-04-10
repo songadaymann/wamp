@@ -380,6 +380,16 @@ export class CourseEditorScene extends Phaser.Scene {
         this.statusText = `Cleared all tiles in ${this.getSliceLabel(slice)}.`;
         this.renderUi();
       },
+      onClearAllObjects: () => {
+        const slice = this.getSelectedSlice();
+        if (!slice) {
+          return;
+        }
+
+        slice.runtime.clearAllObjects();
+        this.statusText = `Cleared all objects in ${this.getSliceLabel(slice)}.`;
+        this.renderUi();
+      },
       onSelectBackground: (backgroundId) => {
         editorState.selectedBackground = backgroundId;
         this.handleBackgroundChanged();
