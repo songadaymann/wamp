@@ -162,7 +162,6 @@ const DECO_ONLY_INDICES_FOREST = [
   56, 57, 58, 59,
   61, 62,
 ];
-const DECO_ONLY_INDICES_DIRT = [58, 59];
 const DECO_ONLY_INDICES_WATER = [1, 2, 3, 5, 13, 18];
 // Snow still has three bottom-anchored cap overlays above the main platform tops.
 const DECO_ONLY_INDICES_SNOW = [2, 3, 4, 8, 9, 10];
@@ -262,9 +261,9 @@ export const TILESETS: TilesetConfig[] = [
     },
   },
   {
-    key: 'dirt',
-    name: 'Dirt',
-    path: 'assets/tilesets/tileset_dirt.png',
+    key: 'cave',
+    name: 'Cave',
+    path: 'assets/tilesets/tileset_cave.png',
     imageWidth: 192,
     imageHeight: 96,
     columns: 12,
@@ -272,8 +271,8 @@ export const TILESETS: TilesetConfig[] = [
     tileCount: 72,
     firstGid: 145,
     terrainCollisionProfiles: {
-      ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_STANDARD, DECORATED_TOP_PROFILE),
-      ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_DIRT, NO_COLLISION_PROFILE),
+      ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_FOREST, DECORATED_TOP_PROFILE),
+      ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_FOREST, NO_COLLISION_PROFILE),
     },
     uiTheme: {
       accentCool: 0x84b95d,
