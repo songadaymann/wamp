@@ -634,7 +634,13 @@ export async function prepareMusicPhrasePublishStatements(
     if (latestPhrase && latestPhrase.fingerprint === fingerprint) {
       statements.push(
         env.DB.prepare(UPDATE_MUSIC_PHRASE_LABEL_SQL).bind(
+          published.version,
+          published.title,
+          published.coordinates.x,
+          published.coordinates.y,
+          creatorDisplayName,
           desiredLabel,
+          fingerprint,
           JSON.stringify(payload),
           payload.kind === 'tonal' ? payload.keyTonic : null,
           payload.kind === 'tonal' ? payload.keyMode : null,
