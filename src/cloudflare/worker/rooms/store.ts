@@ -775,6 +775,7 @@ async function countRoomClaimsSince(env: Env, userId: string, startIso: string):
       SELECT COUNT(*) AS claim_count
       FROM rooms
       WHERE claimer_user_id = ?
+        AND published_json IS NOT NULL
         AND claimed_at IS NOT NULL
         AND claimed_at >= ?
     `
