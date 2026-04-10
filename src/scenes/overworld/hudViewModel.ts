@@ -341,6 +341,14 @@ export function buildOverworldHudViewModel(
     mode === 'play'
       ? `Score ${score}`
       : statusOverride ?? transientStatus ?? '';
+  const onlinePlayCount = onlineRosterEntries.filter((entry) => entry.mode === 'play').length;
+  const onlineEditCount = onlineRosterEntries.filter((entry) => entry.mode === 'edit').length;
+  const onlineBrowseCount = onlineRosterEntries.filter((entry) => entry.mode === 'browse').length;
+  const onlineSummaryParts = [
+    onlinePlayCount > 0 ? `${onlinePlayCount} playing` : null,
+    onlineEditCount > 0 ? `${onlineEditCount} building` : null,
+    onlineBrowseCount > 0 ? `${onlineBrowseCount} browsing` : null,
+  ].filter((part): part is string => Boolean(part));
   const rateRoomButtonVisible = Boolean(
     mode !== 'play'
     && selectedState === 'published'
@@ -423,13 +431,13 @@ export function buildOverworldHudViewModel(
     playersOnlineText:
       totalPlayerCount === null
         ? ''
-        : `${totalPlayerCount} ${totalPlayerCount === 1 ? 'player' : 'players'} online`,
+        : `${totalPlayerCount} ${totalPlayerCount === 1 ? 'person' : 'people'} online`,
     playersOnlineSummaryText:
       totalPlayerCount === null
         ? ''
-        : onlineRosterEntries.length === 0
-          ? 'Live presence in loaded rooms.'
-          : `${onlineRosterEntries.length} ${onlineRosterEntries.length === 1 ? 'player' : 'players'} visible right now`,
+        : totalPlayerCount === 0
+          ? 'No one nearby right now.'
+          : onlineSummaryParts.join(' · '),
     playersOnlineEntries: onlineRosterEntries,
     saveStatusText,
     bottomBarZoomText: `Zoom: ${zoom.toFixed(2)}x`,

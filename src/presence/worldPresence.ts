@@ -154,7 +154,7 @@ export class WorldPresenceClient {
     }
 
     this.localPresence = nextPresence;
-    if (!nextPresence || nextPresence.mode === 'browse' || !nextShardId) {
+    if (!nextPresence || !nextShardId) {
       this.emitSnapshot();
       return;
     }
@@ -220,11 +220,7 @@ export class WorldPresenceClient {
 
     socket.addEventListener('open', () => {
       this.connectedShards.add(shardId);
-      if (
-        this.localPresence &&
-        this.localPresence.mode !== 'browse' &&
-        this.resolveLocalShardId() === shardId
-      ) {
+      if (this.localPresence && this.resolveLocalShardId() === shardId) {
         this.lastPublishedPayloadJson = null;
         this.updateLocalPresence(this.localPresence);
       } else {

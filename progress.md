@@ -7443,3 +7443,44 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - intro appears on first play
     - intro does not reappear on restart
     - intro does not reappear after returning to world and replaying the same published version
+
+## April 10, 2026 - richer nearby presence roster (play / build / browse)
+
+- created a clean main-based follow-up branch/worktree for the footer presence roster:
+  - branch: `feature/presence-roster-followup-2026-04-10`
+  - worktree: `/private/tmp/wamp-presence-roster-followup-2026-04-10`
+- expanded PartyKit world presence so browse-mode overworld users are published instead of silently suppressed:
+  - `src/presence/worldPresence.ts` now publishes browse presence like play/edit
+  - `src/scenes/OverworldPlayScene.ts` now publishes browse presence from the selected room center
+- expanded the PartyKit presence server to include browse + edit peers in snapshots while keeping room population counts play-only and room editor counts edit-only:
+  - `partykit/presenceServer.ts`
+  - remove messages now fire for any visible presence on leave/close, not just play-mode peers
+- kept rendering behavior safe:
+  - ghost rendering still filters to play peers only in `src/scenes/overworld/presence.ts`
+  - browse dots and play room markers still only use play peers
+- rebuilt the footer roster model to carry mode-aware entries:
+  - modes: `play`, `edit`, `browse`
+  - self is now represented in the roster for overworld browse/play tabs via local presence state
+  - total footer count now reflects visible nearby people across those modes instead of only play populations
+- updated the HUD footer popover:
+  - grouped sections for `Playing`, `Building`, and `Browsing`
+  - summary text now reads like `1 playing · 1 building · 2 browsing`
+  - play rows still jump + enter play
+  - build/browse rows jump only, without forcing play
+  - section headers and row borders now use distinct green / yellow / blue accents
+- validation:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - required `develop-web-game` Playwright client run wrote:
+    - `output/web-game/presence-footer-client-smoke/shot-0.png`
+    - `output/web-game/presence-footer-client-smoke/state-0.json`
+  - local validation stack used:
+    - Vite frontend on `http://127.0.0.1:4601/`
+    - local PartyKit on `http://127.0.0.1:1999`
+  - targeted DOM validation proved the grouped footer behavior and interaction split:
+    - `output/web-game/presence-roster-multitab-check-v2/summary.json`
+    - `output/web-game/presence-roster-multitab-check-v2/popover.png`
+- gotchas:
+  - this roster is still shard-local / nearby, not a true sitewide roster; it reflects the currently subscribed overworld chunk window
+  - local automated validation for true `play` rows remains noisy because headless play transitions sometimes leave `render_game_to_text().activeScene` at `scene: none`; that is a known automation quirk outside this roster patch
+  - the shared main-checkout `node_modules` was missing `@tonaljs/key` / `tonal`, so I installed those declared dependencies into the shared install to get `typecheck` / `build` green again

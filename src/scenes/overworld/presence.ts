@@ -46,6 +46,7 @@ export interface OnlineRosterEntry {
   displayName: string;
   roomId: string;
   roomCoordinates: RoomCoordinates;
+  mode: WorldGhostPresence['mode'];
   isSelf: boolean;
 }
 
@@ -90,6 +91,7 @@ export class OverworldPresenceController {
   private subscribedBoundsRetainUntil = 0;
   private ghostRenderBudget = 0;
   private visibleGhostCount = 0;
+  private localRosterPresence: Pick<LocalPresenceInput, 'mode' | 'roomCoordinates'> | null = null;
 
   constructor(private readonly options: OverworldPresenceControllerOptions) {}
 
@@ -189,6 +191,7 @@ export class OverworldPresenceController {
     this.subscribedBoundsRetainUntil = 0;
     this.ghostRenderBudget = 0;
     this.visibleGhostCount = 0;
+    this.localRosterPresence = null;
   }
 
   destroy(): void {
@@ -203,6 +206,7 @@ export class OverworldPresenceController {
     this.subscribedBoundsRetainUntil = 0;
     this.ghostRenderBudget = 0;
     this.visibleGhostCount = 0;
+    this.localRosterPresence = null;
   }
 
   getClient(): WorldPresenceClient | null {
@@ -260,7 +264,14 @@ export class OverworldPresenceController {
   }
 
   updateLocalPresence(input: LocalPresenceInput | null): void {
-    if (!this.client || !input || input.mode !== 'play') {
+    this.localRosterPresence = input
+      ? {
+          mode: input.mode,
+          roomCoordinates: { ...input.roomCoordinates },
+        }
+      : null;
+
+    if (!this.client || !input) {
       this.client?.updateLocalPresence(null);
       return;
     }
@@ -273,7 +284,7 @@ export class OverworldPresenceController {
       velocityY: input.velocityY,
       facing: input.facing,
       animationState: input.animationState,
-      mode: 'play',
+      mode: input.mode,
       timestamp: Date.now(),
     });
   }
@@ -353,12 +364,7 @@ export class OverworldPresenceController {
       return null;
     }
 
-    let total = 0;
-    for (const count of this.roomPopulationsById.values()) {
-      total += count;
-    }
-
-    return total;
+    return this.getOnlineRoster().length;
   }
 
   getOnlineRoster(): OnlineRosterEntry[] {
@@ -367,8 +373,14 @@ export class OverworldPresenceController {
     }
 
     const entries: OnlineRosterEntry[] = (this.snapshot.ghosts ?? [])
-      .filter((ghost) => ghost.mode === 'play' && this.isPresenceFresh(ghost.timestamp))
+      .filter((ghost) => this.isPresenceFresh(ghost.timestamp))
       .sort((left, right) => {
+        const leftModeOrder = this.getOnlineRosterModeOrder(left.mode);
+        const rightModeOrder = this.getOnlineRosterModeOrder(right.mode);
+        if (leftModeOrder !== rightModeOrder) {
+          return leftModeOrder - rightModeOrder;
+        }
+
         if (left.timestamp !== right.timestamp) {
           return right.timestamp - left.timestamp;
         }
@@ -381,28 +393,28 @@ export class OverworldPresenceController {
         displayName: ghost.displayName,
         roomId: ghost.roomId,
         roomCoordinates: { ...ghost.roomCoordinates },
+        mode: ghost.mode,
         isSelf: false,
       }));
 
-    const totalPlayerCount = this.getTotalPlayerCount();
-    if (
-      totalPlayerCount !== null &&
-      totalPlayerCount > entries.length &&
-      this.options.getMode() === 'play' &&
-      this.identity
-    ) {
-      const roomCoordinates = this.options.getCurrentRoomCoordinates();
-      entries.unshift({
-        key: `self:${this.identity.userId}`,
-        userId: this.identity.userId,
-        displayName: this.identity.displayName,
-        roomId: roomIdFromCoordinates(roomCoordinates),
-        roomCoordinates: { ...roomCoordinates },
-        isSelf: true,
-      });
+    const selfEntry = this.getSelfOnlineRosterEntry();
+    if (selfEntry) {
+      entries.unshift(selfEntry);
     }
 
-    return entries;
+    return entries.sort((left, right) => {
+      const leftModeOrder = this.getOnlineRosterModeOrder(left.mode);
+      const rightModeOrder = this.getOnlineRosterModeOrder(right.mode);
+      if (leftModeOrder !== rightModeOrder) {
+        return leftModeOrder - rightModeOrder;
+      }
+
+      if (left.isSelf !== right.isSelf) {
+        return left.isSelf ? -1 : 1;
+      }
+
+      return left.displayName.localeCompare(right.displayName);
+    });
   }
 
   getPresenceSummaryText(input: PresenceSummaryInput): string | null {
@@ -707,6 +719,7 @@ export class OverworldPresenceController {
         : this.options.getSelectedCoordinates();
 
     return [...(this.snapshot?.ghosts ?? [])]
+      .filter((ghost) => ghost.mode === 'play')
       .sort((left, right) => {
         const leftLoaded = this.options.isFullRoomLoaded(left.roomId) ? 0 : 1;
         const rightLoaded = this.options.isFullRoomLoaded(right.roomId) ? 0 : 1;
@@ -731,6 +744,34 @@ export class OverworldPresenceController {
         return left.displayName.localeCompare(right.displayName);
       })
       .slice(0, budget);
+  }
+
+  private getSelfOnlineRosterEntry(): OnlineRosterEntry | null {
+    if (!this.identity || !this.localRosterPresence) {
+      return null;
+    }
+
+    return {
+      key: `self:${this.identity.userId}`,
+      userId: this.identity.userId,
+      displayName: this.identity.displayName,
+      roomId: roomIdFromCoordinates(this.localRosterPresence.roomCoordinates),
+      roomCoordinates: { ...this.localRosterPresence.roomCoordinates },
+      mode: this.localRosterPresence.mode,
+      isSelf: true,
+    };
+  }
+
+  private getOnlineRosterModeOrder(mode: WorldGhostPresence['mode']): number {
+    switch (mode) {
+      case 'play':
+        return 0;
+      case 'edit':
+        return 1;
+      case 'browse':
+      default:
+        return 2;
+    }
   }
 
   private getGhostRenderBudget(): number {

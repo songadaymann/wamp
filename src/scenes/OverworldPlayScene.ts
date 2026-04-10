@@ -1271,8 +1271,14 @@ export class OverworldPlayScene extends Phaser.Scene {
           key: entry.key,
           userId: entry.userId,
           displayName: entry.displayName,
-          roomText: `Room ${entry.roomId}`,
+          roomText:
+            entry.mode === 'play'
+              ? `Playing in Room ${entry.roomId}`
+              : entry.mode === 'edit'
+                ? `Building in Room ${entry.roomId}`
+                : `Browsing Room ${entry.roomId}`,
           roomCoordinates: entry.roomCoordinates,
+          mode: entry.mode,
           isSelf: entry.isSelf,
         })),
       getActiveSignState: () => this.signController.getActiveSign(),
@@ -2204,9 +2210,8 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private syncLocalPresence(): void {
     const localPresence =
-      !this.player || !this.playerBody || this.mode !== 'play'
-        ? null
-        : {
+      this.mode === 'play' && this.player && this.playerBody
+        ? {
             mode: this.mode,
             roomCoordinates: { ...this.currentRoomCoordinates },
             x: this.player.x,
@@ -2215,7 +2220,19 @@ export class OverworldPlayScene extends Phaser.Scene {
             velocityY: this.playerBody.velocity.y,
             facing: this.playerFacing,
             animationState: this.playerAnimationState,
-          };
+          }
+        : this.mode === 'browse'
+          ? {
+              mode: this.mode,
+              roomCoordinates: { ...this.selectedCoordinates },
+              x: this.selectedCoordinates.x * ROOM_PX_WIDTH + ROOM_PX_WIDTH * 0.5,
+              y: this.selectedCoordinates.y * ROOM_PX_HEIGHT + ROOM_PX_HEIGHT * 0.5,
+              velocityX: 0,
+              velocityY: 0,
+              facing: 1,
+              animationState: 'idle' as const,
+            }
+          : null;
 
     this.presenceController.updateLocalPresence(localPresence);
     this.roomChatController.updateLocalPresence(localPresence);

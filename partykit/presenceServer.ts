@@ -195,7 +195,7 @@ export default class PresenceServer implements Party.Server {
     });
 
     if (current.channel === 'presence') {
-      if (previousPresence?.mode === 'play' && presence.mode !== 'play') {
+      if (this.isVisiblePresence(previousPresence) && !this.isVisiblePresence(presence)) {
         this.sendPresenceMessage(
           {
             type: 'remove',
@@ -226,7 +226,7 @@ export default class PresenceServer implements Party.Server {
 
   onClose(connection: Party.Connection<ConnectionPresenceState>): void {
     const presence = connection.state?.presence;
-    if (connection.state?.channel === 'presence' && presence?.mode === 'play') {
+    if (connection.state?.channel === 'presence' && this.isVisiblePresence(presence)) {
       this.sendPresenceMessage({
         type: 'remove',
         connectionId: connection.id,
@@ -260,7 +260,7 @@ export default class PresenceServer implements Party.Server {
       presence: null,
     });
 
-    if (current?.channel === 'presence' && previousPresence.mode === 'play') {
+    if (current?.channel === 'presence' && this.isVisiblePresence(previousPresence)) {
       this.sendPresenceMessage(
         {
           type: 'remove',
@@ -300,12 +300,17 @@ export default class PresenceServer implements Party.Server {
     const counts = new Map<string, number>();
 
     for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
-      const peer = this.toGhostPresence(connection);
-      if (!peer) {
+      const presence = connection.state?.presence;
+      if (
+        connection.state?.channel !== 'presence' ||
+        !presence ||
+        presence.mode !== 'play'
+      ) {
         continue;
       }
 
-      counts.set(peer.roomId, (counts.get(peer.roomId) ?? 0) + 1);
+      const roomId = this.getRoomId(presence.roomCoordinates);
+      counts.set(roomId, (counts.get(roomId) ?? 0) + 1);
     }
 
     return Object.fromEntries(
@@ -343,7 +348,7 @@ export default class PresenceServer implements Party.Server {
     connection: Party.Connection<ConnectionPresenceState>
   ): WorldGhostPresence | null {
     const state = connection.state;
-    if (state?.channel !== 'presence' || !state.presence || state.presence.mode !== 'play') {
+    if (state?.channel !== 'presence' || !this.isVisiblePresence(state.presence)) {
       return null;
     }
 
@@ -356,6 +361,13 @@ export default class PresenceServer implements Party.Server {
       shardId: this.room.id,
       roomId: `${state.presence.roomCoordinates.x},${state.presence.roomCoordinates.y}`,
     };
+  }
+
+  private isVisiblePresence(presence: PresencePayload | null | undefined): presence is PresencePayload {
+    return Boolean(
+      presence &&
+      (presence.mode === 'browse' || presence.mode === 'play' || presence.mode === 'edit')
+    );
   }
 
   private shouldBroadcastPopulations(

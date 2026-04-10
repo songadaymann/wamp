@@ -148,6 +148,7 @@ export interface OverworldOnlineRosterViewEntry {
   displayName: string;
   roomText: string;
   roomCoordinates: RoomCoordinates;
+  mode: 'browse' | 'play' | 'edit';
   isSelf: boolean;
 }
 
@@ -693,9 +694,22 @@ export class OverworldHudBridge {
     }
 
     if (this.playersOnlinePopoverListEl) {
-      this.playersOnlinePopoverListEl.replaceChildren(
-        ...viewModel.playersOnlineEntries.map((entry) => this.createPlayersOnlineEntry(entry))
-      );
+      const playEntries = viewModel.playersOnlineEntries.filter((entry) => entry.mode === 'play');
+      const editEntries = viewModel.playersOnlineEntries.filter((entry) => entry.mode === 'edit');
+      const browseEntries = viewModel.playersOnlineEntries.filter((entry) => entry.mode === 'browse');
+      const sections: HTMLElement[] = [];
+
+      if (playEntries.length > 0) {
+        sections.push(this.createPlayersOnlineSection('play', playEntries));
+      }
+      if (editEntries.length > 0) {
+        sections.push(this.createPlayersOnlineSection('edit', editEntries));
+      }
+      if (browseEntries.length > 0) {
+        sections.push(this.createPlayersOnlineSection('browse', browseEntries));
+      }
+
+      this.playersOnlinePopoverListEl.replaceChildren(...sections);
     }
   }
 
@@ -704,8 +718,14 @@ export class OverworldHudBridge {
     row.type = 'button';
     row.className = 'world-online-popover-entry';
     row.dataset.onlineKey = entry.key;
+    row.dataset.onlineMode = entry.mode;
     row.disabled = entry.isSelf;
-    row.title = entry.isSelf ? '' : `Join ${entry.displayName} in ${entry.roomText}`;
+    row.title =
+      entry.isSelf
+        ? ''
+        : entry.mode === 'play'
+          ? `Join ${entry.displayName} in ${entry.roomText}`
+          : `Warp to ${entry.displayName} in ${entry.roomText}`;
     row.addEventListener('click', () => {
       if (entry.isSelf) {
         return;
@@ -715,7 +735,9 @@ export class OverworldHudBridge {
       this.setPlayersOnlinePopoverOpen(false);
       void (async () => {
         await runtimeConfig.onJumpToCoordinates(entry.roomCoordinates);
-        await runtimeConfig.onPlayRoom();
+        if (entry.mode === 'play') {
+          await runtimeConfig.onPlayRoom();
+        }
       })();
     });
 
@@ -730,6 +752,28 @@ export class OverworldHudBridge {
 
     row.append(name, room);
     return row;
+  }
+
+  private createPlayersOnlineSection(
+    mode: OverworldOnlineRosterViewEntry['mode'],
+    entries: OverworldOnlineRosterViewEntry[],
+  ): HTMLElement {
+    const section = this.doc.createElement('section');
+    section.className = 'world-online-popover-section';
+    section.dataset.onlineMode = mode;
+
+    const title = this.doc.createElement('div');
+    title.className = 'world-online-popover-section-title';
+    title.dataset.onlineMode = mode;
+    title.textContent =
+      mode === 'play' ? 'Playing' : mode === 'edit' ? 'Building' : 'Browsing';
+
+    const list = this.doc.createElement('div');
+    list.className = 'world-online-popover-section-list';
+    list.append(...entries.map((entry) => this.createPlayersOnlineEntry(entry)));
+
+    section.append(title, list);
+    return section;
   }
 
   private renderSelectedCreator(

@@ -1551,6 +1551,34 @@ body[data-app-mode="play-world"] .world-only-control {
 
 .world-online-popover-list {
   display: grid;
+  gap: 10px;
+}
+
+.world-online-popover-section {
+  display: grid;
+  gap: 6px;
+}
+
+.world-online-popover-section-title {
+  font-size: 9px;
+  font-family: 'Early GameBoy', monospace;
+  line-height: 1.2;
+}
+
+.world-online-popover-section-title[data-online-mode='play'] {
+  color: #277b30;
+}
+
+.world-online-popover-section-title[data-online-mode='edit'] {
+  color: #fcea7c;
+}
+
+.world-online-popover-section-title[data-online-mode='browse'] {
+  color: #79ccde;
+}
+
+.world-online-popover-section-list {
+  display: grid;
   gap: 6px;
 }
 
@@ -1570,11 +1598,35 @@ body[data-app-mode="play-world"] .world-only-control {
   cursor: pointer;
 }
 
+.world-online-popover-entry[data-online-mode='play'] {
+  border-color: rgba(39, 123, 48, 0.32);
+}
+
+.world-online-popover-entry[data-online-mode='edit'] {
+  border-color: rgba(252, 234, 124, 0.55);
+}
+
+.world-online-popover-entry[data-online-mode='browse'] {
+  border-color: rgba(121, 204, 222, 0.55);
+}
+
 .world-online-popover-entry:hover,
 .world-online-popover-entry:focus-visible {
   border-color: var(--world-online-green);
   background: rgba(39, 123, 48, 0.1);
   outline: none;
+}
+
+.world-online-popover-entry[data-online-mode='edit']:hover,
+.world-online-popover-entry[data-online-mode='edit']:focus-visible {
+  border-color: #fcea7c;
+  background: rgba(252, 234, 124, 0.16);
+}
+
+.world-online-popover-entry[data-online-mode='browse']:hover,
+.world-online-popover-entry[data-online-mode='browse']:focus-visible {
+  border-color: #79ccde;
+  background: rgba(121, 204, 222, 0.16);
 }
 
 .world-online-popover-entry:disabled {
