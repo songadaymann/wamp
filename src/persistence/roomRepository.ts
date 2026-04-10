@@ -118,6 +118,7 @@ class LocalRoomRepository implements RoomRepository {
   async saveDraft(room: RoomSnapshot): Promise<RoomRecord> {
     const existing = await this.loadRoom(room.id, room.coordinates);
     const now = new Date().toISOString();
+    const shouldClaimDraft = !existing.claimerUserId && existing.published === null;
 
     const draft: RoomSnapshot = {
       ...cloneRoomSnapshot(room),
@@ -133,11 +134,11 @@ class LocalRoomRepository implements RoomRepository {
       published: existing.published,
       versions: existing.versions,
       canonicalVersion: existing.canonicalVersion,
-      claimerUserId: existing.claimerUserId,
-      claimerPrincipalKind: existing.claimerPrincipalKind,
+      claimerUserId: shouldClaimDraft ? 'local-user' : existing.claimerUserId,
+      claimerPrincipalKind: shouldClaimDraft ? 'user' : existing.claimerPrincipalKind,
       claimerAgentId: existing.claimerAgentId,
-      claimerDisplayName: existing.claimerDisplayName,
-      claimedAt: existing.claimedAt,
+      claimerDisplayName: shouldClaimDraft ? 'Guest' : existing.claimerDisplayName,
+      claimedAt: shouldClaimDraft ? now : existing.claimedAt,
       lastPublishedByUserId: existing.lastPublishedByUserId,
       lastPublishedByPrincipalKind: existing.lastPublishedByPrincipalKind,
       lastPublishedByAgentId: existing.lastPublishedByAgentId,
@@ -204,11 +205,11 @@ class LocalRoomRepository implements RoomRepository {
         }),
       ],
       canonicalVersion: existing.canonicalVersion,
-      claimerUserId: existing.claimerUserId,
-      claimerPrincipalKind: existing.claimerPrincipalKind,
+      claimerUserId: existing.claimerUserId ?? 'local-user',
+      claimerPrincipalKind: existing.claimerPrincipalKind ?? 'user',
       claimerAgentId: existing.claimerAgentId,
-      claimerDisplayName: existing.claimerDisplayName,
-      claimedAt: existing.claimedAt,
+      claimerDisplayName: existing.claimerDisplayName ?? 'Guest',
+      claimedAt: existing.claimedAt ?? now,
       lastPublishedByUserId: null,
       lastPublishedByPrincipalKind: null,
       lastPublishedByAgentId: null,

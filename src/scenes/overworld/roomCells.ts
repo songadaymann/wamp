@@ -126,6 +126,8 @@ export class OverworldRoomCellController {
     const editorCount = this.host.getRoomEditorCount(coordinates);
     if (cellState === 'draft') {
       this.drawInsetFrame(x, y, 4, 2, RETRO_COLORS.draft, 0.95);
+    } else if (cellState === 'claimed_unpublished') {
+      this.drawInsetFrame(x, y, 4, 2, RETRO_COLORS.claimedUnpublished, 0.92);
     } else if (cellState === 'frontier') {
       this.drawInsetFrame(x, y, 4, 2, FRONTIER_BUILD_HERE_RED, 0.95);
     } else if (cellState === 'published') {
@@ -290,6 +292,8 @@ export class OverworldRoomCellController {
     switch (cellState) {
       case 'draft':
         return { color: RETRO_COLORS.draft, alpha: 0.07 };
+      case 'claimed_unpublished':
+        return { color: RETRO_COLORS.claimedUnpublished, alpha: 0.085 };
       case 'published':
         return { color: RETRO_COLORS.published, alpha: 0.025 };
       case 'frontier':

@@ -230,7 +230,11 @@ export class OverworldHudStateController {
     coordinates: RoomCoordinates,
     selectedState: SelectedCellState,
   ): void {
-    if (selectedState !== 'published' && selectedState !== 'draft') {
+    if (
+      selectedState !== 'published'
+      && selectedState !== 'draft'
+      && selectedState !== 'claimed_unpublished'
+    ) {
       return;
     }
 

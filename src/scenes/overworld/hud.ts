@@ -96,11 +96,11 @@ export interface OverworldHudViewModel {
   selectedCreatorUserId: string | null;
   selectedStateVisible: boolean;
   selectedStateText: string;
-  selectedStateTone: 'published' | 'minted' | 'draft' | 'frontier' | 'empty';
+  selectedStateTone: 'published' | 'minted' | 'claimed_unpublished' | 'draft' | 'frontier' | 'empty';
   selectedStateInfoVisible: boolean;
   selectedStateInfoText: string;
   selectedMetaText: string;
-  selectedMetaTone: 'default' | 'challenge' | 'draft' | 'frontier';
+  selectedMetaTone: 'default' | 'challenge' | 'claimed_unpublished' | 'draft' | 'frontier';
   selectedGoalText: string;
   statusText: string;
   leaderboardText: string;

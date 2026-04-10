@@ -10,7 +10,8 @@ import {
   computeWorldChunkWindow,
   computeWorldWindow,
   type ClaimableFrontierRoomWindow,
-  type PublishedWorldRoomSource,
+  type ClaimedUnpublishedWorldRoomSource,
+  type WorldRoomSource,
   type WorldChunkBounds,
   type WorldChunkWindow,
   type WorldWindow,
@@ -62,11 +63,11 @@ function parseStoredRecord(
 
 class LocalWorldRepository implements WorldRepository {
   async loadWorldWindow(center: RoomCoordinates, radius: number): Promise<WorldWindow> {
-    return computeWorldWindow(this.loadAllPublishedRooms(), center, radius);
+    return computeWorldWindow(this.loadAllWorldRooms(), center, radius);
   }
 
   async loadWorldChunkWindow(chunkBounds: WorldChunkBounds): Promise<WorldChunkWindow> {
-    return computeWorldChunkWindow(this.loadAllPublishedRooms(), chunkBounds);
+    return computeWorldChunkWindow(this.loadAllWorldRooms(), chunkBounds);
   }
 
   async loadPublishedRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomSnapshot | null> {
@@ -92,7 +93,7 @@ class LocalWorldRepository implements WorldRepository {
     center: RoomCoordinates,
     radius: number
   ): Promise<ClaimableFrontierRoomWindow> {
-    const worldWindow = computeWorldWindow(this.loadAllPublishedRooms(), center, radius);
+    const worldWindow = computeWorldWindow(this.loadAllWorldRooms(), center, radius);
     return {
       center: { ...center },
       radius,
@@ -103,8 +104,8 @@ class LocalWorldRepository implements WorldRepository {
     };
   }
 
-  private loadAllPublishedRooms(): PublishedWorldRoomSource[] {
-    const publishedRooms: PublishedWorldRoomSource[] = [];
+  private loadAllWorldRooms(): WorldRoomSource[] {
+    const rooms: WorldRoomSource[] = [];
 
     for (let index = 0; index < localStorage.length; index++) {
       const key = localStorage.key(index);
@@ -114,16 +115,28 @@ class LocalWorldRepository implements WorldRepository {
       if (!coordinates) continue;
 
       const stored = parseStoredRecord(localStorage.getItem(key), roomId, coordinates);
-      if (!stored?.published) continue;
+      if (stored?.published) {
+        rooms.push({
+          state: 'published',
+          snapshot: cloneRoomSnapshot(stored.published),
+          creatorUserId: stored.claimerUserId ?? stored.lastPublishedByUserId,
+          creatorDisplayName: stored.claimerDisplayName ?? stored.lastPublishedByDisplayName,
+        });
+        continue;
+      }
 
-      publishedRooms.push({
-        snapshot: cloneRoomSnapshot(stored.published),
-        creatorUserId: stored.claimerUserId ?? stored.lastPublishedByUserId,
-        creatorDisplayName: stored.claimerDisplayName ?? stored.lastPublishedByDisplayName,
-      });
+      if (stored?.claimerUserId && stored.claimedAt) {
+        const claimedRoom: ClaimedUnpublishedWorldRoomSource = {
+          state: 'claimed_unpublished',
+          snapshot: cloneRoomSnapshot(stored.draft),
+          claimerUserId: stored.claimerUserId,
+          claimerDisplayName: stored.claimerDisplayName,
+        };
+        rooms.push(claimedRoom);
+      }
     }
 
-    return publishedRooms;
+    return rooms;
   }
 }
 
