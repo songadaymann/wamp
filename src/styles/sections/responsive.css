@@ -815,6 +815,12 @@ body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-va
   word-break: break-word;
 }
 
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-save-status {
+  height: 2.9em;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-value.editor-save-status-rich {
   display: flex;
   flex-wrap: wrap;

@@ -7536,3 +7536,28 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - `staticTileEmitterCount: 1`
     - `glowEmitterCount: 1`
     - `fallbackReason: null`
+
+## April 10, 2026 - editor save-status layout cleanup
+
+- created clean `main`-based worktree branch:
+  - branch: `fix/edit-modal-status-layout-2026-04-10`
+  - worktree: `/private/tmp/wamp-edit-modal-status-layout-2026-04-10`
+- targeted the edit-mode save feedback jitter where `Draft saved...` text moving between one and two lines resized the editor actions panel
+- added a fixed two-line status viewport for:
+  - desktop/sidebar `#editor-top-save-status`
+  - phone action-sheet `#mobile-editor-save-status`
+- validation:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - dependency install note: plain `npm ci` failed because `miniflare -> sharp` tried to build native `sharp` from source under local Node `v24.10.0`; `npm ci --ignore-scripts` was enough for this CSS-only build/typecheck pass
+  - required `develop-web-game` Playwright client smoke wrote:
+    - `output/web-game/edit-modal-status-layout-skill-smoke/shot-0.png`
+    - `output/web-game/edit-modal-status-layout-skill-smoke/state-0.json`
+  - targeted DOM/CSS Playwright probe wrote:
+    - `output/web-game/edit-modal-status-layout-probe/summary.json`
+    - `output/web-game/edit-modal-status-layout-probe/desktop-two-line.png`
+    - `output/web-game/edit-modal-status-layout-probe/mobile-two-line.png`
+  - targeted probe confirmed one-line and two-line status strings keep identical measured heights:
+    - desktop status: `58px`; actions panel: `231.5px`
+    - phone status: `31.890625px`; actions panel: `359.828125px`
+  - inspected the generated screenshots; the desktop editor status window shows the two-line status without moving the actions panel

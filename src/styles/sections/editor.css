@@ -2140,6 +2140,12 @@ body[data-app-mode='editor'] #sidebar .editor-top-save-status {
   box-shadow: 2px 2px 0 var(--editor-retro-shadow);
 }
 
+body[data-app-mode='editor'] #sidebar .editor-top-save-status {
+  height: calc(3em + 22px);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 body[data-app-mode='editor'] #sidebar .editor-top-save-status a {
   color: var(--editor-retro-blue-deep);
   text-decoration: underline;
