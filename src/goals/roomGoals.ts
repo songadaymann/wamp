@@ -63,6 +63,8 @@ export const ROOM_GOAL_LABELS: Record<RoomGoalType, string> = {
   survival: 'Survival',
 };
 
+export const MAX_ROOM_GOAL_INTRO_TEXT_LENGTH = 140;
+
 export function createDefaultRoomGoal(type: RoomGoalType): RoomGoal {
   switch (type) {
     case 'reach_exit':
@@ -162,6 +164,19 @@ export function normalizePositiveInteger(value: number | null | undefined): numb
   return rounded;
 }
 
+export function normalizeRoomGoalIntroText(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim().replace(/\s+/g, ' ');
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.slice(0, MAX_ROOM_GOAL_INTRO_TEXT_LENGTH);
+}
+
 function isGoalMarkerPointLike(value: unknown): value is GoalMarkerPoint {
   if (!value || typeof value !== 'object') {
     return false;
@@ -221,6 +236,73 @@ export function normalizeRoomGoal(value: unknown): RoomGoal | null {
 
 export function goalSupportsTimeLimit(goalType: RoomGoalType): boolean {
   return goalType !== 'survival';
+}
+
+export function formatRoomGoalShortText(
+  goal: RoomGoal,
+  options: {
+    enemyCount?: number | null;
+  } = {},
+): string {
+  switch (goal.type) {
+    case 'reach_exit':
+      return 'Reach exit';
+    case 'collect_target':
+      return `Collect ${goal.requiredCount}`;
+    case 'defeat_all': {
+      const enemyCount = options.enemyCount ?? null;
+      if (typeof enemyCount === 'number' && Number.isFinite(enemyCount) && enemyCount > 0) {
+        return `Defeat ${enemyCount} ${enemyCount === 1 ? 'enemy' : 'enemies'}`;
+      }
+      return 'Defeat all enemies';
+    }
+    case 'checkpoint_sprint':
+      return `Reach ${goal.checkpoints.length || 0} ${goal.checkpoints.length === 1 ? 'checkpoint' : 'checkpoints'}`;
+    case 'survival':
+      return `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds`;
+  }
+}
+
+export function buildAutomaticRoomGoalIntroText(
+  goal: RoomGoal,
+  options: {
+    enemyCount?: number | null;
+  } = {},
+): string {
+  switch (goal.type) {
+    case 'reach_exit':
+      return 'Reach the exit as fast as you can!';
+    case 'collect_target':
+      return `Collect ${goal.requiredCount} item${goal.requiredCount === 1 ? '' : 's'} as fast as you can!`;
+    case 'defeat_all': {
+      const enemyCount = options.enemyCount ?? null;
+      if (typeof enemyCount === 'number' && Number.isFinite(enemyCount) && enemyCount > 0) {
+        return `Defeat ${enemyCount} ${enemyCount === 1 ? 'enemy' : 'enemies'} as fast as you can!`;
+      }
+      return 'Defeat all enemies as fast as you can!';
+    }
+    case 'checkpoint_sprint': {
+      const checkpointCount = goal.checkpoints.length;
+      return `Reach ${checkpointCount} ${checkpointCount === 1 ? 'checkpoint' : 'checkpoints'}, then hit the finish as fast as you can!`;
+    }
+    case 'survival':
+      return `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds!`;
+  }
+}
+
+export function resolveRoomGoalIntroText(
+  goal: RoomGoal,
+  options: {
+    customText?: string | null;
+    enemyCount?: number | null;
+  } = {},
+): string {
+  return (
+    normalizeRoomGoalIntroText(options.customText)
+    ?? buildAutomaticRoomGoalIntroText(goal, {
+      enemyCount: options.enemyCount,
+    })
+  );
 }
 
 export function getRoomGoalPublishValidationError(

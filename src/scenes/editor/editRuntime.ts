@@ -31,6 +31,7 @@ import {
   createGoalMarkerPointFromTile,
   getRoomGoalPublishValidationError,
   goalSupportsTimeLimit,
+  normalizeRoomGoalIntroText,
   type CheckpointSprintGoal,
   type GoalMarkerPoint,
   type RoomGoal,
@@ -133,6 +134,7 @@ export class EditorEditRuntime {
   private goalMarkerSprites: Phaser.GameObjects.Sprite[] = [];
   private goalMarkerLabels: Phaser.GameObjects.Text[] = [];
   private roomGoal: RoomGoal | null = null;
+  private roomGoalIntroText: string | null = null;
   private roomSpawnPoint: RoomSpawnPoint | null = null;
   private roomMusic: RoomMusic | null = null;
   private roomDirty = false;
@@ -168,12 +170,20 @@ export class EditorEditRuntime {
     return this.roomGoal;
   }
 
+  get currentRoomGoalIntroText(): string | null {
+    return this.roomGoalIntroText;
+  }
+
   get currentRoomSpawnPoint(): RoomSpawnPoint | null {
     return this.roomSpawnPoint;
   }
 
   get currentRoomMusic(): RoomMusic | null {
     return cloneRoomMusic(this.roomMusic);
+  }
+
+  getGoalIntroText(): string | null {
+    return this.roomGoalIntroText;
   }
 
   get isRoomDirty(): boolean {
@@ -281,6 +291,7 @@ export class EditorEditRuntime {
     this.spawnMarkerSprite = null;
 
     this.roomGoal = null;
+    this.roomGoalIntroText = null;
     this.roomSpawnPoint = null;
     this.roomMusic = null;
     this.roomDirty = false;
@@ -329,6 +340,7 @@ export class EditorEditRuntime {
     this.host.updateBackground();
 
     this.roomGoal = cloneRoomGoal(room.goal);
+    this.roomGoalIntroText = normalizeRoomGoalIntroText(room.goalIntroText);
     this.roomSpawnPoint = room.spawnPoint ? { ...room.spawnPoint } : null;
     this.roomMusic = cloneRoomMusic(room.music);
     this.host.setPlacedObjects(room.placedObjects.map((placed) => ({ ...placed })));
@@ -462,6 +474,7 @@ export class EditorEditRuntime {
       id: metadata.roomId,
       coordinates: { ...metadata.coordinates },
       title: metadata.title,
+      goalIntroText: this.roomGoal ? normalizeRoomGoalIntroText(this.roomGoalIntroText) : null,
       background: normalizeRoomBackground(this.host.getSelectedBackground()),
       lighting: cloneRoomLightingSettings(this.host.getSelectedLightingSettings()),
       music: cloneRoomMusic(this.roomMusic),
@@ -1297,6 +1310,24 @@ export class EditorEditRuntime {
     this.updateRoomGoal(nextGoal);
   }
 
+  setGoalIntroText(nextText: string | null): void {
+    if (!this.guardEditable()) {
+      return;
+    }
+    if (!this.roomGoal) {
+      return;
+    }
+
+    const normalizedNext = normalizeRoomGoalIntroText(nextText);
+    if (normalizedNext === this.roomGoalIntroText) {
+      this.host.updateGoalUi();
+      return;
+    }
+
+    this.roomGoalIntroText = normalizedNext;
+    this.markRoomDirty();
+  }
+
   startGoalMarkerPlacement(mode: GoalPlacementMode): void {
     if (!this.guardEditable()) {
       return;
@@ -1829,6 +1860,9 @@ export class EditorEditRuntime {
     }
 
     this.roomGoal = normalizedNext;
+    if (!this.roomGoal) {
+      this.roomGoalIntroText = null;
+    }
     if (!this.goalUsesMarkers(this.roomGoal)) {
       this.goalPlacementMode = null;
     }

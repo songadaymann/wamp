@@ -58,6 +58,7 @@ export class EditorChromeController {
         roomTitle: this.host.getRoomTitle(),
         roomCoordinates: this.host.getRoomCoordinates(),
         roomGoal,
+        roomGoalIntroText: this.editRuntime.getGoalIntroText(),
         roomPlacementMode: this.editRuntime.currentGoalPlacementMode,
         goalUsesMarkers: this.editRuntime.goalUsesMarkers(roomGoal),
         goalSummaryText: this.toolController.getGoalSummaryText(),

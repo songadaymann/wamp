@@ -16,6 +16,7 @@ import {
 import { DEFAULT_ROOM_BACKGROUND, normalizeRoomBackground } from '../backgrounds/model';
 import {
   getRoomGoalPublishValidationError,
+  normalizeRoomGoalIntroText,
   normalizeRoomGoal,
   type RoomGoal,
 } from '../goals/roomGoals';
@@ -65,6 +66,7 @@ export interface RoomSnapshot {
   id: string;
   coordinates: RoomCoordinates;
   title: string | null;
+  goalIntroText: string | null;
   background: string;
   lighting: RoomLightingSettings;
   music: RoomMusic | null;
@@ -187,6 +189,7 @@ export function createDefaultRoomSnapshot(
     id: roomId,
     coordinates: { ...coordinates },
     title: null,
+    goalIntroText: null,
     background: DEFAULT_ROOM_BACKGROUND,
     lighting: cloneRoomLightingSettings(null),
     music: null,
@@ -317,6 +320,7 @@ export function cloneRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
     id: room.id,
     coordinates: { ...room.coordinates },
     title: normalizeRoomTitle(room.title),
+    goalIntroText: normalizeRoomGoalIntroText(room.goalIntroText),
     background: normalizeRoomBackground(room.background),
     lighting: normalizeRoomLightingSettings(room.lighting),
     music: normalizeRoomMusic(room.music),
@@ -339,11 +343,12 @@ function isRoomSnapshotLike(value: unknown): value is RoomSnapshot {
 
   const snapshot = value as Partial<RoomSnapshot>;
   return Boolean(
-    typeof snapshot.id === 'string' &&
+      typeof snapshot.id === 'string' &&
       snapshot.coordinates &&
       typeof snapshot.coordinates.x === 'number' &&
       typeof snapshot.coordinates.y === 'number' &&
       (snapshot.title === undefined || snapshot.title === null || typeof snapshot.title === 'string') &&
+      (snapshot.goalIntroText === undefined || snapshot.goalIntroText === null || typeof snapshot.goalIntroText === 'string') &&
       typeof snapshot.background === 'string' &&
       typeof snapshot.version === 'number' &&
       snapshot.tileData &&
@@ -437,6 +442,10 @@ function normalizeRoomVersionRecord(value: unknown): RoomVersionRecord | null {
 
 export function isRoomSnapshotBlank(room: RoomSnapshot): boolean {
   if (room.title) {
+    return false;
+  }
+
+  if (room.goalIntroText) {
     return false;
   }
 

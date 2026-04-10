@@ -18,6 +18,7 @@ import { setupRoomMusicControls } from './setup/musicControls';
 import { ProfileModalController } from './setup/profileModal';
 import { RewardStingController } from './setup/rewardStings';
 import { RewardStingCatchupController } from './setup/rewardStingCatchup';
+import { RoomGoalIntroModalController } from './setup/roomGoalIntroModal';
 import { RunRatingModalController } from './setup/runRatingModal';
 import { SignTextModalController } from './setup/signTextModal';
 import { setupCollapsibleSidebarSections, setupEditorSidebarShell } from './setup/sidebarSections';
@@ -42,6 +43,7 @@ export function setupUI(game: Phaser.Game): void {
   const rewardStings = new RewardStingController();
   const xpReceipts = new XpReceiptController();
   const rewardStingCatchup = new RewardStingCatchupController();
+  const roomGoalIntroModal = new RoomGoalIntroModalController();
   const runRatingModal = new RunRatingModalController(game);
   const signTextModal = new SignTextModalController(game);
   const welcomeModal = new WelcomeModalController(game);
@@ -77,6 +79,7 @@ export function setupUI(game: Phaser.Game): void {
   rewardStings.init();
   xpReceipts.init();
   rewardStingCatchup.init();
+  roomGoalIntroModal.init();
   runRatingModal.init();
   signTextModal.init();
   welcomeModal.init();

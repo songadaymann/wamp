@@ -848,6 +848,17 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #editor-advanced {
   text-transform: uppercase;
 }
 
+.goal-textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+
+.goal-input-help {
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
 .goal-marker-controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2152,6 +2163,13 @@ body[data-app-mode='editor'] #sidebar .goal-placement-hint {
   border-radius: 0;
   background: var(--editor-retro-yellow);
   color: #000;
+  font-family: var(--editor-ui-font);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+body[data-app-mode='editor'] #sidebar .goal-input-help {
+  color: var(--editor-retro-blue-deep);
   font-family: var(--editor-ui-font);
   font-size: 11px;
   line-height: 1.4;

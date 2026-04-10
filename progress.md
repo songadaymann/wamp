@@ -7397,3 +7397,49 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - `selectedState = "published"`
 - caveat:
   - the smoke run used the local frontend against the normal remote API path, so `errors-0.json` contains expected local presence/chat websocket connection refusals rather than a gameplay crash
+
+## 2026-04-09 16:45:00 EDT - First-visit room goal intro modal
+
+- branched cleanly from `main` on `feature/room-goal-intro-2026-04-09`
+- worktree: `/private/tmp/wamp-room-goal-intro-2026-04-09`
+- added a first-visit room goal intro flow that appears before a published room timer starts:
+  - auto-generates concise goal text from the room goal (`Collect 289`, `Reach exit`, `Defeat 3 enemies`, etc.)
+  - auto-generates fuller first-time copy (`Collect 289 items as fast as you can!`) when no custom wording is authored
+  - lets builders optionally author their own goal intro text in the editor goal section
+  - pauses the scene until the player dismisses the modal, then starts the run from a fresh spawn
+- added a new per-room-version local seen-state so the intro only appears once for a given published room version:
+  - does not re-open on restart / respawn
+  - does not re-open when the player leaves the room and plays the same published version again
+  - will re-open if the room publishes a new version later
+- editor / persistence changes:
+  - room snapshots now carry optional `goalIntroText`
+  - room version fingerprinting includes `goalIntroText`, so authored intro changes count as a new room version
+  - the editor goal panel now exposes an optional textarea labeled as first-time-only helper copy
+- runtime / UI changes:
+  - added `src/ui/setup/roomGoalIntroModal.ts`
+  - wired it through `src/ui/setup.ts`
+  - routed overworld room-entry goal sync through a modal-aware path in `src/scenes/OverworldPlayScene.ts`
+  - kept course runs exempt from this modal for now
+- validation:
+  - clean worktree initially had stale/missing deps, so I replaced the borrowed install with a real local one using:
+    - `npm install --ignore-scripts --omit=optional`
+    - `npm install --no-save @rollup/rollup-darwin-arm64`
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - required `develop-web-game` smoke wrote:
+    - `output/web-game/room-goal-intro-client-check/shot-0.png`
+  - targeted first-visit / restart check wrote:
+    - `output/web-game/room-goal-intro-targeted/goal-intro-first.png`
+    - `output/web-game/room-goal-intro-targeted/after-start.png`
+    - `output/web-game/room-goal-intro-targeted/after-restart.png`
+    - `output/web-game/room-goal-intro-targeted/summary.json`
+  - targeted leave-and-replay check wrote:
+    - `output/web-game/room-goal-intro-revisit-check/first-visit.png`
+    - `output/web-game/room-goal-intro-revisit-check/after-replay.png`
+    - `output/web-game/room-goal-intro-revisit-check/summary.json`
+- notes:
+  - no D1 migration was needed because the authored intro text lives inside the existing room snapshot JSON
+  - validation used published room `1,1` (`Undercoin`) and confirmed:
+    - intro appears on first play
+    - intro does not reappear on restart
+    - intro does not reappear after returning to world and replaying the same published version

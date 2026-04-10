@@ -804,6 +804,7 @@ export class EditorScene extends Phaser.Scene {
       onSetGoalTimeLimitSeconds: (seconds) => this.toolController.setGoalTimeLimitSeconds(seconds),
       onSetGoalRequiredCount: (requiredCount) => this.toolController.setGoalRequiredCount(requiredCount),
       onSetGoalSurvivalSeconds: (seconds) => this.toolController.setGoalSurvivalSeconds(seconds),
+      onSetGoalIntroText: (text) => this.toolController.setGoalIntroText(text),
       onStartGoalMarkerPlacement: (mode) => this.toolController.startGoalMarkerPlacement(mode),
       onClearGoalMarkers: () => this.toolController.clearGoalMarkers(),
       onSetCourseGoalType: (goalType) => this.setCourseGoalType(goalType),

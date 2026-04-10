@@ -42,6 +42,9 @@ export interface EditorGoalUiViewModel {
   survivalHidden: boolean;
   survivalDisabled: boolean;
   survivalValue: string;
+  introTextHidden: boolean;
+  introTextDisabled: boolean;
+  introTextValue: string;
   markerControlsHidden: boolean;
   placementHintHidden: boolean;
   placementHintText: string;
@@ -187,6 +190,7 @@ export interface EditorUiBridgeActions {
   onSetGoalTimeLimitSeconds: (seconds: number | null) => void;
   onSetGoalRequiredCount: (requiredCount: number) => void;
   onSetGoalSurvivalSeconds: (seconds: number) => void;
+  onSetGoalIntroText: (text: string | null) => void;
   onStartGoalMarkerPlacement: (mode: EditorMarkerPlacementMode) => void;
   onClearGoalMarkers: () => void;
   onSetCourseGoalType: (goalType: CourseGoalType | null) => void;
@@ -317,6 +321,8 @@ export class EditorUiBridge {
   private readonly requiredCountInput: HTMLInputElement | null;
   private readonly survivalRow: HTMLElement | null;
   private readonly survivalInput: HTMLInputElement | null;
+  private readonly goalIntroRow: HTMLElement | null;
+  private readonly goalIntroInput: HTMLTextAreaElement | null;
   private readonly markerControls: HTMLElement | null;
   private readonly placementHint: HTMLElement | null;
   private readonly summary: HTMLElement | null;
@@ -465,6 +471,9 @@ export class EditorUiBridge {
     this.survivalRow = this.doc.getElementById('goal-survival-row');
     this.survivalInput =
       this.doc.getElementById('goal-survival-seconds') as HTMLInputElement | null;
+    this.goalIntroRow = this.doc.getElementById('goal-intro-text-row');
+    this.goalIntroInput =
+      this.doc.getElementById('goal-intro-text') as HTMLTextAreaElement | null;
     this.markerControls = this.doc.getElementById('goal-marker-controls');
     this.placementHint = this.doc.getElementById('goal-placement-hint');
     this.summary = this.doc.getElementById('goal-summary');
@@ -592,6 +601,9 @@ export class EditorUiBridge {
     this.setHidden(this.survivalRow, viewModel.goal.survivalHidden);
     this.setDisabled(this.survivalInput, viewModel.goal.survivalDisabled);
     this.setValue(this.survivalInput, viewModel.goal.survivalValue);
+    this.setHidden(this.goalIntroRow, viewModel.goal.introTextHidden);
+    this.setDisabled(this.goalIntroInput, viewModel.goal.introTextDisabled);
+    this.setValue(this.goalIntroInput, viewModel.goal.introTextValue);
     this.setHidden(this.markerControls, viewModel.goal.markerControlsHidden);
     this.setHidden(this.placementHint, viewModel.goal.placementHintHidden);
     this.setText(this.placementHint, viewModel.goal.placementHintText);
@@ -958,6 +970,9 @@ export class EditorUiBridge {
       const seconds = Number.parseInt(input.value, 10);
       this.actions.onSetGoalSurvivalSeconds(Number.isFinite(seconds) && seconds > 0 ? seconds : 30);
     });
+    this.bindTextInput(this.goalIntroInput, (input) => {
+      this.actions.onSetGoalIntroText(input.value);
+    });
     this.bindButton(this.placeStartBtn, () => {
       this.actions.onStartGoalMarkerPlacement('start');
       this.requestPhoneEditorAutoCollapse();
@@ -1118,6 +1133,22 @@ export class EditorUiBridge {
           : editorState.selectedLightingRadius;
       onCommit(normalizeRoomLightingSliderValue(Number.parseInt(input.value, 10), fallback));
     };
+    input.addEventListener('input', handleCommit);
+    input.addEventListener('change', handleCommit);
+    this.cleanupCallbacks.push(() => {
+      input.removeEventListener('input', handleCommit);
+      input.removeEventListener('change', handleCommit);
+    });
+  }
+
+  private bindTextInput(
+    input: HTMLInputElement | HTMLTextAreaElement | null,
+    onCommit: (input: HTMLInputElement | HTMLTextAreaElement) => void,
+  ): void {
+    if (!input) {
+      return;
+    }
+    const handleCommit = () => onCommit(input);
     input.addEventListener('input', handleCommit);
     input.addEventListener('change', handleCommit);
     this.cleanupCallbacks.push(() => {
@@ -1380,7 +1411,7 @@ export class EditorUiBridge {
   }
 
   private setValue(
-    element: HTMLInputElement | HTMLSelectElement | null,
+    element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null,
     value: string,
   ): void {
     if (!element) {
@@ -1397,7 +1428,7 @@ export class EditorUiBridge {
   }
 
   private setDisabled(
-    element: HTMLButtonElement | HTMLInputElement | HTMLSelectElement | null,
+    element: HTMLButtonElement | HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null,
     disabled: boolean,
   ): void {
     if (element && element.disabled !== disabled) {

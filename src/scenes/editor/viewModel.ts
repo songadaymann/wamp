@@ -9,6 +9,7 @@ export interface BuildEditorUiViewModelOptions {
   roomTitle: string | null;
   roomCoordinates: RoomCoordinates;
   roomGoal: RoomGoal | null;
+  roomGoalIntroText: string | null;
   roomPlacementMode: GoalPlacementMode;
   goalUsesMarkers: boolean;
   goalSummaryText: string;
@@ -50,6 +51,7 @@ export function buildEditorUiViewModel(
     roomTitle,
     roomCoordinates,
     roomGoal,
+    roomGoalIntroText,
     roomPlacementMode,
     goalUsesMarkers,
     goalSummaryText,
@@ -129,6 +131,9 @@ export function buildEditorUiViewModel(
         roomGoal?.type === 'survival'
           ? String(Math.round(roomGoal.durationMs / 1000))
           : '30',
+      introTextHidden: !roomGoal,
+      introTextDisabled: !roomGoal,
+      introTextValue: roomGoalIntroText ?? '',
       markerControlsHidden: !goalUsesMarkers,
       placementHintHidden: roomPlacementMode === null,
       placementHintText:

@@ -76,7 +76,8 @@ import {
   type DefaultPlayerAnimationState,
 } from '../player/defaultPlayer';
 import {
-  ROOM_GOAL_LABELS,
+  formatRoomGoalShortText,
+  resolveRoomGoalIntroText,
   type GoalMarkerPoint,
 } from '../goals/roomGoals';
 import { setAppMode } from '../ui/appMode';
@@ -224,6 +225,7 @@ import {
   consumeTouchAction,
   getTouchInputState,
 } from '../ui/mobile/touchControls';
+import { getRoomGoalIntroModalController } from '../ui/setup/roomGoalIntroModal';
 
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 2.5;
@@ -299,7 +301,9 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly PROJECTILE_SPEED = 360;
   private readonly PROJECTILE_LIFETIME_MS = 720;
   private playfunPauseDepth = 0;
-  private playfunPauseApplied = false;
+  private playfunPauseRequested = false;
+  private roomGoalIntroPauseRequested = false;
+  private scenePauseApplied = false;
 
   private player: Phaser.GameObjects.Rectangle | null = null;
   private playerBody: Phaser.Physics.Arcade.Body | null = null;
@@ -410,22 +414,14 @@ export class OverworldPlayScene extends Phaser.Scene {
   private shouldRespawnPlayer = false;
   private readonly handlePlayfunGamePause = (): void => {
     this.playfunPauseDepth += 1;
-    if (this.playfunPauseApplied) {
-      return;
-    }
-
-    this.playfunPauseApplied = true;
-    this.scene.pause();
+    this.playfunPauseRequested = true;
+    this.syncScenePauseState();
   };
 
   private readonly handlePlayfunGameResume = (): void => {
     this.playfunPauseDepth = Math.max(0, this.playfunPauseDepth - 1);
-    if (!this.playfunPauseApplied || this.playfunPauseDepth > 0) {
-      return;
-    }
-
-    this.playfunPauseApplied = false;
-    this.scene.resume();
+    this.playfunPauseRequested = this.playfunPauseDepth > 0;
+    this.syncScenePauseState();
   };
 
   constructor() {
@@ -906,7 +902,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           this.goalRunController.clearCurrentRun();
         },
         syncGoalRunForRoom: (room, entryContext) => {
-          this.objectiveController.syncGoalRunForRoom(room, entryContext);
+          this.syncGoalRunForRoomWithIntro(room, entryContext);
         },
         redrawGoalMarkers: () => this.redrawGoalMarkers(),
         syncCameraBoundsUsage: () => this.syncCameraBoundsUsage(),
@@ -1386,7 +1382,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       updateSelectedSummary: () => this.updateSelectedSummary(),
       getActiveCourseRun: () => this.activeCourseRun,
       syncGoalRunForRoom: (room, entryContext) => {
-        this.objectiveController.syncGoalRunForRoom(room, entryContext);
+        this.syncGoalRunForRoomWithIntro(room, entryContext);
       },
       getRoomSnapshotForCoordinates: (coordinates) => this.getRoomSnapshotForCoordinates(coordinates),
       refreshLeaderboardForSelection: () => this.refreshLeaderboardForSelection(),
@@ -2379,6 +2375,69 @@ export class OverworldPlayScene extends Phaser.Scene {
     await this.goalRunController.refreshLeaderboardsForRoom(targetRoom);
   }
 
+  private syncGoalRunForRoomWithIntro(
+    room: RoomSnapshot | null,
+    entryContext: 'transition' | 'spawn' | 'respawn' = 'transition',
+  ): void {
+    if (!this.shouldShowRoomGoalIntro(room, entryContext)) {
+      this.objectiveController.syncGoalRunForRoom(room, entryContext);
+      return;
+    }
+
+    const goalRoom = room;
+    const roomGoalIntroModal = getRoomGoalIntroModalController();
+    if (!goalRoom?.goal || !roomGoalIntroModal) {
+      this.objectiveController.syncGoalRunForRoom(room, entryContext);
+      return;
+    }
+
+    this.goalRunController.clearCurrentRun();
+    this.redrawGoalMarkers();
+    this.roomGoalIntroPauseRequested = true;
+    this.syncScenePauseState();
+    roomGoalIntroModal.open({
+      room: goalRoom,
+      titleText: goalRoom.title?.trim() ? goalRoom.title : `Room ${goalRoom.coordinates.x},${goalRoom.coordinates.y}`,
+      metaText: formatRoomGoalShortText(goalRoom.goal, {
+        enemyCount: this.countRoomObjectsByCategory(goalRoom, 'enemy'),
+      }),
+      bodyText: resolveRoomGoalIntroText(goalRoom.goal, {
+        customText: goalRoom.goalIntroText,
+        enemyCount: this.countRoomObjectsByCategory(goalRoom, 'enemy'),
+      }),
+      onStart: () => {
+        this.roomGoalIntroPauseRequested = false;
+        this.syncScenePauseState();
+
+        if (this.mode !== 'play') {
+          return;
+        }
+
+        const liveRoom = this.getRoomSnapshotForCoordinates(goalRoom.coordinates) ?? goalRoom;
+        this.respawnPlayerToCurrentRoom();
+        this.objectiveController.restartGoalRunForRoom(liveRoom, 'spawn');
+        void this.refreshLeaderboardForSelection();
+        this.renderHud();
+      },
+    });
+  }
+
+  private shouldShowRoomGoalIntro(
+    room: RoomSnapshot | null,
+    entryContext: 'transition' | 'spawn' | 'respawn',
+  ): boolean {
+    if (!room || entryContext === 'respawn' || this.activeCourseRun) {
+      return false;
+    }
+
+    const roomGoalIntroModal = getRoomGoalIntroModalController();
+    if (!roomGoalIntroModal || roomGoalIntroModal.isOpen()) {
+      return false;
+    }
+
+    return roomGoalIntroModal.shouldShowForRoom(room);
+  }
+
   private redrawGoalMarkers(): void {
     this.goalMarkerController.redrawMarkers(this.currentGoalRun, this.activeCourseRun);
     this.syncBackdropCameraIgnores();
@@ -2394,6 +2453,21 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private getCourseGoalSummaryText(goalType: CourseGoalType | null): string {
     return goalType ? `${COURSE_GOAL_LABELS[goalType]} course` : 'Course objective missing';
+  }
+
+  private syncScenePauseState(): void {
+    const shouldPause = this.playfunPauseRequested || this.roomGoalIntroPauseRequested;
+    if (shouldPause === this.scenePauseApplied) {
+      return;
+    }
+
+    this.scenePauseApplied = shouldPause;
+    if (shouldPause) {
+      this.scene.pause();
+      return;
+    }
+
+    this.scene.resume();
   }
 
 
@@ -3093,7 +3167,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     window.removeEventListener(PLAYFUN_GAME_PAUSE_EVENT, this.handlePlayfunGamePause);
     window.removeEventListener(PLAYFUN_GAME_RESUME_EVENT, this.handlePlayfunGameResume);
     this.playfunPauseDepth = 0;
-    this.playfunPauseApplied = false;
+    this.playfunPauseRequested = false;
+    this.roomGoalIntroPauseRequested = false;
+    this.scenePauseApplied = false;
+    getRoomGoalIntroModalController()?.forceClose();
     this.scale.off('resize', this.handleResize, this);
     this.events.off(Phaser.Scenes.Events.WAKE, this.handleWake, this);
     this.inspectInputController.destroy();

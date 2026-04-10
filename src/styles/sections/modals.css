@@ -2759,6 +2759,87 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
   color: #000;
 }
 
+#room-goal-intro-modal .room-goal-intro-modal-panel {
+  width: min(620px, calc(100vw - 28px));
+  max-width: min(620px, calc(100vw - 28px));
+  gap: 18px;
+  padding: 22px 20px 20px;
+  background: #fff3db;
+  border: 3px solid #fff;
+  border-radius: 0;
+  box-shadow: 8px 8px 0 #18161c;
+}
+
+#room-goal-intro-modal .room-goal-intro-header {
+  align-items: flex-start;
+}
+
+#room-goal-intro-modal .history-modal-kicker {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+#room-goal-intro-modal .history-modal-title {
+  margin-top: 8px;
+  color: #18161c;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 20px;
+  line-height: 1.22;
+}
+
+#room-goal-intro-modal .history-modal-meta {
+  margin-top: 10px;
+  display: inline-flex;
+  width: fit-content;
+  padding: 4px 8px 3px;
+  border: 2px solid #18161c;
+  background: #79ccde;
+  color: #000;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 9px;
+  line-height: 1.3;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#room-goal-intro-modal .room-goal-intro-copy {
+  padding: 16px 16px 14px;
+  border: 2px solid #2c5071;
+  background: #fffaf0;
+  box-shadow: 4px 4px 0 #18161c;
+}
+
+#room-goal-intro-modal .room-goal-intro-body {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+#room-goal-intro-modal .room-goal-intro-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+#room-goal-intro-modal .room-goal-intro-actions .bar-btn {
+  min-width: 150px;
+  min-height: 40px;
+  padding: 10px 16px 9px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #277b30;
+  color: #fff3db;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  box-shadow: 4px 4px 0 #18161c;
+}
+
 @media (max-width: 920px) {
   #welcome-modal .welcome-modal-panel {
     width: min(720px, calc(100vw - 24px));
@@ -2780,6 +2861,19 @@ body:not([data-device-class='phone']) #course-modal .course-modal-panel {
 
   #welcome-modal .welcome-lane-card {
     min-height: 0;
+  }
+
+  #room-goal-intro-modal .room-goal-intro-modal-panel {
+    width: min(520px, calc(100vw - 24px));
+    padding: 18px 16px 16px;
+  }
+
+  #room-goal-intro-modal .history-modal-title {
+    font-size: 17px;
+  }
+
+  #room-goal-intro-modal .room-goal-intro-body {
+    font-size: 14px;
   }
 }
 

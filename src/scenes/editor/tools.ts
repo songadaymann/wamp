@@ -64,6 +64,10 @@ export class EditorToolController {
     this.editRuntime.setGoalSurvivalSeconds(seconds);
   }
 
+  setGoalIntroText(text: string | null): void {
+    this.editRuntime.setGoalIntroText(text);
+  }
+
   startGoalMarkerPlacement(mode: EditorMarkerPlacementMode): void {
     this.host.clearCoursePlacementMode();
     this.editRuntime.startGoalMarkerPlacement(mode as GoalPlacementMode);

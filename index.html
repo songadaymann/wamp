@@ -596,6 +596,18 @@
             <span class="goal-inline-suffix">sec</span>
           </div>
         </div>
+        <div id="goal-intro-text-row" class="goal-control-row hidden">
+          <label class="goal-control-label" for="goal-intro-text">Goal Prompt</label>
+          <textarea
+            id="goal-intro-text"
+            class="goal-input goal-textarea"
+            rows="3"
+            maxlength="140"
+            placeholder="Optional custom prompt. Example: Collect 19 coins as fast as you can!"
+            spellcheck="true"
+          ></textarea>
+          <div class="goal-input-help">Shown once before the timer starts.</div>
+        </div>
         <div id="goal-marker-controls" class="goal-marker-controls hidden">
           <button id="btn-goal-place-start" class="bar-btn bar-btn-small hidden">Set Start</button>
           <button id="btn-goal-place-exit" class="bar-btn bar-btn-small">Set Exit</button>
@@ -1384,6 +1396,24 @@
           </div>
           <button id="btn-welcome-build" class="bar-btn welcome-lane-button" type="button">Build</button>
         </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="room-goal-intro-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel room-goal-intro-modal-panel" role="dialog" aria-modal="true" aria-labelledby="room-goal-intro-title">
+      <div class="history-modal-header room-goal-intro-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Room Goal</div>
+          <h2 id="room-goal-intro-title" class="history-modal-title">Reach Exit</h2>
+          <div id="room-goal-intro-meta" class="history-modal-meta">Collect 3</div>
+        </div>
+      </div>
+      <div class="room-goal-intro-copy">
+        <div id="room-goal-intro-body" class="room-goal-intro-body">Reach the exit as fast as you can!</div>
+      </div>
+      <div class="room-goal-intro-actions">
+        <button id="btn-room-goal-intro-start" class="bar-btn" type="button">Start</button>
       </div>
     </div>
   </div>

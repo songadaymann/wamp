@@ -48,6 +48,7 @@ type CanonicalPlacedObjectPayload = {
 
 type CanonicalRoomFingerprintPayload = {
   goal: CanonicalGoalPayload | null;
+  goalIntroText: string | null;
   spawnPoint: [number, number] | null;
   tileData: Record<LayerName, number[]>;
   placedObjects: CanonicalPlacedObjectPayload[];
@@ -85,6 +86,7 @@ export interface RoomVersionLineage {
 export function buildRoomVersionFingerprint(snapshot: RoomSnapshot): string {
   const payload: CanonicalRoomFingerprintPayload = {
     goal: normalizeGoalForFingerprint(snapshot.goal),
+    goalIntroText: snapshot.goalIntroText ?? null,
     spawnPoint: snapshot.spawnPoint
       ? [Math.round(snapshot.spawnPoint.x), Math.round(snapshot.spawnPoint.y)]
       : null,
