@@ -7513,3 +7513,26 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - palette canvas rendered non-empty cave art with no console/page errors
 - follow-up note:
   - this pass lands the cave tileset art/config only; the lantern tiles are not yet wired as tile emissive sources in dark rooms, but the art is now live for that next lighting pass
+
+## April 10, 2026 - cave lantern tile emissive lighting
+
+- followed up on the cave tileset landing after confirming the lantern art itself was live but the tileset had no emissive metadata wired into the lighting system
+- added cave-specific tile light profiles in `src/config.ts`:
+  - lantern tile local indices `62` and `64` now emit warm static tile light
+  - the new cave lantern emission uses a small deterministic flicker so the light reads as flame rather than a perfectly steady bulb
+  - the change stays data-driven and reuses the existing shared tile emissive extraction path instead of adding cave-specific scene code
+- validation:
+  - `npm run build` passed in clean worktree `/private/tmp/wamp-cave-lantern-lighting-2026-04-10`
+  - required `develop-web-game` Playwright client smoke ran against local frontend on `http://127.0.0.1:4179/` and wrote:
+    - `output/web-game/cave-lantern-lighting-skill-smoke/shot-0.png`
+    - `output/web-game/cave-lantern-lighting-skill-smoke/state-0.json`
+  - targeted WebGL synthetic-editor probe placed a cave lantern into a dark room and wrote:
+    - `output/web-game/cave-lantern-lighting-probe/summary.json`
+    - `output/web-game/cave-lantern-lighting-probe/editor-full.png`
+    - `output/web-game/cave-lantern-lighting-probe/game-container.png`
+  - probe confirmed the placed lantern contributes one static tile emitter and one glow emitter:
+    - `rendererPath: webgl`
+    - `emitterCount: 2`
+    - `staticTileEmitterCount: 1`
+    - `glowEmitterCount: 1`
+    - `fallbackReason: null`

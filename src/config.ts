@@ -193,6 +193,12 @@ const LAVA_LIGHT_FLICKER = Object.freeze({
   speedHz: 0.95,
 } satisfies LightEmissionConfig['flicker']);
 
+const CAVE_LANTERN_LIGHT_FLICKER = Object.freeze({
+  radiusAmplitude: 0.06,
+  alphaAmplitude: 0.08,
+  speedHz: 1.25,
+} satisfies LightEmissionConfig['flicker']);
+
 const FIRE_LIGHT_EMISSION = Object.freeze({
   offsetY: -2,
   revealRadiusPx: 25,
@@ -219,6 +225,17 @@ const LAVA_OBJECT_LIGHT_EMISSION = Object.freeze({
   glowAlpha: 0.5,
   flicker: LAVA_LIGHT_FLICKER,
 } satisfies LightEmissionConfig);
+
+const CAVE_LANTERN_TILE_LIGHT_EMISSION = Object.freeze({
+  offsetY: 2,
+  revealRadiusPx: 24,
+  glowRadiusPx: 40,
+  glowColor: 0xffd37a,
+  glowAlpha: 0.46,
+  flicker: CAVE_LANTERN_LIGHT_FLICKER,
+} satisfies TileLightEmissionConfig);
+
+const CAVE_LANTERN_LIGHT_INDICES = [62, 64];
 
 // firstGid assignments: 0 = empty, then sequential per tileset.
 // Keep existing ranges stable because persisted room tile data stores absolute gids.
@@ -273,6 +290,12 @@ export const TILESETS: TilesetConfig[] = [
     terrainCollisionProfiles: {
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_FOREST, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_FOREST, NO_COLLISION_PROFILE),
+    },
+    lightEmissionProfiles: {
+      ...createTilesetLightEmissionProfiles(
+        CAVE_LANTERN_LIGHT_INDICES,
+        CAVE_LANTERN_TILE_LIGHT_EMISSION,
+      ),
     },
     uiTheme: {
       accentCool: 0x84b95d,
