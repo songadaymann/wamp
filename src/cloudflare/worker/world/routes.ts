@@ -11,9 +11,18 @@ import {
 import { HttpError, jsonResponse, parseIntegerQueryParam, parseWorldChunkBounds } from '../core/http';
 import type { Env, RequestAuth } from '../core/types';
 import { loadPublishedCourseMembershipsInBounds } from '../courses/store';
-import { getRoomClaimQuota, loadPublishedRoomsInBounds, loadRoomRecordForMutation } from '../rooms/store';
+import {
+  getRoomClaimQuota,
+  loadClaimedUnpublishedRoomsInBounds,
+  loadPublishedRoomsInBounds,
+  loadRoomRecordForMutation,
+} from '../rooms/store';
 
-export async function handleWorldRequest(request: Request, url: URL, env: Env): Promise<Response> {
+export async function handleWorldRequest(
+  request: Request,
+  url: URL,
+  env: Env,
+): Promise<Response> {
   const centerX = parseIntegerQueryParam(url.searchParams, 'centerX');
   const centerY = parseIntegerQueryParam(url.searchParams, 'centerY');
   const radius = parseIntegerQueryParam(url.searchParams, 'radius');
@@ -29,6 +38,13 @@ export async function handleWorldRequest(request: Request, url: URL, env: Env): 
     centerY - radius - 1,
     centerY + radius + 1
   );
+  const claimedUnpublishedRooms = await loadClaimedUnpublishedRoomsInBounds(
+    env,
+    centerX - radius - 1,
+    centerX + radius + 1,
+    centerY - radius - 1,
+    centerY + radius + 1
+  );
   const memberships = await loadPublishedCourseMembershipsInBounds(
     env,
     centerX - radius - 1,
@@ -36,7 +52,11 @@ export async function handleWorldRequest(request: Request, url: URL, env: Env): 
     centerY - radius - 1,
     centerY + radius + 1
   );
-  const worldWindow = computeWorldWindow(publishedRooms, { x: centerX, y: centerY }, radius);
+  const worldWindow = computeWorldWindow(
+    [...publishedRooms, ...claimedUnpublishedRooms],
+    { x: centerX, y: centerY },
+    radius
+  );
   applyCourseMemberships(worldWindow.rooms, memberships);
 
   return jsonResponse(request, worldWindow);
@@ -56,6 +76,13 @@ export async function handleWorldChunksRequest(
     roomBounds.minY - 1,
     roomBounds.maxY + 1
   );
+  const claimedUnpublishedRooms = await loadClaimedUnpublishedRoomsInBounds(
+    env,
+    roomBounds.minX - 1,
+    roomBounds.maxX + 1,
+    roomBounds.minY - 1,
+    roomBounds.maxY + 1
+  );
   const memberships = await loadPublishedCourseMembershipsInBounds(
     env,
     roomBounds.minX - 1,
@@ -63,7 +90,10 @@ export async function handleWorldChunksRequest(
     roomBounds.minY - 1,
     roomBounds.maxY + 1
   );
-  const chunkWindow = computeWorldChunkWindow(publishedRooms, chunkBounds);
+  const chunkWindow = computeWorldChunkWindow(
+    [...publishedRooms, ...claimedUnpublishedRooms],
+    chunkBounds
+  );
   for (const chunk of chunkWindow.chunks) {
     applyCourseMemberships(chunk.rooms, memberships);
     chunk.chunkPreviewHash = computeWorldChunkPreviewHash(chunk);

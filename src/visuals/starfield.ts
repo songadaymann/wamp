@@ -9,6 +9,7 @@ export const RETRO_COLORS = {
   grid: 0xf3eee2,
   gridSoft: 0x3b372f,
   published: 0xd9d1c3,
+  claimedUnpublished: 0x95c3c3,
   draft: 0x7de5ff,
   frontier: 0xffb04a,
   selected: 0xffffff,

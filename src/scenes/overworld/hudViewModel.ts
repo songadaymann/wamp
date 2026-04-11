@@ -22,7 +22,7 @@ import type { ActiveCourseRunState } from './courseRuns';
 import type { GoalRunState } from './goalRuns';
 import type { ActiveSignState } from './signPosts';
 
-export type SelectedCellState = 'published' | 'draft' | 'frontier' | 'empty';
+export type SelectedCellState = 'published' | 'claimed_unpublished' | 'draft' | 'frontier' | 'empty';
 
 export interface SelectedCourseContext {
   courseId: string;
@@ -174,6 +174,8 @@ export function buildOverworldHudViewModel(
   const selectedRoomTitle =
     selectedState === 'published'
       ? selectedPublishedRoom?.title?.trim() || selectedSummary?.title?.trim() || null
+      : selectedState === 'claimed_unpublished'
+        ? selectedSummary?.title?.trim() || null
       : selectedState === 'draft'
         ? selectedDraft?.title?.trim() || null
         : null;
@@ -196,13 +198,14 @@ export function buildOverworldHudViewModel(
   const selectedTitleSize =
     selectedTitleText.length > 24 ? 'tiny' : selectedTitleText.length > 16 ? 'compact' : 'normal';
   const selectedCreatorUserId =
-    selectedState === 'published'
+    (selectedState === 'published' || selectedState === 'claimed_unpublished')
     && selectedSummary?.creatorUserId
     && selectedSummary.creatorDisplayName
       ? selectedSummary.creatorUserId
       : null;
   const selectedCreatorCardVisible =
-    selectedState === 'published' && Boolean(selectedSummary?.creatorDisplayName?.trim());
+    (selectedState === 'published' || selectedState === 'claimed_unpublished')
+    && Boolean(selectedSummary?.creatorDisplayName?.trim());
   const selectedCreatorNameText =
     selectedCreatorProfile?.displayName?.trim()
     || selectedSummary?.creatorDisplayName?.trim()
@@ -231,7 +234,11 @@ export function buildOverworldHudViewModel(
     selectedRoomMinted ? 'minted' : 'default';
   const selectedRoomClaimOwnerUserId =
     selectedOwnership?.claimerUserId
-    ?? (selectedState === 'published' ? selectedSummary?.creatorUserId ?? null : null);
+    ?? (
+      selectedState === 'published' || selectedState === 'claimed_unpublished'
+        ? selectedSummary?.creatorUserId ?? null
+        : null
+    );
   const viewerOwnsSelectedRoom = Boolean(
     currentUserId &&
     selectedRoomClaimOwnerUserId &&
@@ -245,12 +252,16 @@ export function buildOverworldHudViewModel(
   const canEditSelectedRoom =
     selectedState === 'draft'
       ? true
+      : selectedState === 'claimed_unpublished'
+        ? viewerOwnsSelectedRoom
       : selectedState === 'published'
         ? selectedOwnership === null || !selectedRoomMinted || viewerOwnsMintedRoom
         : false;
   const editButtonTitle =
-    selectedState !== 'published' && selectedState !== 'draft'
-      ? 'Select a published or draft room to edit.'
+    selectedState !== 'published' && selectedState !== 'draft' && selectedState !== 'claimed_unpublished'
+      ? 'Select a published, claimed, or draft room to edit.'
+      : selectedState === 'claimed_unpublished' && !viewerOwnsSelectedRoom
+        ? 'Only the claimer can edit an unpublished claimed room.'
       : selectedRoomMinted && !viewerOwnsMintedRoom
         ? 'Only the room token owner can edit a minted room.'
         : '';
@@ -284,6 +295,20 @@ export function buildOverworldHudViewModel(
       metaParts.push(selectedEditorSummary ?? `${selectedEditorCount} building`);
     }
     selectedMetaText = metaParts.join(' · ');
+  } else if (selectedState === 'claimed_unpublished') {
+    const metaParts: string[] = [
+      viewerOwnsSelectedRoom ? 'Your claimed room' : 'Claimed room',
+    ];
+    if (selectedEditorCount > 0) {
+      metaParts.push(selectedEditorSummary ?? `${selectedEditorCount} building`);
+    }
+    metaParts.push(
+      viewerOwnsSelectedRoom
+        ? 'unpublished draft stored on the server'
+        : 'unpublished work in progress'
+    );
+    selectedMetaText = metaParts.join(' · ');
+    selectedMetaTone = 'claimed_unpublished';
   } else if (selectedState === 'draft' && selectedDraft) {
     const metaParts = ['Local draft only'];
     metaParts.push('publish to make it public');
@@ -385,6 +410,8 @@ export function buildOverworldHudViewModel(
         ? 'Minted'
         : selectedState === 'published'
           ? 'Published'
+        : selectedState === 'claimed_unpublished'
+          ? 'Claimed'
         : selectedState === 'draft'
           ? 'Draft'
           : selectedState === 'frontier'

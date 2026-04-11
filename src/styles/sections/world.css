@@ -307,6 +307,12 @@ body[data-app-mode="play-world"]:not([data-coarse-pointer="true"]) #world-hud .w
   color: var(--hud-trial-ink-dark);
 }
 
+.world-state-pill[data-world-state-tone='claimed_unpublished'] {
+  background: rgba(126, 201, 201, 0.16);
+  border-color: rgba(149, 195, 195, 0.44);
+  color: #d5f0f0;
+}
+
 .world-state-pill[data-world-state-tone='frontier'] {
   background: var(--hud-trial-red);
   color: #fff;
@@ -391,6 +397,10 @@ body[data-app-mode="play-world"]:not([data-coarse-pointer="true"]) #world-hud .w
 
 .world-hud-meta[data-world-meta-tone='draft'] {
   color: #ffd9a8;
+}
+
+.world-hud-meta[data-world-meta-tone='claimed_unpublished'] {
+  color: #bde3e3;
 }
 
 .world-hud-meta[data-world-meta-tone='frontier'] {

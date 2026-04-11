@@ -233,7 +233,11 @@ export class OverworldSceneFlowController {
   editSelectedRoom(): void {
     const selectedCoordinates = this.host.getSelectedCoordinates();
     const selectedState = this.host.getCellStateAt(selectedCoordinates);
-    if (selectedState !== 'published' && selectedState !== 'draft') {
+    if (
+      selectedState !== 'published'
+      && selectedState !== 'draft'
+      && selectedState !== 'claimed_unpublished'
+    ) {
       return;
     }
 

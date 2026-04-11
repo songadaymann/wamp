@@ -8,7 +8,7 @@ import {
 import type { CourseMembershipSummary } from '../courses/model';
 import type { RoomGoalType } from '../goals/roomGoals';
 
-export type WorldCellState = 'published' | 'frontier';
+export type WorldCellState = 'published' | 'claimed_unpublished' | 'frontier';
 export const WORLD_CHUNK_SIZE = 8;
 
 export interface WorldRoomSummary {
@@ -28,10 +28,20 @@ export interface WorldRoomSummary {
 }
 
 export interface PublishedWorldRoomSource {
+  state: 'published';
   snapshot: RoomSnapshot;
   creatorUserId: string | null;
   creatorDisplayName: string | null;
 }
+
+export interface ClaimedUnpublishedWorldRoomSource {
+  state: 'claimed_unpublished';
+  snapshot: RoomSnapshot;
+  claimerUserId: string | null;
+  claimerDisplayName: string | null;
+}
+
+export type WorldRoomSource = PublishedWorldRoomSource | ClaimedUnpublishedWorldRoomSource;
 
 export interface WorldChunkCoordinates {
   x: number;
@@ -183,6 +193,27 @@ export function createPublishedRoomSummary(
   };
 }
 
+export function createClaimedUnpublishedRoomSummary(
+  room: RoomSnapshot | ClaimedUnpublishedWorldRoomSource
+): WorldRoomSummary {
+  const snapshot = getClaimedUnpublishedWorldRoomSnapshot(room);
+  return {
+    id: snapshot.id,
+    coordinates: { ...snapshot.coordinates },
+    title: snapshot.title,
+    state: 'claimed_unpublished',
+    background: snapshot.background,
+    goalType: snapshot.goal?.type ?? null,
+    version: snapshot.version,
+    publishedAt: null,
+    creatorUserId: isClaimedUnpublishedWorldRoomSource(room) ? room.claimerUserId : null,
+    creatorDisplayName: isClaimedUnpublishedWorldRoomSource(room) ? room.claimerDisplayName : null,
+    publishedByUserId: null,
+    publishedByDisplayName: null,
+    course: null,
+  };
+}
+
 export function createFrontierRoomSummary(coordinates: RoomCoordinates): WorldRoomSummary {
   return {
     id: roomIdFromCoordinates(coordinates),
@@ -202,7 +233,7 @@ export function createFrontierRoomSummary(coordinates: RoomCoordinates): WorldRo
 }
 
 export function computeWorldChunk(
-  publishedRooms: Array<RoomSnapshot | PublishedWorldRoomSource>,
+  rooms: WorldRoomSource[],
   coordinates: WorldChunkCoordinates
 ): WorldChunk {
   const roomBounds = getChunkRoomBounds(coordinates);
@@ -210,8 +241,8 @@ export function computeWorldChunk(
     id: chunkIdFromCoordinates(coordinates),
     coordinates: { ...coordinates },
     roomBounds,
-    rooms: computeWorldSummariesInBounds(publishedRooms, roomBounds),
-    previewRooms: computePublishedRoomPreviewSnapshotsInBounds(publishedRooms, roomBounds),
+    rooms: computeWorldSummariesInBounds(rooms, roomBounds),
+    previewRooms: computePublishedRoomPreviewSnapshotsInBounds(rooms, roomBounds),
     chunkPreviewHash: '',
   };
 
@@ -220,13 +251,13 @@ export function computeWorldChunk(
 }
 
 export function computeWorldChunkWindow(
-  publishedRooms: Array<RoomSnapshot | PublishedWorldRoomSource>,
+  rooms: WorldRoomSource[],
   chunkBounds: WorldChunkBounds
 ): WorldChunkWindow {
   const chunks: WorldChunk[] = [];
   for (let chunkY = chunkBounds.minChunkY; chunkY <= chunkBounds.maxChunkY; chunkY += 1) {
     for (let chunkX = chunkBounds.minChunkX; chunkX <= chunkBounds.maxChunkX; chunkX += 1) {
-      chunks.push(computeWorldChunk(publishedRooms, { x: chunkX, y: chunkY }));
+      chunks.push(computeWorldChunk(rooms, { x: chunkX, y: chunkY }));
     }
   }
 
@@ -238,7 +269,7 @@ export function computeWorldChunkWindow(
 }
 
 export function computeWorldWindow(
-  publishedRooms: Array<RoomSnapshot | PublishedWorldRoomSource>,
+  rooms: WorldRoomSource[],
   center: RoomCoordinates,
   radius: number
 ): WorldWindow {
@@ -252,29 +283,36 @@ export function computeWorldWindow(
   return {
     center: { ...center },
     radius,
-    rooms: computeWorldSummariesInBounds(publishedRooms, bounds),
+    rooms: computeWorldSummariesInBounds(rooms, bounds),
   };
 }
 
-export function computeWorldSummariesFromPublishedSummariesInBounds(
-  publishedRooms: WorldRoomSummary[],
+export function computeWorldSummariesFromOccupancySummariesInBounds(
+  rooms: WorldRoomSummary[],
   bounds: WorldRoomBounds
 ): WorldRoomSummary[] {
+  const occupiedById = new Map<string, WorldRoomSummary>();
   const publishedById = new Map<string, WorldRoomSummary>();
-  for (const room of publishedRooms) {
+  for (const room of rooms) {
+    if (room.state === 'published' || room.state === 'claimed_unpublished') {
+      occupiedById.set(room.id, room);
+    }
     if (room.state === 'published') {
       publishedById.set(room.id, room);
     }
   }
 
   const roomsById = new Map<string, WorldRoomSummary>();
-  for (const room of publishedRooms) {
-    if (room.state === 'published' && isWithinRoomBounds(room.coordinates, bounds)) {
+  for (const room of rooms) {
+    if (
+      (room.state === 'published' || room.state === 'claimed_unpublished')
+      && isWithinRoomBounds(room.coordinates, bounds)
+    ) {
       roomsById.set(room.id, { ...room, coordinates: { ...room.coordinates } });
     }
   }
 
-  if (publishedById.size === 0) {
+  if (publishedById.size === 0 && occupiedById.size === 0) {
     if (isWithinRoomBounds(DEFAULT_ROOM_COORDINATES, bounds)) {
       const frontier = createFrontierRoomSummary(DEFAULT_ROOM_COORDINATES);
       roomsById.set(frontier.id, frontier);
@@ -286,7 +324,7 @@ export function computeWorldSummariesFromPublishedSummariesInBounds(
   for (const room of publishedById.values()) {
     for (const neighbor of getOrthogonalNeighbors(room.coordinates)) {
       const neighborId = roomIdFromCoordinates(neighbor);
-      if (publishedById.has(neighborId)) continue;
+      if (occupiedById.has(neighborId)) continue;
       if (!isWithinRoomBounds(neighbor, bounds)) continue;
       if (roomsById.has(neighborId)) continue;
 
@@ -298,24 +336,33 @@ export function computeWorldSummariesFromPublishedSummariesInBounds(
 }
 
 function computeWorldSummariesInBounds(
-  publishedRooms: Array<RoomSnapshot | PublishedWorldRoomSource>,
+  rooms: WorldRoomSource[],
   bounds: WorldRoomBounds
 ): WorldRoomSummary[] {
+  const occupiedById = new Map<string, WorldRoomSource>();
   const publishedById = new Map<string, RoomSnapshot | PublishedWorldRoomSource>();
-  for (const room of publishedRooms) {
-    const snapshot = getPublishedWorldRoomSnapshot(room);
-    publishedById.set(snapshot.id, room);
+  for (const room of rooms) {
+    const snapshot = getWorldRoomSourceSnapshot(room);
+    if (isPublishedWorldRoomSource(room)) {
+      publishedById.set(snapshot.id, room);
+    }
+    occupiedById.set(snapshot.id, room);
   }
 
   const roomsById = new Map<string, WorldRoomSummary>();
-  for (const room of publishedRooms) {
-    const snapshot = getPublishedWorldRoomSnapshot(room);
+  for (const room of rooms) {
+    const snapshot = getWorldRoomSourceSnapshot(room);
     if (isWithinRoomBounds(snapshot.coordinates, bounds)) {
-      roomsById.set(snapshot.id, createPublishedRoomSummary(room));
+      roomsById.set(
+        snapshot.id,
+        isPublishedWorldRoomSource(room)
+          ? createPublishedRoomSummary(room)
+          : createClaimedUnpublishedRoomSummary(room)
+      );
     }
   }
 
-  if (publishedRooms.length === 0) {
+  if (publishedById.size === 0 && occupiedById.size === 0) {
     if (isWithinRoomBounds(DEFAULT_ROOM_COORDINATES, bounds)) {
       const frontier = createFrontierRoomSummary(DEFAULT_ROOM_COORDINATES);
       roomsById.set(frontier.id, frontier);
@@ -324,11 +371,11 @@ function computeWorldSummariesInBounds(
     return Array.from(roomsById.values()).sort(compareWorldSummaries);
   }
 
-  for (const room of publishedRooms) {
+  for (const room of publishedById.values()) {
     const snapshot = getPublishedWorldRoomSnapshot(room);
     for (const neighbor of getOrthogonalNeighbors(snapshot.coordinates)) {
       const neighborId = roomIdFromCoordinates(neighbor);
-      if (publishedById.has(neighborId)) continue;
+      if (occupiedById.has(neighborId)) continue;
       if (!isWithinRoomBounds(neighbor, bounds)) continue;
       if (roomsById.has(neighborId)) continue;
 
@@ -356,12 +403,16 @@ function compareRoomSnapshots(a: RoomSnapshot, b: RoomSnapshot): number {
 }
 
 function computePublishedRoomPreviewSnapshotsInBounds(
-  publishedRooms: Array<RoomSnapshot | PublishedWorldRoomSource>,
+  rooms: WorldRoomSource[],
   bounds: WorldRoomBounds
 ): RoomSnapshot[] {
   const roomsById = new Map<string, RoomSnapshot>();
 
-  for (const room of publishedRooms) {
+  for (const room of rooms) {
+    if (!isPublishedWorldRoomSource(room)) {
+      continue;
+    }
+
     const snapshot = getPublishedWorldRoomSnapshot(room);
     if (isWithinRoomBounds(snapshot.coordinates, bounds)) {
       roomsById.set(snapshot.id, cloneRoomSnapshot(snapshot));
@@ -414,13 +465,29 @@ function hashChunkSignature(value: string): string {
 }
 
 function isPublishedWorldRoomSource(
-  value: RoomSnapshot | PublishedWorldRoomSource
+  value: WorldRoomSource | RoomSnapshot
 ): value is PublishedWorldRoomSource {
-  return 'snapshot' in value;
+  return 'state' in value && value.state === 'published';
 }
 
 function getPublishedWorldRoomSnapshot(
   value: RoomSnapshot | PublishedWorldRoomSource
 ): RoomSnapshot {
   return isPublishedWorldRoomSource(value) ? value.snapshot : value;
+}
+
+function isClaimedUnpublishedWorldRoomSource(
+  value: RoomSnapshot | ClaimedUnpublishedWorldRoomSource
+): value is ClaimedUnpublishedWorldRoomSource {
+  return 'state' in value && value.state === 'claimed_unpublished';
+}
+
+function getClaimedUnpublishedWorldRoomSnapshot(
+  value: RoomSnapshot | ClaimedUnpublishedWorldRoomSource
+): RoomSnapshot {
+  return isClaimedUnpublishedWorldRoomSource(value) ? value.snapshot : value;
+}
+
+function getWorldRoomSourceSnapshot(value: WorldRoomSource): RoomSnapshot {
+  return value.snapshot;
 }

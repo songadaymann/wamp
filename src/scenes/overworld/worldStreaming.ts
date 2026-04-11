@@ -18,7 +18,7 @@ import {
 import type { WorldRepository } from '../../persistence/worldRepository';
 import {
   computeWorldChunkPreviewHash,
-  computeWorldSummariesFromPublishedSummariesInBounds,
+  computeWorldSummariesFromOccupancySummariesInBounds,
   createPublishedRoomSummary,
   createWorldWindowFromRoomBounds,
   isWithinRoomBounds,
@@ -505,11 +505,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       return;
     }
 
-    const publishedSummaries = Array.from(this.roomSummariesById.values()).filter(
-      (summary) => summary.state === 'published'
+    const occupiedSummaries = Array.from(this.roomSummariesById.values()).filter(
+      (summary) => summary.state === 'published' || summary.state === 'claimed_unpublished'
     );
-    const nextSummaries = computeWorldSummariesFromPublishedSummariesInBounds(
-      publishedSummaries,
+    const nextSummaries = computeWorldSummariesFromOccupancySummariesInBounds(
+      occupiedSummaries,
       this.loadedRoomBounds
     );
 

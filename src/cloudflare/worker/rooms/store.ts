@@ -12,7 +12,10 @@ import {
   type RoomSnapshot,
   type RoomVersionRecord,
 } from '../../../persistence/roomModel';
-import type { PublishedWorldRoomSource } from '../../../persistence/worldModel';
+import type {
+  ClaimedUnpublishedWorldRoomSource,
+  PublishedWorldRoomSource,
+} from '../../../persistence/worldModel';
 import { buildRoomVersionLineage } from '../../../persistence/roomVersionLineage';
 import { getManualRoomLeaderboardSourceValidationError } from '../../../persistence/roomLeaderboardLineage';
 import { normalizeAddress } from '../auth/store';
@@ -225,9 +228,46 @@ export async function loadPublishedRoomsInBounds(
     }>();
 
   return result.results.map((row) => ({
+    state: 'published',
     snapshot: parseStoredSnapshot(row.published_json, 'published room'),
     creatorUserId: row.claimer_user_id ?? row.last_published_by_user_id,
     creatorDisplayName: row.claimer_display_name ?? row.last_published_by_display_name,
+  }));
+}
+
+export async function loadClaimedUnpublishedRoomsInBounds(
+  env: Env,
+  minX: number,
+  maxX: number,
+  minY: number,
+  maxY: number
+): Promise<ClaimedUnpublishedWorldRoomSource[]> {
+  const result = await env.DB.prepare(
+    `
+      SELECT
+        draft_json,
+        claimer_user_id,
+        claimer_display_name
+      FROM rooms
+      WHERE published_json IS NULL
+        AND claimer_user_id IS NOT NULL
+        AND claimed_at IS NOT NULL
+        AND x BETWEEN ? AND ?
+        AND y BETWEEN ? AND ?
+    `
+  )
+    .bind(minX, maxX, minY, maxY)
+    .all<{
+      draft_json: string;
+      claimer_user_id: string | null;
+      claimer_display_name: string | null;
+    }>();
+
+  return result.results.map((row) => ({
+    state: 'claimed_unpublished',
+    snapshot: parseStoredSnapshot(row.draft_json, 'claimed unpublished room'),
+    claimerUserId: row.claimer_user_id,
+    claimerDisplayName: row.claimer_display_name,
   }));
 }
 
@@ -284,7 +324,11 @@ export async function saveDraft(
     actorIsAdmin
   );
   if (!existing.permissions.canSaveDraft) {
-    throw new HttpError(403, 'Only the room token owner can save drafts for this minted room.');
+    if (isRoomMinted(existing)) {
+      throw new HttpError(403, 'Only the room token owner can save drafts for this minted room.');
+    }
+
+    throw new HttpError(403, 'Only the room claimer can save drafts for this unpublished room.');
   }
   const now = new Date().toISOString();
   if (!actorIsAdmin) {
@@ -299,29 +343,28 @@ export async function saveDraft(
       existing.draft,
     );
   }
-  const shouldClaim = !existing.claimerUserId && actor.ownerUser !== null;
-  if (shouldClaim && !actorIsAdmin) {
+  const draftOwnerDisplayName =
+    actor.principalDisplayName || actor.ownerUser?.displayName || existing.claimerDisplayName || 'Guest';
+  const shouldClaimDraft =
+    !existing.claimerUserId && actor.ownerUser !== null && existing.published === null;
+  if (shouldClaimDraft && !actorIsAdmin) {
     await enforceFrontierClaimRule(env, incomingRoom.coordinates);
     await enforceDailyRoomClaimLimit(env, actor.ownerUser!.id, now, actor.requestAuthSource);
   }
+  const claimerUserId = shouldClaimDraft ? actor.ownerUser!.id : existing.claimerUserId;
+  const claimerPrincipalType = shouldClaimDraft ? actor.principalKind : existing.claimerPrincipalKind;
+  const claimerAgentId = shouldClaimDraft ? actor.principalAgentId : existing.claimerAgentId;
+  const claimerDisplayName = shouldClaimDraft ? draftOwnerDisplayName : existing.claimerDisplayName;
+  const claimedAt = shouldClaimDraft ? now : existing.claimedAt;
 
   const draft: RoomSnapshot = {
     ...cloneRoomSnapshot(incomingRoom),
     createdAt: existing.draft.createdAt,
     updatedAt: now,
-      publishedAt: existing.published?.publishedAt ?? null,
-      status: 'draft',
-      version: existing.draft.version || 1,
+    publishedAt: existing.published?.publishedAt ?? null,
+    status: 'draft',
+    version: existing.draft.version || 1,
   };
-
-  const claimerUserId = shouldClaim ? actor.ownerUser!.id : existing.claimerUserId;
-  const claimerPrincipalType = shouldClaim ? actor.principalKind : existing.claimerPrincipalKind;
-  const claimerAgentId = shouldClaim ? actor.principalAgentId : existing.claimerAgentId;
-  const claimerDisplayName =
-    shouldClaim
-      ? actor.principalDisplayName || actor.ownerUser?.displayName || existing.claimerDisplayName
-      : existing.claimerDisplayName;
-  const claimedAt = shouldClaim ? now : existing.claimedAt;
 
   await env.DB.batch([
     preparePersistRoomRecordStatement(env, {
@@ -374,7 +417,11 @@ export async function publishRoom(
     actorIsAdmin
   );
   if (!existing.permissions.canPublish) {
-    throw new HttpError(403, 'Only the room token owner can publish this minted room.');
+    if (isRoomMinted(existing)) {
+      throw new HttpError(403, 'Only the room token owner can publish this minted room.');
+    }
+
+    throw new HttpError(403, 'Only the room claimer can publish this unpublished room.');
   }
   if (!actorIsAdmin) {
     if (!actor.ownerUser) {
@@ -775,9 +822,13 @@ async function countRoomClaimsSince(env: Env, userId: string, startIso: string):
       SELECT COUNT(*) AS claim_count
       FROM rooms
       WHERE claimer_user_id = ?
-        AND published_json IS NOT NULL
         AND claimed_at IS NOT NULL
         AND claimed_at >= ?
+        AND (
+          published_json IS NULL
+          OR json_extract(published_json, '$.publishedAt') IS NULL
+          OR json_extract(published_json, '$.publishedAt') >= claimed_at
+        )
     `
   )
     .bind(userId, startIso)
@@ -1101,8 +1152,18 @@ export function buildRoomPermissions(
     normalizeAddress(viewerWalletAddress) === normalizeAddress(record.mintedOwnerWalletAddress);
 
   return {
-    canSaveDraft: !minted || ownsMintedRoom,
-    canPublish: !minted || ownsMintedRoom,
+    canSaveDraft:
+      minted
+        ? ownsMintedRoom
+        : record.published === null && record.claimerUserId !== null
+          ? viewerUserId !== null && viewerUserId === record.claimerUserId
+          : true,
+    canPublish:
+      minted
+        ? ownsMintedRoom
+        : record.published === null && record.claimerUserId !== null
+          ? viewerUserId !== null && viewerUserId === record.claimerUserId
+          : true,
     canRevert: minted
       ? ownsMintedRoom
       : viewerUserId !== null && viewerUserId === record.claimerUserId,

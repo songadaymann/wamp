@@ -153,7 +153,7 @@ export interface EditorSceneBridge {
 export type OverworldSelectedRoomContext = {
   roomId: string;
   coordinates: RoomCoordinates;
-  state: 'published' | 'draft' | 'frontier' | 'empty';
+  state: 'published' | 'claimed_unpublished' | 'draft' | 'frontier' | 'empty';
   courseId: string | null;
   courseTitle: string | null;
   courseGoalType: CourseGoalType | null;

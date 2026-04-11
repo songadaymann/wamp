@@ -150,6 +150,9 @@ export class OverworldSelectionController {
     if (summary?.state === 'published') {
       return 'published';
     }
+    if (summary?.state === 'claimed_unpublished') {
+      return 'claimed_unpublished';
+    }
     if (summary?.state === 'frontier') {
       return 'frontier';
     }

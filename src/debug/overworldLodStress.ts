@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import type { RoomCoordinates } from '../persistence/roomModel';
 
-type PlayableState = 'published' | 'draft' | 'frontier' | 'empty' | 'missing';
+type PlayableState = 'published' | 'claimed_unpublished' | 'draft' | 'frontier' | 'empty' | 'missing';
 
 interface OverworldSceneHarness {
   jumpToCoordinates: (coordinates: RoomCoordinates) => Promise<void>;
