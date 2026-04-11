@@ -302,6 +302,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly PROJECTILE_LIFETIME_MS = 720;
   private playfunPauseDepth = 0;
   private playfunPauseRequested = false;
+  private roomGoalIntroFromOverworldPending = false;
   private roomGoalIntroPauseRequested = false;
   private scenePauseApplied = false;
 
@@ -1445,6 +1446,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       getActiveCourseEditContext: (roomId) => this.getActiveCourseDraftSessionContextForRoom(roomId),
       resetPlaySession: () => this.sessionResetController.resetPlaySession(),
       clearTouchGestureState: () => this.clearTouchGestureState(),
+      requestRoomGoalIntroForNextOverworldEntry: () => {
+        this.roomGoalIntroFromOverworldPending = true;
+      },
       clearGoalRun: () => {
         this.goalRunController.clearCurrentRun();
       },
@@ -2443,9 +2447,14 @@ export class OverworldPlayScene extends Phaser.Scene {
     room: RoomSnapshot | null,
     entryContext: 'transition' | 'spawn' | 'respawn',
   ): boolean {
-    if (!room || entryContext === 'respawn' || this.activeCourseRun) {
+    if (!room || entryContext !== 'spawn' || this.activeCourseRun) {
       return false;
     }
+
+    if (!this.roomGoalIntroFromOverworldPending) {
+      return false;
+    }
+    this.roomGoalIntroFromOverworldPending = false;
 
     const roomGoalIntroModal = getRoomGoalIntroModalController();
     if (!roomGoalIntroModal || roomGoalIntroModal.isOpen()) {
@@ -3185,6 +3194,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     window.removeEventListener(PLAYFUN_GAME_RESUME_EVENT, this.handlePlayfunGameResume);
     this.playfunPauseDepth = 0;
     this.playfunPauseRequested = false;
+    this.roomGoalIntroFromOverworldPending = false;
     this.roomGoalIntroPauseRequested = false;
     this.scenePauseApplied = false;
     getRoomGoalIntroModalController()?.forceClose();

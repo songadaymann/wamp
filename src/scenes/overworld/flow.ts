@@ -44,6 +44,7 @@ interface OverworldSceneFlowHost {
   getActiveCourseEditContext(roomId: string): EditorCourseEditData | null;
   resetPlaySession(): void;
   clearTouchGestureState(): void;
+  requestRoomGoalIntroForNextOverworldEntry(): void;
   clearGoalRun(): void;
   getInspectZoom(): number;
   setInspectZoom(zoom: number): void;
@@ -122,6 +123,7 @@ export class OverworldSceneFlowController {
 
     this.host.resetPlaySession();
     this.host.clearTouchGestureState();
+    this.host.requestRoomGoalIntroForNextOverworldEntry();
     this.host.setBrowseInspectZoom(this.host.getInspectZoom());
     this.host.setMode('play');
     this.host.setCameraMode('follow');
