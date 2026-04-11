@@ -42,13 +42,22 @@ export class EditorInspectorController {
   }
 
   reset(): void {
+    this.clearTransientObjectInspectorState();
+    this.renderInspectorUi();
+  }
+
+  hideTransientUi(): void {
+    this.clearTransientObjectInspectorState();
+    this.renderInspector(this.createEmptyInspectorState());
+  }
+
+  private clearTransientObjectInspectorState(): void {
     this.focusedPressurePlateInstanceId = null;
     this.connectingPressurePlateInstanceId = null;
     this.pressurePlateStatusText = null;
     this.focusedContainerInstanceId = null;
     this.containerStatusText = null;
     this.pinnedInspector = null;
-    this.renderInspectorUi();
   }
 
   updatePressurePlateOverlay(graphics: Phaser.GameObjects.Graphics | null): void {

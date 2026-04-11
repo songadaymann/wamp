@@ -1,0 +1,138 @@
+/* Tools */
+
+#tools {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.tools-primary-row {
+  position: relative;
+}
+
+.tool-btn-more {
+  flex: 0 0 52px;
+}
+
+.tool-btn-compact {
+  min-width: 0;
+}
+
+.editor-tool-popover {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid rgba(243, 238, 226, 0.1);
+  border-radius: 10px;
+  background: rgba(18, 17, 9, 0.86);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.editor-tool-popover-label {
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.editor-tool-popover-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.erase-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.erase-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.erase-controls-label {
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#erase-brush-select {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+}
+
+.erase-action-grid,
+.layer-controls-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.layer-controls-row {
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: 8px;
+}
+
+.tool-btn {
+  flex: 1;
+  min-width: 56px;
+  height: 40px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  transition:
+    background 0.1s,
+    border-color 0.1s,
+    color 0.1s,
+    transform 0.06s ease,
+    box-shadow 0.06s ease;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.28);
+}
+
+.tool-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.tool-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
+
+.tool-btn:hover {
+  background: var(--panel-3);
+  color: var(--text);
+}
+
+.tool-btn.active {
+  background: var(--accent-cool-soft);
+  border-color: var(--accent-cool);
+  color: var(--text);
+}
+
+.tool-btn.is-pressed {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0.18);
+}

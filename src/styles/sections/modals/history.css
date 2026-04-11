@@ -1,0 +1,126 @@
+
+.history-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.history-modal-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.history-modal-title-group {
+  min-width: 0;
+}
+
+.history-modal-kicker {
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.history-modal-title {
+  margin-top: 4px;
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--text);
+}
+
+.history-modal-meta {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.history-modal-meta a {
+  color: #8fd8ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.history-modal-meta a:hover {
+  color: #b7e9ff;
+}
+
+.history-modal-error {
+  padding: 8px 10px;
+  background: rgba(255, 107, 107, 0.12);
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  border-radius: 4px;
+  color: #ffd7d7;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.history-version-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.history-version-empty {
+  padding: 16px 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.history-version-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.history-version-copy {
+  min-width: 0;
+}
+
+.history-version-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.history-version-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-version-label {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.history-version-badge {
+  padding: 2px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--accent-warm);
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.history-version-meta {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}

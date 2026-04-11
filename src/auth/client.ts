@@ -18,6 +18,16 @@ import type {
   PreparedWalletTransaction,
   RoomMintChainInfo,
 } from '../mint/roomOwnership';
+import {
+  getPartykitConfigSource,
+  getStorageBackend,
+  getWalletProjectIdSource,
+  isTestResetEnabled,
+  resolvePartykitConfig,
+  resolveWalletProjectId,
+  type AuthConfigSource,
+  type RoomStorageBackend,
+} from './runtimeConfig';
 
 export const AUTH_STATE_CHANGED_EVENT = 'auth-state-changed';
 export const AUTH_SESSION_REFRESHED_EVENT = 'auth-session-refreshed';
@@ -35,12 +45,12 @@ export interface AuthDebugState {
   walletConnected: boolean;
   walletAddress: string | null;
   walletProjectConfigured: boolean;
-  walletProjectSource: 'build' | 'runtime' | 'missing';
+  walletProjectSource: AuthConfigSource;
   partykitConfigured: boolean;
   partykitHost: string | null;
   partykitParty: string | null;
-  partykitSource: 'build' | 'runtime' | 'missing';
-  storageBackend: 'auto' | 'local' | 'remote';
+  partykitSource: AuthConfigSource;
+  storageBackend: RoomStorageBackend;
   testResetEnabled: boolean;
   chatModeration: ChatModerationViewer;
 }
@@ -1188,19 +1198,6 @@ function isPlayfunVisitor(): boolean {
   return params.get('pf') === '1';
 }
 
-function getStorageBackend(): 'auto' | 'local' | 'remote' {
-  const configured = import.meta.env.VITE_ROOM_STORAGE_BACKEND;
-  if (configured === 'auto' || configured === 'local' || configured === 'remote') {
-    return configured;
-  }
-
-  return 'remote';
-}
-
-function isTestResetEnabled(): boolean {
-  return import.meta.env.DEV || import.meta.env.VITE_ENABLE_TEST_RESET === '1';
-}
-
 function setLoading(loading: boolean, status?: string): void {
   state.loading = loading;
   if (status) {
@@ -1263,8 +1260,7 @@ function initializeStatusFromQuery(): void {
 }
 
 function getWalletProjectId(): string {
-  const bundledProjectId = getBundledWalletProjectId();
-  return bundledProjectId || runtimeWalletProjectId;
+  return resolveWalletProjectId(runtimeWalletProjectId);
 }
 
 export function getResolvedPartykitConfig(): {
@@ -1272,38 +1268,12 @@ export function getResolvedPartykitConfig(): {
   party: string;
   source: 'build' | 'runtime';
 } | null {
-  const bundledHost = getBundledPartykitHost();
-  const host = bundledHost || runtimePartykitHost;
-  if (!host) {
-    return null;
-  }
-
-  return {
-    host,
-    party: getBundledPartykitParty() || runtimePartykitParty || 'main',
-    source: bundledHost ? 'build' : 'runtime',
-  };
-}
-
-function getBundledWalletProjectId(): string {
-  return (
-    import.meta.env.VITE_REOWN_PROJECT_ID?.trim() ||
-    import.meta.env.VITE_WALLET_CONNECT_PROJECT_ID?.trim() ||
-    ''
-  );
+  return resolvePartykitConfig(runtimePartykitHost, runtimePartykitParty);
 }
 
 function setRuntimeWalletProjectId(projectId: string | null | undefined): void {
   runtimeWalletProjectId = projectId?.trim() ?? '';
   refreshWalletProjectConfiguration();
-}
-
-function getBundledPartykitHost(): string {
-  return import.meta.env.VITE_PARTYKIT_HOST?.trim() || '';
-}
-
-function getBundledPartykitParty(): string {
-  return import.meta.env.VITE_PARTYKIT_PARTY?.trim() || '';
 }
 
 function setRuntimePartykitConfig(host: string | null | undefined, party: string | null | undefined): void {
@@ -1314,7 +1284,7 @@ function setRuntimePartykitConfig(host: string | null | undefined, party: string
 
 function refreshWalletProjectConfiguration(): void {
   state.walletProjectConfigured = Boolean(getWalletProjectId());
-  state.walletProjectSource = getWalletProjectIdSource();
+  state.walletProjectSource = getWalletProjectIdSource(runtimeWalletProjectId);
 }
 
 function refreshPartykitConfiguration(): void {
@@ -1322,31 +1292,7 @@ function refreshPartykitConfiguration(): void {
   state.partykitConfigured = Boolean(config);
   state.partykitHost = config?.host ?? null;
   state.partykitParty = config?.party ?? null;
-  state.partykitSource = getPartykitConfigSource();
-}
-
-function getWalletProjectIdSource(): 'build' | 'runtime' | 'missing' {
-  if (getBundledWalletProjectId()) {
-    return 'build';
-  }
-
-  if (runtimeWalletProjectId) {
-    return 'runtime';
-  }
-
-  return 'missing';
-}
-
-function getPartykitConfigSource(): 'build' | 'runtime' | 'missing' {
-  if (getBundledPartykitHost()) {
-    return 'build';
-  }
-
-  if (runtimePartykitHost) {
-    return 'runtime';
-  }
-
-  return 'missing';
+  state.partykitSource = getPartykitConfigSource(runtimePartykitHost);
 }
 
 function shortenAddress(address: string): string {

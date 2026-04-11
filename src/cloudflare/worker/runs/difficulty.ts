@@ -16,13 +16,6 @@ import {
 import { HttpError } from '../core/http';
 import type { ContentTrophyRow, Env, RoomDifficultyVoteRow } from '../core/types';
 
-interface RoomDifficultyAggregateRow {
-  easy_votes: number | string | null;
-  medium_votes: number | string | null;
-  hard_votes: number | string | null;
-  extreme_votes: number | string | null;
-}
-
 interface PublishedRoomDiscoveryRow {
   id: string;
   x: number;

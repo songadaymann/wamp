@@ -2,8 +2,6 @@ import type { RoomCoordinates } from '../persistence/roomModel';
 import type { RoomGoal, RoomGoalType } from '../goals/roomGoals';
 import type { RankedRunVerificationTrace } from './verificationTrace';
 import type {
-  DifficultyRatingSummary,
-  ProgressionDifficulty,
   QualityRatingSummary,
   RoomRatingRequestBody,
   RoomRatingResponse,

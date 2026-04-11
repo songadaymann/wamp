@@ -1,0 +1,713 @@
+.reward-sting-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 18px 18px 0;
+  pointer-events: none;
+}
+
+.reward-sting-layer--hero {
+  align-items: center;
+  padding-top: 0;
+}
+
+.reward-sting-card {
+  --reward-accent: #277b30;
+  --reward-accent-ink: #fff3db;
+  --reward-surface: #fff3db;
+  --reward-ink: #18161c;
+  position: relative;
+  width: min(520px, calc(100vw - 28px));
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 14px 18px 14px 14px;
+  border: 4px solid var(--reward-accent);
+  background: var(--reward-surface);
+  color: var(--reward-ink);
+  box-shadow: 8px 8px 0 #18161c;
+  opacity: 0;
+  transform: translateY(-20px) scale(0.94);
+  overflow: visible;
+}
+
+.reward-sting-card--hero {
+  width: min(560px, calc(100vw - 30px));
+  grid-template-columns: 92px minmax(0, 1fr);
+  padding: 16px 20px 16px 16px;
+}
+
+.reward-sting-card--enter {
+  animation: reward-sting-enter 220ms ease-out forwards;
+}
+
+.reward-sting-card--hero.reward-sting-card--enter {
+  animation: reward-sting-hero-enter 260ms ease-out forwards;
+}
+
+.reward-sting-card--exit {
+  animation: reward-sting-exit 220ms ease-in forwards;
+}
+
+.reward-sting-icon-frame {
+  position: relative;
+  z-index: 1;
+  width: 84px;
+  height: 84px;
+  display: grid;
+  place-items: center;
+  border: 3px solid #18161c;
+  background: #fffaf0;
+  box-shadow: 4px 4px 0 #18161c;
+}
+
+.reward-sting-card--hero .reward-sting-icon-frame {
+  width: 92px;
+  height: 92px;
+}
+
+.reward-sting-icon {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.reward-sting-card--hero .reward-sting-icon {
+  width: 60px;
+  height: 60px;
+}
+
+.reward-sting-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.reward-sting-kicker {
+  width: fit-content;
+  padding: 4px 8px 3px;
+  border: 2px solid #18161c;
+  background: var(--reward-accent);
+  color: var(--reward-accent-ink);
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  line-height: 1.15;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: 2px 2px 0 #18161c;
+}
+
+.reward-sting-title {
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 18px;
+  line-height: 1.16;
+  color: var(--reward-accent);
+  text-transform: uppercase;
+}
+
+.reward-sting-card--hero .reward-sting-title {
+  font-size: 21px;
+}
+
+.reward-sting-subtitle {
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.reward-sting-meter {
+  width: min(240px, 100%);
+  height: 12px;
+  padding: 2px;
+  border: 2px solid #fff3db;
+  background: #18161c;
+  box-shadow: 2px 2px 0 #18161c;
+  overflow: hidden;
+}
+
+.reward-sting-card--hero .reward-sting-meter {
+  width: min(280px, 100%);
+}
+
+.reward-sting-meter-fill {
+  width: 100%;
+  height: 100%;
+  background: var(--reward-accent);
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+
+.reward-sting-card--enter .reward-sting-meter-fill--visible {
+  animation: reward-progress-fill 560ms cubic-bezier(0.2, 0.9, 0.25, 1) 120ms forwards;
+}
+
+.reward-sting-detail {
+  font-family: 'Early GameBoy', monospace;
+  font-size: 9px;
+  line-height: 1.25;
+  color: #2c5071;
+}
+
+.reward-sting-particles {
+  position: absolute;
+  inset: -8px;
+  pointer-events: none;
+}
+
+.reward-sting-particle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--reward-accent);
+  border: 2px solid #18161c;
+  opacity: 0;
+}
+
+.reward-sting-card--enter .reward-sting-particle,
+.reward-sting-card--hero.reward-sting-card--enter .reward-sting-particle {
+  animation: reward-particle-burst 520ms ease-out forwards;
+}
+
+.reward-sting-particle--1 {
+  top: 8px;
+  left: 12px;
+  --burst-x: -18px;
+  --burst-y: -20px;
+}
+
+.reward-sting-particle--2 {
+  top: 16px;
+  right: 18px;
+  animation-delay: 30ms;
+  --burst-x: 18px;
+  --burst-y: -14px;
+}
+
+.reward-sting-particle--3 {
+  top: 50%;
+  left: -2px;
+  animation-delay: 50ms;
+  --burst-x: -22px;
+  --burst-y: 0;
+}
+
+.reward-sting-particle--4 {
+  bottom: 12px;
+  right: 10px;
+  animation-delay: 70ms;
+  --burst-x: 20px;
+  --burst-y: 18px;
+}
+
+.reward-sting-particle--5 {
+  bottom: -2px;
+  left: 88px;
+  animation-delay: 90ms;
+  --burst-x: -16px;
+  --burst-y: 22px;
+}
+
+.reward-sting-particle--6 {
+  top: -2px;
+  left: 98px;
+  animation-delay: 110ms;
+  --burst-x: 12px;
+  --burst-y: -24px;
+}
+
+.reward-sting-card--player {
+  --reward-accent: #277b30;
+  --reward-accent-ink: #fff3db;
+}
+
+.reward-sting-card--builder {
+  --reward-accent: #fcea7c;
+  --reward-accent-ink: #000;
+}
+
+.reward-sting-card--curator,
+.reward-sting-card--leaderboard {
+  --reward-accent: #79ccde;
+  --reward-accent-ink: #000;
+}
+
+.reward-sting-card--badge {
+  --reward-accent: #f65699;
+  --reward-accent-ink: #fff3db;
+}
+
+.reward-sting-card--trophy {
+  --reward-accent: #fcea7c;
+  --reward-accent-ink: #000;
+  --reward-surface: #fff9df;
+}
+
+.reward-sting-card--takeover {
+  --reward-accent: #ed5f4b;
+  --reward-accent-ink: #fff3db;
+}
+
+.reward-sting-card--takeover::before {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  z-index: 0;
+  border: 3px solid rgba(237, 95, 75, 0.55);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(237, 95, 75, 0.18),
+      rgba(237, 95, 75, 0) 42%,
+      rgba(237, 95, 75, 0.18)
+    );
+}
+
+@keyframes reward-sting-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.94);
+  }
+  62% {
+    opacity: 1;
+    transform: translateY(2px) scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes reward-sting-hero-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes reward-sting-exit {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+}
+
+@keyframes reward-particle-burst {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.4);
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--burst-x, 0px), var(--burst-y, 0px)) scale(1.2);
+  }
+}
+
+@keyframes reward-progress-fill {
+  0% {
+    transform: scaleX(0);
+  }
+  100% {
+    transform: scaleX(var(--reward-progress-target, 0));
+  }
+}
+
+.xp-receipt-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 69;
+  pointer-events: none;
+}
+
+.xp-receipt-card {
+  --xp-receipt-accent: #277b30;
+  --xp-receipt-accent-ink: #fff3db;
+  position: fixed;
+  top: calc(74px + var(--safe-top));
+  left: 50%;
+  width: min(368px, calc(100vw - 28px));
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px 11px 10px;
+  border: 3px solid var(--xp-receipt-accent);
+  background: #fff3db;
+  color: #18161c;
+  box-shadow: 5px 5px 0 #18161c;
+  opacity: 0;
+  transform: translate(-50%, -18px) scale(0.9);
+}
+
+.xp-receipt-card--enter {
+  animation: xp-receipt-enter 170ms steps(8, end) forwards;
+}
+
+.xp-receipt-card--fly {
+  animation: xp-receipt-fly 520ms cubic-bezier(0.22, 0.9, 0.28, 1) forwards;
+}
+
+.xp-receipt-card--player {
+  --xp-receipt-accent: #277b30;
+  --xp-receipt-accent-ink: #fff3db;
+}
+
+.xp-receipt-card--builder {
+  --xp-receipt-accent: #fcea7c;
+  --xp-receipt-accent-ink: #000;
+}
+
+.xp-receipt-card--curator {
+  --xp-receipt-accent: #79ccde;
+  --xp-receipt-accent-ink: #000;
+}
+
+.xp-receipt-icon-frame {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border: 3px solid #18161c;
+  background: #fffaf0;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+.xp-receipt-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.xp-receipt-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.xp-receipt-amount {
+  color: var(--xp-receipt-accent);
+  font-family: 'Early GameBoy', monospace;
+  font-size: 11px;
+  line-height: 1.15;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.xp-receipt-reason {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.xp-receipt-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.xp-receipt-level {
+  color: #2c5071;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 9px;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.xp-receipt-detail {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 10px;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.xp-receipt-meter {
+  width: 100%;
+  height: 12px;
+  padding: 2px;
+  border: 2px solid #fff3db;
+  background: #18161c;
+  box-shadow: 2px 2px 0 #18161c;
+  overflow: hidden;
+}
+
+.xp-receipt-meter-fill {
+  width: 0;
+  height: 100%;
+  background: var(--xp-receipt-accent);
+}
+
+.xp-receipt-meter-fill--player {
+  background: #277b30;
+}
+
+.xp-receipt-meter-fill--builder {
+  background: #fcea7c;
+}
+
+.xp-receipt-meter-fill--curator {
+  background: #79ccde;
+}
+
+.xp-receipt-impact {
+  --xp-impact-color: #277b30;
+  position: fixed;
+  z-index: 71;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.xp-receipt-impact--player {
+  --xp-impact-color: #277b30;
+}
+
+.xp-receipt-impact--builder {
+  --xp-impact-color: #fcea7c;
+}
+
+.xp-receipt-impact--curator {
+  --xp-impact-color: #79ccde;
+}
+
+.xp-receipt-impact--active {
+  animation: xp-receipt-impact 540ms steps(8, end) forwards;
+}
+
+.xp-receipt-impact-pixel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  background: var(--xp-impact-color);
+  border: 2px solid #18161c;
+  opacity: 0;
+}
+
+.xp-receipt-impact--active .xp-receipt-impact-pixel {
+  animation: xp-receipt-impact-pixel 540ms steps(8, end) forwards;
+}
+
+.xp-receipt-impact-pixel--1 {
+  --xp-impact-x: -18px;
+  --xp-impact-y: -14px;
+}
+
+.xp-receipt-impact-pixel--2 {
+  --xp-impact-x: 12px;
+  --xp-impact-y: -18px;
+}
+
+.xp-receipt-impact-pixel--3 {
+  --xp-impact-x: -24px;
+  --xp-impact-y: 6px;
+}
+
+.xp-receipt-impact-pixel--4 {
+  --xp-impact-x: 22px;
+  --xp-impact-y: 8px;
+}
+
+.xp-receipt-impact-pixel--5 {
+  --xp-impact-x: -8px;
+  --xp-impact-y: 22px;
+}
+
+.xp-receipt-impact-pixel--6 {
+  --xp-impact-x: 8px;
+  --xp-impact-y: 20px;
+}
+
+@keyframes xp-receipt-enter {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -18px) scale(0.9);
+  }
+  65% {
+    opacity: 1;
+    transform: translate(-50%, 2px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes xp-receipt-fly {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform:
+      translate(
+        calc(-50% + var(--xp-receipt-fly-x, 0px)),
+        var(--xp-receipt-fly-y, 0px)
+      )
+      scale(0.22);
+  }
+}
+
+@keyframes xp-receipt-impact {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+  20%,
+  75% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.12);
+  }
+}
+
+@keyframes xp-receipt-impact-pixel {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.35);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--xp-impact-x, 0px), var(--xp-impact-y, 0px)) scale(1.25);
+  }
+}
+
+@media (max-width: 700px) {
+  .reward-sting-layer {
+    padding: 12px 12px 0;
+  }
+
+  .reward-sting-card,
+  .reward-sting-card--hero {
+    width: min(100%, calc(100vw - 24px));
+    grid-template-columns: 68px minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px 12px 10px 10px;
+    box-shadow: 5px 5px 0 #18161c;
+  }
+
+  .reward-sting-icon-frame,
+  .reward-sting-card--hero .reward-sting-icon-frame {
+    width: 68px;
+    height: 68px;
+    box-shadow: 3px 3px 0 #18161c;
+  }
+
+  .reward-sting-icon,
+  .reward-sting-card--hero .reward-sting-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .reward-sting-title,
+  .reward-sting-card--hero .reward-sting-title {
+    font-size: 15px;
+  }
+
+  .reward-sting-meter,
+  .reward-sting-card--hero .reward-sting-meter {
+    width: 100%;
+    height: 10px;
+  }
+
+  .reward-sting-subtitle {
+    font-size: 11px;
+  }
+
+  .reward-sting-detail {
+    font-size: 8px;
+  }
+
+  .xp-receipt-card {
+    top: calc(66px + var(--safe-top));
+    width: min(100%, calc(100vw - 22px));
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 10px;
+    padding: 9px 10px 10px 9px;
+    box-shadow: 4px 4px 0 #18161c;
+  }
+
+  .xp-receipt-icon-frame {
+    width: 44px;
+    height: 44px;
+    box-shadow: 2px 2px 0 #18161c;
+  }
+
+  .xp-receipt-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .xp-receipt-amount {
+    font-size: 10px;
+  }
+
+  .xp-receipt-reason {
+    font-size: 11px;
+  }
+
+  .xp-receipt-detail {
+    font-size: 9px;
+  }
+
+  .xp-receipt-meter {
+    height: 10px;
+  }
+
+  .leaderboard-row,
+  .leaderboard-row.leaderboard-global-row {
+    grid-template-columns: 36px minmax(0, 1.4fr) minmax(0, 1fr);
+  }
+
+  .leaderboard-row > :nth-child(4),
+  .leaderboard-row > :nth-child(5) {
+    display: none;
+  }
+
+  .profile-hero {
+    flex-direction: column;
+  }
+
+  .profile-stats-list {
+    grid-template-columns: 1fr;
+  }
+}

@@ -5,36 +5,17 @@ import { globalRoomMusicController } from '../music/controller';
 import { getRoomMusicKey } from '../music/model';
 import { getCoursePressurePlateLink } from '../courses/pressurePlateLinks';
 import {
-  clearActiveCourseDraftSessionRoomOverride,
   getActiveCourseDraftSessionCourseId,
   getActiveCourseDraftSessionDraft,
-  getActiveCourseDraftSessionRecord,
-  getActiveCourseDraftSessionRoomOverride,
-  getActiveCourseDraftSessionSelectedRoomId,
-  isRoomInActiveCourseDraftSession,
-  isActiveCourseDraftSessionDirty,
-  setActiveCourseDraftSessionRecord,
-  setActiveCourseDraftSessionRoomOverride,
-  setActiveCourseDraftSessionSelectedRoom,
-  updateActiveCourseDraftSession,
 } from '../courses/draftSession';
 import {
-  areCourseRoomRefsOrthogonallyAdjacent,
-  courseRoomRefsFollowLinearPath,
-  courseGoalRequiresStartPoint,
-  COURSE_GOAL_LABELS,
   cloneCourseSnapshot,
-  createDefaultCourseRecord,
-  MAX_COURSE_ROOMS,
-  type CourseGoalType,
   type CourseMarkerPoint,
-  type CourseRecord,
   type CourseRoomRef,
   type CourseSnapshot,
 } from '../courses/model';
 import { SceneFxController } from '../fx/controller';
 import {
-  getObjectById,
   placedObjectContributesToCategory,
   type GameObjectConfig,
   ROOM_HEIGHT,
@@ -49,7 +30,6 @@ import {
   setFocusedCoordinatesInUrl,
 } from '../navigation/worldNavigation';
 import {
-  cloneRoomSnapshot,
   DEFAULT_ROOM_COORDINATES,
   isRoomMinted,
   roomIdFromCoordinates,
@@ -81,17 +61,6 @@ import {
   type GoalMarkerPoint,
 } from '../goals/roomGoals';
 import { setAppMode } from '../ui/appMode';
-import {
-  hideBusyOverlay,
-  isAppReady,
-  isBusyOverlayVisible,
-  markAppReady,
-  setBootProgress,
-  setBootStatus,
-  showBootFailure,
-  showBusyError,
-  showBusyOverlay,
-} from '../ui/appFeedback';
 import { getDeviceLayoutState, isMobileLandscapeBlocked } from '../ui/deviceLayout';
 import { createProfileRepository } from '../profiles/profileRepository';
 import {
@@ -132,6 +101,7 @@ import {
   type ArcadeObjectBody,
   type LoadedRoomObject,
 } from './overworld/liveObjects';
+import { buildAmbientRoomLightingBounds } from './overworld/lighting';
 import {
   OverworldPresenceController,
 } from './overworld/presence';
@@ -214,10 +184,7 @@ import {
   terrainTileCollidesAtLocalPixel,
 } from './overworld/terrainCollision';
 import type {
-  CourseEditorSceneData,
-  CourseEditedRoomData,
   EditorCourseEditData,
-  EditorSceneData,
   OverworldMode,
   OverworldPlaySceneData,
 } from './sceneData';
@@ -1787,7 +1754,13 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       lighting: currentRoom.lighting,
       emitters,
-      ambientBounds: this.getAmbientRoomLightingBounds(currentRoom.coordinates),
+      ambientBounds: buildAmbientRoomLightingBounds({
+        roomCoordinates: currentRoom.coordinates,
+        roomWidth: ROOM_PX_WIDTH,
+        roomHeight: ROOM_PX_HEIGHT,
+        getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
+        getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
+      }),
       debugCounts: {
         playerGhostEmitterCount: 1 + ghostEmitters.length,
         staticObjectEmitterCount: currentLoadedRoom?.staticLighting.objectCount ?? 0,
@@ -1798,47 +1771,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (structureChanged) {
       this.syncBackdropCameraIgnores();
     }
-  }
-
-  private getAmbientRoomLightingBounds(roomCoordinates: RoomCoordinates): Array<{
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  }> {
-    const bounds: Array<{
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-    }> = [];
-
-    for (let deltaY = -1; deltaY <= 1; deltaY += 1) {
-      for (let deltaX = -1; deltaX <= 1; deltaX += 1) {
-        if (deltaX === 0 && deltaY === 0) {
-          continue;
-        }
-
-        const coordinates = {
-          x: roomCoordinates.x + deltaX,
-          y: roomCoordinates.y + deltaY,
-        };
-        const state = this.getCellStateAt(coordinates);
-        if (state !== 'published' && state !== 'draft') {
-          continue;
-        }
-
-        const origin = this.getRoomOrigin(coordinates);
-        bounds.push({
-          x: origin.x,
-          y: origin.y,
-          width: ROOM_PX_WIDTH,
-          height: ROOM_PX_HEIGHT,
-        });
-      }
-    }
-
-    return bounds;
   }
 
   private resetRuntimeState(): void {
@@ -2203,10 +2135,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.windowController.refreshChunkWindowIfNeeded(centerCoordinates);
   }
 
-  private maybeRefreshVisibleChunks(): void {
-    this.windowController.maybeRefreshVisibleChunks();
-  }
-
   private syncPresenceSubscriptions(): void {
     this.presenceController.setSubscribedChunkBounds(this.loadedChunkBounds);
     this.roomChatController.setSubscribedChunkBounds(this.loadedChunkBounds);
@@ -2473,14 +2401,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     window.dispatchEvent(new CustomEvent(COURSE_COMPOSER_STATE_CHANGED_EVENT));
   }
 
-  private getCourseGoalTypeBadgeLabel(goalType: CourseGoalType | null): string {
-    return (goalType ? COURSE_GOAL_LABELS[goalType] : 'Goal Missing').toUpperCase();
-  }
-
-  private getCourseGoalSummaryText(goalType: CourseGoalType | null): string {
-    return goalType ? `${COURSE_GOAL_LABELS[goalType]} course` : 'Course objective missing';
-  }
-
   private syncScenePauseState(): void {
     const shouldPause = this.playfunPauseRequested || this.roomGoalIntroPauseRequested;
     if (shouldPause === this.scenePauseApplied) {
@@ -2546,16 +2466,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.player = null;
   }
 
-  private syncFullRoomColliders(): void {
-    this.runtimeController.syncFullRoomColliders();
-  }
-
   private syncLiveObjectInteractions(): void {
     this.runtimeController.syncLiveObjectInteractions();
-  }
-
-  private syncEdgeWalls(): void {
-    this.runtimeController.syncEdgeWalls();
   }
 
   private redrawWorld(): void {

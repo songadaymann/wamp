@@ -11,8 +11,6 @@ import {
   getCourseRoomOrder,
   MAX_COURSE_ROOMS,
   sortCourseRoomRefsForStorage,
-  type CourseCheckpointSprintGoal,
-  type CourseGoal,
   type CourseGoalType,
   type CourseMarkerPoint,
   type CourseRecord,
@@ -28,14 +26,10 @@ import type {
   CourseEditorUiState,
 } from '../courses/editor/state';
 import {
-  clearActiveCourseDraftSessionRoomOverride,
-  getActiveCourseDraftSessionCourseId,
-  getActiveCourseDraftSessionDraft,
   getActiveCourseDraftSessionRecord,
   getActiveCourseDraftSessionSelectedRoomId,
   isActiveCourseDraftSessionDirty,
   setActiveCourseDraftSessionRecord,
-  setActiveCourseDraftSessionRoomOverride,
   setActiveCourseDraftSessionSelectedRoom,
   updateActiveCourseDraftSession,
 } from '../courses/draftSession';
@@ -45,8 +39,6 @@ import {
   DEFAULT_ROOM_COORDINATES,
   roomIdFromCoordinates,
   type RoomCoordinates,
-  type RoomRecord,
-  type RoomSnapshot,
 } from '../persistence/roomRepository';
 import { createRoomRepository } from '../persistence/roomRepository';
 import type { WorldRoomSummary } from '../persistence/worldModel';

@@ -11,7 +11,6 @@ import {
   ROOM_PATTERN_TONAL_INSTRUMENT_IDS,
   cloneRoomPatternInstrumentMix,
   createEmptyRoomPatternDrumTrack,
-  createEmptyRoomPatternPhraseSources,
   normalizeRoomPatternBpm,
   normalizeRoomPatternSwingPercent,
   type RoomPatternInstrumentId,

@@ -1,0 +1,366 @@
+/* Room history modal */
+
+.history-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(24, 22, 28, 0.8);
+  backdrop-filter: none;
+}
+
+#room-history-modal,
+#course-modal {
+  background: rgba(24, 22, 28, 0.8);
+  backdrop-filter: none;
+}
+
+.history-modal-panel {
+  width: min(680px, calc(100vw - 40px));
+  max-height: min(720px, calc(100vh - 40px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(11, 11, 11, 0.96);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+}
+
+#room-history-modal .history-modal-panel,
+#course-modal .history-modal-panel {
+  width: min(780px, calc(100vw - 36px));
+  gap: 16px;
+  padding: 20px 18px 18px;
+  background: #fff3db;
+  border: 3px solid #79ccde;
+  border-radius: 0;
+  box-shadow: 6px 6px 0 #18161c;
+}
+
+#room-history-modal .history-modal-kicker,
+#course-modal .history-modal-kicker {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+#room-history-modal .history-modal-title,
+#course-modal .history-modal-title {
+  margin-top: 6px;
+  color: #18161c;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 19px;
+  line-height: 1.25;
+}
+
+#room-history-modal .history-modal-meta,
+#course-modal .history-modal-meta {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+#room-history-modal .history-modal-meta a,
+#course-modal .history-modal-meta a {
+  color: #2c5071;
+}
+
+#room-history-modal .history-modal-meta a:hover,
+#course-modal .history-modal-meta a:hover {
+  color: #1d3850;
+}
+
+#room-history-modal .history-modal-header-actions .bar-btn,
+#room-history-modal .history-version-actions .bar-btn,
+#course-modal .history-modal-header .bar-btn,
+#course-modal .course-room-actions .bar-btn {
+  min-height: 34px;
+  padding: 8px 12px 7px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #79ccde;
+  color: #000;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#room-history-modal .history-modal-header-actions .bar-btn:hover,
+#room-history-modal .history-version-actions .bar-btn:hover,
+#course-modal .history-modal-header .bar-btn:hover,
+#course-modal .course-room-actions .bar-btn:hover {
+  filter: brightness(1.06);
+}
+
+#btn-room-history-restore-canonical {
+  background: #fcea7c !important;
+  color: #000 !important;
+}
+
+#btn-room-history-refresh-metadata,
+#btn-room-history-close,
+#btn-course-close {
+  background: #79ccde !important;
+  color: #000 !important;
+}
+
+#room-history-modal .history-modal-error,
+#course-modal .history-modal-error {
+  padding: 12px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #ed5f4b;
+  color: #fff3db;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#room-history-modal .history-version-list {
+  gap: 12px;
+  padding-right: 2px;
+}
+
+#room-history-modal .history-version-empty {
+  padding: 12px;
+  border: 2px dashed #79ccde;
+  background: #fffaf0;
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+#room-history-modal .history-version-row {
+  align-items: flex-start;
+  padding: 14px;
+  background: #fffaf0;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#room-history-modal .history-version-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#room-history-modal .history-version-label {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+#room-history-modal .history-version-badge {
+  padding: 3px 6px 2px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #fcea7c;
+  color: #000;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  box-shadow: 2px 2px 0 #18161c;
+}
+
+#room-history-modal .history-version-meta {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#room-history-modal .history-version-actions {
+  align-self: stretch;
+  justify-content: flex-start;
+}
+
+#course-modal .course-modal-panel {
+  gap: 16px;
+}
+
+#course-modal .about-copy {
+  gap: 14px;
+  padding-right: 2px;
+}
+
+#course-modal .about-section {
+  gap: 10px;
+  padding: 14px;
+  background: #fffaf0;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#course-modal .about-section-title {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+#course-modal #course-title-input {
+  padding: 9px 10px;
+  border: 2px solid #2c5071;
+  border-radius: 0;
+  background: #fff3db;
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  box-shadow: inset 0 0 0 1px rgba(121, 204, 222, 0.22);
+}
+
+#course-modal #course-title-input:focus {
+  outline: none;
+  border-color: #79ccde;
+  box-shadow:
+    inset 0 0 0 1px rgba(121, 204, 222, 0.35),
+    0 0 0 1px rgba(121, 204, 222, 0.42);
+}
+
+#course-modal #course-published-state,
+#course-modal #course-summary {
+  margin-top: 0;
+  padding: 9px 10px;
+  border: 2px solid #2c5071;
+  background: #fff3db;
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: none;
+}
+
+#course-modal .goal-placement-hint,
+#course-modal #course-selected-room-status,
+#course-modal #course-test-draft-reason,
+#course-modal #course-save-draft-reason,
+#course-modal #course-publish-reason,
+#course-modal #course-unpublish-reason,
+#course-modal #course-modal-status,
+#course-modal #course-published-warning {
+  margin-top: 0;
+  padding: 9px 10px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #fff3db;
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: none;
+}
+
+#course-modal #course-published-warning,
+#course-modal #course-test-draft-reason,
+#course-modal #course-save-draft-reason {
+  background: #fff7cf;
+  color: #18161c;
+  border-color: #fcea7c;
+}
+
+#course-modal #course-publish-reason,
+#course-modal #course-unpublish-reason {
+  background: #eefbfd;
+  color: #000;
+  border-color: #79ccde;
+}
+
+#course-modal #course-modal-status {
+  background: #eef7dd;
+  color: #18161c;
+  border-color: #277b30;
+}
+
+#course-modal .course-room-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+#course-modal .course-room-actions .bar-btn {
+  width: 100%;
+}
+
+#course-modal .course-room-row {
+  width: 100%;
+  padding: 14px 12px;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  background: #fffaf0;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#course-modal .course-room-row-selected {
+  border-color: #277b30;
+  background: #eef7dd;
+}
+
+#course-modal .leaderboard-rank {
+  color: #2c5071;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+}
+
+#course-modal .leaderboard-primary {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+#course-modal .leaderboard-secondary {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+#course-modal #btn-course-add-selected-room {
+  background: #79ccde !important;
+  color: #000 !important;
+}
+
+#course-modal #btn-course-remove-selected-room {
+  background: #ed5f4b !important;
+  color: #fff3db !important;
+}
+
+#course-modal #btn-course-edit-selected-room,
+#course-modal #btn-course-save-draft {
+  background: #fcea7c !important;
+  color: #000 !important;
+}
+
+#course-modal #btn-course-test-draft {
+  background: #277b30 !important;
+  color: #fff3db !important;
+}
+
+#course-modal #btn-course-publish {
+  background: #ed5f4b !important;
+  color: #fff3db !important;
+}
+
+#course-modal #btn-course-unpublish {
+  background: #79ccde !important;
+  color: #000 !important;
+}

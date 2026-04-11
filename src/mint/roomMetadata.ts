@@ -7,7 +7,6 @@ import {
   encodeTileDataValue,
   getPlacedObjectLayer,
   type LayerName,
-  type PlacedObject,
 } from '../config';
 import { getRoomBackgroundLabel, normalizeRoomBackground } from '../backgrounds/model';
 import { cloneRoomGoal, normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';

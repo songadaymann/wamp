@@ -7561,3 +7561,170 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - desktop status: `58px`; actions panel: `231.5px`
     - phone status: `31.890625px`; actions panel: `359.828125px`
   - inspected the generated screenshots; the desktop editor status window shows the two-line status without moving the actions panel
+
+## April 11, 2026 - cruft cleanup / refactor audit branch
+
+- created a clean `main`-based linked worktree because the original checkout was dirty on `feature/claim-quota-ghost-claims-2026-04-10`:
+  - branch: `refactor/cruft-cleanup-audit-2026-04-11`
+  - worktree: `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-refactor-cleanup-2026-04-11`
+- baseline checks before edits:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - `npx tsc --noEmit --noUnusedLocals --noUnusedParameters --pretty false` initially found stale imports/types and a few dead private helpers
+- cleanup performed so far:
+  - removed compiler-proven unused imports/types across progression, runs, course editor, music, persistence, Play.fun leaderboard filtering, scenes, overworld helpers, and UI setup modules
+  - removed dead private helpers left behind by earlier scene/controller extractions
+  - removed the unused `insertProgressEvent(...)` helper in progression store; the live path uses `recordLaneEvent(...)`
+  - extracted ambient room-lighting bounds math from `OverworldPlayScene` into `src/scenes/overworld/lighting.ts`
+- validation:
+  - `npx tsc --noEmit --noUnusedLocals --noUnusedParameters --pretty false` passed after the cleanup/extraction
+  - `npm run typecheck` passed
+  - `npm run build` passed
+  - required `develop-web-game` Playwright client smoke wrote:
+    - `output/web-game/cruft-cleanup-audit-skill-smoke/shot-0.png`
+    - `output/web-game/cruft-cleanup-audit-skill-smoke/state-0.json`
+  - the shared client state reached `activeScene.scene: "overworld-play"` in browse mode with remote world data loaded
+  - the shared client canvas screenshot still hit the known black-frame capture artifact, so a targeted full-page probe followed
+  - targeted play-mode probe wrote:
+    - `output/web-game/cruft-cleanup-audit-play-probe-started/summary.json`
+    - `output/web-game/cruft-cleanup-audit-play-probe-started/full-page.png`
+  - targeted probe closed the welcome modal, entered play, dismissed the room-goal intro, and confirmed:
+    - `activeScene.scene: "overworld-play"`
+    - `activeScene.mode: "play"`
+    - lighting debug active for room `0,0`
+    - no console/page errors
+- follow-up audit notes:
+  - `src/styles/sections/modals.css` is now the largest single file and is a good future candidate for a mechanical ordered split by modal family
+  - `src/cloudflare/worker/progression/store.ts` is still broad, but splitting it safely should be a dedicated backend pass because it owns rating summaries, badge/trophy sync, publish gates, and progression awarding in one persistence layer
+
+## April 11, 2026 - deep cleanup waves continuation
+
+- continued the cleanup from the same linked worktree, branching from the April 11 audit line:
+  - branch: `refactor/deep-cleanup-waves-2026-04-11`
+  - worktree: `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-refactor-cleanup-2026-04-11`
+- cleanup performed:
+  - mechanically split the large modal, editor, and world stylesheet sections into ordered ownership partials under `src/styles/sections/modals/`, `src/styles/sections/editor/`, and `src/styles/sections/world/`
+  - verified the split CSS concatenates back to the same content and order for the previous `modals.css`, `editor.css`, and `world.css` section files
+  - extracted pure auth runtime config helpers into `src/auth/runtimeConfig.ts`
+  - moved Worker run request-body parsers into `src/cloudflare/worker/runs/requestBodies.ts` while keeping route handler exports stable
+  - moved progression weighted-change metrics helpers into `src/cloudflare/worker/progression/changeMetrics.ts`
+  - moved the Editor music DOM renderer for mode buttons, arrangement slots, and phrase library list into `src/scenes/editor/musicUi.ts`, leaving `EditorScene` as the state/action owner
+  - phase 2 follow-up:
+    - moved Course Editor pressure-plate/container inspector state text and button-flag building into `src/scenes/courseEditor/inspectorUi.ts`, leaving focus, editing, hit-testing, and Phaser overlay drawing in `CourseEditorScene`
+    - moved room/global run leaderboard SQL ranking, row mapping, and response assembly into `src/cloudflare/worker/runs/leaderboards.ts`, leaving public route handlers in `runs/routes.ts`
+  - phase 3 backend follow-up:
+    - moved Course Worker request parsing and course-run finalization body normalization into `src/cloudflare/worker/courses/requestBodies.ts`
+    - moved course leaderboard SQL ranking, row mapping, rating summary attachment, and response assembly into `src/cloudflare/worker/courses/leaderboards.ts`, leaving public route handlers in `courses/routes.ts`
+    - moved the shared ranked-run verification acceptance SQL helper into `src/cloudflare/worker/runs/verificationSql.ts` while preserving the existing run leaderboard export path
+    - moved builder cap defaults, local env cap overrides, Play.fun cap handling, and admin override sanitization into `src/cloudflare/worker/progression/capabilities.ts`, leaving D1 trust/progress loading in `progression/store.ts`
+- validation:
+  - `npx tsc --noEmit --noUnusedLocals --noUnusedParameters --pretty false` passed after each code slice and again before the full checks
+  - `npm run typecheck` passed
+  - `npm run build` passed; Rollup still emitted the existing dependency `/*#__PURE__*/` annotation warnings and large-chunk warnings
+  - preview server used `http://127.0.0.1:4181/` because port `4173` was already in use
+  - manual desktop synthetic-editor/music Playwright probe passed with no console/page errors:
+    - `output/web-game/deep-cleanup-synthetic-editor-music-probe/summary.json`
+    - `output/web-game/deep-cleanup-synthetic-editor-music-probe/music-ui.png`
+  - manual phone-landscape synthetic-editor/music Playwright probe passed with no console/page errors:
+    - `output/web-game/deep-cleanup-synthetic-editor-music-mobile-probe/summary.json`
+    - `output/web-game/deep-cleanup-synthetic-editor-music-mobile-probe/music-ui-mobile.png`
+  - `scripts/preview_smoke_readonly.mjs` reached overworld boot without console/page errors, but the current script run was blocked by the welcome modal intercepting `#btn-world-play`; the manual probes set the welcome-modal seen flag before browser interaction
+  - live-room edit smoke is currently data-dependent: `selectEditableRoom` chose published room `0,0`, and the guest session correctly saw the Edit button disabled because it is not the room token owner
+  - phase 2 validation:
+    - strict unused-symbol TypeScript passed after the Course Editor inspector extraction and again after the leaderboard extraction
+    - `npm run typecheck` passed
+    - `npm run build` passed with the same existing Rollup dependency annotation and large-chunk warnings
+    - local dev auth/backend stack used ignored local env files copied into the cleanup worktree, frontend `http://127.0.0.1:3011/`, Worker API `http://127.0.0.1:8789/`, and local D1 migrations applied
+    - debug email sign-in UI flow passed on the local stack with no console/page errors
+    - local global leaderboard API smoke returned a valid empty leaderboard response from `GET /api/leaderboards/global?limit=5`
+    - local frontend/API Playwright check wrote:
+      - `output/web-game/deep-cleanup-phase-2-dev-check/summary.json`
+      - `output/web-game/deep-cleanup-phase-2-dev-check/boot.png`
+  - phase 3 validation:
+    - strict unused-symbol TypeScript passed after the Course Worker route extraction and again after the progression capability extraction
+    - `npm run typecheck` passed
+    - `npm run build` passed with the same existing Rollup dependency annotation and large-chunk warnings
+    - `git diff --check` passed
+    - local API smoke inserted a namespaced synthetic published course into local D1, confirmed `GET /api/leaderboards/courses/codex-phase3-leaderboard-smoke?limit=5` returned a valid empty collect-target leaderboard response, and then deleted the smoke rows
+    - local API smoke confirmed authenticated profile progression still reports builder claim/publish caps of `10` from the local env overrides
+    - required `develop-web-game` browser smoke reached overworld browse mode and wrote:
+      - `output/web-game/deep-cleanup-phase-3-worker-smoke/shot-0.png`
+      - `output/web-game/deep-cleanup-phase-3-worker-smoke/state-0.json`
+    - direct full-page Playwright sanity screenshot rendered the overworld UI with no page errors; only the existing WebGL readback and `clouds_deco` warnings appeared:
+      - `output/web-game/deep-cleanup-phase-3-worker-smoke/full-page.png`
+- local course-testing follow-up:
+  - confirmed Wrangler was already reading `.dev.vars` for Worker debug flags, but `ROOM_DAILY_CLAIM_LIMIT` was being treated as a cap and could not raise a T0 local account above one claim/day
+  - changed normal signed-in `ROOM_DAILY_CLAIM_LIMIT` handling so a positive value in Worker env becomes the effective normal-user claim limit when no per-user admin override exists; Play.fun requests still use the separate `PLAYFUN_ROOM_DAILY_CLAIM_LIMIT` cap
+  - after live testing still hit 429s, traced the remaining blocker to the separate daily publish quota on `POST /api/rooms/:roomId/publish`; publishing a new room is the path that claims it
+  - added `ROOM_DAILY_PUBLISH_LIMIT` as a normal-user local publish override, also bypassed by per-user admin overrides and not applied to Play.fun requests
+  - updated `.dev.vars.example` and the ignored local `.dev.vars` in this cleanup worktree to use `ROOM_DAILY_CLAIM_LIMIT=10` and `ROOM_DAILY_PUBLISH_LIMIT=10` for local course-building tests
+  - validation:
+    - strict unused-symbol TypeScript, `npm run typecheck`, `npm run build`, and `git diff --check` passed
+    - restarted the local Worker on `http://127.0.0.1:8789/`; it confirmed `.dev.vars` bindings for `ENABLE_TEST_RESET`, `ROOM_DAILY_CLAIM_LIMIT`, and `ROOM_DAILY_PUBLISH_LIMIT`
+    - throwaway debug magic-link session returned claim and publish builder caps of `10`
+    - local frontend smoke stayed ready at `http://127.0.0.1:3011/` with no console/page errors:
+      - `output/web-game/local-claim-limit-smoke/summary.json`
+      - `output/web-game/local-claim-limit-smoke/full-page.png`
+- local course test-mode inspector fix:
+  - fixed a pre-existing Course Editor bug where the pressure-plate/container inspector DOM could stay visible after pressing Test, covering the play-mode Stop/Restart/return controls
+  - `CourseEditorScene.startPlayMode()` now clears transient object-inspector state, overlay graphics, and renders the shared inspector hidden before sleeping the course editor and waking `OverworldPlayScene`
+  - validation:
+    - `npx tsc --noEmit --noUnusedLocals --noUnusedParameters --pretty false` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the same existing Rollup dependency annotation and large-chunk warnings
+    - required `develop-web-game` browser smoke wrote:
+      - `output/web-game/course-editor-inspector-regression/shot-0.png`
+      - `output/web-game/course-editor-inspector-regression/state-0.json`
+    - targeted authenticated local course-editor Playwright probe forced the inspector visible, called `startPlayMode()`, and confirmed play mode with the inspector root and pressure panel hidden:
+      - `output/web-game/course-editor-inspector-regression/targeted-after-start-play.png`
+- local room test-mode inspector fix:
+  - fixed the matching pre-existing room Editor bug where the pressure-plate/container inspector DOM could stay visible after pressing Test from room editing
+  - `EditorSceneFlowController.startPlayMode()` now asks the room editor host to clear transient object-inspector state and overlay graphics before sleeping `EditorScene` and waking `OverworldPlayScene`
+  - validation:
+    - `npx tsc --noEmit --noUnusedLocals --noUnusedParameters --pretty false` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the same existing Rollup dependency annotation and large-chunk warnings
+    - `git diff --check` passed
+    - required `develop-web-game` browser smoke wrote:
+      - `output/web-game/room-editor-inspector-regression/shot-0.png`
+      - `output/web-game/room-editor-inspector-regression/state-0.json`
+    - targeted local room-editor Playwright probe forced the inspector visible, called `startPlayMode()`, and confirmed play mode with the inspector root and pressure panel hidden; the only console error was an expected unauthenticated synthetic-editor `401`:
+      - `output/web-game/room-editor-inspector-regression/targeted-after-start-play.png`
+- phase 4 scene cleanup:
+  - moved the remaining Course Editor pressure-plate/container inspector controller logic into `src/scenes/courseEditor/objectInspector.ts`
+  - `CourseEditorScene` now delegates inspector focus state, pressure-plate linking, container contents updates, object removal cleanup, inspector action handlers, and pressure/container overlay drawing through `CourseEditorObjectInspectorController`
+  - kept the scene as the orchestration owner for course loading, room selection, sign text editing, tile tools, course goal markers, and scene handoff
+  - `CourseEditorScene.ts` is down to roughly `2245` lines from roughly `2991`; the new dedicated controller is roughly `820` lines
+  - validation:
+    - `npx tsc --noEmit --noUnusedLocals --noUnusedParameters --pretty false` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the same existing Rollup dependency annotation and large-chunk warnings
+    - `git diff --check` passed
+    - required `develop-web-game` browser smoke wrote:
+      - `output/web-game/deep-cleanup-phase-4-course-inspector/shot-0.png`
+      - `output/web-game/deep-cleanup-phase-4-course-inspector/state-0.json`
+    - targeted synthetic course-editor Playwright probe forced the inspector visible, called `startPlayMode()`, and confirmed the editor-to-overworld transition hid the inspector root and pressure panel with no console/page errors:
+      - `output/web-game/deep-cleanup-phase-4-course-inspector/targeted-after-start-play.png`
+    - note: the targeted synthetic course probe stubs the course draft accessors and lands in overworld browse mode, so it validates the extracted transition/DOM path rather than a full real course-run session
+- final branch readiness check:
+  - user confirmed local QA looked good after the phase 4 Course Editor inspector extraction
+  - final validation passed:
+    - `npx tsc --noEmit --noUnusedLocals --noUnusedParameters --pretty false`
+    - `npm run typecheck`
+    - `npm run build` with the same existing Rollup dependency annotation and large-chunk warnings
+    - `git diff --check`
+  - local servers were still up on the intended cleanup-worktree ports:
+    - frontend `http://127.0.0.1:3011/`
+    - Worker API `http://127.0.0.1:8789/`
+  - required `develop-web-game` browser smoke reached overworld browse mode and wrote:
+    - `output/web-game/deep-cleanup-final-branch-check/shot-0.png`
+    - `output/web-game/deep-cleanup-final-branch-check/state-0.json`
+  - direct full-page Playwright visual sanity check rendered the overworld welcome modal with no page errors:
+    - `output/web-game/deep-cleanup-final-branch-check/full-page.png`
+  - remaining warning notes:
+    - the `develop-web-game` canvas screenshot still shows the known black-frame capture artifact, but `render_game_to_text` showed a valid overworld browse boot
+    - the final build warnings are the existing Rollup dependency annotation and large chunk warnings
+- deferred cleanup candidates:
+  - continue `CourseEditorScene` cleanup only as follow-up polish backed by real course editing interactions; the pressure-plate/container inspector controller extraction is now complete
+  - continue `OverworldPlayScene` runtime/state extraction behind narrow host interfaces
+  - continue Worker store decomposition around rating/progression flows only with a local D1/Wrangler smoke path available

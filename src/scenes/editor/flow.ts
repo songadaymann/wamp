@@ -34,6 +34,7 @@ interface EditorSceneFlowHost {
   getRoomCoordinates(): RoomCoordinates;
   buildCourseEditedRoomData(): CourseEditedRoomData | null;
   syncActiveCourseRoomSessionSnapshot(room: RoomSnapshot, options: { published: boolean }): void;
+  hideObjectInspectorUi(): void;
   clearEditorPresence(): void;
   sleepEditorScene(): void;
   stopEditorScene(): void;
@@ -87,6 +88,7 @@ export class EditorSceneFlowController {
       courseEditedRoom: this.host.buildCourseEditedRoomData(),
     });
 
+    this.host.hideObjectInspectorUi();
     this.host.clearEditorPresence();
     this.host.sleepEditorScene();
     this.host.wakeOverworld(playData);

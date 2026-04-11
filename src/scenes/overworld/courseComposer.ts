@@ -1,9 +1,6 @@
 import { getAuthDebugState } from '../../auth/client';
 import type { CourseRepository } from '../../courses/courseRepository';
 import {
-  clearActiveCourseDraftSessionRoomOverride,
-  getActiveCourseDraftSessionCourseId,
-  getActiveCourseDraftSessionDraft,
   getActiveCourseDraftSessionRecord,
   getActiveCourseDraftSessionSelectedRoomId,
   isActiveCourseDraftSessionDirty,
@@ -17,7 +14,6 @@ import {
   courseGoalRequiresStartPoint,
   courseRoomRefsFollowLinearPath,
   MAX_COURSE_ROOMS,
-  type CourseGoalType,
   type CourseRecord,
   type CourseSnapshot,
 } from '../../courses/model';
@@ -25,7 +21,6 @@ import { setFocusedCoordinatesInUrl } from '../../navigation/worldNavigation';
 import {
   roomIdFromCoordinates,
   type RoomCoordinates,
-  type RoomRecord,
   type RoomSnapshot,
 } from '../../persistence/roomModel';
 import type { RoomRepository } from '../../persistence/roomRepository';

@@ -12,7 +12,6 @@ import {
   isPatternRoomMusic,
   isPhraseArrangementRoomMusic,
   isRoomMusicEmpty,
-  isStemArrangementRoomMusic,
   type RoomMusic,
   type RoomMusicBarClipId,
   type RoomMusicLaneBarAssignments,

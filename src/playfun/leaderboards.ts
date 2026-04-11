@@ -1,11 +1,8 @@
 import type {
-  GlobalLeaderboardEntry,
   GlobalLeaderboardResponse,
-  RoomLeaderboardEntry,
   RoomLeaderboardResponse,
 } from '../runs/model';
 import type {
-  CourseLeaderboardEntry,
   CourseLeaderboardResponse,
 } from '../courses/runModel';
 import { isPlayfunLeaderboardExcludedDisplayName } from './identity';

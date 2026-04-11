@@ -861,7 +861,7 @@ function deriveMetricsForGoal(input: {
 
   switch (goal.type) {
     case 'reach_exit':
-      if (!hasGoalEventNearMarker(input.goalEvents, 'reach_exit', goal.exit ?? null)) {
+      if (!reachedExit || !hasGoalEventNearMarker(input.goalEvents, 'reach_exit', goal.exit ?? null)) {
         return createFailedVerification('failed', 'trace_goal', {
           issue: 'missing_exit',
         });

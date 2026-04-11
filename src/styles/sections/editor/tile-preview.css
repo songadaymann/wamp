@@ -1,0 +1,9 @@
+/* Tile Preview */
+
+#tile-preview {
+  display: block;
+  image-rendering: pixelated;
+  background: var(--field);
+  border-radius: 3px;
+  margin: 0 auto;
+}

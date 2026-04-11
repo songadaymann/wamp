@@ -9,7 +9,10 @@ AUTH_DEBUG_MAGIC_LINKS=1
 # Dev-only reset route for wiping test data through the Worker UI button.
 ENABLE_TEST_RESET=1
 CHAT_OWNER_EMAILS=
-ROOM_DAILY_CLAIM_LIMIT=
+# Local normal-user room claim override for course/editor testing. Leave blank to use trust-tier caps.
+ROOM_DAILY_CLAIM_LIMIT=10
+# Local normal-user publish override for multi-room course/editor testing. Leave blank to use trust-tier caps.
+ROOM_DAILY_PUBLISH_LIMIT=10
 PLAYFUN_ROOM_DAILY_CLAIM_LIMIT=1
 PLAYFUN_ROOM_MAX_PLACED_OBJECTS=16
 PARTYKIT_HOST="127.0.0.1:1999"

@@ -24,7 +24,6 @@ import {
   type RoomRatingRequestBody,
   type TrustTier,
   type TrophyAwardSummary,
-  type ViewerRatingSummary,
 } from '../../../progression/model';
 import { sortCompletedRunsForLeaderboard } from '../../../runs/scoring';
 import type { RoomRunRecord } from '../../../runs/model';
@@ -34,15 +33,20 @@ import type {
   ContentTrophyRow,
   CourseRatingRow,
   CourseRunRow,
-  D1PreparedStatement,
   Env,
-  ProgressEventRow,
   RoomRatingRow,
   RoomRunRow,
-  RoomVersionAttributionRow,
   UserProgressRow,
   UserRow,
 } from '../core/types';
+import {
+  computeCourseWeightedChange,
+  computeRoomWeightedChange,
+} from './changeMetrics';
+import {
+  buildBuilderCapabilitySummary,
+  sanitizeOptionalOverride,
+} from './capabilities';
 
 export interface RoomCapabilitySnapshot {
   trustTier: TrustTier;
@@ -128,17 +132,6 @@ const LANE_BASE_XP = {
   uniqueCourseCompletion: 16,
   uniqueRating: 5,
 } as const;
-
-const TRUST_TIER_CAPABILITIES: Record<
-  TrustTier,
-  { claimLimitPerDay: number; publishLimitPerDay: number; objectLimit: number; collectibleLimit: number }
-> = {
-  T0: { claimLimitPerDay: 1, publishLimitPerDay: 1, objectLimit: 250, collectibleLimit: 25 },
-  T1: { claimLimitPerDay: 2, publishLimitPerDay: 2, objectLimit: 400, collectibleLimit: 40 },
-  T2: { claimLimitPerDay: 4, publishLimitPerDay: 3, objectLimit: 700, collectibleLimit: 70 },
-  T3: { claimLimitPerDay: 6, publishLimitPerDay: 5, objectLimit: 1000, collectibleLimit: 100 },
-  T4: { claimLimitPerDay: 9, publishLimitPerDay: 8, objectLimit: 1500, collectibleLimit: 150 },
-};
 
 interface AdminProgressionIdentitySummary {
   userId: string;
@@ -461,57 +454,6 @@ export async function loadEffectiveTrustTier(
   progress?: UserProgressRow,
 ): Promise<TrustTier> {
   return (await loadEffectiveTrustState(env, userId, progress)).effectiveTier;
-}
-
-function sanitizeOptionalOverride(value: number | string | null | undefined): number | null {
-  if (value === null || value === undefined || value === '') {
-    return null;
-  }
-  const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
-  if (!Number.isFinite(parsed) || Number.isNaN(parsed) || parsed <= 0) {
-    return null;
-  }
-  return Math.floor(parsed);
-}
-
-function hasBuilderCapOverride(progress: UserProgressRow): boolean {
-  return (
-    progress.builder_claim_limit_override !== null ||
-    progress.builder_publish_limit_override !== null ||
-    progress.builder_object_limit_override !== null ||
-    progress.builder_collectible_limit_override !== null
-  );
-}
-
-function buildBuilderCapabilitySummary(
-  env: Env,
-  progress: UserProgressRow,
-  requestAuthSource: 'session' | 'playfun' | 'api_token' | 'agent_token' | null,
-  trustTier: TrustTier,
-): BuilderCapabilitySummary {
-  const base = TRUST_TIER_CAPABILITIES[trustTier];
-  const roomClaimCap =
-    requestAuthSource === 'playfun'
-      ? parseOptionalPositiveInteger(env.PLAYFUN_ROOM_DAILY_CLAIM_LIMIT)
-      : parseOptionalPositiveInteger(env.ROOM_DAILY_CLAIM_LIMIT);
-  const playfunObjectCap =
-    requestAuthSource === 'playfun'
-      ? parseOptionalPositiveInteger(env.PLAYFUN_ROOM_MAX_PLACED_OBJECTS)
-      : null;
-
-  const claimLimitPerDay = progress.builder_claim_limit_override ?? base.claimLimitPerDay;
-  const publishLimitPerDay = progress.builder_publish_limit_override ?? base.publishLimitPerDay;
-  const objectLimit = progress.builder_object_limit_override ?? base.objectLimit;
-  const collectibleLimit = progress.builder_collectible_limit_override ?? base.collectibleLimit;
-
-  return {
-    trustTier,
-    claimLimitPerDay: roomClaimCap === null ? claimLimitPerDay : Math.min(claimLimitPerDay, roomClaimCap),
-    publishLimitPerDay,
-    objectLimit: playfunObjectCap === null ? objectLimit : Math.min(objectLimit, playfunObjectCap),
-    collectibleLimit,
-    overrideActive: hasBuilderCapOverride(progress),
-  };
 }
 
 async function loadBuilderCapabilitySummary(
@@ -1055,43 +997,6 @@ async function progressEventExists(
   return parseRowNumber(row?.found) === 1;
 }
 
-async function insertProgressEvent(
-  env: Env,
-  config: LaneEventConfig,
-): Promise<boolean> {
-  if (config.amount <= 0) {
-    return false;
-  }
-
-  if (await progressEventExists(env, config.table, config.dedupeKey)) {
-    return false;
-  }
-
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        INSERT INTO ${config.table} (
-          id,
-          user_id,
-          event_type,
-          source_type,
-          source_id,
-          dedupe_key,
-          amount,
-          breakdown_json,
-          created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `
-    ).bind(
-      crypto.randomUUID(),
-      config.sourceId.includes(':user:') ? config.sourceId.split(':user:')[1] : undefined,
-    ),
-  ]);
-
-  return true;
-}
-
 async function recordLaneEvent(
   env: Env,
   userId: string,
@@ -1168,13 +1073,6 @@ async function awardLaneDelta(
     breakdown,
   });
   return inserted ? amount : 0;
-}
-
-function mergeDelta(target: ProgressionDelta, patch: Partial<ProgressionDelta>): void {
-  target.pxp += patch.pxp ?? 0;
-  target.bxp += patch.bxp ?? 0;
-  target.cxp += patch.cxp ?? 0;
-  target.trust += patch.trust ?? 0;
 }
 
 function createLineageKey(contentId: string, versionKey: number): string {
@@ -1449,116 +1347,6 @@ async function buildCourseRatingSummary(
       : null,
     trophy: await loadTrophyForContentVersion(env, 'course', courseId, ratingWindow.versionKey),
   };
-}
-
-function computeTileLayerChangeRatio(
-  beforeLayer: (number | -1)[][],
-  afterLayer: (number | -1)[][],
-): number {
-  const rows = Math.max(beforeLayer.length, afterLayer.length);
-  let changed = 0;
-  let total = 0;
-  for (let y = 0; y < rows; y += 1) {
-    const beforeRow = beforeLayer[y] ?? [];
-    const afterRow = afterLayer[y] ?? [];
-    const cols = Math.max(beforeRow.length, afterRow.length);
-    for (let x = 0; x < cols; x += 1) {
-      total += 1;
-      if ((beforeRow[x] ?? -1) !== (afterRow[x] ?? -1)) {
-        changed += 1;
-      }
-    }
-  }
-
-  return total > 0 ? changed / total : 0;
-}
-
-function serializePlacedObjectFingerprint(object: PlacedObject): string {
-  return [
-    object.id,
-    object.x,
-    object.y,
-    object.facing ?? '',
-    object.layer ?? '',
-    object.triggerTargetInstanceId ?? '',
-    object.containedObjectId ?? '',
-    object.instanceId ?? '',
-  ].join(':');
-}
-
-function computePlacedObjectsChangeRatio(
-  beforeObjects: PlacedObject[],
-  afterObjects: PlacedObject[],
-): number {
-  const beforeFingerprints = beforeObjects.map(serializePlacedObjectFingerprint).sort();
-  const afterFingerprints = afterObjects.map(serializePlacedObjectFingerprint).sort();
-  const size = Math.max(beforeFingerprints.length, afterFingerprints.length);
-  if (size === 0) {
-    return 0;
-  }
-
-  let changed = 0;
-  for (let index = 0; index < size; index += 1) {
-    if (beforeFingerprints[index] !== afterFingerprints[index]) {
-      changed += 1;
-    }
-  }
-
-  return changed / size;
-}
-
-export function computeRoomWeightedChange(
-  previous: RoomSnapshot | null,
-  next: RoomSnapshot,
-): number {
-  if (!previous) {
-    return 1;
-  }
-
-  const tileWeights = {
-    background: 0.08,
-    terrain: 0.24,
-    foreground: 0.08,
-  } as const;
-  let score = 0;
-  score += computeTileLayerChangeRatio(previous.tileData.background, next.tileData.background) * tileWeights.background;
-  score += computeTileLayerChangeRatio(previous.tileData.terrain, next.tileData.terrain) * tileWeights.terrain;
-  score += computeTileLayerChangeRatio(previous.tileData.foreground, next.tileData.foreground) * tileWeights.foreground;
-  score += computePlacedObjectsChangeRatio(previous.placedObjects, next.placedObjects) * 0.28;
-  score += (JSON.stringify(previous.goal) === JSON.stringify(next.goal) ? 0 : 0.16);
-  score += (JSON.stringify(previous.spawnPoint) === JSON.stringify(next.spawnPoint) ? 0 : 0.08);
-  score += (previous.background === next.background ? 0 : 0.04);
-  score += (JSON.stringify(previous.lighting) === JSON.stringify(next.lighting) ? 0 : 0.04);
-
-  return Math.max(0, Math.min(1, score));
-}
-
-export function computeCourseWeightedChange(
-  previous: CourseSnapshot | null,
-  next: CourseSnapshot,
-): number {
-  if (!previous) {
-    return 1;
-  }
-
-  const previousRooms = previous.roomRefs.map((room) => `${room.roomId}:${room.roomVersion}`).join('|');
-  const nextRooms = next.roomRefs.map((room) => `${room.roomId}:${room.roomVersion}`).join('|');
-  const previousLinks = previous.pressurePlateLinks
-    .map((link) => `${link.triggerRoomId}:${link.triggerInstanceId}:${link.targetRoomId}:${link.targetInstanceId}`)
-    .sort()
-    .join('|');
-  const nextLinks = next.pressurePlateLinks
-    .map((link) => `${link.triggerRoomId}:${link.triggerInstanceId}:${link.targetRoomId}:${link.targetInstanceId}`)
-    .sort()
-    .join('|');
-
-  let score = 0;
-  score += previousRooms === nextRooms ? 0 : 0.42;
-  score += JSON.stringify(previous.startPoint) === JSON.stringify(next.startPoint) ? 0 : 0.14;
-  score += JSON.stringify(previous.goal) === JSON.stringify(next.goal) ? 0 : 0.24;
-  score += previousLinks === nextLinks ? 0 : 0.2;
-
-  return Math.max(0, Math.min(1, score));
 }
 
 function buildRoomRatingWindow(versions: RoomVersionRecord[], targetVersion: number): RatingWindow {
@@ -2110,18 +1898,6 @@ function countCollectibleObjects(placedObjects: PlacedObject[]): number {
   }
 
   return total;
-}
-
-function parseOptionalPositiveInteger(raw: string | undefined): number | null {
-  const trimmed = raw?.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const parsed = Number.parseInt(trimmed, 10);
-  if (!Number.isFinite(parsed) || Number.isNaN(parsed) || parsed <= 0) {
-    return null;
-  }
-  return parsed;
 }
 
 export async function resolveRoomCapabilities(

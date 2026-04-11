@@ -103,7 +103,6 @@ export class EditorRoomSession {
   private mintedOwnerSyncedAt: string | null = null;
   private mintedMetadataRoomVersion: number | null = null;
   private mintedMetadataUpdatedAt: string | null = null;
-  private mintedMetadataHash: string | null = null;
   private saveInFlight = false;
   private persistenceStatus: EditorStatusDetails = {
     text: '',
@@ -245,7 +244,6 @@ export class EditorRoomSession {
     this.mintedOwnerSyncedAt = null;
     this.mintedMetadataRoomVersion = null;
     this.mintedMetadataUpdatedAt = null;
-    this.mintedMetadataHash = null;
     this.saveInFlight = false;
     this.persistenceStatus = {
       text: '',
@@ -1074,7 +1072,6 @@ export class EditorRoomSession {
     this.mintedOwnerSyncedAt = record.mintedOwnerSyncedAt;
     this.mintedMetadataRoomVersion = record.mintedMetadataRoomVersion;
     this.mintedMetadataUpdatedAt = record.mintedMetadataUpdatedAt;
-    this.mintedMetadataHash = record.mintedMetadataHash;
     this.host.refreshUi();
   }
 

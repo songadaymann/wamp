@@ -2,28 +2,18 @@ import {
   cloneCourseGoal,
   cloneCourseSnapshot,
   normalizeCourseGoal,
-  normalizeCourseSnapshot,
-  type CourseGoal,
   type CourseRecord,
   type CourseSnapshot,
 } from '../../../courses/model';
 import { cloneRoomSnapshot, type RoomSnapshot } from '../../../persistence/roomModel';
 import {
   computeCourseRunScore,
-  getCourseLeaderboardRankingMode,
   sortCompletedCourseRunsForLeaderboard,
 } from '../../../courses/scoring';
-import {
-  RANKED_RUN_TRACE_SCHEMA_VERSION,
-  normalizeRankedRunVerificationTrace,
-} from '../../../runs/verificationTrace';
+import { RANKED_RUN_TRACE_SCHEMA_VERSION } from '../../../runs/verificationTrace';
 import type {
-  CourseLeaderboardEntry,
-  CourseLeaderboardResponse,
-  CourseProgressRatingRequestBody,
   CourseRunFinishRequestBody,
   CourseRunRecord,
-  CourseRunStartRequestBody,
   CourseRunStartResponse,
 } from '../../../courses/runModel';
 import type { RunResult } from '../../../runs/model';
@@ -31,10 +21,6 @@ import {
   HttpError,
   jsonResponse,
   noContentResponse,
-  normalizeIsoTimestamp,
-  normalizeNonNegativeInteger,
-  normalizePositiveInteger,
-  parseJsonBody,
   parseOptionalPositiveIntegerQueryParam,
   parsePositiveIntegerQueryParam,
 } from '../core/http';
@@ -52,7 +38,6 @@ import {
 } from '../playfun/service';
 import {
   assertWampLeaderboardWriteAllowed,
-  sqlUserIdIsNotPlayfunOnly,
 } from '../playfun/leaderboardIsolation';
 import {
   awardCoursePublishPoints,
@@ -66,7 +51,6 @@ import {
   awardCoursePublishProgression,
   awardCourseRunProgression,
   loadEffectiveTrustTier,
-  loadCourseAggregateRatingSummaryForVersion,
   submitCourseRating,
 } from '../progression/store';
 import {
@@ -89,6 +73,20 @@ import {
   type RunVerificationFailureReason,
   verifyCourseRunTrace,
 } from '../runs/verification';
+import {
+  buildCourseLeaderboardResponse,
+  loadRankedCourseLeaderboardRows,
+  loadViewerRankedCourseLeaderboardRow,
+} from './leaderboards';
+import {
+  computeEffectiveElapsedMs,
+  normalizeFinalizedCourseRunBody,
+  parseCourseRatingBody,
+  parseCourseRunFinishBody,
+  parseCourseRunStartBody,
+  parseCourseSnapshotBody,
+} from './requestBodies';
+import { sqlIsVerificationAccepted } from '../runs/verificationSql';
 
 export async function handleCourseCreate(
   request: Request,
@@ -765,163 +763,6 @@ function cloneCourseRecordVersionForPublicRead(version: CourseRecord['versions']
   };
 }
 
-async function parseCourseSnapshotBody(
-  request: Request,
-  fallbackCourseId: string = crypto.randomUUID()
-): Promise<CourseSnapshot> {
-  const body = await parseJsonBody<CourseSnapshot>(request);
-  return normalizeCourseSnapshot(body, fallbackCourseId);
-}
-
-async function parseCourseRunStartBody(
-  request: Request,
-  fallbackCourseId: string
-): Promise<CourseRunStartRequestBody> {
-  const body = await parseJsonBody<CourseRunStartRequestBody>(request);
-  const courseId = typeof body.courseId === 'string' && body.courseId.trim() ? body.courseId.trim() : fallbackCourseId;
-  const courseVersion = normalizePositiveInteger(body.courseVersion, 'courseVersion');
-  const goal = normalizeCourseGoal(body.goal);
-
-  if (!courseId) {
-    throw new HttpError(400, 'courseId is required.');
-  }
-  if (!goal) {
-    throw new HttpError(400, 'goal must be a valid course goal.');
-  }
-
-  return {
-    courseId,
-    courseVersion,
-    goal,
-    startedAt: normalizeIsoTimestamp(body.startedAt),
-  };
-}
-
-async function parseCourseRunFinishBody(
-  request: Request
-): Promise<CourseRunFinishRequestBody> {
-  const body = await parseJsonBody<CourseRunFinishRequestBody>(request);
-  const verificationTrace =
-    body.verificationTrace === undefined
-      ? null
-      : normalizeRankedRunVerificationTrace(body.verificationTrace);
-
-  if (body.result !== 'completed' && body.result !== 'failed' && body.result !== 'abandoned') {
-    throw new HttpError(400, 'result must be completed, failed, or abandoned.');
-  }
-
-  return {
-    result: body.result,
-    elapsedMs: normalizeNonNegativeInteger(body.elapsedMs, 'elapsedMs'),
-    deaths: normalizeNonNegativeInteger(body.deaths, 'deaths'),
-    collectiblesCollected: normalizeNonNegativeInteger(
-      body.collectiblesCollected,
-      'collectiblesCollected'
-    ),
-    enemiesDefeated: normalizeNonNegativeInteger(body.enemiesDefeated, 'enemiesDefeated'),
-    checkpointsReached: normalizeNonNegativeInteger(
-      body.checkpointsReached,
-      'checkpointsReached'
-    ),
-    score: null,
-    finishedAt: normalizeIsoTimestamp(body.finishedAt),
-    verificationTrace,
-  };
-}
-
-async function parseCourseRatingBody(
-  request: Request
-): Promise<CourseProgressRatingRequestBody> {
-  const body = await parseJsonBody<CourseProgressRatingRequestBody>(request);
-  return {
-    courseVersion: normalizePositiveInteger(body.courseVersion, 'courseVersion'),
-    qualityStars:
-      body.qualityStars === null || body.qualityStars === undefined
-        ? null
-        : normalizePositiveInteger(body.qualityStars, 'qualityStars'),
-    difficultyChoice: body.difficultyChoice ? parseCourseDifficulty(body.difficultyChoice) : null,
-    autoSuggestedDifficulty: body.autoSuggestedDifficulty
-      ? parseCourseDifficulty(body.autoSuggestedDifficulty)
-      : null,
-  };
-}
-
-function parseCourseDifficulty(value: unknown) {
-  const normalized =
-    typeof value === 'string' && ['easy', 'medium', 'hard', 'extreme'].includes(value)
-      ? (value as CourseProgressRatingRequestBody['difficultyChoice'])
-      : null;
-  if (!normalized) {
-    throw new HttpError(400, 'difficultyChoice must be easy, medium, hard, extreme, or null.');
-  }
-
-  return normalized;
-}
-
-function computeEffectiveElapsedMs(
-  startedAt: string,
-  finishedAt: string,
-  reportedElapsedMs: number
-): number {
-  const observedStart = Date.parse(startedAt);
-  const observedFinish = Date.parse(finishedAt);
-  const observedElapsedMs =
-    Number.isFinite(observedStart) && Number.isFinite(observedFinish)
-      ? Math.max(0, observedFinish - observedStart)
-      : 0;
-  return Math.max(Math.round(reportedElapsedMs), observedElapsedMs);
-}
-
-function normalizeFinalizedCourseRunBody(
-  goal: CourseSnapshot['goal'],
-  body: CourseRunFinishRequestBody,
-  reportedElapsedMs: number
-): CourseRunFinishRequestBody {
-  if (!goal) {
-    return body;
-  }
-
-  if (body.result !== 'completed') {
-    return {
-      ...body,
-      collectiblesCollected: 0,
-      enemiesDefeated: 0,
-      checkpointsReached: 0,
-    };
-  }
-
-  if (
-    'timeLimitMs' in goal &&
-    goal.timeLimitMs !== null &&
-    reportedElapsedMs > goal.timeLimitMs
-  ) {
-    throw new HttpError(409, 'Completed course runs must finish within the published time limit.');
-  }
-
-  switch (goal.type) {
-    case 'collect_target':
-      if (body.collectiblesCollected < goal.requiredCount) {
-        throw new HttpError(409, 'Completed collect-target course runs must meet the published goal.');
-      }
-      break;
-    case 'checkpoint_sprint':
-      if (body.checkpointsReached < goal.checkpoints.length) {
-        throw new HttpError(409, 'Completed checkpoint course runs must hit every checkpoint.');
-      }
-      break;
-    case 'survival':
-      if (body.elapsedMs < goal.durationMs) {
-        throw new HttpError(409, 'Completed survival course runs must last the full published duration.');
-      }
-      break;
-    case 'defeat_all':
-    case 'reach_exit':
-      break;
-  }
-
-  return body;
-}
-
 async function resolvePublishedCourseVersion(
   env: Env,
   courseId: string,
@@ -1017,172 +858,6 @@ async function loadCourseRunByAttemptId(
   return row ? mapCourseRunRow(row) : null;
 }
 
-interface RankedCourseLeaderboardRow {
-  attempt_id: string;
-  course_version: number;
-  user_id: string;
-  user_display_name: string;
-  elapsed_ms: number;
-  deaths: number;
-  score: number;
-  finished_at: string;
-  overall_rank: number | string | null;
-}
-
-function sqlIsVerificationAccepted(tableName: string): string {
-  return `COALESCE(${tableName}.verification_status, 'not_required') IN ('not_required', 'passed')`;
-}
-
-function getCourseLeaderboardSqlOrderClause(goal: CourseGoal): string {
-  return getCourseLeaderboardRankingMode(goal) === 'time'
-    ? 'elapsed_ms ASC, deaths ASC, score DESC, finished_at ASC, attempt_id ASC'
-    : 'score DESC, elapsed_ms ASC, deaths ASC, finished_at ASC, attempt_id ASC';
-}
-
-function buildRankedCourseLeaderboardCte(goal: CourseGoal): string {
-  const orderClause = getCourseLeaderboardSqlOrderClause(goal);
-  return `
-    WITH candidate_runs AS (
-      SELECT
-        attempt_id,
-        course_version,
-        user_id,
-        user_display_name,
-        elapsed_ms,
-        deaths,
-        score,
-        finished_at,
-        ROW_NUMBER() OVER (
-          PARTITION BY user_id
-          ORDER BY ${orderClause}
-        ) AS user_row_num
-      FROM course_runs
-      WHERE course_id = ?
-        AND course_version = ?
-        AND result = 'completed'
-        AND elapsed_ms IS NOT NULL
-        AND finished_at IS NOT NULL
-        AND ${sqlIsVerificationAccepted('course_runs')}
-        AND ${sqlUserIdIsNotPlayfunOnly('course_runs.user_id')}
-    ),
-    best_runs AS (
-      SELECT
-        attempt_id,
-        course_version,
-        user_id,
-        user_display_name,
-        elapsed_ms,
-        deaths,
-        score,
-        finished_at
-      FROM candidate_runs
-      WHERE user_row_num = 1
-    ),
-    ranked_runs AS (
-      SELECT
-        attempt_id,
-        course_version,
-        user_id,
-        user_display_name,
-        elapsed_ms,
-        deaths,
-        score,
-        finished_at,
-        ROW_NUMBER() OVER (
-          ORDER BY ${orderClause}
-        ) AS overall_rank
-      FROM best_runs
-    )
-  `;
-}
-
-async function loadRankedCourseLeaderboardRows(
-  env: Env,
-  courseId: string,
-  courseVersion: number,
-  goal: CourseGoal,
-  limit: number
-): Promise<RankedCourseLeaderboardRow[]> {
-  if (limit <= 0) {
-    return [];
-  }
-
-  const cte = buildRankedCourseLeaderboardCte(goal);
-  const result = await env.DB.prepare(
-    `
-      ${cte}
-      SELECT
-        attempt_id,
-        course_version,
-        user_id,
-        user_display_name,
-        elapsed_ms,
-        deaths,
-        score,
-        finished_at,
-        overall_rank
-      FROM ranked_runs
-      ORDER BY overall_rank
-      LIMIT ?
-    `
-  )
-    .bind(courseId, courseVersion, limit)
-    .all<RankedCourseLeaderboardRow>();
-
-  return result.results;
-}
-
-async function loadViewerRankedCourseLeaderboardRow(
-  env: Env,
-  courseId: string,
-  courseVersion: number,
-  goal: CourseGoal,
-  viewerUserId: string
-): Promise<RankedCourseLeaderboardRow | null> {
-  const cte = buildRankedCourseLeaderboardCte(goal);
-  const row = await env.DB.prepare(
-    `
-      ${cte}
-      SELECT
-        attempt_id,
-        course_version,
-        user_id,
-        user_display_name,
-        elapsed_ms,
-        deaths,
-        score,
-        finished_at,
-        overall_rank
-      FROM ranked_runs
-      WHERE user_id = ?
-      LIMIT 1
-    `
-  )
-    .bind(courseId, courseVersion, viewerUserId)
-    .first<RankedCourseLeaderboardRow>();
-
-  return row ?? null;
-}
-
-function mapRankedCourseLeaderboardEntry(
-  row: RankedCourseLeaderboardRow,
-  snapshot: CourseSnapshot
-): CourseLeaderboardEntry {
-  return {
-    rank: Number(row.overall_rank),
-    userId: row.user_id,
-    userDisplayName: row.user_display_name,
-    attemptId: row.attempt_id,
-    courseId: snapshot.id,
-    courseVersion: row.course_version,
-    goalType: snapshot.goal!.type,
-    elapsedMs: row.elapsed_ms,
-    deaths: row.deaths,
-    score: row.score,
-    finishedAt: row.finished_at,
-  };
-}
-
 function mapCourseRunRow(row: CourseRunRow): CourseRunRecord {
   const goal = parseStoredCourseGoal(row.goal_json, 'course run goal');
   return {
@@ -1219,60 +894,6 @@ function parseStoredCourseGoal(raw: string, label: string) {
   } catch {
     throw new HttpError(500, `Failed to parse ${label}.`);
   }
-}
-
-async function buildCourseLeaderboardResponse(
-  env: Env,
-  record: CourseRecord,
-  snapshot: CourseSnapshot,
-  limit: number,
-  viewerUserId: string | null = null
-): Promise<CourseLeaderboardResponse> {
-  if (!snapshot.goal) {
-    throw new HttpError(404, 'This course version does not have a leaderboard goal.');
-  }
-
-  const entryRows = await loadRankedCourseLeaderboardRows(
-    env,
-    snapshot.id,
-    snapshot.version,
-    snapshot.goal,
-    limit
-  );
-  const viewerBestRow =
-    viewerUserId === null
-      ? null
-      : await loadViewerRankedCourseLeaderboardRow(
-          env,
-          snapshot.id,
-          snapshot.version,
-          snapshot.goal,
-          viewerUserId
-        );
-  const entries = entryRows.map((row) => mapRankedCourseLeaderboardEntry(row, snapshot));
-  const viewerBest =
-    viewerBestRow === null ? null : mapRankedCourseLeaderboardEntry(viewerBestRow, snapshot);
-  const ratings = await loadCourseAggregateRatingSummaryForVersion(
-    env,
-    record,
-    snapshot.version,
-    viewerUserId,
-  );
-
-  return {
-    courseId: snapshot.id,
-    courseTitle: snapshot.title,
-    courseVersion: snapshot.version,
-    goalType: snapshot.goal.type,
-    rankingMode: getCourseLeaderboardRankingMode(snapshot.goal),
-    quality: ratings.quality,
-    difficulty: ratings.difficulty,
-    viewerRating: ratings.viewerRating,
-    trophy: ratings.trophy,
-    entries,
-    viewerBest,
-    viewerRank: viewerBest?.rank ?? null,
-  };
 }
 
 async function loadBestCompletedCourseRunForUserAndVersion(

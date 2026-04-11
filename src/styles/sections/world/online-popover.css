@@ -1,0 +1,215 @@
+.world-online-wrap {
+  --world-online-green: #277b30;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  flex: 0 0 auto;
+}
+
+.world-online-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 4px 10px 3px;
+  border-radius: 0;
+  border: 2px solid #18161c;
+  background: var(--world-online-green);
+  color: #fff3db;
+  font-size: 8px;
+  font-family: 'Early GameBoy', monospace;
+  letter-spacing: 0.05em;
+  line-height: 1.15;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 #18161c;
+  transition:
+    filter 0.12s ease,
+    transform 0.08s ease;
+}
+
+#bottom-bar .world-footer-controls-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 4px 10px 3px;
+  border-radius: 0;
+  border: 2px solid #18161c;
+  background: #79ccde;
+  color: #000;
+  font-size: 8px;
+  font-family: 'Early GameBoy', monospace;
+  letter-spacing: 0.05em;
+  line-height: 1.15;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 2px 2px 0 #18161c;
+}
+
+#bottom-bar .world-footer-controls-btn:hover {
+  background: #79ccde;
+  filter: brightness(1.06);
+}
+
+#bottom-bar .world-footer-controls-btn:focus-visible {
+  outline: 2px solid #fff3db;
+  outline-offset: 2px;
+}
+
+.world-online-pill:hover,
+.world-online-wrap.is-open .world-online-pill {
+  filter: brightness(1.06);
+}
+
+.world-online-pill:focus-visible {
+  outline: 2px solid #fff3db;
+  outline-offset: 2px;
+}
+
+.world-online-popover {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  width: min(320px, calc(100vw - 32px));
+  max-height: min(320px, 42vh);
+  overflow: auto;
+  z-index: 26;
+  padding: 12px;
+  border: 2px solid var(--world-online-green);
+  border-radius: 0;
+  background: #fff3db;
+  box-shadow: 4px 4px 0 #18161c;
+  backdrop-filter: none;
+}
+
+.world-online-popover-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.world-online-popover-title {
+  color: var(--world-online-green);
+  font-size: 10px;
+  font-family: 'Super Mario Bros. NES', monospace;
+  line-height: 1.35;
+}
+
+.world-online-popover-summary,
+.world-online-popover-empty,
+.world-online-popover-room {
+  color: #18161c;
+  font-size: 10px;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  line-height: 1.2;
+}
+
+.world-online-popover-list {
+  display: grid;
+  gap: 10px;
+}
+
+.world-online-popover-section {
+  display: grid;
+  gap: 6px;
+}
+
+.world-online-popover-section-title {
+  font-size: 9px;
+  font-family: 'Early GameBoy', monospace;
+  line-height: 1.2;
+}
+
+.world-online-popover-section-title[data-online-mode='play'] {
+  color: #277b30;
+}
+
+.world-online-popover-section-title[data-online-mode='edit'] {
+  color: #fcea7c;
+}
+
+.world-online-popover-section-title[data-online-mode='browse'] {
+  color: #79ccde;
+}
+
+.world-online-popover-section-list {
+  display: grid;
+  gap: 6px;
+}
+
+.world-online-popover-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid rgba(39, 123, 48, 0.32);
+  border-radius: 0;
+  background: transparent;
+  color: #18161c;
+  text-align: left;
+  cursor: pointer;
+}
+
+.world-online-popover-entry[data-online-mode='play'] {
+  border-color: rgba(39, 123, 48, 0.32);
+}
+
+.world-online-popover-entry[data-online-mode='edit'] {
+  border-color: rgba(252, 234, 124, 0.55);
+}
+
+.world-online-popover-entry[data-online-mode='browse'] {
+  border-color: rgba(121, 204, 222, 0.55);
+}
+
+.world-online-popover-entry:hover,
+.world-online-popover-entry:focus-visible {
+  border-color: var(--world-online-green);
+  background: rgba(39, 123, 48, 0.1);
+  outline: none;
+}
+
+.world-online-popover-entry[data-online-mode='edit']:hover,
+.world-online-popover-entry[data-online-mode='edit']:focus-visible {
+  border-color: #fcea7c;
+  background: rgba(252, 234, 124, 0.16);
+}
+
+.world-online-popover-entry[data-online-mode='browse']:hover,
+.world-online-popover-entry[data-online-mode='browse']:focus-visible {
+  border-color: #79ccde;
+  background: rgba(121, 204, 222, 0.16);
+}
+
+.world-online-popover-entry:disabled {
+  cursor: default;
+  opacity: 0.82;
+}
+
+.world-online-popover-entry-name {
+  min-width: 0;
+  color: #18161c;
+  font-size: 11px;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.world-online-popover-entry-name.profile-trigger {
+  text-decoration: none;
+}
+
+.world-online-popover-entry-name[data-online-self='true'] {
+  color: var(--world-online-green);
+}

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { CourseEditorCheckpointEntry, CourseEditorRoomEntry, CourseEditorUiState } from '../../courses/editor/state';
+import type { CourseEditorCheckpointEntry, CourseEditorRoomEntry } from '../../courses/editor/state';
 import {
   COURSE_COMPOSER_STATE_CHANGED_EVENT,
   getActiveCourseComposerScene,

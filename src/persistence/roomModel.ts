@@ -26,7 +26,6 @@ import {
   type RoomLightingSettings,
 } from '../lighting/model';
 import {
-  cloneRoomMusic,
   isRoomMusicEmpty,
   normalizeRoomMusic,
   type RoomMusic,

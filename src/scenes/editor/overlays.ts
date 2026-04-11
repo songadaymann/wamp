@@ -81,6 +81,11 @@ export class EditorOverlayController {
     render(this.containerGraphics);
   }
 
+  clearObjectInspectorOverlays(): void {
+    this.pressurePlateGraphics?.clear();
+    this.containerGraphics?.clear();
+  }
+
   updateLayerGuideOverlay(): void {
     this.layerGuideGraphics?.clear();
     if (!this.layerGuideGraphics || editorState.isPlaying || !editorState.showLayerGuides) {

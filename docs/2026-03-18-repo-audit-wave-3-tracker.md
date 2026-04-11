@@ -13,11 +13,14 @@ This document is the living tracker for the March 18, 2026 repo audit follow-thr
   - docs/API drift, repeated copy, duplicated guidance
 - Wave 2: Module boundary cleanup
   - narrow interfaces, route/client dedupe, state boundary cleanup
+  - April 11 continuation extracted auth runtime config, Worker run request parsing, and progression weighted-change metrics into focused modules
+  - April 11 phase 2 moved run leaderboard SQL/ranking/response mapping into `src/cloudflare/worker/runs/leaderboards.ts`
 - Wave 3: Broader refactor candidates
   - active
   - `src/scenes/OverworldPlayScene.ts`
   - `src/scenes/EditorScene.ts`
   - `src/styles/main.css`
+  - April 11 continuation split the largest CSS section partials further and moved Editor music DOM rendering out of `EditorScene`
 
 ## Finding Ledger
 
@@ -77,6 +80,9 @@ Defaults for this wave:
      - extracted course editor state and marker descriptor helpers into `src/scenes/editor/courseEditing.ts`
      - extracted play-mode handoff payload building into `src/scenes/editor/playMode.ts`
      - extracted editor UI view-model assembly into `src/scenes/editor/viewModel.ts`
+     - April 11 follow-up extracted the Editor music DOM renderer into `src/scenes/editor/musicUi.ts`, keeping `EditorScene` as the state/action owner
+     - April 11 phase 2 extracted Course Editor pressure-plate/container inspector state building into `src/scenes/courseEditor/inspectorUi.ts`
+     - April 11 phase 4 moved the remaining Course Editor pressure-plate/container inspector focus, linking, container contents, and overlay rendering into `src/scenes/courseEditor/objectInspector.ts`
 
 ### Wave 3C: CSS
 
@@ -91,6 +97,7 @@ Defaults for this wave:
 3. Preserve selector names and cascade order exactly
    - current pass:
      - `src/styles/main.css` now stays as the root entrypoint and imports ordered partials from `src/styles/sections/`
+     - April 11 follow-up split `modals.css`, `editor.css`, and `world.css` into ordered ownership partials while preserving selectors and cascade order
 
 ## Decision Log
 
@@ -101,6 +108,8 @@ Defaults for this wave:
 - 2026-03-18: Split CSS by contiguous ownership slices to preserve exact cascade order before doing any selector cleanup.
 - 2026-03-18: Keep Wave 0 strictly limited to symbols TypeScript proves unused under `--noUnusedLocals --noUnusedParameters`.
 - 2026-03-18: Tackle Wave 1 as a docs-first drift pass, leaving generated API-contract completeness as separate follow-up work.
+- 2026-04-11: Continue deeper cleanup from `refactor/deep-cleanup-waves-2026-04-11` with mechanical extractions first: no public API, schema, selector, persisted format, or gameplay behavior changes.
+- 2026-04-11: Treat live-room edit smoke as data-dependent when the remote room belongs to another account; use the existing synthetic editor smoke hook for editor-renderer validation.
 
 ## Verification Log
 
@@ -129,9 +138,37 @@ Defaults for this wave:
   - updated the in-product About modal copy so challenge/course messaging matches the shipped product
   - clarified that `docs/asset-intake-rules.md` is the detailed asset intake reference and the About modal is only the short public summary
   - clarified `public/openapi.json` as the agent/builder API contract instead of a full public-route mirror, and added the missing room discovery endpoint plus current leaderboard payload fields
+- April 11 deep-cleanup continuation:
+  - `npx tsc --noEmit --noUnusedLocals --noUnusedParameters --pretty false` passed after the cleanup slices
+  - `npm run typecheck` passed
+  - `npm run build` passed with only the existing Rollup dependency annotation and large-chunk warnings
+  - CSS split verification confirmed the new modal/editor/world partials concatenate back to the previous section contents in the same order
+  - desktop synthetic editor/music Playwright probe passed with no console/page errors and wrote `output/web-game/deep-cleanup-synthetic-editor-music-probe/summary.json`
+  - phone-landscape synthetic editor/music Playwright probe passed with no console/page errors and wrote `output/web-game/deep-cleanup-synthetic-editor-music-mobile-probe/summary.json`
+  - `scripts/preview_smoke_readonly.mjs` reached overworld boot without console/page errors, but this run was blocked by the welcome modal on the first play click; live-room edit probing was also blocked by a correctly disabled Edit button on published room `0,0` for the guest session
+- April 11 phase 2:
+  - strict unused-symbol TypeScript passed after the Course Editor inspector extraction and after the leaderboard extraction
+  - `npm run typecheck` passed
+  - `npm run build` passed with only the existing Rollup dependency annotation and large-chunk warnings
+  - local D1 migrations were applied for the cleanup worktree's local Worker stack
+  - debug email sign-in UI flow passed on `http://127.0.0.1:3011/` with Worker API `http://127.0.0.1:8789/`
+  - local global leaderboard API smoke returned a valid empty response from the extracted leaderboard module
+  - frontend/API Playwright check passed with no console/page errors and wrote `output/web-game/deep-cleanup-phase-2-dev-check/summary.json`
+- April 11 phase 4:
+  - strict unused-symbol TypeScript passed after extracting `CourseEditorObjectInspectorController`
+  - `npm run typecheck` passed
+  - `npm run build` passed with only the existing Rollup dependency annotation and large-chunk warnings
+  - required `develop-web-game` browser smoke wrote `output/web-game/deep-cleanup-phase-4-course-inspector/state-0.json`
+  - targeted synthetic course-editor Playwright probe forced the inspector visible, called `startPlayMode()`, and confirmed the editor-to-overworld transition hid the inspector root and pressure panel with no console/page errors
+- April 11 final readiness pass:
+  - user confirmed local QA looked good
+  - strict unused-symbol TypeScript, `npm run typecheck`, `npm run build`, and `git diff --check` passed
+  - final `develop-web-game` smoke reached overworld browse mode and wrote `output/web-game/deep-cleanup-final-branch-check/state-0.json`
+  - direct full-page Playwright screenshot rendered the overworld welcome modal with no page errors at `output/web-game/deep-cleanup-final-branch-check/full-page.png`
 
 ## Deferred Items
 
 - If we ever want `public/openapi.json` to become a full public-route contract instead of an agent/builder contract, it still needs a broader route-coverage pass.
 - Remaining naming/copy drift outside the updated docs stays in Wave 1.
-- Wave 2 boundary cleanup remains pending in auth/client, worker routing, and client/store seams.
+- Remaining Wave 2 boundary cleanup should continue in small backend/client slices, especially Worker rating/progression store decomposition with D1/Wrangler smoke coverage.
+- Remaining scene cleanup should continue with `OverworldPlayScene` runtime/state extraction behind narrow host interfaces; any further `CourseEditorScene` pressure-plate/container work should be real-interaction polish rather than another structural split.

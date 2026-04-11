@@ -1,4 +1,4 @@
-import type { ProgressionDelta, ProgressionSummary } from './model';
+import type { ProgressionDelta } from './model';
 import {
   buildRewardStings,
   notifyRewardStings,

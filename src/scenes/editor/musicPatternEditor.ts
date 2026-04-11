@@ -109,10 +109,6 @@ function normalizeRect(rect: MusicRect): MusicRect {
   };
 }
 
-function isMusicToolCopy(): boolean {
-  return editorState.activeTool === 'copy';
-}
-
 function resolveSequencerTool(): 'pencil' | 'eraser' | 'copy' {
   if (editorState.activeTool === 'eraser') {
     return 'eraser';

@@ -3,7 +3,6 @@ import type {
   CourseMarkerPoint,
   CoursePermissions,
   CourseRecord,
-  CourseRoomRef,
   CourseSnapshot,
 } from '../model';
 import { courseGoalRequiresStartPoint } from '../model';

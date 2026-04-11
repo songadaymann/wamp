@@ -11,7 +11,7 @@ import {
   getCourseGoalTimerText as formatCourseGoalTimerText,
   type ActiveCourseRunState,
 } from './courseRuns';
-import { ROOM_GOAL_LABELS, type RoomGoal } from '../../goals/roomGoals';
+import type { RoomGoal } from '../../goals/roomGoals';
 import { roomIdFromCoordinates, type RoomCoordinates, type RoomSnapshot } from '../../persistence/roomModel';
 import { type WorldRoomSummary } from '../../persistence/worldModel';
 import type { RoomLeaderboardResponse } from '../../runs/model';

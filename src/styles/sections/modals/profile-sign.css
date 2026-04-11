@@ -1,0 +1,157 @@
+.profile-room-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.profile-room-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  text-align: left;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.profile-room-card:hover,
+.profile-room-card:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(167, 201, 87, 0.4);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.profile-room-preview {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 18 / 10;
+  border-radius: 10px;
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  background:
+    linear-gradient(180deg, rgba(18, 21, 28, 0.92), rgba(10, 12, 18, 0.96));
+}
+
+.profile-room-preview-image,
+.profile-room-preview-fallback {
+  width: 100%;
+  height: 100%;
+}
+
+.profile-room-preview-image {
+  display: block;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.profile-room-preview-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.profile-room-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-room-card-title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.profile-room-card-meta {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.profile-stats-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.profile-stats-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.profile-stats-label {
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.profile-stats-value {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.sign-text-modal-panel {
+  width: min(560px, calc(100vw - 24px));
+}
+
+.sign-text-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sign-text-modal-label {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sign-text-modal-input {
+  min-height: 140px;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: rgba(10, 12, 16, 0.92);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.4;
+}
+
+.sign-text-modal-input:focus {
+  outline: none;
+  border-color: var(--accent-cool);
+  box-shadow: 0 0 0 1px rgba(126, 224, 191, 0.24);
+}
+
+.sign-text-modal-footer,
+.sign-text-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sign-text-modal-actions {
+  justify-content: flex-end;
+}
+
+.sign-text-modal-counter {
+  color: var(--text-muted);
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  white-space: nowrap;
+}

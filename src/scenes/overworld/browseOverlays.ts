@@ -3,7 +3,6 @@ import { COURSE_GOAL_LABELS, type CourseGoalType } from '../../courses/model';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
 import {
   ROOM_GOAL_LABELS,
-  type RoomGoal,
   type RoomGoalType,
 } from '../../goals/roomGoals';
 import {
@@ -13,7 +12,6 @@ import {
 import { type WorldRoomSummary, type WorldWindow } from '../../persistence/worldModel';
 import { RETRO_COLORS } from '../../visuals/starfield';
 import {
-  getRoomBadgeOverlayScale,
   syncBadgePlacements,
   type OverworldBadgePlacement,
   type OverworldBadgeTierDisplay,

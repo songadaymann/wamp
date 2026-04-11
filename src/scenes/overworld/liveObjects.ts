@@ -11,7 +11,6 @@ import {
   TILE_SIZE,
   type GameObjectConfig,
   type LayerName,
-  type PlacedObject,
 } from '../../config';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import type { LoadedFullRoom } from './worldStreaming';

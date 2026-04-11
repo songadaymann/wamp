@@ -1,21 +1,10 @@
 import { cloneRoomGoal, normalizeRoomGoal, type RoomGoal } from '../../../goals/roomGoals';
-import { cloneRoomSnapshot, roomIdFromCoordinates, type RoomRecord, type RoomSnapshot } from '../../../persistence/roomModel';
-import { computeRunScore, getLeaderboardRankingMode, sortCompletedRunsForLeaderboard } from '../../../runs/scoring';
-import {
-  RANKED_RUN_TRACE_SCHEMA_VERSION,
-  normalizeRankedRunVerificationTrace,
-} from '../../../runs/verificationTrace';
+import { cloneRoomSnapshot, type RoomRecord, type RoomSnapshot } from '../../../persistence/roomModel';
+import { computeRunScore, sortCompletedRunsForLeaderboard } from '../../../runs/scoring';
+import { RANKED_RUN_TRACE_SCHEMA_VERSION } from '../../../runs/verificationTrace';
 import type {
-  GlobalLeaderboardEntry,
-  GlobalLeaderboardResponse,
-  RoomDifficultyVoteRequestBody,
-  RoomLeaderboardEntry,
-  RoomLeaderboardResponse,
-  RoomProgressRatingRequestBody,
-  RoomProgressRatingResponse,
   RoomRunRecord,
   RunFinishRequestBody,
-  RunStartRequestBody,
   RunStartResponse,
 } from '../../../runs/model';
 import {
@@ -23,15 +12,10 @@ import {
   getCoordinatesFromRequest,
   jsonResponse,
   noContentResponse,
-  normalizeIsoTimestamp,
-  normalizeNonNegativeInteger,
-  normalizePositiveInteger,
-  normalizeRoomCoordinates,
-  parseJsonBody,
   parseOptionalPositiveIntegerQueryParam,
   parsePositiveIntegerQueryParam,
 } from '../core/http';
-import type { Env, RoomRunRow, UserStatsRow } from '../core/types';
+import type { Env, RoomRunRow } from '../core/types';
 import { requireAuthenticatedRequestAuth, loadOptionalRequestAuth, requireOptionalScope } from '../auth/request';
 import { loadRoomRecord } from '../rooms/store';
 import {
@@ -59,13 +43,17 @@ import {
   parseRoomDifficultyOrThrow,
 } from './difficulty';
 import {
+  parseRoomDifficultyVoteBody,
+  parseRoomRatingBody,
+  parseRunFinishBody,
+  parseRunStartBody,
+} from './requestBodies';
+import {
   resolveAggregatedRoomLeaderboardSelection,
-  type AggregatedRoomLeaderboardSelection,
 } from './roomLeaderboardAggregation';
 import {
   awardRoomRunProgression,
   loadEffectiveTrustTier,
-  loadRoomAggregateRatingSummaryForVersion,
   submitRoomRating,
 } from '../progression/store';
 import {
@@ -78,6 +66,13 @@ import {
   type RunVerificationFailureReason,
   verifyRoomRunTrace,
 } from './verification';
+import {
+  buildGlobalLeaderboardResponse,
+  buildRoomLeaderboardResponse,
+  loadRankedRoomLeaderboardRows,
+  loadViewerRankedRoomLeaderboardRow,
+  sqlIsVerificationAccepted,
+} from './leaderboards';
 
 export async function handleRunStart(request: Request, env: Env): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
@@ -745,94 +740,6 @@ export async function handleGlobalLeaderboard(
   return jsonResponse(request, leaderboard);
 }
 
-export async function parseRunStartBody(request: Request): Promise<RunStartRequestBody> {
-  const body = await parseJsonBody<RunStartRequestBody>(request);
-  const roomCoordinates = normalizeRoomCoordinates(body.roomCoordinates);
-  const roomId = typeof body.roomId === 'string' ? body.roomId.trim() : '';
-  const roomVersion = normalizePositiveInteger(body.roomVersion, 'roomVersion');
-  const goal = normalizeRoomGoal(body.goal);
-
-  if (!roomId) {
-    throw new HttpError(400, 'roomId is required.');
-  }
-
-  if (!goal) {
-    throw new HttpError(400, 'goal must be a valid room goal.');
-  }
-
-  if (roomId !== roomIdFromCoordinates(roomCoordinates)) {
-    throw new HttpError(400, 'roomId must match roomCoordinates.');
-  }
-
-  return {
-    roomId,
-    roomCoordinates,
-    roomVersion,
-    goal,
-    startedAt: normalizeIsoTimestamp(body.startedAt),
-  };
-}
-
-export async function parseRunFinishBody(request: Request): Promise<RunFinishRequestBody> {
-  const body = await parseJsonBody<RunFinishRequestBody>(request);
-  const verificationTrace =
-    body.verificationTrace === undefined
-      ? null
-      : normalizeRankedRunVerificationTrace(body.verificationTrace);
-
-  if (body.result !== 'completed' && body.result !== 'failed' && body.result !== 'abandoned') {
-    throw new HttpError(400, 'result must be completed, failed, or abandoned.');
-  }
-
-  return {
-    result: body.result,
-    elapsedMs: normalizeNonNegativeInteger(body.elapsedMs, 'elapsedMs'),
-    deaths: normalizeNonNegativeInteger(body.deaths, 'deaths'),
-    collectiblesCollected: normalizeNonNegativeInteger(
-      body.collectiblesCollected,
-      'collectiblesCollected'
-    ),
-    enemiesDefeated: normalizeNonNegativeInteger(body.enemiesDefeated, 'enemiesDefeated'),
-    checkpointsReached: normalizeNonNegativeInteger(
-      body.checkpointsReached,
-      'checkpointsReached'
-    ),
-    score: null,
-    finishedAt: normalizeIsoTimestamp(body.finishedAt),
-    verificationTrace,
-  };
-}
-
-export async function parseRoomDifficultyVoteBody(
-  request: Request
-): Promise<RoomDifficultyVoteRequestBody> {
-  const body = await parseJsonBody<RoomDifficultyVoteRequestBody>(request);
-
-  return {
-    roomCoordinates: normalizeRoomCoordinates(body.roomCoordinates),
-    roomVersion: normalizePositiveInteger(body.roomVersion, 'roomVersion'),
-    difficulty: parseRoomDifficultyOrThrow(body.difficulty),
-  };
-}
-
-export async function parseRoomRatingBody(
-  request: Request
-): Promise<RoomProgressRatingRequestBody> {
-  const body = await parseJsonBody<RoomProgressRatingRequestBody>(request);
-  return {
-    roomCoordinates: normalizeRoomCoordinates(body.roomCoordinates),
-    roomVersion: normalizePositiveInteger(body.roomVersion, 'roomVersion'),
-    qualityStars:
-      body.qualityStars === null || body.qualityStars === undefined
-        ? null
-        : normalizePositiveInteger(body.qualityStars, 'qualityStars'),
-    difficultyChoice: body.difficultyChoice ? parseRoomDifficultyOrThrow(body.difficultyChoice) : null,
-    autoSuggestedDifficulty: body.autoSuggestedDifficulty
-      ? parseRoomDifficultyOrThrow(body.autoSuggestedDifficulty)
-      : null,
-  };
-}
-
 export function resolveRoomSnapshotForVersion(
   record: RoomRecord,
   version: number
@@ -982,322 +889,6 @@ export async function loadCompletedRoomRunsForVersions(
   return result.results.map(mapRoomRunRow);
 }
 
-interface RankedRoomLeaderboardRow {
-  attempt_id: string;
-  room_version: number;
-  user_id: string;
-  user_display_name: string;
-  elapsed_ms: number;
-  deaths: number;
-  score: number;
-  finished_at: string;
-  overall_rank: number | string | null;
-}
-
-interface RankedGlobalLeaderboardRow extends UserStatsRow {
-  overall_rank: number | string | null;
-}
-
-function sqlIsVerificationAccepted(tableName: string): string {
-  return `COALESCE(${tableName}.verification_status, 'not_required') IN ('not_required', 'passed')`;
-}
-
-function getRoomLeaderboardSqlOrderClause(goal: RoomGoal): string {
-  return getLeaderboardRankingMode(goal) === 'time'
-    ? 'elapsed_ms ASC, deaths ASC, score DESC, finished_at ASC, attempt_id ASC'
-    : 'score DESC, deaths ASC, elapsed_ms ASC, finished_at ASC, attempt_id ASC';
-}
-
-function getGlobalLeaderboardSqlOrderClause(): string {
-  return 'total_points DESC, completed_runs DESC, total_rooms_published DESC, user_display_name ASC, user_id ASC';
-}
-
-function buildRankedRoomLeaderboardCte(goal: RoomGoal, versionCount: number): string {
-  const versionPlaceholders = Array.from({ length: versionCount }, () => '?').join(', ');
-  const orderClause = getRoomLeaderboardSqlOrderClause(goal);
-  return `
-    WITH candidate_runs AS (
-      SELECT
-        attempt_id,
-        room_version,
-        user_id,
-        user_display_name,
-        elapsed_ms,
-        deaths,
-        score,
-        finished_at,
-        ROW_NUMBER() OVER (
-          PARTITION BY user_id
-          ORDER BY ${orderClause}
-        ) AS user_row_num
-      FROM room_runs
-      WHERE room_id = ?
-        AND room_version IN (${versionPlaceholders})
-        AND result = 'completed'
-        AND elapsed_ms IS NOT NULL
-        AND finished_at IS NOT NULL
-        AND ${sqlIsVerificationAccepted('room_runs')}
-        AND ${sqlUserIdIsNotPlayfunOnly('room_runs.user_id')}
-    ),
-    best_runs AS (
-      SELECT
-        attempt_id,
-        room_version,
-        user_id,
-        user_display_name,
-        elapsed_ms,
-        deaths,
-        score,
-        finished_at
-      FROM candidate_runs
-      WHERE user_row_num = 1
-    ),
-    ranked_runs AS (
-      SELECT
-        attempt_id,
-        room_version,
-        user_id,
-        user_display_name,
-        elapsed_ms,
-        deaths,
-        score,
-        finished_at,
-        ROW_NUMBER() OVER (
-          ORDER BY ${orderClause}
-        ) AS overall_rank
-      FROM best_runs
-    )
-  `;
-}
-
-async function loadRankedRoomLeaderboardRows(
-  env: Env,
-  roomId: string,
-  roomVersions: number[],
-  goal: RoomGoal,
-  limit: number
-): Promise<RankedRoomLeaderboardRow[]> {
-  if (roomVersions.length === 0 || limit <= 0) {
-    return [];
-  }
-
-  const cte = buildRankedRoomLeaderboardCte(goal, roomVersions.length);
-  const result = await env.DB.prepare(
-    `
-      ${cte}
-      SELECT
-        attempt_id,
-        room_version,
-        user_id,
-        user_display_name,
-        elapsed_ms,
-        deaths,
-        score,
-        finished_at,
-        overall_rank
-      FROM ranked_runs
-      ORDER BY overall_rank
-      LIMIT ?
-    `
-  )
-    .bind(roomId, ...roomVersions, limit)
-    .all<RankedRoomLeaderboardRow>();
-
-  return result.results;
-}
-
-async function loadViewerRankedRoomLeaderboardRow(
-  env: Env,
-  roomId: string,
-  roomVersions: number[],
-  goal: RoomGoal,
-  viewerUserId: string
-): Promise<RankedRoomLeaderboardRow | null> {
-  if (roomVersions.length === 0) {
-    return null;
-  }
-
-  const cte = buildRankedRoomLeaderboardCte(goal, roomVersions.length);
-  const row = await env.DB.prepare(
-    `
-      ${cte}
-      SELECT
-        attempt_id,
-        room_version,
-        user_id,
-        user_display_name,
-        elapsed_ms,
-        deaths,
-        score,
-        finished_at,
-        overall_rank
-      FROM ranked_runs
-      WHERE user_id = ?
-      LIMIT 1
-    `
-  )
-    .bind(roomId, ...roomVersions, viewerUserId)
-    .first<RankedRoomLeaderboardRow>();
-
-  return row ?? null;
-}
-
-function mapRankedRoomLeaderboardEntry(
-  row: RankedRoomLeaderboardRow,
-  snapshot: RoomSnapshot
-): RoomLeaderboardEntry {
-  return {
-    rank: Number(row.overall_rank),
-    userId: row.user_id,
-    userDisplayName: row.user_display_name,
-    attemptId: row.attempt_id,
-    roomId: snapshot.id,
-    roomVersion: row.room_version,
-    goalType: snapshot.goal!.type,
-    elapsedMs: row.elapsed_ms,
-    deaths: row.deaths,
-    score: row.score,
-    finishedAt: row.finished_at,
-  };
-}
-
-async function loadRankedGlobalLeaderboardRows(
-  env: Env,
-  limit: number
-): Promise<RankedGlobalLeaderboardRow[]> {
-  if (limit <= 0) {
-    return [];
-  }
-
-  const orderClause = getGlobalLeaderboardSqlOrderClause();
-  const result = await env.DB.prepare(
-    `
-      WITH ranked_stats AS (
-        SELECT
-          user_id,
-          user_display_name,
-          total_points,
-          total_score,
-          total_deaths,
-          total_collectibles,
-          total_enemies_defeated,
-          total_checkpoints,
-          total_rooms_published,
-          completed_runs,
-          failed_runs,
-          abandoned_runs,
-          best_score,
-          fastest_clear_ms,
-          updated_at,
-          ROW_NUMBER() OVER (
-            ORDER BY ${orderClause}
-          ) AS overall_rank
-        FROM user_stats
-        WHERE ${sqlUserIdIsNotPlayfunOnly('user_stats.user_id')}
-      )
-      SELECT
-        user_id,
-        user_display_name,
-        total_points,
-        total_score,
-        total_deaths,
-        total_collectibles,
-        total_enemies_defeated,
-        total_checkpoints,
-        total_rooms_published,
-        completed_runs,
-        failed_runs,
-        abandoned_runs,
-        best_score,
-        fastest_clear_ms,
-        updated_at,
-        overall_rank
-      FROM ranked_stats
-      ORDER BY overall_rank
-      LIMIT ?
-    `
-  )
-    .bind(limit)
-    .all<RankedGlobalLeaderboardRow>();
-
-  return result.results;
-}
-
-async function loadViewerRankedGlobalLeaderboardRow(
-  env: Env,
-  viewerUserId: string
-): Promise<RankedGlobalLeaderboardRow | null> {
-  const orderClause = getGlobalLeaderboardSqlOrderClause();
-  const row = await env.DB.prepare(
-    `
-      WITH ranked_stats AS (
-        SELECT
-          user_id,
-          user_display_name,
-          total_points,
-          total_score,
-          total_deaths,
-          total_collectibles,
-          total_enemies_defeated,
-          total_checkpoints,
-          total_rooms_published,
-          completed_runs,
-          failed_runs,
-          abandoned_runs,
-          best_score,
-          fastest_clear_ms,
-          updated_at,
-          ROW_NUMBER() OVER (
-            ORDER BY ${orderClause}
-          ) AS overall_rank
-        FROM user_stats
-        WHERE ${sqlUserIdIsNotPlayfunOnly('user_stats.user_id')}
-      )
-      SELECT
-        user_id,
-        user_display_name,
-        total_points,
-        total_score,
-        total_deaths,
-        total_collectibles,
-        total_enemies_defeated,
-        total_checkpoints,
-        total_rooms_published,
-        completed_runs,
-        failed_runs,
-        abandoned_runs,
-        best_score,
-        fastest_clear_ms,
-        updated_at,
-        overall_rank
-      FROM ranked_stats
-      WHERE user_id = ?
-      LIMIT 1
-    `
-  )
-    .bind(viewerUserId)
-    .first<RankedGlobalLeaderboardRow>();
-
-  return row ?? null;
-}
-
-function mapRankedGlobalLeaderboardEntry(row: RankedGlobalLeaderboardRow): GlobalLeaderboardEntry {
-  return {
-    rank: Number(row.overall_rank),
-    userId: row.user_id,
-    userDisplayName: row.user_display_name,
-    totalPoints: row.total_points,
-    totalScore: row.total_score,
-    totalRoomsPublished: row.total_rooms_published,
-    completedRuns: row.completed_runs,
-    failedRuns: row.failed_runs,
-    abandonedRuns: row.abandoned_runs,
-    bestScore: row.best_score,
-    fastestClearMs: row.fastest_clear_ms,
-    updatedAt: row.updated_at,
-  };
-}
-
 export function mapRoomRunRow(row: RoomRunRow): RoomRunRecord {
   return {
     attemptId: row.attempt_id,
@@ -1406,89 +997,4 @@ function normalizeFinalizedRunBody(
   }
 
   return body;
-}
-
-export async function buildRoomLeaderboardResponse(
-  env: Env,
-  record: RoomRecord,
-  selection: AggregatedRoomLeaderboardSelection,
-  limit: number,
-  viewerUserId: string | null = null
-): Promise<RoomLeaderboardResponse> {
-  const snapshot = selection.snapshot;
-  if (!snapshot.goal) {
-    throw new HttpError(404, 'This room version does not have a leaderboard goal.');
-  }
-
-  const entriesRows = await loadRankedRoomLeaderboardRows(
-    env,
-    snapshot.id,
-    selection.leaderboardFamilyVersions,
-    snapshot.goal,
-    limit
-  );
-  const viewerBestRow =
-    viewerUserId === null
-      ? null
-      : await loadViewerRankedRoomLeaderboardRow(
-          env,
-          snapshot.id,
-          selection.leaderboardFamilyVersions,
-          snapshot.goal,
-          viewerUserId
-        );
-  const ratings = await loadRoomAggregateRatingSummaryForVersion(
-    env,
-    record,
-    selection.roomVersion,
-    viewerUserId,
-    selection.currentPublishedVersion,
-  );
-  const entries = entriesRows.map((row) => mapRankedRoomLeaderboardEntry(row, snapshot));
-  const viewerBest =
-    viewerBestRow === null ? null : mapRankedRoomLeaderboardEntry(viewerBestRow, snapshot);
-
-  return {
-    roomId: snapshot.id,
-    roomCoordinates: { ...snapshot.coordinates },
-    roomTitle: snapshot.title,
-    roomVersion: selection.roomVersion,
-    displayRoomVersion: selection.displayRoomVersion,
-    equivalentRoomVersions: [...selection.equivalentRoomVersions],
-    leaderboardFamilyVersions: [...selection.leaderboardFamilyVersions],
-    leaderboardSourceVersion: selection.leaderboardSourceVersion,
-    canonicalRoomVersion: selection.canonicalRoomVersion,
-    goalType: snapshot.goal.type,
-    rankingMode: getLeaderboardRankingMode(snapshot.goal),
-    difficulty: ratings.difficulty,
-    quality: ratings.quality,
-    viewerRating: ratings.viewerRating,
-    trophy: ratings.trophy,
-    entries,
-    viewerBest,
-    viewerRank: viewerBest?.rank ?? null,
-  };
-}
-
-export async function buildGlobalLeaderboardResponse(
-  env: Env,
-  limit: number,
-  viewerUserId: string | null = null
-): Promise<GlobalLeaderboardResponse> {
-  const entries = (await loadRankedGlobalLeaderboardRows(env, limit)).map(
-    mapRankedGlobalLeaderboardEntry
-  );
-  let viewerEntry: GlobalLeaderboardEntry | null = null;
-  if (viewerUserId !== null) {
-    viewerEntry = entries.find((entry) => entry.userId === viewerUserId) ?? null;
-    if (viewerEntry === null) {
-      const viewerRow = await loadViewerRankedGlobalLeaderboardRow(env, viewerUserId);
-      viewerEntry = viewerRow ? mapRankedGlobalLeaderboardEntry(viewerRow) : null;
-    }
-  }
-
-  return {
-    entries,
-    viewerEntry,
-  };
 }

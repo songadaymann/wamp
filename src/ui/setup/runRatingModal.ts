@@ -19,9 +19,7 @@ import type {
 import {
   POST_RUN_RATING_REQUEST_EVENT,
   notifyPostRunRatingSubmitted,
-  type CoursePostRunRatingRequestDetail,
   type PostRunRatingRequestDetail,
-  type RoomPostRunRatingRequestDetail,
 } from '../../progression/postRunRatingEvents';
 import { REWARD_STINGS_IDLE_EVENT } from '../../progression/rewardStings';
 import { dispatchProgressionFeedback } from '../../progression/progressionFeedback';
@@ -114,7 +112,7 @@ export class RunRatingModalController {
   };
 
   constructor(
-    private readonly game: Phaser.Game,
+    _game: Phaser.Game,
     private readonly runRepository: RunRepository = createRunRepository(),
     private readonly courseRepository: CourseRepository = createCourseRepository(),
     private readonly profileRepository: ProfileRepository = createProfileRepository(),
