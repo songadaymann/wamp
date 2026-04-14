@@ -29,6 +29,7 @@ interface OverworldCameraControllerOptions {
   playRoomFitPadding: number;
   followCameraLerp: number;
   mobilePlayCameraTargetY: number;
+  getMobilePortraitPlayCameraTargetY(): number;
 }
 
 export class OverworldCameraController {
@@ -76,8 +77,8 @@ export class OverworldCameraController {
 
     if (this.host.getCameraMode() === 'follow') {
       this.syncBoundsUsage();
-      this.startFollowCamera(camera);
       camera.setZoom(this.host.getInspectZoom());
+      this.startFollowCamera(camera);
       return;
     }
 
@@ -116,6 +117,7 @@ export class OverworldCameraController {
         camera,
         getDeviceLayoutState(),
         this.options.mobilePlayCameraTargetY,
+        this.options.getMobilePortraitPlayCameraTargetY(),
       ),
     );
   }

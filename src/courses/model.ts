@@ -4,6 +4,7 @@ import {
   roomIdFromCoordinates,
   type RoomCoordinates,
 } from '../persistence/roomModel';
+import { createRandomUuid } from '../utils/randomId';
 
 export const COURSE_GOAL_TYPES = [
   'reach_exit',
@@ -159,7 +160,7 @@ export function normalizeCourseTitle(value: unknown): string | null {
 }
 
 export function createCourseId(): string {
-  return crypto.randomUUID();
+  return createRandomUuid();
 }
 
 export function createDefaultCoursePermissions(): CoursePermissions {

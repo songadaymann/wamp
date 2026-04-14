@@ -35,13 +35,18 @@ export function getMobilePlayFollowOffsetY(
   camera: Phaser.Cameras.Scene2D.Camera,
   layout: DeviceLayoutState,
   mobilePlayCameraTargetY: number,
+  mobilePortraitPlayCameraTargetY: number = mobilePlayCameraTargetY,
 ): number {
-  if (layout.deviceClass !== 'phone' || !layout.coarsePointer || layout.mobileLandscapeBlocked) {
+  if (layout.deviceClass !== 'phone' || !layout.coarsePointer) {
     return 0;
   }
 
+  const targetY =
+    layout.orientationState === 'portrait'
+      ? mobilePortraitPlayCameraTargetY
+      : mobilePlayCameraTargetY;
   const visibleWorldHeight = camera.height / Math.max(camera.zoom, 0.001);
-  return Math.round((mobilePlayCameraTargetY - 0.5) * visibleWorldHeight);
+  return Math.round((targetY - 0.5) * visibleWorldHeight);
 }
 
 export function constrainInspectCamera(camera: Phaser.Cameras.Scene2D.Camera): void {

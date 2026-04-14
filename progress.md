@@ -57,6 +57,116 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Mobile portrait camera tuner on April 14, 2026:
+  - after real-device tuning from Jonathan's screenshot, baked in the preferred phone portrait defaults:
+    - `zoomMultiplier: 2.25`
+    - `targetY: 0.44`
+    - observed phone camera zoom was about `1.36`
+  - changed tuner console output from `console.info` to `console.log` because the real-device Log button was not surfacing in Safari's console view
+  - validation after baking defaults:
+    - `node --check scripts/mobile_smoke.mjs`
+    - `npm run typecheck`
+    - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-camera-default-smoke" npm run smoke:mobile -- --url http://127.0.0.1:3232`, with all nine scenarios passing and no console/page errors
+    - `npm run build` with the existing Rollup annotation and large-chunk warnings
+    - required `develop-web-game` client ran against `http://127.0.0.1:3232/?x=0&y=0&cameraTuner=1`; it still produced the known desktop black-frame / inactive-scene artifact
+  - baked-default portrait screenshot:
+    - `output/web-game/mobile-camera-default-smoke/phone-portrait-deep-link-play/portrait-play.png`
+  - added a URL-gated phone portrait camera tuner for focused room play:
+    - use `?x=0&y=0&cameraTuner=1`
+    - on-screen controls adjust `zoomMultiplier` and portrait `targetY`
+    - console logs emit copyable lines beginning with `MOBILE_PORTRAIT_CAMERA_TUNING`
+    - `window.wampMobileCameraTuner` exposes `get()`, `log()`, `set({ zoomMultiplier, targetY })`, `adjust(...)`, and `reset()`
+  - portrait play camera zoom now supports a mobile-only multiplier while keeping the default unchanged unless the tuner URL flag or inline camera params are present
+  - portrait follow target is now dynamic for the tuner, and manual tuner changes snap the camera to the chosen frame before logging so `playerScreen` matches the tuned values immediately
+  - added the debug-only `#mobile-camera-tuner` panel with blocky no-gradient controls, hidden unless the portrait play URL flag is active
+  - added `phone-portrait-camera-tuner` to `npm run smoke:mobile`; it verifies the tuner panel is visible, adjusts zoom, moves the player higher in frame, and confirms `log()` returns the latest copyable settings
+  - latest test URL for real phone QA on the current LAN:
+    - `http://192.168.18.178:3232/?x=0&y=0&cameraTuner=1`
+  - validation passed:
+    - `node --check scripts/mobile_smoke.mjs`
+    - `npm run typecheck`
+    - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-camera-tuner-smoke-4" npm run smoke:mobile -- --url http://127.0.0.1:3232`, with all nine scenarios passing and no console/page errors
+    - `npm run build` with the existing Rollup annotation and large-chunk warnings
+    - required `develop-web-game` client ran against `http://127.0.0.1:3232/?x=0&y=0&cameraTuner=1`; it still produced the known desktop black-frame / inactive-scene artifact, so the targeted mobile smoke remains the visual source of truth
+    - `git diff --check`, plus no-index whitespace checks for the untracked mobile docs/smoke/helper/random-id files
+  - final tuner screenshot:
+    - `output/web-game/mobile-camera-tuner-smoke-4/phone-portrait-camera-tuner/camera-tuner.png`
+
+- LAN phone boot fix on April 14, 2026:
+  - fixed the `crypto.randomUUID is not a function` crash that happened when opening the Vite dev server from a real phone over `http://192.168...`
+  - root cause: `crypto.randomUUID()` is unavailable outside secure contexts; `localhost` worked because browsers treat it as secure, but LAN HTTP does not
+  - added `src/utils/randomId.ts` with a `crypto.getRandomValues` UUID fallback and routed guest presence identity plus client course-id creation through it
+  - changed deployed PartyKit hosts without an explicit protocol to default to `wss` even when the page itself is loaded over LAN HTTP; localhost/LAN PartyKit dev hosts still default to `ws`
+  - LAN validation against `http://192.168.18.178:3232/?x=0&y=0` now reaches the room-goal intro, and after clicking Start enters portrait play with controls visible and no hard console/page errors:
+    - `output/web-game/mobile-lan-randomuuid-fix/phone-lan-after-fix.png`
+    - `output/web-game/mobile-lan-randomuuid-fix/phone-lan-after-start.png`
+  - validation passed:
+    - `npm run typecheck`
+    - `node --check scripts/mobile_smoke.mjs`
+    - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-lan-randomuuid-fix-smoke" npm run smoke:mobile -- --url http://127.0.0.1:3232`, with all eight scenarios passing and no console/page errors
+    - `npm run build` with the existing Rollup annotation and large-chunk warnings
+
+- Mobile portrait bottom-console prototype on April 14, 2026:
+  - extended the phone portrait direct-room path so focused room links remain unblocked after `Stop`; ordinary no-room portrait visits still show the rotate/install gate
+  - replaced the first portrait play deck with a bottom console that has a compact top strip for `Stop`, `Restart`, and the active goal/timer, plus compressed D-pad/action controls below
+  - added a shorter compact bottom HUD for focused-room browse mode after stopping play; it removes the game title/creator clutter, keeps room title/state, and exposes compact Play/Edit/Build plus Explore/Leaderboard/Chat/Warp actions
+  - locked and reset window scroll for the portrait focused-room shell so the fixed bottom console does not drift under mobile browser emulation
+  - moved portrait camera composition to a neutral follow target for the taller console; smoke layout now places the player around `422px` on a `390x844` viewport, with the console starting at `506px`
+  - added `phone-portrait-deep-link-bottom-hud` to `npm run smoke:mobile`, which opens a room link, enters portrait play, taps Stop, and verifies the compact bottom HUD replaces the rotate gate
+  - validation passed:
+    - `node --check scripts/mobile_smoke.mjs`
+    - `npm run typecheck`
+    - `npm run build` with the existing Rollup annotation and large-chunk warnings
+    - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-portrait-console-prototype-6" npm run smoke:mobile -- --url http://127.0.0.1:3232`, with all eight scenarios passing and no console/page errors
+    - required `develop-web-game` client ran against `http://127.0.0.1:3232/?x=0&y=0`; it still hit the known black-frame / desktop-state limitation, so the targeted mobile smoke screenshots remain the visual source of truth
+    - `git diff --check`, plus no-index whitespace checks for the new docs, smoke script, and shared focused-room link helper
+  - final portrait console screenshots:
+    - `output/web-game/mobile-portrait-console-prototype-6/phone-portrait-deep-link-play/portrait-play.png`
+    - `output/web-game/mobile-portrait-console-prototype-6/phone-portrait-deep-link-bottom-hud/portrait-bottom-hud.png`
+
+- Mobile portrait direct-play prototype on April 14, 2026:
+  - added a first pass where phone portrait deep links like `?x=0&y=0` can enter `play-world` directly instead of staying behind the rotate gate, while the ordinary portrait homepage still stays gated
+  - tuned follow camera behavior for phone portrait play so the player stays centered horizontally and lower in frame without being tucked under the control deck; current target puts the player around `456px` on the `390x844` smoke viewport, with controls starting at `523px`
+  - added a blocky bottom portrait control deck for play mode: hidden bottom bar, cream panel, hard divider lines, blue D-pad, yellow Shoot, red Sword, and green Jump, with no gradients or rounded rectangles
+  - updated `npm run smoke:mobile` with `phone-portrait-deep-link-play`, which asserts the portrait gate is hidden for deep-linked play, controls are visible/in bounds, bottom bar is hidden, touch inputs work, and player/camera placement is sane
+  - validation passed:
+    - `node --check scripts/mobile_smoke.mjs`
+    - `npm run typecheck`
+    - `npm run build` with the existing Rollup annotation and large-chunk warnings
+    - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-portrait-play-prototype-4" npm run smoke:mobile -- --url http://127.0.0.1:3232`, with all seven scenarios passing and no console/page errors
+    - required `develop-web-game` client ran against `http://127.0.0.1:3232/?x=0&y=0`; its screenshots still hit the known black-frame capture issue, so the targeted mobile smoke screenshot is the visual source of truth
+    - `git diff --check`, plus no-index whitespace checks for the new docs and smoke script files
+  - final portrait prototype screenshot: `output/web-game/mobile-portrait-play-prototype-4/phone-portrait-deep-link-play/portrait-play.png`
+
+- Mobile welcome modal fix on April 14, 2026:
+  - fixed the first-visit `#welcome-modal` phone layout so the global phone `.history-modal-panel` fullscreen sheet rule no longer makes it take over the entire landscape phone viewport
+  - the phone welcome layout is now a centered compact panel with visible side/top/bottom margins, compact action rows for Explore/Play/Build, and all four actions visible without scrolling in the `844x390` phone-landscape smoke profile
+  - added `phone-landscape-welcome-modal` to `npm run smoke:mobile`, forced with `?welcome=1`, so the smoke now catches regressions back to fullscreen or hidden-action behavior
+  - validation passed:
+    - `node --check scripts/mobile_smoke.mjs`
+    - `npm run typecheck`
+    - `npm run build` with the existing Rollup annotation and large-chunk warnings
+    - `npm run smoke:mobile -- --url http://127.0.0.1:3232`, with all six scenarios passing and no console/page errors
+    - `git diff --check`
+    - required `develop-web-game` client ran against `http://127.0.0.1:3232/?welcome=1`, but its canvas-only screenshot hit the known black-frame artifact and captured boot state; the targeted mobile smoke screenshot is the visual source of truth
+  - final welcome screenshot: `output/web-game/mobile-welcome-modal-fix/phone-landscape-welcome-modal/welcome-modal.png`
+
+- Mobile pass setup on April 13, 2026:
+  - created clean main-based branch/worktree:
+    - branch: `feature/mobile-pass-2026-04-13`
+    - worktree: `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-mobile-pass-2026-04-13`
+  - added `npm run smoke:mobile`, backed by `scripts/mobile_smoke.mjs`
+  - the initial smoke covered phone portrait gate, phone landscape browse, phone landscape play touch controls, phone landscape editor sheets/collapse, and tablet landscape browse
+  - added `docs/mobile-testing.md` with the local LAN phone setup, remote API smoke setup, and real-device QA checklist
+  - validation passed:
+    - `node --check scripts/mobile_smoke.mjs`
+    - `npm run typecheck`
+    - `npm run build` with the existing Rollup annotation and large-chunk warnings
+    - `npm run smoke:mobile -- --url http://127.0.0.1:3232`, with all five scenarios passing and no console/page errors
+    - final smoke output: `output/web-game/mobile-smoke-setup-final/summary.json`
+  - setup caveat: `npm ci` hit the existing `sharp` native install issue in this worktree, so local dependencies were installed with `--ignore-scripts`
+  - important local caveat: the original checkout at `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer` is still dirty on `feature/claim-quota-ghost-claims-2026-04-10`; this mobile branch was created as a separate worktree so those changes were not disturbed
+
 - Runtime PartyKit host fallback fix on April 9, 2026:
   - created dedicated `main`-based worktree branch `fix/runtime-partykit-host-fallback-2026-04-09`
   - traced missing live-player count / ghost presence on `wamp.land` to a frontend build missing `VITE_PARTYKIT_HOST`, not to a PartyKit outage
@@ -7728,3 +7838,49 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - continue `CourseEditorScene` cleanup only as follow-up polish backed by real course editing interactions; the pressure-plate/container inspector controller extraction is now complete
   - continue `OverworldPlayScene` runtime/state extraction behind narrow host interfaces
   - continue Worker store decomposition around rating/progression flows only with a local D1/Wrangler smoke path available
+- mobile portrait controls and focused-room HUD follow-up:
+  - replaced the portrait play D-pad buttons with an invisible left-half drag zone labeled `Move`; slight drags now set the same touch movement axes used by the runtime, while the original D-pad buttons remain available for landscape
+  - split the portrait control console into equal left/right halves and lowered/shortened the Shoot/Sword row so it stays below the Stop/Restart divider area
+  - moved `Course Builder` into the primary focused-room HUD action row beside Play/Edit/Build, and made the existing best-run summary strip visible in the compact portrait bottom HUD
+  - validation:
+    - `node --check scripts/mobile_smoke.mjs` passed
+    - `npm run typecheck` passed
+    - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-portrait-controls-smoke" npm run smoke:mobile -- --url http://127.0.0.1:3232` passed all 9 scenarios with zero console/page errors
+    - reviewed screenshots:
+      - `output/web-game/mobile-portrait-controls-smoke/phone-portrait-deep-link-play/portrait-play.png`
+      - `output/web-game/mobile-portrait-controls-smoke/phone-portrait-deep-link-bottom-hud/portrait-bottom-hud.png`
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - required `develop-web-game` client completed, but still reproduced the known desktop/headless black-frame artifact with `activeScene: none` in `output/web-game/state-0.json`
+- mobile portrait input refinement:
+  - kept horizontal portrait move sensitivity unchanged, but split vertical sensitivity into separate constants so up/down now needs a larger drag before crossing the ladder/crouch threshold
+  - changed touch ladder arbitration so the Jump button is always jump; vertical movement on the move zone now owns ladder climbing, which restores jumping while overlapping/standing on top of a ladder
+  - added `user-select: none`, `-webkit-user-select: none`, and `-webkit-touch-callout: none` to mobile play controls plus focused-room portrait HUD surfaces to prevent accidental text selection while holding controls
+  - validation:
+    - `node --check scripts/mobile_smoke.mjs` passed
+    - `npm run typecheck` passed
+    - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-portrait-input-refine-smoke" npm run smoke:mobile -- --url http://127.0.0.1:3232` passed all 9 scenarios with zero console/page errors; the portrait play scenario now asserts 8px horizontal movement triggers, 8px vertical movement does not, and 14px vertical movement does
+    - reviewed `output/web-game/mobile-portrait-input-refine-smoke/phone-portrait-deep-link-play/portrait-play.png`
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - required `develop-web-game` client completed, but still reproduced the known desktop/headless black-frame artifact with `activeScene: none` in `output/web-game/state-0.json`
+- mobile portrait joystick and audio feedback refinement:
+  - added a visible blocky joystick to the portrait `Move` zone while keeping the white control field; the stick uses neutral greys from the Super Colorful 3 palette and follows the existing drag vector
+  - kept horizontal movement just as twitchy, but made vertical ladder/crouch input less sensitive again so small vertical thumb drift no longer crosses the up/down threshold
+  - stopped generic UI click feedback from firing on mobile gameplay action buttons, avoiding a doubled/stuttery sound on Jump/Shoot/Sword while preserving their actual gameplay SFX
+  - validation:
+    - `node --check scripts/mobile_smoke.mjs` passed
+    - `npm run typecheck` passed
+    - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-portrait-joystick-smoke" npm run smoke:mobile -- --url http://127.0.0.1:3232` passed all 9 scenarios with zero console/page errors; the portrait play scenario now asserts the joystick is visible, moves on an 8px horizontal drag, ignores 8px vertical drift, and only triggers vertical input after a longer drag
+    - reviewed `output/web-game/mobile-portrait-joystick-smoke/phone-portrait-deep-link-play/portrait-play.png`
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - required `develop-web-game` client completed, but still reproduced the known desktop/headless black-frame artifact with `activeScene: none` in `output/web-game/state-0.json`
+- mobile portrait joystick hit-area refinement:
+  - enlarged the visible portrait joystick base from `96px` to `132px` and the knob from `34px` to `52px`
+  - changed the left `Move` panel outside the stick to a grey passive surface while keeping the stick base white
+  - changed portrait move input so a drag must start inside the visible stick base; starting a drag on the grey background no longer moves the character, though drags that begin on the stick can still continue outside it
+  - validation:
+    - `node --check scripts/mobile_smoke.mjs` passed
+    - `npm run typecheck` passed
+    - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-portrait-stick-hitbox-smoke" npm run smoke:mobile -- --url http://127.0.0.1:3232` passed all 9 scenarios with zero console/page errors; the portrait play scenario now asserts grey background color, large stick sizing, no movement from an outside-stick drag, and normal movement from a stick-origin drag
+    - reviewed `output/web-game/mobile-portrait-stick-hitbox-smoke/phone-portrait-deep-link-play/portrait-play.png`
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - required `develop-web-game` client completed, but still reproduced the known desktop/headless black-frame artifact with `activeScene: none` in `output/web-game/state-0.json`

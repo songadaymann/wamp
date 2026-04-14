@@ -21,6 +21,9 @@
   inset: 0;
   z-index: 14;
   pointer-events: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .mobile-world-stop {
@@ -29,6 +32,9 @@
   left: calc(8px + var(--safe-left));
   z-index: 12;
   min-width: 68px;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .mobile-world-restart {
@@ -37,6 +43,9 @@
   left: calc(84px + var(--safe-left));
   z-index: 12;
   min-width: 82px;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .mobile-play-actions {
@@ -46,6 +55,9 @@
   width: 188px;
   height: 180px;
   pointer-events: auto;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .mobile-action-btn {
@@ -61,6 +73,9 @@
   isolation: isolate;
   pointer-events: auto;
   touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
   color: #f6ead2;
   font-family: var(--hud-ui-font);
   font-size: 10px;
@@ -142,6 +157,13 @@
   width: 212px;
   height: 176px;
   pointer-events: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.mobile-move-stick {
+  display: none;
 }
 
 .mobile-dpad-btn {
@@ -163,6 +185,9 @@
   box-shadow: none;
   pointer-events: auto;
   touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .mobile-dpad-btn::before {

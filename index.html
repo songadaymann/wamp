@@ -1125,9 +1125,9 @@
           <button id="btn-world-play-course" class="bar-btn bar-btn-small world-btn-play hidden" disabled>Play Course</button>
           <button id="btn-world-edit" class="bar-btn bar-btn-small world-btn-edit" disabled>Edit Room</button>
           <button id="btn-world-build" class="bar-btn bar-btn-small world-btn-build" disabled>Build Here</button>
+          <button id="btn-world-course-builder" class="bar-btn bar-btn-small world-btn-course-builder" disabled>Course Builder</button>
         </div>
         <div class="world-hud-row world-hud-row-secondary-actions">
-          <button id="btn-world-course-builder" class="bar-btn bar-btn-small world-btn-course-builder" disabled>Course Builder</button>
         </div>
         <div class="world-hud-row world-hud-row-tertiary-actions">
           <button id="btn-world-explore" class="bar-btn bar-btn-small world-btn-leaderboard" type="button">Explore</button>
@@ -1170,6 +1170,9 @@
       </button>
       <div id="mobile-play-controls" class="mobile-play-controls hidden">
         <div id="mobile-dpad" class="mobile-dpad" aria-label="Move">
+          <div id="mobile-move-stick" class="mobile-move-stick" aria-hidden="true">
+            <div class="mobile-move-stick-knob"></div>
+          </div>
           <button id="btn-mobile-up" class="mobile-dpad-btn mobile-dpad-up" data-mobile-direction="up" type="button" aria-label="Move up">Up</button>
           <button id="btn-mobile-left" class="mobile-dpad-btn mobile-dpad-left" data-mobile-direction="left" type="button" aria-label="Move left">Left</button>
           <button id="btn-mobile-right" class="mobile-dpad-btn mobile-dpad-right" data-mobile-direction="right" type="button" aria-label="Move right">Right</button>
@@ -1177,8 +1180,20 @@
         </div>
         <div class="mobile-play-actions">
           <button id="btn-mobile-jump" class="mobile-action-btn mobile-action-jump" type="button">Jump</button>
-          <button id="btn-mobile-slash" class="mobile-action-btn mobile-action-slash" type="button">Slash</button>
+          <button id="btn-mobile-slash" class="mobile-action-btn mobile-action-slash" type="button">Sword</button>
           <button id="btn-mobile-shoot" class="mobile-action-btn mobile-action-shoot" type="button">Shoot</button>
+        </div>
+      </div>
+      <div id="mobile-camera-tuner" class="mobile-camera-tuner hidden" aria-label="Mobile camera tuner">
+        <div class="mobile-camera-tuner-title">Camera Tuner</div>
+        <div id="mobile-camera-tuner-value" class="mobile-camera-tuner-value">waiting for camera</div>
+        <div class="mobile-camera-tuner-grid">
+          <button class="mobile-camera-tuner-btn" data-mobile-camera-tuner-action="zoom-out" type="button">Zoom -</button>
+          <button class="mobile-camera-tuner-btn" data-mobile-camera-tuner-action="zoom-in" type="button">Zoom +</button>
+          <button class="mobile-camera-tuner-btn" data-mobile-camera-tuner-action="player-up" type="button">Player Up</button>
+          <button class="mobile-camera-tuner-btn" data-mobile-camera-tuner-action="player-down" type="button">Player Down</button>
+          <button class="mobile-camera-tuner-btn" data-mobile-camera-tuner-action="reset" type="button">Reset</button>
+          <button class="mobile-camera-tuner-btn" data-mobile-camera-tuner-action="log" type="button">Log</button>
         </div>
       </div>
       <div id="global-chat" class="chat-panel">

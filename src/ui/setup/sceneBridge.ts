@@ -160,6 +160,33 @@ export type OverworldSelectedRoomContext = {
   courseRoomCount: number | null;
 };
 
+export type MobilePortraitCameraTuningInput = {
+  zoomMultiplier?: number;
+  targetY?: number;
+};
+
+export type MobilePortraitCameraTuningAdjustment = {
+  zoomMultiplierDelta?: number;
+  targetYDelta?: number;
+};
+
+export type MobilePortraitCameraTuningSnapshot = {
+  enabled: boolean;
+  zoomMultiplier: number;
+  targetY: number;
+  fitZoom: number;
+  cameraZoom: number;
+  playerScreen: {
+    x: number;
+    y: number;
+  } | null;
+  controlsTop: number | null;
+  viewport: {
+    width: number;
+    height: number;
+  };
+};
+
 export const COURSE_COMPOSER_STATE_CHANGED_EVENT = 'course-composer-state-changed';
 
 export interface CourseComposerSceneBridge {
@@ -246,6 +273,17 @@ export interface OverworldSceneBridge {
   saveCourseDraft?: () => Promise<void>;
   publishCourseDraft?: () => Promise<void>;
   unpublishCourse?: () => Promise<void>;
+  getMobilePortraitCameraTuning?: () => MobilePortraitCameraTuningSnapshot;
+  setMobilePortraitCameraTuning?: (
+    input: MobilePortraitCameraTuningInput,
+    reason?: string,
+  ) => MobilePortraitCameraTuningSnapshot;
+  adjustMobilePortraitCameraTuning?: (
+    adjustment: MobilePortraitCameraTuningAdjustment,
+    reason?: string,
+  ) => MobilePortraitCameraTuningSnapshot;
+  resetMobilePortraitCameraTuning?: () => MobilePortraitCameraTuningSnapshot;
+  logMobilePortraitCameraTuning?: (reason?: string) => MobilePortraitCameraTuningSnapshot;
 }
 
 function getScene<T>(game: Phaser.Game, key: string): T | null {
