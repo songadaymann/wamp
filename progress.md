@@ -7906,3 +7906,9 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - reviewed `output/web-game/mobile-no-install-gate-smoke/phone-portrait-browse-unblocked/portrait-browse.png`
     - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
     - required `develop-web-game` client completed, but still reproduced the known desktop/headless black-frame artifact with `activeScene: none` in `output/web-game/state-0.json`
+  - deployed update:
+    - committed and pushed `a6fb0b3` (`Remove mobile install gate from safety preview`)
+    - Pages-only deploy succeeded; Wrangler reported deployment URL `https://8eef0588.wampland.pages.dev` and alias `https://safety-mobile-portrait-play-kbh8.wampland.pages.dev`
+    - targeted deployed portrait probe against `https://safety-mobile-portrait-play-kbh8.wampland.pages.dev` confirmed `mobileLandscapeRequired: false`, `mobileLandscapeBlocked: false`, rotate gate hidden, install-help modal hidden, and install button hidden
+    - full deployed smoke against `https://safety-mobile-portrait-play-kbh8.wampland.pages.dev` reached all 9 scenarios successfully; it returned nonzero only because of the same known Cloudflare Browser Insights/RUM CORS console errors
+    - note: `https://safety-mobile-portrait-play.wampland.pages.dev` still served the previous install-gate build during verification, so use the `-kbh8` alias for this no-install-gate preview
