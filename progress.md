@@ -92,6 +92,9 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - required `develop-web-game` client passed against `http://127.0.0.1:4614/` with no console-error artifact and wrote `output/web-game/collectible-spritesheet-framecount-fix/state-0.json`
   - merged to `main` on April 14, 2026 via merge commit `3eef309`
   - merge note: `origin/main` already had a separate `cake` collectible; the merge preserved it and added `cake` to the agent object-id docs list
+  - production deploy:
+    - pushed `main` to `origin/main`
+    - `npm run deploy:prod` completed Worker + Pages deploy and production smoke passed against `https://wamp.land` / `https://api.wamp.land`
 
 - Runtime PartyKit host fallback fix on April 9, 2026:
   - created dedicated `main`-based worktree branch `fix/runtime-partykit-host-fallback-2026-04-09`
