@@ -7884,3 +7884,11 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - reviewed `output/web-game/mobile-portrait-stick-hitbox-smoke/phone-portrait-deep-link-play/portrait-play.png`
     - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
     - required `develop-web-game` client completed, but still reproduced the known desktop/headless black-frame artifact with `activeScene: none` in `output/web-game/state-0.json`
+- mobile portrait safety preview publish:
+  - created and pushed `safety/mobile-portrait-play-2026-04-14` to GitHub for wider real-device QA
+  - committed the current mobile pass as `55162cb` (`Mobile portrait play safety pass`)
+  - ran the Pages-only safety branch deploy against the safety Worker and safety PartyKit:
+    - stable preview alias: `https://safety-mobile-portrait-play.wampland.pages.dev`
+    - Wrangler deployment URL: `https://199b069c.wampland.pages.dev`
+  - `curl -I https://safety-mobile-portrait-play.wampland.pages.dev` returned `200`
+  - `curl -I https://safety-mobile-portrait-play-2026-04-14.wampland.pages.dev` returned `404`, so use the stable alias URL above when sharing
