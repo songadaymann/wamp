@@ -7892,3 +7892,6 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - Wrangler deployment URL: `https://199b069c.wampland.pages.dev`
   - `curl -I https://safety-mobile-portrait-play.wampland.pages.dev` returned `200`
   - `curl -I https://safety-mobile-portrait-play-2026-04-14.wampland.pages.dev` returned `404`, so use the stable alias URL above when sharing
+  - deployed-preview smoke note:
+    - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-safety-preview-smoke" npm run smoke:mobile -- --url https://safety-mobile-portrait-play.wampland.pages.dev` reached all 9 scenarios successfully, including portrait deep-link play and bottom HUD
+    - the command returned nonzero only because each scenario logged a Cloudflare Browser Insights/RUM CORS resource error (`https://cloudflareinsights.com/cdn-cgi/rum` -> `net::ERR_FAILED`); a targeted Playwright request-failure probe confirmed the app page had no page exceptions
