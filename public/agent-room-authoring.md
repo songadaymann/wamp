@@ -178,6 +178,7 @@ Common valid object ids by category:
   - `apple`
   - `banana`
   - `poop`
+  - `cake`
   - `coin_small_gold`
   - `coin_small_silver`
 - `hazard`:
