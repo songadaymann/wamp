@@ -157,8 +157,24 @@ Common valid object ids by category:
   - `coin_gold`
   - `coin_silver`
   - `gem`
+  - `blue_gem`
+  - `orange_gem`
+  - `red_gem`
+  - `black_pearl`
+  - `crown`
+  - `ring`
+  - `star`
   - `heart`
   - `key`
+  - `health_potion`
+  - `mana_potion`
+  - `mushroom`
+  - `egg`
+  - `bone`
+  - `book`
+  - `scroll`
+  - `skull`
+  - `bomb_pickup`
   - `apple`
   - `banana`
   - `poop`
