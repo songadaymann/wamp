@@ -57,6 +57,40 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Collectible spritesheet expansion on April 14, 2026:
+  - started fresh `main`-based branch/worktree:
+    - branch: `feature/collectible-spritesheets-2026-04-14`
+    - worktree: `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-collectibles-2026-04-14`
+  - imported the distinct sheets from `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/Sprites-and-Things/Collectables/SpriteSheets`
+    - intentionally skipped `Items_Coin.png` and `Items_GreenGem.png` because they overlap existing collectibles
+    - upgraded the existing `heart` and `key` art/config instead of introducing duplicate heart/key object ids
+  - added new collectible ids: `black_pearl`, `blue_gem`, `bomb_pickup`, `bone`, `book`, `crown`, `egg`, `health_potion`, `mana_potion`, `mushroom`, `orange_gem`, `red_gem`, `ring`, `scroll`, `skull`, and `star`
+  - wired new treasure/gem pickups into existing scoring and pickup-SFX routing
+  - updated `public/agent-room-authoring.md` so agents can place the new collectible ids
+  - validation:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - required `develop-web-game` client passed against `http://127.0.0.1:4614/` with no console-error artifact and wrote:
+      - `output/web-game/collectible-spritesheet-smoke/state-0.json`
+      - `output/web-game/collectible-spritesheet-smoke/state-1.json`
+      - `output/web-game/collectible-spritesheet-smoke/shot-0.png`
+      - `output/web-game/collectible-spritesheet-smoke/shot-1.png`
+    - the required client screenshots hit the known black-frame canvas capture artifact, but state JSON confirmed the overworld booted cleanly
+    - targeted browser asset proof wrote:
+      - `output/web-game/collectible-spritesheet-smoke/asset-gallery.png`
+      - `output/web-game/collectible-spritesheet-smoke/asset-gallery-summary.json`
+    - targeted proof confirmed all 18 imported object assets load from the app at `128x16` with no browser errors
+  - local dependency note:
+    - first `npm install` failed while building native `sharp`
+    - reran `npm install --ignore-scripts`, which installed the TypeScript/Vite verification dependencies without changing tracked package files
+  - follow-up fix:
+    - `orange_gem`, `red_gem`, `ring`, and `black_pearl` source sheets have visible art only in frames `0..3`; frames `4..7` are transparent
+    - changed those four object configs from `frameCount: 8` to `frameCount: 4` so their animations no longer blink through empty frames
+    - validation after the frame-count fix:
+      - `npm run typecheck` passed
+      - `npm run build` passed
+      - required `develop-web-game` client passed against `http://127.0.0.1:4614/` with no console-error artifact and wrote `output/web-game/collectible-spritesheet-framecount-fix/state-0.json`
+
 - Runtime PartyKit host fallback fix on April 9, 2026:
   - created dedicated `main`-based worktree branch `fix/runtime-partykit-host-fallback-2026-04-09`
   - traced missing live-player count / ghost presence on `wamp.land` to a frontend build missing `VITE_PARTYKIT_HOST`, not to a PartyKit outage
