@@ -7895,3 +7895,14 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - deployed-preview smoke note:
     - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-safety-preview-smoke" npm run smoke:mobile -- --url https://safety-mobile-portrait-play.wampland.pages.dev` reached all 9 scenarios successfully, including portrait deep-link play and bottom HUD
     - the command returned nonzero only because each scenario logged a Cloudflare Browser Insights/RUM CORS resource error (`https://cloudflareinsights.com/cdn-cgi/rum` -> `net::ERR_FAILED`); a targeted Playwright request-failure probe confirmed the app page had no page exceptions
+- mobile safety preview install-gate removal:
+  - disabled the old mobile portrait landscape/install block for this safety branch by forcing `mobileLandscapeRequired` / `mobileLandscapeBlocked` false in device layout state
+  - disabled install-help offers entirely so the old Add to Home Screen modal cannot auto-open and the account-menu `Install App` button stays hidden
+  - updated the mobile smoke's first portrait scenario from `phone-portrait-gate` to `phone-portrait-browse-unblocked`, asserting portrait browse boots without the rotate gate, install-help modal, or install button
+  - validation:
+    - `node --check scripts/mobile_smoke.mjs` passed
+    - `npm run typecheck` passed
+    - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-no-install-gate-smoke-2" npm run smoke:mobile -- --url http://127.0.0.1:3232` passed all 9 scenarios with zero console/page errors
+    - reviewed `output/web-game/mobile-no-install-gate-smoke/phone-portrait-browse-unblocked/portrait-browse.png`
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - required `develop-web-game` client completed, but still reproduced the known desktop/headless black-frame artifact with `activeScene: none` in `output/web-game/state-0.json`

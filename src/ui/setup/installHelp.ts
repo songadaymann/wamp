@@ -8,6 +8,7 @@ import {
 
 const INSTALL_HELP_DISMISSED_STORAGE_KEY = 'wamp_install_help_dismissed_v1';
 const INSTALL_HELP_AUTO_OPEN_DELAY_MS = 900;
+const INSTALL_HELP_ENABLED = false;
 
 type InstallHelpTarget = 'safari-share' | 'browser-menu' | 'generic';
 
@@ -196,6 +197,10 @@ export class InstallHelpController {
   }
 
   private shouldOfferHelp(): boolean {
+    if (!INSTALL_HELP_ENABLED) {
+      return false;
+    }
+
     const layout = getDeviceLayoutState();
     return layout.coarsePointer && !this.isStandaloneLaunch() && !isPlayfunMode();
   }

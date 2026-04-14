@@ -80,7 +80,7 @@ function computeState(): DeviceLayoutState {
   const orientationState: OrientationState = width >= height ? 'landscape' : 'portrait';
   const deviceClass = classifyDeviceClass(width, height, coarsePointer);
   const performanceProfile = resolvePerformanceProfile(deviceClass, coarsePointer);
-  const mobileLandscapeRequired = coarsePointer && deviceClass !== 'desktop';
+  const mobileLandscapeRequired = false;
 
   return {
     deviceClass,
@@ -90,7 +90,7 @@ function computeState(): DeviceLayoutState {
     standaloneLaunch,
     standalonePortrait,
     mobileLandscapeRequired,
-    mobileLandscapeBlocked: mobileLandscapeRequired && orientationState === 'portrait',
+    mobileLandscapeBlocked: false,
     viewport: {
       width,
       height,

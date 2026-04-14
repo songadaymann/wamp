@@ -28,7 +28,7 @@ output/web-game/mobile-smoke/
 
 It covers:
 
-- phone portrait rotate/install gate
+- phone portrait browse without the old rotate/install gate
 - phone portrait deep-linked room play with touch controls and camera/player placement checks
 - phone portrait deep-linked room Stop flow into the compact bottom HUD
 - phone landscape browse HUD and shortcuts
@@ -86,6 +86,6 @@ Before merging a mobile UI pass, verify at least:
 
 - iOS Safari in normal browser and home-screen launch
 - Android Chrome in normal browser and installed/PWA launch
-- portrait gate, landscape browse, play mode, editor sheets, chat, jump sheet, auth menu, leaderboard/explore modal
+- portrait browse, landscape browse, play mode, editor sheets, chat, jump sheet, auth menu, leaderboard/explore modal
 - keyboard-open behavior for inputs
 - safe-area behavior on notched phones

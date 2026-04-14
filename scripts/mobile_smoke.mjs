@@ -40,9 +40,9 @@ const profiles = {
 
 const scenarios = [
   {
-    name: 'phone-portrait-gate',
+    name: 'phone-portrait-browse-unblocked',
     profile: profiles.phonePortrait,
-    run: runPhonePortraitGate,
+    run: runPhonePortraitBrowseUnblocked,
   },
   {
     name: 'phone-portrait-deep-link-play',
@@ -251,20 +251,26 @@ async function gotoMobileSmokePage(page, searchParams = undefined) {
   });
 }
 
-async function runPhonePortraitGate(page, scenarioSummary, scenarioDir) {
+async function runPhonePortraitBrowseUnblocked(page, scenarioSummary, scenarioDir) {
   const state = await waitForAppState(
     page,
-    (candidate) => candidate?.device?.deviceClass === 'phone' && candidate.device.mobileLandscapeBlocked === true,
-    'phone portrait landscape gate',
+    (candidate) =>
+      candidate?.device?.deviceClass === 'phone' &&
+      candidate.device.orientationState === 'portrait' &&
+      candidate.device.mobileLandscapeBlocked === false &&
+      candidate?.activeScene?.scene === 'overworld-play',
+    'phone portrait unblocked browse',
   );
   scenarioSummary.assertions.push({
-    label: 'phone portrait is landscape-blocked',
+    label: 'phone portrait browse is not blocked by install or rotate gate',
     device: state.device,
+    activeScene: summarizeActiveScene(state.activeScene),
   });
-  await assertVisible(page, '#rotate-gate', 'rotate gate');
-  await assertHidden(page, '#mobile-play-controls', 'mobile play controls while portrait-blocked');
-  await assertSelectorsWithinViewport(page, ['#rotate-gate'], 'portrait gate bounds');
-  await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'portrait-gate');
+  await assertHidden(page, '#rotate-gate', 'rotate gate in phone portrait browse');
+  await assertHidden(page, '#install-help-modal', 'install help modal in phone portrait browse');
+  await assertHidden(page, '#btn-install-help-open', 'install app menu button in phone portrait browse');
+  await assertHidden(page, '#mobile-play-controls', 'mobile play controls while browsing portrait');
+  await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'portrait-browse');
 }
 
 async function runPhonePortraitDeepLinkPlay(page, scenarioSummary, scenarioDir) {
