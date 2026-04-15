@@ -379,42 +379,53 @@ async function runPhonePortraitDeepLinkPlay(page, scenarioSummary, scenarioDir) 
     rightStick.knobCenter.x > rightStick.baseCenter.x + 6,
     `portrait move stick knob should move right with horizontal drag: ${JSON.stringify(rightStick)}`,
   );
-  await dispatchPointerAt(page, '#mobile-move-stick', 'pointermove', 51, -8, 0);
+  await dispatchDocumentPointer(page, 'pointerup', 51);
+  await waitForAppState(
+    page,
+    (candidate) =>
+      candidate?.touch?.active === true
+      && candidate.touch.moveX === 0
+      && candidate.touch.moveY === 0,
+    'document-level portrait move release',
+    5000,
+  );
+  await dispatchPointerAt(page, '#mobile-move-stick', 'pointerdown', 53);
+  await dispatchPointerAt(page, '#mobile-move-stick', 'pointermove', 53, -8, 0);
   await waitForAppState(
     page,
     (candidate) => candidate?.touch?.active === true && candidate.touch.moveX <= -0.28,
     'dragged left touch input in portrait play',
     5000,
   );
-  await dispatchPointerAt(page, '#mobile-move-stick', 'pointermove', 51, 0, -8);
+  await dispatchPointerAt(page, '#mobile-move-stick', 'pointermove', 53, 0, -8);
   await page.waitForTimeout(100);
   const shallowVerticalState = await readState(page);
   assertCondition(
     shallowVerticalState?.touch?.moveY > -0.42,
     `shallow portrait vertical drag should not climb yet: ${JSON.stringify(shallowVerticalState?.touch)}`,
   );
-  await dispatchPointerAt(page, '#mobile-move-stick', 'pointermove', 51, 0, -22);
+  await dispatchPointerAt(page, '#mobile-move-stick', 'pointermove', 53, 0, -22);
   await waitForAppState(
     page,
     (candidate) => candidate?.touch?.active === true && candidate.touch.moveY <= -0.42,
     'dragged up touch input in portrait play',
     5000,
   );
-  await dispatchPointerAt(page, '#mobile-move-stick', 'pointermove', 51, 0, 8);
+  await dispatchPointerAt(page, '#mobile-move-stick', 'pointermove', 53, 0, 8);
   await page.waitForTimeout(100);
   const shallowDownState = await readState(page);
   assertCondition(
     shallowDownState?.touch?.moveY < 0.42,
     `shallow portrait downward drag should not crouch yet: ${JSON.stringify(shallowDownState?.touch)}`,
   );
-  await dispatchPointerAt(page, '#mobile-move-stick', 'pointermove', 51, 0, 22);
+  await dispatchPointerAt(page, '#mobile-move-stick', 'pointermove', 53, 0, 22);
   await waitForAppState(
     page,
     (candidate) => candidate?.touch?.active === true && candidate.touch.moveY >= 0.42,
     'dragged down touch input in portrait play',
     5000,
   );
-  await dispatchPointerAt(page, '#mobile-move-stick', 'pointerup', 51, 0, 22);
+  await dispatchPointerAt(page, '#mobile-move-stick', 'pointerup', 53, 0, 22);
   await waitForAppState(
     page,
     (candidate) =>
@@ -975,6 +986,21 @@ async function dispatchPointerAtRatio(page, selector, type, pointerId, xRatio, y
     },
     { type, pointerId, xRatio, yRatio },
   );
+}
+
+async function dispatchDocumentPointer(page, type, pointerId) {
+  await page.evaluate((payload) => {
+    const event = new PointerEvent(payload.type, {
+      bubbles: true,
+      cancelable: true,
+      pointerId: payload.pointerId,
+      pointerType: 'touch',
+      isPrimary: true,
+      clientX: Math.round(window.innerWidth / 2),
+      clientY: Math.round(window.innerHeight / 2),
+    });
+    document.dispatchEvent(event);
+  }, { type, pointerId });
 }
 
 async function clickElement(page, selector) {

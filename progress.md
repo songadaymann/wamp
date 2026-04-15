@@ -57,6 +57,25 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Mobile stuck-stick hardening and low-end play profile on April 15, 2026:
+  - users reported the portrait analog stick getting stuck when the game became very laggy; the most likely direct cause was a missed element-level `pointerup` / `pointercancel` while the main thread or browser input dispatch was under stress
+  - hardened `src/ui/mobile/portraitPlayControls.ts` so the move stick clears from document-level pointer release/cancel, touch-end/cancel fallback, page hide/blur/visibility loss, and normal mode exit
+  - held Jump/Sword/Shoot buttons now also track their active pointer ids and clear from document-level release/cancel plus lifecycle reset, so the same missed-release class cannot leave an action held down
+  - updated `scripts/mobile_smoke.mjs` with a portrait play regression that starts movement on the stick, releases on `document` instead of the stick element, and asserts `touch.moveX/moveY` return to zero before continuing
+  - made all coarse-pointer devices use the existing reduced play rendering profile; browsers that expose very low `navigator.deviceMemory` or `navigator.hardwareConcurrency` also opt into the reduced profile, which cuts play-mode preview budgets on phones/iPads and older low-end laptops without changing gameplay rules
+  - validation:
+    - `node --check scripts/mobile_smoke.mjs` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup annotation and large-chunk warnings
+    - local Vite frontend ran on `http://127.0.0.1:3232` against the safety Worker via `VITE_ROOM_API_BASE_URL='https://everybodys-platformer-safety.novox-robot.workers.dev'`
+    - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-stuck-stick-release-smoke-2" npm run smoke:mobile -- --url http://127.0.0.1:3232` passed all 9 scenarios with zero console/page errors; phone and tablet scenarios now report `performanceProfile: "reduced"`
+    - required `develop-web-game` client ran against `http://127.0.0.1:3232/?x=0&y=0&previewSmoke=1` and wrote `output/web-game/mobile-stuck-stick-release-client-2/`; no error artifacts were produced, but it reproduced the known desktop/headless black-frame / `activeScene: none` artifact, so the targeted mobile smoke remains the trusted visual/control validation
+  - visual verification screenshot:
+    - `output/web-game/mobile-stuck-stick-release-smoke-2/phone-portrait-deep-link-play/portrait-play.png`
+  - next performance work:
+    - this pass addresses stuck input and reduces play-mode preview load on touch/low-end devices; it does not fully root-cause the broader older-machine/iPad lag
+    - if lag reports continue, add real-device frame timing instrumentation around `OverworldPlayScene.update`, `worldStreaming.refreshVisibleRoomsFromCache`, chunk preview texture builds, live-object updates, and DOM HUD updates, then compare phone portrait play versus tablet/desktop browse
+
 - Mobile play-code cleanup on April 14, 2026:
   - removed the disabled install/rotate gate path from the active UI: rotate gate DOM/CSS, install-help modal/menu entry/controller wiring, and mobile landscape-block device-layout state are gone
   - final review pass also removed the empty account-menu action row left behind by the install button removal and deleted the obsolete `public/install-help/.gitkeep` placeholder

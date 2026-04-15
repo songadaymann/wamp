@@ -13,6 +13,10 @@ export interface DeviceLayoutState {
   };
 }
 
+type NavigatorWithDeviceMemory = Navigator & {
+  deviceMemory?: number;
+};
+
 export const DEVICE_LAYOUT_CHANGED_EVENT = 'device-layout-changed';
 
 const DEFAULT_STATE: DeviceLayoutState = {
@@ -42,7 +46,20 @@ function resolvePerformanceProfile(
   deviceClass: DeviceClass,
   coarsePointer: boolean,
 ): PerformanceProfile {
-  return coarsePointer && deviceClass === 'tablet' ? 'reduced' : 'default';
+  if (coarsePointer || deviceClass === 'phone' || deviceClass === 'tablet') {
+    return 'reduced';
+  }
+
+  const deviceMemory = (navigator as NavigatorWithDeviceMemory).deviceMemory ?? 0;
+  const hardwareConcurrency = navigator.hardwareConcurrency ?? 0;
+  if (
+    (deviceMemory > 0 && deviceMemory <= 4)
+    || (hardwareConcurrency > 0 && hardwareConcurrency <= 4)
+  ) {
+    return 'reduced';
+  }
+
+  return 'default';
 }
 
 function computeState(): DeviceLayoutState {
