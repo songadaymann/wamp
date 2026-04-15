@@ -72,6 +72,12 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - required `develop-web-game` client ran against `http://127.0.0.1:3232/?x=0&y=0&previewSmoke=1` and wrote `output/web-game/mobile-stuck-stick-release-client-2/`; no error artifacts were produced, but it reproduced the known desktop/headless black-frame / `activeScene: none` artifact, so the targeted mobile smoke remains the trusted visual/control validation
   - visual verification screenshot:
     - `output/web-game/mobile-stuck-stick-release-smoke-2/phone-portrait-deep-link-play/portrait-play.png`
+  - committed and deployed:
+    - committed as `16aa6fa` (`Harden mobile stick release`) and pushed `safety/mobile-portrait-play-2026-04-14`
+    - Pages-only safety deploy succeeded on April 15, 2026; Wrangler reported deployment URL `https://60b5e656.wampland.pages.dev` and stable alias `https://safety-mobile-portrait-play.wampland.pages.dev`
+    - `curl -I https://safety-mobile-portrait-play.wampland.pages.dev` returned `200`
+    - `curl -I https://safety-mobile-portrait-play-2026-04-14.wampland.pages.dev` still returned `404`, so use the stable alias URL above for QA
+    - targeted deployed phone-portrait probe confirmed play mode, `mobilePortraitPlay: "true"`, `performanceProfile: "reduced"`, `#mobile-move-zone` present, old rotate gate absent, legacy D-pad buttons absent, and the new deployed asset `assets/main-CH0W_D3H.js`
   - next performance work:
     - this pass addresses stuck input and reduces play-mode preview load on touch/low-end devices; it does not fully root-cause the broader older-machine/iPad lag
     - if lag reports continue, add real-device frame timing instrumentation around `OverworldPlayScene.update`, `worldStreaming.refreshVisibleRoomsFromCache`, chunk preview texture builds, live-object updates, and DOM HUD updates, then compare phone portrait play versus tablet/desktop browse
