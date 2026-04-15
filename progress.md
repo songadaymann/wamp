@@ -79,7 +79,50 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - deployed mobile smoke against `https://safety-mobile-portrait-main.wampland.pages.dev` reached all 9 scenarios successfully with zero page errors, but returned nonzero because each deployed scenario logged the same generic `Failed to load resource: net::ERR_FAILED` console noise seen on prior Cloudflare safety previews
   - deployed portrait screenshot checked:
     - `output/web-game/mobile-main-merge-deployed-smoke/phone-portrait-deep-link-play/portrait-play.png`
-
+- Avatar unlock/runtime foundation on April 15, 2026:
+  - the first implementation started in the dirty `feature/claim-quota-ghost-claims-2026-04-10` worktree, so a clean `main`-based branch/worktree was split for continuation:
+    - branch: `feature/avatar-unlocks-2026-04-15`
+    - worktree: `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-avatar-unlocks-2026-04-15`
+  - added a dedicated player avatar registry/runtime layer in `src/player/avatar`
+    - default avatar remains the existing player/combat sheet pair
+    - restored `punk-465` from the earlier punk-avatar experiment as a registered `cryptopunk` pack
+    - imported 22 recolor packs from `Sprites-and-Things/player/otherColors`, each with default-compatible player + combat atlases
+  - BootScene now preloads all registered avatar atlases and creates pack-specific animation keys
+  - the local player, PartyKit presence identity, ghost rendering, room chat identity refresh, and debug state now resolve through the active avatar id
+  - temporary avatar selection is available through `?avatar=<id>` / `?avatarId=<id>` or `localStorage` key `ep_player_avatar_id_v1`
+  - validation:
+    - `npm ci --ignore-scripts` was needed in the new worktree because local Node is `v24.10.0` while `.nvmrc` asks for `20.19.4`
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - `git diff --check` passed
+    - required web-game client was run against preview and hit the expected no-local-Worker proxy failure path
+    - targeted mocked browser probe passed for `color-ff533f` and `punk-465`, with no failed responses or console errors, and wrote visible screenshots under `output/web-game/avatar-pack-probe-visible/`
+  - next profile-unlock phase:
+    - verified the `WAMP Progression Asset Tracker` `Levels!A1:H31` avatar unlock column:
+      - player levels 1-9 unlock `ee1841`, `ff533f`, `ffe86b`, `62b824`, `1b84c2`, `5f5fec`, `7993f6`, `f65699`, `ff8b97`
+      - player level 10 currently unlocks `Punks`, mapped to the restored `punk-465` pack
+    - added `migrations/0024_user_selected_avatar.sql` with `users.selected_avatar_id`
+    - profile responses now include `selectedAvatarId` plus computed `avatarChoices`; the unlock state is derived from current player level rather than stored as per-avatar rows
+    - profile PATCH now validates selected avatars against the registered pack list and the player-level schedule before saving
+    - the profile modal now renders atlas-derived avatar thumbnails, shows a `Change Avatar` button for the owner, opens a separate avatar picker modal, displays locked choices as question marks, and persists the chosen avatar through the profile save path
+    - auth session refresh syncs the saved selected avatar into local player avatar storage so the overworld runtime can switch packs after save
+    - validation:
+      - `npm run typecheck` passed
+      - `npm run build` passed
+      - `git diff --check` passed
+    - targeted mocked Playwright profile probe passed, selecting `color-ff533f`, saving it, and confirming localStorage `ep_player_avatar_id_v1`; screenshots:
+      - `output/web-game/profile-avatar-unlocks/profile-open.png`
+      - `output/web-game/profile-avatar-unlocks/avatar-picker.png`
+      - `output/web-game/profile-avatar-unlocks/profile-saved.png`
+    - safety D1 migration + deploy:
+      - applied remote safety D1 migration `0024_user_selected_avatar.sql`
+      - deployed safety Worker/assets to `https://everybodys-platformer-safety.novox-robot.workers.dev` with Worker version `b2b9c9c0-5b81-4b4a-943b-213c7d9951fc`
+      - confirmed safety `/api/auth/session` reports the safety PartyKit host
+      - confirmed safety root HTML includes `btn-profile-avatar-change` and `avatar-picker-modal`
+      - confirmed a safety public profile response includes `selectedAvatarId`, 24 computed `avatarChoices`, and level-derived locked/unlocked state
+      - confirmed `wrangler d1 migrations list DB --env safety --remote` reports no pending migrations
+  - current caveat:
+    - keep the hard-coded unlock schedule in sync with the spreadsheet until there is a live sheet ingestion step
 - Sticky same-wall jump follow-up on April 14, 2026:
   - started fresh main-based branch/worktree:
     - branch: `feature/wall-jump-sticky-same-wall-2026-04-14`

@@ -42,7 +42,10 @@
           "email": { "type": ["string", "null"] },
           "walletAddress": { "type": ["string", "null"] },
           "displayName": { "type": "string" },
-          "createdAt": { "type": ["string", "null"], "format": "date-time" }
+          "createdAt": { "type": ["string", "null"], "format": "date-time" },
+          "avatarUrl": { "type": ["string", "null"] },
+          "bio": { "type": ["string", "null"] },
+          "selectedAvatarId": { "type": ["string", "null"] }
         }
       },
       "AuthSessionResponse": {
@@ -1354,6 +1357,30 @@
           "globalRank": { "type": ["integer", "null"] }
         }
       },
+      "PlayerAvatarChoice": {
+        "type": "object",
+        "required": [
+          "avatarId",
+          "label",
+          "kind",
+          "colorHex",
+          "unlockLevel",
+          "unlocked",
+          "selected"
+        ],
+        "properties": {
+          "avatarId": { "type": "string" },
+          "label": { "type": "string" },
+          "kind": {
+            "type": "string",
+            "enum": ["default", "color", "cryptopunk", "custom"]
+          },
+          "colorHex": { "type": ["string", "null"] },
+          "unlockLevel": { "type": ["integer", "null"] },
+          "unlocked": { "type": "boolean" },
+          "selected": { "type": "boolean" }
+        }
+      },
       "UserProfileResponse": {
         "type": "object",
         "required": [
@@ -1362,6 +1389,8 @@
           "createdAt",
           "avatarUrl",
           "bio",
+          "selectedAvatarId",
+          "avatarChoices",
           "isSelf",
           "canEdit",
           "stats",
@@ -1375,6 +1404,11 @@
           "createdAt": { "type": "string", "format": "date-time" },
           "avatarUrl": { "type": ["string", "null"] },
           "bio": { "type": ["string", "null"] },
+          "selectedAvatarId": { "type": "string" },
+          "avatarChoices": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/PlayerAvatarChoice" }
+          },
           "isSelf": { "type": "boolean" },
           "canEdit": { "type": "boolean" },
           "stats": { "$ref": "#/components/schemas/ProfileStatsSummary" },
@@ -1392,7 +1426,8 @@
         "properties": {
           "displayName": { "type": "string" },
           "avatarUrl": { "type": ["string", "null"] },
-          "bio": { "type": ["string", "null"] }
+          "bio": { "type": ["string", "null"] },
+          "selectedAvatarId": { "type": ["string", "null"] }
         }
       },
       "UserProfileUpdateResponse": {

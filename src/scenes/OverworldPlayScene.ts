@@ -55,6 +55,8 @@ import {
   DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
   type DefaultPlayerAnimationState,
 } from '../player/defaultPlayer';
+import { resolveActivePlayerAvatarId } from '../player/avatar/runtime';
+import { PLAYER_AVATAR_CHANGED_EVENT } from '../player/avatar/storage';
 import {
   formatRoomGoalShortText,
   resolveRoomGoalIntroText,
@@ -1622,6 +1624,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.initializePresenceClient();
     this.initializeRoomChatClient();
     window.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
+    window.addEventListener(PLAYER_AVATAR_CHANGED_EVENT, this.handlePlayerAvatarChanged);
     this.syncBackdropCameraIgnores();
 
     this.scale.on('resize', this.handleResize, this);
@@ -2117,6 +2120,22 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (identityChanged || roomChatIdentityChanged) {
       this.syncLocalPresence();
     }
+    this.renderHud();
+  };
+
+  private readonly handlePlayerAvatarChanged = (): void => {
+    const identityChanged = this.presenceController.refreshIdentity();
+    const roomChatIdentityChanged = this.roomChatController.refreshIdentity();
+    if (this.loadedChunkBounds) {
+      if (identityChanged) {
+        this.presenceController.setSubscribedChunkBounds(this.loadedChunkBounds);
+      }
+      if (roomChatIdentityChanged) {
+        this.roomChatController.setSubscribedChunkBounds(this.loadedChunkBounds);
+      }
+    }
+    this.playerPresentationController.syncPlayerVisual();
+    this.syncLocalPresence();
     this.renderHud();
   };
 
@@ -3524,6 +3543,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.roomAudioController.destroy();
     this.lightingController.destroy();
     window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
+    window.removeEventListener(PLAYER_AVATAR_CHANGED_EVENT, this.handlePlayerAvatarChanged);
     window.removeEventListener(PLAYFUN_GAME_PAUSE_EVENT, this.handlePlayfunGamePause);
     window.removeEventListener(PLAYFUN_GAME_RESUME_EVENT, this.handlePlayfunGameResume);
     this.playfunPauseDepth = 0;
@@ -3721,6 +3741,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       player: this.playerBody && this.player
         ? {
+            avatarId: resolveActivePlayerAvatarId(),
             x: Math.round(this.player.x),
             y: Math.round(this.player.y),
             velocityX: Math.round(this.playerBody.velocity.x),

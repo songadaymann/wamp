@@ -6,11 +6,7 @@ import type {
   RoomCoordinates,
   RoomSnapshot,
 } from '../../persistence/roomModel';
-import {
-  DEFAULT_PLAYER_ANIMATION_KEYS,
-  DEFAULT_PLAYER_IDLE_FRAME,
-  DEFAULT_PLAYER_IDLE_TEXTURE_KEY,
-} from '../../player/defaultPlayer';
+import { resolveActivePlayerAvatarPack } from '../../player/avatar/runtime';
 import {
   RETRO_COLORS,
 } from '../../visuals/starfield';
@@ -60,6 +56,7 @@ export class OverworldPlayerLifecycleController<TLiveObject = unknown> {
   createPlayer(startRoom: RoomSnapshot): OverworldPlayerEntities {
     const spawn = this.getPlayerSpawn(startRoom);
     const { scene } = this.host;
+    const playerAvatarPack = resolveActivePlayerAvatarPack();
 
     const player = scene.add.rectangle(
       spawn.x,
@@ -95,12 +92,12 @@ export class OverworldPlayerLifecycleController<TLiveObject = unknown> {
     const playerSprite = scene.add.sprite(
       spawn.x,
       spawn.y,
-      DEFAULT_PLAYER_IDLE_TEXTURE_KEY,
-      DEFAULT_PLAYER_IDLE_FRAME,
+      playerAvatarPack.idleTextureKey,
+      playerAvatarPack.idleFrame,
     );
     playerSprite.setOrigin(0.5, 1);
     playerSprite.setDepth(26);
-    playerSprite.play(DEFAULT_PLAYER_ANIMATION_KEYS.idle);
+    playerSprite.play(playerAvatarPack.animationKeys.idle);
     playerSprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
 
     this.host.syncBackdropCameraIgnores();

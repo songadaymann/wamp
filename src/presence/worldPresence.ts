@@ -1,5 +1,6 @@
 import PartySocket from 'partysocket';
 import { getAuthDebugState, getResolvedPartykitConfig } from '../auth/client';
+import { resolveActivePlayerAvatarId } from '../player/avatar/runtime';
 import type { DefaultPlayerAnimationState } from '../player/defaultPlayer';
 import { roomIdFromCoordinates, type RoomCoordinates } from '../persistence/roomModel';
 import {
@@ -422,11 +423,12 @@ export class WorldPresenceClient {
 
 export function resolveWorldPresenceIdentity(): WorldPresenceIdentity {
   const authState = getAuthDebugState();
+  const avatarId = resolveActivePlayerAvatarId();
   if (authState.authenticated && authState.user) {
     return {
       userId: authState.user.id,
       displayName: authState.user.displayName,
-      avatarId: 'default-player',
+      avatarId,
     };
   }
 
@@ -439,7 +441,7 @@ export function resolveWorldPresenceIdentity(): WorldPresenceIdentity {
         return {
           userId: existing.userId,
           displayName: existing.displayName,
-          avatarId: typeof existing.avatarId === 'string' ? existing.avatarId : 'default-player',
+          avatarId,
         };
       }
     }
@@ -450,7 +452,7 @@ export function resolveWorldPresenceIdentity(): WorldPresenceIdentity {
   const guestIdentity: WorldPresenceIdentity = {
     userId: `guest-${createRandomUuid()}`,
     displayName: `Guest ${Math.random().toString(36).slice(2, 6)}`,
-    avatarId: 'default-player',
+    avatarId,
   };
   try {
     window.localStorage.setItem(storageKey, JSON.stringify(guestIdentity));

@@ -520,6 +520,7 @@ export interface UserRow {
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
+  selected_avatar_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -535,6 +536,7 @@ export interface SessionJoinRow {
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
+  selected_avatar_id: string | null;
   user_created_at: string;
 }
 
@@ -550,6 +552,7 @@ export interface MagicLinkJoinRow {
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
+  selected_avatar_id: string | null;
   user_created_at: string;
 }
 
@@ -576,6 +579,7 @@ export interface ApiTokenRow {
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
+  selected_avatar_id: string | null;
   user_created_at: string;
 }
 
