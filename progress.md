@@ -57,6 +57,26 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Mobile performance profiler setup on April 15, 2026:
+  - added `?mobilePerf=1` instrumentation for real-device lag hunting, exposed as `window.wampMobilePerf`
+  - profiler tracks frame gaps, Phaser update cost, HUD render cost, live-object update cost, streaming refreshes, full-room creation, full-room texture/collider setup, and chunk preview texture builds
+  - optional on-screen overlay is enabled by default with the profiler; use `mobilePerfHud=0` to collect console/API data without visual overlay
+  - Safari/Web Inspector capture commands:
+    - `window.wampMobilePerf.log('after-playing')`
+    - `copy(window.wampMobilePerf.report('after-playing'))`
+  - current LAN server for real-phone testing is running at `http://192.168.18.178:3232/` against the safety Worker and safety PartyKit
+  - recommended phone URL:
+    - `http://192.168.18.178:3232/?x=0&y=0&mobilePerf=1`
+  - early automated mobile-profile probe already flagged concrete suspects:
+    - `stream.buildChunkPreviewTexture` caused off-frame stalls up to about `82ms`
+    - `stream.ensureFullRoom` caused off-frame stalls around `33-63ms`
+    - phone portrait play loaded `9` full rooms and reached about `1,384` active live objects in the local probe
+  - validation:
+    - `npm run typecheck` passed
+    - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-perf-profiler-smoke" npm run smoke:mobile -- --url "http://127.0.0.1:3232/?mobilePerf=1&mobilePerfHud=0&mobilePerfLogMs=3000"` passed all 9 scenarios with zero console/page errors
+    - `npm run build` passed with the existing Rollup annotation and large-chunk warnings
+    - required `develop-web-game` client ran against `http://127.0.0.1:3232/?x=0&y=0&mobilePerf=1&mobilePerfLogMs=3000`; it reproduced the known desktop/headless black-frame / `activeScene: none` artifact, so the targeted mobile smoke and real-device profiler are the useful validation path
+
 - Mobile stuck-stick hardening and low-end play profile on April 15, 2026:
   - users reported the portrait analog stick getting stuck when the game became very laggy; the most likely direct cause was a missed element-level `pointerup` / `pointercancel` while the main thread or browser input dispatch was under stress
   - hardened `src/ui/mobile/portraitPlayControls.ts` so the move stick clears from document-level pointer release/cancel, touch-end/cancel fallback, page hide/blur/visibility loss, and normal mode exit

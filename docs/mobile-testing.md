@@ -80,6 +80,38 @@ VITE_PARTYKIT_HOST="everybodys-platformer-presence.songadaymann.partykit.dev"
 
 For magic-link auth on the phone, make sure the Worker `APP_BASE_URL` points at the phone URL or an HTTPS preview URL. A localhost `APP_BASE_URL` will send the phone back to the Mac-only loopback address.
 
+## Mobile Performance Profiler
+
+For real-device lag checks, start the LAN frontend against the safety backend:
+
+```bash
+VITE_ROOM_API_BASE_URL="https://everybodys-platformer-safety.novox-robot.workers.dev" \
+VITE_PARTYKIT_HOST="everybodys-platformer-presence-safety.songadaymann.partykit.dev" \
+npm run dev -- --host 0.0.0.0 --port 3232
+```
+
+Then open this on the phone:
+
+```bash
+http://${LAN_IP}:3232/?x=0&y=0&mobilePerf=1
+```
+
+Useful flags:
+
+- `mobilePerf=1`: enables frame/segment timing and `window.wampMobilePerf`
+- `mobilePerfHud=0`: keeps the profiler enabled but hides the on-screen overlay
+- `mobilePerfLogMs=3000`: changes the automatic console summary interval
+- `mobilePerfVerbose=1`: logs individual slow-frame/slow-segment events
+
+In Safari Web Inspector, use:
+
+```js
+window.wampMobilePerf.log('after-playing')
+copy(window.wampMobilePerf.report('after-playing'))
+```
+
+The report includes frame gaps, update cost, HUD render cost, live-object work, streaming refreshes, full-room creation, and chunk preview texture builds. Slow events labeled `slow-off-frame-segment` are important because they usually happen while async loading or cache refresh work is blocking the main thread outside the normal Phaser `update` frame.
+
 ## Real Device QA
 
 Before merging a mobile UI pass, verify at least:

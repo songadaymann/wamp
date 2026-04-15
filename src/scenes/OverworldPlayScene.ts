@@ -199,6 +199,11 @@ import {
   getTouchInputState,
 } from '../ui/mobile/touchControls';
 import { getRoomGoalIntroModalController } from '../ui/setup/roomGoalIntroModal';
+import {
+  createMobilePerformanceProfiler,
+  type MobilePerformanceContext,
+  type MobilePerformanceProfiler,
+} from '../debug/mobilePerformanceProfiler';
 
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 2.5;
@@ -320,6 +325,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private backdropCamera: Phaser.Cameras.Scene2D.Camera | null = null;
   private hudBridge: OverworldHudBridge | null = null;
   private fxController: SceneFxController | null = null;
+  private mobilePerformanceProfiler: MobilePerformanceProfiler | null = null;
 
   private mode: OverworldMode = 'browse';
   private cameraMode: CameraMode = 'inspect';
@@ -559,6 +565,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.liveObjectController.syncLoadedWorldColliders(loadedRooms),
       onBackdropObjectsChanged: () => this.syncBackdropCameraIgnores(),
       onFullRoomVisibilityChanged: () => this.syncGhostVisibility(),
+      measurePerformance: (label, callback) => this.measureMobilePerformance(label, callback),
     });
     this.presenceController = new OverworldPresenceController({
       scene: this,
@@ -1571,6 +1578,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   create(data?: OverworldPlaySceneData): void {
     this.resetRuntimeState();
+    this.initializeMobilePerformanceProfiler();
     this.syncAppMode();
     this.initializeMobilePortraitCameraTuning();
     this.viewportController.setZoomDebugEnabled(this.isDebugQueryEnabled('zoomDebug'));
@@ -1644,63 +1652,114 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    this.windowController.maybeRefreshVisibleChunks();
-    this.updateBackdrop();
-    this.gridOverlayController.redraw();
-    this.updateLiveObjects(delta);
-    this.signController.update();
-    this.updateGhosts(delta);
-    this.roomChatController.update();
-    this.presenceOverlayController.updateBrowseDots(delta);
-    this.maybeSyncRoomMusicPlayback();
+    this.mobilePerformanceProfiler?.beginFrame(delta, this.buildMobilePerformanceContext());
+    try {
+      this.measureMobilePerformance('update.visibleChunks', () => {
+        this.windowController.maybeRefreshVisibleChunks();
+      });
+      this.measureMobilePerformance('update.backdrop', () => {
+        this.updateBackdrop();
+      });
+      this.measureMobilePerformance('update.grid', () => {
+        this.gridOverlayController.redraw();
+      });
+      this.measureMobilePerformance('update.liveObjects', () => {
+        this.updateLiveObjects(delta);
+      });
+      this.measureMobilePerformance('update.signs', () => {
+        this.signController.update();
+      });
+      this.measureMobilePerformance('update.ghosts', () => {
+        this.updateGhosts(delta);
+      });
+      this.measureMobilePerformance('update.roomChat', () => {
+        this.roomChatController.update();
+      });
+      this.measureMobilePerformance('update.presenceDots', () => {
+        this.presenceOverlayController.updateBrowseDots(delta);
+      });
+      this.measureMobilePerformance('update.music', () => {
+        this.maybeSyncRoomMusicPlayback();
+      });
 
-    if (
-      this.mode === 'play' &&
-      (Phaser.Input.Keyboard.JustDown(this.cameraToggleKey) || consumeTouchAction('cameraToggle'))
-    ) {
-      this.toggleCameraMode();
-    }
+      if (
+        this.mode === 'play' &&
+        (Phaser.Input.Keyboard.JustDown(this.cameraToggleKey) || consumeTouchAction('cameraToggle'))
+      ) {
+        this.toggleCameraMode();
+      }
 
-    if (this.mode === 'play' && consumeTouchAction('stop')) {
-      this.returnToWorld();
-      return;
-    }
+      if (this.mode === 'play' && consumeTouchAction('stop')) {
+        this.returnToWorld();
+        return;
+      }
 
-    if (this.mode === 'play' && consumeTouchAction('restart')) {
-      void this.restartCurrentRun();
-      return;
-    }
+      if (this.mode === 'play' && consumeTouchAction('restart')) {
+        void this.restartCurrentRun();
+        return;
+      }
 
-    if (!this.playerBody) {
-      this.movementController.handleNoPlayerRuntime();
-      this.syncLocalPresence();
-      this.updateRoomLighting();
+      if (!this.playerBody) {
+        this.measureMobilePerformance('update.noPlayerRuntime', () => {
+          this.movementController.handleNoPlayerRuntime();
+        });
+        this.measureMobilePerformance('update.presence', () => {
+          this.syncLocalPresence();
+        });
+        this.measureMobilePerformance('update.lighting', () => {
+          this.updateRoomLighting();
+        });
+        this.renderHud();
+        return;
+      }
+
+      const swordPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.Q) || consumeTouchAction('slash');
+      const gunPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E) || consumeTouchAction('shoot');
+      const inQuicksand = this.isPlayerInQuicksand();
+      const movement = this.measureMobilePerformance('update.movement', () =>
+        this.movementController.updateMovement(delta, inQuicksand)
+      );
+      this.measureMobilePerformance('update.combatInput', () => {
+        this.combatController.handleCombatInput({
+          swordPressed,
+          gunPressed,
+          downHeld: movement.downHeld,
+          grounded: movement.grounded,
+        });
+      });
+
+      this.measureMobilePerformance('update.quicksand', () => {
+        this.updateQuicksandVisualSink();
+      });
+      this.measureMobilePerformance('update.projectiles', () => {
+        this.combatController.updateProjectiles(delta);
+      });
+      this.measureMobilePerformance('update.ladderSfx', () => {
+        this.movementController.syncLadderClimbSfx(movement.verticalInput);
+      });
+      this.measureMobilePerformance('update.respawnTransition', () => {
+        this.maybeRespawnFromVoid();
+        this.roomTransitionController.maybeAdvancePlayerRoom();
+      });
+      this.measureMobilePerformance('update.rankedTrace', () => {
+        this.recordRankedRunTraceFrame(delta, movement);
+      });
+      this.measureMobilePerformance('update.presentation', () => {
+        this.playerPresentationController.syncPlayerVisual();
+      });
+      this.measureMobilePerformance('update.presence', () => {
+        this.syncLocalPresence();
+      });
+      this.measureMobilePerformance('update.lighting', () => {
+        this.updateRoomLighting();
+      });
+      this.measureMobilePerformance('update.objective', () => {
+        this.objectiveController.update(delta);
+      });
       this.renderHud();
-      return;
+    } finally {
+      this.mobilePerformanceProfiler?.endFrame(this.buildMobilePerformanceContext());
     }
-
-    const swordPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.Q) || consumeTouchAction('slash');
-    const gunPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E) || consumeTouchAction('shoot');
-    const inQuicksand = this.isPlayerInQuicksand();
-    const movement = this.movementController.updateMovement(delta, inQuicksand);
-    this.combatController.handleCombatInput({
-      swordPressed,
-      gunPressed,
-      downHeld: movement.downHeld,
-      grounded: movement.grounded,
-    });
-
-    this.updateQuicksandVisualSink();
-    this.combatController.updateProjectiles(delta);
-    this.movementController.syncLadderClimbSfx(movement.verticalInput);
-    this.maybeRespawnFromVoid();
-    this.roomTransitionController.maybeAdvancePlayerRoom();
-    this.recordRankedRunTraceFrame(delta, movement);
-    this.playerPresentationController.syncPlayerVisual();
-    this.syncLocalPresence();
-    this.updateRoomLighting();
-    this.objectiveController.update(delta);
-    this.renderHud();
   }
 
   private updateRoomLighting(): void {
@@ -3352,8 +3411,58 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.presenceOverlayController.syncOverlayScale();
   }
 
+  private initializeMobilePerformanceProfiler(): void {
+    this.mobilePerformanceProfiler?.destroy();
+    this.mobilePerformanceProfiler = createMobilePerformanceProfiler({
+      getContext: () => this.buildMobilePerformanceContext(),
+    });
+  }
+
+  private measureMobilePerformance<T>(label: string, callback: () => T): T {
+    return this.mobilePerformanceProfiler
+      ? this.mobilePerformanceProfiler.measure(label, callback)
+      : callback();
+  }
+
+  private buildMobilePerformanceContext(): MobilePerformanceContext {
+    const layout = getDeviceLayoutState();
+    const streamingMetrics = this.worldStreamingController.getDebugMetrics();
+    const presenceDebug = this.presenceController.getDebugSnapshot();
+    const activeLiveObjects = Array.from(this.loadedFullRoomsById.values()).reduce(
+      (total, loadedRoom) =>
+        total + loadedRoom.liveObjects.filter((liveObject) => liveObject.sprite.active).length,
+      0,
+    );
+    const activeProjectiles = this.combatController.getProjectileCount();
+
+    return {
+      mode: this.mode,
+      cameraMode: this.cameraMode,
+      deviceClass: layout.deviceClass,
+      orientationState: layout.orientationState,
+      coarsePointer: layout.coarsePointer,
+      performanceProfile: layout.performanceProfile,
+      viewport: layout.viewport,
+      mobilePortraitPlay: document.body.dataset.mobilePortraitPlay === 'true',
+      selected: { ...this.selectedCoordinates },
+      currentRoom: { ...this.currentRoomCoordinates },
+      loadedFullRooms: this.loadedFullRoomsById.size,
+      loadedPreviewRooms: streamingMetrics.loadedPreviewRoomCount,
+      visibleRooms: streamingMetrics.visibleRoomCount,
+      previewRoomBudget: streamingMetrics.previewRoomBudget,
+      fullRoomBudget: streamingMetrics.fullRoomBudget,
+      activeLiveObjects,
+      activeProjectiles,
+      renderedGhosts: presenceDebug.renderedGhostCount,
+      visibleGhosts: presenceDebug.visibleGhostCount,
+      browseDots: this.presenceOverlayController.getBrowseDotCount(),
+    };
+  }
+
   private renderHud(statusOverride?: string): void {
-    this.hudStateController.renderHud(statusOverride);
+    this.measureMobilePerformance('hud.render', () => {
+      this.hudStateController.renderHud(statusOverride);
+    });
   }
 
   private getRoomDisplayTitle(title: string | null, coordinates: RoomCoordinates): string {
@@ -3424,6 +3533,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.hudBridge = null;
     this.fxController?.destroy();
     this.fxController = null;
+    this.mobilePerformanceProfiler?.destroy();
+    this.mobilePerformanceProfiler = null;
     this.removeMobilePortraitCameraTunerApi();
 
     this.destroyPlayer();
@@ -3578,6 +3689,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       roomAudio: roomAudioDebug,
       lighting: lightingDebug,
+      mobilePerformance: this.mobilePerformanceProfiler?.getSnapshot('describe-state') ?? null,
       zoom: Number(camera.zoom.toFixed(3)),
       mobilePortraitCamera: this.buildMobilePortraitCameraTuningSnapshot(),
       camera: {
