@@ -57,6 +57,33 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Sticky same-wall jump follow-up on April 14, 2026:
+  - started fresh main-based branch/worktree:
+    - branch: `feature/wall-jump-sticky-same-wall-2026-04-14`
+    - worktree: `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-wall-jump-2026-04-14`
+  - movement-controller changes:
+    - removed the old `wallJumpBlockedSide` same-wall lockout so a player can recontact and jump from the same wall again in one airborne chain
+    - added a `140ms` `WALL_CONTACT_GRACE_MS` latch with `wallContactGraceSide` / `wallContactGraceUntil`
+    - neutral input while physically touching a wall now counts as wall contact, making the attach/jump window less brittle without requiring a fresh directional press
+    - wall-slide visuals and fall-speed clamping still require live wall contact; grace contact only extends jump eligibility
+    - wall contact grace is cleared immediately after a wall jump so the grace latch cannot become a free repeated air jump without recontact
+  - validation:
+    - `npm ci` failed under local Node `v24.10.0` while building native `sharp`; repo `.nvmrc` asks for Node `20.19.4`
+    - `npm ci --ignore-scripts` succeeded for verification dependencies in this worktree
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - required `develop-web-game` client ran against `http://127.0.0.1:3233/?previewSmoke=1` and wrote `output/web-game/wall-jump-sticky-smoke/`; that generic smoke hit the expected missing local Worker / PartyKit console noise and the known black-frame screenshot artifact
+    - targeted mocked browser probe wrote `output/web-game/wall-jump-targeted-probe/summary.json` and screenshots:
+      - `play-start.png`
+      - `first-contact.png`
+      - `same-wall-contact.png`
+      - `after-second-jump.png`
+    - the targeted probe had `consoleErrors: []` and confirmed:
+      - first right-wall contact exposed `wallContactSide: 1`, `wallContactGraceSide: 1`, `wallContactGraceMs: 140`
+      - first wall jump set `wallJumpActive: true`, `wallJumpChainActive: true`, and kicked left from the right wall
+      - same right-wall recontact exposed `wallContactSide: 1` while `wallJumpChainActive: true`
+      - the second jump from that same right wall again set `wallJumpActive: true` and kicked left
+
 - Collectible spritesheet expansion on April 14, 2026:
   - started fresh `main`-based branch/worktree:
     - branch: `feature/collectible-spritesheets-2026-04-14`

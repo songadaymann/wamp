@@ -226,6 +226,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly COYOTE_MS = 80;
   private readonly JUMP_BUFFER_MS = 100;
   private readonly WALL_JUMP_BUFFER_MS = 240;
+  private readonly WALL_CONTACT_GRACE_MS = 140;
   private readonly WALL_SLIDE_MAX_FALL_SPEED = 70;
   private readonly WALL_JUMP_VELOCITY_X = 205;
   private readonly WALL_JUMP_VELOCITY_Y = -265;
@@ -332,11 +333,12 @@ export class OverworldPlayScene extends Phaser.Scene {
   private jumpBuffered = false;
   private jumpBufferTime = 0;
   private wallContactSide: -1 | 1 | 0 = 0;
+  private wallContactGraceSide: -1 | 1 | 0 = 0;
+  private wallContactGraceUntil = 0;
   private isWallSliding = false;
   private wallJumpLockUntil = 0;
   private wallJumpActive = false;
   private wallJumpDirection: -1 | 1 | 0 = 0;
-  private wallJumpBlockedSide: -1 | 1 | 0 = 0;
   private wallJumpChainActive = false;
   private isClimbingLadder = false;
   private activeLadderKey: string | null = null;
@@ -1032,6 +1034,18 @@ export class OverworldPlayScene extends Phaser.Scene {
       set wallContactSide(value: -1 | 1 | 0) {
         thisScene.wallContactSide = value;
       },
+      get wallContactGraceSide() {
+        return thisScene.wallContactGraceSide;
+      },
+      set wallContactGraceSide(value: -1 | 1 | 0) {
+        thisScene.wallContactGraceSide = value;
+      },
+      get wallContactGraceUntil() {
+        return thisScene.wallContactGraceUntil;
+      },
+      set wallContactGraceUntil(value: number) {
+        thisScene.wallContactGraceUntil = value;
+      },
       get isWallSliding() {
         return thisScene.isWallSliding;
       },
@@ -1055,12 +1069,6 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       set wallJumpDirection(value: -1 | 1 | 0) {
         thisScene.wallJumpDirection = value;
-      },
-      get wallJumpBlockedSide() {
-        return thisScene.wallJumpBlockedSide;
-      },
-      set wallJumpBlockedSide(value: -1 | 1 | 0) {
-        thisScene.wallJumpBlockedSide = value;
       },
       get wallJumpChainActive() {
         return thisScene.wallJumpChainActive;
@@ -1117,6 +1125,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         coyoteMs: this.COYOTE_MS,
         jumpBufferMs: this.JUMP_BUFFER_MS,
         wallJumpBufferMs: this.WALL_JUMP_BUFFER_MS,
+        wallContactGraceMs: this.WALL_CONTACT_GRACE_MS,
         jumpVelocity: this.JUMP_VELOCITY,
         wallSlideMaxFallSpeed: this.WALL_SLIDE_MAX_FALL_SPEED,
         wallJumpVelocityX: this.WALL_JUMP_VELOCITY_X,
@@ -3305,7 +3314,8 @@ export class OverworldPlayScene extends Phaser.Scene {
             coyoteMs: Math.max(0, Math.round(this.coyoteTime)),
             wallSliding: this.isWallSliding,
             wallContactSide: this.wallContactSide,
-            wallJumpBlockedSide: this.wallJumpBlockedSide,
+            wallContactGraceSide: this.wallContactGraceSide,
+            wallContactGraceMs: Math.max(0, Math.round(this.wallContactGraceUntil - this.time.now)),
             wallJumpActive: this.wallJumpActive,
             wallJumpChainActive: this.wallJumpChainActive,
             wallJumpLockMs: Math.max(0, this.wallJumpLockUntil - this.time.now),
