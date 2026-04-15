@@ -355,6 +355,25 @@ async function runPhonePortraitDeepLinkPlay(page, scenarioSummary, scenarioDir) 
     layout.moveStick.rect.width >= 124 && layout.moveStick.rect.height >= 124,
     `portrait move stick should be large enough for thumb targeting: ${JSON.stringify(layout.moveStick)}`,
   );
+  await page.waitForTimeout(500);
+  const streamingState = await readState(page);
+  const lodMetrics = streamingState?.activeScene?.lodMetrics ?? null;
+  assertCondition(
+    lodMetrics?.fullRoomBudget === 1,
+    `reduced phone portrait play should only budget one full gameplay room: ${JSON.stringify(lodMetrics)}`,
+  );
+  assertCondition(
+    lodMetrics?.loadedFullRoomCount <= 1,
+    `reduced phone portrait play should not keep neighboring live rooms loaded: ${JSON.stringify(lodMetrics)}`,
+  );
+  assertCondition(
+    lodMetrics?.previewRoomBudget <= 9,
+    `reduced phone portrait play should keep preview budget tight: ${JSON.stringify(lodMetrics)}`,
+  );
+  assertCondition(
+    lodMetrics?.protectedVisiblePreviewRoomCount === 0,
+    `reduced phone portrait play should not expand budget to every visible preview room: ${JSON.stringify(lodMetrics)}`,
+  );
 
   await dispatchPointerAtRatio(page, '#mobile-move-zone', 'pointerdown', 50, 0.16, 0.16);
   await dispatchPointerAtRatio(page, '#mobile-move-zone', 'pointermove', 50, 0.86, 0.86);
@@ -447,6 +466,7 @@ async function runPhonePortraitDeepLinkPlay(page, scenarioSummary, scenarioDir) 
   scenarioSummary.assertions.push({
     label: 'deep-linked phone portrait play is unblocked with player above control deck',
     layout,
+    lodMetrics,
     activeScene: summarizeActiveScene(state.activeScene),
   });
   await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'portrait-play');

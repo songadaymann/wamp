@@ -57,6 +57,21 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Mobile reduced play streaming throttle on April 15, 2026:
+  - after real-phone testing still felt laggy with the profiler off, applied the first targeted performance fix from the earlier profiler lead
+  - reduced/coarse-pointer play mode now budgets only `1` full gameplay room instead of the 3x3 `9`-room set, which prevents neighboring rooms from creating physics colliders and live object controllers during mobile play
+  - reduced play preview budgets are now capped at `9` rooms for every zoom tier, and reduced play no longer expands the preview budget to every visible room
+  - browse mode budgets are unchanged
+  - added a mobile smoke assertion that phone portrait play stays at `fullRoomBudget: 1`, `loadedFullRoomCount <= 1`, a tight preview budget, and `protectedVisiblePreviewRoomCount: 0`
+  - validation:
+    - `node --check scripts/mobile_smoke.mjs` passed
+    - `npm run typecheck` passed
+    - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-reduced-play-streaming-smoke-2" npm run smoke:mobile -- --url http://127.0.0.1:3232` passed all 9 scenarios with zero console/page errors
+    - portrait play smoke recorded `fullRoomBudget: 1`, `loadedFullRoomCount: 1`, `previewRoomBudget: 9`, and `loadedPreviewRoomCount: 8`
+    - `npm run build` passed with the existing Rollup annotation and large-chunk warnings
+  - current hotspot local test URL remains:
+    - `http://172.20.10.3:3232/?x=0&y=0`
+
 - Mobile performance profiler setup on April 15, 2026:
   - added `?mobilePerf=1` instrumentation for real-device lag hunting, exposed as `window.wampMobilePerf`
   - profiler tracks frame gaps, Phaser update cost, HUD render cost, live-object update cost, streaming refreshes, full-room creation, full-room texture/collider setup, and chunk preview texture builds
