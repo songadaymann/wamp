@@ -12,7 +12,6 @@ import { ExploreModalController } from './setup/exploreModal';
 import { RoomHistoryModalController } from './setup/historyModal';
 import { setupKeyboardShortcutPassthrough } from './setup/keyboardPassthrough';
 import { LeaderboardModalController } from './setup/leaderboardModal';
-import { InstallHelpController } from './setup/installHelp';
 import { PaletteController } from './setup/paletteController';
 import { setupRoomMusicControls } from './setup/musicControls';
 import { ProfileModalController } from './setup/profileModal';
@@ -33,7 +32,6 @@ export function setupUI(game: Phaser.Game): void {
   const historyModal = new RoomHistoryModalController(game);
   const leaderboardModal = new LeaderboardModalController(game);
   const exploreModal = new ExploreModalController(game);
-  const installHelp = new InstallHelpController();
   const controlsModal = new ControlsModalController();
   const aboutModal = new AboutModalController();
   const chatModerationModal = new ChatModerationModalController();
@@ -69,7 +67,6 @@ export function setupUI(game: Phaser.Game): void {
   historyModal.init();
   leaderboardModal.init();
   exploreModal.init();
-  installHelp.init();
   controlsModal.init();
   aboutModal.init();
   chatModerationModal.init();

@@ -11,7 +11,7 @@ import {
 } from '../../config';
 import { isTextInputFocused } from '../../ui/keyboardFocus';
 import { RETRO_COLORS } from '../../visuals/starfield';
-import { getDeviceLayoutState, isMobileLandscapeBlocked } from '../../ui/deviceLayout';
+import { getDeviceLayoutState } from '../../ui/deviceLayout';
 import type { EditorClipboardState, GoalPlacementMode } from './editRuntime';
 
 function getEditorLayerAccent(): { stroke: number; fillAlpha: number } {
@@ -220,7 +220,7 @@ export class EditorInteractionController {
 
   updateCursorHighlight(): void {
     this.cursorGraphics?.clear();
-    if (!this.cursorGraphics || editorState.isPlaying || isMobileLandscapeBlocked()) {
+    if (!this.cursorGraphics || editorState.isPlaying) {
       return;
     }
 
@@ -653,7 +653,7 @@ export class EditorInteractionController {
       return false;
     }
 
-    if (editorState.isPlaying || isMobileLandscapeBlocked()) {
+    if (editorState.isPlaying) {
       return true;
     }
 

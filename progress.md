@@ -57,6 +57,23 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Mobile play-code cleanup on April 14, 2026:
+  - removed the disabled install/rotate gate path from the active UI: rotate gate DOM/CSS, install-help modal/menu entry/controller wiring, and mobile landscape-block device-layout state are gone
+  - final review pass also removed the empty account-menu action row left behind by the install button removal and deleted the obsolete `public/install-help/.gitkeep` placeholder
+  - extracted portrait room-play joystick/action binding into `src/ui/mobile/portraitPlayControls.ts`, leaving `MobileUiController` focused on editor sheets, mobile HUD shortcuts, jump sheet, and camera tuner state
+  - removed the legacy four-button mobile D-pad DOM/CSS/binding; the portrait Move zone is now named `mobile-move-zone`, and phone landscape play remains unblocked without legacy touch controls
+  - updated controls/about copy and the mobile smoke/docs to assert removed gate/control DOM is absent, not just hidden
+  - validation so far:
+    - `node --check scripts/mobile_smoke.mjs`
+    - `npm run typecheck`
+    - `npm run build` with the existing Rollup annotation and large-chunk warnings
+    - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-play-code-cleanup-smoke-2" npm run smoke:mobile -- --url http://127.0.0.1:3232`, with all nine scenarios passing and no console/page errors
+    - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-play-code-cleanup-smoke-3" npm run smoke:mobile -- --url http://127.0.0.1:3232`, with all nine scenarios passing and no console/page errors after the final leftover cleanup
+    - required `develop-web-game` client ran against `http://127.0.0.1:3232/?x=0&y=0`; it reproduced the known desktop/headless black-frame / `activeScene: none` artifact, so the targeted mobile smoke screenshots remain the visual source of truth
+  - visual verification screenshots:
+    - `output/web-game/mobile-play-code-cleanup-smoke-2/phone-portrait-deep-link-play/portrait-play.png`
+    - `output/web-game/mobile-play-code-cleanup-smoke-2/phone-landscape-play-no-legacy-controls/play-no-legacy-controls.png`
+
 - Mobile portrait camera tuner on April 14, 2026:
   - after real-device tuning from Jonathan's screenshot, baked in the preferred phone portrait defaults:
     - `zoomMultiplier: 2.25`

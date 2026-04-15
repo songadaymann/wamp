@@ -150,7 +150,7 @@
   background: linear-gradient(180deg, rgba(239, 86, 75, 0.82), rgba(170, 32, 32, 0.92));
 }
 
-.mobile-dpad {
+.mobile-move-zone {
   position: absolute;
   left: calc(8px + var(--safe-left));
   bottom: calc(4px + var(--safe-bottom));
@@ -164,81 +164,6 @@
 
 .mobile-move-stick {
   display: none;
-}
-
-.mobile-dpad-btn {
-  position: absolute;
-  width: 74px;
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  isolation: isolate;
-  color: rgba(243, 238, 226, 0.86);
-  font-family: 'IBM Plex Mono', 'Courier New', monospace;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  box-shadow: none;
-  pointer-events: auto;
-  touch-action: none;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-.mobile-dpad-btn::before {
-  content: '';
-  position: absolute;
-  inset: 11px 10px;
-  z-index: -1;
-  border-radius: 999px;
-  border: 1px solid rgba(243, 238, 226, 0.18);
-  background: linear-gradient(180deg, rgba(26, 26, 26, 0.76), rgba(7, 7, 7, 0.88));
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
-  transition:
-    transform 0.06s ease,
-    background 0.12s ease,
-    border-color 0.12s ease,
-    box-shadow 0.12s ease;
-}
-
-.mobile-dpad-btn.is-active,
-.mobile-dpad-btn:active {
-  transform: none;
-}
-
-.mobile-dpad-btn.is-active::before,
-.mobile-dpad-btn:active::before {
-  transform: translateY(2px);
-  background: linear-gradient(180deg, rgba(67, 67, 67, 0.84), rgba(15, 15, 15, 0.92));
-}
-
-.mobile-dpad-up {
-  left: 69px;
-  top: 0;
-}
-
-.mobile-dpad-left {
-  left: 0;
-  top: 47px;
-  width: 96px;
-  height: 82px;
-}
-
-.mobile-dpad-right {
-  right: 0;
-  top: 47px;
-  width: 96px;
-  height: 82px;
-}
-
-.mobile-dpad-down {
-  left: 69px;
-  top: 116px;
 }
 
 .mobile-editor-nav {

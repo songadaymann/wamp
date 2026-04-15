@@ -62,7 +62,6 @@ import {
 } from '../goals/roomGoals';
 import { setAppMode } from '../ui/appMode';
 import { getDeviceLayoutState } from '../ui/deviceLayout';
-import { hasFocusedRoomCoordinateLink } from '../ui/mobile/focusedRoomLink';
 import { createProfileRepository } from '../profiles/profileRepository';
 import {
   COURSE_COMPOSER_STATE_CHANGED_EVENT,
@@ -1654,13 +1653,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.roomChatController.update();
     this.presenceOverlayController.updateBrowseDots(delta);
     this.maybeSyncRoomMusicPlayback();
-
-    if (this.shouldBlockForMobileOrientation()) {
-      this.syncLocalPresence();
-      this.updateRoomLighting();
-      this.renderHud();
-      return;
-    }
 
     if (
       this.mode === 'play' &&
@@ -3387,19 +3379,6 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private syncAppMode(): void {
     setAppMode(this.mode === 'play' ? 'play-world' : 'world');
-  }
-
-  private shouldBlockForMobileOrientation(): boolean {
-    const layout = getDeviceLayoutState();
-    return (
-      layout.mobileLandscapeBlocked &&
-      !(
-        layout.deviceClass === 'phone' &&
-        layout.coarsePointer &&
-        layout.orientationState === 'portrait' &&
-        (this.mode === 'play' || hasFocusedRoomCoordinateLink(window.location.search))
-      )
-    );
   }
 
   getSelectedRoomContext(): SelectedRoomContext {

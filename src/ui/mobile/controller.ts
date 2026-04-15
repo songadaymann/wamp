@@ -1,36 +1,15 @@
 import Phaser from 'phaser';
 import { getDeviceLayoutState, initializeDeviceLayout, DEVICE_LAYOUT_CHANGED_EVENT } from '../deviceLayout';
 import { getActiveOverworldScene, withActiveEditorScene } from '../setup/sceneBridge';
-import {
-  pressTouchAction,
-  resetTouchInputState,
-  setTouchActionHeld,
-  setTouchControlsActive,
-  setTouchMove,
-} from './touchControls';
 import { hasFocusedRoomCoordinateLink } from './focusedRoomLink';
+import { PortraitPlayControlsController } from './portraitPlayControls';
 
 type EditorSheetId = 'tools' | 'background' | 'palette' | 'objects' | 'goal' | 'actions';
-type MoveDirection = 'up' | 'left' | 'right' | 'down';
-
-const MOBILE_MOVE_HORIZONTAL_DEADZONE_PX = 3;
-const MOBILE_MOVE_HORIZONTAL_FULL_TILT_PX = 15;
-const MOBILE_MOVE_VERTICAL_DEADZONE_PX = 10;
-const MOBILE_MOVE_VERTICAL_FULL_TILT_PX = 38;
-const MOBILE_MOVE_STICK_VISUAL_LIMIT_PX = 42;
 
 type Elements = {
-  rotateGate: HTMLElement | null;
   mobileEditorNav: HTMLElement | null;
   mobileEditorUndoButton: HTMLButtonElement | null;
   mobileEditorToggleButton: HTMLButtonElement | null;
-  mobilePlayControls: HTMLElement | null;
-  mobileDpad: HTMLElement | null;
-  mobileMoveStick: HTMLElement | null;
-  mobileDpadButtons: HTMLButtonElement[];
-  mobileJumpButton: HTMLButtonElement | null;
-  mobileSlashButton: HTMLButtonElement | null;
-  mobileShootButton: HTMLButtonElement | null;
   mobileWorldStopButton: HTMLButtonElement | null;
   mobileWorldRestartButton: HTMLButtonElement | null;
   mobileCameraTuner: HTMLElement | null;
@@ -53,14 +32,11 @@ type Elements = {
 export class MobileUiController {
   private readonly elements: Elements;
   private readonly mutationObserver: MutationObserver;
-  private pausedSceneKeys = new Set<string>();
+  private readonly portraitPlayControls: PortraitPlayControlsController;
   private activeEditorSheet: EditorSheetId = 'tools';
   private editorSheetCollapsed = false;
   private worldHudCollapsed = false;
   private previousAppMode: string | null = null;
-  private activeDpadPointers = new Map<number, MoveDirection>();
-  private activeMovePointerId: number | null = null;
-  private movePointerOrigin: { x: number; y: number } | null = null;
   private lastTouchEndAt = 0;
 
   constructor(
@@ -69,17 +45,9 @@ export class MobileUiController {
     private readonly windowObj: Window = window,
   ) {
     this.elements = {
-      rotateGate: doc.getElementById('rotate-gate'),
       mobileEditorNav: doc.getElementById('mobile-editor-nav'),
       mobileEditorUndoButton: doc.getElementById('btn-mobile-editor-undo') as HTMLButtonElement | null,
       mobileEditorToggleButton: doc.getElementById('btn-mobile-editor-toggle') as HTMLButtonElement | null,
-      mobilePlayControls: doc.getElementById('mobile-play-controls'),
-      mobileDpad: doc.getElementById('mobile-dpad'),
-      mobileMoveStick: doc.getElementById('mobile-move-stick'),
-      mobileDpadButtons: Array.from(doc.querySelectorAll<HTMLButtonElement>('[data-mobile-direction]')),
-      mobileJumpButton: doc.getElementById('btn-mobile-jump') as HTMLButtonElement | null,
-      mobileSlashButton: doc.getElementById('btn-mobile-slash') as HTMLButtonElement | null,
-      mobileShootButton: doc.getElementById('btn-mobile-shoot') as HTMLButtonElement | null,
       mobileWorldStopButton: doc.getElementById('btn-mobile-world-stop') as HTMLButtonElement | null,
       mobileWorldRestartButton: doc.getElementById('btn-mobile-world-restart') as HTMLButtonElement | null,
       mobileCameraTuner: doc.getElementById('mobile-camera-tuner'),
@@ -101,6 +69,7 @@ export class MobileUiController {
     this.mutationObserver = new MutationObserver(() => {
       this.render();
     });
+    this.portraitPlayControls = new PortraitPlayControlsController(doc);
   }
 
   init(): void {
@@ -113,8 +82,7 @@ export class MobileUiController {
     this.bindMobileEditorActions();
     this.bindMobileWorldHud();
     this.bindWorldShortcuts();
-    this.bindDpad();
-    this.bindActionButtons();
+    this.portraitPlayControls.init();
     this.bindMobileCameraTuner();
     this.bindDoubleTapZoomSuppression();
     this.windowObj.addEventListener('mobile-editor-auto-collapse', this.handleAutoCollapse as EventListener);
@@ -123,6 +91,7 @@ export class MobileUiController {
 
   destroy(): void {
     this.mutationObserver.disconnect();
+    this.portraitPlayControls.destroy();
     this.windowObj.removeEventListener(DEVICE_LAYOUT_CHANGED_EVENT, this.handleDeviceLayoutChanged as EventListener);
     this.windowObj.removeEventListener('mobile-editor-auto-collapse', this.handleAutoCollapse as EventListener);
     this.doc.removeEventListener('touchend', this.handleTouchEndSuppressDoubleTapZoom, true);
@@ -324,255 +293,6 @@ export class MobileUiController {
     );
   }
 
-  private bindDpad(): void {
-    const moveZone = this.elements.mobileDpad;
-    if (!moveZone) {
-      return;
-    }
-
-    const release = (pointerId: number) => {
-      if (!this.activeDpadPointers.has(pointerId)) {
-        return;
-      }
-
-      this.activeDpadPointers.delete(pointerId);
-      this.applyDpadState();
-    };
-
-    this.elements.mobileDpadButtons.forEach((button) => {
-      const direction = this.getMoveDirection(button.dataset.mobileDirection);
-      if (!direction) {
-        return;
-      }
-
-      button.addEventListener('pointerdown', (event) => {
-        event.preventDefault();
-        this.activeDpadPointers.set(event.pointerId, direction);
-        this.applyDpadState();
-        this.trySetPointerCapture(button, event.pointerId);
-      });
-
-      const releaseButtonPointer = (event: PointerEvent) => {
-        if (this.activeDpadPointers.get(event.pointerId) !== direction) {
-          return;
-        }
-
-        release(event.pointerId);
-      };
-
-      button.addEventListener('pointerup', releaseButtonPointer);
-      button.addEventListener('pointercancel', releaseButtonPointer);
-      button.addEventListener('lostpointercapture', releaseButtonPointer);
-    });
-
-    moveZone.addEventListener('pointerdown', (event) => {
-      if (!this.isPortraitMoveZoneActive() || this.activeMovePointerId !== null) {
-        return;
-      }
-
-      event.preventDefault();
-      if (!this.isPointInsideMoveStick(event)) {
-        return;
-      }
-
-      this.activeDpadPointers.clear();
-      this.syncDpadButtonState();
-      this.activeMovePointerId = event.pointerId;
-      this.movePointerOrigin = { x: event.clientX, y: event.clientY };
-      moveZone.setAttribute('data-mobile-move-active', 'true');
-      setTouchMove(0, 0);
-      this.trySetPointerCapture(moveZone, event.pointerId);
-    });
-
-    moveZone.addEventListener('pointermove', (event) => {
-      if (
-        event.pointerId !== this.activeMovePointerId
-        || !this.movePointerOrigin
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-      if (!this.isPortraitMoveZoneActive()) {
-        this.clearMoveZoneState();
-        return;
-      }
-
-      const deltaX = event.clientX - this.movePointerOrigin.x;
-      const deltaY = event.clientY - this.movePointerOrigin.y;
-      this.syncMoveStickVisual(deltaX, deltaY);
-      setTouchMove(
-        this.resolveTightMoveAxis(
-          deltaX,
-          MOBILE_MOVE_HORIZONTAL_DEADZONE_PX,
-          MOBILE_MOVE_HORIZONTAL_FULL_TILT_PX,
-        ),
-        this.resolveTightMoveAxis(
-          deltaY,
-          MOBILE_MOVE_VERTICAL_DEADZONE_PX,
-          MOBILE_MOVE_VERTICAL_FULL_TILT_PX,
-        ),
-      );
-    });
-
-    const releaseMoveZonePointer = (event: PointerEvent) => {
-      if (event.pointerId !== this.activeMovePointerId) {
-        return;
-      }
-
-      event.preventDefault();
-      this.clearMoveZoneState();
-    };
-
-    moveZone.addEventListener('pointerup', releaseMoveZonePointer);
-    moveZone.addEventListener('pointercancel', releaseMoveZonePointer);
-    moveZone.addEventListener('lostpointercapture', releaseMoveZonePointer);
-  }
-
-  private getMoveDirection(direction: string | undefined): MoveDirection | null {
-    if (
-      direction === 'up'
-      || direction === 'left'
-      || direction === 'right'
-      || direction === 'down'
-    ) {
-      return direction;
-    }
-
-    return null;
-  }
-
-  private applyDpadState(): void {
-    let x = 0;
-    let y = 0;
-
-    for (const direction of this.activeDpadPointers.values()) {
-      if (direction === 'left') {
-        x -= 1;
-      } else if (direction === 'right') {
-        x += 1;
-      } else if (direction === 'up') {
-        y -= 1;
-      } else if (direction === 'down') {
-        y += 1;
-      }
-    }
-
-    setTouchMove(Math.max(-1, Math.min(1, x)), Math.max(-1, Math.min(1, y)));
-    this.syncDpadButtonState();
-  }
-
-  private resolveTightMoveAxis(deltaPx: number, deadzonePx: number, fullTiltPx: number): number {
-    const absoluteDelta = Math.abs(deltaPx);
-    if (absoluteDelta <= deadzonePx) {
-      return 0;
-    }
-
-    const denominator = Math.max(1, fullTiltPx - deadzonePx);
-    const normalized = Math.min(1, (absoluteDelta - deadzonePx) / denominator);
-    return Math.sign(deltaPx) * normalized;
-  }
-
-  private isPortraitMoveZoneActive(): boolean {
-    const layout = getDeviceLayoutState();
-    return (
-      layout.deviceClass === 'phone'
-      && layout.coarsePointer
-      && layout.orientationState === 'portrait'
-      && this.doc.body.dataset.appMode === 'play-world'
-      && this.doc.body.dataset.mobilePortraitPlay === 'true'
-    );
-  }
-
-  private isPointInsideMoveStick(event: PointerEvent): boolean {
-    const stick = this.elements.mobileMoveStick;
-    if (!stick) {
-      return false;
-    }
-
-    const rect = stick.getBoundingClientRect();
-    return (
-      event.clientX >= rect.left
-      && event.clientX <= rect.right
-      && event.clientY >= rect.top
-      && event.clientY <= rect.bottom
-    );
-  }
-
-  private syncDpadButtonState(): void {
-    const activeDirections = new Set(this.activeDpadPointers.values());
-    this.elements.mobileDpadButtons.forEach((button) => {
-      const direction = this.getMoveDirection(button.dataset.mobileDirection);
-      button.classList.toggle('is-active', Boolean(direction && activeDirections.has(direction)));
-    });
-  }
-
-  private clearDpadState(): void {
-    if (this.activeDpadPointers.size > 0) {
-      this.activeDpadPointers.clear();
-    }
-
-    this.activeMovePointerId = null;
-    this.movePointerOrigin = null;
-    this.elements.mobileDpad?.removeAttribute('data-mobile-move-active');
-    this.resetMoveStickVisual();
-    setTouchMove(0, 0);
-    this.syncDpadButtonState();
-  }
-
-  private syncMoveStickVisual(deltaX: number, deltaY: number): void {
-    const moveZone = this.elements.mobileDpad;
-    if (!moveZone) {
-      return;
-    }
-
-    const visualX = Math.max(
-      -MOBILE_MOVE_STICK_VISUAL_LIMIT_PX,
-      Math.min(MOBILE_MOVE_STICK_VISUAL_LIMIT_PX, deltaX),
-    );
-    const visualY = Math.max(
-      -MOBILE_MOVE_STICK_VISUAL_LIMIT_PX,
-      Math.min(MOBILE_MOVE_STICK_VISUAL_LIMIT_PX, deltaY),
-    );
-    moveZone.style.setProperty('--mobile-move-stick-x', `${Math.round(visualX)}px`);
-    moveZone.style.setProperty('--mobile-move-stick-y', `${Math.round(visualY)}px`);
-  }
-
-  private resetMoveStickVisual(): void {
-    const moveZone = this.elements.mobileDpad;
-    if (!moveZone) {
-      return;
-    }
-
-    moveZone.style.setProperty('--mobile-move-stick-x', '0px');
-    moveZone.style.setProperty('--mobile-move-stick-y', '0px');
-  }
-
-  private clearMoveZoneState(): void {
-    this.activeMovePointerId = null;
-    this.movePointerOrigin = null;
-    this.elements.mobileDpad?.removeAttribute('data-mobile-move-active');
-    this.resetMoveStickVisual();
-    setTouchMove(0, 0);
-  }
-
-  private bindActionButtons(): void {
-    this.bindHoldButton(this.elements.mobileJumpButton, 'jump');
-    this.bindHoldButton(this.elements.mobileSlashButton, 'slash');
-    this.bindHoldButton(this.elements.mobileShootButton, 'shoot');
-
-    this.elements.mobileWorldStopButton?.addEventListener('click', () => {
-      if (this.doc.body.dataset.appMode === 'play-world') {
-        pressTouchAction('stop');
-      }
-    });
-    this.elements.mobileWorldRestartButton?.addEventListener('click', () => {
-      if (this.doc.body.dataset.appMode === 'play-world') {
-        pressTouchAction('restart');
-      }
-    });
-  }
-
   private bindMobileCameraTuner(): void {
     this.elements.mobileCameraTunerButtons.forEach((button) => {
       button.addEventListener('click', (event) => {
@@ -614,26 +334,6 @@ export class MobileUiController {
     });
   }
 
-  private bindHoldButton(button: HTMLButtonElement | null, action: 'jump' | 'slash' | 'shoot'): void {
-    if (!button) {
-      return;
-    }
-
-    const release = () => {
-      setTouchActionHeld(action, false);
-    };
-
-    button.addEventListener('pointerdown', (event) => {
-      event.preventDefault();
-      setTouchActionHeld(action, true);
-      pressTouchAction(action);
-      this.trySetPointerCapture(button, event.pointerId);
-    });
-    button.addEventListener('pointerup', release);
-    button.addEventListener('pointercancel', release);
-    button.addEventListener('lostpointercapture', release);
-  }
-
   private openJumpSheet(): void {
     const jumpSheet = this.elements.worldJumpSheet;
     if (!jumpSheet) {
@@ -672,18 +372,6 @@ export class MobileUiController {
     delete this.doc.body.dataset.mobileJumpSheetOpen;
   }
 
-  private trySetPointerCapture(button: HTMLElement, pointerId: number): void {
-    if (typeof button.setPointerCapture !== 'function') {
-      return;
-    }
-
-    try {
-      button.setPointerCapture(pointerId);
-    } catch {
-      // Synthetic pointer flows and some browser edge cases can reject capture.
-    }
-  }
-
   private hasVisibleNonJumpModal(): boolean {
     return Array.from(this.doc.querySelectorAll<HTMLElement>('.history-modal')).some((element) => {
       if (element === this.elements.worldJumpSheet) {
@@ -710,11 +398,9 @@ export class MobileUiController {
       isWorld &&
       (isPlay || hasFocusedRoomLink);
     const isPortraitPlay = isPortraitFocusedRoom && isPlay;
-    const orientationBlocked = layout.mobileLandscapeBlocked && !isPortraitFocusedRoom;
     const isCollapsibleWorldHud =
       layout.coarsePointer &&
       layout.deviceClass !== 'desktop' &&
-      !orientationBlocked &&
       isWorld;
     const chatOpen = this.doc.getElementById('global-chat')?.classList.contains('is-open') ?? false;
     const jumpSheetOpen = !(this.elements.worldJumpSheet?.classList.contains('hidden') ?? true);
@@ -723,8 +409,6 @@ export class MobileUiController {
     const nonJumpModalOpen = this.hasVisibleNonJumpModal();
     const mobileShortcutOverlayOpen =
       chatOpen || jumpSheetOpen || menuOpen || busyOverlayOpen || nonJumpModalOpen;
-    const shouldPauseForOrientation = orientationBlocked;
-
     if (isPortraitFocusedRoom && (this.windowObj.scrollX !== 0 || this.windowObj.scrollY !== 0)) {
       this.windowObj.scrollTo(0, 0);
     }
@@ -741,7 +425,7 @@ export class MobileUiController {
 
     if (this.previousAppMode !== appMode) {
       if (layout.coarsePointer && layout.deviceClass !== 'desktop') {
-        if (appMode === 'play-world') {
+        if (appMode === 'play-world' && isPortraitPlay) {
           this.worldHudCollapsed = true;
         } else if (appMode === 'world') {
           this.worldHudCollapsed = false;
@@ -752,15 +436,18 @@ export class MobileUiController {
       this.previousAppMode = appMode;
     }
 
-    this.doc.body.dataset.mobileControlsVisible =
-      layout.coarsePointer && !orientationBlocked && isPlay ? 'true' : 'false';
+    if (isPlay && !isPortraitPlay && this.worldHudCollapsed) {
+      this.worldHudCollapsed = false;
+    }
+
+    this.doc.body.dataset.mobileControlsVisible = isPortraitPlay ? 'true' : 'false';
     this.doc.body.dataset.mobilePortraitPlay = isPortraitPlay ? 'true' : 'false';
     this.doc.body.dataset.mobilePortraitFocusedRoom = isPortraitFocusedRoom ? 'true' : 'false';
 
     if (this.elements.mobileEditorNav) {
       this.elements.mobileEditorNav.classList.toggle(
         'hidden',
-        !(isPhone && layout.coarsePointer && !orientationBlocked && isEditor),
+        !(isPhone && layout.coarsePointer && isEditor),
       );
       this.elements.mobileEditorNav
         .querySelectorAll<HTMLButtonElement>('[data-mobile-editor-sheet]')
@@ -778,22 +465,14 @@ export class MobileUiController {
       this.elements.mobileEditorToggleButton.disabled = musicModeActive;
     }
 
-    this.elements.rotateGate?.classList.toggle(
-      'hidden',
-      !orientationBlocked,
-    );
-
-    this.elements.mobilePlayControls?.classList.toggle(
-      'hidden',
-      !(layout.coarsePointer && !orientationBlocked && isPlay),
-    );
+    this.portraitPlayControls.render(isPortraitPlay);
     this.elements.mobileWorldStopButton?.classList.toggle(
       'hidden',
-      !(isCollapsibleWorldHud && isPlay && this.worldHudCollapsed),
+      !(isCollapsibleWorldHud && isPortraitPlay && this.worldHudCollapsed),
     );
     this.elements.mobileWorldRestartButton?.classList.toggle(
       'hidden',
-      !(isCollapsibleWorldHud && isPlay && this.worldHudCollapsed),
+      !(isCollapsibleWorldHud && isPortraitPlay && this.worldHudCollapsed),
     );
     this.elements.mobileCameraTuner?.classList.toggle(
       'hidden',
@@ -826,18 +505,6 @@ export class MobileUiController {
     );
     if (!(layout.coarsePointer && isWorld) || chatOpen || menuOpen || busyOverlayOpen || nonJumpModalOpen) {
       this.closeJumpSheet();
-    }
-
-    setTouchControlsActive(layout.coarsePointer && isPlay && !orientationBlocked);
-    if (!layout.coarsePointer || orientationBlocked || !isPlay) {
-      resetTouchInputState();
-      this.clearDpadState();
-    }
-
-    if (shouldPauseForOrientation) {
-      this.pauseInteractiveScenes();
-    } else {
-      this.resumeInteractiveScenes();
     }
   }
 
@@ -873,21 +540,4 @@ export class MobileUiController {
       + `cam ${snapshot.cameraZoom.toFixed(2)}`;
   }
 
-  private pauseInteractiveScenes(): void {
-    for (const sceneKey of ['OverworldPlayScene', 'EditorScene']) {
-      if (this.game.scene.isActive(sceneKey)) {
-        this.game.scene.pause(sceneKey);
-        this.pausedSceneKeys.add(sceneKey);
-      }
-    }
-  }
-
-  private resumeInteractiveScenes(): void {
-    for (const sceneKey of [...this.pausedSceneKeys]) {
-      if (this.game.scene.isPaused(sceneKey)) {
-        this.game.scene.resume(sceneKey);
-      }
-      this.pausedSceneKeys.delete(sceneKey);
-    }
-  }
 }

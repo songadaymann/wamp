@@ -28,12 +28,12 @@ output/web-game/mobile-smoke/
 
 It covers:
 
-- phone portrait browse without the old rotate/install gate
+- phone portrait browse with no install or rotate gate in the DOM
 - phone portrait deep-linked room play with touch controls and camera/player placement checks
 - phone portrait deep-linked room Stop flow into the compact bottom HUD
 - phone landscape browse HUD and shortcuts
 - phone landscape first-visit welcome modal
-- phone landscape play controls with D-pad and action-button touch state assertions
+- phone landscape play staying unblocked without the old D-pad controls
 - phone landscape editor sheets and collapse behavior
 - tablet landscape browse layout
 
@@ -64,7 +64,7 @@ Open this on the device:
 http://${LAN_IP}:3000
 ```
 
-For the portrait direct-play prototype, open a room coordinate directly:
+For the portrait-first play prototype, open a room coordinate directly:
 
 ```bash
 http://${LAN_IP}:3000/?x=0&y=0
@@ -84,8 +84,8 @@ For magic-link auth on the phone, make sure the Worker `APP_BASE_URL` points at 
 
 Before merging a mobile UI pass, verify at least:
 
-- iOS Safari in normal browser and home-screen launch
-- Android Chrome in normal browser and installed/PWA launch
-- portrait browse, landscape browse, play mode, editor sheets, chat, jump sheet, auth menu, leaderboard/explore modal
+- iOS Safari in a normal browser tab
+- Android Chrome in a normal browser tab
+- portrait room-link play, portrait browse after Stop, landscape browse, editor sheets, chat, jump sheet, auth menu, leaderboard/explore modal
 - keyboard-open behavior for inputs
 - safe-area behavior on notched phones

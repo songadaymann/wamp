@@ -406,7 +406,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   background: var(--mobile-portrait-console-line);
 }
 
-body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] #mobile-dpad {
+body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] #mobile-move-zone {
   --mobile-move-stick-x: 0px;
   --mobile-move-stick-y: 0px;
   left: 0;
@@ -475,7 +475,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   box-shadow: 3px 3px 0 #aaa4a5;
 }
 
-body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] #mobile-dpad::before {
+body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] #mobile-move-zone::before {
   content: 'Move';
   position: absolute;
   left: 18px;
@@ -487,7 +487,6 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   text-transform: lowercase;
 }
 
-body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .mobile-dpad-btn,
 body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .mobile-action-btn {
   border: 2px solid var(--mobile-portrait-console-ink);
   border-radius: 0;
@@ -500,12 +499,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   touch-action: none;
 }
 
-body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .mobile-dpad-btn::before,
 body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .mobile-action-btn::before {
-  display: none;
-}
-
-body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .mobile-dpad-btn {
   display: none;
 }
 
@@ -576,8 +570,6 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   font-size: 21px;
 }
 
-body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .mobile-dpad-btn.is-active,
-body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .mobile-dpad-btn:active,
 body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .mobile-action-btn:active,
 body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .mobile-action-btn.is-pressed {
   transform: translate(2px, 2px);

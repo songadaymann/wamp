@@ -74,9 +74,9 @@ const scenarios = [
     run: runPhoneLandscapeWelcomeModal,
   },
   {
-    name: 'phone-landscape-play-controls',
+    name: 'phone-landscape-play-no-legacy-controls',
     profile: profiles.phoneLandscape,
-    run: runPhoneLandscapePlayControls,
+    run: runPhoneLandscapePlayNoLegacyControls,
   },
   {
     name: 'phone-landscape-editor-sheets',
@@ -257,7 +257,6 @@ async function runPhonePortraitBrowseUnblocked(page, scenarioSummary, scenarioDi
     (candidate) =>
       candidate?.device?.deviceClass === 'phone' &&
       candidate.device.orientationState === 'portrait' &&
-      candidate.device.mobileLandscapeBlocked === false &&
       candidate?.activeScene?.scene === 'overworld-play',
     'phone portrait unblocked browse',
   );
@@ -266,9 +265,10 @@ async function runPhonePortraitBrowseUnblocked(page, scenarioSummary, scenarioDi
     device: state.device,
     activeScene: summarizeActiveScene(state.activeScene),
   });
-  await assertHidden(page, '#rotate-gate', 'rotate gate in phone portrait browse');
-  await assertHidden(page, '#install-help-modal', 'install help modal in phone portrait browse');
-  await assertHidden(page, '#btn-install-help-open', 'install app menu button in phone portrait browse');
+  await assertAbsent(page, '#rotate-gate', 'rotate gate in phone portrait browse');
+  await assertAbsent(page, '#install-help-modal', 'install help modal in phone portrait browse');
+  await assertAbsent(page, '#btn-install-help-open', 'install app menu button in phone portrait browse');
+  await assertAbsent(page, '.mobile-dpad-btn', 'legacy mobile D-pad buttons in phone portrait browse');
   await assertHidden(page, '#mobile-play-controls', 'mobile play controls while browsing portrait');
   await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'portrait-browse');
 }
@@ -285,10 +285,11 @@ async function runPhonePortraitDeepLinkPlay(page, scenarioSummary, scenarioDir) 
       && candidate?.activeScene?.mode === 'play',
     'phone portrait deep-linked play mode',
   );
-  await assertHidden(page, '#rotate-gate', 'rotate gate during phone portrait play');
+  await assertAbsent(page, '#rotate-gate', 'rotate gate during phone portrait play');
   await assertVisible(page, '#mobile-play-controls', 'portrait mobile play controls');
-  await assertVisible(page, '#mobile-dpad', 'portrait mobile D-pad');
+  await assertVisible(page, '#mobile-move-zone', 'portrait mobile move zone');
   await assertVisible(page, '#mobile-move-stick', 'portrait mobile move stick');
+  await assertAbsent(page, '.mobile-dpad-btn', 'legacy mobile D-pad buttons during portrait play');
   await assertVisible(page, '#btn-mobile-jump', 'portrait mobile jump');
   await assertVisible(page, '#btn-mobile-slash', 'portrait mobile sword');
   await assertVisible(page, '#btn-mobile-shoot', 'portrait mobile shoot');
@@ -300,7 +301,7 @@ async function runPhonePortraitDeepLinkPlay(page, scenarioSummary, scenarioDir) 
     page,
     [
       '#mobile-play-controls',
-      '#mobile-dpad',
+      '#mobile-move-zone',
       '#mobile-move-stick',
       '#btn-mobile-jump',
       '#btn-mobile-slash',
@@ -355,15 +356,15 @@ async function runPhonePortraitDeepLinkPlay(page, scenarioSummary, scenarioDir) 
     `portrait move stick should be large enough for thumb targeting: ${JSON.stringify(layout.moveStick)}`,
   );
 
-  await dispatchPointerAtRatio(page, '#mobile-dpad', 'pointerdown', 50, 0.16, 0.16);
-  await dispatchPointerAtRatio(page, '#mobile-dpad', 'pointermove', 50, 0.86, 0.86);
+  await dispatchPointerAtRatio(page, '#mobile-move-zone', 'pointerdown', 50, 0.16, 0.16);
+  await dispatchPointerAtRatio(page, '#mobile-move-zone', 'pointermove', 50, 0.86, 0.86);
   await page.waitForTimeout(100);
   const outsideStickState = await readState(page);
   assertCondition(
     outsideStickState?.touch?.moveX === 0 && outsideStickState.touch.moveY === 0,
     `portrait grey move-zone background should not move player: ${JSON.stringify(outsideStickState?.touch)}`,
   );
-  await dispatchPointerAtRatio(page, '#mobile-dpad', 'pointerup', 50, 0.86, 0.86);
+  await dispatchPointerAtRatio(page, '#mobile-move-zone', 'pointerup', 50, 0.86, 0.86);
 
   await dispatchPointerAt(page, '#mobile-move-stick', 'pointerdown', 51);
   await dispatchPointerAt(page, '#mobile-move-stick', 'pointermove', 51, 8, 0);
@@ -465,7 +466,7 @@ async function runPhonePortraitDeepLinkBottomHud(page, scenarioSummary, scenario
     'phone portrait focused room browse mode',
   );
 
-  await assertHidden(page, '#rotate-gate', 'rotate gate during phone portrait focused room browse');
+  await assertAbsent(page, '#rotate-gate', 'rotate gate during phone portrait focused room browse');
   await assertHidden(page, '#mobile-play-controls', 'mobile play controls after stopping portrait play');
   await assertHidden(page, '#bottom-bar', 'bottom bar during portrait focused room HUD');
   await assertVisible(page, '#world-hud', 'portrait focused room bottom HUD');
@@ -590,9 +591,10 @@ async function runPhonePortraitCameraTuner(page, scenarioSummary, scenarioDir) {
 async function runPhoneLandscapeBrowse(page, scenarioSummary, scenarioDir) {
   const state = await waitForReadyOverworld(page, 'phone landscape browse');
   assertCondition(state.device.deviceClass === 'phone', 'expected phone device class');
-  assertCondition(state.device.mobileLandscapeBlocked === false, 'expected phone landscape to be unblocked');
   await closeBlockingOverlays(page);
-  await assertHidden(page, '#rotate-gate', 'rotate gate in phone landscape');
+  await assertAbsent(page, '#rotate-gate', 'rotate gate in phone landscape');
+  await assertAbsent(page, '#install-help-modal', 'install help modal in phone landscape');
+  await assertAbsent(page, '.mobile-dpad-btn', 'legacy mobile D-pad buttons in phone landscape browse');
   await assertVisible(page, '#world-hud', 'world HUD');
   await assertVisible(page, '#btn-world-chat', 'mobile global chat shortcut');
   await assertVisible(page, '#btn-world-jump-sheet', 'mobile jump shortcut');
@@ -607,7 +609,6 @@ async function runPhoneLandscapeBrowse(page, scenarioSummary, scenarioDir) {
 async function runPhoneLandscapeWelcomeModal(page, scenarioSummary, scenarioDir) {
   const state = await waitForReadyOverworld(page, 'phone landscape welcome boot');
   assertCondition(state.device.deviceClass === 'phone', 'expected phone device class');
-  assertCondition(state.device.mobileLandscapeBlocked === false, 'expected phone landscape to be unblocked');
 
   await page.waitForSelector('#welcome-modal:not(.hidden)', { state: 'visible', timeout: 15_000 });
   await assertVisible(page, '#welcome-modal .welcome-modal-panel', 'welcome modal panel');
@@ -638,7 +639,7 @@ async function runPhoneLandscapeWelcomeModal(page, scenarioSummary, scenarioDir)
   await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'welcome-modal');
 }
 
-async function runPhoneLandscapePlayControls(page, scenarioSummary, scenarioDir) {
+async function runPhoneLandscapePlayNoLegacyControls(page, scenarioSummary, scenarioDir) {
   await waitForReadyOverworld(page, 'phone landscape play boot');
   await closeBlockingOverlays(page);
   await selectEditableRoom(page);
@@ -647,75 +648,26 @@ async function runPhoneLandscapePlayControls(page, scenarioSummary, scenarioDir)
   await waitForBodyAppMode(page, 'play-world', 'phone play app mode');
   const state = await waitForAppState(
     page,
-    (candidate) => candidate?.touch?.active === true && candidate?.device?.deviceClass === 'phone',
-    'phone play mode',
+    (candidate) =>
+      candidate?.touch?.active === false
+      && candidate?.device?.deviceClass === 'phone'
+      && candidate.device.orientationState === 'landscape'
+      && candidate?.activeScene?.mode === 'play',
+    'phone landscape play mode without portrait controls',
   );
   scenarioSummary.assertions.push({
-    label: 'entered phone play mode',
+    label: 'entered phone landscape play without enabling legacy touch controls',
     activeScene: summarizeActiveScene(state.activeScene),
   });
 
-  await assertVisible(page, '#mobile-play-controls', 'mobile play controls');
-  await assertVisible(page, '#mobile-dpad', 'mobile D-pad');
-  await assertVisible(page, '#btn-mobile-jump', 'mobile jump');
-  await assertVisible(page, '#btn-mobile-slash', 'mobile slash');
-  await assertVisible(page, '#btn-mobile-shoot', 'mobile shoot');
-  await assertSelectorsWithinViewport(
-    page,
-    ['#mobile-dpad', '#btn-mobile-jump', '#btn-mobile-slash', '#btn-mobile-shoot', '#btn-mobile-world-stop'],
-    'phone play controls bounds',
-  );
+  await assertHidden(page, '#mobile-play-controls', 'portrait-only mobile play controls in phone landscape');
+  await assertAbsent(page, '.mobile-dpad-btn', 'legacy mobile D-pad buttons in phone landscape play');
+  await assertAbsent(page, '#btn-mobile-right', 'legacy mobile right button in phone landscape play');
+  await assertAbsent(page, '#rotate-gate', 'rotate gate in phone landscape play');
+  await assertVisible(page, '#world-hud', 'world HUD remains available in phone landscape play');
 
-  await dispatchPointer(page, '#btn-mobile-right', 'pointerdown', 41);
-  await waitForAppState(
-    page,
-    (candidate) => candidate?.touch?.active === true && candidate.touch.moveX > 0,
-    'held right touch input',
-    5000,
-  );
-  await dispatchPointer(page, '#btn-mobile-right', 'pointerup', 41);
-  await waitForAppState(
-    page,
-    (candidate) => candidate?.touch?.active === true && candidate.touch.moveX === 0,
-    'released right touch input',
-    5000,
-  );
-
-  await dispatchPointer(page, '#btn-mobile-jump', 'pointerdown', 42);
-  await waitForAppState(
-    page,
-    (candidate) => candidate?.touch?.active === true && candidate.touch.jumpHeld === true,
-    'held jump touch input',
-    5000,
-  );
-  await dispatchPointer(page, '#btn-mobile-jump', 'pointerup', 42);
-  await waitForAppState(
-    page,
-    (candidate) => candidate?.touch?.active === true && candidate.touch.jumpHeld === false,
-    'released jump touch input',
-    5000,
-  );
-
-  await dispatchPointer(page, '#btn-mobile-slash', 'pointerdown', 43);
-  await waitForAppState(
-    page,
-    (candidate) => candidate?.touch?.slashHeld === true,
-    'held slash touch input',
-    5000,
-  );
-  await dispatchPointer(page, '#btn-mobile-slash', 'pointerup', 43);
-
-  await dispatchPointer(page, '#btn-mobile-shoot', 'pointerdown', 44);
-  await waitForAppState(
-    page,
-    (candidate) => candidate?.touch?.shootHeld === true,
-    'held shoot touch input',
-    5000,
-  );
-  await dispatchPointer(page, '#btn-mobile-shoot', 'pointerup', 44);
-
-  scenarioSummary.assertions.push({ label: 'mobile D-pad and action holds update touch debug state' });
-  await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'play-controls');
+  scenarioSummary.assertions.push({ label: 'phone landscape stays unblocked without old D-pad controls' });
+  await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'play-no-legacy-controls');
 }
 
 async function runPhoneLandscapeEditorSheets(page, scenarioSummary, scenarioDir) {
@@ -754,7 +706,6 @@ async function runTabletLandscapeBrowse(page, scenarioSummary, scenarioDir) {
   const state = await waitForReadyOverworld(page, 'tablet landscape browse');
   assertCondition(state.device.deviceClass === 'tablet', `expected tablet, got ${state.device.deviceClass}`);
   assertCondition(state.device.coarsePointer === true, 'expected coarse pointer on tablet profile');
-  assertCondition(state.device.mobileLandscapeBlocked === false, 'expected tablet landscape to be unblocked');
   await closeBlockingOverlays(page);
   await assertVisible(page, '#world-hud', 'tablet world HUD');
   await assertHidden(page, '#mobile-editor-nav', 'phone editor nav on tablet browse');
@@ -904,6 +855,11 @@ async function waitForAppState(page, predicate, label, timeoutMs = 30_000) {
     await page.waitForTimeout(250);
   }
 
+  lastState = await readState(page);
+  if (lastState && predicate(lastState)) {
+    return lastState;
+  }
+
   throw new Error(`Timed out waiting for ${label}. Last state: ${JSON.stringify(summarizeStateForLog(lastState))}`);
 }
 
@@ -916,6 +872,11 @@ async function assertVisible(page, selector, label) {
 async function assertHidden(page, selector, label) {
   const visible = await page.locator(selector).first().isVisible().catch(() => false);
   assertCondition(!visible, `${label} should be hidden (${selector})`);
+}
+
+async function assertAbsent(page, selector, label) {
+  const count = await page.locator(selector).count();
+  assertCondition(count === 0, `${label} should be absent (${selector}), found ${count}`);
 }
 
 async function assertSelectorsWithinViewport(page, selectors, label) {
@@ -1210,7 +1171,7 @@ async function readPortraitPlayLayout(page, state) {
         height: window.innerHeight,
       },
       controls: serializeRect(controls.getBoundingClientRect()),
-      moveZone: readSelectionStyle(document.getElementById('mobile-dpad')),
+      moveZone: readSelectionStyle(document.getElementById('mobile-move-zone')),
       moveStick: readMoveStickLayout(),
       playerScreen: {
         x: Math.round((player.x - worldView.x) * zoom),
@@ -1238,7 +1199,7 @@ async function readPortraitPlayLayout(page, state) {
     }
 
     function readMoveStickLayout() {
-      const moveZone = document.getElementById('mobile-dpad');
+      const moveZone = document.getElementById('mobile-move-zone');
       const stick = document.getElementById('mobile-move-stick');
       const knob = stick?.querySelector('.mobile-move-stick-knob');
       if (!(moveZone instanceof HTMLElement) || !(stick instanceof HTMLElement) || !(knob instanceof HTMLElement)) {
