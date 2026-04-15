@@ -1,4 +1,5 @@
 import type { UserProfileResponse, ProfilePublishedRoomEntry, ProfileStatsSummary } from '../../../profiles/model';
+import { listPlayerAvatarChoicesForLevel, resolveSelectablePlayerAvatarId } from '../../../player/avatar/unlocks';
 import { isPlayfunLeaderboardExcludedDisplayName } from '../../../playfun/identity';
 import type { Env } from '../core/types';
 import { findUserById, loadAllUserStatsRows, loadPublicUserProfileCourseCount, loadPublishedRoomsByCreator, loadUserStatsRow } from '../auth/store';
@@ -43,6 +44,7 @@ export async function loadUserProfile(
   const publishedRooms = buildPublishedRooms(publishedRoomRows);
   const isSelf = viewerUserId === targetUserId;
   const progression = await loadPublicProgressionSummary(env, targetUserId);
+  const selectedAvatarId = resolveSelectablePlayerAvatarId(user.selectedAvatarId);
 
   return {
     userId: user.id,
@@ -50,6 +52,8 @@ export async function loadUserProfile(
     createdAt: user.createdAt ?? new Date(0).toISOString(),
     avatarUrl: user.avatarUrl ?? null,
     bio: user.bio ?? null,
+    selectedAvatarId,
+    avatarChoices: listPlayerAvatarChoicesForLevel(progression.player.level, selectedAvatarId),
     isSelf,
     canEdit: isSelf,
     stats,

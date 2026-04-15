@@ -32,6 +32,7 @@ export async function findUserByEmail(env: Env, email: string): Promise<AuthUser
         display_name,
         NULL AS avatar_url,
         NULL AS bio,
+        NULL AS selected_avatar_id,
         created_at,
         updated_at
       FROM users
@@ -55,6 +56,7 @@ export async function findUserByWallet(env: Env, walletAddress: string): Promise
         display_name,
         NULL AS avatar_url,
         NULL AS bio,
+        NULL AS selected_avatar_id,
         created_at,
         updated_at
       FROM users
@@ -78,6 +80,7 @@ export async function findUserById(env: Env, userId: string): Promise<AuthUser |
         display_name,
         NULL AS avatar_url,
         NULL AS bio,
+        NULL AS selected_avatar_id,
         created_at,
         updated_at
       FROM users
@@ -101,6 +104,7 @@ export async function findUserByDisplayName(env: Env, displayName: string): Prom
         display_name,
         NULL AS avatar_url,
         NULL AS bio,
+        NULL AS selected_avatar_id,
         created_at,
         updated_at
       FROM users
@@ -238,6 +242,7 @@ export async function updateUserProfile(
     displayName?: string;
     avatarUrl?: string | null;
     bio?: string | null;
+    selectedAvatarId?: string | null;
   }
 ): Promise<AuthUser> {
   const updatedAt = new Date().toISOString();
@@ -245,14 +250,16 @@ export async function updateUserProfile(
   const nextAvatarUrl =
     updates.avatarUrl === undefined ? (user.avatarUrl ?? null) : updates.avatarUrl;
   const nextBio = updates.bio === undefined ? (user.bio ?? null) : updates.bio;
+  const nextSelectedAvatarId =
+    updates.selectedAvatarId === undefined ? (user.selectedAvatarId ?? null) : updates.selectedAvatarId;
   const statements = [
     env.DB.prepare(
       `
         UPDATE users
-        SET display_name = ?, avatar_url = ?, bio = ?, updated_at = ?
+        SET display_name = ?, avatar_url = ?, bio = ?, selected_avatar_id = ?, updated_at = ?
         WHERE id = ?
       `
-    ).bind(nextDisplayName, nextAvatarUrl, nextBio, updatedAt, user.id),
+    ).bind(nextDisplayName, nextAvatarUrl, nextBio, nextSelectedAvatarId, updatedAt, user.id),
   ];
 
   if (nextDisplayName !== user.displayName) {
@@ -311,7 +318,7 @@ export async function updateUserProfile(
     if (isMissingUserProfileColumnError(error)) {
       throw new HttpError(
         503,
-        'Profile editing needs the latest database migration before avatar and bio fields can be saved.'
+        'Profile editing needs the latest database migration before avatar fields can be saved.'
       );
     }
 
@@ -323,6 +330,7 @@ export async function updateUserProfile(
     displayName: nextDisplayName,
     avatarUrl: nextAvatarUrl,
     bio: nextBio,
+    selectedAvatarId: nextSelectedAvatarId,
   };
 }
 
@@ -441,6 +449,7 @@ export async function loadMagicLinkByTokenHash(
         u.display_name,
         NULL AS avatar_url,
         NULL AS bio,
+        NULL AS selected_avatar_id,
         u.created_at AS user_created_at
       FROM magic_link_tokens m
       JOIN users u ON u.id = m.user_id
@@ -615,6 +624,7 @@ export async function loadSessionFromToken(env: Env, token: string): Promise<Aut
         u.display_name,
         NULL AS avatar_url,
         NULL AS bio,
+        NULL AS selected_avatar_id,
         u.created_at AS user_created_at
       FROM sessions s
       JOIN users u ON u.id = s.user_id
@@ -649,6 +659,7 @@ export async function loadSessionFromToken(env: Env, token: string): Promise<Aut
       createdAt: hydratedRow.user_created_at,
       avatarUrl: hydratedRow.avatar_url,
       bio: hydratedRow.bio,
+      selectedAvatarId: hydratedRow.selected_avatar_id,
     },
   };
 }
@@ -673,6 +684,7 @@ export async function loadApiTokenAuth(
         u.display_name,
         NULL AS avatar_url,
         NULL AS bio,
+        NULL AS selected_avatar_id,
         u.created_at AS user_created_at
       FROM api_tokens t
       JOIN users u ON u.id = t.user_id
@@ -697,6 +709,7 @@ export async function loadApiTokenAuth(
     createdAt: hydratedRow.user_created_at,
     avatarUrl: hydratedRow.avatar_url,
     bio: hydratedRow.bio,
+    selectedAvatarId: hydratedRow.selected_avatar_id,
   };
 
   const lastUsedAt = new Date().toISOString();
@@ -847,6 +860,7 @@ export function mapUserRow(row: UserRow): AuthUser {
     createdAt: row.created_at,
     avatarUrl: row.avatar_url,
     bio: row.bio,
+    selectedAvatarId: row.selected_avatar_id,
   };
 }
 
@@ -854,6 +868,7 @@ async function withUserProfileFields<
   T extends {
     avatar_url: string | null;
     bio: string | null;
+    selected_avatar_id: string | null;
   },
 >(
   env: Env,
@@ -870,28 +885,33 @@ async function withUserProfileFields<
 async function loadOptionalUserProfileFields(
   env: Env,
   userId: string
-): Promise<{ avatar_url: string | null; bio: string | null }> {
+): Promise<{ avatar_url: string | null; bio: string | null; selected_avatar_id: string | null }> {
   try {
     const row = await env.DB.prepare(
       `
-        SELECT avatar_url, bio
+        SELECT avatar_url, bio, selected_avatar_id
         FROM users
         WHERE id = ?
         LIMIT 1
       `
     )
       .bind(userId)
-      .first<{ avatar_url: string | null; bio: string | null }>();
+      .first<{ avatar_url: string | null; bio: string | null; selected_avatar_id: string | null }>();
 
     return {
       avatar_url: row?.avatar_url ?? null,
       bio: row?.bio ?? null,
+      selected_avatar_id: row?.selected_avatar_id ?? null,
     };
   } catch (error) {
+    if (isMissingSelectedAvatarColumnError(error)) {
+      return loadLegacyOptionalUserProfileFields(env, userId);
+    }
     if (isMissingUserProfileColumnError(error)) {
       return {
         avatar_url: null,
         bio: null,
+        selected_avatar_id: null,
       };
     }
 
@@ -900,7 +920,33 @@ async function loadOptionalUserProfileFields(
 }
 
 function isMissingUserProfileColumnError(error: unknown): boolean {
-  return error instanceof Error && /no such column:\s*(avatar_url|bio)/i.test(error.message);
+  return error instanceof Error && /no such column:\s*(avatar_url|bio|selected_avatar_id)/i.test(error.message);
+}
+
+function isMissingSelectedAvatarColumnError(error: unknown): boolean {
+  return error instanceof Error && /no such column:\s*selected_avatar_id/i.test(error.message);
+}
+
+async function loadLegacyOptionalUserProfileFields(
+  env: Env,
+  userId: string
+): Promise<{ avatar_url: string | null; bio: string | null; selected_avatar_id: string | null }> {
+  const row = await env.DB.prepare(
+    `
+      SELECT avatar_url, bio
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+    `
+  )
+    .bind(userId)
+    .first<{ avatar_url: string | null; bio: string | null }>();
+
+  return {
+    avatar_url: row?.avatar_url ?? null,
+    bio: row?.bio ?? null,
+    selected_avatar_id: null,
+  };
 }
 
 export function resolvePublicBaseUrl(request: Request, env: Env): string {

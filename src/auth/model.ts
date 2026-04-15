@@ -9,6 +9,7 @@ export interface AuthUser {
   createdAt?: string;
   avatarUrl?: string | null;
   bio?: string | null;
+  selectedAvatarId?: string | null;
 }
 
 export const API_TOKEN_SCOPES = [

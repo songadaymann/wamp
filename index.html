@@ -1466,9 +1466,12 @@
       <div id="profile-modal-error" class="history-modal-error hidden"></div>
       <div class="profile-modal-body">
         <div class="profile-hero">
-          <div class="profile-avatar-shell">
-            <img id="profile-avatar-image" class="profile-avatar-image hidden" alt="" />
-            <div id="profile-avatar-fallback" class="profile-avatar-fallback">PR</div>
+          <div class="profile-avatar-column">
+            <div class="profile-avatar-shell">
+              <img id="profile-avatar-image" class="profile-avatar-image hidden" alt="" />
+              <div id="profile-avatar-fallback" class="profile-avatar-fallback">PR</div>
+            </div>
+            <button id="btn-profile-avatar-change" class="profile-avatar-change-button hidden" type="button">Change Avatar</button>
           </div>
           <div class="profile-hero-copy">
             <div id="profile-display-name" class="profile-display-name">Profile</div>
@@ -1504,6 +1507,20 @@
           <div id="profile-stats-list" class="profile-stats-list"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="avatar-picker-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel leaderboard-modal-panel avatar-picker-modal-panel" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title">
+      <div class="history-modal-header avatar-picker-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Avatar</div>
+          <h2 id="avatar-picker-title" class="history-modal-title">Choose Avatar</h2>
+          <div id="avatar-picker-meta" class="history-modal-meta">Player LVL unlocks are available now.</div>
+        </div>
+        <button id="btn-avatar-picker-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div id="avatar-picker-grid" class="profile-avatar-grid"></div>
     </div>
   </div>
 

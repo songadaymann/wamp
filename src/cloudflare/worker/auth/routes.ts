@@ -224,6 +224,7 @@ export async function handleVerifyMagicLink(
     createdAt: row.user_created_at,
     avatarUrl: row.avatar_url,
     bio: row.bio,
+    selectedAvatarId: row.selected_avatar_id,
   };
 
   const sessionToken = await createSession(env, user.id);

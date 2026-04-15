@@ -1,9 +1,15 @@
 import type { UserProfileUpdateRequestBody, UserProfileUpdateResponse } from '../../../profiles/model';
+import { getRegisteredPlayerAvatarPack } from '../../../player/avatar/registry';
+import {
+  getPlayerAvatarUnlockLevel,
+  isPlayerAvatarUnlockedForLevel,
+} from '../../../player/avatar/unlocks';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
 import { findUserByDisplayName, updateUserProfile } from '../auth/store';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth } from '../auth/request';
 import { assertPlayfunOnlyDisplayNameChangeAllowed } from '../playfun/leaderboardIsolation';
+import { loadPublicProgressionSummary } from '../progression/store';
 import { loadUserProfile } from './store';
 
 const MAX_PROFILE_BIO_LENGTH = 280;
@@ -34,7 +40,11 @@ export async function handleProfileUpdateMe(request: Request, env: Env): Promise
     throw new HttpError(409, 'That display name has already been claimed.');
   }
 
-  const updatedUser = await updateUserProfile(env, auth.user, body);
+  const selectedAvatarId = await validateSelectedAvatarUpdate(env, auth.user.id, body.selectedAvatarId);
+  const updatedUser = await updateUserProfile(env, auth.user, {
+    ...body,
+    ...(selectedAvatarId !== undefined ? { selectedAvatarId } : {}),
+  });
   const profile = await loadUserProfile(env, auth.user.id, auth.user.id);
   if (!profile) {
     throw new HttpError(500, 'Profile update succeeded but reload failed.');
@@ -62,11 +72,13 @@ async function parseProfileUpdateBody(request: Request): Promise<UserProfileUpda
 
   const avatarUrl = normalizeAvatarUrl(body.avatarUrl);
   const bio = normalizeBio(body.bio);
+  const selectedAvatarId = normalizeSelectedAvatarId(body.selectedAvatarId);
 
   return {
     displayName,
     avatarUrl,
     bio,
+    ...(selectedAvatarId !== undefined ? { selectedAvatarId } : {}),
   };
 }
 
@@ -121,4 +133,45 @@ function normalizeBio(value: unknown): string | null {
   }
 
   return normalized;
+}
+
+function normalizeSelectedAvatarId(value: unknown): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
+  }
+  if (typeof value !== 'string') {
+    throw new HttpError(400, 'Selected avatar id must be a string.');
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+async function validateSelectedAvatarUpdate(
+  env: Env,
+  userId: string,
+  selectedAvatarId: string | null | undefined
+): Promise<string | null | undefined> {
+  if (selectedAvatarId === undefined || selectedAvatarId === null) {
+    return selectedAvatarId;
+  }
+
+  const pack = getRegisteredPlayerAvatarPack(selectedAvatarId);
+  if (!pack) {
+    throw new HttpError(400, 'Selected avatar is not registered.');
+  }
+
+  const progression = await loadPublicProgressionSummary(env, userId);
+  if (isPlayerAvatarUnlockedForLevel(selectedAvatarId, progression.player.level)) {
+    return selectedAvatarId;
+  }
+
+  const unlockLevel = getPlayerAvatarUnlockLevel(selectedAvatarId);
+  if (unlockLevel) {
+    throw new HttpError(403, `That avatar unlocks at Player LVL ${unlockLevel}.`);
+  }
+  throw new HttpError(403, 'That avatar is not unlockable yet.');
 }

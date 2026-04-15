@@ -7,6 +7,11 @@ import {
 } from '../../auth/client';
 import { renderRoomSnapshotToPngDataUrl } from '../../mint/roomMetadataRender';
 import { createWorldRepository, type WorldRepository } from '../../persistence/worldRepository';
+import type { PlayerAvatarChoice } from '../../player/avatar/model';
+import { createPlayerAvatarPreviewDataUrl } from '../../player/avatar/previews';
+import { DEFAULT_PLAYER_AVATAR_ID } from '../../player/avatar/registry';
+import { setStoredPlayerAvatarId } from '../../player/avatar/storage';
+import { resolveSelectablePlayerAvatarId } from '../../player/avatar/unlocks';
 import type { ProfilePublishedRoomEntry, ProfileStatsSummary, UserProfileResponse } from '../../profiles/model';
 import { createProfileRepository, type ProfileRepository } from '../../profiles/profileRepository';
 import type { ProgressionLaneSummary, ProgressionSummary } from '../../progression/model';
@@ -28,6 +33,11 @@ type ProfileModalElements = {
   title: HTMLElement | null;
   avatarImage: HTMLImageElement | null;
   avatarFallback: HTMLElement | null;
+  avatarChangeButton: HTMLButtonElement | null;
+  avatarPickerModal: HTMLElement | null;
+  avatarPickerCloseButton: HTMLButtonElement | null;
+  avatarPickerGrid: HTMLElement | null;
+  avatarPickerMeta: HTMLElement | null;
   displayName: HTMLElement | null;
   joinedDate: HTMLElement | null;
   heroLanes: HTMLElement | null;
@@ -47,8 +57,6 @@ type ProfileModalElements = {
 };
 
 type ProfileTone = 'player' | 'builder' | 'curator';
-
-const PROFILE_DEFAULT_AVATAR_SRC = '/assets/ui-creator-idle-tight.png';
 
 const PROFILE_LANE_VISUALS: Record<
   ProfileTone,
@@ -95,6 +103,8 @@ export class ProfileModalController {
   private loading = false;
   private saving = false;
   private avatarPreviewBroken = false;
+  private selectedAvatarIdDraft = DEFAULT_PLAYER_AVATAR_ID;
+  private avatarPreviewToken = 0;
   private loadToken = 0;
   private activeTabAutoSelected = false;
 
@@ -108,8 +118,23 @@ export class ProfileModalController {
     }
   };
 
+  private readonly handleAvatarPickerBackdropClick = (event: Event) => {
+    if (event.target === this.elements.avatarPickerModal) {
+      this.closeAvatarPicker();
+    }
+  };
+
   private readonly handleDocumentKeydown = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape' || this.elements.modal?.classList.contains('hidden')) {
+    if (event.key !== 'Escape') {
+      return;
+    }
+
+    if (!this.elements.avatarPickerModal?.classList.contains('hidden')) {
+      this.closeAvatarPicker();
+      return;
+    }
+
+    if (this.elements.modal?.classList.contains('hidden')) {
       return;
     }
 
@@ -173,6 +198,11 @@ export class ProfileModalController {
       title: this.doc.getElementById('profile-modal-title'),
       avatarImage: this.doc.getElementById('profile-avatar-image') as HTMLImageElement | null,
       avatarFallback: this.doc.getElementById('profile-avatar-fallback'),
+      avatarChangeButton: this.doc.getElementById('btn-profile-avatar-change') as HTMLButtonElement | null,
+      avatarPickerModal: this.doc.getElementById('avatar-picker-modal'),
+      avatarPickerCloseButton: this.doc.getElementById('btn-avatar-picker-close') as HTMLButtonElement | null,
+      avatarPickerGrid: this.doc.getElementById('avatar-picker-grid'),
+      avatarPickerMeta: this.doc.getElementById('avatar-picker-meta'),
       displayName: this.doc.getElementById('profile-display-name'),
       joinedDate: this.doc.getElementById('profile-joined-date'),
       heroLanes: this.doc.getElementById('profile-hero-lanes'),
@@ -203,11 +233,18 @@ export class ProfileModalController {
   init(): void {
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
+    this.elements.avatarPickerModal?.addEventListener('click', this.handleAvatarPickerBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
     this.windowObj.addEventListener(PROFILE_OPEN_REQUEST_EVENT, this.handleProfileOpenRequest as EventListener);
     this.windowObj.addEventListener(PROFILE_INVALIDATED_EVENT, this.handleProfileInvalidated as EventListener);
     this.windowObj.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
     this.elements.avatarImage?.addEventListener('error', this.handleAvatarImageError);
+    this.elements.avatarChangeButton?.addEventListener('click', () => {
+      this.openAvatarPicker();
+    });
+    this.elements.avatarPickerCloseButton?.addEventListener('click', () => {
+      this.closeAvatarPicker();
+    });
     this.elements.saveButton?.addEventListener('click', () => {
       void this.saveProfile();
     });
@@ -235,6 +272,7 @@ export class ProfileModalController {
     this.activeTabAutoSelected = false;
     this.loading = true;
     this.avatarPreviewBroken = false;
+    this.selectedAvatarIdDraft = DEFAULT_PLAYER_AVATAR_ID;
     this.setError(null);
     this.setSaveStatus('');
     this.currentProfile = null;
@@ -244,6 +282,7 @@ export class ProfileModalController {
     const cached = this.profileCache.get(userId);
     if (cached) {
       this.currentProfile = cached;
+      this.selectedAvatarIdDraft = resolveSelectablePlayerAvatarId(cached.selectedAvatarId);
       this.loading = false;
       this.selectDefaultTab(cached);
     }
@@ -259,6 +298,7 @@ export class ProfileModalController {
 
       this.profileCache.set(userId, profile);
       this.currentProfile = profile;
+      this.selectedAvatarIdDraft = resolveSelectablePlayerAvatarId(profile.selectedAvatarId);
       this.loading = false;
       this.selectDefaultTab(profile);
       this.render();
@@ -286,6 +326,8 @@ export class ProfileModalController {
     this.loading = false;
     this.saving = false;
     this.avatarPreviewBroken = false;
+    this.selectedAvatarIdDraft = DEFAULT_PLAYER_AVATAR_ID;
+    this.closeAvatarPicker();
     this.setError(null);
     this.setSaveStatus('');
   }
@@ -308,10 +350,13 @@ export class ProfileModalController {
         displayName,
         avatarUrl: null,
         bio,
+        selectedAvatarId: this.selectedAvatarIdDraft,
       });
       this.profileCache.set(response.profile.userId, response.profile);
       this.currentProfile = response.profile;
+      this.selectedAvatarIdDraft = resolveSelectablePlayerAvatarId(response.profile.selectedAvatarId);
       this.avatarPreviewBroken = false;
+      setStoredPlayerAvatarId(response.profile.selectedAvatarId);
       await refreshAuthSession();
       this.setSaveStatus('Profile saved.');
     } catch (error) {
@@ -360,6 +405,11 @@ export class ProfileModalController {
       this.elements.editFields.classList.toggle('hidden', !profile?.canEdit);
     }
 
+    if (this.elements.avatarChangeButton) {
+      this.elements.avatarChangeButton.classList.toggle('hidden', !profile?.canEdit);
+      this.elements.avatarChangeButton.disabled = this.saving || !profile?.canEdit;
+    }
+
     if (this.elements.displayNameInput && profile?.canEdit) {
       if (this.doc.activeElement !== this.elements.displayNameInput) {
         this.elements.displayNameInput.value = profile.displayName;
@@ -386,6 +436,7 @@ export class ProfileModalController {
     }
 
     this.renderAvatar();
+    this.renderAvatarPicker();
     this.renderRooms(profile?.publishedRooms ?? []);
     this.renderProgress(profile?.progression ?? null);
     this.renderStats(profile?.stats ?? null, profile?.publishedCourseCount ?? 0);
@@ -398,19 +449,179 @@ export class ProfileModalController {
       this.currentProfile?.canEdit
         ? this.elements.displayNameInput?.value.trim() || profile?.displayName || 'Profile'
         : profile?.displayName || 'Profile';
+    const avatarId = profile
+      ? profile.canEdit
+        ? this.selectedAvatarIdDraft
+        : resolveSelectablePlayerAvatarId(profile.selectedAvatarId)
+      : DEFAULT_PLAYER_AVATAR_ID;
 
     if (this.elements.avatarFallback) {
       this.elements.avatarFallback.textContent = initialsFromDisplayName(nameDraft);
     }
 
-    const canShowImage = !this.avatarPreviewBroken;
-    this.elements.avatarImage?.classList.toggle('hidden', !canShowImage);
-    this.elements.avatarFallback?.classList.toggle('hidden', canShowImage);
-
-    if (this.elements.avatarImage && canShowImage && this.elements.avatarImage.src !== PROFILE_DEFAULT_AVATAR_SRC) {
-      this.elements.avatarImage.src = PROFILE_DEFAULT_AVATAR_SRC;
-      this.elements.avatarImage.alt = `${nameDraft} avatar`;
+    const imageEl = this.elements.avatarImage;
+    if (!imageEl || this.avatarPreviewBroken) {
+      imageEl?.classList.add('hidden');
+      this.elements.avatarFallback?.classList.remove('hidden');
+      return;
     }
+
+    imageEl.alt = `${nameDraft} avatar`;
+    if (
+      imageEl.dataset.avatarId === avatarId
+      && imageEl.dataset.previewLoaded === 'true'
+      && imageEl.getAttribute('src')
+    ) {
+      imageEl.classList.remove('hidden');
+      this.elements.avatarFallback?.classList.add('hidden');
+      return;
+    }
+
+    imageEl.dataset.avatarId = avatarId;
+    imageEl.dataset.previewLoaded = 'false';
+    imageEl.classList.add('hidden');
+    this.elements.avatarFallback?.classList.remove('hidden');
+
+    const previewToken = ++this.avatarPreviewToken;
+    void createPlayerAvatarPreviewDataUrl(avatarId).then((dataUrl) => {
+      if (
+        previewToken !== this.avatarPreviewToken
+        || imageEl.dataset.avatarId !== avatarId
+        || !dataUrl
+      ) {
+        return;
+      }
+
+      imageEl.src = dataUrl;
+      imageEl.dataset.previewLoaded = 'true';
+      imageEl.classList.remove('hidden');
+      this.elements.avatarFallback?.classList.add('hidden');
+    });
+  }
+
+  private openAvatarPicker(): void {
+    if (!this.currentProfile?.canEdit || !this.elements.avatarPickerModal) {
+      return;
+    }
+
+    this.elements.avatarPickerModal.classList.remove('hidden');
+    this.elements.avatarPickerModal.setAttribute('aria-hidden', 'false');
+    this.renderAvatarPicker();
+  }
+
+  private closeAvatarPicker(): void {
+    if (!this.elements.avatarPickerModal) {
+      return;
+    }
+
+    this.elements.avatarPickerModal.classList.add('hidden');
+    this.elements.avatarPickerModal.setAttribute('aria-hidden', 'true');
+  }
+
+  private renderAvatarPicker(): void {
+    if (
+      !this.elements.avatarPickerModal
+      || this.elements.avatarPickerModal.classList.contains('hidden')
+      || !this.elements.avatarPickerGrid
+    ) {
+      return;
+    }
+
+    const profile = this.currentProfile;
+    const choices = profile?.avatarChoices ?? [];
+    if (this.elements.avatarPickerMeta) {
+      const playerLevel = profile?.progression.player.level ?? 1;
+      this.elements.avatarPickerMeta.textContent = `Player LVL ${playerLevel} unlocks are available now.`;
+    }
+
+    this.elements.avatarPickerGrid.replaceChildren(
+      ...choices.map((choice) => this.createAvatarChoiceButton(choice))
+    );
+  }
+
+  private createAvatarChoiceButton(choice: PlayerAvatarChoice): HTMLButtonElement {
+    const selected = choice.avatarId === this.selectedAvatarIdDraft;
+    const button = this.doc.createElement('button');
+    button.type = 'button';
+    button.className = 'profile-avatar-option';
+    button.disabled = this.saving || !choice.unlocked;
+    button.dataset.avatarKind = choice.kind;
+    button.dataset.selected = selected ? 'true' : 'false';
+    button.dataset.locked = choice.unlocked ? 'false' : 'true';
+    button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    if (choice.colorHex && choice.unlocked) {
+      button.style.setProperty('--profile-avatar-option-color', `#${choice.colorHex}`);
+    }
+
+    const preview = this.doc.createElement('div');
+    preview.className = 'profile-avatar-option-preview';
+
+    if (choice.unlocked) {
+      const image = this.doc.createElement('img');
+      image.className = 'profile-avatar-option-image hidden';
+      image.alt = '';
+      const fallback = this.doc.createElement('div');
+      fallback.className = 'profile-avatar-option-preview-fallback';
+      fallback.textContent = choice.kind === 'cryptopunk' ? 'P' : 'A';
+      preview.append(image, fallback);
+      this.attachAvatarChoicePreview(choice.avatarId, image, fallback);
+    } else {
+      const locked = this.doc.createElement('div');
+      locked.className = 'profile-avatar-option-locked';
+      locked.textContent = '?';
+      preview.append(locked);
+    }
+
+    const label = this.doc.createElement('div');
+    label.className = 'profile-avatar-option-label';
+    label.textContent = choice.unlocked ? choice.label : 'Locked';
+
+    const meta = this.doc.createElement('div');
+    meta.className = 'profile-avatar-option-meta';
+    if (selected) {
+      meta.textContent = 'Selected';
+    } else if (choice.unlocked) {
+      meta.textContent = 'Unlocked';
+    } else if (choice.unlockLevel) {
+      meta.textContent = `Player LVL ${choice.unlockLevel}`;
+    } else {
+      meta.textContent = 'Future unlock';
+    }
+
+    button.append(preview, label, meta);
+    button.addEventListener('click', () => {
+      if (!choice.unlocked) {
+        return;
+      }
+
+      const previousAvatarId = this.currentProfile?.selectedAvatarId ?? DEFAULT_PLAYER_AVATAR_ID;
+      this.selectedAvatarIdDraft = choice.avatarId;
+      this.avatarPreviewBroken = false;
+      this.closeAvatarPicker();
+      this.setSaveStatus(
+        choice.avatarId === previousAvatarId ? '' : 'Save profile to use this avatar.'
+      );
+      this.render();
+    });
+
+    return button;
+  }
+
+  private attachAvatarChoicePreview(
+    avatarId: string,
+    imageEl: HTMLImageElement,
+    fallbackEl: HTMLElement
+  ): void {
+    imageEl.dataset.avatarId = avatarId;
+    void createPlayerAvatarPreviewDataUrl(avatarId).then((dataUrl) => {
+      if (!imageEl.isConnected || imageEl.dataset.avatarId !== avatarId || !dataUrl) {
+        return;
+      }
+
+      imageEl.src = dataUrl;
+      imageEl.classList.remove('hidden');
+      fallbackEl.classList.add('hidden');
+    });
   }
 
   private renderRooms(rooms: ProfilePublishedRoomEntry[]): void {

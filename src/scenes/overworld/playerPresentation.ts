@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import {
-  DEFAULT_PLAYER_ANIMATION_KEYS,
   type DefaultPlayerAnimationState,
 } from '../../player/defaultPlayer';
+import { resolveActivePlayerAvatarPack } from '../../player/avatar/runtime';
 
 export interface OverworldPlayerPresentationControllerState {
   animationState: DefaultPlayerAnimationState;
@@ -118,9 +118,14 @@ export class OverworldPlayerPresentationController {
       grounded,
       playerBody,
     });
-    if (nextAnimation !== this.host.state.animationState) {
+    const playerAvatarPack = resolveActivePlayerAvatarPack();
+    const nextAnimationKey = playerAvatarPack.animationKeys[nextAnimation];
+    if (
+      nextAnimation !== this.host.state.animationState ||
+      playerSprite.anims.currentAnim?.key !== nextAnimationKey
+    ) {
       this.host.state.animationState = nextAnimation;
-      playerSprite.play(DEFAULT_PLAYER_ANIMATION_KEYS[nextAnimation], true);
+      playerSprite.play(nextAnimationKey, true);
     }
 
     this.host.state.wasGrounded = grounded;

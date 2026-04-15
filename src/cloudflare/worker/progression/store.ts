@@ -533,6 +533,7 @@ async function loadUserIdentityRow(env: Env, userId: string): Promise<UserRow | 
         display_name,
         avatar_url,
         bio,
+        selected_avatar_id,
         created_at,
         updated_at
       FROM users
@@ -1804,6 +1805,7 @@ export async function searchAdminProgressionUsers(
         display_name,
         avatar_url,
         bio,
+        selected_avatar_id,
         created_at,
         updated_at
       FROM users

@@ -1,35 +1,12 @@
-export type PlayerAnimationState =
-  | 'idle'
-  | 'run'
-  | 'jump-rise'
-  | 'jump-fall'
-  | 'wall-slide'
-  | 'wall-jump'
-  | 'land'
-  | 'ladder-climb'
-  | 'crouch'
-  | 'crawl'
-  | 'push'
-  | 'pull'
-  | 'sword-slash'
-  | 'air-slash-down'
-  | 'gun-fire';
+import type {
+  PlayerAnimationDefinition,
+  PlayerAnimationState,
+  PlayerAtlasAssetEntry,
+} from './avatar/model';
 
+export type { PlayerAnimationState, PlayerAtlasAssetEntry };
 export type DefaultPlayerAnimationState = PlayerAnimationState;
-
-export interface PlayerAtlasAssetEntry {
-  key: string;
-  texturePath: string;
-  atlasPath: string;
-}
-
-export interface DefaultPlayerAnimationDefinition {
-  key: string;
-  atlasKey: string;
-  frameNames: string[];
-  frameRate: number;
-  repeat: number;
-}
+export type DefaultPlayerAnimationDefinition = PlayerAnimationDefinition;
 
 const PLAYER_ASSET_ROOT = 'assets/player/default';
 const PLAYER_FRAME_PREFIX = 'Player ';

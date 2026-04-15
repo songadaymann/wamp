@@ -10,6 +10,8 @@ import type {
 } from './model';
 import type { ChatModerationViewer } from '../chat/model';
 import { clearLocalRoomStorage } from '../persistence/browserStorage';
+import { createPlayerAvatarPreviewDataUrl } from '../player/avatar/previews';
+import { setStoredPlayerAvatarId } from '../player/avatar/storage';
 import { getApiBaseUrl } from '../api/baseUrl';
 import { appendPlayfunRequestHeaders } from '../playfun/state';
 import { createProfileRepository } from '../profiles/profileRepository';
@@ -80,6 +82,7 @@ interface Eip1193Provider {
 interface AuthIdentityProfileView {
   userId: string;
   displayName: string;
+  selectedAvatarId: string | null;
   playerLevel: number | null;
   playerProgressFraction: number | null;
   curatorLevel: number | null;
@@ -116,6 +119,7 @@ const state: AuthDebugState = {
 
 let authPanel: HTMLElement | null = null;
 let authIdentity: HTMLButtonElement | null = null;
+let authIdentityAvatar: HTMLImageElement | null = null;
 let authIdentityName: HTMLElement | null = null;
 let authIdentityPlayerLevel: HTMLElement | null = null;
 let authIdentityPlayerProgress: HTMLElement | null = null;
@@ -166,6 +170,7 @@ let guestPanelAutoOpened = false;
 export async function setupAuthUi(): Promise<void> {
   authPanel = document.getElementById('auth-panel');
   authIdentity = document.getElementById('auth-identity') as HTMLButtonElement | null;
+  authIdentityAvatar = document.getElementById('auth-identity-avatar') as HTMLImageElement | null;
   authIdentityName = document.getElementById('auth-identity-name');
   authIdentityPlayerLevel = document.getElementById('auth-identity-player-level');
   authIdentityPlayerProgress = document.getElementById('auth-identity-player-progress');
@@ -352,6 +357,7 @@ async function refreshSession(): Promise<void> {
     state.chatModeration = normalizeChatModerationViewer(session.chatModeration);
 
     if (session.authenticated) {
+      setStoredPlayerAvatarId(session.user?.selectedAvatarId ?? null);
       syncAuthIdentityProfileFromSession(session.user);
       void ensureAuthIdentityProfileLoaded();
       if (state.status.length === 0 || state.status === DEFAULT_GUEST_STATUS || isGenericSignedInStatus(state.status)) {
@@ -434,6 +440,7 @@ function syncAuthIdentityProfileFromSession(user: AuthUser | null): void {
     authIdentityProfile = {
       userId: user.id,
       displayName: fallbackName,
+      selectedAvatarId: user.selectedAvatarId ?? null,
       playerLevel: null,
       playerProgressFraction: null,
       curatorLevel: null,
@@ -447,6 +454,7 @@ function syncAuthIdentityProfileFromSession(user: AuthUser | null): void {
   authIdentityProfile = {
     ...authIdentityProfile,
     displayName: fallbackName,
+    selectedAvatarId: user.selectedAvatarId ?? authIdentityProfile.selectedAvatarId ?? null,
   };
 }
 
@@ -483,6 +491,7 @@ async function ensureAuthIdentityProfileLoaded(force: boolean = false): Promise<
     authIdentityProfile = {
       userId,
       displayName: profile.displayName?.trim() || authIdentityProfile?.displayName || 'Player',
+      selectedAvatarId: profile.selectedAvatarId ?? authIdentityProfile?.selectedAvatarId ?? null,
       playerLevel: profile.progression.player.level,
       playerProgressFraction: profile.progression.player.progressFraction,
       curatorLevel: profile.progression.curator.level,
@@ -1062,6 +1071,7 @@ function renderAuthIdentity(): void {
   if (authIdentityName) {
     authIdentityName.textContent = authIdentityProfile.displayName;
   }
+  renderAuthIdentityAvatar(authIdentityProfile.selectedAvatarId);
   renderMiniProfileStatLevel(authIdentityPlayerLevel, authIdentityProfile.playerLevel);
   renderMiniProfileProgress(authIdentityPlayerProgress, authIdentityProfile.playerProgressFraction);
   renderMiniProfileStatLevel(authIdentityCuratorLevel, authIdentityProfile.curatorLevel);
@@ -1071,6 +1081,31 @@ function renderAuthIdentity(): void {
   authIdentity.dataset.playerProgress = formatProgressFraction(authIdentityProfile.playerProgressFraction);
   authIdentity.dataset.curatorProgress = formatProgressFraction(authIdentityProfile.curatorProgressFraction);
   authIdentity.dataset.builderProgress = formatProgressFraction(authIdentityProfile.builderProgressFraction);
+}
+
+function renderAuthIdentityAvatar(selectedAvatarId: string | null): void {
+  if (!authIdentityAvatar) {
+    return;
+  }
+
+  const avatarId = selectedAvatarId ?? '';
+  if (
+    authIdentityAvatar.dataset.avatarId === avatarId
+    && authIdentityAvatar.dataset.previewLoaded === 'true'
+  ) {
+    return;
+  }
+
+  authIdentityAvatar.dataset.avatarId = avatarId;
+  authIdentityAvatar.dataset.previewLoaded = 'false';
+  void createPlayerAvatarPreviewDataUrl(selectedAvatarId).then((dataUrl) => {
+    if (!authIdentityAvatar || authIdentityAvatar.dataset.avatarId !== avatarId || !dataUrl) {
+      return;
+    }
+
+    authIdentityAvatar.src = dataUrl;
+    authIdentityAvatar.dataset.previewLoaded = 'true';
+  });
 }
 
 function renderMiniProfileStatLevel(element: HTMLElement | null, level: number | null): void {
