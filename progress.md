@@ -83,6 +83,7 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - first wall jump set `wallJumpActive: true`, `wallJumpChainActive: true`, and kicked left from the right wall
       - same right-wall recontact exposed `wallContactSide: 1` while `wallJumpChainActive: true`
       - the second jump from that same right wall again set `wallJumpActive: true` and kicked left
+  - merged to `main` on April 14, 2026 via merge commit `35c12bd`
 
 - Collectible spritesheet expansion on April 14, 2026:
   - started fresh `main`-based branch/worktree:
