@@ -32,11 +32,12 @@ export interface OverworldMovementControllerState {
   jumpBuffered: boolean;
   jumpBufferTime: number;
   wallContactSide: -1 | 1 | 0;
+  wallContactGraceSide: -1 | 1 | 0;
+  wallContactGraceUntil: number;
   isWallSliding: boolean;
   wallJumpLockUntil: number;
   wallJumpActive: boolean;
   wallJumpDirection: -1 | 1 | 0;
-  wallJumpBlockedSide: -1 | 1 | 0;
   wallJumpChainActive: boolean;
   isClimbingLadder: boolean;
   activeLadderKey: string | null;
@@ -78,6 +79,7 @@ interface OverworldMovementControllerOptions {
   coyoteMs: number;
   jumpBufferMs: number;
   wallJumpBufferMs: number;
+  wallContactGraceMs: number;
   jumpVelocity: number;
   wallSlideMaxFallSpeed: number;
   wallJumpVelocityX: number;
@@ -328,7 +330,7 @@ export class OverworldMovementController {
         this.host.state.wallJumpActive = false;
         this.host.state.wallJumpDirection = 0;
         this.host.state.wallJumpLockUntil = 0;
-        this.host.state.wallJumpBlockedSide = 0;
+        this.clearWallContactState();
         this.host.state.wallJumpChainActive = false;
       }
 
@@ -380,16 +382,17 @@ export class OverworldMovementController {
   }
 
   private resetWallMovementState(): void {
-    this.clearWallSlideState();
+    this.clearWallContactState();
     this.host.state.wallJumpLockUntil = 0;
     this.host.state.wallJumpActive = false;
     this.host.state.wallJumpDirection = 0;
-    this.host.state.wallJumpBlockedSide = 0;
     this.host.state.wallJumpChainActive = false;
   }
 
-  private clearWallSlideState(): void {
+  private clearWallContactState(): void {
     this.host.state.wallContactSide = 0;
+    this.host.state.wallContactGraceSide = 0;
+    this.host.state.wallContactGraceUntil = 0;
     this.host.state.isWallSliding = false;
   }
 
@@ -413,12 +416,11 @@ export class OverworldMovementController {
     this.host.state.jumpBuffered = false;
     this.host.state.jumpBufferTime = 0;
     this.host.state.coyoteTime = 0;
-    this.clearWallSlideState();
+    this.clearWallContactState();
     this.host.state.wallJumpLockUntil =
       this.host.getCurrentTime() + this.options.wallJumpInputLockMs;
     this.host.state.wallJumpActive = true;
     this.host.state.wallJumpDirection = wallJumpDirection;
-    this.host.state.wallJumpBlockedSide = wallJumpSourceSide;
     this.host.state.wallJumpChainActive = true;
     return true;
   }
@@ -450,6 +452,9 @@ export class OverworldMovementController {
     if (horizontalInput > 0 && touchingWallSide === 1) {
       return 1;
     }
+    if (horizontalInput === 0) {
+      return touchingWallSide;
+    }
     if (this.host.state.wallJumpChainActive) {
       return touchingWallSide;
     }
@@ -470,20 +475,22 @@ export class OverworldMovementController {
     }
 
     const rawWallContactSide = canWallAttach ? this.getWallContactSide(horizontalInput) : 0;
-    if (
-      rawWallContactSide !== 0 &&
-      this.host.state.wallJumpBlockedSide !== 0 &&
-      rawWallContactSide !== this.host.state.wallJumpBlockedSide
-    ) {
-      this.host.state.wallJumpBlockedSide = 0;
+    const now = this.host.getCurrentTime();
+    if (rawWallContactSide !== 0) {
+      this.host.state.wallContactGraceSide = rawWallContactSide;
+      this.host.state.wallContactGraceUntil = now + this.options.wallContactGraceMs;
     }
 
-    const wallContactSide =
-      rawWallContactSide !== 0 && rawWallContactSide === this.host.state.wallJumpBlockedSide
-        ? 0
-        : rawWallContactSide;
+    const hasWallContactGrace =
+      this.host.state.wallContactGraceSide !== 0 &&
+      now <= this.host.state.wallContactGraceUntil;
+    const wallContactSide = rawWallContactSide !== 0
+      ? rawWallContactSide
+      : hasWallContactGrace
+        ? this.host.state.wallContactGraceSide
+        : 0;
     this.host.state.wallContactSide = wallContactSide;
-    this.host.state.isWallSliding = wallContactSide !== 0 && playerBody.velocity.y >= 0;
+    this.host.state.isWallSliding = rawWallContactSide !== 0 && playerBody.velocity.y >= 0;
 
     if (this.host.state.isWallSliding) {
       this.host.state.wallJumpActive = false;
