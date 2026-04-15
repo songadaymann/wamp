@@ -73,6 +73,12 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - visual verification screenshots:
     - `output/web-game/mobile-play-code-cleanup-smoke-2/phone-portrait-deep-link-play/portrait-play.png`
     - `output/web-game/mobile-play-code-cleanup-smoke-2/phone-landscape-play-no-legacy-controls/play-no-legacy-controls.png`
+  - safety branch deploy for tester QA:
+    - committed cleanup as `6f3fe3e` and pushed `safety/mobile-portrait-play-2026-04-14`
+    - Pages-only safety deploy succeeded on April 15, 2026; Wrangler reported deployment URL `https://526da168.wampland.pages.dev` and alias `https://safety-mobile-portrait-play-t2sk.wampland.pages.dev`
+    - `https://safety-mobile-portrait-play-t2sk.wampland.pages.dev` serves the new cleanup build (`mobile-move-zone` present, old rotate gate absent)
+    - `https://safety-mobile-portrait-play-kbh8.wampland.pages.dev` still serves the previous rotate-gate build, so do not share `-kbh8` for this cleanup QA
+    - full deployed smoke against `https://safety-mobile-portrait-play-t2sk.wampland.pages.dev` reached all 9 scenarios successfully; it returned nonzero only because each scenario logged the same deployed `Failed to load resource: net::ERR_FAILED` console noise, with zero page errors
 
 - Mobile portrait camera tuner on April 14, 2026:
   - after real-device tuning from Jonathan's screenshot, baked in the preferred phone portrait defaults:
