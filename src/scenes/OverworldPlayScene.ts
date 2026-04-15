@@ -61,10 +61,13 @@ import {
   type GoalMarkerPoint,
 } from '../goals/roomGoals';
 import { setAppMode } from '../ui/appMode';
-import { getDeviceLayoutState, isMobileLandscapeBlocked } from '../ui/deviceLayout';
+import { getDeviceLayoutState } from '../ui/deviceLayout';
 import { createProfileRepository } from '../profiles/profileRepository';
 import {
   COURSE_COMPOSER_STATE_CHANGED_EVENT,
+  type MobilePortraitCameraTuningAdjustment,
+  type MobilePortraitCameraTuningInput,
+  type MobilePortraitCameraTuningSnapshot,
   type CourseComposerState,
 } from '../ui/setup/sceneBridge';
 import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState } from '../auth/client';
@@ -179,7 +182,10 @@ import {
   type RankedRunTraceFrameInput,
 } from './overworld/rankedRunTraceRecorder';
 import type { RankedRunVerificationTrace } from '../runs/verificationTrace';
-import { type CameraMode } from './overworld/camera';
+import {
+  getScrollForScreenAnchor,
+  type CameraMode,
+} from './overworld/camera';
 import {
   terrainTileCollidesAtLocalPixel,
 } from './overworld/terrainCollision';
@@ -193,6 +199,11 @@ import {
   getTouchInputState,
 } from '../ui/mobile/touchControls';
 import { getRoomGoalIntroModalController } from '../ui/setup/roomGoalIntroModal';
+import {
+  createMobilePerformanceProfiler,
+  type MobilePerformanceContext,
+  type MobilePerformanceProfiler,
+} from '../debug/mobilePerformanceProfiler';
 
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 2.5;
@@ -206,6 +217,13 @@ const EDGE_WALL_THICKNESS = 12;
 const RESPAWN_FALL_DISTANCE = ROOM_PX_HEIGHT * 2;
 const FOLLOW_CAMERA_LERP = 0.12;
 const MOBILE_PLAY_CAMERA_TARGET_Y = 0.75;
+const MOBILE_PORTRAIT_PLAY_CAMERA_TARGET_Y = 0.44;
+const MOBILE_PORTRAIT_PLAY_CAMERA_ZOOM_MULTIPLIER = 2.25;
+const MOBILE_PORTRAIT_PLAY_CAMERA_MIN_ZOOM_MULTIPLIER = 0.75;
+const MOBILE_PORTRAIT_PLAY_CAMERA_MAX_ZOOM_MULTIPLIER = 3.25;
+const MOBILE_PORTRAIT_PLAY_CAMERA_MIN_TARGET_Y = 0.25;
+const MOBILE_PORTRAIT_PLAY_CAMERA_MAX_TARGET_Y = 0.78;
+const MOBILE_PORTRAIT_CAMERA_TUNING_STORAGE_KEY = 'wamp_mobile_portrait_camera_tuning_v1';
 
 type RoomEdgeWall = OverworldRoomEdgeWall;
 
@@ -308,6 +326,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private backdropCamera: Phaser.Cameras.Scene2D.Camera | null = null;
   private hudBridge: OverworldHudBridge | null = null;
   private fxController: SceneFxController | null = null;
+  private mobilePerformanceProfiler: MobilePerformanceProfiler | null = null;
 
   private mode: OverworldMode = 'browse';
   private cameraMode: CameraMode = 'inspect';
@@ -316,6 +335,10 @@ export class OverworldPlayScene extends Phaser.Scene {
   private windowCenterCoordinates: RoomCoordinates = { ...DEFAULT_ROOM_COORDINATES };
   private inspectZoom = DEFAULT_ZOOM;
   private browseInspectZoom = DEFAULT_ZOOM;
+  private mobilePortraitCameraTuningEnabled = false;
+  private mobilePortraitCameraZoomMultiplier = MOBILE_PORTRAIT_PLAY_CAMERA_ZOOM_MULTIPLIER;
+  private mobilePortraitCameraTargetY = MOBILE_PORTRAIT_PLAY_CAMERA_TARGET_Y;
+  private mobilePortraitCameraTunerApi: Window['wampMobileCameraTuner'] | null = null;
   private shouldAutoPlayDeepLinkedRoomOnBoot = false;
   private lastRoomMusicSyncSignature = '';
   private transientStatusMessage: string | null = null;
@@ -544,6 +567,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.liveObjectController.syncLoadedWorldColliders(loadedRooms),
       onBackdropObjectsChanged: () => this.syncBackdropCameraIgnores(),
       onFullRoomVisibilityChanged: () => this.syncGhostVisibility(),
+      measurePerformance: (label, callback) => this.measureMobilePerformance(label, callback),
     });
     this.presenceController = new OverworldPresenceController({
       scene: this,
@@ -808,6 +832,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         playRoomFitPadding: PLAY_ROOM_FIT_PADDING,
         followCameraLerp: FOLLOW_CAMERA_LERP,
         mobilePlayCameraTargetY: MOBILE_PLAY_CAMERA_TARGET_Y,
+        getMobilePortraitPlayCameraTargetY: () => this.mobilePortraitCameraTargetY,
       },
     );
     this.viewportController = new OverworldViewportController(
@@ -1562,7 +1587,9 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   create(data?: OverworldPlaySceneData): void {
     this.resetRuntimeState();
+    this.initializeMobilePerformanceProfiler();
     this.syncAppMode();
+    this.initializeMobilePortraitCameraTuning();
     this.viewportController.setZoomDebugEnabled(this.isDebugQueryEnabled('zoomDebug'));
 
     this.physics.world.gravity.y = this.GRAVITY;
@@ -1634,70 +1661,114 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    this.windowController.maybeRefreshVisibleChunks();
-    this.updateBackdrop();
-    this.gridOverlayController.redraw();
-    this.updateLiveObjects(delta);
-    this.signController.update();
-    this.updateGhosts(delta);
-    this.roomChatController.update();
-    this.presenceOverlayController.updateBrowseDots(delta);
-    this.maybeSyncRoomMusicPlayback();
+    this.mobilePerformanceProfiler?.beginFrame(delta, this.buildMobilePerformanceContext());
+    try {
+      this.measureMobilePerformance('update.visibleChunks', () => {
+        this.windowController.maybeRefreshVisibleChunks();
+      });
+      this.measureMobilePerformance('update.backdrop', () => {
+        this.updateBackdrop();
+      });
+      this.measureMobilePerformance('update.grid', () => {
+        this.gridOverlayController.redraw();
+      });
+      this.measureMobilePerformance('update.liveObjects', () => {
+        this.updateLiveObjects(delta);
+      });
+      this.measureMobilePerformance('update.signs', () => {
+        this.signController.update();
+      });
+      this.measureMobilePerformance('update.ghosts', () => {
+        this.updateGhosts(delta);
+      });
+      this.measureMobilePerformance('update.roomChat', () => {
+        this.roomChatController.update();
+      });
+      this.measureMobilePerformance('update.presenceDots', () => {
+        this.presenceOverlayController.updateBrowseDots(delta);
+      });
+      this.measureMobilePerformance('update.music', () => {
+        this.maybeSyncRoomMusicPlayback();
+      });
 
-    if (isMobileLandscapeBlocked()) {
-      this.syncLocalPresence();
-      this.updateRoomLighting();
+      if (
+        this.mode === 'play' &&
+        (Phaser.Input.Keyboard.JustDown(this.cameraToggleKey) || consumeTouchAction('cameraToggle'))
+      ) {
+        this.toggleCameraMode();
+      }
+
+      if (this.mode === 'play' && consumeTouchAction('stop')) {
+        this.returnToWorld();
+        return;
+      }
+
+      if (this.mode === 'play' && consumeTouchAction('restart')) {
+        void this.restartCurrentRun();
+        return;
+      }
+
+      if (!this.playerBody) {
+        this.measureMobilePerformance('update.noPlayerRuntime', () => {
+          this.movementController.handleNoPlayerRuntime();
+        });
+        this.measureMobilePerformance('update.presence', () => {
+          this.syncLocalPresence();
+        });
+        this.measureMobilePerformance('update.lighting', () => {
+          this.updateRoomLighting();
+        });
+        this.renderHud();
+        return;
+      }
+
+      const swordPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.Q) || consumeTouchAction('slash');
+      const gunPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E) || consumeTouchAction('shoot');
+      const inQuicksand = this.isPlayerInQuicksand();
+      const movement = this.measureMobilePerformance('update.movement', () =>
+        this.movementController.updateMovement(delta, inQuicksand)
+      );
+      this.measureMobilePerformance('update.combatInput', () => {
+        this.combatController.handleCombatInput({
+          swordPressed,
+          gunPressed,
+          downHeld: movement.downHeld,
+          grounded: movement.grounded,
+        });
+      });
+
+      this.measureMobilePerformance('update.quicksand', () => {
+        this.updateQuicksandVisualSink();
+      });
+      this.measureMobilePerformance('update.projectiles', () => {
+        this.combatController.updateProjectiles(delta);
+      });
+      this.measureMobilePerformance('update.ladderSfx', () => {
+        this.movementController.syncLadderClimbSfx(movement.verticalInput);
+      });
+      this.measureMobilePerformance('update.respawnTransition', () => {
+        this.maybeRespawnFromVoid();
+        this.roomTransitionController.maybeAdvancePlayerRoom();
+      });
+      this.measureMobilePerformance('update.rankedTrace', () => {
+        this.recordRankedRunTraceFrame(delta, movement);
+      });
+      this.measureMobilePerformance('update.presentation', () => {
+        this.playerPresentationController.syncPlayerVisual();
+      });
+      this.measureMobilePerformance('update.presence', () => {
+        this.syncLocalPresence();
+      });
+      this.measureMobilePerformance('update.lighting', () => {
+        this.updateRoomLighting();
+      });
+      this.measureMobilePerformance('update.objective', () => {
+        this.objectiveController.update(delta);
+      });
       this.renderHud();
-      return;
+    } finally {
+      this.mobilePerformanceProfiler?.endFrame(this.buildMobilePerformanceContext());
     }
-
-    if (
-      this.mode === 'play' &&
-      (Phaser.Input.Keyboard.JustDown(this.cameraToggleKey) || consumeTouchAction('cameraToggle'))
-    ) {
-      this.toggleCameraMode();
-    }
-
-    if (this.mode === 'play' && consumeTouchAction('stop')) {
-      this.returnToWorld();
-      return;
-    }
-
-    if (this.mode === 'play' && consumeTouchAction('restart')) {
-      void this.restartCurrentRun();
-      return;
-    }
-
-    if (!this.playerBody) {
-      this.movementController.handleNoPlayerRuntime();
-      this.syncLocalPresence();
-      this.updateRoomLighting();
-      this.renderHud();
-      return;
-    }
-
-    const swordPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.Q) || consumeTouchAction('slash');
-    const gunPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E) || consumeTouchAction('shoot');
-    const inQuicksand = this.isPlayerInQuicksand();
-    const movement = this.movementController.updateMovement(delta, inQuicksand);
-    this.combatController.handleCombatInput({
-      swordPressed,
-      gunPressed,
-      downHeld: movement.downHeld,
-      grounded: movement.grounded,
-    });
-
-    this.updateQuicksandVisualSink();
-    this.combatController.updateProjectiles(delta);
-    this.movementController.syncLadderClimbSfx(movement.verticalInput);
-    this.maybeRespawnFromVoid();
-    this.roomTransitionController.maybeAdvancePlayerRoom();
-    this.recordRankedRunTraceFrame(delta, movement);
-    this.playerPresentationController.syncPlayerVisual();
-    this.syncLocalPresence();
-    this.updateRoomLighting();
-    this.objectiveController.update(delta);
-    this.renderHud();
   }
 
   private updateRoomLighting(): void {
@@ -1783,6 +1854,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private resetRuntimeState(): void {
+    this.removeMobilePortraitCameraTunerApi();
     if (this.backdropCamera && this.cameras.cameras.includes(this.backdropCamera)) {
       this.cameras.remove(this.backdropCamera, true);
     }
@@ -1806,6 +1878,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.hudStateController.reset();
     this.inspectZoom = DEFAULT_ZOOM;
     this.browseInspectZoom = DEFAULT_ZOOM;
+    this.mobilePortraitCameraTuningEnabled = false;
+    this.mobilePortraitCameraZoomMultiplier = MOBILE_PORTRAIT_PLAY_CAMERA_ZOOM_MULTIPLIER;
+    this.mobilePortraitCameraTargetY = MOBILE_PORTRAIT_PLAY_CAMERA_TARGET_Y;
     this.transientStatusMessage = null;
     this.transientStatusExpiresAt = 0;
     this.quicksandTouchedUntil = 0;
@@ -2010,6 +2085,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.viewportController.handleResize();
 
     if (this.mode === 'play' && this.cameraMode === 'follow') {
+      this.inspectZoom = this.getFitZoomForRoom();
       this.applyCameraMode();
       return;
     }
@@ -2518,7 +2594,294 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private getFitZoomForRoom(): number {
-    return this.cameraController.getFitZoomForRoom();
+    const fitZoom = this.cameraController.getFitZoomForRoom();
+    if (!this.shouldApplyMobilePortraitCameraTuning()) {
+      return fitZoom;
+    }
+
+    return Number(
+      Phaser.Math.Clamp(
+        fitZoom * this.mobilePortraitCameraZoomMultiplier,
+        MIN_ZOOM,
+        MAX_ZOOM,
+      ).toFixed(3),
+    );
+  }
+
+  getMobilePortraitCameraTuning(): MobilePortraitCameraTuningSnapshot {
+    return this.buildMobilePortraitCameraTuningSnapshot();
+  }
+
+  setMobilePortraitCameraTuning(
+    input: MobilePortraitCameraTuningInput,
+    reason: string = 'set',
+  ): MobilePortraitCameraTuningSnapshot {
+    this.mobilePortraitCameraTuningEnabled = true;
+
+    if (typeof input.zoomMultiplier === 'number') {
+      this.mobilePortraitCameraZoomMultiplier =
+        this.normalizeMobilePortraitCameraZoomMultiplier(input.zoomMultiplier);
+    }
+    if (typeof input.targetY === 'number') {
+      this.mobilePortraitCameraTargetY =
+        this.normalizeMobilePortraitCameraTargetY(input.targetY);
+    }
+
+    this.persistMobilePortraitCameraTuning();
+    this.applyMobilePortraitCameraTuning();
+    return this.logMobilePortraitCameraTuning(reason);
+  }
+
+  adjustMobilePortraitCameraTuning(
+    adjustment: MobilePortraitCameraTuningAdjustment,
+    reason: string = 'adjust',
+  ): MobilePortraitCameraTuningSnapshot {
+    return this.setMobilePortraitCameraTuning(
+      {
+        zoomMultiplier:
+          this.mobilePortraitCameraZoomMultiplier + (adjustment.zoomMultiplierDelta ?? 0),
+        targetY: this.mobilePortraitCameraTargetY + (adjustment.targetYDelta ?? 0),
+      },
+      reason,
+    );
+  }
+
+  resetMobilePortraitCameraTuning(): MobilePortraitCameraTuningSnapshot {
+    this.mobilePortraitCameraTuningEnabled = true;
+    this.mobilePortraitCameraZoomMultiplier = MOBILE_PORTRAIT_PLAY_CAMERA_ZOOM_MULTIPLIER;
+    this.mobilePortraitCameraTargetY = MOBILE_PORTRAIT_PLAY_CAMERA_TARGET_Y;
+    this.clearStoredMobilePortraitCameraTuning();
+    this.applyMobilePortraitCameraTuning();
+    return this.logMobilePortraitCameraTuning('reset');
+  }
+
+  logMobilePortraitCameraTuning(reason: string = 'log'): MobilePortraitCameraTuningSnapshot {
+    const snapshot = this.buildMobilePortraitCameraTuningSnapshot();
+    console.log(`MOBILE_PORTRAIT_CAMERA_TUNING ${JSON.stringify({ reason, ...snapshot })}`);
+    return snapshot;
+  }
+
+  private initializeMobilePortraitCameraTuning(): void {
+    this.removeMobilePortraitCameraTunerApi();
+
+    const params = new URLSearchParams(window.location.search);
+    const tunerFlag =
+      params.get('cameraTuner')
+      ?? params.get('mobileCameraTuner')
+      ?? params.get('cameraDebug');
+    const hasInlineSettings =
+      params.has('mobileCameraZoom') || params.has('mobileCameraTargetY');
+    this.mobilePortraitCameraTuningEnabled =
+      this.isTruthySearchValue(tunerFlag) || hasInlineSettings;
+
+    if (!this.mobilePortraitCameraTuningEnabled) {
+      return;
+    }
+
+    const stored = this.readStoredMobilePortraitCameraTuning();
+    const zoomMultiplier =
+      this.readNumberSearchParam(params, 'mobileCameraZoom') ?? stored?.zoomMultiplier;
+    const targetY =
+      this.readNumberSearchParam(params, 'mobileCameraTargetY') ?? stored?.targetY;
+
+    if (typeof zoomMultiplier === 'number') {
+      this.mobilePortraitCameraZoomMultiplier =
+        this.normalizeMobilePortraitCameraZoomMultiplier(zoomMultiplier);
+    }
+    if (typeof targetY === 'number') {
+      this.mobilePortraitCameraTargetY =
+        this.normalizeMobilePortraitCameraTargetY(targetY);
+    }
+
+    this.installMobilePortraitCameraTunerApi();
+    console.log(
+      'MOBILE_PORTRAIT_CAMERA_TUNER_READY '
+      + 'Use window.wampMobileCameraTuner.set({ zoomMultiplier, targetY }) '
+      + 'or tap the on-screen camera tuner controls.',
+    );
+  }
+
+  private installMobilePortraitCameraTunerApi(): void {
+    const api: NonNullable<Window['wampMobileCameraTuner']> = {
+      get: () => this.getMobilePortraitCameraTuning(),
+      log: (reason) => this.logMobilePortraitCameraTuning(reason ?? 'console-log'),
+      set: (input, reason) =>
+        this.setMobilePortraitCameraTuning(input, reason ?? 'console-set'),
+      adjust: (adjustment, reason) =>
+        this.adjustMobilePortraitCameraTuning(adjustment, reason ?? 'console-adjust'),
+      reset: () => this.resetMobilePortraitCameraTuning(),
+    };
+
+    this.mobilePortraitCameraTunerApi = api;
+    window.wampMobileCameraTuner = api;
+  }
+
+  private removeMobilePortraitCameraTunerApi(): void {
+    if (window.wampMobileCameraTuner === this.mobilePortraitCameraTunerApi) {
+      delete window.wampMobileCameraTuner;
+    }
+    this.mobilePortraitCameraTunerApi = null;
+  }
+
+  private shouldApplyMobilePortraitCameraTuning(): boolean {
+    const layout = getDeviceLayoutState();
+    return (
+      this.mode === 'play'
+      && layout.deviceClass === 'phone'
+      && layout.coarsePointer
+      && layout.orientationState === 'portrait'
+    );
+  }
+
+  private applyMobilePortraitCameraTuning(): void {
+    if (this.mode !== 'play') {
+      return;
+    }
+
+    this.inspectZoom = this.getFitZoomForRoom();
+    this.cameras.main.setZoom(this.inspectZoom);
+    this.applyCameraMode();
+    this.snapMobilePortraitCameraToTuning();
+  }
+
+  private snapMobilePortraitCameraToTuning(): void {
+    if (!this.player || !this.shouldApplyMobilePortraitCameraTuning()) {
+      return;
+    }
+
+    const camera = this.cameras.main;
+    const scroll = getScrollForScreenAnchor(
+      this.player.x,
+      this.player.y,
+      camera.x + camera.width * 0.5,
+      camera.y + camera.height * this.mobilePortraitCameraTargetY,
+      camera,
+    );
+    camera.setScroll(scroll.x, scroll.y);
+    camera.preRender();
+  }
+
+  private buildMobilePortraitCameraTuningSnapshot(): MobilePortraitCameraTuningSnapshot {
+    const camera = this.cameras.main;
+    const baseFitZoom = this.cameraController.getFitZoomForRoom();
+    const playerScreen = this.player
+      ? {
+          x: Math.round((this.player.x - camera.worldView.x) * camera.zoom + camera.x),
+          y: Math.round((this.player.y - camera.worldView.y) * camera.zoom + camera.y),
+        }
+      : null;
+    const controls = document.getElementById('mobile-play-controls');
+    const controlsTop =
+      controls instanceof HTMLElement
+        ? Math.round(controls.getBoundingClientRect().top)
+        : null;
+
+    return {
+      enabled: this.mobilePortraitCameraTuningEnabled,
+      zoomMultiplier: this.mobilePortraitCameraZoomMultiplier,
+      targetY: this.mobilePortraitCameraTargetY,
+      fitZoom: Number(baseFitZoom.toFixed(3)),
+      cameraZoom: Number(camera.zoom.toFixed(3)),
+      playerScreen,
+      controlsTop,
+      viewport: {
+        width: Math.round(window.innerWidth),
+        height: Math.round(window.innerHeight),
+      },
+    };
+  }
+
+  private normalizeMobilePortraitCameraZoomMultiplier(value: number): number {
+    if (!Number.isFinite(value)) {
+      return this.mobilePortraitCameraZoomMultiplier;
+    }
+
+    return Number(
+      Phaser.Math.Clamp(
+        value,
+        MOBILE_PORTRAIT_PLAY_CAMERA_MIN_ZOOM_MULTIPLIER,
+        MOBILE_PORTRAIT_PLAY_CAMERA_MAX_ZOOM_MULTIPLIER,
+      ).toFixed(3),
+    );
+  }
+
+  private normalizeMobilePortraitCameraTargetY(value: number): number {
+    if (!Number.isFinite(value)) {
+      return this.mobilePortraitCameraTargetY;
+    }
+
+    return Number(
+      Phaser.Math.Clamp(
+        value,
+        MOBILE_PORTRAIT_PLAY_CAMERA_MIN_TARGET_Y,
+        MOBILE_PORTRAIT_PLAY_CAMERA_MAX_TARGET_Y,
+      ).toFixed(3),
+    );
+  }
+
+  private isTruthySearchValue(value: string | null): boolean {
+    if (value === null) {
+      return false;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    return normalized === '' || ['1', 'true', 'yes', 'on'].includes(normalized);
+  }
+
+  private readNumberSearchParam(params: URLSearchParams, name: string): number | null {
+    const raw = params.get(name);
+    if (raw === null || raw.trim() === '') {
+      return null;
+    }
+
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private readStoredMobilePortraitCameraTuning():
+    | Pick<MobilePortraitCameraTuningSnapshot, 'zoomMultiplier' | 'targetY'>
+    | null {
+    try {
+      const raw = window.localStorage.getItem(MOBILE_PORTRAIT_CAMERA_TUNING_STORAGE_KEY);
+      if (!raw) {
+        return null;
+      }
+
+      const parsed = JSON.parse(raw) as Partial<MobilePortraitCameraTuningInput>;
+      const zoomMultiplier =
+        typeof parsed.zoomMultiplier === 'number'
+          ? this.normalizeMobilePortraitCameraZoomMultiplier(parsed.zoomMultiplier)
+          : this.mobilePortraitCameraZoomMultiplier;
+      const targetY =
+        typeof parsed.targetY === 'number'
+          ? this.normalizeMobilePortraitCameraTargetY(parsed.targetY)
+          : this.mobilePortraitCameraTargetY;
+      return { zoomMultiplier, targetY };
+    } catch {
+      return null;
+    }
+  }
+
+  private persistMobilePortraitCameraTuning(): void {
+    try {
+      window.localStorage.setItem(
+        MOBILE_PORTRAIT_CAMERA_TUNING_STORAGE_KEY,
+        JSON.stringify({
+          zoomMultiplier: this.mobilePortraitCameraZoomMultiplier,
+          targetY: this.mobilePortraitCameraTargetY,
+        }),
+      );
+    } catch {
+      // Safari private browsing and embedded contexts can reject localStorage.
+    }
+  }
+
+  private clearStoredMobilePortraitCameraTuning(): void {
+    try {
+      window.localStorage.removeItem(MOBILE_PORTRAIT_CAMERA_TUNING_STORAGE_KEY);
+    } catch {
+      // Safari private browsing and embedded contexts can reject localStorage.
+    }
   }
 
   private createPlayer(startRoom: RoomSnapshot): void {
@@ -3057,8 +3420,58 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.presenceOverlayController.syncOverlayScale();
   }
 
+  private initializeMobilePerformanceProfiler(): void {
+    this.mobilePerformanceProfiler?.destroy();
+    this.mobilePerformanceProfiler = createMobilePerformanceProfiler({
+      getContext: () => this.buildMobilePerformanceContext(),
+    });
+  }
+
+  private measureMobilePerformance<T>(label: string, callback: () => T): T {
+    return this.mobilePerformanceProfiler
+      ? this.mobilePerformanceProfiler.measure(label, callback)
+      : callback();
+  }
+
+  private buildMobilePerformanceContext(): MobilePerformanceContext {
+    const layout = getDeviceLayoutState();
+    const streamingMetrics = this.worldStreamingController.getDebugMetrics();
+    const presenceDebug = this.presenceController.getDebugSnapshot();
+    const activeLiveObjects = Array.from(this.loadedFullRoomsById.values()).reduce(
+      (total, loadedRoom) =>
+        total + loadedRoom.liveObjects.filter((liveObject) => liveObject.sprite.active).length,
+      0,
+    );
+    const activeProjectiles = this.combatController.getProjectileCount();
+
+    return {
+      mode: this.mode,
+      cameraMode: this.cameraMode,
+      deviceClass: layout.deviceClass,
+      orientationState: layout.orientationState,
+      coarsePointer: layout.coarsePointer,
+      performanceProfile: layout.performanceProfile,
+      viewport: layout.viewport,
+      mobilePortraitPlay: document.body.dataset.mobilePortraitPlay === 'true',
+      selected: { ...this.selectedCoordinates },
+      currentRoom: { ...this.currentRoomCoordinates },
+      loadedFullRooms: this.loadedFullRoomsById.size,
+      loadedPreviewRooms: streamingMetrics.loadedPreviewRoomCount,
+      visibleRooms: streamingMetrics.visibleRoomCount,
+      previewRoomBudget: streamingMetrics.previewRoomBudget,
+      fullRoomBudget: streamingMetrics.fullRoomBudget,
+      activeLiveObjects,
+      activeProjectiles,
+      renderedGhosts: presenceDebug.renderedGhostCount,
+      visibleGhosts: presenceDebug.visibleGhostCount,
+      browseDots: this.presenceOverlayController.getBrowseDotCount(),
+    };
+  }
+
   private renderHud(statusOverride?: string): void {
-    this.hudStateController.renderHud(statusOverride);
+    this.measureMobilePerformance('hud.render', () => {
+      this.hudStateController.renderHud(statusOverride);
+    });
   }
 
   private getRoomDisplayTitle(title: string | null, coordinates: RoomCoordinates): string {
@@ -3129,6 +3542,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.hudBridge = null;
     this.fxController?.destroy();
     this.fxController = null;
+    this.mobilePerformanceProfiler?.destroy();
+    this.mobilePerformanceProfiler = null;
+    this.removeMobilePortraitCameraTunerApi();
 
     this.destroyPlayer();
     this.worldStreamingController.destroy();
@@ -3282,7 +3698,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       roomAudio: roomAudioDebug,
       lighting: lightingDebug,
+      mobilePerformance: this.mobilePerformanceProfiler?.getSnapshot('describe-state') ?? null,
       zoom: Number(camera.zoom.toFixed(3)),
+      mobilePortraitCamera: this.buildMobilePortraitCameraTuningSnapshot(),
       camera: {
         scrollX: Math.round(camera.scrollX),
         scrollY: Math.round(camera.scrollY),

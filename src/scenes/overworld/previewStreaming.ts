@@ -16,19 +16,19 @@ const PLAY_NEAR_MAX_CHUNK_RADIUS = 2;
 const PLAY_MID_MAX_CHUNK_RADIUS = 3;
 const PLAY_FAR_MAX_CHUNK_RADIUS = 4;
 const PLAY_ULTRA_MAX_CHUNK_RADIUS = 4;
-const REDUCED_PLAY_NEAR_MAX_CHUNK_RADIUS = 2;
-const REDUCED_PLAY_MID_MAX_CHUNK_RADIUS = 2;
-const REDUCED_PLAY_FAR_MAX_CHUNK_RADIUS = 3;
-const REDUCED_PLAY_ULTRA_MAX_CHUNK_RADIUS = 3;
+const REDUCED_PLAY_NEAR_MAX_CHUNK_RADIUS = 1;
+const REDUCED_PLAY_MID_MAX_CHUNK_RADIUS = 1;
+const REDUCED_PLAY_FAR_MAX_CHUNK_RADIUS = 2;
+const REDUCED_PLAY_ULTRA_MAX_CHUNK_RADIUS = 2;
 const BROWSE_MAX_CHUNK_RADIUS = 3;
 const PLAY_NEAR_MAX_PREVIEW_ROOMS = 49;
 const PLAY_MID_MAX_PREVIEW_ROOMS = 121;
 const PLAY_FAR_MAX_PREVIEW_ROOMS = 196;
 const PLAY_ULTRA_MAX_PREVIEW_ROOMS = 256;
-const REDUCED_PLAY_NEAR_MAX_PREVIEW_ROOMS = 25;
-const REDUCED_PLAY_MID_MAX_PREVIEW_ROOMS = 49;
-const REDUCED_PLAY_FAR_MAX_PREVIEW_ROOMS = 81;
-const REDUCED_PLAY_ULTRA_MAX_PREVIEW_ROOMS = 121;
+const REDUCED_PLAY_NEAR_MAX_PREVIEW_ROOMS = 9;
+const REDUCED_PLAY_MID_MAX_PREVIEW_ROOMS = 9;
+const REDUCED_PLAY_FAR_MAX_PREVIEW_ROOMS = 9;
+const REDUCED_PLAY_ULTRA_MAX_PREVIEW_ROOMS = 9;
 const BROWSE_NEAR_MAX_PREVIEW_ROOMS = 121;
 const BROWSE_MID_MAX_PREVIEW_ROOMS = 225;
 const BROWSE_FAR_MAX_PREVIEW_ROOMS = 324;
@@ -45,6 +45,7 @@ const BROWSE_MID_MID_LOD_ROOM_RADIUS = 10;
 const BROWSE_FAR_MID_LOD_ROOM_RADIUS = 14;
 const MIN_ZOOM = 0.08;
 const FULL_ROOM_BUDGET = (STREAM_RADIUS * 2 + 1) ** 2;
+const REDUCED_PLAY_FULL_ROOM_BUDGET = 1;
 const PLAY_ULTRA_ZOOM_THRESHOLD = 0.11;
 const PLAY_FAR_ZOOM_THRESHOLD = 0.16;
 const PLAY_MID_ZOOM_THRESHOLD = 0.28;
@@ -162,15 +163,15 @@ export function computeOverworldPreviewSelection(
       )
       .map((roomCandidate) => roomCandidate.id)
   );
-  const effectivePreviewBudget = Math.max(
-    budgets.previewRoomBudget,
-    visibleRoomIds.size
-  );
+  const protectVisiblePreviewRooms = mode !== 'play' || performanceProfile !== 'reduced';
+  const effectivePreviewBudget = protectVisiblePreviewRooms
+    ? Math.max(budgets.previewRoomBudget, visibleRoomIds.size)
+    : budgets.previewRoomBudget;
 
   return {
     previewRoomBudget: effectivePreviewBudget,
     fullRoomBudget: budgets.fullRoomBudget,
-    protectedVisiblePreviewRoomCount: visibleRoomIds.size,
+    protectedVisiblePreviewRoomCount: protectVisiblePreviewRooms ? visibleRoomIds.size : 0,
     nearLodRoomIds,
     midLodRoomIds,
     farLodRoomIds,
@@ -289,23 +290,23 @@ function computeStreamingBudgets(
         case 'ultra':
           return {
             previewRoomBudget: REDUCED_PLAY_ULTRA_MAX_PREVIEW_ROOMS,
-            fullRoomBudget: FULL_ROOM_BUDGET,
+            fullRoomBudget: REDUCED_PLAY_FULL_ROOM_BUDGET,
           };
         case 'far':
           return {
             previewRoomBudget: REDUCED_PLAY_FAR_MAX_PREVIEW_ROOMS,
-            fullRoomBudget: FULL_ROOM_BUDGET,
+            fullRoomBudget: REDUCED_PLAY_FULL_ROOM_BUDGET,
           };
         case 'mid':
           return {
             previewRoomBudget: REDUCED_PLAY_MID_MAX_PREVIEW_ROOMS,
-            fullRoomBudget: FULL_ROOM_BUDGET,
+            fullRoomBudget: REDUCED_PLAY_FULL_ROOM_BUDGET,
           };
         case 'near':
         default:
           return {
             previewRoomBudget: REDUCED_PLAY_NEAR_MAX_PREVIEW_ROOMS,
-            fullRoomBudget: FULL_ROOM_BUDGET,
+            fullRoomBudget: REDUCED_PLAY_FULL_ROOM_BUDGET,
           };
       }
     }

@@ -7,6 +7,7 @@ import {
   roomToChunkCoordinates,
   type WorldChunkCoordinates,
 } from '../persistence/worldModel';
+import { createRandomUuid } from '../utils/randomId';
 
 export type WorldPresenceMode = 'browse' | 'play' | 'edit';
 export type WorldPresenceAnimationState = DefaultPlayerAnimationState;
@@ -447,7 +448,7 @@ export function resolveWorldPresenceIdentity(): WorldPresenceIdentity {
   }
 
   const guestIdentity: WorldPresenceIdentity = {
-    userId: `guest-${crypto.randomUUID()}`,
+    userId: `guest-${createRandomUuid()}`,
     displayName: `Guest ${Math.random().toString(36).slice(2, 6)}`,
     avatarId: 'default-player',
   };
@@ -472,15 +473,15 @@ export function resolveWorldPresenceConfig(): {
   }
 
   const normalized = rawHost.replace(/\/+$/, '');
+  const host = normalized.replace(/^(https?:\/\/|wss?:\/\/)/, '');
   const protocol =
     normalized.startsWith('wss://') || normalized.startsWith('https://')
       ? 'wss'
       : normalized.startsWith('ws://') || normalized.startsWith('http://')
         ? 'ws'
-        : window.location.protocol === 'https:'
+        : window.location.protocol === 'https:' || !isLocalPartyKitHost(host)
           ? 'wss'
           : 'ws';
-  const host = normalized.replace(/^(https?:\/\/|wss?:\/\/)/, '');
 
   return {
     host,
@@ -488,4 +489,18 @@ export function resolveWorldPresenceConfig(): {
     // Single-server PartyKit projects default to the implicit `main` party route.
     party: runtimeConfig?.party || 'main',
   };
+}
+
+function isLocalPartyKitHost(host: string): boolean {
+  const hostname = host.split(':')[0]?.replace(/^\[|\]$/g, '').toLowerCase() ?? '';
+  return (
+    hostname === 'localhost'
+    || hostname === '0.0.0.0'
+    || hostname === '::1'
+    || hostname.startsWith('127.')
+    || hostname.startsWith('10.')
+    || hostname.startsWith('192.168.')
+    || /^172\\.(1[6-9]|2\\d|3[0-1])\\./.test(hostname)
+    || hostname.endsWith('.local')
+  );
 }

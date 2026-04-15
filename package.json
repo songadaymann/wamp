@@ -14,6 +14,7 @@
     "dev:presence": "partykit dev",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "smoke:mobile": "node scripts/mobile_smoke.mjs",
     "smoke:preview:readonly": "npx --yes --quiet -p playwright node scripts/preview_smoke_readonly.mjs",
     "smoke:progression-rating": "npx --yes --quiet -p playwright node scripts/smoke_progression_rating_modal.mjs",
     "smoke:progression-api:local": "node scripts/smoke_progression_api_flow.mjs",
@@ -50,6 +51,7 @@
     "@types/react": "^19.2.14",
     "csstype": "^3.2.3",
     "partykit": "^0.0.115",
+    "playwright": "^1.59.1",
     "typescript": "^5.7.0",
     "vite": "^6.2.0",
     "wrangler": "^4.71.0"

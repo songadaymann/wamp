@@ -16,6 +16,7 @@ interface OverworldChunkPreviewRendererOptions {
   isFullRoomLoaded: (roomId: string) => boolean;
   onBackdropObjectsChanged?: () => void;
   onFullRoomVisibilityChanged?: () => void;
+  measurePerformance?: <T>(label: string, callback: () => T) => T;
 }
 
 interface ChunkPreviewState {
@@ -36,6 +37,12 @@ export class OverworldChunkPreviewRenderer {
 
   constructor(private readonly options: OverworldChunkPreviewRendererOptions) {
     this.textureNamespace = sanitizeChunkKey(options.scene.sys.settings.key);
+  }
+
+  private measure<T>(label: string, callback: () => T): T {
+    return this.options.measurePerformance
+      ? this.options.measurePerformance(label, callback)
+      : callback();
   }
 
   reset(): void {
@@ -219,6 +226,7 @@ export class OverworldChunkPreviewRenderer {
     chunkCoordinates: WorldChunkCoordinates,
     rooms: RoomSnapshot[]
   ): void {
+    this.measure('stream.buildChunkPreviewTexture', () => {
     const canvasTexture = this.options.scene.textures.createCanvas(
       textureKey,
       WORLD_CHUNK_SIZE * ROOM_WIDTH * this.options.previewTileSize,
@@ -253,6 +261,7 @@ export class OverworldChunkPreviewRenderer {
     }
 
     canvasTexture.refresh();
+    });
   }
 
   private buildChunkTextureKey(chunkId: string, rooms: RoomSnapshot[]): string {

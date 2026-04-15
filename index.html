@@ -101,36 +101,6 @@
       <span class="xp-receipt-impact-pixel xp-receipt-impact-pixel--6"></span>
     </div>
   </div>
-  <div id="rotate-gate" class="rotate-gate hidden" aria-hidden="true">
-    <div class="rotate-gate-target rotate-gate-target-share" aria-hidden="true">
-      <div class="rotate-gate-target-label">Tap Share</div>
-      <div class="rotate-gate-target-arrow rotate-gate-target-arrow-share"></div>
-    </div>
-    <div class="rotate-gate-target rotate-gate-target-menu" aria-hidden="true">
-      <div class="rotate-gate-target-label">Open Menu</div>
-      <div class="rotate-gate-target-arrow rotate-gate-target-arrow-menu"></div>
-    </div>
-    <div class="rotate-gate-target rotate-gate-target-generic" aria-hidden="true">
-      <div class="rotate-gate-target-label">Open Browser Menu</div>
-      <div class="rotate-gate-target-arrow rotate-gate-target-arrow-generic"></div>
-    </div>
-    <div class="rotate-gate-card">
-      <div class="rotate-gate-kicker rotate-gate-browser-only">Portrait Install</div>
-      <div class="rotate-gate-kicker rotate-gate-standalone-only">Turn To Play</div>
-      <div class="rotate-gate-title rotate-gate-browser-only">Install WAMP From Here</div>
-      <div class="rotate-gate-title rotate-gate-standalone-only">Turn Your Phone</div>
-      <div class="rotate-gate-copy rotate-gate-browser-only">WAMP only works on mobile as a web app! Search for:<br><code>how to add web app to home screen on [your phone] on [your browser]</code></div>
-      <div class="rotate-gate-copy rotate-gate-standalone-only">WAMP is installed. Rotate to landscape to browse the overworld, play rooms, and use the on-screen controls without the sideways confusion.</div>
-      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-only rotate-gate-browser-copy-share">Tap <code>Share</code> in the bottom toolbar, then choose <code>Add to Home Screen</code>.</div>
-      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-only rotate-gate-browser-copy-menu">Open the browser menu in the top-right, then choose <code>Add to Home screen</code> or <code>Install app</code>.</div>
-      <div class="rotate-gate-copy rotate-gate-copy-secondary rotate-gate-browser-copy rotate-gate-browser-only rotate-gate-browser-copy-generic">Open your browser menu and look for <code>Add to Home Screen</code> or <code>Install</code>.</div>
-      <div class="rotate-gate-actions">
-        <button id="btn-rotate-install-help" class="bar-btn rotate-gate-browser-only" type="button">Full Install Steps</button>
-        <div class="rotate-gate-note rotate-gate-browser-only">If you want to keep using the browser tab instead, rotate to landscape.</div>
-        <div class="rotate-gate-note rotate-gate-standalone-only">Once you rotate, the game will resume automatically.</div>
-      </div>
-    </div>
-  </div>
   <div id="auth-panel">
     <div class="auth-panel-topline">
       <button id="auth-identity" class="auth-identity-card mini-profile-card hidden" type="button" aria-label="Open your profile">
@@ -203,9 +173,6 @@
               />
             </svg>
           </a>
-        </div>
-        <div class="auth-row auth-menu-action-row">
-          <button id="btn-install-help-open" class="bar-btn auth-menu-action-btn hidden" type="button">Install App</button>
         </div>
         <div class="auth-row auth-menu-action-row">
           <button id="btn-chat-moderation-open" class="bar-btn auth-menu-action-btn hidden" type="button">Chat Moderation</button>
@@ -1125,9 +1092,9 @@
           <button id="btn-world-play-course" class="bar-btn bar-btn-small world-btn-play hidden" disabled>Play Course</button>
           <button id="btn-world-edit" class="bar-btn bar-btn-small world-btn-edit" disabled>Edit Room</button>
           <button id="btn-world-build" class="bar-btn bar-btn-small world-btn-build" disabled>Build Here</button>
+          <button id="btn-world-course-builder" class="bar-btn bar-btn-small world-btn-course-builder" disabled>Course Builder</button>
         </div>
         <div class="world-hud-row world-hud-row-secondary-actions">
-          <button id="btn-world-course-builder" class="bar-btn bar-btn-small world-btn-course-builder" disabled>Course Builder</button>
         </div>
         <div class="world-hud-row world-hud-row-tertiary-actions">
           <button id="btn-world-explore" class="bar-btn bar-btn-small world-btn-leaderboard" type="button">Explore</button>
@@ -1169,16 +1136,27 @@
         Restart
       </button>
       <div id="mobile-play-controls" class="mobile-play-controls hidden">
-        <div id="mobile-dpad" class="mobile-dpad" aria-label="Move">
-          <button id="btn-mobile-up" class="mobile-dpad-btn mobile-dpad-up" data-mobile-direction="up" type="button" aria-label="Move up">Up</button>
-          <button id="btn-mobile-left" class="mobile-dpad-btn mobile-dpad-left" data-mobile-direction="left" type="button" aria-label="Move left">Left</button>
-          <button id="btn-mobile-right" class="mobile-dpad-btn mobile-dpad-right" data-mobile-direction="right" type="button" aria-label="Move right">Right</button>
-          <button id="btn-mobile-down" class="mobile-dpad-btn mobile-dpad-down" data-mobile-direction="down" type="button" aria-label="Move down">Down</button>
+        <div id="mobile-move-zone" class="mobile-move-zone" aria-label="Move">
+          <div id="mobile-move-stick" class="mobile-move-stick" aria-hidden="true">
+            <div class="mobile-move-stick-knob"></div>
+          </div>
         </div>
         <div class="mobile-play-actions">
           <button id="btn-mobile-jump" class="mobile-action-btn mobile-action-jump" type="button">Jump</button>
-          <button id="btn-mobile-slash" class="mobile-action-btn mobile-action-slash" type="button">Slash</button>
+          <button id="btn-mobile-slash" class="mobile-action-btn mobile-action-slash" type="button">Sword</button>
           <button id="btn-mobile-shoot" class="mobile-action-btn mobile-action-shoot" type="button">Shoot</button>
+        </div>
+      </div>
+      <div id="mobile-camera-tuner" class="mobile-camera-tuner hidden" aria-label="Mobile camera tuner">
+        <div class="mobile-camera-tuner-title">Camera Tuner</div>
+        <div id="mobile-camera-tuner-value" class="mobile-camera-tuner-value">waiting for camera</div>
+        <div class="mobile-camera-tuner-grid">
+          <button class="mobile-camera-tuner-btn" data-mobile-camera-tuner-action="zoom-out" type="button">Zoom -</button>
+          <button class="mobile-camera-tuner-btn" data-mobile-camera-tuner-action="zoom-in" type="button">Zoom +</button>
+          <button class="mobile-camera-tuner-btn" data-mobile-camera-tuner-action="player-up" type="button">Player Up</button>
+          <button class="mobile-camera-tuner-btn" data-mobile-camera-tuner-action="player-down" type="button">Player Down</button>
+          <button class="mobile-camera-tuner-btn" data-mobile-camera-tuner-action="reset" type="button">Reset</button>
+          <button class="mobile-camera-tuner-btn" data-mobile-camera-tuner-action="log" type="button">Log</button>
         </div>
       </div>
       <div id="global-chat" class="chat-panel">
@@ -1706,59 +1684,17 @@
         </div>
         <div class="controls-section">
           <div class="controls-section-title">Mobile</div>
-          <div class="controls-row"><span class="controls-key">Rotate</span><span>Landscape only</span></div>
+          <div class="controls-row"><span class="controls-key">Room Link</span><span>Open and play in portrait</span></div>
           <div class="controls-row"><span class="controls-key">Tap</span><span>Select room / place terrain</span></div>
           <div class="controls-row"><span class="controls-key">Drag</span><span>Pan world or draw with active tool</span></div>
           <div class="controls-row"><span class="controls-key">Pinch</span><span>Zoom camera</span></div>
           <div class="controls-row"><span class="controls-key">2 fingers</span><span>Pan editor camera</span></div>
-          <div class="controls-row"><span class="controls-key">Joystick</span><span>Move in play mode</span></div>
+          <div class="controls-row"><span class="controls-key">Joystick</span><span>Move in portrait play</span></div>
           <div class="controls-row"><span class="controls-key">Jump / Slash / Shoot</span><span>Right-side action buttons</span></div>
-          <div class="controls-row"><span class="controls-key">Safari</span><span>Share -> Add to Home Screen</span></div>
-          <div class="controls-row"><span class="controls-key">Brave / Chrome</span><span>Menu -> Add to Home screen or Install app</span></div>
-          <div class="controls-row"><span class="controls-key">Installed</span><span>Launch from the icon to hide browser chrome</span></div>
+          <div class="controls-row"><span class="controls-key">Stop</span><span>Return to the room HUD</span></div>
         </div>
       </div>
       <div class="history-modal-meta">Custom control remapping can layer onto this later without changing the basic world HUD.</div>
-    </div>
-  </div>
-
-  <div id="install-help-modal" class="history-modal hidden" aria-hidden="true">
-    <div class="history-modal-panel install-help-modal-panel" role="dialog" aria-modal="true" aria-labelledby="install-help-title">
-      <div class="history-modal-header">
-        <div class="history-modal-title-group">
-          <div class="history-modal-kicker">Install</div>
-          <h2 id="install-help-title" class="history-modal-title">Add WAMP To Your Home Screen</h2>
-          <div class="history-modal-meta">Launch from the icon to use the app without the normal browser address bar and tabs.</div>
-        </div>
-        <button id="btn-install-help-close" class="bar-btn bar-btn-small" type="button">Close</button>
-      </div>
-      <div class="about-copy">
-        <div class="about-section">
-          <div class="about-section-title">Required On Mobile</div>
-          <p>This game only works on mobile if you add it as a web app to your home screen.</p>
-          <p>Once that is done, open WAMP from the home-screen icon instead of the browser tab.</p>
-        </div>
-        <div class="about-section">
-          <div class="about-section-title">If You Need Help</div>
-          <p>If you do not know how to do this on your phone/browser, search for:</p>
-          <p class="install-help-search-prompt"><code>how to add web app to home screen on [your phone] on [your browser]</code></p>
-        </div>
-        <div class="about-section">
-          <div class="about-section-title">Quick Reminder</div>
-          <ul class="about-list">
-            <li><strong>Safari:</strong> use <code>Share -&gt; Add to Home Screen</code>.</li>
-            <li><strong>Brave / Chrome:</strong> open the browser menu and choose <code>Add to Home screen</code> or <code>Install app</code>.</li>
-            <li><strong>After that:</strong> launch WAMP from the installed icon.</li>
-          </ul>
-        </div>
-        <div class="about-section">
-          <div class="about-section-title">Result</div>
-          <p>Once installed, WAMP opens in its own standalone app shell, which gives the game more vertical room and reduces browser UI clutter.</p>
-        </div>
-      </div>
-      <div class="install-help-footer">
-        <button id="btn-install-help-got-it" class="bar-btn" type="button">Got It</button>
-      </div>
     </div>
   </div>
 
@@ -1803,15 +1739,6 @@
         <div class="about-section">
           <div class="about-section-title">Challenges</div>
           <p>Right now, the game supports both single-room challenges and short published courses that stitch 2-4 adjacent rooms together. Rooms still handle speedruns, checkpoint sprints, collectible hunts, survival, and other small self-contained tests, while courses let you chain authored room challenges into a longer path.</p>
-        </div>
-        <div class="about-section">
-          <div class="about-section-title">Install App</div>
-          <p>On mobile, you can launch WAMP without the normal browser address bar and tabs by installing it to your home screen.</p>
-          <ul class="about-list">
-            <li><strong>Safari:</strong> use <code>Share -&gt; Add to Home Screen</code>.</li>
-            <li><strong>Brave / Chrome:</strong> open the browser menu and choose <code>Add to Home screen</code> or <code>Install app</code>.</li>
-            <li><strong>Result:</strong> launching from the installed icon opens the game in a standalone app shell.</li>
-          </ul>
         </div>
         <div class="about-section">
           <div class="about-section-title">Future Improvements</div>

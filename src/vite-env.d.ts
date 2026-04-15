@@ -23,6 +23,20 @@ interface Window {
   get_sfx_debug_state?: () => Record<string, unknown>;
   play_sfx_debug?: (cue: import('./audio/sfx').SfxCue) => void;
   run_overworld_lod_stress?: () => Promise<Record<string, unknown>>;
+  wampMobilePerf?: import('./debug/mobilePerformanceProfiler').MobilePerformanceProfilerApi;
+  wampMobileCameraTuner?: {
+    get: () => import('./ui/setup/sceneBridge').MobilePortraitCameraTuningSnapshot;
+    log: (reason?: string) => import('./ui/setup/sceneBridge').MobilePortraitCameraTuningSnapshot;
+    set: (
+      input: import('./ui/setup/sceneBridge').MobilePortraitCameraTuningInput,
+      reason?: string,
+    ) => import('./ui/setup/sceneBridge').MobilePortraitCameraTuningSnapshot;
+    adjust: (
+      adjustment: import('./ui/setup/sceneBridge').MobilePortraitCameraTuningAdjustment,
+      reason?: string,
+    ) => import('./ui/setup/sceneBridge').MobilePortraitCameraTuningSnapshot;
+    reset: () => import('./ui/setup/sceneBridge').MobilePortraitCameraTuningSnapshot;
+  };
   run_preview_smoke_action?: (
     action:
       | 'selectEditableRoom'

@@ -1,30 +1,20 @@
 import Phaser from 'phaser';
 import { getDeviceLayoutState, initializeDeviceLayout, DEVICE_LAYOUT_CHANGED_EVENT } from '../deviceLayout';
 import { getActiveOverworldScene, withActiveEditorScene } from '../setup/sceneBridge';
-import {
-  pressTouchAction,
-  resetTouchInputState,
-  setTouchActionHeld,
-  setTouchControlsActive,
-  setTouchMove,
-} from './touchControls';
+import { hasFocusedRoomCoordinateLink } from './focusedRoomLink';
+import { PortraitPlayControlsController } from './portraitPlayControls';
 
 type EditorSheetId = 'tools' | 'background' | 'palette' | 'objects' | 'goal' | 'actions';
-type MoveDirection = 'up' | 'left' | 'right' | 'down';
 
 type Elements = {
-  rotateGate: HTMLElement | null;
   mobileEditorNav: HTMLElement | null;
   mobileEditorUndoButton: HTMLButtonElement | null;
   mobileEditorToggleButton: HTMLButtonElement | null;
-  mobilePlayControls: HTMLElement | null;
-  mobileDpad: HTMLElement | null;
-  mobileDpadButtons: HTMLButtonElement[];
-  mobileJumpButton: HTMLButtonElement | null;
-  mobileSlashButton: HTMLButtonElement | null;
-  mobileShootButton: HTMLButtonElement | null;
   mobileWorldStopButton: HTMLButtonElement | null;
   mobileWorldRestartButton: HTMLButtonElement | null;
+  mobileCameraTuner: HTMLElement | null;
+  mobileCameraTunerValue: HTMLElement | null;
+  mobileCameraTunerButtons: HTMLButtonElement[];
   worldHudToggleButton: HTMLButtonElement | null;
   worldHudMinimizeButton: HTMLButtonElement | null;
   worldChatButton: HTMLButtonElement | null;
@@ -42,12 +32,11 @@ type Elements = {
 export class MobileUiController {
   private readonly elements: Elements;
   private readonly mutationObserver: MutationObserver;
-  private pausedSceneKeys = new Set<string>();
+  private readonly portraitPlayControls: PortraitPlayControlsController;
   private activeEditorSheet: EditorSheetId = 'tools';
   private editorSheetCollapsed = false;
   private worldHudCollapsed = false;
   private previousAppMode: string | null = null;
-  private activeDpadPointers = new Map<number, MoveDirection>();
   private lastTouchEndAt = 0;
 
   constructor(
@@ -56,18 +45,14 @@ export class MobileUiController {
     private readonly windowObj: Window = window,
   ) {
     this.elements = {
-      rotateGate: doc.getElementById('rotate-gate'),
       mobileEditorNav: doc.getElementById('mobile-editor-nav'),
       mobileEditorUndoButton: doc.getElementById('btn-mobile-editor-undo') as HTMLButtonElement | null,
       mobileEditorToggleButton: doc.getElementById('btn-mobile-editor-toggle') as HTMLButtonElement | null,
-      mobilePlayControls: doc.getElementById('mobile-play-controls'),
-      mobileDpad: doc.getElementById('mobile-dpad'),
-      mobileDpadButtons: Array.from(doc.querySelectorAll<HTMLButtonElement>('[data-mobile-direction]')),
-      mobileJumpButton: doc.getElementById('btn-mobile-jump') as HTMLButtonElement | null,
-      mobileSlashButton: doc.getElementById('btn-mobile-slash') as HTMLButtonElement | null,
-      mobileShootButton: doc.getElementById('btn-mobile-shoot') as HTMLButtonElement | null,
       mobileWorldStopButton: doc.getElementById('btn-mobile-world-stop') as HTMLButtonElement | null,
       mobileWorldRestartButton: doc.getElementById('btn-mobile-world-restart') as HTMLButtonElement | null,
+      mobileCameraTuner: doc.getElementById('mobile-camera-tuner'),
+      mobileCameraTunerValue: doc.getElementById('mobile-camera-tuner-value'),
+      mobileCameraTunerButtons: Array.from(doc.querySelectorAll<HTMLButtonElement>('[data-mobile-camera-tuner-action]')),
       worldHudToggleButton: doc.getElementById('btn-world-hud-toggle') as HTMLButtonElement | null,
       worldHudMinimizeButton: doc.getElementById('btn-mobile-world-hud-minimize') as HTMLButtonElement | null,
       worldChatButton: doc.getElementById('btn-world-chat') as HTMLButtonElement | null,
@@ -84,6 +69,7 @@ export class MobileUiController {
     this.mutationObserver = new MutationObserver(() => {
       this.render();
     });
+    this.portraitPlayControls = new PortraitPlayControlsController(doc);
   }
 
   init(): void {
@@ -96,8 +82,8 @@ export class MobileUiController {
     this.bindMobileEditorActions();
     this.bindMobileWorldHud();
     this.bindWorldShortcuts();
-    this.bindDpad();
-    this.bindActionButtons();
+    this.portraitPlayControls.init();
+    this.bindMobileCameraTuner();
     this.bindDoubleTapZoomSuppression();
     this.windowObj.addEventListener('mobile-editor-auto-collapse', this.handleAutoCollapse as EventListener);
     this.render();
@@ -105,6 +91,7 @@ export class MobileUiController {
 
   destroy(): void {
     this.mutationObserver.disconnect();
+    this.portraitPlayControls.destroy();
     this.windowObj.removeEventListener(DEVICE_LAYOUT_CHANGED_EVENT, this.handleDeviceLayoutChanged as EventListener);
     this.windowObj.removeEventListener('mobile-editor-auto-collapse', this.handleAutoCollapse as EventListener);
     this.doc.removeEventListener('touchend', this.handleTouchEndSuppressDoubleTapZoom, true);
@@ -306,132 +293,45 @@ export class MobileUiController {
     );
   }
 
-  private bindDpad(): void {
-    if (!this.elements.mobileDpad || this.elements.mobileDpadButtons.length === 0) {
-      return;
-    }
-
-    const release = (pointerId: number) => {
-      if (!this.activeDpadPointers.has(pointerId)) {
-        return;
-      }
-
-      this.activeDpadPointers.delete(pointerId);
-      this.applyDpadState();
-    };
-
-    this.elements.mobileDpadButtons.forEach((button) => {
-      const direction = this.getMoveDirection(button.dataset.mobileDirection);
-      if (!direction) {
-        return;
-      }
-
-      button.addEventListener('pointerdown', (event) => {
+  private bindMobileCameraTuner(): void {
+    this.elements.mobileCameraTunerButtons.forEach((button) => {
+      button.addEventListener('click', (event) => {
         event.preventDefault();
-        this.activeDpadPointers.set(event.pointerId, direction);
-        this.applyDpadState();
-        this.trySetPointerCapture(button, event.pointerId);
-      });
-
-      const releaseButtonPointer = (event: PointerEvent) => {
-        if (this.activeDpadPointers.get(event.pointerId) !== direction) {
+        const scene = getActiveOverworldScene(this.game);
+        const action = button.dataset.mobileCameraTunerAction;
+        if (!scene || !action) {
           return;
         }
 
-        release(event.pointerId);
-      };
+        if (action === 'zoom-out') {
+          scene.adjustMobilePortraitCameraTuning?.(
+            { zoomMultiplierDelta: -0.05 },
+            'button-zoom-out',
+          );
+        } else if (action === 'zoom-in') {
+          scene.adjustMobilePortraitCameraTuning?.(
+            { zoomMultiplierDelta: 0.05 },
+            'button-zoom-in',
+          );
+        } else if (action === 'player-up') {
+          scene.adjustMobilePortraitCameraTuning?.(
+            { targetYDelta: -0.03 },
+            'button-player-up',
+          );
+        } else if (action === 'player-down') {
+          scene.adjustMobilePortraitCameraTuning?.(
+            { targetYDelta: 0.03 },
+            'button-player-down',
+          );
+        } else if (action === 'reset') {
+          scene.resetMobilePortraitCameraTuning?.();
+        } else if (action === 'log') {
+          scene.logMobilePortraitCameraTuning?.('button-log');
+        }
 
-      button.addEventListener('pointerup', releaseButtonPointer);
-      button.addEventListener('pointercancel', releaseButtonPointer);
-      button.addEventListener('lostpointercapture', releaseButtonPointer);
+        this.render();
+      });
     });
-  }
-
-  private getMoveDirection(direction: string | undefined): MoveDirection | null {
-    if (
-      direction === 'up'
-      || direction === 'left'
-      || direction === 'right'
-      || direction === 'down'
-    ) {
-      return direction;
-    }
-
-    return null;
-  }
-
-  private applyDpadState(): void {
-    let x = 0;
-    let y = 0;
-
-    for (const direction of this.activeDpadPointers.values()) {
-      if (direction === 'left') {
-        x -= 1;
-      } else if (direction === 'right') {
-        x += 1;
-      } else if (direction === 'up') {
-        y -= 1;
-      } else if (direction === 'down') {
-        y += 1;
-      }
-    }
-
-    setTouchMove(Math.max(-1, Math.min(1, x)), Math.max(-1, Math.min(1, y)));
-    this.syncDpadButtonState();
-  }
-
-  private syncDpadButtonState(): void {
-    const activeDirections = new Set(this.activeDpadPointers.values());
-    this.elements.mobileDpadButtons.forEach((button) => {
-      const direction = this.getMoveDirection(button.dataset.mobileDirection);
-      button.classList.toggle('is-active', Boolean(direction && activeDirections.has(direction)));
-    });
-  }
-
-  private clearDpadState(): void {
-    if (this.activeDpadPointers.size > 0) {
-      this.activeDpadPointers.clear();
-    }
-
-    setTouchMove(0, 0);
-    this.syncDpadButtonState();
-  }
-
-  private bindActionButtons(): void {
-    this.bindHoldButton(this.elements.mobileJumpButton, 'jump');
-    this.bindHoldButton(this.elements.mobileSlashButton, 'slash');
-    this.bindHoldButton(this.elements.mobileShootButton, 'shoot');
-
-    this.elements.mobileWorldStopButton?.addEventListener('click', () => {
-      if (this.doc.body.dataset.appMode === 'play-world') {
-        pressTouchAction('stop');
-      }
-    });
-    this.elements.mobileWorldRestartButton?.addEventListener('click', () => {
-      if (this.doc.body.dataset.appMode === 'play-world') {
-        pressTouchAction('restart');
-      }
-    });
-  }
-
-  private bindHoldButton(button: HTMLButtonElement | null, action: 'jump' | 'slash' | 'shoot'): void {
-    if (!button) {
-      return;
-    }
-
-    const release = () => {
-      setTouchActionHeld(action, false);
-    };
-
-    button.addEventListener('pointerdown', (event) => {
-      event.preventDefault();
-      setTouchActionHeld(action, true);
-      pressTouchAction(action);
-      this.trySetPointerCapture(button, event.pointerId);
-    });
-    button.addEventListener('pointerup', release);
-    button.addEventListener('pointercancel', release);
-    button.addEventListener('lostpointercapture', release);
   }
 
   private openJumpSheet(): void {
@@ -472,18 +372,6 @@ export class MobileUiController {
     delete this.doc.body.dataset.mobileJumpSheetOpen;
   }
 
-  private trySetPointerCapture(button: HTMLButtonElement, pointerId: number): void {
-    if (typeof button.setPointerCapture !== 'function') {
-      return;
-    }
-
-    try {
-      button.setPointerCapture(pointerId);
-    } catch {
-      // Synthetic pointer flows and some browser edge cases can reject capture.
-    }
-  }
-
   private hasVisibleNonJumpModal(): boolean {
     return Array.from(this.doc.querySelectorAll<HTMLElement>('.history-modal')).some((element) => {
       if (element === this.elements.worldJumpSheet) {
@@ -502,10 +390,17 @@ export class MobileUiController {
     const musicModeActive = this.doc.body.dataset.editorMusicMode === 'true';
     const isWorld = appMode === 'world' || appMode === 'play-world';
     const isPlay = appMode === 'play-world';
+    const hasFocusedRoomLink = hasFocusedRoomCoordinateLink(this.windowObj.location.search);
+    const isPortraitFocusedRoom =
+      isPhone &&
+      layout.coarsePointer &&
+      layout.orientationState === 'portrait' &&
+      isWorld &&
+      (isPlay || hasFocusedRoomLink);
+    const isPortraitPlay = isPortraitFocusedRoom && isPlay;
     const isCollapsibleWorldHud =
       layout.coarsePointer &&
       layout.deviceClass !== 'desktop' &&
-      !layout.mobileLandscapeBlocked &&
       isWorld;
     const chatOpen = this.doc.getElementById('global-chat')?.classList.contains('is-open') ?? false;
     const jumpSheetOpen = !(this.elements.worldJumpSheet?.classList.contains('hidden') ?? true);
@@ -514,6 +409,9 @@ export class MobileUiController {
     const nonJumpModalOpen = this.hasVisibleNonJumpModal();
     const mobileShortcutOverlayOpen =
       chatOpen || jumpSheetOpen || menuOpen || busyOverlayOpen || nonJumpModalOpen;
+    if (isPortraitFocusedRoom && (this.windowObj.scrollX !== 0 || this.windowObj.scrollY !== 0)) {
+      this.windowObj.scrollTo(0, 0);
+    }
 
     if (!isEditor && this.editorSheetCollapsed) {
       this.editorSheetCollapsed = false;
@@ -527,7 +425,7 @@ export class MobileUiController {
 
     if (this.previousAppMode !== appMode) {
       if (layout.coarsePointer && layout.deviceClass !== 'desktop') {
-        if (appMode === 'play-world') {
+        if (appMode === 'play-world' && isPortraitPlay) {
           this.worldHudCollapsed = true;
         } else if (appMode === 'world') {
           this.worldHudCollapsed = false;
@@ -538,13 +436,18 @@ export class MobileUiController {
       this.previousAppMode = appMode;
     }
 
-    this.doc.body.dataset.mobileControlsVisible =
-      layout.coarsePointer && !layout.mobileLandscapeBlocked && isPlay ? 'true' : 'false';
+    if (isPlay && !isPortraitPlay && this.worldHudCollapsed) {
+      this.worldHudCollapsed = false;
+    }
+
+    this.doc.body.dataset.mobileControlsVisible = isPortraitPlay ? 'true' : 'false';
+    this.doc.body.dataset.mobilePortraitPlay = isPortraitPlay ? 'true' : 'false';
+    this.doc.body.dataset.mobilePortraitFocusedRoom = isPortraitFocusedRoom ? 'true' : 'false';
 
     if (this.elements.mobileEditorNav) {
       this.elements.mobileEditorNav.classList.toggle(
         'hidden',
-        !(isPhone && layout.coarsePointer && !layout.mobileLandscapeBlocked && isEditor),
+        !(isPhone && layout.coarsePointer && isEditor),
       );
       this.elements.mobileEditorNav
         .querySelectorAll<HTMLButtonElement>('[data-mobile-editor-sheet]')
@@ -562,23 +465,20 @@ export class MobileUiController {
       this.elements.mobileEditorToggleButton.disabled = musicModeActive;
     }
 
-    this.elements.rotateGate?.classList.toggle(
-      'hidden',
-      !layout.mobileLandscapeBlocked,
-    );
-
-    this.elements.mobilePlayControls?.classList.toggle(
-      'hidden',
-      !(layout.coarsePointer && !layout.mobileLandscapeBlocked && isPlay),
-    );
+    this.portraitPlayControls.render(isPortraitPlay);
     this.elements.mobileWorldStopButton?.classList.toggle(
       'hidden',
-      !(isCollapsibleWorldHud && isPlay && this.worldHudCollapsed),
+      !(isCollapsibleWorldHud && isPortraitPlay && this.worldHudCollapsed),
     );
     this.elements.mobileWorldRestartButton?.classList.toggle(
       'hidden',
-      !(isCollapsibleWorldHud && isPlay && this.worldHudCollapsed),
+      !(isCollapsibleWorldHud && isPortraitPlay && this.worldHudCollapsed),
     );
+    this.elements.mobileCameraTuner?.classList.toggle(
+      'hidden',
+      !(this.isMobileCameraTunerUrlEnabled() && isPortraitPlay && !mobileShortcutOverlayOpen),
+    );
+    this.syncMobileCameraTunerValue();
 
     this.doc.body.dataset.mobileWorldHudCollapsed =
       isCollapsibleWorldHud && this.worldHudCollapsed ? 'true' : 'false';
@@ -606,35 +506,38 @@ export class MobileUiController {
     if (!(layout.coarsePointer && isWorld) || chatOpen || menuOpen || busyOverlayOpen || nonJumpModalOpen) {
       this.closeJumpSheet();
     }
-
-    setTouchControlsActive(layout.coarsePointer && isPlay && !layout.mobileLandscapeBlocked);
-    if (!layout.coarsePointer || layout.mobileLandscapeBlocked || !isPlay) {
-      resetTouchInputState();
-      this.clearDpadState();
-    }
-
-    if (layout.mobileLandscapeBlocked) {
-      this.pauseInteractiveScenes();
-    } else {
-      this.resumeInteractiveScenes();
-    }
   }
 
-  private pauseInteractiveScenes(): void {
-    for (const sceneKey of ['OverworldPlayScene', 'EditorScene']) {
-      if (this.game.scene.isActive(sceneKey)) {
-        this.game.scene.pause(sceneKey);
-        this.pausedSceneKeys.add(sceneKey);
-      }
+  private isMobileCameraTunerUrlEnabled(): boolean {
+    const params = new URLSearchParams(this.windowObj.location.search);
+    const raw =
+      params.get('cameraTuner')
+      ?? params.get('mobileCameraTuner')
+      ?? params.get('cameraDebug');
+    if (raw === null) {
+      return params.has('mobileCameraZoom') || params.has('mobileCameraTargetY');
     }
+
+    const normalized = raw.trim().toLowerCase();
+    return normalized === '' || ['1', 'true', 'yes', 'on'].includes(normalized);
   }
 
-  private resumeInteractiveScenes(): void {
-    for (const sceneKey of [...this.pausedSceneKeys]) {
-      if (this.game.scene.isPaused(sceneKey)) {
-        this.game.scene.resume(sceneKey);
-      }
-      this.pausedSceneKeys.delete(sceneKey);
+  private syncMobileCameraTunerValue(): void {
+    const valueElement = this.elements.mobileCameraTunerValue;
+    if (!valueElement) {
+      return;
     }
+
+    const snapshot = getActiveOverworldScene(this.game)?.getMobilePortraitCameraTuning?.();
+    if (!snapshot) {
+      valueElement.textContent = 'waiting for camera';
+      return;
+    }
+
+    valueElement.textContent =
+      `zoom x${snapshot.zoomMultiplier.toFixed(2)} `
+      + `target ${snapshot.targetY.toFixed(2)} `
+      + `cam ${snapshot.cameraZoom.toFixed(2)}`;
   }
+
 }

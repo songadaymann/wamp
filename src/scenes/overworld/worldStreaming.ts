@@ -100,6 +100,7 @@ interface OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall> {
   ) => void;
   onBackdropObjectsChanged?: () => void;
   onFullRoomVisibilityChanged?: () => void;
+  measurePerformance?: <T>(label: string, callback: () => T) => T;
 }
 
 export type WorldRefreshResult = 'success' | 'cancelled' | 'error';
@@ -148,7 +149,14 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       isFullRoomLoaded: (roomId) => this.loadedFullRoomsById.has(roomId),
       onBackdropObjectsChanged: options.onBackdropObjectsChanged,
       onFullRoomVisibilityChanged: options.onFullRoomVisibilityChanged,
+      measurePerformance: options.measurePerformance,
     });
+  }
+
+  private measure<T>(label: string, callback: () => T): T {
+    return this.options.measurePerformance
+      ? this.options.measurePerformance(label, callback)
+      : callback();
   }
 
   reset(): void {
@@ -553,13 +561,18 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   private refreshVisibleRoomsFromCache(): void {
+    this.measure('stream.refreshVisibleRoomsFromCache', () => {
     if (!this.loadedRoomBounds) {
       return;
     }
 
-    const roomCandidates = this.collectVisibleRoomCandidates();
+    const roomCandidates = this.measure('stream.collectVisibleRoomCandidates', () =>
+      this.collectVisibleRoomCandidates()
+    );
     this.visibleRoomIds = new Set(roomCandidates.keys());
-    const previewSelection = this.computePreviewSelection(roomCandidates);
+    const previewSelection = this.measure('stream.computePreviewSelection', () =>
+      this.computePreviewSelection(roomCandidates)
+    );
     const previewRoomIds = previewSelection.previewRoomIds;
     const fullRoomIds = previewSelection.fullRoomIds;
     const requestedRoomIds = new Set<string>([...previewRoomIds, ...fullRoomIds]);
@@ -596,11 +609,13 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       });
     }
 
-    this.previewRenderer.renderChunkPreviews(
-      Array.from(renderableRooms.values(), (renderableRoom) => renderableRoom.room).filter((room) =>
-        previewRoomIds.has(room.id)
-      )
-    );
+    this.measure('stream.renderChunkPreviews', () => {
+      this.previewRenderer.renderChunkPreviews(
+        Array.from(renderableRooms.values(), (renderableRoom) => renderableRoom.room).filter((room) =>
+          previewRoomIds.has(room.id)
+        )
+      );
+    });
 
     if (this.options.getMode() === 'play') {
       for (const renderableRoom of renderableRooms.values()) {
@@ -610,13 +625,16 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       }
     }
 
-    this.previewRenderer.unloadOutsideWindow(this.visibleRoomIds, previewRoomIds);
-    this.previewCache.pruneSnapshots(this.visibleRoomIds, new Set(this.loadedFullRoomsById.keys()));
-    this.unloadFullRoomsOutsideStream(
-      this.options.getMode() === 'play'
-        ? this.getRetainedFullRoomIds(fullRoomIds)
-        : fullRoomIds
-    );
+    this.measure('stream.unloadOutsideWindow', () => {
+      this.previewRenderer.unloadOutsideWindow(this.visibleRoomIds, previewRoomIds);
+      this.previewCache.pruneSnapshots(this.visibleRoomIds, new Set(this.loadedFullRoomsById.keys()));
+      this.unloadFullRoomsOutsideStream(
+        this.options.getMode() === 'play'
+          ? this.getRetainedFullRoomIds(fullRoomIds)
+          : fullRoomIds
+      );
+    });
+    });
   }
 
   private collectVisibleRoomCandidates(): Map<string, StreamingRoomCandidate> {
@@ -798,6 +816,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   private async ensureFullRoom(room: RoomSnapshot): Promise<void> {
+    return this.measure('stream.ensureFullRoom', () => {
     const existing = this.loadedFullRoomsById.get(room.id);
     if (existing && existing.room.version === room.version && existing.room.updatedAt === room.updatedAt) {
       existing.image.setVisible(true);
@@ -824,22 +843,28 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       includedLayers: ['foreground'],
     });
     if (!this.options.scene.textures.exists(textureKey)) {
-      buildRoomSnapshotTexture(this.options.scene, room, textureKey, TILE_SIZE, {
-        includeBackground: false,
-        includeObjects: false,
-        includedLayers: ['background', 'terrain'],
+      this.measure('stream.buildFullRoomTexture.terrain', () => {
+        buildRoomSnapshotTexture(this.options.scene, room, textureKey, TILE_SIZE, {
+          includeBackground: false,
+          includeObjects: false,
+          includedLayers: ['background', 'terrain'],
+        });
       });
     }
     if (!this.options.scene.textures.exists(foregroundTextureKey)) {
-      buildRoomSnapshotTexture(this.options.scene, room, foregroundTextureKey, TILE_SIZE, {
-        includeBackground: false,
-        includeObjects: false,
-        includedLayers: ['foreground'],
+      this.measure('stream.buildFullRoomTexture.foreground', () => {
+        buildRoomSnapshotTexture(this.options.scene, room, foregroundTextureKey, TILE_SIZE, {
+          includeBackground: false,
+          includeObjects: false,
+          includedLayers: ['foreground'],
+        });
       });
     }
 
     const origin = this.options.getRoomOrigin(room.coordinates);
-    const roomBackground = this.createRoomBackground(room, origin);
+    const roomBackground = this.measure('stream.createRoomBackground', () =>
+      this.createRoomBackground(room, origin)
+    );
     const image = this.options.scene.add.image(
       origin.x + ROOM_PX_WIDTH / 2,
       origin.y + ROOM_PX_HEIGHT / 2,
@@ -857,12 +882,12 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     foregroundImage.setDepth(27.25);
     foregroundImage.setDisplaySize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
 
-    const map = this.options.scene.make.tilemap({
+    const map = this.measure('stream.createTilemap', () => this.options.scene.make.tilemap({
       tileWidth: TILE_SIZE,
       tileHeight: TILE_SIZE,
       width: ROOM_WIDTH,
       height: ROOM_HEIGHT,
-    });
+    }));
     const tilesets: Phaser.Tilemaps.Tileset[] = [];
     for (const tilesetConfig of TILESETS) {
       const tileset = map.addTilesetImage(
@@ -879,7 +904,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       }
     }
 
-    const terrainLayer = map.createBlankLayer(`terrain-${room.id}`, tilesets, origin.x, origin.y);
+    const terrainLayer = this.measure('stream.createTerrainLayer', () =>
+      map.createBlankLayer(`terrain-${room.id}`, tilesets, origin.x, origin.y)
+    );
     if (!terrainLayer) {
       roomBackground.colorRect?.destroy();
       for (const backgroundSprite of roomBackground.sprites) {
@@ -889,23 +916,31 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       return;
     }
 
-    for (let y = 0; y < ROOM_HEIGHT; y += 1) {
-      for (let x = 0; x < ROOM_WIDTH; x += 1) {
-        const { gid, flipX, flipY } = decodeTileDataValue(room.tileData.terrain[y][x]);
-        if (gid > 0) {
-          const tile = terrainLayer.putTileAt(gid, x, y);
-          if (tile) {
-            tile.flipX = flipX;
-            tile.flipY = flipY;
+    this.measure('stream.populateTerrainLayer', () => {
+      for (let y = 0; y < ROOM_HEIGHT; y += 1) {
+        for (let x = 0; x < ROOM_WIDTH; x += 1) {
+          const { gid, flipX, flipY } = decodeTileDataValue(room.tileData.terrain[y][x]);
+          if (gid > 0) {
+            const tile = terrainLayer.putTileAt(gid, x, y);
+            if (tile) {
+              tile.flipX = flipX;
+              tile.flipY = flipY;
+            }
           }
         }
       }
-    }
+    });
 
-    terrainLayer.setCollisionByExclusion([-1]);
+    this.measure('stream.setTerrainCollision', () => {
+      terrainLayer.setCollisionByExclusion([-1]);
+    });
     terrainLayer.setVisible(false);
-    const terrainInsetBodies = this.createTerrainInsetBodies(room, origin, terrainLayer);
-    const staticLighting = extractRoomStaticLightingEmitters(room, origin);
+    const terrainInsetBodies = this.measure('stream.createTerrainInsetBodies', () =>
+      this.createTerrainInsetBodies(room, origin, terrainLayer)
+    );
+    const staticLighting = this.measure('stream.extractStaticLighting', () =>
+      extractRoomStaticLightingEmitters(room, origin)
+    );
 
     const player = this.options.getPlayer();
     const loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall> = {
@@ -928,12 +963,17 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       edgeWalls: [],
       liveObjects: [],
     };
-    this.updateFullRoomBackground(loadedRoom, this.options.scene.cameras.main);
-    this.options.createLiveObjects(loadedRoom);
+    this.measure('stream.updateFullRoomBackground', () => {
+      this.updateFullRoomBackground(loadedRoom, this.options.scene.cameras.main);
+    });
+    this.measure('stream.createLiveObjects', () => {
+      this.options.createLiveObjects(loadedRoom);
+    });
     this.loadedFullRoomsById.set(room.id, loadedRoom);
     this.previewRenderer.syncPreviewVisibility();
     this.options.onBackdropObjectsChanged?.();
     this.options.onFullRoomVisibilityChanged?.();
+    });
   }
 
   private buildScopedRoomTextureKey(

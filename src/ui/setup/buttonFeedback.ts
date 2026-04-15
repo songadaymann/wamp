@@ -14,6 +14,8 @@ const PRESSABLE_SELECTOR = [
   '.mobile-action-btn',
 ].join(', ');
 
+const GAMEPLAY_MOBILE_CONTROLS_SELECTOR = '#mobile-play-controls .mobile-action-btn';
+
 function isDisabled(target: HTMLElement): boolean {
   if (target instanceof HTMLButtonElement) {
     return target.disabled || target.getAttribute('aria-disabled') === 'true';
@@ -29,6 +31,10 @@ function resolvePressable(target: EventTarget | null): HTMLElement | null {
 
   const element = target.closest(PRESSABLE_SELECTOR);
   return element instanceof HTMLElement ? element : null;
+}
+
+function isGameplayMobileControl(target: HTMLElement): boolean {
+  return Boolean(target.closest(GAMEPLAY_MOBILE_CONTROLS_SELECTOR));
 }
 
 export function setupButtonFeedback(doc: Document = document): void {
@@ -62,7 +68,7 @@ export function setupButtonFeedback(doc: Document = document): void {
     }
 
     const target = resolvePressable(event.target);
-    if (!target || isDisabled(target)) {
+    if (!target || isDisabled(target) || isGameplayMobileControl(target)) {
       return;
     }
 
@@ -89,7 +95,7 @@ export function setupButtonFeedback(doc: Document = document): void {
 
   doc.addEventListener('click', (event) => {
     const target = resolvePressable(event.target);
-    if (!target || isDisabled(target)) {
+    if (!target || isDisabled(target) || isGameplayMobileControl(target)) {
       return;
     }
 

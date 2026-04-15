@@ -7,15 +7,15 @@ export interface DeviceLayoutState {
   orientationState: OrientationState;
   coarsePointer: boolean;
   performanceProfile: PerformanceProfile;
-  standaloneLaunch: boolean;
-  standalonePortrait: boolean;
-  mobileLandscapeRequired: boolean;
-  mobileLandscapeBlocked: boolean;
   viewport: {
     width: number;
     height: number;
   };
 }
+
+type NavigatorWithDeviceMemory = Navigator & {
+  deviceMemory?: number;
+};
 
 export const DEVICE_LAYOUT_CHANGED_EVENT = 'device-layout-changed';
 
@@ -24,10 +24,6 @@ const DEFAULT_STATE: DeviceLayoutState = {
   orientationState: 'landscape',
   coarsePointer: false,
   performanceProfile: 'default',
-  standaloneLaunch: false,
-  standalonePortrait: false,
-  mobileLandscapeRequired: false,
-  mobileLandscapeBlocked: false,
   viewport: {
     width: 0,
     height: 0,
@@ -36,22 +32,6 @@ const DEFAULT_STATE: DeviceLayoutState = {
 
 let state: DeviceLayoutState = { ...DEFAULT_STATE };
 let initialized = false;
-
-type NavigatorWithStandalone = Navigator & {
-  standalone?: boolean;
-};
-
-export function detectStandaloneLaunch(windowObj: Window = window): boolean {
-  const navigatorWithStandalone = windowObj.navigator as NavigatorWithStandalone;
-  const referrer = windowObj.document.referrer ?? '';
-  return (
-    windowObj.matchMedia('(display-mode: standalone)').matches ||
-    windowObj.matchMedia('(display-mode: fullscreen)').matches ||
-    windowObj.matchMedia('(display-mode: minimal-ui)').matches ||
-    navigatorWithStandalone.standalone === true ||
-    referrer.startsWith('android-app://')
-  );
-}
 
 function classifyDeviceClass(width: number, height: number, coarsePointer: boolean): DeviceClass {
   if (!coarsePointer) {
@@ -66,7 +46,20 @@ function resolvePerformanceProfile(
   deviceClass: DeviceClass,
   coarsePointer: boolean,
 ): PerformanceProfile {
-  return coarsePointer && deviceClass === 'tablet' ? 'reduced' : 'default';
+  if (coarsePointer || deviceClass === 'phone' || deviceClass === 'tablet') {
+    return 'reduced';
+  }
+
+  const deviceMemory = (navigator as NavigatorWithDeviceMemory).deviceMemory ?? 0;
+  const hardwareConcurrency = navigator.hardwareConcurrency ?? 0;
+  if (
+    (deviceMemory > 0 && deviceMemory <= 4)
+    || (hardwareConcurrency > 0 && hardwareConcurrency <= 4)
+  ) {
+    return 'reduced';
+  }
+
+  return 'default';
 }
 
 function computeState(): DeviceLayoutState {
@@ -75,22 +68,15 @@ function computeState(): DeviceLayoutState {
   const height = Math.max(0, Math.round(viewport?.height ?? window.innerHeight));
   const coarsePointer =
     window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
-  const standaloneLaunch = detectStandaloneLaunch();
-  const standalonePortrait = standaloneLaunch && coarsePointer && width < height;
   const orientationState: OrientationState = width >= height ? 'landscape' : 'portrait';
   const deviceClass = classifyDeviceClass(width, height, coarsePointer);
   const performanceProfile = resolvePerformanceProfile(deviceClass, coarsePointer);
-  const mobileLandscapeRequired = coarsePointer && deviceClass !== 'desktop';
 
   return {
     deviceClass,
     orientationState,
     coarsePointer,
     performanceProfile,
-    standaloneLaunch,
-    standalonePortrait,
-    mobileLandscapeRequired,
-    mobileLandscapeBlocked: mobileLandscapeRequired && orientationState === 'portrait',
     viewport: {
       width,
       height,
@@ -103,9 +89,6 @@ function applyStateToDom(nextState: DeviceLayoutState): void {
   document.body.dataset.orientationState = nextState.orientationState;
   document.body.dataset.coarsePointer = nextState.coarsePointer ? 'true' : 'false';
   document.body.dataset.performanceProfile = nextState.performanceProfile;
-  document.body.dataset.standaloneLaunch = nextState.standaloneLaunch ? 'true' : 'false';
-  document.body.dataset.standalonePortrait = nextState.standalonePortrait ? 'true' : 'false';
-  document.body.dataset.mobileLandscapeBlocked = nextState.mobileLandscapeBlocked ? 'true' : 'false';
   document.documentElement.style.setProperty('--app-viewport-width', `${nextState.viewport.width}px`);
   document.documentElement.style.setProperty('--app-viewport-height', `${nextState.viewport.height}px`);
 }
@@ -116,10 +99,6 @@ function statesEqual(a: DeviceLayoutState, b: DeviceLayoutState): boolean {
     a.orientationState === b.orientationState &&
     a.coarsePointer === b.coarsePointer &&
     a.performanceProfile === b.performanceProfile &&
-    a.standaloneLaunch === b.standaloneLaunch &&
-    a.standalonePortrait === b.standalonePortrait &&
-    a.mobileLandscapeRequired === b.mobileLandscapeRequired &&
-    a.mobileLandscapeBlocked === b.mobileLandscapeBlocked &&
     a.viewport.width === b.viewport.width &&
     a.viewport.height === b.viewport.height
   );
@@ -166,8 +145,4 @@ export function isCoarsePointerDevice(): boolean {
 
 export function getPerformanceProfile(): PerformanceProfile {
   return state.performanceProfile;
-}
-
-export function isMobileLandscapeBlocked(): boolean {
-  return state.mobileLandscapeBlocked;
 }

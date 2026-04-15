@@ -202,18 +202,16 @@ export class OverworldMovementController {
     const horizontalInput = (right ? 1 : 0) - (left ? 1 : 0);
     const touchJumpPressed = consumeTouchAction('jump');
     const overlappingLadder = this.host.findOverlappingLadder();
-    const touchClimbUpHeld = overlappingLadder !== null && (touchUp || touchInput.jumpHeld);
+    const touchClimbUpHeld = overlappingLadder !== null && touchUp;
     const upHeld = cursors.up.isDown || wasd.W.isDown || touchClimbUpHeld;
     const downHeld = cursors.down.isDown || wasd.S.isDown || touchDown;
     const verticalInput = (downHeld ? 1 : 0) - (upHeld ? 1 : 0);
-    const touchJumpUsedForLadder = touchJumpPressed && overlappingLadder !== null;
     const upPressed =
       Phaser.Input.Keyboard.JustDown(cursors.up) ||
-      Phaser.Input.Keyboard.JustDown(wasd.W) ||
-      touchJumpUsedForLadder;
+      Phaser.Input.Keyboard.JustDown(wasd.W);
     const spacePressed =
       Phaser.Input.Keyboard.JustDown(cursors.space!) ||
-      (touchJumpPressed && !touchJumpUsedForLadder);
+      touchJumpPressed;
     const stayOnLadder =
       overlappingLadder !== null &&
       !spacePressed &&
