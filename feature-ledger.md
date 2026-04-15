@@ -83,6 +83,11 @@ Audit scope: this ledger currently reflects the recent non-merged branch invento
 
 ## Cleanup Path
 
+- Active merge-prep note on April 15, 2026:
+  - mobile usability pass now also has main-based merge-prep branch `merge/mobile-portrait-play-main-2026-04-15`, created from `origin/main` and merged from `safety/mobile-portrait-play-2026-04-14`
+  - local merged-branch validation passed `node --check scripts/mobile_smoke.mjs`, `npm run typecheck`, `npm run build`, and all 9 `npm run smoke:mobile` scenarios against `http://127.0.0.1:3232`
+  - next clean action is to push/deploy this merge-prep branch as a safety preview for real-phone QA before pushing anything to `main`
+
 1. Treat `main` as the only trusted default base.
 2. Keep testing on existing preview branches when useful, but do not branch new work from those snapshots.
 3. For each active feature, either:

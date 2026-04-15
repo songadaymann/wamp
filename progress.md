@@ -61,7 +61,15 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - created `merge/mobile-portrait-play-main-2026-04-15` from `origin/main` at `51da946`
   - merged `safety/mobile-portrait-play-2026-04-14` into the main-based merge-prep branch
   - the only merge conflict was this `progress.md` recent-changes section; both the current main notes and mobile safety notes were preserved
-  - validation and deploy notes for this merged branch are still pending
+  - local merged-branch validation passed:
+    - `node --check scripts/mobile_smoke.mjs`
+    - `npm run typecheck`
+    - `npm run build` with the existing Rollup annotation and large-chunk warnings
+    - `MOBILE_SMOKE_OUTPUT_DIR="output/web-game/mobile-main-merge-smoke" npm run smoke:mobile -- --url http://127.0.0.1:3232`, with all 9 scenarios passing and zero console/page errors
+    - required `develop-web-game` client wrote `output/web-game/mobile-main-merge-client/`; it reproduced the known generic black-frame / `activeScene: "none"` artifact, while the targeted mobile smoke screenshot showed the portrait play layout correctly
+  - local merged-branch screenshot checked:
+    - `output/web-game/mobile-main-merge-smoke/phone-portrait-deep-link-play/portrait-play.png`
+  - safety deploy notes for this merged branch are still pending
 
 - Sticky same-wall jump follow-up on April 14, 2026:
   - started fresh main-based branch/worktree:
