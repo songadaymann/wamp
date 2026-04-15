@@ -86,7 +86,9 @@ Audit scope: this ledger currently reflects the recent non-merged branch invento
 - Active merge-prep note on April 15, 2026:
   - mobile usability pass now also has main-based merge-prep branch `merge/mobile-portrait-play-main-2026-04-15`, created from `origin/main` and merged from `safety/mobile-portrait-play-2026-04-14`
   - local merged-branch validation passed `node --check scripts/mobile_smoke.mjs`, `npm run typecheck`, `npm run build`, and all 9 `npm run smoke:mobile` scenarios against `http://127.0.0.1:3232`
-  - next clean action is to push/deploy this merge-prep branch as a safety preview for real-phone QA before pushing anything to `main`
+  - merge-prep branch is pushed to origin and Pages-only safety deployed at `https://safety-mobile-portrait-main.wampland.pages.dev`; the script-predicted longer `https://safety-mobile-portrait-main-merge.wampland.pages.dev` alias 404s
+  - deployed smoke against the working alias reached all 9 scenarios with zero page errors and only the known deployed `Failed to load resource: net::ERR_FAILED` console noise
+  - next clean action is real-phone QA on the working safety alias before pushing anything to `main`
 
 1. Treat `main` as the only trusted default base.
 2. Keep testing on existing preview branches when useful, but do not branch new work from those snapshots.

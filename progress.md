@@ -69,7 +69,15 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - required `develop-web-game` client wrote `output/web-game/mobile-main-merge-client/`; it reproduced the known generic black-frame / `activeScene: "none"` artifact, while the targeted mobile smoke screenshot showed the portrait play layout correctly
   - local merged-branch screenshot checked:
     - `output/web-game/mobile-main-merge-smoke/phone-portrait-deep-link-play/portrait-play.png`
-  - safety deploy notes for this merged branch are still pending
+  - pushed `merge/mobile-portrait-play-main-2026-04-15` to origin at `90b1fc4`
+  - Pages-only safety deploy from the merged branch completed:
+    - Wrangler deployment URL: `https://2f77d6df.wampland.pages.dev`
+    - working alias: `https://safety-mobile-portrait-main.wampland.pages.dev`
+    - predicted longer alias `https://safety-mobile-portrait-main-merge.wampland.pages.dev` returns `404`, so do not share it
+    - deployed bundle is `assets/main-BERzhxHz.js`; `mobile-move-zone` is present, while `mobile-rotate-gate` and `data-mobile-direction` are absent
+  - deployed mobile smoke against `https://safety-mobile-portrait-main.wampland.pages.dev` reached all 9 scenarios successfully with zero page errors, but returned nonzero because each deployed scenario logged the same generic `Failed to load resource: net::ERR_FAILED` console noise seen on prior Cloudflare safety previews
+  - deployed portrait screenshot checked:
+    - `output/web-game/mobile-main-merge-deployed-smoke/phone-portrait-deep-link-play/portrait-play.png`
 
 - Sticky same-wall jump follow-up on April 14, 2026:
   - started fresh main-based branch/worktree:
