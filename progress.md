@@ -60,6 +60,7 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 - Mobile main merge-prep on April 15, 2026:
   - created `merge/mobile-portrait-play-main-2026-04-15` from `origin/main` at `51da946`
   - merged `safety/mobile-portrait-play-2026-04-14` into the main-based merge-prep branch
+  - fast-forwarded `origin/main` to the validated merge branch on April 15, 2026, then fast-forwarded the local `main` worktree
   - the only merge conflict was this `progress.md` recent-changes section; both the current main notes and mobile safety notes were preserved
   - local merged-branch validation passed:
     - `node --check scripts/mobile_smoke.mjs`
