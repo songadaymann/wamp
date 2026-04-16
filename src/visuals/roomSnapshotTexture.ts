@@ -15,6 +15,11 @@ import {
   type LayerName,
 } from '../config';
 import { resolveRoomBackground } from '../backgrounds/model';
+import {
+  getCustomBackgroundCenterRect,
+  getCustomBackgroundTextureKey,
+  getCustomBackgroundTileScale,
+} from '../backgrounds/runtime';
 import type { RoomSnapshot } from '../persistence/roomModel';
 import { RETRO_COLORS, drawStarfieldToContext, hashStringToSeed } from './starfield';
 
@@ -142,6 +147,16 @@ export function drawRoomBackground(
     return;
   }
 
+  if (resolved.kind === 'custom') {
+    context.fillStyle = RETRO_COLORS.background;
+    context.fillRect(offsetX, offsetY, width, height);
+    const sourceImage = getTextureSource(scene, getCustomBackgroundTextureKey(resolved.id));
+    if (sourceImage) {
+      drawCustomBackgroundImage(context, sourceImage, resolved.fit, offsetX, offsetY, width, height);
+    }
+    return;
+  }
+
   context.fillStyle = resolved.group.bgColor ?? RETRO_COLORS.background;
   context.fillRect(offsetX, offsetY, width, height);
 
@@ -155,6 +170,79 @@ export function drawRoomBackground(
       context.drawImage(sourceImage, offsetX + drawX, offsetY, drawWidth, height);
     }
   }
+}
+
+function drawCustomBackgroundImage(
+  context: CanvasRenderingContext2D,
+  sourceImage: CanvasImageSource,
+  fit: 'stretch' | 'tile' | 'center',
+  offsetX: number,
+  offsetY: number,
+  width: number,
+  height: number,
+): void {
+  const sourceSize = getCanvasSourceSize(sourceImage, width, height);
+  const sourceWidth = sourceSize.width;
+  const sourceHeight = sourceSize.height;
+
+  if (fit === 'stretch') {
+    context.drawImage(sourceImage, offsetX, offsetY, width, height);
+    return;
+  }
+
+  if (fit === 'center') {
+    const rect = getCustomBackgroundCenterRect(
+      { width: sourceWidth, height: sourceHeight },
+      { width, height },
+    );
+    context.drawImage(sourceImage, offsetX + rect.x, offsetY + rect.y, rect.width, rect.height);
+    return;
+  }
+
+  const scale = getCustomBackgroundTileScale({
+    width: sourceWidth,
+    height: sourceHeight,
+  });
+  const drawWidth = Math.max(1, Math.ceil(sourceWidth * scale));
+  const drawHeight = Math.max(1, Math.ceil(sourceHeight * scale));
+  for (let drawY = 0; drawY < height + drawHeight; drawY += drawHeight) {
+    for (let drawX = 0; drawX < width + drawWidth; drawX += drawWidth) {
+      context.drawImage(sourceImage, offsetX + drawX, offsetY + drawY, drawWidth, drawHeight);
+    }
+  }
+}
+
+function getCanvasSourceSize(
+  sourceImage: CanvasImageSource,
+  fallbackWidth: number,
+  fallbackHeight: number,
+): { width: number; height: number } {
+  const source = sourceImage as {
+    width?: unknown;
+    height?: unknown;
+    naturalWidth?: unknown;
+    naturalHeight?: unknown;
+    videoWidth?: unknown;
+    videoHeight?: unknown;
+  };
+  const rawWidth = typeof source.width === 'number'
+    ? source.width
+    : typeof source.naturalWidth === 'number'
+      ? source.naturalWidth
+      : typeof source.videoWidth === 'number'
+        ? source.videoWidth
+        : fallbackWidth;
+  const rawHeight = typeof source.height === 'number'
+    ? source.height
+    : typeof source.naturalHeight === 'number'
+      ? source.naturalHeight
+      : typeof source.videoHeight === 'number'
+        ? source.videoHeight
+        : fallbackHeight;
+  return {
+    width: Math.max(1, Math.round(rawWidth)),
+    height: Math.max(1, Math.round(rawHeight)),
+  };
 }
 
 function drawRoomTiles(

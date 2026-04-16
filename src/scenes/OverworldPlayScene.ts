@@ -3664,7 +3664,7 @@ export class OverworldPlayScene extends Phaser.Scene {
             background: currentLoadedRoom.room.background,
             layerCount: currentLoadedRoom.backgroundSprites.length,
             sampleParallax: currentRoomParallaxLayer?.parallax ?? null,
-            sampleTilePositionX: currentRoomParallaxLayer
+            sampleTilePositionX: currentRoomParallaxLayer && 'tilePositionX' in currentRoomParallaxLayer.sprite
               ? Number(currentRoomParallaxLayer.sprite.tilePositionX.toFixed(3))
               : null,
           }

@@ -33,3 +33,17 @@ PLAYFUN_API_KEY=
 PLAYFUN_SECRET_KEY=
 PLAYFUN_GAME_ID=
 PLAYFUN_BASE_URL="https://api.play.fun"
+
+# Optional user-uploaded room backgrounds.
+# Configure these as Worker secrets/vars in Cloudflare before enabling real uploads.
+CLOUDFLARE_ACCOUNT_ID=
+CLOUDFLARE_IMAGES_API_TOKEN=
+CLOUDFLARE_IMAGES_ACCOUNT_HASH=
+CLOUDFLARE_IMAGES_BACKGROUND_VARIANT=public
+CLOUDFLARE_IMAGES_THUMB_VARIANT=public
+BACKGROUND_UPLOAD_MAX_BYTES=8388608
+BACKGROUND_UPLOAD_MIN_TRUST_TIER=T2
+# Leave blank to require human approval for everyone. Set to T4 to auto-approve clean T4 uploads.
+BACKGROUND_UPLOAD_AUTO_APPROVE_TRUST_TIER=
+OPENROUTER_API_KEY=
+OPENROUTER_IMAGE_MODERATION_MODEL=gemini-2.0-flash-lite

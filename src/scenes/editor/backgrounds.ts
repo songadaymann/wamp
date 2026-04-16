@@ -6,14 +6,22 @@ import {
   type BackgroundLayer,
 } from '../../config';
 import { resolveRoomBackground } from '../../backgrounds/model';
+import {
+  createCustomBackgroundLayer,
+  createCustomBackgroundObject,
+  ensureCustomBackgroundTexture,
+  syncCustomBackgroundObject,
+  type CustomBackgroundLayer,
+  type CustomBackgroundObject,
+} from '../../backgrounds/runtime';
 import type { RoomCoordinates } from '../../persistence/roomRepository';
 import type { WorldRepository } from '../../persistence/worldRepository';
 import { RETRO_COLORS, ensureStarfieldTexture } from '../../visuals/starfield';
 import { buildRoomSnapshotTexture, buildRoomTextureKey } from '../../visuals/roomSnapshotTexture';
 
 interface ParallaxSprite {
-  sprite: Phaser.GameObjects.TileSprite;
-  layer: BackgroundLayer;
+  sprite: Phaser.GameObjects.TileSprite | CustomBackgroundObject;
+  layer: BackgroundLayer | CustomBackgroundLayer;
 }
 
 interface EditorBackgroundHost {
@@ -32,6 +40,7 @@ export class EditorBackgroundController {
   private surroundingRoomBorders: Phaser.GameObjects.Graphics | null = null;
   private surroundingRoomTextureKeys = new Set<string>();
   private surroundingPreviewToken = 0;
+  private backgroundLoadToken = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -48,6 +57,7 @@ export class EditorBackgroundController {
   }
 
   reset(): void {
+    this.backgroundLoadToken += 1;
     if (this.bgCamera && this.scene.cameras.cameras.includes(this.bgCamera)) {
       this.scene.cameras.remove(this.bgCamera, true);
     }
@@ -78,6 +88,7 @@ export class EditorBackgroundController {
   }
 
   updateBackground(selectedBackground: string): void {
+    const loadToken = ++this.backgroundLoadToken;
     for (const bg of this.bgSprites) {
       bg.sprite.destroy();
     }
@@ -129,6 +140,28 @@ export class EditorBackgroundController {
       return;
     }
 
+    if (resolved.kind === 'custom') {
+      this.bgColorRect = this.scene.add.rectangle(0, 0, w, h, RETRO_COLORS.backgroundNumber);
+      this.bgColorRect.setOrigin(0, 0);
+      this.bgColorRect.setDepth(-20);
+      this.syncBackgroundCameraIgnores();
+      this.updateBackgroundPreview();
+
+      void ensureCustomBackgroundTexture(this.scene, resolved.id)
+        .then(() => {
+          if (loadToken !== this.backgroundLoadToken || !this.host.isSceneActive()) {
+            return;
+          }
+          const layer = createCustomBackgroundLayer(this.scene, resolved.id, resolved.fit);
+          const sprite = createCustomBackgroundObject(this.scene, layer, 0, 0, w, h, -10);
+          this.bgSprites.push({ sprite, layer });
+          this.syncBackgroundCameraIgnores();
+          this.updateBackgroundPreview();
+        })
+        .catch(() => {});
+      return;
+    }
+
     if (resolved.group.bgColor) {
       const color = Phaser.Display.Color.HexStringToColor(resolved.group.bgColor).color;
       this.bgColorRect = this.scene.add.rectangle(0, 0, w, h, color);
@@ -173,13 +206,18 @@ export class EditorBackgroundController {
     }
 
     for (const bg of this.bgSprites) {
-      bg.sprite.setPosition(0, 0);
-      bg.sprite.setSize(w, h);
+      if ('fit' in bg.layer) {
+        syncCustomBackgroundObject(bg.sprite as CustomBackgroundObject, bg.layer, 0, 0, w, h, cam.scrollX);
+        continue;
+      }
 
       const scale = h / bg.layer.height;
-      bg.sprite.setTileScale(scale, scale);
-      bg.sprite.tilePositionX = (cam.scrollX * bg.layer.scrollFactor) / scale;
-      bg.sprite.tilePositionY = 0;
+      const sprite = bg.sprite as Phaser.GameObjects.TileSprite;
+      sprite.setPosition(0, 0);
+      sprite.setSize(w, h);
+      sprite.setTileScale(scale, scale);
+      sprite.tilePositionX = (cam.scrollX * bg.layer.scrollFactor) / scale;
+      sprite.tilePositionY = 0;
     }
 
     const fallbackConfigs = [

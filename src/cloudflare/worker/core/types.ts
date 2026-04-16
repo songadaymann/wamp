@@ -53,6 +53,16 @@ export interface Env {
   PLAYFUN_SECRET_KEY?: string;
   PLAYFUN_GAME_ID?: string;
   PLAYFUN_BASE_URL?: string;
+  CLOUDFLARE_ACCOUNT_ID?: string;
+  CLOUDFLARE_IMAGES_API_TOKEN?: string;
+  CLOUDFLARE_IMAGES_ACCOUNT_HASH?: string;
+  CLOUDFLARE_IMAGES_BACKGROUND_VARIANT?: string;
+  CLOUDFLARE_IMAGES_THUMB_VARIANT?: string;
+  BACKGROUND_UPLOAD_MAX_BYTES?: string;
+  BACKGROUND_UPLOAD_MIN_TRUST_TIER?: string;
+  BACKGROUND_UPLOAD_AUTO_APPROVE_TRUST_TIER?: string;
+  OPENROUTER_API_KEY?: string;
+  OPENROUTER_IMAGE_MODERATION_MODEL?: string;
 }
 
 export interface RoomRow {
@@ -348,6 +358,41 @@ export interface UserProgressRow {
   trophy_count: number;
   first_identity_qualified_at: string | null;
   created_at: string;
+  updated_at: string;
+}
+
+export interface BackgroundImageUploadRow {
+  id: string;
+  cloudflare_image_id: string;
+  owner_user_id: string;
+  owner_display_name: string;
+  original_filename: string;
+  mime_type: string;
+  size_bytes: number;
+  image_width: number | null;
+  image_height: number | null;
+  status: string;
+  moderation_status: string;
+  moderation_score: number | null;
+  moderation_labels_json: string | null;
+  moderation_reason: string | null;
+  moderation_model: string | null;
+  upload_requested_at: string;
+  uploaded_at: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_reason: string | null;
+  cloudflare_deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BackgroundUploadPermissionRow {
+  user_id: string;
+  can_upload: number;
+  auto_approve: number;
+  reason: string | null;
+  updated_by: string | null;
   updated_at: string;
 }
 

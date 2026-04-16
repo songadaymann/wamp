@@ -30,6 +30,7 @@ import type {
 } from '../core/types';
 import { syncRoomOwnershipFromChain } from '../mint/service';
 import { prepareMusicPhrasePublishStatements } from '../music/store';
+import { assertCustomBackgroundApproved } from '../backgroundImages/routes';
 import {
   enforceRoomMutationGuardrails,
   getDailyRoomClaimLimitForUser,
@@ -365,6 +366,7 @@ export async function saveDraft(
     status: 'draft',
     version: existing.draft.version || 1,
   };
+  await assertCustomBackgroundApproved(env, draft.background);
 
   await env.DB.batch([
     preparePersistRoomRecordStatement(env, {
@@ -467,6 +469,7 @@ export async function publishRoom(
     status: 'published',
     version: nextVersion,
   };
+  await assertCustomBackgroundApproved(env, published.background);
 
   const draft: RoomSnapshot = {
     ...cloneRoomSnapshot(published),

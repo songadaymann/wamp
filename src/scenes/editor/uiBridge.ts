@@ -13,12 +13,25 @@ import {
   type ToolName,
 } from '../../config';
 import {
+  finalizeBackgroundUpload,
+  listBackgroundImages,
+  prepareBackgroundUpload,
+  uploadBackgroundFile,
+  type BackgroundImageSummary,
+  type BackgroundUploadPolicy,
+} from '../../backgrounds/client';
+import {
+  DEFAULT_CUSTOM_BACKGROUND_FIT,
+  PHOTO_BACKGROUND_ID,
   SOLID_COLOR_BACKGROUND_ID,
+  buildCustomBackgroundValue,
   buildSolidColorBackgroundValue,
   getBackgroundSelectionValue,
   getSolidColorFromBackgroundValue,
   normalizeRoomBackground,
   normalizeSolidBackgroundColor,
+  parseCustomBackground,
+  type CustomBackgroundFit,
 } from '../../backgrounds/model';
 import type { CourseGoalType } from '../../courses/model';
 import type { RoomGoalType } from '../../goals/roomGoals';
@@ -212,6 +225,11 @@ const runtimeConfig: EditorUiRuntimeConfig = {
   openHistory: () => {},
 };
 
+const BACKGROUND_UPLOAD_SELECT_VALUE = '__upload_background__';
+const DEFAULT_BACKGROUND_PHOTOS_SORT: BackgroundPhotosSort = 'most_used';
+
+type BackgroundPhotosSort = 'most_used' | 'least_used' | 'newest' | 'oldest';
+
 const PREFERRED_TILESET_OPTION_ORDER = [
   'forest',
   'forest_2',
@@ -309,13 +327,33 @@ export class EditorUiBridge {
   private readonly backgroundSolidColorInput: HTMLInputElement | null;
   private readonly backgroundSolidColorValue: HTMLElement | null;
   private readonly backgroundSolidCard: HTMLButtonElement | null;
+  private readonly backgroundUploadControls: HTMLElement | null;
+  private readonly backgroundUploadButton: HTMLButtonElement | null;
+  private readonly backgroundUploadCard: HTMLButtonElement | null;
+  private readonly backgroundUploadInput: HTMLInputElement | null;
+  private readonly backgroundUploadStatus: HTMLElement | null;
+  private readonly backgroundPhotosButton: HTMLButtonElement | null;
+  private readonly backgroundPhotoSelected: HTMLElement | null;
+  private readonly backgroundPhotoFitControls: HTMLElement | null;
+  private readonly backgroundPhotoFitButtons: HTMLButtonElement[];
+  private readonly backgroundPhotosModal: HTMLElement | null;
+  private readonly backgroundPhotosCloseButton: HTMLButtonElement | null;
+  private readonly backgroundPhotosSort: HTMLSelectElement | null;
+  private readonly backgroundPhotosStatus: HTMLElement | null;
+  private readonly backgroundPhotosGrid: HTMLElement | null;
+  private readonly backgroundUploadModal: HTMLElement | null;
+  private readonly backgroundUploadModalCloseButton: HTMLButtonElement | null;
+  private readonly backgroundUploadModalTitle: HTMLElement | null;
+  private readonly backgroundUploadModalMeta: HTMLElement | null;
+  private readonly backgroundUploadModalStatus: HTMLElement | null;
+  private readonly backgroundUploadProgressBar: HTMLElement | null;
   private readonly lightingSelect: HTMLSelectElement | null;
   private readonly lightingTuningControls: HTMLElement | null;
   private readonly lightingDarknessInput: HTMLInputElement | null;
   private readonly lightingDarknessValue: HTMLElement | null;
   private readonly lightingRadiusInput: HTMLInputElement | null;
   private readonly lightingRadiusValue: HTMLElement | null;
-  private readonly backgroundButtons: HTMLButtonElement[];
+  private backgroundButtons: HTMLButtonElement[];
   private readonly goalTypeSelect: HTMLSelectElement | null;
   private readonly goalContextNote: HTMLElement | null;
   private readonly timeLimitRow: HTMLElement | null;
@@ -365,6 +403,12 @@ export class EditorUiBridge {
   private moreToolsOpen = false;
   private currentObjectCategory = 'all';
   private lastViewModel: EditorUiViewModel | null = null;
+  private backgroundImages: BackgroundImageSummary[] = [];
+  private backgroundUploadPolicy: BackgroundUploadPolicy | null = null;
+  private backgroundCatalogToken = 0;
+  private backgroundUploadInFlight = false;
+  private backgroundPhotosSortMode: BackgroundPhotosSort = DEFAULT_BACKGROUND_PHOTOS_SORT;
+  private backgroundPhotoControlsMode: 'photo' | 'upload' | null = null;
 
   constructor(
     private readonly actions: EditorUiBridgeActions,
@@ -457,6 +501,35 @@ export class EditorUiBridge {
     this.backgroundSolidColorValue = this.doc.getElementById('background-solid-color-value');
     this.backgroundSolidCard =
       this.doc.getElementById('background-solid-card') as HTMLButtonElement | null;
+    this.backgroundUploadControls = this.doc.getElementById('background-upload-controls');
+    this.backgroundUploadButton =
+      this.doc.getElementById('background-upload-button') as HTMLButtonElement | null;
+    this.backgroundUploadCard =
+      this.doc.getElementById('background-upload-card') as HTMLButtonElement | null;
+    this.backgroundUploadInput =
+      this.doc.getElementById('background-upload-input') as HTMLInputElement | null;
+    this.backgroundUploadStatus = this.doc.getElementById('background-upload-status');
+    this.backgroundPhotosButton =
+      this.doc.getElementById('background-photos-button') as HTMLButtonElement | null;
+    this.backgroundPhotoSelected = this.doc.getElementById('background-photo-selected');
+    this.backgroundPhotoFitControls = this.doc.getElementById('background-photo-fit-controls');
+    this.backgroundPhotoFitButtons = Array.from(
+      this.doc.querySelectorAll<HTMLButtonElement>('[data-background-photo-fit]')
+    );
+    this.backgroundPhotosModal = this.doc.getElementById('background-photos-modal');
+    this.backgroundPhotosCloseButton =
+      this.doc.getElementById('btn-background-photos-close') as HTMLButtonElement | null;
+    this.backgroundPhotosSort =
+      this.doc.getElementById('background-photos-sort') as HTMLSelectElement | null;
+    this.backgroundPhotosStatus = this.doc.getElementById('background-photos-status');
+    this.backgroundPhotosGrid = this.doc.getElementById('background-photos-grid');
+    this.backgroundUploadModal = this.doc.getElementById('background-upload-modal');
+    this.backgroundUploadModalCloseButton =
+      this.doc.getElementById('btn-background-upload-modal-close') as HTMLButtonElement | null;
+    this.backgroundUploadModalTitle = this.doc.getElementById('background-upload-modal-title');
+    this.backgroundUploadModalMeta = this.doc.getElementById('background-upload-modal-meta');
+    this.backgroundUploadModalStatus = this.doc.getElementById('background-upload-modal-status');
+    this.backgroundUploadProgressBar = this.doc.getElementById('background-upload-progress-bar');
     this.lightingSelect =
       this.doc.getElementById('lighting-mode-select') as HTMLSelectElement | null;
     this.lightingTuningControls = this.doc.getElementById('lighting-tuning-controls');
@@ -537,6 +610,7 @@ export class EditorUiBridge {
 
     this.bindListeners();
     this.syncEditorChromeState();
+    void this.refreshBackgroundImages();
   }
 
   private populateTilesetOptions(): void {
@@ -703,6 +777,7 @@ export class EditorUiBridge {
     });
     this.bind(this.windowObj, AUTH_STATE_CHANGED_EVENT, () => {
       this.actions.onAuthStateChanged();
+      void this.refreshBackgroundImages();
     });
     this.bind(this.windowObj, EDITOR_UI_STATE_CHANGED_EVENT, () => {
       if (this.lastViewModel) {
@@ -965,6 +1040,41 @@ export class EditorUiBridge {
       this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
     }
 
+    const openUploadPicker = () => {
+      this.openBackgroundUploadPicker();
+    };
+    this.bindButton(this.backgroundUploadButton, openUploadPicker);
+    this.bindButton(this.backgroundUploadCard, openUploadPicker);
+    this.bindButton(this.backgroundPhotosButton, () => this.openBackgroundPhotosModal());
+    this.bindButton(this.backgroundPhotosCloseButton, () => this.closeBackgroundPhotosModal());
+    this.bindButton(this.backgroundUploadModalCloseButton, () => this.closeBackgroundUploadModal());
+    for (const button of this.backgroundPhotoFitButtons) {
+      const handler = () => {
+        this.applyBackgroundPhotoFit(button.dataset.backgroundPhotoFit as CustomBackgroundFit);
+      };
+      button.addEventListener('click', handler);
+      this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
+    }
+    const handleBackgroundPhotosSortChange = () => {
+      this.backgroundPhotosSortMode = this.getBackgroundPhotosSortMode();
+      this.renderBackgroundPhotoGrid();
+    };
+    this.backgroundPhotosSort?.addEventListener('change', handleBackgroundPhotosSortChange);
+    if (this.backgroundPhotosSort) {
+      this.cleanupCallbacks.push(() =>
+        this.backgroundPhotosSort?.removeEventListener('change', handleBackgroundPhotosSortChange)
+      );
+    }
+    const handleBackgroundUploadInput = () => {
+      void this.handleBackgroundUploadFileSelected();
+    };
+    this.backgroundUploadInput?.addEventListener('change', handleBackgroundUploadInput);
+    if (this.backgroundUploadInput) {
+      this.cleanupCallbacks.push(() =>
+        this.backgroundUploadInput?.removeEventListener('change', handleBackgroundUploadInput)
+      );
+    }
+
     const handleGoalTypeChange = () => {
       this.actions.onSetGoalType(
         this.goalTypeSelect?.value ? (this.goalTypeSelect.value as RoomGoalType) : null
@@ -1199,6 +1309,18 @@ export class EditorUiBridge {
     if (!nextBackgroundId) {
       return;
     }
+    if (nextBackgroundId === BACKGROUND_UPLOAD_SELECT_VALUE) {
+      this.backgroundPhotoControlsMode = 'upload';
+      this.openBackgroundUploadPicker();
+      this.syncEditorChromeState();
+      return;
+    }
+    if (nextBackgroundId === PHOTO_BACKGROUND_ID) {
+      this.backgroundPhotoControlsMode = 'photo';
+      this.openBackgroundPhotosModal();
+      this.syncEditorChromeState();
+      return;
+    }
     const normalizedSelection =
       nextBackgroundId === SOLID_COLOR_BACKGROUND_ID
         ? SOLID_COLOR_BACKGROUND_ID
@@ -1208,6 +1330,7 @@ export class EditorUiBridge {
       normalizedSelection === SOLID_COLOR_BACKGROUND_ID
         ? buildSolidColorBackgroundValue(editorState.selectedSolidBackgroundColor)
         : normalizedSelection;
+    this.backgroundPhotoControlsMode = parseCustomBackground(nextBackground) ? 'photo' : null;
     if (
       currentSelection === normalizedSelection &&
       editorState.selectedBackground === nextBackground
@@ -1221,6 +1344,319 @@ export class EditorUiBridge {
     if (normalizedSelection !== SOLID_COLOR_BACKGROUND_ID) {
       this.requestPhoneEditorAutoCollapse();
     }
+  }
+
+  private openBackgroundUploadPicker(): void {
+    if (this.backgroundUploadInFlight) {
+      return;
+    }
+    this.backgroundPhotoControlsMode = 'upload';
+    this.syncEditorChromeState();
+    if (!this.backgroundUploadPolicy?.canUpload) {
+      this.setBackgroundUploadStatus(
+        this.backgroundUploadPolicy?.reason ?? 'Uploads are not available for this account.',
+        Boolean(this.backgroundUploadPolicy?.authenticated),
+      );
+      return;
+    }
+    if (this.backgroundUploadInput) {
+      this.backgroundUploadInput.value = '';
+      this.backgroundUploadInput.click();
+    }
+  }
+
+  private async refreshBackgroundImages(): Promise<void> {
+    const token = ++this.backgroundCatalogToken;
+    try {
+      const payload = await listBackgroundImages();
+      if (this.destroyed || token !== this.backgroundCatalogToken) {
+        return;
+      }
+      this.backgroundImages = payload.items;
+      this.backgroundUploadPolicy = payload.uploadPolicy;
+      this.renderBackgroundPhotoGrid();
+      this.renderBackgroundUploadStatus(payload.uploadPolicy, payload.myUploads);
+      this.syncEditorChromeState();
+    } catch (error) {
+      if (this.destroyed || token !== this.backgroundCatalogToken) {
+        return;
+      }
+      this.setBackgroundUploadStatus(
+        error instanceof Error ? error.message : 'Could not load uploaded backgrounds.',
+        true,
+      );
+    }
+  }
+
+  private openBackgroundPhotosModal(): void {
+    if (!this.backgroundPhotosModal) {
+      return;
+    }
+    this.backgroundPhotoControlsMode = 'photo';
+    this.syncEditorChromeState();
+    this.backgroundPhotosModal.classList.remove('hidden');
+    this.backgroundPhotosModal.setAttribute('aria-hidden', 'false');
+    this.renderBackgroundPhotoGrid();
+  }
+
+  private closeBackgroundPhotosModal(): void {
+    if (!this.backgroundPhotosModal) {
+      return;
+    }
+    this.backgroundPhotosModal.classList.add('hidden');
+    this.backgroundPhotosModal.setAttribute('aria-hidden', 'true');
+  }
+
+  private renderBackgroundPhotoGrid(): void {
+    if (!this.backgroundPhotosGrid) {
+      return;
+    }
+
+    const currentPhoto = parseCustomBackground(editorState.selectedBackground);
+    const images = this.getSortedBackgroundImages();
+    this.backgroundPhotosGrid.replaceChildren();
+    this.setText(
+      this.backgroundPhotosStatus,
+      images.length > 0
+        ? `${images.length} approved ${images.length === 1 ? 'photo' : 'photos'}.`
+        : 'No approved photos yet.',
+    );
+
+    for (const image of images) {
+      const button = this.doc.createElement('button');
+      button.type = 'button';
+      button.className = 'background-photo-choice';
+      const active = currentPhoto?.id === image.id;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+
+      const preview = this.doc.createElement('span');
+      preview.className = 'background-photo-choice-preview';
+      if (image.thumbnailUrl) {
+        preview.style.backgroundImage = `url('${image.thumbnailUrl}')`;
+      }
+
+      const name = this.doc.createElement('span');
+      name.className = 'background-photo-choice-name';
+      name.textContent = image.filename;
+
+      const meta = this.doc.createElement('span');
+      meta.className = 'background-photo-choice-meta';
+      const usageCount = image.usageCount ?? 0;
+      meta.textContent = `${usageCount} ${usageCount === 1 ? 'room' : 'rooms'} using this`;
+
+      button.append(preview, name, meta);
+      button.addEventListener('click', () => {
+        const fit = parseCustomBackground(editorState.selectedBackground)?.fit ?? DEFAULT_CUSTOM_BACKGROUND_FIT;
+        this.applyBackgroundSelection(buildCustomBackgroundValue(image.id, fit));
+        this.closeBackgroundPhotosModal();
+      });
+      this.backgroundPhotosGrid.appendChild(button);
+    }
+  }
+
+  private getSortedBackgroundImages(): BackgroundImageSummary[] {
+    const images = [...this.backgroundImages];
+    const compareNewest = (left: BackgroundImageSummary, right: BackgroundImageSummary) =>
+      Date.parse(right.createdAt) - Date.parse(left.createdAt);
+    switch (this.backgroundPhotosSortMode) {
+      case 'least_used':
+        return images.sort((left, right) =>
+          (left.usageCount ?? 0) - (right.usageCount ?? 0) || compareNewest(left, right)
+        );
+      case 'newest':
+        return images.sort(compareNewest);
+      case 'oldest':
+        return images.sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
+      case 'most_used':
+      default:
+        return images.sort((left, right) =>
+          (right.usageCount ?? 0) - (left.usageCount ?? 0) || compareNewest(left, right)
+        );
+    }
+  }
+
+  private getBackgroundPhotosSortMode(): BackgroundPhotosSort {
+    const value = this.backgroundPhotosSort?.value;
+    return value === 'least_used' || value === 'newest' || value === 'oldest' || value === 'most_used'
+      ? value
+      : DEFAULT_BACKGROUND_PHOTOS_SORT;
+  }
+
+  private applyBackgroundPhotoFit(fit: CustomBackgroundFit): void {
+    const currentPhoto = parseCustomBackground(editorState.selectedBackground);
+    if (!currentPhoto) {
+      return;
+    }
+
+    this.applyBackgroundSelection(buildCustomBackgroundValue(currentPhoto.id, fit));
+  }
+
+  private renderBackgroundUploadStatus(
+    policy: BackgroundUploadPolicy,
+    myUploads: BackgroundImageSummary[],
+  ): void {
+    const pendingCount = myUploads.filter((item) =>
+      item.status === 'upload_pending' || item.status === 'pending_review'
+    ).length;
+    const rejectedCount = myUploads.filter((item) =>
+      item.status === 'rejected' || item.status === 'blocked'
+    ).length;
+    const base = policy.canUpload
+      ? `PNG, JPG, or WebP up to ${formatBytes(policy.maxBytes)}.`
+      : policy.reason ?? 'Uploads are not available for this account.';
+    const suffix = pendingCount > 0
+      ? ` ${pendingCount} waiting for review.`
+      : rejectedCount > 0
+        ? ` ${rejectedCount} not approved.`
+        : '';
+    this.setBackgroundUploadStatus(`${base}${suffix}`, !policy.canUpload && policy.authenticated);
+    this.setDisabled(this.backgroundUploadButton, !policy.canUpload || this.backgroundUploadInFlight);
+    this.setDisabled(this.backgroundUploadCard, !policy.canUpload || this.backgroundUploadInFlight);
+    this.setDisabled(this.backgroundPhotosButton, this.backgroundUploadInFlight);
+  }
+
+  private async handleBackgroundUploadFileSelected(): Promise<void> {
+    const file = this.backgroundUploadInput?.files?.[0] ?? null;
+    if (!file) {
+      return;
+    }
+
+    const policy = this.backgroundUploadPolicy;
+    if (policy && file.size > policy.maxBytes) {
+      this.setBackgroundUploadStatus(`Image must be ${formatBytes(policy.maxBytes)} or smaller.`, true);
+      return;
+    }
+    if (policy && !policy.allowedMimeTypes.includes(file.type)) {
+      this.setBackgroundUploadStatus('Upload a PNG, JPG, or WebP image.', true);
+      return;
+    }
+
+    this.backgroundUploadInFlight = true;
+    this.setDisabled(this.backgroundUploadButton, true);
+    this.setDisabled(this.backgroundUploadCard, true);
+    this.setDisabled(this.backgroundPhotosButton, true);
+    this.setBackgroundUploadStatus('Uploading background...', false);
+    this.showBackgroundUploadModal({
+      title: 'Sending photo',
+      meta: 'Preparing your image.',
+      status: 'Starting upload...',
+      progress: 12,
+      done: false,
+      error: false,
+    });
+
+    try {
+      this.showBackgroundUploadModal({
+        title: 'Sending photo',
+        meta: 'Creating a safe upload slot.',
+        status: 'Talking to Cloudflare Images...',
+        progress: 24,
+        done: false,
+        error: false,
+      });
+      const prepared = await prepareBackgroundUpload({
+        filename: file.name,
+        contentType: file.type,
+        sizeBytes: file.size,
+      });
+      this.showBackgroundUploadModal({
+        title: 'Sending photo',
+        meta: 'Uploading the image.',
+        status: 'Keeping the original out of the game until review finishes.',
+        progress: 68,
+        done: false,
+        error: false,
+      });
+      await uploadBackgroundFile(prepared.uploadUrl, file);
+      this.showBackgroundUploadModal({
+        title: 'Checking photo',
+        meta: 'Running the first safety pass.',
+        status: 'A human review is still required before players can use it.',
+        progress: 88,
+        done: false,
+        error: false,
+      });
+      const finalized = await finalizeBackgroundUpload(prepared.id);
+      await this.refreshBackgroundImages();
+      this.setBackgroundUploadStatus(finalized.message, finalized.item.status === 'blocked');
+      this.showBackgroundUploadModal({
+        title: finalized.item.status === 'approved' ? 'Photo ready' : 'Photo sent',
+        meta: finalized.item.status === 'approved'
+          ? 'It is ready to use.'
+          : 'Human thumbs-up needed. Rooms can use it after review.',
+        status: finalized.message,
+        progress: 100,
+        done: true,
+        error: finalized.item.status === 'blocked',
+      });
+      if (finalized.selectedBackgroundValue) {
+        this.applyBackgroundSelection(finalized.selectedBackgroundValue);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Background upload failed.';
+      this.setBackgroundUploadStatus(
+        message,
+        true,
+      );
+      this.showBackgroundUploadModal({
+        title: 'Upload failed',
+        meta: 'The photo did not make it through.',
+        status: message,
+        progress: 100,
+        done: true,
+        error: true,
+      });
+    } finally {
+      this.backgroundUploadInFlight = false;
+      if (this.backgroundUploadPolicy) {
+        const disabled = !this.backgroundUploadPolicy.canUpload;
+        this.setDisabled(this.backgroundUploadButton, disabled);
+        this.setDisabled(this.backgroundUploadCard, disabled);
+        this.setDisabled(this.backgroundPhotosButton, false);
+      }
+    }
+  }
+
+  private setBackgroundUploadStatus(message: string, error: boolean): void {
+    if (!this.backgroundUploadStatus) {
+      return;
+    }
+    this.backgroundUploadStatus.textContent = message;
+    this.backgroundUploadStatus.classList.toggle('error', error);
+  }
+
+  private showBackgroundUploadModal(options: {
+    title: string;
+    meta: string;
+    status: string;
+    progress: number;
+    done: boolean;
+    error: boolean;
+  }): void {
+    if (!this.backgroundUploadModal) {
+      return;
+    }
+
+    this.backgroundUploadModal.classList.remove('hidden');
+    this.backgroundUploadModal.setAttribute('aria-hidden', 'false');
+    this.setText(this.backgroundUploadModalTitle, options.title);
+    this.setText(this.backgroundUploadModalMeta, options.meta);
+    this.setText(this.backgroundUploadModalStatus, options.status);
+    this.backgroundUploadModalStatus?.classList.toggle('background-photo-modal-error', options.error);
+    this.backgroundUploadProgressBar?.style.setProperty(
+      'width',
+      `${Math.max(0, Math.min(100, Math.round(options.progress)))}%`,
+    );
+    this.setHidden(this.backgroundUploadModalCloseButton, !options.done);
+  }
+
+  private closeBackgroundUploadModal(): void {
+    if (!this.backgroundUploadModal) {
+      return;
+    }
+    this.backgroundUploadModal.classList.add('hidden');
+    this.backgroundUploadModal.setAttribute('aria-hidden', 'true');
   }
 
   private applyLightingSelection(nextLightingMode: RoomLightingMode): void {
@@ -1338,11 +1774,32 @@ export class EditorUiBridge {
       editorState.selectedBackground,
       editorState.selectedSolidBackgroundColor,
     );
-    this.setValue(this.backgroundSelect, activeBackgroundId);
+    const selectedPhoto = parseCustomBackground(editorState.selectedBackground);
+    const backgroundSelectValue = selectedPhoto
+      ? PHOTO_BACKGROUND_ID
+      : this.backgroundPhotoControlsMode === 'photo'
+        ? PHOTO_BACKGROUND_ID
+        : this.backgroundPhotoControlsMode === 'upload'
+          ? BACKGROUND_UPLOAD_SELECT_VALUE
+          : activeBackgroundId;
+    this.setValue(this.backgroundSelect, backgroundSelectValue);
     this.setHidden(
       this.backgroundSolidControls,
-      activeBackgroundId !== SOLID_COLOR_BACKGROUND_ID
+      backgroundSelectValue !== SOLID_COLOR_BACKGROUND_ID
     );
+    const showPhotoControls = Boolean(selectedPhoto) || this.backgroundPhotoControlsMode !== null;
+    this.setHidden(this.backgroundUploadControls, !showPhotoControls);
+    this.setHidden(this.backgroundPhotoSelected, !showPhotoControls);
+    this.setHidden(this.backgroundPhotoFitControls, !selectedPhoto);
+    const selectedPhotoSummary = selectedPhoto
+      ? this.getBackgroundPhotoSummary(selectedPhoto.id)
+      : 'No photo selected.';
+    this.setText(this.backgroundPhotoSelected, selectedPhotoSummary);
+    for (const button of this.backgroundPhotoFitButtons) {
+      const active = Boolean(selectedPhoto && button.dataset.backgroundPhotoFit === selectedPhoto.fit);
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
     this.setValue(this.backgroundSolidColorInput, solidColor);
     this.setText(this.backgroundSolidColorValue, solidColor.toUpperCase());
     if (this.backgroundSolidCard) {
@@ -1362,6 +1819,15 @@ export class EditorUiBridge {
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
     }
+  }
+
+  private getBackgroundPhotoSummary(id: string): string {
+    const image = this.backgroundImages.find((item) => item.id === id);
+    if (!image) {
+      return 'Photo selected.';
+    }
+    const usageCount = image.usageCount ?? 0;
+    return `${image.filename} - used in ${usageCount} ${usageCount === 1 ? 'room' : 'rooms'}`;
   }
 
   private setText(elements: HTMLElement | HTMLElement[] | null, text: string): void {
@@ -1512,4 +1978,12 @@ export class EditorUiBridge {
       element.title = title;
     }
   }
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return '0 MB';
+  }
+  const mb = bytes / (1024 * 1024);
+  return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`;
 }

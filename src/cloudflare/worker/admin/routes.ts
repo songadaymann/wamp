@@ -28,12 +28,17 @@ import {
   handleAdminSuspiciousUsers,
 } from './suspicious';
 import { handleAdminSnapshotImport, handleAdminSnapshotReset } from './snapshot';
+import { handleAdminBackgroundImageRequest } from '../backgroundImages/routes';
 
 export async function handleAdminRequest(
   request: Request,
   url: URL,
   env: Env
 ): Promise<Response> {
+  if (url.pathname.startsWith('/api/admin/background-images')) {
+    return handleAdminBackgroundImageRequest(request, url, env);
+  }
+
   if (url.pathname === '/api/admin/launch-stats' && request.method === 'GET') {
     return handleAdminLaunchStats(request, env);
   }

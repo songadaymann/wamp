@@ -362,6 +362,8 @@
         <select id="background-select">
           <option value="none">None</option>
           <option value="solid_color">Solid Color</option>
+          <option value="photo">Photo</option>
+          <option value="__upload_background__">Upload Image...</option>
           <option value="forest">Forest</option>
           <option value="dark_forest">Dark Forest</option>
           <option value="grassland">Grassland</option>
@@ -471,6 +473,25 @@
             value="#24324a"
             aria-label="Solid background color"
           />
+        </div>
+        <div id="background-upload-controls" class="background-upload-controls hidden">
+          <div class="background-photo-action-row">
+            <button id="background-photos-button" class="bar-btn bar-btn-small" type="button">Photos</button>
+            <button id="background-upload-button" class="bar-btn bar-btn-small" type="button">Upload</button>
+          </div>
+          <input
+            id="background-upload-input"
+            class="hidden"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+          />
+          <div id="background-upload-status" class="background-upload-status">Approved uploads appear here.</div>
+          <div id="background-photo-selected" class="background-photo-selected">No photo selected.</div>
+          <div id="background-photo-fit-controls" class="background-photo-fit-controls hidden" aria-label="Photo fit">
+            <button class="background-photo-fit-button" type="button" data-background-photo-fit="stretch">Stretch to fit</button>
+            <button class="background-photo-fit-button" type="button" data-background-photo-fit="tile">Tiled</button>
+            <button class="background-photo-fit-button" type="button" data-background-photo-fit="center">Centered</button>
+          </div>
         </div>
       </div>
 
@@ -1275,6 +1296,47 @@
       </div>
       <div id="room-history-error" class="history-modal-error hidden"></div>
       <div id="room-history-list" class="history-version-list"></div>
+    </div>
+  </div>
+
+  <div id="background-photos-modal" class="history-modal background-photo-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel background-photo-modal-panel background-photos-modal-panel" role="dialog" aria-modal="true" aria-labelledby="background-photos-title">
+      <div class="history-modal-header background-photo-modal-header">
+        <div class="history-modal-title-group background-photo-modal-title-group">
+          <div class="history-modal-kicker background-photo-modal-kicker">Backgrounds</div>
+          <h2 id="background-photos-title" class="history-modal-title background-photo-modal-title">Photos</h2>
+          <div id="background-photos-meta" class="history-modal-meta background-photo-modal-meta">Approved photos from the world.</div>
+        </div>
+        <button id="btn-background-photos-close" class="bar-btn bar-btn-small background-photo-modal-close" type="button">Close</button>
+      </div>
+      <div class="background-photos-toolbar">
+        <label class="background-photos-sort-label" for="background-photos-sort">Sort</label>
+        <select id="background-photos-sort" class="background-photos-sort">
+          <option value="most_used">Most popular</option>
+          <option value="least_used">Least popular</option>
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+        </select>
+      </div>
+      <div id="background-photos-status" class="history-modal-meta background-photo-modal-meta">Loading photos...</div>
+      <div id="background-photos-grid" class="background-photos-grid"></div>
+    </div>
+  </div>
+
+  <div id="background-upload-modal" class="history-modal background-photo-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel background-photo-modal-panel background-upload-modal-panel" role="dialog" aria-modal="true" aria-labelledby="background-upload-modal-title">
+      <div class="history-modal-header background-photo-modal-header">
+        <div class="history-modal-title-group background-photo-modal-title-group">
+          <div class="history-modal-kicker background-photo-modal-kicker">Photo Upload</div>
+          <h2 id="background-upload-modal-title" class="history-modal-title background-photo-modal-title">Sending photo</h2>
+          <div id="background-upload-modal-meta" class="history-modal-meta background-photo-modal-meta">Preparing your image.</div>
+        </div>
+        <button id="btn-background-upload-modal-close" class="bar-btn bar-btn-small background-photo-modal-close hidden" type="button">Close</button>
+      </div>
+      <div class="background-upload-progress" aria-hidden="true">
+        <div id="background-upload-progress-bar" class="background-upload-progress-bar"></div>
+      </div>
+      <div id="background-upload-modal-status" class="history-modal-meta background-photo-modal-meta">Starting upload...</div>
     </div>
   </div>
 
