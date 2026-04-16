@@ -43,6 +43,7 @@ import {
 } from './previewCache';
 import {
   computeOverworldPreviewSelection,
+  getChunkPreviewTileSize,
   getDesiredChunkBounds,
   type OverworldPreviewSelection,
   type PreviewSelectionCandidate,
@@ -54,7 +55,6 @@ import {
   terrainTileNeedsInsetBody,
 } from './terrainCollision';
 
-const PREVIEW_TILE_SIZE = 4;
 const PLAY_ROOM_PARALLAX_MULTIPLIER = 0.2;
 const FULL_ROOM_RELEASE_GRACE_MS = 300;
 
@@ -144,7 +144,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.previewCache = new OverworldPreviewCache(options.worldRepository);
     this.previewRenderer = new OverworldChunkPreviewRenderer({
       scene: options.scene,
-      previewTileSize: PREVIEW_TILE_SIZE,
+      getPreviewTileSize: () => this.getPreviewTileSize(),
       getRoomOrigin: options.getRoomOrigin,
       isFullRoomLoaded: (roomId) => this.loadedFullRoomsById.has(roomId),
       onBackdropObjectsChanged: options.onBackdropObjectsChanged,
@@ -477,6 +477,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     fullRoomBudget: number;
     protectedVisiblePreviewRoomCount: number;
     loadedPreviewRoomCount: number;
+    loadedPreviewChunkCount: number;
+    previewTileSize: number;
+    approximatePreviewTexturePixels: number;
     loadedFullRoomCount: number;
   } {
     return {
@@ -486,6 +489,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       fullRoomBudget: this.fullRoomBudget,
       protectedVisiblePreviewRoomCount: this.protectedVisiblePreviewRoomCount,
       loadedPreviewRoomCount: this.previewRenderer.getLoadedPreviewRoomCount(),
+      loadedPreviewChunkCount: this.previewRenderer.getLoadedPreviewChunkCount(),
+      previewTileSize: this.previewRenderer.getActivePreviewTileSize(),
+      approximatePreviewTexturePixels: this.previewRenderer.getApproximatePreviewTexturePixels(),
       loadedFullRoomCount: this.loadedFullRoomsById.size,
     };
   }
@@ -779,12 +785,25 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     });
   }
 
+  private getPreviewTileSize(): number {
+    const camera = this.options.scene.cameras.main;
+    return getChunkPreviewTileSize({
+      mode: this.options.getMode(),
+      performanceProfile: this.options.getPerformanceProfile(),
+      zoom: camera.zoom,
+    });
+  }
+
   private getViewportRoomBounds(): WorldRoomBounds {
-    const worldView = this.options.scene.cameras.main.worldView;
-    const minX = Math.floor(worldView.left / ROOM_PX_WIDTH);
-    const maxX = Math.floor((worldView.right - 1) / ROOM_PX_WIDTH);
-    const minY = Math.floor(worldView.top / ROOM_PX_HEIGHT);
-    const maxY = Math.floor((worldView.bottom - 1) / ROOM_PX_HEIGHT);
+    const camera = this.options.scene.cameras.main;
+    const viewportLeft = camera.scrollX;
+    const viewportTop = camera.scrollY;
+    const viewportRight = viewportLeft + camera.width / camera.zoom;
+    const viewportBottom = viewportTop + camera.height / camera.zoom;
+    const minX = Math.floor(viewportLeft / ROOM_PX_WIDTH);
+    const maxX = Math.floor((viewportRight - 1) / ROOM_PX_WIDTH);
+    const minY = Math.floor(viewportTop / ROOM_PX_HEIGHT);
+    const maxY = Math.floor((viewportBottom - 1) / ROOM_PX_HEIGHT);
 
     return { minX, maxX, minY, maxY };
   }

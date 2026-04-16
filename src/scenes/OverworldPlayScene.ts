@@ -1465,6 +1465,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       getFitZoomForRoom: () => this.getFitZoomForRoom(),
       syncAppMode: () => this.syncAppMode(),
+      syncModeRuntime: () => this.syncModeRuntime(),
       setShouldCenterCamera: (value) => {
         this.shouldCenterCamera = value;
       },
@@ -3476,6 +3477,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       currentRoom: { ...this.currentRoomCoordinates },
       loadedFullRooms: this.loadedFullRoomsById.size,
       loadedPreviewRooms: streamingMetrics.loadedPreviewRoomCount,
+      loadedPreviewChunks: streamingMetrics.loadedPreviewChunkCount,
+      previewTileSize: streamingMetrics.previewTileSize,
       visibleRooms: streamingMetrics.visibleRoomCount,
       previewRoomBudget: streamingMetrics.previewRoomBudget,
       fullRoomBudget: streamingMetrics.fullRoomBudget,
@@ -3657,6 +3660,9 @@ export class OverworldPlayScene extends Phaser.Scene {
         fullRoomBudget: streamingMetrics.fullRoomBudget,
         protectedVisiblePreviewRoomCount: streamingMetrics.protectedVisiblePreviewRoomCount,
         loadedPreviewRoomCount: streamingMetrics.loadedPreviewRoomCount,
+        loadedPreviewChunkCount: streamingMetrics.loadedPreviewChunkCount,
+        previewTileSize: streamingMetrics.previewTileSize,
+        approximatePreviewTexturePixels: streamingMetrics.approximatePreviewTexturePixels,
         loadedFullRoomCount: streamingMetrics.loadedFullRoomCount,
       },
       currentRoomBackground: currentLoadedRoom
