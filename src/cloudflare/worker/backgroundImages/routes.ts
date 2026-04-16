@@ -856,37 +856,35 @@ async function moderateUploadedImage(
     const suggestive = readScore(parsed.suggestive);
     const graphicViolence = readScore(parsed.graphicViolence);
     const suspectedMinorSexualContent = readScore(parsed.suspectedMinorSexualContent);
-    const confidence = readScore(parsed.confidence);
     const score = Math.max(
       adultSexual,
       pornography,
       suggestive,
       graphicViolence,
       suspectedMinorSexualContent,
-      confidence,
     );
     const rawLabels = Array.isArray(parsed.labels)
       ? parsed.labels.filter((label): label is string => typeof label === 'string')
       : [];
     const labels = rawLabels.slice(0, 12);
     const decision = typeof parsed.decision === 'string' ? parsed.decision.toLowerCase() : '';
-    const blocked = suspectedMinorSexualContent >= 0.5;
     const flagged =
       adultSexual >= 0.9 ||
       pornography >= 0.9 ||
       suggestive >= 0.9 ||
       graphicViolence >= 0.9 ||
+      suspectedMinorSexualContent >= 0.5 ||
       decision === 'review' ||
       decision === 'block';
 
     return {
-      status: blocked ? 'blocked' : flagged ? 'flagged' : 'passed',
+      status: flagged ? 'flagged' : 'passed',
       score,
       labels,
       reason: normalizeOptionalText(parsed.reason, 300),
       model,
-      passed: !blocked && !flagged,
-      blocked,
+      passed: !flagged,
+      blocked: false,
     };
   } catch (error) {
     return {
