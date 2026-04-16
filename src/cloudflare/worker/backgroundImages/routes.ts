@@ -840,13 +840,13 @@ async function moderateUploadedImage(
     const text = readOpenRouterMessageText(payload).trim();
     if (!text) {
       return {
-        status: 'blocked',
+        status: 'flagged',
         score: 1,
         labels: ['model_safety_blocked_or_empty'],
-        reason: 'Moderation model returned no usable classification.',
+        reason: 'Moderation model returned no usable classification. Human review required.',
         model,
         passed: false,
-        blocked: true,
+        blocked: false,
       };
     }
 
@@ -870,8 +870,14 @@ async function moderateUploadedImage(
       : [];
     const labels = rawLabels.slice(0, 12);
     const decision = typeof parsed.decision === 'string' ? parsed.decision.toLowerCase() : '';
-    const blocked = suspectedMinorSexualContent >= 0.5 || decision === 'block';
-    const flagged = adultSexual >= 0.9 || pornography >= 0.9 || suggestive >= 0.9 || decision === 'review';
+    const blocked = suspectedMinorSexualContent >= 0.5;
+    const flagged =
+      adultSexual >= 0.9 ||
+      pornography >= 0.9 ||
+      suggestive >= 0.9 ||
+      graphicViolence >= 0.9 ||
+      decision === 'review' ||
+      decision === 'block';
 
     return {
       status: blocked ? 'blocked' : flagged ? 'flagged' : 'passed',
