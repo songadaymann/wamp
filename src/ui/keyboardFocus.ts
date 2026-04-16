@@ -37,8 +37,32 @@ export function isTextInputElement(element: Element | null): boolean {
   return false;
 }
 
+export function isNativeTextEditingElement(element: Element | null): boolean {
+  if (!element) {
+    return false;
+  }
+
+  if (element instanceof HTMLTextAreaElement) {
+    return true;
+  }
+
+  if (element instanceof HTMLInputElement) {
+    return isEditableInputType(element.type || 'text');
+  }
+
+  if (element instanceof HTMLElement) {
+    return element.isContentEditable;
+  }
+
+  return false;
+}
+
 export function isTextInputFocused(): boolean {
   return isTextInputElement(document.activeElement);
+}
+
+export function isNativeTextEditingFocused(): boolean {
+  return isNativeTextEditingElement(document.activeElement);
 }
 
 export function syncGameKeyboardFocus(game: Phaser.Game): void {

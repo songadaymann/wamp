@@ -65,7 +65,7 @@ import {
 import { clearLocalRoomStorageEntry } from '../persistence/browserStorage';
 import { setAppMode } from '../ui/appMode';
 import { hideBusyOverlay, showBusyOverlay } from '../ui/appFeedback';
-import { isTextInputFocused } from '../ui/keyboardFocus';
+import { isNativeTextEditingFocused, isTextInputFocused } from '../ui/keyboardFocus';
 import { requestSignTextEdit } from '../signs/events';
 import { canPlacedObjectHaveSignText, getPlacedObjectSignText } from '../signs/model';
 import type { EditorCourseUiState, EditorMarkerPlacementMode } from '../ui/setup/sceneBridge';
@@ -191,11 +191,34 @@ export class CourseEditorScene extends Phaser.Scene {
   };
 
   private readonly handleDocumentKeyDown = (event: KeyboardEvent): void => {
-    if (!this.scene.isActive(this.scene.key) || editorState.isPlaying || isTextInputFocused()) {
+    if (!this.scene.isActive(this.scene.key) || editorState.isPlaying) {
       return;
     }
 
     const key = event.key.toLowerCase();
+    const primaryModifier = event.metaKey || event.ctrlKey;
+    const undoRequested = primaryModifier && key === 'z';
+    const ctrlRedoRequested = event.ctrlKey && !event.metaKey && key === 'y';
+
+    if (undoRequested || ctrlRedoRequested) {
+      if (isNativeTextEditingFocused()) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      if ((undoRequested && event.shiftKey) || ctrlRedoRequested) {
+        this.redoAction();
+      } else {
+        this.undoAction();
+      }
+      return;
+    }
+
+    if (isTextInputFocused()) {
+      return;
+    }
+
     if (key === 'escape') {
       event.preventDefault();
       event.stopPropagation();
@@ -224,7 +247,6 @@ export class CourseEditorScene extends Phaser.Scene {
       return;
     }
 
-    const primaryModifier = event.metaKey || event.ctrlKey;
     if (primaryModifier && key === 's') {
       event.preventDefault();
       event.stopPropagation();
@@ -248,24 +270,6 @@ export class CourseEditorScene extends Phaser.Scene {
       event.preventDefault();
       event.stopPropagation();
       void this.publishRoom();
-      return;
-    }
-
-    if (primaryModifier && key === 'z') {
-      event.preventDefault();
-      event.stopPropagation();
-      if (event.shiftKey) {
-        this.redoAction();
-      } else {
-        this.undoAction();
-      }
-      return;
-    }
-
-    if (event.ctrlKey && !event.metaKey && key === 'y') {
-      event.preventDefault();
-      event.stopPropagation();
-      this.redoAction();
       return;
     }
 

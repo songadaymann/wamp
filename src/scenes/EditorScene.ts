@@ -79,7 +79,7 @@ import {
   showBusyError,
   showBusyOverlay,
 } from '../ui/appFeedback';
-import { isTextInputFocused } from '../ui/keyboardFocus';
+import { isNativeTextEditingFocused, isTextInputFocused } from '../ui/keyboardFocus';
 import type {
   CourseEditorSceneData,
   CourseEditedRoomData,
@@ -194,11 +194,34 @@ export class EditorScene extends Phaser.Scene {
     this.updateZoomUI();
   };
   private readonly handleDocumentKeyDown = (event: KeyboardEvent): void => {
-    if (!this.scene.isActive(this.scene.key) || editorState.isPlaying || isTextInputFocused()) {
+    if (!this.scene.isActive(this.scene.key) || editorState.isPlaying) {
       return;
     }
 
     const key = event.key.toLowerCase();
+    const primaryModifier = event.metaKey || event.ctrlKey;
+    const undoRequested = primaryModifier && key === 'z';
+    const ctrlRedoRequested = event.ctrlKey && !event.metaKey && key === 'y';
+
+    if (undoRequested || ctrlRedoRequested) {
+      if (isNativeTextEditingFocused()) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      if ((undoRequested && event.shiftKey) || ctrlRedoRequested) {
+        this.toolController.redo();
+      } else {
+        this.toolController.undo();
+      }
+      return;
+    }
+
+    if (isTextInputFocused()) {
+      return;
+    }
+
     if (key === 'escape') {
       event.preventDefault();
       event.stopPropagation();
@@ -236,7 +259,6 @@ export class EditorScene extends Phaser.Scene {
       return;
     }
 
-    const primaryModifier = event.metaKey || event.ctrlKey;
     if (this.musicModeActive && this.musicComposerMode === 'sequencer' && primaryModifier && key === 'v') {
       event.preventDefault();
       event.stopPropagation();
@@ -279,24 +301,6 @@ export class EditorScene extends Phaser.Scene {
       }
       event.preventDefault();
       event.stopPropagation();
-      return;
-    }
-
-    if (primaryModifier && key === 'z') {
-      event.preventDefault();
-      event.stopPropagation();
-      if (event.shiftKey) {
-        this.toolController.redo();
-      } else {
-        this.toolController.undo();
-      }
-      return;
-    }
-
-    if (event.ctrlKey && !event.metaKey && key === 'y') {
-      event.preventDefault();
-      event.stopPropagation();
-      this.toolController.redo();
       return;
     }
 

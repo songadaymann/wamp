@@ -57,6 +57,14 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Editor undo focus fix on April 16, 2026:
+  - changed editor and course-editor shortcut handling so `Cmd/Ctrl+Z`, `Cmd/Ctrl+Shift+Z`, and `Ctrl+Y` route to room undo/redo when focus is on non-text DOM controls such as selects
+  - kept native browser undo for text-editing controls (`input`, `textarea`, contenteditable), so typing fields retain their own undo stack
+  - validation before main deploy:
+    - `npm run typecheck` passed
+    - `npm run build` passed
+    - targeted Playwright probe passed at `output/web-game/editor-undo-focus-main-targeted/summary.json`
+
 - Mobile main merge-prep on April 15, 2026:
   - created `merge/mobile-portrait-play-main-2026-04-15` from `origin/main` at `51da946`
   - merged `safety/mobile-portrait-play-2026-04-14` into the main-based merge-prep branch
