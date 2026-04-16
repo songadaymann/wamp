@@ -14,7 +14,7 @@ import {
   requireAdminRequest,
   requireAuthenticatedRequestAuth,
 } from '../auth/request';
-import { HttpError, isRoomSnapshot, jsonResponse, parseJsonBody } from '../core/http';
+import { corsHeaders, HttpError, isRoomSnapshot, jsonResponse, parseJsonBody } from '../core/http';
 import type {
   BackgroundImageUploadRow,
   BackgroundUploadPermissionRow,
@@ -139,7 +139,7 @@ export async function handleBackgroundImageRequest(
   }
 
   const imageMatch = /^\/api\/background-images\/([^/]+)\/image$/.exec(url.pathname);
-  if (imageMatch && request.method === 'GET') {
+  if (imageMatch && (request.method === 'GET' || request.method === 'HEAD')) {
     return handleBackgroundImageServe(
       request,
       url,
@@ -162,7 +162,7 @@ export async function handleAdminBackgroundImageRequest(
   }
 
   const adminImageMatch = /^\/api\/admin\/background-images\/([^/]+)\/image$/.exec(url.pathname);
-  if (adminImageMatch && request.method === 'GET') {
+  if (adminImageMatch && (request.method === 'GET' || request.method === 'HEAD')) {
     requireAdminRequest(env, request, 'view background upload image');
     return handleBackgroundImageServe(
       request,
@@ -424,11 +424,72 @@ async function handleBackgroundImageServe(
     throw new HttpError(403, 'Blocked background images are not shown in the review console.');
   }
 
-  return Response.redirect(buildCloudflareDeliveryUrl(
+  return proxyCloudflareDeliveryImage(
+    request,
     env,
     row.cloudflare_image_id,
     url.searchParams.get('variant') === 'thumbnail' ? 'thumbnail' : 'image',
-  ), 302);
+    row.mime_type,
+  );
+}
+
+async function proxyCloudflareDeliveryImage(
+  request: Request,
+  env: Env,
+  imageId: string,
+  kind: 'image' | 'thumbnail',
+  fallbackMimeType: string,
+): Promise<Response> {
+  const deliveryHeaders = new Headers();
+  for (const name of ['Accept', 'If-Modified-Since', 'If-None-Match', 'Range']) {
+    const value = request.headers.get(name);
+    if (value) {
+      deliveryHeaders.set(name, value);
+    }
+  }
+
+  const deliveryResponse = await fetch(buildCloudflareDeliveryUrl(env, imageId, kind), {
+    method: 'GET',
+    headers: deliveryHeaders,
+  });
+  if (!deliveryResponse.ok && deliveryResponse.status !== 304) {
+    throw new HttpError(502, 'Cloudflare image delivery failed.');
+  }
+
+  const headers = new Headers();
+  for (const name of [
+    'Content-Type',
+    'Cache-Control',
+    'ETag',
+    'Last-Modified',
+    'Expires',
+    'Accept-Ranges',
+    'Content-Range',
+  ]) {
+    const value = deliveryResponse.headers.get(name);
+    if (value) {
+      headers.set(name, value);
+    }
+  }
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', fallbackMimeType || 'image/jpeg');
+  }
+  if (!headers.has('Cache-Control')) {
+    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+  }
+
+  for (const [key, value] of Object.entries(corsHeaders(request))) {
+    headers.set(key, value);
+  }
+
+  return new Response(
+    request.method === 'HEAD' || deliveryResponse.status === 304 ? null : deliveryResponse.body,
+    {
+      status: deliveryResponse.status,
+      statusText: deliveryResponse.statusText,
+      headers,
+    },
+  );
 }
 
 async function handleAdminBackgroundImageList(
