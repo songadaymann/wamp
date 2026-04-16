@@ -57,6 +57,22 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Overworld lower-res overview previews pass on April 16, 2026:
+  - created clean `main`-based branch `feature/overworld-overview-previews-2026-04-16`
+  - changed chunk preview rendering from a fixed preview tile size to a zoom-aware preview tile size
+  - far overview zoom now uses lower-resolution chunk preview atlases to reduce texture memory while preserving world-space chunk size
+  - desktop/default browse overview can stream a wider chunk window, while reduced/mobile profiles keep the existing conservative chunk cap
+  - Worker chunk-window validation now accepts up to `9x9` chunks so the desktop overview cap has a matching API limit
+  - added debug metrics for preview tile size, preview chunk count, and approximate preview texture pixels
+  - fixed the `.08x overview -> play room -> return to overview` blank-preview case by applying browse camera runtime before return-path cache selection and by deriving viewport bounds from current camera scroll/zoom instead of the potentially one-frame-stale `worldView`
+  - added an LOD stress step for entering play from far overview and returning, plus a visible-preview coverage assertion for far browse zoom
+  - validation after the return-path fix:
+    - `npm run typecheck` passed
+    - exact Playwright probe `output/web-game/overview-previews-exact-return-probe-3` reproduced the `.08x -> play -> return` path with zero console/page errors; final state stayed at `zoom: 0.08`, `previewTileSize: 2`, `loadedPreviewRoomCount: 263`, `loadedPreviewChunkCount: 14`, `approximatePreviewTexturePixels: 3153920`
+    - reviewed `output/web-game/overview-previews-exact-return-probe-3/page.png`, which showed the far-overview previews populated after return
+    - required `develop-web-game` client completed with no console error artifact; its screenshot still showed the known headless black-canvas artifact while text state was valid
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+
 - Mobile main merge-prep on April 15, 2026:
   - created `merge/mobile-portrait-play-main-2026-04-15` from `origin/main` at `51da946`
   - merged `safety/mobile-portrait-play-2026-04-14` into the main-based merge-prep branch

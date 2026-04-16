@@ -21,6 +21,7 @@ const REDUCED_PLAY_MID_MAX_CHUNK_RADIUS = 1;
 const REDUCED_PLAY_FAR_MAX_CHUNK_RADIUS = 2;
 const REDUCED_PLAY_ULTRA_MAX_CHUNK_RADIUS = 2;
 const BROWSE_MAX_CHUNK_RADIUS = 3;
+const BROWSE_OVERVIEW_MAX_CHUNK_RADIUS = 4;
 const PLAY_NEAR_MAX_PREVIEW_ROOMS = 49;
 const PLAY_MID_MAX_PREVIEW_ROOMS = 121;
 const PLAY_FAR_MAX_PREVIEW_ROOMS = 196;
@@ -32,6 +33,7 @@ const REDUCED_PLAY_ULTRA_MAX_PREVIEW_ROOMS = 9;
 const BROWSE_NEAR_MAX_PREVIEW_ROOMS = 121;
 const BROWSE_MID_MAX_PREVIEW_ROOMS = 225;
 const BROWSE_FAR_MAX_PREVIEW_ROOMS = 324;
+const BROWSE_OVERVIEW_MAX_PREVIEW_ROOMS = 784;
 const PLAY_NEAR_MID_LOD_ROOM_RADIUS = 5;
 const PLAY_MID_MID_LOD_ROOM_RADIUS = 9;
 const PLAY_FAR_MID_LOD_ROOM_RADIUS = 13;
@@ -49,6 +51,9 @@ const REDUCED_PLAY_FULL_ROOM_BUDGET = 1;
 const PLAY_ULTRA_ZOOM_THRESHOLD = 0.11;
 const PLAY_FAR_ZOOM_THRESHOLD = 0.16;
 const PLAY_MID_ZOOM_THRESHOLD = 0.28;
+const OVERVIEW_PREVIEW_ZOOM_THRESHOLD = 0.14;
+const DEFAULT_CHUNK_PREVIEW_TILE_SIZE = 4;
+const OVERVIEW_CHUNK_PREVIEW_TILE_SIZE = 2;
 const VIEWPORT_ROOM_PADDING = 2;
 
 export interface PreviewSelectionCandidate {
@@ -114,6 +119,19 @@ export function getDesiredChunkBounds(input: {
     minChunkY: chunkCenter.y - chunkRadius,
     maxChunkY: chunkCenter.y + chunkRadius,
   };
+}
+
+export function getChunkPreviewTileSize(input: {
+  mode: OverworldMode;
+  performanceProfile: PerformanceProfile;
+  zoom: number;
+}): number {
+  const zoom = Math.max(input.zoom, MIN_ZOOM);
+  if (zoom <= OVERVIEW_PREVIEW_ZOOM_THRESHOLD) {
+    return OVERVIEW_CHUNK_PREVIEW_TILE_SIZE;
+  }
+
+  return DEFAULT_CHUNK_PREVIEW_TILE_SIZE;
 }
 
 export function computeOverworldPreviewSelection(
@@ -205,6 +223,10 @@ function getMaxChunkRadius(
   performanceProfile: PerformanceProfile,
 ): number {
   if (mode === 'browse') {
+    if (performanceProfile !== 'reduced' && zoom <= OVERVIEW_PREVIEW_ZOOM_THRESHOLD) {
+      return BROWSE_OVERVIEW_MAX_CHUNK_RADIUS;
+    }
+
     return BROWSE_MAX_CHUNK_RADIUS;
   }
 
@@ -268,7 +290,7 @@ function getMidLodRoomRadius(
     }
   }
 
-  if (zoom <= 0.14) {
+  if (zoom <= OVERVIEW_PREVIEW_ZOOM_THRESHOLD) {
     return BROWSE_FAR_MID_LOD_ROOM_RADIUS;
   }
 
@@ -336,9 +358,12 @@ function computeStreamingBudgets(
     }
   }
 
-  if (zoom <= 0.14) {
+  if (zoom <= OVERVIEW_PREVIEW_ZOOM_THRESHOLD) {
     return {
-      previewRoomBudget: BROWSE_FAR_MAX_PREVIEW_ROOMS,
+      previewRoomBudget:
+        performanceProfile === 'reduced'
+          ? BROWSE_FAR_MAX_PREVIEW_ROOMS
+          : BROWSE_OVERVIEW_MAX_PREVIEW_ROOMS,
       fullRoomBudget: 0,
     };
   }

@@ -19,6 +19,10 @@ interface OverworldStressStepResult {
   zoom: number | null;
   activeChunkCount: number;
   previewRoomCount: number;
+  previewChunkCount: number;
+  protectedVisiblePreviewRoomCount: number;
+  previewTileSize: number;
+  previewTextureMegapixels: number;
   previewRoomBudget: number;
   fullRoomCount: number;
   fullRoomBudget: number;
@@ -70,6 +74,13 @@ export async function runOverworldLodStress(game: Phaser.Game): Promise<{
   }
   await capture('browse-far-zoom');
 
+  if (selectedState === 'published' || selectedState === 'draft') {
+    scene.playSelectedRoom();
+    await capture('play-from-far-overview');
+    scene.returnToWorld();
+    await capture('browse-return-from-far-overview');
+  }
+
   await scene.jumpToCoordinates({ x: 12, y: 0 });
   await capture('browse-jump-east');
 
@@ -111,6 +122,10 @@ function validateState(label: string, state: Record<string, unknown>): Overworld
   const presence = readRecord(state.presence);
   const activeChunkCount = readNumber(lodMetrics.activeChunkCount);
   const previewRoomCount = readNumber(lodMetrics.loadedPreviewRoomCount, readNumber(state.loadedPreviewRooms));
+  const previewChunkCount = readNumber(lodMetrics.loadedPreviewChunkCount);
+  const protectedVisiblePreviewRoomCount = readNumber(lodMetrics.protectedVisiblePreviewRoomCount);
+  const previewTileSize = readNumber(lodMetrics.previewTileSize);
+  const approximatePreviewTexturePixels = readNumber(lodMetrics.approximatePreviewTexturePixels);
   const previewRoomBudget = readNumber(lodMetrics.previewRoomBudget);
   const fullRoomCount = readNumber(lodMetrics.loadedFullRoomCount, readNumber(state.loadedFullRooms));
   const fullRoomBudget = readNumber(lodMetrics.fullRoomBudget);
@@ -118,6 +133,18 @@ function validateState(label: string, state: Record<string, unknown>): Overworld
   const visibleGhostCount = readNumber(presence.visibleGhostCount);
   const ghostRenderBudget = readNumber(presence.ghostRenderBudget);
   const issues: string[] = [];
+  const mode = typeof state.mode === 'string' ? state.mode : null;
+  const zoom = typeof state.zoom === 'number' ? state.zoom : null;
+  const performanceProfile = typeof state.performanceProfile === 'string'
+    ? state.performanceProfile
+    : null;
+  const overviewChunkCap =
+    mode === 'browse'
+      && performanceProfile === 'default'
+      && zoom !== null
+      && zoom <= 0.14
+      ? 81
+      : 49;
 
   if (previewRoomBudget > 0 && previewRoomCount > previewRoomBudget) {
     issues.push(`preview rooms ${previewRoomCount} exceeded budget ${previewRoomBudget}`);
@@ -131,21 +158,36 @@ function validateState(label: string, state: Record<string, unknown>): Overworld
     issues.push(`visible ghosts ${visibleGhostCount} exceeded budget ${ghostRenderBudget}`);
   }
 
-  if (activeChunkCount > 49) {
-    issues.push(`active chunks ${activeChunkCount} exceeded hard cap 49`);
+  if (activeChunkCount > overviewChunkCap) {
+    issues.push(`active chunks ${activeChunkCount} exceeded hard cap ${overviewChunkCap}`);
   }
 
-  if (subscribedShardCount > 49) {
-    issues.push(`subscribed shards ${subscribedShardCount} exceeded hard cap 49`);
+  if (
+    mode === 'browse'
+    && zoom !== null
+    && zoom <= 0.14
+    && protectedVisiblePreviewRoomCount > previewRoomCount
+  ) {
+    issues.push(
+      `visible preview rooms ${protectedVisiblePreviewRoomCount} exceeded loaded previews ${previewRoomCount}`
+    );
+  }
+
+  if (subscribedShardCount > overviewChunkCap) {
+    issues.push(`subscribed shards ${subscribedShardCount} exceeded hard cap ${overviewChunkCap}`);
   }
 
   return {
     label,
     ok: issues.length === 0,
-    mode: typeof state.mode === 'string' ? state.mode : null,
-    zoom: typeof state.zoom === 'number' ? state.zoom : null,
+    mode,
+    zoom,
     activeChunkCount,
     previewRoomCount,
+    previewChunkCount,
+    protectedVisiblePreviewRoomCount,
+    previewTileSize,
+    previewTextureMegapixels: Number((approximatePreviewTexturePixels / 1_000_000).toFixed(2)),
     previewRoomBudget,
     fullRoomCount,
     fullRoomBudget,

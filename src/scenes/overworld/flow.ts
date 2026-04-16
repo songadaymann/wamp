@@ -52,6 +52,7 @@ interface OverworldSceneFlowHost {
   setBrowseInspectZoom(zoom: number): void;
   getFitZoomForRoom(): number;
   syncAppMode(): void;
+  syncModeRuntime(): void;
   setShouldCenterCamera(value: boolean): void;
   setShouldRespawnPlayer(value: boolean): void;
   refreshAround(
@@ -214,6 +215,7 @@ export class OverworldSceneFlowController {
       return;
     }
 
+    this.host.syncModeRuntime();
     this.host.refreshAroundIfNeededOrFromCache(returnCoordinates);
   }
 

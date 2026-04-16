@@ -209,8 +209,8 @@ export function parseWorldChunkBounds(searchParams: URLSearchParams): WorldChunk
 
   const width = maxChunkX - minChunkX + 1;
   const height = maxChunkY - minChunkY + 1;
-  if (width > 7 || height > 7) {
-    throw new HttpError(400, 'Chunk window must be at most 7x7.');
+  if (width > 9 || height > 9) {
+    throw new HttpError(400, 'Chunk window must be at most 9x9.');
   }
 
   return {

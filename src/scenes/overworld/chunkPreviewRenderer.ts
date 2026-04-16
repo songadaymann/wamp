@@ -11,7 +11,7 @@ import { hashStringToSeed } from '../../visuals/starfield';
 
 interface OverworldChunkPreviewRendererOptions {
   scene: Phaser.Scene;
-  previewTileSize: number;
+  getPreviewTileSize: () => number;
   getRoomOrigin: (coordinates: RoomCoordinates) => { x: number; y: number };
   isFullRoomLoaded: (roomId: string) => boolean;
   onBackdropObjectsChanged?: () => void;
@@ -73,6 +73,21 @@ export class OverworldChunkPreviewRenderer {
 
   getLoadedPreviewRoomCount(): number {
     return this.visiblePreviewRoomIds.size;
+  }
+
+  getLoadedPreviewChunkCount(): number {
+    return this.chunkImagesByChunkId.size;
+  }
+
+  getActivePreviewTileSize(): number {
+    return this.getPreviewTileSize();
+  }
+
+  getApproximatePreviewTexturePixels(): number {
+    const tileSize = this.getPreviewTileSize();
+    const chunkTextureWidth = WORLD_CHUNK_SIZE * ROOM_WIDTH * tileSize;
+    const chunkTextureHeight = WORLD_CHUNK_SIZE * ROOM_HEIGHT * tileSize;
+    return this.chunkImagesByChunkId.size * chunkTextureWidth * chunkTextureHeight;
   }
 
   hasPreviewForRoom(roomId: string): boolean {
@@ -172,7 +187,8 @@ export class OverworldChunkPreviewRenderer {
     rooms: RoomSnapshot[]
   ): void {
     const chunkId = `${chunkCoordinates.x},${chunkCoordinates.y}`;
-    const textureKey = this.buildChunkTextureKey(chunkId, rooms);
+    const previewTileSize = this.getPreviewTileSize();
+    const textureKey = this.buildChunkTextureKey(chunkId, rooms, previewTileSize);
     const previousTextureKey = this.chunkTextureKeysByChunkId.get(chunkId);
 
     if (
@@ -184,7 +200,7 @@ export class OverworldChunkPreviewRenderer {
     }
 
     if (!this.options.scene.textures.exists(textureKey)) {
-      this.buildChunkTexture(textureKey, chunkCoordinates, rooms);
+      this.buildChunkTexture(textureKey, chunkCoordinates, rooms, previewTileSize);
     }
 
     let image = this.chunkImagesByChunkId.get(chunkId) ?? null;
@@ -224,52 +240,61 @@ export class OverworldChunkPreviewRenderer {
   private buildChunkTexture(
     textureKey: string,
     chunkCoordinates: WorldChunkCoordinates,
-    rooms: RoomSnapshot[]
+    rooms: RoomSnapshot[],
+    previewTileSize: number,
   ): void {
     this.measure('stream.buildChunkPreviewTexture', () => {
-    const canvasTexture = this.options.scene.textures.createCanvas(
-      textureKey,
-      WORLD_CHUNK_SIZE * ROOM_WIDTH * this.options.previewTileSize,
-      WORLD_CHUNK_SIZE * ROOM_HEIGHT * this.options.previewTileSize,
-    );
-    if (!canvasTexture) {
-      return;
-    }
-
-    const canvas = canvasTexture.getSourceImage() as HTMLCanvasElement;
-    const context = canvas.getContext('2d');
-    if (!context) {
-      return;
-    }
-
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    context.imageSmoothingEnabled = false;
-
-    for (const room of rooms) {
-      const localRoomX = room.coordinates.x - chunkCoordinates.x * WORLD_CHUNK_SIZE;
-      const localRoomY = room.coordinates.y - chunkCoordinates.y * WORLD_CHUNK_SIZE;
-      drawRoomSnapshotToContext(
-        this.options.scene,
-        context,
-        room,
-        this.options.previewTileSize,
-        {
-          offsetX: localRoomX * ROOM_WIDTH * this.options.previewTileSize,
-          offsetY: localRoomY * ROOM_HEIGHT * this.options.previewTileSize,
-        }
+      const canvasTexture = this.options.scene.textures.createCanvas(
+        textureKey,
+        WORLD_CHUNK_SIZE * ROOM_WIDTH * previewTileSize,
+        WORLD_CHUNK_SIZE * ROOM_HEIGHT * previewTileSize,
       );
-    }
+      if (!canvasTexture) {
+        return;
+      }
 
-    canvasTexture.refresh();
+      const canvas = canvasTexture.getSourceImage() as HTMLCanvasElement;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        return;
+      }
+
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.imageSmoothingEnabled = false;
+
+      for (const room of rooms) {
+        const localRoomX = room.coordinates.x - chunkCoordinates.x * WORLD_CHUNK_SIZE;
+        const localRoomY = room.coordinates.y - chunkCoordinates.y * WORLD_CHUNK_SIZE;
+        drawRoomSnapshotToContext(
+          this.options.scene,
+          context,
+          room,
+          previewTileSize,
+          {
+            offsetX: localRoomX * ROOM_WIDTH * previewTileSize,
+            offsetY: localRoomY * ROOM_HEIGHT * previewTileSize,
+          }
+        );
+      }
+
+      canvasTexture.refresh();
     });
   }
 
-  private buildChunkTextureKey(chunkId: string, rooms: RoomSnapshot[]): string {
+  private buildChunkTextureKey(
+    chunkId: string,
+    rooms: RoomSnapshot[],
+    previewTileSize: number,
+  ): string {
     const signature = rooms
       .map((room) => `${room.id}:${room.version}:${room.updatedAt}`)
       .join('|');
     const hash = hashStringToSeed(`${chunkId}|${signature}`).toString(36);
-    return `chunk-preview-${this.textureNamespace}-${sanitizeChunkKey(chunkId)}-${this.options.previewTileSize}-${hash}`;
+    return `chunk-preview-${this.textureNamespace}-${sanitizeChunkKey(chunkId)}-${previewTileSize}-${hash}`;
+  }
+
+  private getPreviewTileSize(): number {
+    return Math.max(1, Math.floor(this.options.getPreviewTileSize()));
   }
 }
 
