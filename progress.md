@@ -58,6 +58,9 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 ## Recent Changes
 
 - User-uploaded background upload foundation on April 16, 2026:
+  - merged into `main` on April 16, 2026 via merge commit `1ee49b7`
+  - production D1 migration `0025_background_image_uploads.sql` was applied before deploy
+  - production Worker secrets were configured for Cloudflare Images plus OpenRouter; human review remains required and production uses the default `T2` minimum upload tier rather than the safety/local `T0` testing override
   - created clean `main`-based branch `feature/custom-background-uploads-2026-04-16` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-custom-backgrounds-2026-04-16`
   - added D1 migration `0025_background_image_uploads.sql` for uploaded backgrounds plus per-user upload permissions
   - added Cloudflare Images direct-upload endpoints, approved-image delivery endpoints, optional OpenRouter image moderation, and admin review/permission endpoints
