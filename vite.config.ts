@@ -33,6 +33,7 @@ export default defineConfig(({ mode }) => {
           main: resolve(process.cwd(), 'index.html'),
           dashboard: resolve(process.cwd(), 'dashboard.html'),
           launchAdmin: resolve(process.cwd(), 'launch-admin.html'),
+          backgroundAdmin: resolve(process.cwd(), 'background-admin.html'),
           suspiciousAdmin: resolve(process.cwd(), 'suspicious-admin.html'),
           mintedRoom: resolve(process.cwd(), 'minted-room.html'),
           roomPreviewRender: resolve(process.cwd(), 'room-preview-render.html'),

@@ -10,6 +10,7 @@ import {
   type PlacedObject,
 } from '../../../config';
 import {
+  isCustomBackgroundValue,
   isSolidColorBackgroundValue,
   normalizeRoomBackground,
 } from '../../../backgrounds/model';
@@ -335,7 +336,8 @@ function normalizeCommand(value: unknown, index: number): RoomDraftCommand {
       const background = command.background.trim();
       if (
         !BACKGROUND_GROUPS.some((group) => group.id === background) &&
-        !isSolidColorBackgroundValue(background)
+        !isSolidColorBackgroundValue(background) &&
+        !isCustomBackgroundValue(background)
       ) {
         throw new HttpError(400, `Unknown background "${command.background}".`);
       }

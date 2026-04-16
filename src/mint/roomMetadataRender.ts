@@ -122,6 +122,12 @@ async function drawRoomBackground(
     return;
   }
 
+  if (resolved.kind === 'custom') {
+    context.fillStyle = RETRO_COLORS.background;
+    context.fillRect(0, 0, width, height);
+    return;
+  }
+
   context.fillStyle = resolved.group.bgColor ?? RETRO_COLORS.background;
   context.fillRect(0, 0, width, height);
 

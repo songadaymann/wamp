@@ -10,6 +10,14 @@ import {
 } from '../../config';
 import { resolveRoomBackground } from '../../backgrounds/model';
 import {
+  createCustomBackgroundLayer,
+  createCustomBackgroundObject,
+  ensureCustomBackgroundTexture,
+  syncCustomBackgroundObject,
+  type CustomBackgroundLayer,
+  type CustomBackgroundObject,
+} from '../../backgrounds/runtime';
+import {
   cloneRoomSnapshot,
   roomIdFromCoordinates,
   type RoomCoordinates,
@@ -77,10 +85,11 @@ export interface LoadedFullRoom<TLiveObject = unknown, TEdgeWall = unknown> {
 }
 
 interface LoadedRoomBackgroundSprite {
-  sprite: Phaser.GameObjects.TileSprite;
+  sprite: Phaser.GameObjects.TileSprite | CustomBackgroundObject;
   parallax: number;
   tileScale: number;
   useVerticalParallax: boolean;
+  customLayer?: CustomBackgroundLayer;
 }
 
 interface OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall> {
@@ -1203,6 +1212,45 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       return { colorRect, sprites };
     }
 
+    if (resolved.kind === 'custom') {
+      colorRect = this.options.scene.add.rectangle(
+        origin.x,
+        origin.y,
+        ROOM_PX_WIDTH,
+        ROOM_PX_HEIGHT,
+        RETRO_COLORS.backgroundNumber,
+      );
+      colorRect.setOrigin(0, 0);
+      colorRect.setDepth(8);
+      const currentColorRect = colorRect;
+      void ensureCustomBackgroundTexture(this.options.scene, resolved.id)
+        .then(() => {
+          if (!currentColorRect.active || this.destroyed) {
+            return;
+          }
+          const layer = createCustomBackgroundLayer(this.options.scene, resolved.id, resolved.fit);
+          const sprite = createCustomBackgroundObject(
+            this.options.scene,
+            layer,
+            origin.x,
+            origin.y,
+            ROOM_PX_WIDTH,
+            ROOM_PX_HEIGHT,
+            9,
+          );
+          sprites.push({
+            sprite,
+            parallax: 0,
+            tileScale: ROOM_PX_HEIGHT / layer.height,
+            useVerticalParallax: false,
+            customLayer: layer,
+          });
+          this.options.onBackdropObjectsChanged?.();
+        })
+        .catch(() => {});
+      return { colorRect, sprites };
+    }
+
     if (resolved.group.bgColor) {
       const color = Phaser.Display.Color.HexStringToColor(resolved.group.bgColor).color;
       colorRect = this.options.scene.add.rectangle(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT, color);
@@ -1245,12 +1293,26 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
 
     for (const backgroundSprite of loadedRoom.backgroundSprites) {
-      backgroundSprite.sprite.setPosition(origin.x, origin.y);
-      backgroundSprite.sprite.setSize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-      backgroundSprite.sprite.setTileScale(backgroundSprite.tileScale, backgroundSprite.tileScale);
-      backgroundSprite.sprite.tilePositionX =
+      if (backgroundSprite.customLayer) {
+        syncCustomBackgroundObject(
+          backgroundSprite.sprite as CustomBackgroundObject,
+          backgroundSprite.customLayer,
+          origin.x,
+          origin.y,
+          ROOM_PX_WIDTH,
+          ROOM_PX_HEIGHT,
+          camera.scrollX,
+        );
+        continue;
+      }
+
+      const sprite = backgroundSprite.sprite as Phaser.GameObjects.TileSprite;
+      sprite.setPosition(origin.x, origin.y);
+      sprite.setSize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
+      sprite.setTileScale(backgroundSprite.tileScale, backgroundSprite.tileScale);
+      sprite.tilePositionX =
         (camera.scrollX * backgroundSprite.parallax) / backgroundSprite.tileScale;
-      backgroundSprite.sprite.tilePositionY = backgroundSprite.useVerticalParallax
+      sprite.tilePositionY = backgroundSprite.useVerticalParallax
         ? (camera.scrollY * backgroundSprite.parallax) / backgroundSprite.tileScale
         : 0;
     }

@@ -57,6 +57,116 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- User-uploaded background upload foundation on April 16, 2026:
+  - created clean `main`-based branch `feature/custom-background-uploads-2026-04-16` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-custom-backgrounds-2026-04-16`
+  - added D1 migration `0025_background_image_uploads.sql` for uploaded backgrounds plus per-user upload permissions
+  - added Cloudflare Images direct-upload endpoints, approved-image delivery endpoints, optional OpenRouter image moderation, and admin review/permission endpoints
+  - background values now support approved `custom:<id>` images, and save/publish rejects custom backgrounds that are not approved
+  - editor background selector now includes an Upload option, approved custom-background choices, and upload status messaging; Phaser editor/course/world render paths can load approved custom backgrounds from the Worker
+  - added `background-admin.html` for review queue handling and per-user upload/auto-approve grants, linked from launch and suspicious admin consoles
+  - validation:
+    - local D1 migrations report no pending local migrations
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup annotation and large-chunk warnings
+    - required `develop-web-game` client wrote `output/web-game/custom-background-upload-smoke/state-0.json`; the screenshot hit the known black-frame artifact while state confirmed the overworld booted
+    - targeted Playwright probes passed:
+      - `output/web-game/custom-background-upload-targeted/summary.json`
+      - `output/web-game/custom-background-upload-admin-auth/summary.json`
+  - current caveats:
+    - real upload flow still needs Cloudflare Images account/token/account-hash variables and, if desired, `OPENROUTER_API_KEY` in the deployed Worker environment
+    - private/signed Cloudflare Images URLs are a future hardening step; this MVP only exposes approved images through app routes and uses public delivery URLs for admin preview
+  - follow-up change:
+    - swapped direct Gemini env/API usage for `OPENROUTER_API_KEY` plus `OPENROUTER_IMAGE_MODERATION_MODEL`
+    - bare `gemini-*` model names are normalized to OpenRouter's `google/gemini-*` ids before the moderation request is sent
+    - validation after the swap:
+      - `git diff --check` passed
+      - `npm run typecheck` passed
+      - `npm run build` passed with the existing Rollup annotation and large-chunk warnings
+      - required web-game client wrote `output/web-game/openrouter-background-upload-smoke/state-0.json`; screenshot again hit the known black-frame artifact
+  - follow-up visibility fix:
+    - added `Upload Image...` as a real option inside the native background `<select>`, in addition to the separate Upload button below the selector
+    - selecting that dropdown option opens the same upload picker path and then resets the select back to the current background
+    - validation:
+      - `git diff --check` passed
+      - `npm run typecheck` passed
+      - `npm run build` passed with the existing Rollup annotation and large-chunk warnings
+      - targeted dropdown probe passed at `output/web-game/background-upload-select-option-targeted-2/summary.json`
+      - required web-game client wrote `output/web-game/background-upload-select-option-smoke-2/state-0.json`; screenshot again hit the known black-frame artifact
+  - local troubleshooting note:
+    - `http://127.0.0.1:3232/api/background-images` returned `404 Route not found` because the frontend was running from this feature worktree, but Vite's default `/api` proxy was still pointed at a Worker on `127.0.0.1:8787` from the original worktree
+    - this feature worktree currently has no real `.dev.vars`; only `.dev.vars.example` exists, and that template is not read by Wrangler
+    - for local upload testing, run the feature Worker from this worktree and point Vite at that Worker with `VITE_ROOM_API_BASE_URL`, or stop the old Worker and run this branch on port `8787`
+    - made `BACKGROUND_UPLOAD_MIN_TRUST_TIER` / `BACKGROUND_UPLOAD_AUTO_APPROVE_TRUST_TIER` parsing case-insensitive, so `t0` now behaves like `T0`; `npm run typecheck` passed afterward
+    - added credentials to background-image API calls so auth cookies are included when testing against a Worker on another local port
+    - validation after the local troubleshooting fixes:
+      - `npm run build` passed with existing Rollup annotation and large-chunk warnings
+      - `git diff --check -- src/backgrounds/client.ts src/cloudflare/worker/backgroundImages/routes.ts progress.md` passed
+      - required web-game client wrote `output/web-game/background-upload-policy-diagnosis-smoke/state-0.json`; screenshot again hit the known black-frame / boot artifact
+  - safety deploy for upload testing:
+    - copied background-upload and OpenRouter runtime values from the local real `.dev.vars` into the safety Worker as secrets; `BACKGROUND_UPLOAD_AUTO_APPROVE_TRUST_TIER` was blank, so human review remains required
+    - applied remote safety D1 migration `0025_background_image_uploads.sql`
+    - deployed safety Worker/assets to `https://everybodys-platformer-safety.novox-robot.workers.dev` with Worker version `2d2f7933-0f9e-454d-ba90-f0628c545829`
+    - confirmed deployed `/api/background-images` returns `configured: true`, `minTrustTier: "T0"`, max upload size `8388608`, and allowed MIME types `image/jpeg`, `image/png`, `image/webp`
+    - confirmed `background-admin.html` returns `200`
+    - required web-game client wrote `output/web-game/background-upload-safety-deploy-smoke/state-0.json`; screenshot again hit the known black-frame / boot artifact
+    - user hit `502` on `/api/background-images/uploads`; direct Cloudflare Images API diagnostics reproduced the failure with the current local `CLOUDFLARE_IMAGES_API_TOKEN` value:
+      - Bearer token mode returns `400` / `Authentication failed`
+      - token verify returns `400` / `Invalid request headers`
+      - legacy `X-Auth-Email` + `X-Auth-Key` mode with the Wrangler account email also returns `400` / `Authentication failed`
+    - next action: replace `CLOUDFLARE_IMAGES_API_TOKEN` with a real Cloudflare API token that has account-level `Images Write`, then update the safety Worker secret and retry upload; no code change is required for this specific 502
+    - follow-up: user updated the token; the new value succeeds against Cloudflare Images `images/v2/direct_upload`, returns an upload URL, and the diagnostic draft image was deleted successfully
+    - updated the safety Worker `CLOUDFLARE_IMAGES_API_TOKEN` secret with the new value
+    - confirmed unauthenticated safety `POST /api/background-images/uploads` now reaches app auth and returns `401` instead of the prior Cloudflare Images `502` path; signed-in browser retry is the next verification
+  - photo picker UX follow-up:
+    - changed the background dropdown to show a single `Photo` option for custom-image backgrounds instead of appending every approved image to the dropdown
+    - added a `Photos` modal with approved-image grid, usage counts, and sort controls for most popular, least popular, newest, and oldest
+    - added fit-mode controls shown only for selected photos: `Stretch to fit`, `Tiled`, and `Centered`; the saved background value now carries fit mode as `custom:<id>?fit=<mode>` while old `custom:<id>` values still mean tiled
+    - added an upload progress modal with phase-based progress and the completion copy `It is waiting for a human thumbs-up before rooms can use it.`
+    - custom photo rendering now honors fit mode in editor, course editor, overworld, and room snapshot texture generation
+    - follow-up UX polish: `Tiled` now caps large photo tiles at a YTMND-style small repeat size, the Photos/Upload controls stay hidden until the Photo/Upload path is chosen or a photo is selected, the always-visible Upload tile was removed from the background card grid, and the photo modals now have explicit dark editor styling rather than old cream modal styling
+    - deployed safety Worker/assets to `https://everybodys-platformer-safety.novox-robot.workers.dev` with Worker version `85eaa191-2d94-42c7-a926-2f23172cbd0e`
+    - validation:
+      - `npm run typecheck` passed
+      - `npm run build` passed with existing Rollup annotation and large-chunk warnings
+      - targeted browser probe with mocked approved photos passed at `output/web-game/background-photo-modal-targeted-6/summary.json`; screenshots checked:
+        - `output/web-game/background-photo-modal-targeted-6/photos-modal.png`
+        - `output/web-game/background-photo-modal-targeted-6/photo-selected-fit.png`
+      - required web-game client wrote `output/web-game/background-photo-modal-smoke/state-0.json`; local screenshot hit the known no-Worker boot/black-frame artifact
+      - post-deploy `/api/background-images` returned `configured: true`, `minTrustTier: "T0"`, and the approved safety item included `usageCount: 1`
+      - required deployed safety web-game client wrote `output/web-game/background-photo-modal-safety-smoke/state-0.json`; screenshot again hit the known black-frame boot artifact
+    - validation for latest UX polish:
+      - `git diff --check` passed
+      - `npm run typecheck` passed
+      - `npm run build` passed with existing Rollup annotation and large-chunk warnings
+      - targeted browser probe with mocked approved photos passed at `output/web-game/background-photo-ux-polish-targeted/summary.json`; screenshot checked at `output/web-game/background-photo-ux-polish-targeted/photos-modal-dark.png`
+      - required local web-game client wrote `output/web-game/background-photo-ux-polish-smoke-2/state-0.json`; screenshot hit the known local no-Worker black-frame artifact
+      - deployed safety Worker/assets to `https://everybodys-platformer-safety.novox-robot.workers.dev` with Worker version `1e885dd4-af80-42ee-bf22-f99fbb15c025`
+      - post-deploy root HTML contains `assets/main-orMekVg1.js`, `Upload Image...`, hidden `background-upload-controls`, and `background-photos-modal`
+      - post-deploy `/api/background-images` reports `uploadPolicy.configured: true`, `minTrustTier: "T0"`, and one approved safety item with `usageCount: 1`
+      - required deployed safety web-game client wrote `output/web-game/background-photo-ux-polish-safety-smoke/state-0.json`; state reached `appReady: true`, while screenshot again hit the known black-frame artifact
+    - follow-up modal/center polish:
+      - moved the Photos and upload dialogs onto the same cream pixel modal language as Controls/Profile, using the shared `history-modal` shell, cyan bordered panels, block shadows, and `bar-btn` close buttons while keeping photo-specific grid/progress content scoped to background modal IDs
+      - changed `Centered` fit to draw the full natural-size photo centered in the room without source cropping or scaling; black room background remains visible around smaller images, while oversized images are only clipped by the room viewport/canvas
+      - tightened the upload completion copy to `Human thumbs-up needed. Rooms can use it after review.` so it reads cleanly in the pixel modal
+      - validation:
+        - `git diff --check` passed
+        - `npm run typecheck` passed
+        - `npm run build` passed with existing Rollup annotation and large-chunk warnings
+        - targeted browser probe passed at `output/web-game/background-photo-modal-center-polish/summary.json`; screenshots checked:
+          - `output/web-game/background-photo-modal-center-polish/photos-modal-new.png`
+          - `output/web-game/background-photo-modal-center-polish/upload-modal-new.png`
+        - targeted Controls/Profile-style modal probes passed:
+          - `output/web-game/background-photo-modal-controls-profile-polish/summary.json`
+          - `output/web-game/background-photo-modal-controls-profile-polish-final-local/summary.json`
+          - `output/web-game/background-photo-modal-controls-profile-polish-safety-targeted/summary.json`
+        - required local web-game client wrote `output/web-game/background-photo-modal-center-polish-smoke/state-0.json`; screenshot hit the known local no-Worker black-frame artifact
+        - intermediate dark-panel deploy used safety Worker version `551230d6-c03c-4dc7-8cae-54c6695f3e9f` with bundle `assets/main-BBdozZPK.js`
+        - post-deploy `/api/background-images` reports `uploadPolicy.configured: true`, `minTrustTier: "T0"`, and two approved safety items
+        - required deployed safety web-game client passed on retry at `output/web-game/background-photo-modal-center-polish-safety-smoke-2/state-0.json`; state reached `appReady: true`, while screenshot again hit the known black-frame artifact
+        - final safety deploy for Controls/Profile-style modal polish uses Worker version `8e3dc157-8e30-4a37-8bfb-eea8bf4ca822` with bundle `assets/main-BpMfvAVW.js`
+        - final safety root/API checks passed and `output/web-game/background-photo-modal-controls-profile-polish-safety-smoke-3/state-1.json` reached `appReady: true`; screenshot again hit the known black-frame capture artifact
+
 - Editor undo focus fix on April 16, 2026:
   - changed editor and course-editor shortcut handling so `Cmd/Ctrl+Z`, `Cmd/Ctrl+Shift+Z`, and `Ctrl+Y` route to room undo/redo when focus is on non-text DOM controls such as selects
   - kept native browser undo for text-editing controls (`input`, `textarea`, contenteditable), so typing fields retain their own undo stack

@@ -5,14 +5,22 @@ import {
   type BackgroundLayer,
 } from '../config';
 import { resolveRoomBackground } from '../backgrounds/model';
+import {
+  createCustomBackgroundLayer,
+  createCustomBackgroundObject,
+  ensureCustomBackgroundTexture,
+  syncCustomBackgroundObject,
+  type CustomBackgroundLayer,
+  type CustomBackgroundObject,
+} from '../backgrounds/runtime';
 import { RETRO_COLORS, ensureStarfieldTexture } from '../visuals/starfield';
 
 export interface CourseEditorRoomBackgroundVisuals {
   origin: { x: number; y: number };
   colorRect: Phaser.GameObjects.Rectangle | null;
   layerSprites: Array<{
-    sprite: Phaser.GameObjects.TileSprite;
-    layer: BackgroundLayer;
+    sprite: Phaser.GameObjects.TileSprite | CustomBackgroundObject;
+    layer: BackgroundLayer | CustomBackgroundLayer;
   }>;
   fallbackSprites: Phaser.GameObjects.TileSprite[];
 }
@@ -66,6 +74,38 @@ export function createCourseEditorRoomBackgroundVisuals(
     return visuals;
   }
 
+  if (resolved.kind === 'custom') {
+    visuals.colorRect = scene.add.rectangle(
+      origin.x,
+      origin.y,
+      ROOM_PX_WIDTH,
+      ROOM_PX_HEIGHT,
+      RETRO_COLORS.backgroundNumber,
+    );
+    visuals.colorRect.setOrigin(0, 0);
+    visuals.colorRect.setDepth(-40);
+    void ensureCustomBackgroundTexture(scene, resolved.id)
+      .then(() => {
+        if (!visuals.colorRect?.active) {
+          return;
+        }
+        const layer = createCustomBackgroundLayer(scene, resolved.id, resolved.fit);
+        const sprite = createCustomBackgroundObject(
+          scene,
+          layer,
+          origin.x,
+          origin.y,
+          ROOM_PX_WIDTH,
+          ROOM_PX_HEIGHT,
+          -39,
+        );
+        visuals.layerSprites.push({ sprite, layer });
+        syncCourseEditorRoomBackgroundVisuals(visuals, scene.cameras.main);
+      })
+      .catch(() => {});
+    return visuals;
+  }
+
   if (resolved.group.bgColor) {
     const color = Phaser.Display.Color.HexStringToColor(resolved.group.bgColor).color;
     visuals.colorRect = scene.add.rectangle(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT, color);
@@ -95,12 +135,26 @@ export function syncCourseEditorRoomBackgroundVisuals(
   }
 
   for (const { sprite, layer } of visuals.layerSprites) {
+    if ('fit' in layer) {
+      syncCustomBackgroundObject(
+        sprite as CustomBackgroundObject,
+        layer,
+        visuals.origin.x,
+        visuals.origin.y,
+        ROOM_PX_WIDTH,
+        ROOM_PX_HEIGHT,
+        camera.scrollX,
+      );
+      continue;
+    }
+
+    const tileSprite = sprite as Phaser.GameObjects.TileSprite;
     const scale = ROOM_PX_HEIGHT / layer.height;
-    sprite.setPosition(visuals.origin.x, visuals.origin.y);
-    sprite.setSize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-    sprite.setTileScale(scale, scale);
-    sprite.tilePositionX = (camera.scrollX * layer.scrollFactor) / scale;
-    sprite.tilePositionY = (camera.scrollY * layer.scrollFactor) / scale;
+    tileSprite.setPosition(visuals.origin.x, visuals.origin.y);
+    tileSprite.setSize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
+    tileSprite.setTileScale(scale, scale);
+    tileSprite.tilePositionX = (camera.scrollX * layer.scrollFactor) / scale;
+    tileSprite.tilePositionY = (camera.scrollY * layer.scrollFactor) / scale;
   }
 
   for (let index = 0; index < visuals.fallbackSprites.length; index += 1) {

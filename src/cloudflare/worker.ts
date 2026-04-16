@@ -6,6 +6,7 @@ import type {
 } from '../persistence/roomModel';
 import { handleAuthRequest } from './worker/auth/routes';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth, requireOptionalScope } from './worker/auth/request';
+import { handleBackgroundImageRequest } from './worker/backgroundImages/routes';
 import { handleAgentRequest } from './worker/agents/routes';
 import { handleDashboardStatsRequest } from './worker/dashboard/routes';
 import { handleChatRequest } from './worker/chat/routes';
@@ -149,6 +150,10 @@ export default {
 
       if (url.pathname.startsWith('/api/admin/')) {
         return await handleAdminRequest(request, url, env);
+      }
+
+      if (url.pathname.startsWith('/api/background-images')) {
+        return await handleBackgroundImageRequest(request, url, env);
       }
 
       if (url.pathname === '/api/test/reset' && request.method === 'POST') {
