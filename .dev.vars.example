@@ -45,5 +45,7 @@ BACKGROUND_UPLOAD_MAX_BYTES=8388608
 BACKGROUND_UPLOAD_MIN_TRUST_TIER=T2
 # Leave blank to require human approval for everyone. Set to T4 to auto-approve clean T4 uploads.
 BACKGROUND_UPLOAD_AUTO_APPROVE_TRUST_TIER=
+# Set to 1 to skip OpenRouter/Gemini moderation while still requiring human approval.
+BACKGROUND_UPLOAD_SKIP_AI_MODERATION=0
 OPENROUTER_API_KEY=
 OPENROUTER_IMAGE_MODERATION_MODEL=gemini-2.0-flash-lite

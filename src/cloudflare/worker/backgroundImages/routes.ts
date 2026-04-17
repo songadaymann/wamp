@@ -27,6 +27,7 @@ const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 const DEFAULT_MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 const DEFAULT_MIN_TRUST_TIER: TrustTier = 'T2';
 const DEFAULT_OPENROUTER_IMAGE_MODERATION_MODEL = 'gemini-2.0-flash-lite';
+const CLOUDFLARE_UPLOAD_READY_ATTEMPTS = 5;
 const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const IMAGE_MODERATION_PROMPT =
   'Classify this game background upload for safety review. Return only compact JSON with numeric 0..1 fields adultSexual, pornography, suggestive, graphicViolence, suspectedMinorSexualContent, confidence; a string decision pass, review, or block; an array labels; and a short non-explicit reason. Do not describe explicit visual details.';
@@ -330,7 +331,7 @@ async function handleBackgroundImageFinalize(
     throw new HttpError(403, 'Only the uploader can finalize this background upload.');
   }
 
-  const details = await loadCloudflareImageDetails(env, row.cloudflare_image_id);
+  const details = await waitForCloudflareImageUpload(env, row.cloudflare_image_id);
   if (details.draft === true || !details.uploaded) {
     throw new HttpError(409, 'Cloudflare has not finished receiving this upload yet.');
   }
@@ -506,6 +507,14 @@ async function handleAdminBackgroundImageList(
       ORDER BY created_at DESC
       LIMIT 120
     `
+    : status === 'pending_review'
+      ? `
+      SELECT *
+      FROM background_image_uploads
+      WHERE status IN ('pending_review', 'upload_pending')
+      ORDER BY created_at DESC
+      LIMIT 120
+    `
     : `
       SELECT *
       FROM background_image_uploads
@@ -513,7 +522,7 @@ async function handleAdminBackgroundImageList(
       ORDER BY created_at DESC
       LIMIT 120
     `;
-  const result = status === 'all'
+  const result = status === 'all' || status === 'pending_review'
     ? await env.DB.prepare(query).all<BackgroundImageUploadRow>()
     : await env.DB.prepare(query).bind(status).all<BackgroundImageUploadRow>();
 
@@ -776,6 +785,18 @@ async function moderateUploadedImage(
   env: Env,
   row: BackgroundImageUploadRow,
 ): Promise<ModerationResult> {
+  if (env.BACKGROUND_UPLOAD_SKIP_AI_MODERATION === '1') {
+    return {
+      status: 'not_configured',
+      score: null,
+      labels: ['ai_moderation_skipped'],
+      reason: 'AI moderation skipped by configuration. Human review required.',
+      model: null,
+      passed: false,
+      blocked: false,
+    };
+  }
+
   const apiKey = env.OPENROUTER_API_KEY?.trim();
   const model = normalizeOpenRouterModel(
     env.OPENROUTER_IMAGE_MODERATION_MODEL?.trim() || DEFAULT_OPENROUTER_IMAGE_MODERATION_MODEL,
@@ -950,6 +971,25 @@ async function loadCloudflareImageDetails(
     throw new HttpError(502, getCloudflareErrorMessage(payload, 'Cloudflare image lookup failed.'));
   }
   return payload.result;
+}
+
+async function waitForCloudflareImageUpload(
+  env: Env,
+  imageId: string,
+): Promise<NonNullable<CloudflareImageDetailsResponse['result']>> {
+  let details = await loadCloudflareImageDetails(env, imageId);
+  for (let attempt = 1; attempt < CLOUDFLARE_UPLOAD_READY_ATTEMPTS; attempt += 1) {
+    if (details.draft !== true && details.uploaded) {
+      return details;
+    }
+    await sleep(400 * attempt);
+    details = await loadCloudflareImageDetails(env, imageId);
+  }
+  return details;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function deleteCloudflareImage(env: Env, imageId: string): Promise<void> {
