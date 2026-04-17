@@ -528,6 +528,8 @@
         <div class="section-label">Objects</div>
         <div class="object-category-tabs">
           <button class="obj-cat-tab active" data-category="all">All</button>
+          <button class="obj-cat-tab" data-category="custom">Custom</button>
+          <button class="obj-cat-tab" data-category="mine">Mine</button>
           <button class="obj-cat-tab" data-category="collectible">Collect</button>
           <button class="obj-cat-tab" data-category="enemy">Enemy</button>
           <button class="obj-cat-tab" data-category="hazard">Hazard</button>
@@ -552,66 +554,6 @@
         <div id="object-grid"></div>
         <div class="palette-hint">Click an object, then click on the canvas to place.</div>
         <div class="palette-hint palette-hint-accent">Use Spawn Point to choose where players start.</div>
-      </div>
-
-      <div class="sidebar-section" id="room-title-section" data-mobile-panel="goal" data-sidebar-collapsible="true">
-        <div class="section-label">Room Title</div>
-        <input id="room-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Room title (optional)" />
-      </div>
-
-      <div class="sidebar-section" id="goal-section" data-mobile-panel="goal" data-sidebar-collapsible="true">
-        <div class="section-label">Goal</div>
-        <div id="goal-context-note" class="goal-context-note hidden"></div>
-        <select id="goal-type-select">
-          <option value="">None</option>
-          <option value="reach_exit">Reach Exit</option>
-          <option value="collect_target">Collect Target</option>
-          <option value="defeat_all">Defeat All</option>
-          <option value="checkpoint_sprint">Checkpoint Sprint</option>
-          <option value="survival">Survival</option>
-        </select>
-        <div id="goal-time-limit-row" class="goal-control-row hidden">
-          <label class="goal-control-label" for="goal-time-limit-seconds">Time Limit</label>
-          <div class="goal-inline-input">
-            <input id="goal-time-limit-seconds" class="goal-input" type="number" min="1" step="1" placeholder="Off" />
-            <span class="goal-inline-suffix">sec</span>
-          </div>
-        </div>
-        <div id="goal-required-count-row" class="goal-control-row hidden">
-          <label class="goal-control-label" for="goal-required-count">Collect Count</label>
-          <div class="goal-inline-input">
-            <input id="goal-required-count" class="goal-input" type="number" min="1" step="1" />
-            <span class="goal-inline-suffix">items</span>
-          </div>
-        </div>
-        <div id="goal-survival-row" class="goal-control-row hidden">
-          <label class="goal-control-label" for="goal-survival-seconds">Survive For</label>
-          <div class="goal-inline-input">
-            <input id="goal-survival-seconds" class="goal-input" type="number" min="1" step="1" />
-            <span class="goal-inline-suffix">sec</span>
-          </div>
-        </div>
-        <div id="goal-intro-text-row" class="goal-control-row hidden">
-          <label class="goal-control-label" for="goal-intro-text">Goal Prompt</label>
-          <textarea
-            id="goal-intro-text"
-            class="goal-input goal-textarea"
-            rows="3"
-            maxlength="140"
-            placeholder="Optional custom prompt. Example: Collect 19 coins as fast as you can!"
-            spellcheck="true"
-          ></textarea>
-          <div class="goal-input-help">Shown once before the timer starts.</div>
-        </div>
-        <div id="goal-marker-controls" class="goal-marker-controls hidden">
-          <button id="btn-goal-place-start" class="bar-btn bar-btn-small hidden">Set Start</button>
-          <button id="btn-goal-place-exit" class="bar-btn bar-btn-small">Set Exit</button>
-          <button id="btn-goal-add-checkpoint" class="bar-btn bar-btn-small">Add Checkpoint</button>
-          <button id="btn-goal-place-finish" class="bar-btn bar-btn-small">Set Finish</button>
-          <button id="btn-goal-clear-markers" class="bar-btn bar-btn-small">Clear Markers</button>
-        </div>
-        <div id="goal-placement-hint" class="goal-placement-hint hidden">Click the canvas to place the selected goal marker.</div>
-        <div id="goal-summary" class="goal-summary">No room goal selected.</div>
       </div>
 
       <div class="sidebar-section hidden" id="course-goal-section" data-mobile-panel="goal" data-sidebar-collapsible="true">
@@ -706,6 +648,134 @@
               <span class="tool-label">More</span>
             </button>
           </div>
+          <div class="editor-feature-launcher" aria-label="Room features">
+            <div class="editor-feature-launcher-label">Features</div>
+            <div class="editor-feature-launcher-rail">
+              <button class="tool-btn editor-feature-btn" data-editor-feature="goal" type="button" title="Goal Settings" aria-pressed="false">
+                <span class="tool-icon" aria-hidden="true">&#9873;</span>
+                <span class="tool-label">Goal</span>
+              </button>
+              <button id="btn-editor-music-mode" class="tool-btn editor-feature-btn" data-editor-feature="music" type="button" title="Edit Music" aria-pressed="false">
+                <span class="tool-icon" aria-hidden="true">&#9835;</span>
+                <span class="tool-label" data-button-label>Music</span>
+              </button>
+              <button class="tool-btn editor-feature-btn" data-editor-feature="lighting" type="button" title="Lighting Settings" aria-pressed="false">
+                <span class="tool-icon" aria-hidden="true">&#9728;</span>
+                <span class="tool-label">Light</span>
+              </button>
+              <button id="btn-editor-sprite-mode" class="tool-btn editor-feature-btn" data-editor-feature="sprite" type="button" title="Sprite Editor" aria-pressed="false">
+                <span class="tool-icon" aria-hidden="true">&#9998;</span>
+                <span class="tool-label" data-button-label>Sprite</span>
+              </button>
+            </div>
+            <div id="editor-feature-launcher-status" class="editor-feature-launcher-status hidden" aria-live="polite"></div>
+          </div>
+          <div id="editor-feature-panels" class="editor-feature-panels">
+            <div class="editor-feature-panel" id="goal-section" data-mobile-panel="goal">
+              <div class="section-label">Goal</div>
+              <div id="goal-context-note" class="goal-context-note hidden"></div>
+              <select id="goal-type-select">
+                <option value="">None</option>
+                <option value="reach_exit">Reach Exit</option>
+                <option value="collect_target">Collect Target</option>
+                <option value="defeat_all">Defeat All</option>
+                <option value="checkpoint_sprint">Checkpoint Sprint</option>
+                <option value="survival">Survival</option>
+              </select>
+              <div id="goal-time-limit-row" class="goal-control-row hidden">
+                <label class="goal-control-label" for="goal-time-limit-seconds">Time Limit</label>
+                <div class="goal-inline-input">
+                  <input id="goal-time-limit-seconds" class="goal-input" type="number" min="1" step="1" placeholder="Off" />
+                  <span class="goal-inline-suffix">sec</span>
+                </div>
+              </div>
+              <div id="goal-required-count-row" class="goal-control-row hidden">
+                <label class="goal-control-label" for="goal-required-count">Collect Count</label>
+                <div class="goal-inline-input">
+                  <input id="goal-required-count" class="goal-input" type="number" min="1" step="1" />
+                  <span class="goal-inline-suffix">items</span>
+                </div>
+              </div>
+              <div id="goal-survival-row" class="goal-control-row hidden">
+                <label class="goal-control-label" for="goal-survival-seconds">Survive For</label>
+                <div class="goal-inline-input">
+                  <input id="goal-survival-seconds" class="goal-input" type="number" min="1" step="1" />
+                  <span class="goal-inline-suffix">sec</span>
+                </div>
+              </div>
+              <div id="goal-intro-text-row" class="goal-control-row hidden">
+                <label class="goal-control-label" for="goal-intro-text">Goal Prompt</label>
+                <textarea
+                  id="goal-intro-text"
+                  class="goal-input goal-textarea"
+                  rows="3"
+                  maxlength="140"
+                  placeholder="Optional custom prompt. Example: Collect 19 coins as fast as you can!"
+                  spellcheck="true"
+                ></textarea>
+                <div class="goal-input-help">Shown once before the timer starts.</div>
+              </div>
+              <div id="goal-marker-controls" class="goal-marker-controls hidden">
+                <button id="btn-goal-place-start" class="bar-btn bar-btn-small hidden">Set Start</button>
+                <button id="btn-goal-place-exit" class="bar-btn bar-btn-small">Set Exit</button>
+                <button id="btn-goal-add-checkpoint" class="bar-btn bar-btn-small">Add Checkpoint</button>
+                <button id="btn-goal-place-finish" class="bar-btn bar-btn-small">Set Finish</button>
+                <button id="btn-goal-clear-markers" class="bar-btn bar-btn-small">Clear Markers</button>
+              </div>
+              <div id="goal-placement-hint" class="goal-placement-hint hidden">Click the canvas to place the selected goal marker.</div>
+              <div id="goal-summary" class="goal-summary">No room goal selected.</div>
+            </div>
+            <div id="editor-lighting-feature-panel" class="editor-feature-panel editor-lighting-panel hidden" data-editor-feature-panel="lighting">
+              <div class="section-label">Lighting</div>
+              <select id="lighting-mode-select">
+                <option value="off">Normal</option>
+                <option value="playerAuraDark">Dark Aura</option>
+              </select>
+              <div id="lighting-tuning-controls" class="lighting-tuning-controls hidden">
+                <div class="lighting-slider-group">
+                  <div class="lighting-slider-header">
+                    <span class="lighting-slider-label">Darkness</span>
+                    <span id="lighting-darkness-value" class="lighting-slider-value">80%</span>
+                  </div>
+                  <input
+                    id="lighting-darkness-range"
+                    class="lighting-slider-input"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value="80"
+                  />
+                  <div class="lighting-slider-endpoints" aria-hidden="true">
+                    <span>Barely dark</span>
+                    <span>Pitch black</span>
+                  </div>
+                </div>
+                <div class="lighting-slider-group">
+                  <div class="lighting-slider-header">
+                    <span class="lighting-slider-label">Spotlight Radius</span>
+                    <span id="lighting-radius-value" class="lighting-slider-value">50%</span>
+                  </div>
+                  <input
+                    id="lighting-radius-range"
+                    class="lighting-slider-input"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value="50"
+                  />
+                  <div class="lighting-slider-endpoints" aria-hidden="true">
+                    <span>Tight</span>
+                    <span>Wide</span>
+                  </div>
+                </div>
+              </div>
+              <div class="room-lighting-note">
+                Dark Aura previews the active room as dim and opens light from the spawn point.
+              </div>
+            </div>
+          </div>
           <div id="editor-top-more-tools-panel" class="editor-tool-popover editor-more-tools-panel hidden">
             <div class="editor-tool-popover-label">More Tools</div>
             <div class="editor-tool-popover-grid">
@@ -754,16 +824,6 @@
             </div>
           </div>
         </div>
-        <div id="editor-top-save-status" class="editor-top-save-status">Draft ready.</div>
-        <div id="editor-publish-nudge" class="editor-publish-nudge hidden">
-          <div class="editor-publish-nudge-kicker">Draft Only</div>
-          <div id="editor-publish-nudge-text" class="editor-publish-nudge-text">
-            People can’t see this room until you publish it.
-          </div>
-          <button id="btn-editor-publish-nudge" class="bar-btn bar-btn-small" type="button">
-            Publish Now
-          </button>
-        </div>
         <div class="mobile-editor-actions-panel mobile-editor-only">
           <div class="mobile-editor-status-grid">
             <div class="mobile-editor-status-card">
@@ -804,91 +864,28 @@
               <button id="btn-room-history" class="bar-btn">History</button>
             </div>
           </div>
-          <div class="editor-advanced-block" data-advanced-block="music">
-            <div class="editor-advanced-block-label">Music</div>
-            <button id="btn-editor-music-mode" class="bar-btn editor-advanced-primary-action" type="button">Edit Music</button>
-            <div id="music-summary" class="goal-summary">No room music yet. Click on the room grid to start a sequencer loop.</div>
-            <div id="editor-music-workbench" class="editor-music-workbench hidden">
-              <div id="editor-music-phrase-action-row" class="editor-music-button-row hidden">
-                <button id="btn-editor-music-phrase-new" class="bar-btn bar-btn-small" type="button">New</button>
-                <button id="btn-editor-music-phrase-edit" class="bar-btn bar-btn-small" type="button">Edit</button>
-                <button id="btn-editor-music-phrase-save" class="bar-btn bar-btn-small" type="button">Save</button>
-                <button id="btn-editor-music-phrase-save-as" class="bar-btn bar-btn-small" type="button">Save As</button>
-              </div>
-              <div id="editor-music-phrase-name-row" class="editor-music-select-group hidden">
-                <label id="editor-music-phrase-name-label" class="editor-music-select-label" for="editor-music-phrase-name-input">Phrase Name</label>
-                <div class="editor-music-phrase-name-input-wrap">
-                  <input id="editor-music-phrase-name-input" class="goal-input" type="text" maxlength="24" placeholder="Auto numbering" />
-                  <button id="btn-editor-music-phrase-delete" class="bar-btn bar-btn-small bar-btn-danger hidden" type="button">Delete</button>
-                </div>
-              </div>
-              <div id="editor-music-library-panel" class="editor-music-workbench-card">
-                <div class="editor-music-workbench-header">
-                  <div class="section-label">Phrase Library</div>
-                  <button id="btn-editor-music-library-refresh" class="bar-btn bar-btn-small" type="button">Refresh</button>
-                </div>
-                <div id="editor-music-library-status" class="editor-music-status-note"></div>
-                <div id="editor-music-library-list" class="editor-music-library-list"></div>
-                <button id="btn-editor-music-library-more" class="bar-btn bar-btn-small hidden" type="button">Load More</button>
-              </div>
-            </div>
-          </div>
-          <div class="editor-advanced-block" data-advanced-block="lighting">
-            <div class="editor-advanced-block-label">Lighting</div>
-            <select id="lighting-mode-select">
-              <option value="off">Normal</option>
-              <option value="playerAuraDark">Dark Aura</option>
-            </select>
-            <div id="lighting-tuning-controls" class="lighting-tuning-controls hidden">
-              <div class="lighting-slider-group">
-                <div class="lighting-slider-header">
-                  <span class="lighting-slider-label">Darkness</span>
-                  <span id="lighting-darkness-value" class="lighting-slider-value">80%</span>
-                </div>
-                <input
-                  id="lighting-darkness-range"
-                  class="lighting-slider-input"
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value="80"
-                />
-                <div class="lighting-slider-endpoints" aria-hidden="true">
-                  <span>Barely dark</span>
-                  <span>Pitch black</span>
-                </div>
-              </div>
-              <div class="lighting-slider-group">
-                <div class="lighting-slider-header">
-                  <span class="lighting-slider-label">Spotlight Radius</span>
-                  <span id="lighting-radius-value" class="lighting-slider-value">50%</span>
-                </div>
-                <input
-                  id="lighting-radius-range"
-                  class="lighting-slider-input"
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value="50"
-                />
-                <div class="lighting-slider-endpoints" aria-hidden="true">
-                  <span>Tight</span>
-                  <span>Wide</span>
-                </div>
-              </div>
-            </div>
-            <div class="room-lighting-note">
-              Dark Aura previews the active room as dim and opens light from the spawn point.
-            </div>
-          </div>
         </div>
       </div>
     </div>
 
     <!-- Game Canvas -->
     <div id="game-container">
+      <div id="room-title-section" class="editor-room-title-overlay" data-mobile-panel="goal">
+        <label class="editor-room-title-label" for="room-title-input">Room</label>
+        <input id="room-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Name this room" />
+      </div>
+      <div id="editor-room-feedback" class="editor-room-feedback-overlay">
+        <div id="editor-top-save-status" class="editor-top-save-status">Draft ready.</div>
+        <div id="editor-publish-nudge" class="editor-publish-nudge hidden">
+          <div class="editor-publish-nudge-kicker">Draft Only</div>
+          <div id="editor-publish-nudge-text" class="editor-publish-nudge-text">
+            People can’t see this room until you publish it.
+          </div>
+          <button id="btn-editor-publish-nudge" class="bar-btn bar-btn-small" type="button">
+            Publish Now
+          </button>
+        </div>
+      </div>
       <div id="editor-inspector" class="editor-inspector desktop-editor-only hidden">
         <div id="pressure-plate-panel" class="pressure-plate-panel hidden">
           <div class="section-label">Pressure Plate</div>
@@ -958,6 +955,59 @@
               <button id="btn-editor-music-arrangement-clear-all" class="bar-btn bar-btn-small" type="button">Clear All</button>
             </div>
             <div id="editor-music-arrangement-grid" class="editor-music-arrangement-grid"></div>
+          </div>
+        </div>
+      </div>
+      <div id="editor-sprite-overlay" class="editor-sprite-overlay hidden">
+        <div class="editor-sprite-shell">
+          <div class="editor-sprite-strip">
+            <div class="editor-sprite-control-cluster">
+              <div class="editor-sprite-label">Size</div>
+              <button class="bar-btn bar-btn-small active" data-editor-sprite-size="16" type="button" aria-pressed="true">16</button>
+              <button class="bar-btn bar-btn-small" data-editor-sprite-size="32" type="button" aria-pressed="false">32</button>
+            </div>
+            <div class="editor-sprite-control-cluster editor-sprite-name-cluster">
+              <label class="editor-sprite-label" for="editor-sprite-name">Name</label>
+              <input id="editor-sprite-name" class="goal-input editor-sprite-name-input" type="text" maxlength="32" value="My Sprite" spellcheck="false" autocomplete="off" />
+            </div>
+            <div class="editor-sprite-control-cluster">
+              <label class="editor-sprite-label" for="editor-sprite-kind">Use As</label>
+              <select id="editor-sprite-kind" class="editor-sprite-select">
+                <option value="decoration">Decoration</option>
+                <option value="collectible">Collectible</option>
+                <option value="solid">Solid Block</option>
+              </select>
+            </div>
+            <div class="editor-sprite-control-cluster editor-sprite-color-cluster">
+              <label class="editor-sprite-label" for="editor-sprite-color">Color</label>
+              <input id="editor-sprite-color" class="editor-sprite-color-input" type="color" value="#fff3db" />
+              <div id="editor-sprite-swatches" class="editor-sprite-swatches" aria-label="Color presets"></div>
+            </div>
+            <div class="editor-sprite-control-cluster">
+              <button id="btn-editor-sprite-pencil" class="bar-btn bar-btn-small active" data-editor-sprite-tool="pencil" type="button" aria-pressed="true">Draw</button>
+              <button id="btn-editor-sprite-eraser" class="bar-btn bar-btn-small" data-editor-sprite-tool="eraser" type="button" aria-pressed="false">Erase</button>
+              <button id="btn-editor-sprite-clear" class="bar-btn bar-btn-small" type="button">Clear</button>
+            </div>
+            <div class="editor-sprite-control-cluster editor-sprite-action-cluster">
+              <canvas id="editor-sprite-preview" class="editor-sprite-preview" width="64" height="64" aria-hidden="true"></canvas>
+              <button id="btn-editor-sprite-save" class="bar-btn bar-btn-small" type="button">Save</button>
+              <button id="btn-editor-sprite-close" class="bar-btn bar-btn-small" type="button">Close</button>
+            </div>
+          </div>
+          <div class="editor-sprite-status-row">
+            <div id="editor-sprite-status" class="editor-sprite-status" aria-live="polite"></div>
+          </div>
+          <div class="editor-sprite-workbench">
+            <div class="editor-sprite-canvas-wrap">
+              <canvas id="editor-sprite-canvas" class="editor-sprite-canvas" width="512" height="512" aria-label="Sprite pixel grid"></canvas>
+            </div>
+            <aside class="editor-sprite-library" aria-label="My objects">
+              <div class="editor-sprite-library-header">
+                <div class="editor-sprite-label">My Objects</div>
+                <button id="btn-editor-sprite-new" class="bar-btn bar-btn-small" type="button">New</button>
+              </div>
+              <div id="editor-sprite-library-list" class="editor-sprite-library-list"></div>
+            </aside>
           </div>
         </div>
       </div>

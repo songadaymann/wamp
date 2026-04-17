@@ -74,7 +74,6 @@ export function setupEditorSidebarShell(doc: Document = document): void {
 
   appendSection(fixedStack, editorActions);
 
-  appendSection(scrollShell, sectionById.get('room-title-section'));
   appendSection(scrollShell, paletteModeSection);
   appendSection(scrollShell, sectionById.get('tileset-section'));
   appendSection(scrollShell, sectionById.get('tile-palette-section'));

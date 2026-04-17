@@ -8,6 +8,7 @@ import { ChatModerationModalController } from './setup/chatModerationModal';
 import { ControlsModalController } from './setup/controlsModal';
 import { CourseModalController } from './setup/courseModal';
 import { CourseComposerPanelController } from './setup/courseComposerPanel';
+import { setupCustomSpriteEditor } from './setup/customSpriteEditor';
 import { ExploreModalController } from './setup/exploreModal';
 import { RoomHistoryModalController } from './setup/historyModal';
 import { setupKeyboardShortcutPassthrough } from './setup/keyboardPassthrough';
@@ -25,9 +26,14 @@ import { setupSceneCommands } from './setup/sceneCommands';
 import { XpReceiptController } from './setup/xpReceipts';
 import { WelcomeModalController } from './setup/welcomeModal';
 import { configureEditorUiBridgeRuntime } from '../scenes/editor/uiBridge';
+import {
+  CUSTOM_SPRITES_CHANGED_EVENT,
+  loadCustomSpritesFromStorage,
+} from '../customSprites/registry';
 
 export function setupUI(game: Phaser.Game): void {
   initializeDeviceLayout();
+  loadCustomSpritesFromStorage();
   const paletteController = new PaletteController();
   const historyModal = new RoomHistoryModalController(game);
   const leaderboardModal = new LeaderboardModalController(game);
@@ -93,6 +99,7 @@ export function setupUI(game: Phaser.Game): void {
     courseModal
   );
   setupRoomMusicControls(game);
+  setupCustomSpriteEditor(game);
   setupButtonFeedback();
   setupKeyboardShortcutPassthrough();
 
@@ -101,6 +108,11 @@ export function setupUI(game: Phaser.Game): void {
   });
 
   window.addEventListener('tile-selected', () => {
+    paletteController.renderTilePreview();
+  });
+
+  window.addEventListener(CUSTOM_SPRITES_CHANGED_EVENT, () => {
+    paletteController.renderObjectGrid();
     paletteController.renderTilePreview();
   });
 }

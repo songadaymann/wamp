@@ -1,11 +1,9 @@
 import {
   TILESETS,
   TILE_SIZE,
-  GAME_OBJECTS,
   colorNumberToCssHex,
   colorNumberToCssRgba,
   editorState,
-  getObjectById,
   getObjectDefaultFrame,
   getObjectFrameSourceRect,
   getObjectPreviewBounds,
@@ -15,6 +13,12 @@ import {
   type TileSelection,
   type TilesetConfig,
 } from '../../config';
+import {
+  getEditorObjectConfigById,
+  listEditorObjectConfigs,
+} from '../../customSprites/objectConfig';
+import { isCustomSpriteObjectId, parseCustomSpriteObjectId } from '../../customSprites/model';
+import { isLocalCustomSpriteId } from '../../customSprites/registry';
 import { EDITOR_UI_STATE_CHANGED_EVENT } from '../../scenes/editor/uiEvents';
 import { getDeviceLayoutState, isCoarsePointerDevice } from '../deviceLayout';
 
@@ -271,7 +275,7 @@ export class PaletteController {
     ctx.imageSmoothingEnabled = false;
 
     if (editorState.paletteMode === 'objects' && editorState.selectedObjectId) {
-      const selectedObject = GAME_OBJECTS.find((objectConfig) => objectConfig.id === editorState.selectedObjectId);
+      const selectedObject = getEditorObjectConfigById(editorState.selectedObjectId);
       if (selectedObject) {
         const objectImage = new Image();
         objectImage.src = selectedObject.path;
@@ -374,7 +378,7 @@ export class PaletteController {
 
     this.objectGrid.innerHTML = '';
 
-    const filteredObjects = GAME_OBJECTS.filter((objectConfig) => (
+    const filteredObjects = listEditorObjectConfigs().filter((objectConfig) => (
       this.matchesObjectCategoryFilter(objectConfig) &&
       this.matchesObjectSearchFilter(objectConfig)
     ));
@@ -826,12 +830,20 @@ export class PaletteController {
       return null;
     }
 
-    return getObjectById(editorState.selectedObjectId) ?? null;
+    return getEditorObjectConfigById(editorState.selectedObjectId) ?? null;
   }
 
   private matchesObjectCategoryFilter(objectConfig: GameObjectConfig): boolean {
     if (this.currentObjectCategory === 'all') {
       return true;
+    }
+
+    if (this.currentObjectCategory === 'custom') {
+      return isCustomSpriteObjectId(objectConfig.id);
+    }
+
+    if (this.currentObjectCategory === 'mine') {
+      return isLocalCustomSpriteId(parseCustomSpriteObjectId(objectConfig.id));
     }
 
     if (this.currentObjectCategory === 'interactive') {

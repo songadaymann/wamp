@@ -6,6 +6,11 @@ import {
   type RoomLightingMode,
   type TileLightEmissionConfig,
 } from './lighting/model';
+import {
+  getCustomSpriteCategory,
+  isCustomSpriteObjectId,
+  type CustomSpriteKind,
+} from './customSprites/model';
 export const TILE_SIZE = 16;
 export const ROOM_WIDTH = 40;   // tiles
 export const ROOM_HEIGHT = 22;  // tiles
@@ -844,6 +849,7 @@ export interface PlacedObject {
   x: number;         // world pixel x
   y: number;         // world pixel y
   instanceId: string;
+  customSpriteKind?: CustomSpriteKind | null;
   facing?: 'left' | 'right';
   layer?: LayerName;
   triggerTargetInstanceId?: string | null;
@@ -938,11 +944,18 @@ export function canObjectBeStoredInContainer(
 }
 
 export function placedObjectContributesToCategory(
-  placed: Pick<PlacedObject, 'id' | 'containedObjectId'>,
+  placed: Pick<PlacedObject, 'id' | 'containedObjectId' | 'customSpriteKind'>,
   category: ObjectCategory,
 ): boolean {
   const directConfig = getObjectById(placed.id);
   if (directConfig?.category === category) {
+    return true;
+  }
+  if (
+    isCustomSpriteObjectId(placed.id) &&
+    placed.customSpriteKind &&
+    getCustomSpriteCategory(placed.customSpriteKind) === category
+  ) {
     return true;
   }
 

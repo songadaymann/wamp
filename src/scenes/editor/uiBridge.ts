@@ -281,6 +281,20 @@ function getLayerUiLabel(layer: LayerName): string {
   }
 }
 
+type EditorFeatureLauncher = 'goal' | 'music' | 'lighting' | 'sprite';
+
+function getEditorFeatureLauncher(value: string | undefined): EditorFeatureLauncher | null {
+  switch (value) {
+    case 'goal':
+    case 'music':
+    case 'lighting':
+    case 'sprite':
+      return value;
+    default:
+      return null;
+  }
+}
+
 export class EditorUiBridge {
   private readonly cleanupCallbacks: Array<() => void> = [];
   private readonly roomTitleInput: HTMLInputElement | null;
@@ -302,6 +316,10 @@ export class EditorUiBridge {
   private readonly mobileZoomInBtn: HTMLButtonElement | null;
   private readonly mobileZoomOutBtn: HTMLButtonElement | null;
   private readonly toolButtons: HTMLButtonElement[];
+  private readonly featureButtons: HTMLButtonElement[];
+  private readonly featureStatus: HTMLElement | null;
+  private readonly goalRoot: HTMLElement | null;
+  private readonly lightingFeaturePanel: HTMLElement | null;
   private readonly moreToolsButtons: HTMLButtonElement[];
   private readonly moreToolsPanels: HTMLElement[];
   private readonly eraseControls: HTMLElement[];
@@ -401,6 +419,7 @@ export class EditorUiBridge {
   private readonly containerClearBtn: HTMLButtonElement | null;
   private destroyed = false;
   private moreToolsOpen = false;
+  private activeFeatureLauncher: EditorFeatureLauncher | null = null;
   private currentObjectCategory = 'all';
   private lastViewModel: EditorUiViewModel | null = null;
   private backgroundImages: BackgroundImageSummary[] = [];
@@ -453,6 +472,12 @@ export class EditorUiBridge {
     this.toolButtons = Array.from(
       this.doc.querySelectorAll<HTMLButtonElement>('.tool-btn[data-tool]')
     );
+    this.featureButtons = Array.from(
+      this.doc.querySelectorAll<HTMLButtonElement>('[data-editor-feature]')
+    );
+    this.featureStatus = this.doc.getElementById('editor-feature-launcher-status');
+    this.goalRoot = this.doc.getElementById('goal-section');
+    this.lightingFeaturePanel = this.doc.getElementById('editor-lighting-feature-panel');
     this.moreToolsButtons = Array.from(
       this.doc.querySelectorAll<HTMLButtonElement>('.editor-more-tools-toggle')
     );
@@ -808,6 +833,18 @@ export class EditorUiBridge {
         if (tool !== 'rect' && tool !== 'fill') {
           this.moreToolsOpen = false;
         }
+      };
+      button.addEventListener('click', handler);
+      this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
+    }
+
+    for (const button of this.featureButtons) {
+      const handler = () => {
+        const feature = getEditorFeatureLauncher(button.dataset.editorFeature);
+        if (!feature) {
+          return;
+        }
+        this.handleFeatureLauncher(feature);
       };
       button.addEventListener('click', handler);
       this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
@@ -1687,6 +1724,28 @@ export class EditorUiBridge {
     this.syncEditorChromeState();
   }
 
+  private handleFeatureLauncher(feature: EditorFeatureLauncher): void {
+    this.moreToolsOpen = false;
+
+    if (feature === 'music' || feature === 'sprite') {
+      this.activeFeatureLauncher = null;
+      this.syncEditorChromeState();
+      return;
+    }
+
+    const isTogglingOff = this.activeFeatureLauncher === feature;
+    this.activeFeatureLauncher = isTogglingOff ? null : feature;
+    this.syncEditorChromeState();
+  }
+
+  private getFeatureLauncherStatusText(): string {
+    return '';
+  }
+
+  private usesDesktopFeaturePanels(): boolean {
+    return this.doc.body.dataset.appMode === 'editor' && this.doc.body.dataset.deviceClass !== 'phone';
+  }
+
   private requestPhoneEditorAutoCollapse(): void {
     this.windowObj.dispatchEvent(new Event('mobile-editor-auto-collapse'));
   }
@@ -1699,6 +1758,36 @@ export class EditorUiBridge {
     for (const button of this.toolButtons) {
       button.classList.toggle('active', button.dataset.tool === editorState.activeTool);
     }
+
+    const musicModeActive = this.doc.body.dataset.editorMusicMode === 'true';
+    const spriteModeActive = this.doc.body.dataset.editorSpriteMode === 'true';
+    for (const button of this.featureButtons) {
+      const feature = getEditorFeatureLauncher(button.dataset.editorFeature);
+      const active =
+        feature === 'music'
+          ? musicModeActive
+          : feature === 'sprite'
+            ? spriteModeActive
+            : Boolean(feature && feature === this.activeFeatureLauncher);
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+    const featureStatusText = this.getFeatureLauncherStatusText();
+    this.setText(this.featureStatus, featureStatusText);
+    this.setHidden(this.featureStatus, featureStatusText.length === 0);
+
+    const useFeaturePanels = this.usesDesktopFeaturePanels();
+    const courseGoalActive = Boolean(this.courseRoot && !this.courseRoot.classList.contains('hidden'));
+    if (this.goalRoot) {
+      this.goalRoot.classList.toggle(
+        'hidden',
+        useFeaturePanels ? this.activeFeatureLauncher !== 'goal' || courseGoalActive : false,
+      );
+    }
+    this.setHidden(
+      this.lightingFeaturePanel,
+      useFeaturePanels ? this.activeFeatureLauncher !== 'lighting' : true,
+    );
 
     const showMoreTools =
       this.moreToolsOpen ||

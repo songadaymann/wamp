@@ -6,9 +6,9 @@ import {
   ROOM_WIDTH,
   TILE_SIZE,
   editorState,
-  getObjectById,
   getObjectPreviewRectForTile,
 } from '../../config';
+import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { isTextInputFocused } from '../../ui/keyboardFocus';
 import { RETRO_COLORS } from '../../visuals/starfield';
 import { getDeviceLayoutState } from '../../ui/deviceLayout';
@@ -248,7 +248,9 @@ export class EditorInteractionController {
     }
 
     if (editorState.paletteMode === 'objects') {
-      const objectConfig = editorState.selectedObjectId ? getObjectById(editorState.selectedObjectId) : null;
+      const objectConfig = editorState.selectedObjectId
+        ? getEditorObjectConfigById(editorState.selectedObjectId)
+        : null;
       const layerAccent = getEditorLayerAccent();
       if (objectConfig && editorState.activeTool !== 'eraser') {
         const previewRect = getObjectPreviewRectForTile(objectConfig, tileX, tileY);

@@ -5,5 +5,6 @@
 @import './editor/palette-goals.css';
 @import './editor/object-inspector.css';
 @import './editor/music.css';
+@import './editor/sprite.css';
 @import './editor/tile-preview.css';
 @import './editor/retro-skin.css';

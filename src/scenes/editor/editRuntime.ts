@@ -25,6 +25,12 @@ import {
   type LayerName,
   type PlacedObject,
 } from '../../config';
+import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
+import {
+  ensureCustomSpriteTexture,
+  getCustomSpriteDefinitionByObjectId,
+  getCustomSpriteDefinitionsForPlacedObjects,
+} from '../../customSprites/registry';
 import {
   cloneRoomGoal,
   createDefaultRoomGoal,
@@ -481,7 +487,12 @@ export class EditorEditRuntime {
       goal: cloneRoomGoal(this.roomGoal),
       spawnPoint: this.roomSpawnPoint ? { ...this.roomSpawnPoint } : null,
       tileData: this.serializeTileData(),
-      placedObjects: this.host.getPlacedObjects().map((placed) => ({ ...placed })),
+      placedObjects: this.host.getPlacedObjects().map((placed) => ({
+        ...placed,
+        customSpriteKind:
+          getCustomSpriteDefinitionByObjectId(placed.id)?.kind ?? placed.customSpriteKind ?? null,
+      })),
+      customSprites: getCustomSpriteDefinitionsForPlacedObjects(this.host.getPlacedObjects()),
       version: metadata.version,
       status: 'draft',
       createdAt: metadata.createdAt || new Date().toISOString(),
@@ -853,7 +864,7 @@ export class EditorEditRuntime {
       return null;
     }
 
-    const objectConfig = getObjectById(editorState.selectedObjectId);
+    const objectConfig = getEditorObjectConfigById(editorState.selectedObjectId);
     if (!objectConfig) {
       return null;
     }
@@ -869,6 +880,7 @@ export class EditorEditRuntime {
       x: placementPoint.x,
       y: placementPoint.y,
       instanceId: createPlacedObjectInstanceId(),
+      customSpriteKind: getCustomSpriteDefinitionByObjectId(editorState.selectedObjectId)?.kind ?? null,
       facing: objectConfig.facingDirection ? editorState.objectFacing : undefined,
       layer: editorState.activeLayer,
       triggerTargetInstanceId: null,
@@ -967,12 +979,13 @@ export class EditorEditRuntime {
     this.objectSprites = [];
 
     for (const placed of this.host.getPlacedObjects()) {
-      const objectConfig = getObjectById(placed.id);
+      const objectConfig = getEditorObjectConfigById(placed.id);
       if (!objectConfig) {
         continue;
       }
 
       const worldPoint = this.toWorldPoint(placed.x, placed.y);
+      ensureCustomSpriteTexture(this.scene, objectConfig);
       const sprite = this.scene.add.sprite(worldPoint.x, worldPoint.y, objectConfig.id, 0);
       sprite.setDepth(this.getPlacedObjectEditorDepth(placed));
       sprite.setOrigin(0.5, 0.5);
@@ -1209,7 +1222,7 @@ export class EditorEditRuntime {
   }
 
   getPlacedObjectBounds(placed: PlacedObject): Phaser.Geom.Rectangle {
-    const objectConfig = getObjectById(placed.id);
+    const objectConfig = getEditorObjectConfigById(placed.id);
     if (!objectConfig) {
       const worldPoint = this.toWorldPoint(placed.x, placed.y);
       return new Phaser.Geom.Rectangle(worldPoint.x - 8, worldPoint.y - 8, 16, 16);

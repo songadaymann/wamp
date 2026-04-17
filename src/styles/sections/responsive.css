@@ -1068,6 +1068,31 @@ body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet
   display: block;
 }
 
+body[data-device-class='phone'][data-app-mode='editor'] #editor-actions .editor-feature-panels {
+  display: none;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='goal'] #editor-actions {
+  display: block;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='goal'] #editor-actions > :not(.editor-top-tools) {
+  display: none;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='goal'] #editor-actions .editor-top-tools.desktop-editor-only {
+  display: block !important;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='goal'] #editor-actions .editor-top-tools > :not(.editor-feature-panels) {
+  display: none;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='goal'] #editor-actions .editor-feature-panels,
+body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='goal'] #goal-section {
+  display: grid;
+}
+
 body[data-device-class='phone'][data-app-mode='editor'] #sidebar .sidebar-section {
   padding: 10px 12px;
   overflow: visible;
@@ -1258,7 +1283,6 @@ body[data-device-class='phone'][data-app-mode='editor'] .editor-music-arrangemen
   padding: 12px;
 }
 
-body[data-device-class='phone'][data-app-mode='editor'] #room-title-section,
 body[data-device-class='phone'][data-app-mode='editor'] #editor-advanced,
 body[data-device-class='phone'][data-app-mode='editor'] #goal-section {
   max-height: calc(var(--phone-editor-sheet-height) - 26px);

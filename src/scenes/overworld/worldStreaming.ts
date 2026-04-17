@@ -38,6 +38,7 @@ import {
 } from '../../persistence/worldModel';
 import { RETRO_COLORS, ensureStarfieldTexture } from '../../visuals/starfield';
 import { buildRoomSnapshotTexture, buildRoomTextureKey } from '../../visuals/roomSnapshotTexture';
+import { registerCustomSpritesFromSnapshot } from '../../customSprites/registry';
 import {
   extractRoomStaticLightingEmitters,
   type RoomStaticLightingEmitters,
@@ -845,6 +846,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
   private async ensureFullRoom(room: RoomSnapshot): Promise<void> {
     return this.measure('stream.ensureFullRoom', () => {
+    registerCustomSpritesFromSnapshot(room);
     const existing = this.loadedFullRoomsById.get(room.id);
     if (existing && existing.room.version === room.version && existing.room.updatedAt === room.updatedAt) {
       existing.image.setVisible(true);

@@ -13,6 +13,8 @@ import {
   type LayerName,
 } from '../../config';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
+import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
+import { ensureCustomSpriteTexture } from '../../customSprites/registry';
 import type { LoadedFullRoom } from './worldStreaming';
 import { terrainTileCollidesAtLocalPixel } from './terrainCollision';
 
@@ -182,7 +184,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   createLiveObjects(loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>): void {
     for (let index = 0; index < loadedRoom.room.placedObjects.length; index += 1) {
       const placedObject = loadedRoom.room.placedObjects[index];
-      const config = getObjectById(placedObject.id);
+      const config = getEditorObjectConfigById(placedObject.id);
       if (!config) {
         continue;
       }
@@ -258,6 +260,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       signText,
       countsTowardGoals,
     } = options;
+    ensureCustomSpriteTexture(this.options.scene, config);
     const sprite = this.options.scene.add.sprite(
       roomOrigin.x + x,
       roomOrigin.y + y,

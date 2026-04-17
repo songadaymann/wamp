@@ -7,11 +7,11 @@ import {
   ROOM_WIDTH,
   TILE_SIZE,
   editorState,
-  getObjectById,
   getPlacedObjectLayer,
   type LayerName,
   type PlacedObject,
 } from '../../config';
+import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { RETRO_COLORS } from '../../visuals/starfield';
 
 interface EditorOverlayHost {
@@ -238,7 +238,7 @@ export class EditorOverlayController {
     }
 
     for (const placedObject of this.host.getPlacedObjects()) {
-      const objectConfig = getObjectById(placedObject.id);
+      const objectConfig = getEditorObjectConfigById(placedObject.id);
       if (!objectConfig || getPlacedObjectLayer(placedObject) !== layerName) {
         continue;
       }

@@ -18,6 +18,7 @@ import {
   type MusicPhraseRecord,
 } from '../music/library';
 import { deleteMusicPhrase, getMusicPhrase, listMusicPhrases, saveMusicPhrases } from '../music/libraryClient';
+import { registerCustomSprites } from '../customSprites/registry';
 import {
   ROOM_PATTERN_INSTRUMENT_IDS,
   ROOM_PATTERN_MAX_BPM,
@@ -1114,6 +1115,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private applyRoomSnapshot(room: RoomSnapshot): void {
+    registerCustomSprites(room.customSprites ?? [], { persist: false });
     this.editRuntime.applyRoomSnapshot(room);
     this.lightingPreviewStaticEmitters = {
       emitters: [],
@@ -2705,7 +2707,13 @@ export class EditorScene extends Phaser.Scene {
 
     const modeButton = document.getElementById('btn-editor-music-mode') as HTMLButtonElement | null;
     if (modeButton) {
-      modeButton.textContent = this.musicModeActive ? 'Close Music' : 'Edit Music';
+      const label = modeButton.querySelector<HTMLElement>('[data-button-label], .tool-label');
+      if (label) {
+        label.textContent = this.musicModeActive ? 'Close' : 'Music';
+      } else {
+        modeButton.textContent = this.musicModeActive ? 'Close Music' : 'Edit Music';
+      }
+      modeButton.title = this.musicModeActive ? 'Close Music' : 'Edit Music';
       modeButton.classList.toggle('active', this.musicModeActive);
     }
 

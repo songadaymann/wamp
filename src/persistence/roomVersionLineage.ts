@@ -7,6 +7,7 @@ import {
 } from '../config';
 import { normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
 import { getPlacedObjectSignText } from '../signs/model';
+import { normalizeCustomSpriteDefinitions } from '../customSprites/model';
 import type { RoomSnapshot, RoomVersionRecord } from './roomModel';
 
 type CanonicalGoalPayload =
@@ -41,6 +42,7 @@ type CanonicalPlacedObjectPayload = {
   y: number;
   layer: LayerName;
   facing: 'left' | 'right' | 'none';
+  customSpriteKind: string | null;
   containedObjectId: string | null;
   signText: string | null;
   triggerTarget: string | null;
@@ -52,6 +54,13 @@ type CanonicalRoomFingerprintPayload = {
   spawnPoint: [number, number] | null;
   tileData: Record<LayerName, number[]>;
   placedObjects: CanonicalPlacedObjectPayload[];
+  customSprites: Array<{
+    id: string;
+    name: string;
+    size: number;
+    kind: string;
+    pixels: Array<string | null>;
+  }>;
 };
 
 export interface RoomVersionEquivalenceGroup {
@@ -92,6 +101,13 @@ export function buildRoomVersionFingerprint(snapshot: RoomSnapshot): string {
       : null,
     tileData: buildTileFingerprint(snapshot),
     placedObjects: buildPlacedObjectFingerprint(snapshot.placedObjects),
+    customSprites: normalizeCustomSpriteDefinitions(snapshot.customSprites).map((sprite) => ({
+      id: sprite.id,
+      name: sprite.name,
+      size: sprite.size,
+      kind: sprite.kind,
+      pixels: sprite.pixels,
+    })),
   };
 
   return JSON.stringify(payload);
@@ -248,6 +264,7 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
         typeof placed.containedObjectId === 'string' && placed.containedObjectId.trim().length > 0
           ? placed.containedObjectId
           : null,
+      customSpriteKind: placed.customSpriteKind ?? null,
       facing,
       id: placed.id,
       instanceId: getPlacedObjectInstanceId(placed, index),
@@ -279,6 +296,7 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
       y: placed.y,
       layer: placed.layer,
       facing: placed.facing,
+      customSpriteKind: placed.customSpriteKind,
       containedObjectId: placed.containedObjectId,
       signText: placed.signText,
       triggerTarget: placed.triggerTargetInstanceId
@@ -297,6 +315,7 @@ function buildPlacedObjectSignature(placed: PlacedObject): string {
     y: Math.round(placed.y),
     layer: getPlacedObjectLayer(placed),
     facing,
+    customSpriteKind: placed.customSpriteKind ?? null,
     containedObjectId:
       typeof placed.containedObjectId === 'string' && placed.containedObjectId.trim().length > 0
         ? placed.containedObjectId
@@ -315,6 +334,7 @@ function compareCanonicalPlacedObjects(
     left.id.localeCompare(right.id) ||
     left.layer.localeCompare(right.layer) ||
     left.facing.localeCompare(right.facing) ||
+    (left.customSpriteKind ?? '').localeCompare(right.customSpriteKind ?? '') ||
     (left.containedObjectId ?? '').localeCompare(right.containedObjectId ?? '') ||
     (left.signText ?? '').localeCompare(right.signText ?? '') ||
     (left.triggerTarget ?? '').localeCompare(right.triggerTarget ?? '')

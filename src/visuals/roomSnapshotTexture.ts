@@ -8,12 +8,16 @@ import {
   ROOM_WIDTH,
   TILESETS,
   TILE_SIZE,
-  getObjectById,
   getObjectDefaultFrame,
   getObjectFrameSourceRect,
   getPlacedObjectLayer,
   type LayerName,
 } from '../config';
+import { getEditorObjectConfigById } from '../customSprites/objectConfig';
+import {
+  ensureCustomSpriteTexture,
+  registerCustomSpritesFromSnapshot,
+} from '../customSprites/registry';
 import { resolveRoomBackground } from '../backgrounds/model';
 import {
   getCustomBackgroundCenterRect,
@@ -62,6 +66,7 @@ export function buildRoomSnapshotTexture(
   tilePixelSize: number,
   options: RoomTextureBuildOptions = {},
 ): void {
+  registerCustomSpritesFromSnapshot(room);
   const width = ROOM_WIDTH * tilePixelSize;
   const height = ROOM_HEIGHT * tilePixelSize;
   const canvasTexture = scene.textures.createCanvas(textureKey, width, height);
@@ -89,6 +94,7 @@ export function drawRoomSnapshotToContext(
   tilePixelSize: number,
   options: RoomTextureDrawOptions = {},
 ): void {
+  registerCustomSpritesFromSnapshot(room);
   const width = ROOM_WIDTH * tilePixelSize;
   const height = ROOM_HEIGHT * tilePixelSize;
   const offsetX = options.offsetX ?? 0;
@@ -338,9 +344,10 @@ function drawRoomObjectsForLayer(
       continue;
     }
 
-    const objectConfig = getObjectById(placedObject.id);
+    const objectConfig = getEditorObjectConfigById(placedObject.id);
     if (!objectConfig) continue;
 
+    ensureCustomSpriteTexture(scene, objectConfig);
     const sourceImage = getTextureSource(scene, objectConfig.id);
     if (!sourceImage) continue;
 

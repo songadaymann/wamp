@@ -325,7 +325,19 @@ body[data-editor-music-mode='true'] #editor-inspector {
   transition: opacity 0.18s ease;
 }
 
-body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #sidebar .sidebar-section:not(#editor-advanced) {
+body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #sidebar .sidebar-section:not(#editor-actions):not(#editor-advanced) {
+  opacity: 0.26;
+  pointer-events: none;
+  filter: saturate(0.55);
+  transition: opacity 0.18s ease, filter 0.18s ease;
+}
+
+body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-action-rail,
+body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-top-tools-rail,
+body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-tool-popover,
+body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-feature-btn:not([data-editor-feature='music']),
+body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-feature-panels,
+body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-feature-launcher-status {
   opacity: 0.26;
   pointer-events: none;
   filter: saturate(0.55);

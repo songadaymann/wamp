@@ -57,6 +57,60 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Editor compacting design pass on April 17, 2026:
+  - created `design/design-work-2026-04-17` from `main` for edit-mode layout exploration
+  - moved the room title input out of the editor sidebar and into `#game-container` as a compact DOM nameplate above the canvas/edit surface
+  - kept the existing `#room-title-input` ID so the current `EditorUiBridge` room-title binding still owns the save/update path
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with existing Rollup annotation and large-chunk warnings
+    - required web-game client wrote `output/web-game/editor-title-overlay-smoke/state-0.json`; local no-Worker API calls produced the known 500/no-world-load path
+    - targeted visual probes captured the overlay at `output/web-game/editor-title-overlay-clean/desktop.png`; the probe had to force `data-app-mode='editor'` because the synthetic editor preview hook can be overwritten by the still-booting overworld in this no-Worker setup
+    - started local Worker from this design worktree, applied local D1 migrations through `0025_background_image_uploads.sql`, reran the required web-game client at `output/web-game/editor-title-overlay-smoke-api-migrated/state-0.json`, and captured an API-backed editor screenshot at `output/web-game/editor-title-overlay-real-stack/desktop.png`
+  - follow-up: moved the existing desktop save status and `Draft Only` publish nudge out of the sidebar and into a matching under-room DOM overlay inside `#game-container`
+  - kept `#editor-top-save-status`, `#editor-publish-nudge`, and `#btn-editor-publish-nudge` intact so the current editor bridge and publish-nudge action path keep targeting the same elements
+  - mobile editor keeps its existing status card; the under-room overlay is hidden for phone editor layouts and while the music editor overlay is active
+  - feedback-overlay validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with existing Rollup pure-annotation and large-chunk warnings
+    - required web-game client passed against `http://127.0.0.1:3234/?previewSmoke=1&renderer=canvas` with no `errors-*` log and wrote `output/web-game/editor-feedback-overlay-smoke/state-0.json`
+    - targeted API-backed editor screenshot captured the real save-status overlay at `output/web-game/editor-feedback-overlay-real-stack/desktop.png`; the only console error was the expected anonymous `401` after the synthetic edit autosave attempt
+    - targeted forced-nudge screenshot captured the `Draft Only` state at `output/web-game/editor-feedback-overlay-forced-nudge/desktop.png` with no console/page errors
+  - follow-up: added a compact four-square feature launcher under the desktop editor tool buttons for Goal, Music, Light, and Sprite
+  - refined the launcher so Goal and Lighting are removed from their old always-present sidebar / Advanced locations and now appear as inline panels directly below the feature row only when their square is pressed
+  - moved the Music entry out of Advanced; the Music square now owns the existing `#btn-editor-music-mode` toggle, opens/closes the normal music overlay, and changes its label to `Close` while active
+  - replaced the Sprite placeholder with a first-pass pixel editor overlay: choose `16x16` or `32x32`, draw/erase pixels with color presets, name the sprite, choose Decoration / Collectible / Solid Block behavior, save it locally, and immediately place it from the object palette
+  - custom sprite definitions now live in a small client registry, are stored in local browser storage for reuse, are embedded in room snapshots when placed, and are registered into editor/world/preview render paths so placed custom sprites draw in the room and room previews
+  - placed custom sprites carry `customSpriteKind` so collect-target counting can include custom collectibles and solid custom sprites can use the platform object category
+  - follow-up: recolored the active Goal / Music / Light / Sprite feature squares to match the World / Test / Save / Publish action sequence: blue, green, yellow, red
+  - follow-up: added a `My Objects` rail inside the sprite editor with previews, names, sizes, and behavior types; selecting an existing object loads it back into the editor, `New` starts a blank draft, and saving while editing updates the same saved object instead of creating a duplicate
+  - follow-up: editing a saved sprite refreshes its palette entry and active scene texture, and room exports now resolve placed custom sprite behavior from the latest saved definition where possible
+  - follow-up: moved custom sprite objects to the end of the main object chooser instead of prepending them ahead of built-ins
+  - follow-up: added `Custom` and `Mine` object chooser filters; `Custom` shows all custom sprites currently available to the editor, while `Mine` shows only the local browser library saved from this user/session
+  - follow-up: the local custom sprite registry now tracks local-library ids separately from room-embedded custom sprites, so opening rooms with embedded custom art does not automatically make those sprites appear in `My Objects` / `Mine`
+  - feature-launcher validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with existing Rollup pure-annotation and large-chunk warnings
+    - required web-game client passed against `http://127.0.0.1:3234/?previewSmoke=1&renderer=canvas` with no `errors-*` log and wrote `output/web-game/editor-feature-inline-panels-smoke/state-0.json`
+    - targeted API-backed desktop editor probe passed all launcher checks, captured initial / Goal / Lighting / Music open / Music closed / Sprite screenshots in `output/web-game/editor-feature-inline-panels-real-stack/`, and confirmed the old Music and Lighting Advanced blocks are gone
+    - targeted phone editor probe confirmed the Goal mobile sheet still shows the moved Goal controls while hiding the desktop feature launcher, with screenshot `output/web-game/editor-feature-inline-panels-phone-goal/phone-goal.png`
+  - sprite-editor validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with existing Rollup pure-annotation and large-chunk warnings
+    - required web-game client passed against `http://127.0.0.1:3234/?previewSmoke=1&renderer=canvas` with no `errors-*` log and wrote `output/web-game/editor-sprite-editor-smoke-final/state-0.json`
+    - targeted desktop editor probe created a `16x16` collectible sprite, confirmed Save/Clear/Close controls are visible, saved it, confirmed it appears first and active in the object palette, placed it in the room, and captured screenshots in `output/web-game/editor-sprite-editor-targeted-2/`
+    - targeted `32x32` probe saved a Solid Block sprite and confirmed the saved custom sprite has `size: 32`, `kind: solid`, and appears first in the object palette at `output/web-game/editor-sprite-editor-32-check/summary.json`
+    - follow-up targeted library-edit probe confirmed feature colors, created a sprite, placed it, reopened `My Objects`, edited the same object, saved without duplicating it, and wrote screenshots / summary under `output/web-game/editor-sprite-library-edit-targeted/`; the only console error was the expected anonymous `401` from the synthetic editor autosave path
+    - required follow-up `develop-web-game` smoke passed against `http://127.0.0.1:3234/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/editor-sprite-library-smoke-final/state-0.json` plus `shot-0.png`, and produced no console-error artifact
+    - follow-up object-filter probe seeded one local custom sprite, confirmed the All grid ends with `custom_sprite:sprite_filter_probe`, confirmed `Custom` and `Mine` both filter to that sprite, produced no console/page errors, and wrote `output/web-game/editor-object-custom-filters-targeted/summary.json` plus `mine-filter-clean.png`
+    - required object-filter `develop-web-game` smoke passed against `http://127.0.0.1:3234/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/editor-object-custom-filters-smoke/state-0.json` plus `shot-0.png`, and produced no console-error artifact
+  - sprite-editor caveat: this is intentionally local/room-embedded for now; there is no global sharing, moderation queue, profile surface, account/trust gate, or builder-XP integration yet
+  - recommended backend follow-up: move music phrases, custom sprites, and approved photos behind user-owned creator-asset records; require account auth before save, decide whether public/shared sprite creation needs `T2`, expose owned assets in profile endpoints, and award capped builder XP for meaningful creation / approval / public-use events
+
 - User-uploaded background upload foundation on April 16, 2026:
   - merged into `main` on April 16, 2026 via merge commit `1ee49b7`
   - production D1 migration `0025_background_image_uploads.sql` was applied before deploy

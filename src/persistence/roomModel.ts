@@ -31,6 +31,11 @@ import {
   type RoomMusic,
 } from '../music/model';
 import { canPlacedObjectHaveSignText, normalizeSignText } from '../signs/model';
+import {
+  normalizeCustomSpriteDefinitions,
+  normalizeCustomSpriteKind,
+  type CustomSpriteDefinition,
+} from '../customSprites/model';
 
 export interface RoomCoordinates {
   x: number;
@@ -73,6 +78,7 @@ export interface RoomSnapshot {
   spawnPoint: RoomSpawnPoint | null;
   tileData: RoomTileData;
   placedObjects: PlacedObject[];
+  customSprites?: CustomSpriteDefinition[];
   version: number;
   status: RoomStatus;
   createdAt: string;
@@ -196,6 +202,7 @@ export function createDefaultRoomSnapshot(
     spawnPoint: null,
     tileData: createEmptyTileData(),
     placedObjects: [],
+    customSprites: [],
     version: 1,
     status: 'draft',
     createdAt: now,
@@ -251,6 +258,9 @@ function normalizePlacedObject(
       },
       index,
     ),
+    customSpriteKind: placed.customSpriteKind
+      ? normalizeCustomSpriteKind(placed.customSpriteKind)
+      : null,
     facing: placed.facing === 'left' || placed.facing === 'right' ? placed.facing : undefined,
     layer:
       placed.layer === 'background' || placed.layer === 'terrain' || placed.layer === 'foreground'
@@ -327,6 +337,7 @@ export function cloneRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
     spawnPoint: room.spawnPoint ? { ...room.spawnPoint } : null,
     tileData: cloneTileData(room.tileData),
     placedObjects: clonePlacedObjects(room.placedObjects),
+    customSprites: normalizeCustomSpriteDefinitions(room.customSprites),
     version: room.version,
     status: room.status,
     createdAt: room.createdAt,

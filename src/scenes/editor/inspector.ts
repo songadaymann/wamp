@@ -8,6 +8,7 @@ import {
   getObjectById,
   type PlacedObject,
 } from '../../config';
+import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { requestSignTextEdit } from '../../signs/events';
 import { canPlacedObjectHaveSignText, getPlacedObjectSignText } from '../../signs/model';
 import { type EditorEditRuntime } from './editRuntime';
@@ -205,7 +206,9 @@ export class EditorInspectorController {
     }
 
     const bounds = this.editRuntime.getPlacedObjectBounds(focused);
-    const selectedObject = editorState.selectedObjectId ? getObjectById(editorState.selectedObjectId) : null;
+    const selectedObject = editorState.selectedObjectId
+      ? getEditorObjectConfigById(editorState.selectedObjectId)
+      : null;
     const canStoreSelected = canObjectBeStoredInContainer(focused.id, selectedObject);
     const selectedObjectLooksLikeContents =
       selectedObject?.category === 'enemy' || selectedObject?.category === 'collectible';
@@ -478,7 +481,9 @@ export class EditorInspectorController {
     const focusedContainer =
       this.pinnedInspector?.kind === 'pressure' && !connectMode ? null : this.getFocusedContainer();
     if (focusedContainer && editorState.paletteMode === 'objects' && !this.connectingPressurePlateInstanceId) {
-      const selectedObject = editorState.selectedObjectId ? getObjectById(editorState.selectedObjectId) : null;
+      const selectedObject = editorState.selectedObjectId
+        ? getEditorObjectConfigById(editorState.selectedObjectId)
+        : null;
       const selectedLooksLikeContents =
         selectedObject?.category === 'enemy' || selectedObject?.category === 'collectible';
       const canStoreSelected = canObjectBeStoredInContainer(focusedContainer.id, selectedObject);
@@ -565,7 +570,9 @@ export class EditorInspectorController {
     this.focusedContainerInstanceId = focused.instanceId;
     this.focusedPressurePlateInstanceId = null;
     this.pinInspector('container', focused.instanceId);
-    const selectedObject = editorState.selectedObjectId ? getObjectById(editorState.selectedObjectId) : null;
+    const selectedObject = editorState.selectedObjectId
+      ? getEditorObjectConfigById(editorState.selectedObjectId)
+      : null;
     if (!selectedObject) {
       this.renderContainerContentsPanel();
       return true;

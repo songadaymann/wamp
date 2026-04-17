@@ -1,0 +1,373 @@
+body[data-editor-sprite-mode='true'] #editor-inspector,
+body[data-editor-sprite-mode='true'] #editor-room-feedback {
+  opacity: 0.18;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #sidebar .sidebar-section:not(#editor-actions):not(#editor-advanced) {
+  opacity: 0.26;
+  pointer-events: none;
+  filter: saturate(0.55);
+  transition: opacity 0.18s ease, filter 0.18s ease;
+}
+
+body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-action-rail,
+body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-top-tools-rail,
+body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-tool-popover,
+body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-feature-btn:not([data-editor-feature='sprite']),
+body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-feature-panels,
+body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-feature-launcher-status {
+  opacity: 0.26;
+  pointer-events: none;
+  filter: saturate(0.55);
+  transition: opacity 0.18s ease, filter 0.18s ease;
+}
+
+body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #editor-advanced .editor-advanced-block {
+  opacity: 0.26;
+  pointer-events: none;
+  filter: saturate(0.55);
+  transition: opacity 0.18s ease, filter 0.18s ease;
+}
+
+body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-tab:not([data-mobile-editor-sheet='actions']),
+body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-editor-undo,
+body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-editor-toggle {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.editor-sprite-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  display: none;
+  align-items: stretch;
+  justify-content: center;
+  padding:
+    calc(6px + var(--safe-top))
+    calc(14px + var(--safe-right))
+    calc(18px + var(--safe-bottom))
+    calc(14px + var(--safe-left));
+  pointer-events: none;
+}
+
+.editor-sprite-overlay:not(.hidden) {
+  display: flex;
+}
+
+.editor-sprite-shell {
+  width: min(1040px, calc(100% - 4px));
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px 10px 12px;
+  border: 2px solid #fff3db;
+  border-radius: 4px;
+  background: #050505;
+  box-shadow: 4px 4px 0 #18161c;
+  pointer-events: auto;
+}
+
+.editor-sprite-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: visible;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.editor-sprite-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-sprite-control-cluster {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 6px;
+  border: 2px solid #fff3db;
+  border-radius: 4px;
+  background: #0b0b0b;
+  box-shadow: none;
+}
+
+.editor-sprite-name-cluster {
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+
+.editor-sprite-color-cluster {
+  min-width: 250px;
+}
+
+.editor-sprite-action-cluster {
+  margin-left: 0;
+}
+
+.editor-sprite-label {
+  flex: 0 0 auto;
+  color: #fff3db;
+  font-family: var(--editor-pixel-font);
+  font-size: 8px;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.editor-sprite-select,
+.editor-sprite-name-input {
+  height: 32px;
+  min-width: 0;
+  border: 2px solid #fff3db;
+  border-radius: 3px;
+  background: #090909;
+  color: #fff3db;
+  font-family: var(--editor-ui-font);
+  font-size: 12px;
+}
+
+.editor-sprite-name-input {
+  width: 100%;
+}
+
+.editor-sprite-color-input {
+  width: 36px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid #fff3db;
+  border-radius: 3px;
+  background: #090909;
+}
+
+.editor-sprite-swatches {
+  display: grid;
+  grid-template-columns: repeat(5, 16px);
+  gap: 4px;
+}
+
+.editor-sprite-swatch {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid rgba(255, 243, 219, 0.75);
+  border-radius: 3px;
+  box-shadow: none;
+}
+
+.editor-sprite-preview {
+  width: 34px;
+  height: 34px;
+  border: 2px solid #fff3db;
+  border-radius: 3px;
+  background:
+    linear-gradient(45deg, #151515 25%, transparent 25%),
+    linear-gradient(-45deg, #151515 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #151515 75%),
+    linear-gradient(-45deg, transparent 75%, #151515 75%),
+    #090909;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-size: 16px 16px;
+  image-rendering: pixelated;
+}
+
+.editor-sprite-status-row {
+  display: flex;
+  justify-content: center;
+  min-height: 28px;
+}
+
+.editor-sprite-status {
+  min-width: min(620px, 100%);
+  padding: 7px 10px;
+  border: 2px solid #4cc3ff;
+  border-radius: 3px;
+  background: #07131a;
+  color: #fff3db;
+  font-family: var(--editor-ui-font);
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.editor-sprite-status[data-tone='error'] {
+  border-color: #ff8b97;
+  background: #1c0911;
+}
+
+.editor-sprite-canvas-wrap {
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.editor-sprite-workbench {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 12px;
+}
+
+.editor-sprite-canvas {
+  width: min(70vh, 70vw, 640px);
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 1 / 1;
+  border: 2px solid #fff3db;
+  border-radius: 4px;
+  background: #090909;
+  box-shadow: 4px 4px 0 #18161c;
+  cursor: crosshair;
+  image-rendering: pixelated;
+  touch-action: none;
+}
+
+.editor-sprite-library {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px;
+  border: 2px solid #fff3db;
+  border-radius: 4px;
+  background: #080808;
+  box-shadow: 4px 4px 0 #18161c;
+}
+
+.editor-sprite-library-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.editor-sprite-library-list {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.editor-sprite-library-item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 5px;
+  border: 2px solid #fff3db;
+  border-radius: 3px;
+  background: #111;
+  color: #fff3db;
+  text-align: left;
+  box-shadow: none;
+}
+
+.editor-sprite-library-item.active {
+  background: #fff3db;
+  color: #18161c;
+}
+
+.editor-sprite-library-preview {
+  width: 30px;
+  height: 30px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  background-color: #090909;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  image-rendering: pixelated;
+}
+
+.editor-sprite-library-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.editor-sprite-library-name,
+.editor-sprite-library-meta,
+.editor-sprite-library-empty {
+  font-family: var(--editor-ui-font);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.editor-sprite-library-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-sprite-library-meta,
+.editor-sprite-library-empty {
+  color: inherit;
+  opacity: 0.78;
+}
+
+.editor-sprite-library-empty {
+  padding: 8px;
+  border: 2px dashed rgba(255, 243, 219, 0.45);
+  border-radius: 3px;
+  text-align: center;
+}
+
+.editor-sprite-shell .bar-btn {
+  border-radius: 3px;
+  font-family: var(--editor-pixel-font);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+
+.editor-sprite-shell .bar-btn.active {
+  background: #fff3db;
+  border-color: #fff3db;
+  color: #18161c;
+  box-shadow: none;
+}
+
+@media (max-width: 720px), (max-height: 680px) {
+  .editor-sprite-overlay {
+    padding:
+      calc(4px + var(--safe-top))
+      calc(8px + var(--safe-right))
+      calc(12px + var(--safe-bottom))
+      calc(8px + var(--safe-left));
+  }
+
+  .editor-sprite-shell {
+    gap: 6px;
+    padding: 6px 8px 10px;
+  }
+
+  .editor-sprite-control-cluster {
+    min-height: 38px;
+  }
+
+  .editor-sprite-color-cluster {
+    min-width: 210px;
+  }
+
+  .editor-sprite-canvas {
+    width: min(62vh, 92vw, 520px);
+  }
+
+  .editor-sprite-workbench {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .editor-sprite-library {
+    max-height: 140px;
+  }
+}
