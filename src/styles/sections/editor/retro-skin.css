@@ -80,6 +80,11 @@ body[data-editor-music-mode='true'][data-app-mode='editor'] #room-title-section.
   display: none;
 }
 
+body[data-app-mode='editor'][data-editor-music-mode='true'] #auth-identity,
+body[data-app-mode='editor'][data-editor-sprite-mode='true'] #auth-identity {
+  display: none !important;
+}
+
 body[data-app-mode='editor'] #editor-room-feedback.editor-room-feedback-overlay {
   position: absolute;
   bottom: calc(16px + var(--safe-bottom));

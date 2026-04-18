@@ -57,6 +57,17 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Editor music/sprite auth-card overlap hotfix on April 18, 2026:
+  - hid the signed-in mini profile / XP stats card while the Music editor or Sprite editor is open so it no longer covers the top-right of those editor surfaces
+  - kept the hamburger/auth menu available during those modes so sign-in prompts can still open if a save action needs authentication
+  - no D1 migration is needed; this is CSS-only and does not change any Worker persistence schema
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - targeted Playwright probe forced the auth card visible, confirmed it is hidden in both `data-editor-music-mode='true'` and `data-editor-sprite-mode='true'`, confirmed the menu toggle remains visible, and wrote `output/web-game/editor-auth-card-hide-targeted/summary.json`
+    - required `develop-web-game` smoke passed against `http://127.0.0.1:3234/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/editor-auth-card-hide-smoke/state-0.json` plus `shot-0.png`, and produced no console-error artifact
+
 - Editor compacting design pass on April 17, 2026:
   - created `design/design-work-2026-04-17` from `main` for edit-mode layout exploration
   - moved the room title input out of the editor sidebar and into `#game-container` as a compact DOM nameplate above the canvas/edit surface
