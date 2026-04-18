@@ -199,16 +199,24 @@ function drawCustomBackgroundImage(
   if (fit === 'center') {
     const rect = getCustomBackgroundCenterRect(
       { width: sourceWidth, height: sourceHeight },
-      { width, height },
+      { width: ROOM_PX_WIDTH, height: ROOM_PX_HEIGHT },
     );
-    context.drawImage(sourceImage, offsetX + rect.x, offsetY + rect.y, rect.width, rect.height);
+    const scaleX = width / ROOM_PX_WIDTH;
+    const scaleY = height / ROOM_PX_HEIGHT;
+    context.drawImage(
+      sourceImage,
+      offsetX + rect.x * scaleX,
+      offsetY + rect.y * scaleY,
+      Math.max(1, Math.round(rect.width * scaleX)),
+      Math.max(1, Math.round(rect.height * scaleY)),
+    );
     return;
   }
 
   const scale = getCustomBackgroundTileScale({
     width: sourceWidth,
     height: sourceHeight,
-  });
+  }) * (width / ROOM_PX_WIDTH);
   const drawWidth = Math.max(1, Math.ceil(sourceWidth * scale));
   const drawHeight = Math.max(1, Math.ceil(sourceHeight * scale));
   for (let drawY = 0; drawY < height + drawHeight; drawY += drawHeight) {

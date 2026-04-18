@@ -42,11 +42,14 @@ export function getCustomBackgroundCenterRect(
 ): CustomBackgroundDrawRect {
   const sourceWidth = Math.max(1, Math.round(source.width));
   const sourceHeight = Math.max(1, Math.round(source.height));
+  const scale = Math.min(1, target.width / sourceWidth, target.height / sourceHeight);
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
   return {
-    x: Math.floor((target.width - sourceWidth) / 2),
-    y: Math.floor((target.height - sourceHeight) / 2),
-    width: sourceWidth,
-    height: sourceHeight,
+    x: Math.floor((target.width - width) / 2),
+    y: Math.floor((target.height - height) / 2),
+    width,
+    height,
   };
 }
 
