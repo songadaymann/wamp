@@ -57,9 +57,21 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Editor music workbench left rail on April 18, 2026:
+  - moved the Phrase Tools / Phrase Library workbench out of the top music strip and into a fixed desktop left rail that overlays the normal editor controls only while Music is active
+  - kept the top music overlay focused on the sequencer / arrange / transport controls so the phrase library no longer covers the edit room canvas
+  - tightened the workbench into a single-column rail with two-column phrase actions and an independently scrolling Phrase Library list
+  - no D1 migration is needed; this is CSS-only and does not change Worker persistence schema
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - targeted Playwright probe opened the synthetic editor, toggled Music, confirmed the workbench is fixed in the left editor column, confirmed it does not overlap `#game-container`, confirmed the top music shell stays compact, and wrote `output/web-game/editor-music-workbench-left-targeted-2/summary.json` plus `music-workbench-left.png`
+    - required `develop-web-game` smoke passed against `http://127.0.0.1:3234/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/editor-music-workbench-left-smoke/state-0.json` plus `shot-0.png`, and produced no console-error artifact
+
 - Editor music phrase-library restore on April 18, 2026:
   - restored the `#editor-music-workbench` DOM inside the compact Music overlay so the existing phrase tools and Phrase Library renderer have live targets again after the edit-modal redesign
-  - kept the workbench in the new top-of-canvas music UI, with a compact two-column desktop layout and one-column phone layout
+  - initially kept the workbench in the new top-of-canvas music UI, with a compact two-column desktop layout and one-column phone layout; the follow-up above moves that restored workbench into the left editor rail on desktop
   - no D1 migration is needed; this is markup/CSS only and does not change Worker persistence schema
   - validation:
     - `git diff --check` passed
