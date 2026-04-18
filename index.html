@@ -945,6 +945,35 @@
               Replace With Sequencer
             </button>
           </div>
+          <div id="editor-music-workbench" class="editor-music-workbench hidden">
+            <div class="editor-music-workbench-card editor-music-phrase-card">
+              <div class="editor-music-workbench-header">
+                <div class="section-label">Phrase Tools</div>
+              </div>
+              <div id="editor-music-phrase-action-row" class="editor-music-button-row hidden">
+                <button id="btn-editor-music-phrase-new" class="bar-btn bar-btn-small" type="button">New</button>
+                <button id="btn-editor-music-phrase-edit" class="bar-btn bar-btn-small" type="button">Edit</button>
+                <button id="btn-editor-music-phrase-save" class="bar-btn bar-btn-small" type="button">Save</button>
+                <button id="btn-editor-music-phrase-save-as" class="bar-btn bar-btn-small" type="button">Save As</button>
+              </div>
+              <div id="editor-music-phrase-name-row" class="editor-music-select-group hidden">
+                <label id="editor-music-phrase-name-label" class="editor-music-select-label" for="editor-music-phrase-name-input">Phrase Name</label>
+                <div class="editor-music-phrase-name-input-wrap">
+                  <input id="editor-music-phrase-name-input" class="goal-input" type="text" maxlength="24" placeholder="Auto numbering" />
+                  <button id="btn-editor-music-phrase-delete" class="bar-btn bar-btn-small bar-btn-danger hidden" type="button">Delete</button>
+                </div>
+              </div>
+            </div>
+            <div id="editor-music-library-panel" class="editor-music-workbench-card">
+              <div class="editor-music-workbench-header">
+                <div class="section-label">Phrase Library</div>
+                <button id="btn-editor-music-library-refresh" class="bar-btn bar-btn-small" type="button">Refresh</button>
+              </div>
+              <div id="editor-music-library-status" class="editor-music-status-note"></div>
+              <div id="editor-music-library-list" class="editor-music-library-list"></div>
+              <button id="btn-editor-music-library-more" class="bar-btn bar-btn-small hidden" type="button">Load More</button>
+            </div>
+          </div>
           <div id="editor-music-arrangement-panel" class="editor-music-arrangement-overlay hidden">
             <div class="editor-music-arrangement-overlay-copy">
               <div class="section-label">Phrase Arrangement</div>

@@ -1276,6 +1276,18 @@ body[data-device-class='phone'][data-app-mode='editor'] .editor-music-legacy-not
   align-items: stretch;
 }
 
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-workbench {
+  grid-template-columns: 1fr;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #editor-music-phrase-action-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .editor-music-library-list {
+  max-height: 128px;
+}
+
 body[data-device-class='phone'][data-app-mode='editor'] .editor-music-arrangement-overlay {
   width: 100%;
   grid-template-columns: 1fr;

@@ -57,6 +57,17 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Editor music phrase-library restore on April 18, 2026:
+  - restored the `#editor-music-workbench` DOM inside the compact Music overlay so the existing phrase tools and Phrase Library renderer have live targets again after the edit-modal redesign
+  - kept the workbench in the new top-of-canvas music UI, with a compact two-column desktop layout and one-column phone layout
+  - no D1 migration is needed; this is markup/CSS only and does not change Worker persistence schema
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - required `develop-web-game` smoke ran against `http://127.0.0.1:3234/?previewSmoke=1&renderer=canvas` and wrote `output/web-game/editor-music-library-restore-smoke/state-0.json`; it still hit the known no-local-Worker `500` boot/auth path
+    - targeted Playwright probe opened the synthetic editor, toggled Music, confirmed Phrase Tools and Phrase Library are visible/pointer-enabled, mocked an empty music phrase list, and checked the screenshot at `output/web-game/editor-music-library-restore-targeted-2/music-overlay.png`
+
 - Editor music/sprite auth-card overlap hotfix on April 18, 2026:
   - hid the signed-in mini profile / XP stats card while the Music editor or Sprite editor is open so it no longer covers the top-right of those editor surfaces
   - kept the hamburger/auth menu available during those modes so sign-in prompts can still open if a save action needs authentication
