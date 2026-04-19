@@ -4,7 +4,7 @@ import {
   cloneRoomPatternTonalTrack,
   findClosestPatternRowIndexForMidi,
   getPatternInstrumentLabel,
-  getPatternRowNote,
+  getPatternStepMidi,
   isRoomPatternMusicEmpty,
   normalizeRoomPatternBpm,
   normalizeRoomPatternSwingPercent,
@@ -14,6 +14,7 @@ import {
   type RoomPatternInstrumentId,
   type RoomPatternMusic,
   type RoomPatternPitchMode,
+  type RoomPatternPlaybackSequence,
   type RoomPatternTonalInstrumentId,
   type RoomPatternTonalTrack,
 } from './pattern';
@@ -152,7 +153,13 @@ export function cloneMusicPhrasePayload(
     keyTonic: normalizeRoomMusicKeyTonic(value.keyTonic),
     keyMode: normalizeRoomMusicKeyMode(value.keyMode),
     octaveShift: Math.max(-2, Math.min(2, Math.round(value.octaveShift) || 0)),
-    track: cloneRoomPatternTonalTrack(value.track),
+    track: cloneRoomPatternTonalTrack(value.track, {
+      instrumentId: value.instrumentId,
+      pitchMode: value.pitchMode === 'chromatic' ? 'chromatic' : 'scale',
+      octaveShift: Math.max(-2, Math.min(2, Math.round(value.octaveShift) || 0)),
+      keyTonic: normalizeRoomMusicKeyTonic(value.keyTonic),
+      keyMode: normalizeRoomMusicKeyMode(value.keyMode),
+    }),
   };
 }
 
@@ -265,7 +272,8 @@ export function isMusicPhrasePayloadEmpty(payload: MusicPhrasePayload | null | u
     return Object.values(payload.track).every((steps) => steps.length === 0);
   }
 
-  return payload.track.steps.every((rowIndex) => rowIndex === null);
+  return payload.track.steps.every((rowIndex) => rowIndex === null)
+    && (!Array.isArray(payload.track.midis) || payload.track.midis.every((midi) => midi === null));
 }
 
 export function isMusicPhraseRecordTonal(
@@ -315,7 +323,13 @@ export function extractMusicPhrasePayloadFromPattern(
     keyTonic: pattern.keyTonic,
     keyMode: pattern.keyMode,
     octaveShift: pattern.octaveShift[tonalInstrumentId],
-    track: cloneRoomPatternTonalTrack(pattern.tabs[tonalInstrumentId]),
+    track: cloneRoomPatternTonalTrack(pattern.tabs[tonalInstrumentId], {
+      instrumentId: tonalInstrumentId,
+      pitchMode: pattern.pitchMode,
+      octaveShift: pattern.octaveShift[tonalInstrumentId],
+      keyTonic: pattern.keyTonic,
+      keyMode: pattern.keyMode,
+    }),
   };
   return isMusicPhrasePayloadEmpty(payload) ? null : payload;
 }
@@ -324,6 +338,29 @@ function createDynamicTonalTrack(stepCount: number): RoomPatternTonalTrack {
   return {
     steps: Array.from({ length: Math.max(1, stepCount) }, () => null),
     ties: Array.from({ length: Math.max(1, stepCount) }, () => false),
+    midis: Array.from({ length: Math.max(1, stepCount) }, () => null),
+  };
+}
+
+function createPlaybackSequenceForTonalPhrasePayload(
+  payload: MusicPhraseTonalPayload,
+): Pick<RoomPatternPlaybackSequence, 'pitchMode' | 'keyTonic' | 'keyMode' | 'octaveShift' | 'tabs'> {
+  const emptyTrack = () => createDynamicTonalTrack(payload.stepCount);
+  return {
+    pitchMode: payload.pitchMode,
+    keyTonic: payload.keyTonic,
+    keyMode: payload.keyMode,
+    octaveShift: {
+      triangle: payload.instrumentId === 'triangle' ? payload.octaveShift : 0,
+      saw: payload.instrumentId === 'saw' ? payload.octaveShift : 0,
+      square: payload.instrumentId === 'square' ? payload.octaveShift : 0,
+    },
+    tabs: {
+      drums: createEmptyRoomPatternDrumTrack(),
+      triangle: payload.instrumentId === 'triangle' ? payload.track : emptyTrack(),
+      saw: payload.instrumentId === 'saw' ? payload.track : emptyTrack(),
+      square: payload.instrumentId === 'square' ? payload.track : emptyTrack(),
+    },
   };
 }
 
@@ -348,40 +385,28 @@ export function materializeMusicPhraseTonalTrack(
     return createDynamicTonalTrack(phrase.payload.stepCount);
   }
 
-  if (phrase.payload.pitchMode === targetPitchMode) {
-    return cloneRoomPatternTonalTrack({
-      steps: phrase.payload.track.steps,
-      ties: phrase.payload.track.ties,
-    });
-  }
-
   const track = createDynamicTonalTrack(phrase.payload.stepCount);
+  const sourcePlayback = createPlaybackSequenceForTonalPhrasePayload(phrase.payload);
   for (let stepIndex = 0; stepIndex < phrase.payload.stepCount; stepIndex += 1) {
     const rowIndex = phrase.payload.track.steps[stepIndex] ?? null;
     if (rowIndex === null) {
       continue;
     }
 
-    const note = getPatternRowNote(
-      phrase.payload.instrumentId,
-      rowIndex,
-      phrase.payload.pitchMode,
-      phrase.payload.octaveShift,
-      phrase.payload.keyTonic,
-      phrase.payload.keyMode,
-    );
-    if (!note) {
+    const sourceMidi = getPatternStepMidi(sourcePlayback, phrase.payload.instrumentId, stepIndex);
+    if (sourceMidi === null) {
       continue;
     }
 
     track.steps[stepIndex] = findClosestPatternRowIndexForMidi(
       phrase.payload.instrumentId,
-      note.midi,
+      sourceMidi,
       targetPitchMode,
       targetOctaveShift,
       targetKeyTonic,
       targetKeyMode,
     );
+    track.midis[stepIndex] = sourceMidi;
   }
 
   for (let stepIndex = 1; stepIndex < phrase.payload.stepCount; stepIndex += 1) {
@@ -389,7 +414,8 @@ export function materializeMusicPhraseTonalTrack(
       phrase.payload.track.ties[stepIndex] === true &&
       track.steps[stepIndex] !== null &&
       track.steps[stepIndex - 1] !== null &&
-      track.steps[stepIndex] === track.steps[stepIndex - 1];
+      track.midis[stepIndex] !== null &&
+      track.midis[stepIndex] === track.midis[stepIndex - 1];
   }
 
   return track;

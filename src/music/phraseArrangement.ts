@@ -18,6 +18,7 @@ import {
   type RoomPatternPitchMode,
   type RoomPatternPlaybackSequence,
   type RoomPatternTonalInstrumentId,
+  type RoomPatternTonalTrack,
 } from './pattern';
 import {
   DEFAULT_ROOM_MUSIC_KEY_MODE,
@@ -272,10 +273,11 @@ export function getRoomPhraseArrangementActiveBarCount(
   return getRoomPhraseArrangementActiveSlotCount(value) * ROOM_PHRASE_ARRANGEMENT_SEGMENT_BAR_COUNT;
 }
 
-function createDynamicTonalTrack(stepCount: number): { steps: (number | null)[]; ties: boolean[] } {
+function createDynamicTonalTrack(stepCount: number): RoomPatternTonalTrack {
   return {
     steps: Array.from({ length: stepCount }, () => null),
     ties: Array.from({ length: stepCount }, () => false),
+    midis: Array.from({ length: stepCount }, () => null),
   };
 }
 
@@ -298,12 +300,14 @@ function copyTonalPhraseIntoSequence(
   for (let stepIndex = 0; stepIndex < ROOM_PHRASE_ARRANGEMENT_SEGMENT_STEP_COUNT; stepIndex += 1) {
     const destinationIndex = offset + stepIndex;
     targetTrack.steps[destinationIndex] = materialized.steps[stepIndex] ?? null;
+    targetTrack.midis[destinationIndex] = materialized.midis[stepIndex] ?? null;
     targetTrack.ties[destinationIndex] =
       materialized.ties[stepIndex] === true &&
       destinationIndex > 0 &&
       targetTrack.steps[destinationIndex] !== null &&
       targetTrack.steps[destinationIndex - 1] !== null &&
-      targetTrack.steps[destinationIndex] === targetTrack.steps[destinationIndex - 1];
+      targetTrack.midis[destinationIndex] !== null &&
+      targetTrack.midis[destinationIndex] === targetTrack.midis[destinationIndex - 1];
   }
 }
 

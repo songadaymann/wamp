@@ -26,10 +26,13 @@ import {
   createDefaultRoomPatternMusic,
   createEmptyRoomPatternDrumTrack,
   createEmptyRoomPatternTonalTrack,
+  findPatternRowIndexForMidi,
   getPatternInstrumentColor,
   getPatternDrumRowForGridRow,
   getPatternInstrumentLabel,
+  getPatternRowNote,
   getPatternRowLabel,
+  getPatternStepMidi,
   isPatternDrumGridRowPlayable,
   isPatternRoomMusic,
   isStemArrangementRoomMusic,
@@ -829,26 +832,36 @@ export class EditorMusicPatternController {
     }
 
     this.overlayCells.fillStyle(color, 0.86);
-    const track = pattern.tabs[this.activeInstrumentTab as RoomPatternTonalInstrumentId];
+    const instrumentId = this.activeInstrumentTab as RoomPatternTonalInstrumentId;
+    const track = pattern.tabs[instrumentId];
     const steps = track.steps;
     let step = 0;
     while (step < steps.length) {
-      const rowIndex = steps[step];
-      if (rowIndex === null) {
+      if (steps[step] === null) {
         step += 1;
         continue;
       }
 
+      const midi = getPatternStepMidi(pattern, instrumentId, step);
+      const rowIndex = this.getTonalStepDisplayRow(pattern, instrumentId, step);
       let endStep = step + 1;
-      while (endStep < steps.length && steps[endStep] === rowIndex && track.ties[endStep] === true) {
+      while (
+        midi !== null &&
+        endStep < steps.length &&
+        steps[endStep] !== null &&
+        track.ties[endStep] === true &&
+        getPatternStepMidi(pattern, instrumentId, endStep) === midi
+      ) {
         endStep += 1;
       }
-      this.overlayCells.fillRect(
-        step * TILE_SIZE + 2,
-        rowIndex * TILE_SIZE + 2,
-        (endStep - step) * TILE_SIZE - 4,
-        TILE_SIZE - 4,
-      );
+      if (rowIndex !== null) {
+        this.overlayCells.fillRect(
+          step * TILE_SIZE + 2,
+          rowIndex * TILE_SIZE + 2,
+          (endStep - step) * TILE_SIZE - 4,
+          TILE_SIZE - 4,
+        );
+      }
       step = endStep;
     }
   }
@@ -1240,7 +1253,28 @@ export class EditorMusicPatternController {
       return Boolean(drumRow && pattern.tabs.drums[drumRow.id].includes(step));
     }
 
-    return pattern.tabs[this.activeInstrumentTab].steps[step] === row;
+    const instrumentId = this.activeInstrumentTab as RoomPatternTonalInstrumentId;
+    return this.getTonalStepDisplayRow(pattern, instrumentId, step) === row;
+  }
+
+  private getTonalStepDisplayRow(
+    pattern: RoomPatternMusic,
+    instrumentId: RoomPatternTonalInstrumentId,
+    step: number,
+  ): number | null {
+    const midi = getPatternStepMidi(pattern, instrumentId, step);
+    if (midi === null) {
+      return null;
+    }
+
+    return findPatternRowIndexForMidi(
+      instrumentId,
+      midi,
+      pattern.pitchMode,
+      pattern.octaveShift[instrumentId],
+      pattern.keyTonic,
+      pattern.keyMode,
+    );
   }
 
   private commitPattern(pattern: RoomPatternMusic): void {
@@ -1286,32 +1320,49 @@ export class EditorMusicPatternController {
       return;
     }
 
-    const track = pattern.tabs[this.activeInstrumentTab as RoomPatternTonalInstrumentId];
+    const instrumentId = this.activeInstrumentTab as RoomPatternTonalInstrumentId;
+    const track = pattern.tabs[instrumentId];
     const currentRow = track.steps[step];
+    const currentDisplayRow = this.getTonalStepDisplayRow(pattern, instrumentId, step);
     if (tool === 'eraser') {
-      if (currentRow !== row) {
+      if (currentDisplayRow !== row) {
         return;
       }
       track.steps[step] = null;
       track.ties[step] = false;
+      track.midis[step] = null;
       this.normalizeTonalTrackTies(track);
       this.commitPattern(pattern);
       this.lastAppliedCell = { step, row };
       return;
     }
 
+    const targetMidi = getPatternRowNote(
+      instrumentId,
+      row,
+      pattern.pitchMode,
+      pattern.octaveShift[instrumentId],
+      pattern.keyTonic,
+      pattern.keyMode,
+    )?.midi ?? null;
     const shouldTieFromPrevious =
       this.dragMode === 'draw' &&
       this.lastAppliedCell !== null &&
       this.lastAppliedCell.row === row &&
       Math.abs(this.lastAppliedCell.step - step) === 1;
     const currentTie = track.ties[step] === true;
-    if (currentRow === row && currentTie === shouldTieFromPrevious) {
+    if (
+      currentRow !== null &&
+      currentDisplayRow === row &&
+      currentTie === shouldTieFromPrevious &&
+      (track.midis[step] ?? null) === targetMidi
+    ) {
       this.lastAppliedCell = { step, row };
       return;
     }
 
     track.steps[step] = row;
+    track.midis[step] = targetMidi;
     track.ties[step] = shouldTieFromPrevious;
     this.normalizeTonalTrackTies(track);
     this.commitPattern(pattern);
@@ -1356,13 +1407,14 @@ export class EditorMusicPatternController {
     }
 
     const width = normalized.x2 - normalized.x1 + 1;
-    const track = pattern.tabs[this.activeInstrumentTab as RoomPatternTonalInstrumentId];
+    const instrumentId = this.activeInstrumentTab as RoomPatternTonalInstrumentId;
+    const track = pattern.tabs[instrumentId];
     const tonalStepRows = Array.from({ length: width }, () => null as number | null);
     const tonalStepTies = Array.from({ length: width }, () => false);
     let hasAny = false;
     for (let stepOffset = 0; stepOffset < width; stepOffset += 1) {
       const absoluteStep = normalized.x1 + stepOffset;
-      const absoluteRow = track.steps[absoluteStep];
+      const absoluteRow = this.getTonalStepDisplayRow(pattern, instrumentId, absoluteStep);
       if (absoluteRow === null || absoluteRow < normalized.y1 || absoluteRow > normalized.y2) {
         continue;
       }
@@ -1415,8 +1467,21 @@ export class EditorMusicPatternController {
           stepOffset > 0 &&
           clipboard.tonalStepTies?.[stepOffset] === true &&
           clipboard.tonalStepRows[stepOffset - 1] !== null;
-        if (track.steps[targetStep] !== targetRow || track.ties[targetStep] !== targetTie) {
+        const targetMidi = getPatternRowNote(
+          this.activeInstrumentTab as RoomPatternTonalInstrumentId,
+          targetRow,
+          pattern.pitchMode,
+          pattern.octaveShift[this.activeInstrumentTab as RoomPatternTonalInstrumentId],
+          pattern.keyTonic,
+          pattern.keyMode,
+        )?.midi ?? null;
+        if (
+          track.steps[targetStep] !== targetRow ||
+          track.ties[targetStep] !== targetTie ||
+          (track.midis[targetStep] ?? null) !== targetMidi
+        ) {
           track.steps[targetStep] = targetRow;
+          track.midis[targetStep] = targetMidi;
           track.ties[targetStep] = targetTie;
           changed = true;
         }
@@ -1474,17 +1539,44 @@ export class EditorMusicPatternController {
   private normalizeTonalTrackTies(
     track: RoomPatternMusic['tabs'][RoomPatternTonalInstrumentId],
   ): void {
+    if (track.midis.length > track.steps.length) {
+      track.midis.length = track.steps.length;
+    }
+    while (track.midis.length < track.steps.length) {
+      track.midis.push(null);
+    }
+
     for (let index = 0; index < track.ties.length; index += 1) {
       if (index === 0) {
         track.ties[index] = false;
         continue;
       }
 
+      const currentRow = track.steps[index];
+      const previousRow = track.steps[index - 1];
       track.ties[index] =
         track.ties[index] === true &&
-        track.steps[index] !== null &&
-        track.steps[index - 1] !== null &&
-        track.steps[index] === track.steps[index - 1];
+        currentRow !== null &&
+        previousRow !== null &&
+        this.areTonalStepsSameNote(
+          currentRow,
+          previousRow,
+          track.midis[index] ?? null,
+          track.midis[index - 1] ?? null,
+        );
     }
+  }
+
+  private areTonalStepsSameNote(
+    currentRow: number,
+    previousRow: number,
+    currentMidi: number | null,
+    previousMidi: number | null,
+  ): boolean {
+    if (currentMidi !== null || previousMidi !== null) {
+      return currentMidi !== null && previousMidi !== null && currentMidi === previousMidi;
+    }
+
+    return currentRow === previousRow;
   }
 }

@@ -57,6 +57,23 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Music editor note-pitch hardening on April 19, 2026:
+  - created branch `fix/music-editor-bugs` from `main` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-music-editor-bugs`
+  - changed tonal pattern tracks to persist the user-entered MIDI note alongside the editor grid row, so octave / scale-lock / chromatic / key UI changes no longer redefine already-authored bass, saw, square, or melody notes
+  - backfilled MIDI notes for legacy row-only music during normalization/cloning, so old rooms keep their current audible pitches the first time they load under the new model
+  - updated tonal drawing, erasing, paste, tie normalization, phrase extraction, phrase loading, phrase arrangement playback, key detection, and offline pattern rendering to use stored MIDI pitches as the source of truth
+  - changed save-time key detection/rekeying to preserve rows and stored MIDI instead of rebuilding tonal tracks against the detected key, addressing the suspected save path that could move notes
+  - no D1 migration is needed; the new `midis` arrays live inside the existing room/phrase music JSON payloads
+  - validation:
+    - `npm ci` failed on `sharp` native install in this clean worktree, then `npm ci --ignore-scripts` succeeded and provided the TypeScript/Vite toolchain
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - `git diff --check` passed
+    - model-level `tsx` probes confirmed new notes and legacy row-only notes keep the same MIDI after octave and scale/chromatic changes
+    - phrase materialization probe confirmed a saved tonal phrase keeps the same MIDI when loaded into a different octave/chromatic target
+    - required `develop-web-game` smoke ran against `http://127.0.0.1:3235/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/music-note-gospel-smoke/state-0.json` plus `shot-0.png`, and only hit the known no-local-Worker auth/world-load `500` errors
+    - targeted browser probe opened the synthetic editor, entered a saw note through the music pattern controller, changed octave from `0` to `+1`, switched from `Scale Lock` to `Chromatic`, and confirmed MIDI `67` plus grid row `10` stayed fixed; artifacts: `output/web-game/music-note-gospel-targeted/summary.json` and `music-note-gospel.png`
+
 - Sprite editor light checkerboard background on April 19, 2026:
   - changed the sprite editor's transparent/empty-pixel background from a near-black checkerboard to a white/light-grey checkerboard so black sprite pixels are easy to see while drawing
   - applied the same checker treatment to the small live preview and saved `My Objects` thumbnails, keeping transparent saved sprites readable in the library
@@ -8365,3 +8382,20 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - targeted deployed portrait probe against `https://safety-mobile-portrait-play-kbh8.wampland.pages.dev` confirmed `mobileLandscapeRequired: false`, `mobileLandscapeBlocked: false`, rotate gate hidden, install-help modal hidden, and install button hidden
     - full deployed smoke against `https://safety-mobile-portrait-play-kbh8.wampland.pages.dev` reached all 9 scenarios successfully; it returned nonzero only because of the same known Cloudflare Browser Insights/RUM CORS console errors
     - note: `https://safety-mobile-portrait-play.wampland.pages.dev` still served the previous install-gate build during verification, so use the `-kbh8` alias for this no-install-gate preview
+- music editor note display follow-up on April 19, 2026:
+  - fixed the remaining Scale Lock -> Chromatic bug from the user screenshots: stored tonal MIDI is now mapped back to the exact current visible grid row for drawing, hover/toggle detection, erasing, and selection instead of reusing the originally-entered row index
+  - authored notes that are outside the current visible octave/scale register now disappear from the grid but still retain their stored MIDI and still play
+  - focused data probe confirmed the screenshot sequence `A2 E2 A2 E2 C2 A2 A2 A1` stays identical after switching from Scale Lock to Chromatic; the stored scale rows remain `9,12,9,12,14,9,9,16` while chromatic display rows become `0,5,0,5,9,0,0,12`
+  - octave-up probe confirmed the lower `A1` becomes hidden while its MIDI `33` remains in playback data
+  - validation:
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - `git diff --check` passed
+    - required `develop-web-game` smoke ran against `http://127.0.0.1:3235/?previewSmoke=1&renderer=canvas`; only known no-local-Worker auth/window-load errors appeared
+    - targeted browser probes wrote `output/web-game/music-note-gospel-display-targeted-visible/summary.json` and `output/web-game/music-note-gospel-display-grid/summary.json`
+  - safety deploy:
+    - stable preview alias: `https://safety-music-editor-bugs.wampland.pages.dev`
+    - Pages deployment URL: `https://b3f56217.wampland.pages.dev`
+    - safety Worker: `https://everybodys-platformer-safety.novox-robot.workers.dev`, version `bbb3021d-ff64-491d-906a-aca64bdfea9c`
+    - skipped D1 migrations and PartyKit deploy because this fix is frontend/music data only
+    - `curl -I` returned `200` for both the Pages alias and safety Worker

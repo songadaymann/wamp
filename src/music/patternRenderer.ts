@@ -3,7 +3,7 @@ import {
   ROOM_PATTERN_SWING_PERCENT,
   ROOM_PATTERN_DRUM_ROWS,
   ROOM_PATTERN_TONAL_INSTRUMENT_IDS,
-  getPatternRowNote,
+  getPatternStepMidi,
   getRoomPatternLoopDurationSec,
   type RoomPatternPlaybackSequence,
   type RoomPatternTonalInstrumentId,
@@ -108,7 +108,8 @@ function renderTonalTrack(
   let stepIndex = 0;
   while (stepIndex < pattern.stepCount) {
     const rowIndex = steps[stepIndex];
-    if (rowIndex === null) {
+    const midi = getPatternStepMidi(pattern, instrumentId, stepIndex);
+    if (rowIndex === null || midi === null) {
       stepIndex += 1;
       continue;
     }
@@ -116,23 +117,10 @@ function renderTonalTrack(
     let endStepIndex = stepIndex + 1;
     while (
       endStepIndex < pattern.stepCount &&
-      steps[endStepIndex] === rowIndex &&
+      getPatternStepMidi(pattern, instrumentId, endStepIndex) === midi &&
       ties[endStepIndex] === true
     ) {
       endStepIndex += 1;
-    }
-
-    const note = getPatternRowNote(
-      instrumentId,
-      rowIndex,
-      pattern.pitchMode,
-      pattern.octaveShift[instrumentId],
-      pattern.keyTonic,
-      pattern.keyMode,
-    );
-    if (!note) {
-      stepIndex = endStepIndex;
-      continue;
     }
 
     const startSample = Math.max(0, Math.round(stepStartTimesSec[stepIndex] * sampleRate));
@@ -146,7 +134,7 @@ function renderTonalTrack(
     }
 
     let phase = 0;
-    const phaseStep = note.frequencyHz / sampleRate;
+    const phaseStep = (440 * Math.pow(2, (midi - 69) / 12)) / sampleRate;
     for (let sampleIndex = 0; sampleIndex < totalSamples; sampleIndex += 1) {
       const envelope = envelopeAt(sampleIndex, noteSamples, releaseSamples, settings, sampleRate);
       if (envelope <= 0) {
