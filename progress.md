@@ -8399,3 +8399,9 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - safety Worker: `https://everybodys-platformer-safety.novox-robot.workers.dev`, version `bbb3021d-ff64-491d-906a-aca64bdfea9c`
     - skipped D1 migrations and PartyKit deploy because this fix is frontend/music data only
     - `curl -I` returned `200` for both the Pages alias and safety Worker
+  - production promotion:
+    - committed as `d529736` (`Keep music editor notes pitch-stable`)
+    - fast-forwarded `main` and pushed to `origin/main`
+    - production Worker deploy succeeded at version `4f79a98b-8d3d-4fd9-bcfe-02da7b08fe16`
+    - production Pages deploy succeeded at `https://4736ab75.wampland.pages.dev` for `https://wamp.land`
+    - `scripts/smoke_prod.mjs` passed against `https://wamp.land` and `https://api.wamp.land`
