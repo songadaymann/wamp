@@ -57,6 +57,18 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Sprite editor light checkerboard background on April 19, 2026:
+  - changed the sprite editor's transparent/empty-pixel background from a near-black checkerboard to a white/light-grey checkerboard so black sprite pixels are easy to see while drawing
+  - applied the same checker treatment to the small live preview and saved `My Objects` thumbnails, keeping transparent saved sprites readable in the library
+  - no D1 migration is needed; this is renderer/CSS UI polish only and does not change persistence schema
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - required `develop-web-game` smoke passed against `http://127.0.0.1:3234/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/editor-sprite-checker-smoke/state-0.json` plus `shot-0.png`, and produced no console-error artifact
+    - targeted Playwright probe opened the synthetic editor, opened Sprite, painted black pixels on the canvas, confirmed checker pixel samples `#f7f7f7` / `#cfcfcf`, confirmed the painted black sample, and captured `output/web-game/editor-sprite-checker-targeted/sprite-checker-black.png`
+    - targeted saved-library probe saved a one-pixel black sprite, reopened Sprite, confirmed the library thumbnail keeps the data URL plus checker layers, and captured `output/web-game/editor-sprite-checker-library/sprite-library-thumbnail.png`
+
 - Editor music workbench left rail on April 18, 2026:
   - moved the Phrase Tools / Phrase Library workbench out of the top music strip and into a fixed desktop left rail that overlays the normal editor controls only while Music is active
   - kept the top music overlay focused on the sequencer / arrange / transport controls so the phrase library no longer covers the edit room canvas

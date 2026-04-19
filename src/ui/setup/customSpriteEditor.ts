@@ -35,6 +35,8 @@ const SPRITE_PRESET_COLORS = [
   '#ff78b4',
   '#8f6a4a',
 ];
+const SPRITE_EDITOR_CHECKER_LIGHT = '#f7f7f7';
+const SPRITE_EDITOR_CHECKER_DARK = '#cfcfcf';
 
 function getSpriteSize(value: string | undefined): CustomSpriteSize {
   return value === '32' ? 32 : 16;
@@ -158,7 +160,7 @@ export function setupCustomSpriteEditor(
     for (let y = 0; y < size; y += 1) {
       for (let x = 0; x < size; x += 1) {
         const checkerLight = (x + y) % 2 === 0;
-        context.fillStyle = checkerLight ? '#151515' : '#0b0b0b';
+        context.fillStyle = checkerLight ? SPRITE_EDITOR_CHECKER_LIGHT : SPRITE_EDITOR_CHECKER_DARK;
         context.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
       }
     }
@@ -174,7 +176,7 @@ export function setupCustomSpriteEditor(
       context.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
     }
 
-    context.strokeStyle = size === 16 ? 'rgba(255, 243, 219, 0.22)' : 'rgba(255, 243, 219, 0.16)';
+    context.strokeStyle = size === 16 ? 'rgba(24, 22, 28, 0.22)' : 'rgba(24, 22, 28, 0.14)';
     context.lineWidth = 1;
     for (let index = 0; index <= size; index += 1) {
       const line = Math.floor(index * cellSize) + 0.5;
@@ -277,7 +279,7 @@ export function setupCustomSpriteEditor(
 
       const preview = doc.createElement('span');
       preview.className = 'editor-sprite-library-preview';
-      preview.style.backgroundImage = `url("${getCustomSpriteDataUrl(sprite)}")`;
+      preview.style.setProperty('--editor-sprite-preview-image', `url("${getCustomSpriteDataUrl(sprite)}")`);
 
       const copy = doc.createElement('span');
       copy.className = 'editor-sprite-library-copy';

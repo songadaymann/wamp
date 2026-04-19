@@ -167,11 +167,11 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
   border: 2px solid #fff3db;
   border-radius: 3px;
   background:
-    linear-gradient(45deg, #151515 25%, transparent 25%),
-    linear-gradient(-45deg, #151515 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #151515 75%),
-    linear-gradient(-45deg, transparent 75%, #151515 75%),
-    #090909;
+    linear-gradient(45deg, #cfcfcf 25%, transparent 25%),
+    linear-gradient(-45deg, #cfcfcf 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #cfcfcf 75%),
+    linear-gradient(-45deg, transparent 75%, #cfcfcf 75%),
+    #f7f7f7;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0;
   background-size: 16px 16px;
   image-rendering: pixelated;
@@ -223,7 +223,14 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
   aspect-ratio: 1 / 1;
   border: 2px solid #fff3db;
   border-radius: 4px;
-  background: #090909;
+  background:
+    linear-gradient(45deg, #cfcfcf 25%, transparent 25%),
+    linear-gradient(-45deg, #cfcfcf 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #cfcfcf 75%),
+    linear-gradient(-45deg, transparent 75%, #cfcfcf 75%),
+    #f7f7f7;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-size: 16px 16px;
   box-shadow: 4px 4px 0 #18161c;
   cursor: crosshair;
   image-rendering: pixelated;
@@ -283,10 +290,16 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
   height: 30px;
   border: 1px solid currentColor;
   border-radius: 3px;
-  background-color: #090909;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: contain;
+  background-color: #f7f7f7;
+  background-image:
+    var(--editor-sprite-preview-image, none),
+    linear-gradient(45deg, #cfcfcf 25%, transparent 25%),
+    linear-gradient(-45deg, #cfcfcf 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #cfcfcf 75%),
+    linear-gradient(-45deg, transparent 75%, #cfcfcf 75%);
+  background-position: center, 0 0, 0 6px, 6px -6px, -6px 0;
+  background-repeat: no-repeat, repeat, repeat, repeat, repeat;
+  background-size: contain, 12px 12px, 12px 12px, 12px 12px, 12px 12px;
   image-rendering: pixelated;
 }
 
