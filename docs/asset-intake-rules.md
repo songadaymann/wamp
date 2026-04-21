@@ -197,6 +197,11 @@ Generic category behavior already works for:
 - `platform`
 - `decoration`
 
+Pushable/interactable objects now ride on an explicit runtime interaction capability:
+
+- `interaction: "pushable"` gives an object the crate-style dynamic body and push/pull behavior
+- keep the object solid so it still behaves like a floor/block while moving
+
 A brand-new `enemy` id with no extra runtime hook will only behave like a stationary stompable/damaging enemy. It will not patrol, fly, hop, or attack on its own.
 
 Special runtime logic already exists only for:
@@ -213,6 +218,7 @@ So a new object can be added with art only if it is:
 - a static pickup
 - a static hazard
 - a static platform
+- a pushable/interactable block that reuses the crate interaction behavior
 - a static decoration
 - a re-skin of one of the existing special behaviors above
 

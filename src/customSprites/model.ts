@@ -1,7 +1,7 @@
 export const CUSTOM_SPRITE_OBJECT_PREFIX = 'custom_sprite:';
 export const CUSTOM_SPRITE_MAX_LIBRARY_SIZE = 64;
 
-export type CustomSpriteKind = 'decoration' | 'collectible' | 'solid';
+export type CustomSpriteKind = 'decoration' | 'collectible' | 'solid' | 'pushable';
 export type CustomSpriteStatus = 'active' | 'blocked';
 export type CustomSpriteSize = 16 | 32;
 
@@ -37,6 +37,8 @@ export function getCustomSpriteKindLabel(kind: CustomSpriteKind): string {
   switch (kind) {
     case 'collectible':
       return 'Collectible';
+    case 'pushable':
+      return 'Pushable Block';
     case 'solid':
       return 'Solid Block';
     case 'decoration':
@@ -49,6 +51,7 @@ export function getCustomSpriteCategory(kind: CustomSpriteKind): 'decoration' | 
   switch (kind) {
     case 'collectible':
       return 'collectible';
+    case 'pushable':
     case 'solid':
       return 'platform';
     case 'decoration':
@@ -58,7 +61,7 @@ export function getCustomSpriteCategory(kind: CustomSpriteKind): 'decoration' | 
 }
 
 export function normalizeCustomSpriteKind(value: unknown): CustomSpriteKind {
-  return value === 'collectible' || value === 'solid' || value === 'decoration'
+  return value === 'collectible' || value === 'solid' || value === 'pushable' || value === 'decoration'
     ? value
     : 'decoration';
 }

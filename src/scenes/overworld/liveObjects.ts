@@ -3,6 +3,8 @@ import type { SfxCue } from '../../audio/sfx';
 import {
   getObjectById,
   getObjectDefaultFrame,
+  isPushableObjectConfig,
+  isSolidRuntimeObjectConfig,
   getPlacedObjectLayer,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
@@ -293,10 +295,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         body.setOffset(...this.getObjectBodyOffset(config));
         body.setCollideWorldBounds(false);
         body.setAllowGravity(this.objectUsesGravity(config));
-        if (config.id === 'crate') {
+        if (isPushableObjectConfig(config)) {
           body.setBounce(0, 0);
           body.setDragX(900);
           body.setMaxVelocity(120, 500);
+          body.pushable = false;
         }
       } else {
         this.options.scene.physics.add.existing(sprite, true);
@@ -594,6 +597,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       }
     }
 
+    this.stabilizePushableStacks(rooms);
     this.updatePressurePlates(rooms);
   }
 
@@ -777,11 +781,74 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   }
 
   private canActivatePressurePlate(liveObject: LoadedRoomObject): boolean {
-    return liveObject.config.id === 'crate' || liveObject.config.category === 'enemy';
+    return isPushableObjectConfig(liveObject.config) || liveObject.config.category === 'enemy';
   }
 
   private getPressurePlateBounds(liveObject: LoadedRoomObject): Phaser.Geom.Rectangle {
     return new Phaser.Geom.Rectangle(liveObject.sprite.x - 8, liveObject.sprite.y + 2, 16, 8);
+  }
+
+  private stabilizePushableStacks(
+    loadedRooms: LoadedFullRoom<LoadedRoomObject, TEdgeWall>[],
+  ): void {
+    const pushables = loadedRooms
+      .flatMap((loadedRoom) => loadedRoom.liveObjects)
+      .filter(
+        (liveObject) =>
+          liveObject.sprite.active &&
+          isPushableObjectConfig(liveObject.config) &&
+          isDynamicArcadeBody(liveObject.sprite.body as ArcadeObjectBody | null)
+      )
+      .map((liveObject) => ({
+        liveObject,
+        body: liveObject.sprite.body as Phaser.Physics.Arcade.Body,
+      }))
+      .sort((a, b) => a.body.center.x - b.body.center.x || b.body.top - a.body.top);
+
+    const groups: Array<
+      Array<{ liveObject: LoadedRoomObject; body: Phaser.Physics.Arcade.Body }>
+    > = [];
+
+    for (const candidate of pushables) {
+      const group = groups.find((existing) =>
+        existing.some(
+          (member) =>
+            Math.abs(member.body.center.x - candidate.body.center.x) <=
+            Math.max(2, Math.min(member.body.width, candidate.body.width) * 0.5)
+        )
+      );
+      if (group) {
+        group.push(candidate);
+      } else {
+        groups.push([candidate]);
+      }
+    }
+
+    for (const group of groups) {
+      group.sort((a, b) => b.body.top - a.body.top);
+      for (let index = 1; index < group.length; index += 1) {
+        const lower = group[index - 1];
+        const upper = group[index];
+        const desiredTop = lower.body.top - upper.body.height;
+        const stackGap = lower.body.top - upper.body.bottom;
+        if (Math.abs(stackGap) > upper.body.height + 2) {
+          continue;
+        }
+        if (Math.abs(upper.body.top - desiredTop) <= 0.5) {
+          continue;
+        }
+
+        const velocityX = upper.body.velocity.x;
+        const spriteYFromBodyTop = upper.liveObject.sprite.y - upper.body.top;
+        const targetSpriteY = desiredTop + spriteYFromBodyTop;
+
+        upper.liveObject.sprite.setY(targetSpriteY);
+        upper.body.updateFromGameObject();
+        upper.body.prev.x = upper.body.x;
+        upper.body.prev.y = upper.body.y;
+        upper.body.setVelocity(velocityX, 0);
+      }
+    }
   }
 
   private applyPressureDoorState(liveObject: LoadedRoomObject, open: boolean): void {
@@ -951,8 +1018,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       loadedRoom.liveObjects.filter(
         (candidate) =>
           candidate.sprite.body &&
-          (candidate.config.category === 'platform' || candidate.config.id === 'door_locked')
+          isSolidRuntimeObjectConfig(candidate.config)
       )
+    );
+    const dynamicSolidObstacleIndexByKey = new Map(
+      solidObstacles
+        .filter((candidate) => this.usesDynamicObjectBody(candidate.config))
+        .map((candidate, index) => [candidate.key, index] as const)
     );
 
     for (const loadedRoom of rooms) {
@@ -977,8 +1049,18 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           }
         }
 
+        const liveObjectDynamicSolidIndex = dynamicSolidObstacleIndexByKey.get(liveObject.key);
         for (const obstacle of solidObstacles) {
           if (!obstacle.sprite.active || !obstacle.sprite.body || obstacle === liveObject) {
+            continue;
+          }
+
+          const obstacleDynamicSolidIndex = dynamicSolidObstacleIndexByKey.get(obstacle.key);
+          if (
+            liveObjectDynamicSolidIndex !== undefined &&
+            obstacleDynamicSolidIndex !== undefined &&
+            obstacleDynamicSolidIndex <= liveObjectDynamicSolidIndex
+          ) {
             continue;
           }
 
@@ -1298,7 +1380,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     for (const platform of loadedRoom.liveObjects) {
       if (
         platform === bullet ||
-        platform.config.category !== 'platform' ||
+        !isSolidRuntimeObjectConfig(platform.config) ||
         !platform.sprite.active ||
         !platform.sprite.body
       ) {
@@ -1449,7 +1531,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
   private usesDynamicObjectBody(config: GameObjectConfig): boolean {
     return (
-      config.id === 'crate' ||
+      isPushableObjectConfig(config) ||
       config.id === 'cannon_bullet' ||
       config.id === 'crab' ||
       config.id === 'slime_blue' ||

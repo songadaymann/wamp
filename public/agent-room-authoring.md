@@ -225,6 +225,8 @@ Common valid object ids by category:
   - `treasure_chest`
   - `log_wall`
   - `cage`
+- note:
+  - `crate` is the baseline pushable/interactable block behavior; future custom solid objects can reuse that capability instead of being crate-specific
 - `decoration`:
   - `sign`
   - `sign_arrow`

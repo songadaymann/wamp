@@ -57,6 +57,23 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Pushable/interactable crate capability pass on April 21, 2026:
+  - moved crate runtime behavior off the hard-coded `id === 'crate'` checks and onto an explicit `interaction: 'pushable'` capability in `src/config.ts`
+  - added a `Pushable Block` custom sprite kind so sprite-editor objects can opt into the same crate-style push/pull behavior without pretending to be literal crates
+  - added `isPushableObjectConfig()` and `isSolidRuntimeObjectConfig()` helpers so movement, live-object setup, pressure plates, bullet blocking, and dynamic-body classification all reuse the same capability/solid-object rules
+  - deduped dynamic-solid world colliders so pushable-vs-pushable pairs only register one Arcade collider instead of two overlapping colliders
+  - added pushable stack stabilization so near-aligned vertical columns snap back to exact body-to-body spacing instead of compressing/collapsing under Arcade drift
+  - documented the new custom-object path in:
+    - `docs/asset-intake-rules.md`
+    - `public/agent-room-authoring.md`
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - required `develop-web-game` probes confirmed the sprite editor exposes `Pushable Block`, stacked crates remain present, and a custom pushable block can be pushed in `output/web-game/main-crate-pushable-probe/summary.json`
+  - TODO:
+    - if future automation needs exact stack validation from debug text alone, add pushable body-top/body-bottom fields to the overworld debug payload
+
 - Music editor note-pitch hardening on April 19, 2026:
   - created branch `fix/music-editor-bugs` from `main` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-music-editor-bugs`
   - changed tonal pattern tracks to persist the user-entered MIDI note alongside the editor grid row, so octave / scale-lock / chromatic / key UI changes no longer redefine already-authored bass, saw, square, or melody notes

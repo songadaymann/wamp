@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { playSfx, stopSfx } from '../../audio/sfx';
+import { isPushableObjectConfig } from '../../config';
 import type {
   RoomCoordinates,
   RoomSnapshot,
@@ -595,7 +596,7 @@ export class OverworldMovementController {
 
     for (const liveObject of this.host.getLoadedLiveObjects()) {
       if (
-        liveObject.config.id !== 'crate' ||
+        !isPushableObjectConfig(liveObject.config) ||
         !liveObject.sprite.active ||
         !isDynamicArcadeBody(liveObject.sprite.body as ArcadeObjectBody | null)
       ) {
