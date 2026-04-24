@@ -282,7 +282,6 @@ async function loadDetail(userId: string, preserveSelection = false): Promise<vo
       buildDetailPath(userId)
     );
     state.detail = detail;
-    } else {
     if (!preserveSelection || previousScope !== detail.scope) {
       if (detail.scope === 'review_window') {
         state.selectedRoomRunIds = new Set(detail.roomRuns.map((run) => run.attemptId));
