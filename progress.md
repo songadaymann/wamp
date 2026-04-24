@@ -107,8 +107,11 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - patched Pages `_worker.js` to treat `/?x=<x>&y=<y>` and `/index.html?x=<x>&y=<y>` as room share pages for metadata injection, while preserving app-shell behavior; the emitted image URL is now versioned as `https://wamp.land/r/<x>/<y>/image.png?v=<publishedVersion>` and includes explicit `og:image:type`, `og:image:alt`, and `twitter:image:alt`
     - local Node probe confirmed both `https://wamp.land/r/0/0` and `https://wamp.land/?x=0&y=0` produce `og:image` pointing at `https://wamp.land/r/0/0/image.png?v=176`, canonical `https://wamp.land/r/0/0`, and image type/alt tags
     - `node --check public/_worker.js`, `git diff --check -- . ':!node_modules'`, and `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - deployed commit `6ec6aad` to production; Worker version `707b6b00-ad7d-4b6c-81be-75f67cf3529e`, Pages deploy `https://e3dbeb86.wampland.pages.dev`, and `node scripts/smoke_prod.mjs` passed
+    - live `Twitterbot/1.0` probes confirmed both `https://wamp.land/?x=0&y=0` and `https://wamp.land/r/0/0` include canonical, app bundle, `og:image`, `og:image:type`, `og:image:alt`, `twitter:image`, and `twitter:image:alt`; `https://wamp.land/r/0/0/image.png?v=176` returns a 1200x630 PNG
+    - required production web-game smoke passed against `https://wamp.land/?x=0&y=0&renderer=canvas&welcome=0&verify=6ec6aad` with artifacts in `/private/tmp/wamp-prod-main-dc50466/output/web-game/room-share-query-prod-smoke/`; screenshot confirmed the app still renders from the query-style room link and no console error file was produced
   - TODO:
-    - deploy the query-link metadata fix to production, then verify `https://wamp.land/?x=0&y=0` with `Twitterbot/1.0` includes OG/Twitter image tags and that the versioned image URL returns a 1200x630 PNG
+    - if social sites still show a missing image for an already-tested URL, try a fresh room URL or a harmless query suffix because X/Slack/iMessage can cache failed card fetches independently of Cloudflare
 
 - Overworld zoom edge-preview hydration main-port on April 24, 2026:
   - created `fix/overworld-preview-zoom-edge-2026-04-24` from `origin/main` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-overworld-zoom-edge-2026-04-24`
