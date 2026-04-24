@@ -206,9 +206,7 @@ function normalizeMetadata(value, fallback) {
 }
 
 async function renderRoomAppShell(request, env, metadata) {
-  const url = new URL(request.url);
-  const indexRequest = new Request(new URL('/index.html', url.origin), request);
-  const indexResponse = await env.ASSETS.fetch(indexRequest);
+  const indexResponse = await fetchAppShellAsset(request, env);
   if (!indexResponse.ok) {
     return fallbackHtmlResponse(request, metadata);
   }
@@ -230,6 +228,19 @@ async function renderRoomAppShell(request, env, metadata) {
     status: 200,
     headers,
   });
+}
+
+async function fetchAppShellAsset(request, env) {
+  const url = new URL(request.url);
+  for (const pathname of ['/index.html', '/']) {
+    const assetUrl = new URL(pathname, url.origin);
+    const response = await env.ASSETS.fetch(new Request(assetUrl, request));
+    if (response.ok) {
+      return response;
+    }
+  }
+
+  return env.ASSETS.fetch(request);
 }
 
 function fallbackHtmlResponse(request, metadata) {

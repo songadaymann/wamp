@@ -97,6 +97,8 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - Node probe confirmed `public/_worker.js` injects `https://wamp.land/r/0/0/image.png`, uses the real `Hello World - WAMP room 0,0` title, and returns a valid 1200x630 PNG; visually inspected `/tmp/wamp-pages-worker-room-image.png`
     - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
     - required web-game client passed against `http://127.0.0.1:3346/r/0/0?renderer=canvas&welcome=0` with artifacts in `output/web-game/room-share-pages-image-3346-smoke/`; screenshot confirmed the room still renders from the `/r` path and no console error file was produced
+    - production Pages auto-deployed commit `5b51340`; `https://wamp.land/r/0/0` returned the correct OG/Twitter metadata and `https://wamp.land/r/0/0/image.png` returned a 1200x630 PNG, but a production browser smoke showed the app shell fell back to the minimal fallback HTML because Pages `env.ASSETS` did not return `/index.html`
+    - patched the Pages worker to try `/index.html`, then `/`, then the original request when loading the app shell, so production `/r/<x>/<y>` links can still boot the app if `/index.html` is not directly fetchable from the asset binding
   - TODO:
     - after production Pages deploy, verify `https://wamp.land/r/0/0` returns dynamic OG/Twitter tags with `og:image` pointing at `https://wamp.land/r/0/0/image.png`, and verify that image URL returns a non-empty PNG
     - if the Worker API share routes are still desired later, deploy them with a Cloudflare token that has Workers Scripts permissions
