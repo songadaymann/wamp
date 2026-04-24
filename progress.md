@@ -57,6 +57,16 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Overworld zoom edge-preview hydration main-port on April 24, 2026:
+  - created `fix/overworld-preview-zoom-edge-2026-04-24` from `origin/main` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-overworld-zoom-edge-2026-04-24`
+  - ported the edge-preview fix onto the latest main build by calculating viewport room bounds from current camera scroll/size/zoom instead of stale or top-left-assumed camera viewport values
+  - validation:
+    - `npm ci --ignore-scripts` completed in the clean worktree; npm reported existing audit issues
+    - `npm run typecheck` passed
+    - targeted wide-viewport Playwright zoom probe against remote API passed at `output/web-game/overworld-preview-main-zoom-probe/summary.json`
+    - required `develop-web-game` client smoke passed at `output/web-game/overworld-preview-main-smoke/`
+    - `npm run build` passed with the existing Rollup pure-comment and chunk-size warnings
+
 - Pushable/interactable crate capability pass on April 21, 2026:
   - moved crate runtime behavior off the hard-coded `id === 'crate'` checks and onto an explicit `interaction: 'pushable'` capability in `src/config.ts`
   - added a `Pushable Block` custom sprite kind so sprite-editor objects can opt into the same crate-style push/pull behavior without pretending to be literal crates
