@@ -91,6 +91,7 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - required web-game client passed against `http://127.0.0.1:3346/r/0/0?renderer=canvas&welcome=0` with artifacts in `output/web-game/room-share-link-3346-smoke/`; screenshot confirmed the room renders from the `/r` path with no console error file
     - targeted Playwright probe confirmed the app stays at `/r/0/0`, root `<base href="/">` is active, `data-app-ready="true"`, and console error count is zero
     - targeted share-modal probe confirmed the X intent URL now includes `/r/0/0` and the room snapshot still renders as a PNG data URL
+    - first production deploy attempt from clean `main` stopped during Worker asset upload because Wrangler refused to upload Pages `_worker.js` as a static asset; added `public/.assetsignore` with `_worker.js`, matching Cloudflare's static-assets guidance for Pages worker files in asset directories
   - TODO:
     - after production deploy, verify `https://wamp.land/r/0/0` returns dynamic OG/Twitter tags and that `https://api.wamp.land/api/share/rooms/0%2C0/image` returns a non-empty PNG
 
