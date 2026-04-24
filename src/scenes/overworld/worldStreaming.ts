@@ -806,14 +806,18 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
   private getViewportRoomBounds(): WorldRoomBounds {
     const camera = this.options.scene.cameras.main;
-    const viewportLeft = camera.scrollX;
-    const viewportTop = camera.scrollY;
-    const viewportRight = viewportLeft + camera.width / camera.zoom;
-    const viewportBottom = viewportTop + camera.height / camera.zoom;
-    const minX = Math.floor(viewportLeft / ROOM_PX_WIDTH);
-    const maxX = Math.floor((viewportRight - 1) / ROOM_PX_WIDTH);
-    const minY = Math.floor(viewportTop / ROOM_PX_HEIGHT);
-    const maxY = Math.floor((viewportBottom - 1) / ROOM_PX_HEIGHT);
+    const zoom = Math.max(camera.zoom, 0.001);
+    const visibleWorldWidth = camera.width / zoom;
+    const visibleWorldHeight = camera.height / zoom;
+    // Streaming refreshes can run immediately after setZoom(), before Phaser refreshes camera.worldView.
+    const left = camera.scrollX + camera.width * camera.originX - visibleWorldWidth * 0.5;
+    const top = camera.scrollY + camera.height * camera.originY - visibleWorldHeight * 0.5;
+    const right = left + visibleWorldWidth;
+    const bottom = top + visibleWorldHeight;
+    const minX = Math.floor(left / ROOM_PX_WIDTH);
+    const maxX = Math.floor((right - 1) / ROOM_PX_WIDTH);
+    const minY = Math.floor(top / ROOM_PX_HEIGHT);
+    const maxY = Math.floor((bottom - 1) / ROOM_PX_HEIGHT);
 
     return { minX, maxX, minY, maxY };
   }

@@ -78,6 +78,21 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - QA a real signed-in completed room flow on `3345`, especially mobile native file sharing versus desktop X fallback
     - decide whether course completions should get a text-only or generated course-map share treatment later
 
+- Overworld zoom edge-preview hydration main-port on April 24, 2026:
+  - created `fix/overworld-preview-zoom-edge-2026-04-24` from `origin/main` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-overworld-zoom-edge-2026-04-24`
+  - ported the edge-preview fix onto the latest main build by calculating viewport room bounds from current camera scroll/size/zoom instead of stale or top-left-assumed camera viewport values
+  - validation:
+    - `npm ci --ignore-scripts` completed in the clean worktree; npm reported existing audit issues
+    - `npm run typecheck` passed
+    - targeted wide-viewport Playwright zoom probe against remote API passed at `output/web-game/overworld-preview-main-zoom-probe/summary.json`
+    - required `develop-web-game` client smoke passed at `output/web-game/overworld-preview-main-smoke/`
+    - `npm run build` passed with the existing Rollup pure-comment and chunk-size warnings
+    - committed `9be5a48` and pushed `origin/fix/overworld-preview-zoom-edge-2026-04-24`
+    - Pages-only safety branch deploy passed; Cloudflare alias is `https://safety-overworld-preview-zoo.wampland.pages.dev`
+    - deployed smoke rendered correctly at `output/web-game/overworld-preview-deployed-smoke/`; only console errors were the known Cloudflare RUM CORS failures
+    - deployed zoom-click probe reached `0.18 -> 0.16 -> 0.14 -> 0.13` at `output/web-game/overworld-preview-deployed-zoom-clicks/summary.json`; same known RUM CORS noise was present
+    - merged on top of current `origin/main` after the post-run share commits; final merged-main `npm run typecheck`, `npm run build`, and required web-game smoke passed
+
 - Pushable/interactable crate capability pass on April 21, 2026:
   - moved crate runtime behavior off the hard-coded `id === 'crate'` checks and onto an explicit `interaction: 'pushable'` capability in `src/config.ts`
   - added a `Pushable Block` custom sprite kind so sprite-editor objects can opt into the same crate-style push/pull behavior without pretending to be literal crates
