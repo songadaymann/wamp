@@ -11,7 +11,7 @@ const TRUST_TIER_CAPABILITIES: Record<
   T1: { claimLimitPerDay: 2, publishLimitPerDay: 2, objectLimit: 400, collectibleLimit: 40 },
   T2: { claimLimitPerDay: 4, publishLimitPerDay: 3, objectLimit: 700, collectibleLimit: 70 },
   T3: { claimLimitPerDay: 6, publishLimitPerDay: 5, objectLimit: 1000, collectibleLimit: 100 },
-  T4: { claimLimitPerDay: 9, publishLimitPerDay: 8, objectLimit: 1500, collectibleLimit: 150 },
+  T4: { claimLimitPerDay: 9, publishLimitPerDay: 9, objectLimit: 1500, collectibleLimit: 150 },
 };
 
 export function sanitizeOptionalOverride(value: number | string | null | undefined): number | null {
