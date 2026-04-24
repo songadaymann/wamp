@@ -93,6 +93,12 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - deployed zoom-click probe reached `0.18 -> 0.16 -> 0.14 -> 0.13` at `output/web-game/overworld-preview-deployed-zoom-clicks/summary.json`; same known RUM CORS noise was present
     - merged on top of current `origin/main` after the post-run share commits; final merged-main `npm run typecheck`, `npm run build`, and required web-game smoke passed
 
+- Production follow-up on April 24, 2026:
+  - confirmed `wamp.land` was still serving the pre-share frontend bundle (`main-BOIq915l.js`), while the Pages preview included `#run-rating-share`; pushing `main` alone did not deploy production
+  - diagnosed the reported publish failure as a progression idempotency bug: duplicate `trust_events.dedupe_key` inserts could still throw a D1 unique constraint after the pre-insert existence check
+  - changed lane event recording to treat a duplicate lane `dedupe_key` constraint as "already awarded" and return `false` instead of failing the publish request
+  - validation: `git diff --check -- src/cloudflare/worker/progression/store.ts` passed, and `npm run build` passed with the existing Rollup pure-comment and large-chunk warnings
+
 - Pushable/interactable crate capability pass on April 21, 2026:
   - moved crate runtime behavior off the hard-coded `id === 'crate'` checks and onto an explicit `interaction: 'pushable'` capability in `src/config.ts`
   - added a `Pushable Block` custom sprite kind so sprite-editor objects can opt into the same crate-style push/pull behavior without pretending to be literal crates
