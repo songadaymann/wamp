@@ -92,8 +92,14 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - targeted Playwright probe confirmed the app stays at `/r/0/0`, root `<base href="/">` is active, `data-app-ready="true"`, and console error count is zero
     - targeted share-modal probe confirmed the X intent URL now includes `/r/0/0` and the room snapshot still renders as a PNG data URL
     - first production deploy attempt from clean `main` stopped during Worker asset upload because Wrangler refused to upload Pages `_worker.js` as a static asset; added `public/.assetsignore` with `_worker.js`, matching Cloudflare's static-assets guidance for Pages worker files in asset directories
+    - second production deploy attempt from clean `main` got past the asset issue but the local Wrangler OAuth session could not refresh, and the available Cloudflare Images token was account-valid but did not have Worker deploy permission
+    - follow-up changed the Pages `_worker.js` to be self-contained for social cards: `/r/<x>/<y>` metadata now points at `https://wamp.land/r/<x>/<y>/image.png`, and that image route generates a PNG by fetching the already-live `/api/rooms/<x,y>/published` endpoint
+    - Node probe confirmed `public/_worker.js` injects `https://wamp.land/r/0/0/image.png`, uses the real `Hello World - WAMP room 0,0` title, and returns a valid 1200x630 PNG; visually inspected `/tmp/wamp-pages-worker-room-image.png`
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - required web-game client passed against `http://127.0.0.1:3346/r/0/0?renderer=canvas&welcome=0` with artifacts in `output/web-game/room-share-pages-image-3346-smoke/`; screenshot confirmed the room still renders from the `/r` path and no console error file was produced
   - TODO:
-    - after production deploy, verify `https://wamp.land/r/0/0` returns dynamic OG/Twitter tags and that `https://api.wamp.land/api/share/rooms/0%2C0/image` returns a non-empty PNG
+    - after production Pages deploy, verify `https://wamp.land/r/0/0` returns dynamic OG/Twitter tags with `og:image` pointing at `https://wamp.land/r/0/0/image.png`, and verify that image URL returns a non-empty PNG
+    - if the Worker API share routes are still desired later, deploy them with a Cloudflare token that has Workers Scripts permissions
 
 - Overworld zoom edge-preview hydration main-port on April 24, 2026:
   - created `fix/overworld-preview-zoom-edge-2026-04-24` from `origin/main` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-overworld-zoom-edge-2026-04-24`
