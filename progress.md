@@ -66,6 +66,10 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - targeted wide-viewport Playwright zoom probe against remote API passed at `output/web-game/overworld-preview-main-zoom-probe/summary.json`
     - required `develop-web-game` client smoke passed at `output/web-game/overworld-preview-main-smoke/`
     - `npm run build` passed with the existing Rollup pure-comment and chunk-size warnings
+    - committed `9be5a48` and pushed `origin/fix/overworld-preview-zoom-edge-2026-04-24`
+    - Pages-only safety branch deploy passed; Cloudflare alias is `https://safety-overworld-preview-zoo.wampland.pages.dev`
+    - deployed smoke rendered correctly at `output/web-game/overworld-preview-deployed-smoke/`; only console errors were the known Cloudflare RUM CORS failures
+    - deployed zoom-click probe reached `0.18 -> 0.16 -> 0.14 -> 0.13` at `output/web-game/overworld-preview-deployed-zoom-clicks/summary.json`; same known RUM CORS noise was present
 
 - Pushable/interactable crate capability pass on April 21, 2026:
   - moved crate runtime behavior off the hard-coded `id === 'crate'` checks and onto an explicit `interaction: 'pushable'` capability in `src/config.ts`
