@@ -30,6 +30,7 @@ import {
   setFocusedCoordinatesInUrl,
 } from '../navigation/worldNavigation';
 import {
+  cloneRoomSnapshot,
   DEFAULT_ROOM_COORDINATES,
   isRoomMinted,
   roomIdFromCoordinates,
@@ -3303,6 +3304,13 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private isRoomInActiveCourse(coordinates: RoomCoordinates): boolean {
     return this.selectionController.isRoomInActiveCourse(coordinates);
+  }
+
+  getPostRunShareRoomSnapshot(): RoomSnapshot | null {
+    const runState = this.goalRunController.getCurrentRun();
+    const coordinates = runState?.roomCoordinates ?? this.currentRoomCoordinates;
+    const snapshot = this.getRoomSnapshotForCoordinates(coordinates);
+    return snapshot ? cloneRoomSnapshot(snapshot) : null;
   }
 
   fitLoadedWorld(): void {

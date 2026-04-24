@@ -1684,6 +1684,28 @@
         <div id="run-rating-leaderboard" class="history-modal-meta run-rating-summary-card run-rating-summary-card-leaderboard">Loading latest leaderboard summary...</div>
         <div id="run-rating-suggestion" class="history-modal-meta run-rating-summary-card run-rating-summary-card-suggestion">Suggested difficulty: Medium.</div>
 
+        <div id="run-rating-share" class="run-rating-section run-share-section hidden">
+          <div class="run-rating-section-label">Share</div>
+          <div class="run-share-card">
+            <div class="run-share-preview-shell">
+              <img id="run-share-preview-image" class="run-share-preview-image hidden" alt="Room snapshot for sharing" />
+              <div id="run-share-preview-placeholder" class="run-share-preview-placeholder">Rendering snapshot...</div>
+            </div>
+            <div class="run-share-copy">
+              <div id="run-share-message" class="run-share-message"></div>
+              <div id="run-share-status" class="leaderboard-secondary hidden"></div>
+              <div class="run-share-actions">
+                <button id="btn-run-share-signin" class="bar-btn bar-btn-small hidden" type="button">Sign In</button>
+                <button id="btn-run-share-twitter" class="bar-btn run-share-x-button" type="button" aria-label="Share to X">
+                  <span class="run-share-x-logo" aria-hidden="true">X</span>
+                  <span>Share</span>
+                </button>
+                <button id="btn-run-share-download" class="bar-btn bar-btn-small" type="button" disabled>Download Snapshot</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="run-rating-section run-rating-section-quality">
           <div class="run-rating-section-label">Quality</div>
           <div id="run-rating-quality-actions" class="run-rating-quality-actions">

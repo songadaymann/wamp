@@ -57,6 +57,27 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Post-run room share branch on April 24, 2026:
+  - created `feature/post-run-room-share-2026-04-24` from `main` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-post-run-share-2026-04-24`
+  - ported the Run Complete share option from the dirty working branch into the clean branch:
+    - room completions render an in-modal snapshot preview using the room metadata renderer with a canvas fallback
+    - share copy references the real room/title and clear time, e.g. `I beat "Hello World" in WAMP in 11.5 seconds. Can you do better?`
+    - native share sheet gets the PNG when supported; desktop fallback opens an X/Twitter intent and keeps a snapshot download button for manual attachment
+    - unsigned users see a sign-in prompt, while sharing itself remains usable without blocking on auth
+  - validation:
+    - `git diff --check` passed for the touched files
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-comment and large-chunk warnings
+    - `http://127.0.0.1:3345/?renderer=canvas` is running from the clean worktree against the remote room API
+    - `agent-browser` verified page load, nonblank UI, no error overlay, empty console errors, and expected key buttons
+    - required `develop-web-game` smoke passed with artifacts in `output/web-game/post-run-share-3345-smoke/`
+    - targeted share-modal probe passed with artifacts in `output/web-game/post-run-share-3345-modal/`; summary confirms the final share text, PNG data URL, enabled buttons, and X intent URL
+    - added a higher-contrast X-logo share button treatment; `output/web-game/post-run-share-x-logo-modal/share-modal.png` confirms the logo+Share button, and `npm run build` still passes with the existing Rollup warnings
+    - commit/deploy target: Pages-only safety preview at `https://safety-post-run-room-share-2026-04-24.wampland.pages.dev` so the shared safety Worker/PartyKit do not get touched for this frontend-only UI change
+  - TODO:
+    - QA a real signed-in completed room flow on `3345`, especially mobile native file sharing versus desktop X fallback
+    - decide whether course completions should get a text-only or generated course-map share treatment later
+
 - Pushable/interactable crate capability pass on April 21, 2026:
   - moved crate runtime behavior off the hard-coded `id === 'crate'` checks and onto an explicit `interaction: 'pushable'` capability in `src/config.ts`
   - added a `Pushable Block` custom sprite kind so sprite-editor objects can opt into the same crate-style push/pull behavior without pretending to be literal crates
