@@ -73,7 +73,7 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - required `develop-web-game` smoke passed with artifacts in `output/web-game/post-run-share-3345-smoke/`
     - targeted share-modal probe passed with artifacts in `output/web-game/post-run-share-3345-modal/`; summary confirms the final share text, PNG data URL, enabled buttons, and X intent URL
     - added a higher-contrast X-logo share button treatment; `output/web-game/post-run-share-x-logo-modal/share-modal.png` confirms the logo+Share button, and `npm run build` still passes with the existing Rollup warnings
-    - commit/deploy target: Pages-only safety preview at `https://safety-post-run-room-share-2026-04-24.wampland.pages.dev` so the shared safety Worker/PartyKit do not get touched for this frontend-only UI change
+    - commit/deploy target: Pages-only safety preview at `https://feature-post-run-room-share.wampland.pages.dev` so the shared safety Worker/PartyKit do not get touched for this frontend-only UI change
   - TODO:
     - QA a real signed-in completed room flow on `3345`, especially mobile native file sharing versus desktop X fallback
     - decide whether course completions should get a text-only or generated course-map share treatment later
