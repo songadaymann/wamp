@@ -1011,36 +1011,52 @@ async function recordLaneEvent(
     return false;
   }
 
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        INSERT INTO ${config.table} (
-          id,
-          user_id,
-          event_type,
-          source_type,
-          source_id,
-          dedupe_key,
-          amount,
-          breakdown_json,
-          created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `
-    ).bind(
-      crypto.randomUUID(),
-      userId,
-      config.eventType,
-      config.sourceType,
-      config.sourceId,
-      config.dedupeKey,
-      config.amount,
-      config.breakdown ? JSON.stringify(config.breakdown) : null,
-      config.createdAt,
-    ),
-  ]);
+  try {
+    await env.DB.batch([
+      env.DB.prepare(
+        `
+          INSERT INTO ${config.table} (
+            id,
+            user_id,
+            event_type,
+            source_type,
+            source_id,
+            dedupe_key,
+            amount,
+            breakdown_json,
+            created_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `
+      ).bind(
+        crypto.randomUUID(),
+        userId,
+        config.eventType,
+        config.sourceType,
+        config.sourceId,
+        config.dedupeKey,
+        config.amount,
+        config.breakdown ? JSON.stringify(config.breakdown) : null,
+        config.createdAt,
+      ),
+    ]);
+  } catch (error) {
+    if (isLaneDedupeConstraintError(error, config.table)) {
+      return false;
+    }
+    throw error;
+  }
 
   return true;
+}
+
+function isLaneDedupeConstraintError(
+  error: unknown,
+  table: LaneEventConfig['table'],
+): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('UNIQUE constraint failed')
+    && message.includes(`${table}.dedupe_key`);
 }
 
 async function awardLaneDelta(

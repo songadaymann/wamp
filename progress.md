@@ -78,6 +78,12 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - QA a real signed-in completed room flow on `3345`, especially mobile native file sharing versus desktop X fallback
     - decide whether course completions should get a text-only or generated course-map share treatment later
 
+- Production follow-up on April 24, 2026:
+  - confirmed `wamp.land` was still serving the pre-share frontend bundle (`main-BOIq915l.js`), while the Pages preview included `#run-rating-share`; pushing `main` alone did not deploy production
+  - diagnosed the reported publish failure as a progression idempotency bug: duplicate `trust_events.dedupe_key` inserts could still throw a D1 unique constraint after the pre-insert existence check
+  - changed lane event recording to treat a duplicate lane `dedupe_key` constraint as "already awarded" and return `false` instead of failing the publish request
+  - validation: `git diff --check -- src/cloudflare/worker/progression/store.ts` passed, and `npm run build` passed with the existing Rollup pure-comment and large-chunk warnings
+
 - Pushable/interactable crate capability pass on April 21, 2026:
   - moved crate runtime behavior off the hard-coded `id === 'crate'` checks and onto an explicit `interaction: 'pushable'` capability in `src/config.ts`
   - added a `Pushable Block` custom sprite kind so sprite-editor objects can opt into the same crate-style push/pull behavior without pretending to be literal crates
