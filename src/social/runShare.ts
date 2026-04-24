@@ -1,4 +1,5 @@
 import type { PostRunRatingRequestDetail } from '../progression/postRunRatingEvents';
+import { buildRoomShareUrl } from './roomShareLinks';
 
 export interface RunShareImage {
   dataUrl: string;
@@ -17,11 +18,11 @@ export function buildRunShareUrl(
   detail: PostRunRatingRequestDetail,
   href: string,
 ): string {
-  const url = new URL(href);
   if (detail.contentType === 'room') {
-    url.searchParams.set('x', String(detail.roomCoordinates.x));
-    url.searchParams.set('y', String(detail.roomCoordinates.y));
+    return buildRoomShareUrl(detail.roomCoordinates, href);
   }
+
+  const url = new URL(href);
   return url.toString();
 }
 

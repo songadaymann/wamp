@@ -77,6 +77,22 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
   - TODO:
     - QA a real signed-in completed room flow on `3345`, especially mobile native file sharing versus desktop X fallback
     - decide whether course completions should get a text-only or generated course-map share treatment later
+- Room social-card link previews on April 24, 2026:
+  - added shareable room URLs at `/r/<x>/<y>` and updated room focus/history plus post-run X sharing to use those URLs instead of query-only `?x=&y=` links
+  - added a Cloudflare Pages advanced-mode `_worker.js` that serves `/r/<x>/<y>` with injected Open Graph / Twitter Card metadata while still booting the app shell
+  - added Worker API share routes under `/api/share/rooms/<x,y>` for room metadata, a direct share HTML fallback, and a crawler-accessible PNG room preview image generated from the published room snapshot
+  - validation so far:
+    - `git diff --check -- . ':!node_modules'` passed
+    - `node --check public/_worker.js` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - `wrangler deploy --dry-run --outdir /tmp/wamp-og-worker-dry-run-2` bundled the Worker successfully
+    - a Node probe against `public/_worker.js` confirmed `/r/12/-3` injects `<base href="/">`, `og:image`, `twitter:card`, the canonical `/r/12/-3` URL, and the API preview image URL
+    - required web-game client passed against `http://127.0.0.1:3346/r/0/0?renderer=canvas&welcome=0` with artifacts in `output/web-game/room-share-link-3346-smoke/`; screenshot confirmed the room renders from the `/r` path with no console error file
+    - targeted Playwright probe confirmed the app stays at `/r/0/0`, root `<base href="/">` is active, `data-app-ready="true"`, and console error count is zero
+    - targeted share-modal probe confirmed the X intent URL now includes `/r/0/0` and the room snapshot still renders as a PNG data URL
+  - TODO:
+    - after production deploy, verify `https://wamp.land/r/0/0` returns dynamic OG/Twitter tags and that `https://api.wamp.land/api/share/rooms/0%2C0/image` returns a non-empty PNG
 
 - Overworld zoom edge-preview hydration main-port on April 24, 2026:
   - created `fix/overworld-preview-zoom-edge-2026-04-24` from `origin/main` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-overworld-zoom-edge-2026-04-24`
