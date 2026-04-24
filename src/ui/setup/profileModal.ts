@@ -1,5 +1,16 @@
 import Phaser from 'phaser';
 import {
+  getEffectiveCryptopunkViewerLevel,
+  isCryptopunkUnlockOverrideEnabled,
+} from '../../avatars/debug';
+import { loadCryptopunkHeadPreviewUrl } from '../../avatars/headPreview';
+import {
+  CRYPTOPUNK_AVATAR_UNLOCK_PLAYER_LEVEL,
+  parseCryptopunkAvatarId,
+  type CryptopunkAvatarStatusResponse,
+} from '../../avatars/model';
+import { createAvatarRepository, type AvatarRepository } from '../../avatars/repository';
+import {
   AUTH_STATE_CHANGED_EVENT,
   getAuthDebugState,
   refreshAuthSession,
@@ -38,6 +49,12 @@ type ProfileModalElements = {
   avatarPickerCloseButton: HTMLButtonElement | null;
   avatarPickerGrid: HTMLElement | null;
   avatarPickerMeta: HTMLElement | null;
+  cryptopunkUnlockMeta: HTMLElement | null;
+  cryptopunkInput: HTMLInputElement | null;
+  cryptopunkPreviewImage: HTMLImageElement | null;
+  cryptopunkPreviewFallback: HTMLElement | null;
+  cryptopunkStatus: HTMLElement | null;
+  cryptopunkActionButton: HTMLButtonElement | null;
   displayName: HTMLElement | null;
   joinedDate: HTMLElement | null;
   heroLanes: HTMLElement | null;
@@ -104,8 +121,19 @@ export class ProfileModalController {
   private saving = false;
   private avatarPreviewBroken = false;
   private selectedAvatarIdDraft = DEFAULT_PLAYER_AVATAR_ID;
+  private cryptopunkPreviewBroken = false;
+  private cryptopunkPreviewUrl: string | null = null;
+  private cryptopunkPreviewPunkId: number | null = null;
+  private cryptopunkStatusLoading = false;
+  private cryptopunkActionInFlight = false;
+  private cryptopunkStatus: CryptopunkAvatarStatusResponse | null = null;
+  private cryptopunkSelectionStatus = '';
   private avatarPreviewToken = 0;
   private loadToken = 0;
+  private cryptopunkPreviewLoadToken = 0;
+  private cryptopunkLoadToken = 0;
+  private cryptopunkPollTimer: number | null = null;
+  private cryptopunkInputTimer: number | null = null;
   private activeTabAutoSelected = false;
 
   private readonly handleCloseClick = () => {
@@ -183,12 +211,18 @@ export class ProfileModalController {
     this.renderAvatar();
   };
 
+  private readonly handleCryptopunkPreviewError = () => {
+    this.cryptopunkPreviewBroken = true;
+    this.renderCryptopunkPicker();
+  };
+
   constructor(
     private readonly game: Phaser.Game,
     private readonly profileRepository: ProfileRepository = createProfileRepository(),
     private readonly worldRepository: WorldRepository = createWorldRepository(),
     private readonly doc: Document = document,
-    private readonly windowObj: Window = window
+    private readonly windowObj: Window = window,
+    private readonly avatarRepository: AvatarRepository = createAvatarRepository(),
   ) {
     this.elements = {
       modal: this.doc.getElementById('profile-modal'),
@@ -203,6 +237,12 @@ export class ProfileModalController {
       avatarPickerCloseButton: this.doc.getElementById('btn-avatar-picker-close') as HTMLButtonElement | null,
       avatarPickerGrid: this.doc.getElementById('avatar-picker-grid'),
       avatarPickerMeta: this.doc.getElementById('avatar-picker-meta'),
+      cryptopunkUnlockMeta: this.doc.getElementById('profile-cryptopunk-unlock-meta'),
+      cryptopunkInput: this.doc.getElementById('profile-cryptopunk-input') as HTMLInputElement | null,
+      cryptopunkPreviewImage: this.doc.getElementById('profile-cryptopunk-preview-image') as HTMLImageElement | null,
+      cryptopunkPreviewFallback: this.doc.getElementById('profile-cryptopunk-preview-fallback'),
+      cryptopunkStatus: this.doc.getElementById('profile-cryptopunk-status'),
+      cryptopunkActionButton: this.doc.getElementById('btn-profile-cryptopunk-action') as HTMLButtonElement | null,
       displayName: this.doc.getElementById('profile-display-name'),
       joinedDate: this.doc.getElementById('profile-joined-date'),
       heroLanes: this.doc.getElementById('profile-hero-lanes'),
@@ -245,6 +285,13 @@ export class ProfileModalController {
     this.elements.avatarPickerCloseButton?.addEventListener('click', () => {
       this.closeAvatarPicker();
     });
+    this.elements.cryptopunkInput?.addEventListener('input', () => {
+      this.queueCryptopunkStatusRefresh();
+    });
+    this.elements.cryptopunkActionButton?.addEventListener('click', () => {
+      void this.handleCryptopunkAction();
+    });
+    this.elements.cryptopunkPreviewImage?.addEventListener('error', this.handleCryptopunkPreviewError);
     this.elements.saveButton?.addEventListener('click', () => {
       void this.saveProfile();
     });
@@ -326,8 +373,18 @@ export class ProfileModalController {
     this.loading = false;
     this.saving = false;
     this.avatarPreviewBroken = false;
+    this.cryptopunkPreviewBroken = false;
+    this.cryptopunkPreviewUrl = null;
+    this.cryptopunkPreviewPunkId = null;
+    this.cryptopunkStatusLoading = false;
+    this.cryptopunkActionInFlight = false;
+    this.cryptopunkStatus = null;
+    this.cryptopunkSelectionStatus = '';
+    this.cryptopunkPreviewLoadToken += 1;
     this.selectedAvatarIdDraft = DEFAULT_PLAYER_AVATAR_ID;
     this.closeAvatarPicker();
+    this.cancelCryptopunkPolling();
+    this.clearCryptopunkInputTimer();
     this.setError(null);
     this.setSaveStatus('');
   }
@@ -506,6 +563,7 @@ export class ProfileModalController {
 
     this.elements.avatarPickerModal.classList.remove('hidden');
     this.elements.avatarPickerModal.setAttribute('aria-hidden', 'false');
+    this.initializeCryptopunkPickerFromDraft();
     this.renderAvatarPicker();
   }
 
@@ -516,6 +574,8 @@ export class ProfileModalController {
 
     this.elements.avatarPickerModal.classList.add('hidden');
     this.elements.avatarPickerModal.setAttribute('aria-hidden', 'true');
+    this.cancelCryptopunkPolling();
+    this.clearCryptopunkInputTimer();
   }
 
   private renderAvatarPicker(): void {
@@ -537,6 +597,7 @@ export class ProfileModalController {
     this.elements.avatarPickerGrid.replaceChildren(
       ...choices.map((choice) => this.createAvatarChoiceButton(choice))
     );
+    this.renderCryptopunkPicker();
   }
 
   private createAvatarChoiceButton(choice: PlayerAvatarChoice): HTMLButtonElement {
@@ -622,6 +683,400 @@ export class ProfileModalController {
       imageEl.classList.remove('hidden');
       fallbackEl.classList.add('hidden');
     });
+  }
+
+  private renderCryptopunkPicker(): void {
+    if (
+      !this.elements.avatarPickerModal
+      || this.elements.avatarPickerModal.classList.contains('hidden')
+    ) {
+      return;
+    }
+
+    const profile = this.currentProfile;
+    const canEdit = Boolean(profile?.canEdit);
+    const actualPlayerLevel = profile?.progression.player.level ?? 1;
+    const playerLevel = getEffectiveCryptopunkViewerLevel(actualPlayerLevel);
+    const cryptopunksUnlocked = playerLevel >= CRYPTOPUNK_AVATAR_UNLOCK_PLAYER_LEVEL;
+    const unlockOverrideActive =
+      isCryptopunkUnlockOverrideEnabled()
+      && actualPlayerLevel < CRYPTOPUNK_AVATAR_UNLOCK_PLAYER_LEVEL;
+    const inputRaw = this.elements.cryptopunkInput?.value.trim() ?? '';
+    const candidatePunkId = parsePunkIdInput(inputRaw);
+    const activeStatus =
+      candidatePunkId !== null && this.cryptopunkStatus?.pack.punkId === candidatePunkId
+        ? this.cryptopunkStatus
+        : null;
+    const localPreviewUrl =
+      candidatePunkId !== null && this.cryptopunkPreviewPunkId === candidatePunkId
+        ? this.cryptopunkPreviewUrl?.trim() || ''
+        : '';
+    const packPreviewUrl = activeStatus?.pack.headImageUrl?.trim() || '';
+    const previewUrl = this.cryptopunkPreviewBroken ? localPreviewUrl : packPreviewUrl || localPreviewUrl;
+    const canShowPreview = Boolean(previewUrl);
+
+    if (this.elements.cryptopunkUnlockMeta) {
+      this.elements.cryptopunkUnlockMeta.textContent = unlockOverrideActive
+        ? 'Test unlock override active'
+        : actualPlayerLevel >= CRYPTOPUNK_AVATAR_UNLOCK_PLAYER_LEVEL
+          ? `Unlocked at Player LVL ${CRYPTOPUNK_AVATAR_UNLOCK_PLAYER_LEVEL}`
+          : `Unlocks at Player LVL ${CRYPTOPUNK_AVATAR_UNLOCK_PLAYER_LEVEL}`;
+    }
+
+    if (this.elements.cryptopunkInput) {
+      this.elements.cryptopunkInput.disabled =
+        !canEdit || this.saving || this.cryptopunkActionInFlight || !cryptopunksUnlocked;
+    }
+
+    if (this.elements.cryptopunkPreviewImage) {
+      this.elements.cryptopunkPreviewImage.classList.toggle('hidden', !canShowPreview);
+      this.elements.cryptopunkPreviewImage.alt =
+        candidatePunkId !== null ? `CryptoPunk #${candidatePunkId}` : '';
+      if (
+        canShowPreview
+        && this.elements.cryptopunkPreviewImage.dataset.previewUrl !== previewUrl
+      ) {
+        this.elements.cryptopunkPreviewImage.src = previewUrl;
+        this.elements.cryptopunkPreviewImage.dataset.previewUrl = previewUrl;
+      }
+    }
+
+    if (this.elements.cryptopunkPreviewFallback) {
+      this.elements.cryptopunkPreviewFallback.classList.toggle('hidden', canShowPreview);
+      this.elements.cryptopunkPreviewFallback.textContent =
+        candidatePunkId !== null ? `Punk #${candidatePunkId}` : 'Punk #';
+    }
+
+    if (this.elements.cryptopunkStatus) {
+      this.elements.cryptopunkStatus.textContent = this.buildCryptopunkStatusText({
+        activeStatus,
+        candidatePunkId,
+        cryptopunksUnlocked,
+        inputRaw,
+        playerLevel,
+        unlockOverrideActive,
+      });
+    }
+
+    if (this.elements.cryptopunkActionButton) {
+      const { disabled, label } = this.getCryptopunkActionState({
+        activeStatus,
+        candidatePunkId,
+        cryptopunksUnlocked,
+      });
+      this.elements.cryptopunkActionButton.disabled = disabled;
+      this.elements.cryptopunkActionButton.textContent = label;
+    }
+  }
+
+  private buildCryptopunkStatusText(input: {
+    activeStatus: CryptopunkAvatarStatusResponse | null;
+    candidatePunkId: number | null;
+    cryptopunksUnlocked: boolean;
+    inputRaw: string;
+    playerLevel: number;
+    unlockOverrideActive: boolean;
+  }): string {
+    if (!this.currentProfile?.canEdit) {
+      return '';
+    }
+
+    if (this.cryptopunkSelectionStatus) {
+      return this.cryptopunkSelectionStatus;
+    }
+
+    if (!input.cryptopunksUnlocked) {
+      return `CryptoPunk avatars unlock at Player LVL ${CRYPTOPUNK_AVATAR_UNLOCK_PLAYER_LEVEL}. You're Player LVL ${input.playerLevel}.`;
+    }
+
+    if (this.cryptopunkStatusLoading) {
+      return 'Checking CryptoPunk status...';
+    }
+
+    if (input.inputRaw && input.candidatePunkId === null) {
+      return 'Enter a CryptoPunk number from 0 to 9999.';
+    }
+
+    if (input.candidatePunkId === null) {
+      return input.unlockOverrideActive
+        ? 'Test unlock override active. Enter a CryptoPunk number to check or generate.'
+        : 'Enter a CryptoPunk number to check or generate.';
+    }
+
+    const pack = input.activeStatus?.pack ?? null;
+    if (!pack) {
+      return `CryptoPunk #${input.candidatePunkId} is ready to check.`;
+    }
+
+    switch (pack.status) {
+      case 'missing':
+        return `CryptoPunk #${pack.punkId} has not been generated yet.`;
+      case 'queued':
+        return `CryptoPunk #${pack.punkId} is queued for generation.`;
+      case 'generating':
+        return `CryptoPunk #${pack.punkId} is generating now.`;
+      case 'ready':
+        return `CryptoPunk #${pack.punkId} is ready to select.`;
+      case 'failed':
+        return pack.errorMessage?.trim()
+          ? `Generation failed: ${pack.errorMessage}`
+          : `CryptoPunk #${pack.punkId} failed previously. Generate again to retry.`;
+      default:
+        return '';
+    }
+  }
+
+  private getCryptopunkActionState(input: {
+    activeStatus: CryptopunkAvatarStatusResponse | null;
+    candidatePunkId: number | null;
+    cryptopunksUnlocked: boolean;
+  }): { label: string; disabled: boolean } {
+    if (!this.currentProfile?.canEdit) {
+      return { label: 'Unavailable', disabled: true };
+    }
+
+    if (!input.cryptopunksUnlocked) {
+      return { label: 'Locked', disabled: true };
+    }
+
+    if (this.cryptopunkActionInFlight || this.saving) {
+      return { label: 'Working...', disabled: true };
+    }
+
+    if (this.cryptopunkStatusLoading) {
+      return { label: 'Checking...', disabled: true };
+    }
+
+    if (input.candidatePunkId === null) {
+      return { label: 'Enter Punk #', disabled: true };
+    }
+
+    const pack = input.activeStatus?.pack ?? null;
+    if (!pack || pack.status === 'missing' || pack.status === 'failed') {
+      return { label: pack?.status === 'failed' ? 'Retry Generate' : 'Generate', disabled: false };
+    }
+
+    if (pack.status === 'queued' || pack.status === 'generating') {
+      return { label: 'Generating...', disabled: true };
+    }
+
+    if (this.selectedAvatarIdDraft === pack.avatarId) {
+      return { label: 'Selected', disabled: true };
+    }
+
+    return { label: 'Select', disabled: false };
+  }
+
+  private initializeCryptopunkPickerFromDraft(): void {
+    this.cancelCryptopunkPolling();
+    this.clearCryptopunkInputTimer();
+    this.cryptopunkStatusLoading = false;
+    this.cryptopunkActionInFlight = false;
+    this.cryptopunkPreviewBroken = false;
+    this.cryptopunkPreviewUrl = null;
+    this.cryptopunkPreviewPunkId = null;
+    this.cryptopunkSelectionStatus = '';
+    this.cryptopunkStatus = null;
+
+    if (!this.currentProfile?.canEdit || !this.elements.cryptopunkInput) {
+      this.renderCryptopunkPicker();
+      return;
+    }
+
+    const selectedPunkId = parseCryptopunkAvatarId(this.selectedAvatarIdDraft);
+    this.elements.cryptopunkInput.value = selectedPunkId !== null ? String(selectedPunkId) : '';
+    if (selectedPunkId !== null) {
+      void this.refreshCryptopunkPreview(selectedPunkId);
+      void this.refreshCryptopunkStatus(selectedPunkId);
+    } else {
+      this.renderCryptopunkPicker();
+    }
+  }
+
+  private queueCryptopunkStatusRefresh(): void {
+    this.clearCryptopunkInputTimer();
+    this.cancelCryptopunkPolling();
+    this.cryptopunkPreviewBroken = false;
+    this.cryptopunkSelectionStatus = '';
+
+    const inputRaw = this.elements.cryptopunkInput?.value.trim() ?? '';
+    const punkId = parsePunkIdInput(inputRaw);
+    if (!inputRaw || punkId === null) {
+      this.clearCryptopunkPreview();
+      this.cryptopunkStatusLoading = false;
+      this.cryptopunkStatus = null;
+      this.renderCryptopunkPicker();
+      return;
+    }
+
+    void this.refreshCryptopunkPreview(punkId);
+    this.cryptopunkStatusLoading = true;
+    this.renderCryptopunkPicker();
+    this.cryptopunkInputTimer = this.windowObj.setTimeout(() => {
+      void this.refreshCryptopunkStatus(punkId);
+    }, 250);
+  }
+
+  private async refreshCryptopunkStatus(forcedPunkId?: number): Promise<void> {
+    const punkId = forcedPunkId ?? parsePunkIdInput(this.elements.cryptopunkInput?.value.trim() ?? '');
+    if (punkId === null) {
+      this.cryptopunkStatusLoading = false;
+      this.cryptopunkStatus = null;
+      this.renderCryptopunkPicker();
+      return;
+    }
+
+    const loadToken = ++this.cryptopunkLoadToken;
+    this.cryptopunkStatusLoading = true;
+    this.renderCryptopunkPicker();
+    try {
+      const status = await this.avatarRepository.loadCryptopunkStatus(punkId);
+      if (loadToken !== this.cryptopunkLoadToken) {
+        return;
+      }
+
+      this.cryptopunkStatus = status;
+      this.cryptopunkSelectionStatus = '';
+      if (status.pack.status === 'queued' || status.pack.status === 'generating') {
+        this.scheduleCryptopunkPoll();
+      } else {
+        this.cancelCryptopunkPolling();
+      }
+    } catch (error) {
+      if (loadToken !== this.cryptopunkLoadToken) {
+        return;
+      }
+
+      this.cryptopunkStatus = null;
+      this.cryptopunkSelectionStatus =
+        error instanceof Error ? error.message : 'Failed to load CryptoPunk status.';
+      this.cancelCryptopunkPolling();
+    } finally {
+      if (loadToken === this.cryptopunkLoadToken) {
+        this.cryptopunkStatusLoading = false;
+        this.renderCryptopunkPicker();
+      }
+    }
+  }
+
+  private scheduleCryptopunkPoll(delayMs: number = 2000): void {
+    this.cancelCryptopunkPolling();
+    this.cryptopunkPollTimer = this.windowObj.setTimeout(() => {
+      void this.refreshCryptopunkStatus();
+    }, delayMs);
+  }
+
+  private async refreshCryptopunkPreview(forcedPunkId?: number): Promise<void> {
+    const punkId = forcedPunkId ?? parsePunkIdInput(this.elements.cryptopunkInput?.value.trim() ?? '');
+    if (punkId === null) {
+      this.clearCryptopunkPreview();
+      this.renderCryptopunkPicker();
+      return;
+    }
+
+    const loadToken = ++this.cryptopunkPreviewLoadToken;
+    try {
+      const previewUrl = await loadCryptopunkHeadPreviewUrl(punkId);
+      if (loadToken !== this.cryptopunkPreviewLoadToken) {
+        return;
+      }
+
+      this.cryptopunkPreviewPunkId = punkId;
+      this.cryptopunkPreviewUrl = previewUrl;
+      this.cryptopunkPreviewBroken = false;
+    } catch {
+      if (loadToken !== this.cryptopunkPreviewLoadToken) {
+        return;
+      }
+
+      this.cryptopunkPreviewPunkId = punkId;
+      this.cryptopunkPreviewUrl = null;
+    } finally {
+      if (loadToken === this.cryptopunkPreviewLoadToken) {
+        this.renderCryptopunkPicker();
+      }
+    }
+  }
+
+  private cancelCryptopunkPolling(): void {
+    if (this.cryptopunkPollTimer !== null) {
+      this.windowObj.clearTimeout(this.cryptopunkPollTimer);
+      this.cryptopunkPollTimer = null;
+    }
+  }
+
+  private clearCryptopunkInputTimer(): void {
+    if (this.cryptopunkInputTimer !== null) {
+      this.windowObj.clearTimeout(this.cryptopunkInputTimer);
+      this.cryptopunkInputTimer = null;
+    }
+  }
+
+  private clearCryptopunkPreview(): void {
+    this.cryptopunkPreviewLoadToken += 1;
+    this.cryptopunkPreviewUrl = null;
+    this.cryptopunkPreviewPunkId = null;
+    this.cryptopunkPreviewBroken = false;
+  }
+
+  private async handleCryptopunkAction(): Promise<void> {
+    if (!this.currentProfile?.canEdit || this.cryptopunkActionInFlight || this.saving) {
+      return;
+    }
+
+    const candidatePunkId = parsePunkIdInput(this.elements.cryptopunkInput?.value.trim() ?? '');
+    if (candidatePunkId === null) {
+      this.cryptopunkSelectionStatus = 'Enter a CryptoPunk number from 0 to 9999.';
+      this.renderCryptopunkPicker();
+      return;
+    }
+
+    const playerLevel = getEffectiveCryptopunkViewerLevel(this.currentProfile.progression.player.level);
+    if (playerLevel < CRYPTOPUNK_AVATAR_UNLOCK_PLAYER_LEVEL) {
+      this.cryptopunkSelectionStatus =
+        `CryptoPunk avatars unlock at Player LVL ${CRYPTOPUNK_AVATAR_UNLOCK_PLAYER_LEVEL}.`;
+      this.renderCryptopunkPicker();
+      return;
+    }
+
+    const status =
+      this.cryptopunkStatus?.pack.punkId === candidatePunkId ? this.cryptopunkStatus : null;
+    if (status?.pack.status === 'ready') {
+      const previousAvatarId = this.currentProfile.selectedAvatarId ?? DEFAULT_PLAYER_AVATAR_ID;
+      this.selectedAvatarIdDraft = status.pack.avatarId;
+      this.avatarPreviewBroken = false;
+      this.cryptopunkSelectionStatus =
+        status.pack.avatarId === previousAvatarId ? '' : 'Save profile to use this avatar.';
+      this.closeAvatarPicker();
+      this.setSaveStatus(this.cryptopunkSelectionStatus);
+      this.render();
+      return;
+    }
+
+    this.cryptopunkActionInFlight = true;
+    this.cryptopunkSelectionStatus = `Queuing CryptoPunk #${candidatePunkId}...`;
+    this.setError(null);
+    this.renderCryptopunkPicker();
+
+    try {
+      const response = await this.avatarRepository.generateCryptopunkAvatar(candidatePunkId);
+      this.cryptopunkStatus = {
+        pack: response.pack,
+        unlock: {
+          requiredPlayerLevel: CRYPTOPUNK_AVATAR_UNLOCK_PLAYER_LEVEL,
+          viewerPlayerLevel: playerLevel,
+          unlocked: true,
+        },
+      };
+      this.cryptopunkSelectionStatus = `CryptoPunk #${candidatePunkId} queued.`;
+      this.scheduleCryptopunkPoll(1200);
+    } catch (error) {
+      this.cryptopunkSelectionStatus =
+        error instanceof Error ? error.message : 'Failed to queue CryptoPunk generation.';
+    } finally {
+      this.cryptopunkActionInFlight = false;
+      this.renderCryptopunkPicker();
+    }
   }
 
   private renderRooms(rooms: ProfilePublishedRoomEntry[]): void {
@@ -1150,6 +1605,15 @@ function initialsFromDisplayName(displayName: string): string {
   }
 
   return `${parts[0][0] ?? ''}${parts[1][0] ?? ''}`.toUpperCase();
+}
+
+function parsePunkIdInput(rawValue: string): number | null {
+  if (!/^\d{1,4}$/.test(rawValue)) {
+    return null;
+  }
+
+  const punkId = Number(rawValue);
+  return punkId >= 0 && punkId <= 9999 ? punkId : null;
 }
 
 function formatDuration(milliseconds: number): string {

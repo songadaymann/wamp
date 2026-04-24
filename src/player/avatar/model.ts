@@ -40,6 +40,26 @@ export interface PlayerAnimationDefinition {
   repeat: number;
 }
 
+export interface PlayerAvatarManifestAssets {
+  baseTexture: string;
+  baseAtlas: string;
+  combatTexture: string;
+  combatAtlas: string;
+}
+
+export interface PlayerAvatarManifest {
+  version: number;
+  avatarId?: string;
+  punkId?: number;
+  punkType?: string | null;
+  accessories?: string[];
+  assetBaseUrl: string;
+  assets: PlayerAvatarManifestAssets;
+  headImageUrl?: string | null;
+  generatedAt?: string;
+  notes?: string;
+}
+
 export interface PlayerAvatarPackDefinition {
   id: PlayerAvatarId;
   label: string;

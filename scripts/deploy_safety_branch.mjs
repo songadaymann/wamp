@@ -42,6 +42,7 @@ const buildEnv = {
   VITE_ROOM_STORAGE_BACKEND: 'remote',
   VITE_PARTYKIT_HOST: DEFAULT_SAFETY_PARTYKIT_HOST,
   VITE_PARTYKIT_PARTY: DEFAULT_SAFETY_PARTYKIT_PARTY,
+  VITE_ENABLE_TEST_RESET: '1',
 };
 
 console.log('Safety branch deploy');
@@ -66,6 +67,7 @@ run(
       'VITE_ROOM_STORAGE_BACKEND',
       'VITE_PARTYKIT_HOST',
       'VITE_PARTYKIT_PARTY',
+      'VITE_ENABLE_TEST_RESET',
     ],
   }
 );
@@ -83,6 +85,8 @@ if (!options.pagesOnly) {
       'safety',
       '--var',
       `APP_BASE_URL:${previewUrl}`,
+      '--var',
+      'ENABLE_TEST_RESET:1',
     ],
     { dryRun: options.dryRun }
   );

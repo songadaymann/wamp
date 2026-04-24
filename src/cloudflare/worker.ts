@@ -5,6 +5,12 @@ import type {
   RoomRevertRequestBody,
 } from '../persistence/roomModel';
 import { handleAuthRequest } from './worker/auth/routes';
+import {
+  handleAvatarSelectionUpdate,
+  handleCryptopunkAvatarAsset,
+  handleCryptopunkAvatarGenerate,
+  handleCryptopunkAvatarStatus,
+} from './worker/avatars/routes';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth, requireOptionalScope } from './worker/auth/request';
 import { handleBackgroundImageRequest } from './worker/backgroundImages/routes';
 import { handleAgentRequest } from './worker/agents/routes';
@@ -152,6 +158,34 @@ export default {
         return await handleAdminRequest(request, url, env);
       }
 
+      const cryptopunkAvatarStatusMatch = /^\/api\/avatars\/cryptopunks\/([^/]+)\/status$/.exec(url.pathname);
+      if (cryptopunkAvatarStatusMatch && request.method === 'GET') {
+        return await handleCryptopunkAvatarStatus(
+          request,
+          env,
+          decodeURIComponent(cryptopunkAvatarStatusMatch[1])
+        );
+      }
+
+      const cryptopunkAvatarGenerateMatch = /^\/api\/avatars\/cryptopunks\/([^/]+)\/generate$/.exec(url.pathname);
+      if (cryptopunkAvatarGenerateMatch && request.method === 'POST') {
+        return await handleCryptopunkAvatarGenerate(
+          request,
+          env,
+          decodeURIComponent(cryptopunkAvatarGenerateMatch[1])
+        );
+      }
+
+      const cryptopunkAvatarAssetMatch = /^\/api\/avatars\/cryptopunks\/([^/]+)\/files\/(.+)$/.exec(url.pathname);
+      if (cryptopunkAvatarAssetMatch && request.method === 'GET') {
+        return await handleCryptopunkAvatarAsset(
+          request,
+          env,
+          decodeURIComponent(cryptopunkAvatarAssetMatch[1]),
+          decodeURIComponent(cryptopunkAvatarAssetMatch[2])
+        );
+      }
+
       if (url.pathname.startsWith('/api/background-images')) {
         return await handleBackgroundImageRequest(request, url, env);
       }
@@ -227,6 +261,10 @@ export default {
 
       if (url.pathname === '/api/profiles/me' && request.method === 'PATCH') {
         return await handleProfileUpdateMe(request, env);
+      }
+
+      if (url.pathname === '/api/profiles/me/avatar' && request.method === 'POST') {
+        return await handleAvatarSelectionUpdate(request, env);
       }
 
       const profileMatch = /^\/api\/profiles\/([^/]+)$/.exec(url.pathname);

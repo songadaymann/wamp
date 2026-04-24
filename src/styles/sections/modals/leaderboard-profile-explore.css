@@ -1112,6 +1112,98 @@
   gap: 12px;
 }
 
+.profile-cryptopunk-card {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 12px;
+  margin: 0 4px 14px 2px;
+  padding: 12px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #fffaf0;
+  box-shadow: 2px 2px 0 #18161c;
+}
+
+.profile-cryptopunk-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  width: 92px;
+  height: 92px;
+  border: 2px solid #5f5fec;
+  background: #18161c;
+  overflow: hidden;
+}
+
+.profile-cryptopunk-preview-image {
+  display: block;
+  width: 72px;
+  height: 72px;
+  image-rendering: pixelated;
+}
+
+.profile-cryptopunk-preview-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  color: #fff3db;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  line-height: 1.4;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.profile-cryptopunk-controls {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+  align-content: start;
+}
+
+.profile-cryptopunk-title-row {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.profile-cryptopunk-title {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 15px;
+  line-height: 1.15;
+}
+
+.profile-cryptopunk-unlock-meta,
+.profile-cryptopunk-status {
+  min-width: 0;
+  color: #2c5071;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 7px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.profile-cryptopunk-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.profile-cryptopunk-input {
+  min-width: 0;
+  height: 34px;
+}
+
+.profile-cryptopunk-status {
+  min-height: 22px;
+}
+
 .profile-avatar-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
@@ -1512,6 +1604,26 @@
 
   .profile-avatar-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-cryptopunk-card {
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .profile-cryptopunk-preview {
+    width: 76px;
+    height: 76px;
+  }
+
+  .profile-cryptopunk-preview-image {
+    width: 60px;
+    height: 60px;
+  }
+
+  .profile-cryptopunk-input-row {
+    grid-template-columns: 1fr;
   }
 
   .profile-avatar-option {

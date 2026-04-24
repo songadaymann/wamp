@@ -1,4 +1,5 @@
 import type { PlayerAvatarId, ResolvedPlayerAvatarPack } from './model';
+import { parseCryptopunkAvatarId } from '../../avatars/model';
 import {
   DEFAULT_PLAYER_AVATAR_ID,
   getRegisteredPlayerAvatarPack,
@@ -27,5 +28,16 @@ export function resolveActivePlayerAvatarPack(): ResolvedPlayerAvatarPack {
 }
 
 export function resolveActivePlayerAvatarId(): PlayerAvatarId {
-  return resolveActivePlayerAvatarPack().id;
+  const requestedAvatarId = getRequestedPlayerAvatarId();
+  if (
+    requestedAvatarId
+    && (
+      getRegisteredPlayerAvatarPack(requestedAvatarId)
+      || parseCryptopunkAvatarId(requestedAvatarId) !== null
+    )
+  ) {
+    return requestedAvatarId;
+  }
+
+  return DEFAULT_PLAYER_AVATAR_ID;
 }

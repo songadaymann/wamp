@@ -1,0 +1,255 @@
+{
+  "version": 1,
+  "notes": [
+    "This is a proposed back-view taxonomy, not a locked final truth.",
+    "The goal is to collapse front-view classes that are likely to share a similar rear silhouette.",
+    "Hoodie remains a special generator case rather than a template class."
+  ],
+  "groups": [
+    {
+      "id": "back-shaved-head",
+      "label": "Shaved Head",
+      "kind": "template",
+      "classIds": [
+        "human-shaved-head"
+      ],
+      "seedClassIds": [
+        "human-shaved-head"
+      ],
+      "notes": "Exposed scalp / ear-visible baseline."
+    },
+    {
+      "id": "back-messy-short-hair",
+      "label": "Messy Short Hair",
+      "kind": "template",
+      "classIds": [
+        "human-messy-hair",
+        "human-dark-hair",
+        "human-frumpy-hair",
+        "human-purple-hair",
+        "human-blonde-short"
+      ],
+      "seedClassIds": [
+        "human-dark-hair",
+        "human-messy-hair",
+        "human-blonde-short",
+        "human-frumpy-hair",
+        "human-purple-hair"
+      ],
+      "notes": "Rounded short-hair shapes with modest rear volume."
+    },
+    {
+      "id": "back-bob-straight-hair",
+      "label": "Bob / Straight Hair",
+      "kind": "template",
+      "classIds": [
+        "human-blonde-bob",
+        "human-straight-hair",
+        "human-straight-hair-dark",
+        "human-straight-hair-blonde"
+      ],
+      "notes": "Compact longer hair with a smooth rear curtain.",
+      "seedClassIds": [
+        "human-blonde-bob",
+        "human-straight-hair",
+        "human-straight-hair-blonde",
+        "human-straight-hair-dark"
+      ]
+    },
+    {
+      "id": "back-wild-long-hair",
+      "label": "Wild / Long Hair",
+      "kind": "template",
+      "classIds": [
+        "human-stringy-hair",
+        "human-vampire-hair",
+        "human-wild-hair",
+        "human-wild-white-hair",
+        "human-wild-blonde"
+      ],
+      "notes": "Longer or wider hair masses that cover the rear neck differently from short hair.",
+      "seedClassIds": [
+        "human-wild-hair",
+        "human-stringy-hair",
+        "human-vampire-hair",
+        "human-wild-blonde",
+        "human-wild-white-hair"
+      ]
+    },
+    {
+      "id": "back-crest-spike",
+      "label": "Crest / Spike",
+      "kind": "template",
+      "classIds": [
+        "human-mohawk",
+        "human-mohawk-dark",
+        "human-mohawk-thin",
+        "human-red-mohawk",
+        "human-peak-spike"
+      ],
+      "notes": "Central crest silhouettes where the top contour matters more than ear treatment.",
+      "seedClassIds": [
+        "human-peak-spike",
+        "human-mohawk",
+        "human-mohawk-dark",
+        "human-mohawk-thin",
+        "human-red-mohawk"
+      ]
+    },
+    {
+      "id": "back-high-volume-quirky",
+      "label": "High-Volume Quirky Hair",
+      "kind": "template",
+      "classIds": [
+        "human-crazy-hair",
+        "human-clown-hair-green"
+      ],
+      "notes": "Outsize or unusual silhouettes that likely need their own rear volume treatment.",
+      "seedClassIds": [
+        "human-crazy-hair",
+        "human-clown-hair-green"
+      ]
+    },
+    {
+      "id": "back-side-asymmetric",
+      "label": "Side-Asymmetric Hair",
+      "kind": "template",
+      "classIds": [
+        "human-half-shaved",
+        "human-orange-side"
+      ],
+      "notes": "Asymmetric silhouettes where mirroring is especially wrong.",
+      "seedClassIds": [
+        "human-half-shaved",
+        "human-orange-side"
+      ]
+    },
+    {
+      "id": "back-pigtails",
+      "label": "Pigtails",
+      "kind": "template",
+      "classIds": [
+        "human-pigtails"
+      ],
+      "notes": "Likely unique because the rear silhouette is defined by side ties.",
+      "seedClassIds": [
+        "human-pigtails"
+      ]
+    },
+    {
+      "id": "back-soft-knit-cap",
+      "label": "Soft Knit Cap",
+      "kind": "template",
+      "classIds": [
+        "human-beanie",
+        "human-knitted-cap",
+        "human-tassle-hat"
+      ],
+      "seedClassIds": [
+        "human-knitted-cap",
+        "human-beanie",
+        "human-tassle-hat"
+      ],
+      "notes": "Soft rounded cap shapes with little or no brim."
+    },
+    {
+      "id": "back-bandana-wrap",
+      "label": "Bandana / Wrap",
+      "kind": "template",
+      "classIds": [
+        "human-bandana",
+        "human-do-rag"
+      ],
+      "notes": "Low-profile head wraps that mainly change the rear contour and seam lines.",
+      "seedClassIds": [
+        "human-do-rag",
+        "human-bandana"
+      ]
+    },
+    {
+      "id": "back-thin-crown-band",
+      "label": "Thin Crown Band",
+      "kind": "template",
+      "classIds": [
+        "human-headband",
+        "human-tiara"
+      ],
+      "notes": "Thin around-the-head bands that should probably share rear band placement.",
+      "seedClassIds": [
+        "human-headband",
+        "human-tiara"
+      ]
+    },
+    {
+      "id": "back-ballcap-brim",
+      "label": "Ballcap / Brimmed Cap",
+      "kind": "template",
+      "classIds": [
+        "human-cap",
+        "human-cap-forward",
+        "human-police-cap",
+        "human-pink-with-hat"
+      ],
+      "notes": "Compact cap crowns with a brim or rear opening.",
+      "seedClassIds": [
+        "human-police-cap",
+        "human-cap",
+        "human-cap-forward",
+        "human-pink-with-hat"
+      ]
+    },
+    {
+      "id": "back-brimmed-hat",
+      "label": "Brimmed Hat",
+      "kind": "template",
+      "classIds": [
+        "human-cowboy-hat",
+        "human-fedora"
+      ],
+      "notes": "Wider brim silhouettes that should share a back-of-hat treatment.",
+      "seedClassIds": [
+        "human-fedora",
+        "human-cowboy-hat"
+      ]
+    },
+    {
+      "id": "back-tall-hat",
+      "label": "Tall Hat",
+      "kind": "template",
+      "classIds": [
+        "human-top-hat"
+      ],
+      "notes": "Tall cylindrical crown with a back brim.",
+      "seedClassIds": [
+        "human-top-hat"
+      ]
+    },
+    {
+      "id": "back-rigid-helmet",
+      "label": "Rigid Helmet",
+      "kind": "template",
+      "classIds": [
+        "human-pilot-helmet"
+      ],
+      "notes": "Hard-shell helmet with a distinct rear silhouette.",
+      "seedClassIds": [
+        "human-pilot-helmet"
+      ]
+    },
+    {
+      "id": "back-hoodie",
+      "label": "Hoodie",
+      "kind": "generator",
+      "classIds": [
+        "human-hoodie"
+      ],
+      "prototypeClassIds": [
+        "human-hoodie"
+      ],
+      "notes": "Special case. The back shape is clothing, not face cleanup.",
+      "seedClassIds": [
+        "human-hoodie"
+      ]
+    }
+  ]
+}

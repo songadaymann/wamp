@@ -7,7 +7,9 @@ test-results/
 contracts/cache/
 contracts/out/
 contracts/broadcast/
-gen-avatar/
+gen-avatar/cryptopunk/generated-avatar-packs/
+gen-avatar/cryptopunk/__pycache__/
+gen-avatar/cryptopunk/**/*.pyc
 
 .DS_Store
 

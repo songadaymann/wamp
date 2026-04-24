@@ -1,0 +1,790 @@
+{
+  "version": 1,
+  "notes": [
+    "One approved exemplar per back-head silhouette class.",
+    "Status ready means the class has a reusable template and can be generated automatically.",
+    "Status pending means the class has been identified but still needs one approved exemplar.",
+    "Hoodie is intentionally its own special case because the back view should be driven by the hoodie silhouette rather than skin-tone fill."
+  ],
+  "classes": [
+    {
+      "id": "human-bandana",
+      "label": "Bandana",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Bandana"
+        ]
+      },
+      "template": "human-bandana/template.json",
+      "manualSeedImage": "human-bandana/01-human-bandana-93-jmann.edit.png",
+      "sourcePunkId": 93,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `01-human-bandana-93-jmann.edit.png`."
+    },
+    {
+      "id": "human-beanie",
+      "label": "Beanie",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Beanie"
+        ]
+      },
+      "template": "human-beanie/template.json",
+      "sourcePunkId": 344,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `02-human-beanie-344-jmann.edit.png`.",
+      "manualSeedImage": "human-beanie/02-human-beanie-344-jmann.edit.png"
+    },
+    {
+      "id": "human-cap",
+      "label": "Cap",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Cap"
+        ]
+      },
+      "template": "human-cap/template.json",
+      "manualSeedImage": "human-cap/03-human-cap-582-jmann.edit.png",
+      "sourcePunkId": 582,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `03-human-cap-582-jmann.edit.png`."
+    },
+    {
+      "id": "human-cap-forward",
+      "label": "Cap Forward",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Cap Forward"
+        ]
+      },
+      "template": "human-cap-forward/template.json",
+      "manualSeedImage": "human-cap-forward/04-human-cap-forward-135-jmann-edit.png",
+      "sourcePunkId": 135,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `04-human-cap-forward-135-jmann-edit.png`."
+    },
+    {
+      "id": "human-cowboy-hat",
+      "label": "Cowboy Hat",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Cowboy Hat"
+        ]
+      },
+      "template": "human-cowboy-hat/template.json",
+      "manualSeedImage": "human-cowboy-hat/05-human-cowboy-hat-397-jmann.edit.png",
+      "sourcePunkId": 397,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `05-human-cowboy-hat-397-jmann.edit.png`."
+    },
+    {
+      "id": "human-do-rag",
+      "label": "Do-rag",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Do-rag"
+        ]
+      },
+      "template": "human-do-rag/template.json",
+      "sourcePunkId": 6,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `10-back-bandana-wrap-6-jmann.edit.png`.",
+      "manualSeedImage": "human-do-rag/10-back-bandana-wrap-6-jmann.edit.png"
+    },
+    {
+      "id": "human-fedora",
+      "label": "Fedora",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Fedora"
+        ]
+      },
+      "template": "human-fedora/template.json",
+      "sourcePunkId": 178,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `13-back-brimmed-hat-178-source-jmann-edit.png`.",
+      "manualSeedImage": "human-fedora/13-back-brimmed-hat-178-source-jmann-edit.png"
+    },
+    {
+      "id": "human-headband",
+      "label": "Headband",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Headband"
+        ]
+      },
+      "template": "human-headband/template.json",
+      "sourcePunkId": 57,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `11-back-thin-crown-band-57-jmann-edit.png`.",
+      "manualSeedImage": "human-headband/11-back-thin-crown-band-57-jmann-edit.png"
+    },
+    {
+      "id": "human-hoodie",
+      "label": "Hoodie",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Hoodie"
+        ]
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `16-back-hoodie-54-jmann-edit.png`.",
+      "template": "human-hoodie/template.json",
+      "sourcePunkId": 54,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "human-hoodie/16-back-hoodie-54-jmann-edit.png"
+    },
+    {
+      "id": "human-knitted-cap",
+      "label": "Knitted Cap",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Knitted Cap"
+        ]
+      },
+      "template": "human-knitted-cap/template.json",
+      "sourcePunkId": 47,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `09-back-soft-knit-cap-47-jmann-edit.png`.",
+      "manualSeedImage": "human-knitted-cap/09-back-soft-knit-cap-47-jmann-edit.png"
+    },
+    {
+      "id": "human-pilot-helmet",
+      "label": "Pilot Helmet",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Pilot Helmet"
+        ]
+      },
+      "template": "human-pilot-helmet/template.json",
+      "sourcePunkId": 838,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `15-back-rigid-helmet-838-jmann-edit.png`.",
+      "manualSeedImage": "human-pilot-helmet/15-back-rigid-helmet-838-jmann-edit.png"
+    },
+    {
+      "id": "human-police-cap",
+      "label": "Police Cap",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Police Cap"
+        ]
+      },
+      "template": "human-police-cap/template.json",
+      "sourcePunkId": 134,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `12-back-ballcap-brim-134-jmann-edit.png`.",
+      "manualSeedImage": "human-police-cap/12-back-ballcap-brim-134-jmann-edit.png"
+    },
+    {
+      "id": "human-pink-with-hat",
+      "label": "Pink With Hat",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Pink With Hat"
+        ]
+      },
+      "template": "human-pink-with-hat/template.json",
+      "manualSeedImage": "human-pink-with-hat/06-human-pink-with-hat-4021-jmann.edit.png",
+      "sourcePunkId": 4021,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `06-human-pink-with-hat-4021-jmann.edit.png`."
+    },
+    {
+      "id": "human-tassle-hat",
+      "label": "Tassle Hat",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Tassle Hat"
+        ]
+      },
+      "template": "human-tassle-hat/template.json",
+      "manualSeedImage": "human-tassle-hat/07-human-tassle-hat-66-jmann.edit.png",
+      "sourcePunkId": 66,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `07-human-tassle-hat-66-jmann.edit.png`."
+    },
+    {
+      "id": "human-tiara",
+      "label": "Tiara",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Tiara"
+        ]
+      },
+      "template": "human-tiara/template.json",
+      "manualSeedImage": "human-tiara/08-human-tiara-706-jmann.edit.png",
+      "sourcePunkId": 706,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `08-human-tiara-706-jmann.edit.png`."
+    },
+    {
+      "id": "human-top-hat",
+      "label": "Top Hat",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Top Hat"
+        ]
+      },
+      "template": "human-top-hat/template.json",
+      "sourcePunkId": 851,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `14-back-tall-hat-851-jmann-edit.png`.",
+      "manualSeedImage": "human-top-hat/14-back-tall-hat-851-jmann-edit.png"
+    },
+    {
+      "id": "human-blonde-bob",
+      "label": "Blonde Bob",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Blonde Bob"
+        ]
+      },
+      "template": "human-blonde-bob/template.json",
+      "sourcePunkId": 96,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `03-back-bob-straight-hair-96-jmann-edit.png`.",
+      "manualSeedImage": "human-blonde-bob/03-back-bob-straight-hair-96-jmann-edit.png"
+    },
+    {
+      "id": "human-blonde-short",
+      "label": "Blonde Short",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Blonde Short"
+        ]
+      },
+      "template": "human-blonde-short/template.json",
+      "manualSeedImage": "human-blonde-short/09-human-blonde-short-870-jmann.edit.png",
+      "sourcePunkId": 870,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `09-human-blonde-short-870-jmann.edit.png`."
+    },
+    {
+      "id": "human-clown-hair-green",
+      "label": "Clown Hair Green",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Clown Hair Green"
+        ]
+      },
+      "template": "human-clown-hair-green/template.json",
+      "manualSeedImage": "human-clown-hair-green/10-human-clown-hair-green-335-jmann.edit.png",
+      "sourcePunkId": 335,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `10-human-clown-hair-green-335-jmann.edit.png`."
+    },
+    {
+      "id": "human-crazy-hair",
+      "label": "Crazy Hair",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Crazy Hair"
+        ]
+      },
+      "template": "human-crazy-hair/template.json",
+      "sourcePunkId": 20,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `06-back-high-volume-quirky-20-jmann-edit.png`.",
+      "manualSeedImage": "human-crazy-hair/06-back-high-volume-quirky-20-jmann-edit.png"
+    },
+    {
+      "id": "human-dark-hair",
+      "label": "Dark Hair",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Dark Hair"
+        ]
+      },
+      "template": "human-dark-hair/template.json",
+      "sourcePunkId": 26,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `02-back-messy-short-hair-26-jmann-edit.png`.",
+      "manualSeedImage": "human-dark-hair/02-back-messy-short-hair-26-jmann-edit.png"
+    },
+    {
+      "id": "human-frumpy-hair",
+      "label": "Frumpy Hair",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Frumpy Hair"
+        ]
+      },
+      "template": "human-frumpy-hair/template.json",
+      "manualSeedImage": "human-frumpy-hair/11-human-frumpy-hair-337-jmann.edit.png",
+      "sourcePunkId": 337,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `11-human-frumpy-hair-337-jmann.edit.png`."
+    },
+    {
+      "id": "human-half-shaved",
+      "label": "Half Shaved",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Half Shaved"
+        ]
+      },
+      "template": "human-half-shaved/template.json",
+      "sourcePunkId": 43,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `07-back-side-asymmetric-43-jmann-edit.png`.",
+      "manualSeedImage": "human-half-shaved/07-back-side-asymmetric-43-jmann-edit.png"
+    },
+    {
+      "id": "human-messy-hair",
+      "label": "Messy Hair",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Messy Hair"
+        ]
+      },
+      "template": "human-messy-hair/template.json",
+      "sourcePunkId": 44,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `12-human-messy-hair-44-jmann.edit.png`.",
+      "manualSeedImage": "human-messy-hair/12-human-messy-hair-44-jmann.edit.png"
+    },
+    {
+      "id": "human-mohawk",
+      "label": "Mohawk",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Mohawk"
+        ]
+      },
+      "template": "human-mohawk/template.json",
+      "manualSeedImage": "human-mohawk/13-human-mohawk-113-jmann-edit.png",
+      "sourcePunkId": 113,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `13-human-mohawk-113-jmann-edit.png`."
+    },
+    {
+      "id": "human-mohawk-dark",
+      "label": "Mohawk Dark",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Mohawk Dark"
+        ]
+      },
+      "template": "human-mohawk-dark/template.json",
+      "manualSeedImage": "human-mohawk-dark/14-human-mohawk-dark-323-jmann.edit.png",
+      "sourcePunkId": 323,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `14-human-mohawk-dark-323-jmann.edit.png`."
+    },
+    {
+      "id": "human-mohawk-thin",
+      "label": "Mohawk Thin",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Mohawk Thin"
+        ]
+      },
+      "template": "human-mohawk-thin/template.json",
+      "manualSeedImage": "human-mohawk-thin/15-human-mohawk-thin-105-jmann.eth.png",
+      "sourcePunkId": 105,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `15-human-mohawk-thin-105-jmann.eth.png`."
+    },
+    {
+      "id": "human-orange-side",
+      "label": "Orange Side",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Orange Side"
+        ]
+      },
+      "template": "human-orange-side/template.json",
+      "manualSeedImage": "human-orange-side/16-human-orange-side-249-jmann.edit.png",
+      "sourcePunkId": 249,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `16-human-orange-side-249-jmann.edit.png`."
+    },
+    {
+      "id": "human-peak-spike",
+      "label": "Peak Spike",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Peak Spike"
+        ]
+      },
+      "template": "human-peak-spike/template.json",
+      "sourcePunkId": 33,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `05-back-crest-spike-33-jmann-edit.png`.",
+      "manualSeedImage": "human-peak-spike/05-back-crest-spike-33-jmann-edit.png"
+    },
+    {
+      "id": "human-pigtails",
+      "label": "Pigtails",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Pigtails"
+        ]
+      },
+      "template": "human-pigtails/template.json",
+      "sourcePunkId": 1232,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `08-back-pigtails-1232-source-mann-edit.png`.",
+      "manualSeedImage": "human-pigtails/08-back-pigtails-1232-source-mann-edit.png"
+    },
+    {
+      "id": "human-purple-hair",
+      "label": "Purple Hair",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Purple Hair"
+        ]
+      },
+      "template": "human-purple-hair/template.json",
+      "manualSeedImage": "human-purple-hair/17-human-purple-hair-346-jmann.edit.png",
+      "sourcePunkId": 346,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `17-human-purple-hair-346-jmann.edit.png`."
+    },
+    {
+      "id": "human-red-mohawk",
+      "label": "Red Mohawk",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Red Mohawk"
+        ]
+      },
+      "template": "human-red-mohawk/template.json",
+      "manualSeedImage": "human-red-mohawk/18-human-red-mohawk-36-jmann.edit.png",
+      "sourcePunkId": 36,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `18-human-red-mohawk-36-jmann.edit.png`."
+    },
+    {
+      "id": "human-shaved-head",
+      "label": "Shaved Head",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Shaved Head"
+        ]
+      },
+      "template": "human-shaved-head/template.json",
+      "sourcePunkId": 56,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `01-back-shaved-head-56-jmann-edit.png`.",
+      "manualSeedImage": "human-shaved-head/01-back-shaved-head-56-jmann-edit.png"
+    },
+    {
+      "id": "human-straight-hair",
+      "label": "Straight Hair",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Straight Hair"
+        ]
+      },
+      "template": "human-straight-hair/template.json",
+      "manualSeedImage": "human-straight-hair/19-human-straight-hair-187-jmann.dit.png",
+      "sourcePunkId": 187,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `19-human-straight-hair-187-jmann.dit.png`."
+    },
+    {
+      "id": "human-straight-hair-blonde",
+      "label": "Straight Hair Blonde",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Straight Hair Blonde"
+        ]
+      },
+      "template": "human-straight-hair-blonde/template.json",
+      "manualSeedImage": "human-straight-hair-blonde/20-human-straight-hair-blonde-106-jmann-edit.png",
+      "sourcePunkId": 106,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `20-human-straight-hair-blonde-106-jmann-edit.png`."
+    },
+    {
+      "id": "human-straight-hair-dark",
+      "label": "Straight Hair Dark",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Straight Hair Dark"
+        ]
+      },
+      "template": "human-straight-hair-dark/template.json",
+      "manualSeedImage": "human-straight-hair-dark/21-human-straight-hair-dark-417-jmann.edit.png",
+      "sourcePunkId": 417,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `21-human-straight-hair-dark-417-jmann.edit.png`."
+    },
+    {
+      "id": "human-stringy-hair",
+      "label": "Stringy Hair",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Stringy Hair"
+        ]
+      },
+      "template": "human-stringy-hair/template.json",
+      "manualSeedImage": "human-stringy-hair/22-human-stringy-hair-31-jmann.edit.png",
+      "sourcePunkId": 31,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `22-human-stringy-hair-31-jmann.edit.png`."
+    },
+    {
+      "id": "human-vampire-hair",
+      "label": "Vampire Hair",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Vampire Hair"
+        ]
+      },
+      "template": "human-vampire-hair/template.json",
+      "manualSeedImage": "human-vampire-hair/23-human-vampire-hair-681-jmann.edit.png",
+      "sourcePunkId": 681,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `23-human-vampire-hair-681-jmann.edit.png`."
+    },
+    {
+      "id": "human-wild-blonde",
+      "label": "Wild Blonde",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Wild Blonde"
+        ]
+      },
+      "template": "human-wild-blonde/template.json",
+      "manualSeedImage": "human-wild-blonde/24-human-wild-blonde-241-jmann.edit.png",
+      "sourcePunkId": 241,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `24-human-wild-blonde-241-jmann.edit.png`."
+    },
+    {
+      "id": "human-wild-hair",
+      "label": "Wild Hair",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Wild Hair"
+        ]
+      },
+      "template": "human-wild-hair/template.json",
+      "sourcePunkId": 2,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `04-back-wild-long-hair-2-jmann-edit.png`.",
+      "manualSeedImage": "human-wild-hair/04-back-wild-long-hair-2-jmann-edit.png"
+    },
+    {
+      "id": "human-wild-white-hair",
+      "label": "Wild White Hair",
+      "status": "ready",
+      "match": {
+        "type": "Human",
+        "accessoriesAny": [
+          "Wild White Hair"
+        ]
+      },
+      "template": "human-wild-white-hair/template.json",
+      "manualSeedImage": "human-wild-white-hair/25-human-wild-white-hair-25-jmann.edit.png",
+      "sourcePunkId": 25,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "notes": "Bootstrapped from Jonathan's manual edit `25-human-wild-white-hair-25-jmann.edit.png`."
+    }
+  ]
+}

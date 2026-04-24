@@ -629,6 +629,30 @@ export interface ApiTokenRow {
   user_created_at: string;
 }
 
+export interface CryptopunkAvatarPackRow {
+  punk_id: number;
+  avatar_id: string;
+  status: string;
+  requested_by_user_id: string | null;
+  request_count: number;
+  generation_job_id: string | null;
+  asset_base_url: string | null;
+  manifest_url: string | null;
+  head_image_url: string | null;
+  base_texture_url: string | null;
+  base_atlas_url: string | null;
+  combat_texture_url: string | null;
+  combat_atlas_url: string | null;
+  punk_type: string | null;
+  accessories_json: string | null;
+  error_message: string | null;
+  created_at: string;
+  requested_at: string | null;
+  generation_started_at: string | null;
+  generated_at: string | null;
+  updated_at: string;
+}
+
 export interface AuthSession {
   sessionId: string;
   userId: string;

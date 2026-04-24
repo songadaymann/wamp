@@ -1,0 +1,519 @@
+{
+  "version": 1,
+  "kind": "special-back-head-groups",
+  "hoodieOverride": {
+    "groupId": "back-hoodie",
+    "sharedHumanClassId": "human-hoodie"
+  },
+  "entries": [
+    {
+      "id": "alien-back-ballcap-brim",
+      "type": "Alien",
+      "groupId": "back-ballcap-brim",
+      "status": "ready",
+      "examplePunkId": 2890,
+      "accessories": [
+        "Cap"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/alien-back-ballcap-brim/01-alien-back-ballcap-brim-2890-jmann.edit.png",
+      "template": "special-seeds/alien-back-ballcap-brim/template.json",
+      "sourcePunkId": 2890,
+      "notes": "Bootstrapped from Jonathan's manual edit `01-alien-back-ballcap-brim-2890-jmann.edit.png`.",
+      "starterSourceClassId": "human-police-cap"
+    },
+    {
+      "id": "alien-back-bandana-wrap",
+      "type": "Alien",
+      "groupId": "back-bandana-wrap",
+      "status": "ready",
+      "examplePunkId": 5822,
+      "accessories": [
+        "Bandana"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/alien-back-bandana-wrap/02-alien-back-bandana-wrap-5822-jmann.edit.png",
+      "template": "special-seeds/alien-back-bandana-wrap/template.json",
+      "sourcePunkId": 5822,
+      "notes": "Bootstrapped from Jonathan's manual edit `02-alien-back-bandana-wrap-5822-jmann.edit.png`.",
+      "starterSourceClassId": "human-do-rag"
+    },
+    {
+      "id": "alien-back-brimmed-hat",
+      "type": "Alien",
+      "groupId": "back-brimmed-hat",
+      "status": "ready",
+      "examplePunkId": 3443,
+      "accessories": [
+        "Earring",
+        "Cowboy Hat"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/alien-back-brimmed-hat/03-alien-back-brimmed-hat-3443-jmann.edit.png",
+      "template": "special-seeds/alien-back-brimmed-hat/template.json",
+      "sourcePunkId": 3443,
+      "notes": "Bootstrapped from Jonathan's manual edit `03-alien-back-brimmed-hat-3443-jmann.edit.png`.",
+      "starterSourceClassId": "human-fedora"
+    },
+    {
+      "id": "alien-back-soft-knit-cap",
+      "type": "Alien",
+      "groupId": "back-soft-knit-cap",
+      "status": "ready",
+      "examplePunkId": 6089,
+      "accessories": [
+        "Earring",
+        "Knitted Cap"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/alien-back-soft-knit-cap/04-alien-back-soft-knit-cap-6089-jmann.edit.png",
+      "template": "special-seeds/alien-back-soft-knit-cap/template.json",
+      "sourcePunkId": 6089,
+      "notes": "Bootstrapped from Jonathan's manual edit `04-alien-back-soft-knit-cap-6089-jmann.edit.png`.",
+      "starterSourceClassId": "human-knitted-cap"
+    },
+    {
+      "id": "alien-back-thin-crown-band",
+      "type": "Alien",
+      "groupId": "back-thin-crown-band",
+      "status": "ready",
+      "examplePunkId": 3100,
+      "accessories": [
+        "Headband"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/alien-back-thin-crown-band/05-alien-back-thin-crown-band-3100-jmann.edit.png",
+      "template": "special-seeds/alien-back-thin-crown-band/template.json",
+      "sourcePunkId": 3100,
+      "notes": "Bootstrapped from Jonathan's manual edit `05-alien-back-thin-crown-band-3100-jmann.edit.png`.",
+      "starterSourceClassId": "human-headband"
+    },
+    {
+      "id": "ape-back-ballcap-brim",
+      "type": "Ape",
+      "groupId": "back-ballcap-brim",
+      "status": "ready",
+      "examplePunkId": 372,
+      "accessories": [
+        "Cap Forward"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/ape-back-ballcap-brim/06-ape-back-ballcap-brim-372-jmann.edit.png",
+      "template": "special-seeds/ape-back-ballcap-brim/template.json",
+      "sourcePunkId": 372,
+      "notes": "Bootstrapped from Jonathan's manual edit `06-ape-back-ballcap-brim-372-jmann.edit.png`.",
+      "starterSourceClassId": "human-police-cap"
+    },
+    {
+      "id": "ape-back-bandana-wrap",
+      "type": "Ape",
+      "groupId": "back-bandana-wrap",
+      "status": "ready",
+      "examplePunkId": 4156,
+      "accessories": [
+        "Bandana"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/ape-back-bandana-wrap/07-ape-back-bandana-wrap-4156-jmann.edit.png",
+      "template": "special-seeds/ape-back-bandana-wrap/template.json",
+      "sourcePunkId": 4156,
+      "notes": "Bootstrapped from Jonathan's manual edit `07-ape-back-bandana-wrap-4156-jmann.edit.png`.",
+      "starterSourceClassId": "human-do-rag"
+    },
+    {
+      "id": "ape-back-brimmed-hat",
+      "type": "Ape",
+      "groupId": "back-brimmed-hat",
+      "status": "ready",
+      "examplePunkId": 5577,
+      "accessories": [
+        "Cowboy Hat"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/ape-back-brimmed-hat/08-ape-back-brimmed-hat-5577-jmann.edit.png",
+      "template": "special-seeds/ape-back-brimmed-hat/template.json",
+      "sourcePunkId": 5577,
+      "notes": "Bootstrapped from Jonathan's manual edit `08-ape-back-brimmed-hat-5577-jmann.edit.png`.",
+      "starterSourceClassId": "human-fedora"
+    },
+    {
+      "id": "ape-back-hoodie",
+      "type": "Ape",
+      "groupId": "back-hoodie",
+      "status": "ready",
+      "examplePunkId": 2924,
+      "accessories": [
+        "Hoodie"
+      ],
+      "needsBackFillColor": false,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "sharedHumanClassId": "human-hoodie",
+      "manualSeedImage": "human-hoodie/16-back-hoodie-54-jmann-edit.png",
+      "template": "human-hoodie/template.json",
+      "sourcePunkId": 54,
+      "notes": "All hoodie specials reuse the shared human hoodie back-head."
+    },
+    {
+      "id": "ape-back-soft-knit-cap",
+      "type": "Ape",
+      "groupId": "back-soft-knit-cap",
+      "status": "ready",
+      "examplePunkId": 8219,
+      "accessories": [
+        "Knitted Cap"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/ape-back-soft-knit-cap/10-ape-back-soft-knit-cap-8219-jmann.edit.png",
+      "template": "special-seeds/ape-back-soft-knit-cap/template.json",
+      "sourcePunkId": 8219,
+      "notes": "Bootstrapped from Jonathan's manual edit `10-ape-back-soft-knit-cap-8219-jmann.edit.png`.",
+      "starterSourceClassId": "human-knitted-cap"
+    },
+    {
+      "id": "ape-back-tall-hat",
+      "type": "Ape",
+      "groupId": "back-tall-hat",
+      "status": "ready",
+      "examplePunkId": 8498,
+      "accessories": [
+        "Top Hat",
+        "Regular Shades"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/ape-back-tall-hat/11-ape-back-tall-hat-8498-jmann.edit.png",
+      "template": "special-seeds/ape-back-tall-hat/template.json",
+      "sourcePunkId": 8498,
+      "notes": "Bootstrapped from Jonathan's manual edit `11-ape-back-tall-hat-8498-jmann.edit.png`.",
+      "starterSourceClassId": "human-top-hat"
+    },
+    {
+      "id": "ape-back-thin-crown-band",
+      "type": "Ape",
+      "groupId": "back-thin-crown-band",
+      "status": "ready",
+      "examplePunkId": 2386,
+      "accessories": [
+        "Headband",
+        "Small Shades"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/ape-back-thin-crown-band/12-ape-back-thin-crown-band-2386-jmann.edit.png",
+      "template": "special-seeds/ape-back-thin-crown-band/template.json",
+      "sourcePunkId": 2386,
+      "notes": "Bootstrapped from Jonathan's manual edit `12-ape-back-thin-crown-band-2386-jmann.edit.png`.",
+      "starterSourceClassId": "human-headband"
+    },
+    {
+      "id": "zombie-back-ballcap-brim",
+      "type": "Zombie",
+      "groupId": "back-ballcap-brim",
+      "status": "ready",
+      "examplePunkId": 5336,
+      "accessories": [
+        "Police Cap"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/zombie-back-ballcap-brim/13-zombie-back-ballcap-brim-5336-jmann.edit.png",
+      "template": "special-seeds/zombie-back-ballcap-brim/template.json",
+      "sourcePunkId": 5336,
+      "notes": "Bootstrapped from Jonathan's manual edit `13-zombie-back-ballcap-brim-5336-jmann.edit.png`.",
+      "starterSourceClassId": "human-police-cap"
+    },
+    {
+      "id": "zombie-back-bandana-wrap",
+      "type": "Zombie",
+      "groupId": "back-bandana-wrap",
+      "status": "ready",
+      "examplePunkId": 2249,
+      "accessories": [
+        "Bandana",
+        "Eye Patch"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/zombie-back-bandana-wrap/14-zombie-back-bandana-wrap-2249-jmann.edit.png",
+      "template": "special-seeds/zombie-back-bandana-wrap/template.json",
+      "sourcePunkId": 2249,
+      "notes": "Bootstrapped from Jonathan's manual edit `14-zombie-back-bandana-wrap-2249-jmann.edit.png`.",
+      "starterSourceClassId": "human-do-rag"
+    },
+    {
+      "id": "zombie-back-brimmed-hat",
+      "type": "Zombie",
+      "groupId": "back-brimmed-hat",
+      "status": "ready",
+      "examplePunkId": 5489,
+      "accessories": [
+        "Fedora"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/zombie-back-brimmed-hat/15-zombie-back-brimmed-hat-5489-jmann.edit.png",
+      "template": "special-seeds/zombie-back-brimmed-hat/template.json",
+      "sourcePunkId": 5489,
+      "notes": "Bootstrapped from Jonathan's manual edit `15-zombie-back-brimmed-hat-5489-jmann.edit.png`.",
+      "starterSourceClassId": "human-fedora"
+    },
+    {
+      "id": "zombie-back-crest-spike",
+      "type": "Zombie",
+      "groupId": "back-crest-spike",
+      "status": "ready",
+      "examplePunkId": 2338,
+      "accessories": [
+        "Mohawk Thin"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/zombie-back-crest-spike/16-zombie-back-crest-spike-2338-jmann.edit.png",
+      "template": "special-seeds/zombie-back-crest-spike/template.json",
+      "sourcePunkId": 2338,
+      "notes": "Bootstrapped from Jonathan's manual edit `16-zombie-back-crest-spike-2338-jmann.edit.png`.",
+      "starterSourceClassId": "human-peak-spike"
+    },
+    {
+      "id": "zombie-back-high-volume-quirky",
+      "type": "Zombie",
+      "groupId": "back-high-volume-quirky",
+      "status": "ready",
+      "examplePunkId": 3393,
+      "accessories": [
+        "Frown",
+        "Crazy Hair"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/zombie-back-high-volume-quirky/17-zombie-back-high-volume-quirky-3393-jmann.edit.png",
+      "template": "special-seeds/zombie-back-high-volume-quirky/template.json",
+      "sourcePunkId": 3393,
+      "notes": "Bootstrapped from Jonathan's manual edit `17-zombie-back-high-volume-quirky-3393-jmann.edit.png`.",
+      "starterSourceClassId": "human-crazy-hair"
+    },
+    {
+      "id": "zombie-back-hoodie",
+      "type": "Zombie",
+      "groupId": "back-hoodie",
+      "status": "ready",
+      "examplePunkId": 9368,
+      "accessories": [
+        "Hoodie",
+        "Earring"
+      ],
+      "needsBackFillColor": false,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "sharedHumanClassId": "human-hoodie",
+      "manualSeedImage": "human-hoodie/16-back-hoodie-54-jmann-edit.png",
+      "template": "human-hoodie/template.json",
+      "sourcePunkId": 54,
+      "notes": "All hoodie specials reuse the shared human hoodie back-head."
+    },
+    {
+      "id": "zombie-back-messy-short-hair",
+      "type": "Zombie",
+      "groupId": "back-messy-short-hair",
+      "status": "ready",
+      "examplePunkId": 4850,
+      "accessories": [
+        "Purple Hair"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/zombie-back-messy-short-hair/19-zombie-back-messy-short-hair-4850-jmann.edit.png",
+      "template": "special-seeds/zombie-back-messy-short-hair/template.json",
+      "sourcePunkId": 4850,
+      "notes": "Bootstrapped from Jonathan's manual edit `19-zombie-back-messy-short-hair-4850-jmann.edit.png`.",
+      "starterSourceClassId": "human-dark-hair"
+    },
+    {
+      "id": "zombie-back-shaved-head",
+      "type": "Zombie",
+      "groupId": "back-shaved-head",
+      "status": "ready",
+      "examplePunkId": 9955,
+      "accessories": [
+        "Shaved Head"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/zombie-back-shaved-head/20-zombie-back-shaved-head-9955-jmann.edit.png",
+      "template": "special-seeds/zombie-back-shaved-head/template.json",
+      "sourcePunkId": 9955,
+      "notes": "Bootstrapped from Jonathan's manual edit `20-zombie-back-shaved-head-9955-jmann.edit.png`.",
+      "starterSourceClassId": "human-shaved-head"
+    },
+    {
+      "id": "zombie-back-soft-knit-cap",
+      "type": "Zombie",
+      "groupId": "back-soft-knit-cap",
+      "status": "ready",
+      "examplePunkId": 2066,
+      "accessories": [
+        "Knitted Cap"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/zombie-back-soft-knit-cap/21-zombie-back-soft-knit-cap-2066-jmann.edit.png",
+      "template": "special-seeds/zombie-back-soft-knit-cap/template.json",
+      "sourcePunkId": 2066,
+      "notes": "Bootstrapped from Jonathan's manual edit `21-zombie-back-soft-knit-cap-2066-jmann.edit.png`.",
+      "starterSourceClassId": "human-knitted-cap"
+    },
+    {
+      "id": "zombie-back-tall-hat",
+      "type": "Zombie",
+      "groupId": "back-tall-hat",
+      "status": "ready",
+      "examplePunkId": 3636,
+      "accessories": [
+        "Front Beard Dark",
+        "Earring",
+        "Top Hat"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/zombie-back-tall-hat/22-zombie-back-tall-hat-3636-jmann.edit.png",
+      "template": "special-seeds/zombie-back-tall-hat/template.json",
+      "sourcePunkId": 3636,
+      "notes": "Bootstrapped from Jonathan's manual edit `22-zombie-back-tall-hat-3636-jmann.edit.png`.",
+      "starterSourceClassId": "human-top-hat"
+    },
+    {
+      "id": "zombie-back-thin-crown-band",
+      "type": "Zombie",
+      "groupId": "back-thin-crown-band",
+      "status": "ready",
+      "examplePunkId": 8127,
+      "accessories": [
+        "Headband"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/zombie-back-thin-crown-band/23-zombie-back-thin-crown-band-8127-jmann.edit.png",
+      "template": "special-seeds/zombie-back-thin-crown-band/template.json",
+      "sourcePunkId": 8127,
+      "notes": "Bootstrapped from Jonathan's manual edit `23-zombie-back-thin-crown-band-8127-jmann.edit.png`.",
+      "starterSourceClassId": "human-headband"
+    },
+    {
+      "id": "zombie-back-wild-long-hair",
+      "type": "Zombie",
+      "groupId": "back-wild-long-hair",
+      "status": "ready",
+      "examplePunkId": 1658,
+      "accessories": [
+        "Stringy Hair"
+      ],
+      "needsBackFillColor": false,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/zombie-back-wild-long-hair/24-zombie-back-wild-long-hair-1658-jmann.edit.png",
+      "template": "special-seeds/zombie-back-wild-long-hair/template.json",
+      "sourcePunkId": 1658,
+      "notes": "Bootstrapped from Jonathan's manual edit `24-zombie-back-wild-long-hair-1658-jmann.edit.png`.",
+      "starterSourceClassId": "human-wild-hair"
+    },
+    {
+      "id": "zombie-special-base",
+      "type": "Zombie",
+      "groupId": "special-base",
+      "status": "ready",
+      "examplePunkId": 8553,
+      "accessories": [
+        "Front Beard Dark"
+      ],
+      "needsBackFillColor": true,
+      "defaultHeadOffset": {
+        "x": 0,
+        "y": 3
+      },
+      "manualSeedImage": "special-seeds/zombie-special-base/25-zombie-special-base-8553-jmann.edit.png",
+      "template": "special-seeds/zombie-special-base/template.json",
+      "sourcePunkId": 8553,
+      "notes": "Bootstrapped from Jonathan's manual edit `25-zombie-special-base-8553-jmann.edit.png`.",
+      "starterSourceClassId": "human-shaved-head"
+    }
+  ]
+}

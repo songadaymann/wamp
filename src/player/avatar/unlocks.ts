@@ -1,5 +1,9 @@
 import type { PlayerAvatarChoice, PlayerAvatarId } from './model';
 import {
+  CRYPTOPUNK_AVATAR_UNLOCK_PLAYER_LEVEL,
+  parseCryptopunkAvatarId,
+} from '../../avatars/model';
+import {
   DEFAULT_PLAYER_AVATAR_ID,
   PUNK_465_PLAYER_AVATAR_ID,
   getRegisteredPlayerAvatarPack,
@@ -35,12 +39,18 @@ export function resolveSelectablePlayerAvatarId(
   if (avatarId && getRegisteredPlayerAvatarPack(avatarId)) {
     return avatarId;
   }
+  if (avatarId && parseCryptopunkAvatarId(avatarId) !== null) {
+    return avatarId;
+  }
   return DEFAULT_PLAYER_AVATAR_ID;
 }
 
 export function getPlayerAvatarUnlockLevel(avatarId: PlayerAvatarId): number | null {
   if (avatarId === DEFAULT_PLAYER_AVATAR_ID) {
     return 1;
+  }
+  if (parseCryptopunkAvatarId(avatarId) !== null) {
+    return CRYPTOPUNK_AVATAR_UNLOCK_PLAYER_LEVEL;
   }
   return AVATAR_UNLOCK_LEVEL_BY_ID.get(avatarId) ?? null;
 }
@@ -51,6 +61,11 @@ export function isPlayerAvatarUnlockedForLevel(
 ): boolean {
   if (avatarId === DEFAULT_PLAYER_AVATAR_ID) {
     return true;
+  }
+
+  const cryptopunkId = parseCryptopunkAvatarId(avatarId);
+  if (cryptopunkId !== null) {
+    return normalizePlayerLevel(playerLevel) >= CRYPTOPUNK_AVATAR_UNLOCK_PLAYER_LEVEL;
   }
 
   const unlockLevel = AVATAR_UNLOCK_LEVEL_BY_ID.get(avatarId);

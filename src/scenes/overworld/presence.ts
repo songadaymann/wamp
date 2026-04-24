@@ -2,6 +2,11 @@ import Phaser from 'phaser';
 import {
   type DefaultPlayerAnimationState,
 } from '../../player/defaultPlayer';
+import {
+  ensureSceneAvatarPackLoaded,
+  isSceneAvatarPackLoaded,
+  isDynamicPlayerAvatarId,
+} from '../../player/avatar/dynamic';
 import { resolvePlayerAvatarPack } from '../../player/avatar/runtime';
 import { roomIdFromCoordinates, type RoomCoordinates } from '../../persistence/roomModel';
 import { type WorldChunkBounds } from '../../persistence/worldModel';
@@ -90,6 +95,7 @@ export class OverworldPresenceController {
   private ghostRenderBudget = 0;
   private visibleGhostCount = 0;
   private localRosterPresence: Pick<LocalPresenceInput, 'mode' | 'roomCoordinates'> | null = null;
+  private pendingGhostAvatarLoads = new Set<string>();
 
   constructor(private readonly options: OverworldPresenceControllerOptions) {}
 
@@ -303,8 +309,10 @@ export class OverworldPresenceController {
     const showGhosts = this.options.getMode() === 'play';
     let visibleGhostCount = 0;
     for (const renderedGhost of this.renderedGhostsByConnectionId.values()) {
+      const avatarReady = this.isGhostAvatarRenderReady(renderedGhost.presence.avatarId);
       const visible =
         showGhosts &&
+        avatarReady &&
         this.options.isFullRoomLoaded(renderedGhost.presence.roomId) &&
         this.isPresenceFresh(renderedGhost.presence.timestamp);
       renderedGhost.halo.setVisible(visible);
@@ -691,6 +699,10 @@ export class OverworldPresenceController {
       existing.targetY = ghost.y;
       existing.sprite.setFlipX(ghost.facing < 0);
       existing.label.setText(ghost.displayName);
+      this.ensureGhostAvatarPackLoaded(ghost.avatarId);
+      if (!this.isGhostAvatarRenderReady(ghost.avatarId)) {
+        continue;
+      }
       const playerAvatarPack = resolvePlayerAvatarPack(ghost.avatarId);
       const animationKey = playerAvatarPack.animationKeys[ghost.animationState];
       if (existing.sprite.anims.currentAnim?.key !== animationKey) {
@@ -816,7 +828,9 @@ export class OverworldPresenceController {
   }
 
   private createRenderedGhost(ghost: WorldGhostPresence): RenderedGhost {
-    const playerAvatarPack = resolvePlayerAvatarPack(ghost.avatarId);
+    this.ensureGhostAvatarPackLoaded(ghost.avatarId);
+    const avatarReady = this.isGhostAvatarRenderReady(ghost.avatarId);
+    const playerAvatarPack = resolvePlayerAvatarPack(avatarReady ? ghost.avatarId : null);
     const halo = this.options.scene.add.ellipse(ghost.x, ghost.y - 2, 18, 8, 0xffffff, 0.28);
     halo.setDepth(22);
 
@@ -831,7 +845,11 @@ export class OverworldPresenceController {
     sprite.setDepth(24);
     sprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     sprite.setFlipX(ghost.facing < 0);
-    sprite.play(playerAvatarPack.animationKeys[ghost.animationState]);
+    if (avatarReady) {
+      sprite.play(playerAvatarPack.animationKeys[ghost.animationState]);
+    } else {
+      sprite.setVisible(false);
+    }
 
     const label = this.options.scene.add.text(ghost.x, ghost.y - 28, ghost.displayName, {
       fontFamily: 'Courier New',
@@ -872,6 +890,32 @@ export class OverworldPresenceController {
     renderedGhost.halo.destroy();
     renderedGhost.sprite.destroy();
     renderedGhost.label.destroy();
+  }
+
+  private ensureGhostAvatarPackLoaded(avatarId: string): void {
+    if (!isDynamicPlayerAvatarId(avatarId) || this.pendingGhostAvatarLoads.has(avatarId)) {
+      return;
+    }
+
+    this.pendingGhostAvatarLoads.add(avatarId);
+    void ensureSceneAvatarPackLoaded(this.options.scene, avatarId)
+      .then((pack) => {
+        if (pack.id !== avatarId) {
+          return;
+        }
+        this.refreshGhostVisibility();
+        this.options.onGhostDisplayObjectsChanged?.();
+      })
+      .catch((error) => {
+        console.warn('Failed to load ghost avatar pack.', avatarId, error);
+      })
+      .finally(() => {
+        this.pendingGhostAvatarLoads.delete(avatarId);
+      });
+  }
+
+  private isGhostAvatarRenderReady(avatarId: string): boolean {
+    return !isDynamicPlayerAvatarId(avatarId) || isSceneAvatarPackLoaded(this.options.scene, avatarId);
   }
 
   private isPresenceFresh(timestamp: number): boolean {

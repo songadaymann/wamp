@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from '../api/baseUrl';
+import { appendCryptopunkUnlockOverrideHeaders } from '../avatars/debug';
 import type {
   UserProfileResponse,
   UserProfileUpdateRequestBody,
@@ -38,6 +39,7 @@ class ApiProfileRepository implements ProfileRepository {
     if (init?.body && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');
     }
+    appendCryptopunkUnlockOverrideHeaders(headers);
 
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...init,

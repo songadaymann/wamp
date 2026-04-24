@@ -138,7 +138,7 @@ function createDefaultCompatibleAtlasAssets(
   ];
 }
 
-function createDefaultCompatibleAvatarPack(
+export function createDefaultCompatibleAvatarPack(
   options: DefaultCompatiblePackOptions,
 ): PlayerAvatarPackDefinition {
   const atlasKeys = {
@@ -195,7 +195,7 @@ const COLOR_PLAYER_PACKS = PLAYER_COLOR_AVATAR_HEXES.map((hex) =>
   }),
 );
 
-const PLAYER_AVATAR_PACKS: Record<string, PlayerAvatarPackDefinition> = Object.fromEntries(
+const PLAYER_AVATAR_PACKS = new Map<string, PlayerAvatarPackDefinition>(
   [
     DEFAULT_PLAYER_PACK,
     PUNK_465_PLAYER_PACK,
@@ -204,11 +204,18 @@ const PLAYER_AVATAR_PACKS: Record<string, PlayerAvatarPackDefinition> = Object.f
 );
 
 export function listRegisteredPlayerAvatarPacks(): ResolvedPlayerAvatarPack[] {
-  return Object.values(PLAYER_AVATAR_PACKS);
+  return [...PLAYER_AVATAR_PACKS.values()];
 }
 
 export function getRegisteredPlayerAvatarPack(
   avatarId: PlayerAvatarId,
 ): ResolvedPlayerAvatarPack | null {
-  return PLAYER_AVATAR_PACKS[avatarId] ?? null;
+  return PLAYER_AVATAR_PACKS.get(avatarId) ?? null;
+}
+
+export function registerPlayerAvatarPack(
+  pack: PlayerAvatarPackDefinition,
+): ResolvedPlayerAvatarPack {
+  PLAYER_AVATAR_PACKS.set(pack.id, pack);
+  return pack;
 }

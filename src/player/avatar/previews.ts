@@ -1,4 +1,6 @@
 import type { PlayerAvatarId } from './model';
+import { loadCryptopunkHeadPreviewUrl } from '../../avatars/headPreview';
+import { parseCryptopunkAvatarId } from '../../avatars/model';
 import { DEFAULT_PLAYER_AVATAR_ID, getRegisteredPlayerAvatarPack } from './registry';
 
 interface AtlasFrameRect {
@@ -21,17 +23,37 @@ const avatarPreviewCache = new Map<PlayerAvatarId, Promise<string | null>>();
 export function createPlayerAvatarPreviewDataUrl(
   avatarId: PlayerAvatarId | null | undefined,
 ): Promise<string | null> {
-  const resolvedAvatarId = getRegisteredPlayerAvatarPack(avatarId ?? '')
-    ? avatarId as PlayerAvatarId
+  const requestedAvatarId = avatarId ?? '';
+  const punkId = parseCryptopunkAvatarId(requestedAvatarId);
+  const resolvedAvatarId = getRegisteredPlayerAvatarPack(requestedAvatarId) || punkId !== null
+    ? requestedAvatarId as PlayerAvatarId
     : DEFAULT_PLAYER_AVATAR_ID;
   const cached = avatarPreviewCache.get(resolvedAvatarId);
   if (cached) {
     return cached;
   }
 
-  const request = loadPlayerAvatarPreviewDataUrl(resolvedAvatarId);
+  const request = punkId !== null
+    ? loadCryptopunkAvatarPreviewDataUrl(punkId, resolvedAvatarId)
+    : loadPlayerAvatarPreviewDataUrl(resolvedAvatarId);
   avatarPreviewCache.set(resolvedAvatarId, request);
   return request;
+}
+
+async function loadCryptopunkAvatarPreviewDataUrl(
+  punkId: number,
+  avatarId: PlayerAvatarId,
+): Promise<string | null> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return null;
+  }
+
+  try {
+    return await loadCryptopunkHeadPreviewUrl(punkId);
+  } catch (error) {
+    console.warn('Failed to render CryptoPunk avatar preview.', avatarId, error);
+    return null;
+  }
 }
 
 async function loadPlayerAvatarPreviewDataUrl(avatarId: PlayerAvatarId): Promise<string | null> {

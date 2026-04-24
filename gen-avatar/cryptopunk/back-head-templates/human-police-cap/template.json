@@ -1,0 +1,28 @@
+{
+  "name": "human-police-cap",
+  "width": 24,
+  "height": 24,
+  "referencePalette": [
+    [
+      255,
+      255,
+      255,
+      255
+    ],
+    [
+      174,
+      139,
+      97,
+      255
+    ],
+    [
+      38,
+      49,
+      74,
+      255
+    ]
+  ],
+  "samplePoints": [],
+  "includeBlackSamples": false,
+  "operations": []
+}

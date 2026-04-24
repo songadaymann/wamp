@@ -57,6 +57,34 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Dynamic CryptoPunk avatar port on April 24, 2026:
+  - old branch `feature/dynamic-cryptopunk-avatars-2026-04-23` was confirmed to be based on an April 7 `main`, so the work was ported onto fresh branch `feature/dynamic-cryptopunk-avatars-main-2026-04-24` from April 24 `main`
+  - copied the CryptoPunk generator, back-head templates, head preview atlas, queue processor, Worker avatar routes/store, and migration `0026_dynamic_cryptopunk_avatar_packs.sql`
+  - integrated dynamic `cryptopunk-<id>` ids into the current avatar runtime instead of replacing the newer profile/game UI
+  - profile avatar picker now keeps the current unlock grid and adds a compact CryptoPunk row for previewing, checking/generating, and selecting a generated Punk avatar; final avatar selection still saves through the current profile save path
+  - Worker routes now expose CryptoPunk status/generate/proxied asset APIs and validate dynamic avatar profile saves against Player LVL 10 plus generated-ready status
+  - safety branch deploy helper now builds Pages with `VITE_ENABLE_TEST_RESET=1` and deploys the safety Worker with `ENABLE_TEST_RESET:1`, so `?cryptopunkUnlock=1` can force the Player LVL 10 test path on safety
+  - April 24 avatar render fix:
+    - generator now clears each target atlas frame to transparent before pasting the rendered CryptoPunk frame, so transparent pixels in the generated art no longer reveal the default player underneath
+    - local player and play-mode ghost rendering now hold selected dynamic CryptoPunk sprites hidden until that exact dynamic pack has loaded in the current Phaser scene; the default avatar is no longer used as a visible fallback for selected dynamic ids
+    - stopped a stale old-branch safety queue loop that was still claiming queued CryptoPunk jobs from `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer`
+    - requeued/regenerated safety `cryptopunk-4156` and `cryptopunk-4495` from the patched main-based worktree and reuploaded their R2 assets
+  - validation:
+    - initial `npm ci` failed on the known `sharp` native install path; `npm ci --ignore-scripts` succeeded
+    - `npm run typecheck` passed
+    - `npm run build` passed with existing Rollup pure-annotation and large-chunk warnings
+    - `git diff --check` passed
+    - required web-game smoke ran at `http://127.0.0.1:3236/?previewSmoke=1&renderer=canvas` and hit the known no-local-Worker auth/world `500` path; artifact: `output/web-game/cryptopunk-main-port-smoke/state-0.json`
+    - targeted avatar-picker screenshot confirmed the new CryptoPunk row renders in the current modal layout; artifact: `output/web-game/cryptopunk-avatar-picker-targeted/avatar-picker-clean.png`
+    - safety Worker deployed version `a5eec4d6-d34c-4a93-ad6d-25efac2e9696` with `ENABLE_TEST_RESET=1`
+    - safety Pages deployed at `https://safety-dynamic-punk-main.wampland.pages.dev`
+    - deployed HTML contains the current avatar picker, `profile-cryptopunk-*` markup, and bundle `assets/main-vqnNYYEX.js`
+    - safety API status checks show `cryptopunk-4156` and `cryptopunk-4495` ready, with absolute proxied asset URLs on `https://everybodys-platformer-safety.novox-robot.workers.dev`; `PlayerSheet.png` fetches returned `200 image/png` for both
+    - deployed safety play probe entered play with `avatarId: "cryptopunk-4156"` and loaded 4 punk asset responses; artifact: `output/web-game/cryptopunk-safety-play-targeted/play-cryptopunk-4156-clean.png`
+  - TODO:
+    - QA a real signed-in save of `cryptopunk-4156` / `cryptopunk-4495` on the safety Pages preview
+    - decide whether the CryptoPunk queue runner should become a durable Worker/cron/job instead of a local `npm run avatar:cryptopunk:queue:safety` process
+
 - Pushable/interactable crate capability pass on April 21, 2026:
   - moved crate runtime behavior off the hard-coded `id === 'crate'` checks and onto an explicit `interaction: 'pushable'` capability in `src/config.ts`
   - added a `Pushable Block` custom sprite kind so sprite-editor objects can opt into the same crate-style push/pull behavior without pretending to be literal crates

@@ -1,4 +1,9 @@
 import type { UserProfileUpdateRequestBody, UserProfileUpdateResponse } from '../../../profiles/model';
+import {
+  CRYPTOPUNK_AVATAR_UNLOCK_PLAYER_LEVEL,
+  CRYPTOPUNK_UNLOCK_OVERRIDE_HEADER,
+  parseCryptopunkAvatarId,
+} from '../../../avatars/model';
 import { getRegisteredPlayerAvatarPack } from '../../../player/avatar/registry';
 import {
   getPlayerAvatarUnlockLevel,
@@ -10,6 +15,7 @@ import { findUserByDisplayName, updateUserProfile } from '../auth/store';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth } from '../auth/request';
 import { assertPlayfunOnlyDisplayNameChangeAllowed } from '../playfun/leaderboardIsolation';
 import { loadPublicProgressionSummary } from '../progression/store';
+import { loadCryptopunkAvatarPackRow } from '../avatars/store';
 import { loadUserProfile } from './store';
 
 const MAX_PROFILE_BIO_LENGTH = 280;
@@ -40,7 +46,12 @@ export async function handleProfileUpdateMe(request: Request, env: Env): Promise
     throw new HttpError(409, 'That display name has already been claimed.');
   }
 
-  const selectedAvatarId = await validateSelectedAvatarUpdate(env, auth.user.id, body.selectedAvatarId);
+  const selectedAvatarId = await validateSelectedAvatarUpdate(
+    request,
+    env,
+    auth.user.id,
+    body.selectedAvatarId,
+  );
   const updatedUser = await updateUserProfile(env, auth.user, {
     ...body,
     ...(selectedAvatarId !== undefined ? { selectedAvatarId } : {}),
@@ -151,11 +162,31 @@ function normalizeSelectedAvatarId(value: unknown): string | null | undefined {
 }
 
 async function validateSelectedAvatarUpdate(
+  request: Request,
   env: Env,
   userId: string,
   selectedAvatarId: string | null | undefined
 ): Promise<string | null | undefined> {
   if (selectedAvatarId === undefined || selectedAvatarId === null) {
+    return selectedAvatarId;
+  }
+
+  const cryptopunkId = parseCryptopunkAvatarId(selectedAvatarId);
+  if (cryptopunkId !== null) {
+    const progression = await loadPublicProgressionSummary(env, userId);
+    const playerLevel = getEffectiveCryptopunkViewerLevel(request, env, progression.player.level);
+    if (!isPlayerAvatarUnlockedForLevel(selectedAvatarId, playerLevel)) {
+      throw new HttpError(
+        403,
+        `CryptoPunk avatars unlock at Player LVL ${CRYPTOPUNK_AVATAR_UNLOCK_PLAYER_LEVEL}.`
+      );
+    }
+
+    const row = await loadCryptopunkAvatarPackRow(env, cryptopunkId);
+    if (!row || row.status !== 'ready') {
+      throw new HttpError(409, 'That CryptoPunk avatar is not generated yet.');
+    }
+
     return selectedAvatarId;
   }
 
@@ -165,7 +196,10 @@ async function validateSelectedAvatarUpdate(
   }
 
   const progression = await loadPublicProgressionSummary(env, userId);
-  if (isPlayerAvatarUnlockedForLevel(selectedAvatarId, progression.player.level)) {
+  const playerLevel = pack.kind === 'cryptopunk'
+    ? getEffectiveCryptopunkViewerLevel(request, env, progression.player.level)
+    : progression.player.level;
+  if (isPlayerAvatarUnlockedForLevel(selectedAvatarId, playerLevel)) {
     return selectedAvatarId;
   }
 
@@ -174,4 +208,32 @@ async function validateSelectedAvatarUpdate(
     throw new HttpError(403, `That avatar unlocks at Player LVL ${unlockLevel}.`);
   }
   throw new HttpError(403, 'That avatar is not unlockable yet.');
+}
+
+function getEffectiveCryptopunkViewerLevel(
+  request: Request,
+  env: Env,
+  playerLevel: number,
+): number {
+  if (!isCryptopunkUnlockOverrideEnabled(request, env)) {
+    return playerLevel;
+  }
+  return Math.max(playerLevel, CRYPTOPUNK_AVATAR_UNLOCK_PLAYER_LEVEL);
+}
+
+function isCryptopunkUnlockOverrideEnabled(request: Request, env: Env): boolean {
+  if (request.headers.get(CRYPTOPUNK_UNLOCK_OVERRIDE_HEADER) !== '1') {
+    return false;
+  }
+  if (env.ENABLE_TEST_RESET !== '1') {
+    return false;
+  }
+
+  const hostname = new URL(request.url).hostname.trim().toLowerCase();
+  return (
+    hostname === 'localhost'
+    || hostname === '127.0.0.1'
+    || hostname === '::1'
+    || hostname === 'everybodys-platformer-safety.novox-robot.workers.dev'
+  );
 }

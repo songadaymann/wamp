@@ -56,6 +56,11 @@ import {
   type DefaultPlayerAnimationState,
 } from '../player/defaultPlayer';
 import { resolveActivePlayerAvatarId } from '../player/avatar/runtime';
+import {
+  ensureSceneAvatarPackLoaded,
+  isSceneAvatarPackLoaded,
+  isDynamicPlayerAvatarId,
+} from '../player/avatar/dynamic';
 import { PLAYER_AVATAR_CHANGED_EVENT } from '../player/avatar/storage';
 import {
   formatRoomGoalShortText,
@@ -2135,10 +2140,40 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.roomChatController.setSubscribedChunkBounds(this.loadedChunkBounds);
       }
     }
+    void this.ensureCurrentAvatarPackLoaded();
+  };
+
+  private async ensureCurrentAvatarPackLoaded(): Promise<void> {
+    const avatarId = resolveActivePlayerAvatarId();
+    const shouldHoldSprite = this.shouldHoldPlayerSpriteForDynamicAvatar();
+    if (shouldHoldSprite) {
+      this.playerSprite?.setVisible(false);
+    }
+
+    let loadedAvatarId: string | null = null;
+    try {
+      const pack = await ensureSceneAvatarPackLoaded(this, avatarId);
+      loadedAvatarId = pack.id;
+    } catch (error) {
+      console.warn('Failed to load selected avatar pack.', avatarId, error);
+    }
+
+    if (resolveActivePlayerAvatarId() !== avatarId) {
+      return;
+    }
+
     this.playerPresentationController.syncPlayerVisual();
+    if (!isDynamicPlayerAvatarId(avatarId) || loadedAvatarId === avatarId) {
+      this.playerSprite?.setVisible(true);
+    }
     this.syncLocalPresence();
     this.renderHud();
-  };
+  }
+
+  private shouldHoldPlayerSpriteForDynamicAvatar(): boolean {
+    const avatarId = resolveActivePlayerAvatarId();
+    return isDynamicPlayerAvatarId(avatarId) && !isSceneAvatarPackLoaded(this, avatarId);
+  }
 
   private showTransientStatus(message: string): void {
     this.transientStatusMessage = message;
@@ -2911,10 +2946,14 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.playerPickupSensor = entities.playerPickupSensor;
     this.playerPickupSensorBody = entities.playerPickupSensorBody;
     this.playerSprite = entities.playerSprite;
+    if (this.shouldHoldPlayerSpriteForDynamicAvatar()) {
+      this.playerSprite.setVisible(false);
+    }
     this.externalLaunchGraceUntil = 0;
     this.movementController.handlePlayerCreated();
     this.combatController.clearAttackAnimation();
     this.playerPresentationController.handlePlayerCreated();
+    void this.ensureCurrentAvatarPackLoaded();
   }
 
   private findOverlappingLadder(): LoadedRoomObject | null {

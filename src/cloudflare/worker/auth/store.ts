@@ -334,6 +334,14 @@ export async function updateUserProfile(
   };
 }
 
+export async function updateUserSelectedAvatarId(
+  env: Env,
+  user: AuthUser,
+  selectedAvatarId: string
+): Promise<AuthUser> {
+  return updateUserProfile(env, user, { selectedAvatarId });
+}
+
 export async function loadPublicUserProfileCourseCount(env: Env, userId: string): Promise<number> {
   const row = await env.DB.prepare(
     `
