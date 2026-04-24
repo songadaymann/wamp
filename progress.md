@@ -103,8 +103,12 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - `https://wamp.land/r/0/0/image.png` returns a 1200x630 PNG; inspected `/tmp/wamp-r-image-final.png`
     - `node scripts/smoke_prod.mjs` passed against `https://wamp.land` and `https://api.wamp.land`
     - required production web-game smoke passed against `https://wamp.land/r/0/0?renderer=canvas&welcome=0&deployProbe=2b21a59` with artifacts in `/private/tmp/wamp-prod-main-dc50466/output/web-game/room-share-prod-app-shell-smoke/`; screenshot confirmed the app renders the room from `/r`, and no console error file was produced
+    - user reported manual room-link image previews still missing; repro found legacy query links like `https://wamp.land/?x=0&y=0` still served the plain app shell with no OG/Twitter tags
+    - patched Pages `_worker.js` to treat `/?x=<x>&y=<y>` and `/index.html?x=<x>&y=<y>` as room share pages for metadata injection, while preserving app-shell behavior; the emitted image URL is now versioned as `https://wamp.land/r/<x>/<y>/image.png?v=<publishedVersion>` and includes explicit `og:image:type`, `og:image:alt`, and `twitter:image:alt`
+    - local Node probe confirmed both `https://wamp.land/r/0/0` and `https://wamp.land/?x=0&y=0` produce `og:image` pointing at `https://wamp.land/r/0/0/image.png?v=176`, canonical `https://wamp.land/r/0/0`, and image type/alt tags
+    - `node --check public/_worker.js`, `git diff --check -- . ':!node_modules'`, and `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
   - TODO:
-    - if the Worker API share routes are still desired later, deploy them with a Cloudflare token that has Workers Scripts permissions
+    - deploy the query-link metadata fix to production, then verify `https://wamp.land/?x=0&y=0` with `Twitterbot/1.0` includes OG/Twitter image tags and that the versioned image URL returns a 1200x630 PNG
 
 - Overworld zoom edge-preview hydration main-port on April 24, 2026:
   - created `fix/overworld-preview-zoom-edge-2026-04-24` from `origin/main` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-overworld-zoom-edge-2026-04-24`

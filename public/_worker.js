@@ -24,7 +24,7 @@ export default {
       return renderRoomImageResponse(request, env, url, imageCoordinates);
     }
 
-    const coordinates = parseRoomPath(url.pathname);
+    const coordinates = parseRoomPath(url.pathname) || parseRoomQuery(url);
     if (!coordinates) {
       return env.ASSETS.fetch(request);
     }
@@ -51,6 +51,29 @@ function parseRoomPath(pathname, pattern = ROOM_PATH_PATTERN) {
     x: Number.parseInt(match[1], 10),
     y: Number.parseInt(match[2], 10),
   };
+}
+
+function parseRoomQuery(url) {
+  if (url.pathname !== '/' && url.pathname !== '/index.html') {
+    return null;
+  }
+
+  const x = parseStrictInteger(url.searchParams.get('x'));
+  const y = parseStrictInteger(url.searchParams.get('y'));
+  if (x === null || y === null) {
+    return null;
+  }
+
+  return { x, y };
+}
+
+function parseStrictInteger(value) {
+  if (typeof value !== 'string' || !/^-?\d+$/.test(value)) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
 async function loadRoomMetadata(request, env, url, coordinates) {
@@ -133,7 +156,18 @@ function buildPublishedRoomMetadata(snapshot, fallback, coordinates) {
     description: roomTitle
       ? `Play "${roomTitle}" in WAMP. Can you do better?`
       : fallback.description,
+    imageUrl: withRoomVersionQuery(fallback.imageUrl, snapshot?.version),
   };
+}
+
+function withRoomVersionQuery(imageUrl, version) {
+  if (!Number.isFinite(version)) {
+    return imageUrl;
+  }
+
+  const url = new URL(imageUrl);
+  url.searchParams.set('v', String(version));
+  return url.toString();
 }
 
 async function loadPublishedRoomSnapshot(request, env, url, coordinates, timeoutMs) {
@@ -298,12 +332,15 @@ function buildRoomMetaTags(metadata) {
     `    <meta property="og:url" content="${pageUrl}">`,
     `    <meta property="og:image" content="${imageUrl}">`,
     `    <meta property="og:image:secure_url" content="${imageUrl}">`,
+    '    <meta property="og:image:type" content="image/png">',
     `    <meta property="og:image:width" content="${imageWidth}">`,
     `    <meta property="og:image:height" content="${imageHeight}">`,
+    `    <meta property="og:image:alt" content="${title}">`,
     '    <meta name="twitter:card" content="summary_large_image">',
     `    <meta name="twitter:title" content="${title}">`,
     `    <meta name="twitter:description" content="${description}">`,
     `    <meta name="twitter:image" content="${imageUrl}">`,
+    `    <meta name="twitter:image:alt" content="${title}">`,
   ].join('\n');
 }
 
