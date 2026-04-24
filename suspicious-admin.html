@@ -324,6 +324,10 @@
         font-size: 13px;
       }
 
+      .selection-actions {
+        margin-top: 8px;
+      }
+
       @media (max-width: 1100px) {
         .workspace,
         .two-up {
@@ -461,6 +465,10 @@
                   <label for="operator-label-input">Operator Label</label>
                   <input id="operator-label-input" type="text" placeholder="Your name or handle" />
                   <div class="selection-summary" id="selection-summary">0 room runs, 0 course runs, and 0 point events selected.</div>
+                  <div class="actions selection-actions">
+                    <button id="select-all-runs-button" type="button" class="secondary">Select All Runs</button>
+                    <button id="clear-selected-runs-button" type="button" class="secondary">Clear Run Selection</button>
+                  </div>
                 </div>
               </div>
               <div class="actions">

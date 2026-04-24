@@ -42,6 +42,8 @@ const detailSignals = document.getElementById('detail-signals') as HTMLDivElemen
 const reasonInput = document.getElementById('reason-input') as HTMLTextAreaElement | null;
 const operatorLabelInput = document.getElementById('operator-label-input') as HTMLInputElement | null;
 const selectionSummary = document.getElementById('selection-summary') as HTMLDivElement | null;
+const selectAllRunsButton = document.getElementById('select-all-runs-button') as HTMLButtonElement | null;
+const clearSelectedRunsButton = document.getElementById('clear-selected-runs-button') as HTMLButtonElement | null;
 const previewButton = document.getElementById('preview-button') as HTMLButtonElement | null;
 const executeButton = document.getElementById('execute-button') as HTMLButtonElement | null;
 const actionStatus = document.getElementById('action-status') as HTMLDivElement | null;
@@ -193,6 +195,14 @@ detailRoomRuns?.addEventListener('change', handleSelectionChange);
 detailCourseRuns?.addEventListener('change', handleSelectionChange);
 detailPointEvents?.addEventListener('change', handleSelectionChange);
 
+selectAllRunsButton?.addEventListener('click', () => {
+  selectAllRunsForCurrentUser();
+});
+
+clearSelectedRunsButton?.addEventListener('click', () => {
+  clearSelectedRunsForCurrentUser();
+});
+
 previewButton?.addEventListener('click', () => {
   void previewInvalidation();
 });
@@ -272,6 +282,7 @@ async function loadDetail(userId: string, preserveSelection = false): Promise<vo
       buildDetailPath(userId)
     );
     state.detail = detail;
+    } else {
     if (!preserveSelection || previousScope !== detail.scope) {
       if (detail.scope === 'review_window') {
         state.selectedRoomRunIds = new Set(detail.roomRuns.map((run) => run.attemptId));
@@ -285,6 +296,19 @@ async function loadDetail(userId: string, preserveSelection = false): Promise<vo
         state.selectedCourseRunIds.clear();
         state.selectedPointEventIds.clear();
       }
+    } else {
+      state.selectedRoomRunIds = filterSelectionToDetail(
+        state.selectedRoomRunIds,
+        detail.roomRuns.map((run) => run.attemptId)
+      );
+      state.selectedCourseRunIds = filterSelectionToDetail(
+        state.selectedCourseRunIds,
+        detail.courseRuns.map((run) => run.attemptId)
+      );
+      state.selectedPointEventIds = filterSelectionToDetail(
+        state.selectedPointEventIds,
+        detail.recentPointEvents.map((event) => event.id)
+      );
     }
   } catch (error) {
     state.detail = null;
@@ -408,6 +432,34 @@ function handleSelectionChange(event: Event): void {
   }
   state.preview = null;
   render();
+}
+
+function selectAllRunsForCurrentUser(): void {
+  if (!state.detail) {
+    return;
+  }
+
+  state.selectedRoomRunIds = new Set(state.detail.roomRuns.map((run) => run.attemptId));
+  state.selectedCourseRunIds = new Set(state.detail.courseRuns.map((run) => run.attemptId));
+  state.preview = null;
+  render();
+}
+
+function clearSelectedRunsForCurrentUser(): void {
+  state.selectedRoomRunIds.clear();
+  state.selectedCourseRunIds.clear();
+  state.preview = null;
+  render();
+}
+
+function filterSelectionToDetail(selectedIds: Set<string>, allowedIds: string[]): Set<string> {
+  const next = new Set<string>();
+  for (const allowedId of allowedIds) {
+    if (selectedIds.has(allowedId)) {
+      next.add(allowedId);
+    }
+  }
+  return next;
 }
 
 async function adminRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -631,6 +683,7 @@ function renderQueue(): void {
 }
 
 function renderDetail(): void {
+  renderRunSelectionActions();
   const detail = state.detail;
   if (!detail || !detailShell || !detailEmpty) {
     if (detailShell) {
@@ -685,6 +738,19 @@ function renderDetail(): void {
   renderPointEvents(detailPointEvents, detail.recentPointEvents);
   renderAuditList(detailInvalidations, detail.recentInvalidations, 'No prior invalidations for this user.');
   renderSelectionSummary();
+}
+
+function renderRunSelectionActions(): void {
+  const detail = state.detail;
+  const totalRunCount = detail ? detail.roomRuns.length + detail.courseRuns.length : 0;
+  const selectedRunCount = state.selectedRoomRunIds.size + state.selectedCourseRunIds.size;
+
+  if (selectAllRunsButton) {
+    selectAllRunsButton.disabled = totalRunCount === 0 || selectedRunCount >= totalRunCount;
+  }
+  if (clearSelectedRunsButton) {
+    clearSelectedRunsButton.disabled = selectedRunCount === 0;
+  }
 }
 
 function renderRunTable(
