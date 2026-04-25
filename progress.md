@@ -110,8 +110,16 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - deployed commit `6ec6aad` to production; Worker version `707b6b00-ad7d-4b6c-81be-75f67cf3529e`, Pages deploy `https://e3dbeb86.wampland.pages.dev`, and `node scripts/smoke_prod.mjs` passed
     - live `Twitterbot/1.0` probes confirmed both `https://wamp.land/?x=0&y=0` and `https://wamp.land/r/0/0` include canonical, app bundle, `og:image`, `og:image:type`, `og:image:alt`, `twitter:image`, and `twitter:image:alt`; `https://wamp.land/r/0/0/image.png?v=176` returns a 1200x630 PNG
     - required production web-game smoke passed against `https://wamp.land/?x=0&y=0&renderer=canvas&welcome=0&verify=6ec6aad` with artifacts in `/private/tmp/wamp-prod-main-dc50466/output/web-game/room-share-query-prod-smoke/`; screenshot confirmed the app still renders from the query-style room link and no console error file was produced
+    - user reported the social image was visible but looked like a placeholder; confirmed the Pages image route was still drawing a schematic server-side renderer instead of the actual room art
+    - patched `public/_worker.js` so the Pages worker decodes PNG assets, caches them, and draws the real parallax backgrounds, tilesets, and default object sprite frames for `/r/<x>/<y>/image.png`; the old schematic tile/object renderer remains as a per-asset fallback
+    - added `renderer=assets-v1` to generated image URLs alongside the room version query so fresh shares bypass previously cached placeholder card images
+    - local Node probe generated `/tmp/wamp-actual-room-share.png`; visual inspection confirmed the actual room background, terrain, ladders, sprites, hazards, and decorations render in the card image
+    - `node --check public/_worker.js`, `git diff --check -- public/_worker.js`, and `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - deployed commits `48fcbf3` and cache-busting follow-up `939dd0f` to production via Pages-only deploy; latest Pages deploy is `https://5b96dce4.wampland.pages.dev`, and `node scripts/smoke_prod.mjs` passed
+    - live `Twitterbot/1.0` probes confirmed both `https://wamp.land/r/0/0` and `https://wamp.land/?x=0&y=0` now advertise `https://wamp.land/r/0/0/image.png?v=176&renderer=assets-v1`; direct image fetch returned `200 image/png`, 1200x630, `cf-cache-status: MISS`, and `/tmp/wamp-room-image-asset-live.png` visually matches the real room art
+    - required production web-game smoke passed against `https://wamp.land/r/0/0?renderer=canvas&welcome=0&deployProbe=939dd0f` with artifacts in `output/web-game/room-share-actual-image-prod-smoke/`; screenshot confirmed the room link still boots and renders the room, and no console-error artifact was produced
   - TODO:
-    - if social sites still show a missing image for an already-tested URL, try a fresh room URL or a harmless query suffix because X/Slack/iMessage can cache failed card fetches independently of Cloudflare
+    - if social sites still show a stale placeholder for an already-tested URL, use a fresh room URL paste or wait for that site's cache; WAMP now emits `renderer=assets-v1` specifically to avoid the old image URL cache
 
 - Overworld zoom edge-preview hydration main-port on April 24, 2026:
   - created `fix/overworld-preview-zoom-edge-2026-04-24` from `origin/main` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-overworld-zoom-edge-2026-04-24`
