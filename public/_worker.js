@@ -15,6 +15,183 @@ const PREVIEW_WIDTH = ROOM_WIDTH * PREVIEW_TILE_SIZE;
 const PREVIEW_HEIGHT = ROOM_HEIGHT * PREVIEW_TILE_SIZE;
 const TILE_FLIP_X_FLAG = 1 << 20;
 const TILE_FLIP_Y_FLAG = 1 << 21;
+const TILESETS = [
+  { key: 'forest', path: 'assets/tilesets/tileset_forest.png', columns: 12, firstGid: 1, tileCount: 72 },
+  { key: 'desert', path: 'assets/tilesets/tileset_desert.png?v=2026-04-01-desert-tiles', columns: 12, firstGid: 73, tileCount: 72 },
+  { key: 'cave', path: 'assets/tilesets/tileset_cave.png', columns: 12, firstGid: 145, tileCount: 72 },
+  { key: 'lava', path: 'assets/tilesets/tileset_lava.png', columns: 15, firstGid: 217, tileCount: 105 },
+  { key: 'snow', path: 'assets/tilesets/tileset_snow.png', columns: 11, firstGid: 322, tileCount: 66 },
+  { key: 'water', path: 'assets/tilesets/tileset_water.png', columns: 12, firstGid: 388, tileCount: 72 },
+  { key: 'smb_lvl1_3_5', path: 'assets/tilesets/tileset_smb_lvl1_3_5.png', columns: 8, firstGid: 460, tileCount: 32 },
+];
+const BACKGROUND_GROUPS = [
+  { id: 'none', layers: [] },
+  {
+    id: 'forest',
+    layers: [
+      { path: 'assets/backgrounds/forest/1.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/forest/2.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/forest/3.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/forest/5.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/forest/6.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/forest/10.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/forest/7.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/forest/8.png', width: 576, height: 324 },
+    ],
+  },
+  {
+    id: 'dark_forest',
+    layers: [
+      { path: 'assets/backgrounds/dark_forest/1.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/dark_forest/2.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/dark_forest/3.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/dark_forest/4.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/dark_forest/5.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/dark_forest/6.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/dark_forest/7.png', width: 576, height: 324 },
+    ],
+  },
+  {
+    id: 'grassland',
+    layers: [
+      { path: 'assets/backgrounds/grassland/1.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/grassland/2.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/grassland/3.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/grassland/4.png', width: 576, height: 324 },
+    ],
+  },
+  {
+    id: 'mountains',
+    layers: [
+      { path: 'assets/backgrounds/mountains/1.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/mountains/2.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/mountains/3.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/mountains/4.png', width: 576, height: 324 },
+    ],
+  },
+  {
+    id: 'meadow',
+    layers: [
+      { path: 'assets/backgrounds/meadow/1.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/meadow/2.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/meadow/3.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/meadow/4.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/meadow/5.png', width: 576, height: 324 },
+    ],
+  },
+  {
+    id: 'aurora',
+    layers: [
+      { path: 'assets/backgrounds/aurora/1.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/aurora/2.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/aurora/3.png', width: 576, height: 324 },
+    ],
+  },
+  {
+    id: 'cave',
+    layers: [
+      { path: 'assets/backgrounds/cave/layer1_far.png', width: 960, height: 480 },
+      { path: 'assets/backgrounds/cave/layer2_mid.png', width: 960, height: 480 },
+      { path: 'assets/backgrounds/cave/layer3_near.png', width: 960, height: 480 },
+    ],
+  },
+  {
+    id: 'desert',
+    layers: [
+      { path: 'assets/backgrounds/desert/far.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/desert/middle.png', width: 576, height: 324 },
+      { path: 'assets/backgrounds/desert/near.png', width: 576, height: 324 },
+    ],
+  },
+];
+const GAME_OBJECTS = [
+  { id: 'coin_gold', path: 'assets/objects/coin_gold.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
+  { id: 'coin_silver', path: 'assets/objects/coin_silver.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
+  { id: 'gem', path: 'assets/objects/gem.png', frameWidth: 16, frameHeight: 16, frameCount: 5 },
+  { id: 'blue_gem', path: 'assets/objects/blue_gem.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
+  { id: 'orange_gem', path: 'assets/objects/orange_gem.png', frameWidth: 16, frameHeight: 16, frameCount: 4 },
+  { id: 'red_gem', path: 'assets/objects/red_gem.png', frameWidth: 16, frameHeight: 16, frameCount: 4 },
+  { id: 'black_pearl', path: 'assets/objects/black_pearl.png', frameWidth: 16, frameHeight: 16, frameCount: 4 },
+  { id: 'crown', path: 'assets/objects/crown.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
+  { id: 'ring', path: 'assets/objects/ring.png', frameWidth: 16, frameHeight: 16, frameCount: 4 },
+  { id: 'star', path: 'assets/objects/star.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
+  { id: 'heart', path: 'assets/objects/heart.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
+  { id: 'key', path: 'assets/objects/key.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
+  { id: 'health_potion', path: 'assets/objects/health_potion.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
+  { id: 'mana_potion', path: 'assets/objects/mana_potion.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
+  { id: 'mushroom', path: 'assets/objects/mushroom.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
+  { id: 'egg', path: 'assets/objects/egg.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
+  { id: 'bone', path: 'assets/objects/bone.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
+  { id: 'book', path: 'assets/objects/book.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
+  { id: 'scroll', path: 'assets/objects/scroll.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
+  { id: 'skull', path: 'assets/objects/skull.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
+  { id: 'bomb_pickup', path: 'assets/objects/bomb_pickup.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
+  { id: 'apple', path: 'assets/objects/apple.png', frameWidth: 16, frameHeight: 16, frameCount: 1 },
+  { id: 'banana', path: 'assets/objects/banana.png', frameWidth: 16, frameHeight: 16, frameCount: 1 },
+  { id: 'kitkat', path: 'assets/objects/kitkat.png', frameWidth: 16, frameHeight: 16, frameCount: 12 },
+  { id: 'poop', path: 'assets/objects/poop.png', frameWidth: 16, frameHeight: 16, frameCount: 1 },
+  { id: 'cake', path: 'assets/objects/cake.png', frameWidth: 32, frameHeight: 32, frameCount: 6 },
+  { id: 'coin_small_gold', path: 'assets/objects/coin_small_gold.png', frameWidth: 16, frameHeight: 16, frameCount: 6 },
+  { id: 'coin_small_silver', path: 'assets/objects/coin_small_silver.png', frameWidth: 16, frameHeight: 16, frameCount: 6 },
+  { id: 'spikes', path: 'assets/enemies/spikes.png', frameWidth: 16, frameHeight: 16, frameCount: 4 },
+  { id: 'saw', path: 'assets/enemies/saw.png', frameWidth: 34, frameHeight: 34, frameCount: 4, animationFrames: [0, 2, 3, 2] },
+  { id: 'fire', path: 'assets/enemies/fire.png', frameWidth: 16, frameHeight: 16, frameCount: 6 },
+  { id: 'fireball', path: 'assets/enemies/fireball.png', frameWidth: 16, frameHeight: 16, frameCount: 4 },
+  { id: 'bomb', path: 'assets/enemies/bomb.png', frameWidth: 32, frameHeight: 48, frameCount: 15 },
+  { id: 'wood_stakes', path: 'assets/enemies/wood_stakes.png', frameWidth: 32, frameHeight: 32, frameCount: 1 },
+  { id: 'cannon', path: 'assets/enemies/cannon.png', frameWidth: 32, frameHeight: 32, frameCount: 1, defaultFrame: 2, facingDirection: 'left' },
+  { id: 'cactus', path: 'assets/enemies/cactus.png', frameWidth: 32, frameHeight: 32, frameCount: 6 },
+  { id: 'tornado', path: 'assets/enemies/tornado.png', frameWidth: 48, frameHeight: 48, frameCount: 8 },
+  { id: 'fire_big', path: 'assets/enemies/fire_big.png', frameWidth: 32, frameHeight: 32, frameCount: 6 },
+  { id: 'ice_spikes', path: 'assets/enemies/ice_spikes.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
+  { id: 'icicle', path: 'assets/enemies/icicle.png', frameWidth: 48, frameHeight: 48, frameCount: 6, animationFrames: [0, 1, 2, 3] },
+  { id: 'lightning', path: 'assets/enemies/lightning.png', frameWidth: 64, frameHeight: 96, frameCount: 4, defaultFrame: 1, animationFrames: [0, 1] },
+  { id: 'propeller', path: 'assets/enemies/propeller.png', frameWidth: 16, frameHeight: 16, frameCount: 4 },
+  { id: 'quicksand', path: 'assets/enemies/quicksand.png', frameWidth: 32, frameHeight: 32, frameCount: 8 },
+  { id: 'cactus_spike', path: 'assets/enemies/cactus_spike.png', frameWidth: 16, frameHeight: 16, frameCount: 1 },
+  { id: 'tornado_sand', path: 'assets/enemies/tornado_sand.png', frameWidth: 48, frameHeight: 48, frameCount: 8 },
+  { id: 'lava_surface', path: 'assets/deco/lava_surface.png', frameWidth: 48, frameHeight: 48, frameCount: 8 },
+  { id: 'water_surface_a', path: 'assets/deco/water_surface_a.png', frameWidth: 32, frameHeight: 32, frameCount: 8 },
+  { id: 'water_surface_b', path: 'assets/deco/water_surface_b.png', frameWidth: 16, frameHeight: 16, frameCount: 5 },
+  { id: 'slime_blue', path: 'assets/enemies/slime_blue.png', frameWidth: 16, frameHeight: 16, frameCount: 5, facingDirection: 'left' },
+  { id: 'slime_red', path: 'assets/enemies/slime_red.png', frameWidth: 16, frameHeight: 16, frameCount: 5, facingDirection: 'left' },
+  { id: 'bat', path: 'assets/enemies/bat.png', frameWidth: 32, frameHeight: 32, frameCount: 8, defaultFrame: 6, animationFrames: [4, 5, 6, 7, 6, 5], facingDirection: 'right' },
+  { id: 'crab', path: 'assets/enemies/crab.png', frameWidth: 32, frameHeight: 16, frameCount: 9, defaultFrame: 1, animationFrames: [0, 1, 2, 1], facingDirection: 'left' },
+  { id: 'bird', path: 'assets/enemies/bird.png', frameWidth: 32, frameHeight: 32, frameCount: 4, facingDirection: 'left' },
+  { id: 'fish', path: 'assets/enemies/fish.png', frameWidth: 32, frameHeight: 16, frameCount: 3, defaultFrame: 1, animationFrames: [0, 1, 2, 1], facingDirection: 'right' },
+  { id: 'frog', path: 'assets/enemies/frog.png', frameWidth: 32, frameHeight: 32, frameCount: 4, facingDirection: 'right' },
+  { id: 'snake', path: 'assets/enemies/snake.png', frameWidth: 32, frameHeight: 32, frameCount: 4, facingDirection: 'left' },
+  { id: 'penguin', path: 'assets/enemies/penguin.png', frameWidth: 32, frameHeight: 32, frameCount: 4, facingDirection: 'right' },
+  { id: 'bear_brown', path: 'assets/enemies/bear_brown.png', frameWidth: 32, frameHeight: 32, frameCount: 8, defaultFrame: 5, animationFrames: [4, 5, 6, 7, 6, 5], facingDirection: 'right' },
+  { id: 'bear_polar', path: 'assets/enemies/bear_polar.png', frameWidth: 32, frameHeight: 32, frameCount: 8, defaultFrame: 5, animationFrames: [4, 5, 6, 7, 6, 5], facingDirection: 'right' },
+  { id: 'chicken', path: 'assets/enemies/chicken.png', frameWidth: 32, frameHeight: 32, frameCount: 14, defaultFrame: 7, animationFrames: [7, 8, 9, 10, 11, 12, 13], facingDirection: 'left' },
+  { id: 'shark', path: 'assets/enemies/shark.png', frameWidth: 64, frameHeight: 32, frameCount: 4, defaultFrame: 1, animationFrames: [0, 1, 2, 3, 2, 1], facingDirection: 'left' },
+  { id: 'bounce_pad', path: 'assets/objects/bounce_pad.png', frameWidth: 16, frameHeight: 32, frameCount: 4 },
+  { id: 'spawn_point', path: 'assets/objects/sign_arrow.png', frameWidth: 16, frameHeight: 32, frameCount: 1 },
+  { id: 'flag', path: 'assets/objects/flag.png', frameWidth: 32, frameHeight: 32, frameCount: 9 },
+  { id: 'door_locked', path: 'assets/objects/door_locked.png', frameWidth: 32, frameHeight: 48, frameCount: 1 },
+  { id: 'door_metal', path: 'assets/objects/metal_door_locked.png', frameWidth: 32, frameHeight: 48, frameCount: 1 },
+  { id: 'crate', path: 'assets/objects/crate_static.png', frameWidth: 32, frameHeight: 32, frameCount: 1 },
+  { id: 'brick_box', path: 'assets/objects/brick_box.png', frameWidth: 32, frameHeight: 32, frameCount: 6, defaultFrame: 5 },
+  { id: 'treasure_chest', path: 'assets/objects/treasure_chest.png', frameWidth: 32, frameHeight: 32, frameCount: 4, defaultFrame: 0 },
+  { id: 'log_wall', path: 'assets/deco/log_wall.png', frameWidth: 32, frameHeight: 48, frameCount: 1 },
+  { id: 'cage', path: 'assets/objects/cage.png', frameWidth: 18, frameHeight: 32, frameCount: 5, defaultFrame: 0 },
+  { id: 'sign', path: 'assets/objects/sign.png', frameWidth: 16, frameHeight: 32, frameCount: 1 },
+  { id: 'sign_arrow', path: 'assets/objects/sign_arrow.png', frameWidth: 16, frameHeight: 32, frameCount: 1 },
+  { id: 'ladder', path: 'assets/objects/ladder.png', frameWidth: 16, frameHeight: 64, frameCount: 1 },
+  { id: 'floor_trigger', path: 'assets/objects/floor_trigger.png', frameWidth: 16, frameHeight: 16, frameCount: 2, defaultFrame: 0 },
+  { id: 'button', path: 'assets/objects/button.png', frameWidth: 16, frameHeight: 16, frameCount: 4, defaultFrame: 0 },
+  { id: 'bush', path: 'assets/deco/bush.png', frameWidth: 32, frameHeight: 16, frameCount: 1 },
+  { id: 'rock', path: 'assets/deco/rock.png', frameWidth: 16, frameHeight: 16, frameCount: 1 },
+  { id: 'tree', path: 'assets/deco/tree.png', frameWidth: 48, frameHeight: 48, frameCount: 1 },
+  { id: 'tree_b', path: 'assets/deco/tree_b.png', frameWidth: 48, frameHeight: 64, frameCount: 1 },
+  { id: 'tree_c', path: 'assets/deco/tree_c.png', frameWidth: 48, frameHeight: 48, frameCount: 1 },
+  { id: 'tree_trunk', path: 'assets/deco/tree_trunk.png', frameWidth: 16, frameHeight: 16, frameCount: 1 },
+  { id: 'sun', path: 'assets/deco/sun.png', frameWidth: 32, frameHeight: 32, frameCount: 6 },
+  { id: 'clouds_deco', path: 'assets/deco/clouds.png', frameWidth: 48, frameHeight: 16, frameCount: 1 },
+];
+const GAME_OBJECT_CONFIG_BY_ID = new Map(GAME_OBJECTS.map((config) => [config.id, config]));
+const imageDataCache = new Map();
 
 export default {
   async fetch(request, env) {
@@ -218,7 +395,7 @@ async function renderRoomImageResponse(request, env, url, coordinates) {
   const snapshot =
     await loadPublishedRoomSnapshot(request, env, url, coordinates, ROOM_IMAGE_TIMEOUT_MS)
     ?? createFallbackRoomSnapshot(coordinates);
-  return new Response(renderRoomSharePreviewPng(snapshot), {
+  return new Response(await renderRoomSharePreviewPng(request, env, url, snapshot), {
     status: 200,
     headers,
   });
@@ -389,12 +566,12 @@ function emptyTileLayer() {
   return Array.from({ length: ROOM_HEIGHT }, () => Array.from({ length: ROOM_WIDTH }, () => -1));
 }
 
-function renderRoomSharePreviewPng(snapshot) {
+async function renderRoomSharePreviewPng(request, env, url, snapshot) {
   const canvas = createCanvas(ROOM_SHARE_IMAGE_WIDTH, ROOM_SHARE_IMAGE_HEIGHT);
-  drawPreviewBackground(canvas, snapshot);
+  await primeRoomAssetCache(request, env, url, snapshot);
+  await drawPreviewBackground(canvas, request, env, url, snapshot);
   drawRoomFrame(canvas);
-  drawTiles(canvas, snapshot);
-  drawObjects(canvas, snapshot);
+  await drawRoomAssetLayers(canvas, request, env, url, snapshot);
   drawBorder(canvas, PREVIEW_LEFT - 4, PREVIEW_TOP - 4, PREVIEW_WIDTH + 8, PREVIEW_HEIGHT + 8, 0xf5f1de);
   return encodePng(canvas.width, canvas.height, canvas.pixels);
 }
@@ -407,7 +584,7 @@ function createCanvas(width, height) {
   };
 }
 
-function drawPreviewBackground(canvas, snapshot) {
+async function drawPreviewBackground(canvas, request, env, url, snapshot) {
   const background = resolvePreviewBackground(snapshot?.background);
   if (background.kind === 'solid') {
     fillRect(canvas, 0, 0, canvas.width, canvas.height, background.color);
@@ -419,11 +596,29 @@ function drawPreviewBackground(canvas, snapshot) {
   fillRect(canvas, 0, Math.floor(canvas.height * 0.42), canvas.width, Math.ceil(canvas.height * 0.3), palette.far);
   fillRect(canvas, 0, Math.floor(canvas.height * 0.62), canvas.width, Math.ceil(canvas.height * 0.38), palette.near);
   drawHorizonSteps(canvas, palette.far, palette.near, snapshot?.id || 'room');
+
+  const group = getBackgroundGroup(background.id);
+  if (!group || group.layers.length === 0) {
+    return;
+  }
+
+  for (const layer of group.layers) {
+    try {
+      const image = await loadAssetImageData(request, env, url, layer.path);
+      const drawHeight = canvas.height;
+      const drawWidth = Math.max(1, Math.ceil(layer.width * (drawHeight / layer.height)));
+      for (let drawX = 0; drawX < canvas.width + drawWidth; drawX += drawWidth) {
+        blitImageNearest(canvas, image, 0, 0, image.width, image.height, drawX, 0, drawWidth, drawHeight);
+      }
+    } catch {
+      return;
+    }
+  }
 }
 
 function resolvePreviewBackground(background) {
   if (typeof background === 'string') {
-    return { kind: 'palette', palette: backgroundPalette(background) };
+    return { kind: 'palette', id: background, palette: backgroundPalette(background) };
   }
 
   if (background && typeof background === 'object') {
@@ -437,10 +632,10 @@ function resolvePreviewBackground(background) {
       || background.id
       || background.name
       || 'grassland';
-    return { kind: 'palette', palette: backgroundPalette(String(id)) };
+    return { kind: 'palette', id: String(id), palette: backgroundPalette(String(id)) };
   }
 
-  return { kind: 'palette', palette: backgroundPalette('grassland') };
+  return { kind: 'palette', id: 'grassland', palette: backgroundPalette('grassland') };
 }
 
 function backgroundPalette(id) {
@@ -457,9 +652,148 @@ function backgroundPalette(id) {
   return palettes[id] || palettes.grassland;
 }
 
+function getBackgroundGroup(id) {
+  return BACKGROUND_GROUPS.find((group) => group.id === id) || null;
+}
+
+async function primeRoomAssetCache(request, env, url, snapshot) {
+  const paths = new Set();
+  const background = resolvePreviewBackground(snapshot?.background);
+  if (background.kind === 'palette') {
+    for (const layer of getBackgroundGroup(background.id)?.layers ?? []) {
+      paths.add(layer.path);
+    }
+  }
+
+  const tileData = snapshot?.tileData || {};
+  for (const layerName of ['background', 'terrain', 'foreground']) {
+    const layer = Array.isArray(tileData[layerName]) ? tileData[layerName] : [];
+    for (const row of layer) {
+      if (!Array.isArray(row)) {
+        continue;
+      }
+      for (const value of row) {
+        const tileset = getTilesetByGid(decodeTileValue(value ?? -1).gid);
+        if (tileset) {
+          paths.add(tileset.path);
+        }
+      }
+    }
+  }
+
+  const placedObjects = Array.isArray(snapshot?.placedObjects) ? snapshot.placedObjects : [];
+  for (const placed of placedObjects) {
+    const config = getObjectConfig(placed?.id);
+    if (config) {
+      paths.add(config.path);
+    }
+  }
+
+  await Promise.allSettled(
+    Array.from(paths, (path) => loadAssetImageData(request, env, url, path))
+  );
+}
+
 function drawRoomFrame(canvas) {
-  blendRect(canvas, PREVIEW_LEFT - 8, PREVIEW_TOP - 8, PREVIEW_WIDTH + 16, PREVIEW_HEIGHT + 16, 0x05070c, 0.84);
-  blendRect(canvas, PREVIEW_LEFT, PREVIEW_TOP, PREVIEW_WIDTH, PREVIEW_HEIGHT, 0x0e1524, 0.34);
+  blendRect(canvas, PREVIEW_LEFT - 8, PREVIEW_TOP - 8, PREVIEW_WIDTH + 16, PREVIEW_HEIGHT + 16, 0x05070c, 0.12);
+  blendRect(canvas, PREVIEW_LEFT, PREVIEW_TOP, PREVIEW_WIDTH, PREVIEW_HEIGHT, 0x0e1524, 0.04);
+}
+
+async function drawRoomAssetLayers(canvas, request, env, url, snapshot) {
+  const tileData = snapshot?.tileData || {};
+  for (const layerName of ['background', 'terrain', 'foreground']) {
+    const layer = Array.isArray(tileData[layerName]) ? tileData[layerName] : [];
+    await drawAssetTileLayer(canvas, request, env, url, layerName, layer);
+    await drawAssetObjectsForLayer(canvas, request, env, url, snapshot, layerName);
+  }
+}
+
+async function drawAssetTileLayer(canvas, request, env, url, layerName, layer) {
+  for (let tileY = 0; tileY < ROOM_HEIGHT; tileY += 1) {
+    const row = Array.isArray(layer[tileY]) ? layer[tileY] : [];
+    for (let tileX = 0; tileX < ROOM_WIDTH; tileX += 1) {
+      const { gid, flipX, flipY } = decodeTileValue(row[tileX] ?? -1);
+      if (gid <= 0) {
+        continue;
+      }
+
+      const tileset = getTilesetByGid(gid);
+      if (!tileset) {
+        drawFallbackTile(canvas, layerName, tileX, tileY, gid);
+        continue;
+      }
+
+      try {
+        const image = await loadAssetImageData(request, env, url, tileset.path);
+        const localIndex = gid - tileset.firstGid;
+        const sourceCol = localIndex % tileset.columns;
+        const sourceRow = Math.floor(localIndex / tileset.columns);
+        blitImageNearest(
+          canvas,
+          image,
+          sourceCol * TILE_SIZE,
+          sourceRow * TILE_SIZE,
+          TILE_SIZE,
+          TILE_SIZE,
+          PREVIEW_LEFT + tileX * PREVIEW_TILE_SIZE,
+          PREVIEW_TOP + tileY * PREVIEW_TILE_SIZE,
+          PREVIEW_TILE_SIZE,
+          PREVIEW_TILE_SIZE,
+          flipX,
+          flipY,
+        );
+      } catch {
+        drawFallbackTile(canvas, layerName, tileX, tileY, gid);
+      }
+    }
+  }
+}
+
+async function drawAssetObjectsForLayer(canvas, request, env, url, snapshot, layerName) {
+  const placedObjects = Array.isArray(snapshot?.placedObjects) ? snapshot.placedObjects : [];
+  for (const placed of placedObjects) {
+    if (getPlacedObjectLayer(placed) !== layerName) {
+      continue;
+    }
+
+    const config = getObjectConfig(placed?.id);
+    if (!config) {
+      drawFallbackObject(canvas, placed);
+      continue;
+    }
+
+    try {
+      const image = await loadAssetImageData(request, env, url, config.path);
+      const frame = getObjectDefaultFrame(config);
+      const source = getObjectFrameSourceRect(config, frame, image.width || config.frameWidth);
+      const scale = PREVIEW_TILE_SIZE / TILE_SIZE;
+      const destX = PREVIEW_LEFT + Math.round((Number(placed.x || 0) - config.frameWidth / 2) * scale);
+      const destY = PREVIEW_TOP + Math.round((Number(placed.y || 0) - config.frameHeight / 2) * scale);
+      const destWidth = Math.max(1, Math.round(source.sw * scale));
+      const destHeight = Math.max(1, Math.round(source.sh * scale));
+      const shouldFlipX =
+        Boolean(config.facingDirection) &&
+        Boolean(placed.facing) &&
+        config.facingDirection !== placed.facing;
+
+      blitImageNearest(
+        canvas,
+        image,
+        source.sx,
+        source.sy,
+        source.sw,
+        source.sh,
+        destX,
+        destY,
+        destWidth,
+        destHeight,
+        shouldFlipX,
+        false,
+      );
+    } catch {
+      drawFallbackObject(canvas, placed);
+    }
+  }
 }
 
 function drawTiles(canvas, snapshot) {
@@ -474,81 +808,89 @@ function drawTiles(canvas, snapshot) {
           continue;
         }
 
-        const x = PREVIEW_LEFT + tileX * PREVIEW_TILE_SIZE;
-        const y = PREVIEW_TOP + tileY * PREVIEW_TILE_SIZE;
-        const color = getTileColor(gid, tileX, tileY);
-
-        if (layerName === 'background') {
-          blendRect(canvas, x + 4, y + 4, PREVIEW_TILE_SIZE - 8, PREVIEW_TILE_SIZE - 8, color, 0.45);
-          continue;
-        }
-
-        if (layerName === 'foreground') {
-          blendRect(canvas, x + 2, y + 2, PREVIEW_TILE_SIZE - 4, PREVIEW_TILE_SIZE - 4, lighten(color, 0.18), 0.74);
-          drawBorder(canvas, x + 2, y + 2, PREVIEW_TILE_SIZE - 4, PREVIEW_TILE_SIZE - 4, darken(color, 0.28));
-          continue;
-        }
-
-        fillRect(canvas, x, y, PREVIEW_TILE_SIZE, PREVIEW_TILE_SIZE, color);
-        fillRect(canvas, x, y, PREVIEW_TILE_SIZE, 4, lighten(color, 0.2));
-        fillRect(canvas, x, y + PREVIEW_TILE_SIZE - 4, PREVIEW_TILE_SIZE, 4, darken(color, 0.24));
-        fillRect(canvas, x, y, 3, PREVIEW_TILE_SIZE, darken(color, 0.18));
-        fillRect(canvas, x + PREVIEW_TILE_SIZE - 3, y, 3, PREVIEW_TILE_SIZE, darken(color, 0.3));
+        drawFallbackTile(canvas, layerName, tileX, tileY, gid);
       }
     }
   }
 }
 
+function drawFallbackTile(canvas, layerName, tileX, tileY, gid) {
+  const x = PREVIEW_LEFT + tileX * PREVIEW_TILE_SIZE;
+  const y = PREVIEW_TOP + tileY * PREVIEW_TILE_SIZE;
+  const color = getTileColor(gid, tileX, tileY);
+
+  if (layerName === 'background') {
+    blendRect(canvas, x + 4, y + 4, PREVIEW_TILE_SIZE - 8, PREVIEW_TILE_SIZE - 8, color, 0.45);
+    return;
+  }
+
+  if (layerName === 'foreground') {
+    blendRect(canvas, x + 2, y + 2, PREVIEW_TILE_SIZE - 4, PREVIEW_TILE_SIZE - 4, lighten(color, 0.18), 0.74);
+    drawBorder(canvas, x + 2, y + 2, PREVIEW_TILE_SIZE - 4, PREVIEW_TILE_SIZE - 4, darken(color, 0.28));
+    return;
+  }
+
+  fillRect(canvas, x, y, PREVIEW_TILE_SIZE, PREVIEW_TILE_SIZE, color);
+  fillRect(canvas, x, y, PREVIEW_TILE_SIZE, 4, lighten(color, 0.2));
+  fillRect(canvas, x, y + PREVIEW_TILE_SIZE - 4, PREVIEW_TILE_SIZE, 4, darken(color, 0.24));
+  fillRect(canvas, x, y, 3, PREVIEW_TILE_SIZE, darken(color, 0.18));
+  fillRect(canvas, x + PREVIEW_TILE_SIZE - 3, y, 3, PREVIEW_TILE_SIZE, darken(color, 0.3));
+}
+
 function drawObjects(canvas, snapshot) {
   const placedObjects = Array.isArray(snapshot?.placedObjects) ? snapshot.placedObjects : [];
-  const scale = PREVIEW_TILE_SIZE / TILE_SIZE;
 
   for (const placed of placedObjects) {
-    if (!placed || typeof placed.id !== 'string') {
-      continue;
-    }
+    drawFallbackObject(canvas, placed);
+  }
+}
 
-    const id = placed.id;
-    const dimensions = getObjectPreviewDimensions(id);
-    const width = Math.max(10, Math.round(dimensions.width * scale));
-    const height = Math.max(10, Math.round(dimensions.height * scale));
-    const centerX = PREVIEW_LEFT + Math.round(((Number(placed.x) || 0) / TILE_SIZE) * PREVIEW_TILE_SIZE);
-    const centerY = PREVIEW_TOP + Math.round(((Number(placed.y) || 0) / TILE_SIZE) * PREVIEW_TILE_SIZE);
-    const x = centerX - Math.floor(width / 2);
-    const y = centerY - Math.floor(height / 2);
+function drawFallbackObject(canvas, placed) {
+  if (!placed || typeof placed.id !== 'string') {
+    return;
+  }
 
-    if (isHazardObject(id)) {
-      drawTriangle(canvas, centerX, y, x, y + height, x + width, y + height, 0xff5d4d);
-      drawTriangle(canvas, centerX, y + 6, x + 6, y + height - 4, x + width - 6, y + height - 4, 0xffb15a);
-    } else if (isEnemyObject(id)) {
-      fillEllipse(canvas, centerX, centerY, Math.max(8, Math.floor(width * 0.45)), Math.max(7, Math.floor(height * 0.38)), 0x4fd1c5);
-      fillRect(canvas, centerX - 5, centerY - 4, 4, 4, 0x07111c);
-      fillRect(canvas, centerX + 3, centerY - 4, 4, 4, 0x07111c);
-    } else if (isCollectibleObject(id)) {
-      drawDiamond(canvas, centerX, centerY, Math.max(7, Math.floor(Math.min(width, height) * 0.42)), 0xffd447);
-      drawDiamond(canvas, centerX, centerY - 2, Math.max(3, Math.floor(Math.min(width, height) * 0.18)), 0xfff3a4);
-    } else if (id === 'flag' || id.includes('checkpoint')) {
-      fillRect(canvas, centerX - 2, y, 5, height, 0xf5f1de);
-      fillRect(canvas, centerX + 3, y + 2, Math.max(12, Math.floor(width * 0.7)), Math.max(12, Math.floor(height * 0.42)), 0x5dc16b);
-    } else if (id === 'ladder') {
-      fillRect(canvas, x + Math.floor(width * 0.2), y, 4, height, 0xd7ac63);
-      fillRect(canvas, x + Math.floor(width * 0.75), y, 4, height, 0xd7ac63);
-      for (let rungY = y + 8; rungY < y + height - 4; rungY += 12) {
-        fillRect(canvas, x + Math.floor(width * 0.2), rungY, Math.floor(width * 0.6), 4, 0xf0c06b);
-      }
-    } else if (id.includes('door')) {
-      fillRect(canvas, x, y, width, height, 0x3d4a5c);
-      fillRect(canvas, x + 5, y + 5, width - 10, height - 10, 0x6f7f96);
-      fillRect(canvas, x + width - 9, centerY, 5, 5, 0xffd447);
-    } else if (id === 'spawn_point') {
-      drawDiamond(canvas, centerX, centerY, Math.max(9, Math.floor(Math.min(width, height) * 0.38)), 0x7fd4ff);
-    } else if (id.includes('platform')) {
-      fillRect(canvas, x, y, width, height, 0x9a6b44);
-      fillRect(canvas, x, y, width, 5, 0xd6a268);
-      drawBorder(canvas, x, y, width, height, 0x4b2d1f);
-    } else {
-      drawDecoration(canvas, id, x, y, width, height, centerX, centerY);
+  const scale = PREVIEW_TILE_SIZE / TILE_SIZE;
+  const id = placed.id;
+  const dimensions = getObjectPreviewDimensions(id);
+  const width = Math.max(10, Math.round(dimensions.width * scale));
+  const height = Math.max(10, Math.round(dimensions.height * scale));
+  const centerX = PREVIEW_LEFT + Math.round(((Number(placed.x) || 0) / TILE_SIZE) * PREVIEW_TILE_SIZE);
+  const centerY = PREVIEW_TOP + Math.round(((Number(placed.y) || 0) / TILE_SIZE) * PREVIEW_TILE_SIZE);
+  const x = centerX - Math.floor(width / 2);
+  const y = centerY - Math.floor(height / 2);
+
+  if (isHazardObject(id)) {
+    drawTriangle(canvas, centerX, y, x, y + height, x + width, y + height, 0xff5d4d);
+    drawTriangle(canvas, centerX, y + 6, x + 6, y + height - 4, x + width - 6, y + height - 4, 0xffb15a);
+  } else if (isEnemyObject(id)) {
+    fillEllipse(canvas, centerX, centerY, Math.max(8, Math.floor(width * 0.45)), Math.max(7, Math.floor(height * 0.38)), 0x4fd1c5);
+    fillRect(canvas, centerX - 5, centerY - 4, 4, 4, 0x07111c);
+    fillRect(canvas, centerX + 3, centerY - 4, 4, 4, 0x07111c);
+  } else if (isCollectibleObject(id)) {
+    drawDiamond(canvas, centerX, centerY, Math.max(7, Math.floor(Math.min(width, height) * 0.42)), 0xffd447);
+    drawDiamond(canvas, centerX, centerY - 2, Math.max(3, Math.floor(Math.min(width, height) * 0.18)), 0xfff3a4);
+  } else if (id === 'flag' || id.includes('checkpoint')) {
+    fillRect(canvas, centerX - 2, y, 5, height, 0xf5f1de);
+    fillRect(canvas, centerX + 3, y + 2, Math.max(12, Math.floor(width * 0.7)), Math.max(12, Math.floor(height * 0.42)), 0x5dc16b);
+  } else if (id === 'ladder') {
+    fillRect(canvas, x + Math.floor(width * 0.2), y, 4, height, 0xd7ac63);
+    fillRect(canvas, x + Math.floor(width * 0.75), y, 4, height, 0xd7ac63);
+    for (let rungY = y + 8; rungY < y + height - 4; rungY += 12) {
+      fillRect(canvas, x + Math.floor(width * 0.2), rungY, Math.floor(width * 0.6), 4, 0xf0c06b);
     }
+  } else if (id.includes('door')) {
+    fillRect(canvas, x, y, width, height, 0x3d4a5c);
+    fillRect(canvas, x + 5, y + 5, width - 10, height - 10, 0x6f7f96);
+    fillRect(canvas, x + width - 9, centerY, 5, 5, 0xffd447);
+  } else if (id === 'spawn_point') {
+    drawDiamond(canvas, centerX, centerY, Math.max(9, Math.floor(Math.min(width, height) * 0.38)), 0x7fd4ff);
+  } else if (id.includes('platform')) {
+    fillRect(canvas, x, y, width, height, 0x9a6b44);
+    fillRect(canvas, x, y, width, 5, 0xd6a268);
+    drawBorder(canvas, x, y, width, height, 0x4b2d1f);
+  } else {
+    drawDecoration(canvas, id, x, y, width, height, centerX, centerY);
   }
 }
 
@@ -608,14 +950,65 @@ function drawDecoration(canvas, id, x, y, width, height, centerX, centerY) {
   fillEllipse(canvas, centerX, centerY, Math.max(8, Math.floor(width * 0.42)), Math.max(6, Math.floor(height * 0.3)), 0x5dc16b);
 }
 
+function getTilesetByGid(gid) {
+  for (const tileset of TILESETS) {
+    if (gid >= tileset.firstGid && gid < tileset.firstGid + tileset.tileCount) {
+      return tileset;
+    }
+  }
+
+  return null;
+}
+
+function getObjectConfig(id) {
+  return typeof id === 'string' ? GAME_OBJECT_CONFIG_BY_ID.get(id) ?? null : null;
+}
+
+function getObjectDefaultFrame(config) {
+  if (typeof config.defaultFrame === 'number') {
+    return config.defaultFrame;
+  }
+  if (Array.isArray(config.animationFrames) && config.animationFrames.length > 0) {
+    return config.animationFrames[0] ?? 0;
+  }
+  return 0;
+}
+
+function getObjectFrameSourceRect(config, frame, sheetWidth) {
+  const columns = Math.max(1, Math.floor(sheetWidth / config.frameWidth));
+  const normalizedFrame = Math.max(0, frame);
+  const column = normalizedFrame % columns;
+  const row = Math.floor(normalizedFrame / columns);
+  return {
+    sx: column * config.frameWidth,
+    sy: row * config.frameHeight,
+    sw: config.frameWidth,
+    sh: config.frameHeight,
+  };
+}
+
+function getPlacedObjectLayer(placed) {
+  return placed?.layer === 'background' || placed?.layer === 'terrain' || placed?.layer === 'foreground'
+    ? placed.layer
+    : 'terrain';
+}
+
 function decodeTileGid(value) {
+  return decodeTileValue(value).gid;
+}
+
+function decodeTileValue(value) {
   if (!Number.isFinite(value) || value <= 0) {
-    return -1;
+    return { gid: -1, flipX: false, flipY: false };
   }
 
   const flipX = value >= TILE_FLIP_X_FLAG && Math.floor(value / TILE_FLIP_X_FLAG) % 2 === 1;
   const flipY = value >= TILE_FLIP_Y_FLAG && Math.floor(value / TILE_FLIP_Y_FLAG) % 2 === 1;
-  return value - (flipX ? TILE_FLIP_X_FLAG : 0) - (flipY ? TILE_FLIP_Y_FLAG : 0);
+  return {
+    gid: value - (flipX ? TILE_FLIP_X_FLAG : 0) - (flipY ? TILE_FLIP_Y_FLAG : 0),
+    flipX,
+    flipY,
+  };
 }
 
 function getTileColor(gid, tileX, tileY) {
@@ -743,6 +1136,278 @@ function fillEllipse(canvas, centerX, centerY, radiusX, radiusY, color) {
     const halfWidth = Math.floor(safeRadiusX * Math.sqrt(Math.max(0, 1 - normalizedY * normalizedY)));
     fillRect(canvas, centerX - halfWidth, centerY + dy, halfWidth * 2 + 1, 1, color);
   }
+}
+
+async function loadAssetImageData(request, env, url, assetPath) {
+  const normalizedPath = normalizeAssetPath(assetPath);
+  let pending = imageDataCache.get(normalizedPath);
+  if (pending) {
+    return pending;
+  }
+
+  pending = (async () => {
+    const assetUrl = new URL(normalizedPath, url.origin);
+    const response = await env.ASSETS.fetch(new Request(assetUrl, request));
+    if (!response.ok) {
+      throw new Error(`Failed to load asset ${normalizedPath}`);
+    }
+
+    return decodePng(new Uint8Array(await response.arrayBuffer()));
+  })();
+  imageDataCache.set(normalizedPath, pending);
+  return pending;
+}
+
+function normalizeAssetPath(assetPath) {
+  const trimmed = String(assetPath || '').trim();
+  return `/${trimmed.replace(/^\/+/, '')}`;
+}
+
+function blitImageNearest(canvas, image, sx, sy, sw, sh, dx, dy, dw, dh, flipX = false, flipY = false) {
+  if (dw <= 0 || dh <= 0 || sw <= 0 || sh <= 0) {
+    return;
+  }
+
+  const left = Math.max(0, Math.floor(dx));
+  const top = Math.max(0, Math.floor(dy));
+  const right = Math.min(canvas.width, Math.ceil(dx + dw));
+  const bottom = Math.min(canvas.height, Math.ceil(dy + dh));
+
+  for (let targetY = top; targetY < bottom; targetY += 1) {
+    const relativeY = Math.min(sh - 1, Math.max(0, Math.floor(((targetY + 0.5 - dy) / dh) * sh)));
+    const sourceY = Math.max(0, Math.min(image.height - 1, Math.floor(sy + (flipY ? sh - 1 - relativeY : relativeY))));
+    for (let targetX = left; targetX < right; targetX += 1) {
+      const relativeX = Math.min(sw - 1, Math.max(0, Math.floor(((targetX + 0.5 - dx) / dw) * sw)));
+      const sourceX = Math.max(0, Math.min(image.width - 1, Math.floor(sx + (flipX ? sw - 1 - relativeX : relativeX))));
+      const sourceOffset = (sourceY * image.width + sourceX) * 4;
+      const alpha = image.pixels[sourceOffset + 3];
+      if (alpha <= 0) {
+        continue;
+      }
+
+      const targetOffset = (targetY * canvas.width + targetX) * 4;
+      if (alpha >= 255) {
+        canvas.pixels[targetOffset] = image.pixels[sourceOffset];
+        canvas.pixels[targetOffset + 1] = image.pixels[sourceOffset + 1];
+        canvas.pixels[targetOffset + 2] = image.pixels[sourceOffset + 2];
+        canvas.pixels[targetOffset + 3] = 255;
+        continue;
+      }
+
+      const sourceAlpha = alpha / 255;
+      const inverseAlpha = 1 - sourceAlpha;
+      canvas.pixels[targetOffset] = Math.round(image.pixels[sourceOffset] * sourceAlpha + canvas.pixels[targetOffset] * inverseAlpha);
+      canvas.pixels[targetOffset + 1] = Math.round(image.pixels[sourceOffset + 1] * sourceAlpha + canvas.pixels[targetOffset + 1] * inverseAlpha);
+      canvas.pixels[targetOffset + 2] = Math.round(image.pixels[sourceOffset + 2] * sourceAlpha + canvas.pixels[targetOffset + 2] * inverseAlpha);
+      canvas.pixels[targetOffset + 3] = 255;
+    }
+  }
+}
+
+async function decodePng(bytes) {
+  assertPngSignature(bytes);
+
+  let offset = 8;
+  let header = null;
+  let palette = null;
+  let paletteAlpha = null;
+  const idatChunks = [];
+
+  while (offset + 8 <= bytes.length) {
+    const length = readUint32(bytes, offset);
+    const type = readAscii(bytes, offset + 4, 4);
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + length;
+    if (dataEnd + 4 > bytes.length) {
+      throw new Error('Invalid PNG chunk length.');
+    }
+
+    const data = bytes.subarray(dataStart, dataEnd);
+    if (type === 'IHDR') {
+      header = {
+        width: readUint32(data, 0),
+        height: readUint32(data, 4),
+        bitDepth: data[8],
+        colorType: data[9],
+        compression: data[10],
+        filter: data[11],
+        interlace: data[12],
+      };
+    } else if (type === 'PLTE') {
+      palette = data.slice();
+    } else if (type === 'tRNS') {
+      paletteAlpha = data.slice();
+    } else if (type === 'IDAT') {
+      idatChunks.push(data.slice());
+    } else if (type === 'IEND') {
+      break;
+    }
+
+    offset = dataEnd + 4;
+  }
+
+  if (!header) {
+    throw new Error('PNG is missing IHDR.');
+  }
+  if (header.compression !== 0 || header.filter !== 0 || header.interlace !== 0) {
+    throw new Error('Unsupported PNG encoding.');
+  }
+  if (header.bitDepth !== 8 && !(header.colorType === 3 && [1, 2, 4, 8].includes(header.bitDepth))) {
+    throw new Error('Unsupported PNG bit depth.');
+  }
+
+  const inflated = await inflateZlib(concatUint8Arrays(idatChunks));
+  const bitsPerPixel = getPngBitsPerPixel(header.colorType, header.bitDepth);
+  const scanlineLength = Math.ceil((header.width * bitsPerPixel) / 8);
+  const filterByteWidth = Math.max(1, Math.ceil(bitsPerPixel / 8));
+  const pixels = new Uint8Array(header.width * header.height * 4);
+  let readOffset = 0;
+  let previousRow = new Uint8Array(scanlineLength);
+
+  for (let y = 0; y < header.height; y += 1) {
+    const filterType = inflated[readOffset];
+    readOffset += 1;
+    const filteredRow = inflated.subarray(readOffset, readOffset + scanlineLength);
+    readOffset += scanlineLength;
+    const row = unfilterPngScanline(filteredRow, previousRow, filterType, filterByteWidth);
+    writePngRowToRgba(pixels, y, row, header, palette, paletteAlpha);
+    previousRow = row;
+  }
+
+  return {
+    width: header.width,
+    height: header.height,
+    pixels,
+  };
+}
+
+function assertPngSignature(bytes) {
+  const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+  for (let index = 0; index < signature.length; index += 1) {
+    if (bytes[index] !== signature[index]) {
+      throw new Error('Invalid PNG signature.');
+    }
+  }
+}
+
+async function inflateZlib(data) {
+  if (typeof DecompressionStream !== 'function') {
+    throw new Error('DecompressionStream is not available.');
+  }
+
+  const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+function getPngBitsPerPixel(colorType, bitDepth) {
+  if (colorType === 0 || colorType === 3) {
+    return bitDepth;
+  }
+  if (colorType === 2) {
+    return bitDepth * 3;
+  }
+  if (colorType === 4) {
+    return bitDepth * 2;
+  }
+  if (colorType === 6) {
+    return bitDepth * 4;
+  }
+  throw new Error(`Unsupported PNG color type ${colorType}.`);
+}
+
+function unfilterPngScanline(filteredRow, previousRow, filterType, bytesPerPixel) {
+  const row = new Uint8Array(filteredRow.length);
+  for (let index = 0; index < filteredRow.length; index += 1) {
+    const left = index >= bytesPerPixel ? row[index - bytesPerPixel] : 0;
+    const up = previousRow[index] ?? 0;
+    const upLeft = index >= bytesPerPixel ? previousRow[index - bytesPerPixel] ?? 0 : 0;
+    const value = filteredRow[index];
+
+    if (filterType === 0) {
+      row[index] = value;
+    } else if (filterType === 1) {
+      row[index] = (value + left) & 0xff;
+    } else if (filterType === 2) {
+      row[index] = (value + up) & 0xff;
+    } else if (filterType === 3) {
+      row[index] = (value + Math.floor((left + up) / 2)) & 0xff;
+    } else if (filterType === 4) {
+      row[index] = (value + paethPredictor(left, up, upLeft)) & 0xff;
+    } else {
+      throw new Error(`Unsupported PNG filter ${filterType}.`);
+    }
+  }
+  return row;
+}
+
+function writePngRowToRgba(target, y, row, header, palette, paletteAlpha) {
+  for (let x = 0; x < header.width; x += 1) {
+    const targetOffset = (y * header.width + x) * 4;
+
+    if (header.colorType === 6) {
+      const sourceOffset = x * 4;
+      target[targetOffset] = row[sourceOffset];
+      target[targetOffset + 1] = row[sourceOffset + 1];
+      target[targetOffset + 2] = row[sourceOffset + 2];
+      target[targetOffset + 3] = row[sourceOffset + 3];
+    } else if (header.colorType === 2) {
+      const sourceOffset = x * 3;
+      target[targetOffset] = row[sourceOffset];
+      target[targetOffset + 1] = row[sourceOffset + 1];
+      target[targetOffset + 2] = row[sourceOffset + 2];
+      target[targetOffset + 3] = 255;
+    } else if (header.colorType === 3) {
+      const paletteIndex = getPackedPngSample(row, x, header.bitDepth);
+      const paletteOffset = paletteIndex * 3;
+      target[targetOffset] = palette?.[paletteOffset] ?? 0;
+      target[targetOffset + 1] = palette?.[paletteOffset + 1] ?? 0;
+      target[targetOffset + 2] = palette?.[paletteOffset + 2] ?? 0;
+      target[targetOffset + 3] = paletteAlpha?.[paletteIndex] ?? 255;
+    } else if (header.colorType === 0) {
+      const value = header.bitDepth === 8
+        ? row[x]
+        : scalePngSample(getPackedPngSample(row, x, header.bitDepth), header.bitDepth);
+      target[targetOffset] = value;
+      target[targetOffset + 1] = value;
+      target[targetOffset + 2] = value;
+      target[targetOffset + 3] = 255;
+    } else if (header.colorType === 4) {
+      const sourceOffset = x * 2;
+      const value = row[sourceOffset];
+      target[targetOffset] = value;
+      target[targetOffset + 1] = value;
+      target[targetOffset + 2] = value;
+      target[targetOffset + 3] = row[sourceOffset + 1];
+    } else {
+      throw new Error(`Unsupported PNG color type ${header.colorType}.`);
+    }
+  }
+}
+
+function getPackedPngSample(row, pixelIndex, bitDepth) {
+  if (bitDepth === 8) {
+    return row[pixelIndex];
+  }
+
+  const bitIndex = pixelIndex * bitDepth;
+  const byte = row[Math.floor(bitIndex / 8)] ?? 0;
+  const shift = 8 - bitDepth - (bitIndex % 8);
+  return (byte >> shift) & ((1 << bitDepth) - 1);
+}
+
+function scalePngSample(value, bitDepth) {
+  return Math.round((value / ((1 << bitDepth) - 1)) * 255);
+}
+
+function paethPredictor(left, up, upLeft) {
+  const estimate = left + up - upLeft;
+  const leftDistance = Math.abs(estimate - left);
+  const upDistance = Math.abs(estimate - up);
+  const upLeftDistance = Math.abs(estimate - upLeft);
+  if (leftDistance <= upDistance && leftDistance <= upLeftDistance) {
+    return left;
+  }
+  return upDistance <= upLeftDistance ? up : upLeft;
 }
 
 function numberToRgb(color) {
@@ -875,6 +1540,23 @@ function concatUint8Arrays(parts) {
     offset += part.length;
   }
   return output;
+}
+
+function readUint32(source, offset) {
+  return (
+    ((source[offset] ?? 0) * 0x1000000) +
+    ((source[offset + 1] ?? 0) << 16) +
+    ((source[offset + 2] ?? 0) << 8) +
+    (source[offset + 3] ?? 0)
+  ) >>> 0;
+}
+
+function readAscii(source, offset, length) {
+  let value = '';
+  for (let index = 0; index < length; index += 1) {
+    value += String.fromCharCode(source[offset + index] ?? 0);
+  }
+  return value;
 }
 
 function writeUint32(target, offset, value) {
