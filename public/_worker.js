@@ -3,6 +3,7 @@ const ROOM_IMAGE_PATH_PATTERN = /^\/r\/(-?\d+)\/(-?\d+)\/image(?:\.png)?\/?$/;
 const DEFAULT_API_BASE_URL = 'https://api.wamp.land';
 const ROOM_META_TIMEOUT_MS = 1200;
 const ROOM_IMAGE_TIMEOUT_MS = 3500;
+const ROOM_IMAGE_RENDERER_VERSION = 'assets-v1';
 const ROOM_SHARE_IMAGE_WIDTH = 1200;
 const ROOM_SHARE_IMAGE_HEIGHT = 630;
 const ROOM_WIDTH = 40;
@@ -338,12 +339,11 @@ function buildPublishedRoomMetadata(snapshot, fallback, coordinates) {
 }
 
 function withRoomVersionQuery(imageUrl, version) {
-  if (!Number.isFinite(version)) {
-    return imageUrl;
-  }
-
   const url = new URL(imageUrl);
-  url.searchParams.set('v', String(version));
+  if (Number.isFinite(version)) {
+    url.searchParams.set('v', String(version));
+  }
+  url.searchParams.set('renderer', ROOM_IMAGE_RENDERER_VERSION);
   return url.toString();
 }
 
