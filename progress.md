@@ -120,7 +120,7 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - required production web-game smoke passed against `https://wamp.land/r/0/0?renderer=canvas&welcome=0&deployProbe=939dd0f` with artifacts in `output/web-game/room-share-actual-image-prod-smoke/`; screenshot confirmed the room link still boots and renders the room, and no console-error artifact was produced
     - user reported uploaded custom room backgrounds were missing from snapshots; found two separate gaps: the in-app room metadata canvas skipped `custom:<id>` backgrounds, and the Pages social-card renderer only handled built-in PNG assets
     - patched `src/mint/roomMetadataRender.ts` to load approved custom background images through the API with CORS enabled and render `stretch`, `center`, and `tile` fits in the generated room snapshot
-    - patched `public/_worker.js` to parse `custom:<id>?fit=...` and `solid:<hex>` backgrounds, fetch uploaded background images for social cards, render custom fits, and bump generated image URLs to `renderer=assets-v2` for cache busting
+    - patched `public/_worker.js` to parse `custom:<id>?fit=...` and `solid:<hex>` backgrounds, fetch uploaded background images for social cards, render custom fits, and bump generated image URLs to `renderer=assets-v3` for cache busting
     - validation before production deploy: `node --check public/_worker.js`, `npx tsc --noEmit --pretty false`, `git diff --check -- . ':!node_modules'`, and `npm run build` passed; the `roomMetadataRender` build chunk stayed at `110.85 kB` after avoiding a Phaser runtime import
     - targeted browser renderer probe produced `/tmp/wamp-custom-bg-browser-snapshot.png` for room `-1,-6`; visual inspection confirmed the uploaded JPEG background renders behind the room
     - targeted local Pages-worker probe produced `/tmp/wamp-custom-bg-pages-local.png` for room `-3,-8`; visual inspection confirmed the uploaded PNG background renders in the 1200x630 social card
@@ -130,7 +130,7 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - validation after JPEG decoder follow-up: `node --check public/_worker.js`, `npx tsc --noEmit --pretty false`, `git diff --check -- . ':!node_modules'`, and `npm run build` passed
   - TODO:
     - after deploying the JPEG decoder follow-up, verify live social cards for both a PNG-backed custom room (`/r/-3/-8`) and a JPEG-backed custom room (`/r/-1/-6`)
-    - if social sites still show a stale placeholder for an already-tested URL, use a fresh room URL paste or wait for that site's cache; WAMP now emits `renderer=assets-v2` specifically to avoid the old image URL cache
+    - if social sites still show a stale placeholder for an already-tested URL, use a fresh room URL paste or wait for that site's cache; WAMP now emits `renderer=assets-v3` specifically to avoid the old image URL cache
 
 - Overworld zoom edge-preview hydration main-port on April 24, 2026:
   - created `fix/overworld-preview-zoom-edge-2026-04-24` from `origin/main` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-overworld-zoom-edge-2026-04-24`
