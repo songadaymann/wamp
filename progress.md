@@ -128,8 +128,11 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - follow-up added the `jpeg-js` decoder dependency and a bounded JPEG decode path in `public/_worker.js` so social cards can render uploaded JPEG custom backgrounds directly instead of relying on Cloudflare image transformation
     - targeted local Pages-worker probe produced `/tmp/wamp-custom-bg-pages-local-jpeg.png` for room `-1,-6`; visual inspection confirmed the uploaded JPEG background now renders in the 1200x630 social card
     - validation after JPEG decoder follow-up: `node --check public/_worker.js`, `npx tsc --noEmit --pretty false`, `git diff --check -- . ':!node_modules'`, and `npm run build` passed
+    - deployed final cache-busted commit `503e644` to production Pages at `https://7333aba3.wampland.pages.dev`; `node scripts/deploy_prod.mjs --pages-only` passed the production smoke
+    - live `Twitterbot/1.0` probes confirmed `/r/-3/-8` and `/r/-1/-6` advertise `renderer=assets-v3`; direct image fetches returned `200 image/png` with fresh `cf-cache-status: MISS`
+    - visually inspected `/tmp/wamp-live-custom-bg-png-card-v3.png` and `/tmp/wamp-live-custom-bg-jpeg-card-v3.png`; both live social-card images include their uploaded custom backgrounds
+    - required production web-game smoke passed against `https://wamp.land/r/-1/-6?renderer=canvas&welcome=0&deployProbe=503e644` with artifacts in `output/web-game/room-share-custom-background-prod-smoke/`; screenshot confirmed the `/r` page still boots and renders, and no console-error artifact was produced
   - TODO:
-    - after deploying the JPEG decoder follow-up, verify live social cards for both a PNG-backed custom room (`/r/-3/-8`) and a JPEG-backed custom room (`/r/-1/-6`)
     - if social sites still show a stale placeholder for an already-tested URL, use a fresh room URL paste or wait for that site's cache; WAMP now emits `renderer=assets-v3` specifically to avoid the old image URL cache
 
 - Overworld zoom edge-preview hydration main-port on April 24, 2026:
