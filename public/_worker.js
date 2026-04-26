@@ -3,12 +3,19 @@ const ROOM_IMAGE_PATH_PATTERN = /^\/r\/(-?\d+)\/(-?\d+)\/image(?:\.png)?\/?$/;
 const DEFAULT_API_BASE_URL = 'https://api.wamp.land';
 const ROOM_META_TIMEOUT_MS = 1200;
 const ROOM_IMAGE_TIMEOUT_MS = 3500;
-const ROOM_IMAGE_RENDERER_VERSION = 'assets-v1';
+const ROOM_IMAGE_RENDERER_VERSION = 'assets-v2';
 const ROOM_SHARE_IMAGE_WIDTH = 1200;
 const ROOM_SHARE_IMAGE_HEIGHT = 630;
 const ROOM_WIDTH = 40;
 const ROOM_HEIGHT = 22;
 const TILE_SIZE = 16;
+const ROOM_PX_WIDTH = ROOM_WIDTH * TILE_SIZE;
+const ROOM_PX_HEIGHT = ROOM_HEIGHT * TILE_SIZE;
+const CUSTOM_BACKGROUND_PREFIX = 'custom:';
+const SOLID_BACKGROUND_PREFIX = 'solid:';
+const DEFAULT_CUSTOM_BACKGROUND_FIT = 'tile';
+const MAX_TILED_PHOTO_WIDTH = 128;
+const MAX_TILED_PHOTO_HEIGHT = 96;
 const PREVIEW_TILE_SIZE = 27;
 const PREVIEW_LEFT = 60;
 const PREVIEW_TOP = 18;
@@ -597,6 +604,16 @@ async function drawPreviewBackground(canvas, request, env, url, snapshot) {
   fillRect(canvas, 0, Math.floor(canvas.height * 0.62), canvas.width, Math.ceil(canvas.height * 0.38), palette.near);
   drawHorizonSteps(canvas, palette.far, palette.near, snapshot?.id || 'room');
 
+  if (background.kind === 'custom') {
+    try {
+      const image = await loadCustomBackgroundImageData(request, env, url, background.id);
+      drawCustomBackgroundImage(canvas, image, background.fit, 0, 0, canvas.width, canvas.height);
+    } catch {
+      // Keep the generated fallback background when a remote upload cannot be transformed.
+    }
+    return;
+  }
+
   const group = getBackgroundGroup(background.id);
   if (!group || group.layers.length === 0) {
     return;
@@ -618,6 +635,16 @@ async function drawPreviewBackground(canvas, request, env, url, snapshot) {
 
 function resolvePreviewBackground(background) {
   if (typeof background === 'string') {
+    const solidColor = parseSolidBackgroundColor(background);
+    if (solidColor !== null) {
+      return { kind: 'solid', color: solidColor };
+    }
+
+    const custom = parseCustomBackground(background);
+    if (custom) {
+      return { kind: 'custom', ...custom, palette: backgroundPalette('grassland') };
+    }
+
     return { kind: 'palette', id: background, palette: backgroundPalette(background) };
   }
 
@@ -656,6 +683,40 @@ function getBackgroundGroup(id) {
   return BACKGROUND_GROUPS.find((group) => group.id === id) || null;
 }
 
+function parseSolidBackgroundColor(value) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed.toLowerCase().startsWith(SOLID_BACKGROUND_PREFIX)) {
+    return null;
+  }
+
+  const color = trimmed.slice(SOLID_BACKGROUND_PREFIX.length).replace(/^#/, '').trim();
+  return /^[0-9a-f]{6}$/i.test(color) ? Number.parseInt(color, 16) : null;
+}
+
+function parseCustomBackground(value) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed.toLowerCase().startsWith(CUSTOM_BACKGROUND_PREFIX)) {
+    return null;
+  }
+
+  const customValue = trimmed.slice(CUSTOM_BACKGROUND_PREFIX.length).trim();
+  const queryStart = customValue.indexOf('?');
+  const id = (queryStart >= 0 ? customValue.slice(0, queryStart) : customValue).trim();
+  if (!/^[a-zA-Z0-9_-]{8,128}$/.test(id)) {
+    return null;
+  }
+
+  const fit = queryStart >= 0
+    ? new URLSearchParams(customValue.slice(queryStart + 1)).get('fit')
+    : DEFAULT_CUSTOM_BACKGROUND_FIT;
+  return {
+    id,
+    fit: fit === 'stretch' || fit === 'center' || fit === 'tile'
+      ? fit
+      : DEFAULT_CUSTOM_BACKGROUND_FIT,
+  };
+}
+
 async function primeRoomAssetCache(request, env, url, snapshot) {
   const paths = new Set();
   const background = resolvePreviewBackground(snapshot?.background);
@@ -663,6 +724,8 @@ async function primeRoomAssetCache(request, env, url, snapshot) {
     for (const layer of getBackgroundGroup(background.id)?.layers ?? []) {
       paths.add(layer.path);
     }
+  } else if (background.kind === 'custom') {
+    await loadCustomBackgroundImageData(request, env, url, background.id).catch(() => null);
   }
 
   const tileData = snapshot?.tileData || {};
@@ -1158,9 +1221,102 @@ async function loadAssetImageData(request, env, url, assetPath) {
   return pending;
 }
 
+async function loadCustomBackgroundImageData(request, env, url, id) {
+  const apiBaseUrl = resolveApiBaseUrl(env, url);
+  const imageUrl = new URL(`/api/background-images/${encodeURIComponent(id)}/image`, apiBaseUrl);
+  const cacheKey = `custom-background:${imageUrl.toString()}`;
+  let pending = imageDataCache.get(cacheKey);
+  if (pending) {
+    return pending;
+  }
+
+  pending = (async () => {
+    const response = await fetch(imageUrl.toString(), {
+      headers: {
+        Accept: 'image/png',
+        'User-Agent': request.headers.get('User-Agent') || 'WAMP room share renderer',
+      },
+      cf: {
+        image: {
+          format: 'png',
+        },
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to load custom background ${id}`);
+    }
+
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (!isPng(bytes)) {
+      throw new Error(`Custom background ${id} was not returned as PNG.`);
+    }
+    return decodePng(bytes);
+  })();
+  imageDataCache.set(cacheKey, pending);
+  return pending;
+}
+
 function normalizeAssetPath(assetPath) {
   const trimmed = String(assetPath || '').trim();
   return `/${trimmed.replace(/^\/+/, '')}`;
+}
+
+function drawCustomBackgroundImage(canvas, image, fit, x, y, width, height) {
+  if (fit === 'stretch') {
+    blitImageSmooth(canvas, image, 0, 0, image.width, image.height, x, y, width, height);
+    return;
+  }
+
+  if (fit === 'center') {
+    const rect = getCustomBackgroundCenterRect(
+      { width: image.width, height: image.height },
+      { width: ROOM_PX_WIDTH, height: ROOM_PX_HEIGHT },
+    );
+    const scaleX = width / ROOM_PX_WIDTH;
+    const scaleY = height / ROOM_PX_HEIGHT;
+    blitImageSmooth(
+      canvas,
+      image,
+      0,
+      0,
+      image.width,
+      image.height,
+      x + rect.x * scaleX,
+      y + rect.y * scaleY,
+      Math.max(1, Math.round(rect.width * scaleX)),
+      Math.max(1, Math.round(rect.height * scaleY)),
+    );
+    return;
+  }
+
+  const tileScale = getCustomBackgroundTileScale(image) * (width / ROOM_PX_WIDTH);
+  const drawWidth = Math.max(1, Math.ceil(image.width * tileScale));
+  const drawHeight = Math.max(1, Math.ceil(image.height * tileScale));
+  for (let drawY = 0; drawY < height + drawHeight; drawY += drawHeight) {
+    for (let drawX = 0; drawX < width + drawWidth; drawX += drawWidth) {
+      blitImageSmooth(canvas, image, 0, 0, image.width, image.height, x + drawX, y + drawY, drawWidth, drawHeight);
+    }
+  }
+}
+
+function getCustomBackgroundTileScale(size) {
+  const width = Math.max(1, size.width);
+  const height = Math.max(1, size.height);
+  return Math.min(1, MAX_TILED_PHOTO_WIDTH / width, MAX_TILED_PHOTO_HEIGHT / height);
+}
+
+function getCustomBackgroundCenterRect(source, target) {
+  const sourceWidth = Math.max(1, Math.round(source.width));
+  const sourceHeight = Math.max(1, Math.round(source.height));
+  const scale = Math.min(1, target.width / sourceWidth, target.height / sourceHeight);
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
+  return {
+    x: Math.floor((target.width - width) / 2),
+    y: Math.floor((target.height - height) / 2),
+    width,
+    height,
+  };
 }
 
 function blitImageNearest(canvas, image, sx, sy, sw, sh, dx, dy, dw, dh, flipX = false, flipY = false) {
@@ -1202,6 +1358,88 @@ function blitImageNearest(canvas, image, sx, sy, sw, sh, dx, dy, dw, dh, flipX =
       canvas.pixels[targetOffset + 3] = 255;
     }
   }
+}
+
+function blitImageSmooth(canvas, image, sx, sy, sw, sh, dx, dy, dw, dh) {
+  if (dw <= 0 || dh <= 0 || sw <= 0 || sh <= 0) {
+    return;
+  }
+
+  const left = Math.max(0, Math.floor(dx));
+  const top = Math.max(0, Math.floor(dy));
+  const right = Math.min(canvas.width, Math.ceil(dx + dw));
+  const bottom = Math.min(canvas.height, Math.ceil(dy + dh));
+
+  for (let targetY = top; targetY < bottom; targetY += 1) {
+    const sourceY = sy + ((targetY + 0.5 - dy) / dh) * sh - 0.5;
+    for (let targetX = left; targetX < right; targetX += 1) {
+      const sourceX = sx + ((targetX + 0.5 - dx) / dw) * sw - 0.5;
+      const rgba = sampleImageBilinear(image, sourceX, sourceY);
+      blendPixel(canvas, targetX, targetY, rgba[0], rgba[1], rgba[2], rgba[3]);
+    }
+  }
+}
+
+function sampleImageBilinear(image, x, y) {
+  const x0 = Math.max(0, Math.min(image.width - 1, Math.floor(x)));
+  const y0 = Math.max(0, Math.min(image.height - 1, Math.floor(y)));
+  const x1 = Math.max(0, Math.min(image.width - 1, x0 + 1));
+  const y1 = Math.max(0, Math.min(image.height - 1, y0 + 1));
+  const tx = Math.max(0, Math.min(1, x - x0));
+  const ty = Math.max(0, Math.min(1, y - y0));
+  const top = interpolateRgba(
+    readImagePixel(image, x0, y0),
+    readImagePixel(image, x1, y0),
+    tx,
+  );
+  const bottom = interpolateRgba(
+    readImagePixel(image, x0, y1),
+    readImagePixel(image, x1, y1),
+    tx,
+  );
+  return interpolateRgba(top, bottom, ty);
+}
+
+function readImagePixel(image, x, y) {
+  const offset = (y * image.width + x) * 4;
+  return [
+    image.pixels[offset],
+    image.pixels[offset + 1],
+    image.pixels[offset + 2],
+    image.pixels[offset + 3],
+  ];
+}
+
+function interpolateRgba(left, right, t) {
+  const inverse = 1 - t;
+  return [
+    Math.round(left[0] * inverse + right[0] * t),
+    Math.round(left[1] * inverse + right[1] * t),
+    Math.round(left[2] * inverse + right[2] * t),
+    Math.round(left[3] * inverse + right[3] * t),
+  ];
+}
+
+function blendPixel(canvas, x, y, red, green, blue, alpha) {
+  if (alpha <= 0) {
+    return;
+  }
+
+  const offset = (y * canvas.width + x) * 4;
+  if (alpha >= 255) {
+    canvas.pixels[offset] = red;
+    canvas.pixels[offset + 1] = green;
+    canvas.pixels[offset + 2] = blue;
+    canvas.pixels[offset + 3] = 255;
+    return;
+  }
+
+  const sourceAlpha = alpha / 255;
+  const inverseAlpha = 1 - sourceAlpha;
+  canvas.pixels[offset] = Math.round(red * sourceAlpha + canvas.pixels[offset] * inverseAlpha);
+  canvas.pixels[offset + 1] = Math.round(green * sourceAlpha + canvas.pixels[offset + 1] * inverseAlpha);
+  canvas.pixels[offset + 2] = Math.round(blue * sourceAlpha + canvas.pixels[offset + 2] * inverseAlpha);
+  canvas.pixels[offset + 3] = 255;
 }
 
 async function decodePng(bytes) {
@@ -1282,12 +1520,21 @@ async function decodePng(bytes) {
 }
 
 function assertPngSignature(bytes) {
+  if (isPng(bytes)) {
+    return;
+  }
+
+  throw new Error('Invalid PNG signature.');
+}
+
+function isPng(bytes) {
   const signature = [137, 80, 78, 71, 13, 10, 26, 10];
   for (let index = 0; index < signature.length; index += 1) {
     if (bytes[index] !== signature[index]) {
-      throw new Error('Invalid PNG signature.');
+      return false;
     }
   }
+  return true;
 }
 
 async function inflateZlib(data) {

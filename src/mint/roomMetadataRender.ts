@@ -2,6 +2,8 @@ import {
   BACKGROUND_GROUPS,
   GAME_OBJECTS,
   ROOM_HEIGHT,
+  ROOM_PX_HEIGHT,
+  ROOM_PX_WIDTH,
   ROOM_WIDTH,
   TILESETS,
   TILE_SIZE,
@@ -13,6 +15,7 @@ import {
   getTilesetByGid,
   type LayerName,
 } from '../config';
+import { getApiBaseUrl } from '../api/baseUrl';
 import { resolveRoomBackground } from '../backgrounds/model';
 import type { RoomSnapshot } from '../persistence/roomModel';
 import { buildRoomSnapshotFromMintedPayload, type WampMintedRoomPayload } from './roomMetadata';
@@ -26,6 +29,12 @@ export interface MintedRoomRenderOptions {
 }
 
 const imageCache = new Map<string, Promise<HTMLImageElement>>();
+const MAX_TILED_PHOTO_WIDTH = 128;
+const MAX_TILED_PHOTO_HEIGHT = 96;
+
+function getBackgroundImageUrl(id: string): string {
+  return `${getApiBaseUrl()}/api/background-images/${encodeURIComponent(id)}/image`;
+}
 
 export async function renderWampMintedRoomToCanvas(
   payload: WampMintedRoomPayload,
@@ -125,6 +134,12 @@ async function drawRoomBackground(
   if (resolved.kind === 'custom') {
     context.fillStyle = RETRO_COLORS.background;
     context.fillRect(0, 0, width, height);
+    try {
+      const image = await loadAssetImage(getBackgroundImageUrl(resolved.id));
+      drawCustomBackgroundImage(context, image, resolved.fit, width, height);
+    } catch (error) {
+      console.warn('Failed to load custom room snapshot background.', resolved.id, error);
+    }
     return;
   }
 
@@ -139,6 +154,74 @@ async function drawRoomBackground(
       context.drawImage(image, drawX, 0, drawWidth, height);
     }
   }
+}
+
+function drawCustomBackgroundImage(
+  context: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  fit: 'stretch' | 'tile' | 'center',
+  width: number,
+  height: number
+): void {
+  const sourceWidth = Math.max(1, Math.round(image.naturalWidth || image.width || width));
+  const sourceHeight = Math.max(1, Math.round(image.naturalHeight || image.height || height));
+
+  if (fit === 'stretch') {
+    context.drawImage(image, 0, 0, width, height);
+    return;
+  }
+
+  if (fit === 'center') {
+    const rect = getCustomBackgroundCenterRect(
+      { width: sourceWidth, height: sourceHeight },
+      { width: ROOM_PX_WIDTH, height: ROOM_PX_HEIGHT }
+    );
+    const scaleX = width / ROOM_PX_WIDTH;
+    const scaleY = height / ROOM_PX_HEIGHT;
+    context.drawImage(
+      image,
+      rect.x * scaleX,
+      rect.y * scaleY,
+      Math.max(1, Math.round(rect.width * scaleX)),
+      Math.max(1, Math.round(rect.height * scaleY))
+    );
+    return;
+  }
+
+  const scale = getCustomBackgroundTileScale({
+    width: sourceWidth,
+    height: sourceHeight,
+  }) * (width / ROOM_PX_WIDTH);
+  const drawWidth = Math.max(1, Math.ceil(sourceWidth * scale));
+  const drawHeight = Math.max(1, Math.ceil(sourceHeight * scale));
+  for (let drawY = 0; drawY < height + drawHeight; drawY += drawHeight) {
+    for (let drawX = 0; drawX < width + drawWidth; drawX += drawWidth) {
+      context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+    }
+  }
+}
+
+function getCustomBackgroundTileScale(size: { width: number; height: number }): number {
+  const width = Math.max(1, size.width);
+  const height = Math.max(1, size.height);
+  return Math.min(1, MAX_TILED_PHOTO_WIDTH / width, MAX_TILED_PHOTO_HEIGHT / height);
+}
+
+function getCustomBackgroundCenterRect(
+  source: { width: number; height: number },
+  target: { width: number; height: number }
+): { x: number; y: number; width: number; height: number } {
+  const sourceWidth = Math.max(1, Math.round(source.width));
+  const sourceHeight = Math.max(1, Math.round(source.height));
+  const scale = Math.min(1, target.width / sourceWidth, target.height / sourceHeight);
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
+  return {
+    x: Math.floor((target.width - width) / 2),
+    y: Math.floor((target.height - height) / 2),
+    width,
+    height,
+  };
 }
 
 async function drawRoomTiles(
@@ -249,7 +332,11 @@ async function drawObjectsForLayer(
 }
 
 function loadAssetImage(assetPath: string): Promise<HTMLImageElement> {
-  const normalizedPath = assetPath.startsWith('/') ? assetPath : `/${assetPath}`;
+  const normalizedPath = /^https?:\/\//i.test(assetPath)
+    ? assetPath
+    : assetPath.startsWith('/')
+      ? assetPath
+      : `/${assetPath}`;
   let pending = imageCache.get(normalizedPath);
   if (pending) {
     return pending;
@@ -257,6 +344,7 @@ function loadAssetImage(assetPath: string): Promise<HTMLImageElement> {
 
   pending = new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
+    image.crossOrigin = 'anonymous';
     image.decoding = 'async';
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error(`Failed to load asset ${normalizedPath}.`));
