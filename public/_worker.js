@@ -1,3 +1,5 @@
+import decodeJpegBytes from 'jpeg-js/lib/decoder.js';
+
 const ROOM_PATH_PATTERN = /^\/r\/(-?\d+)\/(-?\d+)\/?$/;
 const ROOM_IMAGE_PATH_PATTERN = /^\/r\/(-?\d+)\/(-?\d+)\/image(?:\.png)?\/?$/;
 const DEFAULT_API_BASE_URL = 'https://api.wamp.land';
@@ -16,6 +18,8 @@ const SOLID_BACKGROUND_PREFIX = 'solid:';
 const DEFAULT_CUSTOM_BACKGROUND_FIT = 'tile';
 const MAX_TILED_PHOTO_WIDTH = 128;
 const MAX_TILED_PHOTO_HEIGHT = 96;
+const MAX_CUSTOM_BACKGROUND_DECODE_MP = 8;
+const MAX_CUSTOM_BACKGROUND_DECODE_MEMORY_MB = 96;
 const PREVIEW_TILE_SIZE = 27;
 const PREVIEW_LEFT = 60;
 const PREVIEW_TOP = 18;
@@ -1247,13 +1251,30 @@ async function loadCustomBackgroundImageData(request, env, url, id) {
     }
 
     const bytes = new Uint8Array(await response.arrayBuffer());
-    if (!isPng(bytes)) {
-      throw new Error(`Custom background ${id} was not returned as PNG.`);
+    if (isPng(bytes)) {
+      return decodePng(bytes);
     }
-    return decodePng(bytes);
+    if (isJpeg(bytes)) {
+      return decodeJpegImageData(bytes);
+    }
+    throw new Error(`Custom background ${id} was not returned as a supported image format.`);
   })();
   imageDataCache.set(cacheKey, pending);
   return pending;
+}
+
+function decodeJpegImageData(bytes) {
+  const image = decodeJpegBytes(bytes, {
+    useTArray: true,
+    formatAsRGBA: true,
+    maxResolutionInMP: MAX_CUSTOM_BACKGROUND_DECODE_MP,
+    maxMemoryUsageInMB: MAX_CUSTOM_BACKGROUND_DECODE_MEMORY_MB,
+  });
+  return {
+    width: image.width,
+    height: image.height,
+    pixels: image.data,
+  };
 }
 
 function normalizeAssetPath(assetPath) {
@@ -1535,6 +1556,10 @@ function isPng(bytes) {
     }
   }
   return true;
+}
+
+function isJpeg(bytes) {
+  return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[bytes.length - 2] === 0xff && bytes[bytes.length - 1] === 0xd9;
 }
 
 async function inflateZlib(data) {

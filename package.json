@@ -41,6 +41,7 @@
     "@reown/appkit-adapter-ethers": "^1.8.19",
     "@tonaljs/key": "^4.11.2",
     "ethers": "^6.16.0",
+    "jpeg-js": "^0.4.4",
     "partysocket": "^1.1.16",
     "phaser": "^3.87.0",
     "resend": "^6.9.3",

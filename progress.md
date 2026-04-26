@@ -124,8 +124,12 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - validation before production deploy: `node --check public/_worker.js`, `npx tsc --noEmit --pretty false`, `git diff --check -- . ':!node_modules'`, and `npm run build` passed; the `roomMetadataRender` build chunk stayed at `110.85 kB` after avoiding a Phaser runtime import
     - targeted browser renderer probe produced `/tmp/wamp-custom-bg-browser-snapshot.png` for room `-1,-6`; visual inspection confirmed the uploaded JPEG background renders behind the room
     - targeted local Pages-worker probe produced `/tmp/wamp-custom-bg-pages-local.png` for room `-3,-8`; visual inspection confirmed the uploaded PNG background renders in the 1200x630 social card
+    - deployed commit `e6486b7` to production Pages; live verification confirmed `/r/-3/-8` custom PNG backgrounds render, but `/r/-1/-6` custom JPEG backgrounds still fell back because Cloudflare Images returned JPEG bytes to the Pages worker
+    - follow-up added the `jpeg-js` decoder dependency and a bounded JPEG decode path in `public/_worker.js` so social cards can render uploaded JPEG custom backgrounds directly instead of relying on Cloudflare image transformation
+    - targeted local Pages-worker probe produced `/tmp/wamp-custom-bg-pages-local-jpeg.png` for room `-1,-6`; visual inspection confirmed the uploaded JPEG background now renders in the 1200x630 social card
+    - validation after JPEG decoder follow-up: `node --check public/_worker.js`, `npx tsc --noEmit --pretty false`, `git diff --check -- . ':!node_modules'`, and `npm run build` passed
   - TODO:
-    - after deploying the custom-background fix, verify live social cards for both a PNG-backed custom room (`/r/-3/-8`) and a JPEG-backed custom room (`/r/-1/-6`) because the Pages worker relies on Cloudflare image transformation to hand JPEG uploads to the PNG decoder
+    - after deploying the JPEG decoder follow-up, verify live social cards for both a PNG-backed custom room (`/r/-3/-8`) and a JPEG-backed custom room (`/r/-1/-6`)
     - if social sites still show a stale placeholder for an already-tested URL, use a fresh room URL paste or wait for that site's cache; WAMP now emits `renderer=assets-v2` specifically to avoid the old image URL cache
 
 - Overworld zoom edge-preview hydration main-port on April 24, 2026:
