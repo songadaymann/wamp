@@ -389,6 +389,23 @@ export const TILESETS: TilesetConfig[] = [
       accentAlt: 0x86d54a,
     },
   },
+  {
+    key: 'essentials',
+    name: 'Esentials',
+    path: 'assets/tilesets/beginner.png',
+    imageWidth: 144,
+    imageHeight: 80,
+    columns: 9,
+    rows: 5,
+    tileCount: 45,
+    firstGid: 492,
+    uiTheme: {
+      accentCool: 0x5ca9ff,
+      accentWarm: 0xfbd45b,
+      accentHot: 0xff7865,
+      accentAlt: 0x86d54a,
+    },
+  },
 ];
 
 const LEGACY_TILESET_KEY_ALIASES: Record<string, string> = {
