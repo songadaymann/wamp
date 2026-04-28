@@ -113,7 +113,7 @@ April 28 merge note: Sword Hunter work is being promoted from `feature/sword-hun
 
 ## Open Slots
 
-- Add rows here as more active feature lines resurface.
+- Overworld / room-start optimization: active on clean main-based branch `perf/overworld-room-start-optimization-main-2026-04-28` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-perf-main-2026-04-28`. The earlier `perf/overworld-room-start-optimization-2026-04-28` branch was cut from stale avatar-design work and is reference-only. Clean-branch validation passed `git diff --check`, `npm run typecheck`, `npm run build`, targeted Playwright room-start/LOD probe, and required `develop-web-game` client smoke.
 
 ## Recent Ledger Notes
 

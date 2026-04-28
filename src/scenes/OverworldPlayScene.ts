@@ -216,6 +216,7 @@ const MAX_ZOOM = 2.5;
 const DEFAULT_ZOOM = 0.18;
 const BROWSE_VISIBLE_CHUNK_REFRESH_INTERVAL_MS = 15000;
 const PLAY_VISIBLE_CHUNK_REFRESH_INTERVAL_MS = 8000;
+const FRAME_HUD_RENDER_INTERVAL_MS = 100;
 const BUTTON_ZOOM_FACTOR = 1.12;
 const WHEEL_ZOOM_SENSITIVITY = 0.003;
 const PLAY_ROOM_FIT_PADDING = 16;
@@ -347,6 +348,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private mobilePortraitCameraTunerApi: Window['wampMobileCameraTuner'] | null = null;
   private shouldAutoPlayDeepLinkedRoomOnBoot = false;
   private lastRoomMusicSyncSignature = '';
+  private nextFrameHudRenderAt = 0;
   private transientStatusMessage: string | null = null;
   private transientStatusExpiresAt = 0;
   private quicksandTouchedUntil = 0;
@@ -1728,7 +1730,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.measureMobilePerformance('update.lighting', () => {
           this.updateRoomLighting();
         });
-        this.renderHud();
+        this.renderFrameHud();
         return;
       }
 
@@ -1775,7 +1777,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.measureMobilePerformance('update.objective', () => {
         this.objectiveController.update(delta);
       });
-      this.renderHud();
+      this.renderFrameHud();
     } finally {
       this.mobilePerformanceProfiler?.endFrame(this.buildMobilePerformanceContext());
     }
@@ -1870,6 +1872,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     this.lastRoomMusicSyncSignature = '';
+    this.nextFrameHudRenderAt = 0;
     globalRoomMusicController.stopArrangement({
       transition: 'immediate',
       fadeDurationSec: 0.08,
@@ -2238,7 +2241,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private refreshAroundIfNeededOrFromCache(
     centerCoordinates: RoomCoordinates,
-    options: { forceChunkReload?: boolean; refreshLeaderboards?: boolean } = {},
+    options: { forceChunkReload?: boolean; refreshLeaderboards?: boolean; preferCachedWindow?: boolean } = {},
   ): void {
     this.windowController.refreshAroundIfNeededOrFromCache(centerCoordinates, options);
   }
@@ -3574,6 +3577,15 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.measureMobilePerformance('hud.render', () => {
       this.hudStateController.renderHud(statusOverride);
     });
+    this.nextFrameHudRenderAt = this.time.now + FRAME_HUD_RENDER_INTERVAL_MS;
+  }
+
+  private renderFrameHud(): void {
+    if (this.time.now < this.nextFrameHudRenderAt) {
+      return;
+    }
+
+    this.renderHud();
   }
 
   private getRoomDisplayTitle(title: string | null, coordinates: RoomCoordinates): string {

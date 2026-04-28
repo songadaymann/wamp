@@ -585,13 +585,14 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   }
 
   syncLiveObjectInteractions(loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>): void {
+    const player = this.options.getPlayer();
+    const playerPickupSensor = this.options.getPlayerPickupSensor();
+    const playerBody = this.options.getPlayerBody();
+
     for (const loadedRoom of loadedRooms) {
       for (const liveObject of loadedRoom.liveObjects) {
         this.destroyLiveObjectInteractions(liveObject);
 
-        const player = this.options.getPlayer();
-        const playerPickupSensor = this.options.getPlayerPickupSensor();
-        const playerBody = this.options.getPlayerBody();
         if (!player || !playerBody || !liveObject.sprite.active || !liveObject.sprite.body) {
           continue;
         }
@@ -912,6 +913,23 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private updatePressurePlates(
     loadedRooms: LoadedFullRoom<LoadedRoomObject, TEdgeWall>[]
   ): void {
+    let hasPressureTrigger = false;
+    let hasPressureControlledObject = false;
+
+    for (const loadedRoom of loadedRooms) {
+      for (const liveObject of loadedRoom.liveObjects) {
+        if (liveObject.config.id === 'floor_trigger' && liveObject.sprite.active) {
+          hasPressureTrigger = true;
+        } else if (liveObject.sprite.active && this.isPressureControlledObject(liveObject)) {
+          hasPressureControlledObject = true;
+        }
+      }
+    }
+
+    if (!hasPressureTrigger || !hasPressureControlledObject) {
+      return;
+    }
+
     const activeTargetKeys = new Set<string>();
 
     for (const loadedRoom of loadedRooms) {
@@ -938,6 +956,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     for (const loadedRoom of loadedRooms) {
       for (const liveObject of [...loadedRoom.liveObjects]) {
+        if (!liveObject.sprite.active || !this.isPressureControlledObject(liveObject)) {
+          continue;
+        }
+
         const placedInstanceId = liveObject.placedInstanceId;
         const active = placedInstanceId
           ? activeTargetKeys.has(this.getLinkedTargetKey(loadedRoom.room.id, placedInstanceId))
@@ -945,7 +967,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
         switch (liveObject.config.id) {
           case 'door_metal':
-            this.applyPressureDoorState(liveObject, active);
+            if (liveObject.runtime.pressureActive !== active) {
+              liveObject.runtime.pressureActive = active;
+              this.applyPressureDoorState(liveObject, active);
+            }
             break;
           case 'door_locked':
             if (active) {
@@ -966,6 +991,18 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             break;
         }
       }
+    }
+  }
+
+  private isPressureControlledObject(liveObject: LoadedRoomObject): boolean {
+    switch (liveObject.config.id) {
+      case 'door_metal':
+      case 'door_locked':
+      case 'cage':
+      case 'treasure_chest':
+        return true;
+      default:
+        return false;
     }
   }
 
@@ -1016,19 +1053,29 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private stabilizePushableStacks(
     loadedRooms: LoadedFullRoom<LoadedRoomObject, TEdgeWall>[],
   ): void {
-    const pushables = loadedRooms
-      .flatMap((loadedRoom) => loadedRoom.liveObjects)
-      .filter(
-        (liveObject) =>
+    const pushables: Array<{
+      liveObject: LoadedRoomObject;
+      body: Phaser.Physics.Arcade.Body;
+    }> = [];
+
+    for (const loadedRoom of loadedRooms) {
+      for (const liveObject of loadedRoom.liveObjects) {
+        const body = liveObject.sprite.body as ArcadeObjectBody | null;
+        if (
           liveObject.sprite.active &&
           isPushableObjectConfig(liveObject.config) &&
-          isDynamicArcadeBody(liveObject.sprite.body as ArcadeObjectBody | null)
-      )
-      .map((liveObject) => ({
-        liveObject,
-        body: liveObject.sprite.body as Phaser.Physics.Arcade.Body,
-      }))
-      .sort((a, b) => a.body.center.x - b.body.center.x || b.body.top - a.body.top);
+          isDynamicArcadeBody(body)
+        ) {
+          pushables.push({ liveObject, body });
+        }
+      }
+    }
+
+    if (pushables.length < 2) {
+      return;
+    }
+
+    pushables.sort((a, b) => a.body.center.x - b.body.center.x || b.body.top - a.body.top);
 
     const groups: Array<
       Array<{ liveObject: LoadedRoomObject; body: Phaser.Physics.Arcade.Body }>

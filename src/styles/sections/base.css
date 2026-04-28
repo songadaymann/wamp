@@ -393,6 +393,8 @@ body[data-playfun-mode='true'] .app-busy-overlay {
 
 body[data-app-ready='false'] #app,
 body[data-app-ready='false'] #auth-panel {
+  visibility: hidden;
+  opacity: 0;
   pointer-events: none;
 }
 

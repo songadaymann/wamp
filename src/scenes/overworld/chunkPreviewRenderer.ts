@@ -156,7 +156,25 @@ export class OverworldChunkPreviewRenderer {
     }
   }
 
-  unloadOutsideWindow(_visibleRoomIds: Set<string>, _previewRoomIds: Set<string>): void {
+  unloadOutsideWindow(visibleRoomIds: Set<string>, previewRoomIds: Set<string>): void {
+    for (const [chunkId, chunkState] of Array.from(this.chunkStatesByChunkId.entries())) {
+      const nextRooms = chunkState.rooms.filter(
+        (room) => visibleRoomIds.has(room.id) && previewRoomIds.has(room.id)
+      );
+      if (nextRooms.length === chunkState.rooms.length) {
+        continue;
+      }
+
+      if (nextRooms.length === 0) {
+        this.chunkStatesByChunkId.delete(chunkId);
+      } else {
+        this.chunkStatesByChunkId.set(chunkId, {
+          ...chunkState,
+          rooms: nextRooms,
+        });
+      }
+    }
+
     this.syncChunkImages();
   }
 

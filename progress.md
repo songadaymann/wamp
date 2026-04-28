@@ -57,6 +57,26 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Overworld optimization main-port on April 28, 2026:
+  - user reported the first optimization branch was showing the old site design; diagnosis found it was cut from stale `feature/dynamic-cryptopunk-avatars-2026-04-23`, 131 commits behind `origin/main`
+  - created clean main-based worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-perf-main-2026-04-28` on branch `perf/overworld-room-start-optimization-main-2026-04-28` at deployed main `5d01b45`
+  - ported the optimization pass onto current main: grid redraw signature caching, frame-HUD throttling, roster DOM caching, cache-first room start, staged full-room/preview loading, and per-frame live-object scan reductions
+  - fixed the staged preview path so play mode prunes the old browse-sized preview set before current-room full rendering, keeping LOD budgets intact and avoiding a synchronous chunk-preview rebuild spike
+  - the earlier dirty branch `perf/overworld-room-start-optimization-2026-04-28` remains reference-only and should not be used for QA because it carries the stale design base
+  - validation:
+    - `npm ci --ignore-scripts` installed clean worktree dependencies; npm reported existing audit issues
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with existing Rollup pure-comment and chunk-size warnings
+    - stale old-branch dev server on port `3000` was stopped; clean main-based dev server is running at `http://127.0.0.1:3000/`
+    - targeted Playwright probe passed at `output/web-game/optimization-main-final-probe/`: cache-first `playSelectedRoom()` sync path measured about `49ms`, current room was full-loaded immediately, preview rooms stayed under budget (`48/49`), and `window.run_overworld_lod_stress()` passed
+    - required `develop-web-game` client smoke passed at `output/web-game/optimization-main-client-smoke/`; screenshots were visually inspected and no error artifacts were written
+  - loading-shell follow-up:
+    - set the initial `<body data-app-ready="false">` in `index.html`
+    - while `data-app-ready="false"`, `#app` and `#auth-panel` are now visually hidden instead of only ignoring pointer events, so the old/editor shell no longer shows through the boot splash
+    - used `visibility: hidden` instead of `display: none` so Phaser still gets real game-container dimensions during startup
+    - validation passed: `git diff --check`, `npm run typecheck`, `npm run build`, a paused-API Playwright loading-state probe at `output/web-game/loading-shell-hide-probe/`, and required `develop-web-game` smoke at `output/web-game/loading-shell-client-smoke/`
+
 - Enemy AI follow-up branch on April 28, 2026:
   - created `feature/enemy-ai-continued-2026-04-28` from production `main` at `dba30f4`
   - added a per-Sword-Hunter defeat behavior setting alongside the existing objective selector:

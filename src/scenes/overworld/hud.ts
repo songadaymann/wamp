@@ -215,6 +215,7 @@ export class OverworldHudBridge {
   private destroyed = false;
   private playersOnlinePinned = false;
   private selectedCreatorUserId: string | null = null;
+  private lastPlayersOnlineEntriesSignature = '';
 
   private readonly handleSelectedCreatorClick = (event: MouseEvent): void => {
     if (!isOpenableProfileUserId(this.selectedCreatorUserId)) {
@@ -686,6 +687,7 @@ export class OverworldHudBridge {
     if (!showPlayersOnline) {
       this.playersOnlinePinned = false;
       this.setPlayersOnlinePopoverOpen(false);
+      this.lastPlayersOnlineEntriesSignature = '';
       return;
     }
 
@@ -694,6 +696,23 @@ export class OverworldHudBridge {
     }
 
     if (this.playersOnlinePopoverListEl) {
+      const entriesSignature = viewModel.playersOnlineEntries
+        .map((entry) => [
+          entry.key,
+          entry.userId ?? '',
+          entry.displayName,
+          entry.roomText,
+          entry.roomCoordinates.x,
+          entry.roomCoordinates.y,
+          entry.mode,
+          entry.isSelf ? '1' : '0',
+        ].join('\u001f'))
+        .join('\u001e');
+      if (entriesSignature === this.lastPlayersOnlineEntriesSignature) {
+        return;
+      }
+
+      this.lastPlayersOnlineEntriesSignature = entriesSignature;
       const playEntries = viewModel.playersOnlineEntries.filter((entry) => entry.mode === 'play');
       const editEntries = viewModel.playersOnlineEntries.filter((entry) => entry.mode === 'edit');
       const browseEntries = viewModel.playersOnlineEntries.filter((entry) => entry.mode === 'browse');
@@ -796,9 +815,9 @@ export class OverworldHudBridge {
 
     if (this.selectedCreatorCardEl) {
       this.selectedCreatorCardEl.classList.toggle('hidden', !cardVisible);
-      this.selectedCreatorCardEl.disabled = !clickable;
+      this.setDisabled(this.selectedCreatorCardEl, !clickable);
       this.selectedCreatorCardEl.classList.toggle('is-clickable', clickable);
-      this.selectedCreatorCardEl.title = cardVisible ? profileTitle : '';
+      this.setTitle(this.selectedCreatorCardEl, cardVisible ? profileTitle : '');
     }
     this.setText(this.selectedCreatorNameEl, nameText);
     this.renderCreatorStatLevel(this.selectedCreatorPlayerLevelEl, playerLevelText);
@@ -812,11 +831,11 @@ export class OverworldHudBridge {
       return;
     }
 
-    this.selectedCreatorEl.textContent = fallbackText;
+    this.setText(this.selectedCreatorEl, fallbackText);
     this.selectedCreatorEl.classList.toggle('hidden', cardVisible);
-    this.selectedCreatorEl.disabled = !clickable;
+    this.setDisabled(this.selectedCreatorEl, !clickable);
     this.selectedCreatorEl.classList.toggle('is-clickable', clickable);
-    this.selectedCreatorEl.title = !cardVisible ? profileTitle : '';
+    this.setTitle(this.selectedCreatorEl, !cardVisible ? profileTitle : '');
   }
 
   private renderCreatorStatLevel(element: HTMLElement | null, levelText: string): void {

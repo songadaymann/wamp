@@ -40,6 +40,7 @@ interface WindowStreamingController {
     options?: { forceChunkReload?: boolean }
   ): Promise<WorldRefreshResult>;
   needsRefreshAround(centerCoordinates: RoomCoordinates): boolean;
+  isWithinLoadedRoomBounds(coordinates: RoomCoordinates): boolean;
   refreshVisibleSelectionFromCache(): void;
   refreshLoadedChunksIfChanged(
     centerCoordinates: RoomCoordinates
@@ -280,11 +281,24 @@ export class OverworldWindowController {
 
   refreshAroundIfNeededOrFromCache(
     centerCoordinates: RoomCoordinates,
-    options: { forceChunkReload?: boolean; refreshLeaderboards?: boolean } = {},
+    options: { forceChunkReload?: boolean; refreshLeaderboards?: boolean; preferCachedWindow?: boolean } = {},
   ): void {
+    const needsRefresh = this.host.worldStreamingController.needsRefreshAround(centerCoordinates);
+    if (
+      options.preferCachedWindow
+      && !options.forceChunkReload
+      && this.host.worldStreamingController.isWithinLoadedRoomBounds(centerCoordinates)
+    ) {
+      this.refreshFromCurrentCache(centerCoordinates, options);
+      if (needsRefresh) {
+        void this.refreshAround(centerCoordinates);
+      }
+      return;
+    }
+
     if (
       options.forceChunkReload
-      || this.host.worldStreamingController.needsRefreshAround(centerCoordinates)
+      || needsRefresh
     ) {
       void this.refreshAround(centerCoordinates, {
         forceChunkReload: options.forceChunkReload,
@@ -292,7 +306,14 @@ export class OverworldWindowController {
       return;
     }
 
-    this.host.setWindowCenterCoordinates(centerCoordinates);
+    this.refreshFromCurrentCache(centerCoordinates, options);
+  }
+
+  private refreshFromCurrentCache(
+    centerCoordinates: RoomCoordinates,
+    options: { refreshLeaderboards?: boolean } = {},
+  ): void {
+    this.host.setWindowCenterCoordinates({ ...centerCoordinates });
     this.host.worldStreamingController.refreshVisibleSelectionFromCache();
     this.host.updateSelectedSummary();
     if (options.refreshLeaderboards !== false) {

@@ -11,6 +11,7 @@ interface OverworldGridOverlayControllerHost {
 
 export class OverworldGridOverlayController {
   private roomGridGraphics: Phaser.GameObjects.Graphics | null = null;
+  private lastRedrawSignature = '';
 
   constructor(private readonly host: OverworldGridOverlayControllerHost) {}
 
@@ -26,13 +27,14 @@ export class OverworldGridOverlayController {
   destroy(): void {
     this.roomGridGraphics?.destroy();
     this.roomGridGraphics = null;
+    this.lastRedrawSignature = '';
   }
 
   redraw(): void {
-    this.roomGridGraphics?.clear();
-
     const worldWindow = this.host.getWorldWindow();
     if (!worldWindow || !this.roomGridGraphics) {
+      this.lastRedrawSignature = '';
+      this.roomGridGraphics?.clear();
       return;
     }
 
@@ -46,6 +48,19 @@ export class OverworldGridOverlayController {
     const top = firstRow * ROOM_PX_HEIGHT;
     const bottom = lastRow * ROOM_PX_HEIGHT;
     const lineWidth = 1 / this.host.getZoom();
+    const redrawSignature = [
+      firstCol,
+      lastCol,
+      firstRow,
+      lastRow,
+      lineWidth.toFixed(4),
+    ].join(':');
+    if (redrawSignature === this.lastRedrawSignature) {
+      return;
+    }
+
+    this.lastRedrawSignature = redrawSignature;
+    this.roomGridGraphics.clear();
 
     this.roomGridGraphics.fillStyle(RETRO_COLORS.grid, 0.14);
 
