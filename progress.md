@@ -57,6 +57,22 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Enemy AI follow-up branch on April 28, 2026:
+  - created `feature/enemy-ai-continued-2026-04-28` from production `main` at `dba30f4`
+  - added a per-Sword-Hunter defeat behavior setting alongside the existing objective selector:
+    - `defeatable` / "Can Die": current stomp/sword defeat behavior
+    - `invincible` / "Can't Die": player stomp/sword hits do not remove the hunter
+    - `respawn` / "Respawns": player defeat removes the hunter, then respawns it after a short delay
+  - wired the field through editor state, room snapshot normalization, version fingerprints, run verification hashes, runtime debug output, and agent room `place_object` commands
+  - restyled the Sword Hunter editor panel from the old translucent inspector look to the newer colorful retro editor palette
+  - validation so far:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-comment and chunk-size warnings
+    - required `develop-web-game` smoke passed against `http://127.0.0.1:3006/?previewSmoke=1&renderer=canvas`
+    - targeted Playwright editor probe placed a Sword Hunter, confirmed the `Can Die` / `Can't Die` / `Respawns` select, changed it to `Respawns`, and saw the editor mark the room dirty with the expected status text
+    - targeted Playwright style probe captured `output/web-game/swordsman-panel-restyle.png` and confirmed the restyled panel renders with the expected retro colors
+
 - Sword Hunter AI main merge on April 28, 2026:
   - merged the canonical `feature/sword-hunter-ai-2026-04-21` work into `main` for production deployment
   - includes Sword Hunter object config/assets/animations, duel attack behavior, collect objective mode, collect-race goal/run verification, traversal graph + robust planner, drop landing helper, runtime debug state, editor/persistence wiring, and room metadata support

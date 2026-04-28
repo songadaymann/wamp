@@ -26,7 +26,9 @@ import {
 } from '../../enemies/swordsmanAi';
 import {
   buildSwordsmanDuelObjectiveTarget,
+  DEFAULT_SWORDSMAN_DEFEAT_MODE,
   DEFAULT_SWORDSMAN_OBJECTIVE_MODE,
+  type SwordsmanDefeatMode,
   type SwordsmanObjectiveMode,
   type SwordsmanObjectiveTarget,
 } from '../../enemies/swordsmanObjectives';
@@ -91,6 +93,7 @@ export interface LoadedRoomObjectRuntimeState {
   activatedUntil: number;
   aiState: SwordsmanAiState | null;
   aiObjectiveMode: SwordsmanObjectiveMode | null;
+  aiDefeatMode: SwordsmanDefeatMode | null;
   aiIntent: SwordsmanTraversalIntent | null;
   aiTargetX: number | null;
   aiCurrentSegmentId: string | null;
@@ -136,6 +139,7 @@ export interface LoadedRoomObject {
   linkedTargetInstanceId: string | null;
   containedObjectId: string | null;
   signText: string | null;
+  layer: LayerName;
   countsTowardGoals: boolean;
   config: GameObjectConfig;
   sprite: Phaser.GameObjects.Sprite;
@@ -247,6 +251,7 @@ interface CreateLiveObjectEntryOptions {
   containedObjectId: string | null;
   signText: string | null;
   objectiveMode?: SwordsmanObjectiveMode | null;
+  defeatMode?: SwordsmanDefeatMode | null;
   countsTowardGoals: boolean;
 }
 
@@ -304,6 +309,7 @@ const SWORDSMAN_AI_ATTACK_MS = 240;
 const SWORDSMAN_AI_ATTACK_HIT_START_MS = 55;
 const SWORDSMAN_AI_ATTACK_HIT_END_MS = 155;
 const SWORDSMAN_AI_COOLDOWN_MS = 300;
+const SWORDSMAN_AI_RESPAWN_DELAY_MS = 1500;
 const SWORDSMAN_AI_EDGE_GUARD_PROBE_LEAD_PX = 1;
 const SWORDSMAN_AI_FACING_FLIP_MIN_INTERVAL_MS = 90;
 const SWORDSMAN_AI_FACING_FLIP_MIN_TRAVEL_PX = 6;
@@ -369,6 +375,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         containedObjectId: placedObject.containedObjectId ?? null,
         signText: placedObject.signText ?? null,
         objectiveMode: placedObject.swordsmanObjectiveMode ?? null,
+        defeatMode: placedObject.swordsmanDefeatMode ?? null,
         countsTowardGoals: true,
       });
       if (liveObject) {
@@ -421,6 +428,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       containedObjectId,
       signText,
       objectiveMode = null,
+      defeatMode = null,
       countsTowardGoals,
     } = options;
     ensureCustomSpriteTexture(this.options.scene, config);
@@ -497,6 +505,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       linkedTargetInstanceId,
       containedObjectId,
       signText,
+      layer: getPlacedObjectLayer({ layer }),
       countsTowardGoals,
       config,
       sprite,
@@ -528,6 +537,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         aiObjectiveMode:
           config.id === SWORDSMAN_AI_OBJECT_ID
             ? objectiveMode ?? DEFAULT_SWORDSMAN_OBJECTIVE_MODE
+            : null,
+        aiDefeatMode:
+          config.id === SWORDSMAN_AI_OBJECT_ID
+            ? defeatMode ?? DEFAULT_SWORDSMAN_DEFEAT_MODE
             : null,
         aiIntent: null,
         aiTargetX: null,
@@ -1185,6 +1198,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       containedObjectId: null,
       signText: null,
       objectiveMode: null,
+      defeatMode: null,
       countsTowardGoals: options.countsTowardGoals,
     });
     if (!liveObject) {
@@ -1346,6 +1360,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
   private getSwordsmanObjectiveMode(liveObject: LoadedRoomObject): SwordsmanObjectiveMode {
     return liveObject.runtime.aiObjectiveMode ?? DEFAULT_SWORDSMAN_OBJECTIVE_MODE;
+  }
+
+  private getSwordsmanDefeatMode(liveObject: LoadedRoomObject): SwordsmanDefeatMode {
+    return liveObject.runtime.aiDefeatMode ?? DEFAULT_SWORDSMAN_DEFEAT_MODE;
   }
 
   private updateSwordsmanDuelObjective(
@@ -3957,6 +3975,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       linkedTargetInstanceId: null,
       containedObjectId: null,
       signText: null,
+      layer: 'terrain',
       countsTowardGoals: false,
       config: CANNON_BULLET_CONFIG,
       sprite,
@@ -3979,6 +3998,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         activatedUntil: this.options.getCurrentTime() + this.options.settings.cannonBulletLifetimeMs,
         aiState: null,
         aiObjectiveMode: null,
+        aiDefeatMode: null,
         aiIntent: null,
         aiTargetX: null,
         aiCurrentSegmentId: null,
@@ -4412,6 +4432,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       if (stomped) {
         playerBody.setVelocityY(this.options.settings.enemyStompBounceVelocity);
         this.defeatEnemy(loadedRoom, liveObject);
+        if (this.getSwordsmanDefeatMode(liveObject) === 'invincible') {
+          this.options.playBounceFx(liveObject.sprite.x, liveObject.sprite.y, loadedRoom.room.coordinates);
+        }
       } else if (
         this.getSwordsmanObjectiveMode(liveObject) === 'duel' &&
         this.swordsmanSwordCanDamagePlayer(liveObject, playerBody)
@@ -4553,10 +4576,22 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     if (!liveObject.sprite.active) {
       return null;
     }
+    if (
+      liveObject.config.id === SWORDSMAN_AI_OBJECT_ID &&
+      this.getSwordsmanDefeatMode(liveObject) === 'invincible'
+    ) {
+      this.options.showTransientStatus(`${liveObject.config.name} can't be defeated.`);
+      return null;
+    }
 
     const x = liveObject.sprite.x;
     const y = liveObject.sprite.y;
     const enemyName = liveObject.config.name;
+    const respawnOptions =
+      liveObject.config.id === SWORDSMAN_AI_OBJECT_ID &&
+      this.getSwordsmanDefeatMode(liveObject) === 'respawn'
+        ? this.createLiveObjectRespawnOptions(loadedRoom, liveObject)
+        : null;
 
     this.options.addScore(10);
     this.options.playEnemyKillFx(x, y, loadedRoom.room.coordinates);
@@ -4572,12 +4607,18 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           roomCoordinates: loadedRoom.room.coordinates,
           enemyName,
           instanceId: liveObject.placedInstanceId,
-          x: liveObject.sprite.x - this.options.getRoomOrigin(loadedRoom.room.coordinates).x,
-          y: liveObject.sprite.y - this.options.getRoomOrigin(loadedRoom.room.coordinates).y,
+          x: x - this.options.getRoomOrigin(loadedRoom.room.coordinates).x,
+          y: y - this.options.getRoomOrigin(loadedRoom.room.coordinates).y,
         })
       : false;
     if (!handledStatus) {
-      this.options.showTransientStatus(`${enemyName} defeated.`);
+      this.options.showTransientStatus(
+        respawnOptions ? `${enemyName} will respawn.` : `${enemyName} defeated.`
+      );
+    }
+
+    if (respawnOptions) {
+      this.scheduleLiveObjectRespawn(loadedRoom, respawnOptions);
     }
 
     return {
@@ -4586,5 +4627,66 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       x,
       y,
     };
+  }
+
+  private createLiveObjectRespawnOptions(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+  ): CreateLiveObjectEntryOptions {
+    const roomOrigin = this.options.getRoomOrigin(loadedRoom.room.coordinates);
+    const displayOffset = getObjectDisplayOffset(liveObject.config);
+    const x = liveObject.runtime.baseX - roomOrigin.x - displayOffset.x;
+    const y = liveObject.runtime.baseY - roomOrigin.y - displayOffset.y;
+    return {
+      key: liveObject.key,
+      config: liveObject.config,
+      x,
+      y,
+      facing: liveObject.runtime.initialDirectionX >= 0 ? 'right' : 'left',
+      layer: liveObject.layer,
+      baseTimeSeed: x + y,
+      placedInstanceId: liveObject.placedInstanceId,
+      linkedTargetRoomId: liveObject.linkedTargetRoomId,
+      linkedTargetInstanceId: liveObject.linkedTargetInstanceId,
+      containedObjectId: liveObject.containedObjectId,
+      signText: liveObject.signText,
+      objectiveMode: liveObject.runtime.aiObjectiveMode,
+      defeatMode: liveObject.runtime.aiDefeatMode,
+      countsTowardGoals: liveObject.countsTowardGoals,
+    };
+  }
+
+  private scheduleLiveObjectRespawn(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    options: CreateLiveObjectEntryOptions,
+  ): void {
+    this.options.scene.time.delayedCall(SWORDSMAN_AI_RESPAWN_DELAY_MS, () => {
+      if (!this.isLoadedRoomStillActive(loadedRoom)) {
+        return;
+      }
+      if (loadedRoom.liveObjects.some((liveObject) => liveObject.key === options.key)) {
+        return;
+      }
+
+      const respawned = this.createLiveObjectEntry(loadedRoom, options);
+      if (!respawned) {
+        return;
+      }
+
+      loadedRoom.liveObjects.push(respawned);
+      this.syncWorldObjectColliders(this.options.getLoadedFullRooms());
+      this.syncLiveObjectInteractions([loadedRoom]);
+    });
+  }
+
+  private isLoadedRoomStillActive(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+  ): boolean {
+    for (const candidate of this.options.getLoadedFullRooms()) {
+      if (candidate === loadedRoom) {
+        return true;
+      }
+    }
+    return false;
   }
 }

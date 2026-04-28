@@ -3702,6 +3702,7 @@ export class OverworldPlayScene extends Phaser.Scene {
             directionX: liveObject.runtime.directionX,
             aiState: liveObject.runtime.aiState,
             aiObjectiveMode: liveObject.runtime.aiObjectiveMode,
+            aiDefeatMode: liveObject.runtime.aiDefeatMode,
             aiIntent: liveObject.runtime.aiIntent,
             aiTargetX: liveObject.runtime.aiTargetX === null
               ? null

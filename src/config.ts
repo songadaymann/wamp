@@ -12,7 +12,7 @@ import {
   type CustomSpriteKind,
 } from './customSprites/model';
 import { SWORDSMAN_AI_OBJECT_ID } from './enemies/swordsmanAi';
-import type { SwordsmanObjectiveMode } from './enemies/swordsmanObjectives';
+import type { SwordsmanDefeatMode, SwordsmanObjectiveMode } from './enemies/swordsmanObjectives';
 export const TILE_SIZE = 16;
 export const ROOM_WIDTH = 40;   // tiles
 export const ROOM_HEIGHT = 22;  // tiles
@@ -970,6 +970,7 @@ export interface PlacedObject {
   containedObjectId?: string | null;
   signText?: string | null;
   swordsmanObjectiveMode?: SwordsmanObjectiveMode | null;
+  swordsmanDefeatMode?: SwordsmanDefeatMode | null;
 }
 
 export function getPlacedObjectLayer(

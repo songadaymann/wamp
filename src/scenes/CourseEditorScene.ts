@@ -445,6 +445,7 @@ export class CourseEditorScene extends Phaser.Scene {
       onCancelPressurePlateConnection: () => this.objectInspectorController.cancelPressurePlateConnection(),
       onClearContainerContents: () => this.objectInspectorController.clearFocusedContainerContents(),
       onSetFocusedSwordsmanObjectiveMode: () => {},
+      onSetFocusedSwordsmanDefeatMode: () => {},
     });
     this.selectionGraphics = this.add.graphics();
     this.selectionGraphics.setDepth(120);

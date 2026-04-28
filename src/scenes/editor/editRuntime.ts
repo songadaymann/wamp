@@ -30,8 +30,11 @@ import {
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../enemies/swordsmanAi';
 import {
+  DEFAULT_SWORDSMAN_DEFEAT_MODE,
   DEFAULT_SWORDSMAN_OBJECTIVE_MODE,
+  normalizeSwordsmanDefeatMode,
   normalizeSwordsmanObjectiveMode,
+  type SwordsmanDefeatMode,
   type SwordsmanObjectiveMode,
 } from '../../enemies/swordsmanObjectives';
 import {
@@ -898,6 +901,10 @@ export class EditorEditRuntime {
         editorState.selectedObjectId === SWORDSMAN_AI_OBJECT_ID
           ? DEFAULT_SWORDSMAN_OBJECTIVE_MODE
           : null,
+      swordsmanDefeatMode:
+        editorState.selectedObjectId === SWORDSMAN_AI_OBJECT_ID
+          ? DEFAULT_SWORDSMAN_DEFEAT_MODE
+          : null,
     };
 
     const previous = this.clonePlacedObjects();
@@ -1217,6 +1224,49 @@ export class EditorEditRuntime {
         ? {
             ...placed,
             swordsmanObjectiveMode: normalizedMode,
+          }
+        : placed
+    );
+    this.host.setPlacedObjects(next);
+    this.undoStack.push({
+      kind: 'objects',
+      action: { previous, next: this.clonePlacedObjects(next) },
+    });
+    this.redoStack = [];
+    this.markRoomDirty();
+    return true;
+  }
+
+  setSwordsmanDefeatMode(
+    instanceId: string,
+    defeatMode: SwordsmanDefeatMode,
+  ): boolean {
+    const placedObjects = this.host.getPlacedObjects();
+    const swordsmanIndex = placedObjects.findIndex((placed) => placed.instanceId === instanceId);
+    if (swordsmanIndex < 0) {
+      return false;
+    }
+
+    const swordsman = placedObjects[swordsmanIndex];
+    if (swordsman.id !== SWORDSMAN_AI_OBJECT_ID) {
+      return false;
+    }
+
+    const normalizedMode =
+      normalizeSwordsmanDefeatMode(defeatMode) ?? DEFAULT_SWORDSMAN_DEFEAT_MODE;
+    const previous = this.clonePlacedObjects();
+    const previousMode =
+      normalizeSwordsmanDefeatMode(previous[swordsmanIndex]?.swordsmanDefeatMode)
+      ?? DEFAULT_SWORDSMAN_DEFEAT_MODE;
+    if (previousMode === normalizedMode) {
+      return true;
+    }
+
+    const next = previous.map((placed, index) =>
+      index === swordsmanIndex
+        ? {
+            ...placed,
+            swordsmanDefeatMode: normalizedMode,
           }
         : placed
     );

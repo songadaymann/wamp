@@ -5,7 +5,10 @@ import {
   type LayerName,
   type PlacedObject,
 } from '../config';
-import { normalizeSwordsmanObjectiveMode } from '../enemies/swordsmanObjectives';
+import {
+  normalizeSwordsmanDefeatMode,
+  normalizeSwordsmanObjectiveMode,
+} from '../enemies/swordsmanObjectives';
 import { normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
 import { getPlacedObjectSignText } from '../signs/model';
 import { normalizeCustomSpriteDefinitions } from '../customSprites/model';
@@ -50,6 +53,7 @@ type CanonicalPlacedObjectPayload = {
   customSpriteKind: string | null;
   containedObjectId: string | null;
   swordsmanObjectiveMode: string | null;
+  swordsmanDefeatMode: string | null;
   signText: string | null;
   triggerTarget: string | null;
 };
@@ -282,6 +286,7 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
       layer: getPlacedObjectLayer(placed),
       signText: getPlacedObjectSignText(placed),
       swordsmanObjectiveMode: normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode),
+      swordsmanDefeatMode: normalizeSwordsmanDefeatMode(placed.swordsmanDefeatMode),
       signature,
       triggerTargetInstanceId:
         typeof placed.triggerTargetInstanceId === 'string' && placed.triggerTargetInstanceId.trim().length > 0
@@ -311,6 +316,7 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
       customSpriteKind: placed.customSpriteKind,
       containedObjectId: placed.containedObjectId,
       swordsmanObjectiveMode: placed.swordsmanObjectiveMode,
+      swordsmanDefeatMode: placed.swordsmanDefeatMode,
       signText: placed.signText,
       triggerTarget: placed.triggerTargetInstanceId
         ? canonicalIdentityByInstanceId.get(placed.triggerTargetInstanceId) ?? null
@@ -334,6 +340,7 @@ function buildPlacedObjectSignature(placed: PlacedObject): string {
         ? placed.containedObjectId
         : null,
     swordsmanObjectiveMode: normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode),
+    swordsmanDefeatMode: normalizeSwordsmanDefeatMode(placed.swordsmanDefeatMode),
     signText: getPlacedObjectSignText(placed),
   });
 }
@@ -351,6 +358,7 @@ function compareCanonicalPlacedObjects(
     (left.customSpriteKind ?? '').localeCompare(right.customSpriteKind ?? '') ||
     (left.containedObjectId ?? '').localeCompare(right.containedObjectId ?? '') ||
     (left.swordsmanObjectiveMode ?? '').localeCompare(right.swordsmanObjectiveMode ?? '') ||
+    (left.swordsmanDefeatMode ?? '').localeCompare(right.swordsmanDefeatMode ?? '') ||
     (left.signText ?? '').localeCompare(right.signText ?? '') ||
     (left.triggerTarget ?? '').localeCompare(right.triggerTarget ?? '')
   );
@@ -365,6 +373,7 @@ function compareNormalizedPlacedObjects(
     facing: CanonicalPlacedObjectPayload['facing'];
     containedObjectId: string | null;
     swordsmanObjectiveMode: string | null;
+    swordsmanDefeatMode: string | null;
     signText: string | null;
     signature: string;
   },
@@ -376,6 +385,7 @@ function compareNormalizedPlacedObjects(
     facing: CanonicalPlacedObjectPayload['facing'];
     containedObjectId: string | null;
     swordsmanObjectiveMode: string | null;
+    swordsmanDefeatMode: string | null;
     signText: string | null;
     signature: string;
   }
@@ -389,6 +399,7 @@ function compareNormalizedPlacedObjects(
     left.facing.localeCompare(right.facing) ||
     (left.containedObjectId ?? '').localeCompare(right.containedObjectId ?? '') ||
     (left.swordsmanObjectiveMode ?? '').localeCompare(right.swordsmanObjectiveMode ?? '') ||
+    (left.swordsmanDefeatMode ?? '').localeCompare(right.swordsmanDefeatMode ?? '') ||
     (left.signText ?? '').localeCompare(right.signText ?? '')
   );
 }

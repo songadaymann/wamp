@@ -133,6 +133,7 @@ export async function computeRoomSnapshotVerificationHash(snapshot: RoomSnapshot
       facing: placed.facing ?? null,
       layer: placed.layer ?? null,
       swordsmanObjectiveMode: placed.swordsmanObjectiveMode ?? null,
+      swordsmanDefeatMode: placed.swordsmanDefeatMode ?? null,
       containedObjectId: placed.containedObjectId ?? null,
       triggerTargetInstanceId: placed.triggerTargetInstanceId ?? null,
     })),

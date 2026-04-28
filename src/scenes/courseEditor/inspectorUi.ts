@@ -37,6 +37,8 @@ export function createEmptyCourseInspectorState(): EditorInspectorState {
     swordsmanStatusText: '',
     swordsmanObjectiveModeValue: 'duel',
     swordsmanObjectiveModeDisabled: true,
+    swordsmanDefeatModeValue: 'defeatable',
+    swordsmanDefeatModeDisabled: true,
   };
 }
 

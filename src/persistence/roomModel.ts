@@ -31,7 +31,10 @@ import {
   type RoomMusic,
 } from '../music/model';
 import { SWORDSMAN_AI_OBJECT_ID } from '../enemies/swordsmanAi';
-import { normalizeSwordsmanObjectiveMode } from '../enemies/swordsmanObjectives';
+import {
+  normalizeSwordsmanDefeatMode,
+  normalizeSwordsmanObjectiveMode,
+} from '../enemies/swordsmanObjectives';
 import { canPlacedObjectHaveSignText, normalizeSignText } from '../signs/model';
 import {
   normalizeCustomSpriteDefinitions,
@@ -283,6 +286,10 @@ function normalizePlacedObject(
       placed.id === SWORDSMAN_AI_OBJECT_ID
         ? normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode)
         : null,
+    swordsmanDefeatMode:
+      placed.id === SWORDSMAN_AI_OBJECT_ID
+        ? normalizeSwordsmanDefeatMode(placed.swordsmanDefeatMode)
+        : null,
   };
 
   if (
@@ -329,6 +336,10 @@ function clonePlacedObjects(placedObjects: PlacedObject[]): PlacedObject[] {
       swordsmanObjectiveMode:
         placed.id === SWORDSMAN_AI_OBJECT_ID
           ? normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode)
+          : null,
+      swordsmanDefeatMode:
+        placed.id === SWORDSMAN_AI_OBJECT_ID
+          ? normalizeSwordsmanDefeatMode(placed.swordsmanDefeatMode)
           : null,
     };
   });

@@ -11,9 +11,13 @@ import {
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../enemies/swordsmanAi';
 import {
+  DEFAULT_SWORDSMAN_DEFEAT_MODE,
   DEFAULT_SWORDSMAN_OBJECTIVE_MODE,
+  SWORDSMAN_DEFEAT_MODE_LABELS,
   SWORDSMAN_OBJECTIVE_MODE_LABELS,
+  normalizeSwordsmanDefeatMode,
   normalizeSwordsmanObjectiveMode,
+  type SwordsmanDefeatMode,
   type SwordsmanObjectiveMode,
 } from '../../enemies/swordsmanObjectives';
 import { requestSignTextEdit } from '../../signs/events';
@@ -486,6 +490,24 @@ export class EditorInspectorController {
     }
   }
 
+  setFocusedSwordsmanDefeatMode(defeatMode: SwordsmanDefeatMode): void {
+    const focused = this.getFocusedSwordsman();
+    if (!focused) {
+      this.swordsmanStatusText = 'Select a Sword Hunter first.';
+      this.renderInspectorUi();
+      return;
+    }
+
+    const normalizedMode =
+      normalizeSwordsmanDefeatMode(defeatMode) ?? DEFAULT_SWORDSMAN_DEFEAT_MODE;
+    if (this.editRuntime.setSwordsmanDefeatMode(focused.instanceId, normalizedMode)) {
+      this.focusedSwordsmanInstanceId = focused.instanceId;
+      this.pinInspector('swordsman', focused.instanceId);
+      this.swordsmanStatusText = `Sword Hunter defeat behavior set to ${SWORDSMAN_DEFEAT_MODE_LABELS[normalizedMode]}.`;
+      this.renderInspectorUi();
+    }
+  }
+
   clearPinnedSelection(): void {
     this.clearPinnedInspector();
   }
@@ -534,6 +556,8 @@ export class EditorInspectorController {
       swordsmanStatusText: '',
       swordsmanObjectiveModeValue: DEFAULT_SWORDSMAN_OBJECTIVE_MODE,
       swordsmanObjectiveModeDisabled: true,
+      swordsmanDefeatModeValue: DEFAULT_SWORDSMAN_DEFEAT_MODE,
+      swordsmanDefeatModeDisabled: true,
     };
   }
 
@@ -611,15 +635,20 @@ export class EditorInspectorController {
       const objectiveMode =
         normalizeSwordsmanObjectiveMode(focusedSwordsman.swordsmanObjectiveMode)
         ?? DEFAULT_SWORDSMAN_OBJECTIVE_MODE;
+      const defeatMode =
+        normalizeSwordsmanDefeatMode(focusedSwordsman.swordsmanDefeatMode)
+        ?? DEFAULT_SWORDSMAN_DEFEAT_MODE;
       this.renderInspector({
         ...hiddenState,
         visible: true,
         swordsmanVisible: true,
         swordsmanStatusText:
           this.swordsmanStatusText
-          ?? `This Sword Hunter is set to ${SWORDSMAN_OBJECTIVE_MODE_LABELS[objectiveMode]}.`,
+          ?? `This Sword Hunter is set to ${SWORDSMAN_OBJECTIVE_MODE_LABELS[objectiveMode]} / ${SWORDSMAN_DEFEAT_MODE_LABELS[defeatMode]}.`,
         swordsmanObjectiveModeValue: objectiveMode,
         swordsmanObjectiveModeDisabled: false,
+        swordsmanDefeatModeValue: defeatMode,
+        swordsmanDefeatModeDisabled: false,
       });
       return;
     }

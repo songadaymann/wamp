@@ -238,6 +238,99 @@
   background: rgba(92, 64, 27, 0.2);
 }
 
+#editor-inspector #swordsman-objective-panel {
+  display: grid;
+  gap: 10px;
+  overflow: hidden;
+  padding: 0 10px 12px;
+  border: 3px solid var(--editor-retro-shadow, #18161c);
+  border-radius: 0;
+  background: var(--editor-retro-cream, #fff3db);
+  color: var(--editor-retro-ink, #18161c);
+  box-shadow: 5px 5px 0 var(--editor-retro-shadow, #18161c);
+  font-family: var(--editor-ui-font, 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace);
+}
+
+#editor-inspector #swordsman-objective-panel .section-label {
+  margin: 0 -10px;
+  padding: 8px 10px 7px;
+  border-bottom: 3px solid var(--editor-retro-shadow, #18161c);
+  background: var(--editor-retro-red, #ed5f4b);
+  color: var(--editor-retro-cream, #fff3db);
+  font-family: var(--editor-ui-font, 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+}
+
+#editor-inspector #swordsman-objective-panel .section-label::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 15px;
+  border: 2px solid var(--editor-retro-shadow, #18161c);
+  background: var(--editor-retro-yellow, #fcea7c);
+  box-shadow: 13px 0 0 var(--editor-retro-blue, #79ccde);
+}
+
+#editor-inspector #swordsman-objective-panel .goal-context-note {
+  margin: 0;
+  padding: 8px 9px;
+  border: 2px solid var(--editor-retro-blue-deep, #2c5071);
+  border-radius: 0;
+  background: #e8fbff;
+  color: var(--editor-retro-blue-deep, #2c5071);
+  box-shadow: 2px 2px 0 var(--editor-retro-shadow, #18161c);
+  font-family: var(--editor-ui-font, 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+#editor-inspector #swordsman-objective-panel .goal-control-row {
+  gap: 5px;
+  margin-top: 0;
+  padding-left: 8px;
+  border-left: 6px solid var(--editor-retro-green, #277b30);
+}
+
+#editor-inspector #swordsman-objective-panel .goal-control-row:last-child {
+  border-left-color: var(--editor-retro-yellow, #fcea7c);
+}
+
+#editor-inspector #swordsman-objective-panel .goal-control-label {
+  color: var(--editor-retro-blue-deep, #2c5071);
+  font-family: var(--editor-ui-font, 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+#editor-inspector #swordsman-objective-panel .goal-input {
+  height: 34px;
+  padding: 7px 9px 6px;
+  border: 2px solid var(--editor-retro-blue-deep, #2c5071);
+  border-radius: 0;
+  background: #0b0b0b;
+  color: var(--editor-retro-cream, #fff3db);
+  box-shadow: 2px 2px 0 var(--editor-retro-shadow, #18161c);
+  font-family: var(--editor-ui-font, 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+#editor-inspector #swordsman-objective-panel .goal-input:focus {
+  outline: none;
+  border-color: var(--editor-retro-green, #277b30);
+  box-shadow: 2px 2px 0 var(--editor-retro-shadow, #18161c), 0 0 0 2px rgba(121, 204, 222, 0.28);
+}
+
+#editor-inspector #swordsman-objective-panel .goal-input option {
+  background: #18161c;
+  color: var(--editor-retro-cream, #fff3db);
+}
+
 .editor-inspector {
   position: absolute;
   top: calc(14px + var(--safe-top));
@@ -254,6 +347,10 @@
   pointer-events: auto;
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
   backdrop-filter: blur(8px);
+}
+
+.editor-inspector > #swordsman-objective-panel {
+  backdrop-filter: none;
 }
 
 #music-summary {

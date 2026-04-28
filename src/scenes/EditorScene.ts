@@ -823,6 +823,8 @@ export class EditorScene extends Phaser.Scene {
       onClearContainerContents: () => this.clearFocusedContainerContents(),
       onSetFocusedSwordsmanObjectiveMode: (objectiveMode) =>
         this.inspectorController.setFocusedSwordsmanObjectiveMode(objectiveMode),
+      onSetFocusedSwordsmanDefeatMode: (defeatMode) =>
+        this.inspectorController.setFocusedSwordsmanDefeatMode(defeatMode),
     });
 
     this.createBackground();

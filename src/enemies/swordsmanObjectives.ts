@@ -1,18 +1,32 @@
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
 import type { SwordsmanBodySnapshot } from './swordsmanTraversal';
 
 export type SwordsmanObjectiveMode = 'duel' | 'collect';
+export type SwordsmanDefeatMode = 'defeatable' | 'invincible' | 'respawn';
 export type SwordsmanObjectiveBody = Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody;
 
 export const DEFAULT_SWORDSMAN_OBJECTIVE_MODE: SwordsmanObjectiveMode = 'duel';
+export const DEFAULT_SWORDSMAN_DEFEAT_MODE: SwordsmanDefeatMode = 'defeatable';
 
 export const SWORDSMAN_OBJECTIVE_MODE_LABELS: Record<SwordsmanObjectiveMode, string> = {
   duel: 'Hunt Player',
   collect: 'Collect Items',
 };
 
+export const SWORDSMAN_DEFEAT_MODE_LABELS: Record<SwordsmanDefeatMode, string> = {
+  defeatable: 'Can Die',
+  invincible: "Can't Die",
+  respawn: 'Respawns',
+};
+
 export function normalizeSwordsmanObjectiveMode(value: unknown): SwordsmanObjectiveMode | null {
   return value === 'duel' || value === 'collect' ? value : null;
+}
+
+export function normalizeSwordsmanDefeatMode(value: unknown): SwordsmanDefeatMode | null {
+  return value === 'defeatable' || value === 'invincible' || value === 'respawn'
+    ? value
+    : null;
 }
 
 export interface SwordsmanObjectiveTarget {

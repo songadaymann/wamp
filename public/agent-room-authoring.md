@@ -150,6 +150,8 @@ Important:
 - Every `placedObjects[].id` must be a valid object id
 - Unknown object ids are ignored by rendering/runtime
 - `layer` is optional; if omitted it defaults to `terrain`
+- `swordsman_ai` supports `swordsmanObjectiveMode` (`duel` or `collect`) and
+  `swordsmanDefeatMode` (`defeatable`, `invincible`, or `respawn`)
 
 Common valid object ids by category:
 
