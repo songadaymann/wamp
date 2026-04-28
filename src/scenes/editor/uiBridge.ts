@@ -231,6 +231,7 @@ const DEFAULT_BACKGROUND_PHOTOS_SORT: BackgroundPhotosSort = 'most_used';
 type BackgroundPhotosSort = 'most_used' | 'least_used' | 'newest' | 'oldest';
 
 const PREFERRED_TILESET_OPTION_ORDER = [
+  'essentials',
   'forest',
   'forest_2',
   'desert',

@@ -57,6 +57,17 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Essentials tileset default on April 28, 2026:
+  - changed the editor's first-open tile palette default from `forest` to `essentials`
+  - corrected the visible tileset label from `Esentials` to `Essentials`
+  - put `essentials` first in the editor tileset dropdown order
+  - validation:
+    - `git diff --check -- src/config.ts src/scenes/editor/uiBridge.ts` passed
+    - `npm run typecheck` passed
+    - required `develop-web-game` smoke passed at `output/web-game/default-essentials-skill-smoke/`
+    - targeted Playwright probe confirmed `#tileset-select.value === "essentials"` and first option `Essentials`
+    - `npm run build` passed with the existing Rollup pure-comment and chunk-size warnings
+
 - Post-run room share branch on April 24, 2026:
   - created `feature/post-run-room-share-2026-04-24` from `main` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-post-run-share-2026-04-24`
   - ported the Run Complete share option from the dirty working branch into the clean branch:

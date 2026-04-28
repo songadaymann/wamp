@@ -400,7 +400,7 @@ export const TILESETS: TilesetConfig[] = [
   },
   {
     key: 'essentials',
-    name: 'Esentials',
+    name: 'Essentials',
     path: 'assets/tilesets/beginner.png',
     imageWidth: 144,
     imageHeight: 80,
@@ -1082,8 +1082,8 @@ export interface EditorState {
   placedObjects: PlacedObject[];
 }
 
-const DEFAULT_EDITOR_TILESET_KEY = 'forest';
-const DEFAULT_EDITOR_SELECTION_START_COL = 9;
+const DEFAULT_EDITOR_TILESET_KEY = 'essentials';
+const DEFAULT_EDITOR_SELECTION_START_COL = 0;
 const DEFAULT_EDITOR_SELECTION_START_ROW = 0;
 const DEFAULT_EDITOR_TILESET = getTilesetByKey(DEFAULT_EDITOR_TILESET_KEY);
 const DEFAULT_EDITOR_SELECTED_TILE_GID =
