@@ -1,0 +1,100 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "everybodys-platformer-cryptopunk-avatar-queue",
+  "main": "src/cloudflare/cryptopunk-avatar-queue-worker.ts",
+  "compatibility_date": "2026-04-28",
+  "keep_vars": true,
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "vars": {
+    "CRYPTOPUNK_AVATAR_MAX_JOBS": "2",
+    "CRYPTOPUNK_AVATAR_PUBLIC_BASE_URL": "https://pub-4dd79d967d1b4ff4970db4c110bca7c7.r2.dev",
+    "CRYPTOPUNK_AVATAR_R2_PREFIX": "avatars/cryptopunks",
+    "CRYPTOPUNK_AVATAR_STALE_AFTER_MINUTES": "20"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "everybodys-platformer-db",
+      "database_id": "3cba45fc-4f29-4081-89f7-c57ab3179292",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "AVATAR_BUCKET",
+      "bucket_name": "everybodys-platformer-avatars"
+    }
+  ],
+  "containers": [
+    {
+      "class_name": "CryptopunkAvatarQueueContainer",
+      "image": "./cloudflare/cryptopunk-avatar-queue/Dockerfile",
+      "instance_type": "basic",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "CryptopunkAvatarQueueContainer",
+        "name": "CRYPTOPUNK_AVATAR_QUEUE_CONTAINER"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "cryptopunk-avatar-container-v1",
+      "new_sqlite_classes": ["CryptopunkAvatarQueueContainer"]
+    }
+  ],
+  "env": {
+    "safety": {
+      "name": "everybodys-platformer-safety-cryptopunk-avatar-queue",
+      "preview_urls": true,
+      "vars": {
+        "CRYPTOPUNK_AVATAR_MAX_JOBS": "2",
+        "CRYPTOPUNK_AVATAR_PUBLIC_BASE_URL": "https://pub-3edec36aaa28446294605da2b3949be4.r2.dev",
+        "CRYPTOPUNK_AVATAR_R2_PREFIX": "avatars/cryptopunks",
+        "CRYPTOPUNK_AVATAR_STALE_AFTER_MINUTES": "20"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "everybodys-platformer-safety-db",
+          "database_id": "27f64d18-5d6d-45a0-9361-c09ec1a805a6",
+          "migrations_dir": "./migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "AVATAR_BUCKET",
+          "bucket_name": "everybodys-platformer-safety-avatars"
+        }
+      ],
+      "containers": [
+        {
+          "class_name": "CryptopunkAvatarQueueContainer",
+          "image": "./cloudflare/cryptopunk-avatar-queue/Dockerfile",
+          "instance_type": "basic",
+          "max_instances": 1
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "class_name": "CryptopunkAvatarQueueContainer",
+            "name": "CRYPTOPUNK_AVATAR_QUEUE_CONTAINER"
+          }
+        ]
+      },
+      "migrations": [
+        {
+          "tag": "cryptopunk-avatar-container-v1",
+          "new_sqlite_classes": ["CryptopunkAvatarQueueContainer"]
+        }
+      ]
+    }
+  }
+}

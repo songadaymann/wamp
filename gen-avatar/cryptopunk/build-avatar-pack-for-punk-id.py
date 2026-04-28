@@ -25,10 +25,17 @@ from back_head_template_lib import (
 
 ROOT = Path(__file__).resolve().parent
 REPO_ROOT = ROOT.parent.parent
+
+
+def resolve_local_sprites_separated_root() -> Path:
+    try:
+        return REPO_ROOT.parents[2] / "Sprites-and-Things" / "player" / "SpritesSeparated"
+    except IndexError:
+        return REPO_ROOT.parent / "Sprites-and-Things" / "player" / "SpritesSeparated"
+
+
 LOCAL_FLING_PUNK_ASSETS = REPO_ROOT.parent / "fling-punk" / "assets"
-LOCAL_SPRITES_SEPARATED_ROOT = (
-    REPO_ROOT.parents[2] / "Sprites-and-Things" / "player" / "SpritesSeparated"
-)
+LOCAL_SPRITES_SEPARATED_ROOT = resolve_local_sprites_separated_root()
 DEFAULT_METADATA = Path(
     os.environ.get(
         "CRYPTOPUNK_METADATA_PATH",

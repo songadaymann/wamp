@@ -94,9 +94,17 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
       - `cryptopunk-4495` is now `ready` with punk type `Human` and accessories `Front Beard`, `Messy Hair`; all proxied API asset URLs returned `200`
       - added a lock-safe production queue wrapper plus macOS LaunchAgent installer scripts, installed `land.wamp.cryptopunk-avatar-queue`, and confirmed launchd reports a 60-second interval, two successful runs, and no queued jobs remaining
       - resume validation passed `node --check`, `git diff --check`, plist lint, a manual queue-wrapper no-op run, and launchd inspection showing `last exit code = 0`; earlier stderr entries were stale transient Wrangler `fetch failed` attempts before later successful ticks
+    - April 28 Cloudflare container queue follow-up:
+      - added a separate scheduled Worker/container config at `wrangler.cryptopunk-avatar-queue.jsonc` so the main game Worker still only queues rows while the Cloudflare queue Worker claims D1 jobs, calls a containerized generator, uploads generated files to R2 through bindings, and marks jobs ready/failed
+      - added `cloudflare/cryptopunk-avatar-queue/Dockerfile`, container runner server, and `scripts/prepare_cryptopunk_avatar_container_context.mjs`; the ignored build context stages the local Punk metadata/images plus `Sprites-and-Things/player/SpritesSeparated` before deployment
+      - made `gen-avatar/cryptopunk/build-avatar-pack-for-punk-id.py` tolerate shallow container paths so env overrides for `CRYPTOPUNK_METADATA_PATH`, `CRYPTOPUNK_PUNKS_DIR`, and `PLAYER_SPRITES_SEPARATED_ROOT` work inside Docker
+      - validation passed `node --check`, `npm run typecheck`, `git diff --check`, local container generation for `cryptopunk-4495`, `linux/amd64` container generation for `cryptopunk-4495`, and Wrangler dry-runs for production and safety with Docker builds
+      - safety deployed `everybodys-platformer-safety-cryptopunk-avatar-queue` at `https://everybodys-platformer-safety-cryptopunk-avatar-queue.novox-robot.workers.dev`; first push hit a transient Cloudflare registry `EOF`, retry succeeded
+      - safety end-to-end cloud proof queued `cryptopunk-4496`, cron claimed it as `cryptopunk-job-1777416779113-4bxu878y`, generated it in the container, uploaded assets to R2, marked it `ready`, and all six proxied safety asset URLs returned `200`
+      - production deployed `everybodys-platformer-cryptopunk-avatar-queue` at `https://everybodys-platformer-cryptopunk-avatar-queue.novox-robot.workers.dev`; health reports the production bucket/container bindings and production D1 currently has one ready row and no queued jobs
   - TODO:
     - QA a real signed-in production selection/save of ready Punks such as `cryptopunk-4495`
-    - longer-term: replace the local launchd runner with a cloud-hosted worker/CI job once the generator's external art dependencies are available outside this machine
+    - after a real production user queues the next Punk and the Cloudflare queue Worker marks it ready, uninstall local launchd fallback with `npm run avatar:cryptopunk:queue:uninstall-launchd`
 - Overworld optimization main-port on April 28, 2026:
   - user reported the first optimization branch was showing the old site design; diagnosis found it was cut from stale `feature/dynamic-cryptopunk-avatars-2026-04-23`, 131 commits behind `origin/main`
   - created clean main-based worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-perf-main-2026-04-28` on branch `perf/overworld-room-start-optimization-main-2026-04-28` at deployed main `5d01b45`

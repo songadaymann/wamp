@@ -10,6 +10,7 @@ contracts/broadcast/
 gen-avatar/cryptopunk/generated-avatar-packs/
 gen-avatar/cryptopunk/__pycache__/
 gen-avatar/cryptopunk/**/*.pyc
+cloudflare/cryptopunk-avatar-queue/build-input/
 
 .DS_Store
 

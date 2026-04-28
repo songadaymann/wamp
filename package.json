@@ -26,6 +26,9 @@
     "avatar:cryptopunk:queue:install-launchd": "node scripts/install_cryptopunk_avatar_queue_launchd.mjs",
     "avatar:cryptopunk:queue:uninstall-launchd": "node scripts/install_cryptopunk_avatar_queue_launchd.mjs --uninstall",
     "avatar:cryptopunk:queue:safety": "node scripts/process_cryptopunk_avatar_queue.mjs --env safety",
+    "avatar:cryptopunk:container:prepare": "node scripts/prepare_cryptopunk_avatar_container_context.mjs",
+    "avatar:cryptopunk:container:deploy": "npm run avatar:cryptopunk:container:prepare && DOCKER_DEFAULT_PLATFORM=linux/amd64 wrangler deploy --config wrangler.cryptopunk-avatar-queue.jsonc --env \"\"",
+    "avatar:cryptopunk:container:deploy:safety": "npm run avatar:cryptopunk:container:prepare && DOCKER_DEFAULT_PLATFORM=linux/amd64 wrangler deploy --config wrangler.cryptopunk-avatar-queue.jsonc --env safety",
     "contracts:build": "npm --prefix contracts run build",
     "contracts:test": "npm --prefix contracts run test",
     "contracts:deploy:base-sepolia": "npm --prefix contracts run deploy:base-sepolia",
@@ -43,6 +46,7 @@
     "presence:deploy:safety": "partykit deploy --config partykit.safety.json"
   },
   "dependencies": {
+    "@cloudflare/containers": "^0.3.3",
     "@ethersproject/sha2": "^5.8.0",
     "@reown/appkit": "^1.8.19",
     "@reown/appkit-adapter-ethers": "^1.8.19",
