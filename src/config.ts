@@ -11,6 +11,8 @@ import {
   isCustomSpriteObjectId,
   type CustomSpriteKind,
 } from './customSprites/model';
+import { SWORDSMAN_AI_OBJECT_ID } from './enemies/swordsmanAi';
+import type { SwordsmanObjectiveMode } from './enemies/swordsmanObjectives';
 export const TILE_SIZE = 16;
 export const ROOM_WIDTH = 40;   // tiles
 export const ROOM_HEIGHT = 22;  // tiles
@@ -690,6 +692,12 @@ export interface GameObjectConfig {
   bodyOffsetX?: number;
   /** explicit collision body offset inside the frame */
   bodyOffsetY?: number;
+  /** visual scale applied when drawing this object's sprite */
+  displayScale?: number;
+  /** visual x offset applied when drawing this object's sprite */
+  displayOffsetX?: number;
+  /** visual y offset applied when drawing this object's sprite */
+  displayOffsetY?: number;
   /** optional editor preview width override */
   previewWidth?: number;
   /** optional editor preview height override */
@@ -788,6 +796,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'bear_polar',  name: 'White Mouse', category: 'enemy',       path: 'assets/enemies/bear_polar.png',  frameWidth: 32, frameHeight: 32, frameCount: 8,  fps: 6,  animationFrames: [4, 5, 6, 7, 6, 5], defaultFrame: 5, facingDirection: 'right', bodyWidth: 24, bodyHeight: 22, behavior: 'patrol',   description: 'Small patrol mouse. Kills on contact.' },
   { id: 'chicken',     name: 'Chicken',     category: 'enemy',       path: 'assets/enemies/chicken.png',     frameWidth: 32, frameHeight: 32, frameCount: 14, fps: 8,  animationFrames: [7, 8, 9, 10, 11, 12, 13], defaultFrame: 7, facingDirection: 'left', bodyWidth: 18, bodyHeight: 16, behavior: 'patrol',   description: 'Quick patrol enemy. Kills on contact.' },
   { id: 'shark',       name: 'Shark',       category: 'enemy',       path: 'assets/enemies/shark.png',       frameWidth: 64, frameHeight: 32, frameCount: 4,  fps: 8,  animationFrames: [0, 1, 2, 3, 2, 1], defaultFrame: 1, facingDirection: 'left', bodyWidth: 48, bodyHeight: 18, behavior: 'fly',      description: 'Cruises left and right in a wave pattern. Kills on contact.' },
+  { id: SWORDSMAN_AI_OBJECT_ID, name: 'Sword Hunter', category: 'enemy', path: 'assets/enemies/swordsman_ai/sword_idle.png', frameWidth: 48, frameHeight: 48, frameCount: 10, fps: 8, defaultFrame: 0, facingDirection: 'right', bodyWidth: 10, bodyHeight: 14, bodyOffsetX: 19, bodyOffsetY: 26, displayScale: 1.12, displayOffsetY: 8, previewWidth: 18, previewHeight: 28, previewOffsetX: 15, previewOffsetY: 20, placeUsingPreviewBounds: true, behavior: 'patrol', description: 'Smart sword enemy. Patrols, chases nearby players, and attacks with a timed slash.' },
 
   // ── Interactive ──
   { id: 'bounce_pad',  name: 'Bounce Pad',  category: 'interactive', path: 'assets/objects/bounce_pad.png',  frameWidth: 16, frameHeight: 32, frameCount: 4,  fps: 0,  bodyWidth: 16, bodyHeight: 8,  behavior: 'bounce',   description: 'Launches player upward on contact.' },
@@ -871,6 +880,18 @@ export function getObjectPreviewBounds(config: GameObjectConfig): {
   };
 }
 
+export function getObjectDisplayScale(config: GameObjectConfig): number {
+  const scale = config.displayScale ?? 1;
+  return Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
+export function getObjectDisplayOffset(config: GameObjectConfig): { x: number; y: number } {
+  return {
+    x: config.displayOffsetX ?? 0,
+    y: config.displayOffsetY ?? 0,
+  };
+}
+
 export function getObjectPlacementPointForTile(
   config: GameObjectConfig,
   tileX: number,
@@ -899,21 +920,23 @@ export function getObjectPreviewRectForTile(
   tileY: number,
 ): { x: number; y: number; width: number; height: number } {
   const preview = getObjectPreviewBounds(config);
-
-  if (!config.placeUsingPreviewBounds) {
-    return {
-      x: tileX * TILE_SIZE + preview.offsetX,
-      y: tileY * TILE_SIZE + TILE_SIZE - config.frameHeight + preview.offsetY,
-      width: preview.width,
-      height: preview.height,
-    };
-  }
+  const displayScale = getObjectDisplayScale(config);
+  const displayOffset = getObjectDisplayOffset(config);
+  const placementPoint = getObjectPlacementPointForTile(config, tileX, tileY);
 
   return {
-    x: tileX * TILE_SIZE + Math.max(0, (TILE_SIZE - preview.width) / 2),
-    y: tileY * TILE_SIZE + TILE_SIZE - preview.height,
-    width: preview.width,
-    height: preview.height,
+    x:
+      placementPoint.x +
+      displayOffset.x -
+      config.frameWidth * displayScale * 0.5 +
+      preview.offsetX * displayScale,
+    y:
+      placementPoint.y +
+      displayOffset.y -
+      config.frameHeight * displayScale * 0.5 +
+      preview.offsetY * displayScale,
+    width: preview.width * displayScale,
+    height: preview.height * displayScale,
   };
 }
 
@@ -946,6 +969,7 @@ export interface PlacedObject {
   triggerTargetInstanceId?: string | null;
   containedObjectId?: string | null;
   signText?: string | null;
+  swordsmanObjectiveMode?: SwordsmanObjectiveMode | null;
 }
 
 export function getPlacedObjectLayer(

@@ -30,6 +30,8 @@ import {
   normalizeRoomMusic,
   type RoomMusic,
 } from '../music/model';
+import { SWORDSMAN_AI_OBJECT_ID } from '../enemies/swordsmanAi';
+import { normalizeSwordsmanObjectiveMode } from '../enemies/swordsmanObjectives';
 import { canPlacedObjectHaveSignText, normalizeSignText } from '../signs/model';
 import {
   normalizeCustomSpriteDefinitions,
@@ -277,6 +279,10 @@ function normalizePlacedObject(
     signText: canPlacedObjectHaveSignText({ id: placed.id })
       ? normalizeSignText(placed.signText)
       : null,
+    swordsmanObjectiveMode:
+      placed.id === SWORDSMAN_AI_OBJECT_ID
+        ? normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode)
+        : null,
   };
 
   if (
@@ -320,6 +326,10 @@ function clonePlacedObjects(placedObjects: PlacedObject[]): PlacedObject[] {
       triggerTargetInstanceId: validTarget ? target : null,
       containedObjectId: validContainedObjectId ? containedObjectId : null,
       signText: canPlacedObjectHaveSignText(placed) ? normalizeSignText(placed.signText) : null,
+      swordsmanObjectiveMode:
+        placed.id === SWORDSMAN_AI_OBJECT_ID
+          ? normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode)
+          : null,
     };
   });
 }
@@ -514,6 +524,11 @@ export function getRoomPublishValidationError(
 ): string | null {
   return getRoomGoalPublishValidationError(room.goal, {
     collectiblesPlaced: countRoomPlacedObjectsByCategory(room.placedObjects, 'collectible'),
+    collectModeEnemyCount: room.placedObjects.filter(
+      (placed) =>
+        placed.id === SWORDSMAN_AI_OBJECT_ID &&
+        normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode) === 'collect',
+    ).length,
   });
 }
 

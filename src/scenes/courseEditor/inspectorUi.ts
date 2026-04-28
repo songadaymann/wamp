@@ -33,6 +33,10 @@ export function createEmptyCourseInspectorState(): EditorInspectorState {
     containerStatusText: '',
     containerClearDisabled: true,
     containerClearTitle: '',
+    swordsmanVisible: false,
+    swordsmanStatusText: '',
+    swordsmanObjectiveModeValue: 'duel',
+    swordsmanObjectiveModeDisabled: true,
   };
 }
 

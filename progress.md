@@ -57,6 +57,14 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Sword Hunter AI main merge on April 28, 2026:
+  - merged the canonical `feature/sword-hunter-ai-2026-04-21` work into `main` for production deployment
+  - includes Sword Hunter object config/assets/animations, duel attack behavior, collect objective mode, collect-race goal/run verification, traversal graph + robust planner, drop landing helper, runtime debug state, editor/persistence wiring, and room metadata support
+  - intentionally excludes the discarded traversal-harness line: no `.codex-local-logs/`, standalone `sword_hunter_*_harness.mjs` scripts, `src/enemies/swordsmanTraversalHarness.ts`, `window.run_sword_hunter_traversal_harness`, or forced-edge preview/debug API remains
+  - pre-merge branch validation had already passed `npm run typecheck`, `git diff --check`, `npm run build`, and the required browser smoke against `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas`
+  - next step is production deploy from clean, pushed `main`, then live QA on authored Sword Hunter rooms
+
+
 - Essentials tileset default on April 28, 2026:
   - changed the editor's first-open tile palette default from `forest` to `essentials`
   - corrected the visible tileset label from `Esentials` to `Essentials`

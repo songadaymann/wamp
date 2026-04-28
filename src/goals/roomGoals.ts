@@ -3,6 +3,7 @@ import { TILE_SIZE } from '../config';
 export const ROOM_GOAL_TYPES = [
   'reach_exit',
   'collect_target',
+  'collect_race',
   'defeat_all',
   'checkpoint_sprint',
   'survival',
@@ -27,6 +28,11 @@ export interface CollectTargetGoal {
   timeLimitMs: number | null;
 }
 
+export interface CollectRaceGoal {
+  type: 'collect_race';
+  timeLimitMs: number | null;
+}
+
 export interface DefeatAllGoal {
   type: 'defeat_all';
   timeLimitMs: number | null;
@@ -46,11 +52,13 @@ export interface SurvivalGoal {
 
 export interface RoomGoalPublishValidationContext {
   collectiblesPlaced: number;
+  collectModeEnemyCount: number;
 }
 
 export type RoomGoal =
   | ReachExitGoal
   | CollectTargetGoal
+  | CollectRaceGoal
   | DefeatAllGoal
   | CheckpointSprintGoal
   | SurvivalGoal;
@@ -58,6 +66,7 @@ export type RoomGoal =
 export const ROOM_GOAL_LABELS: Record<RoomGoalType, string> = {
   reach_exit: 'Reach Exit',
   collect_target: 'Collect Target',
+  collect_race: 'Collect Race',
   defeat_all: 'Defeat All',
   checkpoint_sprint: 'Checkpoint Sprint',
   survival: 'Survival',
@@ -77,6 +86,11 @@ export function createDefaultRoomGoal(type: RoomGoalType): RoomGoal {
       return {
         type,
         requiredCount: 3,
+        timeLimitMs: null,
+      };
+    case 'collect_race':
+      return {
+        type,
         timeLimitMs: null,
       };
     case 'defeat_all':
@@ -122,6 +136,11 @@ export function cloneRoomGoal(goal: RoomGoal | null): RoomGoal | null {
       return {
         type: goal.type,
         requiredCount: goal.requiredCount,
+        timeLimitMs: goal.timeLimitMs,
+      };
+    case 'collect_race':
+      return {
+        type: goal.type,
         timeLimitMs: goal.timeLimitMs,
       };
     case 'defeat_all':
@@ -210,6 +229,11 @@ export function normalizeRoomGoal(value: unknown): RoomGoal | null {
         requiredCount: normalizePositiveInteger(goal.requiredCount) ?? 1,
         timeLimitMs: normalizePositiveInteger(goal.timeLimitMs),
       };
+    case 'collect_race':
+      return {
+        type: 'collect_race',
+        timeLimitMs: normalizePositiveInteger(goal.timeLimitMs),
+      };
     case 'defeat_all':
       return {
         type: 'defeat_all',
@@ -249,6 +273,8 @@ export function formatRoomGoalShortText(
       return 'Reach exit';
     case 'collect_target':
       return `Collect ${goal.requiredCount}`;
+    case 'collect_race':
+      return 'Collect race';
     case 'defeat_all': {
       const enemyCount = options.enemyCount ?? null;
       if (typeof enemyCount === 'number' && Number.isFinite(enemyCount) && enemyCount > 0) {
@@ -274,6 +300,8 @@ export function buildAutomaticRoomGoalIntroText(
       return 'Reach the exit as fast as you can!';
     case 'collect_target':
       return `Collect ${goal.requiredCount} item${goal.requiredCount === 1 ? '' : 's'} as fast as you can!`;
+    case 'collect_race':
+      return 'Collect more items than the Sword Hunter before the room is empty!';
     case 'defeat_all': {
       const enemyCount = options.enemyCount ?? null;
       if (typeof enemyCount === 'number' && Number.isFinite(enemyCount) && enemyCount > 0) {
@@ -315,6 +343,20 @@ export function getRoomGoalPublishValidationError(
 
   if (goal.type === 'collect_target' && context.collectiblesPlaced < goal.requiredCount) {
     return `You've set the collect goal for ${goal.requiredCount} object${goal.requiredCount === 1 ? '' : 's'}, but you've only placed ${context.collectiblesPlaced}.`;
+  }
+
+  if (goal.type === 'collect_race') {
+    if (context.collectiblesPlaced <= 0) {
+      return 'Collect Race needs at least one collectible in the room.';
+    }
+
+    if (context.collectModeEnemyCount <= 0) {
+      return 'Collect Race needs one Sword Hunter set to Collect Items.';
+    }
+
+    if (context.collectModeEnemyCount > 1) {
+      return 'Collect Race currently supports exactly one Sword Hunter set to Collect Items.';
+    }
   }
 
   return null;

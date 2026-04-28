@@ -7,6 +7,8 @@ import {
   ROOM_WIDTH,
   TILE_SIZE,
   editorState,
+  getObjectDisplayOffset,
+  getObjectDisplayScale,
   getPlacedObjectLayer,
   type LayerName,
   type PlacedObject,
@@ -243,25 +245,29 @@ export class EditorOverlayController {
         continue;
       }
 
-      const previewWidth = objectConfig.previewWidth ?? objectConfig.frameWidth;
-      const previewHeight = objectConfig.previewHeight ?? objectConfig.frameHeight;
-      const previewOffsetX = objectConfig.previewOffsetX ?? 0;
-      const previewOffsetY = objectConfig.previewOffsetY ?? 0;
+      const displayScale = getObjectDisplayScale(objectConfig);
+      const displayOffset = getObjectDisplayOffset(objectConfig);
+      const frameWidth = objectConfig.frameWidth * displayScale;
+      const frameHeight = objectConfig.frameHeight * displayScale;
+      const previewWidth = (objectConfig.previewWidth ?? objectConfig.frameWidth) * displayScale;
+      const previewHeight = (objectConfig.previewHeight ?? objectConfig.frameHeight) * displayScale;
+      const previewOffsetX = (objectConfig.previewOffsetX ?? 0) * displayScale;
+      const previewOffsetY = (objectConfig.previewOffsetY ?? 0) * displayScale;
       const minTileX = Math.max(
         0,
-        Math.floor((placedObject.x - objectConfig.frameWidth * 0.5 + previewOffsetX) / TILE_SIZE),
+        Math.floor((placedObject.x + displayOffset.x - frameWidth * 0.5 + previewOffsetX) / TILE_SIZE),
       );
       const maxTileX = Math.min(
         ROOM_WIDTH,
-        Math.ceil((placedObject.x - objectConfig.frameWidth * 0.5 + previewOffsetX + previewWidth) / TILE_SIZE),
+        Math.ceil((placedObject.x + displayOffset.x - frameWidth * 0.5 + previewOffsetX + previewWidth) / TILE_SIZE),
       );
       const minTileY = Math.max(
         0,
-        Math.floor((placedObject.y - objectConfig.frameHeight * 0.5 + previewOffsetY) / TILE_SIZE),
+        Math.floor((placedObject.y + displayOffset.y - frameHeight * 0.5 + previewOffsetY) / TILE_SIZE),
       );
       const maxTileY = Math.min(
         ROOM_HEIGHT,
-        Math.ceil((placedObject.y - objectConfig.frameHeight * 0.5 + previewOffsetY + previewHeight) / TILE_SIZE),
+        Math.ceil((placedObject.y + displayOffset.y - frameHeight * 0.5 + previewOffsetY + previewHeight) / TILE_SIZE),
       );
       for (let tileY = minTileY; tileY < maxTileY; tileY += 1) {
         for (let tileX = minTileX; tileX < maxTileX; tileX += 1) {

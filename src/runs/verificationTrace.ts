@@ -36,10 +36,12 @@ export type RankedRunTraceGoalEventType =
   | 'reach_exit'
   | 'finish'
   | 'complete';
+export type RankedRunTraceGoalEventActor = 'player' | 'enemy';
 
 export interface RankedRunTraceGoalEvent {
   atMs: number;
   type: RankedRunTraceGoalEventType;
+  actor: RankedRunTraceGoalEventActor;
   roomId: string | null;
   roomX: number;
   roomY: number;
@@ -256,9 +258,19 @@ function normalizeGoalEvents(value: unknown): RankedRunTraceGoalEvent[] | null {
     ) {
       return null;
     }
+    const actor =
+      candidate.actor === 'enemy'
+        ? 'enemy'
+        : candidate.actor === undefined || candidate.actor === 'player'
+          ? 'player'
+          : null;
+    if (actor === null) {
+      return null;
+    }
     normalized.push({
       atMs,
       type: candidate.type,
+      actor,
       roomId: typeof candidate.roomId === 'string' && candidate.roomId.trim() ? candidate.roomId : null,
       roomX,
       roomY,

@@ -66,6 +66,7 @@ export interface RunVerificationBinding {
 
 export interface RunVerificationDerivedMetrics {
   collectiblesCollected: number;
+  enemyCollectiblesCollected: number;
   enemiesDefeated: number;
   checkpointsReached: number;
 }
@@ -131,6 +132,7 @@ export async function computeRoomSnapshotVerificationHash(snapshot: RoomSnapshot
       y: placed.y,
       facing: placed.facing ?? null,
       layer: placed.layer ?? null,
+      swordsmanObjectiveMode: placed.swordsmanObjectiveMode ?? null,
       containedObjectId: placed.containedObjectId ?? null,
       triggerTargetInstanceId: placed.triggerTargetInstanceId ?? null,
     })),
@@ -178,7 +180,7 @@ export function createRoomVerificationTrigger(
 ): RunVerificationTriggerResult {
   return createGenericVerificationTrigger({
     ...input,
-    rankingMode: goal.type === 'survival' ? 'score' : 'time',
+    rankingMode: goal.type === 'survival' || goal.type === 'collect_race' ? 'score' : 'time',
     compare: (left, right) => compareLeaderboardEntries(left, right, goal),
   });
 }
@@ -495,6 +497,7 @@ function validateTraceEnvelope(
     reason: null,
     derivedMetrics: {
       collectiblesCollected: 0,
+      enemyCollectiblesCollected: 0,
       enemiesDefeated: 0,
       checkpointsReached: 0,
     },
@@ -716,6 +719,7 @@ function deriveMetricsForGoal(input: {
   enemyBindingsByRoomId: Map<string, Map<string, TraceObjectBinding>>;
 }): RunVerificationDerivedMetrics | RunVerificationResult {
   const collectibleIds = new Set<string>();
+  const enemyCollectibleIds = new Set<string>();
   const enemyIds = new Set<string>();
   const checkpoints = new Set<number>();
   let reachedExit = false;
@@ -754,7 +758,7 @@ function deriveMetricsForGoal(input: {
       }
     }
 
-    if (event.type !== 'enemy') {
+    if (event.type !== 'enemy' && !(event.type === 'collectible' && event.actor === 'enemy')) {
       const pathDistance = getGoalEventPathDistance(event, input.breadcrumbs);
       if (pathDistance === null || pathDistance.distancePx > pathDistance.maxDistancePx) {
         return createFailedVerification('failed', 'trace_goal', {
@@ -798,7 +802,11 @@ function deriveMetricsForGoal(input: {
             });
           }
         }
-        collectibleIds.add(`${event.roomId}:${event.instanceId}`);
+        if (event.actor === 'enemy') {
+          enemyCollectibleIds.add(`${event.roomId}:${event.instanceId}`);
+        } else {
+          collectibleIds.add(`${event.roomId}:${event.instanceId}`);
+        }
         break;
       case 'enemy':
         if (!event.roomId || !event.instanceId) {
@@ -854,6 +862,7 @@ function deriveMetricsForGoal(input: {
   if (!goal) {
     return {
       collectiblesCollected: collectibleIds.size,
+      enemyCollectiblesCollected: enemyCollectibleIds.size,
       enemiesDefeated: enemyIds.size,
       checkpointsReached: checkpoints.size,
     };
@@ -875,6 +884,8 @@ function deriveMetricsForGoal(input: {
           collectedCount: collectibleIds.size,
         });
       }
+      break;
+    case 'collect_race':
       break;
     case 'defeat_all':
       if (enemyIds.size < totalCountFromMap(input.enemyIdsByRoomId)) {
@@ -905,6 +916,7 @@ function deriveMetricsForGoal(input: {
 
   return {
     collectiblesCollected: collectibleIds.size,
+    enemyCollectiblesCollected: enemyCollectibleIds.size,
     enemiesDefeated: enemyIds.size,
     checkpointsReached: checkpoints.size,
   };
@@ -1089,6 +1101,7 @@ function createFailedVerification(
     reason,
     derivedMetrics: {
       collectiblesCollected: 0,
+      enemyCollectiblesCollected: 0,
       enemiesDefeated: 0,
       checkpointsReached: 0,
     },

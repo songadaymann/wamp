@@ -335,6 +335,8 @@ export class OverworldHudStateController {
         return 'Reach exit';
       case 'collect_target':
         return `Collect ${goal.requiredCount}`;
+      case 'collect_race':
+        return 'Collect race';
       case 'defeat_all':
         return 'Defeat all enemies';
       case 'checkpoint_sprint':
@@ -354,6 +356,8 @@ export class OverworldHudStateController {
         return 'Reach exit';
       case 'collect_target':
         return `Collect ${room.goal.requiredCount}`;
+      case 'collect_race':
+        return 'Collect more than the Sword Hunter';
       case 'defeat_all': {
         const enemyCount = this.host.countRoomEnemies(room);
         return `Defeat ${enemyCount} ${enemyCount === 1 ? 'enemy' : 'enemies'}`;
@@ -399,6 +403,8 @@ export class OverworldHudStateController {
         return runState.result === 'completed' ? 'Exit reached' : 'Reach the exit';
       case 'collect_target':
         return `${runState.collectiblesCollected}/${runState.goal.requiredCount} collected`;
+      case 'collect_race':
+        return `You ${runState.collectiblesCollected} · Hunter ${runState.enemyCollectiblesCollected}`;
       case 'defeat_all':
         return `${runState.enemiesDefeated}/${runState.enemyTarget ?? 0} defeated`;
       case 'checkpoint_sprint':

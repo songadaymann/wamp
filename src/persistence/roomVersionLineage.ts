@@ -5,6 +5,7 @@ import {
   type LayerName,
   type PlacedObject,
 } from '../config';
+import { normalizeSwordsmanObjectiveMode } from '../enemies/swordsmanObjectives';
 import { normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
 import { getPlacedObjectSignText } from '../signs/model';
 import { normalizeCustomSpriteDefinitions } from '../customSprites/model';
@@ -19,6 +20,10 @@ type CanonicalGoalPayload =
   | {
       type: 'collect_target';
       requiredCount: number;
+      timeLimitMs: number | null;
+    }
+  | {
+      type: 'collect_race';
       timeLimitMs: number | null;
     }
   | {
@@ -44,6 +49,7 @@ type CanonicalPlacedObjectPayload = {
   facing: 'left' | 'right' | 'none';
   customSpriteKind: string | null;
   containedObjectId: string | null;
+  swordsmanObjectiveMode: string | null;
   signText: string | null;
   triggerTarget: string | null;
 };
@@ -229,6 +235,11 @@ function normalizeGoalForFingerprint(goal: RoomGoal | null): CanonicalGoalPayloa
         requiredCount: normalized.requiredCount,
         timeLimitMs: normalized.timeLimitMs,
       };
+    case 'collect_race':
+      return {
+        type: normalized.type,
+        timeLimitMs: normalized.timeLimitMs,
+      };
     case 'defeat_all':
       return {
         type: normalized.type,
@@ -270,6 +281,7 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
       instanceId: getPlacedObjectInstanceId(placed, index),
       layer: getPlacedObjectLayer(placed),
       signText: getPlacedObjectSignText(placed),
+      swordsmanObjectiveMode: normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode),
       signature,
       triggerTargetInstanceId:
         typeof placed.triggerTargetInstanceId === 'string' && placed.triggerTargetInstanceId.trim().length > 0
@@ -298,6 +310,7 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
       facing: placed.facing,
       customSpriteKind: placed.customSpriteKind,
       containedObjectId: placed.containedObjectId,
+      swordsmanObjectiveMode: placed.swordsmanObjectiveMode,
       signText: placed.signText,
       triggerTarget: placed.triggerTargetInstanceId
         ? canonicalIdentityByInstanceId.get(placed.triggerTargetInstanceId) ?? null
@@ -320,6 +333,7 @@ function buildPlacedObjectSignature(placed: PlacedObject): string {
       typeof placed.containedObjectId === 'string' && placed.containedObjectId.trim().length > 0
         ? placed.containedObjectId
         : null,
+    swordsmanObjectiveMode: normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode),
     signText: getPlacedObjectSignText(placed),
   });
 }
@@ -336,6 +350,7 @@ function compareCanonicalPlacedObjects(
     left.facing.localeCompare(right.facing) ||
     (left.customSpriteKind ?? '').localeCompare(right.customSpriteKind ?? '') ||
     (left.containedObjectId ?? '').localeCompare(right.containedObjectId ?? '') ||
+    (left.swordsmanObjectiveMode ?? '').localeCompare(right.swordsmanObjectiveMode ?? '') ||
     (left.signText ?? '').localeCompare(right.signText ?? '') ||
     (left.triggerTarget ?? '').localeCompare(right.triggerTarget ?? '')
   );
@@ -349,6 +364,7 @@ function compareNormalizedPlacedObjects(
     layer: LayerName;
     facing: CanonicalPlacedObjectPayload['facing'];
     containedObjectId: string | null;
+    swordsmanObjectiveMode: string | null;
     signText: string | null;
     signature: string;
   },
@@ -359,6 +375,7 @@ function compareNormalizedPlacedObjects(
     layer: LayerName;
     facing: CanonicalPlacedObjectPayload['facing'];
     containedObjectId: string | null;
+    swordsmanObjectiveMode: string | null;
     signText: string | null;
     signature: string;
   }
@@ -371,6 +388,7 @@ function compareNormalizedPlacedObjects(
     left.layer.localeCompare(right.layer) ||
     left.facing.localeCompare(right.facing) ||
     (left.containedObjectId ?? '').localeCompare(right.containedObjectId ?? '') ||
+    (left.swordsmanObjectiveMode ?? '').localeCompare(right.swordsmanObjectiveMode ?? '') ||
     (left.signText ?? '').localeCompare(right.signText ?? '')
   );
 }

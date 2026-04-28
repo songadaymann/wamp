@@ -12,6 +12,10 @@ import {
   ROCKY_ROADS_FX_SPRITESHEETS,
 } from '../fx/manifest';
 import {
+  SWORDSMAN_AI_ANIMATIONS,
+  SWORDSMAN_AI_EXTRA_SPRITESHEETS,
+} from '../enemies/swordsmanAi';
+import {
   createGoalMarkerFlagAnimations,
   loadGoalMarkerFlagSheets,
 } from '../goals/markerFlags';
@@ -53,6 +57,13 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 16,
       frameHeight: 16,
     });
+
+    for (const sheet of SWORDSMAN_AI_EXTRA_SPRITESHEETS) {
+      this.load.spritesheet(sheet.key, sheet.path, {
+        frameWidth: sheet.frameWidth,
+        frameHeight: sheet.frameHeight,
+      });
+    }
 
     for (const atlas of listPlayerAvatarAtlasAssets()) {
       this.load.atlas(atlas.key, atlas.texturePath, atlas.atlasPath);
@@ -101,6 +112,22 @@ export class BootScene extends Phaser.Scene {
         })),
         frameRate: 18,
         repeat: 0,
+      });
+    }
+
+    for (const animation of SWORDSMAN_AI_ANIMATIONS) {
+      if (this.anims.exists(animation.key)) {
+        continue;
+      }
+
+      this.anims.create({
+        key: animation.key,
+        frames: animation.frames.map((frame) => ({
+          key: animation.spritesheetKey,
+          frame,
+        })),
+        frameRate: animation.frameRate,
+        repeat: animation.repeat,
       });
     }
 

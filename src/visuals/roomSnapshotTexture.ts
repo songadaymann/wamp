@@ -9,6 +9,8 @@ import {
   TILESETS,
   TILE_SIZE,
   getObjectDefaultFrame,
+  getObjectDisplayOffset,
+  getObjectDisplayScale,
   getObjectFrameSourceRect,
   getPlacedObjectLayer,
   type LayerName,
@@ -359,10 +361,12 @@ function drawRoomObjectsForLayer(
     const sourceImage = getTextureSource(scene, objectConfig.id);
     if (!sourceImage) continue;
 
-    const destX = offsetX + Math.round((placedObject.x - objectConfig.frameWidth / 2) * scale);
-    const destY = offsetY + Math.round((placedObject.y - objectConfig.frameHeight / 2) * scale);
-    const destWidth = Math.max(1, Math.round(objectConfig.frameWidth * scale));
-    const destHeight = Math.max(1, Math.round(objectConfig.frameHeight * scale));
+    const displayScale = getObjectDisplayScale(objectConfig);
+    const displayOffset = getObjectDisplayOffset(objectConfig);
+    const destWidth = Math.max(1, Math.round(objectConfig.frameWidth * displayScale * scale));
+    const destHeight = Math.max(1, Math.round(objectConfig.frameHeight * displayScale * scale));
+    const destX = offsetX + Math.round((placedObject.x + displayOffset.x) * scale - destWidth / 2);
+    const destY = offsetY + Math.round((placedObject.y + displayOffset.y) * scale - destHeight / 2);
 
     const frame = getObjectDefaultFrame(objectConfig);
     const { sx, sy, sw, sh } = getObjectFrameSourceRect(
