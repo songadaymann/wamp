@@ -85,8 +85,11 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - April 28 validation passed `git diff --check`, `npm run typecheck`, and `npm run build` after `npm ci --ignore-scripts`; npm still reports the existing audit issues
     - April 28 required live-world smoke passed against `http://127.0.0.1:3242/?renderer=canvas&welcome=0&previewSmoke=1` using `VITE_ROOM_API_BASE_URL=https://api.wamp.land`; artifact: `output/web-game/cryptopunk-main-merge-remote-api-smoke-clean/`
     - April 28 targeted avatar-picker probe passed with mocked authenticated profile data: the picker displayed CryptoPunk `4156` as ready, selected it, and saved `selectedAvatarId: "cryptopunk-4156"` with zero console/page errors; artifacts: `output/web-game/cryptopunk-avatar-picker-main-merge/`
+    - April 28 production promotion fast-forwarded `main` to merge commit `9f8065c`, pushed `origin/main`, deployed Worker/Pages, and applied remote D1 migration `0026_dynamic_cryptopunk_avatar_packs.sql`
+    - April 28 production checks passed: deploy smoke returned healthy `https://wamp.land` / `https://api.wamp.land`, remote D1 reported no pending migrations, live HTML served bundle `assets/main-DqFGz1cf.js` with the `profile-cryptopunk-*` picker markup, and required production web-game smoke passed at `output/web-game/cryptopunk-prod-main-smoke/`
+    - production `GET /api/avatars/cryptopunks/4156/status` currently returns `missing`, which is expected until a production signed-in user queues a Punk and the queue processor uploads/marks the generated pack ready
   - TODO:
-    - QA a real signed-in save of `cryptopunk-4156` / `cryptopunk-4495` on the safety Pages preview
+    - QA a real signed-in production selection/save of ready Punks such as `cryptopunk-4156` / `cryptopunk-4495` after generating them on production
     - decide whether the CryptoPunk queue runner should become a durable Worker/cron/job instead of a local `npm run avatar:cryptopunk:queue:safety` process
 - Overworld optimization main-port on April 28, 2026:
   - user reported the first optimization branch was showing the old site design; diagnosis found it was cut from stale `feature/dynamic-cryptopunk-avatars-2026-04-23`, 131 commits behind `origin/main`
