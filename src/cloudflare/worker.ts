@@ -95,6 +95,7 @@ import {
   handleWorldChunksRequest,
   handleWorldRequest,
 } from './worker/world/routes';
+import { handleRoomShareRequest } from './worker/share/routes';
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -379,6 +380,10 @@ export default {
 
       if (url.pathname === '/api/leaderboards/global' && request.method === 'GET') {
         return await handleGlobalLeaderboard(request, url, env);
+      }
+
+      if (url.pathname.startsWith('/api/share/rooms/')) {
+        return await handleRoomShareRequest(request, url, env);
       }
 
       if (!url.pathname.startsWith('/api/rooms/')) {

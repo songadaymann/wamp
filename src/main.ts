@@ -158,7 +158,40 @@ function getDebugState(): Record<string, unknown> {
     return { scene: sceneKey };
   }
 
+  for (const sceneKey of sceneOrder) {
+    if (!game.scene.isPaused(sceneKey) && !game.scene.isSleeping(sceneKey)) continue;
+
+    const scene = game.scene.getScene(sceneKey) as {
+      describeState?: () => Record<string, unknown>;
+    };
+
+    if (scene.describeState) {
+      return scene.describeState();
+    }
+
+    return { scene: sceneKey };
+  }
+
   return { scene: 'none' };
+}
+
+function getSwordHunterDebugState(): Record<string, unknown> {
+  const activeScene = getDebugState();
+  const liveObjects = Array.isArray(activeScene.liveObjects)
+    ? activeScene.liveObjects
+    : null;
+
+  return {
+    scene: typeof activeScene.scene === 'string' ? activeScene.scene : 'unknown',
+    available: liveObjects !== null,
+    swordsmen:
+      liveObjects?.filter(
+        (liveObject): liveObject is Record<string, unknown> =>
+          Boolean(liveObject) &&
+          typeof liveObject === 'object' &&
+          liveObject.id === 'swordsman_ai',
+      ) ?? [],
+  };
 }
 
 window.render_game_to_text = () =>
@@ -179,11 +212,25 @@ window.render_game_to_text = () =>
   });
 
 window.get_room_music_debug_state = () => globalRoomMusicController.getDebugState();
+window.get_sword_hunter_debug = () => getSwordHunterDebugState();
 
 if (query.get('previewSmoke') === '1') {
   window.run_preview_smoke_action = async (
-    action: 'selectEditableRoom' | 'playSelectedRoom' | 'returnToWorld' | 'editSelectedRoom' | 'openSyntheticEditor',
-    payload?: { roomId?: string | null },
+    action:
+      | 'selectEditableRoom'
+      | 'playSelectedRoom'
+      | 'returnToWorld'
+      | 'editSelectedRoom'
+      | 'openSyntheticEditor'
+      | 'setPlayerPosition',
+    payload?: {
+      roomId?: string | null;
+      x?: number;
+      y?: number;
+      velocityX?: number;
+      velocityY?: number;
+      bodyEnabled?: boolean;
+    },
   ) => {
     switch (action) {
       case 'selectEditableRoom':
@@ -202,6 +249,19 @@ if (query.get('previewSmoke') === '1') {
         }, 1200);
       case 'openSyntheticEditor':
         return openSyntheticEditorForPreviewSmoke();
+      case 'setPlayerPosition':
+        return runOverworldPreviewSmokeAction(
+          (scene) => {
+            return scene.debugSetPlayerPosition?.({
+              x: payload?.x,
+              y: payload?.y,
+              velocityX: payload?.velocityX ?? 0,
+              velocityY: payload?.velocityY ?? 0,
+              bodyEnabled: payload?.bodyEnabled,
+            });
+          },
+          50,
+        );
       default:
         return { ok: false, reason: `unsupported-action:${action}` };
     }
@@ -310,6 +370,13 @@ type PreviewSmokeScene = {
   playSelectedRoom: () => void;
   returnToWorld: () => void;
   editSelectedRoom: () => void;
+  debugSetPlayerPosition?: (options: {
+    x?: number;
+    y?: number;
+    velocityX?: number;
+    velocityY?: number;
+    bodyEnabled?: boolean;
+  }) => Record<string, unknown>;
   roomSummariesById?: Map<string, { id?: string; coordinates?: { x: number; y: number }; state?: string }>;
   draftRoomsById?: Map<string, { id: string; coordinates: { x: number; y: number } }>;
 };
@@ -356,7 +423,7 @@ async function selectEditableRoomForPreviewSmoke(roomId: string | null): Promise
 }
 
 async function runOverworldPreviewSmokeAction(
-  action: (scene: PreviewSmokeScene) => void,
+  action: (scene: PreviewSmokeScene) => Record<string, unknown> | void,
   waitMs = 900,
 ): Promise<Record<string, unknown>> {
   const scene = getOverworldSceneForPreviewSmoke();
@@ -364,12 +431,27 @@ async function runOverworldPreviewSmokeAction(
     return { ok: false, reason: 'overworld-scene-missing' };
   }
 
-  action(scene);
+  const result = action(scene) ?? null;
   await waitForPreviewSmoke(waitMs);
+  if (isPreviewSmokeActionFailure(result)) {
+    return {
+      ok: false,
+      reason: typeof result.reason === 'string' ? result.reason : 'preview-action-failed',
+      result,
+      activeScene: getDebugState(),
+    };
+  }
   return {
     ok: true,
+    result,
     activeScene: getDebugState(),
   };
+}
+
+function isPreviewSmokeActionFailure(
+  result: Record<string, unknown> | null,
+): result is Record<string, unknown> & { ok: false } {
+  return Boolean(result && result.ok === false && typeof result.status !== 'string');
 }
 
 function getOverworldSceneForPreviewSmoke(): PreviewSmokeScene | null {

@@ -81,9 +81,166 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - deployed HTML contains the current avatar picker, `profile-cryptopunk-*` markup, and bundle `assets/main-vqnNYYEX.js`
     - safety API status checks show `cryptopunk-4156` and `cryptopunk-4495` ready, with absolute proxied asset URLs on `https://everybodys-platformer-safety.novox-robot.workers.dev`; `PlayerSheet.png` fetches returned `200 image/png` for both
     - deployed safety play probe entered play with `avatarId: "cryptopunk-4156"` and loaded 4 punk asset responses; artifact: `output/web-game/cryptopunk-safety-play-targeted/play-cryptopunk-4156-clean.png`
+    - April 28 main-update validation merged current `origin/main` into `feature/dynamic-cryptopunk-avatars-main-2026-04-24` after resolving the `progress.md` note conflict
+    - April 28 validation passed `git diff --check`, `npm run typecheck`, and `npm run build` after `npm ci --ignore-scripts`; npm still reports the existing audit issues
+    - April 28 required live-world smoke passed against `http://127.0.0.1:3242/?renderer=canvas&welcome=0&previewSmoke=1` using `VITE_ROOM_API_BASE_URL=https://api.wamp.land`; artifact: `output/web-game/cryptopunk-main-merge-remote-api-smoke-clean/`
+    - April 28 targeted avatar-picker probe passed with mocked authenticated profile data: the picker displayed CryptoPunk `4156` as ready, selected it, and saved `selectedAvatarId: "cryptopunk-4156"` with zero console/page errors; artifacts: `output/web-game/cryptopunk-avatar-picker-main-merge/`
   - TODO:
     - QA a real signed-in save of `cryptopunk-4156` / `cryptopunk-4495` on the safety Pages preview
     - decide whether the CryptoPunk queue runner should become a durable Worker/cron/job instead of a local `npm run avatar:cryptopunk:queue:safety` process
+- Overworld optimization main-port on April 28, 2026:
+  - user reported the first optimization branch was showing the old site design; diagnosis found it was cut from stale `feature/dynamic-cryptopunk-avatars-2026-04-23`, 131 commits behind `origin/main`
+  - created clean main-based worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-perf-main-2026-04-28` on branch `perf/overworld-room-start-optimization-main-2026-04-28` at deployed main `5d01b45`
+  - ported the optimization pass onto current main: grid redraw signature caching, frame-HUD throttling, roster DOM caching, cache-first room start, staged full-room/preview loading, and per-frame live-object scan reductions
+  - fixed the staged preview path so play mode prunes the old browse-sized preview set before current-room full rendering, keeping LOD budgets intact and avoiding a synchronous chunk-preview rebuild spike
+  - the earlier dirty branch `perf/overworld-room-start-optimization-2026-04-28` remains reference-only and should not be used for QA because it carries the stale design base
+  - validation:
+    - `npm ci --ignore-scripts` installed clean worktree dependencies; npm reported existing audit issues
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with existing Rollup pure-comment and chunk-size warnings
+    - stale old-branch dev server on port `3000` was stopped; clean main-based dev server is running at `http://127.0.0.1:3000/`
+    - targeted Playwright probe passed at `output/web-game/optimization-main-final-probe/`: cache-first `playSelectedRoom()` sync path measured about `49ms`, current room was full-loaded immediately, preview rooms stayed under budget (`48/49`), and `window.run_overworld_lod_stress()` passed
+    - required `develop-web-game` client smoke passed at `output/web-game/optimization-main-client-smoke/`; screenshots were visually inspected and no error artifacts were written
+  - loading-shell follow-up:
+    - set the initial `<body data-app-ready="false">` in `index.html`
+    - while `data-app-ready="false"`, `#app` and `#auth-panel` are now visually hidden instead of only ignoring pointer events, so the old/editor shell no longer shows through the boot splash
+    - used `visibility: hidden` instead of `display: none` so Phaser still gets real game-container dimensions during startup
+    - validation passed: `git diff --check`, `npm run typecheck`, `npm run build`, a paused-API Playwright loading-state probe at `output/web-game/loading-shell-hide-probe/`, and required `develop-web-game` smoke at `output/web-game/loading-shell-client-smoke/`
+
+- Enemy AI follow-up branch on April 28, 2026:
+  - created `feature/enemy-ai-continued-2026-04-28` from production `main` at `dba30f4`
+  - added a per-Sword-Hunter defeat behavior setting alongside the existing objective selector:
+    - `defeatable` / "Can Die": current stomp/sword defeat behavior
+    - `invincible` / "Can't Die": player stomp/sword hits do not remove the hunter
+    - `respawn` / "Respawns": player defeat removes the hunter, then respawns it after a short delay
+  - wired the field through editor state, room snapshot normalization, version fingerprints, run verification hashes, runtime debug output, and agent room `place_object` commands
+  - restyled the Sword Hunter editor panel from the old translucent inspector look to the newer colorful retro editor palette
+  - validation so far:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-comment and chunk-size warnings
+    - required `develop-web-game` smoke passed against `http://127.0.0.1:3006/?previewSmoke=1&renderer=canvas`
+    - targeted Playwright editor probe placed a Sword Hunter, confirmed the `Can Die` / `Can't Die` / `Respawns` select, changed it to `Respawns`, and saw the editor mark the room dirty with the expected status text
+    - targeted Playwright style probe captured `output/web-game/swordsman-panel-restyle.png` and confirmed the restyled panel renders with the expected retro colors
+
+- Sword Hunter AI main merge on April 28, 2026:
+  - merged the canonical `feature/sword-hunter-ai-2026-04-21` work into `main` for production deployment
+  - includes Sword Hunter object config/assets/animations, duel attack behavior, collect objective mode, collect-race goal/run verification, traversal graph + robust planner, drop landing helper, runtime debug state, editor/persistence wiring, and room metadata support
+  - intentionally excludes the discarded traversal-harness line: no `.codex-local-logs/`, standalone `sword_hunter_*_harness.mjs` scripts, `src/enemies/swordsmanTraversalHarness.ts`, `window.run_sword_hunter_traversal_harness`, or forced-edge preview/debug API remains
+  - pre-merge branch validation had already passed `npm run typecheck`, `git diff --check`, `npm run build`, and the required browser smoke against `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas`
+  - next step is production deploy from clean, pushed `main`, then live QA on authored Sword Hunter rooms
+
+
+- Essentials tileset default on April 28, 2026:
+  - changed the editor's first-open tile palette default from `forest` to `essentials`
+  - corrected the visible tileset label from `Esentials` to `Essentials`
+  - put `essentials` first in the editor tileset dropdown order
+  - validation:
+    - `git diff --check -- src/config.ts src/scenes/editor/uiBridge.ts` passed
+    - `npm run typecheck` passed
+    - required `develop-web-game` smoke passed at `output/web-game/default-essentials-skill-smoke/`
+    - targeted Playwright probe confirmed `#tileset-select.value === "essentials"` and first option `Essentials`
+    - `npm run build` passed with the existing Rollup pure-comment and chunk-size warnings
+
+- Post-run room share branch on April 24, 2026:
+  - created `feature/post-run-room-share-2026-04-24` from `main` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-post-run-share-2026-04-24`
+  - ported the Run Complete share option from the dirty working branch into the clean branch:
+    - room completions render an in-modal snapshot preview using the room metadata renderer with a canvas fallback
+    - share copy references the real room/title and clear time, e.g. `I beat "Hello World" in WAMP in 11.5 seconds. Can you do better?`
+    - native share sheet gets the PNG when supported; desktop fallback opens an X/Twitter intent and keeps a snapshot download button for manual attachment
+    - unsigned users see a sign-in prompt, while sharing itself remains usable without blocking on auth
+  - validation:
+    - `git diff --check` passed for the touched files
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-comment and large-chunk warnings
+    - `http://127.0.0.1:3345/?renderer=canvas` is running from the clean worktree against the remote room API
+    - `agent-browser` verified page load, nonblank UI, no error overlay, empty console errors, and expected key buttons
+    - required `develop-web-game` smoke passed with artifacts in `output/web-game/post-run-share-3345-smoke/`
+    - targeted share-modal probe passed with artifacts in `output/web-game/post-run-share-3345-modal/`; summary confirms the final share text, PNG data URL, enabled buttons, and X intent URL
+    - added a higher-contrast X-logo share button treatment; `output/web-game/post-run-share-x-logo-modal/share-modal.png` confirms the logo+Share button, and `npm run build` still passes with the existing Rollup warnings
+    - commit/deploy target: Pages-only safety preview at `https://feature-post-run-room-share.wampland.pages.dev` so the shared safety Worker/PartyKit do not get touched for this frontend-only UI change
+  - TODO:
+    - QA a real signed-in completed room flow on `3345`, especially mobile native file sharing versus desktop X fallback
+    - decide whether course completions should get a text-only or generated course-map share treatment later
+- Room social-card link previews on April 24, 2026:
+  - added shareable room URLs at `/r/<x>/<y>` and updated room focus/history plus post-run X sharing to use those URLs instead of query-only `?x=&y=` links
+  - added a Cloudflare Pages advanced-mode `_worker.js` that serves `/r/<x>/<y>` with injected Open Graph / Twitter Card metadata while still booting the app shell
+  - added Worker API share routes under `/api/share/rooms/<x,y>` for room metadata, a direct share HTML fallback, and a crawler-accessible PNG room preview image generated from the published room snapshot
+  - validation so far:
+    - `git diff --check -- . ':!node_modules'` passed
+    - `node --check public/_worker.js` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - `wrangler deploy --dry-run --outdir /tmp/wamp-og-worker-dry-run-2` bundled the Worker successfully
+    - a Node probe against `public/_worker.js` confirmed `/r/12/-3` injects `<base href="/">`, `og:image`, `twitter:card`, the canonical `/r/12/-3` URL, and the API preview image URL
+    - required web-game client passed against `http://127.0.0.1:3346/r/0/0?renderer=canvas&welcome=0` with artifacts in `output/web-game/room-share-link-3346-smoke/`; screenshot confirmed the room renders from the `/r` path with no console error file
+    - targeted Playwright probe confirmed the app stays at `/r/0/0`, root `<base href="/">` is active, `data-app-ready="true"`, and console error count is zero
+    - targeted share-modal probe confirmed the X intent URL now includes `/r/0/0` and the room snapshot still renders as a PNG data URL
+    - first production deploy attempt from clean `main` stopped during Worker asset upload because Wrangler refused to upload Pages `_worker.js` as a static asset; added `public/.assetsignore` with `_worker.js`, matching Cloudflare's static-assets guidance for Pages worker files in asset directories
+    - second production deploy attempt from clean `main` got past the asset issue but the local Wrangler OAuth session could not refresh, and the available Cloudflare Images token was account-valid but did not have Worker deploy permission
+    - follow-up changed the Pages `_worker.js` to be self-contained for social cards: `/r/<x>/<y>` metadata now points at `https://wamp.land/r/<x>/<y>/image.png`, and that image route generates a PNG by fetching the already-live `/api/rooms/<x,y>/published` endpoint
+    - Node probe confirmed `public/_worker.js` injects `https://wamp.land/r/0/0/image.png`, uses the real `Hello World - WAMP room 0,0` title, and returns a valid 1200x630 PNG; visually inspected `/tmp/wamp-pages-worker-room-image.png`
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - required web-game client passed against `http://127.0.0.1:3346/r/0/0?renderer=canvas&welcome=0` with artifacts in `output/web-game/room-share-pages-image-3346-smoke/`; screenshot confirmed the room still renders from the `/r` path and no console error file was produced
+    - production Pages auto-deployed commit `5b51340`; `https://wamp.land/r/0/0` returned the correct OG/Twitter metadata and `https://wamp.land/r/0/0/image.png` returned a 1200x630 PNG, but a production browser smoke showed the app shell fell back to the minimal fallback HTML because Pages `env.ASSETS` did not return `/index.html`
+    - patched the Pages worker to try `/index.html`, then `/`, then the original request when loading the app shell, so production `/r/<x>/<y>` links can still boot the app if `/index.html` is not directly fetchable from the asset binding
+    - production Pages auto-deployed commit `2b21a59`; `https://wamp.land/r/0/0` now includes the app bundle plus the correct `og:image` / `twitter:image` tags pointing at `https://wamp.land/r/0/0/image.png`
+    - `https://wamp.land/r/0/0/image.png` returns a 1200x630 PNG; inspected `/tmp/wamp-r-image-final.png`
+    - `node scripts/smoke_prod.mjs` passed against `https://wamp.land` and `https://api.wamp.land`
+    - required production web-game smoke passed against `https://wamp.land/r/0/0?renderer=canvas&welcome=0&deployProbe=2b21a59` with artifacts in `/private/tmp/wamp-prod-main-dc50466/output/web-game/room-share-prod-app-shell-smoke/`; screenshot confirmed the app renders the room from `/r`, and no console error file was produced
+    - user reported manual room-link image previews still missing; repro found legacy query links like `https://wamp.land/?x=0&y=0` still served the plain app shell with no OG/Twitter tags
+    - patched Pages `_worker.js` to treat `/?x=<x>&y=<y>` and `/index.html?x=<x>&y=<y>` as room share pages for metadata injection, while preserving app-shell behavior; the emitted image URL is now versioned as `https://wamp.land/r/<x>/<y>/image.png?v=<publishedVersion>` and includes explicit `og:image:type`, `og:image:alt`, and `twitter:image:alt`
+    - local Node probe confirmed both `https://wamp.land/r/0/0` and `https://wamp.land/?x=0&y=0` produce `og:image` pointing at `https://wamp.land/r/0/0/image.png?v=176`, canonical `https://wamp.land/r/0/0`, and image type/alt tags
+    - `node --check public/_worker.js`, `git diff --check -- . ':!node_modules'`, and `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - deployed commit `6ec6aad` to production; Worker version `707b6b00-ad7d-4b6c-81be-75f67cf3529e`, Pages deploy `https://e3dbeb86.wampland.pages.dev`, and `node scripts/smoke_prod.mjs` passed
+    - live `Twitterbot/1.0` probes confirmed both `https://wamp.land/?x=0&y=0` and `https://wamp.land/r/0/0` include canonical, app bundle, `og:image`, `og:image:type`, `og:image:alt`, `twitter:image`, and `twitter:image:alt`; `https://wamp.land/r/0/0/image.png?v=176` returns a 1200x630 PNG
+    - required production web-game smoke passed against `https://wamp.land/?x=0&y=0&renderer=canvas&welcome=0&verify=6ec6aad` with artifacts in `/private/tmp/wamp-prod-main-dc50466/output/web-game/room-share-query-prod-smoke/`; screenshot confirmed the app still renders from the query-style room link and no console error file was produced
+    - user reported the social image was visible but looked like a placeholder; confirmed the Pages image route was still drawing a schematic server-side renderer instead of the actual room art
+    - patched `public/_worker.js` so the Pages worker decodes PNG assets, caches them, and draws the real parallax backgrounds, tilesets, and default object sprite frames for `/r/<x>/<y>/image.png`; the old schematic tile/object renderer remains as a per-asset fallback
+    - added `renderer=assets-v1` to generated image URLs alongside the room version query so fresh shares bypass previously cached placeholder card images
+    - local Node probe generated `/tmp/wamp-actual-room-share.png`; visual inspection confirmed the actual room background, terrain, ladders, sprites, hazards, and decorations render in the card image
+    - `node --check public/_worker.js`, `git diff --check -- public/_worker.js`, and `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - deployed commits `48fcbf3` and cache-busting follow-up `939dd0f` to production via Pages-only deploy; latest Pages deploy is `https://5b96dce4.wampland.pages.dev`, and `node scripts/smoke_prod.mjs` passed
+    - live `Twitterbot/1.0` probes confirmed both `https://wamp.land/r/0/0` and `https://wamp.land/?x=0&y=0` now advertise `https://wamp.land/r/0/0/image.png?v=176&renderer=assets-v1`; direct image fetch returned `200 image/png`, 1200x630, `cf-cache-status: MISS`, and `/tmp/wamp-room-image-asset-live.png` visually matches the real room art
+    - required production web-game smoke passed against `https://wamp.land/r/0/0?renderer=canvas&welcome=0&deployProbe=939dd0f` with artifacts in `output/web-game/room-share-actual-image-prod-smoke/`; screenshot confirmed the room link still boots and renders the room, and no console-error artifact was produced
+    - user reported uploaded custom room backgrounds were missing from snapshots; found two separate gaps: the in-app room metadata canvas skipped `custom:<id>` backgrounds, and the Pages social-card renderer only handled built-in PNG assets
+    - patched `src/mint/roomMetadataRender.ts` to load approved custom background images through the API with CORS enabled and render `stretch`, `center`, and `tile` fits in the generated room snapshot
+    - patched `public/_worker.js` to parse `custom:<id>?fit=...` and `solid:<hex>` backgrounds, fetch uploaded background images for social cards, render custom fits, and bump generated image URLs to `renderer=assets-v3` for cache busting
+    - validation before production deploy: `node --check public/_worker.js`, `npx tsc --noEmit --pretty false`, `git diff --check -- . ':!node_modules'`, and `npm run build` passed; the `roomMetadataRender` build chunk stayed at `110.85 kB` after avoiding a Phaser runtime import
+    - targeted browser renderer probe produced `/tmp/wamp-custom-bg-browser-snapshot.png` for room `-1,-6`; visual inspection confirmed the uploaded JPEG background renders behind the room
+    - targeted local Pages-worker probe produced `/tmp/wamp-custom-bg-pages-local.png` for room `-3,-8`; visual inspection confirmed the uploaded PNG background renders in the 1200x630 social card
+    - deployed commit `e6486b7` to production Pages; live verification confirmed `/r/-3/-8` custom PNG backgrounds render, but `/r/-1/-6` custom JPEG backgrounds still fell back because Cloudflare Images returned JPEG bytes to the Pages worker
+    - follow-up added the `jpeg-js` decoder dependency and a bounded JPEG decode path in `public/_worker.js` so social cards can render uploaded JPEG custom backgrounds directly instead of relying on Cloudflare image transformation
+    - targeted local Pages-worker probe produced `/tmp/wamp-custom-bg-pages-local-jpeg.png` for room `-1,-6`; visual inspection confirmed the uploaded JPEG background now renders in the 1200x630 social card
+    - validation after JPEG decoder follow-up: `node --check public/_worker.js`, `npx tsc --noEmit --pretty false`, `git diff --check -- . ':!node_modules'`, and `npm run build` passed
+    - deployed final cache-busted commit `503e644` to production Pages at `https://7333aba3.wampland.pages.dev`; `node scripts/deploy_prod.mjs --pages-only` passed the production smoke
+    - live `Twitterbot/1.0` probes confirmed `/r/-3/-8` and `/r/-1/-6` advertise `renderer=assets-v3`; direct image fetches returned `200 image/png` with fresh `cf-cache-status: MISS`
+    - visually inspected `/tmp/wamp-live-custom-bg-png-card-v3.png` and `/tmp/wamp-live-custom-bg-jpeg-card-v3.png`; both live social-card images include their uploaded custom backgrounds
+    - required production web-game smoke passed against `https://wamp.land/r/-1/-6?renderer=canvas&welcome=0&deployProbe=503e644` with artifacts in `output/web-game/room-share-custom-background-prod-smoke/`; screenshot confirmed the `/r` page still boots and renders, and no console-error artifact was produced
+  - TODO:
+    - if social sites still show a stale placeholder for an already-tested URL, use a fresh room URL paste or wait for that site's cache; WAMP now emits `renderer=assets-v3` specifically to avoid the old image URL cache
+
+- Overworld zoom edge-preview hydration main-port on April 24, 2026:
+  - created `fix/overworld-preview-zoom-edge-2026-04-24` from `origin/main` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-overworld-zoom-edge-2026-04-24`
+  - ported the edge-preview fix onto the latest main build by calculating viewport room bounds from current camera scroll/size/zoom instead of stale or top-left-assumed camera viewport values
+  - validation:
+    - `npm ci --ignore-scripts` completed in the clean worktree; npm reported existing audit issues
+    - `npm run typecheck` passed
+    - targeted wide-viewport Playwright zoom probe against remote API passed at `output/web-game/overworld-preview-main-zoom-probe/summary.json`
+    - required `develop-web-game` client smoke passed at `output/web-game/overworld-preview-main-smoke/`
+    - `npm run build` passed with the existing Rollup pure-comment and chunk-size warnings
+    - committed `9be5a48` and pushed `origin/fix/overworld-preview-zoom-edge-2026-04-24`
+    - Pages-only safety branch deploy passed; Cloudflare alias is `https://safety-overworld-preview-zoo.wampland.pages.dev`
+    - deployed smoke rendered correctly at `output/web-game/overworld-preview-deployed-smoke/`; only console errors were the known Cloudflare RUM CORS failures
+    - deployed zoom-click probe reached `0.18 -> 0.16 -> 0.14 -> 0.13` at `output/web-game/overworld-preview-deployed-zoom-clicks/summary.json`; same known RUM CORS noise was present
+    - merged on top of current `origin/main` after the post-run share commits; final merged-main `npm run typecheck`, `npm run build`, and required web-game smoke passed
+
+- Production follow-up on April 24, 2026:
+  - confirmed `wamp.land` was still serving the pre-share frontend bundle (`main-BOIq915l.js`), while the Pages preview included `#run-rating-share`; pushing `main` alone did not deploy production
+  - diagnosed the reported publish failure as a progression idempotency bug: duplicate `trust_events.dedupe_key` inserts could still throw a D1 unique constraint after the pre-insert existence check
+  - changed lane event recording to treat a duplicate lane `dedupe_key` constraint as "already awarded" and return `false` instead of failing the publish request
+  - validation: `git diff --check -- src/cloudflare/worker/progression/store.ts` passed, and `npm run build` passed with the existing Rollup pure-comment and large-chunk warnings
 
 - Pushable/interactable crate capability pass on April 21, 2026:
   - moved crate runtime behavior off the hard-coded `id === 'crate'` checks and onto an explicit `interaction: 'pushable'` capability in `src/config.ts`
@@ -8450,3 +8607,19 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - production Worker deploy succeeded at version `4f79a98b-8d3d-4fd9-bcfe-02da7b08fe16`
     - production Pages deploy succeeded at `https://4736ab75.wampland.pages.dev` for `https://wamp.land`
     - `scripts/smoke_prod.mjs` passed against `https://wamp.land` and `https://api.wamp.land`
+- room share image asset-source hardening on April 28, 2026:
+  - continued in clean production worktree `/private/tmp/wamp-prod-main-dc50466` on `main`
+  - kept the custom-sprite render fix for `src/mint/roomMetadataRender.ts`, so browser-generated run/share/explore/profile snapshots can draw room-embedded `custom_sprite:<id>` objects from `snapshot.customSprites`
+  - changed the Pages social-card worker to import room dimensions, tilesets, background groups, game objects, flip flags, and object frame/layer helpers from canonical `src/config.ts` instead of maintaining copied constants in `public/_worker.js`
+  - added `scripts/build_pages_worker.mjs` and wired `npm run build` to bundle `public/_worker.js` into `dist/_worker.js`, so Cloudflare Pages receives a self-contained worker while future config additions are picked up during build/deploy
+  - bumped the room card renderer cache key to `assets-v5`
+  - local validation:
+    - `node --check public/_worker.js` passed
+    - `node scripts/build_pages_worker.mjs` passed and produced bundled `dist/_worker.js`
+    - `npx tsc --noEmit --pretty false` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - `git diff --check -- . ':!node_modules' ':!dist'` passed
+    - bundled Pages-worker probe against `https://wamp.land/r/-1/-5/image.png?probe=post-build-bundle` returned `200 image/png` and wrote `/tmp/wamp-post-build-bundled-worker-custom-sprite.png`; visual inspection confirmed the red custom sprites render in the social card
+    - bundled Pages-worker HTML probe for `/r/-1/-5` returned Open Graph metadata with `renderer=assets-v5`
+    - required `develop-web-game` client ran against local Vite on `http://127.0.0.1:3345/?x=-1&y=-5&smoke=config-share`; the canvas-only capture still looked dark/black because it captures the dimmed WebGL canvas behind modals, but a full-page Playwright screenshot at `/tmp/wamp-manual-page.png` showed the room loaded with the expected welcome and room-goal modals and no new page errors
+  - note: dropping an image file into `public/assets/tilesets` still is not enough by itself; new tilesets/enemies/objects need to be registered in `src/config.ts`, after which the browser snapshot renderer and Pages social-card worker now share that catalog.

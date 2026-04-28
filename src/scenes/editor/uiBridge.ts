@@ -40,6 +40,7 @@ import {
   type RoomLightingMode,
 } from '../../lighting/model';
 import { AUTH_STATE_CHANGED_EVENT } from '../../auth/client';
+import type { SwordsmanDefeatMode, SwordsmanObjectiveMode } from '../../enemies/swordsmanObjectives';
 import type { EditorMarkerPlacementMode } from '../../ui/setup/sceneBridge';
 import { EDITOR_UI_STATE_CHANGED_EVENT } from './uiEvents';
 
@@ -119,6 +120,12 @@ export interface EditorInspectorState {
   containerStatusText: string;
   containerClearDisabled: boolean;
   containerClearTitle: string;
+  swordsmanVisible: boolean;
+  swordsmanStatusText: string;
+  swordsmanObjectiveModeValue: SwordsmanObjectiveMode;
+  swordsmanObjectiveModeDisabled: boolean;
+  swordsmanDefeatModeValue: SwordsmanDefeatMode;
+  swordsmanDefeatModeDisabled: boolean;
 }
 
 export interface EditorUiViewModel {
@@ -217,6 +224,8 @@ export interface EditorUiBridgeActions {
   onClearPressurePlateConnection: () => void;
   onCancelPressurePlateConnection: () => void;
   onClearContainerContents: () => void;
+  onSetFocusedSwordsmanObjectiveMode: (objectiveMode: SwordsmanObjectiveMode) => void;
+  onSetFocusedSwordsmanDefeatMode: (defeatMode: SwordsmanDefeatMode) => void;
 }
 
 const runtimeConfig: EditorUiRuntimeConfig = {
@@ -231,6 +240,7 @@ const DEFAULT_BACKGROUND_PHOTOS_SORT: BackgroundPhotosSort = 'most_used';
 type BackgroundPhotosSort = 'most_used' | 'least_used' | 'newest' | 'oldest';
 
 const PREFERRED_TILESET_OPTION_ORDER = [
+  'essentials',
   'forest',
   'forest_2',
   'desert',
@@ -417,6 +427,10 @@ export class EditorUiBridge {
   private readonly containerPanel: HTMLElement | null;
   private readonly containerStatus: HTMLElement | null;
   private readonly containerClearBtn: HTMLButtonElement | null;
+  private readonly swordsmanPanel: HTMLElement | null;
+  private readonly swordsmanStatus: HTMLElement | null;
+  private readonly swordsmanObjectiveModeSelect: HTMLSelectElement | null;
+  private readonly swordsmanDefeatModeSelect: HTMLSelectElement | null;
   private destroyed = false;
   private moreToolsOpen = false;
   private activeFeatureLauncher: EditorFeatureLauncher | null = null;
@@ -632,6 +646,12 @@ export class EditorUiBridge {
     this.containerStatus = this.doc.getElementById('container-contents-status');
     this.containerClearBtn =
       this.doc.getElementById('btn-container-clear') as HTMLButtonElement | null;
+    this.swordsmanPanel = this.doc.getElementById('swordsman-objective-panel');
+    this.swordsmanStatus = this.doc.getElementById('swordsman-objective-status');
+    this.swordsmanObjectiveModeSelect =
+      this.doc.getElementById('swordsman-objective-mode-select') as HTMLSelectElement | null;
+    this.swordsmanDefeatModeSelect =
+      this.doc.getElementById('swordsman-defeat-mode-select') as HTMLSelectElement | null;
 
     this.bindListeners();
     this.syncEditorChromeState();
@@ -779,6 +799,12 @@ export class EditorUiBridge {
     if (this.containerClearBtn) {
       this.containerClearBtn.title = state.containerClearTitle;
     }
+    this.setHidden(this.swordsmanPanel, !state.swordsmanVisible);
+    this.setText(this.swordsmanStatus, state.swordsmanStatusText);
+    this.setValue(this.swordsmanObjectiveModeSelect, state.swordsmanObjectiveModeValue);
+    this.setDisabled(this.swordsmanObjectiveModeSelect, state.swordsmanObjectiveModeDisabled);
+    this.setValue(this.swordsmanDefeatModeSelect, state.swordsmanDefeatModeValue);
+    this.setDisabled(this.swordsmanDefeatModeSelect, state.swordsmanDefeatModeDisabled);
   }
 
   notifyEditorStateChanged(): void {
@@ -1222,6 +1248,36 @@ export class EditorUiBridge {
     this.bindButton(this.containerClearBtn, () => {
       this.actions.onClearContainerContents();
     });
+    const handleSwordsmanObjectiveModeChange = () => {
+      const value = this.swordsmanObjectiveModeSelect?.value;
+      if (value === 'duel' || value === 'collect') {
+        this.actions.onSetFocusedSwordsmanObjectiveMode(value);
+      }
+    };
+    this.swordsmanObjectiveModeSelect?.addEventListener('change', handleSwordsmanObjectiveModeChange);
+    if (this.swordsmanObjectiveModeSelect) {
+      this.cleanupCallbacks.push(() =>
+        this.swordsmanObjectiveModeSelect?.removeEventListener(
+          'change',
+          handleSwordsmanObjectiveModeChange,
+        )
+      );
+    }
+    const handleSwordsmanDefeatModeChange = () => {
+      const value = this.swordsmanDefeatModeSelect?.value;
+      if (value === 'defeatable' || value === 'invincible' || value === 'respawn') {
+        this.actions.onSetFocusedSwordsmanDefeatMode(value);
+      }
+    };
+    this.swordsmanDefeatModeSelect?.addEventListener('change', handleSwordsmanDefeatModeChange);
+    if (this.swordsmanDefeatModeSelect) {
+      this.cleanupCallbacks.push(() =>
+        this.swordsmanDefeatModeSelect?.removeEventListener(
+          'change',
+          handleSwordsmanDefeatModeChange,
+        )
+      );
+    }
 
     this.bindButton(this.playBtn, () => {
       runtimeConfig.closePanels();

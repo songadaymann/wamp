@@ -9,6 +9,15 @@ import {
   type LayerName,
   type PlacedObject,
 } from '../../../config';
+import { SWORDSMAN_AI_OBJECT_ID } from '../../../enemies/swordsmanAi';
+import {
+  DEFAULT_SWORDSMAN_DEFEAT_MODE,
+  DEFAULT_SWORDSMAN_OBJECTIVE_MODE,
+  normalizeSwordsmanDefeatMode,
+  normalizeSwordsmanObjectiveMode,
+  type SwordsmanDefeatMode,
+  type SwordsmanObjectiveMode,
+} from '../../../enemies/swordsmanObjectives';
 import {
   isCustomBackgroundValue,
   isSolidColorBackgroundValue,
@@ -147,6 +156,8 @@ interface PlaceObjectCommand {
   tileY: number;
   facing?: 'left' | 'right';
   layer?: LayerName;
+  swordsmanObjectiveMode?: SwordsmanObjectiveMode;
+  swordsmanDefeatMode?: SwordsmanDefeatMode;
 }
 
 interface RemoveObjectsInRectCommand {
@@ -448,6 +459,39 @@ function normalizeCommand(value: unknown, index: number): RoomDraftCommand {
       if (command.facing !== undefined && command.facing !== 'left' && command.facing !== 'right') {
         throw new HttpError(400, `commands[${index}].facing must be left or right.`);
       }
+      if (command.swordsmanObjectiveMode !== undefined && command.objectId !== SWORDSMAN_AI_OBJECT_ID) {
+        throw new HttpError(400, `commands[${index}].swordsmanObjectiveMode only applies to swordsman_ai.`);
+      }
+      const swordsmanObjectiveMode =
+        command.objectId === SWORDSMAN_AI_OBJECT_ID
+          ? normalizeSwordsmanObjectiveMode(command.swordsmanObjectiveMode)
+            ?? DEFAULT_SWORDSMAN_OBJECTIVE_MODE
+          : undefined;
+      if (
+        command.objectId === SWORDSMAN_AI_OBJECT_ID &&
+        command.swordsmanObjectiveMode !== undefined &&
+        !normalizeSwordsmanObjectiveMode(command.swordsmanObjectiveMode)
+      ) {
+        throw new HttpError(400, `commands[${index}].swordsmanObjectiveMode must be duel or collect.`);
+      }
+      if (command.swordsmanDefeatMode !== undefined && command.objectId !== SWORDSMAN_AI_OBJECT_ID) {
+        throw new HttpError(400, `commands[${index}].swordsmanDefeatMode only applies to swordsman_ai.`);
+      }
+      const swordsmanDefeatMode =
+        command.objectId === SWORDSMAN_AI_OBJECT_ID
+          ? normalizeSwordsmanDefeatMode(command.swordsmanDefeatMode)
+            ?? DEFAULT_SWORDSMAN_DEFEAT_MODE
+          : undefined;
+      if (
+        command.objectId === SWORDSMAN_AI_OBJECT_ID &&
+        command.swordsmanDefeatMode !== undefined &&
+        !normalizeSwordsmanDefeatMode(command.swordsmanDefeatMode)
+      ) {
+        throw new HttpError(
+          400,
+          `commands[${index}].swordsmanDefeatMode must be defeatable, invincible, or respawn.`
+        );
+      }
       return {
         type: 'place_object',
         objectId: command.objectId,
@@ -455,6 +499,8 @@ function normalizeCommand(value: unknown, index: number): RoomDraftCommand {
         tileY: normalizeTileCoordinate(command.tileY, `commands[${index}].tileY`, ROOM_HEIGHT),
         facing: command.facing,
         layer: normalizeLayer(command.layer, `commands[${index}].layer`),
+        swordsmanObjectiveMode,
+        swordsmanDefeatMode,
       };
     }
     case 'remove_objects_in_rect': {
@@ -579,6 +625,15 @@ function placeObjectAtTile(command: PlaceObjectCommand): PlacedObject {
     layer: command.layer,
     triggerTargetInstanceId: null,
     containedObjectId: null,
+    signText: null,
+    swordsmanObjectiveMode:
+      command.objectId === SWORDSMAN_AI_OBJECT_ID
+        ? command.swordsmanObjectiveMode ?? DEFAULT_SWORDSMAN_OBJECTIVE_MODE
+        : null,
+    swordsmanDefeatMode:
+      command.objectId === SWORDSMAN_AI_OBJECT_ID
+        ? command.swordsmanDefeatMode ?? DEFAULT_SWORDSMAN_DEFEAT_MODE
+        : null,
   };
 }
 

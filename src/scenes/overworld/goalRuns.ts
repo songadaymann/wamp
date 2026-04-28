@@ -41,6 +41,7 @@ export interface GoalRunState {
   elapsedMs: number;
   deaths: number;
   collectiblesCollected: number;
+  enemyCollectiblesCollected: number;
   collectibleTarget: number | null;
   enemiesDefeated: number;
   enemyTarget: number | null;
@@ -197,7 +198,13 @@ export class OverworldGoalRunController {
       elapsedMs: 0,
       deaths: 0,
       collectiblesCollected: 0,
-      collectibleTarget: room.goal.type === 'collect_target' ? room.goal.requiredCount : null,
+      enemyCollectiblesCollected: 0,
+      collectibleTarget:
+        room.goal.type === 'collect_target'
+          ? room.goal.requiredCount
+          : room.goal.type === 'collect_race'
+            ? this.options.countRoomObjectsByCategory(room, 'collectible')
+            : null,
       enemiesDefeated: 0,
       enemyTarget:
         room.goal.type === 'defeat_all'
@@ -251,6 +258,14 @@ export class OverworldGoalRunController {
     }
 
     this.currentGoalRun.elapsedMs += delta;
+
+    if (
+      this.currentGoalRun.goal.type === 'collect_race' &&
+      this.currentGoalRun.goal.timeLimitMs !== null &&
+      this.currentGoalRun.elapsedMs >= this.currentGoalRun.goal.timeLimitMs
+    ) {
+      return this.resolveCollectRace('Time up.');
+    }
 
     if (this.goalTimeLimitReached(this.currentGoalRun)) {
       return this.markFailed('Time up.');
@@ -333,15 +348,48 @@ export class OverworldGoalRunController {
       !this.currentGoalRun ||
       this.currentGoalRun.result !== 'active' ||
       this.currentGoalRun.qualificationState !== 'qualified' ||
-      this.currentGoalRun.goal.type !== 'collect_target' ||
+      (this.currentGoalRun.goal.type !== 'collect_target' &&
+        this.currentGoalRun.goal.type !== 'collect_race') ||
       this.currentGoalRun.roomId !== roomId
     ) {
       return NOOP_MUTATION_RESULT;
     }
 
     this.currentGoalRun.collectiblesCollected += 1;
-    if (this.currentGoalRun.collectiblesCollected >= this.currentGoalRun.goal.requiredCount) {
+    if (
+      this.currentGoalRun.goal.type === 'collect_target' &&
+      this.currentGoalRun.collectiblesCollected >= this.currentGoalRun.goal.requiredCount
+    ) {
       return this.markCompleted('Collection target reached.');
+    }
+
+    if (this.currentGoalRun.goal.type === 'collect_race' && this.collectRaceGoalExhausted(this.currentGoalRun)) {
+      return this.resolveCollectRace('All collectibles claimed.');
+    }
+
+    return {
+      changed: true,
+      goalMarkersChanged: false,
+      resetChallengeState: false,
+      transientStatus: null,
+      event: null,
+    };
+  }
+
+  recordEnemyCollectibleCollected(roomId: string): GoalRunMutationResult {
+    if (
+      !this.currentGoalRun ||
+      this.currentGoalRun.result !== 'active' ||
+      this.currentGoalRun.qualificationState !== 'qualified' ||
+      this.currentGoalRun.goal.type !== 'collect_race' ||
+      this.currentGoalRun.roomId !== roomId
+    ) {
+      return NOOP_MUTATION_RESULT;
+    }
+
+    this.currentGoalRun.enemyCollectiblesCollected += 1;
+    if (this.collectRaceGoalExhausted(this.currentGoalRun)) {
+      return this.resolveCollectRace('All collectibles claimed.');
     }
 
     return {
@@ -505,6 +553,8 @@ export class OverworldGoalRunController {
         return `goal ${ROOM_GOAL_LABELS[runState.goal.type]} · ${countdownText ?? `${elapsedSeconds}s`} · deaths ${runState.deaths}${submissionSuffix}`;
       case 'collect_target':
         return `goal ${runState.collectiblesCollected}/${runState.goal.requiredCount} collected · ${countdownText ?? `${elapsedSeconds}s`}${submissionSuffix}`;
+      case 'collect_race':
+        return `goal race · you ${runState.collectiblesCollected} · hunter ${runState.enemyCollectiblesCollected} · ${countdownText ?? `${elapsedSeconds}s`}${submissionSuffix}`;
       case 'defeat_all':
         return `goal ${runState.enemiesDefeated}/${runState.enemyTarget ?? 0} defeated · ${countdownText ?? `${elapsedSeconds}s`}${submissionSuffix}`;
       case 'checkpoint_sprint':
@@ -603,6 +653,7 @@ export class OverworldGoalRunController {
             elapsedMs: Math.round(this.currentGoalRun.elapsedMs),
             deaths: this.currentGoalRun.deaths,
             collectiblesCollected: this.currentGoalRun.collectiblesCollected,
+            enemyCollectiblesCollected: this.currentGoalRun.enemyCollectiblesCollected,
             collectibleTarget: this.currentGoalRun.collectibleTarget,
             enemiesDefeated: this.currentGoalRun.enemiesDefeated,
             enemyTarget: this.currentGoalRun.enemyTarget,
@@ -922,6 +973,7 @@ export class OverworldGoalRunController {
       checkpointsReached: runState.checkpointsReached,
       score: this.options.getScore(),
       finishedAt: this.nowIso(),
+      enemyCollectiblesCollected: runState.enemyCollectiblesCollected,
       verificationTrace,
     };
   }
@@ -970,6 +1022,7 @@ export class OverworldGoalRunController {
     runState.elapsedMs = 0;
     runState.deaths = 0;
     runState.collectiblesCollected = 0;
+    runState.enemyCollectiblesCollected = 0;
     runState.enemiesDefeated = 0;
     runState.checkpointsReached = 0;
     runState.nextCheckpointIndex = 0;
@@ -981,6 +1034,38 @@ export class OverworldGoalRunController {
     runState.verificationSchemaVersion = null;
     runState.verificationNonce = null;
     runState.snapshotHash = null;
+  }
+
+  private collectRaceGoalExhausted(runState: GoalRunState): boolean {
+    if (runState.goal.type !== 'collect_race' || runState.collectibleTarget === null) {
+      return false;
+    }
+
+    return (
+      runState.collectiblesCollected + runState.enemyCollectiblesCollected >= runState.collectibleTarget
+    );
+  }
+
+  private resolveCollectRace(_reason: string): GoalRunMutationResult {
+    if (!this.currentGoalRun || this.currentGoalRun.goal.type !== 'collect_race') {
+      return NOOP_MUTATION_RESULT;
+    }
+
+    if (this.currentGoalRun.collectiblesCollected > this.currentGoalRun.enemyCollectiblesCollected) {
+      return this.markCompleted(
+        `Collect race won ${this.currentGoalRun.collectiblesCollected}-${this.currentGoalRun.enemyCollectiblesCollected}.`,
+      );
+    }
+
+    if (this.currentGoalRun.collectiblesCollected === this.currentGoalRun.enemyCollectiblesCollected) {
+      return this.markFailed(
+        `Collect race tied ${this.currentGoalRun.collectiblesCollected}-${this.currentGoalRun.enemyCollectiblesCollected}.`,
+      );
+    }
+
+    return this.markFailed(
+      `Sword Hunter won ${this.currentGoalRun.enemyCollectiblesCollected}-${this.currentGoalRun.collectiblesCollected}.`,
+    );
   }
 
   private nowIso(): string {

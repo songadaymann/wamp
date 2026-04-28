@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { getAuthDebugState } from '../../auth/client';
+import { getAuthDebugState, promptForSignIn } from '../../auth/client';
 import {
   createCourseRepository,
   type CourseRepository,
@@ -26,12 +26,24 @@ import { dispatchProgressionFeedback } from '../../progression/progressionFeedba
 import { saveSeenRewardProgression } from '../../progression/rewardStingSeenState';
 import { createProfileRepository, type ProfileRepository } from '../../profiles/profileRepository';
 import { requestProfileInvalidation } from './profileEvents';
+import { TILE_SIZE } from '../../config';
+import { renderRoomSnapshotToPngDataUrl } from '../../mint/roomMetadataRender';
+import type { RoomSnapshot } from '../../persistence/roomModel';
 import {
   ROOM_DIFFICULTIES,
   ROOM_DIFFICULTY_LABELS,
   type RoomLeaderboardResponse,
 } from '../../runs/model';
 import { createRunRepository, type RunRepository } from '../../runs/runRepository';
+import {
+  buildRunShareText,
+  buildRunShareUrl,
+  canShareRunImage,
+  createRunShareImageFile,
+  downloadRunShareImage,
+  openTwitterShareIntent,
+  type RunShareImage,
+} from '../../social/runShare';
 
 type RunRatingElements = {
   modal: HTMLElement | null;
@@ -46,8 +58,20 @@ type RunRatingElements = {
   status: HTMLElement | null;
   reward: HTMLElement | null;
   error: HTMLElement | null;
+  shareSection: HTMLElement | null;
+  sharePreviewImage: HTMLImageElement | null;
+  sharePreviewPlaceholder: HTMLElement | null;
+  shareMessage: HTMLElement | null;
+  shareStatus: HTMLElement | null;
+  shareSignInButton: HTMLButtonElement | null;
+  shareTwitterButton: HTMLButtonElement | null;
+  shareDownloadButton: HTMLButtonElement | null;
   qualityButtons: HTMLButtonElement[];
   difficultyButtons: HTMLButtonElement[];
+};
+
+type PostRunShareScene = {
+  getPostRunShareRoomSnapshot?: () => RoomSnapshot | null;
 };
 
 export class RunRatingModalController {
@@ -65,9 +89,30 @@ export class RunRatingModalController {
   private baselineProgression: ProgressionSummary | null = null;
   private baselineProgressionLoad: Promise<void> | null = null;
   private pendingOpenRequest: PostRunRatingRequestDetail | null = null;
+  private shareImage: RunShareImage | null = null;
+  private shareImageLoading = false;
+  private shareStatusText: string | null = null;
+  private shareStatusTone: 'default' | 'error' = 'default';
 
   private readonly handleCloseClick = () => {
     this.close();
+  };
+
+  private readonly handleShareSignInClick = () => {
+    promptForSignIn('Sign in to save ranked clears and share your WAMP runs.');
+  };
+
+  private readonly handleShareTwitterClick = () => {
+    void this.shareRun();
+  };
+
+  private readonly handleShareDownloadClick = () => {
+    if (!this.shareImage) {
+      return;
+    }
+
+    downloadRunShareImage(this.doc, this.shareImage);
+    this.setShareStatus('Snapshot downloaded.', 'default');
   };
 
   private readonly handleBackdropClick = (event: Event) => {
@@ -112,7 +157,7 @@ export class RunRatingModalController {
   };
 
   constructor(
-    _game: Phaser.Game,
+    private readonly game: Phaser.Game,
     private readonly runRepository: RunRepository = createRunRepository(),
     private readonly courseRepository: CourseRepository = createCourseRepository(),
     private readonly profileRepository: ProfileRepository = createProfileRepository(),
@@ -132,6 +177,14 @@ export class RunRatingModalController {
       status: this.doc.getElementById('run-rating-status'),
       reward: this.doc.getElementById('run-rating-reward'),
       error: this.doc.getElementById('run-rating-error'),
+      shareSection: this.doc.getElementById('run-rating-share'),
+      sharePreviewImage: this.doc.getElementById('run-share-preview-image') as HTMLImageElement | null,
+      sharePreviewPlaceholder: this.doc.getElementById('run-share-preview-placeholder'),
+      shareMessage: this.doc.getElementById('run-share-message'),
+      shareStatus: this.doc.getElementById('run-share-status'),
+      shareSignInButton: this.doc.getElementById('btn-run-share-signin') as HTMLButtonElement | null,
+      shareTwitterButton: this.doc.getElementById('btn-run-share-twitter') as HTMLButtonElement | null,
+      shareDownloadButton: this.doc.getElementById('btn-run-share-download') as HTMLButtonElement | null,
       qualityButtons: Array.from(
         this.doc.querySelectorAll<HTMLButtonElement>('#run-rating-quality-actions [data-quality-stars]')
       ),
@@ -147,6 +200,9 @@ export class RunRatingModalController {
     this.elements.submitButton?.addEventListener('click', () => {
       void this.submit();
     });
+    this.elements.shareSignInButton?.addEventListener('click', this.handleShareSignInClick);
+    this.elements.shareTwitterButton?.addEventListener('click', this.handleShareTwitterClick);
+    this.elements.shareDownloadButton?.addEventListener('click', this.handleShareDownloadClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
     this.windowObj.addEventListener(
@@ -177,6 +233,9 @@ export class RunRatingModalController {
   destroy(): void {
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.skipButton?.removeEventListener('click', this.handleCloseClick);
+    this.elements.shareSignInButton?.removeEventListener('click', this.handleShareSignInClick);
+    this.elements.shareTwitterButton?.removeEventListener('click', this.handleShareTwitterClick);
+    this.elements.shareDownloadButton?.removeEventListener('click', this.handleShareDownloadClick);
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
     this.windowObj.removeEventListener(
@@ -202,12 +261,17 @@ export class RunRatingModalController {
     this.savedDeltaText = null;
     this.baselineProgression = null;
     this.baselineProgressionLoad = null;
+    this.shareImage = null;
+    this.shareImageLoading = detail.contentType === 'room';
+    this.shareStatusText = detail.contentType === 'room' ? 'Rendering room snapshot...' : null;
+    this.shareStatusTone = 'default';
     this.setError(null);
+    const loadToken = ++this.loadToken;
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
     this.render();
+    void this.prepareShareImage(detail, loadToken);
 
-    const loadToken = ++this.loadToken;
     this.baselineProgressionLoad = this.loadBaselineProgression(loadToken);
     try {
       if (detail.contentType === 'room') {
@@ -266,12 +330,148 @@ export class RunRatingModalController {
     this.baselineProgression = null;
     this.baselineProgressionLoad = null;
     this.pendingOpenRequest = null;
+    this.shareImage = null;
+    this.shareImageLoading = false;
+    this.shareStatusText = null;
+    this.shareStatusTone = 'default';
     this.setError(null);
   }
 
   private isRewardStingVisible(): boolean {
     const layer = this.doc.getElementById('reward-sting-layer');
     return Boolean(layer && !layer.classList.contains('hidden'));
+  }
+
+  private async prepareShareImage(
+    detail: PostRunRatingRequestDetail,
+    loadToken: number
+  ): Promise<void> {
+    if (detail.contentType !== 'room') {
+      return;
+    }
+
+    try {
+      const snapshot = this.getPostRunShareRoomSnapshot();
+      if (!snapshot) {
+        throw new Error('Completed room snapshot was not available.');
+      }
+
+      const dataUrl = await renderRoomSnapshotToPngDataUrl(snapshot, {
+        tilePixelSize: TILE_SIZE,
+      });
+      if (!this.isActiveRequest(detail, loadToken)) {
+        return;
+      }
+
+      this.shareImage = {
+        dataUrl,
+        fileName: this.buildShareImageFileName(detail),
+      };
+      this.shareStatusText = 'Snapshot ready.';
+      this.shareStatusTone = 'default';
+    } catch (error) {
+      console.warn('Failed to render room share snapshot.', error);
+      if (!this.isActiveRequest(detail, loadToken)) {
+        return;
+      }
+
+      const fallbackDataUrl = this.captureCurrentCanvasDataUrl();
+      if (fallbackDataUrl) {
+        this.shareImage = {
+          dataUrl: fallbackDataUrl,
+          fileName: this.buildShareImageFileName(detail),
+        };
+        this.shareStatusText = 'Snapshot ready from the current view.';
+        this.shareStatusTone = 'default';
+      } else {
+        this.shareImage = null;
+        this.shareStatusText = 'Snapshot unavailable. You can still share the text.';
+        this.shareStatusTone = 'error';
+      }
+    } finally {
+      if (this.isActiveRequest(detail, loadToken)) {
+        this.shareImageLoading = false;
+        this.render();
+      }
+    }
+  }
+
+  private async shareRun(): Promise<void> {
+    const request = this.activeRequest;
+    if (!request || request.contentType !== 'room') {
+      return;
+    }
+
+    const text = buildRunShareText(request, this.getShareContentTitle(request));
+    const url = buildRunShareUrl(request, this.windowObj.location.href);
+    const file = this.shareImage ? createRunShareImageFile(this.shareImage) : null;
+
+    if (file && canShareRunImage(this.windowObj.navigator, file)) {
+      try {
+        await this.windowObj.navigator.share({
+          title: 'WAMP room clear',
+          text,
+          url,
+          files: [file],
+        });
+        this.setShareStatus('Share sheet opened with the snapshot.', 'default');
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          this.setShareStatus('Share canceled.', 'default');
+          return;
+        }
+        console.warn('Native run share failed; falling back to Twitter intent.', error);
+      }
+    }
+
+    openTwitterShareIntent(this.windowObj, text, url);
+    this.setShareStatus(
+      file
+        ? 'Opened X with the achievement text. Download the snapshot if you want to attach it manually.'
+        : 'Opened X with the achievement text. Snapshot image was not available.',
+      'default'
+    );
+  }
+
+  private getPostRunShareRoomSnapshot(): RoomSnapshot | null {
+    try {
+      const scene = this.game.scene.getScene('OverworldPlayScene') as PostRunShareScene;
+      return scene.getPostRunShareRoomSnapshot?.() ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private captureCurrentCanvasDataUrl(): string | null {
+    try {
+      return this.game.canvas.toDataURL('image/png');
+    } catch {
+      return null;
+    }
+  }
+
+  private buildShareImageFileName(detail: PostRunRatingRequestDetail): string {
+    if (detail.contentType !== 'room') {
+      return 'wamp-run-clear.png';
+    }
+
+    const x = String(detail.roomCoordinates.x).replace('-', 'neg');
+    const y = String(detail.roomCoordinates.y).replace('-', 'neg');
+    return `wamp-room-${x}-${y}-v${detail.version}-clear.png`;
+  }
+
+  private getShareContentTitle(request: PostRunRatingRequestDetail): string | null {
+    return request.contentType === 'room'
+      ? this.roomSummary?.roomTitle ?? request.contentTitle
+      : this.courseSummary?.courseTitle ?? request.contentTitle;
+  }
+
+  private isActiveRequest(
+    detail: PostRunRatingRequestDetail,
+    loadToken: number
+  ): boolean {
+    return this.loadToken === loadToken && this.activeRequest === detail;
   }
 
   private adoptViewerRating(viewerRating: ViewerRatingSummary | null): void {
@@ -426,6 +626,7 @@ export class RunRatingModalController {
       this.elements.reward.textContent = rewardText;
       this.elements.reward.classList.toggle('hidden', rewardText.length === 0);
     }
+    this.renderShare(request);
 
     for (const button of this.elements.qualityButtons) {
       const value = Number.parseInt(button.dataset.qualityStars ?? '', 10);
@@ -451,6 +652,58 @@ export class RunRatingModalController {
       this.elements.skipButton.disabled = this.submitting;
       this.elements.skipButton.textContent = this.savedProgression ? 'Done' : 'Skip';
     }
+  }
+
+  private renderShare(request: PostRunRatingRequestDetail | null): void {
+    const visible = request?.contentType === 'room';
+    this.elements.shareSection?.classList.toggle('hidden', !visible);
+    if (!visible || !request) {
+      return;
+    }
+
+    const authState = getAuthDebugState();
+    const shareText = buildRunShareText(request, this.getShareContentTitle(request));
+    if (this.elements.shareMessage) {
+      this.elements.shareMessage.textContent = shareText;
+    }
+    if (this.elements.sharePreviewImage) {
+      if (this.shareImage) {
+        this.elements.sharePreviewImage.src = this.shareImage.dataUrl;
+        this.elements.sharePreviewImage.classList.remove('hidden');
+      } else {
+        this.elements.sharePreviewImage.removeAttribute('src');
+        this.elements.sharePreviewImage.classList.add('hidden');
+      }
+    }
+    if (this.elements.sharePreviewPlaceholder) {
+      this.elements.sharePreviewPlaceholder.textContent = this.shareImageLoading
+        ? 'Rendering snapshot...'
+        : 'Snapshot unavailable';
+      this.elements.sharePreviewPlaceholder.classList.toggle('hidden', Boolean(this.shareImage));
+    }
+    if (this.elements.shareStatus) {
+      this.elements.shareStatus.textContent = this.shareStatusText ?? '';
+      this.elements.shareStatus.classList.toggle('hidden', !this.shareStatusText);
+      this.elements.shareStatus.setAttribute('data-run-share-tone', this.shareStatusTone);
+    }
+    if (this.elements.shareSignInButton) {
+      this.elements.shareSignInButton.classList.toggle('hidden', authState.authenticated);
+    }
+    if (this.elements.shareTwitterButton) {
+      this.elements.shareTwitterButton.disabled = this.shareImageLoading;
+    }
+    if (this.elements.shareDownloadButton) {
+      this.elements.shareDownloadButton.disabled = !this.shareImage;
+    }
+  }
+
+  private setShareStatus(
+    message: string | null,
+    tone: 'default' | 'error'
+  ): void {
+    this.shareStatusText = message;
+    this.shareStatusTone = tone;
+    this.render();
   }
 
   private setError(message: string | null): void {

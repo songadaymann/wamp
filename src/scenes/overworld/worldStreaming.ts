@@ -66,6 +66,8 @@ import {
 
 const PLAY_ROOM_PARALLAX_MULTIPLIER = 0.2;
 const FULL_ROOM_RELEASE_GRACE_MS = 300;
+const DEFERRED_FULL_ROOM_LOAD_DELAY_MS = 24;
+const DEFERRED_PREVIEW_RENDER_DELAY_MS = 32;
 
 export interface LoadedFullRoom<TLiveObject = unknown, TEdgeWall = unknown> {
   room: RoomSnapshot;
@@ -147,6 +149,10 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private fullRoomBudget = 0;
   private activeChunkRadius = 0;
   private chunkWindowRequestInFlight = false;
+  private deferredFullRoomLoadQueue: RoomSnapshot[] = [];
+  private deferredFullRoomLoadTimer: Phaser.Time.TimerEvent | null = null;
+  private deferredPreviewRooms: RoomSnapshot[] = [];
+  private deferredPreviewRenderTimer: Phaser.Time.TimerEvent | null = null;
   private readonly textureNamespace: string;
 
   constructor(private readonly options: OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall>) {
@@ -193,11 +199,15 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.fullRoomBudget = 0;
     this.activeChunkRadius = 0;
     this.chunkWindowRequestInFlight = false;
+    this.cancelDeferredFullRoomLoads();
+    this.cancelDeferredPreviewRender();
   }
 
   destroy(): void {
     this.loadGeneration += 1;
     this.destroyed = true;
+    this.cancelDeferredFullRoomLoads();
+    this.cancelDeferredPreviewRender();
     this.clearDisplayState();
     this.worldWindow = null;
     this.chunkWindow = null;
@@ -331,18 +341,15 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         return 'cancelled';
       }
 
+      this.cancelDeferredPreviewRender();
       this.previewRenderer.renderChunkPreviews(
-        Array.from(renderableRooms.values(), (renderableRoom) => renderableRoom.room).filter((room) =>
-          previewRoomIds.has(room.id)
-        )
+        this.collectPreviewRooms(renderableRooms, previewRoomIds)
       );
 
       if (this.options.getMode() === 'play') {
-        for (const renderableRoom of renderableRooms.values()) {
-          if (fullRoomIds.has(renderableRoom.id)) {
-            await this.ensureFullRoom(renderableRoom.room);
-          }
-        }
+        this.syncPlayFullRooms(renderableRooms, fullRoomIds);
+      } else {
+        this.cancelDeferredFullRoomLoads();
       }
 
       this.previewRenderer.unloadOutsideWindow(this.visibleRoomIds, previewRoomIds);
@@ -625,25 +632,28 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       });
     }
 
-    this.measure('stream.renderChunkPreviews', () => {
-      this.previewRenderer.renderChunkPreviews(
-        Array.from(renderableRooms.values(), (renderableRoom) => renderableRoom.room).filter((room) =>
-          previewRoomIds.has(room.id)
-        )
-      );
+    const previewRooms = this.collectPreviewRooms(renderableRooms, previewRoomIds);
+    if (this.options.getMode() === 'play') {
+      this.queueDeferredPreviewRender(previewRooms);
+    } else {
+      this.cancelDeferredPreviewRender();
+      this.measure('stream.renderChunkPreviews', () => {
+        this.previewRenderer.renderChunkPreviews(previewRooms);
+      });
+    }
+
+    this.measure('stream.unloadPreviewOutsideWindow', () => {
+      this.previewRenderer.unloadOutsideWindow(this.visibleRoomIds, previewRoomIds);
+      this.previewCache.pruneSnapshots(this.visibleRoomIds, new Set(this.loadedFullRoomsById.keys()));
     });
 
     if (this.options.getMode() === 'play') {
-      for (const renderableRoom of renderableRooms.values()) {
-        if (fullRoomIds.has(renderableRoom.id)) {
-          void this.ensureFullRoom(renderableRoom.room);
-        }
-      }
+      this.syncPlayFullRooms(renderableRooms, fullRoomIds);
+    } else {
+      this.cancelDeferredFullRoomLoads();
     }
 
-    this.measure('stream.unloadOutsideWindow', () => {
-      this.previewRenderer.unloadOutsideWindow(this.visibleRoomIds, previewRoomIds);
-      this.previewCache.pruneSnapshots(this.visibleRoomIds, new Set(this.loadedFullRoomsById.keys()));
+    this.measure('stream.unloadFullRoomsOutsideStream', () => {
       this.unloadFullRoomsOutsideStream(
         this.options.getMode() === 'play'
           ? this.getRetainedFullRoomIds(fullRoomIds)
@@ -651,6 +661,106 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       );
     });
     });
+  }
+
+  private syncPlayFullRooms(
+    renderableRooms: Map<string, RenderableRoom>,
+    fullRoomIds: Set<string>,
+  ): void {
+    this.measure('stream.syncPlayFullRooms', () => {
+      const focusRoomId = roomIdFromCoordinates(this.options.getCurrentRoomCoordinates());
+      const deferredRooms: RoomSnapshot[] = [];
+
+      for (const renderableRoom of renderableRooms.values()) {
+        if (!fullRoomIds.has(renderableRoom.id)) {
+          continue;
+        }
+
+        if (renderableRoom.id === focusRoomId || this.loadedFullRoomsById.has(renderableRoom.id)) {
+          this.ensureFullRoom(renderableRoom.room);
+          continue;
+        }
+
+        deferredRooms.push(renderableRoom.room);
+      }
+
+      this.queueDeferredFullRoomLoads(deferredRooms);
+    });
+  }
+
+  private collectPreviewRooms(
+    renderableRooms: Map<string, RenderableRoom>,
+    previewRoomIds: Set<string>,
+  ): RoomSnapshot[] {
+    return Array.from(renderableRooms.values(), (renderableRoom) => renderableRoom.room).filter((room) =>
+      previewRoomIds.has(room.id)
+    );
+  }
+
+  private queueDeferredPreviewRender(rooms: RoomSnapshot[]): void {
+    this.cancelDeferredPreviewRender();
+    this.deferredPreviewRooms = rooms;
+    this.deferredPreviewRenderTimer = this.options.scene.time.delayedCall(
+      DEFERRED_PREVIEW_RENDER_DELAY_MS,
+      () => {
+        this.deferredPreviewRenderTimer = null;
+        if (this.destroyed) {
+          this.deferredPreviewRooms = [];
+          return;
+        }
+
+        const previewRooms = this.deferredPreviewRooms;
+        this.deferredPreviewRooms = [];
+        this.measure('stream.renderChunkPreviews', () => {
+          this.previewRenderer.renderChunkPreviews(previewRooms);
+        });
+      },
+    );
+  }
+
+  private cancelDeferredPreviewRender(): void {
+    this.deferredPreviewRenderTimer?.remove(false);
+    this.deferredPreviewRenderTimer = null;
+    this.deferredPreviewRooms = [];
+  }
+
+  private queueDeferredFullRoomLoads(rooms: RoomSnapshot[]): void {
+    this.cancelDeferredFullRoomLoads();
+    if (rooms.length === 0) {
+      return;
+    }
+
+    this.deferredFullRoomLoadQueue = rooms;
+    this.scheduleNextDeferredFullRoomLoad();
+  }
+
+  private scheduleNextDeferredFullRoomLoad(): void {
+    if (
+      this.destroyed
+      || this.options.getMode() !== 'play'
+      || this.deferredFullRoomLoadQueue.length === 0
+    ) {
+      this.cancelDeferredFullRoomLoads();
+      return;
+    }
+
+    this.deferredFullRoomLoadTimer = this.options.scene.time.delayedCall(
+      DEFERRED_FULL_ROOM_LOAD_DELAY_MS,
+      () => {
+        this.deferredFullRoomLoadTimer = null;
+        const nextRoom = this.deferredFullRoomLoadQueue.shift() ?? null;
+        if (nextRoom && this.options.getMode() === 'play' && !this.destroyed) {
+          this.ensureFullRoom(nextRoom);
+        }
+        this.scheduleNextDeferredFullRoomLoad();
+      },
+    );
+  }
+
+  private cancelDeferredFullRoomLoads(): void {
+    this.deferredFullRoomLoadTimer?.remove(false);
+    this.deferredFullRoomLoadTimer = null;
+    this.deferredFullRoomLoadQueue = [];
   }
 
   private collectVisibleRoomCandidates(): Map<string, StreamingRoomCandidate> {
@@ -806,14 +916,18 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
   private getViewportRoomBounds(): WorldRoomBounds {
     const camera = this.options.scene.cameras.main;
-    const viewportLeft = camera.scrollX;
-    const viewportTop = camera.scrollY;
-    const viewportRight = viewportLeft + camera.width / camera.zoom;
-    const viewportBottom = viewportTop + camera.height / camera.zoom;
-    const minX = Math.floor(viewportLeft / ROOM_PX_WIDTH);
-    const maxX = Math.floor((viewportRight - 1) / ROOM_PX_WIDTH);
-    const minY = Math.floor(viewportTop / ROOM_PX_HEIGHT);
-    const maxY = Math.floor((viewportBottom - 1) / ROOM_PX_HEIGHT);
+    const zoom = Math.max(camera.zoom, 0.001);
+    const visibleWorldWidth = camera.width / zoom;
+    const visibleWorldHeight = camera.height / zoom;
+    // Streaming refreshes can run immediately after setZoom(), before Phaser refreshes camera.worldView.
+    const left = camera.scrollX + camera.width * camera.originX - visibleWorldWidth * 0.5;
+    const top = camera.scrollY + camera.height * camera.originY - visibleWorldHeight * 0.5;
+    const right = left + visibleWorldWidth;
+    const bottom = top + visibleWorldHeight;
+    const minX = Math.floor(left / ROOM_PX_WIDTH);
+    const maxX = Math.floor((right - 1) / ROOM_PX_WIDTH);
+    const minY = Math.floor(top / ROOM_PX_HEIGHT);
+    const maxY = Math.floor((bottom - 1) / ROOM_PX_HEIGHT);
 
     return { minX, maxX, minY, maxY };
   }
@@ -844,7 +958,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.previewCache.invalidateRoom(roomId, dropPublishedSnapshot);
   }
 
-  private async ensureFullRoom(room: RoomSnapshot): Promise<void> {
+  private ensureFullRoom(room: RoomSnapshot): void {
     return this.measure('stream.ensureFullRoom', () => {
     registerCustomSpritesFromSnapshot(room);
     const existing = this.loadedFullRoomsById.get(room.id);

@@ -11,6 +11,8 @@ import {
   isCustomSpriteObjectId,
   type CustomSpriteKind,
 } from './customSprites/model';
+import { SWORDSMAN_AI_OBJECT_ID } from './enemies/swordsmanAi';
+import type { SwordsmanDefeatMode, SwordsmanObjectiveMode } from './enemies/swordsmanObjectives';
 export const TILE_SIZE = 16;
 export const ROOM_WIDTH = 40;   // tiles
 export const ROOM_HEIGHT = 22;  // tiles
@@ -167,11 +169,20 @@ const DECO_ONLY_INDICES_FOREST = [
   56, 57, 58, 59,
   61, 62,
 ];
+const DECO_ONLY_INDICES_TEXT = [
+  0, 1, 2, 3, 4, 5, 6, 7,
+  8, 9, 10, 11, 12, 13, 14, 15,
+  16, 17, 18, 19, 20, 21, 22, 23,
+  24, 25, 26, 27, 28, 29, 30, 31,
+  32, 33, 34, 35, 36, 37, 38, 39,
+  40, 41, 42, 43,
+];
 const DECO_ONLY_INDICES_WATER = [1, 2, 3, 5, 13, 18];
 // Snow still has three bottom-anchored cap overlays above the main platform tops.
 const DECO_ONLY_INDICES_SNOW = [2, 3, 4, 8, 9, 10];
 // Lava has three matching bottom-anchored cap overlays that should not block the air above the ledge.
 const DECO_ONLY_INDICES_LAVA = [2, 4, 8, 10, 20];
+const TOP_DECOR_INDICES_TEXT = [44, 45, 46, 47];
 
 const DEFAULT_TILESET_UI_THEME: TilesetUiThemeConfig = {
   accentCool: 0x5dc16b,
@@ -382,6 +393,65 @@ export const TILESETS: TilesetConfig[] = [
     rows: 4,
     tileCount: 32,
     firstGid: 460,
+    uiTheme: {
+      accentCool: 0x5ca9ff,
+      accentWarm: 0xfbd45b,
+      accentHot: 0xff7865,
+      accentAlt: 0x86d54a,
+    },
+  },
+  {
+    key: 'essentials',
+    name: 'Essentials',
+    path: 'assets/tilesets/beginner.png',
+    imageWidth: 144,
+    imageHeight: 80,
+    columns: 9,
+    rows: 5,
+    tileCount: 45,
+    firstGid: 492,
+    uiTheme: {
+      accentCool: 0x5ca9ff,
+      accentWarm: 0xfbd45b,
+      accentHot: 0xff7865,
+      accentAlt: 0x86d54a,
+    },
+  },
+  {
+    key: 'text white',
+    name: 'Text White',
+    path: 'assets/tilesets/text_white.png',
+    imageWidth: 128,
+    imageHeight: 96,
+    columns: 8,
+    rows: 6,
+    tileCount: 48,
+    firstGid: 537,
+    terrainCollisionProfiles: {
+      ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_TEXT, DECORATED_TOP_PROFILE),
+      ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_TEXT, NO_COLLISION_PROFILE),
+    },
+    uiTheme: {
+      accentCool: 0x5ca9ff,
+      accentWarm: 0xfbd45b,
+      accentHot: 0xff7865,
+      accentAlt: 0x86d54a,
+    },
+  },
+  {
+    key: 'text black',
+    name: 'Text Black',
+    path: 'assets/tilesets/text_black.png',
+    imageWidth: 128,
+    imageHeight: 96,
+    columns: 8,
+    rows: 6,
+    tileCount: 48,
+    firstGid: 585,
+    terrainCollisionProfiles: {
+      ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_TEXT, DECORATED_TOP_PROFILE),
+      ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_TEXT, NO_COLLISION_PROFILE),
+    },
     uiTheme: {
       accentCool: 0x5ca9ff,
       accentWarm: 0xfbd45b,
@@ -622,6 +692,12 @@ export interface GameObjectConfig {
   bodyOffsetX?: number;
   /** explicit collision body offset inside the frame */
   bodyOffsetY?: number;
+  /** visual scale applied when drawing this object's sprite */
+  displayScale?: number;
+  /** visual x offset applied when drawing this object's sprite */
+  displayOffsetX?: number;
+  /** visual y offset applied when drawing this object's sprite */
+  displayOffsetY?: number;
   /** optional editor preview width override */
   previewWidth?: number;
   /** optional editor preview height override */
@@ -720,6 +796,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'bear_polar',  name: 'White Mouse', category: 'enemy',       path: 'assets/enemies/bear_polar.png',  frameWidth: 32, frameHeight: 32, frameCount: 8,  fps: 6,  animationFrames: [4, 5, 6, 7, 6, 5], defaultFrame: 5, facingDirection: 'right', bodyWidth: 24, bodyHeight: 22, behavior: 'patrol',   description: 'Small patrol mouse. Kills on contact.' },
   { id: 'chicken',     name: 'Chicken',     category: 'enemy',       path: 'assets/enemies/chicken.png',     frameWidth: 32, frameHeight: 32, frameCount: 14, fps: 8,  animationFrames: [7, 8, 9, 10, 11, 12, 13], defaultFrame: 7, facingDirection: 'left', bodyWidth: 18, bodyHeight: 16, behavior: 'patrol',   description: 'Quick patrol enemy. Kills on contact.' },
   { id: 'shark',       name: 'Shark',       category: 'enemy',       path: 'assets/enemies/shark.png',       frameWidth: 64, frameHeight: 32, frameCount: 4,  fps: 8,  animationFrames: [0, 1, 2, 3, 2, 1], defaultFrame: 1, facingDirection: 'left', bodyWidth: 48, bodyHeight: 18, behavior: 'fly',      description: 'Cruises left and right in a wave pattern. Kills on contact.' },
+  { id: SWORDSMAN_AI_OBJECT_ID, name: 'Sword Hunter', category: 'enemy', path: 'assets/enemies/swordsman_ai/sword_idle.png', frameWidth: 48, frameHeight: 48, frameCount: 10, fps: 8, defaultFrame: 0, facingDirection: 'right', bodyWidth: 10, bodyHeight: 14, bodyOffsetX: 19, bodyOffsetY: 26, displayScale: 1.12, displayOffsetY: 8, previewWidth: 18, previewHeight: 28, previewOffsetX: 15, previewOffsetY: 20, placeUsingPreviewBounds: true, behavior: 'patrol', description: 'Smart sword enemy. Patrols, chases nearby players, and attacks with a timed slash.' },
 
   // ── Interactive ──
   { id: 'bounce_pad',  name: 'Bounce Pad',  category: 'interactive', path: 'assets/objects/bounce_pad.png',  frameWidth: 16, frameHeight: 32, frameCount: 4,  fps: 0,  bodyWidth: 16, bodyHeight: 8,  behavior: 'bounce',   description: 'Launches player upward on contact.' },
@@ -803,6 +880,18 @@ export function getObjectPreviewBounds(config: GameObjectConfig): {
   };
 }
 
+export function getObjectDisplayScale(config: GameObjectConfig): number {
+  const scale = config.displayScale ?? 1;
+  return Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
+export function getObjectDisplayOffset(config: GameObjectConfig): { x: number; y: number } {
+  return {
+    x: config.displayOffsetX ?? 0,
+    y: config.displayOffsetY ?? 0,
+  };
+}
+
 export function getObjectPlacementPointForTile(
   config: GameObjectConfig,
   tileX: number,
@@ -831,21 +920,23 @@ export function getObjectPreviewRectForTile(
   tileY: number,
 ): { x: number; y: number; width: number; height: number } {
   const preview = getObjectPreviewBounds(config);
-
-  if (!config.placeUsingPreviewBounds) {
-    return {
-      x: tileX * TILE_SIZE + preview.offsetX,
-      y: tileY * TILE_SIZE + TILE_SIZE - config.frameHeight + preview.offsetY,
-      width: preview.width,
-      height: preview.height,
-    };
-  }
+  const displayScale = getObjectDisplayScale(config);
+  const displayOffset = getObjectDisplayOffset(config);
+  const placementPoint = getObjectPlacementPointForTile(config, tileX, tileY);
 
   return {
-    x: tileX * TILE_SIZE + Math.max(0, (TILE_SIZE - preview.width) / 2),
-    y: tileY * TILE_SIZE + TILE_SIZE - preview.height,
-    width: preview.width,
-    height: preview.height,
+    x:
+      placementPoint.x +
+      displayOffset.x -
+      config.frameWidth * displayScale * 0.5 +
+      preview.offsetX * displayScale,
+    y:
+      placementPoint.y +
+      displayOffset.y -
+      config.frameHeight * displayScale * 0.5 +
+      preview.offsetY * displayScale,
+    width: preview.width * displayScale,
+    height: preview.height * displayScale,
   };
 }
 
@@ -878,6 +969,8 @@ export interface PlacedObject {
   triggerTargetInstanceId?: string | null;
   containedObjectId?: string | null;
   signText?: string | null;
+  swordsmanObjectiveMode?: SwordsmanObjectiveMode | null;
+  swordsmanDefeatMode?: SwordsmanDefeatMode | null;
 }
 
 export function getPlacedObjectLayer(
@@ -1014,8 +1107,8 @@ export interface EditorState {
   placedObjects: PlacedObject[];
 }
 
-const DEFAULT_EDITOR_TILESET_KEY = 'forest';
-const DEFAULT_EDITOR_SELECTION_START_COL = 9;
+const DEFAULT_EDITOR_TILESET_KEY = 'essentials';
+const DEFAULT_EDITOR_SELECTION_START_COL = 0;
 const DEFAULT_EDITOR_SELECTION_START_ROW = 0;
 const DEFAULT_EDITOR_TILESET = getTilesetByKey(DEFAULT_EDITOR_TILESET_KEY);
 const DEFAULT_EDITOR_SELECTED_TILE_GID =

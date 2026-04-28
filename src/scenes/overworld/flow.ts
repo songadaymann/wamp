@@ -61,7 +61,7 @@ interface OverworldSceneFlowHost {
   ): Promise<unknown>;
   refreshAroundIfNeededOrFromCache(
     coordinates: RoomCoordinates,
-    options?: { forceChunkReload?: boolean; refreshLeaderboards?: boolean }
+    options?: { forceChunkReload?: boolean; refreshLeaderboards?: boolean; preferCachedWindow?: boolean }
   ): void;
   prepareActiveCourseRoomOverrides(
     snapshot: CourseSnapshot,
@@ -134,7 +134,9 @@ export class OverworldSceneFlowController {
     this.host.setShouldCenterCamera(true);
     this.host.setShouldRespawnPlayer(true);
     setFocusedCoordinatesInUrl(selectedCoordinates);
-    void this.host.refreshAround(selectedCoordinates);
+    this.host.refreshAroundIfNeededOrFromCache(selectedCoordinates, {
+      preferCachedWindow: true,
+    });
   }
 
   async restartCurrentRun(): Promise<void> {

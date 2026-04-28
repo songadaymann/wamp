@@ -42,6 +42,7 @@ const ROOM_BADGE_SEMANTIC_COLORS: Record<RoomGoalType, number> = {
   reach_exit: 0x6dd3ff,
   checkpoint_sprint: 0xffd166,
   collect_target: 0x7ee081,
+  collect_race: 0x58d39b,
   defeat_all: 0xff7a7a,
   survival: 0xc297ff,
 };
@@ -49,6 +50,7 @@ const ROOM_BADGE_SEMANTIC_CODES: Record<RoomGoalType, string> = {
   reach_exit: 'EX',
   checkpoint_sprint: 'CP',
   collect_target: 'CL',
+  collect_race: 'RC',
   defeat_all: 'KO',
   survival: 'SV',
 };

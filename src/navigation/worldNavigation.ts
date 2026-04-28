@@ -2,6 +2,10 @@ import {
   DEFAULT_ROOM_COORDINATES,
   type RoomCoordinates,
 } from '../persistence/roomModel';
+import {
+  buildRoomSharePath,
+  parseRoomSharePath,
+} from '../social/roomShareLinks';
 
 function parseCoordinate(value: string | null): number | null {
   if (value === null) return null;
@@ -10,11 +14,20 @@ function parseCoordinate(value: string | null): number | null {
 }
 
 export function hasFocusedCoordinatesInUrl(): boolean {
+  if (parseRoomSharePath(window.location.pathname)) {
+    return true;
+  }
+
   const params = new URLSearchParams(window.location.search);
   return parseCoordinate(params.get('x')) !== null && parseCoordinate(params.get('y')) !== null;
 }
 
 export function getFocusedCoordinatesFromUrl(): RoomCoordinates {
+  const pathCoordinates = parseRoomSharePath(window.location.pathname);
+  if (pathCoordinates) {
+    return pathCoordinates;
+  }
+
   const params = new URLSearchParams(window.location.search);
   const x = parseCoordinate(params.get('x'));
   const y = parseCoordinate(params.get('y'));
@@ -28,7 +41,8 @@ export function getFocusedCoordinatesFromUrl(): RoomCoordinates {
 
 export function setFocusedCoordinatesInUrl(coordinates: RoomCoordinates): void {
   const url = new URL(window.location.href);
-  url.searchParams.set('x', String(coordinates.x));
-  url.searchParams.set('y', String(coordinates.y));
+  url.pathname = buildRoomSharePath(coordinates);
+  url.searchParams.delete('x');
+  url.searchParams.delete('y');
   window.history.replaceState({}, '', url);
 }

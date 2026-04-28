@@ -51,6 +51,7 @@ import {
   type CourseWorkspaceBounds,
 } from '../courses/editor/workspace';
 import { createGoalMarkerFlagSprite } from '../goals/markerFlags';
+import type { RoomGoalType } from '../goals/roomGoals';
 import {
   cloneRoomSnapshot,
   createLocalRoomRepository,
@@ -443,6 +444,8 @@ export class CourseEditorScene extends Phaser.Scene {
       onClearPressurePlateConnection: () => this.objectInspectorController.clearFocusedPressurePlateConnection(),
       onCancelPressurePlateConnection: () => this.objectInspectorController.cancelPressurePlateConnection(),
       onClearContainerContents: () => this.objectInspectorController.clearFocusedContainerContents(),
+      onSetFocusedSwordsmanObjectiveMode: () => {},
+      onSetFocusedSwordsmanDefeatMode: () => {},
     });
     this.selectionGraphics = this.add.graphics();
     this.selectionGraphics.setDepth(120);
@@ -558,7 +561,7 @@ export class CourseEditorScene extends Phaser.Scene {
     this.renderUi();
   }
 
-  setGoalType(_nextType: CourseGoalType | null): void {
+  setGoalType(_nextType: RoomGoalType | null): void {
     // Room goals stay hidden in course edit mode.
   }
 

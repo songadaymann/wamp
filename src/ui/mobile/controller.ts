@@ -390,7 +390,10 @@ export class MobileUiController {
     const musicModeActive = this.doc.body.dataset.editorMusicMode === 'true';
     const isWorld = appMode === 'world' || appMode === 'play-world';
     const isPlay = appMode === 'play-world';
-    const hasFocusedRoomLink = hasFocusedRoomCoordinateLink(this.windowObj.location.search);
+    const hasFocusedRoomLink = hasFocusedRoomCoordinateLink(
+      this.windowObj.location.search,
+      this.windowObj.location.pathname,
+    );
     const isPortraitFocusedRoom =
       isPhone &&
       layout.coarsePointer &&

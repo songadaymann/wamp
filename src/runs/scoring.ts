@@ -4,6 +4,8 @@ import type { LeaderboardRankingMode, RoomLeaderboardEntry, RoomRunRecord, RunFi
 const REACH_EXIT_CLEAR_SCORE = 100;
 const COLLECT_TARGET_ITEM_SCORE = 25;
 const COLLECT_TARGET_CLEAR_SCORE = 60;
+const COLLECT_RACE_ITEM_SCORE = 25;
+const COLLECT_RACE_WIN_BONUS = 120;
 const DEFEAT_ALL_ENEMY_SCORE = 30;
 const DEFEAT_ALL_CLEAR_SCORE = 80;
 const CHECKPOINT_SPRINT_CLEAR_SCORE = 120;
@@ -31,6 +33,14 @@ export function computeRunScore(goal: RoomGoal, finish: RunFinishRequestBody): n
         collectiblesCollected * COLLECT_TARGET_ITEM_SCORE +
           (finish.result === 'completed' ? COLLECT_TARGET_CLEAR_SCORE : 0) +
           computeTimeBonus(goal.timeLimitMs, elapsedMs, 5) -
+          deathPenalty
+      );
+    case 'collect_race':
+      return Math.max(
+        0,
+        collectiblesCollected * COLLECT_RACE_ITEM_SCORE +
+          (finish.result === 'completed' ? COLLECT_RACE_WIN_BONUS : 0) +
+          computeTimeBonus(goal.timeLimitMs, elapsedMs, 4) -
           deathPenalty
       );
     case 'defeat_all':
@@ -61,6 +71,7 @@ export function computeRunScore(goal: RoomGoal, finish: RunFinishRequestBody): n
 export function getLeaderboardRankingMode(goal: RoomGoal): LeaderboardRankingMode {
   switch (goal.type) {
     case 'survival':
+    case 'collect_race':
       return 'score';
     case 'reach_exit':
     case 'collect_target':

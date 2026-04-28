@@ -32,7 +32,7 @@ type WampMintedRoomPayloadVersion =
   | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V3
   | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V4;
 type WampV2LayerKey = 'b' | 't' | 'f';
-type WampGoalCode = 'e' | 'c' | 'd' | 'k' | 's';
+type WampGoalCode = 'e' | 'c' | 'r' | 'd' | 'k' | 's';
 
 export interface WampMintedRoomObject {
   id: string;
@@ -70,6 +70,11 @@ interface WampMintedCollectTargetGoalV2 {
   l?: number;
 }
 
+interface WampMintedCollectRaceGoalV2 {
+  t: 'r';
+  l?: number;
+}
+
 interface WampMintedDefeatAllGoalV2 {
   t: 'd';
   l?: number;
@@ -90,6 +95,7 @@ interface WampMintedSurvivalGoalV2 {
 type WampMintedRoomGoalV2 =
   | WampMintedReachExitGoalV2
   | WampMintedCollectTargetGoalV2
+  | WampMintedCollectRaceGoalV2
   | WampMintedDefeatAllGoalV2
   | WampMintedCheckpointSprintGoalV2
   | WampMintedSurvivalGoalV2;
@@ -434,6 +440,11 @@ function serializeRoomGoalV2(goal: RoomGoal): WampMintedRoomGoalV2 {
         r: goal.requiredCount,
         ...(goal.timeLimitMs ? { l: goal.timeLimitMs } : {}),
       };
+    case 'collect_race':
+      return {
+        t: 'r',
+        ...(goal.timeLimitMs ? { l: goal.timeLimitMs } : {}),
+      };
     case 'defeat_all':
       return {
         t: 'd',
@@ -723,6 +734,13 @@ function normalizeRoomGoalV2(value: unknown): RoomGoal | null {
         type: 'collect_target',
         requiredCount: normalizeNullablePositiveInteger(collectGoal.r) ?? 1,
         timeLimitMs: normalizeNullablePositiveInteger(collectGoal.l),
+      });
+    }
+    case 'r': {
+      const collectRaceGoal = value as Partial<WampMintedCollectRaceGoalV2>;
+      return normalizeRoomGoal({
+        type: 'collect_race',
+        timeLimitMs: normalizeNullablePositiveInteger(collectRaceGoal.l),
       });
     }
     case 'd': {

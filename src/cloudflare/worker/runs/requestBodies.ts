@@ -64,6 +64,10 @@ export async function parseRunFinishBody(request: Request): Promise<RunFinishReq
       body.collectiblesCollected,
       'collectiblesCollected'
     ),
+    enemyCollectiblesCollected: normalizeNonNegativeInteger(
+      body.enemyCollectiblesCollected,
+      'enemyCollectiblesCollected'
+    ),
     enemiesDefeated: normalizeNonNegativeInteger(body.enemiesDefeated, 'enemiesDefeated'),
     checkpointsReached: normalizeNonNegativeInteger(
       body.checkpointsReached,

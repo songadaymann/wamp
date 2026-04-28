@@ -182,6 +182,130 @@
   background: rgba(121, 204, 222, 0.18);
 }
 
+#run-rating-modal .run-share-section {
+  border-color: #2c5071;
+  background: #fffaf0;
+}
+
+#run-rating-modal .run-share-card {
+  display: grid;
+  grid-template-columns: minmax(168px, 224px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+#run-rating-modal .run-share-preview-shell {
+  position: relative;
+  min-height: 118px;
+  overflow: hidden;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #2c5071;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#run-rating-modal .run-share-preview-image,
+#run-rating-modal .run-share-preview-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 118px;
+}
+
+#run-rating-modal .run-share-preview-image {
+  display: block;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+#run-rating-modal .run-share-preview-placeholder {
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  color: #fff3db;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+#run-rating-modal .run-share-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+#run-rating-modal .run-share-message {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+#run-rating-modal .run-share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+#run-rating-modal .run-share-actions .bar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 8px 12px 7px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #79ccde;
+  color: #000;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#run-rating-modal .run-share-actions .run-share-x-button {
+  background: #18161c;
+  color: #fff3db;
+}
+
+#run-rating-modal .run-share-x-logo {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 2px solid #fff3db;
+  background: #000;
+  color: #fff3db;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: none;
+}
+
+#run-rating-modal .run-share-actions .bar-btn:hover {
+  filter: brightness(1.04);
+}
+
+#run-rating-modal .run-share-actions .bar-btn:disabled {
+  background: #c2bbb6;
+  color: #6d6768;
+  box-shadow: none;
+}
+
+#run-rating-modal #run-share-status[data-run-share-tone='error'] {
+  color: #ed5f4b;
+}
+
 .run-rating-section {
   display: flex;
   flex-direction: column;
@@ -533,6 +657,10 @@
 
   #room-goal-intro-modal .room-goal-intro-body {
     font-size: 14px;
+  }
+
+  #run-rating-modal .run-share-card {
+    grid-template-columns: 1fr;
   }
 }
 
