@@ -143,6 +143,7 @@ export class RankedRunTraceRecorder {
 
     this.active.goalEvents.push({
       ...event,
+      actor: event.actor ?? 'player',
       atMs: Math.round(this.active.elapsedMs),
     });
   }

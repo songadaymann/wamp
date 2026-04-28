@@ -223,6 +223,10 @@ export async function handleRunFinish(
         ...body,
         elapsedMs: computeEffectiveElapsedMs(existing.startedAt, finishedAt, reportedElapsedMs),
         collectiblesCollected: clampedMetrics.collectiblesCollected,
+        enemyCollectiblesCollected: Math.min(
+          metricCaps.maxCollectibles,
+          body.enemyCollectiblesCollected,
+        ),
         enemiesDefeated: clampedMetrics.enemiesDefeated,
         checkpointsReached: clampedMetrics.checkpointsReached,
       },
@@ -388,6 +392,7 @@ export async function handleRunFinish(
         reason: 'missing_trace' as const,
         derivedMetrics: {
           collectiblesCollected: 0,
+          enemyCollectiblesCollected: 0,
           enemiesDefeated: 0,
           checkpointsReached: 0,
         },
@@ -409,12 +414,18 @@ export async function handleRunFinish(
     };
 
     if (verificationResult.status === 'passed') {
-      finalBody = {
+      finalBody = normalizeFinalizedRunBody(
+        snapshot.goal,
+        {
         ...clampedBody,
         collectiblesCollected: verificationResult.derivedMetrics.collectiblesCollected,
+        enemyCollectiblesCollected: verificationResult.derivedMetrics.enemyCollectiblesCollected,
         enemiesDefeated: verificationResult.derivedMetrics.enemiesDefeated,
         checkpointsReached: verificationResult.derivedMetrics.checkpointsReached,
-      };
+        },
+        metricCaps,
+        reportedElapsedMs,
+      );
       finalScore = computeRunScore(snapshot.goal, finalBody);
     }
   }
@@ -958,6 +969,7 @@ function normalizeFinalizedRunBody(
     return {
       ...body,
       collectiblesCollected: 0,
+      enemyCollectiblesCollected: 0,
       enemiesDefeated: 0,
       checkpointsReached: 0,
     };
@@ -977,6 +989,21 @@ function normalizeFinalizedRunBody(
         throw new HttpError(409, 'Completed collect-target runs must meet the published goal.');
       }
       break;
+    case 'collect_race': {
+      const totalCollected = body.collectiblesCollected + body.enemyCollectiblesCollected;
+      const finishedByTime = goal.timeLimitMs !== null && reportedElapsedMs >= goal.timeLimitMs;
+      const finishedByExhaustion = totalCollected >= metricCaps.maxCollectibles;
+      if (!finishedByTime && !finishedByExhaustion) {
+        throw new HttpError(
+          409,
+          'Completed collect-race runs must end when time expires or all collectibles are claimed.',
+        );
+      }
+      if (body.collectiblesCollected <= body.enemyCollectiblesCollected) {
+        throw new HttpError(409, 'Completed collect-race runs must beat the Sword Hunter.');
+      }
+      break;
+    }
     case 'defeat_all':
       if (body.enemiesDefeated < metricCaps.maxEnemies) {
         throw new HttpError(409, 'Completed defeat-all runs must clear every published enemy.');

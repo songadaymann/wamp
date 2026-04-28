@@ -19,6 +19,8 @@ import {
   getPlacedObjectLayer,
   getObjectById,
   getObjectDefaultFrame,
+  getObjectDisplayOffset,
+  getObjectDisplayScale,
   getObjectPlacementPointForTile,
   placedObjectContributesToCategory,
   getSelectionTileValue,
@@ -26,6 +28,12 @@ import {
   type PlacedObject,
 } from '../../config';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
+import { SWORDSMAN_AI_OBJECT_ID } from '../../enemies/swordsmanAi';
+import {
+  DEFAULT_SWORDSMAN_OBJECTIVE_MODE,
+  normalizeSwordsmanObjectiveMode,
+  type SwordsmanObjectiveMode,
+} from '../../enemies/swordsmanObjectives';
 import {
   ensureCustomSpriteTexture,
   getCustomSpriteDefinitionByObjectId,
@@ -886,6 +894,10 @@ export class EditorEditRuntime {
       triggerTargetInstanceId: null,
       containedObjectId: null,
       signText: null,
+      swordsmanObjectiveMode:
+        editorState.selectedObjectId === SWORDSMAN_AI_OBJECT_ID
+          ? DEFAULT_SWORDSMAN_OBJECTIVE_MODE
+          : null,
     };
 
     const previous = this.clonePlacedObjects();
@@ -986,9 +998,16 @@ export class EditorEditRuntime {
 
       const worldPoint = this.toWorldPoint(placed.x, placed.y);
       ensureCustomSpriteTexture(this.scene, objectConfig);
-      const sprite = this.scene.add.sprite(worldPoint.x, worldPoint.y, objectConfig.id, 0);
+      const displayOffset = getObjectDisplayOffset(objectConfig);
+      const sprite = this.scene.add.sprite(
+        worldPoint.x + displayOffset.x,
+        worldPoint.y + displayOffset.y,
+        objectConfig.id,
+        0,
+      );
       sprite.setDepth(this.getPlacedObjectEditorDepth(placed));
       sprite.setOrigin(0.5, 0.5);
+      sprite.setScale(getObjectDisplayScale(objectConfig));
       if (objectConfig.frameCount > 1 && objectConfig.fps > 0) {
         const animKey = `${objectConfig.id}_anim`;
         if (this.scene.anims.exists(animKey)) {
@@ -1168,6 +1187,49 @@ export class EditorEditRuntime {
     return true;
   }
 
+  setSwordsmanObjectiveMode(
+    instanceId: string,
+    objectiveMode: SwordsmanObjectiveMode,
+  ): boolean {
+    const placedObjects = this.host.getPlacedObjects();
+    const swordsmanIndex = placedObjects.findIndex((placed) => placed.instanceId === instanceId);
+    if (swordsmanIndex < 0) {
+      return false;
+    }
+
+    const swordsman = placedObjects[swordsmanIndex];
+    if (swordsman.id !== SWORDSMAN_AI_OBJECT_ID) {
+      return false;
+    }
+
+    const normalizedMode =
+      normalizeSwordsmanObjectiveMode(objectiveMode) ?? DEFAULT_SWORDSMAN_OBJECTIVE_MODE;
+    const previous = this.clonePlacedObjects();
+    const previousMode =
+      normalizeSwordsmanObjectiveMode(previous[swordsmanIndex]?.swordsmanObjectiveMode)
+      ?? DEFAULT_SWORDSMAN_OBJECTIVE_MODE;
+    if (previousMode === normalizedMode) {
+      return true;
+    }
+
+    const next = previous.map((placed, index) =>
+      index === swordsmanIndex
+        ? {
+            ...placed,
+            swordsmanObjectiveMode: normalizedMode,
+          }
+        : placed
+    );
+    this.host.setPlacedObjects(next);
+    this.undoStack.push({
+      kind: 'objects',
+      action: { previous, next: this.clonePlacedObjects(next) },
+    });
+    this.redoStack = [];
+    this.markRoomDirty();
+    return true;
+  }
+
   setPressurePlateTarget(
     triggerInstanceId: string,
     targetInstanceId: string | null,
@@ -1228,24 +1290,28 @@ export class EditorEditRuntime {
       return new Phaser.Geom.Rectangle(worldPoint.x - 8, worldPoint.y - 8, 16, 16);
     }
 
+    const displayScale = getObjectDisplayScale(objectConfig);
+    const displayOffset = getObjectDisplayOffset(objectConfig);
     const width = Math.max(
       objectConfig.previewWidth ?? 0,
       objectConfig.bodyWidth ?? 0,
-      objectConfig.frameWidth
+      objectConfig.frameWidth * displayScale
     );
     const height = Math.max(
       objectConfig.previewHeight ?? 0,
       objectConfig.bodyHeight ?? 0,
-      objectConfig.frameHeight
+      objectConfig.frameHeight * displayScale
     );
     const x =
       placed.x -
-      objectConfig.frameWidth * 0.5 +
-      (objectConfig.previewOffsetX ?? 0);
+      objectConfig.frameWidth * displayScale * 0.5 +
+      displayOffset.x +
+      (objectConfig.previewOffsetX ?? 0) * displayScale;
     const y =
       placed.y -
-      objectConfig.frameHeight * 0.5 +
-      (objectConfig.previewOffsetY ?? 0);
+      objectConfig.frameHeight * displayScale * 0.5 +
+      displayOffset.y +
+      (objectConfig.previewOffsetY ?? 0) * displayScale;
 
     const origin = this.getRoomOrigin();
     return new Phaser.Geom.Rectangle(origin.x + x - 4, origin.y + y - 4, width + 8, height + 8);
@@ -1529,6 +1595,11 @@ export class EditorEditRuntime {
         const available = this.countPlacedObjectsByCategory('collectible');
         return `Collect ${this.roomGoal.requiredCount} item${this.roomGoal.requiredCount === 1 ? '' : 's'} (${available} placed).`;
       }
+      case 'collect_race': {
+        const availableCollectibles = this.countPlacedObjectsByCategory('collectible');
+        const collectingHunters = this.countCollectModeSwordsmen();
+        return `Collect more items than the Sword Hunter (${availableCollectibles} collectibles, ${collectingHunters} collector${collectingHunters === 1 ? '' : 's'}).`;
+      }
       case 'defeat_all': {
         const available = this.countPlacedObjectsByCategory('enemy');
         return `Defeat every enemy in the room (${available} placed).`;
@@ -1543,7 +1614,17 @@ export class EditorEditRuntime {
   getPublishValidationError(): string | null {
     return getRoomGoalPublishValidationError(this.roomGoal, {
       collectiblesPlaced: this.countPlacedObjectsByCategory('collectible'),
+      collectModeEnemyCount: this.countCollectModeSwordsmen(),
     });
+  }
+
+  private countCollectModeSwordsmen(): number {
+    return this.host.getPlacedObjects().filter(
+      (placed) =>
+        placed.id === SWORDSMAN_AI_OBJECT_ID &&
+        (normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode)
+          ?? DEFAULT_SWORDSMAN_OBJECTIVE_MODE) === 'collect',
+    ).length;
   }
 
   hasUndoHistory(): boolean {

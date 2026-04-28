@@ -821,6 +821,8 @@ export class EditorScene extends Phaser.Scene {
       onClearPressurePlateConnection: () => this.clearFocusedPressurePlateConnection(),
       onCancelPressurePlateConnection: () => this.cancelPressurePlateConnection(),
       onClearContainerContents: () => this.clearFocusedContainerContents(),
+      onSetFocusedSwordsmanObjectiveMode: (objectiveMode) =>
+        this.inspectorController.setFocusedSwordsmanObjectiveMode(objectiveMode),
     });
 
     this.createBackground();

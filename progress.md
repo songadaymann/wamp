@@ -57,6 +57,577 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
 
 ## Recent Changes
 
+- Sword Hunter branch/harness cleanup on April 28, 2026:
+  - moved `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-sword-hunter` from `feature/sword-hunter-traversal-harness-2026-04-25` onto canonical `feature/sword-hunter-ai-2026-04-21`
+  - removed the traversal-harness-only layer while keeping runtime enemy behavior:
+    - deleted `.codex-local-logs/`
+    - deleted `scripts/sword_hunter_traversal_harness.mjs`
+    - deleted `scripts/sword_hunter_live_traversal_harness.mjs`
+    - deleted `src/enemies/swordsmanTraversalHarness.ts`
+    - removed `window.run_sword_hunter_traversal_harness`
+    - removed forced-edge traversal test actions from `window.run_preview_smoke_action`
+    - removed `debugStartSwordsmanTraversalEdgeTest(...)` / `debugGetSwordsmanTraversalEdgeTestStatus(...)` plumbing from `main.ts`, `OverworldPlayScene`, `liveObjects.ts`, and `vite-env.d.ts`
+  - kept the actual Sword Hunter runtime line:
+    - duel attack behavior
+    - collect objective mode
+    - collect-race goal/run verification
+    - traversal graph, robust planner, drop landing helper, tuning constants, debug state dump, spritesheets/assets, editor/persistence wiring
+  - validation:
+    - `npm run typecheck` passed after harness removal
+    - `git diff --check` passed
+    - `npm run build` passed
+    - required `develop-web-game` browser smoke against `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas` wrote `output/web-game/shot-0.png`, `state-0.json`, and `errors-0.json`; the screenshot rendered the overworld and the only recorded console error was the known local Cloudflare Images `503`
+  - branch cleanup:
+    - deleted local branch `feature/sword-hunter-traversal-harness-2026-04-25`
+  - next follow-up:
+    - continue QA/fixes from `feature/sword-hunter-ai-2026-04-21`
+
+- Sword Hunter collect-mode + collect-race runtime on April 22, 2026:
+  - user approved the next major step:
+    - make the Sword Hunter support a real `collect` objective mode
+    - add a matching room goal where the player races that enemy to collect more items
+    - use the safety backend for testing because it already has collectible-heavy rooms
+  - changed `src/scenes/overworld/liveObjects.ts`:
+    - `updateSwordsmanEnemy(...)` now accepts the full loaded room so collect mode can inspect live collectibles in that room
+    - added a real `updateSwordsmanCollectObjective(...)` path instead of the old duel fallback
+    - added nearest-collectible target selection for collect-mode Sword Hunters
+    - collect-mode Sword Hunters now traverse toward collectibles, collect them on contact, and stop using duel attack logic
+    - collect-mode Sword Hunters are now harmless on contact unless the player stomps them; only duel-mode swordsmen can sword-kill the player
+    - generalized `collectLiveObject(...)` so collectibles can be claimed by either the player or the enemy
+    - added a new live-object callback `onEnemyCollectibleCollected(...)`
+  - changed `src/scenes/overworld/goalRuns.ts`, `objectiveController.ts`, and `hudState.ts`:
+    - `GoalRunState` now tracks both `collectiblesCollected` and `enemyCollectiblesCollected`
+    - `collect_race` goal runs now:
+      - count player and enemy pickups separately
+      - resolve on time expiry or when all room collectibles are claimed
+      - complete only if the player collected more than the Sword Hunter
+    - HUD progress text now shows `You` vs `Hunter` counts instead of a single collect total
+  - changed `src/goals/roomGoals.ts`:
+    - `collect_race` publish validation now enforces exactly one Sword Hunter set to `Collect Items`, because the current HUD/result model assumes a single rival collector
+  - changed `src/scenes/OverworldPlayScene.ts`, `src/runs/verificationTrace.ts`, and `src/scenes/overworld/rankedRunTraceRecorder.ts`:
+    - added enemy-collectible goal events so collect-race runs can distinguish player vs enemy pickups in the ranked trace
+    - room run finish payloads now include `enemyCollectiblesCollected`
+  - changed `src/cloudflare/worker/runs/requestBodies.ts`, `routes.ts`, and `verification.ts`:
+    - the Worker now accepts `enemyCollectiblesCollected`
+    - completed `collect_race` submissions are validated against the new rule:
+      - player must beat the Sword Hunter
+      - and the race must have ended either by time expiry or by exhausting the room collectible pool
+    - ranked verification now treats `collect_race` as score-ranked like `survival`
+    - verification metrics now track enemy collectible count separately from player collectible count
+    - room verification hashes now include `swordsmanObjectiveMode`, so collect-mode authored rooms do not share the old duel-mode verification fingerprint
+  - safety-backed local testing path:
+    - started branch Worker against the safety env / safety D1 on `http://127.0.0.1:8788` via `wrangler dev --env safety --remote`
+    - started local frontend on `http://127.0.0.1:3002` pointed at that Worker
+    - this gives current-branch gameplay code against real safety room data without requiring a safety deploy first
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check` passed
+    - required `develop-web-game` smoke against the safety-backed local stack wrote fresh `output/web-game/state-0.json`, `state-1.json`, `state-2.json`, and `shot-0.png`/`shot-1.png`/`shot-2.png`
+    - the smoke only confirmed clean browse-mode boot on the safety-backed stack; the headless screenshot still hit the known black-frame artifact and the smoke did not reach a meaningful authored collect-race room
+  - remaining follow-up:
+    - manual browser QA is still needed on `http://127.0.0.1:3002` against a real safety room with lots of collectibles
+    - minted-room token metadata still does not explicitly persist `swordsmanObjectiveMode`; local/safety room JSON normalization does preserve it, but onchain metadata encoding has not been extended yet
+
+- Sword Hunter collect-mode dead-end target-selection fix on April 22, 2026:
+  - user reported a live collect-race repro where the Sword Hunter successfully ran down a coin hallway, then reached a dead-end edge and got stuck instead of backing out and pursuing the next sensible collectible
+  - root cause:
+    - collect mode was still selecting its target collectible by raw `abs(dx) + abs(dy)` only
+    - that meant it could fixate on the physically nearest coin even when the best next reachable coin required choosing a different route or backing away from the local edge
+  - changed `src/scenes/overworld/liveObjects.ts`:
+    - `getSwordsmanCollectObjectiveTarget(...)` now evaluates a small nearest-candidate set (`10`) with `planSwordsmanRobustTraversal(...)`
+    - exact planned routes are preferred over partial/unplanned ones
+    - route length is now part of the target score, so collect mode chooses a better reachable objective instead of blindly chasing the closest coin body
+    - collect-mode target selection now receives the live swordsman so it can respect blocked-edge memory when scoring collectible routes
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check` passed
+    - required `develop-web-game` smoke was rerun against `http://127.0.0.1:3002/?previewSmoke=1`, but this worktree's client still wrote only the default `output/web-game/state-*.json` files and did not produce a meaningful authored-room collect-mode artifact
+  - next follow-up:
+    - have the user retry the exact same safety room and confirm whether the Sword Hunter now backs out of that hallway dead end instead of sticking there
+    - if it still stalls, the next thing to inspect is whether it is choosing a correct target but failing the first drop/jump edge again, which would be a traversal-execution issue rather than a target-selection issue
+
+- Sword Hunter objective-mode refactor groundwork on April 22, 2026:
+  - user wants this enemy family to support more than one high-level objective, starting with a future `collect` mode where the enemy competes for collectibles
+  - before adding `collect`, we refactored the current swordsman AI so traversal/execution is no longer hard-wired directly to the duel/player-chase objective
+  - changed `src/enemies/swordsmanObjectives.ts`:
+    - added `SwordsmanObjectiveMode = 'duel' | 'collect'`
+    - added `DEFAULT_SWORDSMAN_OBJECTIVE_MODE = 'duel'`
+    - added `SwordsmanObjectiveTarget`
+    - extracted the current duel target-selection rules into `buildSwordsmanDuelObjectiveTarget(...)`
+  - changed `src/scenes/overworld/liveObjects.ts`:
+    - runtime now carries `aiObjectiveMode`
+    - `updateSwordsmanEnemy(...)` now dispatches by objective mode instead of assuming the player-duel objective inline
+    - extracted duel-specific state handling into `updateSwordsmanDuelObjective(...)`
+    - extracted shared target-follow/traversal execution into `runSwordsmanTraversalObjective(...)`
+    - extracted shared no-target fallback into `runSwordsmanPatrolFallback(...)`
+    - extracted repeated AI cleanup into `clearSwordsmanObjectiveTraversalState(...)`
+    - current `collect` branch intentionally falls back to duel for now; the point of this change is to open the seam without changing authored-room behavior yet
+  - changed `src/scenes/OverworldPlayScene.ts` so debug output now includes `aiObjectiveMode`
+  - practical result:
+    - duel behavior should stay the same
+    - future work can add `collect` target selection and collection action logic without reopening the whole traversal/combat loop
+    - the current code still does not expose any editor/UI or persistence path for choosing swordsman objective mode per placed enemy instance
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check` passed
+    - required Playwright smoke via the web-game client wrote `output/web-game/sword-hunter-objective-refactor-smoke/shot-0.png` and `state-0.json`; it confirmed the local build still loads but did not reach a meaningful live swordsman scenario
+    - additional direct Playwright probes against `?x=0&y=0` and `?x=6&y=-4` wrote `output/web-game/sword-hunter-objective-refactor-probe/summary.json` and `output/web-game/sword-hunter-objective-refactor-probe-6--4/summary.json`, but both landed in `swordsmen: []`, so they were not useful duel-regression artifacts
+  - next follow-up:
+    - add a real `collect` objective target selector that ranks reachable collectibles instead of the player body
+    - add an enemy collectible-consume path parallel to the current player-only `collectLiveObject(...)`
+    - after that, add per-instance authoring/persistence for swordsman objective mode in the editor + room snapshot schema
+
+- Sword Hunter facing debounce cosmetic polish on April 22, 2026:
+  - user reported the next remaining issue was cosmetic: the swordsman sometimes flips left/right every frame while doing setup corrections, which no longer breaks traversal but looks obviously wrong
+  - root cause: `updateSwordsmanEnemy(...)` and the traversal helpers were applying sprite facing directly from the live decision direction every frame, so tiny `same-platform` / lip-setup corrections could mirror the sprite back and forth instantly even when the enemy had barely moved
+  - changed `src/scenes/overworld/liveObjects.ts` so the swordsman now keeps display-facing memory separate from movement direction:
+    - added swordsman-facing runtime state for current displayed facing, last flip time, and last flip x-position
+    - added a swordsman-only `applySwordsmanFacing(...)` helper that debounces non-forced flips unless enough time or horizontal travel has happened
+    - routed ground chase, patrol, in-air steering, and jump launch facing updates through that helper
+    - kept launches, windup, and attack as forced flips so important committed actions still face the right way immediately
+    - reset the swordsman-facing memory when the enemy respawns after falling out of bounds
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check` passed
+    - Playwright smoke against `http://127.0.0.1:3002/?swordHunterPlanner=robust&x=0&y=0&renderer=canvas` wrote `output/web-game/sword-hunter-facing-debounce-smoke/shot-0.png` and `state-0.json`; it only confirmed the local build still loads and did not meaningfully reproduce the authored-room swordsman behavior, so live manual verification is still needed
+  - next follow-up:
+    - have the user re-run the room where the swordsman used to jitter at the lip and confirm whether the sprite now holds facing instead of snapping every frame
+    - if the visual jitter is still too noticeable, tighten the debounce by raising `SWORDSMAN_AI_FACING_FLIP_MIN_INTERVAL_MS` / `SWORDSMAN_AI_FACING_FLIP_MIN_TRAVEL_PX` rather than touching path logic
+
+- Sword Hunter ground-speed bump to `84` and object-picker full-frame previews on April 22, 2026:
+  - user asked two follow-ups:
+    - make the enemy move just a bit faster
+    - fix the editor object picker thumbnail where the Sword Hunter's head was getting cropped off
+  - player-speed reference for comparison:
+    - `OverworldPlayScene` still uses `PLAYER_SPEED = 150`
+  - changed `src/scenes/overworld/liveObjects.ts` so `SWORDSMAN_AI_SPEED` increased from `80` to `84`
+  - speed scope remains intentionally narrow:
+    - affects ground chase speed directly
+    - affects patrol speed indirectly because patrol already uses `SWORDSMAN_AI_SPEED * 0.68`
+    - does not change jump velocity, wall-jump velocity, or airborne traversal speed
+  - changed `src/ui/setup/paletteController.ts` so editor object thumbnails and the selected-object preview now render from the full sprite frame instead of the tighter placement preview bounds
+    - this keeps placement/collision preview bounds unchanged for editor placement logic
+    - but stops the picker from chopping off sprite art that sits outside those tighter bounds, which is what was happening to the Sword Hunter head
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check` passed
+    - Playwright smoke via the required web-game client wrote `output/web-game/sword-hunter-speed-and-picker-smoke/shot-0.png` and `state-0.json`; it confirmed the local build still loads, but it stayed in overworld browse mode and therefore did not provide a meaningful visual verification of the editor picker
+    - an attempted targeted headless synthetic-editor probe failed because the objects palette tab was not visible in that headless preview path, so no authoritative picker screenshot was produced from automation
+  - next follow-up:
+    - have the user try the live swordsman room again and judge whether `84` feels right against the player speed of `150`
+    - have the user open the editor object picker and confirm the Sword Hunter thumbnail now shows the full head/body
+    - if `84` still feels slow, the next obvious nudge is `88`; if it starts looking too slippery around lips, back it down to `82`
+
+- Sword Hunter robust first-edge penalty and repeated-route memory on April 22, 2026:
+  - user approved the next stuck-behavior experiment after seeing robust still choose and reuse suspicious first edges like `drop:right` while the target node was effectively down-left; they also suggested a global “if you do the same thing 3 times, do something different” rule
+  - changed `src/enemies/swordsmanRobustPlanner.ts` so the robust planner's first-edge cost now inherits the classic heuristic bias against strategically dumb opening moves:
+    - adds the same setup-direction penalty when the first move points opposite the player's horizontal direction
+    - adds the same moving-away penalty when the first setup point increases horizontal target distance
+    - adds a new first-edge heuristic-regression penalty when the first edge makes the node-to-target heuristic worse instead of better
+  - changed `src/scenes/overworld/liveObjects.ts` so the swordsman now keeps a small repeated-route memory keyed by `currentSegmentId + traversalEdgeId + targetSegmentId`
+    - while on the floor, if the same first edge is reused from the same node toward the same target without meaningful setup-progress improvement, a stall window increments a repeat counter instead of allowing infinite reuse
+    - after 3 stalled windows, that first edge is temporarily blacklisted for a longer interval (`2400ms`) and the planned route is cleared with reason `blocked-repeated-route`
+    - added debug runtime fields `aiRouteLoopSignature` and `aiRouteLoopCount`
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check` passed
+    - lightweight Playwright probe against `http://127.0.0.1:3002/?swordHunterPlanner=robust&x=0&y=0` wrote `output/web-game/sword-hunter-route-loop-probe/state-0.json` and `shot-0.png`, but it stayed in browse mode with no loaded full room and the headless screenshot was black, so it was not a useful authored-room repro artifact
+  - next follow-up:
+    - have the user retry the live stuck repro and paste `window.get_sword_hunter_debug()`
+    - the new fields that matter most are `aiRouteLoopSignature`, `aiRouteLoopCount`, `aiTraversalEdgeId`, and whether `aiPlannedTraversalReason` eventually flips to `blocked-repeated-route` or at least stops showing endless `reuse`
+
+- Sword Hunter same-platform stall memory widening on April 22, 2026:
+  - user retried with four live dumps from the same stuck top-platform case and the bug was still effectively unchanged
+  - the key signal from those dumps was that `aiRouteLoopCount` never increased even though the swordsman stayed on the same current segment `surface:12:16` while robust alternated among different first edges like `drop:left`, `drop:right`, and multi-edge drop routes
+  - root cause: the new repeated-route memory had been keyed too narrowly; because the signature included the exact first edge id, switching from one bad drop edge to another on the same platform reset the memory back to zero and prevented the taboo rule from ever firing
+  - changed `src/scenes/overworld/liveObjects.ts` so route-loop memory is now keyed by `currentSegmentId -> targetSegmentId` instead of `currentSegmentId -> traversalEdgeId -> targetSegmentId`
+  - changed repeated-route blocking to preserve that node-target memory across `blocked-repeated-route` edge blocks, so once the swordsman has proven he is stuck on a platform he can continue escalating through alternative edges instead of starting over from zero each time
+  - also raised the stall window to `900ms` so the counter represents sustained “still on the same platform” churn instead of tiny frame-to-frame pacing noise
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check` passed
+  - next follow-up:
+    - have the user retry the same room/platform repro
+    - expected debug difference: `aiRouteLoopSignature` should now look like `surface:12:16->surface:14:12` and `aiRouteLoopCount` should finally rise above `0` if he remains stuck on the same platform
+
+- Sword Hunter drop-overshoot relaxation when player is below on April 22, 2026:
+  - user tried threading player Y into `buildDecisionFromFirstEdge(...)` to force drops when the player is below, but the first edit was not correct:
+    - the comparison used the wrong Y direction
+    - it changed behavior for every rightward drop
+    - it broke the two robust call sites to `buildSwordsmanTraversalDecisionFromEdge(...)`
+  - changed `src/enemies/swordsmanTraversal.ts` so the `drop-down` branch now does the narrower thing we actually want:
+    - if the player is below (`target.centerY > enemy.centerY`), the swordsman still has to approach the lip from the correct side
+    - but once he has reached or slightly overshot the lip, we no longer force a `same-platform` backtrack just because of that overshoot
+    - if the player is not below, the old overshoot correction still applies
+  - updated both robust `buildSwordsmanTraversalDecisionFromEdge(...)` call sites in `src/scenes/overworld/liveObjects.ts` so the helper now receives `targetSnapshot` and typechecks again
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check` passed
+  - next follow-up:
+    - have the user retry the authored stuck repro
+    - expected behavior change: when the swordsman reaches the lip for a downward route, he should be more willing to actually commit to `drop-down` instead of flipping back to `same-platform` immediately after a slight overshoot
+
+- Sword Hunter upward-platform bias penalty on April 22, 2026:
+  - user pointed out another behavior smell: the swordsman tends to jump up whenever there is an upper platform available, even when that is strategically wrong
+  - root cause: both the classic path scorer and the robust planner's first-edge cost mostly priced horizontal setup / horizontal target distance, with no strong penalty for a first edge that moves vertically away from the player
+  - changed `src/enemies/swordsmanTraversal.ts` so `scoreTraversalPathEntry(...)` now adds a strong penalty when the first edge moves upward while the player is meaningfully below, or downward while the player is meaningfully above
+  - changed `src/enemies/swordsmanRobustPlanner.ts` so robust first-edge scoring now applies the same vertical-direction penalty before choosing a route
+  - implementation detail: the penalty is based on the source and destination node Y positions for the first edge, not just the edge type name, so it catches `jump-up`, upward `jump-to-wall`, and any other first edge that actually moves in the wrong vertical direction
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check` passed
+    - lightweight Playwright smoke on `http://127.0.0.1:3002/?swordHunterPlanner=robust&x=0&y=0` wrote `output/web-game/sword-hunter-vertical-bias-smoke/state-0.json`; it still landed in browse mode, so this is only a load smoke, not a useful authored-room behavior verification
+  - next follow-up:
+    - have the user retry the same repro where the player is below and the swordsman used to opportunistically climb
+    - if the bias is reduced but not gone, the next likely step is to reduce `buildJumpUpEdge(...)` reachability rather than adding more scoring penalties
+
+- Sword Hunter hitbox debug cleanup and restart fix on April 22, 2026:
+  - user reported that the swordsman hitbox debug overlay should come off, and noticed that after killing the swordsman the hitbox rectangle stayed behind even across room restart
+  - root cause: the swordsman debug rectangle was implemented as a `liveObject.helpers` entry, but `defeatEnemy(...)` destroyed interactions and world colliders only; it destroyed the enemy sprite and removed the enemy from `loadedRoom.liveObjects` without destroying helpers first
+  - practical consequence: the stale helper rectangle could persist in the scene even after the enemy object was gone, and because the defeated enemy had already been removed from the room list, later room resets no longer had a handle to destroy that helper
+  - changed `src/scenes/overworld/liveObjects.ts` to remove the swordsman hitbox debug helper feature entirely
+  - changed `defeatEnemy(...)` to destroy helpers before destroying the enemy sprite and removing it from the loaded-room list
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check` passed
+  - next follow-up:
+    - reload the page once so any helper rectangles created by the old build are gone
+    - verify that killing the swordsman leaves no rectangle behind and that room restart now visually resets him like other enemies
+
+- Local Sword Hunter debug stack check on April 22, 2026:
+  - user reported `http://localhost:3000/?swordHunterPlanner=robust&x=6&y=-4` “does not seem to work at all” and asked to start the local presence server so browser warnings would settle down before collecting debug output
+  - started local PartyKit with `npm run dev:presence`; local presence was reachable at `http://127.0.0.1:1999`
+  - important discovery: the user's `localhost:3000` Vite process was not this worktree at all; `lsof` showed it serving from `/Users/jonathanmann/.../everybodys-platformer`, so that URL was testing the wrong checkout
+  - important discovery #2: the existing `localhost:3002` Vite process *was* serving this Sword Hunter worktree, but it had been launched with `VITE_ROOM_API_BASE_URL=https://everybodys-platformer.novox-robot.workers.dev`, so it was still using the remote Worker/Partykit runtime config rather than the local `wrangler dev` + local PartyKit stack
+  - updated local `.dev.vars` `APP_BASE_URL` from `http://127.0.0.1:3000` to `http://localhost:3002` and restarted `npm run dev:api`; direct local auth verification now returns a debug magic link whose verify redirect lands on `http://localhost:3002/?auth=email`
+  - validation against the real Sword Hunter frontend URL `http://127.0.0.1:3002/?swordHunterPlanner=robust&x=6&y=-4`:
+    - `window.get_sword_hunter_debug()` exists on that build
+    - the swordsman reports `aiPlannerMode: "robust"`, `aiPlannerFallback: false`, and a 5-edge planned route from `surface:11:0` to `surface:4:19`
+    - artifact: `output/web-game/sword-hunter-room-6--4-debug-3002/summary.json`
+  - practical implication: robust mode *is* active on the correct frontend build; if browser console warnings still mention the remote PartyKit host, that is because the current `3002` frontend process is baked to the remote API, so the local PartyKit server on `1999` cannot affect that session unless the frontend is relaunched against the local API
+
+- Sword Hunter midair traversal-commit fix on April 22, 2026:
+  - user provided a stronger live repro from room `6,-4`: even in robust mode, when the player was above the swordsman he still wound up jumping below the player instead of actually completing the planned climb route
+  - the revealing debug payload showed an impossible combination: the active route edge was `surface:14:19->surface:15:23:drop:right`, but runtime `directionX` and `velocityX` had already flipped left while he was still in the air
+  - root cause: `buildDecisionFromFirstEdge(...)` in `src/enemies/swordsmanTraversal.ts` was recomputing airborne traversal steering from `edge.targetX - enemy.centerX`; once the swordsman overshot a route target by a few pixels, a committed `drop:right`, `jump-to-wall`, or `wall-jump` edge could reverse itself mid-flight and collapse back into generic under-the-player hopping
+  - changed airborne traversal decisions so active traversal edges keep `directionX: edge.directionX` while in flight instead of re-deriving direction from the overshoot delta each frame
+  - practical effect: once the AI commits to a traversal edge, it should keep steering in that edge’s intended direction until the edge completes or gets blocked, instead of undoing its own wall/drop route halfway through
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check` passed
+    - targeted browser probe `output/web-game/sword-hunter-airborne-commit-probe/summary.json` confirmed the previously bad airborne cases now stay committed:
+      - `drop:right` stays `directionX: 1`
+      - `jump-to-wall` right stays `directionX: 1`
+      - `wall-jump` left stays `directionX: -1`
+    - lightweight browser smoke on `http://127.0.0.1:3002/?swordHunterPlanner=robust&x=6&y=-4` wrote `output/web-game/sword-hunter-room-6--4-smoke-after-air-commit/state-0.json`; screenshot capture was black in headless WebGL, so the state JSON is the useful artifact there
+  - next follow-up: re-run the live authored-room repro by hand and inspect whether `window.get_sword_hunter_debug()` still ever shows an edge like `drop:right` or `jump-to-wall` paired with the opposite `directionX`; if it does, the next likely fix is to tighten route failure/blacklisting for drop routes rather than steering
+
+- Sword Hunter active-traversal lock and drop-lip overshoot fix on April 22, 2026:
+  - user reported the AI still looked confused after the midair-direction patch and shared a new dump where the swordsman was airborne with `aiIntent: "air-chase"` but the freshly replanned route had already switched to a new first edge `surface:16:33->surface:17:30:drop:left`
+  - root cause #1: the robust planner/controller could replan while the swordsman was already airborne during an active traversal attempt; that let an in-flight jump get replaced by a brand new ground-first route before the original jump had either succeeded or failed
+  - changed `getSwordsmanRobustTraversalDecision(...)` in `src/scenes/overworld/liveObjects.ts` so when `aiActiveTraversalEdgeId` is set and the swordsman is still airborne, the active traversal edge stays authoritative and no new robust first-edge decision replaces it mid-flight
+  - root cause #2: drop edges only checked one-sided setup tolerance; if the swordsman had already overshot the lip, the AI could still think it was “ready” to drop instead of first stepping back into position
+  - changed `buildDecisionFromFirstEdge(...)` in `src/enemies/swordsmanTraversal.ts` so `drop-down` edges now also detect overshoot and return `same-platform` setup correction until the lip alignment is valid
+  - added `aiActiveTraversalEdgeId` and `aiActiveTraversalNextNodeId` to `OverworldPlayScene.describeState()` so future dumps can show whether the live AI is still following the originally launched traversal edge or has no active traversal in flight
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check` passed
+    - targeted probe `output/web-game/sword-hunter-drop-setup-probe/summary.json` confirms an overshot `drop:left` case now yields `intent: "same-platform"` with corrective `directionX: 1`, while a properly aligned case still yields `intent: "drop-down"` with `directionX: -1`
+  - next follow-up: have the user retry the live repro and paste a new `window.get_sword_hunter_debug()` dump; the most important new fields are `aiActiveTraversalEdgeId`, `aiTraversalEdgeId`, and whether `aiPlannedTraversalReason` stays `active-traversal` while he is mid-jump
+
+- Sword Hunter ground-route stall metric fix on April 22, 2026:
+  - user observed the next behavior layer after the climb improvements: the swordsman now finds higher platforms more often, but then can get stuck on a platform and keep reusing the same first edge regardless of where the player moves
+  - the key live dump showed a stable on-floor route reuse loop:
+    - `aiIntent: "drop-down"`
+    - `aiTraversalEdgeId: "surface:14:13->surface:17:9:drop:left"`
+    - `aiActiveTraversalEdgeId: null`
+    - `aiPlannedTraversalReason: "reuse"`
+  - root cause: the old stall logic in `liveObjects.ts` only watched whether body `center.x` changed at all; small pacing or oscillation on a platform could keep resetting the timer even when the swordsman was not actually getting closer to the first edge's setup point
+  - changed the fallback / first-edge stall tracker so it now measures remaining setup distance for the current traversal edge (`abs(edge.setupX - setupReferenceX)`) and only counts real progress when that metric improves, rather than any horizontal motion
+  - practical effect: if he keeps reusing a `same-platform` or `drop-down` first edge without actually closing the setup distance, that edge should get blocked and force a different route instead of being reused indefinitely
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check` passed
+    - simple metric probe `output/web-game/sword-hunter-fallback-metric-probe/summary.json` confirms the tracked remaining distance decreases only when the swordsman genuinely gets closer to the intended drop lip
+
+- Sword Hunter robust partial-route fallback on April 22, 2026:
+  - user then provided a new dump showing the swordsman stuck above the player with `aiPlannerFallback: true`, `aiPlannedTraversalEdgeIds: []`, and `aiPlannedTraversalReason: "fallback-classic"`; that meant we were still dropping all the way back to the original short-horizon classic chooser whenever the robust planner could not prove a full exact route
+  - root cause: `planSwordsmanRobustTraversal(...)` only returned a plan when it found an exact route to the target node; otherwise it returned `null`, which sent control back to `decideSwordsmanTraversal(...)` and reintroduced the old “partial nonsense path” behavior in the hardest cases
+  - changed `src/enemies/swordsmanRobustPlanner.ts` so the robust search now keeps the best partial route it discovered while exploring; if no exact route exists but the search found a route that meaningfully reduces the target heuristic, it returns that partial route instead of `null`
+  - changed `src/scenes/overworld/liveObjects.ts` so robust route reasons now distinguish exact vs partial replans (`new-partial-route`, `replan-partial`) in debug state
+  - practical effect: when the exact planner cannot fully solve a room graph in one shot, the swordsman should still keep using the robust simulated search to make progress instead of immediately falling back to the old classic partial-path chooser
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check` passed
+  - remaining limitation: my remote-backed headless verification run did not settle into the overworld scene in time, so this change still needs manual in-browser confirmation from the user via `window.get_sword_hunter_debug()`
+
+- Local debug magic-link auth bootstrap on April 22, 2026:
+  - user wanted local debug sign-in enabled in the Sword Hunter worktree so they could create/publish a test room and then exercise the new `?swordHunterPlanner=robust` flag against authored content
+  - root cause: this worktree had no `.dev.vars`, so `wrangler dev` had no local auth overrides even though the Worker already supported debug magic links via `AUTH_DEBUG_MAGIC_LINKS=1`
+  - added a local ignored `.dev.vars` file based on `.dev.vars.example`, keeping `AUTH_DEBUG_MAGIC_LINKS=1`, `ENABLE_TEST_RESET=1`, and `APP_BASE_URL="http://127.0.0.1:3000"` for the normal local Vite + Wrangler flow
+  - first verification attempt still failed because the local D1 instance in `.wrangler/state/v3/d1` had never been migrated in this worktree; `POST /api/auth/request-link` returned `D1_ERROR: no such table: users`
+  - ran `npm run cf:d1:migrate:local`, which applied migrations `0000` through `0025` to the local DB
+  - validation after migration:
+    - `npm run dev:api` reported `Using secrets defined in .dev.vars`
+    - direct `POST http://127.0.0.1:8787/api/auth/request-link` returned `{ ok: true, delivery: "debug", debugMagicLink: "http://127.0.0.1:8787/api/auth/verify?..." }`
+    - following that link with redirects disabled returned `302` to `http://127.0.0.1:3000/?auth=email` and included `Set-Cookie`, confirming the debug sign-in round-trip works locally
+  - local runbook for authored-room robust-planner testing:
+    - `npm run dev:api`
+    - `npm run dev`
+    - sign in from the auth menu; it should show `Open debug sign-in link`
+    - create/publish the test room, then open it with `?swordHunterPlanner=robust`
+
+- Sword Hunter robust planner mode experiment on April 22, 2026:
+  - user direction changed from “keep it lightweight” toward a deliberate robustness-first experiment: build a heavier planner path first, see whether it actually makes the Sword Hunter more competent, and only optimize/back off later if the heavy path works
+  - added `docs/sword-hunter-ai-explainer.md` with a plain-English explanation of the current Sword Hunter architecture: combat state machine, traversal graph, one-step-at-a-time execution, and why the discrete planner / continuous physics mismatch has been causing brittle behavior
+  - added a new parallel planner module `src/enemies/swordsmanRobustPlanner.ts` instead of replacing the classic planner in place
+  - robust planner characteristics:
+    - uses deeper exact-route search (`8` edges / `160` explored states) instead of the classic `MAX_SEARCH_DEPTH = 3`
+    - requires a full reachable route to the target traversal node instead of accepting partial “gets closer” paths
+    - validates each candidate traversal edge by simulating actual Sword Hunter movement against room terrain collision, using the live gravity and Sword Hunter jump / wall-jump / air-steer tuning rather than only static reachability thresholds
+    - keeps a short committed route in runtime memory so the Sword Hunter can keep following a chosen multi-edge route for a brief window instead of replanning every frame
+    - still falls back to the classic planner if the robust path cannot produce an exact route, so authored rooms stay playable while we evaluate how often the robust planner really solves the hard cases
+  - runtime/debug wiring:
+    - `OverworldPlayScene` now passes a query-selectable planner mode into live-object runtime; `?swordHunterPlanner=robust` enables the new planner path and default remains classic
+    - Sword Hunter debug/live-object payloads now include `aiPlannerMode`, `aiPlannerFallback`, `aiPlannerPlanMs`, `aiPlannerExpandedStates`, `aiPlannerSimulatedEdges`, `aiPlannedTraversalEdgeIds`, `aiPlannedTraversalTargetNodeId`, `aiPlannedTraversalExpiresMs`, and `aiPlannedTraversalReason`
+    - traversal graph objects now also expose `edgesById`, exported traversal context/target helpers, and a reusable `buildSwordsmanTraversalDecisionFromEdge(...)` path so classic + robust execution stay aligned
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - required `develop-web-game` client smoke ran against `http://localhost:3004/?previewSmoke=1&renderer=canvas&swordHunterPlanner=robust`, wrote `output/web-game/sword-hunter-robust-planner-smoke-remote/state-0.json` plus `shot-0.png`, and the screenshot showed the expected overworld room-grid browse scene with no smoke error file
+    - an initial local-only smoke against `http://localhost:3003/...` surfaced local auth/API 500s and only reached the boot screen; kept the artifact at `output/web-game/sword-hunter-robust-planner-smoke/` for reference but used the remote-backed frontend smoke as the real verification path
+    - new synthetic browser-side probe `output/web-game/sword-hunter-robust-planner-probe/summary.json` confirmed the main behavioral goal of this experiment: in a handcrafted staircase room, the classic planner only emitted the first edge (`surface:20:0->surface:17:10:jump-up:left`) while the robust planner returned a full exact 4-edge route up to the target surface (`surface:20:0 -> 17:10 -> 14:18 -> 11:26 -> 8:34`)
+  - next follow-up:
+    - test a real authored room with a placed Sword Hunter under `?swordHunterPlanner=robust` and inspect `window.get_sword_hunter_debug()` to see whether real stalls now become “robust exact route solved”, “robust fell back to classic”, or “robust exact route still missing because the graph/simulator is modeling the wrong world”
+    - if authored-room behavior improves materially, the next work should be trimming the cost of simulated edge checks and maybe broadening the simulator to include more runtime collision surfaces beyond raw terrain
+
+- Sword Hunter wall-route air-speed preservation on April 21, 2026:
+  - user reported that the latest live debug dump now showed a correct upper target surface plus an explicit wall route (`aiTraversalEdgeId: "surface:15:23->wall:right:18:13:jump-to-wall"`), but the enemy still looked like he was jumping wildly instead of reaching the wall and continuing the climb
+  - root cause: runtime execution was immediately clamping airborne horizontal steering back to the generic `SWORDSMAN_AI_AIR_SPEED = 88` even during active `jump-to-wall` and `wall-jump` traversal attempts, so the planner could pick a wall route that was physically reachable at launch speed but then get weakened mid-flight
+  - moved traversal-specific air-speed tuning into `src/enemies/swordsmanTuning.ts` and changed `src/scenes/overworld/liveObjects.ts` so airborne steering now preserves the stronger launch speed while an active traversal edge is a real `:jump-to-wall` or `:wall-jump` route, but still falls back to the normal air speed if the AI reverses direction midair
+  - practical effect: once the Sword Hunter commits to a wall route, generic `air-chase` steering should stop shaving horizontal momentum off that route before wall contact
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - targeted probe `output/web-game/sword-hunter-wall-route-air-speed-probe/summary.json` confirmed `jump-to-wall` preserves `118`, `wall-jump` preserves `150`, and opposite-direction midair steering still falls back to `88`
+    - required `develop-web-game` smoke ran against `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/sword-hunter-wall-route-air-speed-smoke/state-0.json` plus `shot-0.png`, and rendered the expected starfield browse boot with no smoke error file
+  - next follow-up: re-test the authored-room wall-route repro and check whether the same `jump-to-wall` edge now reaches wall contact; if it still misses, the next useful probe is to compare wall-route generation thresholds in `buildJumpToWallEdge(...)` against real in-room geometry rather than tuning air steering again
+
+- Sword Hunter airborne target-surface matching on April 21, 2026:
+  - user reported that after the route-choice fix, the remaining failure mode was back to “when I’m above him, he jumps under me again”; the debug dump showed `aiCurrentSegmentId: "surface:6:15"` with `aiTargetSegmentId: "surface:7:19"` and `aiTraversalEdgeId: "surface:6:15->surface:7:19:jump-gap:left"`, which pointed at target-surface selection rather than missing traversal memory
+  - root cause: `findTargetSurfaceSegment` in `src/enemies/swordsmanTraversal.ts` was still biased toward the nearest surface below the player's centerline, using `body.centerX` for horizontal admission; when the player was airborne above stacked nearby platforms, it could latch onto the lower surface instead of the upper support surface the player was actually over
+  - changed target-surface selection so it first reuses `findSurfaceSegmentNearBody(...)` with the player's full body footprint and support-style tolerances; only if that fails does it fall back to the older broader search, which now also uses the full body interval plus horizontal-overflow scoring instead of only `centerX`
+  - practical effect: when the player is on or just above an upper platform, the planner should keep targeting that upper support surface instead of deciding the lower platform under the player is the real destination and jumping underneath again
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - targeted probe `output/web-game/sword-hunter-airborne-target-probe/summary.json` confirmed an airborne target above stacked upper/lower platforms now resolves to `targetSegmentId: "surface:6:15"` rather than the lower `surface:7:15`
+    - required `develop-web-game` smoke ran against `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/sword-hunter-airborne-target-smoke/state-0.json` plus `shot-0.png`, and rendered the expected starfield browse scene
+  - next follow-up: if a live repro still shows a lower `aiTargetSegmentId` while the player is clearly above, expose the raw player body snapshot in `window.get_sword_hunter_debug()` so we can see whether the issue is now support matching or unexpected player-body placement relative to the room geometry
+
+- Sword Hunter drop-route scoring fix on April 21, 2026:
+  - user provided a live debug dump that finally pinned the bug down as a route-choice issue instead of missing memory: with `aiCurrentSegmentId: "surface:8:7"` and `aiTargetSegmentId: "surface:9:3"`, the planner was explicitly choosing `aiTraversalEdgeId: "surface:8:7->surface:9:3:drop:right"` even though the target platform was below-left
+  - root cause: `scoreTraversalPathEntry` in `src/enemies/swordsmanTraversal.ts` only scored the first edge by setup-point proximity to the enemy, so the search could prefer the nearest lip even when that meant moving away from the player before a drop
+  - changed first-edge scoring to include two new penalties: one for choosing a setup move whose direction opposes the target's horizontal direction when the player is meaningfully offset, and one for increasing the setup-point distance to the target compared with the enemy's current distance
+  - practical effect: when both left and right lips can eventually reach the same lower platform, the planner now prefers the lip that actually moves him toward the player instead of whichever lip happens to be a few pixels closer
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - targeted probe `output/web-game/sword-hunter-route-choice-probe/summary.json` confirmed the previously bad lower-left drop case now chooses `surface:8:7->surface:11:3:drop:left` with `directionX: -1`
+    - required `develop-web-game` smoke ran against `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/sword-hunter-route-choice-smoke/state-0.json` plus `shot-0.png`, and rendered the expected room-grid browse scene
+  - next follow-up: if the authored-room repro still finds a wrong lip, expose the first-edge path score components in debug or keep a tiny capped history of recent rejected setup edges so we can see whether scoring or cooldown expiry is still dominating
+
+- Sword Hunter traversal edge-id continuity and broader lip-stall blocking on April 21, 2026:
+  - user hit another “goes crazy on the edge” repro and the debug dump showed `aiIntent: "air-chase"` with `aiCurrentSegmentId` / `aiTargetSegmentId` present but `aiTraversalEdgeId: null`
+  - root cause: `buildDecisionFromFirstEdge` was still dropping the chosen edge id once a planned route entered airborne continuation, and the short no-progress blocker in `src/scenes/overworld/liveObjects.ts` was only watching synthetic `fallback-drop:*` edges rather than ordinary grounded setup/drop edges
+  - changed `src/enemies/swordsmanTraversal.ts` so real graph edges now keep `traversalEdgeId` and `traversalNextNodeId` during airborne `air-chase` continuation, and grounded `drop-down` decisions now also keep their edge id instead of clearing it at the commit point
+  - changed `src/scenes/overworld/liveObjects.ts` so the short no-progress blocker now applies to any grounded setup/drop route that still has a concrete `traversalEdgeId`, not just synthetic fallback-drop edges
+  - practical effect: when he reaches a lip while pursuing a real drop path, that path remains identifiable in debug and can now be cooled down if it keeps stalling on the same segment instead of degenerating into anonymous `air-chase` flailing
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - targeted probe `output/web-game/sword-hunter-edge-id-continuity-probe/summary.json` confirmed the same real drop edge id (`surface:8:12->surface:12:9:drop:left`) now survives from grounded setup (`same-platform`) into airborne continuation (`air-chase`)
+    - required `develop-web-game` smoke ran against `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/sword-hunter-edge-id-continuity-smoke/state-0.json` plus `shot-0.png`, and rendered the expected starfield browse scene
+  - next follow-up: if the live repro still gets stuck, expose the currently blocked edge ids in `window.get_sword_hunter_debug()` so we can tell whether he is genuinely exhausting options or repeatedly reselecting the same edge after cooldown
+
+- Sword Hunter fallback reroute memory on April 21, 2026:
+  - user provided richer debug dumps showing `aiState: "chase"` with valid `aiCurrentSegmentId` / `aiTargetSegmentId`, but `aiTraversalEdgeId: null`; that proved the live stalls were often happening in heuristic fallback behavior rather than on a real graph edge
+  - root cause: when graph search found no usable traversal edge, the lower-target fallback just said “drop toward the player” without turning that choice into an explicit route side or remembering whether that side had already failed
+  - changed `src/enemies/swordsmanTraversal.ts` so fallback drops now become explicit pseudo-edges like `fallback-drop:surface:8:12:left` or `...:right`, built only from genuinely open sides of the current surface and preserved even during the `same-platform` walk-to-setup phase
+  - changed `src/scenes/overworld/liveObjects.ts` so Sword Hunter runtime now tracks fallback side progress on the current segment; if a fallback side stops making progress for `480ms`, that pseudo-edge gets temporarily blocked using the same blocked-edge memory the jump system already uses, and planning is recomputed so the other side can be tried
+  - practical effect: if he keeps trying to get off a platform via one lip and that route goes nowhere, the next plan can choose the opposite lip instead of reissuing the same blind drop guess forever
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - targeted probe `output/web-game/sword-hunter-fallback-reroute-probe/summary.json` confirmed a no-edge source surface first chooses `fallback-drop:surface:8:12:left`, then flips to `fallback-drop:surface:8:12:right` once the left fallback edge is blocked
+    - required `develop-web-game` smoke ran against `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/sword-hunter-fallback-reroute-smoke/state-0.json` plus `shot-0.png`, and rendered the expected starfield browse scene
+  - next follow-up: re-test the authored room with the new `aiTraversalEdgeId` values visible during setup movement; if he still stalls, the next useful debug addition is the current blocked-edge list so we can tell whether he is out of real options or just scoring the wrong fallback side
+
+- Sword Hunter edge-guard tuning plus richer debug context on April 21, 2026:
+  - user verified with the temporary green body overlay that the remaining lip stalls were not really a collider-shape problem; the pasted repro snapshot showed `aiState: "chase"` plus `aiIntent: "air-chase"`, which meant the Sword Hunter was still airborne and steering in that frame rather than already frozen
+  - root cause for the actual edge-freeze cases was the Sword Hunter-specific ground-ahead guard in `src/scenes/overworld/liveObjects.ts`: while executing a grounded `same-platform` / `drop-down` setup, the guard was still probing `4px` beyond the front foot, so the AI could decide it needed one more step while physics had already started refusing that step
+  - added `SWORDSMAN_AI_EDGE_GUARD_PROBE_LEAD_PX = 1` and now pass that tighter lead distance only for Sword Hunter ground movement, letting him commit much closer to a lip before the edge guard stops him
+  - also expanded the Sword Hunter debug payload so `window.get_sword_hunter_debug()` and `OverworldPlayScene.describeState()` now expose `aiCurrentSegmentId`, `aiTargetSegmentId`, and `aiTraversalEdgeId`; future repro dumps can now distinguish bad route choice from a movement-guard stop immediately
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - artifact `output/web-game/sword-hunter-edge-guard-tuning/summary.json` records the Sword Hunter-only probe-lead change plus the newly exposed debug fields
+    - required `develop-web-game` smoke ran against `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/sword-hunter-edge-guard-smoke/state-0.json` plus `shot-0.png`, and loaded the expected browse scene; this generic smoke did not spawn a Sword Hunter, so its value here was regression coverage for the branch rather than behavior-level AI proof
+  - next follow-up: if another stall shows up, capture the enriched `window.get_sword_hunter_debug().swordsmen` dump at the exact freeze moment so we can see the current segment, target segment, and chosen traversal edge instead of inferring them from `aiIntent` alone
+
+- Sword Hunter temporary hitbox overlay on April 21, 2026:
+  - user asked to temporarily show the Sword Hunter hitbox while tuning traversal and drop behavior
+  - added a runtime rectangle helper in `src/scenes/overworld/liveObjects.ts` that attaches only to Sword Hunter live objects, is synced every frame to the actual Arcade body bounds, and renders as a translucent green rectangle with a green stroke
+  - also updated `src/scenes/OverworldPlayScene.ts` so those helper rectangles are ignored by the backdrop camera pass the same way other live-object display helpers are
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - artifact `output/web-game/sword-hunter-hitbox-overlay/summary.json` records the helper name and styling constants
+    - required `develop-web-game` smoke ran against `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/sword-hunter-hitbox-overlay-smoke/state-0.json` plus `shot-0.png`, and rendered the expected starfield browse scene
+  - next follow-up: once the remaining traversal bugs are understood, remove this overlay or gate it behind a proper debug toggle instead of leaving it always on
+
+- Sword Hunter lower-body hitbox alignment on April 21, 2026:
+  - user pointed out a likely root cause for several remaining traversal hiccups: the Sword Hunter collider still covered too much upper-body space compared to the player avatar, so while the planner might choose a valid ledge drop the physics body could still snag on nearby geometry
+  - root cause: `src/config.ts` still defined the Sword Hunter body as `14x24` at offset `(17, 16)`, much taller than the player's effective `10x14` lower-body collider
+  - changed the Sword Hunter object config to use a player-style lower-body collider: `bodyWidth: 10`, `bodyHeight: 14`, `bodyOffsetX: 19`, `bodyOffsetY: 26`
+  - this preserves the same feet position on the frame (`bottomInsetPx` stays `8`) while moving the collider top down by `10px`, so the head and torso can pass through overhangs the same way the player avatar does
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - artifact `output/web-game/sword-hunter-hitbox-tuning/summary.json` records the before/after Sword Hunter body metrics next to the player collider metrics
+    - required `develop-web-game` smoke ran against `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/sword-hunter-hitbox-smoke/state-0.json` plus `shot-0.png`, and rendered the expected starfield browse scene
+  - next follow-up: re-test the authored room that was hanging on ledge drops; if the last sticky cases remain, then the next likely target is route scoring rather than collision shape
+
+- Sword Hunter same-height gap-jump routing on April 21, 2026:
+  - user screenshots plus debug narrowed the new “stuck on the top floating platform” repro down to a missing move type, not a broken drop edge: the planner already knew how to `jump-up`, `drop-down`, and wall-jump, but it had no direct edge for jumping across a gap onto another platform at roughly the same height
+  - root cause: `buildJumpUpEdge` in `src/enemies/swordsmanTraversal.ts` rejected targets unless they were at least `10px` higher than the source surface, so same-height and slight-downward gap jumps fell back to worse multi-step routes like dropping away from the player
+  - changed traversal graph generation so adjacent same-height / slight-drop surfaces now emit a first-class `jump-gap` edge; execution still uses the existing live jump impulse, but the planner can now prefer the direct cross-gap route instead of detouring down to the floor
+  - also extended jump-attempt memory in `src/scenes/overworld/liveObjects.ts` so landing on the intended next traversal node counts as success even when there was little or no net vertical rise, which keeps valid gap jumps from being incorrectly marked as failed and temporarily blacklisted
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - probe `output/web-game/sword-hunter-gap-jump-probe/summary.json` confirmed the graph now creates `jump-gap` edges, returns a `same-platform` setup move toward the takeoff point from mid-platform, then flips to `jump-up` with `traversalEdgeId: "...:jump-gap:..."` once the Sword Hunter reaches the lip; the same probe also confirmed the landing node matcher resolves to the destination surface id
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - required `develop-web-game` smoke ran against `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/sword-hunter-gap-jump-smoke/state-0.json` plus `shot-0.png`, and rendered the expected starfield browse scene rather than a blank frame
+  - next follow-up: re-test the authored floating-platform room; if he still picks odd multi-step routes after this, expose the chosen first-edge id in `window.get_sword_hunter_debug()` so route scoring mistakes become obvious immediately
+
+- Sword Hunter open-ledge drop validation on April 21, 2026:
+  - user screenshot plus debug exposed a separate route-generation bug from the earlier lip-stall issue: the planner could choose `drop-down` toward a side that was not a real ledge at all, because `buildDropDownEdges` treated both ends of every surface segment as open drops
+  - root cause: drop-edge generation in `src/enemies/swordsmanTraversal.ts` did not verify whether the segment boundary actually opened into air or instead butted into taller same-row terrain from a neighboring column
+  - changed `buildDropDownEdges` to take the room snapshot and only generate a left/right drop edge when that boundary has no colliding terrain tile immediately adjacent on the same row
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - probe `output/web-game/sword-hunter-drop-open-edge-probe/summary.json` confirmed the earlier centered-below case still keeps the valid open-edge drop routes and still chooses the right-side drop when appropriate
+    - probe `output/web-game/sword-hunter-drop-wall-side-probe-2/summary.json` confirmed the fake left drop at the base of a taller left-hand wall is gone, leaving only the real right-side drop edge
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - required `develop-web-game` smoke ran against `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/sword-hunter-drop-side-fix-smoke/state-0.json` plus `shot-0.png`, and the screenshot rendered normally
+  - next follow-up: recheck the exact authored-room repro and, if route choices still look odd, expose the chosen first-edge id / segment ids in `window.get_sword_hunter_debug()` so we can separate bad target-surface selection from bad edge generation
+
+- Sword Hunter leading-edge setup fix on April 21, 2026:
+  - user debug showed a classic lip-stall case rather than lost aggro: `aiState: "chase"`, `aiIntent: "same-platform"`, and zero velocity while standing at a ledge
+  - root cause was that `buildDecisionFromFirstEdge` in `src/enemies/swordsmanTraversal.ts` still judged jump/drop setup readiness from `enemy.centerX`; when the Sword Hunter's front edge had already reached the takeoff/drop point but his center lagged a few pixels behind, traversal kept returning `same-platform` and the ground edge guard stopped him
+  - changed jump-up, jump-to-wall, and drop-down setup checks to use the leading body edge (`enemy.right` when moving right, `enemy.left` when moving left) instead of the center point
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - probe `output/web-game/sword-hunter-edge-setup-probe/summary.json` confirmed the former lip-stall cases now resolve to `drop-down` and `jump-up` instead of `same-platform`
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - required `develop-web-game` smoke wrote `output/web-game/sword-hunter-edge-lip-fix-smoke/state-0.json` plus `shot-0.png`; that particular capture landed during boot/loading rather than a gameplay frame, so the synthetic traversal probe is the reliable verification artifact for this fix
+  - next follow-up: recheck the user repro in a real authored room and, if any edge stalls remain, expose `currentSegmentId` / `targetSegmentId` in `window.get_sword_hunter_debug()` so route-selection mistakes are easier to distinguish from edge-guard stops
+
+- Sword Hunter console debug helper for editor play on April 21, 2026:
+  - clarified that editor "Test Play" already sleeps `EditorScene` and wakes `OverworldPlayScene`, so the existing live-object AI debug path should remain the source of truth even for anonymous editor testing
+  - added `window.get_sword_hunter_debug()` in `src/main.ts` plus its window typing in `src/vite-env.d.ts` so there is now a dedicated console helper for Sword Hunter state instead of requiring manual `render_game_to_text` JSON filtering
+  - helper behavior:
+    - returns `{ scene: 'editor', available: false, swordsmen: [] }` while still in pure editor mode
+    - returns `{ scene: 'overworld-play', available: true, swordsmen: [...] }` in overworld and editor Test Play, using the same live-object snapshot that already carries `aiState`, `aiIntent`, `aiTargetX`, and velocities
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - required `develop-web-game` smoke ran against `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/sword-hunter-editor-debug-smoke/state-0.json` plus `shot-0.png`, and the screenshot rendered normally
+    - targeted Playwright probe `output/web-game/sword-hunter-editor-debug-probe/summary.json` confirmed the helper reports `scene: 'editor'` before Test Play and `scene: 'overworld-play'` after triggering `#btn-test-play`
+  - next follow-up: if console-only inspection still feels too hidden, add a tiny optional on-screen label above Sword Hunters showing `aiState` and `aiIntent`
+
+- Sword Hunter explicit ledge-drop routing on April 21, 2026:
+  - found that the enemy's "can't get off a platform" behavior was mostly a planner problem, not a ground-movement problem: `allowEdgeDrop` already worked in the runtime, but `buildDropDownEdges` was rejecting many valid drops whenever the lower platform sat inward from the ledge, so traversal often fell back to a vague generic `drop-down` intent
+  - added shared drop-setup tuning in `src/enemies/swordsmanTuning.ts` and changed `src/enemies/swordsmanTraversal.ts` so drop routes now:
+    - generate from actual ledge-near setup points instead of broad surface anchors
+    - keep valid inward-air-steer drops instead of rejecting them on horizontal-sign mismatch
+    - use a tighter approach tolerance before committing to walk off the edge
+    - score candidate paths partly by how far the first setup point is from the enemy's current x-position, so when both sides can work the planner prefers the nearer ledge
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - probe `output/web-game/sword-hunter-drop-edge-probe/summary.json` confirmed a lower platform centered underneath now gets two explicit drop edges and an upper-platform enemy on the left half chooses the nearer left-edge setup instead of falling back to the generic drop decision
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - required `develop-web-game` smoke ran against `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/sword-hunter-drop-edge-smoke/state-0.json` plus `shot-0.png`, and the screenshot rendered normally
+  - next follow-up: verify in a real authored room whether live edge-drop chase now feels decisive enough, and if not, bias drop-route scoring further toward keeping horizontal drift small after the fall
+
+- Sword Hunter underside jump-route fix on April 21, 2026:
+  - confirmed the clean-branch port kept the existing Sword Hunter traversal feature set; the reported regression was a heuristic bug in `src/enemies/swordsmanTraversal.ts`, not a missing branch-port chunk
+  - changed `buildJumpUpEdge` so `jump-up` routes now require a setup point outside the target platform's actual underside footprint before the enemy will jump
+  - this prevents the old behavior where the Sword Hunter could stand directly under an upper platform, choose a straight-up interior jump, and spam repeated bonk jumps into the platform bottom
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - synthetic traversal probe `output/web-game/sword-hunter-jump-up-regression-probe/summary.json` confirmed the enemy now chooses `same-platform` sideways movement while directly under an overlapping upper platform, then switches to `jump-up` once it reaches a legal edge setup point
+    - required `develop-web-game` smoke ran against the clean branch at `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/sword-hunter-jump-up-fix-smoke/state-0.json` plus `shot-0.png`, and the screenshot rendered normally
+  - next follow-up: run an authored-room play-mode probe with a real placed Sword Hunter and confirm this fix also feels right in live chase behavior, especially when both left and right jump approaches are available
+
+- Sword Hunter failed-jump memory on April 21, 2026:
+  - kept the 3-edge traversal look-ahead, but added retry suppression so failed jump edges are temporarily filtered out instead of being retried immediately
+  - `src/enemies/swordsmanTraversal.ts` decisions now carry `traversalEdgeId`, and traversal search now accepts a blocked-edge set so the planner can reroute around recently failed edges
+  - `src/scenes/overworld/liveObjects.ts` now tracks active traversal jump attempts, detects ceiling bonks or low-progress landings, and puts the failed edge on a short cooldown before planning the next move
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - probe `output/web-game/sword-hunter-failed-jump-memory-probe/summary.json` confirmed that once the original `jump-up` edge is blocked, planning no longer returns that same edge and instead reroutes to a different first step
+    - required `develop-web-game` smoke ran against `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/sword-hunter-failed-jump-memory-smoke/state-0.json` plus `shot-0.png`, and only logged the expected local PartyKit websocket refusals on `127.0.0.1:1999`
+  - next follow-up: verify in a real authored room whether blocked-edge reroutes should prefer lateral repositioning over `jump-to-wall` alternatives when both are available
+
+- Sword Hunter jump-launch tuning on April 21, 2026:
+  - found that the jump planner was still too loose in two ways: it let `jump-up` launch from a broad setup window, and it allowed vertical rises above what the live jump physics can reliably clear
+  - added shared jump-tuning constants in `src/enemies/swordsmanTuning.ts` so traversal and live physics now agree on jump velocities and the planner's reliable jump-rise ceiling
+  - tightened `jump-up` setup behavior in `src/enemies/swordsmanTraversal.ts`:
+    - launch points now back off farther from the platform edge
+    - landing targets steer farther onto the platform instead of hugging the lip
+    - the enemy now has a narrow approach window and a tiny overshoot allowance before it will actually jump
+    - impossible `64px` rises no longer generate plain `jump-up` edges, while reachable `48px` rises still do
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - probe `output/web-game/sword-hunter-jump-setup-probe/summary.json` confirmed a reachable `48px` rise now uses a cleaner launch (`setupX: 190`, `targetX: 226`) while an unreachable `64px` rise gets no `jump-up` edge
+    - required `develop-web-game` smoke ran against `http://127.0.0.1:3002/?previewSmoke=1&renderer=canvas`, wrote `output/web-game/sword-hunter-jump-setup-smoke/state-0.json` plus `shot-0.png`, and produced no console-error artifact
+  - next follow-up: verify with a real placed Sword Hunter whether the tighter setup window removes the “almost makes it” platform misses in authored rooms, and decide whether `jump-to-wall` should be deprioritized after a failed ledge approach
+
+- Sword Hunter clean branch extraction on April 21, 2026:
+  - created clean `main`-based worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-sword-hunter` on branch `feature/sword-hunter-ai-2026-04-21`
+  - ported only the Sword Hunter feature from the dirty mixed branch: new `src/enemies/swordsmanAi.ts`, `src/enemies/swordsmanTraversal.ts`, `public/assets/enemies/swordsman_ai/`, BootScene animation preload/registration, object config entry, editor/display-scale preview hooks, overworld live-object AI/traversal integration, and debug state fields
+  - left the old dirty branch `feature/claim-quota-ghost-claims-2026-04-10` untouched; it remains reference-only for this feature
+  - validation:
+    - reused the original worktree toolchain by symlinking `node_modules` into the clean worktree
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - required `develop-web-game` client ran against the clean branch on `http://localhost:3002/`; remote-backed state dumps confirmed the overworld loaded at `output/web-game/sword-hunter-branch-port-smoke-remote/state-0.json`
+    - the web-game client's canvas screenshots stayed black in both headless and headed runs, matching the existing black-frame capture artifact rather than a branch-specific render failure
+    - fallback Playwright page screenshots verified visible browse-mode rendering at `output/web-game/sword-hunter-branch-page-screenshot.png` and `output/web-game/sword-hunter-branch-page-screenshot-closed.png`
+  - next follow-up: continue Sword Hunter gameplay/pathing work only on `feature/sword-hunter-ai-2026-04-21`, and use a deeper authored-room play-mode probe if we want behavior-level verification instead of branch-isolation validation
+
 - Music editor note-pitch hardening on April 19, 2026:
   - created branch `fix/music-editor-bugs` from `main` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-music-editor-bugs`
   - changed tonal pattern tracks to persist the user-entered MIDI note alongside the editor grid row, so octave / scale-lock / chromatic / key UI changes no longer redefine already-authored bass, saw, square, or melody notes
@@ -8405,3 +8976,1502 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - production Worker deploy succeeded at version `4f79a98b-8d3d-4fd9-bcfe-02da7b08fe16`
     - production Pages deploy succeeded at `https://4736ab75.wampland.pages.dev` for `https://wamp.land`
     - `scripts/smoke_prod.mjs` passed against `https://wamp.land` and `https://api.wamp.land`
+
+- Sword Hunter collect-mode node/surface target grouping on April 22, 2026:
+  - user retried the collect-race hallway repro and reported the earlier route-aware nearest-coin fix was still too coin-local: the hunter could still get stuck preferring coins on another level instead of backing out to a better access surface
+  - changed `src/scenes/overworld/liveObjects.ts` so `getSwordsmanCollectObjectiveTarget(...)` now groups collectibles by traversal target node/surface before planning
+  - collect mode now keeps one representative collectible per target node, counts how many collectibles share that node, and scores those grouped node candidates with `planSwordsmanRobustTraversal(...)`
+  - exact reachable node routes are still preferred first, but dense coin clusters now only help through a bounded node bonus instead of flooding the shortlist with many individually-near bodies
+  - practical effect: the hunter should reason more like \"which collectible-bearing level/surface can I sensibly get to next?\" rather than \"which single coin body is closest right now?\"
+  - validation so far: `npm run typecheck` passed; `git diff --check` passed
+
+- Sword Hunter collect-mode access-surface targeting on April 22, 2026:
+  - user reported a new live collect-race dump where the hunter was still stuck, but this time the debug showed `aiCurrentSegmentId === aiTargetSegmentId`, `aiIntent: "same-platform"`, and `aiRouteLoopCount: 4`
+  - root cause was narrower than before: for floating collectibles, collect mode was still handing traversal the raw collectible body, so target-surface matching could classify a coin onto the hunter's current surface even when standing on that surface could not actually collect it
+  - changed `src/enemies/swordsmanObjectives.ts` and `src/scenes/overworld/liveObjects.ts` so collect targets can now carry an optional traversal snapshot separate from the real collectible body
+  - collect-mode target selection now computes a synthetic on-surface access snapshot for each collectible when possible, and traversal/planning uses that access snapshot while collection still uses the real coin body
+  - added a same-node loop penalty for collect mode, so after the hunter has already proven it is looping on `currentNode -> currentNode`, those same-node collectible candidates are strongly deprioritized
+  - practical effect: the hunter should reason about "where do I need to stand to collect this coin?" rather than "what surface does the coin sprite seem nearest to?"
+  - validation: `npm run typecheck` passed; `git diff --check` passed
+
+- Sword Hunter collect-mode same-surface jump collection on April 22, 2026:
+  - user retried after the access-surface patch and reported the hunter was still stuck at room `6,4`; the new debug still showed `aiCurrentSegmentId === aiTargetSegmentId`, `aiIntent: "same-platform"`, and `aiPlannerMode: "classic"`
+  - inspecting the live room data showed the stuck zone is a dense floating coin cloud near local `x 520-632, y 184-248` above / around a long platform, so this is not just a wrong-surface routing problem
+  - root cause: the traversal system only knew how to run along the same surface or route to another surface; for collect mode it had no local behavior for "coin is above me on this same platform, jump up into it"
+  - changed `src/scenes/overworld/liveObjects.ts` so collect mode now converts same-surface floating-coin targets into an align-under-it then `jump-up` decision when the coin is meaningfully above the hunter but horizontally aligned enough
+  - also changed jump/wall-jump impulse application to respect `decision.jumpVelocityX` / `decision.jumpVelocityY`, which allows collect mode to request a straight-up or lightly-directed jump instead of always forcing full horizontal jump speed from `directionX`
+  - practical effect: the hunter should no longer sit under a floating same-platform coin cluster forever; once aligned, he can actually hop into the coins instead of only pacing below them
+  - validation: `npm run typecheck` passed; `git diff --check` passed
+
+- Sword Hunter collect-mode forced robust planner + same-node-below penalty on April 22, 2026:
+  - user retried after the same-surface jump fix and reported the hunter was improved but stuck in a new place near local `x≈216`; the dump still showed `aiPlannerMode: "classic"`, `aiCurrentSegmentId === aiTargetSegmentId`, and `aiIntent: "same-platform"`
+  - inspecting the room data showed another dense same-column coin field in that zone, with coins both above and below the hunter's lane plus nearby saw hazards
+  - changed `src/scenes/overworld/liveObjects.ts` so collect-mode swordsmen now always use the robust planner path even if the global query flag is still on classic
+  - also added a strong target-selection penalty for same-node collectible candidates that are actually below the hunter and not already within collection range, so collect mode stops fixating on impossible `same-platform` / `same-node` downward targets in dense coin clouds
+  - practical effect: collect mode should stop silently regressing to the classic planner path, and same-node target choice should bias toward reachable local-jump / local-run collectibles instead of below-lane traps
+  - validation: `npm run typecheck` passed; `git diff --check` passed
+
+- Sword Hunter collect-mode reachable same-surface target fix on April 22, 2026:
+  - user reported a newer room `6,4` collect-mode dump where the hunter was still getting stuck, this time with `aiPlannerMode: "robust"`, `aiPlannedTraversalReason: "same-surface"`, `aiCurrentSegmentId === aiTargetSegmentId`, `aiTraversalEdgeId: null`, and `aiTargetX` set to an edge coin's raw X
+  - inspecting the top-left coin cluster showed the likely failure mode: collect mode could still steer toward a raw coin center that sits off the walkable part of the platform, so the edge guard would stop movement before the hunter ever reached the requested `same-platform` target
+  - changed `src/scenes/overworld/liveObjects.ts` so collect traversal now always resolves a reachable standing snapshot for planning when objective mode is `collect`, even if no explicit override was passed in that call path
+  - also changed the collect same-surface jump/alignment helper to use the reachable traversal snapshot X instead of the literal coin center when deciding where to stand or jump from
+  - practical effect: same-surface collect decisions should now target the nearest reachable collection point on the platform rather than trying to walk off the lip toward an impossible coin center
+  - validation: `npm run typecheck` passed; `git diff --check` passed
+  - smoke note: reran the required Playwright client; it still booted only into unauthenticated browse mode, and the headless screenshot remained black, but the build stayed healthy and the latest artifacts were copied to `output/web-game/sword-hunter-collect-reachable-target-smoke/`
+
+- Sword Hunter jump-setup edge-guard relaxation on April 22, 2026:
+  - user pasted a newer collect-mode dump from room `6,4` showing a different failure shape:
+    - `aiPlannerMode: "robust"`
+    - `aiIntent: "same-platform"`
+    - `aiTraversalEdgeId: "surface:4:1->surface:1:0:jump-up:right"`
+    - non-empty planned route ending at a higher target segment
+  - that pointed to a runtime setup issue rather than target selection: the hunter had a jump route, but was still only trying to walk into jump setup on the lower platform
+  - likely cause: the normal edge guard could stop the hunter one step before the jump setup point if that setup lived close to a platform lip, which would make jump-up setup behave like a permanent `same-platform` stall
+  - changed `src/scenes/overworld/liveObjects.ts`:
+    - `moveSwordsmanAlongGround(...)` now accepts the active traversal decision
+    - added `shouldAllowSwordsmanJumpSetupEdgeApproach(...)`
+    - when the hunter is on the floor, in `same-platform` setup for a `jump-up` / `jump-gap` / `jump-to-wall` edge, and only has a small remaining setup distance left, the edge guard now allows that last setup approach instead of freezing him at the lip
+  - practical effect: jump setups near platform edges should be able to complete and actually launch, while normal edge safety for patrol/chase is unchanged
+  - validation: `npm run typecheck` passed; `git diff --check` passed
+  - smoke note: reran the required Playwright client and copied the latest default artifacts to `output/web-game/sword-hunter-jump-setup-edge-guard-smoke/`; it still only reached unauthenticated browse mode
+
+- Sword Hunter collect exact-route scan across all grouped node targets on April 22, 2026:
+  - user then reported another dump from room `6,4` where the hunter was no longer stuck on raw edge targeting, but had fallen back to classic again:
+    - `aiPlannerMode: "robust"`
+    - `aiPlannerFallback: true`
+    - `aiPlannedTraversalReason: "fallback-classic"`
+    - target segment from the fallback decision was a lower collectible surface
+  - direct repro in the room graph showed the real issue:
+    - from a similar top-left position, robust can find an exact route to an upper collectible surface
+    - but it returns `null` for some nearer lower collectible surfaces
+    - collect target selection was still only planning the nearest grouped node candidates (`18`), so a nearby unreachable lower cluster could beat a farther-but-exact upper route simply because the upper route never got evaluated
+  - changed `src/scenes/overworld/liveObjects.ts` so `getSwordsmanCollectObjectiveTarget(...)` now scans all grouped collectible node candidates for exact robust routes
+  - the old shortlist limit is still used for approximate / unplanned fallback candidates, so we widened exact-route discovery without fully unbounding the weaker fallback path
+  - practical effect: if there is any exact reachable grouped collectible target in the room, collect mode should now prefer that over a nearer unreachable cluster that would only force robust to fall back to classic
+  - validation: `npm run typecheck` passed; `git diff --check` passed
+  - smoke note: reran the required Playwright client and copied the latest default artifacts to `output/web-game/sword-hunter-collect-exact-target-scan-smoke/`; it still only reached unauthenticated browse mode
+
+- Sword Hunter airborne robust hold / edge reuse on April 22, 2026:
+  - user then reported a new dump where the hunter was airborne with `aiPlannerMode: "robust"` but had already fallen back to classic again:
+    - `aiIntent: "air-chase"`
+    - `aiPlannerFallback: true`
+    - `aiPlannedTraversalReason: "fallback-classic"`
+    - `aiActiveTraversalEdgeId: null`
+    - non-null `aiTraversalEdgeId` from the current fallback decision
+  - root cause: robust was still trying to solve a fresh path every airborne frame when there was no active traversal lock, and if that replan failed it immediately dropped back to classic mid-flight
+  - changed `src/scenes/overworld/liveObjects.ts` so robust no longer replans while airborne:
+    - if there is an active traversal edge, it keeps using that (existing behavior)
+    - otherwise, if the previous frame already had a traversal edge, robust now reuses that edge in the air with reason `airborne-reuse-edge`
+    - if there is no previous traversal edge, robust now returns a simple `air-chase` hold with reason `airborne-hold` instead of falling back to classic midair
+  - practical effect: once the hunter has launched, midair behavior should stay consistent until landing rather than snapping into a brand-new classic decision every frame
+  - validation: `npm run typecheck` passed; `git diff --check` passed
+  - smoke note: reran the required Playwright client and copied the latest default artifacts to `output/web-game/sword-hunter-airborne-robust-hold-smoke/`; it still only reached unauthenticated browse mode
+
+- Sword Hunter targeted traversal miss detection on April 23, 2026:
+  - user shared another room `6,4` dump plus screenshot and wondered whether the collect AI needs randomness because it still gets stuck too easily
+  - the dump showed the hunter was in a committed active jump edge (`aiActiveTraversalEdgeId` and `aiActiveTraversalNextNodeId` both set), trying a fragile top-left jump in a very dense collectible room
+  - found a more direct cause than randomness:
+    - `updateSwordsmanTraversalMemory(...)` considered a targeted traversal successful after landing if the hunter achieved enough vertical rise, even when it did not land on the expected `aiActiveTraversalNextNodeId`
+    - that let missed jumps clear as "success" instead of blacklisting the bad edge, so the planner could keep choosing the same brittle route
+  - changed `src/scenes/overworld/liveObjects.ts` so if an active traversal has an expected next node, landing on any other node now blocks that traversal edge with reason `missed-traversal-target`
+  - the older vertical-rise success fallback still exists only for traversal attempts that do not have a specific expected next node
+  - practical effect: this should produce the "try something else" behavior the user was reaching for, but deterministically: bad targeted jumps become blocked edges, so the collect target selector/planner has to choose another route instead of repeating the same miss
+  - validation: `npm run typecheck` passed; `git diff --check` passed
+  - smoke note: reran the required Playwright client and copied the latest default artifacts to `output/web-game/sword-hunter-targeted-jump-failure-smoke/`; it still only reached unauthenticated browse mode
+
+- Sword Hunter stale airborne-edge reuse guard on April 23, 2026:
+  - user shared a new screenshot/map and dump showing a repeated deterministic top-left route:
+    - `aiIntent: "air-chase"`
+    - `aiPlannedTraversalReason: "airborne-reuse-edge"`
+    - `aiActiveTraversalEdgeId: null`
+    - `aiPlannedTraversalEdgeIds: []`
+    - stale `aiTraversalEdgeId` still pointing at the old jump-up route
+  - root cause: the previous airborne-reuse patch was too permissive; it reused the previous frame's traversal edge whenever airborne, even after the active attempt and planned route had already been cleared
+  - changed `src/scenes/overworld/liveObjects.ts` so airborne edge reuse only happens if the previous edge is still the first edge of the committed planned route and is not currently blocked
+  - if the planned route has been cleared or the edge was blocked, robust now uses the safer `airborne-hold` path instead of steering along stale route data
+  - practical effect: once a fragile jump route has been invalidated, the hunter should stop clinging to that same airborne edge and be able to choose a different route after landing
+  - validation: `npm run typecheck` passed; `git diff --check` passed
+  - smoke note: reran the required Playwright client and copied the latest default artifacts to `output/web-game/sword-hunter-airborne-stale-edge-guard-smoke/`; it still only reached unauthenticated browse mode
+
+- Sword Hunter collect same-surface group-center targeting on April 23, 2026:
+  - user reported the exact same repeated route and pasted a dump showing the hunter grounded on the upper-left surface with:
+    - `aiIntent: "same-platform"`
+    - `aiTargetX: 8`
+    - `aiCurrentSegmentId === aiTargetSegmentId`
+    - `aiPlannedTraversalReason: "same-surface"`
+  - root cause: collect-mode node grouping was still choosing the nearest coin as the representative for a same-surface group, so one leftover edge coin could make the whole surface target point backward toward the lip even when the same surface still contained many reachable coins ahead
+  - changed `src/scenes/overworld/liveObjects.ts` so grouped collect candidates now accumulate traversal-center X positions
+  - for multi-coin groups on the hunter's current node, the representative traversal snapshot is adjusted to the group's average reachable X instead of the nearest coin's X
+  - practical effect: same-surface collect groups should steer the hunter through the coin cluster instead of backtracking to a single brittle edge coin first
+  - validation: `npm run typecheck` passed; `git diff --check` passed
+  - smoke note: reran the required Playwright client and copied the latest default artifacts to `output/web-game/sword-hunter-collect-current-node-center-smoke/`; it still only reached unauthenticated browse mode
+
+- Sword Hunter collect route setup/backtrack cost on April 23, 2026:
+  - user captured a full sequence of debug dumps showing the route choice before the final stuck point:
+    - the hunter correctly sweeps same-surface coins on `surface:7:2`
+    - then suddenly chooses `surface:7:2->surface:4:17:jump-up:left`
+    - that route forces a long run backward to setup point `aiTargetX: 254` even though visually there are dense coins ahead
+  - root cause: collect target scoring was using raw coin distance, edge count, and cluster bonus, but it did not price the first edge setup distance enough
+  - changed `src/scenes/overworld/liveObjects.ts` so collect target scoring now adds:
+    - a setup-distance penalty for the first planned edge
+    - an extra backtrack penalty when that setup point is behind the hunter's current movement direction beyond a small grace distance
+  - practical effect: a one-edge upward route that requires a long turn-around/backtrack should no longer beat forward/local alternatives merely because it has a short edge count or dense coin cluster
+  - validation: `npm run typecheck` passed; `git diff --check` passed
+  - smoke note: reran the required Playwright client and copied the latest default artifacts to `output/web-game/sword-hunter-collect-backtrack-cost-smoke/`; it still only reached unauthenticated browse mode
+
+- Sword Hunter collect route escape pressure on April 23, 2026:
+  - user shared another long sequence from room `6,4`; the route changed a little but still followed a similar deterministic climb:
+    - same-surface collection on `surface:7:2`
+    - long backward setup into `surface:7:2->surface:4:17:jump-up:left`
+    - later another upward/backward route from `surface:4:17`
+  - root cause: the collect selector was still underpricing real route travel/setup cost, and it always preferred an exact route over any approximate route even after the exact route had become a repeated/expensive choice
+  - changed `src/enemies/swordsmanRobustPlanner.ts` to expose the selected robust plan's internal `routeCost`
+  - changed `src/scenes/overworld/liveObjects.ts` so collect target scoring now adds:
+    - a route-cost penalty from the robust planner
+    - a hard penalty for long backward first-edge setup routes
+    - a repeated current-node-to-target-node penalty once route loop memory has seen the same route stall
+  - changed collect target selection so a heavily penalized exact route can lose to a better-scored partial robust route instead of exact always winning; totally unplanned raw fallbacks still only apply when no planned target exists
+  - practical effect: this is deterministic "try something else" pressure, not raw randomness; if the hunter starts repeating `surface:7:2->surface:4:17`, that target should stop winning before the full stuck-edge block kicks in
+  - validation: `npm run typecheck` passed; `git diff --check` passed
+  - smoke note: reran the required Playwright client and copied artifacts to `output/web-game/sword-hunter-collect-route-escape-cost-smoke/`; the automated run still only reached unauthenticated browse/inspect mode with an empty room, so manual testing via the debug room is still needed
+
+- Sword Hunter collect forward exploration fallback on April 23, 2026:
+  - user reported no meaningful behavior change and pasted a fresh sequence from room `6,4`
+  - the dumps showed two remaining issues:
+    - the hunter still left `surface:7:2` for exact upward routes (`surface:7:2->surface:4:1` and then `surface:7:2->surface:4:17`) even though those required a long backward setup
+    - after landing on `surface:4:17`, a same-surface coin jump near the right edge produced untracked `airborne-hold` movement
+  - changed `src/scenes/overworld/liveObjects.ts` so collect target selection now tracks a forward same-or-lower "explore" target across all candidates
+  - if the best exact route is a bad collect route (long backward setup, repeated route, or upward climb with setup travel), that explore target can override it even when it is not an exact robust graph route
+  - this intentionally lets the hunter keep sweeping dense forward/lower coin lanes instead of treating an exact upward route as mandatory
+  - also guarded same-surface collect jumps near surface edges, so a coin directly overhead at a lip should no longer launch him into uncontrolled airborne steering
+  - validation: `npm run typecheck` passed; `git diff --check` passed
+  - smoke note: reran the required Playwright client and copied artifacts to `output/web-game/sword-hunter-collect-forward-explore-smoke/`; it still only reached unauthenticated browse/inspect mode with an empty room
+
+- Sword Hunter collect state machine refactor on April 23, 2026:
+  - user correctly called out that the last few changes were accumulating rules instead of addressing the underlying design issue
+  - conclusion from the latest dumps:
+    - collect mode was still using a chase-style loop: pick a coin/group, route to it, then immediately re-evaluate after each pickup
+    - collecting a coin also cleared traversal state and zeroed horizontal velocity, which could interrupt route setup/jump attempts
+    - this produced inconsistent traces such as planning one route, collecting a coin, then ending up with a different active traversal edge
+  - changed `src/scenes/overworld/liveObjects.ts` to make collect target selection higher-level:
+    - current-node sweep is chosen first, so the hunter harvests the current platform/lane before routing away
+    - route targets are now committed via `aiCollectRouteTargetNodeId`/`aiCollectRouteExpiresAt`, so collecting a coin while travelling no longer causes immediate route churn
+    - route selection now only commits exact robust routes to target nodes; the previous forward-explore and repeated-route penalty hacks were removed
+    - collecting a coin no longer clears objective traversal state
+    - collecting a coin no longer zeroes horizontal velocity while an active traversal is in progress or while airborne
+  - added debug fields in `src/scenes/OverworldPlayScene.ts`:
+    - `aiCollectState`
+    - `aiCollectRouteTargetNodeId`
+    - `aiCollectRouteExpiresMs`
+  - practical effect: future dumps should distinguish sweep vs route behavior and should show whether the hunter stays committed to `surface:10:2` or another route target after incidental pickups
+  - validation: `npm run typecheck` passed; `git diff --check` passed
+  - smoke note: reran the required Playwright client and copied artifacts to `output/web-game/sword-hunter-collect-state-machine-smoke/`; automated smoke still only reaches unauthenticated browse/inspect mode, so manual room testing is still required
+
+- Sword Hunter collect route lock follow-up on April 23, 2026:
+  - user tested the state-machine refactor and the route was still effectively the same
+  - the new debug fields exposed the underlying mistake:
+    - collect route committed to `surface:4:17`
+    - while the jump to `surface:4:17` was active, the target coin/candidate disappeared
+    - selector then retargeted to `surface:4:1` before the active traversal landed, producing mismatched debug (`aiActiveTraversalNextNodeId: "surface:4:17"` while `aiCollectRouteTargetNodeId: "surface:4:1"`)
+  - changed `src/scenes/overworld/liveObjects.ts` so active traversal target nodes now win target selection even if there are no remaining coins grouped on that node
+  - if a committed route target has no remaining coin candidate, collect mode now creates a temporary node-based traversal target instead of clearing the route immediately
+  - removed the old same-surface collect jump adjustment entirely; overhead same-surface coins now receive a sweep penalty instead of causing local `jump-up` impulses that led to `airborne-hold`
+  - practical effect: a jump already committed to `surface:4:17` should finish as a route to `surface:4:17`; incidental pickups should not retarget it to `surface:4:1` midair, and edge/overhead coin jumps should stop injecting new airborne states
+  - validation: `npm run typecheck` passed; `git diff --check` passed
+  - smoke note: reran the required Playwright client and copied artifacts to `output/web-game/sword-hunter-collect-route-lock-smoke/`; automated smoke still only reaches unauthenticated browse/inspect mode
+
+- Sword Hunter collect concrete sweep targets on April 23, 2026:
+  - user tested again and the new dump showed the route lock was behaving, but the hunter still got stuck after landing on `surface:4:17`
+  - the key pattern in the dump:
+    - route commit to `surface:4:17` stayed stable during the jump
+    - after landing, collect mode switched back to `aiCollectState: "sweep"`
+    - then `aiRouteLoopCount` climbed while `aiCurrentSegmentId` and `aiTargetSegmentId` both stayed `surface:4:17`
+    - `aiTargetX` hovered at the same local X while facing flipped left/right frame to frame
+  - root cause: current-platform sweep was still scoring grouped node candidates, so the hunter could chase an averaged same-node representative instead of a real collectible reach point
+  - changed `src/scenes/overworld/liveObjects.ts` so collect mode now tracks concrete same-node sweep candidates directly from individual collectibles
+  - grouped node candidates are still used for off-node route planning and route commitment, but current-node sweep now scores exact collectible traversal snapshots instead of grouped averages
+  - practical effect: after landing on a platform like `surface:4:17`, sweep should target a real collectible reach point on that platform rather than oscillating around a synthetic group center
+  - validation: `npm run typecheck` passed; `git diff --check` passed
+  - smoke note: reran the required Playwright client and copied the latest default artifacts to `output/web-game/sword-hunter-collect-concrete-sweep-smoke/`; automated smoke still only reached unauthenticated browse/inspect mode
+
+- Sword Hunter collect synthetic repro + selector/traversal fixes on April 23, 2026:
+  - safety no longer had a published `collect_race` room or a placed collect-mode swordsman, so I built a deterministic synthetic repro by loading published room `6,4` through the editor direct-room path, injecting a collect-mode swordsman, and starting play from there
+  - that repro finally exposed a concrete target-selection bug:
+    - while stuck on `surface:10:2`, collect mode was explicitly choosing a coin below the platform as a `same-surface` sweep target because `getSwordsmanCollectObjectiveTarget(...)` fell back to the raw collectible body whenever no standing pickup snapshot existed
+  - changed `src/scenes/overworld/liveObjects.ts` so collect mode now ignores non-standable collectibles as explicit sweep/route targets instead of letting their raw body snapshot masquerade as a current-node target
+  - the same synthetic run then exposed a second issue in route execution:
+    - the repeated-route blocker was incrementing on a timer even while the hunter was making real progress toward the jump setup point, which let legitimate route edges get blacklisted mid-approach
+  - changed `src/scenes/overworld/liveObjects.ts` so route-loop memory once again respects setup-distance progress before counting a stalled repeat window
+  - a later late-phase trace showed jump-type edges still getting stuck in `same-platform` correction when the hunter was only a few pixels past the setup point, so he kept backing up instead of launching
+  - changed `src/enemies/swordsmanTuning.ts` and `src/enemies/swordsmanTraversal.ts` to add a separate, slightly wider overshoot tolerance for jump-type edge launches without loosening drop-lip correction
+  - validation:
+    - `npm run typecheck` passed after each patch
+    - `git diff --check` passed after each patch
+    - repeated synthetic Playwright repro against local `3002` + worker `8788` no longer reproduced the original late `surface:10:2` hard stall; the hunter now moves across `surface:7:0`, `surface:4:14`, back through `surface:7:0`, and into `surface:10:2`, collecting about `268` items over a 50-second run instead of freezing in place
+  - remaining risk:
+    - there is still a long no-pickup route churn window around `surface:4:14` / `surface:7:0` in the synthetic room, so the collector looks materially less stuck but not fully solved yet
+  - next follow-up:
+    - have the user retry the real room and paste a fresh `window.get_sword_hunter_debug()` dump if there is still a visible stall
+    - if the remaining churn is still a problem, the next place to look is collect-route commitment / retargeting between upper nodes like `surface:4:0` and `surface:3:31`, not the old same-surface coin selector
+
+- Sword Hunter wall-route completion fix on April 23, 2026:
+  - user retried the live room and shared a longer dump that narrowed the remaining hard stall to wall traversal, not same-surface sweep:
+    - the hunter eventually routed from `surface:10:2` to `surface:7:35`
+    - then entered active `jump-to-wall` traversal with `aiActiveTraversalEdgeId: "surface:7:35->wall:left:39:3:jump-to-wall"`
+    - subsequent dumps showed `aiCurrentSegmentId: "wall:left:39:3"` and `aiActiveTraversalNextNodeId: "wall:left:39:3"` at the same time, but the active traversal edge never cleared
+  - root cause: `updateSwordsmanTraversalMemory(...)` only considered a traversal attempt complete after the grace window if the swordsman was on the floor; that is correct for jumps to surfaces, but wrong for `jump-to-wall` because wall contact is the success condition
+  - changed `src/scenes/overworld/liveObjects.ts` so after the normal jump-result grace window, a `jump-to-wall` traversal is cleared as soon as the current traversal node matches the active target wall node, even while airborne / wall-contacting
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check` passed
+  - note:
+    - the direct browser-side synthetic wall probe was noisy because the injected room flow did not consistently expose the same live object state on demand, but the runtime condition in the user's dump exactly matched the now-fixed code path
+  - next follow-up:
+    - have the user retry and watch whether the hunter now transitions off wall nodes into the next planned `wall-jump` / surface step instead of hanging on a completed `jump-to-wall`
+
+- Sword Hunter planned wall-route handoff fix on April 24, 2026:
+  - user tested the safety D1 collect-race room `6,5` and pasted a dump showing two distinct signals:
+    - plain same-surface sweep on `surface:20:1` was incrementing `aiRouteLoopCount` even though no traversal edge was active and the hunter was walking through targets
+    - the actual stall remained the wall-route sequence: planned route `surface:20:1->wall:right:0:15:jump-to-wall`, then `wall:right:0:15->surface:17:3:wall-jump`, but the decision loop could return `active-traversal` / `airborne-hold` before advancing the planned route after wall contact
+  - changed `src/scenes/overworld/liveObjects.ts` so robust planning advances the planned route before airborne handling, clears completed `jump-to-wall` attempts as soon as the current node is the target wall node, and allows an airborne planned edge whose `fromId` matches the current node to run immediately
+  - changed the route-loop monitor so decisions with no `traversalEdgeId` clear loop memory instead of incrementing a misleading same-surface loop count
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - required Playwright client was run against `http://127.0.0.1:3002/?swordHunterPlanner=robust&x=6&y=5&renderer=canvas`; artifact path: `output/web-game/sword-hunter-wall-handoff-2026-04-24/`
+    - agent-browser debug probe on the same room showed the hunter had advanced past the earlier `surface:20:1 -> wall:right:0:15 -> surface:17:3` route and was later planning onward from `surface:17:3`
+  - notes:
+    - the Playwright client captured gameplay but reported a generic 503 resource console error and only one text-state iteration; agent-browser was used for the reliable `window.get_sword_hunter_debug()` probe
+    - a long async agent-browser sampler hung and was killed; avoid page-side timer loops for this app, use repeated short `wait` + `eval` calls instead
+
+- Sword Hunter collect route commitment follow-up on April 24, 2026:
+  - user asked whether the player position affects the collect-mode swordsman after seeing more backtracking in room `6,5`
+  - code check: collect-mode targeting does not call `getPlayerBody()`; only duel mode targets the player, so any apparent player influence is timing / camera / room-streaming side effect rather than collector target selection
+  - the new dump showed two runtime issues:
+    - a just-started active traversal could lose its planned route when Arcade still reported floor contact and a same-surface sweep decision cleared planned traversal state
+    - the collect route target could stay committed while the lower-level robust planned route expired after the short 900ms robust window, causing route alternation before the hunter reached setup
+  - changed `src/scenes/overworld/liveObjects.ts` so active traversal edges are honored before same-surface sweep handling, even if the body still reports floor contact
+  - changed robust airborne handling so wall-contact nodes can replan from the wall and immediately issue the next wall-jump instead of falling into empty-route `airborne-hold`
+  - changed collect-mode robust route lifetime to use the collect route commitment window, and increased `SWORDSMAN_AI_COLLECT_ROUTE_COMMIT_MS` from `3600` to `7200` so long setup walks do not expire just before launch
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - required Playwright client was rerun; latest artifact path: `output/web-game/sword-hunter-long-collect-commit-2026-04-24/`
+    - fresh agent-browser sampling showed planned route expiry in the multi-second range (`planMs` around `4-6s`) instead of the sub-second churn from the user's dump, and active traversal retained its planned follow-up route
+  - remaining tuning risk:
+    - after failed upper-route traversal attempts, the planner can still choose between multiple valid routes to the same target node; if this still looks wasteful, the next fix should bias reuse of the previous exact route while `aiCollectRouteTargetNodeId` is unchanged, rather than retuning player interaction
+
+- Sword Hunter collect waste/backtracking follow-up on April 24, 2026:
+  - user reported that the room `6,5` collector still looked wasteful: it backtracked through already-collected space and ignored nearer productive routes
+  - browser sampling before the final patch showed the hunter collecting quickly at first, then stalling around the upper-route handoff while alternating between failed `jump-up` and wall routes
+  - changed `src/scenes/overworld/liveObjects.ts` so collect-mode current-node sweep wins before a still-committed off-node route, which lets local remaining coins interrupt a longer route commitment without deleting the route prematurely
+  - tuned collect route scoring to reduce distant cluster lure and increase penalties for route edge count, setup walking, backtracking, and upward routes
+  - added a collect-specific failed traversal block duration (`6400ms`) so a missed collect traversal is not retried almost immediately
+  - added route-detach handling: if a collect route's remaining planned edge no longer connects to the hunter's actual current node, the edge is blocked with `detached-route` and the collect route commitment is cleared so target selection can re-score instead of silently replanning the same failed setup
+  - removed the off-node raw fallback in collect mode; when no exact route is currently viable and there are no current-node sweep candidates, collect mode now returns no target instead of chasing a nearest coin on another segment through classic fallback/drop spam
+  - changed `src/scenes/OverworldPlayScene.ts` debug payload to include `aiTraversalBlockedEdgeIds`, so future `window.get_sword_hunter_debug()` dumps show which failed edges are temporarily suppressed
+  - note on player influence:
+    - collect-mode target selection still does not use `getPlayerBody()`; only duel mode targets the player, so apparent player-position effects in collect tests are timing/streaming/camera side effects rather than an explicit collect target input
+  - validation:
+    - `git diff --check` passed
+    - `npm run typecheck` passed
+    - required Playwright client ran against `http://127.0.0.1:3002/?swordHunterPlanner=robust&x=6&y=5&renderer=canvas`; artifacts:
+      - `output/web-game/sword-hunter-route-detach-fallback-2026-04-24/`
+      - `output/web-game/sword-hunter-route-detach-fallback-rerun-2026-04-24/`
+    - Playwright client caveat: the local authenticated state opens the owned tester room in editor context and the boot splash intercepted `#btn-test-play`, so those artifacts captured load state (`scene: "none"`) plus the existing generic 503 resource console error rather than a clean started run
+    - direct browser sampling before the final raw-fallback patch confirmed the new route-detach block was working: `wall:right:0:8->surface:10:2:wall-jump` appeared in `aiTraversalBlockedEdgeIds` after the hunter detached from that route
+  - next follow-up:
+    - have the user retry room `6,5` and watch whether post-failure behavior now waits/re-scores instead of classic fallback backtracking through already-collected platforms
+    - if it still feels wasteful, gather a fresh debug dump including `aiTraversalBlockedEdgeIds`; the next likely work is a positive value model for "coins collectable along route setup", not more player-position tuning
+
+- Local debug login fix on April 24, 2026:
+  - user reported the debug sign-in link did not work on the local `3002` stack
+  - repro in a real browser showed Wrangler remote dev was returning debug magic links on `everybodys-platformer-safety.novox-robot.workers.dev`; opening that link stored `ep_session` for the `workers.dev` host while the app continued polling the local proxy on `localhost:8788` / `127.0.0.1:8788`, so `/api/auth/session` stayed unauthenticated
+  - changed `src/auth/client.ts` so debug magic links are rewritten through the same API base the app is using before displaying `Open debug sign-in link`
+  - changed `src/api/baseUrl.ts` so a configured loopback API host follows the current loopback page host, keeping `http://localhost:3002` paired with `http://localhost:8788` instead of mixing `localhost` and `127.0.0.1`
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check` passed
+    - browser UI flow from `http://localhost:3002/?swordHunterPlanner=robust&x=6&y=5&renderer=canvas` generated a debug link on `localhost:8788`, redirected back to `localhost:3002`, and `window.get_auth_debug_state()` reported `authenticated: true`, `source: "session"`
+    - required Playwright web-game client ran; artifact path: `output/web-game/debug-login-localhost-2026-04-24/`
+  - known unrelated noise:
+    - the Playwright client still records the existing generic `503 Service Unavailable` resource error from the local background-image path when Cloudflare Images account config is blank
+
+- Sword Hunter room `6,5` post-publish observation on April 24, 2026:
+  - user published version 3 of `Sword Hunter Collect Race Tester`; direct Worker room load shows 809 placed objects: 808 `coin_gold` and 1 `swordsman_ai`
+  - ran browser observation from `http://localhost:3002/?swordHunterPlanner=robust&x=6&y=5&renderer=canvas&previewSmoke=1`, dismissed the collect-race intro, and sampled `window.get_sword_hunter_debug()` over the 60-second run
+  - artifacts:
+    - full debug trace plus player-camera screenshots: `output/web-game/ai-observe-room65-clean-2026-04-24/`
+    - zoomed-out screenshots plus 5-second samples: `output/web-game/ai-observe-room65-zoomed-2026-04-24/`
+  - observed behavior:
+    - the hunter is much more productive than before: it collected about 546-566 coins in the minute while the idle player collected 1
+    - route progression was broadly: bottom `surface:20:1` sweep -> second shelf `surface:17:3` -> recover from right-wall route failure -> `surface:17:30` / `surface:14:1` -> `surface:10:3` -> `surface:7:0`, then planning toward `surface:4:14` near timeout
+    - there is still a clear nonproductive window around `22s-30s`: hunter score stayed at `180` while it tried/blocked the `surface:17:3` right-wall route, fell/repositioned, then selected the `surface:20:1->surface:17:30:jump-up:left` route
+    - after that recovery, same-platform sweeps were productive and did not show the old infinite backtracking pattern
+  - likely next tuning target:
+    - reduce the 22-30s wall-route recovery cost by preferring the known reachable jump-up route sooner after a right-wall route miss, rather than letting it spend multiple seconds proving/blocking adjacent wall options
+
+- Sword Hunter overhead coin jump experiment on April 24, 2026:
+  - user asked whether the collector can sense coins above him and to make the overhead-pickup change, then run room `6,5`
+  - changed `src/enemies/swordsmanObjectives.ts` so a collect objective can carry an optional opportunistic jump impulse
+  - changed `src/scenes/overworld/liveObjects.ts` so collect mode can choose a nearby overhead coin as an immediate jump target, and execute that jump before normal traversal route following
+  - narrowed the trigger after observation: overhead jump now only applies to coins with no standing pickup target or targets whose collect snapshot still maps to the current traversal node, so it does not constantly interrupt routes to upper platforms
+  - changed `src/main.ts` debug state fallback so Playwright can read paused/sleeping overworld scene state when no scene reports active
+  - added a preview-smoke-only player-position helper through `window.run_preview_smoke_action('setPlayerPosition', ...)` and `OverworldPlayScene.debugSetPlayerPosition(...)` so automated observations can move/disable the player body; this avoids the local test harness spawning the player on top of the hunter and stomping/body-blocking it
+  - validation:
+    - `npm run typecheck` passed after the final patch
+    - `git diff --check` passed
+    - required Playwright web-game client ran; artifact path: `output/web-game/overhead-jump-final-client-2026-04-24/`
+    - long isolated observer runs with screenshots/debug summaries:
+      - broad first pass: `output/web-game/ai-overhead-jump-room65-2026-04-24/`
+      - player body disabled: `output/web-game/ai-overhead-jump-room65-noplayer-2026-04-24/`
+      - narrowed trigger: `output/web-game/ai-overhead-jump-room65-narrowed-2026-04-24/`
+  - observed result:
+    - the new state does fire: narrowed run had `jumpSampleCount: 14`, including `collect-overhead-jump` events on `surface:20:1` with `velocityY: -265`
+    - the run still underperformed the prior post-publish observation: narrowed no-player-body run reached about `229/808` hunter coins by ~54.8s goal time, versus the prior observed `546-566` range
+    - the remaining waste is not player targeting; with the player body disabled the hunter still repeatedly blocks/retries wall/jump-up routes while trying to reach `surface:14:1`
+  - next tuning target:
+    - keep the overhead pickup hook, but focus next on route-choice memory/value: after a wall route miss, prefer the already-successful `surface:20:1->surface:17:30:jump-up:left` route and score coins collectible during setup/travel, rather than repeatedly proving nearby wall alternatives
+
+- Sword Hunter reward-aware route scoring + overhead interruption follow-up on April 24, 2026:
+  - user agreed to try the research-informed utility/reward model instead of more one-off route rules
+  - changed `src/scenes/overworld/liveObjects.ts` so collect route selection now scores route value and penalties explicitly:
+    - counts coins reachable on route destination nodes and coins along setup travel
+    - penalizes empty setup walks, wall-heavy routes, recent wall-route failures, and valuable-but-partial routes
+    - stores `aiCollectRouteScore`, `aiCollectRouteValue`, and `aiCollectRoutePenalty` on the runtime for debug dumps
+  - changed `src/scenes/OverworldPlayScene.ts` debug output to expose those new collect route score/value/penalty fields
+  - changed current-surface sweep so only productive forward/near sweeps preempt routing; far-behind sweeps become fallback instead of forcing long backtracks
+  - added partial-route collect targets so robust plans can intentionally move to the best reachable coin node instead of requiring an exact route every time
+  - tightened overhead jump safety near shelf lips, then loosened the selection rule so safe overhead coin jumps can interrupt a longer route even when the coin's standing pickup snapshot belongs to an upper platform
+  - fixed two stale wall-route execution cases:
+    - `wall-jump` impulses now require actual contact with the expected wall side
+    - airborne or grounded planned `wall-jump` routes are blocked/cleared when the hunter is not actually on the required wall, instead of being kept as a stale planned edge while falling
+  - local stack note:
+    - Vite remains on `http://localhost:3002`
+    - Wrangler remote dev on `8788` could not refresh because Cloudflare auth expired, so I replaced it with `.codex-local-logs/safety-room-proxy.mjs`, a local proxy to the safety Worker
+    - because the deployed safety Worker strips the newer `swordsmanObjectiveMode` / collect-race fields, the proxy patches only embedded room `6,5` responses to restore `{ goal: { type: "collect_race" } }` and `swordsmanObjectiveMode: "collect"` for local testing
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check -- src/scenes/overworld/liveObjects.ts src/scenes/OverworldPlayScene.ts` passed
+    - required web-game client ran with artifacts at `output/web-game/sword-hunter-overhead-route-fix-client-2026-04-24/`
+  - observation:
+    - pre-final clean observer with fixed disabled player stayed in room `6,5` but plateaued at about `230/808` enemy coins by 60s: `output/web-game/sword-hunter-utility-scoring-observe4-2026-04-24/summary.json`
+    - after allowing safe overhead interruption and clearing stale wall-jump starts, the same fixed-player observer reached `402/808` enemy coins by 60s: `output/web-game/sword-hunter-overhead-route-fix-observe-2026-04-24/summary.json`
+    - the trace shows the desired `collect-overhead-jump` state around 31s and later productive sweeps on `surface:10:3` / `surface:14:1`
+  - remaining issue:
+    - it is materially better, but still below the earlier best post-publish run (~546-566/min); late run routing now climbs from `surface:14:1` toward `surface:4:0` with a high route score/penalty, so the next pass should make route scoring prefer finishing dense current/near shelves before committing to expensive multi-step wall routes
+
+- Sword Hunter depleted-surface soft-block pass on April 24, 2026:
+  - user observed that the hunter was still running long distances over already-cleared shelves and asked whether cleared areas can be blocked unless they are needed for reaching new coins
+  - diagnosis:
+    - collect mode was still reactive to the remaining live coins only; it did not give special treatment to a current traversal surface with no remaining coin targets
+    - when collect target selection returned no target, the shared traversal objective used the normal patrol fallback, which made collect-mode enemies run along empty shelves even though no coin target had been selected
+    - route scoring already had a light empty-setup penalty, but it did not specifically distinguish "this current surface is depleted" from ordinary setup travel
+  - changed `src/scenes/overworld/liveObjects.ts` so collect mode now soft-blocks depleted surfaces:
+    - routes that require setup walking on a current surface with no remaining collect nodes get an additional depleted-current setup penalty
+    - routes through intermediate surface nodes with no remaining collect nodes get an additional depleted-surface step penalty
+    - collect-mode no-target fallback now idles/falls in place instead of invoking the patrol fallback that runs down the platform
+  - note:
+    - this is intentionally a soft block rather than deleting graph nodes; cleared shelves remain usable as corridors or jump setup space when they are the only way to reach valuable coins
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check -- src/scenes/overworld/liveObjects.ts src/scenes/OverworldPlayScene.ts` passed
+    - required web-game client ran with artifacts at `output/web-game/sword-hunter-depleted-surface-client-2026-04-24/`; inspected `shot-0.png` and confirmed room `6,5` rendered with the hunter active
+    - added local observer helper `.codex-local-logs/observe-sword-hunter-room65.mjs`
+    - observer check reached play mode and sampled the hunter at `80` enemy-collected by about `8s` goal time: `output/web-game/sword-hunter-depleted-surface-observe-check-2026-04-24/summary.json`
+    - full observer with fixed disabled player reached `333/781` hunter coins by about `55s` goal time on published room version 4: `output/web-game/sword-hunter-depleted-surface-observe-2026-04-24/summary.json`
+  - remaining issue:
+    - this removes the worst empty-shelf patrol fallback, but it is not the final collection-quality fix
+    - late trace still shows wall-route churn from `surface:14:1` toward `surface:10:3`, including `surface:14:1->wall:left:39:11:jump-to-wall`
+    - next pass should distinguish route jump setup from opportunistic overhead jumps and make failed wall routes less attractive when a nearby jump-up path is available
+
+- Sword Hunter wall-route failure memory + collect recovery pass on April 24, 2026:
+  - user confirmed the depleted-surface pass reduced backtracking, but the hunter still got stuck around repeated wall/jump setup attempts
+  - diagnosis from `output/web-game/sword-hunter-depleted-surface-observe-2026-04-24/summary.json`:
+    - after a wall-jump toward `surface:10:3` failed, only the terminal `wall-jump` edge was blocked
+    - once that short block expired, route scoring could choose the upstream `jump-to-wall` back into the same wall route, recreating the stuck/retry behavior
+    - a too-broad first attempt blocked the whole wall family for `jump-to-wall` entry failures and stranded the hunter at `surface:17:3`; that was narrowed before leaving the code
+  - changed `src/scenes/overworld/liveObjects.ts` so collect-mode traversal failures now clear the committed collect route, forcing target selection to rescore instead of clinging to the same failed node
+  - terminal `wall-jump` failures in collect mode now block related inbound `jump-to-wall` edges to that same wall for `18000ms`, so the planner does not immediately pay setup cost to re-enter a wall route whose exit jump already failed
+  - failed `jump-to-wall` entry attempts still only block that entry edge normally; they do not suppress all exits from that wall
+  - added a collect recovery fallback:
+    - normal no-target collect mode still idles, avoiding empty-platform patrol
+    - but if no target exists because traversal edges are blocked, collect mode temporarily uses patrol movement as recovery, because cleared surfaces are now necessary corridors
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check -- src/scenes/overworld/liveObjects.ts src/scenes/OverworldPlayScene.ts progress.md .codex-local-logs/observe-sword-hunter-room65.mjs` passed
+    - required web-game client ran with artifacts at `output/web-game/sword-hunter-wall-family-block-client-2026-04-24/`; inspected `shot-0.png`
+    - over-broad wall-family observer showed the failure case clearly: only `185` coins and a long `collect-idle` at `surface:17:3`; this was intentionally superseded by the narrower patch
+    - final observer after narrowing + recovery reached `313/781` hunter coins by about `54s` goal time: `output/web-game/sword-hunter-collect-recovery-observe-2026-04-24/summary.json`
+  - remaining issue:
+    - this pass prevents the hard idle/freeze and suppresses immediate same-wall retries after terminal wall-jump failure, but it is still lower than the best post-publish observer
+    - trace still has an 8-ish second low-value window around `surface:14:1 -> surface:10:3`; next pass should score direct overhead/local collection against committed wall routes more aggressively and/or improve the actual launch timing for `jump-up` routes to `surface:10:3`
+
+- Sword Hunter tuned local-sweep-over-wall pass on April 24, 2026:
+  - user asked to give the next route-choice idea a shot after the collector still wasted time around `surface:14:1 -> surface:10:3`
+  - changed `src/scenes/overworld/liveObjects.ts` so a current-surface collect target can override a wall-heavy route only when the route is both high-penalty and high-score:
+    - added `SWORDSMAN_AI_COLLECT_WALL_ROUTE_LOCAL_SWEEP_PENALTY_MIN = 2600`
+    - kept `SWORDSMAN_AI_COLLECT_WALL_ROUTE_LOCAL_SWEEP_SCORE_MIN = 3200`
+    - changed the override from broad `penalty OR score` to narrower `penalty AND score`
+  - observation:
+    - broad first shot suppressed the late wall-left route but underperformed at `300/781`: `output/web-game/sword-hunter-local-sweep-over-wall-observe-2026-04-24/summary.json`
+    - tuned scoring-only patch reached `343/781` by about `55s` goal time: `output/web-game/sword-hunter-local-sweep-tuned-observe-2026-04-24/summary.json`
+    - tuned trace still shows an early failed right-wall route around 32s, but later it spends more time collecting on `surface:14:1` instead of immediately committing back into the expensive wall-left route
+  - rejected experiment:
+    - tried routing invalid wall-start blocks through the same related-edge wall-route failure memory; this over-blocked wall entries and dropped the observer to `217/781`
+    - reverted that experiment; artifact kept for diagnosis at `output/web-game/sword-hunter-invalid-wall-route-memory-observe-2026-04-24/summary.json`
+  - validation:
+    - `npm run typecheck` passed after the final reverted state
+    - `git diff --check -- src/scenes/overworld/liveObjects.ts src/scenes/OverworldPlayScene.ts progress.md .codex-local-logs/observe-sword-hunter-room65.mjs` passed
+    - required web-game client ran for the tuned state with artifacts at `output/web-game/sword-hunter-local-sweep-tuned-client-2026-04-24/`
+    - inspected `shot-0.png`; room `6,5` rendered with the hunter active
+  - next tuning target:
+    - do not broadly block invalid wall-start related edges; it strands recovery routes
+    - focus next on actual launch timing and route feasibility for the `surface:17:3` / `surface:14:1` wall routes, or teach route scoring to favor known successful `jump-up` paths without suppressing all wall entries
+
+- Sword Hunter traversal harness branch + local mainnet D1 refresh on April 25, 2026:
+  - user wants traversal-harness work on a separate branch from the AI tuning branch, with local D1 refreshed from current mainnet before creating purpose-built traversal rooms
+  - created branch `feature/sword-hunter-traversal-harness-2026-04-25`
+  - exported production D1 `everybodys-platformer-db` / binding `DB` to `.codex-local-logs/mainnet-d1-2026-04-25.sql`
+  - backed up the previous local D1 state to `.codex-local-logs/local-d1-backup-2026-04-25/`
+  - Wrangler's direct `d1 execute --local --file` import hung before creating the sqlite file, so the SQL dump was imported directly with local `sqlite3` into Wrangler's local D1 sqlite path
+  - local D1 sanity checks after import:
+    - `rooms`: 311
+    - `room_versions`: 4618
+    - `users`: 482 before the debug-login check
+    - `d1_migrations`: 28
+  - restarted local stack:
+    - frontend: `http://localhost:3002` in screen `wamp-traversal-vite-3002`
+    - local Worker/API: `http://localhost:8788` in screen `wamp-traversal-api-8788`
+    - local PartyKit: `http://localhost:1999` in screen `wamp-traversal-presence-1999`
+  - verified debug login:
+    - `.dev.vars` has `AUTH_DEBUG_MAGIC_LINKS=1` and `APP_BASE_URL="http://localhost:3002"`
+    - direct API returned `delivery: "debug"` with a `localhost:8788/api/auth/verify` link
+    - browser flow from `http://localhost:3002` generated the debug link, clicked it, redirected back with `auth=email`, and `window.get_auth_debug_state()` reported `authenticated: true`
+    - the debug user `debug-local@example.com` was present in the local sqlite afterward, confirming the refreshed local D1 is the active auth store
+  - known local noise:
+    - background image requests still log `503` because `CLOUDFLARE_IMAGES_ACCOUNT_HASH` is not configured locally; this is unrelated to auth/D1/traversal room authoring
+
+- Sword Hunter traversal harness room inventory on April 25, 2026:
+  - user created purpose-built traversal test rooms in local D1:
+    - `12,0` Simple Jump Up
+    - `13,0` Long Jump Gap
+    - `14,0` Short Hop
+    - `15,0` Wall Jump Left
+    - `16,0` Wall Jump Right
+    - `17,0` Jump To Wall then Wall Jump
+    - `18,0` Stacked Shelves
+    - `19,0` Tight Ceiling JUmp
+    - `20,0` Edge/Lip Jump
+  - scanned the refreshed production-backed local D1 for existing published rooms with traversal-heavy geometry; metrics were intentionally rough and based on terrain density, surface rows, vertical span, wall columns, small platforms, hazards, and special objects
+  - recommended first "real authored room" candidates:
+    - `8,-10` bookcase: strong vertical climb / wall-heavy room
+    - `7,0` The Depths of Koumoo: vertical climb with coins and many wall columns
+    - `2,0` Vertical parkour: many small platforms, full-height climb, hazards, bounce pads
+    - `3,6` Chocomaze: very dense small-platform maze
+    - `-5,-1` untitled: coin-dense, many small platforms across many rows
+    - `13,2` The Mario Opera pt 2: many small platforms / gap-style traversal
+    - `3,1` You better be batman: small platforms plus tall wall geometry
+    - `-6,0` The Pits: pit/drop style room with walls and coins
+    - `8,0` untitled: tall vertical room with wall columns
+    - `5,2` untitled: extreme hazard/wall stress room, useful later but probably too noisy for the first harness pass
+  - harness strategy:
+    - use `12,0` through `20,0` as deterministic unit tests for specific traversal skills
+    - use the authored rooms above as regression/stress tests once the harness can classify edge success/failure reliably
+    - do not judge traversal quality from one real room only; real rooms are noisy and should complement the purpose-built rooms
+
+- Sword Hunter traversal harness first implementation on April 25, 2026:
+  - added a browser-debug traversal harness API:
+    - `window.run_sword_hunter_traversal_harness({ rooms })`
+    - fetches published room snapshots through the active API base
+    - builds the Sword Hunter traversal graph
+    - simulates every graph edge with the robust planner's physics simulator
+    - reports surfaces, walls, edges, per-edge success/failure, reachability by source surface, and warnings
+  - added `src/enemies/swordsmanTraversalHarness.ts` for the pure report builder
+  - added `scripts/sword_hunter_traversal_harness.mjs` to drive the browser harness over a room list and write JSON reports plus optional screenshots
+  - exposed `debugSimulateSwordsmanTraversalEdge(...)` from `src/enemies/swordsmanRobustPlanner.ts` so the harness uses the same edge feasibility check as robust planning
+  - first purpose-room run artifact:
+    - `output/web-game/sword-hunter-traversal-harness-2026-04-26T00-33-41-138Z/summary.json`
+    - initial signal showed `13,0`, `15,0`, `16,0`, and `20,0` had zero simulated-success edges
+  - found and patched a concrete graph issue:
+    - `jump-to-wall` edges were sometimes created with `setupX === wall.x`, which makes the simulated hunter jump straight up at the wall face
+    - `buildJumpToWallEdge(...)` now backs setup away from the wall by the existing jump setup backoff and rejects near-zero horizontal setup
+  - purpose-room rerun after wall setup patch:
+    - `output/web-game/sword-hunter-traversal-harness-wall-setup-2026-04-26/summary.json`
+    - `15,0` improved from `0/4` to `2/4` simulated-success edges
+    - `16,0` improved from `0/4` to `2/4`
+    - `17,0` improved from `5/16` to `7/16`
+    - `13,0` and `20,0` still have no successful route; `13,0` appears to be an overlong same-height gap for current Sword Hunter physics, while `20,0` still needs a movement primitive or route rule beyond the current graph
+    - `15,0` / `16,0` now reach the wall, but still do not route onto the top of the same one-tile column because the graph only models wall-jumps away from a wall to a separate target surface, not same-column ledge/top-out behavior
+  - real-room graph audit artifact:
+    - `output/web-game/sword-hunter-traversal-harness-real-rooms-2026-04-26/summary.json`
+    - expectedly noisy; examples:
+      - `8,-10` bookcase: `275/488` simulated-success edges
+      - `7,0` The Depths of Koumoo: `342/469`
+      - `2,0` Vertical parkour: `327/1263`
+      - `3,6` Chocomaze: `682/4509`
+    - useful next step is pruning or labeling bad graph candidates, because real authored rooms generate many edges that the simulator correctly rejects
+  - validation:
+    - `npm run typecheck` passed
+    - `git diff --check` passed for touched tracked files
+    - required `develop-web-game` client ran:
+      - before the wall-setup patch: `output/web-game/sword-hunter-traversal-harness-client-2026-04-26/`
+      - after the wall-setup patch: `output/web-game/sword-hunter-traversal-harness-wall-setup-client-2026-04-26/`
+    - inspected harness screenshots; the rooms render and the local 503 custom-background console error remains the known missing Cloudflare Images local config noise
+  - next harness steps:
+    - add live execution tests that spawn/position a Sword Hunter at a source surface, force one edge/route, and classify whether the real Arcade body reaches the expected node
+    - add a "missing primitive" label for cases like same-column wall-top routes so they do not look like ordinary planner bugs
+    - decide whether long gap `13,0` should be authored inside current Sword Hunter physics limits or whether the Sword Hunter should gain a longer gap-jump move
+
+- Sword Hunter live traversal edge harness on April 26, 2026:
+  - added live edge-test control APIs for the overworld preview-smoke harness:
+    - `debugStartSwordsmanTraversalEdgeTest(...)`
+    - `debugGetSwordsmanTraversalEdgeTestStatus(...)`
+    - exposed through `window.run_preview_smoke_action('startSwordsmanTraversalEdgeTest' | 'getSwordsmanTraversalEdgeTestStatus', ...)`
+  - added runtime debug fields so `window.get_sword_hunter_debug()` can show forced live traversal state:
+    - `aiDebugForcedTraversalEdgeId`
+    - `aiDebugForcedTraversalStatus`
+    - `aiDebugForcedTraversalExpiresMs`
+  - added `scripts/sword_hunter_live_traversal_harness.mjs`, which:
+    - opens a room in preview-smoke mode
+    - disables the player body without teleporting the player away
+    - runs the static graph harness
+    - chooses graph-sim-successful edges
+    - forces each edge on the live Sword Hunter body and records success / timeout / fell / blocked
+  - fixed harness-specific issues found during probing:
+    - `debugSetPlayerPosition(...)` can now disable the body without moving the player; the previous `-10000,-10000` move caused room-window/camera side effects
+    - `debugStartSwordsmanTraversalEdgeTest(...)` now returns the actual room status instead of `missing-room` from a reused consumed iterator
+    - live forced tests now latch source contact briefly and launch jump-style edges immediately from their setup anchor, matching what a graph edge feasibility test is supposed to measure
+  - fixed a real setup-coordinate mismatch:
+    - traversal graph scoring and robust edge simulation treat `edge.setupX` as a body-center anchor
+    - live traversal decisions were comparing `setupX` to the leading body edge (`left`/`right`), which pushed the hunter about half a body width away from tiny-platform jump setup points
+    - changed live traversal setup checks and progress metrics to use `enemy.centerX` / `snapshot.centerX`
+  - first live baseline artifacts:
+    - focused room `17,0`: `output/web-game/sword-hunter-live-traversal-probe-17-immediate-launch-2026-04-26/summary.json`
+    - purpose rooms `12,0` through `20,0`: `output/web-game/sword-hunter-live-traversal-purpose-baseline-2026-04-26/summary.json`
+    - static rerun after setup-center alignment: `output/web-game/sword-hunter-static-traversal-purpose-after-live-setup-2026-04-26/summary.json`
+    - required web-game client: `output/web-game/sword-hunter-live-harness-client-2026-04-26/`
+  - first live baseline results:
+    - `12,0` Simple Jump Up: `2/4` sampled live edges succeeded (`18/26` graph-sim success)
+    - `13,0` Long Jump Gap: `0/0` sampled (`0/2` graph-sim success)
+    - `14,0` Short Hop: `1/4` sampled (`8/12` graph-sim success)
+    - `15,0` Wall Jump Left: `0/2` sampled (`2/4` graph-sim success)
+    - `16,0` Wall Jump Right: `0/2` sampled (`2/4` graph-sim success)
+    - `17,0` Jump To Wall then Wall Jump: `1/4` sampled (`7/16` graph-sim success)
+    - `18,0` Stacked Shelves: `2/4` sampled (`25/40` graph-sim success)
+    - `19,0` Tight Ceiling JUmp: `2/4` sampled (`8/16` graph-sim success)
+    - `20,0` Edge/Lip Jump: `0/0` sampled (`0/4` graph-sim success)
+  - interpretation:
+    - the live harness is now producing useful failure data instead of all-failing due harness setup
+    - the static simulator is still optimistic versus real Phaser/Arcade collisions, especially around tiny platforms, wall-contact starts, and drop/lip behavior
+    - wall-jump rooms `15,0` / `16,0` remain the clearest next target because static says the wall edges should work, while live says none of the sampled wall routes currently execute
+  - validation:
+    - `npm run typecheck` passed
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+    - `git diff --check` passed for touched harness/traversal files
+    - inspected the web-game client screenshot; room `17,0` rendered correctly, with the same known local `503` custom-background resource noise
+  - next harness steps:
+    - add richer per-edge live traces with start/sample/final body positions so a failure can be classified without rerunning manual Playwright snippets
+    - focus the next implementation pass on wall-contact and wall-jump live execution mismatch in `15,0`, `16,0`, and `17,0`
+    - after wall edges match live/static better, broaden from sampled edges to full-edge live sweeps on the purpose rooms
+
+- Sword Hunter live/static wall mismatch pass on April 26, 2026:
+  - added richer live edge traces to `scripts/sword_hunter_live_traversal_harness.mjs`:
+    - each tested edge now records sampled status, current/target node, active/planned edges, blocked edges, last block reason, body size/position/velocity, and Arcade blocked/touching flags
+    - failed edge summaries include trace samples so the failure can be inspected from `summary.json` without another browser repro
+  - added `aiTraversalLastBlockReason` to live Sword Hunter runtime/debug status:
+    - reset when starting forced tests or clearing traversal memory
+    - populated by `blockSwordsmanTraversalEdge(...)`
+    - visible through `debugGetSwordsmanTraversalEdgeTestStatus(...)`
+  - focused live trace artifact:
+    - `output/web-game/sword-hunter-live-wall-traces-reason-2026-04-26/summary.json`
+    - `15,0` Wall Jump Left: `0/2` live successes while graph still claimed `2/4`
+    - `16,0` Wall Jump Right: `0/2` live successes while graph still claimed `2/4`
+    - `17,0` Jump To Wall then Wall Jump: `2/7` live successes while graph claimed `7/16`
+  - diagnosis from traces:
+    - every false `jump-to-wall` success in `15,0` / `16,0` was blocked by `lastBlockReason: "hit-head"` about 200ms into the jump
+    - the hunter was jumping from below into the underside of a floating one-tile block, not reaching a useful wall contact
+    - temporarily ignoring the live head-hit block only changed those cases from `hit-head` to `fell`; it did not produce wall contact or route success, so that relaxation was reverted
+  - graph/simulator alignment changes:
+    - `simulateTraversalEdge(...)` now treats upward collision as a failed non-drop traversal instead of continuing after a head bump
+    - `buildJumpToWallEdge(...)` now rejects source-to-wall edges where the wall segment is more than one tile above the source surface (`wall.bottomY < source.topY - TILE_SIZE`)
+    - this prunes the misleading "jump into the side of a floating block from underneath" graph edges that live Arcade cannot execute with the current movement primitives
+  - purpose-room static results after pruning:
+    - `output/web-game/sword-hunter-static-wall-underblock-pruned-2026-04-26/summary.json`
+    - `12,0` Simple Jump Up: `16/24`
+    - `13,0` Long Jump Gap: `0/2`
+    - `14,0` Short Hop: `8/12`
+    - `15,0` Wall Jump Left: `0/2` (previous `2/4` false positives removed)
+    - `16,0` Wall Jump Right: `0/2` (previous `2/4` false positives removed)
+    - `17,0` Jump To Wall then Wall Jump: `5/12` (previous `7/16` false positives reduced)
+    - `18,0` Stacked Shelves: `25/40`
+    - `19,0` Tight Ceiling JUmp: `4/16`
+    - `20,0` Edge/Lip Jump: `0/2`
+  - purpose-room live sample after pruning:
+    - `output/web-game/sword-hunter-live-purpose-wall-pruned-2026-04-26/summary.json`
+    - `12,0`: `2/4` live successes (`16/24` graph)
+    - `13,0`: `0/0` (`0/2` graph)
+    - `14,0`: `1/4` (`8/12` graph)
+    - `15,0`: `0/0` (`0/2` graph)
+    - `16,0`: `0/0` (`0/2` graph)
+    - `17,0`: `1/4` (`5/12` graph)
+    - `18,0`: `2/4` (`25/40` graph)
+    - `19,0`: `2/4` (`4/16` graph)
+    - `20,0`: `0/0` (`0/2` graph)
+  - required web-game client artifact:
+    - `output/web-game/sword-hunter-wall-pruned-client-2026-04-26/`
+    - inspected `shot-0.png`; room `17,0` rendered correctly, with only the known local Cloudflare Images `503` resource noise
+  - interpretation:
+    - the apparent wall-route wins in `15,0` and `16,0` were not real traversal abilities; they were static graph optimism
+    - those rooms now correctly expose a missing movement primitive rather than a live execution bug
+    - likely next primitive to design is a same-column top-out / mantle / ledge-climb route, or a deliberately authored direct wall-top route that can avoid underside head collisions
+    - remaining live/static mismatch worth inspecting next is `17,0`, especially `surface:15:20->surface:14:16:jump-up:right` missing live and one wall-start case resolving to the opposite wall side
+  - validation run during this pass:
+    - `npm run typecheck` passed
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+
+- Sword Hunter room `19,0` drop traversal fix on April 27, 2026:
+  - user asked to look at `19,0` after the harness became trustworthy and the first visible failure turned out to be bad start geometry / clipping rather than jump physics
+  - focused pre-fix repro:
+    - artifact: `output/web-game/sword-hunter-debug-19-drop-2026-04-27/summary.json`
+    - tested the two static-success drop edges:
+      - `surface:17:0->surface:21:0:drop:left`
+      - `surface:17:0->surface:21:17:drop:right`
+    - result: `0/6`; both edges were broken
+    - traces showed the Sword Hunter running outward at the room boundary and never treating the drop as an active traversal, so drop-specific target correction was not really controlling the attempt
+  - implementation:
+    - changed `src/scenes/overworld/liveObjects.ts` so committed `drop-down` decisions start an active traversal attempt, same as jump/wall-jump edges
+    - added a separate `SWORDSMAN_AI_DROP_DOWN_RESULT_GRACE_MS = 520` because the generic `140ms` jump result grace blocked drops before the body had actually walked off the lip
+    - changed `src/enemies/swordsmanTraversal.ts` so drop-down graph edges are pruned when an intermediate surface lies between the source and target along the drop path
+      - this mirrors the previous intermediate-surface pruning for jump-gap edges
+      - it fixed `18,0` shelf-skipping drops that were physically landing on the intermediate shelf, not the requested lower shelf
+  - validation artifacts:
+    - focused `19,0` after active-drop start only:
+      - `output/web-game/sword-hunter-debug-19-drop-active-2026-04-27/summary.json`
+      - result improved to `3/6`; both drops became risky instead of broken
+    - focused `19,0` after drop grace:
+      - `output/web-game/sword-hunter-debug-19-drop-active-grace-2026-04-27/summary.json`
+      - result: `6/6`; both drops reliable
+    - static purpose-room pass after drop-intercept pruning:
+      - `output/web-game/sword-hunter-static-purpose-drop-intercept-2026-04-27/summary.json`
+      - `18,0` changed from `21/40` to `17/36`, removing the four bogus shelf-skip drop edges
+    - full live purpose-room pass after both fixes:
+      - `output/web-game/sword-hunter-live-purpose-drop-active-drop-prune-2026-04-27/summary.json`
+      - aggregate: `252/255` successful live attempts, `51` reliable edges, `0` risky, `0` broken, `43` unproven
+      - per room:
+        - `12,0`: `58/60`, `12` reliable, `0` broken, `4` unproven
+        - `13,0`: `0/0`, `0` reliable, `0` broken, `2` unproven
+        - `14,0`: `30/30`, `6` reliable, `0` broken, `4` unproven
+        - `15,0`: `10/10`, `2` reliable, `0` broken, `0` unproven
+        - `16,0`: `10/10`, `2` reliable, `0` broken, `0` unproven
+        - `17,0`: `29/30`, `6` reliable, `0` broken, `6` unproven
+        - `18,0`: `85/85`, `17` reliable, `0` broken, `19` unproven
+        - `19,0`: `20/20`, `4` reliable, `0` broken, `8` unproven
+        - `20,0`: `10/10`, `2` reliable, `0` broken, `0` unproven
+  - remaining live attempt misses:
+    - two `12,0` jump-to-wall offset attempts land on an intermediate surface instead of the wall but those edges still pass enough offsets to remain reliable
+    - one `17,0` upward diagonal attempt still trips `source-floor-penetration` at offset `x8`; this is likely a remaining harness/start geometry issue or over-optimistic one-tile diagonal jump candidate
+  - browser/screenshot verification:
+    - inspected `output/web-game/sword-hunter-live-purpose-drop-active-drop-prune-2026-04-27/final.png`; room rendered correctly with the player and Sword Hunter visible
+    - summary had `0` page errors
+    - console output still contains known local Cloudflare Images `503` resource noise plus WebGL readback warnings
+  - validation:
+    - `npm run typecheck` passed
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+    - `node --check scripts/sword_hunter_traversal_harness.mjs` passed
+    - `git diff --check` passed
+  - next suggested implementation step:
+    - investigate the remaining `17,0` one-tile upward diagonal / source-floor-penetration case
+    - after that, start the movement-skill seam extraction while behavior is in a strong measured state, using the current reports as regression baselines
+
+- Sword Hunter `17,0` intended wall-route forced test on April 27, 2026:
+  - user clarified room `17,0` was authored specifically as a "jump to wall, then wall jump" / double-wall-jump test, so the normal live sweep result was misleading:
+    - normal sweep listed `17,0` as healthy because direct `jump-up`, `jump-gap`, and `drop-down` alternatives worked
+    - the intended `jump-to-wall` and `wall-jump` edges were all `unproven` because the live harness skipped static-simulation-failed edges
+  - changed `scripts/sword_hunter_live_traversal_harness.mjs`:
+    - added `--force-edge-ids`
+    - added env option `SWORD_HUNTER_LIVE_FORCE_EDGE_IDS=1`
+    - when explicit edge IDs are supplied with this flag, the live harness tests those edges even if static simulation marked them failed
+    - default full-sweep behavior remains unchanged
+  - focused forced run:
+    - artifact: `output/web-game/sword-hunter-debug-17-wall-route-forced-2026-04-27/summary.json`
+    - tested:
+      - `surface:14:16->wall:left:20:15:jump-to-wall`
+      - `surface:15:20->wall:right:16:14:jump-to-wall`
+      - `wall:left:20:15->surface:14:16:wall-jump`
+      - `wall:right:16:14->surface:15:20:wall-jump`
+    - result: `4/12` live attempts succeeded
+      - reliable: `wall:right:16:14->surface:15:20:wall-jump` (`3/3`)
+      - risky: `wall:left:20:15->surface:14:16:wall-jump` (`1/3`)
+      - broken: both `jump-to-wall` edges (`0/3` each)
+  - interpretation:
+    - the two `jump-to-wall` edges are not actually becoming wall grabs; visually they arc high enough to land on top of the opposite pillar, so they resolve to the target pillar's surface instead of the side wall
+    - the left-wall-to-surface wall jump is sensitive to starting height; lower starts collide/slide on the opposite wall and fall to the floor, while the higher start lands
+    - this room is therefore not currently proving a double wall jump; it is proving that the graph can see wall-route candidates, while execution/simulation still treats the same geometry as direct top landings or failed wall jumps
+  - next suggested implementation step:
+    - decide whether this authored room should be adjusted so the top surfaces are not directly reachable before wall contact, or whether the graph should prune `jump-to-wall` edges when a surface landing intercepts the route
+    - if keeping this exact geometry, the wall-route skill likely needs explicit "prefer wall contact over top landing" execution logic, not just generic jump steering
+  - validation:
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+    - `git diff --check` passed
+
+- Sword Hunter forced-start body sync / approach-start diagnostic on April 27, 2026:
+  - user clarified the floor-clipping was not something they had seen during the earlier manual AI movement work, so we treated it as a likely forced-harness setup bug rather than proof that normal runtime traversal regressed
+  - added an opt-in live harness approach mode:
+    - script flag: `--approach-distance-px=N`
+    - preview smoke payload/debug start option: `approachDistancePx`
+    - surface jump/gap/wall tests can now start back on the source surface and let the existing traversal decision walk toward `edge.setupX`
+    - approach mode waits for real Arcade floor contact and does not fake the surface contact latch while walking in
+  - found the actual clipping source:
+    - `setSwordsmanDebugBodyCenter(...)` placed the body correctly for the immediate status read, but after Phaser's next body sync the body shifted by the configured sprite body offset and then fell through the source floor
+    - fixed that helper by calling `body.updateFromGameObject()` before measuring/correcting the body-center offset, then syncing again after correction
+  - validation artifacts:
+    - first strict approach run before the body-sync fix: `output/web-game/sword-hunter-approach-start-real-floor-18-2026-04-27/summary.json`
+      - confirmed forced starts never established real floor contact and fell through source tiles
+    - focused approach run after the body-sync fix: `output/web-game/sword-hunter-approach-start-body-sync-18-2026-04-27/summary.json`
+      - `18,0` targeted stair edges: `2/2` succeeded
+    - focused direct forced run after the body-sync fix: `output/web-game/sword-hunter-direct-start-body-sync-18-2026-04-27/summary.json`
+      - same two edges: `2/2` succeeded even without approach mode
+    - one-offset full `18,0` direct run: `output/web-game/sword-hunter-live-18-body-sync-one-offset-2026-04-27/summary.json`
+      - `16/21` succeeded; `16` reliable, `5` broken, `19` unproven
+    - one-offset full `18,0` approach run: `output/web-game/sword-hunter-live-18-body-sync-approach-one-offset-2026-04-27/summary.json`
+      - also `16/21`; remaining failures match the direct run
+    - screenshot inspected: `output/web-game/sword-hunter-approach-start-body-sync-capture-18-2026-04-27/final.png`
+      - hunter rendered on the upper stair, not below the floor
+    - follow-up classifier fix run: `output/web-game/sword-hunter-live-18-body-sync-one-offset-classifier-fix-2026-04-27/summary.json`
+      - `21/21` succeeded; `21` reliable, `0` broken, `19` unproven
+  - after inspecting the five apparent `jump-gap` failures, they were false negatives:
+    - the live trace ended with `status: success`, `currentNodeId` on the target platform, and `onFloor: true`
+    - the script-side path checker was invalidating descending gap jumps because the body bottom was naturally below the original source platform after landing on the lower target platform
+    - patched `classifyAttemptPathViolation(...)` so source-floor penetration only applies to `jump-up` edges, matching the runtime debug status check
+  - validation:
+    - `npm run typecheck` passed
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+    - `node --check scripts/sword_hunter_traversal_harness.mjs` passed
+    - `git diff --check` passed
+  - next suggested implementation step:
+    - rerun a full default-offset purpose-room sweep after the body-sync fix to reset the reliability baseline
+    - then focus on the remaining `jump-gap:right` source-floor-penetration class in `18,0`
+
+- Sword Hunter corrected purpose-room reliability baseline on April 27, 2026:
+  - reran the plan from the top after the forced-start body-sync fix and the `jump-gap` false-negative classifier fix
+  - static baseline artifact:
+    - `output/web-game/sword-hunter-static-purpose-body-sync-baseline-2026-04-27/summary.json`
+    - static graph results stayed unchanged:
+      - `12,0`: `16/24`
+      - `13,0`: `0/2`
+      - `14,0`: `8/12`
+      - `15,0`: `2/2`
+      - `16,0`: `2/2`
+      - `17,0`: `6/12`
+      - `18,0`: `21/40`
+      - `19,0`: `4/16`
+      - `20,0`: `2/2`
+  - full live reliability artifact:
+    - `output/web-game/sword-hunter-live-purpose-body-sync-baseline-2026-04-27/summary.json`
+    - aggregate corrected result: `273/305` live attempts succeeded
+    - corrected live categories: `55` reliable, `1` risky, `5` broken, `51` unproven
+  - room-level corrected live results:
+    - `12,0` Simple Jump Up: `68/80`; `14` reliable, `2` broken, `8` unproven
+    - `13,0` Long Jump Gap: `0/0`; `2` unproven
+    - `14,0` Short Hop: `30/40`; `6` reliable, `2` broken, `4` unproven
+    - `15,0` Wall Jump Left: `10/10`; `2` reliable
+    - `16,0` Wall Jump Right: `10/10`; `2` reliable
+    - `17,0` Jump To Wall then Wall Jump: `29/30`; `6` reliable, `6` unproven
+    - `18,0` Stacked Shelves: `105/105`; `21` reliable, `19` unproven
+    - `19,0` Tight Ceiling Jump: `11/20`; `2` reliable, `1` risky, `1` broken, `12` unproven
+    - `20,0` Edge/Lip Jump: `10/10`; `2` reliable
+  - real remaining broken/risky classes:
+    - `12,0`: two direct same-row `jump-gap` edges fail because the hunter lands on the intermediate upper platform (`surface:17:17`) instead of the requested far same-row target
+    - `14,0`: two direct same-row `jump-gap` edges fail because the hunter lands on the intermediate upper platform (`surface:20:14`) instead of the requested far same-row target
+    - `19,0`: one `drop:right` is broken and one `drop:left` is risky; the drop steering can carry the hunter outside the room bounds before the harness sees the intended lower platform
+    - `17,0`: one `jump-up` attempt failed but the edge remains reliable at `4/5`; it landed on a wall node instead of the tiny target platform in that offset
+  - interpretation:
+    - the previous high `hit-head` / bottom-row clipping numbers were mostly harness artifacts
+    - room `18,0` is no longer a problem case for the fixed harness
+    - the next real graph/simulation issue is direct gap edges that should be split/pruned when an intermediate platform intercepts the jump
+    - the next real movement-skill issue is drop steering on very wide platforms near room edges
+  - validation:
+    - inspected `output/web-game/sword-hunter-live-purpose-body-sync-baseline-2026-04-27/final.png`; final room rendered correctly
+    - `npm run typecheck` passed after the classifier fix
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+    - `git diff --check` passed
+
+- Sword Hunter intercepted gap-edge pruning pass on April 27, 2026:
+  - user pointed out the `14,0` screenshot shows a tall middle block, and asked whether the failure was really caused by direct setup-starting in the middle of the platform
+  - reran `14,0 surface:21:0->surface:21:17:jump-gap:left` with `--approach-distance-px=80`
+    - artifact: `output/web-game/sword-hunter-debug-14-gap-approach-left-2026-04-27/summary.json`
+    - result stayed `0/1`: starting left and walking into the launch still lands on `surface:20:14`, the intermediate block top
+  - implemented graph pruning in `src/enemies/swordsmanTraversal.ts`:
+    - `buildJumpUpEdge(...)` now receives all surfaces
+    - `jump-gap` candidates are rejected when another surface lies between `setupX` and `targetX` and is high enough to intercept the gap arc
+    - this keeps the room authored as-is and forces routes to use the intermediate platform instead of a fake direct gap edge
+  - static validation after pruning:
+    - artifact: `output/web-game/sword-hunter-static-purpose-intercept-prune-2026-04-27/summary.json`
+    - `12,0`: `14/20` graph-successful, down from `16/24`
+    - `14,0`: `6/10` graph-successful, down from `8/12`
+    - `19,0`: `4/12` graph-successful, down from `4/16`
+    - other purpose rooms unchanged
+  - full live validation after pruning:
+    - artifact: `output/web-game/sword-hunter-live-purpose-intercept-prune-2026-04-27/summary.json`
+    - aggregate: `273/285` attempts succeeded
+    - categories: `55` reliable, `1` risky, `1` broken, `45` unproven
+    - `12,0`: `68/70`; no broken edges
+    - `14,0`: `30/30`; no broken edges
+    - `18,0`: `105/105`; still fully clean
+  - remaining real issue:
+    - `19,0` still has one risky `drop:left` (`1/5`) and one broken `drop:right` (`0/5`)
+    - failed drop attempts drift outside room bounds before being recognized as landing on the intended lower target surface
+  - remaining non-blocking outliers:
+    - `12,0` has two `jump-to-wall` edges at `4/5`; the failed offset lands on the intermediate surface instead of wall contact
+    - `17,0` has one `jump-up` edge at `4/5`; one offset reaches a wall node rather than the tiny target platform
+  - validation:
+    - `npm run typecheck` passed
+    - `node --check scripts/sword_hunter_traversal_harness.mjs` passed
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+    - `git diff --check` passed
+  - next suggested implementation step:
+    - fix or prune the `19,0` edge-drop behavior near room bounds
+    - then run another full live sweep; if broken edges reach zero, move from harness-only work to runtime planner consumption of proven/risky/broken edge knowledge
+
+- Sword Hunter grounded forced-start reliability pass on April 27, 2026:
+  - fixed the live traversal harness surface-start setup so forced edge attempts begin grounded on the source platform instead of falling through before launch:
+    - surface starts now place the Sword Hunter on the source top with a 1px clearance instead of spawning above and waiting for Arcade physics to settle
+    - pending forced launches re-anchor to the source surface and latch source contact only while waiting to launch
+    - the artificial contact latch is cleared immediately before the real traversal impulse so it does not pollute the jump itself
+    - the debug payload now reports body bounds, source/target bounds, source contact, and `fellBeforePendingLaunch`/`sourceGuardActive` state for diagnosis
+  - focused rerun of `18,0` edge `surface:21:0->surface:20:8:jump-up:left`:
+    - artifact: `output/web-game/sword-hunter-failure-frames-grounded-clearance-18-2026-04-27/`
+    - result remained `0/1`, but the failure changed from harness setup uncertainty to a real launch failure classified as `bottom-row-source-floor-hit`
+    - metadata confirmed the attempt started grounded: body bottom `336`, source top `336`, `onFloor: true`, then launched with `velocityX: 118`, `velocityY: -265`
+    - inspected the captured frame sequence; after launch the body is pushed below/through the source-floor region, so this still needs execution/collision investigation rather than planner pruning
+  - full purpose-room live sweep after the grounded-start fix:
+    - artifact: `output/web-game/sword-hunter-live-grounded-start-purpose-2026-04-27/summary.json`
+    - aggregate: `158/305` live attempts succeeded
+    - edge categories: `29` reliable, `8` risky, `24` broken, `51` unproven
+    - failure modes:
+      - `bottom-row-source-floor-hit`: `50`
+      - `fell`: `57`
+      - `missed-traversal-target`: `29`
+      - `timeout`: `10`
+    - room summaries:
+      - `12,0`: `31/80`; `5` reliable, `3` risky, `8` broken, `8` unproven (`16/24` graph)
+      - `13,0`: `0/0`; `0` reliable, `0` risky, `0` broken, `2` unproven (`0/2` graph)
+      - `14,0`: `12/40`; `2` reliable, `1` risky, `5` broken, `4` unproven (`8/12` graph)
+      - `15,0`: `10/10`; `2` reliable, `0` risky, `0` broken, `0` unproven (`2/2` graph)
+      - `16,0`: `10/10`; `2` reliable, `0` risky, `0` broken, `0` unproven (`2/2` graph)
+      - `17,0`: `25/30`; `5` reliable, `0` risky, `1` broken, `6` unproven (`6/12` graph)
+      - `18,0`: `50/105`; `9` reliable, `4` risky, `8` broken, `19` unproven (`21/40` graph)
+      - `19,0`: `10/20`; `2` reliable, `0` risky, `2` broken, `12` unproven (`4/16` graph)
+      - `20,0`: `10/10`; `2` reliable, `0` risky, `0` broken, `0` unproven (`2/2` graph)
+  - browser verification:
+    - artifact: `output/web-game/sword-hunter-grounded-start-client-2026-04-27/`
+    - inspected `shot-0.png`; room `18,0` rendered correctly with the player and Sword Hunter visible
+    - `errors-0.json` only had the known local Cloudflare Images `503` resource noise
+    - runtime state showed the normal AI can still attempt the same `18,0` edge in live play, so the next step should compare normal launch state against forced-harness launch state before blocking that edge
+  - interpretation:
+    - the harness-start bug is fixed; these are now real traversal failures, not pre-launch floor-fall artifacts
+    - the big remaining buckets are bottom-row source-floor collisions, drop/fall misses, and target misses
+    - the full sweep is slightly worse than the previous head-prune artifact (`158/305` now vs `164/305` before), but the classification is more honest and gives us the next concrete target
+  - validation:
+    - `npm run typecheck` passed
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+    - `node --check scripts/sword_hunter_traversal_harness.mjs` passed
+    - `git diff --check` passed
+
+- Sword Hunter visible forced-edge watch mode on April 27, 2026:
+  - clarified that a manually opened Chrome room is the normal runtime AI, not the isolated forced-edge reliability harness
+  - added watch support to `scripts/sword_hunter_live_traversal_harness.mjs`:
+    - `--headed`
+    - `--browser-channel=chrome`
+    - `--launch-delay-ms=<ms>`
+    - `--post-run-pause-ms=<ms>`
+  - threaded `launchDelayMs` through the preview smoke debug action into `debugStartSwordsmanTraversalEdgeTest`
+  - fixed timeout accounting so the pre-launch watch delay does not consume the actual traversal attempt duration
+  - visible focused run:
+    - command used room `18,0`, edge `surface:21:0->surface:20:8:jump-up:left`, offset `0`, launch delay `2500ms`, post-run pause `12000ms`
+    - artifact: `output/web-game/sword-hunter-watch-forced-edge-18-fixed-2026-04-27/summary.json`
+    - result: `0/1`, `broken`, failure mode `bottom-row-source-floor-hit`
+    - trace confirms the hunter waited grounded at body bottom `336`, launched at `velocityX: 118`, `velocityY: -265`, then hit `hit-head` after `91ms` and ended below the source floor region with body bottom `368`
+  - validation:
+    - `npm run typecheck` passed
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+    - `git diff --check` passed
+
+- Sword Hunter visible successful-edge comparison on April 27, 2026:
+  - ran a headed harness capture for a known reliable `18,0` jump-up edge so the user could screen record a success case
+  - edge: `surface:20:8->surface:19:11:jump-up:left`
+  - command used launch delay `6000ms` and post-run pause `20000ms`
+  - artifact: `output/web-game/sword-hunter-watch-success-edge-18-2026-04-27/summary.json`
+  - result: `1/1` live attempts succeeded; category `reliable`
+  - this gives a direct visual comparison against the failing bottom-row edge `surface:21:0->surface:20:8:jump-up:left`
+
+- Sword Hunter path-sanity tightening on April 27, 2026:
+  - user screen recordings showed that the headed "successful" stair-step jump had the same physical glitch as the failed one: the hunter gets shoved/teleported below the stair/floor during the jump, then the "successful" case later recovers and lands
+  - important distinction:
+    - old harness success meant "eventually touched the intended target surface"
+    - that was too weak because it allowed a physically bad path to count as reliable
+  - added runtime forced-edge path-sanity detection:
+    - `jump-up` attempts from surface sources now become `path-invalid` if the hunter body penetrates more than `4px` below the source surface during the active forced jump
+    - `path-invalid` attempts classify as `source-floor-penetration` in the live harness
+  - changed headed watch behavior:
+    - headed runs now disable rapid screenshot capture by default, because the user observed visual blinking where the room alternated between full-size and top-quarter render; the likely trigger was Playwright screenshot capture every `50ms` in a visible browser
+    - `--allow-headed-frame-capture` can opt back into screenshots if needed
+  - focused validation:
+    - artifact: `output/web-game/sword-hunter-path-sanity-runtime-18-2026-04-27/summary.json`
+    - tested `surface:21:0->surface:20:8:jump-up:left` and `surface:20:8->surface:19:11:jump-up:left`
+    - result changed to `0/2`; both attempts are now `path-invalid` with `source-floor-penetration`
+    - bottom-row attempt penetrated `34px` below source at `192ms`
+    - former "successful" attempt penetrated `27px` below source at `207ms`
+  - current interpretation:
+    - the immediate issue is not target selection; it is jump execution colliding with the stair/step face and Arcade resolving the small hitbox downward
+    - the likely next fix is to adjust the jump-up skill launch point/trajectory so it clears the vertical face before horizontal overlap, then rerun the focused pair and the full purpose-room sweep
+  - validation:
+    - `npm run typecheck` passed
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+    - `git diff --check` passed
+
+- Sword Hunter clipping root-cause note on April 27, 2026:
+  - the repeated stair-step glitch appears to be a collision-resolution problem, not a collect/planner problem
+  - the relevant room `18,0` stair edges are one-tile rises:
+    - lower surface top to upper surface top differs by `16px`
+    - Sword Hunter physics body height is also `16px`
+  - that means when the hunter stands on the lower shelf, his body already spans the same vertical band as the next solid step tile
+  - the forced `jump-up` skill gives him immediate horizontal velocity into the upper step; if the body overlaps the step face/underside before it has clear vertical separation, Arcade resolves the overlap by snapping/pushing the body downward, which looks like teleporting below the floor
+  - why it looks new:
+    - the visible harness made this frame obvious
+    - the previous harness success criteria only checked the endpoint and hid physically bad paths that later recovered
+    - normal AI may approach some of these edges differently, but the isolated skill is exposing that the candidate `jump-up` execution is not robust for one-tile stairs
+  - likely repair direction:
+    - treat one-tile stair `jump-up` as a separate skill or subcase
+    - require a clearance phase before horizontal overlap with the target face, or launch from farther back / delay horizontal steering until the body bottom is above the target top
+    - do not consume empirical "successful" results for these until path-sanity passes
+
+- Sword Hunter clipping regression clarification on April 27, 2026:
+  - user clarified that the old AI movement branch/manual traversal work did not show this clipping, so we rechecked the branch situation and harness behavior
+  - important finding:
+    - local branches `feature/sword-hunter-ai-2026-04-21` and `feature/sword-hunter-traversal-harness-2026-04-25` point at the same committed base in this worktree
+    - the current behavior difference is in the uncommitted harness/debug layer added after that base, not in committed branch history
+  - headed watch confusion:
+    - `scripts/sword_hunter_live_traversal_harness.mjs` was waiting `2000ms` after loading the room before starting the forced edge test
+    - during that delay, normal live Sword Hunter AI was free to run, so a screen capture could show a clean normal jump first, then the forced harness reset/teleport and clipped on the isolated forced jump
+    - this explains why the capture looked like "normal traversal works, then suddenly a later jump teleports"
+  - changed the harness startup:
+    - waits only until `window.get_sword_hunter_debug()` reports a Sword Hunter loaded in the target room
+    - replaces the fixed `2000ms` delay with configurable `--pre-test-settle-ms`, defaulting to `100ms`
+    - focused fast-start check used `--pre-test-settle-ms=0`
+  - focused fast-start result:
+    - artifact: `output/web-game/sword-hunter-fast-start-path-check-18-2026-04-27/summary.json`
+    - both isolated forced stair jumps still report `path-invalid` / `source-floor-penetration`
+  - revised interpretation:
+    - do not treat this as proof that the old/manual runtime traversal regressed yet
+    - strongest current suspicion is that the forced-edge harness is creating an unnatural physics state by `body.reset(...)`-teleporting to the launch point, manually latching `blocked.down` / `touching.down`, then applying an immediate jump impulse
+    - the old manual traversal path walked into the setup point and used real Arcade floor contact, so it did not exercise this synthetic start-state path
+  - next best diagnostic:
+    - add a harness mode that starts farther back and lets the normal movement code walk to the launch point before forcing/observing the edge, or add body-bound debug to normal runtime and compare the same edge without teleport/latch
+
+- Sword Hunter forced-start fall-through visual/debug pass on April 27, 2026:
+  - added extra live forced-traversal debug data to the harness status and failure-frame metadata:
+    - body bounds (`left/right/top/bottom`) in room-local pixels
+    - source/target traversal node summaries
+    - distance from body bottom to the source surface
+    - terrain probes at the body feet and at the source surface
+    - live object world-collider count
+  - generated focused frame sequences for `18,0 surface:21:0->surface:20:8:jump-up:left`:
+    - natural-settle/no-overlay artifact: `output/web-game/sword-hunter-failure-frames-natural-settle-18-no-overlay-2026-04-27/`
+    - debug artifact: `output/web-game/sword-hunter-failure-frames-natural-settle-18-debug-2026-04-27/`
+    - source-guard artifact: `output/web-game/sword-hunter-failure-frames-source-guard-18-2026-04-27/`
+  - finding:
+    - the forced start begins above a real solid source surface (`source surface y=336`, body bottom starts at `325`, terrain probes at `sourceSurfacePlus1` are solid)
+    - Arcade never reports source-floor contact during the debug settle, and the body falls past the platform
+    - before the guard, the pending-launch code could mistake a later `blocked.down` below the room for valid source-floor contact and launch from below the map
+  - fix made during this pass:
+    - pending forced surface launches now only fire when the body is grounded on the intended source node, not merely when any `blocked.down/touching.down` flag is true
+    - pending forced starts now resolve as `fell` once the body is below the room, before the generic pending-running status can mask that state
+  - browser verification:
+    - artifact: `output/web-game/sword-hunter-source-guard-client-2026-04-27/`
+    - inspected `shot-0.png`; room `18,0` rendered correctly
+    - `errors-0.json` only contained the known local Cloudflare Images `503` resource noise
+    - normal runtime state still showed the Sword Hunter actively traversing `surface:21:0->surface:20:8:jump-up:left`, so the fall-through is currently a forced-harness start reproduction bug, not proof that the route is impossible
+  - validation:
+    - `npm run typecheck` passed
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+    - `node --check scripts/sword_hunter_traversal_harness.mjs` passed
+  - next suggested implementation step:
+    - make forced surface starts reproduce the normal runtime grounded state exactly, likely by placing on the source surface with a controlled one-frame source contact instead of relying on a gravity settle from above
+    - compare the normal runtime launch frame against forced launch for the same edge before pruning this route class
+
+- Sword Hunter Traversal Harness v2 reliability reports on April 27, 2026:
+  - implemented the first report-only empirical reliability pass from the traversal architecture plan
+  - debug forced-edge starts now accept:
+    - `startOffsetX`
+    - `startOffsetY`
+    - `attemptId`
+  - live traversal status now includes:
+    - `attemptId`
+    - `startOffsetX`
+    - `startOffsetY`
+  - `scripts/sword_hunter_live_traversal_harness.mjs` now fans each tested edge into offset attempts:
+    - default offsets: `[-8, -4, 0, 4, 8]`
+    - default repeats per offset: `1`
+    - surface-source edges offset around setup X
+    - wall-source edges offset around start/contact Y
+    - CLI overrides:
+      - `--offsets=-8,-4,0,4,8`
+      - `--repeats-per-offset=1`
+  - harness output now aggregates per edge:
+    - `attemptCount`
+    - `successCount`
+    - `successRate`
+    - `averageSuccessfulTravelMs`
+    - `failureModes`
+    - full attempt traces in `report.json`
+    - representative failed traces in `summary.json`
+  - added report-only reliability categories:
+    - `reliable`: success rate `>= 0.8`
+    - `risky`: success rate `> 0 && < 0.8`
+    - `broken`: attempted but `0` successes
+    - `unproven`: not live-tested because static simulation failed or because it was outside a live sample limit
+  - important behavior constraint:
+    - no live planner consumption was added
+    - empirical reliability remains report-only in this pass
+  - static purpose-room validation:
+    - artifact: `output/web-game/sword-hunter-static-purpose-reliability-v2-2026-04-27/summary.json`
+    - results remained consistent with the previous strict target / air steering pass:
+      - `12,0`: `16/24`
+      - `13,0`: `0/2`
+      - `14,0`: `8/12`
+      - `15,0`: `0/2`
+      - `16,0`: `0/2`
+      - `17,0`: `4/12`
+      - `18,0`: `21/40`
+      - `19,0`: `2/16`
+      - `20,0`: `0/2`
+  - sampled purpose-room live reliability validation:
+    - artifact: `output/web-game/sword-hunter-live-purpose-reliability-v2-sampled-2026-04-27/summary.json`
+    - used `--max-edges-per-room=4` with default five offsets, so selected edges had 5 attempts each
+    - results:
+      - `12,0`: `9/20` attempts; `2` reliable, `2` broken, `20` unproven
+      - `13,0`: `0/0` attempts; `2` unproven
+      - `14,0`: `7/20` attempts; `1` reliable, `1` risky, `2` broken, `8` unproven
+      - `15,0`: `0/0` attempts; `2` unproven
+      - `16,0`: `0/0` attempts; `2` unproven
+      - `17,0`: `10/20` attempts; `2` reliable, `2` broken, `8` unproven
+      - `18,0`: `20/20` attempts; `4` reliable, `36` unproven
+      - `19,0`: `5/10` attempts; `1` reliable, `1` broken, `14` unproven
+      - `20,0`: `0/0` attempts; `2` unproven
+  - focused `18,0` full-edge live reliability validation:
+    - artifact: `output/web-game/sword-hunter-live-18-reliability-v2-full-2026-04-27/summary.json`
+    - used default all static-successful edges and default five offsets
+    - result: `50/105` attempts; `9` reliable, `5` risky, `7` broken, `19` unproven
+    - the first sampled staircase jumps were all reliable, but the full graph has mixed reliability, especially drop edges and a couple head-hit routes; this is useful report-only signal for later planner weighting
+  - focused `17,0` readout from the sampled run:
+    - the remaining one-tile upward diagonal edge is now clearly `broken`:
+      - `surface:15:20->surface:14:16:jump-up:right`
+      - `0/5`, failure mode `missed-traversal-target`
+    - the remaining wall-start/wall-jump edge is also clearly `broken`:
+      - `wall:left:20:15->surface:14:16:wall-jump`
+      - `0/5`, failure mode `missed-traversal-target`
+    - the opposite direction gap and wall jump are reliable at `5/5`
+  - required web-game client artifact:
+    - `output/web-game/sword-hunter-reliability-v2-client-2026-04-27/`
+    - inspected `shot-0.png`; room `18,0` rendered correctly with the player and Sword Hunter visible
+    - `errors-0.json` only had the known local Cloudflare Images `503` resource noise
+  - validation:
+    - initial `npm run typecheck` passed
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+    - `node --check scripts/sword_hunter_traversal_harness.mjs` passed
+  - next suggested implementation step:
+    - extract a small Sword Hunter traversal skill seam for failure classification and start-position generation, using the reliability-v2 report as the safety net
+    - keep planner consumption off until we have at least one more full-edge reliability run across the purpose rooms and decide how to persist/consume empirical data
+    - `node --check scripts/sword_hunter_traversal_harness.mjs` passed
+
+- Sword Hunter traversal skill seam extraction on April 27, 2026:
+  - implemented the first small Sword Hunter-specific traversal skill seam after Harness v2, keeping it report-only and out of live planner route weighting
+  - added `src/enemies/swordsmanTraversalSkills.ts`:
+    - centralizes default live reliability offsets and repeats
+    - defines the current skill registry by edge type:
+      - `jump-up`
+      - `jump-gap`
+      - `drop-down`
+      - `jump-to-wall`
+      - `wall-jump`
+    - owns harness attempt-plan generation:
+      - surface-source edges offset on X
+      - wall-source edges offset on Y
+      - attempt IDs use `edgeId::axisOffset::repeat`
+    - owns reliability categories:
+      - `reliable`
+      - `risky`
+      - `broken`
+      - `unproven`
+    - owns failure classification:
+      - missing status
+      - explicit runtime block reason
+      - fell / timeout / missing edge
+      - landed back on source
+      - landed on another node
+      - still on wall for wall-jump failures
+  - updated `scripts/sword_hunter_live_traversal_harness.mjs` to consume that seam instead of carrying local harness-only traversal logic
+  - important behavior constraint:
+    - runtime Sword Hunter behavior remains unchanged
+    - the live planner still does not consume empirical reliability
+  - validation reruns after the extraction:
+    - static purpose rooms artifact: `output/web-game/sword-hunter-static-purpose-skill-seam-2026-04-27/summary.json`
+      - results stayed consistent with the v2 baseline:
+        - `12,0`: `16/24`
+        - `13,0`: `0/2`
+        - `14,0`: `8/12`
+        - `15,0`: `0/2`
+        - `16,0`: `0/2`
+        - `17,0`: `4/12`
+        - `18,0`: `21/40`
+        - `19,0`: `2/16`
+        - `20,0`: `0/2`
+    - sampled live purpose rooms artifact: `output/web-game/sword-hunter-live-purpose-skill-seam-sampled-2026-04-27/summary.json`
+      - results matched the v2 sampled room-level counts:
+        - `12,0`: `9/20`; `2` reliable, `2` broken, `20` unproven
+        - `13,0`: `0/0`; `2` unproven
+        - `14,0`: `7/20`; `1` reliable, `1` risky, `2` broken, `8` unproven
+        - `15,0`: `0/0`; `2` unproven
+        - `16,0`: `0/0`; `2` unproven
+        - `17,0`: `10/20`; `2` reliable, `2` broken, `8` unproven
+        - `18,0`: `20/20`; `4` reliable, `36` unproven
+        - `19,0`: `5/10`; `1` reliable, `1` broken, `14` unproven
+        - `20,0`: `0/0`; `2` unproven
+    - focused `18,0` full-edge live reliability artifact: `output/web-game/sword-hunter-live-18-skill-seam-full-2026-04-27/summary.json`
+      - result: `49/105`; `9` reliable, `4` risky, `8` broken, `19` unproven
+      - this differed from the v2 baseline by one attempt/category, which appears to be normal live Arcade timing variance rather than an output-shape change
+    - browser client artifact: `output/web-game/sword-hunter-skill-seam-client-2026-04-27/`
+      - inspected `shot-0.png`; room `18,0` rendered correctly with the player and Sword Hunter visible
+      - `errors-0.json` only had the known local Cloudflare Images `503` resource noise
+  - next suggested implementation step:
+    - run one more full-edge live sweep across all purpose rooms with the seam in place, then use the report to decide which skill should get the first real extracted execution owner
+
+- Sword Hunter full purpose-room reliability sweep on April 27, 2026:
+  - ran the full live reliability sweep requested after the skill seam extraction
+  - command:
+    - `node scripts/sword_hunter_live_traversal_harness.mjs --url=http://localhost:3002/ --rooms='12,0;13,0;14,0;15,0;16,0;17,0;18,0;19,0;20,0' --max-edges-per-room=0 --duration-ms=2600 --out=output/web-game/sword-hunter-live-purpose-skill-seam-full-2026-04-27`
+  - artifact:
+    - `output/web-game/sword-hunter-live-purpose-skill-seam-full-2026-04-27/summary.json`
+    - final screenshot: `output/web-game/sword-hunter-live-purpose-skill-seam-full-2026-04-27/final.png`
+  - aggregate result:
+    - `115/255` live attempts succeeded
+    - graph candidate edges: `51/112` static-successful
+    - live categories across all purpose rooms:
+      - `22` reliable
+      - `6` risky
+      - `23` broken
+      - `61` unproven
+  - room results:
+    - `12,0` Simple Jump Up: `39/80`; `8` reliable, `1` risky, `7` broken, `8` unproven (`16/24` graph)
+    - `13,0` Long Jump Gap: `0/0`; `2` unproven (`0/2` graph)
+    - `14,0` Short Hop: `12/40`; `2` reliable, `1` risky, `5` broken, `4` unproven (`8/12` graph)
+    - `15,0` Wall Jump Left: `0/0`; `2` unproven (`0/2` graph)
+    - `16,0` Wall Jump Right: `0/0`; `2` unproven (`0/2` graph)
+    - `17,0` Jump To Wall then Wall Jump: `10/20`; `2` reliable, `2` broken, `8` unproven (`4/12` graph)
+    - `18,0` Stacked Shelves: `49/105`; `9` reliable, `4` risky, `8` broken, `19` unproven (`21/40` graph)
+    - `19,0` Tight Ceiling JUmp: `5/10`; `1` reliable, `1` broken, `14` unproven (`2/16` graph)
+    - `20,0` Edge/Lip Jump: `0/0`; `2` unproven (`0/2` graph)
+  - broken edge failure modes:
+    - `hit-head`: `50` attempts
+    - `fell`: `43` attempts
+    - `missed-traversal-target`: `20` attempts
+    - `timeout`: `2` attempts
+  - broken edge types:
+    - `drop-down`: `9` edges
+    - `jump-up`: `6` edges
+    - `jump-gap`: `4` edges
+    - `jump-to-wall`: `3` edges
+    - `wall-jump`: `1` edge
+  - reliable edge types:
+    - `jump-gap`: `8` edges
+    - `drop-down`: `7` edges
+    - `jump-up`: `4` edges
+    - `jump-to-wall`: `2` edges
+    - `wall-jump`: `1` edge
+  - interpretation:
+    - `18,0` reproduced the previous focused full-edge result exactly at `49/105`, which is good evidence that the seam did not change report behavior
+    - the biggest runtime failures are not collect/chase decisions; they are movement-skill execution and graph/static mismatch:
+      - many upward and jump-to-wall candidates hit overhead tiles
+      - many drop candidates fall past their intended target
+      - the remaining `17,0` failures are still target-miss problems
+    - the next most useful extraction target is likely `drop-down`, because it has the most broken edges and its failures are highly consistent
+    - the next most useful graph-pruning target is likely `hit-head` upward/jump-to-wall candidates, because those should be filtered before live execution trusts them
+  - harness/browser notes:
+    - `pageErrors` was empty
+    - console output included known local noise: Cloudflare Images `503`, custom background image load warnings, local PartyKit websocket warnings, `clouds_deco` zero-frame warning, and WebGL readback performance warnings
+    - inspected `final.png`; the game rendered and the harness ended on room `20,0` with debug UI visible
+
+- Sword Hunter bottom-row head-hit classification pass on April 27, 2026:
+  - investigated the remaining live `hit-head` cluster from the purpose-room reliability sweep after the drop skill pass:
+    - focused traces on `14,0` and `18,0` showed the visible Sword Hunter sprite is not the collider; the live body is about `11x16`, derived from the configured `10x14` body scaled by `displayScale: 1.12`
+    - the failing traces all ended with the body center around `y=360`, below the room bottom row, after starting from a `surface:21:*` source; that means the body is being separated under the source floor / bottom-row solid column, not hitting a normal overhead ceiling
+    - a runtime movement experiment with a lower horizontal launch and a brief vertical hold did not fix the issue, so it was reverted rather than leaving an unproven movement change in place
+  - changed live forced-edge setup/reporting:
+    - surface jump starts no longer receive the debug-only fake floor contact latch before the forced impulse; drops and wall starts still keep the latch they need
+    - `classifySwordsmanTraversalFailure(...)` now reports this pattern as `bottom-row-source-floor-hit` when a `hit-head` block comes from a bottom-row surface and the body has been pushed below the floor
+    - empirical reliability remains report-only; no planner filtering/penalty is consuming this classification yet
+  - validation artifacts:
+    - focused live classification check: `output/web-game/sword-hunter-live-bottom-row-hit-classified-2026-04-27/`
+    - full static purpose sweep: `output/web-game/sword-hunter-static-bottom-row-classified-2026-04-27/summary.json`
+    - full live purpose sweep: `output/web-game/sword-hunter-live-bottom-row-classified-2026-04-27/summary.json`
+    - browser smoke: `output/web-game/sword-hunter-bottom-row-classified-client-2026-04-27/`
+  - full static purpose results were unchanged, as expected:
+    - `12,0`: `16/24`
+    - `13,0`: `0/2`
+    - `14,0`: `8/12`
+    - `15,0`: `2/2`
+    - `16,0`: `2/2`
+    - `17,0`: `6/12`
+    - `18,0`: `21/40`
+    - `19,0`: `4/16`
+    - `20,0`: `2/2`
+  - full live purpose results:
+    - `12,0`: `40/80`; `7` reliable, `3` risky, `6` broken, `8` unproven
+    - `13,0`: `0/0`; `2` unproven
+    - `14,0`: `12/40`; `2` reliable, `1` risky, `5` broken, `4` unproven
+    - `15,0`: `10/10`; `2` reliable
+    - `16,0`: `10/10`; `2` reliable
+    - `17,0`: `25/30`; `5` reliable, `1` broken, `6` unproven
+    - `18,0`: `47/105`; `9` reliable, `4` risky, `8` broken, `19` unproven
+    - `19,0`: `10/20`; `2` reliable, `2` broken, `12` unproven
+    - `20,0`: `10/10`; `2` reliable
+  - aggregate live failure modes after classification:
+    - `bottom-row-source-floor-hit`: `50`
+    - `fell`: `56`
+    - `missed-traversal-target`: `26`
+    - `timeout`: `9`
+  - browser verification:
+    - inspected `shot-0.png`; room `18,0` rendered correctly with the player and Sword Hunter visible
+    - `errors-0.json` only had the known local Cloudflare Images `503` noise
+  - validation:
+    - `npm run typecheck` passed
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+    - `node --check scripts/sword_hunter_traversal_harness.mjs` passed
+    - `git diff --check` passed
+  - next suggested implementation step:
+    - treat `bottom-row-source-floor-hit` as a distinct movement-skill bug, not as overhead/ceiling pruning
+    - inspect Phaser body reset / previous-position state for forced edge starts and compare against normal runtime jumping from bottom-row surfaces before changing graph reachability
+
+- Sword Hunter two-phase forced surface-start pass on April 27, 2026:
+  - implemented a debug-only pending launch state for forced surface traversal tests:
+    - surface `jump-up`, `jump-gap`, and `jump-to-wall` tests now place the Sword Hunter on the source surface first, expose `pendingLaunchEdgeId`, and launch after a short settle delay
+    - wall starts and `drop-down` starts keep the existing immediate behavior
+    - `getSwordsmanTraversalEdgeTestStatus` can also advance a pending launch so the live harness does not depend on a normal frame update occurring between probe calls
+  - validation artifact:
+    - focused live sweep: `output/web-game/sword-hunter-live-two-phase-surface-start-focused-2026-04-27/summary.json`
+    - browser smoke: `output/web-game/sword-hunter-two-phase-surface-start-client-2026-04-27/`
+  - focused live sweep results:
+    - `12,0`: `40/80`; `7` reliable, `3` risky, `6` broken, `8` unproven
+    - `14,0`: `12/40`; `2` reliable, `1` risky, `5` broken, `4` unproven
+    - `18,0`: `47/105`; `9` reliable, `3` risky, `9` broken, `19` unproven
+  - the known bottom-row cases still fail from real grounded starts:
+    - `12,0 surface:21:0->surface:18:16:jump-up:left`: `5/5` blocked as `bottom-row-source-floor-hit`
+    - `14,0 surface:21:0->surface:20:14:jump-up:left`: `5/5` blocked as `bottom-row-source-floor-hit`
+    - `18,0 surface:21:0->surface:20:8:jump-up:left`: `5/5` blocked as `bottom-row-source-floor-hit`
+  - vertical probe:
+    - `18,0 surface:21:0->surface:20:8:jump-up:left` still failed at start offsets `0`, `-1`, `-2`, `-4`, and `-8`
+    - it only succeeded when spawned `12-16px` above the source floor, which is not a valid grounded launch and should not be used to mark the edge reliable
+  - browser verification:
+    - inspected `shot-0.png`; room `18,0` rendered correctly with the Sword Hunter and player visible
+    - `errors-0.json` only contained the known local Cloudflare Images `503`
+    - interesting normal-runtime note: the smoke state can show the Sword Hunter mid-route on `surface:21:0->surface:20:8:jump-up:left`, so the next pass should compare normal route handoff/grounded collision state with forced harness start state before deciding whether to prune or retune that edge class
+  - validation:
+    - `npm run typecheck` passed
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+    - `node --check scripts/sword_hunter_traversal_harness.mjs` passed
+  - next suggested implementation step:
+    - compare the exact normal-runtime launch frame against the forced launch frame for the same edge, especially body center, bottom, `blocked.down`, previous body position, and actual Arcade tile collision contact
+    - if normal launch is genuinely succeeding from the floor, fix the forced harness start to reproduce that state
+    - if normal success is stale/debug-misreported, prune these bottom-row upward/gap/wall candidates from static reachability or mark them unproven
+
+- Sword Hunter failure-frame capture pass on April 27, 2026:
+  - added optional visual failure sequences to `scripts/sword_hunter_live_traversal_harness.mjs`:
+    - `--capture-failure-frames` stores a rolling screenshot buffer for failed attempts
+    - `--failure-frame-limit=N` caps how many failed attempts write images
+    - `--frames-per-failure=N` caps each failed-attempt sequence
+    - `--frame-interval-ms=N` controls the screenshot/status cadence while capture is enabled
+    - `--edge-id=...` / `--edge-ids=...` filters the live sweep to specific graph-successful edges for focused visual debugging
+  - generated a focused visual artifact for the known `18,0` bottom-row failure:
+    - command targeted `surface:21:0->surface:20:8:jump-up:left` with `--offsets=0`
+    - artifact: `output/web-game/sword-hunter-failure-frames-bottom-row-18-2026-04-27/`
+    - frame sequence directory: `output/web-game/sword-hunter-failure-frames-bottom-row-18-2026-04-27/failure-frames/01-18_0-surface_21_0-_surface_20_8_jump-up_left-x0-r1/`
+    - frames captured:
+      - `frame-00-start.png`
+      - `frame-01-t142.png`
+      - `metadata.json`
+    - summary result: `0/1` succeeded; failure mode `bottom-row-source-floor-hit`
+    - because the edge fails almost immediately, the sequence only has two useful frames: pending start and blocked-at-142ms
+  - validation:
+    - inspected both generated frames
+    - `npm run typecheck` passed
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+    - `node --check scripts/sword_hunter_traversal_harness.mjs` passed
+    - `git diff --check` passed
+
+- Sword Hunter drop skill / scaled simulation pass on April 27, 2026:
+  - implemented the first movement-skill cleanup pass after the full reliability sweep
+  - changes:
+    - `src/enemies/swordsmanTraversalHarness.ts` now resolves the harness body size using the Sword Hunter display scale, matching the live Arcade body more closely:
+      - config body: `10x14`
+      - scaled body: about `11.2x15.68`
+      - live debug reports this as about `11x16`
+    - `src/enemies/swordsmanTraversalSkills.ts` now owns a `drop-down` landing-window helper:
+      - computes a safe target-surface center window from surface bounds and body width
+      - brakes horizontal air movement when already inside the landing window
+      - otherwise applies bounded horizontal correction toward the intended landing window
+    - `src/enemies/swordsmanRobustPlanner.ts` now uses the same drop helper in static/robust simulation
+    - `src/scenes/overworld/liveObjects.ts` now uses the drop helper for live `drop-down` air steering
+  - static harness rerun:
+    - artifact: `output/web-game/sword-hunter-static-purpose-drop-skill-head-prune-2026-04-27/summary.json`
+    - result:
+      - `12,0`: `16/24`
+      - `13,0`: `0/2`
+      - `14,0`: `8/12`
+      - `15,0`: `2/2`
+      - `16,0`: `2/2`
+      - `17,0`: `6/12`
+      - `18,0`: `21/40`
+      - `19,0`: `4/16`
+      - `20,0`: `2/2`
+    - interpretation:
+      - scaled-body/drop simulation unlocked previously unproven purpose rooms `15,0`, `16,0`, and `20,0`
+      - it did not prune the known `12,0` head-hit edges; those still need a separate conservative overhead/ceiling filter because the current simulator still believes the exact launch path succeeds
+  - full live reliability rerun:
+    - artifact: `output/web-game/sword-hunter-live-purpose-drop-skill-head-prune-2026-04-27/summary.json`
+    - final screenshot: `output/web-game/sword-hunter-live-purpose-drop-skill-head-prune-2026-04-27/final.png`
+    - aggregate result:
+      - before: `115/255` live attempts, `22` reliable, `6` risky, `23` broken, `61` unproven, `51/112` graph-successful
+      - after: `164/305` live attempts, `31` reliable, `8` risky, `22` broken, `51` unproven, `61/112` graph-successful
+    - room results:
+      - `12,0`: `40/80`; `7` reliable, `3` risky, `6` broken, `8` unproven (`16/24` graph)
+      - `13,0`: `0/0`; `2` unproven (`0/2` graph)
+      - `14,0`: `12/40`; `2` reliable, `1` risky, `5` broken, `4` unproven (`8/12` graph)
+      - `15,0`: `10/10`; `2` reliable, `0` broken, `0` unproven (`2/2` graph)
+      - `16,0`: `10/10`; `2` reliable, `0` broken, `0` unproven (`2/2` graph)
+      - `17,0`: `25/30`; `5` reliable, `1` broken, `6` unproven (`6/12` graph)
+      - `18,0`: `47/105`; `9` reliable, `4` risky, `8` broken, `19` unproven (`21/40` graph)
+      - `19,0`: `10/20`; `2` reliable, `2` broken, `12` unproven (`4/16` graph)
+      - `20,0`: `10/10`; `2` reliable, `0` broken, `0` unproven (`2/2` graph)
+    - failure mode changes:
+      - `hit-head`: unchanged at `50`
+      - `fell`: improved from `43` to `38`
+      - `missed-traversal-target`: improved from `20` to `15`
+      - `timeout`: worsened from `2` to `7`, mostly from newly tested/drop-braked edges
+    - interpretation:
+      - net reliability improved substantially because the harness now proves more reachable routes and `drop-down` has a real landing-window behavior
+      - the known `hit-head` class remains unsolved and should be the next graph/simulation task
+      - room `18,0` regressed slightly from `49/105` to `47/105`; keep that as a risk when tuning drop braking further
+  - browser verification:
+    - artifact: `output/web-game/sword-hunter-drop-skill-client-2026-04-27/`
+    - inspected `shot-0.png`; room `20,0` rendered correctly with player and Sword Hunter visible
+    - `errors-0.json` only had the known local Cloudflare Images `503` resource noise
+  - validation:
+    - `npm run typecheck` passed
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+    - `node --check scripts/sword_hunter_traversal_harness.mjs` passed
+    - `git diff --check` passed
+  - next suggested implementation step:
+    - add conservative overhead/ceiling pruning for `jump-up` and `jump-to-wall` candidates, focused first on the unchanged `hit-head` failures in `12,0`, `14,0`, and `18,0`
+    - then rerun the static harness and expect those edges to move from live `broken` to static/live `unproven`
+
+- Sword Hunter strict target / air steering retry on April 26, 2026:
+  - reran focused room `17,0` after the wall-underblock pruning:
+    - artifact: `output/web-game/sword-hunter-live-17-retry-2026-04-26/summary.json`
+    - result was `2/5` live successes (`5/12` graph)
+    - failed traces showed three classes: airborne near-miss counted as graph success, a drop edge that fell past the target, and a wall-jump that did not land
+  - tightened traversal-edge success criteria:
+    - robust simulator now counts a surface target only when the simulated body is actually on the floor / blocked down at that target
+    - live forced-edge status now counts a surface target only when the Arcade body is on-floor, and wall targets only when wall contact exists
+    - this keeps normal traversal context's looser airborne matching available for planning context, but prevents the harness/simulator from declaring a traversal edge successful just because the body passed near a target while airborne
+  - aligned live committed-edge air steering with the robust simulator:
+    - live air steering now uses the committed traversal edge's `targetX` and can brake/reverse toward the landing target
+    - before this, live execution kept pushing in the original jump direction, so it sailed over tiny one-tile platforms that the simulator expected it to correct toward
+  - focused validation artifacts:
+    - strict target only:
+      - static: `output/web-game/sword-hunter-static-17-strict-target-2026-04-26/summary.json`
+      - live: `output/web-game/sword-hunter-live-17-strict-target-2026-04-26/summary.json`
+      - `17,0` static dropped from `5/12` to `4/12`; live under strict status was `0/4`
+    - target-aware air steering:
+      - live: `output/web-game/sword-hunter-live-17-target-air-steer-2026-04-26/summary.json`
+      - `17,0` improved to `2/4` live successes under the stricter success rule
+  - purpose-room validation after both changes:
+    - static: `output/web-game/sword-hunter-static-purpose-strict-target-air-steer-2026-04-26/summary.json`
+      - `12,0`: `16/24`
+      - `13,0`: `0/2`
+      - `14,0`: `8/12`
+      - `15,0`: `0/2`
+      - `16,0`: `0/2`
+      - `17,0`: `4/12`
+      - `18,0`: `21/40`
+      - `19,0`: `2/16`
+      - `20,0`: `0/2`
+    - sampled live: `output/web-game/sword-hunter-live-purpose-strict-target-air-steer-2026-04-26/summary.json`
+      - `12,0`: `2/4`
+      - `13,0`: `0/0`
+      - `14,0`: `1/4`
+      - `15,0`: `0/0`
+      - `16,0`: `0/0`
+      - `17,0`: `2/4`
+      - `18,0`: `4/4` (improved from `2/4` in the earlier sampled baseline)
+      - `19,0`: `1/2`
+      - `20,0`: `0/0`
+  - required web-game client artifact:
+    - `output/web-game/sword-hunter-strict-target-air-steer-client-2026-04-26/`
+    - inspected `shot-0.png`; room `18,0` rendered correctly and the Sword Hunter was mid-route on the staircase
+    - `errors-0.json` only had the known local Cloudflare Images `503` resource noise
+  - interpretation:
+    - the target-aware air steering is a real execution improvement, especially for small platform landings
+    - the stricter target test makes the harness more honest; some previous "successes" were just near passes
+    - remaining `17,0` misses are not the same issue:
+      - `surface:15:20->surface:14:16:jump-up:right` still lands on the floor below; likely an over-optimistic upward diagonal jump from a one-tile source
+      - `wall:left:20:15->surface:14:16:wall-jump` still resolves poorly in live and needs a separate wall-start / wall-jump investigation
+    - a brief attempt to remove the wall-source debug latch after launch made live wall-start tests worse (`output/web-game/sword-hunter-live-17-wall-latch-2026-04-26/summary.json` was `1/4`), so that latch tweak was reverted
+  - validation run during this pass:
+    - `npm run typecheck` passed
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+
+- Sword Hunter `17,0` visual alternation investigation on April 28, 2026:
+  - user-provided screen-recording frames showed the Sword Hunter alternating between two impossible positions every other frame during a forced wall-route test
+  - extracted/inspected the sequence under `output/web-game/weird-jump-sequence-2026-04-28/frames/` and built a labeled crop sheet at `output/web-game/weird-jump-sequence-2026-04-28/crops-labeled/contact-0001-0025.jpg`
+  - found the debug status endpoint was mutating movement state by calling pending settle/launch helpers from `debugGetSwordsmanTraversalEdgeTestStatus`; made that status endpoint read-only so only the normal game update loop can advance forced traversal movement
+  - validation:
+    - `npm run typecheck` passed
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+    - `node --check scripts/sword_hunter_traversal_harness.mjs` passed
+    - `git diff --check` passed
+  - reran the forced intended `17,0` wall-route sweep:
+    - artifact: `output/web-game/sword-hunter-debug-17-status-readonly-2026-04-28/summary.json`
+    - result stayed `4/12` live successes: `1` reliable, `1` risky, `2` broken
+    - screenshot sequence for `surface:14:16->wall:left:20:15:jump-to-wall` now shows a normal failed arc: he launches, clears the target wall-contact zone, lands on the opposite surface, and is blocked as `missed-traversal-target`
+    - a per-frame RAF probe over 80 frames showed no large frame-to-frame position jumps after the patch
+  - current interpretation:
+    - the A/B visual flip was a harness/debug side-effect bug, not the actual traversal physics
+    - the remaining `17,0` problem is real traversal execution/graph semantics: `jump-to-wall` candidates can resolve as surface landings because the arc is too high/long for the intended wall contact
+
+- Sword Hunter traversal harness hardening on April 28, 2026:
+  - implemented fixes after a read-only harness audit found ways the live/static reports could still mislead us:
+    - forced-edge status now only resolves for the active forced edge, latches completed final states, and checks timeout before a still-running attempt can newly become success
+    - preview smoke action failures now propagate as top-level failures unless the nested result is a valid traversal status; normal failed traversal attempts like `blocked` remain valid status results
+    - live harness validates every preview action response and every traversal status shape before recording an attempt
+    - live harness reports a host/browser deadline overrun as `harness-timeout` instead of treating stale `running` as a traversal status
+    - requested live edge IDs are validated per room; typos or static-failed requested edges now fail loudly instead of silently producing a zero-attempt run
+    - focused `--edge-ids` reports now only count requested-but-untested edges as `unproven`, instead of labeling unrelated room edges as unproven
+    - live and static harnesses now close Playwright browsers on thrown errors
+    - added optional quality gates:
+      - live: `--fail-on-broken`, `--fail-on-risky`, `--fail-on-unproven`, `--fail-on-console`
+      - static: `--fail-on-static-failures`, `--fail-on-console`
+    - static screenshot capture now waits for the harness app and dismisses close overlays before capturing
+  - validation:
+    - `npm run typecheck` passed
+    - `node --check scripts/sword_hunter_live_traversal_harness.mjs` passed
+    - `node --check scripts/sword_hunter_traversal_harness.mjs` passed
+    - `git diff --check` passed
+    - focused live run artifact: `output/web-game/sword-hunter-debug-17-harness-hardened-2026-04-28/summary.json`
+      - result: `4/12`, `1` reliable, `1` risky, `2` broken, `0` unproven
+    - focused static run artifact: `output/web-game/sword-hunter-static-17-harness-hardened-2026-04-28/summary.json`
+      - result: `6/12` simulated edges ok
+    - bogus requested edge ID now fails with `Requested edge selection failed`
+    - `--fail-on-broken` check exits nonzero when a focused broken edge is present

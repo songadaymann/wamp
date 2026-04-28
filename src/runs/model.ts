@@ -49,6 +49,7 @@ export interface RunFinishRequestBody {
   elapsedMs: number;
   deaths: number;
   collectiblesCollected: number;
+  enemyCollectiblesCollected: number;
   enemiesDefeated: number;
   checkpointsReached: number;
   score?: number | null;

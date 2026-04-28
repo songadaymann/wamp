@@ -171,6 +171,10 @@ export class OverworldObjectiveController {
     this.applyGoalRunMutation(this.host.goalRunController.recordCollectibleCollected(roomId));
   }
 
+  handleEnemyCollectibleCollected(roomId: string): void {
+    this.applyGoalRunMutation(this.host.goalRunController.recordEnemyCollectibleCollected(roomId));
+  }
+
   private updateCheckpointSprintRun(runState: GoalRunState): void {
     if (runState.goal.type !== 'checkpoint_sprint') {
       return;

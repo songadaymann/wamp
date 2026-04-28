@@ -544,7 +544,7 @@ async function requestMagicLink(): Promise<void> {
       body: JSON.stringify({ email }),
     });
 
-    state.debugMagicLink = response.debugMagicLink ?? null;
+    state.debugMagicLink = normalizeDebugMagicLink(response.debugMagicLink);
     state.status =
       response.delivery === 'email'
         ? 'Check your email for the sign-in link.'
@@ -1276,6 +1276,28 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return (await response.json()) as T;
+}
+
+function normalizeDebugMagicLink(rawMagicLink: string | null | undefined): string | null {
+  if (!rawMagicLink) {
+    return null;
+  }
+
+  const apiBase = getApiBaseUrl().replace(/\/+$/, '');
+  if (!apiBase) {
+    return rawMagicLink;
+  }
+
+  try {
+    const magicLinkUrl = new URL(rawMagicLink);
+    if (magicLinkUrl.pathname !== '/api/auth/verify') {
+      return rawMagicLink;
+    }
+
+    return `${apiBase}${magicLinkUrl.pathname}${magicLinkUrl.search}${magicLinkUrl.hash}`;
+  } catch {
+    return rawMagicLink;
+  }
 }
 
 function initializeStatusFromQuery(): void {

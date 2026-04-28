@@ -6,7 +6,6 @@ import {
   editorState,
   getObjectDefaultFrame,
   getObjectFrameSourceRect,
-  getObjectPreviewBounds,
   getTilesetByKey,
   getTilesetUiTheme,
   type GameObjectConfig,
@@ -879,14 +878,7 @@ export class PaletteController {
   }
 
   private getObjectPreviewSourceSize(objectConfig: GameObjectConfig): { width: number; height: number } {
-    if (objectConfig.placeUsingPreviewBounds) {
-      const preview = getObjectPreviewBounds(objectConfig);
-      return {
-        width: preview.width,
-        height: preview.height,
-      };
-    }
-
+    // Palette previews should show the full sprite art, not the tighter placement bounds.
     return {
       width: objectConfig.frameWidth,
       height: objectConfig.frameHeight,
@@ -909,11 +901,6 @@ export class PaletteController {
       frame,
       image.naturalWidth || image.width || objectConfig.frameWidth,
     );
-    const preview = objectConfig.placeUsingPreviewBounds ? getObjectPreviewBounds(objectConfig) : null;
-    const sx = sourceRect.sx + (preview?.offsetX ?? 0);
-    const sy = sourceRect.sy + (preview?.offsetY ?? 0);
-    const sw = preview?.width ?? sourceRect.sw;
-    const sh = preview?.height ?? sourceRect.sh;
     context.save();
 
     if (flipX) {
@@ -921,10 +908,10 @@ export class PaletteController {
       context.scale(-1, 1);
       context.drawImage(
         image,
-        sx,
-        sy,
-        sw,
-        sh,
+        sourceRect.sx,
+        sourceRect.sy,
+        sourceRect.sw,
+        sourceRect.sh,
         0,
         0,
         destWidth,
@@ -933,10 +920,10 @@ export class PaletteController {
     } else {
       context.drawImage(
         image,
-        sx,
-        sy,
-        sw,
-        sh,
+        sourceRect.sx,
+        sourceRect.sy,
+        sourceRect.sw,
+        sourceRect.sh,
         destX,
         destY,
         destWidth,

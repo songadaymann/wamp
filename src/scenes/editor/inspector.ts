@@ -9,12 +9,19 @@ import {
   type PlacedObject,
 } from '../../config';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
+import { SWORDSMAN_AI_OBJECT_ID } from '../../enemies/swordsmanAi';
+import {
+  DEFAULT_SWORDSMAN_OBJECTIVE_MODE,
+  SWORDSMAN_OBJECTIVE_MODE_LABELS,
+  normalizeSwordsmanObjectiveMode,
+  type SwordsmanObjectiveMode,
+} from '../../enemies/swordsmanObjectives';
 import { requestSignTextEdit } from '../../signs/events';
 import { canPlacedObjectHaveSignText, getPlacedObjectSignText } from '../../signs/model';
 import { type EditorEditRuntime } from './editRuntime';
 import type { EditorInspectorState } from './uiBridge';
 
-type PinnedInspector = { kind: 'pressure' | 'container'; instanceId: string } | null;
+type PinnedInspector = { kind: 'pressure' | 'container' | 'swordsman'; instanceId: string } | null;
 
 export class EditorInspectorController {
   private focusedPressurePlateInstanceId: string | null = null;
@@ -22,6 +29,8 @@ export class EditorInspectorController {
   private pressurePlateStatusText: string | null = null;
   private focusedContainerInstanceId: string | null = null;
   private containerStatusText: string | null = null;
+  private focusedSwordsmanInstanceId: string | null = null;
+  private swordsmanStatusText: string | null = null;
   private pinnedInspector: PinnedInspector = null;
 
   constructor(
@@ -58,6 +67,8 @@ export class EditorInspectorController {
     this.pressurePlateStatusText = null;
     this.focusedContainerInstanceId = null;
     this.containerStatusText = null;
+    this.focusedSwordsmanInstanceId = null;
+    this.swordsmanStatusText = null;
     this.pinnedInspector = null;
   }
 
@@ -182,6 +193,18 @@ export class EditorInspectorController {
     ) {
       this.pinnedInspector = null;
     }
+    if (
+      this.focusedSwordsmanInstanceId &&
+      !this.editRuntime.hasPlacedObjectInstanceId(this.focusedSwordsmanInstanceId)
+    ) {
+      this.focusedSwordsmanInstanceId = null;
+    }
+    if (
+      this.pinnedInspector?.kind === 'swordsman' &&
+      !this.editRuntime.hasPlacedObjectInstanceId(this.pinnedInspector.instanceId)
+    ) {
+      this.pinnedInspector = null;
+    }
 
     const pointer = this.scene.input.activePointer;
     const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
@@ -195,8 +218,22 @@ export class EditorInspectorController {
         this.containerStatusText = null;
       }
       this.focusedContainerInstanceId = hoveredContainer.instanceId;
+      this.focusedSwordsmanInstanceId = null;
     } else if (this.pinnedInspector?.kind !== 'container') {
       this.focusedContainerInstanceId = null;
+      const hoveredSwordsman = this.editRuntime.findPlacedObjectAt(
+        worldPoint.x,
+        worldPoint.y,
+        (placed) => placed.id === SWORDSMAN_AI_OBJECT_ID,
+      );
+      if (hoveredSwordsman) {
+        if (this.focusedSwordsmanInstanceId !== hoveredSwordsman.instanceId) {
+          this.swordsmanStatusText = null;
+        }
+        this.focusedSwordsmanInstanceId = hoveredSwordsman.instanceId;
+      } else if (this.pinnedInspector?.kind !== 'swordsman') {
+        this.focusedSwordsmanInstanceId = null;
+      }
     }
 
     const focused = this.getFocusedContainer();
@@ -252,6 +289,7 @@ export class EditorInspectorController {
     if (clickedPressurePlate) {
       this.focusedPressurePlateInstanceId = clickedPressurePlate.instanceId;
       this.focusedContainerInstanceId = null;
+      this.focusedSwordsmanInstanceId = null;
       this.pinInspector('pressure', clickedPressurePlate.instanceId);
       this.pressurePlateStatusText = null;
       this.renderPressurePlatePanel();
@@ -259,6 +297,21 @@ export class EditorInspectorController {
     }
 
     if (this.handleContainerContentsClick(worldPoint.x, worldPoint.y)) {
+      return true;
+    }
+
+    const clickedSwordsman = this.editRuntime.findPlacedObjectAt(
+      worldPoint.x,
+      worldPoint.y,
+      (placed) => placed.id === SWORDSMAN_AI_OBJECT_ID,
+    );
+    if (clickedSwordsman) {
+      this.focusedSwordsmanInstanceId = clickedSwordsman.instanceId;
+      this.focusedPressurePlateInstanceId = null;
+      this.focusedContainerInstanceId = null;
+      this.pinInspector('swordsman', clickedSwordsman.instanceId);
+      this.swordsmanStatusText = null;
+      this.renderInspectorUi();
       return true;
     }
 
@@ -292,6 +345,7 @@ export class EditorInspectorController {
 
     if (placed && canPlacedObjectTriggerOtherObjects(placed)) {
       this.focusedContainerInstanceId = null;
+      this.focusedSwordsmanInstanceId = null;
       this.focusedPressurePlateInstanceId = placed.instanceId;
       this.pinInspector('pressure', placed.instanceId);
       this.beginPressurePlateConnection(placed.instanceId, true);
@@ -301,9 +355,20 @@ export class EditorInspectorController {
     if (placed && canPlacedObjectBeContainer(placed)) {
       this.focusedContainerInstanceId = placed.instanceId;
       this.focusedPressurePlateInstanceId = null;
+      this.focusedSwordsmanInstanceId = null;
       this.pinInspector('container', placed.instanceId);
       this.containerStatusText = `${this.getContainerName(placed.id)} placed. Select a ${this.getContainerAcceptedContentsLabel(placed.id)} and click it to fill the container.`;
       this.renderContainerContentsPanel();
+      return;
+    }
+
+    if (placed && placed.id === SWORDSMAN_AI_OBJECT_ID) {
+      this.focusedSwordsmanInstanceId = placed.instanceId;
+      this.focusedPressurePlateInstanceId = null;
+      this.focusedContainerInstanceId = null;
+      this.pinInspector('swordsman', placed.instanceId);
+      this.swordsmanStatusText = 'Sword Hunter placed. Choose what it should try to do.';
+      this.renderInspectorUi();
     }
   }
 
@@ -321,6 +386,9 @@ export class EditorInspectorController {
     if (removed.instanceId === this.focusedContainerInstanceId) {
       this.focusedContainerInstanceId = null;
     }
+    if (removed.instanceId === this.focusedSwordsmanInstanceId) {
+      this.focusedSwordsmanInstanceId = null;
+    }
     if (this.pinnedInspector?.instanceId === removed.instanceId) {
       this.pinnedInspector = null;
     }
@@ -330,8 +398,12 @@ export class EditorInspectorController {
     if (canPlacedObjectBeContainer(removed)) {
       this.containerStatusText = `${this.getContainerName(removed.id)} removed.`;
     }
+    if (removed.id === SWORDSMAN_AI_OBJECT_ID) {
+      this.swordsmanStatusText = 'Sword Hunter removed.';
+    }
     this.renderPressurePlatePanel();
     this.renderContainerContentsPanel();
+    this.renderInspectorUi();
   }
 
   handleObjectSpritesRebuilt(): void {
@@ -340,6 +412,7 @@ export class EditorInspectorController {
     }
     this.renderPressurePlatePanel();
     this.renderContainerContentsPanel();
+    this.renderInspectorUi();
   }
 
   beginFocusedPressurePlateConnection(): void {
@@ -395,6 +468,24 @@ export class EditorInspectorController {
     }
   }
 
+  setFocusedSwordsmanObjectiveMode(objectiveMode: SwordsmanObjectiveMode): void {
+    const focused = this.getFocusedSwordsman();
+    if (!focused) {
+      this.swordsmanStatusText = 'Select a Sword Hunter first.';
+      this.renderInspectorUi();
+      return;
+    }
+
+    const normalizedMode =
+      normalizeSwordsmanObjectiveMode(objectiveMode) ?? DEFAULT_SWORDSMAN_OBJECTIVE_MODE;
+    if (this.editRuntime.setSwordsmanObjectiveMode(focused.instanceId, normalizedMode)) {
+      this.focusedSwordsmanInstanceId = focused.instanceId;
+      this.pinInspector('swordsman', focused.instanceId);
+      this.swordsmanStatusText = `Sword Hunter set to ${SWORDSMAN_OBJECTIVE_MODE_LABELS[normalizedMode]}.`;
+      this.renderInspectorUi();
+    }
+  }
+
   clearPinnedSelection(): void {
     this.clearPinnedInspector();
   }
@@ -439,6 +530,10 @@ export class EditorInspectorController {
       containerStatusText: '',
       containerClearDisabled: true,
       containerClearTitle: '',
+      swordsmanVisible: false,
+      swordsmanStatusText: '',
+      swordsmanObjectiveModeValue: DEFAULT_SWORDSMAN_OBJECTIVE_MODE,
+      swordsmanObjectiveModeDisabled: true,
     };
   }
 
@@ -451,7 +546,9 @@ export class EditorInspectorController {
 
     const connectMode = this.connectingPressurePlateInstanceId !== null;
     const source =
-      this.pinnedInspector?.kind === 'container' && !connectMode ? null : this.getFocusedPressurePlate();
+      this.pinnedInspector && this.pinnedInspector.kind !== 'pressure' && !connectMode
+        ? null
+        : this.getFocusedPressurePlate();
     if (source && (editorState.paletteMode === 'objects' || connectMode)) {
       const target = this.editRuntime.getPlacedObjectByInstanceId(source.triggerTargetInstanceId ?? null);
       const eligibleTargetCount = this.editRuntime.getPressurePlateEligibleTargets(source.instanceId).length;
@@ -479,7 +576,9 @@ export class EditorInspectorController {
     }
 
     const focusedContainer =
-      this.pinnedInspector?.kind === 'pressure' && !connectMode ? null : this.getFocusedContainer();
+      this.pinnedInspector && this.pinnedInspector.kind !== 'container' && !connectMode
+        ? null
+        : this.getFocusedContainer();
     if (focusedContainer && editorState.paletteMode === 'objects' && !this.connectingPressurePlateInstanceId) {
       const selectedObject = editorState.selectedObjectId
         ? getEditorObjectConfigById(editorState.selectedObjectId)
@@ -503,6 +602,24 @@ export class EditorInspectorController {
                 : `${this.getContainerName(focusedContainer.id)} is empty. Select a ${this.getContainerAcceptedContentsLabel(focusedContainer.id)} from the object list, then click it to fill the container.`),
         containerClearDisabled: !focusedContainer.containedObjectId,
         containerClearTitle: focusedContainer.containedObjectId ? '' : 'This container is empty.',
+      });
+      return;
+    }
+
+    const focusedSwordsman = this.getFocusedSwordsman();
+    if (focusedSwordsman && editorState.paletteMode === 'objects' && !this.connectingPressurePlateInstanceId) {
+      const objectiveMode =
+        normalizeSwordsmanObjectiveMode(focusedSwordsman.swordsmanObjectiveMode)
+        ?? DEFAULT_SWORDSMAN_OBJECTIVE_MODE;
+      this.renderInspector({
+        ...hiddenState,
+        visible: true,
+        swordsmanVisible: true,
+        swordsmanStatusText:
+          this.swordsmanStatusText
+          ?? `This Sword Hunter is set to ${SWORDSMAN_OBJECTIVE_MODE_LABELS[objectiveMode]}.`,
+        swordsmanObjectiveModeValue: objectiveMode,
+        swordsmanObjectiveModeDisabled: false,
       });
       return;
     }
@@ -569,6 +686,7 @@ export class EditorInspectorController {
 
     this.focusedContainerInstanceId = focused.instanceId;
     this.focusedPressurePlateInstanceId = null;
+    this.focusedSwordsmanInstanceId = null;
     this.pinInspector('container', focused.instanceId);
     const selectedObject = editorState.selectedObjectId
       ? getEditorObjectConfigById(editorState.selectedObjectId)
@@ -600,7 +718,7 @@ export class EditorInspectorController {
     return true;
   }
 
-  private pinInspector(kind: 'pressure' | 'container', instanceId: string): void {
+  private pinInspector(kind: 'pressure' | 'container' | 'swordsman', instanceId: string): void {
     this.pinnedInspector = { kind, instanceId };
   }
 
@@ -608,8 +726,10 @@ export class EditorInspectorController {
     this.pinnedInspector = null;
     this.focusedPressurePlateInstanceId = null;
     this.focusedContainerInstanceId = null;
+    this.focusedSwordsmanInstanceId = null;
     this.pressurePlateStatusText = null;
     this.containerStatusText = null;
+    this.swordsmanStatusText = null;
     this.renderInspectorUi();
   }
 
@@ -631,6 +751,20 @@ export class EditorInspectorController {
       pinnedContainerId ?? this.focusedContainerInstanceId,
     );
     if (focused && canPlacedObjectBeContainer(focused)) {
+      return focused;
+    }
+
+    return null;
+  }
+
+  private getFocusedSwordsman(): PlacedObject | null {
+    const pinnedSwordsmanId = this.pinnedInspector?.kind === 'swordsman'
+      ? this.pinnedInspector.instanceId
+      : null;
+    const focused = this.editRuntime.getPlacedObjectByInstanceId(
+      pinnedSwordsmanId ?? this.focusedSwordsmanInstanceId,
+    );
+    if (focused?.id === SWORDSMAN_AI_OBJECT_ID) {
       return focused;
     }
 

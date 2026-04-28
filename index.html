@@ -678,6 +678,7 @@
                 <option value="">None</option>
                 <option value="reach_exit">Reach Exit</option>
                 <option value="collect_target">Collect Target</option>
+                <option value="collect_race">Collect Race</option>
                 <option value="defeat_all">Defeat All</option>
                 <option value="checkpoint_sprint">Checkpoint Sprint</option>
                 <option value="survival">Survival</option>
@@ -901,6 +902,17 @@
           <div id="container-contents-status" class="goal-context-note">Hover a chest, cage, or question block to set what is inside.</div>
           <div class="course-room-actions">
             <button id="btn-container-clear" class="bar-btn bar-btn-small" type="button">Clear Contents</button>
+          </div>
+        </div>
+        <div id="swordsman-objective-panel" class="pressure-plate-panel hidden">
+          <div class="section-label">Sword Hunter</div>
+          <div id="swordsman-objective-status" class="goal-context-note">Hover or click a Sword Hunter to change its objective.</div>
+          <div class="goal-control-row">
+            <label class="goal-control-label" for="swordsman-objective-mode-select">Mode</label>
+            <select id="swordsman-objective-mode-select" class="goal-input">
+              <option value="duel">Hunt Player</option>
+              <option value="collect">Collect Items</option>
+            </select>
           </div>
         </div>
       </div>

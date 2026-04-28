@@ -106,6 +106,9 @@ import {
   type ArcadeObjectBody,
   type LoadedRoomObject,
 } from './overworld/liveObjects';
+import {
+  type SwordsmanTraversalPlannerMode,
+} from '../enemies/swordsmanRobustPlanner';
 import { buildAmbientRoomLightingBounds } from './overworld/lighting';
 import {
   OverworldPresenceController,
@@ -489,6 +492,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getPlayer: () => this.player,
       getPlayerPickupSensor: () => this.playerPickupSensor,
       getPlayerBody: () => this.playerBody,
+      swordsmanTraversalPlannerMode: this.getSwordsmanTraversalPlannerMode(),
       isPlayerClimbingLadder: () => this.isClimbingLadder,
       isLadderDropRequested: () => this.isLadderDropRequested(),
       getCurrentTime: () => this.time.now,
@@ -519,6 +523,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       handlePlayerDeath: (reason) => this.sessionResetController.handlePlayerDeath(reason),
       onEnemyDefeated: (event) => this.handleEnemyDefeated(event),
       onCollectibleCollected: (event) => this.handleCollectibleCollected(event),
+      onEnemyCollectibleCollected: (event) => this.handleEnemyCollectibleCollected(event),
       playRoomSfx: (cue, roomCoordinates) =>
         this.roomAudioController.playRoomSfx(cue, roomCoordinates),
       playEnemyKillFx: (x, y, roomCoordinates) =>
@@ -2065,6 +2070,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       }
       for (const liveObject of loadedRoom.liveObjects) {
         ignoredObjects.push(liveObject.sprite);
+        ignoredObjects.push(...liveObject.helpers);
       }
       for (const wall of loadedRoom.edgeWalls) {
         ignoredObjects.push(wall.rect);
@@ -3136,6 +3142,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     roomCoordinates: RoomCoordinates;
     x: number;
     y: number;
+    actor?: 'player' | 'enemy';
     instanceId?: string | null;
     checkpointIndex?: number | null;
   }): void {
@@ -3150,6 +3157,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       roomY: event.roomCoordinates.y,
       x: event.x,
       y: event.y,
+      actor: event.actor ?? 'player',
       instanceId: event.instanceId ?? null,
       checkpointIndex: event.checkpointIndex ?? null,
     });
@@ -3188,10 +3196,31 @@ export class OverworldPlayScene extends Phaser.Scene {
       roomCoordinates: event.roomCoordinates,
       x: event.x,
       y: event.y,
+      actor: 'player',
       instanceId: event.instanceId,
       checkpointIndex: null,
     });
     this.objectiveController.handleCollectibleCollected(event.roomId);
+  }
+
+  private handleEnemyCollectibleCollected(event: {
+    roomId: string;
+    roomCoordinates: RoomCoordinates;
+    instanceId: string | null;
+    x: number;
+    y: number;
+  }): void {
+    this.recordRankedGoalEvent({
+      type: 'collectible',
+      roomId: event.roomId,
+      roomCoordinates: event.roomCoordinates,
+      x: event.x,
+      y: event.y,
+      actor: 'enemy',
+      instanceId: event.instanceId,
+      checkpointIndex: null,
+    });
+    this.objectiveController.handleEnemyCollectibleCollected(event.roomId);
   }
 
   private resetTransientPlayState(): void {
@@ -3320,6 +3349,49 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   playSelectedRoom(): void {
     this.flowController.playSelectedRoom();
+  }
+
+  debugSetPlayerPosition(options: {
+    x?: number;
+    y?: number;
+    velocityX?: number;
+    velocityY?: number;
+    bodyEnabled?: boolean;
+  }): Record<string, unknown> {
+    if (!this.player || !this.playerBody) {
+      return { ok: false, reason: 'player-missing' };
+    }
+
+    const nextX = options.x;
+    const nextY = options.y;
+    const shouldSetPosition =
+      typeof nextX === 'number' &&
+      Number.isFinite(nextX) &&
+      typeof nextY === 'number' &&
+      Number.isFinite(nextY);
+    if (shouldSetPosition) {
+      this.player.setPosition(nextX, nextY);
+      this.playerBody.reset(nextX, nextY);
+    }
+    this.playerBody.setVelocity(options.velocityX ?? 0, options.velocityY ?? 0);
+    if (typeof options.bodyEnabled === 'boolean') {
+      this.playerBody.enable = options.bodyEnabled;
+      if (this.playerPickupSensorBody) {
+        this.playerPickupSensorBody.enable = options.bodyEnabled;
+      }
+    }
+    this.playerPresentationController.syncPlayerPickupSensor();
+    this.playerPresentationController.syncPlayerVisual();
+    return {
+      ok: true,
+      player: {
+        x: Math.round(this.player.x),
+        y: Math.round(this.player.y),
+        velocityX: Math.round(this.playerBody.velocity.x),
+        velocityY: Math.round(this.playerBody.velocity.y),
+        bodyEnabled: this.playerBody.enable,
+      },
+    };
   }
 
   async restartCurrentRun(): Promise<void> {
@@ -3534,6 +3606,11 @@ export class OverworldPlayScene extends Phaser.Scene {
     return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
   }
 
+  private getSwordsmanTraversalPlannerMode(): SwordsmanTraversalPlannerMode {
+    const value = new URLSearchParams(window.location.search).get('swordHunterPlanner');
+    return value === 'robust' ? 'robust' : 'classic';
+  }
+
   private handleShutdown = (): void => {
     globalRoomMusicController.stopArrangement({
       transition: 'immediate',
@@ -3615,6 +3692,45 @@ export class OverworldPlayScene extends Phaser.Scene {
             x: Math.round(liveObject.sprite.x),
             y: Math.round(liveObject.sprite.y),
             directionX: liveObject.runtime.directionX,
+            aiState: liveObject.runtime.aiState,
+            aiObjectiveMode: liveObject.runtime.aiObjectiveMode,
+            aiIntent: liveObject.runtime.aiIntent,
+            aiTargetX: liveObject.runtime.aiTargetX === null
+              ? null
+              : Math.round(liveObject.runtime.aiTargetX),
+            aiCurrentSegmentId: liveObject.runtime.aiCurrentSegmentId,
+            aiTargetSegmentId: liveObject.runtime.aiTargetSegmentId,
+            aiTraversalEdgeId: liveObject.runtime.aiTraversalEdgeId,
+            aiTraversalBlockedEdgeIds: liveObject.runtime.aiTraversalBlockedEdges.map(
+              (entry) => entry.edgeId,
+            ),
+            aiActiveTraversalEdgeId: liveObject.runtime.aiActiveTraversalEdgeId,
+            aiActiveTraversalNextNodeId: liveObject.runtime.aiActiveTraversalNextNodeId,
+            aiRouteLoopSignature: liveObject.runtime.aiRouteLoopSignature,
+            aiRouteLoopCount: liveObject.runtime.aiRouteLoopCount,
+            aiPlannerMode: liveObject.runtime.aiPlannerMode,
+            aiPlannerFallback: liveObject.runtime.aiPlannerFallback,
+            aiPlannerPlanMs: liveObject.runtime.aiPlannerPlanMs,
+            aiPlannerExpandedStates: liveObject.runtime.aiPlannerExpandedStates,
+            aiPlannerSimulatedEdges: liveObject.runtime.aiPlannerSimulatedEdges,
+            aiPlannedTraversalEdgeIds: [...liveObject.runtime.aiPlannedTraversalEdgeIds],
+            aiPlannedTraversalTargetNodeId: liveObject.runtime.aiPlannedTraversalTargetNodeId,
+            aiPlannedTraversalExpiresMs: Math.max(
+              0,
+              Math.round(liveObject.runtime.aiPlannedTraversalExpiresAt - this.time.now),
+            ),
+            aiPlannedTraversalReason: liveObject.runtime.aiPlannedTraversalReason,
+            aiCollectState: liveObject.runtime.aiCollectState,
+            aiCollectRouteTargetNodeId: liveObject.runtime.aiCollectRouteTargetNodeId,
+            aiCollectRouteExpiresMs: Math.max(
+              0,
+              Math.round(liveObject.runtime.aiCollectRouteExpiresAt - this.time.now),
+            ),
+            aiCollectRouteScore: liveObject.runtime.aiCollectRouteScore === null
+              ? null
+              : Math.round(liveObject.runtime.aiCollectRouteScore),
+            aiCollectRouteValue: Math.round(liveObject.runtime.aiCollectRouteValue),
+            aiCollectRoutePenalty: Math.round(liveObject.runtime.aiCollectRoutePenalty),
             velocityX: dynamicBody ? Math.round(dynamicBody.velocity.x) : 0,
             velocityY: dynamicBody ? Math.round(dynamicBody.velocity.y) : 0,
           };
