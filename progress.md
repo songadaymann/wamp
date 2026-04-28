@@ -88,9 +88,15 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - April 28 production promotion fast-forwarded `main` to merge commit `9f8065c`, pushed `origin/main`, deployed Worker/Pages, and applied remote D1 migration `0026_dynamic_cryptopunk_avatar_packs.sql`
     - April 28 production checks passed: deploy smoke returned healthy `https://wamp.land` / `https://api.wamp.land`, remote D1 reported no pending migrations, live HTML served bundle `assets/main-DqFGz1cf.js` with the `profile-cryptopunk-*` picker markup, and required production web-game smoke passed at `output/web-game/cryptopunk-prod-main-smoke/`
     - production `GET /api/avatars/cryptopunks/4156/status` currently returns `missing`, which is expected until a production signed-in user queues a Punk and the queue processor uploads/marks the generated pack ready
+    - April 28 production queue follow-up:
+      - user queued `cryptopunk-4495`; production D1 showed it waiting in `queued`
+      - created the missing production R2 bucket `everybodys-platformer-avatars`, enabled its r2.dev URL at `https://pub-4dd79d967d1b4ff4970db4c110bca7c7.r2.dev`, and ran the queue processor
+      - `cryptopunk-4495` is now `ready` with punk type `Human` and accessories `Front Beard`, `Messy Hair`; all proxied API asset URLs returned `200`
+      - added a lock-safe production queue wrapper plus macOS LaunchAgent installer scripts, installed `land.wamp.cryptopunk-avatar-queue`, and confirmed launchd reports a 60-second interval, two successful runs, and no queued jobs remaining
+      - resume validation passed `node --check`, `git diff --check`, plist lint, a manual queue-wrapper no-op run, and launchd inspection showing `last exit code = 0`; earlier stderr entries were stale transient Wrangler `fetch failed` attempts before later successful ticks
   - TODO:
-    - QA a real signed-in production selection/save of ready Punks such as `cryptopunk-4156` / `cryptopunk-4495` after generating them on production
-    - decide whether the CryptoPunk queue runner should become a durable Worker/cron/job instead of a local `npm run avatar:cryptopunk:queue:safety` process
+    - QA a real signed-in production selection/save of ready Punks such as `cryptopunk-4495`
+    - longer-term: replace the local launchd runner with a cloud-hosted worker/CI job once the generator's external art dependencies are available outside this machine
 - Overworld optimization main-port on April 28, 2026:
   - user reported the first optimization branch was showing the old site design; diagnosis found it was cut from stale `feature/dynamic-cryptopunk-avatars-2026-04-23`, 131 commits behind `origin/main`
   - created clean main-based worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-perf-main-2026-04-28` on branch `perf/overworld-room-start-optimization-main-2026-04-28` at deployed main `5d01b45`
