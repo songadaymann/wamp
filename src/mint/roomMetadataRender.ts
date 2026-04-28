@@ -17,6 +17,10 @@ import {
 } from '../config';
 import { getApiBaseUrl } from '../api/baseUrl';
 import { resolveRoomBackground } from '../backgrounds/model';
+import {
+  parseCustomSpriteObjectId,
+  type CustomSpriteDefinition,
+} from '../customSprites/model';
 import type { RoomSnapshot } from '../persistence/roomModel';
 import { buildRoomSnapshotFromMintedPayload, type WampMintedRoomPayload } from './roomMetadata';
 import { RETRO_COLORS, drawStarfieldToContext, hashStringToSeed } from '../visuals/starfield';
@@ -29,6 +33,7 @@ export interface MintedRoomRenderOptions {
 }
 
 const imageCache = new Map<string, Promise<HTMLImageElement>>();
+const customSpriteCanvasCache = new Map<string, HTMLCanvasElement>();
 const MAX_TILED_PHOTO_WIDTH = 128;
 const MAX_TILED_PHOTO_HEIGHT = 96;
 
@@ -304,6 +309,10 @@ async function drawObjectsForLayer(
 
     const objectConfig = getObjectById(placedObject.id);
     if (!objectConfig) {
+      const customSprite = getCustomSpriteForObject(snapshot, placedObject.id);
+      if (customSprite) {
+        drawCustomSpriteObject(context, customSprite, placedObject, tilePixelSize);
+      }
       continue;
     }
 
@@ -329,6 +338,61 @@ async function drawObjectsForLayer(
     context.drawImage(image, sx, sy, sw, sh, 0, 0, destWidth, destHeight);
     context.restore();
   }
+}
+
+function getCustomSpriteForObject(
+  snapshot: Pick<RoomSnapshot, 'customSprites'>,
+  objectId: string
+): CustomSpriteDefinition | null {
+  const spriteId = parseCustomSpriteObjectId(objectId);
+  if (!spriteId || !Array.isArray(snapshot.customSprites)) {
+    return null;
+  }
+
+  return snapshot.customSprites.find(
+    (sprite) => sprite.id === spriteId && sprite.status !== 'blocked'
+  ) ?? null;
+}
+
+function drawCustomSpriteObject(
+  context: CanvasRenderingContext2D,
+  sprite: CustomSpriteDefinition,
+  placedObject: { x: number; y: number },
+  tilePixelSize: number
+): void {
+  const sourceCanvas = getCustomSpriteCanvas(sprite);
+  const scale = tilePixelSize / TILE_SIZE;
+  const destX = Math.round((placedObject.x - sprite.size / 2) * scale);
+  const destY = Math.round((placedObject.y - sprite.size / 2) * scale);
+  const destSize = Math.max(1, Math.round(sprite.size * scale));
+  context.drawImage(sourceCanvas, 0, 0, sprite.size, sprite.size, destX, destY, destSize, destSize);
+}
+
+function getCustomSpriteCanvas(sprite: CustomSpriteDefinition): HTMLCanvasElement {
+  const cacheKey = `${sprite.id}:${sprite.size}:${sprite.updatedAt}`;
+  const cached = customSpriteCanvasCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = sprite.size;
+  canvas.height = sprite.size;
+  const context = canvas.getContext('2d');
+  if (context) {
+    context.imageSmoothingEnabled = false;
+    context.clearRect(0, 0, sprite.size, sprite.size);
+    for (let index = 0; index < sprite.pixels.length; index += 1) {
+      const color = sprite.pixels[index];
+      if (!color || !/^#[0-9a-f]{6}$/i.test(color)) {
+        continue;
+      }
+      context.fillStyle = color;
+      context.fillRect(index % sprite.size, Math.floor(index / sprite.size), 1, 1);
+    }
+  }
+  customSpriteCanvasCache.set(cacheKey, canvas);
+  return canvas;
 }
 
 function loadAssetImage(assetPath: string): Promise<HTMLImageElement> {

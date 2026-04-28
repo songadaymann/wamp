@@ -8540,3 +8540,19 @@ Original prompt: ok start a progress md file that we'll use as short term memotr
     - production Worker deploy succeeded at version `4f79a98b-8d3d-4fd9-bcfe-02da7b08fe16`
     - production Pages deploy succeeded at `https://4736ab75.wampland.pages.dev` for `https://wamp.land`
     - `scripts/smoke_prod.mjs` passed against `https://wamp.land` and `https://api.wamp.land`
+- room share image asset-source hardening on April 28, 2026:
+  - continued in clean production worktree `/private/tmp/wamp-prod-main-dc50466` on `main`
+  - kept the custom-sprite render fix for `src/mint/roomMetadataRender.ts`, so browser-generated run/share/explore/profile snapshots can draw room-embedded `custom_sprite:<id>` objects from `snapshot.customSprites`
+  - changed the Pages social-card worker to import room dimensions, tilesets, background groups, game objects, flip flags, and object frame/layer helpers from canonical `src/config.ts` instead of maintaining copied constants in `public/_worker.js`
+  - added `scripts/build_pages_worker.mjs` and wired `npm run build` to bundle `public/_worker.js` into `dist/_worker.js`, so Cloudflare Pages receives a self-contained worker while future config additions are picked up during build/deploy
+  - bumped the room card renderer cache key to `assets-v5`
+  - local validation:
+    - `node --check public/_worker.js` passed
+    - `node scripts/build_pages_worker.mjs` passed and produced bundled `dist/_worker.js`
+    - `npx tsc --noEmit --pretty false` passed
+    - `npm run build` passed with the existing Rollup pure-annotation and large-chunk warnings
+    - `git diff --check -- . ':!node_modules' ':!dist'` passed
+    - bundled Pages-worker probe against `https://wamp.land/r/-1/-5/image.png?probe=post-build-bundle` returned `200 image/png` and wrote `/tmp/wamp-post-build-bundled-worker-custom-sprite.png`; visual inspection confirmed the red custom sprites render in the social card
+    - bundled Pages-worker HTML probe for `/r/-1/-5` returned Open Graph metadata with `renderer=assets-v5`
+    - required `develop-web-game` client ran against local Vite on `http://127.0.0.1:3345/?x=-1&y=-5&smoke=config-share`; the canvas-only capture still looked dark/black because it captures the dimmed WebGL canvas behind modals, but a full-page Playwright screenshot at `/tmp/wamp-manual-page.png` showed the room loaded with the expected welcome and room-goal modals and no new page errors
+  - note: dropping an image file into `public/assets/tilesets` still is not enough by itself; new tilesets/enemies/objects need to be registered in `src/config.ts`, after which the browser snapshot renderer and Pages social-card worker now share that catalog.

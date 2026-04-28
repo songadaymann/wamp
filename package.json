@@ -12,7 +12,7 @@
     "dev:api": "wrangler dev",
     "dev:api:remote": "wrangler dev --remote",
     "dev:presence": "partykit dev",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && node scripts/build_pages_worker.mjs",
     "preview": "vite preview",
     "smoke:mobile": "node scripts/mobile_smoke.mjs",
     "smoke:preview:readonly": "npx --yes --quiet -p playwright node scripts/preview_smoke_readonly.mjs",

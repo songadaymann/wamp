@@ -1,19 +1,30 @@
 import decodeJpegBytes from 'jpeg-js/lib/decoder.js';
+import {
+  BACKGROUND_GROUPS,
+  GAME_OBJECTS,
+  ROOM_HEIGHT,
+  ROOM_PX_HEIGHT,
+  ROOM_PX_WIDTH,
+  ROOM_WIDTH,
+  TILESETS,
+  TILE_FLIP_X_FLAG,
+  TILE_FLIP_Y_FLAG,
+  TILE_SIZE,
+  getObjectDefaultFrame,
+  getObjectFrameSourceRect,
+  getPlacedObjectLayer,
+} from '../src/config.ts';
 
 const ROOM_PATH_PATTERN = /^\/r\/(-?\d+)\/(-?\d+)\/?$/;
 const ROOM_IMAGE_PATH_PATTERN = /^\/r\/(-?\d+)\/(-?\d+)\/image(?:\.png)?\/?$/;
 const DEFAULT_API_BASE_URL = 'https://api.wamp.land';
 const ROOM_META_TIMEOUT_MS = 1200;
 const ROOM_IMAGE_TIMEOUT_MS = 3500;
-const ROOM_IMAGE_RENDERER_VERSION = 'assets-v3';
+const ROOM_IMAGE_RENDERER_VERSION = 'assets-v5';
 const ROOM_SHARE_IMAGE_WIDTH = 1200;
 const ROOM_SHARE_IMAGE_HEIGHT = 630;
-const ROOM_WIDTH = 40;
-const ROOM_HEIGHT = 22;
-const TILE_SIZE = 16;
-const ROOM_PX_WIDTH = ROOM_WIDTH * TILE_SIZE;
-const ROOM_PX_HEIGHT = ROOM_HEIGHT * TILE_SIZE;
 const CUSTOM_BACKGROUND_PREFIX = 'custom:';
+const CUSTOM_SPRITE_OBJECT_PREFIX = 'custom_sprite:';
 const SOLID_BACKGROUND_PREFIX = 'solid:';
 const DEFAULT_CUSTOM_BACKGROUND_FIT = 'tile';
 const MAX_TILED_PHOTO_WIDTH = 128;
@@ -25,183 +36,6 @@ const PREVIEW_LEFT = 60;
 const PREVIEW_TOP = 18;
 const PREVIEW_WIDTH = ROOM_WIDTH * PREVIEW_TILE_SIZE;
 const PREVIEW_HEIGHT = ROOM_HEIGHT * PREVIEW_TILE_SIZE;
-const TILE_FLIP_X_FLAG = 1 << 20;
-const TILE_FLIP_Y_FLAG = 1 << 21;
-const TILESETS = [
-  { key: 'forest', path: 'assets/tilesets/tileset_forest.png', columns: 12, firstGid: 1, tileCount: 72 },
-  { key: 'desert', path: 'assets/tilesets/tileset_desert.png?v=2026-04-01-desert-tiles', columns: 12, firstGid: 73, tileCount: 72 },
-  { key: 'cave', path: 'assets/tilesets/tileset_cave.png', columns: 12, firstGid: 145, tileCount: 72 },
-  { key: 'lava', path: 'assets/tilesets/tileset_lava.png', columns: 15, firstGid: 217, tileCount: 105 },
-  { key: 'snow', path: 'assets/tilesets/tileset_snow.png', columns: 11, firstGid: 322, tileCount: 66 },
-  { key: 'water', path: 'assets/tilesets/tileset_water.png', columns: 12, firstGid: 388, tileCount: 72 },
-  { key: 'smb_lvl1_3_5', path: 'assets/tilesets/tileset_smb_lvl1_3_5.png', columns: 8, firstGid: 460, tileCount: 32 },
-];
-const BACKGROUND_GROUPS = [
-  { id: 'none', layers: [] },
-  {
-    id: 'forest',
-    layers: [
-      { path: 'assets/backgrounds/forest/1.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/forest/2.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/forest/3.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/forest/5.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/forest/6.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/forest/10.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/forest/7.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/forest/8.png', width: 576, height: 324 },
-    ],
-  },
-  {
-    id: 'dark_forest',
-    layers: [
-      { path: 'assets/backgrounds/dark_forest/1.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/dark_forest/2.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/dark_forest/3.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/dark_forest/4.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/dark_forest/5.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/dark_forest/6.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/dark_forest/7.png', width: 576, height: 324 },
-    ],
-  },
-  {
-    id: 'grassland',
-    layers: [
-      { path: 'assets/backgrounds/grassland/1.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/grassland/2.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/grassland/3.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/grassland/4.png', width: 576, height: 324 },
-    ],
-  },
-  {
-    id: 'mountains',
-    layers: [
-      { path: 'assets/backgrounds/mountains/1.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/mountains/2.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/mountains/3.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/mountains/4.png', width: 576, height: 324 },
-    ],
-  },
-  {
-    id: 'meadow',
-    layers: [
-      { path: 'assets/backgrounds/meadow/1.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/meadow/2.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/meadow/3.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/meadow/4.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/meadow/5.png', width: 576, height: 324 },
-    ],
-  },
-  {
-    id: 'aurora',
-    layers: [
-      { path: 'assets/backgrounds/aurora/1.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/aurora/2.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/aurora/3.png', width: 576, height: 324 },
-    ],
-  },
-  {
-    id: 'cave',
-    layers: [
-      { path: 'assets/backgrounds/cave/layer1_far.png', width: 960, height: 480 },
-      { path: 'assets/backgrounds/cave/layer2_mid.png', width: 960, height: 480 },
-      { path: 'assets/backgrounds/cave/layer3_near.png', width: 960, height: 480 },
-    ],
-  },
-  {
-    id: 'desert',
-    layers: [
-      { path: 'assets/backgrounds/desert/far.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/desert/middle.png', width: 576, height: 324 },
-      { path: 'assets/backgrounds/desert/near.png', width: 576, height: 324 },
-    ],
-  },
-];
-const GAME_OBJECTS = [
-  { id: 'coin_gold', path: 'assets/objects/coin_gold.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
-  { id: 'coin_silver', path: 'assets/objects/coin_silver.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
-  { id: 'gem', path: 'assets/objects/gem.png', frameWidth: 16, frameHeight: 16, frameCount: 5 },
-  { id: 'blue_gem', path: 'assets/objects/blue_gem.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
-  { id: 'orange_gem', path: 'assets/objects/orange_gem.png', frameWidth: 16, frameHeight: 16, frameCount: 4 },
-  { id: 'red_gem', path: 'assets/objects/red_gem.png', frameWidth: 16, frameHeight: 16, frameCount: 4 },
-  { id: 'black_pearl', path: 'assets/objects/black_pearl.png', frameWidth: 16, frameHeight: 16, frameCount: 4 },
-  { id: 'crown', path: 'assets/objects/crown.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
-  { id: 'ring', path: 'assets/objects/ring.png', frameWidth: 16, frameHeight: 16, frameCount: 4 },
-  { id: 'star', path: 'assets/objects/star.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
-  { id: 'heart', path: 'assets/objects/heart.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
-  { id: 'key', path: 'assets/objects/key.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
-  { id: 'health_potion', path: 'assets/objects/health_potion.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
-  { id: 'mana_potion', path: 'assets/objects/mana_potion.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
-  { id: 'mushroom', path: 'assets/objects/mushroom.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
-  { id: 'egg', path: 'assets/objects/egg.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
-  { id: 'bone', path: 'assets/objects/bone.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
-  { id: 'book', path: 'assets/objects/book.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
-  { id: 'scroll', path: 'assets/objects/scroll.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
-  { id: 'skull', path: 'assets/objects/skull.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
-  { id: 'bomb_pickup', path: 'assets/objects/bomb_pickup.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
-  { id: 'apple', path: 'assets/objects/apple.png', frameWidth: 16, frameHeight: 16, frameCount: 1 },
-  { id: 'banana', path: 'assets/objects/banana.png', frameWidth: 16, frameHeight: 16, frameCount: 1 },
-  { id: 'kitkat', path: 'assets/objects/kitkat.png', frameWidth: 16, frameHeight: 16, frameCount: 12 },
-  { id: 'poop', path: 'assets/objects/poop.png', frameWidth: 16, frameHeight: 16, frameCount: 1 },
-  { id: 'cake', path: 'assets/objects/cake.png', frameWidth: 32, frameHeight: 32, frameCount: 6 },
-  { id: 'coin_small_gold', path: 'assets/objects/coin_small_gold.png', frameWidth: 16, frameHeight: 16, frameCount: 6 },
-  { id: 'coin_small_silver', path: 'assets/objects/coin_small_silver.png', frameWidth: 16, frameHeight: 16, frameCount: 6 },
-  { id: 'spikes', path: 'assets/enemies/spikes.png', frameWidth: 16, frameHeight: 16, frameCount: 4 },
-  { id: 'saw', path: 'assets/enemies/saw.png', frameWidth: 34, frameHeight: 34, frameCount: 4, animationFrames: [0, 2, 3, 2] },
-  { id: 'fire', path: 'assets/enemies/fire.png', frameWidth: 16, frameHeight: 16, frameCount: 6 },
-  { id: 'fireball', path: 'assets/enemies/fireball.png', frameWidth: 16, frameHeight: 16, frameCount: 4 },
-  { id: 'bomb', path: 'assets/enemies/bomb.png', frameWidth: 32, frameHeight: 48, frameCount: 15 },
-  { id: 'wood_stakes', path: 'assets/enemies/wood_stakes.png', frameWidth: 32, frameHeight: 32, frameCount: 1 },
-  { id: 'cannon', path: 'assets/enemies/cannon.png', frameWidth: 32, frameHeight: 32, frameCount: 1, defaultFrame: 2, facingDirection: 'left' },
-  { id: 'cactus', path: 'assets/enemies/cactus.png', frameWidth: 32, frameHeight: 32, frameCount: 6 },
-  { id: 'tornado', path: 'assets/enemies/tornado.png', frameWidth: 48, frameHeight: 48, frameCount: 8 },
-  { id: 'fire_big', path: 'assets/enemies/fire_big.png', frameWidth: 32, frameHeight: 32, frameCount: 6 },
-  { id: 'ice_spikes', path: 'assets/enemies/ice_spikes.png', frameWidth: 16, frameHeight: 16, frameCount: 8 },
-  { id: 'icicle', path: 'assets/enemies/icicle.png', frameWidth: 48, frameHeight: 48, frameCount: 6, animationFrames: [0, 1, 2, 3] },
-  { id: 'lightning', path: 'assets/enemies/lightning.png', frameWidth: 64, frameHeight: 96, frameCount: 4, defaultFrame: 1, animationFrames: [0, 1] },
-  { id: 'propeller', path: 'assets/enemies/propeller.png', frameWidth: 16, frameHeight: 16, frameCount: 4 },
-  { id: 'quicksand', path: 'assets/enemies/quicksand.png', frameWidth: 32, frameHeight: 32, frameCount: 8 },
-  { id: 'cactus_spike', path: 'assets/enemies/cactus_spike.png', frameWidth: 16, frameHeight: 16, frameCount: 1 },
-  { id: 'tornado_sand', path: 'assets/enemies/tornado_sand.png', frameWidth: 48, frameHeight: 48, frameCount: 8 },
-  { id: 'lava_surface', path: 'assets/deco/lava_surface.png', frameWidth: 48, frameHeight: 48, frameCount: 8 },
-  { id: 'water_surface_a', path: 'assets/deco/water_surface_a.png', frameWidth: 32, frameHeight: 32, frameCount: 8 },
-  { id: 'water_surface_b', path: 'assets/deco/water_surface_b.png', frameWidth: 16, frameHeight: 16, frameCount: 5 },
-  { id: 'slime_blue', path: 'assets/enemies/slime_blue.png', frameWidth: 16, frameHeight: 16, frameCount: 5, facingDirection: 'left' },
-  { id: 'slime_red', path: 'assets/enemies/slime_red.png', frameWidth: 16, frameHeight: 16, frameCount: 5, facingDirection: 'left' },
-  { id: 'bat', path: 'assets/enemies/bat.png', frameWidth: 32, frameHeight: 32, frameCount: 8, defaultFrame: 6, animationFrames: [4, 5, 6, 7, 6, 5], facingDirection: 'right' },
-  { id: 'crab', path: 'assets/enemies/crab.png', frameWidth: 32, frameHeight: 16, frameCount: 9, defaultFrame: 1, animationFrames: [0, 1, 2, 1], facingDirection: 'left' },
-  { id: 'bird', path: 'assets/enemies/bird.png', frameWidth: 32, frameHeight: 32, frameCount: 4, facingDirection: 'left' },
-  { id: 'fish', path: 'assets/enemies/fish.png', frameWidth: 32, frameHeight: 16, frameCount: 3, defaultFrame: 1, animationFrames: [0, 1, 2, 1], facingDirection: 'right' },
-  { id: 'frog', path: 'assets/enemies/frog.png', frameWidth: 32, frameHeight: 32, frameCount: 4, facingDirection: 'right' },
-  { id: 'snake', path: 'assets/enemies/snake.png', frameWidth: 32, frameHeight: 32, frameCount: 4, facingDirection: 'left' },
-  { id: 'penguin', path: 'assets/enemies/penguin.png', frameWidth: 32, frameHeight: 32, frameCount: 4, facingDirection: 'right' },
-  { id: 'bear_brown', path: 'assets/enemies/bear_brown.png', frameWidth: 32, frameHeight: 32, frameCount: 8, defaultFrame: 5, animationFrames: [4, 5, 6, 7, 6, 5], facingDirection: 'right' },
-  { id: 'bear_polar', path: 'assets/enemies/bear_polar.png', frameWidth: 32, frameHeight: 32, frameCount: 8, defaultFrame: 5, animationFrames: [4, 5, 6, 7, 6, 5], facingDirection: 'right' },
-  { id: 'chicken', path: 'assets/enemies/chicken.png', frameWidth: 32, frameHeight: 32, frameCount: 14, defaultFrame: 7, animationFrames: [7, 8, 9, 10, 11, 12, 13], facingDirection: 'left' },
-  { id: 'shark', path: 'assets/enemies/shark.png', frameWidth: 64, frameHeight: 32, frameCount: 4, defaultFrame: 1, animationFrames: [0, 1, 2, 3, 2, 1], facingDirection: 'left' },
-  { id: 'bounce_pad', path: 'assets/objects/bounce_pad.png', frameWidth: 16, frameHeight: 32, frameCount: 4 },
-  { id: 'spawn_point', path: 'assets/objects/sign_arrow.png', frameWidth: 16, frameHeight: 32, frameCount: 1 },
-  { id: 'flag', path: 'assets/objects/flag.png', frameWidth: 32, frameHeight: 32, frameCount: 9 },
-  { id: 'door_locked', path: 'assets/objects/door_locked.png', frameWidth: 32, frameHeight: 48, frameCount: 1 },
-  { id: 'door_metal', path: 'assets/objects/metal_door_locked.png', frameWidth: 32, frameHeight: 48, frameCount: 1 },
-  { id: 'crate', path: 'assets/objects/crate_static.png', frameWidth: 32, frameHeight: 32, frameCount: 1 },
-  { id: 'brick_box', path: 'assets/objects/brick_box.png', frameWidth: 32, frameHeight: 32, frameCount: 6, defaultFrame: 5 },
-  { id: 'treasure_chest', path: 'assets/objects/treasure_chest.png', frameWidth: 32, frameHeight: 32, frameCount: 4, defaultFrame: 0 },
-  { id: 'log_wall', path: 'assets/deco/log_wall.png', frameWidth: 32, frameHeight: 48, frameCount: 1 },
-  { id: 'cage', path: 'assets/objects/cage.png', frameWidth: 18, frameHeight: 32, frameCount: 5, defaultFrame: 0 },
-  { id: 'sign', path: 'assets/objects/sign.png', frameWidth: 16, frameHeight: 32, frameCount: 1 },
-  { id: 'sign_arrow', path: 'assets/objects/sign_arrow.png', frameWidth: 16, frameHeight: 32, frameCount: 1 },
-  { id: 'ladder', path: 'assets/objects/ladder.png', frameWidth: 16, frameHeight: 64, frameCount: 1 },
-  { id: 'floor_trigger', path: 'assets/objects/floor_trigger.png', frameWidth: 16, frameHeight: 16, frameCount: 2, defaultFrame: 0 },
-  { id: 'button', path: 'assets/objects/button.png', frameWidth: 16, frameHeight: 16, frameCount: 4, defaultFrame: 0 },
-  { id: 'bush', path: 'assets/deco/bush.png', frameWidth: 32, frameHeight: 16, frameCount: 1 },
-  { id: 'rock', path: 'assets/deco/rock.png', frameWidth: 16, frameHeight: 16, frameCount: 1 },
-  { id: 'tree', path: 'assets/deco/tree.png', frameWidth: 48, frameHeight: 48, frameCount: 1 },
-  { id: 'tree_b', path: 'assets/deco/tree_b.png', frameWidth: 48, frameHeight: 64, frameCount: 1 },
-  { id: 'tree_c', path: 'assets/deco/tree_c.png', frameWidth: 48, frameHeight: 48, frameCount: 1 },
-  { id: 'tree_trunk', path: 'assets/deco/tree_trunk.png', frameWidth: 16, frameHeight: 16, frameCount: 1 },
-  { id: 'sun', path: 'assets/deco/sun.png', frameWidth: 32, frameHeight: 32, frameCount: 6 },
-  { id: 'clouds_deco', path: 'assets/deco/clouds.png', frameWidth: 48, frameHeight: 16, frameCount: 1 },
-];
 const GAME_OBJECT_CONFIG_BY_ID = new Map(GAME_OBJECTS.map((config) => [config.id, config]));
 const imageDataCache = new Map();
 
@@ -823,6 +657,12 @@ async function drawAssetObjectsForLayer(canvas, request, env, url, snapshot, lay
       continue;
     }
 
+    const customSprite = getCustomSpriteForObject(snapshot, placed?.id);
+    if (customSprite) {
+      drawCustomSpriteObject(canvas, customSprite, placed);
+      continue;
+    }
+
     const config = getObjectConfig(placed?.id);
     if (!config) {
       drawFallbackObject(canvas, placed);
@@ -861,6 +701,57 @@ async function drawAssetObjectsForLayer(canvas, request, env, url, snapshot, lay
       drawFallbackObject(canvas, placed);
     }
   }
+}
+
+function getCustomSpriteForObject(snapshot, objectId) {
+  const spriteId = parseCustomSpriteObjectId(objectId);
+  if (!spriteId || !Array.isArray(snapshot?.customSprites)) {
+    return null;
+  }
+
+  return snapshot.customSprites.find((sprite) => (
+    sprite &&
+    sprite.id === spriteId &&
+    sprite.status !== 'blocked' &&
+    (sprite.size === 16 || sprite.size === 32) &&
+    Array.isArray(sprite.pixels)
+  )) || null;
+}
+
+function parseCustomSpriteObjectId(objectId) {
+  if (typeof objectId !== 'string' || !objectId.startsWith(CUSTOM_SPRITE_OBJECT_PREFIX)) {
+    return null;
+  }
+
+  const id = objectId.slice(CUSTOM_SPRITE_OBJECT_PREFIX.length).trim();
+  return id || null;
+}
+
+function drawCustomSpriteObject(canvas, sprite, placed) {
+  const size = sprite.size === 32 ? 32 : 16;
+  const scale = PREVIEW_TILE_SIZE / TILE_SIZE;
+  const destX = PREVIEW_LEFT + Math.round((Number(placed.x || 0) - size / 2) * scale);
+  const destY = PREVIEW_TOP + Math.round((Number(placed.y || 0) - size / 2) * scale);
+  const destSize = Math.max(1, Math.round(size * scale));
+
+  for (let pixelY = 0; pixelY < size; pixelY += 1) {
+    const top = destY + Math.floor((pixelY * destSize) / size);
+    const bottom = destY + Math.ceil(((pixelY + 1) * destSize) / size);
+    for (let pixelX = 0; pixelX < size; pixelX += 1) {
+      const color = sprite.pixels[pixelY * size + pixelX];
+      if (!isCustomSpriteColor(color)) {
+        continue;
+      }
+
+      const left = destX + Math.floor((pixelX * destSize) / size);
+      const right = destX + Math.ceil(((pixelX + 1) * destSize) / size);
+      fillRect(canvas, left, top, right - left, bottom - top, hexToNumber(color));
+    }
+  }
+}
+
+function isCustomSpriteColor(value) {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
 }
 
 function drawTiles(canvas, snapshot) {
@@ -1029,35 +920,6 @@ function getTilesetByGid(gid) {
 
 function getObjectConfig(id) {
   return typeof id === 'string' ? GAME_OBJECT_CONFIG_BY_ID.get(id) ?? null : null;
-}
-
-function getObjectDefaultFrame(config) {
-  if (typeof config.defaultFrame === 'number') {
-    return config.defaultFrame;
-  }
-  if (Array.isArray(config.animationFrames) && config.animationFrames.length > 0) {
-    return config.animationFrames[0] ?? 0;
-  }
-  return 0;
-}
-
-function getObjectFrameSourceRect(config, frame, sheetWidth) {
-  const columns = Math.max(1, Math.floor(sheetWidth / config.frameWidth));
-  const normalizedFrame = Math.max(0, frame);
-  const column = normalizedFrame % columns;
-  const row = Math.floor(normalizedFrame / columns);
-  return {
-    sx: column * config.frameWidth,
-    sy: row * config.frameHeight,
-    sw: config.frameWidth,
-    sh: config.frameHeight,
-  };
-}
-
-function getPlacedObjectLayer(placed) {
-  return placed?.layer === 'background' || placed?.layer === 'terrain' || placed?.layer === 'foreground'
-    ? placed.layer
-    : 'terrain';
 }
 
 function decodeTileGid(value) {

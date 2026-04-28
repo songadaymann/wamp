@@ -113,3 +113,7 @@ April 28 merge note: Sword Hunter work is being promoted from `feature/sword-hun
 ## Open Slots
 
 - Add rows here as more active feature lines resurface.
+
+## Recent Ledger Notes
+
+- April 28, 2026: Post-run room social share remains the production baseline on `main`. The current follow-up hardens share-image rendering by making the Pages social-card worker import the canonical `src/config.ts` tileset/background/object catalog and by bundling that worker during `npm run build`; room card URLs now use `renderer=assets-v5`. This also carries the custom-sprite snapshot fix for browser-generated previews and Pages social cards. Next agent should continue from fresh `main`; when adding tilesets/sprites/enemies/objects, register them in `src/config.ts` and the share-image paths should pick them up on the next build/deploy.
