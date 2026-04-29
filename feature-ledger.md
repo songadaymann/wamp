@@ -115,7 +115,7 @@ April 28 merge note: Sword Hunter work is being promoted from `feature/sword-hun
 ## Open Slots
 
 - Overworld / room-start optimization: active on clean main-based branch `perf/overworld-room-start-optimization-main-2026-04-28` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-perf-main-2026-04-28`. The earlier `perf/overworld-room-start-optimization-2026-04-28` branch was cut from stale avatar-design work and is reference-only. Clean-branch validation passed `git diff --check`, `npm run typecheck`, `npm run build`, targeted Playwright room-start/LOD probe, and required `develop-web-game` client smoke.
-- Overworld zoom smoothing: active on clean main-based branch `feature/overworld-zoom-smoothing-2026-04-29` in worktree `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-overworld-zoom-smoothing-2026-04-29`. Initial target is diagnosing and smoothing choppy overworld zoom plus preview-room pop-in/out. Start from zoom instrumentation and the existing `?perf=1` profiler before changing LOD budgets.
+- Overworld zoom smoothing: merged to `main` from clean branch `feature/overworld-zoom-smoothing-2026-04-29` on April 29, 2026. Adds repeatable zoom probes, debounced continuous wheel/pinch zoom refresh, chunk preview texture caching, cheaper overview previews, and deferred post-initial cache-miss preview builds. Production deploy target: `https://wamp.land` / `https://api.wamp.land`.
 
 ## Recent Ledger Notes
 
