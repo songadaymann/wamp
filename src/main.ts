@@ -1,5 +1,9 @@
 import Phaser from 'phaser';
 import { getAuthDebugState, setupAuthUi } from './auth/client';
+import {
+  initializeGuestActivityTracking,
+  type GuestActivityMode,
+} from './analytics/guestActivity';
 import { initSfx, globalSfxController } from './audio/sfx';
 import { runOverworldLodStress } from './debug/overworldLodStress';
 import { globalRoomMusicController, initRoomMusic } from './music/controller';
@@ -213,6 +217,7 @@ window.render_game_to_text = () =>
 
 window.get_room_music_debug_state = () => globalRoomMusicController.getDebugState();
 window.get_sword_hunter_debug = () => getSwordHunterDebugState();
+initializeGuestActivityTracking(getGuestActivitySnapshot);
 
 if (query.get('previewSmoke') === '1') {
   window.run_preview_smoke_action = async (
@@ -304,6 +309,54 @@ function normalizeRendererQuery(value: string | null): 'auto' | 'canvas' | 'webg
     default:
       return 'auto';
   }
+}
+
+function getGuestActivitySnapshot(): {
+  mode: GuestActivityMode;
+  roomCoordinates: { x: number; y: number } | null;
+} {
+  const state = getDebugState();
+  return {
+    mode: resolveGuestActivityMode(state),
+    roomCoordinates: readDebugRoomCoordinates(state),
+  };
+}
+
+function resolveGuestActivityMode(state: Record<string, unknown>): GuestActivityMode {
+  const appMode = document.body.dataset.appMode;
+  if (appMode === 'play-world') {
+    return 'play';
+  }
+  if (appMode === 'editor' || appMode === 'course-composer') {
+    return 'edit';
+  }
+
+  return state.mode === 'play' ? 'play' : 'browse';
+}
+
+function readDebugRoomCoordinates(state: Record<string, unknown>): { x: number; y: number } | null {
+  return (
+    normalizeDebugCoordinates(state.currentRoom) ??
+    normalizeDebugCoordinates(state.coordinates) ??
+    normalizeDebugCoordinates(state.selectedCoordinates) ??
+    normalizeDebugCoordinates(state.selected)
+  );
+}
+
+function normalizeDebugCoordinates(value: unknown): { x: number; y: number } | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const coordinates = value as { x?: unknown; y?: unknown };
+  if (!Number.isInteger(coordinates.x) || !Number.isInteger(coordinates.y)) {
+    return null;
+  }
+
+  return {
+    x: Number(coordinates.x),
+    y: Number(coordinates.y),
+  };
 }
 
 function resolveRendererType(renderer: 'auto' | 'canvas' | 'webgl'): number {

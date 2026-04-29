@@ -86,6 +86,8 @@ async function loadTotals(env: Env, nowIso: string): Promise<LaunchStatsTotals> 
   const [
     users,
     activeSessions,
+    guestVisitors,
+    guestVisits,
     rooms,
     publishedRooms,
     roomRuns,
@@ -97,6 +99,8 @@ async function loadTotals(env: Env, nowIso: string): Promise<LaunchStatsTotals> 
   ] = await Promise.all([
     countQuery(env, 'SELECT COUNT(*) AS count FROM users'),
     countQuery(env, 'SELECT COUNT(*) AS count FROM sessions WHERE expires_at > ?', [nowIso]),
+    countQuery(env, 'SELECT COUNT(DISTINCT guest_user_id) AS count FROM guest_visits'),
+    countQuery(env, 'SELECT COUNT(*) AS count FROM guest_visits'),
     countQuery(env, 'SELECT COUNT(*) AS count FROM rooms'),
     countQuery(env, 'SELECT COUNT(*) AS count FROM rooms WHERE published_json IS NOT NULL'),
     countQuery(env, 'SELECT COUNT(*) AS count FROM room_runs'),
@@ -110,6 +114,8 @@ async function loadTotals(env: Env, nowIso: string): Promise<LaunchStatsTotals> 
   return {
     users,
     activeSessions,
+    guestVisitors,
+    guestVisits,
     rooms,
     publishedRooms,
     roomRuns,
@@ -128,6 +134,8 @@ async function loadActivityWindow(
   const [
     newUsers,
     logins,
+    guestVisitors,
+    guestVisitHeartbeats,
     magicLinksCreated,
     chatMessages,
     roomClaims,
@@ -156,6 +164,24 @@ async function loadActivityWindow(
         JOIN users ON users.id = sessions.user_id
         WHERE sessions.created_at >= ?
           AND ${sqlLaunchActivityIsNotPlayfunIdentity('users.id', 'users.display_name')}
+      `,
+      [sinceIso]
+    ),
+    countQuery(
+      env,
+      `
+        SELECT COUNT(DISTINCT guest_user_id) AS count
+        FROM guest_visits
+        WHERE last_seen_at >= ?
+      `,
+      [sinceIso]
+    ),
+    countQuery(
+      env,
+      `
+        SELECT COALESCE(SUM(heartbeat_count), 0) AS count
+        FROM guest_visits
+        WHERE last_seen_at >= ?
       `,
       [sinceIso]
     ),
@@ -281,6 +307,8 @@ async function loadActivityWindow(
   return {
     newUsers,
     logins,
+    guestVisitors,
+    guestVisitHeartbeats,
     magicLinksCreated,
     chatMessages,
     roomClaims,
@@ -306,6 +334,21 @@ interface VisitOnlySummaryRow {
   actor_user_id: string;
   actor_display_name: string;
   session_count: number;
+}
+
+interface GuestVisitSummaryRow {
+  at: string;
+  actor_guest_id: string;
+  actor_display_name: string;
+  heartbeat_count: number | string | null;
+  duration_seconds: number | string | null;
+  browse_seconds: number | string | null;
+  play_seconds: number | string | null;
+  edit_seconds: number | string | null;
+  last_path: string | null;
+  last_room_id: string | null;
+  last_room_x: number | string | null;
+  last_room_y: number | string | null;
 }
 
 interface RoomBuildActivityRow {
@@ -376,15 +419,16 @@ interface CourseReferenceAccumulator {
 async function loadRecentSummaries(env: Env, nowIso: string): Promise<LaunchStatsRecentSummary[]> {
   const recentSinceIso = daysAgoIso(new Date(nowIso), RECENT_EVENT_WINDOW_DAYS);
 
-  const [signups, visitOnly, roomPlay, roomBuild, courseBuild] = await Promise.all([
+  const [signups, guestVisits, visitOnly, roomPlay, roomBuild, courseBuild] = await Promise.all([
     loadSignupSummaries(env, recentSinceIso),
+    loadGuestVisitSummaries(env, recentSinceIso),
     loadVisitOnlySummaries(env, recentSinceIso),
     loadRoomPlaySummaries(env, recentSinceIso),
     loadRoomBuildSummaries(env, recentSinceIso),
     loadCourseBuildSummaries(env, recentSinceIso),
   ]);
 
-  return [...signups, ...visitOnly, ...roomPlay, ...roomBuild, ...courseBuild]
+  return [...signups, ...guestVisits, ...visitOnly, ...roomPlay, ...roomBuild, ...courseBuild]
     .sort((left, right) => compareIsoDesc(left.at, right.at))
     .slice(0, RECENT_SUMMARY_LIMIT);
 }
@@ -444,6 +488,70 @@ function inferSignupSource(row: SignupSummaryRow): LaunchStatsSignupSource {
   }
 
   return 'unknown';
+}
+
+async function loadGuestVisitSummaries(
+  env: Env,
+  recentSinceIso: string
+): Promise<LaunchStatsRecentSummary[]> {
+  const rows = await env.DB.prepare(
+    `
+      SELECT
+        guest_visits.last_seen_at AS at,
+        guest_visits.guest_user_id AS actor_guest_id,
+        guest_visits.guest_display_name AS actor_display_name,
+        guest_visits.heartbeat_count AS heartbeat_count,
+        MAX(
+          0,
+          CAST((julianday(guest_visits.last_seen_at) - julianday(guest_visits.first_seen_at)) * 86400 AS INTEGER)
+        ) AS duration_seconds,
+        guest_visits.browse_seconds AS browse_seconds,
+        guest_visits.play_seconds AS play_seconds,
+        guest_visits.edit_seconds AS edit_seconds,
+        guest_visits.last_path AS last_path,
+        guest_visits.room_id AS last_room_id,
+        guest_visits.room_x AS last_room_x,
+        guest_visits.room_y AS last_room_y
+      FROM guest_visits
+      WHERE guest_visits.last_seen_at >= ?
+      ORDER BY guest_visits.last_seen_at DESC
+      LIMIT ?
+    `
+  )
+    .bind(recentSinceIso, RECENT_SUMMARY_LIMIT)
+    .all<GuestVisitSummaryRow>();
+
+  return rows.results
+    .filter((row) => Boolean(row.at && row.actor_guest_id && row.actor_display_name))
+    .map((row) => ({
+      kind: 'guest_visit',
+      at: row.at,
+      actorUserId: null,
+      actorGuestId: row.actor_guest_id,
+      actorDisplayName: row.actor_display_name,
+      signupSource: null,
+      sessionCount: null,
+      heartbeatCount: parseOptionalInteger(row.heartbeat_count),
+      durationSeconds: parseOptionalInteger(row.duration_seconds),
+      browseSeconds: parseOptionalInteger(row.browse_seconds),
+      playSeconds: parseOptionalInteger(row.play_seconds),
+      editSeconds: parseOptionalInteger(row.edit_seconds),
+      lastPath: row.last_path,
+      lastRoomId: row.last_room_id,
+      lastRoomX: parseOptionalInteger(row.last_room_x),
+      lastRoomY: parseOptionalInteger(row.last_room_y),
+      roomCount: null,
+      courseCount: null,
+      claimCount: null,
+      roomPublishCount: null,
+      coursePublishCount: null,
+      attemptCount: null,
+      completedCount: null,
+      failedCount: null,
+      abandonedCount: null,
+      topRooms: [],
+      topCourses: [],
+    }));
 }
 
 async function loadVisitOnlySummaries(
@@ -981,6 +1089,15 @@ function compareIsoDesc(left: string, right: string): number {
 
 function maxIso(current: string, candidate: string): string {
   return candidate > current ? candidate : current;
+}
+
+function parseOptionalInteger(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.round(parsed) : null;
 }
 
 async function loadPartykitStatus(env: Env): Promise<LaunchStatsPartykitStatus> {

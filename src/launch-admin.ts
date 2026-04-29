@@ -557,6 +557,8 @@ function renderTotals(): void {
   const cards: Array<[string, number]> = [
     ['Users', totals.users],
     ['Active Sessions', totals.activeSessions],
+    ['Guest Visitors', totals.guestVisitors],
+    ['Guest Visits', totals.guestVisits],
     ['Rooms', totals.rooms],
     ['Published Rooms', totals.publishedRooms],
     ['Room Runs', totals.roomRuns],
@@ -603,7 +605,10 @@ function renderActivity(): void {
       ([label, windowStats]) => `
         <article class="card stack">
           <span class="label">${escapeHtml(label)}</span>
-          <div class="meta">People ${formatNumber(windowStats.newUsers)} signups · ${formatNumber(windowStats.logins)} logins</div>
+          <div class="meta">People ${formatNumber(windowStats.newUsers)} signups · ${formatNumber(windowStats.logins)} logins · ${formatNumber(
+            windowStats.guestVisitors
+          )} guests</div>
+          <div class="meta">Guest heartbeats ${formatNumber(windowStats.guestVisitHeartbeats)}</div>
           <div class="meta">Build ${formatNumber(windowStats.roomClaims)} claims · ${formatNumber(
             windowStats.roomPublishes
           )} room publishes · ${formatNumber(windowStats.coursePublishes)} course publishes</div>
@@ -753,6 +758,8 @@ function renderRecentSummaryKindLabel(kind: LaunchStatsRecentSummary['kind']): s
   switch (kind) {
     case 'signup':
       return 'Sign Up';
+    case 'guest_visit':
+      return 'Guest Visit';
     case 'visit_only':
       return 'Visit Only';
     case 'room_play':
@@ -773,6 +780,10 @@ function renderRecentSummaryMarkup(summary: LaunchStatsRecentSummary): string {
 
 function renderRecentSummaryActorMarkup(summary: LaunchStatsRecentSummary): string {
   const actor = escapeHtml(summary.actorDisplayName || 'Unknown');
+  if (summary.actorGuestId) {
+    return `<span class="activity-actor" title="${escapeHtml(summary.actorGuestId)}">${actor}</span>`;
+  }
+
   if (!summary.actorUserId) {
     return `<span class="activity-actor">${actor}</span>`;
   }
@@ -788,6 +799,13 @@ function renderRecentSummaryBody(summary: LaunchStatsRecentSummary): string {
         : summary.signupSource === 'email'
           ? 'signed up with email.'
           : 'signed up.';
+    case 'guest_visit': {
+      const duration = formatDurationSeconds(summary.durationSeconds ?? 0);
+      const activity = summarizeGuestActivity(summary);
+      return activity
+        ? `visited as a guest for ${duration}; ${activity}.`
+        : `visited as a guest for ${duration}.`;
+    }
     case 'visit_only': {
       const sessions = summary.sessionCount ?? 0;
       return sessions <= 1
@@ -846,6 +864,20 @@ function renderRecentSummaryDetail(summary: LaunchStatsRecentSummary): string | 
         : summary.signupSource === 'email'
           ? 'New email account.'
           : 'New account.';
+    case 'guest_visit': {
+      const parts = [
+        `${formatNumber(summary.heartbeatCount ?? 0)} heartbeat${summary.heartbeatCount === 1 ? '' : 's'}`,
+        `activity ${formatGuestActivityBreakdown(summary)}`,
+      ];
+      const room = formatGuestRoom(summary);
+      if (room) {
+        parts.push(`last room ${room}`);
+      }
+      if (summary.lastPath) {
+        parts.push(`last path ${summary.lastPath}`);
+      }
+      return parts.join(' · ');
+    }
     case 'visit_only': {
       const sessions = summary.sessionCount ?? 0;
       return `${formatNumber(sessions)} login session${sessions === 1 ? '' : 's'} · no room or course play/build in the last 7 days.`;
@@ -982,6 +1014,53 @@ function formatAge(ageMs: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
   return `${minutes}m ${remainingSeconds}s`;
+}
+
+function formatDurationSeconds(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.round(totalSeconds));
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (minutes < 60) {
+    return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+}
+
+function summarizeGuestActivity(summary: LaunchStatsRecentSummary): string {
+  const parts: string[] = [];
+  if ((summary.playSeconds ?? 0) > 0) {
+    parts.push(`played ${formatDurationSeconds(summary.playSeconds ?? 0)}`);
+  }
+  if ((summary.editSeconds ?? 0) > 0) {
+    parts.push(`edited ${formatDurationSeconds(summary.editSeconds ?? 0)}`);
+  }
+  if ((summary.browseSeconds ?? 0) > 0) {
+    parts.push(`browsed ${formatDurationSeconds(summary.browseSeconds ?? 0)}`);
+  }
+  return parts.join(', ');
+}
+
+function formatGuestActivityBreakdown(summary: LaunchStatsRecentSummary): string {
+  return [
+    `browse ${formatDurationSeconds(summary.browseSeconds ?? 0)}`,
+    `play ${formatDurationSeconds(summary.playSeconds ?? 0)}`,
+    `edit ${formatDurationSeconds(summary.editSeconds ?? 0)}`,
+  ].join(' / ');
+}
+
+function formatGuestRoom(summary: LaunchStatsRecentSummary): string | null {
+  if (summary.lastRoomX !== null && summary.lastRoomX !== undefined && summary.lastRoomY !== null && summary.lastRoomY !== undefined) {
+    return `${summary.lastRoomX},${summary.lastRoomY}`;
+  }
+
+  return summary.lastRoomId?.trim() || null;
 }
 
 function formatNumber(value: number): string {

@@ -16,6 +16,7 @@ import { handleBackgroundImageRequest } from './worker/backgroundImages/routes';
 import { handleAgentRequest } from './worker/agents/routes';
 import { handleDashboardStatsRequest } from './worker/dashboard/routes';
 import { handleChatRequest } from './worker/chat/routes';
+import { handleGuestActivityHeartbeat } from './worker/guestActivity/routes';
 import {
   handleCourseCreate,
   handleCourseDraftByRoomLookup,
@@ -197,6 +198,10 @@ export default {
 
       if (url.pathname.startsWith('/api/chat/')) {
         return await handleChatRequest(request, url, env);
+      }
+
+      if (url.pathname === '/api/guest-activity/heartbeat' && request.method === 'POST') {
+        return await handleGuestActivityHeartbeat(request, env);
       }
 
       if (url.pathname === '/api/world' && request.method === 'GET') {

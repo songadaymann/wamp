@@ -1953,11 +1953,6 @@ export class OverworldPlayScene extends Phaser.Scene {
       E: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
     };
     this.cameraToggleKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.BACKTICK);
-    keyboard.on('keydown-T', () => {
-      if (this.mode === 'play') {
-        this.roomChatController.openComposer();
-      }
-    });
     keyboard.on('keydown-ESC', () => {
       if (this.roomChatController.handleEscapeKey()) {
         return;

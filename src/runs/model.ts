@@ -157,6 +157,7 @@ export interface RoomDiscoveryEntry {
   quality: QualityRatingSummary;
   trophy: TrophyAwardSummary | null;
   publishedAt: string | null;
+  firstPublishedAt: string | null;
   featured: boolean;
   featuredAt: string | null;
 }
