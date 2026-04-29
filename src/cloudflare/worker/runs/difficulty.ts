@@ -28,6 +28,7 @@ interface PublishedRoomDiscoveryRow {
   last_published_by_display_name: string | null;
   current_published_version: number;
   published_at: string;
+  first_published_at: string;
   canonical_version: number | null;
 }
 
@@ -232,6 +233,7 @@ export async function loadRoomDiscoveryResponse(
         rooms.last_published_by_display_name,
         latest.version AS current_published_version,
         latest.created_at AS published_at,
+        first_published.first_published_at AS first_published_at,
         rooms.canonical_version
       FROM rooms
       INNER JOIN (
@@ -243,6 +245,12 @@ export async function loadRoomDiscoveryResponse(
       INNER JOIN room_versions AS latest
         ON latest.room_id = latest_index.room_id
        AND latest.version = latest_index.version
+      INNER JOIN (
+        SELECT room_id, MIN(created_at) AS first_published_at
+        FROM room_versions
+        GROUP BY room_id
+      ) AS first_published
+        ON first_published.room_id = rooms.id
       WHERE rooms.published_json IS NOT NULL
         AND rooms.published_goal_type IS NOT NULL
     `
@@ -336,6 +344,7 @@ export async function loadRoomDiscoveryResponse(
         quality: ratingSummary.quality,
         trophy: trophyByRoomId.get(room.roomId) ?? null,
         publishedAt: room.publishedAt,
+        firstPublishedAt: room.firstPublishedAt,
         featured:
           featured !== null
           && featured.room_version === room.roomVersion,
@@ -439,6 +448,10 @@ function compareRoomDiscoveryEntries(
     return compareTimestampsDesc(left.publishedAt, right.publishedAt);
   }
 
+  const firstPublishedCompare = compareTimestampsDesc(left.firstPublishedAt, right.firstPublishedAt);
+  if (firstPublishedCompare !== 0) {
+    return firstPublishedCompare;
+  }
   return compareTimestampsDesc(left.publishedAt, right.publishedAt);
 }
 
@@ -796,6 +809,7 @@ function mapPublishedRoomDiscoveryRow(
   canonicalRoomVersion: number | null;
   goalType: RoomGoalType;
   publishedAt: string;
+  firstPublishedAt: string;
 } {
   const goalType = parseRoomGoalType(row.published_goal_type);
   if (!goalType) {
@@ -815,6 +829,7 @@ function mapPublishedRoomDiscoveryRow(
     canonicalRoomVersion: row.canonical_version,
     goalType,
     publishedAt: row.published_at,
+    firstPublishedAt: row.first_published_at,
   };
 }
 

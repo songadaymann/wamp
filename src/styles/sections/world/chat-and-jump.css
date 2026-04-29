@@ -24,7 +24,7 @@
   position: absolute;
   left: 50%;
   bottom: calc(68px + var(--safe-bottom));
-  z-index: 18;
+  z-index: 36;
   width: min(360px, calc(100% - 32px - var(--safe-left) - var(--safe-right)));
   transform: translateX(-50%);
 }

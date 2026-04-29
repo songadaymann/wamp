@@ -28,6 +28,8 @@ export interface LaunchStatsConfig {
 export interface LaunchStatsTotals {
   users: number;
   activeSessions: number;
+  guestVisitors: number;
+  guestVisits: number;
   rooms: number;
   publishedRooms: number;
   roomRuns: number;
@@ -41,6 +43,8 @@ export interface LaunchStatsTotals {
 export interface LaunchStatsActivityWindow {
   newUsers: number;
   logins: number;
+  guestVisitors: number;
+  guestVisitHeartbeats: number;
   magicLinksCreated: number;
   chatMessages: number;
   roomClaims: number;
@@ -60,6 +64,7 @@ export interface LaunchStatsActivity {
 
 export type LaunchStatsRecentSummaryKind =
   | 'signup'
+  | 'guest_visit'
   | 'visit_only'
   | 'room_play'
   | 'room_build'
@@ -93,9 +98,19 @@ export interface LaunchStatsRecentSummary {
   kind: LaunchStatsRecentSummaryKind;
   at: string;
   actorUserId: string | null;
+  actorGuestId?: string | null;
   actorDisplayName: string;
   signupSource: LaunchStatsSignupSource | null;
   sessionCount: number | null;
+  heartbeatCount?: number | null;
+  durationSeconds?: number | null;
+  browseSeconds?: number | null;
+  playSeconds?: number | null;
+  editSeconds?: number | null;
+  lastPath?: string | null;
+  lastRoomId?: string | null;
+  lastRoomX?: number | null;
+  lastRoomY?: number | null;
   roomCount: number | null;
   courseCount: number | null;
   claimCount: number | null;

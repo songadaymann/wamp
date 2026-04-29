@@ -62,6 +62,7 @@ const SUBSCRIPTION_RETAIN_MS = 1_200;
 const BUBBLE_STROKE_COLOR = 0xe7c977;
 const BUBBLE_FILL_COLOR = 0x050505;
 const BUBBLE_TEXT_COLOR = '#f7edd8';
+const ROOM_CHAT_BUBBLE_DEPTH = 260;
 
 export class OverworldRoomChatController {
   private client: WorldRoomChatClient | null = null;
@@ -527,7 +528,7 @@ export class OverworldRoomChatController {
     text.setLineSpacing(2);
 
     const container = this.options.scene.add.container(0, 0, [background, text]);
-    container.setDepth(27);
+    container.setDepth(ROOM_CHAT_BUBBLE_DEPTH);
 
     const bubble: RenderedRoomChatBubble = {
       userId: message.userId,

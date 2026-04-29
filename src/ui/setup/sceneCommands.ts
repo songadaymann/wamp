@@ -9,6 +9,7 @@ import { LeaderboardModalController } from './leaderboardModal';
 import {
   getActiveEditorScene,
   getActiveOverworldScene,
+  getOverworldScene,
 } from './sceneBridge';
 import { configureOverworldHudBridgeRuntime } from '../../scenes/overworld/hud';
 
@@ -70,6 +71,45 @@ export function setupSceneCommands(
       y: Number(match[2]),
     });
   };
+  const isEditableKeyboardTarget = (target: EventTarget | null) => {
+    if (!(target instanceof HTMLElement)) {
+      return false;
+    }
+
+    const tagName = target.tagName.toLowerCase();
+    return tagName === 'input' || tagName === 'textarea' || target.isContentEditable;
+  };
+  const handleRoomChatShortcut = (event: KeyboardEvent) => {
+    if (
+      event.key.toLowerCase() !== 't' ||
+      event.repeat ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.altKey ||
+      isEditableKeyboardTarget(event.target)
+    ) {
+      return;
+    }
+
+    const overworldScene = getOverworldScene(game);
+    if (!overworldScene?.openRoomChatComposer || overworldScene.isRoomChatComposerOpen?.()) {
+      return;
+    }
+
+    const opened = overworldScene.openRoomChatComposer();
+    if (!opened) {
+      if (doc.body.dataset.appMode === 'play-world') {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  doc.addEventListener('keydown', handleRoomChatShortcut, { capture: true });
 
   configureOverworldHudBridgeRuntime({
     onPlayRoom: () => {
