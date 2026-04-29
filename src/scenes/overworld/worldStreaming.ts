@@ -63,6 +63,11 @@ import {
   terrainTileDisablesTilemapCollision,
   terrainTileNeedsInsetBody,
 } from './terrainCollision';
+import {
+  computeLocalPlayPressureMetrics,
+  createDefaultLocalPlayPressureMetrics,
+  type LocalPlayPressureMetrics,
+} from './playPressure';
 
 const PLAY_ROOM_PARALLAX_MULTIPLIER = 0.2;
 const FULL_ROOM_RELEASE_GRACE_MS = 300;
@@ -149,6 +154,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private previewRoomBudget = 0;
   private fullRoomBudget = 0;
   private activeChunkRadius = 0;
+  private localPlayPressure = createDefaultLocalPlayPressureMetrics();
   private chunkWindowRequestInFlight = false;
   private deferredFullRoomLoadQueue: RoomSnapshot[] = [];
   private deferredFullRoomLoadTimer: Phaser.Time.TimerEvent | null = null;
@@ -200,6 +206,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.previewRoomBudget = 0;
     this.fullRoomBudget = 0;
     this.activeChunkRadius = 0;
+    this.localPlayPressure = createDefaultLocalPlayPressureMetrics();
     this.chunkWindowRequestInFlight = false;
     this.cancelDeferredFullRoomLoads();
     this.cancelDeferredPreviewRender();
@@ -231,6 +238,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.previewRoomBudget = 0;
     this.fullRoomBudget = 0;
     this.activeChunkRadius = 0;
+    this.localPlayPressure = createDefaultLocalPlayPressureMetrics();
     this.chunkWindowRequestInFlight = false;
   }
 
@@ -506,6 +514,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
   getDebugMetrics(): {
     activeChunkRadius: number;
+    effectivePerformanceProfile: PerformanceProfile;
     visibleRoomCount: number;
     previewRoomBudget: number;
     fullRoomBudget: number;
@@ -515,9 +524,13 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     previewTileSize: number;
     approximatePreviewTexturePixels: number;
     loadedFullRoomCount: number;
+    localPlayPressureProfile: LocalPlayPressureMetrics['profile'];
+    localPlayPressureScore: number;
+    localPlayPressureRoomCount: number;
   } {
     return {
       activeChunkRadius: this.activeChunkRadius,
+      effectivePerformanceProfile: this.getEffectivePerformanceProfile(),
       visibleRoomCount: this.visibleRoomIds.size,
       previewRoomBudget: this.previewRoomBudget,
       fullRoomBudget: this.fullRoomBudget,
@@ -527,11 +540,14 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       previewTileSize: this.previewRenderer.getActivePreviewTileSize(),
       approximatePreviewTexturePixels: this.previewRenderer.getApproximatePreviewTexturePixels(),
       loadedFullRoomCount: this.loadedFullRoomsById.size,
+      localPlayPressureProfile: this.localPlayPressure.profile,
+      localPlayPressureScore: this.localPlayPressure.score,
+      localPlayPressureRoomCount: this.localPlayPressure.roomBreakdowns.length,
     };
   }
 
   updateFullRoomBackgrounds(camera: Phaser.Cameras.Scene2D.Camera): void {
-    if (this.options.getMode() === 'play' && this.options.getPerformanceProfile() === 'reduced') {
+    if (this.options.getMode() === 'play' && this.getEffectivePerformanceProfile() === 'reduced') {
       return;
     }
 
@@ -865,6 +881,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private computePreviewSelection(
     roomCandidates: Map<string, StreamingRoomCandidate>
   ): OverworldPreviewSelection {
+    this.localPlayPressure = this.computeLocalPlayPressure(roomCandidates);
     const previewCandidates: PreviewSelectionCandidate[] = Array.from(roomCandidates.values()).map(
       (roomCandidate) => ({
         id: roomCandidate.id,
@@ -879,11 +896,12 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
     const selection = computeOverworldPreviewSelection({
       mode: this.options.getMode(),
-      performanceProfile: this.options.getPerformanceProfile(),
+      performanceProfile: this.getEffectivePerformanceProfile(),
       zoom: this.options.scene.cameras.main.zoom,
       focusCoordinates: this.getFocusCoordinates(),
       roomCandidates: previewCandidates,
       visibleRoomBounds: this.getViewportRoomBounds(),
+      fullRoomBudgetOverride: this.localPlayPressure.fullRoomBudgetOverride,
     });
 
     this.previewRoomBudget = selection.previewRoomBudget;
@@ -980,7 +998,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return getDesiredChunkBounds({
       centerCoordinates,
       mode: this.options.getMode(),
-      performanceProfile: this.options.getPerformanceProfile(),
+      performanceProfile: this.getEffectivePerformanceProfile(),
       zoom: camera.zoom,
       viewportWidth: this.options.scene.scale.width,
       viewportHeight: this.options.scene.scale.height,
@@ -991,8 +1009,41 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     const camera = this.options.scene.cameras.main;
     return getChunkPreviewTileSize({
       mode: this.options.getMode(),
-      performanceProfile: this.options.getPerformanceProfile(),
+      performanceProfile: this.getEffectivePerformanceProfile(),
       zoom: camera.zoom,
+    });
+  }
+
+  private getEffectivePerformanceProfile(): PerformanceProfile {
+    return this.options.getMode() === 'play' && this.localPlayPressure.profile === 'reduced'
+      ? 'reduced'
+      : this.options.getPerformanceProfile();
+  }
+
+  private computeLocalPlayPressure(
+    roomCandidates: Map<string, StreamingRoomCandidate>
+  ): LocalPlayPressureMetrics {
+    if (this.options.getMode() !== 'play') {
+      return createDefaultLocalPlayPressureMetrics();
+    }
+
+    return computeLocalPlayPressureMetrics({
+      focusCoordinates: this.options.getCurrentRoomCoordinates(),
+      wasReduced: this.localPlayPressure.profile === 'reduced',
+      getRoomSnapshot: (coordinates) => {
+        const roomId = roomIdFromCoordinates(coordinates);
+        const candidate = roomCandidates.get(roomId);
+        if (candidate?.draft) {
+          return candidate.draft;
+        }
+
+        const loadedRoom = this.loadedFullRoomsById.get(roomId);
+        if (loadedRoom) {
+          return loadedRoom.room;
+        }
+
+        return this.previewCache.getRoomSnapshot(roomId);
+      },
     });
   }
 

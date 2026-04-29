@@ -81,6 +81,7 @@ interface OverworldPreviewSelectionInput {
   focusCoordinates: RoomCoordinates;
   roomCandidates: Iterable<PreviewSelectionCandidate>;
   visibleRoomBounds: WorldRoomBounds | null;
+  fullRoomBudgetOverride?: number | null;
 }
 
 interface StreamingBudgetResult {
@@ -142,6 +143,7 @@ export function computeOverworldPreviewSelection(
   const zoom = Math.max(input.zoom, MIN_ZOOM);
   const roomCandidates = Array.from(input.roomCandidates);
   const budgets = computeStreamingBudgets(mode, zoom, performanceProfile);
+  const fullRoomBudget = input.fullRoomBudgetOverride ?? budgets.fullRoomBudget;
   const midLodRoomRadius = getMidLodRoomRadius(mode, zoom, performanceProfile);
   const visibleRoomBounds = input.visibleRoomBounds
     ? expandRoomBounds(input.visibleRoomBounds, VIEWPORT_ROOM_PADDING)
@@ -189,7 +191,7 @@ export function computeOverworldPreviewSelection(
 
   return {
     previewRoomBudget: effectivePreviewBudget,
-    fullRoomBudget: budgets.fullRoomBudget,
+    fullRoomBudget,
     protectedVisiblePreviewRoomCount: protectVisiblePreviewRooms ? visibleRoomIds.size : 0,
     nearLodRoomIds,
     midLodRoomIds,
@@ -219,7 +221,7 @@ export function computeOverworldPreviewSelection(
             midLodRoomIds,
             visibleRoomIds: new Set<string>(),
             focusCoordinates,
-            budget: budgets.fullRoomBudget,
+            budget: fullRoomBudget,
           })
         : new Set<string>(),
   };

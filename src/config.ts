@@ -836,6 +836,29 @@ export function isPushableObjectConfig(
   return config?.interaction === 'pushable';
 }
 
+export function isDynamicRuntimeObjectConfig(
+  config: Pick<GameObjectConfig, 'id' | 'interaction'> | null | undefined,
+): boolean {
+  if (!config) {
+    return false;
+  }
+
+  return (
+    isPushableObjectConfig(config)
+    || config.id === 'cannon_bullet'
+    || config.id === 'crab'
+    || config.id === 'slime_blue'
+    || config.id === 'slime_red'
+    || config.id === 'snake'
+    || config.id === 'penguin'
+    || config.id === 'frog'
+    || config.id === 'bear_brown'
+    || config.id === 'bear_polar'
+    || config.id === 'chicken'
+    || config.id === SWORDSMAN_AI_OBJECT_ID
+  );
+}
+
 export function isSolidRuntimeObjectConfig(
   config: Pick<GameObjectConfig, 'category' | 'id' | 'interaction'> | null | undefined,
 ): boolean {

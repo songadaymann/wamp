@@ -3838,6 +3838,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       lodMetrics: {
         activeChunkCount: this.chunkWindow?.chunks.length ?? 0,
         activeChunkRadius: streamingMetrics.activeChunkRadius,
+        effectivePerformanceProfile: streamingMetrics.effectivePerformanceProfile,
         visibleRoomCount: streamingMetrics.visibleRoomCount,
         previewRoomBudget: streamingMetrics.previewRoomBudget,
         fullRoomBudget: streamingMetrics.fullRoomBudget,
@@ -3847,6 +3848,9 @@ export class OverworldPlayScene extends Phaser.Scene {
         previewTileSize: streamingMetrics.previewTileSize,
         approximatePreviewTexturePixels: streamingMetrics.approximatePreviewTexturePixels,
         loadedFullRoomCount: streamingMetrics.loadedFullRoomCount,
+        localPlayPressureProfile: streamingMetrics.localPlayPressureProfile,
+        localPlayPressureScore: streamingMetrics.localPlayPressureScore,
+        localPlayPressureRoomCount: streamingMetrics.localPlayPressureRoomCount,
       },
       currentRoomBackground: currentLoadedRoom
         ? {
