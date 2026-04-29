@@ -11,6 +11,7 @@ gen-avatar/cryptopunk/generated-avatar-packs/
 gen-avatar/cryptopunk/__pycache__/
 gen-avatar/cryptopunk/**/*.pyc
 cloudflare/cryptopunk-avatar-queue/build-input/
+progress.md
 
 .DS_Store
 
@@ -28,3 +29,13 @@ env.local.*
 !.env.*.example
 
 .claude/settings.local.json
+
+# Local-only personal exports and experiments.
+src/cloudflare/emailExportWorker.ts
+src/cloudflare/worker/exports/
+wrangler.email-export.jsonc
+docs/WAMP-Progression-Asset-Tracker.xlsx
+font-hud-preview.html
+scripts/probe_swordsman_chase_helpers.mjs
+public/assets/fonts/AzeretMono-*.ttf
+public/assets/fonts/SpaceMono-*.ttf
