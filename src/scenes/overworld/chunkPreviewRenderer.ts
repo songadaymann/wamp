@@ -4,7 +4,13 @@ import {
   ensureCustomBackgroundTexture,
   getCustomBackgroundTextureKey,
 } from '../../backgrounds/runtime';
-import { ROOM_HEIGHT, ROOM_PX_HEIGHT, ROOM_PX_WIDTH, ROOM_WIDTH } from '../../config';
+import {
+  ROOM_HEIGHT,
+  ROOM_PX_HEIGHT,
+  ROOM_PX_WIDTH,
+  ROOM_WIDTH,
+  type LayerName,
+} from '../../config';
 import { type RoomCoordinates, type RoomSnapshot } from '../../persistence/roomModel';
 import {
   roomToChunkCoordinates,
@@ -30,8 +36,30 @@ interface ChunkPreviewState {
   rooms: RoomSnapshot[];
 }
 
+interface CachedChunkPreviewTexture {
+  textureKey: string;
+  chunkId: string;
+  contentSignature: string;
+  previewTileSize: number;
+  pixelCount: number;
+  lastUsedAt: number;
+}
+
+interface PendingChunkPreviewBuild {
+  textureKey: string;
+  chunkId: string;
+  contentSignature: string;
+  chunkCoordinates: WorldChunkCoordinates;
+  rooms: RoomSnapshot[];
+  previewTileSize: number;
+}
+
 const CHUNK_PREVIEW_WIDTH = WORLD_CHUNK_SIZE * ROOM_PX_WIDTH;
 const CHUNK_PREVIEW_HEIGHT = WORLD_CHUNK_SIZE * ROOM_PX_HEIGHT;
+const CHUNK_PREVIEW_TEXTURE_CACHE_MAX_PIXELS = 32_000_000;
+const CUSTOM_BACKGROUND_PREVIEW_TILE_SIZE = 4;
+const DEFERRED_CHUNK_PREVIEW_BUILD_DELAY_MS = 24;
+const LIGHTWEIGHT_PREVIEW_LAYERS: LayerName[] = ['background', 'terrain'];
 
 export class OverworldChunkPreviewRenderer {
   private chunkStatesByChunkId = new Map<string, ChunkPreviewState>();
@@ -39,6 +67,12 @@ export class OverworldChunkPreviewRenderer {
   private chunkTextureKeysByChunkId = new Map<string, string>();
   private visiblePreviewRoomIds = new Set<string>();
   private pendingCustomBackgroundLoads = new Map<string, Promise<string>>();
+  private cachedTexturesByKey = new Map<string, CachedChunkPreviewTexture>();
+  private pendingTextureBuildsByKey = new Map<string, PendingChunkPreviewBuild>();
+  private pendingTextureBuildQueue: PendingChunkPreviewBuild[] = [];
+  private textureBuildTimer: number | null = null;
+  private cacheClock = 0;
+  private hasCompletedInitialTexturePass = false;
   private customBackgroundLoadGeneration = 0;
   private readonly textureNamespace: string;
 
@@ -60,11 +94,16 @@ export class OverworldChunkPreviewRenderer {
   }
 
   clear(): void {
+    this.cancelQueuedTextureBuilds();
     for (const image of this.chunkImagesByChunkId.values()) {
       image.destroy();
     }
 
-    for (const textureKey of this.chunkTextureKeysByChunkId.values()) {
+    const textureKeys = new Set<string>([
+      ...this.chunkTextureKeysByChunkId.values(),
+      ...this.cachedTexturesByKey.keys(),
+    ]);
+    for (const textureKey of textureKeys) {
       if (this.options.scene.textures.exists(textureKey)) {
         this.options.scene.textures.remove(textureKey);
       }
@@ -72,6 +111,10 @@ export class OverworldChunkPreviewRenderer {
 
     this.chunkImagesByChunkId = new Map();
     this.chunkTextureKeysByChunkId = new Map();
+    this.cachedTexturesByKey = new Map();
+    this.pendingTextureBuildsByKey = new Map();
+    this.pendingTextureBuildQueue = [];
+    this.hasCompletedInitialTexturePass = false;
     this.visiblePreviewRoomIds = new Set();
     this.pendingCustomBackgroundLoads = new Map();
     this.customBackgroundLoadGeneration += 1;
@@ -94,6 +137,14 @@ export class OverworldChunkPreviewRenderer {
   }
 
   getApproximatePreviewTexturePixels(): number {
+    let cachedPixelCount = 0;
+    for (const textureKey of new Set(this.chunkTextureKeysByChunkId.values())) {
+      cachedPixelCount += this.cachedTexturesByKey.get(textureKey)?.pixelCount ?? 0;
+    }
+    if (cachedPixelCount > 0) {
+      return cachedPixelCount;
+    }
+
     const tileSize = this.getPreviewTileSize();
     const chunkTextureWidth = WORLD_CHUNK_SIZE * ROOM_WIDTH * tileSize;
     const chunkTextureHeight = WORLD_CHUNK_SIZE * ROOM_HEIGHT * tileSize;
@@ -183,10 +234,7 @@ export class OverworldChunkPreviewRenderer {
     const activeChunkIds = new Set(this.chunkStatesByChunkId.keys());
 
     for (const [chunkId, chunkState] of this.chunkStatesByChunkId.entries()) {
-      const visibleRooms = chunkState.rooms
-        .filter((room) => !this.options.isFullRoomLoaded(room.id))
-        .slice()
-        .sort(compareRoomSnapshots);
+      const visibleRooms = this.getVisibleRoomsForChunk(chunkState);
 
       if (visibleRooms.length === 0) {
         this.destroyChunkPreview(chunkId);
@@ -207,6 +255,8 @@ export class OverworldChunkPreviewRenderer {
     }
 
     this.visiblePreviewRoomIds = nextVisiblePreviewRoomIds;
+    this.hasCompletedInitialTexturePass = true;
+    this.pruneTextureCache();
     this.options.onBackdropObjectsChanged?.();
   }
 
@@ -216,33 +266,63 @@ export class OverworldChunkPreviewRenderer {
   ): void {
     const chunkId = `${chunkCoordinates.x},${chunkCoordinates.y}`;
     const previewTileSize = this.getPreviewTileSize();
-    const textureKey = this.buildChunkTextureKey(chunkId, rooms, previewTileSize);
-    const previousTextureKey = this.chunkTextureKeysByChunkId.get(chunkId);
+    const contentSignature = this.buildChunkContentSignature(chunkId, rooms);
+    const textureKey = this.buildChunkTextureKey(chunkId, contentSignature, previewTileSize);
 
-    this.ensureCustomBackgroundsForChunk(rooms);
-
-    if (
-      previousTextureKey &&
-      previousTextureKey !== textureKey &&
-      this.options.scene.textures.exists(previousTextureKey)
-    ) {
-      this.options.scene.textures.remove(previousTextureKey);
+    if (this.shouldDrawCustomBackgroundImages(previewTileSize)) {
+      this.ensureCustomBackgroundsForChunk(rooms);
     }
 
-    if (!this.options.scene.textures.exists(textureKey)) {
-      this.buildChunkTexture(textureKey, chunkCoordinates, rooms, previewTileSize);
-    }
+    let displayTextureKey =
+      this.findReusableTextureKey(chunkId, contentSignature, previewTileSize) ?? textureKey;
+    const image = this.chunkImagesByChunkId.get(chunkId) ?? null;
 
-    let image = this.chunkImagesByChunkId.get(chunkId) ?? null;
+    if (!this.options.scene.textures.exists(displayTextureKey)) {
+      if (this.shouldDeferTextureBuild()) {
+        this.queueTextureBuild({
+          textureKey,
+          chunkId,
+          contentSignature,
+          chunkCoordinates: { ...chunkCoordinates },
+          rooms: rooms.slice(),
+          previewTileSize,
+        });
+        if (image) {
+          this.positionChunkImage(image, chunkCoordinates);
+        }
+        return;
+      }
+
+      displayTextureKey = textureKey;
+      if (!this.options.scene.textures.exists(textureKey)) {
+        const built = this.buildChunkTexture(textureKey, chunkCoordinates, rooms, previewTileSize);
+        if (!built) {
+          return;
+        }
+      }
+      this.recordCachedTexture(textureKey, chunkId, contentSignature, previewTileSize);
+    } else if (displayTextureKey === textureKey && !this.cachedTexturesByKey.has(textureKey)) {
+      this.recordCachedTexture(textureKey, chunkId, contentSignature, previewTileSize);
+    }
+    this.touchCachedTexture(displayTextureKey);
+
     if (!image) {
-      image = this.options.scene.add.image(0, 0, textureKey);
-      image.setOrigin(0, 0);
-      image.setDepth(0);
-      this.chunkImagesByChunkId.set(chunkId, image);
+      const nextImage = this.options.scene.add.image(0, 0, displayTextureKey);
+      nextImage.setOrigin(0, 0);
+      nextImage.setDepth(0);
+      this.chunkImagesByChunkId.set(chunkId, nextImage);
+      this.positionChunkImage(nextImage, chunkCoordinates);
     } else {
-      image.setTexture(textureKey);
+      image.setTexture(displayTextureKey);
+      this.positionChunkImage(image, chunkCoordinates);
     }
+    this.chunkTextureKeysByChunkId.set(chunkId, displayTextureKey);
+  }
 
+  private positionChunkImage(
+    image: Phaser.GameObjects.Image,
+    chunkCoordinates: WorldChunkCoordinates,
+  ): void {
     const origin = this.options.getRoomOrigin({
       x: chunkCoordinates.x * WORLD_CHUNK_SIZE,
       y: chunkCoordinates.y * WORLD_CHUNK_SIZE,
@@ -250,7 +330,6 @@ export class OverworldChunkPreviewRenderer {
     image.setPosition(origin.x, origin.y);
     image.setDisplaySize(CHUNK_PREVIEW_WIDTH, CHUNK_PREVIEW_HEIGHT);
     image.setVisible(true);
-    this.chunkTextureKeysByChunkId.set(chunkId, textureKey);
   }
 
   private ensureCustomBackgroundsForChunk(rooms: RoomSnapshot[]): void {
@@ -298,6 +377,7 @@ export class OverworldChunkPreviewRenderer {
 
     for (const chunkId of chunkIdsToRebuild) {
       this.destroyChunkPreview(chunkId);
+      this.destroyCachedTexturesForChunk(chunkId);
     }
 
     if (chunkIdsToRebuild.length > 0) {
@@ -314,8 +394,8 @@ export class OverworldChunkPreviewRenderer {
     }
 
     const textureKey = this.chunkTextureKeysByChunkId.get(chunkId);
-    if (textureKey && this.options.scene.textures.exists(textureKey)) {
-      this.options.scene.textures.remove(textureKey);
+    if (textureKey) {
+      this.touchCachedTexture(textureKey);
     }
     this.chunkTextureKeysByChunkId.delete(chunkId);
   }
@@ -325,21 +405,22 @@ export class OverworldChunkPreviewRenderer {
     chunkCoordinates: WorldChunkCoordinates,
     rooms: RoomSnapshot[],
     previewTileSize: number,
-  ): void {
-    this.measure('stream.buildChunkPreviewTexture', () => {
+  ): boolean {
+    return this.measure('stream.buildChunkPreviewTexture', () => {
       const canvasTexture = this.options.scene.textures.createCanvas(
         textureKey,
         WORLD_CHUNK_SIZE * ROOM_WIDTH * previewTileSize,
         WORLD_CHUNK_SIZE * ROOM_HEIGHT * previewTileSize,
       );
       if (!canvasTexture) {
-        return;
+        return false;
       }
 
       const canvas = canvasTexture.getSourceImage() as HTMLCanvasElement;
       const context = canvas.getContext('2d');
       if (!context) {
-        return;
+        this.options.scene.textures.remove(textureKey);
+        return false;
       }
 
       context.clearRect(0, 0, canvas.width, canvas.height);
@@ -356,30 +437,249 @@ export class OverworldChunkPreviewRenderer {
           {
             offsetX: localRoomX * ROOM_WIDTH * previewTileSize,
             offsetY: localRoomY * ROOM_HEIGHT * previewTileSize,
+            includeObjects: this.shouldDrawDetailedRoomPreviews(previewTileSize),
+            includedLayers: this.getPreviewLayers(previewTileSize),
             showConstructionOverlay: room.status !== 'published',
             constructionLabel: 'BUILDING',
+            skipCustomBackgroundImages: !this.shouldDrawCustomBackgroundImages(previewTileSize),
           }
         );
       }
 
       canvasTexture.refresh();
+      return true;
     });
   }
 
   private buildChunkTextureKey(
     chunkId: string,
-    rooms: RoomSnapshot[],
+    contentSignature: string,
     previewTileSize: number,
   ): string {
+    return `chunk-preview-${this.textureNamespace}-${sanitizeChunkKey(chunkId)}-${previewTileSize}-${contentSignature}`;
+  }
+
+  private buildChunkContentSignature(chunkId: string, rooms: RoomSnapshot[]): string {
     const signature = rooms
       .map((room) => `${room.id}:${room.version}:${room.updatedAt}:${room.status}`)
       .join('|');
-    const hash = hashStringToSeed(`${chunkId}|${signature}`).toString(36);
-    return `chunk-preview-${this.textureNamespace}-${sanitizeChunkKey(chunkId)}-${previewTileSize}-${hash}`;
+    return hashStringToSeed(`${chunkId}|${signature}`).toString(36);
+  }
+
+  private findReusableTextureKey(
+    chunkId: string,
+    contentSignature: string,
+    requestedTileSize: number,
+  ): string | null {
+    let best: CachedChunkPreviewTexture | null = null;
+
+    for (const [textureKey, record] of Array.from(this.cachedTexturesByKey.entries())) {
+      if (!this.options.scene.textures.exists(textureKey)) {
+        this.cachedTexturesByKey.delete(textureKey);
+        continue;
+      }
+
+      if (record.chunkId !== chunkId || record.contentSignature !== contentSignature) {
+        continue;
+      }
+
+      if (record.previewTileSize < requestedTileSize) {
+        continue;
+      }
+
+      if (!best || record.previewTileSize < best.previewTileSize) {
+        best = record;
+      }
+    }
+
+    return best?.textureKey ?? null;
+  }
+
+  private recordCachedTexture(
+    textureKey: string,
+    chunkId: string,
+    contentSignature: string,
+    previewTileSize: number,
+  ): void {
+    this.cachedTexturesByKey.set(textureKey, {
+      textureKey,
+      chunkId,
+      contentSignature,
+      previewTileSize,
+      pixelCount: this.getChunkTexturePixelCount(previewTileSize),
+      lastUsedAt: ++this.cacheClock,
+    });
+  }
+
+  private touchCachedTexture(textureKey: string): void {
+    const record = this.cachedTexturesByKey.get(textureKey);
+    if (record) {
+      record.lastUsedAt = ++this.cacheClock;
+    }
+  }
+
+  private pruneTextureCache(): void {
+    const activeTextureKeys = new Set(this.chunkTextureKeysByChunkId.values());
+    let totalPixels = 0;
+
+    for (const [textureKey, record] of Array.from(this.cachedTexturesByKey.entries())) {
+      if (!this.options.scene.textures.exists(textureKey)) {
+        this.cachedTexturesByKey.delete(textureKey);
+        continue;
+      }
+      totalPixels += record.pixelCount;
+    }
+
+    if (totalPixels <= CHUNK_PREVIEW_TEXTURE_CACHE_MAX_PIXELS) {
+      return;
+    }
+
+    const evictableRecords = Array.from(this.cachedTexturesByKey.values())
+      .filter((record) => !activeTextureKeys.has(record.textureKey))
+      .sort((left, right) => left.lastUsedAt - right.lastUsedAt);
+
+    for (const record of evictableRecords) {
+      if (totalPixels <= CHUNK_PREVIEW_TEXTURE_CACHE_MAX_PIXELS) {
+        break;
+      }
+      this.removeCachedTexture(record.textureKey);
+      totalPixels -= record.pixelCount;
+    }
+  }
+
+  private destroyCachedTexturesForChunk(chunkId: string): void {
+    for (const record of Array.from(this.cachedTexturesByKey.values())) {
+      if (record.chunkId === chunkId) {
+        this.removeCachedTexture(record.textureKey);
+      }
+    }
+  }
+
+  private removeCachedTexture(textureKey: string): void {
+    this.cachedTexturesByKey.delete(textureKey);
+    if (this.options.scene.textures.exists(textureKey)) {
+      this.options.scene.textures.remove(textureKey);
+    }
+  }
+
+  private getChunkTexturePixelCount(previewTileSize: number): number {
+    return (
+      WORLD_CHUNK_SIZE *
+      ROOM_WIDTH *
+      previewTileSize *
+      WORLD_CHUNK_SIZE *
+      ROOM_HEIGHT *
+      previewTileSize
+    );
+  }
+
+  private getVisibleRoomsForChunk(chunkState: ChunkPreviewState): RoomSnapshot[] {
+    return chunkState.rooms
+      .filter((room) => !this.options.isFullRoomLoaded(room.id))
+      .slice()
+      .sort(compareRoomSnapshots);
+  }
+
+  private shouldDeferTextureBuild(): boolean {
+    return this.hasCompletedInitialTexturePass;
+  }
+
+  private queueTextureBuild(request: PendingChunkPreviewBuild): void {
+    if (
+      this.options.scene.textures.exists(request.textureKey) ||
+      this.pendingTextureBuildsByKey.has(request.textureKey)
+    ) {
+      return;
+    }
+
+    this.pendingTextureBuildsByKey.set(request.textureKey, request);
+    this.pendingTextureBuildQueue.push(request);
+    this.scheduleNextTextureBuild();
+  }
+
+  private scheduleNextTextureBuild(): void {
+    if (this.textureBuildTimer !== null || this.pendingTextureBuildQueue.length === 0) {
+      return;
+    }
+
+    this.textureBuildTimer = window.setTimeout(() => {
+      this.textureBuildTimer = null;
+      this.runNextQueuedTextureBuild();
+    }, DEFERRED_CHUNK_PREVIEW_BUILD_DELAY_MS);
+  }
+
+  private runNextQueuedTextureBuild(): void {
+    const request = this.pendingTextureBuildQueue.shift() ?? null;
+    if (!request) {
+      return;
+    }
+
+    this.pendingTextureBuildsByKey.delete(request.textureKey);
+    if (!this.isTextureBuildRequestCurrent(request)) {
+      this.scheduleNextTextureBuild();
+      return;
+    }
+
+    if (!this.options.scene.textures.exists(request.textureKey)) {
+      const built = this.buildChunkTexture(
+        request.textureKey,
+        request.chunkCoordinates,
+        request.rooms,
+        request.previewTileSize,
+      );
+      if (built) {
+        this.recordCachedTexture(
+          request.textureKey,
+          request.chunkId,
+          request.contentSignature,
+          request.previewTileSize,
+        );
+      }
+    }
+
+    this.syncChunkImages();
+    this.scheduleNextTextureBuild();
+  }
+
+  private isTextureBuildRequestCurrent(request: PendingChunkPreviewBuild): boolean {
+    const chunkState = this.chunkStatesByChunkId.get(request.chunkId);
+    if (!chunkState) {
+      return false;
+    }
+
+    const visibleRooms = this.getVisibleRoomsForChunk(chunkState);
+    if (visibleRooms.length === 0) {
+      return false;
+    }
+
+    return this.buildChunkContentSignature(request.chunkId, visibleRooms) === request.contentSignature;
+  }
+
+  private cancelQueuedTextureBuilds(): void {
+    if (this.textureBuildTimer !== null) {
+      window.clearTimeout(this.textureBuildTimer);
+      this.textureBuildTimer = null;
+    }
+    this.pendingTextureBuildsByKey = new Map();
+    this.pendingTextureBuildQueue = [];
   }
 
   private getPreviewTileSize(): number {
     return Math.max(1, Math.floor(this.options.getPreviewTileSize()));
+  }
+
+  private shouldDrawCustomBackgroundImages(previewTileSize: number): boolean {
+    return previewTileSize >= CUSTOM_BACKGROUND_PREVIEW_TILE_SIZE;
+  }
+
+  private shouldDrawDetailedRoomPreviews(previewTileSize: number): boolean {
+    return previewTileSize >= CUSTOM_BACKGROUND_PREVIEW_TILE_SIZE;
+  }
+
+  private getPreviewLayers(previewTileSize: number): LayerName[] | undefined {
+    return this.shouldDrawDetailedRoomPreviews(previewTileSize)
+      ? undefined
+      : LIGHTWEIGHT_PREVIEW_LAYERS;
   }
 }
 

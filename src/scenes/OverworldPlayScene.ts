@@ -883,6 +883,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         maxZoom: MAX_ZOOM,
         buttonZoomFactor: BUTTON_ZOOM_FACTOR,
         wheelZoomSensitivity: WHEEL_ZOOM_SENSITIVITY,
+        measurePerformance: (label, callback) => this.measureMobilePerformance(label, callback),
       },
     );
     this.runtimeController = new OverworldRuntimeController(

@@ -37,12 +37,18 @@ export interface RoomTextureBuildOptions {
   includedLayers?: LayerName[];
   showConstructionOverlay?: boolean;
   constructionLabel?: string;
+  skipCustomBackgroundImages?: boolean;
 }
 
 export interface RoomTextureDrawOptions extends RoomTextureBuildOptions {
   offsetX?: number;
   offsetY?: number;
 }
+
+const CUSTOM_BACKGROUND_DRAW_CACHE_MAX_ENTRIES = 128;
+const customBackgroundSourceIds = new WeakMap<object, number>();
+const customBackgroundDrawCache = new Map<string, HTMLCanvasElement>();
+let nextCustomBackgroundSourceId = 1;
 
 export function buildRoomTextureKey(
   room: RoomSnapshot,
@@ -113,7 +119,16 @@ export function drawRoomSnapshotToContext(
   context.clip();
 
   if (options.includeBackground !== false) {
-    drawRoomBackground(scene, context, room, width, height, offsetX, offsetY);
+    drawRoomBackground(
+      scene,
+      context,
+      room,
+      width,
+      height,
+      offsetX,
+      offsetY,
+      options.skipCustomBackgroundImages === true,
+    );
   }
   drawRoomTiles(
     scene,
@@ -148,6 +163,7 @@ export function drawRoomBackground(
   height: number = ROOM_PX_HEIGHT,
   offsetX = 0,
   offsetY = 0,
+  skipCustomBackgroundImages = false,
 ): void {
   const resolved = resolveRoomBackground(room.background);
   if (resolved.kind === 'none') {
@@ -172,6 +188,9 @@ export function drawRoomBackground(
   if (resolved.kind === 'custom') {
     context.fillStyle = RETRO_COLORS.background;
     context.fillRect(offsetX, offsetY, width, height);
+    if (skipCustomBackgroundImages) {
+      return;
+    }
     const sourceImage = getTextureSource(scene, getCustomBackgroundTextureKey(resolved.id));
     if (sourceImage) {
       drawCustomBackgroundImage(context, sourceImage, resolved.fit, offsetX, offsetY, width, height);
@@ -195,6 +214,24 @@ export function drawRoomBackground(
 }
 
 function drawCustomBackgroundImage(
+  context: CanvasRenderingContext2D,
+  sourceImage: CanvasImageSource,
+  fit: 'stretch' | 'tile' | 'center',
+  offsetX: number,
+  offsetY: number,
+  width: number,
+  height: number,
+): void {
+  const cachedCanvas = getCachedCustomBackgroundCanvas(sourceImage, fit, width, height);
+  if (cachedCanvas) {
+    context.drawImage(cachedCanvas, offsetX, offsetY);
+    return;
+  }
+
+  drawCustomBackgroundImageUncached(context, sourceImage, fit, offsetX, offsetY, width, height);
+}
+
+function drawCustomBackgroundImageUncached(
   context: CanvasRenderingContext2D,
   sourceImage: CanvasImageSource,
   fit: 'stretch' | 'tile' | 'center',
@@ -240,6 +277,61 @@ function drawCustomBackgroundImage(
       context.drawImage(sourceImage, offsetX + drawX, offsetY + drawY, drawWidth, drawHeight);
     }
   }
+}
+
+function getCachedCustomBackgroundCanvas(
+  sourceImage: CanvasImageSource,
+  fit: 'stretch' | 'tile' | 'center',
+  width: number,
+  height: number,
+): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  const sourceObject = sourceImage as object;
+  let sourceId = customBackgroundSourceIds.get(sourceObject);
+  if (!sourceId) {
+    sourceId = nextCustomBackgroundSourceId;
+    nextCustomBackgroundSourceId += 1;
+    customBackgroundSourceIds.set(sourceObject, sourceId);
+  }
+
+  const sourceSize = getCanvasSourceSize(sourceImage, width, height);
+  const cacheKey = [
+    sourceId,
+    fit,
+    width,
+    height,
+    sourceSize.width,
+    sourceSize.height,
+  ].join(':');
+  const existing = customBackgroundDrawCache.get(cacheKey);
+  if (existing) {
+    customBackgroundDrawCache.delete(cacheKey);
+    customBackgroundDrawCache.set(cacheKey, existing);
+    return existing;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(width));
+  canvas.height = Math.max(1, Math.round(height));
+  const cacheContext = canvas.getContext('2d');
+  if (!cacheContext) {
+    return null;
+  }
+
+  cacheContext.imageSmoothingEnabled = false;
+  drawCustomBackgroundImageUncached(cacheContext, sourceImage, fit, 0, 0, width, height);
+  customBackgroundDrawCache.set(cacheKey, canvas);
+  while (customBackgroundDrawCache.size > CUSTOM_BACKGROUND_DRAW_CACHE_MAX_ENTRIES) {
+    const oldestKey = customBackgroundDrawCache.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+    customBackgroundDrawCache.delete(oldestKey);
+  }
+  return canvas;
 }
 
 function getCanvasSourceSize(

@@ -8,6 +8,8 @@ import {
   type CameraMode,
 } from './camera';
 
+const CONTINUOUS_ZOOM_REFRESH_DEBOUNCE_MS = 120;
+
 export interface ZoomDebugState {
   source: 'canvas-wheel';
   rawClient: { x: number; y: number };
@@ -56,6 +58,7 @@ interface OverworldViewportControllerOptions {
   maxZoom: number;
   buttonZoomFactor: number;
   wheelZoomSensitivity: number;
+  measurePerformance?: <T>(label: string, callback: () => T) => T;
 }
 
 export class OverworldViewportController {
@@ -63,6 +66,7 @@ export class OverworldViewportController {
   private zoomDebugGraphics: Phaser.GameObjects.Graphics | null = null;
   private zoomDebugEnabled = false;
   private lastZoomDebug: ZoomDebugState | null = null;
+  private postZoomRefreshTimer: number | null = null;
 
   private readonly handleCanvasWheel = (event: WheelEvent): void => {
     const appMode = document.body.dataset.appMode;
@@ -129,6 +133,12 @@ export class OverworldViewportController {
     private readonly options: OverworldViewportControllerOptions
   ) {}
 
+  private measure<T>(label: string, callback: () => T): T {
+    return this.options.measurePerformance
+      ? this.options.measurePerformance(label, callback)
+      : callback();
+  }
+
   setZoomDebugEnabled(enabled: boolean): void {
     this.zoomDebugEnabled = enabled;
   }
@@ -159,6 +169,7 @@ export class OverworldViewportController {
   }
 
   destroy(): void {
+    this.cancelScheduledPostZoomRefresh();
     this.host.scene.game.canvas.removeEventListener('wheel', this.handleCanvasWheel);
     delete (window as Window & { get_zoom_debug?: () => ZoomDebugState | null }).get_zoom_debug;
     this.zoomDebugGraphics?.destroy();
@@ -188,81 +199,89 @@ export class OverworldViewportController {
   }
 
   adjustZoomByFactor(factor: number, screenX?: number, screenY?: number): void {
-    const camera = this.host.scene.cameras.main;
-    const anchorX = screenX ?? camera.width * 0.5;
-    const anchorY = screenY ?? camera.height * 0.5;
-    const nextZoom = Phaser.Math.Clamp(
-      camera.zoom * factor,
-      this.options.minZoom,
-      this.options.maxZoom
-    );
-    if (Math.abs(nextZoom - camera.zoom) < 0.0001) {
-      return;
-    }
-
-    const anchorWorldPoint = calculateScreenAnchorWorldPoint(anchorX, anchorY, camera);
-    this.host.setInspectZoom(Number(nextZoom.toFixed(3)));
-    if (this.host.getMode() === 'browse') {
-      this.host.setBrowseInspectZoom(this.host.getInspectZoom());
-    }
-    camera.setZoom(this.host.getInspectZoom());
-
-    if (
-      this.host.getMode() === 'play' &&
-      this.host.getCameraMode() === 'follow' &&
-      this.host.getPlayer()
-    ) {
-      this.host.startFollowCamera(camera);
-    } else {
-      const nextScroll = calculateScrollForScreenAnchor(
-        anchorWorldPoint.x,
-        anchorWorldPoint.y,
-        anchorX,
-        anchorY,
-        camera
+    this.measure('zoom.adjustZoomByFactor', () => {
+      const camera = this.host.scene.cameras.main;
+      const anchorX = screenX ?? camera.width * 0.5;
+      const anchorY = screenY ?? camera.height * 0.5;
+      const shouldDeferPostZoomRefresh = screenX !== undefined || screenY !== undefined;
+      const nextZoom = Phaser.Math.Clamp(
+        camera.zoom * factor,
+        this.options.minZoom,
+        this.options.maxZoom
       );
-      camera.setScroll(nextScroll.x, nextScroll.y);
-      this.host.constrainInspectCamera();
-    }
+      if (Math.abs(nextZoom - camera.zoom) < 0.0001) {
+        return;
+      }
 
-    this.host.refreshChunkWindowIfNeeded(this.host.getZoomFocusCoordinates());
-    this.host.updateBackdrop();
-    this.host.redrawWorldCells();
-    this.host.redrawGridOverlay();
-    this.host.renderHud();
+      const anchorWorldPoint = calculateScreenAnchorWorldPoint(anchorX, anchorY, camera);
+      this.host.setInspectZoom(Number(nextZoom.toFixed(3)));
+      if (this.host.getMode() === 'browse') {
+        this.host.setBrowseInspectZoom(this.host.getInspectZoom());
+      }
+      camera.setZoom(this.host.getInspectZoom());
+
+      this.measure('zoom.camera', () => {
+        if (
+          this.host.getMode() === 'play' &&
+          this.host.getCameraMode() === 'follow' &&
+          this.host.getPlayer()
+        ) {
+          this.host.startFollowCamera(camera);
+          return;
+        }
+
+        const nextScroll = calculateScrollForScreenAnchor(
+          anchorWorldPoint.x,
+          anchorWorldPoint.y,
+          anchorX,
+          anchorY,
+          camera
+        );
+        camera.setScroll(nextScroll.x, nextScroll.y);
+        this.host.constrainInspectCamera();
+      });
+
+      if (shouldDeferPostZoomRefresh) {
+        this.schedulePostZoomRefresh();
+      } else {
+        this.cancelScheduledPostZoomRefresh();
+        this.runPostZoomRefresh();
+      }
+    });
   }
 
   private adjustButtonZoom(factor: number): void {
-    if (
-      this.host.getMode() === 'play' &&
-      this.host.getCameraMode() === 'follow' &&
-      this.host.getPlayer()
-    ) {
-      this.adjustZoomByFactor(factor);
-      return;
-    }
+    this.measure('zoom.adjustButtonZoom', () => {
+      if (
+        this.host.getMode() === 'play' &&
+        this.host.getCameraMode() === 'follow' &&
+        this.host.getPlayer()
+      ) {
+        this.adjustZoomByFactor(factor);
+        return;
+      }
 
-    const camera = this.host.scene.cameras.main;
-    const nextZoom = Phaser.Math.Clamp(
-      camera.zoom * factor,
-      this.options.minZoom,
-      this.options.maxZoom
-    );
-    if (Math.abs(nextZoom - camera.zoom) < 0.0001) {
-      return;
-    }
+      const camera = this.host.scene.cameras.main;
+      const nextZoom = Phaser.Math.Clamp(
+        camera.zoom * factor,
+        this.options.minZoom,
+        this.options.maxZoom
+      );
+      if (Math.abs(nextZoom - camera.zoom) < 0.0001) {
+        return;
+      }
 
-    this.host.setInspectZoom(Number(nextZoom.toFixed(3)));
-    if (this.host.getMode() === 'browse') {
-      this.host.setBrowseInspectZoom(this.host.getInspectZoom());
-    }
-    camera.setZoom(this.host.getInspectZoom());
-    this.host.centerCameraOnCoordinates(this.host.getZoomFocusCoordinates());
-    this.host.refreshChunkWindowIfNeeded(this.host.getZoomFocusCoordinates());
-    this.host.updateBackdrop();
-    this.host.redrawWorldCells();
-    this.host.redrawGridOverlay();
-    this.host.renderHud();
+      this.host.setInspectZoom(Number(nextZoom.toFixed(3)));
+      if (this.host.getMode() === 'browse') {
+        this.host.setBrowseInspectZoom(this.host.getInspectZoom());
+      }
+      camera.setZoom(this.host.getInspectZoom());
+      this.measure('zoom.centerCamera', () =>
+        this.host.centerCameraOnCoordinates(this.host.getZoomFocusCoordinates())
+      );
+      this.cancelScheduledPostZoomRefresh();
+      this.runPostZoomRefresh();
+    });
   }
 
   private handleWheelZoom(screenX: number, screenY: number, deltaY: number): void {
@@ -272,6 +291,37 @@ export class OverworldViewportController {
       1.08
     );
     this.adjustZoomByFactor(zoomFactor, screenX, screenY);
+  }
+
+  private schedulePostZoomRefresh(): void {
+    this.measure('zoom.schedulePostZoomRefresh', () => {
+      this.cancelScheduledPostZoomRefresh();
+      this.postZoomRefreshTimer = window.setTimeout(
+        () => {
+          this.postZoomRefreshTimer = null;
+          this.runPostZoomRefresh();
+        },
+        CONTINUOUS_ZOOM_REFRESH_DEBOUNCE_MS,
+      );
+    });
+  }
+
+  private cancelScheduledPostZoomRefresh(): void {
+    if (this.postZoomRefreshTimer !== null) {
+      window.clearTimeout(this.postZoomRefreshTimer);
+    }
+    this.postZoomRefreshTimer = null;
+  }
+
+  private runPostZoomRefresh(): void {
+    const focusCoordinates = this.host.getZoomFocusCoordinates();
+    this.measure('zoom.refreshChunkWindowIfNeeded', () =>
+      this.host.refreshChunkWindowIfNeeded(focusCoordinates)
+    );
+    this.measure('zoom.updateBackdrop', () => this.host.updateBackdrop());
+    this.measure('zoom.redrawWorldCells', () => this.host.redrawWorldCells());
+    this.measure('zoom.redrawGridOverlay', () => this.host.redrawGridOverlay());
+    this.measure('zoom.renderHud', () => this.host.renderHud());
   }
 
   private updateDebugOverlay(): void {
