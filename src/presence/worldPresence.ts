@@ -274,6 +274,9 @@ export class WorldPresenceClient {
     if (this.publishedShardId) {
       this.sendLeaveToShard(this.publishedShardId);
     }
+    if (this.previewShardId) {
+      this.sendPreviewClearToShard(this.previewShardId);
+    }
 
     for (const shardId of Array.from(this.socketsByShardId.keys())) {
       this.closeShardSocket(shardId);

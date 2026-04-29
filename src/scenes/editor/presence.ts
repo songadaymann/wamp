@@ -112,7 +112,7 @@ export class EditorPresenceController {
   }
 
   destroy(): void {
-    this.syncSharedConstructionPreview({ force: true });
+    this.clearSharedConstructionPreview({ force: true });
     this.client?.destroy();
     this.client = null;
     this.identity = null;
@@ -162,8 +162,11 @@ export class EditorPresenceController {
     this.lastSharedConstructionPreviewStateKey = stateKey;
   }
 
-  private clearSharedConstructionPreview(): void {
-    if (!this.client || this.lastSharedConstructionPreviewStateKey === null) {
+  private clearSharedConstructionPreview(options?: { force?: boolean }): void {
+    if (
+      !this.client
+      || (!options?.force && this.lastSharedConstructionPreviewStateKey === null)
+    ) {
       return;
     }
 
