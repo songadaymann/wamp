@@ -1,5 +1,11 @@
 import Phaser from 'phaser';
-import { TILESETS, BACKGROUND_GROUPS, GAME_OBJECTS, getObjectAnimationFrames } from '../config';
+import {
+  TILESETS,
+  BACKGROUND_GROUPS,
+  GAME_OBJECTS,
+  BLOCK_SWITCH_ACTIVE_TEXTURES,
+  getObjectAnimationFrames,
+} from '../config';
 import {
   DEFAULT_PLAYER_FX_ANIMATIONS,
 } from '../player/defaultPlayer';
@@ -51,6 +57,10 @@ export class BootScene extends Phaser.Scene {
         frameWidth: obj.frameWidth,
         frameHeight: obj.frameHeight,
       });
+    }
+
+    for (const texture of BLOCK_SWITCH_ACTIVE_TEXTURES) {
+      this.load.image(texture.key, texture.path);
     }
 
     this.load.spritesheet('cannon_bullet', 'assets/enemies/bullet.png', {

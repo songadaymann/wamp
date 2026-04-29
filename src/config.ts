@@ -728,6 +728,21 @@ export const PRESSURE_PLATE_TARGET_OBJECT_IDS = [
 export type PressurePlateTargetObjectId = (typeof PRESSURE_PLATE_TARGET_OBJECT_IDS)[number];
 export const CONTAINER_OBJECT_IDS = ['cage', 'treasure_chest'] as const;
 export type ContainerObjectId = (typeof CONTAINER_OBJECT_IDS)[number];
+export const BLOCK_SWITCH_OBJECT_ID = 'block_switch' as const;
+export const SWITCH_BLOCK_ON_OBJECT_ID = 'switch_block_on' as const;
+export const SWITCH_BLOCK_OFF_OBJECT_ID = 'switch_block_off' as const;
+export const BLOCK_SWITCH_RED_ACTIVE_TEXTURE_KEY = 'block_switch_red_active' as const;
+export const BLOCK_SWITCH_ACTIVE_TEXTURES = [
+  {
+    key: BLOCK_SWITCH_RED_ACTIVE_TEXTURE_KEY,
+    path: 'assets/objects/switch-block-red-active.png',
+  },
+] as const;
+export const SWITCH_BLOCK_OBJECT_IDS = [
+  SWITCH_BLOCK_ON_OBJECT_ID,
+  SWITCH_BLOCK_OFF_OBJECT_ID,
+] as const;
+export type SwitchBlockObjectId = (typeof SWITCH_BLOCK_OBJECT_IDS)[number];
 
 export const GAME_OBJECTS: GameObjectConfig[] = [
   // ── Collectibles ──
@@ -806,6 +821,9 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'door_metal',  name: 'Metal Door',  category: 'platform',    path: 'assets/objects/metal_door_locked.png', frameWidth: 32, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 44, bodyOffsetX: 2, bodyOffsetY: 4, behavior: 'static',   description: 'Pressure-plate door. Opens while its linked plate stays pressed.' },
   { id: 'crate',       name: 'Crate',       category: 'platform',    path: 'assets/objects/crate_static.png', frameWidth: 32, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 0, bodyOffsetY: 16, previewWidth: 16, previewHeight: 16, previewOffsetX: 0, previewOffsetY: 16, behavior: 'static',   interaction: 'pushable', description: 'Solid block. Stand on it or push it.' },
   { id: 'brick_box',   name: 'Brick Box',   category: 'platform',    path: 'assets/objects/brick_box.png',   frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 0,  defaultFrame: 5, bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 8, bodyOffsetY: 8, previewWidth: 16, previewHeight: 16, previewOffsetX: 8, previewOffsetY: 8, placeUsingPreviewBounds: true, behavior: 'static',   description: 'Solid brick block. Stand on it like a platform.' },
+  { id: BLOCK_SWITCH_OBJECT_ID, name: 'Block Switch', category: 'platform', path: 'assets/objects/switch-block-blue-active.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 16, bodyHeight: 16, behavior: 'static', description: 'Hit this active-color block from below, or bump it with certain enemies/projectiles, to swap red and blue switch blocks in this room.' },
+  { id: SWITCH_BLOCK_ON_OBJECT_ID, name: 'Blue Switch Block', category: 'platform', path: 'assets/objects/switch-block-blue.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 16, bodyHeight: 16, behavior: 'static', description: 'Blue platform block. Starts solid, then toggles with a Block Switch.' },
+  { id: SWITCH_BLOCK_OFF_OBJECT_ID, name: 'Red Switch Block', category: 'platform', path: 'assets/objects/switch-block-red.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 16, bodyHeight: 16, behavior: 'static', description: 'Red platform block. Starts inactive, then toggles with a Block Switch.' },
   { id: 'treasure_chest', name: 'Treasure Chest', category: 'platform', path: 'assets/objects/treasure_chest.png', frameWidth: 32, frameHeight: 32, frameCount: 4, fps: 0, defaultFrame: 0, bodyWidth: 28, bodyHeight: 18, bodyOffsetX: 2, bodyOffsetY: 14, behavior: 'static', description: 'Solid chest prop. Good for treasure rooms.' },
   { id: 'log_wall',    name: 'Log Wall',    category: 'platform',    path: 'assets/deco/log_wall.png',       frameWidth: 32, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 44, bodyOffsetX: 2, bodyOffsetY: 4, behavior: 'static',   description: 'Tall wooden wall segment. Solid collision.' },
   { id: 'cage',        name: 'Cage',        category: 'platform',    path: 'assets/objects/cage.png',        frameWidth: 18, frameHeight: 32, frameCount: 5,  fps: 0,  defaultFrame: 0, bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 1, bodyOffsetY: 16, behavior: 'static', description: 'Tall cage prop. Solid collision.' },
@@ -813,7 +831,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'sign_arrow',  name: 'Arrow Sign',  category: 'decoration',  path: 'assets/objects/sign_arrow.png',  frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative arrow sign. No collision.' },
   { id: 'ladder',      name: 'Ladder',      category: 'interactive', path: 'assets/objects/ladder.png',      frameWidth: 16, frameHeight: 64, frameCount: 1,  fps: 0,  bodyWidth: 16, bodyHeight: 51, bodyOffsetX: 0, bodyOffsetY: 13, previewWidth: 16, previewHeight: 51, previewOffsetX: 0, previewOffsetY: 13, behavior: 'static',   description: 'Climbable surface. Press up to climb.' },
   { id: 'floor_trigger', name: 'Pressure Plate', category: 'interactive', path: 'assets/objects/floor_trigger.png', frameWidth: 16, frameHeight: 16, frameCount: 2, fps: 0, defaultFrame: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Link this plate to a door, cage, or chest, then press it with a player, monster, or crate.' },
-  { id: 'button',      name: 'Button',      category: 'decoration',  path: 'assets/objects/button.png',      frameWidth: 16, frameHeight: 16, frameCount: 4,  fps: 0,  defaultFrame: 0, bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Floor button prop. Logic can be added later.' },
+  { id: 'button',      name: 'Button',      category: 'decoration',  path: 'assets/objects/button.png',      frameWidth: 16, frameHeight: 16, frameCount: 4,  fps: 0,  defaultFrame: 0, bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Floor button prop. No collision.' },
 
   // ── Decorations ──
   { id: 'bush',        name: 'Bush',        category: 'decoration',  path: 'assets/deco/bush.png',           frameWidth: 32, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative bush. No collision.' },
@@ -1036,6 +1054,22 @@ export function getPlacedObjectInstanceId(
 
 export function isPressurePlateTriggerId(id: string): id is 'floor_trigger' {
   return id === 'floor_trigger';
+}
+
+export function isBlockSwitchObjectId(id: string): id is typeof BLOCK_SWITCH_OBJECT_ID {
+  return id === BLOCK_SWITCH_OBJECT_ID;
+}
+
+export function isSwitchBlockObjectId(id: string): id is SwitchBlockObjectId {
+  return (SWITCH_BLOCK_OBJECT_IDS as readonly string[]).includes(id);
+}
+
+export function isSwitchBlockInitiallyActive(id: string): boolean {
+  return id === SWITCH_BLOCK_ON_OBJECT_ID;
+}
+
+export function getBlockSwitchRuntimeTextureKey(redActive: boolean): string {
+  return redActive ? BLOCK_SWITCH_RED_ACTIVE_TEXTURE_KEY : BLOCK_SWITCH_OBJECT_ID;
 }
 
 export function canPlacedObjectTriggerOtherObjects(

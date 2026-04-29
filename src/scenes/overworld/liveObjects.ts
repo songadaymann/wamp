@@ -5,9 +5,13 @@ import {
   getObjectDefaultFrame,
   getObjectDisplayOffset,
   getObjectDisplayScale,
+  getBlockSwitchRuntimeTextureKey,
   isDynamicRuntimeObjectConfig,
+  isBlockSwitchObjectId,
   isPushableObjectConfig,
   isSolidRuntimeObjectConfig,
+  isSwitchBlockInitiallyActive,
+  isSwitchBlockObjectId,
   getPlacedObjectLayer,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
@@ -285,6 +289,7 @@ const CANNON_BULLET_CONFIG: GameObjectConfig = {
 };
 
 const BOUNCE_PAD_LAUNCH_GRACE_MS = 180;
+const BLOCK_SWITCH_COOLDOWN_MS = 320;
 const TORNADO_LAUNCH_GRACE_MS = 280;
 const LIGHTNING_ACTIVE_MS = 190;
 const LIGHTNING_COOLDOWN_MS = 1150;
@@ -346,8 +351,28 @@ const SWORDSMAN_AI_COLLECT_OVERHEAD_PATH_STEP_PX = 8;
 
 export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly swordsmanTraversalGraphs = new Map<string, SwordsmanTraversalGraph>();
+  private readonly switchStateByRoomId = new Map<string, boolean>();
+  private readonly blockSwitchActorLatchesBySwitchKey = new Map<string, Set<string>>();
 
   constructor(private readonly options: OverworldLiveObjectControllerOptions<TEdgeWall>) {}
+
+  resetSwitchStates(): void {
+    this.switchStateByRoomId.clear();
+    this.blockSwitchActorLatchesBySwitchKey.clear();
+    for (const loadedRoom of this.options.getLoadedFullRooms()) {
+      this.applySwitchBlockStates(loadedRoom);
+    }
+  }
+
+  resetSwitchStateForRoom(roomId: string): void {
+    this.switchStateByRoomId.delete(roomId);
+    for (const loadedRoom of this.options.getLoadedFullRooms()) {
+      if (loadedRoom.room.id === roomId) {
+        this.clearBlockSwitchActorLatchesForRoom(loadedRoom);
+        this.applySwitchBlockStates(loadedRoom);
+      }
+    }
+  }
 
   createLiveObjects(loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>): void {
     for (let index = 0; index < loadedRoom.room.placedObjects.length; index += 1) {
@@ -384,10 +409,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       }
     }
 
+    this.applySwitchBlockStates(loadedRoom);
     this.syncWorldObjectColliders(this.options.getLoadedFullRooms());
   }
 
   destroyLiveObjects(loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>): void {
+    this.clearBlockSwitchActorLatchesForRoom(loadedRoom);
     for (const liveObject of loadedRoom.liveObjects) {
       this.destroyLiveObjectInteractions(liveObject);
       this.destroyLiveObjectWorldColliders(liveObject);
@@ -458,7 +485,6 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     if (config.id === 'door_metal') {
       sprite.setTint(0xb8c4d8);
     }
-
     if (config.bodyWidth > 0 && config.bodyHeight > 0) {
       if (this.usesDynamicObjectBody(config)) {
         this.options.scene.physics.add.existing(sprite);
@@ -650,6 +676,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
                   this.maybeBreakBrickBox(loadedRoom, liveObject);
                 })
               );
+            } else if (isBlockSwitchObjectId(liveObject.config.id)) {
+              liveObject.interactions.push(
+                this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
+                  this.maybeTriggerBlockSwitch(loadedRoom, liveObject);
+                })
+              );
             } else {
               liveObject.interactions.push(
                 this.options.scene.physics.add.collider(player, liveObject.sprite)
@@ -817,6 +849,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             break;
           case 'bounce_pad':
             this.updateBouncePadObject(liveObject);
+            break;
+          case 'block_switch':
+            this.updateBlockSwitchObject(loadedRoom, liveObject);
             break;
           default:
             break;
@@ -991,6 +1026,203 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           default:
             break;
         }
+      }
+    }
+  }
+
+  private triggerBlockSwitch(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    switchObject: LoadedRoomObject
+  ): void {
+    const now = this.options.getCurrentTime();
+    if (now < switchObject.runtime.cooldownUntil) {
+      return;
+    }
+
+    if (!loadedRoom.liveObjects.some((liveObject) => isSwitchBlockObjectId(liveObject.config.id))) {
+      switchObject.runtime.cooldownUntil = now + BLOCK_SWITCH_COOLDOWN_MS;
+      this.options.showTransientStatus('No switch blocks in this room.');
+      return;
+    }
+
+    const nextState = !this.getRoomSwitchState(loadedRoom.room.id);
+    this.switchStateByRoomId.set(loadedRoom.room.id, nextState);
+    switchObject.runtime.cooldownUntil = now + BLOCK_SWITCH_COOLDOWN_MS;
+    this.applySwitchBlockStates(loadedRoom);
+    this.options.playRoomSfx('pressure-plate-down', loadedRoom.room.coordinates);
+    this.options.playBounceFx(
+      switchObject.sprite.x,
+      switchObject.sprite.y - 4,
+      loadedRoom.room.coordinates
+    );
+    this.options.showTransientStatus(nextState ? 'Red blocks active.' : 'Blue blocks active.');
+  }
+
+  private updateBlockSwitchObject(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject
+  ): void {
+    if (!this.isPlayerTouchingBlockSwitchUnderside(liveObject)) {
+      liveObject.runtime.triggerLatched = false;
+    }
+
+    this.releaseSeparatedBlockSwitchActorLatches(loadedRoom, liveObject);
+    this.checkBlockSwitchActorContacts(loadedRoom, liveObject);
+  }
+
+  private canActorTriggerBlockSwitchByContact(liveObject: LoadedRoomObject): boolean {
+    return (
+      liveObject.config.id === SWORDSMAN_AI_OBJECT_ID ||
+      liveObject.config.id === 'bird' ||
+      liveObject.config.id === 'bat'
+    );
+  }
+
+  private checkBlockSwitchActorContacts(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    switchObject: LoadedRoomObject
+  ): void {
+    if (!isBlockSwitchObjectId(switchObject.config.id) || !switchObject.sprite.active) {
+      return;
+    }
+
+    const switchBody = switchObject.sprite.body as ArcadeObjectBody | null;
+    if (!switchBody || !switchBody.enable) {
+      return;
+    }
+
+    for (const actor of loadedRoom.liveObjects) {
+      if (
+        actor === switchObject ||
+        !actor.sprite.active ||
+        !this.canActorTriggerBlockSwitchByContact(actor)
+      ) {
+        continue;
+      }
+
+      const actorBody = actor.sprite.body as ArcadeObjectBody | null;
+      if (!actorBody || !actorBody.enable || !this.arcadeBodiesOverlap(switchBody, actorBody)) {
+        continue;
+      }
+
+      if (this.isBlockSwitchActorLatched(switchObject, actor)) {
+        continue;
+      }
+
+      this.triggerBlockSwitch(loadedRoom, switchObject);
+      this.latchBlockSwitchActor(switchObject, actor);
+    }
+  }
+
+  private getRoomSwitchState(roomId: string): boolean {
+    return this.switchStateByRoomId.get(roomId) ?? false;
+  }
+
+  private applySwitchBlockStates(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>
+  ): void {
+    const roomSwitchActive = this.getRoomSwitchState(loadedRoom.room.id);
+
+    for (const liveObject of loadedRoom.liveObjects) {
+      if (isBlockSwitchObjectId(liveObject.config.id)) {
+        this.setBlockSwitchFace(liveObject, roomSwitchActive);
+        continue;
+      }
+
+      if (!isSwitchBlockObjectId(liveObject.config.id)) {
+        continue;
+      }
+
+      const enabled = isSwitchBlockInitiallyActive(liveObject.config.id)
+        ? !roomSwitchActive
+        : roomSwitchActive;
+      this.setSwitchBlockEnabled(liveObject, enabled);
+    }
+  }
+
+  private setBlockSwitchFace(liveObject: LoadedRoomObject, redActive: boolean): void {
+    const textureKey = getBlockSwitchRuntimeTextureKey(redActive);
+    if (textureKey === liveObject.config.id) {
+      liveObject.sprite.setTexture(textureKey, getObjectDefaultFrame(liveObject.config));
+    } else {
+      liveObject.sprite.setTexture(textureKey);
+    }
+  }
+
+  private setSwitchBlockEnabled(liveObject: LoadedRoomObject, enabled: boolean): void {
+    liveObject.sprite.setTexture(liveObject.config.id, getObjectDefaultFrame(liveObject.config));
+
+    const body = liveObject.sprite.body as ArcadeObjectBody | null;
+    if (body) {
+      body.enable = enabled;
+      if (enabled && 'updateFromGameObject' in body) {
+        body.updateFromGameObject();
+      }
+    }
+
+    liveObject.sprite.setAlpha(enabled ? 1 : 0.16);
+  }
+
+  private latchBlockSwitchActor(switchObject: LoadedRoomObject, actor: LoadedRoomObject): void {
+    const actorKeys =
+      this.blockSwitchActorLatchesBySwitchKey.get(switchObject.key) ?? new Set<string>();
+    actorKeys.add(actor.key);
+    this.blockSwitchActorLatchesBySwitchKey.set(switchObject.key, actorKeys);
+  }
+
+  private isBlockSwitchActorLatched(
+    switchObject: LoadedRoomObject,
+    actor: LoadedRoomObject
+  ): boolean {
+    return this.blockSwitchActorLatchesBySwitchKey.get(switchObject.key)?.has(actor.key) ?? false;
+  }
+
+  private releaseSeparatedBlockSwitchActorLatches(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    switchObject: LoadedRoomObject
+  ): void {
+    const actorKeys = this.blockSwitchActorLatchesBySwitchKey.get(switchObject.key);
+    if (!actorKeys) {
+      return;
+    }
+
+    const switchBody = switchObject.sprite.body as ArcadeObjectBody | null;
+    if (!switchObject.sprite.active || !switchBody) {
+      this.blockSwitchActorLatchesBySwitchKey.delete(switchObject.key);
+      return;
+    }
+
+    for (const actorKey of [...actorKeys]) {
+      const actor = loadedRoom.liveObjects.find((candidate) => candidate.key === actorKey) ?? null;
+      const actorBody = actor?.sprite.body as ArcadeObjectBody | null;
+      if (
+        !actor ||
+        !actor.sprite.active ||
+        !actorBody ||
+        !this.arcadeBodiesOverlap(switchBody, actorBody)
+      ) {
+        actorKeys.delete(actorKey);
+      }
+    }
+
+    if (actorKeys.size === 0) {
+      this.blockSwitchActorLatchesBySwitchKey.delete(switchObject.key);
+    }
+  }
+
+  private clearBlockSwitchActorLatchesForRoom(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>
+  ): void {
+    const roomObjectKeys = new Set(loadedRoom.liveObjects.map((liveObject) => liveObject.key));
+    for (const liveObject of loadedRoom.liveObjects) {
+      this.blockSwitchActorLatchesBySwitchKey.delete(liveObject.key);
+    }
+    for (const [switchKey, actorKeys] of this.blockSwitchActorLatchesBySwitchKey) {
+      for (const actorKey of roomObjectKeys) {
+        actorKeys.delete(actorKey);
+      }
+      if (actorKeys.size === 0) {
+        this.blockSwitchActorLatchesBySwitchKey.delete(switchKey);
       }
     }
   }
@@ -4117,8 +4349,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         continue;
       }
 
+      const hitsBlockSwitch = isBlockSwitchObjectId(platform.config.id);
       bullet.worldColliders.push(
         this.options.scene.physics.add.collider(sprite, platform.sprite, () => {
+          if (hitsBlockSwitch) {
+            this.triggerBlockSwitch(loadedRoom, platform);
+          }
           this.removeLiveObject(loadedRoom, bullet);
         }),
       );
@@ -4412,6 +4648,64 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     this.breakBrickBox(loadedRoom, liveObject);
   }
 
+  private maybeTriggerBlockSwitch(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+  ): void {
+    if (!isBlockSwitchObjectId(liveObject.config.id) || !liveObject.sprite.active) {
+      return;
+    }
+    if (!this.isPlayerHittingBlockSwitchFromBelow(liveObject)) {
+      return;
+    }
+    if (liveObject.runtime.triggerLatched) {
+      return;
+    }
+
+    const playerBody = this.options.getPlayerBody();
+    if (playerBody && playerBody.velocity.y < -40) {
+      playerBody.setVelocityY(-40);
+    }
+    liveObject.runtime.triggerLatched = true;
+    this.triggerBlockSwitch(loadedRoom, liveObject);
+  }
+
+  private isPlayerHittingBlockSwitchFromBelow(liveObject: LoadedRoomObject): boolean {
+    const playerBody = this.options.getPlayerBody();
+    if (!playerBody) {
+      return false;
+    }
+
+    const upwardDelta =
+      typeof playerBody.deltaY === 'function'
+        ? playerBody.deltaY()
+        : playerBody.y - (playerBody.prev?.y ?? playerBody.y);
+    const separatedUp =
+      Boolean(playerBody.blocked?.up) ||
+      Boolean(playerBody.touching?.up);
+    return (
+      (upwardDelta < -0.5 || playerBody.velocity.y < -20 || separatedUp) &&
+      this.isPlayerTouchingBlockSwitchUnderside(liveObject)
+    );
+  }
+
+  private isPlayerTouchingBlockSwitchUnderside(liveObject: LoadedRoomObject): boolean {
+    const playerBody = this.options.getPlayerBody();
+    const blockBody = liveObject.sprite.body as ArcadeObjectBody | null;
+    if (!playerBody || !blockBody) {
+      return false;
+    }
+
+    const horizontallyOverlapping =
+      playerBody.right > blockBody.left + 1 &&
+      playerBody.left < blockBody.right - 1;
+    return (
+      horizontallyOverlapping &&
+      playerBody.center.y >= blockBody.center.y - 2 &&
+      playerBody.top <= blockBody.bottom + 4
+    );
+  }
+
   private breakBrickBox(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
@@ -4448,6 +4742,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
   private getArcadeBodyBounds(body: ArcadeObjectBody): Phaser.Geom.Rectangle {
     return new Phaser.Geom.Rectangle(body.left, body.top, body.width, body.height);
+  }
+
+  private arcadeBodiesOverlap(first: ArcadeObjectBody, second: ArcadeObjectBody): boolean {
+    return Phaser.Geom.Intersects.RectangleToRectangle(
+      this.getArcadeBodyBounds(first),
+      this.getArcadeBodyBounds(second)
+    );
   }
 
   private handleEnemyContact(

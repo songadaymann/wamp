@@ -1887,6 +1887,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       resetTransport: true,
     });
     this.worldStreamingController.reset();
+    this.liveObjectController.resetSwitchStates();
     this.lightingController.reset();
     this.starfieldSprites = [];
     this.backdropCamera = null;
@@ -3278,6 +3279,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.combatController.clearAttackAnimation();
     this.externalLaunchGraceUntil = 0;
     this.combatController.destroyProjectiles();
+    this.liveObjectController.resetSwitchStates();
     this.playerPresentationController.resetTransientPlayState();
   }
 
@@ -3291,6 +3293,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.heldKeyCount = Math.max(0, this.heldKeyCount - restoredKeyCount);
     }
     this.score = 0;
+    this.liveObjectController.resetSwitchStateForRoom(room.id);
 
     const loadedRoom = this.loadedFullRoomsById.get(room.id) ?? null;
     if (!loadedRoom) {
@@ -3753,6 +3756,9 @@ export class OverworldPlayScene extends Phaser.Scene {
             room: { ...loadedRoom.room.coordinates },
             x: Math.round(liveObject.sprite.x),
             y: Math.round(liveObject.sprite.y),
+            textureKey: liveObject.sprite.texture.key,
+            alpha: Number(liveObject.sprite.alpha.toFixed(2)),
+            bodyEnabled: body ? body.enable : null,
             directionX: liveObject.runtime.directionX,
             aiState: liveObject.runtime.aiState,
             aiObjectiveMode: liveObject.runtime.aiObjectiveMode,
