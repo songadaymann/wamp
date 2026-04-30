@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, type PluginOption } from 'vite';
 
 export default defineConfig(({ mode }) => {
   const env = loadMergedEnv(mode);
@@ -13,9 +13,13 @@ export default defineConfig(({ mode }) => {
   const enableTestReset = env.VITE_ENABLE_TEST_RESET ?? (mode === 'development' ? '1' : '');
   const partykitHost = env.VITE_PARTYKIT_HOST ?? '';
   const partykitParty = env.VITE_PARTYKIT_PARTY ?? '';
+  const cloudflareWebAnalyticsToken = env.VITE_CLOUDFLARE_WEB_ANALYTICS_TOKEN?.trim() ?? '';
 
   return {
     base: './',
+    plugins: [
+      cloudflareWebAnalyticsPlugin(cloudflareWebAnalyticsToken),
+    ],
     define: {
       'import.meta.env.VITE_ROOM_API_BASE_URL': JSON.stringify(roomApiBaseUrl),
       'import.meta.env.VITE_ROOM_STORAGE_BACKEND': JSON.stringify(roomStorageBackend),
@@ -54,6 +58,29 @@ export default defineConfig(({ mode }) => {
     },
   };
 });
+
+function cloudflareWebAnalyticsPlugin(token: string): PluginOption {
+  return {
+    name: 'cloudflare-web-analytics',
+    transformIndexHtml() {
+      if (!token) {
+        return [];
+      }
+
+      return [
+        {
+          tag: 'script',
+          attrs: {
+            defer: true,
+            src: 'https://static.cloudflareinsights.com/beacon.min.js',
+            'data-cf-beacon': JSON.stringify({ token }),
+          },
+          injectTo: 'body',
+        },
+      ];
+    },
+  };
+}
 
 function loadMergedEnv(mode: string): Record<string, string> {
   const viteEnv = loadEnv(mode, process.cwd(), '');
