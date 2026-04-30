@@ -1,0 +1,52 @@
+body[data-device-class='phone'] .chat-form,
+body[data-device-class='phone'] .chat-moderation-form,
+body[data-device-class='phone'] .mobile-jump-sheet-form,
+body[data-device-class='phone'] .leaderboard-controls {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+body[data-device-class='phone'] .chat-moderation-item {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+body[data-device-class='phone'] .leaderboard-row,
+body[data-device-class='phone'] .leaderboard-row.leaderboard-global-row {
+  grid-template-columns: 32px minmax(0, 1fr);
+}
+
+body[data-device-class='phone'] .leaderboard-row > :nth-child(n + 3) {
+  grid-column: 2;
+}
+
+body[data-device-class='phone'] .history-modal,
+body[data-device-class='phone'] #mobile-jump-sheet {
+  padding: 0;
+}
+
+body[data-device-class='phone'] .history-modal-panel,
+body[data-device-class='phone'] .mobile-sheet-panel {
+  width: 100vw;
+  max-width: none;
+  max-height: 100vh;
+  min-height: 100vh;
+  border-radius: 0;
+  padding: calc(18px + var(--safe-top)) calc(14px + var(--safe-right)) calc(18px + var(--safe-bottom)) calc(14px + var(--safe-left));
+}
+
+body[data-device-class='phone'][data-coarse-pointer='true'] .object-item:hover,
+body[data-device-class='phone'][data-coarse-pointer='true'] .tool-btn:hover,
+body[data-device-class='phone'][data-coarse-pointer='true'] .layer-btn:hover,
+body[data-device-class='phone'][data-coarse-pointer='true'] .palette-tab:hover,
+body[data-device-class='phone'][data-coarse-pointer='true'] .obj-cat-tab:hover,
+body[data-device-class='phone'][data-coarse-pointer='true'] .bar-btn:hover,
+body[data-device-class='tablet'][data-coarse-pointer='true'] .object-item:hover,
+body[data-device-class='tablet'][data-coarse-pointer='true'] .tool-btn:hover,
+body[data-device-class='tablet'][data-coarse-pointer='true'] .layer-btn:hover,
+body[data-device-class='tablet'][data-coarse-pointer='true'] .palette-tab:hover,
+body[data-device-class='tablet'][data-coarse-pointer='true'] .obj-cat-tab:hover,
+body[data-device-class='tablet'][data-coarse-pointer='true'] .bar-btn:hover {
+  background: inherit;
+}
+

@@ -10,7 +10,7 @@ import type {
   ChatMessageListResponse,
   ChatMessageRecord,
 } from '../../chat/model';
-import { getApiBaseUrl } from '../../api/baseUrl';
+import { apiRequest } from '../../api/request';
 
 export async function fetchChatMessages(options: {
   limit?: number;
@@ -82,24 +82,4 @@ export async function unbanChatUser(userId: string): Promise<ChatBanMutationResp
       method: 'DELETE',
     }
   );
-}
-
-async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = new Headers(init?.headers);
-  if (init?.body && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
-  }
-
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    ...init,
-    headers,
-    credentials: 'include',
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `Request failed with status ${response.status}.`);
-  }
-
-  return (await response.json()) as T;
 }

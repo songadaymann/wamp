@@ -1,0 +1,91 @@
+@media (max-width: 700px) {
+  #leaderboard-modal .leaderboard-tabs,
+  #profile-modal .profile-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #explore-modal .explore-room-list {
+    grid-template-columns: 1fr;
+  }
+
+  #explore-modal .explore-room-card {
+    grid-template-columns: 1fr;
+  }
+
+  #leaderboard-modal .leaderboard-panel,
+  #profile-modal .leaderboard-panel,
+  #leaderboard-modal .leaderboard-controls,
+  #explore-modal .explore-room-card,
+  #profile-modal .profile-edit-fields,
+  #profile-modal .profile-hero,
+  #editor-music-phrase-save-modal .music-phrase-save-section {
+    padding: 12px;
+  }
+
+  #profile-modal .profile-display-name {
+    font-size: 18px;
+  }
+
+  #profile-modal .profile-hero-lane {
+    flex-wrap: wrap;
+  }
+
+  #profile-modal .profile-hero-lane-label-wrap {
+    min-width: 0;
+  }
+
+  #profile-modal .profile-hero-lane-progress {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .profile-avatar-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-cryptopunk-card {
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .profile-cryptopunk-preview {
+    width: 76px;
+    height: 76px;
+  }
+
+  .profile-cryptopunk-preview-image {
+    width: 60px;
+    height: 60px;
+  }
+
+  .profile-cryptopunk-input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-avatar-option {
+    grid-template-rows: 72px auto auto;
+    min-height: 140px;
+  }
+
+  .profile-avatar-option-preview {
+    height: 72px;
+  }
+
+  .profile-avatar-option-image {
+    height: 70px;
+  }
+
+  #profile-modal .profile-stats-list,
+  #profile-modal .profile-info-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #profile-modal .profile-info-card-curator {
+    grid-column: auto;
+  }
+
+  #editor-music-phrase-save-modal .music-phrase-save-actions {
+    grid-template-columns: 1fr;
+  }
+}

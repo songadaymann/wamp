@@ -18,7 +18,8 @@ import { createRandomUuid } from '../utils/randomId';
 export type WorldPresenceMode = 'browse' | 'play' | 'edit';
 export type WorldPresenceAnimationState = DefaultPlayerAnimationState;
 
-const PRESENCE_PUBLISH_INTERVAL_MS = 200;
+const PRESENCE_MOVING_PUBLISH_INTERVAL_MS = 200;
+const PRESENCE_IDLE_KEEPALIVE_MS = 5_000;
 
 export interface WorldPresenceIdentity {
   userId: string;
@@ -150,6 +151,7 @@ export class WorldPresenceClient {
   private publishedShardId: string | null = null;
   private previewShardId: string | null = null;
   private lastPublishedPayloadJson: string | null = null;
+  private lastPublishedPresenceSignature: string | null = null;
   private lastPublishedPreviewJson: string | null = null;
   private lastPublishedAt = 0;
 
@@ -190,6 +192,7 @@ export class WorldPresenceClient {
       this.sendLeaveToShard(this.publishedShardId);
       this.publishedShardId = null;
       this.lastPublishedPayloadJson = null;
+      this.lastPublishedPresenceSignature = null;
     }
 
     this.localPresence = nextPresence;
@@ -205,21 +208,29 @@ export class WorldPresenceClient {
       return;
     }
 
-    const payload = JSON.stringify({
-      type: 'presence:update',
-      presence: nextPresence,
-    } satisfies PresencePublishMessage);
-    const changed = payload !== this.lastPublishedPayloadJson;
-    const isInitialPublish = this.lastPublishedPayloadJson === null;
     const now = Date.now();
-    const enoughTimeElapsed = now - this.lastPublishedAt >= PRESENCE_PUBLISH_INTERVAL_MS;
-    if (!isInitialPublish && (!changed || !enoughTimeElapsed)) {
+    const presenceSignature = getPresencePublishSignature(nextPresence);
+    const changed = presenceSignature !== this.lastPublishedPresenceSignature;
+    const isInitialPublish = this.lastPublishedPayloadJson === null;
+    const publishInterval = changed
+      ? PRESENCE_MOVING_PUBLISH_INTERVAL_MS
+      : PRESENCE_IDLE_KEEPALIVE_MS;
+    const enoughTimeElapsed = now - this.lastPublishedAt >= publishInterval;
+    if (!isInitialPublish && !enoughTimeElapsed) {
       return;
     }
 
+    const payload = JSON.stringify({
+      type: 'presence:update',
+      presence: {
+        ...nextPresence,
+        timestamp: now,
+      },
+    } satisfies PresencePublishMessage);
     shardSocket.send(payload);
     this.publishedShardId = nextShardId;
     this.lastPublishedPayloadJson = payload;
+    this.lastPublishedPresenceSignature = presenceSignature;
     this.lastPublishedAt = now;
     this.emitSnapshot();
   }
@@ -293,6 +304,7 @@ export class WorldPresenceClient {
     this.publishedShardId = null;
     this.previewShardId = null;
     this.lastPublishedPayloadJson = null;
+    this.lastPublishedPresenceSignature = null;
     this.lastPublishedPreviewJson = null;
     this.emitSnapshot();
   }
@@ -314,6 +326,7 @@ export class WorldPresenceClient {
       this.connectedShards.add(shardId);
       if (this.localPresence && this.resolveLocalShardId() === shardId) {
         this.lastPublishedPayloadJson = null;
+        this.lastPublishedPresenceSignature = null;
         this.updateLocalPresence(this.localPresence);
       }
 
@@ -333,6 +346,7 @@ export class WorldPresenceClient {
       this.roomPreviewsByShardId.delete(shardId);
       if (this.publishedShardId === shardId) {
         this.lastPublishedPayloadJson = null;
+        this.lastPublishedPresenceSignature = null;
       }
       if (this.previewShardId === shardId) {
         this.lastPublishedPreviewJson = null;
@@ -364,6 +378,7 @@ export class WorldPresenceClient {
       this.sendLeaveToShard(shardId);
       this.publishedShardId = null;
       this.lastPublishedPayloadJson = null;
+      this.lastPublishedPresenceSignature = null;
     }
     if (this.previewShardId === shardId) {
       this.previewShardId = null;
@@ -584,6 +599,20 @@ export class WorldPresenceClient {
       roomPreviews,
     });
   }
+}
+
+function getPresencePublishSignature(presence: WorldPresencePayload): string {
+  return JSON.stringify([
+    presence.mode,
+    presence.roomCoordinates.x,
+    presence.roomCoordinates.y,
+    Math.round(presence.x),
+    Math.round(presence.y),
+    Math.round(presence.velocityX),
+    Math.round(presence.velocityY),
+    presence.facing,
+    presence.animationState,
+  ]);
 }
 
 export function resolveWorldPresenceIdentity(): WorldPresenceIdentity {

@@ -518,7 +518,7 @@ interface QueueScheduledController {
   type: string;
 }
 
-type DurableObjectNamespace<T = unknown> = unknown;
+type DurableObjectNamespace = unknown;
 
 interface QueueEnv {
   ADMIN_API_KEY?: string;
@@ -526,7 +526,7 @@ interface QueueEnv {
   CRYPTOPUNK_AVATAR_CONTAINER_TIMEOUT_MS?: string;
   CRYPTOPUNK_AVATAR_MAX_JOBS?: string;
   CRYPTOPUNK_AVATAR_PUBLIC_BASE_URL?: string;
-  CRYPTOPUNK_AVATAR_QUEUE_CONTAINER: DurableObjectNamespace<CryptopunkAvatarQueueContainer>;
+  CRYPTOPUNK_AVATAR_QUEUE_CONTAINER: DurableObjectNamespace;
   CRYPTOPUNK_AVATAR_R2_PREFIX?: string;
   CRYPTOPUNK_AVATAR_STALE_AFTER_MINUTES?: string;
   DB: D1Database;

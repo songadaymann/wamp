@@ -1,0 +1,141 @@
+.leaderboard-modal-panel {
+  max-width: min(720px, calc(100vw - 32px));
+  overflow: hidden;
+}
+
+.leaderboard-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 0 20px 12px;
+}
+
+.leaderboard-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 20px 20px;
+}
+
+.leaderboard-difficulty {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-muted);
+  border-radius: 12px;
+  background: rgba(12, 13, 18, 0.64);
+}
+
+.leaderboard-difficulty-actions,
+.leaderboard-discover-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.leaderboard-difficulty-actions .bar-btn.active,
+.leaderboard-discover-filters .bar-btn.active {
+  border-color: var(--accent-cool);
+  color: var(--accent-cool);
+}
+
+.leaderboard-discover-row {
+  width: 100%;
+  border: 1px solid var(--border-muted);
+  border-radius: 12px;
+  background: rgba(15, 17, 24, 0.8);
+  color: inherit;
+  text-align: left;
+  padding: 12px;
+  cursor: pointer;
+}
+
+.leaderboard-discover-row:hover,
+.leaderboard-discover-row:focus-visible {
+  border-color: var(--accent-cool);
+  outline: none;
+}
+
+.leaderboard-discover-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.leaderboard-discover-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.leaderboard-discover-title {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.leaderboard-discover-feature-badge {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 2px solid #79ccde;
+  background: #79ccde;
+  color: #000;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 7px;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.leaderboard-discover-meta {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.leaderboard-discover-admin-btn {
+  justify-self: start;
+}
+
+.leaderboard-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1.8fr) minmax(0, 1fr) 70px 110px;
+  gap: 10px;
+  align-items: center;
+}
+
+.leaderboard-row.leaderboard-global-row {
+  grid-template-columns: 40px minmax(0, 2fr) 100px 110px 90px;
+}
+
+.leaderboard-rank {
+  color: var(--accent-warm);
+}
+
+.leaderboard-primary {
+  color: var(--text);
+}
+
+.leaderboard-secondary {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.leaderboard-viewer {
+  color: var(--accent-cool);
+}
+
+.leaderboard-empty {
+  color: var(--text-muted);
+  padding: 6px 0;
+}
+

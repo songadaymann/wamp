@@ -62,8 +62,6 @@
     "viem": "^2.47.0"
   },
   "devDependencies": {
-    "@types/react": "^19.2.14",
-    "csstype": "^3.2.3",
     "partykit": "^0.0.115",
     "playwright": "^1.59.1",
     "typescript": "^5.7.0",

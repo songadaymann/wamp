@@ -110,6 +110,7 @@ Defaults for this wave:
 - 2026-03-18: Tackle Wave 1 as a docs-first drift pass, leaving generated API-contract completeness as separate follow-up work.
 - 2026-04-11: Continue deeper cleanup from `refactor/deep-cleanup-waves-2026-04-11` with mechanical extractions first: no public API, schema, selector, persisted format, or gameplay behavior changes.
 - 2026-04-11: Treat live-room edit smoke as data-dependent when the remote room belongs to another account; use the existing synthetic editor smoke hook for editor-renderer validation.
+- 2026-04-30: Run the next cleanup line on isolated branch `refactor/cruft-alleviator-2026-04-30` from fresh `main`, preserving public routes, payloads, D1 schema, smoke/debug globals, and compatibility import barrels.
 
 ## Verification Log
 
@@ -165,6 +166,15 @@ Defaults for this wave:
   - strict unused-symbol TypeScript, `npm run typecheck`, `npm run build`, and `git diff --check` passed
   - final `develop-web-game` smoke reached overworld browse mode and wrote `output/web-game/deep-cleanup-final-branch-check/state-0.json`
   - direct full-page Playwright screenshot rendered the overworld welcome modal with no page errors at `output/web-game/deep-cleanup-final-branch-check/full-page.png`
+- April 30 cruft alleviator pass:
+  - branch `refactor/cruft-alleviator-2026-04-30` was cut from clean, up-to-date `main`
+  - compiler-proven unused code was removed, unused dev dependencies `@types/react` / `csstype` were removed, stale tracked preview HTML was deleted, and `noUnusedLocals` / `noUnusedParameters` were enabled
+  - `src/config.ts` stayed as a compatibility barrel while config data moved into focused `src/config/*` modules; main bootstrap/debug/preview-smoke helpers moved into `src/main/*`
+  - Worker progression storage, editor UI bridge, live-object helpers, large responsive/profile CSS partials, and shared frontend request/error handling were split into focused modules without D1 migrations or route/payload changes
+  - low-risk perf reductions landed for presence publish/snapshot churn, mobile pressure full-room budget, pressure/link scans, live-object indexing, focused/deferred chunk preview texture builds, lower-detail preview zoom, and hot-path preview snapshot reuse
+  - strict unused-symbol TypeScript, `npm run typecheck`, `npm run build`, and `git diff --check` passed
+  - browser/smoke validation passed preview readonly smoke, mobile smoke, progression rating smoke, required `develop-web-game` client smoke, zoom perf probe at `output/overworld-zoom-perf/cruft-alleviator-final/result.json`, and a 48-peer live-presence stress probe at `output/perf-local-2026-04-30-presence-stress-final/summary.json`
+  - local progression API smoke was blocked because no local Worker/D1 API was running on `127.0.0.1:8787`
 
 ## Deferred Items
 

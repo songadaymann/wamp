@@ -1,12 +1,8 @@
 import {
   ERASER_BRUSH_SIZES,
   TILESETS,
-  colorNumberToCssHex,
-  colorNumberToCssRgba,
-  colorNumberToCssRgb,
   editorState,
   getTilesetByKey,
-  getTilesetUiTheme,
   type EraserBrushSize,
   type LayerName,
   type PaletteMode,
@@ -40,193 +36,43 @@ import {
   type RoomLightingMode,
 } from '../../lighting/model';
 import { AUTH_STATE_CHANGED_EVENT } from '../../auth/client';
-import type { SwordsmanDefeatMode, SwordsmanObjectiveMode } from '../../enemies/swordsmanObjectives';
-import type { EditorMarkerPlacementMode } from '../../ui/setup/sceneBridge';
 import { EDITOR_UI_STATE_CHANGED_EVENT } from './uiEvents';
+import type {
+  EditorInspectorState,
+  EditorUiBridgeActions,
+  EditorUiRuntimeConfig,
+  EditorUiViewModel,
+} from './uiBridge/model';
+import {
+  lookupEditorUiElements,
+  type EditorUiElements,
+} from './uiBridge/elements';
+import {
+  bindButton,
+  bindDomEvent,
+  bindNumericInput,
+  bindRangeInput,
+  bindTextInput,
+} from './uiBridge/bindings';
+import {
+  applyTilesetTheme,
+  renderEditorUiViewModel,
+  renderInspectorPanel,
+  setDisabled,
+  setHidden,
+  setText,
+  setValue,
+} from './uiBridge/panels';
 
-export interface EditorGoalUiViewModel {
-  goalTypeValue: string;
-  goalTypeDisabled: boolean;
-  timeLimitHidden: boolean;
-  timeLimitDisabled: boolean;
-  timeLimitValue: string;
-  requiredCountHidden: boolean;
-  requiredCountDisabled: boolean;
-  requiredCountValue: string;
-  survivalHidden: boolean;
-  survivalDisabled: boolean;
-  survivalValue: string;
-  introTextHidden: boolean;
-  introTextDisabled: boolean;
-  introTextValue: string;
-  markerControlsHidden: boolean;
-  placementHintHidden: boolean;
-  placementHintText: string;
-  summaryText: string;
-  contextHidden: boolean;
-  contextText: string;
-  placeStartHidden: boolean;
-  placeStartActive: boolean;
-  placeExitHidden: boolean;
-  placeExitActive: boolean;
-  addCheckpointHidden: boolean;
-  addCheckpointActive: boolean;
-  placeFinishHidden: boolean;
-  placeFinishActive: boolean;
-}
-
-export interface EditorCourseUiViewModel {
-  visible: boolean;
-  statusHidden: boolean;
-  statusText: string;
-  roomStepText: string;
-  canReturnToCourseBuilder: boolean;
-  goalTypeValue: string;
-  goalTypeDisabled: boolean;
-  timeLimitHidden: boolean;
-  timeLimitDisabled: boolean;
-  timeLimitValue: string;
-  requiredCountHidden: boolean;
-  requiredCountDisabled: boolean;
-  requiredCountValue: string;
-  survivalHidden: boolean;
-  survivalDisabled: boolean;
-  survivalValue: string;
-  markerControlsHidden: boolean;
-  placementHintHidden: boolean;
-  placementHintText: string;
-  summaryText: string;
-  placeStartHidden: boolean;
-  placeStartActive: boolean;
-  placeExitHidden: boolean;
-  placeExitActive: boolean;
-  addCheckpointHidden: boolean;
-  addCheckpointActive: boolean;
-  placeFinishHidden: boolean;
-  placeFinishActive: boolean;
-}
-
-export interface EditorInspectorState {
-  visible: boolean;
-  pressureVisible: boolean;
-  pressureStatusText: string;
-  pressureConnectHidden: boolean;
-  pressureConnectDisabled: boolean;
-  pressureConnectTitle: string;
-  pressureClearHidden: boolean;
-  pressureClearDisabled: boolean;
-  pressureDoneLaterHidden: boolean;
-  containerVisible: boolean;
-  containerStatusText: string;
-  containerClearDisabled: boolean;
-  containerClearTitle: string;
-  swordsmanVisible: boolean;
-  swordsmanStatusText: string;
-  swordsmanObjectiveModeValue: SwordsmanObjectiveMode;
-  swordsmanObjectiveModeDisabled: boolean;
-  swordsmanDefeatModeValue: SwordsmanDefeatMode;
-  swordsmanDefeatModeDisabled: boolean;
-}
-
-export interface EditorUiViewModel {
-  roomTitleValue: string;
-  roomCoordinatesText: string;
-  saveStatusText: string;
-  saveStatusAccentText: string;
-  saveStatusLinkText: string;
-  saveStatusLinkHref: string | null;
-  publishNudgeVisible: boolean;
-  publishNudgeText: string;
-  publishNudgeActionText: string;
-  zoomText: string;
-  backButtonHidden: boolean;
-  backButtonText: string;
-  backButtonTitle: string;
-  playHidden: boolean;
-  saveHidden: boolean;
-  saveButtonText: string;
-  saveButtonTitle: string;
-  saveDisabled: boolean;
-  publishHidden: boolean;
-  publishButtonText: string;
-  publishButtonTitle: string;
-  publishDisabled: boolean;
-  publishButtonAriaDisabled: boolean;
-  mintHidden: boolean;
-  mintDisabled: boolean;
-  mintButtonText: string;
-  refreshMetadataHidden: boolean;
-  refreshMetadataDisabled: boolean;
-  refreshMetadataButtonText: string;
-  historyHidden: boolean;
-  historyDisabled: boolean;
-  fitHidden: boolean;
-  goal: EditorGoalUiViewModel;
-  course: EditorCourseUiViewModel;
-}
-
-interface EditorUiPaletteController {
-  renderPalette(): void;
-  renderTilePreview(): void;
-  setObjectCategory(category: string): void;
-  updateSelection(
-    tilesetKey: string,
-    col1: number,
-    row1: number,
-    col2: number,
-    row2: number,
-  ): void;
-}
-
-interface EditorUiRuntimeConfig {
-  paletteController: EditorUiPaletteController | null;
-  closePanels: () => void;
-  openHistory: () => void | Promise<void>;
-}
-
-export interface EditorUiBridgeActions {
-  onRequestRender: () => void;
-  onDocumentKeyDown: (event: KeyboardEvent) => void;
-  onAuthStateChanged: () => void;
-  onBack: () => void | Promise<void>;
-  onStartPlayMode: () => void | Promise<void>;
-  onSaveDraft: () => void | Promise<void>;
-  onPublishRoom: () => void | Promise<void>;
-  onPublishNudge: () => void | Promise<void>;
-  onMintRoom: () => void | Promise<void>;
-  onRefreshMintMetadata: () => void | Promise<void>;
-  onFitToScreen: () => void;
-  onZoomIn: () => void;
-  onZoomOut: () => void;
-  onSetRoomTitle: (title: string | null) => void;
-  onSelectTool: (tool: ToolName) => void;
-  onClearCurrentLayer: () => void;
-  onClearAllTiles: () => void;
-  onClearAllObjects: () => void;
-  onSelectBackground: (backgroundId: string) => void;
-  onSelectLighting: (mode: RoomLightingMode) => void;
-  onSetLightingDarkness: (darkness: number) => void;
-  onSetLightingRadius: (radius: number) => void;
-  onSetGoalType: (nextType: RoomGoalType | null) => void;
-  onSetGoalTimeLimitSeconds: (seconds: number | null) => void;
-  onSetGoalRequiredCount: (requiredCount: number) => void;
-  onSetGoalSurvivalSeconds: (seconds: number) => void;
-  onSetGoalIntroText: (text: string | null) => void;
-  onStartGoalMarkerPlacement: (mode: EditorMarkerPlacementMode) => void;
-  onClearGoalMarkers: () => void;
-  onSetCourseGoalType: (goalType: CourseGoalType | null) => void;
-  onSetCourseGoalTimeLimitSeconds: (seconds: number | null) => void;
-  onSetCourseGoalRequiredCount: (requiredCount: number) => void;
-  onSetCourseGoalSurvivalSeconds: (seconds: number) => void;
-  onStartCourseGoalMarkerPlacement: (mode: EditorMarkerPlacementMode) => void;
-  onClearCourseGoalMarkers: () => void;
-  onBeginPressurePlateConnection: () => void;
-  onClearPressurePlateConnection: () => void;
-  onCancelPressurePlateConnection: () => void;
-  onClearContainerContents: () => void;
-  onSetFocusedSwordsmanObjectiveMode: (objectiveMode: SwordsmanObjectiveMode) => void;
-  onSetFocusedSwordsmanDefeatMode: (defeatMode: SwordsmanDefeatMode) => void;
-}
+export type {
+  EditorCourseUiViewModel,
+  EditorGoalUiViewModel,
+  EditorInspectorState,
+  EditorUiBridgeActions,
+  EditorUiPaletteController,
+  EditorUiRuntimeConfig,
+  EditorUiViewModel,
+} from './uiBridge/model';
 
 const runtimeConfig: EditorUiRuntimeConfig = {
   paletteController: null,
@@ -307,130 +153,7 @@ function getEditorFeatureLauncher(value: string | undefined): EditorFeatureLaunc
 
 export class EditorUiBridge {
   private readonly cleanupCallbacks: Array<() => void> = [];
-  private readonly roomTitleInput: HTMLInputElement | null;
-  private readonly roomCoordsEls: HTMLElement[];
-  private readonly separatorEl: HTMLElement | null;
-  private readonly saveStatusEls: HTMLElement[];
-  private readonly publishNudgeRoot: HTMLElement | null;
-  private readonly publishNudgeTextEl: HTMLElement | null;
-  private readonly publishNudgeActionBtn: HTMLButtonElement | null;
-  private readonly zoomEls: HTMLElement[];
-  private readonly backBtn: HTMLButtonElement | null;
-  private readonly playBtn: HTMLButtonElement | null;
-  private readonly saveBtn: HTMLButtonElement | null;
-  private readonly publishBtn: HTMLButtonElement | null;
-  private readonly mintBtn: HTMLButtonElement | null;
-  private readonly refreshMetadataBtn: HTMLButtonElement | null;
-  private readonly historyBtn: HTMLButtonElement | null;
-  private readonly fitBtns: HTMLButtonElement[];
-  private readonly mobileZoomInBtn: HTMLButtonElement | null;
-  private readonly mobileZoomOutBtn: HTMLButtonElement | null;
-  private readonly toolButtons: HTMLButtonElement[];
-  private readonly featureButtons: HTMLButtonElement[];
-  private readonly featureStatus: HTMLElement | null;
-  private readonly goalRoot: HTMLElement | null;
-  private readonly lightingFeaturePanel: HTMLElement | null;
-  private readonly moreToolsButtons: HTMLButtonElement[];
-  private readonly moreToolsPanels: HTMLElement[];
-  private readonly eraseControls: HTMLElement[];
-  private readonly tileEraseControls: HTMLElement[];
-  private readonly eraseBrushSelects: HTMLSelectElement[];
-  private readonly clearLayerButtons: HTMLButtonElement[];
-  private readonly clearAllButtons: HTMLButtonElement[];
-  private readonly clearObjectButtons: HTMLButtonElement[];
-  private readonly layerButtons: HTMLElement[];
-  private readonly layerMiniButtons: HTMLElement[];
-  private readonly layerChip: HTMLElement | null;
-  private readonly layerGuideButton: HTMLButtonElement | null;
-  private readonly tilesetSelect: HTMLSelectElement | null;
-  private readonly flipXButton: HTMLButtonElement | null;
-  private readonly flipYButton: HTMLButtonElement | null;
-  private readonly paletteTabs: HTMLElement[];
-  private readonly tilesetSection: HTMLElement | null;
-  private readonly tilePaletteSection: HTMLElement | null;
-  private readonly objectPaletteSection: HTMLElement | null;
-  private readonly objectCategoryTabs: HTMLElement[];
-  private readonly backgroundSelect: HTMLSelectElement | null;
-  private readonly backgroundSolidControls: HTMLElement | null;
-  private readonly backgroundSolidColorInput: HTMLInputElement | null;
-  private readonly backgroundSolidColorValue: HTMLElement | null;
-  private readonly backgroundSolidCard: HTMLButtonElement | null;
-  private readonly backgroundUploadControls: HTMLElement | null;
-  private readonly backgroundUploadButton: HTMLButtonElement | null;
-  private readonly backgroundUploadCard: HTMLButtonElement | null;
-  private readonly backgroundUploadInput: HTMLInputElement | null;
-  private readonly backgroundUploadStatus: HTMLElement | null;
-  private readonly backgroundPhotosButton: HTMLButtonElement | null;
-  private readonly backgroundPhotoSelected: HTMLElement | null;
-  private readonly backgroundPhotoFitControls: HTMLElement | null;
-  private readonly backgroundPhotoFitButtons: HTMLButtonElement[];
-  private readonly backgroundPhotosModal: HTMLElement | null;
-  private readonly backgroundPhotosCloseButton: HTMLButtonElement | null;
-  private readonly backgroundPhotosSort: HTMLSelectElement | null;
-  private readonly backgroundPhotosStatus: HTMLElement | null;
-  private readonly backgroundPhotosGrid: HTMLElement | null;
-  private readonly backgroundUploadModal: HTMLElement | null;
-  private readonly backgroundUploadModalCloseButton: HTMLButtonElement | null;
-  private readonly backgroundUploadModalTitle: HTMLElement | null;
-  private readonly backgroundUploadModalMeta: HTMLElement | null;
-  private readonly backgroundUploadModalStatus: HTMLElement | null;
-  private readonly backgroundUploadProgressBar: HTMLElement | null;
-  private readonly lightingSelect: HTMLSelectElement | null;
-  private readonly lightingTuningControls: HTMLElement | null;
-  private readonly lightingDarknessInput: HTMLInputElement | null;
-  private readonly lightingDarknessValue: HTMLElement | null;
-  private readonly lightingRadiusInput: HTMLInputElement | null;
-  private readonly lightingRadiusValue: HTMLElement | null;
-  private backgroundButtons: HTMLButtonElement[];
-  private readonly goalTypeSelect: HTMLSelectElement | null;
-  private readonly goalContextNote: HTMLElement | null;
-  private readonly timeLimitRow: HTMLElement | null;
-  private readonly timeLimitInput: HTMLInputElement | null;
-  private readonly requiredCountRow: HTMLElement | null;
-  private readonly requiredCountInput: HTMLInputElement | null;
-  private readonly survivalRow: HTMLElement | null;
-  private readonly survivalInput: HTMLInputElement | null;
-  private readonly goalIntroRow: HTMLElement | null;
-  private readonly goalIntroInput: HTMLTextAreaElement | null;
-  private readonly markerControls: HTMLElement | null;
-  private readonly placementHint: HTMLElement | null;
-  private readonly summary: HTMLElement | null;
-  private readonly placeStartBtn: HTMLButtonElement | null;
-  private readonly placeExitBtn: HTMLButtonElement | null;
-  private readonly addCheckpointBtn: HTMLButtonElement | null;
-  private readonly placeFinishBtn: HTMLButtonElement | null;
-  private readonly clearGoalMarkersBtn: HTMLButtonElement | null;
-  private readonly courseRoot: HTMLElement | null;
-  private readonly courseStatus: HTMLElement | null;
-  private readonly courseRoomStep: HTMLElement | null;
-  private readonly courseGoalTypeSelect: HTMLSelectElement | null;
-  private readonly courseTimeLimitRow: HTMLElement | null;
-  private readonly courseTimeLimitInput: HTMLInputElement | null;
-  private readonly courseRequiredCountRow: HTMLElement | null;
-  private readonly courseRequiredCountInput: HTMLInputElement | null;
-  private readonly courseSurvivalRow: HTMLElement | null;
-  private readonly courseSurvivalInput: HTMLInputElement | null;
-  private readonly courseMarkerControls: HTMLElement | null;
-  private readonly coursePlacementHint: HTMLElement | null;
-  private readonly courseSummary: HTMLElement | null;
-  private readonly coursePlaceStartBtn: HTMLButtonElement | null;
-  private readonly coursePlaceExitBtn: HTMLButtonElement | null;
-  private readonly courseAddCheckpointBtn: HTMLButtonElement | null;
-  private readonly coursePlaceFinishBtn: HTMLButtonElement | null;
-  private readonly courseClearMarkersBtn: HTMLButtonElement | null;
-  private readonly inspectorRoot: HTMLElement | null;
-  private readonly pressurePanel: HTMLElement | null;
-  private readonly pressureStatus: HTMLElement | null;
-  private readonly pressureConnectBtn: HTMLButtonElement | null;
-  private readonly pressureClearBtn: HTMLButtonElement | null;
-  private readonly pressureDoneLaterBtn: HTMLButtonElement | null;
-  private readonly containerPanel: HTMLElement | null;
-  private readonly containerStatus: HTMLElement | null;
-  private readonly containerClearBtn: HTMLButtonElement | null;
-  private readonly swordsmanPanel: HTMLElement | null;
-  private readonly swordsmanStatus: HTMLElement | null;
-  private readonly swordsmanObjectiveModeSelect: HTMLSelectElement | null;
-  private readonly swordsmanDefeatModeSelect: HTMLSelectElement | null;
+  private readonly elements: EditorUiElements;
   private destroyed = false;
   private moreToolsOpen = false;
   private activeFeatureLauncher: EditorFeatureLauncher | null = null;
@@ -448,210 +171,8 @@ export class EditorUiBridge {
     private readonly doc: Document = document,
     private readonly windowObj: Window = window,
   ) {
-    this.roomTitleInput = this.doc.getElementById('room-title-input') as HTMLInputElement | null;
-    this.roomCoordsEls = [
-      this.doc.getElementById('room-coords'),
-      this.doc.getElementById('mobile-editor-room-coords'),
-    ].filter((element): element is HTMLElement => Boolean(element));
-    this.separatorEl = this.doc.querySelector('#bottom-bar .separator');
-    this.saveStatusEls = [
-      this.doc.getElementById('editor-top-save-status'),
-      this.doc.getElementById('room-save-status'),
-      this.doc.getElementById('mobile-editor-save-status'),
-    ].filter((element): element is HTMLElement => Boolean(element));
-    this.publishNudgeRoot = this.doc.getElementById('editor-publish-nudge');
-    this.publishNudgeTextEl = this.doc.getElementById('editor-publish-nudge-text');
-    this.publishNudgeActionBtn =
-      this.doc.getElementById('btn-editor-publish-nudge') as HTMLButtonElement | null;
-    this.zoomEls = [
-      this.doc.getElementById('zoom-level'),
-      this.doc.getElementById('mobile-editor-zoom-level'),
-    ].filter((element): element is HTMLElement => Boolean(element));
-    this.backBtn = this.doc.getElementById('btn-editor-back') as HTMLButtonElement | null;
-    this.playBtn = this.doc.getElementById('btn-test-play') as HTMLButtonElement | null;
-    this.saveBtn = this.doc.getElementById('btn-save-draft') as HTMLButtonElement | null;
-    this.publishBtn = this.doc.getElementById('btn-publish-room') as HTMLButtonElement | null;
-    this.mintBtn = this.doc.getElementById('btn-mint-room') as HTMLButtonElement | null;
-    this.refreshMetadataBtn =
-      this.doc.getElementById('btn-refresh-room-metadata') as HTMLButtonElement | null;
-    this.historyBtn = this.doc.getElementById('btn-room-history') as HTMLButtonElement | null;
-    this.fitBtns = [
-      this.doc.getElementById('btn-fit-screen') as HTMLButtonElement | null,
-      this.doc.getElementById('btn-mobile-editor-fit') as HTMLButtonElement | null,
-    ].filter((element): element is HTMLButtonElement => Boolean(element));
-    this.mobileZoomInBtn =
-      this.doc.getElementById('btn-mobile-editor-zoom-in') as HTMLButtonElement | null;
-    this.mobileZoomOutBtn =
-      this.doc.getElementById('btn-mobile-editor-zoom-out') as HTMLButtonElement | null;
-    this.toolButtons = Array.from(
-      this.doc.querySelectorAll<HTMLButtonElement>('.tool-btn[data-tool]')
-    );
-    this.featureButtons = Array.from(
-      this.doc.querySelectorAll<HTMLButtonElement>('[data-editor-feature]')
-    );
-    this.featureStatus = this.doc.getElementById('editor-feature-launcher-status');
-    this.goalRoot = this.doc.getElementById('goal-section');
-    this.lightingFeaturePanel = this.doc.getElementById('editor-lighting-feature-panel');
-    this.moreToolsButtons = Array.from(
-      this.doc.querySelectorAll<HTMLButtonElement>('.editor-more-tools-toggle')
-    );
-    this.moreToolsPanels = Array.from(
-      this.doc.querySelectorAll<HTMLElement>('.editor-more-tools-panel')
-    );
-    this.eraseControls = Array.from(
-      this.doc.querySelectorAll<HTMLElement>('.editor-eraser-controls')
-    );
-    this.tileEraseControls = Array.from(
-      this.doc.querySelectorAll<HTMLElement>('.editor-tile-erase-control')
-    );
-    this.eraseBrushSelects = Array.from(
-      this.doc.querySelectorAll<HTMLSelectElement>('.editor-erase-brush-select')
-    );
-    this.clearLayerButtons = Array.from(
-      this.doc.querySelectorAll<HTMLButtonElement>('.editor-clear-layer-btn')
-    );
-    this.clearAllButtons = Array.from(
-      this.doc.querySelectorAll<HTMLButtonElement>('.editor-clear-all-btn')
-    );
-    this.clearObjectButtons = Array.from(
-      this.doc.querySelectorAll<HTMLButtonElement>('.editor-clear-objects-btn')
-    );
-    this.layerButtons = Array.from(this.doc.querySelectorAll<HTMLElement>('.layer-btn'));
-    this.layerMiniButtons = Array.from(
-      this.doc.querySelectorAll<HTMLElement>('.layer-stack-mini-btn')
-    );
-    this.layerChip = this.doc.getElementById('editor-layer-chip');
-    this.layerGuideButton =
-      this.doc.getElementById('btn-editor-layer-guides') as HTMLButtonElement | null;
-    this.tilesetSelect = this.doc.getElementById('tileset-select') as HTMLSelectElement | null;
+    this.elements = lookupEditorUiElements(this.doc);
     this.populateTilesetOptions();
-    this.flipXButton = this.doc.getElementById('btn-tile-flip-x') as HTMLButtonElement | null;
-    this.flipYButton = this.doc.getElementById('btn-tile-flip-y') as HTMLButtonElement | null;
-    this.paletteTabs = Array.from(this.doc.querySelectorAll<HTMLElement>('.palette-tab'));
-    this.tilesetSection = this.doc.getElementById('tileset-section');
-    this.tilePaletteSection = this.doc.getElementById('tile-palette-section');
-    this.objectPaletteSection = this.doc.getElementById('object-palette-section');
-    this.objectCategoryTabs = Array.from(this.doc.querySelectorAll<HTMLElement>('.obj-cat-tab'));
-    this.backgroundSelect =
-      this.doc.getElementById('background-select') as HTMLSelectElement | null;
-    this.backgroundSolidControls = this.doc.getElementById('background-solid-controls');
-    this.backgroundSolidColorInput =
-      this.doc.getElementById('background-solid-color-input') as HTMLInputElement | null;
-    this.backgroundSolidColorValue = this.doc.getElementById('background-solid-color-value');
-    this.backgroundSolidCard =
-      this.doc.getElementById('background-solid-card') as HTMLButtonElement | null;
-    this.backgroundUploadControls = this.doc.getElementById('background-upload-controls');
-    this.backgroundUploadButton =
-      this.doc.getElementById('background-upload-button') as HTMLButtonElement | null;
-    this.backgroundUploadCard =
-      this.doc.getElementById('background-upload-card') as HTMLButtonElement | null;
-    this.backgroundUploadInput =
-      this.doc.getElementById('background-upload-input') as HTMLInputElement | null;
-    this.backgroundUploadStatus = this.doc.getElementById('background-upload-status');
-    this.backgroundPhotosButton =
-      this.doc.getElementById('background-photos-button') as HTMLButtonElement | null;
-    this.backgroundPhotoSelected = this.doc.getElementById('background-photo-selected');
-    this.backgroundPhotoFitControls = this.doc.getElementById('background-photo-fit-controls');
-    this.backgroundPhotoFitButtons = Array.from(
-      this.doc.querySelectorAll<HTMLButtonElement>('[data-background-photo-fit]')
-    );
-    this.backgroundPhotosModal = this.doc.getElementById('background-photos-modal');
-    this.backgroundPhotosCloseButton =
-      this.doc.getElementById('btn-background-photos-close') as HTMLButtonElement | null;
-    this.backgroundPhotosSort =
-      this.doc.getElementById('background-photos-sort') as HTMLSelectElement | null;
-    this.backgroundPhotosStatus = this.doc.getElementById('background-photos-status');
-    this.backgroundPhotosGrid = this.doc.getElementById('background-photos-grid');
-    this.backgroundUploadModal = this.doc.getElementById('background-upload-modal');
-    this.backgroundUploadModalCloseButton =
-      this.doc.getElementById('btn-background-upload-modal-close') as HTMLButtonElement | null;
-    this.backgroundUploadModalTitle = this.doc.getElementById('background-upload-modal-title');
-    this.backgroundUploadModalMeta = this.doc.getElementById('background-upload-modal-meta');
-    this.backgroundUploadModalStatus = this.doc.getElementById('background-upload-modal-status');
-    this.backgroundUploadProgressBar = this.doc.getElementById('background-upload-progress-bar');
-    this.lightingSelect =
-      this.doc.getElementById('lighting-mode-select') as HTMLSelectElement | null;
-    this.lightingTuningControls = this.doc.getElementById('lighting-tuning-controls');
-    this.lightingDarknessInput =
-      this.doc.getElementById('lighting-darkness-range') as HTMLInputElement | null;
-    this.lightingDarknessValue = this.doc.getElementById('lighting-darkness-value');
-    this.lightingRadiusInput =
-      this.doc.getElementById('lighting-radius-range') as HTMLInputElement | null;
-    this.lightingRadiusValue = this.doc.getElementById('lighting-radius-value');
-    this.backgroundButtons = Array.from(
-      this.doc.querySelectorAll<HTMLButtonElement>('[data-background-id]')
-    );
-    this.goalTypeSelect = this.doc.getElementById('goal-type-select') as HTMLSelectElement | null;
-    this.goalContextNote = this.doc.getElementById('goal-context-note');
-    this.timeLimitRow = this.doc.getElementById('goal-time-limit-row');
-    this.timeLimitInput =
-      this.doc.getElementById('goal-time-limit-seconds') as HTMLInputElement | null;
-    this.requiredCountRow = this.doc.getElementById('goal-required-count-row');
-    this.requiredCountInput =
-      this.doc.getElementById('goal-required-count') as HTMLInputElement | null;
-    this.survivalRow = this.doc.getElementById('goal-survival-row');
-    this.survivalInput =
-      this.doc.getElementById('goal-survival-seconds') as HTMLInputElement | null;
-    this.goalIntroRow = this.doc.getElementById('goal-intro-text-row');
-    this.goalIntroInput =
-      this.doc.getElementById('goal-intro-text') as HTMLTextAreaElement | null;
-    this.markerControls = this.doc.getElementById('goal-marker-controls');
-    this.placementHint = this.doc.getElementById('goal-placement-hint');
-    this.summary = this.doc.getElementById('goal-summary');
-    this.placeStartBtn = this.doc.getElementById('btn-goal-place-start') as HTMLButtonElement | null;
-    this.placeExitBtn = this.doc.getElementById('btn-goal-place-exit') as HTMLButtonElement | null;
-    this.addCheckpointBtn =
-      this.doc.getElementById('btn-goal-add-checkpoint') as HTMLButtonElement | null;
-    this.placeFinishBtn =
-      this.doc.getElementById('btn-goal-place-finish') as HTMLButtonElement | null;
-    this.clearGoalMarkersBtn =
-      this.doc.getElementById('btn-goal-clear-markers') as HTMLButtonElement | null;
-    this.courseRoot = this.doc.getElementById('course-goal-section');
-    this.courseStatus = this.doc.getElementById('course-editor-status');
-    this.courseRoomStep = this.doc.getElementById('course-editor-room-step');
-    this.courseGoalTypeSelect =
-      this.doc.getElementById('course-editor-goal-type-select') as HTMLSelectElement | null;
-    this.courseTimeLimitRow = this.doc.getElementById('course-editor-time-limit-row');
-    this.courseTimeLimitInput =
-      this.doc.getElementById('course-editor-time-limit-seconds') as HTMLInputElement | null;
-    this.courseRequiredCountRow = this.doc.getElementById('course-editor-required-count-row');
-    this.courseRequiredCountInput =
-      this.doc.getElementById('course-editor-required-count') as HTMLInputElement | null;
-    this.courseSurvivalRow = this.doc.getElementById('course-editor-survival-row');
-    this.courseSurvivalInput =
-      this.doc.getElementById('course-editor-survival-seconds') as HTMLInputElement | null;
-    this.courseMarkerControls = this.doc.getElementById('course-editor-marker-controls');
-    this.coursePlacementHint = this.doc.getElementById('course-editor-placement-hint');
-    this.courseSummary = this.doc.getElementById('course-editor-summary');
-    this.coursePlaceStartBtn =
-      this.doc.getElementById('btn-course-editor-place-start') as HTMLButtonElement | null;
-    this.coursePlaceExitBtn =
-      this.doc.getElementById('btn-course-editor-place-exit') as HTMLButtonElement | null;
-    this.courseAddCheckpointBtn =
-      this.doc.getElementById('btn-course-editor-add-checkpoint') as HTMLButtonElement | null;
-    this.coursePlaceFinishBtn =
-      this.doc.getElementById('btn-course-editor-place-finish') as HTMLButtonElement | null;
-    this.courseClearMarkersBtn =
-      this.doc.getElementById('btn-course-editor-clear-markers') as HTMLButtonElement | null;
-    this.inspectorRoot = this.doc.getElementById('editor-inspector');
-    this.pressurePanel = this.doc.getElementById('pressure-plate-panel');
-    this.pressureStatus = this.doc.getElementById('pressure-plate-status');
-    this.pressureConnectBtn =
-      this.doc.getElementById('btn-pressure-plate-connect') as HTMLButtonElement | null;
-    this.pressureClearBtn =
-      this.doc.getElementById('btn-pressure-plate-clear') as HTMLButtonElement | null;
-    this.pressureDoneLaterBtn =
-      this.doc.getElementById('btn-pressure-plate-done-later') as HTMLButtonElement | null;
-    this.containerPanel = this.doc.getElementById('container-contents-panel');
-    this.containerStatus = this.doc.getElementById('container-contents-status');
-    this.containerClearBtn =
-      this.doc.getElementById('btn-container-clear') as HTMLButtonElement | null;
-    this.swordsmanPanel = this.doc.getElementById('swordsman-objective-panel');
-    this.swordsmanStatus = this.doc.getElementById('swordsman-objective-status');
-    this.swordsmanObjectiveModeSelect =
-      this.doc.getElementById('swordsman-objective-mode-select') as HTMLSelectElement | null;
-    this.swordsmanDefeatModeSelect =
-      this.doc.getElementById('swordsman-defeat-mode-select') as HTMLSelectElement | null;
 
     this.bindListeners();
     this.syncEditorChromeState();
@@ -659,14 +180,14 @@ export class EditorUiBridge {
   }
 
   private populateTilesetOptions(): void {
-    if (!this.tilesetSelect) {
+    if (!this.elements.tilesetSelect) {
       return;
     }
 
     const editorTilesets = getEditorTilesets();
     const selectedKey =
       getTilesetByKey(editorState.selectedTilesetKey)?.key ?? editorTilesets[0]?.key ?? '';
-    this.tilesetSelect.replaceChildren(
+    this.elements.tilesetSelect.replaceChildren(
       ...editorTilesets.map((tileset) => {
         const option = this.doc.createElement('option');
         option.value = tileset.key;
@@ -674,7 +195,7 @@ export class EditorUiBridge {
         return option;
       })
     );
-    this.tilesetSelect.value = selectedKey;
+    this.elements.tilesetSelect.value = selectedKey;
   }
 
   render(viewModel: EditorUiViewModel): void {
@@ -683,97 +204,7 @@ export class EditorUiBridge {
     }
 
     this.lastViewModel = viewModel;
-    this.setValue(this.roomTitleInput, viewModel.roomTitleValue);
-    this.setText(this.roomCoordsEls, viewModel.roomCoordinatesText);
-    this.separatorEl?.classList.toggle('hidden', false);
-    this.renderSaveStatus(this.saveStatusEls, viewModel);
-    this.setHidden(this.publishNudgeRoot, !viewModel.publishNudgeVisible);
-    this.setText(this.publishNudgeTextEl, viewModel.publishNudgeText);
-    this.setButtonText(this.publishNudgeActionBtn, viewModel.publishNudgeActionText);
-    this.resetSaveStatusTone();
-    this.setText(this.zoomEls, viewModel.zoomText);
-
-    this.setHidden(this.backBtn, viewModel.backButtonHidden);
-    this.setButtonText(this.backBtn, viewModel.backButtonText);
-    this.setButtonTitle(this.backBtn, viewModel.backButtonTitle);
-    this.setHidden(this.playBtn, viewModel.playHidden);
-    this.setHidden(this.saveBtn, viewModel.saveHidden);
-    this.setButtonText(this.saveBtn, viewModel.saveButtonText);
-    this.setButtonTitle(this.saveBtn, viewModel.saveButtonTitle);
-    this.setDisabled(this.saveBtn, viewModel.saveDisabled);
-    this.setHidden(this.publishBtn, viewModel.publishHidden);
-    this.setButtonText(this.publishBtn, viewModel.publishButtonText);
-    this.setButtonTitle(this.publishBtn, viewModel.publishButtonTitle);
-    this.setDisabled(this.publishBtn, viewModel.publishDisabled);
-    this.setAriaDisabled(this.publishBtn, viewModel.publishButtonAriaDisabled);
-    this.setHidden(this.mintBtn, viewModel.mintHidden);
-    this.setDisabled(this.mintBtn, viewModel.mintDisabled);
-    this.setButtonText(this.mintBtn, viewModel.mintButtonText);
-    this.setHidden(this.refreshMetadataBtn, viewModel.refreshMetadataHidden);
-    this.setDisabled(this.refreshMetadataBtn, viewModel.refreshMetadataDisabled);
-    this.setButtonText(this.refreshMetadataBtn, viewModel.refreshMetadataButtonText);
-    this.setHidden(this.historyBtn, viewModel.historyHidden);
-    this.setDisabled(this.historyBtn, viewModel.historyDisabled);
-    this.setHidden(this.fitBtns, viewModel.fitHidden);
-
-    this.setValue(this.goalTypeSelect, viewModel.goal.goalTypeValue);
-    this.setDisabled(this.goalTypeSelect, viewModel.goal.goalTypeDisabled);
-    this.setHidden(this.goalContextNote, viewModel.goal.contextHidden);
-    this.setText(this.goalContextNote, viewModel.goal.contextText);
-    this.setHidden(this.timeLimitRow, viewModel.goal.timeLimitHidden);
-    this.setDisabled(this.timeLimitInput, viewModel.goal.timeLimitDisabled);
-    this.setValue(this.timeLimitInput, viewModel.goal.timeLimitValue);
-    this.setHidden(this.requiredCountRow, viewModel.goal.requiredCountHidden);
-    this.setDisabled(this.requiredCountInput, viewModel.goal.requiredCountDisabled);
-    this.setValue(this.requiredCountInput, viewModel.goal.requiredCountValue);
-    this.setHidden(this.survivalRow, viewModel.goal.survivalHidden);
-    this.setDisabled(this.survivalInput, viewModel.goal.survivalDisabled);
-    this.setValue(this.survivalInput, viewModel.goal.survivalValue);
-    this.setHidden(this.goalIntroRow, viewModel.goal.introTextHidden);
-    this.setDisabled(this.goalIntroInput, viewModel.goal.introTextDisabled);
-    this.setValue(this.goalIntroInput, viewModel.goal.introTextValue);
-    this.setHidden(this.markerControls, viewModel.goal.markerControlsHidden);
-    this.setHidden(this.placementHint, viewModel.goal.placementHintHidden);
-    this.setText(this.placementHint, viewModel.goal.placementHintText);
-    this.setText(this.summary, viewModel.goal.summaryText);
-    this.setHidden(this.placeStartBtn, viewModel.goal.placeStartHidden);
-    this.setActive(this.placeStartBtn, viewModel.goal.placeStartActive);
-    this.setHidden(this.placeExitBtn, viewModel.goal.placeExitHidden);
-    this.setActive(this.placeExitBtn, viewModel.goal.placeExitActive);
-    this.setHidden(this.addCheckpointBtn, viewModel.goal.addCheckpointHidden);
-    this.setActive(this.addCheckpointBtn, viewModel.goal.addCheckpointActive);
-    this.setHidden(this.placeFinishBtn, viewModel.goal.placeFinishHidden);
-    this.setActive(this.placeFinishBtn, viewModel.goal.placeFinishActive);
-
-    this.setHidden(this.courseRoot, !viewModel.course.visible);
-    this.setHidden(this.courseStatus, viewModel.course.statusHidden);
-    this.setText(this.courseStatus, viewModel.course.statusText);
-    this.setHidden(this.courseRoomStep, viewModel.course.roomStepText.length === 0);
-    this.setText(this.courseRoomStep, viewModel.course.roomStepText);
-    this.setValue(this.courseGoalTypeSelect, viewModel.course.goalTypeValue);
-    this.setDisabled(this.courseGoalTypeSelect, viewModel.course.goalTypeDisabled);
-    this.setHidden(this.courseTimeLimitRow, viewModel.course.timeLimitHidden);
-    this.setDisabled(this.courseTimeLimitInput, viewModel.course.timeLimitDisabled);
-    this.setValue(this.courseTimeLimitInput, viewModel.course.timeLimitValue);
-    this.setHidden(this.courseRequiredCountRow, viewModel.course.requiredCountHidden);
-    this.setDisabled(this.courseRequiredCountInput, viewModel.course.requiredCountDisabled);
-    this.setValue(this.courseRequiredCountInput, viewModel.course.requiredCountValue);
-    this.setHidden(this.courseSurvivalRow, viewModel.course.survivalHidden);
-    this.setDisabled(this.courseSurvivalInput, viewModel.course.survivalDisabled);
-    this.setValue(this.courseSurvivalInput, viewModel.course.survivalValue);
-    this.setHidden(this.courseMarkerControls, viewModel.course.markerControlsHidden);
-    this.setHidden(this.coursePlacementHint, viewModel.course.placementHintHidden);
-    this.setText(this.coursePlacementHint, viewModel.course.placementHintText);
-    this.setText(this.courseSummary, viewModel.course.summaryText);
-    this.setHidden(this.coursePlaceStartBtn, viewModel.course.placeStartHidden);
-    this.setActive(this.coursePlaceStartBtn, viewModel.course.placeStartActive);
-    this.setHidden(this.coursePlaceExitBtn, viewModel.course.placeExitHidden);
-    this.setActive(this.coursePlaceExitBtn, viewModel.course.placeExitActive);
-    this.setHidden(this.courseAddCheckpointBtn, viewModel.course.addCheckpointHidden);
-    this.setActive(this.courseAddCheckpointBtn, viewModel.course.addCheckpointActive);
-    this.setHidden(this.coursePlaceFinishBtn, viewModel.course.placeFinishHidden);
-    this.setActive(this.coursePlaceFinishBtn, viewModel.course.placeFinishActive);
-
+    renderEditorUiViewModel(this.elements, this.doc, viewModel);
     this.syncEditorChromeState();
   }
 
@@ -782,29 +213,7 @@ export class EditorUiBridge {
       return;
     }
 
-    this.setHidden(this.inspectorRoot, !state.visible);
-    this.setHidden(this.pressurePanel, !state.pressureVisible);
-    this.setText(this.pressureStatus, state.pressureStatusText);
-    this.setHidden(this.pressureConnectBtn, state.pressureConnectHidden);
-    this.setDisabled(this.pressureConnectBtn, state.pressureConnectDisabled);
-    if (this.pressureConnectBtn) {
-      this.pressureConnectBtn.title = state.pressureConnectTitle;
-    }
-    this.setHidden(this.pressureClearBtn, state.pressureClearHidden);
-    this.setDisabled(this.pressureClearBtn, state.pressureClearDisabled);
-    this.setHidden(this.pressureDoneLaterBtn, state.pressureDoneLaterHidden);
-    this.setHidden(this.containerPanel, !state.containerVisible);
-    this.setText(this.containerStatus, state.containerStatusText);
-    this.setDisabled(this.containerClearBtn, state.containerClearDisabled);
-    if (this.containerClearBtn) {
-      this.containerClearBtn.title = state.containerClearTitle;
-    }
-    this.setHidden(this.swordsmanPanel, !state.swordsmanVisible);
-    this.setText(this.swordsmanStatus, state.swordsmanStatusText);
-    this.setValue(this.swordsmanObjectiveModeSelect, state.swordsmanObjectiveModeValue);
-    this.setDisabled(this.swordsmanObjectiveModeSelect, state.swordsmanObjectiveModeDisabled);
-    this.setValue(this.swordsmanDefeatModeSelect, state.swordsmanDefeatModeValue);
-    this.setDisabled(this.swordsmanDefeatModeSelect, state.swordsmanDefeatModeDisabled);
+    renderInspectorPanel(this.elements, state);
   }
 
   notifyEditorStateChanged(): void {
@@ -812,9 +221,9 @@ export class EditorUiBridge {
   }
 
   destroy(): void {
-    this.setHidden(this.inspectorRoot, true);
-    this.setHidden(this.pressurePanel, true);
-    this.setHidden(this.containerPanel, true);
+    setHidden(this.elements.inspectorRoot, true);
+    setHidden(this.elements.pressurePanel, true);
+    setHidden(this.elements.containerPanel, true);
     this.destroyed = true;
     for (const cleanup of this.cleanupCallbacks) {
       cleanup();
@@ -823,14 +232,14 @@ export class EditorUiBridge {
   }
 
   private bindListeners(): void {
-    this.bind(this.doc, 'keydown', (event) => {
+    bindDomEvent(this.cleanupCallbacks, this.doc, 'keydown', (event) => {
       this.actions.onDocumentKeyDown(event as KeyboardEvent);
     });
-    this.bind(this.windowObj, AUTH_STATE_CHANGED_EVENT, () => {
+    bindDomEvent(this.cleanupCallbacks, this.windowObj, AUTH_STATE_CHANGED_EVENT, () => {
       this.actions.onAuthStateChanged();
       void this.refreshBackgroundImages();
     });
-    this.bind(this.windowObj, EDITOR_UI_STATE_CHANGED_EVENT, () => {
+    bindDomEvent(this.cleanupCallbacks, this.windowObj, EDITOR_UI_STATE_CHANGED_EVENT, () => {
       if (this.lastViewModel) {
         this.syncEditorChromeState();
       }
@@ -838,18 +247,18 @@ export class EditorUiBridge {
     });
 
     const commitRoomTitle = () => {
-      this.actions.onSetRoomTitle(this.roomTitleInput?.value ?? null);
+      this.actions.onSetRoomTitle(this.elements.roomTitleInput?.value ?? null);
     };
-    this.roomTitleInput?.addEventListener('input', commitRoomTitle);
-    this.roomTitleInput?.addEventListener('change', commitRoomTitle);
-    if (this.roomTitleInput) {
+    this.elements.roomTitleInput?.addEventListener('input', commitRoomTitle);
+    this.elements.roomTitleInput?.addEventListener('change', commitRoomTitle);
+    if (this.elements.roomTitleInput) {
       this.cleanupCallbacks.push(() => {
-        this.roomTitleInput?.removeEventListener('input', commitRoomTitle);
-        this.roomTitleInput?.removeEventListener('change', commitRoomTitle);
+        this.elements.roomTitleInput?.removeEventListener('input', commitRoomTitle);
+        this.elements.roomTitleInput?.removeEventListener('change', commitRoomTitle);
       });
     }
 
-    for (const button of this.toolButtons) {
+    for (const button of this.elements.toolButtons) {
       const handler = () => {
         const tool = button.dataset.tool as ToolName | undefined;
         if (!tool) {
@@ -864,7 +273,7 @@ export class EditorUiBridge {
       this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
     }
 
-    for (const button of this.featureButtons) {
+    for (const button of this.elements.featureButtons) {
       const handler = () => {
         const feature = getEditorFeatureLauncher(button.dataset.editorFeature);
         if (!feature) {
@@ -876,7 +285,7 @@ export class EditorUiBridge {
       this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
     }
 
-    for (const button of this.moreToolsButtons) {
+    for (const button of this.elements.moreToolsButtons) {
       const toggleMoreTools = (event: Event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -888,14 +297,14 @@ export class EditorUiBridge {
     }
 
     const closeMoreToolsOnOutsideClick = (event: Event) => {
-      if (this.moreToolsPanels.length === 0 || !this.moreToolsOpen) {
+      if (this.elements.moreToolsPanels.length === 0 || !this.moreToolsOpen) {
         return;
       }
       const target = event.target as Node | null;
       if (
         target &&
-        (this.moreToolsPanels.some((panel) => panel.contains(target)) ||
-          this.moreToolsButtons.some((button) => button.contains(target)))
+        (this.elements.moreToolsPanels.some((panel) => panel.contains(target)) ||
+          this.elements.moreToolsButtons.some((button) => button.contains(target)))
       ) {
         return;
       }
@@ -910,22 +319,22 @@ export class EditorUiBridge {
     const handleEraserBrushChange = () => {
       const target = this.doc.activeElement;
       const selectedInput =
-        this.eraseBrushSelects.find((input) => input === target) ?? this.eraseBrushSelects[0];
+        this.elements.eraseBrushSelects.find((input) => input === target) ?? this.elements.eraseBrushSelects[0];
       const nextSize = Number.parseInt(selectedInput?.value ?? '', 10);
       if (ERASER_BRUSH_SIZES.includes(nextSize as EraserBrushSize)) {
         editorState.eraserBrushSize = nextSize as EraserBrushSize;
         this.syncEditorChromeState();
       }
     };
-    for (const input of this.eraseBrushSelects) {
+    for (const input of this.elements.eraseBrushSelects) {
       input.addEventListener('change', handleEraserBrushChange);
       this.cleanupCallbacks.push(() =>
         input.removeEventListener('change', handleEraserBrushChange)
       );
     }
 
-    for (const button of this.clearLayerButtons) {
-      this.bindButton(button, () => {
+    for (const button of this.elements.clearLayerButtons) {
+      bindButton(this.cleanupCallbacks, button, () => {
         if (!this.windowObj.confirm('Clear every tile on the current layer?')) {
           return;
         }
@@ -933,8 +342,8 @@ export class EditorUiBridge {
       });
     }
 
-    for (const button of this.clearAllButtons) {
-      this.bindButton(button, () => {
+    for (const button of this.elements.clearAllButtons) {
+      bindButton(this.cleanupCallbacks, button, () => {
         if (!this.windowObj.confirm('Remove all tiles from Back, Gameplay, and Front?')) {
           return;
         }
@@ -942,8 +351,8 @@ export class EditorUiBridge {
       });
     }
 
-    for (const button of this.clearObjectButtons) {
-      this.bindButton(button, () => {
+    for (const button of this.elements.clearObjectButtons) {
+      bindButton(this.cleanupCallbacks, button, () => {
         if (!this.windowObj.confirm('Remove all placed objects from this room?')) {
           return;
         }
@@ -959,23 +368,23 @@ export class EditorUiBridge {
       editorState.activeLayer = layer;
       this.syncEditorChromeState();
     };
-    for (const button of [...this.layerButtons, ...this.layerMiniButtons]) {
+    for (const button of [...this.elements.layerButtons, ...this.elements.layerMiniButtons]) {
       const handler = () => handleLayerClick(button);
       button.addEventListener('click', handler);
       this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
     }
 
-    this.bindButton(this.layerGuideButton, () => {
+    bindButton(this.cleanupCallbacks, this.elements.layerGuideButton, () => {
       editorState.showLayerGuides = !editorState.showLayerGuides;
       this.syncEditorChromeState();
     });
 
     const handleTilesetChange = () => {
-      if (!this.tilesetSelect) {
+      if (!this.elements.tilesetSelect) {
         return;
       }
-      editorState.selectedTilesetKey = this.tilesetSelect.value;
-      const tileset = getTilesetByKey(this.tilesetSelect.value);
+      editorState.selectedTilesetKey = this.elements.tilesetSelect.value;
+      const tileset = getTilesetByKey(this.elements.tilesetSelect.value);
       if (tileset) {
         runtimeConfig.paletteController?.updateSelection(tileset.key, 0, 0, 0, 0);
       }
@@ -983,25 +392,25 @@ export class EditorUiBridge {
       runtimeConfig.paletteController?.renderTilePreview();
       this.syncEditorChromeState();
     };
-    this.tilesetSelect?.addEventListener('change', handleTilesetChange);
-    if (this.tilesetSelect) {
+    this.elements.tilesetSelect?.addEventListener('change', handleTilesetChange);
+    if (this.elements.tilesetSelect) {
       this.cleanupCallbacks.push(() =>
-        this.tilesetSelect?.removeEventListener('change', handleTilesetChange)
+        this.elements.tilesetSelect?.removeEventListener('change', handleTilesetChange)
       );
     }
 
-    this.bindButton(this.flipXButton, () => {
+    bindButton(this.cleanupCallbacks, this.elements.flipXButton, () => {
       editorState.tileFlipX = !editorState.tileFlipX;
       runtimeConfig.paletteController?.renderTilePreview();
       this.syncEditorChromeState();
     });
-    this.bindButton(this.flipYButton, () => {
+    bindButton(this.cleanupCallbacks, this.elements.flipYButton, () => {
       editorState.tileFlipY = !editorState.tileFlipY;
       runtimeConfig.paletteController?.renderTilePreview();
       this.syncEditorChromeState();
     });
 
-    for (const tab of this.paletteTabs) {
+    for (const tab of this.elements.paletteTabs) {
       const handler = () => {
         const mode = (tab.dataset.mode as PaletteMode | undefined) ?? 'tiles';
         editorState.paletteMode = mode;
@@ -1017,7 +426,7 @@ export class EditorUiBridge {
       this.cleanupCallbacks.push(() => tab.removeEventListener('click', handler));
     }
 
-    for (const tab of this.objectCategoryTabs) {
+    for (const tab of this.elements.objectCategoryTabs) {
       const handler = () => {
         this.currentObjectCategory = tab.dataset.category || 'all';
         runtimeConfig.paletteController?.setObjectCategory(this.currentObjectCategory);
@@ -1028,23 +437,23 @@ export class EditorUiBridge {
     }
 
     const handleBackgroundSelectChange = () => {
-      if (!this.backgroundSelect) {
+      if (!this.elements.backgroundSelect) {
         return;
       }
-      this.applyBackgroundSelection(this.backgroundSelect.value);
+      this.applyBackgroundSelection(this.elements.backgroundSelect.value);
     };
-    this.backgroundSelect?.addEventListener('change', handleBackgroundSelectChange);
-    if (this.backgroundSelect) {
+    this.elements.backgroundSelect?.addEventListener('change', handleBackgroundSelectChange);
+    if (this.elements.backgroundSelect) {
       this.cleanupCallbacks.push(() =>
-        this.backgroundSelect?.removeEventListener('change', handleBackgroundSelectChange)
+        this.elements.backgroundSelect?.removeEventListener('change', handleBackgroundSelectChange)
       );
     }
     const handleBackgroundSolidColorChange = () => {
-      if (!this.backgroundSolidColorInput) {
+      if (!this.elements.backgroundSolidColorInput) {
         return;
       }
       const nextColor = normalizeSolidBackgroundColor(
-        this.backgroundSolidColorInput.value,
+        this.elements.backgroundSolidColorInput.value,
         editorState.selectedSolidBackgroundColor,
       );
       editorState.selectedSolidBackgroundColor = nextColor;
@@ -1057,15 +466,15 @@ export class EditorUiBridge {
       }
       this.syncEditorChromeState();
     };
-    this.backgroundSolidColorInput?.addEventListener('input', handleBackgroundSolidColorChange);
-    this.backgroundSolidColorInput?.addEventListener('change', handleBackgroundSolidColorChange);
-    if (this.backgroundSolidColorInput) {
+    this.elements.backgroundSolidColorInput?.addEventListener('input', handleBackgroundSolidColorChange);
+    this.elements.backgroundSolidColorInput?.addEventListener('change', handleBackgroundSolidColorChange);
+    if (this.elements.backgroundSolidColorInput) {
       this.cleanupCallbacks.push(() => {
-        this.backgroundSolidColorInput?.removeEventListener(
+        this.elements.backgroundSolidColorInput?.removeEventListener(
           'input',
           handleBackgroundSolidColorChange,
         );
-        this.backgroundSolidColorInput?.removeEventListener(
+        this.elements.backgroundSolidColorInput?.removeEventListener(
           'change',
           handleBackgroundSolidColorChange,
         );
@@ -1073,25 +482,43 @@ export class EditorUiBridge {
     }
 
     const handleLightingSelectChange = () => {
-      if (!this.lightingSelect) {
+      if (!this.elements.lightingSelect) {
         return;
       }
-      this.applyLightingSelection(this.lightingSelect.value as RoomLightingMode);
+      this.applyLightingSelection(this.elements.lightingSelect.value as RoomLightingMode);
     };
-    this.lightingSelect?.addEventListener('change', handleLightingSelectChange);
-    if (this.lightingSelect) {
+    this.elements.lightingSelect?.addEventListener('change', handleLightingSelectChange);
+    if (this.elements.lightingSelect) {
       this.cleanupCallbacks.push(() =>
-        this.lightingSelect?.removeEventListener('change', handleLightingSelectChange)
+        this.elements.lightingSelect?.removeEventListener('change', handleLightingSelectChange)
       );
     }
-    this.bindRangeInput(this.lightingDarknessInput, (value) => {
-      this.applyLightingDarkness(value);
-    });
-    this.bindRangeInput(this.lightingRadiusInput, (value) => {
-      this.applyLightingRadius(value);
-    });
+    bindRangeInput(
+      this.cleanupCallbacks,
+      this.elements.lightingDarknessInput,
+      () =>
+        normalizeRoomLightingSliderValue(
+          Number.parseInt(this.elements.lightingDarknessInput?.value ?? '', 10),
+          editorState.selectedLightingDarkness,
+        ),
+      (value) => {
+        this.applyLightingDarkness(value);
+      },
+    );
+    bindRangeInput(
+      this.cleanupCallbacks,
+      this.elements.lightingRadiusInput,
+      () =>
+        normalizeRoomLightingSliderValue(
+          Number.parseInt(this.elements.lightingRadiusInput?.value ?? '', 10),
+          editorState.selectedLightingRadius,
+        ),
+      (value) => {
+        this.applyLightingRadius(value);
+      },
+    );
 
-    for (const button of this.backgroundButtons) {
+    for (const button of this.elements.backgroundButtons) {
       const handler = () => {
         const nextBackground = button.dataset.backgroundId;
         if (!nextBackground) {
@@ -1106,12 +533,12 @@ export class EditorUiBridge {
     const openUploadPicker = () => {
       this.openBackgroundUploadPicker();
     };
-    this.bindButton(this.backgroundUploadButton, openUploadPicker);
-    this.bindButton(this.backgroundUploadCard, openUploadPicker);
-    this.bindButton(this.backgroundPhotosButton, () => this.openBackgroundPhotosModal());
-    this.bindButton(this.backgroundPhotosCloseButton, () => this.closeBackgroundPhotosModal());
-    this.bindButton(this.backgroundUploadModalCloseButton, () => this.closeBackgroundUploadModal());
-    for (const button of this.backgroundPhotoFitButtons) {
+    bindButton(this.cleanupCallbacks, this.elements.backgroundUploadButton, openUploadPicker);
+    bindButton(this.cleanupCallbacks, this.elements.backgroundUploadCard, openUploadPicker);
+    bindButton(this.cleanupCallbacks, this.elements.backgroundPhotosButton, () => this.openBackgroundPhotosModal());
+    bindButton(this.cleanupCallbacks, this.elements.backgroundPhotosCloseButton, () => this.closeBackgroundPhotosModal());
+    bindButton(this.cleanupCallbacks, this.elements.backgroundUploadModalCloseButton, () => this.closeBackgroundUploadModal());
+    for (const button of this.elements.backgroundPhotoFitButtons) {
       const handler = () => {
         this.applyBackgroundPhotoFit(button.dataset.backgroundPhotoFit as CustomBackgroundFit);
       };
@@ -1122,280 +549,206 @@ export class EditorUiBridge {
       this.backgroundPhotosSortMode = this.getBackgroundPhotosSortMode();
       this.renderBackgroundPhotoGrid();
     };
-    this.backgroundPhotosSort?.addEventListener('change', handleBackgroundPhotosSortChange);
-    if (this.backgroundPhotosSort) {
+    this.elements.backgroundPhotosSort?.addEventListener('change', handleBackgroundPhotosSortChange);
+    if (this.elements.backgroundPhotosSort) {
       this.cleanupCallbacks.push(() =>
-        this.backgroundPhotosSort?.removeEventListener('change', handleBackgroundPhotosSortChange)
+        this.elements.backgroundPhotosSort?.removeEventListener('change', handleBackgroundPhotosSortChange)
       );
     }
     const handleBackgroundUploadInput = () => {
       void this.handleBackgroundUploadFileSelected();
     };
-    this.backgroundUploadInput?.addEventListener('change', handleBackgroundUploadInput);
-    if (this.backgroundUploadInput) {
+    this.elements.backgroundUploadInput?.addEventListener('change', handleBackgroundUploadInput);
+    if (this.elements.backgroundUploadInput) {
       this.cleanupCallbacks.push(() =>
-        this.backgroundUploadInput?.removeEventListener('change', handleBackgroundUploadInput)
+        this.elements.backgroundUploadInput?.removeEventListener('change', handleBackgroundUploadInput)
       );
     }
 
     const handleGoalTypeChange = () => {
       this.actions.onSetGoalType(
-        this.goalTypeSelect?.value ? (this.goalTypeSelect.value as RoomGoalType) : null
+        this.elements.goalTypeSelect?.value ? (this.elements.goalTypeSelect.value as RoomGoalType) : null
       );
     };
-    this.goalTypeSelect?.addEventListener('change', handleGoalTypeChange);
-    if (this.goalTypeSelect) {
+    this.elements.goalTypeSelect?.addEventListener('change', handleGoalTypeChange);
+    if (this.elements.goalTypeSelect) {
       this.cleanupCallbacks.push(() =>
-        this.goalTypeSelect?.removeEventListener('change', handleGoalTypeChange)
+        this.elements.goalTypeSelect?.removeEventListener('change', handleGoalTypeChange)
       );
     }
-    this.bindNumericInput(this.timeLimitInput, (input) => {
+    bindNumericInput(this.cleanupCallbacks, this.elements.timeLimitInput, (input) => {
       const seconds = Number.parseInt(input.value, 10);
       this.actions.onSetGoalTimeLimitSeconds(Number.isFinite(seconds) && seconds > 0 ? seconds : null);
     });
-    this.bindNumericInput(this.requiredCountInput, (input) => {
+    bindNumericInput(this.cleanupCallbacks, this.elements.requiredCountInput, (input) => {
       const requiredCount = Number.parseInt(input.value, 10);
       this.actions.onSetGoalRequiredCount(Number.isFinite(requiredCount) && requiredCount > 0 ? requiredCount : 1);
     });
-    this.bindNumericInput(this.survivalInput, (input) => {
+    bindNumericInput(this.cleanupCallbacks, this.elements.survivalInput, (input) => {
       const seconds = Number.parseInt(input.value, 10);
       this.actions.onSetGoalSurvivalSeconds(Number.isFinite(seconds) && seconds > 0 ? seconds : 30);
     });
-    this.bindTextInput(this.goalIntroInput, (input) => {
+    bindTextInput(this.cleanupCallbacks, this.elements.goalIntroInput, (input) => {
       this.actions.onSetGoalIntroText(input.value);
     });
-    this.bindButton(this.placeStartBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.placeStartBtn, () => {
       this.actions.onStartGoalMarkerPlacement('start');
       this.requestPhoneEditorAutoCollapse();
     });
-    this.bindButton(this.placeExitBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.placeExitBtn, () => {
       this.actions.onStartGoalMarkerPlacement('exit');
       this.requestPhoneEditorAutoCollapse();
     });
-    this.bindButton(this.addCheckpointBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.addCheckpointBtn, () => {
       this.actions.onStartGoalMarkerPlacement('checkpoint');
       this.requestPhoneEditorAutoCollapse();
     });
-    this.bindButton(this.placeFinishBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.placeFinishBtn, () => {
       this.actions.onStartGoalMarkerPlacement('finish');
       this.requestPhoneEditorAutoCollapse();
     });
-    this.bindButton(this.clearGoalMarkersBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.clearGoalMarkersBtn, () => {
       this.actions.onClearGoalMarkers();
     });
 
     const handleCourseGoalTypeChange = () => {
       this.actions.onSetCourseGoalType(
-        this.courseGoalTypeSelect?.value
-          ? (this.courseGoalTypeSelect.value as CourseGoalType)
+        this.elements.courseGoalTypeSelect?.value
+          ? (this.elements.courseGoalTypeSelect.value as CourseGoalType)
           : null
       );
     };
-    this.courseGoalTypeSelect?.addEventListener('change', handleCourseGoalTypeChange);
-    if (this.courseGoalTypeSelect) {
+    this.elements.courseGoalTypeSelect?.addEventListener('change', handleCourseGoalTypeChange);
+    if (this.elements.courseGoalTypeSelect) {
       this.cleanupCallbacks.push(() =>
-        this.courseGoalTypeSelect?.removeEventListener('change', handleCourseGoalTypeChange)
+        this.elements.courseGoalTypeSelect?.removeEventListener('change', handleCourseGoalTypeChange)
       );
     }
-    this.bindNumericInput(this.courseTimeLimitInput, (input) => {
+    bindNumericInput(this.cleanupCallbacks, this.elements.courseTimeLimitInput, (input) => {
       const seconds = Number.parseInt(input.value, 10);
       this.actions.onSetCourseGoalTimeLimitSeconds(
         Number.isFinite(seconds) && seconds > 0 ? seconds : null
       );
     });
-    this.bindNumericInput(this.courseRequiredCountInput, (input) => {
+    bindNumericInput(this.cleanupCallbacks, this.elements.courseRequiredCountInput, (input) => {
       const requiredCount = Number.parseInt(input.value, 10);
       this.actions.onSetCourseGoalRequiredCount(
         Number.isFinite(requiredCount) && requiredCount > 0 ? requiredCount : 1
       );
     });
-    this.bindNumericInput(this.courseSurvivalInput, (input) => {
+    bindNumericInput(this.cleanupCallbacks, this.elements.courseSurvivalInput, (input) => {
       const seconds = Number.parseInt(input.value, 10);
       this.actions.onSetCourseGoalSurvivalSeconds(
         Number.isFinite(seconds) && seconds > 0 ? seconds : 30
       );
     });
-    this.bindButton(this.coursePlaceStartBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.coursePlaceStartBtn, () => {
       this.actions.onStartCourseGoalMarkerPlacement('start');
       this.requestPhoneEditorAutoCollapse();
     });
-    this.bindButton(this.coursePlaceExitBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.coursePlaceExitBtn, () => {
       this.actions.onStartCourseGoalMarkerPlacement('exit');
       this.requestPhoneEditorAutoCollapse();
     });
-    this.bindButton(this.courseAddCheckpointBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.courseAddCheckpointBtn, () => {
       this.actions.onStartCourseGoalMarkerPlacement('checkpoint');
       this.requestPhoneEditorAutoCollapse();
     });
-    this.bindButton(this.coursePlaceFinishBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.coursePlaceFinishBtn, () => {
       this.actions.onStartCourseGoalMarkerPlacement('finish');
       this.requestPhoneEditorAutoCollapse();
     });
-    this.bindButton(this.courseClearMarkersBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.courseClearMarkersBtn, () => {
       this.actions.onClearCourseGoalMarkers();
     });
 
-    this.bindButton(this.pressureConnectBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.pressureConnectBtn, () => {
       this.actions.onBeginPressurePlateConnection();
       this.requestPhoneEditorAutoCollapse();
     });
-    this.bindButton(this.pressureClearBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.pressureClearBtn, () => {
       this.actions.onClearPressurePlateConnection();
     });
-    this.bindButton(this.pressureDoneLaterBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.pressureDoneLaterBtn, () => {
       this.actions.onCancelPressurePlateConnection();
     });
-    this.bindButton(this.containerClearBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.containerClearBtn, () => {
       this.actions.onClearContainerContents();
     });
     const handleSwordsmanObjectiveModeChange = () => {
-      const value = this.swordsmanObjectiveModeSelect?.value;
+      const value = this.elements.swordsmanObjectiveModeSelect?.value;
       if (value === 'duel' || value === 'collect') {
         this.actions.onSetFocusedSwordsmanObjectiveMode(value);
       }
     };
-    this.swordsmanObjectiveModeSelect?.addEventListener('change', handleSwordsmanObjectiveModeChange);
-    if (this.swordsmanObjectiveModeSelect) {
+    this.elements.swordsmanObjectiveModeSelect?.addEventListener('change', handleSwordsmanObjectiveModeChange);
+    if (this.elements.swordsmanObjectiveModeSelect) {
       this.cleanupCallbacks.push(() =>
-        this.swordsmanObjectiveModeSelect?.removeEventListener(
+        this.elements.swordsmanObjectiveModeSelect?.removeEventListener(
           'change',
           handleSwordsmanObjectiveModeChange,
         )
       );
     }
     const handleSwordsmanDefeatModeChange = () => {
-      const value = this.swordsmanDefeatModeSelect?.value;
+      const value = this.elements.swordsmanDefeatModeSelect?.value;
       if (value === 'defeatable' || value === 'invincible' || value === 'respawn') {
         this.actions.onSetFocusedSwordsmanDefeatMode(value);
       }
     };
-    this.swordsmanDefeatModeSelect?.addEventListener('change', handleSwordsmanDefeatModeChange);
-    if (this.swordsmanDefeatModeSelect) {
+    this.elements.swordsmanDefeatModeSelect?.addEventListener('change', handleSwordsmanDefeatModeChange);
+    if (this.elements.swordsmanDefeatModeSelect) {
       this.cleanupCallbacks.push(() =>
-        this.swordsmanDefeatModeSelect?.removeEventListener(
+        this.elements.swordsmanDefeatModeSelect?.removeEventListener(
           'change',
           handleSwordsmanDefeatModeChange,
         )
       );
     }
 
-    this.bindButton(this.playBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.playBtn, () => {
       runtimeConfig.closePanels();
       void this.actions.onStartPlayMode();
     });
-    this.bindButton(this.backBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.backBtn, () => {
       runtimeConfig.closePanels();
       void this.actions.onBack();
     });
-    this.bindButton(this.saveBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.saveBtn, () => {
       runtimeConfig.closePanels();
       void this.actions.onSaveDraft();
     });
-    this.bindButton(this.publishBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.publishBtn, () => {
       runtimeConfig.closePanels();
       void this.actions.onPublishRoom();
     });
-    this.bindButton(this.publishNudgeActionBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.publishNudgeActionBtn, () => {
       runtimeConfig.closePanels();
       void this.actions.onPublishNudge();
     });
-    this.bindButton(this.mintBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.mintBtn, () => {
       runtimeConfig.closePanels();
       void this.actions.onMintRoom();
     });
-    this.bindButton(this.refreshMetadataBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.refreshMetadataBtn, () => {
       runtimeConfig.closePanels();
       void this.actions.onRefreshMintMetadata();
     });
-    this.bindButton(this.historyBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.historyBtn, () => {
       runtimeConfig.closePanels();
       void runtimeConfig.openHistory();
     });
-    for (const fitButton of this.fitBtns) {
-      this.bindButton(fitButton, () => {
+    for (const fitButton of this.elements.fitBtns) {
+      bindButton(this.cleanupCallbacks, fitButton, () => {
         this.actions.onFitToScreen();
       });
     }
-    this.bindButton(this.mobileZoomInBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.mobileZoomInBtn, () => {
       this.actions.onZoomIn();
     });
-    this.bindButton(this.mobileZoomOutBtn, () => {
+    bindButton(this.cleanupCallbacks, this.elements.mobileZoomOutBtn, () => {
       this.actions.onZoomOut();
     });
-  }
-
-  private bindNumericInput(
-    input: HTMLInputElement | null,
-    onCommit: (input: HTMLInputElement) => void,
-  ): void {
-    if (!input) {
-      return;
-    }
-    const handleCommit = () => onCommit(input);
-    input.addEventListener('input', handleCommit);
-    input.addEventListener('change', handleCommit);
-    this.cleanupCallbacks.push(() => {
-      input.removeEventListener('input', handleCommit);
-      input.removeEventListener('change', handleCommit);
-    });
-  }
-
-  private bindRangeInput(
-    input: HTMLInputElement | null,
-    onCommit: (value: number) => void,
-  ): void {
-    if (!input) {
-      return;
-    }
-    const handleCommit = () => {
-      const fallback =
-        input === this.lightingDarknessInput
-          ? editorState.selectedLightingDarkness
-          : editorState.selectedLightingRadius;
-      onCommit(normalizeRoomLightingSliderValue(Number.parseInt(input.value, 10), fallback));
-    };
-    input.addEventListener('input', handleCommit);
-    input.addEventListener('change', handleCommit);
-    this.cleanupCallbacks.push(() => {
-      input.removeEventListener('input', handleCommit);
-      input.removeEventListener('change', handleCommit);
-    });
-  }
-
-  private bindTextInput(
-    input: HTMLInputElement | HTMLTextAreaElement | null,
-    onCommit: (input: HTMLInputElement | HTMLTextAreaElement) => void,
-  ): void {
-    if (!input) {
-      return;
-    }
-    const handleCommit = () => onCommit(input);
-    input.addEventListener('input', handleCommit);
-    input.addEventListener('change', handleCommit);
-    this.cleanupCallbacks.push(() => {
-      input.removeEventListener('input', handleCommit);
-      input.removeEventListener('change', handleCommit);
-    });
-  }
-
-  private bindButton(
-    button: HTMLButtonElement | HTMLElement | null,
-    handler: () => void,
-  ): void {
-    if (!button) {
-      return;
-    }
-    button.addEventListener('click', handler);
-    this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
-  }
-
-  private bind(
-    target: Document | Window,
-    type: string,
-    handler: EventListener,
-  ): void {
-    target.addEventListener(type, handler);
-    this.cleanupCallbacks.push(() => target.removeEventListener(type, handler));
   }
 
   private applyBackgroundSelection(nextBackgroundId: string): void {
@@ -1452,9 +805,9 @@ export class EditorUiBridge {
       );
       return;
     }
-    if (this.backgroundUploadInput) {
-      this.backgroundUploadInput.value = '';
-      this.backgroundUploadInput.click();
+    if (this.elements.backgroundUploadInput) {
+      this.elements.backgroundUploadInput.value = '';
+      this.elements.backgroundUploadInput.click();
     }
   }
 
@@ -1482,34 +835,34 @@ export class EditorUiBridge {
   }
 
   private openBackgroundPhotosModal(): void {
-    if (!this.backgroundPhotosModal) {
+    if (!this.elements.backgroundPhotosModal) {
       return;
     }
     this.backgroundPhotoControlsMode = 'photo';
     this.syncEditorChromeState();
-    this.backgroundPhotosModal.classList.remove('hidden');
-    this.backgroundPhotosModal.setAttribute('aria-hidden', 'false');
+    this.elements.backgroundPhotosModal.classList.remove('hidden');
+    this.elements.backgroundPhotosModal.setAttribute('aria-hidden', 'false');
     this.renderBackgroundPhotoGrid();
   }
 
   private closeBackgroundPhotosModal(): void {
-    if (!this.backgroundPhotosModal) {
+    if (!this.elements.backgroundPhotosModal) {
       return;
     }
-    this.backgroundPhotosModal.classList.add('hidden');
-    this.backgroundPhotosModal.setAttribute('aria-hidden', 'true');
+    this.elements.backgroundPhotosModal.classList.add('hidden');
+    this.elements.backgroundPhotosModal.setAttribute('aria-hidden', 'true');
   }
 
   private renderBackgroundPhotoGrid(): void {
-    if (!this.backgroundPhotosGrid) {
+    if (!this.elements.backgroundPhotosGrid) {
       return;
     }
 
     const currentPhoto = parseCustomBackground(editorState.selectedBackground);
     const images = this.getSortedBackgroundImages();
-    this.backgroundPhotosGrid.replaceChildren();
-    this.setText(
-      this.backgroundPhotosStatus,
+    this.elements.backgroundPhotosGrid.replaceChildren();
+    setText(
+      this.elements.backgroundPhotosStatus,
       images.length > 0
         ? `${images.length} approved ${images.length === 1 ? 'photo' : 'photos'}.`
         : 'No approved photos yet.',
@@ -1544,7 +897,7 @@ export class EditorUiBridge {
         this.applyBackgroundSelection(buildCustomBackgroundValue(image.id, fit));
         this.closeBackgroundPhotosModal();
       });
-      this.backgroundPhotosGrid.appendChild(button);
+      this.elements.backgroundPhotosGrid.appendChild(button);
     }
   }
 
@@ -1570,7 +923,7 @@ export class EditorUiBridge {
   }
 
   private getBackgroundPhotosSortMode(): BackgroundPhotosSort {
-    const value = this.backgroundPhotosSort?.value;
+    const value = this.elements.backgroundPhotosSort?.value;
     return value === 'least_used' || value === 'newest' || value === 'oldest' || value === 'most_used'
       ? value
       : DEFAULT_BACKGROUND_PHOTOS_SORT;
@@ -1604,13 +957,13 @@ export class EditorUiBridge {
         ? ` ${rejectedCount} not approved.`
         : '';
     this.setBackgroundUploadStatus(`${base}${suffix}`, !policy.canUpload && policy.authenticated);
-    this.setDisabled(this.backgroundUploadButton, !policy.canUpload || this.backgroundUploadInFlight);
-    this.setDisabled(this.backgroundUploadCard, !policy.canUpload || this.backgroundUploadInFlight);
-    this.setDisabled(this.backgroundPhotosButton, this.backgroundUploadInFlight);
+    setDisabled(this.elements.backgroundUploadButton, !policy.canUpload || this.backgroundUploadInFlight);
+    setDisabled(this.elements.backgroundUploadCard, !policy.canUpload || this.backgroundUploadInFlight);
+    setDisabled(this.elements.backgroundPhotosButton, this.backgroundUploadInFlight);
   }
 
   private async handleBackgroundUploadFileSelected(): Promise<void> {
-    const file = this.backgroundUploadInput?.files?.[0] ?? null;
+    const file = this.elements.backgroundUploadInput?.files?.[0] ?? null;
     if (!file) {
       return;
     }
@@ -1626,9 +979,9 @@ export class EditorUiBridge {
     }
 
     this.backgroundUploadInFlight = true;
-    this.setDisabled(this.backgroundUploadButton, true);
-    this.setDisabled(this.backgroundUploadCard, true);
-    this.setDisabled(this.backgroundPhotosButton, true);
+    setDisabled(this.elements.backgroundUploadButton, true);
+    setDisabled(this.elements.backgroundUploadCard, true);
+    setDisabled(this.elements.backgroundPhotosButton, true);
     this.setBackgroundUploadStatus('Uploading background...', false);
     this.showBackgroundUploadModal({
       title: 'Sending photo',
@@ -1704,19 +1057,19 @@ export class EditorUiBridge {
       this.backgroundUploadInFlight = false;
       if (this.backgroundUploadPolicy) {
         const disabled = !this.backgroundUploadPolicy.canUpload;
-        this.setDisabled(this.backgroundUploadButton, disabled);
-        this.setDisabled(this.backgroundUploadCard, disabled);
-        this.setDisabled(this.backgroundPhotosButton, false);
+        setDisabled(this.elements.backgroundUploadButton, disabled);
+        setDisabled(this.elements.backgroundUploadCard, disabled);
+        setDisabled(this.elements.backgroundPhotosButton, false);
       }
     }
   }
 
   private setBackgroundUploadStatus(message: string, error: boolean): void {
-    if (!this.backgroundUploadStatus) {
+    if (!this.elements.backgroundUploadStatus) {
       return;
     }
-    this.backgroundUploadStatus.textContent = message;
-    this.backgroundUploadStatus.classList.toggle('error', error);
+    this.elements.backgroundUploadStatus.textContent = message;
+    this.elements.backgroundUploadStatus.classList.toggle('error', error);
   }
 
   private showBackgroundUploadModal(options: {
@@ -1727,29 +1080,29 @@ export class EditorUiBridge {
     done: boolean;
     error: boolean;
   }): void {
-    if (!this.backgroundUploadModal) {
+    if (!this.elements.backgroundUploadModal) {
       return;
     }
 
-    this.backgroundUploadModal.classList.remove('hidden');
-    this.backgroundUploadModal.setAttribute('aria-hidden', 'false');
-    this.setText(this.backgroundUploadModalTitle, options.title);
-    this.setText(this.backgroundUploadModalMeta, options.meta);
-    this.setText(this.backgroundUploadModalStatus, options.status);
-    this.backgroundUploadModalStatus?.classList.toggle('background-photo-modal-error', options.error);
-    this.backgroundUploadProgressBar?.style.setProperty(
+    this.elements.backgroundUploadModal.classList.remove('hidden');
+    this.elements.backgroundUploadModal.setAttribute('aria-hidden', 'false');
+    setText(this.elements.backgroundUploadModalTitle, options.title);
+    setText(this.elements.backgroundUploadModalMeta, options.meta);
+    setText(this.elements.backgroundUploadModalStatus, options.status);
+    this.elements.backgroundUploadModalStatus?.classList.toggle('background-photo-modal-error', options.error);
+    this.elements.backgroundUploadProgressBar?.style.setProperty(
       'width',
       `${Math.max(0, Math.min(100, Math.round(options.progress)))}%`,
     );
-    this.setHidden(this.backgroundUploadModalCloseButton, !options.done);
+    setHidden(this.elements.backgroundUploadModalCloseButton, !options.done);
   }
 
   private closeBackgroundUploadModal(): void {
-    if (!this.backgroundUploadModal) {
+    if (!this.elements.backgroundUploadModal) {
       return;
     }
-    this.backgroundUploadModal.classList.add('hidden');
-    this.backgroundUploadModal.setAttribute('aria-hidden', 'true');
+    this.elements.backgroundUploadModal.classList.add('hidden');
+    this.elements.backgroundUploadModal.setAttribute('aria-hidden', 'true');
   }
 
   private applyLightingSelection(nextLightingMode: RoomLightingMode): void {
@@ -1811,13 +1164,13 @@ export class EditorUiBridge {
       return;
     }
 
-    for (const button of this.toolButtons) {
+    for (const button of this.elements.toolButtons) {
       button.classList.toggle('active', button.dataset.tool === editorState.activeTool);
     }
 
     const musicModeActive = this.doc.body.dataset.editorMusicMode === 'true';
     const spriteModeActive = this.doc.body.dataset.editorSpriteMode === 'true';
-    for (const button of this.featureButtons) {
+    for (const button of this.elements.featureButtons) {
       const feature = getEditorFeatureLauncher(button.dataset.editorFeature);
       const active =
         feature === 'music'
@@ -1829,19 +1182,19 @@ export class EditorUiBridge {
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
     }
     const featureStatusText = this.getFeatureLauncherStatusText();
-    this.setText(this.featureStatus, featureStatusText);
-    this.setHidden(this.featureStatus, featureStatusText.length === 0);
+    setText(this.elements.featureStatus, featureStatusText);
+    setHidden(this.elements.featureStatus, featureStatusText.length === 0);
 
     const useFeaturePanels = this.usesDesktopFeaturePanels();
-    const courseGoalActive = Boolean(this.courseRoot && !this.courseRoot.classList.contains('hidden'));
-    if (this.goalRoot) {
-      this.goalRoot.classList.toggle(
+    const courseGoalActive = Boolean(this.elements.courseRoot && !this.elements.courseRoot.classList.contains('hidden'));
+    if (this.elements.goalRoot) {
+      this.elements.goalRoot.classList.toggle(
         'hidden',
         useFeaturePanels ? this.activeFeatureLauncher !== 'goal' || courseGoalActive : false,
       );
     }
-    this.setHidden(
-      this.lightingFeaturePanel,
+    setHidden(
+      this.elements.lightingFeaturePanel,
       useFeaturePanels ? this.activeFeatureLauncher !== 'lighting' : true,
     );
 
@@ -1851,66 +1204,66 @@ export class EditorUiBridge {
         (editorState.activeTool === 'rect' || editorState.activeTool === 'fill'));
     const moreToolsActive =
       showMoreTools || editorState.activeTool === 'rect' || editorState.activeTool === 'fill';
-    for (const button of this.moreToolsButtons) {
+    for (const button of this.elements.moreToolsButtons) {
       button.classList.toggle('active', moreToolsActive);
     }
-    for (const panel of this.moreToolsPanels) {
+    for (const panel of this.elements.moreToolsPanels) {
       panel.classList.toggle('hidden', !showMoreTools);
       panel.dataset.open = showMoreTools ? 'true' : 'false';
     }
 
     const showEraseControls = editorState.activeTool === 'eraser';
-    for (const controls of this.eraseControls) {
+    for (const controls of this.elements.eraseControls) {
       controls.classList.toggle('hidden', !showEraseControls);
     }
-    this.setHidden(this.tileEraseControls, editorState.paletteMode !== 'tiles');
-    for (const input of this.eraseBrushSelects) {
+    setHidden(this.elements.tileEraseControls, editorState.paletteMode !== 'tiles');
+    for (const input of this.elements.eraseBrushSelects) {
       if (input.value !== String(editorState.eraserBrushSize)) {
         input.value = String(editorState.eraserBrushSize);
       }
     }
 
-    for (const button of this.layerButtons) {
+    for (const button of this.elements.layerButtons) {
       button.classList.toggle('active', button.dataset.layer === editorState.activeLayer);
     }
-    for (const button of this.layerMiniButtons) {
+    for (const button of this.elements.layerMiniButtons) {
       button.classList.toggle('active', button.dataset.layer === editorState.activeLayer);
     }
-    if (this.layerChip) {
-      this.layerChip.textContent = `Placing on ${getLayerUiLabel(editorState.activeLayer)}`;
-      this.layerChip.setAttribute('data-layer-tone', editorState.activeLayer);
+    if (this.elements.layerChip) {
+      this.elements.layerChip.textContent = `Placing on ${getLayerUiLabel(editorState.activeLayer)}`;
+      this.elements.layerChip.setAttribute('data-layer-tone', editorState.activeLayer);
     }
-    if (this.layerGuideButton) {
-      this.layerGuideButton.classList.toggle('active', editorState.showLayerGuides);
-      this.layerGuideButton.setAttribute(
+    if (this.elements.layerGuideButton) {
+      this.elements.layerGuideButton.classList.toggle('active', editorState.showLayerGuides);
+      this.elements.layerGuideButton.setAttribute(
         'aria-pressed',
         editorState.showLayerGuides ? 'true' : 'false'
       );
-      this.layerGuideButton.textContent = editorState.showLayerGuides
+      this.elements.layerGuideButton.textContent = editorState.showLayerGuides
         ? 'Hide Layers'
         : 'See Layers';
     }
 
-    this.setValue(this.tilesetSelect, editorState.selectedTilesetKey);
-    this.applyTilesetTheme();
-    if (this.flipXButton) {
-      this.flipXButton.classList.toggle('active', editorState.tileFlipX);
-      this.flipXButton.setAttribute('aria-pressed', editorState.tileFlipX ? 'true' : 'false');
+    setValue(this.elements.tilesetSelect, editorState.selectedTilesetKey);
+    applyTilesetTheme(this.doc, editorState.selectedTilesetKey);
+    if (this.elements.flipXButton) {
+      this.elements.flipXButton.classList.toggle('active', editorState.tileFlipX);
+      this.elements.flipXButton.setAttribute('aria-pressed', editorState.tileFlipX ? 'true' : 'false');
     }
-    if (this.flipYButton) {
-      this.flipYButton.classList.toggle('active', editorState.tileFlipY);
-      this.flipYButton.setAttribute('aria-pressed', editorState.tileFlipY ? 'true' : 'false');
+    if (this.elements.flipYButton) {
+      this.elements.flipYButton.classList.toggle('active', editorState.tileFlipY);
+      this.elements.flipYButton.setAttribute('aria-pressed', editorState.tileFlipY ? 'true' : 'false');
     }
 
-    for (const tab of this.paletteTabs) {
+    for (const tab of this.elements.paletteTabs) {
       tab.classList.toggle('active', tab.dataset.mode === editorState.paletteMode);
     }
     const paletteModeIsTiles = editorState.paletteMode === 'tiles';
-    this.tilesetSection?.classList.toggle('hidden', !paletteModeIsTiles);
-    this.tilePaletteSection?.classList.toggle('hidden', !paletteModeIsTiles);
-    this.objectPaletteSection?.classList.toggle('hidden', paletteModeIsTiles);
+    this.elements.tilesetSection?.classList.toggle('hidden', !paletteModeIsTiles);
+    this.elements.tilePaletteSection?.classList.toggle('hidden', !paletteModeIsTiles);
+    this.elements.objectPaletteSection?.classList.toggle('hidden', paletteModeIsTiles);
 
-    for (const tab of this.objectCategoryTabs) {
+    for (const tab of this.elements.objectCategoryTabs) {
       tab.classList.toggle('active', (tab.dataset.category || 'all') === this.currentObjectCategory);
     }
 
@@ -1927,39 +1280,39 @@ export class EditorUiBridge {
         : this.backgroundPhotoControlsMode === 'upload'
           ? BACKGROUND_UPLOAD_SELECT_VALUE
           : activeBackgroundId;
-    this.setValue(this.backgroundSelect, backgroundSelectValue);
-    this.setHidden(
-      this.backgroundSolidControls,
+    setValue(this.elements.backgroundSelect, backgroundSelectValue);
+    setHidden(
+      this.elements.backgroundSolidControls,
       backgroundSelectValue !== SOLID_COLOR_BACKGROUND_ID
     );
     const showPhotoControls = Boolean(selectedPhoto) || this.backgroundPhotoControlsMode !== null;
-    this.setHidden(this.backgroundUploadControls, !showPhotoControls);
-    this.setHidden(this.backgroundPhotoSelected, !showPhotoControls);
-    this.setHidden(this.backgroundPhotoFitControls, !selectedPhoto);
+    setHidden(this.elements.backgroundUploadControls, !showPhotoControls);
+    setHidden(this.elements.backgroundPhotoSelected, !showPhotoControls);
+    setHidden(this.elements.backgroundPhotoFitControls, !selectedPhoto);
     const selectedPhotoSummary = selectedPhoto
       ? this.getBackgroundPhotoSummary(selectedPhoto.id)
       : 'No photo selected.';
-    this.setText(this.backgroundPhotoSelected, selectedPhotoSummary);
-    for (const button of this.backgroundPhotoFitButtons) {
+    setText(this.elements.backgroundPhotoSelected, selectedPhotoSummary);
+    for (const button of this.elements.backgroundPhotoFitButtons) {
       const active = Boolean(selectedPhoto && button.dataset.backgroundPhotoFit === selectedPhoto.fit);
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
     }
-    this.setValue(this.backgroundSolidColorInput, solidColor);
-    this.setText(this.backgroundSolidColorValue, solidColor.toUpperCase());
-    if (this.backgroundSolidCard) {
-      this.backgroundSolidCard.style.setProperty('--background-card-solid', solidColor);
+    setValue(this.elements.backgroundSolidColorInput, solidColor);
+    setText(this.elements.backgroundSolidColorValue, solidColor.toUpperCase());
+    if (this.elements.backgroundSolidCard) {
+      this.elements.backgroundSolidCard.style.setProperty('--background-card-solid', solidColor);
     }
-    this.setValue(this.lightingSelect, editorState.selectedLightingMode);
-    this.setHidden(
-      this.lightingTuningControls,
+    setValue(this.elements.lightingSelect, editorState.selectedLightingMode);
+    setHidden(
+      this.elements.lightingTuningControls,
       editorState.selectedLightingMode !== 'playerAuraDark'
     );
-    this.setValue(this.lightingDarknessInput, String(editorState.selectedLightingDarkness));
-    this.setValue(this.lightingRadiusInput, String(editorState.selectedLightingRadius));
-    this.setText(this.lightingDarknessValue, `${editorState.selectedLightingDarkness}%`);
-    this.setText(this.lightingRadiusValue, `${editorState.selectedLightingRadius}%`);
-    for (const button of this.backgroundButtons) {
+    setValue(this.elements.lightingDarknessInput, String(editorState.selectedLightingDarkness));
+    setValue(this.elements.lightingRadiusInput, String(editorState.selectedLightingRadius));
+    setText(this.elements.lightingDarknessValue, `${editorState.selectedLightingDarkness}%`);
+    setText(this.elements.lightingRadiusValue, `${editorState.selectedLightingRadius}%`);
+    for (const button of this.elements.backgroundButtons) {
       const active = button.dataset.backgroundId === activeBackgroundId;
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
@@ -1973,155 +1326,6 @@ export class EditorUiBridge {
     }
     const usageCount = image.usageCount ?? 0;
     return `${image.filename} - used in ${usageCount} ${usageCount === 1 ? 'room' : 'rooms'}`;
-  }
-
-  private setText(elements: HTMLElement | HTMLElement[] | null, text: string): void {
-    const targets = Array.isArray(elements) ? elements : elements ? [elements] : [];
-    for (const element of targets) {
-      if (element.textContent !== text) {
-        element.textContent = text;
-      }
-    }
-  }
-
-  private applyTilesetTheme(): void {
-    const root = this.doc.documentElement;
-    const theme = getTilesetUiTheme(editorState.selectedTilesetKey);
-    root.style.setProperty('--accent-cool', colorNumberToCssHex(theme.accentCool));
-    root.style.setProperty('--accent-cool-rgb', colorNumberToCssRgb(theme.accentCool));
-    root.style.setProperty('--accent-cool-soft', colorNumberToCssRgba(theme.accentCool, 0.18));
-    root.style.setProperty('--accent-warm', colorNumberToCssHex(theme.accentWarm));
-    root.style.setProperty('--accent-warm-rgb', colorNumberToCssRgb(theme.accentWarm));
-    root.style.setProperty('--accent-warm-soft', colorNumberToCssRgba(theme.accentWarm, 0.18));
-    root.style.setProperty('--accent-hot', colorNumberToCssHex(theme.accentHot));
-    root.style.setProperty('--accent-hot-rgb', colorNumberToCssRgb(theme.accentHot));
-    root.style.setProperty('--accent-hot-soft', colorNumberToCssRgba(theme.accentHot, 0.18));
-    root.style.setProperty('--accent-alt', colorNumberToCssHex(theme.accentAlt));
-    root.style.setProperty('--accent-alt-rgb', colorNumberToCssRgb(theme.accentAlt));
-    root.style.setProperty('--accent-alt-soft', colorNumberToCssRgba(theme.accentAlt, 0.18));
-    root.style.setProperty('--accent-soft', colorNumberToCssHex(theme.accentAlt));
-  }
-
-  private renderSaveStatus(elements: HTMLElement[], viewModel: EditorUiViewModel): void {
-    for (const element of elements) {
-      element.replaceChildren();
-
-      const hasRichStatus =
-        viewModel.saveStatusAccentText.length > 0 || viewModel.saveStatusLinkText.length > 0;
-      element.classList.toggle('editor-save-status-rich', hasRichStatus);
-
-      if (viewModel.saveStatusAccentText) {
-        const accent = this.doc.createElement('span');
-        accent.className = 'editor-save-status-accent';
-        accent.textContent = viewModel.saveStatusAccentText;
-        element.append(accent);
-      }
-
-      if (viewModel.saveStatusText) {
-        if (element.childNodes.length > 0) {
-          element.append(this.doc.createTextNode(' '));
-        }
-        element.append(this.doc.createTextNode(viewModel.saveStatusText));
-      }
-
-      if (viewModel.saveStatusLinkText && viewModel.saveStatusLinkHref) {
-        if (element.childNodes.length > 0) {
-          element.append(this.doc.createTextNode(' '));
-        }
-        const link = this.doc.createElement('a');
-        link.className = 'editor-save-status-link';
-        link.href = viewModel.saveStatusLinkHref;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.textContent = viewModel.saveStatusLinkText;
-        element.append(link);
-      }
-    }
-  }
-
-  private setValue(
-    element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null,
-    value: string,
-  ): void {
-    if (!element) {
-      return;
-    }
-
-    if (this.doc.activeElement === element && element.value !== value) {
-      return;
-    }
-
-    if (element.value !== value) {
-      element.value = value;
-    }
-  }
-
-  private setDisabled(
-    element: HTMLButtonElement | HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null,
-    disabled: boolean,
-  ): void {
-    if (element && element.disabled !== disabled) {
-      element.disabled = disabled;
-    }
-  }
-
-  private setAriaDisabled(element: HTMLElement | null, disabled: boolean): void {
-    if (!element) {
-      return;
-    }
-
-    if (disabled) {
-      element.setAttribute('aria-disabled', 'true');
-      return;
-    }
-
-    element.removeAttribute('aria-disabled');
-  }
-
-  private setHidden(element: HTMLElement | HTMLElement[] | null, hidden: boolean): void {
-    const targets = Array.isArray(element) ? element : element ? [element] : [];
-    for (const target of targets) {
-      target.classList.toggle('hidden', hidden);
-    }
-  }
-
-  private resetSaveStatusTone(): void {
-    for (const element of this.saveStatusEls) {
-      element.removeAttribute('data-overworld-tone');
-    }
-  }
-
-  private setActive(element: HTMLElement | null, active: boolean): void {
-    if (element) {
-      element.classList.toggle('active', active);
-    }
-  }
-
-  private setButtonText(element: HTMLButtonElement | null, text: string): void {
-    if (!element) {
-      return;
-    }
-
-    const labelTarget = element.querySelector<HTMLElement>('[data-button-label]');
-    if (labelTarget) {
-      if (labelTarget.textContent !== text) {
-        labelTarget.textContent = text;
-      }
-      return;
-    }
-
-    if (element.textContent !== text) {
-      element.textContent = text;
-    }
-  }
-
-  private setButtonTitle(element: HTMLButtonElement | null, title: string): void {
-    if (!element) {
-      return;
-    }
-    if (element.title !== title) {
-      element.title = title;
-    }
   }
 }
 

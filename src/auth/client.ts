@@ -13,6 +13,7 @@ import { clearLocalRoomStorage } from '../persistence/browserStorage';
 import { createPlayerAvatarPreviewDataUrl } from '../player/avatar/previews';
 import { setStoredPlayerAvatarId } from '../player/avatar/storage';
 import { getApiBaseUrl } from '../api/baseUrl';
+import { apiRequest as requestApi } from '../api/request';
 import { appendPlayfunRequestHeaders } from '../playfun/state';
 import { createProfileRepository } from '../profiles/profileRepository';
 import { isOpenableProfileUserId, PROFILE_INVALIDATED_EVENT, requestProfileOpen } from '../ui/setup/profileEvents';
@@ -1258,24 +1259,10 @@ function normalizeChatModerationViewer(
 }
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = new Headers(init?.headers);
-  appendPlayfunRequestHeaders(headers);
-  if (init?.body && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
-  }
-
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+  return requestApi<T>(path, {
     ...init,
-    headers,
-    credentials: 'include',
+    prepareHeaders: appendPlayfunRequestHeaders,
   });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `Request failed with status ${response.status}.`);
-  }
-
-  return (await response.json()) as T;
 }
 
 function normalizeDebugMagicLink(rawMagicLink: string | null | undefined): string | null {

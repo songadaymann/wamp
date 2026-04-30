@@ -1,4 +1,4 @@
-import {
+  import {
   ROOM_HEIGHT,
   ROOM_WIDTH,
   TILE_SIZE,
@@ -203,10 +203,8 @@ export function decideSwordsmanTraversal(
 ): SwordsmanTraversalDecision {
   const currentContext = getSwordsmanTraversalContext(graph, enemy);
   const currentSurface = currentContext.currentSurface;
-  const currentWall = currentContext.currentWall;
   const targetContext = getSwordsmanTraversalTargetContext(graph, target);
   const targetSurface = targetContext.targetSurface;
-  const targetWall = targetContext.targetWall;
   const fallbackDirectionX = (target.centerX >= enemy.centerX ? 1 : -1) as -1 | 1;
   const fallbackTargetX = targetSurface?.centerX ?? target.centerX;
   const currentNodeId = currentContext.currentNodeId;
@@ -692,7 +690,7 @@ function buildDecisionFromFirstEdge(
     case 'jump-gap':
     case 'jump-to-wall': {
       if (enemy.onFloor) {
-        const setupReferenceX = getTraversalSetupReferenceX(edge.directionX, enemy);
+        const setupReferenceX = getTraversalSetupReferenceX(enemy);
         const setupDelta = edge.setupX - setupReferenceX;
         const needsSetupMove =
           edge.directionX > 0
@@ -730,7 +728,7 @@ function buildDecisionFromFirstEdge(
     }
     case 'drop-down': {
       if (enemy.onFloor) {
-        const setupReferenceX = getTraversalSetupReferenceX(edge.directionX, enemy);
+        const setupReferenceX = getTraversalSetupReferenceX(enemy);
         const setupDelta = edge.setupX - setupReferenceX;
         const targetBelowEnemy = target.centerY > enemy.centerY;
         const needsApproachMove =
@@ -880,10 +878,7 @@ function buildFallbackDropDecision(
   return buildDecisionFromFirstEdge(baseDecision, bestCandidate, enemy, target);
 }
 
-function getTraversalSetupReferenceX(
-  directionX: -1 | 1,
-  enemy: SwordsmanBodySnapshot,
-): number {
+function getTraversalSetupReferenceX(enemy: SwordsmanBodySnapshot): number {
   return enemy.centerX;
 }
 

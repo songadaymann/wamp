@@ -1,0 +1,236 @@
+#profile-modal .profile-hero-copy {
+  min-width: 0;
+  gap: 8px;
+}
+
+#profile-modal .profile-joined-date {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+#profile-modal .profile-hero-lanes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#profile-modal .profile-hero-lane {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+#profile-modal .profile-hero-lane-label-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 96px;
+}
+
+#profile-modal .profile-hero-lane-icon {
+  width: 18px;
+  height: 18px;
+  image-rendering: pixelated;
+  flex: 0 0 auto;
+}
+
+#profile-modal .profile-hero-lane-label,
+#profile-modal .profile-hero-lane-total {
+  color: #18161c;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+}
+
+#profile-modal .profile-hero-lane-progress {
+  flex: 1 1 auto;
+  min-width: 100px;
+  height: 10px;
+  border: 2px solid #fff3db;
+  background: #050505;
+  box-shadow:
+    2px 2px 0 #18161c,
+    inset 1px 1px 0 rgba(255, 243, 219, 0.06);
+  overflow: hidden;
+}
+
+#profile-modal .profile-hero-lane-fill {
+  height: 100%;
+  width: 0;
+}
+
+#profile-modal .profile-hero-lane-fill-player {
+  background: #277b30;
+}
+
+#profile-modal .profile-hero-lane-fill-builder {
+  background: #fcea7c;
+}
+
+#profile-modal .profile-hero-lane-fill-curator {
+  background: #79ccde;
+}
+
+#profile-modal .profile-hero-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#profile-modal .profile-hero-summary-chip {
+  padding: 5px 8px 4px;
+  border: 2px solid #18161c;
+  background: #fff3db;
+  color: #18161c;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  line-height: 1.25;
+  box-shadow: 2px 2px 0 #18161c;
+}
+
+#profile-modal .profile-hero-summary-chip-player {
+  background: #277b30;
+  color: #fff3db;
+}
+
+#profile-modal .profile-hero-summary-chip-builder {
+  background: #fcea7c;
+  color: #000;
+}
+
+#profile-modal .profile-hero-summary-chip-curator {
+  background: #79ccde;
+  color: #000;
+}
+
+#profile-modal .profile-overview-bio {
+  color: #18161c;
+}
+
+#profile-modal #profile-hero-progress {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#profile-modal .profile-edit-fields {
+  gap: 10px;
+}
+
+#profile-modal .profile-room-preview {
+  border: 2px solid #2c5071;
+  border-radius: 0;
+  background: #18161c;
+}
+
+#profile-modal .profile-room-preview-fallback {
+  color: #fff3db;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+#profile-modal .profile-stats-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+#profile-modal .profile-info-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  background: #fffaf0;
+  box-shadow: 2px 2px 0 #18161c;
+}
+
+#profile-modal .profile-info-card-curator {
+  grid-column: 1 / -1;
+}
+
+#profile-modal .profile-info-card-player {
+  border-color: #277b30;
+  background: #eef7dd;
+}
+
+#profile-modal .profile-info-card-builder {
+  border-color: #fcea7c;
+  background: #fff7cf;
+}
+
+#profile-modal .profile-info-card-curator {
+  border-color: #79ccde;
+  background: #eefbfd;
+}
+
+#profile-modal .profile-info-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#profile-modal .profile-info-card-header-icon {
+  width: 18px;
+  height: 18px;
+  image-rendering: pixelated;
+  flex: 0 0 auto;
+}
+
+#profile-modal .profile-info-card-title {
+  color: #18161c;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+#profile-modal .profile-info-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+#profile-modal .profile-info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 2px solid #18161c;
+  background: rgba(255, 243, 219, 0.78);
+}
+
+#profile-modal .profile-info-item-icon {
+  width: 16px;
+  height: 16px;
+  image-rendering: pixelated;
+  flex: 0 0 auto;
+}
+
+#profile-modal .profile-info-item-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#profile-modal .profile-info-item-label {
+  color: #2c5071;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  line-height: 1.3;
+}
+
+#profile-modal .profile-info-item-value {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+}
+

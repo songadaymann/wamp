@@ -222,6 +222,7 @@ const DEFAULT_ZOOM = 0.18;
 const BROWSE_VISIBLE_CHUNK_REFRESH_INTERVAL_MS = 15000;
 const PLAY_VISIBLE_CHUNK_REFRESH_INTERVAL_MS = 8000;
 const FRAME_HUD_RENDER_INTERVAL_MS = 100;
+const PRESENCE_SNAPSHOT_SYNC_INTERVAL_MS = 200;
 const BUTTON_ZOOM_FACTOR = 1.12;
 const WHEEL_ZOOM_SENSITIVITY = 0.003;
 const PLAY_ROOM_FIT_PADDING = 16;
@@ -354,6 +355,9 @@ export class OverworldPlayScene extends Phaser.Scene {
   private shouldAutoPlayDeepLinkedRoomOnBoot = false;
   private lastRoomMusicSyncSignature = '';
   private nextFrameHudRenderAt = 0;
+  private presenceSnapshotSyncPending = false;
+  private presenceSnapshotSyncTimer: number | null = null;
+  private lastPresenceSnapshotSyncAt = 0;
   private transientStatusMessage: string | null = null;
   private transientStatusExpiresAt = 0;
   private quicksandTouchedUntil = 0;
@@ -592,10 +596,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getSelectedCoordinates: () => this.selectedCoordinates,
       getZoom: () => this.cameras.main.zoom,
       onSnapshotUpdated: () => {
-        this.syncSharedConstructionPreviews();
-        this.presenceOverlayController.syncOverlays();
-        this.syncBackdropCameraIgnores();
-        this.renderHud();
+        this.queuePresenceSnapshotSync();
       },
       onRoomActivityChanged: () => this.redrawWorld(),
       onGhostDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
@@ -3633,6 +3634,45 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.renderHud();
   }
 
+  private queuePresenceSnapshotSync(): void {
+    this.presenceSnapshotSyncPending = true;
+    if (this.presenceSnapshotSyncTimer !== null) {
+      return;
+    }
+
+    const elapsed = performance.now() - this.lastPresenceSnapshotSyncAt;
+    const delay = Math.max(0, PRESENCE_SNAPSHOT_SYNC_INTERVAL_MS - elapsed);
+    this.presenceSnapshotSyncTimer = window.setTimeout(() => {
+      this.presenceSnapshotSyncTimer = null;
+      this.flushPresenceSnapshotSync();
+    }, delay);
+  }
+
+  private flushPresenceSnapshotSync(): void {
+    if (!this.presenceSnapshotSyncPending) {
+      return;
+    }
+
+    this.presenceSnapshotSyncPending = false;
+    this.lastPresenceSnapshotSyncAt = performance.now();
+    this.measureMobilePerformance('presence.snapshotSync', () => {
+      this.syncSharedConstructionPreviews();
+      this.presenceOverlayController.syncOverlays();
+      this.syncBackdropCameraIgnores();
+      this.renderHud();
+    });
+  }
+
+  private clearPresenceSnapshotSyncTimer(): void {
+    this.presenceSnapshotSyncPending = false;
+    if (this.presenceSnapshotSyncTimer === null) {
+      return;
+    }
+
+    window.clearTimeout(this.presenceSnapshotSyncTimer);
+    this.presenceSnapshotSyncTimer = null;
+  }
+
   private getRoomDisplayTitle(title: string | null, coordinates: RoomCoordinates): string {
     return title?.trim() ? title : `Room ${coordinates.x},${coordinates.y}`;
   }
@@ -3687,6 +3727,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.roomChatController.destroy();
     this.roomAudioController.destroy();
     this.lightingController.destroy();
+    this.clearPresenceSnapshotSyncTimer();
     window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
     window.removeEventListener(PLAYER_AVATAR_CHANGED_EVENT, this.handlePlayerAvatarChanged);
     window.removeEventListener(PLAYFUN_GAME_PAUSE_EVENT, this.handlePlayfunGamePause);

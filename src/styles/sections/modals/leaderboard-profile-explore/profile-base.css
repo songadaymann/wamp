@@ -1,0 +1,135 @@
+.profile-modal-panel {
+  max-width: min(760px, calc(100vw - 32px));
+}
+
+.profile-modal-header {
+  justify-content: flex-end;
+  gap: 0;
+}
+
+.profile-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.profile-hero {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.profile-avatar-shell {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  flex: 0 0 auto;
+}
+
+.profile-avatar-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+  flex: 0 0 auto;
+}
+
+.profile-avatar-image,
+.profile-avatar-fallback {
+  width: 84px;
+  height: 84px;
+  border-radius: 18px;
+  border: 1px solid rgba(243, 238, 226, 0.1);
+}
+
+.profile-avatar-image {
+  display: block;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.profile-avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at top, rgba(143, 216, 255, 0.22), transparent 65%),
+    rgba(15, 17, 24, 0.92);
+  color: var(--accent-cool);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.profile-hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.profile-display-name {
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.profile-overview-bio {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.profile-overview-bio-empty {
+  color: var(--text-muted);
+}
+
+.profile-edit-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(243, 238, 226, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.profile-bio-input {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.profile-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.profile-tabs {
+  padding: 0;
+}
+
+.profile-modal-panel .leaderboard-panel {
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
+  padding: 0;
+}
+
+.profile-modal-panel .history-version-list {
+  flex: 0 0 auto;
+  min-height: auto;
+  max-height: none;
+}
+

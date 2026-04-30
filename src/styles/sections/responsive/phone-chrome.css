@@ -1,0 +1,80 @@
+body[data-device-class='phone'] #app {
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+body[data-device-class='phone'] #bottom-bar {
+  height: auto;
+  min-height: 52px;
+  padding: 8px calc(10px + var(--safe-right)) calc(8px + var(--safe-bottom)) calc(10px + var(--safe-left));
+  gap: 10px;
+  flex-wrap: wrap;
+  background: rgba(5, 5, 5, 0.66);
+  backdrop-filter: blur(8px);
+}
+
+body[data-device-class='phone'] .bar-left,
+body[data-device-class='phone'] .bar-right,
+body[data-device-class='phone'] .bar-center {
+  flex-wrap: wrap;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .mobile-goal-footer {
+  display: none !important;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] #bottom-bar {
+  min-height: 0;
+  padding: 0 calc(10px + var(--safe-right)) calc(4px + var(--safe-bottom)) calc(10px + var(--safe-left));
+  gap: 6px;
+  align-items: flex-end;
+  justify-content: center;
+  background: linear-gradient(180deg, rgba(5, 5, 5, 0), rgba(5, 5, 5, 0.4));
+  border-top: none;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .bar-left {
+  display: none;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .bar-center,
+body[data-device-class='phone'][data-app-mode='play-world'] .bar-right {
+  flex: 0 1 auto;
+  gap: 6px;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .bar-right {
+  justify-content: flex-start;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-zoom-out-footer,
+body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-zoom-in-footer,
+body[data-device-class='phone'][data-app-mode='play-world'] #btn-fit-screen,
+body[data-device-class='phone'][data-app-mode='play-world'] #zoom-level {
+  display: none;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] #world-online-count,
+body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-controls,
+body[data-device-class='phone'][data-app-mode='play-world'] #room-save-status {
+  min-height: 20px;
+  padding: 3px 7px;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] #world-online-count,
+body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-controls {
+  font-size: 7px;
+}
+
+body[data-device-class='phone'] .world-online-popover {
+  width: min(280px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
+  max-height: min(260px, 36vh);
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] #room-save-status {
+  max-width: 46vw;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+

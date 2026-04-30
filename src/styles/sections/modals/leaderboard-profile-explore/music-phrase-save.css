@@ -1,0 +1,17 @@
+#editor-music-phrase-save-modal .music-phrase-save-body {
+  gap: 14px;
+}
+
+#editor-music-phrase-save-modal .music-phrase-save-section {
+  gap: 10px;
+  padding: 14px;
+  background: #fffaf0;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#editor-music-phrase-save-modal .music-phrase-save-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+

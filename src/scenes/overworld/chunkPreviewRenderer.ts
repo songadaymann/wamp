@@ -23,6 +23,7 @@ import { hashStringToSeed } from '../../visuals/starfield';
 interface OverworldChunkPreviewRendererOptions {
   scene: Phaser.Scene;
   getPreviewTileSize: () => number;
+  getFocusCoordinates?: () => RoomCoordinates;
   getRoomOrigin: (coordinates: RoomCoordinates) => { x: number; y: number };
   isFullRoomLoaded: (roomId: string) => boolean;
   onBackdropObjectsChanged?: () => void;
@@ -59,6 +60,7 @@ const CHUNK_PREVIEW_HEIGHT = WORLD_CHUNK_SIZE * ROOM_PX_HEIGHT;
 const CHUNK_PREVIEW_TEXTURE_CACHE_MAX_PIXELS = 32_000_000;
 const CUSTOM_BACKGROUND_PREVIEW_TILE_SIZE = 4;
 const DEFERRED_CHUNK_PREVIEW_BUILD_DELAY_MS = 24;
+const INITIAL_IMMEDIATE_CHUNK_TEXTURE_BUILDS = 1;
 const LIGHTWEIGHT_PREVIEW_LAYERS: LayerName[] = ['background', 'terrain'];
 
 export class OverworldChunkPreviewRenderer {
@@ -73,6 +75,7 @@ export class OverworldChunkPreviewRenderer {
   private textureBuildTimer: number | null = null;
   private cacheClock = 0;
   private hasCompletedInitialTexturePass = false;
+  private initialImmediateTextureBuildsRemaining = INITIAL_IMMEDIATE_CHUNK_TEXTURE_BUILDS;
   private customBackgroundLoadGeneration = 0;
   private readonly textureNamespace: string;
 
@@ -115,6 +118,7 @@ export class OverworldChunkPreviewRenderer {
     this.pendingTextureBuildsByKey = new Map();
     this.pendingTextureBuildQueue = [];
     this.hasCompletedInitialTexturePass = false;
+    this.initialImmediateTextureBuildsRemaining = INITIAL_IMMEDIATE_CHUNK_TEXTURE_BUILDS;
     this.visiblePreviewRoomIds = new Set();
     this.pendingCustomBackgroundLoads = new Map();
     this.customBackgroundLoadGeneration += 1;
@@ -233,7 +237,7 @@ export class OverworldChunkPreviewRenderer {
     const nextVisiblePreviewRoomIds = new Set<string>();
     const activeChunkIds = new Set(this.chunkStatesByChunkId.keys());
 
-    for (const [chunkId, chunkState] of this.chunkStatesByChunkId.entries()) {
+    for (const [chunkId, chunkState] of this.getPrioritizedChunkStates()) {
       const visibleRooms = this.getVisibleRoomsForChunk(chunkState);
 
       if (visibleRooms.length === 0) {
@@ -295,6 +299,7 @@ export class OverworldChunkPreviewRenderer {
 
       displayTextureKey = textureKey;
       if (!this.options.scene.textures.exists(textureKey)) {
+        this.markImmediateTextureBuild();
         const built = this.buildChunkTexture(textureKey, chunkCoordinates, rooms, previewTileSize);
         if (!built) {
           return;
@@ -581,7 +586,19 @@ export class OverworldChunkPreviewRenderer {
   }
 
   private shouldDeferTextureBuild(): boolean {
-    return this.hasCompletedInitialTexturePass;
+    return (
+      this.hasCompletedInitialTexturePass ||
+      this.initialImmediateTextureBuildsRemaining <= 0
+    );
+  }
+
+  private markImmediateTextureBuild(): void {
+    if (!this.hasCompletedInitialTexturePass) {
+      this.initialImmediateTextureBuildsRemaining = Math.max(
+        0,
+        this.initialImmediateTextureBuildsRemaining - 1,
+      );
+    }
   }
 
   private queueTextureBuild(request: PendingChunkPreviewBuild): void {
@@ -681,6 +698,24 @@ export class OverworldChunkPreviewRenderer {
       ? undefined
       : LIGHTWEIGHT_PREVIEW_LAYERS;
   }
+
+  private getPrioritizedChunkStates(): Array<[string, ChunkPreviewState]> {
+    const focusCoordinates = this.options.getFocusCoordinates?.() ?? null;
+    if (!focusCoordinates) {
+      return Array.from(this.chunkStatesByChunkId.entries());
+    }
+
+    const focusChunkCoordinates = roomToChunkCoordinates(focusCoordinates);
+    return Array.from(this.chunkStatesByChunkId.entries()).sort((left, right) => {
+      const leftDistance = getChunkDistance(left[1].chunkCoordinates, focusChunkCoordinates);
+      const rightDistance = getChunkDistance(right[1].chunkCoordinates, focusChunkCoordinates);
+      if (leftDistance !== rightDistance) {
+        return leftDistance - rightDistance;
+      }
+
+      return left[0].localeCompare(right[0]);
+    });
+  }
 }
 
 function sanitizeChunkKey(value: string): string {
@@ -698,4 +733,14 @@ function compareRoomSnapshots(a: RoomSnapshot, b: RoomSnapshot): number {
   }
 
   return a.coordinates.x - b.coordinates.x;
+}
+
+function getChunkDistance(
+  chunkCoordinates: WorldChunkCoordinates,
+  focusChunkCoordinates: WorldChunkCoordinates,
+): number {
+  return Math.max(
+    Math.abs(chunkCoordinates.x - focusChunkCoordinates.x),
+    Math.abs(chunkCoordinates.y - focusChunkCoordinates.y),
+  );
 }
