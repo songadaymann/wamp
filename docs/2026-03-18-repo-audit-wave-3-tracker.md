@@ -175,6 +175,7 @@ Defaults for this wave:
   - strict unused-symbol TypeScript, `npm run typecheck`, `npm run build`, and `git diff --check` passed
   - browser/smoke validation passed preview readonly smoke, mobile smoke, progression rating smoke, required `develop-web-game` client smoke, zoom perf probe at `output/overworld-zoom-perf/cruft-alleviator-final/result.json`, and a 48-peer live-presence stress probe at `output/perf-local-2026-04-30-presence-stress-final/summary.json`
   - local progression API smoke was blocked because no local Worker/D1 API was running on `127.0.0.1:8787`
+  - merged to `main` as `98cb432` and production deployed to `https://wamp.land` / `https://api.wamp.land` with Worker version `18ecb73a-fe36-4523-87d9-bc8a4f728715`; deploy smoke passed
 
 ## Deferred Items
 
