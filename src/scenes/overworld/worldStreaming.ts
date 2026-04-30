@@ -168,6 +168,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.previewRenderer = new OverworldChunkPreviewRenderer({
       scene: options.scene,
       getPreviewTileSize: () => this.getPreviewTileSize(),
+      getFocusCoordinates: () => this.getFocusCoordinates(),
       getRoomOrigin: options.getRoomOrigin,
       isFullRoomLoaded: (roomId) => this.loadedFullRoomsById.has(roomId),
       onBackdropObjectsChanged: options.onBackdropObjectsChanged,
@@ -644,7 +645,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         renderableRooms.set(candidate.id, {
           id: candidate.id,
           coordinates: { ...candidate.coordinates },
-          room: cloneRoomSnapshot(candidate.draft),
+          room: candidate.draft,
         });
         continue;
       }
@@ -653,7 +654,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         renderableRooms.set(candidate.id, {
           id: candidate.id,
           coordinates: { ...candidate.coordinates },
-          room: cloneRoomSnapshot(candidate.sharedPreview),
+          room: candidate.sharedPreview,
         });
         continue;
       }
@@ -670,7 +671,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       renderableRooms.set(candidate.id, {
         id: candidate.id,
         coordinates: { ...candidate.coordinates },
-        room: cloneRoomSnapshot(cachedRoom),
+        room: cachedRoom,
       });
     }
 

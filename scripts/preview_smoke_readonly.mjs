@@ -37,6 +37,7 @@ const context = await browser.newContext({
 });
 await context.addInitScript(() => {
   window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
+  window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
 });
 const page = await context.newPage();
 page.on('console', (message) => {
@@ -96,6 +97,10 @@ try {
   summary.steps.play = {
     activeScene: playState.activeScene,
   };
+  const goalIntroStart = page.locator('#room-goal-intro-modal:not(.hidden) #btn-room-goal-intro-start');
+  if (await goalIntroStart.count()) {
+    await goalIntroStart.click();
+  }
   await page.screenshot({ path: path.join(outputDir, 'play.png') });
 
   await page.click('#btn-world-play');
@@ -108,7 +113,18 @@ try {
     activeScene: browseStateAfterPlay.activeScene,
   };
 
-  await page.click('#btn-world-edit');
+  const editButton = page.locator('#btn-world-edit');
+  if (await editButton.isEnabled()) {
+    await editButton.click();
+  } else {
+    const syntheticEditor = await page.evaluate(
+      () => window.run_preview_smoke_action?.('openSyntheticEditor') ?? null,
+    );
+    if (!syntheticEditor?.ok) {
+      throw new Error(`Failed to open synthetic editor: ${JSON.stringify(syntheticEditor)}`);
+    }
+    summary.steps.syntheticEditor = syntheticEditor;
+  }
   const editState = await waitForAppState(
     page,
     (state) => state?.activeScene?.scene === 'editor',

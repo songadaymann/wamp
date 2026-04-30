@@ -1,0 +1,332 @@
+body[data-device-class='phone'][data-app-mode='editor'] #game-container,
+body[data-device-class='phone'][data-app-mode='world'] #game-container,
+body[data-device-class='phone'][data-app-mode='play-world'] #game-container {
+  grid-column: 1 / -1;
+}
+
+.world-hud-mobile-toggle,
+.world-hud-toggle {
+  white-space: nowrap;
+}
+
+.world-hud-toggle {
+  position: absolute;
+  top: calc(8px + var(--safe-top));
+  left: calc(8px + var(--safe-left));
+  z-index: 11;
+}
+
+body[data-device-class='phone'] #world-hud {
+  top: calc(8px + var(--safe-top));
+  left: calc(8px + var(--safe-left));
+  right: auto;
+  width: min(296px, calc(100vw - 96px - var(--safe-left) - var(--safe-right)));
+  max-width: calc(100vw - 96px - var(--safe-left) - var(--safe-right));
+  padding: 12px;
+  gap: 10px;
+  background: #0b0b0b;
+  transition: transform 0.16s ease, opacity 0.16s ease;
+}
+
+body[data-device-class='phone'] .world-goal-panel {
+  top: calc(8px + var(--safe-top));
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 0;
+  width: min(230px, calc(100vw - 120px - var(--safe-left) - var(--safe-right)));
+  max-width: calc(100vw - 120px - var(--safe-left) - var(--safe-right));
+  padding: 10px 12px;
+  gap: 4px;
+  background: #050505;
+}
+
+body[data-device-class='phone'] .world-goal-panel-goal,
+body[data-device-class='phone'] .world-goal-panel-timer {
+  font-size: 13px;
+}
+
+body[data-device-class='phone'] .world-goal-panel-progress {
+  font-size: 11px;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel {
+  top: calc(6px + var(--safe-top));
+  width: min(264px, calc(100vw - 128px - var(--safe-left) - var(--safe-right)));
+  max-width: calc(100vw - 128px - var(--safe-left) - var(--safe-right));
+  padding: 8px 12px;
+  gap: 3px;
+  border-radius: 0;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-room {
+  display: none;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-goal {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-row {
+  align-items: center;
+  gap: 8px;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-progress {
+  min-width: 0;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-timer {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
+body[data-coarse-pointer='true']:not([data-device-class='desktop'])[data-mobile-world-hud-collapsed='true'] #world-hud {
+  transform: translateY(calc(-100% - 14px));
+  opacity: 0;
+  pointer-events: none;
+}
+
+body[data-device-class='phone'] #auth-panel {
+  left: calc(8px + var(--safe-left));
+  right: calc(8px + var(--safe-right));
+  width: auto;
+}
+
+body[data-device-class='phone'] .auth-panel-topline {
+  gap: 6px;
+}
+
+body[data-device-class='phone'] #auth-identity {
+  max-width: calc(100vw - 74px - var(--safe-left) - var(--safe-right));
+}
+
+body[data-device-class='phone'] #auth-identity.mini-profile-card--progress-active {
+  max-width: calc(100vw - 74px - var(--safe-left) - var(--safe-right));
+}
+
+body[data-device-class='phone'] #menu-body {
+  width: 100%;
+  max-width: none;
+  max-height: calc(100vh - 72px - var(--safe-top) - var(--safe-bottom));
+  padding: 10px;
+}
+
+body[data-device-class='phone'] #menu-body .bar-btn {
+  width: 100%;
+}
+
+body[data-device-class='phone'] .auth-session-summary-value {
+  font-size: 9px;
+}
+
+body[data-device-class='phone'] .world-room-title {
+  font-size: 16px;
+}
+
+body[data-device-class='phone'] .world-room-title[data-title-size='compact'] {
+  font-size: 14px;
+}
+
+body[data-device-class='phone'] .world-room-title[data-title-size='tiny'] {
+  font-size: 12px;
+}
+
+body[data-device-class='phone'] .world-room-subtitle {
+  font-size: 11px;
+}
+
+body[data-device-class='phone'] .world-hud-title {
+  font-size: 11px;
+}
+
+body[data-device-class='phone'] .world-hud-title-wrap {
+  gap: 6px;
+}
+
+body[data-device-class='phone'] .world-hud-beta {
+  padding: 2px 6px;
+  font-size: 8px;
+}
+
+body[data-device-class='phone'] .world-hud-row {
+  gap: 6px;
+}
+
+body[data-device-class='phone'] .mini-profile-card {
+  padding: 5px 7px;
+  gap: 7px;
+}
+
+body[data-device-class='phone'] .mini-profile-avatar-frame {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+}
+
+body[data-device-class='phone'] .mini-profile-avatar {
+  height: 27px;
+}
+
+body[data-device-class='phone'] .mini-profile-name {
+  font-size: 11px;
+}
+
+body[data-device-class='phone'] .mini-profile-byline {
+  font-size: 9px;
+}
+
+body[data-device-class='phone'] .mini-profile-stats {
+  gap: 5px;
+}
+
+body[data-device-class='phone'] .mini-profile-stat-level-icon {
+  width: 12px;
+  height: 12px;
+}
+
+body[data-device-class='phone'] .mini-profile-stat-level-label {
+  font-size: 6px;
+}
+
+body[data-device-class='phone'] .mini-profile-progress {
+  gap: 3px;
+}
+
+body[data-device-class='phone'] .mini-profile-progress-track {
+  height: 5px;
+}
+
+body[data-device-class='phone'] #world-jump-row {
+  display: none;
+}
+
+body[data-device-class='phone'] .world-hud-toggle {
+  top: calc(8px + var(--safe-top));
+  left: calc(8px + var(--safe-left));
+}
+
+body[data-device-class='phone'] .mobile-world-stop {
+  top: calc(48px + var(--safe-top));
+  left: calc(8px + var(--safe-left));
+}
+
+body[data-device-class='phone'] .mobile-world-restart {
+  top: calc(48px + var(--safe-top));
+  left: calc(84px + var(--safe-left));
+}
+
+body[data-device-class='phone'] #global-chat {
+  right: calc(8px + var(--safe-right));
+  left: calc(8px + var(--safe-left));
+  width: auto;
+  bottom: calc(60px + var(--safe-bottom));
+}
+
+body[data-device-class='phone'] .room-chat-composer {
+  bottom: calc(112px + var(--safe-bottom));
+  width: min(320px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
+}
+
+body[data-device-class='phone'] .room-chat-composer-form {
+  padding: 8px 10px;
+  border-radius: 0;
+}
+
+body[data-device-class='phone'] #global-chat.is-open {
+  top: calc(8px + var(--safe-top));
+  right: calc(8px + var(--safe-right));
+  bottom: calc(8px + var(--safe-bottom));
+  left: calc(8px + var(--safe-left));
+  z-index: 22;
+  gap: 0;
+}
+
+body[data-device-class='phone'] #global-chat.is-open .chat-toggle {
+  display: none;
+}
+
+body[data-device-class='phone'] #global-chat .chat-panel-body {
+  min-height: 0;
+  max-height: 78vh;
+  border-radius: 0;
+  background: #fff3db;
+  backdrop-filter: none;
+}
+
+body[data-device-class='phone'] #global-chat.is-open .chat-panel-body {
+  flex: 1 1 auto;
+  height: 100%;
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+}
+
+body[data-device-class='phone'] #global-chat .chat-panel-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 12px 12px 8px;
+  background: #fff3db;
+  backdrop-filter: none;
+  border-bottom: 2px solid #79ccde;
+}
+
+body[data-device-class='phone'] #global-chat .chat-messages {
+  min-height: 0;
+  max-height: min(480px, 62vh);
+}
+
+body[data-device-class='phone'] #global-chat.is-open .chat-messages {
+  flex: 1 1 auto;
+  max-height: none;
+  padding: 10px;
+  margin: 0 12px;
+}
+
+body[data-device-class='phone'] #global-chat.is-open .chat-empty,
+body[data-device-class='phone'] #global-chat.is-open .chat-status,
+body[data-device-class='phone'] #global-chat.is-open .chat-form {
+  margin-left: 12px;
+  margin-right: 12px;
+}
+
+body[data-device-class='phone'] #global-chat.is-open .chat-form {
+  padding-bottom: 12px;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] #global-chat {
+  left: auto;
+  right: calc(204px + var(--safe-right));
+  bottom: calc(8px + var(--safe-bottom));
+  width: min(280px, calc(100vw - 236px - var(--safe-left) - var(--safe-right)));
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] #global-chat.is-open {
+  left: calc(8px + var(--safe-left));
+  right: calc(8px + var(--safe-right));
+  width: auto;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] #global-chat .chat-toggle {
+  margin-left: 0;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-room-chat {
+  position: fixed;
+  right: calc(204px + var(--safe-right));
+  bottom: calc(48px + var(--safe-bottom));
+  z-index: 23;
+}
+
+body[data-device-class='phone'][data-app-mode='play-world'] .room-chat-composer-form {
+  padding: 8px 10px;
+}
+

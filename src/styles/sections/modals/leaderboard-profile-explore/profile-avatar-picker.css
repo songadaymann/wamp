@@ -1,0 +1,285 @@
+#profile-modal .profile-modal-header {
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+#profile-modal .profile-modal-body {
+  gap: 12px;
+  padding-right: 2px;
+}
+
+#profile-modal .profile-hero {
+  gap: 14px;
+  align-items: flex-start;
+  padding: 14px;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  background: #fffaf0;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#profile-modal .profile-avatar-shell {
+  width: 82px;
+  height: 96px;
+  flex: 0 0 auto;
+}
+
+#profile-modal .profile-avatar-column {
+  width: 82px;
+}
+
+#profile-modal .profile-avatar-image,
+#profile-modal .profile-avatar-fallback {
+  width: 82px;
+  height: 96px;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#profile-modal .profile-avatar-image {
+  background: #18161c;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+#profile-modal .profile-avatar-fallback {
+  background: #fff3db;
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+#profile-modal .profile-avatar-change-button {
+  min-height: 30px;
+  padding: 6px 4px 5px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #ff533f;
+  color: #fff3db;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 7px;
+  line-height: 1.25;
+  text-align: center;
+  box-shadow: 2px 2px 0 #18161c;
+  cursor: pointer;
+}
+
+#profile-modal .profile-avatar-change-button:hover,
+#profile-modal .profile-avatar-change-button:focus-visible {
+  background: #1b84c2;
+  color: #fff3db;
+  outline: none;
+}
+
+#profile-modal .profile-avatar-change-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.avatar-picker-modal-panel {
+  max-width: min(680px, calc(100vw - 32px));
+}
+
+.avatar-picker-modal-header {
+  gap: 12px;
+}
+
+.profile-cryptopunk-card {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 12px;
+  margin: 0 4px 14px 2px;
+  padding: 12px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #fffaf0;
+  box-shadow: 2px 2px 0 #18161c;
+}
+
+.profile-cryptopunk-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  width: 92px;
+  height: 92px;
+  border: 2px solid #5f5fec;
+  background: #18161c;
+  overflow: hidden;
+}
+
+.profile-cryptopunk-preview-image {
+  display: block;
+  width: 72px;
+  height: 72px;
+  image-rendering: pixelated;
+}
+
+.profile-cryptopunk-preview-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  color: #fff3db;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  line-height: 1.4;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.profile-cryptopunk-controls {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+  align-content: start;
+}
+
+.profile-cryptopunk-title-row {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.profile-cryptopunk-title {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 15px;
+  line-height: 1.15;
+}
+
+.profile-cryptopunk-unlock-meta,
+.profile-cryptopunk-status {
+  min-width: 0;
+  color: #2c5071;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 7px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.profile-cryptopunk-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.profile-cryptopunk-input {
+  min-width: 0;
+  height: 34px;
+}
+
+.profile-cryptopunk-status {
+  min-height: 22px;
+}
+
+.profile-avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 12px;
+  overflow-y: auto;
+  padding: 2px 4px 4px 2px;
+}
+
+.profile-avatar-option {
+  --profile-avatar-option-color: #79ccde;
+  display: grid;
+  grid-template-rows: 80px auto auto;
+  gap: 7px;
+  min-width: 0;
+  min-height: 148px;
+  padding: 10px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #fffaf0;
+  color: #18161c;
+  box-shadow: 2px 2px 0 #18161c;
+  cursor: pointer;
+}
+
+.profile-avatar-option[data-selected='true'] {
+  border-color: #277b30;
+  background: #eef7dd;
+}
+
+.profile-avatar-option[data-locked='true'] {
+  background: #d8e1e7;
+  color: #2c5071;
+  cursor: default;
+}
+
+.profile-avatar-option:not(:disabled):hover,
+.profile-avatar-option:not(:disabled):focus-visible {
+  border-color: #ff533f;
+  outline: none;
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+.profile-avatar-option-preview {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-width: 0;
+  width: 100%;
+  height: 80px;
+  border: 2px solid var(--profile-avatar-option-color);
+  background: #18161c;
+  overflow: hidden;
+}
+
+.profile-avatar-option-image {
+  display: block;
+  width: auto;
+  height: 78px;
+  image-rendering: pixelated;
+}
+
+.profile-avatar-option-preview-fallback,
+.profile-avatar-option-locked {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.profile-avatar-option-preview-fallback {
+  color: #fff3db;
+}
+
+.profile-avatar-option-locked {
+  background: #5e595e;
+  color: #fff3db;
+}
+
+.profile-avatar-option-label,
+.profile-avatar-option-meta {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.profile-avatar-option-label {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.profile-avatar-option-meta {
+  color: #2c5071;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 7px;
+  line-height: 1.35;
+}
+

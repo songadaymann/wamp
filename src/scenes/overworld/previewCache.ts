@@ -95,7 +95,7 @@ export class OverworldPreviewCache {
           renderableRooms.set(candidate.id, {
             id: candidate.id,
             coordinates: { ...candidate.coordinates },
-            room: cloneRoomSnapshot(candidate.draft),
+            room: candidate.draft,
           });
           return;
         }
@@ -104,7 +104,7 @@ export class OverworldPreviewCache {
           renderableRooms.set(candidate.id, {
             id: candidate.id,
             coordinates: { ...candidate.coordinates },
-            room: cloneRoomSnapshot(candidate.sharedPreview),
+            room: candidate.sharedPreview,
           });
           return;
         }

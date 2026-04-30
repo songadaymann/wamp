@@ -1,0 +1,212 @@
+#explore-modal .explore-room-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding-right: 2px;
+}
+
+#explore-modal .explore-room-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+#explore-modal .explore-room-card {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #79ccde;
+  background: #fffaf0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#explore-modal .explore-room-card:hover,
+#explore-modal .explore-room-card:focus-visible {
+  border-color: #277b30;
+  outline: none;
+  transform: translateY(-1px);
+}
+
+#explore-modal .explore-room-preview {
+  position: relative;
+  overflow: hidden;
+  min-height: 94px;
+  border: 2px solid #2c5071;
+  background: #18161c;
+}
+
+#explore-modal .explore-room-preview-image,
+#explore-modal .explore-room-preview-fallback {
+  width: 100%;
+  height: 100%;
+}
+
+#explore-modal .explore-room-preview-image {
+  display: block;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+#explore-modal .explore-room-preview-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  color: #fff3db;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  text-align: center;
+}
+
+#explore-modal .explore-room-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+#explore-modal .explore-room-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+#explore-modal .explore-room-title {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+#explore-modal .explore-room-builder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+#explore-modal .explore-room-builder-label,
+#explore-modal .explore-room-builder-name {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+#explore-modal .explore-room-builder-name {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+#explore-modal .explore-room-builder-name:hover,
+#explore-modal .explore-room-builder-name:focus-visible {
+  color: #79ccde;
+  outline: none;
+}
+
+#explore-modal .explore-room-featured-badge,
+#explore-modal .explore-room-difficulty,
+#explore-modal .explore-room-trophy {
+  width: fit-content;
+  padding: 4px 8px;
+  border: 2px solid #18161c;
+  box-shadow: 2px 2px 0 #18161c;
+  font-size: 8px;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+#explore-modal .explore-room-featured-badge {
+  background: #79ccde;
+  color: #000;
+  font-family: 'Early GameBoy', monospace;
+}
+
+#explore-modal .explore-room-difficulty,
+#explore-modal .explore-room-trophy {
+  font-family: 'Early GameBoy', monospace;
+}
+
+#explore-modal .explore-room-difficulty[data-difficulty='easy'] {
+  background: #277b30;
+  color: #fff3db;
+}
+
+#explore-modal .explore-room-difficulty[data-difficulty='medium'] {
+  background: #fcea7c;
+  color: #000;
+}
+
+#explore-modal .explore-room-difficulty[data-difficulty='hard'] {
+  background: #d7ac63;
+  color: #000;
+}
+
+#explore-modal .explore-room-difficulty[data-difficulty='extreme'] {
+  background: #ed5f4b;
+  color: #fff3db;
+}
+
+#explore-modal .explore-room-difficulty[data-difficulty='unrated'] {
+  background: #fff3db;
+  color: #2c5071;
+}
+
+#explore-modal .explore-room-quality {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#explore-modal .explore-room-stars {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+#explore-modal .explore-room-star {
+  color: rgba(44, 80, 113, 0.22);
+  font-size: 15px;
+  line-height: 1;
+}
+
+#explore-modal .explore-room-star.active {
+  color: #fcea7c;
+}
+
+#explore-modal .explore-room-quality-label {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#explore-modal .explore-room-trophy {
+  background: #fff3db;
+  color: #2c5071;
+}
+
+#explore-modal .explore-room-admin-btn {
+  justify-self: start;
+  min-width: 120px;
+}
+
+#explore-modal .explore-room-admin-btn[data-featured-active='true'] {
+  background: #ed5f4b;
+  color: #fff3db;
+}
+

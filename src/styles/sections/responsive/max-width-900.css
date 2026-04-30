@@ -1,0 +1,44 @@
+@media (max-width: 900px) {
+  #auth-panel {
+    width: calc(100vw - 24px);
+    top: 12px;
+    right: 12px;
+  }
+
+  #world-hud {
+    top: 12px;
+    left: 12px;
+    width: min(340px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+  }
+
+  .history-modal {
+    padding: 12px;
+  }
+
+  .history-modal-panel {
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+    padding: 14px;
+  }
+
+  .history-modal-header,
+  .history-version-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .controls-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-panel {
+    right: 12px;
+    bottom: 48px;
+    width: min(320px, calc(100% - 24px));
+  }
+
+  .chat-messages {
+    max-height: min(420px, 56vh);
+  }
+}

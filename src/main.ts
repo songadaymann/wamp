@@ -21,14 +21,16 @@ import {
   getAppFeedbackDebugState,
   initializeAppFeedback,
   isAppReady,
-  markAppReady,
   showBootSplash,
 } from './ui/appFeedback';
 import { getDeviceLayoutState } from './ui/deviceLayout';
 import { syncGameKeyboardFocus } from './ui/keyboardFocus';
 import { getTouchInputDebugState } from './ui/mobile/touchControls';
 import { setupUI } from './ui/setup';
-import { createDefaultRoomSnapshot } from './persistence/roomModel';
+import { getCaptureDebugInfo } from './main/captureDebug';
+import { getGameDebugState, getSwordHunterDebugState } from './main/debugState';
+import { installPreviewSmokeActions } from './main/previewSmoke';
+import { normalizeRendererQuery, parseBooleanQuery, resolveRendererType } from './main/query';
 
 const gameContainer = document.getElementById('game-container')!;
 const query = new URLSearchParams(window.location.search);
@@ -145,58 +147,7 @@ window.requestAnimationFrame(() => {
   syncGameKeyboardFocus(game);
 });
 
-function getDebugState(): Record<string, unknown> {
-  const sceneOrder = ['CourseEditorScene', 'CourseComposerScene', 'OverworldPlayScene', 'EditorScene', 'BootScene'];
-
-  for (const sceneKey of sceneOrder) {
-    if (!game.scene.isActive(sceneKey)) continue;
-
-    const scene = game.scene.getScene(sceneKey) as {
-      describeState?: () => Record<string, unknown>;
-    };
-
-    if (scene.describeState) {
-      return scene.describeState();
-    }
-
-    return { scene: sceneKey };
-  }
-
-  for (const sceneKey of sceneOrder) {
-    if (!game.scene.isPaused(sceneKey) && !game.scene.isSleeping(sceneKey)) continue;
-
-    const scene = game.scene.getScene(sceneKey) as {
-      describeState?: () => Record<string, unknown>;
-    };
-
-    if (scene.describeState) {
-      return scene.describeState();
-    }
-
-    return { scene: sceneKey };
-  }
-
-  return { scene: 'none' };
-}
-
-function getSwordHunterDebugState(): Record<string, unknown> {
-  const activeScene = getDebugState();
-  const liveObjects = Array.isArray(activeScene.liveObjects)
-    ? activeScene.liveObjects
-    : null;
-
-  return {
-    scene: typeof activeScene.scene === 'string' ? activeScene.scene : 'unknown',
-    available: liveObjects !== null,
-    swordsmen:
-      liveObjects?.filter(
-        (liveObject): liveObject is Record<string, unknown> =>
-          Boolean(liveObject) &&
-          typeof liveObject === 'object' &&
-          liveObject.id === 'swordsman_ai',
-      ) ?? [],
-  };
-}
+const getDebugState = () => getGameDebugState(game);
 
 window.render_game_to_text = () =>
   JSON.stringify({
@@ -216,64 +167,14 @@ window.render_game_to_text = () =>
   });
 
 window.get_room_music_debug_state = () => globalRoomMusicController.getDebugState();
-window.get_sword_hunter_debug = () => getSwordHunterDebugState();
+window.get_sword_hunter_debug = () => getSwordHunterDebugState(game);
 initializeGuestActivityTracking(getGuestActivitySnapshot);
 
 if (query.get('previewSmoke') === '1') {
-  window.run_preview_smoke_action = async (
-    action:
-      | 'selectEditableRoom'
-      | 'playSelectedRoom'
-      | 'returnToWorld'
-      | 'editSelectedRoom'
-      | 'openSyntheticEditor'
-      | 'setPlayerPosition',
-    payload?: {
-      roomId?: string | null;
-      x?: number;
-      y?: number;
-      velocityX?: number;
-      velocityY?: number;
-      bodyEnabled?: boolean;
-    },
-  ) => {
-    switch (action) {
-      case 'selectEditableRoom':
-        return selectEditableRoomForPreviewSmoke(payload?.roomId ?? null);
-      case 'playSelectedRoom':
-        return runOverworldPreviewSmokeAction((scene) => {
-          scene.playSelectedRoom();
-        });
-      case 'returnToWorld':
-        return runOverworldPreviewSmokeAction((scene) => {
-          scene.returnToWorld();
-        });
-      case 'editSelectedRoom':
-        return runOverworldPreviewSmokeAction((scene) => {
-          scene.editSelectedRoom();
-        }, 1200);
-      case 'openSyntheticEditor':
-        return openSyntheticEditorForPreviewSmoke();
-      case 'setPlayerPosition':
-        return runOverworldPreviewSmokeAction(
-          (scene) => {
-            return scene.debugSetPlayerPosition?.({
-              x: payload?.x,
-              y: payload?.y,
-              velocityX: payload?.velocityX ?? 0,
-              velocityY: payload?.velocityY ?? 0,
-              bodyEnabled: payload?.bodyEnabled,
-            });
-          },
-          50,
-        );
-      default:
-        return { ok: false, reason: `unsupported-action:${action}` };
-    }
-  };
+  installPreviewSmokeActions(game, getDebugState);
 }
 
-window.capture_debug_info = () => getCaptureDebugInfo();
+window.capture_debug_info = () => getCaptureDebugInfo(game, debug_options, getDebugState);
 window.get_auth_debug_state = () => ({ ...getAuthDebugState() });
 
 if (typeof window.advanceTime !== 'function') {
@@ -284,7 +185,7 @@ if (typeof window.advanceTime !== 'function') {
 
 if (debug_options.captureDebug) {
   window.setTimeout(() => {
-    console.info('[capture-debug]', getCaptureDebugInfo());
+    console.info('[capture-debug]', getCaptureDebugInfo(game, debug_options, getDebugState));
   }, 750);
 }
 
@@ -292,24 +193,6 @@ if (debug_options.captureDebug) {
 window.addEventListener('resize', () => {
   queueResizeGameToContainer();
 });
-
-function parseBooleanQuery(value: string | null): boolean {
-  if (!value) return false;
-  return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
-}
-
-function normalizeRendererQuery(value: string | null): 'auto' | 'canvas' | 'webgl' {
-  if (!value) return 'auto';
-
-  switch (value.toLowerCase()) {
-    case 'canvas':
-      return 'canvas';
-    case 'webgl':
-      return 'webgl';
-    default:
-      return 'auto';
-  }
-}
 
 function getGuestActivitySnapshot(): {
   mode: GuestActivityMode;
@@ -357,409 +240,4 @@ function normalizeDebugCoordinates(value: unknown): { x: number; y: number } | n
     x: Number(coordinates.x),
     y: Number(coordinates.y),
   };
-}
-
-function resolveRendererType(renderer: 'auto' | 'canvas' | 'webgl'): number {
-  switch (renderer) {
-    case 'canvas':
-      return Phaser.CANVAS;
-    case 'webgl':
-      return Phaser.WEBGL;
-    default:
-      return Phaser.AUTO;
-  }
-}
-
-function getRendererLabel(rendererType: number): string {
-  switch (rendererType) {
-    case Phaser.CANVAS:
-      return 'canvas';
-    case Phaser.WEBGL:
-      return 'webgl';
-    case Phaser.HEADLESS:
-      return 'headless';
-    default:
-      return 'unknown';
-  }
-}
-
-function getCaptureDebugInfo(): Record<string, unknown> {
-  const canvas = game.canvas;
-  const webglRenderer =
-    game.renderer.type === Phaser.WEBGL
-      ? (game.renderer as Phaser.Renderer.WebGL.WebGLRenderer)
-      : null;
-  const gl = webglRenderer?.gl ?? null;
-  const dataUrlResult = getCanvasDataUrl(canvas);
-
-  return {
-    debugOptions: { ...debug_options },
-    renderer: {
-      requested: debug_options.renderer,
-      active: getRendererLabel(game.renderer.type),
-      type: game.renderer.type,
-    },
-    canvas: {
-      width: canvas.width,
-      height: canvas.height,
-      clientWidth: canvas.clientWidth,
-      clientHeight: canvas.clientHeight,
-      styleWidth: canvas.style.width || null,
-      styleHeight: canvas.style.height || null,
-      dataUrlOk: dataUrlResult.ok,
-      dataUrlLength: dataUrlResult.value?.length ?? 0,
-      dataUrlPrefix: dataUrlResult.value?.slice(0, 48) ?? null,
-      dataUrlError: dataUrlResult.error,
-      pixelProbe: sampleCanvasPixels(canvas),
-    },
-    webgl: gl ? getWebglDebugInfo(gl) : null,
-    activeScene: getDebugState(),
-  };
-}
-
-type PreviewSmokeScene = {
-  describeState: () => Record<string, unknown>;
-  jumpToCoordinates: (coordinates: { x: number; y: number }) => Promise<void> | void;
-  playSelectedRoom: () => void;
-  returnToWorld: () => void;
-  editSelectedRoom: () => void;
-  debugSetPlayerPosition?: (options: {
-    x?: number;
-    y?: number;
-    velocityX?: number;
-    velocityY?: number;
-    bodyEnabled?: boolean;
-  }) => Record<string, unknown>;
-  roomSummariesById?: Map<string, { id?: string; coordinates?: { x: number; y: number }; state?: string }>;
-  draftRoomsById?: Map<string, { id: string; coordinates: { x: number; y: number } }>;
-};
-
-async function selectEditableRoomForPreviewSmoke(roomId: string | null): Promise<Record<string, unknown>> {
-  const scene = getOverworldSceneForPreviewSmoke();
-  if (!scene) {
-    return { ok: false, reason: 'overworld-scene-missing' };
-  }
-
-  const requestedCoordinates = parsePreviewSmokeRoomId(roomId);
-  const currentState = scene.describeState();
-  const currentSelectedCoordinates = currentState.selected as { x: number; y: number } | undefined;
-  const currentSelectedState = currentState.selectedState;
-  const currentSelectionIsEditable =
-    currentSelectedCoordinates
-    && (currentSelectedState === 'published' || currentSelectedState === 'draft')
-    && requestedCoordinates === null;
-  const target =
-    currentSelectionIsEditable
-      ? {
-          roomId: `${currentSelectedCoordinates.x},${currentSelectedCoordinates.y}`,
-          coordinates: { ...currentSelectedCoordinates },
-          selectedState: currentSelectedState,
-        }
-      : findEditableRoomCandidate(scene, requestedCoordinates);
-  if (!target) {
-    return {
-      ok: false,
-      reason: 'no-editable-room-loaded',
-    };
-  }
-
-  await scene.jumpToCoordinates(target.coordinates);
-  await waitForPreviewSmoke(1200);
-
-  const selectedState = scene.describeState().selectedState;
-  return {
-    ok: true,
-    roomId: target.roomId,
-    coordinates: target.coordinates,
-    selectedState,
-  };
-}
-
-async function runOverworldPreviewSmokeAction(
-  action: (scene: PreviewSmokeScene) => Record<string, unknown> | void,
-  waitMs = 900,
-): Promise<Record<string, unknown>> {
-  const scene = getOverworldSceneForPreviewSmoke();
-  if (!scene) {
-    return { ok: false, reason: 'overworld-scene-missing' };
-  }
-
-  const result = action(scene) ?? null;
-  await waitForPreviewSmoke(waitMs);
-  if (isPreviewSmokeActionFailure(result)) {
-    return {
-      ok: false,
-      reason: typeof result.reason === 'string' ? result.reason : 'preview-action-failed',
-      result,
-      activeScene: getDebugState(),
-    };
-  }
-  return {
-    ok: true,
-    result,
-    activeScene: getDebugState(),
-  };
-}
-
-function isPreviewSmokeActionFailure(
-  result: Record<string, unknown> | null,
-): result is Record<string, unknown> & { ok: false } {
-  return Boolean(result && result.ok === false && typeof result.status !== 'string');
-}
-
-function getOverworldSceneForPreviewSmoke(): PreviewSmokeScene | null {
-  try {
-    return game.scene.getScene('OverworldPlayScene') as unknown as PreviewSmokeScene;
-  } catch {
-    return null;
-  }
-}
-
-async function openSyntheticEditorForPreviewSmoke(): Promise<Record<string, unknown>> {
-  const editorScene = game.scene.keys.EditorScene as unknown as {
-    roomSession?: {
-      loadPersistedRoom: (initialRoomSnapshot: unknown) => Promise<boolean>;
-    };
-  };
-  if (!editorScene?.roomSession) {
-    return { ok: false, reason: 'editor-scene-missing' };
-  }
-
-  editorScene.roomSession.loadPersistedRoom = async () => true;
-
-  const roomSnapshot = createDefaultRoomSnapshot('99,99', { x: 99, y: 99 });
-  roomSnapshot.background = 'cave';
-  roomSnapshot.spawnPoint = { x: 320, y: 176 };
-  roomSnapshot.lighting = {
-    mode: 'playerAuraDark',
-    darkness: 88,
-    radius: 24,
-  };
-
-  if (
-    game.scene.isActive('EditorScene')
-    || game.scene.isSleeping('EditorScene')
-    || game.scene.isPaused('EditorScene')
-  ) {
-    game.scene.stop('EditorScene');
-  }
-
-  game.scene.run('EditorScene', {
-    source: 'direct',
-    roomSnapshot,
-  });
-  if (game.scene.isActive('OverworldPlayScene')) {
-    game.scene.sleep('OverworldPlayScene');
-  }
-  markAppReady();
-  await waitForPreviewSmoke(1200);
-
-  return {
-    ok: true,
-    activeScene: getDebugState(),
-  };
-}
-
-function findEditableRoomCandidate(
-  scene: PreviewSmokeScene,
-  requestedCoordinates: { x: number; y: number } | null,
-): {
-  roomId: string;
-  coordinates: { x: number; y: number };
-} | null {
-  const summaryCandidates = Array.from(scene.roomSummariesById?.values() ?? [])
-    .filter((candidate) => candidate.coordinates && (candidate.state === 'published' || candidate.state === 'draft'))
-    .map((candidate) => ({
-      roomId: candidate.id ?? `${candidate.coordinates!.x},${candidate.coordinates!.y}`,
-      coordinates: { ...candidate.coordinates! },
-    }));
-  const draftCandidates = Array.from(scene.draftRoomsById?.values() ?? []).map((candidate) => ({
-    roomId: candidate.id,
-    coordinates: { ...candidate.coordinates },
-  }));
-  const allCandidates = [...summaryCandidates, ...draftCandidates];
-  if (requestedCoordinates) {
-    return (
-      allCandidates.find(
-        (candidate) =>
-          candidate.coordinates.x === requestedCoordinates.x
-          && candidate.coordinates.y === requestedCoordinates.y
-      ) ?? null
-    );
-  }
-
-  return allCandidates[0] ?? null;
-}
-
-function parsePreviewSmokeRoomId(value: string | null): { x: number; y: number } | null {
-  if (!value || !value.trim()) {
-    return null;
-  }
-
-  const match = /^\s*(-?\d+)\s*,\s*(-?\d+)\s*$/.exec(value);
-  if (!match) {
-    return null;
-  }
-
-  return {
-    x: Number(match[1]),
-    y: Number(match[2]),
-  };
-}
-
-function waitForPreviewSmoke(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
-
-function getCanvasDataUrl(canvas: HTMLCanvasElement): {
-  ok: boolean;
-  value: string | null;
-  error: string | null;
-} {
-  try {
-    return {
-      ok: true,
-      value: canvas.toDataURL('image/png'),
-      error: null,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      value: null,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-function sampleCanvasPixels(canvas: HTMLCanvasElement): Record<string, unknown> {
-  try {
-    const probeCanvas = document.createElement('canvas');
-    const probeSize = 8;
-    probeCanvas.width = probeSize;
-    probeCanvas.height = probeSize;
-
-    const context = probeCanvas.getContext('2d', { willReadFrequently: true });
-    if (!context) {
-      return { ok: false, error: '2d probe context unavailable' };
-    }
-
-    context.imageSmoothingEnabled = false;
-    context.clearRect(0, 0, probeSize, probeSize);
-    context.drawImage(canvas, 0, 0, probeSize, probeSize);
-
-    const imageData = context.getImageData(0, 0, probeSize, probeSize).data;
-    let opaquePixels = 0;
-    let visiblePixels = 0;
-    let maxChannel = 0;
-    const sample: number[][] = [];
-
-    for (let index = 0; index < imageData.length; index += 4) {
-      const rgba = [
-        imageData[index],
-        imageData[index + 1],
-        imageData[index + 2],
-        imageData[index + 3],
-      ];
-
-      if (sample.length < 6) {
-        sample.push(rgba);
-      }
-
-      if (rgba[3] > 0) {
-        opaquePixels += 1;
-      }
-
-      if (rgba[0] > 0 || rgba[1] > 0 || rgba[2] > 0) {
-        visiblePixels += 1;
-      }
-
-      maxChannel = Math.max(maxChannel, rgba[0], rgba[1], rgba[2], rgba[3]);
-    }
-
-    return {
-      ok: true,
-      probeSize,
-      opaquePixels,
-      visiblePixels,
-      maxChannel,
-      sample,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-function getWebglDebugInfo(gl: WebGLRenderingContext | WebGL2RenderingContext): Record<string, unknown> {
-  const debugExt = gl.getExtension('WEBGL_debug_renderer_info');
-  const contextAttributes = gl.getContextAttributes();
-
-  return {
-    isContextLost: gl.isContextLost(),
-    drawingBufferWidth: gl.drawingBufferWidth,
-    drawingBufferHeight: gl.drawingBufferHeight,
-    contextAttributes,
-    version: safeGlString(gl, gl.VERSION),
-    shadingLanguageVersion: safeGlString(gl, gl.SHADING_LANGUAGE_VERSION),
-    vendor: debugExt
-      ? safeGlString(gl, debugExt.UNMASKED_VENDOR_WEBGL)
-      : safeGlString(gl, gl.VENDOR),
-    renderer: debugExt
-      ? safeGlString(gl, debugExt.UNMASKED_RENDERER_WEBGL)
-      : safeGlString(gl, gl.RENDERER),
-    pixelProbe: sampleWebglPixels(gl),
-  };
-}
-
-function sampleWebglPixels(gl: WebGLRenderingContext | WebGL2RenderingContext): Record<string, unknown> {
-  try {
-    const positions = [
-      { label: 'topLeft', x: 0, y: gl.drawingBufferHeight - 1 },
-      {
-        label: 'center',
-        x: Math.max(0, Math.floor(gl.drawingBufferWidth / 2)),
-        y: Math.max(0, Math.floor(gl.drawingBufferHeight / 2)),
-      },
-      {
-        label: 'bottomRight',
-        x: Math.max(0, gl.drawingBufferWidth - 1),
-        y: 0,
-      },
-    ];
-
-    const samples = positions.map((position) => {
-      const bytes = new Uint8Array(4);
-      gl.readPixels(position.x, position.y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
-
-      return {
-        ...position,
-        rgba: Array.from(bytes),
-      };
-    });
-
-    return {
-      ok: true,
-      samples,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-function safeGlString(
-  gl: WebGLRenderingContext | WebGL2RenderingContext,
-  key: number
-): string | null {
-  try {
-    return gl.getParameter(key) as string | null;
-  } catch {
-    return null;
-  }
 }

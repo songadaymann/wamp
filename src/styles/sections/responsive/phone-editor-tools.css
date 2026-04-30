@@ -1,0 +1,103 @@
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav {
+  left: 50%;
+  right: auto;
+  bottom: calc(var(--phone-editor-sheet-height) - 1px);
+  width: min(calc(100vw - 12px - var(--safe-left) - var(--safe-right)), 820px);
+  transform: translateX(-50%);
+  padding: 0;
+  background: rgba(14, 14, 14, 0.98);
+  border: 1px solid var(--border-strong);
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -14px 30px rgba(0, 0, 0, 0.26);
+}
+
+body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-collapsed='true'] #mobile-editor-nav {
+  bottom: 0;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .bar-btn {
+  min-width: 0;
+  padding: 10px 12px;
+  border: none;
+  border-right: 1px solid rgba(243, 238, 226, 0.08);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .bar-btn:last-child {
+  border-right: none;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-tab.active {
+  background: rgba(11, 11, 11, 0.98);
+  color: #f7ecd1;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-utility {
+  color: var(--accent-warm);
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-utility:active,
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-tab:active {
+  background: rgba(243, 238, 226, 0.08);
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #tools,
+body[data-device-class='phone'][data-app-mode='editor'] #layers {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #layers {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #background-select,
+body[data-device-class='phone'][data-app-mode='editor'] .palette-tabs,
+body[data-device-class='phone'][data-app-mode='editor'] #object-palette-section > .section-label,
+body[data-device-class='phone'][data-app-mode='editor'] [data-mobile-panel='background'] > .section-label {
+  display: none;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #palette-container {
+  flex: none;
+  max-height: 166px;
+  overflow: auto;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #palette-canvas {
+  margin: 0 auto;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .object-category-tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .object-search-input {
+  font-size: 16px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #object-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(2, minmax(70px, 1fr));
+  grid-auto-columns: 86px;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 6px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .object-item {
+  min-height: 70px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] .palette-hint {
+  padding-top: 2px;
+}
+
