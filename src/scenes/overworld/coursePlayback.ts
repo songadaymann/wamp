@@ -25,7 +25,10 @@ import {
   type ActiveCourseRunState,
 } from './courseRuns';
 import { suggestProgressionDifficulty } from '../../progression/autoDifficulty';
-import { requestPostRunRating } from '../../progression/postRunRatingEvents';
+import {
+  requestPostRunGuestClaim,
+  requestPostRunRating,
+} from '../../progression/postRunRatingEvents';
 import { createPostRunClearReward, notifyRewardStings } from '../../progression/rewardStings';
 import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
 
@@ -218,6 +221,26 @@ export class OverworldCoursePlaybackController {
     if (!attemptId || activeCourseRun.submissionState === 'local-only') {
       activeCourseRun.submissionState = 'submitted';
       activeCourseRun.submissionMessage = 'Local course run saved on this client only.';
+      if (result === 'completed' && this.shouldPromptGuestClaimForLocalCourseClear(activeCourseRun)) {
+        activeCourseRun.submissionMessage = 'Guest course clear saved on this browser.';
+        requestPostRunGuestClaim({
+          contentType: 'course',
+          contentId: activeCourseRun.course.id,
+          contentTitle: activeCourseRun.course.title,
+          version: activeCourseRun.course.version,
+          previousViewerRank: null,
+          elapsedMs: Math.round(activeCourseRun.elapsedMs),
+          deaths: activeCourseRun.deaths,
+          score: null,
+          autoSuggestedDifficulty: suggestProgressionDifficulty({
+            elapsedMs: activeCourseRun.elapsedMs,
+            deaths: activeCourseRun.deaths,
+            collectiblesCollected: activeCourseRun.collectiblesCollected,
+            enemiesDefeated: activeCourseRun.enemiesDefeated,
+            checkpointsReached: activeCourseRun.checkpointsReached,
+          }),
+        });
+      }
       this.host.clearVerificationTrace?.();
       this.host.renderHud();
       return;
@@ -314,6 +337,16 @@ export class OverworldCoursePlaybackController {
     } finally {
       this.host.renderHud();
     }
+  }
+
+  private shouldPromptGuestClaimForLocalCourseClear(runState: ActiveCourseRunState): boolean {
+    const authState = getAuthDebugState();
+    return (
+      runState.course.status === 'published' &&
+      !runState.leaderboardEligible &&
+      !authState.authenticated &&
+      !isPlayfunSurfaceAuth(authState.source ?? null)
+    );
   }
 
   private async loadPinnedCourseRoomSnapshot(roomRef: CourseRoomRef): Promise<RoomSnapshot> {

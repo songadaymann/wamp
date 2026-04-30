@@ -22,7 +22,10 @@ import {
   type GoalRunStartPoint,
 } from './goalRunStartGate';
 import { suggestProgressionDifficulty } from '../../progression/autoDifficulty';
-import { requestPostRunRating } from '../../progression/postRunRatingEvents';
+import {
+  requestPostRunGuestClaim,
+  requestPostRunRating,
+} from '../../progression/postRunRatingEvents';
 import { createPostRunClearReward, notifyRewardStings } from '../../progression/rewardStings';
 import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
 
@@ -431,10 +434,12 @@ export class OverworldGoalRunController {
       return NOOP_MUTATION_RESULT;
     }
 
-    this.currentGoalRun.result = 'completed';
-    this.currentGoalRun.completionMessage = message;
-    this.currentGoalRun.pendingResult = 'completed';
-    this.maybeSubmitGoalRunResult(this.currentGoalRun);
+    const runState = this.currentGoalRun;
+    runState.result = 'completed';
+    runState.completionMessage = message;
+    runState.pendingResult = 'completed';
+    this.maybeSubmitGoalRunResult(runState);
+    this.maybePromptGuestClaimForLocalClear(runState);
     return {
       changed: true,
       goalMarkersChanged: true,
@@ -834,6 +839,60 @@ export class OverworldGoalRunController {
     }
 
     void this.finishRemoteGoalRun(runState, runState.pendingResult);
+  }
+
+  private maybePromptGuestClaimForLocalClear(runState: GoalRunState): void {
+    if (!this.shouldPromptGuestClaimForLocalClear(runState)) {
+      return;
+    }
+
+    const elapsedMs = Math.round(runState.elapsedMs);
+    const score = this.options.getScore();
+    runState.pendingResult = null;
+    runState.submissionState = 'submitted';
+    runState.submittedScore = computeRunScore(runState.goal, {
+      result: 'completed',
+      elapsedMs,
+      deaths: runState.deaths,
+      collectiblesCollected: runState.collectiblesCollected,
+      enemiesDefeated: runState.enemiesDefeated,
+      checkpointsReached: runState.checkpointsReached,
+      score,
+      finishedAt: this.nowIso(),
+      enemyCollectiblesCollected: runState.enemyCollectiblesCollected,
+      verificationTrace: null,
+    });
+    runState.submissionMessage = 'Guest clear saved on this browser.';
+
+    requestPostRunGuestClaim({
+      contentType: 'room',
+      contentId: runState.roomId,
+      contentTitle: this.currentRoomLeaderboard?.roomTitle ?? null,
+      roomCoordinates: { ...runState.roomCoordinates },
+      version: runState.roomVersion,
+      previousViewerRank: null,
+      elapsedMs,
+      deaths: runState.deaths,
+      score,
+      autoSuggestedDifficulty: suggestProgressionDifficulty({
+        elapsedMs,
+        deaths: runState.deaths,
+        collectiblesCollected: runState.collectiblesCollected,
+        enemiesDefeated: runState.enemiesDefeated,
+        checkpointsReached: runState.checkpointsReached,
+      }),
+    });
+  }
+
+  private shouldPromptGuestClaimForLocalClear(runState: GoalRunState): boolean {
+    return (
+      runState.result === 'completed' &&
+      runState.roomStatus === 'published' &&
+      runState.submissionState === 'local-only' &&
+      !runState.leaderboardEligible &&
+      !this.options.getAuthenticated() &&
+      !isPlayfunSurfaceAuth(this.options.getAuthSource())
+    );
   }
 
   private activateQualifiedRun(

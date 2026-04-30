@@ -1710,7 +1710,7 @@
     <div class="history-modal-panel leaderboard-modal-panel run-rating-modal-panel" role="dialog" aria-modal="true" aria-labelledby="run-rating-title">
       <div class="history-modal-header">
         <div class="history-modal-title-group">
-          <div class="history-modal-kicker">Run Complete</div>
+          <div id="run-rating-kicker" class="history-modal-kicker">Run Complete</div>
           <h2 id="run-rating-title" class="history-modal-title">Post-Run Rating</h2>
           <div id="run-rating-meta" class="history-modal-meta">Rate the run you just finished.</div>
         </div>
@@ -1721,6 +1721,15 @@
         <div id="run-rating-result" class="run-rating-result"></div>
         <div id="run-rating-leaderboard" class="history-modal-meta run-rating-summary-card run-rating-summary-card-leaderboard">Loading latest leaderboard summary...</div>
         <div id="run-rating-suggestion" class="history-modal-meta run-rating-summary-card run-rating-summary-card-suggestion">Suggested difficulty: Medium.</div>
+
+        <div id="run-guest-claim" class="run-rating-section run-guest-claim hidden">
+          <div id="run-guest-claim-xp" class="run-guest-claim-xp">You earned 20 XP</div>
+          <div id="run-guest-claim-copy" class="run-guest-claim-copy">Sign in to save your XP and leaderboard progress.</div>
+          <div class="run-guest-claim-actions">
+            <button id="btn-run-guest-claim-continue" class="bar-btn bar-btn-small" type="button">Keep Playing</button>
+            <button id="btn-run-guest-claim-signin" class="bar-btn" type="button">Save Progress</button>
+          </div>
+        </div>
 
         <div id="run-rating-share" class="run-rating-section run-share-section hidden">
           <div class="run-rating-section-label">Share</div>

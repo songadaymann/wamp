@@ -15,6 +15,7 @@
     "build": "tsc && vite build && node scripts/build_pages_worker.mjs",
     "preview": "vite preview",
     "smoke:mobile": "node scripts/mobile_smoke.mjs",
+    "smoke:guest-claim": "npx --yes --quiet -p playwright node scripts/smoke_guest_claim_modal.mjs",
     "smoke:preview:readonly": "npx --yes --quiet -p playwright node scripts/preview_smoke_readonly.mjs",
     "smoke:progression-rating": "npx --yes --quiet -p playwright node scripts/smoke_progression_rating_modal.mjs",
     "smoke:progression-api:local": "node scripts/smoke_progression_api_flow.mjs",

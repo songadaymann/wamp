@@ -17,10 +17,15 @@ import type {
   ViewerRatingSummary,
 } from '../../progression/model';
 import {
+  POST_RUN_GUEST_CLAIM_REQUEST_EVENT,
   POST_RUN_RATING_REQUEST_EVENT,
   notifyPostRunRatingSubmitted,
   type PostRunRatingRequestDetail,
 } from '../../progression/postRunRatingEvents';
+import {
+  recordGuestRunClear,
+  type GuestRunProgressSummary,
+} from '../../progression/guestRunProgress';
 import { REWARD_STINGS_IDLE_EVENT } from '../../progression/rewardStings';
 import { dispatchProgressionFeedback } from '../../progression/progressionFeedback';
 import { saveSeenRewardProgression } from '../../progression/rewardStingSeenState';
@@ -50,6 +55,7 @@ type RunRatingElements = {
   closeButton: HTMLButtonElement | null;
   skipButton: HTMLButtonElement | null;
   submitButton: HTMLButtonElement | null;
+  kicker: HTMLElement | null;
   title: HTMLElement | null;
   meta: HTMLElement | null;
   result: HTMLElement | null;
@@ -57,6 +63,9 @@ type RunRatingElements = {
   suggestion: HTMLElement | null;
   status: HTMLElement | null;
   reward: HTMLElement | null;
+  qualitySection: HTMLElement | null;
+  difficultySection: HTMLElement | null;
+  ratingActions: HTMLElement | null;
   error: HTMLElement | null;
   shareSection: HTMLElement | null;
   sharePreviewImage: HTMLImageElement | null;
@@ -66,6 +75,11 @@ type RunRatingElements = {
   shareSignInButton: HTMLButtonElement | null;
   shareTwitterButton: HTMLButtonElement | null;
   shareDownloadButton: HTMLButtonElement | null;
+  guestClaimSection: HTMLElement | null;
+  guestClaimXp: HTMLElement | null;
+  guestClaimCopy: HTMLElement | null;
+  guestClaimSignInButton: HTMLButtonElement | null;
+  guestClaimContinueButton: HTMLButtonElement | null;
   qualityButtons: HTMLButtonElement[];
   difficultyButtons: HTMLButtonElement[];
 };
@@ -73,6 +87,13 @@ type RunRatingElements = {
 type PostRunShareScene = {
   getPostRunShareRoomSnapshot?: () => RoomSnapshot | null;
 };
+
+type RunRatingModalMode = 'rating' | 'guest-claim';
+
+interface PendingOpenRequest {
+  mode: RunRatingModalMode;
+  detail: PostRunRatingRequestDetail;
+}
 
 export class RunRatingModalController {
   private readonly elements: RunRatingElements;
@@ -88,7 +109,9 @@ export class RunRatingModalController {
   private savedDeltaText: string | null = null;
   private baselineProgression: ProgressionSummary | null = null;
   private baselineProgressionLoad: Promise<void> | null = null;
-  private pendingOpenRequest: PostRunRatingRequestDetail | null = null;
+  private pendingOpenRequest: PendingOpenRequest | null = null;
+  private mode: RunRatingModalMode = 'rating';
+  private guestProgressSummary: GuestRunProgressSummary | null = null;
   private shareImage: RunShareImage | null = null;
   private shareImageLoading = false;
   private shareStatusText: string | null = null;
@@ -100,6 +123,16 @@ export class RunRatingModalController {
 
   private readonly handleShareSignInClick = () => {
     promptForSignIn('Sign in to save ranked clears and share your WAMP runs.');
+  };
+
+  private readonly handleGuestClaimSignInClick = (event: Event) => {
+    event.stopPropagation();
+    this.close();
+    promptForSignIn('Sign in to save your XP and leaderboard progress.');
+  };
+
+  private readonly handleGuestClaimContinueClick = () => {
+    this.close();
   };
 
   private readonly handleShareTwitterClick = () => {
@@ -138,12 +171,35 @@ export class RunRatingModalController {
       return;
     }
 
+    const mode: RunRatingModalMode = getAuthDebugState().authenticated ? 'rating' : 'guest-claim';
     if (this.isRewardStingVisible()) {
-      this.pendingOpenRequest = detail;
+      this.pendingOpenRequest = { mode, detail };
+      return;
+    }
+
+    if (mode === 'guest-claim') {
+      this.openGuestClaim(detail);
       return;
     }
 
     void this.open(detail);
+  };
+
+  private readonly handleGuestClaimRequest = (event: Event) => {
+    const detail =
+      event instanceof CustomEvent
+        ? (event.detail as PostRunRatingRequestDetail | undefined)
+        : undefined;
+    if (!detail) {
+      return;
+    }
+
+    if (this.isRewardStingVisible()) {
+      this.pendingOpenRequest = { mode: 'guest-claim', detail };
+      return;
+    }
+
+    this.openGuestClaim(detail);
   };
 
   private readonly handleRewardStingsIdle = () => {
@@ -151,9 +207,13 @@ export class RunRatingModalController {
       return;
     }
 
-    const detail = this.pendingOpenRequest;
+    const request = this.pendingOpenRequest;
     this.pendingOpenRequest = null;
-    void this.open(detail);
+    if (request.mode === 'guest-claim') {
+      this.openGuestClaim(request.detail);
+      return;
+    }
+    void this.open(request.detail);
   };
 
   constructor(
@@ -169,6 +229,7 @@ export class RunRatingModalController {
       closeButton: this.doc.getElementById('btn-run-rating-close') as HTMLButtonElement | null,
       skipButton: this.doc.getElementById('btn-run-rating-skip') as HTMLButtonElement | null,
       submitButton: this.doc.getElementById('btn-run-rating-submit') as HTMLButtonElement | null,
+      kicker: this.doc.getElementById('run-rating-kicker'),
       title: this.doc.getElementById('run-rating-title'),
       meta: this.doc.getElementById('run-rating-meta'),
       result: this.doc.getElementById('run-rating-result'),
@@ -176,6 +237,9 @@ export class RunRatingModalController {
       suggestion: this.doc.getElementById('run-rating-suggestion'),
       status: this.doc.getElementById('run-rating-status'),
       reward: this.doc.getElementById('run-rating-reward'),
+      qualitySection: this.doc.querySelector<HTMLElement>('#run-rating-modal .run-rating-section-quality'),
+      difficultySection: this.doc.querySelector<HTMLElement>('#run-rating-modal .run-rating-section-difficulty'),
+      ratingActions: this.doc.querySelector<HTMLElement>('#run-rating-modal .run-rating-actions'),
       error: this.doc.getElementById('run-rating-error'),
       shareSection: this.doc.getElementById('run-rating-share'),
       sharePreviewImage: this.doc.getElementById('run-share-preview-image') as HTMLImageElement | null,
@@ -185,6 +249,11 @@ export class RunRatingModalController {
       shareSignInButton: this.doc.getElementById('btn-run-share-signin') as HTMLButtonElement | null,
       shareTwitterButton: this.doc.getElementById('btn-run-share-twitter') as HTMLButtonElement | null,
       shareDownloadButton: this.doc.getElementById('btn-run-share-download') as HTMLButtonElement | null,
+      guestClaimSection: this.doc.getElementById('run-guest-claim'),
+      guestClaimXp: this.doc.getElementById('run-guest-claim-xp'),
+      guestClaimCopy: this.doc.getElementById('run-guest-claim-copy'),
+      guestClaimSignInButton: this.doc.getElementById('btn-run-guest-claim-signin') as HTMLButtonElement | null,
+      guestClaimContinueButton: this.doc.getElementById('btn-run-guest-claim-continue') as HTMLButtonElement | null,
       qualityButtons: Array.from(
         this.doc.querySelectorAll<HTMLButtonElement>('#run-rating-quality-actions [data-quality-stars]')
       ),
@@ -203,11 +272,17 @@ export class RunRatingModalController {
     this.elements.shareSignInButton?.addEventListener('click', this.handleShareSignInClick);
     this.elements.shareTwitterButton?.addEventListener('click', this.handleShareTwitterClick);
     this.elements.shareDownloadButton?.addEventListener('click', this.handleShareDownloadClick);
+    this.elements.guestClaimSignInButton?.addEventListener('click', this.handleGuestClaimSignInClick);
+    this.elements.guestClaimContinueButton?.addEventListener('click', this.handleGuestClaimContinueClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
     this.windowObj.addEventListener(
       POST_RUN_RATING_REQUEST_EVENT,
       this.handleOpenRequest as EventListener
+    );
+    this.windowObj.addEventListener(
+      POST_RUN_GUEST_CLAIM_REQUEST_EVENT,
+      this.handleGuestClaimRequest as EventListener
     );
     this.windowObj.addEventListener(REWARD_STINGS_IDLE_EVENT, this.handleRewardStingsIdle);
     for (const button of this.elements.qualityButtons) {
@@ -236,11 +311,17 @@ export class RunRatingModalController {
     this.elements.shareSignInButton?.removeEventListener('click', this.handleShareSignInClick);
     this.elements.shareTwitterButton?.removeEventListener('click', this.handleShareTwitterClick);
     this.elements.shareDownloadButton?.removeEventListener('click', this.handleShareDownloadClick);
+    this.elements.guestClaimSignInButton?.removeEventListener('click', this.handleGuestClaimSignInClick);
+    this.elements.guestClaimContinueButton?.removeEventListener('click', this.handleGuestClaimContinueClick);
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
     this.windowObj.removeEventListener(
       POST_RUN_RATING_REQUEST_EVENT,
       this.handleOpenRequest as EventListener
+    );
+    this.windowObj.removeEventListener(
+      POST_RUN_GUEST_CLAIM_REQUEST_EVENT,
+      this.handleGuestClaimRequest as EventListener
     );
     this.windowObj.removeEventListener(REWARD_STINGS_IDLE_EVENT, this.handleRewardStingsIdle);
   }
@@ -250,7 +331,9 @@ export class RunRatingModalController {
       return;
     }
 
+    this.mode = 'rating';
     this.activeRequest = detail;
+    this.guestProgressSummary = null;
     this.roomSummary = null;
     this.courseSummary = null;
     this.currentQualityStars = null;
@@ -311,6 +394,35 @@ export class RunRatingModalController {
     }
   }
 
+  private openGuestClaim(detail: PostRunRatingRequestDetail): void {
+    if (!this.elements.modal) {
+      return;
+    }
+
+    this.mode = 'guest-claim';
+    this.activeRequest = detail;
+    this.guestProgressSummary = recordGuestRunClear(detail);
+    this.roomSummary = null;
+    this.courseSummary = null;
+    this.currentQualityStars = null;
+    this.currentDifficultyChoice = null;
+    this.submitting = false;
+    this.loadingSummary = false;
+    this.savedProgression = null;
+    this.savedDeltaText = null;
+    this.baselineProgression = null;
+    this.baselineProgressionLoad = null;
+    this.shareImage = null;
+    this.shareImageLoading = false;
+    this.shareStatusText = null;
+    this.shareStatusTone = 'default';
+    this.setError(null);
+    this.loadToken += 1;
+    this.elements.modal.classList.remove('hidden');
+    this.elements.modal.setAttribute('aria-hidden', 'false');
+    this.render();
+  }
+
   close(): void {
     if (!this.elements.modal) {
       return;
@@ -318,7 +430,9 @@ export class RunRatingModalController {
 
     this.elements.modal.classList.add('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'true');
+    this.mode = 'rating';
     this.activeRequest = null;
+    this.guestProgressSummary = null;
     this.roomSummary = null;
     this.courseSummary = null;
     this.currentQualityStars = null;
@@ -584,35 +698,48 @@ export class RunRatingModalController {
     const request = this.activeRequest;
     const roomSummary = this.roomSummary;
     const courseSummary = this.courseSummary;
-    const summaryTitle =
-      request?.contentType === 'room'
+    const guestClaimMode = this.mode === 'guest-claim';
+    const summaryTitle = guestClaimMode
+      ? 'You did it!'
+      : request?.contentType === 'room'
         ? roomSummary?.roomTitle ?? request?.contentTitle ?? 'Room Challenge'
         : courseSummary?.courseTitle ?? request?.contentTitle ?? 'Course Run';
 
+    this.elements.kicker?.classList.toggle('hidden', guestClaimMode);
     if (this.elements.title) {
       this.elements.title.textContent = summaryTitle;
     }
     if (this.elements.meta) {
-      this.elements.meta.textContent = request
-        ? request.contentType === 'room'
-          ? `Post-run room rating · version ${request.version}`
-          : `Post-run course rating · version ${request.version}`
-        : 'Post-run rating';
+      this.elements.meta.classList.toggle('hidden', guestClaimMode);
+      if (guestClaimMode) {
+        this.elements.meta.textContent = '';
+      } else if (request) {
+        this.elements.meta.textContent =
+          request.contentType === 'room'
+            ? `Post-run room rating · version ${request.version}`
+            : `Post-run course rating · version ${request.version}`;
+      } else {
+        this.elements.meta.textContent = 'Post-run rating';
+      }
     }
     if (this.elements.result) {
+      this.elements.result.classList.toggle('hidden', guestClaimMode);
       this.elements.result.textContent = request ? formatRunResultSummary(request) : '';
     }
     if (this.elements.leaderboard) {
+      this.elements.leaderboard.classList.toggle('hidden', guestClaimMode);
       this.elements.leaderboard.textContent = this.loadingSummary
         ? 'Loading latest leaderboard summary...'
         : formatLeaderboardSummary(roomSummary, courseSummary);
     }
     if (this.elements.suggestion) {
+      this.elements.suggestion.classList.toggle('hidden', guestClaimMode);
       this.elements.suggestion.textContent = request
         ? `Suggested difficulty: ${ROOM_DIFFICULTY_LABELS[request.autoSuggestedDifficulty]}.`
         : '';
     }
     if (this.elements.status) {
+      this.elements.status.classList.toggle('hidden', guestClaimMode);
       this.elements.status.textContent = this.submitting
         ? 'Saving your post-run rating...'
         : this.savedProgression
@@ -624,7 +751,14 @@ export class RunRatingModalController {
         ? buildProgressionSummaryText(this.savedProgression)
         : buildQualitySummaryText(roomSummary?.quality ?? courseSummary?.quality ?? null);
       this.elements.reward.textContent = rewardText;
-      this.elements.reward.classList.toggle('hidden', rewardText.length === 0);
+      this.elements.reward.classList.toggle('hidden', guestClaimMode || rewardText.length === 0);
+    }
+    this.elements.qualitySection?.classList.toggle('hidden', guestClaimMode);
+    this.elements.difficultySection?.classList.toggle('hidden', guestClaimMode);
+    this.elements.ratingActions?.classList.toggle('hidden', guestClaimMode);
+    this.elements.guestClaimSection?.classList.toggle('hidden', !guestClaimMode);
+    if (guestClaimMode) {
+      this.renderGuestClaim();
     }
     this.renderShare(request);
 
@@ -654,8 +788,19 @@ export class RunRatingModalController {
     }
   }
 
+  private renderGuestClaim(): void {
+    const xp = this.guestProgressSummary?.latest?.potentialPxp ?? 0;
+    if (this.elements.guestClaimXp) {
+      this.elements.guestClaimXp.textContent = `You earned ${xp > 0 ? xp : 20} XP`;
+    }
+    if (this.elements.guestClaimCopy) {
+      this.elements.guestClaimCopy.textContent =
+        'Sign in to save your XP and leaderboard progress.';
+    }
+  }
+
   private renderShare(request: PostRunRatingRequestDetail | null): void {
-    const visible = request?.contentType === 'room';
+    const visible = this.mode === 'rating' && request?.contentType === 'room';
     this.elements.shareSection?.classList.toggle('hidden', !visible);
     if (!visible || !request) {
       return;
