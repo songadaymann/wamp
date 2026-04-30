@@ -8,6 +8,7 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_TEST_RESET?: string;
   readonly VITE_PARTYKIT_HOST?: string;
   readonly VITE_PARTYKIT_PARTY?: string;
+  readonly VITE_CLOUDFLARE_WEB_ANALYTICS_TOKEN?: string;
 }
 
 interface ImportMeta {
