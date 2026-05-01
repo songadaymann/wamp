@@ -253,6 +253,109 @@
   filter: brightness(1.06);
 }
 
+#guest-builder-claim-modal {
+  background: rgba(24, 22, 28, 0.8);
+  backdrop-filter: none;
+}
+
+#guest-builder-claim-modal .guest-builder-claim-modal-panel {
+  width: min(560px, calc(100vw - 36px));
+  max-height: calc(100vh - 32px);
+  gap: 16px;
+  padding: 20px 18px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #fff3db;
+  border: 3px solid #277b30;
+  border-radius: 0;
+  box-shadow: 6px 6px 0 #18161c;
+}
+
+#guest-builder-claim-modal .history-modal-kicker {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+#guest-builder-claim-modal .history-modal-title {
+  margin-top: 6px;
+  color: #18161c;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+#guest-builder-claim-modal .history-modal-meta,
+#guest-builder-claim-modal .guest-builder-claim-copy {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+#guest-builder-claim-modal .guest-builder-claim-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  text-align: center;
+}
+
+#guest-builder-claim-modal .guest-builder-claim-xp {
+  color: #18161c;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+#guest-builder-claim-modal .guest-builder-claim-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+#guest-builder-claim-modal #btn-guest-builder-claim-close,
+#guest-builder-claim-modal #btn-guest-builder-claim-continue {
+  min-height: 34px;
+  padding: 8px 12px 7px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #79ccde;
+  color: #000;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#guest-builder-claim-modal #btn-guest-builder-claim-signin {
+  min-height: 34px;
+  padding: 8px 14px 7px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #277b30;
+  color: #fff3db;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#guest-builder-claim-modal #btn-guest-builder-claim-close:hover,
+#guest-builder-claim-modal #btn-guest-builder-claim-continue:hover,
+#guest-builder-claim-modal #btn-guest-builder-claim-signin:hover {
+  filter: brightness(1.06);
+}
+
 #run-rating-modal .run-share-card {
   display: grid;
   grid-template-columns: minmax(168px, 224px) minmax(0, 1fr);

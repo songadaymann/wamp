@@ -94,6 +94,7 @@ import { EditorEditRuntime, type GoalPlacementMode } from './editor/editRuntime'
 import { EditorSceneFlowController } from './editor/flow';
 import { EditorInspectorController } from './editor/inspector';
 import { EditorInteractionController } from './editor/interaction';
+import { GuestBuilderActivityTracker } from './editor/guestBuilderActivityTracker';
 import { EditorMusicPatternController } from './editor/musicPatternEditor';
 import {
   renderMusicArrangementPanel,
@@ -157,6 +158,7 @@ export class EditorScene extends Phaser.Scene {
 
   // Single-room persistence (local-first, ready for a remote adapter later)
   private readonly editRuntime: EditorEditRuntime;
+  private readonly guestBuilderActivityTracker: GuestBuilderActivityTracker;
   private readonly roomSession: EditorRoomSession;
   private readonly worldRepository = createWorldRepository();
   private readonly backgroundController: EditorBackgroundController;
@@ -358,6 +360,11 @@ export class EditorScene extends Phaser.Scene {
 
   constructor() {
     super({ key: 'EditorScene' });
+    this.guestBuilderActivityTracker = new GuestBuilderActivityTracker({
+      getRoomId: () => this.roomId,
+      getRoomCoordinates: () => ({ ...this.roomCoordinates }),
+      getRoomTitle: () => this.roomTitle,
+    });
     this.editRuntime = new EditorEditRuntime(this, {
       getLayers: () => this.layers,
       getRoomSnapshotMetadata: () => ({
@@ -395,6 +402,7 @@ export class EditorScene extends Phaser.Scene {
       syncBackgroundCameraIgnores: () => this.syncBackgroundCameraIgnores(),
       updatePersistenceStatus: (text) => this.updatePersistenceStatus(text),
       canSaveDraft: () => this.roomPermissions.canSaveDraft,
+      recordBuildPlacement: (count) => this.guestBuilderActivityTracker.recordPlacedBuildContent(count),
     });
     this.roomSession = new EditorRoomSession(createRoomRepository(), {
       applyRoomSnapshot: (room) => {
@@ -907,6 +915,7 @@ export class EditorScene extends Phaser.Scene {
     this.courseController.reset();
     this.roomSession.reset();
     this.toolController.reset();
+    this.guestBuilderActivityTracker.reset();
     this.roomEditCount = 0;
     resetEditorPaletteSelection();
     editorState.tileFlipX = false;

@@ -1197,6 +1197,7 @@ export class CourseEditorScene extends Phaser.Scene {
           this.renderUi();
         },
         canSaveDraft: () => slice.permissions.canSaveDraft,
+        recordBuildPlacement: () => {},
       }),
     };
 

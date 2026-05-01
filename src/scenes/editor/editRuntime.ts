@@ -147,6 +147,7 @@ interface EditorEditRuntimeHost {
   syncBackgroundCameraIgnores(): void;
   updatePersistenceStatus(text: string): void;
   canSaveDraft(): boolean;
+  recordBuildPlacement(count: number): void;
 }
 
 export class EditorEditRuntime {
@@ -529,10 +530,12 @@ export class EditorEditRuntime {
       return;
     }
 
+    const placedTileCount = this.currentBatch.filter((action) => action.newGid >= 0).length;
     this.undoStack.push({ kind: 'tiles', actions: [...this.currentBatch] });
     this.redoStack = [];
     this.currentBatch = [];
     this.markRoomDirty();
+    this.host.recordBuildPlacement(placedTileCount);
   }
 
   clearTileBatch(): void {
@@ -940,6 +943,7 @@ export class EditorEditRuntime {
     this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
+    this.host.recordBuildPlacement(1);
     return placed;
   }
 

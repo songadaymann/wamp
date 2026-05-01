@@ -18,6 +18,10 @@ import {
   refreshAuthSession,
   sendPreparedWalletTransaction,
 } from '../../auth/client';
+import {
+  requestGuestBuilderClaim,
+  type GuestBuilderClaimSource,
+} from '../../progression/guestBuilderClaimEvents';
 import { clearLocalRoomStorageEntry } from '../../persistence/browserStorage';
 import {
   buildExplorerTxUrl,
@@ -423,9 +427,9 @@ export class EditorRoomSession {
       if (!getAuthDebugState().authenticated) {
         await this.saveDraftLocally(
           saveStartedAt,
-          'Draft saved locally. Sign in to save drafts to your account.'
+          'Draft saved locally. Sign in to save drafts to your account.',
+          'manual-save'
         );
-        promptForSignIn('Sign in to save drafts to your account. Your local draft is safe.');
         return null;
       }
     }
@@ -453,11 +457,9 @@ export class EditorRoomSession {
           saveStartedAt,
           options.promptForSignInOnUnauthorized
             ? 'Draft saved locally. Sign in to save drafts to your account.'
-            : 'Draft saved locally. Sign in to publish.'
+            : 'Draft saved locally. Sign in to publish.',
+          options.promptForSignInOnUnauthorized ? 'manual-save' : null
         );
-        if (options.promptForSignInOnUnauthorized) {
-          promptForSignIn('Sign in to save drafts to your account. Your local draft is safe.');
-        }
         return record;
       }
 
@@ -492,9 +494,9 @@ export class EditorRoomSession {
     if (!getAuthDebugState().authenticated) {
       await this.saveDraftLocally(
         this.host.getLastDirtyAt(),
-        'Draft saved locally. Sign in to publish.'
+        'Draft saved locally. Sign in to publish.',
+        'publish-attempt'
       );
-      promptForSignIn('Sign in to publish this room. Your local draft is safe.');
       return null;
     }
 
@@ -524,9 +526,9 @@ export class EditorRoomSession {
       if (this.shouldPersistGuestDraftLocally(error)) {
         await this.saveDraftLocally(
           this.host.getLastDirtyAt(),
-          'Draft saved locally. Sign in to publish.'
+          'Draft saved locally. Sign in to publish.',
+          'publish-attempt'
         );
-        promptForSignIn('Sign in to publish this room. Your local draft is safe.');
         return null;
       }
 
@@ -1034,7 +1036,8 @@ export class EditorRoomSession {
 
   private async saveDraftLocally(
     saveStartedAt: number,
-    successText: string
+    successText: string,
+    guestBuilderClaimSource: GuestBuilderClaimSource | null = null,
   ): Promise<RoomRecord | null> {
     const record = await this.localRoomRepository.saveDraft(this.host.exportRoomSnapshot());
     this.syncRoomMetadata(record);
@@ -1044,7 +1047,21 @@ export class EditorRoomSession {
     }
 
     this.setStatusText(successText);
+    this.requestGuestBuilderClaimPrompt(guestBuilderClaimSource);
     return record;
+  }
+
+  private requestGuestBuilderClaimPrompt(source: GuestBuilderClaimSource | null): void {
+    if (!source || getAuthDebugState().authenticated) {
+      return;
+    }
+
+    requestGuestBuilderClaim({
+      roomId: this.roomId,
+      roomCoordinates: this.roomCoordinates,
+      roomTitle: this.roomTitle,
+      source,
+    });
   }
 
   private syncRoomMetadata(record: RoomRecord): void {
