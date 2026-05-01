@@ -65,6 +65,30 @@ type SfxHistoryEntry = {
   status: 'played' | 'blocked' | 'missing' | 'cooldown' | 'error';
 };
 
+type AudioResumeDebugEntry = {
+  at: number;
+  trigger: string;
+  status: 'no-context' | 'already-running' | 'resumed' | 'failed';
+  stateBefore: string | null;
+  stateAfter: string | null;
+  errorName?: string;
+  errorMessage?: string;
+};
+
+type AudioContextStateDebugEntry = {
+  at: number;
+  state: string;
+};
+
+type SfxPlayErrorDebugEntry = {
+  at: number;
+  cue: SfxCue;
+  userInteracted: boolean;
+  audioContextState: string | null;
+  errorName: string;
+  errorMessage: string;
+};
+
 // Music already runs through its own master gain, so SFX need a shared trim to
 // stop common gameplay cues from sitting on top of the room mix.
 const GLOBAL_SFX_VOLUME_MULTIPLIER = 0.55;
@@ -322,6 +346,9 @@ export class SfxController {
   private readonly activeCueCounts = new Map<SfxCue, number>();
   private readonly lastPlayedAt = new Map<SfxCue, number>();
   private readonly history: SfxHistoryEntry[] = [];
+  private lastResumeAttempt: AudioResumeDebugEntry | null = null;
+  private lastAudioContextStateChange: AudioContextStateDebugEntry | null = null;
+  private lastPlayError: SfxPlayErrorDebugEntry | null = null;
 
   init(windowObj: Window = window): void {
     if (this.initialized) {
@@ -332,12 +359,26 @@ export class SfxController {
 
     const markInteracted = () => {
       this.userInteracted = true;
-      void this.resumeAudioContext();
+      void this.resumeAudioContext('user-gesture');
+    };
+
+    const resumeAfterLifecycleEvent = (trigger: string) => {
+      if (!this.userInteracted) {
+        return;
+      }
+      void this.resumeAudioContext(trigger);
     };
 
     windowObj.addEventListener('pointerdown', markInteracted, { passive: true });
     windowObj.addEventListener('keydown', markInteracted, { passive: true });
     windowObj.addEventListener('touchstart', markInteracted, { passive: true });
+    windowObj.addEventListener('focus', () => resumeAfterLifecycleEvent('window-focus'), { passive: true });
+    windowObj.addEventListener('pageshow', () => resumeAfterLifecycleEvent('pageshow'), { passive: true });
+    windowObj.document.addEventListener('visibilitychange', () => {
+      if (!windowObj.document.hidden) {
+        resumeAfterLifecycleEvent('visibilitychange-visible');
+      }
+    });
 
     for (const config of Object.values(SFX_CUES)) {
       const audio = new Audio(resolveAssetUrl(config.path));
@@ -366,6 +407,10 @@ export class SfxController {
       initialized: this.initialized,
       muted: this.muted,
       userInteracted: this.userInteracted,
+      audioContextState: this.audioContext?.state ?? null,
+      lastAudioContextStateChange: this.lastAudioContextStateChange,
+      lastResumeAttempt: this.lastResumeAttempt,
+      lastPlayError: this.lastPlayError,
       activeCount: this.activeAudio.size,
       activeCues: [...this.activeAudioByCue.entries()].map(([cue, players]) => ({
         cue,
@@ -437,7 +482,7 @@ export class SfxController {
         filterNode.Q.value = Math.max(0.0001, playbackOptions?.lowPassQ ?? 0.9);
         mediaSourceNode.connect(filterNode);
         filterNode.connect(audioContext.destination);
-        void this.resumeAudioContext();
+        void this.resumeAudioContext('lowpass-sfx');
       }
     }
 
@@ -516,8 +561,15 @@ export class SfxController {
         .then(() => {
           this.record(cue, 'played');
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           cleanup();
+          this.lastPlayError = {
+            at: Date.now(),
+            cue,
+            userInteracted: this.userInteracted,
+            audioContextState: this.audioContext?.state ?? null,
+            ...normalizeAudioError(error),
+          };
           this.record(cue, this.userInteracted ? 'error' : 'blocked');
         });
       return;
@@ -564,24 +616,90 @@ export class SfxController {
     }
 
     this.audioContext = new AudioContextCtor();
+    this.lastAudioContextStateChange = {
+      at: Date.now(),
+      state: this.audioContext.state,
+    };
+    this.audioContext.addEventListener('statechange', () => {
+      this.lastAudioContextStateChange = {
+        at: Date.now(),
+        state: this.audioContext?.state ?? 'unknown',
+      };
+    });
     return this.audioContext;
   }
 
-  private async resumeAudioContext(): Promise<void> {
-    if (!this.audioContext || this.audioContext.state === 'running') {
+  private async resumeAudioContext(trigger: string): Promise<void> {
+    const stateBefore = this.audioContext?.state ?? null;
+    if (!this.audioContext) {
+      this.lastResumeAttempt = {
+        at: Date.now(),
+        trigger,
+        status: 'no-context',
+        stateBefore,
+        stateAfter: null,
+      };
+      return;
+    }
+
+    if (this.audioContext.state === 'running') {
+      this.lastResumeAttempt = {
+        at: Date.now(),
+        trigger,
+        status: 'already-running',
+        stateBefore,
+        stateAfter: this.audioContext.state,
+      };
       return;
     }
 
     try {
       await this.audioContext.resume();
-    } catch {
-      void 0;
+      const stateAfter: string = this.audioContext.state;
+      this.lastResumeAttempt = {
+        at: Date.now(),
+        trigger,
+        status: stateAfter === 'running' ? 'resumed' : 'failed',
+        stateBefore,
+        stateAfter,
+      };
+    } catch (error) {
+      this.lastResumeAttempt = {
+        at: Date.now(),
+        trigger,
+        status: 'failed',
+        stateBefore,
+        stateAfter: this.audioContext.state,
+        ...normalizeAudioError(error),
+      };
     }
   }
 }
 
 function PhaserClamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function normalizeAudioError(error: unknown): { errorName: string; errorMessage: string } {
+  if (error instanceof Error) {
+    return {
+      errorName: error.name || 'Error',
+      errorMessage: error.message || '',
+    };
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const value = error as { name?: unknown; message?: unknown };
+    return {
+      errorName: typeof value.name === 'string' ? value.name : 'UnknownError',
+      errorMessage: typeof value.message === 'string' ? value.message : '',
+    };
+  }
+
+  return {
+    errorName: 'UnknownError',
+    errorMessage: typeof error === 'string' ? error : '',
+  };
 }
 
 export const globalSfxController = new SfxController();

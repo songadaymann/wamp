@@ -58,6 +58,40 @@ type OneShotPlayback = {
   stop: () => void;
 };
 
+type AudioResumeDebugEntry = {
+  at: number;
+  trigger: string;
+  status: 'no-context' | 'already-running' | 'resumed' | 'failed';
+  stateBefore: string | null;
+  stateAfter: string | null;
+  errorName?: string;
+  errorMessage?: string;
+};
+
+type AudioContextStateDebugEntry = {
+  at: number;
+  state: string;
+};
+
+type PlaybackRequestStatus =
+  | 'pending'
+  | 'already-playing'
+  | 'started'
+  | 'stopped'
+  | 'stale'
+  | 'empty'
+  | 'error';
+
+type PlaybackRequestDebugEntry = {
+  at: number;
+  id: number;
+  mode: PlaybackMode;
+  arrangementKey: string | null;
+  status: PlaybackRequestStatus;
+  errorName?: string;
+  errorMessage?: string;
+};
+
 const IMMEDIATE_FADE_DURATION_SEC = 0.12;
 const GLOBAL_MUSIC_VOLUME_MULTIPLIER = 0.6;
 
@@ -83,6 +117,11 @@ export class RoomMusicController {
   private readonly patternLoopBufferPromises = new Map<string, Promise<AudioBuffer>>();
   private currentArrangement: RoomMusic | null = null;
   private mode: PlaybackMode = 'idle';
+  private playbackRequestSerial = 0;
+  private lastPlaybackRequest: PlaybackRequestDebugEntry | null = null;
+  private lastStalePlaybackRequest: PlaybackRequestDebugEntry | null = null;
+  private lastResumeAttempt: AudioResumeDebugEntry | null = null;
+  private lastAudioContextStateChange: AudioContextStateDebugEntry | null = null;
 
   init(windowObj: Window = window): void {
     if (this.initialized) {
@@ -92,12 +131,26 @@ export class RoomMusicController {
     this.initialized = true;
     const markInteracted = () => {
       this.userInteracted = true;
-      void this.resumeAudioContext();
+      void this.resumeAudioContext('user-gesture');
+    };
+
+    const resumeAfterLifecycleEvent = (trigger: string) => {
+      if (!this.userInteracted) {
+        return;
+      }
+      void this.resumeAudioContext(trigger);
     };
 
     windowObj.addEventListener('pointerdown', markInteracted, { passive: true });
     windowObj.addEventListener('keydown', markInteracted, { passive: true });
     windowObj.addEventListener('touchstart', markInteracted, { passive: true });
+    windowObj.addEventListener('focus', () => resumeAfterLifecycleEvent('window-focus'), { passive: true });
+    windowObj.addEventListener('pageshow', () => resumeAfterLifecycleEvent('pageshow'), { passive: true });
+    windowObj.document.addEventListener('visibilitychange', () => {
+      if (!windowObj.document.hidden) {
+        resumeAfterLifecycleEvent('visibilitychange-visible');
+      }
+    });
   }
 
   async playArrangement(
@@ -109,9 +162,11 @@ export class RoomMusicController {
     },
   ): Promise<void> {
     this.init();
+    const requestId = this.beginPlaybackRequest(options.mode, getRoomMusicKey(music));
     this.mode = options.mode;
 
     if (!music || isRoomMusicEmpty(music)) {
+      this.recordPlaybackRequestStatus(requestId, options.mode, getRoomMusicKey(music), 'empty');
       this.stopArrangement({
         transition: options.transition ?? 'bar',
         mode: options.mode,
@@ -122,6 +177,7 @@ export class RoomMusicController {
 
     const nextArrangement = cloneRoomMusic(music);
     if (!nextArrangement) {
+      this.recordPlaybackRequestStatus(requestId, options.mode, getRoomMusicKey(music), 'empty');
       this.stopArrangement({
         transition: options.transition ?? 'bar',
         mode: options.mode,
@@ -130,17 +186,27 @@ export class RoomMusicController {
       return;
     }
 
-    if (isPatternRoomMusic(nextArrangement)) {
-      await this.playPatternArrangement(nextArrangement, options);
-      return;
-    }
+    try {
+      if (isPatternRoomMusic(nextArrangement)) {
+        await this.playPatternArrangement(nextArrangement, options, requestId);
+        return;
+      }
 
-    if (isPhraseArrangementRoomMusic(nextArrangement)) {
-      await this.playPhraseArrangement(nextArrangement, options);
-      return;
-    }
+      if (isPhraseArrangementRoomMusic(nextArrangement)) {
+        await this.playPhraseArrangement(nextArrangement, options, requestId);
+        return;
+      }
 
-    await this.playStemArrangement(nextArrangement, options);
+      await this.playStemArrangement(nextArrangement, options, requestId);
+    } catch (error) {
+      this.recordPlaybackRequestStatus(
+        requestId,
+        options.mode,
+        getRoomMusicKey(nextArrangement),
+        'error',
+        error,
+      );
+    }
   }
 
   stopArrangement(options?: {
@@ -149,12 +215,15 @@ export class RoomMusicController {
     fadeDurationSec?: number;
     resetTransport?: boolean;
   }): void {
+    const requestId = this.invalidatePlaybackRequests();
+    const nextMode = options?.mode ?? 'idle';
+    this.recordPlaybackRequestStatus(requestId, nextMode, null, 'stopped');
     const audioContext = this.audioContext;
     if (!audioContext) {
       this.activeLanes.clear();
       this.activePattern = null;
       this.currentArrangement = null;
-      this.mode = options?.mode ?? 'idle';
+      this.mode = nextMode;
       if (options?.resetTransport) {
         this.transportStartTime = 0;
       }
@@ -181,7 +250,7 @@ export class RoomMusicController {
     }
 
     this.currentArrangement = null;
-    this.mode = options?.mode ?? 'idle';
+    this.mode = nextMode;
     if (options?.resetTransport) {
       this.transportStartTime = 0;
     }
@@ -221,7 +290,7 @@ export class RoomMusicController {
       source,
       gain,
     };
-    void this.resumeAudioContext();
+    void this.resumeAudioContext('preview-clip');
   }
 
   stopPreviewClip(): void {
@@ -359,7 +428,7 @@ export class RoomMusicController {
       },
       { once: true },
     );
-    void this.resumeAudioContext();
+    void this.resumeAudioContext('preview-pattern-cell');
   }
 
   private async previewDrumPatternCell(
@@ -414,7 +483,7 @@ export class RoomMusicController {
       },
       { once: true },
     );
-    void this.resumeAudioContext();
+    void this.resumeAudioContext('preview-drum-cell');
   }
 
   getDebugState(): Record<string, unknown> {
@@ -423,6 +492,11 @@ export class RoomMusicController {
       initialized: this.initialized,
       userInteracted: this.userInteracted,
       mode: this.mode,
+      audioContextState: this.audioContext?.state ?? null,
+      lastAudioContextStateChange: this.lastAudioContextStateChange,
+      lastResumeAttempt: this.lastResumeAttempt,
+      lastPlaybackRequest: this.lastPlaybackRequest,
+      lastStalePlaybackRequest: this.lastStalePlaybackRequest,
       transportStartTime: this.transportStartTime,
       audioCurrentTime: Number(currentTime.toFixed(3)),
       oneShotCount: this.oneShotPlaybacks.size,
@@ -455,6 +529,7 @@ export class RoomMusicController {
       transition?: TransitionMode;
       fadeDurationSec?: number;
     },
+    requestId: number,
   ): Promise<void> {
     const pack = getRoomMusicPack(nextArrangement.packId);
     if (!pack) {
@@ -473,6 +548,10 @@ export class RoomMusicController {
 
     const clipIds = this.collectStemArrangementClipIds(nextArrangement);
     await Promise.all([...clipIds].map((clipId) => this.loadBuffer(nextArrangement.packId, clipId)));
+    if (!this.isCurrentPlaybackRequest(requestId)) {
+      this.recordPlaybackRequestStatus(requestId, options.mode, getRoomMusicKey(nextArrangement), 'stale');
+      return;
+    }
 
     const now = audioContext.currentTime;
     const transportAlreadyRunning = this.transportStartTime > 0;
@@ -519,6 +598,10 @@ export class RoomMusicController {
       }
 
       const buffer = await this.loadLaneLoopBuffer(nextArrangement.packId, laneId, nextBarClipIds);
+      if (!this.isCurrentPlaybackRequest(requestId)) {
+        this.recordPlaybackRequestStatus(requestId, options.mode, getRoomMusicKey(nextArrangement), 'stale');
+        return;
+      }
       const lane = getRoomMusicLane(pack, laneId);
       const playback = this.startLoopPlayback(nextPatternKey, buffer, {
         loopDurationSec: pack.loopDurationSec,
@@ -532,6 +615,7 @@ export class RoomMusicController {
     }
 
     this.currentArrangement = nextArrangement;
+    this.recordPlaybackRequestStatus(requestId, options.mode, getRoomMusicKey(nextArrangement), 'started');
   }
 
   private async playPatternArrangement(
@@ -541,6 +625,7 @@ export class RoomMusicController {
       transition?: TransitionMode;
       fadeDurationSec?: number;
     },
+    requestId: number,
   ): Promise<void> {
     const audioContext = this.getAudioContext();
     if (!audioContext) {
@@ -554,12 +639,17 @@ export class RoomMusicController {
       (this.activePattern.stopTime === null || this.activePattern.stopTime > audioContext.currentTime)
     ) {
       this.currentArrangement = cloneRoomMusic(nextArrangement);
+      this.recordPlaybackRequestStatus(requestId, options.mode, nextPatternKey, 'already-playing');
       return;
     }
 
     const loopDurationSec = getRoomMusicLoopDurationSec(nextArrangement);
     const barDurationSec = getRoomMusicBarDurationSec(nextArrangement);
     const buffer = await this.loadPatternLoopBuffer(nextArrangement);
+    if (!this.isCurrentPlaybackRequest(requestId)) {
+      this.recordPlaybackRequestStatus(requestId, options.mode, nextPatternKey, 'stale');
+      return;
+    }
     const now = audioContext.currentTime;
     const transportAlreadyRunning = this.transportStartTime > 0;
     const transition = options.transition ?? 'bar';
@@ -597,6 +687,7 @@ export class RoomMusicController {
       baseGain: 1,
     });
     this.currentArrangement = nextArrangement;
+    this.recordPlaybackRequestStatus(requestId, options.mode, nextPatternKey, 'started');
   }
 
   private async playPhraseArrangement(
@@ -606,6 +697,7 @@ export class RoomMusicController {
       transition?: TransitionMode;
       fadeDurationSec?: number;
     },
+    requestId: number,
   ): Promise<void> {
     const audioContext = this.getAudioContext();
     if (!audioContext) {
@@ -619,12 +711,17 @@ export class RoomMusicController {
       (this.activePattern.stopTime === null || this.activePattern.stopTime > audioContext.currentTime)
     ) {
       this.currentArrangement = cloneRoomMusic(nextArrangement);
+      this.recordPlaybackRequestStatus(requestId, options.mode, nextArrangementKey, 'already-playing');
       return;
     }
 
     const loopDurationSec = getRoomMusicLoopDurationSec(nextArrangement);
     const barDurationSec = getRoomMusicBarDurationSec(nextArrangement);
     const buffer = await this.loadPhraseArrangementLoopBuffer(nextArrangement);
+    if (!this.isCurrentPlaybackRequest(requestId)) {
+      this.recordPlaybackRequestStatus(requestId, options.mode, nextArrangementKey, 'stale');
+      return;
+    }
     const now = audioContext.currentTime;
     const transportAlreadyRunning = this.transportStartTime > 0;
     const transition = options.transition ?? 'bar';
@@ -662,10 +759,56 @@ export class RoomMusicController {
       baseGain: 1,
     });
     this.currentArrangement = nextArrangement;
+    this.recordPlaybackRequestStatus(requestId, options.mode, nextArrangementKey, 'started');
   }
 
   private hasActivePlaybacks(): boolean {
     return this.activePattern !== null || this.activeLanes.size > 0;
+  }
+
+  private beginPlaybackRequest(mode: PlaybackMode, arrangementKey: string | null): number {
+    const id = this.invalidatePlaybackRequests();
+    this.lastPlaybackRequest = {
+      at: Date.now(),
+      id,
+      mode,
+      arrangementKey,
+      status: 'pending',
+    };
+    return id;
+  }
+
+  private invalidatePlaybackRequests(): number {
+    this.playbackRequestSerial += 1;
+    return this.playbackRequestSerial;
+  }
+
+  private isCurrentPlaybackRequest(requestId: number): boolean {
+    return requestId === this.playbackRequestSerial;
+  }
+
+  private recordPlaybackRequestStatus(
+    id: number,
+    mode: PlaybackMode,
+    arrangementKey: string | null,
+    status: PlaybackRequestStatus,
+    error?: unknown,
+  ): void {
+    const entry: PlaybackRequestDebugEntry = {
+      at: Date.now(),
+      id,
+      mode,
+      arrangementKey,
+      status,
+      ...(error ? normalizeAudioError(error) : {}),
+    };
+
+    if (status === 'stale' && this.lastPlaybackRequest?.id !== id) {
+      this.lastStalePlaybackRequest = entry;
+      return;
+    }
+
+    this.lastPlaybackRequest = entry;
   }
 
   private collectStemArrangementClipIds(arrangement: StemArrangementRoomMusic): Set<string> {
@@ -705,6 +848,16 @@ export class RoomMusicController {
     }
 
     this.audioContext = new AudioContextCtor();
+    this.lastAudioContextStateChange = {
+      at: Date.now(),
+      state: this.audioContext.state,
+    };
+    this.audioContext.addEventListener('statechange', () => {
+      this.lastAudioContextStateChange = {
+        at: Date.now(),
+        state: this.audioContext?.state ?? 'unknown',
+      };
+    });
     return this.audioContext;
   }
 
@@ -924,7 +1077,7 @@ export class RoomMusicController {
     source.connect(gain);
     gain.connect(masterGain);
     source.start(options.startAt, options.offsetSec);
-    void this.resumeAudioContext();
+    void this.resumeAudioContext('start-loop-playback');
 
     return {
       playbackId,
@@ -1002,17 +1155,73 @@ export class RoomMusicController {
     return elapsed % loopDurationSec;
   }
 
-  private async resumeAudioContext(): Promise<void> {
-    if (!this.audioContext || this.audioContext.state === 'running') {
+  private async resumeAudioContext(trigger: string): Promise<void> {
+    const stateBefore = this.audioContext?.state ?? null;
+    if (!this.audioContext) {
+      this.lastResumeAttempt = {
+        at: Date.now(),
+        trigger,
+        status: 'no-context',
+        stateBefore,
+        stateAfter: null,
+      };
+      return;
+    }
+
+    if (this.audioContext.state === 'running') {
+      this.lastResumeAttempt = {
+        at: Date.now(),
+        trigger,
+        status: 'already-running',
+        stateBefore,
+        stateAfter: this.audioContext.state,
+      };
       return;
     }
 
     try {
       await this.audioContext.resume();
-    } catch {
-      void 0;
+      const stateAfter: string = this.audioContext.state;
+      this.lastResumeAttempt = {
+        at: Date.now(),
+        trigger,
+        status: stateAfter === 'running' ? 'resumed' : 'failed',
+        stateBefore,
+        stateAfter,
+      };
+    } catch (error) {
+      this.lastResumeAttempt = {
+        at: Date.now(),
+        trigger,
+        status: 'failed',
+        stateBefore,
+        stateAfter: this.audioContext.state,
+        ...normalizeAudioError(error),
+      };
     }
   }
+}
+
+function normalizeAudioError(error: unknown): { errorName: string; errorMessage: string } {
+  if (error instanceof Error) {
+    return {
+      errorName: error.name || 'Error',
+      errorMessage: error.message || '',
+    };
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const value = error as { name?: unknown; message?: unknown };
+    return {
+      errorName: typeof value.name === 'string' ? value.name : 'UnknownError',
+      errorMessage: typeof value.message === 'string' ? value.message : '',
+    };
+  }
+
+  return {
+    errorName: 'UnknownError',
+    errorMessage: typeof error === 'string' ? error : '',
+  };
 }
 
 export const globalRoomMusicController = new RoomMusicController();
