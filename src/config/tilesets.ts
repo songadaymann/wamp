@@ -126,6 +126,14 @@ const DECO_ONLY_INDICES_TEXT = [
   32, 33, 34, 35, 36, 37, 38, 39,
   40, 41, 42, 43,
 ];
+const DECO_ONLY_INDICES_SIGNS = [
+  0, 1, 2, 3, 4, 5,
+  6, 7, 8, 9, 10, 11,
+  12, 13, 14, 15, 16, 17,
+  18, 29, 20, 21, 22, 23,
+  24, 25, 26, 27, 28, 29,
+  30, 31, 32, 33, 34, 35,
+]
 const DECO_ONLY_INDICES_WATER = [1, 2, 3, 5, 13, 18];
 // Snow still has three bottom-anchored cap overlays above the main platform tops.
 const DECO_ONLY_INDICES_SNOW = [2, 3, 4, 8, 9, 10];
@@ -400,6 +408,26 @@ export const TILESETS: TilesetConfig[] = [
     terrainCollisionProfiles: {
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_TEXT, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_TEXT, NO_COLLISION_PROFILE),
+    },
+    uiTheme: {
+      accentCool: 0x5ca9ff,
+      accentWarm: 0xfbd45b,
+      accentHot: 0xff7865,
+      accentAlt: 0x86d54a,
+    },
+  },
+  {
+    key: 'signs and graffiti',
+    name: 'Signs and Graffiti',
+    path: 'assets/tilesets/signs.png',
+    imageWidth: 96,
+    imageHeight: 96,
+    columns: 6,
+    rows: 6,
+    tileCount: 36,
+    firstGid: 621,
+    terrainCollisionProfiles: {
+      ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_SIGNS, NO_COLLISION_PROFILE),
     },
     uiTheme: {
       accentCool: 0x5ca9ff,
