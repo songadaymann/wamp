@@ -425,7 +425,7 @@ export const TILESETS: TilesetConfig[] = [
     columns: 6,
     rows: 6,
     tileCount: 36,
-    firstGid: 621,
+    firstGid: 633,
     terrainCollisionProfiles: {
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_SIGNS, NO_COLLISION_PROFILE),
     },
