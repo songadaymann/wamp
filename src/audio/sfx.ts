@@ -49,6 +49,8 @@ export type SfxCue =
   | 'respawn'
   | 'warp'
   | 'pressure-plate-down'
+  | 'switch-block-toggle'
+  | 'door-open'
   | 'treasure-open'
   | 'cage-open'
   | 'chat-send'
@@ -283,6 +285,16 @@ const SFX_CUES: Record<SfxCue, CueConfig> = {
     path: 'assets/sfx/world/pressure-plate-down.wav',
     volume: 0.42,
     cooldownMs: 45,
+  },
+  'switch-block-toggle': {
+    path: 'assets/sfx/world/switch-block-toggle.wav',
+    volume: 0.5,
+    cooldownMs: 45,
+  },
+  'door-open': {
+    path: 'assets/sfx/world/door-open.wav',
+    volume: 0.5,
+    cooldownMs: 90,
   },
   'treasure-open': {
     path: 'assets/sfx/world/treasure-open.wav',

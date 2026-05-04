@@ -552,11 +552,12 @@ export class OverworldPlayScene extends Phaser.Scene {
           cue,
           this.roomAudioController.getPlaybackOptionsForRoom(roomCoordinates)
         ),
-      playBounceFx: (x, y, roomCoordinates) =>
+      playBounceFx: (x, y, roomCoordinates, cue) =>
         this.fxController?.playBounceFx(
           x,
           y,
-          this.roomAudioController.getPlaybackOptionsForRoom(roomCoordinates)
+          this.roomAudioController.getPlaybackOptionsForRoom(roomCoordinates),
+          cue
         ),
       playBombExplosionFx: (x, y, roomCoordinates) =>
         this.fxController?.playBombExplosionFx(

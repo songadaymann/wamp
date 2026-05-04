@@ -62,14 +62,19 @@ export class SceneFxController {
     }
   }
 
-  playBounceFx(x: number, y: number, playbackOptions?: SfxPlaybackOptions | null): void {
+  playBounceFx(
+    x: number,
+    y: number,
+    playbackOptions?: SfxPlaybackOptions | null,
+    cue: SfxCue | null = 'bounce'
+  ): void {
     this.playAnimatedFx(FX_ANIMATION_KEYS.boing, x, y - 4, {
       scale: 1.2,
       depth: 28,
     });
     this.spawnFlash(x, y - 4, 24, 0x9deaff, 0.22);
-    if (playbackOptions !== null) {
-      playSfx('bounce', playbackOptions);
+    if (cue && playbackOptions !== null) {
+      playSfx(cue, playbackOptions);
     }
   }
 

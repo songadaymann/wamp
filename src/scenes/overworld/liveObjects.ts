@@ -263,7 +263,12 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
     roomCoordinates: RoomCoordinates,
     cue?: SfxCue
   ) => void;
-  playBounceFx: (x: number, y: number, roomCoordinates: RoomCoordinates) => void;
+  playBounceFx: (
+    x: number,
+    y: number,
+    roomCoordinates: RoomCoordinates,
+    cue?: SfxCue | null
+  ) => void;
   playBombExplosionFx: (x: number, y: number, roomCoordinates: RoomCoordinates) => void;
 }
 
@@ -684,7 +689,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
                     this.options.playBounceFx(
                       liveObject.sprite.x,
                       liveObject.sprite.y - 6,
-                      loadedRoom.room.coordinates
+                      loadedRoom.room.coordinates,
+                      'door-open'
                     );
                     this.options.showTransientStatus('Unlocked the door.');
                     this.removeLiveObject(loadedRoom, liveObject);
@@ -931,6 +937,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           if (liveObject.runtime.pressureActive !== active) {
             liveObject.runtime.pressureActive = active;
             this.applyPressureDoorState(liveObject, active);
+            if (active) {
+              this.options.playRoomSfx('door-open', loadedRoom.room.coordinates);
+            }
           }
           break;
         case 'door_locked':
@@ -973,11 +982,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     this.switchStateByRoomId.set(loadedRoom.room.id, nextState);
     switchObject.runtime.cooldownUntil = now + BLOCK_SWITCH_COOLDOWN_MS;
     this.applySwitchBlockStates(loadedRoom);
-    this.options.playRoomSfx('pressure-plate-down', loadedRoom.room.coordinates);
     this.options.playBounceFx(
       switchObject.sprite.x,
       switchObject.sprite.y - 4,
-      loadedRoom.room.coordinates
+      loadedRoom.room.coordinates,
+      'switch-block-toggle'
     );
     this.options.showTransientStatus(nextState ? 'Red blocks active.' : 'Blue blocks active.');
   }
@@ -1276,7 +1285,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     this.options.playBounceFx(
       liveObject.sprite.x,
       liveObject.sprite.y - 6,
-      loadedRoom.room.coordinates
+      loadedRoom.room.coordinates,
+      'door-open'
     );
     this.removeLiveObject(loadedRoom, liveObject);
   }
