@@ -62,7 +62,7 @@ export type SfxCue =
 type SfxHistoryEntry = {
   cue: SfxCue;
   at: number;
-  status: 'played' | 'blocked' | 'missing' | 'cooldown' | 'error';
+  status: 'played' | 'blocked' | 'missing' | 'cooldown' | 'capped' | 'error';
 };
 
 type AudioResumeDebugEntry = {
@@ -92,11 +92,22 @@ type SfxPlayErrorDebugEntry = {
 // Music already runs through its own master gain, so SFX need a shared trim to
 // stop common gameplay cues from sitting on top of the room mix.
 const GLOBAL_SFX_VOLUME_MULTIPLIER = 0.55;
+const MAX_SFX_MEDIA_PLAYERS = 64;
+
+type SfxAudioRoute = 'direct' | 'low-pass';
+
+type SfxAudioPlayer = {
+  audio: HTMLAudioElement;
+  route: SfxAudioRoute;
+  poolKey: string;
+  mediaSourceNode: MediaElementAudioSourceNode | null;
+  filterNode: BiquadFilterNode | null;
+};
 
 declare global {
   interface Window {
     get_sfx_debug_state?: () => Record<string, unknown>;
-    play_sfx_debug?: (cue: SfxCue) => void;
+    play_sfx_debug?: (cue: SfxCue, playbackOptions?: SfxPlaybackOptions) => void;
   }
 }
 
@@ -339,7 +350,9 @@ export class SfxController {
   private initialized = false;
   private userInteracted = false;
   private audioContext: AudioContext | null = null;
-  private readonly baseAudioByPath = new Map<string, HTMLAudioElement>();
+  private readonly assetUrlByPath = new Map<string, string>();
+  private readonly idleAudioByPoolKey = new Map<string, SfxAudioPlayer[]>();
+  private readonly audioPlayerByElement = new Map<HTMLAudioElement, SfxAudioPlayer>();
   private readonly activeAudio = new Set<HTMLAudioElement>();
   private readonly activeAudioByCue = new Map<SfxCue, Set<HTMLAudioElement>>();
   private readonly cleanupByAudio = new Map<HTMLAudioElement, () => void>();
@@ -381,15 +394,15 @@ export class SfxController {
     });
 
     for (const config of Object.values(SFX_CUES)) {
-      const audio = new Audio(resolveAssetUrl(config.path));
-      audio.preload = 'auto';
-      this.baseAudioByPath.set(config.path, audio);
+      if (!this.assetUrlByPath.has(config.path)) {
+        this.assetUrlByPath.set(config.path, resolveAssetUrl(config.path));
+      }
     }
 
     windowObj.get_sfx_debug_state = () => this.getDebugState();
     if (import.meta.env.DEV) {
-      windowObj.play_sfx_debug = (cue: SfxCue) => {
-        this.play(cue);
+      windowObj.play_sfx_debug = (cue: SfxCue, playbackOptions?: SfxPlaybackOptions) => {
+        this.play(cue, playbackOptions);
       };
     }
   }
@@ -411,6 +424,18 @@ export class SfxController {
       lastAudioContextStateChange: this.lastAudioContextStateChange,
       lastResumeAttempt: this.lastResumeAttempt,
       lastPlayError: this.lastPlayError,
+      mediaPlayerPool: {
+        cap: MAX_SFX_MEDIA_PLAYERS,
+        total: this.audioPlayerByElement.size,
+        active: this.activeAudio.size,
+        idle: this.countIdleAudioPlayers(),
+        idlePools: [...this.idleAudioByPoolKey.entries()]
+          .filter(([, players]) => players.length > 0)
+          .map(([poolKey, players]) => ({
+            poolKey,
+            count: players.length,
+          })),
+      },
       activeCount: this.activeAudio.size,
       activeCues: [...this.activeAudioByCue.entries()].map(([cue, players]) => ({
         cue,
@@ -444,8 +469,7 @@ export class SfxController {
       return;
     }
 
-    const baseAudio = this.baseAudioByPath.get(config.path);
-    if (!baseAudio) {
+    if (!this.assetUrlByPath.has(config.path)) {
       this.record(cue, 'missing');
       return;
     }
@@ -455,7 +479,14 @@ export class SfxController {
       return;
     }
 
-    const player = baseAudio.cloneNode() as HTMLAudioElement;
+    const route: SfxAudioRoute = (playbackOptions?.lowPassFrequencyHz ?? 0) > 0 ? 'low-pass' : 'direct';
+    const audioPlayer = this.acquireAudioPlayer(config.path, route);
+    if (!audioPlayer) {
+      this.record(cue, 'capped');
+      return;
+    }
+
+    const player = audioPlayer.audio;
     const baseVolume = PhaserClamp(
       config.volume * GLOBAL_SFX_VOLUME_MULTIPLIER * Math.max(0, playbackOptions?.volumeMultiplier ?? 1),
       0,
@@ -467,23 +498,25 @@ export class SfxController {
       0.05,
       4
     );
-    player.currentTime = 0;
+    resetAudioPlayerCurrentTime(player);
     player.loop = Boolean(config.loop);
 
-    let mediaSourceNode: MediaElementAudioSourceNode | null = null;
-    let filterNode: BiquadFilterNode | null = null;
-    if ((playbackOptions?.lowPassFrequencyHz ?? 0) > 0) {
-      const audioContext = this.getAudioContext();
-      if (audioContext) {
-        mediaSourceNode = audioContext.createMediaElementSource(player);
-        filterNode = audioContext.createBiquadFilter();
-        filterNode.type = 'lowpass';
-        filterNode.frequency.value = Math.max(20, playbackOptions?.lowPassFrequencyHz ?? 1000);
-        filterNode.Q.value = Math.max(0.0001, playbackOptions?.lowPassQ ?? 0.9);
-        mediaSourceNode.connect(filterNode);
-        filterNode.connect(audioContext.destination);
-        void this.resumeAudioContext('lowpass-sfx');
+    try {
+      if (route === 'low-pass' || audioPlayer.mediaSourceNode) {
+        this.connectRoutedPlayback(audioPlayer, playbackOptions, route);
       }
+    } catch (error) {
+      this.disconnectRoutedAudioPlayer(audioPlayer);
+      this.releaseAudioPlayer(audioPlayer);
+      this.lastPlayError = {
+        at: Date.now(),
+        cue,
+        userInteracted: this.userInteracted,
+        audioContextState: this.audioContext?.state ?? null,
+        ...normalizeAudioError(error),
+      };
+      this.record(cue, 'error');
+      return;
     }
 
     this.activeAudio.add(player);
@@ -493,7 +526,12 @@ export class SfxController {
     this.activeCueCounts.set(cue, (this.activeCueCounts.get(cue) ?? 0) + 1);
     let fadeIntervalId: number | null = null;
     let trimTimeoutId: number | null = null;
+    let cleanedUp = false;
     const cleanup = () => {
+      if (cleanedUp) {
+        return;
+      }
+      cleanedUp = true;
       if (trimTimeoutId !== null) {
         window.clearTimeout(trimTimeoutId);
         trimTimeoutId = null;
@@ -517,16 +555,8 @@ export class SfxController {
       }
       player.removeEventListener('ended', cleanup);
       player.removeEventListener('error', cleanup);
-      try {
-        mediaSourceNode?.disconnect();
-      } catch {
-        void 0;
-      }
-      try {
-        filterNode?.disconnect();
-      } catch {
-        void 0;
-      }
+      this.disconnectRoutedAudioPlayer(audioPlayer);
+      this.releaseAudioPlayer(audioPlayer);
     };
     this.cleanupByAudio.set(player, cleanup);
     player.addEventListener('ended', cleanup);
@@ -555,13 +585,29 @@ export class SfxController {
       }, config.trimAfterMs);
     }
 
-    const playPromise = player.play();
+    let playPromise: Promise<void> | undefined;
+    try {
+      playPromise = player.play();
+    } catch (error) {
+      player.pause();
+      cleanup();
+      this.lastPlayError = {
+        at: Date.now(),
+        cue,
+        userInteracted: this.userInteracted,
+        audioContextState: this.audioContext?.state ?? null,
+        ...normalizeAudioError(error),
+      };
+      this.record(cue, this.userInteracted ? 'error' : 'blocked');
+      return;
+    }
     if (playPromise) {
       void playPromise
         .then(() => {
           this.record(cue, 'played');
         })
         .catch((error: unknown) => {
+          player.pause();
           cleanup();
           this.lastPlayError = {
             at: Date.now(),
@@ -586,7 +632,7 @@ export class SfxController {
 
     for (const player of [...activeCuePlayers]) {
       player.pause();
-      player.currentTime = 0;
+      resetAudioPlayerCurrentTime(player);
       this.cleanupByAudio.get(player)?.();
     }
   }
@@ -601,6 +647,138 @@ export class SfxController {
     if (this.history.length > 40) {
       this.history.splice(0, this.history.length - 40);
     }
+  }
+
+  private acquireAudioPlayer(path: string, route: SfxAudioRoute): SfxAudioPlayer | null {
+    const poolKey = getAudioPoolKey(path, route);
+    const idlePlayers = this.idleAudioByPoolKey.get(poolKey);
+    const idlePlayer = idlePlayers?.pop();
+    if (idlePlayer) {
+      return idlePlayer;
+    }
+
+    const retargetedIdlePlayer = this.acquireRetargetedIdleAudioPlayer(path, route);
+    if (retargetedIdlePlayer) {
+      return retargetedIdlePlayer;
+    }
+
+    if (this.audioPlayerByElement.size >= MAX_SFX_MEDIA_PLAYERS) {
+      return null;
+    }
+
+    const assetUrl = this.assetUrlByPath.get(path);
+    if (!assetUrl) {
+      return null;
+    }
+
+    const audio = new Audio(assetUrl);
+    audio.preload = 'auto';
+    const audioPlayer: SfxAudioPlayer = {
+      audio,
+      route,
+      poolKey,
+      mediaSourceNode: null,
+      filterNode: null,
+    };
+    this.audioPlayerByElement.set(audio, audioPlayer);
+    return audioPlayer;
+  }
+
+  private acquireRetargetedIdleAudioPlayer(path: string, route: SfxAudioRoute): SfxAudioPlayer | null {
+    for (const players of this.idleAudioByPoolKey.values()) {
+      const audioPlayer = players.pop();
+      if (!audioPlayer) {
+        continue;
+      }
+
+      this.retargetAudioPlayer(audioPlayer, path, route);
+      return audioPlayer;
+    }
+
+    return null;
+  }
+
+  private retargetAudioPlayer(audioPlayer: SfxAudioPlayer, path: string, route: SfxAudioRoute): void {
+    const assetUrl = this.assetUrlByPath.get(path);
+    if (!assetUrl) {
+      return;
+    }
+
+    audioPlayer.route = route;
+    audioPlayer.poolKey = getAudioPoolKey(path, route);
+    if (audioPlayer.audio.src !== assetUrl) {
+      audioPlayer.audio.src = assetUrl;
+      audioPlayer.audio.preload = 'auto';
+      audioPlayer.audio.load();
+    }
+    resetAudioPlayerCurrentTime(audioPlayer.audio);
+  }
+
+  private releaseAudioPlayer(audioPlayer: SfxAudioPlayer): void {
+    const player = audioPlayer.audio;
+    player.loop = false;
+    player.volume = 1;
+    player.playbackRate = 1;
+    resetAudioPlayerCurrentTime(player);
+
+    const idlePlayers = this.idleAudioByPoolKey.get(audioPlayer.poolKey) ?? [];
+    if (!idlePlayers.includes(audioPlayer)) {
+      idlePlayers.push(audioPlayer);
+    }
+    this.idleAudioByPoolKey.set(audioPlayer.poolKey, idlePlayers);
+  }
+
+  private connectRoutedPlayback(
+    audioPlayer: SfxAudioPlayer,
+    playbackOptions: SfxPlaybackOptions | undefined,
+    route: SfxAudioRoute
+  ): void {
+    const audioContext = this.getAudioContext();
+    if (!audioContext) {
+      return;
+    }
+
+    if (!audioPlayer.mediaSourceNode) {
+      audioPlayer.mediaSourceNode = audioContext.createMediaElementSource(audioPlayer.audio);
+    }
+
+    if (route === 'direct') {
+      audioPlayer.mediaSourceNode.connect(audioContext.destination);
+      void this.resumeAudioContext('direct-routed-sfx');
+      return;
+    }
+
+    if (!audioPlayer.filterNode) {
+      audioPlayer.filterNode = audioContext.createBiquadFilter();
+      audioPlayer.filterNode.type = 'lowpass';
+    }
+
+    audioPlayer.filterNode.frequency.value = Math.max(20, playbackOptions?.lowPassFrequencyHz ?? 1000);
+    audioPlayer.filterNode.Q.value = Math.max(0.0001, playbackOptions?.lowPassQ ?? 0.9);
+    audioPlayer.mediaSourceNode.connect(audioPlayer.filterNode);
+    audioPlayer.filterNode.connect(audioContext.destination);
+    void this.resumeAudioContext('lowpass-sfx');
+  }
+
+  private disconnectRoutedAudioPlayer(audioPlayer: SfxAudioPlayer): void {
+    try {
+      audioPlayer.mediaSourceNode?.disconnect();
+    } catch {
+      void 0;
+    }
+    try {
+      audioPlayer.filterNode?.disconnect();
+    } catch {
+      void 0;
+    }
+  }
+
+  private countIdleAudioPlayers(): number {
+    let count = 0;
+    for (const players of this.idleAudioByPoolKey.values()) {
+      count += players.length;
+    }
+    return count;
   }
 
   private getAudioContext(): AudioContext | null {
@@ -673,6 +851,18 @@ export class SfxController {
         ...normalizeAudioError(error),
       };
     }
+  }
+}
+
+function getAudioPoolKey(path: string, route: SfxAudioRoute): string {
+  return `${route}:${path}`;
+}
+
+function resetAudioPlayerCurrentTime(player: HTMLAudioElement): void {
+  try {
+    player.currentTime = 0;
+  } catch {
+    void 0;
   }
 }
 

@@ -23,7 +23,10 @@ interface Window {
   get_room_music_debug_state?: () => Record<string, unknown>;
   get_sword_hunter_debug?: () => Record<string, unknown>;
   get_sfx_debug_state?: () => Record<string, unknown>;
-  play_sfx_debug?: (cue: import('./audio/sfx').SfxCue) => void;
+  play_sfx_debug?: (
+    cue: import('./audio/sfx').SfxCue,
+    playbackOptions?: import('./audio/sfx').SfxPlaybackOptions,
+  ) => void;
   run_overworld_lod_stress?: () => Promise<Record<string, unknown>>;
   wampMobilePerf?: import('./debug/mobilePerformanceProfiler').MobilePerformanceProfilerApi;
   wampMobileCameraTuner?: {
