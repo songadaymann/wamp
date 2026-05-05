@@ -22,6 +22,10 @@ import {
   SWORDSMAN_AI_EXTRA_SPRITESHEETS,
 } from '../enemies/swordsmanAi';
 import {
+  GHOST_ANIMATIONS,
+  GHOST_EXTRA_SPRITESHEETS,
+} from '../enemies/ghost';
+import {
   createGoalMarkerFlagAnimations,
   loadGoalMarkerFlagSheets,
 } from '../goals/markerFlags';
@@ -69,6 +73,13 @@ export class BootScene extends Phaser.Scene {
     });
 
     for (const sheet of SWORDSMAN_AI_EXTRA_SPRITESHEETS) {
+      this.load.spritesheet(sheet.key, sheet.path, {
+        frameWidth: sheet.frameWidth,
+        frameHeight: sheet.frameHeight,
+      });
+    }
+
+    for (const sheet of GHOST_EXTRA_SPRITESHEETS) {
       this.load.spritesheet(sheet.key, sheet.path, {
         frameWidth: sheet.frameWidth,
         frameHeight: sheet.frameHeight,
@@ -126,6 +137,22 @@ export class BootScene extends Phaser.Scene {
     }
 
     for (const animation of SWORDSMAN_AI_ANIMATIONS) {
+      if (this.anims.exists(animation.key)) {
+        continue;
+      }
+
+      this.anims.create({
+        key: animation.key,
+        frames: animation.frames.map((frame) => ({
+          key: animation.spritesheetKey,
+          frame,
+        })),
+        frameRate: animation.frameRate,
+        repeat: animation.repeat,
+      });
+    }
+
+    for (const animation of GHOST_ANIMATIONS) {
       if (this.anims.exists(animation.key)) {
         continue;
       }

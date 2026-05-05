@@ -5,6 +5,7 @@ import {
   getObjectDefaultFrame,
   getObjectDisplayOffset,
   getObjectDisplayScale,
+  objectCollidesWithWorld,
   getBlockSwitchRuntimeTextureKey,
   isDynamicRuntimeObjectConfig,
   isBlockSwitchObjectId,
@@ -24,6 +25,7 @@ import {
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { ensureCustomSpriteTexture } from '../../customSprites/registry';
+import { GHOST_OBJECT_ID } from '../../enemies/ghost';
 import {
   SWORDSMAN_AI_ANIMATION_KEYS,
   SWORDSMAN_AI_OBJECT_ID,
@@ -752,6 +754,16 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
               this.options.settings.birdWaveSpeed
             );
             break;
+          case GHOST_OBJECT_ID:
+            this.updateFlyingEnemyObject(
+              loadedRoom.room,
+              liveObject,
+              delta,
+              this.options.settings.batSpeed * 0.62,
+              5,
+              0.006
+            );
+            break;
           case 'fish':
             this.updateFlyingEnemyObject(
               loadedRoom.room,
@@ -1433,6 +1445,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       loadedRoom.liveObjects.filter(
         (candidate) =>
           candidate.sprite.body &&
+          objectCollidesWithWorld(candidate.config) &&
           isSolidRuntimeObjectConfig(candidate.config)
       )
     );
@@ -1447,6 +1460,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         this.destroyLiveObjectWorldColliders(liveObject);
 
         if (!this.usesDynamicObjectBody(liveObject.config) || !liveObject.sprite.body) {
+          continue;
+        }
+        if (!objectCollidesWithWorld(liveObject.config)) {
           continue;
         }
 

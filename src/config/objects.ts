@@ -4,6 +4,7 @@ import {
   isCustomSpriteObjectId,
   type CustomSpriteKind,
 } from '../customSprites/model';
+import { GHOST_OBJECT_ID } from '../enemies/ghost';
 import { SWORDSMAN_AI_OBJECT_ID } from '../enemies/swordsmanAi';
 import type { SwordsmanDefeatMode, SwordsmanObjectiveMode } from '../enemies/swordsmanObjectives';
 import { TILE_SIZE, type LayerName } from './room';
@@ -67,6 +68,8 @@ export interface GameObjectConfig {
   behavior: 'static' | 'patrol' | 'fly' | 'bounce' | 'animated' | 'shooter';
   /** optional runtime interaction capability shared across object categories */
   interaction?: ObjectInteraction;
+  /** false for actors that keep overlap bodies but pass through terrain and solid objects */
+  collidesWithWorld?: boolean;
   /** optional emissive lighting behavior for dark rooms */
   lightEmission?: LightEmissionConfig;
   /** short tooltip description for the editor palette */
@@ -156,6 +159,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'slime_blue',  name: 'Blue Slime',  category: 'enemy',       path: 'assets/enemies/slime_blue.png',  frameWidth: 16, frameHeight: 16, frameCount: 5,  fps: 6,  facingDirection: 'left', bodyWidth: 12, bodyHeight: 10, behavior: 'patrol',   description: 'Patrols back and forth. Kills on contact.' },
   { id: 'slime_red',   name: 'Red Slime',   category: 'enemy',       path: 'assets/enemies/slime_red.png',   frameWidth: 16, frameHeight: 16, frameCount: 5,  fps: 6,  facingDirection: 'left', bodyWidth: 12, bodyHeight: 10, behavior: 'patrol',   description: 'Patrols back and forth. Kills on contact.' },
   { id: 'bat',         name: 'Bat',         category: 'enemy',       path: 'assets/enemies/bat.png',         frameWidth: 32, frameHeight: 32, frameCount: 8,  fps: 8,  animationFrames: [4, 5, 6, 7, 6, 5], defaultFrame: 6, facingDirection: 'right', bodyWidth: 24, bodyHeight: 20, behavior: 'fly',      description: 'Flies in a wave pattern. Kills on contact.' },
+  { id: GHOST_OBJECT_ID, name: 'Ghost',     category: 'enemy',       path: 'assets/enemies/ghost/idle.png',  frameWidth: 48, frameHeight: 48, frameCount: 8,  fps: 8,  defaultFrame: 0, facingDirection: 'right', bodyWidth: 22, bodyHeight: 20, bodyOffsetX: 11, bodyOffsetY: 13, previewWidth: 24, previewHeight: 22, previewOffsetX: 10, previewOffsetY: 12, placeUsingPreviewBounds: true, collidesWithWorld: false, behavior: 'fly', description: 'Phases through walls while drifting in the air. Kills on contact.' },
   { id: 'crab',        name: 'Crab',        category: 'enemy',       path: 'assets/enemies/crab.png',        frameWidth: 32, frameHeight: 16, frameCount: 9,  fps: 8,  animationFrames: [0, 1, 2, 1], defaultFrame: 1, facingDirection: 'left', bodyWidth: 24, bodyHeight: 10, behavior: 'patrol',   description: 'Patrols back and forth. Kills on contact.' },
   { id: 'bird',        name: 'Bird',        category: 'enemy',       path: 'assets/enemies/bird.png',        frameWidth: 32, frameHeight: 32, frameCount: 4,  fps: 10, facingDirection: 'left', bodyWidth: 24, bodyHeight: 20, behavior: 'fly',      description: 'Flies in a wave pattern. Kills on contact.' },
   { id: 'fish',        name: 'Fish',        category: 'enemy',       path: 'assets/enemies/fish.png',        frameWidth: 32, frameHeight: 16, frameCount: 3,  fps: 8,  animationFrames: [0, 1, 2, 1], defaultFrame: 1, facingDirection: 'right', bodyWidth: 22, bodyHeight: 10, behavior: 'fly',      description: 'Swims left and right in a gentle wave. Kills on contact.' },
@@ -245,6 +249,12 @@ export function isSolidRuntimeObjectConfig(
     || config.id === 'door_locked'
     || isPushableObjectConfig(config)
   );
+}
+
+export function objectCollidesWithWorld(
+  config: Pick<GameObjectConfig, 'collidesWithWorld'> | null | undefined,
+): boolean {
+  return config?.collidesWithWorld !== false;
 }
 
 export function getObjectAnimationFrames(config: GameObjectConfig): number[] {
