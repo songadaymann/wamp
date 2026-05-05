@@ -45,6 +45,9 @@ export interface LaunchStatsActivityWindow {
   logins: number;
   guestVisitors: number;
   guestVisitHeartbeats: number;
+  guestPlayBuildVisitors: number;
+  guestPlaySeconds: number;
+  guestEditSeconds: number;
   magicLinksCreated: number;
   chatMessages: number;
   roomClaims: number;

@@ -608,7 +608,11 @@ function renderActivity(): void {
           <div class="meta">People ${formatNumber(windowStats.newUsers)} signups · ${formatNumber(windowStats.logins)} logins · ${formatNumber(
             windowStats.guestVisitors
           )} guests</div>
-          <div class="meta">Guest heartbeats ${formatNumber(windowStats.guestVisitHeartbeats)}</div>
+          <div class="meta">Guest play/build ${formatNumber(
+            windowStats.guestPlayBuildVisitors
+          )} · play ${formatDurationSeconds(windowStats.guestPlaySeconds)} · build ${formatDurationSeconds(
+            windowStats.guestEditSeconds
+          )}</div>
           <div class="meta">Build ${formatNumber(windowStats.roomClaims)} claims · ${formatNumber(
             windowStats.roomPublishes
           )} room publishes · ${formatNumber(windowStats.coursePublishes)} course publishes</div>
@@ -642,7 +646,7 @@ function renderActivity(): void {
       return `
         <article class="card activity-row">
           <div class="activity-head">
-            <span class="label">${escapeHtml(renderRecentSummaryKindLabel(summary.kind))}</span>
+            <span class="label">${escapeHtml(renderRecentSummaryKindLabel(summary))}</span>
             <span class="meta">${escapeHtml(formatTimestamp(summary.at))}</span>
           </div>
           <div class="activity-summary">${renderRecentSummaryMarkup(summary)}</div>
@@ -754,12 +758,12 @@ function buildChip(label: string, value: string, tone: 'good' | 'warn' | 'danger
   return `<span class="chip ${tone}">${escapeHtml(label)}: ${escapeHtml(value)}</span>`;
 }
 
-function renderRecentSummaryKindLabel(kind: LaunchStatsRecentSummary['kind']): string {
-  switch (kind) {
+function renderRecentSummaryKindLabel(summary: LaunchStatsRecentSummary): string {
+  switch (summary.kind) {
     case 'signup':
       return 'Sign Up';
     case 'guest_visit':
-      return 'Guest Visit';
+      return renderGuestVisitSummaryLabel(summary);
     case 'visit_only':
       return 'Visit Only';
     case 'room_play':
@@ -800,11 +804,7 @@ function renderRecentSummaryBody(summary: LaunchStatsRecentSummary): string {
           ? 'signed up with email.'
           : 'signed up.';
     case 'guest_visit': {
-      const duration = formatDurationSeconds(summary.durationSeconds ?? 0);
-      const activity = summarizeGuestActivity(summary);
-      return activity
-        ? `visited as a guest for ${duration}; ${activity}.`
-        : `visited as a guest for ${duration}.`;
+      return renderGuestVisitSummaryBody(summary);
     }
     case 'visit_only': {
       const sessions = summary.sessionCount ?? 0;
@@ -866,9 +866,15 @@ function renderRecentSummaryDetail(summary: LaunchStatsRecentSummary): string | 
           : 'New account.';
     case 'guest_visit': {
       const parts = [
+        formatGuestPlayBuildBreakdown(summary),
         `${formatNumber(summary.heartbeatCount ?? 0)} heartbeat${summary.heartbeatCount === 1 ? '' : 's'}`,
-        `activity ${formatGuestActivityBreakdown(summary)}`,
       ];
+      if ((summary.browseSeconds ?? 0) > 0) {
+        parts.push(`browse/idle ${formatDurationSeconds(summary.browseSeconds ?? 0)}`);
+      }
+      if ((summary.durationSeconds ?? 0) > 0) {
+        parts.push(`visit span ${formatDurationSeconds(summary.durationSeconds ?? 0)}`);
+      }
       const room = formatGuestRoom(summary);
       if (room) {
         parts.push(`last room ${room}`);
@@ -1033,26 +1039,51 @@ function formatDurationSeconds(totalSeconds: number): string {
   return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 }
 
-function summarizeGuestActivity(summary: LaunchStatsRecentSummary): string {
+function renderGuestVisitSummaryLabel(summary: LaunchStatsRecentSummary): string {
+  const playSeconds = summary.playSeconds ?? 0;
+  const editSeconds = summary.editSeconds ?? 0;
+
+  if (playSeconds > 0 && editSeconds > 0) {
+    return 'Guest Play/Build';
+  }
+  if (playSeconds > 0) {
+    return 'Guest Play';
+  }
+  if (editSeconds > 0) {
+    return 'Guest Build';
+  }
+  return 'Guest Browse';
+}
+
+function renderGuestVisitSummaryBody(summary: LaunchStatsRecentSummary): string {
   const parts: string[] = [];
   if ((summary.playSeconds ?? 0) > 0) {
     parts.push(`played ${formatDurationSeconds(summary.playSeconds ?? 0)}`);
   }
   if ((summary.editSeconds ?? 0) > 0) {
-    parts.push(`edited ${formatDurationSeconds(summary.editSeconds ?? 0)}`);
+    parts.push(`built ${formatDurationSeconds(summary.editSeconds ?? 0)}`);
   }
-  if ((summary.browseSeconds ?? 0) > 0) {
-    parts.push(`browsed ${formatDurationSeconds(summary.browseSeconds ?? 0)}`);
+
+  if (parts.length > 0) {
+    return `${joinSentenceParts(parts)} as a guest.`;
   }
-  return parts.join(', ');
+
+  return 'has not played or built yet.';
 }
 
-function formatGuestActivityBreakdown(summary: LaunchStatsRecentSummary): string {
+function formatGuestPlayBuildBreakdown(summary: LaunchStatsRecentSummary): string {
   return [
-    `browse ${formatDurationSeconds(summary.browseSeconds ?? 0)}`,
     `play ${formatDurationSeconds(summary.playSeconds ?? 0)}`,
-    `edit ${formatDurationSeconds(summary.editSeconds ?? 0)}`,
+    `build ${formatDurationSeconds(summary.editSeconds ?? 0)}`,
   ].join(' / ');
+}
+
+function joinSentenceParts(parts: string[]): string {
+  if (parts.length <= 1) {
+    return parts[0] ?? '';
+  }
+
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
 function formatGuestRoom(summary: LaunchStatsRecentSummary): string | null {

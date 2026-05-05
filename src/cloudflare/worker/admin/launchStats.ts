@@ -136,6 +136,9 @@ async function loadActivityWindow(
     logins,
     guestVisitors,
     guestVisitHeartbeats,
+    guestPlayBuildVisitors,
+    guestPlaySeconds,
+    guestEditSeconds,
     magicLinksCreated,
     chatMessages,
     roomClaims,
@@ -180,6 +183,34 @@ async function loadActivityWindow(
       env,
       `
         SELECT COALESCE(SUM(heartbeat_count), 0) AS count
+        FROM guest_visits
+        WHERE last_seen_at >= ?
+      `,
+      [sinceIso]
+    ),
+    countQuery(
+      env,
+      `
+        SELECT COUNT(DISTINCT guest_user_id) AS count
+        FROM guest_visits
+        WHERE last_seen_at >= ?
+          AND (play_seconds > 0 OR edit_seconds > 0)
+      `,
+      [sinceIso]
+    ),
+    countQuery(
+      env,
+      `
+        SELECT COALESCE(SUM(play_seconds), 0) AS count
+        FROM guest_visits
+        WHERE last_seen_at >= ?
+      `,
+      [sinceIso]
+    ),
+    countQuery(
+      env,
+      `
+        SELECT COALESCE(SUM(edit_seconds), 0) AS count
         FROM guest_visits
         WHERE last_seen_at >= ?
       `,
@@ -309,6 +340,9 @@ async function loadActivityWindow(
     logins,
     guestVisitors,
     guestVisitHeartbeats,
+    guestPlayBuildVisitors,
+    guestPlaySeconds,
+    guestEditSeconds,
     magicLinksCreated,
     chatMessages,
     roomClaims,
