@@ -88,6 +88,7 @@
       input[type="password"],
       input[type="text"],
       input[type="number"],
+      select,
       textarea {
         min-width: min(420px, 100%);
         padding: 12px 14px;
@@ -305,9 +306,55 @@
         gap: 10px;
       }
 
+      .activity-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .activity-toolbar .field {
+        min-width: min(260px, 100%);
+      }
+
+      .activity-stat-card {
+        border-left: 4px solid var(--accent);
+      }
+
       .activity-row {
         display: grid;
         gap: 8px;
+        border-left: 4px solid rgba(126, 201, 255, 0.55);
+        background:
+          linear-gradient(90deg, rgba(126, 201, 255, 0.08), transparent 46%),
+          rgba(7, 11, 16, 0.65);
+      }
+
+      .activity-tone-people,
+      .activity-kind-signup,
+      .activity-kind-visit-only {
+        border-left-color: #7ec9ff;
+      }
+
+      .activity-tone-guest,
+      .activity-kind-guest-visit {
+        border-left-color: #ffcd57;
+      }
+
+      .activity-tone-play,
+      .activity-kind-room-play {
+        border-left-color: #59d98e;
+      }
+
+      .activity-tone-build,
+      .activity-kind-room-build,
+      .activity-kind-course-build {
+        border-left-color: #ff7ab6;
+      }
+
+      .activity-tone-support {
+        border-left-color: #b391ff;
       }
 
       .activity-summary {
@@ -432,7 +479,13 @@
 
       <section class="panel stack">
         <h2>Recent Activity</h2>
-        <div class="meta">Last 7 days, grouped by person and activity type. Play.fun-only and playfun-* fallback activity excluded.</div>
+        <div class="activity-toolbar">
+          <div class="meta" id="activity-range-summary">Choose a time window to see who actually played, built, signed up, or published in that period.</div>
+          <label class="field">
+            <span class="label">Time Window</span>
+            <select id="activity-range-select"></select>
+          </label>
+        </div>
         <div id="activity-grid" class="grid cards"></div>
         <div id="activity-feed" class="activity-feed"></div>
       </section>

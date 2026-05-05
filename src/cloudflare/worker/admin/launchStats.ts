@@ -1,4 +1,6 @@
 import type {
+  LaunchStatsActivityRange,
+  LaunchStatsActivityRangeKey,
   LaunchStatsActivityWindow,
   LaunchStatsRecentCourseReference,
   LaunchStatsRecentRoomReference,
@@ -17,8 +19,20 @@ import {
 
 const METRICS_ROOM_ID = '__launch-stats__';
 const RECENT_SUMMARY_LIMIT = 80;
-const RECENT_EVENT_WINDOW_DAYS = 7;
 const TOP_REFERENCE_LIMIT = 3;
+const DEFAULT_ACTIVITY_RANGE_KEY: LaunchStatsActivityRangeKey = 'last24h';
+const ACTIVITY_RANGES: Array<{
+  key: LaunchStatsActivityRangeKey;
+  label: string;
+  description: string;
+  hours: number;
+}> = [
+  { key: 'last12h', label: 'Last 12h', description: 'the last 12 hours', hours: 12 },
+  { key: 'last24h', label: 'Last 24h', description: 'the last 24 hours', hours: 24 },
+  { key: 'last3d', label: 'Last 3d', description: 'the last 3 days', hours: 72 },
+  { key: 'last7d', label: 'Last 7d', description: 'the last 7 days', hours: 168 },
+  { key: 'last30d', label: 'Last 30d', description: 'the last 30 days', hours: 720 },
+];
 
 export async function loadLaunchStats(env: Env): Promise<LaunchStatsResponse> {
   const now = new Date();
@@ -30,14 +44,18 @@ export async function loadLaunchStats(env: Env): Promise<LaunchStatsResponse> {
     partykitConfigured: isPartykitConfigured(env),
   };
 
-  const [totals, last5m, last15m, last60m, recentSummaries, partykit] = await Promise.all([
+  const [totals, last5m, last15m, last60m, ranges, partykit] = await Promise.all([
     loadTotals(env, generatedAt),
     loadActivityWindow(env, minutesAgoIso(now, 5)),
     loadActivityWindow(env, minutesAgoIso(now, 15)),
     loadActivityWindow(env, minutesAgoIso(now, 60)),
-    loadRecentSummaries(env, generatedAt),
+    Promise.all(ACTIVITY_RANGES.map((range) => loadActivityRange(env, now, range))),
     loadPartykitStatus(env),
   ]);
+  const defaultRange =
+    ranges.find((range) => range.key === DEFAULT_ACTIVITY_RANGE_KEY) ??
+    ranges[0] ??
+    null;
 
   return {
     generatedAt,
@@ -47,8 +65,10 @@ export async function loadLaunchStats(env: Env): Promise<LaunchStatsResponse> {
       last5m,
       last15m,
       last60m,
+      defaultRangeKey: DEFAULT_ACTIVITY_RANGE_KEY,
+      ranges,
     },
-    recentSummaries,
+    recentSummaries: defaultRange?.recentSummaries ?? [],
     partykit,
   };
 }
@@ -61,8 +81,29 @@ function minutesAgoIso(base: Date, minutes: number): string {
   return new Date(base.getTime() - minutes * 60 * 1000).toISOString();
 }
 
-function daysAgoIso(base: Date, days: number): string {
-  return new Date(base.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+function hoursAgoIso(base: Date, hours: number): string {
+  return new Date(base.getTime() - hours * 60 * 60 * 1000).toISOString();
+}
+
+async function loadActivityRange(
+  env: Env,
+  now: Date,
+  range: (typeof ACTIVITY_RANGES)[number],
+): Promise<LaunchStatsActivityRange> {
+  const since = hoursAgoIso(now, range.hours);
+  const [activity, recentSummaries] = await Promise.all([
+    loadActivityWindow(env, since),
+    loadRecentSummaries(env, since),
+  ]);
+
+  return {
+    key: range.key,
+    label: range.label,
+    description: range.description,
+    since,
+    activity,
+    recentSummaries,
+  };
 }
 
 function sqlLaunchActivityIsPlayfunIdentity(
@@ -193,17 +234,17 @@ async function loadActivityWindow(
       `
         SELECT COUNT(DISTINCT guest_user_id) AS count
         FROM guest_visits
-        WHERE last_seen_at >= ?
-          AND (play_seconds > 0 OR edit_seconds > 0)
+        WHERE last_play_at >= ?
+           OR last_edit_at >= ?
       `,
-      [sinceIso]
+      [sinceIso, sinceIso]
     ),
     countQuery(
       env,
       `
         SELECT COALESCE(SUM(play_seconds), 0) AS count
         FROM guest_visits
-        WHERE last_seen_at >= ?
+        WHERE last_play_at >= ?
       `,
       [sinceIso]
     ),
@@ -212,7 +253,7 @@ async function loadActivityWindow(
       `
         SELECT COALESCE(SUM(edit_seconds), 0) AS count
         FROM guest_visits
-        WHERE last_seen_at >= ?
+        WHERE last_edit_at >= ?
       `,
       [sinceIso]
     ),
@@ -450,9 +491,10 @@ interface CourseReferenceAccumulator {
   latestCoordinates: CourseCoordinateAccumulator[];
 }
 
-async function loadRecentSummaries(env: Env, nowIso: string): Promise<LaunchStatsRecentSummary[]> {
-  const recentSinceIso = daysAgoIso(new Date(nowIso), RECENT_EVENT_WINDOW_DAYS);
-
+async function loadRecentSummaries(
+  env: Env,
+  recentSinceIso: string
+): Promise<LaunchStatsRecentSummary[]> {
   const [signups, guestVisits, visitOnly, roomPlay, roomBuild, courseBuild] = await Promise.all([
     loadSignupSummaries(env, recentSinceIso),
     loadGuestVisitSummaries(env, recentSinceIso),
@@ -531,7 +573,10 @@ async function loadGuestVisitSummaries(
   const rows = await env.DB.prepare(
     `
       SELECT
-        guest_visits.last_seen_at AS at,
+        MAX(
+          COALESCE(guest_visits.last_play_at, ''),
+          COALESCE(guest_visits.last_edit_at, '')
+        ) AS at,
         guest_visits.guest_user_id AS actor_guest_id,
         guest_visits.guest_display_name AS actor_display_name,
         guest_visits.heartbeat_count AS heartbeat_count,
@@ -547,12 +592,13 @@ async function loadGuestVisitSummaries(
         guest_visits.room_x AS last_room_x,
         guest_visits.room_y AS last_room_y
       FROM guest_visits
-      WHERE guest_visits.last_seen_at >= ?
-      ORDER BY guest_visits.last_seen_at DESC
+      WHERE guest_visits.last_play_at >= ?
+         OR guest_visits.last_edit_at >= ?
+      ORDER BY at DESC
       LIMIT ?
     `
   )
-    .bind(recentSinceIso, RECENT_SUMMARY_LIMIT)
+    .bind(recentSinceIso, recentSinceIso, RECENT_SUMMARY_LIMIT)
     .all<GuestVisitSummaryRow>();
 
   return rows.results

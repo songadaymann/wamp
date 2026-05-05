@@ -3,6 +3,8 @@ import type {
   AdminProgressionUserCapsResponse,
   AdminProgressionUserLookupEntry,
   AdminProgressionUserLookupResponse,
+  LaunchStatsActivityRange,
+  LaunchStatsActivityRangeKey,
   LaunchStatsActivityWindow,
   LaunchStatsRecentCourseReference,
   LaunchStatsRecentRoomReference,
@@ -13,6 +15,7 @@ import type {
 import { getApiBaseUrl } from './api/baseUrl';
 
 const ADMIN_KEY_STORAGE_KEY = 'ep_launch_admin_api_key';
+const ACTIVITY_RANGE_STORAGE_KEY = 'ep_launch_admin_activity_range';
 const POLL_INTERVAL_MS = 10_000;
 const WARN_AGE_MS = 30_000;
 const CRITICAL_AGE_MS = 90_000;
@@ -26,6 +29,8 @@ const lastUpdated = document.getElementById('last-updated') as HTMLDivElement | 
 const warnings = document.getElementById('warnings') as HTMLDivElement | null;
 const configChips = document.getElementById('config-chips') as HTMLDivElement | null;
 const totalsGrid = document.getElementById('totals-grid') as HTMLDivElement | null;
+const activityRangeSelect = document.getElementById('activity-range-select') as HTMLSelectElement | null;
+const activityRangeSummary = document.getElementById('activity-range-summary') as HTMLDivElement | null;
 const activityGrid = document.getElementById('activity-grid') as HTMLDivElement | null;
 const activityFeed = document.getElementById('activity-feed') as HTMLDivElement | null;
 const partykitSummary = document.getElementById('partykit-summary') as HTMLDivElement | null;
@@ -51,6 +56,9 @@ let lastError: string | null = null;
 let lastGoodSnapshotAt: string | null = null;
 let pollingTimer: number | null = null;
 let refreshInFlight = false;
+let selectedActivityRangeKey =
+  (window.localStorage.getItem(ACTIVITY_RANGE_STORAGE_KEY) as LaunchStatsActivityRangeKey | null) ??
+  null;
 let progressionStatusMessage = 'Search for a user to inspect or raise their builder caps.';
 let progressionResultsSnapshot: AdminProgressionUserLookupEntry[] = [];
 let selectedProgressionUser: AdminProgressionUserCapsResponse | null = null;
@@ -85,6 +93,12 @@ clearKeyButton?.addEventListener('click', () => {
   }
   syncPolling();
   render();
+});
+
+activityRangeSelect?.addEventListener('change', () => {
+  selectedActivityRangeKey = activityRangeSelect.value as LaunchStatsActivityRangeKey;
+  window.localStorage.setItem(ACTIVITY_RANGE_STORAGE_KEY, selectedActivityRangeKey);
+  renderActivity();
 });
 
 progressionSearchButton?.addEventListener('click', () => {
@@ -588,68 +602,62 @@ function renderActivity(): void {
 
   if (!lastSnapshot) {
     activityGrid.innerHTML = '<div class="meta">No activity yet.</div>';
+    if (activityRangeSummary) {
+      activityRangeSummary.textContent =
+        'Choose a time window to see who actually played, built, signed up, or published in that period.';
+    }
+    if (activityRangeSelect) {
+      activityRangeSelect.innerHTML = '';
+    }
     if (activityFeed) {
       activityFeed.innerHTML = '<div class="meta">No recent summaries yet.</div>';
     }
     return;
   }
 
-  const windows: Array<[string, LaunchStatsActivityWindow]> = [
-    ['Last 5m', lastSnapshot.activity.last5m],
-    ['Last 15m', lastSnapshot.activity.last15m],
-    ['Last 60m', lastSnapshot.activity.last60m],
-  ];
+  const selectedRange = getSelectedActivityRange();
+  renderActivityRangeOptions(selectedRange);
 
-  activityGrid.innerHTML = windows
-    .map(
-      ([label, windowStats]) => `
-        <article class="card stack">
-          <span class="label">${escapeHtml(label)}</span>
-          <div class="meta">People ${formatNumber(windowStats.newUsers)} signups · ${formatNumber(windowStats.logins)} logins · ${formatNumber(
-            windowStats.guestVisitors
-          )} guests</div>
-          <div class="meta">Guest play/build ${formatNumber(
-            windowStats.guestPlayBuildVisitors
-          )} · play ${formatDurationSeconds(windowStats.guestPlaySeconds)} · build ${formatDurationSeconds(
-            windowStats.guestEditSeconds
-          )}</div>
-          <div class="meta">Build ${formatNumber(windowStats.roomClaims)} claims · ${formatNumber(
-            windowStats.roomPublishes
-          )} room publishes · ${formatNumber(windowStats.coursePublishes)} course publishes</div>
-          <div class="meta">Play room ${formatNumber(
-            windowStats.roomRunStarts
-          )}/${formatNumber(windowStats.roomRunFinishes)} start/finish · course ${formatNumber(
-            windowStats.courseRunStarts
-          )}/${formatNumber(windowStats.courseRunFinishes)} start/finish</div>
-          <div class="meta">Support ${formatNumber(windowStats.chatMessages)} chat · ${formatNumber(
-            windowStats.magicLinksCreated
-          )} magic links</div>
-        </article>
-      `
-    )
-    .join('');
+  if (!selectedRange) {
+    activityGrid.innerHTML = '<div class="meta">No activity ranges returned yet.</div>';
+    if (activityFeed) {
+      activityFeed.innerHTML = '<div class="meta">No recent summaries yet.</div>';
+    }
+    return;
+  }
+
+  if (activityRangeSummary) {
+    activityRangeSummary.textContent =
+      `Showing grouped player, guest, build, and signup activity in ${selectedRange.description}. ` +
+      'Browse-only guest tabs are counted in guest visitors, but only play/build guests appear in the feed.';
+  }
+
+  activityGrid.innerHTML = renderActivityWindowCards(selectedRange.activity);
 
   if (!activityFeed) {
     return;
   }
 
-  const summaries = lastSnapshot.recentSummaries ?? [];
+  const summaries = selectedRange.recentSummaries ?? [];
   if (summaries.length === 0) {
-    activityFeed.innerHTML = '<div class="meta">No recent summaries yet.</div>';
+    activityFeed.innerHTML =
+      `<div class="meta">No play, build, signup, login-only, or publish summaries in ${escapeHtml(
+        selectedRange.description
+      )}.</div>`;
     return;
   }
 
   activityFeed.innerHTML = summaries
     .map((summary) => {
-      const detail = renderRecentSummaryDetail(summary);
+      const detail = renderRecentSummaryDetail(summary, selectedRange);
 
       return `
-        <article class="card activity-row">
+        <article class="card activity-row ${escapeHtml(getActivityRowClass(summary))}">
           <div class="activity-head">
             <span class="label">${escapeHtml(renderRecentSummaryKindLabel(summary))}</span>
             <span class="meta">${escapeHtml(formatTimestamp(summary.at))}</span>
           </div>
-          <div class="activity-summary">${renderRecentSummaryMarkup(summary)}</div>
+          <div class="activity-summary">${renderRecentSummaryMarkup(summary, selectedRange)}</div>
           ${detail ? `<div class="meta activity-detail">${escapeHtml(detail)}</div>` : ''}
         </article>
       `;
@@ -657,6 +665,87 @@ function renderActivity(): void {
     .join('');
 
   wireProgressionLookupButtons(activityFeed);
+}
+
+function getSelectedActivityRange(): LaunchStatsActivityRange | null {
+  const ranges = lastSnapshot?.activity.ranges ?? [];
+  if (ranges.length === 0) {
+    return null;
+  }
+
+  const defaultKey = lastSnapshot?.activity.defaultRangeKey ?? ranges[0].key;
+  const selected =
+    ranges.find((range) => range.key === selectedActivityRangeKey) ??
+    ranges.find((range) => range.key === defaultKey) ??
+    ranges[0];
+  selectedActivityRangeKey = selected.key;
+  return selected;
+}
+
+function renderActivityRangeOptions(selectedRange: LaunchStatsActivityRange | null): void {
+  if (!activityRangeSelect) {
+    return;
+  }
+
+  const ranges = lastSnapshot?.activity.ranges ?? [];
+  activityRangeSelect.innerHTML = ranges
+    .map((range) => {
+      const selected = selectedRange?.key === range.key ? 'selected' : '';
+      return `<option value="${escapeHtml(range.key)}" ${selected}>${escapeHtml(range.label)}</option>`;
+    })
+    .join('');
+}
+
+function renderActivityWindowCards(windowStats: LaunchStatsActivityWindow): string {
+  const cards: Array<{
+    label: string;
+    value: string;
+    detail: string;
+    tone: string;
+  }> = [
+    {
+      label: 'People',
+      value: `${formatNumber(windowStats.newUsers)} signups`,
+      detail: `${formatNumber(windowStats.logins)} logins · ${formatNumber(windowStats.guestVisitors)} guest visitor${windowStats.guestVisitors === 1 ? '' : 's'}`,
+      tone: 'people',
+    },
+    {
+      label: 'Guest Play/Build',
+      value: `${formatNumber(windowStats.guestPlayBuildVisitors)} guest${windowStats.guestPlayBuildVisitors === 1 ? '' : 's'}`,
+      detail: `play ${formatDurationSeconds(windowStats.guestPlaySeconds)} · build ${formatDurationSeconds(windowStats.guestEditSeconds)}`,
+      tone: 'guest',
+    },
+    {
+      label: 'Play',
+      value: `${formatNumber(windowStats.roomRunStarts)} room start${windowStats.roomRunStarts === 1 ? '' : 's'}`,
+      detail: `${formatNumber(windowStats.roomRunFinishes)} room finish${windowStats.roomRunFinishes === 1 ? '' : 'es'} · ${formatNumber(windowStats.courseRunStarts)} course start${windowStats.courseRunStarts === 1 ? '' : 's'} · ${formatNumber(windowStats.courseRunFinishes)} course finish${windowStats.courseRunFinishes === 1 ? '' : 'es'}`,
+      tone: 'play',
+    },
+    {
+      label: 'Build',
+      value: `${formatNumber(windowStats.roomPublishes)} room publish${windowStats.roomPublishes === 1 ? '' : 'es'}`,
+      detail: `${formatNumber(windowStats.roomClaims)} claim${windowStats.roomClaims === 1 ? '' : 's'} · ${formatNumber(windowStats.coursePublishes)} course publish${windowStats.coursePublishes === 1 ? '' : 'es'}`,
+      tone: 'build',
+    },
+    {
+      label: 'Support',
+      value: `${formatNumber(windowStats.chatMessages)} chat`,
+      detail: `${formatNumber(windowStats.magicLinksCreated)} magic link${windowStats.magicLinksCreated === 1 ? '' : 's'}`,
+      tone: 'support',
+    },
+  ];
+
+  return cards
+    .map(
+      (card) => `
+        <article class="card stack activity-stat-card activity-tone-${escapeHtml(card.tone)}">
+          <span class="label">${escapeHtml(card.label)}</span>
+          <span class="value">${escapeHtml(card.value)}</span>
+          <div class="meta">${escapeHtml(card.detail)}</div>
+        </article>
+      `
+    )
+    .join('');
 }
 
 function renderPartykitSummary(): void {
@@ -777,9 +866,30 @@ function renderRecentSummaryKindLabel(summary: LaunchStatsRecentSummary): string
   }
 }
 
-function renderRecentSummaryMarkup(summary: LaunchStatsRecentSummary): string {
+function getActivityRowClass(summary: LaunchStatsRecentSummary): string {
+  switch (summary.kind) {
+    case 'guest_visit':
+      return 'activity-kind-guest-visit';
+    case 'visit_only':
+      return 'activity-kind-visit-only';
+    case 'room_play':
+      return 'activity-kind-room-play';
+    case 'room_build':
+      return 'activity-kind-room-build';
+    case 'course_build':
+      return 'activity-kind-course-build';
+    case 'signup':
+    default:
+      return 'activity-kind-signup';
+  }
+}
+
+function renderRecentSummaryMarkup(
+  summary: LaunchStatsRecentSummary,
+  range: LaunchStatsActivityRange,
+): string {
   const actorMarkup = renderRecentSummaryActorMarkup(summary);
-  return `${actorMarkup} ${escapeHtml(renderRecentSummaryBody(summary))}`;
+  return `${actorMarkup} ${escapeHtml(renderRecentSummaryBody(summary, range))}`;
 }
 
 function renderRecentSummaryActorMarkup(summary: LaunchStatsRecentSummary): string {
@@ -795,7 +905,11 @@ function renderRecentSummaryActorMarkup(summary: LaunchStatsRecentSummary): stri
   return `<button class="activity-actor-button" type="button" data-progression-user-id="${escapeHtml(summary.actorUserId)}">${actor}</button>`;
 }
 
-function renderRecentSummaryBody(summary: LaunchStatsRecentSummary): string {
+function renderRecentSummaryBody(
+  summary: LaunchStatsRecentSummary,
+  range: LaunchStatsActivityRange,
+): string {
+  const rangePhrase = `in ${range.description}`;
   switch (summary.kind) {
     case 'signup':
       return summary.signupSource === 'wallet'
@@ -809,13 +923,13 @@ function renderRecentSummaryBody(summary: LaunchStatsRecentSummary): string {
     case 'visit_only': {
       const sessions = summary.sessionCount ?? 0;
       return sessions <= 1
-        ? 'logged in and did not build or play anything yet.'
-        : `logged in ${formatNumber(sessions)} times and did not build or play anything yet.`;
+        ? `logged in ${rangePhrase} and did not build or play anything yet.`
+        : `logged in ${formatNumber(sessions)} times ${rangePhrase} and did not build or play anything yet.`;
     }
     case 'room_play': {
       const attempts = summary.attemptCount ?? 0;
       const roomCount = summary.roomCount ?? summary.topRooms.length;
-      return `did ${formatNumber(attempts)} room attempt${attempts === 1 ? '' : 's'} across ${formatNumber(
+      return `did ${formatNumber(attempts)} room attempt${attempts === 1 ? '' : 's'} ${rangePhrase} across ${formatNumber(
         roomCount
       )} room${roomCount === 1 ? '' : 's'}.`;
     }
@@ -827,16 +941,16 @@ function renderRecentSummaryBody(summary: LaunchStatsRecentSummary): string {
       if (claims > 0 && publishes > 0) {
         return `claimed ${formatNumber(claims)} room${claims === 1 ? '' : 's'} and published ${formatNumber(
           publishes
-        )} room version${publishes === 1 ? '' : 's'} across ${formatNumber(roomCount)} room${
+        )} room version${publishes === 1 ? '' : 's'} ${rangePhrase} across ${formatNumber(roomCount)} room${
           roomCount === 1 ? '' : 's'
         }.`;
       }
 
       if (claims > 0) {
-        return `claimed ${formatNumber(claims)} room${claims === 1 ? '' : 's'}.`;
+        return `claimed ${formatNumber(claims)} room${claims === 1 ? '' : 's'} ${rangePhrase}.`;
       }
 
-      return `published ${formatNumber(publishes)} room version${publishes === 1 ? '' : 's'} across ${formatNumber(
+      return `published ${formatNumber(publishes)} room version${publishes === 1 ? '' : 's'} ${rangePhrase} across ${formatNumber(
         roomCount
       )} room${roomCount === 1 ? '' : 's'}.`;
     }
@@ -844,19 +958,22 @@ function renderRecentSummaryBody(summary: LaunchStatsRecentSummary): string {
       const courses = summary.courseCount ?? summary.topCourses.length;
       const publishes = summary.coursePublishCount ?? courses;
       if (publishes > courses) {
-        return `published ${formatNumber(publishes)} course version${publishes === 1 ? '' : 's'} across ${formatNumber(
+        return `published ${formatNumber(publishes)} course version${publishes === 1 ? '' : 's'} ${rangePhrase} across ${formatNumber(
           courses
         )} course${courses === 1 ? '' : 's'}.`;
       }
 
-      return `published ${formatNumber(courses)} course${courses === 1 ? '' : 's'}.`;
+      return `published ${formatNumber(courses)} course${courses === 1 ? '' : 's'} ${rangePhrase}.`;
     }
     default:
       return 'showed up recently.';
   }
 }
 
-function renderRecentSummaryDetail(summary: LaunchStatsRecentSummary): string | null {
+function renderRecentSummaryDetail(
+  summary: LaunchStatsRecentSummary,
+  range: LaunchStatsActivityRange,
+): string | null {
   switch (summary.kind) {
     case 'signup':
       return summary.signupSource === 'wallet'
@@ -886,7 +1003,7 @@ function renderRecentSummaryDetail(summary: LaunchStatsRecentSummary): string | 
     }
     case 'visit_only': {
       const sessions = summary.sessionCount ?? 0;
-      return `${formatNumber(sessions)} login session${sessions === 1 ? '' : 's'} · no room or course play/build in the last 7 days.`;
+      return `${formatNumber(sessions)} login session${sessions === 1 ? '' : 's'} · no room or course play/build in ${range.description}.`;
     }
     case 'room_play': {
       const parts = [

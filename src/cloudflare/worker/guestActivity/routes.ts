@@ -71,9 +71,11 @@ export async function handleGuestActivityHeartbeat(
           heartbeat_count,
           browse_seconds,
           play_seconds,
-          edit_seconds
+          edit_seconds,
+          last_play_at,
+          last_edit_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, 0)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, 0, ?, ?)
         ON CONFLICT(session_id) DO UPDATE SET
           guest_user_id = excluded.guest_user_id,
           guest_display_name = excluded.guest_display_name,
@@ -88,7 +90,15 @@ export async function handleGuestActivityHeartbeat(
           heartbeat_count = guest_visits.heartbeat_count + 1,
           browse_seconds = guest_visits.browse_seconds + ?,
           play_seconds = guest_visits.play_seconds + ?,
-          edit_seconds = guest_visits.edit_seconds + ?
+          edit_seconds = guest_visits.edit_seconds + ?,
+          last_play_at = CASE
+            WHEN ? IS NOT NULL THEN ?
+            ELSE guest_visits.last_play_at
+          END,
+          last_edit_at = CASE
+            WHEN ? IS NOT NULL THEN ?
+            ELSE guest_visits.last_edit_at
+          END
       `
     ).bind(
       sessionId,
@@ -103,9 +113,15 @@ export async function handleGuestActivityHeartbeat(
       room?.roomId ?? null,
       room?.x ?? null,
       room?.y ?? null,
+      mode === 'play' ? nowIso : null,
+      mode === 'edit' ? nowIso : null,
       browseDelta,
       playDelta,
       editDelta,
+      mode === 'play' || playDelta > 0 ? nowIso : null,
+      mode === 'play' || playDelta > 0 ? nowIso : null,
+      mode === 'edit' || editDelta > 0 ? nowIso : null,
+      mode === 'edit' || editDelta > 0 ? nowIso : null,
     ),
   ]);
 

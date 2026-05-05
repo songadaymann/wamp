@@ -59,10 +59,28 @@ export interface LaunchStatsActivityWindow {
   courseRunFinishes: number;
 }
 
+export type LaunchStatsActivityRangeKey =
+  | 'last12h'
+  | 'last24h'
+  | 'last3d'
+  | 'last7d'
+  | 'last30d';
+
+export interface LaunchStatsActivityRange {
+  key: LaunchStatsActivityRangeKey;
+  label: string;
+  description: string;
+  since: string;
+  activity: LaunchStatsActivityWindow;
+  recentSummaries: LaunchStatsRecentSummary[];
+}
+
 export interface LaunchStatsActivity {
   last5m: LaunchStatsActivityWindow;
   last15m: LaunchStatsActivityWindow;
   last60m: LaunchStatsActivityWindow;
+  defaultRangeKey: LaunchStatsActivityRangeKey;
+  ranges: LaunchStatsActivityRange[];
 }
 
 export type LaunchStatsRecentSummaryKind =
