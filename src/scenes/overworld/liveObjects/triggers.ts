@@ -24,7 +24,9 @@ export function canActorTriggerBlockSwitchByContact(liveObject: LoadedRoomObject
   return (
     liveObject.config.id === SWORDSMAN_AI_OBJECT_ID ||
     liveObject.config.id === 'bird' ||
-    liveObject.config.id === 'bat'
+    liveObject.config.id === 'bat' ||
+    liveObject.config.id === 'fish' ||
+    liveObject.config.id === 'shark'
   );
 }
 

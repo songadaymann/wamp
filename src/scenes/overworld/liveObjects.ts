@@ -78,7 +78,7 @@ import {
 import type { LoadedFullRoom } from './worldStreaming';
 import { terrainTileCollidesAtLocalPixel } from './terrainCollision';
 import {
-  arcadeBodiesOverlap,
+  arcadeBodiesTouchOrOverlap,
   getArcadeBodyBounds,
   isDynamicArcadeBody,
 } from './liveObjects/bodies';
@@ -1045,17 +1045,40 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       }
 
       const actorBody = actor.sprite.body as ArcadeObjectBody | null;
-      if (!actorBody || !actorBody.enable || !arcadeBodiesOverlap(switchBody, actorBody)) {
+      if (!actorBody || !actorBody.enable || !arcadeBodiesTouchOrOverlap(switchBody, actorBody)) {
         continue;
       }
 
-      if (this.isBlockSwitchActorLatched(switchObject, actor)) {
-        continue;
-      }
-
-      this.triggerBlockSwitch(loadedRoom, switchObject);
-      this.latchBlockSwitchActor(switchObject, actor);
+      this.handleBlockSwitchActorHit(loadedRoom, switchObject, actor);
     }
+  }
+
+  private handleBlockSwitchActorHit(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    switchObject: LoadedRoomObject,
+    actor: LoadedRoomObject
+  ): void {
+    if (
+      !isBlockSwitchObjectId(switchObject.config.id) ||
+      !switchObject.sprite.active ||
+      !actor.sprite.active ||
+      !canActorTriggerBlockSwitchByContact(actor)
+    ) {
+      return;
+    }
+
+    const switchBody = switchObject.sprite.body as ArcadeObjectBody | null;
+    const actorBody = actor.sprite.body as ArcadeObjectBody | null;
+    if (!switchBody || !switchBody.enable || !actorBody || !actorBody.enable) {
+      return;
+    }
+
+    if (this.isBlockSwitchActorLatched(switchObject, actor)) {
+      return;
+    }
+
+    this.triggerBlockSwitch(loadedRoom, switchObject);
+    this.latchBlockSwitchActor(switchObject, actor);
   }
 
   private getRoomSwitchState(roomId: string): boolean {
@@ -1144,7 +1167,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         !actor ||
         !actor.sprite.active ||
         !actorBody ||
-        !arcadeBodiesOverlap(switchBody, actorBody)
+        !arcadeBodiesTouchOrOverlap(switchBody, actorBody)
       ) {
         actorKeys.delete(actorKey);
       }
@@ -1447,12 +1470,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           candidate.sprite.body &&
           objectCollidesWithWorld(candidate.config) &&
           isSolidRuntimeObjectConfig(candidate.config)
-      )
+      ).map((liveObject) => ({ loadedRoom, liveObject }))
     );
     const dynamicSolidObstacleIndexByKey = new Map(
       solidObstacles
-        .filter((candidate) => this.usesDynamicObjectBody(candidate.config))
-        .map((candidate, index) => [candidate.key, index] as const)
+        .filter(({ liveObject }) => this.usesDynamicObjectBody(liveObject.config))
+        .map(({ liveObject }, index) => [liveObject.key, index] as const)
     );
 
     for (const loadedRoom of rooms) {
@@ -1481,7 +1504,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         }
 
         const liveObjectDynamicSolidIndex = dynamicSolidObstacleIndexByKey.get(liveObject.key);
-        for (const obstacle of solidObstacles) {
+        for (const { loadedRoom: obstacleLoadedRoom, liveObject: obstacle } of solidObstacles) {
           if (!obstacle.sprite.active || !obstacle.sprite.body || obstacle === liveObject) {
             continue;
           }
@@ -1492,6 +1515,18 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             obstacleDynamicSolidIndex !== undefined &&
             obstacleDynamicSolidIndex <= liveObjectDynamicSolidIndex
           ) {
+            continue;
+          }
+
+          if (
+            isBlockSwitchObjectId(obstacle.config.id) &&
+            canActorTriggerBlockSwitchByContact(liveObject)
+          ) {
+            liveObject.worldColliders.push(
+              this.options.scene.physics.add.collider(liveObject.sprite, obstacle.sprite, () => {
+                this.handleBlockSwitchActorHit(obstacleLoadedRoom, obstacle, liveObject);
+              })
+            );
             continue;
           }
 

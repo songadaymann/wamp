@@ -16,3 +16,18 @@ export function arcadeBodiesOverlap(first: ArcadeObjectBody, second: ArcadeObjec
     getArcadeBodyBounds(second),
   );
 }
+
+export function arcadeBodiesTouchOrOverlap(
+  first: ArcadeObjectBody,
+  second: ArcadeObjectBody,
+  tolerancePx = 1,
+): boolean {
+  const firstBounds = getArcadeBodyBounds(first);
+  const secondBounds = getArcadeBodyBounds(second);
+  return (
+    firstBounds.right + tolerancePx >= secondBounds.left
+    && firstBounds.left - tolerancePx <= secondBounds.right
+    && firstBounds.bottom + tolerancePx >= secondBounds.top
+    && firstBounds.top - tolerancePx <= secondBounds.bottom
+  );
+}
