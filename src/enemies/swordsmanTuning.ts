@@ -3,6 +3,8 @@ export const SWORDSMAN_AI_JUMP_VELOCITY_Y = -265;
 export const SWORDSMAN_AI_JUMP_VELOCITY_X = 118;
 export const SWORDSMAN_AI_WALL_JUMP_VELOCITY_Y = -260;
 export const SWORDSMAN_AI_WALL_JUMP_VELOCITY_X = 150;
+export const SWORDSMAN_AI_LADDER_CLIMB_SPEED = 72;
+export const SWORDSMAN_AI_LADDER_ALIGN_SPEED = 48;
 
 export function getSwordsmanTraversalAirSpeed(
   edgeId: string | null,

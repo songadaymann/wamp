@@ -42,6 +42,8 @@ import {
   SWORDSMAN_AI_JUMP_SETUP_APPROACH_TOLERANCE_PX,
   SWORDSMAN_AI_JUMP_VELOCITY_X,
   SWORDSMAN_AI_JUMP_VELOCITY_Y,
+  SWORDSMAN_AI_LADDER_ALIGN_SPEED,
+  SWORDSMAN_AI_LADDER_CLIMB_SPEED,
   SWORDSMAN_AI_WALL_JUMP_VELOCITY_X,
   SWORDSMAN_AI_WALL_JUMP_VELOCITY_Y,
 } from '../../enemies/swordsmanTuning';
@@ -57,6 +59,7 @@ import {
   getSwordsmanTraversalCurrentNodeId,
   getSwordsmanTraversalGraphCacheKey,
   getSwordsmanTraversalTargetContext,
+  isSwordsmanLadderTraversalEdge,
   type SwordsmanBodySnapshot,
   type SwordsmanSurfaceSegment,
   type SwordsmanTraversalDecision,
@@ -135,6 +138,7 @@ export interface LoadedRoomObjectRuntimeState {
   aiActiveTraversalNextNodeId: string | null;
   aiActiveTraversalStartedAt: number;
   aiActiveTraversalStartBottom: number;
+  aiLadderTraversalEdgeId: string | null;
   aiFallbackTraversalEdgeId: string | null;
   aiFallbackTraversalSegmentId: string | null;
   aiFallbackTraversalLastProgressAt: number;
@@ -313,6 +317,9 @@ const SWORDSMAN_AI_COLLECT_FAILED_TRAVERSAL_BLOCK_MS = 6400;
 const SWORDSMAN_AI_COLLECT_FAILED_WALL_ROUTE_BLOCK_MS = 18000;
 const SWORDSMAN_AI_JUMP_RESULT_GRACE_MS = 140;
 const SWORDSMAN_AI_DROP_DOWN_RESULT_GRACE_MS = 520;
+const SWORDSMAN_AI_LADDER_RESULT_TIMEOUT_MS = 6000;
+const SWORDSMAN_AI_LADDER_ATTACH_TOLERANCE_PX = 6;
+const SWORDSMAN_AI_LADDER_FINISH_TOLERANCE_PX = 4;
 const SWORDSMAN_AI_JUMP_SUCCESS_RISE_PX = 10;
 const SWORDSMAN_AI_FALLBACK_STALL_BLOCK_MS = 480;
 const SWORDSMAN_AI_FALLBACK_PROGRESS_EPSILON_PX = 3;
@@ -1522,11 +1529,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     const now = this.options.getCurrentTime();
     if (this.resetDynamicObjectIfOutOfBounds(room, liveObject, body)) {
+      this.stopSwordsmanLadderTraversal(liveObject, body);
       this.resetSwordsmanTraversalMemory(liveObject);
       this.setSwordsmanAiState(liveObject, 'patrol');
       return;
     }
 
+    this.syncSwordsmanLadderGravity(liveObject, body);
     this.updateSwordsmanTraversalMemory(room, liveObject, body, now);
     switch (this.getSwordsmanObjectiveMode(liveObject)) {
       case 'collect':
@@ -1558,7 +1567,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     if (currentState === 'attack') {
       body.setVelocityX(0);
-      this.clearSwordsmanObjectiveTraversalState(liveObject, 'attack');
+      this.clearSwordsmanObjectiveTraversalState(liveObject, 'attack', body);
       this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX, { force: true });
       this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS['sword-slash']);
       this.applySwordsmanSwordDamage(liveObject);
@@ -1571,7 +1580,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     if (currentState === 'windup') {
       body.setVelocityX(0);
-      this.clearSwordsmanObjectiveTraversalState(liveObject, 'windup');
+      this.clearSwordsmanObjectiveTraversalState(liveObject, 'windup', body);
       if (target) {
         liveObject.runtime.directionX = target.directionX;
       }
@@ -1585,7 +1594,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     if (currentState === 'cooldown') {
       body.setVelocityX(0);
-      this.clearSwordsmanObjectiveTraversalState(liveObject, 'cooldown');
+      this.clearSwordsmanObjectiveTraversalState(liveObject, 'cooldown', body);
       this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS.idle);
       if (now >= liveObject.runtime.cooldownUntil) {
         this.setSwordsmanAiState(liveObject, target ? 'chase' : 'patrol');
@@ -1612,7 +1621,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const currentState = liveObject.runtime.aiState ?? 'patrol';
 
     if (currentState === 'attack' || currentState === 'windup' || currentState === 'cooldown') {
-      this.clearSwordsmanObjectiveTraversalState(liveObject, 'collect-mode-reset');
+      this.clearSwordsmanObjectiveTraversalState(liveObject, 'collect-mode-reset', body);
       this.setSwordsmanAiState(liveObject, 'patrol');
     }
 
@@ -2421,7 +2430,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private clearSwordsmanObjectiveTraversalState(
     liveObject: LoadedRoomObject,
     reason: string | null,
+    body: Phaser.Physics.Arcade.Body | null = null,
   ): void {
+    this.stopSwordsmanLadderTraversal(liveObject, body);
     liveObject.runtime.aiIntent = null;
     liveObject.runtime.aiTargetX = null;
     liveObject.runtime.aiCurrentSegmentId = null;
@@ -2508,6 +2519,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     if (this.tryApplySwordsmanCollectJump(room, liveObject, body, target, now)) {
       return;
     }
+    if (this.tryApplySwordsmanLadderTraversal(room, liveObject, body, traversalDecision, now)) {
+      return;
+    }
     if (this.tryApplySwordsmanTraversalImpulse(liveObject, body, traversalDecision)) {
       return;
     }
@@ -2536,7 +2550,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     reason: string,
   ): void {
     this.setSwordsmanAiState(liveObject, 'patrol');
-    this.clearSwordsmanObjectiveTraversalState(liveObject, reason);
+    this.clearSwordsmanObjectiveTraversalState(liveObject, reason, body);
     body.setVelocityX(0);
     this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX);
     this.playSwordsmanAnimation(
@@ -2556,7 +2570,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     reason: string,
   ): void {
     this.setSwordsmanAiState(liveObject, 'patrol');
-    this.clearSwordsmanObjectiveTraversalState(liveObject, reason);
+    this.clearSwordsmanObjectiveTraversalState(liveObject, reason, body);
     this.maybeReverseGroundEnemy(room, liveObject, body);
     this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX);
     body.setVelocityX(liveObject.runtime.directionX * SWORDSMAN_AI_SPEED * 0.68);
@@ -2657,6 +2671,22 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     liveObject.runtime.aiPlannerPlanMs = 0;
     liveObject.runtime.aiPlannerExpandedStates = 0;
     liveObject.runtime.aiPlannerSimulatedEdges = 0;
+    const activeTraversalEdge = liveObject.runtime.aiActiveTraversalEdgeId
+      ? getSwordsmanTraversalEdgeById(graph, liveObject.runtime.aiActiveTraversalEdgeId)
+      : null;
+    if (isSwordsmanLadderTraversalEdge(activeTraversalEdge)) {
+      const currentContext = getSwordsmanTraversalContext(graph, enemySnapshot);
+      const targetContext = getSwordsmanTraversalTargetContext(graph, targetSnapshot);
+      return buildSwordsmanTraversalDecisionFromEdge(
+        activeTraversalEdge,
+        enemySnapshot,
+        targetSnapshot.centerX >= enemySnapshot.centerX ? 1 : -1,
+        targetContext.targetSurface?.centerX ?? targetSnapshot.centerX,
+        currentContext.currentNodeId,
+        targetContext.targetNodeId,
+        targetSnapshot,
+      );
+    }
     this.clearSwordsmanPlannedRoute(liveObject, null);
     return decideSwordsmanTraversal(graph, enemySnapshot, targetSnapshot, blockedEdgeIds);
   }
@@ -3079,7 +3109,15 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       this.getSwordsmanTraversalGraph(room),
       decision.traversalEdgeId,
     );
-    if (!edge || (edge.type !== 'jump-up' && edge.type !== 'jump-gap' && edge.type !== 'jump-to-wall')) {
+    if (
+      !edge ||
+      (
+        edge.type !== 'jump-up' &&
+        edge.type !== 'jump-gap' &&
+        edge.type !== 'jump-to-wall' &&
+        !isSwordsmanLadderTraversalEdge(edge)
+      )
+    ) {
       return false;
     }
 
@@ -3120,6 +3158,107 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       return 1;
     }
     return 0;
+  }
+
+  private syncSwordsmanLadderGravity(
+    liveObject: LoadedRoomObject,
+    body: Phaser.Physics.Arcade.Body,
+  ): void {
+    body.setAllowGravity(liveObject.runtime.aiLadderTraversalEdgeId === null);
+  }
+
+  private stopSwordsmanLadderTraversal(
+    liveObject: LoadedRoomObject,
+    body: Phaser.Physics.Arcade.Body | null = null,
+  ): void {
+    const ladderEdgeId = liveObject.runtime.aiLadderTraversalEdgeId;
+    if (!ladderEdgeId && body?.allowGravity !== false) {
+      return;
+    }
+
+    if (body) {
+      body.setAllowGravity(true);
+    }
+    liveObject.runtime.aiLadderTraversalEdgeId = null;
+    if (ladderEdgeId && liveObject.runtime.aiActiveTraversalEdgeId === ladderEdgeId) {
+      this.clearSwordsmanTraversalAttempt(liveObject);
+    }
+  }
+
+  private tryApplySwordsmanLadderTraversal(
+    room: RoomSnapshot,
+    liveObject: LoadedRoomObject,
+    body: Phaser.Physics.Arcade.Body,
+    decision: SwordsmanTraversalDecision | null,
+    now: number,
+  ): boolean {
+    if (!decision || decision.intent !== 'ladder-climb' || !decision.traversalEdgeId) {
+      this.stopSwordsmanLadderTraversal(liveObject, body);
+      return false;
+    }
+
+    const graph = this.getSwordsmanTraversalGraph(room);
+    const edge = getSwordsmanTraversalEdgeById(graph, decision.traversalEdgeId);
+    if (!isSwordsmanLadderTraversalEdge(edge)) {
+      this.stopSwordsmanLadderTraversal(liveObject, body);
+      return false;
+    }
+
+    const targetNode = graph.nodesById.get(edge.toId);
+    if (!targetNode || targetNode.kind !== 'surface') {
+      this.stopSwordsmanLadderTraversal(liveObject, body);
+      return false;
+    }
+
+    if (liveObject.runtime.aiLadderTraversalEdgeId !== edge.id) {
+      this.startSwordsmanTraversalAttempt(liveObject, decision, body);
+      liveObject.runtime.aiLadderTraversalEdgeId = edge.id;
+      liveObject.runtime.aiTraversalCooldownUntil = now + SWORDSMAN_AI_TRAVERSAL_COOLDOWN_MS;
+    }
+
+    const roomOrigin = this.options.getRoomOrigin(room.coordinates);
+    const ladderX = edge.ladderX ?? edge.setupX;
+    const localCenterX = body.center.x - roomOrigin.x;
+    const localBottom = body.bottom - roomOrigin.y;
+    const deltaX = ladderX - localCenterX;
+    const targetBottom = targetNode.topY;
+    const climbDirectionY = edge.type === 'ladder-up' ? -1 : 1;
+    const reachedTarget =
+      climbDirectionY < 0
+        ? localBottom <= targetBottom + SWORDSMAN_AI_LADDER_FINISH_TOLERANCE_PX
+        : localBottom >= targetBottom - SWORDSMAN_AI_LADDER_FINISH_TOLERANCE_PX;
+
+    if (reachedTarget) {
+      this.stopSwordsmanLadderTraversal(liveObject, body);
+      body.setVelocityY(0);
+      body.setVelocityX(
+        Phaser.Math.Clamp(
+          (edge.targetX - localCenterX) * 10,
+          -SWORDSMAN_AI_LADDER_ALIGN_SPEED,
+          SWORDSMAN_AI_LADDER_ALIGN_SPEED,
+        ),
+      );
+      this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS.idle);
+      return true;
+    }
+
+    body.setAllowGravity(false);
+    body.setVelocityX(
+      Phaser.Math.Clamp(
+        deltaX * 12,
+        -SWORDSMAN_AI_LADDER_ALIGN_SPEED,
+        SWORDSMAN_AI_LADDER_ALIGN_SPEED,
+      ),
+    );
+    body.setVelocityY(climbDirectionY * SWORDSMAN_AI_LADDER_CLIMB_SPEED);
+    const facingDirectionX =
+      Math.abs(deltaX) > SWORDSMAN_AI_LADDER_ATTACH_TOLERANCE_PX
+        ? (deltaX > 0 ? 1 : -1)
+        : decision.directionX;
+    liveObject.runtime.directionX = facingDirectionX;
+    this.applySwordsmanFacing(liveObject, body, facingDirectionX);
+    this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS['ladder-climb']);
+    return true;
   }
 
   private tryApplySwordsmanTraversalImpulse(
@@ -3282,6 +3421,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   }
 
   private clearSwordsmanTraversalAttempt(liveObject: LoadedRoomObject): void {
+    liveObject.runtime.aiLadderTraversalEdgeId = null;
     liveObject.runtime.aiActiveTraversalEdgeId = null;
     liveObject.runtime.aiActiveTraversalNextNodeId = null;
     liveObject.runtime.aiActiveTraversalStartedAt = 0;
@@ -3379,7 +3519,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     const graph = this.getSwordsmanTraversalGraph(room);
     const activeEdge = getSwordsmanTraversalEdgeById(graph, activeEdgeId);
-    if (body.blocked.up || body.touching.up) {
+    const currentNodeId = getSwordsmanTraversalCurrentNodeId(
+      graph,
+      this.createSwordsmanBodySnapshot(body, this.options.getRoomOrigin(room.coordinates)),
+    );
+    const nextNodeId = liveObject.runtime.aiActiveTraversalNextNodeId;
+
+    if (!isSwordsmanLadderTraversalEdge(activeEdge) && (body.blocked.up || body.touching.up)) {
       this.blockSwordsmanTraversalEdge(
         liveObject,
         activeEdgeId,
@@ -3394,11 +3540,52 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       return;
     }
 
-    const currentNodeId = getSwordsmanTraversalCurrentNodeId(
-      graph,
-      this.createSwordsmanBodySnapshot(body, this.options.getRoomOrigin(room.coordinates)),
-    );
-    const nextNodeId = liveObject.runtime.aiActiveTraversalNextNodeId;
+    if (isSwordsmanLadderTraversalEdge(activeEdge)) {
+      const targetNode = nextNodeId ? graph.nodesById.get(nextNodeId) : null;
+      const localBottom = body.bottom - this.options.getRoomOrigin(room.coordinates).y;
+      const reachedTarget =
+        targetNode?.kind === 'surface' &&
+        (activeEdge.type === 'ladder-up'
+          ? localBottom <= targetNode.topY + SWORDSMAN_AI_LADDER_FINISH_TOLERANCE_PX
+          : localBottom >= targetNode.topY - SWORDSMAN_AI_LADDER_FINISH_TOLERANCE_PX);
+      if (nextNodeId && currentNodeId === nextNodeId && reachedTarget) {
+        this.stopSwordsmanLadderTraversal(liveObject, body);
+        return;
+      }
+
+      if (activeEdge.type === 'ladder-up' && (body.blocked.up || body.touching.up)) {
+        this.blockSwordsmanTraversalEdge(
+          liveObject,
+          activeEdgeId,
+          now,
+          this.getSwordsmanTraversalFailureBlockOptions(
+            liveObject,
+            graph,
+            activeEdge,
+            'hit-head',
+          ),
+        );
+        this.stopSwordsmanLadderTraversal(liveObject, body);
+        return;
+      }
+
+      if (now >= liveObject.runtime.aiActiveTraversalStartedAt + SWORDSMAN_AI_LADDER_RESULT_TIMEOUT_MS) {
+        this.blockSwordsmanTraversalEdge(
+          liveObject,
+          activeEdgeId,
+          now,
+          this.getSwordsmanTraversalFailureBlockOptions(
+            liveObject,
+            graph,
+            activeEdge,
+            'failed-ladder-traversal',
+          ),
+        );
+        this.stopSwordsmanLadderTraversal(liveObject, body);
+      }
+      return;
+    }
+
     if (
       nextNodeId &&
       currentNodeId === nextNodeId &&
@@ -3565,6 +3752,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       return false;
     }
 
+    if (this.isSwordsmanLadderTraversalDecision(room, decision)) {
+      this.clearSwordsmanFallbackTraversal(liveObject);
+      return false;
+    }
+
     if (
       liveObject.runtime.aiFallbackTraversalEdgeId !== fallbackEdgeId ||
       liveObject.runtime.aiFallbackTraversalSegmentId !== decision.currentSegmentId
@@ -3620,6 +3812,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       return;
     }
 
+    if (this.isSwordsmanLadderTraversalDecision(room, decision)) {
+      this.clearSwordsmanFallbackTraversal(liveObject);
+      return;
+    }
+
     if (
       liveObject.runtime.aiFallbackTraversalEdgeId !== fallbackEdgeId ||
       liveObject.runtime.aiFallbackTraversalSegmentId !== decision.currentSegmentId
@@ -3655,6 +3852,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const progressMetric = activeDecision?.traversalEdgeId
       ? this.measureSwordsmanFallbackProgressMetric(room, body, activeDecision)
       : null;
+    if (this.isSwordsmanLadderTraversalDecision(room, activeDecision)) {
+      this.clearSwordsmanRouteLoopMemory(liveObject);
+      return false;
+    }
     if (
       !activeDecision ||
       !signature ||
@@ -3704,6 +3905,19 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       preserveRouteLoopMemory: true,
     });
     return true;
+  }
+
+  private isSwordsmanLadderTraversalDecision(
+    room: RoomSnapshot,
+    decision: SwordsmanTraversalDecision | null,
+  ): boolean {
+    if (!decision?.traversalEdgeId) {
+      return false;
+    }
+
+    return isSwordsmanLadderTraversalEdge(
+      getSwordsmanTraversalEdgeById(this.getSwordsmanTraversalGraph(room), decision.traversalEdgeId),
+    );
   }
 
   private buildSwordsmanRouteLoopSignature(
@@ -4190,6 +4404,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         aiActiveTraversalNextNodeId: null,
         aiActiveTraversalStartedAt: 0,
         aiActiveTraversalStartBottom: 0,
+        aiLadderTraversalEdgeId: null,
         aiFallbackTraversalEdgeId: null,
         aiFallbackTraversalSegmentId: null,
         aiFallbackTraversalLastProgressAt: 0,
@@ -4408,7 +4623,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   }
 
   private objectUsesGravity(config: GameObjectConfig): boolean {
-    return config.id !== 'bird' && config.id !== 'cannon_bullet';
+    return config.behavior !== 'fly' && config.id !== 'cannon_bullet';
   }
 
   private createLadderTopSupport(sprite: Phaser.GameObjects.Sprite): Phaser.GameObjects.Zone | null {

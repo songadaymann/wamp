@@ -82,6 +82,7 @@ export function createLiveObjectRuntimeState(options: {
     aiActiveTraversalNextNodeId: null,
     aiActiveTraversalStartedAt: 0,
     aiActiveTraversalStartBottom: 0,
+    aiLadderTraversalEdgeId: null,
     aiFallbackTraversalEdgeId: null,
     aiFallbackTraversalSegmentId: null,
     aiFallbackTraversalLastProgressAt: 0,

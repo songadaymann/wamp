@@ -10,6 +10,7 @@ import {
   SWORDSMAN_AI_AIR_SPEED,
   SWORDSMAN_AI_JUMP_VELOCITY_X,
   SWORDSMAN_AI_JUMP_VELOCITY_Y,
+  SWORDSMAN_AI_LADDER_CLIMB_SPEED,
   SWORDSMAN_AI_WALL_JUMP_VELOCITY_X,
   SWORDSMAN_AI_WALL_JUMP_VELOCITY_Y,
 } from './swordsmanTuning';
@@ -20,6 +21,7 @@ import {
   getSwordsmanTraversalContext,
   getSwordsmanTraversalCurrentNodeId,
   getSwordsmanTraversalTargetContext,
+  isSwordsmanLadderTraversalEdge,
   measureSwordsmanTraversalNodeDistanceToBody,
   type SwordsmanBodySnapshot,
   type SwordsmanTraversalEdge,
@@ -391,6 +393,13 @@ function simulateTraversalEdge(
     return rememberEdgeSimulation(cacheKey, { success: false, travelMs: 0 });
   }
 
+  if (isSwordsmanLadderTraversalEdge(edge)) {
+    return rememberEdgeSimulation(
+      cacheKey,
+      simulateLadderTraversalEdge(edge, sourceNode, targetNode),
+    );
+  }
+
   const body = createInitialSimBody(edge, sourceNode, targetNode, bodyWidth, bodyHeight);
   let elapsedMs = 0;
   let preserveLaunchSteps = needsLaunchImpulse(edge) ? 1 : 0;
@@ -426,6 +435,26 @@ function simulateTraversalEdge(
   }
 
   return rememberEdgeSimulation(cacheKey, { success: false, travelMs: elapsedMs });
+}
+
+function simulateLadderTraversalEdge(
+  edge: SwordsmanTraversalEdge,
+  sourceNode: SwordsmanTraversalNode,
+  targetNode: SwordsmanTraversalNode,
+): EdgeSimulationResult {
+  if (sourceNode.kind !== 'surface' || targetNode.kind !== 'surface') {
+    return { success: false, travelMs: 0 };
+  }
+
+  const climbDistance = Math.abs(targetNode.topY - sourceNode.topY);
+  const alignDistance = Math.abs((edge.ladderX ?? edge.setupX) - edge.setupX);
+  return {
+    success: climbDistance > 0,
+    travelMs:
+      120 +
+      (alignDistance / GROUND_SPEED_PX_PER_S) * 1000 +
+      (climbDistance / SWORDSMAN_AI_LADDER_CLIMB_SPEED) * 1000,
+  };
 }
 
 function hasSimBodyReachedTraversalTarget(

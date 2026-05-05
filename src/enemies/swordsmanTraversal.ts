@@ -1,7 +1,10 @@
-  import {
+import {
   ROOM_HEIGHT,
   ROOM_WIDTH,
   TILE_SIZE,
+  getObjectById,
+  getObjectDisplayOffset,
+  type PlacedObject,
 } from '../config';
 import {
   SWORDSMAN_AI_DROP_SETUP_APPROACH_TOLERANCE_PX,
@@ -22,6 +25,7 @@ export type SwordsmanTraversalIntent =
   | 'same-platform'
   | 'jump-up'
   | 'drop-down'
+  | 'ladder-climb'
   | 'air-chase'
   | 'wall-jump'
   | 'blocked';
@@ -55,13 +59,23 @@ export interface SwordsmanWallSegment {
 
 export interface SwordsmanTraversalEdge {
   id: string;
-  type: 'jump-up' | 'jump-gap' | 'drop-down' | 'jump-to-wall' | 'wall-jump';
+  type:
+    | 'jump-up'
+    | 'jump-gap'
+    | 'drop-down'
+    | 'jump-to-wall'
+    | 'wall-jump'
+    | 'ladder-up'
+    | 'ladder-down';
   fromId: string;
   toId: string;
   directionX: -1 | 1;
   setupX: number;
   targetX: number;
   allowEdgeDrop: boolean;
+  ladderX?: number;
+  ladderTopY?: number;
+  ladderBottomY?: number;
 }
 
 export type SwordsmanTraversalNode = SwordsmanSurfaceSegment | SwordsmanWallSegment;
@@ -130,9 +144,27 @@ const WALL_JUMP_TO_SURFACE_MIN_VERTICAL_PX = 8;
 const WALL_JUMP_TO_SURFACE_MAX_VERTICAL_PX = 86;
 const WALL_JUMP_TO_SURFACE_MAX_HORIZONTAL_PX = 96;
 const WALL_JUMP_PREFERRED_RISE_PX = 40;
+const LADDER_SURFACE_ATTACH_TOLERANCE_X_PX = TILE_SIZE * 1.25;
+const LADDER_SURFACE_ATTACH_TOLERANCE_Y_PX = TILE_SIZE * 1.5;
+const LADDER_VERTICAL_MERGE_GAP_PX = TILE_SIZE * 1.25;
+const LADDER_COLUMN_MERGE_TOLERANCE_X_PX = TILE_SIZE * 0.5;
+const LADDER_MIN_VERTICAL_DELTA_PX = TILE_SIZE * 0.75;
+const LADDER_ATTACH_APPROACH_TOLERANCE_PX = 5;
 const MAX_SEARCH_DEPTH = 3;
 const TARGET_MATCH_SCORE_BONUS = 240;
 const FALLBACK_DROP_EDGE_PREFIX = 'fallback-drop';
+
+interface SwordsmanLadderSegment {
+  id: string;
+  centerX: number;
+  topY: number;
+  bottomY: number;
+}
+
+interface SwordsmanLadderSurfaceAttachment {
+  surface: SwordsmanSurfaceSegment;
+  anchorX: number;
+}
 
 export function getSwordsmanTraversalGraphCacheKey(room: RoomSnapshot): string {
   return `${room.id}:${room.version}:${room.updatedAt}`;
@@ -141,6 +173,7 @@ export function getSwordsmanTraversalGraphCacheKey(room: RoomSnapshot): string {
 export function buildSwordsmanTraversalGraph(room: RoomSnapshot): SwordsmanTraversalGraph {
   const surfaceSegments = buildSurfaceSegments(room);
   const wallSegments = buildWallSegments(room);
+  const ladderSegments = buildLadderSegments(room);
   const nodesById = new Map<string, SwordsmanTraversalNode>();
   const edgesByNodeId = new Map<string, SwordsmanTraversalEdge[]>();
   const edgesById = new Map<string, SwordsmanTraversalEdge>();
@@ -183,6 +216,10 @@ export function buildSwordsmanTraversalGraph(room: RoomSnapshot): SwordsmanTrave
     for (const target of surfaceSegments) {
       addEdge(buildWallJumpEdge(wall, target));
     }
+  }
+
+  for (const edge of buildLadderEdges(ladderSegments, surfaceSegments)) {
+    addEdge(edge);
   }
 
   return {
@@ -395,6 +432,129 @@ function buildWallSegments(room: RoomSnapshot): SwordsmanWallSegment[] {
   }
 
   return segments;
+}
+
+function buildLadderSegments(room: RoomSnapshot): SwordsmanLadderSegment[] {
+  const ladderConfig = getObjectById('ladder');
+  if (!ladderConfig) {
+    return [];
+  }
+
+  const rawSegments = room.placedObjects
+    .map((placed, index) => buildPlacedLadderSegment(placed, index, ladderConfig))
+    .filter((segment): segment is SwordsmanLadderSegment => segment !== null)
+    .sort((left, right) => left.centerX - right.centerX || left.topY - right.topY);
+  const mergedSegments: SwordsmanLadderSegment[] = [];
+
+  for (const segment of rawSegments) {
+    const existing = mergedSegments.find((candidate) => {
+      const sameColumn =
+        Math.abs(candidate.centerX - segment.centerX) <= LADDER_COLUMN_MERGE_TOLERANCE_X_PX;
+      const verticalTouching =
+        segment.topY <= candidate.bottomY + LADDER_VERTICAL_MERGE_GAP_PX &&
+        segment.bottomY >= candidate.topY - LADDER_VERTICAL_MERGE_GAP_PX;
+      return sameColumn && verticalTouching;
+    });
+
+    if (!existing) {
+      mergedSegments.push({ ...segment });
+      continue;
+    }
+
+    existing.id = `${existing.id}+${segment.id}`;
+    existing.centerX = (existing.centerX + segment.centerX) * 0.5;
+    existing.topY = Math.min(existing.topY, segment.topY);
+    existing.bottomY = Math.max(existing.bottomY, segment.bottomY);
+  }
+
+  return mergedSegments;
+}
+
+function buildPlacedLadderSegment(
+  placed: PlacedObject,
+  index: number,
+  ladderConfig: NonNullable<ReturnType<typeof getObjectById>>,
+): SwordsmanLadderSegment | null {
+  if (placed.id !== 'ladder' || ladderConfig.bodyWidth <= 0 || ladderConfig.bodyHeight <= 0) {
+    return null;
+  }
+
+  const displayOffset = getObjectDisplayOffset(ladderConfig);
+  const spriteX = placed.x + displayOffset.x;
+  const spriteY = placed.y + displayOffset.y;
+  const bodyOffsetX =
+    ladderConfig.bodyOffsetX ?? Math.max(0, (ladderConfig.frameWidth - ladderConfig.bodyWidth) * 0.5);
+  const bodyOffsetY =
+    ladderConfig.bodyOffsetY ?? Math.max(0, (ladderConfig.frameHeight - ladderConfig.bodyHeight) * 0.5);
+  const leftX = spriteX - ladderConfig.frameWidth * 0.5 + bodyOffsetX;
+  const topY = spriteY - ladderConfig.frameHeight * 0.5 + bodyOffsetY;
+
+  return {
+    id: `ladder:${placed.instanceId ?? index}:${Math.round(spriteX)}:${Math.round(topY)}`,
+    centerX: leftX + ladderConfig.bodyWidth * 0.5,
+    topY,
+    bottomY: topY + ladderConfig.bodyHeight,
+  };
+}
+
+function buildLadderEdges(
+  ladderSegments: readonly SwordsmanLadderSegment[],
+  surfaceSegments: readonly SwordsmanSurfaceSegment[],
+): SwordsmanTraversalEdge[] {
+  const edges: SwordsmanTraversalEdge[] = [];
+
+  for (const ladder of ladderSegments) {
+    const attachments = surfaceSegments
+      .map((surface) => getLadderSurfaceAttachment(ladder, surface))
+      .filter((attachment): attachment is SwordsmanLadderSurfaceAttachment => attachment !== null)
+      .sort((left, right) => left.surface.topY - right.surface.topY);
+
+    for (const source of attachments) {
+      for (const target of attachments) {
+        const verticalDelta = target.surface.topY - source.surface.topY;
+        if (Math.abs(verticalDelta) < LADDER_MIN_VERTICAL_DELTA_PX) {
+          continue;
+        }
+
+        const type = verticalDelta < 0 ? 'ladder-up' : 'ladder-down';
+        const directionX = directionFromDelta(ladder.centerX - source.surface.centerX, 1);
+        edges.push({
+          id: `${source.surface.id}->${target.surface.id}:${ladder.id}:${type}`,
+          type,
+          fromId: source.surface.id,
+          toId: target.surface.id,
+          directionX,
+          setupX: source.anchorX,
+          targetX: target.anchorX,
+          allowEdgeDrop: false,
+          ladderX: ladder.centerX,
+          ladderTopY: ladder.topY,
+          ladderBottomY: ladder.bottomY,
+        });
+      }
+    }
+  }
+
+  return edges;
+}
+
+function getLadderSurfaceAttachment(
+  ladder: SwordsmanLadderSegment,
+  surface: SwordsmanSurfaceSegment,
+): SwordsmanLadderSurfaceAttachment | null {
+  if (
+    surface.topY < ladder.topY - LADDER_SURFACE_ATTACH_TOLERANCE_Y_PX ||
+    surface.topY > ladder.bottomY + LADDER_SURFACE_ATTACH_TOLERANCE_Y_PX
+  ) {
+    return null;
+  }
+
+  const anchorX = getSurfaceAnchorNearestX(surface, ladder.centerX);
+  if (Math.abs(anchorX - ladder.centerX) > LADDER_SURFACE_ATTACH_TOLERANCE_X_PX) {
+    return null;
+  }
+
+  return { surface, anchorX };
 }
 
 function buildJumpUpEdge(
@@ -780,6 +940,35 @@ function buildDecisionFromFirstEdge(
       }
 
       return baseDecision('air-chase', {
+        directionX: edge.directionX,
+        targetX: edge.targetX,
+        traversalEdgeId: edge.id,
+        traversalNextNodeId: edge.toId,
+      });
+    }
+    case 'ladder-up':
+    case 'ladder-down': {
+      const setupReferenceX = getTraversalSetupReferenceX(enemy);
+      const setupDelta = edge.setupX - setupReferenceX;
+      if (Math.abs(setupDelta) > LADDER_ATTACH_APPROACH_TOLERANCE_PX && enemy.onFloor) {
+        return baseDecision('same-platform', {
+          directionX: directionFromDelta(setupDelta, edge.directionX),
+          targetX: edge.setupX,
+          traversalEdgeId: edge.id,
+          traversalNextNodeId: edge.toId,
+        });
+      }
+
+      if (Math.abs(setupDelta) > TILE_SIZE && !enemy.onFloor) {
+        return baseDecision('air-chase', {
+          directionX: directionFromDelta(setupDelta, edge.directionX),
+          targetX: edge.setupX,
+          traversalEdgeId: edge.id,
+          traversalNextNodeId: edge.toId,
+        });
+      }
+
+      return baseDecision('ladder-climb', {
         directionX: edge.directionX,
         targetX: edge.targetX,
         traversalEdgeId: edge.id,
@@ -1177,6 +1366,12 @@ export function getSwordsmanTraversalEdgeById(
   edgeId: string,
 ): SwordsmanTraversalEdge | null {
   return graph.edgesById.get(edgeId) ?? null;
+}
+
+export function isSwordsmanLadderTraversalEdge(
+  edge: SwordsmanTraversalEdge | null,
+): edge is SwordsmanTraversalEdge & { type: 'ladder-up' | 'ladder-down' } {
+  return edge?.type === 'ladder-up' || edge?.type === 'ladder-down';
 }
 
 function getSurfaceMinAnchorX(segment: SwordsmanSurfaceSegment): number {

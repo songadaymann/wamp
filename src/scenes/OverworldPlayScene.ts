@@ -3817,6 +3817,7 @@ export class OverworldPlayScene extends Phaser.Scene {
             ),
             aiActiveTraversalEdgeId: liveObject.runtime.aiActiveTraversalEdgeId,
             aiActiveTraversalNextNodeId: liveObject.runtime.aiActiveTraversalNextNodeId,
+            aiLadderTraversalEdgeId: liveObject.runtime.aiLadderTraversalEdgeId,
             aiRouteLoopSignature: liveObject.runtime.aiRouteLoopSignature,
             aiRouteLoopCount: liveObject.runtime.aiRouteLoopCount,
             aiPlannerMode: liveObject.runtime.aiPlannerMode,
@@ -3842,6 +3843,7 @@ export class OverworldPlayScene extends Phaser.Scene {
               : Math.round(liveObject.runtime.aiCollectRouteScore),
             aiCollectRouteValue: Math.round(liveObject.runtime.aiCollectRouteValue),
             aiCollectRoutePenalty: Math.round(liveObject.runtime.aiCollectRoutePenalty),
+            allowGravity: dynamicBody ? dynamicBody.allowGravity : null,
             velocityX: dynamicBody ? Math.round(dynamicBody.velocity.x) : 0,
             velocityY: dynamicBody ? Math.round(dynamicBody.velocity.y) : 0,
           };
