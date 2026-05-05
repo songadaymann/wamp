@@ -1495,13 +1495,55 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     waveAmplitude: number,
     waveSpeed: number
   ): void {
-    const body = liveObject.sprite.body as Phaser.Physics.Arcade.StaticBody | null;
+    const body = liveObject.sprite.body as ArcadeObjectBody | null;
     if (!body) {
       return;
     }
 
     const bounds = this.getObjectHorizontalTravelBounds(room, liveObject.config);
     liveObject.runtime.elapsedMs += delta;
+    const nextY =
+      liveObject.runtime.baseY +
+      Math.sin(liveObject.runtime.elapsedMs * waveSpeed) * waveAmplitude;
+
+    if (isDynamicArcadeBody(body)) {
+      if (this.resetDynamicObjectIfOutOfBounds(room, liveObject, body)) {
+        return;
+      }
+
+      const touchingHorizontalObstacle =
+        ((body.blocked.left || body.touching.left) && liveObject.runtime.directionX < 0) ||
+        ((body.blocked.right || body.touching.right) && liveObject.runtime.directionX > 0);
+      const reachedBounds =
+        (liveObject.sprite.x <= bounds.left && liveObject.runtime.directionX < 0) ||
+        (liveObject.sprite.x >= bounds.right && liveObject.runtime.directionX > 0);
+
+      if (touchingHorizontalObstacle || reachedBounds) {
+        const clampedX = Phaser.Math.Clamp(liveObject.sprite.x, bounds.left, bounds.right);
+        if (clampedX !== liveObject.sprite.x) {
+          body.reset(clampedX, liveObject.sprite.y);
+        }
+        liveObject.runtime.directionX *= -1;
+      }
+
+      const deltaSeconds = Math.max(delta / 1000, 1 / 60);
+      const maxVerticalSpeed = Math.max(24, waveAmplitude * waveSpeed * 1000 * 1.5);
+      let velocityY = Phaser.Math.Clamp(
+        (nextY - liveObject.sprite.y) / deltaSeconds,
+        -maxVerticalSpeed,
+        maxVerticalSpeed
+      );
+      const movingIntoVerticalObstacle =
+        (velocityY < 0 && (body.blocked.up || body.touching.up)) ||
+        (velocityY > 0 && (body.blocked.down || body.touching.down));
+      if (movingIntoVerticalObstacle) {
+        velocityY = 0;
+      }
+
+      body.setVelocity(liveObject.runtime.directionX * speed, velocityY);
+      this.applyDirectionalFacing(liveObject.sprite, liveObject.config, liveObject.runtime.directionX);
+      return;
+    }
 
     let nextX = liveObject.sprite.x + liveObject.runtime.directionX * speed * (delta / 1000);
     if (nextX <= bounds.left || nextX >= bounds.right) {
@@ -1509,9 +1551,6 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       liveObject.runtime.directionX *= -1;
     }
 
-    const nextY =
-      liveObject.runtime.baseY +
-      Math.sin(liveObject.runtime.elapsedMs * waveSpeed) * waveAmplitude;
     liveObject.sprite.setPosition(nextX, nextY);
     this.applyDirectionalFacing(liveObject.sprite, liveObject.config, liveObject.runtime.directionX);
     body.updateFromGameObject();

@@ -210,7 +210,7 @@ export function isPushableObjectConfig(
 }
 
 export function isDynamicRuntimeObjectConfig(
-  config: Pick<GameObjectConfig, 'id' | 'interaction'> | null | undefined,
+  config: Pick<GameObjectConfig, 'id' | 'interaction' | 'behavior'> | null | undefined,
 ): boolean {
   if (!config) {
     return false;
@@ -218,6 +218,7 @@ export function isDynamicRuntimeObjectConfig(
 
   return (
     isPushableObjectConfig(config)
+    || config.behavior === 'fly'
     || config.id === 'cannon_bullet'
     || config.id === 'crab'
     || config.id === 'slime_blue'
