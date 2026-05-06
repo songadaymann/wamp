@@ -13,6 +13,7 @@ interface OverworldHudRuntimeConfig {
   onZoomOut: () => void;
   onOpenExplore: () => void | Promise<void>;
   onOpenLeaderboard: () => void | Promise<void>;
+  onOpenRoomRush: () => void | Promise<void>;
   onOpenControls: () => void | Promise<void>;
   onFitWorld: () => void;
 }
@@ -29,6 +30,7 @@ const runtimeConfig: OverworldHudRuntimeConfig = {
   onZoomOut: () => {},
   onOpenExplore: () => {},
   onOpenLeaderboard: () => {},
+  onOpenRoomRush: () => {},
   onOpenControls: () => {},
   onFitWorld: () => {},
 };
@@ -68,6 +70,9 @@ export function configureOverworldHudBridgeRuntime(
   }
   if (config.onOpenLeaderboard) {
     runtimeConfig.onOpenLeaderboard = config.onOpenLeaderboard;
+  }
+  if (config.onOpenRoomRush) {
+    runtimeConfig.onOpenRoomRush = config.onOpenRoomRush;
   }
   if (config.onOpenControls) {
     runtimeConfig.onOpenControls = config.onOpenControls;
@@ -119,6 +124,10 @@ export interface OverworldHudViewModel {
   playCourseButtonDisabled: boolean;
   playCourseButtonHidden: boolean;
   playCourseButtonActive: boolean;
+  roomRushButtonText: string;
+  roomRushButtonDisabled: boolean;
+  roomRushButtonHidden: boolean;
+  roomRushButtonActive: boolean;
   courseBuilderButtonDisabled: boolean;
   courseBuilderButtonTitle: string;
   editButtonDisabled: boolean;
@@ -176,6 +185,7 @@ export class OverworldHudBridge {
   private readonly playButton: HTMLButtonElement | null;
   private readonly restartButton: HTMLButtonElement | null;
   private readonly playCourseButton: HTMLButtonElement | null;
+  private readonly roomRushButton: HTMLButtonElement | null;
   private readonly courseBuilderButton: HTMLButtonElement | null;
   private readonly editButton: HTMLButtonElement | null;
   private readonly buildButton: HTMLButtonElement | null;
@@ -319,6 +329,10 @@ export class OverworldHudBridge {
     void runtimeConfig.onPlayCourse();
   };
 
+  private readonly handleRoomRushClick = (): void => {
+    void runtimeConfig.onOpenRoomRush();
+  };
+
   private readonly handleEditRoomClick = (): void => {
     void runtimeConfig.onEditRoom();
   };
@@ -403,6 +417,7 @@ export class OverworldHudBridge {
     this.playButton = this.doc.getElementById('btn-world-play') as HTMLButtonElement | null;
     this.restartButton = this.doc.getElementById('btn-world-restart') as HTMLButtonElement | null;
     this.playCourseButton = this.doc.getElementById('btn-world-play-course') as HTMLButtonElement | null;
+    this.roomRushButton = this.doc.getElementById('btn-world-room-rush') as HTMLButtonElement | null;
     this.courseBuilderButton = this.doc.getElementById('btn-world-course-builder') as HTMLButtonElement | null;
     this.editButton = this.doc.getElementById('btn-world-edit') as HTMLButtonElement | null;
     this.buildButton = this.doc.getElementById('btn-world-build') as HTMLButtonElement | null;
@@ -450,6 +465,7 @@ export class OverworldHudBridge {
     this.playButton?.addEventListener('click', this.handlePlayRoomClick);
     this.restartButton?.addEventListener('click', this.handleRestartRunClick);
     this.playCourseButton?.addEventListener('click', this.handlePlayCourseClick);
+    this.roomRushButton?.addEventListener('click', this.handleRoomRushClick);
     this.editButton?.addEventListener('click', this.handleEditRoomClick);
     this.buildButton?.addEventListener('click', this.handleBuildRoomClick);
     this.courseBuilderButton?.addEventListener('click', this.handleOpenCourseBuilderClick);
@@ -529,6 +545,13 @@ export class OverworldHudBridge {
     );
     this.setActive(this.playCourseButton, viewModel.playCourseButtonActive);
     this.playCourseButton?.classList.toggle('hidden', viewModel.playCourseButtonHidden);
+    this.setButton(
+      this.roomRushButton,
+      viewModel.roomRushButtonText,
+      viewModel.roomRushButtonDisabled,
+    );
+    this.setActive(this.roomRushButton, viewModel.roomRushButtonActive);
+    this.roomRushButton?.classList.toggle('hidden', viewModel.roomRushButtonHidden);
     this.setDisabled(this.courseBuilderButton, viewModel.courseBuilderButtonDisabled);
     this.setTitle(this.courseBuilderButton, viewModel.courseBuilderButtonTitle);
     this.setDisabled(this.editButton, viewModel.editButtonDisabled);
@@ -550,6 +573,7 @@ export class OverworldHudBridge {
     this.playButton?.removeEventListener('click', this.handlePlayRoomClick);
     this.restartButton?.removeEventListener('click', this.handleRestartRunClick);
     this.playCourseButton?.removeEventListener('click', this.handlePlayCourseClick);
+    this.roomRushButton?.removeEventListener('click', this.handleRoomRushClick);
     this.editButton?.removeEventListener('click', this.handleEditRoomClick);
     this.buildButton?.removeEventListener('click', this.handleBuildRoomClick);
     this.courseBuilderButton?.removeEventListener('click', this.handleOpenCourseBuilderClick);

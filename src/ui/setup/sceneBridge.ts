@@ -9,6 +9,10 @@ import type {
   RoomPatternPitchMode,
 } from '../../music/model';
 import type { GoalPlacementMode } from '../../scenes/editor/editRuntime';
+import type {
+  RoomRushDifficulty,
+  RoomRushStartRule,
+} from '../../scenes/overworld/roomRushRuns';
 import type { RoomCoordinates, RoomRecord, RoomVersionRecord } from '../../persistence/roomModel';
 
 export type EditorHistoryState = {
@@ -248,6 +252,12 @@ export type CourseComposerState = {
 export interface OverworldSceneBridge {
   playSelectedRoom?: () => void;
   restartCurrentRun?: () => Promise<void> | void;
+  startRoomRushRun?: (options: {
+    difficulty: RoomRushDifficulty;
+    startRule: RoomRushStartRule;
+  }) => Promise<boolean> | boolean;
+  endRoomRushRun?: () => void;
+  isRoomRushRunActive?: () => boolean;
   playSelectedCourse?: () => Promise<void> | void;
   editSelectedRoom?: () => void;
   buildSelectedRoom?: () => void;

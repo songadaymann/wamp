@@ -1212,6 +1212,7 @@
           <button id="btn-world-play" class="bar-btn bar-btn-small world-btn-play" disabled>Play Room</button>
           <button id="btn-world-restart" class="bar-btn bar-btn-small world-btn-play hidden" type="button">Restart</button>
           <button id="btn-world-play-course" class="bar-btn bar-btn-small world-btn-play hidden" disabled>Play Course</button>
+          <button id="btn-world-room-rush" class="bar-btn bar-btn-small world-btn-room-rush hidden" type="button">Room Rush</button>
           <button id="btn-world-edit" class="bar-btn bar-btn-small world-btn-edit" disabled>Edit Room</button>
           <button id="btn-world-build" class="bar-btn bar-btn-small world-btn-build" disabled>Build Here</button>
           <button id="btn-world-course-builder" class="bar-btn bar-btn-small world-btn-course-builder" disabled>Course Builder</button>
@@ -1569,6 +1570,65 @@
       </div>
       <div class="room-goal-intro-actions">
         <button id="btn-room-goal-intro-start" class="bar-btn" type="button">Start</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="room-rush-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel room-rush-modal-panel" role="dialog" aria-modal="true" aria-labelledby="room-rush-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">World Run</div>
+          <h2 id="room-rush-title" class="history-modal-title">Room Rush</h2>
+          <div class="history-modal-meta">How many unique rooms can you traverse in a single run? There are four modes:</div>
+        </div>
+        <button id="btn-room-rush-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div id="room-rush-status" class="history-modal-error hidden"></div>
+      <div class="room-rush-grid">
+        <button class="room-rush-mode-card" type="button" data-room-rush-difficulty="easy" data-room-rush-start-rule="selected">
+          <span class="room-rush-card-title">START ANYWHERE</span>
+          <span class="room-rush-card-meta">Deaths Allowed</span>
+        </button>
+        <button class="room-rush-mode-card" type="button" data-room-rush-difficulty="hard" data-room-rush-start-rule="selected">
+          <span class="room-rush-card-title">START ANYWHERE</span>
+          <span class="room-rush-card-meta">Death Ends Run</span>
+        </button>
+        <button class="room-rush-mode-card" type="button" data-room-rush-difficulty="easy" data-room-rush-start-rule="origin">
+          <span class="room-rush-card-title">START FROM 0,0</span>
+          <span class="room-rush-card-meta">Deaths Allowed</span>
+        </button>
+        <button class="room-rush-mode-card" type="button" data-room-rush-difficulty="hard" data-room-rush-start-rule="origin">
+          <span class="room-rush-card-title">START FROM 0,0</span>
+          <span class="room-rush-card-meta">Death Ends Run</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="room-rush-result-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel room-rush-result-modal-panel" role="dialog" aria-modal="true" aria-labelledby="room-rush-result-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">World Run</div>
+          <h2 id="room-rush-result-title" class="history-modal-title">Room Rush Complete</h2>
+          <div id="room-rush-result-meta" class="history-modal-meta">Route map ready.</div>
+        </div>
+        <button id="btn-room-rush-result-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div class="room-rush-result-card">
+        <canvas id="room-rush-result-map" class="room-rush-result-map" width="1200" height="630" aria-label="Room Rush route map"></canvas>
+        <div class="room-rush-result-copy">
+          <div id="room-rush-result-message" class="room-rush-result-message"></div>
+          <div id="room-rush-result-status" class="history-modal-meta room-rush-result-status hidden"></div>
+          <div class="room-rush-result-actions">
+            <button id="btn-room-rush-result-share" class="bar-btn room-rush-result-x-button" type="button" aria-label="Share Room Rush route">
+              <span class="run-share-x-logo" aria-hidden="true">X</span>
+            </button>
+            <button id="btn-room-rush-result-copy" class="bar-btn bar-btn-small" type="button">Copy Text</button>
+            <button id="btn-room-rush-result-download" class="bar-btn bar-btn-small" type="button">Download Map</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

@@ -44,6 +44,7 @@ interface OverworldRuntimeControllerHost<TLiveObject> {
   getCurrentRoomSnapshot(): RoomSnapshot | null;
   getActiveCourseSnapshot(): CourseSnapshot | null;
   getActiveCourseRun(): ActiveCourseRunState | null;
+  getActiveRoomRushRun(): unknown | null;
   getShouldRespawnPlayer(): boolean;
   setShouldRespawnPlayer(value: boolean): void;
   getPlayer(): Phaser.GameObjects.Rectangle | null;
@@ -122,7 +123,7 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
       this.host.setShouldRespawnPlayer(false);
     }
 
-    if (this.host.getActiveCourseRun()) {
+    if (this.host.getActiveCourseRun() || this.host.getActiveRoomRushRun()) {
       this.host.clearCurrentGoalRun();
       this.host.redrawGoalMarkers();
     } else {
@@ -213,6 +214,10 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
     }
 
     const neighborState = this.host.getCellStateAt(neighborCoordinates);
+    if (this.host.getActiveRoomRushRun()) {
+      return neighborState === 'published';
+    }
+
     return neighborState === 'published' || neighborState === 'draft';
   }
 

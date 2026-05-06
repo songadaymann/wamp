@@ -26,6 +26,8 @@ interface OverworldRoomTransitionHost {
   refreshLeaderboardForSelection(): Promise<void>;
   refreshCourseComposerSelectedRoomState(): Promise<void>;
   setFocusedCoordinates(coordinates: RoomCoordinates): void;
+  getActiveRoomRushRun(): unknown | null;
+  recordRoomRushVisit(room: RoomSnapshot | null): void;
   refreshAround(coordinates: RoomCoordinates): Promise<unknown>;
   refreshAroundIfNeededOrFromCache(
     coordinates: RoomCoordinates,
@@ -66,7 +68,11 @@ export class OverworldRoomTransitionController {
     this.host.setSelectedCoordinates(nextRoomCoordinates);
     this.host.updateSelectedSummary();
 
-    if (!this.host.getActiveCourseRun()) {
+    if (this.host.getActiveRoomRushRun()) {
+      this.host.recordRoomRushVisit(
+        this.host.getRoomSnapshotForCoordinates(nextRoomCoordinates),
+      );
+    } else if (!this.host.getActiveCourseRun()) {
       this.host.syncGoalRunForRoom(
         this.host.getRoomSnapshotForCoordinates(nextRoomCoordinates),
         'transition',

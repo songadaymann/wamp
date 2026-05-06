@@ -497,6 +497,14 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return this.previewRenderer.hasPreviewForRoom(roomId);
   }
 
+  getPendingPreviewTextureBuildCount(): number {
+    return this.previewRenderer.getPendingTextureBuildCount();
+  }
+
+  flushPendingPreviewTextureBuilds(): number {
+    return this.previewRenderer.flushPendingTextureBuilds();
+  }
+
   getLoadedFullRoomsById(): Map<string, LoadedFullRoom<TLiveObject, TEdgeWall>> {
     return this.loadedFullRoomsById;
   }
@@ -523,6 +531,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     loadedPreviewRoomCount: number;
     loadedPreviewChunkCount: number;
     previewTileSize: number;
+    pendingPreviewTextureBuildCount: number;
     approximatePreviewTexturePixels: number;
     loadedFullRoomCount: number;
     localPlayPressureProfile: LocalPlayPressureMetrics['profile'];
@@ -539,6 +548,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       loadedPreviewRoomCount: this.previewRenderer.getLoadedPreviewRoomCount(),
       loadedPreviewChunkCount: this.previewRenderer.getLoadedPreviewChunkCount(),
       previewTileSize: this.previewRenderer.getActivePreviewTileSize(),
+      pendingPreviewTextureBuildCount: this.previewRenderer.getPendingTextureBuildCount(),
       approximatePreviewTexturePixels: this.previewRenderer.getApproximatePreviewTexturePixels(),
       loadedFullRoomCount: this.loadedFullRoomsById.size,
       localPlayPressureProfile: this.localPlayPressure.profile,
