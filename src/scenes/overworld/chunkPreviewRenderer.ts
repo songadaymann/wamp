@@ -159,6 +159,51 @@ export class OverworldChunkPreviewRenderer {
     return this.visiblePreviewRoomIds.has(roomId);
   }
 
+  getPendingTextureBuildCount(): number {
+    return this.pendingTextureBuildQueue.length;
+  }
+
+  flushPendingTextureBuilds(): number {
+    if (this.textureBuildTimer !== null) {
+      window.clearTimeout(this.textureBuildTimer);
+      this.textureBuildTimer = null;
+    }
+
+    let processedCount = 0;
+    while (this.pendingTextureBuildQueue.length > 0) {
+      const request = this.pendingTextureBuildQueue.shift() ?? null;
+      if (!request) {
+        continue;
+      }
+
+      this.pendingTextureBuildsByKey.delete(request.textureKey);
+      if (!this.isTextureBuildRequestCurrent(request)) {
+        continue;
+      }
+
+      if (!this.options.scene.textures.exists(request.textureKey)) {
+        const built = this.buildChunkTexture(
+          request.textureKey,
+          request.chunkCoordinates,
+          request.rooms,
+          request.previewTileSize,
+        );
+        if (built) {
+          this.recordCachedTexture(
+            request.textureKey,
+            request.chunkId,
+            request.contentSignature,
+            request.previewTileSize,
+          );
+        }
+      }
+      processedCount += 1;
+    }
+
+    this.syncChunkImages();
+    return processedCount;
+  }
+
   renderChunkPreviews(previewRooms: Iterable<RoomSnapshot>): void {
     const groupedStates = new Map<string, ChunkPreviewState>();
     for (const room of previewRooms) {

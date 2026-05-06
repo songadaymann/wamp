@@ -8,13 +8,18 @@ import type {
 import type {
   GoalRunState,
 } from './goalRuns';
+import type {
+  ActiveRoomRushRunState,
+} from './roomRushRuns';
 
 interface OverworldSessionResetHost {
   getCurrentGoalRun(): GoalRunState | null;
   getActiveCourseRun(): ActiveCourseRunState | null;
+  getActiveRoomRushRun(): ActiveRoomRushRunState | null;
   setActiveCourseRun(runState: ActiveCourseRunState | null): void;
   recordGoalRunDeath(): void;
   recordCourseRunDeath(): void;
+  recordRoomRushDeath(reason: string): boolean;
   playPlayerFailFx(): void;
   respawnPlayerToCurrentRoom(): void;
   failCourseRun(message: string): void;
@@ -24,11 +29,13 @@ interface OverworldSessionResetHost {
   restartGoalRunForRoom(room: RoomSnapshot): void;
   refreshLeaderboardForSelection(): void;
   abandonGoalRun(): void;
+  abandonRoomRushRun(): void;
   finalizeActiveCourseRun(result: 'failed' | 'abandoned'): void;
   clearActiveCourseRoomOverrides(): void;
   resetRoomChallengeState(room: RoomSnapshot): void;
   resetTransientPlayState(): void;
   resetGoalRunController(): void;
+  resetRoomRushController(): void;
   redrawGoalMarkers(): void;
 }
 
@@ -38,11 +45,20 @@ export class OverworldSessionResetController {
   handlePlayerDeath(reason: string): void {
     const activeRun = this.host.getCurrentGoalRun();
     const activeCourseRun = this.host.getActiveCourseRun();
+    const activeRoomRushRun = this.host.getActiveRoomRushRun();
 
     this.host.recordGoalRunDeath();
     this.host.recordCourseRunDeath();
     this.host.playPlayerFailFx();
     this.host.respawnPlayerToCurrentRoom();
+
+    if (activeRoomRushRun) {
+      const terminal = this.host.recordRoomRushDeath(reason);
+      if (terminal) {
+        return;
+      }
+      return;
+    }
 
     if (activeCourseRun?.course.goal?.type === 'survival') {
       this.host.failCourseRun('Course survival failed.');
@@ -77,9 +93,11 @@ export class OverworldSessionResetController {
 
   resetPlaySession(): void {
     const activeCourseRun = this.host.getActiveCourseRun();
-    const singleRoomRunToReset = activeCourseRun ? null : this.host.getCurrentGoalRun();
+    const activeRoomRushRun = this.host.getActiveRoomRushRun();
+    const singleRoomRunToReset = activeCourseRun || activeRoomRushRun ? null : this.host.getCurrentGoalRun();
 
     this.host.abandonGoalRun();
+    this.host.abandonRoomRushRun();
     if (activeCourseRun?.result === 'active') {
       this.host.finalizeActiveCourseRun('abandoned');
     }
@@ -92,6 +110,7 @@ export class OverworldSessionResetController {
     this.host.clearActiveCourseRoomOverrides();
     this.host.resetTransientPlayState();
     this.host.resetGoalRunController();
+    this.host.resetRoomRushController();
     this.host.redrawGoalMarkers();
   }
 

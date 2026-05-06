@@ -20,6 +20,7 @@ import type {
 } from './hud';
 import type { ActiveCourseRunState } from './courseRuns';
 import type { GoalRunState } from './goalRuns';
+import type { ActiveRoomRushRunState } from './roomRushRuns';
 import type { ActiveSignState } from './signPosts';
 
 export type SelectedCellState = 'published' | 'claimed_unpublished' | 'draft' | 'frontier' | 'empty';
@@ -78,6 +79,7 @@ export interface BuildOverworldHudViewModelOptions {
   roomTop: RoomLeaderboardEntry | null;
   currentRoomLeaderboard: RoomLeaderboardResponse | null;
   activeCourseRun: ActiveCourseRunState | null;
+  activeRoomRushRun: ActiveRoomRushRunState | null;
   activeRoomGoalRun: GoalRunState | null;
   activeGoalRoom: RoomSnapshot | null;
   totalPlayerCount: number | null;
@@ -95,6 +97,9 @@ export interface BuildOverworldHudViewModelOptions {
   getPlayGoalTimerText: (runState: GoalRunState) => string;
   getCourseGoalProgressText: (runState: ActiveCourseRunState) => string;
   getPlayGoalProgressText: (runState: GoalRunState) => string;
+  getRoomRushGoalBadgeText: (runState: ActiveRoomRushRunState) => string;
+  getRoomRushTimerText: (runState: ActiveRoomRushRunState) => string;
+  getRoomRushProgressText: (runState: ActiveRoomRushRunState) => string;
   truncateOverlayText: (text: string, maxChars: number) => string;
 }
 
@@ -141,6 +146,7 @@ export function buildOverworldHudViewModel(
     roomTop,
     currentRoomLeaderboard,
     activeCourseRun,
+    activeRoomRushRun,
     activeRoomGoalRun,
     activeGoalRoom,
     totalPlayerCount,
@@ -158,12 +164,16 @@ export function buildOverworldHudViewModel(
     getPlayGoalTimerText,
     getCourseGoalProgressText,
     getPlayGoalProgressText,
+    getRoomRushGoalBadgeText,
+    getRoomRushTimerText,
+    getRoomRushProgressText,
     truncateOverlayText,
   } = options;
-  const activeRunResult = activeCourseRun?.result ?? activeRoomGoalRun?.result ?? null;
+  const activeRunResult =
+    activeCourseRun?.result ?? activeRoomRushRun?.result ?? activeRoomGoalRun?.result ?? null;
   const saveStatusTone =
     mode === 'play'
-      ? activeCourseRun || activeRoomGoalRun
+      ? activeCourseRun || activeRoomRushRun || activeRoomGoalRun
         ? activeRunResult === 'completed'
           ? 'challenge-complete'
           : activeRunResult === 'failed'
@@ -364,7 +374,9 @@ export function buildOverworldHudViewModel(
 
   const saveStatusText =
     mode === 'play'
-      ? `Score ${score}`
+      ? activeRoomRushRun
+        ? `Rush ${activeRoomRushRun.visitedRoomIds.length}`
+        : `Score ${score}`
       : statusOverride ?? transientStatus ?? '';
   const onlinePlayCount = onlineRosterEntries.filter((entry) => entry.mode === 'play').length;
   const onlineEditCount = onlineRosterEntries.filter((entry) => entry.mode === 'edit').length;
@@ -432,22 +444,36 @@ export function buildOverworldHudViewModel(
     rateRoomButtonText: 'Rate Room',
     rateRoomButtonDisabled: false,
     zoomLabelText: `${zoom.toFixed(2)}x`,
-    playButtonText: activeCourseRun ? 'Play Room' : mode === 'play' ? 'Stop' : 'Play Room',
+    playButtonText: activeCourseRun || activeRoomRushRun ? 'Play Room' : mode === 'play' ? 'Stop' : 'Play Room',
     playButtonDisabled:
-      activeCourseRun
+      activeCourseRun || activeRoomRushRun
         ? true
         : mode === 'play'
           ? false
           : selectedState !== 'published' && selectedState !== 'draft',
-    playButtonActive: mode === 'play' && !activeCourseRun,
+    playButtonActive: mode === 'play' && !activeCourseRun && !activeRoomRushRun,
     restartButtonText: 'Restart',
     restartButtonDisabled: mode !== 'play',
     restartButtonActive: mode === 'play',
     restartButtonHidden: mode !== 'play',
     playCourseButtonText: activeCourseRun ? 'Stop Course' : 'Play Course',
-    playCourseButtonDisabled: activeCourseRun ? false : !selectedCourse,
+    playCourseButtonDisabled: activeCourseRun ? false : Boolean(activeRoomRushRun) || !selectedCourse,
     playCourseButtonHidden: !selectedCourse && !activeCourseRun,
     playCourseButtonActive: Boolean(activeCourseRun),
+    roomRushButtonText: activeRoomRushRun ? 'End Rush' : 'Room Rush',
+    roomRushButtonDisabled:
+      activeRoomRushRun
+        ? false
+        : mode === 'play'
+          ? true
+          : selectedState !== 'published',
+    roomRushButtonHidden:
+      activeRoomRushRun
+        ? false
+        : mode === 'play'
+          ? true
+          : selectedState !== 'published',
+    roomRushButtonActive: Boolean(activeRoomRushRun),
     courseBuilderButtonDisabled: resolvedCourseBuilderButtonDisabled,
     courseBuilderButtonTitle,
     editButtonDisabled: !canEditSelectedRoom,
@@ -468,10 +494,12 @@ export function buildOverworldHudViewModel(
     playersOnlineEntries: onlineRosterEntries,
     saveStatusText,
     bottomBarZoomText: `Zoom: ${zoom.toFixed(2)}x`,
-    goalPanelVisible: Boolean(activeCourseRun || activeRoomGoalRun),
+    goalPanelVisible: Boolean(activeCourseRun || activeRoomRushRun || activeRoomGoalRun),
     goalPanelTone,
     goalPanelRoomText: activeCourseRun
       ? truncateOverlayText((activeCourseRun.course.title?.trim() || 'COURSE').toUpperCase(), 22)
+      : activeRoomRushRun
+        ? 'ROOM RUSH'
       : activeRoomGoalRun
         ? truncateOverlayText(
             getRoomDisplayTitle(activeGoalRoom?.title ?? null, activeRoomGoalRun.roomCoordinates).toUpperCase(),
@@ -480,16 +508,22 @@ export function buildOverworldHudViewModel(
         : '',
     goalPanelGoalText: activeCourseRun
       ? getCourseGoalBadgeText(activeCourseRun.course.goal ?? null).toUpperCase()
+      : activeRoomRushRun
+        ? getRoomRushGoalBadgeText(activeRoomRushRun).toUpperCase()
       : activeRoomGoalRun
         ? getGoalBadgeText(activeRoomGoalRun.goal).toUpperCase()
         : '',
     goalPanelTimerText: activeCourseRun
       ? getCourseGoalTimerText(activeCourseRun)
+      : activeRoomRushRun
+        ? getRoomRushTimerText(activeRoomRushRun)
       : activeRoomGoalRun
         ? getPlayGoalTimerText(activeRoomGoalRun)
         : '',
     goalPanelProgressText: activeCourseRun
       ? getCourseGoalProgressText(activeCourseRun)
+      : activeRoomRushRun
+        ? getRoomRushProgressText(activeRoomRushRun)
       : activeRoomGoalRun
         ? getPlayGoalProgressText(activeRoomGoalRun)
         : '',

@@ -30,6 +30,11 @@ import {
   type SelectedRoomOwnershipViewData,
 } from './hudViewModel';
 import type { GoalRunState } from './goalRuns';
+import {
+  getRoomRushGoalBadgeText as formatRoomRushGoalBadgeText,
+  getRoomRushProgressText as formatRoomRushProgressText,
+  type ActiveRoomRushRunState,
+} from './roomRushRuns';
 
 export interface SelectedRoomContext {
   roomId: string;
@@ -51,6 +56,7 @@ interface OverworldHudStateControllerHost {
   getRoomEditorCount(coordinates: RoomCoordinates): number;
   getRoomEditorDisplayNames(coordinates: RoomCoordinates): string[];
   getActiveCourseRun(): ActiveCourseRunState | null;
+  getActiveRoomRushRun(): ActiveRoomRushRunState | null;
   getCurrentGoalRun(): GoalRunState | null;
   getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null;
   getCurrentRoomLeaderboard(): RoomLeaderboardResponse | null;
@@ -157,8 +163,9 @@ export class OverworldHudStateController {
       selectedCourse ? this.selectedPublishedCourseById.get(selectedCourse.courseId) ?? null : null;
     const mode = this.host.getMode();
     const activeCourseRun = mode === 'play' ? this.host.getActiveCourseRun() : null;
+    const activeRoomRushRun = activeCourseRun ? null : mode === 'play' ? this.host.getActiveRoomRushRun() : null;
     const activeRoomGoalRun =
-      activeCourseRun ? null : mode === 'play' ? this.host.getCurrentGoalRun() : null;
+      activeCourseRun || activeRoomRushRun ? null : mode === 'play' ? this.host.getCurrentGoalRun() : null;
     const activeGoalRoom = activeRoomGoalRun
       ? this.host.getRoomSnapshotForCoordinates(activeRoomGoalRun.roomCoordinates)
       : null;
@@ -202,6 +209,7 @@ export class OverworldHudStateController {
         roomTop: this.host.getCurrentRoomLeaderboard()?.entries[0] ?? null,
         currentRoomLeaderboard: this.host.getCurrentRoomLeaderboard(),
         activeCourseRun,
+        activeRoomRushRun,
         activeRoomGoalRun,
         activeGoalRoom,
         totalPlayerCount: this.host.getTotalPlayerCount(),
@@ -219,6 +227,9 @@ export class OverworldHudStateController {
         getPlayGoalTimerText: (runState) => this.getPlayGoalTimerText(runState),
         getCourseGoalProgressText: (runState) => this.getCourseGoalProgressText(runState),
         getPlayGoalProgressText: (runState) => this.getPlayGoalProgressText(runState),
+        getRoomRushGoalBadgeText: (runState) => this.getRoomRushGoalBadgeText(runState),
+        getRoomRushTimerText: (runState) => this.getRoomRushTimerText(runState),
+        getRoomRushProgressText: (runState) => this.getRoomRushProgressText(runState),
         truncateOverlayText: (text, maxChars) => this.truncateOverlayText(text, maxChars),
       }),
     );
@@ -416,6 +427,18 @@ export class OverworldHudStateController {
 
   private getCourseGoalProgressText(runState: ActiveCourseRunState): string {
     return formatCourseGoalProgressText(runState);
+  }
+
+  private getRoomRushGoalBadgeText(runState: ActiveRoomRushRunState): string {
+    return formatRoomRushGoalBadgeText(runState);
+  }
+
+  private getRoomRushTimerText(runState: ActiveRoomRushRunState): string {
+    return this.formatOverlayTimer(runState.elapsedMs);
+  }
+
+  private getRoomRushProgressText(runState: ActiveRoomRushRunState): string {
+    return formatRoomRushProgressText(runState);
   }
 
   private formatOverlayTimer(ms: number): string {

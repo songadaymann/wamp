@@ -248,6 +248,22 @@ body[data-app-mode="play-world"] .world-only-control {
   background: var(--hud-trial-red);
 }
 
+#world-hud .world-btn-room-rush:not(:disabled) {
+  background: #faaa39;
+  border-color: #18161c;
+  color: var(--hud-trial-ink-dark);
+}
+
+#world-hud .world-btn-room-rush:not(:disabled):hover {
+  background: #faaa39;
+}
+
+#world-hud .world-btn-room-rush.active {
+  background: #bd382b;
+  border-color: #18161c;
+  color: #fff;
+}
+
 .world-btn-play.hidden {
   display: none;
 }

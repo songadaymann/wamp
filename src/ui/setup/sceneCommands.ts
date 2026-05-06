@@ -6,6 +6,8 @@ import { CourseModalController } from './courseModal';
 import { ExploreModalController } from './exploreModal';
 import { RoomHistoryModalController } from './historyModal';
 import { LeaderboardModalController } from './leaderboardModal';
+import { RoomRushModalController } from './roomRushModal';
+import { RoomRushResultModalController } from './roomRushResultModal';
 import {
   getActiveEditorScene,
   getActiveOverworldScene,
@@ -22,6 +24,8 @@ export function setupSceneCommands(
   aboutModal: AboutModalController,
   chatModerationModal: ChatModerationModalController,
   courseModal: CourseModalController,
+  roomRushModal: RoomRushModalController,
+  roomRushResultModal: RoomRushResultModalController,
   doc: Document = document,
 ): void {
   const authPanel = doc.getElementById('auth-panel');
@@ -52,6 +56,8 @@ export function setupSceneCommands(
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
+    roomRushModal.close();
+    roomRushResultModal.close();
     chatModerationModal.close();
   };
 
@@ -151,6 +157,8 @@ export function setupSceneCommands(
       controlsModal.close();
       aboutModal.close();
       courseModal.close();
+      roomRushModal.close();
+      roomRushResultModal.close();
       chatModerationModal.close();
       void exploreModal.open();
     },
@@ -159,8 +167,26 @@ export function setupSceneCommands(
       controlsModal.close();
       aboutModal.close();
       courseModal.close();
+      roomRushModal.close();
+      roomRushResultModal.close();
       chatModerationModal.close();
       void leaderboardModal.open();
+    },
+    onOpenRoomRush: () => {
+      leaderboardModal.close();
+      exploreModal.close();
+      historyModal.close();
+      controlsModal.close();
+      aboutModal.close();
+      courseModal.close();
+      chatModerationModal.close();
+      roomRushResultModal.close();
+      const scene = getActiveOverworldScene(game);
+      if (scene?.isRoomRushRunActive?.()) {
+        scene.endRoomRushRun?.();
+        return;
+      }
+      roomRushModal.open();
     },
     onOpenControls: () => {
       leaderboardModal.close();
@@ -168,6 +194,8 @@ export function setupSceneCommands(
       historyModal.close();
       aboutModal.close();
       courseModal.close();
+      roomRushModal.close();
+      roomRushResultModal.close();
       chatModerationModal.close();
       controlsModal.open();
     },
@@ -179,6 +207,8 @@ export function setupSceneCommands(
       controlsModal.close();
       aboutModal.close();
       courseModal.close();
+      roomRushModal.close();
+      roomRushResultModal.close();
       chatModerationModal.close();
       getActiveOverworldScene(game)?.fitLoadedWorld?.();
     },
@@ -191,6 +221,8 @@ export function setupSceneCommands(
     exploreModal.close();
     controlsModal.close();
     courseModal.close();
+    roomRushModal.close();
+    roomRushResultModal.close();
     chatModerationModal.close();
     aboutModal.open();
   });
@@ -203,6 +235,8 @@ export function setupSceneCommands(
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
+    roomRushModal.close();
+    roomRushResultModal.close();
     void chatModerationModal.open();
   });
 
@@ -219,6 +253,7 @@ export function setupSceneCommands(
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
+    roomRushResultModal.close();
     chatModerationModal.close();
     getActiveEditorScene(game)?.startPlayMode?.();
   });
@@ -230,6 +265,7 @@ export function setupSceneCommands(
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
+    roomRushResultModal.close();
     chatModerationModal.close();
     const editorScene = getActiveEditorScene(game);
     const canReturnToCourseBuilder = editorScene?.getCourseEditorState?.().canReturnToCourseBuilder ?? false;
@@ -252,6 +288,7 @@ export function setupSceneCommands(
     courseModal.close();
     chatModerationModal.close();
     exploreModal.close();
+    roomRushResultModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.saveDraft) {
       await editorScene.saveDraft(true, { promptForSignInOnUnauthorized: true });
@@ -264,6 +301,7 @@ export function setupSceneCommands(
     courseModal.close();
     chatModerationModal.close();
     exploreModal.close();
+    roomRushResultModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.publishRoom) {
       await editorScene.publishRoom();
@@ -276,6 +314,7 @@ export function setupSceneCommands(
     courseModal.close();
     chatModerationModal.close();
     exploreModal.close();
+    roomRushResultModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.saveCourseDraft) {
       await editorScene.saveCourseDraft();
@@ -287,6 +326,7 @@ export function setupSceneCommands(
     aboutModal.close();
     courseModal.close();
     chatModerationModal.close();
+    roomRushResultModal.close();
     const editorScene = getActiveEditorScene(game);
     if (editorScene?.publishCourseDraft) {
       await editorScene.publishCourseDraft();

@@ -13,7 +13,9 @@
 }
 
 #room-history-modal,
-#course-modal {
+#course-modal,
+#room-rush-modal,
+#room-rush-result-modal {
   background: rgba(24, 22, 28, 0.8);
   backdrop-filter: none;
 }
@@ -32,7 +34,9 @@
 }
 
 #room-history-modal .history-modal-panel,
-#course-modal .history-modal-panel {
+#course-modal .history-modal-panel,
+#room-rush-modal .history-modal-panel,
+#room-rush-result-modal .history-modal-panel {
   width: min(780px, calc(100vw - 36px));
   gap: 16px;
   padding: 20px 18px 18px;
@@ -43,7 +47,9 @@
 }
 
 #room-history-modal .history-modal-kicker,
-#course-modal .history-modal-kicker {
+#course-modal .history-modal-kicker,
+#room-rush-modal .history-modal-kicker,
+#room-rush-result-modal .history-modal-kicker {
   color: #2c5071;
   font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
   font-size: 11px;
@@ -53,7 +59,9 @@
 }
 
 #room-history-modal .history-modal-title,
-#course-modal .history-modal-title {
+#course-modal .history-modal-title,
+#room-rush-modal .history-modal-title,
+#room-rush-result-modal .history-modal-title {
   margin-top: 6px;
   color: #18161c;
   font-family: 'Super Mario Bros. NES', monospace;
@@ -62,7 +70,9 @@
 }
 
 #room-history-modal .history-modal-meta,
-#course-modal .history-modal-meta {
+#course-modal .history-modal-meta,
+#room-rush-modal .history-modal-meta,
+#room-rush-result-modal .history-modal-meta {
   color: #18161c;
   font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
   font-size: 12px;
@@ -70,19 +80,25 @@
 }
 
 #room-history-modal .history-modal-meta a,
-#course-modal .history-modal-meta a {
+#course-modal .history-modal-meta a,
+#room-rush-modal .history-modal-meta a,
+#room-rush-result-modal .history-modal-meta a {
   color: #2c5071;
 }
 
 #room-history-modal .history-modal-meta a:hover,
-#course-modal .history-modal-meta a:hover {
+#course-modal .history-modal-meta a:hover,
+#room-rush-modal .history-modal-meta a:hover,
+#room-rush-result-modal .history-modal-meta a:hover {
   color: #1d3850;
 }
 
 #room-history-modal .history-modal-header-actions .bar-btn,
 #room-history-modal .history-version-actions .bar-btn,
 #course-modal .history-modal-header .bar-btn,
-#course-modal .course-room-actions .bar-btn {
+#course-modal .course-room-actions .bar-btn,
+#room-rush-modal .history-modal-header .bar-btn,
+#room-rush-result-modal .bar-btn {
   min-height: 34px;
   padding: 8px 12px 7px;
   border: 2px solid #18161c;
@@ -100,7 +116,9 @@
 #room-history-modal .history-modal-header-actions .bar-btn:hover,
 #room-history-modal .history-version-actions .bar-btn:hover,
 #course-modal .history-modal-header .bar-btn:hover,
-#course-modal .course-room-actions .bar-btn:hover {
+#course-modal .course-room-actions .bar-btn:hover,
+#room-rush-modal .history-modal-header .bar-btn:hover,
+#room-rush-result-modal .bar-btn:hover {
   filter: brightness(1.06);
 }
 
@@ -111,13 +129,17 @@
 
 #btn-room-history-refresh-metadata,
 #btn-room-history-close,
-#btn-course-close {
+#btn-course-close,
+#btn-room-rush-close,
+#btn-room-rush-result-close {
   background: #79ccde !important;
   color: #000 !important;
 }
 
 #room-history-modal .history-modal-error,
-#course-modal .history-modal-error {
+#course-modal .history-modal-error,
+#room-rush-modal .history-modal-error,
+#room-rush-result-modal .history-modal-error {
   padding: 12px;
   border: 2px solid #18161c;
   border-radius: 0;
@@ -127,6 +149,255 @@
   font-size: 12px;
   line-height: 1.45;
   box-shadow: 3px 3px 0 #18161c;
+}
+
+#room-rush-modal .room-rush-modal-panel {
+  width: min(640px, calc(100vw - 36px));
+}
+
+#room-rush-modal .history-modal-meta {
+  max-width: 540px;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+#room-rush-result-modal .room-rush-result-modal-panel {
+  width: min(1040px, calc(100vw - 36px));
+  position: relative;
+  padding-top: 14px;
+}
+
+#room-rush-result-modal .history-modal-header {
+  position: absolute;
+  top: 34px;
+  right: 36px;
+  z-index: 3;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: flex-end;
+  margin: 0;
+  pointer-events: none;
+}
+
+#room-rush-result-modal .history-modal-title-group {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+#room-rush-result-modal #btn-room-rush-result-close {
+  pointer-events: auto;
+  box-shadow: 4px 4px 0 rgba(24, 22, 28, 0.85);
+}
+
+.room-rush-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.room-rush-mode-card {
+  display: flex;
+  min-height: 124px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 18px;
+  padding: 14px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #fffaf0;
+  color: #18161c;
+  text-align: left;
+  box-shadow: 4px 4px 0 #18161c;
+  cursor: pointer;
+}
+
+.room-rush-mode-card:nth-child(1) {
+  background: #eef7dd;
+  border-color: #277b30;
+}
+
+.room-rush-mode-card:nth-child(2) {
+  background: #ffe7e2;
+  border-color: #bd382b;
+}
+
+.room-rush-mode-card:nth-child(3) {
+  background: #eefbfd;
+  border-color: #2c5071;
+}
+
+.room-rush-mode-card:nth-child(4) {
+  background: #fff7cf;
+  border-color: #faaa39;
+}
+
+.room-rush-mode-card:hover,
+.room-rush-mode-card:focus-visible {
+  filter: brightness(1.04);
+  outline: none;
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 #18161c;
+}
+
+.room-rush-mode-card:disabled {
+  filter: grayscale(0.45);
+  opacity: 0.72;
+  cursor: wait;
+  transform: none;
+  box-shadow: 4px 4px 0 #18161c;
+}
+
+.room-rush-card-kicker {
+  color: #2c5071;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.room-rush-card-title {
+  color: #18161c;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.room-rush-card-meta {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.room-rush-result-card {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.room-rush-result-map {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1200 / 630;
+  border: 2px solid #18161c;
+  background: #fffaf0;
+  box-shadow: 4px 4px 0 #18161c;
+}
+
+.room-rush-result-copy {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 2px solid #18161c;
+  background: #eefbfd;
+  box-shadow: 4px 4px 0 #18161c;
+}
+
+.room-rush-result-message {
+  flex: 1 1 auto;
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.room-rush-result-status {
+  flex: 0 0 auto;
+  padding: 9px;
+  border: 2px solid #79ccde;
+  background: #fffaf0;
+}
+
+.room-rush-result-status[data-room-rush-share-tone='error'] {
+  border-color: #ed5f4b;
+  color: #8f231b;
+}
+
+.room-rush-result-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+#room-rush-result-modal .room-rush-result-actions .bar-btn {
+  min-height: 36px;
+  flex: 1 1 112px;
+  background: #79ccde;
+}
+
+#room-rush-result-modal .room-rush-result-x-button {
+  max-width: 48px;
+  flex: 0 0 44px;
+  padding-inline: 8px;
+  background: #18161c;
+  color: #fff3db;
+}
+
+#room-rush-result-modal .run-share-x-logo {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+#room-rush-result-modal .bar-btn:disabled {
+  cursor: wait;
+  filter: grayscale(0.4);
+  opacity: 0.68;
+}
+
+@media (max-width: 560px) {
+  .room-rush-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .room-rush-mode-card {
+    min-height: 96px;
+  }
+
+  .room-rush-result-card {
+    grid-template-columns: 1fr;
+  }
+
+  .room-rush-result-copy {
+    min-height: auto;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #room-rush-result-modal .room-rush-result-actions .bar-btn {
+    flex-basis: calc(50% - 4px);
+  }
+
+  #room-rush-result-modal .room-rush-result-x-button {
+    max-width: none;
+    flex-basis: 42px;
+  }
+
+  #room-rush-result-modal .history-modal-header {
+    top: 24px;
+    right: 24px;
+  }
 }
 
 #room-history-modal .history-version-list {

@@ -25,6 +25,7 @@ import type {
 import type { CameraMode } from './camera';
 import type { CoursePlaybackRoomSourceMode } from './coursePlayback';
 import type { ActiveCourseRunState } from './courseRuns';
+import type { ActiveRoomRushRunState } from './roomRushRuns';
 import type { SelectedCellState } from './hudViewModel';
 
 interface OverworldSceneFlowHost {
@@ -73,6 +74,7 @@ interface OverworldSceneFlowHost {
   ): ActiveCourseRunState;
   getCourseStartRoomRef(course: CourseSnapshot): CourseRoomRef | null;
   getActiveCourseRun(): ActiveCourseRunState | null;
+  getActiveRoomRushRun(): ActiveRoomRushRunState | null;
   setActiveCourseRun(runState: ActiveCourseRunState | null): void;
   startRemoteCourseRun(runState: ActiveCourseRunState): void;
   setCourseComposerStatusText(text: string | null): void;
@@ -183,7 +185,9 @@ export class OverworldSceneFlowController {
 
   returnToWorld(): void {
     const returnCoordinates =
-      this.host.getActiveCourseRun()?.returnCoordinates ?? this.host.getCurrentRoomCoordinates();
+      this.host.getActiveCourseRun()?.returnCoordinates
+      ?? this.host.getActiveRoomRushRun()?.returnCoordinates
+      ?? this.host.getCurrentRoomCoordinates();
     const courseEditorReturnTarget = this.host.getCourseEditorReturnTarget();
     this.host.setCourseEditorReturnTarget(null);
     this.host.resetPlaySession();
