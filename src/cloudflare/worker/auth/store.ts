@@ -280,6 +280,13 @@ export async function updateUserProfile(
       ).bind(nextDisplayName, user.id),
       env.DB.prepare(
         `
+          UPDATE room_rush_runs
+          SET user_display_name = ?
+          WHERE user_id = ?
+        `
+      ).bind(nextDisplayName, user.id),
+      env.DB.prepare(
+        `
           UPDATE user_stats
           SET user_display_name = ?, updated_at = ?
           WHERE user_id = ?

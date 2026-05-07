@@ -1455,6 +1455,7 @@
       <div class="leaderboard-tabs">
         <button id="btn-leaderboard-tab-room" class="bar-btn bar-btn-small active" type="button">Room</button>
         <button id="btn-leaderboard-tab-course" class="bar-btn bar-btn-small" type="button">Course</button>
+        <button id="btn-leaderboard-tab-room-rush" class="bar-btn bar-btn-small" type="button">Room Rush</button>
         <button id="btn-leaderboard-tab-global" class="bar-btn bar-btn-small" type="button">Global</button>
       </div>
       <div id="leaderboard-modal-error" class="history-modal-error hidden"></div>
@@ -1489,6 +1490,17 @@
         <div id="leaderboard-course-summary" class="history-modal-meta">No published course selected.</div>
         <div id="leaderboard-course-viewer" class="history-modal-meta hidden"></div>
         <div id="leaderboard-course-list" class="history-version-list"></div>
+      </div>
+      <div id="leaderboard-room-rush-panel" class="leaderboard-panel hidden">
+        <div id="leaderboard-room-rush-modes" class="leaderboard-difficulty-actions leaderboard-room-rush-modes">
+          <button class="bar-btn bar-btn-small active" type="button" data-room-rush-leaderboard-mode="easy:selected">Start Anywhere / Deaths Allowed</button>
+          <button class="bar-btn bar-btn-small" type="button" data-room-rush-leaderboard-mode="hard:selected">Start Anywhere / Death Ends Run</button>
+          <button class="bar-btn bar-btn-small" type="button" data-room-rush-leaderboard-mode="easy:origin">Start From 0,0 / Deaths Allowed</button>
+          <button class="bar-btn bar-btn-small" type="button" data-room-rush-leaderboard-mode="hard:origin">Start From 0,0 / Death Ends Run</button>
+        </div>
+        <div id="leaderboard-room-rush-summary" class="history-modal-meta">No Room Rush leaderboard selected.</div>
+        <div id="leaderboard-room-rush-viewer" class="history-modal-meta hidden"></div>
+        <div id="leaderboard-room-rush-list" class="history-version-list"></div>
       </div>
       <div id="leaderboard-global-panel" class="leaderboard-panel hidden">
         <div id="leaderboard-global-summary" class="history-modal-meta">World points leaderboard.</div>

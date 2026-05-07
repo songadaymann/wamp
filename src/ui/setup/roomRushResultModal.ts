@@ -1,4 +1,10 @@
 import Phaser from 'phaser';
+import { getAuthDebugState } from '../../auth/client';
+import {
+  createRunRepository,
+  type RunRepository,
+} from '../../runs/runRepository';
+import type { RoomRushRunSubmissionRequestBody } from '../../runs/model';
 import {
   buildRoomRushShareText,
   formatRoomRushDifficulty,
@@ -95,6 +101,7 @@ export class RoomRushResultModalController {
     private readonly game: Phaser.Game,
     private readonly doc: Document = document,
     private readonly windowObj: Window = window,
+    private readonly runRepository: RunRepository = createRunRepository(),
   ) {
     this.elements = {
       modal: this.doc.getElementById('room-rush-result-modal'),
@@ -151,6 +158,7 @@ export class RoomRushResultModalController {
     this.shareStatusText = 'Rendering overworld map...';
     this.shareStatusTone = 'default';
     this.render();
+    void this.submitLeaderboardRun(this.activeRun);
     void this.renderShareImageAfterFrame();
   }
 
@@ -310,6 +318,45 @@ export class RoomRushResultModalController {
     this.shareStatusTone = tone;
     this.render();
   }
+
+  private async submitLeaderboardRun(run: ActiveRoomRushRunState): Promise<void> {
+    if (run.result !== 'completed' && run.result !== 'failed') {
+      return;
+    }
+
+    if (!getAuthDebugState().authenticated) {
+      return;
+    }
+
+    try {
+      await this.runRepository.submitRoomRushRun(buildRoomRushSubmissionBody(run));
+    } catch (error) {
+      console.warn('Failed to save Room Rush leaderboard run.', error);
+    }
+  }
+}
+
+function buildRoomRushSubmissionBody(
+  run: ActiveRoomRushRunState
+): RoomRushRunSubmissionRequestBody {
+  return {
+    clientRunId: run.runId,
+    difficulty: run.difficulty,
+    startRule: run.startRule,
+    result: run.result === 'failed' ? 'failed' : 'completed',
+    elapsedMs: Math.max(0, Math.round(run.elapsedMs)),
+    deaths: Math.max(0, Math.round(run.deaths)),
+    visitedRoomIds: [...run.visitedRoomIds],
+    route: run.route.map((step) => ({
+      routeIndex: step.routeIndex,
+      roomId: step.roomId,
+      coordinates: { ...step.coordinates },
+      uniqueVisitIndex: step.uniqueVisitIndex,
+    })),
+    startCoordinates: { ...run.startCoordinates },
+    finishCoordinates: { ...run.currentCoordinates },
+    finishedAt: new Date().toISOString(),
+  };
 }
 
 function cloneRoomRushRun(run: ActiveRoomRushRunState): ActiveRoomRushRunState {

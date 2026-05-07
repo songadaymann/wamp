@@ -65,6 +65,10 @@ import {
   handleRunFinish,
   handleRunStart,
 } from './worker/runs/routes';
+import {
+  handleRoomRushLeaderboards,
+  handleRoomRushRunSubmit,
+} from './worker/runs/roomRushLeaderboards';
 import { awardRoomPublishPoints, upsertUserStats } from './worker/runs/points';
 import {
   annotateRoomRecordWithTilesetHints,
@@ -385,6 +389,14 @@ export default {
 
       if (url.pathname === '/api/leaderboards/global' && request.method === 'GET') {
         return await handleGlobalLeaderboard(request, url, env);
+      }
+
+      if (url.pathname === '/api/leaderboards/room-rush' && request.method === 'GET') {
+        return await handleRoomRushLeaderboards(request, url, env);
+      }
+
+      if (url.pathname === '/api/room-rush/runs' && request.method === 'POST') {
+        return await handleRoomRushRunSubmit(request, env);
       }
 
       if (url.pathname.startsWith('/api/share/rooms/')) {

@@ -15,6 +15,12 @@ export const ROOM_DIFFICULTIES = ['easy', 'medium', 'hard', 'extreme'] as const;
 export type RoomDifficulty = typeof ROOM_DIFFICULTIES[number];
 export const ROOM_DISCOVERY_SORTS = ['featured', 'quality', 'newest', 'builder'] as const;
 export type RoomDiscoverySort = typeof ROOM_DISCOVERY_SORTS[number];
+export const ROOM_RUSH_DIFFICULTIES = ['easy', 'hard'] as const;
+export type RoomRushDifficulty = typeof ROOM_RUSH_DIFFICULTIES[number];
+export const ROOM_RUSH_START_RULES = ['selected', 'origin'] as const;
+export type RoomRushStartRule = typeof ROOM_RUSH_START_RULES[number];
+export type RoomRushLeaderboardModeKey =
+  `${RoomRushDifficulty}:${RoomRushStartRule}`;
 
 export const ROOM_DIFFICULTY_LABELS: Record<RoomDifficulty, string> = {
   easy: 'Easy',
@@ -189,6 +195,63 @@ export interface GlobalLeaderboardEntry {
 export interface GlobalLeaderboardResponse {
   entries: GlobalLeaderboardEntry[];
   viewerEntry: GlobalLeaderboardEntry | null;
+}
+
+export interface RoomRushRouteStepRecord {
+  routeIndex: number;
+  roomId: string;
+  coordinates: RoomCoordinates;
+  uniqueVisitIndex: number;
+}
+
+export interface RoomRushRunSubmissionRequestBody {
+  clientRunId: string;
+  difficulty: RoomRushDifficulty;
+  startRule: RoomRushStartRule;
+  result: Exclude<RunResult, 'active' | 'abandoned'>;
+  elapsedMs: number;
+  deaths: number;
+  visitedRoomIds: string[];
+  route: RoomRushRouteStepRecord[];
+  startCoordinates: RoomCoordinates;
+  finishCoordinates: RoomCoordinates;
+  finishedAt?: string | null;
+}
+
+export interface RoomRushRunSubmissionResponse {
+  saved: boolean;
+  attemptId: string;
+}
+
+export interface RoomRushLeaderboardEntry {
+  rank: number;
+  attemptId: string;
+  userId: string;
+  userDisplayName: string;
+  difficulty: RoomRushDifficulty;
+  startRule: RoomRushStartRule;
+  result: Exclude<RunResult, 'active' | 'abandoned'>;
+  uniqueRooms: number;
+  elapsedMs: number;
+  deaths: number;
+  startRoomId: string;
+  startCoordinates: RoomCoordinates;
+  finishRoomId: string;
+  finishCoordinates: RoomCoordinates;
+  finishedAt: string;
+}
+
+export interface RoomRushLeaderboardResponse {
+  difficulty: RoomRushDifficulty;
+  startRule: RoomRushStartRule;
+  modeKey: RoomRushLeaderboardModeKey;
+  entries: RoomRushLeaderboardEntry[];
+  viewerBest: RoomRushLeaderboardEntry | null;
+  viewerRank: number | null;
+}
+
+export interface RoomRushLeaderboardsResponse {
+  modes: RoomRushLeaderboardResponse[];
 }
 
 export interface UserStatsRecord {

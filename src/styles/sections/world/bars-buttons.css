@@ -259,6 +259,7 @@ body[data-app-mode="play-world"] .world-only-control {
 }
 
 #world-hud .world-btn-room-rush.active {
+  order: -1;
   background: #bd382b;
   border-color: #18161c;
   color: #fff;

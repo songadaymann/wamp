@@ -327,6 +327,28 @@ export interface RoomRunRow {
   verification_snapshot_hash?: string | null;
 }
 
+export interface RoomRushRunRow {
+  attempt_id: string;
+  client_run_id: string;
+  user_id: string;
+  user_display_name: string;
+  difficulty: string;
+  start_rule: string;
+  result: RunResult;
+  unique_rooms: number;
+  elapsed_ms: number;
+  deaths: number;
+  start_room_id: string;
+  start_x: number;
+  start_y: number;
+  finish_room_id: string;
+  finish_x: number;
+  finish_y: number;
+  route_json: string;
+  finished_at: string;
+  created_at: string;
+}
+
 export interface RoomDifficultyVoteRow {
   room_id: string;
   room_version: number;

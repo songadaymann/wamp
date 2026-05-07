@@ -36,6 +36,17 @@
   gap: 8px;
 }
 
+.leaderboard-room-rush-modes .bar-btn {
+  flex: 1 1 calc(50% - 8px);
+  min-width: min(100%, 220px);
+  padding: 10px 12px;
+  border-width: 2px;
+  white-space: normal;
+  line-height: 1.2;
+  text-align: left;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
 .leaderboard-difficulty-actions .bar-btn.active,
 .leaderboard-discover-filters .bar-btn.active {
   border-color: var(--accent-cool);
@@ -117,6 +128,10 @@
   grid-template-columns: 40px minmax(0, 2fr) 100px 110px 90px;
 }
 
+.leaderboard-row.leaderboard-room-rush-row {
+  grid-template-columns: 40px minmax(0, 1.8fr) 96px 80px 80px;
+}
+
 .leaderboard-rank {
   color: var(--accent-warm);
 }
@@ -138,4 +153,3 @@
   color: var(--text-muted);
   padding: 6px 0;
 }
-
