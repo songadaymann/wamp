@@ -49,6 +49,13 @@ import {
 
 type LeaderboardTab = 'room' | 'discover' | 'course' | 'roomRush' | 'global';
 
+const ROOM_RUSH_MODE_ORDER: RoomRushLeaderboardModeKey[] = [
+  'easy:selected',
+  'hard:selected',
+  'easy:origin',
+  'hard:origin',
+];
+
 type LeaderboardModalElements = {
   modal: HTMLElement | null;
   title: HTMLElement | null;
@@ -110,7 +117,8 @@ export class LeaderboardModalController {
   private courseLoading = false;
   private courseLoaded = false;
   private roomRushLoading = false;
-  private roomRushLoaded = false;
+  private readonly roomRushLoadedModes = new Set<RoomRushLeaderboardModeKey>();
+  private readonly roomRushFailedModes = new Set<RoomRushLeaderboardModeKey>();
   private globalLoading = false;
   private globalLoaded = false;
   private voteSubmitting = false;
@@ -297,6 +305,9 @@ export class LeaderboardModalController {
 
         this.selectedRoomRushMode = mode;
         this.render();
+        if (this.activeTab === 'roomRush') {
+          void this.ensureRoomRushModeLoaded(mode);
+        }
       });
     }
   }
@@ -326,7 +337,6 @@ export class LeaderboardModalController {
     this.courseLoading = false;
     this.courseLoaded = false;
     this.roomRushLoading = false;
-    this.roomRushLoaded = false;
     this.globalLoading = false;
     this.globalLoaded = false;
     this.voteSubmitting = false;
@@ -334,6 +344,8 @@ export class LeaderboardModalController {
     this.roomDiscovery = null;
     this.courseLeaderboard = null;
     this.roomRushLeaderboards = null;
+    this.roomRushLoadedModes.clear();
+    this.roomRushFailedModes.clear();
     this.globalLeaderboard = null;
     this.roomVersions = [];
     this.roomVersionOptions = [];
@@ -386,9 +398,7 @@ export class LeaderboardModalController {
         }
         return;
       case 'roomRush':
-        if (!this.roomRushLoaded && !this.roomRushLoading) {
-          await this.loadRoomRushLeaderboards();
-        }
+        await this.ensureRoomRushModeLoaded(this.selectedRoomRushMode);
         return;
       case 'global':
         if (!this.globalLoaded && !this.globalLoading) {
@@ -496,22 +506,53 @@ export class LeaderboardModalController {
     }
   }
 
-  private async loadRoomRushLeaderboards(): Promise<void> {
+  private async ensureRoomRushModeLoaded(modeKey: RoomRushLeaderboardModeKey): Promise<void> {
+    if (this.roomRushLoadedModes.has(modeKey) || this.roomRushLoading) {
+      return;
+    }
+
+    await this.loadRoomRushLeaderboards(modeKey);
+  }
+
+  private async loadRoomRushLeaderboards(modeKey: RoomRushLeaderboardModeKey): Promise<void> {
     this.roomRushLoading = true;
-    this.roomRushLoaded = false;
+    this.roomRushFailedModes.delete(modeKey);
     this.render();
     try {
-      this.roomRushLeaderboards = await this.runRepository.loadRoomRushLeaderboards(25);
+      const response = await this.runRepository.loadRoomRushLeaderboards(25, modeKey);
+      this.mergeRoomRushLeaderboards(response);
+      for (const mode of response.modes) {
+        this.roomRushLoadedModes.add(mode.modeKey);
+      }
+      if (!this.roomRushLoadedModes.has(modeKey)) {
+        this.roomRushFailedModes.add(modeKey);
+      }
       this.setError(null);
     } catch (error) {
       console.error('Failed to load Room Rush leaderboards', error);
-      this.roomRushLeaderboards = null;
+      this.roomRushFailedModes.add(modeKey);
       this.setError(error instanceof Error ? error.message : 'Failed to load Room Rush leaderboards.');
     } finally {
       this.roomRushLoading = false;
-      this.roomRushLoaded = true;
       this.render();
     }
+  }
+
+  private mergeRoomRushLeaderboards(response: RoomRushLeaderboardsResponse): void {
+    const byMode = new Map<RoomRushLeaderboardModeKey, RoomRushLeaderboardResponse>();
+    for (const mode of this.roomRushLeaderboards?.modes ?? []) {
+      byMode.set(mode.modeKey, mode);
+    }
+    for (const mode of response.modes) {
+      byMode.set(mode.modeKey, mode);
+    }
+
+    this.roomRushLeaderboards = {
+      modes: ROOM_RUSH_MODE_ORDER.flatMap((modeKey) => {
+        const mode = byMode.get(modeKey);
+        return mode ? [mode] : [];
+      }),
+    };
   }
 
   private async loadDiscoveryResults(): Promise<void> {
@@ -656,10 +697,10 @@ export class LeaderboardModalController {
       this.elements.courseTabButton.disabled = !courseAvailable;
     }
     if (!roomAvailable && this.activeTab === 'room') {
-      this.activeTab = courseAvailable ? 'course' : 'roomRush';
+      this.activeTab = courseAvailable ? 'course' : 'global';
     }
     if (!courseAvailable && this.activeTab === 'course') {
-      this.activeTab = 'roomRush';
+      this.activeTab = roomAvailable ? 'room' : 'global';
     }
 
     this.elements.roomPanel?.classList.toggle('hidden', this.activeTab !== 'room');
@@ -961,10 +1002,13 @@ export class LeaderboardModalController {
       return;
     }
 
+    const selectedModeSettled =
+      this.roomRushLoadedModes.has(this.selectedRoomRushMode) ||
+      this.roomRushFailedModes.has(this.selectedRoomRushMode);
     const roomRushPending =
       this.loading ||
       this.roomRushLoading ||
-      (this.activeTab === 'roomRush' && !this.roomRushLoaded);
+      (this.activeTab === 'roomRush' && !selectedModeSettled);
     const selected = this.getSelectedRoomRushLeaderboard();
     this.elements.roomRushList.replaceChildren();
 
@@ -1424,7 +1468,7 @@ export class LeaderboardModalController {
       return 'room';
     }
 
-    return roomAvailable ? 'room' : courseAvailable ? 'course' : 'roomRush';
+    return roomAvailable ? 'room' : courseAvailable ? 'course' : 'global';
   }
 
   private getDiscoverSortLabel(sort: RoomDiscoverySort): string {

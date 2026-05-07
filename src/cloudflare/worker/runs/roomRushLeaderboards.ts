@@ -140,8 +140,10 @@ export async function handleRoomRushLeaderboards(
   const auth = await loadOptionalRequestAuth(env, request);
   requireOptionalScope(auth, 'leaderboards:read', 'read Room Rush leaderboards');
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 25, 1, 50);
+  const requestedMode = parseRoomRushLeaderboardModeQuery(url.searchParams.get('mode'));
+  const modeOrder = requestedMode ? [requestedMode] : ROOM_RUSH_MODE_ORDER;
   const modes = await Promise.all(
-    ROOM_RUSH_MODE_ORDER.map((mode) =>
+    modeOrder.map((mode) =>
       buildRoomRushLeaderboardResponse(
         env,
         mode.difficulty,
@@ -153,6 +155,24 @@ export async function handleRoomRushLeaderboards(
   );
   const response: RoomRushLeaderboardsResponse = { modes };
   return jsonResponse(request, response);
+}
+
+function parseRoomRushLeaderboardModeQuery(value: string | null): {
+  difficulty: RoomRushDifficulty;
+  startRule: RoomRushStartRule;
+} | null {
+  if (!value) {
+    return null;
+  }
+
+  const match = ROOM_RUSH_MODE_ORDER.find(
+    (mode) => getRoomRushModeKey(mode.difficulty, mode.startRule) === value
+  );
+  if (!match) {
+    throw new HttpError(400, 'Invalid Room Rush leaderboard mode.');
+  }
+
+  return match;
 }
 
 async function buildRoomRushLeaderboardResponse(

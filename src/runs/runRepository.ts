@@ -37,7 +37,10 @@ export interface RunRepository {
   submitRoomDifficultyVote(roomId: string, body: RoomDifficultyVoteRequestBody): Promise<void>;
   submitRoomRating(roomId: string, body: RoomProgressRatingRequestBody): Promise<RoomProgressRatingResponse>;
   submitRoomRushRun(body: RoomRushRunSubmissionRequestBody): Promise<RoomRushRunSubmissionResponse>;
-  loadRoomRushLeaderboards(limit?: number): Promise<RoomRushLeaderboardsResponse>;
+  loadRoomRushLeaderboards(
+    limit?: number,
+    modeKey?: RoomRushLeaderboardsResponse['modes'][number]['modeKey']
+  ): Promise<RoomRushLeaderboardsResponse>;
   loadRoomDiscovery(
     difficulty: RoomDifficulty | null,
     sort?: RoomDiscoverySort,
@@ -124,10 +127,16 @@ class ApiRunRepository implements RunRepository {
     });
   }
 
-  async loadRoomRushLeaderboards(limit: number = 25): Promise<RoomRushLeaderboardsResponse> {
+  async loadRoomRushLeaderboards(
+    limit: number = 25,
+    modeKey?: RoomRushLeaderboardsResponse['modes'][number]['modeKey']
+  ): Promise<RoomRushLeaderboardsResponse> {
     const params = new URLSearchParams({
       limit: String(limit),
     });
+    if (modeKey) {
+      params.set('mode', modeKey);
+    }
 
     return this.request<RoomRushLeaderboardsResponse>(
       `/api/leaderboards/room-rush?${params.toString()}`
