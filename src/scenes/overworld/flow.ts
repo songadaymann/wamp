@@ -180,7 +180,10 @@ export class OverworldSceneFlowController {
     this.host.setShouldCenterCamera(true);
     this.host.setShouldRespawnPlayer(true);
     setFocusedCoordinatesInUrl(restartCoordinates);
-    await this.host.refreshAround(restartCoordinates, { forceChunkReload: true });
+    this.host.refreshAroundIfNeededOrFromCache(restartCoordinates, {
+      preferCachedWindow: true,
+      refreshLeaderboards: false,
+    });
   }
 
   returnToWorld(): void {
