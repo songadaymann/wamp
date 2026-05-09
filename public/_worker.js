@@ -1,5 +1,9 @@
 import decodeJpegBytes from 'jpeg-js/lib/decoder.js';
 import {
+  buildProfileSharePath,
+  parseProfileSharePath,
+} from '../src/profiles/username.ts';
+import {
   BACKGROUND_GROUPS,
   GAME_OBJECTS,
   ROOM_HEIGHT,
@@ -19,6 +23,7 @@ const ROOM_PATH_PATTERN = /^\/r\/(-?\d+)\/(-?\d+)\/?$/;
 const ROOM_IMAGE_PATH_PATTERN = /^\/r\/(-?\d+)\/(-?\d+)\/image(?:\.png)?\/?$/;
 const DEFAULT_API_BASE_URL = 'https://api.wamp.land';
 const ROOM_META_TIMEOUT_MS = 1200;
+const PROFILE_META_TIMEOUT_MS = 1200;
 const ROOM_IMAGE_TIMEOUT_MS = 3500;
 const ROOM_IMAGE_RENDERER_VERSION = 'assets-v5';
 const ROOM_SHARE_IMAGE_WIDTH = 1200;
@@ -48,7 +53,20 @@ export default {
     }
 
     const coordinates = parseRoomPath(url.pathname) || parseRoomQuery(url);
-    if (!coordinates) {
+    if (coordinates) {
+      if (request.method !== 'GET' && request.method !== 'HEAD') {
+        return new Response('Method Not Allowed', {
+          status: 405,
+          headers: { Allow: 'GET, HEAD' },
+        });
+      }
+
+      const metadata = await loadRoomMetadata(request, env, url, coordinates);
+      return renderRoomAppShell(request, env, metadata);
+    }
+
+    const profileUsername = parseProfileSharePath(url.pathname);
+    if (!profileUsername) {
       return env.ASSETS.fetch(request);
     }
 
@@ -59,8 +77,8 @@ export default {
       });
     }
 
-    const metadata = await loadRoomMetadata(request, env, url, coordinates);
-    return renderRoomAppShell(request, env, metadata);
+    const metadata = await loadProfileMetadata(request, env, url, profileUsername);
+    return renderProfileAppShell(request, env, metadata);
   },
 };
 
@@ -139,6 +157,34 @@ async function loadRoomMetadata(request, env, url, coordinates) {
   }
 }
 
+async function loadProfileMetadata(request, env, url, username) {
+  const apiBaseUrl = resolveApiBaseUrl(env, url);
+  const publicUrl = `${url.origin}${buildProfileSharePath(username)}`;
+  const fallback = buildFallbackProfileMetadata(username, publicUrl, url.origin);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PROFILE_META_TIMEOUT_MS);
+
+  try {
+    const profileUrl = new URL(`/api/profiles/by-username/${encodeURIComponent(username)}`, apiBaseUrl);
+    const response = await fetch(profileUrl.toString(), {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': request.headers.get('User-Agent') || 'WAMP profile share renderer',
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      return fallback;
+    }
+
+    return buildPublishedProfileMetadata(await response.json(), fallback);
+  } catch {
+    return fallback;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function resolveApiBaseUrl(env, url) {
   const configured = typeof env.ROOM_SHARE_API_BASE_URL === 'string'
     ? env.ROOM_SHARE_API_BASE_URL.trim()
@@ -167,6 +213,15 @@ function buildFallbackMetadata(apiBaseUrl, roomId, coordinates, publicUrl) {
   };
 }
 
+function buildFallbackProfileMetadata(username, publicUrl, origin) {
+  return {
+    title: `@${username} on WAMP`,
+    description: `View @${username}'s WAMP profile, levels, progress, and stats.`,
+    url: publicUrl,
+    imageUrl: new URL('/favicon.svg', origin).toString(),
+  };
+}
+
 function buildPublishedRoomMetadata(snapshot, fallback, coordinates) {
   const roomTitle = cleanText(snapshot?.title);
   const title = roomTitle
@@ -180,6 +235,24 @@ function buildPublishedRoomMetadata(snapshot, fallback, coordinates) {
       ? `Play "${roomTitle}" in WAMP. Can you do better?`
       : fallback.description,
     imageUrl: withRoomVersionQuery(fallback.imageUrl, snapshot?.version),
+  };
+}
+
+function buildPublishedProfileMetadata(profile, fallback) {
+  const displayName = cleanText(profile?.displayName) || fallback.title.replace(/ on WAMP$/, '');
+  const username = cleanText(profile?.username);
+  const bio = cleanText(profile?.bio);
+  const totalRooms = Number(profile?.stats?.totalRoomsPublished ?? 0) || 0;
+  const roomText = totalRooms === 1 ? '1 published level' : `${totalRooms} published levels`;
+  const title = username ? `${displayName} (@${username}) on WAMP` : `${displayName} on WAMP`;
+  const description = bio || `${displayName}'s WAMP profile with ${roomText}, progress, and stats.`;
+  const avatarUrl = cleanUrl(profile?.avatarUrl);
+
+  return {
+    ...fallback,
+    title,
+    description,
+    imageUrl: avatarUrl || fallback.imageUrl,
   };
 }
 
@@ -286,6 +359,31 @@ async function renderRoomAppShell(request, env, metadata) {
   });
 }
 
+async function renderProfileAppShell(request, env, metadata) {
+  const indexResponse = await fetchAppShellAsset(request, env);
+  if (!indexResponse.ok) {
+    return fallbackProfileHtmlResponse(request, metadata);
+  }
+
+  const headers = new Headers(indexResponse.headers);
+  headers.set('Content-Type', 'text/html; charset=utf-8');
+  headers.set('Cache-Control', 'public, max-age=60, s-maxage=300');
+  headers.delete('Content-Length');
+
+  if (request.method === 'HEAD') {
+    return new Response(null, {
+      status: 200,
+      headers,
+    });
+  }
+
+  const html = await indexResponse.text();
+  return new Response(injectProfileMetadata(html, metadata), {
+    status: 200,
+    headers,
+  });
+}
+
 async function fetchAppShellAsset(request, env) {
   const url = new URL(request.url);
   for (const pathname of ['/index.html', '/']) {
@@ -323,6 +421,30 @@ function fallbackHtmlResponse(request, metadata) {
   });
 }
 
+function fallbackProfileHtmlResponse(request, metadata) {
+  const body = [
+    '<!doctype html>',
+    '<html lang="en">',
+    '<head>',
+    '  <meta charset="utf-8">',
+    '  <meta name="viewport" content="width=device-width, initial-scale=1">',
+    buildProfileMetaTags(metadata),
+    '</head>',
+    '<body>',
+    `  <p><a href="${escapeHtml(metadata.url)}">Open this WAMP profile</a></p>`,
+    '</body>',
+    '</html>',
+  ].join('\n');
+
+  return new Response(request.method === 'HEAD' ? null : body, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'public, max-age=60, s-maxage=300',
+    },
+  });
+}
+
 function injectRoomMetadata(html, metadata) {
   let nextHtml = html;
   if (!/<base\s/i.test(nextHtml)) {
@@ -334,6 +456,19 @@ function injectRoomMetadata(html, metadata) {
   }
 
   return nextHtml.replace(/<\/head>/i, `${buildRoomMetaTags(metadata)}\n  </head>`);
+}
+
+function injectProfileMetadata(html, metadata) {
+  let nextHtml = html;
+  if (!/<base\s/i.test(nextHtml)) {
+    nextHtml = nextHtml.replace(/<head([^>]*)>/i, '<head$1>\n    <base href="/">');
+  }
+
+  if (/<title>[\s\S]*?<\/title>/i.test(nextHtml)) {
+    nextHtml = nextHtml.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(metadata.title)}</title>`);
+  }
+
+  return nextHtml.replace(/<\/head>/i, `${buildProfileMetaTags(metadata)}\n  </head>`);
 }
 
 function buildRoomMetaTags(metadata) {
@@ -363,6 +498,29 @@ function buildRoomMetaTags(metadata) {
     `    <meta name="twitter:description" content="${description}">`,
     `    <meta name="twitter:image" content="${imageUrl}">`,
     `    <meta name="twitter:image:alt" content="${title}">`,
+  ].join('\n');
+}
+
+function buildProfileMetaTags(metadata) {
+  const title = escapeHtml(metadata.title);
+  const description = escapeHtml(metadata.description);
+  const pageUrl = escapeHtml(metadata.url);
+  const imageUrl = escapeHtml(metadata.imageUrl);
+
+  return [
+    '    <meta name="robots" content="index,follow">',
+    `    <link rel="canonical" href="${pageUrl}">`,
+    '    <meta property="og:type" content="profile">',
+    '    <meta property="og:site_name" content="WAMP">',
+    `    <meta property="og:title" content="${title}">`,
+    `    <meta property="og:description" content="${description}">`,
+    `    <meta property="og:url" content="${pageUrl}">`,
+    `    <meta property="og:image" content="${imageUrl}">`,
+    `    <meta property="og:image:secure_url" content="${imageUrl}">`,
+    '    <meta name="twitter:card" content="summary">',
+    `    <meta name="twitter:title" content="${title}">`,
+    `    <meta name="twitter:description" content="${description}">`,
+    `    <meta name="twitter:image" content="${imageUrl}">`,
   ].join('\n');
 }
 

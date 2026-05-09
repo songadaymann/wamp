@@ -8,6 +8,7 @@ import type {
 
 export interface ProfileRepository {
   loadProfile(userId: string): Promise<UserProfileResponse>;
+  loadProfileByUsername(username: string): Promise<UserProfileResponse>;
   updateMyProfile(body: UserProfileUpdateRequestBody): Promise<UserProfileUpdateResponse>;
 }
 
@@ -25,6 +26,10 @@ class ApiProfileRepository implements ProfileRepository {
 
   async loadProfile(userId: string): Promise<UserProfileResponse> {
     return this.request<UserProfileResponse>(`/api/profiles/${encodeURIComponent(userId)}`);
+  }
+
+  async loadProfileByUsername(username: string): Promise<UserProfileResponse> {
+    return this.request<UserProfileResponse>(`/api/profiles/by-username/${encodeURIComponent(username)}`);
   }
 
   async updateMyProfile(body: UserProfileUpdateRequestBody): Promise<UserProfileUpdateResponse> {

@@ -4,7 +4,7 @@
 
 .profile-modal-header {
   justify-content: flex-end;
-  gap: 0;
+  gap: 8px;
 }
 
 .profile-modal-body {
@@ -132,4 +132,3 @@
   min-height: auto;
   max-height: none;
 }
-

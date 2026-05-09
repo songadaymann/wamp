@@ -32,6 +32,7 @@ export interface ProfileStatsSummary {
 export interface UserProfileResponse {
   userId: string;
   displayName: string;
+  username: string | null;
   createdAt: string;
   avatarUrl: string | null;
   bio: string | null;
@@ -47,6 +48,7 @@ export interface UserProfileResponse {
 
 export interface UserProfileUpdateRequestBody {
   displayName: string;
+  username?: string | null;
   avatarUrl: string | null;
   bio: string | null;
   selectedAvatarId?: string | null;

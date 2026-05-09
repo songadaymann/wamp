@@ -367,6 +367,8 @@
           <option value="__upload_background__">Upload Image...</option>
           <option value="forest">Forest</option>
           <option value="dark_forest">Dark Forest</option>
+          <option value="spooky_moon">Spooky Moon</option>
+          <option value="spooky_mountain">Spooky Mountain</option>
           <option value="grassland">Grassland</option>
           <option value="mountains">Mountains</option>
           <option value="meadow">Meadow</option>
@@ -406,6 +408,24 @@
           >
             <span class="background-card-art" aria-hidden="true"></span>
             <span class="background-card-label">Dark Forest</span>
+          </button>
+          <button
+            class="background-card"
+            type="button"
+            data-background-id="spooky_moon"
+            style="--background-card-back: url('/assets/backgrounds/spooky_moon/sky.png'); --background-card-front: url('/assets/backgrounds/spooky_moon/moon.png'); --background-card-tint: rgba(37, 95, 108, 0.48);"
+          >
+            <span class="background-card-art" aria-hidden="true"></span>
+            <span class="background-card-label">Spooky Moon</span>
+          </button>
+          <button
+            class="background-card"
+            type="button"
+            data-background-id="spooky_mountain"
+            style="--background-card-back: url('/assets/backgrounds/spooky_mountain/sky.png'); --background-card-front: url('/assets/backgrounds/spooky_mountain/mountain_near.png'); --background-card-tint: rgba(35, 55, 74, 0.52);"
+          >
+            <span class="background-card-art" aria-hidden="true"></span>
+            <span class="background-card-label">Spooky Mountain</span>
           </button>
           <button
             class="background-card"
@@ -1695,6 +1715,7 @@
   <div id="profile-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel profile-modal-panel" role="dialog" aria-modal="true" aria-label="Profile">
       <div class="history-modal-header profile-modal-header">
+        <button id="btn-profile-share" class="bar-btn bar-btn-small hidden" type="button">Copy Link</button>
         <button id="btn-profile-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
       <div id="profile-modal-error" class="history-modal-error hidden"></div>
@@ -1709,6 +1730,7 @@
           </div>
           <div class="profile-hero-copy">
             <div id="profile-display-name" class="profile-display-name">Profile</div>
+            <div id="profile-username" class="profile-joined-date hidden">@player</div>
             <div id="profile-joined-date" class="profile-joined-date">Joined recently</div>
             <div id="profile-hero-lanes" class="profile-hero-lanes"></div>
             <div id="profile-hero-progress" class="profile-hero-summary hidden"></div>
@@ -1718,6 +1740,8 @@
         <div id="profile-edit-fields" class="profile-edit-fields hidden">
           <label class="goal-control-label" for="profile-display-name-input">Display Name</label>
           <input id="profile-display-name-input" class="goal-input room-title-input" type="text" maxlength="24" spellcheck="false" />
+          <label class="goal-control-label" for="profile-username-input">Username</label>
+          <input id="profile-username-input" class="goal-input room-title-input" type="text" maxlength="24" spellcheck="false" autocapitalize="none" autocomplete="off" />
           <label class="goal-control-label" for="profile-bio-input">Bio</label>
           <textarea id="profile-bio-input" class="goal-input goal-textarea profile-bio-input" maxlength="280" rows="4" spellcheck="true" placeholder="Tell people a little about yourself."></textarea>
           <div class="profile-edit-actions">

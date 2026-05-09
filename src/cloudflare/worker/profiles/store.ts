@@ -49,6 +49,7 @@ export async function loadUserProfile(
   return {
     userId: user.id,
     displayName: user.displayName,
+    username: user.username ?? null,
     createdAt: user.createdAt ?? new Date(0).toISOString(),
     avatarUrl: user.avatarUrl ?? null,
     bio: user.bio ?? null,

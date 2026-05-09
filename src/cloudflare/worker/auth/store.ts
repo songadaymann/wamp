@@ -1,5 +1,9 @@
 import { Resend } from 'resend';
 import { API_TOKEN_SCOPES, type ApiTokenRecord, type ApiTokenScope, type AuthUser } from '../../../auth/model';
+import {
+  deriveProfileUsernameBase,
+  PROFILE_USERNAME_MAX_LENGTH,
+} from '../../../profiles/username';
 import { HttpError } from '../core/http';
 import type {
   ApiTokenRow,
@@ -30,6 +34,7 @@ export async function findUserByEmail(env: Env, email: string): Promise<AuthUser
         email,
         wallet_address,
         display_name,
+        NULL AS username,
         NULL AS avatar_url,
         NULL AS bio,
         NULL AS selected_avatar_id,
@@ -54,6 +59,7 @@ export async function findUserByWallet(env: Env, walletAddress: string): Promise
         email,
         wallet_address,
         display_name,
+        NULL AS username,
         NULL AS avatar_url,
         NULL AS bio,
         NULL AS selected_avatar_id,
@@ -78,6 +84,7 @@ export async function findUserById(env: Env, userId: string): Promise<AuthUser |
         email,
         wallet_address,
         display_name,
+        NULL AS username,
         NULL AS avatar_url,
         NULL AS bio,
         NULL AS selected_avatar_id,
@@ -102,6 +109,7 @@ export async function findUserByDisplayName(env: Env, displayName: string): Prom
         email,
         wallet_address,
         display_name,
+        NULL AS username,
         NULL AS avatar_url,
         NULL AS bio,
         NULL AS selected_avatar_id,
@@ -118,24 +126,52 @@ export async function findUserByDisplayName(env: Env, displayName: string): Prom
   return row ? mapUserRow(await withUserProfileFields(env, row, row.id)) : null;
 }
 
+export async function findUserByUsername(env: Env, username: string): Promise<AuthUser | null> {
+  try {
+    const row = await env.DB.prepare(
+      `
+        SELECT
+          id,
+          email,
+          wallet_address,
+          display_name,
+          username,
+          NULL AS avatar_url,
+          NULL AS bio,
+          NULL AS selected_avatar_id,
+          created_at,
+          updated_at
+        FROM users
+        WHERE lower(username) = lower(?)
+        LIMIT 1
+      `
+    )
+      .bind(username)
+      .first<UserRow>();
+
+    return row ? mapUserRow(await withUserProfileFields(env, row, row.id)) : null;
+  } catch (error) {
+    if (isMissingUsernameColumnError(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 export async function createUserForEmail(env: Env, email: string): Promise<AuthUser> {
   const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  const displayName = createDisplayNameFromEmail(email);
   const user: AuthUser = {
-    id: crypto.randomUUID(),
+    id,
     email,
     walletAddress: null,
-    displayName: createDisplayNameFromEmail(email),
+    displayName,
+    username: await createUniqueUsername(env, displayName, id),
     createdAt: now,
   };
 
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        INSERT INTO users (id, email, wallet_address, display_name, created_at, updated_at)
-        VALUES (?, ?, NULL, ?, ?, ?)
-      `
-    ).bind(user.id, user.email, user.displayName, now, now),
-  ]);
+  await insertUserRecord(env, user, now);
 
   await ensureFounderIdentityQualification(env, user.id, now);
 
@@ -144,22 +180,18 @@ export async function createUserForEmail(env: Env, email: string): Promise<AuthU
 
 export async function createUserForWallet(env: Env, walletAddress: string): Promise<AuthUser> {
   const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  const displayName = shortenAddress(walletAddress);
   const user: AuthUser = {
-    id: crypto.randomUUID(),
+    id,
     email: null,
     walletAddress,
-    displayName: shortenAddress(walletAddress),
+    displayName,
+    username: await createUniqueUsername(env, displayName, id),
     createdAt: now,
   };
 
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        INSERT INTO users (id, email, wallet_address, display_name, created_at, updated_at)
-        VALUES (?, NULL, ?, ?, ?, ?)
-      `
-    ).bind(user.id, walletAddress, user.displayName, now, now),
-  ]);
+  await insertUserRecord(env, user, now);
 
   await ensureFounderIdentityQualification(env, user.id, now);
 
@@ -168,24 +200,90 @@ export async function createUserForWallet(env: Env, walletAddress: string): Prom
 
 export async function createUserForPlayfun(env: Env, ogpId: string): Promise<AuthUser> {
   const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  const displayName = createDisplayNameFromPlayfunOgpId(ogpId);
   const user: AuthUser = {
-    id: crypto.randomUUID(),
+    id,
     email: null,
     walletAddress: null,
-    displayName: createDisplayNameFromPlayfunOgpId(ogpId),
+    displayName,
+    username: await createUniqueUsername(env, displayName, id),
     createdAt: now,
   };
 
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        INSERT INTO users (id, email, wallet_address, display_name, created_at, updated_at)
-        VALUES (?, NULL, NULL, ?, ?, ?)
-      `
-    ).bind(user.id, user.displayName, now, now),
-  ]);
+  await insertUserRecord(env, user, now);
 
   return user;
+}
+
+async function insertUserRecord(env: Env, user: AuthUser, now: string): Promise<void> {
+  try {
+    await env.DB.batch([
+      env.DB.prepare(
+        `
+          INSERT INTO users (id, email, wallet_address, display_name, username, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `
+      ).bind(
+        user.id,
+        user.email,
+        user.walletAddress,
+        user.displayName,
+        user.username ?? null,
+        now,
+        now
+      ),
+    ]);
+  } catch (error) {
+    if (!isMissingUsernameColumnError(error)) {
+      throw error;
+    }
+
+    await env.DB.batch([
+      env.DB.prepare(
+        `
+          INSERT INTO users (id, email, wallet_address, display_name, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `
+      ).bind(user.id, user.email, user.walletAddress, user.displayName, now, now),
+    ]);
+  }
+}
+
+async function createUniqueUsername(
+  env: Env,
+  displayName: string,
+  fallbackSeed: string,
+): Promise<string | null> {
+  if (!(await hasUsernameColumn(env))) {
+    return null;
+  }
+
+  const seed = fallbackSeed.replace(/-/g, '').slice(0, 12);
+  const base = deriveProfileUsernameBase(displayName, `player${seed}`);
+  const trimmedBase = base.slice(0, PROFILE_USERNAME_MAX_LENGTH);
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const suffix = attempt === 0 ? '' : `-${attempt + 1}`;
+    const candidate = `${trimmedBase.slice(0, PROFILE_USERNAME_MAX_LENGTH - suffix.length)}${suffix}`;
+    const existing = await findUserByUsername(env, candidate);
+    if (!existing) {
+      return candidate;
+    }
+  }
+
+  return `player-${seed.slice(0, 16)}`.slice(0, PROFILE_USERNAME_MAX_LENGTH);
+}
+
+async function hasUsernameColumn(env: Env): Promise<boolean> {
+  try {
+    await env.DB.prepare('SELECT username FROM users LIMIT 1').first<{ username: string | null }>();
+    return true;
+  } catch (error) {
+    if (isMissingUsernameColumnError(error)) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 export async function attachWalletToUser(
@@ -240,6 +338,7 @@ export async function updateUserProfile(
   user: AuthUser,
   updates: {
     displayName?: string;
+    username?: string | null;
     avatarUrl?: string | null;
     bio?: string | null;
     selectedAvatarId?: string | null;
@@ -247,20 +346,31 @@ export async function updateUserProfile(
 ): Promise<AuthUser> {
   const updatedAt = new Date().toISOString();
   const nextDisplayName = updates.displayName ?? user.displayName;
+  const nextUsername = updates.username === undefined ? (user.username ?? null) : updates.username;
   const nextAvatarUrl =
     updates.avatarUrl === undefined ? (user.avatarUrl ?? null) : updates.avatarUrl;
   const nextBio = updates.bio === undefined ? (user.bio ?? null) : updates.bio;
   const nextSelectedAvatarId =
     updates.selectedAvatarId === undefined ? (user.selectedAvatarId ?? null) : updates.selectedAvatarId;
-  const statements = [
-    env.DB.prepare(
-      `
-        UPDATE users
-        SET display_name = ?, avatar_url = ?, bio = ?, selected_avatar_id = ?, updated_at = ?
-        WHERE id = ?
-      `
-    ).bind(nextDisplayName, nextAvatarUrl, nextBio, nextSelectedAvatarId, updatedAt, user.id),
-  ];
+  const statements = updates.username === undefined
+    ? [
+      env.DB.prepare(
+        `
+          UPDATE users
+          SET display_name = ?, avatar_url = ?, bio = ?, selected_avatar_id = ?, updated_at = ?
+          WHERE id = ?
+        `
+      ).bind(nextDisplayName, nextAvatarUrl, nextBio, nextSelectedAvatarId, updatedAt, user.id),
+    ]
+    : [
+      env.DB.prepare(
+        `
+          UPDATE users
+          SET display_name = ?, username = ?, avatar_url = ?, bio = ?, selected_avatar_id = ?, updated_at = ?
+          WHERE id = ?
+        `
+      ).bind(nextDisplayName, nextUsername, nextAvatarUrl, nextBio, nextSelectedAvatarId, updatedAt, user.id),
+    ];
 
   if (nextDisplayName !== user.displayName) {
     statements.push(
@@ -322,6 +432,13 @@ export async function updateUserProfile(
   try {
     await env.DB.batch(statements);
   } catch (error) {
+    if (isMissingUsernameColumnError(error) && updates.username !== undefined) {
+      throw new HttpError(
+        503,
+        'Profile sharing needs the latest database migration before usernames can be saved.'
+      );
+    }
+
     if (isMissingUserProfileColumnError(error)) {
       throw new HttpError(
         503,
@@ -335,6 +452,7 @@ export async function updateUserProfile(
   return {
     ...user,
     displayName: nextDisplayName,
+    username: nextUsername,
     avatarUrl: nextAvatarUrl,
     bio: nextBio,
     selectedAvatarId: nextSelectedAvatarId,
@@ -462,6 +580,7 @@ export async function loadMagicLinkByTokenHash(
         m.created_at,
         u.wallet_address,
         u.display_name,
+        NULL AS username,
         NULL AS avatar_url,
         NULL AS bio,
         NULL AS selected_avatar_id,
@@ -637,6 +756,7 @@ export async function loadSessionFromToken(env: Env, token: string): Promise<Aut
         u.email,
         u.wallet_address,
         u.display_name,
+        NULL AS username,
         NULL AS avatar_url,
         NULL AS bio,
         NULL AS selected_avatar_id,
@@ -671,6 +791,7 @@ export async function loadSessionFromToken(env: Env, token: string): Promise<Aut
       email: hydratedRow.email,
       walletAddress: hydratedRow.wallet_address,
       displayName: hydratedRow.display_name,
+      username: hydratedRow.username ?? null,
       createdAt: hydratedRow.user_created_at,
       avatarUrl: hydratedRow.avatar_url,
       bio: hydratedRow.bio,
@@ -697,6 +818,7 @@ export async function loadApiTokenAuth(
         u.email,
         u.wallet_address,
         u.display_name,
+        NULL AS username,
         NULL AS avatar_url,
         NULL AS bio,
         NULL AS selected_avatar_id,
@@ -721,6 +843,7 @@ export async function loadApiTokenAuth(
     email: hydratedRow.email,
     walletAddress: hydratedRow.wallet_address,
     displayName: hydratedRow.display_name,
+    username: hydratedRow.username ?? null,
     createdAt: hydratedRow.user_created_at,
     avatarUrl: hydratedRow.avatar_url,
     bio: hydratedRow.bio,
@@ -872,6 +995,7 @@ export function mapUserRow(row: UserRow): AuthUser {
     email: row.email,
     walletAddress: row.wallet_address,
     displayName: row.display_name,
+    username: row.username ?? null,
     createdAt: row.created_at,
     avatarUrl: row.avatar_url,
     bio: row.bio,
@@ -881,6 +1005,7 @@ export function mapUserRow(row: UserRow): AuthUser {
 
 async function withUserProfileFields<
   T extends {
+    username?: string | null;
     avatar_url: string | null;
     bio: string | null;
     selected_avatar_id: string | null;
@@ -900,7 +1025,76 @@ async function withUserProfileFields<
 async function loadOptionalUserProfileFields(
   env: Env,
   userId: string
-): Promise<{ avatar_url: string | null; bio: string | null; selected_avatar_id: string | null }> {
+): Promise<{
+  username: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  selected_avatar_id: string | null;
+}> {
+  try {
+    const row = await env.DB.prepare(
+      `
+        SELECT username, avatar_url, bio, selected_avatar_id
+        FROM users
+        WHERE id = ?
+        LIMIT 1
+      `
+    )
+      .bind(userId)
+      .first<{
+        username: string | null;
+        avatar_url: string | null;
+        bio: string | null;
+        selected_avatar_id: string | null;
+      }>();
+
+    return {
+      username: row?.username ?? null,
+      avatar_url: row?.avatar_url ?? null,
+      bio: row?.bio ?? null,
+      selected_avatar_id: row?.selected_avatar_id ?? null,
+    };
+  } catch (error) {
+    if (isMissingUsernameColumnError(error)) {
+      return loadOptionalUserProfileFieldsWithoutUsername(env, userId);
+    }
+    if (isMissingSelectedAvatarColumnError(error)) {
+      return loadLegacyOptionalUserProfileFields(env, userId);
+    }
+    if (isMissingUserProfileColumnError(error)) {
+      return {
+        username: null,
+        avatar_url: null,
+        bio: null,
+        selected_avatar_id: null,
+      };
+    }
+
+    throw error;
+  }
+}
+
+function isMissingUserProfileColumnError(error: unknown): boolean {
+  return error instanceof Error && /no such column:\s*(username|avatar_url|bio|selected_avatar_id)/i.test(error.message);
+}
+
+function isMissingUsernameColumnError(error: unknown): boolean {
+  return error instanceof Error && /no such column:\s*username/i.test(error.message);
+}
+
+function isMissingSelectedAvatarColumnError(error: unknown): boolean {
+  return error instanceof Error && /no such column:\s*selected_avatar_id/i.test(error.message);
+}
+
+async function loadOptionalUserProfileFieldsWithoutUsername(
+  env: Env,
+  userId: string
+): Promise<{
+  username: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  selected_avatar_id: string | null;
+}> {
   try {
     const row = await env.DB.prepare(
       `
@@ -914,6 +1108,7 @@ async function loadOptionalUserProfileFields(
       .first<{ avatar_url: string | null; bio: string | null; selected_avatar_id: string | null }>();
 
     return {
+      username: null,
       avatar_url: row?.avatar_url ?? null,
       bio: row?.bio ?? null,
       selected_avatar_id: row?.selected_avatar_id ?? null,
@@ -922,30 +1117,19 @@ async function loadOptionalUserProfileFields(
     if (isMissingSelectedAvatarColumnError(error)) {
       return loadLegacyOptionalUserProfileFields(env, userId);
     }
-    if (isMissingUserProfileColumnError(error)) {
-      return {
-        avatar_url: null,
-        bio: null,
-        selected_avatar_id: null,
-      };
-    }
-
     throw error;
   }
-}
-
-function isMissingUserProfileColumnError(error: unknown): boolean {
-  return error instanceof Error && /no such column:\s*(avatar_url|bio|selected_avatar_id)/i.test(error.message);
-}
-
-function isMissingSelectedAvatarColumnError(error: unknown): boolean {
-  return error instanceof Error && /no such column:\s*selected_avatar_id/i.test(error.message);
 }
 
 async function loadLegacyOptionalUserProfileFields(
   env: Env,
   userId: string
-): Promise<{ avatar_url: string | null; bio: string | null; selected_avatar_id: string | null }> {
+): Promise<{
+  username: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  selected_avatar_id: string | null;
+}> {
   const row = await env.DB.prepare(
     `
       SELECT avatar_url, bio
@@ -958,6 +1142,7 @@ async function loadLegacyOptionalUserProfileFields(
     .first<{ avatar_url: string | null; bio: string | null }>();
 
   return {
+    username: null,
     avatar_url: row?.avatar_url ?? null,
     bio: row?.bio ?? null,
     selected_avatar_id: null,

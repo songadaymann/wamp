@@ -1,5 +1,9 @@
 import type { UserProfileUpdateRequestBody, UserProfileUpdateResponse } from '../../../profiles/model';
 import {
+  normalizeProfileUsername,
+  validateProfileUsername,
+} from '../../../profiles/username';
+import {
   CRYPTOPUNK_AVATAR_UNLOCK_PLAYER_LEVEL,
   CRYPTOPUNK_UNLOCK_OVERRIDE_HEADER,
   parseCryptopunkAvatarId,
@@ -11,7 +15,7 @@ import {
 } from '../../../player/avatar/unlocks';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
-import { findUserByDisplayName, updateUserProfile } from '../auth/store';
+import { findUserByDisplayName, findUserByUsername, updateUserProfile } from '../auth/store';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth } from '../auth/request';
 import { assertPlayfunOnlyDisplayNameChangeAllowed } from '../playfun/leaderboardIsolation';
 import { loadPublicProgressionSummary } from '../progression/store';
@@ -35,6 +39,25 @@ export async function handleProfileGet(
   return jsonResponse(request, profile);
 }
 
+export async function handleProfileGetByUsername(
+  request: Request,
+  env: Env,
+  username: string
+): Promise<Response> {
+  const normalizedUsername = normalizeProfileUsername(username);
+  const validationMessage = validateProfileUsername(normalizedUsername);
+  if (validationMessage) {
+    throw new HttpError(400, validationMessage);
+  }
+
+  const user = await findUserByUsername(env, normalizedUsername);
+  if (!user) {
+    throw new HttpError(404, 'Profile not found.');
+  }
+
+  return handleProfileGet(request, env, user.id);
+}
+
 export async function handleProfileUpdateMe(request: Request, env: Env): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(env, request, 'update your profile');
   const body = await parseProfileUpdateBody(request);
@@ -44,6 +67,13 @@ export async function handleProfileUpdateMe(request: Request, env: Env): Promise
   const existingUser = await findUserByDisplayName(env, body.displayName);
   if (existingUser && existingUser.id !== auth.user.id) {
     throw new HttpError(409, 'That display name has already been claimed.');
+  }
+
+  if (body.username !== undefined) {
+    const existingUsernameUser = await findUserByUsername(env, body.username ?? '');
+    if (existingUsernameUser && existingUsernameUser.id !== auth.user.id) {
+      throw new HttpError(409, 'That username has already been claimed.');
+    }
   }
 
   const selectedAvatarId = await validateSelectedAvatarUpdate(
@@ -83,14 +113,33 @@ async function parseProfileUpdateBody(request: Request): Promise<UserProfileUpda
 
   const avatarUrl = normalizeAvatarUrl(body.avatarUrl);
   const bio = normalizeBio(body.bio);
+  const username = normalizeOptionalUsername(body.username);
   const selectedAvatarId = normalizeSelectedAvatarId(body.selectedAvatarId);
 
   return {
     displayName,
+    ...(username !== undefined ? { username } : {}),
     avatarUrl,
     bio,
     ...(selectedAvatarId !== undefined ? { selectedAvatarId } : {}),
   };
+}
+
+function normalizeOptionalUsername(value: unknown): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    throw new HttpError(400, 'Username is required.');
+  }
+
+  const username = normalizeProfileUsername(value);
+  const validationMessage = validateProfileUsername(username);
+  if (validationMessage) {
+    throw new HttpError(400, validationMessage);
+  }
+
+  return username;
 }
 
 function normalizeDisplayName(value: unknown): string {

@@ -50,7 +50,7 @@ import {
 } from './worker/mint/routes';
 import { syncRoomOwnershipFromChain } from './worker/mint/service';
 import { handlePlayfunConfig, handlePlayfunFlush } from './worker/playfun/routes';
-import { handleProfileGet, handleProfileUpdateMe } from './worker/profiles/routes';
+import { handleProfileGet, handleProfileGetByUsername, handleProfileUpdateMe } from './worker/profiles/routes';
 import {
   enqueuePlayfunPointSync,
   flushPlayfunPointSync,
@@ -275,6 +275,11 @@ export default {
 
       if (url.pathname === '/api/profiles/me/avatar' && request.method === 'POST') {
         return await handleAvatarSelectionUpdate(request, env);
+      }
+
+      const profileByUsernameMatch = /^\/api\/profiles\/by-username\/([^/]+)$/.exec(url.pathname);
+      if (profileByUsernameMatch && request.method === 'GET') {
+        return await handleProfileGetByUsername(request, env, decodeURIComponent(profileByUsernameMatch[1]));
       }
 
       const profileMatch = /^\/api\/profiles\/([^/]+)$/.exec(url.pathname);

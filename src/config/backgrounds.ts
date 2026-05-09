@@ -47,6 +47,30 @@ export const BACKGROUND_GROUPS: BackgroundGroup[] = [
     ],
   },
   {
+    id: 'spooky_moon',
+    name: 'Spooky Moon',
+    layers: [
+      { key: 'spooky_moon_sky', path: 'assets/backgrounds/spooky_moon/sky.png', width: 320, height: 180, scrollFactor: 0.0 },
+      { key: 'spooky_moon_moon', path: 'assets/backgrounds/spooky_moon/moon.png', width: 320, height: 180, scrollFactor: 0.03 },
+      { key: 'spooky_moon_cloud_1', path: 'assets/backgrounds/spooky_moon/cloud_1.png', width: 320, height: 180, scrollFactor: 0.08 },
+      { key: 'spooky_moon_cloud_2', path: 'assets/backgrounds/spooky_moon/cloud_2.png', width: 320, height: 180, scrollFactor: 0.14 },
+      { key: 'spooky_moon_cloud_3', path: 'assets/backgrounds/spooky_moon/cloud_3.png', width: 320, height: 180, scrollFactor: 0.22 },
+    ],
+  },
+  {
+    id: 'spooky_mountain',
+    name: 'Spooky Mountain',
+    layers: [
+      { key: 'spooky_mountain_sky', path: 'assets/backgrounds/spooky_mountain/sky.png', width: 320, height: 180, scrollFactor: 0.0 },
+      { key: 'spooky_mountain_moon', path: 'assets/backgrounds/spooky_mountain/moon.png', width: 320, height: 180, scrollFactor: 0.03 },
+      { key: 'spooky_mountain_cloud_1', path: 'assets/backgrounds/spooky_mountain/cloud_1.png', width: 320, height: 180, scrollFactor: 0.06 },
+      { key: 'spooky_mountain_cloud_2', path: 'assets/backgrounds/spooky_mountain/cloud_2.png', width: 320, height: 180, scrollFactor: 0.1 },
+      { key: 'spooky_mountain_cloud_3', path: 'assets/backgrounds/spooky_mountain/cloud_3.png', width: 320, height: 180, scrollFactor: 0.16 },
+      { key: 'spooky_mountain_far', path: 'assets/backgrounds/spooky_mountain/mountain_far.png', width: 320, height: 180, scrollFactor: 0.32 },
+      { key: 'spooky_mountain_near', path: 'assets/backgrounds/spooky_mountain/mountain_near.png', width: 320, height: 180, scrollFactor: 0.5 },
+    ],
+  },
+  {
     id: 'grassland',
     name: 'Grassland',
     layers: [

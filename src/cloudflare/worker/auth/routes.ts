@@ -221,6 +221,7 @@ export async function handleVerifyMagicLink(
     email: row.email,
     walletAddress: row.wallet_address,
     displayName: row.display_name,
+    username: row.username ?? null,
     createdAt: row.user_created_at,
     avatarUrl: row.avatar_url,
     bio: row.bio,

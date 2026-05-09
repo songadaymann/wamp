@@ -25,6 +25,11 @@ import { setStoredPlayerAvatarId } from '../../player/avatar/storage';
 import { resolveSelectablePlayerAvatarId } from '../../player/avatar/unlocks';
 import type { ProfilePublishedRoomEntry, ProfileStatsSummary, UserProfileResponse } from '../../profiles/model';
 import { createProfileRepository, type ProfileRepository } from '../../profiles/profileRepository';
+import {
+  buildProfileShareUrl,
+  deriveProfileUsernameBase,
+  parseProfileSharePath,
+} from '../../profiles/username';
 import type { ProgressionLaneSummary, ProgressionSummary } from '../../progression/model';
 import { getActiveOverworldScene } from './sceneBridge';
 import {
@@ -39,6 +44,7 @@ type ProfileTabId = 'rooms' | 'progress' | 'stats';
 type ProfileModalElements = {
   modal: HTMLElement | null;
   closeButton: HTMLButtonElement | null;
+  shareButton: HTMLButtonElement | null;
   meta: HTMLElement | null;
   error: HTMLElement | null;
   title: HTMLElement | null;
@@ -56,12 +62,14 @@ type ProfileModalElements = {
   cryptopunkStatus: HTMLElement | null;
   cryptopunkActionButton: HTMLButtonElement | null;
   displayName: HTMLElement | null;
+  usernameDisplay: HTMLElement | null;
   joinedDate: HTMLElement | null;
   heroLanes: HTMLElement | null;
   heroProgress: HTMLElement | null;
   overviewBio: HTMLElement | null;
   editFields: HTMLElement | null;
   displayNameInput: HTMLInputElement | null;
+  usernameInput: HTMLInputElement | null;
   bioInput: HTMLTextAreaElement | null;
   saveButton: HTMLButtonElement | null;
   saveStatus: HTMLElement | null;
@@ -138,6 +146,10 @@ export class ProfileModalController {
 
   private readonly handleCloseClick = () => {
     this.close();
+  };
+
+  private readonly handleShareClick = () => {
+    void this.shareCurrentProfile();
   };
 
   private readonly handleBackdropClick = (event: Event) => {
@@ -227,6 +239,7 @@ export class ProfileModalController {
     this.elements = {
       modal: this.doc.getElementById('profile-modal'),
       closeButton: this.doc.getElementById('btn-profile-close') as HTMLButtonElement | null,
+      shareButton: this.doc.getElementById('btn-profile-share') as HTMLButtonElement | null,
       meta: this.doc.getElementById('profile-modal-meta'),
       error: this.doc.getElementById('profile-modal-error'),
       title: this.doc.getElementById('profile-modal-title'),
@@ -244,12 +257,14 @@ export class ProfileModalController {
       cryptopunkStatus: this.doc.getElementById('profile-cryptopunk-status'),
       cryptopunkActionButton: this.doc.getElementById('btn-profile-cryptopunk-action') as HTMLButtonElement | null,
       displayName: this.doc.getElementById('profile-display-name'),
+      usernameDisplay: this.doc.getElementById('profile-username'),
       joinedDate: this.doc.getElementById('profile-joined-date'),
       heroLanes: this.doc.getElementById('profile-hero-lanes'),
       heroProgress: this.doc.getElementById('profile-hero-progress'),
       overviewBio: this.doc.getElementById('profile-overview-bio'),
       editFields: this.doc.getElementById('profile-edit-fields'),
       displayNameInput: this.doc.getElementById('profile-display-name-input') as HTMLInputElement | null,
+      usernameInput: this.doc.getElementById('profile-username-input') as HTMLInputElement | null,
       bioInput: this.doc.getElementById('profile-bio-input') as HTMLTextAreaElement | null,
       saveButton: this.doc.getElementById('btn-profile-save') as HTMLButtonElement | null,
       saveStatus: this.doc.getElementById('profile-save-status'),
@@ -272,6 +287,7 @@ export class ProfileModalController {
 
   init(): void {
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
+    this.elements.shareButton?.addEventListener('click', this.handleShareClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.elements.avatarPickerModal?.addEventListener('click', this.handleAvatarPickerBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
@@ -298,6 +314,9 @@ export class ProfileModalController {
     this.elements.displayNameInput?.addEventListener('input', () => {
       this.renderAvatar();
     });
+    this.elements.usernameInput?.addEventListener('input', () => {
+      this.renderShareControls();
+    });
     for (const [tabId, button] of Object.entries(this.elements.tabButtons) as Array<
       [ProfileTabId, HTMLButtonElement | null]
     >) {
@@ -306,6 +325,61 @@ export class ProfileModalController {
         this.activeTabAutoSelected = true;
         this.renderTabs();
       });
+    }
+    this.openProfileFromCurrentPath();
+  }
+
+  private openProfileFromCurrentPath(): void {
+    const username = parseProfileSharePath(this.windowObj.location.pathname);
+    if (!username) {
+      return;
+    }
+
+    void this.openByUsername(username);
+  }
+
+  private async openByUsername(username: string): Promise<void> {
+    if (!this.elements.modal) {
+      return;
+    }
+
+    const routeKey = `username:${username}`;
+    this.currentProfileUserId = routeKey;
+    this.activeTab = 'rooms';
+    this.activeTabAutoSelected = false;
+    this.loading = true;
+    this.avatarPreviewBroken = false;
+    this.selectedAvatarIdDraft = DEFAULT_PLAYER_AVATAR_ID;
+    this.setError(null);
+    this.setSaveStatus('');
+    this.currentProfile = null;
+    this.elements.modal.classList.remove('hidden');
+    this.elements.modal.setAttribute('aria-hidden', 'false');
+    this.render();
+
+    const loadToken = ++this.loadToken;
+    try {
+      const profile = await this.profileRepository.loadProfileByUsername(username);
+      if (loadToken !== this.loadToken || this.currentProfileUserId !== routeKey) {
+        return;
+      }
+
+      this.currentProfileUserId = profile.userId;
+      this.profileCache.set(profile.userId, profile);
+      this.currentProfile = profile;
+      this.selectedAvatarIdDraft = resolveSelectablePlayerAvatarId(profile.selectedAvatarId);
+      this.loading = false;
+      this.selectDefaultTab(profile);
+      this.render();
+    } catch (error) {
+      if (loadToken !== this.loadToken || this.currentProfileUserId !== routeKey) {
+        return;
+      }
+
+      this.loading = false;
+      this.currentProfile = null;
+      this.setError(error instanceof Error ? error.message : 'Failed to load profile.');
+      this.render();
     }
   }
 
@@ -395,6 +469,7 @@ export class ProfileModalController {
     }
 
     const displayName = this.elements.displayNameInput?.value.trim() ?? '';
+    const username = this.elements.usernameInput?.value.trim() ?? '';
     const bio = this.elements.bioInput?.value ?? '';
 
     this.saving = true;
@@ -405,6 +480,7 @@ export class ProfileModalController {
     try {
       const response = await this.profileRepository.updateMyProfile({
         displayName,
+        username,
         avatarUrl: null,
         bio,
         selectedAvatarId: this.selectedAvatarIdDraft,
@@ -458,6 +534,11 @@ export class ProfileModalController {
         : '';
     }
 
+    if (this.elements.usernameDisplay) {
+      this.elements.usernameDisplay.textContent = profile?.username ? `@${profile.username}` : '';
+      this.elements.usernameDisplay.classList.toggle('hidden', !profile?.username);
+    }
+
     if (this.elements.editFields) {
       this.elements.editFields.classList.toggle('hidden', !profile?.canEdit);
     }
@@ -472,6 +553,13 @@ export class ProfileModalController {
         this.elements.displayNameInput.value = profile.displayName;
       }
       this.elements.displayNameInput.disabled = this.saving;
+    }
+
+    if (this.elements.usernameInput && profile?.canEdit) {
+      if (this.doc.activeElement !== this.elements.usernameInput) {
+        this.elements.usernameInput.value = profile.username ?? deriveProfileUsernameBase(profile.displayName);
+      }
+      this.elements.usernameInput.disabled = this.saving;
     }
 
     if (this.elements.bioInput && profile?.canEdit) {
@@ -493,11 +581,56 @@ export class ProfileModalController {
     }
 
     this.renderAvatar();
+    this.renderShareControls();
     this.renderAvatarPicker();
     this.renderRooms(profile?.publishedRooms ?? []);
     this.renderProgress(profile?.progression ?? null);
     this.renderStats(profile?.stats ?? null, profile?.publishedCourseCount ?? 0);
     this.renderTabs();
+  }
+
+  private renderShareControls(): void {
+    if (!this.elements.shareButton) {
+      return;
+    }
+
+    const profile = this.currentProfile;
+    const username = profile?.canEdit
+      ? this.elements.usernameInput?.value.trim() || profile.username
+      : profile?.username;
+    const canShare = Boolean(profile && username && !this.loading);
+    this.elements.shareButton.classList.toggle('hidden', !profile);
+    this.elements.shareButton.disabled = !canShare;
+    this.elements.shareButton.textContent = canShare ? 'Copy Link' : 'No Link';
+  }
+
+  private async shareCurrentProfile(): Promise<void> {
+    const profile = this.currentProfile;
+    const username = profile?.canEdit
+      ? this.elements.usernameInput?.value.trim() || profile.username
+      : profile?.username;
+    if (!profile || !username) {
+      return;
+    }
+
+    const shareUrl = buildProfileShareUrl(username, this.windowObj.location.href);
+    try {
+      if (!this.windowObj.navigator.clipboard) {
+        throw new Error('Clipboard unavailable.');
+      }
+      await this.windowObj.navigator.clipboard.writeText(shareUrl);
+      if (this.elements.shareButton) {
+        this.elements.shareButton.textContent = 'Copied';
+        this.windowObj.setTimeout(() => this.renderShareControls(), 1400);
+      }
+      this.setSaveStatus('Profile link copied.');
+    } catch {
+      if (this.elements.shareButton) {
+        this.elements.shareButton.textContent = 'Copy Failed';
+        this.windowObj.setTimeout(() => this.renderShareControls(), 1400);
+      }
+      this.setSaveStatus(shareUrl);
+    }
   }
 
   private renderAvatar(): void {
