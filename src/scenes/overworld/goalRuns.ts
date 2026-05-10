@@ -26,7 +26,11 @@ import {
   requestPostRunGuestClaim,
   requestPostRunRating,
 } from '../../progression/postRunRatingEvents';
-import { createPostRunClearReward, notifyRewardStings } from '../../progression/rewardStings';
+import {
+  buildLeaderboardRankRewardStings,
+  createPostRunClearReward,
+  notifyRewardStings,
+} from '../../progression/rewardStings';
 import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
 
 export type GoalRunLeaderboardState = 'idle' | 'loading' | 'ready' | 'error';
@@ -123,6 +127,7 @@ export class OverworldGoalRunController {
   private leaderboardState: GoalRunLeaderboardState = 'idle';
   private leaderboardMessage: string | null = null;
   private leaderboardRequestKey: string | null = null;
+  private readonly promptedPostRunRatingKeys = new Set<string>();
 
   constructor(private readonly options: OverworldGoalRunControllerOptions) {}
 
@@ -940,6 +945,16 @@ export class OverworldGoalRunController {
     runState.submissionMessage = 'Submitting run...';
 
     const payload = this.buildRunFinishPayload(runState, result);
+    let previousLeaderboard = this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard)
+      ? this.currentRoomLeaderboard
+      : null;
+    if (result === 'completed' && previousLeaderboard === null) {
+      previousLeaderboard = await this.loadFreshRoomLeaderboard(runState);
+    }
+    const previousViewerBest = previousLeaderboard?.viewerBest ?? null;
+    const previousViewerRank = previousLeaderboard?.viewerRank ?? null;
+    const previousRoomTitle = previousLeaderboard?.roomTitle ?? null;
+    const postRunPromptKey = this.buildPostRunRatingPromptKey(runState);
 
     try {
       await this.options.runRepository.finishRun(runState.attemptId, payload);
@@ -954,26 +969,42 @@ export class OverworldGoalRunController {
             ? 'Failed run submitted.'
             : 'Run marked abandoned.';
       if (result === 'completed') {
+        const refreshedLeaderboard = await this.loadFreshRoomLeaderboard(runState);
+        const currentViewerRank = refreshedLeaderboard?.viewerRank ?? null;
+        const contentTitle = refreshedLeaderboard?.roomTitle ?? previousRoomTitle;
+        const leaderboardRewards = buildLeaderboardRankRewardStings({
+          previousViewerRank,
+          currentViewerRank,
+          contentTitle,
+        });
         const shouldPromptForRating =
-          this.currentRoomLeaderboard === null
-          || this.currentRoomLeaderboard.viewerBest === null;
+          previousViewerBest === null &&
+          !this.promptedPostRunRatingKeys.has(postRunPromptKey);
+        const rewards = [
+          ...(shouldPromptForRating
+            ? [
+                createPostRunClearReward({
+                  contentType: 'room',
+                  contentTitle,
+                  elapsedMs: payload.elapsedMs,
+                  deaths: payload.deaths,
+                  score: payload.score ?? null,
+                }),
+              ]
+            : []),
+          ...leaderboardRewards,
+        ];
+        notifyRewardStings(rewards);
         if (shouldPromptForRating) {
-          notifyRewardStings([
-            createPostRunClearReward({
-              contentType: 'room',
-              contentTitle: this.currentRoomLeaderboard?.roomTitle ?? null,
-              elapsedMs: payload.elapsedMs,
-              deaths: payload.deaths,
-              score: payload.score ?? null,
-            }),
-          ]);
+          this.promptedPostRunRatingKeys.add(postRunPromptKey);
           requestPostRunRating({
             contentType: 'room',
             contentId: runState.roomId,
-            contentTitle: null,
+            contentTitle,
             roomCoordinates: { ...runState.roomCoordinates },
             version: runState.roomVersion,
-            previousViewerRank: this.currentRoomLeaderboard?.viewerRank ?? null,
+            previousViewerRank,
+            suppressLeaderboardRewardStings: leaderboardRewards.length > 0,
             elapsedMs: payload.elapsedMs,
             deaths: payload.deaths,
             score: payload.score ?? null,
@@ -1001,6 +1032,43 @@ export class OverworldGoalRunController {
       if (result === 'completed') {
         this.options.showTransientStatus?.(message);
       }
+    }
+  }
+
+  private buildPostRunRatingPromptKey(runState: GoalRunState): string {
+    return `${runState.roomId}:${runState.roomVersion}`;
+  }
+
+  private leaderboardMatchesRun(
+    runState: GoalRunState,
+    leaderboard: RoomLeaderboardResponse | null,
+  ): boolean {
+    return (
+      leaderboard !== null &&
+      leaderboard.roomId === runState.roomId &&
+      leaderboard.roomVersion === runState.roomVersion
+    );
+  }
+
+  private async loadFreshRoomLeaderboard(
+    runState: GoalRunState,
+  ): Promise<RoomLeaderboardResponse | null> {
+    try {
+      const leaderboard = await this.options.runRepository.loadRoomLeaderboard(
+        runState.roomId,
+        runState.roomCoordinates,
+        runState.roomVersion,
+        5,
+      );
+      this.currentRoomLeaderboard = leaderboard;
+      this.leaderboardState = 'ready';
+      this.leaderboardMessage = leaderboard.entries.length
+        ? 'Leaderboard ready.'
+        : 'No ranked clears yet.';
+      return leaderboard;
+    } catch (error) {
+      console.warn('Failed to refresh leaderboard after room clear', error);
+      return null;
     }
   }
 

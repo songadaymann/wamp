@@ -8,7 +8,7 @@ import {
   type CourseRoomRef,
   type CourseSnapshot,
 } from '../../courses/model';
-import type { CourseRunFinishRequestBody } from '../../courses/runModel';
+import type { CourseLeaderboardResponse, CourseRunFinishRequestBody } from '../../courses/runModel';
 import { type GameObjectConfig } from '../../config';
 import {
   cloneRoomSnapshot,
@@ -29,7 +29,11 @@ import {
   requestPostRunGuestClaim,
   requestPostRunRating,
 } from '../../progression/postRunRatingEvents';
-import { createPostRunClearReward, notifyRewardStings } from '../../progression/rewardStings';
+import {
+  buildLeaderboardRankRewardStings,
+  createPostRunClearReward,
+  notifyRewardStings,
+} from '../../progression/rewardStings';
 import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
 
 export type CoursePlaybackRoomSourceMode = 'published' | 'draftPreview';
@@ -132,7 +136,7 @@ export class OverworldCoursePlaybackController {
 
   createCourseRunState(
     course: CourseSnapshot,
-    options?: { hadPreviousCompletion?: boolean },
+    options?: { hadPreviousCompletion?: boolean; previousViewerRank?: number | null },
   ): ActiveCourseRunState {
     const authState = getAuthDebugState();
     const leaderboardEligible =
@@ -159,6 +163,7 @@ export class OverworldCoursePlaybackController {
           : null,
       leaderboardEligible,
       hadPreviousCompletion: options?.hadPreviousCompletion ?? false,
+      previousViewerRank: options?.previousViewerRank ?? null,
       localOnlyMessage,
     });
   }
@@ -287,33 +292,51 @@ export class OverworldCoursePlaybackController {
       currentActiveCourseRun.submissionState = 'submitted';
       currentActiveCourseRun.submissionMessage = 'Ranked course run submitted.';
       this.host.clearVerificationTrace?.();
-      if (result === 'completed' && !currentActiveCourseRun.hadPreviousCompletion) {
-        notifyRewardStings([
-          createPostRunClearReward({
+      if (result === 'completed') {
+        const refreshedLeaderboard = await this.loadFreshCourseLeaderboard(currentActiveCourseRun.course);
+        const currentViewerRank = refreshedLeaderboard?.viewerRank ?? null;
+        const contentTitle = refreshedLeaderboard?.courseTitle ?? currentActiveCourseRun.course.title;
+        const leaderboardRewards = buildLeaderboardRankRewardStings({
+          previousViewerRank: currentActiveCourseRun.previousViewerRank,
+          currentViewerRank,
+          contentTitle,
+        });
+        const shouldPromptForRating = !currentActiveCourseRun.hadPreviousCompletion;
+        const rewards = [
+          ...(shouldPromptForRating
+            ? [
+                createPostRunClearReward({
+                  contentType: 'course',
+                  contentTitle,
+                  elapsedMs: body.elapsedMs,
+                  deaths: body.deaths,
+                  score: body.score ?? null,
+                }),
+              ]
+            : []),
+          ...leaderboardRewards,
+        ];
+        notifyRewardStings(rewards);
+        if (shouldPromptForRating) {
+          requestPostRunRating({
             contentType: 'course',
-            contentTitle: currentActiveCourseRun.course.title,
+            contentId: currentActiveCourseRun.course.id,
+            contentTitle,
+            version: currentActiveCourseRun.course.version,
+            previousViewerRank: currentActiveCourseRun.previousViewerRank,
+            suppressLeaderboardRewardStings: leaderboardRewards.length > 0,
             elapsedMs: body.elapsedMs,
             deaths: body.deaths,
             score: body.score ?? null,
-          }),
-        ]);
-        requestPostRunRating({
-          contentType: 'course',
-          contentId: currentActiveCourseRun.course.id,
-          contentTitle: currentActiveCourseRun.course.title,
-          version: currentActiveCourseRun.course.version,
-          previousViewerRank: null,
-          elapsedMs: body.elapsedMs,
-          deaths: body.deaths,
-          score: body.score ?? null,
-          autoSuggestedDifficulty: suggestProgressionDifficulty({
-            elapsedMs: body.elapsedMs,
-            deaths: body.deaths,
-            collectiblesCollected: body.collectiblesCollected,
-            enemiesDefeated: body.enemiesDefeated,
-            checkpointsReached: body.checkpointsReached,
-          }),
-        });
+            autoSuggestedDifficulty: suggestProgressionDifficulty({
+              elapsedMs: body.elapsedMs,
+              deaths: body.deaths,
+              collectiblesCollected: body.collectiblesCollected,
+              enemiesDefeated: body.enemiesDefeated,
+              checkpointsReached: body.checkpointsReached,
+            }),
+          });
+        }
       }
     } catch (error) {
       console.error('Failed to finish ranked course run', {
@@ -347,6 +370,17 @@ export class OverworldCoursePlaybackController {
       !authState.authenticated &&
       !isPlayfunSurfaceAuth(authState.source ?? null)
     );
+  }
+
+  private async loadFreshCourseLeaderboard(
+    course: CourseSnapshot,
+  ): Promise<CourseLeaderboardResponse | null> {
+    try {
+      return await this.courseRepository.loadCourseLeaderboard(course.id, course.version, 5);
+    } catch (error) {
+      console.warn('Failed to refresh leaderboard after course clear', error);
+      return null;
+    }
   }
 
   private async loadPinnedCourseRoomSnapshot(roomRef: CourseRoomRef): Promise<RoomSnapshot> {

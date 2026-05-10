@@ -97,22 +97,20 @@ export function notifyRewardStings(rewards: RewardSting[]): void {
 }
 
 export function buildRewardStings(options: BuildRewardStingsOptions): RewardSting[] {
-  const rewards: RewardSting[] = [];
+  const rewards: RewardSting[] = buildLeaderboardRankRewardStings({
+    previousViewerRank: options.previousViewerRank,
+    currentViewerRank: options.currentViewerRank,
+    contentTitle: options.contentTitle,
+  });
   const suppressedBadgeIds = new Set<string>();
   const newBadges = options.previousProgression
     ? getNewBadges(options.previousProgression, options.currentProgression)
     : [];
 
-  if (options.currentViewerRank !== null && options.currentViewerRank === 1 && options.previousViewerRank !== 1) {
+  if (rewards.some((reward) => reward.kind === 'number-one-takeover')) {
     suppressedBadgeIds.add(NUMBER_ONE_BADGE_ID);
-    rewards.push(createNumberOneReward(options.contentTitle, buildRankShiftText(options.previousViewerRank, options.currentViewerRank)));
-  } else if (
-    options.currentViewerRank !== null &&
-    options.currentViewerRank <= 10 &&
-    (options.previousViewerRank === null || options.previousViewerRank > 10)
-  ) {
+  } else if (rewards.some((reward) => reward.kind === 'top-10-entry')) {
     suppressedBadgeIds.add(TOP_TEN_BADGE_ID);
-    rewards.push(createTopTenReward(options.contentTitle, buildRankShiftText(options.previousViewerRank, options.currentViewerRank)));
   } else if (newBadges.some((badge) => badge.badgeId === NUMBER_ONE_BADGE_ID)) {
     suppressedBadgeIds.add(NUMBER_ONE_BADGE_ID);
     rewards.push(createNumberOneReward(options.contentTitle, null));
@@ -146,6 +144,39 @@ export function buildRewardStings(options: BuildRewardStingsOptions): RewardStin
   }
 
   return rewards;
+}
+
+export function buildLeaderboardRankRewardStings(options: {
+  previousViewerRank: number | null;
+  currentViewerRank: number | null;
+  contentTitle: string | null;
+}): RewardSting[] {
+  if (options.currentViewerRank === null) {
+    return [];
+  }
+
+  if (options.currentViewerRank === 1 && options.previousViewerRank !== 1) {
+    return [
+      createNumberOneReward(
+        options.contentTitle,
+        buildRankShiftText(options.previousViewerRank, options.currentViewerRank),
+      ),
+    ];
+  }
+
+  if (
+    options.currentViewerRank <= 10 &&
+    (options.previousViewerRank === null || options.previousViewerRank > 10)
+  ) {
+    return [
+      createTopTenReward(
+        options.contentTitle,
+        buildRankShiftText(options.previousViewerRank, options.currentViewerRank),
+      ),
+    ];
+  }
+
+  return [];
 }
 
 export function createPostRunClearReward(options: {

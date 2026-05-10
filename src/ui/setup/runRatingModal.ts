@@ -888,15 +888,18 @@ export class RunRatingModalController {
         ? this.roomSummary?.roomTitle ?? request.contentTitle
         : this.courseSummary?.courseTitle ?? request.contentTitle;
 
+    const currentViewerRank =
+      request.contentType === 'room'
+        ? this.roomSummary?.viewerRank ?? null
+        : this.courseSummary?.viewerRank ?? null;
     dispatchProgressionFeedback({
       previousProgression: this.baselineProgression,
       currentProgression: progression,
       progressionDelta,
-      previousViewerRank: request.previousViewerRank,
-      currentViewerRank:
-        request.contentType === 'room'
-          ? this.roomSummary?.viewerRank ?? null
-          : this.courseSummary?.viewerRank ?? null,
+      previousViewerRank: request.suppressLeaderboardRewardStings
+        ? currentViewerRank
+        : request.previousViewerRank,
+      currentViewerRank,
       contentType: request.contentType,
       contentId: request.contentId,
       contentTitle: resolvedTitle,

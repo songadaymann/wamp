@@ -11,6 +11,7 @@ interface BasePostRunRatingRequestDetail {
   contentTitle: string | null;
   version: number;
   previousViewerRank: number | null;
+  suppressLeaderboardRewardStings?: boolean;
   elapsedMs: number;
   deaths: number;
   score: number | null;
