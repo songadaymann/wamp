@@ -34,6 +34,11 @@ PLAYFUN_SECRET_KEY=
 PLAYFUN_GAME_ID=
 PLAYFUN_BASE_URL="https://api.play.fun"
 
+# Optional guestbook verification. Leave blank in local dev to bypass Turnstile.
+TURNSTILE_SITE_KEY=
+TURNSTILE_SECRET_KEY=
+GUESTBOOK_IP_HASH_SALT=
+
 # Optional user-uploaded room backgrounds.
 # Configure these as Worker secrets/vars in Cloudflare before enabling real uploads.
 CLOUDFLARE_ACCOUNT_ID=

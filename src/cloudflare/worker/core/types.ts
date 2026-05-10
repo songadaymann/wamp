@@ -64,6 +64,9 @@ export interface Env {
   BACKGROUND_UPLOAD_SKIP_AI_MODERATION?: string;
   OPENROUTER_API_KEY?: string;
   OPENROUTER_IMAGE_MODERATION_MODEL?: string;
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
+  GUESTBOOK_IP_HASH_SALT?: string;
 }
 
 export interface RoomRow {
@@ -145,6 +148,20 @@ export interface MusicPhraseRow {
 
 export interface MusicPhraseJoinRow extends MusicPhraseRow {
   source_phrase_ids_csv: string | null;
+}
+
+export interface GuestbookEntryRow {
+  id: string;
+  display_name: string;
+  body: string;
+  user_id: string | null;
+  guest_session_id?: string | null;
+  ip_hash?: string | null;
+  user_agent?: string | null;
+  turnstile_verified_at?: string | null;
+  created_at: string;
+  hidden_at?: string | null;
+  hidden_by_user_id?: string | null;
 }
 
 export interface AgentRow {

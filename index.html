@@ -1363,6 +1363,7 @@
             <div id="world-online-popover-list" class="world-online-popover-list"></div>
           </div>
         </div>
+        <button id="btn-guestbook-open" class="bar-btn bar-btn-small world-footer-controls-btn world-only-control" type="button">Guestbook</button>
         <button id="btn-world-controls" class="bar-btn bar-btn-small world-footer-controls-btn world-only-control" type="button">Controls</button>
       </div>
       <div class="bar-right">
@@ -1992,6 +1993,51 @@
           <div id="course-unpublish-reason" class="history-modal-meta hidden"></div>
           <div id="course-modal-status" class="history-modal-meta hidden"></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="guestbook-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel guestbook-modal-panel" role="dialog" aria-modal="true" aria-labelledby="guestbook-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Guestbook</div>
+          <h2 id="guestbook-title" class="history-modal-title">Sign the Guestbook</h2>
+          <div class="history-modal-meta">Leave your mark on WAMP.</div>
+        </div>
+        <button id="btn-guestbook-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div id="guestbook-status" class="history-modal-error hidden"></div>
+      <div class="guestbook-modal-body">
+        <section class="guestbook-list-section" aria-label="Guestbook signatures">
+          <div id="guestbook-empty" class="guestbook-empty hidden">No signatures yet.</div>
+          <div id="guestbook-list" class="guestbook-list"></div>
+        </section>
+        <form id="guestbook-form" class="guestbook-form">
+          <label class="goal-control-label" for="guestbook-name-input">Name</label>
+          <input
+            id="guestbook-name-input"
+            class="goal-input guestbook-input"
+            type="text"
+            maxlength="32"
+            spellcheck="false"
+            autocomplete="name"
+          />
+          <label class="goal-control-label" for="guestbook-message-input">Message</label>
+          <textarea
+            id="guestbook-message-input"
+            class="goal-input goal-textarea guestbook-message-input"
+            maxlength="280"
+            rows="4"
+            placeholder="I was here."
+            spellcheck="true"
+          ></textarea>
+          <div class="guestbook-form-footer">
+            <div id="guestbook-message-counter" class="history-modal-meta">0/280</div>
+          </div>
+          <div id="guestbook-turnstile" class="guestbook-turnstile hidden"></div>
+          <button id="btn-guestbook-submit" class="bar-btn" type="submit">Sign Guestbook</button>
+        </form>
       </div>
     </div>
   </div>

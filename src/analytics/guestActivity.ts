@@ -115,7 +115,7 @@ async function sendHeartbeat(keepalive: boolean): Promise<void> {
   }
 }
 
-function getGuestVisitSessionId(): string {
+export function getGuestVisitSessionId(): string {
   try {
     const existing = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
     if (existing && /^[A-Za-z0-9_-]{8,80}$/.test(existing)) {

@@ -4,6 +4,7 @@ import { ChatModerationModalController } from './chatModerationModal';
 import { ControlsModalController } from './controlsModal';
 import { CourseModalController } from './courseModal';
 import { ExploreModalController } from './exploreModal';
+import { GuestbookModalController } from './guestbookModal';
 import { RoomHistoryModalController } from './historyModal';
 import { LeaderboardModalController } from './leaderboardModal';
 import { RoomRushModalController } from './roomRushModal';
@@ -20,6 +21,7 @@ export function setupSceneCommands(
   historyModal: RoomHistoryModalController,
   leaderboardModal: LeaderboardModalController,
   exploreModal: ExploreModalController,
+  guestbookModal: GuestbookModalController,
   controlsModal: ControlsModalController,
   aboutModal: AboutModalController,
   chatModerationModal: ChatModerationModalController,
@@ -53,6 +55,7 @@ export function setupSceneCommands(
   const closeWorldPanels = () => {
     leaderboardModal.close();
     exploreModal.close();
+    guestbookModal.close();
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
@@ -154,6 +157,7 @@ export function setupSceneCommands(
     },
     onOpenExplore: () => {
       leaderboardModal.close();
+      guestbookModal.close();
       controlsModal.close();
       aboutModal.close();
       courseModal.close();
@@ -164,6 +168,7 @@ export function setupSceneCommands(
     },
     onOpenLeaderboard: () => {
       exploreModal.close();
+      guestbookModal.close();
       controlsModal.close();
       aboutModal.close();
       courseModal.close();
@@ -175,6 +180,7 @@ export function setupSceneCommands(
     onOpenRoomRush: () => {
       leaderboardModal.close();
       exploreModal.close();
+      guestbookModal.close();
       historyModal.close();
       controlsModal.close();
       aboutModal.close();
@@ -191,6 +197,7 @@ export function setupSceneCommands(
     onOpenControls: () => {
       leaderboardModal.close();
       exploreModal.close();
+      guestbookModal.close();
       historyModal.close();
       aboutModal.close();
       courseModal.close();
@@ -205,6 +212,7 @@ export function setupSceneCommands(
       }
 
       controlsModal.close();
+      guestbookModal.close();
       aboutModal.close();
       courseModal.close();
       roomRushModal.close();
@@ -219,6 +227,7 @@ export function setupSceneCommands(
     historyModal.close();
     leaderboardModal.close();
     exploreModal.close();
+    guestbookModal.close();
     controlsModal.close();
     courseModal.close();
     roomRushModal.close();
@@ -232,6 +241,7 @@ export function setupSceneCommands(
     historyModal.close();
     leaderboardModal.close();
     exploreModal.close();
+    guestbookModal.close();
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
@@ -250,6 +260,7 @@ export function setupSceneCommands(
     historyModal.close();
     leaderboardModal.close();
     exploreModal.close();
+    guestbookModal.close();
     controlsModal.close();
     aboutModal.close();
     courseModal.close();

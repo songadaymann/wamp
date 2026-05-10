@@ -11,6 +11,7 @@ import { CourseComposerPanelController } from './setup/courseComposerPanel';
 import { setupCustomSpriteEditor } from './setup/customSpriteEditor';
 import { ExploreModalController } from './setup/exploreModal';
 import { GuestBuilderClaimModalController } from './setup/guestBuilderClaimModal';
+import { GuestbookModalController } from './setup/guestbookModal';
 import { RoomHistoryModalController } from './setup/historyModal';
 import { setupKeyboardShortcutPassthrough } from './setup/keyboardPassthrough';
 import { LeaderboardModalController } from './setup/leaderboardModal';
@@ -42,6 +43,7 @@ export function setupUI(game: Phaser.Game): void {
   const leaderboardModal = new LeaderboardModalController(game);
   const exploreModal = new ExploreModalController(game);
   const guestBuilderClaimModal = new GuestBuilderClaimModalController();
+  const guestbookModal = new GuestbookModalController();
   const controlsModal = new ControlsModalController();
   const aboutModal = new AboutModalController();
   const chatModerationModal = new ChatModerationModalController();
@@ -68,6 +70,7 @@ export function setupUI(game: Phaser.Game): void {
       leaderboardModal.close();
       exploreModal.close();
       guestBuilderClaimModal.close();
+      guestbookModal.close();
       controlsModal.close();
       aboutModal.close();
       courseModal.close();
@@ -81,6 +84,7 @@ export function setupUI(game: Phaser.Game): void {
   leaderboardModal.init();
   exploreModal.init();
   guestBuilderClaimModal.init();
+  guestbookModal.init();
   controlsModal.init();
   aboutModal.init();
   chatModerationModal.init();
@@ -103,6 +107,7 @@ export function setupUI(game: Phaser.Game): void {
     historyModal,
     leaderboardModal,
     exploreModal,
+    guestbookModal,
     controlsModal,
     aboutModal,
     chatModerationModal,
