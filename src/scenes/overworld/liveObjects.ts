@@ -1530,6 +1530,18 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             continue;
           }
 
+          if (
+            isPushableObjectConfig(obstacle.config) &&
+            this.canActorPushPushableByContact(liveObject)
+          ) {
+            liveObject.worldColliders.push(
+              this.options.scene.physics.add.collider(liveObject.sprite, obstacle.sprite, () => {
+                this.handleActorPushableContact(liveObject, obstacle);
+              })
+            );
+            continue;
+          }
+
           liveObject.worldColliders.push(
             this.options.scene.physics.add.collider(liveObject.sprite, obstacle.sprite)
           );
@@ -4595,9 +4607,19 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     body: Phaser.Physics.Arcade.Body
   ): void {
     const bounds = this.getObjectHorizontalTravelBounds(room, liveObject.config);
+    const pushableAhead = this.getPushableContactAhead(liveObject, body);
+    const pushableBlockedAhead =
+      pushableAhead !== null &&
+      (
+        (liveObject.runtime.directionX < 0 && (pushableAhead.blocked.left || pushableAhead.touching.left)) ||
+        (liveObject.runtime.directionX > 0 && (pushableAhead.blocked.right || pushableAhead.touching.right))
+      );
     const touchingWall =
-      (body.blocked.left && liveObject.runtime.directionX < 0) ||
-      (body.blocked.right && liveObject.runtime.directionX > 0);
+      (
+        (body.blocked.left && liveObject.runtime.directionX < 0) ||
+        (body.blocked.right && liveObject.runtime.directionX > 0)
+      ) &&
+      (pushableAhead === null || pushableBlockedAhead);
     const reachedBounds =
       (liveObject.sprite.x <= bounds.left && liveObject.runtime.directionX < 0) ||
       (liveObject.sprite.x >= bounds.right && liveObject.runtime.directionX > 0);
@@ -4610,6 +4632,84 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     if (touchingWall || reachedBounds || missingGroundAhead) {
       liveObject.runtime.directionX *= -1;
     }
+  }
+
+  private canActorPushPushableByContact(liveObject: LoadedRoomObject): boolean {
+    return liveObject.config.id === 'penguin';
+  }
+
+  private handleActorPushableContact(
+    actor: LoadedRoomObject,
+    pushable: LoadedRoomObject,
+  ): void {
+    if (!this.canActorPushPushableByContact(actor)) {
+      return;
+    }
+
+    const actorBody = this.getDynamicBody(actor.sprite);
+    const pushableBody = this.getDynamicBody(pushable.sprite);
+    if (!actorBody || !pushableBody) {
+      return;
+    }
+
+    const directionX = actor.runtime.directionX >= 0 ? 1 : -1;
+    const actorBounds = getArcadeBodyBounds(actorBody);
+    const pushableBounds = getArcadeBodyBounds(pushableBody);
+    const verticalOverlap =
+      Math.min(actorBounds.bottom, pushableBounds.bottom) -
+      Math.max(actorBounds.top, pushableBounds.top);
+    const sideContact =
+      directionX > 0
+        ? actorBounds.right <= pushableBounds.right && actorBounds.centerX < pushableBounds.centerX
+        : actorBounds.left >= pushableBounds.left && actorBounds.centerX > pushableBounds.centerX;
+    if (verticalOverlap < Math.min(8, actorBounds.height * 0.5) || !sideContact) {
+      return;
+    }
+
+    pushableBody.setVelocityX(directionX * this.options.settings.penguinSpeed);
+  }
+
+  private getPushableContactAhead(
+    actor: LoadedRoomObject,
+    actorBody: Phaser.Physics.Arcade.Body,
+  ): Phaser.Physics.Arcade.Body | null {
+    if (!this.canActorPushPushableByContact(actor)) {
+      return null;
+    }
+
+    const directionX = actor.runtime.directionX >= 0 ? 1 : -1;
+    const actorBounds = getArcadeBodyBounds(actorBody);
+    for (const loadedRoom of this.options.getLoadedFullRooms()) {
+      for (const candidate of loadedRoom.liveObjects) {
+        if (
+          candidate === actor ||
+          !candidate.sprite.active ||
+          !isPushableObjectConfig(candidate.config) ||
+          !isDynamicArcadeBody(candidate.sprite.body as ArcadeObjectBody | null)
+        ) {
+          continue;
+        }
+
+        const candidateBody = candidate.sprite.body as Phaser.Physics.Arcade.Body;
+        const candidateBounds = getArcadeBodyBounds(candidateBody);
+        const verticalOverlap =
+          Math.min(actorBounds.bottom, candidateBounds.bottom) -
+          Math.max(actorBounds.top, candidateBounds.top);
+        if (verticalOverlap < Math.min(8, actorBounds.height * 0.5)) {
+          continue;
+        }
+
+        const horizontalGap =
+          directionX > 0
+            ? candidateBounds.left - actorBounds.right
+            : actorBounds.left - candidateBounds.right;
+        if (horizontalGap >= -2 && horizontalGap <= 3) {
+          return candidateBody;
+        }
+      }
+    }
+
+    return null;
   }
 
   private applyDirectionalFacing(
