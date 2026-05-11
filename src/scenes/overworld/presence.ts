@@ -21,6 +21,9 @@ import {
 } from '../../presence/worldPresence';
 import type { OverworldMode } from '../sceneData';
 
+const BROWSE_PRESENCE_DOT_MAX_TOTAL = 192;
+const BROWSE_PRESENCE_DOT_MAX_PER_ROOM = 12;
+
 export interface RenderedGhost {
   presence: WorldGhostPresence;
   halo: Phaser.GameObjects.Ellipse;
@@ -542,8 +545,8 @@ export class OverworldPresenceController {
 
   getSampledBrowsePresenceDots(
     visibleRooms: RoomCoordinates[],
-    maxDots = 96,
-    perRoomLimit = 4,
+    maxDots = BROWSE_PRESENCE_DOT_MAX_TOTAL,
+    perRoomLimit = BROWSE_PRESENCE_DOT_MAX_PER_ROOM,
   ): BrowsePresenceDotPresence[] {
     if (this.options.getMode() !== 'browse' || !this.snapshot?.enabled || visibleRooms.length === 0) {
       return [];

@@ -20,6 +20,7 @@ export type WorldPresenceAnimationState = DefaultPlayerAnimationState;
 
 const PRESENCE_MOVING_PUBLISH_INTERVAL_MS = 200;
 const PRESENCE_IDLE_KEEPALIVE_MS = 5_000;
+const REMOTE_PRESENCE_SNAPSHOT_FLUSH_INTERVAL_MS = 140;
 
 export interface WorldPresenceIdentity {
   userId: string;
@@ -88,6 +89,11 @@ interface PresenceUpsertMessage {
   peer: WorldGhostPresence;
 }
 
+interface PresenceUpsertsMessage {
+  type: 'upserts';
+  peers: WorldGhostPresence[];
+}
+
 interface PresenceRemoveMessage {
   type: 'remove';
   connectionId: string;
@@ -103,6 +109,7 @@ interface PresencePopulationsMessage {
 type PresenceMessage =
   | PresenceSnapshotMessage
   | PresenceUpsertMessage
+  | PresenceUpsertsMessage
   | PresenceRemoveMessage
   | PresencePopulationsMessage;
 
@@ -154,6 +161,9 @@ export class WorldPresenceClient {
   private lastPublishedPresenceSignature: string | null = null;
   private lastPublishedPreviewJson: string | null = null;
   private lastPublishedAt = 0;
+  private pendingSnapshotEmit = false;
+  private snapshotEmitTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastSnapshotEmittedAt = 0;
 
   constructor(private readonly options: WorldPresenceClientOptions) {
     this.emitSnapshot();
@@ -282,6 +292,7 @@ export class WorldPresenceClient {
   }
 
   destroy(): void {
+    this.clearQueuedSnapshotEmit();
     if (this.publishedShardId) {
       this.sendLeaveToShard(this.publishedShardId);
     }
@@ -444,6 +455,18 @@ export class WorldPresenceClient {
           roomId: roomIdFromCoordinates(message.peer.roomCoordinates),
         });
         break;
+      case 'upserts':
+        if (!Array.isArray(message.peers)) {
+          return;
+        }
+        for (const peer of message.peers) {
+          this.ghostsByConnectionId.set(peer.connectionId, {
+            ...peer,
+            shardId,
+            roomId: roomIdFromCoordinates(peer.roomCoordinates),
+          });
+        }
+        break;
       case 'remove':
         this.ghostsByConnectionId.delete(message.connectionId);
         break;
@@ -456,7 +479,7 @@ export class WorldPresenceClient {
         return;
     }
 
-    this.emitSnapshot();
+    this.queueSnapshotEmit();
   }
 
   private replaceRoomPopulations(
@@ -534,6 +557,8 @@ export class WorldPresenceClient {
   }
 
   private emitSnapshot(): void {
+    this.clearQueuedSnapshotEmit();
+    this.lastSnapshotEmittedAt = getNowMs();
     const connectedShards = Array.from(this.connectedShards).sort();
     const subscribedShards = Array.from(this.desiredShardIds).sort();
     const mergedRoomPopulations = new Map<string, number>();
@@ -599,6 +624,39 @@ export class WorldPresenceClient {
       roomPreviews,
     });
   }
+
+  private queueSnapshotEmit(): void {
+    this.pendingSnapshotEmit = true;
+    if (this.snapshotEmitTimer !== null) {
+      return;
+    }
+
+    const elapsed = getNowMs() - this.lastSnapshotEmittedAt;
+    const delay = Math.max(0, REMOTE_PRESENCE_SNAPSHOT_FLUSH_INTERVAL_MS - elapsed);
+    this.snapshotEmitTimer = setTimeout(() => {
+      this.snapshotEmitTimer = null;
+      if (!this.pendingSnapshotEmit) {
+        return;
+      }
+
+      this.pendingSnapshotEmit = false;
+      this.emitSnapshot();
+    }, delay);
+  }
+
+  private clearQueuedSnapshotEmit(): void {
+    this.pendingSnapshotEmit = false;
+    if (this.snapshotEmitTimer === null) {
+      return;
+    }
+
+    clearTimeout(this.snapshotEmitTimer);
+    this.snapshotEmitTimer = null;
+  }
+}
+
+function getNowMs(): number {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
 }
 
 function getPresencePublishSignature(presence: WorldPresencePayload): string {

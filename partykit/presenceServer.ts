@@ -16,6 +16,7 @@ const INTERNAL_TOKEN_HEADER = 'x-partykit-internal-token';
 const METRICS_ROOM_ID = '__launch-stats__';
 const METRICS_STORAGE_PREFIX = 'shard:';
 const PREVIEW_STORAGE_PREFIX = 'preview:';
+const PRESENCE_UPSERT_FLUSH_MS = 80;
 
 type PresenceMode = 'browse' | 'play' | 'edit';
 type PresenceAnimationState =
@@ -119,6 +120,8 @@ export default class PresenceServer implements Party.Server {
   private lastHeartbeatAt = 0;
   private readonly previewsByConnectionId = new Map<string, RoomPreviewPayload>();
   private readonly persistedPreviewsByRoomId = new Map<string, SharedRoomPreview>();
+  private readonly pendingPresenceUpsertsByConnectionId = new Map<string, WorldGhostPresence>();
+  private presenceUpsertFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(readonly room: Party.Room) {
     this.syncHeartbeatTimer();
@@ -274,13 +277,7 @@ export default class PresenceServer implements Party.Server {
 
       const peer = this.toGhostPresence(sender);
       if (peer) {
-        this.sendPresenceMessage(
-          {
-            type: 'upsert',
-            peer,
-          },
-          { excludeConnectionIds: [sender.id] }
-        );
+        this.queuePresenceUpsert(peer);
       }
 
       const shouldBroadcast = this.shouldBroadcastPopulations(previousPresence, presence);
@@ -293,6 +290,7 @@ export default class PresenceServer implements Party.Server {
 
   onClose(connection: Party.Connection<ConnectionPresenceState>): void {
     const presence = connection.state?.presence;
+    this.pendingPresenceUpsertsByConnectionId.delete(connection.id);
     this.previewsByConnectionId.delete(connection.id);
     if (connection.state?.channel === 'presence' && this.isVisiblePresence(presence)) {
       this.sendPresenceMessage({
@@ -312,6 +310,7 @@ export default class PresenceServer implements Party.Server {
     const current = connection.state;
     const previousPresence = current?.presence ?? null;
     const previousPreview = this.previewsByConnectionId.get(connection.id) ?? null;
+    this.pendingPresenceUpsertsByConnectionId.delete(connection.id);
     this.previewsByConnectionId.delete(connection.id);
     if (!previousPresence) {
       connection.setState(
@@ -944,6 +943,48 @@ export default class PresenceServer implements Party.Server {
     }
 
     return text;
+  }
+
+  private queuePresenceUpsert(peer: WorldGhostPresence): void {
+    this.pendingPresenceUpsertsByConnectionId.set(peer.connectionId, peer);
+    if (this.presenceUpsertFlushTimer !== null) {
+      return;
+    }
+
+    this.presenceUpsertFlushTimer = setTimeout(() => {
+      this.presenceUpsertFlushTimer = null;
+      this.flushPresenceUpserts();
+    }, PRESENCE_UPSERT_FLUSH_MS);
+  }
+
+  private flushPresenceUpserts(): void {
+    if (this.pendingPresenceUpsertsByConnectionId.size === 0) {
+      return;
+    }
+
+    const presenceConnections = Array.from(this.room.getConnections<ConnectionPresenceState>()).filter(
+      (connection) => connection.state?.channel === 'presence'
+    );
+    const liveConnectionIds = new Set(presenceConnections.map((connection) => connection.id));
+    const peers = Array.from(this.pendingPresenceUpsertsByConnectionId.values()).filter((peer) =>
+      liveConnectionIds.has(peer.connectionId)
+    );
+    this.pendingPresenceUpsertsByConnectionId.clear();
+    if (peers.length === 0) {
+      return;
+    }
+
+    for (const connection of presenceConnections) {
+      const visiblePeers = peers.filter((peer) => peer.connectionId !== connection.id);
+      if (visiblePeers.length === 0) {
+        continue;
+      }
+
+      connection.send(JSON.stringify({
+        type: 'upserts',
+        peers: visiblePeers,
+      }));
+    }
   }
 
   private sendPresenceMessage(
