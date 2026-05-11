@@ -70,6 +70,10 @@ import {
   handleRoomRushLeaderboards,
   handleRoomRushRunSubmit,
 } from './worker/runs/roomRushLeaderboards';
+import {
+  handleRoomCommentCreate,
+  handleRoomCommentList,
+} from './worker/roomComments/routes';
 import { awardRoomPublishPoints, upsertUserStats } from './worker/runs/points';
 import {
   annotateRoomRecordWithTilesetHints,
@@ -452,6 +456,14 @@ export default {
           }
         }
         return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
+      }
+
+      if (segments.length === 4 && segments[3] === 'comments' && request.method === 'GET') {
+        return await handleRoomCommentList(request, url, env, roomId);
+      }
+
+      if (segments.length === 4 && segments[3] === 'comments' && request.method === 'POST') {
+        return await handleRoomCommentCreate(request, url, env, roomId);
       }
 
       if (segments.length === 4 && segments[3] === 'published' && request.method === 'GET') {

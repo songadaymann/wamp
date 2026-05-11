@@ -62,6 +62,7 @@ export function setupSceneCommands(
     roomRushModal.close();
     roomRushResultModal.close();
     chatModerationModal.close();
+    getActiveOverworldScene(game)?.closeRoomCommentComposer?.();
   };
 
   const handleWorldJump = () => {
@@ -118,7 +119,38 @@ export function setupSceneCommands(
     event.stopPropagation();
   };
 
+  const handleRoomCommentShortcut = (event: KeyboardEvent) => {
+    if (
+      event.key.toLowerCase() !== 'c' ||
+      event.repeat ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.altKey ||
+      isEditableKeyboardTarget(event.target)
+    ) {
+      return;
+    }
+
+    const overworldScene = getOverworldScene(game);
+    if (!overworldScene?.openRoomCommentComposer || overworldScene.isRoomCommentComposerOpen?.()) {
+      return;
+    }
+
+    const opened = overworldScene.openRoomCommentComposer();
+    if (!opened) {
+      if (doc.body.dataset.appMode === 'play-world') {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
   doc.addEventListener('keydown', handleRoomChatShortcut, { capture: true });
+  doc.addEventListener('keydown', handleRoomCommentShortcut, { capture: true });
 
   configureOverworldHudBridgeRuntime({
     onPlayRoom: () => {
@@ -193,6 +225,32 @@ export function setupSceneCommands(
         return;
       }
       roomRushModal.open();
+    },
+    onOpenRoomComment: () => {
+      leaderboardModal.close();
+      exploreModal.close();
+      guestbookModal.close();
+      historyModal.close();
+      controlsModal.close();
+      aboutModal.close();
+      courseModal.close();
+      roomRushModal.close();
+      roomRushResultModal.close();
+      chatModerationModal.close();
+      getActiveOverworldScene(game)?.openRoomCommentComposer?.();
+    },
+    onToggleRoomComments: () => {
+      leaderboardModal.close();
+      exploreModal.close();
+      guestbookModal.close();
+      historyModal.close();
+      controlsModal.close();
+      aboutModal.close();
+      courseModal.close();
+      roomRushModal.close();
+      roomRushResultModal.close();
+      chatModerationModal.close();
+      getActiveOverworldScene(game)?.toggleRoomComments?.();
     },
     onOpenControls: () => {
       leaderboardModal.close();

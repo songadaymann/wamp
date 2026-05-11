@@ -71,6 +71,7 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 16,
       frameHeight: 16,
     });
+    this.load.image('room_comment_icon', 'assets/ui/comment-indicator.png');
 
     for (const sheet of SWORDSMAN_AI_EXTRA_SPRITESHEETS) {
       this.load.spritesheet(sheet.key, sheet.path, {

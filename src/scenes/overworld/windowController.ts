@@ -84,6 +84,7 @@ interface OverworldWindowControllerHost {
   syncPreviewVisibility(): void;
   syncPresenceSubscriptions(): void;
   syncGhostVisibility(): void;
+  syncRoomComments(): void;
   redrawWorld(): void;
   renderHud(statusOverride?: string): void;
   hideLoadingText(): void;
@@ -235,6 +236,7 @@ export class OverworldWindowController {
       this.host.syncPreviewVisibility();
       this.host.syncPresenceSubscriptions();
       this.host.syncGhostVisibility();
+      this.host.syncRoomComments();
       this.host.redrawWorld();
       this.host.renderHud();
       this.host.hideLoadingText();
@@ -324,6 +326,7 @@ export class OverworldWindowController {
     this.host.syncPreviewVisibility();
     this.host.syncPresenceSubscriptions();
     this.host.syncGhostVisibility();
+    this.host.syncRoomComments();
     this.host.redrawWorld();
     this.host.renderHud();
     this.host.hideLoadingText();

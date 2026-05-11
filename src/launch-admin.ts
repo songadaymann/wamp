@@ -13,6 +13,12 @@ import type {
   PartyKitShardHeartbeat,
 } from './admin/model';
 import { getApiBaseUrl } from './api/baseUrl';
+import type {
+  AdminRoomCommentListResponse,
+  AdminRoomCommentRecord,
+  AdminRoomCommentReviewResponse,
+  RoomCommentStatus,
+} from './roomComments/model';
 
 const ADMIN_KEY_STORAGE_KEY = 'ep_launch_admin_api_key';
 const ACTIVITY_RANGE_STORAGE_KEY = 'ep_launch_admin_activity_range';
@@ -49,6 +55,11 @@ const progressionCollectibleInput = document.getElementById('progression-collect
 const progressionReasonInput = document.getElementById('progression-reason-input') as HTMLTextAreaElement | null;
 const progressionSaveButton = document.getElementById('progression-save-button') as HTMLButtonElement | null;
 const progressionClearButton = document.getElementById('progression-clear-button') as HTMLButtonElement | null;
+const roomCommentsStatusFilter = document.getElementById('room-comments-status-filter') as HTMLSelectElement | null;
+const roomCommentsOperatorInput = document.getElementById('room-comments-operator-input') as HTMLInputElement | null;
+const roomCommentsRefreshButton = document.getElementById('room-comments-refresh-button') as HTMLButtonElement | null;
+const roomCommentsStatus = document.getElementById('room-comments-status') as HTMLDivElement | null;
+const roomCommentsList = document.getElementById('room-comments-list') as HTMLDivElement | null;
 
 let adminKey = window.sessionStorage.getItem(ADMIN_KEY_STORAGE_KEY) ?? '';
 let lastSnapshot: LaunchStatsResponse | null = null;
@@ -62,6 +73,9 @@ let selectedActivityRangeKey =
 let progressionStatusMessage = 'Search for a user to inspect or raise their builder caps.';
 let progressionResultsSnapshot: AdminProgressionUserLookupEntry[] = [];
 let selectedProgressionUser: AdminProgressionUserCapsResponse | null = null;
+let roomCommentsStatusMessage = 'Paste the admin key to load room comments.';
+let roomCommentsSnapshot: AdminRoomCommentRecord[] = [];
+let roomCommentsLoading = false;
 
 if (adminKeyInput) {
   adminKeyInput.value = adminKey;
@@ -82,6 +96,7 @@ saveKeyButton?.addEventListener('click', () => {
 
 refreshButton?.addEventListener('click', () => {
   void refreshSnapshot(true);
+  void refreshRoomComments();
 });
 
 clearKeyButton?.addEventListener('click', () => {
@@ -121,6 +136,14 @@ progressionClearButton?.addEventListener('click', () => {
   void saveProgressionOverride(true);
 });
 
+roomCommentsRefreshButton?.addEventListener('click', () => {
+  void refreshRoomComments();
+});
+
+roomCommentsStatusFilter?.addEventListener('change', () => {
+  void refreshRoomComments();
+});
+
 document.addEventListener('visibilitychange', () => {
   syncPolling();
   if (document.visibilityState === 'visible' && adminKey) {
@@ -131,6 +154,7 @@ document.addEventListener('visibilitychange', () => {
 syncPolling();
 if (adminKey) {
   void refreshSnapshot();
+  void refreshRoomComments();
 } else {
   render();
 }
@@ -198,6 +222,7 @@ function render(): void {
   renderMeta();
   renderWarnings();
   renderProgressionAdmin();
+  renderRoomCommentsAdmin();
   renderConfig();
   renderTotals();
   renderActivity();
@@ -373,6 +398,227 @@ async function saveProgressionOverride(clear: boolean): Promise<void> {
     progressionStatusMessage =
       error instanceof Error ? error.message : 'Unknown progression save failure.';
     render();
+  }
+}
+
+async function refreshRoomComments(): Promise<void> {
+  if (!adminKey) {
+    roomCommentsStatusMessage = 'Paste the admin key before loading room comments.';
+    render();
+    return;
+  }
+
+  if (roomCommentsLoading) {
+    return;
+  }
+
+  const status = readRoomCommentsStatusFilter();
+  roomCommentsLoading = true;
+  roomCommentsStatusMessage = `Loading ${formatCommentStatus(status).toLowerCase()} comments...`;
+  render();
+
+  try {
+    const response = await fetch(
+      `${getApiBaseUrl()}/api/admin/room-comments?status=${encodeURIComponent(status)}&limit=80`,
+      {
+        headers: {
+          'x-admin-key': adminKey,
+        },
+      },
+    );
+    if (!response.ok) {
+      const text = (await response.text()).trim();
+      throw new Error(text || `Comment load failed with status ${response.status}.`);
+    }
+
+    const payload = (await response.json()) as AdminRoomCommentListResponse;
+    roomCommentsSnapshot = payload.comments;
+    roomCommentsStatusMessage =
+      payload.comments.length > 0
+        ? `${payload.comments.length} ${formatCommentStatus(status).toLowerCase()} comment${payload.comments.length === 1 ? '' : 's'}.`
+        : `No ${formatCommentStatus(status).toLowerCase()} comments.`;
+  } catch (error) {
+    roomCommentsStatusMessage =
+      error instanceof Error ? error.message : 'Unknown room comment load failure.';
+  } finally {
+    roomCommentsLoading = false;
+    render();
+  }
+}
+
+async function reviewRoomComment(
+  commentId: string,
+  decision: Extract<RoomCommentStatus, 'approved' | 'rejected'>,
+): Promise<void> {
+  if (!adminKey) {
+    roomCommentsStatusMessage = 'Paste the admin key before reviewing comments.';
+    render();
+    return;
+  }
+
+  const reason = window.prompt(`${decision === 'approved' ? 'Approval' : 'Rejection'} reason`, '') ?? '';
+  const operatorLabel =
+    roomCommentsOperatorInput?.value.trim()
+    || progressionOperatorInput?.value.trim()
+    || 'Admin';
+  roomCommentsStatusMessage = `${decision === 'approved' ? 'Approving' : 'Rejecting'} comment...`;
+  render();
+
+  try {
+    const response = await fetch(
+      `${getApiBaseUrl()}/api/admin/room-comments/${encodeURIComponent(commentId)}/review`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-admin-key': adminKey,
+        },
+        body: JSON.stringify({
+          decision,
+          reason,
+          operatorLabel,
+        }),
+      },
+    );
+    if (!response.ok) {
+      const text = (await response.text()).trim();
+      throw new Error(text || `Review failed with status ${response.status}.`);
+    }
+
+    const payload = (await response.json()) as AdminRoomCommentReviewResponse;
+    roomCommentsSnapshot = roomCommentsSnapshot.map((comment) =>
+      comment.id === payload.comment.id ? payload.comment : comment,
+    );
+    const emailStatus = payload.email.sent
+      ? ' Builder email sent.'
+      : payload.email.error
+        ? ` Builder email failed: ${payload.email.error}`
+        : payload.email.skippedReason
+          ? ` Builder email skipped: ${payload.email.skippedReason}`
+          : '';
+    roomCommentsStatusMessage =
+      `${decision === 'approved' ? 'Approved' : 'Rejected'} comment.${emailStatus}`;
+    render();
+  } catch (error) {
+    roomCommentsStatusMessage =
+      error instanceof Error ? error.message : 'Unknown room comment review failure.';
+    render();
+  }
+}
+
+function renderRoomCommentsAdmin(): void {
+  if (roomCommentsStatus) {
+    roomCommentsStatus.textContent = roomCommentsStatusMessage;
+  }
+
+  if (!roomCommentsList) {
+    return;
+  }
+
+  if (roomCommentsLoading) {
+    roomCommentsList.innerHTML = '<div class="meta">Loading room comments...</div>';
+    return;
+  }
+
+  if (roomCommentsSnapshot.length === 0) {
+    roomCommentsList.innerHTML = '<div class="meta">No comments loaded.</div>';
+    return;
+  }
+
+  roomCommentsList.innerHTML = roomCommentsSnapshot
+    .map((comment) => renderRoomCommentCard(comment))
+    .join('');
+  wireRoomCommentReviewButtons(roomCommentsList);
+}
+
+function renderRoomCommentCard(comment: AdminRoomCommentRecord): string {
+  const roomLabel = comment.roomTitle?.trim()
+    ? `"${comment.roomTitle.trim()}"`
+    : `Room ${comment.roomCoordinates.x},${comment.roomCoordinates.y}`;
+  const roomHref = `/r/${encodeURIComponent(String(comment.roomCoordinates.x))}/${encodeURIComponent(String(comment.roomCoordinates.y))}`;
+  const canReview = comment.status === 'pending_review';
+  const emailMeta =
+    comment.notifiedAt
+      ? `Builder email sent ${formatTimestamp(comment.notifiedAt)}`
+      : comment.notificationError
+        ? `Builder email error: ${comment.notificationError}`
+        : comment.builderEmail
+          ? `Builder email ready: ${comment.builderEmail}`
+          : 'Builder email unavailable';
+
+  return `
+    <article class="card comment-review-card" data-status="${escapeHtml(comment.status)}">
+      <div class="activity-head">
+        <span class="label">${escapeHtml(formatCommentStatus(comment.status))}</span>
+        <span class="meta">${escapeHtml(formatTimestamp(comment.createdAt))}</span>
+      </div>
+      <div class="comment-review-body">${escapeHtml(comment.body)}</div>
+      <div class="meta">
+        ${escapeHtml(comment.authorDisplayName)}${comment.authorEmail ? ` (${escapeHtml(comment.authorEmail)})` : ''}
+        on <a href="${escapeHtml(roomHref)}" target="_blank" rel="noreferrer">${escapeHtml(roomLabel)}</a>
+        v${escapeHtml(String(comment.roomVersion))}
+        at ${escapeHtml(`${comment.position.x},${comment.position.y}`)}
+      </div>
+      <div class="meta">
+        Builder: ${escapeHtml(comment.builderDisplayName ?? comment.builderUserId ?? 'unknown')} · ${escapeHtml(emailMeta)}
+      </div>
+      ${
+        comment.reviewedAt
+          ? `<div class="meta">Reviewed ${escapeHtml(formatTimestamp(comment.reviewedAt))} by ${escapeHtml(comment.reviewedByLabel ?? 'Admin')}${comment.reviewReason ? ` · ${escapeHtml(comment.reviewReason)}` : ''}</div>`
+          : ''
+      }
+      ${
+        canReview
+          ? `
+            <div class="controls">
+              <button type="button" data-room-comment-review="approved" data-room-comment-id="${escapeHtml(comment.id)}">Approve</button>
+              <button type="button" class="secondary" data-room-comment-review="rejected" data-room-comment-id="${escapeHtml(comment.id)}">Reject</button>
+            </div>
+          `
+          : ''
+      }
+    </article>
+  `;
+}
+
+function wireRoomCommentReviewButtons(root: ParentNode): void {
+  for (const button of Array.from(root.querySelectorAll<HTMLButtonElement>('[data-room-comment-review]'))) {
+    if (button.dataset.roomCommentReviewBound === '1') {
+      continue;
+    }
+
+    button.dataset.roomCommentReviewBound = '1';
+    button.addEventListener('click', () => {
+      const commentId = button.dataset.roomCommentId?.trim();
+      const decision = button.dataset.roomCommentReview;
+      if (!commentId || (decision !== 'approved' && decision !== 'rejected')) {
+        return;
+      }
+      void reviewRoomComment(commentId, decision);
+    });
+  }
+}
+
+function readRoomCommentsStatusFilter(): RoomCommentStatus | 'all' {
+  const value = roomCommentsStatusFilter?.value ?? 'pending_review';
+  if (value === 'approved' || value === 'rejected' || value === 'pending_review' || value === 'all') {
+    return value;
+  }
+  return 'pending_review';
+}
+
+function formatCommentStatus(status: RoomCommentStatus | 'all'): string {
+  switch (status) {
+    case 'pending_review':
+      return 'Pending Review';
+    case 'approved':
+      return 'Approved';
+    case 'rejected':
+      return 'Rejected';
+    case 'all':
+      return 'All';
+    default:
+      return 'Comments';
   }
 }
 

@@ -373,6 +373,31 @@
         flex-wrap: wrap;
       }
 
+      .comment-review-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .comment-review-card {
+        display: grid;
+        gap: 10px;
+        border-left: 4px solid var(--warn);
+      }
+
+      .comment-review-card[data-status='approved'] {
+        border-left-color: var(--good);
+      }
+
+      .comment-review-card[data-status='rejected'] {
+        border-left-color: var(--danger);
+      }
+
+      .comment-review-body {
+        white-space: pre-wrap;
+        line-height: 1.5;
+        color: var(--text);
+      }
+
       @media (max-width: 720px) {
         .shell {
           padding: 16px 14px 32px;
@@ -453,6 +478,30 @@
         <div class="controls">
           <button id="progression-save-button" type="button">Save Override</button>
           <button id="progression-clear-button" type="button" class="secondary">Clear Override</button>
+        </div>
+      </section>
+
+      <section id="room-comments-admin-panel" class="panel stack">
+        <h2>Room Comment Review</h2>
+        <div class="controls">
+          <label class="field">
+            <span class="label">Status</span>
+            <select id="room-comments-status-filter">
+              <option value="pending_review">Pending Review</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+              <option value="all">All</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="label">Operator Label</span>
+            <input id="room-comments-operator-input" type="text" autocomplete="off" placeholder="Jonathan" />
+          </label>
+          <button id="room-comments-refresh-button" type="button">Refresh Comments</button>
+        </div>
+        <div id="room-comments-status" class="meta">Paste the admin key to load room comments.</div>
+        <div id="room-comments-list" class="comment-review-list">
+          <div class="meta">No comments loaded yet.</div>
         </div>
       </section>
 

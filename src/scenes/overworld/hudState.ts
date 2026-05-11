@@ -73,6 +73,7 @@ interface OverworldHudStateControllerHost {
   countRoomEnemies(room: RoomSnapshot): number;
   getScore(): number;
   isCourseComposerLoading(): boolean;
+  areRoomCommentsVisible(): boolean;
   getZoom(): number;
   getTransientStatusMessage(): string | null;
   renderHudViewModel(viewModel: OverworldHudViewModel): void;
@@ -218,6 +219,7 @@ export class OverworldHudStateController {
         currentWalletAddress,
         score: this.host.getScore(),
         courseBuilderButtonDisabled: this.host.isCourseComposerLoading(),
+        roomCommentsVisible: this.host.areRoomCommentsVisible(),
         zoom: this.host.getZoom(),
         getRoomDisplayTitle: (title, coordinates) => this.getRoomDisplayTitle(title, coordinates),
         getCourseGoalBadgeText: (goal) => this.getCourseGoalBadgeText(goal),

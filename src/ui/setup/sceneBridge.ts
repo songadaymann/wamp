@@ -270,6 +270,10 @@ export interface OverworldSceneBridge {
   openRoomChatComposer?: () => boolean;
   closeRoomChatComposer?: () => void;
   isRoomChatComposerOpen?: () => boolean;
+  openRoomCommentComposer?: () => boolean;
+  closeRoomCommentComposer?: () => void;
+  isRoomCommentComposerOpen?: () => boolean;
+  toggleRoomComments?: () => void;
   openCourseComposer?: () => Promise<void> | void;
   openCourseEditor?: () => Promise<void> | void;
   closeCourseComposer?: () => void;

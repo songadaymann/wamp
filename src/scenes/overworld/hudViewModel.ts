@@ -88,6 +88,7 @@ export interface BuildOverworldHudViewModelOptions {
   currentWalletAddress: string | null;
   score: number;
   courseBuilderButtonDisabled: boolean;
+  roomCommentsVisible: boolean;
   zoom: number;
   getRoomDisplayTitle: (title: string | null, coordinates: RoomCoordinates) => string;
   getCourseGoalBadgeText: (goal: CourseGoal | null) => string;
@@ -155,6 +156,7 @@ export function buildOverworldHudViewModel(
     currentWalletAddress,
     score,
     courseBuilderButtonDisabled,
+    roomCommentsVisible,
     zoom,
     getRoomDisplayTitle,
     getCourseGoalBadgeText,
@@ -474,6 +476,13 @@ export function buildOverworldHudViewModel(
           ? true
           : selectedState !== 'published',
     roomRushButtonActive: Boolean(activeRoomRushRun),
+    commentButtonText: 'Comment',
+    commentButtonDisabled: mode !== 'play',
+    commentButtonHidden: mode !== 'play',
+    commentButtonActive: mode === 'play',
+    commentsToggleText: roomCommentsVisible ? 'Hide Comments' : 'Show Comments',
+    commentsToggleHidden: false,
+    commentsToggleActive: roomCommentsVisible,
     courseBuilderButtonDisabled: resolvedCourseBuilderButtonDisabled,
     courseBuilderButtonTitle,
     editButtonDisabled: !canEditSelectedRoom,

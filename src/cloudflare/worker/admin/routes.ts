@@ -29,6 +29,7 @@ import {
 } from './suspicious';
 import { handleAdminSnapshotImport, handleAdminSnapshotReset } from './snapshot';
 import { handleAdminBackgroundImageRequest } from '../backgroundImages/routes';
+import { handleAdminRoomCommentRequest } from '../roomComments/routes';
 
 export async function handleAdminRequest(
   request: Request,
@@ -37,6 +38,10 @@ export async function handleAdminRequest(
 ): Promise<Response> {
   if (url.pathname.startsWith('/api/admin/background-images')) {
     return handleAdminBackgroundImageRequest(request, url, env);
+  }
+
+  if (url.pathname.startsWith('/api/admin/room-comments')) {
+    return handleAdminRoomCommentRequest(request, url, env);
   }
 
   if (url.pathname === '/api/admin/launch-stats' && request.method === 'GET') {

@@ -123,6 +123,9 @@ import {
 import {
   OverworldRoomChatController,
 } from './overworld/roomChat';
+import {
+  OverworldRoomCommentsController,
+} from './overworld/roomComments';
 import { OverworldRoomAudioController } from './overworld/roomAudio';
 import {
   OverworldCoursePlaybackController,
@@ -436,6 +439,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   >;
   private readonly presenceController: OverworldPresenceController;
   private readonly roomChatController: OverworldRoomChatController;
+  private readonly roomCommentsController: OverworldRoomCommentsController;
 
   private shouldCenterCamera = false;
   private shouldRespawnPlayer = false;
@@ -634,6 +638,16 @@ export class OverworldPlayScene extends Phaser.Scene {
       showTransientStatus: (message) => this.showTransientStatus(message),
       onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
     });
+    this.roomCommentsController = new OverworldRoomCommentsController({
+      scene: this,
+      getMode: () => this.mode,
+      getCurrentRoomSnapshot: () => this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates),
+      isCurrentRoomPublished: () => this.getCellStateAt(this.currentRoomCoordinates) === 'published',
+      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
+      getPlayerCommentPosition: () => this.getPlayerCommentPosition(),
+      showTransientStatus: (message) => this.showTransientStatus(message),
+      onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
+    });
     this.coursePlaybackController = new OverworldCoursePlaybackController({
       getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
       getActiveCourseRun: () => this.activeCourseRun,
@@ -767,6 +781,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       syncPreviewVisibility: () => this.syncPreviewVisibility(),
       syncPresenceSubscriptions: () => this.syncPresenceSubscriptions(),
       syncGhostVisibility: () => this.syncGhostVisibility(),
+      syncRoomComments: () => this.roomCommentsController.update(),
       redrawWorld: () => this.redrawWorld(),
       renderHud: (statusOverride) => this.renderHud(statusOverride),
       hideLoadingText: () => {
@@ -1357,6 +1372,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       countRoomEnemies: (room) => this.countRoomObjectsByCategory(room, 'enemy'),
       getScore: () => this.score,
       isCourseComposerLoading: () => this.courseComposerController.isLoading(),
+      areRoomCommentsVisible: () => this.roomCommentsController.areCommentsVisible(),
       getZoom: () => this.cameras.main.zoom,
       getTransientStatusMessage: () => this.getTransientStatusMessage(),
       renderHudViewModel: (viewModel) => {
@@ -1675,6 +1691,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.setupCamera();
     this.initializePresenceClient();
     this.initializeRoomChatClient();
+    this.initializeRoomComments();
     window.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
     window.addEventListener(PLAYER_AVATAR_CHANGED_EVENT, this.handlePlayerAvatarChanged);
     this.syncBackdropCameraIgnores();
@@ -1738,6 +1755,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       });
       this.measureMobilePerformance('update.roomChat', () => {
         this.roomChatController.update();
+      });
+      this.measureMobilePerformance('update.roomComments', () => {
+        this.roomCommentsController.update();
       });
       this.measureMobilePerformance('update.presenceDots', () => {
         this.presenceOverlayController.updateBrowseDots(delta);
@@ -1965,6 +1985,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.shouldRespawnPlayer = false;
     this.presenceController.reset();
     this.roomChatController.reset();
+    this.roomCommentsController.reset();
     this.courseComposerController.reset();
     this.windowController.reset();
     this.coursePlaybackController.clearActiveCourseRoomOverrides();
@@ -1984,6 +2005,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.roomChatController.initialize();
   }
 
+  private initializeRoomComments(): void {
+    this.roomCommentsController.initialize();
+  }
+
   private setupGameplayKeys(): void {
     const keyboard = this.input.keyboard!;
 
@@ -2000,6 +2025,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     };
     this.cameraToggleKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.BACKTICK);
     keyboard.on('keydown-ESC', () => {
+      if (this.roomCommentsController.handleEscapeKey()) {
+        return;
+      }
       if (this.roomChatController.handleEscapeKey()) {
         return;
       }
@@ -2131,6 +2159,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     ignoredObjects.push(...this.presenceController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.roomChatController.getBackdropIgnoredObjects());
+    ignoredObjects.push(...this.roomCommentsController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.presenceOverlayController.getBackdropIgnoredObjects());
     ignoredObjects.push(...(this.fxController?.getBackdropIgnoredObjects() ?? []));
 
@@ -2168,6 +2197,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly handleAuthStateChanged = (): void => {
     const identityChanged = this.presenceController.refreshIdentity();
     const roomChatIdentityChanged = this.roomChatController.refreshIdentity();
+    this.roomCommentsController.refreshAuthState();
     if (this.loadedChunkBounds) {
       if (identityChanged) {
         this.presenceController.setSubscribedChunkBounds(this.loadedChunkBounds);
@@ -2185,6 +2215,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly handlePlayerAvatarChanged = (): void => {
     const identityChanged = this.presenceController.refreshIdentity();
     const roomChatIdentityChanged = this.roomChatController.refreshIdentity();
+    this.roomCommentsController.refreshAuthState();
     if (this.loadedChunkBounds) {
       if (identityChanged) {
         this.presenceController.setSubscribedChunkBounds(this.loadedChunkBounds);
@@ -3912,6 +3943,25 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.roomChatController.isComposerOpen();
   }
 
+  openRoomCommentComposer(): boolean {
+    return this.roomCommentsController.openComposer();
+  }
+
+  closeRoomCommentComposer(): void {
+    this.roomCommentsController.closeComposer();
+  }
+
+  isRoomCommentComposerOpen(): boolean {
+    return this.roomCommentsController.isComposerOpen();
+  }
+
+  toggleRoomComments(): void {
+    const visible = this.roomCommentsController.toggleCommentsVisible();
+    this.showTransientStatus(visible ? 'Room comments shown.' : 'Room comments hidden.');
+    this.syncBackdropCameraIgnores();
+    this.renderHud();
+  }
+
   getCourseComposerState(): CourseComposerState | null {
     return this.courseComposerController.getState();
   }
@@ -3973,6 +4023,23 @@ export class OverworldPlayScene extends Phaser.Scene {
     return {
       x: roomOrigin.x + ROOM_PX_WIDTH * 0.5,
       y: roomOrigin.y + ROOM_PX_HEIGHT * 0.5,
+    };
+  }
+
+  private getPlayerCommentPosition(): { x: number; y: number } | null {
+    if (!this.playerBody) {
+      return null;
+    }
+
+    const currentRoom = this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates);
+    if (!currentRoom) {
+      return null;
+    }
+
+    const roomOrigin = this.getRoomOrigin(currentRoom.coordinates);
+    return {
+      x: Math.round(this.playerBody.center.x - roomOrigin.x),
+      y: Math.round(this.playerBody.bottom - roomOrigin.y),
     };
   }
 
@@ -4138,6 +4205,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     });
     this.presenceController.destroy();
     this.roomChatController.destroy();
+    this.roomCommentsController.destroy();
     this.roomAudioController.destroy();
     this.lightingController.destroy();
     this.clearPresenceSnapshotSyncTimer();
@@ -4190,6 +4258,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     const streamingMetrics = this.worldStreamingController.getDebugMetrics();
     const presenceDebug = this.presenceController.getDebugSnapshot();
     const roomChatDebug = this.roomChatController.getDebugSnapshot();
+    const roomCommentsDebug = this.roomCommentsController.getDebugSnapshot();
     const roomAudioDebug = this.roomAudioController.getDebugSnapshot();
     const lightingDebug = this.lightingController.getDebugState();
     const currentLoadedRoom = this.loadedFullRoomsById.get(
@@ -4370,6 +4439,7 @@ export class OverworldPlayScene extends Phaser.Scene {
             }
           : null,
       },
+      roomComments: roomCommentsDebug,
       roomAudio: roomAudioDebug,
       lighting: lightingDebug,
       mobilePerformance: this.mobilePerformanceProfiler?.getSnapshot('describe-state') ?? null,

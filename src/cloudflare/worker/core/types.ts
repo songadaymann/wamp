@@ -164,6 +164,28 @@ export interface GuestbookEntryRow {
   hidden_by_user_id?: string | null;
 }
 
+export interface RoomCommentRow {
+  id: string;
+  room_id: string;
+  room_version: number;
+  room_x: number;
+  room_y: number;
+  body: string;
+  author_user_id: string;
+  author_display_name: string;
+  builder_user_id: string | null;
+  builder_display_name: string | null;
+  status: 'pending_review' | 'approved' | 'rejected';
+  created_at: string;
+  reviewed_at: string | null;
+  reviewed_by_label: string | null;
+  review_reason: string | null;
+  notified_at: string | null;
+  notification_error: string | null;
+  ip_hash: string | null;
+  user_agent: string | null;
+}
+
 export interface AgentRow {
   id: string;
   owner_user_id: string;

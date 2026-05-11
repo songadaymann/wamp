@@ -458,6 +458,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       return cloneRoomSnapshot(draftRoom);
     }
 
+    const loadedFullRoom = this.loadedFullRoomsById.get(roomId);
+    if (loadedFullRoom) {
+      return cloneRoomSnapshot(loadedFullRoom.room);
+    }
+
     return this.previewCache.getRoomSnapshot(roomId);
   }
 
