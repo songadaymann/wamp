@@ -44,6 +44,7 @@ interface OverworldPlayerLifecycleHost<TLiveObject> {
 interface OverworldPlayerLifecycleOptions {
   playerWidth: number;
   playerHeight: number;
+  playerBodyAnchorHeight: number;
   playerPickupSensorExtraHeight: number;
 }
 
@@ -62,7 +63,7 @@ export class OverworldPlayerLifecycleController<TLiveObject = unknown> {
       spawn.x,
       spawn.y,
       this.options.playerWidth,
-      this.options.playerHeight,
+      this.options.playerBodyAnchorHeight,
       RETRO_COLORS.draft,
     );
     player.setVisible(false);
@@ -147,14 +148,14 @@ export class OverworldPlayerLifecycleController<TLiveObject = unknown> {
       const origin = this.host.getRoomOrigin(room.coordinates);
       return {
         x: origin.x + activeCourseSnapshot.startPoint.x,
-        y: origin.y + activeCourseSnapshot.startPoint.y - this.options.playerHeight / 2,
+        y: origin.y + activeCourseSnapshot.startPoint.y - this.options.playerBodyAnchorHeight / 2,
       };
     }
 
     const startPoint = resolveGoalRunStartPoint(room, this.options.playerHeight);
     return {
       x: startPoint.x,
-      y: startPoint.y - this.options.playerHeight / 2,
+      y: startPoint.y - this.options.playerBodyAnchorHeight / 2,
     };
   }
 }

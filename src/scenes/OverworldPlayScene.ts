@@ -269,6 +269,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly GRAVITY = 700;
   private readonly PLAYER_WIDTH = 10;
   private readonly PLAYER_HEIGHT = 14;
+  private readonly PLAYER_STANDING_HEIGHT = 22;
   private readonly PLAYER_CROUCH_HEIGHT = 9;
   private readonly PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT = 15;
   private readonly CRAWL_SPEED = 70;
@@ -994,6 +995,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       {
         playerWidth: this.PLAYER_WIDTH,
         playerHeight: this.PLAYER_HEIGHT,
+        playerBodyAnchorHeight: this.PLAYER_STANDING_HEIGHT,
         playerPickupSensorExtraHeight: this.PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT,
       },
     );
@@ -1197,6 +1199,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       {
         playerWidth: this.PLAYER_WIDTH,
         playerHeight: this.PLAYER_HEIGHT,
+        playerStandingHeight: this.PLAYER_STANDING_HEIGHT,
         playerCrouchHeight: this.PLAYER_CROUCH_HEIGHT,
         playerSpeed: this.PLAYER_SPEED,
         crawlSpeed: this.CRAWL_SPEED,
@@ -4616,6 +4619,10 @@ export class OverworldPlayScene extends Phaser.Scene {
             y: Math.round(this.player.y),
             velocityX: Math.round(this.playerBody.velocity.x),
             velocityY: Math.round(this.playerBody.velocity.y),
+            bodyWidth: Math.round(this.playerBody.width),
+            bodyHeight: Math.round(this.playerBody.height),
+            bodyTop: Math.round(this.playerBody.top),
+            bodyBottom: Math.round(this.playerBody.bottom),
             crouching: this.isCrouching,
             climbing: this.isClimbingLadder,
             jumpBuffered: this.jumpBuffered,

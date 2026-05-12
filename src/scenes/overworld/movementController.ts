@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { playSfx, stopSfx } from '../../audio/sfx';
-import { isPushableObjectConfig } from '../../config';
+import {
+  isPushableObjectConfig,
+  isSolidRuntimeObjectConfig,
+} from '../../config';
 import type {
   RoomCoordinates,
   RoomSnapshot,
@@ -73,6 +76,7 @@ interface OverworldMovementControllerHost {
 interface OverworldMovementControllerOptions {
   playerWidth: number;
   playerHeight: number;
+  playerStandingHeight: number;
   playerCrouchHeight: number;
   playerSpeed: number;
   crawlSpeed: number;
@@ -251,9 +255,16 @@ export class OverworldMovementController {
       !inQuicksand && grounded && horizontalInput !== 0
         ? this.findCrateInteraction(horizontalInput, downHeld)
         : null;
+    const standingHitboxFits =
+      !grounded ||
+      playerBody.height >= this.options.playerStandingHeight ||
+      this.canPlayerFitHitbox(this.options.playerStandingHeight);
     const wantsCrouch = grounded && downHeld && !crateInteraction;
-    this.host.state.isCrouching = wantsCrouch || (this.host.state.isCrouching && !this.canPlayerStandUp());
-    this.syncPlayerHitbox();
+    this.host.state.isCrouching =
+      wantsCrouch ||
+      (grounded && !standingHitboxFits) ||
+      (this.host.state.isCrouching && !standingHitboxFits);
+    this.syncPlayerHitbox(grounded && playerBody.velocity.y >= 0);
     const canWallAttach =
       !grounded &&
       crateInteraction === null &&
@@ -364,6 +375,8 @@ export class OverworldMovementController {
     if (inQuicksand && grounded) {
       playerBody.setVelocityY(Math.max(playerBody.velocity.y, 4));
     }
+
+    this.syncPlayerHitbox(grounded && playerBody.velocity.y >= 0);
 
     return {
       grounded,
@@ -536,20 +549,36 @@ export class OverworldMovementController {
     }
   }
 
-  private syncPlayerHitbox(): void {
+  private syncPlayerHitbox(useGroundedProfile?: boolean): void {
     const playerBody = this.host.getPlayerBody();
     if (!playerBody) {
       return;
     }
 
-    const nextHeight = this.host.state.isCrouching
-      ? this.options.playerCrouchHeight
-      : this.options.playerHeight;
-    if (playerBody.height !== nextHeight) {
+    const groundedProfile =
+      useGroundedProfile ??
+      Boolean((playerBody.blocked.down || playerBody.touching.down) && playerBody.velocity.y >= 0);
+    const nextHeight = this.getPlayerHitboxHeight(playerBody, groundedProfile);
+    if (playerBody.width !== this.options.playerWidth || playerBody.height !== nextHeight) {
       playerBody.setSize(this.options.playerWidth, nextHeight, false);
-      playerBody.setOffset(0, this.options.playerHeight - nextHeight);
+      playerBody.setOffset(0, this.options.playerStandingHeight - nextHeight);
     }
     this.host.syncPlayerPickupSensor();
+  }
+
+  private getPlayerHitboxHeight(playerBody: Phaser.Physics.Arcade.Body, groundedProfile: boolean): number {
+    if (this.host.state.isCrouching) {
+      return this.options.playerCrouchHeight;
+    }
+
+    if (!groundedProfile) {
+      return this.options.playerHeight;
+    }
+
+    return playerBody.height >= this.options.playerStandingHeight ||
+      this.canPlayerFitHitbox(this.options.playerStandingHeight, playerBody)
+      ? this.options.playerStandingHeight
+      : this.options.playerHeight;
   }
 
   private clearCrateInteractionState(): void {
@@ -589,20 +618,43 @@ export class OverworldMovementController {
     return crateInteraction.moveDirectionX * (moveSpeed + dragCompensation);
   }
 
-  private canPlayerStandUp(): boolean {
-    const playerBody = this.host.getPlayerBody();
+  private canPlayerFitHitbox(height: number, playerBody = this.host.getPlayerBody()): boolean {
     if (!playerBody) {
       return true;
     }
 
     const room = this.host.getRoomSnapshotForCoordinates(this.host.getCurrentRoomCoordinates());
-    if (!room) {
-      return true;
+    const nextTop = playerBody.bottom - height;
+    const candidateBounds = new Phaser.Geom.Rectangle(
+      playerBody.center.x - this.options.playerWidth * 0.5,
+      nextTop,
+      this.options.playerWidth,
+      height,
+    );
+
+    if (room) {
+      const sampleXs = [candidateBounds.centerX, candidateBounds.left + 1, candidateBounds.right - 1];
+      if (sampleXs.some((sampleX) => this.host.isSolidTerrainAtWorldPoint(room, sampleX, nextTop + 1))) {
+        return false;
+      }
     }
 
-    const topY = playerBody.bottom - this.options.playerHeight;
-    const sampleXs = [playerBody.center.x, playerBody.left + 1, playerBody.right - 1];
-    return sampleXs.every((sampleX) => !this.host.isSolidTerrainAtWorldPoint(room, sampleX, topY + 1));
+    for (const liveObject of this.host.getLoadedLiveObjects()) {
+      if (
+        !isSolidRuntimeObjectConfig(liveObject.config) ||
+        !liveObject.sprite.active ||
+        !liveObject.sprite.body
+      ) {
+        continue;
+      }
+
+      const objectBounds = this.host.getArcadeBodyBounds(liveObject.sprite.body as ArcadeObjectBody);
+      if (Phaser.Geom.Intersects.RectangleToRectangle(candidateBounds, objectBounds)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   private findCrateInteraction(horizontalInput: number, downHeld: boolean): OverworldCrateInteraction | null {
