@@ -7,7 +7,7 @@ import {
 } from '../../config';
 import { roomIdFromCoordinates, type RoomCoordinates, type RoomSnapshot } from '../../persistence/roomModel';
 
-const LOCAL_PRESSURE_ENABLE_THRESHOLD = 700;
+const LOCAL_PRESSURE_ENABLE_THRESHOLD = 620;
 const LOCAL_PRESSURE_DISABLE_THRESHOLD = 500;
 const LOCAL_PRESSURE_REDUCED_FULL_ROOM_BUDGET = 1;
 
