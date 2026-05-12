@@ -160,6 +160,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private deferredFullRoomLoadTimer: Phaser.Time.TimerEvent | null = null;
   private deferredPreviewRooms: RoomSnapshot[] = [];
   private deferredPreviewRenderTimer: Phaser.Time.TimerEvent | null = null;
+  private fullRoomReleaseCleanupTimer: Phaser.Time.TimerEvent | null = null;
   private readonly textureNamespace: string;
 
   constructor(private readonly options: OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall>) {
@@ -211,6 +212,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.chunkWindowRequestInFlight = false;
     this.cancelDeferredFullRoomLoads();
     this.cancelDeferredPreviewRender();
+    this.cancelFullRoomReleaseCleanup();
   }
 
   destroy(): void {
@@ -218,6 +220,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.destroyed = true;
     this.cancelDeferredFullRoomLoads();
     this.cancelDeferredPreviewRender();
+    this.cancelFullRoomReleaseCleanup();
     this.clearDisplayState();
     this.worldWindow = null;
     this.chunkWindow = null;
@@ -1300,6 +1303,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private getRetainedFullRoomIds(targetFullRoomIds: Set<string>): Set<string> {
     const retainedRoomIds = new Set<string>(targetFullRoomIds);
     const now = this.options.scene.time.now;
+    let nextReleaseAt: number | null = null;
 
     for (const roomId of targetFullRoomIds) {
       this.fullRoomReleaseAtById.delete(roomId);
@@ -1320,12 +1324,38 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       this.fullRoomReleaseAtById.set(roomId, releaseAt);
       if (releaseAt > now) {
         retainedRoomIds.add(roomId);
+        nextReleaseAt = nextReleaseAt === null ? releaseAt : Math.min(nextReleaseAt, releaseAt);
       } else {
         this.fullRoomReleaseAtById.delete(roomId);
       }
     }
 
+    this.scheduleFullRoomReleaseCleanup(nextReleaseAt, now);
     return retainedRoomIds;
+  }
+
+  private scheduleFullRoomReleaseCleanup(releaseAt: number | null, now: number): void {
+    this.cancelFullRoomReleaseCleanup();
+    if (releaseAt === null || this.destroyed || this.options.getMode() !== 'play') {
+      return;
+    }
+
+    this.fullRoomReleaseCleanupTimer = this.options.scene.time.delayedCall(
+      Math.max(1, releaseAt - now + 1),
+      () => {
+        this.fullRoomReleaseCleanupTimer = null;
+        if (this.destroyed || this.options.getMode() !== 'play') {
+          return;
+        }
+
+        this.refreshVisibleRoomsFromCache();
+      },
+    );
+  }
+
+  private cancelFullRoomReleaseCleanup(): void {
+    this.fullRoomReleaseCleanupTimer?.remove(false);
+    this.fullRoomReleaseCleanupTimer = null;
   }
 
   private destroyFullRoom(roomId: string): void {
