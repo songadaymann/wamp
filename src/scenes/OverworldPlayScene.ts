@@ -16,6 +16,8 @@ import {
 } from '../courses/model';
 import { SceneFxController } from '../fx/controller';
 import {
+  decodeTileDataValue,
+  isSpecialBreakableBrickGid,
   placedObjectContributesToCategory,
   type GameObjectConfig,
   ROOM_HEIGHT,
@@ -49,6 +51,7 @@ import {
   RETRO_COLORS,
   ensureStarfieldTexture,
 } from '../visuals/starfield';
+import { buildRoomSnapshotTexture } from '../visuals/roomSnapshotTexture';
 import type { RoomRushOverworldCapture } from '../social/roomRushShare';
 import { RoomLightingController } from '../lighting/controller';
 import { type RoomLightingEmitter } from '../lighting/model';
@@ -378,6 +381,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private quicksandTouchedUntil = 0;
   private quicksandVisualSink = 0;
   private quicksandStatusCooldownUntil = 0;
+  private runtimeRoomTextureRevision = 0;
   private readonly roomRepository = createRoomRepository();
   private readonly courseRepository = createCourseRepository();
   private readonly profileRepository = createProfileRepository();
@@ -1787,6 +1791,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       const movement = this.measureMobilePerformance('update.movement', () =>
         this.movementController.updateMovement(delta, inQuicksand)
       );
+      this.measureMobilePerformance('update.specialTiles', () => {
+        this.updateSpecialTiles();
+      });
       this.measureMobilePerformance('update.combatInput', () => {
         this.combatController.handleCombatInput({
           swordPressed,
@@ -2407,6 +2414,145 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     this.syncActiveCoursePressurePlateLinks(this.loadedFullRoomsById.values());
     this.liveObjectController.updateLiveObjects(this.loadedFullRoomsById.values(), delta);
+  }
+
+  private updateSpecialTiles(): void {
+    if (this.mode !== 'play') {
+      return;
+    }
+
+    this.maybeBreakSpecialBrickTile();
+  }
+
+  private maybeBreakSpecialBrickTile(): void {
+    const playerBody = this.playerBody;
+    if (!playerBody) {
+      return;
+    }
+
+    const upwardDelta =
+      typeof playerBody.deltaY === 'function'
+        ? playerBody.deltaY()
+        : playerBody.y - (playerBody.prev?.y ?? playerBody.y);
+    const separatedUp = Boolean(playerBody.blocked?.up) || Boolean(playerBody.touching?.up);
+    const hitFromBelow = upwardDelta < -0.5 || playerBody.velocity.y < -20 || separatedUp;
+    if (!hitFromBelow) {
+      return;
+    }
+
+    const sampleY = playerBody.top - 1;
+    const sampleXs = [
+      playerBody.center.x,
+      playerBody.left + 2,
+      playerBody.right - 2,
+    ].filter((value, index, values) => values.indexOf(value) === index);
+
+    for (const sampleX of sampleXs) {
+      const match = this.findSpecialBreakableBrickTileAtWorldPoint(sampleX, sampleY);
+      if (!match) {
+        continue;
+      }
+
+      if (playerBody.velocity.y < -40) {
+        playerBody.setVelocityY(-40);
+      }
+      this.breakSpecialBrickTile(match.loadedRoom, match.tileX, match.tileY);
+      return;
+    }
+  }
+
+  private findSpecialBreakableBrickTileAtWorldPoint(
+    worldX: number,
+    worldY: number,
+  ): { loadedRoom: SceneLoadedFullRoom; tileX: number; tileY: number } | null {
+    const coordinates = this.getRoomCoordinatesForPoint(worldX, worldY);
+    const roomId = roomIdFromCoordinates(coordinates);
+    const loadedRoom = this.loadedFullRoomsById.get(roomId) ?? null;
+    if (!loadedRoom) {
+      return null;
+    }
+
+    const origin = this.getRoomOrigin(coordinates);
+    const tileX = Math.floor((worldX - origin.x) / TILE_SIZE);
+    const tileY = Math.floor((worldY - origin.y) / TILE_SIZE);
+    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
+      return null;
+    }
+
+    const { gid } = decodeTileDataValue(loadedRoom.room.tileData.terrain[tileY][tileX]);
+    if (!isSpecialBreakableBrickGid(gid)) {
+      return null;
+    }
+
+    return { loadedRoom, tileX, tileY };
+  }
+
+  private breakSpecialBrickTile(
+    loadedRoom: SceneLoadedFullRoom,
+    tileX: number,
+    tileY: number,
+  ): void {
+    const { gid } = decodeTileDataValue(loadedRoom.room.tileData.terrain[tileY][tileX]);
+    if (!isSpecialBreakableBrickGid(gid)) {
+      return;
+    }
+
+    loadedRoom.room.tileData.terrain[tileY][tileX] = -1;
+    loadedRoom.terrainLayer.removeTileAt(tileX, tileY, true, true);
+    this.refreshLoadedRoomTerrainTexture(loadedRoom);
+    this.playSpecialBrickBreakAnimation(loadedRoom, tileX, tileY);
+  }
+
+  private refreshLoadedRoomTerrainTexture(loadedRoom: SceneLoadedFullRoom): void {
+    const oldTextureKey = loadedRoom.textureKey;
+    this.runtimeRoomTextureRevision += 1;
+    const baseTextureKey = oldTextureKey.replace(/(?:-runtime-\d+)+$/, '');
+    const nextTextureKey = `${baseTextureKey}-runtime-${this.runtimeRoomTextureRevision}`;
+
+    if (this.textures.exists(nextTextureKey)) {
+      this.textures.remove(nextTextureKey);
+    }
+
+    buildRoomSnapshotTexture(this, loadedRoom.room, nextTextureKey, TILE_SIZE, {
+      includeBackground: false,
+      includeObjects: false,
+      includedLayers: ['background', 'terrain'],
+    });
+
+    loadedRoom.image.setTexture(nextTextureKey);
+    loadedRoom.textureKey = nextTextureKey;
+
+    const oldTextureStillUsed = Array.from(this.loadedFullRoomsById.values()).some(
+      (candidate) => candidate !== loadedRoom && candidate.textureKey === oldTextureKey,
+    );
+    if (!oldTextureStillUsed && this.textures.exists(oldTextureKey)) {
+      this.textures.remove(oldTextureKey);
+    }
+  }
+
+  private playSpecialBrickBreakAnimation(
+    loadedRoom: SceneLoadedFullRoom,
+    tileX: number,
+    tileY: number,
+  ): void {
+    const origin = this.getRoomOrigin(loadedRoom.room.coordinates);
+    const sprite = this.add.sprite(
+      origin.x + tileX * TILE_SIZE + TILE_SIZE / 2,
+      origin.y + tileY * TILE_SIZE + TILE_SIZE / 2,
+      'brick_box',
+      5,
+    );
+    sprite.setDepth(26);
+
+    if (this.anims.exists('brick_box_break_anim')) {
+      sprite.play('brick_box_break_anim');
+      sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+        sprite.destroy();
+      });
+      return;
+    }
+
+    sprite.destroy();
   }
 
   private syncActiveCoursePressurePlateLinks(

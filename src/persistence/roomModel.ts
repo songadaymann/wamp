@@ -2,11 +2,13 @@ import {
   LAYER_NAMES,
   ROOM_HEIGHT,
   ROOM_WIDTH,
+  SPECIAL_TILE_BREAKABLE_BRICK_GID,
   TILE_SIZE,
   canObjectBeStoredInContainer,
   canPlacedObjectBeContainer,
   canPlacedObjectBePressurePlateTarget,
   canPlacedObjectTriggerOtherObjects,
+  decodeTileDataValue,
   getPlacedObjectInstanceId,
   getObjectById,
   placedObjectContributesToCategory,
@@ -353,7 +355,72 @@ function clonePlacedObjects(placedObjects: PlacedObject[]): PlacedObject[] {
   });
 }
 
+function getLegacyBrickBoxTerrainCell(
+  placed: PlacedObject,
+): { x: number; y: number } | null {
+  const tileXFloat = (placed.x - TILE_SIZE / 2) / TILE_SIZE;
+  const tileYFloat = (placed.y - TILE_SIZE / 2) / TILE_SIZE;
+  const tileX = Math.round(tileXFloat);
+  const tileY = Math.round(tileYFloat);
+  const isAligned =
+    Math.abs(tileXFloat - tileX) < 0.001 &&
+    Math.abs(tileYFloat - tileY) < 0.001;
+
+  if (
+    !isAligned ||
+    tileX < 0 ||
+    tileX >= ROOM_WIDTH ||
+    tileY < 0 ||
+    tileY >= ROOM_HEIGHT
+  ) {
+    return null;
+  }
+
+  return { x: tileX, y: tileY };
+}
+
+function migrateLegacyBrickBoxesToSpecialTerrain(
+  tileData: RoomTileData,
+  placedObjects: PlacedObject[],
+): PlacedObject[] {
+  const nextPlacedObjects: PlacedObject[] = [];
+
+  for (const placed of placedObjects) {
+    if (placed.id !== 'brick_box') {
+      nextPlacedObjects.push(placed);
+      continue;
+    }
+
+    const cell = getLegacyBrickBoxTerrainCell(placed);
+    if (!cell) {
+      nextPlacedObjects.push(placed);
+      continue;
+    }
+
+    const currentTile = tileData.terrain[cell.y]?.[cell.x] ?? -1;
+    const currentGid = decodeTileDataValue(currentTile).gid;
+    if (currentGid === SPECIAL_TILE_BREAKABLE_BRICK_GID) {
+      continue;
+    }
+
+    if (currentGid > 0) {
+      nextPlacedObjects.push(placed);
+      continue;
+    }
+
+    tileData.terrain[cell.y][cell.x] = SPECIAL_TILE_BREAKABLE_BRICK_GID;
+  }
+
+  return nextPlacedObjects;
+}
+
 export function cloneRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
+  const tileData = cloneTileData(room.tileData);
+  const placedObjects = migrateLegacyBrickBoxesToSpecialTerrain(
+    tileData,
+    clonePlacedObjects(room.placedObjects),
+  );
+
   return {
     id: room.id,
     coordinates: { ...room.coordinates },
@@ -364,8 +431,8 @@ export function cloneRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
     music: normalizeRoomMusic(room.music),
     goal: normalizeRoomGoal(room.goal),
     spawnPoint: room.spawnPoint ? { ...room.spawnPoint } : null,
-    tileData: cloneTileData(room.tileData),
-    placedObjects: clonePlacedObjects(room.placedObjects),
+    tileData,
+    placedObjects,
     customSprites: normalizeCustomSpriteDefinitions(room.customSprites),
     version: room.version,
     status: room.status,

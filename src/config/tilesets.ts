@@ -13,7 +13,14 @@ export interface TilesetConfig {
   firstGid: number;
   terrainCollisionProfiles?: Partial<Record<number, TerrainCollisionProfileId>>;
   lightEmissionProfiles?: Partial<Record<number, TileLightEmissionConfig>>;
+  editorTileMetadata?: Partial<Record<number, EditorTileMetadata>>;
   uiTheme?: TilesetUiThemeConfig;
+}
+
+export interface EditorTileMetadata {
+  label: string;
+  description?: string;
+  enabled: boolean;
 }
 
 export type TilesetMusicColorRole = 'drums' | 'triangle' | 'saw' | 'square';
@@ -147,6 +154,113 @@ const DEFAULT_TILESET_UI_THEME: TilesetUiThemeConfig = {
   accentHot: 0xff7a5c,
   accentAlt: 0x63d6cb,
 };
+
+export const SPECIAL_TILESET_KEY = 'special';
+export const SPECIAL_TILESET_FIRST_GID = 669;
+export const SPECIAL_TILE_BREAKABLE_BRICK_LOCAL_INDEX = 0;
+export const SPECIAL_TILE_BREAKABLE_BRICK_GID =
+  SPECIAL_TILESET_FIRST_GID + SPECIAL_TILE_BREAKABLE_BRICK_LOCAL_INDEX;
+
+const SPECIAL_TILE_COUNT = 64;
+const SPECIAL_TILE_RESERVED_INDICES = Array.from(
+  { length: SPECIAL_TILE_COUNT - 1 },
+  (_, index) => index + 1,
+);
+
+function createSpecialTileEditorMetadata(): Partial<Record<number, EditorTileMetadata>> {
+  const metadata: Partial<Record<number, EditorTileMetadata>> = {
+    0: {
+      label: 'Breakable Brick',
+      description: 'Breakable solid tile. Player can hit it from below.',
+      enabled: true,
+    },
+    1: {
+      label: 'One-Way Platform',
+      description: 'Reserved jump-through platform tile.',
+      enabled: false,
+    },
+    2: {
+      label: 'Moving Platform',
+      description: 'Reserved moving platform tile.',
+      enabled: false,
+    },
+    3: {
+      label: 'Conveyor Left',
+      description: 'Reserved conveyor tile.',
+      enabled: false,
+    },
+    4: {
+      label: 'Conveyor Right',
+      description: 'Reserved conveyor tile.',
+      enabled: false,
+    },
+    5: {
+      label: 'Ice',
+      description: 'Reserved low-friction tile.',
+      enabled: false,
+    },
+    6: {
+      label: 'Sticky',
+      description: 'Reserved high-friction tile.',
+      enabled: false,
+    },
+    7: {
+      label: 'Bounce',
+      description: 'Reserved bounce tile.',
+      enabled: false,
+    },
+    8: {
+      label: 'Damage',
+      description: 'Reserved hazard tile.',
+      enabled: false,
+    },
+    9: {
+      label: 'Gravity Up',
+      description: 'Reserved gravity modifier tile.',
+      enabled: false,
+    },
+    10: {
+      label: 'Gravity Down',
+      description: 'Reserved gravity modifier tile.',
+      enabled: false,
+    },
+    11: {
+      label: 'Gravity Left',
+      description: 'Reserved gravity modifier tile.',
+      enabled: false,
+    },
+    12: {
+      label: 'Gravity Right',
+      description: 'Reserved gravity modifier tile.',
+      enabled: false,
+    },
+    13: {
+      label: 'Water',
+      description: 'Reserved swim or slow-zone tile.',
+      enabled: false,
+    },
+    14: {
+      label: 'Wind Left',
+      description: 'Reserved force tile.',
+      enabled: false,
+    },
+    15: {
+      label: 'Wind Right',
+      description: 'Reserved force tile.',
+      enabled: false,
+    },
+  };
+
+  for (let index = 16; index < SPECIAL_TILE_COUNT; index += 1) {
+    metadata[index] = {
+      label: `Reserved ${index + 1}`,
+      description: 'Reserved special tile slot.',
+      enabled: false,
+    };
+  }
+
+  return metadata;
+}
 
 const FIRE_LIGHT_FLICKER = Object.freeze({
   radiusAmplitude: 0.14,
@@ -436,6 +550,27 @@ export const TILESETS: TilesetConfig[] = [
       accentAlt: 0x86d54a,
     },
   },
+  {
+    key: SPECIAL_TILESET_KEY,
+    name: 'Special',
+    path: 'assets/tilesets/special.png?v=2026-05-12-special-tiles',
+    imageWidth: 128,
+    imageHeight: 128,
+    columns: 8,
+    rows: 8,
+    tileCount: SPECIAL_TILE_COUNT,
+    firstGid: SPECIAL_TILESET_FIRST_GID,
+    terrainCollisionProfiles: {
+      ...createTilesetCollisionProfiles(SPECIAL_TILE_RESERVED_INDICES, NO_COLLISION_PROFILE),
+    },
+    editorTileMetadata: createSpecialTileEditorMetadata(),
+    uiTheme: {
+      accentCool: 0x6fd2c8,
+      accentWarm: 0xf3c74f,
+      accentHot: 0xff6c4a,
+      accentAlt: 0x9bb0ff,
+    },
+  },
 ];
 
 const LEGACY_TILESET_KEY_ALIASES: Record<string, string> = {
@@ -510,6 +645,26 @@ export function getTilesetByGid(gid: number): TilesetConfig | undefined {
   }
 
   return undefined;
+}
+
+export function getTilesetLocalTileIndex(gid: number): number | null {
+  const tileset = getTilesetByGid(gid);
+  if (!tileset) {
+    return null;
+  }
+
+  return gid - tileset.firstGid;
+}
+
+export function isTilesetLocalTileEditorEnabled(
+  tileset: TilesetConfig,
+  localIndex: number,
+): boolean {
+  return tileset.editorTileMetadata?.[localIndex]?.enabled !== false;
+}
+
+export function isSpecialBreakableBrickGid(gid: number): boolean {
+  return gid === SPECIAL_TILE_BREAKABLE_BRICK_GID;
 }
 
 export function getTerrainCollisionProfileForGid(gid: number): TerrainCollisionProfileConfig {
