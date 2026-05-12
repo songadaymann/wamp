@@ -15,6 +15,8 @@ import {
   type LoadedRoomObject,
 } from './liveObjects';
 
+const CRATE_PULL_DRAG_COMPENSATION_SCALE = 2.25;
+
 export interface OverworldCrateInteraction {
   crateBody: Phaser.Physics.Arcade.Body;
   mode: 'push' | 'pull';
@@ -269,7 +271,9 @@ export class OverworldMovementController {
       this.host.state.activeCrateInteractionMode = crateInteraction.mode;
       this.host.state.activeCrateInteractionFacing = crateInteraction.facing;
       playerBody.setVelocityX(crateInteraction.moveDirectionX * moveSpeed);
-      crateInteraction.crateBody.setVelocityX(crateInteraction.moveDirectionX * moveSpeed);
+      crateInteraction.crateBody.setVelocityX(
+        this.getCrateInteractionVelocityX(crateInteraction, moveSpeed, delta)
+      );
     } else {
       this.clearCrateInteractionState();
       if (this.host.getCurrentTime() < this.host.state.weaponKnockbackUntil) {
@@ -567,6 +571,24 @@ export class OverworldMovementController {
     stopSfx('ladder-climb');
   }
 
+  private getCrateInteractionVelocityX(
+    crateInteraction: OverworldCrateInteraction,
+    moveSpeed: number,
+    delta: number,
+  ): number {
+    if (crateInteraction.mode !== 'pull') {
+      return crateInteraction.moveDirectionX * moveSpeed;
+    }
+
+    // Pulling does not have push contact to keep the crate coupled, so offset its drag for the next physics step.
+    const dragCompensation =
+      Math.max(0, crateInteraction.crateBody.drag.x) *
+      Math.min(Math.max(delta, 0), 50) /
+      1000 *
+      CRATE_PULL_DRAG_COMPENSATION_SCALE;
+    return crateInteraction.moveDirectionX * (moveSpeed + dragCompensation);
+  }
+
   private canPlayerStandUp(): boolean {
     const playerBody = this.host.getPlayerBody();
     if (!playerBody) {
@@ -615,6 +637,10 @@ export class OverworldMovementController {
       let mode: 'push' | 'pull' | null = null;
       let gap = Number.POSITIVE_INFINITY;
       let facing: -1 | 1 = moveDirectionX;
+      const pullGapLimit =
+        this.host.state.activeCrateInteractionMode === 'pull'
+          ? this.options.crateInteractionMaxGap + Math.max(6, playerBounds.width * 0.5)
+          : this.options.crateInteractionMaxGap;
 
       if (moveDirectionX > 0) {
         const pushGap = crateBounds.left - playerBounds.right;
@@ -623,7 +649,7 @@ export class OverworldMovementController {
           mode = 'push';
           gap = Math.abs(pushGap);
           facing = 1;
-        } else if (downHeld && pullGap >= -6 && pullGap <= this.options.crateInteractionMaxGap) {
+        } else if (downHeld && pullGap >= -6 && pullGap <= pullGapLimit) {
           mode = 'pull';
           gap = Math.abs(pullGap);
           facing = -1;
@@ -635,7 +661,7 @@ export class OverworldMovementController {
           mode = 'push';
           gap = Math.abs(pushGap);
           facing = -1;
-        } else if (downHeld && pullGap >= -6 && pullGap <= this.options.crateInteractionMaxGap) {
+        } else if (downHeld && pullGap >= -6 && pullGap <= pullGapLimit) {
           mode = 'pull';
           gap = Math.abs(pullGap);
           facing = 1;
