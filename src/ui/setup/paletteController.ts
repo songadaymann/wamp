@@ -8,6 +8,7 @@ import {
   getObjectFrameSourceRect,
   getTilesetByKey,
   getTilesetUiTheme,
+  isTilesetLocalTileEditorEnabled,
   type GameObjectConfig,
   type TileSelection,
   type TilesetConfig,
@@ -168,6 +169,7 @@ export class PaletteController {
 
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
+    this.drawDisabledTileOverlays(ctx, ts, scaledTile);
 
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
     ctx.lineWidth = 1;
@@ -642,11 +644,48 @@ export class PaletteController {
     for (let row = 0; row < ts.rows; row++) {
       for (let col = 0; col < ts.columns; col++) {
         const tileIndex = row * ts.columns + col;
-        occupied[tileIndex] = this.tileHasVisiblePixels(imageData, col, row, allowSparseTiles);
+        occupied[tileIndex] =
+          isTilesetLocalTileEditorEnabled(ts, tileIndex) &&
+          this.tileHasVisiblePixels(imageData, col, row, allowSparseTiles);
       }
     }
 
     return occupied;
+  }
+
+  private drawDisabledTileOverlays(
+    ctx: CanvasRenderingContext2D,
+    ts: TilesetConfig,
+    scaledTile: number,
+  ): void {
+    if (!ts.editorTileMetadata) {
+      return;
+    }
+
+    ctx.save();
+    for (let tileIndex = 0; tileIndex < ts.tileCount; tileIndex += 1) {
+      if (isTilesetLocalTileEditorEnabled(ts, tileIndex)) {
+        continue;
+      }
+
+      const col = tileIndex % ts.columns;
+      const row = Math.floor(tileIndex / ts.columns);
+      const x = Math.floor(col * scaledTile);
+      const y = Math.floor(row * scaledTile);
+      const size = Math.floor(scaledTile);
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.48)';
+      ctx.fillRect(x, y, size, size);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + 3, y + 3);
+      ctx.lineTo(x + size - 3, y + size - 3);
+      ctx.moveTo(x + size - 3, y + 3);
+      ctx.lineTo(x + 3, y + size - 3);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   private tileHasVisiblePixels(

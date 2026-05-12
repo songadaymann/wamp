@@ -95,6 +95,10 @@ const PREFERRED_TILESET_OPTION_ORDER = [
   'snow',
   'water',
   'smb_lvl1_3_5',
+  'text white',
+  'text black',
+  'signs and graffiti',
+  'special',
 ] as const;
 
 function getEditorTilesets(): typeof TILESETS {
