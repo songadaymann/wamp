@@ -11,7 +11,7 @@ import type {
   PvpParticipantIdentity,
 } from '../../pvp/model';
 import type { WeaponHitResult } from './liveObjects';
-import { PvpHeartDisplay } from './pvpHeartDisplay';
+import { PVP_HEART_HEAD_CLEARANCE_PX, PvpHeartDisplay } from './pvpHeartDisplay';
 
 interface PvpInstanceRendererOptions {
   scene: Phaser.Scene;
@@ -145,7 +145,10 @@ export class PvpInstanceRenderer {
         this.opponent.sprite.x = Phaser.Math.Linear(this.opponent.sprite.x, predicted.x, step);
         this.opponent.sprite.y = Phaser.Math.Linear(this.opponent.sprite.y, predicted.y, step);
       }
-      this.opponent.heartsDisplay.setPosition(this.opponent.sprite.x, this.opponent.sprite.y - 28);
+      this.opponent.heartsDisplay.setPosition(
+        this.opponent.sprite.x,
+        this.getOpponentHeartY(this.opponent),
+      );
       this.ensureOpponentAvatarLoaded(this.opponent);
     }
 
@@ -348,6 +351,12 @@ export class PvpInstanceRenderer {
     };
     this.ensureOpponentAvatarLoaded(this.opponent);
     this.options.onDisplayObjectsChanged?.();
+  }
+
+  private getOpponentHeartY(opponent: RemoteOpponent): number {
+    const visualTop = opponent.sprite.y - opponent.sprite.displayHeight;
+    const bodyTop = opponent.sprite.y - this.options.playerHeight;
+    return Math.min(visualTop, bodyTop) - PVP_HEART_HEAD_CLEARANCE_PX;
   }
 
   private ensureOpponentAvatarLoaded(opponent: RemoteOpponent): void {

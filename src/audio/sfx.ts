@@ -163,9 +163,8 @@ const SFX_CUES: Record<SfxCue, CueConfig> = {
     cooldownMs: 40,
   },
   'player-hurt': {
-    path: 'assets/sfx/goals/game-fail.wav',
-    volume: 0.34,
-    playbackRate: 1.08,
+    path: 'assets/sfx/combat/player-hurt.wav',
+    volume: 0.5,
     cooldownMs: 90,
   },
   'player-death': {

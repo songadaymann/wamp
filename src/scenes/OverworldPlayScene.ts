@@ -146,7 +146,7 @@ import {
   type RenderedGhost,
 } from './overworld/presence';
 import { PvpInstanceRenderer } from './overworld/pvpInstanceRenderer';
-import { PvpHeartDisplay } from './overworld/pvpHeartDisplay';
+import { PVP_HEART_HEAD_CLEARANCE_PX, PvpHeartDisplay } from './overworld/pvpHeartDisplay';
 import {
   OverworldRoomChatController,
 } from './overworld/roomChat';
@@ -5221,7 +5221,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     this.pvpLocalHeartDisplay.setHearts(local.hearts);
-    this.pvpLocalHeartDisplay.setPosition(this.playerBody.center.x, this.playerBody.top - 8);
+    this.pvpLocalHeartDisplay.setPosition(
+      this.playerBody.center.x,
+      this.getLocalPvpHeartY(),
+    );
     this.pvpLocalHeartDisplay.setVisible(true);
   }
 
@@ -5237,6 +5240,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private playPvpLocalDamageFeedback(previousHearts: number, nextHearts: number): void {
     const lostHearts = Math.max(1, previousHearts - nextHearts);
+    playSfx('player-hurt', { ignoreCooldown: true });
     showPvpDamageFlashOverlay();
     this.cameras.main.flash(150, 255, 32, 42, false);
     this.cameras.main.shake(110, 0.0045 + lostHearts * 0.0015);
@@ -5246,6 +5250,14 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.playerSprite?.clearTint();
       });
     }
+  }
+
+  private getLocalPvpHeartY(): number {
+    const visualTop = this.playerSprite
+      ? this.playerSprite.y - this.playerSprite.displayHeight
+      : this.playerBody?.top ?? 0;
+    const bodyTop = this.playerBody?.top ?? visualTop;
+    return Math.min(visualTop, bodyTop) - PVP_HEART_HEAD_CLEARANCE_PX;
   }
 
   private resolvePvpEnvironmentSource(reason: string): PvpHitSource {

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 
 export const PVP_HEART_TEXTURE_KEY = 'pvp_heart_full';
 export const PVP_HEART_TEXTURE_PATH = 'assets/ui/pvp-heart-full.png';
+export const PVP_HEART_HEAD_CLEARANCE_PX = 12;
 
 const HEART_SPACING_PX = 12;
 
