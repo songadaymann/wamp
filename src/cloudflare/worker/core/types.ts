@@ -388,6 +388,34 @@ export interface RoomRushRunRow {
   created_at: string;
 }
 
+export interface PvpMatchRow {
+  match_id: string;
+  mode: string;
+  room_id: string;
+  room_x: number;
+  room_y: number;
+  result: string;
+  winner_user_id: string | null;
+  loser_user_id: string | null;
+  started_at: string;
+  finished_at: string;
+  duration_ms: number;
+  final_snapshot_json: string;
+  created_at: string;
+}
+
+export interface PvpMatchPlayerRow {
+  match_id: string;
+  user_id: string;
+  user_display_name: string;
+  result: string;
+  hearts_remaining: number;
+  lives_lost: number;
+  hits: number;
+  xp_awarded: number;
+  created_at: string;
+}
+
 export interface RoomDifficultyVoteRow {
   room_id: string;
   room_version: number;
@@ -543,6 +571,9 @@ export interface UserStatsRow {
   abandoned_runs: number;
   best_score: number;
   fastest_clear_ms: number | null;
+  pvp_wins?: number | null;
+  pvp_losses?: number | null;
+  pvp_draws?: number | null;
   updated_at: string;
 }
 

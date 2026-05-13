@@ -1,0 +1,74 @@
+.pvp-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(5, 6, 10, 0.58);
+}
+
+.pvp-modal-panel {
+  width: min(360px, calc(100vw - 28px));
+  border: 3px solid #18161c;
+  border-radius: 6px;
+  box-shadow: 6px 6px 0 #18161c;
+  background: #fff5d4;
+  color: #18161c;
+  padding: 16px;
+}
+
+.pvp-modal-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 1.1;
+  color: #b7352d;
+}
+
+.pvp-modal-body {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.pvp-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.pvp-countdown-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1190;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: rgba(5, 6, 10, 0.34);
+  color: #fff5d4;
+  text-align: center;
+  text-shadow: 3px 3px 0 #18161c;
+}
+
+.pvp-countdown-title {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 6vw, 46px);
+  line-height: 1;
+}
+
+.pvp-countdown-rule {
+  max-width: min(420px, calc(100vw - 32px));
+  margin-top: 10px;
+  font-weight: 800;
+  font-size: clamp(14px, 3vw, 20px);
+  line-height: 1.2;
+}
+
+.pvp-countdown-count {
+  margin-top: 18px;
+  font-family: var(--font-display);
+  font-size: clamp(60px, 18vw, 140px);
+  line-height: 0.9;
+  color: #ffd65a;
+}

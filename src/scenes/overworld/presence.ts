@@ -9,6 +9,12 @@ import {
 } from '../../player/avatar/dynamic';
 import { resolvePlayerAvatarPack } from '../../player/avatar/runtime';
 import { roomIdFromCoordinates, type RoomCoordinates } from '../../persistence/roomModel';
+import type {
+  PvpInviteOffer,
+  PvpInviteSendMessage,
+  PvpMatchSnapshot,
+  PvpPresenceServerMessage,
+} from '../../pvp/model';
 import { type WorldChunkBounds } from '../../persistence/worldModel';
 import {
   resolveWorldPresenceConfig,
@@ -16,6 +22,7 @@ import {
   WorldPresenceClient,
   type WorldGhostPresence,
   type WorldPresenceIdentity,
+  type WorldPresencePvpAction,
   type WorldPresenceRoomPreview,
   type WorldPresenceSnapshot,
 } from '../../presence/worldPresence';
@@ -29,6 +36,9 @@ export interface RenderedGhost {
   halo: Phaser.GameObjects.Ellipse;
   sprite: Phaser.GameObjects.Sprite;
   label: Phaser.GameObjects.Text;
+  actionIndicator: Phaser.GameObjects.Rectangle;
+  actionAccent: Phaser.GameObjects.Rectangle;
+  actionProjectile: Phaser.GameObjects.Rectangle;
   targetX: number;
   targetY: number;
 }
@@ -66,6 +76,11 @@ interface LocalPresenceInput {
   velocityY: number;
   facing: number;
   animationState: DefaultPlayerAnimationState;
+  pvp?: {
+    matchId: string;
+    action: WorldPresencePvpAction | null;
+    actionUntil: number;
+  } | null;
 }
 
 interface PresenceSummaryInput {
@@ -84,6 +99,9 @@ interface OverworldPresenceControllerOptions {
   onSnapshotUpdated?: () => void;
   onRoomActivityChanged?: () => void;
   onGhostDisplayObjectsChanged?: () => void;
+  onPvpInvite?: (invite: PvpInviteOffer) => void;
+  onPvpInviteAccepted?: (message: Extract<PvpPresenceServerMessage, { type: 'pvp:invite:accepted' }>) => void;
+  onPvpInviteDeclined?: (message: Extract<PvpPresenceServerMessage, { type: 'pvp:invite:declined' }>) => void;
 }
 
 export class OverworldPresenceController {
@@ -101,6 +119,9 @@ export class OverworldPresenceController {
   private visibleGhostCount = 0;
   private localRosterPresence: Pick<LocalPresenceInput, 'mode' | 'roomCoordinates'> | null = null;
   private pendingGhostAvatarLoads = new Set<string>();
+  private pvpMatchSnapshot: PvpMatchSnapshot | null = null;
+  private pvpLocalUserId: string | null = null;
+  private pvpInstanceOpponentUserId: string | null = null;
 
   constructor(private readonly options: OverworldPresenceControllerOptions) {}
 
@@ -128,6 +149,9 @@ export class OverworldPresenceController {
     this.client = new WorldPresenceClient({
       ...config,
       identity: this.identity,
+      onPvpInvite: (invite) => this.options.onPvpInvite?.(invite),
+      onPvpInviteAccepted: (message) => this.options.onPvpInviteAccepted?.(message),
+      onPvpInviteDeclined: (message) => this.options.onPvpInviteDeclined?.(message),
       onSnapshot: (snapshot) => {
         const roomActivityChanged =
           !this.areCountMapsEqual(this.roomPopulationsById, snapshot.roomPopulations)
@@ -207,6 +231,9 @@ export class OverworldPresenceController {
     this.ghostRenderBudget = 0;
     this.visibleGhostCount = 0;
     this.localRosterPresence = null;
+    this.pvpMatchSnapshot = null;
+    this.pvpLocalUserId = null;
+    this.pvpInstanceOpponentUserId = null;
   }
 
   destroy(): void {
@@ -223,6 +250,9 @@ export class OverworldPresenceController {
     this.ghostRenderBudget = 0;
     this.visibleGhostCount = 0;
     this.localRosterPresence = null;
+    this.pvpMatchSnapshot = null;
+    this.pvpLocalUserId = null;
+    this.pvpInstanceOpponentUserId = null;
   }
 
   getClient(): WorldPresenceClient | null {
@@ -251,6 +281,43 @@ export class OverworldPresenceController {
 
   getRenderedGhostsByConnectionId(): Map<string, RenderedGhost> {
     return this.renderedGhostsByConnectionId;
+  }
+
+  setPvpMatchSnapshot(snapshot: PvpMatchSnapshot | null, localUserId: string | null): void {
+    this.pvpMatchSnapshot = snapshot && snapshot.status !== 'complete' ? snapshot : null;
+    this.pvpLocalUserId = localUserId;
+    this.syncRenderedGhostLabels();
+    this.syncRenderedGhostPvpPresentation();
+    this.refreshGhostVisibility();
+  }
+
+  setPvpInstanceOpponentUserId(userId: string | null): void {
+    this.pvpInstanceOpponentUserId = userId;
+    this.refreshGhostVisibility();
+  }
+
+  sendPvpInvite(
+    targetConnectionId: string,
+    invite: Omit<PvpInviteSendMessage['invite'], 'targetConnectionId' | 'target'>,
+  ): boolean {
+    if (!this.client || !this.snapshot?.enabled) {
+      return false;
+    }
+
+    const target = (this.snapshot.ghosts ?? []).find((ghost) => ghost.connectionId === targetConnectionId);
+    if (!target) {
+      return false;
+    }
+
+    return this.client.sendPvpInvite(target, invite);
+  }
+
+  acceptPvpInvite(invite: PvpInviteOffer): boolean {
+    return this.client?.sendPvpInviteAccept(invite) ?? false;
+  }
+
+  declinePvpInvite(invite: PvpInviteOffer): boolean {
+    return this.client?.sendPvpInviteDecline(invite) ?? false;
   }
 
   setSubscribedChunkBounds(bounds: WorldChunkBounds | null): void {
@@ -305,18 +372,36 @@ export class OverworldPresenceController {
       facing: input.facing,
       animationState: input.animationState,
       mode: input.mode,
+      pvp: input.pvp ?? null,
       timestamp: Date.now(),
     });
   }
 
   updateGhosts(delta: number): void {
-    const step = Math.min(1, delta / 90);
+    const defaultStep = Math.min(1, delta / 90);
+    const pvpStep = Math.min(1, delta / 30);
     for (const renderedGhost of this.renderedGhostsByConnectionId.values()) {
-      renderedGhost.sprite.x = Phaser.Math.Linear(renderedGhost.sprite.x, renderedGhost.targetX, step);
-      renderedGhost.sprite.y = Phaser.Math.Linear(renderedGhost.sprite.y, renderedGhost.targetY, step);
+      const pvpRealtime = this.isGhostInActivePvp(renderedGhost.presence);
+      const predictedTarget = pvpRealtime
+        ? this.getPredictedGhostTarget(renderedGhost.presence)
+        : { x: renderedGhost.targetX, y: renderedGhost.targetY };
+      const distance = Phaser.Math.Distance.Between(
+        renderedGhost.sprite.x,
+        renderedGhost.sprite.y,
+        predictedTarget.x,
+        predictedTarget.y,
+      );
+      const step = pvpRealtime ? pvpStep : defaultStep;
+      if (pvpRealtime && distance > 72) {
+        renderedGhost.sprite.setPosition(predictedTarget.x, predictedTarget.y);
+      } else {
+        renderedGhost.sprite.x = Phaser.Math.Linear(renderedGhost.sprite.x, predictedTarget.x, step);
+        renderedGhost.sprite.y = Phaser.Math.Linear(renderedGhost.sprite.y, predictedTarget.y, step);
+      }
       renderedGhost.halo.x = renderedGhost.sprite.x;
       renderedGhost.halo.y = renderedGhost.sprite.y - 2;
       renderedGhost.label.setPosition(renderedGhost.sprite.x, renderedGhost.sprite.y - 28);
+      this.syncRenderedGhostActionIndicator(renderedGhost);
     }
   }
 
@@ -326,14 +411,23 @@ export class OverworldPresenceController {
     let visibleGhostCount = 0;
     for (const renderedGhost of this.renderedGhostsByConnectionId.values()) {
       const avatarReady = this.isGhostAvatarRenderReady(renderedGhost.presence.avatarId);
+      const pvpParticipant = this.isGhostInActivePvp(renderedGhost.presence);
+      const hiddenByPvpInstance =
+        Boolean(this.pvpInstanceOpponentUserId) &&
+        renderedGhost.presence.userId === this.pvpInstanceOpponentUserId;
       const visible =
         showGhosts &&
+        !hiddenByPvpInstance &&
         avatarReady &&
         this.options.isFullRoomLoaded(renderedGhost.presence.roomId) &&
         this.isPresenceFresh(renderedGhost.presence.timestamp);
-      renderedGhost.halo.setVisible(visible);
+      this.syncRenderedGhostPvpPresentation(renderedGhost);
+      renderedGhost.halo.setVisible(visible && !pvpParticipant);
       renderedGhost.sprite.setVisible(visible);
       renderedGhost.label.setVisible(visible);
+      if (!visible || !this.isGhostActionVisible(renderedGhost.presence)) {
+        this.setRenderedGhostActionVisible(renderedGhost, false);
+      }
       if (visible) {
         visibleGhostCount += 1;
       }
@@ -344,7 +438,14 @@ export class OverworldPresenceController {
   getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
     const objects: Phaser.GameObjects.GameObject[] = [];
     for (const renderedGhost of this.renderedGhostsByConnectionId.values()) {
-      objects.push(renderedGhost.halo, renderedGhost.sprite, renderedGhost.label);
+      objects.push(
+        renderedGhost.halo,
+        renderedGhost.sprite,
+        renderedGhost.label,
+        renderedGhost.actionIndicator,
+        renderedGhost.actionAccent,
+        renderedGhost.actionProjectile,
+      );
     }
     return objects;
   }
@@ -731,7 +832,8 @@ export class OverworldPresenceController {
       existing.targetX = ghost.x;
       existing.targetY = ghost.y;
       existing.sprite.setFlipX(ghost.facing < 0);
-      existing.label.setText(ghost.displayName);
+      existing.label.setText(this.getGhostLabelText(ghost));
+      this.syncRenderedGhostPvpPresentation(existing);
       this.ensureGhostAvatarPackLoaded(ghost.avatarId);
       if (!this.isGhostAvatarRenderReady(ghost.avatarId)) {
         continue;
@@ -755,6 +857,29 @@ export class OverworldPresenceController {
 
     if (structureChanged) {
       this.options.onGhostDisplayObjectsChanged?.();
+    }
+  }
+
+  private syncRenderedGhostLabels(): void {
+    for (const renderedGhost of this.renderedGhostsByConnectionId.values()) {
+      renderedGhost.label.setText(this.getGhostLabelText(renderedGhost.presence));
+      this.syncRenderedGhostPvpPresentation(renderedGhost);
+    }
+  }
+
+  private syncRenderedGhostPvpPresentation(renderedGhost?: RenderedGhost): void {
+    const renderedGhosts = renderedGhost
+      ? [renderedGhost]
+      : Array.from(this.renderedGhostsByConnectionId.values());
+
+    for (const ghost of renderedGhosts) {
+      const pvpParticipant = this.isGhostInActivePvp(ghost.presence);
+      ghost.sprite.setAlpha(pvpParticipant ? 1 : 0.74);
+      ghost.halo.setAlpha(pvpParticipant ? 0 : 1);
+      ghost.label.setAlpha(pvpParticipant ? 1 : 0.94);
+      ghost.label.setColor(pvpParticipant ? '#ff3f5f' : '#f3eee2');
+      ghost.label.setStroke('#050505', pvpParticipant ? 4 : 3);
+      ghost.label.setBackgroundColor(pvpParticipant ? 'rgba(0,0,0,0)' : '#050505');
     }
   }
 
@@ -825,6 +950,108 @@ export class OverworldPresenceController {
     }
   }
 
+  private getGhostLabelText(ghost: WorldGhostPresence): string {
+    const participant = this.getPvpParticipant(ghost.userId);
+    if (participant && this.isGhostInActivePvp(ghost)) {
+      return participant.hearts > 0 ? '♥'.repeat(participant.hearts) : '0♥';
+    }
+
+    return ghost.displayName;
+  }
+
+  private isGhostInActivePvp(ghost: WorldGhostPresence): boolean {
+    const snapshot = this.pvpMatchSnapshot;
+    if (!snapshot || snapshot.status === 'complete' || ghost.userId === this.pvpLocalUserId) {
+      return false;
+    }
+
+    if (!this.getPvpParticipant(ghost.userId)) {
+      return false;
+    }
+
+    return !ghost.pvp?.matchId || ghost.pvp.matchId === snapshot.matchId;
+  }
+
+  private getPvpParticipant(userId: string): PvpMatchSnapshot['participants'][number] | null {
+    return this.pvpMatchSnapshot?.participants.find((participant) => participant.userId === userId) ?? null;
+  }
+
+  private getPredictedGhostTarget(ghost: WorldGhostPresence): { x: number; y: number } {
+    const ageMs = Phaser.Math.Clamp(Date.now() - ghost.timestamp, 0, 100);
+    const ageSeconds = ageMs / 1000;
+    return {
+      x: ghost.x + ghost.velocityX * ageSeconds,
+      y: ghost.y + ghost.velocityY * ageSeconds,
+    };
+  }
+
+  private isGhostActionVisible(ghost: WorldGhostPresence): boolean {
+    const pvp = ghost.pvp;
+    if (
+      !this.isGhostInActivePvp(ghost) ||
+      !pvp ||
+      pvp.matchId !== this.pvpMatchSnapshot?.matchId ||
+      !pvp.action
+    ) {
+      return false;
+    }
+
+    return Date.now() < pvp.actionUntil;
+  }
+
+  private syncRenderedGhostActionIndicator(renderedGhost: RenderedGhost): void {
+    const action = renderedGhost.presence.pvp?.action ?? null;
+    if (!renderedGhost.sprite.visible || !this.isGhostActionVisible(renderedGhost.presence) || !action) {
+      this.setRenderedGhostActionVisible(renderedGhost, false);
+      return;
+    }
+
+    const facing = renderedGhost.presence.facing < 0 ? -1 : 1;
+    this.setRenderedGhostActionVisible(renderedGhost, true);
+    if (action === 'sword') {
+      renderedGhost.actionIndicator
+        .setPosition(renderedGhost.sprite.x + facing * 17, renderedGhost.sprite.y - 22)
+        .setSize(24, 4)
+        .setScale(1, 1)
+        .setFillStyle(0xfff0b3, 0.96)
+        .setAngle(facing * -28);
+      renderedGhost.actionAccent
+        .setPosition(renderedGhost.sprite.x + facing * 8, renderedGhost.sprite.y - 18)
+        .setSize(7, 7)
+        .setScale(1, 1)
+        .setFillStyle(0xff3f5f, 0.95)
+        .setAngle(0);
+      renderedGhost.actionProjectile.setVisible(false);
+      return;
+    }
+
+    renderedGhost.actionIndicator
+      .setPosition(renderedGhost.sprite.x + facing * 14, renderedGhost.sprite.y - 20)
+      .setSize(14, 4)
+      .setScale(1, 1)
+      .setFillStyle(0xd7faff, 0.96)
+      .setAngle(0);
+    renderedGhost.actionAccent
+      .setPosition(renderedGhost.sprite.x + facing * 24, renderedGhost.sprite.y - 20)
+      .setSize(6, 6)
+      .setScale(1, 1)
+      .setFillStyle(0xfff0b3, 0.96)
+      .setAngle(0);
+    renderedGhost.actionProjectile
+      .setVisible(true)
+      .setPosition(renderedGhost.sprite.x + facing * 40, renderedGhost.sprite.y - 20)
+      .setSize(18, 3)
+      .setScale(1, 1)
+      .setFillStyle(0x7de3ff, 0.96)
+      .setAngle(0);
+  }
+
+  private setRenderedGhostActionVisible(renderedGhost: RenderedGhost, visible: boolean): void {
+    renderedGhost.actionIndicator.setVisible(visible);
+    renderedGhost.actionAccent.setVisible(visible);
+    renderedGhost.actionProjectile.setVisible(visible);
+  }
+
   private getGhostRenderBudget(): number {
     if (this.options.getMode() !== 'play') {
       return 0;
@@ -884,7 +1111,7 @@ export class OverworldPresenceController {
       sprite.setVisible(false);
     }
 
-    const label = this.options.scene.add.text(ghost.x, ghost.y - 28, ghost.displayName, {
+    const label = this.options.scene.add.text(ghost.x, ghost.y - 28, this.getGhostLabelText(ghost), {
       fontFamily: 'Courier New',
       fontSize: '11px',
       color: '#f3eee2',
@@ -897,14 +1124,29 @@ export class OverworldPresenceController {
     label.setAlpha(0.94);
     label.setDepth(25);
 
-    return {
+    const actionIndicator = this.options.scene.add.rectangle(ghost.x, ghost.y - 18, 20, 4, 0xffd65a, 0);
+    actionIndicator.setDepth(27);
+    actionIndicator.setVisible(false);
+    const actionAccent = this.options.scene.add.rectangle(ghost.x, ghost.y - 18, 7, 7, 0xff3f5f, 0);
+    actionAccent.setDepth(28);
+    actionAccent.setVisible(false);
+    const actionProjectile = this.options.scene.add.rectangle(ghost.x, ghost.y - 18, 18, 3, 0x7de3ff, 0);
+    actionProjectile.setDepth(28);
+    actionProjectile.setVisible(false);
+
+    const renderedGhost = {
       presence: ghost,
       halo,
       sprite,
       label,
+      actionIndicator,
+      actionAccent,
+      actionProjectile,
       targetX: ghost.x,
       targetY: ghost.y,
     };
+    this.syncRenderedGhostPvpPresentation(renderedGhost);
+    return renderedGhost;
   }
 
   private destroyGhostRenderers(): void {
@@ -923,6 +1165,9 @@ export class OverworldPresenceController {
     renderedGhost.halo.destroy();
     renderedGhost.sprite.destroy();
     renderedGhost.label.destroy();
+    renderedGhost.actionIndicator.destroy();
+    renderedGhost.actionAccent.destroy();
+    renderedGhost.actionProjectile.destroy();
   }
 
   private ensureGhostAvatarPackLoaded(avatarId: string): void {

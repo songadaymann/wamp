@@ -1,17 +1,21 @@
 import Phaser from 'phaser';
 import { playSfx } from '../../audio/sfx';
 import type { DefaultPlayerAnimationState } from '../../player/defaultPlayer';
+import type {
+  CombatPresentationEvent,
+  CombatPresentationOptions,
+  PresentedProjectile,
+} from './combatPresentation';
 import type { WeaponHitResult } from './liveObjects';
 
 export interface OverworldPlayerProjectile {
-  rect: Phaser.GameObjects.Rectangle;
+  presentation: PresentedProjectile;
   directionX: number;
   speed: number;
   expiresAt: number;
 }
 
 interface OverworldCombatControllerHost {
-  scene: Phaser.Scene;
   getCurrentTime(): number;
   getPlayer(): Phaser.GameObjects.Rectangle | null;
   getPlayerBody(): Phaser.Physics.Arcade.Body | null;
@@ -19,18 +23,19 @@ interface OverworldCombatControllerHost {
   isPlayerCrouching(): boolean;
   attackEnemiesInRect(attackRect: Phaser.Geom.Rectangle, damage: number): WeaponHitResult[];
   attackEnemyAtPoint(worldX: number, worldY: number, damage: number): WeaponHitResult | null;
+  attackPeerInRect(attackRect: Phaser.Geom.Rectangle, source: 'sword'): WeaponHitResult | null;
+  attackPeerAtPoint(worldX: number, worldY: number, source: 'gun'): WeaponHitResult | null;
   isProjectileBlocked(worldX: number, worldY: number): boolean;
   applyWeaponKnockback(velocityX: number): void;
-  playSwordSlashFx(
-    x: number,
-    y: number,
-    facing: -1 | 1,
-    downward: boolean,
-  ): void;
-  playMuzzleFlashFx(x: number, y: number, facing: -1 | 1): void;
+  presentCombatEvent(
+    event: CombatPresentationEvent,
+    options?: CombatPresentationOptions,
+  ): PresentedProjectile | null;
+  destroyPresentedProjectile(projectile: PresentedProjectile): void;
   playBulletImpactFx(x: number, y: number): void;
+  playPeerHitFx(x: number, y: number): void;
   shakeCamera(durationMs: number, intensity: number): void;
-  syncBackdropCameraIgnores(): void;
+  publishCombatAction(event: CombatPresentationEvent): void;
 }
 
 interface OverworldCombatControllerOptions {
@@ -97,7 +102,7 @@ export class OverworldCombatController {
   }
 
   getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return this.playerProjectiles.map((projectile) => projectile.rect);
+    return this.playerProjectiles.map((projectile) => projectile.presentation.rect);
   }
 
   handleCombatInput(input: {
@@ -130,12 +135,13 @@ export class OverworldCombatController {
 
     const now = this.host.getCurrentTime();
     for (const projectile of [...this.playerProjectiles]) {
-      if (!projectile.rect.active || now >= projectile.expiresAt) {
+      const projectileRect = projectile.presentation.rect;
+      if (!projectileRect.active || now >= projectile.expiresAt) {
         this.destroyProjectile(projectile);
         continue;
       }
 
-      const startX = projectile.rect.x;
+      const startX = projectileRect.x;
       const stepDistance = (projectile.speed * delta) / 1000;
       const nextX = startX + projectile.directionX * stepDistance;
       const sampleCount = Math.max(1, Math.ceil(Math.abs(nextX - startX) / 6));
@@ -143,11 +149,21 @@ export class OverworldCombatController {
 
       for (let index = 1; index <= sampleCount; index += 1) {
         const sampleX = Phaser.Math.Linear(startX, nextX, index / sampleCount);
-        const sampleY = projectile.rect.y;
+        const sampleY = projectileRect.y;
         const enemyHit = this.host.attackEnemyAtPoint(sampleX, sampleY, this.options.gunHitDamage);
         if (enemyHit) {
           playSfx('enemy-hit');
           this.host.playBulletImpactFx(enemyHit.x, enemyHit.y - 2);
+          this.host.shakeCamera(40, 0.0015);
+          this.destroyProjectile(projectile);
+          destroyed = true;
+          break;
+        }
+
+        const peerHit = this.host.attackPeerAtPoint(sampleX, sampleY, 'gun');
+        if (peerHit) {
+          playSfx('enemy-hit');
+          this.host.playPeerHitFx(peerHit.x, peerHit.y);
           this.host.shakeCamera(40, 0.0015);
           this.destroyProjectile(projectile);
           destroyed = true;
@@ -163,17 +179,16 @@ export class OverworldCombatController {
       }
 
       if (!destroyed) {
-        projectile.rect.x = nextX;
+        projectileRect.x = nextX;
       }
     }
   }
 
   destroyProjectiles(): void {
     for (const projectile of this.playerProjectiles) {
-      projectile.rect.destroy();
+      this.host.destroyPresentedProjectile(projectile.presentation);
     }
     this.playerProjectiles = [];
-    this.host.syncBackdropCameraIgnores();
   }
 
   private performSwordAttack(
@@ -204,18 +219,31 @@ export class OverworldCombatController {
         );
 
     const hits = this.host.attackEnemiesInRect(attackRect, this.options.swordHitDamage);
-    this.host.playSwordSlashFx(
-      player.x,
-      downward ? playerBody.bottom - 2 : playerBody.center.y,
-      playerFacing,
+    const peerHit = this.host.attackPeerInRect(attackRect, 'sword');
+    const event = this.createCombatPresentationEvent({
+      source: 'sword',
+      player,
+      playerBody,
+      facing: playerFacing,
+      durationMs: this.options.swordAttackMs,
+      effectX: player.x,
+      effectY: downward ? playerBody.bottom - 2 : playerBody.center.y,
       downward,
-    );
+      projectile: null,
+    });
+    this.host.presentCombatEvent(event);
+    this.host.publishCombatAction(event);
 
-    if (hits.length === 0) {
+    if (hits.length === 0 && !peerHit) {
       return;
     }
 
-    playSfx('enemy-hit');
+    if (hits.length > 0 || peerHit) {
+      playSfx('enemy-hit');
+    }
+    if (peerHit) {
+      this.host.playPeerHitFx(peerHit.x, peerHit.y);
+    }
     if (downward) {
       playerBody.setVelocityY(this.options.downwardSlashBounceVelocity);
     } else {
@@ -242,16 +270,33 @@ export class OverworldCombatController {
 
     const muzzleX = player.x + playerFacing * 10;
     const muzzleY = playerBody.center.y - (this.host.isPlayerCrouching() ? 1 : 5);
-    this.host.playMuzzleFlashFx(muzzleX, muzzleY, playerFacing);
-
-    const projectile = this.host.scene.add.rectangle(muzzleX, muzzleY, 8, 3, 0x9deaff, 1);
-    projectile.setDepth(27);
-    this.playerProjectiles.push({
-      rect: projectile,
-      directionX: playerFacing,
-      speed: this.options.projectileSpeed,
-      expiresAt: now + this.options.projectileLifetimeMs,
+    const event = this.createCombatPresentationEvent({
+      source: 'gun',
+      player,
+      playerBody,
+      facing: playerFacing,
+      durationMs: this.options.gunAttackMs,
+      effectX: muzzleX,
+      effectY: muzzleY,
+      downward: false,
+      projectile: {
+        x: muzzleX,
+        y: muzzleY,
+        velocityX: playerFacing * this.options.projectileSpeed,
+        lifetimeMs: this.options.projectileLifetimeMs,
+      },
     });
+    const projectile = this.host.presentCombatEvent(event, { autoUpdateProjectile: false });
+    this.host.publishCombatAction(event);
+
+    if (projectile) {
+      this.playerProjectiles.push({
+        presentation: projectile,
+        directionX: playerFacing,
+        speed: this.options.projectileSpeed,
+        expiresAt: now + this.options.projectileLifetimeMs,
+      });
+    }
 
     this.host.applyWeaponKnockback(
       Phaser.Math.Clamp(
@@ -260,12 +305,43 @@ export class OverworldCombatController {
         this.options.playerSpeed * 1.2,
       ),
     );
-    this.host.syncBackdropCameraIgnores();
   }
 
   private destroyProjectile(projectile: OverworldPlayerProjectile): void {
-    projectile.rect.destroy();
+    this.host.destroyPresentedProjectile(projectile.presentation);
     this.playerProjectiles = this.playerProjectiles.filter((candidate) => candidate !== projectile);
-    this.host.syncBackdropCameraIgnores();
+  }
+
+  private createCombatPresentationEvent(input: {
+    source: CombatPresentationEvent['source'];
+    player: Phaser.GameObjects.Rectangle;
+    playerBody: Phaser.Physics.Arcade.Body;
+    facing: -1 | 1;
+    durationMs: number;
+    effectX: number;
+    effectY: number;
+    downward: boolean;
+    projectile: CombatPresentationEvent['projectile'];
+  }): CombatPresentationEvent {
+    const startedAt = Date.now();
+    return {
+      id: [
+        'combat',
+        input.source,
+        startedAt,
+        Math.random().toString(36).slice(2, 8),
+      ].join(':'),
+      owner: 'local',
+      source: input.source,
+      x: input.player.x,
+      y: input.playerBody.bottom,
+      facing: input.facing,
+      startedAt,
+      durationMs: input.durationMs,
+      effectX: input.effectX,
+      effectY: input.effectY,
+      downward: input.downward,
+      projectile: input.projectile,
+    };
   }
 }

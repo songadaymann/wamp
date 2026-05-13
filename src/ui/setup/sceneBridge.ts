@@ -13,6 +13,7 @@ import type {
   RoomRushDifficulty,
   RoomRushStartRule,
 } from '../../scenes/overworld/roomRushRuns';
+import type { OverworldOnlineRosterViewEntry } from '../../scenes/overworld/hud';
 import type { RoomCoordinates, RoomRecord, RoomVersionRecord } from '../../persistence/roomModel';
 
 export type EditorHistoryState = {
@@ -258,6 +259,7 @@ export interface OverworldSceneBridge {
   }) => Promise<boolean> | boolean;
   endRoomRushRun?: () => void;
   isRoomRushRunActive?: () => boolean;
+  invitePvpDuel?: (entry: OverworldOnlineRosterViewEntry) => Promise<void> | void;
   playSelectedCourse?: () => Promise<void> | void;
   editSelectedRoom?: () => void;
   buildSelectedRoom?: () => void;

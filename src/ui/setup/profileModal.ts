@@ -1396,6 +1396,27 @@ export class ProfileModalController {
         ],
       },
       {
+        tone: 'player',
+        title: 'PVP',
+        items: [
+          {
+            label: 'Wins',
+            value: String(stats.pvpWins),
+            iconSrc: '/assets/objects/crown.png',
+          },
+          {
+            label: 'Losses',
+            value: String(stats.pvpLosses),
+            iconSrc: '/assets/objects/skull.png',
+          },
+          {
+            label: 'Draws',
+            value: String(stats.pvpDraws),
+            iconSrc: '/assets/objects/heart.png',
+          },
+        ],
+      },
+      {
         tone: 'builder',
         title: 'Built',
         items: [

@@ -8,6 +8,13 @@ import {
   type RoomCoordinates,
   type RoomSnapshot,
 } from '../persistence/roomModel';
+import type {
+  PvpInviteAcceptMessage,
+  PvpInviteDeclineMessage,
+  PvpInviteOffer,
+  PvpInviteSendMessage,
+  PvpPresenceServerMessage,
+} from '../pvp/model';
 import {
   chunkIdFromCoordinates,
   roomToChunkCoordinates,
@@ -19,6 +26,7 @@ export type WorldPresenceMode = 'browse' | 'play' | 'edit';
 export type WorldPresenceAnimationState = DefaultPlayerAnimationState;
 
 const PRESENCE_MOVING_PUBLISH_INTERVAL_MS = 200;
+const PVP_PRESENCE_MOVING_PUBLISH_INTERVAL_MS = 25;
 const PRESENCE_IDLE_KEEPALIVE_MS = 5_000;
 const REMOTE_PRESENCE_SNAPSHOT_FLUSH_INTERVAL_MS = 140;
 
@@ -26,6 +34,14 @@ export interface WorldPresenceIdentity {
   userId: string;
   displayName: string;
   avatarId: string;
+}
+
+export type WorldPresencePvpAction = 'sword' | 'gun';
+
+export interface WorldPresencePvpState {
+  matchId: string;
+  action: WorldPresencePvpAction | null;
+  actionUntil: number;
 }
 
 export interface WorldPresencePayload {
@@ -37,6 +53,7 @@ export interface WorldPresencePayload {
   facing: number;
   animationState: WorldPresenceAnimationState;
   mode: WorldPresenceMode;
+  pvp?: WorldPresencePvpState | null;
   timestamp: number;
 }
 
@@ -111,7 +128,8 @@ type PresenceMessage =
   | PresenceUpsertMessage
   | PresenceUpsertsMessage
   | PresenceRemoveMessage
-  | PresencePopulationsMessage;
+  | PresencePopulationsMessage
+  | PvpPresenceServerMessage;
 
 interface PresencePublishMessage {
   type: 'presence:update';
@@ -143,6 +161,9 @@ interface WorldPresenceClientOptions {
   party: string;
   identity: WorldPresenceIdentity;
   onSnapshot: (snapshot: WorldPresenceSnapshot) => void;
+  onPvpInvite?: (invite: PvpInviteOffer) => void;
+  onPvpInviteAccepted?: (message: Extract<PvpPresenceServerMessage, { type: 'pvp:invite:accepted' }>) => void;
+  onPvpInviteDeclined?: (message: Extract<PvpPresenceServerMessage, { type: 'pvp:invite:declined' }>) => void;
 }
 
 export class WorldPresenceClient {
@@ -223,7 +244,9 @@ export class WorldPresenceClient {
     const changed = presenceSignature !== this.lastPublishedPresenceSignature;
     const isInitialPublish = this.lastPublishedPayloadJson === null;
     const publishInterval = changed
-      ? PRESENCE_MOVING_PUBLISH_INTERVAL_MS
+      ? nextPresence.pvp?.matchId
+        ? PVP_PRESENCE_MOVING_PUBLISH_INTERVAL_MS
+        : PRESENCE_MOVING_PUBLISH_INTERVAL_MS
       : PRESENCE_IDLE_KEEPALIVE_MS;
     const enoughTimeElapsed = now - this.lastPublishedAt >= publishInterval;
     if (!isInitialPublish && !enoughTimeElapsed) {
@@ -289,6 +312,58 @@ export class WorldPresenceClient {
     shardSocket.send(payload);
     this.lastPublishedPreviewJson = payload;
     this.emitSnapshot();
+  }
+
+  sendPvpInvite(target: WorldGhostPresence, invite: Omit<PvpInviteSendMessage['invite'], 'targetConnectionId' | 'target'>): boolean {
+    const socket = this.socketsByShardId.get(target.shardId)?.socket ?? null;
+    if (!socket || socket.readyState !== PartySocket.OPEN) {
+      return false;
+    }
+
+    const payload: PvpInviteSendMessage = {
+      type: 'pvp:invite',
+      invite: {
+        ...invite,
+        targetConnectionId: target.connectionId,
+        target: {
+          userId: target.userId,
+          displayName: target.displayName,
+          avatarId: target.avatarId,
+        },
+      },
+    };
+    socket.send(JSON.stringify(payload));
+    return true;
+  }
+
+  sendPvpInviteAccept(invite: PvpInviteOffer): boolean {
+    const socket = this.socketsByShardId.get(invite.shardId)?.socket ?? null;
+    if (!socket || socket.readyState !== PartySocket.OPEN) {
+      return false;
+    }
+
+    socket.send(JSON.stringify({
+      type: 'pvp:invite:accept',
+      inviteId: invite.inviteId,
+      matchId: invite.matchId,
+      inviterConnectionId: invite.inviterConnectionId,
+    } satisfies PvpInviteAcceptMessage));
+    return true;
+  }
+
+  sendPvpInviteDecline(invite: PvpInviteOffer): boolean {
+    const socket = this.socketsByShardId.get(invite.shardId)?.socket ?? null;
+    if (!socket || socket.readyState !== PartySocket.OPEN) {
+      return false;
+    }
+
+    socket.send(JSON.stringify({
+      type: 'pvp:invite:decline',
+      inviteId: invite.inviteId,
+      matchId: invite.matchId,
+      inviterConnectionId: invite.inviterConnectionId,
+    } satisfies PvpInviteDeclineMessage));
+    return true;
   }
 
   destroy(): void {
@@ -434,7 +509,17 @@ export class WorldPresenceClient {
       return;
     }
 
+    let urgentSnapshot = false;
     switch (message.type) {
+      case 'pvp:invite:offer':
+        this.options.onPvpInvite?.(message.invite);
+        return;
+      case 'pvp:invite:accepted':
+        this.options.onPvpInviteAccepted?.(message);
+        return;
+      case 'pvp:invite:declined':
+        this.options.onPvpInviteDeclined?.(message);
+        return;
       case 'snapshot':
         this.removeGhostsForShard(shardId);
         for (const peer of message.peers) {
@@ -454,6 +539,7 @@ export class WorldPresenceClient {
           shardId,
           roomId: roomIdFromCoordinates(message.peer.roomCoordinates),
         });
+        urgentSnapshot = Boolean(message.peer.pvp?.matchId);
         break;
       case 'upserts':
         if (!Array.isArray(message.peers)) {
@@ -465,6 +551,7 @@ export class WorldPresenceClient {
             shardId,
             roomId: roomIdFromCoordinates(peer.roomCoordinates),
           });
+          urgentSnapshot ||= Boolean(peer.pvp?.matchId);
         }
         break;
       case 'remove':
@@ -479,7 +566,7 @@ export class WorldPresenceClient {
         return;
     }
 
-    this.queueSnapshotEmit();
+    this.queueSnapshotEmit(urgentSnapshot);
   }
 
   private replaceRoomPopulations(
@@ -625,8 +712,14 @@ export class WorldPresenceClient {
     });
   }
 
-  private queueSnapshotEmit(): void {
+  private queueSnapshotEmit(urgent = false): void {
     this.pendingSnapshotEmit = true;
+    if (urgent) {
+      this.clearQueuedSnapshotEmit();
+      this.emitSnapshot();
+      return;
+    }
+
     if (this.snapshotEmitTimer !== null) {
       return;
     }
@@ -670,6 +763,9 @@ function getPresencePublishSignature(presence: WorldPresencePayload): string {
     Math.round(presence.velocityY),
     presence.facing,
     presence.animationState,
+    presence.pvp?.matchId ?? '',
+    presence.pvp?.action ?? '',
+    Math.round((presence.pvp?.actionUntil ?? 0) / 50),
   ]);
 }
 

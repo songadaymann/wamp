@@ -187,6 +187,9 @@ export interface GlobalLeaderboardEntry {
   completedRuns: number;
   failedRuns: number;
   abandonedRuns: number;
+  pvpWins: number;
+  pvpLosses: number;
+  pvpDraws: number;
   bestScore: number;
   fastestClearMs: number | null;
   updatedAt: string;
@@ -267,6 +270,9 @@ export interface UserStatsRecord {
   completedRuns: number;
   failedRuns: number;
   abandonedRuns: number;
+  pvpWins: number;
+  pvpLosses: number;
+  pvpDraws: number;
   bestScore: number;
   fastestClearMs: number | null;
   updatedAt: string;
