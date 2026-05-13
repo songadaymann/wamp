@@ -104,6 +104,8 @@ export class PaletteController {
     if (!ts) {
       return;
     }
+    const tilesetChanged = editorState.selectedTilesetKey !== tilesetKey;
+    editorState.selectedTilesetKey = tilesetKey;
 
     const nextSelection = this.normalizeSelection(
       this.createSelection(
@@ -132,6 +134,9 @@ export class PaletteController {
 
     this.renderPalette();
     this.renderTilePreview();
+    if (tilesetChanged) {
+      this.doc.defaultView?.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
+    }
   }
 
   renderPalette(): void {

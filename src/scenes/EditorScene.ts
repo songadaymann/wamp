@@ -9,7 +9,6 @@ import {
   LAYER_NAMES,
   TILESETS,
   editorState,
-  resetEditorPaletteSelection,
 } from '../config';
 import { globalRoomMusicController } from '../music/controller';
 import {
@@ -917,7 +916,6 @@ export class EditorScene extends Phaser.Scene {
     this.toolController.reset();
     this.guestBuilderActivityTracker.reset();
     this.roomEditCount = 0;
-    resetEditorPaletteSelection();
     editorState.tileFlipX = false;
     editorState.tileFlipY = false;
     this.setSelectedLightingSettings(null);
