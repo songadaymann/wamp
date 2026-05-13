@@ -625,11 +625,18 @@ export class OverworldMovementController {
 
     const room = this.host.getRoomSnapshotForCoordinates(this.host.getCurrentRoomCoordinates());
     const nextTop = playerBody.bottom - height;
+    const currentTop = playerBody.bottom - playerBody.height;
     const candidateBounds = new Phaser.Geom.Rectangle(
       playerBody.center.x - this.options.playerWidth * 0.5,
       nextTop,
       this.options.playerWidth,
       height,
+    );
+    const addedHeadroomBounds = new Phaser.Geom.Rectangle(
+      candidateBounds.left + 1,
+      nextTop,
+      Math.max(0, candidateBounds.width - 2),
+      Math.max(0, currentTop - nextTop),
     );
 
     if (room) {
@@ -649,12 +656,29 @@ export class OverworldMovementController {
       }
 
       const objectBounds = this.host.getArcadeBodyBounds(liveObject.sprite.body as ArcadeObjectBody);
-      if (Phaser.Geom.Intersects.RectangleToRectangle(candidateBounds, objectBounds)) {
+      if (
+        addedHeadroomBounds.width > 0 &&
+        addedHeadroomBounds.height > 0 &&
+        this.rectanglesStrictlyOverlap(addedHeadroomBounds, objectBounds)
+      ) {
         return false;
       }
     }
 
     return true;
+  }
+
+  private rectanglesStrictlyOverlap(
+    first: Phaser.Geom.Rectangle,
+    second: Phaser.Geom.Rectangle,
+  ): boolean {
+    const minimumOverlap = 0.5;
+    return (
+      first.left < second.right - minimumOverlap &&
+      first.right > second.left + minimumOverlap &&
+      first.top < second.bottom - minimumOverlap &&
+      first.bottom > second.top + minimumOverlap
+    );
   }
 
   private findCrateInteraction(horizontalInput: number, downHeld: boolean): OverworldCrateInteraction | null {
