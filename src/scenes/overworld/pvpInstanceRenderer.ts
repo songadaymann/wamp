@@ -11,6 +11,7 @@ import type {
   PvpParticipantIdentity,
 } from '../../pvp/model';
 import type { WeaponHitResult } from './liveObjects';
+import { PvpHeartDisplay } from './pvpHeartDisplay';
 
 interface PvpInstanceRendererOptions {
   scene: Phaser.Scene;
@@ -25,7 +26,7 @@ interface RemoteOpponent {
   roomId: string;
   hearts: number;
   sprite: Phaser.GameObjects.Sprite;
-  label: Phaser.GameObjects.Text;
+  heartsDisplay: PvpHeartDisplay;
   targetX: number;
   targetY: number;
   velocityX: number;
@@ -61,7 +62,7 @@ export class PvpInstanceRenderer {
     this.ensureOpponent(participant, snapshot.roomId);
     if (this.opponent) {
       this.opponent.hearts = participant.hearts;
-      this.opponent.label.setText(this.formatHearts(participant.hearts));
+      this.opponent.heartsDisplay.setHearts(participant.hearts);
     }
   }
 
@@ -144,7 +145,7 @@ export class PvpInstanceRenderer {
         this.opponent.sprite.x = Phaser.Math.Linear(this.opponent.sprite.x, predicted.x, step);
         this.opponent.sprite.y = Phaser.Math.Linear(this.opponent.sprite.y, predicted.y, step);
       }
-      this.opponent.label.setPosition(this.opponent.sprite.x, this.opponent.sprite.y - 28);
+      this.opponent.heartsDisplay.setPosition(this.opponent.sprite.x, this.opponent.sprite.y - 28);
       this.ensureOpponentAvatarLoaded(this.opponent);
     }
 
@@ -262,7 +263,7 @@ export class PvpInstanceRenderer {
   getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
     const objects: Phaser.GameObjects.GameObject[] = [];
     if (this.opponent) {
-      objects.push(this.opponent.sprite, this.opponent.label);
+      objects.push(this.opponent.sprite, this.opponent.heartsDisplay.getGameObject());
     }
     return objects;
   }
@@ -295,7 +296,7 @@ export class PvpInstanceRenderer {
   clear(): void {
     if (this.opponent) {
       this.opponent.sprite.destroy();
-      this.opponent.label.destroy();
+      this.opponent.heartsDisplay.destroy();
       this.opponent = null;
     }
     this.lastCombatEventIds.clear();
@@ -323,24 +324,15 @@ export class PvpInstanceRenderer {
     sprite.play(pack.animationKeys.idle);
     sprite.setVisible(false);
 
-    const label = this.options.scene.add.text(0, -28, this.formatHearts(3), {
-      fontFamily: 'Courier New',
-      fontSize: '11px',
-      color: '#ff3f5f',
-      stroke: '#050505',
-      strokeThickness: 4,
-      padding: { x: 4, y: 2 },
-    });
-    label.setOrigin(0.5, 1);
-    label.setDepth(30);
-    label.setVisible(false);
+    const heartsDisplay = new PvpHeartDisplay(this.options.scene, 30);
+    heartsDisplay.setHearts(3);
 
     this.opponent = {
       identity,
       roomId,
       hearts: 3,
       sprite,
-      label,
+      heartsDisplay,
       targetX: 0,
       targetY: 0,
       velocityX: 0,
@@ -426,7 +418,7 @@ export class PvpInstanceRenderer {
 
     const visible = this.opponent.receivedAt > 0;
     this.opponent.sprite.setVisible(visible);
-    this.opponent.label.setVisible(visible);
+    this.opponent.heartsDisplay.setVisible(visible);
   }
 
   private getPredictedTarget(opponent: RemoteOpponent): { x: number; y: number } {
@@ -451,7 +443,4 @@ export class PvpInstanceRenderer {
     };
   }
 
-  private formatHearts(hearts: number): string {
-    return hearts > 0 ? '♥'.repeat(hearts) : '0♥';
-  }
 }

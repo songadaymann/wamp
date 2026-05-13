@@ -103,6 +103,7 @@ import type { WorldPresencePvpAction } from '../presence/worldPresence';
 import {
   hidePvpCountdownOverlay,
   showPvpCountdownOverlay,
+  showPvpDamageFlashOverlay,
   showPvpGoOverlay,
   showPvpInvitePrompt,
   showPvpResultModal,
@@ -145,6 +146,7 @@ import {
   type RenderedGhost,
 } from './overworld/presence';
 import { PvpInstanceRenderer } from './overworld/pvpInstanceRenderer';
+import { PvpHeartDisplay } from './overworld/pvpHeartDisplay';
 import {
   OverworldRoomChatController,
 } from './overworld/roomChat';
@@ -437,7 +439,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly pvpLastHitSentAtByKey = new Map<string, number>();
   private readonly pvpLastReceivedActionHitIds = new Set<string>();
   private readonly pvpDebugEvents: Array<Record<string, unknown>> = [];
-  private pvpLocalHeartLabel: Phaser.GameObjects.Text | null = null;
+  private pvpLocalHeartDisplay: PvpHeartDisplay | null = null;
   private localPvpAction: WorldPresencePvpAction | null = null;
   private localPvpActionUntilEpoch = 0;
   private lastPvpInstanceStateSentAt = 0;
@@ -2277,7 +2279,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     ignoredObjects.push(...this.browseOverlayController.getBackdropIgnoredObjects());
     if (this.player) ignoredObjects.push(this.player);
     if (this.playerSprite) ignoredObjects.push(this.playerSprite);
-    if (this.pvpLocalHeartLabel) ignoredObjects.push(this.pvpLocalHeartLabel);
+    if (this.pvpLocalHeartDisplay) ignoredObjects.push(this.pvpLocalHeartDisplay.getGameObject());
     ignoredObjects.push(...this.combatPresentationController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.combatController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.pvpInstanceRenderer.getBackdropIgnoredObjects());
@@ -4397,10 +4399,15 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private handlePvpSnapshot(snapshot: PvpMatchSnapshot): void {
-    const previousStatus = this.activePvpMatch?.status ?? null;
+    const previousSnapshot = this.activePvpMatch;
+    const previousStatus = previousSnapshot?.status ?? null;
+    const identity = this.presenceController.getIdentity();
+    const previousLocalHearts =
+      previousSnapshot?.matchId === snapshot.matchId && identity
+        ? previousSnapshot.participants.find((participant) => participant.userId === identity.userId)?.hearts ?? null
+        : null;
     this.activePvpMatch = snapshot;
     this.movementController.refreshPlayerHitbox();
-    const identity = this.presenceController.getIdentity();
     this.presenceController.setPvpMatchSnapshot(snapshot, identity?.userId ?? null);
     this.presenceController.setPvpInstanceOpponentUserId(
       snapshot.status !== 'complete' ? this.activePvpOpponentUserId : null,
@@ -4429,6 +4436,16 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     this.syncPvpLocalHeartLabel();
+    const nextLocalHearts = identity
+      ? snapshot.participants.find((participant) => participant.userId === identity.userId)?.hearts ?? null
+      : null;
+    if (
+      previousLocalHearts !== null &&
+      nextLocalHearts !== null &&
+      nextLocalHearts < previousLocalHearts
+    ) {
+      this.playPvpLocalDamageFeedback(previousLocalHearts, nextLocalHearts);
+    }
 
     if (snapshot.status === 'complete' && previousStatus !== 'complete') {
       void this.submitPvpMatchResult(snapshot);
@@ -5198,36 +5215,37 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    if (!this.pvpLocalHeartLabel) {
-      this.pvpLocalHeartLabel = this.add.text(0, 0, '', {
-        fontFamily: 'Courier New',
-        fontSize: '12px',
-        color: '#ff3f5f',
-        stroke: '#050505',
-        strokeThickness: 4,
-      });
-      this.pvpLocalHeartLabel.setOrigin(0.5, 1);
-      this.pvpLocalHeartLabel.setDepth(29);
+    if (!this.pvpLocalHeartDisplay) {
+      this.pvpLocalHeartDisplay = new PvpHeartDisplay(this, 30);
       this.syncBackdropCameraIgnores();
     }
 
-    this.pvpLocalHeartLabel.setText(this.formatPvpHearts(local.hearts));
-    this.pvpLocalHeartLabel.setPosition(this.playerBody.center.x, this.playerBody.top - 5);
-    this.pvpLocalHeartLabel.setVisible(true);
+    this.pvpLocalHeartDisplay.setHearts(local.hearts);
+    this.pvpLocalHeartDisplay.setPosition(this.playerBody.center.x, this.playerBody.top - 8);
+    this.pvpLocalHeartDisplay.setVisible(true);
   }
 
   private destroyPvpLocalHeartLabel(): void {
-    if (!this.pvpLocalHeartLabel) {
+    if (!this.pvpLocalHeartDisplay) {
       return;
     }
 
-    this.pvpLocalHeartLabel.destroy();
-    this.pvpLocalHeartLabel = null;
+    this.pvpLocalHeartDisplay.destroy();
+    this.pvpLocalHeartDisplay = null;
     this.syncBackdropCameraIgnores();
   }
 
-  private formatPvpHearts(hearts: number): string {
-    return hearts > 0 ? '♥'.repeat(hearts) : '0♥';
+  private playPvpLocalDamageFeedback(previousHearts: number, nextHearts: number): void {
+    const lostHearts = Math.max(1, previousHearts - nextHearts);
+    showPvpDamageFlashOverlay();
+    this.cameras.main.flash(150, 255, 32, 42, false);
+    this.cameras.main.shake(110, 0.0045 + lostHearts * 0.0015);
+    if (this.playerSprite) {
+      this.playerSprite.setTintFill(0xff4f5f);
+      this.time.delayedCall(90, () => {
+        this.playerSprite?.clearTint();
+      });
+    }
   }
 
   private resolvePvpEnvironmentSource(reason: string): PvpHitSource {

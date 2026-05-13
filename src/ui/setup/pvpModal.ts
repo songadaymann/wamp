@@ -5,6 +5,8 @@ let activeResultModal: HTMLElement | null = null;
 let activeCountdownOverlay: HTMLElement | null = null;
 let countdownFrame: number | null = null;
 let countdownTimeout: number | null = null;
+let damageFlashOverlay: HTMLElement | null = null;
+let damageFlashTimeout: number | null = null;
 
 export function showPvpInvitePrompt(invite: PvpInviteOffer): Promise<'accept' | 'decline'> {
   activeInviteModal?.remove();
@@ -184,6 +186,27 @@ export function hidePvpCountdownOverlay(): void {
   }
   activeCountdownOverlay?.remove();
   activeCountdownOverlay = null;
+}
+
+export function showPvpDamageFlashOverlay(durationMs = 300): void {
+  if (!damageFlashOverlay) {
+    damageFlashOverlay = document.createElement('div');
+    damageFlashOverlay.className = 'pvp-damage-flash';
+    damageFlashOverlay.setAttribute('aria-hidden', 'true');
+    document.body.append(damageFlashOverlay);
+  }
+
+  damageFlashOverlay.classList.remove('active');
+  void damageFlashOverlay.offsetWidth;
+  damageFlashOverlay.classList.add('active');
+
+  if (damageFlashTimeout !== null) {
+    window.clearTimeout(damageFlashTimeout);
+  }
+  damageFlashTimeout = window.setTimeout(() => {
+    damageFlashOverlay?.classList.remove('active');
+    damageFlashTimeout = null;
+  }, durationMs);
 }
 
 function formatPvpResultBody(snapshot: PvpMatchSnapshot): string {
