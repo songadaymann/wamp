@@ -337,6 +337,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private playerFacing = 1;
   private playerWasGrounded = false;
   private playerLandAnimationUntil = 0;
+  private playerPresentationGroundedOverride: boolean | null = null;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: {
     W: Phaser.Input.Keyboard.Key;
@@ -1048,6 +1049,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         getIsCrouching: () => this.isCrouching,
         getActiveCrateInteractionMode: () => this.activeCrateInteractionMode,
         getActiveCrateInteractionFacing: () => this.activeCrateInteractionFacing,
+        getGroundedOverride: () => this.playerPresentationGroundedOverride,
         getCurrentAttackAnimation: (now) => this.combatController.getCurrentAttackAnimation(now),
         playLandingDustFx: (x, y, facing) => this.fxController?.playLandingDustFx(x, y, facing),
       },
@@ -1185,6 +1187,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         getPlayerBody: () => this.playerBody,
         getPlayerFacing: () => this.playerFacing as -1 | 1,
         getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
+        getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
         getRoomSnapshotForCoordinates: (coordinates) => this.getRoomSnapshotForCoordinates(coordinates),
         isSolidTerrainAtWorldPoint: (room, worldX, worldY) =>
           this.isSolidTerrainAtWorldPoint(room, worldX, worldY),
@@ -1848,7 +1851,12 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.recordRankedRunTraceFrame(delta, movement);
       });
       this.measureMobilePerformance('update.presentation', () => {
-        this.playerPresentationController.syncPlayerVisual();
+        try {
+          this.playerPresentationGroundedOverride = movement.grounded;
+          this.playerPresentationController.syncPlayerVisual();
+        } finally {
+          this.playerPresentationGroundedOverride = null;
+        }
       });
       this.measureMobilePerformance('update.presence', () => {
         this.syncLocalPresence();

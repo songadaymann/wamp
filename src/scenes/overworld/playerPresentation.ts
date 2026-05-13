@@ -28,6 +28,7 @@ interface OverworldPlayerPresentationControllerHost {
   getIsCrouching(): boolean;
   getActiveCrateInteractionMode(): 'push' | 'pull' | null;
   getActiveCrateInteractionFacing(): -1 | 1 | null;
+  getGroundedOverride(): boolean | null;
   getCurrentAttackAnimation(now: number): DefaultPlayerAnimationState | null;
   playLandingDustFx(x: number, y: number, facing: -1 | 1): void;
 }
@@ -107,7 +108,9 @@ export class OverworldPlayerPresentationController {
     }
     playerSprite.setFlipX(this.host.state.facing < 0);
 
-    const grounded = playerBody.blocked.down || playerBody.touching.down;
+    const grounded =
+      this.host.getGroundedOverride() ??
+      (playerBody.blocked.down || playerBody.touching.down);
     if (!this.host.getIsClimbingLadder() && grounded && !this.host.state.wasGrounded) {
       this.host.state.landAnimationUntil = now + this.options.landingAnimationMs;
       this.host.playLandingDustFx(player.x, playerBody.bottom, this.host.state.facing);

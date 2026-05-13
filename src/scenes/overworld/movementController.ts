@@ -3,6 +3,9 @@ import { playSfx, stopSfx } from '../../audio/sfx';
 import {
   isPushableObjectConfig,
   isSolidRuntimeObjectConfig,
+  ROOM_HEIGHT,
+  ROOM_WIDTH,
+  TILE_SIZE,
 } from '../../config';
 import type {
   RoomCoordinates,
@@ -19,6 +22,9 @@ import {
 } from './liveObjects';
 
 const CRATE_PULL_DRAG_COMPENSATION_SCALE = 2.25;
+const SINGLE_TILE_GAP_ASSIST_MAX_DROP_PX = 4;
+const SINGLE_TILE_GAP_ASSIST_FOOT_PROBE_PX = 1;
+const SINGLE_TILE_GAP_ASSIST_HORIZONTAL_PAD_PX = 1;
 
 export interface OverworldCrateInteraction {
   crateBody: Phaser.Physics.Arcade.Body;
@@ -56,6 +62,7 @@ interface OverworldMovementControllerHost {
   getPlayerBody(): Phaser.Physics.Arcade.Body | null;
   getPlayerFacing(): -1 | 1;
   getCurrentRoomCoordinates(): RoomCoordinates;
+  getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number };
   getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null;
   isSolidTerrainAtWorldPoint(room: RoomSnapshot, worldX: number, worldY: number): boolean;
   getExternalLaunchGraceUntil(): number;
@@ -250,7 +257,14 @@ export class OverworldMovementController {
       this.setPlayerLadderState(null);
     }
 
-    const grounded = playerBody.blocked.down || playerBody.touching.down;
+    let grounded = playerBody.blocked.down || playerBody.touching.down;
+    if (
+      this.shouldApplySingleTileGapAssist(horizontalInput, downHeld, spacePressed, inQuicksand, grounded) &&
+      this.tryApplySingleTileGapAssist(horizontalInput, grounded)
+    ) {
+      grounded = true;
+    }
+
     const crateInteraction =
       !inQuicksand && grounded && horizontalInput !== 0
         ? this.findCrateInteraction(horizontalInput, downHeld)
@@ -598,6 +612,131 @@ export class OverworldMovementController {
     }
 
     stopSfx('ladder-climb');
+  }
+
+  private shouldApplySingleTileGapAssist(
+    horizontalInput: number,
+    downHeld: boolean,
+    spacePressed: boolean,
+    inQuicksand: boolean,
+    grounded: boolean,
+  ): boolean {
+    return (
+      horizontalInput !== 0 &&
+      !downHeld &&
+      !spacePressed &&
+      !inQuicksand &&
+      !this.host.state.isClimbingLadder &&
+      (grounded || this.host.state.coyoteTime > 0)
+    );
+  }
+
+  private tryApplySingleTileGapAssist(horizontalInput: number, grounded: boolean): boolean {
+    const playerBody = this.host.getPlayerBody();
+    if (!playerBody || (!grounded && this.host.state.coyoteTime <= 0)) {
+      return false;
+    }
+
+    if (playerBody.velocity.y < -1) {
+      return false;
+    }
+
+    const direction = horizontalInput > 0 ? 1 : -1;
+    const room = this.host.getRoomSnapshotForCoordinates(this.host.getCurrentRoomCoordinates());
+    if (!room) {
+      return false;
+    }
+
+    const origin = this.host.getRoomOrigin(room.coordinates);
+    const localBottomY = playerBody.bottom - origin.y;
+    const floorTileY = Math.floor((localBottomY + SINGLE_TILE_GAP_ASSIST_FOOT_PROBE_PX) / TILE_SIZE);
+    if (floorTileY < 0 || floorTileY >= ROOM_HEIGHT) {
+      return false;
+    }
+
+    const floorTopY = origin.y + floorTileY * TILE_SIZE;
+    const dropDistance = playerBody.bottom - floorTopY;
+    if (dropDistance < -1 || dropDistance > SINGLE_TILE_GAP_ASSIST_MAX_DROP_PX) {
+      return false;
+    }
+
+    const minTileX = Math.floor(
+      (playerBody.left - origin.x - SINGLE_TILE_GAP_ASSIST_HORIZONTAL_PAD_PX) / TILE_SIZE,
+    );
+    const maxTileX = Math.floor(
+      (playerBody.right - origin.x + SINGLE_TILE_GAP_ASSIST_HORIZONTAL_PAD_PX) / TILE_SIZE,
+    );
+    for (let gapTileX = minTileX; gapTileX <= maxTileX; gapTileX += 1) {
+      if (!this.isOneTileTerrainGap(room, origin, gapTileX, floorTileY, direction, floorTopY)) {
+        continue;
+      }
+
+      this.snapPlayerToGapAssistFloor(playerBody, floorTopY);
+      return true;
+    }
+
+    return false;
+  }
+
+  private isOneTileTerrainGap(
+    room: RoomSnapshot,
+    origin: { x: number; y: number },
+    gapTileX: number,
+    floorTileY: number,
+    direction: -1 | 1,
+    floorTopY: number,
+  ): boolean {
+    const behindTileX = gapTileX - direction;
+    const landingTileX = gapTileX + direction;
+    if (
+      gapTileX < 0 ||
+      gapTileX >= ROOM_WIDTH ||
+      behindTileX < 0 ||
+      behindTileX >= ROOM_WIDTH ||
+      landingTileX < 0 ||
+      landingTileX >= ROOM_WIDTH
+    ) {
+      return false;
+    }
+
+    return (
+      !this.isSolidTerrainTileAtFoot(room, origin, gapTileX, floorTileY, floorTopY) &&
+      this.isSolidTerrainTileAtFoot(room, origin, behindTileX, floorTileY, floorTopY) &&
+      this.isSolidTerrainTileAtFoot(room, origin, landingTileX, floorTileY, floorTopY)
+    );
+  }
+
+  private isSolidTerrainTileAtFoot(
+    room: RoomSnapshot,
+    origin: { x: number; y: number },
+    tileX: number,
+    tileY: number,
+    floorTopY: number,
+  ): boolean {
+    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
+      return false;
+    }
+
+    const worldX = origin.x + tileX * TILE_SIZE + TILE_SIZE / 2;
+    return this.host.isSolidTerrainAtWorldPoint(
+      room,
+      worldX,
+      floorTopY + SINGLE_TILE_GAP_ASSIST_FOOT_PROBE_PX,
+    );
+  }
+
+  private snapPlayerToGapAssistFloor(
+    playerBody: Phaser.Physics.Arcade.Body,
+    floorTopY: number,
+  ): void {
+    const velocityX = playerBody.velocity.x;
+    if (Math.abs(playerBody.bottom - floorTopY) > 0.01) {
+      playerBody.reset(playerBody.center.x, floorTopY - playerBody.height / 2);
+      playerBody.setVelocityX(velocityX);
+    }
+    if (playerBody.velocity.y > 0) {
+      playerBody.setVelocityY(0);
+    }
   }
 
   private getCrateInteractionVelocityX(
