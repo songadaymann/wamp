@@ -107,6 +107,7 @@ export class RoomMusicController {
   private userInteracted = false;
   private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
+  private volume = 1;
   private transportStartTime = 0;
   private activeLanes = new Map<RoomMusicLaneId, ActiveLoopPlayback>();
   private activePattern: ActiveLoopPlayback | null = null;
@@ -316,6 +317,22 @@ export class RoomMusicController {
     this.previewClipPlayback = null;
   }
 
+  setVolume(value: number): void {
+    const nextVolume = clampUnit(Number.isFinite(value) ? value : 1);
+    if (this.volume === nextVolume) {
+      return;
+    }
+
+    this.volume = nextVolume;
+    if (this.masterGain && this.audioContext) {
+      this.masterGain.gain.setTargetAtTime(
+        this.getMasterGainValue(),
+        this.audioContext.currentTime,
+        0.02,
+      );
+    }
+  }
+
   previewPatternCell(
     pattern: RoomPatternMusic,
     instrumentId: RoomPatternInstrumentId,
@@ -492,6 +509,7 @@ export class RoomMusicController {
       initialized: this.initialized,
       userInteracted: this.userInteracted,
       mode: this.mode,
+      volume: this.volume,
       audioContextState: this.audioContext?.state ?? null,
       lastAudioContextStateChange: this.lastAudioContextStateChange,
       lastResumeAttempt: this.lastResumeAttempt,
@@ -871,9 +889,13 @@ export class RoomMusicController {
     }
 
     this.masterGain = audioContext.createGain();
-    this.masterGain.gain.setValueAtTime(0.82 * GLOBAL_MUSIC_VOLUME_MULTIPLIER, audioContext.currentTime);
+    this.masterGain.gain.setValueAtTime(this.getMasterGainValue(), audioContext.currentTime);
     this.masterGain.connect(audioContext.destination);
     return this.masterGain;
+  }
+
+  private getMasterGainValue(): number {
+    return 0.82 * GLOBAL_MUSIC_VOLUME_MULTIPLIER * this.volume;
   }
 
   private ensureTransport(currentTime: number): void {
@@ -1222,6 +1244,14 @@ function normalizeAudioError(error: unknown): { errorName: string; errorMessage:
     errorName: 'UnknownError',
     errorMessage: typeof error === 'string' ? error : '',
   };
+}
+
+function clampUnit(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+
+  return Math.min(1, Math.max(0, value));
 }
 
 export const globalRoomMusicController = new RoomMusicController();

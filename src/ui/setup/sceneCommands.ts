@@ -9,6 +9,7 @@ import { RoomHistoryModalController } from './historyModal';
 import { LeaderboardModalController } from './leaderboardModal';
 import { RoomRushModalController } from './roomRushModal';
 import { RoomRushResultModalController } from './roomRushResultModal';
+import { SettingsModalController } from './settingsModal';
 import {
   getActiveEditorScene,
   getActiveOverworldScene,
@@ -22,6 +23,7 @@ export function setupSceneCommands(
   leaderboardModal: LeaderboardModalController,
   exploreModal: ExploreModalController,
   guestbookModal: GuestbookModalController,
+  settingsModal: SettingsModalController,
   controlsModal: ControlsModalController,
   aboutModal: AboutModalController,
   chatModerationModal: ChatModerationModalController,
@@ -56,6 +58,7 @@ export function setupSceneCommands(
     leaderboardModal.close();
     exploreModal.close();
     guestbookModal.close();
+    settingsModal.close();
     controlsModal.close();
     aboutModal.close();
     courseModal.close();
@@ -190,6 +193,7 @@ export function setupSceneCommands(
     onOpenExplore: () => {
       leaderboardModal.close();
       guestbookModal.close();
+      settingsModal.close();
       controlsModal.close();
       aboutModal.close();
       courseModal.close();
@@ -201,6 +205,7 @@ export function setupSceneCommands(
     onOpenLeaderboard: () => {
       exploreModal.close();
       guestbookModal.close();
+      settingsModal.close();
       controlsModal.close();
       aboutModal.close();
       courseModal.close();
@@ -214,6 +219,7 @@ export function setupSceneCommands(
       exploreModal.close();
       guestbookModal.close();
       historyModal.close();
+      settingsModal.close();
       controlsModal.close();
       aboutModal.close();
       courseModal.close();
@@ -231,6 +237,7 @@ export function setupSceneCommands(
       exploreModal.close();
       guestbookModal.close();
       historyModal.close();
+      settingsModal.close();
       controlsModal.close();
       aboutModal.close();
       courseModal.close();
@@ -244,6 +251,7 @@ export function setupSceneCommands(
       exploreModal.close();
       guestbookModal.close();
       historyModal.close();
+      settingsModal.close();
       controlsModal.close();
       aboutModal.close();
       courseModal.close();
@@ -252,11 +260,26 @@ export function setupSceneCommands(
       chatModerationModal.close();
       getActiveOverworldScene(game)?.toggleRoomComments?.();
     },
+    onOpenSettings: () => {
+      leaderboardModal.close();
+      exploreModal.close();
+      guestbookModal.close();
+      historyModal.close();
+      controlsModal.close();
+      aboutModal.close();
+      courseModal.close();
+      roomRushModal.close();
+      roomRushResultModal.close();
+      chatModerationModal.close();
+      getActiveOverworldScene(game)?.closeRoomCommentComposer?.();
+      settingsModal.open();
+    },
     onOpenControls: () => {
       leaderboardModal.close();
       exploreModal.close();
       guestbookModal.close();
       historyModal.close();
+      settingsModal.close();
       aboutModal.close();
       courseModal.close();
       roomRushModal.close();
@@ -270,6 +293,7 @@ export function setupSceneCommands(
       }
 
       controlsModal.close();
+      settingsModal.close();
       guestbookModal.close();
       aboutModal.close();
       courseModal.close();

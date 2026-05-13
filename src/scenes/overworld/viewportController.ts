@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { getGameSettings } from '../../settings/userSettings';
 import { RETRO_COLORS } from '../../visuals/starfield';
 import type { RoomCoordinates } from '../../persistence/roomModel';
 import type { OverworldMode } from '../sceneData';
@@ -92,6 +93,12 @@ export class OverworldViewportController {
     }
 
     event.preventDefault();
+
+    const settings = getGameSettings();
+    if (settings.panningStyle === 'two-finger-drag' && !event.ctrlKey) {
+      this.handleWheelPan(event.deltaX, event.deltaY, event.deltaMode);
+      return;
+    }
 
     const camera = this.host.scene.cameras.main;
     const beforeZoom = camera.zoom;
@@ -291,6 +298,43 @@ export class OverworldViewportController {
       1.08
     );
     this.adjustZoomByFactor(zoomFactor, screenX, screenY);
+  }
+
+  private handleWheelPan(deltaX: number, deltaY: number, deltaMode: number): void {
+    if (this.host.getMode() !== 'browse' && this.host.getCameraMode() !== 'inspect') {
+      return;
+    }
+
+    const camera = this.host.scene.cameras.main;
+    const normalizedDelta = this.normalizeWheelPanDelta(deltaX, deltaY, deltaMode);
+    camera.setScroll(
+      camera.scrollX + normalizedDelta.x / camera.zoom,
+      camera.scrollY + normalizedDelta.y / camera.zoom,
+    );
+    this.host.constrainInspectCamera();
+    this.schedulePostZoomRefresh();
+  }
+
+  private normalizeWheelPanDelta(
+    deltaX: number,
+    deltaY: number,
+    deltaMode: number,
+  ): { x: number; y: number } {
+    if (deltaMode === WheelEvent.DOM_DELTA_LINE) {
+      return {
+        x: deltaX * 16,
+        y: deltaY * 16,
+      };
+    }
+
+    if (deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+      return {
+        x: deltaX * this.host.scene.scale.width,
+        y: deltaY * this.host.scene.scale.height,
+      };
+    }
+
+    return { x: deltaX, y: deltaY };
   }
 
   private schedulePostZoomRefresh(): void {

@@ -31,6 +31,11 @@ import { getCaptureDebugInfo } from './main/captureDebug';
 import { getGameDebugState, getSwordHunterDebugState } from './main/debugState';
 import { installPreviewSmokeActions } from './main/previewSmoke';
 import { normalizeRendererQuery, parseBooleanQuery, resolveRendererType } from './main/query';
+import { getGameSettings, subscribeGameSettings, type GameSettings } from './settings/userSettings';
+import {
+  getGameSettingsSyncDebugState,
+  initializeGameSettingsSync,
+} from './settings/userSettingsSync';
 
 const gameContainer = document.getElementById('game-container')!;
 const query = new URLSearchParams(window.location.search);
@@ -74,6 +79,13 @@ showBootSplash('Loading assets...', 0);
 const game = new Phaser.Game(config);
 initSfx();
 initRoomMusic();
+const applyRuntimeSettings = (settings: GameSettings) => {
+  globalSfxController.setVolume(settings.sfxVolume);
+  globalRoomMusicController.setVolume(settings.musicVolume);
+};
+applyRuntimeSettings(getGameSettings());
+subscribeGameSettings(applyRuntimeSettings);
+initializeGameSettingsSync();
 
 if (import.meta.env.DEV) {
   (window as Window & { __EVERYBODYS_PLATFORMER_GAME__?: Phaser.Game }).__EVERYBODYS_PLATFORMER_GAME__ = game;
@@ -160,6 +172,10 @@ window.render_game_to_text = () =>
     playfun: getPlayfunDebugState(),
     sfx: window.get_sfx_debug_state?.() ?? globalSfxController.getDebugState(),
     music: globalRoomMusicController.getDebugState(),
+    settings: {
+      values: getGameSettings(),
+      sync: getGameSettingsSyncDebugState(),
+    },
     appFeedback: {
       ready: isAppReady(),
       ...getAppFeedbackDebugState(),

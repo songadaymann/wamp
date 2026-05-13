@@ -1,0 +1,146 @@
+#settings-modal {
+  background: rgba(5, 5, 5, 0.8);
+  backdrop-filter: none;
+}
+
+#settings-modal .settings-modal-panel {
+  width: min(560px, calc(100vw - 40px));
+  max-height: calc(100vh - 32px);
+  gap: 14px;
+  padding: 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #fff3db;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  box-shadow: 4px 4px 0 #18161c;
+}
+
+#settings-modal .history-modal-title {
+  margin-top: 0;
+  color: #18161c;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+#settings-modal #btn-settings-close {
+  padding: 5px 10px 4px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #79ccde;
+  color: #000;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  box-shadow: 2px 2px 0 #18161c;
+}
+
+#settings-modal #btn-settings-close:hover {
+  background: #79ccde;
+  filter: brightness(1.06);
+}
+
+.settings-modal-body {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-section {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(121, 204, 222, 0.12);
+  border: 2px solid #79ccde;
+}
+
+.settings-section-title,
+.settings-label-title,
+.settings-value,
+.settings-choice {
+  color: #18161c;
+}
+
+.settings-section-title {
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.settings-toggle-row,
+.settings-range-row,
+.settings-choice {
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.settings-toggle-row,
+.settings-range-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(130px, 2fr) 46px;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-toggle-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.settings-checkbox {
+  width: 22px;
+  height: 22px;
+  accent-color: #277b30;
+}
+
+.settings-range {
+  width: 100%;
+  accent-color: #277b30;
+}
+
+.settings-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-choice-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.settings-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 2px solid #18161c;
+  background: #fffaf0;
+  box-shadow: 2px 2px 0 #18161c;
+}
+
+.settings-choice input {
+  accent-color: #277b30;
+}
+
+@media (max-width: 540px) {
+  #settings-modal .settings-modal-panel {
+    width: min(420px, calc(100vw - 24px));
+    padding: 14px;
+  }
+
+  .settings-range-row {
+    grid-template-columns: minmax(0, 1fr) 48px;
+  }
+
+  .settings-range-row .settings-range {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .settings-choice-group {
+    grid-template-columns: 1fr;
+  }
+}

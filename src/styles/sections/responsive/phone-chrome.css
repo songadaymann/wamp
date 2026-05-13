@@ -55,7 +55,7 @@ body[data-device-class='phone'][data-app-mode='play-world'] #zoom-level {
 }
 
 body[data-device-class='phone'][data-app-mode='play-world'] #world-online-count,
-body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-comments-toggle,
+body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-settings,
 body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-controls,
 body[data-device-class='phone'][data-app-mode='play-world'] #room-save-status {
   min-height: 20px;
@@ -63,7 +63,7 @@ body[data-device-class='phone'][data-app-mode='play-world'] #room-save-status {
 }
 
 body[data-device-class='phone'][data-app-mode='play-world'] #world-online-count,
-body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-comments-toggle,
+body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-settings,
 body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-controls {
   font-size: 7px;
 }

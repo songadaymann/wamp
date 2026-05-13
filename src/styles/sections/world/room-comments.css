@@ -61,22 +61,12 @@
   color: #18161c;
 }
 
-#bottom-bar .world-footer-comments-toggle[data-comments-visible='true'] {
-  background: #277b30;
-  color: #fff3db;
-}
-
-#bottom-bar .world-footer-comments-toggle[data-comments-visible='true']:hover {
-  background: #277b30;
-  filter: brightness(1.08);
-}
-
-#bottom-bar .world-footer-comments-toggle[data-comments-visible='false'] {
+#bottom-bar .world-footer-settings {
   background: #79ccde;
   color: #000;
 }
 
-#bottom-bar .world-footer-comments-toggle[data-comments-visible='false']:hover {
+#bottom-bar .world-footer-settings:hover {
   background: #79ccde;
   filter: brightness(1.06);
 }

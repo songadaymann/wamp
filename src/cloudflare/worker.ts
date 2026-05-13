@@ -74,6 +74,10 @@ import {
   handleRoomCommentCreate,
   handleRoomCommentList,
 } from './worker/roomComments/routes';
+import {
+  handleUserSettingsGet,
+  handleUserSettingsPut,
+} from './worker/userSettings/routes';
 import { awardRoomPublishPoints, upsertUserStats } from './worker/runs/points';
 import {
   annotateRoomRecordWithTilesetHints,
@@ -215,6 +219,14 @@ export default {
 
       if (url.pathname.startsWith('/api/guestbook')) {
         return await handleGuestbookRequest(request, url, env);
+      }
+
+      if (url.pathname === '/api/settings/me' && request.method === 'GET') {
+        return await handleUserSettingsGet(request, env);
+      }
+
+      if (url.pathname === '/api/settings/me' && request.method === 'PUT') {
+        return await handleUserSettingsPut(request, env);
       }
 
       if (url.pathname === '/api/world' && request.method === 'GET') {

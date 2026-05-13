@@ -5,6 +5,12 @@ import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
 import { ROOM_COMMENT_MAX_LENGTH, type RoomCommentRecord } from '../../roomComments/model';
 import { fetchRoomComments, submitRoomComment } from '../../roomComments/client';
 import { type RoomSnapshot } from '../../persistence/roomModel';
+import {
+  getGameSettings,
+  subscribeGameSettings,
+  updateGameSettings,
+  type GameSettings,
+} from '../../settings/userSettings';
 import type { OverworldMode } from '../sceneData';
 
 interface ComposerElements {
@@ -47,7 +53,6 @@ const COMMENT_TEXT_COLOR = '#fff3dc';
 const COMMENT_MUTED_COLOR = '#d0b98c';
 const COMMENT_PANEL_WIDTH = 236;
 const COMMENT_PANEL_PADDING = 9;
-const ROOM_COMMENTS_VISIBLE_STORAGE_KEY = 'wamp.roomComments.visible';
 
 export class OverworldRoomCommentsController {
   private composerElements: ComposerElements | null = null;
@@ -56,13 +61,15 @@ export class OverworldRoomCommentsController {
   private comments: RoomCommentRecord[] = [];
   private activeRoomSignature: string | null = null;
   private loadingRoomSignature: string | null = null;
-  private commentsVisible = readRoomCommentsVisiblePreference();
+  private commentsVisible = getGameSettings().roomCommentsVisible;
+  private unsubscribeSettings: (() => void) | null = null;
   private readonly renderedCommentsById = new Map<string, RenderedRoomComment>();
 
   constructor(private readonly options: OverworldRoomCommentsControllerOptions) {}
 
   initialize(): void {
     this.ensureComposerDom();
+    this.unsubscribeSettings = subscribeGameSettings(this.handleSettingsChanged);
     this.renderComposer();
   }
 
@@ -75,6 +82,8 @@ export class OverworldRoomCommentsController {
   }
 
   destroy(): void {
+    this.unsubscribeSettings?.();
+    this.unsubscribeSettings = null;
     this.reset();
     this.destroyComposerDom();
   }
@@ -152,7 +161,7 @@ export class OverworldRoomCommentsController {
     }
 
     this.commentsVisible = visible;
-    writeRoomCommentsVisiblePreference(visible);
+    updateGameSettings({ roomCommentsVisible: visible });
     this.syncRenderedComments(this.getRenderableRoom());
     this.renderComposer();
   }
@@ -236,6 +245,16 @@ export class OverworldRoomCommentsController {
 
   private readonly handleComposerCancel = () => {
     this.closeComposer();
+  };
+
+  private readonly handleSettingsChanged = (settings: GameSettings): void => {
+    if (this.commentsVisible === settings.roomCommentsVisible) {
+      return;
+    }
+
+    this.commentsVisible = settings.roomCommentsVisible;
+    this.syncRenderedComments(this.getRenderableRoom());
+    this.renderComposer();
   };
 
   private async loadComments(room: RoomSnapshot, signature: string): Promise<void> {
@@ -583,28 +602,4 @@ function formatCommentTime(value: string): string {
 
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
-}
-
-function readRoomCommentsVisiblePreference(): boolean {
-  try {
-    if (typeof window === 'undefined') {
-      return true;
-    }
-
-    return window.localStorage.getItem(ROOM_COMMENTS_VISIBLE_STORAGE_KEY) !== 'false';
-  } catch {
-    return true;
-  }
-}
-
-function writeRoomCommentsVisiblePreference(visible: boolean): void {
-  try {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    window.localStorage.setItem(ROOM_COMMENTS_VISIBLE_STORAGE_KEY, visible ? 'true' : 'false');
-  } catch {
-    // Ignore storage errors; visibility can still update for the active session.
-  }
 }

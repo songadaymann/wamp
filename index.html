@@ -1364,7 +1364,7 @@
             <div id="world-online-popover-list" class="world-online-popover-list"></div>
           </div>
         </div>
-        <button id="btn-world-comments-toggle" class="bar-btn bar-btn-small world-footer-controls-btn world-footer-comments-toggle world-only-control" type="button" data-comments-visible="true">Hide Comments</button>
+        <button id="btn-world-settings" class="bar-btn bar-btn-small world-footer-controls-btn world-footer-settings world-only-control" type="button">Settings</button>
         <button id="btn-guestbook-open" class="bar-btn bar-btn-small world-footer-controls-btn world-only-control" type="button">Guestbook</button>
         <button id="btn-world-controls" class="bar-btn bar-btn-small world-footer-controls-btn world-only-control" type="button">Controls</button>
       </div>
@@ -2044,6 +2044,54 @@
     </div>
   </div>
 
+  <div id="settings-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel settings-modal-panel" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <h2 id="settings-modal-title" class="history-modal-title">Settings</h2>
+        </div>
+        <button id="btn-settings-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div class="settings-modal-body">
+        <section class="settings-section">
+          <div class="settings-section-title">Comments</div>
+          <label class="settings-toggle-row" for="settings-comments-visible">
+            <span class="settings-label-copy">
+              <span class="settings-label-title">Show Room Comments</span>
+            </span>
+            <input id="settings-comments-visible" class="settings-checkbox" type="checkbox" />
+          </label>
+        </section>
+        <section class="settings-section">
+          <div class="settings-section-title">Audio</div>
+          <label class="settings-range-row" for="settings-music-volume">
+            <span class="settings-label-title">MUSIC</span>
+            <input id="settings-music-volume" class="settings-range" type="range" min="0" max="100" step="1" />
+            <span id="settings-music-volume-value" class="settings-value">100%</span>
+          </label>
+          <label class="settings-range-row" for="settings-sfx-volume">
+            <span class="settings-label-title">SFX</span>
+            <input id="settings-sfx-volume" class="settings-range" type="range" min="0" max="100" step="1" />
+            <span id="settings-sfx-volume-value" class="settings-value">100%</span>
+          </label>
+        </section>
+        <section class="settings-section">
+          <div class="settings-section-title">Panning Style</div>
+          <div class="settings-choice-group">
+            <label class="settings-choice">
+              <input type="radio" name="settings-panning-style" value="option-drag" />
+              <span>Option-drag</span>
+            </label>
+            <label class="settings-choice">
+              <input type="radio" name="settings-panning-style" value="two-finger-drag" />
+              <span>Two-finger drag</span>
+            </label>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
   <div id="controls-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel controls-modal-panel" role="dialog" aria-modal="true" aria-labelledby="controls-modal-title">
       <div class="history-modal-header">
@@ -2059,7 +2107,7 @@
           <div class="controls-section-title">Browse</div>
           <div class="controls-row"><span class="controls-key">Click</span><span>Select room</span></div>
           <div class="controls-row"><span class="controls-key">Wheel</span><span>Zoom to cursor</span></div>
-          <div class="controls-row"><span class="controls-key">Drag / Space</span><span>Pan camera</span></div>
+          <div class="controls-row"><span class="controls-key">Settings</span><span>Choose Option-drag or two-finger drag panning</span></div>
           <div class="controls-row"><span class="controls-key">Warp field</span><span>Go to coordinates</span></div>
           <div class="controls-row"><span class="controls-key">F</span><span>Fit loaded world</span></div>
         </div>

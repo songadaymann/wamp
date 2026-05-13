@@ -24,6 +24,7 @@ import { RoomGoalIntroModalController } from './setup/roomGoalIntroModal';
 import { RoomRushModalController } from './setup/roomRushModal';
 import { RoomRushResultModalController } from './setup/roomRushResultModal';
 import { RunRatingModalController } from './setup/runRatingModal';
+import { SettingsModalController } from './setup/settingsModal';
 import { SignTextModalController } from './setup/signTextModal';
 import { setupCollapsibleSidebarSections, setupEditorSidebarShell } from './setup/sidebarSections';
 import { setupSceneCommands } from './setup/sceneCommands';
@@ -44,6 +45,7 @@ export function setupUI(game: Phaser.Game): void {
   const exploreModal = new ExploreModalController(game);
   const guestBuilderClaimModal = new GuestBuilderClaimModalController();
   const guestbookModal = new GuestbookModalController();
+  const settingsModal = new SettingsModalController();
   const controlsModal = new ControlsModalController();
   const aboutModal = new AboutModalController();
   const chatModerationModal = new ChatModerationModalController();
@@ -71,6 +73,7 @@ export function setupUI(game: Phaser.Game): void {
       exploreModal.close();
       guestBuilderClaimModal.close();
       guestbookModal.close();
+      settingsModal.close();
       controlsModal.close();
       aboutModal.close();
       courseModal.close();
@@ -85,6 +88,7 @@ export function setupUI(game: Phaser.Game): void {
   exploreModal.init();
   guestBuilderClaimModal.init();
   guestbookModal.init();
+  settingsModal.init();
   controlsModal.init();
   aboutModal.init();
   chatModerationModal.init();
@@ -108,6 +112,7 @@ export function setupUI(game: Phaser.Game): void {
     leaderboardModal,
     exploreModal,
     guestbookModal,
+    settingsModal,
     controlsModal,
     aboutModal,
     chatModerationModal,

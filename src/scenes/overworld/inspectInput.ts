@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { getDeviceLayoutState } from '../../ui/deviceLayout';
+import { getGameSettings } from '../../settings/userSettings';
 import type { RoomCoordinates } from '../../persistence/roomModel';
 import type { OverworldMode } from '../sceneData';
 import type { CameraMode } from './camera';
@@ -411,6 +412,7 @@ export class OverworldInspectInputController {
 
   private pointerRequestsPan(pointer: Phaser.Input.Pointer): boolean {
     const altPressed = this.altDown || Boolean((pointer.event as MouseEvent | undefined)?.altKey);
-    return pointer.middleButtonDown() || this.spaceDown || altPressed;
+    const optionDragPanEnabled = getGameSettings().panningStyle === 'option-drag';
+    return pointer.middleButtonDown() || this.spaceDown || (optionDragPanEnabled && altPressed);
   }
 }

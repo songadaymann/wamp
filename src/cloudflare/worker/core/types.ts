@@ -186,6 +186,13 @@ export interface RoomCommentRow {
   user_agent: string | null;
 }
 
+export interface UserSettingsRow {
+  user_id: string;
+  settings_json: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AgentRow {
   id: string;
   owner_user_id: string;

@@ -368,12 +368,14 @@ export class SfxController {
   private readonly activeAudio = new Set<HTMLAudioElement>();
   private readonly activeAudioByCue = new Map<SfxCue, Set<HTMLAudioElement>>();
   private readonly cleanupByAudio = new Map<HTMLAudioElement, () => void>();
+  private readonly baseVolumeByAudio = new Map<HTMLAudioElement, number>();
   private readonly activeCueCounts = new Map<SfxCue, number>();
   private readonly lastPlayedAt = new Map<SfxCue, number>();
   private readonly history: SfxHistoryEntry[] = [];
   private lastResumeAttempt: AudioResumeDebugEntry | null = null;
   private lastAudioContextStateChange: AudioContextStateDebugEntry | null = null;
   private lastPlayError: SfxPlayErrorDebugEntry | null = null;
+  private volume = 1;
 
   init(windowObj: Window = window): void {
     if (this.initialized) {
@@ -427,10 +429,24 @@ export class SfxController {
     return this.muted;
   }
 
+  setVolume(value: number): void {
+    const nextVolume = PhaserClamp(Number.isFinite(value) ? value : 1, 0, 1);
+    if (this.volume === nextVolume) {
+      return;
+    }
+
+    this.volume = nextVolume;
+    for (const player of this.activeAudio) {
+      const baseVolume = this.baseVolumeByAudio.get(player) ?? 0;
+      player.volume = PhaserClamp(baseVolume * this.volume, 0, 1);
+    }
+  }
+
   getDebugState(): Record<string, unknown> {
     return {
       initialized: this.initialized,
       muted: this.muted,
+      volume: this.volume,
       userInteracted: this.userInteracted,
       audioContextState: this.audioContext?.state ?? null,
       lastAudioContextStateChange: this.lastAudioContextStateChange,
@@ -504,7 +520,8 @@ export class SfxController {
       0,
       1
     );
-    player.volume = baseVolume;
+    this.baseVolumeByAudio.set(player, baseVolume);
+    player.volume = PhaserClamp(baseVolume * this.volume, 0, 1);
     player.playbackRate = PhaserClamp(
       (config.playbackRate ?? 1) * Math.max(0.05, playbackOptions?.playbackRateMultiplier ?? 1),
       0.05,
@@ -553,6 +570,7 @@ export class SfxController {
         fadeIntervalId = null;
       }
       this.cleanupByAudio.delete(player);
+      this.baseVolumeByAudio.delete(player);
       this.activeAudio.delete(player);
       const activeCuePlayers = this.activeAudioByCue.get(cue);
       activeCuePlayers?.delete(player);
@@ -588,7 +606,8 @@ export class SfxController {
         fadeIntervalId = window.setInterval(() => {
           const elapsed = performance.now() - fadeStartedAt;
           const progress = PhaserClamp(elapsed / fadeOutMs, 0, 1);
-          player.volume = baseVolume * (1 - progress);
+          const currentBaseVolume = this.baseVolumeByAudio.get(player) ?? baseVolume;
+          player.volume = currentBaseVolume * this.volume * (1 - progress);
           if (progress >= 1) {
             player.pause();
             cleanup();
