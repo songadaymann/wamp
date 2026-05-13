@@ -715,7 +715,6 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
                   }
                 })
               );
-            }
             } else if (liveObject.config.id === 'trapdoor_locked') {
               liveObject.interactions.push(
                 this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
