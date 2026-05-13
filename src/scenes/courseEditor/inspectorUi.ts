@@ -91,6 +91,10 @@ export function getPressurePlateTargetLabel(objectId: string): string {
       return 'door';
     case 'door_metal':
       return 'metal door';
+    case 'trapdoor_locked':
+      return 'trapdoor';
+    case 'trapdoor_metal':
+      return 'metal trapdoor';
     case 'treasure_chest':
       return 'treasure chest';
     case 'cage':
