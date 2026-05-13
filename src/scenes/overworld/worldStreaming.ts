@@ -117,6 +117,7 @@ interface OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall> {
   ) => void;
   onBackdropObjectsChanged?: () => void;
   onFullRoomVisibilityChanged?: () => void;
+  onFullRoomDestroyed?: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
   measurePerformance?: <T>(label: string, callback: () => T) => T;
 }
 
@@ -1386,6 +1387,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       this.options.scene.textures.remove(loadedRoom.foregroundTextureKey);
     }
 
+    this.options.onFullRoomDestroyed?.(loadedRoom);
     this.loadedFullRoomsById.delete(roomId);
     this.fullRoomReleaseAtById.delete(roomId);
     this.options.onBackdropObjectsChanged?.();

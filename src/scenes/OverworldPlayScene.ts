@@ -212,6 +212,7 @@ import {
   type CameraMode,
 } from './overworld/camera';
 import {
+  getTerrainTileCollisionProfile,
   terrainTileCollidesAtLocalPixel,
 } from './overworld/terrainCollision';
 import type {
@@ -386,6 +387,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private quicksandVisualSink = 0;
   private quicksandStatusCooldownUntil = 0;
   private runtimeRoomTextureRevision = 0;
+  private readonly brokenSpecialBrickTileKeysByRoomId = new Map<string, Set<string>>();
   private readonly roomRepository = createRoomRepository();
   private readonly courseRepository = createCourseRepository();
   private readonly profileRepository = createProfileRepository();
@@ -613,6 +615,9 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.liveObjectController.syncLoadedWorldColliders(loadedRooms),
       onBackdropObjectsChanged: () => this.syncBackdropCameraIgnores(),
       onFullRoomVisibilityChanged: () => this.syncGhostVisibility(),
+      onFullRoomDestroyed: (loadedRoom) => {
+        this.brokenSpecialBrickTileKeysByRoomId.delete(loadedRoom.room.id);
+      },
       measurePerformance: (label, callback) => this.measureMobilePerformance(label, callback),
     });
     this.presenceController = new OverworldPresenceController({
@@ -2513,8 +2518,15 @@ export class OverworldPlayScene extends Phaser.Scene {
       return null;
     }
 
+    if (this.isSpecialBrickTileBroken(roomId, tileX, tileY)) {
+      return null;
+    }
+
     const { gid } = decodeTileDataValue(loadedRoom.room.tileData.terrain[tileY][tileX]);
     if (!isSpecialBreakableBrickGid(gid)) {
+      return null;
+    }
+    if (!loadedRoom.terrainLayer.getTileAt(tileX, tileY)) {
       return null;
     }
 
@@ -2531,10 +2543,60 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    loadedRoom.room.tileData.terrain[tileY][tileX] = -1;
+    const tileKey = this.getSpecialBrickTileKey(tileX, tileY);
+    let brokenTiles = this.brokenSpecialBrickTileKeysByRoomId.get(loadedRoom.room.id);
+    if (!brokenTiles) {
+      brokenTiles = new Set<string>();
+      this.brokenSpecialBrickTileKeysByRoomId.set(loadedRoom.room.id, brokenTiles);
+    }
+    if (brokenTiles.has(tileKey)) {
+      return;
+    }
+
+    brokenTiles.add(tileKey);
     loadedRoom.terrainLayer.removeTileAt(tileX, tileY, true, true);
     this.refreshLoadedRoomTerrainTexture(loadedRoom);
     this.playSpecialBrickBreakAnimation(loadedRoom, tileX, tileY);
+  }
+
+  private isSpecialBrickTileBroken(roomId: string, tileX: number, tileY: number): boolean {
+    return this.brokenSpecialBrickTileKeysByRoomId.get(roomId)?.has(
+      this.getSpecialBrickTileKey(tileX, tileY),
+    ) === true;
+  }
+
+  private getSpecialBrickTileKey(tileX: number, tileY: number): string {
+    return `${tileX},${tileY}`;
+  }
+
+  private parseSpecialBrickTileKey(tileKey: string): { tileX: number; tileY: number } | null {
+    const [tileXText, tileYText] = tileKey.split(',');
+    const tileX = Number(tileXText);
+    const tileY = Number(tileYText);
+    if (!Number.isInteger(tileX) || !Number.isInteger(tileY)) {
+      return null;
+    }
+    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
+      return null;
+    }
+    return { tileX, tileY };
+  }
+
+  private createLoadedRoomTerrainTextureSnapshot(loadedRoom: SceneLoadedFullRoom): RoomSnapshot {
+    const brokenTiles = this.brokenSpecialBrickTileKeysByRoomId.get(loadedRoom.room.id);
+    if (!brokenTiles || brokenTiles.size === 0) {
+      return loadedRoom.room;
+    }
+
+    const snapshot = cloneRoomSnapshot(loadedRoom.room);
+    for (const tileKey of brokenTiles) {
+      const parsed = this.parseSpecialBrickTileKey(tileKey);
+      if (!parsed) {
+        continue;
+      }
+      snapshot.tileData.terrain[parsed.tileY][parsed.tileX] = -1;
+    }
+    return snapshot;
   }
 
   private refreshLoadedRoomTerrainTexture(loadedRoom: SceneLoadedFullRoom): void {
@@ -2547,11 +2609,17 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.textures.remove(nextTextureKey);
     }
 
-    buildRoomSnapshotTexture(this, loadedRoom.room, nextTextureKey, TILE_SIZE, {
-      includeBackground: false,
-      includeObjects: false,
-      includedLayers: ['background', 'terrain'],
-    });
+    buildRoomSnapshotTexture(
+      this,
+      this.createLoadedRoomTerrainTextureSnapshot(loadedRoom),
+      nextTextureKey,
+      TILE_SIZE,
+      {
+        includeBackground: false,
+        includeObjects: false,
+        includedLayers: ['background', 'terrain'],
+      },
+    );
 
     loadedRoom.image.setTexture(nextTextureKey);
     loadedRoom.textureKey = nextTextureKey;
@@ -2562,6 +2630,52 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (!oldTextureStillUsed && this.textures.exists(oldTextureKey)) {
       this.textures.remove(oldTextureKey);
     }
+  }
+
+  private resetAllSpecialBrickTiles(): void {
+    for (const loadedRoom of this.loadedFullRoomsById.values()) {
+      this.resetSpecialBrickTilesForRoom(loadedRoom);
+    }
+    this.brokenSpecialBrickTileKeysByRoomId.clear();
+  }
+
+  private resetSpecialBrickTilesForRoom(loadedRoom: SceneLoadedFullRoom): void {
+    const brokenTiles = this.brokenSpecialBrickTileKeysByRoomId.get(loadedRoom.room.id);
+    if (!brokenTiles || brokenTiles.size === 0) {
+      return;
+    }
+
+    for (const tileKey of brokenTiles) {
+      const parsed = this.parseSpecialBrickTileKey(tileKey);
+      if (!parsed) {
+        continue;
+      }
+
+      const { tileX, tileY } = parsed;
+      const decoded = decodeTileDataValue(loadedRoom.room.tileData.terrain[tileY][tileX]);
+      if (!isSpecialBreakableBrickGid(decoded.gid)) {
+        continue;
+      }
+
+      const restoredTile = loadedRoom.terrainLayer.putTileAt(decoded.gid, tileX, tileY);
+      if (!restoredTile) {
+        continue;
+      }
+
+      restoredTile.flipX = decoded.flipX;
+      restoredTile.flipY = decoded.flipY;
+      const collisionProfile = getTerrainTileCollisionProfile(loadedRoom.room, tileX, tileY);
+      restoredTile.setCollision(
+        collisionProfile.hasCollision,
+        collisionProfile.hasCollision,
+        collisionProfile.hasCollision,
+        collisionProfile.hasCollision,
+      );
+    }
+
+    loadedRoom.terrainLayer.calculateFacesWithin(0, 0, ROOM_WIDTH, ROOM_HEIGHT);
+    this.brokenSpecialBrickTileKeysByRoomId.delete(loadedRoom.room.id);
+    this.refreshLoadedRoomTerrainTexture(loadedRoom);
   }
 
   private playSpecialBrickBreakAnimation(
@@ -3732,6 +3846,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.combatController.destroyProjectiles();
     this.liveObjectController.resetSwitchStates();
     this.playerPresentationController.resetTransientPlayState();
+    this.resetAllSpecialBrickTiles();
   }
 
   private clearTouchGestureState(): void {
@@ -3751,6 +3866,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
+    this.resetSpecialBrickTilesForRoom(loadedRoom);
     this.destroyLiveObjects(loadedRoom);
     this.createLiveObjects(loadedRoom);
     this.syncLiveObjectInteractions();
