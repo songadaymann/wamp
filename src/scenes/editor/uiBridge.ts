@@ -180,6 +180,8 @@ export class EditorUiBridge {
 
     this.bindListeners();
     this.syncEditorChromeState();
+    runtimeConfig.paletteController?.renderPalette();
+    runtimeConfig.paletteController?.renderTilePreview();
     void this.refreshBackgroundImages();
   }
 
