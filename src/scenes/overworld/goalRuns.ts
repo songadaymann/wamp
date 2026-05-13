@@ -328,7 +328,8 @@ export class OverworldGoalRunController {
       !this.currentGoalRun ||
       this.currentGoalRun.result !== 'active' ||
       this.currentGoalRun.qualificationState !== 'qualified' ||
-      this.currentGoalRun.goal.type !== 'defeat_all' ||
+      (this.currentGoalRun.goal.type !== 'defeat_all' &&
+        this.currentGoalRun.goal.type !== 'survival') ||
       this.currentGoalRun.roomId !== roomId
     ) {
       return NOOP_MUTATION_RESULT;
@@ -346,7 +347,9 @@ export class OverworldGoalRunController {
       changed: true,
       goalMarkersChanged: false,
       resetChallengeState: false,
-      transientStatus: `${enemyName} defeated.`,
+      transientStatus: this.currentGoalRun.goal.type === 'defeat_all'
+        ? `${enemyName} defeated.`
+        : null,
       event: null,
     };
   }
@@ -357,7 +360,8 @@ export class OverworldGoalRunController {
       this.currentGoalRun.result !== 'active' ||
       this.currentGoalRun.qualificationState !== 'qualified' ||
       (this.currentGoalRun.goal.type !== 'collect_target' &&
-        this.currentGoalRun.goal.type !== 'collect_race') ||
+        this.currentGoalRun.goal.type !== 'collect_race' &&
+        this.currentGoalRun.goal.type !== 'survival') ||
       this.currentGoalRun.roomId !== roomId
     ) {
       return NOOP_MUTATION_RESULT;
@@ -571,7 +575,21 @@ export class OverworldGoalRunController {
         return `goal ${runState.checkpointsReached}/${runState.checkpointTarget ?? 0} checkpoints · ${countdownText ?? `${elapsedSeconds}s`}${submissionSuffix}`;
       case 'survival': {
         const remaining = Math.max(0, runState.goal.durationMs - runState.elapsedMs);
-        return `goal survive ${(remaining / 1000).toFixed(1)}s${submissionSuffix}`;
+        const parts = [`goal survive ${(remaining / 1000).toFixed(1)}s`];
+        if (runState.collectiblesCollected > 0) {
+          parts.push(
+            `${runState.collectiblesCollected} item${runState.collectiblesCollected === 1 ? '' : 's'}`
+          );
+        }
+        if (runState.enemiesDefeated > 0) {
+          parts.push(
+            `${runState.enemiesDefeated} enem${runState.enemiesDefeated === 1 ? 'y' : 'ies'}`
+          );
+        }
+        if (runState.deaths > 0) {
+          parts.push(`deaths ${runState.deaths}`);
+        }
+        return `${parts.join(' · ')}${submissionSuffix}`;
       }
     }
   }

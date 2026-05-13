@@ -11,6 +11,9 @@ const DEFEAT_ALL_CLEAR_SCORE = 80;
 const CHECKPOINT_SPRINT_CLEAR_SCORE = 120;
 const SURVIVAL_SCORE_PER_SECOND = 10;
 const SURVIVAL_CLEAR_BONUS = 100;
+const SURVIVAL_COLLECTIBLE_SCORE = 15;
+const SURVIVAL_ENEMY_SCORE = 30;
+const SURVIVAL_ZERO_DEATH_CLEAR_BONUS = 50;
 const DEATH_PENALTY = 20;
 
 export function computeRunScore(goal: RoomGoal, finish: RunFinishRequestBody): number {
@@ -58,13 +61,18 @@ export function computeRunScore(goal: RoomGoal, finish: RunFinishRequestBody): n
           checkpointsReached * 10 -
           deathPenalty
       );
-    case 'survival':
+    case 'survival': {
+      const survivalElapsedMs = Math.min(elapsedMs, Math.max(0, goal.durationMs));
       return Math.max(
         0,
-        Math.floor(elapsedMs / 1000) * SURVIVAL_SCORE_PER_SECOND +
-          (finish.result === 'completed' ? SURVIVAL_CLEAR_BONUS : 0) -
+        Math.floor(survivalElapsedMs / 1000) * SURVIVAL_SCORE_PER_SECOND +
+          collectiblesCollected * SURVIVAL_COLLECTIBLE_SCORE +
+          enemiesDefeated * SURVIVAL_ENEMY_SCORE +
+          (finish.result === 'completed' ? SURVIVAL_CLEAR_BONUS : 0) +
+          (finish.result === 'completed' && deaths === 0 ? SURVIVAL_ZERO_DEATH_CLEAR_BONUS : 0) -
           deathPenalty
       );
+    }
   }
 }
 

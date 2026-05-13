@@ -314,7 +314,7 @@ export function buildAutomaticRoomGoalIntroText(
       return `Reach ${checkpointCount} ${checkpointCount === 1 ? 'checkpoint' : 'checkpoints'}, then hit the finish as fast as you can!`;
     }
     case 'survival':
-      return `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds!`;
+      return `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds. Pickups, enemy defeats, and zero-death clears raise your score!`;
   }
 }
 
