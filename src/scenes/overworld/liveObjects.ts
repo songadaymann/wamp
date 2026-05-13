@@ -503,6 +503,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     if (config.id === 'door_metal') {
       sprite.setTint(0xb8c4d8);
     }
+    if (config.id === 'trapdoor_metal') {
+      sprite.setTint(0xb8c4d8);
+    }
     if (config.bodyWidth > 0 && config.bodyHeight > 0) {
       if (this.usesDynamicObjectBody(config)) {
         this.options.scene.physics.add.existing(sprite);
@@ -692,6 +695,28 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
                 })
               );
             } else if (liveObject.config.id === 'door_locked') {
+              liveObject.interactions.push(
+                this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
+                  if (this.options.tryConsumeHeldKey()) {
+                    this.options.playBounceFx(
+                      liveObject.sprite.x,
+                      liveObject.sprite.y - 6,
+                      loadedRoom.room.coordinates,
+                      'door-open'
+                    );
+                    this.options.showTransientStatus('Unlocked the door.');
+                    this.removeLiveObject(loadedRoom, liveObject);
+                    return;
+                  }
+
+                  if (this.options.getCurrentTime() >= liveObject.runtime.cooldownUntil) {
+                    liveObject.runtime.cooldownUntil = this.options.getCurrentTime() + 900;
+                    this.options.showTransientStatus('Need a key.');
+                  }
+                })
+              );
+            }
+            } else if (liveObject.config.id === 'trapdoor_locked') {
               liveObject.interactions.push(
                 this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
                   if (this.options.tryConsumeHeldKey()) {
@@ -961,7 +986,21 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             }
           }
           break;
+        case 'trapdoor_metal':
+          if (liveObject.runtime.pressureActive !== active) {
+            liveObject.runtime.pressureActive = active;
+            this.applyPressureDoorState(liveObject, active);
+            if (active) {
+              this.options.playRoomSfx('door-open', loadedRoom.room.coordinates);
+            }
+          }
+          break;
         case 'door_locked':
+          if (active) {
+            this.triggerLinkedLockedDoor(loadedRoom, liveObject);
+          }
+          break;
+        case 'trapdoor_locked':
           if (active) {
             this.triggerLinkedLockedDoor(loadedRoom, liveObject);
           }
@@ -4881,6 +4920,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       case 'brick_box':
       case 'treasure_chest':
       case 'door_locked':
+      case 'trapdoor_locked':
       case 'log_wall':
       case 'bear_brown':
       case 'bear_polar':

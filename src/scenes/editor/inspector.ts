@@ -584,14 +584,14 @@ export class EditorInspectorController {
           this.pressurePlateStatusText ??
           (connectMode
             ? eligibleTargetCount > 0
-              ? 'Click a door, metal door, cage, or chest to link this pressure plate.'
-              : 'No door, metal door, cage, or chest is in this room yet.'
+              ? 'Click a door, cage, or chest to link this pressure plate.'
+              : 'No door, cage, or chest is in this room yet.'
             : target
               ? `Linked to ${this.getPressurePlateTargetLabel(target.id)}.`
               : 'This pressure plate is not linked yet.'),
         pressureConnectHidden: connectMode,
         pressureConnectDisabled: connectMode || eligibleTargetCount === 0,
-        pressureConnectTitle: eligibleTargetCount === 0 ? 'Add a door, metal door, cage, or chest first.' : '',
+        pressureConnectTitle: eligibleTargetCount === 0 ? 'Add a door, cage, or chest first.' : '',
         pressureClearHidden: connectMode,
         pressureClearDisabled: !target,
         pressureDoneLaterHidden: !connectMode,
@@ -669,9 +669,9 @@ export class EditorInspectorController {
     this.pressurePlateStatusText =
       eligibleTargets.length > 0
         ? autoPlaced
-          ? 'Pressure plate placed. Click a door, metal door, cage, or chest to link it.'
-          : 'Click a door, metal door, cage, or chest to link this pressure plate.'
-        : 'No door, metal door, cage, or chest is in this room yet. You can link this pressure plate later.';
+          ? 'Pressure plate placed. Click a door, cage, or chest to link it.'
+          : 'Click a door, cage, or chest to link this pressure plate.'
+        : 'No door, cage, or chest is in this room yet. You can link this pressure plate later.';
     this.renderPressurePlatePanel();
   }
 
@@ -688,7 +688,7 @@ export class EditorInspectorController {
       (placed) => canPlacedObjectBePressurePlateTarget(placed) && placed.instanceId !== source.instanceId,
     );
     if (!target) {
-      this.pressurePlateStatusText = 'Pick a door, metal door, cage, or chest in this room.';
+      this.pressurePlateStatusText = 'Pick a door, cage, or chest in this room.';
       this.renderPressurePlatePanel();
       return true;
     }
@@ -819,6 +819,10 @@ export class EditorInspectorController {
         return 'treasure chest';
       case 'cage':
         return 'cage';
+      case 'trapdoor_metal':
+        return 'metal trapdoor';
+      case 'trapdoor_locked':
+        return 'locked trapdoor';
       default:
         return getObjectById(objectId)?.name ?? 'object';
     }

@@ -1013,6 +1013,7 @@ function drawFallbackObject(canvas, placed) {
 function getObjectPreviewDimensions(id) {
   if (id === 'ladder') return { width: 16, height: 48 };
   if (id.includes('door')) return { width: 32, height: 48 };
+  if (id.includes('trapdoor')) return { width: 16, height: 16};
   if (id === 'flag' || id.includes('checkpoint')) return { width: 32, height: 48 };
   if (id.includes('tree')) return { width: 48, height: 64 };
   if (id.includes('sun')) return { width: 48, height: 48 };

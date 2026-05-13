@@ -260,7 +260,7 @@ export class CourseEditorObjectInspectorController {
         placed.instanceId !== source.placed.instanceId
     );
     if (!target) {
-      this.pressurePlateStatusText = 'Pick a door, metal door, cage, or chest in this course.';
+      this.pressurePlateStatusText = 'Pick a door, cage, or chest in this course.';
       this.renderInspectorUi();
       return true;
     }
@@ -717,9 +717,9 @@ export class CourseEditorObjectInspectorController {
     this.pressurePlateStatusText =
       eligibleTargets.length > 0
         ? autoPlaced
-          ? 'Pressure plate placed. Click a door, metal door, cage, or chest to link it.'
-          : 'Click a door, metal door, cage, or chest to link this pressure plate.'
-        : 'No door, metal door, cage, or chest is in this course yet. You can link this pressure plate later.';
+          ? 'Pressure plate placed. Click a door, cage, or chest to link it.'
+          : 'Click a door, cage, or chest to link this pressure plate.'
+        : 'No door, cage, or chest is in this course yet. You can link this pressure plate later.';
     this.renderInspectorUi();
   }
 

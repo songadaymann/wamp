@@ -20,7 +20,7 @@ export function getInitialDirectionX(
   if (facing === 'left') {
     return -1;
   }
-  return localX <= ROOM_PX_WIDTH * 0.5 ? 1 : -1;
+  return localX <= ROOM_PX_WIDTH * 0.5 ? 1 : -1; //if undefined, objects face toward middle of Room
 }
 
 export function createLiveObjectRuntimeState(options: {
@@ -54,7 +54,7 @@ export function createLiveObjectRuntimeState(options: {
     aiFacingLastFlipAt: getCurrentTime(),
     aiFacingLastFlipX: sprite.x,
     elapsedMs: 0,
-    nextActionAt:
+    nextActionAt: //these are custom delays before these objects start doing things
       config.id === 'frog'
         ? getCurrentTime() + 250
         : config.id === 'cannon'
