@@ -113,7 +113,7 @@ export function getContainerName(objectId: string): string {
 }
 
 export function getContainerAcceptedContentsLabel(objectId: string): string {
-  return objectId === 'cage' ? 'enemies' : 'collectibles';
+  return objectId === 'cage' ? 'enemies or crates' : 'collectibles';
 }
 
 function getContainerInspectorStatusText(options: ContainerInspectorOptions): string {

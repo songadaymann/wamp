@@ -189,7 +189,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: SWITCH_BLOCK_OFF_OBJECT_ID, name: 'Red Switch Block', category: 'platform', path: 'assets/objects/switch-block-red.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 16, bodyHeight: 16, behavior: 'static', description: 'Red platform block. Starts inactive, then toggles with a Block Switch.' },
   { id: 'treasure_chest', name: 'Treasure Chest', category: 'platform', path: 'assets/objects/treasure_chest.png', frameWidth: 32, frameHeight: 32, frameCount: 4, fps: 0, defaultFrame: 0, bodyWidth: 28, bodyHeight: 18, bodyOffsetX: 2, bodyOffsetY: 14, behavior: 'static', description: 'Solid chest prop. Good for treasure rooms.' },
   { id: 'log_wall',    name: 'Log Wall',    category: 'platform',    path: 'assets/deco/log_wall.png',       frameWidth: 32, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 44, bodyOffsetX: 2, bodyOffsetY: 4, behavior: 'static',   description: 'Tall wooden wall segment. Solid collision.' },
-  { id: 'cage',        name: 'Cage',        category: 'platform',    path: 'assets/objects/cage.png',        frameWidth: 18, frameHeight: 32, frameCount: 5,  fps: 0,  defaultFrame: 0, bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 1, bodyOffsetY: 16, behavior: 'static', description: 'Tall cage prop. Solid collision.' },
+  { id: 'cage',        name: 'Cage',        category: 'platform',    path: 'assets/objects/cage.png',        frameWidth: 18, frameHeight: 32, frameCount: 5,  fps: 0,  defaultFrame: 0, facingDirection: 'right', bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 1, bodyOffsetY: 16, behavior: 'static', description: 'Tall cage prop. Solid collision.' },
   { id: 'sign',        name: 'Sign',        category: 'decoration',  path: 'assets/objects/sign.png',        frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative signpost. No collision.' },
   { id: 'sign_arrow',  name: 'Arrow Sign',  category: 'decoration',  path: 'assets/objects/sign_arrow.png',  frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative arrow sign. No collision.' },
   { id: 'ladder',      name: 'Ladder',      category: 'interactive', path: 'assets/objects/ladder.png',      frameWidth: 16, frameHeight: 64, frameCount: 1,  fps: 0,  bodyWidth: 16, bodyHeight: 51, bodyOffsetX: 0, bodyOffsetY: 13, previewWidth: 16, previewHeight: 51, previewOffsetX: 0, previewOffsetY: 13, behavior: 'static',   description: 'Climbable surface. Press up to climb.' },
@@ -470,14 +470,14 @@ export function canPlacedObjectBeContainer<T extends Pick<PlacedObject, 'id'>>(
 
 export function canObjectBeStoredInContainer(
   containerId: string,
-  objectConfig: Pick<GameObjectConfig, 'category'> | null | undefined,
+  objectConfig: Pick<GameObjectConfig, 'category' | 'id' | 'interaction'> | null | undefined,
 ): boolean {
   if (!objectConfig) {
     return false;
   }
 
   if (containerId === 'cage') {
-    return objectConfig.category === 'enemy';
+    return objectConfig.category === 'enemy' || isPushableObjectConfig(objectConfig);
   }
   if (containerId === 'treasure_chest') {
     return objectConfig.category === 'collectible';

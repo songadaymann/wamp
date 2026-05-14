@@ -6,6 +6,7 @@ import {
   getObjectDisplayOffset,
   getObjectDisplayScale,
   objectCollidesWithWorld,
+  canObjectBeStoredInContainer,
   getBlockSwitchRuntimeTextureKey,
   isDynamicRuntimeObjectConfig,
   isBlockSwitchObjectId,
@@ -332,6 +333,8 @@ const SWORDSMAN_AI_WINDUP_MS = 180;
 const SWORDSMAN_AI_ATTACK_MS = 240;
 const SWORDSMAN_AI_ATTACK_HIT_START_MS = 55;
 const SWORDSMAN_AI_ATTACK_HIT_END_MS = 155;
+const SWORDSMAN_AI_ATTACK_WALL_SAMPLE_STEP_PX = 4;
+const SWORDSMAN_AI_ATTACK_OCCLUSION_EPSILON_PX = 0.5;
 const SWORDSMAN_AI_COOLDOWN_MS = 300;
 const SWORDSMAN_AI_RESPAWN_DELAY_MS = 1500;
 const SWORDSMAN_AI_EDGE_GUARD_PROBE_LEAD_PX = 1;
@@ -1385,8 +1388,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       liveObject.sprite.setFrame(Math.max(0, liveObject.config.frameCount - 1));
     }
     this.setLiveObjectBodyEnabled(liveObject, false);
-    if (liveObject.containedObjectId && getObjectById(liveObject.containedObjectId)?.category === 'enemy') {
-      this.spawnTriggeredObject(loadedRoom, liveObject.containedObjectId, {
+    const containedObjectId = liveObject.containedObjectId;
+    const containedObject = containedObjectId
+      ? getObjectById(containedObjectId)
+      : null;
+    if (containedObjectId && containedObject && canObjectBeStoredInContainer(liveObject.config.id, containedObject)) {
+      this.spawnTriggeredObject(loadedRoom, containedObjectId, {
         x: liveObject.sprite.x - this.options.getRoomOrigin(loadedRoom.room.coordinates).x,
         y: liveObject.sprite.y + 2 - this.options.getRoomOrigin(loadedRoom.room.coordinates).y,
         facing: 'right',
@@ -4246,10 +4253,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       return false;
     }
 
-    return Phaser.Geom.Intersects.RectangleToRectangle(
-      this.getSwordsmanAttackBounds(liveObject),
-      getArcadeBodyBounds(playerBody),
-    );
+    const attackBounds = this.getSwordsmanAttackBounds(liveObject);
+    const playerBounds = getArcadeBodyBounds(playerBody);
+    if (!Phaser.Geom.Intersects.RectangleToRectangle(attackBounds, playerBounds)) {
+      return false;
+    }
+
+    return this.swordsmanSwordHasClearPathToPlayer(liveObject, attackBounds, playerBounds);
   }
 
   private getSwordsmanAttackBounds(liveObject: LoadedRoomObject): Phaser.Geom.Rectangle {
@@ -4273,6 +4283,160 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       width,
       height,
     );
+  }
+
+  private swordsmanSwordHasClearPathToPlayer(
+    liveObject: LoadedRoomObject,
+    attackBounds: Phaser.Geom.Rectangle,
+    playerBounds: Phaser.Geom.Rectangle,
+  ): boolean {
+    const body = liveObject.sprite.body as ArcadeObjectBody | null;
+    if (!body) {
+      return true;
+    }
+
+    const enemyBounds = getArcadeBodyBounds(body);
+    const directionX = liveObject.runtime.directionX >= 0 ? 1 : -1;
+    const startX = directionX > 0
+      ? enemyBounds.right + SWORDSMAN_AI_ATTACK_OCCLUSION_EPSILON_PX
+      : enemyBounds.left - SWORDSMAN_AI_ATTACK_OCCLUSION_EPSILON_PX;
+    const endX = directionX > 0
+      ? playerBounds.left - SWORDSMAN_AI_ATTACK_OCCLUSION_EPSILON_PX
+      : playerBounds.right + SWORDSMAN_AI_ATTACK_OCCLUSION_EPSILON_PX;
+
+    if ((directionX > 0 && endX <= startX) || (directionX < 0 && endX >= startX)) {
+      return true;
+    }
+
+    const overlapTop = Math.max(attackBounds.top, playerBounds.top);
+    const overlapBottom = Math.min(attackBounds.bottom, playerBounds.bottom);
+    if (overlapBottom <= overlapTop) {
+      return true;
+    }
+
+    return this.getSwordsmanSwordPathSampleYs(overlapTop, overlapBottom).some(
+      (sampleY) => !this.isSwordsmanSwordLineBlocked(liveObject, startX, endX, sampleY),
+    );
+  }
+
+  private getSwordsmanSwordPathSampleYs(overlapTop: number, overlapBottom: number): number[] {
+    const overlapHeight = overlapBottom - overlapTop;
+    const centerY = overlapTop + overlapHeight * 0.5;
+    if (overlapHeight <= 2) {
+      return [centerY];
+    }
+
+    const sampleYs = [
+      centerY,
+      centerY - overlapHeight * 0.35,
+      centerY + overlapHeight * 0.35,
+    ];
+
+    return sampleYs
+      .map((sampleY) => Phaser.Math.Clamp(sampleY, overlapTop + 1, overlapBottom - 1))
+      .filter((sampleY, index, values) =>
+        values.findIndex((candidate) => Math.abs(candidate - sampleY) < 0.5) === index
+      );
+  }
+
+  private isSwordsmanSwordLineBlocked(
+    attacker: LoadedRoomObject,
+    startX: number,
+    endX: number,
+    y: number,
+  ): boolean {
+    return (
+      this.isSwordsmanSwordLineBlockedByTerrain(startX, endX, y) ||
+      this.isSwordsmanSwordLineBlockedBySolidObject(attacker, startX, endX, y)
+    );
+  }
+
+  private isSwordsmanSwordLineBlockedByTerrain(startX: number, endX: number, y: number): boolean {
+    const distance = Math.abs(endX - startX);
+    const steps = Math.max(1, Math.ceil(distance / SWORDSMAN_AI_ATTACK_WALL_SAMPLE_STEP_PX));
+
+    for (let step = 0; step <= steps; step += 1) {
+      const sampleX = Phaser.Math.Linear(startX, endX, step / steps);
+      const loadedRoom = this.getLoadedRoomAtWorldPoint(sampleX, y);
+      if (loadedRoom && this.hasLoadedRoomSolidTerrainAtWorldPoint(loadedRoom, sampleX, y)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private hasLoadedRoomSolidTerrainAtWorldPoint(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    worldX: number,
+    worldY: number,
+  ): boolean {
+    const tile = loadedRoom.terrainLayer.getTileAtWorldXY(worldX, worldY);
+    if (!tile || tile.index <= 0) {
+      return false;
+    }
+
+    return this.hasSolidTerrainAtWorldPoint(loadedRoom.room, worldX, worldY);
+  }
+
+  private isSwordsmanSwordLineBlockedBySolidObject(
+    attacker: LoadedRoomObject,
+    startX: number,
+    endX: number,
+    y: number,
+  ): boolean {
+    const left = Math.min(startX, endX);
+    const right = Math.max(startX, endX);
+
+    for (const loadedRoom of this.options.getLoadedFullRooms()) {
+      for (const liveObject of loadedRoom.liveObjects) {
+        if (
+          liveObject === attacker ||
+          !liveObject.sprite.active ||
+          !liveObject.sprite.body ||
+          !objectCollidesWithWorld(liveObject.config) ||
+          !isSolidRuntimeObjectConfig(liveObject.config)
+        ) {
+          continue;
+        }
+
+        const body = liveObject.sprite.body as ArcadeObjectBody;
+        if (!body.enable) {
+          continue;
+        }
+
+        const bounds = getArcadeBodyBounds(body);
+        if (
+          y > bounds.top + SWORDSMAN_AI_ATTACK_OCCLUSION_EPSILON_PX &&
+          y < bounds.bottom - SWORDSMAN_AI_ATTACK_OCCLUSION_EPSILON_PX &&
+          left < bounds.right - SWORDSMAN_AI_ATTACK_OCCLUSION_EPSILON_PX &&
+          right > bounds.left + SWORDSMAN_AI_ATTACK_OCCLUSION_EPSILON_PX
+        ) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  private getLoadedRoomAtWorldPoint(
+    worldX: number,
+    worldY: number,
+  ): LoadedFullRoom<LoadedRoomObject, TEdgeWall> | null {
+    for (const loadedRoom of this.options.getLoadedFullRooms()) {
+      const roomOrigin = this.options.getRoomOrigin(loadedRoom.room.coordinates);
+      if (
+        worldX >= roomOrigin.x &&
+        worldX < roomOrigin.x + ROOM_PX_WIDTH &&
+        worldY >= roomOrigin.y &&
+        worldY < roomOrigin.y + ROOM_PX_HEIGHT
+      ) {
+        return loadedRoom;
+      }
+    }
+
+    return null;
   }
 
   private updatePatrolEnemy(room: RoomSnapshot, liveObject: LoadedRoomObject): void {

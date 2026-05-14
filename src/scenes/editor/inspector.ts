@@ -837,7 +837,7 @@ export class EditorInspectorController {
   }
 
   private getContainerAcceptedContentsLabel(objectId: string): string {
-    return objectId === 'cage' ? 'enemies' : 'collectibles';
+    return objectId === 'cage' ? 'enemies or crates' : 'collectibles';
   }
 
   private openSignTextEditor(placed: PlacedObject): void {
