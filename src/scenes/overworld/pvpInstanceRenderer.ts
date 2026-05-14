@@ -4,6 +4,7 @@ import {
   isSceneAvatarPackLoaded,
 } from '../../player/avatar/dynamic';
 import { resolvePlayerAvatarPack } from '../../player/avatar/runtime';
+import { PVP_ARENA_HEARTS } from '../../pvp/model';
 import type {
   PvpMatchCombatEvent,
   PvpMatchPlayerState,
@@ -343,7 +344,7 @@ export class PvpInstanceRenderer {
     sprite.setVisible(false);
 
     const heartsDisplay = new PvpHeartDisplay(this.options.scene, 30);
-    heartsDisplay.setHearts(3);
+    heartsDisplay.setHearts(PVP_ARENA_HEARTS);
     const invulnerabilityFx = this.options.scene.add.graphics();
     invulnerabilityFx.setDepth(PVP_INVULNERABILITY_FX_DEPTH);
     invulnerabilityFx.setVisible(false);
@@ -351,7 +352,7 @@ export class PvpInstanceRenderer {
     this.opponent = {
       identity,
       roomId,
-      hearts: 3,
+      hearts: PVP_ARENA_HEARTS,
       invulnerableUntil: 0,
       sprite,
       heartsDisplay,

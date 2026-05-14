@@ -1367,6 +1367,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getActiveCourseRun: () => this.activeCourseRun,
       getActiveRoomRushRun: () => this.activeRoomRushRun,
       hasActivePvpMatch: () => this.isPvpMatchActive(),
+      isPvpDamageActive: () => this.isPvpDamageActive(),
       setActiveCourseRun: (runState) => {
         this.activeCourseRun = runState;
       },

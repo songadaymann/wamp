@@ -1,4 +1,4 @@
-import type { PvpInviteOffer, PvpMatchSnapshot } from '../../pvp/model';
+import { PVP_ARENA_HEARTS, type PvpInviteOffer, type PvpMatchSnapshot } from '../../pvp/model';
 
 let activeInviteModal: HTMLElement | null = null;
 let activeResultModal: HTMLElement | null = null;
@@ -48,7 +48,7 @@ export function showPvpInvitePrompt(invite: PvpInviteOffer): Promise<'accept' | 
 
     const rule = document.createElement('div');
     rule.className = 'pvp-modal-rule';
-    rule.textContent = '3 hearts. First to zero loses.';
+    rule.textContent = `${PVP_ARENA_HEARTS} hearts. First to zero loses.`;
 
     challenge.append(challengeCopy, roomChip, rule);
     body.append(challenge);
