@@ -251,6 +251,7 @@ export function isSolidRuntimeObjectConfig(
   return (
     config.category === 'platform'
     || config.id === 'door_locked'
+    || config.id === 'trapdoor_locked'
     || isPushableObjectConfig(config)
   );
 }
