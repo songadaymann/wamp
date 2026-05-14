@@ -66,6 +66,7 @@ interface OverworldMovementControllerHost {
   getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null;
   isSolidTerrainAtWorldPoint(room: RoomSnapshot, worldX: number, worldY: number): boolean;
   getExternalLaunchGraceUntil(): number;
+  shouldForceFullBodyHitbox(): boolean;
   getLoadedLiveObjects(): Iterable<LoadedRoomObject>;
   getArcadeBodyBounds(body: ArcadeObjectBody): Phaser.Geom.Rectangle;
   getCursors(): Phaser.Types.Input.Keyboard.CursorKeys;
@@ -173,6 +174,10 @@ export class OverworldMovementController {
     this.host.state.isCrouching = false;
     this.clearCrateInteractionState();
     this.resetWallMovementState();
+    this.syncPlayerHitbox();
+  }
+
+  refreshPlayerHitbox(): void {
     this.syncPlayerHitbox();
   }
 
@@ -583,6 +588,10 @@ export class OverworldMovementController {
   private getPlayerHitboxHeight(playerBody: Phaser.Physics.Arcade.Body, groundedProfile: boolean): number {
     if (this.host.state.isCrouching) {
       return this.options.playerCrouchHeight;
+    }
+
+    if (this.host.shouldForceFullBodyHitbox()) {
+      return this.options.playerStandingHeight;
     }
 
     if (!groundedProfile) {

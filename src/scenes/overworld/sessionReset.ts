@@ -16,10 +16,12 @@ interface OverworldSessionResetHost {
   getCurrentGoalRun(): GoalRunState | null;
   getActiveCourseRun(): ActiveCourseRunState | null;
   getActiveRoomRushRun(): ActiveRoomRushRunState | null;
+  hasActivePvpMatch(): boolean;
   setActiveCourseRun(runState: ActiveCourseRunState | null): void;
   recordGoalRunDeath(): void;
   recordCourseRunDeath(): void;
   recordRoomRushDeath(reason: string): boolean;
+  recordPvpSelfDeath(reason: string): boolean;
   playPlayerFailFx(): void;
   respawnPlayerToCurrentRoom(): void;
   failCourseRun(message: string): void;
@@ -46,11 +48,20 @@ export class OverworldSessionResetController {
     const activeRun = this.host.getCurrentGoalRun();
     const activeCourseRun = this.host.getActiveCourseRun();
     const activeRoomRushRun = this.host.getActiveRoomRushRun();
+    const activePvpMatch = this.host.hasActivePvpMatch();
 
     this.host.recordGoalRunDeath();
     this.host.recordCourseRunDeath();
     this.host.playPlayerFailFx();
     this.host.respawnPlayerToCurrentRoom();
+
+    if (activePvpMatch) {
+      const terminal = this.host.recordPvpSelfDeath(reason);
+      if (terminal) {
+        return;
+      }
+      return;
+    }
 
     if (activeRoomRushRun) {
       const terminal = this.host.recordRoomRushDeath(reason);

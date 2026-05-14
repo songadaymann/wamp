@@ -397,6 +397,13 @@ export async function updateUserProfile(
       ).bind(nextDisplayName, user.id),
       env.DB.prepare(
         `
+          UPDATE pvp_match_players
+          SET user_display_name = ?
+          WHERE user_id = ?
+        `
+      ).bind(nextDisplayName, user.id),
+      env.DB.prepare(
+        `
           UPDATE user_stats
           SET user_display_name = ?, updated_at = ?
           WHERE user_id = ?
@@ -498,6 +505,9 @@ export async function loadUserStatsRow(env: Env, userId: string) {
         completed_runs,
         failed_runs,
         abandoned_runs,
+        pvp_wins,
+        pvp_losses,
+        pvp_draws,
         best_score,
         fastest_clear_ms,
         updated_at
@@ -527,6 +537,9 @@ export async function loadAllUserStatsRows(env: Env) {
         completed_runs,
         failed_runs,
         abandoned_runs,
+        pvp_wins,
+        pvp_losses,
+        pvp_draws,
         best_score,
         fastest_clear_ms,
         updated_at

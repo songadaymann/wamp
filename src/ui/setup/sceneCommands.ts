@@ -232,6 +232,19 @@ export function setupSceneCommands(
       }
       roomRushModal.open();
     },
+    onInvitePvp: (entry) => {
+      leaderboardModal.close();
+      exploreModal.close();
+      guestbookModal.close();
+      historyModal.close();
+      controlsModal.close();
+      aboutModal.close();
+      courseModal.close();
+      roomRushModal.close();
+      roomRushResultModal.close();
+      chatModerationModal.close();
+      getActiveOverworldScene(game)?.invitePvpDuel?.(entry);
+    },
     onOpenRoomComment: () => {
       leaderboardModal.close();
       exploreModal.close();

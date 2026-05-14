@@ -18,6 +18,7 @@ interface OverworldRoomTransitionHost {
   getWindowCenterCoordinates(): RoomCoordinates;
   getRoomCoordinatesForPoint(x: number, y: number): RoomCoordinates;
   isNeighborReachable(roomCoordinates: RoomCoordinates, neighborCoordinates: RoomCoordinates): boolean;
+  isRoomTransitionLocked(): boolean;
   resetChallengeStateForRoomExit(nextRoomCoordinates: RoomCoordinates): void;
   updateSelectedSummary(): void;
   getActiveCourseRun(): unknown | null;
@@ -113,6 +114,10 @@ export class OverworldRoomTransitionController {
     const deltaY = nextRoomCoordinates.y - currentRoomCoordinates.y;
     if (Math.abs(deltaX) + Math.abs(deltaY) !== 1) {
       return false;
+    }
+
+    if (this.host.isRoomTransitionLocked()) {
+      return true;
     }
 
     return !this.isNeighborReachableInCurrentPlayMode(currentRoomCoordinates, nextRoomCoordinates);

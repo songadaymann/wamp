@@ -111,6 +111,29 @@
   line-height: 1.2;
 }
 
+.world-online-pvp-btn {
+  flex: 0 0 auto;
+  border: 2px solid #18161c;
+  border-radius: 4px;
+  padding: 3px 7px;
+  background: #b7352d;
+  color: #fffaf0;
+  font-size: 11px;
+  line-height: 1;
+  box-shadow: 2px 2px 0 #18161c;
+}
+
+.world-online-pvp-btn[data-disabled='true'] {
+  opacity: 0.45;
+  background: #86786c;
+}
+
+.world-online-pvp-btn:not([data-disabled='true']):hover,
+.world-online-pvp-btn:not([data-disabled='true']):focus-visible {
+  background: #e85243;
+  outline: none;
+}
+
 .world-online-popover-list {
   display: grid;
   gap: 10px;

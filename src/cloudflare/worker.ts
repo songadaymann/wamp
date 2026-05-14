@@ -52,6 +52,7 @@ import {
 import { syncRoomOwnershipFromChain } from './worker/mint/service';
 import { handlePlayfunConfig, handlePlayfunFlush } from './worker/playfun/routes';
 import { handleProfileGet, handleProfileGetByUsername, handleProfileUpdateMe } from './worker/profiles/routes';
+import { handlePvpMatchSubmit } from './worker/pvp/routes';
 import {
   enqueuePlayfunPointSync,
   flushPlayfunPointSync,
@@ -423,6 +424,10 @@ export default {
 
       if (url.pathname === '/api/room-rush/runs' && request.method === 'POST') {
         return await handleRoomRushRunSubmit(request, env);
+      }
+
+      if (url.pathname === '/api/pvp/matches' && request.method === 'POST') {
+        return await handlePvpMatchSubmit(request, env);
       }
 
       if (url.pathname.startsWith('/api/share/rooms/')) {

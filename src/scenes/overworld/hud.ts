@@ -17,6 +17,7 @@ interface OverworldHudRuntimeConfig {
   onOpenRoomComment: () => void | Promise<void>;
   onToggleRoomComments: () => void | Promise<void>;
   onOpenSettings: () => void | Promise<void>;
+  onInvitePvp: (entry: OverworldOnlineRosterViewEntry) => void | Promise<void>;
   onOpenControls: () => void | Promise<void>;
   onFitWorld: () => void;
 }
@@ -37,6 +38,7 @@ const runtimeConfig: OverworldHudRuntimeConfig = {
   onOpenRoomComment: () => {},
   onToggleRoomComments: () => {},
   onOpenSettings: () => {},
+  onInvitePvp: () => {},
   onOpenControls: () => {},
   onFitWorld: () => {},
 };
@@ -88,6 +90,9 @@ export function configureOverworldHudBridgeRuntime(
   }
   if (config.onOpenSettings) {
     runtimeConfig.onOpenSettings = config.onOpenSettings;
+  }
+  if (config.onInvitePvp) {
+    runtimeConfig.onInvitePvp = config.onInvitePvp;
   }
   if (config.onOpenControls) {
     runtimeConfig.onOpenControls = config.onOpenControls;
@@ -181,6 +186,7 @@ export interface OverworldOnlineRosterViewEntry {
   roomCoordinates: RoomCoordinates;
   mode: 'browse' | 'play' | 'edit';
   isSelf: boolean;
+  pvpInviteDisabled: boolean;
 }
 
 export class OverworldHudBridge {
@@ -789,6 +795,7 @@ export class OverworldHudBridge {
           entry.roomCoordinates.y,
           entry.mode,
           entry.isSelf ? '1' : '0',
+          entry.pvpInviteDisabled ? '1' : '0',
         ].join('\u001f'))
         .join('\u001e');
       if (entriesSignature === this.lastPlayersOnlineEntriesSignature) {
@@ -852,7 +859,33 @@ export class OverworldHudBridge {
     room.className = 'world-online-popover-room';
     room.textContent = entry.roomText;
 
-    row.append(name, room);
+    const duel = this.doc.createElement('span');
+    duel.setAttribute('role', 'button');
+    duel.tabIndex = entry.pvpInviteDisabled ? -1 : 0;
+    duel.className = 'world-online-pvp-btn';
+    duel.textContent = 'Duel';
+    duel.dataset.disabled = entry.pvpInviteDisabled ? 'true' : 'false';
+    duel.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (entry.pvpInviteDisabled) {
+        return;
+      }
+
+      this.playersOnlinePinned = false;
+      this.setPlayersOnlinePopoverOpen(false);
+      void runtimeConfig.onInvitePvp(entry);
+    });
+    duel.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') {
+        return;
+      }
+
+      event.preventDefault();
+      duel.click();
+    });
+
+    row.append(name, room, duel);
     return row;
   }
 

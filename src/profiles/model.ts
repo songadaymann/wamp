@@ -24,6 +24,9 @@ export interface ProfileStatsSummary {
   completedRuns: number;
   failedRuns: number;
   abandonedRuns: number;
+  pvpWins: number;
+  pvpLosses: number;
+  pvpDraws: number;
   bestScore: number;
   fastestClearMs: number | null;
   globalRank: number | null;

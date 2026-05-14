@@ -34,6 +34,10 @@ import {
   setBootStatus,
   showBootSplash,
 } from '../ui/appFeedback';
+import {
+  PVP_HEART_TEXTURE_KEY,
+  PVP_HEART_TEXTURE_PATH,
+} from './overworld/pvpHeartDisplay';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -72,6 +76,7 @@ export class BootScene extends Phaser.Scene {
       frameHeight: 16,
     });
     this.load.image('room_comment_icon', 'assets/ui/comment-indicator.png');
+    this.load.image(PVP_HEART_TEXTURE_KEY, PVP_HEART_TEXTURE_PATH);
 
     for (const sheet of SWORDSMAN_AI_EXTRA_SPRITESHEETS) {
       this.load.spritesheet(sheet.key, sheet.path, {
