@@ -38,6 +38,7 @@ import {
   PVP_HEART_TEXTURE_KEY,
   PVP_HEART_TEXTURE_PATH,
 } from './overworld/pvpHeartDisplay';
+import { logBootPhase, startBootStallWatch } from '../main/bootDiagnostics';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -46,6 +47,40 @@ export class BootScene extends Phaser.Scene {
 
   preload(): void {
     showBootSplash('Loading assets...', 0);
+    const avatarAtlasAssets = listPlayerAvatarAtlasAssets();
+    const assetGroupCount =
+      TILESETS.length +
+      BACKGROUND_GROUPS.reduce((total, group) => total + group.layers.length, 0) +
+      GAME_OBJECTS.length +
+      BLOCK_SWITCH_ACTIVE_TEXTURES.length +
+      SWORDSMAN_AI_EXTRA_SPRITESHEETS.length +
+      GHOST_EXTRA_SPRITESHEETS.length +
+      avatarAtlasAssets.length +
+      ROCKY_ROADS_FX_SPRITESHEETS.length +
+      3;
+    let lastProgress = 0;
+    const cancelAssetStallWatch = startBootStallWatch('asset preload', 15000, () => ({
+      progressPercent: Math.round(lastProgress * 100),
+      assetGroupCount,
+    }));
+    logBootPhase('boot-scene:preload-start', { assetGroupCount });
+
+    this.load.once('complete', () => {
+      cancelAssetStallWatch();
+      logBootPhase('boot-scene:assets-complete', { assetGroupCount });
+    });
+
+    this.load.on('loaderror', (file: { key?: unknown; type?: unknown; url?: unknown }) => {
+      logBootPhase(
+        'boot-scene:asset-error',
+        {
+          key: typeof file.key === 'string' ? file.key : null,
+          type: typeof file.type === 'string' ? file.type : null,
+          url: typeof file.url === 'string' ? file.url : null,
+        },
+        { level: 'warn' }
+      );
+    });
 
     // Load all tilesets as images (Phaser tilemap system handles slicing)
     for (const ts of TILESETS) {
@@ -92,7 +127,7 @@ export class BootScene extends Phaser.Scene {
       });
     }
 
-    for (const atlas of listPlayerAvatarAtlasAssets()) {
+    for (const atlas of avatarAtlasAssets) {
       this.load.atlas(atlas.key, atlas.texturePath, atlas.atlasPath);
     }
 
@@ -107,12 +142,14 @@ export class BootScene extends Phaser.Scene {
 
     // Loading progress
     this.load.on('progress', (value: number) => {
+      lastProgress = value;
       setBootProgress(value);
       setBootStatus(`Loading assets... ${Math.round(value * 100)}%`);
     });
   }
 
   create(): void {
+    logBootPhase('boot-scene:create-start');
     this.input.addPointer(4);
 
     // Create animations for game objects with multiple frames
@@ -226,6 +263,7 @@ export class BootScene extends Phaser.Scene {
 
     setBootProgress(1);
     setBootStatus('Loading world...');
+    logBootPhase('boot-scene:handoff-overworld');
     this.scene.start('OverworldPlayScene');
   }
 }

@@ -20,6 +20,7 @@ import {
 } from './worldModel';
 import { getApiBaseUrl } from '../api/baseUrl';
 import { ROOM_STORAGE_PREFIX } from './browserStorage';
+import { startBootStallWatch } from '../main/bootDiagnostics';
 
 export interface WorldRepository {
   loadWorldWindow(center: RoomCoordinates, radius: number): Promise<WorldWindow>;
@@ -204,9 +205,7 @@ class ApiWorldRepository implements WorldRepository {
   }
 
   private async requestWorldWindow(path: string): Promise<WorldWindow> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      credentials: 'include',
-    });
+    const response = await this.fetchWorldApi(path);
 
     if (!response.ok) {
       const details = await response.text();
@@ -220,9 +219,7 @@ class ApiWorldRepository implements WorldRepository {
   }
 
   private async requestWorldChunkWindow(path: string): Promise<WorldChunkWindow> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      credentials: 'include',
-    });
+    const response = await this.fetchWorldApi(path);
 
     if (!response.ok) {
       const details = await response.text();
@@ -236,9 +233,7 @@ class ApiWorldRepository implements WorldRepository {
   }
 
   private async requestPublishedRoom(path: string): Promise<RoomSnapshot | null> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      credentials: 'include',
-    });
+    const response = await this.fetchWorldApi(path);
 
     if (response.status === 404) {
       return null;
@@ -257,9 +252,7 @@ class ApiWorldRepository implements WorldRepository {
   }
 
   private async requestClaimableFrontierWindow(path: string): Promise<ClaimableFrontierRoomWindow> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      credentials: 'include',
-    });
+    const response = await this.fetchWorldApi(path);
 
     if (!response.ok) {
       const details = await response.text();
@@ -270,6 +263,21 @@ class ApiWorldRepository implements WorldRepository {
     }
 
     return (await response.json()) as ClaimableFrontierRoomWindow;
+  }
+
+  private async fetchWorldApi(path: string): Promise<Response> {
+    const cancelStallWatch = startBootStallWatch('world API request', 8000, () => ({
+      path,
+      baseUrl: this.baseUrl,
+    }));
+
+    try {
+      return await fetch(`${this.baseUrl}${path}`, {
+        credentials: 'include',
+      });
+    } finally {
+      cancelStallWatch();
+    }
   }
 
   private async withFallback<T>(

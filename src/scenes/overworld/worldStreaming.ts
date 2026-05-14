@@ -68,6 +68,7 @@ import {
   createDefaultLocalPlayPressureMetrics,
   type LocalPlayPressureMetrics,
 } from './playPressure';
+import { logBootPhase, startBootStallWatch } from '../../main/bootDiagnostics';
 
 const PLAY_ROOM_PARALLAX_MULTIPLIER = 0.2;
 const FULL_ROOM_RELEASE_GRACE_MS = 300;
@@ -336,11 +337,27 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     options: { forceChunkReload?: boolean } = {}
   ): Promise<WorldRefreshResult> {
     if (this.chunkWindowRequestInFlight) {
+      logBootPhase('world-stream:cancelled-in-flight', {
+        center: centerCoordinates,
+      });
       return 'cancelled';
     }
 
     const generation = ++this.loadGeneration;
     this.chunkWindowRequestInFlight = true;
+    const cancelRefreshStallWatch = startBootStallWatch('world stream refresh', 10000, () => ({
+      center: centerCoordinates,
+      forceChunkReload: Boolean(options.forceChunkReload),
+      generation,
+      mode: this.options.getMode(),
+      loadedChunkBounds: this.loadedChunkBounds,
+    }));
+    logBootPhase('world-stream:start', {
+      center: centerCoordinates,
+      forceChunkReload: Boolean(options.forceChunkReload),
+      generation,
+      mode: this.options.getMode(),
+    });
 
     try {
       const desiredChunkBounds = this.getDesiredChunkBounds(centerCoordinates);
@@ -350,10 +367,22 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         !this.loadedChunkBounds ||
         !this.containsChunkBounds(this.loadedChunkBounds, desiredChunkBounds)
       ) {
-        const chunkWindow = await this.options.worldRepository.loadWorldChunkWindow(desiredChunkBounds);
+        logBootPhase('world-stream:chunk-window:start', {
+          desiredChunkBounds,
+        });
+        const cancelChunkStallWatch = startBootStallWatch('world chunk window', 8000, () => ({
+          desiredChunkBounds,
+        }));
+        let chunkWindow: WorldChunkWindow;
+        try {
+          chunkWindow = await this.options.worldRepository.loadWorldChunkWindow(desiredChunkBounds);
+        } finally {
+          cancelChunkStallWatch();
+        }
         if (this.destroyed || generation !== this.loadGeneration) {
           return 'cancelled';
         }
+        logBootPhase('world-stream:chunk-window:done', summarizeChunkWindow(chunkWindow));
         this.applyChunkWindow(chunkWindow);
       }
 
@@ -362,14 +391,32 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       const previewSelection = this.computePreviewSelection(roomCandidates);
       const previewRoomIds = previewSelection.previewRoomIds;
       const fullRoomIds = previewSelection.fullRoomIds;
-      const renderableRooms = await this.previewCache.collectRenderableRooms(
-        roomCandidates,
-        previewRoomIds,
-        fullRoomIds
-      );
+      logBootPhase('world-stream:renderables:start', {
+        visibleRoomCount: this.visibleRoomIds.size,
+        previewRoomCount: previewRoomIds.size,
+        fullRoomCount: fullRoomIds.size,
+      });
+      const cancelRenderableStallWatch = startBootStallWatch('world renderable rooms', 8000, () => ({
+        visibleRoomCount: this.visibleRoomIds.size,
+        previewRoomCount: previewRoomIds.size,
+        fullRoomCount: fullRoomIds.size,
+      }));
+      let renderableRooms: Map<string, RenderableRoom>;
+      try {
+        renderableRooms = await this.previewCache.collectRenderableRooms(
+          roomCandidates,
+          previewRoomIds,
+          fullRoomIds
+        );
+      } finally {
+        cancelRenderableStallWatch();
+      }
       if (this.destroyed || generation !== this.loadGeneration) {
         return 'cancelled';
       }
+      logBootPhase('world-stream:renderables:done', {
+        renderableRoomCount: renderableRooms.size,
+      });
 
       this.cancelDeferredPreviewRender();
       this.previewRenderer.renderChunkPreviews(
@@ -389,11 +436,23 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
           ? this.getRetainedFullRoomIds(fullRoomIds)
           : fullRoomIds
       );
+      logBootPhase('world-stream:success', {
+        visibleRoomCount: this.visibleRoomIds.size,
+        loadedPreviewRoomCount: this.previewRenderer.getLoadedPreviewRoomCount(),
+        loadedFullRoomCount: this.loadedFullRoomsById.size,
+      });
       return 'success';
-    } catch {
+    } catch (error) {
+      logBootPhase(
+        'world-stream:error',
+        { message: error instanceof Error ? error.message : String(error) },
+        { level: 'error' }
+      );
+      console.error('[wamp boot] Failed during world stream refresh', error);
       return 'error';
     } finally {
       this.chunkWindowRequestInFlight = false;
+      cancelRefreshStallWatch();
     }
   }
 
@@ -1618,4 +1677,12 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
 function sanitizeTextureNamespace(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]+/g, '_');
+}
+
+function summarizeChunkWindow(chunkWindow: WorldChunkWindow): Record<string, unknown> {
+  return {
+    chunkCount: chunkWindow.chunks.length,
+    roomSummaryCount: chunkWindow.chunks.reduce((total, chunk) => total + chunk.rooms.length, 0),
+    previewRoomCount: chunkWindow.chunks.reduce((total, chunk) => total + chunk.previewRooms.length, 0),
+  };
 }

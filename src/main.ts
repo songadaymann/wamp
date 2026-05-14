@@ -28,6 +28,11 @@ import { syncGameKeyboardFocus } from './ui/keyboardFocus';
 import { getTouchInputDebugState } from './ui/mobile/touchControls';
 import { setupUI } from './ui/setup';
 import { getCaptureDebugInfo } from './main/captureDebug';
+import {
+  getBootDiagnostics,
+  installBootDiagnosticsGlobal,
+  logBootPhase,
+} from './main/bootDiagnostics';
 import { getGameDebugState, getSwordHunterDebugState } from './main/debugState';
 import { installPreviewSmokeActions } from './main/previewSmoke';
 import { normalizeRendererQuery, parseBooleanQuery, resolveRendererType } from './main/query';
@@ -45,6 +50,13 @@ const debug_options = {
   preserveDrawingBuffer: parseBooleanQuery(query.get('preserveDrawingBuffer')),
   captureDebug: parseBooleanQuery(query.get('captureDebug')),
 } as const;
+
+installBootDiagnosticsGlobal();
+logBootPhase('main:start', {
+  renderer: debug_options.renderer ?? 'auto',
+  preserveDrawingBuffer: debug_options.preserveDrawingBuffer,
+  captureDebug: debug_options.captureDebug,
+});
 
 const config: Phaser.Types.Core.GameConfig = {
   type: resolveRendererType(debug_options.renderer),
@@ -76,7 +88,12 @@ const config: Phaser.Types.Core.GameConfig = {
 bootstrapPlayfunModeFromUrl();
 initializeAppFeedback();
 showBootSplash('Loading assets...', 0);
+logBootPhase('phaser-game:create-start', {
+  width: config.width,
+  height: config.height,
+});
 const game = new Phaser.Game(config);
+logBootPhase('phaser-game:created');
 initSfx();
 initRoomMusic();
 const applyRuntimeSettings = (settings: GameSettings) => {
@@ -94,6 +111,7 @@ if (import.meta.env.DEV) {
 
 // Set up HTML UI event handlers
 setupUI(game);
+logBootPhase('main:ui-ready');
 void setupAuthUi();
 void setupPlayfunClient();
 syncGameKeyboardFocus(game);
@@ -180,6 +198,7 @@ window.render_game_to_text = () =>
       ready: isAppReady(),
       ...getAppFeedbackDebugState(),
     },
+    bootDiagnostics: getBootDiagnostics(),
   });
 
 window.get_room_music_debug_state = () => globalRoomMusicController.getDebugState();

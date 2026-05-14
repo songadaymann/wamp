@@ -21,6 +21,7 @@ import {
   showBusyError,
   showBusyOverlay,
 } from '../../ui/appFeedback';
+import { logBootPhase, startBootStallWatch } from '../../main/bootDiagnostics';
 import type { CameraMode } from './camera';
 import type { OverworldMode, OverworldPlaySceneData } from '../sceneData';
 
@@ -210,6 +211,22 @@ export class OverworldWindowController {
     centerCoordinates: RoomCoordinates,
     options: { forceChunkReload?: boolean } = {}
   ): Promise<boolean> {
+    const bootRefresh = !isAppReady();
+    const cancelBootRefreshStallWatch = bootRefresh
+      ? startBootStallWatch('overworld refresh', 12000, () => ({
+          center: centerCoordinates,
+          mode: this.host.getMode(),
+          forceChunkReload: Boolean(options.forceChunkReload),
+        }))
+      : () => {};
+    if (bootRefresh) {
+      logBootPhase('overworld-refresh:start', {
+        center: centerCoordinates,
+        mode: this.host.getMode(),
+        forceChunkReload: Boolean(options.forceChunkReload),
+      });
+    }
+
     this.host.setWindowCenterCoordinates({ ...centerCoordinates });
     this.host.renderHud('Loading world...');
     if (!isAppReady()) {
@@ -217,47 +234,6 @@ export class OverworldWindowController {
       setBootStatus('Loading world...');
     }
 
-    const refreshed = await this.host.worldStreamingController.refreshAround(
-      centerCoordinates,
-      options
-    );
-    const sceneAvailable =
-      this.scene.scene.isActive(this.scene.scene.key) ||
-      this.scene.scene.isPaused(this.scene.scene.key);
-    if (refreshed === 'success') {
-      if (!sceneAvailable) {
-        return true;
-      }
-
-      this.host.updateSelectedSummary();
-      void this.host.refreshLeaderboardForSelection();
-      this.host.updateCameraBounds();
-      this.host.syncModeRuntime();
-      this.host.syncPreviewVisibility();
-      this.host.syncPresenceSubscriptions();
-      this.host.syncGhostVisibility();
-      this.host.syncRoomComments();
-      this.host.redrawWorld();
-      this.host.renderHud();
-      this.host.hideLoadingText();
-      this.nextVisibleChunkRefreshAt =
-        this.host.getTimeNow() + this.getVisibleChunkRefreshIntervalMs();
-      if (!isAppReady()) {
-        markAppReady();
-      }
-      hideBusyOverlay();
-      return true;
-    }
-
-    if (refreshed === 'cancelled') {
-      return false;
-    }
-
-    if (!sceneAvailable) {
-      return false;
-    }
-
-    console.error('Failed to load overworld window');
     const retry = async (): Promise<void> => {
       if (!isAppReady()) {
         setBootProgress(1);
@@ -268,17 +244,88 @@ export class OverworldWindowController {
       await this.refreshAround(centerCoordinates, { forceChunkReload: true });
     };
 
-    if (!isAppReady()) {
-      showBootFailure('Failed to load world. Check your connection and retry.', retry);
-    } else if (isBusyOverlayVisible()) {
-      showBusyError('Failed to load world. Check your connection and try again.', {
-        retryHandler: retry,
-      });
-    } else {
-      this.host.renderHud('Failed to load world.');
-    }
+    try {
+      const refreshed = await this.host.worldStreamingController.refreshAround(
+        centerCoordinates,
+        options
+      );
+      if (bootRefresh) {
+        logBootPhase('overworld-refresh:stream-result', { result: refreshed });
+      }
+      const sceneAvailable =
+        this.scene.scene.isActive(this.scene.scene.key) ||
+        this.scene.scene.isPaused(this.scene.scene.key);
+      if (refreshed === 'success') {
+        if (!sceneAvailable) {
+          return true;
+        }
 
-    return false;
+        if (bootRefresh) {
+          logBootPhase('overworld-refresh:hydrate-start');
+        }
+        this.host.updateSelectedSummary();
+        void this.host.refreshLeaderboardForSelection();
+        this.host.updateCameraBounds();
+        this.host.syncModeRuntime();
+        this.host.syncPreviewVisibility();
+        this.host.syncPresenceSubscriptions();
+        this.host.syncGhostVisibility();
+        this.host.syncRoomComments();
+        this.host.redrawWorld();
+        this.host.renderHud();
+        this.host.hideLoadingText();
+        this.nextVisibleChunkRefreshAt =
+          this.host.getTimeNow() + this.getVisibleChunkRefreshIntervalMs();
+        if (!isAppReady()) {
+          markAppReady();
+        }
+        hideBusyOverlay();
+        if (bootRefresh) {
+          logBootPhase('overworld-refresh:ready');
+        }
+        return true;
+      }
+
+      if (refreshed === 'cancelled') {
+        return false;
+      }
+
+      if (!sceneAvailable) {
+        return false;
+      }
+
+      console.error('Failed to load overworld window');
+      if (!isAppReady()) {
+        showBootFailure('Failed to load world. Check your connection and retry.', retry);
+      } else if (isBusyOverlayVisible()) {
+        showBusyError('Failed to load world. Check your connection and try again.', {
+          retryHandler: retry,
+        });
+      } else {
+        this.host.renderHud('Failed to load world.');
+      }
+
+      return false;
+    } catch (error) {
+      logBootPhase(
+        'overworld-refresh:error',
+        { message: error instanceof Error ? error.message : String(error) },
+        { level: 'error' }
+      );
+      console.error('[wamp boot] Failed while preparing the overworld', error);
+      if (!isAppReady()) {
+        showBootFailure('Loaded world data, but failed to enter the world. Check the console and retry.', retry);
+      } else if (isBusyOverlayVisible()) {
+        showBusyError('Failed to prepare the world. Check the console and try again.', {
+          retryHandler: retry,
+        });
+      } else {
+        this.host.renderHud('Failed to prepare world.');
+      }
+      return false;
+    } finally {
+      cancelBootRefreshStallWatch();
+    }
   }
 
   refreshAroundIfNeededOrFromCache(

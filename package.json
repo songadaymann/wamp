@@ -21,6 +21,7 @@
     "smoke:progression-rating": "npx --yes --quiet -p playwright node scripts/smoke_progression_rating_modal.mjs",
     "smoke:progression-api:local": "node scripts/smoke_progression_api_flow.mjs",
     "smoke:prod": "node scripts/smoke_prod.mjs",
+    "stress:presence": "node scripts/presence_load_test.mjs",
     "avatar:cryptopunk:build": "python3 gen-avatar/cryptopunk/build-avatar-pack-for-punk-id.py",
     "avatar:cryptopunk:build-preview-atlas": "python3 scripts/build_cryptopunk_head_preview_atlas.py",
     "avatar:cryptopunk:queue": "node scripts/process_cryptopunk_avatar_queue.mjs",
