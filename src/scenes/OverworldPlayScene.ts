@@ -16,8 +16,6 @@ import {
 } from '../courses/model';
 import { SceneFxController } from '../fx/controller';
 import {
-  decodeTileDataValue,
-  isSpecialBreakableBrickGid,
   placedObjectContributesToCategory,
   type GameObjectConfig,
   ROOM_HEIGHT,
@@ -51,7 +49,6 @@ import {
   RETRO_COLORS,
   ensureStarfieldTexture,
 } from '../visuals/starfield';
-import { buildRoomSnapshotTexture } from '../visuals/roomSnapshotTexture';
 import type { RoomRushOverworldCapture } from '../social/roomRushShare';
 import { RoomLightingController } from '../lighting/controller';
 import { type RoomLightingEmitter } from '../lighting/model';
@@ -216,6 +213,7 @@ import {
   OverworldSelectionController,
 } from './overworld/selection';
 import { OverworldSignController } from './overworld/signPosts';
+import { OverworldSpecialTilesController } from './overworld/specialTiles';
 import {
   OverworldRoomCellController,
 } from './overworld/roomCells';
@@ -234,6 +232,10 @@ import {
   type RoomRushDifficulty,
   type RoomRushStartRule,
 } from './overworld/roomRushRuns';
+import {
+  OverworldRoomRushResultController,
+  type RoomRushOverviewCameraState,
+} from './overworld/roomRushResults';
 import {
   RankedRunTraceRecorder,
   type RankedRunTraceBinding,
@@ -259,9 +261,6 @@ import {
   getTouchInputState,
 } from '../ui/mobile/touchControls';
 import { getRoomGoalIntroModalController } from '../ui/setup/roomGoalIntroModal';
-import {
-  requestRoomRushResultShare as dispatchRoomRushResultShare,
-} from '../ui/setup/roomRushResultEvents';
 import {
   createMobilePerformanceProfiler,
   type MobilePerformanceContext,
@@ -293,10 +292,6 @@ const MOBILE_PORTRAIT_CAMERA_TUNING_STORAGE_KEY = 'wamp_mobile_portrait_camera_t
 type RoomEdgeWall = OverworldRoomEdgeWall;
 
 type SceneLoadedFullRoom = LoadedFullRoom<LoadedRoomObject, RoomEdgeWall>;
-
-interface RoomRushResultOverview {
-  focusCoordinates: RoomCoordinates;
-}
 
 export class OverworldPlayScene extends Phaser.Scene {
   private readonly PLAYER_SPEED = 150;
@@ -421,8 +416,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private quicksandTouchedUntil = 0;
   private quicksandVisualSink = 0;
   private quicksandStatusCooldownUntil = 0;
-  private runtimeRoomTextureRevision = 0;
-  private readonly brokenSpecialBrickTileKeysByRoomId = new Map<string, Set<string>>();
   private readonly roomRepository = createRoomRepository();
   private readonly courseRepository = createCourseRepository();
   private readonly profileRepository = createProfileRepository();
@@ -452,7 +445,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private localPvpActionUntilEpoch = 0;
   private lastPvpInstanceStateSentAt = 0;
   private pvpInstanceStateSequence = 0;
-  private lastSharedRoomRushResultRunId: string | null = null;
   private courseEditorReturnTarget: OverworldPlaySceneData['courseEditorReturnTarget'] = null;
 
   private coyoteTime = 0;
@@ -500,6 +492,8 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly hudStateController: OverworldHudStateController;
   private readonly liveObjectController: OverworldLiveObjectController<RoomEdgeWall>;
   private readonly signController: OverworldSignController<RoomEdgeWall>;
+  private readonly specialTilesController: OverworldSpecialTilesController<LoadedRoomObject, RoomEdgeWall>;
+  private readonly roomRushResultController: OverworldRoomRushResultController;
   private readonly worldStreamingController: OverworldWorldStreamingController<
     LoadedRoomObject,
     RoomEdgeWall
@@ -660,6 +654,14 @@ export class OverworldPlayScene extends Phaser.Scene {
       getPlayerBody: () => this.playerBody,
       getLoadedFullRooms: () => this.loadedFullRoomsById.values(),
     });
+    this.specialTilesController = new OverworldSpecialTilesController(this, {
+      getMode: () => this.mode,
+      getPlayerBody: () => this.playerBody,
+      getLoadedFullRooms: () => this.loadedFullRoomsById.values(),
+      getLoadedFullRoomById: (roomId) => this.loadedFullRoomsById.get(roomId) ?? null,
+      getRoomCoordinatesForPoint: (x, y) => this.getRoomCoordinatesForPoint(x, y),
+      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
+    });
     this.worldStreamingController = new OverworldWorldStreamingController({
       scene: this,
       worldRepository: createWorldRepository(),
@@ -677,9 +679,31 @@ export class OverworldPlayScene extends Phaser.Scene {
       onBackdropObjectsChanged: () => this.syncBackdropCameraIgnores(),
       onFullRoomVisibilityChanged: () => this.syncGhostVisibility(),
       onFullRoomDestroyed: (loadedRoom) => {
-        this.brokenSpecialBrickTileKeysByRoomId.delete(loadedRoom.room.id);
+        this.specialTilesController.handleFullRoomDestroyed(loadedRoom.room.id);
       },
       measurePerformance: (label, callback) => this.measureMobilePerformance(label, callback),
+    });
+    this.roomRushResultController = new OverworldRoomRushResultController(this, {
+      getMode: () => this.mode,
+      returnToWorld: () => this.returnToWorld(),
+      showTransientStatus: (message) => this.showTransientStatus(message),
+      applyOverviewCameraState: (state) => this.applyRoomRushResultOverviewCameraState(state),
+      refreshAround: (coordinates) => this.worldStreamingController.refreshAround(coordinates),
+      setWindowCenterCoordinates: (coordinates) => {
+        this.windowCenterCoordinates = { ...coordinates };
+      },
+      syncPresenceSubscriptions: () => this.syncPresenceSubscriptions(),
+      updateCameraBounds: () => this.updateCameraBounds(),
+      flushPendingPreviewTextureBuilds: () =>
+        this.worldStreamingController.flushPendingPreviewTextureBuilds(),
+      syncPreviewVisibility: () => this.syncPreviewVisibility(),
+      updateBackdrop: () => this.updateBackdrop(),
+      redrawWorld: () => this.redrawWorld(),
+      renderHud: () => this.renderHud(),
+      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
+    }, {
+      minZoom: MIN_ZOOM,
+      maxZoom: MAX_ZOOM,
     });
     this.presenceController = new OverworldPresenceController({
       scene: this,
@@ -2146,7 +2170,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.clearRankedRunTrace();
     this.goalRunController.reset();
     this.roomRushRunController.reset();
-    this.lastSharedRoomRushResultRunId = null;
+    this.roomRushResultController.reset();
     this.playerPresentationController.reset();
     this.browseOverlayController.destroy();
     this.shouldCenterCamera = false;
@@ -2668,251 +2692,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private updateSpecialTiles(): void {
-    if (this.mode !== 'play') {
-      return;
-    }
-
-    this.maybeBreakSpecialBrickTile();
-  }
-
-  private maybeBreakSpecialBrickTile(): void {
-    const playerBody = this.playerBody;
-    if (!playerBody) {
-      return;
-    }
-
-    const upwardDelta =
-      typeof playerBody.deltaY === 'function'
-        ? playerBody.deltaY()
-        : playerBody.y - (playerBody.prev?.y ?? playerBody.y);
-    const separatedUp = Boolean(playerBody.blocked?.up) || Boolean(playerBody.touching?.up);
-    const hitFromBelow = upwardDelta < -0.5 || playerBody.velocity.y < -20 || separatedUp;
-    if (!hitFromBelow) {
-      return;
-    }
-
-    const sampleY = playerBody.top - 1;
-    const sampleXs = [
-      playerBody.center.x,
-      playerBody.left + 2,
-      playerBody.right - 2,
-    ].filter((value, index, values) => values.indexOf(value) === index);
-
-    for (const sampleX of sampleXs) {
-      const match = this.findSpecialBreakableBrickTileAtWorldPoint(sampleX, sampleY);
-      if (!match) {
-        continue;
-      }
-
-      if (playerBody.velocity.y < -40) {
-        playerBody.setVelocityY(-40);
-      }
-      this.breakSpecialBrickTile(match.loadedRoom, match.tileX, match.tileY);
-      return;
-    }
-  }
-
-  private findSpecialBreakableBrickTileAtWorldPoint(
-    worldX: number,
-    worldY: number,
-  ): { loadedRoom: SceneLoadedFullRoom; tileX: number; tileY: number } | null {
-    const coordinates = this.getRoomCoordinatesForPoint(worldX, worldY);
-    const roomId = roomIdFromCoordinates(coordinates);
-    const loadedRoom = this.loadedFullRoomsById.get(roomId) ?? null;
-    if (!loadedRoom) {
-      return null;
-    }
-
-    const origin = this.getRoomOrigin(coordinates);
-    const tileX = Math.floor((worldX - origin.x) / TILE_SIZE);
-    const tileY = Math.floor((worldY - origin.y) / TILE_SIZE);
-    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
-      return null;
-    }
-
-    if (this.isSpecialBrickTileBroken(roomId, tileX, tileY)) {
-      return null;
-    }
-
-    const { gid } = decodeTileDataValue(loadedRoom.room.tileData.terrain[tileY][tileX]);
-    if (!isSpecialBreakableBrickGid(gid)) {
-      return null;
-    }
-    if (!loadedRoom.terrainLayer.getTileAt(tileX, tileY)) {
-      return null;
-    }
-
-    return { loadedRoom, tileX, tileY };
-  }
-
-  private breakSpecialBrickTile(
-    loadedRoom: SceneLoadedFullRoom,
-    tileX: number,
-    tileY: number,
-  ): void {
-    const { gid } = decodeTileDataValue(loadedRoom.room.tileData.terrain[tileY][tileX]);
-    if (!isSpecialBreakableBrickGid(gid)) {
-      return;
-    }
-
-    const tileKey = this.getSpecialBrickTileKey(tileX, tileY);
-    let brokenTiles = this.brokenSpecialBrickTileKeysByRoomId.get(loadedRoom.room.id);
-    if (!brokenTiles) {
-      brokenTiles = new Set<string>();
-      this.brokenSpecialBrickTileKeysByRoomId.set(loadedRoom.room.id, brokenTiles);
-    }
-    if (brokenTiles.has(tileKey)) {
-      return;
-    }
-
-    brokenTiles.add(tileKey);
-    loadedRoom.terrainLayer.removeTileAt(tileX, tileY, true, true);
-    this.refreshLoadedRoomTerrainTexture(loadedRoom);
-    this.playSpecialBrickBreakAnimation(loadedRoom, tileX, tileY);
-  }
-
-  private isSpecialBrickTileBroken(roomId: string, tileX: number, tileY: number): boolean {
-    return this.brokenSpecialBrickTileKeysByRoomId.get(roomId)?.has(
-      this.getSpecialBrickTileKey(tileX, tileY),
-    ) === true;
-  }
-
-  private getSpecialBrickTileKey(tileX: number, tileY: number): string {
-    return `${tileX},${tileY}`;
-  }
-
-  private parseSpecialBrickTileKey(tileKey: string): { tileX: number; tileY: number } | null {
-    const [tileXText, tileYText] = tileKey.split(',');
-    const tileX = Number(tileXText);
-    const tileY = Number(tileYText);
-    if (!Number.isInteger(tileX) || !Number.isInteger(tileY)) {
-      return null;
-    }
-    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
-      return null;
-    }
-    return { tileX, tileY };
-  }
-
-  private createLoadedRoomTerrainTextureSnapshot(loadedRoom: SceneLoadedFullRoom): RoomSnapshot {
-    const brokenTiles = this.brokenSpecialBrickTileKeysByRoomId.get(loadedRoom.room.id);
-    if (!brokenTiles || brokenTiles.size === 0) {
-      return loadedRoom.room;
-    }
-
-    const snapshot = cloneRoomSnapshot(loadedRoom.room);
-    for (const tileKey of brokenTiles) {
-      const parsed = this.parseSpecialBrickTileKey(tileKey);
-      if (!parsed) {
-        continue;
-      }
-      snapshot.tileData.terrain[parsed.tileY][parsed.tileX] = -1;
-    }
-    return snapshot;
-  }
-
-  private refreshLoadedRoomTerrainTexture(loadedRoom: SceneLoadedFullRoom): void {
-    const oldTextureKey = loadedRoom.textureKey;
-    this.runtimeRoomTextureRevision += 1;
-    const baseTextureKey = oldTextureKey.replace(/(?:-runtime-\d+)+$/, '');
-    const nextTextureKey = `${baseTextureKey}-runtime-${this.runtimeRoomTextureRevision}`;
-
-    if (this.textures.exists(nextTextureKey)) {
-      this.textures.remove(nextTextureKey);
-    }
-
-    buildRoomSnapshotTexture(
-      this,
-      this.createLoadedRoomTerrainTextureSnapshot(loadedRoom),
-      nextTextureKey,
-      TILE_SIZE,
-      {
-        includeBackground: false,
-        includeObjects: false,
-        includedLayers: ['background', 'terrain'],
-      },
-    );
-
-    loadedRoom.image.setTexture(nextTextureKey);
-    loadedRoom.textureKey = nextTextureKey;
-
-    const oldTextureStillUsed = Array.from(this.loadedFullRoomsById.values()).some(
-      (candidate) => candidate !== loadedRoom && candidate.textureKey === oldTextureKey,
-    );
-    if (!oldTextureStillUsed && this.textures.exists(oldTextureKey)) {
-      this.textures.remove(oldTextureKey);
-    }
-  }
-
-  private resetAllSpecialBrickTiles(): void {
-    for (const loadedRoom of this.loadedFullRoomsById.values()) {
-      this.resetSpecialBrickTilesForRoom(loadedRoom);
-    }
-    this.brokenSpecialBrickTileKeysByRoomId.clear();
-  }
-
-  private resetSpecialBrickTilesForRoom(loadedRoom: SceneLoadedFullRoom): void {
-    const brokenTiles = this.brokenSpecialBrickTileKeysByRoomId.get(loadedRoom.room.id);
-    if (!brokenTiles || brokenTiles.size === 0) {
-      return;
-    }
-
-    for (const tileKey of brokenTiles) {
-      const parsed = this.parseSpecialBrickTileKey(tileKey);
-      if (!parsed) {
-        continue;
-      }
-
-      const { tileX, tileY } = parsed;
-      const decoded = decodeTileDataValue(loadedRoom.room.tileData.terrain[tileY][tileX]);
-      if (!isSpecialBreakableBrickGid(decoded.gid)) {
-        continue;
-      }
-
-      const restoredTile = loadedRoom.terrainLayer.putTileAt(decoded.gid, tileX, tileY);
-      if (!restoredTile) {
-        continue;
-      }
-
-      restoredTile.flipX = decoded.flipX;
-      restoredTile.flipY = decoded.flipY;
-      const collisionProfile = getTerrainTileCollisionProfile(loadedRoom.room, tileX, tileY);
-      restoredTile.setCollision(
-        collisionProfile.hasCollision,
-        collisionProfile.hasCollision,
-        collisionProfile.hasCollision,
-        collisionProfile.hasCollision,
-      );
-    }
-
-    loadedRoom.terrainLayer.calculateFacesWithin(0, 0, ROOM_WIDTH, ROOM_HEIGHT);
-    this.brokenSpecialBrickTileKeysByRoomId.delete(loadedRoom.room.id);
-    this.refreshLoadedRoomTerrainTexture(loadedRoom);
-  }
-
-  private playSpecialBrickBreakAnimation(
-    loadedRoom: SceneLoadedFullRoom,
-    tileX: number,
-    tileY: number,
-  ): void {
-    const origin = this.getRoomOrigin(loadedRoom.room.coordinates);
-    const sprite = this.add.sprite(
-      origin.x + tileX * TILE_SIZE + TILE_SIZE / 2,
-      origin.y + tileY * TILE_SIZE + TILE_SIZE / 2,
-      'brick_box',
-      5,
-    );
-    sprite.setDepth(26);
-
-    if (this.anims.exists('brick_box_break_anim')) {
-      sprite.play('brick_box_break_anim');
-      sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
-        sprite.destroy();
-      });
-      return;
-    }
-
-    sprite.destroy();
+    this.specialTilesController.update();
   }
 
   private syncActiveCoursePressurePlateLinks(
@@ -3048,187 +2828,34 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private showRoomRushResult(finalStatus: string | null): void {
-    const snapshot = this.roomRushRunController.getDebugSnapshot();
-    if (
-      !snapshot ||
-      snapshot.result === 'active' ||
-      snapshot.runId === this.lastSharedRoomRushResultRunId
-    ) {
-      return;
-    }
-
-    this.lastSharedRoomRushResultRunId = snapshot.runId;
-    void this.showRoomRushResultWhenOverviewReady(snapshot, finalStatus);
-  }
-
-  private async showRoomRushResultWhenOverviewReady(
-    snapshot: ActiveRoomRushRunState,
-    finalStatus: string | null,
-  ): Promise<void> {
-    if (this.mode === 'play') {
-      this.returnToWorld();
-    }
-    const overview = this.prepareRoomRushResultOverview(snapshot, {
-      constrainCamera: false,
-    });
-    if (finalStatus) {
-      this.showTransientStatus(finalStatus);
-    }
-    await this.hydrateRoomRushResultOverview(snapshot, overview);
-    dispatchRoomRushResultShare(snapshot);
-  }
-
-  private async hydrateRoomRushResultOverview(
-    runState: ActiveRoomRushRunState,
-    overview: RoomRushResultOverview | null,
-  ): Promise<void> {
-    const focusCoordinates =
-      overview?.focusCoordinates
-      ?? this.prepareRoomRushResultOverview(runState, { constrainCamera: false })?.focusCoordinates
-      ?? null;
-    if (!focusCoordinates) {
-      return;
-    }
-
-    await this.waitForRoomRushResultAnimationFrames(1);
-    await this.refreshRoomRushOverviewWindow(focusCoordinates);
-    this.updateCameraBounds();
-    this.prepareRoomRushResultOverview(runState);
-    this.worldStreamingController.flushPendingPreviewTextureBuilds();
-    this.syncPreviewVisibility();
-    this.updateBackdrop();
-    this.redrawWorld();
-    this.renderHud();
-    await this.waitForRoomRushResultAnimationFrames(2);
-    this.worldStreamingController.flushPendingPreviewTextureBuilds();
-    this.updateBackdrop();
-    this.redrawWorld();
-    this.renderHud();
-  }
-
-  private async refreshRoomRushOverviewWindow(
-    focusCoordinates: RoomCoordinates,
-  ): Promise<boolean> {
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      const result = await this.worldStreamingController.refreshAround(focusCoordinates);
-      if (result === 'success') {
-        this.windowCenterCoordinates = { ...focusCoordinates };
-        this.syncPresenceSubscriptions();
-        return true;
-      }
-
-      if (result === 'error') {
-        return false;
-      }
-
-      await this.waitForRoomRushResultDelay(100);
-    }
-
-    return false;
-  }
-
-  private waitForRoomRushResultAnimationFrames(frameCount: number): Promise<void> {
-    return new Promise((resolve) => {
-      let framesRemaining = Math.max(1, frameCount);
-      const waitForFrame = () => {
-        framesRemaining -= 1;
-        if (framesRemaining <= 0) {
-          resolve();
-          return;
-        }
-
-        window.requestAnimationFrame(waitForFrame);
-      };
-      window.requestAnimationFrame(waitForFrame);
-    });
-  }
-
-  private waitForRoomRushResultDelay(delayMs: number): Promise<void> {
-    return new Promise((resolve) => {
-      window.setTimeout(resolve, delayMs);
-    });
-  }
-
-  private prepareRoomRushResultOverview(
-    runState: ActiveRoomRushRunState,
-    options: { constrainCamera?: boolean } = {},
-  ): RoomRushResultOverview | null {
-    if (this.mode !== 'browse') {
-      return null;
-    }
-
-    const route = runState.route.length > 0
-      ? runState.route
-      : [{
-          coordinates: { ...runState.startCoordinates },
-        }];
-    const xs = route.map((step) => step.coordinates.x);
-    const ys = route.map((step) => step.coordinates.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    const centerWorldX = ((minX + maxX + 1) / 2) * ROOM_PX_WIDTH;
-    const centerWorldY = ((minY + maxY + 1) / 2) * ROOM_PX_HEIGHT;
-    const focusCoordinates = {
-      x: Math.round((minX + maxX) / 2),
-      y: Math.round((minY + maxY) / 2),
-    };
-    const routeWidth = Math.max(3, maxX - minX + 1) * ROOM_PX_WIDTH;
-    const routeHeight = Math.max(3, maxY - minY + 1) * ROOM_PX_HEIGHT;
-    const fitZoom = Math.min(
-      (this.scale.width - 120) / routeWidth,
-      (this.scale.height - 120) / routeHeight,
+    this.roomRushResultController.showResult(
+      this.roomRushRunController.getDebugSnapshot(),
+      finalStatus,
     );
-    const overviewZoom = Phaser.Math.Clamp(Math.min(0.115, fitZoom), MIN_ZOOM, MAX_ZOOM);
+  }
+
+  private applyRoomRushResultOverviewCameraState(state: RoomRushOverviewCameraState): void {
     const camera = this.cameras.main;
 
     this.cameraMode = 'inspect';
-    this.inspectZoom = overviewZoom;
-    this.browseInspectZoom = overviewZoom;
+    this.inspectZoom = state.overviewZoom;
+    this.browseInspectZoom = state.overviewZoom;
     camera.stopFollow();
-    camera.setZoom(overviewZoom);
-    camera.centerOn(centerWorldX, centerWorldY);
-    this.windowCenterCoordinates = { ...focusCoordinates };
+    camera.setZoom(state.overviewZoom);
+    camera.centerOn(state.centerWorldX, state.centerWorldY);
+    this.windowCenterCoordinates = { ...state.focusCoordinates };
     this.shouldCenterCamera = false;
-    if (options.constrainCamera !== false) {
+    if (state.constrainCamera) {
       this.constrainInspectCamera();
     }
     camera.preRender();
     this.redrawWorld();
     this.updateBackdrop();
     this.renderHud();
-    return { focusCoordinates };
   }
 
   getRoomRushShareOverworldCapture(runState: ActiveRoomRushRunState): RoomRushOverworldCapture | null {
-    const source = this.game.canvas;
-    if (!source) {
-      return null;
-    }
-
-    const camera = this.cameras.main;
-    const route = runState.route.length > 0
-      ? runState.route
-      : [{
-          coordinates: { ...runState.startCoordinates },
-        }];
-    const routePoints = route.map((step) => {
-      const origin = this.getRoomOrigin(step.coordinates);
-      const worldX = origin.x + ROOM_PX_WIDTH / 2;
-      const worldY = origin.y + ROOM_PX_HEIGHT / 2;
-      return {
-        x: (worldX - camera.worldView.x) * camera.zoom + camera.x,
-        y: (worldY - camera.worldView.y) * camera.zoom + camera.y,
-      };
-    });
-
-    return {
-      source,
-      sourceWidth: source.width,
-      sourceHeight: source.height,
-      routePoints,
-    };
+    return this.roomRushResultController.getOverworldCapture(runState);
   }
 
   private async refreshLeaderboardForSelection(): Promise<void> {
@@ -4075,7 +3702,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.combatController.destroyProjectiles();
     this.liveObjectController.resetSwitchStates();
     this.playerPresentationController.resetTransientPlayState();
-    this.resetAllSpecialBrickTiles();
+    this.specialTilesController.resetAll();
   }
 
   private clearTouchGestureState(): void {
@@ -4095,7 +3722,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    this.resetSpecialBrickTilesForRoom(loadedRoom);
+    this.specialTilesController.resetForRoom(loadedRoom);
     this.destroyLiveObjects(loadedRoom);
     this.createLiveObjects(loadedRoom);
     this.syncLiveObjectInteractions();
