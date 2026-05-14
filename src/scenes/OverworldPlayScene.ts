@@ -148,6 +148,11 @@ import {
 import { PvpInstanceRenderer } from './overworld/pvpInstanceRenderer';
 import { PVP_HEART_HEAD_CLEARANCE_PX, PvpHeartDisplay } from './overworld/pvpHeartDisplay';
 import {
+  PVP_INVULNERABILITY_FX_DEPTH,
+  syncPvpInvulnerabilityFx,
+  syncPvpInvulnerabilitySpriteStyle,
+} from './overworld/pvpInvulnerabilityFx';
+import {
   OverworldRoomChatController,
 } from './overworld/roomChat';
 import {
@@ -440,6 +445,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly pvpLastReceivedActionHitIds = new Set<string>();
   private readonly pvpDebugEvents: Array<Record<string, unknown>> = [];
   private pvpLocalHeartDisplay: PvpHeartDisplay | null = null;
+  private pvpLocalInvulnerabilityFx: Phaser.GameObjects.Graphics | null = null;
   private localPvpAction: WorldPresencePvpAction | null = null;
   private localPvpActionUntilEpoch = 0;
   private lastPvpInstanceStateSentAt = 0;
@@ -2280,6 +2286,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (this.player) ignoredObjects.push(this.player);
     if (this.playerSprite) ignoredObjects.push(this.playerSprite);
     if (this.pvpLocalHeartDisplay) ignoredObjects.push(this.pvpLocalHeartDisplay.getGameObject());
+    if (this.pvpLocalInvulnerabilityFx) ignoredObjects.push(this.pvpLocalInvulnerabilityFx);
     ignoredObjects.push(...this.combatPresentationController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.combatController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.pvpInstanceRenderer.getBackdropIgnoredObjects());
@@ -5226,6 +5233,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.getLocalPvpHeartY(),
     );
     this.pvpLocalHeartDisplay.setVisible(true);
+    this.syncPvpLocalInvulnerability(local.invulnerableUntil);
   }
 
   private destroyPvpLocalHeartLabel(): void {
@@ -5235,6 +5243,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     this.pvpLocalHeartDisplay.destroy();
     this.pvpLocalHeartDisplay = null;
+    this.destroyPvpLocalInvulnerabilityFx();
     this.syncBackdropCameraIgnores();
   }
 
@@ -5258,6 +5267,43 @@ export class OverworldPlayScene extends Phaser.Scene {
       : this.playerBody?.top ?? 0;
     const bodyTop = this.playerBody?.top ?? visualTop;
     return Math.min(visualTop, bodyTop) - PVP_HEART_HEAD_CLEARANCE_PX;
+  }
+
+  private syncPvpLocalInvulnerability(invulnerableUntil: number): void {
+    if (!this.playerBody || !this.playerSprite) {
+      this.destroyPvpLocalInvulnerabilityFx();
+      return;
+    }
+
+    if (!this.pvpLocalInvulnerabilityFx) {
+      this.pvpLocalInvulnerabilityFx = this.add.graphics();
+      this.pvpLocalInvulnerabilityFx.setDepth(PVP_INVULNERABILITY_FX_DEPTH);
+      this.pvpLocalInvulnerabilityFx.setVisible(false);
+      this.syncBackdropCameraIgnores();
+    }
+
+    syncPvpInvulnerabilityFx({
+      graphics: this.pvpLocalInvulnerabilityFx,
+      centerX: this.playerBody.center.x,
+      bottomY: this.playerBody.bottom + DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
+      width: Math.max(18, this.PLAYER_WIDTH + 8),
+      height: Math.max(30, this.PLAYER_STANDING_HEIGHT + 8),
+      invulnerableUntil,
+    });
+    syncPvpInvulnerabilitySpriteStyle(this.playerSprite, invulnerableUntil);
+  }
+
+  private destroyPvpLocalInvulnerabilityFx(): void {
+    if (this.playerSprite) {
+      this.playerSprite.setAlpha(1);
+      this.playerSprite.clearTint();
+    }
+    if (!this.pvpLocalInvulnerabilityFx) {
+      return;
+    }
+
+    this.pvpLocalInvulnerabilityFx.destroy();
+    this.pvpLocalInvulnerabilityFx = null;
   }
 
   private resolvePvpEnvironmentSource(reason: string): PvpHitSource {

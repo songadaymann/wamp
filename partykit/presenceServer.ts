@@ -13,6 +13,7 @@ import {
   PVP_ARENA_HEARTS,
   PVP_COUNTDOWN_MS,
   PVP_FINALIZE_DRAW_WINDOW_MS,
+  PVP_RESPAWN_INVULNERABLE_MS,
   type PvpHitSource,
   type PvpInviteAcceptMessage,
   type PvpInviteDeclineMessage,
@@ -1390,10 +1391,15 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
+    const now = Date.now();
+    if (match.status === 'active' && now < target.invulnerableUntil) {
+      return;
+    }
+
     match.appliedHitIds.add(hitId);
     target.hearts = Math.max(0, target.hearts - 1);
     target.losses += 1;
-    target.invulnerableUntil = 0;
+    target.invulnerableUntil = now + PVP_RESPAWN_INVULNERABLE_MS;
 
     const attacker = input.attackerUserId
       ? match.participants.find((participant) => participant.userId === input.attackerUserId) ?? null

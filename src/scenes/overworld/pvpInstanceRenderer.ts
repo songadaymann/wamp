@@ -12,6 +12,11 @@ import type {
 } from '../../pvp/model';
 import type { WeaponHitResult } from './liveObjects';
 import { PVP_HEART_HEAD_CLEARANCE_PX, PvpHeartDisplay } from './pvpHeartDisplay';
+import {
+  PVP_INVULNERABILITY_FX_DEPTH,
+  syncPvpInvulnerabilityFx,
+  syncPvpInvulnerabilitySpriteStyle,
+} from './pvpInvulnerabilityFx';
 
 interface PvpInstanceRendererOptions {
   scene: Phaser.Scene;
@@ -25,8 +30,10 @@ interface RemoteOpponent {
   identity: PvpParticipantIdentity;
   roomId: string;
   hearts: number;
+  invulnerableUntil: number;
   sprite: Phaser.GameObjects.Sprite;
   heartsDisplay: PvpHeartDisplay;
+  invulnerabilityFx: Phaser.GameObjects.Graphics;
   targetX: number;
   targetY: number;
   velocityX: number;
@@ -62,6 +69,7 @@ export class PvpInstanceRenderer {
     this.ensureOpponent(participant, snapshot.roomId);
     if (this.opponent) {
       this.opponent.hearts = participant.hearts;
+      this.opponent.invulnerableUntil = participant.invulnerableUntil;
       this.opponent.heartsDisplay.setHearts(participant.hearts);
     }
   }
@@ -149,6 +157,7 @@ export class PvpInstanceRenderer {
         this.opponent.sprite.x,
         this.getOpponentHeartY(this.opponent),
       );
+      this.syncOpponentInvulnerability(this.opponent);
       this.ensureOpponentAvatarLoaded(this.opponent);
     }
 
@@ -266,7 +275,11 @@ export class PvpInstanceRenderer {
   getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
     const objects: Phaser.GameObjects.GameObject[] = [];
     if (this.opponent) {
-      objects.push(this.opponent.sprite, this.opponent.heartsDisplay.getGameObject());
+      objects.push(
+        this.opponent.sprite,
+        this.opponent.heartsDisplay.getGameObject(),
+        this.opponent.invulnerabilityFx,
+      );
     }
     return objects;
   }
@@ -281,6 +294,7 @@ export class PvpInstanceRenderer {
       displayName: this.opponent.identity.displayName,
       roomId: this.opponent.roomId,
       hearts: this.opponent.hearts,
+      invulnerableMs: Math.max(0, Math.round(this.opponent.invulnerableUntil - Date.now())),
       x: Math.round(this.opponent.sprite.x),
       y: Math.round(this.opponent.sprite.y),
       targetX: Math.round(this.opponent.targetX),
@@ -300,6 +314,7 @@ export class PvpInstanceRenderer {
     if (this.opponent) {
       this.opponent.sprite.destroy();
       this.opponent.heartsDisplay.destroy();
+      this.opponent.invulnerabilityFx.destroy();
       this.opponent = null;
     }
     this.lastCombatEventIds.clear();
@@ -329,13 +344,18 @@ export class PvpInstanceRenderer {
 
     const heartsDisplay = new PvpHeartDisplay(this.options.scene, 30);
     heartsDisplay.setHearts(3);
+    const invulnerabilityFx = this.options.scene.add.graphics();
+    invulnerabilityFx.setDepth(PVP_INVULNERABILITY_FX_DEPTH);
+    invulnerabilityFx.setVisible(false);
 
     this.opponent = {
       identity,
       roomId,
       hearts: 3,
+      invulnerableUntil: 0,
       sprite,
       heartsDisplay,
+      invulnerabilityFx,
       targetX: 0,
       targetY: 0,
       velocityX: 0,
@@ -357,6 +377,28 @@ export class PvpInstanceRenderer {
     const visualTop = opponent.sprite.y - opponent.sprite.displayHeight;
     const bodyTop = opponent.sprite.y - this.options.playerHeight;
     return Math.min(visualTop, bodyTop) - PVP_HEART_HEAD_CLEARANCE_PX;
+  }
+
+  private syncOpponentInvulnerability(opponent: RemoteOpponent): void {
+    if (!opponent.sprite.visible) {
+      opponent.invulnerabilityFx.clear();
+      opponent.invulnerabilityFx.setVisible(false);
+      opponent.sprite.setAlpha(1);
+      opponent.sprite.clearTint();
+      return;
+    }
+
+    const width = Math.max(18, this.options.playerWidth + 8);
+    const height = Math.max(30, this.options.playerHeight + 14);
+    syncPvpInvulnerabilityFx({
+      graphics: opponent.invulnerabilityFx,
+      centerX: opponent.sprite.x,
+      bottomY: opponent.sprite.y,
+      width,
+      height,
+      invulnerableUntil: opponent.invulnerableUntil,
+    });
+    syncPvpInvulnerabilitySpriteStyle(opponent.sprite, opponent.invulnerableUntil);
   }
 
   private ensureOpponentAvatarLoaded(opponent: RemoteOpponent): void {
@@ -428,6 +470,10 @@ export class PvpInstanceRenderer {
     const visible = this.opponent.receivedAt > 0;
     this.opponent.sprite.setVisible(visible);
     this.opponent.heartsDisplay.setVisible(visible);
+    if (!visible) {
+      this.opponent.invulnerabilityFx.clear();
+      this.opponent.invulnerabilityFx.setVisible(false);
+    }
   }
 
   private getPredictedTarget(opponent: RemoteOpponent): { x: number; y: number } {

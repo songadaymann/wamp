@@ -5,6 +5,7 @@ import type { ProgressionDelta, ProgressionSummary } from '../progression/model'
 export const PVP_ARENA_HEARTS = 3;
 export const PVP_COUNTDOWN_MS = 4_200;
 export const PVP_FINALIZE_DRAW_WINDOW_MS = 350;
+export const PVP_RESPAWN_INVULNERABLE_MS = 1_800;
 
 export type PvpMode = 'arena';
 export type PvpMatchStatus = 'waiting' | 'countdown' | 'active' | 'finalizing' | 'complete';
