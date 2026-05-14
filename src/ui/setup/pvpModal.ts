@@ -13,20 +13,45 @@ export function showPvpInvitePrompt(invite: PvpInviteOffer): Promise<'accept' | 
 
   return new Promise((resolve) => {
     const modal = document.createElement('div');
-    modal.className = 'pvp-modal';
+    modal.className = 'pvp-modal pvp-modal-invite';
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
 
     const panel = document.createElement('div');
     panel.className = 'pvp-modal-panel';
 
+    const header = document.createElement('div');
+    header.className = 'pvp-modal-header';
+
+    const kicker = document.createElement('div');
+    kicker.className = 'pvp-modal-kicker';
+    kicker.textContent = 'PVP Challenge';
+
     const title = document.createElement('div');
     title.className = 'pvp-modal-title';
     title.textContent = 'Arena Duel';
+    header.append(kicker, title);
 
     const body = document.createElement('div');
     body.className = 'pvp-modal-body';
-    body.textContent = `${invite.inviter.displayName} invited you to Room ${invite.roomId}.`;
+
+    const challenge = document.createElement('div');
+    challenge.className = 'pvp-modal-card pvp-invite-card';
+
+    const challengeCopy = document.createElement('div');
+    challengeCopy.className = 'pvp-invite-copy';
+    challengeCopy.textContent = `${invite.inviter.displayName} invited you to duel.`;
+
+    const roomChip = document.createElement('div');
+    roomChip.className = 'pvp-room-chip';
+    roomChip.textContent = `Room ${invite.roomId}`;
+
+    const rule = document.createElement('div');
+    rule.className = 'pvp-modal-rule';
+    rule.textContent = '3 hearts. First to zero loses.';
+
+    challenge.append(challengeCopy, roomChip, rule);
+    body.append(challenge);
 
     const actions = document.createElement('div');
     actions.className = 'pvp-modal-actions';
@@ -52,7 +77,7 @@ export function showPvpInvitePrompt(invite: PvpInviteOffer): Promise<'accept' | 
     accept.addEventListener('click', () => close('accept'));
     decline.addEventListener('click', () => close('decline'));
     actions.append(accept, decline);
-    panel.append(title, body, actions);
+    panel.append(header, body, actions);
     modal.append(panel);
     document.body.append(modal);
     activeInviteModal = modal;
@@ -70,24 +95,37 @@ export function showPvpResultModal(snapshot: PvpMatchSnapshot, localUserId: stri
   activeResultModal?.remove();
 
   const modal = document.createElement('div');
-  modal.className = 'pvp-modal';
+  modal.className = 'pvp-modal pvp-modal-result';
+  modal.dataset.result = snapshot.draw
+    ? 'draw'
+    : snapshot.winnerUserId === localUserId
+      ? 'win'
+      : 'loss';
   modal.setAttribute('role', 'dialog');
   modal.setAttribute('aria-modal', 'true');
 
   const panel = document.createElement('div');
   panel.className = 'pvp-modal-panel';
 
+  const header = document.createElement('div');
+  header.className = 'pvp-modal-header';
+
+  const kicker = document.createElement('div');
+  kicker.className = 'pvp-modal-kicker';
+  kicker.textContent = 'Duel Result';
+
   const title = document.createElement('div');
   title.className = 'pvp-modal-title';
   title.textContent = snapshot.draw
     ? 'Draw'
     : snapshot.winnerUserId === localUserId
-      ? 'You Win'
+      ? 'You Win!'
       : 'You Lose';
+  header.append(kicker, title);
 
   const body = document.createElement('div');
   body.className = 'pvp-modal-body';
-  body.textContent = formatPvpResultBody(snapshot);
+  body.append(createPvpResultSummary(snapshot, localUserId));
 
   const actions = document.createElement('div');
   actions.className = 'pvp-modal-actions';
@@ -104,7 +142,7 @@ export function showPvpResultModal(snapshot: PvpMatchSnapshot, localUserId: stri
   });
 
   actions.append(close);
-  panel.append(title, body, actions);
+  panel.append(header, body, actions);
   modal.append(panel);
   document.body.append(modal);
   activeResultModal = modal;
@@ -209,14 +247,6 @@ export function showPvpDamageFlashOverlay(durationMs = 300): void {
   }, durationMs);
 }
 
-function formatPvpResultBody(snapshot: PvpMatchSnapshot): string {
-  const parts = snapshot.participants.map((participant) => {
-    const lost = Math.max(0, participant.losses);
-    return `${participant.displayName}: ${participant.hearts} hearts, ${lost} lost`;
-  });
-  return parts.join(' · ');
-}
-
 function ensureCountdownOverlay(): void {
   if (activeCountdownOverlay) {
     return;
@@ -225,6 +255,13 @@ function ensureCountdownOverlay(): void {
   const overlay = document.createElement('div');
   overlay.className = 'pvp-countdown-overlay';
   overlay.setAttribute('role', 'status');
+
+  const card = document.createElement('div');
+  card.className = 'pvp-countdown-card';
+
+  const kicker = document.createElement('div');
+  kicker.className = 'pvp-countdown-kicker';
+  kicker.textContent = 'PVP Starting';
 
   const title = document.createElement('div');
   title.className = 'pvp-countdown-title';
@@ -235,7 +272,34 @@ function ensureCountdownOverlay(): void {
   const count = document.createElement('div');
   count.className = 'pvp-countdown-count';
 
-  overlay.append(title, rule, count);
+  card.append(kicker, title, rule, count);
+  overlay.append(card);
   document.body.append(overlay);
   activeCountdownOverlay = overlay;
+}
+
+function createPvpResultSummary(snapshot: PvpMatchSnapshot, localUserId: string): HTMLElement {
+  const summary = document.createElement('div');
+  summary.className = 'pvp-modal-card pvp-result-summary';
+
+  for (const participant of snapshot.participants) {
+    const row = document.createElement('div');
+    row.className = 'pvp-result-row';
+    row.dataset.local = participant.userId === localUserId ? 'true' : 'false';
+
+    const name = document.createElement('div');
+    name.className = 'pvp-result-name';
+    name.textContent = participant.userId === localUserId
+      ? `${participant.displayName} (You)`
+      : participant.displayName;
+
+    const stats = document.createElement('div');
+    stats.className = 'pvp-result-stats';
+    stats.textContent = `${participant.hearts} hearts / ${Math.max(0, participant.losses)} lost`;
+
+    row.append(name, stats);
+    summary.append(row);
+  }
+
+  return summary;
 }
