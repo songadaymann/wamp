@@ -1,0 +1,39 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "index.html",
+    "dashboard.html",
+    "launch-admin.html",
+    "background-admin.html",
+    "suspicious-admin.html",
+    "minted-room.html",
+    "room-preview-render.html",
+    "reward-stings-preview.html",
+    "src/main.ts",
+    "src/dashboard.ts",
+    "src/launch-admin.ts",
+    "src/background-admin.ts",
+    "src/suspicious-admin.ts",
+    "src/minted-room.ts",
+    "src/room-preview-render.ts",
+    "public/_worker.js",
+    "src/cloudflare/worker.ts",
+    "src/cloudflare/cryptopunk-avatar-queue-worker.ts",
+    "cloudflare/cryptopunk-avatar-queue/runner/server.mjs",
+    "partykit/presenceServer.ts",
+    "scripts/*.{js,mjs,ts}",
+    "gen-avatar/**/*.mjs"
+  ],
+  "project": [
+    "src/**/*.{js,mjs,ts}",
+    "scripts/**/*.{js,mjs,ts}",
+    "cloudflare/**/*.{js,mjs,ts}",
+    "partykit/**/*.ts",
+    "gen-avatar/**/*.{js,mjs,ts}",
+    "*.html"
+  ],
+  "ignoreBinaries": [
+    "python3",
+    "tsx"
+  ]
+}
