@@ -88,10 +88,7 @@ import {
   createLiveObjectRuntimeState,
   getInitialDirectionX,
 } from './liveObjects/objectFactory';
-import {
-  getCollectibleCue,
-  getCollectibleScoreValue,
-} from './liveObjects/pickups';
+import { collectLiveObject as collectLiveObjectWithFx } from './liveObjects/collection';
 import { CANNON_BULLET_CONFIG } from './liveObjects/projectiles';
 import {
   buildPressurePlateScanIndex,
@@ -5129,60 +5126,20 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       collector?: 'player' | 'enemy';
     } = {},
   ): void {
-    if (!liveObject.sprite.active || this.options.isCollectedObjectKey(liveObject.key)) {
-      return;
-    }
-
-    const collector = options.collector ?? 'player';
-    this.options.markCollectedObjectKey(liveObject.key);
-    const scoreDelta = getCollectibleScoreValue(liveObject.config.id);
-    if (collector === 'player') {
-      this.options.addScore(scoreDelta);
-      if (liveObject.config.id === 'key') {
-        this.options.onKeyCollected();
-      }
-      this.options.playCollectFx(
-        liveObject.sprite.x,
-        liveObject.sprite.y,
-        scoreDelta,
-        loadedRoom.room.coordinates,
-        getCollectibleCue(liveObject.config.id)
-      );
-      this.options.showTransientStatus(`${liveObject.config.name} collected.`);
-    } else {
-      this.options.playRoomSfx(getCollectibleCue(liveObject.config.id), loadedRoom.room.coordinates);
-    }
-    this.destroyLiveObjectInteractions(liveObject);
-
-    const startY = liveObject.sprite.y;
-    this.options.scene.tweens.add({
-      targets: liveObject.sprite,
-      y: startY - 16,
-      scaleX: 1.5,
-      scaleY: 1.5,
-      alpha: 0,
-      duration: 300,
-      ease: 'Quad.easeOut',
-      onComplete: () => {
-        liveObject.sprite.destroy();
-      },
-    });
-
-    loadedRoom.liveObjects = loadedRoom.liveObjects.filter((candidate) => candidate !== liveObject);
-    if (liveObject.countsTowardGoals) {
-      const event = {
-        roomId: loadedRoom.room.id,
-        roomCoordinates: loadedRoom.room.coordinates,
-        instanceId: liveObject.placedInstanceId,
-        x: liveObject.sprite.x - this.options.getRoomOrigin(loadedRoom.room.coordinates).x,
-        y: liveObject.sprite.y - this.options.getRoomOrigin(loadedRoom.room.coordinates).y,
-      };
-      if (collector === 'player') {
-        this.options.onCollectibleCollected(event);
-      } else {
-        this.options.onEnemyCollectibleCollected(event);
-      }
-    }
+    collectLiveObjectWithFx(loadedRoom, liveObject, {
+      scene: this.options.scene,
+      isCollectedObjectKey: this.options.isCollectedObjectKey,
+      markCollectedObjectKey: this.options.markCollectedObjectKey,
+      addScore: this.options.addScore,
+      onKeyCollected: this.options.onKeyCollected,
+      playRoomSfx: this.options.playRoomSfx,
+      playCollectFx: this.options.playCollectFx,
+      showTransientStatus: this.options.showTransientStatus,
+      getRoomOrigin: this.options.getRoomOrigin,
+      onCollectibleCollected: this.options.onCollectibleCollected,
+      onEnemyCollectibleCollected: this.options.onEnemyCollectibleCollected,
+      destroyLiveObjectInteractions: (target) => this.destroyLiveObjectInteractions(target),
+    }, options);
   }
 
   private defeatEnemy(
