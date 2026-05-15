@@ -149,7 +149,7 @@ export class RoomRushResultModalController {
       return;
     }
 
-    this.activeRun = cloneRoomRushRun(run);
+    this.activeRun = cloneRoomRushRun(run, getAuthDebugState().user?.displayName ?? null);
     this.shareImage = null;
     this.shareStatusText = null;
     this.shareStatusTone = 'default';
@@ -359,9 +359,13 @@ function buildRoomRushSubmissionBody(
   };
 }
 
-function cloneRoomRushRun(run: ActiveRoomRushRunState): ActiveRoomRushRunState {
+function cloneRoomRushRun(
+  run: ActiveRoomRushRunState,
+  playerDisplayName: string | null,
+): ActiveRoomRushRunState {
   return {
     ...run,
+    playerDisplayName: playerDisplayName?.trim() || run.playerDisplayName?.trim() || null,
     startCoordinates: { ...run.startCoordinates },
     returnCoordinates: { ...run.returnCoordinates },
     currentCoordinates: { ...run.currentCoordinates },

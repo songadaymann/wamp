@@ -19,6 +19,7 @@ export interface RoomRushRouteStep {
 
 export interface ActiveRoomRushRunState {
   runId: string;
+  playerDisplayName?: string | null;
   difficulty: RoomRushDifficulty;
   startRule: RoomRushStartRule;
   startCoordinates: RoomCoordinates;

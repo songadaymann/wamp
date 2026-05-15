@@ -5,10 +5,21 @@
   padding-right: 2px;
 }
 
+#explore-modal .explore-builder-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding-right: 2px;
+}
+
 #explore-modal .explore-room-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
+}
+
+#explore-modal .explore-builder-item {
+  min-width: 0;
 }
 
 #explore-modal .explore-room-card {
@@ -26,8 +37,26 @@
   box-shadow: 3px 3px 0 #18161c;
 }
 
+#explore-modal .explore-builder-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 70px;
+  padding: 12px;
+  border: 2px solid #79ccde;
+  background: #fffaf0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
 #explore-modal .explore-room-card:hover,
-#explore-modal .explore-room-card:focus-visible {
+#explore-modal .explore-room-card:focus-visible,
+#explore-modal .explore-builder-row:hover,
+#explore-modal .explore-builder-row:focus-visible {
   border-color: #277b30;
   outline: none;
   transform: translateY(-1px);
@@ -83,6 +112,40 @@
   font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
   font-size: 14px;
   line-height: 1.3;
+}
+
+#explore-modal .explore-builder-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+#explore-modal .explore-builder-name {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+#explore-modal .explore-builder-username,
+#explore-modal .explore-builder-meta {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+#explore-modal .explore-builder-count {
+  padding: 7px 10px;
+  border: 2px solid #18161c;
+  background: #fcea7c;
+  color: #18161c;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  line-height: 1.35;
+  text-transform: uppercase;
+  box-shadow: 2px 2px 0 #18161c;
+  white-space: nowrap;
 }
 
 #explore-modal .explore-room-builder {
@@ -209,4 +272,3 @@
   background: #ed5f4b;
   color: #fff3db;
 }
-

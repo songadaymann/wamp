@@ -37,6 +37,7 @@ import { handlePlayfunConfig, handlePlayfunFlush } from './worker/playfun/routes
 import { handleProfileGet, handleProfileGetByUsername, handleProfileUpdateMe } from './worker/profiles/routes';
 import { handlePvpMatchSubmit } from './worker/pvp/routes';
 import {
+  handleBuilderDiscovery,
   handleGlobalLeaderboard,
   handleRoomDifficultyVote,
   handleRoomDiscovery,
@@ -316,6 +317,10 @@ export default {
 
       if (url.pathname === '/api/leaderboards/rooms/discover' && request.method === 'GET') {
         return await handleRoomDiscovery(request, url, env);
+      }
+
+      if (url.pathname === '/api/leaderboards/builders/discover' && request.method === 'GET') {
+        return await handleBuilderDiscovery(request, url, env);
       }
 
       const roomLeaderboardMatch = /^\/api\/leaderboards\/rooms\/([^/]+)$/.exec(url.pathname);

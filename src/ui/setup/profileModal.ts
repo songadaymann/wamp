@@ -31,6 +31,7 @@ import {
   parseProfileSharePath,
 } from '../../profiles/username';
 import type { ProgressionLaneSummary, ProgressionSummary } from '../../progression/model';
+import { ROOM_DIFFICULTY_LABELS } from '../../runs/model';
 import { getActiveOverworldScene } from './sceneBridge';
 import {
   PROFILE_INVALIDATED_EVENT,
@@ -1259,10 +1260,61 @@ export class ProfileModalController {
     const publishedText = room.publishedAt ? this.formatShortDate(room.publishedAt) : 'Unpublished';
     meta.textContent = `${goalText} · v${room.roomVersion} · ${room.roomCoordinates.x},${room.roomCoordinates.y} · ${publishedText}`;
 
-    copy.append(title, meta);
+    copy.append(title, meta, this.createRoomRatingRow(room));
     button.append(preview, copy);
     this.attachRoomPreview(room, previewImage, previewFallback);
     return button;
+  }
+
+  private createRoomRatingRow(room: ProfilePublishedRoomEntry): HTMLElement {
+    const row = this.doc.createElement('div');
+    row.className = 'profile-room-card-ratings';
+
+    row.append(
+      this.createRoomDifficultyBadge(room),
+      this.createRoomQualitySummary(room),
+    );
+    return row;
+  }
+
+  private createRoomDifficultyBadge(room: ProfilePublishedRoomEntry): HTMLElement {
+    const badge = this.doc.createElement('div');
+    badge.className = 'profile-room-card-difficulty';
+    const difficulty = room.consensusDifficulty;
+    if (difficulty) {
+      badge.dataset.difficulty = difficulty;
+      badge.textContent = ROOM_DIFFICULTY_LABELS[difficulty];
+    } else {
+      badge.dataset.difficulty = 'unrated';
+      badge.textContent = 'Unrated';
+    }
+    return badge;
+  }
+
+  private createRoomQualitySummary(room: ProfilePublishedRoomEntry): HTMLElement {
+    const quality = this.doc.createElement('div');
+    quality.className = 'profile-room-card-quality';
+
+    const stars = this.doc.createElement('div');
+    stars.className = 'profile-room-card-stars';
+    const average = room.quality.adjustedAverage ?? room.quality.rawAverage ?? null;
+    const filledCount = average === null ? 0 : Math.max(0, Math.min(5, Math.round(average)));
+    for (let index = 0; index < 5; index += 1) {
+      const star = this.doc.createElement('span');
+      star.className = 'profile-room-card-star';
+      if (index < filledCount) {
+        star.classList.add('active');
+      }
+      star.textContent = '★';
+      stars.appendChild(star);
+    }
+
+    const label = this.doc.createElement('div');
+    label.className = 'profile-room-card-quality-label';
+    label.textContent = average === null ? 'Not rated yet' : `${average.toFixed(1)} stars`;
+
+    quality.append(stars, label);
+    return quality;
   }
 
   private attachRoomPreview(

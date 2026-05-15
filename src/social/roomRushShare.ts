@@ -55,7 +55,10 @@ export function buildRoomRushShareText(run: ActiveRoomRushRunState): string {
       ? 'no deaths'
       : `${run.deaths} ${run.deaths === 1 ? 'death' : 'deaths'}`;
   const verb = run.result === 'failed' ? 'made it through' : 'traversed';
-  return `I ${verb} ${roomText} in WAMP ${ROOM_RUSH_NAME} (${modeText}) in ${formatRoomRushDuration(run.elapsedMs)} with ${deathText}. Can you beat my route?`;
+  const playerName = getRoomRushPlayerDisplayName(run);
+  const subject = playerName ?? 'I';
+  const routePhrase = playerName ? 'this route' : 'my route';
+  return `${subject} ${verb} ${roomText} in WAMP ${ROOM_RUSH_NAME} (${modeText}) in ${formatRoomRushDuration(run.elapsedMs)} with ${deathText}. Can you beat ${routePhrase}?`;
 }
 
 export function buildRoomRushShareImageFileName(run: ActiveRoomRushRunState): string {
@@ -128,10 +131,12 @@ function drawRoomRushCard(
     family: "'Super Mario Bros. NES', monospace",
     color: PALETTE.ink,
   });
-  drawText(context, 'A route through the world', 472, 88, {
+  drawText(context, buildRoomRushPlayerTagline(run), 472, 88, {
     size: 24,
     family: "'HomeVideo', monospace",
     color: PALETTE.blue,
+    maxWidth: 660,
+    minSize: 17,
   });
 
   drawMap(context, run);
@@ -261,6 +266,13 @@ function drawOverworldTitlePanel(
   run: ActiveRoomRushRunState,
 ): void {
   drawPanel(context, 426, 44, 724, 94, PALETTE.cream, PALETTE.ink, 5);
+  drawText(context, buildRoomRushPlayerTagline(run).toUpperCase(), 452, 66, {
+    size: 16,
+    family: "'HomeVideo', monospace",
+    color: PALETTE.blue,
+    maxWidth: 656,
+    minSize: 13,
+  });
   drawText(context, `${ROOM_RUSH_NAME.toUpperCase()} COMPLETE`, 452, 88, {
     size: 34,
     family: "'Super Mario Bros. NES', monospace",
@@ -297,6 +309,22 @@ function drawOverworldStatsPanel(
     color: PALETTE.blue,
   });
 
+  const playerName = getRoomRushPlayerDisplayName(run);
+  if (playerName) {
+    drawText(context, 'PLAYER', 72, 238, {
+      size: 13,
+      family: "'Early GameBoy', monospace",
+      color: PALETTE.blue,
+    });
+    drawText(context, playerName, 72, 262, {
+      size: 20,
+      family: "'HomeVideo', monospace",
+      color: PALETTE.ink,
+      maxWidth: 154,
+      minSize: 14,
+    });
+  }
+
   const statRows = [
     ['Mode', `${formatRoomRushDifficulty(run)} - ${formatRoomRushStartRule(run)}`],
     ['Start', roomIdFromCoordinates(run.startCoordinates)],
@@ -304,7 +332,8 @@ function drawOverworldStatsPanel(
     ['Time', formatRoomRushDuration(run.elapsedMs)],
     ['Deaths', String(run.deaths)],
   ];
-  let y = 262;
+  let y = playerName ? 302 : 262;
+  const rowGap = playerName ? 44 : 52;
   for (const [label, value] of statRows) {
     drawText(context, label.toUpperCase(), 72, y, {
       size: 13,
@@ -318,7 +347,7 @@ function drawOverworldStatsPanel(
       maxWidth: 154,
       minSize: 16,
     });
-    y += 52;
+    y += rowGap;
   }
 
   const resultFill = run.result === 'failed' ? PALETTE.red : PALETTE.green;
@@ -344,6 +373,16 @@ function buildRoomRushSummaryLine(run: ActiveRoomRushRunState): string {
     formatRoomRushDuration(run.elapsedMs),
     `${run.deaths} ${run.deaths === 1 ? 'DEATH' : 'DEATHS'}`,
   ].join(' / ');
+}
+
+function getRoomRushPlayerDisplayName(run: ActiveRoomRushRunState): string | null {
+  const name = run.playerDisplayName?.replace(/\s+/g, ' ').trim();
+  return name || null;
+}
+
+function buildRoomRushPlayerTagline(run: ActiveRoomRushRunState): string {
+  const playerName = getRoomRushPlayerDisplayName(run);
+  return playerName ? `By ${playerName}` : 'A route through the world';
 }
 
 function drawPixelBackdrop(context: CanvasRenderingContext2D): void {
@@ -397,12 +436,12 @@ function drawStatsPanel(context: CanvasRenderingContext2D, run: ActiveRoomRushRu
   });
 
   const statRows = [
+    ['Player', getRoomRushPlayerDisplayName(run) ?? 'Unknown player'],
     ['Mode', `${formatRoomRushDifficulty(run)} - ${formatRoomRushStartRule(run)}`],
     ['Start', roomIdFromCoordinates(run.startCoordinates)],
     ['Finish', roomIdFromCoordinates(run.currentCoordinates)],
     ['Time', formatRoomRushDuration(run.elapsedMs)],
     ['Deaths', String(run.deaths)],
-    ['Route', `${Math.max(0, run.route.length - 1)} moves`],
   ];
 
   let y = PANEL_Y + 202;
@@ -416,6 +455,8 @@ function drawStatsPanel(context: CanvasRenderingContext2D, run: ActiveRoomRushRu
       size: 21,
       family: "'HomeVideo', monospace",
       color: PALETTE.ink,
+      maxWidth: PANEL_WIDTH - 60,
+      minSize: 14,
     });
     y += 48;
   }
