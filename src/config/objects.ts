@@ -304,6 +304,81 @@ export function getObjectDisplayOffset(config: GameObjectConfig): { x: number; y
   };
 }
 
+export function getObjectRuntimeBodyOffset(config: GameObjectConfig): [number, number] {
+  if (typeof config.bodyOffsetX === 'number' || typeof config.bodyOffsetY === 'number') {
+    return [config.bodyOffsetX ?? 0, config.bodyOffsetY ?? 0];
+  }
+
+  const centeredX = Math.max(0, (config.frameWidth - config.bodyWidth) * 0.5);
+  let offsetY = Math.max(0, (config.frameHeight - config.bodyHeight) * 0.5);
+
+  switch (config.id) {
+    case 'bounce_pad':
+    case 'crab':
+    case 'slime_blue':
+    case 'slime_red':
+    case 'snake':
+    case 'penguin':
+    case 'frog':
+    case 'spikes':
+    case 'ice_spikes':
+    case 'cannon':
+    case 'cactus':
+    case 'tornado':
+    case 'tornado_sand':
+    case 'fire_big':
+    case 'quicksand':
+    case 'cactus_spike':
+    case 'lava_surface':
+    case 'water_surface_a':
+    case 'water_surface_b':
+    case 'brick_box':
+    case 'treasure_chest':
+    case 'door_locked':
+    case 'trapdoor_locked':
+    case 'log_wall':
+    case 'bear_brown':
+    case 'bear_polar':
+    case 'chicken':
+    case SWORDSMAN_AI_OBJECT_ID:
+      offsetY = Math.max(0, config.frameHeight - config.bodyHeight);
+      break;
+    default:
+      break;
+  }
+
+  return [centeredX, offsetY];
+}
+
+export function getObjectRuntimeBodyRect(
+  config: GameObjectConfig,
+  placementPoint: { x: number; y: number },
+): { x: number; y: number; width: number; height: number } {
+  const displayScale = getObjectDisplayScale(config);
+  const displayOffset = getObjectDisplayOffset(config);
+  const bodyWidth = config.bodyWidth > 0 ? config.bodyWidth : config.frameWidth;
+  const bodyHeight = config.bodyHeight > 0 ? config.bodyHeight : config.frameHeight;
+  const [bodyOffsetX, bodyOffsetY] =
+    config.bodyWidth > 0 && config.bodyHeight > 0
+      ? getObjectRuntimeBodyOffset(config)
+      : [0, 0];
+
+  return {
+    x:
+      placementPoint.x +
+      displayOffset.x -
+      config.frameWidth * displayScale * 0.5 +
+      bodyOffsetX * displayScale,
+    y:
+      placementPoint.y +
+      displayOffset.y -
+      config.frameHeight * displayScale * 0.5 +
+      bodyOffsetY * displayScale,
+    width: bodyWidth * displayScale,
+    height: bodyHeight * displayScale,
+  };
+}
+
 export function getObjectPlacementPointForTile(
   config: GameObjectConfig,
   tileX: number,

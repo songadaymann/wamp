@@ -248,7 +248,10 @@ import {
   getTerrainTileCollisionProfile,
   terrainTileCollidesAtLocalPixel,
 } from './overworld/terrainCollision';
-import { resolveGoalRunStartPoint } from './overworld/goalRunStartGate';
+import {
+  isPvpDangerousObjectConfig,
+  resolvePvpSpawnPoint as resolvePvpArenaSpawnPoint,
+} from './overworld/pvpSpawn';
 import type {
   EditorCourseEditData,
   OverworldMode,
@@ -5222,68 +5225,48 @@ export class OverworldPlayScene extends Phaser.Scene {
     room: RoomSnapshot,
     participantIndex: number,
   ): { x: number; y: number } {
-    const origin = this.getRoomOrigin(room.coordinates);
-    const leftSide = participantIndex % 2 === 0;
-    const preferredStart = Phaser.Math.Clamp(
-      Math.floor(ROOM_WIDTH * (leftSide ? 0.18 : 0.82)),
-      2,
-      ROOM_WIDTH - 3,
-    );
-    const columns: number[] = [];
-    for (let offset = 0; offset < ROOM_WIDTH; offset += 1) {
-      const tileX = preferredStart + (leftSide ? offset : -offset);
-      if (tileX >= 1 && tileX <= ROOM_WIDTH - 2) {
-        columns.push(tileX);
-      }
-    }
-
-    for (const tileX of columns) {
-      const surfaceTileY = this.findPvpSpawnSurfaceTile(room, tileX);
-      if (surfaceTileY === null) {
-        continue;
-      }
-
-      const profile = getTerrainTileCollisionProfile(room, tileX, surfaceTileY);
-      return {
-        x: origin.x + tileX * TILE_SIZE + TILE_SIZE / 2,
-        y: origin.y + surfaceTileY * TILE_SIZE + profile.topInset - this.PLAYER_HEIGHT / 2,
-      };
-    }
-
-    const fallback = resolveGoalRunStartPoint(room, this.PLAYER_HEIGHT);
-    return {
-      x: origin.x + ROOM_PX_WIDTH * (leftSide ? 0.18 : 0.82),
-      y: fallback.y - this.PLAYER_HEIGHT / 2,
-    };
+    return resolvePvpArenaSpawnPoint({
+      room,
+      participantIndex,
+      playerWidth: this.PLAYER_WIDTH,
+      playerHeight: this.PLAYER_HEIGHT,
+      playerStandingHeight: this.PLAYER_STANDING_HEIGHT,
+      liveDangerousObjectBounds: this.getPvpLiveDangerousObjectBounds(room),
+    });
   }
 
-  private findPvpSpawnSurfaceTile(room: RoomSnapshot, tileX: number): number | null {
-    const clearTilesNeeded = Math.max(2, Math.ceil(this.PLAYER_HEIGHT / TILE_SIZE) + 1);
-    for (let tileY = ROOM_HEIGHT - 1; tileY >= 0; tileY -= 1) {
-      const profile = getTerrainTileCollisionProfile(room, tileX, tileY);
-      if (!profile.hasCollision) {
+  private getPvpLiveDangerousObjectBounds(room: RoomSnapshot): Phaser.Geom.Rectangle[] {
+    const loadedRoom = this.loadedFullRoomsById.get(room.id) ?? null;
+    if (!loadedRoom) {
+      return [];
+    }
+
+    const dangerousBounds: Phaser.Geom.Rectangle[] = [];
+    const origin = this.getRoomOrigin(room.coordinates);
+    for (const liveObject of loadedRoom.liveObjects) {
+      if (
+        !isPvpDangerousObjectConfig(liveObject.config) ||
+        !liveObject.sprite.active ||
+        !liveObject.sprite.body
+      ) {
         continue;
       }
 
-      let hasClearHeadroom = true;
-      for (let offset = 1; offset <= clearTilesNeeded; offset += 1) {
-        const aboveTileY = tileY - offset;
-        if (aboveTileY < 0) {
-          break;
-        }
-
-        if (getTerrainTileCollisionProfile(room, tileX, aboveTileY).hasCollision) {
-          hasClearHeadroom = false;
-          break;
-        }
+      const body = liveObject.sprite.body as ArcadeObjectBody;
+      if (!body.enable) {
+        continue;
       }
 
-      if (hasClearHeadroom) {
-        return tileY;
-      }
+      const bounds = this.getArcadeBodyBounds(body);
+      dangerousBounds.push(new Phaser.Geom.Rectangle(
+        bounds.x - origin.x,
+        bounds.y - origin.y,
+        bounds.width,
+        bounds.height,
+      ));
     }
 
-    return null;
+    return dangerousBounds;
   }
 
   private publishPvpCombatAction(event: CombatPresentationEvent): void {

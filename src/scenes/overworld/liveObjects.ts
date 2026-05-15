@@ -5,6 +5,7 @@ import {
   getObjectDefaultFrame,
   getObjectDisplayOffset,
   getObjectDisplayScale,
+  getObjectRuntimeBodyOffset,
   objectCollidesWithWorld,
   canObjectBeStoredInContainer,
   getBlockSwitchRuntimeTextureKey,
@@ -5053,49 +5054,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   }
 
   private getObjectBodyOffset(config: GameObjectConfig): [number, number] {
-    if (typeof config.bodyOffsetX === 'number' || typeof config.bodyOffsetY === 'number') {
-      return [config.bodyOffsetX ?? 0, config.bodyOffsetY ?? 0];
-    }
-
-    const centeredX = Math.max(0, (config.frameWidth - config.bodyWidth) * 0.5);
-    let offsetY = Math.max(0, (config.frameHeight - config.bodyHeight) * 0.5);
-
-    switch (config.id) {
-      case 'bounce_pad':
-      case 'crab':
-      case 'slime_blue':
-      case 'slime_red':
-      case 'snake':
-      case 'penguin':
-      case 'frog':
-      case 'spikes':
-      case 'ice_spikes':
-      case 'cannon':
-      case 'cactus':
-      case 'tornado':
-      case 'tornado_sand':
-      case 'fire_big':
-      case 'quicksand':
-      case 'cactus_spike':
-      case 'lava_surface':
-      case 'water_surface_a':
-      case 'water_surface_b':
-      case 'brick_box':
-      case 'treasure_chest':
-      case 'door_locked':
-      case 'trapdoor_locked':
-      case 'log_wall':
-      case 'bear_brown':
-      case 'bear_polar':
-      case 'chicken':
-      case SWORDSMAN_AI_OBJECT_ID:
-        offsetY = Math.max(0, config.frameHeight - config.bodyHeight);
-        break;
-      default:
-        break;
-    }
-
-    return [centeredX, offsetY];
+    return getObjectRuntimeBodyOffset(config);
   }
 
   private getDynamicBody(sprite: Phaser.GameObjects.Sprite): Phaser.Physics.Arcade.Body | null {
