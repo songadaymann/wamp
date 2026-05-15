@@ -88,6 +88,7 @@ import {
 } from './liveObjects/triggers';
 import { LiveObjectTriggerController } from './liveObjects/triggerController';
 import { LiveObjectHazardController } from './liveObjects/hazardController';
+import { LiveObjectEnemyLifecycleController } from './liveObjects/enemyLifecycle';
 
 export { isDynamicArcadeBody } from './liveObjects/bodies';
 export type { ArcadeObjectBody } from './liveObjects/bodies';
@@ -315,7 +316,6 @@ const SWORDSMAN_AI_ATTACK_MS = 240;
 const SWORDSMAN_AI_ATTACK_HIT_START_MS = 55;
 const SWORDSMAN_AI_ATTACK_HIT_END_MS = 155;
 const SWORDSMAN_AI_COOLDOWN_MS = 300;
-const SWORDSMAN_AI_RESPAWN_DELAY_MS = 1500;
 const SWORDSMAN_AI_EDGE_GUARD_PROBE_LEAD_PX = 1;
 const SWORDSMAN_AI_FACING_FLIP_MIN_INTERVAL_MS = 90;
 const SWORDSMAN_AI_FACING_FLIP_MIN_TRAVEL_PX = 6;
@@ -353,6 +353,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly swordsmanTraversalGraphs = new Map<string, SwordsmanTraversalGraph>();
   private readonly triggerController: LiveObjectTriggerController<TEdgeWall>;
   private readonly hazardController: LiveObjectHazardController<TEdgeWall>;
+  private readonly enemyLifecycleController: LiveObjectEnemyLifecycleController<TEdgeWall>;
 
   constructor(private readonly options: OverworldLiveObjectControllerOptions<TEdgeWall>) {
     this.triggerController = new LiveObjectTriggerController({
@@ -391,6 +392,34 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         this.removeLiveObject(loadedRoom, liveObject),
       triggerBlockSwitch: (loadedRoom, switchObject) =>
         this.triggerController.triggerBlockSwitch(loadedRoom, switchObject),
+    });
+    this.enemyLifecycleController = new LiveObjectEnemyLifecycleController({
+      scene: this.options.scene,
+      settings: this.options.settings,
+      getLoadedFullRooms: this.options.getLoadedFullRooms,
+      getRoomOrigin: this.options.getRoomOrigin,
+      getPlayer: this.options.getPlayer,
+      getPlayerBody: this.options.getPlayerBody,
+      addScore: this.options.addScore,
+      playEnemyKillFx: this.options.playEnemyKillFx,
+      playBounceFx: this.options.playBounceFx,
+      showTransientStatus: this.options.showTransientStatus,
+      handlePlayerDeath: this.options.handlePlayerDeath,
+      onEnemyDefeated: this.options.onEnemyDefeated,
+      getSwordsmanObjectiveMode: (liveObject) => this.getSwordsmanObjectiveMode(liveObject),
+      getSwordsmanDefeatMode: (liveObject) => this.getSwordsmanDefeatMode(liveObject),
+      swordsmanSwordCanDamagePlayer: (liveObject, playerBody) =>
+        this.swordsmanSwordCanDamagePlayer(liveObject, playerBody),
+      createLiveObjectEntry: (loadedRoom, entryOptions) =>
+        this.createLiveObjectEntry(loadedRoom, entryOptions),
+      destroyLiveObjectInteractions: (liveObject) =>
+        this.destroyLiveObjectInteractions(liveObject),
+      destroyLiveObjectWorldColliders: (liveObject) =>
+        this.destroyLiveObjectWorldColliders(liveObject),
+      destroyLiveObjectHelpers: (liveObject) =>
+        this.destroyLiveObjectHelpers(liveObject),
+      syncWorldObjectColliders: (loadedRooms) => this.syncWorldObjectColliders(loadedRooms),
+      syncLiveObjectInteractions: (loadedRooms) => this.syncLiveObjectInteractions(loadedRooms),
     });
   }
 
@@ -608,7 +637,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           case 'enemy':
             liveObject.interactions.push(
               this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
-                this.handleEnemyContact(loadedRoom, liveObject);
+                this.enemyLifecycleController.handleEnemyContact(loadedRoom, liveObject);
               })
             );
             break;
@@ -815,36 +844,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     attackRect: Phaser.Geom.Rectangle,
     maxHits = Number.POSITIVE_INFINITY
   ): WeaponHitResult[] {
-    const hits: WeaponHitResult[] = [];
-
-    for (const loadedRoom of loadedRooms) {
-      for (const liveObject of [...loadedRoom.liveObjects]) {
-        if (
-          liveObject.config.category !== 'enemy' ||
-          !liveObject.sprite.active ||
-          !liveObject.sprite.body
-        ) {
-          continue;
-        }
-
-        const enemyBounds = getArcadeBodyBounds(liveObject.sprite.body as ArcadeObjectBody);
-        if (!Phaser.Geom.Intersects.RectangleToRectangle(attackRect, enemyBounds)) {
-          continue;
-        }
-
-        const hit = this.defeatEnemy(loadedRoom, liveObject);
-        if (!hit) {
-          continue;
-        }
-
-        hits.push(hit);
-        if (hits.length >= maxHits) {
-          return hits;
-        }
-      }
-    }
-
-    return hits;
+    return this.enemyLifecycleController.attackEnemiesInRect(loadedRooms, attackRect, maxHits);
   }
 
   attackEnemyAtPoint(
@@ -853,8 +853,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     y: number,
     radius = 6
   ): WeaponHitResult | null {
-    const attackRect = new Phaser.Geom.Rectangle(x - radius, y - radius, radius * 2, radius * 2);
-    return this.attackEnemiesInRect(loadedRooms, attackRect, 1)[0] ?? null;
+    return this.enemyLifecycleController.attackEnemyAtPoint(loadedRooms, x, y, radius);
   }
 
   private stabilizePushableStacks(
@@ -4162,44 +4161,6 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     this.syncWorldObjectColliders(this.options.getLoadedFullRooms());
   }
 
-  private handleEnemyContact(
-    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
-    liveObject: LoadedRoomObject
-  ): void {
-    const playerBody = this.options.getPlayerBody();
-    const player = this.options.getPlayer();
-    if (!playerBody || !player || !liveObject.sprite.body) {
-      return;
-    }
-
-    const enemyBody = liveObject.sprite.body as ArcadeObjectBody;
-    const stomped = playerBody.velocity.y > 40 && playerBody.bottom <= enemyBody.top + 10;
-
-    if (liveObject.config.id === SWORDSMAN_AI_OBJECT_ID) {
-      if (stomped) {
-        playerBody.setVelocityY(this.options.settings.enemyStompBounceVelocity);
-        this.defeatEnemy(loadedRoom, liveObject);
-        if (this.getSwordsmanDefeatMode(liveObject) === 'invincible') {
-          this.options.playBounceFx(liveObject.sprite.x, liveObject.sprite.y, loadedRoom.room.coordinates);
-        }
-      } else if (
-        this.getSwordsmanObjectiveMode(liveObject) === 'duel' &&
-        this.swordsmanSwordCanDamagePlayer(liveObject, playerBody)
-      ) {
-        this.options.handlePlayerDeath(`${liveObject.config.name} cut you down.`);
-      }
-      return;
-    }
-
-    if (!stomped) {
-      this.options.handlePlayerDeath(`${liveObject.config.name} hit you.`);
-      return;
-    }
-
-    playerBody.setVelocityY(this.options.settings.enemyStompBounceVelocity);
-    this.defeatEnemy(loadedRoom, liveObject);
-  }
-
   private collectLiveObject(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
@@ -4223,124 +4184,4 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }, options);
   }
 
-  private defeatEnemy(
-    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
-    liveObject: LoadedRoomObject
-  ): WeaponHitResult | null {
-    if (!liveObject.sprite.active) {
-      return null;
-    }
-    if (
-      liveObject.config.id === SWORDSMAN_AI_OBJECT_ID &&
-      this.getSwordsmanDefeatMode(liveObject) === 'invincible'
-    ) {
-      this.options.showTransientStatus(`${liveObject.config.name} can't be defeated.`);
-      return null;
-    }
-
-    const x = liveObject.sprite.x;
-    const y = liveObject.sprite.y;
-    const enemyName = liveObject.config.name;
-    const respawnOptions =
-      liveObject.config.id === SWORDSMAN_AI_OBJECT_ID &&
-      this.getSwordsmanDefeatMode(liveObject) === 'respawn'
-        ? this.createLiveObjectRespawnOptions(loadedRoom, liveObject)
-        : null;
-
-    this.options.addScore(10);
-    this.options.playEnemyKillFx(x, y, loadedRoom.room.coordinates);
-    this.destroyLiveObjectInteractions(liveObject);
-    this.destroyLiveObjectWorldColliders(liveObject);
-    this.destroyLiveObjectHelpers(liveObject);
-    liveObject.sprite.destroy();
-    loadedRoom.liveObjects = loadedRoom.liveObjects.filter((candidate) => candidate !== liveObject);
-
-    const handledStatus = liveObject.countsTowardGoals
-      ? this.options.onEnemyDefeated({
-          roomId: loadedRoom.room.id,
-          roomCoordinates: loadedRoom.room.coordinates,
-          enemyName,
-          instanceId: liveObject.placedInstanceId,
-          x: x - this.options.getRoomOrigin(loadedRoom.room.coordinates).x,
-          y: y - this.options.getRoomOrigin(loadedRoom.room.coordinates).y,
-        })
-      : false;
-    if (!handledStatus) {
-      this.options.showTransientStatus(
-        respawnOptions ? `${enemyName} will respawn.` : `${enemyName} defeated.`
-      );
-    }
-
-    if (respawnOptions) {
-      this.scheduleLiveObjectRespawn(loadedRoom, respawnOptions);
-    }
-
-    return {
-      roomId: loadedRoom.room.id,
-      enemyName,
-      x,
-      y,
-    };
-  }
-
-  private createLiveObjectRespawnOptions(
-    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
-    liveObject: LoadedRoomObject,
-  ): CreateLiveObjectEntryOptions {
-    const roomOrigin = this.options.getRoomOrigin(loadedRoom.room.coordinates);
-    const displayOffset = getObjectDisplayOffset(liveObject.config);
-    const x = liveObject.runtime.baseX - roomOrigin.x - displayOffset.x;
-    const y = liveObject.runtime.baseY - roomOrigin.y - displayOffset.y;
-    return {
-      key: liveObject.key,
-      config: liveObject.config,
-      x,
-      y,
-      facing: liveObject.runtime.initialDirectionX >= 0 ? 'right' : 'left',
-      layer: liveObject.layer,
-      baseTimeSeed: x + y,
-      placedInstanceId: liveObject.placedInstanceId,
-      linkedTargetRoomId: liveObject.linkedTargetRoomId,
-      linkedTargetInstanceId: liveObject.linkedTargetInstanceId,
-      containedObjectId: liveObject.containedObjectId,
-      signText: liveObject.signText,
-      objectiveMode: liveObject.runtime.aiObjectiveMode,
-      defeatMode: liveObject.runtime.aiDefeatMode,
-      countsTowardGoals: liveObject.countsTowardGoals,
-    };
-  }
-
-  private scheduleLiveObjectRespawn(
-    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
-    options: CreateLiveObjectEntryOptions,
-  ): void {
-    this.options.scene.time.delayedCall(SWORDSMAN_AI_RESPAWN_DELAY_MS, () => {
-      if (!this.isLoadedRoomStillActive(loadedRoom)) {
-        return;
-      }
-      if (loadedRoom.liveObjects.some((liveObject) => liveObject.key === options.key)) {
-        return;
-      }
-
-      const respawned = this.createLiveObjectEntry(loadedRoom, options);
-      if (!respawned) {
-        return;
-      }
-
-      loadedRoom.liveObjects.push(respawned);
-      this.syncWorldObjectColliders(this.options.getLoadedFullRooms());
-      this.syncLiveObjectInteractions([loadedRoom]);
-    });
-  }
-
-  private isLoadedRoomStillActive(
-    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
-  ): boolean {
-    for (const candidate of this.options.getLoadedFullRooms()) {
-      if (candidate === loadedRoom) {
-        return true;
-      }
-    }
-    return false;
-  }
 }
