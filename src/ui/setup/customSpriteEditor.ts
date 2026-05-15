@@ -3,11 +3,11 @@ import { editorState } from '../../config';
 import {
   buildCustomSpriteObjectId,
   getCustomSpriteKindLabel,
-  normalizeCustomSpriteKind,
   type CustomSpriteDefinition,
   type CustomSpriteKind,
   type CustomSpriteSize,
 } from '../../customSprites/model';
+import { canCustomSpriteBecomeRoomTile } from '../../customTiles/model';
 import {
   CUSTOM_SPRITES_CHANGED_EVENT,
   getCustomSpriteDataUrl,
@@ -67,6 +67,10 @@ export function setupCustomSpriteEditor(
   const kindSelect = doc.getElementById('editor-sprite-kind') as HTMLSelectElement | null;
   const colorInput = doc.getElementById('editor-sprite-color') as HTMLInputElement | null;
   const statusEl = doc.getElementById('editor-sprite-status');
+  const kindHelp = doc.getElementById('editor-sprite-kind-help');
+  const kindChoiceButtons = Array.from(
+    doc.querySelectorAll<HTMLButtonElement>('[data-editor-sprite-kind-choice]')
+  );
   const sizeButtons = Array.from(
     doc.querySelectorAll<HTMLButtonElement>('[data-editor-sprite-size]')
   );
@@ -76,7 +80,6 @@ export function setupCustomSpriteEditor(
   const swatchGrid = doc.getElementById('editor-sprite-swatches');
   const clearButton = doc.getElementById('btn-editor-sprite-clear') as HTMLButtonElement | null;
   const saveButton = doc.getElementById('btn-editor-sprite-save') as HTMLButtonElement | null;
-  const saveTileButton = doc.getElementById('btn-editor-sprite-save-tile') as HTMLButtonElement | null;
   const closeButton = doc.getElementById('btn-editor-sprite-close') as HTMLButtonElement | null;
   const newButton = doc.getElementById('btn-editor-sprite-new') as HTMLButtonElement | null;
   const libraryList = doc.getElementById('editor-sprite-library-list');
@@ -91,6 +94,7 @@ export function setupCustomSpriteEditor(
   let dragMode: SpritePaintDragMode | null = null;
   let isPointerDown = false;
   let editingSpriteId: string | null = null;
+  let saveAfterUseAsChoice = false;
 
   const setStatus = (message: string, tone: 'neutral' | 'error' = 'neutral') => {
     if (!statusEl) {
@@ -105,7 +109,33 @@ export function setupCustomSpriteEditor(
     return isValidHexColor(color) ? color.toLowerCase() : '#fff3db';
   };
 
-  const getKind = (): CustomSpriteKind => normalizeCustomSpriteKind(kindSelect?.value);
+  const getKind = (): CustomSpriteKind | null => {
+    const value = kindSelect?.value;
+    return value === 'decoration' || value === 'collectible' || value === 'solid' || value === 'pushable'
+      ? value
+      : null;
+  };
+
+  const setUseAsPromptVisible = (visible: boolean): void => {
+    kindHelp?.classList.toggle('hidden', !visible);
+    if (kindSelect) {
+      kindSelect.dataset.invalid = visible ? 'true' : 'false';
+    }
+  };
+
+  const promptForUseAs = (): void => {
+    saveAfterUseAsChoice = true;
+    setUseAsPromptVisible(true);
+    setStatus('Choose a Use As option before saving.', 'error');
+    kindSelect?.focus();
+  };
+
+  const setKind = (kind: CustomSpriteKind): void => {
+    if (kindSelect) {
+      kindSelect.value = kind;
+    }
+    setUseAsPromptVisible(false);
+  };
 
   const syncSizeButtons = (): void => {
     for (const button of sizeButtons) {
@@ -307,8 +337,10 @@ export function setupCustomSpriteEditor(
       nameInput.value = 'My Sprite';
     }
     if (kindSelect) {
-      kindSelect.value = 'decoration';
+      kindSelect.value = '';
     }
+    saveAfterUseAsChoice = false;
+    setUseAsPromptVisible(false);
     syncSizeButtons();
     renderCanvas();
     renderLibrary();
@@ -325,6 +357,8 @@ export function setupCustomSpriteEditor(
     if (kindSelect) {
       kindSelect.value = sprite.kind;
     }
+    saveAfterUseAsChoice = false;
+    setUseAsPromptVisible(false);
     syncSizeButtons();
     renderCanvas();
     renderLibrary();
@@ -358,7 +392,7 @@ export function setupCustomSpriteEditor(
     window.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
   };
 
-  const buildSpriteDraft = (): CustomSpriteDefinition | null => {
+  const buildSpriteDraft = (kind: CustomSpriteKind): CustomSpriteDefinition | null => {
     if (!pixels.some(Boolean)) {
       setStatus('Draw at least one pixel before saving.', 'error');
       return null;
@@ -370,7 +404,7 @@ export function setupCustomSpriteEditor(
       id: existing?.id ?? createSpriteId(),
       name: clampSpriteName(nameInput?.value ?? ''),
       size,
-      kind: getKind(),
+      kind,
       pixels: [...pixels],
       status: 'active',
       createdAt: existing?.createdAt ?? now,
@@ -378,12 +412,7 @@ export function setupCustomSpriteEditor(
     };
   };
 
-  const saveSprite = (): void => {
-    const sprite = buildSpriteDraft();
-    if (!sprite) {
-      return;
-    }
-
+  const saveSpriteAsObject = (sprite: CustomSpriteDefinition): void => {
     editingSpriteId = sprite.id;
     editorState.paletteMode = 'objects';
     editorState.selectedObjectId = buildCustomSpriteObjectId(sprite.id);
@@ -396,24 +425,7 @@ export function setupCustomSpriteEditor(
     setSpriteModeActive(false);
   };
 
-  const saveSpriteAsTile = (): void => {
-    const sprite = buildSpriteDraft();
-    if (!sprite) {
-      return;
-    }
-
-    if (sprite.size !== 16) {
-      setStatus('Tiles use the 16x16 sprite size.', 'error');
-      return;
-    }
-
-    if (sprite.kind !== 'decoration' && sprite.kind !== 'solid') {
-      setStatus('Pushable and collectible sprites stay as objects.', 'error');
-      return;
-    }
-
-    registerCustomSprite(sprite);
-    refreshSpriteInActiveScenes(sprite);
+  const saveSpriteAsTile = (sprite: CustomSpriteDefinition): void => {
     let selectedTile = false;
     withActiveEditorScene(game, (scene) => {
       selectedTile = scene.useCustomSpriteAsTile?.(sprite) ?? false;
@@ -423,10 +435,40 @@ export function setupCustomSpriteEditor(
       return;
     }
 
+    registerCustomSprite(sprite);
+    refreshSpriteInActiveScenes(sprite);
     editingSpriteId = sprite.id;
     renderLibrary();
     setStatus('Saved as tile. Click in the room to paint it.');
     setSpriteModeActive(false);
+  };
+
+  const saveSprite = (): void => {
+    if (!pixels.some(Boolean)) {
+      setStatus('Draw at least one pixel before saving.', 'error');
+      return;
+    }
+
+    const kind = getKind();
+    if (!kind) {
+      promptForUseAs();
+      return;
+    }
+
+    saveAfterUseAsChoice = false;
+    setUseAsPromptVisible(false);
+
+    const sprite = buildSpriteDraft(kind);
+    if (!sprite) {
+      return;
+    }
+
+    if (canCustomSpriteBecomeRoomTile(sprite)) {
+      saveSpriteAsTile(sprite);
+      return;
+    }
+
+    saveSpriteAsObject(sprite);
   };
 
   modeButton.addEventListener('click', () => {
@@ -435,12 +477,35 @@ export function setupCustomSpriteEditor(
   closeButton?.addEventListener('click', () => setSpriteModeActive(false));
   newButton?.addEventListener('click', resetSpriteDraft);
   saveButton?.addEventListener('click', saveSprite);
-  saveTileButton?.addEventListener('click', saveSpriteAsTile);
   clearButton?.addEventListener('click', () => {
     pixels = Array.from({ length: size * size }, () => null);
     setStatus('Canvas cleared.');
     renderCanvas();
   });
+
+  kindSelect?.addEventListener('change', () => {
+    const kind = getKind();
+    if (!kind) {
+      return;
+    }
+    setUseAsPromptVisible(false);
+    if (saveAfterUseAsChoice) {
+      saveSprite();
+    }
+  });
+
+  for (const button of kindChoiceButtons) {
+    button.addEventListener('click', () => {
+      const value = button.dataset.editorSpriteKindChoice;
+      if (value !== 'decoration' && value !== 'collectible' && value !== 'solid' && value !== 'pushable') {
+        return;
+      }
+      setKind(value);
+      if (saveAfterUseAsChoice) {
+        saveSprite();
+      }
+    });
+  }
 
   for (const button of sizeButtons) {
     button.addEventListener('click', () => setSize(getSpriteSize(button.dataset.editorSpriteSize)));
