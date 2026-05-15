@@ -1042,7 +1042,8 @@
             </div>
             <div class="editor-sprite-control-cluster">
               <label class="editor-sprite-label" for="editor-sprite-kind">Use As</label>
-              <select id="editor-sprite-kind" class="editor-sprite-select">
+              <select id="editor-sprite-kind" class="editor-sprite-select" required>
+                <option value="">Choose...</option>
                 <option value="decoration">Decoration</option>
                 <option value="collectible">Collectible</option>
                 <option value="solid">Solid Block</option>
@@ -1061,13 +1062,36 @@
             </div>
             <div class="editor-sprite-control-cluster editor-sprite-action-cluster">
               <canvas id="editor-sprite-preview" class="editor-sprite-preview" width="64" height="64" aria-hidden="true"></canvas>
-              <button id="btn-editor-sprite-save-tile" class="bar-btn bar-btn-small" type="button">Save Tile</button>
               <button id="btn-editor-sprite-save" class="bar-btn bar-btn-small" type="button">Save</button>
               <button id="btn-editor-sprite-close" class="bar-btn bar-btn-small" type="button">Close</button>
             </div>
           </div>
           <div class="editor-sprite-status-row">
             <div id="editor-sprite-status" class="editor-sprite-status" aria-live="polite"></div>
+          </div>
+          <div id="editor-sprite-kind-help" class="editor-sprite-kind-help hidden">
+            <div class="editor-sprite-kind-help-copy">
+              <div class="editor-sprite-kind-help-title">Choose what this sprite does.</div>
+              <div class="editor-sprite-kind-help-text">Decoration and Solid Block are best for repeated tiles. Collectible and Pushable Block stay as objects because they need behavior.</div>
+            </div>
+            <div class="editor-sprite-kind-help-grid">
+              <button class="editor-sprite-kind-choice" data-editor-sprite-kind-choice="decoration" type="button">
+                <span class="editor-sprite-kind-choice-title">Decoration</span>
+                <span class="editor-sprite-kind-choice-text">Background or detail art that does not block the player.</span>
+              </button>
+              <button class="editor-sprite-kind-choice" data-editor-sprite-kind-choice="solid" type="button">
+                <span class="editor-sprite-kind-choice-title">Solid Block</span>
+                <span class="editor-sprite-kind-choice-text">Platforms, floors, walls, and anything players should stand on.</span>
+              </button>
+              <button class="editor-sprite-kind-choice" data-editor-sprite-kind-choice="collectible" type="button">
+                <span class="editor-sprite-kind-choice-title">Collectible</span>
+                <span class="editor-sprite-kind-choice-text">Items the player can pick up.</span>
+              </button>
+              <button class="editor-sprite-kind-choice" data-editor-sprite-kind-choice="pushable" type="button">
+                <span class="editor-sprite-kind-choice-title">Pushable Block</span>
+                <span class="editor-sprite-kind-choice-text">Movable blocks that should stay interactive.</span>
+              </button>
+            </div>
           </div>
           <div class="editor-sprite-workbench">
             <div class="editor-sprite-canvas-wrap">
