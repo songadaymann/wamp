@@ -19,12 +19,12 @@ import {
   type RoomTileData,
 } from '../persistence/roomModel';
 
-export const WAMP_MINTED_ROOM_SCHEMA_VERSION_V1 = 1 as const;
-export const WAMP_MINTED_ROOM_SCHEMA_VERSION_V2 = 2 as const;
-export const WAMP_MINTED_ROOM_SCHEMA_VERSION_V3 = 3 as const;
-export const WAMP_MINTED_ROOM_SCHEMA_VERSION_V4 = 4 as const;
-export const WAMP_MINTED_ROOM_SCHEMA_VERSION = WAMP_MINTED_ROOM_SCHEMA_VERSION_V4;
-export const ROOM_TOKEN_METADATA_MIME = 'data:application/json;base64,';
+const WAMP_MINTED_ROOM_SCHEMA_VERSION_V1 = 1 as const;
+const WAMP_MINTED_ROOM_SCHEMA_VERSION_V2 = 2 as const;
+const WAMP_MINTED_ROOM_SCHEMA_VERSION_V3 = 3 as const;
+const WAMP_MINTED_ROOM_SCHEMA_VERSION_V4 = 4 as const;
+const WAMP_MINTED_ROOM_SCHEMA_VERSION = WAMP_MINTED_ROOM_SCHEMA_VERSION_V4;
+const ROOM_TOKEN_METADATA_MIME = 'data:application/json;base64,';
 
 type WampMintedRoomPayloadVersion =
   | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V1
