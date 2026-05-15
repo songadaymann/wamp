@@ -798,6 +798,14 @@
         "type": "string",
         "enum": ["easy", "medium", "hard", "extreme"]
       },
+      "RoomDiscoverySort": {
+        "type": "string",
+        "enum": ["featured", "quality", "newest", "builder"]
+      },
+      "BuilderDiscoverySort": {
+        "type": "string",
+        "enum": ["alphabet", "rooms", "recent"]
+      },
       "RoomDifficultyCounts": {
         "type": "object",
         "required": ["easy", "medium", "hard", "extreme"],
@@ -884,7 +892,7 @@
       },
       "RoomDiscoveryResponse": {
         "type": "object",
-        "required": ["difficultyFilter", "results"],
+        "required": ["difficultyFilter", "sort", "results"],
         "properties": {
           "difficultyFilter": {
             "oneOf": [
@@ -892,9 +900,33 @@
               { "type": "null" }
             ]
           },
+          "sort": { "$ref": "#/components/schemas/RoomDiscoverySort" },
           "results": {
             "type": "array",
             "items": { "$ref": "#/components/schemas/RoomDiscoveryEntry" }
+          }
+        }
+      },
+      "BuilderDiscoveryEntry": {
+        "type": "object",
+        "required": ["userId", "displayName", "username", "roomCount", "latestPublishedAt", "firstPublishedAt"],
+        "properties": {
+          "userId": { "type": "string" },
+          "displayName": { "type": "string" },
+          "username": { "type": ["string", "null"] },
+          "roomCount": { "type": "integer" },
+          "latestPublishedAt": { "type": ["string", "null"], "format": "date-time" },
+          "firstPublishedAt": { "type": ["string", "null"], "format": "date-time" }
+        }
+      },
+      "BuilderDiscoveryResponse": {
+        "type": "object",
+        "required": ["sort", "results"],
+        "properties": {
+          "sort": { "$ref": "#/components/schemas/BuilderDiscoverySort" },
+          "results": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/BuilderDiscoveryEntry" }
           }
         }
       },
@@ -1314,14 +1346,30 @@
       },
       "ProfilePublishedRoomEntry": {
         "type": "object",
-        "required": ["roomId", "roomCoordinates", "roomTitle", "roomVersion", "goalType", "publishedAt"],
+        "required": [
+          "roomId",
+          "roomCoordinates",
+          "roomTitle",
+          "roomVersion",
+          "goalType",
+          "publishedAt",
+          "consensusDifficulty",
+          "quality"
+        ],
         "properties": {
           "roomId": { "type": "string" },
           "roomCoordinates": { "$ref": "#/components/schemas/RoomCoordinates" },
           "roomTitle": { "type": ["string", "null"] },
           "roomVersion": { "type": "integer" },
           "goalType": { "type": ["string", "null"] },
-          "publishedAt": { "type": ["string", "null"], "format": "date-time" }
+          "publishedAt": { "type": ["string", "null"], "format": "date-time" },
+          "consensusDifficulty": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/RoomDifficulty" },
+              { "type": "null" }
+            ]
+          },
+          "quality": { "$ref": "#/components/schemas/QualityRatingSummary" }
         }
       },
       "ProfileStatsSummary": {
@@ -2879,6 +2927,12 @@
             "in": "query",
             "required": false,
             "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 100 }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": { "$ref": "#/components/schemas/RoomDiscoverySort" }
           }
         ],
         "responses": {
@@ -2887,6 +2941,40 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/RoomDiscoveryResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/leaderboards/builders/discover": {
+      "get": {
+        "summary": "Discover published-room builders",
+        "description": "Public read. If a bearer token is supplied, it must include leaderboards:read.",
+        "security": [
+          { "bearerAuth": [] },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": { "$ref": "#/components/schemas/BuilderDiscoverySort" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 100 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Builder discovery results",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BuilderDiscoveryResponse" }
               }
             }
           }

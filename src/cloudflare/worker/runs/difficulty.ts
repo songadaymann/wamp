@@ -1,6 +1,10 @@
 import type { RoomSnapshot } from '../../../persistence/roomModel';
 import { ROOM_GOAL_TYPES, type RoomGoalType } from '../../../goals/roomGoals';
-import type { RoomDifficulty,
+import type {
+  BuilderDiscoveryEntry,
+  BuilderDiscoveryResponse,
+  BuilderDiscoverySort,
+  RoomDifficulty,
   RoomDifficultyCounts,
   RoomDifficultySummary,
   RoomDiscoveryEntry,
@@ -9,12 +13,17 @@ import type { RoomDifficulty,
 } from '../../../runs/model';
 import type { QualityRatingSummary, TrophyAwardSummary } from '../../../progression/model';
 import {
+  normalizeBuilderDiscoverySort,
   normalizeRoomDifficulty,
   normalizeRoomDiscoverySort,
   ROOM_DIFFICULTIES,
 } from '../../../runs/model';
 import { HttpError } from '../core/http';
 import type { ContentTrophyRow, Env, RoomDifficultyVoteRow } from '../core/types';
+import {
+  sqlUserIdDoesNotHavePlayfunDisplayNamePrefix,
+  sqlUserIdIsNotPlayfunOnly,
+} from '../playfun/leaderboardIsolation';
 
 interface PublishedRoomDiscoveryRow {
   id: string;
@@ -42,6 +51,15 @@ interface BuilderProgressionRow {
   user_id: string;
   total_bxp: number | string | null;
   builder_level: number | string | null;
+}
+
+interface BuilderDiscoveryRow {
+  user_id: string;
+  display_name: string | null;
+  username: string | null;
+  room_count: number | string | null;
+  latest_published_at: string | null;
+  first_published_at: string | null;
 }
 
 interface RoomDiscoveryRatingAggregateRow {
@@ -383,6 +401,87 @@ export function parseRoomDiscoverySortOrThrow(value: unknown): RoomDiscoverySort
   return normalized;
 }
 
+export async function loadBuilderDiscoveryResponse(
+  env: Env,
+  limit: number,
+  sort: BuilderDiscoverySort,
+): Promise<BuilderDiscoveryResponse> {
+  const rows = await env.DB.prepare(
+    `
+      WITH latest_index AS (
+        SELECT room_id, MAX(version) AS version
+        FROM room_versions
+        GROUP BY room_id
+      ),
+      latest AS (
+        SELECT room_id, version, created_at
+        FROM room_versions
+      ),
+      first_published AS (
+        SELECT room_id, MIN(created_at) AS first_published_at
+        FROM room_versions
+        GROUP BY room_id
+      ),
+      published_rooms AS (
+        SELECT
+          rooms.id AS room_id,
+          COALESCE(rooms.claimer_user_id, rooms.last_published_by_user_id) AS builder_user_id,
+          latest.created_at AS latest_published_at,
+          first_published.first_published_at AS first_published_at
+        FROM rooms
+        INNER JOIN latest_index
+          ON latest_index.room_id = rooms.id
+        INNER JOIN latest
+          ON latest.room_id = latest_index.room_id
+         AND latest.version = latest_index.version
+        INNER JOIN first_published
+          ON first_published.room_id = rooms.id
+        WHERE rooms.published_json IS NOT NULL
+          AND COALESCE(rooms.claimer_user_id, rooms.last_published_by_user_id) IS NOT NULL
+      ),
+      builder_counts AS (
+        SELECT
+          builder_user_id AS user_id,
+          COUNT(*) AS room_count,
+          MAX(latest_published_at) AS latest_published_at,
+          MIN(first_published_at) AS first_published_at
+        FROM published_rooms
+        WHERE ${sqlUserIdIsNotPlayfunOnly('published_rooms.builder_user_id')}
+          AND ${sqlUserIdDoesNotHavePlayfunDisplayNamePrefix('published_rooms.builder_user_id')}
+        GROUP BY builder_user_id
+      )
+      SELECT
+        builder_counts.user_id,
+        users.display_name,
+        users.username,
+        builder_counts.room_count,
+        builder_counts.latest_published_at,
+        builder_counts.first_published_at
+      FROM builder_counts
+      INNER JOIN users
+        ON users.id = builder_counts.user_id
+      ORDER BY ${getBuilderDiscoverySqlOrderClause(sort)}
+      LIMIT ?
+    `
+  )
+    .bind(limit)
+    .all<BuilderDiscoveryRow>();
+
+  return {
+    sort,
+    results: rows.results.map(mapBuilderDiscoveryRow),
+  };
+}
+
+export function parseBuilderDiscoverySortOrThrow(value: unknown): BuilderDiscoverySort {
+  const normalized = normalizeBuilderDiscoverySort(value);
+  if (!normalized) {
+    throw new HttpError(400, 'sort must be alphabet, rooms, or recent.');
+  }
+
+  return normalized;
+}
+
 function compareRoomDiscoveryEntries(
   left: RoomDiscoveryEntry,
   right: RoomDiscoveryEntry,
@@ -490,6 +589,29 @@ function compareNullableStringsAsc(left: string | null, right: string | null): n
     return -1;
   }
   return leftValue.localeCompare(rightValue, undefined, { sensitivity: 'base' });
+}
+
+function getBuilderDiscoverySqlOrderClause(sort: BuilderDiscoverySort): string {
+  if (sort === 'rooms') {
+    return 'builder_counts.room_count DESC, builder_counts.latest_published_at DESC, users.display_name COLLATE NOCASE ASC, builder_counts.user_id ASC';
+  }
+
+  if (sort === 'recent') {
+    return 'builder_counts.latest_published_at DESC, builder_counts.room_count DESC, users.display_name COLLATE NOCASE ASC, builder_counts.user_id ASC';
+  }
+
+  return 'users.display_name COLLATE NOCASE ASC, builder_counts.user_id ASC';
+}
+
+function mapBuilderDiscoveryRow(row: BuilderDiscoveryRow): BuilderDiscoveryEntry {
+  return {
+    userId: row.user_id,
+    displayName: row.display_name?.trim() || 'Unknown builder',
+    username: row.username?.trim() || null,
+    roomCount: parseRowNumber(row.room_count),
+    latestPublishedAt: row.latest_published_at,
+    firstPublishedAt: row.first_published_at,
+  };
 }
 
 async function loadBuilderProgressionRows(

@@ -445,7 +445,18 @@
   color: #fff3db;
 }
 
-#explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='builder'] {
+#explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='builders'],
+#explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-builder-sort='rooms'] {
   background: #fcea7c;
   color: #000;
+}
+
+#explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-builder-sort='alphabet'] {
+  background: #79ccde;
+  color: #000;
+}
+
+#explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-builder-sort='recent'] {
+  background: #277b30;
+  color: #fff3db;
 }

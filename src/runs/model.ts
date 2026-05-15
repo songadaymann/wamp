@@ -15,6 +15,8 @@ export const ROOM_DIFFICULTIES = ['easy', 'medium', 'hard', 'extreme'] as const;
 export type RoomDifficulty = typeof ROOM_DIFFICULTIES[number];
 export const ROOM_DISCOVERY_SORTS = ['featured', 'quality', 'newest', 'builder'] as const;
 export type RoomDiscoverySort = typeof ROOM_DISCOVERY_SORTS[number];
+export const BUILDER_DISCOVERY_SORTS = ['alphabet', 'rooms', 'recent'] as const;
+export type BuilderDiscoverySort = typeof BUILDER_DISCOVERY_SORTS[number];
 export const ROOM_RUSH_DIFFICULTIES = ['easy', 'hard'] as const;
 export type RoomRushDifficulty = typeof ROOM_RUSH_DIFFICULTIES[number];
 export const ROOM_RUSH_START_RULES = ['selected', 'origin'] as const;
@@ -174,6 +176,20 @@ export interface RoomDiscoveryResponse {
   results: RoomDiscoveryEntry[];
 }
 
+export interface BuilderDiscoveryEntry {
+  userId: string;
+  displayName: string;
+  username: string | null;
+  roomCount: number;
+  latestPublishedAt: string | null;
+  firstPublishedAt: string | null;
+}
+
+export interface BuilderDiscoveryResponse {
+  sort: BuilderDiscoverySort;
+  results: BuilderDiscoveryEntry[];
+}
+
 export type RoomProgressRatingRequestBody = RoomRatingRequestBody;
 export type RoomProgressRatingResponse = RoomRatingResponse;
 
@@ -287,5 +303,11 @@ export function normalizeRoomDifficulty(value: unknown): RoomDifficulty | null {
 export function normalizeRoomDiscoverySort(value: unknown): RoomDiscoverySort | null {
   return typeof value === 'string' && ROOM_DISCOVERY_SORTS.includes(value as RoomDiscoverySort)
     ? (value as RoomDiscoverySort)
+    : null;
+}
+
+export function normalizeBuilderDiscoverySort(value: unknown): BuilderDiscoverySort | null {
+  return typeof value === 'string' && BUILDER_DISCOVERY_SORTS.includes(value as BuilderDiscoverySort)
+    ? (value as BuilderDiscoverySort)
     : null;
 }

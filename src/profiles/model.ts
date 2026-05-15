@@ -2,7 +2,8 @@ import type { AuthUser } from '../auth/model';
 import type { RoomGoalType } from '../goals/roomGoals';
 import type { RoomCoordinates } from '../persistence/roomModel';
 import type { PlayerAvatarChoice } from '../player/avatar/model';
-import type { ProgressionSummary } from '../progression/model';
+import type { ProgressionSummary, QualityRatingSummary } from '../progression/model';
+import type { RoomDifficulty } from '../runs/model';
 
 export interface ProfilePublishedRoomEntry {
   roomId: string;
@@ -11,6 +12,8 @@ export interface ProfilePublishedRoomEntry {
   roomVersion: number;
   goalType: RoomGoalType | null;
   publishedAt: string | null;
+  consensusDifficulty: RoomDifficulty | null;
+  quality: QualityRatingSummary;
 }
 
 export interface ProfileStatsSummary {

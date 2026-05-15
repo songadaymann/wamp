@@ -38,7 +38,9 @@ import {
   upsertUserStats,
 } from './points';
 import {
+  loadBuilderDiscoveryResponse,
   loadRoomDiscoveryResponse,
+  parseBuilderDiscoverySortOrThrow,
   parseRoomDiscoverySortOrThrow,
   parseRoomDifficultyOrThrow,
 } from './difficulty';
@@ -684,6 +686,20 @@ export async function handleRoomDiscovery(
   const sort = rawSort && rawSort.trim() ? parseRoomDiscoverySortOrThrow(rawSort) : 'featured';
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 100, 1, 200);
   const response = await loadRoomDiscoveryResponse(env, difficultyFilter, limit, sort);
+  return jsonResponse(request, response);
+}
+
+export async function handleBuilderDiscovery(
+  request: Request,
+  url: URL,
+  env: Env
+): Promise<Response> {
+  const auth = await loadOptionalRequestAuth(env, request);
+  requireOptionalScope(auth, 'leaderboards:read', 'discover builders');
+  const rawSort = url.searchParams.get('sort');
+  const sort = rawSort && rawSort.trim() ? parseBuilderDiscoverySortOrThrow(rawSort) : 'alphabet';
+  const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 100, 1, 200);
+  const response = await loadBuilderDiscoveryResponse(env, limit, sort);
   return jsonResponse(request, response);
 }
 

@@ -1,6 +1,8 @@
 import type { UserProfileResponse, ProfilePublishedRoomEntry, ProfileStatsSummary } from '../../../profiles/model';
 import { listPlayerAvatarChoicesForLevel, resolveSelectablePlayerAvatarId } from '../../../player/avatar/unlocks';
 import { isPlayfunLeaderboardExcludedDisplayName } from '../../../playfun/identity';
+import type { QualityRatingSummary } from '../../../progression/model';
+import { ROOM_DIFFICULTIES, type RoomDifficulty } from '../../../runs/model';
 import type { Env } from '../core/types';
 import { findUserById, loadAllUserStatsRows, loadPublicUserProfileCourseCount, loadPublishedRoomsByCreator, loadUserStatsRow } from '../auth/store';
 import { loadPublicProgressionSummary } from '../progression/store';
@@ -26,6 +28,36 @@ const EMPTY_PROFILE_STATS: ProfileStatsSummary = {
   globalRank: null,
 };
 
+const QUALITY_PRIOR_MEAN = 3.5;
+const QUALITY_PRIOR_WEIGHT = 5;
+
+type ProfilePublishedRoomBaseEntry = Omit<
+  ProfilePublishedRoomEntry,
+  'consensusDifficulty' | 'quality'
+>;
+
+interface ProfileRoomRatingAggregateRow {
+  room_id: string;
+  version_key: number | string | null;
+  quality_vote_count: number | string | null;
+  quality_raw_sum: number | string | null;
+  quality_weighted_sum: number | string | null;
+  quality_weighted_vote_count: number | string | null;
+  one_star_count: number | string | null;
+  two_star_count: number | string | null;
+  three_star_count: number | string | null;
+  four_star_count: number | string | null;
+  five_star_count: number | string | null;
+  easy_count: number | string | null;
+  medium_count: number | string | null;
+  hard_count: number | string | null;
+  extreme_count: number | string | null;
+  easy_weight: number | string | null;
+  medium_weight: number | string | null;
+  hard_weight: number | string | null;
+  extreme_weight: number | string | null;
+}
+
 export async function loadUserProfile(
   env: Env,
   targetUserId: string,
@@ -44,7 +76,7 @@ export async function loadUserProfile(
   ]);
 
   const stats = buildProfileStats(statsRow, allStatsRows, publishedRoomRows.length);
-  const publishedRooms = buildPublishedRooms(publishedRoomRows);
+  const publishedRooms = await buildPublishedRooms(env, publishedRoomRows);
   const isSelf = viewerUserId === targetUserId;
   const progression = await loadPublicProgressionSummary(env, targetUserId);
   const selectedAvatarId = resolveSelectablePlayerAvatarId(user.selectedAvatarId);
@@ -107,10 +139,11 @@ function buildProfileStats(
   };
 }
 
-function buildPublishedRooms(
+async function buildPublishedRooms(
+  env: Env,
   rows: Awaited<ReturnType<typeof loadPublishedRoomsByCreator>>
-): ProfilePublishedRoomEntry[] {
-  const entries: ProfilePublishedRoomEntry[] = [];
+): Promise<ProfilePublishedRoomEntry[]> {
+  const entries: ProfilePublishedRoomBaseEntry[] = [];
 
   for (const row of rows) {
     try {
@@ -128,7 +161,7 @@ function buildPublishedRooms(
     }
   }
 
-  return entries
+  const sortedEntries = entries
     .sort((left, right) => {
       const leftTime = left.publishedAt ? Date.parse(left.publishedAt) : 0;
       const rightTime = right.publishedAt ? Date.parse(right.publishedAt) : 0;
@@ -141,4 +174,180 @@ function buildPublishedRooms(
       return left.roomCoordinates.x - right.roomCoordinates.x;
     })
     .slice(0, 32);
+  const ratingSummaries = await loadProfileRoomRatingSummaries(
+    env,
+    sortedEntries.map((entry) => ({
+      roomId: entry.roomId,
+      roomVersion: entry.roomVersion,
+    })),
+  );
+
+  return sortedEntries.map((entry) => ({
+    ...entry,
+    ...(ratingSummaries.get(buildProfileRoomRatingKey(entry.roomId, entry.roomVersion))
+      ?? createEmptyProfileRoomRatingSummary()),
+  }));
+}
+
+async function loadProfileRoomRatingSummaries(
+  env: Env,
+  roomVersionKeys: Array<{ roomId: string; roomVersion: number }>
+): Promise<Map<string, { consensusDifficulty: RoomDifficulty | null; quality: QualityRatingSummary }>> {
+  const summaries = new Map<string, { consensusDifficulty: RoomDifficulty | null; quality: QualityRatingSummary }>();
+  if (roomVersionKeys.length === 0) {
+    return summaries;
+  }
+
+  for (const chunk of chunkValues(roomVersionKeys, 40)) {
+    const whereClause = chunk
+      .map(() => '(room_id = ? AND version_key = ?)')
+      .join(' OR ');
+    const bindings = chunk.flatMap((entry) => [entry.roomId, entry.roomVersion]);
+    const result = await env.DB.prepare(
+      `
+        SELECT
+          room_id,
+          version_key,
+          SUM(CASE WHEN quality_stars IS NOT NULL THEN 1 ELSE 0 END) AS quality_vote_count,
+          SUM(CASE WHEN quality_stars IS NOT NULL THEN quality_stars ELSE 0 END) AS quality_raw_sum,
+          SUM(CASE WHEN quality_stars IS NOT NULL THEN quality_stars * trust_weight ELSE 0 END) AS quality_weighted_sum,
+          SUM(CASE WHEN quality_stars IS NOT NULL THEN trust_weight ELSE 0 END) AS quality_weighted_vote_count,
+          SUM(CASE WHEN quality_stars = 1 THEN 1 ELSE 0 END) AS one_star_count,
+          SUM(CASE WHEN quality_stars = 2 THEN 1 ELSE 0 END) AS two_star_count,
+          SUM(CASE WHEN quality_stars = 3 THEN 1 ELSE 0 END) AS three_star_count,
+          SUM(CASE WHEN quality_stars = 4 THEN 1 ELSE 0 END) AS four_star_count,
+          SUM(CASE WHEN quality_stars = 5 THEN 1 ELSE 0 END) AS five_star_count,
+          SUM(CASE WHEN difficulty_choice = 'easy' THEN 1 ELSE 0 END) AS easy_count,
+          SUM(CASE WHEN difficulty_choice = 'medium' THEN 1 ELSE 0 END) AS medium_count,
+          SUM(CASE WHEN difficulty_choice = 'hard' THEN 1 ELSE 0 END) AS hard_count,
+          SUM(CASE WHEN difficulty_choice = 'extreme' THEN 1 ELSE 0 END) AS extreme_count,
+          SUM(CASE WHEN difficulty_choice = 'easy' THEN trust_weight ELSE 0 END) AS easy_weight,
+          SUM(CASE WHEN difficulty_choice = 'medium' THEN trust_weight ELSE 0 END) AS medium_weight,
+          SUM(CASE WHEN difficulty_choice = 'hard' THEN trust_weight ELSE 0 END) AS hard_weight,
+          SUM(CASE WHEN difficulty_choice = 'extreme' THEN trust_weight ELSE 0 END) AS extreme_weight
+        FROM room_ratings
+        WHERE ${whereClause}
+        GROUP BY room_id, version_key
+      `
+    )
+      .bind(...bindings)
+      .all<ProfileRoomRatingAggregateRow>();
+
+    for (const row of result.results) {
+      summaries.set(
+        buildProfileRoomRatingKey(row.room_id, parseRatingRowNumber(row.version_key)),
+        buildProfileRoomRatingSummary(row),
+      );
+    }
+  }
+
+  return summaries;
+}
+
+function buildProfileRoomRatingSummary(
+  row: ProfileRoomRatingAggregateRow
+): { consensusDifficulty: RoomDifficulty | null; quality: QualityRatingSummary } {
+  const qualityVoteCount = parseRatingRowNumber(row.quality_vote_count);
+  const qualityWeightedVoteCount = parseRatingRowFloat(row.quality_weighted_vote_count);
+  const quality =
+    qualityVoteCount === 0 || qualityWeightedVoteCount <= 0
+      ? createEmptyProfileQualitySummary()
+      : {
+          adjustedAverage: roundQuality(
+            (QUALITY_PRIOR_MEAN * QUALITY_PRIOR_WEIGHT + parseRatingRowFloat(row.quality_weighted_sum)) /
+              (QUALITY_PRIOR_WEIGHT + qualityWeightedVoteCount),
+          ),
+          rawAverage: roundQuality(parseRatingRowFloat(row.quality_raw_sum) / qualityVoteCount),
+          voteCount: qualityVoteCount,
+          weightedVoteCount: roundQuality(qualityWeightedVoteCount),
+          counts: {
+            oneStar: parseRatingRowNumber(row.one_star_count),
+            twoStar: parseRatingRowNumber(row.two_star_count),
+            threeStar: parseRatingRowNumber(row.three_star_count),
+            fourStar: parseRatingRowNumber(row.four_star_count),
+            fiveStar: parseRatingRowNumber(row.five_star_count),
+          },
+        };
+
+  const weightedDifficulty = {
+    easy: parseRatingRowFloat(row.easy_weight),
+    medium: parseRatingRowFloat(row.medium_weight),
+    hard: parseRatingRowFloat(row.hard_weight),
+    extreme: parseRatingRowFloat(row.extreme_weight),
+  };
+  const totalDifficultyVotes =
+    parseRatingRowNumber(row.easy_count)
+    + parseRatingRowNumber(row.medium_count)
+    + parseRatingRowNumber(row.hard_count)
+    + parseRatingRowNumber(row.extreme_count);
+  let consensusDifficulty: RoomDifficulty | null = null;
+  let bestWeight = 0;
+  for (const difficulty of ROOM_DIFFICULTIES) {
+    if (weightedDifficulty[difficulty] > bestWeight) {
+      bestWeight = weightedDifficulty[difficulty];
+      consensusDifficulty = difficulty;
+    }
+  }
+
+  return {
+    consensusDifficulty: totalDifficultyVotes > 0 ? consensusDifficulty : null,
+    quality,
+  };
+}
+
+function createEmptyProfileRoomRatingSummary(): {
+  consensusDifficulty: RoomDifficulty | null;
+  quality: QualityRatingSummary;
+} {
+  return {
+    consensusDifficulty: null,
+    quality: createEmptyProfileQualitySummary(),
+  };
+}
+
+function createEmptyProfileQualitySummary(): QualityRatingSummary {
+  return {
+    adjustedAverage: null,
+    rawAverage: null,
+    voteCount: 0,
+    weightedVoteCount: 0,
+    counts: {
+      oneStar: 0,
+      twoStar: 0,
+      threeStar: 0,
+      fourStar: 0,
+      fiveStar: 0,
+    },
+  };
+}
+
+function buildProfileRoomRatingKey(roomId: string, roomVersion: number): string {
+  return `${roomId}:${roomVersion}`;
+}
+
+function chunkValues<T>(values: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function roundQuality(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function parseRatingRowNumber(value: number | string | null | undefined): number {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function parseRatingRowFloat(value: number | string | null | undefined): number {
+  return parseRatingRowNumber(value);
 }

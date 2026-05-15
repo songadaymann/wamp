@@ -1,6 +1,8 @@
 import type { RoomCoordinates } from '../persistence/roomModel';
 import { getApiBaseUrl } from '../api/baseUrl';
 import type {
+  BuilderDiscoveryResponse,
+  BuilderDiscoverySort,
   GlobalLeaderboardResponse,
   RoomDifficulty,
   RoomDiscoveryResponse,
@@ -46,6 +48,10 @@ export interface RunRepository {
     sort?: RoomDiscoverySort,
     limit?: number
   ): Promise<RoomDiscoveryResponse>;
+  loadBuilderDiscovery(
+    sort?: BuilderDiscoverySort,
+    limit?: number
+  ): Promise<BuilderDiscoveryResponse>;
   loadGlobalLeaderboard(limit?: number): Promise<GlobalLeaderboardResponse>;
 }
 
@@ -158,6 +164,20 @@ class ApiRunRepository implements RunRepository {
 
     return this.request<RoomDiscoveryResponse>(
       `/api/leaderboards/rooms/discover?${params.toString()}`
+    );
+  }
+
+  async loadBuilderDiscovery(
+    sort: BuilderDiscoverySort = 'alphabet',
+    limit: number = 100
+  ): Promise<BuilderDiscoveryResponse> {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      sort,
+    });
+
+    return this.request<BuilderDiscoveryResponse>(
+      `/api/leaderboards/builders/discover?${params.toString()}`
     );
   }
 

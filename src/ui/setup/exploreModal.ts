@@ -10,8 +10,11 @@ import {
   createRunRepository,
   type RunRepository,
 } from '../../runs/runRepository';
-import { createProfileTriggerElement } from './profileEvents';
+import { createProfileTriggerElement, requestProfileOpen } from './profileEvents';
 import {
+  type BuilderDiscoveryEntry,
+  type BuilderDiscoveryResponse,
+  type BuilderDiscoverySort,
   ROOM_DIFFICULTIES,
   ROOM_DIFFICULTY_LABELS,
   type RoomDifficulty,
@@ -20,13 +23,19 @@ import {
   type RoomDiscoverySort,
 } from '../../runs/model';
 
+type ExploreMode = 'rooms' | 'builders';
+type ExploreSortButtonValue = Exclude<RoomDiscoverySort, 'builder'> | 'builders';
+
 type ExploreModalElements = {
   modal: HTMLElement | null;
   closeButton: HTMLButtonElement | null;
   error: HTMLElement | null;
   list: HTMLElement | null;
+  filterGroup: HTMLElement | null;
+  builderSortGroup: HTMLElement | null;
   filterButtons: HTMLButtonElement[];
   sortButtons: HTMLButtonElement[];
+  builderSortButtons: HTMLButtonElement[];
 };
 
 type PreviewTargetState = {
@@ -42,10 +51,14 @@ export class ExploreModalController {
   private readonly previewTargets = new WeakMap<Element, PreviewTargetState>();
   private readonly previewObserver: IntersectionObserver | null;
   private roomDiscovery: RoomDiscoveryResponse | null = null;
+  private builderDiscovery: BuilderDiscoveryResponse | null = null;
   private loading = false;
   private loaded = false;
+  private builderLoaded = false;
+  private exploreMode: ExploreMode = 'rooms';
   private discoverFilter: RoomDifficulty | null = null;
-  private discoverSort: RoomDiscoverySort = 'featured';
+  private discoverSort: Exclude<RoomDiscoverySort, 'builder'> = 'featured';
+  private builderSort: BuilderDiscoverySort = 'alphabet';
   private featurePendingRoomId: string | null = null;
 
   private readonly handleCloseClick = () => {
@@ -77,11 +90,16 @@ export class ExploreModalController {
       closeButton: this.doc.getElementById('btn-explore-close') as HTMLButtonElement | null,
       error: this.doc.getElementById('explore-modal-error'),
       list: this.doc.getElementById('explore-list'),
+      filterGroup: this.doc.getElementById('explore-filters'),
+      builderSortGroup: this.doc.getElementById('explore-builder-sorts'),
       filterButtons: Array.from(
         this.doc.querySelectorAll<HTMLButtonElement>('#explore-filters [data-explore-difficulty]'),
       ),
       sortButtons: Array.from(
         this.doc.querySelectorAll<HTMLButtonElement>('#explore-sorts [data-explore-sort]'),
+      ),
+      builderSortButtons: Array.from(
+        this.doc.querySelectorAll<HTMLButtonElement>('#explore-builder-sorts [data-explore-builder-sort]'),
       ),
     };
 
@@ -118,6 +136,7 @@ export class ExploreModalController {
     for (const button of this.elements.filterButtons) {
       button.addEventListener('click', () => {
         const difficulty = this.parseDifficultyButtonValue(button.dataset.exploreDifficulty);
+        this.exploreMode = 'rooms';
         this.discoverFilter = difficulty;
         void this.loadDiscoveryResults();
       });
@@ -125,12 +144,40 @@ export class ExploreModalController {
 
     for (const button of this.elements.sortButtons) {
       button.addEventListener('click', () => {
-        const sort = this.parseDiscoverSortButtonValue(button.dataset.exploreSort);
-        if (!sort || sort === this.discoverSort) {
+        const sort = this.parseExploreSortButtonValue(button.dataset.exploreSort);
+        if (!sort) {
           return;
         }
+        if (sort === 'builders') {
+          if (this.exploreMode === 'builders') {
+            return;
+          }
+          this.exploreMode = 'builders';
+          void this.loadBuilderDiscoveryResults();
+          return;
+        }
+
+        if (this.exploreMode === 'rooms' && sort === this.discoverSort) {
+          return;
+        }
+        this.exploreMode = 'rooms';
         this.discoverSort = sort;
         void this.loadDiscoveryResults();
+      });
+    }
+
+    for (const button of this.elements.builderSortButtons) {
+      button.addEventListener('click', () => {
+        const sort = this.parseBuilderSortButtonValue(button.dataset.exploreBuilderSort);
+        if (!sort || sort === this.builderSort) {
+          return;
+        }
+        this.builderSort = sort;
+        if (this.exploreMode === 'builders') {
+          void this.loadBuilderDiscoveryResults();
+        } else {
+          this.render();
+        }
       });
     }
   }
@@ -151,10 +198,14 @@ export class ExploreModalController {
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
     this.roomDiscovery = null;
+    this.builderDiscovery = null;
     this.loading = true;
     this.loaded = false;
+    this.builderLoaded = false;
+    this.exploreMode = 'rooms';
     this.discoverFilter = null;
     this.discoverSort = 'featured';
+    this.builderSort = 'alphabet';
     this.featurePendingRoomId = null;
     this.setError(null);
     this.render();
@@ -193,27 +244,73 @@ export class ExploreModalController {
     }
   }
 
+  private async loadBuilderDiscoveryResults(): Promise<void> {
+    this.loading = true;
+    this.builderLoaded = false;
+    this.render();
+    try {
+      this.builderDiscovery = await this.runRepository.loadBuilderDiscovery(
+        this.builderSort,
+        100,
+      );
+      this.setError(null);
+    } catch (error) {
+      console.error('Failed to load builder explorer', error);
+      this.builderDiscovery = null;
+      this.setError(error instanceof Error ? error.message : 'Failed to load builder explorer.');
+    } finally {
+      this.loading = false;
+      this.builderLoaded = true;
+      this.render();
+    }
+  }
+
   private render(): void {
     if (!this.elements.list) {
       return;
     }
 
+    const buildersActive = this.exploreMode === 'builders';
+    this.elements.filterGroup?.classList.toggle('hidden', buildersActive);
+    this.elements.builderSortGroup?.classList.toggle('hidden', !buildersActive);
+    this.elements.list.classList.toggle('explore-room-list', !buildersActive);
+    this.elements.list.classList.toggle('explore-builder-list', buildersActive);
+
     for (const button of this.elements.filterButtons) {
       const difficulty = this.parseDifficultyButtonValue(button.dataset.exploreDifficulty);
       button.classList.toggle('active', difficulty === this.discoverFilter);
-      button.disabled = this.loading;
+      button.disabled = this.loading || buildersActive;
     }
 
     for (const button of this.elements.sortButtons) {
-      const sort = this.parseDiscoverSortButtonValue(button.dataset.exploreSort);
-      button.classList.toggle('active', sort === this.discoverSort);
+      const sort = this.parseExploreSortButtonValue(button.dataset.exploreSort);
+      button.classList.toggle(
+        'active',
+        sort === 'builders'
+          ? buildersActive
+          : !buildersActive && sort === this.discoverSort,
+      );
       button.disabled = this.loading;
+    }
+
+    for (const button of this.elements.builderSortButtons) {
+      const sort = this.parseBuilderSortButtonValue(button.dataset.exploreBuilderSort);
+      button.classList.toggle('active', buildersActive && sort === this.builderSort);
+      button.disabled = this.loading || !buildersActive;
     }
 
     this.elements.list.replaceChildren();
 
-    if (this.loading || !this.loaded) {
-      this.elements.list.appendChild(this.createEmptyState('Loading levels...'));
+    const activeLoaded = buildersActive ? this.builderLoaded : this.loaded;
+    if (this.loading || !activeLoaded) {
+      this.elements.list.appendChild(
+        this.createEmptyState(buildersActive ? 'Loading builders...' : 'Loading levels...')
+      );
+      return;
+    }
+
+    if (buildersActive) {
+      this.renderBuilderResults();
       return;
     }
 
@@ -233,6 +330,67 @@ export class ExploreModalController {
     for (const entry of results) {
       this.elements.list.appendChild(this.renderEntry(entry));
     }
+  }
+
+  private renderBuilderResults(): void {
+    if (!this.elements.list) {
+      return;
+    }
+
+    const results = this.builderDiscovery?.results ?? [];
+    if (results.length === 0) {
+      this.elements.list.appendChild(this.createEmptyState('No published-room builders found yet.'));
+      return;
+    }
+
+    for (const entry of results) {
+      this.elements.list.appendChild(this.renderBuilderEntry(entry));
+    }
+  }
+
+  private renderBuilderEntry(entry: BuilderDiscoveryEntry): HTMLElement {
+    const item = this.doc.createElement('div');
+    item.className = 'explore-builder-item';
+
+    const button = this.doc.createElement('button');
+    button.type = 'button';
+    button.className = 'explore-builder-row';
+    button.addEventListener('click', () => {
+      if (requestProfileOpen(entry.userId)) {
+        this.close();
+      }
+    });
+
+    const copy = this.doc.createElement('div');
+    copy.className = 'explore-builder-copy';
+
+    const name = this.doc.createElement('div');
+    name.className = 'explore-builder-name';
+    name.textContent = entry.displayName;
+    copy.appendChild(name);
+
+    if (entry.username) {
+      const username = this.doc.createElement('div');
+      username.className = 'explore-builder-username';
+      username.textContent = `@${entry.username}`;
+      copy.appendChild(username);
+    }
+
+    const latestText = entry.latestPublishedAt
+      ? `Updated ${this.formatShortDate(entry.latestPublishedAt)}`
+      : 'No recent activity';
+    const meta = this.doc.createElement('div');
+    meta.className = 'explore-builder-meta';
+    meta.textContent = latestText;
+    copy.appendChild(meta);
+
+    const count = this.doc.createElement('div');
+    count.className = 'explore-builder-count';
+    count.textContent = `${entry.roomCount} ${entry.roomCount === 1 ? 'room' : 'rooms'}`;
+
+    button.append(copy, count);
+    item.appendChild(button);
+    return item;
   }
 
   private renderEntry(entry: RoomDiscoveryEntry): HTMLElement {
@@ -533,12 +691,33 @@ export class ExploreModalController {
     return ROOM_DIFFICULTIES.includes(value as RoomDifficulty) ? (value as RoomDifficulty) : null;
   }
 
-  private parseDiscoverSortButtonValue(value: string | undefined): RoomDiscoverySort | null {
-    if (value === 'featured' || value === 'quality' || value === 'newest' || value === 'builder') {
+  private parseExploreSortButtonValue(value: string | undefined): ExploreSortButtonValue | null {
+    if (value === 'featured' || value === 'quality' || value === 'newest' || value === 'builders') {
       return value;
     }
 
     return null;
+  }
+
+  private parseBuilderSortButtonValue(value: string | undefined): BuilderDiscoverySort | null {
+    if (value === 'alphabet' || value === 'rooms' || value === 'recent') {
+      return value;
+    }
+
+    return null;
+  }
+
+  private formatShortDate(isoDate: string): string {
+    const date = new Date(isoDate);
+    if (Number.isNaN(date.getTime())) {
+      return isoDate;
+    }
+
+    return date.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
   }
 
   private setError(message: string | null): void {
