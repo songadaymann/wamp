@@ -24,6 +24,7 @@ export interface Env {
   DB: D1Database;
   ADMIN_API_KEY?: string;
   CHAT_OWNER_EMAILS?: string;
+  ADMIN_REVIEW_EMAIL?: string;
   PARTYKIT_HOST?: string;
   PARTYKIT_PARTY?: string;
   PARTYKIT_INTERNAL_TOKEN?: string;

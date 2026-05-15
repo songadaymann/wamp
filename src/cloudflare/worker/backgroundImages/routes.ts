@@ -10,6 +10,11 @@ import type {
 import { buildCustomBackgroundValue, parseCustomBackgroundId } from '../../../backgrounds/model';
 import type { TrustTier } from '../../../progression/model';
 import {
+  buildAdminReviewUrl,
+  logAdminReviewNotificationFailure,
+  sendAdminReviewNotificationEmail,
+} from '../admin/reviewNotifications';
+import {
   loadOptionalRequestAuth,
   requireAdminRequest,
   requireAuthenticatedRequestAuth,
@@ -394,6 +399,10 @@ async function handleBackgroundImageFinalize(
     throw new HttpError(500, 'Background upload disappeared after finalization.');
   }
 
+  if (row.status !== 'pending_review' && updated.status === 'pending_review') {
+    await sendBackgroundImageAdminReviewNotification(request, env, updated);
+  }
+
   const response: BackgroundUploadFinalizeResponse = {
     item: serializeBackgroundImage(request, env, updated, false),
     selectedBackgroundValue: updated.status === 'approved'
@@ -402,6 +411,33 @@ async function handleBackgroundImageFinalize(
     message: getFinalizeMessage(updated),
   };
   return jsonResponse(request, response);
+}
+
+async function sendBackgroundImageAdminReviewNotification(
+  request: Request,
+  env: Env,
+  row: BackgroundImageUploadRow,
+): Promise<void> {
+  const labels = parseLabels(row.moderation_labels_json);
+  const score = row.moderation_score === null
+    ? 'no score'
+    : `${Math.round(Number(row.moderation_score) * 100)}%`;
+  const result = await sendAdminReviewNotificationEmail(env, {
+    subject: `Photo needs approval: ${row.original_filename}`,
+    heading: 'New photo needs approval',
+    intro: `${row.owner_display_name} uploaded a background photo.`,
+    details: [
+      `Filename: ${row.original_filename}`,
+      `Uploader: ${row.owner_display_name}`,
+      `Size: ${formatBytes(Number(row.size_bytes))}`,
+      `Moderation: ${normalizeModerationStatus(row.moderation_status)} (${score})`,
+      `Labels: ${labels.length > 0 ? labels.join(', ') : 'none'}`,
+      `Submitted: ${row.uploaded_at ?? row.created_at}`,
+    ],
+    actionUrl: buildAdminReviewUrl(request, env, '/background-admin.html'),
+    actionLabel: 'Open photo review queue',
+  });
+  logAdminReviewNotificationFailure(result, `background image ${row.id}`);
 }
 
 async function handleBackgroundImageServe(

@@ -9,9 +9,16 @@ import {
   type AdminRoomCommentReviewResponse,
   type RoomCommentCreateRequestBody,
   type RoomCommentCreateResponse,
+  type RoomCommentRecord,
   type RoomCommentListResponse,
   type RoomCommentStatus,
 } from '../../../roomComments/model';
+import {
+  buildAdminReviewUrl,
+  buildPublicAppUrl,
+  logAdminReviewNotificationFailure,
+  sendAdminReviewNotificationEmail,
+} from '../admin/reviewNotifications';
 import {
   requireAdminRequest,
   requireAuthenticatedRequestAuth,
@@ -39,6 +46,7 @@ import {
   markRoomCommentNotificationError,
   markRoomCommentNotificationSent,
   reviewRoomComment,
+  type RoomCommentTarget,
 } from './store';
 
 const ROOM_COMMENT_USER_MINUTE_LIMIT = 1;
@@ -113,12 +121,40 @@ export async function handleRoomCommentCreate(
     createdAt: now.toISOString(),
   });
 
+  await sendRoomCommentAdminReviewNotification(request, env, comment, target);
+
   const response: RoomCommentCreateResponse = {
     comment,
     status: 'pending_review',
     message: 'Comment submitted for review.',
   };
   return jsonResponse(request, response, { status: 201 });
+}
+
+async function sendRoomCommentAdminReviewNotification(
+  request: Request,
+  env: Env,
+  comment: RoomCommentRecord,
+  target: RoomCommentTarget,
+): Promise<void> {
+  const roomLabel =
+    target.roomTitle?.trim()
+      ? `"${target.roomTitle.trim()}"`
+      : `Room ${target.coordinates.x},${target.coordinates.y}`;
+  const result = await sendAdminReviewNotificationEmail(env, {
+    subject: `Comment needs approval: ${roomLabel}`,
+    heading: 'New comment needs approval',
+    intro: `${comment.authorDisplayName} submitted a comment on ${roomLabel}.`,
+    details: [
+      `Comment: ${comment.body}`,
+      `Room: ${roomLabel}`,
+      `Room link: ${buildPublicAppUrl(request, env, `/r/${target.coordinates.x}/${target.coordinates.y}`)}`,
+      `Submitted: ${comment.createdAt}`,
+    ],
+    actionUrl: buildAdminReviewUrl(request, env, '/launch-admin.html'),
+    actionLabel: 'Open comment review queue',
+  });
+  logAdminReviewNotificationFailure(result, `room comment ${comment.id}`);
 }
 
 export async function handleAdminRoomCommentRequest(
