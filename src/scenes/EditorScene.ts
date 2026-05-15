@@ -13,10 +13,8 @@ import {
 import { globalRoomMusicController } from '../music/controller';
 import {
   extractMusicPhrasePayloadFromPattern,
-  getMusicPhraseSampleName as getMusicPhraseDisplayName,
   type MusicPhraseRecord,
 } from '../music/library';
-import { deleteMusicPhrase, getMusicPhrase, listMusicPhrases, saveMusicPhrases } from '../music/libraryClient';
 import { registerCustomSprites } from '../customSprites/registry';
 import {
   ROOM_PATTERN_INSTRUMENT_IDS,
@@ -102,6 +100,10 @@ import {
   type EditorMusicArrangementSelection,
   type EditorMusicComposerMode,
 } from './editor/musicUi';
+import {
+  EditorMusicPhraseOrchestrator,
+  type EditorMusicPhraseSavePromptMode,
+} from './editor/musicPhraseOrchestrator';
 import { EditorPresenceController } from './editor/presence';
 import { EditorPersistenceController } from './editor/persistence';
 import { EditorToolController } from './editor/tools';
@@ -124,7 +126,6 @@ import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
 
 const EDITOR_NEIGHBOR_RADIUS = 1;
 type EditorMarkerPlacementMode = Exclude<GoalPlacementMode, null> | 'start';
-type EditorMusicPhraseSavePromptMode = 'save' | 'save-as';
 
 export class EditorScene extends Phaser.Scene {
   private uiBridge: EditorUiBridge | null = null;
@@ -132,23 +133,7 @@ export class EditorScene extends Phaser.Scene {
   private musicModeActive = false;
   private musicComposerMode: EditorMusicComposerMode = 'sequencer';
   private musicPreviewState: 'stopped' | 'playing' = 'stopped';
-  private musicPhraseMetadataEditing = false;
-  private musicPhraseLibraryInstrument: RoomPatternInstrumentId = 'drums';
-  private musicPhraseLibraryItems: MusicPhraseRecord[] = [];
-  private musicPhraseLibraryNextCursor: string | null = null;
-  private musicPhraseLibraryLoading = false;
-  private musicPhraseLibraryLoadingMore = false;
-  private musicPhraseLibraryLoaded = false;
-  private musicPhraseLibraryError: string | null = null;
-  private musicPhraseLibraryRequestId = 0;
-  private musicPhraseSaveInFlight = false;
-  private musicPhraseDeleteInFlight = false;
-  private musicPhraseSavePromptMode: EditorMusicPhraseSavePromptMode | null = null;
-  private musicPhraseSavePromptName = '';
-  private musicPhraseSavePromptError: string | null = null;
-  private musicArrangementSelection: EditorMusicArrangementSelection | null = null;
-  private readonly musicPhraseRecordCache = new Map<string, MusicPhraseRecord>();
-  private readonly musicPhraseDetailLoading = new Set<string>();
+  private readonly musicPhraseOrchestrator = new EditorMusicPhraseOrchestrator();
 
   // Tilemap
   private map!: Phaser.Tilemaps.Tilemap;
@@ -1183,17 +1168,19 @@ export class EditorScene extends Phaser.Scene {
       return record;
     }
 
-    this.musicPhraseSaveInFlight = true;
+    this.musicPhraseOrchestrator.setSaveInFlight(true);
     this.renderEditorUi();
 
     try {
-      const response = await saveMusicPhrases(record.draft, {
-        instrumentId: options?.instrumentId ?? null,
-        saveMode: options?.saveMode ?? null,
-        overwritePhraseId: options?.overwritePhraseId ?? null,
-      });
-      this.rememberMusicPhrases(response.items);
-      this.applySavedMusicPhrasesToLibrary(response.items);
+      const response = await this.musicPhraseOrchestrator.savePhrases(
+        record.draft,
+        this.musicPatternController.getActiveInstrumentTab(),
+        {
+          instrumentId: options?.instrumentId ?? null,
+          saveMode: options?.saveMode ?? null,
+          overwritePhraseId: options?.overwritePhraseId ?? null,
+        },
+      );
 
       if (options?.instrumentId) {
         const savedPhrase = response.items.find((phrase) => phrase.instrumentId === options.instrumentId) ?? null;
@@ -1219,10 +1206,10 @@ export class EditorScene extends Phaser.Scene {
         error instanceof Error && error.message.trim()
           ? error.message.trim()
           : 'Phrase save failed.';
-      this.musicPhraseLibraryError = message;
+      this.musicPhraseOrchestrator.setLibraryError(message);
       this.updatePersistenceStatus(`Draft saved v${this.roomVersion}. ${message}`);
     } finally {
-      this.musicPhraseSaveInFlight = false;
+      this.musicPhraseOrchestrator.setSaveInFlight(false);
       this.renderEditorUi();
     }
 
@@ -1298,9 +1285,7 @@ export class EditorScene extends Phaser.Scene {
       return;
     }
 
-    this.musicPhraseSavePromptMode = mode;
-    this.musicPhraseSavePromptName = this.getSuggestedActiveMusicPhraseName();
-    this.musicPhraseSavePromptError = null;
+    this.musicPhraseOrchestrator.openSavePrompt(mode, this.getSuggestedActiveMusicPhraseName());
     this.renderEditorUi();
     window.requestAnimationFrame(() => {
       const input = document.getElementById('editor-music-phrase-save-name-input') as HTMLInputElement | null;
@@ -1310,21 +1295,15 @@ export class EditorScene extends Phaser.Scene {
   }
 
   closeRoomMusicPhraseSavePrompt(): void {
-    if (!this.musicPhraseSavePromptMode) {
+    if (!this.musicPhraseOrchestrator.closeSavePrompt()) {
       return;
     }
 
-    this.musicPhraseSavePromptMode = null;
-    this.musicPhraseSavePromptName = '';
-    this.musicPhraseSavePromptError = null;
     this.renderEditorUi();
   }
 
   setRoomMusicPhraseSavePromptName(value: string): void {
-    this.musicPhraseSavePromptName = value.slice(0, 24);
-    if (this.musicPhraseSavePromptError) {
-      this.musicPhraseSavePromptError = null;
-    }
+    this.musicPhraseOrchestrator.setSavePromptName(value);
     this.renderEditorUi();
   }
 
@@ -1380,13 +1359,13 @@ export class EditorScene extends Phaser.Scene {
   }
 
   async confirmRoomMusicPhraseSavePrompt(): Promise<void> {
-    if (!this.musicPhraseSavePromptMode) {
+    if (!this.musicPhraseOrchestrator.getSavePromptMode()) {
       return;
     }
 
-    const trimmedName = this.musicPhraseSavePromptName.trim().slice(0, 24);
+    const trimmedName = this.musicPhraseOrchestrator.getSavePromptName().trim().slice(0, 24);
     if (!trimmedName) {
-      this.musicPhraseSavePromptError = 'Name this phrase before saving.';
+      this.musicPhraseOrchestrator.setSavePromptError('Name this phrase before saving.');
       this.renderEditorUi();
       return;
     }
@@ -1403,8 +1382,8 @@ export class EditorScene extends Phaser.Scene {
   async startNewRoomMusicPhrase(): Promise<void> {
     if (
       this.saveInFlight ||
-      this.musicPhraseSaveInFlight ||
-      this.musicPhraseDeleteInFlight ||
+      this.musicPhraseOrchestrator.getSaveInFlight() ||
+      this.musicPhraseOrchestrator.getDeleteInFlight() ||
       !this.roomPermissions.canSaveDraft
     ) {
       return;
@@ -1426,7 +1405,7 @@ export class EditorScene extends Phaser.Scene {
     }
 
     this.musicPatternController.clearActivePhrase();
-    this.musicPhraseMetadataEditing = true;
+    this.musicPhraseOrchestrator.setMetadataEditing(true);
     this.updatePersistenceStatus(`Started a new ${getPatternInstrumentLabel(this.musicPatternController.getActiveInstrumentTab())} phrase.`);
     this.renderEditorUi();
   }
@@ -1436,8 +1415,7 @@ export class EditorScene extends Phaser.Scene {
       return;
     }
 
-    this.musicPhraseMetadataEditing = !this.musicPhraseMetadataEditing;
-    if (this.musicPhraseMetadataEditing) {
+    if (this.musicPhraseOrchestrator.toggleMetadataEditing()) {
       this.ensureActivePatternPhraseCache();
     }
     this.renderEditorUi();
@@ -1447,8 +1425,8 @@ export class EditorScene extends Phaser.Scene {
     if (
       this.musicComposerMode !== 'sequencer' ||
       this.saveInFlight ||
-      this.musicPhraseSaveInFlight ||
-      this.musicPhraseDeleteInFlight
+      this.musicPhraseOrchestrator.getSaveInFlight() ||
+      this.musicPhraseOrchestrator.getDeleteInFlight()
     ) {
       return;
     }
@@ -1460,26 +1438,23 @@ export class EditorScene extends Phaser.Scene {
       return;
     }
 
-    this.musicPhraseDeleteInFlight = true;
+    this.musicPhraseOrchestrator.setDeleteInFlight(true);
     this.renderEditorUi();
 
     try {
-      await deleteMusicPhrase(phrase.id);
-      this.musicPhraseRecordCache.delete(phrase.id);
-      this.musicPhraseLibraryItems = this.musicPhraseLibraryItems.filter((item) => item.id !== phrase.id);
-      this.musicPhraseLibraryError = null;
+      await this.musicPhraseOrchestrator.deletePhrase(phrase.id);
       this.musicPatternController.clearActivePhrase();
-      this.musicPhraseMetadataEditing = true;
+      this.musicPhraseOrchestrator.setMetadataEditing(true);
       this.updatePersistenceStatus(`Deleted ${this.getMusicPhraseSampleName(phrase)}.`);
     } catch (error) {
       const message =
         error instanceof Error && error.message.trim()
           ? error.message.trim()
           : 'Phrase delete failed.';
-      this.musicPhraseLibraryError = message;
+      this.musicPhraseOrchestrator.setLibraryError(message);
       this.updatePersistenceStatus(message);
     } finally {
-      this.musicPhraseDeleteInFlight = false;
+      this.musicPhraseOrchestrator.setDeleteInFlight(false);
       this.renderEditorUi();
     }
   }
@@ -1487,9 +1462,7 @@ export class EditorScene extends Phaser.Scene {
   async publishRoom(successText?: string): Promise<RoomRecord | null> {
     const record = await this.persistenceController.publishRoom(successText);
     if (record?.published) {
-      this.musicPhraseLibraryLoaded = false;
-      this.musicPhraseLibraryError = null;
-      this.musicPhraseLibraryNextCursor = null;
+      this.musicPhraseOrchestrator.resetLibraryAfterPublish();
       if (this.musicModeActive) {
         await this.loadMusicPhraseLibrary(true);
       }
@@ -1921,7 +1894,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private shouldHidePhraseMetadataTransportControls(): boolean {
-    return this.musicComposerMode === 'sequencer' && this.musicPhraseMetadataEditing;
+    return this.musicComposerMode === 'sequencer' && this.musicPhraseOrchestrator.isMetadataEditing();
   }
 
   private getCurrentMusicPhraseUserId(): string | null {
@@ -1945,7 +1918,7 @@ export class EditorScene extends Phaser.Scene {
       return null;
     }
 
-    return this.musicPhraseRecordCache.get(phraseId) ?? null;
+    return this.musicPhraseOrchestrator.getCachedPhrase(phraseId);
   }
 
   private syncActivePatternPhraseRecord(phrase: MusicPhraseRecord): void {
@@ -2000,221 +1973,64 @@ export class EditorScene extends Phaser.Scene {
     return this.musicPatternController.getActiveOctaveShift();
   }
 
-  private rememberMusicPhrases(phrases: readonly MusicPhraseRecord[]): void {
-    for (const phrase of phrases) {
-      this.musicPhraseRecordCache.set(phrase.id, phrase);
-    }
-  }
-
-  private applySavedMusicPhrasesToLibrary(phrases: readonly MusicPhraseRecord[]): void {
-    if (phrases.length === 0) {
-      return;
-    }
-
-    const activeInstrumentId = this.musicPatternController.getActiveInstrumentTab();
-    const relevantPhrases = phrases.filter((phrase) => phrase.instrumentId === activeInstrumentId);
-    if (relevantPhrases.length === 0) {
-      return;
-    }
-
-    const nextItems = [...this.musicPhraseLibraryItems];
-    for (const phrase of relevantPhrases) {
-      const existingIndex = nextItems.findIndex((item) => item.id === phrase.id);
-      if (existingIndex >= 0) {
-        nextItems[existingIndex] = phrase;
-      } else {
-        nextItems.unshift(phrase);
-      }
-    }
-
-    nextItems.sort((left, right) => {
-      const createdAtDiff = Date.parse(right.createdAt) - Date.parse(left.createdAt);
-      if (createdAtDiff !== 0) {
-        return createdAtDiff;
-      }
-      return right.id.localeCompare(left.id);
-    });
-
-    this.musicPhraseLibraryInstrument = activeInstrumentId;
-    this.musicPhraseLibraryLoaded = true;
-    this.musicPhraseLibraryError = null;
-    this.musicPhraseLibraryItems = nextItems;
-  }
-
   private ensureArrangementSelection(instrumentId: RoomPatternInstrumentId): void {
-    if (!this.musicArrangementSelection || this.musicArrangementSelection.instrumentId !== instrumentId) {
-      this.musicArrangementSelection = {
-        instrumentId,
-        slotIndex: 0,
-      };
-    }
+    this.musicPhraseOrchestrator.ensureArrangementSelection(instrumentId);
   }
 
   private getArrangementSelection(): EditorMusicArrangementSelection {
     const instrumentId = this.musicPatternController.getActiveInstrumentTab();
-    this.ensureArrangementSelection(instrumentId);
-    return this.musicArrangementSelection as EditorMusicArrangementSelection;
+    return this.musicPhraseOrchestrator.getArrangementSelection(instrumentId);
   }
 
   private async loadMusicPhraseLibrary(reset: boolean): Promise<void> {
-    const instrumentId = this.musicPatternController.getActiveInstrumentTab();
-    const requestId = this.musicPhraseLibraryRequestId + 1;
-    this.musicPhraseLibraryRequestId = requestId;
-    this.musicPhraseLibraryInstrument = instrumentId;
-    if (reset) {
-      this.musicPhraseLibraryLoading = true;
-      this.musicPhraseLibraryLoadingMore = false;
-      this.musicPhraseLibraryLoaded = false;
-      this.musicPhraseLibraryItems = [];
-      this.musicPhraseLibraryNextCursor = null;
-      this.musicPhraseLibraryError = null;
-    } else {
-      if (!this.musicPhraseLibraryNextCursor) {
-        return;
-      }
-      this.musicPhraseLibraryLoadingMore = true;
-      this.musicPhraseLibraryError = null;
-    }
-    this.renderEditorUi();
-
-    try {
-      const response = await listMusicPhrases({
-        instrumentId,
-        cursor: reset ? null : this.musicPhraseLibraryNextCursor,
-        limit: 24,
-      });
-      if (requestId !== this.musicPhraseLibraryRequestId) {
-        return;
-      }
-
-      this.rememberMusicPhrases(response.items);
-      this.musicPhraseLibraryLoaded = true;
-      this.musicPhraseLibraryItems = reset
-        ? [...response.items]
-        : [...this.musicPhraseLibraryItems, ...response.items];
-      this.musicPhraseLibraryNextCursor = response.nextCursor;
-      this.musicPhraseLibraryError = null;
-    } catch (error) {
-      if (requestId !== this.musicPhraseLibraryRequestId) {
-        return;
-      }
-      this.musicPhraseLibraryError =
-        error instanceof Error && error.message.trim()
-          ? error.message.trim()
-          : 'Failed to load music phrases.';
-    } finally {
-      if (requestId === this.musicPhraseLibraryRequestId) {
-        this.musicPhraseLibraryLoading = false;
-        this.musicPhraseLibraryLoadingMore = false;
-        this.renderEditorUi();
-      }
-    }
+    await this.musicPhraseOrchestrator.loadLibrary(
+      this.musicPatternController.getActiveInstrumentTab(),
+      reset,
+      () => this.renderEditorUi(),
+    );
   }
 
   private ensureMusicPhraseLibraryLoaded(force = false): void {
-    const instrumentId = this.musicPatternController.getActiveInstrumentTab();
-    const instrumentChanged = this.musicPhraseLibraryInstrument !== instrumentId;
-    if (force || instrumentChanged) {
-      void this.loadMusicPhraseLibrary(true);
-      return;
-    }
-
-    if (
-      !this.musicPhraseLibraryLoading &&
-      !this.musicPhraseLibraryLoadingMore &&
-      !this.musicPhraseLibraryLoaded &&
-      !this.musicPhraseLibraryError
-    ) {
-      void this.loadMusicPhraseLibrary(true);
-    }
+    this.musicPhraseOrchestrator.ensureLibraryLoaded(
+      this.musicPatternController.getActiveInstrumentTab(),
+      force,
+      () => this.renderEditorUi(),
+    );
   }
 
   private ensureArrangementPhraseCache(): void {
-    if (!isPhraseArrangementRoomMusic(this.roomMusic)) {
-      return;
-    }
-
-    for (const instrumentId of ROOM_PATTERN_INSTRUMENT_IDS) {
-      for (const phraseId of this.roomMusic.slots[instrumentId]) {
-        if (!phraseId || this.musicPhraseRecordCache.has(phraseId) || this.musicPhraseDetailLoading.has(phraseId)) {
-          continue;
-        }
-
-        this.musicPhraseDetailLoading.add(phraseId);
-        void getMusicPhrase(phraseId)
-          .then((phrase) => {
-            this.musicPhraseRecordCache.set(phrase.id, phrase);
-            this.renderEditorUi();
-          })
-          .catch(() => {
-            void 0;
-          })
-          .finally(() => {
-            this.musicPhraseDetailLoading.delete(phraseId);
-          });
-      }
-    }
+    this.musicPhraseOrchestrator.ensureArrangementPhraseCache(this.roomMusic, () => this.renderEditorUi());
   }
 
   private ensureActivePatternPhraseCache(): void {
     const phraseId = this.getActivePatternSourcePhraseId();
-    if (!phraseId || this.musicPhraseRecordCache.has(phraseId) || this.musicPhraseDetailLoading.has(phraseId)) {
-      return;
-    }
-
-    this.musicPhraseDetailLoading.add(phraseId);
-    void getMusicPhrase(phraseId)
-      .then((phrase) => {
-        this.musicPhraseRecordCache.set(phrase.id, phrase);
-        this.renderEditorUi();
-      })
-      .catch(() => {
-        void 0;
-      })
-      .finally(() => {
-        this.musicPhraseDetailLoading.delete(phraseId);
-      });
+    this.musicPhraseOrchestrator.ensurePhraseCached(phraseId, () => this.renderEditorUi());
   }
 
   private getArrangementSlotLabel(phraseId: string | null): string {
-    if (!phraseId) {
-      return 'Empty';
-    }
-
-    const phrase = this.musicPhraseRecordCache.get(phraseId) ?? null;
-    if (!phrase) {
-      return `Phrase ${phraseId.slice(0, 6)}`;
-    }
-
-    return getMusicPhraseDisplayName(phrase);
+    return this.musicPhraseOrchestrator.getArrangementSlotLabel(phraseId);
   }
 
   private getMusicPhraseSampleName(phrase: MusicPhraseRecord): string {
-    return getMusicPhraseDisplayName(phrase);
+    return this.musicPhraseOrchestrator.getMusicPhraseSampleName(phrase);
   }
 
   private getMusicPhraseRoomLabel(phrase: MusicPhraseRecord): string {
-    return phrase.roomTitle?.trim() ? phrase.roomTitle.trim() : `${phrase.roomX},${phrase.roomY}`;
+    return this.musicPhraseOrchestrator.getMusicPhraseRoomLabel(phrase);
   }
 
   private getMusicPhraseKeyLabel(phrase: MusicPhraseRecord): string {
-    if (phrase.payload.kind === 'drums') {
-      return 'No Key';
-    }
-
-    return `${phrase.payload.keyTonic} ${phrase.payload.keyMode === 'minor' ? 'Minor' : 'Major'}`;
+    return this.musicPhraseOrchestrator.getMusicPhraseKeyLabel(phrase);
   }
 
   setMusicModeActive(active: boolean): void {
     this.musicModeActive = active;
-    this.musicPhraseSavePromptMode = null;
-    this.musicPhraseSavePromptName = '';
-    this.musicPhraseSavePromptError = null;
+    this.musicPhraseOrchestrator.resetSavePrompt();
     if (active) {
       this.musicComposerMode = isPhraseArrangementRoomMusic(this.roomMusic)
         ? 'arrangement'
         : 'sequencer';
-      this.musicPhraseMetadataEditing = false;
+      this.musicPhraseOrchestrator.setMetadataEditing(false);
     }
     if (active && editorState.activeTool !== 'pencil' && editorState.activeTool !== 'eraser' && editorState.activeTool !== 'copy') {
       editorState.activeTool = 'pencil';
@@ -2226,7 +2042,7 @@ export class EditorScene extends Phaser.Scene {
       this.ensureActivePatternPhraseCache();
     }
     if (!active) {
-      this.musicPhraseMetadataEditing = false;
+      this.musicPhraseOrchestrator.setMetadataEditing(false);
       this.musicPatternController.cancelPastePreview();
       if (this.musicPreviewState !== 'stopped') {
         this.stopRoomMusicPreview();
@@ -2246,11 +2062,9 @@ export class EditorScene extends Phaser.Scene {
     }
 
     this.musicComposerMode = mode;
-    this.musicPhraseSavePromptMode = null;
-    this.musicPhraseSavePromptName = '';
-    this.musicPhraseSavePromptError = null;
+    this.musicPhraseOrchestrator.resetSavePrompt();
     if (mode === 'arrangement') {
-      this.musicPhraseMetadataEditing = false;
+      this.musicPhraseOrchestrator.setMetadataEditing(false);
     }
     if (mode === 'arrangement') {
       this.ensureArrangementSelection(this.musicPatternController.getActiveInstrumentTab());
@@ -2261,9 +2075,7 @@ export class EditorScene extends Phaser.Scene {
 
   setMusicPatternInstrumentTab(instrumentId: RoomPatternInstrumentId): void {
     this.musicPatternController.setActiveInstrumentTab(instrumentId);
-    this.musicPhraseSavePromptMode = null;
-    this.musicPhraseSavePromptName = '';
-    this.musicPhraseSavePromptError = null;
+    this.musicPhraseOrchestrator.resetSavePrompt();
     if (this.musicComposerMode === 'arrangement') {
       this.ensureArrangementSelection(instrumentId);
     }
@@ -2449,7 +2261,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   loadMoreMusicPhrases(): void {
-    if (this.musicPhraseLibraryLoading || this.musicPhraseLibraryLoadingMore || !this.musicPhraseLibraryNextCursor) {
+    if (!this.musicPhraseOrchestrator.canLoadMoreLibrary()) {
       return;
     }
 
@@ -2458,8 +2270,7 @@ export class EditorScene extends Phaser.Scene {
 
   async useMusicPhrase(phraseId: string): Promise<void> {
     try {
-      const phrase = await getMusicPhrase(phraseId);
-      this.rememberMusicPhrases([phrase]);
+      const phrase = await this.musicPhraseOrchestrator.loadPhrase(phraseId);
       if (this.musicComposerMode === 'arrangement') {
         await this.assignPhraseToArrangementSlot(phrase);
       } else {
@@ -2470,10 +2281,11 @@ export class EditorScene extends Phaser.Scene {
       playSfx('music-phrase-place', { ignoreCooldown: true });
       this.renderEditorUi();
     } catch (error) {
-      this.musicPhraseLibraryError =
+      this.musicPhraseOrchestrator.setLibraryError(
         error instanceof Error && error.message.trim()
           ? error.message.trim()
-          : 'Failed to load music phrase.';
+          : 'Failed to load music phrase.',
+      );
       this.renderEditorUi();
     }
   }
@@ -2483,7 +2295,7 @@ export class EditorScene extends Phaser.Scene {
       return;
     }
 
-    this.musicArrangementSelection = { instrumentId, slotIndex };
+    this.musicPhraseOrchestrator.setArrangementSelection({ instrumentId, slotIndex });
     this.musicPatternController.setActiveInstrumentTab(instrumentId);
     this.ensureMusicPhraseLibraryLoaded();
     this.renderEditorUi();
@@ -2538,7 +2350,7 @@ export class EditorScene extends Phaser.Scene {
       return;
     }
 
-    this.musicArrangementSelection = { instrumentId, slotIndex };
+    this.musicPhraseOrchestrator.setArrangementSelection({ instrumentId, slotIndex });
     this.musicPatternController.setActiveInstrumentTab(instrumentId);
     this.ensureMusicPhraseLibraryLoaded();
     this.renderEditorUi();
@@ -2548,7 +2360,7 @@ export class EditorScene extends Phaser.Scene {
   private async assignPhraseToArrangementSlot(phrase: MusicPhraseRecord): Promise<void> {
     const selection = this.getArrangementSelection();
     if (phrase.instrumentId !== selection.instrumentId) {
-      this.musicPhraseLibraryError = `Selected slot expects ${getPatternInstrumentLabel(selection.instrumentId)} phrases.`;
+      this.musicPhraseOrchestrator.setLibraryError(`Selected slot expects ${getPatternInstrumentLabel(selection.instrumentId)} phrases.`);
       return;
     }
 
@@ -2570,10 +2382,10 @@ export class EditorScene extends Phaser.Scene {
     }
 
     arrangement.slots[selection.instrumentId][selection.slotIndex] = phrase.id;
-    this.musicArrangementSelection = {
+    this.musicPhraseOrchestrator.setArrangementSelection({
       instrumentId: selection.instrumentId,
       slotIndex: Math.min(ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT - 1, selection.slotIndex + 1),
-    };
+    });
     this.commitRoomMusic(arrangement);
   }
 
@@ -2696,15 +2508,16 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private renderMusicLibraryPanel(legacyLocked: boolean): void {
+    const phraseState = this.musicPhraseOrchestrator.getViewState();
     renderMusicLibraryPanel({
       legacyLocked,
       composerMode: this.musicComposerMode,
       activeInstrumentId: this.musicPatternController.getActiveInstrumentTab(),
-      items: this.musicPhraseLibraryItems,
-      nextCursor: this.musicPhraseLibraryNextCursor,
-      loading: this.musicPhraseLibraryLoading,
-      loadingMore: this.musicPhraseLibraryLoadingMore,
-      error: this.musicPhraseLibraryError,
+      items: phraseState.libraryItems,
+      nextCursor: phraseState.libraryNextCursor,
+      loading: phraseState.libraryLoading,
+      loadingMore: phraseState.libraryLoadingMore,
+      error: phraseState.libraryError,
       getMusicPhraseSampleName: (phrase) => this.getMusicPhraseSampleName(phrase),
       getMusicPhraseKeyLabel: (phrase) => this.getMusicPhraseKeyLabel(phrase),
       getMusicPhraseRoomLabel: (phrase) => this.getMusicPhraseRoomLabel(phrase),
@@ -2760,6 +2573,7 @@ export class EditorScene extends Phaser.Scene {
     const workbench = document.getElementById('editor-music-workbench');
     workbench?.classList.toggle('hidden', !this.musicModeActive);
     const legacyLocked = this.musicPatternController.getLegacyStemNoticeVisible();
+    const phraseState = this.musicPhraseOrchestrator.getViewState();
 
     const previewToggleButton = document.getElementById('btn-editor-music-preview-toggle') as HTMLButtonElement | null;
     if (previewToggleButton) {
@@ -2773,7 +2587,7 @@ export class EditorScene extends Phaser.Scene {
     const saveButton = document.getElementById('btn-editor-music-save') as HTMLButtonElement | null;
     if (saveButton) {
       const savePhrases = this.musicComposerMode === 'sequencer' && !legacyLocked;
-      saveButton.disabled = !this.roomPermissions.canSaveDraft || this.saveInFlight || this.musicPhraseSaveInFlight;
+      saveButton.disabled = !this.roomPermissions.canSaveDraft || this.saveInFlight || phraseState.saveInFlight;
       saveButton.title = this.roomPermissions.canSaveDraft
         ? savePhrases
           ? 'Save room draft and phrases (Cmd/Ctrl+S)'
@@ -2917,7 +2731,7 @@ export class EditorScene extends Phaser.Scene {
     const phraseNameLabel = document.getElementById('editor-music-phrase-name-label');
     const phraseNameInput = document.getElementById('editor-music-phrase-name-input') as HTMLInputElement | null;
     const activeInstrumentLabel = getPatternInstrumentLabel(this.musicPatternController.getActiveInstrumentTab());
-    const showPhraseNameInput = !legacyLocked && this.musicComposerMode === 'sequencer' && this.musicPhraseMetadataEditing;
+    const showPhraseNameInput = !legacyLocked && this.musicComposerMode === 'sequencer' && phraseState.metadataEditing;
     const canDeletePhrase = !legacyLocked && showPhraseNameInput && this.canDeleteActivePatternPhrase();
     phraseActionRow?.classList.toggle('hidden', legacyLocked);
     phraseNameRow?.classList.toggle('hidden', !showPhraseNameInput);
@@ -2938,20 +2752,20 @@ export class EditorScene extends Phaser.Scene {
         legacyLocked ||
         !this.roomPermissions.canSaveDraft ||
         this.saveInFlight ||
-        this.musicPhraseSaveInFlight ||
-        this.musicPhraseDeleteInFlight;
+        phraseState.saveInFlight ||
+        phraseState.deleteInFlight;
       phraseNewButton.title = this.musicComposerMode === 'arrangement'
         ? `Save the arrangement draft and open a fresh ${activeInstrumentLabel} sequence.`
         : `Autosave and start a fresh ${activeInstrumentLabel} phrase.`;
       phraseNewButton.ariaLabel = phraseNewButton.title;
     }
     if (phraseEditButton) {
-      const disabled = legacyLocked || this.musicComposerMode !== 'sequencer' || this.musicPhraseDeleteInFlight;
+      const disabled = legacyLocked || this.musicComposerMode !== 'sequencer' || phraseState.deleteInFlight;
       phraseEditButton.disabled = disabled;
-      phraseEditButton.classList.toggle('active', !disabled && this.musicPhraseMetadataEditing);
+      phraseEditButton.classList.toggle('active', !disabled && phraseState.metadataEditing);
       phraseEditButton.title = disabled
         ? 'Phrase metadata editing is only available in Sequencer mode.'
-        : `${this.musicPhraseMetadataEditing ? 'Hide' : 'Edit'} phrase name and delete options.`;
+        : `${phraseState.metadataEditing ? 'Hide' : 'Edit'} phrase name and delete options.`;
       phraseEditButton.ariaLabel = phraseEditButton.title;
     }
     if (phraseSaveButton) {
@@ -2960,8 +2774,8 @@ export class EditorScene extends Phaser.Scene {
         this.musicComposerMode !== 'sequencer' ||
         !this.roomPermissions.canSaveDraft ||
         this.saveInFlight ||
-        this.musicPhraseSaveInFlight ||
-        this.musicPhraseDeleteInFlight;
+        phraseState.saveInFlight ||
+        phraseState.deleteInFlight;
       phraseSaveButton.title = this.musicComposerMode === 'sequencer'
         ? this.getOwnedActivePatternPhrase()
           ? `Detect key and update this ${activeInstrumentLabel} phrase.`
@@ -2975,8 +2789,8 @@ export class EditorScene extends Phaser.Scene {
         this.musicComposerMode !== 'sequencer' ||
         !this.roomPermissions.canSaveDraft ||
         this.saveInFlight ||
-        this.musicPhraseSaveInFlight ||
-        this.musicPhraseDeleteInFlight ||
+        phraseState.saveInFlight ||
+        phraseState.deleteInFlight ||
         !this.hasSavableActiveRoomMusicPhrase();
       phraseSaveAsButton.title = this.musicComposerMode === 'sequencer'
         ? `Save a new named version of this ${activeInstrumentLabel} phrase.`
@@ -2985,12 +2799,12 @@ export class EditorScene extends Phaser.Scene {
     }
     if (phraseDeleteButton) {
       phraseDeleteButton.classList.toggle('hidden', !showPhraseNameInput);
-      phraseDeleteButton.disabled = !canDeletePhrase || this.musicPhraseDeleteInFlight;
+      phraseDeleteButton.disabled = !canDeletePhrase || phraseState.deleteInFlight;
       phraseDeleteButton.title = canDeletePhrase
         ? `Delete your saved ${activeInstrumentLabel} phrase.`
         : 'Only your own saved phrases can be deleted.';
       phraseDeleteButton.ariaLabel = phraseDeleteButton.title;
-      phraseDeleteButton.textContent = this.musicPhraseDeleteInFlight ? 'Deleting...' : 'Delete';
+      phraseDeleteButton.textContent = phraseState.deleteInFlight ? 'Deleting...' : 'Delete';
     }
 
     const phraseSaveModal = document.getElementById('editor-music-phrase-save-modal');
@@ -2999,34 +2813,34 @@ export class EditorScene extends Phaser.Scene {
     const phraseSaveModalError = document.getElementById('editor-music-phrase-save-error');
     const phraseSaveModalInput = document.getElementById('editor-music-phrase-save-name-input') as HTMLInputElement | null;
     const phraseSaveModalConfirm = document.getElementById('btn-editor-music-phrase-save-confirm') as HTMLButtonElement | null;
-    const showPhraseSaveModal = this.musicPhraseSavePromptMode !== null;
+    const showPhraseSaveModal = phraseState.savePromptMode !== null;
     phraseSaveModal?.classList.toggle('hidden', !showPhraseSaveModal);
     phraseSaveModal?.setAttribute('aria-hidden', showPhraseSaveModal ? 'false' : 'true');
     if (phraseSaveModalTitle) {
-      phraseSaveModalTitle.textContent = this.musicPhraseSavePromptMode === 'save-as' ? 'Save Phrase As' : 'Name Phrase';
+      phraseSaveModalTitle.textContent = phraseState.savePromptMode === 'save-as' ? 'Save Phrase As' : 'Name Phrase';
     }
     if (phraseSaveModalMeta) {
-      phraseSaveModalMeta.textContent = this.musicPhraseSavePromptMode === 'save-as'
+      phraseSaveModalMeta.textContent = phraseState.savePromptMode === 'save-as'
         ? `Create a new named version of this ${activeInstrumentLabel} phrase.`
         : `Name this ${activeInstrumentLabel} phrase before saving it to your library.`;
     }
     if (phraseSaveModalError) {
-      phraseSaveModalError.textContent = this.musicPhraseSavePromptError ?? '';
-      phraseSaveModalError.classList.toggle('hidden', !this.musicPhraseSavePromptError);
+      phraseSaveModalError.textContent = phraseState.savePromptError ?? '';
+      phraseSaveModalError.classList.toggle('hidden', !phraseState.savePromptError);
     }
     if (phraseSaveModalInput) {
-      phraseSaveModalInput.value = this.musicPhraseSavePromptName;
-      phraseSaveModalInput.disabled = !showPhraseSaveModal || this.musicPhraseSaveInFlight;
+      phraseSaveModalInput.value = phraseState.savePromptName;
+      phraseSaveModalInput.disabled = !showPhraseSaveModal || phraseState.saveInFlight;
       phraseSaveModalInput.placeholder = `${activeInstrumentLabel} Phrase`;
     }
     if (phraseSaveModalConfirm) {
       phraseSaveModalConfirm.disabled =
         !showPhraseSaveModal ||
-        this.musicPhraseSaveInFlight ||
-        this.musicPhraseSavePromptName.trim().length === 0;
-      phraseSaveModalConfirm.textContent = this.musicPhraseSaveInFlight
+        phraseState.saveInFlight ||
+        phraseState.savePromptName.trim().length === 0;
+      phraseSaveModalConfirm.textContent = phraseState.saveInFlight
         ? 'Saving...'
-        : this.musicPhraseSavePromptMode === 'save-as'
+        : phraseState.savePromptMode === 'save-as'
           ? 'Save As'
           : 'Save Phrase';
     }
