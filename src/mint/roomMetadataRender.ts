@@ -21,6 +21,8 @@ import {
   parseCustomSpriteObjectId,
   type CustomSpriteDefinition,
 } from '../customSprites/model';
+import { getCustomRoomTileDefinitionForGid, type CustomRoomTileDefinition } from '../customTiles/model';
+import { drawCustomRoomTileToContext } from '../customTiles/runtime';
 import type { RoomSnapshot } from '../persistence/roomModel';
 import { buildRoomSnapshotFromMintedPayload, type WampMintedRoomPayload } from './roomMetadata';
 import { RETRO_COLORS, drawStarfieldToContext, hashStringToSeed } from '../visuals/starfield';
@@ -245,6 +247,21 @@ async function drawRoomTiles(
           continue;
         }
 
+        const customTile = getCustomRoomTileDefinitionForGid(snapshot, gid);
+        if (customTile) {
+          drawCustomTileFrame(
+            context,
+            customTile,
+            x * tilePixelSize,
+            y * tilePixelSize,
+            tilePixelSize,
+            tilePixelSize,
+            flipX,
+            flipY
+          );
+          continue;
+        }
+
         const tileset = getTilesetByGid(gid);
         if (!tileset) {
           continue;
@@ -291,6 +308,23 @@ function drawTileFrame(
   context.translate(dx + (flipX ? width : 0), dy + (flipY ? height : 0));
   context.scale(flipX ? -1 : 1, flipY ? -1 : 1);
   context.drawImage(image, sx, sy, TILE_SIZE, TILE_SIZE, 0, 0, width, height);
+  context.restore();
+}
+
+function drawCustomTileFrame(
+  context: CanvasRenderingContext2D,
+  tile: CustomRoomTileDefinition,
+  dx: number,
+  dy: number,
+  width: number,
+  height: number,
+  flipX: boolean,
+  flipY: boolean
+): void {
+  context.save();
+  context.translate(dx + (flipX ? width : 0), dy + (flipY ? height : 0));
+  context.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+  drawCustomRoomTileToContext(context, tile, 0, 0, Math.min(width, height));
   context.restore();
 }
 

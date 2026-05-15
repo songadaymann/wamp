@@ -5,6 +5,7 @@ import {
   ROOM_WIDTH,
   TILE_SIZE,
 } from '../../config';
+import { getCustomRoomTileCollisionProfile } from '../../customTiles/model';
 import type { RoomSnapshot } from '../../persistence/roomModel';
 
 export interface TerrainTileCollisionProfile {
@@ -24,7 +25,7 @@ export function roomHasTerrainTile(room: RoomSnapshot, tileX: number, tileY: num
     return false;
   }
 
-  return getTerrainCollisionProfileForGid(decoded.gid).hasCollision;
+  return getRoomTerrainCollisionProfileForGid(room, decoded.gid).hasCollision;
 }
 
 export function getTerrainTileCollisionProfile(
@@ -41,7 +42,7 @@ export function getTerrainTileCollisionProfile(
     return { hasCollision: false, topInset: 0, bottomInset: 0, height: 0 };
   }
 
-  const collisionProfile = getTerrainCollisionProfileForGid(decoded.gid);
+  const collisionProfile = getRoomTerrainCollisionProfileForGid(room, decoded.gid);
   if (!collisionProfile.hasCollision) {
     return { hasCollision: false, topInset: 0, bottomInset: 0, height: 0 };
   }
@@ -61,6 +62,13 @@ export function getTerrainTileCollisionProfile(
     bottomInset,
     height: Math.max(1, TILE_SIZE - topInset - bottomInset),
   };
+}
+
+function getRoomTerrainCollisionProfileForGid(
+  room: RoomSnapshot,
+  gid: number,
+) {
+  return getCustomRoomTileCollisionProfile(room, gid) ?? getTerrainCollisionProfileForGid(gid);
 }
 
 export function terrainTileNeedsInsetBody(

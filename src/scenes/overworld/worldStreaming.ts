@@ -40,6 +40,11 @@ import { RETRO_COLORS, ensureStarfieldTexture } from '../../visuals/starfield';
 import { buildRoomSnapshotTexture, buildRoomTextureKey } from '../../visuals/roomSnapshotTexture';
 import { registerCustomSpritesFromSnapshot } from '../../customSprites/registry';
 import {
+  buildCustomRoomTileTextureKey,
+  ensureCustomRoomTileTexture,
+  ensureCustomRoomTilesetForMap,
+} from '../../customTiles/runtime';
+import {
   extractRoomStaticLightingEmitters,
   type RoomStaticLightingEmitters,
 } from '../../lighting/emissiveSources';
@@ -1244,6 +1249,12 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       width: ROOM_WIDTH,
       height: ROOM_HEIGHT,
     }));
+    const customRoomTileTextureKey = buildCustomRoomTileTextureKey(
+      `${this.textureNamespace}:${room.id}:${room.version}:${room.updatedAt}`
+    );
+    this.measure('stream.ensureCustomRoomTileTexture', () => {
+      ensureCustomRoomTileTexture(this.options.scene, customRoomTileTextureKey, room.customTiles);
+    });
     const tilesets: Phaser.Tilemaps.Tileset[] = [];
     for (const tilesetConfig of TILESETS) {
       const tileset = map.addTilesetImage(
@@ -1258,6 +1269,10 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       if (tileset) {
         tilesets.push(tileset);
       }
+    }
+    const customTileset = ensureCustomRoomTilesetForMap(map, customRoomTileTextureKey);
+    if (customTileset) {
+      tilesets.push(customTileset);
     }
 
     const terrainLayer = this.measure('stream.createTerrainLayer', () =>

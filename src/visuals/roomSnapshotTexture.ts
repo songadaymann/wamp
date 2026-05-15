@@ -20,6 +20,11 @@ import {
   ensureCustomSpriteTexture,
   registerCustomSpritesFromSnapshot,
 } from '../customSprites/registry';
+import {
+  getCustomRoomTileDefinitionForGid,
+  getCustomRoomTileSignature,
+} from '../customTiles/model';
+import { drawCustomRoomTileToContext } from '../customTiles/runtime';
 import { resolveRoomBackground } from '../backgrounds/model';
 import {
   getCustomBackgroundCenterRect,
@@ -65,6 +70,7 @@ export function buildRoomTextureKey(
     options.includeObjects === false ? 'tiles-only' : 'with-objects',
     options.includedLayers?.join('_') ?? 'all-layers',
     options.showConstructionOverlay ? `construction-${sanitizeTextureKey(options.constructionLabel ?? 'building')}` : 'clean',
+    `ct-${hashStringToSeed(getCustomRoomTileSignature(room.customTiles)).toString(36)}`,
     room.version,
     sanitizeTextureKey(room.updatedAt),
   ].join('-');
@@ -384,6 +390,20 @@ function drawRoomTiles(
         const { gid, flipX, flipY } = decodeTileDataValue(tileValue);
         if (gid <= 0) continue;
 
+        const customTile = getCustomRoomTileDefinitionForGid(room, gid);
+        if (customTile) {
+          drawCustomTileFrame(
+            context,
+            customTile,
+            offsetX + x * tilePixelSize,
+            offsetY + y * tilePixelSize,
+            tilePixelSize,
+            flipX,
+            flipY,
+          );
+          continue;
+        }
+
         const resolvedTileset = resolveTilesetForGid(gid);
         if (!resolvedTileset) continue;
 
@@ -413,6 +433,22 @@ function drawRoomTiles(
   }
 
   context.globalAlpha = 1;
+}
+
+function drawCustomTileFrame(
+  context: CanvasRenderingContext2D,
+  tile: NonNullable<ReturnType<typeof getCustomRoomTileDefinitionForGid>>,
+  dx: number,
+  dy: number,
+  size: number,
+  flipX: boolean,
+  flipY: boolean,
+): void {
+  context.save();
+  context.translate(dx + (flipX ? size : 0), dy + (flipY ? size : 0));
+  context.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+  drawCustomRoomTileToContext(context, tile, 0, 0, size);
+  context.restore();
 }
 
 function drawConstructionOverlay(

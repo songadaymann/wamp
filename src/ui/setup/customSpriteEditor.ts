@@ -76,6 +76,7 @@ export function setupCustomSpriteEditor(
   const swatchGrid = doc.getElementById('editor-sprite-swatches');
   const clearButton = doc.getElementById('btn-editor-sprite-clear') as HTMLButtonElement | null;
   const saveButton = doc.getElementById('btn-editor-sprite-save') as HTMLButtonElement | null;
+  const saveTileButton = doc.getElementById('btn-editor-sprite-save-tile') as HTMLButtonElement | null;
   const closeButton = doc.getElementById('btn-editor-sprite-close') as HTMLButtonElement | null;
   const newButton = doc.getElementById('btn-editor-sprite-new') as HTMLButtonElement | null;
   const libraryList = doc.getElementById('editor-sprite-library-list');
@@ -357,15 +358,15 @@ export function setupCustomSpriteEditor(
     window.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
   };
 
-  const saveSprite = (): void => {
+  const buildSpriteDraft = (): CustomSpriteDefinition | null => {
     if (!pixels.some(Boolean)) {
       setStatus('Draw at least one pixel before saving.', 'error');
-      return;
+      return null;
     }
 
     const now = new Date().toISOString();
     const existing = getCustomSpriteDefinition(editingSpriteId);
-    const sprite: CustomSpriteDefinition = {
+    return {
       id: existing?.id ?? createSpriteId(),
       name: clampSpriteName(nameInput?.value ?? ''),
       size,
@@ -375,6 +376,13 @@ export function setupCustomSpriteEditor(
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };
+  };
+
+  const saveSprite = (): void => {
+    const sprite = buildSpriteDraft();
+    if (!sprite) {
+      return;
+    }
 
     editingSpriteId = sprite.id;
     editorState.paletteMode = 'objects';
@@ -388,12 +396,46 @@ export function setupCustomSpriteEditor(
     setSpriteModeActive(false);
   };
 
+  const saveSpriteAsTile = (): void => {
+    const sprite = buildSpriteDraft();
+    if (!sprite) {
+      return;
+    }
+
+    if (sprite.size !== 16) {
+      setStatus('Tiles use the 16x16 sprite size.', 'error');
+      return;
+    }
+
+    if (sprite.kind !== 'decoration' && sprite.kind !== 'solid') {
+      setStatus('Pushable and collectible sprites stay as objects.', 'error');
+      return;
+    }
+
+    registerCustomSprite(sprite);
+    refreshSpriteInActiveScenes(sprite);
+    let selectedTile = false;
+    withActiveEditorScene(game, (scene) => {
+      selectedTile = scene.useCustomSpriteAsTile?.(sprite) ?? false;
+    });
+    if (!selectedTile) {
+      setStatus('Open an editable room before saving a tile.', 'error');
+      return;
+    }
+
+    editingSpriteId = sprite.id;
+    renderLibrary();
+    setStatus('Saved as tile. Click in the room to paint it.');
+    setSpriteModeActive(false);
+  };
+
   modeButton.addEventListener('click', () => {
     setSpriteModeActive(doc.body.dataset.editorSpriteMode !== 'true');
   });
   closeButton?.addEventListener('click', () => setSpriteModeActive(false));
   newButton?.addEventListener('click', resetSpriteDraft);
   saveButton?.addEventListener('click', saveSprite);
+  saveTileButton?.addEventListener('click', saveSpriteAsTile);
   clearButton?.addEventListener('click', () => {
     pixels = Array.from({ length: size * size }, () => null);
     setStatus('Canvas cleared.');

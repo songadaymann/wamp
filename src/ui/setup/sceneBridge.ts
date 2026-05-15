@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { CourseGoalType, CourseRoomRef } from '../../courses/model';
 import type { CourseEditorUiState } from '../../courses/editor/state';
+import type { CustomSpriteDefinition } from '../../customSprites/model';
 import type { RoomGoalType } from '../../goals/roomGoals';
 import type {
   RoomMusicKeyMode,
@@ -91,6 +92,7 @@ export interface EditorSceneBridge {
   zoomIn?: () => void;
   zoomOut?: () => void;
   updateToolUi?: () => void;
+  useCustomSpriteAsTile?: (sprite: CustomSpriteDefinition) => boolean;
   clearCurrentLayer?: () => void;
   clearAllTiles?: () => void;
   setRoomTitle?: (title: string | null) => void;
