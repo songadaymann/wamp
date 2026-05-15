@@ -44,6 +44,10 @@ import {
   type CustomSpriteDefinition,
 } from '../customSprites/model';
 import {
+  normalizeCustomRoomTileDefinitions,
+  type CustomRoomTileDefinition,
+} from '../customTiles/model';
+import {
   dedupePlacedObjectsByAnchorCell,
   resolvePlacedObjectInstanceAlias,
 } from '../placedObjects/occupancy';
@@ -90,6 +94,7 @@ export interface RoomSnapshot {
   tileData: RoomTileData;
   placedObjects: PlacedObject[];
   customSprites?: CustomSpriteDefinition[];
+  customTiles?: CustomRoomTileDefinition[];
   version: number;
   status: RoomStatus;
   createdAt: string;
@@ -214,6 +219,7 @@ export function createDefaultRoomSnapshot(
     tileData: createEmptyTileData(),
     placedObjects: [],
     customSprites: [],
+    customTiles: [],
     version: 1,
     status: 'draft',
     createdAt: now,
@@ -434,6 +440,7 @@ export function cloneRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
     tileData,
     placedObjects,
     customSprites: normalizeCustomSpriteDefinitions(room.customSprites),
+    customTiles: normalizeCustomRoomTileDefinitions(room.customTiles),
     version: room.version,
     status: room.status,
     createdAt: room.createdAt,
@@ -576,6 +583,10 @@ export function isRoomSnapshotBlank(room: RoomSnapshot): boolean {
   }
 
   if (room.placedObjects.length > 0) {
+    return false;
+  }
+
+  if (normalizeCustomRoomTileDefinitions(room.customTiles).length > 0) {
     return false;
   }
 

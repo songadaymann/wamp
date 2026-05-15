@@ -42,6 +42,21 @@ import {
   getCustomSpriteDefinitionByObjectId,
   getCustomSpriteDefinitionsForPlacedObjects,
 } from '../../customSprites/registry';
+import type { CustomSpriteDefinition } from '../../customSprites/model';
+import {
+  buildCustomRoomTileFromSprite,
+  CUSTOM_ROOM_TILE_MAX_TILES,
+  CUSTOM_ROOM_TILESET_KEY_PREFIX,
+  findCustomRoomTileIndexForSourceSprite,
+  getCustomRoomTileGid,
+  normalizeCustomRoomTileDefinitions,
+  type CustomRoomTileDefinition,
+} from '../../customTiles/model';
+import {
+  buildCustomRoomTileTextureKey,
+  ensureCustomRoomTileTexture,
+  syncCustomRoomTilesetForLayers,
+} from '../../customTiles/runtime';
 import {
   createPlacedObjectAnchorCell,
   findConflictingPlacedObjectAtAnchorCell,
@@ -132,6 +147,7 @@ export interface EditorClipboardState {
 
 interface EditorEditRuntimeHost {
   getLayers(): Map<string, Phaser.Tilemaps.TilemapLayer>;
+  getTilemap(): Phaser.Tilemaps.Tilemap;
   getRoomSnapshotMetadata(): EditorRoomSnapshotMetadata;
   getRoomOrigin(): { x: number; y: number };
   getSelectedBackground(): string;
@@ -166,6 +182,7 @@ export class EditorEditRuntime {
   private redoStack: UndoAction[] = [];
   private currentBatch: TileAction[] = [];
   private clipboardState: EditorClipboardState | null = null;
+  private customRoomTiles: CustomRoomTileDefinition[] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -323,10 +340,13 @@ export class EditorEditRuntime {
     this.redoStack = [];
     this.currentBatch = [];
     this.clipboardState = null;
+    this.customRoomTiles = [];
   }
 
   applyRoomSnapshot(room: RoomSnapshot): void {
     const tileData = room.tileData;
+    this.customRoomTiles = normalizeCustomRoomTileDefinitions(room.customTiles);
+    this.syncCustomRoomTileset();
 
     for (const layerName of LAYER_NAMES) {
       const layer = this.host.getLayers().get(layerName);
@@ -509,12 +529,65 @@ export class EditorEditRuntime {
           getCustomSpriteDefinitionByObjectId(placed.id)?.kind ?? placed.customSpriteKind ?? null,
       })),
       customSprites: getCustomSpriteDefinitionsForPlacedObjects(this.host.getPlacedObjects()),
+      customTiles: this.customRoomTiles.map((tile) => ({
+        ...tile,
+        pixels: [...tile.pixels],
+      })),
       version: metadata.version,
       status: 'draft',
       createdAt: metadata.createdAt || new Date().toISOString(),
       updatedAt: metadata.updatedAt || new Date().toISOString(),
       publishedAt: metadata.publishedAt,
     };
+  }
+
+  useCustomSpriteAsTile(sprite: CustomSpriteDefinition): { gid: number; tile: CustomRoomTileDefinition } | null {
+    if (!this.guardEditable()) {
+      return null;
+    }
+
+    const existingIndex = findCustomRoomTileIndexForSourceSprite(this.customRoomTiles, sprite.id);
+    const existingTile = existingIndex >= 0 ? this.customRoomTiles[existingIndex] : null;
+    const nextTile = buildCustomRoomTileFromSprite(sprite, existingTile);
+    if (!nextTile) {
+      return null;
+    }
+
+    let nextIndex = existingIndex;
+    if (existingIndex >= 0) {
+      this.customRoomTiles = [
+        ...this.customRoomTiles.slice(0, existingIndex),
+        nextTile,
+        ...this.customRoomTiles.slice(existingIndex + 1),
+      ];
+    } else {
+      if (this.customRoomTiles.length >= CUSTOM_ROOM_TILE_MAX_TILES) {
+        this.host.updatePersistenceStatus(`Room can use up to ${CUSTOM_ROOM_TILE_MAX_TILES} custom tiles.`);
+        return null;
+      }
+      nextIndex = this.customRoomTiles.length;
+      this.customRoomTiles = [...this.customRoomTiles, nextTile];
+    }
+
+    this.syncCustomRoomTileset();
+    const gid = getCustomRoomTileGid(nextIndex);
+    editorState.paletteMode = 'tiles';
+    editorState.selectedObjectId = null;
+    editorState.activeTool = 'pencil';
+    editorState.selectedTileGid = gid;
+    editorState.tileFlipX = false;
+    editorState.tileFlipY = false;
+    editorState.selection = {
+      tilesetKey: `${CUSTOM_ROOM_TILESET_KEY_PREFIX}:${nextTile.id}`,
+      startCol: 0,
+      startRow: 0,
+      width: 1,
+      height: 1,
+      occupiedMask: [[true]],
+    };
+    this.markRoomDirty();
+
+    return { gid, tile: nextTile };
   }
 
   beginTileBatch(): void {
@@ -1929,6 +2002,13 @@ export class EditorEditRuntime {
         ? 'Draft changes...'
         : 'Read-only minted room. Changes are local only.',
     );
+  }
+
+  private syncCustomRoomTileset(): void {
+    const metadata = this.host.getRoomSnapshotMetadata();
+    const textureKey = buildCustomRoomTileTextureKey(`editor:${metadata.roomId}`);
+    ensureCustomRoomTileTexture(this.scene, textureKey, this.customRoomTiles);
+    syncCustomRoomTilesetForLayers(this.host.getTilemap(), this.host.getLayers().values(), textureKey);
   }
 
   private roomMusicChanged(previous: RoomMusic | null, next: RoomMusic | null): boolean {

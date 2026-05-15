@@ -78,6 +78,7 @@ import {
   showBusyOverlay,
 } from '../ui/appFeedback';
 import { isNativeTextEditingFocused, isTextInputFocused } from '../ui/keyboardFocus';
+import type { CustomSpriteDefinition } from '../customSprites/model';
 import type {
   CourseEditorSceneData,
   CourseEditedRoomData,
@@ -351,6 +352,7 @@ export class EditorScene extends Phaser.Scene {
     });
     this.editRuntime = new EditorEditRuntime(this, {
       getLayers: () => this.layers,
+      getTilemap: () => this.map,
       getRoomSnapshotMetadata: () => ({
         roomId: this.roomId,
         coordinates: this.roomCoordinates,
@@ -1598,6 +1600,27 @@ export class EditorScene extends Phaser.Scene {
   rebuildObjectSprites(): void {
     this.editRuntime.rebuildObjectSprites();
     this.inspectorController.handleObjectSpritesRebuilt();
+  }
+
+  useCustomSpriteAsTile(sprite: CustomSpriteDefinition): boolean {
+    if (!this.roomPermissions.canSaveDraft) {
+      this.updatePersistenceStatus('Minted room is read-only for non-owners.');
+      return false;
+    }
+
+    const result = this.editRuntime.useCustomSpriteAsTile(sprite);
+    if (!result) {
+      this.updatePersistenceStatus('Only 16x16 solid or decoration sprites can be used as tiles.');
+      return false;
+    }
+
+    this.inspectorController.reset();
+    this.renderEditorUi();
+    this.updateToolUi();
+    this.updateLightingPreview();
+    this.presenceController.markConstructionPreviewDirty();
+    this.updatePersistenceStatus('Saved as tile. Click in the room to paint it.');
+    return true;
   }
 
   beginFocusedPressurePlateConnection(): void {

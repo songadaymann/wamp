@@ -1123,6 +1123,7 @@ export class CourseEditorScene extends Phaser.Scene {
       label,
       runtime: new EditorEditRuntime(this, {
         getLayers: () => slice.layers,
+        getTilemap: () => slice.map,
         getRoomSnapshotMetadata: () => ({
           roomId: slice.roomId,
           coordinates: slice.coordinates,

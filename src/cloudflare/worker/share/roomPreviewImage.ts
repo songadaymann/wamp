@@ -9,6 +9,11 @@ import {
   getTilesetByGid,
 } from '../../../config';
 import { resolveRoomBackground } from '../../../backgrounds/model';
+import {
+  getCustomRoomTileCollisionProfile,
+  getCustomRoomTileDefinitionForGid,
+  type CustomRoomTileDefinition,
+} from '../../../customTiles/model';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
 
 export const ROOM_SHARE_IMAGE_WIDTH = 1200;
@@ -109,13 +114,33 @@ function drawTiles(canvas: ShareCanvas, snapshot: RoomSnapshot): void {
       const row = layer[tileY];
       for (let tileX = 0; tileX < ROOM_WIDTH; tileX += 1) {
         const rawTile = row?.[tileX] ?? -1;
-        const { gid } = decodeTileDataValue(rawTile);
+        const { gid, flipX, flipY } = decodeTileDataValue(rawTile);
         if (gid <= 0) {
           continue;
         }
 
         const x = PREVIEW_LEFT + tileX * PREVIEW_TILE_SIZE;
         const y = PREVIEW_TOP + tileY * PREVIEW_TILE_SIZE;
+        const customTile = getCustomRoomTileDefinitionForGid(snapshot, gid);
+        if (customTile) {
+          const alpha = layerName === 'background'
+            ? 0.5
+            : layerName === 'foreground'
+              ? 0.78
+              : 1;
+          drawCustomRoomTilePreview(canvas, customTile, x, y, PREVIEW_TILE_SIZE, alpha, flipX, flipY);
+          if (layerName === 'terrain') {
+            const collision = getCustomRoomTileCollisionProfile(snapshot, gid);
+            if (collision?.hasCollision) {
+              blendRect(canvas, x, y, PREVIEW_TILE_SIZE, 4, 0xffffff, 0.18);
+              blendRect(canvas, x, y + PREVIEW_TILE_SIZE - 4, PREVIEW_TILE_SIZE, 4, 0x000000, 0.22);
+              blendRect(canvas, x, y, 3, PREVIEW_TILE_SIZE, 0x000000, 0.16);
+              blendRect(canvas, x + PREVIEW_TILE_SIZE - 3, y, 3, PREVIEW_TILE_SIZE, 0x000000, 0.22);
+            }
+          }
+          continue;
+        }
+
         const color = getTileColor(gid, tileX, tileY);
 
         if (layerName === 'background') {
@@ -135,6 +160,43 @@ function drawTiles(canvas: ShareCanvas, snapshot: RoomSnapshot): void {
         fillRect(canvas, x, y + PREVIEW_TILE_SIZE - 4, PREVIEW_TILE_SIZE, 4, darken(color, 0.24));
         fillRect(canvas, x, y, 3, PREVIEW_TILE_SIZE, darken(color, 0.18));
         fillRect(canvas, x + PREVIEW_TILE_SIZE - 3, y, 3, PREVIEW_TILE_SIZE, darken(color, 0.3));
+      }
+    }
+  }
+}
+
+function drawCustomRoomTilePreview(
+  canvas: ShareCanvas,
+  tile: CustomRoomTileDefinition,
+  x: number,
+  y: number,
+  size: number,
+  alpha: number,
+  flipX: boolean,
+  flipY: boolean,
+): void {
+  for (let sourceY = 0; sourceY < TILE_SIZE; sourceY += 1) {
+    for (let sourceX = 0; sourceX < TILE_SIZE; sourceX += 1) {
+      const sourceIndex = sourceY * TILE_SIZE + sourceX;
+      const color = tile.pixels[sourceIndex];
+      if (!color) {
+        continue;
+      }
+
+      const destCellX = flipX ? TILE_SIZE - 1 - sourceX : sourceX;
+      const destCellY = flipY ? TILE_SIZE - 1 - sourceY : sourceY;
+      const left = x + Math.floor((destCellX * size) / TILE_SIZE);
+      const top = y + Math.floor((destCellY * size) / TILE_SIZE);
+      const right = x + Math.ceil(((destCellX + 1) * size) / TILE_SIZE);
+      const bottom = y + Math.ceil(((destCellY + 1) * size) / TILE_SIZE);
+      const width = Math.max(1, right - left);
+      const height = Math.max(1, bottom - top);
+      const numericColor = hexToNumber(color);
+
+      if (alpha >= 1) {
+        fillRect(canvas, left, top, width, height, numericColor);
+      } else {
+        blendRect(canvas, left, top, width, height, numericColor, alpha);
       }
     }
   }
