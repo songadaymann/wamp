@@ -16,11 +16,12 @@ import {
 } from '../../music/library';
 import {
   ROOM_PATTERN_ACTIVE_STEP_COLUMNS,
+} from '../../music/pattern';
+import {
   ROOM_PATTERN_DRUM_GRID_START_ROW,
   ROOM_PATTERN_DRUM_ROWS,
   ROOM_PATTERN_GRID_ROWS,
   ROOM_PATTERN_INSTRUMENT_IDS,
-  ROOM_PATTERN_MARGIN_START_STEP,
   ROOM_PATTERN_TONAL_INSTRUMENT_IDS,
   cloneRoomMusic,
   createDefaultRoomPatternMusic,
@@ -49,6 +50,7 @@ import {
 } from '../../music/model';
 
 type EditorMusicPreviewState = 'stopped' | 'playing' | 'paused';
+const ROOM_PATTERN_MARGIN_START_STEP = ROOM_PATTERN_ACTIVE_STEP_COLUMNS;
 
 interface EditorMusicPatternHost {
   getRoomMusic(): RoomMusic | null;
