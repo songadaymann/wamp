@@ -341,7 +341,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly WEAPON_KNOCKBACK_MS = 90;
   private readonly SWORD_HIT_LUNGE_VELOCITY = 90;
   private readonly DOWNWARD_SLASH_BOUNCE_VELOCITY = -210;
-  private readonly GUN_COOLDOWN_MS = 260;
+  private readonly GUN_COOLDOWN_MS = 420;
   private readonly GUN_ATTACK_MS = 120;
   private readonly GUN_RECOIL_VELOCITY = 44;
   private readonly PROJECTILE_SPEED = 360;
