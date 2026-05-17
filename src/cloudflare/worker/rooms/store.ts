@@ -336,13 +336,6 @@ export async function saveDraft(
     if (!actor.ownerUser) {
       throw new HttpError(401, 'Sign in to save room drafts.');
     }
-    await enforceRoomMutationGuardrails(
-      env,
-      incomingRoom,
-      actor.ownerUser.id,
-      actor.requestAuthSource,
-      existing.draft,
-    );
   }
   const draftOwnerDisplayName =
     actor.principalDisplayName || actor.ownerUser?.displayName || existing.claimerDisplayName || 'Guest';
@@ -434,7 +427,7 @@ export async function publishRoom(
       incomingRoom,
       actor.ownerUser.id,
       actor.requestAuthSource,
-      existing.draft,
+      existing.published,
     );
   }
   const normalizedIncomingRoom = cloneRoomSnapshot(incomingRoom);

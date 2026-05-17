@@ -4,6 +4,7 @@ import type {
   RoomSnapshot,
 } from '../../persistence/roomRepository';
 import {
+  getAppFeedbackDebugState,
   hideBusyOverlay,
   showBusyError,
   showBusyOverlay,
@@ -117,7 +118,9 @@ export class EditorPersistenceController {
       }
       return record;
     } finally {
-      hideBusyOverlay();
+      if (getAppFeedbackDebugState().busyState !== 'error') {
+        hideBusyOverlay();
+      }
     }
   }
 

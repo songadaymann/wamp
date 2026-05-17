@@ -237,6 +237,7 @@ export async function loadRoomDiscoveryResponse(
   limit: number,
   sort: RoomDiscoverySort,
 ): Promise<RoomDiscoveryResponse> {
+  const includeGoalLessRooms = sort === 'newest' && difficultyFilter === null;
   const publishedRooms = await env.DB.prepare(
     `
       SELECT
@@ -270,9 +271,11 @@ export async function loadRoomDiscoveryResponse(
       ) AS first_published
         ON first_published.room_id = rooms.id
       WHERE rooms.published_json IS NOT NULL
-        AND rooms.published_goal_type IS NOT NULL
+        AND (? = 1 OR rooms.published_goal_type IS NOT NULL)
     `
-  ).all<PublishedRoomDiscoveryRow>();
+  )
+    .bind(includeGoalLessRooms ? 1 : 0)
+    .all<PublishedRoomDiscoveryRow>();
 
   const challengeRooms = publishedRooms.results.map((row) => mapPublishedRoomDiscoveryRow(row));
 
@@ -929,12 +932,12 @@ function mapPublishedRoomDiscoveryRow(
   builderDisplayName: string | null;
   roomVersion: number;
   canonicalRoomVersion: number | null;
-  goalType: RoomGoalType;
+  goalType: RoomGoalType | null;
   publishedAt: string;
   firstPublishedAt: string;
 } {
   const goalType = parseRoomGoalType(row.published_goal_type);
-  if (!goalType) {
+  if (!goalType && row.published_goal_type !== null) {
     throw new HttpError(500, 'Failed to parse published room goal type.');
   }
 

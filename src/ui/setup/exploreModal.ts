@@ -320,7 +320,7 @@ export class ExploreModalController {
       this.elements.list.appendChild(
         this.createEmptyState(
           this.discoverFilter === null
-            ? 'No published challenge levels found yet.'
+            ? this.getEmptyRoomDiscoveryText()
             : `No ${ROOM_DIFFICULTY_LABELS[this.discoverFilter].toLowerCase()} levels yet.`,
         ),
       );
@@ -435,7 +435,7 @@ export class ExploreModalController {
 
     const title = this.doc.createElement('div');
     title.className = 'explore-room-title';
-    title.textContent = entry.roomTitle?.trim() || 'Untitled Level';
+    title.textContent = entry.roomTitle?.trim() || (entry.goalType ? 'Untitled Level' : 'Untitled Room');
     titleRow.appendChild(title);
 
     if (entry.featured) {
@@ -544,6 +544,12 @@ export class ExploreModalController {
   private createDifficultyBadge(entry: RoomDiscoveryEntry): HTMLElement {
     const badge = this.doc.createElement('div');
     badge.className = 'explore-room-difficulty';
+    if (!entry.goalType) {
+      badge.dataset.difficulty = 'none';
+      badge.textContent = 'No challenge';
+      return badge;
+    }
+
     const difficulty = entry.consensusDifficulty;
     if (difficulty) {
       badge.dataset.difficulty = difficulty;
@@ -553,6 +559,12 @@ export class ExploreModalController {
       badge.textContent = 'Unrated';
     }
     return badge;
+  }
+
+  private getEmptyRoomDiscoveryText(): string {
+    return this.discoverSort === 'newest'
+      ? 'No published rooms found yet.'
+      : 'No published challenge levels found yet.';
   }
 
   private attachRoomPreview(

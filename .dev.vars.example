@@ -12,7 +12,7 @@ CHAT_OWNER_EMAILS=
 # Email address that receives approval-queue notifications for new comments/photos.
 ADMIN_REVIEW_EMAIL=jonathan@jonathanmann.net
 # Local normal-user room claim override for course/editor testing. Leave blank to use trust-tier caps.
-ROOM_DAILY_CLAIM_LIMIT=10
+ROOM_DAILY_CLAIM_LIMIT=4
 # Local normal-user publish override for multi-room course/editor testing. Leave blank to use trust-tier caps.
 ROOM_DAILY_PUBLISH_LIMIT=10
 PLAYFUN_ROOM_DAILY_CLAIM_LIMIT=1
