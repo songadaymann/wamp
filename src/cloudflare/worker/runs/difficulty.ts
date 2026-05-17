@@ -236,8 +236,9 @@ export async function loadRoomDiscoveryResponse(
   difficultyFilter: RoomDifficulty | null,
   limit: number,
   sort: RoomDiscoverySort,
+  includeGoalLessRooms: boolean = false,
 ): Promise<RoomDiscoveryResponse> {
-  const includeGoalLessRooms = sort === 'newest' && difficultyFilter === null;
+  const includeAllPublishedRooms = includeGoalLessRooms && sort === 'newest' && difficultyFilter === null;
   const publishedRooms = await env.DB.prepare(
     `
       SELECT
@@ -274,7 +275,7 @@ export async function loadRoomDiscoveryResponse(
         AND (? = 1 OR rooms.published_goal_type IS NOT NULL)
     `
   )
-    .bind(includeGoalLessRooms ? 1 : 0)
+    .bind(includeAllPublishedRooms ? 1 : 0)
     .all<PublishedRoomDiscoveryRow>();
 
   const challengeRooms = publishedRooms.results.map((row) => mapPublishedRoomDiscoveryRow(row));

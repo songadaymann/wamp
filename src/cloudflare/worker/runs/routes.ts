@@ -685,7 +685,17 @@ export async function handleRoomDiscovery(
   const rawSort = url.searchParams.get('sort');
   const sort = rawSort && rawSort.trim() ? parseRoomDiscoverySortOrThrow(rawSort) : 'featured';
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 100, 1, 200);
-  const response = await loadRoomDiscoveryResponse(env, difficultyFilter, limit, sort);
+  const includeGoalLessRooms =
+    difficultyFilter === null
+    && sort === 'newest'
+    && parseBooleanQueryFlag(url.searchParams.get('includeGoalLessRooms'));
+  const response = await loadRoomDiscoveryResponse(
+    env,
+    difficultyFilter,
+    limit,
+    sort,
+    includeGoalLessRooms,
+  );
   return jsonResponse(request, response);
 }
 
@@ -701,6 +711,15 @@ export async function handleBuilderDiscovery(
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 100, 1, 200);
   const response = await loadBuilderDiscoveryResponse(env, limit, sort);
   return jsonResponse(request, response);
+}
+
+function parseBooleanQueryFlag(value: string | null): boolean {
+  if (value === null) {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes';
 }
 
 async function maybeMirrorRunPointEventToPlayfun(

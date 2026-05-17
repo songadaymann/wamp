@@ -563,7 +563,8 @@ export class LeaderboardModalController {
       this.roomDiscovery = await this.runRepository.loadRoomDiscovery(
         this.discoverFilter,
         this.discoverSort,
-        100
+        100,
+        this.isAllPublishedRoomDiscoveryFeed(),
       );
       this.setError(null);
     } catch (error) {

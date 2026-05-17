@@ -314,7 +314,7 @@ export class ExploreModalController {
       return;
     }
 
-    const results = this.roomDiscovery?.results ?? [];
+    const results = (this.roomDiscovery?.results ?? []).filter((entry) => entry.goalType !== null);
 
     if (results.length === 0) {
       this.elements.list.appendChild(
@@ -562,9 +562,7 @@ export class ExploreModalController {
   }
 
   private getEmptyRoomDiscoveryText(): string {
-    return this.discoverSort === 'newest'
-      ? 'No published rooms found yet.'
-      : 'No published challenge levels found yet.';
+    return 'No published challenge levels found yet.';
   }
 
   private attachRoomPreview(

@@ -31,27 +31,15 @@ export async function handleWorldRequest(
     throw new HttpError(400, 'Radius must be between 0 and 32.');
   }
 
-  const publishedRooms = await loadPublishedRoomsInBounds(
-    env,
-    centerX - radius - 1,
-    centerX + radius + 1,
-    centerY - radius - 1,
-    centerY + radius + 1
-  );
-  const claimedUnpublishedRooms = await loadClaimedUnpublishedRoomsInBounds(
-    env,
-    centerX - radius - 1,
-    centerX + radius + 1,
-    centerY - radius - 1,
-    centerY + radius + 1
-  );
-  const memberships = await loadPublishedCourseMembershipsInBounds(
-    env,
-    centerX - radius - 1,
-    centerX + radius + 1,
-    centerY - radius - 1,
-    centerY + radius + 1
-  );
+  const minX = centerX - radius - 1;
+  const maxX = centerX + radius + 1;
+  const minY = centerY - radius - 1;
+  const maxY = centerY + radius + 1;
+  const [publishedRooms, claimedUnpublishedRooms, memberships] = await Promise.all([
+    loadPublishedRoomsInBounds(env, minX, maxX, minY, maxY),
+    loadClaimedUnpublishedRoomsInBounds(env, minX, maxX, minY, maxY),
+    loadPublishedCourseMembershipsInBounds(env, minX, maxX, minY, maxY),
+  ]);
   const worldWindow = computeWorldWindow(
     [...publishedRooms, ...claimedUnpublishedRooms],
     { x: centerX, y: centerY },
@@ -69,27 +57,15 @@ export async function handleWorldChunksRequest(
 ): Promise<Response> {
   const chunkBounds = parseWorldChunkBounds(url.searchParams);
   const roomBounds = getRoomBoundsForChunkBounds(chunkBounds);
-  const publishedRooms = await loadPublishedRoomsInBounds(
-    env,
-    roomBounds.minX - 1,
-    roomBounds.maxX + 1,
-    roomBounds.minY - 1,
-    roomBounds.maxY + 1
-  );
-  const claimedUnpublishedRooms = await loadClaimedUnpublishedRoomsInBounds(
-    env,
-    roomBounds.minX - 1,
-    roomBounds.maxX + 1,
-    roomBounds.minY - 1,
-    roomBounds.maxY + 1
-  );
-  const memberships = await loadPublishedCourseMembershipsInBounds(
-    env,
-    roomBounds.minX - 1,
-    roomBounds.maxX + 1,
-    roomBounds.minY - 1,
-    roomBounds.maxY + 1
-  );
+  const minX = roomBounds.minX - 1;
+  const maxX = roomBounds.maxX + 1;
+  const minY = roomBounds.minY - 1;
+  const maxY = roomBounds.maxY + 1;
+  const [publishedRooms, claimedUnpublishedRooms, memberships] = await Promise.all([
+    loadPublishedRoomsInBounds(env, minX, maxX, minY, maxY),
+    loadClaimedUnpublishedRoomsInBounds(env, minX, maxX, minY, maxY),
+    loadPublishedCourseMembershipsInBounds(env, minX, maxX, minY, maxY),
+  ]);
   const chunkWindow = computeWorldChunkWindow(
     [...publishedRooms, ...claimedUnpublishedRooms],
     chunkBounds

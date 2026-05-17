@@ -26,6 +26,7 @@ import {
   GHOST_EXTRA_SPRITESHEETS,
 } from '../enemies/ghost';
 import {
+  GOAL_MARKER_FLAG_SHEETS,
   createGoalMarkerFlagAnimations,
   loadGoalMarkerFlagSheets,
 } from '../goals/markerFlags';
@@ -39,6 +40,12 @@ import {
   PVP_HEART_TEXTURE_PATH,
 } from './overworld/pvpHeartDisplay';
 import { logBootPhase, startBootStallWatch } from '../main/bootDiagnostics';
+
+type PendingBootAsset = {
+  key: string;
+  type: string;
+  url: string;
+};
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -57,11 +64,36 @@ export class BootScene extends Phaser.Scene {
       GHOST_EXTRA_SPRITESHEETS.length +
       avatarAtlasAssets.length +
       ROCKY_ROADS_FX_SPRITESHEETS.length +
+      GOAL_MARKER_FLAG_SHEETS.length +
       3;
     let lastProgress = 0;
-    const cancelAssetStallWatch = startBootStallWatch('asset preload', 15000, () => ({
+    const pendingAssets = new Map<string, PendingBootAsset>();
+    const trackAsset = (type: string, key: string, url: string) => {
+      pendingAssets.set(`${type}:${key}`, { key, type, url });
+    };
+    const clearTrackedAsset = (key: unknown, type: unknown) => {
+      if (typeof key !== 'string') {
+        return;
+      }
+
+      if (typeof type === 'string') {
+        pendingAssets.delete(`${type}:${key}`);
+      }
+
+      for (const [assetId, asset] of pendingAssets) {
+        if (asset.key === key) {
+          pendingAssets.delete(assetId);
+        }
+      }
+    };
+    const getPendingAssetDetails = () => ({
       progressPercent: Math.round(lastProgress * 100),
       assetGroupCount,
+      pendingAssetCount: pendingAssets.size,
+      pendingAssets: Array.from(pendingAssets.values()).slice(0, 12),
+    });
+    const cancelAssetStallWatch = startBootStallWatch('asset preload', 15000, () => ({
+      ...getPendingAssetDetails(),
     }));
     logBootPhase('boot-scene:preload-start', { assetGroupCount });
 
@@ -71,6 +103,7 @@ export class BootScene extends Phaser.Scene {
     });
 
     this.load.on('loaderror', (file: { key?: unknown; type?: unknown; url?: unknown }) => {
+      clearTrackedAsset(file.key, file.type);
       logBootPhase(
         'boot-scene:asset-error',
         {
@@ -81,21 +114,27 @@ export class BootScene extends Phaser.Scene {
         { level: 'warn' }
       );
     });
+    this.load.on('filecomplete', (key: unknown, type: unknown) => {
+      clearTrackedAsset(key, type);
+    });
 
     // Load all tilesets as images (Phaser tilemap system handles slicing)
     for (const ts of TILESETS) {
+      trackAsset('image', ts.key, ts.path);
       this.load.image(ts.key, ts.path);
     }
 
     // Load all background parallax layers
     for (const group of BACKGROUND_GROUPS) {
       for (const layer of group.layers) {
+        trackAsset('image', layer.key, layer.path);
         this.load.image(layer.key, layer.path);
       }
     }
 
     // Load game object spritesheets
     for (const obj of GAME_OBJECTS) {
+      trackAsset('spritesheet', obj.id, obj.path);
       this.load.spritesheet(obj.id, obj.path, {
         frameWidth: obj.frameWidth,
         frameHeight: obj.frameHeight,
@@ -103,17 +142,22 @@ export class BootScene extends Phaser.Scene {
     }
 
     for (const texture of BLOCK_SWITCH_ACTIVE_TEXTURES) {
+      trackAsset('image', texture.key, texture.path);
       this.load.image(texture.key, texture.path);
     }
 
+    trackAsset('spritesheet', 'cannon_bullet', 'assets/enemies/bullet.png');
     this.load.spritesheet('cannon_bullet', 'assets/enemies/bullet.png', {
       frameWidth: 16,
       frameHeight: 16,
     });
+    trackAsset('image', 'room_comment_icon', 'assets/ui/comment-indicator.png');
     this.load.image('room_comment_icon', 'assets/ui/comment-indicator.png');
+    trackAsset('image', PVP_HEART_TEXTURE_KEY, PVP_HEART_TEXTURE_PATH);
     this.load.image(PVP_HEART_TEXTURE_KEY, PVP_HEART_TEXTURE_PATH);
 
     for (const sheet of SWORDSMAN_AI_EXTRA_SPRITESHEETS) {
+      trackAsset('spritesheet', sheet.key, sheet.path);
       this.load.spritesheet(sheet.key, sheet.path, {
         frameWidth: sheet.frameWidth,
         frameHeight: sheet.frameHeight,
@@ -121,6 +165,7 @@ export class BootScene extends Phaser.Scene {
     }
 
     for (const sheet of GHOST_EXTRA_SPRITESHEETS) {
+      trackAsset('spritesheet', sheet.key, sheet.path);
       this.load.spritesheet(sheet.key, sheet.path, {
         frameWidth: sheet.frameWidth,
         frameHeight: sheet.frameHeight,
@@ -128,16 +173,21 @@ export class BootScene extends Phaser.Scene {
     }
 
     for (const atlas of avatarAtlasAssets) {
+      trackAsset('atlas', atlas.key, `${atlas.texturePath} + ${atlas.atlasPath}`);
       this.load.atlas(atlas.key, atlas.texturePath, atlas.atlasPath);
     }
 
     for (const effectSheet of ROCKY_ROADS_FX_SPRITESHEETS) {
+      trackAsset('spritesheet', effectSheet.key, effectSheet.path);
       this.load.spritesheet(effectSheet.key, effectSheet.path, {
         frameWidth: effectSheet.frameWidth,
         frameHeight: effectSheet.frameHeight,
       });
     }
 
+    for (const sheet of GOAL_MARKER_FLAG_SHEETS) {
+      trackAsset('spritesheet', sheet.textureKey, sheet.path);
+    }
     loadGoalMarkerFlagSheets(this);
 
     // Loading progress

@@ -2905,7 +2905,7 @@
     "/api/leaderboards/rooms/discover": {
       "get": {
         "summary": "Discover published rooms",
-        "description": "Public read. If sort=newest and no difficulty is supplied, the feed includes all published rooms; other room discovery views include published challenge rooms. If a bearer token is supplied, it must include leaderboards:read.",
+        "description": "Public read. By default this returns published challenge rooms. Set sort=newest with includeGoalLessRooms=true and no difficulty to include all newly published rooms. If a bearer token is supplied, it must include leaderboards:read.",
         "security": [
           { "bearerAuth": [] },
           {}
@@ -2933,6 +2933,12 @@
             "in": "query",
             "required": false,
             "schema": { "$ref": "#/components/schemas/RoomDiscoverySort" }
+          },
+          {
+            "name": "includeGoalLessRooms",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean", "default": false }
           }
         ],
         "responses": {
