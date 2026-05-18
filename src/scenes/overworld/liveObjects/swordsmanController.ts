@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import {
+  isSolidRuntimeObjectConfig,
+  objectCollidesWithWorld,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
@@ -89,7 +91,8 @@ const SWORDSMAN_AI_ATTACK_MS = 240;
 const SWORDSMAN_AI_ATTACK_HIT_START_MS = 55;
 const SWORDSMAN_AI_ATTACK_HIT_END_MS = 155;
 const SWORDSMAN_AI_COOLDOWN_MS = 300;
-const SWORDSMAN_AI_EDGE_GUARD_PROBE_LEAD_PX = 1;
+const SWORDSMAN_AI_SWORD_LOS_STEP_PX = 4;
+const SWORDSMAN_AI_EDGE_GUARD_PROBE_LEAD_PX = 4;
 const SWORDSMAN_AI_FACING_FLIP_MIN_INTERVAL_MS = 90;
 const SWORDSMAN_AI_FACING_FLIP_MIN_TRAVEL_PX = 6;
 const SWORDSMAN_AI_COLLECT_NODE_COIN_BONUS = 48;
@@ -168,10 +171,11 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
   }
 
   swordCanDamagePlayer(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
     playerBody: Phaser.Physics.Arcade.Body,
   ): boolean {
-    return this.swordsmanSwordCanDamagePlayer(liveObject, playerBody);
+    return this.swordsmanSwordCanDamagePlayer(loadedRoom, liveObject, playerBody);
   }
 
   resetFacingMemory(liveObject: LoadedRoomObject, directionX: number): void {
@@ -213,7 +217,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
         return;
       case 'duel':
       default:
-        this.updateSwordsmanDuelObjective(room, liveObject, body, now);
+        this.updateSwordsmanDuelObjective(loadedRoom, liveObject, body, now);
         return;
     }
   }
@@ -227,20 +231,21 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
   }
 
   private updateSwordsmanDuelObjective(
-    room: RoomSnapshot,
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
     body: Phaser.Physics.Arcade.Body,
     now: number,
   ): void {
-    const target = this.getSwordsmanDuelObjectiveTarget(room, body);
+    const target = this.getSwordsmanDuelObjectiveTarget(loadedRoom, liveObject, body);
     const currentState = liveObject.runtime.aiState ?? 'patrol';
 
     if (currentState === 'attack') {
       body.setVelocityX(0);
+      this.holdGroundedSwordsmanAttackBody(body);
       this.clearSwordsmanObjectiveTraversalState(liveObject, 'attack', body);
       this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX, { force: true });
       this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS['sword-slash']);
-      this.applySwordsmanSwordDamage(liveObject);
+      this.applySwordsmanSwordDamage(loadedRoom, liveObject);
       if (now >= liveObject.runtime.nextActionAt) {
         this.setSwordsmanAiState(liveObject, 'cooldown');
         this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS.idle);
@@ -250,6 +255,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
 
     if (currentState === 'windup') {
       body.setVelocityX(0);
+      this.holdGroundedSwordsmanAttackBody(body);
       this.clearSwordsmanObjectiveTraversalState(liveObject, 'windup', body);
       if (target) {
         liveObject.runtime.directionX = target.directionX;
@@ -257,13 +263,18 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX, { force: true });
       this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS.idle);
       if (now >= liveObject.runtime.nextActionAt) {
-        this.startSwordsmanAttack(liveObject);
+        if (target?.withinActionRange) {
+          this.startSwordsmanAttack(loadedRoom, liveObject);
+        } else {
+          this.setSwordsmanAiState(liveObject, target ? 'chase' : 'patrol');
+        }
       }
       return;
     }
 
     if (currentState === 'cooldown') {
       body.setVelocityX(0);
+      this.holdGroundedSwordsmanAttackBody(body);
       this.clearSwordsmanObjectiveTraversalState(liveObject, 'cooldown', body);
       this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS.idle);
       if (now >= liveObject.runtime.cooldownUntil) {
@@ -272,7 +283,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       return;
     }
 
-    this.runSwordsmanTraversalObjective(room, liveObject, body, target, now, {
+    this.runSwordsmanTraversalObjective(loadedRoom, liveObject, body, target, now, {
       onActionRangeReached: () => {
         this.startSwordsmanWindup(liveObject);
       },
@@ -286,7 +297,6 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     body: Phaser.Physics.Arcade.Body,
     now: number,
   ): void {
-    const room = loadedRoom.room;
     const target = this.getSwordsmanCollectObjectiveTarget(loadedRoom, liveObject, body);
     const currentState = liveObject.runtime.aiState ?? 'patrol';
 
@@ -295,7 +305,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       this.setSwordsmanAiState(liveObject, 'patrol');
     }
 
-    this.runSwordsmanTraversalObjective(room, liveObject, body, target?.objectiveTarget ?? null, now, {
+    this.runSwordsmanTraversalObjective(loadedRoom, liveObject, body, target?.objectiveTarget ?? null, now, {
       onActionRangeReached: () => {
         if (!target) {
           return;
@@ -314,10 +324,12 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
   }
 
   private getSwordsmanDuelObjectiveTarget(
-    room: RoomSnapshot,
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
     body: Phaser.Physics.Arcade.Body
   ): SwordsmanObjectiveTarget | null {
-    return buildSwordsmanDuelObjectiveTarget({
+    const room = loadedRoom.room;
+    const target = buildSwordsmanDuelObjectiveTarget({
       enemyBody: body,
       playerBody: this.options.getPlayerBody(),
       roomOrigin: this.options.getRoomOrigin(room.coordinates),
@@ -328,6 +340,19 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       attackRangeX: SWORDSMAN_AI_ATTACK_RANGE_X,
       attackRangeY: SWORDSMAN_AI_ATTACK_RANGE_Y,
     });
+
+    if (!target?.withinActionRange) {
+      return target;
+    }
+
+    if (this.canSwordsmanSwordReachTarget(loadedRoom, liveObject, target.body)) {
+      return target;
+    }
+
+    return {
+      ...target,
+      withinActionRange: false,
+    };
   }
 
   private getSwordsmanCollectObjectiveTarget(
@@ -1115,7 +1140,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
   }
 
   private runSwordsmanTraversalObjective(
-    room: RoomSnapshot,
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
     body: Phaser.Physics.Arcade.Body,
     target: SwordsmanObjectiveTarget | null,
@@ -1125,6 +1150,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       idleReason: string;
     },
   ): void {
+    const room = loadedRoom.room;
     const onFloor = body.blocked.down || body.touching.down;
     if (!target) {
       if (options.idleReason === 'collect-idle') {
@@ -1132,13 +1158,13 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
           (entry) => entry.until > now,
         );
         if (hasBlockedCollectRoute) {
-          this.runSwordsmanPatrolFallback(room, liveObject, body, 'collect-recovery');
+          this.runSwordsmanPatrolFallback(loadedRoom, liveObject, body, 'collect-recovery');
           return;
         }
         this.runSwordsmanCollectIdleFallback(liveObject, body, options.idleReason);
         return;
       }
-      this.runSwordsmanPatrolFallback(room, liveObject, body, options.idleReason);
+      this.runSwordsmanPatrolFallback(loadedRoom, liveObject, body, options.idleReason);
       return;
     }
 
@@ -1195,7 +1221,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     if (this.tryApplySwordsmanTraversalImpulse(liveObject, body, traversalDecision)) {
       return;
     }
-    this.maybeStartSwordsmanDropDownTraversalAttempt(liveObject, body, traversalDecision, now);
+    this.maybeStartSwordsmanDropDownTraversalAttempt(loadedRoom, liveObject, body, traversalDecision, now);
 
     if (!onFloor) {
       this.steerSwordsmanInAir(
@@ -1208,7 +1234,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       return;
     }
 
-    this.moveSwordsmanAlongGround(room, liveObject, body, SWORDSMAN_AI_SPEED, {
+    this.moveSwordsmanAlongGround(loadedRoom, liveObject, body, SWORDSMAN_AI_SPEED, {
       allowEdgeDrop: traversalDecision?.allowEdgeDrop ?? false,
       decision: traversalDecision,
     });
@@ -1234,21 +1260,20 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
   }
 
   private runSwordsmanPatrolFallback(
-    room: RoomSnapshot,
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
     body: Phaser.Physics.Arcade.Body,
     reason: string,
   ): void {
     this.setSwordsmanAiState(liveObject, 'patrol');
     this.clearSwordsmanObjectiveTraversalState(liveObject, reason, body);
-    this.maybeReverseGroundEnemy(room, liveObject, body);
+    this.maybeReverseGroundEnemy(loadedRoom.room, liveObject, body);
     this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX);
-    body.setVelocityX(liveObject.runtime.directionX * SWORDSMAN_AI_SPEED * 0.68);
-    this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS.run);
+    this.moveSwordsmanAlongGround(loadedRoom, liveObject, body, SWORDSMAN_AI_SPEED * 0.68);
   }
 
   private moveSwordsmanAlongGround(
-    room: RoomSnapshot,
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
     body: Phaser.Physics.Arcade.Body,
     speed: number,
@@ -1261,17 +1286,26 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     const movingTowardWall =
       (body.blocked.left && liveObject.runtime.directionX < 0) ||
       (body.blocked.right && liveObject.runtime.directionX > 0);
-    const allowJumpSetupApproach = this.shouldAllowSwordsmanJumpSetupEdgeApproach(
-      room,
+    const supportedByRuntimeObject = this.isSwordsmanSupportedBySolidRuntimeObject(
+      loadedRoom,
+      liveObject,
       body,
-      options.decision ?? null,
     );
+    const allowJumpSetupApproach =
+      !supportedByRuntimeObject &&
+      this.shouldAllowSwordsmanJumpSetupEdgeApproach(
+        loadedRoom.room,
+        body,
+        options.decision ?? null,
+      );
+    const allowEdgeDrop = Boolean(options.allowEdgeDrop && !supportedByRuntimeObject);
     const missingGroundAhead =
-      !options.allowEdgeDrop &&
+      !allowEdgeDrop &&
       !allowJumpSetupApproach &&
       onFloor &&
-      !this.hasSolidTerrainAhead(
-        room,
+      !this.hasSolidSupportAhead(
+        loadedRoom,
+        liveObject,
         body,
         liveObject.runtime.directionX,
         SWORDSMAN_AI_EDGE_GUARD_PROBE_LEAD_PX,
@@ -1975,6 +2009,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
   }
 
   private maybeStartSwordsmanDropDownTraversalAttempt(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
     body: Phaser.Physics.Arcade.Body,
     decision: SwordsmanTraversalDecision | null,
@@ -1992,6 +2027,10 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
 
     const onFloor = body.blocked.down || body.touching.down;
     if (!onFloor) {
+      return;
+    }
+
+    if (this.isSwordsmanSupportedBySolidRuntimeObject(loadedRoom, liveObject, body)) {
       return;
     }
 
@@ -2723,7 +2762,10 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS.idle);
   }
 
-  private startSwordsmanAttack(liveObject: LoadedRoomObject): void {
+  private startSwordsmanAttack(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+  ): void {
     const now = this.options.getCurrentTime();
     this.setSwordsmanAiState(liveObject, 'attack');
     liveObject.runtime.nextActionAt = now + SWORDSMAN_AI_ATTACK_MS;
@@ -2731,7 +2773,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     liveObject.runtime.cooldownUntil = now + SWORDSMAN_AI_ATTACK_MS + SWORDSMAN_AI_COOLDOWN_MS;
     this.applySwordsmanFacing(liveObject, null, liveObject.runtime.directionX, { force: true });
     liveObject.sprite.play(SWORDSMAN_AI_ANIMATION_KEYS['sword-slash'], false);
-    this.applySwordsmanSwordDamage(liveObject);
+    this.applySwordsmanSwordDamage(loadedRoom, liveObject);
   }
 
   private setSwordsmanAiState(
@@ -2754,9 +2796,12 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     liveObject.sprite.play(animationKey, true);
   }
 
-  private applySwordsmanSwordDamage(liveObject: LoadedRoomObject): void {
+  private applySwordsmanSwordDamage(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+  ): void {
     const playerBody = this.options.getPlayerBody();
-    if (!playerBody || !this.swordsmanSwordCanDamagePlayer(liveObject, playerBody)) {
+    if (!playerBody || !this.swordsmanSwordCanDamagePlayer(loadedRoom, liveObject, playerBody)) {
       return;
     }
 
@@ -2764,6 +2809,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
   }
 
   private swordsmanSwordCanDamagePlayer(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
     playerBody: Phaser.Physics.Arcade.Body,
   ): boolean {
@@ -2776,10 +2822,186 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       return false;
     }
 
-    return Phaser.Geom.Intersects.RectangleToRectangle(
+    return this.canSwordsmanSwordReachTarget(loadedRoom, liveObject, playerBody);
+  }
+
+  private canSwordsmanSwordReachTarget(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+    targetBody: ArcadeObjectBody,
+  ): boolean {
+    const targetBounds = getArcadeBodyBounds(targetBody);
+    if (!Phaser.Geom.Intersects.RectangleToRectangle(
       this.getSwordsmanAttackBounds(liveObject),
-      getArcadeBodyBounds(playerBody),
+      targetBounds,
+    )) {
+      return false;
+    }
+
+    return !this.isSwordsmanSwordPathBlocked(loadedRoom, liveObject, targetBounds);
+  }
+
+  private isSwordsmanSwordPathBlocked(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+    targetBounds: Phaser.Geom.Rectangle,
+  ): boolean {
+    const lane = this.getSwordsmanSwordPathLane(liveObject, targetBounds);
+    if (!lane) {
+      return false;
+    }
+
+    if (this.swordsmanSwordLaneHitsSolidTerrain(loadedRoom.room, lane)) {
+      return true;
+    }
+
+    for (const candidate of loadedRoom.liveObjects) {
+      const body = this.getSolidRuntimeObjectBody(candidate, liveObject);
+      if (!body) {
+        continue;
+      }
+
+      if (Phaser.Geom.Intersects.RectangleToRectangle(lane, getArcadeBodyBounds(body))) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private getSwordsmanSwordPathLane(
+    liveObject: LoadedRoomObject,
+    targetBounds: Phaser.Geom.Rectangle,
+  ): Phaser.Geom.Rectangle | null {
+    const body = liveObject.sprite.body as ArcadeObjectBody | null;
+    if (!body) {
+      return null;
+    }
+
+    const attackBounds = this.getSwordsmanAttackBounds(liveObject);
+    const overlapTop = Math.max(attackBounds.top, targetBounds.top);
+    const overlapBottom = Math.min(attackBounds.bottom, targetBounds.bottom);
+    if (overlapBottom <= overlapTop) {
+      return null;
+    }
+
+    const bodyBounds = getArcadeBodyBounds(body);
+    const directionX = liveObject.runtime.directionX >= 0 ? 1 : -1;
+    const pathStartX = directionX > 0 ? bodyBounds.right : targetBounds.right;
+    const pathEndX = directionX > 0 ? targetBounds.left : bodyBounds.left;
+    const left = Math.min(pathStartX, pathEndX);
+    const right = Math.max(pathStartX, pathEndX);
+    if (right - left <= 1) {
+      return null;
+    }
+
+    return new Phaser.Geom.Rectangle(left, overlapTop, right - left, overlapBottom - overlapTop);
+  }
+
+  private swordsmanSwordLaneHitsSolidTerrain(
+    room: RoomSnapshot,
+    lane: Phaser.Geom.Rectangle,
+  ): boolean {
+    const left = Math.floor(lane.left) + 1;
+    const right = Math.ceil(lane.right) - 1;
+    if (right < left) {
+      return false;
+    }
+
+    const top = lane.top + 1;
+    const bottom = lane.bottom - 1;
+    const sampleYs = [
+      lane.centerY,
+      Phaser.Math.Clamp(top, lane.top, lane.bottom),
+      Phaser.Math.Clamp(bottom, lane.top, lane.bottom),
+    ];
+    const sampleAtX = (x: number): boolean => {
+      for (const y of sampleYs) {
+        if (this.hasSolidTerrainAtWorldPoint(room, x, y)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    for (let x = left; x <= right; x += SWORDSMAN_AI_SWORD_LOS_STEP_PX) {
+      if (sampleAtX(x)) {
+        return true;
+      }
+    }
+
+    return sampleAtX(right);
+  }
+
+  private hasSolidSupportAhead(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+    body: Phaser.Physics.Arcade.Body,
+    directionX: number,
+    leadPx = 4,
+  ): boolean {
+    const probeX = body.center.x + directionX * (body.halfWidth + leadPx);
+    const probeY = body.bottom + 2;
+    return (
+      this.hasSolidTerrainAtWorldPoint(loadedRoom.room, probeX, probeY) ||
+      this.solidRuntimeObjectContainsPoint(loadedRoom, liveObject, probeX, probeY)
     );
+  }
+
+  private isSwordsmanSupportedBySolidRuntimeObject(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+    body: Phaser.Physics.Arcade.Body,
+  ): boolean {
+    const probeY = body.bottom + 2;
+    return [body.left + 1, body.center.x, body.right - 1].some((probeX) =>
+      this.solidRuntimeObjectContainsPoint(loadedRoom, liveObject, probeX, probeY)
+    );
+  }
+
+  private solidRuntimeObjectContainsPoint(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    excludedObject: LoadedRoomObject,
+    x: number,
+    y: number,
+  ): boolean {
+    for (const candidate of loadedRoom.liveObjects) {
+      const body = this.getSolidRuntimeObjectBody(candidate, excludedObject);
+      if (!body) {
+        continue;
+      }
+
+      const bounds = getArcadeBodyBounds(body);
+      if (x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private getSolidRuntimeObjectBody(
+    candidate: LoadedRoomObject,
+    excludedObject: LoadedRoomObject,
+  ): ArcadeObjectBody | null {
+    if (
+      candidate === excludedObject ||
+      !candidate.sprite.active ||
+      !candidate.sprite.body ||
+      !objectCollidesWithWorld(candidate.config) ||
+      !isSolidRuntimeObjectConfig(candidate.config)
+    ) {
+      return null;
+    }
+
+    const body = candidate.sprite.body as ArcadeObjectBody;
+    return body.enable ? body : null;
+  }
+
+  private holdGroundedSwordsmanAttackBody(body: Phaser.Physics.Arcade.Body): void {
+    if (body.blocked.down || body.touching.down) {
+      body.setVelocityY(0);
+    }
   }
 
   private getSwordsmanAttackBounds(liveObject: LoadedRoomObject): Phaser.Geom.Rectangle {
@@ -2841,17 +3063,6 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
 
     const facingRight = directionX > 0;
     sprite.setFlipX(config.facingDirection === 'right' ? !facingRight : facingRight);
-  }
-
-  private hasSolidTerrainAhead(
-    room: RoomSnapshot,
-    body: Phaser.Physics.Arcade.Body,
-    directionX: number,
-    leadPx = 4,
-  ): boolean {
-    const probeX = body.center.x + directionX * (body.halfWidth + leadPx);
-    const probeY = body.bottom + 2;
-    return this.hasSolidTerrainAtWorldPoint(room, probeX, probeY);
   }
 
   private hasSolidTerrainAtWorldPoint(room: RoomSnapshot, worldX: number, worldY: number): boolean {
