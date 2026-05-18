@@ -352,7 +352,7 @@ export class OverworldMovementController {
     }
 
     const crateInteraction =
-      !inQuicksand && !specialEnvironment.inWater && grounded && horizontalInput !== 0
+      !inQuicksand && (grounded || specialEnvironment.inWater) && horizontalInput !== 0
         ? this.findCrateInteraction(horizontalInput, downHeld, specialEnvironment.gravityDirection)
         : null;
     const standingHitboxFits =
@@ -547,7 +547,6 @@ export class OverworldMovementController {
     const deltaSeconds = Math.max(delta / 1000, 1 / 60);
 
     this.setPlayerLadderState(null);
-    this.resetWallMovementState();
     this.host.state.isCrouching = false;
     this.syncPlayerHitbox();
 
@@ -572,14 +571,17 @@ export class OverworldMovementController {
     }
 
     const crateInteraction =
-      !inQuicksand &&
-      !specialEnvironment.inWater &&
-      grounded &&
-      controls.tangentInput !== 0
+      !inQuicksand && (grounded || specialEnvironment.inWater) && controls.tangentInput !== 0
         ? this.findCrateInteraction(controls.tangentInput, controls.crouchHeld, gravityDirection)
         : null;
     this.host.state.isCrouching = grounded && controls.crouchHeld && !crateInteraction;
     this.syncPlayerHitbox();
+    const canWallAttach =
+      !grounded &&
+      crateInteraction === null &&
+      !this.host.state.isCrouching &&
+      !specialEnvironment.inWater;
+    this.updateWallMovementState(controls.tangentInput, grounded, canWallAttach, gravityDirection);
 
     const moveSpeedBase = this.host.state.isCrouching
       ? this.options.crawlSpeed
@@ -596,24 +598,36 @@ export class OverworldMovementController {
       this.applyCrateInteraction(playerBody, crateInteraction, moveSpeed, delta);
     } else {
       this.clearCrateInteractionState();
-      const targetTangentVelocity = controls.tangentInput * moveSpeedBase;
-      const currentTangentVelocity = getBodyVelocityAlongVector(playerBody, rightVector);
-      if (specialEnvironment.onIce && grounded) {
-        const nextTangentVelocity =
-          controls.tangentInput === 0
-            ? currentTangentVelocity * ICE_COAST_FACTOR
-            : Phaser.Math.Linear(
-                currentTangentVelocity,
-                targetTangentVelocity,
-                Phaser.Math.Clamp(ICE_ACCELERATION * deltaSeconds / Math.max(1, moveSpeedBase), 0, 1),
-              );
-        setBodyVelocityAlongVector(playerBody, rightVector, nextTangentVelocity);
+      if (
+        this.host.getCurrentTime() < this.host.state.wallJumpLockUntil &&
+        this.host.state.wallJumpDirection !== 0
+      ) {
+        setBodyVelocityAlongVector(
+          playerBody,
+          rightVector,
+          this.host.state.wallJumpDirection * this.options.wallJumpVelocityX,
+        );
       } else {
-        setBodyVelocityAlongVector(playerBody, rightVector, targetTangentVelocity);
+        const targetTangentVelocity = controls.tangentInput * moveSpeedBase;
+        const currentTangentVelocity = getBodyVelocityAlongVector(playerBody, rightVector);
+        if (specialEnvironment.onIce && grounded) {
+          const nextTangentVelocity =
+            controls.tangentInput === 0
+              ? currentTangentVelocity * ICE_COAST_FACTOR
+              : Phaser.Math.Linear(
+                  currentTangentVelocity,
+                  targetTangentVelocity,
+                  Phaser.Math.Clamp(ICE_ACCELERATION * deltaSeconds / Math.max(1, moveSpeedBase), 0, 1),
+                );
+          setBodyVelocityAlongVector(playerBody, rightVector, nextTangentVelocity);
+        } else {
+          setBodyVelocityAlongVector(playerBody, rightVector, targetTangentVelocity);
+        }
       }
     }
 
-    if (controls.jumpPressed && (specialEnvironment.inWater || this.host.state.coyoteTime > 0)) {
+    const jumpPressed = !this.host.state.isCrouching && controls.jumpPressed;
+    const performGravityJump = () => {
       const launchVelocity =
         specialEnvironment.inWater
           ? WATER_SWIM_KICK_VELOCITY
@@ -625,6 +639,40 @@ export class OverworldMovementController {
       this.host.state.jumpBuffered = false;
       this.host.state.jumpBufferTime = 0;
       this.host.state.coyoteTime = 0;
+      this.host.state.wallJumpActive = false;
+      this.host.state.wallJumpDirection = 0;
+      this.host.state.wallJumpLockUntil = 0;
+      this.clearWallContactState();
+      this.host.state.wallJumpChainActive = false;
+    };
+
+    if (jumpPressed) {
+      if (specialEnvironment.inWater) {
+        performGravityJump();
+      } else if (!this.tryPerformWallJump(player, playerBody, gravityDirection)) {
+        this.host.state.jumpBuffered = true;
+        this.host.state.jumpBufferTime =
+          !grounded && this.host.state.coyoteTime <= 0
+            ? this.options.wallJumpBufferMs
+            : this.options.jumpBufferMs;
+      }
+    }
+
+    if (
+      this.host.state.jumpBuffered &&
+      !specialEnvironment.inWater &&
+      this.tryPerformWallJump(player, playerBody, gravityDirection)
+    ) {
+      // Wall-jump buffering lets the player press jump just before reaching the next wall.
+    } else if (this.host.state.jumpBuffered && this.host.state.coyoteTime > 0) {
+      performGravityJump();
+    }
+
+    if (this.host.state.jumpBufferTime > 0) {
+      this.host.state.jumpBufferTime -= delta;
+      if (this.host.state.jumpBufferTime <= 0) {
+        this.host.state.jumpBuffered = false;
+      }
     }
 
     const currentNormalVelocity = getBodyVelocityAlongVector(playerBody, gravityVector);
@@ -634,6 +682,17 @@ export class OverworldMovementController {
       this.host.getCurrentTime() >= this.host.getExternalLaunchGraceUntil()
     ) {
       setBodyVelocityAlongVector(playerBody, gravityVector, currentNormalVelocity * 0.86);
+    }
+
+    if (this.host.state.isWallSliding) {
+      const wallSlideGravityVelocity = getBodyVelocityAlongVector(playerBody, gravityVector);
+      if (wallSlideGravityVelocity > this.options.wallSlideMaxFallSpeed) {
+        setBodyVelocityAlongVector(
+          playerBody,
+          gravityVector,
+          this.options.wallSlideMaxFallSpeed,
+        );
+      }
     }
 
     if (grounded && specialEnvironment.conveyorX !== 0) {
@@ -747,6 +806,7 @@ export class OverworldMovementController {
   private tryPerformWallJump(
     player: Phaser.GameObjects.Rectangle,
     playerBody: Phaser.Physics.Arcade.Body,
+    gravityDirection: PlayerGravityDirection = 'down',
   ): boolean {
     const wallJumpSourceSide = this.host.state.wallContactSide;
     if (wallJumpSourceSide === 0) {
@@ -754,8 +814,16 @@ export class OverworldMovementController {
     }
 
     const wallJumpDirection = (wallJumpSourceSide === -1 ? 1 : -1) as -1 | 1;
-    playerBody.setVelocityX(wallJumpDirection * this.options.wallJumpVelocityX);
-    playerBody.setVelocityY(this.options.wallJumpVelocityY);
+    setBodyVelocityAlongVector(
+      playerBody,
+      getGravityRightVector(gravityDirection),
+      wallJumpDirection * this.options.wallJumpVelocityX,
+    );
+    setBodyVelocityAlongVector(
+      playerBody,
+      getGravityVector(gravityDirection),
+      this.options.wallJumpVelocityY,
+    );
     this.host.playJumpDustFx(
       player.x ?? playerBody.center.x,
       playerBody.bottom,
@@ -773,23 +841,37 @@ export class OverworldMovementController {
     return true;
   }
 
-  private getTouchingWallSide(): -1 | 1 | 0 {
+  private getTouchingWallSide(gravityDirection: PlayerGravityDirection = 'down'): -1 | 1 | 0 {
     const playerBody = this.host.getPlayerBody();
     if (!playerBody) {
       return 0;
     }
 
-    const touchingLeft = playerBody.blocked.left || playerBody.touching.left;
-    const touchingRight = playerBody.blocked.right || playerBody.touching.right;
-    if (touchingLeft === touchingRight) {
+    const rightVector = getGravityRightVector(gravityDirection);
+    if (rightVector.x !== 0) {
+      const touchingLeft = playerBody.blocked.left || playerBody.touching.left;
+      const touchingRight = playerBody.blocked.right || playerBody.touching.right;
+      if (touchingLeft === touchingRight) {
+        return 0;
+      }
+
+      return touchingLeft ? (-rightVector.x as -1 | 1) : (rightVector.x as -1 | 1);
+    }
+
+    const touchingUp = playerBody.blocked.up || playerBody.touching.up;
+    const touchingDown = playerBody.blocked.down || playerBody.touching.down;
+    if (touchingUp === touchingDown) {
       return 0;
     }
 
-    return touchingLeft ? -1 : 1;
+    return touchingUp ? (-rightVector.y as -1 | 1) : (rightVector.y as -1 | 1);
   }
 
-  private getWallContactSide(horizontalInput: number): -1 | 1 | 0 {
-    const touchingWallSide = this.getTouchingWallSide();
+  private getWallContactSide(
+    horizontalInput: number,
+    gravityDirection: PlayerGravityDirection = 'down',
+  ): -1 | 1 | 0 {
+    const touchingWallSide = this.getTouchingWallSide(gravityDirection);
     if (touchingWallSide === 0) {
       return 0;
     }
@@ -810,19 +892,30 @@ export class OverworldMovementController {
     return 0;
   }
 
-  private updateWallMovementState(horizontalInput: number, grounded: boolean, canWallAttach: boolean): void {
+  private updateWallMovementState(
+    horizontalInput: number,
+    grounded: boolean,
+    canWallAttach: boolean,
+    gravityDirection: PlayerGravityDirection = 'down',
+  ): void {
     const playerBody = this.host.getPlayerBody();
     if (!playerBody || grounded || this.host.state.isClimbingLadder) {
       this.resetWallMovementState();
       return;
     }
 
-    if (this.host.state.wallJumpActive && playerBody.velocity.y >= 0) {
+    const gravityVelocity = getBodyVelocityAlongVector(
+      playerBody,
+      getGravityVector(gravityDirection),
+    );
+    if (this.host.state.wallJumpActive && gravityVelocity >= 0) {
       this.host.state.wallJumpActive = false;
       this.host.state.wallJumpDirection = 0;
     }
 
-    const rawWallContactSide = canWallAttach ? this.getWallContactSide(horizontalInput) : 0;
+    const rawWallContactSide = canWallAttach
+      ? this.getWallContactSide(horizontalInput, gravityDirection)
+      : 0;
     const now = this.host.getCurrentTime();
     if (rawWallContactSide !== 0) {
       this.host.state.wallContactGraceSide = rawWallContactSide;
@@ -838,7 +931,7 @@ export class OverworldMovementController {
         ? this.host.state.wallContactGraceSide
         : 0;
     this.host.state.wallContactSide = wallContactSide;
-    this.host.state.isWallSliding = rawWallContactSide !== 0 && playerBody.velocity.y >= 0;
+    this.host.state.isWallSliding = rawWallContactSide !== 0 && gravityVelocity >= 0;
 
     if (this.host.state.isWallSliding) {
       this.host.state.wallJumpActive = false;
