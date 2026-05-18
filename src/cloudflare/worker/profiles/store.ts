@@ -8,6 +8,7 @@ import { findUserById, loadAllUserStatsRows, loadPublicUserProfileCourseCount, l
 import { loadPublicProgressionSummary } from '../progression/store';
 import { parseStoredSnapshot } from '../rooms/store';
 import { compareGlobalLeaderboardEntries, mapUserStatsRow } from '../runs/points';
+import { loadPublicPlaylistSummariesForUser } from '../playlists/store';
 
 const EMPTY_PROFILE_STATS: ProfileStatsSummary = {
   totalPoints: 0,
@@ -68,11 +69,12 @@ export async function loadUserProfile(
     return null;
   }
 
-  const [statsRow, allStatsRows, publishedRoomRows, publishedCourseCount] = await Promise.all([
+  const [statsRow, allStatsRows, publishedRoomRows, publishedCourseCount, playlists] = await Promise.all([
     loadUserStatsRow(env, targetUserId),
     loadAllUserStatsRows(env),
     loadPublishedRoomsByCreator(env, targetUserId),
     loadPublicUserProfileCourseCount(env, targetUserId),
+    loadPublicPlaylistSummariesForUser(env, targetUserId),
   ]);
 
   const stats = buildProfileStats(statsRow, allStatsRows, publishedRoomRows.length);
@@ -95,6 +97,7 @@ export async function loadUserProfile(
     stats,
     progression,
     publishedRooms,
+    playlists,
     publishedCourseCount,
   };
 }

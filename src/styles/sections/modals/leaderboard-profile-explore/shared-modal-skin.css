@@ -445,6 +445,21 @@
   color: #fff3db;
 }
 
+#explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='unbeaten'] {
+  background: #ed5f4b;
+  color: #fff3db;
+}
+
+#explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='unvisited'] {
+  background: #2c5071;
+  color: #fff3db;
+}
+
+#explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='unrated'] {
+  background: #d7ac63;
+  color: #000;
+}
+
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='builders'],
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-builder-sort='rooms'] {
   background: #fcea7c;

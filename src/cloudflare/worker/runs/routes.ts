@@ -695,6 +695,7 @@ export async function handleRoomDiscovery(
     limit,
     sort,
     includeGoalLessRooms,
+    auth?.user.id ?? null,
   );
   return jsonResponse(request, response);
 }

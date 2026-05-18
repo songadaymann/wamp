@@ -1,0 +1,213 @@
+#playlist-modal {
+  background: rgba(24, 22, 28, 0.8);
+  backdrop-filter: none;
+}
+
+#playlist-modal .playlist-modal-panel {
+  width: min(780px, calc(100vw - 36px));
+  max-height: calc(100vh - 32px);
+  gap: 16px;
+  padding: 20px 18px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #fff3db;
+  border: 3px solid #79ccde;
+  border-radius: 0;
+  box-shadow: 6px 6px 0 #18161c;
+}
+
+#playlist-modal .history-modal-kicker,
+#playlist-modal .history-modal-title,
+#playlist-modal .history-modal-meta,
+#playlist-modal .leaderboard-empty,
+#playlist-modal .profile-overview-bio {
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+}
+
+#playlist-modal .history-modal-kicker {
+  color: #2c5071;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+#playlist-modal .history-modal-title {
+  margin-top: 6px;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 19px;
+  line-height: 1.25;
+}
+
+#playlist-modal .history-modal-meta,
+#playlist-modal .profile-overview-bio {
+  color: #2c5071;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#playlist-modal .history-modal-error {
+  padding: 12px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #ed5f4b;
+  color: #fff3db;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#playlist-modal .history-modal-header > .bar-btn,
+#profile-modal .profile-playlist-actions .bar-btn,
+#profile-modal .profile-playlist-create-actions .bar-btn,
+#profile-modal .profile-add-room-playlist-btn,
+#explore-modal .explore-room-playlist-action .bar-btn,
+#playlist-modal .playlist-remove-room-btn {
+  min-height: 34px;
+  padding: 8px 12px 7px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #79ccde;
+  color: #000;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#playlist-modal .history-modal-header > .bar-btn:disabled,
+#profile-modal .profile-playlist-actions .bar-btn:disabled,
+#profile-modal .profile-playlist-create-actions .bar-btn:disabled,
+#profile-modal .profile-add-room-playlist-btn:disabled,
+#explore-modal .explore-room-playlist-action .bar-btn:disabled,
+#playlist-modal .playlist-remove-room-btn:disabled {
+  background: #c2bbb6;
+  color: #6d6768;
+  box-shadow: none;
+}
+
+#profile-modal .profile-tabs {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+#profile-modal .profile-playlist-create-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: #fff3db;
+  border: 2px solid #2c5071;
+  border-radius: 0;
+}
+
+#profile-modal .profile-playlist-create-actions {
+  display: grid;
+  grid-template-columns: minmax(130px, auto) minmax(92px, auto) minmax(180px, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+#profile-modal #profile-playlist-select {
+  width: 100%;
+}
+
+#profile-modal .profile-room-playlist-row,
+#playlist-modal .playlist-room-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+#profile-modal .profile-room-playlist-row .profile-room-card,
+#playlist-modal .playlist-room-card {
+  width: 100%;
+}
+
+#profile-modal .profile-add-room-playlist-btn,
+#playlist-modal .playlist-remove-room-btn {
+  justify-self: end;
+  min-width: 82px;
+}
+
+#profile-modal .profile-playlist-list,
+#playlist-modal .playlist-room-list {
+  display: grid;
+  gap: 12px;
+}
+
+#explore-modal .explore-room-playlist-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+#explore-modal .explore-room-playlist-action:has(select) {
+  grid-template-columns: minmax(160px, 1fr) auto auto;
+}
+
+#explore-modal .explore-room-playlist-select {
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 2px solid #2c5071;
+  border-radius: 0;
+  background: #fff3db;
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+#profile-modal .profile-playlist-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  background: #fffaf0;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#profile-modal .profile-playlist-open {
+  display: grid;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+#profile-modal .profile-playlist-description {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#profile-modal .profile-playlist-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 700px) {
+  #profile-modal .profile-playlist-create-actions,
+  #profile-modal .profile-room-playlist-row,
+  #profile-modal .profile-playlist-card,
+  #playlist-modal .playlist-room-row {
+    grid-template-columns: 1fr;
+  }
+
+  #profile-modal .profile-add-room-playlist-btn,
+  #playlist-modal .playlist-remove-room-btn {
+    justify-self: stretch;
+  }
+}

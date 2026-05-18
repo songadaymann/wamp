@@ -23,6 +23,12 @@ import { createPlayerAvatarPreviewDataUrl } from '../../player/avatar/previews';
 import { DEFAULT_PLAYER_AVATAR_ID } from '../../player/avatar/registry';
 import { setStoredPlayerAvatarId } from '../../player/avatar/storage';
 import { resolveSelectablePlayerAvatarId } from '../../player/avatar/unlocks';
+import type { RoomPlaylistSummary } from '../../playlists/model';
+import {
+  buildPlaylistShareUrl,
+  derivePlaylistSlugBase,
+} from '../../playlists/model';
+import { createPlaylistRepository, type PlaylistRepository } from '../../playlists/repository';
 import type { ProfilePublishedRoomEntry, ProfileStatsSummary, UserProfileResponse } from '../../profiles/model';
 import { createProfileRepository, type ProfileRepository } from '../../profiles/profileRepository';
 import {
@@ -39,8 +45,9 @@ import {
   type ProfileInvalidatedDetail,
   type ProfileOpenRequestDetail,
 } from './profileEvents';
+import { requestPlaylistOpen } from './playlistEvents';
 
-type ProfileTabId = 'rooms' | 'progress' | 'stats';
+type ProfileTabId = 'rooms' | 'playlists' | 'progress' | 'stats';
 
 type ProfileModalElements = {
   modal: HTMLElement | null;
@@ -78,6 +85,15 @@ type ProfileModalElements = {
   panels: Record<ProfileTabId, HTMLElement | null>;
   roomsList: HTMLElement | null;
   roomsEmpty: HTMLElement | null;
+  playlistCreateFields: HTMLElement | null;
+  playlistTitleInput: HTMLInputElement | null;
+  playlistSlugInput: HTMLInputElement | null;
+  playlistDescriptionInput: HTMLTextAreaElement | null;
+  playlistCreateButton: HTMLButtonElement | null;
+  playlistSelect: HTMLSelectElement | null;
+  playlistStatus: HTMLElement | null;
+  playlistsList: HTMLElement | null;
+  playlistsEmpty: HTMLElement | null;
   progressList: HTMLElement | null;
   statsList: HTMLElement | null;
 };
@@ -144,6 +160,9 @@ export class ProfileModalController {
   private cryptopunkPollTimer: number | null = null;
   private cryptopunkInputTimer: number | null = null;
   private activeTabAutoSelected = false;
+  private selectedPlaylistId: string | null = null;
+  private playlistBusy = false;
+  private playlistStatus = '';
 
   private readonly handleCloseClick = () => {
     this.close();
@@ -236,6 +255,7 @@ export class ProfileModalController {
     private readonly doc: Document = document,
     private readonly windowObj: Window = window,
     private readonly avatarRepository: AvatarRepository = createAvatarRepository(),
+    private readonly playlistRepository: PlaylistRepository = createPlaylistRepository(),
   ) {
     this.elements = {
       modal: this.doc.getElementById('profile-modal'),
@@ -271,16 +291,27 @@ export class ProfileModalController {
       saveStatus: this.doc.getElementById('profile-save-status'),
       tabButtons: {
         rooms: this.doc.getElementById('btn-profile-tab-rooms') as HTMLButtonElement | null,
+        playlists: this.doc.getElementById('btn-profile-tab-playlists') as HTMLButtonElement | null,
         progress: this.doc.getElementById('btn-profile-tab-progress') as HTMLButtonElement | null,
         stats: this.doc.getElementById('btn-profile-tab-stats') as HTMLButtonElement | null,
       },
       panels: {
         rooms: this.doc.getElementById('profile-rooms-panel'),
+        playlists: this.doc.getElementById('profile-playlists-panel'),
         progress: this.doc.getElementById('profile-progress-panel'),
         stats: this.doc.getElementById('profile-stats-panel'),
       },
       roomsList: this.doc.getElementById('profile-rooms-list'),
       roomsEmpty: this.doc.getElementById('profile-rooms-empty'),
+      playlistCreateFields: this.doc.getElementById('profile-playlist-create-fields'),
+      playlistTitleInput: this.doc.getElementById('profile-playlist-title-input') as HTMLInputElement | null,
+      playlistSlugInput: this.doc.getElementById('profile-playlist-slug-input') as HTMLInputElement | null,
+      playlistDescriptionInput: this.doc.getElementById('profile-playlist-description-input') as HTMLTextAreaElement | null,
+      playlistCreateButton: this.doc.getElementById('btn-profile-playlist-create') as HTMLButtonElement | null,
+      playlistSelect: this.doc.getElementById('profile-playlist-select') as HTMLSelectElement | null,
+      playlistStatus: this.doc.getElementById('profile-playlist-status'),
+      playlistsList: this.doc.getElementById('profile-playlists-list'),
+      playlistsEmpty: this.doc.getElementById('profile-playlists-empty'),
       progressList: this.doc.getElementById('profile-progress-list'),
       statsList: this.doc.getElementById('profile-stats-list'),
     };
@@ -311,6 +342,16 @@ export class ProfileModalController {
     this.elements.cryptopunkPreviewImage?.addEventListener('error', this.handleCryptopunkPreviewError);
     this.elements.saveButton?.addEventListener('click', () => {
       void this.saveProfile();
+    });
+    this.elements.playlistCreateButton?.addEventListener('click', () => {
+      void this.createPlaylist();
+    });
+    this.elements.playlistTitleInput?.addEventListener('input', () => {
+      this.updatePlaylistSlugDraft();
+    });
+    this.elements.playlistSelect?.addEventListener('change', () => {
+      this.selectedPlaylistId = this.elements.playlistSelect?.value || null;
+      this.renderRooms(this.currentProfile?.publishedRooms ?? []);
     });
     this.elements.displayNameInput?.addEventListener('input', () => {
       this.renderAvatar();
@@ -353,6 +394,7 @@ export class ProfileModalController {
     this.selectedAvatarIdDraft = DEFAULT_PLAYER_AVATAR_ID;
     this.setError(null);
     this.setSaveStatus('');
+    this.setPlaylistStatus('');
     this.currentProfile = null;
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
@@ -397,6 +439,7 @@ export class ProfileModalController {
     this.selectedAvatarIdDraft = DEFAULT_PLAYER_AVATAR_ID;
     this.setError(null);
     this.setSaveStatus('');
+    this.setPlaylistStatus('');
     this.currentProfile = null;
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
@@ -447,6 +490,9 @@ export class ProfileModalController {
     this.currentProfile = null;
     this.loading = false;
     this.saving = false;
+    this.playlistBusy = false;
+    this.selectedPlaylistId = null;
+    this.playlistStatus = '';
     this.avatarPreviewBroken = false;
     this.cryptopunkPreviewBroken = false;
     this.cryptopunkPreviewUrl = null;
@@ -462,6 +508,7 @@ export class ProfileModalController {
     this.clearCryptopunkInputTimer();
     this.setError(null);
     this.setSaveStatus('');
+    this.setPlaylistStatus('');
   }
 
   private async saveProfile(): Promise<void> {
@@ -585,6 +632,7 @@ export class ProfileModalController {
     this.renderShareControls();
     this.renderAvatarPicker();
     this.renderRooms(profile?.publishedRooms ?? []);
+    this.renderPlaylists(profile?.playlists ?? [], Boolean(profile?.canEdit));
     this.renderProgress(profile?.progression ?? null);
     this.renderStats(profile?.stats ?? null, profile?.publishedCourseCount ?? 0);
     this.renderTabs();
@@ -1263,6 +1311,30 @@ export class ProfileModalController {
     copy.append(title, meta, this.createRoomRatingRow(room));
     button.append(preview, copy);
     this.attachRoomPreview(room, previewImage, previewFallback);
+    if (this.currentProfile?.canEdit) {
+      const row = this.doc.createElement('div');
+      row.className = 'profile-room-playlist-row';
+      row.append(button, this.createAddRoomToPlaylistButton(room));
+      return row;
+    }
+
+    return button;
+  }
+
+  private createAddRoomToPlaylistButton(room: ProfilePublishedRoomEntry): HTMLButtonElement {
+    const button = this.doc.createElement('button');
+    button.type = 'button';
+    button.className = 'bar-btn bar-btn-small profile-add-room-playlist-btn';
+    const playlists = this.currentProfile?.playlists ?? [];
+    const selectedPlaylist = this.getSelectedPlaylist();
+    button.textContent = this.playlistBusy ? 'Adding...' : 'Add';
+    button.disabled = this.playlistBusy || playlists.length === 0 || !selectedPlaylist;
+    button.title = playlists.length === 0 ? 'Create a playlist first.' : 'Add this room to the selected playlist.';
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void this.addRoomToSelectedPlaylist(room);
+    });
     return button;
   }
 
@@ -1315,6 +1387,226 @@ export class ProfileModalController {
 
     quality.append(stars, label);
     return quality;
+  }
+
+  private renderPlaylists(playlists: RoomPlaylistSummary[], canEdit: boolean): void {
+    if (this.elements.playlistCreateFields) {
+      this.elements.playlistCreateFields.classList.toggle('hidden', !canEdit);
+    }
+
+    this.syncSelectedPlaylist(playlists);
+    this.renderPlaylistSelect(playlists, canEdit);
+    this.renderPlaylistStatus();
+
+    if (!this.elements.playlistsList) {
+      return;
+    }
+
+    this.elements.playlistsEmpty?.classList.toggle('hidden', playlists.length > 0);
+    this.elements.playlistsList.replaceChildren(
+      ...playlists.map((playlist) => this.createPlaylistRow(playlist, canEdit)),
+    );
+  }
+
+  private renderPlaylistSelect(playlists: RoomPlaylistSummary[], canEdit: boolean): void {
+    const select = this.elements.playlistSelect;
+    if (!select) {
+      return;
+    }
+
+    select.replaceChildren();
+    if (playlists.length === 0) {
+      const option = this.doc.createElement('option');
+      option.value = '';
+      option.textContent = 'Create a playlist first';
+      select.appendChild(option);
+    } else {
+      for (const playlist of playlists) {
+        const option = this.doc.createElement('option');
+        option.value = playlist.id;
+        option.textContent = playlist.title;
+        select.appendChild(option);
+      }
+    }
+    select.value = this.selectedPlaylistId ?? '';
+    select.disabled = !canEdit || this.playlistBusy || playlists.length === 0;
+  }
+
+  private createPlaylistRow(playlist: RoomPlaylistSummary, canEdit: boolean): HTMLElement {
+    const row = this.doc.createElement('div');
+    row.className = 'profile-playlist-card';
+
+    const button = this.doc.createElement('button');
+    button.type = 'button';
+    button.className = 'profile-playlist-open';
+    button.addEventListener('click', () => {
+      if (requestPlaylistOpen(playlist.slug, this.windowObj)) {
+        this.close();
+      }
+    });
+
+    const title = this.doc.createElement('div');
+    title.className = 'profile-room-card-title';
+    title.textContent = playlist.title;
+
+    const meta = this.doc.createElement('div');
+    meta.className = 'profile-room-card-meta';
+    meta.textContent = `${playlist.roomCount} ${playlist.roomCount === 1 ? 'room' : 'rooms'} · /playlist/${playlist.slug}`;
+
+    const description = this.doc.createElement('div');
+    description.className = 'profile-playlist-description';
+    description.textContent = playlist.description?.trim() || 'No description yet.';
+    description.classList.toggle('profile-overview-bio-empty', !playlist.description?.trim());
+
+    button.append(title, meta, description);
+    row.appendChild(button);
+
+    const actions = this.doc.createElement('div');
+    actions.className = 'profile-playlist-actions';
+
+    const copyButton = this.doc.createElement('button');
+    copyButton.type = 'button';
+    copyButton.className = 'bar-btn bar-btn-small';
+    copyButton.textContent = 'Copy Link';
+    copyButton.addEventListener('click', () => {
+      void this.copyPlaylistLink(playlist);
+    });
+    actions.appendChild(copyButton);
+
+    if (canEdit) {
+      const selectButton = this.doc.createElement('button');
+      selectButton.type = 'button';
+      selectButton.className = 'bar-btn bar-btn-small';
+      selectButton.textContent = playlist.id === this.selectedPlaylistId ? 'Selected' : 'Use';
+      selectButton.disabled = this.playlistBusy || playlist.id === this.selectedPlaylistId;
+      selectButton.addEventListener('click', () => {
+        this.selectedPlaylistId = playlist.id;
+        this.setPlaylistStatus(`Adding rooms to "${playlist.title}".`);
+        this.render();
+      });
+      actions.appendChild(selectButton);
+    }
+
+    row.appendChild(actions);
+    return row;
+  }
+
+  private async createPlaylist(): Promise<void> {
+    if (!this.currentProfile?.canEdit || this.playlistBusy) {
+      return;
+    }
+
+    const title = this.elements.playlistTitleInput?.value.trim() ?? '';
+    const slug = this.elements.playlistSlugInput?.value.trim() ?? '';
+    const description = this.elements.playlistDescriptionInput?.value ?? '';
+
+    this.playlistBusy = true;
+    this.setPlaylistStatus('Creating playlist...');
+    this.setError(null);
+    this.render();
+
+    try {
+      const playlist = await this.playlistRepository.createPlaylist({
+        title,
+        slug: slug || null,
+        description,
+      });
+      this.selectedPlaylistId = playlist.id;
+      await this.reloadCurrentProfile();
+      if (this.elements.playlistTitleInput) {
+        this.elements.playlistTitleInput.value = '';
+      }
+      if (this.elements.playlistSlugInput) {
+        this.elements.playlistSlugInput.value = '';
+      }
+      if (this.elements.playlistDescriptionInput) {
+        this.elements.playlistDescriptionInput.value = '';
+      }
+      this.activeTab = 'playlists';
+      this.setPlaylistStatus(`Created "${playlist.title}".`);
+    } catch (error) {
+      this.setPlaylistStatus('');
+      this.setError(error instanceof Error ? error.message : 'Failed to create playlist.');
+    } finally {
+      this.playlistBusy = false;
+      this.render();
+    }
+  }
+
+  private async addRoomToSelectedPlaylist(room: ProfilePublishedRoomEntry): Promise<void> {
+    const playlist = this.getSelectedPlaylist();
+    if (!playlist || !this.currentProfile?.canEdit || this.playlistBusy) {
+      return;
+    }
+
+    this.playlistBusy = true;
+    this.setPlaylistStatus(`Adding room to "${playlist.title}"...`);
+    this.setError(null);
+    this.render();
+
+    try {
+      await this.playlistRepository.addPlaylistItem(playlist.id, {
+        roomId: room.roomId,
+        roomCoordinates: room.roomCoordinates,
+        roomVersion: room.roomVersion,
+      });
+      await this.reloadCurrentProfile();
+      this.setPlaylistStatus(`Added "${room.roomTitle?.trim() || 'room'}" to "${playlist.title}".`);
+    } catch (error) {
+      this.setPlaylistStatus('');
+      this.setError(error instanceof Error ? error.message : 'Failed to add room to playlist.');
+    } finally {
+      this.playlistBusy = false;
+      this.render();
+    }
+  }
+
+  private async copyPlaylistLink(playlist: RoomPlaylistSummary): Promise<void> {
+    const shareUrl = buildPlaylistShareUrl(playlist.slug, this.windowObj.location.href);
+    try {
+      if (!this.windowObj.navigator.clipboard) {
+        throw new Error('Clipboard unavailable.');
+      }
+      await this.windowObj.navigator.clipboard.writeText(shareUrl);
+      this.setPlaylistStatus('Playlist link copied.');
+    } catch {
+      this.setPlaylistStatus(shareUrl);
+    }
+  }
+
+  private async reloadCurrentProfile(): Promise<void> {
+    const userId = this.currentProfile?.userId;
+    if (!userId) {
+      return;
+    }
+    const profile = await this.profileRepository.loadProfile(userId);
+    this.profileCache.set(userId, profile);
+    this.currentProfile = profile;
+    this.syncSelectedPlaylist(profile.playlists);
+  }
+
+  private updatePlaylistSlugDraft(): void {
+    const titleInput = this.elements.playlistTitleInput;
+    const slugInput = this.elements.playlistSlugInput;
+    if (!titleInput || !slugInput || this.doc.activeElement === slugInput || slugInput.value.trim()) {
+      return;
+    }
+    slugInput.value = derivePlaylistSlugBase(titleInput.value);
+  }
+
+  private syncSelectedPlaylist(playlists: RoomPlaylistSummary[]): void {
+    if (playlists.length === 0) {
+      this.selectedPlaylistId = null;
+      return;
+    }
+    if (!this.selectedPlaylistId || !playlists.some((playlist) => playlist.id === this.selectedPlaylistId)) {
+      this.selectedPlaylistId = playlists[0]?.id ?? null;
+    }
+  }
+
+  private getSelectedPlaylist(): RoomPlaylistSummary | null {
+    const playlists = this.currentProfile?.playlists ?? [];
+    return playlists.find((playlist) => playlist.id === this.selectedPlaylistId) ?? null;
   }
 
   private attachRoomPreview(
@@ -1778,6 +2070,20 @@ export class ProfileModalController {
 
     this.elements.saveStatus.textContent = message;
     this.elements.saveStatus.classList.toggle('hidden', !message);
+  }
+
+  private setPlaylistStatus(message: string): void {
+    this.playlistStatus = message;
+    this.renderPlaylistStatus();
+  }
+
+  private renderPlaylistStatus(): void {
+    if (!this.elements.playlistStatus) {
+      return;
+    }
+
+    this.elements.playlistStatus.textContent = this.playlistStatus;
+    this.elements.playlistStatus.classList.toggle('hidden', !this.playlistStatus);
   }
 
   private formatLongDate(value: string): string {
