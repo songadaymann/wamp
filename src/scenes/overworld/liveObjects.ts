@@ -213,6 +213,8 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
     x: number;
     y: number;
   }) => void;
+  onLiveObjectRemoved: (event: LiveObjectRemovedEvent) => void;
+  onRoomSwitchStateChanged: (event: LiveObjectSwitchStateChangedEvent) => void;
   playRoomSfx: (cue: SfxCue, roomCoordinates: RoomCoordinates) => void;
   playEnemyKillFx: (x: number, y: number, roomCoordinates: RoomCoordinates) => void;
   playCollectFx: (
@@ -256,11 +258,36 @@ export interface WeaponHitResult {
   y: number;
 }
 
+export type LiveObjectRemovedReason =
+  | 'enemy-defeated'
+  | 'collectible-collected'
+  | 'enemy-collected'
+  | 'object-removed'
+  | 'brick-broken';
+
+export interface LiveObjectRemovedEvent {
+  roomId: string;
+  roomCoordinates: RoomCoordinates;
+  objectKey: string;
+  objectId: string;
+  instanceId: string | null;
+  reason: LiveObjectRemovedReason;
+  x: number;
+  y: number;
+}
+
+export interface LiveObjectSwitchStateChangedEvent {
+  roomId: string;
+  roomCoordinates: RoomCoordinates;
+  active: boolean;
+}
+
 export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly triggerController: LiveObjectTriggerController<TEdgeWall>;
   private readonly hazardController: LiveObjectHazardController<TEdgeWall>;
   private readonly swordsmanController: LiveObjectSwordsmanController<TEdgeWall>;
   private readonly enemyLifecycleController: LiveObjectEnemyLifecycleController<TEdgeWall>;
+  private roomStateEventSuppressionDepth = 0;
 
   constructor(private readonly options: OverworldLiveObjectControllerOptions<TEdgeWall>) {
     this.triggerController = new LiveObjectTriggerController({
@@ -274,8 +301,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       tryConsumeHeldKey: this.options.tryConsumeHeldKey,
       createLiveObjectEntry: (loadedRoom, entryOptions) =>
         this.createLiveObjectEntry(loadedRoom, entryOptions),
-      removeLiveObject: (loadedRoom, liveObject) =>
-        this.removeLiveObject(loadedRoom, liveObject),
+      removeLiveObject: (loadedRoom, liveObject, reason) =>
+        this.removeLiveObject(loadedRoom, liveObject, reason),
+      onRoomSwitchStateChanged: (event) => this.emitRoomSwitchStateChanged(event),
       syncWorldObjectColliders: (loadedRooms) => this.syncWorldObjectColliders(loadedRooms),
       syncLiveObjectInteractions: (loadedRooms) => this.syncLiveObjectInteractions(loadedRooms),
     });
@@ -328,6 +356,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       showTransientStatus: this.options.showTransientStatus,
       handlePlayerDeath: this.options.handlePlayerDeath,
       onEnemyDefeated: this.options.onEnemyDefeated,
+      onLiveObjectRemoved: (event) => this.emitLiveObjectRemoved(event),
       getSwordsmanObjectiveMode: (liveObject) => this.swordsmanController.getObjectiveMode(liveObject),
       getSwordsmanDefeatMode: (liveObject) => this.swordsmanController.getDefeatMode(liveObject),
       swordsmanSwordCanDamagePlayer: (loadedRoom, liveObject, playerBody) =>
@@ -351,6 +380,40 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
   resetSwitchStateForRoom(roomId: string): void {
     this.triggerController.resetSwitchStateForRoom(roomId);
+  }
+
+  setSwitchStateForRoom(roomId: string, active: boolean): void {
+    this.withSuppressedRoomStateEvents(() => {
+      this.triggerController.setRoomSwitchState(roomId, active);
+      for (const loadedRoom of this.options.getLoadedFullRooms()) {
+        if (loadedRoom.room.id !== roomId) {
+          continue;
+        }
+        this.triggerController.applySwitchBlockStates(loadedRoom);
+      }
+      this.syncWorldObjectColliders(this.options.getLoadedFullRooms());
+      this.syncLiveObjectInteractions(this.options.getLoadedFullRooms());
+    });
+  }
+
+  removeLiveObjectByKey(roomId: string, objectKey: string): boolean {
+    for (const loadedRoom of this.options.getLoadedFullRooms()) {
+      if (loadedRoom.room.id !== roomId) {
+        continue;
+      }
+
+      const liveObject = loadedRoom.liveObjects.find((candidate) => candidate.key === objectKey) ?? null;
+      if (!liveObject) {
+        return false;
+      }
+
+      this.withSuppressedRoomStateEvents(() => {
+        this.removeLiveObject(loadedRoom, liveObject);
+      });
+      return true;
+    }
+
+    return false;
   }
 
   createLiveObjects(loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>): void {
@@ -1396,6 +1459,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const sprite = liveObject.sprite;
     const body = sprite.body as ArcadeObjectBody | null;
 
+    this.emitLiveObjectRemovedForObject(loadedRoom, liveObject, 'brick-broken');
     this.destroyLiveObjectInteractions(liveObject);
     this.destroyLiveObjectWorldColliders(liveObject);
     this.destroyLiveObjectHelpers(liveObject);
@@ -1413,8 +1477,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
   private removeLiveObject(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
-    liveObject: LoadedRoomObject
+    liveObject: LoadedRoomObject,
+    reason: 'object-removed' = 'object-removed',
   ): void {
+    this.emitLiveObjectRemovedForObject(loadedRoom, liveObject, reason);
     this.destroyLiveObjectInteractions(liveObject);
     this.destroyLiveObjectWorldColliders(liveObject);
     this.destroyLiveObjectHelpers(liveObject);
@@ -1442,8 +1508,55 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       getRoomOrigin: this.options.getRoomOrigin,
       onCollectibleCollected: this.options.onCollectibleCollected,
       onEnemyCollectibleCollected: this.options.onEnemyCollectibleCollected,
+      onLiveObjectRemoved: (event) => this.emitLiveObjectRemoved(event),
       destroyLiveObjectInteractions: (target) => this.destroyLiveObjectInteractions(target),
     }, options);
+  }
+
+  private emitLiveObjectRemovedForObject(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+    reason: 'object-removed' | 'brick-broken',
+  ): void {
+    if (!liveObject.sprite.active) {
+      return;
+    }
+    const roomOrigin = this.options.getRoomOrigin(loadedRoom.room.coordinates);
+    this.emitLiveObjectRemoved({
+      roomId: loadedRoom.room.id,
+      roomCoordinates: loadedRoom.room.coordinates,
+      objectKey: liveObject.key,
+      objectId: liveObject.config.id,
+      instanceId: liveObject.placedInstanceId,
+      reason,
+      x: liveObject.sprite.x - roomOrigin.x,
+      y: liveObject.sprite.y - roomOrigin.y,
+    });
+  }
+
+  private emitLiveObjectRemoved(event: LiveObjectRemovedEvent): void {
+    if (this.roomStateEventSuppressionDepth > 0) {
+      return;
+    }
+    this.options.onLiveObjectRemoved(event);
+  }
+
+  private emitRoomSwitchStateChanged(
+    event: LiveObjectSwitchStateChangedEvent,
+  ): void {
+    if (this.roomStateEventSuppressionDepth > 0) {
+      return;
+    }
+    this.options.onRoomSwitchStateChanged(event);
+  }
+
+  private withSuppressedRoomStateEvents(callback: () => void): void {
+    this.roomStateEventSuppressionDepth += 1;
+    try {
+      callback();
+    } finally {
+      this.roomStateEventSuppressionDepth = Math.max(0, this.roomStateEventSuppressionDepth - 1);
+    }
   }
 
 }

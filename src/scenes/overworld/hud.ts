@@ -1,4 +1,9 @@
 import type { RoomCoordinates } from '../../persistence/roomModel';
+import {
+  MULTIPLAYER_MODE_LIST,
+  getMultiplayerModeDefinition,
+  type MultiplayerModeId,
+} from '../../multiplayer/model';
 import { isOpenableProfileUserId, requestProfileOpen } from '../../ui/setup/profileEvents';
 
 interface OverworldHudRuntimeConfig {
@@ -17,7 +22,11 @@ interface OverworldHudRuntimeConfig {
   onOpenRoomComment: () => void | Promise<void>;
   onToggleRoomComments: () => void | Promise<void>;
   onOpenSettings: () => void | Promise<void>;
-  onInvitePvp: (entry: OverworldOnlineRosterViewEntry) => void | Promise<void>;
+  onOpenMultiplayer: () => boolean | Promise<boolean>;
+  onInviteMultiplayer: (
+    modeId: MultiplayerModeId,
+    entry: OverworldOnlineRosterViewEntry,
+  ) => void | Promise<void>;
   onOpenControls: () => void | Promise<void>;
   onFitWorld: () => void;
 }
@@ -38,7 +47,8 @@ const runtimeConfig: OverworldHudRuntimeConfig = {
   onOpenRoomComment: () => {},
   onToggleRoomComments: () => {},
   onOpenSettings: () => {},
-  onInvitePvp: () => {},
+  onOpenMultiplayer: () => true,
+  onInviteMultiplayer: () => {},
   onOpenControls: () => {},
   onFitWorld: () => {},
 };
@@ -91,8 +101,11 @@ export function configureOverworldHudBridgeRuntime(
   if (config.onOpenSettings) {
     runtimeConfig.onOpenSettings = config.onOpenSettings;
   }
-  if (config.onInvitePvp) {
-    runtimeConfig.onInvitePvp = config.onInvitePvp;
+  if (config.onOpenMultiplayer) {
+    runtimeConfig.onOpenMultiplayer = config.onOpenMultiplayer;
+  }
+  if (config.onInviteMultiplayer) {
+    runtimeConfig.onInviteMultiplayer = config.onInviteMultiplayer;
   }
   if (config.onOpenControls) {
     runtimeConfig.onOpenControls = config.onOpenControls;
@@ -186,7 +199,7 @@ export interface OverworldOnlineRosterViewEntry {
   roomCoordinates: RoomCoordinates;
   mode: 'browse' | 'play' | 'edit';
   isSelf: boolean;
-  pvpInviteDisabled: boolean;
+  multiplayerInviteDisabled: boolean;
 }
 
 export class OverworldHudBridge {
@@ -255,6 +268,8 @@ export class OverworldHudBridge {
   private readonly mobileGoalFooterTimerEl: HTMLElement | null;
   private destroyed = false;
   private playersOnlinePinned = false;
+  private playersOnlineMultiplayerStage: 'roster' | 'modes' | 'invite' = 'roster';
+  private selectedMultiplayerModeId: MultiplayerModeId | null = null;
   private selectedCreatorUserId: string | null = null;
   private lastPlayersOnlineEntriesSignature = '';
 
@@ -775,17 +790,24 @@ export class OverworldHudBridge {
 
     if (!showPlayersOnline) {
       this.playersOnlinePinned = false;
+      this.resetPlayersOnlineMultiplayerLauncher();
       this.setPlayersOnlinePopoverOpen(false);
       this.lastPlayersOnlineEntriesSignature = '';
       return;
     }
 
     if (this.playersOnlinePopoverEmptyEl) {
-      this.playersOnlinePopoverEmptyEl.classList.toggle('hidden', viewModel.playersOnlineEntries.length > 0);
+      this.playersOnlinePopoverEmptyEl.classList.toggle(
+        'hidden',
+        this.playersOnlineMultiplayerStage !== 'roster' || viewModel.playersOnlineEntries.length > 0,
+      );
     }
 
     if (this.playersOnlinePopoverListEl) {
-      const entriesSignature = viewModel.playersOnlineEntries
+      const entriesSignature = [
+        this.playersOnlineMultiplayerStage,
+        this.selectedMultiplayerModeId ?? '',
+        ...viewModel.playersOnlineEntries
         .map((entry) => [
           entry.key,
           entry.userId ?? '',
@@ -795,27 +817,35 @@ export class OverworldHudBridge {
           entry.roomCoordinates.y,
           entry.mode,
           entry.isSelf ? '1' : '0',
-          entry.pvpInviteDisabled ? '1' : '0',
-        ].join('\u001f'))
-        .join('\u001e');
+          entry.multiplayerInviteDisabled ? '1' : '0',
+        ].join('\u001f')),
+      ].join('\u001e');
       if (entriesSignature === this.lastPlayersOnlineEntriesSignature) {
         return;
       }
 
       this.lastPlayersOnlineEntriesSignature = entriesSignature;
-      const playEntries = viewModel.playersOnlineEntries.filter((entry) => entry.mode === 'play');
-      const editEntries = viewModel.playersOnlineEntries.filter((entry) => entry.mode === 'edit');
-      const browseEntries = viewModel.playersOnlineEntries.filter((entry) => entry.mode === 'browse');
       const sections: HTMLElement[] = [];
 
-      if (playEntries.length > 0) {
-        sections.push(this.createPlayersOnlineSection('play', playEntries));
-      }
-      if (editEntries.length > 0) {
-        sections.push(this.createPlayersOnlineSection('edit', editEntries));
-      }
-      if (browseEntries.length > 0) {
-        sections.push(this.createPlayersOnlineSection('browse', browseEntries));
+      if (this.playersOnlineMultiplayerStage === 'modes') {
+        sections.push(this.createMultiplayerModePicker(viewModel));
+      } else if (this.playersOnlineMultiplayerStage === 'invite' && this.selectedMultiplayerModeId) {
+        sections.push(this.createMultiplayerInvitePicker(viewModel, this.selectedMultiplayerModeId));
+      } else {
+        sections.push(this.createMultiplayerLauncher(viewModel));
+        const playEntries = viewModel.playersOnlineEntries.filter((entry) => entry.mode === 'play');
+        const editEntries = viewModel.playersOnlineEntries.filter((entry) => entry.mode === 'edit');
+        const browseEntries = viewModel.playersOnlineEntries.filter((entry) => entry.mode === 'browse');
+
+        if (playEntries.length > 0) {
+          sections.push(this.createPlayersOnlineSection('play', playEntries));
+        }
+        if (editEntries.length > 0) {
+          sections.push(this.createPlayersOnlineSection('edit', editEntries));
+        }
+        if (browseEntries.length > 0) {
+          sections.push(this.createPlayersOnlineSection('browse', browseEntries));
+        }
       }
 
       this.playersOnlinePopoverListEl.replaceChildren(...sections);
@@ -859,34 +889,148 @@ export class OverworldHudBridge {
     room.className = 'world-online-popover-room';
     room.textContent = entry.roomText;
 
-    const duel = this.doc.createElement('span');
-    duel.setAttribute('role', 'button');
-    duel.tabIndex = entry.pvpInviteDisabled ? -1 : 0;
-    duel.className = 'world-online-pvp-btn';
-    duel.textContent = 'Duel';
-    duel.dataset.disabled = entry.pvpInviteDisabled ? 'true' : 'false';
-    duel.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (entry.pvpInviteDisabled) {
-        return;
-      }
-
-      this.playersOnlinePinned = false;
-      this.setPlayersOnlinePopoverOpen(false);
-      void runtimeConfig.onInvitePvp(entry);
-    });
-    duel.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter' && event.key !== ' ') {
-        return;
-      }
-
-      event.preventDefault();
-      duel.click();
-    });
-
-    row.append(name, room, duel);
+    row.append(name, room);
     return row;
+  }
+
+  private createMultiplayerLauncher(viewModel: OverworldHudViewModel): HTMLElement {
+    const wrap = this.doc.createElement('div');
+    wrap.className = 'world-online-multiplayer-launcher';
+
+    const button = this.doc.createElement('button');
+    button.type = 'button';
+    button.className = 'world-online-multiplayer-btn';
+    button.textContent = 'Multiplayer';
+    button.addEventListener('click', () => {
+      void (async () => {
+        const canOpen = await runtimeConfig.onOpenMultiplayer();
+        if (!canOpen) {
+          return;
+        }
+        this.playersOnlineMultiplayerStage = 'modes';
+        this.selectedMultiplayerModeId = null;
+        this.lastPlayersOnlineEntriesSignature = '';
+        this.renderPlayersOnline(viewModel);
+      })();
+    });
+
+    wrap.append(button);
+    return wrap;
+  }
+
+  private createMultiplayerModePicker(viewModel: OverworldHudViewModel): HTMLElement {
+    const wrap = this.doc.createElement('section');
+    wrap.className = 'world-online-multiplayer-panel';
+
+    const header = this.createMultiplayerPanelHeader('Choose Mode', () => {
+      this.playersOnlineMultiplayerStage = 'roster';
+      this.selectedMultiplayerModeId = null;
+      this.lastPlayersOnlineEntriesSignature = '';
+      this.renderPlayersOnline(viewModel);
+    });
+
+    const list = this.doc.createElement('div');
+    list.className = 'world-online-multiplayer-modes';
+
+    for (const mode of MULTIPLAYER_MODE_LIST) {
+      const card = this.doc.createElement('button');
+      card.type = 'button';
+      card.className = 'world-online-multiplayer-mode-card';
+      card.dataset.multiplayerMode = mode.id;
+      card.textContent = mode.displayName;
+      card.addEventListener('click', () => {
+        this.playersOnlineMultiplayerStage = 'invite';
+        this.selectedMultiplayerModeId = mode.id;
+        this.lastPlayersOnlineEntriesSignature = '';
+        this.renderPlayersOnline(viewModel);
+      });
+      list.append(card);
+    }
+
+    wrap.append(header, list);
+    return wrap;
+  }
+
+  private createMultiplayerInvitePicker(
+    viewModel: OverworldHudViewModel,
+    modeId: MultiplayerModeId,
+  ): HTMLElement {
+    const mode = getMultiplayerModeDefinition(modeId);
+    const wrap = this.doc.createElement('section');
+    wrap.className = 'world-online-multiplayer-panel';
+
+    const header = this.createMultiplayerPanelHeader(`Invite: ${mode.displayName}`, () => {
+      this.playersOnlineMultiplayerStage = 'modes';
+      this.selectedMultiplayerModeId = null;
+      this.lastPlayersOnlineEntriesSignature = '';
+      this.renderPlayersOnline(viewModel);
+    });
+
+    const list = this.doc.createElement('div');
+    list.className = 'world-online-multiplayer-invite-list';
+
+    const candidates = viewModel.playersOnlineEntries.filter(
+      (entry) => !entry.isSelf && !entry.multiplayerInviteDisabled,
+    );
+    for (const entry of candidates) {
+      const button = this.doc.createElement('button');
+      button.type = 'button';
+      button.className = 'world-online-multiplayer-invite-entry';
+      button.dataset.disabled = entry.multiplayerInviteDisabled ? 'true' : 'false';
+      button.disabled = entry.multiplayerInviteDisabled;
+      button.title = entry.multiplayerInviteDisabled
+        ? ''
+        : `Invite ${entry.displayName} to ${mode.displayName}`;
+
+      const name = this.doc.createElement('span');
+      name.className = 'world-online-popover-entry-name';
+      name.textContent = entry.displayName;
+
+      const room = this.doc.createElement('span');
+      room.className = 'world-online-popover-room';
+      room.textContent = entry.roomText;
+
+      button.append(name, room);
+      button.addEventListener('click', () => {
+        if (entry.multiplayerInviteDisabled) {
+          return;
+        }
+
+        this.playersOnlinePinned = false;
+        this.resetPlayersOnlineMultiplayerLauncher();
+        this.setPlayersOnlinePopoverOpen(false);
+        void runtimeConfig.onInviteMultiplayer(modeId, entry);
+      });
+      list.append(button);
+    }
+
+    if (candidates.length === 0) {
+      const empty = this.doc.createElement('div');
+      empty.className = 'world-online-multiplayer-empty';
+      empty.textContent = 'No players available to invite.';
+      list.append(empty);
+    }
+
+    wrap.append(header, list);
+    return wrap;
+  }
+
+  private createMultiplayerPanelHeader(label: string, onBack: () => void): HTMLElement {
+    const header = this.doc.createElement('div');
+    header.className = 'world-online-multiplayer-panel-header';
+
+    const back = this.doc.createElement('button');
+    back.type = 'button';
+    back.className = 'world-online-multiplayer-back';
+    back.textContent = 'Back';
+    back.addEventListener('click', onBack);
+
+    const title = this.doc.createElement('div');
+    title.className = 'world-online-multiplayer-panel-title';
+    title.textContent = label;
+
+    header.append(back, title);
+    return header;
   }
 
   private createPlayersOnlineSection(
@@ -1017,10 +1161,18 @@ export class OverworldHudBridge {
   }
 
   private setPlayersOnlinePopoverOpen(open: boolean): void {
+    if (!open) {
+      this.resetPlayersOnlineMultiplayerLauncher();
+    }
     this.playersOnlineWrapEl?.classList.toggle('is-open', open);
     this.playersOnlinePopoverEl?.classList.toggle('hidden', !open);
     this.playersOnlinePopoverEl?.setAttribute('aria-hidden', open ? 'false' : 'true');
     this.playersOnlineEl?.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  private resetPlayersOnlineMultiplayerLauncher(): void {
+    this.playersOnlineMultiplayerStage = 'roster';
+    this.selectedMultiplayerModeId = null;
   }
 
   private renderGoalPanel(viewModel: OverworldHudViewModel): void {

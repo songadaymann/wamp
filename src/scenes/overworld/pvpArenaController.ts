@@ -1,13 +1,18 @@
 import {
-  PVP_ARENA_HEARTS,
   type PvpInviteOffer,
   type PvpInviteSendMessage,
   type PvpMatchCombatEvent,
   type PvpMatchPlayerState,
   type PvpMatchSnapshot,
   type PvpParticipantIdentity,
+  type PvpRoomStateEvent,
 } from '../../pvp/model';
-import { PvpMatchClient } from '../../pvp/matchClient';
+import {
+  getMultiplayerModeDefinition,
+  type MultiplayerModeDefinition,
+  type MultiplayerModeId,
+} from '../../multiplayer/model';
+import { MultiplayerInstanceClient } from '../../multiplayer/instanceClient';
 import { createPvpRepository } from '../../pvp/repository';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import {
@@ -38,7 +43,11 @@ interface OverworldPvpArenaControllerHost {
   declinePvpInvite: (invite: PvpInviteOffer) => void;
   isWithinLoadedRoomBounds: (coordinates: RoomCoordinates) => boolean;
   refreshAround: (coordinates: RoomCoordinates) => Promise<unknown>;
-  prepareArenaDuel: (roomCoordinates: RoomCoordinates, opponentUserId: string) => void;
+  prepareArenaDuel: (
+    roomCoordinates: RoomCoordinates,
+    opponentUserId: string,
+    modeDefinition: MultiplayerModeDefinition,
+  ) => void;
   refreshPlayerHitbox: () => void;
   syncPresenceMatchSnapshot: (
     snapshot: PvpMatchSnapshot | null,
@@ -48,6 +57,7 @@ interface OverworldPvpArenaControllerHost {
   syncInstanceMatchSnapshot: (snapshot: PvpMatchSnapshot, localUserId: string | null) => void;
   handlePeerState: (state: PvpMatchPlayerState) => void;
   handlePeerCombatEvent: (event: PvpMatchCombatEvent) => void;
+  handlePeerRoomStateEvent: (event: PvpRoomStateEvent) => void;
   destroyCombatProjectiles: () => void;
   maybeApplyStartingPosition: (snapshot: PvpMatchSnapshot) => void;
   applyCameraLock: () => void;
@@ -61,8 +71,9 @@ interface OverworldPvpArenaControllerHost {
 }
 
 export class OverworldPvpArenaController {
+  private readonly arenaMode = getMultiplayerModeDefinition('arena');
   private readonly pvpRepository = createPvpRepository();
-  private pvpMatchClient: PvpMatchClient | null = null;
+  private pvpMatchClient: MultiplayerInstanceClient | null = null;
   private activePvpMatch: PvpMatchSnapshot | null = null;
   private activePvpOpponentUserId: string | null = null;
   private activePvpReturnCoordinates: RoomCoordinates | null = null;
@@ -84,7 +95,7 @@ export class OverworldPvpArenaController {
     return this.activePvpReturnCoordinates;
   }
 
-  getClient(): PvpMatchClient | null {
+  getClient(): MultiplayerInstanceClient | null {
     return this.pvpMatchClient;
   }
 
@@ -118,16 +129,29 @@ export class OverworldPvpArenaController {
     if (snapshot.status === 'countdown' && snapshot.countdownEndsAt) {
       const remainingMs = Math.max(0, snapshot.countdownEndsAt - Date.now());
       const remainingSeconds = Math.max(1, Math.min(3, Math.ceil((remainingMs - 450) / 1000)));
-      return `Arena Duel starts in ${remainingSeconds}`;
+      return `${this.arenaMode.displayName} starts in ${remainingSeconds}`;
     }
 
     const local = snapshot.participants.find((participant) => participant.userId === identity.userId);
     const opponent = snapshot.participants.find((participant) => participant.userId !== identity.userId);
     if (!local || !opponent) {
-      return 'Arena Duel waiting for opponent';
+      return this.arenaMode.copy.waitingStatus;
     }
 
-    return `Arena Duel ${local.hearts}-${opponent.hearts} vs ${opponent.displayName}`;
+    return this.arenaMode.copy.activeStatus(local.hearts, opponent.hearts, opponent.displayName);
+  }
+
+  canOpenLauncher(): boolean {
+    const identity = this.host.getIdentity();
+    if (!identity || identity.userId.startsWith('guest-')) {
+      this.host.showTransientStatus('Sign in to start ranked PVP.');
+      return false;
+    }
+    if (this.isMatchActive()) {
+      this.host.showTransientStatus('Finish the current duel first.');
+      return false;
+    }
+    return true;
   }
 
   async inviteDuel(entry: {
@@ -135,6 +159,23 @@ export class OverworldPvpArenaController {
     userId: string | null;
     displayName: string;
   }): Promise<void> {
+    await this.invitePlayerToMode('arena', entry);
+  }
+
+  async invitePlayerToMode(
+    modeId: MultiplayerModeId,
+    entry: {
+      key: string;
+      userId: string | null;
+      displayName: string;
+    },
+  ): Promise<void> {
+    if (modeId !== 'arena') {
+      this.host.showTransientStatus('That multiplayer mode is not available yet.');
+      return;
+    }
+
+    const mode = getMultiplayerModeDefinition(modeId);
     const identity = this.host.getIdentity();
     const currentRoom = this.host.getSelectedRoom();
     if (!identity || !entry.userId) {
@@ -146,7 +187,7 @@ export class OverworldPvpArenaController {
       return;
     }
     if (entry.userId.startsWith('guest-')) {
-      this.host.showTransientStatus(`${entry.displayName} needs to sign in for ranked PVP.`);
+      this.host.showTransientStatus(mode.copy.opponentRequiresSignin(entry.displayName));
       return;
     }
     if (this.isMatchActive()) {
@@ -154,11 +195,11 @@ export class OverworldPvpArenaController {
       return;
     }
     if (!currentRoom || currentRoom.status !== 'published') {
-      this.host.showTransientStatus('Arena Duel starts from a published room.');
+      this.host.showTransientStatus(`${mode.displayName} starts from a published room.`);
       return;
     }
 
-    const matchId = `arena-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const matchId = `${mode.id}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const inviteId = `invite-${matchId}`;
     const opponent = this.host.getPvpOpponentIdentity(entry.key) ?? {
       userId: entry.userId,
@@ -175,14 +216,14 @@ export class OverworldPvpArenaController {
     const sent = this.host.sendPvpInvite(entry.key, {
       inviteId,
       matchId,
-      mode: 'arena',
+      mode: mode.id,
       roomId: currentRoom.id,
       roomCoordinates: { ...currentRoom.coordinates },
       expiresAt: Date.now() + 20_000,
     });
 
     this.host.showTransientStatus(
-      sent ? `Duel invite sent to ${opponent.displayName}.` : 'Could not send duel invite.',
+      sent ? mode.copy.inviteSent(opponent.displayName) : 'Could not send duel invite.',
     );
   }
 
@@ -198,6 +239,7 @@ export class OverworldPvpArenaController {
       return;
     }
 
+    const mode = getMultiplayerModeDefinition(invite.mode);
     const decision = await showPvpInvitePrompt(invite);
     if (decision !== 'accept') {
       this.host.declinePvpInvite(invite);
@@ -211,6 +253,7 @@ export class OverworldPvpArenaController {
     }
 
     await this.startArenaDuel({
+      modeId: mode.id,
       matchId: invite.matchId,
       roomId: invite.roomId,
       roomCoordinates: invite.roomCoordinates,
@@ -229,6 +272,7 @@ export class OverworldPvpArenaController {
     }
 
     await this.startArenaDuel({
+      modeId: this.arenaMode.id,
       matchId,
       roomId: invite.roomId,
       roomCoordinates: invite.roomCoordinates,
@@ -263,6 +307,7 @@ export class OverworldPvpArenaController {
   }
 
   private async startArenaDuel(options: {
+    modeId: MultiplayerModeId;
     matchId: string;
     roomId: string;
     roomCoordinates: RoomCoordinates;
@@ -289,16 +334,17 @@ export class OverworldPvpArenaController {
     }
 
     const returnCoordinates = { ...this.host.getSelectedCoordinates() };
+    const mode = getMultiplayerModeDefinition(options.modeId);
     this.clearActiveMatch();
-    this.host.prepareArenaDuel(options.roomCoordinates, options.opponent.userId);
+    this.host.prepareArenaDuel(options.roomCoordinates, options.opponent.userId, mode);
     this.activePvpOpponentUserId = options.opponent.userId;
     this.activePvpReturnCoordinates = returnCoordinates;
     this.lastSubmittedPvpMatchId = null;
     this.pvpDebugEvents.length = 0;
 
-    this.pvpMatchClient = new PvpMatchClient({
+    this.pvpMatchClient = new MultiplayerInstanceClient({
       matchId: options.matchId,
-      mode: 'arena',
+      mode: mode.id,
       roomId: options.roomId,
       roomCoordinates: { ...options.roomCoordinates },
       localIdentity: identity,
@@ -306,10 +352,11 @@ export class OverworldPvpArenaController {
       onSnapshot: (snapshot) => this.handleSnapshot(snapshot),
       onPeerState: (state) => this.handlePeerState(state),
       onPeerCombatEvent: (event) => this.handlePeerCombatEvent(event),
+      onPeerRoomStateEvent: (event) => this.handlePeerRoomStateEvent(event),
       onStatus: (message) => this.host.showTransientStatus(message),
     });
     this.pvpMatchClient.connect();
-    this.host.showTransientStatus(`Arena Duel with ${options.opponent.displayName}.`);
+    this.host.showTransientStatus(`${mode.displayName} with ${options.opponent.displayName}.`);
     return true;
   }
 
@@ -346,7 +393,7 @@ export class OverworldPvpArenaController {
     if (snapshot.status === 'countdown') {
       showPvpCountdownOverlay(snapshot);
     } else if (previousStatus === 'countdown' && snapshot.status === 'active') {
-      showPvpGoOverlay();
+      showPvpGoOverlay(snapshot.mode);
     } else if (snapshot.status === 'complete') {
       hidePvpCountdownOverlay();
     }
@@ -368,6 +415,11 @@ export class OverworldPvpArenaController {
       if (identity) {
         showPvpResultModal(snapshot, identity.userId);
       }
+      setTimeout(() => {
+        if (this.activePvpMatch?.matchId === snapshot.matchId && this.activePvpMatch.status === 'complete') {
+          this.host.returnToWorld();
+        }
+      }, 450);
     }
 
     this.host.renderHud();
@@ -408,6 +460,20 @@ export class OverworldPvpArenaController {
     });
   }
 
+  private handlePeerRoomStateEvent(event: PvpRoomStateEvent): void {
+    if (!this.activePvpMatch || event.matchId !== this.activePvpMatch.matchId) {
+      return;
+    }
+
+    this.host.handlePeerRoomStateEvent(event);
+    this.recordDebugEvent({
+      type: 'peer-room-state-event',
+      kind: event.kind,
+      userId: event.userId,
+      eventId: event.id,
+    });
+  }
+
   private async submitMatchResult(snapshot: PvpMatchSnapshot): Promise<void> {
     const identity = this.host.getIdentity();
     if (!identity || this.lastSubmittedPvpMatchId === snapshot.matchId || !snapshot.startedAt || !snapshot.finishedAt) {
@@ -440,7 +506,7 @@ export class OverworldPvpArenaController {
               ? 'win'
               : 'loss',
           heartsRemaining: participant.hearts,
-          livesLost: Math.max(0, PVP_ARENA_HEARTS - participant.hearts),
+          livesLost: Math.max(0, getMultiplayerModeDefinition(snapshot.mode).startingLives - participant.hearts),
           hits: participant.hits,
         })),
         finalSnapshot: snapshot,

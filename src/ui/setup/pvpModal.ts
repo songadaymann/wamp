@@ -1,4 +1,8 @@
-import { PVP_ARENA_HEARTS, type PvpInviteOffer, type PvpMatchSnapshot } from '../../pvp/model';
+import {
+  getMultiplayerModeDefinition,
+  type PvpInviteOffer,
+  type PvpMatchSnapshot,
+} from '../../pvp/model';
 
 let activeInviteModal: HTMLElement | null = null;
 let activeResultModal: HTMLElement | null = null;
@@ -25,11 +29,12 @@ export function showPvpInvitePrompt(invite: PvpInviteOffer): Promise<'accept' | 
 
     const kicker = document.createElement('div');
     kicker.className = 'pvp-modal-kicker';
-    kicker.textContent = 'PVP Challenge';
+    const mode = getMultiplayerModeDefinition(invite.mode);
+    kicker.textContent = mode.copy.inviteKicker;
 
     const title = document.createElement('div');
     title.className = 'pvp-modal-title';
-    title.textContent = 'Arena Duel';
+    title.textContent = mode.copy.inviteTitle;
     header.append(kicker, title);
 
     const body = document.createElement('div');
@@ -40,7 +45,7 @@ export function showPvpInvitePrompt(invite: PvpInviteOffer): Promise<'accept' | 
 
     const challengeCopy = document.createElement('div');
     challengeCopy.className = 'pvp-invite-copy';
-    challengeCopy.textContent = `${invite.inviter.displayName} invited you to duel.`;
+    challengeCopy.textContent = mode.copy.inviteBody(invite.inviter.displayName);
 
     const roomChip = document.createElement('div');
     roomChip.className = 'pvp-room-chip';
@@ -48,7 +53,7 @@ export function showPvpInvitePrompt(invite: PvpInviteOffer): Promise<'accept' | 
 
     const rule = document.createElement('div');
     rule.className = 'pvp-modal-rule';
-    rule.textContent = `${PVP_ARENA_HEARTS} hearts. First to zero loses.`;
+    rule.textContent = `${mode.startingLives} hearts. First to zero loses.`;
 
     challenge.append(challengeCopy, roomChip, rule);
     body.append(challenge);
@@ -109,10 +114,11 @@ export function showPvpResultModal(snapshot: PvpMatchSnapshot, localUserId: stri
 
   const header = document.createElement('div');
   header.className = 'pvp-modal-header';
+  const mode = getMultiplayerModeDefinition(snapshot.mode);
 
   const kicker = document.createElement('div');
   kicker.className = 'pvp-modal-kicker';
-  kicker.textContent = 'Duel Result';
+  kicker.textContent = mode.copy.resultKicker;
 
   const title = document.createElement('div');
   title.className = 'pvp-modal-title';
@@ -161,14 +167,19 @@ export function showPvpCountdownOverlay(snapshot: PvpMatchSnapshot): void {
   }
 
   overlay.dataset.mode = 'countdown';
+  const mode = getMultiplayerModeDefinition(snapshot.mode);
+  const kicker = overlay.querySelector<HTMLElement>('.pvp-countdown-kicker');
   const title = overlay.querySelector<HTMLElement>('.pvp-countdown-title');
   const rule = overlay.querySelector<HTMLElement>('.pvp-countdown-rule');
   const count = overlay.querySelector<HTMLElement>('.pvp-countdown-count');
+  if (kicker) {
+    kicker.textContent = mode.copy.countdownKicker;
+  }
   if (title) {
-    title.textContent = 'Arena Duel';
+    title.textContent = mode.copy.countdownTitle;
   }
   if (rule) {
-    rule.textContent = 'First to lose all hearts loses!';
+    rule.textContent = mode.copy.countdownRule;
   }
 
   const render = () => {
@@ -192,17 +203,19 @@ export function showPvpCountdownOverlay(snapshot: PvpMatchSnapshot): void {
   countdownFrame = window.requestAnimationFrame(render);
 }
 
-export function showPvpGoOverlay(durationMs = 700): void {
+export function showPvpGoOverlay(modeId: PvpMatchSnapshot['mode'] = 'arena', durationMs = 700): void {
   ensureCountdownOverlay();
   const overlay = activeCountdownOverlay;
   if (!overlay) {
     return;
   }
 
+  const mode = getMultiplayerModeDefinition(modeId);
   overlay.dataset.mode = 'go';
-  overlay.querySelector<HTMLElement>('.pvp-countdown-title')!.textContent = 'Arena Duel';
+  overlay.querySelector<HTMLElement>('.pvp-countdown-kicker')!.textContent = mode.copy.countdownKicker;
+  overlay.querySelector<HTMLElement>('.pvp-countdown-title')!.textContent = mode.copy.countdownTitle;
   overlay.querySelector<HTMLElement>('.pvp-countdown-rule')!.textContent = '';
-  overlay.querySelector<HTMLElement>('.pvp-countdown-count')!.textContent = 'GO!';
+  overlay.querySelector<HTMLElement>('.pvp-countdown-count')!.textContent = mode.copy.goEvent;
   if (countdownFrame !== null) {
     window.cancelAnimationFrame(countdownFrame);
     countdownFrame = null;
@@ -261,7 +274,7 @@ function ensureCountdownOverlay(): void {
 
   const kicker = document.createElement('div');
   kicker.className = 'pvp-countdown-kicker';
-  kicker.textContent = 'PVP Starting';
+  kicker.textContent = getMultiplayerModeDefinition('arena').copy.countdownKicker;
 
   const title = document.createElement('div');
   title.className = 'pvp-countdown-title';

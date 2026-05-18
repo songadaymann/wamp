@@ -51,6 +51,16 @@ interface EnemyLifecycleOptions<TEdgeWall> {
     x: number;
     y: number;
   }) => boolean;
+  onLiveObjectRemoved: (event: {
+    roomId: string;
+    roomCoordinates: RoomCoordinates;
+    objectKey: string;
+    objectId: string;
+    instanceId: string | null;
+    reason: 'enemy-defeated';
+    x: number;
+    y: number;
+  }) => void;
   getSwordsmanObjectiveMode: (liveObject: LoadedRoomObject) => SwordsmanObjectiveMode;
   getSwordsmanDefeatMode: (liveObject: LoadedRoomObject) => SwordsmanDefeatMode;
   swordsmanSwordCanDamagePlayer: (
@@ -179,6 +189,7 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
     const x = liveObject.sprite.x;
     const y = liveObject.sprite.y;
     const enemyName = liveObject.config.name;
+    const roomOrigin = this.options.getRoomOrigin(loadedRoom.room.coordinates);
     const respawnOptions =
       liveObject.config.id === SWORDSMAN_AI_OBJECT_ID &&
       this.options.getSwordsmanDefeatMode(liveObject) === 'respawn'
@@ -187,6 +198,16 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
 
     this.options.addScore(10);
     this.options.playEnemyKillFx(x, y, loadedRoom.room.coordinates);
+    this.options.onLiveObjectRemoved({
+      roomId: loadedRoom.room.id,
+      roomCoordinates: loadedRoom.room.coordinates,
+      objectKey: liveObject.key,
+      objectId: liveObject.config.id,
+      instanceId: liveObject.placedInstanceId,
+      reason: 'enemy-defeated',
+      x: x - roomOrigin.x,
+      y: y - roomOrigin.y,
+    });
     this.options.destroyLiveObjectInteractions(liveObject);
     this.options.destroyLiveObjectWorldColliders(liveObject);
     this.options.destroyLiveObjectHelpers(liveObject);
@@ -199,8 +220,8 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
           roomCoordinates: loadedRoom.room.coordinates,
           enemyName,
           instanceId: liveObject.placedInstanceId,
-          x: x - this.options.getRoomOrigin(loadedRoom.room.coordinates).x,
-          y: y - this.options.getRoomOrigin(loadedRoom.room.coordinates).y,
+          x: x - roomOrigin.x,
+          y: y - roomOrigin.y,
         })
       : false;
     if (!handledStatus) {

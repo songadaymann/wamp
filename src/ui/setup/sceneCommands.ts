@@ -232,18 +232,33 @@ export function setupSceneCommands(
       }
       roomRushModal.open();
     },
-    onInvitePvp: (entry) => {
+    onOpenMultiplayer: () => {
       leaderboardModal.close();
       exploreModal.close();
       guestbookModal.close();
       historyModal.close();
+      settingsModal.close();
       controlsModal.close();
       aboutModal.close();
       courseModal.close();
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
-      getActiveOverworldScene(game)?.invitePvpDuel?.(entry);
+      return getActiveOverworldScene(game)?.openMultiplayerLauncher?.() ?? false;
+    },
+    onInviteMultiplayer: (modeId, entry) => {
+      leaderboardModal.close();
+      exploreModal.close();
+      guestbookModal.close();
+      historyModal.close();
+      settingsModal.close();
+      controlsModal.close();
+      aboutModal.close();
+      courseModal.close();
+      roomRushModal.close();
+      roomRushResultModal.close();
+      chatModerationModal.close();
+      getActiveOverworldScene(game)?.inviteMultiplayer?.(modeId, entry);
     },
     onOpenRoomComment: () => {
       leaderboardModal.close();

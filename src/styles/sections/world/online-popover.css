@@ -111,32 +111,123 @@
   line-height: 1.2;
 }
 
-.world-online-pvp-btn {
-  flex: 0 0 auto;
+.world-online-popover-list {
+  display: grid;
+  gap: 10px;
+}
+
+.world-online-multiplayer-launcher,
+.world-online-multiplayer-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.world-online-multiplayer-btn,
+.world-online-multiplayer-mode-card,
+.world-online-multiplayer-back,
+.world-online-multiplayer-invite-entry {
   border: 2px solid #18161c;
-  border-radius: 4px;
-  padding: 3px 7px;
+  border-radius: 0;
+  font-family: 'Early GameBoy', monospace;
+  line-height: 1.15;
+  box-shadow: 2px 2px 0 #18161c;
+  cursor: pointer;
+}
+
+.world-online-multiplayer-btn {
+  width: 100%;
+  min-height: 30px;
+  padding: 6px 10px 5px;
+  background: #79ccde;
+  color: #18161c;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.world-online-multiplayer-btn:hover,
+.world-online-multiplayer-btn:focus-visible {
+  filter: brightness(1.06);
+  outline: 2px solid #277b30;
+  outline-offset: 2px;
+}
+
+.world-online-multiplayer-panel-header {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.world-online-multiplayer-back {
+  padding: 4px 7px 3px;
+  background: #fff3db;
+  color: #18161c;
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
+.world-online-multiplayer-panel-title {
+  min-width: 0;
+  color: #277b30;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 10px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.world-online-multiplayer-modes,
+.world-online-multiplayer-invite-list {
+  display: grid;
+  gap: 7px;
+}
+
+.world-online-multiplayer-mode-card {
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 10px;
   background: #b7352d;
   color: #fffaf0;
-  font-size: 11px;
-  line-height: 1;
-  box-shadow: 2px 2px 0 #18161c;
+  font-size: 10px;
+  text-align: left;
+  text-transform: uppercase;
 }
 
-.world-online-pvp-btn[data-disabled='true'] {
-  opacity: 0.45;
-  background: #86786c;
-}
-
-.world-online-pvp-btn:not([data-disabled='true']):hover,
-.world-online-pvp-btn:not([data-disabled='true']):focus-visible {
+.world-online-multiplayer-mode-card:hover,
+.world-online-multiplayer-mode-card:focus-visible {
   background: #e85243;
   outline: none;
 }
 
-.world-online-popover-list {
+.world-online-multiplayer-invite-entry {
   display: grid;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 8px;
+  background: transparent;
+  color: #18161c;
+  text-align: left;
+}
+
+.world-online-multiplayer-invite-entry:hover,
+.world-online-multiplayer-invite-entry:focus-visible {
+  background: rgba(39, 123, 48, 0.1);
+  outline: none;
+}
+
+.world-online-multiplayer-invite-entry[data-disabled='true'] {
+  cursor: default;
+  opacity: 0.48;
+  box-shadow: none;
+}
+
+.world-online-multiplayer-empty {
+  color: #18161c;
+  font-size: 10px;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  line-height: 1.2;
 }
 
 .world-online-popover-section {

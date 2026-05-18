@@ -18,6 +18,12 @@ interface LiveObjectCollectionEvent {
   y: number;
 }
 
+interface LiveObjectRemovedEvent extends LiveObjectCollectionEvent {
+  objectKey: string;
+  objectId: string;
+  reason: 'collectible-collected' | 'enemy-collected';
+}
+
 interface LiveObjectCollectionHost {
   scene: Phaser.Scene;
   isCollectedObjectKey: (key: string) => boolean;
@@ -36,6 +42,7 @@ interface LiveObjectCollectionHost {
   getRoomOrigin: (coordinates: RoomCoordinates) => { x: number; y: number };
   onCollectibleCollected: (event: LiveObjectCollectionEvent) => void;
   onEnemyCollectibleCollected: (event: LiveObjectCollectionEvent) => void;
+  onLiveObjectRemoved: (event: LiveObjectRemovedEvent) => void;
   destroyLiveObjectInteractions: (liveObject: LoadedRoomObject) => void;
 }
 
@@ -87,8 +94,18 @@ export function collectLiveObject<TEdgeWall>(
   });
 
   loadedRoom.liveObjects = loadedRoom.liveObjects.filter((candidate) => candidate !== liveObject);
+  const roomOrigin = host.getRoomOrigin(loadedRoom.room.coordinates);
+  host.onLiveObjectRemoved({
+    roomId: loadedRoom.room.id,
+    roomCoordinates: loadedRoom.room.coordinates,
+    objectKey: liveObject.key,
+    objectId: liveObject.config.id,
+    instanceId: liveObject.placedInstanceId,
+    reason: collector === 'player' ? 'collectible-collected' : 'enemy-collected',
+    x: liveObject.sprite.x - roomOrigin.x,
+    y: liveObject.sprite.y - roomOrigin.y,
+  });
   if (liveObject.countsTowardGoals) {
-    const roomOrigin = host.getRoomOrigin(loadedRoom.room.coordinates);
     const event = {
       roomId: loadedRoom.room.id,
       roomCoordinates: loadedRoom.room.coordinates,
