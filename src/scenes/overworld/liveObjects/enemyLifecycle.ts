@@ -54,6 +54,7 @@ interface EnemyLifecycleOptions<TEdgeWall> {
   getSwordsmanObjectiveMode: (liveObject: LoadedRoomObject) => SwordsmanObjectiveMode;
   getSwordsmanDefeatMode: (liveObject: LoadedRoomObject) => SwordsmanDefeatMode;
   swordsmanSwordCanDamagePlayer: (
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
     playerBody: Phaser.Physics.Arcade.Body,
   ) => boolean;
@@ -144,7 +145,7 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
         }
       } else if (
         this.options.getSwordsmanObjectiveMode(liveObject) === 'duel' &&
-        this.options.swordsmanSwordCanDamagePlayer(liveObject, playerBody)
+        this.options.swordsmanSwordCanDamagePlayer(loadedRoom, liveObject, playerBody)
       ) {
         this.options.handlePlayerDeath(`${liveObject.config.name} cut you down.`);
       }

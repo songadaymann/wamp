@@ -330,8 +330,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       onEnemyDefeated: this.options.onEnemyDefeated,
       getSwordsmanObjectiveMode: (liveObject) => this.swordsmanController.getObjectiveMode(liveObject),
       getSwordsmanDefeatMode: (liveObject) => this.swordsmanController.getDefeatMode(liveObject),
-      swordsmanSwordCanDamagePlayer: (liveObject, playerBody) =>
-        this.swordsmanController.swordCanDamagePlayer(liveObject, playerBody),
+      swordsmanSwordCanDamagePlayer: (loadedRoom, liveObject, playerBody) =>
+        this.swordsmanController.swordCanDamagePlayer(loadedRoom, liveObject, playerBody),
       createLiveObjectEntry: (loadedRoom, entryOptions) =>
         this.createLiveObjectEntry(loadedRoom, entryOptions),
       destroyLiveObjectInteractions: (liveObject) =>
