@@ -685,7 +685,13 @@ export async function handleRoomDiscovery(
   const rawSort = url.searchParams.get('sort');
   const sort = rawSort && rawSort.trim() ? parseRoomDiscoverySortOrThrow(rawSort) : 'featured';
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 100, 1, 200);
-  const response = await loadRoomDiscoveryResponse(env, difficultyFilter, limit, sort);
+  const response = await loadRoomDiscoveryResponse(
+    env,
+    difficultyFilter,
+    limit,
+    sort,
+    auth?.user.id ?? null,
+  );
   return jsonResponse(request, response);
 }
 

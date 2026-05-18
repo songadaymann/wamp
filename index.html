@@ -1709,6 +1709,9 @@
         <button class="bar-btn bar-btn-small active" type="button" data-explore-sort="featured">Featured</button>
         <button class="bar-btn bar-btn-small" type="button" data-explore-sort="quality">Top Rated</button>
         <button class="bar-btn bar-btn-small" type="button" data-explore-sort="newest">Newest</button>
+        <button class="bar-btn bar-btn-small" type="button" data-explore-sort="unbeaten">Unbeaten</button>
+        <button class="bar-btn bar-btn-small" type="button" data-explore-sort="unvisited">Never Visited</button>
+        <button class="bar-btn bar-btn-small" type="button" data-explore-sort="unrated">Unrated By Me</button>
         <button class="bar-btn bar-btn-small" type="button" data-explore-sort="builders">Builders</button>
       </div>
       <div id="explore-builder-sorts" class="leaderboard-discover-filters leaderboard-discover-sorts explore-builder-sorts hidden">
@@ -1760,12 +1763,31 @@
         </div>
         <div class="leaderboard-tabs profile-tabs">
           <button id="btn-profile-tab-rooms" class="bar-btn bar-btn-small active" type="button" aria-selected="true">Levels</button>
+          <button id="btn-profile-tab-playlists" class="bar-btn bar-btn-small" type="button" aria-selected="false">Playlists</button>
           <button id="btn-profile-tab-progress" class="bar-btn bar-btn-small" type="button" aria-selected="false">Progress</button>
           <button id="btn-profile-tab-stats" class="bar-btn bar-btn-small" type="button" aria-selected="false">Stats</button>
         </div>
         <div id="profile-rooms-panel" class="leaderboard-panel">
           <div id="profile-rooms-empty" class="leaderboard-empty">No claimed published rooms yet.</div>
           <div id="profile-rooms-list" class="history-version-list profile-room-grid"></div>
+        </div>
+        <div id="profile-playlists-panel" class="leaderboard-panel hidden">
+          <div id="profile-playlist-create-fields" class="profile-playlist-create-fields hidden">
+            <label class="goal-control-label" for="profile-playlist-title-input">Playlist Title</label>
+            <input id="profile-playlist-title-input" class="goal-input room-title-input" type="text" maxlength="60" spellcheck="false" />
+            <label class="goal-control-label" for="profile-playlist-slug-input">Share URL</label>
+            <input id="profile-playlist-slug-input" class="goal-input room-title-input" type="text" maxlength="48" spellcheck="false" autocapitalize="none" autocomplete="off" />
+            <label class="goal-control-label" for="profile-playlist-description-input">Description</label>
+            <textarea id="profile-playlist-description-input" class="goal-input goal-textarea profile-bio-input" maxlength="280" rows="3" spellcheck="true"></textarea>
+            <div class="profile-playlist-create-actions">
+              <button id="btn-profile-playlist-create" class="bar-btn" type="button">Create Playlist</button>
+              <label class="goal-control-label" for="profile-playlist-select">Add Rooms To</label>
+              <select id="profile-playlist-select" class="goal-input"></select>
+            </div>
+            <div id="profile-playlist-status" class="history-modal-meta hidden"></div>
+          </div>
+          <div id="profile-playlists-empty" class="leaderboard-empty">No public playlists yet.</div>
+          <div id="profile-playlists-list" class="history-version-list profile-playlist-list"></div>
         </div>
         <div id="profile-progress-panel" class="leaderboard-panel hidden">
           <div id="profile-progress-list" class="profile-stats-list"></div>
@@ -1774,6 +1796,24 @@
           <div id="profile-stats-list" class="profile-stats-list"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="playlist-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel leaderboard-modal-panel playlist-modal-panel" role="dialog" aria-modal="true" aria-labelledby="playlist-modal-title">
+      <div class="history-modal-header profile-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Playlist</div>
+          <h2 id="playlist-modal-title" class="history-modal-title">Playlist</h2>
+          <div id="playlist-modal-meta" class="history-modal-meta"></div>
+        </div>
+        <button id="btn-playlist-share" class="bar-btn bar-btn-small hidden" type="button">Copy Link</button>
+        <button id="btn-playlist-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div id="playlist-modal-error" class="history-modal-error hidden"></div>
+      <div id="playlist-description" class="profile-overview-bio hidden"></div>
+      <div id="playlist-rooms-empty" class="leaderboard-empty hidden">No rooms in this playlist yet.</div>
+      <div id="playlist-room-list" class="history-version-list playlist-room-list"></div>
     </div>
   </div>
 

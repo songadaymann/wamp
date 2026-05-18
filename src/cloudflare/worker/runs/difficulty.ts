@@ -88,6 +88,12 @@ interface DiscoveryRoomVersionKey {
   roomVersion: number;
 }
 
+interface DiscoveryViewerRoomState {
+  visited: boolean;
+  completed: boolean;
+  rated: boolean;
+}
+
 const QUALITY_PRIOR_MEAN = 3.5;
 const QUALITY_PRIOR_WEIGHT = 5;
 
@@ -236,7 +242,12 @@ export async function loadRoomDiscoveryResponse(
   difficultyFilter: RoomDifficulty | null,
   limit: number,
   sort: RoomDiscoverySort,
+  viewerUserId: string | null = null,
 ): Promise<RoomDiscoveryResponse> {
+  if (isPersonalRoomDiscoverySort(sort) && !viewerUserId) {
+    throw new HttpError(401, 'Sign in to sort by your room history.');
+  }
+
   const publishedRooms = await env.DB.prepare(
     `
       SELECT
@@ -296,11 +307,14 @@ export async function loadRoomDiscoveryResponse(
     roomId: entry.roomId,
     roomVersion: entry.roomVersion,
   }));
-  const [featuredRows, ratingRows, trophyRows, builderRows] = await Promise.all([
+  const [featuredRows, ratingRows, trophyRows, builderRows, viewerStates] = await Promise.all([
     loadFeaturedRoomRows(env, roomIds),
     loadRoomDiscoveryRatingAggregateRows(env, roomVersionKeys),
     loadRoomDiscoveryTrophyRows(env, roomVersionKeys),
     loadBuilderProgressionRows(env, builderUserIds),
+    viewerUserId
+      ? loadDiscoveryViewerRoomStates(env, viewerUserId, roomVersionKeys)
+      : Promise.resolve(new Map<string, DiscoveryViewerRoomState>()),
   ]);
   const featuredByRoomId = new Map(
     featuredRows.results.map((row) => [row.room_id, row] as const),
@@ -373,6 +387,24 @@ export async function loadRoomDiscoveryResponse(
       };
     })
     .filter((entry) => difficultyFilter === null || entry.consensusDifficulty === difficultyFilter)
+    .filter((entry) => {
+      if (!isPersonalRoomDiscoverySort(sort)) {
+        return true;
+      }
+
+      const state = viewerStates.get(buildDiscoveryRoomVersionKey(entry.roomId, entry.roomVersion))
+        ?? createEmptyDiscoveryViewerRoomState();
+      switch (sort) {
+        case 'unbeaten':
+          return !state.completed;
+        case 'unvisited':
+          return !state.visited;
+        case 'unrated':
+          return !state.rated;
+        default:
+          return true;
+      }
+    })
     .sort((left, right) => compareRoomDiscoveryEntries(left, right, sort))
     .slice(0, limit);
 
@@ -395,7 +427,7 @@ export function parseRoomDifficultyOrThrow(value: unknown): RoomDifficulty {
 export function parseRoomDiscoverySortOrThrow(value: unknown): RoomDiscoverySort {
   const normalized = normalizeRoomDiscoverySort(value);
   if (!normalized) {
-    throw new HttpError(400, 'sort must be featured, quality, newest, or builder.');
+    throw new HttpError(400, 'sort must be featured, quality, newest, builder, unbeaten, unvisited, or unrated.');
   }
 
   return normalized;
@@ -547,11 +579,31 @@ function compareRoomDiscoveryEntries(
     return compareTimestampsDesc(left.publishedAt, right.publishedAt);
   }
 
+  if (isPersonalRoomDiscoverySort(sort)) {
+    const featuredCompare = compareBooleansDesc(left.featured, right.featured);
+    if (featuredCompare !== 0) {
+      return featuredCompare;
+    }
+    const qualityCompare = compareQualityDesc(left, right);
+    if (qualityCompare !== 0) {
+      return qualityCompare;
+    }
+    const voteCompare = right.voteCount - left.voteCount;
+    if (voteCompare !== 0) {
+      return voteCompare;
+    }
+    return compareTimestampsDesc(left.publishedAt, right.publishedAt);
+  }
+
   const firstPublishedCompare = compareTimestampsDesc(left.firstPublishedAt, right.firstPublishedAt);
   if (firstPublishedCompare !== 0) {
     return firstPublishedCompare;
   }
   return compareTimestampsDesc(left.publishedAt, right.publishedAt);
+}
+
+function isPersonalRoomDiscoverySort(sort: RoomDiscoverySort): boolean {
+  return sort === 'unbeaten' || sort === 'unvisited' || sort === 'unrated';
 }
 
 function compareQualityDesc(left: RoomDiscoveryEntry, right: RoomDiscoveryEntry): number {
@@ -612,6 +664,91 @@ function mapBuilderDiscoveryRow(row: BuilderDiscoveryRow): BuilderDiscoveryEntry
     latestPublishedAt: row.latest_published_at,
     firstPublishedAt: row.first_published_at,
   };
+}
+
+async function loadDiscoveryViewerRoomStates(
+  env: Env,
+  userId: string,
+  roomVersionKeys: DiscoveryRoomVersionKey[],
+): Promise<Map<string, DiscoveryViewerRoomState>> {
+  const states = new Map<string, DiscoveryViewerRoomState>();
+  for (const key of roomVersionKeys) {
+    states.set(buildDiscoveryRoomVersionKey(key.roomId, key.roomVersion), createEmptyDiscoveryViewerRoomState());
+  }
+
+  for (const roomVersionChunk of chunkValues(roomVersionKeys, 40)) {
+    const whereClause = roomVersionChunk
+      .map(() => '(room_id = ? AND room_version = ?)')
+      .join(' OR ');
+    const bindings = roomVersionChunk.flatMap((entry) => [entry.roomId, entry.roomVersion]);
+    const runRows = await env.DB.prepare(
+      `
+        SELECT
+          room_id,
+          room_version,
+          COUNT(*) AS run_count,
+          SUM(CASE WHEN result = 'completed' THEN 1 ELSE 0 END) AS completed_count
+        FROM room_runs
+        WHERE user_id = ?
+          AND (${whereClause})
+        GROUP BY room_id, room_version
+      `
+    )
+      .bind(userId, ...bindings)
+      .all<{
+        room_id: string;
+        room_version: number | string | null;
+        run_count: number | string | null;
+        completed_count: number | string | null;
+      }>();
+
+    for (const row of runRows.results) {
+      const key = buildDiscoveryRoomVersionKey(row.room_id, parseRowNumber(row.room_version));
+      const state = states.get(key) ?? createEmptyDiscoveryViewerRoomState();
+      state.visited = parseRowNumber(row.run_count) > 0;
+      state.completed = parseRowNumber(row.completed_count) > 0;
+      states.set(key, state);
+    }
+
+    const ratingWhereClause = roomVersionChunk
+      .map(() => '(room_id = ? AND version_key = ?)')
+      .join(' OR ');
+    const ratingBindings = roomVersionChunk.flatMap((entry) => [entry.roomId, entry.roomVersion]);
+    const ratingRows = await env.DB.prepare(
+      `
+        SELECT
+          room_id,
+          version_key
+        FROM room_ratings
+        WHERE user_id = ?
+          AND (quality_stars IS NOT NULL OR difficulty_choice IS NOT NULL)
+          AND (${ratingWhereClause})
+      `
+    )
+      .bind(userId, ...ratingBindings)
+      .all<{ room_id: string; version_key: number | string | null }>();
+
+    for (const row of ratingRows.results) {
+      const key = buildDiscoveryRoomVersionKey(row.room_id, parseRowNumber(row.version_key));
+      const state = states.get(key) ?? createEmptyDiscoveryViewerRoomState();
+      state.rated = true;
+      states.set(key, state);
+    }
+  }
+
+  return states;
+}
+
+function createEmptyDiscoveryViewerRoomState(): DiscoveryViewerRoomState {
+  return {
+    visited: false,
+    completed: false,
+    rated: false,
+  };
+}
+
+function buildDiscoveryRoomVersionKey(roomId: string, roomVersion: number): string {
+  return `${roomId}:${roomVersion}`;
 }
 
 async function loadBuilderProgressionRows(

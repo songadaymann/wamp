@@ -15,6 +15,7 @@ import { RoomHistoryModalController } from './historyModal';
 import { setupKeyboardShortcutPassthrough } from './keyboardPassthrough';
 import { LeaderboardModalController } from './leaderboardModal';
 import { PaletteController } from './paletteController';
+import { PlaylistModalController } from './playlistModal';
 import { setupRoomMusicControls } from './musicControls';
 import { ProfileModalController } from './profileModal';
 import { RewardStingController } from './rewardStings';
@@ -46,6 +47,7 @@ interface UiControllers {
   courseModal: CourseModalController;
   courseComposerPanel: CourseComposerPanelController;
   profileModal: ProfileModalController;
+  playlistModal: PlaylistModalController;
   rewardStings: RewardStingController;
   xpReceipts: XpReceiptController;
   rewardStingCatchup: RewardStingCatchupController;
@@ -90,6 +92,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     courseModal: new CourseModalController(game),
     courseComposerPanel: new CourseComposerPanelController(game),
     profileModal: new ProfileModalController(game),
+    playlistModal: new PlaylistModalController(game),
     rewardStings: new RewardStingController(),
     xpReceipts: new XpReceiptController(),
     rewardStingCatchup: new RewardStingCatchupController(),
@@ -117,6 +120,7 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.courseModal.init();
   controllers.courseComposerPanel.init();
   controllers.profileModal.init();
+  controllers.playlistModal.init();
   controllers.rewardStings.init();
   controllers.xpReceipts.init();
   controllers.rewardStingCatchup.init();
@@ -144,6 +148,7 @@ function configureEditorBridge(controllers: UiControllers): void {
       controllers.aboutModal.close();
       controllers.courseModal.close();
       controllers.chatModerationModal.close();
+      controllers.playlistModal.close();
     },
     openHistory: () => controllers.historyModal.open(),
   });

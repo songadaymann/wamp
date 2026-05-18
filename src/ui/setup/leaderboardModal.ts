@@ -1411,7 +1411,15 @@ export class LeaderboardModalController {
   }
 
   private parseDiscoverSortButtonValue(value: string | undefined): RoomDiscoverySort | null {
-    if (value === 'featured' || value === 'quality' || value === 'newest' || value === 'builder') {
+    if (
+      value === 'featured'
+      || value === 'quality'
+      || value === 'newest'
+      || value === 'builder'
+      || value === 'unbeaten'
+      || value === 'unvisited'
+      || value === 'unrated'
+    ) {
       return value;
     }
 
@@ -1481,6 +1489,12 @@ export class LeaderboardModalController {
         return 'Newest';
       case 'builder':
         return 'Builder';
+      case 'unbeaten':
+        return "Haven't Beaten";
+      case 'unvisited':
+        return 'Never Visited';
+      case 'unrated':
+        return "Haven't Rated";
     }
   }
 

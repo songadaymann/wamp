@@ -2,6 +2,7 @@ import type { AuthUser } from '../auth/model';
 import type { RoomGoalType } from '../goals/roomGoals';
 import type { RoomCoordinates } from '../persistence/roomModel';
 import type { PlayerAvatarChoice } from '../player/avatar/model';
+import type { RoomPlaylistSummary } from '../playlists/model';
 import type { ProgressionSummary, QualityRatingSummary } from '../progression/model';
 import type { RoomDifficulty } from '../runs/model';
 
@@ -49,6 +50,7 @@ export interface UserProfileResponse {
   stats: ProfileStatsSummary;
   progression: ProgressionSummary;
   publishedRooms: ProfilePublishedRoomEntry[];
+  playlists: RoomPlaylistSummary[];
   publishedCourseCount: number;
 }
 
