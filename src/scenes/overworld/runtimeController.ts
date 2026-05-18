@@ -49,6 +49,7 @@ interface OverworldRuntimeControllerHost<TLiveObject> {
   setShouldRespawnPlayer(value: boolean): void;
   getPlayer(): Phaser.GameObjects.Rectangle | null;
   getPlayerBody(): Phaser.Physics.Arcade.Body | null;
+  shouldCollidePlayerWithTerrainTile(tile: Phaser.Tilemaps.Tile): boolean;
   createPlayer(room: RoomSnapshot): void;
   destroyPlayer(): void;
   syncAppMode(): void;
@@ -150,6 +151,9 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
         loadedRoom.terrainCollider = this.host.scene.physics.add.collider(
           player,
           loadedRoom.terrainLayer,
+          undefined,
+          (_player, tile) =>
+            this.host.shouldCollidePlayerWithTerrainTile(tile as Phaser.Tilemaps.Tile),
         );
       }
       if (loadedRoom.terrainInsetBodies && !loadedRoom.terrainInsetCollider) {

@@ -584,8 +584,11 @@ async function logout(): Promise<void> {
 }
 
 async function resetTestData(): Promise<void> {
+  const isLocalRoomStorage = state.storageBackend === 'local';
   const confirmed = window.confirm(
-    'Reset test data on the current API backend? This deletes rooms, versions, users, sessions, and auth tokens.'
+    isLocalRoomStorage
+      ? 'Reset local test data? This deletes local room drafts and published room records cached in this browser.'
+      : 'Reset test data on the current API backend? This deletes rooms, versions, users, sessions, and auth tokens.'
   );
   if (!confirmed) {
     return;
@@ -594,6 +597,17 @@ async function resetTestData(): Promise<void> {
   setLoading(true, 'Resetting test data...');
 
   try {
+    if (isLocalRoomStorage) {
+      const clearedLocalRooms = clearLocalRoomStorage();
+      state.status = `Reset complete. Cleared ${clearedLocalRooms} local cached room entries. Reloading...`;
+      renderAuthUi();
+
+      window.setTimeout(() => {
+        window.location.replace(`${window.location.pathname}${window.location.hash}`);
+      }, 200);
+      return;
+    }
+
     const response = await apiRequest<TestResetResponse>('/api/test/reset', {
       method: 'POST',
     });

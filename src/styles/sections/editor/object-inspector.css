@@ -169,7 +169,8 @@
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.28);
 }
 
-/* ── Object Tooltips ── */
+/* ── Palette Tooltips ── */
+#palette-tooltip,
 #object-tooltip {
   position: fixed;
   z-index: 100;
@@ -188,8 +189,18 @@
   transition: opacity 0.12s;
 }
 
+#palette-tooltip.visible,
 #object-tooltip.visible {
   opacity: 1;
+}
+
+.palette-tooltip-title {
+  font-weight: 700;
+}
+
+.palette-tooltip-description {
+  margin-top: 4px;
+  color: var(--text-muted);
 }
 
 .object-item:hover {

@@ -9,6 +9,9 @@ import {
   getTilesetByKey,
   getTilesetUiTheme,
   isTilesetLocalTileEditorEnabled,
+  MOVING_PLATFORM_OBJECT_ID,
+  SPECIAL_TILE_LOCAL_INDICES,
+  SPECIAL_TILESET_KEY,
   type GameObjectConfig,
   type TileSelection,
   type TilesetConfig,
@@ -23,6 +26,11 @@ import { EDITOR_UI_STATE_CHANGED_EVENT } from '../../scenes/editor/uiEvents';
 import { getDeviceLayoutState, isCoarsePointerDevice } from '../deviceLayout';
 
 const MIN_SELECTION_OPAQUE_PIXELS = 96;
+
+type PaletteTooltipContent = {
+  title: string;
+  description?: string;
+};
 
 export class PaletteController {
   private readonly doc: Document;
@@ -42,7 +50,7 @@ export class PaletteController {
   private currentObjectCategory = 'all';
   private currentObjectSearch = '';
   private paletteDragStart: { col: number; row: number } | null = null;
-  private objectTooltipEl: HTMLDivElement | null = null;
+  private paletteTooltipEl: HTMLDivElement | null = null;
 
   constructor(doc: Document = document) {
     this.doc = doc;
@@ -75,8 +83,8 @@ export class PaletteController {
       this.paletteCanvas.onclick = null;
     }
 
-    this.objectTooltipEl?.remove();
-    this.objectTooltipEl = null;
+    this.paletteTooltipEl?.remove();
+    this.paletteTooltipEl = null;
     if (this.objectSearchInput) {
       this.objectSearchInput.oninput = null;
       this.objectSearchInput.onchange = null;
@@ -211,6 +219,7 @@ export class PaletteController {
     }
 
     this.paletteCanvas.onpointerdown = (event: PointerEvent) => {
+      this.hidePaletteTooltip();
       const rect = this.paletteCanvas?.getBoundingClientRect();
       if (!rect) {
         return;
@@ -222,6 +231,9 @@ export class PaletteController {
       const row = Math.floor(y / scaledTile);
 
       if (col >= 0 && col < ts.columns && row >= 0 && row < ts.rows) {
+        if (this.handleSpecialPaletteTileShortcut(ts, row * ts.columns + col)) {
+          return;
+        }
         this.paletteDragStart = { col, row };
         this.updateSelection(ts.key, col, row, col, row);
         this.paletteCanvas?.setPointerCapture(event.pointerId);
@@ -230,9 +242,11 @@ export class PaletteController {
 
     this.paletteCanvas.onpointermove = (event: PointerEvent) => {
       if (!this.paletteDragStart) {
+        this.updatePaletteTileTooltip(event, ts, scaledTile);
         return;
       }
 
+      this.hidePaletteTooltip();
       const rect = this.paletteCanvas?.getBoundingClientRect();
       if (!rect) {
         return;
@@ -257,12 +271,14 @@ export class PaletteController {
       if (this.paletteDragStart) {
         this.paletteDragStart = null;
       }
+      this.hidePaletteTooltip();
     };
 
     this.paletteCanvas.onpointerleave = () => {
       if (this.paletteDragStart) {
         this.paletteDragStart = null;
       }
+      this.hidePaletteTooltip();
     };
 
     this.paletteCanvas.onclick = null;
@@ -410,12 +426,14 @@ export class PaletteController {
 
       if (!isCoarsePointerDevice()) {
         item.addEventListener('mouseenter', (event) => {
-          this.showObjectTooltip(
+          this.showPaletteTooltipForElement(
             event.currentTarget as HTMLElement,
-            objectConfig.name,
+            {
+              title: objectConfig.name,
+            },
           );
         });
-        item.addEventListener('mouseleave', () => this.hideObjectTooltip());
+        item.addEventListener('mouseleave', () => this.hidePaletteTooltip());
       }
 
       const img = this.doc.createElement('img');
@@ -488,6 +506,13 @@ export class PaletteController {
     this.currentObjectSearch = this.objectSearchInput.value.trim().toLowerCase();
     this.objectSearchInput.oninput = applySearch;
     this.objectSearchInput.onchange = applySearch;
+  }
+
+  private setObjectSearch(query: string): void {
+    this.currentObjectSearch = query.trim().toLowerCase();
+    if (this.objectSearchInput) {
+      this.objectSearchInput.value = query;
+    }
   }
 
   private requestPhoneEditorAutoCollapse(): void {
@@ -594,28 +619,103 @@ export class PaletteController {
     editorState.selectedTileGid = this.getPrimarySelectionGid(normalizedSelection, ts);
   }
 
-  private getObjectTooltip(): HTMLDivElement {
-    if (!this.objectTooltipEl) {
-      this.objectTooltipEl = this.doc.createElement('div');
-      this.objectTooltipEl.id = 'object-tooltip';
-      this.doc.body.appendChild(this.objectTooltipEl);
+  private getPaletteTooltip(): HTMLDivElement {
+    if (!this.paletteTooltipEl) {
+      this.paletteTooltipEl = this.doc.createElement('div');
+      this.paletteTooltipEl.id = 'palette-tooltip';
+      this.doc.body.appendChild(this.paletteTooltipEl);
     }
 
-    return this.objectTooltipEl;
+    return this.paletteTooltipEl;
   }
 
-  private showObjectTooltip(anchor: HTMLElement, text: string): void {
-    const tooltip = this.getObjectTooltip();
-    tooltip.textContent = text;
+  private showPaletteTooltipForElement(
+    anchor: HTMLElement,
+    content: PaletteTooltipContent,
+  ): void {
     const rect = anchor.getBoundingClientRect();
-    tooltip.style.left = `${rect.right + 8}px`;
-    tooltip.style.top = `${rect.top + rect.height / 2}px`;
+    this.showPaletteTooltip(rect.right + 8, rect.top + rect.height / 2, content);
+  }
+
+  private showPaletteTooltip(
+    left: number,
+    centerY: number,
+    content: PaletteTooltipContent,
+  ): void {
+    const tooltip = this.getPaletteTooltip();
+    tooltip.textContent = '';
+
+    const title = this.doc.createElement('div');
+    title.className = 'palette-tooltip-title';
+    title.textContent = content.title;
+    tooltip.appendChild(title);
+
+    const descriptionText = content.description?.trim();
+    if (descriptionText) {
+      const description = this.doc.createElement('div');
+      description.className = 'palette-tooltip-description';
+      description.textContent = descriptionText;
+      tooltip.appendChild(description);
+    }
+
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${centerY}px`;
     tooltip.style.transform = 'translateY(-50%)';
     tooltip.classList.add('visible');
   }
 
-  private hideObjectTooltip(): void {
-    this.objectTooltipEl?.classList.remove('visible');
+  private hidePaletteTooltip(): void {
+    this.paletteTooltipEl?.classList.remove('visible');
+  }
+
+  private updatePaletteTileTooltip(
+    event: PointerEvent,
+    ts: TilesetConfig,
+    scaledTile: number,
+  ): void {
+    if (
+      isCoarsePointerDevice() ||
+      ts.key !== SPECIAL_TILESET_KEY ||
+      !this.paletteCanvas
+    ) {
+      this.hidePaletteTooltip();
+      return;
+    }
+
+    const rect = this.paletteCanvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      this.hidePaletteTooltip();
+      return;
+    }
+
+    const canvasScaleX = this.paletteCanvas.width / rect.width;
+    const canvasScaleY = this.paletteCanvas.height / rect.height;
+    const canvasX = (event.clientX - rect.left) * canvasScaleX;
+    const canvasY = (event.clientY - rect.top) * canvasScaleY;
+    const col = Math.floor(canvasX / scaledTile);
+    const row = Math.floor(canvasY / scaledTile);
+
+    if (col < 0 || col >= ts.columns || row < 0 || row >= ts.rows) {
+      this.hidePaletteTooltip();
+      return;
+    }
+
+    const tileIndex = row * ts.columns + col;
+    const metadata = ts.editorTileMetadata?.[tileIndex];
+    const isObjectShortcut = tileIndex === SPECIAL_TILE_LOCAL_INDICES.movingPlatformTile;
+    if (!metadata || (!metadata.enabled && !isObjectShortcut)) {
+      this.hidePaletteTooltip();
+      return;
+    }
+
+    const cellWidth = rect.width / ts.columns;
+    const cellHeight = rect.height / ts.rows;
+    const tooltipLeft = rect.left + (col + 1) * cellWidth + 8;
+    const tooltipCenterY = rect.top + (row + 0.5) * cellHeight;
+    this.showPaletteTooltip(tooltipLeft, tooltipCenterY, {
+      title: metadata.label,
+      description: metadata.description,
+    });
   }
 
   private computeTilesetOccupancy(ts: TilesetConfig, img: HTMLImageElement): boolean[] {
@@ -691,6 +791,33 @@ export class PaletteController {
       ctx.stroke();
     }
     ctx.restore();
+  }
+
+  private handleSpecialPaletteTileShortcut(ts: TilesetConfig, tileIndex: number): boolean {
+    if (
+      ts.key !== SPECIAL_TILESET_KEY ||
+      tileIndex !== SPECIAL_TILE_LOCAL_INDICES.movingPlatformTile
+    ) {
+      return false;
+    }
+
+    this.hidePaletteTooltip();
+    editorState.paletteMode = 'objects';
+    editorState.selectedObjectId = MOVING_PLATFORM_OBJECT_ID;
+    editorState.objectFacing = 'right';
+    editorState.activeTool = 'pencil';
+    this.currentObjectCategory = 'all';
+    this.setObjectSearch('moving platform');
+    this.renderObjectGrid();
+    this.renderObjectFacingControls();
+    this.renderTilePreview();
+    this.doc.defaultView?.dispatchEvent(
+      new CustomEvent(EDITOR_UI_STATE_CHANGED_EVENT, {
+        detail: { objectCategory: 'all' },
+      }),
+    );
+    this.doc.defaultView?.requestAnimationFrame(() => this.hidePaletteTooltip());
+    return true;
   }
 
   private tileHasVisiblePixels(

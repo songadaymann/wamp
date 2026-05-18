@@ -20,17 +20,52 @@ import {
   type ArcadeObjectBody,
   type LoadedRoomObject,
 } from './liveObjects';
+import {
+  bodyIsBlockedInGravityDirection,
+  getBodyVelocityAlongVector,
+  getGravityRightVector,
+  getGravityVector,
+  setBodyVelocityAlongVector,
+  type DirectionVector,
+  type PlayerGravityDirection,
+  type SpecialTilePlayerEnvironment,
+} from './specialTiles';
 
 const CRATE_PULL_DRAG_COMPENSATION_SCALE = 2.25;
 const SINGLE_TILE_GAP_ASSIST_MAX_DROP_PX = 4;
 const SINGLE_TILE_GAP_ASSIST_FOOT_PROBE_PX = 1;
 const SINGLE_TILE_GAP_ASSIST_HORIZONTAL_PAD_PX = 1;
+const WATER_MOVE_FACTOR = 0.62;
+const WATER_SWIM_KICK_VELOCITY = -168;
+const WATER_MAX_GRAVITY_SPEED = 118;
+const WATER_GRAVITY_FACTOR = 0.35;
+const WIND_PUSH_ACCELERATION = 980;
+const WIND_MAX_SPEED = 280;
+const CONVEYOR_SPEED = 48;
+const ICE_COAST_FACTOR = 0.985;
+const ICE_ACCELERATION = 900;
+const STICKY_MOVE_FACTOR = 0.48;
+const STICKY_JUMP_FACTOR = 0.72;
+const RUNTIME_OBJECT_SUPPORT_MAX_UPWARD_SPEED = -60;
+const RUNTIME_OBJECT_SUPPORT_HOVER_TOLERANCE_PX = 8;
+const RUNTIME_OBJECT_SUPPORT_PENETRATION_TOLERANCE_PX = 5;
+const RUNTIME_OBJECT_SUPPORT_EDGE_INSET_PX = 1;
 
 export interface OverworldCrateInteraction {
   crateBody: Phaser.Physics.Arcade.Body;
   mode: 'push' | 'pull';
   moveDirectionX: -1 | 1;
   facing: -1 | 1;
+  gravityDirection: PlayerGravityDirection;
+}
+
+interface DirectionalGravityControls {
+  tangentInput: number;
+  crouchHeld: boolean;
+  jumpPressed: boolean;
+  jumpHeld: boolean;
+  horizontalInput: number;
+  verticalInput: number;
 }
 
 export interface OverworldMovementControllerState {
@@ -60,6 +95,7 @@ interface OverworldMovementControllerHost {
   getCurrentTime(): number;
   getPlayer(): Phaser.GameObjects.Rectangle | null;
   getPlayerBody(): Phaser.Physics.Arcade.Body | null;
+  getSpecialTileEnvironment(): SpecialTilePlayerEnvironment;
   getPlayerFacing(): -1 | 1;
   getCurrentRoomCoordinates(): RoomCoordinates;
   getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number };
@@ -228,14 +264,56 @@ export class OverworldMovementController {
     const upPressed =
       Phaser.Input.Keyboard.JustDown(cursors.up) ||
       Phaser.Input.Keyboard.JustDown(wasd.W);
+    const downPressed =
+      Phaser.Input.Keyboard.JustDown(cursors.down) ||
+      Phaser.Input.Keyboard.JustDown(wasd.S);
+    const leftPressed =
+      Phaser.Input.Keyboard.JustDown(cursors.left) ||
+      Phaser.Input.Keyboard.JustDown(wasd.A);
+    const rightPressed =
+      Phaser.Input.Keyboard.JustDown(cursors.right) ||
+      Phaser.Input.Keyboard.JustDown(wasd.D);
     const spacePressed =
       Phaser.Input.Keyboard.JustDown(cursors.space!) ||
       touchJumpPressed;
+    const spaceHeld = cursors.space!.isDown || touchInput.jumpHeld;
     const stayOnLadder =
       overlappingLadder !== null &&
       !spacePressed &&
       (verticalInput !== 0 || (this.host.state.isClimbingLadder && !left && !right));
     const jumpedOffLadder = this.host.state.isClimbingLadder && spacePressed;
+    const specialEnvironment = this.host.getSpecialTileEnvironment();
+    const playerGravityDirection = specialEnvironment.gravityDirection;
+    playerBody.setAllowGravity(playerGravityDirection === 'down');
+
+    if (playerGravityDirection !== 'down') {
+      const directionalControls = this.resolveDirectionalGravityControls(playerGravityDirection, {
+        horizontalInput,
+        verticalInput,
+        left,
+        right,
+        upHeld,
+        downHeld,
+        upPressed,
+        downPressed,
+        leftPressed,
+        rightPressed,
+        spacePressed,
+        spaceHeld,
+        touchLeft,
+        touchRight,
+        touchUp,
+        touchDown,
+      });
+      return this.updateDirectionalGravityMovement({
+        delta,
+        inQuicksand,
+        player,
+        playerBody,
+        specialEnvironment,
+        controls: directionalControls,
+      });
+    }
 
     if (stayOnLadder && overlappingLadder) {
       this.setPlayerLadderState(overlappingLadder);
@@ -262,7 +340,10 @@ export class OverworldMovementController {
       this.setPlayerLadderState(null);
     }
 
-    let grounded = playerBody.blocked.down || playerBody.touching.down;
+    let grounded =
+      playerBody.blocked.down ||
+      playerBody.touching.down ||
+      this.isSupportedBySolidRuntimeObject(playerBody);
     if (
       this.shouldApplySingleTileGapAssist(horizontalInput, downHeld, spacePressed, inQuicksand, grounded) &&
       this.tryApplySingleTileGapAssist(horizontalInput, grounded)
@@ -271,8 +352,8 @@ export class OverworldMovementController {
     }
 
     const crateInteraction =
-      !inQuicksand && grounded && horizontalInput !== 0
-        ? this.findCrateInteraction(horizontalInput, downHeld)
+      !inQuicksand && !specialEnvironment.inWater && grounded && horizontalInput !== 0
+        ? this.findCrateInteraction(horizontalInput, downHeld, specialEnvironment.gravityDirection)
         : null;
     const standingHitboxFits =
       !grounded ||
@@ -300,10 +381,7 @@ export class OverworldMovementController {
         crateInteraction.mode === 'push' ? this.options.cratePushSpeed : this.options.cratePullSpeed;
       this.host.state.activeCrateInteractionMode = crateInteraction.mode;
       this.host.state.activeCrateInteractionFacing = crateInteraction.facing;
-      playerBody.setVelocityX(crateInteraction.moveDirectionX * moveSpeed);
-      crateInteraction.crateBody.setVelocityX(
-        this.getCrateInteractionVelocityX(crateInteraction, moveSpeed, delta)
-      );
+      this.applyCrateInteraction(playerBody, crateInteraction, moveSpeed, delta);
     } else {
       this.clearCrateInteractionState();
       if (this.host.getCurrentTime() < this.host.state.weaponKnockbackUntil) {
@@ -316,8 +394,27 @@ export class OverworldMovementController {
       } else {
         this.host.state.weaponKnockbackVelocityX = 0;
         const moveSpeedBase = this.host.state.isCrouching ? this.options.crawlSpeed : this.options.playerSpeed;
-        const moveSpeed = inQuicksand ? moveSpeedBase * this.options.quicksandMoveFactor : moveSpeedBase;
-        if (left) {
+        const moveSpeed =
+          inQuicksand
+            ? moveSpeedBase * this.options.quicksandMoveFactor
+            : specialEnvironment.inWater
+              ? moveSpeedBase * WATER_MOVE_FACTOR
+              : specialEnvironment.onSticky
+                ? moveSpeedBase * STICKY_MOVE_FACTOR
+                : moveSpeedBase;
+        if (specialEnvironment.onIce && grounded && !left && !right) {
+          playerBody.setVelocityX(playerBody.velocity.x * ICE_COAST_FACTOR);
+        } else if (specialEnvironment.onIce && grounded && (left || right)) {
+          const targetVelocityX = left ? -moveSpeed : moveSpeed;
+          const deltaSeconds = Math.max(delta / 1000, 1 / 60);
+          playerBody.setVelocityX(
+            Phaser.Math.Linear(
+              playerBody.velocity.x,
+              targetVelocityX,
+              Phaser.Math.Clamp(ICE_ACCELERATION * deltaSeconds / Math.max(1, moveSpeed), 0, 1),
+            ),
+          );
+        } else if (left) {
           playerBody.setVelocityX(-moveSpeed);
         } else if (right) {
           playerBody.setVelocityX(moveSpeed);
@@ -329,11 +426,17 @@ export class OverworldMovementController {
 
     const jumpPressed =
       !this.host.state.isCrouching && (spacePressed || (upPressed && overlappingLadder === null));
+    const specialJumpVelocity =
+      specialEnvironment.inWater
+        ? WATER_SWIM_KICK_VELOCITY
+        : inQuicksand
+          ? this.options.jumpVelocity * this.options.quicksandJumpFactor
+          : specialEnvironment.onSticky
+            ? this.options.jumpVelocity * STICKY_JUMP_FACTOR
+            : this.options.jumpVelocity;
 
     if (jumpedOffLadder) {
-      playerBody.setVelocityY(
-        inQuicksand ? this.options.jumpVelocity * this.options.quicksandJumpFactor : this.options.jumpVelocity,
-      );
+      playerBody.setVelocityY(specialJumpVelocity);
       this.host.playJumpDustFx(player.x ?? playerBody.center.x, playerBody.bottom, this.host.getPlayerFacing());
       this.host.state.jumpBuffered = false;
       this.host.state.jumpBufferTime = 0;
@@ -341,7 +444,13 @@ export class OverworldMovementController {
       this.resetWallMovementState();
     } else {
       if (jumpPressed) {
-        if (!this.tryPerformWallJump(player, playerBody)) {
+        if (specialEnvironment.inWater) {
+          playerBody.setVelocityY(WATER_SWIM_KICK_VELOCITY);
+          this.host.playJumpDustFx(player.x ?? playerBody.center.x, playerBody.bottom, this.host.getPlayerFacing());
+          this.host.state.jumpBuffered = false;
+          this.host.state.jumpBufferTime = 0;
+          this.host.state.coyoteTime = 0;
+        } else if (!this.tryPerformWallJump(player, playerBody)) {
           this.host.state.jumpBuffered = true;
           this.host.state.jumpBufferTime =
             !grounded && this.host.state.coyoteTime <= 0
@@ -353,9 +462,7 @@ export class OverworldMovementController {
       if (this.host.state.jumpBuffered && this.tryPerformWallJump(player, playerBody)) {
         // Wall-jump buffering lets the player press jump just before reaching the next wall.
       } else if (this.host.state.jumpBuffered && this.host.state.coyoteTime > 0) {
-        playerBody.setVelocityY(
-          inQuicksand ? this.options.jumpVelocity * this.options.quicksandJumpFactor : this.options.jumpVelocity,
-        );
+        playerBody.setVelocityY(specialJumpVelocity);
         this.host.playJumpDustFx(player.x ?? playerBody.center.x, playerBody.bottom, this.host.getPlayerFacing());
         this.host.state.jumpBuffered = false;
         this.host.state.jumpBufferTime = 0;
@@ -394,6 +501,18 @@ export class OverworldMovementController {
     if (inQuicksand && grounded) {
       playerBody.setVelocityY(Math.max(playerBody.velocity.y, 4));
     }
+    if (specialEnvironment.inWater) {
+      playerBody.setVelocityY(Math.min(playerBody.velocity.y, WATER_MAX_GRAVITY_SPEED));
+    }
+    if (grounded && specialEnvironment.conveyorX !== 0) {
+      playerBody.setVelocityX(playerBody.velocity.x + specialEnvironment.conveyorX * CONVEYOR_SPEED);
+    }
+    if (specialEnvironment.windX !== 0) {
+      const windDelta = specialEnvironment.windX * WIND_PUSH_ACCELERATION * Math.max(delta / 1000, 1 / 60);
+      playerBody.setVelocityX(
+        Phaser.Math.Clamp(playerBody.velocity.x + windDelta, -WIND_MAX_SPEED, WIND_MAX_SPEED),
+      );
+    }
 
     this.syncPlayerHitbox(grounded && playerBody.velocity.y >= 0);
 
@@ -404,6 +523,200 @@ export class OverworldMovementController {
       verticalInput,
       jumpPressed: spacePressed || upPressed,
     };
+  }
+
+  private updateDirectionalGravityMovement(input: {
+    delta: number;
+    inQuicksand: boolean;
+    player: Phaser.GameObjects.Rectangle;
+    playerBody: Phaser.Physics.Arcade.Body;
+    specialEnvironment: SpecialTilePlayerEnvironment;
+    controls: DirectionalGravityControls;
+  }): OverworldMovementStepResult {
+    const {
+      delta,
+      inQuicksand,
+      player,
+      playerBody,
+      specialEnvironment,
+      controls,
+    } = input;
+    const gravityDirection = specialEnvironment.gravityDirection;
+    const gravityVector = getGravityVector(gravityDirection);
+    const rightVector = getGravityRightVector(gravityDirection);
+    const deltaSeconds = Math.max(delta / 1000, 1 / 60);
+
+    this.setPlayerLadderState(null);
+    this.resetWallMovementState();
+    this.host.state.isCrouching = false;
+    this.syncPlayerHitbox();
+
+    const gravityScale = specialEnvironment.inWater ? WATER_GRAVITY_FACTOR : 1;
+    const gravityVelocity = getBodyVelocityAlongVector(playerBody, gravityVector);
+    const maxGravitySpeed = specialEnvironment.inWater ? WATER_MAX_GRAVITY_SPEED : 500;
+    setBodyVelocityAlongVector(
+      playerBody,
+      gravityVector,
+      Phaser.Math.Clamp(
+        gravityVelocity + this.options.jumpVelocity * -1 * gravityScale * deltaSeconds * 2.5,
+        -500,
+        maxGravitySpeed,
+      ),
+    );
+
+    const grounded = bodyIsBlockedInGravityDirection(playerBody, gravityDirection);
+    if (grounded) {
+      this.host.state.coyoteTime = this.options.coyoteMs;
+    } else {
+      this.host.state.coyoteTime = Math.max(0, this.host.state.coyoteTime - delta);
+    }
+
+    const crateInteraction =
+      !inQuicksand &&
+      !specialEnvironment.inWater &&
+      grounded &&
+      controls.tangentInput !== 0
+        ? this.findCrateInteraction(controls.tangentInput, controls.crouchHeld, gravityDirection)
+        : null;
+    this.host.state.isCrouching = grounded && controls.crouchHeld && !crateInteraction;
+    this.syncPlayerHitbox();
+
+    const moveSpeedBase = this.host.state.isCrouching
+      ? this.options.crawlSpeed
+      : specialEnvironment.inWater
+      ? this.options.playerSpeed * WATER_MOVE_FACTOR
+      : specialEnvironment.onSticky
+        ? this.options.playerSpeed * STICKY_MOVE_FACTOR
+        : this.options.playerSpeed;
+    if (crateInteraction) {
+      const moveSpeed =
+        crateInteraction.mode === 'push' ? this.options.cratePushSpeed : this.options.cratePullSpeed;
+      this.host.state.activeCrateInteractionMode = crateInteraction.mode;
+      this.host.state.activeCrateInteractionFacing = crateInteraction.facing;
+      this.applyCrateInteraction(playerBody, crateInteraction, moveSpeed, delta);
+    } else {
+      this.clearCrateInteractionState();
+      const targetTangentVelocity = controls.tangentInput * moveSpeedBase;
+      const currentTangentVelocity = getBodyVelocityAlongVector(playerBody, rightVector);
+      if (specialEnvironment.onIce && grounded) {
+        const nextTangentVelocity =
+          controls.tangentInput === 0
+            ? currentTangentVelocity * ICE_COAST_FACTOR
+            : Phaser.Math.Linear(
+                currentTangentVelocity,
+                targetTangentVelocity,
+                Phaser.Math.Clamp(ICE_ACCELERATION * deltaSeconds / Math.max(1, moveSpeedBase), 0, 1),
+              );
+        setBodyVelocityAlongVector(playerBody, rightVector, nextTangentVelocity);
+      } else {
+        setBodyVelocityAlongVector(playerBody, rightVector, targetTangentVelocity);
+      }
+    }
+
+    if (controls.jumpPressed && (specialEnvironment.inWater || this.host.state.coyoteTime > 0)) {
+      const launchVelocity =
+        specialEnvironment.inWater
+          ? WATER_SWIM_KICK_VELOCITY
+          : specialEnvironment.onSticky
+            ? this.options.jumpVelocity * STICKY_JUMP_FACTOR
+            : this.options.jumpVelocity;
+      setBodyVelocityAlongVector(playerBody, gravityVector, launchVelocity);
+      this.host.playJumpDustFx(player.x ?? playerBody.center.x, playerBody.bottom, this.host.getPlayerFacing());
+      this.host.state.jumpBuffered = false;
+      this.host.state.jumpBufferTime = 0;
+      this.host.state.coyoteTime = 0;
+    }
+
+    const currentNormalVelocity = getBodyVelocityAlongVector(playerBody, gravityVector);
+    if (
+      !controls.jumpHeld &&
+      currentNormalVelocity < 0 &&
+      this.host.getCurrentTime() >= this.host.getExternalLaunchGraceUntil()
+    ) {
+      setBodyVelocityAlongVector(playerBody, gravityVector, currentNormalVelocity * 0.86);
+    }
+
+    if (grounded && specialEnvironment.conveyorX !== 0) {
+      playerBody.setVelocityX(playerBody.velocity.x + specialEnvironment.conveyorX * CONVEYOR_SPEED);
+    }
+    if (specialEnvironment.windX !== 0) {
+      const windDelta = specialEnvironment.windX * WIND_PUSH_ACCELERATION * deltaSeconds;
+      playerBody.setVelocityX(
+        Phaser.Math.Clamp(playerBody.velocity.x + windDelta, -WIND_MAX_SPEED, WIND_MAX_SPEED),
+      );
+    }
+
+    this.syncPlayerHitbox();
+
+    return {
+      grounded,
+      downHeld: controls.crouchHeld,
+      horizontalInput: controls.horizontalInput,
+      verticalInput: controls.verticalInput,
+      jumpPressed: controls.jumpPressed,
+    };
+  }
+
+  private resolveDirectionalGravityControls(
+    gravityDirection: PlayerGravityDirection,
+    input: {
+      horizontalInput: number;
+      verticalInput: number;
+      left: boolean;
+      right: boolean;
+      upHeld: boolean;
+      downHeld: boolean;
+      upPressed: boolean;
+      downPressed: boolean;
+      leftPressed: boolean;
+      rightPressed: boolean;
+      spacePressed: boolean;
+      spaceHeld: boolean;
+      touchLeft: boolean;
+      touchRight: boolean;
+      touchUp: boolean;
+      touchDown: boolean;
+    },
+  ): DirectionalGravityControls {
+    switch (gravityDirection) {
+      case 'up':
+        return {
+          tangentInput: -input.horizontalInput,
+          crouchHeld: input.upHeld,
+          jumpPressed: input.spacePressed || input.downPressed || input.touchDown,
+          jumpHeld: input.spaceHeld || input.downHeld,
+          horizontalInput: input.horizontalInput,
+          verticalInput: input.verticalInput,
+        };
+      case 'left':
+        return {
+          tangentInput: -input.verticalInput,
+          crouchHeld: input.left,
+          jumpPressed: input.spacePressed || input.rightPressed || input.touchRight,
+          jumpHeld: input.spaceHeld || input.right,
+          horizontalInput: -input.verticalInput,
+          verticalInput: input.verticalInput,
+        };
+      case 'right':
+        return {
+          tangentInput: input.verticalInput,
+          crouchHeld: input.right,
+          jumpPressed: input.spacePressed || input.leftPressed || input.touchLeft,
+          jumpHeld: input.spaceHeld || input.left,
+          horizontalInput: input.verticalInput,
+          verticalInput: input.verticalInput,
+        };
+      case 'down':
+      default:
+        return {
+          tangentInput: input.horizontalInput,
+          crouchHeld: input.downHeld,
+          jumpPressed: input.spacePressed || input.upPressed || input.touchUp,
+          jumpHeld: input.spaceHeld || input.upHeld,
+          horizontalInput: input.horizontalInput,
+          verticalInput: input.verticalInput,
+        };
+    }
   }
 
   syncLadderClimbSfx(verticalInput: number): void {
@@ -748,7 +1061,26 @@ export class OverworldMovementController {
     }
   }
 
-  private getCrateInteractionVelocityX(
+  private applyCrateInteraction(
+    playerBody: Phaser.Physics.Arcade.Body,
+    crateInteraction: OverworldCrateInteraction,
+    moveSpeed: number,
+    delta: number,
+  ): void {
+    const tangentVector = getGravityRightVector(crateInteraction.gravityDirection);
+    setBodyVelocityAlongVector(
+      playerBody,
+      tangentVector,
+      crateInteraction.moveDirectionX * moveSpeed,
+    );
+    setBodyVelocityAlongVector(
+      crateInteraction.crateBody,
+      tangentVector,
+      this.getCrateInteractionTangentVelocity(crateInteraction, moveSpeed, delta),
+    );
+  }
+
+  private getCrateInteractionTangentVelocity(
     crateInteraction: OverworldCrateInteraction,
     moveSpeed: number,
     delta: number,
@@ -758,8 +1090,12 @@ export class OverworldMovementController {
     }
 
     // Pulling does not have push contact to keep the crate coupled, so offset its drag for the next physics step.
+    const tangentVector = getGravityRightVector(crateInteraction.gravityDirection);
+    const tangentDrag = tangentVector.x !== 0
+      ? crateInteraction.crateBody.drag.x
+      : crateInteraction.crateBody.drag.y;
     const dragCompensation =
-      Math.max(0, crateInteraction.crateBody.drag.x) *
+      Math.max(0, tangentDrag) *
       Math.min(Math.max(delta, 0), 50) /
       1000 *
       CRATE_PULL_DRAG_COMPENSATION_SCALE;
@@ -816,6 +1152,45 @@ export class OverworldMovementController {
     return true;
   }
 
+  private isSupportedBySolidRuntimeObject(playerBody: Phaser.Physics.Arcade.Body): boolean {
+    if (playerBody.velocity.y < RUNTIME_OBJECT_SUPPORT_MAX_UPWARD_SPEED) {
+      return false;
+    }
+
+    const playerBounds = this.host.getArcadeBodyBounds(playerBody);
+    const playerLeft = playerBounds.left + RUNTIME_OBJECT_SUPPORT_EDGE_INSET_PX;
+    const playerRight = playerBounds.right - RUNTIME_OBJECT_SUPPORT_EDGE_INSET_PX;
+
+    for (const liveObject of this.host.getLoadedLiveObjects()) {
+      if (
+        !isSolidRuntimeObjectConfig(liveObject.config) ||
+        !liveObject.sprite.active ||
+        !liveObject.sprite.body
+      ) {
+        continue;
+      }
+
+      const objectBounds = this.host.getArcadeBodyBounds(liveObject.sprite.body as ArcadeObjectBody);
+      const horizontalOverlap =
+        playerRight > objectBounds.left + RUNTIME_OBJECT_SUPPORT_EDGE_INSET_PX &&
+        playerLeft < objectBounds.right - RUNTIME_OBJECT_SUPPORT_EDGE_INSET_PX;
+      if (!horizontalOverlap) {
+        continue;
+      }
+
+      const footDistanceFromTop = playerBounds.bottom - objectBounds.top;
+      const nearTopSurface =
+        footDistanceFromTop >= -RUNTIME_OBJECT_SUPPORT_HOVER_TOLERANCE_PX &&
+        footDistanceFromTop <= RUNTIME_OBJECT_SUPPORT_PENETRATION_TOLERANCE_PX;
+      const playerIsAboveSurface = playerBounds.top < objectBounds.top;
+      if (nearTopSurface && playerIsAboveSurface) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   private rectanglesStrictlyOverlap(
     first: Phaser.Geom.Rectangle,
     second: Phaser.Geom.Rectangle,
@@ -829,14 +1204,22 @@ export class OverworldMovementController {
     );
   }
 
-  private findCrateInteraction(horizontalInput: number, downHeld: boolean): OverworldCrateInteraction | null {
+  private findCrateInteraction(
+    tangentInput: number,
+    crouchHeld: boolean,
+    gravityDirection: PlayerGravityDirection,
+  ): OverworldCrateInteraction | null {
     const playerBody = this.host.getPlayerBody();
-    if (!playerBody || horizontalInput === 0) {
+    if (!playerBody || tangentInput === 0) {
       return null;
     }
 
-    const moveDirectionX = horizontalInput > 0 ? 1 : -1;
+    const moveDirectionX = tangentInput > 0 ? 1 : -1;
+    const gravityVector = getGravityVector(gravityDirection);
+    const tangentVector = getGravityRightVector(gravityDirection);
     const playerBounds = this.host.getArcadeBodyBounds(playerBody);
+    const playerTangent = this.projectBodyBounds(playerBounds, tangentVector);
+    const playerGravity = this.projectBodyBounds(playerBounds, gravityVector);
     let bestInteraction: OverworldCrateInteraction | null = null;
     let bestGap = Number.POSITIVE_INFINITY;
 
@@ -851,44 +1234,46 @@ export class OverworldMovementController {
 
       const crateBody = liveObject.sprite.body as Phaser.Physics.Arcade.Body;
       const crateBounds = this.host.getArcadeBodyBounds(crateBody);
-      const verticalOverlap =
-        Math.min(playerBounds.bottom, crateBounds.bottom) -
-        Math.max(playerBounds.top, crateBounds.top);
-      if (verticalOverlap < Math.min(8, playerBounds.height * 0.5)) {
+      const crateTangent = this.projectBodyBounds(crateBounds, tangentVector);
+      const crateGravity = this.projectBodyBounds(crateBounds, gravityVector);
+      const gravityAxisOverlap =
+        Math.min(playerGravity.max, crateGravity.max) -
+        Math.max(playerGravity.min, crateGravity.min);
+      if (gravityAxisOverlap < Math.min(8, playerGravity.size * 0.5)) {
         continue;
       }
 
       let mode: 'push' | 'pull' | null = null;
       let gap = Number.POSITIVE_INFINITY;
-      let facing: -1 | 1 = moveDirectionX;
+      let facing: -1 | 1 = this.resolveSpriteFacingForGravity(gravityDirection, moveDirectionX);
       const pullGapLimit =
         this.host.state.activeCrateInteractionMode === 'pull'
-          ? this.options.crateInteractionMaxGap + Math.max(6, playerBounds.width * 0.5)
+          ? this.options.crateInteractionMaxGap + Math.max(6, playerTangent.size * 0.5)
           : this.options.crateInteractionMaxGap;
 
       if (moveDirectionX > 0) {
-        const pushGap = crateBounds.left - playerBounds.right;
-        const pullGap = playerBounds.left - crateBounds.right;
+        const pushGap = crateTangent.min - playerTangent.max;
+        const pullGap = playerTangent.min - crateTangent.max;
         if (pushGap >= -6 && pushGap <= this.options.crateInteractionMaxGap) {
           mode = 'push';
           gap = Math.abs(pushGap);
-          facing = 1;
-        } else if (downHeld && pullGap >= -6 && pullGap <= pullGapLimit) {
+          facing = this.resolveSpriteFacingForGravity(gravityDirection, moveDirectionX);
+        } else if (crouchHeld && pullGap >= -6 && pullGap <= pullGapLimit) {
           mode = 'pull';
           gap = Math.abs(pullGap);
-          facing = -1;
+          facing = this.resolveSpriteFacingForGravity(gravityDirection, -moveDirectionX);
         }
       } else {
-        const pushGap = playerBounds.left - crateBounds.right;
-        const pullGap = crateBounds.left - playerBounds.right;
+        const pushGap = playerTangent.min - crateTangent.max;
+        const pullGap = crateTangent.min - playerTangent.max;
         if (pushGap >= -6 && pushGap <= this.options.crateInteractionMaxGap) {
           mode = 'push';
           gap = Math.abs(pushGap);
-          facing = -1;
-        } else if (downHeld && pullGap >= -6 && pullGap <= pullGapLimit) {
+          facing = this.resolveSpriteFacingForGravity(gravityDirection, moveDirectionX);
+        } else if (crouchHeld && pullGap >= -6 && pullGap <= pullGapLimit) {
           mode = 'pull';
           gap = Math.abs(pullGap);
-          facing = 1;
+          facing = this.resolveSpriteFacingForGravity(gravityDirection, -moveDirectionX);
         }
       }
 
@@ -902,9 +1287,33 @@ export class OverworldMovementController {
         mode,
         moveDirectionX,
         facing,
+        gravityDirection,
       };
     }
 
     return bestInteraction;
+  }
+
+  private projectBodyBounds(
+    bounds: Phaser.Geom.Rectangle,
+    vector: DirectionVector,
+  ): { min: number; max: number; size: number } {
+    const center = bounds.centerX * vector.x + bounds.centerY * vector.y;
+    const halfSize = vector.x !== 0 ? bounds.width * 0.5 : bounds.height * 0.5;
+    return {
+      min: center - halfSize,
+      max: center + halfSize,
+      size: halfSize * 2,
+    };
+  }
+
+  private resolveSpriteFacingForGravity(
+    gravityDirection: PlayerGravityDirection,
+    tangentDirection: number,
+  ): -1 | 1 {
+    const tangentFacing = tangentDirection < 0 ? -1 : 1;
+    return gravityDirection === 'left' || gravityDirection === 'right'
+      ? (tangentFacing === 1 ? -1 : 1)
+      : tangentFacing;
   }
 }

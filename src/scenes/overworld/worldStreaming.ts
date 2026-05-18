@@ -115,6 +115,7 @@ interface OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall> {
   getCurrentRoomCoordinates: () => RoomCoordinates;
   getRoomOrigin: (coordinates: RoomCoordinates) => { x: number; y: number };
   getPlayer: () => Phaser.GameObjects.GameObject | null;
+  shouldCollidePlayerWithTerrainTile?: (tile: Phaser.Tilemaps.Tile) => boolean;
   createLiveObjects: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
   destroyLiveObjects: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
   destroyEdgeWalls: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
@@ -1179,7 +1180,13 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return this.measure('stream.ensureFullRoom', () => {
     registerCustomSpritesFromSnapshot(room);
     const existing = this.loadedFullRoomsById.get(room.id);
-    if (existing && existing.room.version === room.version && existing.room.updatedAt === room.updatedAt) {
+    if (
+      existing &&
+      (
+        this.options.getMode() === 'play' ||
+        (existing.room.version === room.version && existing.room.updatedAt === room.updatedAt)
+      )
+    ) {
       existing.image.setVisible(true);
       existing.foregroundImage?.setVisible(true);
       for (const liveObject of existing.liveObjects) {
@@ -1325,7 +1332,15 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       foregroundTextureKey,
       map,
       terrainLayer,
-      terrainCollider: player ? this.options.scene.physics.add.collider(player, terrainLayer) : null,
+      terrainCollider: player
+        ? this.options.scene.physics.add.collider(
+            player,
+            terrainLayer,
+            undefined,
+            (_player, tile) =>
+              this.options.shouldCollidePlayerWithTerrainTile?.(tile as Phaser.Tilemaps.Tile) ?? true,
+          )
+        : null,
       terrainInsetBodies,
       terrainInsetCollider:
         player && terrainInsetBodies

@@ -48,6 +48,11 @@ export function createLiveObjectRuntimeState(options: {
   return {
     baseX: sprite.x,
     baseY: sprite.y,
+    previousX: sprite.x,
+    previousY: sprite.y,
+    gravityDirection: 'down',
+    gravityRoomId: null,
+    inWater: false,
     initialDirectionX,
     directionX: initialDirectionX,
     aiFacingDirectionX: initialDirectionX,

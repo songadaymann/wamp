@@ -157,15 +157,69 @@ const DEFAULT_TILESET_UI_THEME: TilesetUiThemeConfig = {
 
 export const SPECIAL_TILESET_KEY = 'special';
 export const SPECIAL_TILESET_FIRST_GID = 669;
-export const SPECIAL_TILE_BREAKABLE_BRICK_LOCAL_INDEX = 0;
+export type SpecialTileKind =
+  | 'breakableBrick'
+  | 'oneWayPlatform'
+  | 'movingPlatformTile'
+  | 'conveyorLeft'
+  | 'conveyorRight'
+  | 'ice'
+  | 'sticky'
+  | 'bounce'
+  | 'damage'
+  | 'gravityUp'
+  | 'gravityDown'
+  | 'gravityLeft'
+  | 'gravityRight'
+  | 'water'
+  | 'windLeft'
+  | 'windRight';
+
+export const SPECIAL_TILE_LOCAL_INDICES = {
+  breakableBrick: 0,
+  oneWayPlatform: 1,
+  movingPlatformTile: 2,
+  conveyorLeft: 3,
+  conveyorRight: 4,
+  ice: 5,
+  sticky: 6,
+  bounce: 7,
+  damage: 8,
+  gravityUp: 9,
+  gravityDown: 10,
+  gravityLeft: 11,
+  gravityRight: 12,
+  water: 13,
+  windLeft: 14,
+  windRight: 15,
+} as const satisfies Record<SpecialTileKind, number>;
+
+export const SPECIAL_TILE_BREAKABLE_BRICK_LOCAL_INDEX =
+  SPECIAL_TILE_LOCAL_INDICES.breakableBrick;
 export const SPECIAL_TILE_BREAKABLE_BRICK_GID =
   SPECIAL_TILESET_FIRST_GID + SPECIAL_TILE_BREAKABLE_BRICK_LOCAL_INDEX;
 
+const SPECIAL_TILE_KIND_BY_LOCAL_INDEX: Partial<Record<number, SpecialTileKind>> =
+  Object.fromEntries(
+    Object.entries(SPECIAL_TILE_LOCAL_INDICES).map(([kind, localIndex]) => [
+      localIndex,
+      kind as SpecialTileKind,
+    ]),
+  );
+
 const SPECIAL_TILE_COUNT = 64;
-const SPECIAL_TILE_RESERVED_INDICES = Array.from(
-  { length: SPECIAL_TILE_COUNT - 1 },
-  (_, index) => index + 1,
-);
+const SPECIAL_TILE_NO_COLLISION_INDICES = [
+  SPECIAL_TILE_LOCAL_INDICES.movingPlatformTile,
+  SPECIAL_TILE_LOCAL_INDICES.damage,
+  SPECIAL_TILE_LOCAL_INDICES.gravityUp,
+  SPECIAL_TILE_LOCAL_INDICES.gravityDown,
+  SPECIAL_TILE_LOCAL_INDICES.gravityLeft,
+  SPECIAL_TILE_LOCAL_INDICES.gravityRight,
+  SPECIAL_TILE_LOCAL_INDICES.water,
+  SPECIAL_TILE_LOCAL_INDICES.windLeft,
+  SPECIAL_TILE_LOCAL_INDICES.windRight,
+  ...Array.from({ length: SPECIAL_TILE_COUNT - 16 }, (_, index) => index + 16),
+];
 
 function createSpecialTileEditorMetadata(): Partial<Record<number, EditorTileMetadata>> {
   const metadata: Partial<Record<number, EditorTileMetadata>> = {
@@ -176,78 +230,78 @@ function createSpecialTileEditorMetadata(): Partial<Record<number, EditorTileMet
     },
     1: {
       label: 'One-Way Platform',
-      description: 'Reserved jump-through platform tile.',
-      enabled: false,
+      description: 'Jump-through platform. Press down+jump to drop through.',
+      enabled: true,
     },
     2: {
       label: 'Moving Platform',
-      description: 'Reserved moving platform tile.',
+      description: 'Use the Moving Platform object instead.',
       enabled: false,
     },
     3: {
       label: 'Conveyor Left',
-      description: 'Reserved conveyor tile.',
-      enabled: false,
+      description: 'Solid conveyor tile that pushes left.',
+      enabled: true,
     },
     4: {
       label: 'Conveyor Right',
-      description: 'Reserved conveyor tile.',
-      enabled: false,
+      description: 'Solid conveyor tile that pushes right.',
+      enabled: true,
     },
     5: {
       label: 'Ice',
-      description: 'Reserved low-friction tile.',
-      enabled: false,
+      description: 'Low-friction solid tile.',
+      enabled: true,
     },
     6: {
       label: 'Sticky',
-      description: 'Reserved high-friction tile.',
-      enabled: false,
+      description: 'Sticky solid tile that slows movement and jumps.',
+      enabled: true,
     },
     7: {
       label: 'Bounce',
-      description: 'Reserved bounce tile.',
-      enabled: false,
+      description: 'Beach-ball bounce tile.',
+      enabled: true,
     },
     8: {
       label: 'Damage',
-      description: 'Reserved hazard tile.',
-      enabled: false,
+      description: 'Hazard tile. Touching it defeats the player.',
+      enabled: true,
     },
     9: {
       label: 'Gravity Up',
-      description: 'Reserved gravity modifier tile.',
-      enabled: false,
+      description: 'Gravity plate that sets upward gravity until the player leaves the room.',
+      enabled: true,
     },
     10: {
       label: 'Gravity Down',
-      description: 'Reserved gravity modifier tile.',
-      enabled: false,
+      description: 'Gravity plate that resets gravity downward until the player leaves the room.',
+      enabled: true,
     },
     11: {
       label: 'Gravity Left',
-      description: 'Reserved gravity modifier tile.',
-      enabled: false,
+      description: 'Gravity plate that sets leftward gravity until the player leaves the room.',
+      enabled: true,
     },
     12: {
       label: 'Gravity Right',
-      description: 'Reserved gravity modifier tile.',
-      enabled: false,
+      description: 'Gravity plate that sets rightward gravity until the player leaves the room.',
+      enabled: true,
     },
     13: {
       label: 'Water',
-      description: 'Reserved swim or slow-zone tile.',
-      enabled: false,
+      description: 'Swim zone tile.',
+      enabled: true,
     },
     14: {
       label: 'Wind Left',
-      description: 'Reserved force tile.',
-      enabled: false,
+      description: 'Wind zone that pushes left.',
+      enabled: true,
     },
     15: {
       label: 'Wind Right',
-      description: 'Reserved force tile.',
-      enabled: false,
+      description: 'Wind zone that pushes right.',
+      enabled: true,
     },
   };
 
@@ -561,7 +615,7 @@ export const TILESETS: TilesetConfig[] = [
     tileCount: SPECIAL_TILE_COUNT,
     firstGid: SPECIAL_TILESET_FIRST_GID,
     terrainCollisionProfiles: {
-      ...createTilesetCollisionProfiles(SPECIAL_TILE_RESERVED_INDICES, NO_COLLISION_PROFILE),
+      ...createTilesetCollisionProfiles(SPECIAL_TILE_NO_COLLISION_INDICES, NO_COLLISION_PROFILE),
     },
     editorTileMetadata: createSpecialTileEditorMetadata(),
     uiTheme: {
@@ -665,6 +719,27 @@ export function isTilesetLocalTileEditorEnabled(
 
 export function isSpecialBreakableBrickGid(gid: number): boolean {
   return gid === SPECIAL_TILE_BREAKABLE_BRICK_GID;
+}
+
+export function getSpecialTileLocalIndexForGid(gid: number): number | null {
+  if (gid < SPECIAL_TILESET_FIRST_GID || gid >= SPECIAL_TILESET_FIRST_GID + SPECIAL_TILE_COUNT) {
+    return null;
+  }
+
+  return gid - SPECIAL_TILESET_FIRST_GID;
+}
+
+export function getSpecialTileKindForGid(gid: number): SpecialTileKind | null {
+  const localIndex = getSpecialTileLocalIndexForGid(gid);
+  if (localIndex === null) {
+    return null;
+  }
+
+  return SPECIAL_TILE_KIND_BY_LOCAL_INDEX[localIndex] ?? null;
+}
+
+export function isSpecialTileKindGid(gid: number, kind: SpecialTileKind): boolean {
+  return getSpecialTileKindForGid(gid) === kind;
 }
 
 export function getTerrainCollisionProfileForGid(gid: number): TerrainCollisionProfileConfig {
