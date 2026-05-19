@@ -119,11 +119,24 @@ export default {
   },
 };
 
-function fetchStandalonePageAsset(request, env, pathname) {
+async function fetchStandalonePageAsset(request, env, pathname) {
   const url = new URL(request.url);
   const apiBaseUrl = resolveApiBaseUrl(env, url);
   const assetUrl = new URL(pathname, `${apiBaseUrl}/`);
-  return fetch(new Request(assetUrl, request));
+  const response = await fetch(assetUrl.toString(), {
+    method: request.method === 'HEAD' ? 'GET' : request.method,
+    headers: { Accept: 'text/html' },
+    redirect: 'follow',
+  });
+  const headers = new Headers(response.headers);
+  headers.set('Content-Type', 'text/html; charset=utf-8');
+  headers.set('Cache-Control', 'public, max-age=60, s-maxage=300');
+  headers.delete('Content-Length');
+
+  return new Response(request.method === 'HEAD' ? null : response.body, {
+    status: response.status,
+    headers,
+  });
 }
 
 function parseRoomPath(pathname, pattern = ROOM_PATH_PATTERN) {
