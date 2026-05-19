@@ -18,6 +18,7 @@ import {
   type AuthDebugState,
 } from '../../auth/client';
 import { createProfileTriggerElement, requestProfileOpen } from './profileEvents';
+import { requestExploreQueueStart, type ExploreQueueMode } from './exploreQueueEvents';
 import {
   type BuilderDiscoveryEntry,
   type BuilderDiscoveryResponse,
@@ -39,6 +40,7 @@ type ExploreModalElements = {
   error: HTMLElement | null;
   list: HTMLElement | null;
   filterGroup: HTMLElement | null;
+  queueActions: HTMLElement | null;
   builderSortGroup: HTMLElement | null;
   filterButtons: HTMLButtonElement[];
   sortButtons: HTMLButtonElement[];
@@ -117,6 +119,7 @@ export class ExploreModalController {
       error: this.doc.getElementById('explore-modal-error'),
       list: this.doc.getElementById('explore-list'),
       filterGroup: this.doc.getElementById('explore-filters'),
+      queueActions: this.doc.getElementById('explore-queue-actions'),
       builderSortGroup: this.doc.getElementById('explore-builder-sorts'),
       filterButtons: Array.from(
         this.doc.querySelectorAll<HTMLButtonElement>('#explore-filters [data-explore-difficulty]'),
@@ -341,9 +344,10 @@ export class ExploreModalController {
       button.disabled = this.loading || !buildersActive;
     }
 
+    const activeLoaded = buildersActive ? this.builderLoaded : this.loaded;
+    this.renderQueueActions(buildersActive, activeLoaded);
     this.elements.list.replaceChildren();
 
-    const activeLoaded = buildersActive ? this.builderLoaded : this.loaded;
     if (this.loading || !activeLoaded) {
       this.elements.list.appendChild(
         this.createEmptyState(buildersActive ? 'Loading builders...' : 'Loading levels...')
@@ -368,6 +372,51 @@ export class ExploreModalController {
     for (const entry of results) {
       this.elements.list.appendChild(this.renderEntry(entry));
     }
+  }
+
+  private renderQueueActions(buildersActive: boolean, activeLoaded: boolean): void {
+    const container = this.elements.queueActions;
+    if (!container) {
+      return;
+    }
+
+    container.replaceChildren();
+    const mode = this.getQueueMode();
+    const entries = mode ? this.getQueueEntries(mode) : [];
+    const visible =
+      !buildersActive
+      && activeLoaded
+      && !this.loading
+      && mode !== null
+      && this.authState.authenticated;
+    container.classList.toggle('hidden', !visible);
+    if (!visible || mode === null) {
+      return;
+    }
+
+    const button = this.doc.createElement('button');
+    button.type = 'button';
+    button.className = 'bar-btn bar-btn-small explore-queue-start-btn';
+    button.dataset.exploreQueueMode = mode;
+    button.textContent = `${mode === 'play' ? 'Play All' : 'Rate All'} (${entries.length})`;
+    button.disabled = this.loading || entries.length === 0;
+    button.addEventListener('click', () => {
+      if (entries.length === 0) {
+        return;
+      }
+      requestExploreQueueStart({
+        mode,
+        entries,
+        sourceLabel: mode === 'play' ? 'Unbeaten rooms' : 'Unrated rooms',
+      });
+      this.close();
+    });
+
+    const meta = this.doc.createElement('div');
+    meta.className = 'explore-queue-actions-meta';
+    meta.textContent = `${entries.length} challenge${entries.length === 1 ? '' : 's'}`;
+
+    container.append(button, meta);
   }
 
   private renderBuilderResults(): void {
@@ -884,6 +933,28 @@ export class ExploreModalController {
 
   private isPersonalRoomSort(sort: ExploreSortButtonValue | null): boolean {
     return sort === 'unbeaten' || sort === 'unvisited' || sort === 'unrated';
+  }
+
+  private getQueueMode(): ExploreQueueMode | null {
+    if (this.discoverSort === 'unbeaten') {
+      return 'play';
+    }
+    if (this.discoverSort === 'unrated') {
+      return 'rate';
+    }
+    return null;
+  }
+
+  private getQueueEntries(mode: ExploreQueueMode): RoomDiscoveryEntry[] {
+    const results = (this.roomDiscovery?.results ?? [])
+      .filter((entry) => entry.goalType !== null);
+    if (mode === 'rate') {
+      return results.filter((entry) => {
+        const state = entry.viewerState;
+        return Boolean(state?.completed && !state.rated);
+      });
+    }
+    return results.filter((entry) => entry.viewerState?.completed !== true);
   }
 
   private getRoomDiscoveryEmptyText(): string {
