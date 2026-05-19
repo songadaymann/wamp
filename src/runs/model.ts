@@ -176,6 +176,13 @@ export interface RoomDiscoveryEntry {
   firstPublishedAt: string | null;
   featured: boolean;
   featuredAt: string | null;
+  viewerState: RoomDiscoveryViewerState | null;
+}
+
+export interface RoomDiscoveryViewerState {
+  visited: boolean;
+  completed: boolean;
+  rated: boolean;
 }
 
 export interface RoomDiscoveryResponse {

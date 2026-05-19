@@ -9,6 +9,7 @@ import { CourseModalController } from './courseModal';
 import { CourseComposerPanelController } from './courseComposerPanel';
 import { setupCustomSpriteEditor } from './customSpriteEditor';
 import { ExploreModalController } from './exploreModal';
+import { ExploreQueueController } from './exploreQueueController';
 import { GuestBuilderClaimModalController } from './guestBuilderClaimModal';
 import { GuestbookModalController } from './guestbookModal';
 import { RoomHistoryModalController } from './historyModal';
@@ -38,6 +39,7 @@ interface UiControllers {
   historyModal: RoomHistoryModalController;
   leaderboardModal: LeaderboardModalController;
   exploreModal: ExploreModalController;
+  exploreQueue: ExploreQueueController;
   guestBuilderClaimModal: GuestBuilderClaimModalController;
   guestbookModal: GuestbookModalController;
   settingsModal: SettingsModalController;
@@ -78,11 +80,14 @@ export function setupUiControllers(game: Phaser.Game): void {
 }
 
 function createUiControllers(game: Phaser.Game): UiControllers {
+  const leaderboardModal = new LeaderboardModalController(game);
+
   return {
     paletteController: new PaletteController(),
     historyModal: new RoomHistoryModalController(game),
-    leaderboardModal: new LeaderboardModalController(game),
+    leaderboardModal,
     exploreModal: new ExploreModalController(game),
+    exploreQueue: new ExploreQueueController(game, leaderboardModal),
     guestBuilderClaimModal: new GuestBuilderClaimModalController(),
     guestbookModal: new GuestbookModalController(),
     settingsModal: new SettingsModalController(),
@@ -111,6 +116,7 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.historyModal.init();
   controllers.leaderboardModal.init();
   controllers.exploreModal.init();
+  controllers.exploreQueue.init();
   controllers.guestBuilderClaimModal.init();
   controllers.guestbookModal.init();
   controllers.settingsModal.init();
@@ -149,6 +155,7 @@ function configureEditorBridge(controllers: UiControllers): void {
       controllers.courseModal.close();
       controllers.chatModerationModal.close();
       controllers.playlistModal.close();
+      controllers.exploreQueue.stop();
     },
     openHistory: () => controllers.historyModal.open(),
   });

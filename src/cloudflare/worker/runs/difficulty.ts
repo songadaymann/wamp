@@ -360,6 +360,10 @@ export async function loadRoomDiscoveryResponse(
         ratingSummary.quality.voteCount,
         ratingSummary.totalDifficultyVotes,
       );
+      const viewerState = viewerUserId
+        ? viewerStates.get(buildDiscoveryRoomVersionKey(room.roomId, room.roomVersion))
+          ?? createEmptyDiscoveryViewerRoomState()
+        : null;
 
       return {
         roomId: room.roomId,
@@ -387,6 +391,14 @@ export async function loadRoomDiscoveryResponse(
           featured !== null && featured.room_version === room.roomVersion
             ? featured.featured_at
             : null,
+        viewerState:
+          viewerState === null
+            ? null
+            : {
+                visited: viewerState.visited,
+                completed: viewerState.completed,
+                rated: viewerState.rated,
+              },
       };
     })
     .filter((entry) => difficultyFilter === null || entry.consensusDifficulty === difficultyFilter)
@@ -403,7 +415,7 @@ export async function loadRoomDiscoveryResponse(
         case 'unvisited':
           return !state.visited;
         case 'unrated':
-          return !state.rated;
+          return state.completed && !state.rated;
         default:
           return true;
       }
