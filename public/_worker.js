@@ -47,10 +47,30 @@ const PREVIEW_WIDTH = ROOM_WIDTH * PREVIEW_TILE_SIZE;
 const PREVIEW_HEIGHT = ROOM_HEIGHT * PREVIEW_TILE_SIZE;
 const GAME_OBJECT_CONFIG_BY_ID = new Map(GAME_OBJECTS.map((config) => [config.id, config]));
 const imageDataCache = new Map();
+const STANDALONE_PAGE_ALIASES = new Map([
+  ['/school-admin', '/school-admin.html'],
+  ['/school-admin/', '/school-admin.html'],
+  ['/school-admin.html', '/school-admin.html'],
+  ['/school-login', '/school-login.html'],
+  ['/school-login/', '/school-login.html'],
+  ['/school-login.html', '/school-login.html'],
+]);
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const standalonePage = STANDALONE_PAGE_ALIASES.get(url.pathname);
+    if (standalonePage) {
+      if (request.method !== 'GET' && request.method !== 'HEAD') {
+        return new Response('Method Not Allowed', {
+          status: 405,
+          headers: { Allow: 'GET, HEAD' },
+        });
+      }
+
+      return fetchStandalonePageAsset(request, env, standalonePage);
+    }
+
     const imageCoordinates = parseRoomPath(url.pathname, ROOM_IMAGE_PATH_PATTERN);
     if (imageCoordinates) {
       return renderRoomImageResponse(request, env, url, imageCoordinates);
@@ -98,6 +118,12 @@ export default {
     return renderProfileAppShell(request, env, metadata);
   },
 };
+
+function fetchStandalonePageAsset(request, env, pathname) {
+  const url = new URL(request.url);
+  const assetUrl = new URL(pathname, url.origin);
+  return env.ASSETS.fetch(new Request(assetUrl, request));
+}
 
 function parseRoomPath(pathname, pattern = ROOM_PATH_PATTERN) {
   const match = pattern.exec(pathname);
