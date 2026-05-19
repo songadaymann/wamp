@@ -76,6 +76,11 @@ interface SaveDraftOptions {
   promptForSignInOnUnauthorized?: boolean;
 }
 
+const DAILY_ROOM_CLAIM_LIMIT_ERROR_PREFIX = 'Daily room claim limit reached.';
+const DAILY_ROOM_CLAIM_LIMIT_TITLE = "You've Reached Today's Room Claim Limit";
+const DAILY_ROOM_CLAIM_LIMIT_MESSAGE =
+  "You've reached your daily room claim limit. To claim more rooms per day, increase your Builder XP by publishing more high quality rooms.";
+
 export class EditorRoomSession {
   private readonly AUTO_SAVE_DELAY_MS = 600;
   private readonly DRAFT_VISIBILITY_WARNING = 'Draft only. Not visible in the world until published.';
@@ -463,6 +468,10 @@ export class EditorRoomSession {
         return record;
       }
 
+      if (this.showDailyRoomClaimLimitModal(error)) {
+        return null;
+      }
+
       console.error('Failed to save room draft', error);
       this.setStatusText('Draft save failed.');
     } finally {
@@ -529,6 +538,10 @@ export class EditorRoomSession {
           'Draft saved locally. Sign in to publish.',
           'publish-attempt'
         );
+        return null;
+      }
+
+      if (this.showDailyRoomClaimLimitModal(error)) {
         return null;
       }
 
@@ -1062,6 +1075,22 @@ export class EditorRoomSession {
       roomTitle: this.roomTitle,
       source,
     });
+  }
+
+  private showDailyRoomClaimLimitModal(error: unknown): boolean {
+    if (!isRoomApiError(error) || error.status !== 429) {
+      return false;
+    }
+    if (!error.message.startsWith(DAILY_ROOM_CLAIM_LIMIT_ERROR_PREFIX)) {
+      return false;
+    }
+
+    this.setStatusText(DAILY_ROOM_CLAIM_LIMIT_ERROR_PREFIX);
+    showBusyError(DAILY_ROOM_CLAIM_LIMIT_MESSAGE, {
+      title: DAILY_ROOM_CLAIM_LIMIT_TITLE,
+      closeLabel: 'OK',
+    });
+    return true;
   }
 
   private syncRoomMetadata(record: RoomRecord): void {

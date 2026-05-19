@@ -765,7 +765,9 @@ export class LeaderboardModalController {
     if (this.activeTab === 'discover') {
       const filterLabel =
         this.discoverFilter === null
-          ? 'all published challenge rooms'
+          ? this.isAllPublishedRoomDiscoveryFeed()
+            ? 'all newly published rooms'
+            : 'all published challenge rooms'
           : `${ROOM_DIFFICULTY_LABELS[this.discoverFilter].toLowerCase()}-rated published rooms`;
       this.elements.meta.textContent = `Browse ${filterLabel} sorted by ${this.getDiscoverSortLabel(this.discoverSort).toLowerCase()}.`;
       return;
@@ -924,7 +926,9 @@ export class LeaderboardModalController {
     const featuredCount = results.filter((entry) => entry.featured).length;
     const roomCountLabel =
       this.discoverFilter === null
-        ? `${results.length} published challenge room${results.length === 1 ? '' : 's'}`
+        ? this.isAllPublishedRoomDiscoveryFeed()
+          ? `${results.length} published room${results.length === 1 ? '' : 's'}`
+          : `${results.length} published challenge room${results.length === 1 ? '' : 's'}`
         : `${results.length} ${ROOM_DIFFICULTY_LABELS[this.discoverFilter].toLowerCase()} room${results.length === 1 ? '' : 's'}`;
     const featuredLabel = featuredCount > 0 ? ` · ${featuredCount} featured` : '';
     this.elements.discoverSummary.textContent = `${roomCountLabel}${featuredLabel} · sorted by ${this.getDiscoverSortLabel(this.discoverSort).toLowerCase()}`;
@@ -934,7 +938,9 @@ export class LeaderboardModalController {
       empty.className = 'leaderboard-empty';
       empty.textContent =
         this.discoverFilter === null
-          ? 'No published challenge rooms found yet.'
+          ? this.isAllPublishedRoomDiscoveryFeed()
+            ? 'No published rooms found yet.'
+            : 'No published challenge rooms found yet.'
           : `No ${ROOM_DIFFICULTY_LABELS[this.discoverFilter].toLowerCase()}-rated rooms yet.`;
       this.elements.discoverList.appendChild(empty);
       return;
@@ -943,6 +949,10 @@ export class LeaderboardModalController {
     for (const entry of results) {
       this.elements.discoverList.appendChild(this.renderDiscoverEntry(entry));
     }
+  }
+
+  private isAllPublishedRoomDiscoveryFeed(): boolean {
+    return this.discoverFilter === null && this.discoverSort === 'newest';
   }
 
   private renderCoursePanel(): void {
@@ -1171,7 +1181,10 @@ export class LeaderboardModalController {
     meta.className = 'leaderboard-discover-meta';
     const difficultyLabel = entry.consensusDifficulty
       ? ROOM_DIFFICULTY_LABELS[entry.consensusDifficulty]
-      : 'Unrated';
+      : entry.goalType
+        ? 'Unrated'
+        : 'No challenge';
+    const goalLabel = entry.goalType ? entry.goalType.replace(/_/g, ' ') : 'free play';
     const versionLabel = this.formatRoomVersionSummary(
       entry.displayRoomVersion,
       entry.roomVersion,
@@ -1183,7 +1196,7 @@ export class LeaderboardModalController {
         entry.canonicalRoomVersion === entry.displayRoomVersion)
         ? ' · canonical'
         : '';
-    meta.textContent = `${entry.goalType.replace('_', ' ')} · ${versionLabel}${canonicalLabel} · ${difficultyLabel} · ${
+    meta.textContent = `${goalLabel} · ${versionLabel}${canonicalLabel} · ${difficultyLabel} · ${
       entry.voteCount
     } vote${entry.voteCount === 1 ? '' : 's'} · ${this.formatQualitySummary(entry.quality)}${this.formatTrophySuffix(entry.trophy)} · ${entry.roomCoordinates.x},${entry.roomCoordinates.y}`;
     button.appendChild(meta);

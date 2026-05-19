@@ -65,7 +65,7 @@ import {
 } from '../persistence/roomRepository';
 import { clearLocalRoomStorageEntry } from '../persistence/browserStorage';
 import { setAppMode } from '../ui/appMode';
-import { hideBusyOverlay, showBusyOverlay } from '../ui/appFeedback';
+import { getAppFeedbackDebugState, hideBusyOverlay, showBusyError, showBusyOverlay } from '../ui/appFeedback';
 import { isNativeTextEditingFocused, isTextInputFocused } from '../ui/keyboardFocus';
 import { requestSignTextEdit } from '../signs/events';
 import { canPlacedObjectHaveSignText, getPlacedObjectSignText } from '../signs/model';
@@ -92,6 +92,11 @@ import {
   createEmptyCourseInspectorState,
 } from './courseEditor/inspectorUi';
 import { CourseEditorObjectInspectorController } from './courseEditor/objectInspector';
+
+const DAILY_ROOM_CLAIM_LIMIT_ERROR_PREFIX = 'Daily room claim limit reached.';
+const DAILY_ROOM_CLAIM_LIMIT_TITLE = "You've Reached Today's Room Claim Limit";
+const DAILY_ROOM_CLAIM_LIMIT_MESSAGE =
+  "You've reached your daily room claim limit. To claim more rooms per day, increase your Builder XP by publishing more high quality rooms.";
 
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 3;
@@ -763,11 +768,16 @@ export class CourseEditorScene extends Phaser.Scene {
         }
         return null;
       }
+      if (this.showDailyRoomClaimLimitModal(error)) {
+        return null;
+      }
       this.statusText = error instanceof Error ? error.message : 'Failed to save course room drafts.';
       this.renderUi();
       return null;
     } finally {
-      hideBusyOverlay();
+      if (getAppFeedbackDebugState().busyState !== 'error') {
+        hideBusyOverlay();
+      }
     }
   }
 
@@ -821,11 +831,16 @@ export class CourseEditorScene extends Phaser.Scene {
         promptForSignIn('Sign in to publish this room. Your local draft is safe.');
         return null;
       }
+      if (this.showDailyRoomClaimLimitModal(error)) {
+        return null;
+      }
       this.statusText = error instanceof Error ? error.message : 'Failed to publish changed course rooms.';
       this.renderUi();
       return null;
     } finally {
-      hideBusyOverlay();
+      if (getAppFeedbackDebugState().busyState !== 'error') {
+        hideBusyOverlay();
+      }
     }
   }
 
@@ -1285,6 +1300,23 @@ export class CourseEditorScene extends Phaser.Scene {
 
   private shouldPersistGuestDraftLocally(error: unknown): boolean {
     return isRoomApiError(error) && error.status === 401;
+  }
+
+  private showDailyRoomClaimLimitModal(error: unknown): boolean {
+    if (!isRoomApiError(error) || error.status !== 429) {
+      return false;
+    }
+    if (!error.message.startsWith(DAILY_ROOM_CLAIM_LIMIT_ERROR_PREFIX)) {
+      return false;
+    }
+
+    this.statusText = DAILY_ROOM_CLAIM_LIMIT_ERROR_PREFIX;
+    this.renderUi();
+    showBusyError(DAILY_ROOM_CLAIM_LIMIT_MESSAGE, {
+      title: DAILY_ROOM_CLAIM_LIMIT_TITLE,
+      closeLabel: 'OK',
+    });
+    return true;
   }
 
   private async saveSlicesLocally(

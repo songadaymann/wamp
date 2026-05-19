@@ -12,7 +12,8 @@
   },
   "vars": {
     "PARTYKIT_HOST": "everybodys-platformer-presence.songadaymann.partykit.dev",
-    "PARTYKIT_PARTY": "main"
+    "PARTYKIT_PARTY": "main",
+    "ROOM_DAILY_CLAIM_LIMIT": "4"
   },
   "d1_databases": [
     {

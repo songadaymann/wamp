@@ -159,7 +159,7 @@ export interface RoomDiscoveryEntry {
   displayRoomVersion: number;
   leaderboardSourceVersion: number | null;
   canonicalRoomVersion: number | null;
-  goalType: RoomGoalType;
+  goalType: RoomGoalType | null;
   consensusDifficulty: RoomDifficulty | null;
   voteCount: number;
   quality: QualityRatingSummary;

@@ -52,7 +52,13 @@ interface LiveObjectTriggerControllerOptions<TEdgeWall> {
   removeLiveObject: (
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
+    reason?: 'object-removed',
   ) => void;
+  onRoomSwitchStateChanged: (event: {
+    roomId: string;
+    roomCoordinates: RoomCoordinates;
+    active: boolean;
+  }) => void;
   syncWorldObjectColliders: (
     loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
   ) => void;
@@ -203,9 +209,14 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
     }
 
     const nextState = !this.getRoomSwitchState(loadedRoom.room.id);
-    this.switchStateByRoomId.set(loadedRoom.room.id, nextState);
+    this.setRoomSwitchState(loadedRoom.room.id, nextState);
     switchObject.runtime.cooldownUntil = now + BLOCK_SWITCH_COOLDOWN_MS;
     this.applySwitchBlockStates(loadedRoom);
+    this.options.onRoomSwitchStateChanged({
+      roomId: loadedRoom.room.id,
+      roomCoordinates: loadedRoom.room.coordinates,
+      active: nextState,
+    });
     this.options.playBounceFx(
       switchObject.sprite.x,
       switchObject.sprite.y - 4,
@@ -277,7 +288,7 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
         'door-open'
       );
       this.options.showTransientStatus('Unlocked the door.');
-      this.options.removeLiveObject(loadedRoom, liveObject);
+      this.options.removeLiveObject(loadedRoom, liveObject, 'object-removed');
       return;
     }
 
@@ -307,6 +318,10 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
         : roomSwitchActive;
       this.setSwitchBlockEnabled(liveObject, enabled);
     }
+  }
+
+  setRoomSwitchState(roomId: string, active: boolean): void {
+    this.switchStateByRoomId.set(roomId, active);
   }
 
   private checkBlockSwitchActorContacts(
@@ -477,7 +492,7 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
       loadedRoom.room.coordinates,
       'door-open'
     );
-    this.options.removeLiveObject(loadedRoom, liveObject);
+    this.options.removeLiveObject(loadedRoom, liveObject, 'object-removed');
   }
 
   private openTriggeredCage(

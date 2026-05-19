@@ -14,6 +14,7 @@ import type {
   RoomRushDifficulty,
   RoomRushStartRule,
 } from '../../scenes/overworld/roomRushRuns';
+import type { MultiplayerModeId } from '../../multiplayer/model';
 import type { OverworldOnlineRosterViewEntry } from '../../scenes/overworld/hud';
 import type { RoomCoordinates, RoomRecord, RoomVersionRecord } from '../../persistence/roomModel';
 
@@ -262,6 +263,11 @@ export interface OverworldSceneBridge {
   endRoomRushRun?: () => void;
   isRoomRushRunActive?: () => boolean;
   invitePvpDuel?: (entry: OverworldOnlineRosterViewEntry) => Promise<void> | void;
+  openMultiplayerLauncher?: () => Promise<boolean> | boolean;
+  inviteMultiplayer?: (
+    modeId: MultiplayerModeId,
+    entry: OverworldOnlineRosterViewEntry,
+  ) => Promise<void> | void;
   playSelectedCourse?: () => Promise<void> | void;
   editSelectedRoom?: () => void;
   buildSelectedRoom?: () => void;

@@ -872,7 +872,7 @@
           "displayRoomVersion": { "type": "integer" },
           "leaderboardSourceVersion": { "type": ["integer", "null"] },
           "canonicalRoomVersion": { "type": ["integer", "null"] },
-          "goalType": { "type": "string" },
+          "goalType": { "type": ["string", "null"] },
           "consensusDifficulty": {
             "oneOf": [
               { "$ref": "#/components/schemas/RoomDifficulty" },
@@ -2904,8 +2904,8 @@
     },
     "/api/leaderboards/rooms/discover": {
       "get": {
-        "summary": "Discover published challenge rooms by difficulty",
-        "description": "Public read. If a bearer token is supplied, it must include leaderboards:read.",
+        "summary": "Discover published rooms",
+        "description": "Public read. If sort=newest and no difficulty is supplied, the feed includes all published rooms; other room discovery views include published challenge rooms. If a bearer token is supplied, it must include leaderboards:read.",
         "security": [
           { "bearerAuth": [] },
           {}
