@@ -121,8 +121,9 @@ export default {
 
 function fetchStandalonePageAsset(request, env, pathname) {
   const url = new URL(request.url);
-  const assetUrl = new URL(pathname, url.origin);
-  return env.ASSETS.fetch(new Request(assetUrl, request));
+  const apiBaseUrl = resolveApiBaseUrl(env, url);
+  const assetUrl = new URL(pathname, `${apiBaseUrl}/`);
+  return fetch(new Request(assetUrl, request));
 }
 
 function parseRoomPath(pathname, pattern = ROOM_PATH_PATTERN) {
