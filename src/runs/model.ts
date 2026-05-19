@@ -13,7 +13,15 @@ export type RunResult = 'active' | 'completed' | 'failed' | 'abandoned';
 export type LeaderboardRankingMode = 'time' | 'score';
 export const ROOM_DIFFICULTIES = ['easy', 'medium', 'hard', 'extreme'] as const;
 export type RoomDifficulty = typeof ROOM_DIFFICULTIES[number];
-export const ROOM_DISCOVERY_SORTS = ['featured', 'quality', 'newest', 'builder'] as const;
+export const ROOM_DISCOVERY_SORTS = [
+  'featured',
+  'quality',
+  'newest',
+  'builder',
+  'unbeaten',
+  'unvisited',
+  'unrated',
+] as const;
 export type RoomDiscoverySort = typeof ROOM_DISCOVERY_SORTS[number];
 export const BUILDER_DISCOVERY_SORTS = ['alphabet', 'rooms', 'recent'] as const;
 export type BuilderDiscoverySort = typeof BUILDER_DISCOVERY_SORTS[number];
@@ -168,6 +176,13 @@ export interface RoomDiscoveryEntry {
   firstPublishedAt: string | null;
   featured: boolean;
   featuredAt: string | null;
+  viewerState: RoomDiscoveryViewerState | null;
+}
+
+export interface RoomDiscoveryViewerState {
+  visited: boolean;
+  completed: boolean;
+  rated: boolean;
 }
 
 export interface RoomDiscoveryResponse {

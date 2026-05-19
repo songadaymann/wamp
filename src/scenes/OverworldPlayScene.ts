@@ -447,6 +447,10 @@ export class OverworldPlayScene extends Phaser.Scene {
   private wallJumpChainActive = false;
   private isClimbingLadder = false;
   private activeLadderKey: string | null = null;
+  private lastMovementInput = {
+    horizontalInput: 0,
+    verticalInput: 0,
+  };
   private collectedObjectKeys = new Set<string>();
   private readonly multiplayerRemovedObjectKeys = new Set<string>();
   private readonly multiplayerRoomStateEventIds = new Set<string>();
@@ -594,6 +598,12 @@ export class OverworldPlayScene extends Phaser.Scene {
       getPlayer: () => this.player,
       getPlayerPickupSensor: () => this.playerPickupSensor,
       getPlayerBody: () => this.playerBody,
+      getConveyorDirectionForBody: (body, gravityDirection) =>
+        this.specialTilesController.getConveyorDirectionForBody(body, gravityDirection),
+      getGravityPlateDirectionForBody: (body, currentGravityDirection) =>
+        this.specialTilesController.getGravityPlateDirectionForBody(body, currentGravityDirection),
+      getBodyRoomId: (body) => this.specialTilesController.getBodyRoomId(body),
+      isBodyInWater: (body) => this.specialTilesController.isBodyInWater(body),
       swordsmanTraversalPlannerMode: this.getSwordsmanTraversalPlannerMode(),
       isPlayerClimbingLadder: () => this.isClimbingLadder,
       isLadderDropRequested: () => this.isLadderDropRequested(),
@@ -666,11 +676,26 @@ export class OverworldPlayScene extends Phaser.Scene {
     });
     this.specialTilesController = new OverworldSpecialTilesController(this, {
       getMode: () => this.mode,
+      getCurrentTime: () => this.time.now,
       getPlayerBody: () => this.playerBody,
       getLoadedFullRooms: () => this.loadedFullRoomsById.values(),
       getLoadedFullRoomById: (roomId) => this.loadedFullRoomsById.get(roomId) ?? null,
       getRoomCoordinatesForPoint: (x, y) => this.getRoomCoordinatesForPoint(x, y),
       getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
+      grantExternalLaunchGrace: (durationMs) => {
+        this.externalLaunchGraceUntil = Math.max(
+          this.externalLaunchGraceUntil,
+          this.time.now + durationMs
+        );
+      },
+      handlePlayerDeath: (reason) => this.sessionResetController.handlePlayerDeath(reason),
+      playBounceFx: (x, y, roomCoordinates, cue) =>
+        this.fxController?.playBounceFx(
+          x,
+          y,
+          this.roomAudioController.getPlaybackOptionsForRoom(roomCoordinates),
+          cue
+        ),
     });
     this.worldStreamingController = new OverworldWorldStreamingController({
       scene: this,
@@ -681,6 +706,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
       getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
       getPlayer: () => this.player,
+      shouldCollidePlayerWithTerrainTile: (tile) =>
+        this.specialTilesController.shouldCollidePlayerWithTerrainTile(tile),
       createLiveObjects: (loadedRoom) => this.createLiveObjects(loadedRoom),
       destroyLiveObjects: (loadedRoom) => this.destroyLiveObjects(loadedRoom),
       destroyEdgeWalls: (loadedRoom) => this.destroyEdgeWalls(loadedRoom),
@@ -1107,6 +1134,8 @@ export class OverworldPlayScene extends Phaser.Scene {
         },
         getPlayer: () => this.player,
         getPlayerBody: () => this.playerBody,
+        shouldCollidePlayerWithTerrainTile: (tile) =>
+          this.specialTilesController.shouldCollidePlayerWithTerrainTile(tile),
         createPlayer: (room) => this.createPlayer(room),
         destroyPlayer: () => this.destroyPlayer(),
         syncAppMode: () => this.syncAppMode(),
@@ -1197,6 +1226,8 @@ export class OverworldPlayScene extends Phaser.Scene {
         getPlayerSprite: () => this.playerSprite,
         getPlayerPickupSensor: () => this.playerPickupSensor,
         getPlayerPickupSensorBody: () => this.playerPickupSensorBody,
+        getSpecialTileEnvironment: () => this.specialTilesController.getPlayerEnvironment(),
+        getLastMovementInput: () => this.lastMovementInput,
         getQuicksandVisualSink: () => this.quicksandVisualSink,
         getWeaponKnockbackUntil: () => this.weaponKnockbackUntil,
         getIsClimbingLadder: () => this.isClimbingLadder,
@@ -1342,6 +1373,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         getCurrentTime: () => this.time.now,
         getPlayer: () => this.player,
         getPlayerBody: () => this.playerBody,
+        getSpecialTileEnvironment: () => this.specialTilesController.getPlayerEnvironment(),
         getPlayerFacing: () => this.playerFacing as -1 | 1,
         getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
         getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
@@ -1983,6 +2015,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       }
 
       if (!this.playerBody) {
+        this.lastMovementInput = {
+          horizontalInput: 0,
+          verticalInput: 0,
+        };
         this.measureMobilePerformance('update.noPlayerRuntime', () => {
           this.movementController.handleNoPlayerRuntime();
         });
@@ -2006,12 +2042,19 @@ export class OverworldPlayScene extends Phaser.Scene {
       const swordPressed = !pvpCountdownLocked && swordInputPressed;
       const gunPressed = !pvpCountdownLocked && gunInputPressed;
       const inQuicksand = this.isPlayerInQuicksand();
-      const movement = this.measureMobilePerformance('update.movement', () =>
-        this.movementController.updateMovement(delta, inQuicksand)
-      );
       this.measureMobilePerformance('update.specialTiles', () => {
         this.updateSpecialTiles();
       });
+      const movement = this.measureMobilePerformance('update.movement', () =>
+        this.movementController.updateMovement(delta, inQuicksand)
+      );
+      this.lastMovementInput = {
+        horizontalInput: movement.horizontalInput,
+        verticalInput: movement.verticalInput,
+      };
+      if (movement.downHeld && movement.jumpPressed) {
+        this.specialTilesController.beginOneWayDropThrough();
+      }
       if (pvpCountdownLocked) {
         this.playerBody.setVelocityX(0);
         if (this.playerBody.blocked.down || this.playerBody.touching.down) {
@@ -2211,6 +2254,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.quicksandTouchedUntil = 0;
     this.quicksandVisualSink = 0;
     this.quicksandStatusCooldownUntil = 0;
+    this.lastMovementInput = {
+      horizontalInput: 0,
+      verticalInput: 0,
+    };
     this.inspectInputController.reset();
     this.movementController.reset();
     this.combatController.reset();
@@ -3080,6 +3127,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.combatController.clearAttackAnimation();
     this.playerPresentationController.handlePlayerDestroyed();
     this.externalLaunchGraceUntil = 0;
+    this.lastMovementInput = {
+      horizontalInput: 0,
+      verticalInput: 0,
+    };
     this.playerBody = null;
     this.playerPickupSensorBody = null;
     this.playerPickupSensor = null;
@@ -5576,6 +5627,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         rangedCooldownMs: this.combatController.getRangedCooldownRemainingMs(this.time.now),
         projectileCount: this.combatController.getProjectileCount(),
       },
+      specialTiles: this.specialTilesController.getPlayerEnvironment(),
       presence: {
         status: presenceDebug.snapshot?.status ?? 'disabled',
         subscribedShardCount: presenceDebug.snapshot?.subscribedShards.length ?? 0,

@@ -4,6 +4,10 @@ import {
   parseProfileSharePath,
 } from '../src/profiles/username.ts';
 import {
+  buildPlaylistSharePath,
+  parsePlaylistSharePath,
+} from '../src/playlists/model.ts';
+import {
   BACKGROUND_GROUPS,
   GAME_OBJECTS,
   ROOM_HEIGHT,
@@ -43,10 +47,30 @@ const PREVIEW_WIDTH = ROOM_WIDTH * PREVIEW_TILE_SIZE;
 const PREVIEW_HEIGHT = ROOM_HEIGHT * PREVIEW_TILE_SIZE;
 const GAME_OBJECT_CONFIG_BY_ID = new Map(GAME_OBJECTS.map((config) => [config.id, config]));
 const imageDataCache = new Map();
+const STANDALONE_PAGE_ALIASES = new Map([
+  ['/school-admin', '/school-admin.html'],
+  ['/school-admin/', '/school-admin.html'],
+  ['/school-admin.html', '/school-admin.html'],
+  ['/school-login', '/school-login.html'],
+  ['/school-login/', '/school-login.html'],
+  ['/school-login.html', '/school-login.html'],
+]);
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const standalonePage = STANDALONE_PAGE_ALIASES.get(url.pathname);
+    if (standalonePage) {
+      if (request.method !== 'GET' && request.method !== 'HEAD') {
+        return new Response('Method Not Allowed', {
+          status: 405,
+          headers: { Allow: 'GET, HEAD' },
+        });
+      }
+
+      return fetchStandalonePageAsset(request, env, standalonePage);
+    }
+
     const imageCoordinates = parseRoomPath(url.pathname, ROOM_IMAGE_PATH_PATTERN);
     if (imageCoordinates) {
       return renderRoomImageResponse(request, env, url, imageCoordinates);
@@ -65,6 +89,19 @@ export default {
       return renderRoomAppShell(request, env, metadata);
     }
 
+    const playlistSlug = parsePlaylistSharePath(url.pathname);
+    if (playlistSlug) {
+      if (request.method !== 'GET' && request.method !== 'HEAD') {
+        return new Response('Method Not Allowed', {
+          status: 405,
+          headers: { Allow: 'GET, HEAD' },
+        });
+      }
+
+      const metadata = await loadPlaylistMetadata(request, env, url, playlistSlug);
+      return renderPlaylistAppShell(request, env, metadata);
+    }
+
     const profileUsername = parseProfileSharePath(url.pathname);
     if (!profileUsername) {
       return env.ASSETS.fetch(request);
@@ -81,6 +118,26 @@ export default {
     return renderProfileAppShell(request, env, metadata);
   },
 };
+
+async function fetchStandalonePageAsset(request, env, pathname) {
+  const url = new URL(request.url);
+  const apiBaseUrl = resolveApiBaseUrl(env, url);
+  const assetUrl = new URL(pathname, `${apiBaseUrl}/`);
+  const response = await fetch(assetUrl.toString(), {
+    method: request.method === 'HEAD' ? 'GET' : request.method,
+    headers: { Accept: 'text/html' },
+    redirect: 'follow',
+  });
+  const headers = new Headers(response.headers);
+  headers.set('Content-Type', 'text/html; charset=utf-8');
+  headers.set('Cache-Control', 'public, max-age=60, s-maxage=300');
+  headers.delete('Content-Length');
+
+  return new Response(request.method === 'HEAD' ? null : response.body, {
+    status: response.status,
+    headers,
+  });
+}
 
 function parseRoomPath(pathname, pattern = ROOM_PATH_PATTERN) {
   const match = pattern.exec(pathname);
@@ -185,6 +242,34 @@ async function loadProfileMetadata(request, env, url, username) {
   }
 }
 
+async function loadPlaylistMetadata(request, env, url, slug) {
+  const apiBaseUrl = resolveApiBaseUrl(env, url);
+  const publicUrl = `${url.origin}${buildPlaylistSharePath(slug)}`;
+  const fallback = buildFallbackPlaylistMetadata(slug, publicUrl, url.origin);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PROFILE_META_TIMEOUT_MS);
+
+  try {
+    const playlistUrl = new URL(`/api/playlists/by-slug/${encodeURIComponent(slug)}`, apiBaseUrl);
+    const response = await fetch(playlistUrl.toString(), {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': request.headers.get('User-Agent') || 'WAMP playlist share renderer',
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      return fallback;
+    }
+
+    return buildPublishedPlaylistMetadata(await response.json(), fallback);
+  } catch {
+    return fallback;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function resolveApiBaseUrl(env, url) {
   const configured = typeof env.ROOM_SHARE_API_BASE_URL === 'string'
     ? env.ROOM_SHARE_API_BASE_URL.trim()
@@ -222,6 +307,15 @@ function buildFallbackProfileMetadata(username, publicUrl, origin) {
   };
 }
 
+function buildFallbackPlaylistMetadata(slug, publicUrl, origin) {
+  return {
+    title: `${slug} - WAMP playlist`,
+    description: `Play this WAMP room playlist.`,
+    url: publicUrl,
+    imageUrl: new URL('/favicon.svg', origin).toString(),
+  };
+}
+
 function buildPublishedRoomMetadata(snapshot, fallback, coordinates) {
   const roomTitle = cleanText(snapshot?.title);
   const title = roomTitle
@@ -253,6 +347,20 @@ function buildPublishedProfileMetadata(profile, fallback) {
     title,
     description,
     imageUrl: avatarUrl || fallback.imageUrl,
+  };
+}
+
+function buildPublishedPlaylistMetadata(playlist, fallback) {
+  const title = cleanText(playlist?.title) || fallback.title;
+  const owner = cleanText(playlist?.ownerDisplayName);
+  const description = cleanText(playlist?.description);
+  const roomCount = Number(playlist?.roomCount ?? playlist?.items?.length ?? 0) || 0;
+  const roomText = roomCount === 1 ? '1 room' : `${roomCount} rooms`;
+
+  return {
+    ...fallback,
+    title: `${title} - WAMP playlist`,
+    description: description || `${owner ? `${owner}'s ` : ''}WAMP playlist with ${roomText}.`,
   };
 }
 
@@ -384,6 +492,31 @@ async function renderProfileAppShell(request, env, metadata) {
   });
 }
 
+async function renderPlaylistAppShell(request, env, metadata) {
+  const indexResponse = await fetchAppShellAsset(request, env);
+  if (!indexResponse.ok) {
+    return fallbackPlaylistHtmlResponse(request, metadata);
+  }
+
+  const headers = new Headers(indexResponse.headers);
+  headers.set('Content-Type', 'text/html; charset=utf-8');
+  headers.set('Cache-Control', 'public, max-age=60, s-maxage=300');
+  headers.delete('Content-Length');
+
+  if (request.method === 'HEAD') {
+    return new Response(null, {
+      status: 200,
+      headers,
+    });
+  }
+
+  const html = await indexResponse.text();
+  return new Response(injectPlaylistMetadata(html, metadata), {
+    status: 200,
+    headers,
+  });
+}
+
 async function fetchAppShellAsset(request, env) {
   const url = new URL(request.url);
   for (const pathname of ['/index.html', '/']) {
@@ -445,6 +578,30 @@ function fallbackProfileHtmlResponse(request, metadata) {
   });
 }
 
+function fallbackPlaylistHtmlResponse(request, metadata) {
+  const body = [
+    '<!doctype html>',
+    '<html lang="en">',
+    '<head>',
+    '  <meta charset="utf-8">',
+    '  <meta name="viewport" content="width=device-width, initial-scale=1">',
+    buildPlaylistMetaTags(metadata),
+    '</head>',
+    '<body>',
+    `  <p><a href="${escapeHtml(metadata.url)}">Open this WAMP playlist</a></p>`,
+    '</body>',
+    '</html>',
+  ].join('\n');
+
+  return new Response(request.method === 'HEAD' ? null : body, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'public, max-age=60, s-maxage=300',
+    },
+  });
+}
+
 function injectRoomMetadata(html, metadata) {
   let nextHtml = html;
   if (!/<base\s/i.test(nextHtml)) {
@@ -469,6 +626,19 @@ function injectProfileMetadata(html, metadata) {
   }
 
   return nextHtml.replace(/<\/head>/i, `${buildProfileMetaTags(metadata)}\n  </head>`);
+}
+
+function injectPlaylistMetadata(html, metadata) {
+  let nextHtml = html;
+  if (!/<base\s/i.test(nextHtml)) {
+    nextHtml = nextHtml.replace(/<head([^>]*)>/i, '<head$1>\n    <base href="/">');
+  }
+
+  if (/<title>[\s\S]*?<\/title>/i.test(nextHtml)) {
+    nextHtml = nextHtml.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(metadata.title)}</title>`);
+  }
+
+  return nextHtml.replace(/<\/head>/i, `${buildPlaylistMetaTags(metadata)}\n  </head>`);
 }
 
 function buildRoomMetaTags(metadata) {
@@ -511,6 +681,29 @@ function buildProfileMetaTags(metadata) {
     '    <meta name="robots" content="index,follow">',
     `    <link rel="canonical" href="${pageUrl}">`,
     '    <meta property="og:type" content="profile">',
+    '    <meta property="og:site_name" content="WAMP">',
+    `    <meta property="og:title" content="${title}">`,
+    `    <meta property="og:description" content="${description}">`,
+    `    <meta property="og:url" content="${pageUrl}">`,
+    `    <meta property="og:image" content="${imageUrl}">`,
+    `    <meta property="og:image:secure_url" content="${imageUrl}">`,
+    '    <meta name="twitter:card" content="summary">',
+    `    <meta name="twitter:title" content="${title}">`,
+    `    <meta name="twitter:description" content="${description}">`,
+    `    <meta name="twitter:image" content="${imageUrl}">`,
+  ].join('\n');
+}
+
+function buildPlaylistMetaTags(metadata) {
+  const title = escapeHtml(metadata.title);
+  const description = escapeHtml(metadata.description);
+  const pageUrl = escapeHtml(metadata.url);
+  const imageUrl = escapeHtml(metadata.imageUrl);
+
+  return [
+    '    <meta name="robots" content="index,follow">',
+    `    <link rel="canonical" href="${pageUrl}">`,
+    '    <meta property="og:type" content="website">',
     '    <meta property="og:site_name" content="WAMP">',
     `    <meta property="og:title" content="${title}">`,
     `    <meta property="og:description" content="${description}">`,

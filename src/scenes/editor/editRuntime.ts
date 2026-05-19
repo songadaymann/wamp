@@ -6,8 +6,9 @@ import {
 import {
   canObjectBeStoredInContainer,
   canPlacedObjectBeContainer,
+  canPlacedObjectBeLinkedObjectTarget,
   canPlacedObjectBePressurePlateTarget,
-  canPlacedObjectTriggerOtherObjects,
+  canPlacedObjectUseObjectLink,
   createPlacedObjectInstanceId,
   decodeTileDataValue,
   encodeTileDataValue,
@@ -1199,13 +1200,22 @@ export class EditorEditRuntime {
   }
 
   getPressurePlateEligibleTargets(triggerInstanceId: string | null | undefined): PlacedObject[] {
-    return this.host.getPlacedObjects().filter((placed) => {
-      if (!canPlacedObjectBePressurePlateTarget(placed)) {
-        return false;
-      }
+    return this.getObjectLinkEligibleTargets(triggerInstanceId).filter((placed) =>
+      canPlacedObjectBePressurePlateTarget(placed)
+    );
+  }
 
-      return placed.instanceId !== triggerInstanceId;
-    });
+  getObjectLinkEligibleTargets(sourceInstanceId: string | null | undefined): PlacedObject[] {
+    const source = this.getPlacedObjectByInstanceId(sourceInstanceId);
+    if (!source || !canPlacedObjectUseObjectLink(source)) {
+      return [];
+    }
+
+    return this.host.getPlacedObjects().filter(
+      (placed) =>
+        placed.instanceId !== sourceInstanceId &&
+        canPlacedObjectBeLinkedObjectTarget(source, placed),
+    );
   }
 
   setContainerContents(
@@ -1387,16 +1397,23 @@ export class EditorEditRuntime {
     triggerInstanceId: string,
     targetInstanceId: string | null,
   ): boolean {
+    return this.setObjectLinkTarget(triggerInstanceId, targetInstanceId);
+  }
+
+  setObjectLinkTarget(
+    sourceInstanceId: string,
+    targetInstanceId: string | null,
+  ): boolean {
     const placedObjects = this.host.getPlacedObjects();
-    const triggerIndex = placedObjects.findIndex(
-      (placed) => placed.instanceId === triggerInstanceId
+    const sourceIndex = placedObjects.findIndex(
+      (placed) => placed.instanceId === sourceInstanceId
     );
-    if (triggerIndex < 0) {
+    if (sourceIndex < 0) {
       return false;
     }
 
-    const trigger = placedObjects[triggerIndex];
-    if (!canPlacedObjectTriggerOtherObjects(trigger)) {
+    const source = placedObjects[sourceIndex];
+    if (!canPlacedObjectUseObjectLink(source)) {
       return false;
     }
 
@@ -1404,8 +1421,8 @@ export class EditorEditRuntime {
       const target = this.getPlacedObjectByInstanceId(targetInstanceId);
       if (
         !target ||
-        target.instanceId === triggerInstanceId ||
-        !canPlacedObjectBePressurePlateTarget(target)
+        target.instanceId === sourceInstanceId ||
+        !canPlacedObjectBeLinkedObjectTarget(source, target)
       ) {
         return false;
       }
@@ -1413,14 +1430,14 @@ export class EditorEditRuntime {
 
     const previous = this.clonePlacedObjects();
     const next = previous.map((placed, index) =>
-      index === triggerIndex
+      index === sourceIndex
         ? {
             ...placed,
             triggerTargetInstanceId: targetInstanceId,
           }
         : placed
     );
-    const previousTarget = previous[triggerIndex]?.triggerTargetInstanceId ?? null;
+    const previousTarget = previous[sourceIndex]?.triggerTargetInstanceId ?? null;
     if (previousTarget === targetInstanceId) {
       return true;
     }

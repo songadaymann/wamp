@@ -88,6 +88,8 @@ export const PRESSURE_PLATE_TARGET_OBJECT_IDS = [
 export type PressurePlateTargetObjectId = (typeof PRESSURE_PLATE_TARGET_OBJECT_IDS)[number];
 export const CONTAINER_OBJECT_IDS = ['cage', 'treasure_chest'] as const;
 export type ContainerObjectId = (typeof CONTAINER_OBJECT_IDS)[number];
+export const MOVING_PLATFORM_OBJECT_ID = 'moving_platform';
+export const MOVING_PLATFORM_ENDPOINT_OBJECT_ID = 'moving_platform_endpoint';
 export const BLOCK_SWITCH_OBJECT_ID = 'block_switch' as const;
 export const SWITCH_BLOCK_ON_OBJECT_ID = 'switch_block_on' as const;
 export const SWITCH_BLOCK_OFF_OBJECT_ID = 'switch_block_off' as const;
@@ -184,6 +186,8 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'trapdoor_metal',  name: 'Metal Trapoor',  category: 'platform',    path: 'assets/objects/trapdoor2.png', frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 0, bodyOffsetY: 0, behavior: 'static',   description: 'Pressure-plate trapdoor. Opens while its linked plate stays pressed.' },
   { id: 'crate',       name: 'Crate',       category: 'platform',    path: 'assets/objects/crate_static.png', frameWidth: 32, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 0, bodyOffsetY: 16, previewWidth: 16, previewHeight: 16, previewOffsetX: 0, previewOffsetY: 16, behavior: 'static',   interaction: 'pushable', description: 'Solid block. Stand on it or push it.' },
   { id: 'brick_box',   name: 'Brick Box',   category: 'platform',    path: 'assets/objects/brick_box.png',   frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 0,  defaultFrame: 5, bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 8, bodyOffsetY: 8, previewWidth: 16, previewHeight: 16, previewOffsetX: 8, previewOffsetY: 8, placeUsingPreviewBounds: true, behavior: 'static',   description: 'Solid brick block. Stand on it like a platform.' },
+  { id: MOVING_PLATFORM_OBJECT_ID, name: 'Moving Platform', category: 'platform', path: 'assets/tilesets/special.png?v=2026-05-12-special-tiles', frameWidth: 16, frameHeight: 16, frameCount: 64, fps: 0, defaultFrame: 2, facingDirection: 'right', bodyWidth: 16, bodyHeight: 8, bodyOffsetX: 0, bodyOffsetY: 4, behavior: 'static', collidesWithWorld: false, description: 'Linked platform. Connect it to a Moving Platform Anchor to make it patrol.' },
+  { id: MOVING_PLATFORM_ENDPOINT_OBJECT_ID, name: 'Moving Platform Anchor', category: 'decoration', path: 'assets/tilesets/special.png?v=2026-05-12-special-tiles', frameWidth: 16, frameHeight: 16, frameCount: 64, fps: 0, defaultFrame: 2, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Editor marker for linked moving platforms. Hidden during play.' },
   { id: BLOCK_SWITCH_OBJECT_ID, name: 'Block Switch', category: 'platform', path: 'assets/objects/switch-block-blue-active.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 16, bodyHeight: 16, behavior: 'static', description: 'Hit this active-color block from below, or bump it with certain enemies/projectiles, to swap red and blue switch blocks in this room.' },
   { id: SWITCH_BLOCK_ON_OBJECT_ID, name: 'Blue Switch Block', category: 'platform', path: 'assets/objects/switch-block-blue.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 16, bodyHeight: 16, behavior: 'static', description: 'Blue platform block. Starts solid, then toggles with a Block Switch.' },
   { id: SWITCH_BLOCK_OFF_OBJECT_ID, name: 'Red Switch Block', category: 'platform', path: 'assets/objects/switch-block-red.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 16, bodyHeight: 16, behavior: 'static', description: 'Red platform block. Starts inactive, then toggles with a Block Switch.' },
@@ -204,7 +208,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'tree_c',      name: 'Tree C',      category: 'decoration',  path: 'assets/deco/tree_c.png',         frameWidth: 48, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Extra palm-like tree decoration.' },
   { id: 'tree_trunk',  name: 'Tree Trunk',  category: 'decoration',  path: 'assets/deco/tree_trunk.png',     frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Cut stump or trunk decoration.' },
   { id: 'sun',         name: 'Sun',         category: 'decoration',  path: 'assets/deco/sun.png',            frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 4,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'animated', description: 'Animated sun. Purely decorative.' },
-  { id: 'clouds_deco', name: 'Clouds',      category: 'decoration',  path: 'assets/deco/clouds.png',         frameWidth: 48, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Cloud decoration. No collision.' },
+  { id: 'clouds_deco', name: 'Clouds',      category: 'decoration',  path: 'assets/deco/clouds.png',         frameWidth: 48, frameHeight: 14, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Cloud decoration. No collision.' },
 ];
 
 export function getObjectById(id: string): GameObjectConfig | undefined {
@@ -237,7 +241,9 @@ export function isDynamicRuntimeObjectConfig(
     || config.id === 'bear_brown'
     || config.id === 'bear_polar'
     || config.id === 'chicken'
+    || config.id === 'cage'
     || config.id === SWORDSMAN_AI_OBJECT_ID
+    || config.id === MOVING_PLATFORM_OBJECT_ID
   );
 }
 
@@ -522,6 +528,45 @@ export function canPlacedObjectTriggerOtherObjects(
   placed: Pick<PlacedObject, 'id'> | null | undefined
 ): boolean {
   return isPressurePlateTriggerId(placed?.id ?? '');
+}
+
+export function isMovingPlatformObjectId(id: string): id is typeof MOVING_PLATFORM_OBJECT_ID {
+  return id === MOVING_PLATFORM_OBJECT_ID;
+}
+
+export function isMovingPlatformEndpointObjectId(
+  id: string,
+): id is typeof MOVING_PLATFORM_ENDPOINT_OBJECT_ID {
+  return id === MOVING_PLATFORM_ENDPOINT_OBJECT_ID;
+}
+
+export function canPlacedObjectUseObjectLink(
+  placed: Pick<PlacedObject, 'id'> | null | undefined
+): boolean {
+  if (!placed) {
+    return false;
+  }
+
+  return canPlacedObjectTriggerOtherObjects(placed) || isMovingPlatformObjectId(placed.id);
+}
+
+export function canPlacedObjectBeLinkedObjectTarget(
+  source: Pick<PlacedObject, 'id'> | null | undefined,
+  target: Pick<PlacedObject, 'id'> | null | undefined,
+): boolean {
+  if (!source || !target) {
+    return false;
+  }
+
+  if (canPlacedObjectTriggerOtherObjects(source)) {
+    return canPlacedObjectBePressurePlateTarget(target);
+  }
+
+  if (isMovingPlatformObjectId(source.id)) {
+    return isMovingPlatformEndpointObjectId(target.id);
+  }
+
+  return false;
 }
 
 export function canPlacedObjectBePressurePlateTarget(

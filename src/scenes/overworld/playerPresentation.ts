@@ -3,6 +3,15 @@ import {
   type DefaultPlayerAnimationState,
 } from '../../player/defaultPlayer';
 import { resolveActivePlayerAvatarPack } from '../../player/avatar/runtime';
+import {
+  bodyIsBlockedInGravityDirection,
+  getBodyVelocityAlongVector,
+  getGravityAngle,
+  getGravityRightVector,
+  getGravityVector,
+  type PlayerGravityDirection,
+  type SpecialTilePlayerEnvironment,
+} from './specialTiles';
 
 export interface OverworldPlayerPresentationControllerState {
   animationState: DefaultPlayerAnimationState;
@@ -19,6 +28,8 @@ interface OverworldPlayerPresentationControllerHost {
   getPlayerSprite(): Phaser.GameObjects.Sprite | null;
   getPlayerPickupSensor(): Phaser.GameObjects.Rectangle | null;
   getPlayerPickupSensorBody(): Phaser.Physics.Arcade.Body | null;
+  getSpecialTileEnvironment(): SpecialTilePlayerEnvironment;
+  getLastMovementInput(): { horizontalInput: number; verticalInput: number };
   getQuicksandVisualSink(): number;
   getWeaponKnockbackUntil(): number;
   getIsClimbingLadder(): boolean;
@@ -88,29 +99,45 @@ export class OverworldPlayerPresentationController {
 
     this.syncPlayerPickupSensor();
 
-    playerSprite.setPosition(
-      player.x,
-      playerBody.bottom + this.options.playerVisualFeetOffset + this.host.getQuicksandVisualSink(),
-    );
+    const specialEnvironment = this.host.getSpecialTileEnvironment();
+    const gravityDirection = specialEnvironment.gravityDirection;
+    const visualOffset = this.options.playerVisualFeetOffset + this.host.getQuicksandVisualSink();
+    playerSprite.setRotation(getGravityAngle(gravityDirection));
+    switch (gravityDirection) {
+      case 'up':
+        this.setPlayerSpritePixelPosition(playerSprite, playerBody.center.x, playerBody.top - visualOffset);
+        break;
+      case 'left':
+        this.setPlayerSpritePixelPosition(playerSprite, playerBody.left - visualOffset, playerBody.center.y);
+        break;
+      case 'right':
+        this.setPlayerSpritePixelPosition(playerSprite, playerBody.right + visualOffset, playerBody.center.y);
+        break;
+      case 'down':
+      default:
+        this.setPlayerSpritePixelPosition(playerSprite, player.x, playerBody.bottom + visualOffset);
+        break;
+    }
 
     const now = this.host.getCurrentTime();
     const facingLockedByWeaponKnockback = now < this.host.getWeaponKnockbackUntil();
     const wallContactSide = this.host.getWallContactSide();
+    const tangentVelocity = getBodyVelocityAlongVector(playerBody, getGravityRightVector(gravityDirection));
     if (this.host.getIsWallSliding() && wallContactSide !== 0) {
       this.host.state.facing = wallContactSide;
     } else if (this.host.getActiveCrateInteractionFacing() !== null) {
       this.host.state.facing = this.host.getActiveCrateInteractionFacing()!;
     } else if (
       !facingLockedByWeaponKnockback &&
-      Math.abs(playerBody.velocity.x) > this.options.facingVelocityThreshold
+      Math.abs(tangentVelocity) > this.options.facingVelocityThreshold
     ) {
-      this.host.state.facing = playerBody.velocity.x < 0 ? -1 : 1;
+      this.host.state.facing = this.resolveSpriteFacingForGravity(gravityDirection, tangentVelocity);
     }
     playerSprite.setFlipX(this.host.state.facing < 0);
 
     const grounded =
       this.host.getGroundedOverride() ??
-      (playerBody.blocked.down || playerBody.touching.down);
+      bodyIsBlockedInGravityDirection(playerBody, gravityDirection);
     if (!this.host.getIsClimbingLadder() && grounded && !this.host.state.wasGrounded) {
       this.host.state.landAnimationUntil = now + this.options.landingAnimationMs;
       this.host.playLandingDustFx(player.x, playerBody.bottom, this.host.state.facing);
@@ -120,6 +147,7 @@ export class OverworldPlayerPresentationController {
       now,
       grounded,
       playerBody,
+      specialEnvironment,
     });
     const playerAvatarPack = resolveActivePlayerAvatarPack();
     const nextAnimationKey = playerAvatarPack.animationKeys[nextAnimation];
@@ -156,6 +184,7 @@ export class OverworldPlayerPresentationController {
     now: number;
     grounded: boolean;
     playerBody: Phaser.Physics.Arcade.Body;
+    specialEnvironment: SpecialTilePlayerEnvironment;
   }): DefaultPlayerAnimationState {
     const activeAttackAnimation = this.host.getCurrentAttackAnimation(input.now);
     if (activeAttackAnimation) {
@@ -175,7 +204,11 @@ export class OverworldPlayerPresentationController {
     }
 
     if (!input.grounded) {
-      return input.playerBody.velocity.y < this.options.jumpRiseVelocityThreshold
+      const gravityVelocity = getBodyVelocityAlongVector(
+        input.playerBody,
+        getGravityVector(input.specialEnvironment.gravityDirection),
+      );
+      return gravityVelocity < this.options.jumpRiseVelocityThreshold
         ? 'jump-rise'
         : 'jump-fall';
     }
@@ -189,7 +222,11 @@ export class OverworldPlayerPresentationController {
     }
 
     if (this.host.getIsCrouching()) {
-      return Math.abs(input.playerBody.velocity.x) > this.options.crouchMoveVelocityThreshold
+      const tangentVelocity = getBodyVelocityAlongVector(
+        input.playerBody,
+        getGravityRightVector(input.specialEnvironment.gravityDirection),
+      );
+      return Math.abs(tangentVelocity) > this.options.crouchMoveVelocityThreshold
         ? 'crawl'
         : 'crouch';
     }
@@ -198,10 +235,44 @@ export class OverworldPlayerPresentationController {
       return 'land';
     }
 
-    if (Math.abs(input.playerBody.velocity.x) > this.options.runVelocityThreshold) {
+    const tangentVelocity = getBodyVelocityAlongVector(
+      input.playerBody,
+      getGravityRightVector(input.specialEnvironment.gravityDirection),
+    );
+    const lastMovementInput = this.host.getLastMovementInput();
+    const movingOnlyFromSurface =
+      lastMovementInput.horizontalInput === 0 &&
+      (
+        input.specialEnvironment.conveyorX !== 0 ||
+        input.specialEnvironment.onIce ||
+        input.specialEnvironment.windX !== 0
+      );
+    if (movingOnlyFromSurface) {
+      return 'idle';
+    }
+
+    if (Math.abs(tangentVelocity) > this.options.runVelocityThreshold) {
       return 'run';
     }
 
     return 'idle';
+  }
+
+  private setPlayerSpritePixelPosition(
+    playerSprite: Phaser.GameObjects.Sprite,
+    x: number,
+    y: number,
+  ): void {
+    playerSprite.setPosition(Math.round(x), Math.round(y));
+  }
+
+  private resolveSpriteFacingForGravity(
+    gravityDirection: PlayerGravityDirection,
+    tangentVelocity: number,
+  ): -1 | 1 {
+    const tangentFacing = tangentVelocity < 0 ? -1 : 1;
+    return gravityDirection === 'left' || gravityDirection === 'right'
+      ? (tangentFacing === 1 ? -1 : 1)
+      : tangentFacing;
   }
 }

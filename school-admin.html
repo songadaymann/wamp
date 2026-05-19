@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="ai-api-base" content="https://api.wamp.land" />
+    <title>School Admin</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0a0d12;
+        --panel: #131821;
+        --line: rgba(183, 202, 232, 0.2);
+        --line-strong: rgba(183, 202, 232, 0.36);
+        --text: #f5f7fb;
+        --muted: #a8b3c7;
+        --accent: #6ec5ff;
+        --danger: #ff7676;
+        --good: #69d995;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      .shell {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 24px 18px 48px;
+        display: grid;
+        gap: 16px;
+      }
+
+      .masthead,
+      .controls,
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+        font-family: "IBM Plex Mono", "Fira Code", monospace;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 16px;
+      }
+
+      .notice {
+        border-color: rgba(105, 217, 149, 0.28);
+        background: rgba(105, 217, 149, 0.08);
+      }
+
+      .grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      .form-grid {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        align-items: end;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      input {
+        min-height: 42px;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        background: #080b10;
+        color: var(--text);
+        padding: 10px 12px;
+      }
+
+      button {
+        min-height: 42px;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        background: rgba(110, 197, 255, 0.14);
+        color: var(--text);
+        padding: 10px 12px;
+        cursor: pointer;
+      }
+
+      button.secondary {
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      button.danger {
+        background: rgba(255, 118, 118, 0.12);
+        border-color: rgba(255, 118, 118, 0.34);
+      }
+
+      button:disabled {
+        opacity: 0.55;
+        cursor: default;
+      }
+
+      .status {
+        color: var(--muted);
+      }
+
+      .status.error {
+        color: var(--danger);
+      }
+
+      .credential {
+        display: grid;
+        gap: 8px;
+        border: 1px solid rgba(110, 197, 255, 0.3);
+        border-radius: 8px;
+        padding: 12px;
+        background: rgba(110, 197, 255, 0.08);
+      }
+
+      .credential code {
+        font-size: 18px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 10px 8px;
+        text-align: left;
+        vertical-align: middle;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      td.actions-cell {
+        white-space: nowrap;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="masthead">
+        <div>
+          <h1>School Admin</h1>
+          <p id="classroom-summary">Loading classroom...</p>
+        </div>
+        <a id="student-link" href="#">Student login</a>
+      </section>
+
+      <section class="panel notice">
+        <p>
+          Real student names are saved only in this browser for your roster view. The game server only receives student usernames and password hashes.
+        </p>
+      </section>
+
+      <section id="signin-panel" class="panel grid hidden">
+        <h2>Teacher Sign-In</h2>
+        <p>Use the teacher email registered for this classroom.</p>
+        <div class="form-grid">
+          <label>
+            Teacher email
+            <input id="teacher-email-input" type="email" autocomplete="email" />
+          </label>
+          <button id="btn-request-link" type="button">Send Sign-In Link</button>
+        </div>
+        <a id="debug-link" class="hidden" href="#">Open debug sign-in link</a>
+      </section>
+
+      <section id="roster-panel" class="panel grid hidden">
+        <div class="controls">
+          <div>
+            <h2>Student Accounts</h2>
+            <p id="roster-status" class="status">Loading roster...</p>
+          </div>
+          <div class="actions">
+            <button id="btn-export-json" type="button" class="secondary">Export JSON</button>
+            <button id="btn-export-csv" type="button" class="secondary">Export CSV</button>
+            <button id="btn-import" type="button" class="secondary">Import Backup</button>
+            <input id="import-input" class="hidden" type="file" accept=".json,.csv,text/csv,application/json" />
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <label>
+            Local student name
+            <input id="local-name-input" type="text" autocomplete="off" />
+          </label>
+          <label>
+            Student username
+            <input id="student-username-input" type="text" autocomplete="off" placeholder="blue-comet-12" />
+          </label>
+          <button id="btn-create-student" type="button">Create Student</button>
+        </div>
+
+        <div id="credential-panel" class="credential hidden">
+          <strong>Temporary password, shown once</strong>
+          <div id="credential-text"></div>
+          <button id="btn-copy-credential" type="button" class="secondary">Copy Login Card</button>
+        </div>
+
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Local name</th>
+                <th>Username</th>
+                <th>Status</th>
+                <th>Last login</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="students-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <div id="page-status" class="status"></div>
+    </main>
+    <script type="module" src="/src/school-admin.ts"></script>
+  </body>
+</html>
+

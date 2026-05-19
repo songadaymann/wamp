@@ -5,12 +5,20 @@ import {
 } from '../../admin/featuredRoomsClient';
 import { renderRoomSnapshotToPngDataUrl } from '../../mint/roomMetadataRender';
 import { createWorldRepository, type WorldRepository } from '../../persistence/worldRepository';
+import type { RoomPlaylistSummary } from '../../playlists/model';
+import { createPlaylistRepository, type PlaylistRepository } from '../../playlists/repository';
 import { getActiveOverworldScene } from './sceneBridge';
 import {
   createRunRepository,
   type RunRepository,
 } from '../../runs/runRepository';
+import {
+  AUTH_STATE_CHANGED_EVENT,
+  getAuthDebugState,
+  type AuthDebugState,
+} from '../../auth/client';
 import { createProfileTriggerElement, requestProfileOpen } from './profileEvents';
+import { requestExploreQueueStart, type ExploreQueueMode } from './exploreQueueEvents';
 import {
   type BuilderDiscoveryEntry,
   type BuilderDiscoveryResponse,
@@ -32,6 +40,7 @@ type ExploreModalElements = {
   error: HTMLElement | null;
   list: HTMLElement | null;
   filterGroup: HTMLElement | null;
+  queueActions: HTMLElement | null;
   builderSortGroup: HTMLElement | null;
   filterButtons: HTMLButtonElement[];
   sortButtons: HTMLButtonElement[];
@@ -55,6 +64,12 @@ export class ExploreModalController {
   private loading = false;
   private loaded = false;
   private builderLoaded = false;
+  private authState: AuthDebugState = getAuthDebugState();
+  private myPlaylists: RoomPlaylistSummary[] = [];
+  private myPlaylistsLoaded = false;
+  private playlistPickerRoomId: string | null = null;
+  private playlistPickerSelectedId: string | null = null;
+  private playlistPendingRoomId: string | null = null;
   private exploreMode: ExploreMode = 'rooms';
   private discoverFilter: RoomDifficulty | null = null;
   private discoverSort: Exclude<RoomDiscoverySort, 'builder'> = 'featured';
@@ -79,11 +94,24 @@ export class ExploreModalController {
     this.close();
   };
 
+  private readonly handleAuthStateChanged = (event: Event) => {
+    const detail = event instanceof CustomEvent ? (event.detail as AuthDebugState | undefined) : undefined;
+    this.authState = detail ?? getAuthDebugState();
+    if (!this.authState.authenticated) {
+      this.myPlaylists = [];
+      this.myPlaylistsLoaded = false;
+      this.playlistPickerRoomId = null;
+      this.playlistPickerSelectedId = null;
+    }
+    this.render();
+  };
+
   constructor(
     private readonly game: Phaser.Game,
     private readonly runRepository: RunRepository = createRunRepository(),
     private readonly worldRepository: WorldRepository = createWorldRepository(),
     private readonly doc: Document = document,
+    private readonly playlistRepository: PlaylistRepository = createPlaylistRepository(),
   ) {
     this.elements = {
       modal: this.doc.getElementById('explore-modal'),
@@ -91,6 +119,7 @@ export class ExploreModalController {
       error: this.doc.getElementById('explore-modal-error'),
       list: this.doc.getElementById('explore-list'),
       filterGroup: this.doc.getElementById('explore-filters'),
+      queueActions: this.doc.getElementById('explore-queue-actions'),
       builderSortGroup: this.doc.getElementById('explore-builder-sorts'),
       filterButtons: Array.from(
         this.doc.querySelectorAll<HTMLButtonElement>('#explore-filters [data-explore-difficulty]'),
@@ -132,6 +161,7 @@ export class ExploreModalController {
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
+    window.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
 
     for (const button of this.elements.filterButtons) {
       button.addEventListener('click', () => {
@@ -154,6 +184,10 @@ export class ExploreModalController {
           }
           this.exploreMode = 'builders';
           void this.loadBuilderDiscoveryResults();
+          return;
+        }
+        if (this.isPersonalRoomSort(sort) && !this.authState.authenticated) {
+          this.setError('Sign in to sort by your room history.');
           return;
         }
 
@@ -186,6 +220,7 @@ export class ExploreModalController {
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
+    window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
     this.previewObserver?.disconnect();
     this.close();
   }
@@ -202,6 +237,11 @@ export class ExploreModalController {
     this.loading = true;
     this.loaded = false;
     this.builderLoaded = false;
+    this.myPlaylists = [];
+    this.myPlaylistsLoaded = false;
+    this.playlistPickerRoomId = null;
+    this.playlistPickerSelectedId = null;
+    this.playlistPendingRoomId = null;
     this.exploreMode = 'rooms';
     this.discoverFilter = null;
     this.discoverSort = 'featured';
@@ -290,7 +330,12 @@ export class ExploreModalController {
           ? buildersActive
           : !buildersActive && sort === this.discoverSort,
       );
-      button.disabled = this.loading;
+      button.disabled = this.loading || (this.isPersonalRoomSort(sort) && !this.authState.authenticated);
+      if (this.isPersonalRoomSort(sort) && !this.authState.authenticated) {
+        button.title = 'Sign in to sort by your room history.';
+      } else {
+        button.removeAttribute('title');
+      }
     }
 
     for (const button of this.elements.builderSortButtons) {
@@ -299,9 +344,10 @@ export class ExploreModalController {
       button.disabled = this.loading || !buildersActive;
     }
 
+    const activeLoaded = buildersActive ? this.builderLoaded : this.loaded;
+    this.renderQueueActions(buildersActive, activeLoaded);
     this.elements.list.replaceChildren();
 
-    const activeLoaded = buildersActive ? this.builderLoaded : this.loaded;
     if (this.loading || !activeLoaded) {
       this.elements.list.appendChild(
         this.createEmptyState(buildersActive ? 'Loading builders...' : 'Loading levels...')
@@ -314,15 +360,11 @@ export class ExploreModalController {
       return;
     }
 
-    const results = this.roomDiscovery?.results ?? [];
+    const results = (this.roomDiscovery?.results ?? []).filter((entry) => entry.goalType !== null);
 
     if (results.length === 0) {
       this.elements.list.appendChild(
-        this.createEmptyState(
-          this.discoverFilter === null
-            ? this.getEmptyRoomDiscoveryText()
-            : `No ${ROOM_DIFFICULTY_LABELS[this.discoverFilter].toLowerCase()} levels yet.`,
-        ),
+        this.createEmptyState(this.getRoomDiscoveryEmptyText()),
       );
       return;
     }
@@ -330,6 +372,51 @@ export class ExploreModalController {
     for (const entry of results) {
       this.elements.list.appendChild(this.renderEntry(entry));
     }
+  }
+
+  private renderQueueActions(buildersActive: boolean, activeLoaded: boolean): void {
+    const container = this.elements.queueActions;
+    if (!container) {
+      return;
+    }
+
+    container.replaceChildren();
+    const mode = this.getQueueMode();
+    const entries = mode ? this.getQueueEntries(mode) : [];
+    const visible =
+      !buildersActive
+      && activeLoaded
+      && !this.loading
+      && mode !== null
+      && this.authState.authenticated;
+    container.classList.toggle('hidden', !visible);
+    if (!visible || mode === null) {
+      return;
+    }
+
+    const button = this.doc.createElement('button');
+    button.type = 'button';
+    button.className = 'bar-btn bar-btn-small explore-queue-start-btn';
+    button.dataset.exploreQueueMode = mode;
+    button.textContent = `${mode === 'play' ? 'Play All' : 'Rate All'} (${entries.length})`;
+    button.disabled = this.loading || entries.length === 0;
+    button.addEventListener('click', () => {
+      if (entries.length === 0) {
+        return;
+      }
+      requestExploreQueueStart({
+        mode,
+        entries,
+        sourceLabel: mode === 'play' ? 'Unbeaten rooms' : 'Unrated rooms',
+      });
+      this.close();
+    });
+
+    const meta = this.doc.createElement('div');
+    meta.className = 'explore-queue-actions-meta';
+    meta.textContent = `${entries.length} challenge${entries.length === 1 ? '' : 's'}`;
+
+    container.append(button, meta);
   }
 
   private renderBuilderResults(): void {
@@ -481,7 +568,138 @@ export class ExploreModalController {
       item.appendChild(adminButton);
     }
 
+    if (this.authState.authenticated) {
+      item.appendChild(this.createPlaylistAction(entry));
+    }
+
     return item;
+  }
+
+  private createPlaylistAction(entry: RoomDiscoveryEntry): HTMLElement {
+    const action = this.doc.createElement('div');
+    action.className = 'explore-room-playlist-action';
+
+    if (this.playlistPickerRoomId === entry.roomId && this.myPlaylists.length > 1) {
+      const select = this.doc.createElement('select');
+      select.className = 'explore-room-playlist-select';
+      for (const playlist of this.myPlaylists) {
+        const option = this.doc.createElement('option');
+        option.value = playlist.id;
+        option.textContent = playlist.title;
+        select.appendChild(option);
+      }
+      select.value = this.playlistPickerSelectedId ?? this.myPlaylists[0]?.id ?? '';
+      select.addEventListener('change', () => {
+        this.playlistPickerSelectedId = select.value;
+      });
+
+      const addButton = this.doc.createElement('button');
+      addButton.type = 'button';
+      addButton.className = 'bar-btn bar-btn-small';
+      addButton.textContent = this.playlistPendingRoomId === entry.roomId ? 'Adding...' : 'Add';
+      addButton.disabled = this.playlistPendingRoomId !== null;
+      addButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const playlist = this.myPlaylists.find((candidate) => candidate.id === select.value) ?? this.myPlaylists[0] ?? null;
+        if (playlist) {
+          void this.addRoomToPlaylist(entry, playlist);
+        }
+      });
+
+      const cancelButton = this.doc.createElement('button');
+      cancelButton.type = 'button';
+      cancelButton.className = 'bar-btn bar-btn-small';
+      cancelButton.textContent = 'Cancel';
+      cancelButton.disabled = this.playlistPendingRoomId !== null;
+      cancelButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.playlistPickerRoomId = null;
+        this.playlistPickerSelectedId = null;
+        this.render();
+      });
+
+      action.append(select, addButton, cancelButton);
+      return action;
+    }
+
+    const button = this.doc.createElement('button');
+    button.type = 'button';
+    button.className = 'bar-btn bar-btn-small explore-room-playlist-btn';
+    button.textContent = this.playlistPendingRoomId === entry.roomId ? 'Adding...' : 'Playlist';
+    button.disabled = this.playlistPendingRoomId !== null;
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void this.handlePlaylistAction(entry);
+    });
+    action.appendChild(button);
+    return action;
+  }
+
+  private async handlePlaylistAction(entry: RoomDiscoveryEntry): Promise<void> {
+    const playlists = await this.ensureMyPlaylists();
+    if (playlists.length === 0) {
+      this.setError('Create a playlist from your profile first.');
+      return;
+    }
+
+    if (playlists.length === 1) {
+      await this.addRoomToPlaylist(entry, playlists[0]);
+      return;
+    }
+
+    this.playlistPickerRoomId = entry.roomId;
+    this.playlistPickerSelectedId = playlists[0]?.id ?? null;
+    this.render();
+  }
+
+  private async ensureMyPlaylists(): Promise<RoomPlaylistSummary[]> {
+    if (this.myPlaylistsLoaded) {
+      return this.myPlaylists;
+    }
+
+    try {
+      const response = await this.playlistRepository.loadMyPlaylists();
+      this.myPlaylists = response.playlists;
+      this.myPlaylistsLoaded = true;
+      this.setError(null);
+      return this.myPlaylists;
+    } catch (error) {
+      this.setError(error instanceof Error ? error.message : 'Failed to load your playlists.');
+      return [];
+    } finally {
+      this.render();
+    }
+  }
+
+  private async addRoomToPlaylist(
+    entry: RoomDiscoveryEntry,
+    playlist: RoomPlaylistSummary,
+  ): Promise<void> {
+    if (this.playlistPendingRoomId !== null) {
+      return;
+    }
+
+    this.playlistPendingRoomId = entry.roomId;
+    this.render();
+    try {
+      await this.playlistRepository.addPlaylistItem(playlist.id, {
+        roomId: entry.roomId,
+        roomCoordinates: entry.roomCoordinates,
+        roomVersion: entry.roomVersion,
+      });
+      this.myPlaylistsLoaded = false;
+      this.playlistPickerRoomId = null;
+      this.playlistPickerSelectedId = null;
+      this.setError(null);
+    } catch (error) {
+      this.setError(error instanceof Error ? error.message : 'Failed to add room to playlist.');
+    } finally {
+      this.playlistPendingRoomId = null;
+      this.render();
+    }
   }
 
   private createBuilderRow(entry: RoomDiscoveryEntry): HTMLElement {
@@ -559,12 +777,6 @@ export class ExploreModalController {
       badge.textContent = 'Unrated';
     }
     return badge;
-  }
-
-  private getEmptyRoomDiscoveryText(): string {
-    return this.discoverSort === 'newest'
-      ? 'No published rooms found yet.'
-      : 'No published challenge levels found yet.';
   }
 
   private attachRoomPreview(
@@ -704,11 +916,60 @@ export class ExploreModalController {
   }
 
   private parseExploreSortButtonValue(value: string | undefined): ExploreSortButtonValue | null {
-    if (value === 'featured' || value === 'quality' || value === 'newest' || value === 'builders') {
+    if (
+      value === 'featured'
+      || value === 'quality'
+      || value === 'newest'
+      || value === 'unbeaten'
+      || value === 'unvisited'
+      || value === 'unrated'
+      || value === 'builders'
+    ) {
       return value;
     }
 
     return null;
+  }
+
+  private isPersonalRoomSort(sort: ExploreSortButtonValue | null): boolean {
+    return sort === 'unbeaten' || sort === 'unvisited' || sort === 'unrated';
+  }
+
+  private getQueueMode(): ExploreQueueMode | null {
+    if (this.discoverSort === 'unbeaten') {
+      return 'play';
+    }
+    if (this.discoverSort === 'unrated') {
+      return 'rate';
+    }
+    return null;
+  }
+
+  private getQueueEntries(mode: ExploreQueueMode): RoomDiscoveryEntry[] {
+    const results = (this.roomDiscovery?.results ?? [])
+      .filter((entry) => entry.goalType !== null);
+    if (mode === 'rate') {
+      return results.filter((entry) => {
+        const state = entry.viewerState;
+        return Boolean(state?.completed && !state.rated);
+      });
+    }
+    return results.filter((entry) => entry.viewerState?.completed !== true);
+  }
+
+  private getRoomDiscoveryEmptyText(): string {
+    if (this.discoverSort === 'unbeaten') {
+      return "No unbeaten published challenge levels found.";
+    }
+    if (this.discoverSort === 'unvisited') {
+      return "No never-visited published challenge levels found.";
+    }
+    if (this.discoverSort === 'unrated') {
+      return "No unrated-by-you published challenge levels found.";
+    }
+    return this.discoverFilter === null
+      ? 'No published challenge levels found yet.'
+      : `No ${ROOM_DIFFICULTY_LABELS[this.discoverFilter].toLowerCase()} levels yet.`;
   }
 
   private parseBuilderSortButtonValue(value: string | undefined): BuilderDiscoverySort | null {

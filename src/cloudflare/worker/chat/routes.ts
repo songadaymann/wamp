@@ -14,8 +14,9 @@ import {
   DEFAULT_CHAT_MESSAGE_LIMIT,
   MAX_CHAT_MESSAGE_LIMIT,
 } from '../../../chat/model';
-import { loadCurrentSession, requireCurrentSession } from '../auth/request';
+import { loadCurrentSession, requireAuthenticatedRequestAuth } from '../auth/request';
 import { findUserByDisplayName } from '../auth/store';
+import { assertNotSchoolRestricted } from '../school/restrictions';
 import {
   HttpError,
   jsonResponse,
@@ -123,15 +124,16 @@ export async function handleCreateChatMessage(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const session = await requireCurrentSession(env, request, 'send chat messages');
-  const viewer = await resolveChatModerationViewer(env, session.user);
+  const auth = await requireAuthenticatedRequestAuth(env, request, 'send chat messages');
+  assertNotSchoolRestricted(auth, 'send chat messages');
+  const viewer = await resolveChatModerationViewer(env, auth.user);
   if (viewer.banned) {
     throw new HttpError(403, 'You are banned from chat.');
   }
 
   const body = await parseJsonBody<ChatMessageCreateRequestBody>(request);
   const text = normalizeChatMessageText(body.text);
-  const latestMessage = await loadLatestChatMessageForUser(env, session.user.id);
+  const latestMessage = await loadLatestChatMessageForUser(env, auth.user.id);
   const nowMs = Date.now();
 
   if (latestMessage) {
@@ -143,8 +145,8 @@ export async function handleCreateChatMessage(
 
   const message = await createChatMessage(
     env,
-    session.user.id,
-    session.user.displayName,
+    auth.user.id,
+    auth.user.displayName,
     text,
     new Date(nowMs).toISOString()
   );

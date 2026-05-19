@@ -28,6 +28,8 @@ const RESERVED_PROFILE_USERNAMES = new Set([
   'minted-room',
   'new',
   'play',
+  'playlist',
+  'playlists',
   'profile',
   'profiles',
   'r',

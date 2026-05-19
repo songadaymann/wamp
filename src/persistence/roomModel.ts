@@ -6,8 +6,8 @@ import {
   TILE_SIZE,
   canObjectBeStoredInContainer,
   canPlacedObjectBeContainer,
-  canPlacedObjectBePressurePlateTarget,
-  canPlacedObjectTriggerOtherObjects,
+  canPlacedObjectBeLinkedObjectTarget,
+  canPlacedObjectUseObjectLink,
   decodeTileDataValue,
   getPlacedObjectInstanceId,
   getObjectById,
@@ -328,16 +328,15 @@ function clonePlacedObjects(placedObjects: PlacedObject[]): PlacedObject[] {
       placed.triggerTargetInstanceId,
       replacedInstanceIds,
     );
+    const targetPlaced = deduped.find((candidate) => candidate.instanceId === target) ?? null;
     const containedObjectId = placed.containedObjectId;
     const validTarget =
-      canPlacedObjectTriggerOtherObjects(placed) &&
+      canPlacedObjectUseObjectLink(placed) &&
       typeof target === 'string' &&
       target.trim().length > 0 &&
       target !== placed.instanceId &&
       ids.has(target) &&
-      canPlacedObjectBePressurePlateTarget(
-        normalized.find((candidate) => candidate.instanceId === target) ?? null
-      );
+      canPlacedObjectBeLinkedObjectTarget(placed, targetPlaced);
     const validContainedObjectId =
       canPlacedObjectBeContainer(placed) &&
       typeof containedObjectId === 'string' &&

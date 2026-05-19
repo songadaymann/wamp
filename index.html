@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <base href="/">
   <meta name="theme-color" content="#050505">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="WAMP">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -910,8 +911,8 @@
       </div>
       <div id="editor-inspector" class="editor-inspector desktop-editor-only hidden">
         <div id="pressure-plate-panel" class="pressure-plate-panel hidden">
-          <div class="section-label">Pressure Plate</div>
-          <div id="pressure-plate-status" class="goal-context-note">Hover a pressure plate to edit its link.</div>
+          <div class="section-label">Object Link</div>
+          <div id="pressure-plate-status" class="goal-context-note">Hover a linkable object to edit its link.</div>
           <div class="course-room-actions">
             <button id="btn-pressure-plate-connect" class="bar-btn bar-btn-small" type="button">Connect</button>
             <button id="btn-pressure-plate-clear" class="bar-btn bar-btn-small" type="button">Clear Link</button>
@@ -1042,7 +1043,8 @@
             </div>
             <div class="editor-sprite-control-cluster">
               <label class="editor-sprite-label" for="editor-sprite-kind">Use As</label>
-              <select id="editor-sprite-kind" class="editor-sprite-select">
+              <select id="editor-sprite-kind" class="editor-sprite-select" required>
+                <option value="">Choose...</option>
                 <option value="decoration">Decoration</option>
                 <option value="collectible">Collectible</option>
                 <option value="solid">Solid Block</option>
@@ -1061,13 +1063,36 @@
             </div>
             <div class="editor-sprite-control-cluster editor-sprite-action-cluster">
               <canvas id="editor-sprite-preview" class="editor-sprite-preview" width="64" height="64" aria-hidden="true"></canvas>
-              <button id="btn-editor-sprite-save-tile" class="bar-btn bar-btn-small" type="button">Save Tile</button>
               <button id="btn-editor-sprite-save" class="bar-btn bar-btn-small" type="button">Save</button>
               <button id="btn-editor-sprite-close" class="bar-btn bar-btn-small" type="button">Close</button>
             </div>
           </div>
           <div class="editor-sprite-status-row">
             <div id="editor-sprite-status" class="editor-sprite-status" aria-live="polite"></div>
+          </div>
+          <div id="editor-sprite-kind-help" class="editor-sprite-kind-help hidden">
+            <div class="editor-sprite-kind-help-copy">
+              <div class="editor-sprite-kind-help-title">Choose what this sprite does.</div>
+              <div class="editor-sprite-kind-help-text">Decoration and Solid Block are best for repeated tiles. Collectible and Pushable Block stay as objects because they need behavior.</div>
+            </div>
+            <div class="editor-sprite-kind-help-grid">
+              <button class="editor-sprite-kind-choice" data-editor-sprite-kind-choice="decoration" type="button">
+                <span class="editor-sprite-kind-choice-title">Decoration</span>
+                <span class="editor-sprite-kind-choice-text">Background or detail art that does not block the player.</span>
+              </button>
+              <button class="editor-sprite-kind-choice" data-editor-sprite-kind-choice="solid" type="button">
+                <span class="editor-sprite-kind-choice-title">Solid Block</span>
+                <span class="editor-sprite-kind-choice-text">Platforms, floors, walls, and anything players should stand on.</span>
+              </button>
+              <button class="editor-sprite-kind-choice" data-editor-sprite-kind-choice="collectible" type="button">
+                <span class="editor-sprite-kind-choice-title">Collectible</span>
+                <span class="editor-sprite-kind-choice-text">Items the player can pick up.</span>
+              </button>
+              <button class="editor-sprite-kind-choice" data-editor-sprite-kind-choice="pushable" type="button">
+                <span class="editor-sprite-kind-choice-title">Pushable Block</span>
+                <span class="editor-sprite-kind-choice-text">Movable blocks that should stay interactive.</span>
+              </button>
+            </div>
           </div>
           <div class="editor-sprite-workbench">
             <div class="editor-sprite-canvas-wrap">
@@ -1709,6 +1734,9 @@
         <button class="bar-btn bar-btn-small active" type="button" data-explore-sort="featured">Featured</button>
         <button class="bar-btn bar-btn-small" type="button" data-explore-sort="quality">Top Rated</button>
         <button class="bar-btn bar-btn-small" type="button" data-explore-sort="newest">Newest</button>
+        <button class="bar-btn bar-btn-small" type="button" data-explore-sort="unbeaten">Unbeaten</button>
+        <button class="bar-btn bar-btn-small" type="button" data-explore-sort="unvisited">Never Visited</button>
+        <button class="bar-btn bar-btn-small" type="button" data-explore-sort="unrated">Unrated By Me</button>
         <button class="bar-btn bar-btn-small" type="button" data-explore-sort="builders">Builders</button>
       </div>
       <div id="explore-builder-sorts" class="leaderboard-discover-filters leaderboard-discover-sorts explore-builder-sorts hidden">
@@ -1716,8 +1744,22 @@
         <button class="bar-btn bar-btn-small" type="button" data-explore-builder-sort="rooms">Most Rooms</button>
         <button class="bar-btn bar-btn-small" type="button" data-explore-builder-sort="recent">Recent</button>
       </div>
+      <div id="explore-queue-actions" class="explore-queue-actions hidden"></div>
       <div id="explore-modal-error" class="history-modal-error hidden"></div>
       <div id="explore-list" class="history-version-list explore-room-list"></div>
+    </div>
+  </div>
+
+  <div id="explore-queue-bar" class="explore-queue-bar hidden" aria-hidden="true">
+    <div class="explore-queue-copy">
+      <div id="explore-queue-kicker" class="explore-queue-kicker">Play All</div>
+      <div id="explore-queue-title" class="explore-queue-title">Queue</div>
+      <div id="explore-queue-meta" class="explore-queue-meta"></div>
+    </div>
+    <div class="explore-queue-buttons">
+      <button id="btn-explore-queue-current" class="bar-btn bar-btn-small" type="button">Play</button>
+      <button id="btn-explore-queue-next" class="bar-btn bar-btn-small" type="button">Next</button>
+      <button id="btn-explore-queue-stop" class="bar-btn bar-btn-small" type="button">Stop</button>
     </div>
   </div>
 
@@ -1760,12 +1802,31 @@
         </div>
         <div class="leaderboard-tabs profile-tabs">
           <button id="btn-profile-tab-rooms" class="bar-btn bar-btn-small active" type="button" aria-selected="true">Levels</button>
+          <button id="btn-profile-tab-playlists" class="bar-btn bar-btn-small" type="button" aria-selected="false">Playlists</button>
           <button id="btn-profile-tab-progress" class="bar-btn bar-btn-small" type="button" aria-selected="false">Progress</button>
           <button id="btn-profile-tab-stats" class="bar-btn bar-btn-small" type="button" aria-selected="false">Stats</button>
         </div>
         <div id="profile-rooms-panel" class="leaderboard-panel">
           <div id="profile-rooms-empty" class="leaderboard-empty">No claimed published rooms yet.</div>
           <div id="profile-rooms-list" class="history-version-list profile-room-grid"></div>
+        </div>
+        <div id="profile-playlists-panel" class="leaderboard-panel hidden">
+          <div id="profile-playlist-create-fields" class="profile-playlist-create-fields hidden">
+            <label class="goal-control-label" for="profile-playlist-title-input">Playlist Title</label>
+            <input id="profile-playlist-title-input" class="goal-input room-title-input" type="text" maxlength="60" spellcheck="false" />
+            <label class="goal-control-label" for="profile-playlist-slug-input">Share URL</label>
+            <input id="profile-playlist-slug-input" class="goal-input room-title-input" type="text" maxlength="48" spellcheck="false" autocapitalize="none" autocomplete="off" />
+            <label class="goal-control-label" for="profile-playlist-description-input">Description</label>
+            <textarea id="profile-playlist-description-input" class="goal-input goal-textarea profile-bio-input" maxlength="280" rows="3" spellcheck="true"></textarea>
+            <div class="profile-playlist-create-actions">
+              <button id="btn-profile-playlist-create" class="bar-btn" type="button">Create Playlist</button>
+              <label class="goal-control-label" for="profile-playlist-select">Add Rooms To</label>
+              <select id="profile-playlist-select" class="goal-input"></select>
+            </div>
+            <div id="profile-playlist-status" class="history-modal-meta hidden"></div>
+          </div>
+          <div id="profile-playlists-empty" class="leaderboard-empty">No public playlists yet.</div>
+          <div id="profile-playlists-list" class="history-version-list profile-playlist-list"></div>
         </div>
         <div id="profile-progress-panel" class="leaderboard-panel hidden">
           <div id="profile-progress-list" class="profile-stats-list"></div>
@@ -1774,6 +1835,24 @@
           <div id="profile-stats-list" class="profile-stats-list"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="playlist-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel leaderboard-modal-panel playlist-modal-panel" role="dialog" aria-modal="true" aria-labelledby="playlist-modal-title">
+      <div class="history-modal-header profile-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Playlist</div>
+          <h2 id="playlist-modal-title" class="history-modal-title">Playlist</h2>
+          <div id="playlist-modal-meta" class="history-modal-meta"></div>
+        </div>
+        <button id="btn-playlist-share" class="bar-btn bar-btn-small hidden" type="button">Copy Link</button>
+        <button id="btn-playlist-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div id="playlist-modal-error" class="history-modal-error hidden"></div>
+      <div id="playlist-description" class="profile-overview-bio hidden"></div>
+      <div id="playlist-rooms-empty" class="leaderboard-empty hidden">No rooms in this playlist yet.</div>
+      <div id="playlist-room-list" class="history-version-list playlist-room-list"></div>
     </div>
   </div>
 

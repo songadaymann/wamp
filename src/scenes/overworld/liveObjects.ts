@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { SfxCue } from '../../audio/sfx';
 import {
+  decodeTileDataValue,
   getObjectDefaultFrame,
   getObjectDisplayOffset,
   getObjectDisplayScale,
@@ -8,9 +9,13 @@ import {
   objectCollidesWithWorld,
   isDynamicRuntimeObjectConfig,
   isBlockSwitchObjectId,
+  isMovingPlatformEndpointObjectId,
+  isMovingPlatformObjectId,
   isPushableObjectConfig,
   isSolidRuntimeObjectConfig,
   getPlacedObjectLayer,
+  getSpecialTileKindForGid,
+  LAYER_NAMES,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
@@ -18,6 +23,7 @@ import {
   TILE_SIZE,
   type GameObjectConfig,
   type LayerName,
+  type SpecialTileKind,
 } from '../../config';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
@@ -37,6 +43,16 @@ import {
 import type { SwordsmanTraversalPlannerMode } from '../../enemies/swordsmanRobustPlanner';
 import type { LoadedFullRoom } from './worldStreaming';
 import { terrainTileCollidesAtLocalPixel } from './terrainCollision';
+import {
+  bodyIsBlockedInGravityDirection,
+  getBodyVelocityAlongVector,
+  getGravityAngle,
+  getGravityRightVector,
+  getGravityVector,
+  setBodyVelocityAlongVector,
+  type DirectionVector,
+  type PlayerGravityDirection,
+} from './specialTiles';
 import {
   getArcadeBodyBounds,
   isDynamicArcadeBody,
@@ -68,6 +84,11 @@ type SwordsmanCollectState = 'sweep' | 'route' | 'jump';
 export interface LoadedRoomObjectRuntimeState {
   baseX: number;
   baseY: number;
+  previousX: number;
+  previousY: number;
+  gravityDirection: PlayerGravityDirection;
+  gravityRoomId: string | null;
+  inWater: boolean;
   initialDirectionX: number;
   directionX: number;
   aiFacingDirectionX: number;
@@ -180,6 +201,16 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   getPlayer: () => Phaser.GameObjects.GameObject | null;
   getPlayerPickupSensor: () => Phaser.GameObjects.GameObject | null;
   getPlayerBody: () => Phaser.Physics.Arcade.Body | null;
+  getConveyorDirectionForBody: (
+    body: Phaser.Physics.Arcade.Body,
+    gravityDirection: PlayerGravityDirection,
+  ) => -1 | 0 | 1;
+  getGravityPlateDirectionForBody: (
+    body: Phaser.Physics.Arcade.Body,
+    currentGravityDirection: PlayerGravityDirection,
+  ) => PlayerGravityDirection | null;
+  getBodyRoomId: (body: Phaser.Physics.Arcade.Body) => string;
+  isBodyInWater: (body: Phaser.Physics.Arcade.Body) => boolean;
   swordsmanTraversalPlannerMode: SwordsmanTraversalPlannerMode;
   isPlayerClimbingLadder: () => boolean;
   isLadderDropRequested: () => boolean;
@@ -232,6 +263,29 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   ) => void;
   playBombExplosionFx: (x: number, y: number, roomCoordinates: RoomCoordinates) => void;
 }
+
+const MOVING_PLATFORM_CARRY_MAX_UPWARD_PLAYER_SPEED = -60;
+const MOVING_PLATFORM_CARRY_EDGE_INSET_PX = 1;
+const MOVING_PLATFORM_CARRY_HOVER_TOLERANCE_PX = 10;
+const MOVING_PLATFORM_CARRY_PENETRATION_TOLERANCE_PX = 8;
+const LIVE_OBJECT_CONVEYOR_SPEED = 48;
+const LIVE_OBJECT_GRAVITY_ACCELERATION = 700;
+const LIVE_OBJECT_MAX_GRAVITY_SPEED = 500;
+const LIVE_OBJECT_WATER_GRAVITY_FACTOR = 0.35;
+const LIVE_OBJECT_WATER_MAX_GRAVITY_SPEED = 118;
+const LIVE_OBJECT_WATER_DAMPING_FACTOR = 0.965;
+const GROUND_ENEMY_EDGE_SAFE_SPECIAL_TILE_KINDS = new Set<SpecialTileKind>([
+  'conveyorLeft',
+  'conveyorRight',
+  'ice',
+  'sticky',
+  'bounce',
+  'gravityUp',
+  'gravityDown',
+  'gravityLeft',
+  'gravityRight',
+  'water',
+]);
 
 export interface CreateLiveObjectEntryOptions {
   key: string;
@@ -359,8 +413,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       onLiveObjectRemoved: (event) => this.emitLiveObjectRemoved(event),
       getSwordsmanObjectiveMode: (liveObject) => this.swordsmanController.getObjectiveMode(liveObject),
       getSwordsmanDefeatMode: (liveObject) => this.swordsmanController.getDefeatMode(liveObject),
-      swordsmanSwordCanDamagePlayer: (liveObject, playerBody) =>
-        this.swordsmanController.swordCanDamagePlayer(liveObject, playerBody),
+      swordsmanSwordCanDamagePlayer: (loadedRoom, liveObject, playerBody) =>
+        this.swordsmanController.swordCanDamagePlayer(loadedRoom, liveObject, playerBody),
       createLiveObjectEntry: (loadedRoom, entryOptions) =>
         this.createLiveObjectEntry(loadedRoom, entryOptions),
       destroyLiveObjectInteractions: (liveObject) =>
@@ -512,6 +566,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     sprite.setOrigin(0.5, 0.5);
     sprite.setScale(getObjectDisplayScale(config));
     sprite.setDepth(this.getPlacedObjectRuntimeDepth({ layer }));
+    sprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    if (isMovingPlatformEndpointObjectId(config.id)) {
+      sprite.setVisible(false);
+    }
 
     if (config.frameCount > 1 && config.fps > 0) {
       const animationKey = `${config.id}_anim`;
@@ -538,7 +596,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         body.setOffset(...this.getObjectBodyOffset(config));
         body.setCollideWorldBounds(false);
         body.setAllowGravity(this.objectUsesGravity(config));
-        if (isPushableObjectConfig(config)) {
+        if (isMovingPlatformObjectId(config.id)) {
+          body.setAllowGravity(false);
+          body.setImmovable(true);
+          body.setBounce(0, 0);
+          body.pushable = false;
+        }
+        if (isPushableObjectConfig(config) || config.id === 'cage') {
           body.setBounce(0, 0);
           body.setDragX(900);
           body.setMaxVelocity(120, 500);
@@ -677,6 +741,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           default:
             break;
         }
+
       }
     }
   }
@@ -691,6 +756,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       for (const liveObject of loadedRoom.liveObjects) {
         if (!liveObject.sprite.active) {
           continue;
+        }
+
+        const dynamicBody = this.getDynamicBody(liveObject.sprite);
+        if (dynamicBody) {
+          this.updateLiveObjectSpecialTileState(liveObject, dynamicBody);
         }
 
         switch (liveObject.config.id) {
@@ -775,17 +845,286 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           case 'bounce_pad':
             this.hazardController.updateBouncePadObject(liveObject);
             break;
+          case 'moving_platform':
+            this.updateMovingPlatformObject(rooms, liveObject, delta);
+            break;
           case 'block_switch':
             this.triggerController.updateBlockSwitchObject(loadedRoom, liveObject);
             break;
           default:
             break;
         }
+
+        this.applyConveyorToLiveObject(liveObject);
+        if (dynamicBody) {
+          this.applyLiveObjectSpecialTileForces(liveObject, dynamicBody, delta);
+        }
+        if (liveObject.sprite.active) {
+          this.syncLiveObjectGravityPresentation(liveObject);
+        }
       }
     }
 
     this.stabilizePushableStacks(rooms);
     this.triggerController.updatePressurePlates(rooms);
+  }
+
+  private applyConveyorToLiveObject(liveObject: LoadedRoomObject): void {
+    if (!this.shouldLiveObjectRideConveyors(liveObject)) {
+      return;
+    }
+
+    const body = this.getDynamicBody(liveObject.sprite);
+    if (!body) {
+      return;
+    }
+
+    const gravityDirection = this.getLiveObjectGravityDirection(liveObject);
+    const gravityVelocity = getBodyVelocityAlongVector(body, getGravityVector(gravityDirection));
+    if (gravityVelocity < -20) {
+      return;
+    }
+
+    const conveyorDirection = this.options.getConveyorDirectionForBody(body, gravityDirection);
+    if (conveyorDirection === 0) {
+      return;
+    }
+
+    body.setVelocityX(body.velocity.x + conveyorDirection * LIVE_OBJECT_CONVEYOR_SPEED);
+  }
+
+  private updateLiveObjectSpecialTileState(
+    liveObject: LoadedRoomObject,
+    body: Phaser.Physics.Arcade.Body,
+  ): void {
+    if (!this.shouldLiveObjectUseSpecialTilePhysics(liveObject)) {
+      liveObject.runtime.gravityDirection = 'down';
+      liveObject.runtime.gravityRoomId = null;
+      liveObject.runtime.inWater = false;
+      body.setAllowGravity(this.objectUsesGravity(liveObject.config));
+      return;
+    }
+
+    const currentRoomId = this.options.getBodyRoomId(body);
+    if (liveObject.runtime.gravityRoomId !== currentRoomId) {
+      liveObject.runtime.gravityRoomId = currentRoomId;
+      liveObject.runtime.gravityDirection = 'down';
+    }
+
+    const nextGravityDirection = this.options.getGravityPlateDirectionForBody(
+      body,
+      liveObject.runtime.gravityDirection,
+    );
+    if (nextGravityDirection) {
+      liveObject.runtime.gravityDirection = nextGravityDirection;
+      liveObject.runtime.gravityRoomId = currentRoomId;
+    }
+
+    liveObject.runtime.inWater = this.options.isBodyInWater(body);
+    body.setAllowGravity(
+      this.objectUsesGravity(liveObject.config) &&
+      liveObject.runtime.gravityDirection === 'down' &&
+      !liveObject.runtime.inWater,
+    );
+    if (isPushableObjectConfig(liveObject.config) || liveObject.config.id === 'cage') {
+      const horizontalGravity =
+        liveObject.runtime.gravityDirection === 'left' ||
+        liveObject.runtime.gravityDirection === 'right';
+      body.setDragX(horizontalGravity ? 0 : 900);
+      body.setMaxVelocity(horizontalGravity ? 500 : 120, horizontalGravity ? 120 : 500);
+    }
+  }
+
+  private applyLiveObjectSpecialTileForces(
+    liveObject: LoadedRoomObject,
+    body: Phaser.Physics.Arcade.Body,
+    delta: number,
+  ): void {
+    if (!this.shouldLiveObjectUseSpecialTilePhysics(liveObject)) {
+      return;
+    }
+
+    const gravityDirection = this.getLiveObjectGravityDirection(liveObject);
+    const gravityVector = getGravityVector(gravityDirection);
+    const deltaSeconds = Math.max(delta / 1000, 1 / 60);
+    const usesManualGravity = gravityDirection !== 'down' || liveObject.runtime.inWater;
+    body.setAllowGravity(this.objectUsesGravity(liveObject.config) && !usesManualGravity);
+
+    if (usesManualGravity) {
+      const gravityScale = liveObject.runtime.inWater ? LIVE_OBJECT_WATER_GRAVITY_FACTOR : 1;
+      const maxGravitySpeed = liveObject.runtime.inWater
+        ? LIVE_OBJECT_WATER_MAX_GRAVITY_SPEED
+        : LIVE_OBJECT_MAX_GRAVITY_SPEED;
+      const gravityVelocity = getBodyVelocityAlongVector(body, gravityVector);
+      setBodyVelocityAlongVector(
+        body,
+        gravityVector,
+        Phaser.Math.Clamp(
+          gravityVelocity + LIVE_OBJECT_GRAVITY_ACCELERATION * gravityScale * deltaSeconds,
+          -LIVE_OBJECT_MAX_GRAVITY_SPEED,
+          maxGravitySpeed,
+        ),
+      );
+    }
+
+    if (liveObject.runtime.inWater) {
+      const nextVelocityX = Phaser.Math.Clamp(
+        body.velocity.x * LIVE_OBJECT_WATER_DAMPING_FACTOR,
+        -LIVE_OBJECT_WATER_MAX_GRAVITY_SPEED,
+        LIVE_OBJECT_WATER_MAX_GRAVITY_SPEED,
+      );
+      const nextVelocityY = Phaser.Math.Clamp(
+        body.velocity.y * LIVE_OBJECT_WATER_DAMPING_FACTOR,
+        -LIVE_OBJECT_WATER_MAX_GRAVITY_SPEED,
+        LIVE_OBJECT_WATER_MAX_GRAVITY_SPEED,
+      );
+      body.setVelocity(nextVelocityX, nextVelocityY);
+    }
+  }
+
+  private shouldLiveObjectUseSpecialTilePhysics(liveObject: LoadedRoomObject): boolean {
+    const config = liveObject.config;
+    if (isMovingPlatformObjectId(config.id) || config.behavior === 'fly' || config.id === 'cannon_bullet') {
+      return false;
+    }
+    if (config.id === SWORDSMAN_AI_OBJECT_ID && liveObject.runtime.aiLadderTraversalEdgeId) {
+      return false;
+    }
+
+    return (
+      isPushableObjectConfig(config) ||
+      config.id === 'cage' ||
+      config.category === 'enemy'
+    );
+  }
+
+  private shouldLiveObjectRideConveyors(liveObject: LoadedRoomObject): boolean {
+    const config = liveObject.config;
+    if (isMovingPlatformObjectId(config.id)) {
+      return false;
+    }
+
+    return (
+      isPushableObjectConfig(config) ||
+      config.id === 'cage' ||
+      (config.category === 'enemy' && config.behavior !== 'fly')
+    );
+  }
+
+  private updateMovingPlatformObject(
+    rooms: Array<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
+    liveObject: LoadedRoomObject,
+    delta: number,
+  ): void {
+    const body = this.getDynamicBody(liveObject.sprite);
+    if (!body) {
+      return;
+    }
+
+    const target = this.findLinkedMovingPlatformEndpoint(rooms, liveObject);
+    if (!target) {
+      liveObject.runtime.previousX = liveObject.sprite.x;
+      liveObject.runtime.previousY = liveObject.sprite.y;
+      body.setVelocity(0, 0);
+      return;
+    }
+
+    const start = new Phaser.Math.Vector2(liveObject.runtime.baseX, liveObject.runtime.baseY);
+    const end = new Phaser.Math.Vector2(target.sprite.x, target.sprite.y);
+    const distance = Phaser.Math.Distance.Between(start.x, start.y, end.x, end.y);
+    if (distance < 2) {
+      body.setVelocity(0, 0);
+      return;
+    }
+
+    const destination = liveObject.runtime.directionX >= 0 ? end : start;
+    const current = new Phaser.Math.Vector2(liveObject.sprite.x, liveObject.sprite.y);
+    const deltaSeconds = Math.max(delta / 1000, 1 / 60);
+    const step = Math.max(1, 44 * deltaSeconds);
+    const remaining = Phaser.Math.Distance.Between(
+      current.x,
+      current.y,
+      destination.x,
+      destination.y,
+    );
+    const next =
+      remaining <= step
+        ? destination
+        : current.add(destination.clone().subtract(current).normalize().scale(step));
+    const previousX = liveObject.sprite.x;
+    const previousY = liveObject.sprite.y;
+
+    body.reset(next.x, next.y);
+    body.setVelocity((next.x - previousX) / deltaSeconds, (next.y - previousY) / deltaSeconds);
+    liveObject.sprite.setPosition(next.x, next.y);
+    liveObject.runtime.previousX = previousX;
+    liveObject.runtime.previousY = previousY;
+    if (remaining <= step) {
+      liveObject.runtime.directionX *= -1;
+    }
+
+    this.carryPlayerOnMovingPlatform(body, next.x - previousX, next.y - previousY);
+  }
+
+  private findLinkedMovingPlatformEndpoint(
+    rooms: Array<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
+    liveObject: LoadedRoomObject,
+  ): LoadedRoomObject | null {
+    if (!liveObject.linkedTargetInstanceId) {
+      return null;
+    }
+
+    for (const loadedRoom of rooms) {
+      if (liveObject.linkedTargetRoomId && loadedRoom.room.id !== liveObject.linkedTargetRoomId) {
+        continue;
+      }
+      for (const candidate of loadedRoom.liveObjects) {
+        if (
+          candidate.placedInstanceId === liveObject.linkedTargetInstanceId &&
+          candidate.sprite.active &&
+          isMovingPlatformEndpointObjectId(candidate.config.id)
+        ) {
+          return candidate;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private carryPlayerOnMovingPlatform(
+    platformBody: Phaser.Physics.Arcade.Body,
+    deltaX: number,
+    deltaY: number,
+  ): void {
+    if (deltaX === 0 && deltaY === 0) {
+      return;
+    }
+
+    const playerBody = this.options.getPlayerBody();
+    if (!playerBody || playerBody.velocity.y < MOVING_PLATFORM_CARRY_MAX_UPWARD_PLAYER_SPEED) {
+      return;
+    }
+
+    const horizontalOverlap =
+      playerBody.right - MOVING_PLATFORM_CARRY_EDGE_INSET_PX >
+        platformBody.left + MOVING_PLATFORM_CARRY_EDGE_INSET_PX &&
+      playerBody.left + MOVING_PLATFORM_CARRY_EDGE_INSET_PX <
+        platformBody.right - MOVING_PLATFORM_CARRY_EDGE_INSET_PX;
+    const footDistanceFromTop = playerBody.bottom - platformBody.top;
+    const standingOnPlatform =
+      horizontalOverlap &&
+      footDistanceFromTop >= -MOVING_PLATFORM_CARRY_HOVER_TOLERANCE_PX &&
+      footDistanceFromTop <= MOVING_PLATFORM_CARRY_PENETRATION_TOLERANCE_PX &&
+      playerBody.top < platformBody.top;
+    if (!standingOnPlatform) {
+      return;
+    }
+
+    const velocityX = playerBody.velocity.x;
+    const velocityY = playerBody.velocity.y;
+    playerBody.reset(playerBody.center.x + deltaX, playerBody.center.y + deltaY);
+    playerBody.setVelocity(velocityX, velocityY);
   }
 
   findOverlappingLadder(
@@ -855,6 +1194,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         if (
           liveObject.sprite.active &&
           isPushableObjectConfig(liveObject.config) &&
+          this.getLiveObjectGravityDirection(liveObject) === 'down' &&
           isDynamicArcadeBody(body)
         ) {
           pushables.push({ liveObject, body });
@@ -1105,8 +1445,17 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
 
     this.maybeReverseGroundEnemy(room, liveObject, body);
-    this.applyDirectionalFacing(liveObject.sprite, liveObject.config, liveObject.runtime.directionX);
-    body.setVelocityX(liveObject.runtime.directionX * this.getGroundEnemySpeed(liveObject.config.id));
+    const gravityDirection = this.getLiveObjectGravityDirection(liveObject);
+    this.applyDirectionalFacing(
+      liveObject.sprite,
+      liveObject.config,
+      this.getScreenFacingDirectionForGravityTangent(liveObject.runtime.directionX, gravityDirection),
+    );
+    this.setBodyVelocityAlongGravityTangent(
+      body,
+      gravityDirection,
+      liveObject.runtime.directionX * this.getGroundEnemySpeed(liveObject.config.id),
+    );
   }
 
   private updateFrogEnemy(room: RoomSnapshot, liveObject: LoadedRoomObject): void {
@@ -1120,24 +1469,49 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
 
     this.maybeReverseGroundEnemy(room, liveObject, body);
-    const onFloor = body.blocked.down || body.touching.down;
+    const gravityDirection = this.getLiveObjectGravityDirection(liveObject);
+    const onFloor = bodyIsBlockedInGravityDirection(body, gravityDirection);
 
     if (onFloor) {
-      this.applyDirectionalFacing(liveObject.sprite, liveObject.config, liveObject.runtime.directionX);
+      this.applyDirectionalFacing(
+        liveObject.sprite,
+        liveObject.config,
+        this.getScreenFacingDirectionForGravityTangent(liveObject.runtime.directionX, gravityDirection),
+      );
       if (this.options.getCurrentTime() >= liveObject.runtime.nextActionAt) {
-        body.setVelocityX(liveObject.runtime.directionX * this.options.settings.frogHopSpeed);
-        body.setVelocityY(this.options.settings.frogHopVelocity);
+        this.setBodyVelocityAlongGravityTangent(
+          body,
+          gravityDirection,
+          liveObject.runtime.directionX * this.options.settings.frogHopSpeed,
+        );
+        setBodyVelocityAlongVector(
+          body,
+          getGravityVector(gravityDirection),
+          this.options.settings.frogHopVelocity,
+        );
         liveObject.runtime.nextActionAt =
           this.options.getCurrentTime() + this.options.settings.frogHopDelayMs;
       } else {
-        body.setVelocityX(0);
+        this.setBodyVelocityAlongGravityTangent(body, gravityDirection, 0);
       }
       return;
     }
 
-    this.applyDirectionalFacing(liveObject.sprite, liveObject.config, liveObject.runtime.directionX);
-    if (Math.abs(body.velocity.x) < this.options.settings.frogHopSpeed * 0.8) {
-      body.setVelocityX(liveObject.runtime.directionX * this.options.settings.frogHopSpeed);
+    this.applyDirectionalFacing(
+      liveObject.sprite,
+      liveObject.config,
+      this.getScreenFacingDirectionForGravityTangent(liveObject.runtime.directionX, gravityDirection),
+    );
+    const tangentVelocity = getBodyVelocityAlongVector(
+      body,
+      getGravityRightVector(gravityDirection),
+    );
+    if (Math.abs(tangentVelocity) < this.options.settings.frogHopSpeed * 0.8) {
+      this.setBodyVelocityAlongGravityTangent(
+        body,
+        gravityDirection,
+        liveObject.runtime.directionX * this.options.settings.frogHopSpeed,
+      );
     }
   }
 
@@ -1146,8 +1520,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     liveObject: LoadedRoomObject,
     body: Phaser.Physics.Arcade.Body
   ): void {
-    const bounds = this.getObjectHorizontalTravelBounds(room, liveObject.config);
-    const pushableAhead = this.getPushableContactAhead(liveObject, body);
+    const gravityDirection = this.getLiveObjectGravityDirection(liveObject);
+    const bounds = this.getObjectTangentTravelBounds(room, liveObject.config, gravityDirection);
+    const pushableAhead =
+      gravityDirection === 'down' ? this.getPushableContactAhead(liveObject, body) : null;
     const pushableBlockedAhead =
       pushableAhead !== null &&
       (
@@ -1155,19 +1531,25 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         (liveObject.runtime.directionX > 0 && (pushableAhead.blocked.right || pushableAhead.touching.right))
       );
     const touchingWall =
-      (
-        (body.blocked.left && liveObject.runtime.directionX < 0) ||
-        (body.blocked.right && liveObject.runtime.directionX > 0)
-      ) &&
+      this.bodyIsBlockedAlongGravityTangent(body, gravityDirection, liveObject.runtime.directionX) &&
       (pushableAhead === null || pushableBlockedAhead);
+    const rightVector = getGravityRightVector(gravityDirection);
+    const axisDirection =
+      liveObject.runtime.directionX * (rightVector.x !== 0 ? rightVector.x : rightVector.y);
+    const tangentPosition = rightVector.x !== 0 ? body.center.x : body.center.y;
     const reachedBounds =
-      (liveObject.sprite.x <= bounds.left && liveObject.runtime.directionX < 0) ||
-      (liveObject.sprite.x >= bounds.right && liveObject.runtime.directionX > 0);
-    const onFloor = body.blocked.down || body.touching.down;
+      (tangentPosition <= bounds.min && axisDirection < 0) ||
+      (tangentPosition >= bounds.max && axisDirection > 0);
+    const onFloor = bodyIsBlockedInGravityDirection(body, gravityDirection);
     const missingGroundAhead =
       onFloor &&
       this.groundEnemyAvoidsEdges(liveObject.config.id) &&
-      !this.hasSolidTerrainAhead(room, body, liveObject.runtime.directionX);
+      !this.hasGroundEnemySupportOrSpecialTileAhead(
+        room,
+        body,
+        liveObject.runtime.directionX,
+        gravityDirection,
+      );
 
     if (touchingWall || reachedBounds || missingGroundAhead) {
       liveObject.runtime.directionX *= -1;
@@ -1265,6 +1647,36 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     sprite.setFlipX(config.facingDirection === 'right' ? !facingRight : facingRight);
   }
 
+  private syncLiveObjectGravityPresentation(liveObject: LoadedRoomObject): void {
+    const shouldRotateWithGravity =
+      liveObject.config.category === 'enemy' &&
+      this.shouldLiveObjectUseSpecialTilePhysics(liveObject);
+    const gravityDirection = shouldRotateWithGravity
+      ? this.getLiveObjectGravityDirection(liveObject)
+      : 'down';
+    liveObject.sprite.setRotation(getGravityAngle(gravityDirection));
+
+    if (!shouldRotateWithGravity || !liveObject.config.facingDirection) {
+      return;
+    }
+
+    const body = this.getDynamicBody(liveObject.sprite);
+    const tangentVelocity = body
+      ? getBodyVelocityAlongVector(body, getGravityRightVector(gravityDirection))
+      : 0;
+    const fallbackDirectionX =
+      liveObject.config.id === SWORDSMAN_AI_OBJECT_ID
+        ? liveObject.runtime.aiFacingDirectionX
+        : liveObject.runtime.directionX;
+    const directionX =
+      Math.abs(tangentVelocity) > 4 ? Math.sign(tangentVelocity) : fallbackDirectionX;
+    this.applyDirectionalFacing(
+      liveObject.sprite,
+      liveObject.config,
+      this.getScreenFacingDirectionForGravityTangent(directionX, gravityDirection),
+    );
+  }
+
   private getPlacedObjectRuntimeDepth(placedObject: Pick<RoomSnapshot['placedObjects'][number], 'layer'>): number {
     switch (getPlacedObjectLayer(placedObject)) {
       case 'background':
@@ -1283,15 +1695,25 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     body: Phaser.Physics.Arcade.Body
   ): boolean {
     const roomOrigin = this.options.getRoomOrigin(room.coordinates);
-    if (liveObject.sprite.y <= roomOrigin.y + ROOM_PX_HEIGHT + this.options.settings.respawnFallDistance) {
+    const margin = this.options.settings.respawnFallDistance;
+    if (
+      body.right >= roomOrigin.x - margin &&
+      body.left <= roomOrigin.x + ROOM_PX_WIDTH + margin &&
+      body.bottom >= roomOrigin.y - margin &&
+      body.top <= roomOrigin.y + ROOM_PX_HEIGHT + margin
+    ) {
       return false;
     }
 
     liveObject.runtime.directionX = liveObject.runtime.initialDirectionX;
+    liveObject.runtime.gravityDirection = 'down';
+    liveObject.runtime.gravityRoomId = room.id;
+    liveObject.runtime.inWater = false;
     liveObject.runtime.elapsedMs = 0;
     liveObject.runtime.nextActionAt = this.options.getCurrentTime() + 250;
     body.reset(liveObject.runtime.baseX, liveObject.runtime.baseY);
     liveObject.sprite.setPosition(liveObject.runtime.baseX, liveObject.runtime.baseY);
+    body.setAllowGravity(this.objectUsesGravity(liveObject.config));
     if (liveObject.config.id === SWORDSMAN_AI_OBJECT_ID) {
       this.swordsmanController.resetFacingMemory(liveObject, liveObject.runtime.initialDirectionX);
       this.swordsmanController.applyFacing(liveObject, body, liveObject.runtime.initialDirectionX, {
@@ -1308,15 +1730,40 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     return true;
   }
 
-  private hasSolidTerrainAhead(
+  private hasGroundEnemySupportOrSpecialTileAhead(
     room: RoomSnapshot,
     body: Phaser.Physics.Arcade.Body,
     directionX: number,
+    gravityDirection: PlayerGravityDirection,
     leadPx = 4,
   ): boolean {
-    const probeX = body.center.x + directionX * (body.halfWidth + leadPx);
-    const probeY = body.bottom + 2;
-    return this.hasSolidTerrainAtWorldPoint(room, probeX, probeY);
+    const probe = this.getGroundEnemySupportProbePoint(body, directionX, gravityDirection, leadPx);
+    return (
+      this.hasSolidTerrainAtWorldPoint(room, probe.x, probe.y) ||
+      this.hasEdgeSafeSpecialTileAtWorldPoint(room, probe.x, probe.y)
+    );
+  }
+
+  private getGroundEnemySupportProbePoint(
+    body: Phaser.Physics.Arcade.Body,
+    directionX: number,
+    gravityDirection: PlayerGravityDirection,
+    leadPx: number,
+  ): { x: number; y: number } {
+    const gravityVector = getGravityVector(gravityDirection);
+    const rightVector = getGravityRightVector(gravityDirection);
+    const tangentHalfExtent = rightVector.x !== 0 ? body.halfWidth : body.halfHeight;
+    const gravityHalfExtent = gravityVector.x !== 0 ? body.halfWidth : body.halfHeight;
+    return {
+      x:
+        body.center.x +
+        rightVector.x * directionX * (tangentHalfExtent + leadPx) +
+        gravityVector.x * (gravityHalfExtent + 2),
+      y:
+        body.center.y +
+        rightVector.y * directionX * (tangentHalfExtent + leadPx) +
+        gravityVector.y * (gravityHalfExtent + 2),
+    };
   }
 
   private hasSolidTerrainAtWorldPoint(room: RoomSnapshot, worldX: number, worldY: number): boolean {
@@ -1330,6 +1777,30 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     const localPixelY = worldY - roomOrigin.y - localY * TILE_SIZE;
     return terrainTileCollidesAtLocalPixel(room, localX, localY, localPixelY);
+  }
+
+  private hasEdgeSafeSpecialTileAtWorldPoint(
+    room: RoomSnapshot,
+    worldX: number,
+    worldY: number,
+  ): boolean {
+    const roomOrigin = this.options.getRoomOrigin(room.coordinates);
+    const localX = Math.floor((worldX - roomOrigin.x) / TILE_SIZE);
+    const localY = Math.floor((worldY - roomOrigin.y) / TILE_SIZE);
+
+    if (localX < 0 || localX >= ROOM_WIDTH || localY < 0 || localY >= ROOM_HEIGHT) {
+      return false;
+    }
+
+    for (const layerName of LAYER_NAMES) {
+      const gid = decodeTileDataValue(room.tileData[layerName][localY][localX]).gid;
+      const specialKind = getSpecialTileKindForGid(gid);
+      if (specialKind && GROUND_ENEMY_EDGE_SAFE_SPECIAL_TILE_KINDS.has(specialKind)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private groundEnemyAvoidsEdges(objectId: string): boolean {
@@ -1348,12 +1819,87 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     };
   }
 
+  private getObjectTangentTravelBounds(
+    room: RoomSnapshot,
+    config: GameObjectConfig,
+    gravityDirection: PlayerGravityDirection,
+  ): { min: number; max: number } {
+    const roomOrigin = this.options.getRoomOrigin(room.coordinates);
+    const rightVector = getGravityRightVector(gravityDirection);
+    if (rightVector.x !== 0) {
+      const halfWidth = Math.max(4, (config.bodyWidth > 0 ? config.bodyWidth : config.frameWidth) * 0.5);
+      return {
+        min: roomOrigin.x + halfWidth + 2,
+        max: roomOrigin.x + ROOM_PX_WIDTH - halfWidth - 2,
+      };
+    }
+
+    const halfHeight = Math.max(4, (config.bodyHeight > 0 ? config.bodyHeight : config.frameHeight) * 0.5);
+    return {
+      min: roomOrigin.y + halfHeight + 2,
+      max: roomOrigin.y + ROOM_PX_HEIGHT - halfHeight - 2,
+    };
+  }
+
+  private getLiveObjectGravityDirection(liveObject: LoadedRoomObject): PlayerGravityDirection {
+    return liveObject.runtime.gravityDirection ?? 'down';
+  }
+
+  private setBodyVelocityAlongGravityTangent(
+    body: Phaser.Physics.Arcade.Body,
+    gravityDirection: PlayerGravityDirection,
+    velocity: number,
+  ): void {
+    setBodyVelocityAlongVector(body, getGravityRightVector(gravityDirection), velocity);
+  }
+
+  private getScreenFacingDirectionForGravityTangent(
+    directionX: number,
+    gravityDirection: PlayerGravityDirection,
+  ): number {
+    const tangentFacing = directionX < 0 ? -1 : 1;
+    return gravityDirection === 'left' || gravityDirection === 'right'
+      ? (tangentFacing === 1 ? -1 : 1)
+      : tangentFacing;
+  }
+
+  private bodyIsBlockedAlongGravityTangent(
+    body: Phaser.Physics.Arcade.Body,
+    gravityDirection: PlayerGravityDirection,
+    directionX: number,
+  ): boolean {
+    const rightVector = getGravityRightVector(gravityDirection);
+    return this.bodyIsBlockedAlongVector(body, {
+      x: (rightVector.x * directionX) as DirectionVector['x'],
+      y: (rightVector.y * directionX) as DirectionVector['y'],
+    });
+  }
+
+  private bodyIsBlockedAlongVector(
+    body: Phaser.Physics.Arcade.Body,
+    vector: DirectionVector,
+  ): boolean {
+    if (vector.x < 0) {
+      return Boolean(body.blocked.left || body.touching.left);
+    }
+    if (vector.x > 0) {
+      return Boolean(body.blocked.right || body.touching.right);
+    }
+    if (vector.y < 0) {
+      return Boolean(body.blocked.up || body.touching.up);
+    }
+    if (vector.y > 0) {
+      return Boolean(body.blocked.down || body.touching.down);
+    }
+    return false;
+  }
+
   private usesDynamicObjectBody(config: GameObjectConfig): boolean {
     return isDynamicRuntimeObjectConfig(config);
   }
 
   private objectUsesGravity(config: GameObjectConfig): boolean {
-    return config.behavior !== 'fly' && config.id !== 'cannon_bullet';
+    return config.behavior !== 'fly' && config.id !== 'cannon_bullet' && !isMovingPlatformObjectId(config.id);
   }
 
   private createLadderTopSupport(sprite: Phaser.GameObjects.Sprite): Phaser.GameObjects.Zone | null {

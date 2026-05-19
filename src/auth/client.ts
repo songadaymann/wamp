@@ -40,6 +40,8 @@ export interface AuthDebugState {
   authenticated: boolean;
   user: AuthUser | null;
   source: AuthSessionResponse['source'] | null;
+  schoolManaged: boolean;
+  school: AuthSessionResponse['school'] | null;
   roomDailyClaimLimit: number | null;
   roomClaimsUsedToday: number;
   roomClaimsRemainingToday: number | null;
@@ -97,6 +99,8 @@ const state: AuthDebugState = {
   authenticated: false,
   user: null,
   source: null,
+  schoolManaged: false,
+  school: null,
   roomDailyClaimLimit: null,
   roomClaimsUsedToday: 0,
   roomClaimsRemainingToday: null,
@@ -272,6 +276,7 @@ export async function setupAuthUi(): Promise<void> {
 export function getAuthDebugState(): AuthDebugState {
   return {
     ...state,
+    school: state.school ? { ...state.school } : null,
     chatModeration: { ...state.chatModeration },
   };
 }
@@ -352,6 +357,8 @@ async function refreshSession(): Promise<void> {
     state.authenticated = session.authenticated;
     state.user = session.user;
     state.source = session.source ?? null;
+    state.schoolManaged = session.schoolManaged === true;
+    state.school = session.school ?? null;
     state.roomDailyClaimLimit = session.roomDailyClaimLimit ?? null;
     state.roomClaimsUsedToday = session.roomClaimsUsedToday ?? 0;
     state.roomClaimsRemainingToday = session.roomClaimsRemainingToday ?? null;
@@ -374,12 +381,16 @@ async function refreshSession(): Promise<void> {
     } else if (window.location.search.includes('auth=')) {
       // Preserve status set from query params.
       state.source = null;
+      state.schoolManaged = false;
+      state.school = null;
       authIdentityProfile = null;
       authIdentityProfileLoadingUserId = null;
       lastCheckedDisplayName = '';
       lastDisplayNameAvailability = null;
     } else {
       state.source = null;
+      state.schoolManaged = false;
+      state.school = null;
       state.status = DEFAULT_GUEST_STATUS;
       authIdentityProfile = null;
       authIdentityProfileLoadingUserId = null;
@@ -390,6 +401,8 @@ async function refreshSession(): Promise<void> {
     console.error('Failed to load auth session', error);
     state.status = 'Failed to load account session.';
     state.source = null;
+    state.schoolManaged = false;
+    state.school = null;
     state.roomDailyClaimLimit = null;
     state.roomClaimsUsedToday = 0;
     state.roomClaimsRemainingToday = null;
@@ -569,6 +582,8 @@ async function logout(): Promise<void> {
     state.authenticated = false;
     state.user = null;
     state.source = null;
+    state.schoolManaged = false;
+    state.school = null;
     state.debugMagicLink = null;
     state.chatModeration = {
       role: 'none',
@@ -584,8 +599,11 @@ async function logout(): Promise<void> {
 }
 
 async function resetTestData(): Promise<void> {
+  const isLocalRoomStorage = state.storageBackend === 'local';
   const confirmed = window.confirm(
-    'Reset test data on the current API backend? This deletes rooms, versions, users, sessions, and auth tokens.'
+    isLocalRoomStorage
+      ? 'Reset local test data? This deletes local room drafts and published room records cached in this browser.'
+      : 'Reset test data on the current API backend? This deletes rooms, versions, users, sessions, and auth tokens.'
   );
   if (!confirmed) {
     return;
@@ -594,6 +612,17 @@ async function resetTestData(): Promise<void> {
   setLoading(true, 'Resetting test data...');
 
   try {
+    if (isLocalRoomStorage) {
+      const clearedLocalRooms = clearLocalRoomStorage();
+      state.status = `Reset complete. Cleared ${clearedLocalRooms} local cached room entries. Reloading...`;
+      renderAuthUi();
+
+      window.setTimeout(() => {
+        window.location.replace(`${window.location.pathname}${window.location.hash}`);
+      }, 200);
+      return;
+    }
+
     const response = await apiRequest<TestResetResponse>('/api/test/reset', {
       method: 'POST',
     });
@@ -602,6 +631,8 @@ async function resetTestData(): Promise<void> {
     state.authenticated = false;
     state.user = null;
     state.source = null;
+    state.schoolManaged = false;
+    state.school = null;
     state.debugMagicLink = null;
     state.chatModeration = {
       role: 'none',
@@ -1293,6 +1324,8 @@ function initializeStatusFromQuery(): void {
 
   if (authResult === 'email') {
     state.status = 'Email sign-in complete.';
+  } else if (authResult === 'school') {
+    state.status = 'Classroom sign-in complete.';
   } else if (authResult === 'invalid') {
     state.status = 'That sign-in link is invalid or expired.';
   } else {

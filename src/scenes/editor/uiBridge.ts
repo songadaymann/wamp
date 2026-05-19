@@ -245,7 +245,11 @@ export class EditorUiBridge {
       this.actions.onAuthStateChanged();
       void this.refreshBackgroundImages();
     });
-    bindDomEvent(this.cleanupCallbacks, this.windowObj, EDITOR_UI_STATE_CHANGED_EVENT, () => {
+    bindDomEvent(this.cleanupCallbacks, this.windowObj, EDITOR_UI_STATE_CHANGED_EVENT, (event) => {
+      const detail = (event as CustomEvent<{ objectCategory?: string }>).detail;
+      if (detail?.objectCategory) {
+        this.currentObjectCategory = detail.objectCategory;
+      }
       if (this.lastViewModel) {
         this.syncEditorChromeState();
       }

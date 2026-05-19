@@ -34,6 +34,15 @@ import {
   handleMusicPhraseListRequest,
 } from './worker/music/routes';
 import { handlePlayfunConfig, handlePlayfunFlush } from './worker/playfun/routes';
+import {
+  handleMyPlaylistsGet,
+  handlePlaylistCreate,
+  handlePlaylistDelete,
+  handlePlaylistGetBySlug,
+  handlePlaylistItemCreate,
+  handlePlaylistItemDelete,
+  handlePlaylistUpdate,
+} from './worker/playlists/routes';
 import { handleProfileGet, handleProfileGetByUsername, handleProfileUpdateMe } from './worker/profiles/routes';
 import { handlePvpMatchSubmit } from './worker/pvp/routes';
 import {
@@ -65,6 +74,7 @@ import {
   handleWorldRequest,
 } from './worker/world/routes';
 import { handleRoomShareRequest } from './worker/share/routes';
+import { handleSchoolRequest } from './worker/school/routes';
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -118,6 +128,10 @@ export default {
 
       if (url.pathname.startsWith('/api/auth')) {
         return await handleAuthRequest(request, url, env);
+      }
+
+      if (url.pathname.startsWith('/api/school')) {
+        return await handleSchoolRequest(request, url, env);
       }
 
       if (url.pathname.startsWith('/api/agents')) {
@@ -243,6 +257,58 @@ export default {
 
       if (url.pathname === '/api/playfun/flush' && request.method === 'POST') {
         return await handlePlayfunFlush(request, env);
+      }
+
+      if (url.pathname === '/api/playlists/me' && request.method === 'GET') {
+        return await handleMyPlaylistsGet(request, env);
+      }
+
+      if (url.pathname === '/api/playlists' && request.method === 'POST') {
+        return await handlePlaylistCreate(request, env);
+      }
+
+      const playlistItemMatch = /^\/api\/playlists\/([^/]+)\/items\/([^/]+)$/.exec(url.pathname);
+      if (playlistItemMatch && request.method === 'DELETE') {
+        return await handlePlaylistItemDelete(
+          request,
+          env,
+          decodeURIComponent(playlistItemMatch[1]),
+          decodeURIComponent(playlistItemMatch[2]),
+        );
+      }
+
+      const playlistItemsMatch = /^\/api\/playlists\/([^/]+)\/items$/.exec(url.pathname);
+      if (playlistItemsMatch && request.method === 'POST') {
+        return await handlePlaylistItemCreate(
+          request,
+          env,
+          decodeURIComponent(playlistItemsMatch[1]),
+        );
+      }
+
+      const playlistBySlugMatch = /^\/api\/playlists\/by-slug\/([^/]+)$/.exec(url.pathname);
+      if (playlistBySlugMatch && request.method === 'GET') {
+        return await handlePlaylistGetBySlug(
+          request,
+          env,
+          decodeURIComponent(playlistBySlugMatch[1]),
+        );
+      }
+
+      const playlistMatch = /^\/api\/playlists\/([^/]+)$/.exec(url.pathname);
+      if (playlistMatch && request.method === 'PATCH') {
+        return await handlePlaylistUpdate(
+          request,
+          env,
+          decodeURIComponent(playlistMatch[1]),
+        );
+      }
+      if (playlistMatch && request.method === 'DELETE') {
+        return await handlePlaylistDelete(
+          request,
+          env,
+          decodeURIComponent(playlistMatch[1]),
+        );
       }
 
       if (url.pathname === '/api/profiles/me' && request.method === 'PATCH') {

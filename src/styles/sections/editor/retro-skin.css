@@ -564,6 +564,7 @@ body[data-app-mode='editor'] #sidebar .layer-info-button {
 }
 
 body[data-app-mode='editor'] #sidebar .layer-info-tooltip,
+body[data-app-mode='editor'] #palette-tooltip,
 body[data-app-mode='editor'] #object-tooltip,
 body[data-app-mode='editor'] #sidebar .editor-tool-popover,
 body[data-app-mode='editor'] #sidebar .pressure-plate-panel,
@@ -574,6 +575,11 @@ body[data-app-mode='editor'] #sidebar #container-contents-panel {
   color: var(--editor-retro-ink);
   box-shadow: 3px 3px 0 var(--editor-retro-shadow);
   font-family: var(--editor-ui-font);
+}
+
+body[data-app-mode='editor'] #palette-tooltip .palette-tooltip-description,
+body[data-app-mode='editor'] #object-tooltip .palette-tooltip-description {
+  color: var(--editor-retro-blue-deep);
 }
 
 body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn.active {

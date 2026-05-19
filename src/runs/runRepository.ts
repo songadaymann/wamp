@@ -46,7 +46,8 @@ export interface RunRepository {
   loadRoomDiscovery(
     difficulty: RoomDifficulty | null,
     sort?: RoomDiscoverySort,
-    limit?: number
+    limit?: number,
+    includeGoalLessRooms?: boolean
   ): Promise<RoomDiscoveryResponse>;
   loadBuilderDiscovery(
     sort?: BuilderDiscoverySort,
@@ -152,7 +153,8 @@ class ApiRunRepository implements RunRepository {
   async loadRoomDiscovery(
     difficulty: RoomDifficulty | null,
     sort: RoomDiscoverySort = 'featured',
-    limit: number = 100
+    limit: number = 100,
+    includeGoalLessRooms: boolean = false
   ): Promise<RoomDiscoveryResponse> {
     const params = new URLSearchParams({
       limit: String(limit),
@@ -160,6 +162,9 @@ class ApiRunRepository implements RunRepository {
     });
     if (difficulty) {
       params.set('difficulty', difficulty);
+    }
+    if (includeGoalLessRooms) {
+      params.set('includeGoalLessRooms', '1');
     }
 
     return this.request<RoomDiscoveryResponse>(

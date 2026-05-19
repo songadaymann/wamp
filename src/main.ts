@@ -64,6 +64,7 @@ const config: Phaser.Types.Core.GameConfig = {
   width: gameContainer.clientWidth,
   height: gameContainer.clientHeight,
   pixelArt: true,
+  roundPixels: true,
   preserveDrawingBuffer: debug_options.preserveDrawingBuffer,
   backgroundColor: '#050505',
   scene: [BootScene, EditorScene, OverworldPlayScene, CourseComposerScene, CourseEditorScene],

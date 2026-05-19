@@ -345,6 +345,11 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
       runtime: {
         baseX: spawnX,
         baseY: spawnY,
+        previousX: spawnX,
+        previousY: spawnY,
+        gravityDirection: 'down',
+        gravityRoomId: loadedRoom.room.id,
+        inWater: false,
         initialDirectionX: directionX,
         directionX,
         aiFacingDirectionX: directionX,

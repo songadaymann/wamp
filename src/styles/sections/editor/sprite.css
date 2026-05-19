@@ -60,7 +60,7 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
 .editor-sprite-shell {
   width: min(1040px, calc(100% - 4px));
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 8px;
   padding: 8px 10px 12px;
   border: 2px solid #fff3db;
@@ -137,6 +137,11 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
   width: 100%;
 }
 
+.editor-sprite-select[data-invalid='true'] {
+  border-color: #ff8b97;
+  background: #1c0911;
+}
+
 .editor-sprite-color-input {
   width: 36px;
   height: 32px;
@@ -199,6 +204,71 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
 .editor-sprite-status[data-tone='error'] {
   border-color: #ff8b97;
   background: #1c0911;
+}
+
+.editor-sprite-kind-help {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 2px solid #ffb347;
+  border-radius: 3px;
+  background: #150f04;
+}
+
+.editor-sprite-kind-help.hidden {
+  display: none;
+}
+
+.editor-sprite-kind-help-copy {
+  display: grid;
+  gap: 4px;
+  color: #fff3db;
+}
+
+.editor-sprite-kind-help-title,
+.editor-sprite-kind-choice-title {
+  font-family: var(--editor-pixel-font);
+  font-size: 8px;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.editor-sprite-kind-help-text,
+.editor-sprite-kind-choice-text {
+  font-family: var(--editor-ui-font);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.editor-sprite-kind-help-text {
+  color: rgba(255, 243, 219, 0.82);
+}
+
+.editor-sprite-kind-help-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.editor-sprite-kind-choice {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  align-content: start;
+  padding: 7px;
+  border: 2px solid #fff3db;
+  border-radius: 3px;
+  background: #0b0b0b;
+  color: #fff3db;
+  text-align: left;
+  box-shadow: none;
+}
+
+.editor-sprite-kind-choice:hover,
+.editor-sprite-kind-choice:focus-visible {
+  background: #fff3db;
+  color: #18161c;
 }
 
 .editor-sprite-canvas-wrap {
@@ -378,6 +448,10 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
 
   .editor-sprite-workbench {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .editor-sprite-kind-help-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .editor-sprite-library {

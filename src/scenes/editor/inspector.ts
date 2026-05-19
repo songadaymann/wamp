@@ -2,10 +2,13 @@ import Phaser from 'phaser';
 import {
   canObjectBeStoredInContainer,
   canPlacedObjectBeContainer,
+  canPlacedObjectBeLinkedObjectTarget,
   canPlacedObjectBePressurePlateTarget,
-  canPlacedObjectTriggerOtherObjects,
+  canPlacedObjectUseObjectLink,
   editorState,
   getObjectById,
+  isMovingPlatformEndpointObjectId,
+  isMovingPlatformObjectId,
   type PlacedObject,
 } from '../../config';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
@@ -108,7 +111,7 @@ export class EditorInspectorController {
       const hoveredTrigger = this.editRuntime.findPlacedObjectAt(
         worldPoint.x,
         worldPoint.y,
-        (placed) => canPlacedObjectTriggerOtherObjects(placed),
+        (placed) => canPlacedObjectUseObjectLink(placed),
       );
       if (hoveredTrigger) {
         if (this.focusedPressurePlateInstanceId !== hoveredTrigger.instanceId) {
@@ -145,9 +148,9 @@ export class EditorInspectorController {
       const hoveredTarget = this.editRuntime.findPlacedObjectAt(
         worldPoint.x,
         worldPoint.y,
-        (placed) => canPlacedObjectBePressurePlateTarget(placed) && placed.instanceId !== source.instanceId,
+        (placed) => this.canUseObjectLinkTarget(source, placed),
       );
-      const eligibleTargets = this.editRuntime.getPressurePlateEligibleTargets(source.instanceId);
+      const eligibleTargets = this.editRuntime.getObjectLinkEligibleTargets(source.instanceId);
       for (const target of eligibleTargets) {
         const bounds = this.editRuntime.getPlacedObjectBounds(target);
         graphics.lineStyle(
@@ -288,7 +291,7 @@ export class EditorInspectorController {
     const clickedPressurePlate = this.editRuntime.findPlacedObjectAt(
       worldPoint.x,
       worldPoint.y,
-      (placed) => canPlacedObjectTriggerOtherObjects(placed),
+      (placed) => canPlacedObjectUseObjectLink(placed),
     );
     if (clickedPressurePlate) {
       this.focusedPressurePlateInstanceId = clickedPressurePlate.instanceId;
@@ -347,7 +350,7 @@ export class EditorInspectorController {
       return;
     }
 
-    if (placed && canPlacedObjectTriggerOtherObjects(placed)) {
+    if (placed && canPlacedObjectUseObjectLink(placed)) {
       this.focusedContainerInstanceId = null;
       this.focusedSwordsmanInstanceId = null;
       this.focusedPressurePlateInstanceId = placed.instanceId;
@@ -396,8 +399,8 @@ export class EditorInspectorController {
     if (this.pinnedInspector?.instanceId === removed.instanceId) {
       this.pinnedInspector = null;
     }
-    if (canPlacedObjectBePressurePlateTarget(removed)) {
-      this.pressurePlateStatusText = `${this.getPressurePlateTargetLabel(removed.id)} removed. Linked plates were cleared.`;
+    if (canPlacedObjectBePressurePlateTarget(removed) || isMovingPlatformEndpointObjectId(removed.id)) {
+      this.pressurePlateStatusText = `${this.getObjectLinkTargetLabel(removed.id)} removed. Linked objects were cleared.`;
     }
     if (canPlacedObjectBeContainer(removed)) {
       this.containerStatusText = `${this.getContainerName(removed.id)} removed.`;
@@ -422,7 +425,7 @@ export class EditorInspectorController {
   beginFocusedPressurePlateConnection(): void {
     const focused = this.getFocusedPressurePlate();
     if (!focused) {
-      this.pressurePlateStatusText = 'Hover or place a pressure plate first.';
+      this.pressurePlateStatusText = 'Hover or place a linkable object first.';
       this.renderPressurePlatePanel();
       return;
     }
@@ -432,12 +435,12 @@ export class EditorInspectorController {
 
   clearFocusedPressurePlateConnection(): void {
     const focused = this.getFocusedPressurePlate();
-    if (!focused || !canPlacedObjectTriggerOtherObjects(focused)) {
+    if (!focused || !canPlacedObjectUseObjectLink(focused)) {
       return;
     }
 
-    if (this.editRuntime.setPressurePlateTarget(focused.instanceId, null)) {
-      this.pressurePlateStatusText = 'Pressure plate link cleared.';
+    if (this.editRuntime.setObjectLinkTarget(focused.instanceId, null)) {
+      this.pressurePlateStatusText = `${this.getObjectLinkSourceLabel(focused)} link cleared.`;
       this.connectingPressurePlateInstanceId = null;
       this.focusedPressurePlateInstanceId = focused.instanceId;
       this.pinInspector('pressure', focused.instanceId);
@@ -451,7 +454,8 @@ export class EditorInspectorController {
     }
 
     this.connectingPressurePlateInstanceId = null;
-    this.pressurePlateStatusText = 'Pressure plate left unlinked for now.';
+    const focused = this.getFocusedPressurePlate();
+    this.pressurePlateStatusText = `${this.getObjectLinkSourceLabel(focused)} left unlinked for now.`;
     if (this.focusedPressurePlateInstanceId) {
       this.pinInspector('pressure', this.focusedPressurePlateInstanceId);
     }
@@ -575,7 +579,7 @@ export class EditorInspectorController {
         : this.getFocusedPressurePlate();
     if (source && (editorState.paletteMode === 'objects' || connectMode)) {
       const target = this.editRuntime.getPlacedObjectByInstanceId(source.triggerTargetInstanceId ?? null);
-      const eligibleTargetCount = this.editRuntime.getPressurePlateEligibleTargets(source.instanceId).length;
+      const eligibleTargetCount = this.editRuntime.getObjectLinkEligibleTargets(source.instanceId).length;
       this.renderInspector({
         ...hiddenState,
         visible: true,
@@ -583,15 +587,13 @@ export class EditorInspectorController {
         pressureStatusText:
           this.pressurePlateStatusText ??
           (connectMode
-            ? eligibleTargetCount > 0
-              ? 'Click a door, cage, or chest to link this pressure plate.'
-              : 'No door, cage, or chest is in this room yet.'
+            ? this.getObjectLinkConnectStatus(source, eligibleTargetCount)
             : target
-              ? `Linked to ${this.getPressurePlateTargetLabel(target.id)}.`
-              : 'This pressure plate is not linked yet.'),
+              ? `${this.getObjectLinkSourceLabel(source)} linked to ${this.getObjectLinkTargetLabel(target.id)}.`
+              : `${this.getObjectLinkSourceLabel(source)} is not linked yet.`),
         pressureConnectHidden: connectMode,
         pressureConnectDisabled: connectMode || eligibleTargetCount === 0,
-        pressureConnectTitle: eligibleTargetCount === 0 ? 'Add a door, cage, or chest first.' : '',
+        pressureConnectTitle: eligibleTargetCount === 0 ? this.getObjectLinkNoTargetsTitle(source) : '',
         pressureClearHidden: connectMode,
         pressureClearDisabled: !target,
         pressureDoneLaterHidden: !connectMode,
@@ -658,20 +660,18 @@ export class EditorInspectorController {
 
   private beginPressurePlateConnection(triggerInstanceId: string, autoPlaced: boolean): void {
     const trigger = this.editRuntime.getPlacedObjectByInstanceId(triggerInstanceId);
-    if (!trigger || !canPlacedObjectTriggerOtherObjects(trigger)) {
+    if (!trigger || !canPlacedObjectUseObjectLink(trigger)) {
       return;
     }
 
     this.focusedPressurePlateInstanceId = trigger.instanceId;
     this.connectingPressurePlateInstanceId = trigger.instanceId;
     this.pinInspector('pressure', trigger.instanceId);
-    const eligibleTargets = this.editRuntime.getPressurePlateEligibleTargets(trigger.instanceId);
+    const eligibleTargets = this.editRuntime.getObjectLinkEligibleTargets(trigger.instanceId);
     this.pressurePlateStatusText =
       eligibleTargets.length > 0
-        ? autoPlaced
-          ? 'Pressure plate placed. Click a door, cage, or chest to link it.'
-          : 'Click a door, cage, or chest to link this pressure plate.'
-        : 'No door, cage, or chest is in this room yet. You can link this pressure plate later.';
+        ? this.getObjectLinkBeginStatus(trigger, autoPlaced)
+        : this.getObjectLinkNoTargetsStatus(trigger);
     this.renderPressurePlatePanel();
   }
 
@@ -685,19 +685,20 @@ export class EditorInspectorController {
     const target = this.editRuntime.findPlacedObjectAt(
       worldX,
       worldY,
-      (placed) => canPlacedObjectBePressurePlateTarget(placed) && placed.instanceId !== source.instanceId,
+      (placed) => this.canUseObjectLinkTarget(source, placed),
     );
     if (!target) {
-      this.pressurePlateStatusText = 'Pick a door, cage, or chest in this room.';
+      this.pressurePlateStatusText = this.getObjectLinkPickTargetStatus(source);
       this.renderPressurePlatePanel();
       return true;
     }
 
-    if (this.editRuntime.setPressurePlateTarget(source.instanceId, target.instanceId)) {
+    if (this.editRuntime.setObjectLinkTarget(source.instanceId, target.instanceId)) {
       this.connectingPressurePlateInstanceId = null;
       this.focusedPressurePlateInstanceId = source.instanceId;
       this.pinInspector('pressure', source.instanceId);
-      this.pressurePlateStatusText = `Pressure plate linked to ${this.getPressurePlateTargetLabel(target.id)}.`;
+      this.pressurePlateStatusText =
+        `${this.getObjectLinkSourceLabel(source)} linked to ${this.getObjectLinkTargetLabel(target.id)}.`;
       this.renderPressurePlatePanel();
     }
     return true;
@@ -767,7 +768,7 @@ export class EditorInspectorController {
     const activeId =
       this.connectingPressurePlateInstanceId ?? pinnedPressureId ?? this.focusedPressurePlateInstanceId;
     const focused = this.editRuntime.getPlacedObjectByInstanceId(activeId);
-    if (focused && canPlacedObjectTriggerOtherObjects(focused)) {
+    if (focused && canPlacedObjectUseObjectLink(focused)) {
       return focused;
     }
 
@@ -802,14 +803,68 @@ export class EditorInspectorController {
 
   private getConnectingPressurePlate(): PlacedObject | null {
     const focused = this.editRuntime.getPlacedObjectByInstanceId(this.connectingPressurePlateInstanceId);
-    if (focused && canPlacedObjectTriggerOtherObjects(focused)) {
+    if (focused && canPlacedObjectUseObjectLink(focused)) {
       return focused;
     }
 
     return null;
   }
 
-  private getPressurePlateTargetLabel(objectId: string): string {
+  private canUseObjectLinkTarget(source: PlacedObject, target: PlacedObject): boolean {
+    return target.instanceId !== source.instanceId && canPlacedObjectBeLinkedObjectTarget(source, target);
+  }
+
+  private getObjectLinkSourceLabel(source: PlacedObject | null): string {
+    if (source && isMovingPlatformObjectId(source.id)) {
+      return 'Moving platform';
+    }
+
+    return 'Pressure plate';
+  }
+
+  private getObjectLinkConnectStatus(source: PlacedObject, eligibleTargetCount: number): string {
+    if (eligibleTargetCount <= 0) {
+      return this.getObjectLinkNoTargetsStatus(source);
+    }
+
+    return this.getObjectLinkPickTargetStatus(source);
+  }
+
+  private getObjectLinkBeginStatus(source: PlacedObject, autoPlaced: boolean): string {
+    if (isMovingPlatformObjectId(source.id)) {
+      return autoPlaced
+        ? 'Moving platform placed. Click a Moving Platform Anchor to link it.'
+        : 'Click a Moving Platform Anchor to link this moving platform.';
+    }
+
+    return autoPlaced
+      ? 'Pressure plate placed. Click a door, cage, or chest to link it.'
+      : 'Click a door, cage, or chest to link this pressure plate.';
+  }
+
+  private getObjectLinkPickTargetStatus(source: PlacedObject): string {
+    return isMovingPlatformObjectId(source.id)
+      ? 'Pick a Moving Platform Anchor in this room.'
+      : 'Pick a door, cage, or chest in this room.';
+  }
+
+  private getObjectLinkNoTargetsStatus(source: PlacedObject): string {
+    return isMovingPlatformObjectId(source.id)
+      ? 'No Moving Platform Anchor is in this room yet. You can link this moving platform later.'
+      : 'No door, cage, or chest is in this room yet. You can link this pressure plate later.';
+  }
+
+  private getObjectLinkNoTargetsTitle(source: PlacedObject): string {
+    return isMovingPlatformObjectId(source.id)
+      ? 'Add a Moving Platform Anchor first.'
+      : 'Add a door, cage, or chest first.';
+  }
+
+  private getObjectLinkTargetLabel(objectId: string): string {
+    if (isMovingPlatformEndpointObjectId(objectId)) {
+      return 'Moving Platform Anchor';
+    }
+
     switch (objectId) {
       case 'door_locked':
         return 'door';
