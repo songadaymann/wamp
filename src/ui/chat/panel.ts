@@ -244,7 +244,10 @@ export class ChatPanelController {
   }
 
   private canPost(): boolean {
-    return this.authState.authenticated && !this.authState.loading && !this.authState.chatModeration.banned;
+    return this.authState.authenticated
+      && !this.authState.loading
+      && !this.authState.chatModeration.banned
+      && !this.authState.schoolManaged;
   }
 
   private canModerateMessages(): boolean {
@@ -535,7 +538,9 @@ export class ChatPanelController {
     if (this.elements.input) {
       this.elements.input.disabled = !this.canPost() || this.sending;
       this.elements.input.placeholder =
-        this.authState.chatModeration.banned
+        this.authState.schoolManaged
+          ? 'Classroom chat is disabled'
+          : this.authState.chatModeration.banned
           ? 'Chat banned'
           : this.canPost()
             ? 'Say something...'
@@ -556,6 +561,11 @@ export class ChatPanelController {
     }
 
     if (this.sending) {
+      return;
+    }
+
+    if (this.authState.schoolManaged) {
+      this.elements.status.textContent = 'Classroom accounts can read chat, but cannot post.';
       return;
     }
 

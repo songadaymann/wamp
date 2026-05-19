@@ -18,6 +18,7 @@ import type { Env } from '../core/types';
 import { findUserByDisplayName, findUserByUsername, updateUserProfile } from '../auth/store';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth } from '../auth/request';
 import { assertPlayfunOnlyDisplayNameChangeAllowed } from '../playfun/leaderboardIsolation';
+import { assertNotSchoolRestricted } from '../school/restrictions';
 import { loadPublicProgressionSummary } from '../progression/store';
 import { loadCryptopunkAvatarPackRow } from '../avatars/store';
 import { loadUserProfile } from './store';
@@ -60,6 +61,7 @@ export async function handleProfileGetByUsername(
 
 export async function handleProfileUpdateMe(request: Request, env: Env): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(env, request, 'update your profile');
+  assertNotSchoolRestricted(auth, 'edit profile text');
   const body = await parseProfileUpdateBody(request);
 
   await assertPlayfunOnlyDisplayNameChangeAllowed(env, auth.user, body.displayName);

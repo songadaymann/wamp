@@ -170,7 +170,7 @@ export async function handleRequestMagicLink(request: Request, env: Env): Promis
   await createMagicLinkToken(env, user.id, email, tokenHash, expiresAt, now.toISOString());
 
   const verifyBaseUrl = new URL(request.url).origin;
-  const returnBaseUrl = resolveMagicLinkReturnBase(request, env);
+  const returnBaseUrl = resolveMagicLinkReturnUrl(request, env, body.returnTo);
   const magicLinkUrl = new URL('/api/auth/verify', verifyBaseUrl);
   magicLinkUrl.searchParams.set('token', token);
   magicLinkUrl.searchParams.set('returnTo', returnBaseUrl);
@@ -203,17 +203,18 @@ export async function handleVerifyMagicLink(
   url: URL,
   env: Env
 ): Promise<Response> {
-  const redirectBaseUrl = resolveMagicLinkRedirectBase(request, env, url.searchParams.get('returnTo'));
+  const redirectUrl = buildMagicLinkRedirectUrl(request, env, url.searchParams.get('returnTo'), 'email');
+  const invalidRedirectUrl = buildMagicLinkRedirectUrl(request, env, url.searchParams.get('returnTo'), 'invalid');
   const token = url.searchParams.get('token');
   if (!token) {
-    return redirectResponse(`${redirectBaseUrl}/?auth=invalid`);
+    return redirectResponse(invalidRedirectUrl);
   }
 
   const tokenHash = await hashToken(token);
   const row = await loadMagicLinkByTokenHash(env, tokenHash);
 
   if (!row || row.consumed_at || isExpired(row.expires_at)) {
-    return redirectResponse(`${redirectBaseUrl}/?auth=invalid`);
+    return redirectResponse(invalidRedirectUrl);
   }
 
   const user: AuthUser = {
@@ -232,9 +233,38 @@ export async function handleVerifyMagicLink(
   const now = new Date().toISOString();
   await consumeMagicLinkToken(env, row.id, now);
 
-  return redirectResponse(`${redirectBaseUrl}/?auth=email`, {
+  return redirectResponse(redirectUrl, {
     'Set-Cookie': createSessionCookie(request, sessionToken),
   });
+}
+
+function resolveMagicLinkReturnUrl(request: Request, env: Env, candidate: unknown): string {
+  if (typeof candidate !== 'string' || !candidate.trim()) {
+    return resolveMagicLinkReturnBase(request, env);
+  }
+
+  const trustedBase = resolveMagicLinkRedirectBase(request, env, candidate);
+  try {
+    const parsed = new URL(candidate.trim());
+    if (parsed.origin === trustedBase) {
+      return parsed.toString();
+    }
+  } catch {
+    // Fall back to the trusted origin below.
+  }
+
+  return trustedBase;
+}
+
+function buildMagicLinkRedirectUrl(
+  request: Request,
+  env: Env,
+  candidate: string | null,
+  authResult: 'email' | 'invalid',
+): string {
+  const redirectUrl = new URL(resolveMagicLinkReturnUrl(request, env, candidate ?? undefined));
+  redirectUrl.searchParams.set('auth', authResult);
+  return redirectUrl.toString();
 }
 
 export async function handleLogout(request: Request, env: Env): Promise<Response> {

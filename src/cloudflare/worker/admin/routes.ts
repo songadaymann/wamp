@@ -30,6 +30,7 @@ import {
 import { handleAdminSnapshotImport, handleAdminSnapshotReset } from './snapshot';
 import { handleAdminBackgroundImageRequest } from '../backgroundImages/routes';
 import { handleAdminRoomCommentRequest } from '../roomComments/routes';
+import { handleAdminSchoolRequest } from '../school/routes';
 
 export async function handleAdminRequest(
   request: Request,
@@ -42,6 +43,10 @@ export async function handleAdminRequest(
 
   if (url.pathname.startsWith('/api/admin/room-comments')) {
     return handleAdminRoomCommentRequest(request, url, env);
+  }
+
+  if (url.pathname.startsWith('/api/admin/school')) {
+    return handleAdminSchoolRequest(request, url, env);
   }
 
   if (url.pathname === '/api/admin/launch-stats' && request.method === 'GET') {

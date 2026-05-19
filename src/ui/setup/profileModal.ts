@@ -516,6 +516,11 @@ export class ProfileModalController {
       return;
     }
 
+    if (this.isSchoolAvatarOnlyEdit()) {
+      await this.saveSelectedAvatarOnly();
+      return;
+    }
+
     const displayName = this.elements.displayNameInput?.value.trim() ?? '';
     const username = this.elements.usernameInput?.value.trim() ?? '';
     const bio = this.elements.bioInput?.value ?? '';
@@ -549,12 +554,47 @@ export class ProfileModalController {
     }
   }
 
+  private async saveSelectedAvatarOnly(): Promise<void> {
+    if (!this.currentProfile?.canEdit || this.saving) {
+      return;
+    }
+
+    this.saving = true;
+    this.setSaveStatus('Saving avatar...');
+    this.setError(null);
+    this.render();
+
+    try {
+      await this.avatarRepository.updateMySelectedAvatar(this.selectedAvatarIdDraft);
+      const updatedProfile = {
+        ...this.currentProfile,
+        selectedAvatarId: this.selectedAvatarIdDraft,
+      };
+      this.profileCache.set(updatedProfile.userId, updatedProfile);
+      this.currentProfile = updatedProfile;
+      this.selectedAvatarIdDraft = resolveSelectablePlayerAvatarId(updatedProfile.selectedAvatarId);
+      this.avatarPreviewBroken = false;
+      setStoredPlayerAvatarId(updatedProfile.selectedAvatarId);
+      await refreshAuthSession();
+      this.setSaveStatus('Avatar saved.');
+    } catch (error) {
+      this.setSaveStatus('');
+      this.setError(error instanceof Error ? error.message : 'Failed to save avatar.');
+    } finally {
+      this.saving = false;
+      this.render();
+    }
+  }
+
   private render(): void {
     if (!this.elements.modal || this.elements.modal.classList.contains('hidden')) {
       return;
     }
 
     const profile = this.currentProfile;
+    const canEdit = Boolean(profile?.canEdit);
+    const avatarOnlyEdit = this.isSchoolAvatarOnlyEdit(profile);
+    const canEditProfileText = canEdit && !avatarOnlyEdit;
     const titleText = this.loading
       ? 'Loading profile...'
       : profile
@@ -588,29 +628,29 @@ export class ProfileModalController {
     }
 
     if (this.elements.editFields) {
-      this.elements.editFields.classList.toggle('hidden', !profile?.canEdit);
+      this.elements.editFields.classList.toggle('hidden', !canEditProfileText);
     }
 
     if (this.elements.avatarChangeButton) {
-      this.elements.avatarChangeButton.classList.toggle('hidden', !profile?.canEdit);
-      this.elements.avatarChangeButton.disabled = this.saving || !profile?.canEdit;
+      this.elements.avatarChangeButton.classList.toggle('hidden', !canEdit);
+      this.elements.avatarChangeButton.disabled = this.saving || !canEdit;
     }
 
-    if (this.elements.displayNameInput && profile?.canEdit) {
+    if (this.elements.displayNameInput && canEditProfileText && profile) {
       if (this.doc.activeElement !== this.elements.displayNameInput) {
         this.elements.displayNameInput.value = profile.displayName;
       }
       this.elements.displayNameInput.disabled = this.saving;
     }
 
-    if (this.elements.usernameInput && profile?.canEdit) {
+    if (this.elements.usernameInput && canEditProfileText && profile) {
       if (this.doc.activeElement !== this.elements.usernameInput) {
         this.elements.usernameInput.value = profile.username ?? deriveProfileUsernameBase(profile.displayName);
       }
       this.elements.usernameInput.disabled = this.saving;
     }
 
-    if (this.elements.bioInput && profile?.canEdit) {
+    if (this.elements.bioInput && canEditProfileText && profile) {
       if (this.doc.activeElement !== this.elements.bioInput) {
         this.elements.bioInput.value = profile.bio ?? '';
       }
@@ -618,9 +658,13 @@ export class ProfileModalController {
     }
 
     if (this.elements.saveButton) {
-      this.elements.saveButton.classList.toggle('hidden', !profile?.canEdit);
-      this.elements.saveButton.disabled = this.saving || !profile?.canEdit;
-      this.elements.saveButton.textContent = this.saving ? 'Saving...' : 'Save Profile';
+      this.elements.saveButton.classList.toggle('hidden', !canEdit);
+      this.elements.saveButton.disabled = this.saving || !canEdit;
+      this.elements.saveButton.textContent = this.saving
+        ? 'Saving...'
+        : avatarOnlyEdit
+          ? 'Save Avatar'
+          : 'Save Profile';
     }
 
     if (this.elements.overviewBio) {
@@ -632,7 +676,7 @@ export class ProfileModalController {
     this.renderShareControls();
     this.renderAvatarPicker();
     this.renderRooms(profile?.publishedRooms ?? []);
-    this.renderPlaylists(profile?.playlists ?? [], Boolean(profile?.canEdit));
+    this.renderPlaylists(profile?.playlists ?? [], canEditProfileText);
     this.renderProgress(profile?.progression ?? null);
     this.renderStats(profile?.stats ?? null, profile?.publishedCourseCount ?? 0);
     this.renderTabs();
@@ -644,7 +688,7 @@ export class ProfileModalController {
     }
 
     const profile = this.currentProfile;
-    const username = profile?.canEdit
+    const username = profile?.canEdit && !this.isSchoolAvatarOnlyEdit(profile)
       ? this.elements.usernameInput?.value.trim() || profile.username
       : profile?.username;
     const canShare = Boolean(profile && username && !this.loading);
@@ -655,7 +699,7 @@ export class ProfileModalController {
 
   private async shareCurrentProfile(): Promise<void> {
     const profile = this.currentProfile;
-    const username = profile?.canEdit
+    const username = profile?.canEdit && !this.isSchoolAvatarOnlyEdit(profile)
       ? this.elements.usernameInput?.value.trim() || profile.username
       : profile?.username;
     if (!profile || !username) {
@@ -685,7 +729,7 @@ export class ProfileModalController {
   private renderAvatar(): void {
     const profile = this.currentProfile;
     const nameDraft =
-      this.currentProfile?.canEdit
+      this.currentProfile?.canEdit && !this.isSchoolAvatarOnlyEdit()
         ? this.elements.displayNameInput?.value.trim() || profile?.displayName || 'Profile'
         : profile?.displayName || 'Profile';
     const avatarId = profile
@@ -842,7 +886,11 @@ export class ProfileModalController {
       this.avatarPreviewBroken = false;
       this.closeAvatarPicker();
       this.setSaveStatus(
-        choice.avatarId === previousAvatarId ? '' : 'Save profile to use this avatar.'
+        choice.avatarId === previousAvatarId
+          ? ''
+          : this.isSchoolAvatarOnlyEdit()
+            ? 'Save avatar to use this choice.'
+            : 'Save profile to use this avatar.'
       );
       this.render();
     });
@@ -2100,6 +2148,14 @@ export class ProfileModalController {
       day: 'numeric',
       year: 'numeric',
     }).format(new Date(value));
+  }
+
+  private isSchoolAvatarOnlyEdit(profile: UserProfileResponse | null = this.currentProfile): boolean {
+    return Boolean(
+      profile?.canEdit
+      && this.authState.schoolManaged
+      && this.authState.user?.id === profile.userId
+    );
   }
 }
 

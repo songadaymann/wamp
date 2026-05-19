@@ -3,6 +3,7 @@ import type { AgentAccount, AgentTokenRecord, RequestAuthSource, RequestPrincipa
 import type { CourseSnapshot } from '../../../courses/model';
 import type { RoomCoordinates, RoomRecord, RoomSnapshot, RoomVersionRecord } from '../../../persistence/roomModel';
 import type { RunResult } from '../../../runs/model';
+import type { SchoolAuthContext } from '../../../school/model';
 
 export interface D1PreparedStatement {
   bind(...values: unknown[]): D1PreparedStatement;
@@ -772,6 +773,7 @@ export interface RequestAuth {
   principal: RequestPrincipal;
   agent: AgentAccount | null;
   session: AuthSession | null;
+  school: SchoolAuthContext | null;
   scopes: ApiTokenScope[] | null;
   apiToken: ApiTokenRecord | null;
   agentToken: AgentTokenRecord | null;

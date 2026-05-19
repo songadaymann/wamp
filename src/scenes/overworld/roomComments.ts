@@ -120,6 +120,10 @@ export class OverworldRoomCommentsController {
       this.options.showTransientStatus?.('Sign in to comment on rooms.');
       return false;
     }
+    if (authState.schoolManaged) {
+      this.options.showTransientStatus?.('Classroom accounts cannot comment on rooms.');
+      return false;
+    }
 
     this.ensureComposerDom();
     this.composerOpen = true;
@@ -556,11 +560,13 @@ export class OverworldRoomCommentsController {
     const room = this.getRenderableRoom();
     const open = this.composerOpen && Boolean(room);
     elements.root.classList.toggle('hidden', !open);
-    elements.input.disabled = !authState.authenticated || this.submitting;
-    elements.submitButton.disabled = !authState.authenticated || this.submitting;
+    elements.input.disabled = !authState.authenticated || authState.schoolManaged || this.submitting;
+    elements.submitButton.disabled = !authState.authenticated || authState.schoolManaged || this.submitting;
     elements.cancelButton.disabled = this.submitting;
     elements.submitButton.textContent = this.submitting ? 'Submitting...' : 'Submit';
-    elements.input.placeholder = authState.authenticated
+    elements.input.placeholder = authState.schoolManaged
+      ? 'Classroom comments are disabled'
+      : authState.authenticated
       ? 'Leave a comment for this room'
       : 'Sign in to comment on rooms';
     this.renderCounter();
