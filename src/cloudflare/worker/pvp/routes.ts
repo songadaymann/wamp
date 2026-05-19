@@ -4,6 +4,7 @@ import type {
   PvpMatchSubmissionResponse,
   PvpResult,
 } from '../../../pvp/model';
+import { getMultiplayerModeDefinition } from '../../../multiplayer/model';
 import { createEmptyProgressionDelta } from '../progression/shared';
 import { awardLaneDelta, persistProgressIncrement } from '../progression/laneEvents';
 import { loadPublicProgressionSummary, syncUserBadges } from '../progression/store';
@@ -210,6 +211,7 @@ function normalizePvpMatchSubmission(value: PvpMatchSubmissionRequestBody): PvpM
   if (value.mode !== 'arena') {
     throw new HttpError(400, 'Unsupported PVP mode.');
   }
+  const mode = getMultiplayerModeDefinition(value.mode);
   if (!value.roomCoordinates || !Number.isInteger(value.roomCoordinates.x) || !Number.isInteger(value.roomCoordinates.y)) {
     throw new HttpError(400, 'Room coordinates are required.');
   }
@@ -223,8 +225,8 @@ function normalizePvpMatchSubmission(value: PvpMatchSubmissionRequestBody): PvpM
     throw new HttpError(400, 'Draw matches cannot have a winner.');
   }
 
-  const participants = normalizeParticipants(value.participants);
-  if (participants.length !== 2) {
+  const participants = normalizeParticipants(value.participants, mode.startingLives);
+  if (participants.length < mode.minPlayers || participants.length > mode.maxPlayers) {
     throw new HttpError(400, 'PVP matches require two participants.');
   }
   if (value.winnerUserId && !participants.some((participant) => participant.userId === value.winnerUserId)) {
@@ -269,7 +271,7 @@ function normalizePvpMatchSubmission(value: PvpMatchSubmissionRequestBody): PvpM
   };
 }
 
-function normalizeParticipants(value: unknown): PvpMatchSubmissionParticipant[] {
+function normalizeParticipants(value: unknown, maxLives: number): PvpMatchSubmissionParticipant[] {
   if (!Array.isArray(value)) {
     throw new HttpError(400, 'PVP participants are required.');
   }
@@ -288,8 +290,8 @@ function normalizeParticipants(value: unknown): PvpMatchSubmissionParticipant[] 
       userId,
       userDisplayName: normalizeText(raw.userDisplayName, 32, 'Participant display name is required.'),
       result,
-      heartsRemaining: clampInteger(raw.heartsRemaining, 0, 3),
-      livesLost: clampInteger(raw.livesLost, 0, 3),
+      heartsRemaining: clampInteger(raw.heartsRemaining, 0, maxLives),
+      livesLost: clampInteger(raw.livesLost, 0, maxLives),
       hits: clampInteger(raw.hits, 0, 99),
     });
     seen.add(userId);

@@ -157,8 +157,9 @@ export function setupSceneCommands(
 
   configureOverworldHudBridgeRuntime({
     onPlayRoom: () => {
+      const overworldScene = getActiveOverworldScene(game);
       closeWorldPanels();
-      getActiveOverworldScene(game)?.playSelectedRoom?.();
+      overworldScene?.playSelectedRoom?.();
     },
     onRestartRun: () => {
       closeWorldPanels();
@@ -232,18 +233,33 @@ export function setupSceneCommands(
       }
       roomRushModal.open();
     },
-    onInvitePvp: (entry) => {
+    onOpenMultiplayer: () => {
       leaderboardModal.close();
       exploreModal.close();
       guestbookModal.close();
       historyModal.close();
+      settingsModal.close();
       controlsModal.close();
       aboutModal.close();
       courseModal.close();
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
-      getActiveOverworldScene(game)?.invitePvpDuel?.(entry);
+      return getActiveOverworldScene(game)?.openMultiplayerLauncher?.() ?? false;
+    },
+    onInviteMultiplayer: (modeId, entry) => {
+      leaderboardModal.close();
+      exploreModal.close();
+      guestbookModal.close();
+      historyModal.close();
+      settingsModal.close();
+      controlsModal.close();
+      aboutModal.close();
+      courseModal.close();
+      roomRushModal.close();
+      roomRushResultModal.close();
+      chatModerationModal.close();
+      getActiveOverworldScene(game)?.inviteMultiplayer?.(modeId, entry);
     },
     onOpenRoomComment: () => {
       leaderboardModal.close();
@@ -365,6 +381,8 @@ export function setupSceneCommands(
   });
 
   editorBackBtn?.addEventListener('click', () => {
+    const editorScene = getActiveEditorScene(game);
+    const overworldScene = getActiveOverworldScene(game);
     historyModal.close();
     leaderboardModal.close();
     exploreModal.close();
@@ -373,7 +391,6 @@ export function setupSceneCommands(
     courseModal.close();
     roomRushResultModal.close();
     chatModerationModal.close();
-    const editorScene = getActiveEditorScene(game);
     const canReturnToCourseBuilder = editorScene?.getCourseEditorState?.().canReturnToCourseBuilder ?? false;
     if (canReturnToCourseBuilder && editorScene?.returnToCourseBuilder) {
       void editorScene.returnToCourseBuilder();
@@ -385,7 +402,7 @@ export function setupSceneCommands(
       return;
     }
 
-    getActiveOverworldScene(game)?.returnToWorld?.();
+    overworldScene?.returnToWorld?.();
   });
 
   saveBtn?.addEventListener('click', async () => {
