@@ -888,6 +888,7 @@ export async function loadApiTokenAuth(
     session: null,
     scopes,
     isAdmin: false,
+    school: null,
     apiToken: {
       id: row.id,
       label: row.label,

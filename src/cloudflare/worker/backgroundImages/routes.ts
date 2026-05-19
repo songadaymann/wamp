@@ -20,6 +20,7 @@ import {
   requireAuthenticatedRequestAuth,
 } from '../auth/request';
 import { corsHeaders, HttpError, isRoomSnapshot, jsonResponse, parseJsonBody } from '../core/http';
+import { assertNotSchoolRestricted } from '../school/restrictions';
 import type {
   BackgroundImageUploadRow,
   BackgroundUploadPermissionRow,
@@ -260,6 +261,7 @@ async function handleBackgroundImageUploadPrepare(
     'upload background images',
     'rooms:write',
   );
+  assertNotSchoolRestricted(auth, 'upload background images');
   const policy = await buildUploadPolicy(env, auth);
   if (!policy.configured) {
     throw new HttpError(503, 'Background uploads are not configured yet.');
@@ -328,6 +330,7 @@ async function handleBackgroundImageFinalize(
     'finalize background image uploads',
     'rooms:write',
   );
+  assertNotSchoolRestricted(auth, 'finalize background image uploads');
   const row = await loadBackgroundImageRow(env, id);
   if (!row) {
     throw new HttpError(404, 'Background upload not found.');
@@ -694,6 +697,20 @@ async function buildUploadPolicy(
       maxBytes,
       allowedMimeTypes: [...ALLOWED_MIME_TYPES],
       reason: 'Sign in to upload backgrounds.',
+    };
+  }
+
+  if (auth.school) {
+    return {
+      authenticated: true,
+      configured,
+      trustTier: null,
+      minTrustTier,
+      canUpload: false,
+      autoApproveEligible: false,
+      maxBytes,
+      allowedMimeTypes: [...ALLOWED_MIME_TYPES],
+      reason: 'School-managed student accounts cannot upload background images.',
     };
   }
 

@@ -373,6 +373,7 @@ export async function loadAgentTokenAuth(
     },
     agent,
     session: null,
+    school: null,
     scopes: scopes as ApiTokenScope[],
     apiToken: null,
     agentToken: {

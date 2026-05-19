@@ -1,7 +1,9 @@
 import type { ApiTokenScope, AuthSessionResponse } from '../../../auth/model';
+import type { SchoolAuthContext } from '../../../school/model';
 import { HttpError } from '../core/http';
 import type { AuthSession, Env, RequestAuth } from '../core/types';
 import { loadAgentTokenAuth } from '../agents/store';
+import { loadSchoolAuthContextForUser } from '../school/store';
 import {
   getPlayfunSessionTokenFromRequest,
   loadPlayfunUserLinkByOgpId,
@@ -11,6 +13,7 @@ import {
 import {
   SESSION_MAX_AGE_SECONDS,
   createUserForPlayfun,
+  deleteSessionById,
   findUserById,
   loadApiTokenAuth,
   loadSessionFromToken,
@@ -84,16 +87,25 @@ export async function loadOptionalRequestAuth(
       throw new HttpError(401, 'API token is invalid or has been revoked.');
     }
 
-    return {
+    const auth = {
       ...tokenAuth,
       isAdmin,
     };
+    return requireEnabledSchoolContext(env, auth);
   }
 
   const session = await loadCurrentSession(env, request);
   if (session) {
     await syncPlayfunLinkForUser(env, request, session.user.id);
-    return createUserRequestAuth('session', session.user, isAdmin, session);
+    const auth = await attachSchoolContext(
+      env,
+      createUserRequestAuth('session', session.user, isAdmin, session, null),
+    );
+    if (auth) {
+      return auth;
+    }
+
+    await deleteSessionById(env, session.sessionId);
   }
 
   return loadPlayfunRequestAuth(env, request, isAdmin);
@@ -113,6 +125,8 @@ export function createSessionResponse(auth: RequestAuth | null): AuthSessionResp
     authenticated: Boolean(auth),
     user: auth?.user ?? null,
     source: auth?.source ?? null,
+    schoolManaged: Boolean(auth?.school),
+    school: auth?.school ?? null,
     scopes: auth?.scopes ?? null,
     principal: auth?.principal ?? null,
     agent: auth?.agent ?? null,
@@ -219,7 +233,10 @@ async function loadPlayfunRequestAuth(
   const resolvedUser = resolvedLink && resolvedLink.user_id !== provisionalUser.id
     ? (await findUserById(env, resolvedLink.user_id)) ?? provisionalUser
     : provisionalUser;
-  return createUserRequestAuth('playfun', resolvedUser, isAdmin, null);
+  return attachSchoolContext(
+    env,
+    createUserRequestAuth('playfun', resolvedUser, isAdmin, null, null),
+  );
 }
 
 async function syncPlayfunLinkForUser(
@@ -242,7 +259,8 @@ function createUserRequestAuth(
   source: 'session' | 'playfun',
   user: AuthSession['user'],
   isAdmin: boolean,
-  session: AuthSession | null
+  session: AuthSession | null,
+  school: SchoolAuthContext | null,
 ): RequestAuth {
   return {
     source,
@@ -256,9 +274,30 @@ function createUserRequestAuth(
     },
     agent: null,
     session,
+    school,
     scopes: null,
     apiToken: null,
     agentToken: null,
     isAdmin,
   };
+}
+
+async function attachSchoolContext(env: Env, auth: RequestAuth): Promise<RequestAuth | null> {
+  const school = await loadSchoolAuthContextForUser(env, auth.user.id);
+  if (school.disabled) {
+    return null;
+  }
+
+  return {
+    ...auth,
+    school: school.context,
+  };
+}
+
+async function requireEnabledSchoolContext(env: Env, auth: RequestAuth): Promise<RequestAuth> {
+  const schoolAuth = await attachSchoolContext(env, auth);
+  if (!schoolAuth) {
+    throw new HttpError(401, 'This school-managed account is disabled.');
+  }
+  return schoolAuth;
 }

@@ -24,6 +24,7 @@ import {
   requireAuthenticatedRequestAuth,
 } from '../auth/request';
 import { resolveChatModerationViewer } from '../chat/moderation';
+import { assertNotSchoolRestricted } from '../school/restrictions';
 import {
   getCoordinatesFromRequest,
   HttpError,
@@ -86,6 +87,7 @@ export async function handleRoomCommentCreate(
   roomId: string,
 ): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(env, request, 'comment on rooms');
+  assertNotSchoolRestricted(auth, 'comment on rooms');
   const viewer = await resolveChatModerationViewer(env, auth.user);
   if (viewer.banned) {
     throw new HttpError(403, 'You are banned from chat and comments.');

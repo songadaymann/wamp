@@ -17,6 +17,7 @@ import {
   parsePositiveIntegerQueryParam,
 } from '../core/http';
 import type { Env } from '../core/types';
+import { assertNotSchoolRestricted } from '../school/restrictions';
 import {
   countRecentGuestbookEntriesForIp,
   countRecentGuestbookEntriesForSession,
@@ -76,6 +77,9 @@ async function handleGuestbookCreate(request: Request, env: Env): Promise<Respon
   const message = normalizeGuestbookMessage(body.body);
   const guestSessionId = normalizeGuestSessionId(body.guestSessionId);
   const auth = await loadOptionalRequestAuth(env, request);
+  if (auth) {
+    assertNotSchoolRestricted(auth, 'sign the guestbook');
+  }
   const remoteIp = getRequestIp(request);
   const ipHash = remoteIp ? await hashGuestbookIp(env, remoteIp) : null;
   const now = new Date();

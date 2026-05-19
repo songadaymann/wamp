@@ -74,6 +74,7 @@ import {
   handleWorldRequest,
 } from './worker/world/routes';
 import { handleRoomShareRequest } from './worker/share/routes';
+import { handleSchoolRequest } from './worker/school/routes';
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -127,6 +128,10 @@ export default {
 
       if (url.pathname.startsWith('/api/auth')) {
         return await handleAuthRequest(request, url, env);
+      }
+
+      if (url.pathname.startsWith('/api/school')) {
+        return await handleSchoolRequest(request, url, env);
       }
 
       if (url.pathname.startsWith('/api/agents')) {

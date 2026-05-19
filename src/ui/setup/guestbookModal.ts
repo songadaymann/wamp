@@ -171,6 +171,11 @@ export class GuestbookModalController {
       return;
     }
 
+    if (getAuthDebugState().schoolManaged) {
+      this.setStatus('Classroom accounts cannot sign the guestbook.', true);
+      return;
+    }
+
     const displayName = this.elements.nameInput.value.replace(/\s+/g, ' ').trim();
     const body = this.elements.messageInput.value.replace(/\s+/g, ' ').trim();
     if (!displayName || !body) {
@@ -226,8 +231,18 @@ export class GuestbookModalController {
   private render(): void {
     this.renderEntries();
     this.renderCounter();
+    const schoolManaged = getAuthDebugState().schoolManaged;
+    if (this.elements.nameInput) {
+      this.elements.nameInput.disabled = schoolManaged || this.loading || this.submitting;
+    }
+    if (this.elements.messageInput) {
+      this.elements.messageInput.disabled = schoolManaged || this.loading || this.submitting;
+      this.elements.messageInput.placeholder = schoolManaged
+        ? 'Classroom guestbook signing is disabled'
+        : '';
+    }
     if (this.elements.submitButton) {
-      this.elements.submitButton.disabled = this.loading || this.submitting;
+      this.elements.submitButton.disabled = schoolManaged || this.loading || this.submitting;
       this.elements.submitButton.textContent = this.submitting ? 'Signing...' : 'Sign Guestbook';
     }
   }

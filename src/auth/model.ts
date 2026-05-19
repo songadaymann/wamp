@@ -1,5 +1,6 @@
 import type { AgentAccount, RequestAuthSource, RequestPrincipal } from '../agents/model';
 import type { ChatModerationViewer } from '../chat/model';
+import type { SchoolAuthContext } from '../school/model';
 
 export interface AuthUser {
   id: string;
@@ -26,6 +27,8 @@ export interface AuthSessionResponse {
   authenticated: boolean;
   user: AuthUser | null;
   source?: RequestAuthSource | null;
+  schoolManaged?: boolean;
+  school?: SchoolAuthContext | null;
   walletProjectId?: string | null;
   partykitHost?: string | null;
   partykitParty?: string | null;
@@ -40,6 +43,7 @@ export interface AuthSessionResponse {
 
 export interface MagicLinkRequestBody {
   email: string;
+  returnTo?: string;
 }
 
 export interface MagicLinkRequestResponse {
