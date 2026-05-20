@@ -19,6 +19,9 @@ import {
 
 const PVP_SPAWN_DANGER_PADDING_PX = 4;
 const PVP_SPAWN_EMERGENCY_STEP_PX = 4;
+const PVP_SPAWN_REACHABILITY_STEP_PX = 8;
+const PVP_SPAWN_MIN_ESCAPE_DISTANCE_PX = TILE_SIZE * 3;
+const PVP_SPAWN_ESCAPE_STEP_PX = 4;
 
 export interface ResolvePvpSpawnPointOptions {
   room: RoomSnapshot;
@@ -27,6 +30,7 @@ export interface ResolvePvpSpawnPointOptions {
   playerHeight: number;
   playerStandingHeight: number;
   liveDangerousObjectBounds?: readonly Phaser.Geom.Rectangle[];
+  liveSolidObjectBounds?: readonly Phaser.Geom.Rectangle[];
 }
 
 export function resolvePvpSpawnPoint(options: ResolvePvpSpawnPointOptions): { x: number; y: number } {
@@ -40,24 +44,52 @@ export function resolvePvpSpawnPoint(options: ResolvePvpSpawnPointOptions): { x:
     ...getPvpAuthoredDangerousObjectBounds(room),
     ...(options.liveDangerousObjectBounds ?? []),
   ];
+  const solidObjectBounds = options.liveSolidObjectBounds !== undefined
+    ? [...options.liveSolidObjectBounds]
+    : getPvpAuthoredSolidObjectBounds(room);
   const preferredStart = Phaser.Math.Clamp(
     Math.floor(ROOM_WIDTH * (leftSide ? 0.18 : 0.82)),
     2,
     ROOM_WIDTH - 3,
   );
+  const reachableRegion = resolvePvpReachableSpawnRegion(
+    room,
+    solidObjectBounds,
+    dangerousObjectBounds,
+    options,
+  );
 
-  for (const tileX of getPvpSpawnColumnOrder(preferredStart, leftSide)) {
-    const spawn = resolvePvpSurfaceSpawnPointForTile(room, tileX, playerHeight);
-    if (
-      !spawn ||
-      !isPvpSpawnPointClear(room, spawn, dangerousObjectBounds, options)
-    ) {
-      continue;
-    }
-
+  const reachableSurfaceSpawn = resolvePvpSurfaceSpawnPoint(
+    room,
+    preferredStart,
+    leftSide,
+    dangerousObjectBounds,
+    solidObjectBounds,
+    options,
+    reachableRegion,
+  );
+  if (reachableSurfaceSpawn) {
     return {
-      x: origin.x + spawn.x,
-      y: origin.y + spawn.y,
+      x: origin.x + reachableSurfaceSpawn.x,
+      y: origin.y + reachableSurfaceSpawn.y,
+    };
+  }
+
+  const fallbackSurfaceSpawn = reachableRegion
+    ? resolvePvpSurfaceSpawnPoint(
+        room,
+        preferredStart,
+        leftSide,
+        dangerousObjectBounds,
+        solidObjectBounds,
+        options,
+        null,
+      )
+    : null;
+  if (fallbackSurfaceSpawn) {
+    return {
+      x: origin.x + fallbackSurfaceSpawn.x,
+      y: origin.y + fallbackSurfaceSpawn.y,
     };
   }
 
@@ -66,7 +98,11 @@ export function resolvePvpSpawnPoint(options: ResolvePvpSpawnPointOptions): { x:
     x: ROOM_PX_WIDTH * (leftSide ? 0.18 : 0.82),
     y: fallback.y - origin.y - playerHeight / 2,
   };
-  if (isPvpSpawnPointClear(room, fallbackSpawn, dangerousObjectBounds, options)) {
+  if (
+    isPvpSpawnPointClear(room, fallbackSpawn, dangerousObjectBounds, solidObjectBounds, options, true) &&
+    hasPvpSpawnEscapeSpace(room, fallbackSpawn, [...solidObjectBounds, ...dangerousObjectBounds], options) &&
+    isPvpSpawnReachable(fallbackSpawn, reachableRegion, options)
+  ) {
     return {
       x: origin.x + fallbackSpawn.x,
       y: origin.y + fallbackSpawn.y,
@@ -77,8 +113,10 @@ export function resolvePvpSpawnPoint(options: ResolvePvpSpawnPointOptions): { x:
     room,
     leftSide,
     dangerousObjectBounds,
+    solidObjectBounds,
     true,
     options,
+    reachableRegion,
   );
   if (terrainClearFallback) {
     return {
@@ -91,8 +129,10 @@ export function resolvePvpSpawnPoint(options: ResolvePvpSpawnPointOptions): { x:
     room,
     leftSide,
     dangerousObjectBounds,
+    solidObjectBounds,
     false,
     options,
+    reachableRegion,
   );
   if (objectClearFallback) {
     return {
@@ -111,6 +151,17 @@ export function isPvpDangerousObjectConfig(
   config: GameObjectConfig | null | undefined,
 ): config is GameObjectConfig {
   return config?.category === 'hazard' || config?.category === 'enemy';
+}
+
+export function isPvpSolidObjectConfig(
+  config: GameObjectConfig | null | undefined,
+): config is GameObjectConfig {
+  return Boolean(
+    config &&
+    config.bodyWidth > 0 &&
+    config.bodyHeight > 0 &&
+    (config.category === 'platform' || config.id === 'door_locked' || config.id === 'trapdoor_locked'),
+  );
 }
 
 function getPvpAuthoredDangerousObjectBounds(room: RoomSnapshot): Phaser.Geom.Rectangle[] {
@@ -142,6 +193,21 @@ function getPvpAuthoredDangerousObjectBounds(room: RoomSnapshot): Phaser.Geom.Re
   return dangerousBounds;
 }
 
+function getPvpAuthoredSolidObjectBounds(room: RoomSnapshot): Phaser.Geom.Rectangle[] {
+  const solidBounds: Phaser.Geom.Rectangle[] = [];
+
+  for (const placedObject of room.placedObjects) {
+    const config = getObjectById(placedObject.id);
+    if (!isPvpSolidObjectConfig(config)) {
+      continue;
+    }
+
+    solidBounds.push(getPvpObjectBodyBounds(config, placedObject.x, placedObject.y));
+  }
+
+  return solidBounds;
+}
+
 function getPvpObjectBodyBounds(
   config: GameObjectConfig,
   localX: number,
@@ -171,6 +237,34 @@ function getPvpSpawnColumnOrder(preferredStart: number, leftSide: boolean): numb
   }
 
   return columns;
+}
+
+function resolvePvpSurfaceSpawnPoint(
+  room: RoomSnapshot,
+  preferredStart: number,
+  leftSide: boolean,
+  dangerousObjectBounds: readonly Phaser.Geom.Rectangle[],
+  solidObjectBounds: readonly Phaser.Geom.Rectangle[],
+  options: ResolvePvpSpawnPointOptions,
+  reachableRegion: PvpReachableSpawnRegion | null,
+): { x: number; y: number } | null {
+  const blockers = [...solidObjectBounds, ...dangerousObjectBounds];
+
+  for (const tileX of getPvpSpawnColumnOrder(preferredStart, leftSide)) {
+    const spawn = resolvePvpSurfaceSpawnPointForTile(room, tileX, options.playerHeight);
+    if (
+      !spawn ||
+      !isPvpSpawnPointClear(room, spawn, dangerousObjectBounds, solidObjectBounds, options, true) ||
+      !hasPvpSpawnEscapeSpace(room, spawn, blockers, options) ||
+      !isPvpSpawnReachable(spawn, reachableRegion, options)
+    ) {
+      continue;
+    }
+
+    return spawn;
+  }
+
+  return null;
 }
 
 function resolvePvpSurfaceSpawnPointForTile(
@@ -223,7 +317,8 @@ function isPvpSpawnPointClear(
   room: RoomSnapshot,
   spawn: { x: number; y: number },
   dangerousObjectBounds: readonly Phaser.Geom.Rectangle[],
-  options: Pick<ResolvePvpSpawnPointOptions, 'playerWidth' | 'playerStandingHeight'>,
+  solidObjectBounds: readonly Phaser.Geom.Rectangle[],
+  options: Pick<ResolvePvpSpawnPointOptions, 'playerWidth' | 'playerHeight' | 'playerStandingHeight'>,
   requireTerrainClear = false,
 ): boolean {
   const playerBounds = getPvpSpawnSafetyBounds(spawn.x, spawn.y, options);
@@ -242,20 +337,73 @@ function isPvpSpawnPointClear(
     }
   }
 
-  return !requireTerrainClear || isPvpSpawnTerrainClear(room, playerBounds);
+  for (const solidBounds of solidObjectBounds) {
+    if (Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, solidBounds)) {
+      return false;
+    }
+  }
+
+  return !requireTerrainClear || isPvpSpawnBodyClear(room, spawn, solidObjectBounds, options);
 }
 
 function getPvpSpawnSafetyBounds(
   localX: number,
   localY: number,
-  options: Pick<ResolvePvpSpawnPointOptions, 'playerWidth' | 'playerStandingHeight'>,
+  options: Pick<ResolvePvpSpawnPointOptions, 'playerWidth' | 'playerHeight' | 'playerStandingHeight'>,
 ): Phaser.Geom.Rectangle {
+  const feetY = getPvpSpawnFeetY(localY, options);
   return new Phaser.Geom.Rectangle(
     localX - options.playerWidth / 2 - PVP_SPAWN_DANGER_PADDING_PX,
-    localY - options.playerStandingHeight / 2 - PVP_SPAWN_DANGER_PADDING_PX,
+    feetY - options.playerStandingHeight - PVP_SPAWN_DANGER_PADDING_PX,
     options.playerWidth + PVP_SPAWN_DANGER_PADDING_PX * 2,
     options.playerStandingHeight + PVP_SPAWN_DANGER_PADDING_PX * 2,
   );
+}
+
+function getPvpSpawnBodyBounds(
+  localX: number,
+  localY: number,
+  options: Pick<ResolvePvpSpawnPointOptions, 'playerWidth' | 'playerHeight' | 'playerStandingHeight'>,
+): Phaser.Geom.Rectangle {
+  const feetY = getPvpSpawnFeetY(localY, options);
+  return new Phaser.Geom.Rectangle(
+    localX - options.playerWidth / 2,
+    feetY - options.playerStandingHeight,
+    options.playerWidth,
+    Math.max(1, options.playerStandingHeight - 1),
+  );
+}
+
+function getPvpSpawnFeetY(
+  localY: number,
+  options: Pick<ResolvePvpSpawnPointOptions, 'playerHeight'>,
+): number {
+  return localY + options.playerHeight / 2;
+}
+
+function isPvpSpawnBodyClear(
+  room: RoomSnapshot,
+  spawn: { x: number; y: number },
+  objectBlockers: readonly Phaser.Geom.Rectangle[],
+  options: Pick<ResolvePvpSpawnPointOptions, 'playerWidth' | 'playerHeight' | 'playerStandingHeight'>,
+): boolean {
+  const playerBounds = getPvpSpawnBodyBounds(spawn.x, spawn.y, options);
+  if (
+    playerBounds.left < 0 ||
+    playerBounds.right > ROOM_PX_WIDTH ||
+    playerBounds.top < 0 ||
+    playerBounds.bottom > ROOM_PX_HEIGHT
+  ) {
+    return false;
+  }
+
+  for (const blocker of objectBlockers) {
+    if (Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, blocker)) {
+      return false;
+    }
+  }
+
+  return isPvpSpawnTerrainClear(room, playerBounds);
 }
 
 function isPvpSpawnTerrainClear(room: RoomSnapshot, playerBounds: Phaser.Geom.Rectangle): boolean {
@@ -281,6 +429,37 @@ function isPvpSpawnTerrainClear(room: RoomSnapshot, playerBounds: Phaser.Geom.Re
   return true;
 }
 
+function hasPvpSpawnEscapeSpace(
+  room: RoomSnapshot,
+  spawn: { x: number; y: number },
+  objectBlockers: readonly Phaser.Geom.Rectangle[],
+  options: Pick<ResolvePvpSpawnPointOptions, 'playerWidth' | 'playerHeight' | 'playerStandingHeight'>,
+): boolean {
+  if (!isPvpSpawnBodyClear(room, spawn, objectBlockers, options)) {
+    return false;
+  }
+
+  for (const direction of [-1, 1] as const) {
+    let lastClearDistance = 0;
+    for (
+      let distance = PVP_SPAWN_ESCAPE_STEP_PX;
+      distance <= PVP_SPAWN_MIN_ESCAPE_DISTANCE_PX;
+      distance += PVP_SPAWN_ESCAPE_STEP_PX
+    ) {
+      if (!isPvpSpawnBodyClear(room, { x: spawn.x + direction * distance, y: spawn.y }, objectBlockers, options)) {
+        break;
+      }
+      lastClearDistance = distance;
+    }
+
+    if (lastClearDistance >= PVP_SPAWN_MIN_ESCAPE_DISTANCE_PX) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function isSolidTerrainAtRoomLocalPoint(room: RoomSnapshot, localX: number, localY: number): boolean {
   const tileX = Math.floor(localX / TILE_SIZE);
   const tileY = Math.floor(localY / TILE_SIZE);
@@ -296,8 +475,10 @@ function resolvePvpEmergencySpawnPoint(
   room: RoomSnapshot,
   leftSide: boolean,
   dangerousObjectBounds: readonly Phaser.Geom.Rectangle[],
+  solidObjectBounds: readonly Phaser.Geom.Rectangle[],
   requireTerrainClear: boolean,
-  options: Pick<ResolvePvpSpawnPointOptions, 'playerWidth' | 'playerStandingHeight'>,
+  options: Pick<ResolvePvpSpawnPointOptions, 'playerWidth' | 'playerHeight' | 'playerStandingHeight'>,
+  reachableRegion: PvpReachableSpawnRegion | null,
 ): { x: number; y: number } | null {
   const preferredStart = Phaser.Math.Clamp(
     Math.floor(ROOM_WIDTH * (leftSide ? 0.18 : 0.82)),
@@ -307,16 +488,210 @@ function resolvePvpEmergencySpawnPoint(
   const columns = getPvpSpawnColumnOrder(preferredStart, leftSide);
   const topY = options.playerStandingHeight / 2 + PVP_SPAWN_DANGER_PADDING_PX + 1;
   const bottomY = ROOM_PX_HEIGHT - options.playerStandingHeight / 2 - PVP_SPAWN_DANGER_PADDING_PX - 1;
+  const blockers = [...solidObjectBounds, ...dangerousObjectBounds];
 
   for (const tileX of columns) {
     const spawnX = tileX * TILE_SIZE + TILE_SIZE / 2;
     for (let spawnY = bottomY; spawnY >= topY; spawnY -= PVP_SPAWN_EMERGENCY_STEP_PX) {
       const spawn = { x: spawnX, y: spawnY };
-      if (isPvpSpawnPointClear(room, spawn, dangerousObjectBounds, options, requireTerrainClear)) {
+      if (
+        isPvpSpawnPointClear(room, spawn, dangerousObjectBounds, solidObjectBounds, options, requireTerrainClear) &&
+        (!requireTerrainClear || hasPvpSpawnEscapeSpace(room, spawn, blockers, options)) &&
+        isPvpSpawnReachable(spawn, reachableRegion, options)
+      ) {
         return spawn;
       }
     }
   }
 
   return null;
+}
+
+interface PvpReachableSpawnRegion {
+  readonly cells: ReadonlySet<string>;
+}
+
+function resolvePvpReachableSpawnRegion(
+  room: RoomSnapshot,
+  solidObjectBounds: readonly Phaser.Geom.Rectangle[],
+  dangerousObjectBounds: readonly Phaser.Geom.Rectangle[],
+  options: Pick<ResolvePvpSpawnPointOptions, 'playerWidth' | 'playerHeight' | 'playerStandingHeight'>,
+): PvpReachableSpawnRegion | null {
+  const origin = {
+    x: room.coordinates.x * ROOM_PX_WIDTH,
+    y: room.coordinates.y * ROOM_PX_HEIGHT,
+  };
+  const startPoint = resolveGoalRunStartPoint(room, options.playerHeight);
+  const startSpawn = {
+    x: startPoint.x - origin.x,
+    y: startPoint.y - origin.y - options.playerHeight / 2,
+  };
+  const blockers = [...solidObjectBounds, ...dangerousObjectBounds];
+  const startCell = findNearestPvpReachableCell(room, startSpawn, blockers, options);
+  if (!startCell) {
+    return null;
+  }
+
+  const cells = new Set<string>();
+  const queue: Array<{ cellX: number; cellY: number }> = [startCell];
+  cells.add(getPvpReachableCellKey(startCell.cellX, startCell.cellY));
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index];
+    for (const [offsetX, offsetY] of PVP_REACHABLE_CELL_NEIGHBORS) {
+      const next = { cellX: current.cellX + offsetX, cellY: current.cellY + offsetY };
+      if (
+        next.cellX < 0 ||
+        next.cellY < 0 ||
+        next.cellX >= getPvpReachableGridWidth() ||
+        next.cellY >= getPvpReachableGridHeight()
+      ) {
+        continue;
+      }
+
+      const key = getPvpReachableCellKey(next.cellX, next.cellY);
+      if (cells.has(key)) {
+        continue;
+      }
+
+      if (!isPvpReachableCellClear(room, next.cellX, next.cellY, blockers, options)) {
+        continue;
+      }
+
+      cells.add(key);
+      queue.push(next);
+    }
+  }
+
+  return { cells };
+}
+
+const PVP_REACHABLE_CELL_NEIGHBORS: ReadonlyArray<readonly [number, number]> = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+];
+
+function findNearestPvpReachableCell(
+  room: RoomSnapshot,
+  spawn: { x: number; y: number },
+  objectBlockers: readonly Phaser.Geom.Rectangle[],
+  options: Pick<ResolvePvpSpawnPointOptions, 'playerWidth' | 'playerHeight' | 'playerStandingHeight'>,
+): { cellX: number; cellY: number } | null {
+  const desired = getPvpReachableCellForSpawn(spawn, options);
+  const maxRadius = Math.max(getPvpReachableGridWidth(), getPvpReachableGridHeight());
+
+  for (let radius = 0; radius <= maxRadius; radius += 1) {
+    for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
+      for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+        if (Math.max(Math.abs(offsetX), Math.abs(offsetY)) !== radius) {
+          continue;
+        }
+
+        const cellX = desired.cellX + offsetX;
+        const cellY = desired.cellY + offsetY;
+        if (
+          cellX < 0 ||
+          cellY < 0 ||
+          cellX >= getPvpReachableGridWidth() ||
+          cellY >= getPvpReachableGridHeight()
+        ) {
+          continue;
+        }
+
+        if (isPvpReachableCellClear(room, cellX, cellY, objectBlockers, options)) {
+          return { cellX, cellY };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function isPvpSpawnReachable(
+  spawn: { x: number; y: number },
+  reachableRegion: PvpReachableSpawnRegion | null,
+  options: Pick<ResolvePvpSpawnPointOptions, 'playerHeight' | 'playerStandingHeight'>,
+): boolean {
+  if (!reachableRegion) {
+    return true;
+  }
+
+  const cell = getPvpReachableCellForSpawn(spawn, options);
+  return reachableRegion.cells.has(getPvpReachableCellKey(cell.cellX, cell.cellY));
+}
+
+function isPvpReachableCellClear(
+  room: RoomSnapshot,
+  cellX: number,
+  cellY: number,
+  objectBlockers: readonly Phaser.Geom.Rectangle[],
+  options: Pick<ResolvePvpSpawnPointOptions, 'playerWidth' | 'playerStandingHeight'>,
+): boolean {
+  const bounds = getPvpReachableCellBodyBounds(cellX, cellY, options);
+  if (
+    bounds.left < 0 ||
+    bounds.right > ROOM_PX_WIDTH ||
+    bounds.top < 0 ||
+    bounds.bottom > ROOM_PX_HEIGHT
+  ) {
+    return false;
+  }
+
+  for (const blocker of objectBlockers) {
+    if (Phaser.Geom.Intersects.RectangleToRectangle(bounds, blocker)) {
+      return false;
+    }
+  }
+
+  return isPvpSpawnTerrainClear(room, bounds);
+}
+
+function getPvpReachableCellForSpawn(
+  spawn: { x: number; y: number },
+  options: Pick<ResolvePvpSpawnPointOptions, 'playerHeight' | 'playerStandingHeight'>,
+): { cellX: number; cellY: number } {
+  const feetY = getPvpSpawnFeetY(spawn.y, options);
+  const bodyCenterY = feetY - options.playerStandingHeight / 2;
+  return {
+    cellX: Phaser.Math.Clamp(
+      Math.floor(spawn.x / PVP_SPAWN_REACHABILITY_STEP_PX),
+      0,
+      getPvpReachableGridWidth() - 1,
+    ),
+    cellY: Phaser.Math.Clamp(
+      Math.floor(bodyCenterY / PVP_SPAWN_REACHABILITY_STEP_PX),
+      0,
+      getPvpReachableGridHeight() - 1,
+    ),
+  };
+}
+
+function getPvpReachableCellBodyBounds(
+  cellX: number,
+  cellY: number,
+  options: Pick<ResolvePvpSpawnPointOptions, 'playerWidth' | 'playerStandingHeight'>,
+): Phaser.Geom.Rectangle {
+  const centerX = cellX * PVP_SPAWN_REACHABILITY_STEP_PX + PVP_SPAWN_REACHABILITY_STEP_PX / 2;
+  const centerY = cellY * PVP_SPAWN_REACHABILITY_STEP_PX + PVP_SPAWN_REACHABILITY_STEP_PX / 2;
+  return new Phaser.Geom.Rectangle(
+    centerX - options.playerWidth / 2,
+    centerY - options.playerStandingHeight / 2,
+    options.playerWidth,
+    Math.max(1, options.playerStandingHeight - 1),
+  );
+}
+
+function getPvpReachableGridWidth(): number {
+  return Math.ceil(ROOM_PX_WIDTH / PVP_SPAWN_REACHABILITY_STEP_PX);
+}
+
+function getPvpReachableGridHeight(): number {
+  return Math.ceil(ROOM_PX_HEIGHT / PVP_SPAWN_REACHABILITY_STEP_PX);
+}
+
+function getPvpReachableCellKey(cellX: number, cellY: number): string {
+  return `${cellX},${cellY}`;
 }

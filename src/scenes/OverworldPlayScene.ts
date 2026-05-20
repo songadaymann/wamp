@@ -248,6 +248,7 @@ import {
 } from './overworld/terrainCollision';
 import {
   isPvpDangerousObjectConfig,
+  isPvpSolidObjectConfig,
   resolvePvpSpawnPoint as resolvePvpArenaSpawnPoint,
 } from './overworld/pvpSpawn';
 import type {
@@ -4814,6 +4815,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       playerHeight: this.PLAYER_HEIGHT,
       playerStandingHeight: this.PLAYER_STANDING_HEIGHT,
       liveDangerousObjectBounds: this.getPvpLiveDangerousObjectBounds(room),
+      liveSolidObjectBounds: this.getPvpLiveSolidObjectBounds(room),
     });
   }
 
@@ -4849,6 +4851,40 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     return dangerousBounds;
+  }
+
+  private getPvpLiveSolidObjectBounds(room: RoomSnapshot): Phaser.Geom.Rectangle[] | undefined {
+    const loadedRoom = this.loadedFullRoomsById.get(room.id) ?? null;
+    if (!loadedRoom) {
+      return undefined;
+    }
+
+    const solidBounds: Phaser.Geom.Rectangle[] = [];
+    const origin = this.getRoomOrigin(room.coordinates);
+    for (const liveObject of loadedRoom.liveObjects) {
+      if (
+        !isPvpSolidObjectConfig(liveObject.config) ||
+        !liveObject.sprite.active ||
+        !liveObject.sprite.body
+      ) {
+        continue;
+      }
+
+      const body = liveObject.sprite.body as ArcadeObjectBody;
+      if (!body.enable) {
+        continue;
+      }
+
+      const bounds = this.getArcadeBodyBounds(body);
+      solidBounds.push(new Phaser.Geom.Rectangle(
+        bounds.x - origin.x,
+        bounds.y - origin.y,
+        bounds.width,
+        bounds.height,
+      ));
+    }
+
+    return solidBounds;
   }
 
   private publishPvpCombatAction(event: CombatPresentationEvent): void {

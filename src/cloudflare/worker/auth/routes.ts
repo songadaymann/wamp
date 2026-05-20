@@ -169,8 +169,8 @@ export async function handleRequestMagicLink(request: Request, env: Env): Promis
 
   await createMagicLinkToken(env, user.id, email, tokenHash, expiresAt, now.toISOString());
 
-  const verifyBaseUrl = new URL(request.url).origin;
   const returnBaseUrl = resolveMagicLinkReturnUrl(request, env, body.returnTo);
+  const verifyBaseUrl = resolveMagicLinkVerifyBaseUrl(request, env, returnBaseUrl);
   const magicLinkUrl = new URL('/api/auth/verify', verifyBaseUrl);
   magicLinkUrl.searchParams.set('token', token);
   magicLinkUrl.searchParams.set('returnTo', returnBaseUrl);
@@ -254,6 +254,30 @@ function resolveMagicLinkReturnUrl(request: Request, env: Env, candidate: unknow
   }
 
   return trustedBase;
+}
+
+function resolveMagicLinkVerifyBaseUrl(request: Request, env: Env, returnBaseUrl: string): string {
+  if (env.AUTH_DEBUG_MAGIC_LINKS === '1') {
+    try {
+      const parsedReturnUrl = new URL(returnBaseUrl);
+      if (isLocalMagicLinkHostname(parsedReturnUrl.hostname)) {
+        return parsedReturnUrl.origin;
+      }
+    } catch {
+      // Fall back to the worker origin below.
+    }
+  }
+
+  return new URL(request.url).origin;
+}
+
+function isLocalMagicLinkHostname(hostname: string): boolean {
+  return (
+    hostname === 'localhost'
+    || hostname === '127.0.0.1'
+    || hostname === '[::1]'
+    || hostname === '::1'
+  );
 }
 
 function buildMagicLinkRedirectUrl(
