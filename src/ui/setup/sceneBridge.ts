@@ -254,7 +254,7 @@ export type CourseComposerState = {
 };
 
 export interface OverworldSceneBridge {
-  playSelectedRoom?: () => void;
+  playSelectedRoom?: (options?: { forceGoalIntro?: boolean }) => void;
   restartCurrentRun?: () => Promise<void> | void;
   startRoomRushRun?: (options: {
     difficulty: RoomRushDifficulty;

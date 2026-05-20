@@ -1255,6 +1255,20 @@
           <button id="btn-world-jump" class="bar-btn bar-btn-small">Warp</button>
         </div>
         <div class="world-hud-row world-hud-row-primary-actions">
+          <div id="room-sequence-hud" class="room-sequence-hud hidden" aria-hidden="true">
+            <div class="room-sequence-copy">
+              <div id="room-sequence-kicker" class="room-sequence-kicker">Play All</div>
+              <div id="room-sequence-title" class="room-sequence-title">Queue</div>
+              <div id="room-sequence-meta" class="room-sequence-meta"></div>
+            </div>
+            <div class="room-sequence-buttons">
+              <button id="btn-room-sequence-stop" class="bar-btn bar-btn-small" type="button">Stop</button>
+              <button id="btn-room-sequence-restart" class="bar-btn bar-btn-small" type="button">Restart</button>
+              <button id="btn-room-sequence-current" class="bar-btn bar-btn-small hidden" type="button">Rate</button>
+              <button id="btn-room-sequence-next" class="bar-btn bar-btn-small" type="button">Next</button>
+              <button id="btn-room-sequence-comment" class="bar-btn bar-btn-small" type="button">Comment</button>
+            </div>
+          </div>
           <button id="btn-world-play" class="bar-btn bar-btn-small world-btn-play" disabled>Play Room</button>
           <button id="btn-world-restart" class="bar-btn bar-btn-small world-btn-play hidden" type="button">Restart</button>
           <button id="btn-world-play-course" class="bar-btn bar-btn-small world-btn-play hidden" disabled>Play Course</button>
@@ -1750,19 +1764,6 @@
     </div>
   </div>
 
-  <div id="explore-queue-bar" class="explore-queue-bar hidden" aria-hidden="true">
-    <div class="explore-queue-copy">
-      <div id="explore-queue-kicker" class="explore-queue-kicker">Play All</div>
-      <div id="explore-queue-title" class="explore-queue-title">Queue</div>
-      <div id="explore-queue-meta" class="explore-queue-meta"></div>
-    </div>
-    <div class="explore-queue-buttons">
-      <button id="btn-explore-queue-current" class="bar-btn bar-btn-small" type="button">Play</button>
-      <button id="btn-explore-queue-next" class="bar-btn bar-btn-small" type="button">Next</button>
-      <button id="btn-explore-queue-stop" class="bar-btn bar-btn-small" type="button">Stop</button>
-    </div>
-  </div>
-
   <div id="profile-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel profile-modal-panel" role="dialog" aria-modal="true" aria-label="Profile">
       <div class="history-modal-header profile-modal-header">
@@ -1847,12 +1848,33 @@
           <div id="playlist-modal-meta" class="history-modal-meta"></div>
         </div>
         <button id="btn-playlist-share" class="bar-btn bar-btn-small hidden" type="button">Copy Link</button>
+        <button id="btn-playlist-play" class="bar-btn bar-btn-small hidden" type="button">Play Playlist</button>
         <button id="btn-playlist-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
       <div id="playlist-modal-error" class="history-modal-error hidden"></div>
       <div id="playlist-description" class="profile-overview-bio hidden"></div>
       <div id="playlist-rooms-empty" class="leaderboard-empty hidden">No rooms in this playlist yet.</div>
       <div id="playlist-room-list" class="history-version-list playlist-room-list"></div>
+    </div>
+  </div>
+
+  <div id="playlist-intro-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel playlist-intro-modal-panel" role="dialog" aria-modal="true" aria-labelledby="playlist-intro-title">
+      <div class="playlist-intro-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Playlist</div>
+          <h2 id="playlist-intro-title" class="history-modal-title">Playlist</h2>
+          <div id="playlist-intro-meta" class="history-modal-meta"></div>
+        </div>
+      </div>
+      <div class="playlist-intro-controls" aria-label="Controls">
+        <div class="playlist-intro-control"><span class="controls-key">WASD / Arrows</span><span>Move</span></div>
+        <div class="playlist-intro-control"><span class="controls-key">Space / Up</span><span>Jump</span></div>
+        <div class="playlist-intro-control"><span class="controls-key">E</span><span>Shoot</span></div>
+        <div class="playlist-intro-control"><span class="controls-key">Q</span><span>Sword</span></div>
+      </div>
+      <div id="playlist-intro-levels" class="playlist-intro-level-grid"></div>
+      <button id="btn-playlist-intro-start" class="bar-btn playlist-intro-start-button" type="button">Start Playlist</button>
     </div>
   </div>
 

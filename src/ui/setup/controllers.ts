@@ -9,7 +9,6 @@ import { CourseModalController } from './courseModal';
 import { CourseComposerPanelController } from './courseComposerPanel';
 import { setupCustomSpriteEditor } from './customSpriteEditor';
 import { ExploreModalController } from './exploreModal';
-import { ExploreQueueController } from './exploreQueueController';
 import { GuestBuilderClaimModalController } from './guestBuilderClaimModal';
 import { GuestbookModalController } from './guestbookModal';
 import { RoomHistoryModalController } from './historyModal';
@@ -17,6 +16,8 @@ import { setupKeyboardShortcutPassthrough } from './keyboardPassthrough';
 import { LeaderboardModalController } from './leaderboardModal';
 import { PaletteController } from './paletteController';
 import { PlaylistModalController } from './playlistModal';
+import { PlaylistIntroModalController } from './playlistIntroModal';
+import { RoomSequenceController } from './roomSequenceController';
 import { setupRoomMusicControls } from './musicControls';
 import { ProfileModalController } from './profileModal';
 import { RewardStingController } from './rewardStings';
@@ -39,7 +40,7 @@ interface UiControllers {
   historyModal: RoomHistoryModalController;
   leaderboardModal: LeaderboardModalController;
   exploreModal: ExploreModalController;
-  exploreQueue: ExploreQueueController;
+  roomSequence: RoomSequenceController;
   guestBuilderClaimModal: GuestBuilderClaimModalController;
   guestbookModal: GuestbookModalController;
   settingsModal: SettingsModalController;
@@ -50,6 +51,7 @@ interface UiControllers {
   courseComposerPanel: CourseComposerPanelController;
   profileModal: ProfileModalController;
   playlistModal: PlaylistModalController;
+  playlistIntroModal: PlaylistIntroModalController;
   rewardStings: RewardStingController;
   xpReceipts: XpReceiptController;
   rewardStingCatchup: RewardStingCatchupController;
@@ -81,23 +83,27 @@ export function setupUiControllers(game: Phaser.Game): void {
 
 function createUiControllers(game: Phaser.Game): UiControllers {
   const leaderboardModal = new LeaderboardModalController(game);
+  const controlsModal = new ControlsModalController();
+  const playlistIntroModal = new PlaylistIntroModalController();
+  const welcomeModal = new WelcomeModalController(game);
 
   return {
     paletteController: new PaletteController(),
     historyModal: new RoomHistoryModalController(game),
     leaderboardModal,
     exploreModal: new ExploreModalController(game),
-    exploreQueue: new ExploreQueueController(game, leaderboardModal),
+    roomSequence: new RoomSequenceController(game, leaderboardModal, playlistIntroModal, welcomeModal),
     guestBuilderClaimModal: new GuestBuilderClaimModalController(),
     guestbookModal: new GuestbookModalController(),
     settingsModal: new SettingsModalController(),
-    controlsModal: new ControlsModalController(),
+    controlsModal,
     aboutModal: new AboutModalController(),
     chatModerationModal: new ChatModerationModalController(),
     courseModal: new CourseModalController(game),
     courseComposerPanel: new CourseComposerPanelController(game),
     profileModal: new ProfileModalController(game),
     playlistModal: new PlaylistModalController(game),
+    playlistIntroModal,
     rewardStings: new RewardStingController(),
     xpReceipts: new XpReceiptController(),
     rewardStingCatchup: new RewardStingCatchupController(),
@@ -106,7 +112,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     roomRushResultModal: new RoomRushResultModalController(game),
     runRatingModal: new RunRatingModalController(game),
     signTextModal: new SignTextModalController(game),
-    welcomeModal: new WelcomeModalController(game),
+    welcomeModal,
     chatPanel: new ChatPanelController(),
     mobileUi: new MobileUiController(game),
   };
@@ -116,7 +122,7 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.historyModal.init();
   controllers.leaderboardModal.init();
   controllers.exploreModal.init();
-  controllers.exploreQueue.init();
+  controllers.roomSequence.init();
   controllers.guestBuilderClaimModal.init();
   controllers.guestbookModal.init();
   controllers.settingsModal.init();
@@ -126,11 +132,12 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.courseModal.init();
   controllers.courseComposerPanel.init();
   controllers.profileModal.init();
+  controllers.roomGoalIntroModal.init();
   controllers.playlistModal.init();
+  controllers.playlistIntroModal.init();
   controllers.rewardStings.init();
   controllers.xpReceipts.init();
   controllers.rewardStingCatchup.init();
-  controllers.roomGoalIntroModal.init();
   controllers.roomRushModal.init();
   controllers.roomRushResultModal.init();
   controllers.runRatingModal.init();
@@ -155,7 +162,8 @@ function configureEditorBridge(controllers: UiControllers): void {
       controllers.courseModal.close();
       controllers.chatModerationModal.close();
       controllers.playlistModal.close();
-      controllers.exploreQueue.stop();
+      controllers.playlistIntroModal.close();
+      controllers.roomSequence.stop({ returnToWorld: false });
     },
     openHistory: () => controllers.historyModal.open(),
   });

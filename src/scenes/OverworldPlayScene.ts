@@ -353,6 +353,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private playfunPauseDepth = 0;
   private playfunPauseRequested = false;
   private roomGoalIntroFromOverworldPending = false;
+  private forceRoomGoalIntroFromOverworldPending = false;
   private roomGoalIntroPauseRequested = false;
   private scenePauseApplied = false;
 
@@ -1732,8 +1733,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       getActiveCourseEditContext: (roomId) => this.getActiveCourseDraftSessionContextForRoom(roomId),
       resetPlaySession: () => this.sessionResetController.resetPlaySession(),
       clearTouchGestureState: () => this.clearTouchGestureState(),
-      requestRoomGoalIntroForNextOverworldEntry: () => {
+      requestRoomGoalIntroForNextOverworldEntry: (options) => {
         this.roomGoalIntroFromOverworldPending = true;
+        this.forceRoomGoalIntroFromOverworldPending = options?.force === true;
       },
       clearGoalRun: () => {
         this.goalRunController.clearCurrentRun();
@@ -3036,14 +3038,16 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (!this.roomGoalIntroFromOverworldPending) {
       return false;
     }
+    const forceGoalIntro = this.forceRoomGoalIntroFromOverworldPending;
     this.roomGoalIntroFromOverworldPending = false;
+    this.forceRoomGoalIntroFromOverworldPending = false;
 
     const roomGoalIntroModal = getRoomGoalIntroModalController();
     if (!roomGoalIntroModal || roomGoalIntroModal.isOpen()) {
       return false;
     }
 
-    return roomGoalIntroModal.shouldShowForRoom(room);
+    return forceGoalIntro || roomGoalIntroModal.shouldShowForRoom(room);
   }
 
   private areMultiplayerRoomGoalsActive(): boolean {
@@ -4052,7 +4056,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.constrainInspectCamera();
   }
 
-  playSelectedRoom(): void {
+  playSelectedRoom(options: { forceGoalIntro?: boolean } = {}): void {
     if (this.mode === 'play') {
       if (this.activeRoomRushRun) {
         this.endRoomRushRun();
@@ -4062,7 +4066,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    this.flowController.playSelectedRoom();
+    this.flowController.playSelectedRoom(options);
   }
 
   async startRoomRushRun(options: {
@@ -4106,6 +4110,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.clearTouchGestureState();
     this.goalRunController.clearCurrentRun();
     this.roomGoalIntroFromOverworldPending = false;
+    this.forceRoomGoalIntroFromOverworldPending = false;
     this.roomGoalIntroPauseRequested = false;
     this.syncScenePauseState();
     this.setRoomRushMutationStatus(
@@ -4161,6 +4166,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.clearTouchGestureState();
     this.goalRunController.clearCurrentRun();
     this.roomGoalIntroFromOverworldPending = false;
+    this.forceRoomGoalIntroFromOverworldPending = false;
     this.roomGoalIntroPauseRequested = false;
     this.syncScenePauseState();
     this.setRoomRushMutationStatus(
@@ -4250,6 +4256,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (!this.areMultiplayerRoomGoalsActive()) {
       this.goalRunController.clearCurrentRun();
       this.roomGoalIntroFromOverworldPending = false;
+      this.forceRoomGoalIntroFromOverworldPending = false;
       this.roomGoalIntroPauseRequested = false;
     }
     if (!this.areMultiplayerCourseGoalsActive()) {
@@ -5409,6 +5416,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.playfunPauseDepth = 0;
     this.playfunPauseRequested = false;
     this.roomGoalIntroFromOverworldPending = false;
+    this.forceRoomGoalIntroFromOverworldPending = false;
     this.roomGoalIntroPauseRequested = false;
     this.scenePauseApplied = false;
     getRoomGoalIntroModalController()?.forceClose();

@@ -12,11 +12,13 @@ import {
   PLAYLIST_OPEN_REQUEST_EVENT,
   type PlaylistOpenRequestDetail,
 } from './playlistEvents';
+import { requestRoomSequenceStart } from './roomSequenceEvents';
 
 type PlaylistModalElements = {
   modal: HTMLElement | null;
   closeButton: HTMLButtonElement | null;
   shareButton: HTMLButtonElement | null;
+  playButton: HTMLButtonElement | null;
   error: HTMLElement | null;
   title: HTMLElement | null;
   meta: HTMLElement | null;
@@ -40,6 +42,10 @@ export class PlaylistModalController {
 
   private readonly handleShareClick = () => {
     void this.shareCurrentPlaylist();
+  };
+
+  private readonly handlePlayClick = () => {
+    this.startCurrentPlaylistPlayback({ fromShareLink: false });
   };
 
   private readonly handleBackdropClick = (event: Event) => {
@@ -77,6 +83,7 @@ export class PlaylistModalController {
       modal: this.doc.getElementById('playlist-modal'),
       closeButton: this.doc.getElementById('btn-playlist-close') as HTMLButtonElement | null,
       shareButton: this.doc.getElementById('btn-playlist-share') as HTMLButtonElement | null,
+      playButton: this.doc.getElementById('btn-playlist-play') as HTMLButtonElement | null,
       error: this.doc.getElementById('playlist-modal-error'),
       title: this.doc.getElementById('playlist-modal-title'),
       meta: this.doc.getElementById('playlist-modal-meta'),
@@ -89,6 +96,7 @@ export class PlaylistModalController {
   init(): void {
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.shareButton?.addEventListener('click', this.handleShareClick);
+    this.elements.playButton?.addEventListener('click', this.handlePlayClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
     this.windowObj.addEventListener(PLAYLIST_OPEN_REQUEST_EVENT, this.handlePlaylistOpenRequest as EventListener);
@@ -108,7 +116,7 @@ export class PlaylistModalController {
     this.setError(null);
   }
 
-  async open(slug: string): Promise<void> {
+  async open(slug: string, options: { autoPlay?: boolean } = {}): Promise<void> {
     if (!this.elements.modal) {
       return;
     }
@@ -129,6 +137,9 @@ export class PlaylistModalController {
       this.currentPlaylist = playlist;
       this.loading = false;
       this.render();
+      if (options.autoPlay) {
+        this.startCurrentPlaylistPlayback({ fromShareLink: true });
+      }
     } catch (error) {
       if (this.currentSlug !== slug) {
         return;
@@ -145,7 +156,7 @@ export class PlaylistModalController {
     if (!slug) {
       return;
     }
-    void this.open(slug);
+    void this.open(slug, { autoPlay: true });
   }
 
   private render(): void {
@@ -170,6 +181,11 @@ export class PlaylistModalController {
       this.elements.shareButton.classList.toggle('hidden', !playlist);
       this.elements.shareButton.disabled = !playlist;
       this.elements.shareButton.textContent = 'Copy Link';
+    }
+    if (this.elements.playButton) {
+      const canPlay = Boolean(playlist && playlist.items.length > 0);
+      this.elements.playButton.classList.toggle('hidden', !playlist);
+      this.elements.playButton.disabled = !canPlay;
     }
 
     this.renderRooms(playlist?.items ?? []);
@@ -356,6 +372,34 @@ export class PlaylistModalController {
     } catch {
       this.setError(shareUrl);
     }
+  }
+
+  private startCurrentPlaylistPlayback(options: { fromShareLink: boolean }): void {
+    const playlist = this.currentPlaylist;
+    if (!playlist) {
+      return;
+    }
+
+    if (playlist.items.length === 0) {
+      this.setError('No rooms in this playlist yet.');
+      return;
+    }
+
+    this.close();
+    requestRoomSequenceStart({
+      mode: 'play',
+      kind: 'playlist',
+      entries: playlist.items.map((item) => ({
+        roomId: item.roomId,
+        roomCoordinates: item.roomCoordinates,
+        roomVersion: item.roomVersion,
+        roomTitle: item.roomTitle,
+      })),
+      sourceLabel: `${playlist.ownerDisplayName}'s playlist`,
+      kickerLabel: playlist.title,
+      forceGoalIntro: options.fromShareLink,
+      showDesktopControlsIntro: options.fromShareLink,
+    });
   }
 
   private createEmptyState(text: string): HTMLElement {

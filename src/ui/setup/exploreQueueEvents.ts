@@ -1,4 +1,5 @@
 import type { RoomDiscoveryEntry } from '../../runs/model';
+import { requestRoomSequenceStart } from './roomSequenceEvents';
 
 export const EXPLORE_QUEUE_START_EVENT = 'explore-queue-start';
 
@@ -16,4 +17,11 @@ export function requestExploreQueueStart(detail: ExploreQueueStartDetail): void 
       detail,
     }),
   );
+  requestRoomSequenceStart({
+    mode: detail.mode,
+    kind: 'explore',
+    entries: detail.entries,
+    sourceLabel: detail.sourceLabel,
+    kickerLabel: detail.mode === 'play' ? 'Play All' : 'Rate All',
+  });
 }

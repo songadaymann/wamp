@@ -70,6 +70,8 @@ export class ExploreModalController {
   private playlistPickerRoomId: string | null = null;
   private playlistPickerSelectedId: string | null = null;
   private playlistPendingRoomId: string | null = null;
+  private readonly playlistFeedbackByRoomId = new Map<string, string>();
+  private readonly playlistFeedbackTimers = new Map<string, number>();
   private exploreMode: ExploreMode = 'rooms';
   private discoverFilter: RoomDifficulty | null = null;
   private discoverSort: Exclude<RoomDiscoverySort, 'builder'> = 'featured';
@@ -222,6 +224,7 @@ export class ExploreModalController {
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
     window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
     this.previewObserver?.disconnect();
+    this.clearPlaylistFeedback();
     this.close();
   }
 
@@ -242,6 +245,7 @@ export class ExploreModalController {
     this.playlistPickerRoomId = null;
     this.playlistPickerSelectedId = null;
     this.playlistPendingRoomId = null;
+    this.clearPlaylistFeedback();
     this.exploreMode = 'rooms';
     this.discoverFilter = null;
     this.discoverSort = 'featured';
@@ -621,6 +625,7 @@ export class ExploreModalController {
       });
 
       action.append(select, addButton, cancelButton);
+      this.appendPlaylistFeedback(action, entry);
       return action;
     }
 
@@ -635,6 +640,7 @@ export class ExploreModalController {
       void this.handlePlaylistAction(entry);
     });
     action.appendChild(button);
+    this.appendPlaylistFeedback(action, entry);
     return action;
   }
 
@@ -693,6 +699,7 @@ export class ExploreModalController {
       this.myPlaylistsLoaded = false;
       this.playlistPickerRoomId = null;
       this.playlistPickerSelectedId = null;
+      this.setPlaylistFeedback(entry.roomId, `Added to "${playlist.title}".`);
       this.setError(null);
     } catch (error) {
       this.setError(error instanceof Error ? error.message : 'Failed to add room to playlist.');
@@ -700,6 +707,41 @@ export class ExploreModalController {
       this.playlistPendingRoomId = null;
       this.render();
     }
+  }
+
+  private appendPlaylistFeedback(container: HTMLElement, entry: RoomDiscoveryEntry): void {
+    const message = this.playlistFeedbackByRoomId.get(entry.roomId);
+    if (!message) {
+      return;
+    }
+
+    const feedback = this.doc.createElement('div');
+    feedback.className = 'explore-room-playlist-feedback';
+    feedback.textContent = message;
+    container.appendChild(feedback);
+  }
+
+  private setPlaylistFeedback(roomId: string, message: string): void {
+    const existingTimer = this.playlistFeedbackTimers.get(roomId);
+    if (existingTimer !== undefined) {
+      window.clearTimeout(existingTimer);
+    }
+
+    this.playlistFeedbackByRoomId.set(roomId, message);
+    const timer = window.setTimeout(() => {
+      this.playlistFeedbackTimers.delete(roomId);
+      this.playlistFeedbackByRoomId.delete(roomId);
+      this.render();
+    }, 2400);
+    this.playlistFeedbackTimers.set(roomId, timer);
+  }
+
+  private clearPlaylistFeedback(): void {
+    for (const timer of this.playlistFeedbackTimers.values()) {
+      window.clearTimeout(timer);
+    }
+    this.playlistFeedbackTimers.clear();
+    this.playlistFeedbackByRoomId.clear();
   }
 
   private createBuilderRow(entry: RoomDiscoveryEntry): HTMLElement {

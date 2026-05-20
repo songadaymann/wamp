@@ -14,7 +14,7 @@
 }
 
 #explore-modal .explore-queue-actions .bar-btn,
-.explore-queue-bar .bar-btn {
+.room-sequence-hud .bar-btn {
   min-height: 34px;
   padding: 8px 12px 7px;
   border: 2px solid #18161c;
@@ -30,7 +30,7 @@
 }
 
 #explore-modal .explore-queue-actions .bar-btn:disabled,
-.explore-queue-bar .bar-btn:disabled {
+.room-sequence-hud .bar-btn:disabled {
   background: #c2bbb6;
   color: #6d6768;
   box-shadow: none;
@@ -43,95 +43,108 @@
   line-height: 1.35;
 }
 
-.explore-queue-bar {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  z-index: 39;
+.room-sequence-hud {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  width: min(520px, calc(100vw - 32px));
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  width: min(560px, calc(100vw - 48px));
   padding: 12px;
   background: #fff3db;
   border: 3px solid #79ccde;
   box-shadow: 5px 5px 0 #18161c;
 }
 
-.explore-queue-bar.hidden {
+.room-sequence-hud.hidden {
   display: none;
 }
 
-.explore-queue-bar[data-queue-tone='error'] {
+.room-sequence-hud[data-sequence-tone='error'] {
   border-color: #ed5f4b;
 }
 
-.explore-queue-bar[data-queue-tone='done'] {
+.room-sequence-hud[data-sequence-tone='done'] {
   border-color: #277b30;
 }
 
-.explore-queue-copy {
+.room-sequence-copy {
   min-width: 0;
   display: grid;
   gap: 4px;
 }
 
-.explore-queue-kicker,
-.explore-queue-title,
-.explore-queue-meta {
+.room-sequence-kicker,
+.room-sequence-title,
+.room-sequence-meta {
   overflow-wrap: anywhere;
   font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
   line-height: 1.25;
 }
 
-.explore-queue-kicker {
+.room-sequence-kicker {
   color: #2c5071;
   font-size: 10px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
-.explore-queue-title {
+.room-sequence-title {
   color: #18161c;
   font-family: 'Super Mario Bros. NES', monospace;
   font-size: 13px;
 }
 
-.explore-queue-meta {
+.room-sequence-meta {
   color: #2c5071;
   font-size: 11px;
 }
 
-.explore-queue-bar[data-queue-tone='error'] .explore-queue-meta {
+.room-sequence-hud[data-sequence-tone='error'] .room-sequence-meta {
   color: #a42925;
 }
 
-.explore-queue-buttons {
+.room-sequence-buttons {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
 }
 
-.explore-queue-bar #btn-explore-queue-stop {
+.room-sequence-hud #btn-room-sequence-stop {
   background: #79ccde;
 }
 
+#world-hud .room-sequence-hud .bar-btn {
+  color: #000;
+}
+
+#world-hud .room-sequence-hud .bar-btn:disabled {
+  color: #6d6768;
+}
+
+body[data-room-sequence-active='true'] #world-hud .world-hud-row-primary-actions > button {
+  display: none !important;
+}
+
+body[data-room-sequence-active='true'] #world-hud .world-hud-row-primary-actions > .room-sequence-hud {
+  display: grid;
+}
+
+body[data-app-mode='play-world']:not([data-coarse-pointer='true']) #world-hud .room-sequence-hud {
+  width: min(560px, calc(100vw - 56px));
+}
+
 @media (max-width: 700px) {
-  .explore-queue-bar {
-    top: 10px;
-    right: 10px;
-    left: 10px;
+  .room-sequence-hud {
     width: auto;
     grid-template-columns: 1fr;
   }
 
-  .explore-queue-buttons {
+  .room-sequence-buttons {
     justify-content: stretch;
   }
 
-  .explore-queue-buttons .bar-btn {
+  .room-sequence-buttons .bar-btn {
     flex: 1 1 90px;
   }
 }
