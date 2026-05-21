@@ -376,7 +376,17 @@ const CAVE_LANTERN_TILE_LIGHT_EMISSION = Object.freeze({
   flicker: CAVE_LANTERN_LIGHT_FLICKER,
 } satisfies TileLightEmissionConfig);
 
+const GOTHIC_CANDLE_TILE_LIGHT_EMISSION = Object.freeze({
+  offsetY: 0,
+  revealRadiusPx: 10,
+  glowRadiusPx: 25,
+  glowColor: 0xdbd4ba,
+  glowAlpha: 0.5,
+  flicker: CAVE_LANTERN_LIGHT_FLICKER,
+} satisfies TileLightEmissionConfig);
+
 const CAVE_LANTERN_LIGHT_INDICES = [62, 64];
+const GOTHIC_CANDLE_LIGHT_INDICES = [58]
 
 // firstGid assignments: 0 = empty, then sequential per tileset.
 // Keep existing ranges stable because persisted room tile data stores absolute gids.
@@ -623,6 +633,33 @@ export const TILESETS: TilesetConfig[] = [
       accentWarm: 0xf3c74f,
       accentHot: 0xff6c4a,
       accentAlt: 0x9bb0ff,
+    },
+  },
+  {
+    key: 'gothic',
+    name: 'Gothic',
+    path: 'assets/tilesets/gothic.png',
+    imageWidth: 192,
+    imageHeight: 96,
+    columns: 12,
+    rows: 6,
+    tileCount: 72,
+    firstGid: 733,
+    terrainCollisionProfiles: {
+      ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_FOREST, DECORATED_TOP_PROFILE),
+      ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_FOREST, NO_COLLISION_PROFILE),
+    },
+    lightEmissionProfiles: {
+      ...createTilesetLightEmissionProfiles(
+        GOTHIC_CANDLE_LIGHT_INDICES,
+        GOTHIC_CANDLE_TILE_LIGHT_EMISSION,
+      ),
+    },
+    uiTheme: {
+      accentCool: 0x84b95d,
+      accentWarm: 0xcd9158,
+      accentHot: 0xe76f50,
+      accentAlt: 0xd8b373,
     },
   },
 ];
