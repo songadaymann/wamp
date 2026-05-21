@@ -10,10 +10,14 @@ import {
 } from '../../config';
 import { resolveRoomBackground } from '../../backgrounds/model';
 import {
+  createBuiltInBackgroundObject,
   createCustomBackgroundLayer,
   createCustomBackgroundObject,
   ensureCustomBackgroundTexture,
+  getBuiltInBackgroundTileScale,
+  syncBuiltInBackgroundObject,
   syncCustomBackgroundObject,
+  type BuiltInBackgroundObject,
   type CustomBackgroundLayer,
   type CustomBackgroundObject,
 } from '../../backgrounds/runtime';
@@ -99,10 +103,11 @@ export interface LoadedFullRoom<TLiveObject = unknown, TEdgeWall = unknown> {
 }
 
 interface LoadedRoomBackgroundSprite {
-  sprite: Phaser.GameObjects.TileSprite | CustomBackgroundObject;
+  sprite: BuiltInBackgroundObject | CustomBackgroundObject;
   parallax: number;
   tileScale: number;
   useVerticalParallax: boolean;
+  builtInLayer?: { height: number; repeat?: boolean };
   customLayer?: CustomBackgroundLayer;
 }
 
@@ -1646,21 +1651,22 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
     for (let index = 0; index < resolved.group.layers.length; index += 1) {
       const layer = resolved.group.layers[index];
-      const sprite = this.options.scene.add.tileSprite(
+      const sprite = createBuiltInBackgroundObject(
+        this.options.scene,
+        layer,
         origin.x,
         origin.y,
         ROOM_PX_WIDTH,
         ROOM_PX_HEIGHT,
-        layer.key,
+        9 + index * 0.01,
       );
-      sprite.setOrigin(0, 0);
-      sprite.setDepth(9 + index * 0.01);
-      sprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      const tileScale = getBuiltInBackgroundTileScale(layer, ROOM_PX_HEIGHT);
       sprites.push({
         sprite,
         parallax: layer.scrollFactor * PLAY_ROOM_PARALLAX_MULTIPLIER,
-        tileScale: ROOM_PX_HEIGHT / layer.height,
+        tileScale,
         useVerticalParallax: false,
+        builtInLayer: layer,
       });
     }
 
@@ -1688,6 +1694,22 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
           ROOM_PX_WIDTH,
           ROOM_PX_HEIGHT,
           camera.scrollX,
+        );
+        continue;
+      }
+
+      if (backgroundSprite.builtInLayer) {
+        syncBuiltInBackgroundObject(
+          backgroundSprite.sprite as BuiltInBackgroundObject,
+          backgroundSprite.builtInLayer,
+          origin.x,
+          origin.y,
+          ROOM_PX_WIDTH,
+          ROOM_PX_HEIGHT,
+          (camera.scrollX * backgroundSprite.parallax) / backgroundSprite.tileScale,
+          backgroundSprite.useVerticalParallax
+            ? (camera.scrollY * backgroundSprite.parallax) / backgroundSprite.tileScale
+            : 0,
         );
         continue;
       }

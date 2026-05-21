@@ -6,10 +6,14 @@ import {
 } from '../config';
 import { resolveRoomBackground } from '../backgrounds/model';
 import {
+  createBuiltInBackgroundObject,
   createCustomBackgroundLayer,
   createCustomBackgroundObject,
   ensureCustomBackgroundTexture,
+  getBuiltInBackgroundTileScale,
+  syncBuiltInBackgroundObject,
   syncCustomBackgroundObject,
+  type BuiltInBackgroundObject,
   type CustomBackgroundLayer,
   type CustomBackgroundObject,
 } from '../backgrounds/runtime';
@@ -19,7 +23,7 @@ export interface CourseEditorRoomBackgroundVisuals {
   origin: { x: number; y: number };
   colorRect: Phaser.GameObjects.Rectangle | null;
   layerSprites: Array<{
-    sprite: Phaser.GameObjects.TileSprite | CustomBackgroundObject;
+    sprite: BuiltInBackgroundObject | CustomBackgroundObject;
     layer: BackgroundLayer | CustomBackgroundLayer;
   }>;
   fallbackSprites: Phaser.GameObjects.TileSprite[];
@@ -115,10 +119,15 @@ export function createCourseEditorRoomBackgroundVisuals(
 
   for (let index = 0; index < resolved.group.layers.length; index += 1) {
     const layer = resolved.group.layers[index];
-    const sprite = scene.add.tileSprite(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT, layer.key);
-    sprite.setOrigin(0, 0);
-    sprite.setDepth(-39 + index);
-    sprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    const sprite = createBuiltInBackgroundObject(
+      scene,
+      layer,
+      origin.x,
+      origin.y,
+      ROOM_PX_WIDTH,
+      ROOM_PX_HEIGHT,
+      -39 + index,
+    );
     visuals.layerSprites.push({ sprite, layer });
   }
 
@@ -148,13 +157,17 @@ export function syncCourseEditorRoomBackgroundVisuals(
       continue;
     }
 
-    const tileSprite = sprite as Phaser.GameObjects.TileSprite;
-    const scale = ROOM_PX_HEIGHT / layer.height;
-    tileSprite.setPosition(visuals.origin.x, visuals.origin.y);
-    tileSprite.setSize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-    tileSprite.setTileScale(scale, scale);
-    tileSprite.tilePositionX = (camera.scrollX * layer.scrollFactor) / scale;
-    tileSprite.tilePositionY = (camera.scrollY * layer.scrollFactor) / scale;
+    const scale = getBuiltInBackgroundTileScale(layer, ROOM_PX_HEIGHT);
+    syncBuiltInBackgroundObject(
+      sprite as BuiltInBackgroundObject,
+      layer,
+      visuals.origin.x,
+      visuals.origin.y,
+      ROOM_PX_WIDTH,
+      ROOM_PX_HEIGHT,
+      (camera.scrollX * layer.scrollFactor) / scale,
+      (camera.scrollY * layer.scrollFactor) / scale,
+    );
   }
 
   for (let index = 0; index < visuals.fallbackSprites.length; index += 1) {

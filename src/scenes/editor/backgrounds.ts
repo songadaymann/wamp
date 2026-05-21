@@ -7,10 +7,14 @@ import {
 } from '../../config';
 import { resolveRoomBackground } from '../../backgrounds/model';
 import {
+  createBuiltInBackgroundObject,
   createCustomBackgroundLayer,
   createCustomBackgroundObject,
   ensureCustomBackgroundTexture,
+  getBuiltInBackgroundTileScale,
+  syncBuiltInBackgroundObject,
   syncCustomBackgroundObject,
+  type BuiltInBackgroundObject,
   type CustomBackgroundLayer,
   type CustomBackgroundObject,
 } from '../../backgrounds/runtime';
@@ -20,7 +24,7 @@ import { RETRO_COLORS, ensureStarfieldTexture } from '../../visuals/starfield';
 import { buildRoomSnapshotTexture, buildRoomTextureKey } from '../../visuals/roomSnapshotTexture';
 
 interface ParallaxSprite {
-  sprite: Phaser.GameObjects.TileSprite | CustomBackgroundObject;
+  sprite: BuiltInBackgroundObject | CustomBackgroundObject;
   layer: BackgroundLayer | CustomBackgroundLayer;
 }
 
@@ -171,10 +175,7 @@ export class EditorBackgroundController {
 
     for (let index = 0; index < resolved.group.layers.length; index += 1) {
       const layer = resolved.group.layers[index];
-      const sprite = this.scene.add.tileSprite(0, 0, w, h, layer.key);
-      sprite.setOrigin(0, 0);
-      sprite.setDepth(-10 + index);
-      sprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      const sprite = createBuiltInBackgroundObject(this.scene, layer, 0, 0, w, h, -10 + index);
       this.bgSprites.push({ sprite, layer });
     }
 
@@ -211,13 +212,17 @@ export class EditorBackgroundController {
         continue;
       }
 
-      const scale = h / bg.layer.height;
-      const sprite = bg.sprite as Phaser.GameObjects.TileSprite;
-      sprite.setPosition(0, 0);
-      sprite.setSize(w, h);
-      sprite.setTileScale(scale, scale);
-      sprite.tilePositionX = (cam.scrollX * bg.layer.scrollFactor) / scale;
-      sprite.tilePositionY = 0;
+      const scale = getBuiltInBackgroundTileScale(bg.layer, h);
+      syncBuiltInBackgroundObject(
+        bg.sprite as BuiltInBackgroundObject,
+        bg.layer,
+        0,
+        0,
+        w,
+        h,
+        (cam.scrollX * bg.layer.scrollFactor) / scale,
+        0,
+      );
     }
 
     const fallbackConfigs = [
