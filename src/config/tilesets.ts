@@ -386,7 +386,7 @@ const GOTHIC_CANDLE_TILE_LIGHT_EMISSION = Object.freeze({
 } satisfies TileLightEmissionConfig);
 
 const CAVE_LANTERN_LIGHT_INDICES = [62, 64];
-const GOTHIC_CANDLE_LIGHT_INDICES = [58]
+const GOTHIC_CANDLE_LIGHT_INDICES = [59,65]
 
 // firstGid assignments: 0 = empty, then sequential per tileset.
 // Keep existing ranges stable because persisted room tile data stores absolute gids.
