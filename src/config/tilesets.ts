@@ -341,8 +341,8 @@ const CAVE_LANTERN_LIGHT_FLICKER = Object.freeze({
 } satisfies LightEmissionConfig['flicker']);
 
 const GARGOYLE_LIGHT_FLICKER = Object.freeze({
-  radiusAmplitude: 0.05,
-  alphaAmplitude: 0.04,
+  radiusAmplitude: 0.08,
+  alphaAmplitude: 0.08,
   speedHz: 0.3,
 } satisfies LightEmissionConfig['flicker']);
 
@@ -392,11 +392,12 @@ const GOTHIC_CANDLE_TILE_LIGHT_EMISSION = Object.freeze({
 } satisfies TileLightEmissionConfig);
 
 const GOTHIC_GARGOYLE_TILE_LIGHT_EMISSION = Object.freeze({
-  offsetY: -1,
-  revealRadiusPx: 3,
-  glowRadiusPx: 5,
+  offsetY: -2,
+  offsetX: 3,
+  revealRadiusPx: 6,
+  glowRadiusPx: 10,
   glowColor: 0xe45b8d,
-  glowAlpha: 0.35,
+  glowAlpha: 0.25,
   flicker: GARGOYLE_LIGHT_FLICKER,
 } satisfies TileLightEmissionConfig);
 
