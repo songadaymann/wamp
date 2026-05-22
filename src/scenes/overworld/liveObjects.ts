@@ -984,7 +984,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
   private shouldLiveObjectUseSpecialTilePhysics(liveObject: LoadedRoomObject): boolean {
     const config = liveObject.config;
-    if (isMovingPlatformObjectId(config.id) || config.behavior === 'fly' || config.id === 'cannon_bullet') {
+    if (
+      isMovingPlatformObjectId(config.id) ||
+      config.behavior === 'fly' ||
+      config.id === 'cannon_bullet' ||
+      config.id === 'cage'
+    ) {
       return false;
     }
     if (config.id === SWORDSMAN_AI_OBJECT_ID && liveObject.runtime.aiLadderTraversalEdgeId) {
@@ -993,7 +998,6 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     return (
       isPushableObjectConfig(config) ||
-      config.id === 'cage' ||
       config.category === 'enemy'
     );
   }
@@ -1899,7 +1903,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   }
 
   private objectUsesGravity(config: GameObjectConfig): boolean {
-    return config.behavior !== 'fly' && config.id !== 'cannon_bullet' && !isMovingPlatformObjectId(config.id);
+    return (
+      config.behavior !== 'fly' &&
+      config.id !== 'cannon_bullet' &&
+      config.id !== 'cage' &&
+      !isMovingPlatformObjectId(config.id)
+    );
   }
 
   private createLadderTopSupport(sprite: Phaser.GameObjects.Sprite): Phaser.GameObjects.Zone | null {
