@@ -505,8 +505,7 @@ async function loadRecentSummaries(
   ]);
 
   return [...signups, ...guestVisits, ...visitOnly, ...roomPlay, ...roomBuild, ...courseBuild]
-    .sort((left, right) => compareIsoDesc(left.at, right.at))
-    .slice(0, RECENT_SUMMARY_LIMIT);
+    .sort((left, right) => compareIsoDesc(left.at, right.at));
 }
 
 async function loadSignupSummaries(

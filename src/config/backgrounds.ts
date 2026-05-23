@@ -8,6 +8,7 @@ export interface BackgroundLayer {
   width: number;
   height: number;
   scrollFactor: number;  // 0 = fixed, 0.1-0.9 = parallax, 1.0 = moves with world
+  repeat?: boolean;      // false = scale once to the room instead of tiling
 }
 
 export interface BackgroundGroup {
@@ -123,9 +124,9 @@ export const BACKGROUND_GROUPS: BackgroundGroup[] = [
     id: 'desert',
     name: 'Desert',
     layers: [
-      { key: 'desert_far', path: 'assets/backgrounds/desert/far.png', width: 576, height: 324, scrollFactor: 0.0 },
-      { key: 'desert_mid', path: 'assets/backgrounds/desert/middle.png', width: 576, height: 324, scrollFactor: 0.2 },
-      { key: 'desert_near', path: 'assets/backgrounds/desert/near.png', width: 576, height: 324, scrollFactor: 0.5 },
+      { key: 'desert_far', path: 'assets/backgrounds/desert/far.png', width: 576, height: 324, scrollFactor: 0.0, repeat: false },
+      { key: 'desert_mid', path: 'assets/backgrounds/desert/middle.png', width: 576, height: 324, scrollFactor: 0.2, repeat: false },
+      { key: 'desert_near', path: 'assets/backgrounds/desert/near.png', width: 576, height: 324, scrollFactor: 0.5, repeat: false },
     ],
   },
 ];

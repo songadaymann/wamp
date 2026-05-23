@@ -23,6 +23,14 @@ export interface CustomBackgroundDrawRect {
 }
 
 export type CustomBackgroundObject = Phaser.GameObjects.TileSprite | Phaser.GameObjects.Image;
+export type BuiltInBackgroundObject = Phaser.GameObjects.TileSprite | Phaser.GameObjects.Image;
+
+interface BuiltInBackgroundLayer {
+  key: string;
+  width: number;
+  height: number;
+  repeat?: boolean;
+}
 
 export function getCustomBackgroundTextureKey(id: string): string {
   return `custom_background_${id.replace(/[^a-zA-Z0-9_-]+/g, '_')}`;
@@ -94,6 +102,58 @@ export function createCustomBackgroundObject(
   image.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
   syncCustomBackgroundObject(image, layer, x, y, width, height, 0);
   return image;
+}
+
+export function createBuiltInBackgroundObject(
+  scene: Phaser.Scene,
+  layer: BuiltInBackgroundLayer,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  depth: number,
+): BuiltInBackgroundObject {
+  const object = layer.repeat === false
+    ? scene.add.image(x, y, layer.key)
+    : scene.add.tileSprite(x, y, width, height, layer.key);
+
+  object.setOrigin(0, 0);
+  object.setDepth(depth);
+  object.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+  syncBuiltInBackgroundObject(object, layer, x, y, width, height, 0, 0);
+  return object;
+}
+
+export function syncBuiltInBackgroundObject(
+  object: BuiltInBackgroundObject,
+  layer: Pick<BuiltInBackgroundLayer, 'height' | 'repeat'>,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  tilePositionX: number,
+  tilePositionY: number,
+): void {
+  object.setPosition(x, y);
+
+  if (!isTileSprite(object)) {
+    object.setCrop();
+    object.setDisplaySize(width, height);
+    return;
+  }
+
+  object.setSize(width, height);
+  const scale = getBuiltInBackgroundTileScale(layer, height);
+  object.setTileScale(scale, scale);
+  object.tilePositionX = tilePositionX;
+  object.tilePositionY = tilePositionY;
+}
+
+export function getBuiltInBackgroundTileScale(
+  layer: Pick<BuiltInBackgroundLayer, 'height'>,
+  targetHeight: number,
+): number {
+  return targetHeight / Math.max(1, layer.height);
 }
 
 export function syncCustomBackgroundObject(

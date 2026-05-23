@@ -340,6 +340,12 @@ const CAVE_LANTERN_LIGHT_FLICKER = Object.freeze({
   speedHz: 1.25,
 } satisfies LightEmissionConfig['flicker']);
 
+const GARGOYLE_LIGHT_FLICKER = Object.freeze({
+  radiusAmplitude: 0.08,
+  alphaAmplitude: 0.08,
+  speedHz: 0.3,
+} satisfies LightEmissionConfig['flicker']);
+
 export const FIRE_LIGHT_EMISSION = Object.freeze({
   offsetY: -2,
   revealRadiusPx: 25,
@@ -376,7 +382,28 @@ const CAVE_LANTERN_TILE_LIGHT_EMISSION = Object.freeze({
   flicker: CAVE_LANTERN_LIGHT_FLICKER,
 } satisfies TileLightEmissionConfig);
 
+const GOTHIC_CANDLE_TILE_LIGHT_EMISSION = Object.freeze({
+  offsetY: -5,
+  revealRadiusPx: 10,
+  glowRadiusPx: 25,
+  glowColor: 0xffe28a,
+  glowAlpha: 0.5,
+  flicker: CAVE_LANTERN_LIGHT_FLICKER,
+} satisfies TileLightEmissionConfig);
+
+const GOTHIC_GARGOYLE_TILE_LIGHT_EMISSION = Object.freeze({
+  offsetY: -2,
+  offsetX: 3,
+  revealRadiusPx: 6,
+  glowRadiusPx: 10,
+  glowColor: 0xe45b8d,
+  glowAlpha: 0.25,
+  flicker: GARGOYLE_LIGHT_FLICKER,
+} satisfies TileLightEmissionConfig);
+
 const CAVE_LANTERN_LIGHT_INDICES = [62, 64];
+const GOTHIC_CANDLE_LIGHT_INDICES = [59];
+const GOTHIC_GARGOYLE_LIGHT_INDICES = [65];
 
 // firstGid assignments: 0 = empty, then sequential per tileset.
 // Keep existing ranges stable because persisted room tile data stores absolute gids.
@@ -623,6 +650,31 @@ export const TILESETS: TilesetConfig[] = [
       accentWarm: 0xf3c74f,
       accentHot: 0xff6c4a,
       accentAlt: 0x9bb0ff,
+    },
+  },
+  {
+    key: 'gothic',
+    name: 'Gothic',
+    path: 'assets/tilesets/gothic.png',
+    imageWidth: 192,
+    imageHeight: 96,
+    columns: 12,
+    rows: 6,
+    tileCount: 72,
+    firstGid: 733,
+    terrainCollisionProfiles: {
+      ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_FOREST, DECORATED_TOP_PROFILE),
+      ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_FOREST, NO_COLLISION_PROFILE),
+    },
+    lightEmissionProfiles: {
+      ...createTilesetLightEmissionProfiles(GOTHIC_CANDLE_LIGHT_INDICES, GOTHIC_CANDLE_TILE_LIGHT_EMISSION),
+      ...createTilesetLightEmissionProfiles(GOTHIC_GARGOYLE_LIGHT_INDICES, GOTHIC_GARGOYLE_TILE_LIGHT_EMISSION),
+    },
+    uiTheme: {
+      accentCool: 0x84b95d,
+      accentWarm: 0xcd9158,
+      accentHot: 0xe76f50,
+      accentAlt: 0xd8b373,
     },
   },
 ];

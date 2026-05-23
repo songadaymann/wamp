@@ -318,8 +318,43 @@
         min-width: min(260px, 100%);
       }
 
+      .activity-filter-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .activity-filter-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 11px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      .activity-filter-button[aria-pressed="true"] {
+        border-color: rgba(126, 201, 255, 0.68);
+        background: rgba(126, 201, 255, 0.18);
+      }
+
+      .activity-filter-count {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
       .activity-stat-card {
         border-left: 4px solid var(--accent);
+      }
+
+      .activity-stat-button {
+        width: 100%;
+        text-align: left;
+      }
+
+      .activity-stat-button[aria-pressed="true"] {
+        border-color: rgba(126, 201, 255, 0.7);
+        box-shadow: 0 0 0 1px rgba(126, 201, 255, 0.3);
       }
 
       .activity-row {
@@ -535,6 +570,7 @@
             <select id="activity-range-select"></select>
           </label>
         </div>
+        <div id="activity-filter-list" class="activity-filter-list" role="group" aria-label="Activity type"></div>
         <div id="activity-grid" class="grid cards"></div>
         <div id="activity-feed" class="activity-feed"></div>
       </section>

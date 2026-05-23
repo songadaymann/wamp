@@ -211,6 +211,11 @@ export function drawRoomBackground(
     const sourceImage = getTextureSource(scene, layer.key);
     if (!sourceImage) continue;
 
+    if (layer.repeat === false) {
+      context.drawImage(sourceImage, offsetX, offsetY, width, height);
+      continue;
+    }
+
     const scale = height / layer.height;
     const drawWidth = Math.max(1, Math.ceil(layer.width * scale));
     for (let drawX = 0; drawX < width + drawWidth; drawX += drawWidth) {
