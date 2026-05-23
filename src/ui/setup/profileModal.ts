@@ -138,6 +138,15 @@ export class ProfileModalController {
   private readonly profileCache = new Map<string, UserProfileResponse>();
   private readonly roomPreviewCache = new Map<string, string | null>();
   private readonly roomPreviewLoads = new Map<string, Promise<string | null>>();
+  private readonly roomPreviewTargets = new Map<
+    Element,
+    {
+      room: ProfilePublishedRoomEntry;
+      imageEl: HTMLImageElement;
+      fallbackEl: HTMLElement;
+    }
+  >();
+  private roomPreviewObserver: IntersectionObserver | null = null;
   private authState: AuthDebugState = getAuthDebugState();
   private activeTab: ProfileTabId = 'rooms';
   private currentProfileUserId: string | null = null;
@@ -503,6 +512,7 @@ export class ProfileModalController {
     this.cryptopunkSelectionStatus = '';
     this.cryptopunkPreviewLoadToken += 1;
     this.selectedAvatarIdDraft = DEFAULT_PLAYER_AVATAR_ID;
+    this.resetRoomPreviewObserver();
     this.closeAvatarPicker();
     this.cancelCryptopunkPolling();
     this.clearCryptopunkInputTimer();
@@ -1314,6 +1324,7 @@ export class ProfileModalController {
       return;
     }
 
+    this.resetRoomPreviewObserver();
     this.elements.roomsEmpty?.classList.toggle('hidden', rooms.length > 0);
     this.elements.roomsList.replaceChildren(
       ...rooms.map((room) => this.createRoomRow(room))
@@ -1358,7 +1369,7 @@ export class ProfileModalController {
 
     copy.append(title, meta, this.createRoomRatingRow(room));
     button.append(preview, copy);
-    this.attachRoomPreview(room, previewImage, previewFallback);
+    this.observeRoomPreview(room, preview, previewImage, previewFallback);
     if (this.currentProfile?.canEdit) {
       const row = this.doc.createElement('div');
       row.className = 'profile-room-playlist-row';
@@ -1655,6 +1666,86 @@ export class ProfileModalController {
   private getSelectedPlaylist(): RoomPlaylistSummary | null {
     const playlists = this.currentProfile?.playlists ?? [];
     return playlists.find((playlist) => playlist.id === this.selectedPlaylistId) ?? null;
+  }
+
+  private observeRoomPreview(
+    room: ProfilePublishedRoomEntry,
+    previewEl: HTMLElement,
+    imageEl: HTMLImageElement,
+    fallbackEl: HTMLElement
+  ): void {
+    const previewKey = this.buildRoomPreviewKey(room);
+    imageEl.dataset.previewKey = previewKey;
+
+    const cached = this.roomPreviewCache.get(previewKey);
+    if (cached !== undefined) {
+      this.applyRoomPreview(imageEl, fallbackEl, cached, room);
+      return;
+    }
+
+    fallbackEl.textContent = `${room.roomCoordinates.x},${room.roomCoordinates.y}`;
+    imageEl.classList.add('hidden');
+    fallbackEl.classList.remove('hidden');
+
+    if (!this.getIntersectionObserverConstructor()) {
+      this.attachRoomPreview(room, imageEl, fallbackEl);
+      return;
+    }
+
+    this.roomPreviewTargets.set(previewEl, { room, imageEl, fallbackEl });
+    this.getRoomPreviewObserver().observe(previewEl);
+  }
+
+  private getRoomPreviewObserver(): IntersectionObserver {
+    if (this.roomPreviewObserver) {
+      return this.roomPreviewObserver;
+    }
+
+    const ObserverCtor = this.getIntersectionObserverConstructor();
+    if (!ObserverCtor) {
+      throw new Error('IntersectionObserver is unavailable.');
+    }
+
+    const observer = new ObserverCtor(
+      (entries: IntersectionObserverEntry[]) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) {
+            continue;
+          }
+
+          const target = entry.target;
+          const preview = this.roomPreviewTargets.get(target);
+          if (!preview) {
+            continue;
+          }
+
+          observer.unobserve(target);
+          this.roomPreviewTargets.delete(target);
+          this.attachRoomPreview(preview.room, preview.imageEl, preview.fallbackEl);
+        }
+      },
+      {
+        rootMargin: '240px 0px',
+      },
+    );
+
+    this.roomPreviewObserver = observer;
+    return observer;
+  }
+
+  private getIntersectionObserverConstructor(): typeof IntersectionObserver | null {
+    const windowWithObserver = this.windowObj as Window & {
+      IntersectionObserver?: typeof IntersectionObserver;
+    };
+    return typeof windowWithObserver.IntersectionObserver === 'function'
+      ? windowWithObserver.IntersectionObserver
+      : null;
+  }
+
+  private resetRoomPreviewObserver(): void {
+    this.roomPreviewObserver?.disconnect();
+    this.roomPreviewObserver = null;
+    this.roomPreviewTargets.clear();
   }
 
   private attachRoomPreview(

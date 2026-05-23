@@ -175,8 +175,7 @@ async function buildPublishedRooms(
         return left.roomCoordinates.y - right.roomCoordinates.y;
       }
       return left.roomCoordinates.x - right.roomCoordinates.x;
-    })
-    .slice(0, 32);
+    });
   const ratingSummaries = await loadProfileRoomRatingSummaries(
     env,
     sortedEntries.map((entry) => ({
