@@ -1,4 +1,5 @@
 import { getAuthDebugState, promptForSignIn } from '../../auth/client';
+import { submitLatestGuestRoomDraftForRoom } from '../../guestRooms/client';
 import {
   GUEST_BUILDER_CLAIM_REQUEST_EVENT,
   GUEST_BUILDER_POTENTIAL_BXP,
@@ -12,6 +13,7 @@ type GuestBuilderClaimElements = {
   modal: HTMLElement | null;
   closeButton: HTMLButtonElement | null;
   keepBuildingButton: HTMLButtonElement | null;
+  submitGuestButton: HTMLButtonElement | null;
   signInButton: HTMLButtonElement | null;
   title: HTMLElement | null;
   meta: HTMLElement | null;
@@ -31,6 +33,31 @@ export class GuestBuilderClaimModalController {
     event.stopPropagation();
     this.close();
     promptForSignIn('Sign in to save this room to your account and earn Builder XP when you publish.');
+  };
+
+  private readonly handleSubmitGuestClick = async (event: Event) => {
+    event.stopPropagation();
+    const detail = this.activeDetail;
+    if (!detail) {
+      return;
+    }
+
+    this.setText(this.elements.copy, 'Publishing to Guest Rooms...');
+    this.elements.submitGuestButton?.setAttribute('disabled', 'true');
+    try {
+      await submitLatestGuestRoomDraftForRoom(detail.roomId);
+      this.setText(
+        this.elements.copy,
+        'Published to Guest Rooms. People can play it there, but guest-published rooms do not earn XP or account benefits.',
+      );
+      window.setTimeout(() => this.close(), 1200);
+    } catch (error) {
+      this.setText(
+        this.elements.copy,
+        error instanceof Error ? error.message : 'Could not publish to Guest Rooms.',
+      );
+      this.elements.submitGuestButton?.removeAttribute('disabled');
+    }
   };
 
   private readonly handleBackdropClick = (event: Event) => {
@@ -72,6 +99,7 @@ export class GuestBuilderClaimModalController {
       modal: this.doc.getElementById('guest-builder-claim-modal'),
       closeButton: this.doc.getElementById('btn-guest-builder-claim-close') as HTMLButtonElement | null,
       keepBuildingButton: this.doc.getElementById('btn-guest-builder-claim-continue') as HTMLButtonElement | null,
+      submitGuestButton: this.doc.getElementById('btn-guest-builder-claim-submit-guest') as HTMLButtonElement | null,
       signInButton: this.doc.getElementById('btn-guest-builder-claim-signin') as HTMLButtonElement | null,
       title: this.doc.getElementById('guest-builder-claim-title'),
       meta: this.doc.getElementById('guest-builder-claim-meta'),
@@ -83,6 +111,7 @@ export class GuestBuilderClaimModalController {
   init(): void {
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.keepBuildingButton?.addEventListener('click', this.handleCloseClick);
+    this.elements.submitGuestButton?.addEventListener('click', this.handleSubmitGuestClick);
     this.elements.signInButton?.addEventListener('click', this.handleSignInClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
@@ -95,6 +124,7 @@ export class GuestBuilderClaimModalController {
   destroy(): void {
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.keepBuildingButton?.removeEventListener('click', this.handleCloseClick);
+    this.elements.submitGuestButton?.removeEventListener('click', this.handleSubmitGuestClick);
     this.elements.signInButton?.removeEventListener('click', this.handleSignInClick);
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
@@ -136,9 +166,14 @@ export class GuestBuilderClaimModalController {
     this.setText(this.elements.title, 'Awesome work!');
     this.setText(this.elements.meta, metaText);
     this.setText(this.elements.xp, `+${potentialBxp} Builder XP`);
+    const guestSubmissionAvailable = detail?.source === 'publish-attempt';
+    this.elements.submitGuestButton?.classList.toggle('hidden', !guestSubmissionAvailable);
+    this.elements.submitGuestButton?.removeAttribute('disabled');
     this.setText(
       this.elements.copy,
-      'Sign in so you can save this build to your account. Add a challenge goal and publish it to claim Builder XP.',
+      guestSubmissionAvailable
+        ? 'Sign in to publish it as yours and earn Builder XP. If you cannot sign in, publish it to Guest Rooms without XP or account benefits.'
+        : 'Sign in so you can save this build to your account. Add a challenge goal and publish it to claim Builder XP.',
     );
   }
 

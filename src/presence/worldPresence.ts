@@ -29,6 +29,7 @@ const PRESENCE_MOVING_PUBLISH_INTERVAL_MS = 200;
 const PVP_PRESENCE_MOVING_PUBLISH_INTERVAL_MS = 25;
 const PRESENCE_IDLE_KEEPALIVE_MS = 5_000;
 const REMOTE_PRESENCE_SNAPSHOT_FLUSH_INTERVAL_MS = 140;
+const PRESENCE_GUEST_IDENTITY_STORAGE_KEY = 'ep_presence_guest_identity_v1';
 
 export interface WorldPresenceIdentity {
   userId: string;
@@ -780,9 +781,13 @@ export function resolveWorldPresenceIdentity(): WorldPresenceIdentity {
     };
   }
 
-  const storageKey = 'ep_presence_guest_identity_v1';
+  return resolveWorldPresenceGuestIdentity();
+}
+
+export function resolveWorldPresenceGuestIdentity(): WorldPresenceIdentity {
+  const avatarId = resolveActivePlayerAvatarId();
   try {
-    const existingRaw = window.localStorage.getItem(storageKey);
+    const existingRaw = window.localStorage.getItem(PRESENCE_GUEST_IDENTITY_STORAGE_KEY);
     if (existingRaw) {
       const existing = JSON.parse(existingRaw) as Partial<WorldPresenceIdentity>;
       if (typeof existing.userId === 'string' && typeof existing.displayName === 'string') {
@@ -803,7 +808,7 @@ export function resolveWorldPresenceIdentity(): WorldPresenceIdentity {
     avatarId,
   };
   try {
-    window.localStorage.setItem(storageKey, JSON.stringify(guestIdentity));
+    window.localStorage.setItem(PRESENCE_GUEST_IDENTITY_STORAGE_KEY, JSON.stringify(guestIdentity));
   } catch {
     // Ignore storage failures for guest identities.
   }

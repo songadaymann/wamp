@@ -10,6 +10,7 @@ import { CourseComposerPanelController } from './courseComposerPanel';
 import { setupCustomSpriteEditor } from './customSpriteEditor';
 import { ExploreModalController } from './exploreModal';
 import { GuestBuilderClaimModalController } from './guestBuilderClaimModal';
+import { GuestRoomRecoveryModalController } from './guestRoomRecoveryModal';
 import { GuestbookModalController } from './guestbookModal';
 import { RoomHistoryModalController } from './historyModal';
 import { setupKeyboardShortcutPassthrough } from './keyboardPassthrough';
@@ -42,6 +43,7 @@ interface UiControllers {
   exploreModal: ExploreModalController;
   roomSequence: RoomSequenceController;
   guestBuilderClaimModal: GuestBuilderClaimModalController;
+  guestRoomRecoveryModal: GuestRoomRecoveryModalController;
   guestbookModal: GuestbookModalController;
   settingsModal: SettingsModalController;
   controlsModal: ControlsModalController;
@@ -94,6 +96,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     exploreModal: new ExploreModalController(game),
     roomSequence: new RoomSequenceController(game, leaderboardModal, playlistIntroModal, welcomeModal),
     guestBuilderClaimModal: new GuestBuilderClaimModalController(),
+    guestRoomRecoveryModal: new GuestRoomRecoveryModalController(game),
     guestbookModal: new GuestbookModalController(),
     settingsModal: new SettingsModalController(),
     controlsModal,
@@ -124,6 +127,7 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.exploreModal.init();
   controllers.roomSequence.init();
   controllers.guestBuilderClaimModal.init();
+  controllers.guestRoomRecoveryModal.init();
   controllers.guestbookModal.init();
   controllers.settingsModal.init();
   controllers.controlsModal.init();
@@ -155,6 +159,7 @@ function configureEditorBridge(controllers: UiControllers): void {
       controllers.leaderboardModal.close();
       controllers.exploreModal.close();
       controllers.guestBuilderClaimModal.close();
+      controllers.guestRoomRecoveryModal.close();
       controllers.guestbookModal.close();
       controllers.settingsModal.close();
       controllers.controlsModal.close();

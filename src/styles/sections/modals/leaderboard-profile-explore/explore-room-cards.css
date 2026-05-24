@@ -198,6 +198,11 @@
   font-family: 'Early GameBoy', monospace;
 }
 
+#explore-modal .explore-guest-room-badge {
+  background: #fcea7c;
+  color: #000;
+}
+
 #explore-modal .explore-room-difficulty,
 #explore-modal .explore-room-trophy {
   font-family: 'Early GameBoy', monospace;

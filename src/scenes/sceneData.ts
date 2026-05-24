@@ -20,6 +20,7 @@ export interface EditorSceneData {
   roomCoordinates?: RoomCoordinates;
   source?: 'world' | 'direct';
   roomSnapshot?: RoomSnapshot | null;
+  forceRoomSnapshot?: boolean;
   courseEdit?: EditorCourseEditData | null;
 }
 

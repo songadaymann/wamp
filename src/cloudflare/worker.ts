@@ -12,6 +12,7 @@ import { handleAgentRequest } from './worker/agents/routes';
 import { handleDashboardStatsRequest } from './worker/dashboard/routes';
 import { handleChatRequest } from './worker/chat/routes';
 import { handleGuestActivityHeartbeat } from './worker/guestActivity/routes';
+import { handleGuestRoomDraftRequest } from './worker/guestRoomDrafts/routes';
 import { handleGuestbookRequest } from './worker/guestbook/routes';
 import {
   handleCourseCreate,
@@ -184,6 +185,10 @@ export default {
 
       if (url.pathname === '/api/guest-activity/heartbeat' && request.method === 'POST') {
         return await handleGuestActivityHeartbeat(request, env);
+      }
+
+      if (url.pathname.startsWith('/api/guest-room-drafts')) {
+        return await handleGuestRoomDraftRequest(request, url, env);
       }
 
       if (url.pathname.startsWith('/api/guestbook')) {

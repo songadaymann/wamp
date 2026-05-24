@@ -4,6 +4,8 @@ import {
   setFeaturedRoomStatus,
 } from '../../admin/featuredRoomsClient';
 import { renderRoomSnapshotToPngDataUrl } from '../../mint/roomMetadataRender';
+import { listSubmittedGuestRoomDrafts } from '../../guestRooms/client';
+import type { GuestRoomDraftSummary } from '../../guestRooms/model';
 import { createWorldRepository, type WorldRepository } from '../../persistence/worldRepository';
 import type { RoomPlaylistSummary } from '../../playlists/model';
 import { createPlaylistRepository, type PlaylistRepository } from '../../playlists/repository';
@@ -31,8 +33,8 @@ import {
   type RoomDiscoverySort,
 } from '../../runs/model';
 
-type ExploreMode = 'rooms' | 'builders';
-type ExploreSortButtonValue = Exclude<RoomDiscoverySort, 'builder'> | 'builders';
+type ExploreMode = 'rooms' | 'builders' | 'guestRooms';
+type ExploreSortButtonValue = Exclude<RoomDiscoverySort, 'builder'> | 'builders' | 'guestRooms';
 
 type ExploreModalElements = {
   modal: HTMLElement | null;
@@ -61,9 +63,11 @@ export class ExploreModalController {
   private readonly previewObserver: IntersectionObserver | null;
   private roomDiscovery: RoomDiscoveryResponse | null = null;
   private builderDiscovery: BuilderDiscoveryResponse | null = null;
+  private guestRoomDrafts: GuestRoomDraftSummary[] = [];
   private loading = false;
   private loaded = false;
   private builderLoaded = false;
+  private guestRoomsLoaded = false;
   private authState: AuthDebugState = getAuthDebugState();
   private myPlaylists: RoomPlaylistSummary[] = [];
   private myPlaylistsLoaded = false;
@@ -188,6 +192,14 @@ export class ExploreModalController {
           void this.loadBuilderDiscoveryResults();
           return;
         }
+        if (sort === 'guestRooms') {
+          if (this.exploreMode === 'guestRooms') {
+            return;
+          }
+          this.exploreMode = 'guestRooms';
+          void this.loadGuestRoomResults();
+          return;
+        }
         if (this.isPersonalRoomSort(sort) && !this.authState.authenticated) {
           this.setError('Sign in to sort by your room history.');
           return;
@@ -237,9 +249,11 @@ export class ExploreModalController {
     this.elements.modal.setAttribute('aria-hidden', 'false');
     this.roomDiscovery = null;
     this.builderDiscovery = null;
+    this.guestRoomDrafts = [];
     this.loading = true;
     this.loaded = false;
     this.builderLoaded = false;
+    this.guestRoomsLoaded = false;
     this.myPlaylists = [];
     this.myPlaylistsLoaded = false;
     this.playlistPickerRoomId = null;
@@ -309,13 +323,33 @@ export class ExploreModalController {
     }
   }
 
+  private async loadGuestRoomResults(): Promise<void> {
+    this.loading = true;
+    this.guestRoomsLoaded = false;
+    this.render();
+    try {
+      const response = await listSubmittedGuestRoomDrafts(48);
+      this.guestRoomDrafts = response.drafts;
+      this.setError(null);
+    } catch (error) {
+      console.error('Failed to load Guest Rooms', error);
+      this.guestRoomDrafts = [];
+      this.setError(error instanceof Error ? error.message : 'Failed to load Guest Rooms.');
+    } finally {
+      this.loading = false;
+      this.guestRoomsLoaded = true;
+      this.render();
+    }
+  }
+
   private render(): void {
     if (!this.elements.list) {
       return;
     }
 
     const buildersActive = this.exploreMode === 'builders';
-    this.elements.filterGroup?.classList.toggle('hidden', buildersActive);
+    const guestRoomsActive = this.exploreMode === 'guestRooms';
+    this.elements.filterGroup?.classList.toggle('hidden', buildersActive || guestRoomsActive);
     this.elements.builderSortGroup?.classList.toggle('hidden', !buildersActive);
     this.elements.list.classList.toggle('explore-room-list', !buildersActive);
     this.elements.list.classList.toggle('explore-builder-list', buildersActive);
@@ -323,7 +357,7 @@ export class ExploreModalController {
     for (const button of this.elements.filterButtons) {
       const difficulty = this.parseDifficultyButtonValue(button.dataset.exploreDifficulty);
       button.classList.toggle('active', difficulty === this.discoverFilter);
-      button.disabled = this.loading || buildersActive;
+      button.disabled = this.loading || buildersActive || guestRoomsActive;
     }
 
     for (const button of this.elements.sortButtons) {
@@ -332,7 +366,9 @@ export class ExploreModalController {
         'active',
         sort === 'builders'
           ? buildersActive
-          : !buildersActive && sort === this.discoverSort,
+          : sort === 'guestRooms'
+            ? guestRoomsActive
+            : !buildersActive && !guestRoomsActive && sort === this.discoverSort,
       );
       button.disabled = this.loading || (this.isPersonalRoomSort(sort) && !this.authState.authenticated);
       if (this.isPersonalRoomSort(sort) && !this.authState.authenticated) {
@@ -348,19 +384,34 @@ export class ExploreModalController {
       button.disabled = this.loading || !buildersActive;
     }
 
-    const activeLoaded = buildersActive ? this.builderLoaded : this.loaded;
-    this.renderQueueActions(buildersActive, activeLoaded);
+    const activeLoaded = buildersActive
+      ? this.builderLoaded
+      : guestRoomsActive
+        ? this.guestRoomsLoaded
+        : this.loaded;
+    this.renderQueueActions(buildersActive || guestRoomsActive, activeLoaded);
     this.elements.list.replaceChildren();
 
     if (this.loading || !activeLoaded) {
       this.elements.list.appendChild(
-        this.createEmptyState(buildersActive ? 'Loading builders...' : 'Loading levels...')
+        this.createEmptyState(
+          buildersActive
+            ? 'Loading builders...'
+            : guestRoomsActive
+              ? 'Loading Guest Rooms...'
+              : 'Loading levels...'
+        )
       );
       return;
     }
 
     if (buildersActive) {
       this.renderBuilderResults();
+      return;
+    }
+
+    if (guestRoomsActive) {
+      this.renderGuestRoomResults();
       return;
     }
 
@@ -481,6 +532,88 @@ export class ExploreModalController {
 
     button.append(copy, count);
     item.appendChild(button);
+    return item;
+  }
+
+  private renderGuestRoomResults(): void {
+    if (!this.elements.list) {
+      return;
+    }
+
+    const results = this.guestRoomDrafts.filter((draft) => draft.status === 'submitted');
+    if (results.length === 0) {
+      this.elements.list.appendChild(this.createEmptyState('No Guest Rooms have been published yet.'));
+      return;
+    }
+
+    for (const draft of results) {
+      this.elements.list.appendChild(this.renderGuestRoomEntry(draft));
+    }
+  }
+
+  private renderGuestRoomEntry(draft: GuestRoomDraftSummary): HTMLElement {
+    const item = this.doc.createElement('div');
+    item.className = 'explore-room-item';
+
+    const card = this.doc.createElement('div');
+    card.className = 'explore-room-card explore-guest-room-card';
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+
+    const openDraft = () => {
+      this.close();
+      getActiveOverworldScene(this.game)?.openGuestDraftRoom?.(draft.snapshot);
+    };
+    card.addEventListener('click', openDraft);
+    card.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') {
+        return;
+      }
+      event.preventDefault();
+      openDraft();
+    });
+
+    const preview = this.doc.createElement('div');
+    preview.className = 'explore-room-preview';
+
+    const previewImage = this.doc.createElement('img');
+    previewImage.className = 'explore-room-preview-image hidden';
+    previewImage.alt = `${draft.title?.trim() || 'Guest Room'} preview`;
+
+    const previewFallback = this.doc.createElement('div');
+    previewFallback.className = 'explore-room-preview-fallback';
+    previewFallback.textContent = `Room ${draft.roomX},${draft.roomY}`;
+    preview.append(previewImage, previewFallback);
+
+    const copy = this.doc.createElement('div');
+    copy.className = 'explore-room-copy';
+
+    const titleRow = this.doc.createElement('div');
+    titleRow.className = 'explore-room-title-row';
+
+    const title = this.doc.createElement('div');
+    title.className = 'explore-room-title';
+    title.textContent = draft.title?.trim() || 'Guest Room';
+    titleRow.appendChild(title);
+
+    const badge = this.doc.createElement('div');
+    badge.className = 'explore-room-featured-badge explore-guest-room-badge';
+    badge.textContent = 'Guest';
+    titleRow.appendChild(badge);
+
+    const builder = this.doc.createElement('div');
+    builder.className = 'explore-room-builder';
+    builder.textContent = `${draft.guestDisplayName || 'Guest'} - Room ${draft.roomX},${draft.roomY}`;
+
+    const meta = this.doc.createElement('div');
+    meta.className = 'explore-room-quality-label';
+    const publishedDate = this.formatShortDate(draft.submittedAt ?? draft.updatedAt);
+    meta.textContent = publishedDate ? `Published ${publishedDate} - No XP or account benefits` : 'No XP or account benefits';
+
+    copy.append(titleRow, builder, meta);
+    card.append(preview, copy);
+    item.appendChild(card);
+    void this.loadAndApplyGuestRoomPreview(draft, previewImage, previewFallback);
     return item;
   }
 
@@ -862,6 +995,31 @@ export class ExploreModalController {
     this.applyRoomPreview(imageEl, fallbackEl, dataUrl, room);
   }
 
+  private async loadAndApplyGuestRoomPreview(
+    draft: GuestRoomDraftSummary,
+    imageEl: HTMLImageElement,
+    fallbackEl: HTMLElement,
+  ): Promise<void> {
+    const previewKey = `guest:${draft.id}:${draft.updatedAt}`;
+    imageEl.dataset.previewKey = previewKey;
+    try {
+      const dataUrl = await renderRoomSnapshotToPngDataUrl(draft.snapshot, {
+        tilePixelSize: 4,
+      });
+      if (!imageEl.isConnected || imageEl.dataset.previewKey !== previewKey) {
+        return;
+      }
+      imageEl.src = dataUrl;
+      imageEl.classList.remove('hidden');
+      fallbackEl.classList.add('hidden');
+    } catch (error) {
+      console.warn('Failed to render Guest Room preview.', draft.id, error);
+      fallbackEl.textContent = draft.title?.trim() || `Room ${draft.roomX},${draft.roomY}`;
+      imageEl.classList.add('hidden');
+      fallbackEl.classList.remove('hidden');
+    }
+  }
+
   private applyRoomPreview(
     imageEl: HTMLImageElement,
     fallbackEl: HTMLElement,
@@ -966,6 +1124,7 @@ export class ExploreModalController {
       || value === 'unvisited'
       || value === 'unrated'
       || value === 'builders'
+      || value === 'guestRooms'
     ) {
       return value;
     }

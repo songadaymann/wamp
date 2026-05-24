@@ -461,6 +461,7 @@
 }
 
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='builders'],
+#explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='guestRooms'],
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-builder-sort='rooms'] {
   background: #fcea7c;
   color: #000;

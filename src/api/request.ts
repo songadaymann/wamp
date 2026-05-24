@@ -17,7 +17,7 @@ export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Pr
   const response = await fetch(`${baseUrl}${path}`, {
     ...requestInit,
     headers,
-    credentials: 'include',
+    credentials: requestInit.credentials ?? 'include',
   });
 
   return parseJsonApiResponse<T>(response);

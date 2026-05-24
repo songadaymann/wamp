@@ -1723,7 +1723,38 @@
         <div id="guest-builder-claim-copy" class="guest-builder-claim-copy">Sign in so you can save this build to your account. Add a challenge goal and publish it to claim Builder XP.</div>
         <div class="guest-builder-claim-actions">
           <button id="btn-guest-builder-claim-continue" class="bar-btn bar-btn-small" type="button">Keep Building</button>
+          <button id="btn-guest-builder-claim-submit-guest" class="bar-btn bar-btn-small hidden" type="button">Publish To Guest Rooms</button>
           <button id="btn-guest-builder-claim-signin" class="bar-btn" type="button">Sign In to Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="guest-room-recovery-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel guest-room-recovery-modal-panel" role="dialog" aria-modal="true" aria-labelledby="guest-room-recovery-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Saved Guest Room</div>
+          <h2 id="guest-room-recovery-title" class="history-modal-title">You left a room unfinished</h2>
+          <div id="guest-room-recovery-meta" class="history-modal-meta">Room 0,0</div>
+        </div>
+        <button id="btn-guest-room-recovery-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div class="guest-room-recovery-body">
+        <div id="guest-room-recovery-preview" class="guest-room-recovery-preview" aria-label="Saved room preview">
+          <div id="guest-room-recovery-preview-fallback" class="guest-room-recovery-preview-fallback">Saved Room</div>
+        </div>
+        <div id="guest-room-recovery-copy" class="guest-room-recovery-copy">
+          Your room is still saved for this browser. Sign in to make it yours and publish it in the world.
+        </div>
+        <div class="guest-room-recovery-benefits">
+          Guest Rooms are playable, but guest-published rooms do not earn XP, profile credit, minting rights, or other account benefits.
+        </div>
+        <div id="guest-room-recovery-status" class="history-modal-meta guest-room-recovery-status hidden"></div>
+        <div class="guest-room-recovery-actions">
+          <button id="btn-guest-room-recovery-signin" class="bar-btn" type="button">Sign In To Publish</button>
+          <button id="btn-guest-room-recovery-submit" class="bar-btn bar-btn-small" type="button">Publish To Guest Rooms</button>
+          <button id="btn-guest-room-recovery-go" class="bar-btn bar-btn-small" type="button">Go To Room</button>
         </div>
       </div>
     </div>
@@ -1752,6 +1783,7 @@
         <button class="bar-btn bar-btn-small" type="button" data-explore-sort="unvisited">Never Visited</button>
         <button class="bar-btn bar-btn-small" type="button" data-explore-sort="unrated">Unrated By Me</button>
         <button class="bar-btn bar-btn-small" type="button" data-explore-sort="builders">Builders</button>
+        <button class="bar-btn bar-btn-small" type="button" data-explore-sort="guestRooms">Guest Rooms</button>
       </div>
       <div id="explore-builder-sorts" class="leaderboard-discover-filters leaderboard-discover-sorts explore-builder-sorts hidden">
         <button class="bar-btn bar-btn-small active" type="button" data-explore-builder-sort="alphabet">A-Z</button>
