@@ -166,6 +166,7 @@ export class EditorScene extends Phaser.Scene {
   private lightingPreviewCacheKey = '';
   private entrySource: 'world' | 'direct' = 'direct';
   private initialRoomSnapshot: RoomSnapshot | null = null;
+  private forceInitialRoomSnapshot = false;
   private readonly handleWake = (): void => {
     setAppMode('editor');
     editorState.isPlaying = false;
@@ -754,6 +755,7 @@ export class EditorScene extends Phaser.Scene {
     this.resetRuntimeState();
 
     this.initialRoomSnapshot = data?.roomSnapshot ? cloneRoomSnapshot(data.roomSnapshot) : null;
+    this.forceInitialRoomSnapshot = data?.forceRoomSnapshot === true;
     this.courseController.initialize(data?.courseEdit ?? null);
 
     if (this.initialRoomSnapshot) {
@@ -1065,7 +1067,9 @@ export class EditorScene extends Phaser.Scene {
   // ══════════════════════════════════════
 
   private async loadPersistedRoom(): Promise<void> {
-    const loaded = await this.roomSession.loadPersistedRoom(this.initialRoomSnapshot);
+    const loaded = await this.roomSession.loadPersistedRoom(this.initialRoomSnapshot, {
+      forceInitialRoomSnapshot: this.forceInitialRoomSnapshot,
+    });
     if (!loaded) {
       if (this.entrySource === 'world') {
         showBusyError('Failed to load room.', {

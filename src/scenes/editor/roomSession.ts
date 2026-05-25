@@ -22,6 +22,7 @@ import {
   requestGuestBuilderClaim,
   type GuestBuilderClaimSource,
 } from '../../progression/guestBuilderClaimEvents';
+import { saveGuestRoomDraft } from '../../guestRooms/client';
 import { clearLocalRoomStorageEntry } from '../../persistence/browserStorage';
 import {
   buildExplorerTxUrl,
@@ -384,7 +385,10 @@ export class EditorRoomSession {
     void this.saveDraft();
   }
 
-  async loadPersistedRoom(initialRoomSnapshot: RoomSnapshot | null): Promise<boolean> {
+  async loadPersistedRoom(
+    initialRoomSnapshot: RoomSnapshot | null,
+    options: { forceInitialRoomSnapshot?: boolean } = {},
+  ): Promise<boolean> {
     this.setStatusText('Loading draft...');
 
     try {
@@ -393,7 +397,7 @@ export class EditorRoomSession {
       const activeRecord = localRecord ?? remoteRecord;
       this.syncRoomMetadata(activeRecord);
       this.host.applyRoomSnapshot(
-        this.resolveRoomSnapshotForEditing(activeRecord, initialRoomSnapshot)
+        this.resolveRoomSnapshotForEditing(activeRecord, initialRoomSnapshot, options)
       );
       this.host.refreshSurroundingRoomPreviews();
       this.setStatusText(
@@ -430,13 +434,21 @@ export class EditorRoomSession {
     if (options.promptForSignInOnUnauthorized) {
       await refreshAuthSession();
       if (!getAuthDebugState().authenticated) {
-        await this.saveDraftLocally(
+        await this.saveGuestDraft(
           saveStartedAt,
-          'Draft saved locally. Sign in to save drafts to your account.',
+          'Draft saved as guest. Sign in to save drafts to your account.',
           'manual-save'
         );
         return null;
       }
+    }
+
+    if (!getAuthDebugState().authenticated) {
+      return this.saveGuestDraft(
+        saveStartedAt,
+        'Draft saved as guest. Sign in to publish.',
+        null,
+      );
     }
 
     this.saveInFlight = true;
@@ -501,9 +513,9 @@ export class EditorRoomSession {
     }
     await refreshAuthSession();
     if (!getAuthDebugState().authenticated) {
-      await this.saveDraftLocally(
+      await this.saveGuestDraft(
         this.host.getLastDirtyAt(),
-        'Draft saved locally. Sign in to publish.',
+        'Draft saved as guest. Sign in to publish, or publish to Guest Rooms.',
         'publish-attempt'
       );
       return null;
@@ -1064,6 +1076,39 @@ export class EditorRoomSession {
     return record;
   }
 
+  private async saveGuestDraft(
+    saveStartedAt: number,
+    successText: string,
+    guestBuilderClaimSource: GuestBuilderClaimSource | null = null,
+  ): Promise<RoomRecord | null> {
+    this.saveInFlight = true;
+    this.setStatusText('Saving guest draft...');
+
+    try {
+      const snapshot = this.host.exportRoomSnapshot();
+      const localRecord = await this.localRoomRepository.saveDraft(snapshot);
+      this.syncRoomMetadata(localRecord);
+
+      try {
+        await saveGuestRoomDraft(localRecord.draft);
+        this.setStatusText(successText);
+      } catch (error) {
+        console.warn('Failed to save durable guest room draft', error);
+        this.setStatusText('Draft saved locally. Sign in to publish.');
+      }
+
+      if (this.host.getLastDirtyAt() === saveStartedAt) {
+        this.host.setRoomDirty(false);
+      }
+
+      this.requestGuestBuilderClaimPrompt(guestBuilderClaimSource);
+      return localRecord;
+    } finally {
+      this.saveInFlight = false;
+      this.host.refreshUi();
+    }
+  }
+
   private requestGuestBuilderClaimPrompt(source: GuestBuilderClaimSource | null): void {
     if (!source || getAuthDebugState().authenticated) {
       return;
@@ -1124,7 +1169,12 @@ export class EditorRoomSession {
   private resolveRoomSnapshotForEditing(
     record: RoomRecord,
     initialRoomSnapshot: RoomSnapshot | null,
+    options: { forceInitialRoomSnapshot?: boolean } = {},
   ): RoomSnapshot {
+    if (initialRoomSnapshot && options.forceInitialRoomSnapshot) {
+      return this.getEditableSnapshotFromSource(initialRoomSnapshot);
+    }
+
     if (initialRoomSnapshot && this.shouldPreferInitialRoomSnapshot(record, initialRoomSnapshot)) {
       return this.getEditableSnapshotFromSource(initialRoomSnapshot);
     }

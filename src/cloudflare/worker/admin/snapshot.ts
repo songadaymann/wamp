@@ -16,6 +16,7 @@ const SNAPSHOT_TABLES = [
   'course_runs',
   'course_versions',
   'courses',
+  'guest_room_drafts',
   'magic_link_tokens',
   'playfun_point_sync',
   'playfun_user_links',

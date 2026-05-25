@@ -16,7 +16,7 @@ import type {
 } from '../../scenes/overworld/roomRushRuns';
 import type { MultiplayerModeId } from '../../multiplayer/model';
 import type { OverworldOnlineRosterViewEntry } from '../../scenes/overworld/hud';
-import type { RoomCoordinates, RoomRecord, RoomVersionRecord } from '../../persistence/roomModel';
+import type { RoomCoordinates, RoomRecord, RoomSnapshot, RoomVersionRecord } from '../../persistence/roomModel';
 
 export type EditorHistoryState = {
   roomId: string;
@@ -271,6 +271,7 @@ export interface OverworldSceneBridge {
   playSelectedCourse?: () => Promise<void> | void;
   editSelectedRoom?: () => void;
   buildSelectedRoom?: () => void;
+  openGuestDraftRoom?: (roomSnapshot: RoomSnapshot) => void;
   zoomIn?: () => void;
   zoomOut?: () => void;
   jumpToCoordinates?: (coordinates: RoomCoordinates) => Promise<void> | void;

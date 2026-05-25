@@ -73,6 +73,24 @@ Notes:
 
 ## Now
 
+## G-020 - Durable guest draft recovery and guest rooms
+Status: Now
+Priority: High
+Why:
+- Guest builders can create real rooms, leave, and only have a stale PartyKit preview or browser-local draft as evidence of the work.
+- We want to recover that work when the same browser guest returns, push them hard toward signup/publish, and still provide a fallback for kids or visitors who cannot make an account.
+
+Acceptance:
+- Non-empty guest room work is autosaved durably outside PartyKit preview storage.
+- Returning same-browser guests can recover their drafts and are prompted to sign up and publish.
+- The returning-guest prompt follows the existing nudge-modal pattern: sign in and publish, publish to Guest Rooms, or go to the saved room while keeping those destination choices prominent.
+- Guests who refuse or cannot sign up have a defined guest-room submission path that does not imply account ownership and clearly says guest-published rooms do not earn XP or account benefits.
+- Stale PartyKit previews no longer act like permanent creative storage.
+
+Notes:
+- Design pass: [guest-room-recovery-design.md](guest-room-recovery-design.md)
+- Keep guest identity and guest recovery token separate; `guestUserId` alone should not authorize draft recovery.
+
 ## Next
 
 ## G-005 - Presence-aware chat and teleport to friends
