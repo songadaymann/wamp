@@ -415,7 +415,7 @@ export async function loadRoomDiscoveryResponse(
         case 'unvisited':
           return !state.visited;
         case 'unrated':
-          return state.completed && !state.rated;
+          return state.completed && !state.rated && !isViewerRoomBuilder(entry, viewerUserId);
         default:
           return true;
       }
@@ -619,6 +619,10 @@ function compareRoomDiscoveryEntries(
 
 function isPersonalRoomDiscoverySort(sort: RoomDiscoverySort): boolean {
   return sort === 'unbeaten' || sort === 'unvisited' || sort === 'unrated';
+}
+
+function isViewerRoomBuilder(entry: RoomDiscoveryEntry, viewerUserId: string | null): boolean {
+  return viewerUserId !== null && entry.builderUserId === viewerUserId;
 }
 
 function compareQualityDesc(left: RoomDiscoveryEntry, right: RoomDiscoveryEntry): number {

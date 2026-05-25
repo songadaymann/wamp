@@ -991,9 +991,14 @@ export class ExploreModalController {
     const results = (this.roomDiscovery?.results ?? [])
       .filter((entry) => entry.goalType !== null);
     if (mode === 'rate') {
+      const viewerUserId = this.authState.user?.id ?? null;
       return results.filter((entry) => {
         const state = entry.viewerState;
-        return Boolean(state?.completed && !state.rated);
+        return Boolean(
+          state?.completed
+          && !state.rated
+          && (viewerUserId === null || entry.builderUserId !== viewerUserId),
+        );
       });
     }
     return results.filter((entry) => entry.viewerState?.completed !== true);
