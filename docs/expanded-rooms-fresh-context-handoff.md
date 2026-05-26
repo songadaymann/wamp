@@ -4,9 +4,18 @@ Date: 2026-05-26
 Worktree: `/Users/jonathanmann/SongADAO Dropbox/Jonathan Mann/projects/games/everybodys-platformer-worktrees/design/expanded-rooms`
 Branch: `design/expanded-rooms`
 
-## Latest Safety QA Status
+## Latest Production Status
 
-The stale "Current Slice In Progress" section below is from an earlier share-preview handoff. The branch has since advanced through the remaining pre-QA Expanded Rooms slices and is deployed for hands-on safety QA.
+The stale "Current Slice In Progress" section below is from an earlier share-preview handoff. The branch advanced through safety QA, merged to `main`, and is now deployed to production.
+
+Production targets:
+
+- App: `https://wamp.land`
+- API: `https://api.wamp.land`
+- Merge commit: `ac0b90f`
+- Production Worker version: `2c31b8c0-a04b-4b2d-be5c-3bf1caaea875`
+- Production Pages deploy: `https://86aec669.wampland.pages.dev`
+- Production D1 migration: `0037_expanded_rooms.sql` applied on 2026-05-26
 
 Current safety targets:
 
@@ -35,7 +44,7 @@ Verification for the latest deploy:
 
 Next practical step:
 
-- Have Jonathan re-test the signed-in safety flow: select an existing Expanded Room in the overworld, click `Edit Expanded Room`, confirm it opens the expanded-room editor directly, then confirm a normal room still shows `Expand Room`.
+- Live QA on production: create/edit/publish multi-cell Expanded Rooms, play/rate/clear them, test playlists/profiles/explore/share/admin views, and watch migration-report/admin surfaces for parity issues.
 
 ## Important Warning
 
