@@ -202,6 +202,7 @@ export function buildCustomSpriteObjectConfig(sprite: CustomSpriteDefinition): G
     bodyOffsetY: bodyOffset,
     behavior: 'static',
     interaction: sprite.kind === 'pushable' ? 'pushable' : undefined,
+    customSpriteKind: sprite.kind,
     description: `${getCustomSpriteKindLabel(sprite.kind)} made in the pixel editor.`,
   };
 }

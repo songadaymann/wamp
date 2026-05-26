@@ -68,6 +68,8 @@ export interface GameObjectConfig {
   behavior: 'static' | 'patrol' | 'fly' | 'bounce' | 'animated' | 'shooter';
   /** optional runtime interaction capability shared across object categories */
   interaction?: ObjectInteraction;
+  /** kind marker for object configs generated from custom sprite definitions */
+  customSpriteKind?: CustomSpriteKind | null;
   /** false for actors that keep overlap bodies but pass through terrain and solid objects */
   collidesWithWorld?: boolean;
   /** optional emissive lighting behavior for dark rooms */
@@ -266,6 +268,30 @@ export function objectCollidesWithWorld(
   config: Pick<GameObjectConfig, 'collidesWithWorld'> | null | undefined,
 ): boolean {
   return config?.collidesWithWorld !== false;
+}
+
+export function isSolidCustomSpriteObjectConfig(
+  config: Pick<GameObjectConfig, 'id' | 'category' | 'interaction' | 'customSpriteKind'> | null | undefined,
+): boolean {
+  if (!config || !isCustomSpriteObjectId(config.id)) {
+    return false;
+  }
+
+  return (
+    config.customSpriteKind === 'solid' ||
+    (
+      config.customSpriteKind == null &&
+      config.category === 'platform' &&
+      !isPushableObjectConfig(config)
+    )
+  );
+}
+
+export function placedObjectLayerAllowsRuntimeCollision(
+  config: Pick<GameObjectConfig, 'id' | 'category' | 'interaction' | 'customSpriteKind'> | null | undefined,
+  placed: Pick<PlacedObject, 'layer'> | null | undefined,
+): boolean {
+  return !isSolidCustomSpriteObjectConfig(config) || getPlacedObjectLayer(placed) === 'terrain';
 }
 
 export function getObjectAnimationFrames(config: GameObjectConfig): number[] {

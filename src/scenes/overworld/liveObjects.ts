@@ -7,6 +7,7 @@ import {
   getObjectDisplayScale,
   getObjectRuntimeBodyOffset,
   objectCollidesWithWorld,
+  placedObjectLayerAllowsRuntimeCollision,
   isDynamicRuntimeObjectConfig,
   isBlockSwitchObjectId,
   isMovingPlatformEndpointObjectId,
@@ -565,7 +566,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     );
     sprite.setOrigin(0.5, 0.5);
     sprite.setScale(getObjectDisplayScale(config));
-    sprite.setDepth(this.getPlacedObjectRuntimeDepth({ layer }));
+    const normalizedLayer = getPlacedObjectLayer({ layer });
+    sprite.setDepth(this.getPlacedObjectRuntimeDepth({ layer: normalizedLayer }));
     sprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     if (isMovingPlatformEndpointObjectId(config.id)) {
       sprite.setVisible(false);
@@ -588,7 +590,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     if (config.id === 'trapdoor_metal') {
       sprite.setTint(0xb8c4d8);
     }
-    if (config.bodyWidth > 0 && config.bodyHeight > 0) {
+    if (
+      config.bodyWidth > 0 &&
+      config.bodyHeight > 0 &&
+      placedObjectLayerAllowsRuntimeCollision(config, { layer: normalizedLayer })
+    ) {
       if (this.usesDynamicObjectBody(config)) {
         this.options.scene.physics.add.existing(sprite);
         const body = sprite.body as Phaser.Physics.Arcade.Body;
@@ -634,7 +640,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       linkedTargetInstanceId,
       containedObjectId,
       signText,
-      layer: getPlacedObjectLayer({ layer }),
+      layer: normalizedLayer,
       countsTowardGoals,
       config,
       sprite,
@@ -1287,6 +1293,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       loadedRoom.liveObjects.filter(
         (candidate) =>
           candidate.sprite.body &&
+          placedObjectLayerAllowsRuntimeCollision(candidate.config, candidate) &&
           objectCollidesWithWorld(candidate.config) &&
           isSolidRuntimeObjectConfig(candidate.config)
       ).map((liveObject) => ({ loadedRoom, liveObject }))
@@ -1302,6 +1309,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         this.destroyLiveObjectWorldColliders(liveObject);
 
         if (!this.usesDynamicObjectBody(liveObject.config) || !liveObject.sprite.body) {
+          continue;
+        }
+        if (!placedObjectLayerAllowsRuntimeCollision(liveObject.config, liveObject)) {
           continue;
         }
         if (!objectCollidesWithWorld(liveObject.config)) {
