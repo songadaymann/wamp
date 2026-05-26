@@ -74,7 +74,10 @@ interface OverworldSceneFlowHost {
     snapshot: CourseSnapshot,
     options?: { hadPreviousCompletion?: boolean; previousViewerRank?: number | null }
   ): ActiveCourseRunState;
-  getCourseStartRoomRef(course: CourseSnapshot): CourseRoomRef | null;
+  getCourseStartRoomRef(
+    course: CourseSnapshot,
+    lockedStartRoomId?: string | null,
+  ): CourseRoomRef | null;
   getActiveCourseRun(): ActiveCourseRunState | null;
   getActiveRoomRushRun(): ActiveRoomRushRunState | null;
   setActiveCourseRun(runState: ActiveCourseRunState | null): void;
@@ -406,7 +409,10 @@ export class OverworldSceneFlowController {
       this.host.startRemoteCourseRun(runState);
     }
 
-    const startRoom = this.host.getCourseStartRoomRef(snapshot) ?? snapshot.roomRefs[0] ?? null;
+    const startRoom =
+      this.host.getCourseStartRoomRef(runState.course, runState.startRoomId) ??
+      runState.course.roomRefs[0] ??
+      null;
     if (!startRoom) {
       throw new Error('This course has no playable rooms.');
     }

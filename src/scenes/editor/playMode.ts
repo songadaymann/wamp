@@ -1,6 +1,7 @@
 import {
   cloneCourseSnapshot,
   courseGoalRequiresStartPoint,
+  type CourseRoomRef,
   type CourseSnapshot,
 } from '../../courses/model';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomRepository';
@@ -54,11 +55,7 @@ export function buildEditorPlayModeData(
     coursePreview,
     courseEditedRoom,
   } = options;
-  const startRoomRef = coursePreview
-    ? (coursePreview.startPoint
-        ? coursePreview.roomRefs.find((roomRef) => roomRef.roomId === coursePreview.startPoint?.roomId) ?? null
-        : coursePreview.roomRefs[0] ?? null)
-    : null;
+  const startRoomRef = getCoursePreviewStartRoomRef(coursePreview, roomSnapshot);
   const playCoordinates = startRoomRef?.coordinates ?? roomCoordinates;
   return {
     centerCoordinates: { ...playCoordinates },
@@ -72,4 +69,31 @@ export function buildEditorPlayModeData(
     statusMessage: coursePreview ? 'Testing draft course.' : null,
     mode: 'play',
   };
+}
+
+function getCoursePreviewStartRoomRef(
+  coursePreview: CourseSnapshot | null,
+  roomSnapshot: RoomSnapshot,
+): CourseRoomRef | null {
+  if (!coursePreview) {
+    return null;
+  }
+
+  if (coursePreview.startPoint) {
+    const startRoomRef = coursePreview.roomRefs.find(
+      (roomRef) => roomRef.roomId === coursePreview.startPoint?.roomId,
+    );
+    if (startRoomRef) {
+      return startRoomRef;
+    }
+  }
+
+  const currentRoomRef = coursePreview.roomRefs.find(
+    (roomRef) => roomRef.roomId === roomSnapshot.id,
+  );
+  if (currentRoomRef && roomSnapshot.spawnPoint) {
+    return currentRoomRef;
+  }
+
+  return coursePreview.roomRefs[0] ?? null;
 }

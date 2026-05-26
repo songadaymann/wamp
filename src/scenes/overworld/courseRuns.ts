@@ -14,6 +14,7 @@ export interface ActiveCourseRunState {
   expandedRoomVersion: number | null;
   submissionTarget: 'course' | 'expanded_room' | null;
   returnCoordinates: RoomCoordinates;
+  startRoomId: string | null;
   elapsedMs: number;
   deaths: number;
   collectiblesCollected: number;
@@ -43,6 +44,7 @@ export interface CreateActiveCourseRunStateOptions {
   expandedRoomId?: string | null;
   expandedRoomVersion?: number | null;
   returnCoordinates: RoomCoordinates;
+  startRoomId?: string | null;
   leaderboardEligible: boolean;
   hadPreviousCompletion?: boolean;
   previousViewerRank?: number | null;
@@ -90,6 +92,7 @@ export function createActiveCourseRunState(
     expandedRoomId = null,
     expandedRoomVersion = null,
     returnCoordinates,
+    startRoomId = null,
     leaderboardEligible,
     hadPreviousCompletion = false,
     previousViewerRank = null,
@@ -102,6 +105,7 @@ export function createActiveCourseRunState(
     expandedRoomVersion,
     submissionTarget: null,
     returnCoordinates: { ...returnCoordinates },
+    startRoomId,
     elapsedMs: 0,
     deaths: 0,
     collectiblesCollected: 0,

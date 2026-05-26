@@ -21,6 +21,7 @@ import type {
 import { type GameObjectConfig } from '../../config';
 import {
   cloneRoomSnapshot,
+  roomIdFromCoordinates,
   type RoomCoordinates,
   type RoomSnapshot,
 } from '../../persistence/roomModel';
@@ -33,6 +34,7 @@ import {
   createActiveCourseRunState,
   type ActiveCourseRunState,
 } from './courseRuns';
+import { resolveCourseStartRoomRef } from './courseStartRoom';
 import { suggestProgressionDifficulty } from '../../progression/autoDifficulty';
 import {
   requestPostRunGuestClaim,
@@ -140,12 +142,15 @@ export class OverworldCoursePlaybackController {
     this.host.setActiveCourseRun(this.createCourseRunState(snapshot));
   }
 
-  getCourseStartRoomRef(course: CourseSnapshot): CourseRoomRef | null {
-    if (course.startPoint) {
-      return course.roomRefs.find((roomRef) => roomRef.roomId === course.startPoint?.roomId) ?? null;
-    }
-
-    return course.roomRefs[0] ?? null;
+  getCourseStartRoomRef(
+    course: CourseSnapshot,
+    lockedStartRoomId: string | null = null,
+  ): CourseRoomRef | null {
+    return resolveCourseStartRoomRef(course, {
+      lockedStartRoomId,
+      selectedRoomId: roomIdFromCoordinates(this.host.getSelectedCoordinates()),
+      roomRefHasSpawnPoint: (roomRef) => this.roomRefHasSpawnPoint(roomRef),
+    });
   }
 
   createCourseRunState(
@@ -153,6 +158,7 @@ export class OverworldCoursePlaybackController {
     options?: { hadPreviousCompletion?: boolean; previousViewerRank?: number | null },
   ): ActiveCourseRunState {
     const authState = getAuthDebugState();
+    const startRoomRef = this.getCourseStartRoomRef(course);
     const leaderboardEligible =
       course.status === 'published' &&
       isWampLeaderboardEligibleAuth(
@@ -174,6 +180,7 @@ export class OverworldCoursePlaybackController {
         course.status === 'published' ? expandedRoomIdFromLegacyCourseId(course.id) : null,
       expandedRoomVersion: course.status === 'published' ? course.version : null,
       returnCoordinates: { ...this.host.getSelectedCoordinates() },
+      startRoomId: startRoomRef?.roomId ?? null,
       enemyTarget:
         course.goal?.type === 'defeat_all'
           ? this.countCourseObjectsByCategory(course, 'enemy')
@@ -183,6 +190,10 @@ export class OverworldCoursePlaybackController {
       previousViewerRank: options?.previousViewerRank ?? null,
       localOnlyMessage,
     });
+  }
+
+  private roomRefHasSpawnPoint(roomRef: CourseRoomRef): boolean {
+    return Boolean(this.host.getRoomSnapshotForCoordinates(roomRef.coordinates)?.spawnPoint);
   }
 
   async startRemoteCourseRun(runState: ActiveCourseRunState): Promise<void> {

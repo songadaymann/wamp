@@ -1778,8 +1778,8 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.coursePlaybackController.prepareActiveCourseRoomOverrides(snapshot, options),
       createCourseRunState: (snapshot, options) =>
         this.coursePlaybackController.createCourseRunState(snapshot, options),
-      getCourseStartRoomRef: (course) =>
-        this.coursePlaybackController.getCourseStartRoomRef(course),
+      getCourseStartRoomRef: (course, lockedStartRoomId) =>
+        this.coursePlaybackController.getCourseStartRoomRef(course, lockedStartRoomId),
       getActiveCourseRun: () => this.activeCourseRun,
       getActiveRoomRushRun: () => this.activeRoomRushRun,
       setActiveCourseRun: (runState) => {
@@ -2962,7 +2962,11 @@ export class OverworldPlayScene extends Phaser.Scene {
     const activeCourseRun = this.activeCourseRun;
     const activeCourse = activeCourseRun?.course ?? null;
     if (activeCourse?.roomRefs.some((roomRef) => roomRef.roomId === currentRoom.id)) {
-      const sourceRoom = this.resolveCourseAreaMusicSource(activeCourse, currentRoom);
+      const sourceRoom = this.resolveCourseAreaMusicSource(
+        activeCourse,
+        currentRoom,
+        activeCourseRun?.startRoomId ?? null,
+      );
       const expandedRoomId =
         activeCourseRun?.expandedRoomId ?? this.getExpandedRoomIdAt(currentRoom.coordinates) ?? `course:${activeCourse.id}`;
       return {
@@ -2995,8 +2999,12 @@ export class OverworldPlayScene extends Phaser.Scene {
   private resolveCourseAreaMusicSource(
     course: CourseSnapshot,
     currentRoom: RoomSnapshot,
+    lockedStartRoomId: string | null = null,
   ): RoomSnapshot {
-    const startRoomRef = this.coursePlaybackController.getCourseStartRoomRef(course);
+    const startRoomRef = this.coursePlaybackController.getCourseStartRoomRef(
+      course,
+      lockedStartRoomId,
+    );
     const orderedRoomRefs = [
       ...(startRoomRef ? [startRoomRef] : []),
       ...course.roomRefs.filter((roomRef) => roomRef.roomId !== startRoomRef?.roomId),
@@ -3757,7 +3765,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     const activeCourseRun = this.activeCourseRun;
     const courseStartRoom =
       activeCourseRun
-        ? this.coursePlaybackController.getCourseStartRoomRef(activeCourseRun.course)
+        ? this.coursePlaybackController.getCourseStartRoomRef(
+            activeCourseRun.course,
+            activeCourseRun.startRoomId,
+          )
         : null;
 
     if (courseStartRoom) {
