@@ -225,6 +225,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
 
 #course-editor-shell .goal-summary,
 #course-editor-shell #course-workbench-published-state,
+#course-editor-shell #course-workbench-cell-limit,
 #course-editor-shell #course-workbench-selected-room-summary {
   margin-top: 0;
   padding: 9px 10px;

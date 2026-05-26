@@ -15,6 +15,7 @@ type CourseModalElements = {
   publishedWarning: HTMLElement | null;
   closeButton: HTMLElement | null;
   titleInput: HTMLInputElement | null;
+  cellLimit: HTMLElement | null;
   roomList: HTMLElement | null;
   selectedRoomStatus: HTMLElement | null;
   addSelectedRoomButton: HTMLButtonElement | null;
@@ -44,7 +45,7 @@ function goalTypeLabel(goalType: CourseComposerState['goalType']): string {
     case 'survival':
       return 'Survival';
     default:
-      return 'No course goal selected.';
+      return 'No expanded room goal selected.';
   }
 }
 
@@ -107,6 +108,7 @@ export class CourseModalController {
       publishedWarning: this.doc.getElementById('course-published-warning'),
       closeButton: this.doc.getElementById('btn-course-close'),
       titleInput: this.doc.getElementById('course-title-input') as HTMLInputElement | null,
+      cellLimit: this.doc.getElementById('course-cell-limit'),
       roomList: this.doc.getElementById('course-room-list'),
       selectedRoomStatus: this.doc.getElementById('course-selected-room-status'),
       addSelectedRoomButton: this.doc.getElementById('btn-course-add-selected-room') as HTMLButtonElement | null,
@@ -222,14 +224,18 @@ export class CourseModalController {
       const roomCount = state.roomRefs.length;
       this.elements.meta.textContent =
         roomCount > 0
-          ? `${roomCount} room${roomCount === 1 ? '' : 's'} selected · listed order defines the path`
-          : 'Select 1-4 adjacent published rooms you authored to extend the course tail.';
+          ? 'Select adjacent published cells you authored to expand the footprint.'
+          : 'Select a published cell you authored to start an expanded room.';
+    }
+
+    if (this.elements.cellLimit) {
+      this.elements.cellLimit.textContent = state.cellUsageText;
     }
 
     if (this.elements.publishedState) {
       const publishedRoomText =
         state.published && state.publishedRoomCount > 0
-          ? ` · ${state.publishedRoomCount} room${state.publishedRoomCount === 1 ? '' : 's'}`
+          ? ` · ${state.publishedRoomCount} cell${state.publishedRoomCount === 1 ? '' : 's'}`
           : '';
       this.elements.publishedState.textContent = `${state.publishedStateText}${publishedRoomText}`;
     }
@@ -240,15 +246,17 @@ export class CourseModalController {
 
     this.setInputValue(this.elements.titleInput, state.title);
     if (this.elements.selectedRoomStatus) {
-      let selectedText = 'Select a published room in the world to extend this course tail.';
+      let selectedText = 'Select a published cell in the world to expand this room.';
       if (state.selectedRoomInDraft) {
-        selectedText = 'World selection is already in this course. Use Edit Selected Room to author it.';
+        selectedText = 'World selection is already in this expanded room. Use Edit Selected Cell to author it.';
       } else if (state.selectedRoomEligible) {
-        selectedText = 'World selection can extend the current course tail.';
+        selectedText = 'World selection can join this expanded room.';
       } else if (!state.canEdit) {
-        selectedText = 'This course is read-only for your account.';
+        selectedText = 'This expanded room is read-only for your account.';
+      } else if (state.cellLimitReached) {
+        selectedText = `${state.cellUsageText}. Remove a cell or raise the builder cap to add more.`;
       } else {
-        selectedText = 'World selection cannot extend the current course tail.';
+        selectedText = 'World selection cannot join this expanded room.';
       }
       this.elements.selectedRoomStatus.textContent = selectedText;
     }
@@ -258,6 +266,16 @@ export class CourseModalController {
 
     this.setDisabled(this.elements.titleInput, !state.canEdit);
     this.setButtonDisabled(this.elements.addSelectedRoomButton, !state.canEdit || !state.selectedRoomEligible);
+    if (this.elements.addSelectedRoomButton) {
+      this.elements.addSelectedRoomButton.title =
+        !state.canEdit
+          ? 'This expanded room is read-only for your account.'
+          : state.cellLimitReached
+            ? state.cellUsageText
+            : state.selectedRoomEligible
+              ? ''
+              : 'Select an adjacent published cell you authored.';
+    }
     this.setButtonDisabled(this.elements.removeSelectedRoomButton, !state.canEdit || !state.selectedRoomId);
     this.setButtonDisabled(
       this.elements.editSelectedRoomButton,
@@ -314,7 +332,7 @@ export class CourseModalController {
     if (state.roomRefs.length === 0) {
       const empty = this.doc.createElement('div');
       empty.className = 'leaderboard-empty';
-      empty.textContent = 'No rooms selected yet.';
+      empty.textContent = 'No cells selected yet.';
       this.elements.roomList.appendChild(empty);
       return;
     }
@@ -358,7 +376,7 @@ export class CourseModalController {
 
     if (!state.goalType) {
       this.elements.summary.textContent =
-        'Open a selected course room in the editor to choose the course goal and place markers.';
+        'Open a selected expanded room cell in the editor to choose the expanded room goal and place markers.';
       return;
     }
 
@@ -382,7 +400,7 @@ export class CourseModalController {
 
   private renderEmpty(): void {
     if (this.elements.meta) {
-      this.elements.meta.textContent = 'Open the course builder from the world HUD.';
+      this.elements.meta.textContent = 'Open the expanded room builder from the world HUD.';
     }
     if (this.elements.status) {
       this.elements.status.textContent = '';
@@ -395,9 +413,12 @@ export class CourseModalController {
       this.elements.publishedWarning.textContent = '';
       this.elements.publishedWarning.classList.add('hidden');
     }
+    if (this.elements.cellLimit) {
+      this.elements.cellLimit.textContent = '0/16 cells used';
+    }
     this.elements.roomList?.replaceChildren();
     if (this.elements.summary) {
-      this.elements.summary.textContent = 'No course selected.';
+      this.elements.summary.textContent = 'No expanded room selected.';
     }
     if (this.elements.saveDraftReason) {
       this.elements.saveDraftReason.textContent = '';

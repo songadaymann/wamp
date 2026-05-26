@@ -168,8 +168,10 @@ export interface OverworldHudViewModel {
   commentsToggleText: string;
   commentsToggleHidden: boolean;
   commentsToggleActive: boolean;
+  courseBuilderButtonText: string;
   courseBuilderButtonDisabled: boolean;
   courseBuilderButtonTitle: string;
+  editButtonText: string;
   editButtonDisabled: boolean;
   editButtonTitle: string;
   buildButtonDisabled: boolean;
@@ -629,9 +631,13 @@ export class OverworldHudBridge {
       'data-comments-visible',
       viewModel.commentsToggleActive ? 'true' : 'false',
     );
-    this.setDisabled(this.courseBuilderButton, viewModel.courseBuilderButtonDisabled);
+    this.setButton(
+      this.courseBuilderButton,
+      viewModel.courseBuilderButtonText,
+      viewModel.courseBuilderButtonDisabled,
+    );
     this.setTitle(this.courseBuilderButton, viewModel.courseBuilderButtonTitle);
-    this.setDisabled(this.editButton, viewModel.editButtonDisabled);
+    this.setButton(this.editButton, viewModel.editButtonText, viewModel.editButtonDisabled);
     this.setTitle(this.editButton, viewModel.editButtonTitle);
     this.setDisabled(this.buildButton, viewModel.buildButtonDisabled);
     this.renderGoalPanel(viewModel);

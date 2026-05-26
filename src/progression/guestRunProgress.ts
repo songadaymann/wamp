@@ -4,6 +4,7 @@ const STORAGE_KEY = 'wamp_guest_run_progress_v1';
 const MAX_RECORDS = 50;
 const ROOM_CLEAR_POTENTIAL_PXP = 20;
 const COURSE_CLEAR_POTENTIAL_PXP = 40;
+const EXPANDED_ROOM_CLEAR_POTENTIAL_PXP = COURSE_CLEAR_POTENTIAL_PXP;
 
 export interface GuestRunProgressRecord {
   id: string;
@@ -24,6 +25,7 @@ export interface GuestRunProgressSummary {
   totalClears: number;
   roomClears: number;
   courseClears: number;
+  expandedRoomClears: number;
   potentialPxp: number;
 }
 
@@ -64,6 +66,9 @@ export function loadGuestRunProgress(): GuestRunProgressSummary {
 }
 
 function getPotentialPxp(contentType: PostRunRatingRequestDetail['contentType']): number {
+  if (contentType === 'expanded_room') {
+    return EXPANDED_ROOM_CLEAR_POTENTIAL_PXP;
+  }
   return contentType === 'course' ? COURSE_CLEAR_POTENTIAL_PXP : ROOM_CLEAR_POTENTIAL_PXP;
 }
 
@@ -91,10 +96,13 @@ function summarizeRecords(
 ): GuestRunProgressSummary {
   let roomClears = 0;
   let courseClears = 0;
+  let expandedRoomClears = 0;
   let potentialPxp = 0;
 
   for (const record of records) {
-    if (record.contentType === 'course') {
+    if (record.contentType === 'expanded_room') {
+      expandedRoomClears += 1;
+    } else if (record.contentType === 'course') {
       courseClears += 1;
     } else {
       roomClears += 1;
@@ -108,6 +116,7 @@ function summarizeRecords(
     totalClears: records.length,
     roomClears,
     courseClears,
+    expandedRoomClears,
     potentialPxp,
   };
 }
@@ -149,7 +158,7 @@ function normalizeRecord(value: unknown): GuestRunProgressRecord | null {
   const record = value as Partial<GuestRunProgressRecord>;
   if (
     typeof record.id !== 'string' ||
-    (record.contentType !== 'room' && record.contentType !== 'course') ||
+    (record.contentType !== 'room' && record.contentType !== 'course' && record.contentType !== 'expanded_room') ||
     typeof record.contentId !== 'string' ||
     typeof record.version !== 'number' ||
     typeof record.elapsedMs !== 'number' ||

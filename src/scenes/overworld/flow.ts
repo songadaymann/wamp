@@ -11,6 +11,8 @@ import {
   type CourseRoomRef,
   type CourseSnapshot,
 } from '../../courses/model';
+import { expandedRoomIdFromLegacyCourseId } from '../../expandedRooms/model';
+import { createExpandedRoomRepository } from '../../expandedRooms/repository';
 import { setFocusedCoordinatesInUrl } from '../../navigation/worldNavigation';
 import { roomIdFromCoordinates, type RoomCoordinates, type RoomSnapshot } from '../../persistence/roomModel';
 import { hideBusyOverlay, showBusyError, showBusyOverlay } from '../../ui/appFeedback';
@@ -84,6 +86,7 @@ interface OverworldSceneFlowHost {
 
 export class OverworldSceneFlowController {
   private readonly courseRepository = createCourseRepository();
+  private readonly expandedRoomRepository = createExpandedRoomRepository();
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -124,6 +127,11 @@ export class OverworldSceneFlowController {
       return;
     }
 
+    if (selectedState === 'published' && this.host.getSelectedPublishedCourseId()) {
+      void this.playSelectedCourse();
+      return;
+    }
+
     this.host.resetPlaySession();
     this.host.clearTouchGestureState();
     this.host.requestRoomGoalIntroForNextOverworldEntry({
@@ -150,7 +158,7 @@ export class OverworldSceneFlowController {
 
     const activeCourseRun = this.host.getActiveCourseRun();
     if (activeCourseRun) {
-      showBusyOverlay('Restarting course...', 'Resetting run...');
+      showBusyOverlay('Restarting expanded room...', 'Resetting run...');
       try {
         await this.startCoursePlayback(
           cloneCourseSnapshot(activeCourseRun.course),
@@ -158,8 +166,8 @@ export class OverworldSceneFlowController {
         );
         hideBusyOverlay();
       } catch (error) {
-        console.error('Failed to restart course', error);
-        showBusyError(error instanceof Error ? error.message : 'Failed to restart course.', {
+        console.error('Failed to restart expanded room', error);
+        showBusyError(error instanceof Error ? error.message : 'Failed to restart expanded room.', {
           closeHandler: () => hideBusyOverlay(),
         });
       }
@@ -255,12 +263,53 @@ export class OverworldSceneFlowController {
     }
 
     const selectedRoomId = roomIdFromCoordinates(selectedCoordinates);
+    const selectedCourseId = selectedState === 'published'
+      ? this.host.getSelectedPublishedCourseId()
+      : null;
+    if (selectedCourseId) {
+      this.openSelectedExpandedRoomEditor(selectedCourseId, selectedRoomId, selectedCoordinates);
+      return;
+    }
+
     this.openEditor({
       roomCoordinates: { ...selectedCoordinates },
       source: 'world',
       roomSnapshot: this.host.getSelectedRoomSnapshot(selectedCoordinates),
       courseEdit: this.host.getActiveCourseEditContext(selectedRoomId),
     });
+  }
+
+  private openSelectedExpandedRoomEditor(
+    courseId: string,
+    selectedRoomId: string,
+    selectedCoordinates: RoomCoordinates,
+  ): void {
+    showBusyOverlay('Opening expanded room editor...', 'Loading expanded room...');
+
+    const sceneData: CourseEditorSceneData = {
+      courseId,
+      selectedRoomId,
+      selectedCoordinates: { ...selectedCoordinates },
+      centerCoordinates: { ...this.host.getCurrentRoomCoordinates() },
+    };
+
+    if (
+      this.scene.scene.isSleeping('CourseEditorScene')
+      || this.scene.scene.isPaused('CourseEditorScene')
+    ) {
+      this.scene.scene.wake('CourseEditorScene', sceneData);
+      this.scene.scene.sleep();
+      return;
+    }
+
+    if (this.scene.scene.isActive('CourseEditorScene')) {
+      this.scene.scene.bringToTop('CourseEditorScene');
+      this.scene.scene.sleep();
+      return;
+    }
+
+    this.scene.scene.run('CourseEditorScene', sceneData);
+    this.scene.scene.sleep();
   }
 
   openEditor(editorData: EditorSceneData): void {
@@ -289,22 +338,22 @@ export class OverworldSceneFlowController {
       return;
     }
 
-    showBusyOverlay('Starting course...', 'Loading course...');
+    showBusyOverlay('Starting expanded room...', 'Loading expanded room...');
     try {
       const record = await this.courseRepository.loadCourse(selectedCourseId);
       const snapshot = record.published ? cloneCourseSnapshot(record.published) : null;
       if (!snapshot) {
-        throw new Error('This course is not published yet.');
+        throw new Error('This expanded room is not published yet.');
       }
       if (!snapshot.goal) {
-        throw new Error('Published course is missing objective data. Reopen the builder and publish again.');
+        throw new Error('Published expanded room is missing objective data. Reopen the builder and publish again.');
       }
 
       await this.startCoursePlayback(snapshot, 'published');
       hideBusyOverlay();
     } catch (error) {
-      console.error('Failed to start course', error);
-      showBusyError(error instanceof Error ? error.message : 'Failed to start course.', {
+      console.error('Failed to start expanded room', error);
+      showBusyError(error instanceof Error ? error.message : 'Failed to start expanded room.', {
         closeHandler: () => hideBusyOverlay(),
       });
     }
@@ -319,15 +368,27 @@ export class OverworldSceneFlowController {
     let previousViewerRank: number | null = null;
     if (snapshot.status === 'published' && authState.authenticated) {
       try {
-        const leaderboard = await this.courseRepository.loadCourseLeaderboard(
-          snapshot.id,
+        const expandedRoomId = expandedRoomIdFromLegacyCourseId(snapshot.id);
+        const leaderboard = await this.expandedRoomRepository.loadExpandedRoomLeaderboard(
+          expandedRoomId,
           snapshot.version,
           5,
         );
         hadPreviousCompletion = leaderboard.viewerBest !== null;
         previousViewerRank = leaderboard.viewerRank;
       } catch (error) {
-        console.warn('Failed to preload course completion history', error);
+        console.warn('Failed to preload expanded-room completion history', error);
+        try {
+          const leaderboard = await this.courseRepository.loadCourseLeaderboard(
+            snapshot.id,
+            snapshot.version,
+            5,
+          );
+          hadPreviousCompletion = leaderboard.viewerBest !== null;
+          previousViewerRank = leaderboard.viewerRank;
+        } catch (fallbackError) {
+          console.warn('Failed to preload legacy course completion history', fallbackError);
+        }
       }
     }
 

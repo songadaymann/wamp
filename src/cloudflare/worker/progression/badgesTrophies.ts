@@ -3,6 +3,7 @@ import {
   type ProgressionSummary,
   type QualityRatingSummary,
   type TrophyAwardSummary,
+  type TrophyContentType,
 } from '../../../progression/model';
 import type { BadgeAwardRow, ContentTrophyRow, Env } from '../core/types';
 import {
@@ -17,6 +18,7 @@ import {
   upsertUserProgressRow,
 } from './progressRows';
 import { loadBuilderCapabilitySummary } from './trustCaps';
+import { isExpandedRoomSchemaMissingError } from '../expandedRooms/schemaErrors';
 
 const BADGE_DEFINITIONS: Record<
   string,
@@ -73,8 +75,8 @@ const BADGE_DEFINITIONS: Record<
   },
   builder_first_published_course: {
     category: 'builder',
-    label: 'First Course',
-    description: 'Published a course.',
+    label: 'First Expanded Room',
+    description: 'Published an Expanded Room.',
   },
   builder_10_unique_players: {
     category: 'builder',
@@ -110,7 +112,7 @@ const BADGE_DEFINITIONS: Record<
 
 export async function loadTrophyForContentVersion(
   env: Env,
-  contentType: 'room' | 'course',
+  contentType: TrophyContentType,
   contentId: string,
   versionKey: number,
 ): Promise<TrophyAwardSummary | null> {
@@ -214,12 +216,54 @@ async function loadOwnedCourseTrophyRows(env: Env, userId: string): Promise<Trop
   }));
 }
 
+async function loadOwnedExpandedRoomTrophyRows(env: Env, userId: string): Promise<TrophyAwardSummary[]> {
+  let result;
+  try {
+    result = await env.DB.prepare(
+      `
+        SELECT
+          t.content_type,
+          t.content_id,
+          t.version_key,
+          t.trophy_type,
+          t.metric_value,
+          t.weighted_vote_count,
+          t.awarded_at
+        FROM content_trophies t
+        INNER JOIN expanded_room_versions v
+          ON t.content_type = 'expanded_room'
+         AND t.content_id = v.expanded_room_id
+         AND t.version_key = v.version
+        WHERE v.published_by_user_id = ?
+        ORDER BY t.awarded_at DESC
+        LIMIT 12
+      `
+    )
+      .bind(userId)
+      .all<ContentTrophyRow>();
+  } catch (error) {
+    if (isExpandedRoomSchemaMissingError(error)) {
+      return [];
+    }
+    throw error;
+  }
+
+  return result.results.map((row) => ({
+    contentType: 'expanded_room',
+    contentId: row.content_id,
+    versionKey: parseRowNumber(row.version_key),
+    trophyType: row.trophy_type,
+    awardedAt: row.awarded_at,
+  }));
+}
+
 async function countOwnedTrophies(env: Env, userId: string): Promise<number> {
-  const [roomRows, courseRows] = await Promise.all([
+  const [roomRows, courseRows, expandedRoomRows] = await Promise.all([
     loadOwnedRoomTrophyRows(env, userId),
     loadOwnedCourseTrophyRows(env, userId),
+    loadOwnedExpandedRoomTrophyRows(env, userId),
   ]);
-  return roomRows.length + courseRows.length;
+  return dedupePlayableTrophies([...roomRows, ...courseRows, ...expandedRoomRows]).length;
 }
 
 async function upsertBadgeAward(
@@ -383,12 +427,14 @@ export async function loadPublicProgressionSummary(
 ): Promise<ProgressionSummary> {
   const progress = await loadOrBackfillUserProgress(env, userId);
   await syncUserBadges(env, userId);
-  const [badgeRows, roomTrophies, courseTrophies] = await Promise.all([
+  const [badgeRows, roomTrophies, courseTrophies, expandedRoomTrophies, trophyCount] = await Promise.all([
     loadBadgeAwardRows(env, userId),
     loadOwnedRoomTrophyRows(env, userId),
     loadOwnedCourseTrophyRows(env, userId),
+    loadOwnedExpandedRoomTrophyRows(env, userId),
+    countOwnedTrophies(env, userId),
   ]);
-  const recentTrophies = [...roomTrophies, ...courseTrophies]
+  const recentTrophies = dedupePlayableTrophies([...roomTrophies, ...courseTrophies, ...expandedRoomTrophies])
     .sort((left, right) => Date.parse(right.awardedAt) - Date.parse(left.awardedAt))
     .slice(0, 6);
   const builderCaps = await loadBuilderCapabilitySummary(env, progress, 'session');
@@ -416,7 +462,7 @@ export async function loadPublicProgressionSummary(
       .filter((value): value is BadgeAwardSummary => value !== null)
       .slice(0, 6),
     badgeCount: badgeRows.length,
-    trophyCount: recentTrophies.length,
+    trophyCount,
     recentTrophies,
   };
 }
@@ -424,7 +470,7 @@ export async function loadPublicProgressionSummary(
 
 export async function syncContentTrophy(
   env: Env,
-  contentType: 'room' | 'course',
+  contentType: TrophyContentType,
   contentId: string,
   versionKey: number,
   quality: QualityRatingSummary,
@@ -478,34 +524,11 @@ export async function syncContentTrophy(
 
 export async function refreshContentOwnerProgressCounts(
   env: Env,
-  contentType: 'room' | 'course',
+  contentType: TrophyContentType,
   contentId: string,
   versionKey: number,
 ): Promise<void> {
-  const ownerRow =
-    contentType === 'room'
-      ? await env.DB.prepare(
-          `
-            SELECT published_by_user_id AS user_id
-            FROM room_versions
-            WHERE room_id = ?
-              AND version = ?
-            LIMIT 1
-          `
-        )
-          .bind(contentId, versionKey)
-          .first<{ user_id: string | null }>()
-      : await env.DB.prepare(
-          `
-            SELECT published_by_user_id AS user_id
-            FROM course_versions
-            WHERE course_id = ?
-              AND version = ?
-            LIMIT 1
-          `
-        )
-          .bind(contentId, versionKey)
-          .first<{ user_id: string | null }>();
+  const ownerRow = await loadContentOwnerRow(env, contentType, contentId, versionKey);
 
   const ownerUserId = ownerRow?.user_id ?? null;
   if (!ownerUserId) {
@@ -513,4 +536,80 @@ export async function refreshContentOwnerProgressCounts(
   }
 
   await syncUserBadges(env, ownerUserId);
+}
+
+async function loadContentOwnerRow(
+  env: Env,
+  contentType: TrophyContentType,
+  contentId: string,
+  versionKey: number,
+): Promise<{ user_id: string | null } | null> {
+  if (contentType === 'room') {
+    return env.DB.prepare(
+      `
+        SELECT published_by_user_id AS user_id
+        FROM room_versions
+        WHERE room_id = ?
+          AND version = ?
+        LIMIT 1
+      `
+    )
+      .bind(contentId, versionKey)
+      .first<{ user_id: string | null }>();
+  }
+
+  if (contentType === 'expanded_room') {
+    return env.DB.prepare(
+      `
+        SELECT published_by_user_id AS user_id
+        FROM expanded_room_versions
+        WHERE expanded_room_id = ?
+          AND version = ?
+        LIMIT 1
+      `
+    )
+      .bind(contentId, versionKey)
+      .first<{ user_id: string | null }>();
+  }
+
+  return env.DB.prepare(
+    `
+      SELECT published_by_user_id AS user_id
+      FROM course_versions
+      WHERE course_id = ?
+        AND version = ?
+      LIMIT 1
+    `
+  )
+    .bind(contentId, versionKey)
+    .first<{ user_id: string | null }>();
+}
+
+function dedupePlayableTrophies(trophies: TrophyAwardSummary[]): TrophyAwardSummary[] {
+  const byKey = new Map<string, TrophyAwardSummary>();
+  const sorted = [...trophies].sort((left, right) => trophyPriority(right) - trophyPriority(left));
+  for (const trophy of sorted) {
+    const key = getPlayableTrophyKey(trophy);
+    if (!byKey.has(key)) {
+      byKey.set(key, trophy);
+    }
+  }
+  return [...byKey.values()];
+}
+
+function getPlayableTrophyKey(trophy: TrophyAwardSummary): string {
+  if (trophy.contentType === 'course') {
+    return `expanded_room:course:${trophy.contentId}:${trophy.versionKey}:${trophy.trophyType}`;
+  }
+  return `${trophy.contentType}:${trophy.contentId}:${trophy.versionKey}:${trophy.trophyType}`;
+}
+
+function trophyPriority(trophy: TrophyAwardSummary): number {
+  if (trophy.contentType === 'expanded_room') {
+    return 2;
+  }
+  if (trophy.contentType === 'course') {
+    return 1;
+  }
+  return 0;
 }

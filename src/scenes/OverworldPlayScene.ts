@@ -1,8 +1,14 @@
 import Phaser from 'phaser';
 import { playSfx } from '../audio/sfx';
 import { createCourseRepository } from '../courses/courseRepository';
+import { createExpandedRoomEditorRepository } from '../expandedRooms/editorRepository';
+import { expandedRoomIdFromStandaloneRoomId } from '../expandedRooms/model';
 import { globalRoomMusicController } from '../music/controller';
-import { getRoomMusicKey } from '../music/model';
+import {
+  getRoomMusicKey,
+  isRoomMusicEmpty,
+  type RoomMusic,
+} from '../music/model';
 import { getCoursePressurePlateLink } from '../courses/pressurePlateLinks';
 import {
   getActiveCourseDraftSessionCourseId,
@@ -136,6 +142,7 @@ import {
 import { buildAmbientRoomLightingBounds } from './overworld/lighting';
 import {
   OverworldPresenceController,
+  type OnlineRosterEntry,
   type RenderedGhost,
 } from './overworld/presence';
 import { OverworldPvpArenaController } from './overworld/pvpArenaController';
@@ -293,6 +300,12 @@ type RoomEdgeWall = OverworldRoomEdgeWall;
 
 type SceneLoadedFullRoom = LoadedFullRoom<LoadedRoomObject, RoomEdgeWall>;
 
+interface RoomMusicPlaybackTarget {
+  identity: string;
+  sourceRoomId: string;
+  music: RoomMusic | null;
+}
+
 export class OverworldPlayScene extends Phaser.Scene {
   private readonly PLAYER_SPEED = 150;
   private readonly JUMP_VELOCITY = -280;
@@ -419,6 +432,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private quicksandStatusCooldownUntil = 0;
   private readonly roomRepository = createRoomRepository();
   private readonly courseRepository = createCourseRepository();
+  private readonly expandedRoomEditorRepository = createExpandedRoomEditorRepository();
   private readonly profileRepository = createProfileRepository();
   private activeCourseRun: ActiveCourseRunState | null = null;
   private readonly roomRushRunController = new OverworldRoomRushRunController();
@@ -874,7 +888,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     });
     this.courseComposerController = new OverworldCourseComposerController({
       roomRepository: this.roomRepository,
-      courseRepository: this.courseRepository,
+      expandedRoomEditorRepository: this.expandedRoomEditorRepository,
       getMode: () => this.mode,
       setMode: (mode) => {
         this.mode = mode;
@@ -1019,6 +1033,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       scene: this,
       getWorldWindow: () => this.worldWindow,
       getZoom: () => this.cameras.main.zoom,
+      getExpandedRoomIdAt: (coordinates) => this.getExpandedRoomIdAt(coordinates),
     });
     this.browseOverlayController = new OverworldBrowseOverlayController({
       scene: this,
@@ -1051,6 +1066,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
       getMode: () => this.mode,
       isRoomInActiveCourse: (coordinates) => this.isRoomInActiveCourse(coordinates),
+      getExpandedRoomIdAt: (coordinates) => this.getExpandedRoomIdAt(coordinates),
     });
     this.goalMarkerController = new OverworldGoalMarkerController({
       scene: this,
@@ -1130,6 +1146,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         getActiveCourseSnapshot: () => this.activeCourseSnapshot,
         getActiveCourseRun: () => this.activeCourseRun,
         getActiveRoomRushRun: () => this.activeRoomRushRun,
+        isRoomTransitionLocked: () => this.isPvpArenaActive(),
         getShouldRespawnPlayer: () => this.shouldRespawnPlayer,
         setShouldRespawnPlayer: (value) => {
           this.shouldRespawnPlayer = value;
@@ -1170,6 +1187,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         destroyRoomEdgeWalls: (loadedRoom) => this.destroyEdgeWalls(loadedRoom),
         getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
         getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
+        getExpandedRoomIdAt: (coordinates) => this.getExpandedRoomIdAt(coordinates),
         syncBackdropCameraIgnores: () => this.syncBackdropCameraIgnores(),
       },
       {
@@ -1549,12 +1567,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           key: entry.key,
           userId: entry.userId,
           displayName: entry.displayName,
-          roomText:
-            entry.mode === 'play'
-              ? `Playing in Room ${entry.roomId}`
-              : entry.mode === 'edit'
-                ? `Building in Room ${entry.roomId}`
-                : `Browsing Room ${entry.roomId}`,
+          roomText: this.formatOnlineRosterRoomText(entry),
           roomCoordinates: entry.roomCoordinates,
           mode: entry.mode,
           isSelf: entry.isSelf,
@@ -1815,6 +1828,13 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private getSelectedCourseContext() {
     return this.hudStateController.getSelectedCourseContext();
+  }
+
+  private getExpandedRoomIdAt(coordinates: RoomCoordinates): string | null {
+    return (
+      this.roomSummariesById.get(roomIdFromCoordinates(coordinates))?.expandedRoom?.expandedRoomId
+      ?? null
+    );
   }
 
   private getActiveCourseDraftSessionContextForRoom(roomId: string): EditorCourseEditData | null {
@@ -2753,15 +2773,73 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private getRoomPopulation(coordinates: RoomCoordinates): number {
-    return this.presenceController.getRoomPopulation(coordinates);
+    const expandedRoomCoordinates = this.getExpandedRoomPresenceCoordinates(coordinates);
+    if (!expandedRoomCoordinates) {
+      return this.presenceController.getRoomPopulation(coordinates);
+    }
+
+    return expandedRoomCoordinates.reduce(
+      (total, cellCoordinates) => total + this.presenceController.getRoomPopulation(cellCoordinates),
+      0,
+    );
   }
 
   private getRoomEditorCount(coordinates: RoomCoordinates): number {
-    return this.presenceController.getRoomEditorCount(coordinates);
+    const expandedRoomCoordinates = this.getExpandedRoomPresenceCoordinates(coordinates);
+    if (!expandedRoomCoordinates) {
+      return this.presenceController.getRoomEditorCount(coordinates);
+    }
+
+    return expandedRoomCoordinates.reduce(
+      (total, cellCoordinates) => total + this.presenceController.getRoomEditorCount(cellCoordinates),
+      0,
+    );
   }
 
   private getRoomEditorDisplayNames(coordinates: RoomCoordinates): string[] {
-    return this.presenceController.getRoomEditorDisplayNames(coordinates);
+    const expandedRoomCoordinates = this.getExpandedRoomPresenceCoordinates(coordinates);
+    if (!expandedRoomCoordinates) {
+      return this.presenceController.getRoomEditorDisplayNames(coordinates);
+    }
+
+    const names = new Set<string>();
+    for (const cellCoordinates of expandedRoomCoordinates) {
+      for (const name of this.presenceController.getRoomEditorDisplayNames(cellCoordinates)) {
+        names.add(name);
+      }
+    }
+    return [...names].sort((left, right) => left.localeCompare(right));
+  }
+
+  private getExpandedRoomPresenceCoordinates(coordinates: RoomCoordinates): RoomCoordinates[] | null {
+    const expandedRoomId = this.getExpandedRoomIdAt(coordinates);
+    if (!expandedRoomId) {
+      return null;
+    }
+
+    const coordinatesList = Array.from(this.roomSummariesById.values())
+      .filter((summary) => summary.expandedRoom?.expandedRoomId === expandedRoomId)
+      .map((summary) => summary.coordinates)
+      .sort((left, right) => left.y - right.y || left.x - right.x);
+
+    return coordinatesList.length > 0 ? coordinatesList : [coordinates];
+  }
+
+  private formatOnlineRosterRoomText(entry: OnlineRosterEntry): string {
+    const verb =
+      entry.mode === 'play'
+        ? 'Playing in'
+        : entry.mode === 'edit'
+          ? 'Building in'
+          : 'Browsing';
+    const summary = this.roomSummariesById.get(entry.roomId);
+    const expandedRoom = summary?.expandedRoom ?? null;
+    if (!expandedRoom || expandedRoom.cellCount <= 1) {
+      return `${verb} Room ${entry.roomId}`;
+    }
+
+    const title = expandedRoom.title?.trim() || 'Expanded Room';
+    return `${verb} ${title} (${expandedRoom.cellCount} cells · focus ${entry.roomCoordinates.x},${entry.roomCoordinates.y})`;
   }
 
   private destroyEdgeWalls(loadedRoom: SceneLoadedFullRoom): void {
@@ -2856,14 +2934,16 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    const roomMusicKey = getRoomMusicKey(currentRoom.music) ?? 'none';
-    const signature = `mode:play|room:${currentRoom.id}|music:${roomMusicKey}`;
+    const playbackTarget = this.resolveRoomMusicPlaybackTarget(currentRoom);
+    const roomMusicKey = getRoomMusicKey(playbackTarget.music) ?? 'none';
+    const signature =
+      `mode:play|${playbackTarget.identity}|source:${playbackTarget.sourceRoomId}|music:${roomMusicKey}`;
     if (this.lastRoomMusicSyncSignature === signature) {
       return;
     }
 
     this.lastRoomMusicSyncSignature = signature;
-    if (!currentRoom.music) {
+    if (isRoomMusicEmpty(playbackTarget.music)) {
       globalRoomMusicController.stopArrangement({
         transition: 'bar',
         fadeDurationSec: 0.18,
@@ -2872,10 +2952,91 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    void globalRoomMusicController.playArrangement(currentRoom.music, {
+    void globalRoomMusicController.playArrangement(playbackTarget.music, {
       mode: 'world-play',
       transition: 'bar',
     });
+  }
+
+  private resolveRoomMusicPlaybackTarget(currentRoom: RoomSnapshot): RoomMusicPlaybackTarget {
+    const activeCourseRun = this.activeCourseRun;
+    const activeCourse = activeCourseRun?.course ?? null;
+    if (activeCourse?.roomRefs.some((roomRef) => roomRef.roomId === currentRoom.id)) {
+      const sourceRoom = this.resolveCourseAreaMusicSource(activeCourse, currentRoom);
+      const expandedRoomId =
+        activeCourseRun?.expandedRoomId ?? this.getExpandedRoomIdAt(currentRoom.coordinates) ?? `course:${activeCourse.id}`;
+      return {
+        identity: `expanded-room:${expandedRoomId}|v:${activeCourseRun?.expandedRoomVersion ?? activeCourse.version}`,
+        sourceRoomId: sourceRoom.id,
+        music: sourceRoom.music,
+      };
+    }
+
+    const expandedRoom = this.roomSummariesById.get(currentRoom.id)?.expandedRoom ?? null;
+    if (expandedRoom && expandedRoom.cellCount > 1) {
+      const sourceRoom = this.resolveLoadedExpandedRoomMusicSource(
+        expandedRoom.expandedRoomId,
+        currentRoom,
+      );
+      return {
+        identity: `expanded-room:${expandedRoom.expandedRoomId}`,
+        sourceRoomId: sourceRoom.id,
+        music: sourceRoom.music,
+      };
+    }
+
+    return {
+      identity: `room:${currentRoom.id}`,
+      sourceRoomId: currentRoom.id,
+      music: currentRoom.music,
+    };
+  }
+
+  private resolveCourseAreaMusicSource(
+    course: CourseSnapshot,
+    currentRoom: RoomSnapshot,
+  ): RoomSnapshot {
+    const startRoomRef = this.coursePlaybackController.getCourseStartRoomRef(course);
+    const orderedRoomRefs = [
+      ...(startRoomRef ? [startRoomRef] : []),
+      ...course.roomRefs.filter((roomRef) => roomRef.roomId !== startRoomRef?.roomId),
+    ];
+    let firstAvailableRoom: RoomSnapshot | null = null;
+    for (const roomRef of orderedRoomRefs) {
+      const room = this.getRoomSnapshotForCoordinates(roomRef.coordinates);
+      if (!room) {
+        continue;
+      }
+      firstAvailableRoom ??= room;
+      if (!isRoomMusicEmpty(room.music)) {
+        return room;
+      }
+    }
+
+    return firstAvailableRoom ?? currentRoom;
+  }
+
+  private resolveLoadedExpandedRoomMusicSource(
+    expandedRoomId: string,
+    currentRoom: RoomSnapshot,
+  ): RoomSnapshot {
+    const candidateCoordinates = Array.from(this.roomSummariesById.values())
+      .filter((summary) => summary.expandedRoom?.expandedRoomId === expandedRoomId)
+      .map((summary) => summary.coordinates)
+      .sort((a, b) => a.y - b.y || a.x - b.x);
+    let firstAvailableRoom: RoomSnapshot | null = null;
+    for (const coordinates of candidateCoordinates) {
+      const room = this.getRoomSnapshotForCoordinates(coordinates);
+      if (!room) {
+        continue;
+      }
+      firstAvailableRoom ??= room;
+      if (!isRoomMusicEmpty(room.music)) {
+        return room;
+      }
+    }
+
+    return firstAvailableRoom ?? currentRoom;
   }
 
   private countRoomObjectsByCategory(room: RoomSnapshot, category: GameObjectConfig['category']): number {
@@ -2897,7 +3058,9 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private recordRoomRushVisit(room: RoomSnapshot | null): void {
-    this.setRoomRushMutationStatus(this.roomRushRunController.recordRoomVisit(room));
+    this.setRoomRushMutationStatus(
+      this.roomRushRunController.recordRoomVisit(room, this.getRoomRushAreaId(room)),
+    );
   }
 
   private recordRoomRushDeath(reason: string): boolean {
@@ -4121,6 +4284,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         startCoordinates,
         returnCoordinates,
         startRoom,
+        startExpandedRoomId: this.getRoomRushAreaId(startRoom),
       }),
     );
 
@@ -4177,6 +4341,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         startCoordinates,
         returnCoordinates,
         startRoom,
+        startExpandedRoomId: this.getRoomRushAreaId(startRoom),
       }),
     );
 
@@ -4208,6 +4373,13 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   isRoomRushRunActive(): boolean {
     return Boolean(this.activeRoomRushRun);
+  }
+
+  private getRoomRushAreaId(room: RoomSnapshot | null): string | null {
+    if (!room) {
+      return null;
+    }
+    return this.getExpandedRoomIdAt(room.coordinates) ?? expandedRoomIdFromStandaloneRoomId(room.id);
   }
 
   async invitePvpDuel(entry: {

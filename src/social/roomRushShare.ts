@@ -1,4 +1,5 @@
 import { roomIdFromCoordinates } from '../persistence/roomModel';
+import { expandedRoomIdFromStandaloneRoomId } from '../expandedRooms/model';
 import {
   ROOM_RUSH_NAME,
   type ActiveRoomRushRunState,
@@ -652,8 +653,11 @@ function normalizeRoute(run: ActiveRoomRushRunState): RoomRushRouteStep[] {
   return [{
     routeIndex: 0,
     roomId: roomIdFromCoordinates(run.startCoordinates),
+    expandedRoomId: run.visitedRoomIds[0] ??
+      expandedRoomIdFromStandaloneRoomId(roomIdFromCoordinates(run.startCoordinates)),
     coordinates: { ...run.startCoordinates },
     uniqueVisitIndex: 1,
+    uniqueAreaVisitIndex: 1,
   }];
 }
 

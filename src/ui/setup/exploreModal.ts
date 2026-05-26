@@ -510,7 +510,7 @@ export class ExploreModalController {
 
     const previewImage = this.doc.createElement('img');
     previewImage.className = 'explore-room-preview-image hidden';
-    previewImage.alt = `${entry.roomTitle?.trim() || 'Room'} preview`;
+    previewImage.alt = `${this.getRoomDisplayTitle(entry)} preview`;
 
     const previewFallback = this.doc.createElement('div');
     previewFallback.className = 'explore-room-preview-fallback';
@@ -526,7 +526,7 @@ export class ExploreModalController {
 
     const title = this.doc.createElement('div');
     title.className = 'explore-room-title';
-    title.textContent = entry.roomTitle?.trim() || (entry.goalType ? 'Untitled Level' : 'Untitled Room');
+    title.textContent = this.getRoomDisplayTitle(entry);
     titleRow.appendChild(title);
 
     if (entry.featured) {
@@ -536,8 +536,20 @@ export class ExploreModalController {
       titleRow.appendChild(badge);
     }
 
+    const areaBadgeText = this.getExpandedRoomBadgeText(entry);
+    if (areaBadgeText) {
+      const badge = this.doc.createElement('div');
+      badge.className = 'explore-room-area-badge';
+      badge.textContent = areaBadgeText;
+      titleRow.appendChild(badge);
+    }
+
     copy.appendChild(titleRow);
     copy.appendChild(this.createBuilderRow(entry));
+    const areaMeta = this.createExpandedRoomMeta(entry);
+    if (areaMeta) {
+      copy.appendChild(areaMeta);
+    }
     copy.appendChild(this.createQualityRow(entry));
     copy.appendChild(this.createDifficultyBadge(entry));
 
@@ -875,7 +887,7 @@ export class ExploreModalController {
       return;
     }
 
-    fallbackEl.textContent = room.roomTitle?.trim() || 'Level';
+    fallbackEl.textContent = this.getRoomDisplayTitle(room);
     imageEl.classList.add('hidden');
     fallbackEl.classList.remove('hidden');
   }
@@ -914,7 +926,35 @@ export class ExploreModalController {
   }
 
   private buildRoomPreviewKey(room: RoomDiscoveryEntry): string {
-    return `${room.roomId}:${room.roomVersion}`;
+    return room.expandedRoom?.expandedRoomId
+      ? `${room.expandedRoom.expandedRoomId}:${room.expandedRoom.expandedRoomVersion ?? 'published'}:${room.roomId}:${room.roomVersion}`
+      : `${room.roomId}:${room.roomVersion}`;
+  }
+
+  private getRoomDisplayTitle(entry: RoomDiscoveryEntry): string {
+    return entry.roomTitle?.trim() || (entry.goalType ? 'Untitled Level' : 'Untitled Room');
+  }
+
+  private getExpandedRoomBadgeText(entry: RoomDiscoveryEntry): string | null {
+    const cellCount = entry.expandedRoom?.cellCount ?? 0;
+    return cellCount > 1 ? `${cellCount} cells` : null;
+  }
+
+  private createExpandedRoomMeta(entry: RoomDiscoveryEntry): HTMLElement | null {
+    const expandedRoom = entry.expandedRoom;
+    if (!expandedRoom || expandedRoom.cellCount <= 1) {
+      return null;
+    }
+
+    const meta = this.doc.createElement('div');
+    meta.className = 'explore-room-area-meta';
+    const versionText =
+      typeof expandedRoom.expandedRoomVersion === 'number'
+        ? `v${expandedRoom.expandedRoomVersion}`
+        : `v${entry.roomVersion}`;
+    meta.textContent =
+      `${expandedRoom.cellCount} cells · ${versionText} · focus ${entry.roomCoordinates.x},${entry.roomCoordinates.y}`;
+    return meta;
   }
 
   private async toggleFeaturedRoom(entry: RoomDiscoveryEntry): Promise<void> {

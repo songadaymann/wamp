@@ -19,6 +19,7 @@ interface OverworldRoomCellControllerHost {
   getSelectedCoordinates(): RoomCoordinates;
   getMode(): OverworldMode;
   isRoomInActiveCourse(coordinates: RoomCoordinates): boolean;
+  getExpandedRoomIdAt(coordinates: RoomCoordinates): string | null;
 }
 
 export class OverworldRoomCellController {
@@ -115,6 +116,12 @@ export class OverworldRoomCellController {
     y: number,
   ): void {
     if (!this.roomFrameGraphics) {
+      return;
+    }
+
+    const expandedRoomId = this.host.getExpandedRoomIdAt(coordinates);
+    if (expandedRoomId) {
+      this.drawExpandedRoomBoundary(coordinates, x, y, expandedRoomId);
       return;
     }
 
@@ -254,6 +261,50 @@ export class OverworldRoomCellController {
     x: number,
     y: number,
   ): void {
+    this.drawConnectedCellBoundary(
+      coordinates,
+      x,
+      y,
+      (candidate) => this.host.isRoomInActiveCourse(candidate),
+      RETRO_COLORS.draft,
+      0.92,
+      3,
+    );
+  }
+
+  private drawExpandedRoomBoundary(
+    coordinates: RoomCoordinates,
+    x: number,
+    y: number,
+    expandedRoomId: string,
+  ): void {
+    const selectedCoordinates = this.host.getSelectedCoordinates();
+    const selectedExpandedRoomId = this.host.getExpandedRoomIdAt(selectedCoordinates);
+    const selected = selectedExpandedRoomId === expandedRoomId;
+    if (!selected) {
+      return;
+    }
+
+    this.drawConnectedCellBoundary(
+      coordinates,
+      x,
+      y,
+      (candidate) => this.host.getExpandedRoomIdAt(candidate) === expandedRoomId,
+      RETRO_COLORS.selected,
+      0.96,
+      4,
+    );
+  }
+
+  private drawConnectedCellBoundary(
+    coordinates: RoomCoordinates,
+    x: number,
+    y: number,
+    isConnectedNeighbor: (coordinates: RoomCoordinates) => boolean,
+    color: number,
+    alpha: number,
+    screenThicknessPx: number,
+  ): void {
     if (!this.roomFrameGraphics) {
       return;
     }
@@ -265,15 +316,15 @@ export class OverworldRoomCellController {
     const bottom = y + ROOM_PX_HEIGHT - lineInset;
     const boundaryWidth = right - left;
     const boundaryHeight = bottom - top;
-    const thickness = this.getWorldLineThickness(3, boundaryWidth, boundaryHeight);
+    const thickness = this.getWorldLineThickness(screenThicknessPx, boundaryWidth, boundaryHeight);
     const neighbors = {
-      left: this.host.isRoomInActiveCourse({ x: coordinates.x - 1, y: coordinates.y }),
-      right: this.host.isRoomInActiveCourse({ x: coordinates.x + 1, y: coordinates.y }),
-      up: this.host.isRoomInActiveCourse({ x: coordinates.x, y: coordinates.y - 1 }),
-      down: this.host.isRoomInActiveCourse({ x: coordinates.x, y: coordinates.y + 1 }),
+      left: isConnectedNeighbor({ x: coordinates.x - 1, y: coordinates.y }),
+      right: isConnectedNeighbor({ x: coordinates.x + 1, y: coordinates.y }),
+      up: isConnectedNeighbor({ x: coordinates.x, y: coordinates.y - 1 }),
+      down: isConnectedNeighbor({ x: coordinates.x, y: coordinates.y + 1 }),
     };
 
-    this.roomFrameGraphics.fillStyle(RETRO_COLORS.draft, 0.92);
+    this.roomFrameGraphics.fillStyle(color, alpha);
     if (!neighbors.left) {
       this.roomFrameGraphics.fillRect(left, top, thickness, boundaryHeight);
     }

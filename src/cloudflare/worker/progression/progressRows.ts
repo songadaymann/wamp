@@ -1,5 +1,6 @@
 import { HttpError } from '../core/http';
 import type { Env, UserProgressRow, UserRow } from '../core/types';
+import { isExpandedRoomSchemaMissingError } from '../expandedRooms/schemaErrors';
 import { sanitizeOptionalOverride } from './capabilities';
 import {
   LANE_BASE_XP,
@@ -49,6 +50,7 @@ export async function loadUserProgressRow(env: Env, userId: string): Promise<Use
         builder_publish_limit_override,
         builder_object_limit_override,
         builder_collectible_limit_override,
+        builder_expanded_room_cell_limit_override,
         builder_cap_override_reason,
         builder_cap_override_updated_at,
         builder_cap_override_updated_by,
@@ -83,6 +85,9 @@ export async function loadUserProgressRow(env: Env, userId: string): Promise<Use
     builder_publish_limit_override: sanitizeOptionalOverride(row.builder_publish_limit_override),
     builder_object_limit_override: sanitizeOptionalOverride(row.builder_object_limit_override),
     builder_collectible_limit_override: sanitizeOptionalOverride(row.builder_collectible_limit_override),
+    builder_expanded_room_cell_limit_override: sanitizeOptionalOverride(
+      row.builder_expanded_room_cell_limit_override
+    ),
     badge_count: parseRowNumber(row.badge_count),
     trophy_count: parseRowNumber(row.trophy_count),
   };
@@ -107,6 +112,7 @@ export async function upsertUserProgressRow(env: Env, row: UserProgressRow): Pro
           builder_publish_limit_override,
           builder_object_limit_override,
           builder_collectible_limit_override,
+          builder_expanded_room_cell_limit_override,
           builder_cap_override_reason,
           builder_cap_override_updated_at,
           builder_cap_override_updated_by,
@@ -116,7 +122,7 @@ export async function upsertUserProgressRow(env: Env, row: UserProgressRow): Pro
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(user_id) DO UPDATE SET
           total_pxp = excluded.total_pxp,
           total_bxp = excluded.total_bxp,
@@ -131,6 +137,7 @@ export async function upsertUserProgressRow(env: Env, row: UserProgressRow): Pro
           builder_publish_limit_override = excluded.builder_publish_limit_override,
           builder_object_limit_override = excluded.builder_object_limit_override,
           builder_collectible_limit_override = excluded.builder_collectible_limit_override,
+          builder_expanded_room_cell_limit_override = excluded.builder_expanded_room_cell_limit_override,
           builder_cap_override_reason = excluded.builder_cap_override_reason,
           builder_cap_override_updated_at = excluded.builder_cap_override_updated_at,
           builder_cap_override_updated_by = excluded.builder_cap_override_updated_by,
@@ -157,6 +164,7 @@ export async function upsertUserProgressRow(env: Env, row: UserProgressRow): Pro
       row.builder_publish_limit_override,
       row.builder_object_limit_override,
       row.builder_collectible_limit_override,
+      row.builder_expanded_room_cell_limit_override,
       row.builder_cap_override_reason,
       row.builder_cap_override_updated_at,
       row.builder_cap_override_updated_by,
@@ -188,7 +196,29 @@ async function countDistinctRoomCompletions(env: Env, userId: string): Promise<n
 }
 
 async function countDistinctCourseCompletions(env: Env, userId: string): Promise<number> {
-  const row = await env.DB.prepare(
+  const row = await expandedRoomAwareCountQuery(
+    env,
+    `
+      SELECT COUNT(*) AS count
+      FROM (
+        SELECT DISTINCT expanded_room_id AS content_id, expanded_room_version AS version_key
+        FROM expanded_room_runs
+        WHERE user_id = ?
+          AND result = 'completed'
+        UNION
+        SELECT DISTINCT 'course:' || course_id AS content_id, course_version AS version_key
+        FROM course_runs
+        WHERE user_id = ?
+          AND result = 'completed'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM expanded_room_runs expanded
+            WHERE expanded.legacy_course_attempt_id = course_runs.attempt_id
+               OR expanded.attempt_id = course_runs.attempt_id
+          )
+      )
+    `,
+    [userId, userId],
     `
       SELECT COUNT(*) AS count
       FROM (
@@ -197,10 +227,9 @@ async function countDistinctCourseCompletions(env: Env, userId: string): Promise
         WHERE user_id = ?
           AND result = 'completed'
       )
-    `
-  )
-    .bind(userId)
-    .first<{ count: number | string | null }>();
+    `,
+    [userId],
+  );
 
   return parseRowNumber(row?.count);
 }
@@ -216,15 +245,35 @@ async function countDistinctRatingsByUser(env: Env, userId: string): Promise<num
     )
       .bind(userId)
       .first<{ count: number | string | null }>(),
-    env.DB.prepare(
+    expandedRoomAwareCountQuery(
+      env,
+      `
+        SELECT COUNT(*) AS count
+        FROM (
+          SELECT expanded_room_id AS content_id, version_key
+          FROM expanded_room_ratings
+          WHERE user_id = ?
+          UNION
+          SELECT 'course:' || course_id AS content_id, version_key
+          FROM course_ratings
+          WHERE user_id = ?
+            AND NOT EXISTS (
+              SELECT 1
+              FROM expanded_room_ratings expanded
+              WHERE expanded.legacy_course_id = course_ratings.course_id
+                AND expanded.version_key = course_ratings.version_key
+                AND expanded.user_id = course_ratings.user_id
+            )
+        )
+      `,
+      [userId, userId],
       `
         SELECT COUNT(*) AS count
         FROM course_ratings
         WHERE user_id = ?
-      `
-    )
-      .bind(userId)
-      .first<{ count: number | string | null }>(),
+      `,
+      [userId],
+    ),
   ]);
 
   return parseRowNumber(roomRow?.count) + parseRowNumber(courseRow?.count);
@@ -246,16 +295,37 @@ async function countMeaningfulRoomPublishes(env: Env, userId: string): Promise<n
 }
 
 async function countMeaningfulCoursePublishes(env: Env, userId: string): Promise<number> {
-  const row = await env.DB.prepare(
+  const row = await expandedRoomAwareCountQuery(
+    env,
+    `
+      SELECT COUNT(*) AS count
+      FROM (
+        SELECT DISTINCT expanded_room_id AS content_id, version AS version_key
+        FROM expanded_room_versions
+        WHERE published_by_user_id = ?
+          AND json_extract(snapshot_json, '$.goal.type') IS NOT NULL
+        UNION
+        SELECT DISTINCT 'course:' || course_id AS content_id, version AS version_key
+        FROM course_versions
+        WHERE published_by_user_id = ?
+          AND json_extract(snapshot_json, '$.goal.type') IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM expanded_room_versions expanded
+            WHERE expanded.legacy_course_id = course_versions.course_id
+              AND expanded.version = course_versions.version
+          )
+      )
+    `,
+    [userId, userId],
     `
       SELECT COUNT(*) AS count
       FROM course_versions
       WHERE published_by_user_id = ?
         AND json_extract(snapshot_json, '$.goal.type') IS NOT NULL
-    `
-  )
-    .bind(userId)
-    .first<{ count: number | string | null }>();
+    `,
+    [userId],
+  );
 
   return parseRowNumber(row?.count);
 }
@@ -279,7 +349,37 @@ async function countHistoricalCreatorUniqueCompletions(env: Env, userId: string)
     )
       .bind(userId, userId)
       .first<{ count: number | string | null }>(),
-    env.DB.prepare(
+    expandedRoomAwareCountQuery(
+      env,
+      `
+        SELECT COUNT(*) AS count
+        FROM (
+          SELECT DISTINCT r.expanded_room_id AS content_id, r.user_id
+          FROM expanded_room_runs r
+          INNER JOIN expanded_room_versions v
+            ON v.expanded_room_id = r.expanded_room_id
+           AND v.version = r.expanded_room_version
+          WHERE v.published_by_user_id = ?
+            AND r.result = 'completed'
+            AND r.user_id != ?
+          UNION
+          SELECT DISTINCT 'course:' || r.course_id AS content_id, r.user_id
+          FROM course_runs r
+          INNER JOIN course_versions v
+            ON v.course_id = r.course_id
+           AND v.version = r.course_version
+          WHERE v.published_by_user_id = ?
+            AND r.result = 'completed'
+            AND r.user_id != ?
+            AND NOT EXISTS (
+              SELECT 1
+              FROM expanded_room_runs expanded
+              WHERE expanded.legacy_course_attempt_id = r.attempt_id
+                 OR expanded.attempt_id = r.attempt_id
+            )
+        )
+      `,
+      [userId, userId, userId, userId],
       `
         SELECT COUNT(*) AS count
         FROM (
@@ -292,13 +392,33 @@ async function countHistoricalCreatorUniqueCompletions(env: Env, userId: string)
             AND r.result = 'completed'
             AND r.user_id != ?
         )
-      `
-    )
-      .bind(userId, userId)
-      .first<{ count: number | string | null }>(),
+      `,
+      [userId, userId],
+    ),
   ]);
 
   return parseRowNumber(roomRow?.count) + parseRowNumber(courseRow?.count);
+}
+
+async function expandedRoomAwareCountQuery(
+  env: Env,
+  query: string,
+  bindings: unknown[],
+  fallbackQuery: string,
+  fallbackBindings: unknown[],
+): Promise<{ count: number | string | null } | null> {
+  try {
+    return await env.DB.prepare(query)
+      .bind(...bindings)
+      .first<{ count: number | string | null }>();
+  } catch (error) {
+    if (!isExpandedRoomSchemaMissingError(error)) {
+      throw error;
+    }
+    return env.DB.prepare(fallbackQuery)
+      .bind(...fallbackBindings)
+      .first<{ count: number | string | null }>();
+  }
 }
 
 export async function loadBackfillSeedMetrics(env: Env, userId: string): Promise<ProgressSeedMetrics> {
@@ -379,6 +499,7 @@ async function createBackfilledUserProgressRow(
     builder_publish_limit_override: null,
     builder_object_limit_override: null,
     builder_collectible_limit_override: null,
+    builder_expanded_room_cell_limit_override: null,
     builder_cap_override_reason: null,
     builder_cap_override_updated_at: null,
     builder_cap_override_updated_by: null,

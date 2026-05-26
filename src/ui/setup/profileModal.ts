@@ -1345,7 +1345,7 @@ export class ProfileModalController {
 
     const previewImage = this.doc.createElement('img');
     previewImage.className = 'profile-room-preview-image hidden';
-    previewImage.alt = `${room.roomTitle?.trim() || `Room ${room.roomCoordinates.x},${room.roomCoordinates.y}`} preview`;
+    previewImage.alt = `${this.getProfileRoomTitle(room)} preview`;
 
     const previewFallback = this.doc.createElement('div');
     previewFallback.className = 'profile-room-preview-fallback';
@@ -1358,14 +1358,11 @@ export class ProfileModalController {
 
     const title = this.doc.createElement('div');
     title.className = 'profile-room-card-title';
-    title.textContent =
-      room.roomTitle?.trim() || `Room ${room.roomCoordinates.x},${room.roomCoordinates.y}`;
+    title.textContent = this.getProfileRoomTitle(room);
 
     const meta = this.doc.createElement('div');
     meta.className = 'profile-room-card-meta';
-    const goalText = room.goalType ? room.goalType.replace(/_/g, ' ') : 'free play';
-    const publishedText = room.publishedAt ? this.formatShortDate(room.publishedAt) : 'Unpublished';
-    meta.textContent = `${goalText} · v${room.roomVersion} · ${room.roomCoordinates.x},${room.roomCoordinates.y} · ${publishedText}`;
+    meta.textContent = this.getProfileRoomMeta(room);
 
     copy.append(title, meta, this.createRoomRatingRow(room));
     button.append(preview, copy);
@@ -1610,7 +1607,7 @@ export class ProfileModalController {
         roomVersion: room.roomVersion,
       });
       await this.reloadCurrentProfile();
-      this.setPlaylistStatus(`Added "${room.roomTitle?.trim() || 'room'}" to "${playlist.title}".`);
+      this.setPlaylistStatus(`Added "${this.getProfileRoomTitle(room)}" to "${playlist.title}".`);
     } catch (error) {
       this.setPlaylistStatus('');
       this.setError(error instanceof Error ? error.message : 'Failed to add room to playlist.');
@@ -1788,9 +1785,32 @@ export class ProfileModalController {
       return;
     }
 
-    fallbackEl.textContent = room.roomTitle?.trim() || `${room.roomCoordinates.x},${room.roomCoordinates.y}`;
+    fallbackEl.textContent = this.getProfileRoomTitle(room);
     imageEl.classList.add('hidden');
     fallbackEl.classList.remove('hidden');
+  }
+
+  private getProfileRoomTitle(room: ProfilePublishedRoomEntry): string {
+    return (
+      room.expandedRoom?.title?.trim()
+      || room.roomTitle?.trim()
+      || `Room ${room.roomCoordinates.x},${room.roomCoordinates.y}`
+    );
+  }
+
+  private getProfileRoomMeta(room: ProfilePublishedRoomEntry): string {
+    const goalText = room.goalType ? room.goalType.replace(/_/g, ' ') : 'free play';
+    const publishedText = room.publishedAt ? this.formatShortDate(room.publishedAt) : 'Unpublished';
+    const expandedRoom = room.expandedRoom;
+    if (expandedRoom && expandedRoom.cellCount > 1) {
+      const versionText =
+        typeof expandedRoom.expandedRoomVersion === 'number'
+          ? `v${expandedRoom.expandedRoomVersion}`
+          : `v${room.roomVersion}`;
+      return `${goalText} · ${expandedRoom.cellCount} cells · ${versionText} · focus ${room.roomCoordinates.x},${room.roomCoordinates.y} · ${publishedText}`;
+    }
+
+    return `${goalText} · v${room.roomVersion} · ${room.roomCoordinates.x},${room.roomCoordinates.y} · ${publishedText}`;
   }
 
   private loadRoomPreview(room: ProfilePublishedRoomEntry): Promise<string | null> {
@@ -1909,7 +1929,7 @@ export class ProfileModalController {
             iconSrc: '/assets/ui-progress-builder.png',
           },
           {
-            label: 'Courses published',
+            label: 'Expanded rooms published',
             value: String(publishedCourseCount),
             iconSrc: '/assets/objects/flag-green.png',
           },
@@ -2034,6 +2054,11 @@ export class ProfileModalController {
             label: 'Collectibles',
             value: String(progression.builderCaps.collectibleLimit),
             iconSrc: '/assets/objects/coin_small_gold.png',
+          },
+          {
+            label: 'Expanded cells',
+            value: String(progression.builderCaps.expandedRoomCellLimit),
+            iconSrc: '/assets/objects/key.png',
           },
         ],
       },

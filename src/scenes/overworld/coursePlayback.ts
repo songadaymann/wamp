@@ -8,7 +8,16 @@ import {
   type CourseRoomRef,
   type CourseSnapshot,
 } from '../../courses/model';
-import type { CourseLeaderboardResponse, CourseRunFinishRequestBody } from '../../courses/runModel';
+import { expandedRoomIdFromLegacyCourseId } from '../../expandedRooms/model';
+import {
+  createExpandedRoomRepository,
+  isExpandedRoomApiError,
+} from '../../expandedRooms/repository';
+import type {
+  CourseLeaderboardResponse,
+  CourseRunFinishRequestBody,
+  CourseRunStartResponse,
+} from '../../courses/runModel';
 import { type GameObjectConfig } from '../../config';
 import {
   cloneRoomSnapshot,
@@ -37,6 +46,10 @@ import {
 import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
 
 export type CoursePlaybackRoomSourceMode = 'published' | 'draftPreview';
+type RankedCourseRunStartBinding = Pick<
+  CourseRunStartResponse,
+  'attemptId' | 'verificationSchemaVersion' | 'verificationNonce' | 'snapshotHash'
+>;
 
 interface OverworldCoursePlaybackHost {
   getSelectedCoordinates(): RoomCoordinates;
@@ -64,6 +77,7 @@ interface OverworldCoursePlaybackHost {
 export class OverworldCoursePlaybackController {
   private readonly roomRepository = createRoomRepository();
   private readonly courseRepository = createCourseRepository();
+  private readonly expandedRoomRepository = createExpandedRoomRepository();
   private readonly activeCourseRoomOverrideIds = new Set<string>();
 
   constructor(private readonly host: OverworldCoursePlaybackHost) {}
@@ -156,6 +170,9 @@ export class OverworldCoursePlaybackController {
             : 'Sign in to rank course runs.';
     return createActiveCourseRunState({
       course: cloneCourseSnapshot(course),
+      expandedRoomId:
+        course.status === 'published' ? expandedRoomIdFromLegacyCourseId(course.id) : null,
+      expandedRoomVersion: course.status === 'published' ? course.version : null,
       returnCoordinates: { ...this.host.getSelectedCoordinates() },
       enemyTarget:
         course.goal?.type === 'defeat_all'
@@ -170,23 +187,19 @@ export class OverworldCoursePlaybackController {
 
   async startRemoteCourseRun(runState: ActiveCourseRunState): Promise<void> {
     try {
-      const response = await this.courseRepository.startRun(runState.course.id, {
-        courseId: runState.course.id,
-        courseVersion: runState.course.version,
-        goal: runState.course.goal as CourseGoal,
-        startedAt: new Date().toISOString(),
-      });
+      const { response, submissionTarget } = await this.startRankedCourseRun(runState);
       const activeCourseRun = this.host.getActiveCourseRun();
       if (activeCourseRun?.course.id !== runState.course.id) {
         return;
       }
 
       activeCourseRun.attemptId = response.attemptId;
+      activeCourseRun.submissionTarget = submissionTarget;
       activeCourseRun.verificationSchemaVersion = response.verificationSchemaVersion;
       activeCourseRun.verificationNonce = response.verificationNonce;
       activeCourseRun.snapshotHash = response.snapshotHash;
       activeCourseRun.submissionState = 'active';
-      activeCourseRun.submissionMessage = 'Ranked course run active.';
+      activeCourseRun.submissionMessage = 'Ranked expanded room run active.';
       this.host.onRankedRunStarted?.({
         kind: 'course',
         verificationSchemaVersion: response.verificationSchemaVersion,
@@ -201,7 +214,10 @@ export class OverworldCoursePlaybackController {
         return;
       }
 
-      if (isCourseApiError(error) && error.status === 403) {
+      if (
+        (isCourseApiError(error) || isExpandedRoomApiError(error)) &&
+        error.status === 403
+      ) {
         activeCourseRun.submissionState = 'local-only';
         activeCourseRun.submissionMessage = error.message;
       } else {
@@ -225,13 +241,14 @@ export class OverworldCoursePlaybackController {
     const attemptId = activeCourseRun.attemptId;
     if (!attemptId || activeCourseRun.submissionState === 'local-only') {
       activeCourseRun.submissionState = 'submitted';
-      activeCourseRun.submissionMessage = 'Local course run saved on this client only.';
+      activeCourseRun.submissionMessage = 'Local expanded room run saved on this client only.';
       if (result === 'completed' && this.shouldPromptGuestClaimForLocalCourseClear(activeCourseRun)) {
-        activeCourseRun.submissionMessage = 'Guest course clear saved on this browser.';
+        activeCourseRun.submissionMessage = 'Guest expanded room clear saved on this browser.';
         requestPostRunGuestClaim({
           contentType: 'course',
           contentId: activeCourseRun.course.id,
           contentTitle: activeCourseRun.course.title,
+          expandedRoomId: activeCourseRun.expandedRoomId,
           version: activeCourseRun.course.version,
           previousViewerRank: null,
           elapsedMs: Math.round(activeCourseRun.elapsedMs),
@@ -252,7 +269,7 @@ export class OverworldCoursePlaybackController {
     }
 
     activeCourseRun.submissionState = 'finishing';
-    activeCourseRun.submissionMessage = 'Submitting course run...';
+    activeCourseRun.submissionMessage = 'Submitting expanded room run...';
     this.host.renderHud();
 
     const verificationTrace = this.host.buildVerificationTrace?.(activeCourseRun, result) ?? null;
@@ -283,17 +300,21 @@ export class OverworldCoursePlaybackController {
     };
 
     try {
-      await this.courseRepository.finishRun(attemptId, body);
+      if (activeCourseRun.submissionTarget === 'expanded_room') {
+        await this.expandedRoomRepository.finishRun(attemptId, body);
+      } else {
+        await this.courseRepository.finishRun(attemptId, body);
+      }
       const currentActiveCourseRun = this.host.getActiveCourseRun();
       if (!currentActiveCourseRun || currentActiveCourseRun.attemptId !== attemptId) {
         return;
       }
 
       currentActiveCourseRun.submissionState = 'submitted';
-      currentActiveCourseRun.submissionMessage = 'Ranked course run submitted.';
+      currentActiveCourseRun.submissionMessage = 'Ranked expanded room run submitted.';
       this.host.clearVerificationTrace?.();
       if (result === 'completed') {
-        const refreshedLeaderboard = await this.loadFreshCourseLeaderboard(currentActiveCourseRun.course);
+        const refreshedLeaderboard = await this.loadFreshCourseLeaderboard(currentActiveCourseRun);
         const currentViewerRank = refreshedLeaderboard?.viewerRank ?? null;
         const contentTitle = refreshedLeaderboard?.courseTitle ?? currentActiveCourseRun.course.title;
         const leaderboardRewards = buildLeaderboardRankRewardStings({
@@ -302,11 +323,13 @@ export class OverworldCoursePlaybackController {
           contentTitle,
         });
         const shouldPromptForRating = !currentActiveCourseRun.hadPreviousCompletion;
+        const ratingContentType = currentActiveCourseRun.expandedRoomId ? 'expanded_room' : 'course';
+        const ratingContentId = currentActiveCourseRun.expandedRoomId ?? currentActiveCourseRun.course.id;
         const rewards = [
           ...(shouldPromptForRating
             ? [
                 createPostRunClearReward({
-                  contentType: 'course',
+                  contentType: ratingContentType,
                   contentTitle,
                   elapsedMs: body.elapsedMs,
                   deaths: body.deaths,
@@ -318,9 +341,7 @@ export class OverworldCoursePlaybackController {
         ];
         notifyRewardStings(rewards);
         if (shouldPromptForRating) {
-          requestPostRunRating({
-            contentType: 'course',
-            contentId: currentActiveCourseRun.course.id,
+          const baseRatingRequest = {
             contentTitle,
             version: currentActiveCourseRun.course.version,
             previousViewerRank: currentActiveCourseRun.previousViewerRank,
@@ -335,7 +356,23 @@ export class OverworldCoursePlaybackController {
               enemiesDefeated: body.enemiesDefeated,
               checkpointsReached: body.checkpointsReached,
             }),
-          });
+          };
+          const expandedRoomId = currentActiveCourseRun.expandedRoomId;
+          if (expandedRoomId) {
+            requestPostRunRating({
+              ...baseRatingRequest,
+              contentType: 'expanded_room',
+              contentId: ratingContentId,
+              expandedRoomId,
+              legacyCourseId: currentActiveCourseRun.course.id,
+            });
+          } else {
+            requestPostRunRating({
+              ...baseRatingRequest,
+              contentType: 'course',
+              contentId: ratingContentId,
+            });
+          }
         }
       }
     } catch (error) {
@@ -372,9 +409,62 @@ export class OverworldCoursePlaybackController {
     );
   }
 
+  private async startRankedCourseRun(
+    runState: ActiveCourseRunState,
+  ): Promise<{
+    response: RankedCourseRunStartBinding;
+    submissionTarget: ActiveCourseRunState['submissionTarget'];
+  }> {
+    if (runState.expandedRoomId && runState.expandedRoomVersion) {
+      try {
+        return {
+          response: await this.expandedRoomRepository.startRun(runState.expandedRoomId, {
+            expandedRoomId: runState.expandedRoomId,
+            expandedRoomVersion: runState.expandedRoomVersion,
+            goal: runState.course.goal as CourseGoal,
+            startedAt: new Date().toISOString(),
+          }),
+          submissionTarget: 'expanded_room',
+        };
+      } catch (error) {
+        if (!this.shouldFallBackToLegacyCourseRunStart(error)) {
+          throw error;
+        }
+        console.warn('Falling back to legacy course run start after expanded-room start failed', error);
+      }
+    }
+
+    return {
+      response: await this.courseRepository.startRun(runState.course.id, {
+        courseId: runState.course.id,
+        courseVersion: runState.course.version,
+        goal: runState.course.goal as CourseGoal,
+        startedAt: new Date().toISOString(),
+      }),
+      submissionTarget: 'course',
+    };
+  }
+
+  private shouldFallBackToLegacyCourseRunStart(error: unknown): boolean {
+    return isExpandedRoomApiError(error) && (error.status === 404 || error.status >= 500);
+  }
+
   private async loadFreshCourseLeaderboard(
-    course: CourseSnapshot,
+    runState: ActiveCourseRunState,
   ): Promise<CourseLeaderboardResponse | null> {
+    const course = runState.course;
+    if (runState.expandedRoomId) {
+      try {
+        return await this.expandedRoomRepository.loadExpandedRoomLeaderboard(
+          runState.expandedRoomId,
+          runState.expandedRoomVersion ?? course.version,
+          5,
+        );
+      } catch (error) {
+        console.warn('Failed to refresh expanded-room leaderboard after clear', error);
+      }
+    }
+
     try {
       return await this.courseRepository.loadCourseLeaderboard(course.id, course.version, 5);
     } catch (error) {
@@ -392,7 +482,7 @@ export class OverworldCoursePlaybackController {
       const roomLabel =
         roomRef.roomTitle?.trim() || `Room ${roomRef.coordinates.x},${roomRef.coordinates.y}`;
       throw new Error(
-        `${roomLabel} is missing published room version v${roomRef.roomVersion}. Reopen the course builder and publish again.`,
+        `${roomLabel} is missing published room version v${roomRef.roomVersion}. Reopen the expanded room builder and publish again.`,
       );
     }
 
@@ -433,15 +523,15 @@ function formatCourseRunSubmissionErrorMessage(
   const detail =
     error instanceof Error && error.message.trim()
       ? error.message.trim()
-      : 'Course run submission failed.';
+      : 'Expanded room run submission failed.';
 
   if (result === 'completed') {
-    return `Ranked course clear not recorded: ${detail}`;
+    return `Ranked expanded room clear not recorded: ${detail}`;
   }
 
   if (result === 'failed') {
-    return `Ranked failed course run not recorded: ${detail}`;
+    return `Ranked failed expanded room run not recorded: ${detail}`;
   }
 
-  return `Course run abandon did not sync: ${detail}`;
+  return `Expanded room run abandon did not sync: ${detail}`;
 }

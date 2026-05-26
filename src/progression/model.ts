@@ -4,7 +4,7 @@ export type ProgressionDifficulty = typeof PROGRESSION_DIFFICULTIES[number];
 export type TrustTier = 'T0' | 'T1' | 'T2' | 'T3' | 'T4';
 export type ProgressionLane = 'player' | 'builder' | 'curator';
 export type ProgressionBadgeCategory = 'founder' | 'player' | 'builder' | 'curator';
-export type TrophyContentType = 'room' | 'course';
+export type TrophyContentType = 'room' | 'course' | 'expanded_room';
 
 export interface ProgressionDifficultyCounts {
   easy: number;
@@ -76,6 +76,7 @@ export interface BuilderCapabilitySummary {
   publishLimitPerDay: number;
   objectLimit: number;
   collectibleLimit: number;
+  expandedRoomCellLimit: number;
   overrideActive: boolean;
 }
 
@@ -126,6 +127,13 @@ export interface CourseRatingRequestBody {
   autoSuggestedDifficulty: ProgressionDifficulty | null;
 }
 
+export interface ExpandedRoomRatingRequestBody {
+  expandedRoomVersion: number;
+  qualityStars: number | null;
+  difficultyChoice: ProgressionDifficulty | null;
+  autoSuggestedDifficulty: ProgressionDifficulty | null;
+}
+
 export interface RoomRatingResponse {
   ok: true;
   roomId: string;
@@ -139,6 +147,16 @@ export interface CourseRatingResponse {
   ok: true;
   courseId: string;
   courseVersion: number;
+  progressionDelta: ProgressionDelta;
+  summary: RatingAggregateSummary;
+  progression: ProgressionSummary;
+}
+
+export interface ExpandedRoomRatingResponse {
+  ok: true;
+  expandedRoomId: string;
+  expandedRoomVersion: number;
+  legacyCourseId: string | null;
   progressionDelta: ProgressionDelta;
   summary: RatingAggregateSummary;
   progression: ProgressionSummary;

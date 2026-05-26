@@ -8,6 +8,11 @@ import type {
   CourseLeaderboardResponse,
   CourseProgressRatingResponse,
 } from '../../courses/runModel';
+import {
+  createExpandedRoomRepository,
+  type ExpandedRoomRepository,
+} from '../../expandedRooms/repository';
+import type { ExpandedRoomProgressRatingResponse } from '../../expandedRooms/runModel';
 import type {
   ProgressionDelta,
   ProgressionDifficulty,
@@ -220,6 +225,7 @@ export class RunRatingModalController {
     private readonly game: Phaser.Game,
     private readonly runRepository: RunRepository = createRunRepository(),
     private readonly courseRepository: CourseRepository = createCourseRepository(),
+    private readonly expandedRoomRepository: ExpandedRoomRepository = createExpandedRoomRepository(),
     private readonly profileRepository: ProfileRepository = createProfileRepository(),
     private readonly doc: Document = document,
     private readonly windowObj: Window = window
@@ -370,11 +376,17 @@ export class RunRatingModalController {
         this.roomSummary = summary;
         this.adoptViewerRating(summary.viewerRating);
       } else {
-        const summary = await this.courseRepository.loadCourseLeaderboard(
-          detail.contentId,
-          detail.version,
-          5
-        );
+        const summary = detail.contentType === 'expanded_room' || detail.expandedRoomId
+          ? await this.expandedRoomRepository.loadExpandedRoomLeaderboard(
+              detail.expandedRoomId ?? detail.contentId,
+              detail.version,
+              5,
+            )
+          : await this.courseRepository.loadCourseLeaderboard(
+              detail.contentId,
+              detail.version,
+              5,
+            );
         if (loadToken !== this.loadToken || !this.activeRequest) {
           return;
         }
@@ -636,12 +648,19 @@ export class RunRatingModalController {
         requestProfileInvalidation(authUserId);
         this.emitProgressionFeedback(request, response.progression, response.progressionDelta);
       } else {
-        const response = await this.courseRepository.submitCourseRating(request.contentId, {
-          courseVersion: request.version,
-          qualityStars: this.currentQualityStars,
-          difficultyChoice: this.currentDifficultyChoice,
-          autoSuggestedDifficulty: request.autoSuggestedDifficulty,
-        });
+        const response = request.contentType === 'expanded_room' || request.expandedRoomId
+          ? await this.expandedRoomRepository.submitExpandedRoomRating(request.expandedRoomId ?? request.contentId, {
+              expandedRoomVersion: request.version,
+              qualityStars: this.currentQualityStars,
+              difficultyChoice: this.currentDifficultyChoice,
+              autoSuggestedDifficulty: request.autoSuggestedDifficulty,
+            })
+          : await this.courseRepository.submitCourseRating(request.contentId, {
+              courseVersion: request.version,
+              qualityStars: this.currentQualityStars,
+              difficultyChoice: this.currentDifficultyChoice,
+              autoSuggestedDifficulty: request.autoSuggestedDifficulty,
+            });
         this.courseSummary = this.mergeCourseSummary(response);
         this.savedProgression = response.progression;
         this.savedDeltaText = formatProgressionDelta(response.progressionDelta);
@@ -657,6 +676,12 @@ export class RunRatingModalController {
       notifyPostRunRatingSubmitted({
         contentType: request.contentType,
         contentId: request.contentId,
+        expandedRoomId:
+          request.contentType === 'expanded_room'
+            ? request.expandedRoomId
+            : request.contentType === 'course'
+              ? request.expandedRoomId ?? null
+              : null,
       });
     } catch (error) {
       this.setError(error instanceof Error ? error.message : 'Failed to save your rating.');
@@ -680,7 +705,9 @@ export class RunRatingModalController {
     };
   }
 
-  private mergeCourseSummary(response: CourseProgressRatingResponse): CourseLeaderboardResponse | null {
+  private mergeCourseSummary(
+    response: CourseProgressRatingResponse | ExpandedRoomProgressRatingResponse,
+  ): CourseLeaderboardResponse | null {
     const existing = this.courseSummary;
     if (!existing) {
       return null;
@@ -703,7 +730,9 @@ export class RunRatingModalController {
       ? 'You did it!'
       : request?.contentType === 'room'
         ? roomSummary?.roomTitle ?? request?.contentTitle ?? 'Room Challenge'
-        : courseSummary?.courseTitle ?? request?.contentTitle ?? 'Course Run';
+        : courseSummary?.courseTitle
+          ?? request?.contentTitle
+          ?? (request?.contentType === 'expanded_room' ? 'Expanded Room Run' : 'Course Run');
 
     this.elements.kicker?.classList.toggle('hidden', guestClaimMode);
     if (this.elements.title) {
@@ -717,7 +746,9 @@ export class RunRatingModalController {
         this.elements.meta.textContent =
           request.contentType === 'room'
             ? `Post-run room rating · version ${request.version}`
-            : `Post-run course rating · version ${request.version}`;
+            : request.contentType === 'expanded_room'
+              ? `Post-run Expanded Room rating · version ${request.version}`
+              : `Post-run course rating · version ${request.version}`;
       } else {
         this.elements.meta.textContent = 'Post-run rating';
       }
@@ -916,7 +947,11 @@ export class RunRatingModalController {
     if (normalizedTitle) {
       return `Rated ${normalizedTitle}`;
     }
-    return contentType === 'course' ? 'Rated a course' : 'Rated a room';
+    return contentType === 'expanded_room'
+      ? 'Rated an Expanded Room'
+      : contentType === 'course'
+        ? 'Rated a course'
+        : 'Rated a room';
   }
 
   private async ensureCurrentSummary(request: PostRunRatingRequestDetail): Promise<void> {
@@ -937,11 +972,17 @@ export class RunRatingModalController {
       if (this.courseSummary) {
         return;
       }
-      this.courseSummary = await this.courseRepository.loadCourseLeaderboard(
-        request.contentId,
-        request.version,
-        5,
-      );
+      this.courseSummary = request.contentType === 'expanded_room' || request.expandedRoomId
+        ? await this.expandedRoomRepository.loadExpandedRoomLeaderboard(
+            request.expandedRoomId ?? request.contentId,
+            request.version,
+            5,
+          )
+        : await this.courseRepository.loadCourseLeaderboard(
+            request.contentId,
+            request.version,
+            5,
+          );
     } catch {
       // Reward rank stings can silently skip when the summary is unavailable.
     }
@@ -1007,6 +1048,9 @@ function buildQualitySummaryText(quality: QualityRatingSummary | null): string {
 }
 
 function buildPromptStatus(request: PostRunRatingRequestDetail | null): string {
+  if (request?.contentType === 'expanded_room') {
+    return 'Rate the Expanded Room quality and tweak the suggested difficulty if needed.';
+  }
   if (request?.contentType === 'course') {
     return 'Rate the course quality and tweak the suggested difficulty if needed.';
   }

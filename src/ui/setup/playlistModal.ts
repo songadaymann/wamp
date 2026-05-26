@@ -168,7 +168,7 @@ export class PlaylistModalController {
     }
     if (this.elements.meta) {
       this.elements.meta.textContent = playlist
-        ? `${playlist.roomCount} ${playlist.roomCount === 1 ? 'room' : 'rooms'} by ${playlist.ownerDisplayName}`
+        ? `${playlist.items.length} ${playlist.items.length === 1 ? 'room' : 'rooms'} by ${playlist.ownerDisplayName}`
         : this.loading
           ? 'Loading rooms...'
           : '';
@@ -226,7 +226,7 @@ export class PlaylistModalController {
 
     const previewImage = this.doc.createElement('img');
     previewImage.className = 'profile-room-preview-image hidden';
-    previewImage.alt = `${item.roomTitle?.trim() || `Room ${item.roomCoordinates.x},${item.roomCoordinates.y}`} preview`;
+    previewImage.alt = `${this.getPlaylistItemTitle(item)} preview`;
 
     const previewFallback = this.doc.createElement('div');
     previewFallback.className = 'profile-room-preview-fallback';
@@ -238,13 +238,11 @@ export class PlaylistModalController {
 
     const title = this.doc.createElement('div');
     title.className = 'profile-room-card-title';
-    title.textContent = item.roomTitle?.trim() || `Room ${item.roomCoordinates.x},${item.roomCoordinates.y}`;
+    title.textContent = this.getPlaylistItemTitle(item);
 
     const meta = this.doc.createElement('div');
     meta.className = 'profile-room-card-meta';
-    const goalText = item.goalType ? item.goalType.replace(/_/g, ' ') : 'free play';
-    const publishedText = item.publishedAt ? this.formatShortDate(item.publishedAt) : 'Published';
-    meta.textContent = `${goalText} · v${item.roomVersion} · ${item.roomCoordinates.x},${item.roomCoordinates.y} · ${publishedText}`;
+    meta.textContent = this.getPlaylistItemMeta(item);
 
     copy.append(title, meta);
     button.append(preview, copy);
@@ -299,7 +297,7 @@ export class PlaylistModalController {
       fallbackEl.classList.add('hidden');
       return;
     }
-    fallbackEl.textContent = item.roomTitle?.trim() || `${item.roomCoordinates.x},${item.roomCoordinates.y}`;
+    fallbackEl.textContent = this.getPlaylistItemTitle(item);
     imageEl.classList.add('hidden');
     fallbackEl.classList.remove('hidden');
   }
@@ -393,7 +391,11 @@ export class PlaylistModalController {
         roomId: item.roomId,
         roomCoordinates: item.roomCoordinates,
         roomVersion: item.roomVersion,
-        roomTitle: item.roomTitle,
+        roomTitle: this.getPlaylistItemTitle(item),
+        expandedRoomId: item.expandedRoom?.expandedRoomId ?? null,
+        expandedRoomVersion: item.expandedRoom?.expandedRoomVersion ?? null,
+        expandedRoomCellCount: item.expandedRoom?.cellCount ?? null,
+        legacyCourseId: item.expandedRoom?.legacyCourseId ?? null,
       })),
       sourceLabel: `${playlist.ownerDisplayName}'s playlist`,
       kickerLabel: playlist.title,
@@ -419,6 +421,29 @@ export class PlaylistModalController {
       day: 'numeric',
       year: 'numeric',
     });
+  }
+
+  private getPlaylistItemTitle(item: RoomPlaylistItem): string {
+    return (
+      item.expandedRoom?.title?.trim()
+      || item.roomTitle?.trim()
+      || `Room ${item.roomCoordinates.x},${item.roomCoordinates.y}`
+    );
+  }
+
+  private getPlaylistItemMeta(item: RoomPlaylistItem): string {
+    const goalText = item.goalType ? item.goalType.replace(/_/g, ' ') : 'free play';
+    const publishedText = item.publishedAt ? this.formatShortDate(item.publishedAt) : 'Published';
+    const expandedRoom = item.expandedRoom;
+    if (expandedRoom && expandedRoom.cellCount > 1) {
+      const versionText =
+        typeof expandedRoom.expandedRoomVersion === 'number'
+          ? `v${expandedRoom.expandedRoomVersion}`
+          : `v${item.roomVersion}`;
+      return `${goalText} · ${expandedRoom.cellCount} cells · ${versionText} · focus ${item.roomCoordinates.x},${item.roomCoordinates.y} · ${publishedText}`;
+    }
+
+    return `${goalText} · v${item.roomVersion} · ${item.roomCoordinates.x},${item.roomCoordinates.y} · ${publishedText}`;
   }
 
   private setError(message: string | null): void {

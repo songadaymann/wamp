@@ -34,6 +34,7 @@ import type {
   UserRow,
   UserStatsRow,
 } from '../core/types';
+import { isExpandedRoomSchemaMissingError } from '../expandedRooms/schemaErrors';
 import { mapUserStatsRow } from '../runs/points';
 import { loadRecentInvalidations } from './suspiciousInvalidation';
 
@@ -970,6 +971,123 @@ async function loadRecentCompletedCourseRuns(
   env: Env,
   sinceIso: string
 ): Promise<JoinedCourseRunRow[]> {
+  try {
+    const result = await env.DB.prepare(
+      `
+        SELECT *
+        FROM (
+          SELECT
+            r.attempt_id,
+            r.expanded_room_id AS course_id,
+            r.expanded_room_version AS course_version,
+            r.goal_type,
+            r.goal_json,
+            r.user_id,
+            r.user_display_name,
+            r.started_at,
+            r.finished_at,
+            r.result,
+            r.elapsed_ms,
+            r.deaths,
+            r.score,
+            r.collectibles_collected,
+            r.enemies_defeated,
+            r.checkpoints_reached,
+            v.title AS title,
+            u.created_at AS user_created_at,
+            u.email,
+            u.wallet_address,
+            l.ogp_id,
+            l.player_id,
+            p.id AS run_finalized_point_event_id,
+            p.points AS run_finalized_points,
+            p.created_at AS run_finalized_point_created_at
+          FROM expanded_room_runs r
+          INNER JOIN users u
+            ON u.id = r.user_id
+          LEFT JOIN expanded_room_versions v
+            ON v.expanded_room_id = r.expanded_room_id
+           AND v.version = r.expanded_room_version
+          LEFT JOIN playfun_user_links l
+            ON l.user_id = r.user_id
+          LEFT JOIN point_events p
+            ON p.user_id = r.user_id
+           AND p.event_type = 'run_finalized'
+           AND p.source_key = r.attempt_id
+          WHERE r.result = 'completed'
+            AND r.finished_at IS NOT NULL
+            AND r.finished_at >= ?
+
+          UNION ALL
+
+          SELECT
+            r.attempt_id,
+            r.course_id,
+            r.course_version,
+            r.goal_type,
+            r.goal_json,
+            r.user_id,
+            r.user_display_name,
+            r.started_at,
+            r.finished_at,
+            r.result,
+            r.elapsed_ms,
+            r.deaths,
+            r.score,
+            r.collectibles_collected,
+            r.enemies_defeated,
+            r.checkpoints_reached,
+            v.title AS title,
+            u.created_at AS user_created_at,
+            u.email,
+            u.wallet_address,
+            l.ogp_id,
+            l.player_id,
+            p.id AS run_finalized_point_event_id,
+            p.points AS run_finalized_points,
+            p.created_at AS run_finalized_point_created_at
+          FROM course_runs r
+          INNER JOIN users u
+            ON u.id = r.user_id
+          LEFT JOIN course_versions v
+            ON v.course_id = r.course_id
+           AND v.version = r.course_version
+          LEFT JOIN playfun_user_links l
+            ON l.user_id = r.user_id
+          LEFT JOIN point_events p
+            ON p.user_id = r.user_id
+           AND p.event_type = 'run_finalized'
+           AND p.source_key = r.attempt_id
+          WHERE r.result = 'completed'
+            AND r.finished_at IS NOT NULL
+            AND r.finished_at >= ?
+            AND NOT EXISTS (
+              SELECT 1
+              FROM expanded_room_runs expanded
+              WHERE expanded.legacy_course_attempt_id = r.attempt_id
+                 OR expanded.attempt_id = r.attempt_id
+            )
+        )
+        ORDER BY finished_at DESC
+        LIMIT ?
+      `
+    )
+      .bind(sinceIso, sinceIso, MAX_RECENT_RUNS)
+      .all<JoinedCourseRunRow>();
+
+    return result.results;
+  } catch (error) {
+    if (!isExpandedRoomSchemaMissingError(error)) {
+      throw error;
+    }
+    return loadRecentCompletedLegacyCourseRuns(env, sinceIso);
+  }
+}
+
+async function loadRecentCompletedLegacyCourseRuns(
+  env: Env,
+  sinceIso: string
+): Promise<JoinedCourseRunRow[]> {
   const result = await env.DB.prepare(
     `
       SELECT
@@ -1329,28 +1447,83 @@ async function loadHistoricalCourseRunsForVersion(
   courseId: string,
   courseVersion: number
 ): Promise<HistoricalComparableRun[]> {
-  const result = await env.DB.prepare(
-    `
-      SELECT
-        attempt_id,
-        started_at,
-        finished_at,
-        elapsed_ms,
-        deaths,
-        score
-      FROM course_runs
-      WHERE course_id = ?
-        AND course_version = ?
-        AND result = 'completed'
-        AND finished_at IS NOT NULL
-        AND elapsed_ms IS NOT NULL
-      ORDER BY finished_at ASC
-    `
-  )
-    .bind(courseId, courseVersion)
-    .all<
-      Pick<CourseRunRow, 'attempt_id' | 'started_at' | 'finished_at' | 'elapsed_ms' | 'deaths' | 'score'>
-    >();
+  const legacyCourseId = getLegacyCourseIdFromCourseRunSource(courseId);
+  let result;
+  try {
+    result = await env.DB.prepare(
+      `
+        SELECT *
+        FROM (
+          SELECT
+            attempt_id,
+            started_at,
+            finished_at,
+            elapsed_ms,
+            deaths,
+            score
+          FROM expanded_room_runs
+          WHERE expanded_room_id = ?
+            AND expanded_room_version = ?
+            AND result = 'completed'
+            AND finished_at IS NOT NULL
+            AND elapsed_ms IS NOT NULL
+
+          UNION ALL
+
+          SELECT
+            attempt_id,
+            started_at,
+            finished_at,
+            elapsed_ms,
+            deaths,
+            score
+          FROM course_runs
+          WHERE course_id = ?
+            AND course_version = ?
+            AND result = 'completed'
+            AND finished_at IS NOT NULL
+            AND elapsed_ms IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM expanded_room_runs expanded
+              WHERE expanded.legacy_course_attempt_id = course_runs.attempt_id
+                 OR expanded.attempt_id = course_runs.attempt_id
+            )
+        )
+        ORDER BY finished_at ASC
+      `
+    )
+      .bind(courseId, courseVersion, legacyCourseId, courseVersion)
+      .all<
+        Pick<CourseRunRow, 'attempt_id' | 'started_at' | 'finished_at' | 'elapsed_ms' | 'deaths' | 'score'>
+      >();
+  } catch (error) {
+    if (!isExpandedRoomSchemaMissingError(error)) {
+      throw error;
+    }
+    result = await env.DB.prepare(
+      `
+        SELECT
+          attempt_id,
+          started_at,
+          finished_at,
+          elapsed_ms,
+          deaths,
+          score
+        FROM course_runs
+        WHERE course_id = ?
+          AND course_version = ?
+          AND result = 'completed'
+          AND finished_at IS NOT NULL
+          AND elapsed_ms IS NOT NULL
+        ORDER BY finished_at ASC
+      `
+    )
+      .bind(legacyCourseId, courseVersion)
+      .all<
+        Pick<CourseRunRow, 'attempt_id' | 'started_at' | 'finished_at' | 'elapsed_ms' | 'deaths' | 'score'>
+      >();
+  }
 
   return result.results
     .filter((row): row is typeof row & { finished_at: string; elapsed_ms: number } => typeof row.finished_at === 'string' && typeof row.elapsed_ms === 'number')
@@ -1362,6 +1535,10 @@ async function loadHistoricalCourseRunsForVersion(
       deaths: row.deaths,
       score: row.score,
     }));
+}
+
+function getLegacyCourseIdFromCourseRunSource(courseId: string): string {
+  return courseId.startsWith('course:') ? courseId.slice('course:'.length) : courseId;
 }
 
 async function loadPlayerHistoryRoomRuns(
@@ -1450,40 +1627,7 @@ async function loadPlayerHistoryCourseRuns(
   userId: string,
   flaggedRuns: SuspiciousRunCase[]
 ): Promise<SuspiciousRunCase[]> {
-  const result = await env.DB.prepare(
-    `
-      SELECT
-        r.attempt_id,
-        r.course_id,
-        r.course_version,
-        r.goal_type,
-        r.goal_json,
-        r.user_id,
-        r.user_display_name,
-        r.started_at,
-        r.finished_at,
-        r.result,
-        r.elapsed_ms,
-        r.deaths,
-        r.score,
-        v.title AS title,
-        p.id AS run_finalized_point_event_id,
-        p.points AS run_finalized_points,
-        p.created_at AS run_finalized_point_created_at
-      FROM course_runs r
-      LEFT JOIN course_versions v
-        ON v.course_id = r.course_id
-       AND v.version = r.course_version
-      LEFT JOIN point_events p
-        ON p.user_id = r.user_id
-       AND p.event_type = 'run_finalized'
-       AND p.source_key = r.attempt_id
-      WHERE r.user_id = ?
-      ORDER BY COALESCE(r.finished_at, r.started_at) DESC, r.attempt_id DESC
-    `
-  )
-    .bind(userId)
-    .all<JoinedCourseRunRow>();
+  const result = await loadPlayerHistoryCourseRunRows(env, userId);
 
   const runs: SuspiciousRunCase[] = [];
   for (const row of result.results) {
@@ -1522,6 +1666,136 @@ async function loadPlayerHistoryCourseRuns(
   }
 
   return mergeFlaggedRunsIntoHistory(runs, flaggedRuns);
+}
+
+async function loadPlayerHistoryCourseRunRows(
+  env: Env,
+  userId: string,
+): Promise<{ results: JoinedCourseRunRow[] }> {
+  try {
+    const result = await env.DB.prepare(
+      `
+        SELECT *
+        FROM (
+          SELECT
+            r.attempt_id,
+            r.expanded_room_id AS course_id,
+            r.expanded_room_version AS course_version,
+            r.goal_type,
+            r.goal_json,
+            r.user_id,
+            r.user_display_name,
+            r.started_at,
+            r.finished_at,
+            r.result,
+            r.elapsed_ms,
+            r.deaths,
+            r.score,
+            r.collectibles_collected,
+            r.enemies_defeated,
+            r.checkpoints_reached,
+            v.title AS title,
+            p.id AS run_finalized_point_event_id,
+            p.points AS run_finalized_points,
+            p.created_at AS run_finalized_point_created_at
+          FROM expanded_room_runs r
+          LEFT JOIN expanded_room_versions v
+            ON v.expanded_room_id = r.expanded_room_id
+           AND v.version = r.expanded_room_version
+          LEFT JOIN point_events p
+            ON p.user_id = r.user_id
+           AND p.event_type = 'run_finalized'
+           AND p.source_key = r.attempt_id
+          WHERE r.user_id = ?
+
+          UNION ALL
+
+          SELECT
+            r.attempt_id,
+            r.course_id,
+            r.course_version,
+            r.goal_type,
+            r.goal_json,
+            r.user_id,
+            r.user_display_name,
+            r.started_at,
+            r.finished_at,
+            r.result,
+            r.elapsed_ms,
+            r.deaths,
+            r.score,
+            r.collectibles_collected,
+            r.enemies_defeated,
+            r.checkpoints_reached,
+            v.title AS title,
+            p.id AS run_finalized_point_event_id,
+            p.points AS run_finalized_points,
+            p.created_at AS run_finalized_point_created_at
+          FROM course_runs r
+          LEFT JOIN course_versions v
+            ON v.course_id = r.course_id
+           AND v.version = r.course_version
+          LEFT JOIN point_events p
+            ON p.user_id = r.user_id
+           AND p.event_type = 'run_finalized'
+           AND p.source_key = r.attempt_id
+          WHERE r.user_id = ?
+            AND NOT EXISTS (
+              SELECT 1
+              FROM expanded_room_runs expanded
+              WHERE expanded.legacy_course_attempt_id = r.attempt_id
+                 OR expanded.attempt_id = r.attempt_id
+            )
+        )
+        ORDER BY COALESCE(finished_at, started_at) DESC, attempt_id DESC
+      `
+    )
+      .bind(userId, userId)
+      .all<JoinedCourseRunRow>();
+    return { results: result.results };
+  } catch (error) {
+    if (!isExpandedRoomSchemaMissingError(error)) {
+      throw error;
+    }
+    const result = await env.DB.prepare(
+      `
+        SELECT
+          r.attempt_id,
+          r.course_id,
+          r.course_version,
+          r.goal_type,
+          r.goal_json,
+          r.user_id,
+          r.user_display_name,
+          r.started_at,
+          r.finished_at,
+          r.result,
+          r.elapsed_ms,
+          r.deaths,
+          r.score,
+          r.collectibles_collected,
+          r.enemies_defeated,
+          r.checkpoints_reached,
+          v.title AS title,
+          p.id AS run_finalized_point_event_id,
+          p.points AS run_finalized_points,
+          p.created_at AS run_finalized_point_created_at
+        FROM course_runs r
+        LEFT JOIN course_versions v
+          ON v.course_id = r.course_id
+         AND v.version = r.course_version
+        LEFT JOIN point_events p
+          ON p.user_id = r.user_id
+         AND p.event_type = 'run_finalized'
+         AND p.source_key = r.attempt_id
+        WHERE r.user_id = ?
+        ORDER BY COALESCE(r.finished_at, r.started_at) DESC, r.attempt_id DESC
+      `
+    )
+      .bind(userId)
+      .all<JoinedCourseRunRow>();
+    return { results: result.results };
+  }
 }
 
 function getOrCreateAccumulator(

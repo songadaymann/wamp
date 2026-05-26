@@ -6,6 +6,7 @@ import {
   type RoomSnapshot,
 } from './roomModel';
 import type { CourseMembershipSummary } from '../courses/model';
+import type { ExpandedRoomMembershipSummary } from '../expandedRooms/model';
 import type { RoomGoalType } from '../goals/roomGoals';
 
 export type WorldCellState = 'published' | 'claimed_unpublished' | 'frontier';
@@ -25,6 +26,7 @@ export interface WorldRoomSummary {
   publishedByUserId: string | null;
   publishedByDisplayName: string | null;
   course: CourseMembershipSummary | null;
+  expandedRoom: ExpandedRoomMembershipSummary | null;
 }
 
 export interface PublishedWorldRoomSource {
@@ -184,6 +186,7 @@ export function cloneWorldChunkWindow(window: WorldChunkWindow): WorldChunkWindo
         ...room,
         coordinates: { ...room.coordinates },
         course: room.course ? { ...room.course } : null,
+        expandedRoom: room.expandedRoom ? { ...room.expandedRoom } : null,
       })),
       previewRooms: chunk.previewRooms.map((room) => cloneRoomSnapshot(room)),
       chunkPreviewHash: chunk.chunkPreviewHash,
@@ -199,6 +202,7 @@ export function cloneWorldWindow(window: WorldWindow): WorldWindow {
       ...room,
       coordinates: { ...room.coordinates },
       course: room.course ? { ...room.course } : null,
+      expandedRoom: room.expandedRoom ? { ...room.expandedRoom } : null,
     })),
   };
 }
@@ -221,6 +225,7 @@ export function createPublishedRoomSummary(
     publishedByUserId: isPublishedWorldRoomSource(room) ? room.creatorUserId : null,
     publishedByDisplayName: isPublishedWorldRoomSource(room) ? room.creatorDisplayName : null,
     course: null,
+    expandedRoom: null,
   };
 }
 
@@ -242,6 +247,7 @@ export function createClaimedUnpublishedRoomSummary(
     publishedByUserId: null,
     publishedByDisplayName: null,
     course: null,
+    expandedRoom: null,
   };
 }
 
@@ -260,6 +266,7 @@ export function createFrontierRoomSummary(coordinates: RoomCoordinates): WorldRo
     publishedByUserId: null,
     publishedByDisplayName: null,
     course: null,
+    expandedRoom: null,
   };
 }
 
@@ -339,7 +346,12 @@ export function computeWorldSummariesFromOccupancySummariesInBounds(
       (room.state === 'published' || room.state === 'claimed_unpublished')
       && isWithinRoomBounds(room.coordinates, bounds)
     ) {
-      roomsById.set(room.id, { ...room, coordinates: { ...room.coordinates } });
+      roomsById.set(room.id, {
+        ...room,
+        coordinates: { ...room.coordinates },
+        course: room.course ? { ...room.course } : null,
+        expandedRoom: room.expandedRoom ? { ...room.expandedRoom } : null,
+      });
     }
   }
 
@@ -473,6 +485,12 @@ export function computeWorldChunkPreviewHash(
         room.course?.courseId ?? '',
         room.course?.goalType ?? '',
         room.course?.roomCount ?? '',
+        room.expandedRoom?.expandedRoomId ?? '',
+        room.expandedRoom?.title ?? '',
+        room.expandedRoom?.goalType ?? '',
+        room.expandedRoom?.cellCount ?? '',
+        room.expandedRoom?.source ?? '',
+        room.expandedRoom?.legacyCourseId ?? '',
       ].join(':')
     )
     .join('|');

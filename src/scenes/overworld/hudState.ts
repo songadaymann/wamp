@@ -112,6 +112,16 @@ export class OverworldHudStateController {
   }
 
   getSelectedCourseContext(): SelectedCourseContext | null {
+    const expandedRoom = this.selectedSummary?.expandedRoom ?? null;
+    if (expandedRoom?.legacyCourseId) {
+      return {
+        courseId: expandedRoom.legacyCourseId,
+        courseTitle: expandedRoom.title,
+        goalType: expandedRoom.goalType === 'collect_race' ? null : expandedRoom.goalType,
+        roomCount: expandedRoom.cellCount,
+      };
+    }
+
     const publishedCourse = this.selectedSummary?.course ?? null;
     if (!publishedCourse) {
       return null;

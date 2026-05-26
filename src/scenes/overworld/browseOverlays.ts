@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { COURSE_GOAL_LABELS, type CourseGoalType } from '../../courses/model';
+import { type CourseGoalType } from '../../courses/model';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
 import {
   ROOM_GOAL_LABELS,
@@ -62,8 +62,8 @@ const MIN_ZOOM = 0.08;
 
 type GoalRoomBadge = OverworldBadgePlacement;
 type RoomActivityBadge = OverworldBadgePlacement;
-type CourseRoomBadge = OverworldBadgePlacement;
-type SemanticBadgeOwner = 'goal' | 'course';
+type ExpandedRoomBadge = OverworldBadgePlacement;
+type SemanticBadgeOwner = 'goal' | 'expanded-room';
 
 interface SemanticRoomBadgeDescriptor {
   owner: SemanticBadgeOwner;
@@ -111,7 +111,7 @@ export class OverworldBrowseOverlayController {
 
   private roomGoalBadges: GoalRoomBadge[] = [];
   private roomActivityBadges: RoomActivityBadge[] = [];
-  private roomCourseBadges: CourseRoomBadge[] = [];
+  private expandedRoomBadges: ExpandedRoomBadge[] = [];
   private selectedRoomPlayAffordance: SelectedRoomPlayAffordance | null = null;
 
   constructor(private readonly host: OverworldBrowseOverlayControllerHost) {}
@@ -175,7 +175,7 @@ export class OverworldBrowseOverlayController {
   destroy(): void {
     this.destroyRoomGoalBadges();
     this.destroyRoomActivityBadges();
-    this.destroyRoomCourseBadges();
+    this.destroyExpandedRoomBadges();
     this.selectedRoomPlayAffordance?.container.destroy(true);
     this.selectedRoomPlayAffordance = null;
   }
@@ -188,7 +188,7 @@ export class OverworldBrowseOverlayController {
     for (const badge of this.roomActivityBadges) {
       ignoredObjects.push(badge.container);
     }
-    for (const badge of this.roomCourseBadges) {
+    for (const badge of this.expandedRoomBadges) {
       ignoredObjects.push(badge.container);
     }
     if (this.selectedRoomPlayAffordance) {
@@ -200,7 +200,7 @@ export class OverworldBrowseOverlayController {
   redrawBrowseOverlays(): void {
     this.destroyRoomGoalBadges();
     this.destroyRoomActivityBadges();
-    this.destroyRoomCourseBadges();
+    this.destroyExpandedRoomBadges();
 
     const worldWindow = this.host.getWorldWindow();
     if (!worldWindow || this.host.getMode() !== 'browse') {
@@ -217,7 +217,7 @@ export class OverworldBrowseOverlayController {
         };
         this.redrawGoalBadgeAt(coordinates);
         this.redrawActivityBadgeAt(coordinates);
-        this.redrawCourseBadgeAt(coordinates);
+        this.redrawExpandedRoomBadgeAt(coordinates);
       }
     }
 
@@ -228,7 +228,7 @@ export class OverworldBrowseOverlayController {
   syncScale(zoom: number): void {
     syncBadgePlacements(this.roomGoalBadges, zoom, this.roomBadgeScaleConfig);
     syncBadgePlacements(this.roomActivityBadges, zoom, this.roomBadgeScaleConfig);
-    syncBadgePlacements(this.roomCourseBadges, zoom, this.roomBadgeScaleConfig);
+    syncBadgePlacements(this.expandedRoomBadges, zoom, this.roomBadgeScaleConfig);
     this.updateSelectedRoomPlayAffordance(zoom);
   }
 
@@ -246,14 +246,19 @@ export class OverworldBrowseOverlayController {
     this.roomActivityBadges = [];
   }
 
-  private destroyRoomCourseBadges(): void {
-    for (const badge of this.roomCourseBadges) {
+  private destroyExpandedRoomBadges(): void {
+    for (const badge of this.expandedRoomBadges) {
       badge.container.destroy(true);
     }
-    this.roomCourseBadges = [];
+    this.expandedRoomBadges = [];
   }
 
   private redrawGoalBadgeAt(coordinates: RoomCoordinates): void {
+    const expandedRoom = this.host.getRoomSummaryForCoordinates(coordinates)?.expandedRoom ?? null;
+    if (expandedRoom && expandedRoom.source !== 'standalone_room' && expandedRoom.cellCount > 1) {
+      return;
+    }
+
     const room = this.host.getRoomSnapshotForCoordinates(coordinates);
     if (!room?.goal) {
       return;
@@ -316,21 +321,38 @@ export class OverworldBrowseOverlayController {
     });
   }
 
-  private redrawCourseBadgeAt(coordinates: RoomCoordinates): void {
+  private redrawExpandedRoomBadgeAt(coordinates: RoomCoordinates): void {
     const summary = this.host.getRoomSummaryForCoordinates(coordinates);
-    if (!summary?.course) {
+    const expandedRoom = summary?.expandedRoom ?? null;
+    if (
+      !expandedRoom ||
+      expandedRoom.source === 'standalone_room' ||
+      expandedRoom.cellCount <= 1 ||
+      !this.isExpandedRoomBadgeAnchor(coordinates, expandedRoom.expandedRoomId)
+    ) {
       return;
     }
 
-    this.roomCourseBadges.push(
+    this.expandedRoomBadges.push(
       this.createSemanticRoomBadge({
-        owner: 'course',
-        title: (summary.course.courseTitle?.trim() || 'COURSE').toUpperCase(),
-        typeLabel: this.getCourseGoalTypeBadgeLabel(summary.course.goalType),
-        compactCode: this.getSemanticBadgeCode(summary.course.goalType),
-        color: this.getSemanticBadgeColor(summary.course.goalType),
+        owner: 'expanded-room',
+        title: (expandedRoom.title?.trim() || 'EXPANDED ROOM').toUpperCase(),
+        typeLabel: this.getCourseGoalTypeBadgeLabel(expandedRoom.goalType),
+        compactCode: this.getSemanticBadgeCode(expandedRoom.goalType),
+        color: this.getSemanticBadgeColor(expandedRoom.goalType),
         coordinates,
       }),
+    );
+  }
+
+  private isExpandedRoomBadgeAnchor(coordinates: RoomCoordinates, expandedRoomId: string): boolean {
+    return ![
+      { x: coordinates.x - 1, y: coordinates.y },
+      { x: coordinates.x, y: coordinates.y - 1 },
+    ].some(
+      (neighbor) =>
+        this.host.getRoomSummaryForCoordinates(neighbor)?.expandedRoom?.expandedRoomId
+        === expandedRoomId,
     );
   }
 
@@ -400,8 +422,8 @@ export class OverworldBrowseOverlayController {
     return ROOM_BADGE_SEMANTIC_CODES[goalType];
   }
 
-  private getCourseGoalTypeBadgeLabel(goalType: CourseGoalType | null): string {
-    return (goalType ? COURSE_GOAL_LABELS[goalType] : 'Goal Missing').toUpperCase();
+  private getCourseGoalTypeBadgeLabel(goalType: RoomGoalType | CourseGoalType | null): string {
+    return (goalType ? ROOM_GOAL_LABELS[goalType] : 'Goal Missing').toUpperCase();
   }
 
   private createRoundedBadgeBackground(
@@ -637,7 +659,7 @@ export class OverworldBrowseOverlayController {
             RETRO_COLORS.selected,
             0.82,
           );
-    if (descriptor.owner === 'course' && accent instanceof Phaser.GameObjects.Graphics) {
+    if (descriptor.owner === 'expanded-room' && accent instanceof Phaser.GameObjects.Graphics) {
       accent.setPosition(
         -backgroundWidth * 0.5 + 10,
         -backgroundHeight * 0.5 + verticalPadding + 1,

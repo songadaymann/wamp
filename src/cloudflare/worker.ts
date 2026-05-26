@@ -27,6 +27,26 @@ import {
 } from './worker/courses/routes';
 import { corsHeaders, HttpError, jsonResponse } from './worker/core/http';
 import type { Env } from './worker/core/types';
+import {
+  handleExpandedRoomByCoordinateGet,
+  handleExpandedRoomGet,
+} from './worker/expandedRooms/routes';
+import {
+  handleExpandedRoomCellAdd,
+  handleExpandedRoomCellRemove,
+  handleExpandedRoomCreate,
+  handleExpandedRoomDraftByRoomLookup,
+  handleExpandedRoomDraftSave,
+  handleExpandedRoomEditorRecordGet,
+  handleExpandedRoomPublish,
+  handleExpandedRoomUnpublish,
+} from './worker/expandedRooms/editorRoutes';
+import {
+  handleExpandedRoomLeaderboard,
+  handleExpandedRoomRatingSubmit,
+  handleExpandedRoomRunFinish,
+  handleExpandedRoomRunStart,
+} from './worker/expandedRooms/runRoutes';
 import { handleTestReset } from './worker/maintenance/routes';
 import {
   handleMusicPhraseDeleteRequest,
@@ -333,6 +353,103 @@ export default {
         return await handleRunStart(request, env);
       }
 
+      if (url.pathname === '/api/expanded-rooms' && request.method === 'POST') {
+        return await handleExpandedRoomCreate(request, env);
+      }
+
+      const expandedRoomRunStartMatch = /^\/api\/expanded-rooms\/([^/]+)\/runs\/start$/.exec(url.pathname);
+      if (expandedRoomRunStartMatch && request.method === 'POST') {
+        return await handleExpandedRoomRunStart(
+          request,
+          env,
+          decodeURIComponent(expandedRoomRunStartMatch[1]),
+        );
+      }
+
+      const expandedRoomByCoordinateMatch =
+        /^\/api\/expanded-rooms\/by-coordinate\/(-?\d+)\/(-?\d+)$/.exec(url.pathname);
+      if (expandedRoomByCoordinateMatch && request.method === 'GET') {
+        return await handleExpandedRoomByCoordinateGet(
+          request,
+          env,
+          expandedRoomByCoordinateMatch[1],
+          expandedRoomByCoordinateMatch[2]
+        );
+      }
+
+      const expandedRoomDraftByRoomMatch = /^\/api\/expanded-rooms\/drafts\/by-room\/([^/]+)$/.exec(url.pathname);
+      if (expandedRoomDraftByRoomMatch && request.method === 'GET') {
+        return await handleExpandedRoomDraftByRoomLookup(
+          request,
+          env,
+          decodeURIComponent(expandedRoomDraftByRoomMatch[1])
+        );
+      }
+
+      const expandedRoomEditorRecordMatch = /^\/api\/expanded-rooms\/([^/]+)\/editor-record$/.exec(url.pathname);
+      if (expandedRoomEditorRecordMatch && request.method === 'GET') {
+        return await handleExpandedRoomEditorRecordGet(
+          request,
+          env,
+          decodeURIComponent(expandedRoomEditorRecordMatch[1])
+        );
+      }
+
+      const expandedRoomDraftMatch = /^\/api\/expanded-rooms\/([^/]+)\/draft$/.exec(url.pathname);
+      if (expandedRoomDraftMatch && request.method === 'PUT') {
+        return await handleExpandedRoomDraftSave(
+          request,
+          env,
+          decodeURIComponent(expandedRoomDraftMatch[1])
+        );
+      }
+
+      const expandedRoomPublishMatch = /^\/api\/expanded-rooms\/([^/]+)\/publish$/.exec(url.pathname);
+      if (expandedRoomPublishMatch && request.method === 'POST') {
+        return await handleExpandedRoomPublish(
+          request,
+          env,
+          decodeURIComponent(expandedRoomPublishMatch[1])
+        );
+      }
+
+      const expandedRoomUnpublishMatch = /^\/api\/expanded-rooms\/([^/]+)\/unpublish$/.exec(url.pathname);
+      if (expandedRoomUnpublishMatch && request.method === 'POST') {
+        return await handleExpandedRoomUnpublish(
+          request,
+          env,
+          decodeURIComponent(expandedRoomUnpublishMatch[1])
+        );
+      }
+
+      const expandedRoomCellAddMatch = /^\/api\/expanded-rooms\/([^/]+)\/cells$/.exec(url.pathname);
+      if (expandedRoomCellAddMatch && request.method === 'POST') {
+        return await handleExpandedRoomCellAdd(
+          request,
+          env,
+          decodeURIComponent(expandedRoomCellAddMatch[1])
+        );
+      }
+
+      const expandedRoomCellRemoveMatch = /^\/api\/expanded-rooms\/([^/]+)\/cells\/([^/]+)$/.exec(url.pathname);
+      if (expandedRoomCellRemoveMatch && request.method === 'DELETE') {
+        return await handleExpandedRoomCellRemove(
+          request,
+          env,
+          decodeURIComponent(expandedRoomCellRemoveMatch[1]),
+          decodeURIComponent(expandedRoomCellRemoveMatch[2])
+        );
+      }
+
+      const expandedRoomMatch = /^\/api\/expanded-rooms\/([^/]+)$/.exec(url.pathname);
+      if (expandedRoomMatch && request.method === 'GET') {
+        return await handleExpandedRoomGet(
+          request,
+          env,
+          decodeURIComponent(expandedRoomMatch[1])
+        );
+      }
+
       if (url.pathname === '/api/courses' && request.method === 'POST') {
         return await handleCourseCreate(request, env);
       }
@@ -374,6 +491,15 @@ export default {
       const finishRunMatch = /^\/api\/runs\/([^/]+)\/finish$/.exec(url.pathname);
       if (finishRunMatch && request.method === 'POST') {
         return await handleRunFinish(request, env, decodeURIComponent(finishRunMatch[1]));
+      }
+
+      const finishExpandedRoomRunMatch = /^\/api\/expanded-room-runs\/([^/]+)\/finish$/.exec(url.pathname);
+      if (finishExpandedRoomRunMatch && request.method === 'POST') {
+        return await handleExpandedRoomRunFinish(
+          request,
+          env,
+          decodeURIComponent(finishExpandedRoomRunMatch[1]),
+        );
       }
 
       const finishCourseRunMatch = /^\/api\/course-runs\/([^/]+)\/finish$/.exec(url.pathname);
@@ -426,6 +552,25 @@ export default {
           url,
           env,
           decodeURIComponent(courseLeaderboardMatch[1])
+        );
+      }
+
+      const expandedRoomLeaderboardMatch = /^\/api\/leaderboards\/expanded-rooms\/([^/]+)$/.exec(url.pathname);
+      if (expandedRoomLeaderboardMatch && request.method === 'GET') {
+        return await handleExpandedRoomLeaderboard(
+          request,
+          url,
+          env,
+          decodeURIComponent(expandedRoomLeaderboardMatch[1]),
+        );
+      }
+
+      const expandedRoomRatingMatch = /^\/api\/expanded-rooms\/([^/]+)\/ratings$/.exec(url.pathname);
+      if (expandedRoomRatingMatch && request.method === 'POST') {
+        return await handleExpandedRoomRatingSubmit(
+          request,
+          env,
+          decodeURIComponent(expandedRoomRatingMatch[1]),
         );
       }
 

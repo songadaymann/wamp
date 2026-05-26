@@ -2,12 +2,25 @@ import {
   parseRoomId,
   type RoomCoordinates,
 } from '../../../persistence/roomModel';
+import type { ResolvedExpandedRoomTarget } from '../../../expandedRooms/model';
 import type {
   AdminRoomCommentRecord,
+  RoomCommentAreaContext,
   RoomCommentRecord,
   RoomCommentStatus,
 } from '../../../roomComments/model';
 import type { Env, RoomCommentRow } from '../core/types';
+import { resolveExpandedRoomAtCoordinates } from '../expandedRooms/store';
+
+interface RoomCommentScopeCellRef {
+  roomId: string;
+  roomVersion: number;
+  coordinates: RoomCoordinates;
+}
+
+interface RoomCommentAreaScope extends RoomCommentAreaContext {
+  cells: RoomCommentScopeCellRef[];
+}
 
 export interface RoomCommentTarget {
   roomId: string;
@@ -17,6 +30,7 @@ export interface RoomCommentTarget {
   builderUserId: string | null;
   builderDisplayName: string | null;
   builderEmail: string | null;
+  areaScope: RoomCommentAreaScope | null;
 }
 
 export async function loadRoomCommentTarget(
@@ -76,16 +90,16 @@ export async function loadRoomCommentTarget(
     }>();
 
   if (!row) {
-    return null;
+    return loadExpandedRoomCommentTarget(env, roomId, coordinates, roomVersion);
   }
 
   const currentVersion = Number(row.current_version ?? 0);
   if (!Number.isInteger(currentVersion) || currentVersion <= 0) {
-    return null;
+    return loadExpandedRoomCommentTarget(env, roomId, coordinates, roomVersion);
   }
 
   if (roomVersion !== null && roomVersion !== currentVersion) {
-    return null;
+    return loadExpandedRoomCommentTarget(env, roomId, coordinates, roomVersion);
   }
 
   const builderUserId =
@@ -96,7 +110,7 @@ export async function loadRoomCommentTarget(
     ?? row.claimer_display_name
     ?? row.last_published_by_display_name;
 
-  return {
+  const targetWithoutScope: Omit<RoomCommentTarget, 'areaScope'> = {
     roomId: row.id,
     roomVersion: currentVersion,
     roomTitle: row.version_title ?? row.published_title ?? null,
@@ -105,6 +119,10 @@ export async function loadRoomCommentTarget(
     builderDisplayName,
     builderEmail: row.builder_email,
   };
+  return {
+    ...targetWithoutScope,
+    areaScope: await loadRoomCommentAreaScope(env, targetWithoutScope),
+  };
 }
 
 export async function listApprovedRoomComments(
@@ -112,18 +130,18 @@ export async function listApprovedRoomComments(
   target: RoomCommentTarget,
   limit: number,
 ): Promise<RoomCommentRecord[]> {
+  const predicate = buildRoomCommentTargetPredicate(getRoomCommentScopeCells(target));
   const result = await env.DB.prepare(
     `
       SELECT *
       FROM room_comments
-      WHERE room_id = ?
-        AND room_version = ?
+      WHERE (${predicate.sql})
         AND status = 'approved'
       ORDER BY created_at DESC, id DESC
       LIMIT ?
     `,
   )
-    .bind(target.roomId, target.roomVersion, limit)
+    .bind(...predicate.bindings, limit)
     .all<RoomCommentRow>();
 
   return result.results.map((row) => mapPublicRoomCommentRow(row, target.coordinates));
@@ -219,27 +237,41 @@ export async function countRecentRoomCommentsForUser(
   return Number(row?.count ?? 0);
 }
 
-export async function countRecentRoomCommentsForUserRoom(
+export async function countRecentRoomCommentsForUserTarget(
   env: Env,
   userId: string,
-  roomId: string,
-  roomVersion: number,
+  target: RoomCommentTarget,
   sinceIso: string,
 ): Promise<number> {
+  const predicate = buildRoomCommentTargetPredicate(getRoomCommentScopeCells(target));
   const row = await env.DB.prepare(
     `
       SELECT COUNT(*) AS count
       FROM room_comments
       WHERE author_user_id = ?
-        AND room_id = ?
-        AND room_version = ?
+        AND (${predicate.sql})
         AND created_at >= ?
     `,
   )
-    .bind(userId, roomId, roomVersion, sinceIso)
+    .bind(userId, ...predicate.bindings, sinceIso)
     .first<{ count: number | string | null }>();
 
   return Number(row?.count ?? 0);
+}
+
+export function getRoomCommentAreaContext(target: RoomCommentTarget): RoomCommentAreaContext | null {
+  if (!target.areaScope) {
+    return null;
+  }
+
+  return {
+    expandedRoomId: target.areaScope.expandedRoomId,
+    expandedRoomVersion: target.areaScope.expandedRoomVersion,
+    title: target.areaScope.title,
+    anchorCoordinates: { ...target.areaScope.anchorCoordinates },
+    focusedCoordinates: { ...target.areaScope.focusedCoordinates },
+    cellCount: target.areaScope.cellCount,
+  };
 }
 
 export async function listAdminRoomComments(
@@ -383,13 +415,14 @@ interface AdminRoomCommentJoinRow extends RoomCommentRow {
 
 function mapPublicRoomCommentRow(
   row: RoomCommentRow,
-  coordinates: RoomCoordinates,
+  fallbackCoordinates: RoomCoordinates,
 ): RoomCommentRecord {
+  const coordinates = parseRoomId(row.room_id) ?? fallbackCoordinates;
   return {
     id: row.id,
     roomId: row.room_id,
     roomVersion: Number(row.room_version),
-    roomCoordinates: { ...coordinates },
+    roomCoordinates: coordinates,
     position: {
       x: Number(row.room_x),
       y: Number(row.room_y),
@@ -417,4 +450,199 @@ function mapAdminRoomCommentRow(row: AdminRoomCommentJoinRow): AdminRoomCommentR
     notifiedAt: row.notified_at,
     notificationError: row.notification_error,
   };
+}
+
+async function loadRoomCommentAreaScope(
+  env: Env,
+  target: Omit<RoomCommentTarget, 'areaScope'>,
+): Promise<RoomCommentAreaScope | null> {
+  if (!isExpandedRoomsEnabled(env)) {
+    return null;
+  }
+
+  const expandedRoom = await resolveExpandedRoomAtCoordinates(env, target.coordinates);
+  if (!expandedRoom || expandedRoom.cellCount <= 1) {
+    return null;
+  }
+
+  return createRoomCommentAreaScope(expandedRoom, target);
+}
+
+async function loadExpandedRoomCommentTarget(
+  env: Env,
+  roomId: string,
+  coordinates: RoomCoordinates,
+  roomVersion: number | null,
+): Promise<RoomCommentTarget | null> {
+  if (!isExpandedRoomsEnabled(env)) {
+    return null;
+  }
+
+  const expandedRoom = await resolveExpandedRoomAtCoordinates(env, coordinates);
+  if (!expandedRoom || expandedRoom.cellCount <= 1) {
+    return null;
+  }
+
+  const focusedCell =
+    expandedRoom.cells.find((cell) => cell.roomId === roomId)
+    ?? expandedRoom.cells.find((cell) => (
+      cell.coordinates.x === coordinates.x && cell.coordinates.y === coordinates.y
+    ))
+    ?? null;
+  if (!focusedCell) {
+    return null;
+  }
+
+  const focusedRoomVersion = normalizeRoomCommentVersion(focusedCell.roomVersion);
+  if (focusedRoomVersion === null) {
+    return null;
+  }
+  if (roomVersion !== null && roomVersion !== focusedRoomVersion) {
+    return null;
+  }
+
+  const builder = expandedRoom.ownerUserId
+    ? await loadRoomCommentBuilder(env, expandedRoom.ownerUserId)
+    : null;
+  const targetWithoutScope: Omit<RoomCommentTarget, 'areaScope'> = {
+    roomId: focusedCell.roomId,
+    roomVersion: focusedRoomVersion,
+    roomTitle: focusedCell.roomTitle ?? expandedRoom.title,
+    coordinates: { ...focusedCell.coordinates },
+    builderUserId: expandedRoom.ownerUserId,
+    builderDisplayName: expandedRoom.ownerDisplayName ?? builder?.displayName ?? null,
+    builderEmail: builder?.email ?? null,
+  };
+
+  return {
+    ...targetWithoutScope,
+    areaScope: createRoomCommentAreaScope(expandedRoom, targetWithoutScope),
+  };
+}
+
+async function loadRoomCommentBuilder(
+  env: Env,
+  userId: string,
+): Promise<{ email: string | null; displayName: string | null } | null> {
+  return env.DB.prepare(
+    `
+      SELECT email, display_name AS displayName
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+    `,
+  )
+    .bind(userId)
+    .first<{ email: string | null; displayName: string | null }>();
+}
+
+function createRoomCommentAreaScope(
+  expandedRoom: ResolvedExpandedRoomTarget,
+  target: Omit<RoomCommentTarget, 'areaScope'>,
+): RoomCommentAreaScope | null {
+  if (expandedRoom.cellCount <= 1) {
+    return null;
+  }
+
+  const cells = getExpandedRoomCommentCells(expandedRoom, target);
+  if (cells.length <= 1) {
+    return null;
+  }
+
+  return {
+    expandedRoomId: expandedRoom.expandedRoomId,
+    expandedRoomVersion: expandedRoom.version,
+    title: expandedRoom.title,
+    anchorCoordinates: { ...expandedRoom.anchorCoordinates },
+    focusedCoordinates: { ...target.coordinates },
+    cellCount: expandedRoom.cellCount,
+    cells,
+  };
+}
+
+function getExpandedRoomCommentCells(
+  expandedRoom: ResolvedExpandedRoomTarget,
+  target: Omit<RoomCommentTarget, 'areaScope'>,
+): RoomCommentScopeCellRef[] {
+  const cellsByKey = new Map<string, RoomCommentScopeCellRef>();
+  for (const cell of expandedRoom.cells) {
+    const roomVersion = normalizeRoomCommentVersion(cell.roomVersion);
+    if (roomVersion === null) {
+      continue;
+    }
+    const ref = {
+      roomId: cell.roomId,
+      roomVersion,
+      coordinates: { ...cell.coordinates },
+    };
+    cellsByKey.set(getRoomCommentScopeCellKey(ref), ref);
+  }
+
+  const targetRef = {
+    roomId: target.roomId,
+    roomVersion: target.roomVersion,
+    coordinates: { ...target.coordinates },
+  };
+  cellsByKey.set(getRoomCommentScopeCellKey(targetRef), targetRef);
+
+  return Array.from(cellsByKey.values()).sort(compareRoomCommentScopeCells);
+}
+
+function getRoomCommentScopeCells(target: RoomCommentTarget): RoomCommentScopeCellRef[] {
+  return target.areaScope?.cells ?? [
+    {
+      roomId: target.roomId,
+      roomVersion: target.roomVersion,
+      coordinates: { ...target.coordinates },
+    },
+  ];
+}
+
+function buildRoomCommentTargetPredicate(cells: RoomCommentScopeCellRef[]): {
+  sql: string;
+  bindings: Array<string | number>;
+} {
+  const safeCells = cells.length > 0
+    ? cells
+    : [
+      {
+        roomId: '',
+        roomVersion: 0,
+        coordinates: { x: 0, y: 0 },
+      },
+    ];
+  return {
+    sql: safeCells.map(() => '(room_id = ? AND room_version = ?)').join(' OR '),
+    bindings: safeCells.flatMap((cell) => [cell.roomId, cell.roomVersion]),
+  };
+}
+
+function normalizeRoomCommentVersion(value: number | null | undefined): number | null {
+  const version = Number(value);
+  return Number.isInteger(version) && version > 0 ? version : null;
+}
+
+function getRoomCommentScopeCellKey(cell: RoomCommentScopeCellRef): string {
+  return `${cell.roomId}:${cell.roomVersion}`;
+}
+
+function compareRoomCommentScopeCells(
+  a: RoomCommentScopeCellRef,
+  b: RoomCommentScopeCellRef,
+): number {
+  if (a.coordinates.y !== b.coordinates.y) {
+    return a.coordinates.y - b.coordinates.y;
+  }
+  if (a.coordinates.x !== b.coordinates.x) {
+    return a.coordinates.x - b.coordinates.x;
+  }
+  if (a.roomId !== b.roomId) {
+    return a.roomId.localeCompare(b.roomId);
+  }
+  return a.roomVersion - b.roomVersion;
+}
+
+function isExpandedRoomsEnabled(env: Env): boolean {
+  const raw = env.EXPANDED_ROOMS_ENABLED?.trim().toLowerCase();
+  return raw !== '0' && raw !== 'false' && raw !== 'off';
 }

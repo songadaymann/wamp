@@ -579,7 +579,7 @@
       </div>
 
       <div class="sidebar-section hidden" id="course-goal-section" data-mobile-panel="goal" data-sidebar-collapsible="true">
-        <div class="section-label">Course Goal</div>
+        <div class="section-label">Expanded Room Goal</div>
         <div id="course-editor-status" class="goal-context-note hidden"></div>
         <select id="course-editor-goal-type-select">
           <option value="">None</option>
@@ -619,10 +619,10 @@
         </div>
         <div id="course-editor-room-step" class="history-modal-meta hidden"></div>
         <div id="course-editor-placement-hint" class="goal-placement-hint hidden">Click the canvas to place the selected course marker.</div>
-        <div id="course-editor-summary" class="goal-summary">No course selected.</div>
+        <div id="course-editor-summary" class="goal-summary">No expanded room selected.</div>
         <div class="course-room-actions">
-          <button id="btn-course-editor-save-course" class="bar-btn bar-btn-small" type="button">Save Course</button>
-          <button id="btn-course-editor-publish-course" class="bar-btn bar-btn-small" type="button">Publish Course</button>
+          <button id="btn-course-editor-save-course" class="bar-btn bar-btn-small" type="button">Save Expanded Room</button>
+          <button id="btn-course-editor-publish-course" class="bar-btn bar-btn-small" type="button">Publish Expanded Room</button>
         </div>
       </div>
 
@@ -1112,8 +1112,8 @@
         <div class="course-editor-panel">
           <div class="course-editor-header">
             <div class="course-editor-header-copy">
-              <div class="history-modal-kicker">Courses</div>
-              <div class="history-modal-title">Course Setup</div>
+              <div class="history-modal-kicker">Expanded Rooms</div>
+              <div class="history-modal-title">Expanded Room Setup</div>
               <div id="course-workbench-status" class="history-modal-meta hidden"></div>
             </div>
             <button id="btn-course-workbench-back-world" class="bar-btn bar-btn-small" type="button">World</button>
@@ -1131,29 +1131,29 @@
           <div class="course-editor-scroll">
             <div class="about-section">
               <div class="about-section-title">Title</div>
-              <input id="course-workbench-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Course title" />
+              <input id="course-workbench-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Expanded room title" />
             </div>
 
             <div class="about-section">
-              <div class="about-section-title">Selected Room</div>
+              <div class="about-section-title">Selected Cell</div>
               <div id="course-workbench-selected-room-summary" class="goal-summary">Room 0,0</div>
               <div id="course-workbench-selected-room-status" class="history-modal-meta">Select a room to begin.</div>
               <div id="course-workbench-selected-room-actions" class="course-room-actions">
-                <button id="btn-course-workbench-toggle-room" class="bar-btn bar-btn-small" type="button">Add Room</button>
-                <button id="btn-course-workbench-open-room" class="bar-btn bar-btn-small" type="button">Open Room</button>
+                <button id="btn-course-workbench-toggle-room" class="bar-btn bar-btn-small" type="button">Add Cell</button>
+                <button id="btn-course-workbench-open-room" class="bar-btn bar-btn-small" type="button">Open Cell</button>
                 <button id="btn-course-workbench-center-room" class="bar-btn bar-btn-small" type="button">Center</button>
-                <button id="btn-course-workbench-edit-course" class="bar-btn bar-btn-small" type="button">Edit Course</button>
+                <button id="btn-course-workbench-edit-course" class="bar-btn bar-btn-small" type="button">Edit Expanded Room</button>
               </div>
             </div>
 
             <div class="about-section">
               <div class="about-section-title">Setup</div>
-              <div class="history-modal-meta">Save this title + room list before opening the course editor.</div>
+              <div class="history-modal-meta">Save this title + cell list before opening the expanded room editor.</div>
               <div class="course-room-actions">
                 <button id="btn-course-workbench-save" class="bar-btn" type="button">Save Setup</button>
                 <button id="btn-course-workbench-test" class="bar-btn" type="button">Test Draft</button>
-                <button id="btn-course-workbench-publish" class="bar-btn" type="button">Publish Course</button>
-                <button id="btn-course-workbench-unpublish" class="bar-btn hidden" type="button">Unpublish Course</button>
+                <button id="btn-course-workbench-publish" class="bar-btn" type="button">Publish Expanded Room</button>
+                <button id="btn-course-workbench-unpublish" class="bar-btn hidden" type="button">Unpublish Expanded Room</button>
               </div>
               <div id="course-workbench-save-reason" class="history-modal-meta hidden"></div>
               <div id="course-workbench-test-reason" class="history-modal-meta hidden"></div>
@@ -1162,7 +1162,8 @@
             </div>
 
             <div class="about-section">
-              <div class="about-section-title">Rooms</div>
+              <div class="about-section-title">Cells</div>
+              <div id="course-workbench-cell-limit" class="goal-summary">0/16 cells used</div>
               <div id="course-workbench-room-list" class="course-editor-list"></div>
             </div>
 
@@ -1271,12 +1272,12 @@
           </div>
           <button id="btn-world-play" class="bar-btn bar-btn-small world-btn-play" disabled>Play Room</button>
           <button id="btn-world-restart" class="bar-btn bar-btn-small world-btn-play hidden" type="button">Restart</button>
-          <button id="btn-world-play-course" class="bar-btn bar-btn-small world-btn-play hidden" disabled>Play Course</button>
+          <button id="btn-world-play-course" class="bar-btn bar-btn-small world-btn-play hidden" disabled>Play Expanded Room</button>
           <button id="btn-world-room-rush" class="bar-btn bar-btn-small world-btn-room-rush hidden" type="button">Room Rush</button>
           <button id="btn-world-comment" class="bar-btn bar-btn-small world-btn-comment hidden" type="button">Comment</button>
           <button id="btn-world-edit" class="bar-btn bar-btn-small world-btn-edit" disabled>Edit Room</button>
           <button id="btn-world-build" class="bar-btn bar-btn-small world-btn-build" disabled>Build Here</button>
-          <button id="btn-world-course-builder" class="bar-btn bar-btn-small world-btn-course-builder" disabled>Course Builder</button>
+          <button id="btn-world-course-builder" class="bar-btn bar-btn-small world-btn-course-builder" disabled>Expanded Room Builder</button>
         </div>
         <div class="world-hud-row world-hud-row-secondary-actions">
         </div>
@@ -1517,7 +1518,7 @@
       </div>
       <div class="leaderboard-tabs">
         <button id="btn-leaderboard-tab-room" class="bar-btn bar-btn-small active" type="button">Room</button>
-        <button id="btn-leaderboard-tab-course" class="bar-btn bar-btn-small" type="button">Course</button>
+        <button id="btn-leaderboard-tab-course" class="bar-btn bar-btn-small" type="button">Expanded Room</button>
         <button id="btn-leaderboard-tab-room-rush" class="bar-btn bar-btn-small" type="button">Room Rush</button>
         <button id="btn-leaderboard-tab-global" class="bar-btn bar-btn-small" type="button">Global</button>
       </div>
@@ -2052,16 +2053,16 @@
     <div class="history-modal-panel leaderboard-modal-panel course-modal-panel" role="dialog" aria-modal="true" aria-labelledby="course-modal-title">
         <div class="history-modal-header">
         <div class="history-modal-title-group">
-          <div class="history-modal-kicker">Courses</div>
-          <h2 id="course-modal-title" class="history-modal-title">Course Builder</h2>
-          <div id="course-modal-meta" class="history-modal-meta">Select 1-4 adjacent published rooms you authored to extend the course tail.</div>
+          <div class="history-modal-kicker">Expanded Rooms</div>
+          <h2 id="course-modal-title" class="history-modal-title">Expanded Room Builder</h2>
+          <div id="course-modal-meta" class="history-modal-meta">Select a published cell you authored to start or expand an expanded room.</div>
         </div>
         <button id="btn-course-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
       <div class="about-copy">
         <div class="about-section">
           <div class="about-section-title">Title</div>
-          <input id="course-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Course title (optional)" />
+          <input id="course-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Expanded room title (optional)" />
         </div>
         <div class="about-section">
           <div class="about-section-title">Live State</div>
@@ -2069,24 +2070,25 @@
           <div id="course-published-warning" class="history-modal-meta hidden"></div>
         </div>
         <div class="about-section">
-          <div class="about-section-title">Rooms</div>
-          <div id="course-selected-room-status" class="history-modal-meta">Select a published room to extend the course tail.</div>
+          <div class="about-section-title">Cells</div>
+          <div id="course-cell-limit" class="goal-summary">0/16 cells used</div>
+          <div id="course-selected-room-status" class="history-modal-meta">Select a published cell to expand the room.</div>
           <div class="course-room-actions">
-            <button id="btn-course-add-selected-room" class="bar-btn bar-btn-small" type="button">Add Selected Room</button>
-            <button id="btn-course-remove-selected-room" class="bar-btn bar-btn-small" type="button">Remove Selected Room</button>
+            <button id="btn-course-add-selected-room" class="bar-btn bar-btn-small" type="button">Add Selected Cell</button>
+            <button id="btn-course-remove-selected-room" class="bar-btn bar-btn-small" type="button">Remove Selected Cell</button>
           </div>
           <div id="course-room-list" class="history-version-list"></div>
         </div>
         <div class="about-section">
-          <div class="about-section-title">Course Goal</div>
-          <div class="goal-placement-hint">Goal type, start point, and course markers are authored in the room editor for the selected course room.</div>
-          <div id="course-summary" class="goal-summary">No course goal selected yet.</div>
+          <div class="about-section-title">Expanded Room Goal</div>
+          <div class="goal-placement-hint">Goal type, start point, and markers are authored in the room editor for the selected expanded room cell.</div>
+          <div id="course-summary" class="goal-summary">No expanded room goal selected yet.</div>
         </div>
         <div class="about-section">
           <div class="about-section-title">Editor</div>
           <div class="course-room-actions">
-            <button id="btn-course-edit-selected-room" class="bar-btn" type="button">Edit Selected Room</button>
-            <button id="btn-course-test-draft" class="bar-btn" type="button">Test Draft Course</button>
+            <button id="btn-course-edit-selected-room" class="bar-btn" type="button">Edit Selected Cell</button>
+            <button id="btn-course-test-draft" class="bar-btn" type="button">Test Draft Expanded Room</button>
           </div>
           <div id="course-test-draft-reason" class="history-modal-meta hidden"></div>
         </div>
@@ -2094,8 +2096,8 @@
           <div class="about-section-title">Publish</div>
           <div class="course-room-actions">
             <button id="btn-course-save-draft" class="bar-btn" type="button">Save Draft</button>
-            <button id="btn-course-publish" class="bar-btn" type="button">Publish Course</button>
-            <button id="btn-course-unpublish" class="bar-btn hidden" type="button">Unpublish Course</button>
+            <button id="btn-course-publish" class="bar-btn" type="button">Publish Expanded Room</button>
+            <button id="btn-course-unpublish" class="bar-btn hidden" type="button">Unpublish Expanded Room</button>
           </div>
           <div id="course-save-draft-reason" class="history-modal-meta hidden"></div>
           <div id="course-publish-reason" class="history-modal-meta hidden"></div>
@@ -2286,14 +2288,14 @@
         </div>
         <div class="about-section">
           <div class="about-section-title">Challenges</div>
-          <p>Right now, the game supports both single-room challenges and short published courses that stitch 2-4 adjacent rooms together. Rooms still handle speedruns, checkpoint sprints, collectible hunts, survival, and other small self-contained tests, while courses let you chain authored room challenges into a longer path.</p>
+          <p>Right now, the game supports both single-cell rooms and expanded rooms that stitch adjacent cells into one larger playable space. A room can still handle speedruns, checkpoint sprints, collectible hunts, survival, and other authored challenges, while expanded rooms let builders use more space without leaving the overworld.</p>
         </div>
         <div class="about-section">
           <div class="about-section-title">Future Improvements</div>
           <ul class="about-list">
-            <li>Better course discovery, curation, and progression on top of the current room/course leaderboard flow.</li>
+            <li>Better expanded room discovery, curation, and progression on top of the current room leaderboard flow.</li>
             <li>More ways for players to interact with each other inside the world while they explore and play levels.</li>
-            <li>Deeper collaborative world systems layered on top of the current room and course format.</li>
+            <li>Deeper collaborative world systems layered on top of the current room and expanded room format.</li>
             <li>Bug finds and suggestions are always welcome!</li>
           </ul>
         </div>

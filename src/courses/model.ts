@@ -108,6 +108,7 @@ export interface CourseRecord {
   ownerUserId: string | null;
   ownerDisplayName: string | null;
   permissions: CoursePermissions;
+  expandedRoomCellLimit?: number | null;
 }
 
 export interface CourseMembershipSummary {
@@ -118,7 +119,8 @@ export interface CourseMembershipSummary {
 }
 
 export const MAX_COURSE_TITLE_LENGTH = 40;
-export const MAX_COURSE_ROOMS = 4;
+export const MAX_EXPANDED_ROOM_CELLS = 16;
+export const MAX_COURSE_ROOMS = MAX_EXPANDED_ROOM_CELLS;
 export const MIN_COURSE_ROOMS = 2;
 
 export const COURSE_GOAL_LABELS: Record<CourseGoalType, string> = {
@@ -424,6 +426,7 @@ export function cloneCourseRecord(record: CourseRecord): CourseRecord {
     ownerUserId: record.ownerUserId,
     ownerDisplayName: record.ownerDisplayName,
     permissions: { ...record.permissions },
+    expandedRoomCellLimit: record.expandedRoomCellLimit ?? null,
   };
 }
 
@@ -435,6 +438,7 @@ export function createDefaultCourseRecord(courseId: string = createCourseId()): 
     ownerUserId: null,
     ownerDisplayName: null,
     permissions: createDefaultCoursePermissions(),
+    expandedRoomCellLimit: null,
   };
 }
 
@@ -750,5 +754,6 @@ export function normalizeCourseRecord(value: unknown, fallbackCourseId: string):
       canPublish: record.permissions?.canPublish ?? true,
       canUnpublish: record.permissions?.canUnpublish ?? true,
     },
+    expandedRoomCellLimit: normalizePositiveInteger(record.expandedRoomCellLimit ?? null),
   };
 }

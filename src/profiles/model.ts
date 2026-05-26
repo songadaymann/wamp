@@ -1,4 +1,5 @@
 import type { AuthUser } from '../auth/model';
+import type { ExpandedRoomSource } from '../expandedRooms/model';
 import type { RoomGoalType } from '../goals/roomGoals';
 import type { RoomCoordinates } from '../persistence/roomModel';
 import type { PlayerAvatarChoice } from '../player/avatar/model';
@@ -15,6 +16,18 @@ export interface ProfilePublishedRoomEntry {
   publishedAt: string | null;
   consensusDifficulty: RoomDifficulty | null;
   quality: QualityRatingSummary;
+  expandedRoom?: ProfilePublishedRoomExpandedRoomTarget | null;
+}
+
+export interface ProfilePublishedRoomExpandedRoomTarget {
+  expandedRoomId: string;
+  expandedRoomVersion: number | null;
+  title: string | null;
+  source: ExpandedRoomSource;
+  legacyCourseId: string | null;
+  cellCount: number;
+  anchorCoordinates: RoomCoordinates;
+  focusedCoordinates: RoomCoordinates;
 }
 
 export interface ProfileStatsSummary {

@@ -19,6 +19,7 @@ import { loadAdminProgressionUser, searchAdminProgressionUsers, updateAdminBuild
 import { revertRoom } from '../rooms/store';
 import { upsertUserStats } from '../runs/points';
 import { loadLaunchStats } from './launchStats';
+import { handleAdminExpandedRoomsMigrationReport } from '../expandedRooms/migrationReport';
 import { handleAdminPlayfunLeaderboardCleanup } from './playfunLeaderboardCleanup';
 import {
   handleAdminSuspiciousInvalidate,
@@ -51,6 +52,10 @@ export async function handleAdminRequest(
 
   if (url.pathname === '/api/admin/launch-stats' && request.method === 'GET') {
     return handleAdminLaunchStats(request, env);
+  }
+
+  if (url.pathname === '/api/admin/expanded-rooms/migration-report' && request.method === 'GET') {
+    return handleAdminExpandedRoomsMigrationReport(request, env);
   }
 
   if (url.pathname === '/api/admin/suspicious/summary' && request.method === 'GET') {
@@ -481,6 +486,7 @@ async function handleAdminProgressionUserCapsUpdate(
       publishLimitPerDay: body.publishLimitPerDay,
       objectLimit: body.objectLimit,
       collectibleLimit: body.collectibleLimit,
+      expandedRoomCellLimit: body.expandedRoomCellLimit,
       reason: body.reason,
       operatorLabel: body.operatorLabel,
     })),

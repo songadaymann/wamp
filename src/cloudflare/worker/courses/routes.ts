@@ -51,6 +51,7 @@ import {
   awardCoursePublishProgression,
   awardCourseRunProgression,
   loadEffectiveTrustTier,
+  resolveRoomCapabilities,
   submitCourseRating,
 } from '../progression/store';
 import {
@@ -88,6 +89,10 @@ import {
 } from './requestBodies';
 import { sqlIsVerificationAccepted } from '../runs/verificationSql';
 
+interface CoursePublishRouteOptions {
+  enforceDailyPublishLimit?: boolean;
+}
+
 export async function handleCourseCreate(
   request: Request,
   env: Env
@@ -99,7 +104,7 @@ export async function handleCourseCreate(
     'rooms:write'
   );
   const snapshot = await parseCourseSnapshotBody(request);
-  const record = await createCourseDraft(env, snapshot, auth.user, auth.isAdmin);
+  const record = await createCourseDraft(env, snapshot, auth.user, auth.isAdmin, auth.source);
   return jsonResponse(request, record);
 }
 
@@ -122,7 +127,10 @@ export async function handleCourseGet(
   }
 
   if (record.permissions.canSaveDraft || auth?.isAdmin) {
-    return jsonResponse(request, record);
+    const editableRecord = auth
+      ? await attachExpandedRoomCellLimitForUser(env, record, auth.user.id, auth.source)
+      : record;
+    return jsonResponse(request, editableRecord);
   }
 
   if (!record.published) {
@@ -154,7 +162,10 @@ export async function handleCourseDraftByRoomLookup(
     throw new HttpError(404, 'Draft course not found for this room.');
   }
 
-  return jsonResponse(request, record);
+  return jsonResponse(
+    request,
+    await attachExpandedRoomCellLimitForUser(env, record, auth.user.id, auth.source)
+  );
 }
 
 export async function handleCourseDraftSave(
@@ -169,14 +180,15 @@ export async function handleCourseDraftSave(
     'rooms:write'
   );
   const snapshot = await parseCourseSnapshotBody(request, courseId);
-  const record = await saveCourseDraft(env, snapshot, auth.user, auth.isAdmin);
+  const record = await saveCourseDraft(env, snapshot, auth.user, auth.isAdmin, auth.source);
   return jsonResponse(request, record);
 }
 
 export async function handleCoursePublish(
   request: Request,
   env: Env,
-  courseId: string
+  courseId: string,
+  options: CoursePublishRouteOptions = {}
 ): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
     env,
@@ -189,8 +201,11 @@ export async function handleCoursePublish(
     throw new HttpError(404, 'Course draft not found.');
   }
 
-  await assertUserCanPublishContent(env, auth.user.id, auth.source);
-  const record = await publishCourse(env, courseId, auth.user, auth.isAdmin);
+  if (options.enforceDailyPublishLimit !== false) {
+    await assertUserCanPublishContent(env, auth.user.id, auth.source);
+  }
+
+  const record = await publishCourse(env, courseId, auth.user, auth.isAdmin, auth.source);
   const pointEvent = await awardCoursePublishPoints(
     env,
     auth.user.id,
@@ -224,7 +239,23 @@ export async function handleCourseUnpublish(
     'rooms:write'
   );
   const record = await unpublishCourse(env, courseId, auth.user, auth.isAdmin);
-  return jsonResponse(request, record);
+  return jsonResponse(
+    request,
+    await attachExpandedRoomCellLimitForUser(env, record, auth.user.id, auth.source)
+  );
+}
+
+async function attachExpandedRoomCellLimitForUser(
+  env: Env,
+  record: CourseRecord,
+  userId: string,
+  requestAuthSource: Parameters<typeof resolveRoomCapabilities>[2]
+): Promise<CourseRecord> {
+  const capabilities = await resolveRoomCapabilities(env, userId, requestAuthSource);
+  return {
+    ...record,
+    expandedRoomCellLimit: capabilities.expandedRoomCellLimit,
+  };
 }
 
 export async function handleCourseRunStart(
@@ -327,11 +358,11 @@ export async function handleCourseRunFinish(
   const body = await parseCourseRunFinishBody(request);
   const existing = await loadCourseRunByAttemptId(env, attemptId);
   if (!existing) {
-    throw new HttpError(404, 'Course run attempt was not found.');
+    throw new HttpError(404, 'Expanded room run attempt was not found.');
   }
 
   if (existing.userId !== auth.user.id) {
-    throw new HttpError(403, 'You can only finish your own course run attempts.');
+    throw new HttpError(403, 'You can only finish your own expanded room run attempts.');
   }
 
   if (existing.result !== 'active') {
@@ -810,7 +841,7 @@ async function loadCourseVerificationRoomsById(
     if (!historicalVersion) {
       throw new HttpError(
         409,
-        `Course room ${roomRef.roomId} version ${roomRef.roomVersion} is unavailable for verification.`,
+        `Expanded room cell ${roomRef.roomId} version ${roomRef.roomVersion} is unavailable for verification.`,
       );
     }
 

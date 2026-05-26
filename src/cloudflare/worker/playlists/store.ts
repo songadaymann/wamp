@@ -1,9 +1,11 @@
 import type { AuthUser } from '../../../auth/model';
 import type {
+  RoomPlaylistExpandedRoomTarget,
   RoomPlaylistItem,
   RoomPlaylistResponse,
   RoomPlaylistSummary,
 } from '../../../playlists/model';
+import type { ResolvedExpandedRoomTarget } from '../../../expandedRooms/model';
 import {
   derivePlaylistSlugBase,
   normalizePlaylistDescription,
@@ -16,6 +18,7 @@ import {
 import type { RoomCoordinates } from '../../../persistence/roomModel';
 import type { Env } from '../core/types';
 import { HttpError } from '../core/http';
+import { resolveExpandedRoomAtCoordinates } from '../expandedRooms/store';
 import { parseStoredSnapshot } from '../rooms/store';
 
 interface PlaylistRow {
@@ -42,6 +45,14 @@ interface PlaylistItemRow {
   version_title: string | null;
   snapshot_json: string;
   version_created_at: string | null;
+}
+
+interface PlaylistCountItemRow {
+  playlist_id: string;
+  room_id: string;
+  room_version: number | string | null;
+  room_x: number | string | null;
+  room_y: number | string | null;
 }
 
 interface PublishedRoomVersionRow {
@@ -96,7 +107,7 @@ export async function loadPublicPlaylistSummariesForUser(
     .bind(userId, limit)
     .all<PlaylistRow>();
 
-  return rows.results.map(mapPlaylistSummaryRow);
+  return hydratePlaylistSummaryCounts(env, rows.results.map(mapPlaylistSummaryRow));
 }
 
 export async function loadMyPlaylistSummaries(
@@ -160,6 +171,7 @@ export async function loadPlaylistBySlug(
   const items = await loadPlaylistItems(env, summary.id);
   return {
     ...summary,
+    roomCount: items.length,
     viewerCanEdit: viewerUserId === summary.ownerUserId,
     items,
   };
@@ -212,10 +224,12 @@ export async function loadPlaylistByIdForOwner(
   }
 
   const summary = mapPlaylistSummaryRow(row);
+  const items = await loadPlaylistItems(env, summary.id);
   return {
     ...summary,
+    roomCount: items.length,
     viewerCanEdit: true,
-    items: await loadPlaylistItems(env, summary.id),
+    items,
   };
 }
 
@@ -373,6 +387,28 @@ export async function addRoomToPlaylist(
     throw new HttpError(404, 'Published room version not found.');
   }
 
+  const storedRoomCoordinates = {
+    x: parseRowNumber(room.room_x),
+    y: parseRowNumber(room.room_y),
+  };
+  const storedRoomVersion = parseRowNumber(room.room_version);
+  const expandedRoomTarget = await loadPlaylistExpandedRoomTargetForCell(
+    env,
+    room.room_id,
+    storedRoomCoordinates,
+    storedRoomVersion,
+  );
+  if (await playlistContainsPlayableTarget(env, playlistId, expandedRoomTarget, {
+    roomId: room.room_id,
+    roomVersion: storedRoomVersion,
+  })) {
+    const playlist = await loadPlaylistByIdForOwner(env, playlistId, owner.id);
+    if (!playlist) {
+      throw new HttpError(500, 'Playlist duplicate was skipped but playlist reload failed.');
+    }
+    return playlist;
+  }
+
   const now = new Date().toISOString();
   const itemId = crypto.randomUUID();
   const position = await loadNextPlaylistPosition(env, playlistId);
@@ -391,7 +427,7 @@ export async function addRoomToPlaylist(
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
       `
-    ).bind(itemId, playlistId, room.room_id, room.room_version, position, owner.id, now),
+    ).bind(itemId, playlistId, room.room_id, storedRoomVersion, position, owner.id, now),
     env.DB.prepare(
       `
         UPDATE room_playlists
@@ -479,7 +515,82 @@ async function loadPlaylistItems(env: Env, playlistId: string): Promise<RoomPlay
       console.warn('Skipping malformed playlist room item.', row.id, error);
     }
   }
-  return items;
+  return hydratePlaylistItemsWithExpandedRooms(env, items);
+}
+
+async function hydratePlaylistSummaryCounts(
+  env: Env,
+  summaries: RoomPlaylistSummary[],
+): Promise<RoomPlaylistSummary[]> {
+  if (!isExpandedRoomsEnabled(env) || summaries.length === 0) {
+    return summaries;
+  }
+
+  const countRows = await loadPlaylistCountItemRows(env, summaries.map((summary) => summary.id));
+  const playableTargetKeysByPlaylistId = new Map<string, Set<string>>();
+  for (const row of countRows) {
+    const roomVersion = normalizeResolvedRoomVersion(row.room_version);
+    if (roomVersion === null) {
+      continue;
+    }
+
+    const expandedRoomTarget = await loadPlaylistExpandedRoomTargetForCell(
+      env,
+      row.room_id,
+      {
+        x: parseRowNumber(row.room_x),
+        y: parseRowNumber(row.room_y),
+      },
+      roomVersion,
+    );
+    const playableTargetKey = expandedRoomTarget
+      ? getExpandedRoomPlaylistTargetKey(expandedRoomTarget)
+      : getStandalonePlaylistTargetKey(row.room_id, roomVersion);
+    let playlistTargetKeys = playableTargetKeysByPlaylistId.get(row.playlist_id);
+    if (!playlistTargetKeys) {
+      playlistTargetKeys = new Set<string>();
+      playableTargetKeysByPlaylistId.set(row.playlist_id, playlistTargetKeys);
+    }
+    playlistTargetKeys.add(playableTargetKey);
+  }
+
+  return summaries.map((summary) => ({
+    ...summary,
+    roomCount: playableTargetKeysByPlaylistId.get(summary.id)?.size ?? 0,
+  }));
+}
+
+async function loadPlaylistCountItemRows(
+  env: Env,
+  playlistIds: string[],
+): Promise<PlaylistCountItemRow[]> {
+  if (playlistIds.length === 0) {
+    return [];
+  }
+
+  const placeholders = playlistIds.map(() => '?').join(', ');
+  const result = await env.DB.prepare(
+    `
+      SELECT
+        room_playlist_items.playlist_id,
+        room_playlist_items.room_id,
+        room_playlist_items.room_version,
+        rooms.x AS room_x,
+        rooms.y AS room_y
+      FROM room_playlist_items
+      INNER JOIN rooms
+        ON rooms.id = room_playlist_items.room_id
+      INNER JOIN room_versions
+        ON room_versions.room_id = room_playlist_items.room_id
+       AND room_versions.version = room_playlist_items.room_version
+      WHERE room_playlist_items.playlist_id IN (${placeholders})
+      ORDER BY room_playlist_items.playlist_id ASC, room_playlist_items.position ASC, room_playlist_items.added_at ASC
+    `,
+  )
+    .bind(...playlistIds)
+    .all<PlaylistCountItemRow>();
+
+  return result.results;
 }
 
 async function loadPublishedRoomVersionForPlaylist(
@@ -601,7 +712,146 @@ function mapPlaylistItemRow(row: PlaylistItemRow): RoomPlaylistItem {
     publishedAt: snapshot.publishedAt ?? row.version_created_at,
     position: parseRowNumber(row.position),
     addedAt: row.added_at,
+    expandedRoom: null,
   };
+}
+
+async function hydratePlaylistItemsWithExpandedRooms(
+  env: Env,
+  items: RoomPlaylistItem[],
+): Promise<RoomPlaylistItem[]> {
+  const hydrated: RoomPlaylistItem[] = [];
+  const seenPlayableTargetKeys = new Set<string>();
+  for (const item of items) {
+    const expandedRoomTarget = await loadPlaylistExpandedRoomTargetForCell(
+      env,
+      item.roomId,
+      item.roomCoordinates,
+      item.roomVersion,
+    );
+    const expandedRoom = expandedRoomTarget
+      ? mapExpandedRoomTargetForPlaylistItem(expandedRoomTarget, item.roomCoordinates)
+      : null;
+    const playableTargetKey = expandedRoomTarget
+      ? getExpandedRoomPlaylistTargetKey(expandedRoomTarget)
+      : getStandalonePlaylistTargetKey(item.roomId, item.roomVersion);
+    if (seenPlayableTargetKeys.has(playableTargetKey)) {
+      continue;
+    }
+    seenPlayableTargetKeys.add(playableTargetKey);
+    hydrated.push({
+      ...item,
+      roomTitle: expandedRoom?.title?.trim() || item.roomTitle,
+      goalType: expandedRoomTarget?.goalType ?? item.goalType,
+      publishedAt: expandedRoomTarget?.publishedAt ?? item.publishedAt,
+      expandedRoom,
+    });
+  }
+  return hydrated;
+}
+
+async function loadPlaylistExpandedRoomTargetForCell(
+  env: Env,
+  roomId: string,
+  coordinates: RoomCoordinates,
+  roomVersion: number,
+): Promise<ResolvedExpandedRoomTarget | null> {
+  if (!isExpandedRoomsEnabled(env)) {
+    return null;
+  }
+
+  const target = await resolveExpandedRoomAtCoordinates(env, coordinates);
+  if (!target || target.cellCount <= 1) {
+    return null;
+  }
+
+  const containsPinnedCell = target.cells.some(
+    (cell) => cell.roomId === roomId && normalizeResolvedRoomVersion(cell.roomVersion) === roomVersion,
+  );
+  return containsPinnedCell ? target : null;
+}
+
+async function playlistContainsPlayableTarget(
+  env: Env,
+  playlistId: string,
+  expandedRoomTarget: ResolvedExpandedRoomTarget | null,
+  fallback: { roomId: string; roomVersion: number },
+): Promise<boolean> {
+  const cells = expandedRoomTarget
+    ? getExpandedRoomPlaylistCells(expandedRoomTarget)
+    : [{ roomId: fallback.roomId, roomVersion: fallback.roomVersion }];
+  const predicate = buildPlaylistItemTargetPredicate(cells);
+  const row = await env.DB.prepare(
+    `
+      SELECT 1 AS found
+      FROM room_playlist_items
+      WHERE playlist_id = ?
+        AND (${predicate.sql})
+      LIMIT 1
+    `,
+  )
+    .bind(playlistId, ...predicate.bindings)
+    .first<{ found: number | string | null }>();
+
+  return Number(row?.found ?? 0) === 1;
+}
+
+function mapExpandedRoomTargetForPlaylistItem(
+  target: ResolvedExpandedRoomTarget,
+  focusedCoordinates: RoomCoordinates,
+): RoomPlaylistExpandedRoomTarget {
+  return {
+    expandedRoomId: target.expandedRoomId,
+    expandedRoomVersion: target.version,
+    title: target.title,
+    source: target.source,
+    legacyCourseId: target.legacyCourseId,
+    cellCount: target.cellCount,
+    anchorCoordinates: { ...target.anchorCoordinates },
+    focusedCoordinates: { ...focusedCoordinates },
+  };
+}
+
+function getExpandedRoomPlaylistCells(
+  target: ResolvedExpandedRoomTarget,
+): Array<{ roomId: string; roomVersion: number }> {
+  return target.cells
+    .map((cell) => ({
+      roomId: cell.roomId,
+      roomVersion: normalizeResolvedRoomVersion(cell.roomVersion),
+    }))
+    .filter((cell): cell is { roomId: string; roomVersion: number } => cell.roomVersion !== null);
+}
+
+function buildPlaylistItemTargetPredicate(cells: Array<{ roomId: string; roomVersion: number }>): {
+  sql: string;
+  bindings: Array<string | number>;
+} {
+  const safeCells = cells.length > 0
+    ? cells
+    : [{ roomId: '', roomVersion: 0 }];
+  return {
+    sql: safeCells.map(() => '(room_id = ? AND room_version = ?)').join(' OR '),
+    bindings: safeCells.flatMap((cell) => [cell.roomId, cell.roomVersion]),
+  };
+}
+
+function getExpandedRoomPlaylistTargetKey(target: ResolvedExpandedRoomTarget): string {
+  return `expanded-room:${target.expandedRoomId}:v${target.version ?? 'published'}`;
+}
+
+function getStandalonePlaylistTargetKey(roomId: string, roomVersion: number): string {
+  return `room:${roomId}:v${roomVersion}`;
+}
+
+function normalizeResolvedRoomVersion(value: unknown): number | null {
+  const version = Number(value);
+  return Number.isInteger(version) && version > 0 ? version : null;
+}
+
+function isExpandedRoomsEnabled(env: Env): boolean {
+  const raw = env.EXPANDED_ROOMS_ENABLED?.trim().toLowerCase();
+  return raw !== '0' && raw !== 'false' && raw !== 'off';
 }
 
 function normalizeRoomId(value: unknown): string {

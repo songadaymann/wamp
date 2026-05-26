@@ -1,3 +1,4 @@
+import type { ExpandedRoomSource } from '../expandedRooms/model';
 import type { RoomCoordinates } from '../persistence/roomModel';
 import type { RoomGoal, RoomGoalType } from '../goals/roomGoals';
 import type { RankedRunVerificationTrace } from './verificationTrace';
@@ -177,12 +178,24 @@ export interface RoomDiscoveryEntry {
   featured: boolean;
   featuredAt: string | null;
   viewerState: RoomDiscoveryViewerState | null;
+  expandedRoom?: RoomDiscoveryExpandedRoomTarget | null;
 }
 
 export interface RoomDiscoveryViewerState {
   visited: boolean;
   completed: boolean;
   rated: boolean;
+}
+
+export interface RoomDiscoveryExpandedRoomTarget {
+  expandedRoomId: string;
+  expandedRoomVersion: number | null;
+  title: string | null;
+  source: ExpandedRoomSource;
+  legacyCourseId: string | null;
+  cellCount: number;
+  anchorCoordinates: RoomCoordinates;
+  focusedCoordinates: RoomCoordinates;
 }
 
 export interface RoomDiscoveryResponse {
@@ -234,8 +247,10 @@ export interface GlobalLeaderboardResponse {
 export interface RoomRushRouteStepRecord {
   routeIndex: number;
   roomId: string;
+  expandedRoomId?: string | null;
   coordinates: RoomCoordinates;
   uniqueVisitIndex: number;
+  uniqueAreaVisitIndex?: number | null;
 }
 
 export interface RoomRushRunSubmissionRequestBody {

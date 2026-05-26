@@ -1,4 +1,7 @@
 import {
+  expandedRoomIdFromStandaloneRoomId,
+} from '../../expandedRooms/model';
+import {
   roomIdFromCoordinates,
   type RoomCoordinates,
   type RoomSnapshot,
@@ -13,8 +16,10 @@ export type RoomRushResult = 'active' | 'completed' | 'failed' | 'abandoned';
 export interface RoomRushRouteStep {
   routeIndex: number;
   roomId: string;
+  expandedRoomId: string;
   coordinates: RoomCoordinates;
   uniqueVisitIndex: number;
+  uniqueAreaVisitIndex: number;
 }
 
 export interface ActiveRoomRushRunState {
@@ -39,6 +44,7 @@ export interface StartRoomRushRunOptions {
   startCoordinates: RoomCoordinates;
   returnCoordinates: RoomCoordinates;
   startRoom: RoomSnapshot;
+  startExpandedRoomId?: string | null;
 }
 
 export interface RoomRushMutationResult {
@@ -82,7 +88,7 @@ export class OverworldRoomRushRunController {
     };
     this.nextRunNumber += 1;
 
-    this.recordRoomVisit(options.startRoom);
+    this.recordRoomVisit(options.startRoom, options.startExpandedRoomId);
     return {
       changed: true,
       transientStatus: this.getStartStatusText(this.currentRun),
@@ -103,13 +109,17 @@ export class OverworldRoomRushRunController {
     };
   }
 
-  recordRoomVisit(room: RoomSnapshot | null): RoomRushMutationResult {
+  recordRoomVisit(
+    room: RoomSnapshot | null,
+    expandedRoomId: string | null = null,
+  ): RoomRushMutationResult {
     if (!this.currentRun || this.currentRun.result !== 'active' || room?.status !== 'published') {
       return NOOP_MUTATION_RESULT;
     }
 
     this.currentRun.currentCoordinates = { ...room.coordinates };
-    const existingUniqueIndex = this.currentRun.visitedRoomIds.indexOf(room.id);
+    const areaId = getRoomRushAreaId(room, expandedRoomId);
+    const existingUniqueIndex = this.currentRun.visitedRoomIds.indexOf(areaId);
     const uniqueVisitIndex =
       existingUniqueIndex === -1
         ? this.currentRun.visitedRoomIds.length + 1
@@ -119,8 +129,10 @@ export class OverworldRoomRushRunController {
       this.currentRun.route.push({
         routeIndex: this.currentRun.route.length,
         roomId: room.id,
+        expandedRoomId: areaId,
         coordinates: { ...room.coordinates },
         uniqueVisitIndex,
+        uniqueAreaVisitIndex: uniqueVisitIndex,
       });
     }
 
@@ -132,7 +144,7 @@ export class OverworldRoomRushRunController {
       };
     }
 
-    this.currentRun.visitedRoomIds.push(room.id);
+    this.currentRun.visitedRoomIds.push(areaId);
     return {
       changed: true,
       transientStatus: `${ROOM_RUSH_NAME}: ${this.currentRun.visitedRoomIds.length} rooms.`,
@@ -258,4 +270,8 @@ export function getRoomRushProgressText(runState: ActiveRoomRushRunState): strin
   }
 
   return `${roomText} visited · ${deathText}`;
+}
+
+function getRoomRushAreaId(room: RoomSnapshot, expandedRoomId: string | null): string {
+  return expandedRoomId?.trim() || expandedRoomIdFromStandaloneRoomId(room.id);
 }

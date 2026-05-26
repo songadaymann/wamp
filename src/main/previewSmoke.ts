@@ -1,5 +1,15 @@
 import Phaser from 'phaser';
-import { createDefaultRoomSnapshot } from '../persistence/roomModel';
+import { createDefaultCoursePermissions, createDefaultCourseSnapshot, type CourseRecord } from '../courses/model';
+import {
+  setActiveCourseDraftSessionRecord,
+  setActiveCourseDraftSessionRoomOverride,
+} from '../courses/draftSession';
+import {
+  createDefaultRoomRecord,
+  createDefaultRoomSnapshot,
+  type RoomRecord,
+  type RoomSnapshot,
+} from '../persistence/roomModel';
 import { markAppReady } from '../ui/appFeedback';
 
 type PreviewSmokeScene = {
@@ -25,6 +35,7 @@ type PreviewSmokeAction =
   | 'returnToWorld'
   | 'editSelectedRoom'
   | 'openSyntheticEditor'
+  | 'openSyntheticCourseEditor'
   | 'setPlayerPosition';
 
 interface PreviewSmokePayload {
@@ -71,6 +82,8 @@ export function installPreviewSmokeActions(
         );
       case 'openSyntheticEditor':
         return openSyntheticEditorForPreviewSmoke(game, getDebugState);
+      case 'openSyntheticCourseEditor':
+        return openSyntheticCourseEditorForPreviewSmoke(game, getDebugState);
       case 'setPlayerPosition':
         return runOverworldPreviewSmokeAction(
           game,
@@ -89,6 +102,96 @@ export function installPreviewSmokeActions(
       default:
         return { ok: false, reason: `unsupported-action:${action}` };
     }
+  };
+}
+
+async function openSyntheticCourseEditorForPreviewSmoke(
+  game: Phaser.Game,
+  getDebugState: () => Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const courseEditorScene = game.scene.keys.CourseEditorScene as unknown as {
+    roomRepository?: {
+      loadRoom: (roomId: string, coordinates: { x: number; y: number }) => Promise<RoomRecord>;
+    };
+  };
+  if (!courseEditorScene?.roomRepository) {
+    return { ok: false, reason: 'course-editor-scene-missing' };
+  }
+
+  const roomSnapshots = [
+    createDefaultRoomSnapshot('99,99', { x: 99, y: 99 }),
+    createDefaultRoomSnapshot('100,99', { x: 100, y: 99 }),
+  ];
+  roomSnapshots[0].title = 'Preview Smoke Left';
+  roomSnapshots[0].spawnPoint = { x: 320, y: 176 };
+  roomSnapshots[1].title = 'Preview Smoke Right';
+
+  const courseDraft = createDefaultCourseSnapshot('preview-smoke-expanded-room');
+  courseDraft.title = 'Preview Smoke Expanded Room';
+  courseDraft.roomRefs = roomSnapshots.map((snapshot) => ({
+    roomId: snapshot.id,
+    coordinates: { ...snapshot.coordinates },
+    roomVersion: snapshot.version,
+    roomTitle: snapshot.title,
+  }));
+  const courseRecord: CourseRecord = {
+    draft: courseDraft,
+    published: null,
+    versions: [],
+    ownerUserId: null,
+    ownerDisplayName: null,
+    permissions: createDefaultCoursePermissions(),
+    expandedRoomCellLimit: 16,
+  };
+
+  setActiveCourseDraftSessionRecord(courseRecord, { selectedRoomId: roomSnapshots[0].id });
+  const snapshotsByRoomId = new Map<string, RoomSnapshot>();
+  for (const snapshot of roomSnapshots) {
+    snapshotsByRoomId.set(snapshot.id, snapshot);
+    setActiveCourseDraftSessionRoomOverride(snapshot);
+  }
+
+  courseEditorScene.roomRepository.loadRoom = async (roomId, coordinates) => {
+    const snapshot = snapshotsByRoomId.get(roomId) ?? createDefaultRoomSnapshot(roomId, coordinates);
+    const record = createDefaultRoomRecord(roomId, coordinates);
+    record.draft = snapshot;
+    return record;
+  };
+
+  if (
+    game.scene.isActive('CourseEditorScene')
+    || game.scene.isSleeping('CourseEditorScene')
+    || game.scene.isPaused('CourseEditorScene')
+  ) {
+    game.scene.stop('CourseEditorScene');
+  }
+  if (
+    game.scene.isActive('CourseComposerScene')
+    || game.scene.isSleeping('CourseComposerScene')
+    || game.scene.isPaused('CourseComposerScene')
+  ) {
+    game.scene.stop('CourseComposerScene');
+  }
+
+  game.scene.run('CourseComposerScene', { courseId: courseDraft.id });
+  await waitForPreviewSmoke(200);
+  if (game.scene.isActive('CourseComposerScene')) {
+    game.scene.sleep('CourseComposerScene');
+  }
+  game.scene.run('CourseEditorScene', {
+    courseId: courseDraft.id,
+    selectedRoomId: roomSnapshots[0].id,
+    statusMessage: 'Preview smoke expanded room editor.',
+  });
+  if (game.scene.isActive('OverworldPlayScene')) {
+    game.scene.sleep('OverworldPlayScene');
+  }
+  markAppReady();
+  await waitForPreviewSmoke(1500);
+
+  return {
+    ok: true,
+    activeScene: getDebugState(),
   };
 }
 

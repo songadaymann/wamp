@@ -10,6 +10,9 @@ import type { RoomCoordinates } from '../../persistence/roomModel';
 
 export interface ActiveCourseRunState {
   course: CourseSnapshot;
+  expandedRoomId: string | null;
+  expandedRoomVersion: number | null;
+  submissionTarget: 'course' | 'expanded_room' | null;
   returnCoordinates: RoomCoordinates;
   elapsedMs: number;
   deaths: number;
@@ -37,6 +40,8 @@ export interface ActiveCourseRunState {
 
 export interface CreateActiveCourseRunStateOptions {
   course: CourseSnapshot;
+  expandedRoomId?: string | null;
+  expandedRoomVersion?: number | null;
   returnCoordinates: RoomCoordinates;
   leaderboardEligible: boolean;
   hadPreviousCompletion?: boolean;
@@ -82,6 +87,8 @@ export function createActiveCourseRunState(
 ): ActiveCourseRunState {
   const {
     course,
+    expandedRoomId = null,
+    expandedRoomVersion = null,
     returnCoordinates,
     leaderboardEligible,
     hadPreviousCompletion = false,
@@ -91,6 +98,9 @@ export function createActiveCourseRunState(
   } = options;
   return {
     course,
+    expandedRoomId,
+    expandedRoomVersion,
+    submissionTarget: null,
     returnCoordinates: { ...returnCoordinates },
     elapsedMs: 0,
     deaths: 0,
@@ -107,8 +117,8 @@ export function createActiveCourseRunState(
     attemptId: null,
     submissionState: leaderboardEligible ? 'starting' : 'local-only',
     submissionMessage: leaderboardEligible
-      ? 'Starting ranked course run...'
-      : localOnlyMessage ?? 'Course run stays local.',
+      ? 'Starting ranked expanded room run...'
+      : localOnlyMessage ?? 'Expanded room run stays local.',
     pendingResult: null,
     submittedScore: null,
     leaderboardEligible,
@@ -139,7 +149,7 @@ export function tickActiveCourseRun(
   }
 
   if (goal.type === 'survival' && runState.elapsedMs >= goal.durationMs) {
-    return createTerminalMutation('completed', 'Course cleared.');
+    return createTerminalMutation('completed', 'Expanded room cleared.');
   }
 
   if (goal.type === 'reach_exit' && goal.exit && options.touchesCoursePoint(goal.exit)) {

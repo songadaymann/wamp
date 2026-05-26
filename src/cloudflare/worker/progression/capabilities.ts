@@ -1,4 +1,5 @@
 import type { BuilderCapabilitySummary, TrustTier } from '../../../progression/model';
+import { getExpandedRoomCellLimitForTrustTier } from '../../../expandedRooms/model';
 import type { Env, UserProgressRow } from '../core/types';
 
 type RequestAuthSource = 'session' | 'playfun' | 'api_token' | 'agent_token' | null;
@@ -30,7 +31,8 @@ function hasBuilderCapOverride(progress: UserProgressRow): boolean {
     progress.builder_claim_limit_override !== null ||
     progress.builder_publish_limit_override !== null ||
     progress.builder_object_limit_override !== null ||
-    progress.builder_collectible_limit_override !== null
+    progress.builder_collectible_limit_override !== null ||
+    progress.builder_expanded_room_cell_limit_override != null
   );
 }
 
@@ -50,6 +52,8 @@ export function buildBuilderCapabilitySummary(
   const publishLimitPerDay = resolveRoomPublishLimit(env, requestAuthSource, progress, base.publishLimitPerDay);
   const objectLimit = progress.builder_object_limit_override ?? base.objectLimit;
   const collectibleLimit = progress.builder_collectible_limit_override ?? base.collectibleLimit;
+  const expandedRoomCellLimit =
+    progress.builder_expanded_room_cell_limit_override ?? getExpandedRoomCellLimitForTrustTier(trustTier);
 
   return {
     trustTier,
@@ -57,6 +61,7 @@ export function buildBuilderCapabilitySummary(
     publishLimitPerDay,
     objectLimit: playfunObjectCap === null ? objectLimit : Math.min(objectLimit, playfunObjectCap),
     collectibleLimit,
+    expandedRoomCellLimit,
     overrideActive: hasBuilderCapOverride(progress),
   };
 }

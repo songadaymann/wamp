@@ -6,7 +6,7 @@ export const POST_RUN_GUEST_CLAIM_REQUEST_EVENT = 'post-run-guest-claim-request'
 export const POST_RUN_RATING_SUBMITTED_EVENT = 'post-run-rating-submitted';
 
 interface BasePostRunRatingRequestDetail {
-  contentType: 'room' | 'course';
+  contentType: 'room' | 'course' | 'expanded_room';
   contentId: string;
   contentTitle: string | null;
   version: number;
@@ -25,15 +25,24 @@ export interface RoomPostRunRatingRequestDetail extends BasePostRunRatingRequest
 
 export interface CoursePostRunRatingRequestDetail extends BasePostRunRatingRequestDetail {
   contentType: 'course';
+  expandedRoomId?: string | null;
+}
+
+export interface ExpandedRoomPostRunRatingRequestDetail extends BasePostRunRatingRequestDetail {
+  contentType: 'expanded_room';
+  expandedRoomId: string;
+  legacyCourseId?: string | null;
 }
 
 export type PostRunRatingRequestDetail =
   | RoomPostRunRatingRequestDetail
-  | CoursePostRunRatingRequestDetail;
+  | CoursePostRunRatingRequestDetail
+  | ExpandedRoomPostRunRatingRequestDetail;
 
 export interface PostRunRatingSubmittedDetail {
-  contentType: 'room' | 'course';
+  contentType: 'room' | 'course' | 'expanded_room';
   contentId: string;
+  expandedRoomId?: string | null;
 }
 
 export function requestPostRunRating(detail: PostRunRatingRequestDetail): void {

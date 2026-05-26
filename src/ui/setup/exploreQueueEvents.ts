@@ -20,7 +20,16 @@ export function requestExploreQueueStart(detail: ExploreQueueStartDetail): void 
   requestRoomSequenceStart({
     mode: detail.mode,
     kind: 'explore',
-    entries: detail.entries,
+    entries: detail.entries.map((entry) => ({
+      roomId: entry.roomId,
+      roomCoordinates: entry.roomCoordinates,
+      roomVersion: entry.roomVersion,
+      roomTitle: entry.roomTitle,
+      expandedRoomId: entry.expandedRoom?.expandedRoomId ?? null,
+      expandedRoomVersion: entry.expandedRoom?.expandedRoomVersion ?? null,
+      expandedRoomCellCount: entry.expandedRoom?.cellCount ?? null,
+      legacyCourseId: entry.expandedRoom?.legacyCourseId ?? null,
+    })),
     sourceLabel: detail.sourceLabel,
     kickerLabel: detail.mode === 'play' ? 'Play All' : 'Rate All',
   });

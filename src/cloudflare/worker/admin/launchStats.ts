@@ -12,6 +12,7 @@ import type {
   PartyKitLaunchStats,
 } from '../../../admin/model';
 import type { Env } from '../core/types';
+import { isExpandedRoomSchemaMissingError } from '../expandedRooms/schemaErrors';
 import {
   sqlHasPlayfunDisplayNamePrefix,
   sqlUserIdIsPlayfunOnly,
@@ -134,6 +135,8 @@ async function loadTotals(env: Env, nowIso: string): Promise<LaunchStatsTotals> 
     roomRuns,
     courses,
     courseRuns,
+    expandedRooms,
+    expandedRoomRuns,
     chatMessages,
     agents,
     agentTokens,
@@ -146,7 +149,23 @@ async function loadTotals(env: Env, nowIso: string): Promise<LaunchStatsTotals> 
     countQuery(env, 'SELECT COUNT(*) AS count FROM rooms WHERE published_json IS NOT NULL'),
     countQuery(env, 'SELECT COUNT(*) AS count FROM room_runs'),
     countQuery(env, 'SELECT COUNT(*) AS count FROM courses'),
-    countQuery(env, 'SELECT COUNT(*) AS count FROM course_runs'),
+    countExpandedRoomAwareQuery(
+      env,
+      `
+        SELECT COUNT(*) AS count
+        FROM course_runs
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM expanded_room_runs expanded
+          WHERE expanded.legacy_course_attempt_id = course_runs.attempt_id
+             OR expanded.attempt_id = course_runs.attempt_id
+        )
+      `,
+      [],
+      'SELECT COUNT(*) AS count FROM course_runs',
+    ),
+    countExpandedRoomQuery(env, 'SELECT COUNT(*) AS count FROM expanded_rooms WHERE archived_at IS NULL'),
+    countExpandedRoomQuery(env, 'SELECT COUNT(*) AS count FROM expanded_room_runs'),
     countQuery(env, 'SELECT COUNT(*) AS count FROM chat_messages'),
     countQuery(env, 'SELECT COUNT(*) AS count FROM agents'),
     countQuery(env, 'SELECT COUNT(*) AS count FROM agent_tokens'),
@@ -162,6 +181,8 @@ async function loadTotals(env: Env, nowIso: string): Promise<LaunchStatsTotals> 
     roomRuns,
     courses,
     courseRuns,
+    expandedRooms,
+    expandedRoomRuns,
     chatMessages,
     agents,
     agentTokens,
@@ -185,10 +206,13 @@ async function loadActivityWindow(
     roomClaims,
     roomPublishes,
     coursePublishes,
+    expandedRoomPublishes,
     roomRunStarts,
     roomRunFinishes,
     courseRunStarts,
     courseRunFinishes,
+    expandedRoomRunStarts,
+    expandedRoomRunFinishes,
   ] = await Promise.all([
     countQuery(
       env,
@@ -306,7 +330,7 @@ async function loadActivityWindow(
       `,
       [sinceIso]
     ),
-    countQuery(
+    countExpandedRoomAwareQuery(
       env,
       `
         SELECT COUNT(*) AS count
@@ -317,8 +341,39 @@ async function loadActivityWindow(
             'course_versions.published_by_user_id',
             'course_versions.published_by_display_name'
           )}
+          AND NOT EXISTS (
+            SELECT 1
+            FROM expanded_room_versions expanded
+            WHERE expanded.legacy_course_id = course_versions.course_id
+              AND expanded.version = course_versions.version
+          )
       `,
-      [sinceIso]
+      [sinceIso],
+      `
+        SELECT COUNT(*) AS count
+        FROM course_versions
+        WHERE created_at >= ?
+          AND published_by_display_name IS NOT NULL
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+            'course_versions.published_by_user_id',
+            'course_versions.published_by_display_name'
+          )}
+      `,
+      [sinceIso],
+    ),
+    countExpandedRoomQuery(
+      env,
+      `
+        SELECT COUNT(*) AS count
+        FROM expanded_room_versions
+        WHERE created_at >= ?
+          AND published_by_display_name IS NOT NULL
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+            'expanded_room_versions.published_by_user_id',
+            'expanded_room_versions.published_by_display_name'
+          )}
+      `,
+      [sinceIso],
     ),
     countQuery(
       env,
@@ -347,7 +402,7 @@ async function loadActivityWindow(
       `,
       [sinceIso]
     ),
-    countQuery(
+    countExpandedRoomAwareQuery(
       env,
       `
         SELECT COUNT(*) AS count
@@ -357,10 +412,26 @@ async function loadActivityWindow(
             'course_runs.user_id',
             'course_runs.user_display_name'
           )}
+          AND NOT EXISTS (
+            SELECT 1
+            FROM expanded_room_runs expanded
+            WHERE expanded.legacy_course_attempt_id = course_runs.attempt_id
+               OR expanded.attempt_id = course_runs.attempt_id
+          )
       `,
-      [sinceIso]
+      [sinceIso],
+      `
+        SELECT COUNT(*) AS count
+        FROM course_runs
+        WHERE started_at >= ?
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+            'course_runs.user_id',
+            'course_runs.user_display_name'
+          )}
+      `,
+      [sinceIso],
     ),
-    countQuery(
+    countExpandedRoomAwareQuery(
       env,
       `
         SELECT COUNT(*) AS count
@@ -371,8 +442,52 @@ async function loadActivityWindow(
             'course_runs.user_id',
             'course_runs.user_display_name'
           )}
+          AND NOT EXISTS (
+            SELECT 1
+            FROM expanded_room_runs expanded
+            WHERE expanded.legacy_course_attempt_id = course_runs.attempt_id
+               OR expanded.attempt_id = course_runs.attempt_id
+          )
       `,
-      [sinceIso]
+      [sinceIso],
+      `
+        SELECT COUNT(*) AS count
+        FROM course_runs
+        WHERE finished_at IS NOT NULL
+          AND finished_at >= ?
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+            'course_runs.user_id',
+            'course_runs.user_display_name'
+          )}
+      `,
+      [sinceIso],
+    ),
+    countExpandedRoomQuery(
+      env,
+      `
+        SELECT COUNT(*) AS count
+        FROM expanded_room_runs
+        WHERE started_at >= ?
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+            'expanded_room_runs.user_id',
+            'expanded_room_runs.user_display_name'
+          )}
+      `,
+      [sinceIso],
+    ),
+    countExpandedRoomQuery(
+      env,
+      `
+        SELECT COUNT(*) AS count
+        FROM expanded_room_runs
+        WHERE finished_at IS NOT NULL
+          AND finished_at >= ?
+          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+            'expanded_room_runs.user_id',
+            'expanded_room_runs.user_display_name'
+          )}
+      `,
+      [sinceIso],
     ),
   ]);
 
@@ -389,10 +504,13 @@ async function loadActivityWindow(
     roomClaims,
     roomPublishes,
     coursePublishes,
+    expandedRoomPublishes,
     roomRunStarts,
     roomRunFinishes,
     courseRunStarts,
     courseRunFinishes,
+    expandedRoomRunStarts,
+    expandedRoomRunFinishes,
   };
 }
 
@@ -1257,4 +1375,36 @@ async function countQuery(env: Env, query: string, bindings: unknown[] = []): Pr
       : await prepared.first<{ count: number | string | null }>();
 
   return Number(row?.count ?? 0);
+}
+
+async function countExpandedRoomQuery(
+  env: Env,
+  query: string,
+  bindings: unknown[] = [],
+): Promise<number> {
+  try {
+    return await countQuery(env, query, bindings);
+  } catch (error) {
+    if (isExpandedRoomSchemaMissingError(error)) {
+      return 0;
+    }
+    throw error;
+  }
+}
+
+async function countExpandedRoomAwareQuery(
+  env: Env,
+  query: string,
+  bindings: unknown[],
+  fallbackQuery: string,
+  fallbackBindings: unknown[] = bindings,
+): Promise<number> {
+  try {
+    return await countQuery(env, query, bindings);
+  } catch (error) {
+    if (isExpandedRoomSchemaMissingError(error)) {
+      return countQuery(env, fallbackQuery, fallbackBindings);
+    }
+    throw error;
+  }
 }

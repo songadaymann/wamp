@@ -39,7 +39,7 @@ export async function parseCourseRunStartBody(
     throw new HttpError(400, 'courseId is required.');
   }
   if (!goal) {
-    throw new HttpError(400, 'goal must be a valid course goal.');
+    throw new HttpError(400, 'goal must be a valid expanded room goal.');
   }
 
   return {

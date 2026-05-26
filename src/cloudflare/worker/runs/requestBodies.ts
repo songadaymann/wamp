@@ -198,8 +198,16 @@ function normalizeRoomRushRoute(value: unknown): RoomRushRouteStepRecord[] {
     return {
       routeIndex: normalizeRouteIndex(step.routeIndex, index),
       roomId,
+      expandedRoomId:
+        step.expandedRoomId === null || step.expandedRoomId === undefined
+          ? null
+          : normalizeNonEmptyString(step.expandedRoomId, 'route.expandedRoomId', 128),
       coordinates,
       uniqueVisitIndex: normalizePositiveInteger(step.uniqueVisitIndex, 'route.uniqueVisitIndex'),
+      uniqueAreaVisitIndex:
+        step.uniqueAreaVisitIndex === null || step.uniqueAreaVisitIndex === undefined
+          ? null
+          : normalizePositiveInteger(step.uniqueAreaVisitIndex, 'route.uniqueAreaVisitIndex'),
     };
   });
 }
@@ -216,7 +224,7 @@ function normalizeRoomRushVisitedRoomIds(
   value: unknown,
   route: RoomRushRouteStepRecord[]
 ): string[] {
-  const fromRoute = Array.from(new Set(route.map((step) => step.roomId)));
+  const fromRoute = Array.from(new Set(route.map((step) => step.expandedRoomId ?? step.roomId)));
   if (!Array.isArray(value)) {
     return fromRoute;
   }

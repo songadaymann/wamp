@@ -47,7 +47,7 @@ const ACTIVITY_FILTERS: Array<{
   { key: 'room_play', label: 'Room Plays' },
   { key: 'room_claims', label: 'Room Claims' },
   { key: 'room_publishes', label: 'Room Publishes' },
-  { key: 'course_publishes', label: 'Course Publishes' },
+  { key: 'course_publishes', label: 'Expanded/Course Publishes' },
 ];
 
 const adminKeyInput = document.getElementById('admin-key-input') as HTMLInputElement | null;
@@ -77,6 +77,7 @@ const progressionClaimInput = document.getElementById('progression-claim-input')
 const progressionPublishInput = document.getElementById('progression-publish-input') as HTMLInputElement | null;
 const progressionObjectInput = document.getElementById('progression-object-input') as HTMLInputElement | null;
 const progressionCollectibleInput = document.getElementById('progression-collectible-input') as HTMLInputElement | null;
+const progressionExpandedRoomInput = document.getElementById('progression-expanded-room-input') as HTMLInputElement | null;
 const progressionReasonInput = document.getElementById('progression-reason-input') as HTMLTextAreaElement | null;
 const progressionSaveButton = document.getElementById('progression-save-button') as HTMLButtonElement | null;
 const progressionClearButton = document.getElementById('progression-clear-button') as HTMLButtonElement | null;
@@ -359,6 +360,9 @@ function populateProgressionForm(user: AdminProgressionUserCapsResponse | null):
   if (progressionCollectibleInput) {
     progressionCollectibleInput.value = user?.override.collectibleLimit ? String(user.override.collectibleLimit) : '';
   }
+  if (progressionExpandedRoomInput) {
+    progressionExpandedRoomInput.value = user?.override.expandedRoomCellLimit ? String(user.override.expandedRoomCellLimit) : '';
+  }
   if (progressionReasonInput) {
     progressionReasonInput.value = user?.override.reason ?? '';
   }
@@ -383,6 +387,7 @@ async function saveProgressionOverride(clear: boolean): Promise<void> {
         publishLimitPerDay: null,
         objectLimit: null,
         collectibleLimit: null,
+        expandedRoomCellLimit: null,
         reason: null,
         operatorLabel,
       }
@@ -391,6 +396,7 @@ async function saveProgressionOverride(clear: boolean): Promise<void> {
         publishLimitPerDay: readOptionalPositiveInteger(progressionPublishInput),
         objectLimit: readOptionalPositiveInteger(progressionObjectInput),
         collectibleLimit: readOptionalPositiveInteger(progressionCollectibleInput),
+        expandedRoomCellLimit: readOptionalPositiveInteger(progressionExpandedRoomInput),
         reason: progressionReasonInput?.value.trim() || null,
         operatorLabel,
       };
@@ -855,6 +861,8 @@ function renderTotals(): void {
     ['Room Runs', totals.roomRuns],
     ['Courses', totals.courses],
     ['Course Runs', totals.courseRuns],
+    ['Expanded Rooms', totals.expandedRooms],
+    ['Expanded Room Runs', totals.expandedRoomRuns],
     ['Chat Messages', totals.chatMessages],
     ['Agents', totals.agents],
     ['Agent Tokens', totals.agentTokens],
@@ -1038,7 +1046,11 @@ function getActivityFilterCountLabel(
     case 'room_publishes':
       return formatCountWithNoun(activity.roomPublishes, 'publish', 'publishes');
     case 'course_publishes':
-      return formatCountWithNoun(activity.coursePublishes, 'publish', 'publishes');
+      return formatCountWithNoun(
+        activity.expandedRoomPublishes + activity.coursePublishes,
+        'publish',
+        'publishes',
+      );
     default:
       return '0 rows';
   }
@@ -1176,10 +1188,31 @@ function renderActivityWindowCards(range: LaunchStatsActivityRange): string {
     },
     {
       filterKey: 'course_publishes',
-      label: 'Course Publishes',
-      value: formatCountWithNoun(windowStats.coursePublishes, 'course publish', 'course publishes'),
-      detail: `${formatFilteredRowCount(range, 'course_publishes')} in feed`,
+      label: 'Expanded/Course Publishes',
+      value: formatCountWithNoun(
+        windowStats.expandedRoomPublishes + windowStats.coursePublishes,
+        'publish',
+        'publishes',
+      ),
+      detail: `${formatNumber(windowStats.expandedRoomPublishes)} expanded · ${formatNumber(
+        windowStats.coursePublishes,
+      )} legacy · ${formatFilteredRowCount(range, 'course_publishes')} legacy feed rows`,
       tone: 'build',
+    },
+    {
+      filterKey: null,
+      label: 'Expanded Room Runs',
+      value: formatCountWithNoun(
+        windowStats.expandedRoomRunStarts,
+        'expanded room start',
+        'expanded room starts',
+      ),
+      detail: formatCountWithNoun(
+        windowStats.expandedRoomRunFinishes,
+        'expanded room finish',
+        'expanded room finishes',
+      ),
+      tone: 'play',
     },
     {
       filterKey: null,
@@ -1719,7 +1752,7 @@ function readOptionalPositiveInteger(input: HTMLInputElement | null): number | n
 function formatCapSummary(caps: AdminProgressionUserLookupEntry['builderCaps']): string {
   return `${formatNumber(caps.objectLimit)} objects · ${formatNumber(caps.collectibleLimit)} collectibles · ${formatNumber(
     caps.publishLimitPerDay,
-  )} publish/day · ${formatNumber(caps.claimLimitPerDay)} claim/day`;
+  )} publish/day · ${formatNumber(caps.claimLimitPerDay)} claim/day · ${formatNumber(caps.expandedRoomCellLimit)} expanded cells`;
 }
 
 function formatLaneSummary(lane: AdminProgressionUserCapsResponse['stats']['player']): string {
@@ -1751,6 +1784,7 @@ function formatOverrideSummary(user: AdminProgressionUserCapsResponse): string {
   const parts = [
     user.override.objectLimit !== null ? `${formatNumber(user.override.objectLimit)} objects` : null,
     user.override.collectibleLimit !== null ? `${formatNumber(user.override.collectibleLimit)} collectibles` : null,
+    user.override.expandedRoomCellLimit !== null ? `${formatNumber(user.override.expandedRoomCellLimit)} expanded cells` : null,
     user.override.publishLimitPerDay !== null ? `${formatNumber(user.override.publishLimitPerDay)} publish/day` : null,
     user.override.claimLimitPerDay !== null ? `${formatNumber(user.override.claimLimitPerDay)} claim/day` : null,
     user.override.reason,

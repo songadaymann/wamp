@@ -42,16 +42,18 @@ await context.addInitScript(() => {
 const page = await context.newPage();
 page.on('console', (message) => {
   const text = message.text();
+  const location = message.location();
   const record = {
     type: message.type(),
     text,
+    location,
   };
   if (message.type() === 'warning') {
     summary.consoleWarnings.push(record);
     return;
   }
 
-  if (message.type() === 'error' && !isIgnoredConsoleError(text)) {
+  if (message.type() === 'error' && !isIgnoredConsoleError(text, location.url)) {
     summary.consoleErrors.push(record);
   }
 });
@@ -192,11 +194,12 @@ function withPreviewSmokeQuery(value) {
   return url.toString();
 }
 
-function isIgnoredConsoleError(text) {
+function isIgnoredConsoleError(text, sourceUrl = '') {
+  const haystack = `${text}\n${sourceUrl}`;
   return (
-    text.includes('cloudflareinsights.com/cdn-cgi/rum')
-    || text.includes('Failed to load resource: net::ERR_FAILED')
-      && text.includes('cloudflareinsights.com')
+    haystack.includes('cloudflareinsights.com/cdn-cgi/rum')
+    || haystack.includes('Failed to load resource: net::ERR_FAILED')
+      && haystack.includes('cloudflareinsights.com')
   );
 }
 
