@@ -1,4 +1,10 @@
-import type { UserProfileResponse, ProfilePublishedRoomEntry, ProfileStatsSummary } from '../../../profiles/model';
+import type {
+  ProfilePublishedRoomEntry,
+  ProfilePublishedRoomExpandedRoomTarget,
+  ProfileStatsSummary,
+  UserProfileResponse,
+} from '../../../profiles/model';
+import type { ResolvedExpandedRoomTarget } from '../../../expandedRooms/model';
 import { listPlayerAvatarChoicesForLevel, resolveSelectablePlayerAvatarId } from '../../../player/avatar/unlocks';
 import { isPlayfunLeaderboardExcludedDisplayName } from '../../../playfun/identity';
 import type { QualityRatingSummary } from '../../../progression/model';
@@ -9,6 +15,7 @@ import { loadPublicProgressionSummary } from '../progression/store';
 import { parseStoredSnapshot } from '../rooms/store';
 import { compareGlobalLeaderboardEntries, mapUserStatsRow } from '../runs/points';
 import { loadPublicPlaylistSummariesForUser } from '../playlists/store';
+import { resolveExpandedRoomAtCoordinates } from '../expandedRooms/store';
 
 const EMPTY_PROFILE_STATS: ProfileStatsSummary = {
   totalPoints: 0,
@@ -77,8 +84,8 @@ export async function loadUserProfile(
     loadPublicPlaylistSummariesForUser(env, targetUserId),
   ]);
 
-  const stats = buildProfileStats(statsRow, allStatsRows, publishedRoomRows.length);
   const publishedRooms = await buildPublishedRooms(env, publishedRoomRows);
+  const stats = buildProfileStats(statsRow, allStatsRows, publishedRooms.length);
   const isSelf = viewerUserId === targetUserId;
   const progression = await loadPublicProgressionSummary(env, targetUserId);
   const selectedAvatarId = resolveSelectablePlayerAvatarId(user.selectedAvatarId);
@@ -158,13 +165,15 @@ async function buildPublishedRooms(
         roomVersion: snapshot.version,
         goalType: snapshot.goal?.type ?? null,
         publishedAt: snapshot.publishedAt,
+        expandedRoom: null,
       });
     } catch (error) {
       console.warn('Skipping malformed published room while building profile.', row.id, error);
     }
   }
 
-  const sortedEntries = entries
+  const resolvedEntries = await resolveProfilePublishedRoomEntries(env, entries);
+  const sortedEntries = resolvedEntries
     .sort((left, right) => {
       const leftTime = left.publishedAt ? Date.parse(left.publishedAt) : 0;
       const rightTime = right.publishedAt ? Date.parse(right.publishedAt) : 0;
@@ -189,6 +198,130 @@ async function buildPublishedRooms(
     ...(ratingSummaries.get(buildProfileRoomRatingKey(entry.roomId, entry.roomVersion))
       ?? createEmptyProfileRoomRatingSummary()),
   }));
+}
+
+async function resolveProfilePublishedRoomEntries(
+  env: Env,
+  entries: ProfilePublishedRoomBaseEntry[],
+): Promise<ProfilePublishedRoomBaseEntry[]> {
+  if (!isExpandedRoomsEnabled(env)) {
+    return entries;
+  }
+
+  const entriesByPlayableTarget = new Map<string, ProfilePublishedRoomBaseEntry>();
+  for (const entry of entries) {
+    const expandedRoomTarget = await loadProfileExpandedRoomTargetForCell(env, entry);
+    const resolvedEntry = expandedRoomTarget
+      ? mapProfileEntryToExpandedRoom(entry, expandedRoomTarget)
+      : { ...entry, expandedRoom: null };
+    const playableTargetKey = expandedRoomTarget
+      ? getExpandedRoomProfileTargetKey(expandedRoomTarget)
+      : getStandaloneProfileTargetKey(entry);
+    const existingEntry = entriesByPlayableTarget.get(playableTargetKey);
+    if (!existingEntry || shouldReplaceProfileRepresentative(existingEntry, resolvedEntry)) {
+      entriesByPlayableTarget.set(playableTargetKey, resolvedEntry);
+    }
+  }
+
+  return Array.from(entriesByPlayableTarget.values());
+}
+
+async function loadProfileExpandedRoomTargetForCell(
+  env: Env,
+  entry: ProfilePublishedRoomBaseEntry,
+): Promise<ResolvedExpandedRoomTarget | null> {
+  const target = await resolveExpandedRoomAtCoordinates(env, entry.roomCoordinates);
+  if (!target || target.cellCount <= 1) {
+    return null;
+  }
+
+  const containsPinnedCell = target.cells.some(
+    (cell) => cell.roomId === entry.roomId && normalizeProfileVersion(cell.roomVersion) === entry.roomVersion,
+  );
+  return containsPinnedCell ? target : null;
+}
+
+function mapProfileEntryToExpandedRoom(
+  entry: ProfilePublishedRoomBaseEntry,
+  target: ResolvedExpandedRoomTarget,
+): ProfilePublishedRoomBaseEntry {
+  return {
+    ...entry,
+    roomTitle: target.title?.trim() || entry.roomTitle,
+    goalType: target.goalType ?? entry.goalType,
+    publishedAt: target.publishedAt ?? entry.publishedAt,
+    expandedRoom: mapProfileExpandedRoomTarget(target, entry.roomCoordinates),
+  };
+}
+
+function mapProfileExpandedRoomTarget(
+  target: ResolvedExpandedRoomTarget,
+  focusedCoordinates: ProfilePublishedRoomBaseEntry['roomCoordinates'],
+): ProfilePublishedRoomExpandedRoomTarget {
+  return {
+    expandedRoomId: target.expandedRoomId,
+    expandedRoomVersion: target.version,
+    title: target.title,
+    source: target.source,
+    legacyCourseId: target.legacyCourseId,
+    cellCount: target.cellCount,
+    anchorCoordinates: { ...target.anchorCoordinates },
+    focusedCoordinates: { ...focusedCoordinates },
+  };
+}
+
+function shouldReplaceProfileRepresentative(
+  existingEntry: ProfilePublishedRoomBaseEntry,
+  nextEntry: ProfilePublishedRoomBaseEntry,
+): boolean {
+  if (!nextEntry.expandedRoom) {
+    return false;
+  }
+  if (!existingEntry.expandedRoom) {
+    return true;
+  }
+
+  const nextIsAnchor = coordinatesEqual(nextEntry.roomCoordinates, nextEntry.expandedRoom.anchorCoordinates);
+  const existingIsAnchor = coordinatesEqual(existingEntry.roomCoordinates, existingEntry.expandedRoom.anchorCoordinates);
+  if (nextIsAnchor !== existingIsAnchor) {
+    return nextIsAnchor;
+  }
+
+  const nextTime = nextEntry.publishedAt ? Date.parse(nextEntry.publishedAt) : 0;
+  const existingTime = existingEntry.publishedAt ? Date.parse(existingEntry.publishedAt) : 0;
+  if (nextTime !== existingTime) {
+    return nextTime > existingTime;
+  }
+
+  if (nextEntry.roomCoordinates.y !== existingEntry.roomCoordinates.y) {
+    return nextEntry.roomCoordinates.y < existingEntry.roomCoordinates.y;
+  }
+  return nextEntry.roomCoordinates.x < existingEntry.roomCoordinates.x;
+}
+
+function getExpandedRoomProfileTargetKey(target: ResolvedExpandedRoomTarget): string {
+  return `expanded-room:${target.expandedRoomId}:v${target.version ?? 'published'}`;
+}
+
+function getStandaloneProfileTargetKey(entry: ProfilePublishedRoomBaseEntry): string {
+  return `room:${entry.roomId}:v${entry.roomVersion}`;
+}
+
+function normalizeProfileVersion(value: unknown): number | null {
+  const version = Number(value);
+  return Number.isInteger(version) && version > 0 ? version : null;
+}
+
+function coordinatesEqual(
+  left: ProfilePublishedRoomBaseEntry['roomCoordinates'],
+  right: ProfilePublishedRoomBaseEntry['roomCoordinates'],
+): boolean {
+  return left.x === right.x && left.y === right.y;
+}
+
+function isExpandedRoomsEnabled(env: Env): boolean {
+  const raw = env.EXPANDED_ROOMS_ENABLED?.trim().toLowerCase();
+  return raw !== '0' && raw !== 'false' && raw !== 'off';
 }
 
 async function loadProfileRoomRatingSummaries(

@@ -181,6 +181,7 @@
 }
 
 #explore-modal .explore-room-featured-badge,
+#explore-modal .explore-room-area-badge,
 #explore-modal .explore-room-difficulty,
 #explore-modal .explore-room-trophy {
   width: fit-content;
@@ -201,6 +202,12 @@
 #explore-modal .explore-guest-room-badge {
   background: #fcea7c;
   color: #000;
+}
+
+#explore-modal .explore-room-area-badge {
+  background: #fcea7c;
+  color: #000;
+  font-family: 'Early GameBoy', monospace;
 }
 
 #explore-modal .explore-room-difficulty,
@@ -261,6 +268,13 @@
   font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
   font-size: 12px;
   line-height: 1.45;
+}
+
+#explore-modal .explore-room-area-meta {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 #explore-modal .explore-room-trophy {

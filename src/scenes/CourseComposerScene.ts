@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { getAuthDebugState } from '../auth/client';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../config';
-import { createCourseRepository } from '../courses/courseRepository';
+import { createExpandedRoomEditorRepository } from '../expandedRooms/editorRepository';
 import {
   cloneCourseRecord,
   cloneCourseSnapshot,
@@ -9,7 +9,6 @@ import {
   createDefaultCourseGoal,
   createDefaultCourseRecord,
   getCourseRoomOrder,
-  MAX_COURSE_ROOMS,
   sortCourseRoomRefsForStorage,
   type CourseGoalType,
   type CourseMarkerPoint,
@@ -19,6 +18,9 @@ import {
 import {
   buildCourseEditorUiState,
 } from '../courses/editor/viewModel';
+import {
+  getExpandedRoomCellLimit as getRecordExpandedRoomCellLimit,
+} from '../courses/editor/state';
 import type {
   CourseEditorCheckpointEntry,
   CourseEditorRoomEntry,
@@ -59,7 +61,7 @@ const MAX_ZOOM = 1.5;
 const BUTTON_ZOOM_FACTOR = 1.2;
 const FIT_PADDING = 96;
 const PAN_THRESHOLD = 5;
-const DEFAULT_COURSE_COMPOSER_STATUS_TEXT = 'Select published rooms you authored to build a course.';
+const DEFAULT_COURSE_COMPOSER_STATUS_TEXT = 'Select published cells you authored to build an expanded room.';
 
 interface CoursePublishedRoomMeta {
   roomId: string;
@@ -73,7 +75,7 @@ interface CoursePublishedRoomMeta {
 export class CourseComposerScene extends Phaser.Scene implements CourseComposerSceneBridge {
   private readonly worldRepository = createWorldRepository();
   private readonly roomRepository = createRoomRepository();
-  private readonly courseRepository = createCourseRepository();
+  private readonly expandedRoomEditorRepository = createExpandedRoomEditorRepository();
   private worldStreamingController!: OverworldWorldStreamingController;
   private record: CourseRecord | null = null;
   private uiState: CourseEditorUiState | null = null;
@@ -163,6 +165,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       selectedCoordinates: { ...this.selectedCoordinates },
       centerCoordinates: { ...this.centerCoordinates },
       roomCount: this.record?.draft.roomRefs.length ?? 0,
+      cellLimit: this.getExpandedRoomCellLimit(),
       tool: this.tool,
       zoom: this.cameras.main.zoom,
     };
@@ -280,6 +283,10 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
   }
 
   toggleSelectedRoomMembership(): void {
+    void this.toggleSelectedRoomMembershipAsync();
+  }
+
+  private async toggleSelectedRoomMembershipAsync(): Promise<void> {
     const selectedRoomId = roomIdFromCoordinates(this.selectedCoordinates);
     const selectedMeta = this.getSelectedRoomMeta();
     const draft = this.record?.draft ?? null;
@@ -296,16 +303,30 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
         return;
       }
 
-      this.mutateDraft((mutableDraft) => {
-        mutableDraft.roomRefs = mutableDraft.roomRefs.filter((roomRef) => roomRef.roomId !== selectedRoomId);
-      });
-      this.statusText = 'Removed room from course.';
+      this.loading = true;
+      this.statusText = 'Removing expanded room cell...';
       this.renderUi();
+      try {
+        const baseRecord = await this.saveDraftBeforeFootprintMutation();
+        const updated = await this.expandedRoomEditorRepository.removeCell(
+          baseRecord.draft.id,
+          selectedRoomId
+        );
+        this.setRecord(updated);
+        this.statusText = 'Expanded room cell removed and draft saved.';
+      } catch (error) {
+        console.error('Failed to remove expanded room cell', error);
+        this.statusText =
+          error instanceof Error ? error.message : 'Failed to remove expanded room cell.';
+      } finally {
+        this.loading = false;
+        this.renderUi();
+      }
       return;
     }
 
     if (!selectedMeta) {
-      this.statusText = 'Only published rooms can be added to a course.';
+      this.statusText = 'Only published cells can be added to an expanded room.';
       this.renderUi();
       return;
     }
@@ -317,20 +338,24 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       return;
     }
 
-    this.mutateDraft((mutableDraft) => {
-      mutableDraft.roomRefs = sortCourseRoomRefsForStorage([
-        ...mutableDraft.roomRefs,
-        {
-          roomId: selectedMeta.roomId,
-          coordinates: { ...selectedMeta.coordinates },
-          roomVersion: selectedMeta.roomVersion,
-          roomTitle: selectedMeta.roomTitle,
-        },
-      ]);
-    });
-    setActiveCourseDraftSessionSelectedRoom(selectedMeta.roomId);
-    this.statusText = 'Added room to course.';
+    this.loading = true;
+    this.statusText = 'Adding expanded room cell...';
     this.renderUi();
+    try {
+      const record =
+        draft.roomRefs.length === 0
+          ? await this.createExpandedRoomDraftWithInitialCell(selectedMeta)
+          : await this.expandSavedDraftIntoCell(selectedMeta);
+      this.setRecord(record, selectedMeta.roomId);
+      this.statusText = 'Expanded room cell added and draft saved.';
+    } catch (error) {
+      console.error('Failed to add expanded room cell', error);
+      this.statusText =
+        error instanceof Error ? error.message : 'Failed to add expanded room cell.';
+    } finally {
+      this.loading = false;
+      this.renderUi();
+    }
   }
 
   async openSelectedRoom(): Promise<void> {
@@ -389,7 +414,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     }
 
     if (draft.roomRefs.length === 0) {
-      this.statusText = 'Add at least one room before opening the course editor.';
+      this.statusText = 'Add at least one cell before opening the expanded room editor.';
       this.renderUi();
       return;
     }
@@ -490,21 +515,21 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
 
     const state = this.uiState;
     if (!state?.canSaveDraft) {
-      this.statusText = state?.saveDraftDisabledReason ?? 'Course draft is not ready to save.';
+      this.statusText = state?.saveDraftDisabledReason ?? 'Expanded room draft is not ready to save.';
       this.renderUi();
       return;
     }
 
     this.loading = true;
-    this.statusText = 'Saving course draft...';
+    this.statusText = 'Saving expanded room draft...';
     this.renderUi();
     try {
-      const saved = await this.courseRepository.saveDraft(this.record.draft);
+      const saved = await this.expandedRoomEditorRepository.saveDraft(this.record.draft);
       this.setRecord(saved, getActiveCourseDraftSessionSelectedRoomId());
-      this.statusText = 'Course setup saved. Open Edit Course to place goals and edit the rooms together.';
+      this.statusText = 'Expanded room setup saved. Open Edit Expanded Room to place goals and edit the cells together.';
       await this.refreshAround(this.centerCoordinates, true);
     } catch (error) {
-      this.statusText = error instanceof Error ? error.message : 'Failed to save course draft.';
+      this.statusText = error instanceof Error ? error.message : 'Failed to save expanded room draft.';
       this.renderUi();
     } finally {
       this.loading = false;
@@ -519,23 +544,23 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
 
     const state = this.uiState;
     if (!state?.canPublishCourse) {
-      this.statusText = state?.publishCourseDisabledReason ?? 'Course draft is not ready to publish.';
+      this.statusText = state?.publishCourseDisabledReason ?? 'Expanded room draft is not ready to publish.';
       this.renderUi();
       return;
     }
 
     this.loading = true;
-    this.statusText = 'Publishing course...';
+    this.statusText = 'Publishing expanded room...';
     this.renderUi();
     try {
-      const saved = await this.courseRepository.saveDraft(this.record.draft);
+      const saved = await this.expandedRoomEditorRepository.saveDraft(this.record.draft);
       this.setRecord(saved, getActiveCourseDraftSessionSelectedRoomId());
-      const published = await this.courseRepository.publishCourse(this.record.draft.id);
+      const published = await this.expandedRoomEditorRepository.publishExpandedRoom(this.record.draft.id);
       this.setRecord(published, getActiveCourseDraftSessionSelectedRoomId());
-      this.statusText = 'Course published.';
+      this.statusText = 'Expanded room published.';
       await this.refreshAround(this.centerCoordinates, true);
     } catch (error) {
-      this.statusText = error instanceof Error ? error.message : 'Failed to publish course.';
+      this.statusText = error instanceof Error ? error.message : 'Failed to publish expanded room.';
       this.renderUi();
     } finally {
       this.loading = false;
@@ -556,10 +581,10 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     }
 
     this.loading = true;
-    this.statusText = 'Unpublishing course...';
+    this.statusText = 'Unpublishing expanded room...';
     this.renderUi();
     try {
-      const unpublished = await this.courseRepository.unpublishCourse(this.record.draft.id);
+      const unpublished = await this.expandedRoomEditorRepository.unpublishExpandedRoom(this.record.draft.id);
       const preservedDraft = cloneCourseSnapshot(this.record.draft);
       preservedDraft.status = 'draft';
       preservedDraft.publishedAt = null;
@@ -570,10 +595,10 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
         },
         getActiveCourseDraftSessionSelectedRoomId(),
       );
-      this.statusText = 'Course unpublished.';
+      this.statusText = 'Expanded room unpublished.';
       await this.refreshAround(this.centerCoordinates, true);
     } catch (error) {
-      this.statusText = error instanceof Error ? error.message : 'Failed to unpublish course.';
+      this.statusText = error instanceof Error ? error.message : 'Failed to unpublish expanded room.';
       this.renderUi();
     } finally {
       this.loading = false;
@@ -585,7 +610,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     const draft = this.record?.draft ?? null;
     const state = this.uiState;
     if (!draft || !state?.canTestDraft) {
-      this.statusText = state?.testDraftDisabledReason ?? 'Course draft is not ready to test.';
+      this.statusText = state?.testDraftDisabledReason ?? 'Expanded room draft is not ready to test.';
       this.renderUi();
       return;
     }
@@ -595,7 +620,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
         ? draft.roomRefs.find((roomRef) => roomRef.roomId === draft.startPoint?.roomId) ?? null
         : draft.roomRefs[0] ?? null);
     if (!startRoom) {
-      this.statusText = 'Course draft has no playable rooms.';
+      this.statusText = 'Expanded room draft has no playable cells.';
       this.renderUi();
       return;
     }
@@ -698,13 +723,13 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       if (sessionRecord?.draft.id === courseId) {
         return this.normalizeRecord(sessionRecord);
       }
-      const loaded = await this.courseRepository.loadCourse(courseId);
+      const loaded = await this.expandedRoomEditorRepository.loadExpandedRoomRecord(courseId);
       return this.normalizeRecord(loaded);
     }
 
     const authState = getAuthDebugState();
     if (authState.authenticated) {
-      const savedDraftForSelectedRoom = await this.courseRepository.loadLatestDraftForRoom(selectedRoomId);
+      const savedDraftForSelectedRoom = await this.expandedRoomEditorRepository.loadLatestDraftForRoom(selectedRoomId);
       if (savedDraftForSelectedRoom) {
         return this.normalizeRecord(savedDraftForSelectedRoom);
       }
@@ -756,6 +781,50 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     this.renderUi();
   }
 
+  private async createExpandedRoomDraftWithInitialCell(
+    meta: CoursePublishedRoomMeta
+  ): Promise<CourseRecord> {
+    if (!this.record) {
+      throw new Error('No active expanded room draft.');
+    }
+
+    const draft = cloneCourseSnapshot(this.record.draft);
+    draft.roomRefs = [
+      {
+        roomId: meta.roomId,
+        coordinates: { ...meta.coordinates },
+        roomVersion: meta.roomVersion,
+        roomTitle: meta.roomTitle,
+      },
+    ];
+    return this.expandedRoomEditorRepository.createExpandedRoom(draft);
+  }
+
+  private async expandSavedDraftIntoCell(
+    meta: CoursePublishedRoomMeta
+  ): Promise<CourseRecord> {
+    const baseRecord = await this.saveDraftBeforeFootprintMutation();
+    return this.expandedRoomEditorRepository.expandIntoCell(baseRecord.draft.id, {
+      roomId: meta.roomId,
+      coordinates: { ...meta.coordinates },
+      roomVersion: meta.roomVersion,
+    });
+  }
+
+  private async saveDraftBeforeFootprintMutation(): Promise<CourseRecord> {
+    if (!this.record) {
+      throw new Error('No active expanded room draft.');
+    }
+
+    if (!isActiveCourseDraftSessionDirty()) {
+      return this.record;
+    }
+
+    const saved = await this.expandedRoomEditorRepository.saveDraft(this.record.draft);
+    this.setRecord(saved, getActiveCourseDraftSessionSelectedRoomId());
+    return this.record ?? saved;
+  }
+
   private async refreshAround(
     centerCoordinates: RoomCoordinates,
     forceChunkReload: boolean = false
@@ -780,7 +849,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       dirty: isActiveCourseDraftSessionDirty(),
       zoomText: `Zoom: ${zoom.toFixed(2)}x`,
       tool: this.tool,
-      statusText: this.loading ? 'Loading course…' : this.statusText,
+      statusText: this.loading ? 'Loading expanded room...' : this.statusText,
       selectedRoomSummary: this.getSelectedRoomSummaryText(),
       selectedRoomStatusText: this.getSelectedRoomStatusText(),
       selectedRoomId: this.getSelectedRoomRef()?.roomId ?? this.getSelectedSummary()?.id ?? null,
@@ -846,7 +915,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       selectedRef?.roomTitle?.trim() ??
       summary?.title?.trim() ??
       `Room ${coordinates}`;
-    const membershipText = selectedRef ? 'In this course' : 'Not in this course';
+    const membershipText = selectedRef ? 'In this expanded room' : 'Not in this expanded room';
 
     return `${title} · ${coordinates} · ${membershipText}`;
   }
@@ -855,15 +924,15 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     const selectedRef = this.getSelectedRoomRef();
     if (selectedRef) {
       const removalBlockedReason = this.getSelectedRoomRemovalDisabledReason(selectedRef.roomId);
-      return removalBlockedReason ?? 'Room is part of this course cluster.';
+      return removalBlockedReason ?? 'Cell is part of this expanded room.';
     }
 
     const meta = this.getSelectedRoomMeta();
     if (!meta) {
-      return 'Only published rooms you authored can be added.';
+      return 'Only published cells you authored can be added.';
     }
 
-    return this.getSelectedRoomAddDisabledReason(meta) ?? 'Room can join the current connected cluster.';
+    return this.getSelectedRoomAddDisabledReason(meta) ?? 'Cell can join this expanded room.';
   }
 
   private canToggleSelectedRoomMembership(): boolean {
@@ -877,7 +946,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
   }
 
   private getSelectedRoomToggleLabel(): string {
-    return this.getSelectedRoomRef() ? 'Remove Room' : 'Add Room';
+    return this.getSelectedRoomRef() ? 'Remove Cell' : 'Add Cell';
   }
 
   private getSelectedRoomToggleDisabledReason(): string | null {
@@ -887,29 +956,29 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     }
 
     const meta = this.getSelectedRoomMeta();
-    return meta ? this.getSelectedRoomAddDisabledReason(meta) : 'Only published rooms can be added.';
+    return meta ? this.getSelectedRoomAddDisabledReason(meta) : 'Only published cells can be added.';
   }
 
   private getOpenCourseEditorDisabledReason(): string | null {
     const draft = this.record?.draft ?? null;
     if (!draft) {
-      return 'No active course draft.';
+      return 'No active expanded room draft.';
     }
 
     if (!this.record?.permissions.canSaveDraft) {
-      return 'This course is read-only for your account.';
+      return 'This expanded room is read-only for your account.';
     }
 
     if (!draft.title?.trim()) {
-      return 'Add a course title before editing.';
+      return 'Add an expanded room title before editing.';
     }
 
     if (draft.roomRefs.length === 0) {
-      return 'Add at least one room before editing the course.';
+      return 'Add at least one cell before editing the expanded room.';
     }
 
     if (isActiveCourseDraftSessionDirty()) {
-      return 'Save course setup before editing.';
+      return 'Save expanded room setup before editing.';
     }
 
     return null;
@@ -917,32 +986,33 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
 
   private getSelectedRoomAddDisabledReason(meta: CoursePublishedRoomMeta): string | null {
     if (!this.record?.permissions.canSaveDraft) {
-      return 'This course is read-only for your account.';
+      return 'This expanded room is read-only for your account.';
     }
 
     const authState = getAuthDebugState();
     if (!authState.authenticated || !authState.user?.id) {
-      return 'Sign in to edit courses.';
+      return 'Sign in to edit expanded rooms.';
     }
 
     if (meta.builderUserId !== authState.user.id) {
-      return 'You can only add rooms you authored.';
+      return 'You can only add cells you authored.';
     }
 
     if (meta.courseId && meta.courseId !== this.record.draft.id) {
-      return 'This room is already published in another course.';
+      return 'This cell is already published in another expanded room.';
     }
 
     if (this.record.ownerUserId && this.record.ownerUserId !== meta.builderUserId) {
-      return 'All course rooms must belong to the same creator.';
+      return 'All expanded room cells must belong to the same creator.';
     }
 
     if (this.record.draft.roomRefs.some((roomRef) => roomRef.roomId === meta.roomId)) {
-      return 'Room is already in this course.';
+      return 'Cell is already in this expanded room.';
     }
 
-    if (this.record.draft.roomRefs.length >= MAX_COURSE_ROOMS) {
-      return `Courses are limited to ${MAX_COURSE_ROOMS} rooms for now.`;
+    const cellLimit = this.getExpandedRoomCellLimit();
+    if (this.record.draft.roomRefs.length >= cellLimit) {
+      return `Your builder tier allows ${this.formatCellCount(cellLimit)} in this expanded room.`;
     }
 
     const nextRoomRefs = [
@@ -956,21 +1026,29 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     ];
     return courseRoomRefsFormConnectedCluster(nextRoomRefs)
       ? null
-      : 'Course rooms must stay in one connected cluster.';
+      : 'Expanded room cells must stay in one connected cluster.';
+  }
+
+  private getExpandedRoomCellLimit(): number {
+    return getRecordExpandedRoomCellLimit(this.record);
+  }
+
+  private formatCellCount(count: number): string {
+    return count === 1 ? '1 cell' : `${count} cells`;
   }
 
   private getSelectedRoomRemovalDisabledReason(roomId: string): string | null {
     const draft = this.record?.draft ?? null;
     if (!draft) {
-      return 'No active course draft.';
+      return 'No active expanded room draft.';
     }
 
     if (draft.startPoint?.roomId === roomId) {
-      return 'Remove the course start marker first.';
+      return 'Remove the expanded room start marker first.';
     }
 
     if (draft.goal?.type === 'reach_exit' && draft.goal.exit?.roomId === roomId) {
-      return 'Remove the course exit marker first.';
+      return 'Remove the expanded room exit marker first.';
     }
 
     if (draft.goal?.type === 'checkpoint_sprint') {
@@ -982,9 +1060,15 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       }
     }
 
+    const anchorRoomId =
+      draft.startPoint?.roomId ?? sortCourseRoomRefsForStorage(draft.roomRefs)[0]?.roomId ?? null;
+    if (anchorRoomId === roomId) {
+      return 'Anchor cells cannot be removed.';
+    }
+
     const nextRoomRefs = draft.roomRefs.filter((roomRef) => roomRef.roomId !== roomId);
     if (nextRoomRefs.length > 0 && !courseRoomRefsFormConnectedCluster(nextRoomRefs)) {
-      return 'Removing this room would split the course cluster.';
+      return 'Removing this cell would split the expanded room footprint.';
     }
 
     return null;

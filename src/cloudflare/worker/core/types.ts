@@ -41,6 +41,7 @@ export interface Env {
   ENABLE_TEST_RESET?: string;
   ROOM_DAILY_CLAIM_LIMIT?: string;
   ROOM_DAILY_PUBLISH_LIMIT?: string;
+  EXPANDED_ROOMS_ENABLED?: string;
   PLAYFUN_ROOM_DAILY_CLAIM_LIMIT?: string;
   PLAYFUN_ROOM_MAX_PLACED_OBJECTS?: string;
   ROOM_MINT_CHAIN_ID?: string;
@@ -350,6 +351,30 @@ export interface CourseRunRow {
   verification_snapshot_hash?: string | null;
 }
 
+export interface ExpandedRoomRunRow {
+  attempt_id: string;
+  expanded_room_id: string;
+  expanded_room_version: number;
+  goal_type: string;
+  goal_json: string;
+  user_id: string;
+  user_display_name: string;
+  started_at: string;
+  finished_at: string | null;
+  result: RunResult;
+  elapsed_ms: number | null;
+  deaths: number;
+  score: number;
+  collectibles_collected: number;
+  enemies_defeated: number;
+  checkpoints_reached: number;
+  legacy_course_attempt_id: string | null;
+  verification_status?: 'not_required' | 'passed' | 'failed' | 'timeout' | null;
+  verification_reason?: string | null;
+  verification_nonce?: string | null;
+  verification_snapshot_hash?: string | null;
+}
+
 export interface RoomRunRow {
   attempt_id: string;
   room_id: string;
@@ -450,6 +475,7 @@ export interface UserProgressRow {
   builder_publish_limit_override: number | null;
   builder_object_limit_override: number | null;
   builder_collectible_limit_override: number | null;
+  builder_expanded_room_cell_limit_override: number | null;
   builder_cap_override_reason: string | null;
   builder_cap_override_updated_at: string | null;
   builder_cap_override_updated_by: string | null;

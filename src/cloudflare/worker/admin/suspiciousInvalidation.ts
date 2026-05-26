@@ -22,6 +22,7 @@ import type {
   RoomRunRow,
   SuspiciousInvalidationAuditRow,
 } from '../core/types';
+import { isExpandedRoomSchemaMissingError } from '../expandedRooms/schemaErrors';
 import { upsertUserStats } from '../runs/points';
 
 const RECENT_INVALIDATION_LIMIT = 10;
@@ -169,6 +170,7 @@ export async function handleAdminSuspiciousInvalidate(
   }
 
   await env.DB.batch(statements);
+  await deleteExpandedRoomRunsByAttemptIds(env, preview.courseRuns.map((run) => run.attemptId));
 
   for (const affectedUser of preview.affectedUsers) {
     await upsertUserStats(env, affectedUser.userId);
@@ -501,41 +503,7 @@ async function loadSelectedCourseRuns(
 
   const rows: SuspiciousRunCase[] = [];
   for (const chunk of chunkArray([...new Set(attemptIds)], 50)) {
-    const placeholders = chunk.map(() => '?').join(', ');
-    const result = await env.DB.prepare(
-      `
-        SELECT
-          r.attempt_id,
-          r.course_id,
-          r.course_version,
-          r.goal_type,
-          r.goal_json,
-          r.user_id,
-          r.user_display_name,
-          r.started_at,
-          r.finished_at,
-          r.result,
-          r.elapsed_ms,
-          r.deaths,
-          r.score,
-          v.title AS title,
-          p.id AS run_finalized_point_event_id,
-          p.points AS run_finalized_points,
-          p.created_at AS run_finalized_point_created_at
-        FROM course_runs r
-        LEFT JOIN course_versions v
-          ON v.course_id = r.course_id
-         AND v.version = r.course_version
-        LEFT JOIN point_events p
-          ON p.user_id = r.user_id
-         AND p.event_type = 'run_finalized'
-         AND p.source_key = r.attempt_id
-        WHERE r.user_id = ?
-          AND r.attempt_id IN (${placeholders})
-      `
-    )
-      .bind(userId, ...chunk)
-      .all<SelectedCourseRunWithPointsRow>();
+    const result = await loadSelectedCourseRunRows(env, userId, chunk);
 
     for (const row of result.results) {
       const goal = normalizeCourseGoal(parseJsonSafely(row.goal_json));
@@ -578,6 +546,130 @@ async function loadSelectedCourseRuns(
   }
 
   return rows.sort(compareRunCases);
+}
+
+async function loadSelectedCourseRunRows(
+  env: Env,
+  userId: string,
+  chunk: string[],
+): Promise<{ results: SelectedCourseRunWithPointsRow[] }> {
+  const placeholders = chunk.map(() => '?').join(', ');
+  try {
+    const result = await env.DB.prepare(
+      `
+        SELECT *
+        FROM (
+          SELECT
+            r.attempt_id,
+            r.expanded_room_id AS course_id,
+            r.expanded_room_version AS course_version,
+            r.goal_type,
+            r.goal_json,
+            r.user_id,
+            r.user_display_name,
+            r.started_at,
+            r.finished_at,
+            r.result,
+            r.elapsed_ms,
+            r.deaths,
+            r.score,
+            v.title AS title,
+            p.id AS run_finalized_point_event_id,
+            p.points AS run_finalized_points,
+            p.created_at AS run_finalized_point_created_at
+          FROM expanded_room_runs r
+          LEFT JOIN expanded_room_versions v
+            ON v.expanded_room_id = r.expanded_room_id
+           AND v.version = r.expanded_room_version
+          LEFT JOIN point_events p
+            ON p.user_id = r.user_id
+           AND p.event_type = 'run_finalized'
+           AND p.source_key = r.attempt_id
+          WHERE r.user_id = ?
+            AND r.attempt_id IN (${placeholders})
+
+          UNION ALL
+
+          SELECT
+            r.attempt_id,
+            r.course_id,
+            r.course_version,
+            r.goal_type,
+            r.goal_json,
+            r.user_id,
+            r.user_display_name,
+            r.started_at,
+            r.finished_at,
+            r.result,
+            r.elapsed_ms,
+            r.deaths,
+            r.score,
+            v.title AS title,
+            p.id AS run_finalized_point_event_id,
+            p.points AS run_finalized_points,
+            p.created_at AS run_finalized_point_created_at
+          FROM course_runs r
+          LEFT JOIN course_versions v
+            ON v.course_id = r.course_id
+           AND v.version = r.course_version
+          LEFT JOIN point_events p
+            ON p.user_id = r.user_id
+           AND p.event_type = 'run_finalized'
+           AND p.source_key = r.attempt_id
+          WHERE r.user_id = ?
+            AND r.attempt_id IN (${placeholders})
+            AND NOT EXISTS (
+              SELECT 1
+              FROM expanded_room_runs expanded
+              WHERE expanded.legacy_course_attempt_id = r.attempt_id
+                 OR expanded.attempt_id = r.attempt_id
+            )
+        )
+      `
+    )
+      .bind(userId, ...chunk, userId, ...chunk)
+      .all<SelectedCourseRunWithPointsRow>();
+    return { results: result.results };
+  } catch (error) {
+    if (!isExpandedRoomSchemaMissingError(error)) {
+      throw error;
+    }
+    const result = await env.DB.prepare(
+      `
+        SELECT
+          r.attempt_id,
+          r.course_id,
+          r.course_version,
+          r.goal_type,
+          r.goal_json,
+          r.user_id,
+          r.user_display_name,
+          r.started_at,
+          r.finished_at,
+          r.result,
+          r.elapsed_ms,
+          r.deaths,
+          r.score,
+          v.title AS title,
+          p.id AS run_finalized_point_event_id,
+          p.points AS run_finalized_points,
+          p.created_at AS run_finalized_point_created_at
+        FROM course_runs r
+        LEFT JOIN course_versions v
+          ON v.course_id = r.course_id
+         AND v.version = r.course_version
+        LEFT JOIN point_events p
+          ON p.user_id = r.user_id
+         AND p.event_type = 'run_finalized'
+         AND p.source_key = r.attempt_id
+        WHERE r.user_id = ?
+          AND r.attempt_id IN (${placeholders})
+      `
+    )
+      .bind(userId, ...chunk)
+      .all<SelectedCourseRunWithPointsRow>();
+    return { results: result.results };
+  }
 }
 
 async function loadRunPointEventsByAttemptIds(
@@ -686,6 +778,32 @@ async function loadPlayfunSyncRowsByPointEventIds(
     rows.push(...result.results);
   }
   return rows;
+}
+
+async function deleteExpandedRoomRunsByAttemptIds(env: Env, attemptIds: string[]): Promise<void> {
+  const uniqueAttemptIds = [...new Set(attemptIds)];
+  if (uniqueAttemptIds.length === 0) {
+    return;
+  }
+
+  try {
+    for (const chunk of chunkArray(uniqueAttemptIds, 50)) {
+      const placeholders = chunk.map(() => '?').join(', ');
+      await env.DB.batch([
+        env.DB.prepare(
+          `
+            DELETE FROM expanded_room_runs
+            WHERE attempt_id IN (${placeholders})
+               OR legacy_course_attempt_id IN (${placeholders})
+          `
+        ).bind(...chunk, ...chunk),
+      ]);
+    }
+  } catch (error) {
+    if (!isExpandedRoomSchemaMissingError(error)) {
+      throw error;
+    }
+  }
 }
 
 function mapAuditSummary(row: SuspiciousInvalidationAuditRow): SuspiciousInvalidationAuditSummary {

@@ -13,6 +13,7 @@ export const REWARD_STINGS_IDLE_EVENT = 'reward-stings-idle';
 export type RewardStingKind =
   | 'room-clear'
   | 'course-clear'
+  | 'expanded-room-clear'
   | 'player-level-up'
   | 'builder-level-up'
   | 'curator-level-up'
@@ -54,7 +55,7 @@ export interface BuildRewardStingsOptions {
   currentProgression: ProgressionSummary;
   previousViewerRank: number | null;
   currentViewerRank: number | null;
-  contentType: 'room' | 'course';
+  contentType: 'room' | 'course' | 'expanded_room';
   contentId: string;
   contentTitle: string | null;
 }
@@ -68,6 +69,7 @@ const NUMBER_ONE_BADGE_ID = 'player_top1_finisher';
 const DEFAULT_REWARD_STING_DURATIONS_MS: Record<RewardStingKind, number> = {
   'room-clear': 1550,
   'course-clear': 1550,
+  'expanded-room-clear': 1550,
   'player-level-up': 1800,
   'builder-level-up': 1800,
   'curator-level-up': 1800,
@@ -180,24 +182,27 @@ export function buildLeaderboardRankRewardStings(options: {
 }
 
 export function createPostRunClearReward(options: {
-  contentType: 'room' | 'course';
+  contentType: 'room' | 'course' | 'expanded_room';
   contentTitle: string | null;
   elapsedMs: number;
   deaths: number;
   score: number | null;
 }): RewardSting {
   const isCourse = options.contentType === 'course';
+  const isExpandedRoom = options.contentType === 'expanded_room';
+  const kind = isExpandedRoom ? 'expanded-room-clear' : isCourse ? 'course-clear' : 'room-clear';
+  const label = isExpandedRoom ? 'Expanded Room' : isCourse ? 'Course' : 'Room';
   return {
-    kind: isCourse ? 'course-clear' : 'room-clear',
+    kind,
     tone: isCourse ? 'curator' : 'player',
-    kicker: isCourse ? 'Course Clear' : 'Room Clear',
-    title: isCourse ? 'COURSE CLEAR!' : 'ROOM CLEAR!',
-    subtitle: options.contentTitle?.trim() || (isCourse ? 'Course complete' : 'Room complete'),
+    kicker: `${label} Clear`,
+    title: `${label.toUpperCase()} CLEAR!`,
+    subtitle: options.contentTitle?.trim() || `${label} complete`,
     detail: formatPostRunClearDetail(options.elapsedMs, options.deaths, options.score),
     iconSrc: isCourse ? CURATOR_ICON_SRC : PLAYER_ICON_SRC,
-    iconAlt: isCourse ? 'Course clear icon' : 'Room clear icon',
+    iconAlt: `${label} clear icon`,
     emphasis: 'normal',
-    durationMs: getRewardStingDurationMs(isCourse ? 'course-clear' : 'room-clear', isCourse ? 'curator' : 'player'),
+    durationMs: getRewardStingDurationMs(kind, isCourse ? 'curator' : 'player'),
     sfxCue: 'goal-success',
   };
 }
@@ -300,6 +305,7 @@ export function getRewardStingSfxCue(kind: RewardStingKind, tone: RewardStingTon
   switch (kind) {
     case 'room-clear':
     case 'course-clear':
+    case 'expanded-room-clear':
       return 'goal-success';
     case 'player-level-up':
       return 'progression-player-level-up';
@@ -421,7 +427,9 @@ function formatTrophyDetail(
   }
 
   const targetLabel =
-    trophy.contentType === 'course'
+    trophy.contentType === 'expanded_room'
+      ? `Expanded Room ${trophy.contentId}`
+      : trophy.contentType === 'course'
       ? `Course ${trophy.contentId}`
       : `Room ${trophy.contentId}`;
   return `${targetLabel} v${trophy.versionKey}`;

@@ -169,6 +169,7 @@ export class EditorScene extends Phaser.Scene {
   private forceInitialRoomSnapshot = false;
   private readonly handleWake = (): void => {
     setAppMode('editor');
+    delete document.body.dataset.editorCourseMode;
     editorState.isPlaying = false;
     this.presenceController.sync();
     this.updateBottomBar();
@@ -770,6 +771,7 @@ export class EditorScene extends Phaser.Scene {
     }
     this.entrySource = data?.source ?? 'direct';
     setAppMode('editor');
+    delete document.body.dataset.editorCourseMode;
     this.uiBridge = new EditorUiBridge({
       onRequestRender: () => this.renderEditorUi(),
       onDocumentKeyDown: this.handleDocumentKeyDown,

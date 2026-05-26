@@ -16,6 +16,7 @@ export interface RoomCapabilitySnapshot {
   trustTier: TrustTier;
   claimLimitPerDay: number;
   publishLimitPerDay: number;
+  expandedRoomCellLimit: number;
   objectLimit: number;
   collectibleLimit: number;
 }
@@ -156,42 +157,31 @@ export async function resolveRoomCapabilities(
     trustTier: summary.trustTier,
     claimLimitPerDay: summary.claimLimitPerDay,
     publishLimitPerDay: summary.publishLimitPerDay,
+    expandedRoomCellLimit: summary.expandedRoomCellLimit,
     objectLimit: summary.objectLimit,
     collectibleLimit: summary.collectibleLimit,
   };
 }
 
 async function countDailyRoomPublishes(env: Env, userId: string, dayStartIso: string): Promise<number> {
-  const [roomRow, courseRow] = await Promise.all([
-    env.DB.prepare(
-      `
-        SELECT COUNT(*) AS count
-        FROM room_versions
-        WHERE published_by_user_id = ?
-          AND created_at >= ?
-          AND NOT EXISTS (
-            SELECT 1
-            FROM room_versions AS prior_versions
-            WHERE prior_versions.room_id = room_versions.room_id
-              AND prior_versions.version < room_versions.version
-          )
-      `
-    )
-      .bind(userId, dayStartIso)
-      .first<{ count: number | string | null }>(),
-    env.DB.prepare(
-      `
-        SELECT COUNT(*) AS count
-        FROM course_versions
-        WHERE published_by_user_id = ?
-          AND created_at >= ?
-      `
-    )
-      .bind(userId, dayStartIso)
-      .first<{ count: number | string | null }>(),
-  ]);
+  const roomRow = await env.DB.prepare(
+    `
+      SELECT COUNT(*) AS count
+      FROM room_versions
+      WHERE published_by_user_id = ?
+        AND created_at >= ?
+        AND NOT EXISTS (
+          SELECT 1
+          FROM room_versions AS prior_versions
+          WHERE prior_versions.room_id = room_versions.room_id
+            AND prior_versions.version < room_versions.version
+        )
+    `
+  )
+    .bind(userId, dayStartIso)
+    .first<{ count: number | string | null }>();
 
-  return parseRowNumber(roomRow?.count) + parseRowNumber(courseRow?.count);
+  return parseRowNumber(roomRow?.count);
 }
 
 export async function assertUserCanPublishContent(
@@ -206,7 +196,7 @@ export async function assertUserCanPublishContent(
   if (publishCount >= capabilities.publishLimitPerDay) {
     throw new HttpError(
       429,
-      `Daily publish limit reached. You can publish ${capabilities.publishLimitPerDay} meaningful room or course updates per UTC day.`,
+      `Daily publish limit reached. You can publish ${capabilities.publishLimitPerDay} new rooms per UTC day. Publishing an Expanded Room setup does not count toward this limit.`,
     );
   }
 }

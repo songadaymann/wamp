@@ -1,4 +1,5 @@
 import type { AuthUser } from '../../../auth/model';
+import type { RequestAuthSource } from '../../../agents/model';
 import {
   cloneCourseRecord,
   cloneCourseSnapshot,
@@ -26,6 +27,11 @@ import type {
   PersistCourseVersionInput,
   RoomVersionRow,
 } from '../core/types';
+import {
+  syncExpandedRoomRecordFromLegacyCourse,
+  syncExpandedRoomVersionFromLegacyCourse,
+} from '../expandedRooms/writeStore';
+import { resolveRoomCapabilities } from '../progression/trustCaps';
 
 export async function loadCourseRecord(
   env: Env,
@@ -207,13 +213,16 @@ export async function createCourseDraft(
   env: Env,
   snapshot: CourseSnapshot,
   actor: AuthUser,
-  actorIsAdmin = false
+  actorIsAdmin = false,
+  requestAuthSource: RequestAuthSource | null = null
 ): Promise<CourseRecord> {
   const normalized = normalizeCourseSnapshot(snapshot, snapshot.id);
   const now = new Date().toISOString();
+  const expandedRoomCellLimit = await loadExpandedRoomCellLimit(env, actor.id, requestAuthSource);
   const draft = await resolveValidatedCourseDraft(env, normalized, actor, {
     allowSingleRoomDraft: true,
     requirePublishedGoal: false,
+    expandedRoomCellLimit,
   });
   const createdAt = normalized.createdAt || now;
   const nextRecord: CourseRecord = {
@@ -245,33 +254,44 @@ export async function createCourseDraft(
     updatedAt: now,
     publishedAt: null,
   });
+  await syncExpandedRoomRecordFromLegacyCourse(env, {
+    draft: nextRecord.draft,
+    published: null,
+    ownerUserId: actor.id,
+    ownerDisplayName: actor.displayName,
+    createdAt,
+    updatedAt: now,
+    publishedAt: null,
+  });
 
   const stored = await loadCourseRecord(env, nextRecord.draft.id, actor.id, actorIsAdmin);
   if (!stored) {
-    throw new HttpError(500, 'Failed to create course draft.');
+    throw new HttpError(500, 'Failed to create expanded room draft.');
   }
 
-  return stored;
+  return attachExpandedRoomCellLimit(stored, expandedRoomCellLimit);
 }
 
 export async function saveCourseDraft(
   env: Env,
   snapshot: CourseSnapshot,
   actor: AuthUser,
-  actorIsAdmin = false
+  actorIsAdmin = false,
+  requestAuthSource: RequestAuthSource | null = null
 ): Promise<CourseRecord> {
   const existing = await loadCourseRecord(env, snapshot.id, actor.id, actorIsAdmin);
   if (!existing) {
-    return createCourseDraft(env, snapshot, actor, actorIsAdmin);
+    return createCourseDraft(env, snapshot, actor, actorIsAdmin, requestAuthSource);
   }
 
   if (!existing.permissions.canSaveDraft) {
-    throw new HttpError(403, 'You do not have permission to edit this course.');
+    throw new HttpError(403, 'You do not have permission to edit this expanded room.');
   }
 
   const now = new Date().toISOString();
   const nextVersion = existing.published?.version ?? existing.draft.version;
   const normalized = normalizeCourseSnapshot(snapshot, snapshot.id);
+  const expandedRoomCellLimit = await loadExpandedRoomCellLimit(env, actor.id, requestAuthSource);
   const draft = await resolveValidatedCourseDraft(
     env,
     {
@@ -282,6 +302,7 @@ export async function saveCourseDraft(
     {
       allowSingleRoomDraft: true,
       requirePublishedGoal: false,
+      expandedRoomCellLimit,
     }
   );
 
@@ -303,20 +324,30 @@ export async function saveCourseDraft(
     updatedAt: now,
     publishedAt: existing.published?.publishedAt ?? null,
   });
+  await syncExpandedRoomRecordFromLegacyCourse(env, {
+    draft: nextDraft,
+    published: existing.published,
+    ownerUserId: existing.ownerUserId ?? actor.id,
+    ownerDisplayName: existing.ownerDisplayName ?? actor.displayName,
+    createdAt: existing.draft.createdAt,
+    updatedAt: now,
+    publishedAt: existing.published?.publishedAt ?? null,
+  });
 
   const stored = await loadCourseRecord(env, snapshot.id, actor.id, actorIsAdmin);
   if (!stored) {
-    throw new HttpError(500, 'Failed to save course draft.');
+    throw new HttpError(500, 'Failed to save expanded room draft.');
   }
 
-  return stored;
+  return attachExpandedRoomCellLimit(stored, expandedRoomCellLimit);
 }
 
 export async function publishCourse(
   env: Env,
   courseId: string,
   actor: AuthUser,
-  actorIsAdmin = false
+  actorIsAdmin = false,
+  requestAuthSource: RequestAuthSource | null = null
 ): Promise<CourseRecord> {
   const existing = await loadCourseRecord(env, courseId, actor.id, actorIsAdmin);
   if (!existing) {
@@ -330,6 +361,7 @@ export async function publishCourse(
   const now = new Date().toISOString();
   const lastPublished = existing.versions[existing.versions.length - 1] ?? null;
   const nextVersion = lastPublished ? lastPublished.version + 1 : Math.max(1, existing.draft.version);
+  const expandedRoomCellLimit = await loadExpandedRoomCellLimit(env, actor.id, requestAuthSource);
   const validatedDraft = await resolveValidatedCourseDraft(
     env,
     {
@@ -340,6 +372,7 @@ export async function publishCourse(
     {
       allowSingleRoomDraft: false,
       requirePublishedGoal: true,
+      expandedRoomCellLimit,
     }
   );
 
@@ -377,13 +410,28 @@ export async function publishCourse(
     publishedByDisplayName: actor.displayName,
     onConflictUpdate: true,
   });
+  await syncExpandedRoomRecordFromLegacyCourse(env, {
+    draft,
+    published,
+    ownerUserId: existing.ownerUserId ?? actor.id,
+    ownerDisplayName: existing.ownerDisplayName ?? actor.displayName,
+    createdAt: existing.draft.createdAt,
+    updatedAt: now,
+    publishedAt: now,
+  });
+  await syncExpandedRoomVersionFromLegacyCourse(env, {
+    snapshot: published,
+    createdAt: now,
+    publishedByUserId: actor.id,
+    publishedByDisplayName: actor.displayName,
+  });
 
   const stored = await loadCourseRecord(env, courseId, actor.id, actorIsAdmin);
   if (!stored?.published) {
     throw new HttpError(500, 'Failed to publish course.');
   }
 
-  return stored;
+  return attachExpandedRoomCellLimit(stored, expandedRoomCellLimit);
 }
 
 export async function unpublishCourse(
@@ -414,6 +462,15 @@ export async function unpublishCourse(
   };
 
   await persistCourseRecord(env, {
+    draft,
+    published: null,
+    ownerUserId: existing.ownerUserId ?? actor.id,
+    ownerDisplayName: existing.ownerDisplayName ?? actor.displayName,
+    createdAt: existing.draft.createdAt,
+    updatedAt: now,
+    publishedAt: null,
+  });
+  await syncExpandedRoomRecordFromLegacyCourse(env, {
     draft,
     published: null,
     ownerUserId: existing.ownerUserId ?? actor.id,
@@ -464,37 +521,44 @@ async function resolveValidatedCourseDraft(
   env: Env,
   draft: CourseSnapshot,
   actor: AuthUser,
-  options: { allowSingleRoomDraft: boolean; requirePublishedGoal: boolean }
+  options: {
+    allowSingleRoomDraft: boolean;
+    requirePublishedGoal: boolean;
+    expandedRoomCellLimit: number;
+  }
 ): Promise<CourseSnapshot> {
   const roomRefs = draft.roomRefs;
   if (roomRefs.length === 0) {
-    throw new HttpError(400, 'A course needs at least one room in draft.');
+    throw new HttpError(400, 'An expanded room needs at least one cell in draft.');
   }
 
   if (!courseRoomRefsHaveUniqueRoomIds(roomRefs)) {
-    throw new HttpError(400, 'Course rooms must be unique.');
+    throw new HttpError(400, 'Expanded room cells must be unique.');
   }
 
-  if (roomRefs.length > 4) {
-    throw new HttpError(400, 'Courses can span at most 4 rooms.');
+  if (roomRefs.length > options.expandedRoomCellLimit) {
+    throw new HttpError(
+      400,
+      `Expanded rooms can span at most ${formatCellCount(options.expandedRoomCellLimit)} at your builder tier.`,
+    );
   }
 
   if (!options.allowSingleRoomDraft && roomRefs.length < 2) {
-    throw new HttpError(400, 'Published courses must span 2 to 4 rooms.');
+    throw new HttpError(400, 'Published expanded rooms need at least 2 cells.');
   }
 
   if (!courseRoomRefsFormConnectedCluster(roomRefs)) {
-    throw new HttpError(400, 'Course rooms must stay in one connected cluster.');
+    throw new HttpError(400, 'Expanded room cells must stay in one connected cluster.');
   }
 
   const resolvedRefs = sortCourseRoomRefsForStorage(await Promise.all(
     roomRefs.map(async (roomRef) => {
       const roomVersion = await loadPublishedRoomVersionForCourse(env, roomRef.roomId, roomRef.roomVersion);
       if (!roomVersion.published_by_user_id) {
-        throw new HttpError(409, 'Only published rooms can be used in a course.');
+        throw new HttpError(409, 'Only published rooms can be used in an expanded room.');
       }
       if (roomVersion.published_by_user_id !== actor.id) {
-        throw new HttpError(403, 'All course rooms must be published by the same creator.');
+        throw new HttpError(403, 'All expanded room cells must be published by the same creator.');
       }
       return {
         roomId: roomRef.roomId,
@@ -599,19 +663,19 @@ function validatePublishableCourseDraft(
   roomRefs: CourseRoomRef[]
 ): void {
   if (!draft.title?.trim()) {
-    throw new HttpError(400, 'Published courses need a title.');
+    throw new HttpError(400, 'Published expanded rooms need a title.');
   }
 
   if (!draft.goal) {
-    throw new HttpError(400, 'Published courses need a goal.');
+    throw new HttpError(400, 'Published expanded rooms need a goal.');
   }
 
   if (roomRefs.length < 2) {
-    throw new HttpError(400, 'Published courses must span 2 to 4 rooms.');
+    throw new HttpError(400, 'Published expanded rooms need at least 2 cells.');
   }
 
   if (courseGoalRequiresStartPoint(draft.goal) && !draft.startPoint) {
-    throw new HttpError(400, 'Published courses need a start point.');
+    throw new HttpError(400, 'Published expanded rooms need a start point.');
   }
 
   switch (draft.goal.type) {
@@ -639,6 +703,25 @@ function validatePublishableCourseDraft(
     case 'survival':
       return;
   }
+}
+
+async function loadExpandedRoomCellLimit(
+  env: Env,
+  userId: string,
+  requestAuthSource: RequestAuthSource | null
+): Promise<number> {
+  return (await resolveRoomCapabilities(env, userId, requestAuthSource)).expandedRoomCellLimit;
+}
+
+function attachExpandedRoomCellLimit(record: CourseRecord, expandedRoomCellLimit: number): CourseRecord {
+  return {
+    ...record,
+    expandedRoomCellLimit,
+  };
+}
+
+function formatCellCount(count: number): string {
+  return count === 1 ? '1 cell' : `${count} cells`;
 }
 
 async function ensureRoomsNotInOtherPublishedCourses(

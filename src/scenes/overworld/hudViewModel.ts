@@ -171,6 +171,7 @@ export function buildOverworldHudViewModel(
     getRoomRushProgressText,
     truncateOverlayText,
   } = options;
+  const selectedExpandedRoom = selectedState === 'published' ? selectedCourse : null;
   const activeRunResult =
     activeCourseRun?.result ?? activeRoomRushRun?.result ?? activeRoomGoalRun?.result ?? null;
   const saveStatusTone =
@@ -192,8 +193,11 @@ export function buildOverworldHudViewModel(
         ? selectedDraft?.title?.trim() || null
         : null;
   const selectedRoomTitleText = getRoomDisplayTitle(selectedRoomTitle, selectedCoordinates);
-  const selectedPublishedCourseTitle = selectedPublishedCourse?.title?.trim() || null;
-  const selectedCourseTitle = selectedPublishedCourseTitle || selectedCourse?.courseTitle?.trim() || null;
+  const selectedPublishedCourseTitle =
+    selectedExpandedRoom ? selectedPublishedCourse?.title?.trim() || null : null;
+  const selectedCourseTitle =
+    selectedPublishedCourseTitle || selectedExpandedRoom?.courseTitle?.trim() || null;
+  const selectedExpandedRoomCellCount = selectedExpandedRoom?.roomCount ?? null;
   const selectedCourseHasNamedRooms = Boolean(
     selectedCourseTitle &&
     selectedPublishedCourse &&
@@ -280,16 +284,21 @@ export function buildOverworldHudViewModel(
   const canOpenCourseBuilder = selectedState === 'published' && viewerOwnsSelectedRoom;
   const resolvedCourseBuilderButtonDisabled =
     courseBuilderButtonDisabled || !canOpenCourseBuilder;
+  const selectedIsExpandedRoom = Boolean(selectedExpandedRoom);
+  const courseBuilderButtonText = selectedIsExpandedRoom ? 'Expanded Room Setup' : 'Expand Room';
   const courseBuilderButtonTitle =
     courseBuilderButtonDisabled
-      ? 'Loading course builder...'
+      ? 'Loading expanded room builder...'
       : selectedState !== 'published'
-        ? 'Only published rooms can start a course.'
+        ? 'Only published rooms can start an expanded room.'
         : !viewerOwnsSelectedRoom
-          ? 'Only the room claimer can build a course from this room.'
+          ? 'Only the room claimer can build an expanded room from this room.'
           : '';
+  const editButtonText = selectedIsExpandedRoom ? 'Edit Expanded Room' : 'Edit Room';
   const selectedGoalText =
-    selectedState === 'published' && selectedPublishedRoom?.goal
+    selectedExpandedRoom
+      ? ''
+      : selectedState === 'published' && selectedPublishedRoom?.goal
       ? getSelectedRoomGoalText(selectedPublishedRoom)
       : selectedState === 'draft' && selectedDraft?.goal
         ? getSelectedRoomGoalText(selectedDraft)
@@ -300,6 +309,9 @@ export function buildOverworldHudViewModel(
   let selectedMetaTone: OverworldHudViewModel['selectedMetaTone'] = 'default';
   if (selectedState === 'published') {
     const metaParts: string[] = [];
+    if (selectedExpandedRoomCellCount !== null && selectedExpandedRoomCellCount > 1) {
+      metaParts.push(`${selectedExpandedRoomCellCount}-cell expanded room`);
+    }
     if (selectedPopulation > 0) {
       metaParts.push(`${selectedPopulation} here`);
     }
@@ -391,6 +403,7 @@ export function buildOverworldHudViewModel(
   const rateRoomButtonVisible = Boolean(
     mode !== 'play'
     && selectedState === 'published'
+    && !selectedExpandedRoom
     && currentRoomLeaderboard?.difficulty.viewerCanVote
     && (!selectedSummary?.creatorUserId || selectedSummary.creatorUserId !== currentUserId),
   );
@@ -422,6 +435,8 @@ export function buildOverworldHudViewModel(
     selectedStateText:
       selectedRoomMinted
         ? 'Minted'
+        : selectedExpandedRoomCellCount !== null && selectedExpandedRoomCellCount > 1
+          ? 'Expanded'
         : selectedState === 'published'
           ? 'Published'
         : selectedState === 'claimed_unpublished'
@@ -446,21 +461,29 @@ export function buildOverworldHudViewModel(
     rateRoomButtonText: 'Rate Room',
     rateRoomButtonDisabled: false,
     zoomLabelText: `${zoom.toFixed(2)}x`,
-    playButtonText: activeCourseRun || activeRoomRushRun ? 'Play Room' : mode === 'play' ? 'Stop' : 'Play Room',
+    playButtonText: activeCourseRun
+      ? 'Stop Expanded Room'
+      : activeRoomRushRun
+        ? 'Play Room'
+        : mode === 'play'
+          ? 'Stop'
+          : selectedExpandedRoom
+            ? 'Play Expanded Room'
+            : 'Play Room',
     playButtonDisabled:
-      activeCourseRun || activeRoomRushRun
+      activeRoomRushRun
         ? true
         : mode === 'play'
           ? false
           : selectedState !== 'published' && selectedState !== 'draft',
-    playButtonActive: mode === 'play' && !activeCourseRun && !activeRoomRushRun,
+    playButtonActive: mode === 'play' && !activeRoomRushRun,
     restartButtonText: 'Restart',
     restartButtonDisabled: mode !== 'play',
     restartButtonActive: mode === 'play',
     restartButtonHidden: mode !== 'play',
-    playCourseButtonText: activeCourseRun ? 'Stop Course' : 'Play Course',
-    playCourseButtonDisabled: activeCourseRun ? false : Boolean(activeRoomRushRun) || !selectedCourse,
-    playCourseButtonHidden: !selectedCourse && !activeCourseRun,
+    playCourseButtonText: activeCourseRun ? 'Stop Expanded Room' : 'Play Expanded Room',
+    playCourseButtonDisabled: true,
+    playCourseButtonHidden: true,
     playCourseButtonActive: Boolean(activeCourseRun),
     roomRushButtonText: activeRoomRushRun ? 'End Rush' : 'Room Rush',
     roomRushButtonDisabled:
@@ -483,8 +506,10 @@ export function buildOverworldHudViewModel(
     commentsToggleText: roomCommentsVisible ? 'Hide Comments' : 'Show Comments',
     commentsToggleHidden: false,
     commentsToggleActive: roomCommentsVisible,
+    courseBuilderButtonText,
     courseBuilderButtonDisabled: resolvedCourseBuilderButtonDisabled,
     courseBuilderButtonTitle,
+    editButtonText,
     editButtonDisabled: !canEditSelectedRoom,
     editButtonTitle,
     buildButtonDisabled: selectedState !== 'frontier' || frontierBuildBlocked,
@@ -506,7 +531,7 @@ export function buildOverworldHudViewModel(
     goalPanelVisible: Boolean(activeCourseRun || activeRoomRushRun || activeRoomGoalRun),
     goalPanelTone,
     goalPanelRoomText: activeCourseRun
-      ? truncateOverlayText((activeCourseRun.course.title?.trim() || 'COURSE').toUpperCase(), 22)
+      ? truncateOverlayText((activeCourseRun.course.title?.trim() || 'EXPANDED ROOM').toUpperCase(), 22)
       : activeRoomRushRun
         ? 'ROOM RUSH'
       : activeRoomGoalRun

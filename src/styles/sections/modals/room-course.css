@@ -508,6 +508,7 @@
 }
 
 #course-modal #course-published-state,
+#course-modal #course-cell-limit,
 #course-modal #course-summary {
   margin-top: 0;
   padding: 9px 10px;

@@ -14,7 +14,11 @@ import {
   getCustomRoomTileDefinitionForGid,
   type CustomRoomTileDefinition,
 } from '../../../customTiles/model';
-import type { RoomSnapshot } from '../../../persistence/roomModel';
+import {
+  createDefaultRoomSnapshot,
+  type RoomCoordinates,
+  type RoomSnapshot,
+} from '../../../persistence/roomModel';
 
 export const ROOM_SHARE_IMAGE_WIDTH = 1200;
 export const ROOM_SHARE_IMAGE_HEIGHT = 630;
@@ -24,6 +28,25 @@ const PREVIEW_LEFT = 60;
 const PREVIEW_TOP = 18;
 const PREVIEW_WIDTH = ROOM_WIDTH * PREVIEW_TILE_SIZE;
 const PREVIEW_HEIGHT = ROOM_HEIGHT * PREVIEW_TILE_SIZE;
+const EXPANDED_PREVIEW_MARGIN_X = 60;
+const EXPANDED_PREVIEW_MARGIN_Y = 36;
+
+interface RoomPreviewLayout {
+  left: number;
+  top: number;
+  tileSize: number;
+}
+
+export interface ExpandedRoomSharePreviewCell {
+  snapshot: RoomSnapshot;
+  coordinates: RoomCoordinates;
+}
+
+const DEFAULT_ROOM_PREVIEW_LAYOUT: RoomPreviewLayout = {
+  left: PREVIEW_LEFT,
+  top: PREVIEW_TOP,
+  tileSize: PREVIEW_TILE_SIZE,
+};
 
 interface RgbColor {
   r: number;
@@ -58,11 +81,138 @@ const BACKGROUND_COLORS: Record<string, { sky: number; far: number; near: number
 export function renderRoomSharePreviewPng(snapshot: RoomSnapshot): Uint8Array {
   const canvas = createCanvas(ROOM_SHARE_IMAGE_WIDTH, ROOM_SHARE_IMAGE_HEIGHT);
   drawBackground(canvas, snapshot);
-  drawRoomFrame(canvas);
-  drawTiles(canvas, snapshot);
-  drawObjects(canvas, snapshot);
+  drawRoomFrame(canvas, DEFAULT_ROOM_PREVIEW_LAYOUT);
+  drawTiles(canvas, snapshot, DEFAULT_ROOM_PREVIEW_LAYOUT);
+  drawObjects(canvas, snapshot, DEFAULT_ROOM_PREVIEW_LAYOUT);
   drawBorder(canvas, PREVIEW_LEFT - 4, PREVIEW_TOP - 4, PREVIEW_WIDTH + 8, PREVIEW_HEIGHT + 8, 0xf5f1de);
   return encodePng(canvas.width, canvas.height, canvas.pixels);
+}
+
+export function renderExpandedRoomSharePreviewPng(cells: ExpandedRoomSharePreviewCell[]): Uint8Array {
+  if (cells.length <= 1) {
+    return renderRoomSharePreviewPng(cells[0]?.snapshot ?? createDefaultRoomSnapshot());
+  }
+
+  const sortedCells = cells
+    .filter((cell) => Number.isFinite(cell.coordinates.x) && Number.isFinite(cell.coordinates.y))
+    .sort((left, right) => (
+      left.coordinates.y - right.coordinates.y
+      || left.coordinates.x - right.coordinates.x
+    ));
+  if (sortedCells.length === 0) {
+    return renderRoomSharePreviewPng(createDefaultRoomSnapshot());
+  }
+
+  const bounds = getExpandedRoomPreviewBounds(sortedCells);
+  const canvas = createCanvas(ROOM_SHARE_IMAGE_WIDTH, ROOM_SHARE_IMAGE_HEIGHT);
+  drawBackground(canvas, sortedCells[0].snapshot);
+
+  const columnCount = bounds.maxX - bounds.minX + 1;
+  const rowCount = bounds.maxY - bounds.minY + 1;
+  const tileSize = Math.max(
+    3,
+    Math.floor(
+      Math.min(
+        (ROOM_SHARE_IMAGE_WIDTH - EXPANDED_PREVIEW_MARGIN_X * 2) / (columnCount * ROOM_WIDTH),
+        (ROOM_SHARE_IMAGE_HEIGHT - EXPANDED_PREVIEW_MARGIN_Y * 2) / (rowCount * ROOM_HEIGHT),
+      ),
+    ),
+  );
+  const cellWidth = ROOM_WIDTH * tileSize;
+  const cellHeight = ROOM_HEIGHT * tileSize;
+  const previewWidth = columnCount * cellWidth;
+  const previewHeight = rowCount * cellHeight;
+  const previewLeft = Math.floor((ROOM_SHARE_IMAGE_WIDTH - previewWidth) / 2);
+  const previewTop = Math.floor((ROOM_SHARE_IMAGE_HEIGHT - previewHeight) / 2);
+  const occupiedCells = new Set(sortedCells.map((cell) => getCoordinateKey(cell.coordinates)));
+
+  blendRect(canvas, previewLeft - 12, previewTop - 12, previewWidth + 24, previewHeight + 24, 0x05070c, 0.7);
+  blendRect(canvas, previewLeft, previewTop, previewWidth, previewHeight, 0x0e1524, 0.34);
+
+  for (const cell of sortedCells) {
+    const layout = {
+      left: previewLeft + (cell.coordinates.x - bounds.minX) * cellWidth,
+      top: previewTop + (cell.coordinates.y - bounds.minY) * cellHeight,
+      tileSize,
+    };
+    drawTiles(canvas, cell.snapshot, layout);
+    drawObjects(canvas, cell.snapshot, layout);
+  }
+
+  drawExpandedRoomOuterBorder(canvas, sortedCells, occupiedCells, bounds, {
+    left: previewLeft,
+    top: previewTop,
+    tileSize,
+  });
+  return encodePng(canvas.width, canvas.height, canvas.pixels);
+}
+
+function getExpandedRoomPreviewBounds(cells: ExpandedRoomSharePreviewCell[]): {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+} {
+  return cells.reduce(
+    (bounds, cell) => ({
+      minX: Math.min(bounds.minX, cell.coordinates.x),
+      maxX: Math.max(bounds.maxX, cell.coordinates.x),
+      minY: Math.min(bounds.minY, cell.coordinates.y),
+      maxY: Math.max(bounds.maxY, cell.coordinates.y),
+    }),
+    {
+      minX: cells[0].coordinates.x,
+      maxX: cells[0].coordinates.x,
+      minY: cells[0].coordinates.y,
+      maxY: cells[0].coordinates.y,
+    },
+  );
+}
+
+function drawExpandedRoomOuterBorder(
+  canvas: ShareCanvas,
+  cells: ExpandedRoomSharePreviewCell[],
+  occupiedCells: Set<string>,
+  bounds: { minX: number; minY: number },
+  layout: RoomPreviewLayout,
+): void {
+  const cellWidth = ROOM_WIDTH * layout.tileSize;
+  const cellHeight = ROOM_HEIGHT * layout.tileSize;
+  const stroke = Math.max(3, Math.floor(layout.tileSize / 3));
+
+  for (const cell of cells) {
+    const left = layout.left + (cell.coordinates.x - bounds.minX) * cellWidth;
+    const top = layout.top + (cell.coordinates.y - bounds.minY) * cellHeight;
+    const { x, y } = cell.coordinates;
+    if (!occupiedCells.has(`${x},${y - 1}`)) {
+      fillRect(canvas, left - stroke, top - stroke, cellWidth + stroke * 2, stroke, 0xf5f1de);
+    }
+    if (!occupiedCells.has(`${x},${y + 1}`)) {
+      fillRect(canvas, left - stroke, top + cellHeight, cellWidth + stroke * 2, stroke, 0xf5f1de);
+    }
+    if (!occupiedCells.has(`${x - 1},${y}`)) {
+      fillRect(canvas, left - stroke, top - stroke, stroke, cellHeight + stroke * 2, 0xf5f1de);
+    }
+    if (!occupiedCells.has(`${x + 1},${y}`)) {
+      fillRect(canvas, left + cellWidth, top - stroke, stroke, cellHeight + stroke * 2, 0xf5f1de);
+    }
+  }
+}
+
+function getCoordinateKey(coordinates: RoomCoordinates): string {
+  return `${coordinates.x},${coordinates.y}`;
+}
+
+function getTilePreviewInset(tileSize: number, preferredInset: number): number {
+  return Math.max(0, Math.min(preferredInset, Math.floor((tileSize - 1) / 2)));
+}
+
+function getTilePreviewEdgeSize(tileSize: number): number {
+  return Math.max(1, Math.min(4, Math.floor(tileSize / 4) || 1));
+}
+
+function getTilePreviewSideSize(tileSize: number): number {
+  return Math.max(1, Math.min(3, Math.floor(tileSize / 5) || 1));
 }
 
 function createCanvas(width: number, height: number): ShareCanvas {
@@ -100,12 +250,14 @@ function drawBackground(canvas: ShareCanvas, snapshot: RoomSnapshot): void {
   drawStars(canvas, snapshot.id);
 }
 
-function drawRoomFrame(canvas: ShareCanvas): void {
-  blendRect(canvas, PREVIEW_LEFT - 8, PREVIEW_TOP - 8, PREVIEW_WIDTH + 16, PREVIEW_HEIGHT + 16, 0x05070c, 0.84);
-  blendRect(canvas, PREVIEW_LEFT, PREVIEW_TOP, PREVIEW_WIDTH, PREVIEW_HEIGHT, 0x0e1524, 0.34);
+function drawRoomFrame(canvas: ShareCanvas, layout: RoomPreviewLayout): void {
+  const width = ROOM_WIDTH * layout.tileSize;
+  const height = ROOM_HEIGHT * layout.tileSize;
+  blendRect(canvas, layout.left - 8, layout.top - 8, width + 16, height + 16, 0x05070c, 0.84);
+  blendRect(canvas, layout.left, layout.top, width, height, 0x0e1524, 0.34);
 }
 
-function drawTiles(canvas: ShareCanvas, snapshot: RoomSnapshot): void {
+function drawTiles(canvas: ShareCanvas, snapshot: RoomSnapshot, layout: RoomPreviewLayout): void {
   const layers = ['background', 'terrain', 'foreground'] as const;
 
   for (const layerName of layers) {
@@ -119,8 +271,10 @@ function drawTiles(canvas: ShareCanvas, snapshot: RoomSnapshot): void {
           continue;
         }
 
-        const x = PREVIEW_LEFT + tileX * PREVIEW_TILE_SIZE;
-        const y = PREVIEW_TOP + tileY * PREVIEW_TILE_SIZE;
+        const x = layout.left + tileX * layout.tileSize;
+        const y = layout.top + tileY * layout.tileSize;
+        const edgeSize = getTilePreviewEdgeSize(layout.tileSize);
+        const sideSize = getTilePreviewSideSize(layout.tileSize);
         const customTile = getCustomRoomTileDefinitionForGid(snapshot, gid);
         if (customTile) {
           const alpha = layerName === 'background'
@@ -128,14 +282,14 @@ function drawTiles(canvas: ShareCanvas, snapshot: RoomSnapshot): void {
             : layerName === 'foreground'
               ? 0.78
               : 1;
-          drawCustomRoomTilePreview(canvas, customTile, x, y, PREVIEW_TILE_SIZE, alpha, flipX, flipY);
+          drawCustomRoomTilePreview(canvas, customTile, x, y, layout.tileSize, alpha, flipX, flipY);
           if (layerName === 'terrain') {
             const collision = getCustomRoomTileCollisionProfile(snapshot, gid);
             if (collision?.hasCollision) {
-              blendRect(canvas, x, y, PREVIEW_TILE_SIZE, 4, 0xffffff, 0.18);
-              blendRect(canvas, x, y + PREVIEW_TILE_SIZE - 4, PREVIEW_TILE_SIZE, 4, 0x000000, 0.22);
-              blendRect(canvas, x, y, 3, PREVIEW_TILE_SIZE, 0x000000, 0.16);
-              blendRect(canvas, x + PREVIEW_TILE_SIZE - 3, y, 3, PREVIEW_TILE_SIZE, 0x000000, 0.22);
+              blendRect(canvas, x, y, layout.tileSize, edgeSize, 0xffffff, 0.18);
+              blendRect(canvas, x, y + layout.tileSize - edgeSize, layout.tileSize, edgeSize, 0x000000, 0.22);
+              blendRect(canvas, x, y, sideSize, layout.tileSize, 0x000000, 0.16);
+              blendRect(canvas, x + layout.tileSize - sideSize, y, sideSize, layout.tileSize, 0x000000, 0.22);
             }
           }
           continue;
@@ -144,22 +298,24 @@ function drawTiles(canvas: ShareCanvas, snapshot: RoomSnapshot): void {
         const color = getTileColor(gid, tileX, tileY);
 
         if (layerName === 'background') {
-          blendRect(canvas, x + 4, y + 4, PREVIEW_TILE_SIZE - 8, PREVIEW_TILE_SIZE - 8, color, 0.45);
+          const inset = getTilePreviewInset(layout.tileSize, 4);
+          blendRect(canvas, x + inset, y + inset, layout.tileSize - inset * 2, layout.tileSize - inset * 2, color, 0.45);
           continue;
         }
 
         if (layerName === 'foreground') {
-          blendRect(canvas, x + 2, y + 2, PREVIEW_TILE_SIZE - 4, PREVIEW_TILE_SIZE - 4, lighten(color, 0.18), 0.74);
-          drawBorder(canvas, x + 2, y + 2, PREVIEW_TILE_SIZE - 4, PREVIEW_TILE_SIZE - 4, darken(color, 0.28));
+          const inset = getTilePreviewInset(layout.tileSize, 2);
+          blendRect(canvas, x + inset, y + inset, layout.tileSize - inset * 2, layout.tileSize - inset * 2, lighten(color, 0.18), 0.74);
+          drawBorder(canvas, x + inset, y + inset, layout.tileSize - inset * 2, layout.tileSize - inset * 2, darken(color, 0.28));
           continue;
         }
 
         const collision = getTerrainCollisionProfileForGid(gid);
-        fillRect(canvas, x, y, PREVIEW_TILE_SIZE, PREVIEW_TILE_SIZE, color);
-        fillRect(canvas, x, y, PREVIEW_TILE_SIZE, 4, lighten(color, collision.hasCollision ? 0.22 : 0.1));
-        fillRect(canvas, x, y + PREVIEW_TILE_SIZE - 4, PREVIEW_TILE_SIZE, 4, darken(color, 0.24));
-        fillRect(canvas, x, y, 3, PREVIEW_TILE_SIZE, darken(color, 0.18));
-        fillRect(canvas, x + PREVIEW_TILE_SIZE - 3, y, 3, PREVIEW_TILE_SIZE, darken(color, 0.3));
+        fillRect(canvas, x, y, layout.tileSize, layout.tileSize, color);
+        fillRect(canvas, x, y, layout.tileSize, edgeSize, lighten(color, collision.hasCollision ? 0.22 : 0.1));
+        fillRect(canvas, x, y + layout.tileSize - edgeSize, layout.tileSize, edgeSize, darken(color, 0.24));
+        fillRect(canvas, x, y, sideSize, layout.tileSize, darken(color, 0.18));
+        fillRect(canvas, x + layout.tileSize - sideSize, y, sideSize, layout.tileSize, darken(color, 0.3));
       }
     }
   }
@@ -202,8 +358,8 @@ function drawCustomRoomTilePreview(
   }
 }
 
-function drawObjects(canvas: ShareCanvas, snapshot: RoomSnapshot): void {
-  const scale = PREVIEW_TILE_SIZE / TILE_SIZE;
+function drawObjects(canvas: ShareCanvas, snapshot: RoomSnapshot, layout: RoomPreviewLayout): void {
+  const scale = layout.tileSize / TILE_SIZE;
 
   for (const placed of snapshot.placedObjects) {
     if (getPlacedObjectLayer(placed) === 'background') {
@@ -217,8 +373,8 @@ function drawObjects(canvas: ShareCanvas, snapshot: RoomSnapshot): void {
 
     const width = Math.max(10, Math.round(config.frameWidth * scale));
     const height = Math.max(10, Math.round(config.frameHeight * scale));
-    const centerX = PREVIEW_LEFT + Math.round((placed.x / TILE_SIZE) * PREVIEW_TILE_SIZE);
-    const centerY = PREVIEW_TOP + Math.round((placed.y / TILE_SIZE) * PREVIEW_TILE_SIZE);
+    const centerX = layout.left + Math.round((placed.x / TILE_SIZE) * layout.tileSize);
+    const centerY = layout.top + Math.round((placed.y / TILE_SIZE) * layout.tileSize);
     const x = centerX - Math.floor(width / 2);
     const y = centerY - Math.floor(height / 2);
 

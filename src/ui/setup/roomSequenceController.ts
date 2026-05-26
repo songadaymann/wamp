@@ -102,8 +102,7 @@ export class RoomSequenceController {
       !detail ||
       !sequence ||
       !current ||
-      detail.contentType !== 'room' ||
-      detail.contentId !== current.roomId
+      !this.ratingSubmissionMatchesEntry(detail, current)
     ) {
       return;
     }
@@ -403,8 +402,27 @@ export class RoomSequenceController {
       index: sequence?.index ?? null,
       count: sequence?.entries.length ?? 0,
       currentRoomId: this.getCurrentEntry()?.roomId ?? null,
+      currentExpandedRoomId: this.getCurrentEntry()?.expandedRoomId ?? null,
       navigating: this.navigating,
       statusText: sequence?.statusText ?? null,
     };
+  }
+
+  private ratingSubmissionMatchesEntry(
+    detail: PostRunRatingSubmittedDetail,
+    entry: RoomSequenceStartDetail['entries'][number],
+  ): boolean {
+    if (detail.contentType === 'room') {
+      return detail.contentId === entry.roomId;
+    }
+
+    if (!entry.expandedRoomId) {
+      return false;
+    }
+
+    return (
+      detail.expandedRoomId === entry.expandedRoomId ||
+      (entry.legacyCourseId !== null && entry.legacyCourseId !== undefined && detail.contentId === entry.legacyCourseId)
+    );
   }
 }

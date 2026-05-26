@@ -120,7 +120,16 @@ export class PlaylistIntroModalController {
 
     const meta = this.doc.createElement('div');
     meta.className = 'playlist-intro-level-meta';
-    meta.textContent = `${entry.roomCoordinates.x},${entry.roomCoordinates.y} · v${entry.roomVersion}`;
+    if (entry.expandedRoomId && entry.expandedRoomCellCount && entry.expandedRoomCellCount > 1) {
+      const versionText =
+        typeof entry.expandedRoomVersion === 'number'
+          ? `v${entry.expandedRoomVersion}`
+          : `v${entry.roomVersion}`;
+      meta.textContent =
+        `${entry.expandedRoomCellCount} cells · ${versionText} · focus ${entry.roomCoordinates.x},${entry.roomCoordinates.y}`;
+    } else {
+      meta.textContent = `${entry.roomCoordinates.x},${entry.roomCoordinates.y} · v${entry.roomVersion}`;
+    }
 
     copy.append(title, meta);
     card.append(number, copy);

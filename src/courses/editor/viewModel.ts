@@ -1,12 +1,14 @@
 import type { CourseRecord } from '../model';
 import {
   getCourseEditorPlacementHintText,
+  getExpandedRoomCellUsageText,
   getCoursePublishedDraftWarningText,
   getCoursePublishedStateText,
   getCourseUnpublishDisabledReason,
   getCurrentCourseDraftPreviewDisabledReason,
   getCurrentCourseDraftPublishDisabledReason,
   getCurrentCourseDraftSaveDisabledReason,
+  isExpandedRoomCellLimitReached,
   type CourseEditorCheckpointEntry,
   type CourseEditorRoomEntry,
   type CourseEditorTool,
@@ -59,13 +61,13 @@ export function buildCourseEditorUiState(
   const permissions = record?.permissions ?? null;
   const testDraftDisabledReason = permissions?.canSaveDraft
     ? getCurrentCourseDraftPreviewDisabledReason(record)
-    : 'This course is read-only for your account.';
+    : 'This expanded room is read-only for your account.';
   const saveDraftDisabledReason = permissions?.canSaveDraft
     ? getCurrentCourseDraftSaveDisabledReason(record, dirty)
-    : 'This course is read-only for your account.';
+    : 'This expanded room is read-only for your account.';
   const publishCourseDisabledReason = permissions?.canPublish
     ? getCurrentCourseDraftPublishDisabledReason(record)
-    : 'This course is read-only for your account.';
+    : 'This expanded room is read-only for your account.';
   const unpublishCourseDisabledReason = getCourseUnpublishDisabledReason(record, permissions);
 
   return {
@@ -88,6 +90,8 @@ export function buildCourseEditorUiState(
     openCourseEditorDisabledReason,
     roomEntries,
     checkpointEntries,
+    cellUsageText: getExpandedRoomCellUsageText(record),
+    cellLimitReached: isExpandedRoomCellLimitReached(record),
     goalType: draft?.goal?.type ?? null,
     timeLimitSeconds:
       draft?.goal && 'timeLimitMs' in draft.goal && draft.goal.timeLimitMs !== null
@@ -119,14 +123,14 @@ function buildCourseSummaryText(record: CourseRecord | null): string {
   const draft = record?.draft ?? null;
   const goal = draft?.goal ?? null;
   if (!draft) {
-    return 'Select published rooms you authored to build a course.';
+    return 'Select published cells you authored to build an expanded room.';
   }
 
   const parts: string[] = [];
-  parts.push(`${draft.roomRefs.length} room${draft.roomRefs.length === 1 ? '' : 's'}`);
+  parts.push(getExpandedRoomCellUsageText(record));
 
   if (!goal) {
-    parts.push('No course goal selected');
+    parts.push('No expanded room goal selected');
     return parts.join(' · ');
   }
 

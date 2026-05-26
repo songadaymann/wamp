@@ -88,16 +88,25 @@
   font-size: 13px;
 }
 
-.leaderboard-discover-feature-badge {
+.leaderboard-discover-feature-badge,
+.leaderboard-discover-area-badge {
   flex: 0 0 auto;
   padding: 4px 8px;
-  border: 2px solid #79ccde;
-  background: #79ccde;
   color: #000;
   font-family: 'Early GameBoy', monospace;
   font-size: 7px;
   line-height: 1.3;
   text-transform: uppercase;
+}
+
+.leaderboard-discover-feature-badge {
+  border: 2px solid #79ccde;
+  background: #79ccde;
+}
+
+.leaderboard-discover-area-badge {
+  border: 2px solid #fcea7c;
+  background: #fcea7c;
 }
 
 .leaderboard-discover-meta {

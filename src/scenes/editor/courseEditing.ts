@@ -33,11 +33,11 @@ export function getCourseEditorContextStatusText(
   }
 
   if (!draft) {
-    return courseEditorStatusText ?? 'Open this room from the active course builder session.';
+    return courseEditorStatusText ?? 'Open this room from the active expanded room builder session.';
   }
 
-  const titleText = draft.title?.trim() || 'Untitled Course';
-  return `Course room · ${titleText}`;
+  const titleText = draft.title?.trim() || 'Untitled Expanded Room';
+  return `Expanded room cell · ${titleText}`;
 }
 
 export function buildCourseEditedRoomData(
@@ -56,7 +56,7 @@ export function buildCourseEditedRoomData(
 export function getCourseGoalSummaryText(draft: CourseSnapshot | null): string {
   const goal = draft?.goal ?? null;
   if (!goal) {
-    return 'No course goal selected.';
+    return 'No expanded room goal selected.';
   }
 
   const parts: string[] = [];
@@ -84,7 +84,7 @@ export function getCourseGoalSummaryText(draft: CourseSnapshot | null): string {
   }
 
   if (draft?.roomRefs.length) {
-    parts.push(`${draft.roomRefs.length} room${draft.roomRefs.length === 1 ? '' : 's'}`);
+    parts.push(`${draft.roomRefs.length} cell${draft.roomRefs.length === 1 ? '' : 's'}`);
   }
 
   return parts.join(' · ');
@@ -158,7 +158,7 @@ export function buildCourseEditorState(
       visible: false,
       statusHidden: true,
       statusText: null,
-      roomStepText: draft ? `${draft.roomRefs.length} room${draft.roomRefs.length === 1 ? '' : 's'} in course` : '',
+      roomStepText: draft ? `${draft.roomRefs.length} cell${draft.roomRefs.length === 1 ? '' : 's'} in expanded room` : '',
       canReturnToCourseBuilder: true,
       goalTypeValue: activeGoal?.type ?? '',
       goalTypeDisabled: true,

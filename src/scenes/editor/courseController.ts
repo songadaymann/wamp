@@ -55,7 +55,7 @@ export class EditorCourseController {
     this.courseGoalPlacementMode = null;
     this.courseEditorStatusText = this.activeCourseMarkerEdit
       ? null
-      : 'Open this room from the course builder to edit course goals.';
+      : 'Open this room from the expanded room builder to edit expanded room goals.';
   }
 
   reset(): void {

@@ -1,4 +1,10 @@
 import type { CourseGoalType } from '../../../courses/model';
+import {
+  createExpandedRoomSummaryFromStandaloneRoom,
+  type ExpandedRoomMembershipSummary,
+  type ExpandedRoomCellMembership,
+} from '../../../expandedRooms/model';
+import type { RoomGoalType } from '../../../goals/roomGoals';
 import { isRoomMinted } from '../../../persistence/roomModel';
 import {
   computeWorldChunkPreviewHash,
@@ -11,6 +17,7 @@ import {
 import { HttpError, jsonResponse, parseIntegerQueryParam, parseWorldChunkBounds } from '../core/http';
 import type { Env, RequestAuth } from '../core/types';
 import { loadPublishedCourseMembershipsInBounds } from '../courses/store';
+import { loadPublishedExpandedRoomMembershipsInBounds } from '../expandedRooms/store';
 import {
   getRoomClaimQuota,
   loadClaimedUnpublishedRoomsInBounds,
@@ -35,17 +42,24 @@ export async function handleWorldRequest(
   const maxX = centerX + radius + 1;
   const minY = centerY - radius - 1;
   const maxY = centerY + radius + 1;
+  const expandedRoomsEnabled = isExpandedRoomsEnabled(env);
   const [publishedRooms, claimedUnpublishedRooms, memberships] = await Promise.all([
     loadPublishedRoomsInBounds(env, minX, maxX, minY, maxY),
     loadClaimedUnpublishedRoomsInBounds(env, minX, maxX, minY, maxY),
-    loadPublishedCourseMembershipsInBounds(env, minX, maxX, minY, maxY),
+    expandedRoomsEnabled
+      ? loadPublishedExpandedRoomMembershipsInBounds(env, minX, maxX, minY, maxY)
+      : loadPublishedCourseMembershipsInBounds(env, minX, maxX, minY, maxY),
   ]);
   const worldWindow = computeWorldWindow(
     [...publishedRooms, ...claimedUnpublishedRooms],
     { x: centerX, y: centerY },
     radius
   );
-  applyCourseMemberships(worldWindow.rooms, memberships);
+  if (expandedRoomsEnabled) {
+    applyExpandedRoomMemberships(worldWindow.rooms, memberships as ExpandedRoomCellMembership[]);
+  } else {
+    applyLegacyCourseMemberships(worldWindow.rooms, memberships as LegacyCourseMembership[]);
+  }
 
   return jsonResponse(request, worldWindow);
 }
@@ -61,17 +75,24 @@ export async function handleWorldChunksRequest(
   const maxX = roomBounds.maxX + 1;
   const minY = roomBounds.minY - 1;
   const maxY = roomBounds.maxY + 1;
+  const expandedRoomsEnabled = isExpandedRoomsEnabled(env);
   const [publishedRooms, claimedUnpublishedRooms, memberships] = await Promise.all([
     loadPublishedRoomsInBounds(env, minX, maxX, minY, maxY),
     loadClaimedUnpublishedRoomsInBounds(env, minX, maxX, minY, maxY),
-    loadPublishedCourseMembershipsInBounds(env, minX, maxX, minY, maxY),
+    expandedRoomsEnabled
+      ? loadPublishedExpandedRoomMembershipsInBounds(env, minX, maxX, minY, maxY)
+      : loadPublishedCourseMembershipsInBounds(env, minX, maxX, minY, maxY),
   ]);
   const chunkWindow = computeWorldChunkWindow(
     [...publishedRooms, ...claimedUnpublishedRooms],
     chunkBounds
   );
   for (const chunk of chunkWindow.chunks) {
-    applyCourseMemberships(chunk.rooms, memberships);
+    if (expandedRoomsEnabled) {
+      applyExpandedRoomMemberships(chunk.rooms, memberships as ExpandedRoomCellMembership[]);
+    } else {
+      applyLegacyCourseMemberships(chunk.rooms, memberships as LegacyCourseMembership[]);
+    }
     chunk.chunkPreviewHash = computeWorldChunkPreviewHash(chunk);
   }
 
@@ -144,7 +165,15 @@ async function filterClaimableFrontierRooms(
   return claimableRooms;
 }
 
-function applyCourseMemberships(
+type LegacyCourseMembership = {
+  roomId: string;
+  courseId: string;
+  courseTitle: string | null;
+  goalType: CourseGoalType | null;
+  roomCount: number;
+};
+
+function applyLegacyCourseMemberships(
   rooms: Array<{
     id: string;
     course: {
@@ -153,14 +182,9 @@ function applyCourseMemberships(
       goalType: CourseGoalType | null;
       roomCount: number;
     } | null;
+    expandedRoom: ExpandedRoomMembershipSummary | null;
   }>,
-  memberships: Array<{
-    roomId: string;
-    courseId: string;
-    courseTitle: string | null;
-    goalType: CourseGoalType | null;
-    roomCount: number;
-  }>
+  memberships: LegacyCourseMembership[],
 ): void {
   const membershipsByRoomId = new Map(memberships.map((entry) => [entry.roomId, entry]));
   for (const room of rooms) {
@@ -173,5 +197,58 @@ function applyCourseMemberships(
           roomCount: membership.roomCount,
         }
       : null;
+    room.expandedRoom = null;
   }
+}
+
+function applyExpandedRoomMemberships(
+  rooms: Array<{
+    id: string;
+    title: string | null;
+    state: string;
+    goalType: RoomGoalType | null;
+    course: {
+      courseId: string;
+      courseTitle: string | null;
+      goalType: CourseGoalType | null;
+      roomCount: number;
+    } | null;
+    expandedRoom: ExpandedRoomMembershipSummary | null;
+  }>,
+  memberships: ExpandedRoomCellMembership[],
+): void {
+  const membershipsByRoomId = new Map(memberships.map((entry) => [entry.roomId, entry]));
+  for (const room of rooms) {
+    const membership = membershipsByRoomId.get(room.id);
+    room.course =
+      membership?.legacyCourseId
+        ? {
+            courseId: membership.legacyCourseId,
+            courseTitle: membership.title,
+            goalType: membership.goalType as CourseGoalType | null,
+            roomCount: membership.cellCount,
+          }
+        : null;
+    room.expandedRoom = membership
+      ? {
+          expandedRoomId: membership.expandedRoomId,
+          title: membership.title,
+          goalType: membership.goalType,
+          cellCount: membership.cellCount,
+          source: membership.source,
+          legacyCourseId: membership.legacyCourseId,
+        }
+      : room.state === 'published'
+        ? createExpandedRoomSummaryFromStandaloneRoom({
+            roomId: room.id,
+            roomTitle: room.title,
+            goalType: room.goalType,
+          })
+        : null;
+  }
+}
+
+function isExpandedRoomsEnabled(env: Env): boolean {
+  const raw = env.EXPANDED_ROOMS_ENABLED?.trim().toLowerCase();
+  return raw !== '0' && raw !== 'false' && raw !== 'off';
 }

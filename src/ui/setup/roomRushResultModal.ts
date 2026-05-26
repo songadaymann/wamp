@@ -350,8 +350,10 @@ function buildRoomRushSubmissionBody(
     route: run.route.map((step) => ({
       routeIndex: step.routeIndex,
       roomId: step.roomId,
+      expandedRoomId: step.expandedRoomId,
       coordinates: { ...step.coordinates },
       uniqueVisitIndex: step.uniqueVisitIndex,
+      uniqueAreaVisitIndex: step.uniqueAreaVisitIndex,
     })),
     startCoordinates: { ...run.startCoordinates },
     finishCoordinates: { ...run.currentCoordinates },

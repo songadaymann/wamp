@@ -24,8 +24,18 @@ export interface RoomCommentRecord {
   createdAt: string;
 }
 
+export interface RoomCommentAreaContext {
+  expandedRoomId: string;
+  expandedRoomVersion: number | null;
+  title: string | null;
+  anchorCoordinates: RoomCoordinates;
+  focusedCoordinates: RoomCoordinates;
+  cellCount: number;
+}
+
 export interface RoomCommentListResponse {
   comments: RoomCommentRecord[];
+  commentArea: RoomCommentAreaContext | null;
 }
 
 export interface RoomCommentCreateRequestBody {
@@ -38,6 +48,7 @@ export interface RoomCommentCreateResponse {
   comment: RoomCommentRecord;
   status: RoomCommentStatus;
   message: string;
+  commentArea: RoomCommentAreaContext | null;
 }
 
 export interface AdminRoomCommentRecord extends RoomCommentRecord {

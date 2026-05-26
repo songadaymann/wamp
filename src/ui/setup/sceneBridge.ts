@@ -239,6 +239,10 @@ export type CourseComposerState = {
   publishedRoomCount: number;
   publishedStateText: string;
   publishedDraftWarningText: string | null;
+  cellCount: number;
+  cellLimit: number;
+  cellUsageText: string;
+  cellLimitReached: boolean;
   dirty: boolean;
   statusText: string | null;
   canEditSelectedRoom: boolean;

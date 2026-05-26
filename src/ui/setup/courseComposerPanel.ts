@@ -16,6 +16,7 @@ type CourseEditorPanelElements = {
   openSelectedRoomButton: HTMLButtonElement | null;
   centerSelectedRoomButton: HTMLButtonElement | null;
   editCourseButton: HTMLButtonElement | null;
+  cellLimit: HTMLElement | null;
   roomList: HTMLElement | null;
   checkpointList: HTMLElement | null;
   summary: HTMLElement | null;
@@ -59,6 +60,7 @@ export class CourseComposerPanelController {
       openSelectedRoomButton: this.doc.getElementById('btn-course-workbench-open-room') as HTMLButtonElement | null,
       centerSelectedRoomButton: this.doc.getElementById('btn-course-workbench-center-room') as HTMLButtonElement | null,
       editCourseButton: this.doc.getElementById('btn-course-workbench-edit-course') as HTMLButtonElement | null,
+      cellLimit: this.doc.getElementById('course-workbench-cell-limit'),
       roomList: this.doc.getElementById('course-workbench-room-list'),
       checkpointList: this.doc.getElementById('course-workbench-checkpoint-list'),
       summary: this.doc.getElementById('course-workbench-summary'),
@@ -191,6 +193,7 @@ export class CourseComposerPanelController {
 
     this.renderRoomEntries(state.roomEntries);
     this.renderCheckpointEntries(state.checkpointEntries);
+    this.setText(this.elements.cellLimit, state.cellUsageText);
     this.setText(this.elements.summary, state.summaryText);
     this.setText(this.elements.publishedState, state.publishedStateText);
     this.setText(this.elements.publishedWarning, state.publishedDraftWarningText ?? '');
@@ -222,7 +225,7 @@ export class CourseComposerPanelController {
     if (entries.length === 0) {
       const empty = this.doc.createElement('div');
       empty.className = 'course-editor-empty';
-      empty.textContent = 'No rooms in this course yet.';
+      empty.textContent = 'No cells in this expanded room yet.';
       root.append(empty);
       return;
     }

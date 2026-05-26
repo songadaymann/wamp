@@ -496,9 +496,9 @@ export class LeaderboardModalController {
       );
       this.setError(null);
     } catch (error) {
-      console.error('Failed to load course leaderboard', error);
+      console.error('Failed to load expanded room leaderboard', error);
       this.courseLeaderboard = null;
-      this.setError(error instanceof Error ? error.message : 'Failed to load course leaderboard.');
+      this.setError(error instanceof Error ? error.message : 'Failed to load expanded room leaderboard.');
     } finally {
       this.courseLoading = false;
       this.courseLoaded = true;
@@ -965,10 +965,10 @@ export class LeaderboardModalController {
       this.loading || this.courseLoading || (this.activeTab === 'course' && !this.courseLoaded);
     this.elements.courseList.replaceChildren();
     this.elements.courseSummary.textContent = coursePending
-      ? 'Loading course leaderboard...'
+      ? 'Loading expanded room leaderboard...'
       : this.courseLeaderboard
         ? `${this.courseLeaderboard.entries.length} ranked run${this.courseLeaderboard.entries.length === 1 ? '' : 's'} · ${this.courseLeaderboard.rankingMode === 'time' ? 'fastest time wins' : 'highest score wins'} · ${this.formatQualitySummary(this.courseLeaderboard.quality)} · ${this.formatDifficultyConsensus(this.courseLeaderboard.difficulty)}${this.formatTrophySuffix(this.courseLeaderboard.trophy)}`
-        : 'No published course leaderboard available.';
+        : 'No published expanded room leaderboard available.';
 
     const viewer = this.courseLeaderboard?.viewerBest ?? null;
     this.elements.courseViewer.classList.toggle('hidden', coursePending || viewer === null);
@@ -982,7 +982,7 @@ export class LeaderboardModalController {
     if (coursePending) {
       const loading = this.doc.createElement('div');
       loading.className = 'leaderboard-empty';
-      loading.textContent = 'Loading course leaderboard...';
+      loading.textContent = 'Loading expanded room leaderboard...';
       this.elements.courseList.appendChild(loading);
       return;
     }
@@ -991,8 +991,8 @@ export class LeaderboardModalController {
       const empty = this.doc.createElement('div');
       empty.className = 'leaderboard-empty';
       empty.textContent = this.roomContext?.courseId
-        ? 'No completed ranked course runs yet.'
-        : 'Select a published course room to view course rankings.';
+        ? 'No completed ranked expanded room runs yet.'
+        : 'Select a published expanded room cell to view expanded room rankings.';
       this.elements.courseList.appendChild(empty);
       return;
     }
@@ -1176,6 +1176,13 @@ export class LeaderboardModalController {
       titleRow.appendChild(badge);
     }
 
+    if (entry.expandedRoom && entry.expandedRoom.cellCount > 1) {
+      const badge = this.doc.createElement('div');
+      badge.className = 'leaderboard-discover-area-badge';
+      badge.textContent = `${entry.expandedRoom.cellCount} cells`;
+      titleRow.appendChild(badge);
+    }
+
     button.appendChild(titleRow);
 
     const meta = this.doc.createElement('div');
@@ -1186,11 +1193,13 @@ export class LeaderboardModalController {
         ? 'Unrated'
         : 'No challenge';
     const goalLabel = entry.goalType ? entry.goalType.replace(/_/g, ' ') : 'free play';
-    const versionLabel = this.formatRoomVersionSummary(
-      entry.displayRoomVersion,
-      entry.roomVersion,
-      entry.leaderboardSourceVersion
-    );
+    const versionLabel = entry.expandedRoom && typeof entry.expandedRoom.expandedRoomVersion === 'number'
+      ? `area v${entry.expandedRoom.expandedRoomVersion}`
+      : this.formatRoomVersionSummary(
+          entry.displayRoomVersion,
+          entry.roomVersion,
+          entry.leaderboardSourceVersion
+        );
     const canonicalLabel =
       entry.canonicalRoomVersion !== null &&
       (entry.canonicalRoomVersion === entry.roomVersion ||
@@ -1199,7 +1208,7 @@ export class LeaderboardModalController {
         : '';
     meta.textContent = `${goalLabel} · ${versionLabel}${canonicalLabel} · ${difficultyLabel} · ${
       entry.voteCount
-    } vote${entry.voteCount === 1 ? '' : 's'} · ${this.formatQualitySummary(entry.quality)}${this.formatTrophySuffix(entry.trophy)} · ${entry.roomCoordinates.x},${entry.roomCoordinates.y}`;
+    } vote${entry.voteCount === 1 ? '' : 's'} · ${this.formatQualitySummary(entry.quality)}${this.formatTrophySuffix(entry.trophy)} · ${this.formatDiscoveryLocationSummary(entry)}`;
     button.appendChild(meta);
     item.appendChild(button);
 
@@ -1339,6 +1348,14 @@ export class LeaderboardModalController {
     trophy: RoomLeaderboardResponse['trophy'] | CourseLeaderboardResponse['trophy'] | RoomDiscoveryEntry['trophy'] | null
   ): string {
     return trophy ? ' · trophy' : '';
+  }
+
+  private formatDiscoveryLocationSummary(entry: RoomDiscoveryEntry): string {
+    if (entry.expandedRoom && entry.expandedRoom.cellCount > 1) {
+      return `${entry.expandedRoom.cellCount} cells · focus ${entry.roomCoordinates.x},${entry.roomCoordinates.y}`;
+    }
+
+    return `${entry.roomCoordinates.x},${entry.roomCoordinates.y}`;
   }
 
   private getDifficultyStatusText(): string {

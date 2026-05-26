@@ -10,6 +10,10 @@ export interface RoomSequenceEntry {
   roomCoordinates: RoomCoordinates;
   roomVersion: number;
   roomTitle?: string | null;
+  expandedRoomId?: string | null;
+  expandedRoomVersion?: number | null;
+  expandedRoomCellCount?: number | null;
+  legacyCourseId?: string | null;
 }
 
 export interface RoomSequenceStartDetail {

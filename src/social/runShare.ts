@@ -88,6 +88,10 @@ function getRunShareSubject(
     return `"${cleanTitle}"`;
   }
 
+  if (detail.contentType === 'expanded_room') {
+    return cleanTitle ? `"${cleanTitle}"` : 'this Expanded Room';
+  }
+
   return cleanTitle ? `"${cleanTitle}"` : 'this course';
 }
 

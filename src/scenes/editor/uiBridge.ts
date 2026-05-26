@@ -1155,6 +1155,9 @@ export class EditorUiBridge {
     const isTogglingOff = this.activeFeatureLauncher === feature;
     this.activeFeatureLauncher = isTogglingOff ? null : feature;
     this.syncEditorChromeState();
+    if (!isTogglingOff) {
+      this.revealActiveFeaturePanel(feature);
+    }
   }
 
   private getFeatureLauncherStatusText(): string {
@@ -1167,6 +1170,28 @@ export class EditorUiBridge {
 
   private requestPhoneEditorAutoCollapse(): void {
     this.windowObj.dispatchEvent(new Event('mobile-editor-auto-collapse'));
+  }
+
+  private revealActiveFeaturePanel(feature: EditorFeatureLauncher): void {
+    const courseEditorMode = this.doc.body.dataset.editorCourseMode === 'true';
+    const target =
+      feature === 'goal'
+        ? courseEditorMode
+          ? this.elements.courseRoot
+          : this.elements.goalRoot
+        : feature === 'lighting'
+          ? this.elements.lightingFeaturePanel
+          : null;
+    if (!target) {
+      return;
+    }
+
+    this.windowObj.requestAnimationFrame(() => {
+      if (this.destroyed || target.classList.contains('hidden')) {
+        return;
+      }
+      target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
   }
 
   private syncEditorChromeState(): void {
@@ -1196,11 +1221,18 @@ export class EditorUiBridge {
     setHidden(this.elements.featureStatus, featureStatusText.length === 0);
 
     const useFeaturePanels = this.usesDesktopFeaturePanels();
-    const courseGoalActive = Boolean(this.elements.courseRoot && !this.elements.courseRoot.classList.contains('hidden'));
+    const courseEditorMode = this.doc.body.dataset.editorCourseMode === 'true';
+    const courseGoalActive = courseEditorMode && this.activeFeatureLauncher === 'goal';
+    if (this.elements.courseRoot && courseEditorMode) {
+      this.elements.courseRoot.classList.toggle(
+        'hidden',
+        useFeaturePanels ? this.activeFeatureLauncher !== 'goal' : false,
+      );
+    }
     if (this.elements.goalRoot) {
       this.elements.goalRoot.classList.toggle(
         'hidden',
-        useFeaturePanels ? this.activeFeatureLauncher !== 'goal' || courseGoalActive : false,
+        useFeaturePanels ? this.activeFeatureLauncher !== 'goal' || courseGoalActive : courseEditorMode,
       );
     }
     setHidden(

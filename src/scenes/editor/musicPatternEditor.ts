@@ -56,6 +56,7 @@ interface EditorMusicPatternHost {
   getRoomMusic(): RoomMusic | null;
   commitRoomMusic(nextMusic: RoomMusic | null): RoomMusic | null;
   replaceLegacyRoomMusicWithPattern(): RoomMusic | null;
+  getWorkspaceOrigin?: () => { x: number; y: number };
   renderUi(): void;
   getMusicPlaybackDebugState(): Record<string, unknown>;
   getMusicPreviewState(): EditorMusicPreviewState;
@@ -681,10 +682,11 @@ export class EditorMusicPatternController {
       hoveredActiveCell && resolveSequencerTool() !== 'copy'
         ? theme.accentHot
         : this.getInstrumentColor();
+    const origin = this.getWorkspaceOrigin();
     graphics.lineStyle(2, color, 0.9);
     graphics.fillStyle(color, hoveredActiveCell ? 0.08 : 0.18);
-    graphics.fillRect(cell.step * TILE_SIZE, cell.row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-    graphics.strokeRect(cell.step * TILE_SIZE, cell.row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    graphics.fillRect(origin.x + cell.step * TILE_SIZE, origin.y + cell.row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    graphics.strokeRect(origin.x + cell.step * TILE_SIZE, origin.y + cell.row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
     return true;
   }
 
@@ -754,26 +756,42 @@ export class EditorMusicPatternController {
     return getPatternInstrumentColor(instrumentId);
   }
 
+  private getWorkspaceOrigin(): { x: number; y: number } {
+    return this.host.getWorkspaceOrigin?.() ?? { x: 0, y: 0 };
+  }
+
+  private getLocalPointerWorldPoint(pointer: Phaser.Input.Pointer): Phaser.Math.Vector2 {
+    const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const origin = this.getWorkspaceOrigin();
+    return new Phaser.Math.Vector2(worldPoint.x - origin.x, worldPoint.y - origin.y);
+  }
+
   private drawBackdrop(): void {
     if (!this.overlayBackdrop) {
       return;
     }
 
     const theme = this.getTilesetTheme();
+    const origin = this.getWorkspaceOrigin();
     this.overlayBackdrop.clear();
     this.overlayBackdrop.fillStyle(0x050506, 0.68);
-    this.overlayBackdrop.fillRect(0, 0, ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
+    this.overlayBackdrop.fillRect(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
     this.overlayBackdrop.fillStyle(theme.accentAlt, 0.08);
     this.overlayBackdrop.fillRect(
-      ROOM_PATTERN_MARGIN_START_STEP * TILE_SIZE,
-      0,
+      origin.x + ROOM_PATTERN_MARGIN_START_STEP * TILE_SIZE,
+      origin.y,
       (ROOM_PX_WIDTH - ROOM_PATTERN_MARGIN_START_STEP * TILE_SIZE),
       ROOM_PX_HEIGHT,
     );
 
     if (this.activeInstrumentTab === 'drums') {
       this.overlayBackdrop.fillStyle(theme.accentWarm, 0.08);
-      this.overlayBackdrop.fillRect(0, 0, ROOM_PATTERN_ACTIVE_STEP_COLUMNS * TILE_SIZE, ROOM_PATTERN_DRUM_GRID_START_ROW * TILE_SIZE);
+      this.overlayBackdrop.fillRect(
+        origin.x,
+        origin.y,
+        ROOM_PATTERN_ACTIVE_STEP_COLUMNS * TILE_SIZE,
+        ROOM_PATTERN_DRUM_GRID_START_ROW * TILE_SIZE,
+      );
     }
   }
 
@@ -783,6 +801,7 @@ export class EditorMusicPatternController {
     }
 
     const theme = this.getTilesetTheme();
+    const origin = this.getWorkspaceOrigin();
     this.overlayGrid.clear();
     for (let x = 0; x <= ROOM_PATTERN_ACTIVE_STEP_COLUMNS; x += 1) {
       const lineAlpha = x === 16 ? 0.76 : x % 4 === 0 ? 0.4 : 0.14;
@@ -790,8 +809,8 @@ export class EditorMusicPatternController {
       const color = x === 16 ? theme.accentHot : x % 4 === 0 ? theme.accentWarm : 0xf2ecd9;
       this.overlayGrid.lineStyle(lineWidth, color, lineAlpha);
       this.overlayGrid.beginPath();
-      this.overlayGrid.moveTo(x * TILE_SIZE, 0);
-      this.overlayGrid.lineTo(x * TILE_SIZE, ROOM_PX_HEIGHT);
+      this.overlayGrid.moveTo(origin.x + x * TILE_SIZE, origin.y);
+      this.overlayGrid.lineTo(origin.x + x * TILE_SIZE, origin.y + ROOM_PX_HEIGHT);
       this.overlayGrid.strokePath();
     }
 
@@ -802,13 +821,18 @@ export class EditorMusicPatternController {
           : 0.18;
       this.overlayGrid.lineStyle(1, theme.accentAlt, rowAlpha);
       this.overlayGrid.beginPath();
-      this.overlayGrid.moveTo(0, y * TILE_SIZE);
-      this.overlayGrid.lineTo(ROOM_PATTERN_ACTIVE_STEP_COLUMNS * TILE_SIZE, y * TILE_SIZE);
+      this.overlayGrid.moveTo(origin.x, origin.y + y * TILE_SIZE);
+      this.overlayGrid.lineTo(origin.x + ROOM_PATTERN_ACTIVE_STEP_COLUMNS * TILE_SIZE, origin.y + y * TILE_SIZE);
       this.overlayGrid.strokePath();
     }
 
     this.overlayGrid.lineStyle(2, theme.accentCool, 0.42);
-    this.overlayGrid.strokeRect(0, 0, ROOM_PATTERN_ACTIVE_STEP_COLUMNS * TILE_SIZE, ROOM_PX_HEIGHT);
+    this.overlayGrid.strokeRect(
+      origin.x,
+      origin.y,
+      ROOM_PATTERN_ACTIVE_STEP_COLUMNS * TILE_SIZE,
+      ROOM_PX_HEIGHT,
+    );
   }
 
   private drawCells(): void {
@@ -823,11 +847,17 @@ export class EditorMusicPatternController {
 
     const pattern = this.getDisplayPattern();
     const color = this.getInstrumentColor();
+    const origin = this.getWorkspaceOrigin();
     if (this.activeInstrumentTab === 'drums') {
       this.overlayCells.fillStyle(color, 0.88);
       for (const row of ROOM_PATTERN_DRUM_ROWS) {
         for (const step of pattern.tabs.drums[row.id]) {
-          this.overlayCells.fillRect(step * TILE_SIZE + 2, row.gridRow * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+          this.overlayCells.fillRect(
+            origin.x + step * TILE_SIZE + 2,
+            origin.y + row.gridRow * TILE_SIZE + 2,
+            TILE_SIZE - 4,
+            TILE_SIZE - 4,
+          );
         }
       }
       return;
@@ -858,8 +888,8 @@ export class EditorMusicPatternController {
       }
       if (rowIndex !== null) {
         this.overlayCells.fillRect(
-          step * TILE_SIZE + 2,
-          rowIndex * TILE_SIZE + 2,
+          origin.x + step * TILE_SIZE + 2,
+          origin.y + rowIndex * TILE_SIZE + 2,
           (endStep - step) * TILE_SIZE - 4,
           TILE_SIZE - 4,
         );
@@ -884,12 +914,13 @@ export class EditorMusicPatternController {
     }
 
     const theme = this.getTilesetTheme();
+    const origin = this.getWorkspaceOrigin();
     this.overlayPlayhead.fillStyle(theme.accentWarm, 0.12);
-    this.overlayPlayhead.fillRect(playheadStep * TILE_SIZE, 0, TILE_SIZE, ROOM_PX_HEIGHT);
+    this.overlayPlayhead.fillRect(origin.x + playheadStep * TILE_SIZE, origin.y, TILE_SIZE, ROOM_PX_HEIGHT);
     this.overlayPlayhead.lineStyle(2, theme.accentWarm, 0.9);
     this.overlayPlayhead.beginPath();
-    this.overlayPlayhead.moveTo(playheadStep * TILE_SIZE, 0);
-    this.overlayPlayhead.lineTo(playheadStep * TILE_SIZE, ROOM_PX_HEIGHT);
+    this.overlayPlayhead.moveTo(origin.x + playheadStep * TILE_SIZE, origin.y);
+    this.overlayPlayhead.lineTo(origin.x + playheadStep * TILE_SIZE, origin.y + ROOM_PX_HEIGHT);
     this.overlayPlayhead.strokePath();
   }
 
@@ -1020,10 +1051,11 @@ export class EditorMusicPatternController {
   private updateRowLabels(): void {
     const pattern = this.getDisplayPattern();
     const theme = this.getTilesetTheme();
+    const origin = this.getWorkspaceOrigin();
     for (let rowIndex = 0; rowIndex < this.rowLabels.length; rowIndex += 1) {
       const label = this.rowLabels[rowIndex];
       label.setVisible(this.overlayBackdrop?.visible ?? false);
-      label.setPosition(-8, rowIndex * TILE_SIZE + TILE_SIZE * 0.5);
+      label.setPosition(origin.x - 8, origin.y + rowIndex * TILE_SIZE + TILE_SIZE * 0.5);
       label.setText(
         getPatternRowLabel(
           this.activeInstrumentTab,
@@ -1061,12 +1093,12 @@ export class EditorMusicPatternController {
           : 'C';
     const disabled = this.getLegacyStemNoticeVisible();
 
-    this.mixTitleLabel?.setPosition(layout.centerX, MIX_TITLE_Y);
+    this.mixTitleLabel?.setPosition(layout.centerX, layout.panelY + (MIX_TITLE_Y - 8));
     this.mixTitleLabel?.setText(getPatternInstrumentLabel(this.activeInstrumentTab));
     this.mixTitleLabel?.setAlpha(disabled ? 0.4 : 0.92);
     this.mixTitleLabel?.setColor(colorNumberToCssHex(this.getInstrumentColor()));
 
-    this.mixReadoutLabel?.setPosition(layout.centerX, MIX_READOUT_Y);
+    this.mixReadoutLabel?.setPosition(layout.centerX, layout.panelY + (MIX_READOUT_Y - 8));
     this.mixReadoutLabel?.setText(`PAN ${panLabel} · VOL ${Math.round(mix.volume * 100)}%`);
     this.mixReadoutLabel?.setAlpha(disabled ? 0.34 : 0.78);
     this.mixReadoutLabel?.setColor(colorNumberToCssHex(theme.accentWarm));
@@ -1074,17 +1106,18 @@ export class EditorMusicPatternController {
 
   private drawSelectionRect(graphics: Phaser.GameObjects.Graphics, rect: MusicRect): void {
     const theme = this.getTilesetTheme();
+    const origin = this.getWorkspaceOrigin();
     graphics.lineStyle(2, theme.accentWarm, 0.92);
     graphics.fillStyle(theme.accentWarm, 0.1);
     graphics.fillRect(
-      rect.x1 * TILE_SIZE,
-      rect.y1 * TILE_SIZE,
+      origin.x + rect.x1 * TILE_SIZE,
+      origin.y + rect.y1 * TILE_SIZE,
       (rect.x2 - rect.x1 + 1) * TILE_SIZE,
       (rect.y2 - rect.y1 + 1) * TILE_SIZE,
     );
     graphics.strokeRect(
-      rect.x1 * TILE_SIZE,
-      rect.y1 * TILE_SIZE,
+      origin.x + rect.x1 * TILE_SIZE,
+      origin.y + rect.y1 * TILE_SIZE,
       (rect.x2 - rect.x1 + 1) * TILE_SIZE,
       (rect.y2 - rect.y1 + 1) * TILE_SIZE,
     );
@@ -1101,6 +1134,7 @@ export class EditorMusicPatternController {
     }
 
     const color = this.getInstrumentColor();
+    const origin = this.getWorkspaceOrigin();
     graphics.lineStyle(2, color, 0.92);
     graphics.fillStyle(color, 0.18);
     if (clipboard.tonalStepRows) {
@@ -1116,8 +1150,8 @@ export class EditorMusicPatternController {
           continue;
         }
 
-        graphics.fillRect(targetStep * TILE_SIZE, targetRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-        graphics.strokeRect(targetStep * TILE_SIZE, targetRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        graphics.fillRect(origin.x + targetStep * TILE_SIZE, origin.y + targetRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        graphics.strokeRect(origin.x + targetStep * TILE_SIZE, origin.y + targetRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
       }
       return;
     }
@@ -1138,28 +1172,29 @@ export class EditorMusicPatternController {
           continue;
         }
 
-        graphics.fillRect(targetStep * TILE_SIZE, targetRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-        graphics.strokeRect(targetStep * TILE_SIZE, targetRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        graphics.fillRect(origin.x + targetStep * TILE_SIZE, origin.y + targetRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        graphics.strokeRect(origin.x + targetStep * TILE_SIZE, origin.y + targetRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
       }
     }
   }
 
   private getMixControlLayout(): MixControlLayout {
+    const origin = this.getWorkspaceOrigin();
     const marginWidth = ROOM_PX_WIDTH - ROOM_PATTERN_MARGIN_START_STEP * TILE_SIZE;
     const panelWidth = Math.min(MIX_PANEL_WIDTH, marginWidth - MIX_PANEL_PADDING * 2);
-    const panelX = ROOM_PATTERN_MARGIN_START_STEP * TILE_SIZE + (marginWidth - panelWidth) * 0.5;
+    const panelX = origin.x + ROOM_PATTERN_MARGIN_START_STEP * TILE_SIZE + (marginWidth - panelWidth) * 0.5;
     const centerX = panelX + panelWidth * 0.5;
     return {
       panelX,
-      panelY: 8,
+      panelY: origin.y + 8,
       panelWidth,
       panelHeight: ROOM_PX_HEIGHT - 16,
       panTrackX: centerX - MIX_PAN_TRACK_WIDTH * 0.5,
-      panTrackY: MIX_PAN_TRACK_Y,
+      panTrackY: origin.y + MIX_PAN_TRACK_Y,
       panTrackWidth: MIX_PAN_TRACK_WIDTH,
       panTrackHeight: MIX_PAN_TRACK_HEIGHT,
       volumeTrackX: centerX - MIX_VOLUME_TRACK_WIDTH * 0.5,
-      volumeTrackY: MIX_VOLUME_TRACK_Y,
+      volumeTrackY: origin.y + MIX_VOLUME_TRACK_Y,
       volumeTrackWidth: MIX_VOLUME_TRACK_WIDTH,
       volumeTrackHeight: MIX_VOLUME_TRACK_HEIGHT,
       centerX,
@@ -1214,7 +1249,7 @@ export class EditorMusicPatternController {
   }
 
   private getCellFromPointer(pointer: Phaser.Input.Pointer): { step: number; row: number } | null {
-    const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const worldPoint = this.getLocalPointerWorldPoint(pointer);
     const step = Math.floor(worldPoint.x / TILE_SIZE);
     const row = Math.floor(worldPoint.y / TILE_SIZE);
     if (!this.isPlayableCell(step, row)) {

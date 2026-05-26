@@ -1,3 +1,4 @@
+import type { ExpandedRoomSource } from '../expandedRooms/model';
 import type { RoomGoalType } from '../goals/roomGoals';
 import type { RoomCoordinates } from '../persistence/roomModel';
 
@@ -31,6 +32,18 @@ export interface RoomPlaylistItem {
   publishedAt: string | null;
   position: number;
   addedAt: string;
+  expandedRoom?: RoomPlaylistExpandedRoomTarget | null;
+}
+
+export interface RoomPlaylistExpandedRoomTarget {
+  expandedRoomId: string;
+  expandedRoomVersion: number | null;
+  title: string | null;
+  source: ExpandedRoomSource;
+  legacyCourseId: string | null;
+  cellCount: number;
+  anchorCoordinates: RoomCoordinates;
+  focusedCoordinates: RoomCoordinates;
 }
 
 export interface RoomPlaylistResponse extends RoomPlaylistSummary {

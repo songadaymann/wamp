@@ -1,5 +1,5 @@
 import { getAuthDebugState } from '../../auth/client';
-import type { CourseRepository } from '../../courses/courseRepository';
+import type { ExpandedRoomEditorRepository } from '../../expandedRooms/editorRepository';
 import {
   getActiveCourseDraftSessionRecord,
   getActiveCourseDraftSessionSelectedRoomId,
@@ -9,12 +9,16 @@ import {
   updateActiveCourseDraftSession,
 } from '../../courses/draftSession';
 import {
-  areCourseRoomRefsOrthogonallyAdjacent,
+  getExpandedRoomCellLimit as getRecordExpandedRoomCellLimit,
+  getExpandedRoomCellUsageText,
+  isExpandedRoomCellLimitReached,
+} from '../../courses/editor/state';
+import {
   cloneCourseSnapshot,
   courseGoalRequiresStartPoint,
-  courseRoomRefsFollowLinearPath,
-  MAX_COURSE_ROOMS,
+  courseRoomRefsFormConnectedCluster,
   type CourseRecord,
+  type CourseRoomRef,
   type CourseSnapshot,
 } from '../../courses/model';
 import { setFocusedCoordinatesInUrl } from '../../navigation/worldNavigation';
@@ -49,7 +53,7 @@ interface CoursePublishedRoomMeta {
 
 interface OverworldCourseComposerControllerHost {
   roomRepository: RoomRepository;
-  courseRepository: CourseRepository;
+  expandedRoomEditorRepository: ExpandedRoomEditorRepository;
   getMode(): OverworldMode;
   setMode(mode: OverworldMode): void;
   setCameraMode(mode: CameraMode): void;
@@ -123,7 +127,7 @@ export class OverworldCourseComposerController {
       return;
     }
 
-    this.statusText = 'Course draft updated.';
+    this.statusText = 'Expanded room draft updated.';
     void this.refreshSelectedRoomState();
     this.host.emitStateChanged();
   }
@@ -142,15 +146,15 @@ export class OverworldCourseComposerController {
     const draft = this.record.draft;
     const testDraftDisabledReason =
       !this.record.permissions.canSaveDraft
-        ? 'This course is read-only for your account.'
+        ? 'This expanded room is read-only for your account.'
         : this.getCurrentCourseDraftPreviewDisabledReason();
     const saveDraftDisabledReason =
       !this.record.permissions.canSaveDraft
-        ? 'This course is read-only for your account.'
+        ? 'This expanded room is read-only for your account.'
         : this.getCurrentCourseDraftSaveDisabledReason();
     const publishCourseDisabledReason =
       !this.record.permissions.canPublish
-        ? 'This course is read-only for your account.'
+        ? 'This expanded room is read-only for your account.'
         : this.getCurrentCourseDraftPublishDisabledReason();
     const unpublishCourseDisabledReason = this.getCourseComposerUnpublishDisabledReason();
 
@@ -189,8 +193,12 @@ export class OverworldCourseComposerController {
       publishedRoomCount: this.record.published?.roomRefs.length ?? 0,
       publishedStateText: this.getCourseComposerPublishedStateText(),
       publishedDraftWarningText: this.getCourseComposerPublishedDraftWarningText(),
+      cellCount: draft.roomRefs.length,
+      cellLimit: this.getExpandedRoomCellLimit(),
+      cellUsageText: getExpandedRoomCellUsageText(this.record),
+      cellLimitReached: isExpandedRoomCellLimitReached(this.record),
       dirty: this.isDirty(),
-      statusText: this.loading ? 'Loading course...' : this.statusText,
+      statusText: this.loading ? 'Loading expanded room...' : this.statusText,
       canEditSelectedRoom:
         this.record.permissions.canSaveDraft &&
         getActiveCourseDraftSessionSelectedRoomId() !== null,
@@ -217,6 +225,10 @@ export class OverworldCourseComposerController {
   }
 
   removeSelectedRoomFromCourseDraft(): void {
+    void this.removeSelectedRoomFromCourseDraftAsync();
+  }
+
+  private async removeSelectedRoomFromCourseDraftAsync(): Promise<void> {
     if (!this.record?.permissions.canSaveDraft) {
       return;
     }
@@ -226,24 +238,30 @@ export class OverworldCourseComposerController {
       return;
     }
 
-    this.updateCourseComposerDraft((draft) => {
-      draft.roomRefs = draft.roomRefs.filter((roomRef) => roomRef.roomId !== selectedRoomId);
-      if (draft.startPoint?.roomId === selectedRoomId) {
-        draft.startPoint = null;
-      }
-      if (draft.goal?.type === 'reach_exit' && draft.goal.exit?.roomId === selectedRoomId) {
-        draft.goal.exit = null;
-      }
-      if (draft.goal?.type === 'checkpoint_sprint') {
-        draft.goal.checkpoints = draft.goal.checkpoints.filter(
-          (checkpoint) => checkpoint.roomId !== selectedRoomId
-        );
-        if (draft.goal.finish?.roomId === selectedRoomId) {
-          draft.goal.finish = null;
-        }
-      }
-    });
-    void this.refreshSelectedRoomState();
+    this.loading = true;
+    this.statusText = 'Removing expanded room cell...';
+    this.host.emitStateChanged();
+    this.host.renderHud();
+    try {
+      const baseRecord = await this.saveDraftBeforeFootprintMutation();
+      const updated = await this.host.expandedRoomEditorRepository.removeCell(
+        baseRecord.draft.id,
+        selectedRoomId
+      );
+      this.setRecord(updated, {
+        selectedRoomId: updated.draft.roomRefs[0]?.roomId ?? null,
+      });
+      this.statusText = 'Expanded room cell removed and draft saved.';
+      await this.refreshSelectedRoomState();
+    } catch (error) {
+      console.error('Failed to remove expanded room cell', error);
+      this.statusText =
+        error instanceof Error ? error.message : 'Failed to remove expanded room cell.';
+    } finally {
+      this.loading = false;
+      this.host.emitStateChanged();
+      this.host.renderHud();
+    }
   }
 
   selectCourseRoomInComposer(roomId: string): void {
@@ -277,25 +295,25 @@ export class OverworldCourseComposerController {
       ? this.record.draft.roomRefs.find((candidate) => candidate.roomId === roomId) ?? null
       : null;
     if (!roomId) {
-      this.statusText = 'Select a room from this course to open it in the editor.';
+      this.statusText = 'Select a cell from this expanded room to open it in the editor.';
       this.host.emitStateChanged();
       return false;
     }
 
     if (!roomRef) {
-      this.statusText = 'Selected course room is no longer in this draft.';
+      this.statusText = 'Selected expanded room cell is no longer in this draft.';
       this.host.emitStateChanged();
       return false;
     }
 
     const roomSnapshot = this.host.getRoomSnapshotForCoordinates(roomRef.coordinates);
     if (!roomSnapshot) {
-      this.statusText = 'Selected course room is not loaded yet.';
+      this.statusText = 'Selected expanded room cell is not loaded yet.';
       this.host.emitStateChanged();
       return false;
     }
 
-    this.statusText = 'Editing course room in the room editor...';
+    this.statusText = 'Editing expanded room cell in the room editor...';
     this.host.emitStateChanged();
 
     this.host.openEditor({
@@ -314,10 +332,10 @@ export class OverworldCourseComposerController {
     const draft = this.record?.draft ?? null;
     const disabledReason =
       !this.record?.permissions.canSaveDraft
-        ? 'This course is read-only for your account.'
+        ? 'This expanded room is read-only for your account.'
         : this.getCurrentCourseDraftPreviewDisabledReason();
     if (!draft || disabledReason) {
-      this.statusText = disabledReason ?? 'Course draft is not ready to test.';
+      this.statusText = disabledReason ?? 'Expanded room draft is not ready to test.';
       this.host.emitStateChanged();
       this.host.renderHud();
       return;
@@ -343,7 +361,7 @@ export class OverworldCourseComposerController {
     const courseRecord = this.record;
     const disabledReason =
       !courseRecord?.permissions.canSaveDraft
-        ? 'This course is read-only for your account.'
+        ? 'This expanded room is read-only for your account.'
         : this.getCurrentCourseDraftSaveDisabledReason();
     if (disabledReason) {
       this.statusText = disabledReason;
@@ -355,20 +373,20 @@ export class OverworldCourseComposerController {
       return;
     }
 
-    this.statusText = 'Saving course draft...';
+    this.statusText = 'Saving expanded room draft...';
     this.host.emitStateChanged();
     try {
-      const saved = await this.host.courseRepository.saveDraft(courseRecord.draft);
+      const saved = await this.host.expandedRoomEditorRepository.saveDraft(courseRecord.draft);
       this.setRecord(saved, {
         selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
       });
-      this.statusText = 'Course draft saved.';
+      this.statusText = 'Expanded room draft saved.';
       await this.refreshSelectedRoomState();
       await this.host.refreshAround(this.host.getCurrentRoomCoordinates(), { forceChunkReload: true });
     } catch (error) {
-      console.error('Failed to save course draft', error);
+      console.error('Failed to save expanded room draft', error);
       this.statusText =
-        error instanceof Error ? error.message : 'Failed to save course draft.';
+        error instanceof Error ? error.message : 'Failed to save expanded room draft.';
     } finally {
       this.host.emitStateChanged();
       this.host.renderHud();
@@ -379,7 +397,7 @@ export class OverworldCourseComposerController {
     const courseRecord = this.record;
     const disabledReason =
       !courseRecord?.permissions.canPublish
-        ? 'This course is read-only for your account.'
+        ? 'This expanded room is read-only for your account.'
         : this.getCurrentCourseDraftPublishDisabledReason();
     if (disabledReason) {
       this.statusText = disabledReason;
@@ -391,24 +409,24 @@ export class OverworldCourseComposerController {
       return;
     }
 
-    this.statusText = 'Publishing course...';
+    this.statusText = 'Publishing expanded room...';
     this.host.emitStateChanged();
     try {
-      const saved = await this.host.courseRepository.saveDraft(courseRecord.draft);
+      const saved = await this.host.expandedRoomEditorRepository.saveDraft(courseRecord.draft);
       this.setRecord(saved, {
         selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
       });
-      const published = await this.host.courseRepository.publishCourse(courseRecord.draft.id);
+      const published = await this.host.expandedRoomEditorRepository.publishExpandedRoom(courseRecord.draft.id);
       this.setRecord(published, {
         selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
       });
-      this.statusText = 'Course published.';
+      this.statusText = 'Expanded room published.';
       await this.refreshSelectedRoomState();
       await this.host.refreshAround(this.host.getCurrentRoomCoordinates(), { forceChunkReload: true });
     } catch (error) {
-      console.error('Failed to publish course', error);
+      console.error('Failed to publish expanded room', error);
       this.statusText =
-        error instanceof Error ? error.message : 'Failed to publish course.';
+        error instanceof Error ? error.message : 'Failed to publish expanded room.';
     } finally {
       this.host.emitStateChanged();
       this.host.renderHud();
@@ -428,10 +446,10 @@ export class OverworldCourseComposerController {
       return;
     }
 
-    this.statusText = 'Unpublishing course...';
+    this.statusText = 'Unpublishing expanded room...';
     this.host.emitStateChanged();
     try {
-      const unpublished = await this.host.courseRepository.unpublishCourse(courseRecord.draft.id);
+      const unpublished = await this.host.expandedRoomEditorRepository.unpublishExpandedRoom(courseRecord.draft.id);
       const preservedDraft = cloneCourseSnapshot(courseRecord.draft);
       preservedDraft.status = 'draft';
       preservedDraft.publishedAt = null;
@@ -463,13 +481,13 @@ export class OverworldCourseComposerController {
         this.host.showTransientStatus('Stopped course because it was unpublished.');
       }
 
-      this.statusText = 'Course unpublished. The live course is no longer public.';
+      this.statusText = 'Expanded room unpublished. The live expanded room is no longer public.';
       await this.refreshSelectedRoomState();
       await this.host.refreshAround(this.host.getCurrentRoomCoordinates(), { forceChunkReload: true });
     } catch (error) {
-      console.error('Failed to unpublish course', error);
+      console.error('Failed to unpublish expanded room', error);
       this.statusText =
-        error instanceof Error ? error.message : 'Failed to unpublish course.';
+        error instanceof Error ? error.message : 'Failed to unpublish expanded room.';
     } finally {
       this.host.emitStateChanged();
       this.host.renderHud();
@@ -565,7 +583,7 @@ export class OverworldCourseComposerController {
       return false;
     }
 
-    if (this.record.draft.roomRefs.length >= MAX_COURSE_ROOMS) {
+    if (this.record.draft.roomRefs.length >= this.getExpandedRoomCellLimit()) {
       return false;
     }
 
@@ -573,16 +591,20 @@ export class OverworldCourseComposerController {
       return false;
     }
 
-    if (this.record.draft.roomRefs.length === 0) {
-      return true;
-    }
+    const nextRoomRefs: CourseRoomRef[] = [
+      ...this.record.draft.roomRefs,
+      {
+        roomId: meta.roomId,
+        coordinates: { ...meta.coordinates },
+        roomVersion: meta.roomVersion,
+        roomTitle: meta.roomTitle,
+      },
+    ];
+    return courseRoomRefsFormConnectedCluster(nextRoomRefs);
+  }
 
-    if (!courseRoomRefsFollowLinearPath(this.record.draft.roomRefs)) {
-      return false;
-    }
-
-    const lastRoomRef = this.record.draft.roomRefs[this.record.draft.roomRefs.length - 1];
-    return areCourseRoomRefsOrthogonallyAdjacent(meta, lastRoomRef);
+  private getExpandedRoomCellLimit(): number {
+    return getRecordExpandedRoomCellLimit(this.record);
   }
 
   private setRecord(
@@ -597,21 +619,21 @@ export class OverworldCourseComposerController {
     draft: CourseSnapshot | null,
   ): string | null {
     if (!draft?.goal) {
-      return 'Choose a course goal in the editor first.';
+      return 'Choose an expanded room goal in the editor first.';
     }
 
     if (draft.goal && courseGoalRequiresStartPoint(draft.goal) && !draft.startPoint) {
-      return 'Place a course start marker first.';
+      return 'Place an expanded room start marker first.';
     }
 
     switch (draft.goal.type) {
       case 'reach_exit':
-        return draft.goal.exit ? null : 'Place a course exit first.';
+        return draft.goal.exit ? null : 'Place an expanded room exit first.';
       case 'checkpoint_sprint':
         if (draft.goal.checkpoints.length === 0) {
           return 'Add at least one checkpoint first.';
         }
-        return draft.goal.finish ? null : 'Place a course finish marker first.';
+        return draft.goal.finish ? null : 'Place an expanded room finish marker first.';
       case 'collect_target':
       case 'defeat_all':
       case 'survival':
@@ -639,13 +661,13 @@ export class OverworldCourseComposerController {
       return null;
     }
 
-    return `Draft is empty. Published course v${published.version} is still live until you unpublish it.`;
+    return `Draft is empty. Published expanded room v${published.version} is still live until you unpublish it.`;
   }
 
   private getCurrentCourseDraftPreviewDisabledReason(): string | null {
     const draft = this.record?.draft ?? null;
     if (!draft || draft.roomRefs.length === 0) {
-      return this.getCourseComposerPublishedDraftWarningText() ?? 'Add at least one room to the course first.';
+      return this.getCourseComposerPublishedDraftWarningText() ?? 'Add at least one cell to the expanded room first.';
     }
 
     return this.getCurrentCourseDraftGoalSetupDisabledReason(draft);
@@ -654,11 +676,11 @@ export class OverworldCourseComposerController {
   private getCurrentCourseDraftSaveDisabledReason(): string | null {
     const draft = this.record?.draft ?? null;
     if (!draft || draft.roomRefs.length === 0) {
-      return this.getCourseComposerPublishedDraftWarningText() ?? 'Add at least one room before saving.';
+      return this.getCourseComposerPublishedDraftWarningText() ?? 'Add at least one cell before saving.';
     }
 
     if (!draft.title?.trim()) {
-      return 'Add a course title before saving.';
+      return 'Add an expanded room title before saving.';
     }
 
     if (!this.isDirty()) {
@@ -673,12 +695,12 @@ export class OverworldCourseComposerController {
     if (!draft || draft.roomRefs.length < 2) {
       const published = this.record?.published ?? null;
       return published
-        ? `Add at least 2 rooms before publishing. Published course v${published.version} is still live until you republish or unpublish it.`
-        : 'Add at least 2 rooms before publishing.';
+        ? `Add at least 2 cells before publishing. Published expanded room v${published.version} is still live until you republish or unpublish it.`
+        : 'Add at least 2 cells before publishing.';
     }
 
     if (!draft.title?.trim()) {
-      return 'Add a course title before publishing.';
+      return 'Add an expanded room title before publishing.';
     }
 
     return this.getCurrentCourseDraftGoalSetupDisabledReason(draft);
@@ -686,11 +708,11 @@ export class OverworldCourseComposerController {
 
   private getCourseComposerUnpublishDisabledReason(): string | null {
     if (!this.record?.published) {
-      return 'This course is not published yet.';
+      return 'This expanded room is not published yet.';
     }
 
     if (!this.record.permissions.canUnpublish) {
-      return 'This course is read-only for your account.';
+      return 'This expanded room is read-only for your account.';
     }
 
     return null;
@@ -709,23 +731,72 @@ export class OverworldCourseComposerController {
       return;
     }
 
-    this.updateCourseComposerDraft((draft) => {
-      const nextRoomRef = {
+    this.loading = true;
+    this.statusText = 'Adding expanded room cell...';
+    this.host.emitStateChanged();
+    this.host.renderHud();
+    try {
+      const record =
+        this.record.draft.roomRefs.length === 0
+          ? await this.createExpandedRoomDraftWithInitialCell(meta)
+          : await this.expandSavedDraftIntoCell(meta);
+      this.setRecord(record, { selectedRoomId: meta.roomId });
+      this.statusText = 'Expanded room cell added and draft saved.';
+      await this.refreshSelectedRoomState();
+    } catch (error) {
+      console.error('Failed to add expanded room cell', error);
+      this.statusText =
+        error instanceof Error ? error.message : 'Failed to add expanded room cell.';
+    } finally {
+      this.loading = false;
+      this.host.emitStateChanged();
+      this.host.renderHud();
+    }
+  }
+
+  private async createExpandedRoomDraftWithInitialCell(
+    meta: CoursePublishedRoomMeta
+  ): Promise<CourseRecord> {
+    if (!this.record) {
+      throw new Error('No active expanded room draft.');
+    }
+
+    const draft = cloneCourseSnapshot(this.record.draft);
+    draft.roomRefs = [
+      {
         roomId: meta.roomId,
         coordinates: { ...meta.coordinates },
         roomVersion: meta.roomVersion,
         roomTitle: meta.roomTitle,
-      };
-      if (draft.roomRefs.length === 0) {
-        draft.roomRefs = [nextRoomRef];
-        return;
-      }
-      const lastRoomRef = draft.roomRefs[draft.roomRefs.length - 1];
-      if (areCourseRoomRefsOrthogonallyAdjacent(nextRoomRef, lastRoomRef)) {
-        draft.roomRefs = [...draft.roomRefs, nextRoomRef];
-      }
+      },
+    ];
+    return this.host.expandedRoomEditorRepository.createExpandedRoom(draft);
+  }
+
+  private async expandSavedDraftIntoCell(
+    meta: CoursePublishedRoomMeta
+  ): Promise<CourseRecord> {
+    const baseRecord = await this.saveDraftBeforeFootprintMutation();
+    return this.host.expandedRoomEditorRepository.expandIntoCell(baseRecord.draft.id, {
+      roomId: meta.roomId,
+      coordinates: { ...meta.coordinates },
+      roomVersion: meta.roomVersion,
     });
-    setActiveCourseDraftSessionSelectedRoom(meta.roomId);
-    await this.refreshSelectedRoomState();
+  }
+
+  private async saveDraftBeforeFootprintMutation(): Promise<CourseRecord> {
+    if (!this.record) {
+      throw new Error('No active expanded room draft.');
+    }
+
+    if (!isActiveCourseDraftSessionDirty()) {
+      return this.record;
+    }
+
+    const saved = await this.host.expandedRoomEditorRepository.saveDraft(this.record.draft);
+    this.setRecord(saved, {
+      selectedRoomId: getActiveCourseDraftSessionSelectedRoomId(),
+    });
+    return this.record ?? saved;
   }
 }

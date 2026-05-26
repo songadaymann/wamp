@@ -1,10 +1,15 @@
-import { roomIdFromCoordinates } from '../../../persistence/roomModel';
+import { expandedRoomIdFromStandaloneRoomId } from '../../../expandedRooms/model';
+import {
+  roomIdFromCoordinates,
+  type RoomCoordinates,
+} from '../../../persistence/roomModel';
 import type {
   RoomRushDifficulty,
   RoomRushLeaderboardEntry,
   RoomRushLeaderboardModeKey,
   RoomRushLeaderboardResponse,
   RoomRushLeaderboardsResponse,
+  RoomRushRouteStepRecord,
   RoomRushRunSubmissionResponse,
   RoomRushStartRule,
 } from '../../../runs/model';
@@ -15,6 +20,7 @@ import {
   assertWampLeaderboardWriteAllowed,
   sqlUserIdIsNotPlayfunOnly,
 } from '../playfun/leaderboardIsolation';
+import { loadPublishedExpandedRoomMembershipsInBounds } from '../expandedRooms/store';
 import { parseRoomRushRunSubmissionBody } from './requestBodies';
 
 const ROOM_RUSH_MODE_ORDER: Array<{
@@ -66,7 +72,8 @@ export async function handleRoomRushRunSubmit(
     return jsonResponse(request, response);
   }
 
-  const uniqueRooms = new Set(body.route.map((step) => step.roomId)).size;
+  const scoredRoute = await scoreRoomRushRouteByExpandedRoom(env, body.route);
+  const uniqueRooms = scoredRoute.uniqueRooms;
   if (uniqueRooms <= 0) {
     throw new HttpError(400, 'Room Rush runs must include at least one unique room.');
   }
@@ -123,13 +130,86 @@ export async function handleRoomRushRunSubmit(
       finishRoomId,
       body.finishCoordinates.x,
       body.finishCoordinates.y,
-      JSON.stringify(body.route),
+      JSON.stringify(scoredRoute.route),
       finishedAt,
       finishedAt
     ),
   ]);
 
   return jsonResponse(request, response, { status: 201 });
+}
+
+async function scoreRoomRushRouteByExpandedRoom(
+  env: Env,
+  route: RoomRushRouteStepRecord[]
+): Promise<{ uniqueRooms: number; route: RoomRushRouteStepRecord[] }> {
+  if (route.length === 0 || !isExpandedRoomsEnabled(env)) {
+    return {
+      uniqueRooms: new Set(route.map((step) => step.roomId)).size,
+      route,
+    };
+  }
+
+  const bounds = getRouteBounds(route.map((step) => step.coordinates));
+  const memberships = await loadPublishedExpandedRoomMembershipsInBounds(
+    env,
+    bounds.minX,
+    bounds.maxX,
+    bounds.minY,
+    bounds.maxY,
+  );
+  const expandedRoomIdByRoomId = new Map(
+    memberships.map((membership) => [membership.roomId, membership.expandedRoomId])
+  );
+  const areaVisitIndexById = new Map<string, number>();
+  const scoredRoute = route.map((step) => {
+    const expandedRoomId =
+      expandedRoomIdByRoomId.get(step.roomId) ?? expandedRoomIdFromStandaloneRoomId(step.roomId);
+    let uniqueAreaVisitIndex = areaVisitIndexById.get(expandedRoomId) ?? null;
+    if (uniqueAreaVisitIndex === null) {
+      uniqueAreaVisitIndex = areaVisitIndexById.size + 1;
+      areaVisitIndexById.set(expandedRoomId, uniqueAreaVisitIndex);
+    }
+
+    return {
+      ...step,
+      expandedRoomId,
+      uniqueVisitIndex: uniqueAreaVisitIndex,
+      uniqueAreaVisitIndex,
+    };
+  });
+
+  return {
+    uniqueRooms: areaVisitIndexById.size,
+    route: scoredRoute,
+  };
+}
+
+function getRouteBounds(coordinates: RoomCoordinates[]): {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+} {
+  return coordinates.reduce(
+    (bounds, coordinate) => ({
+      minX: Math.min(bounds.minX, coordinate.x),
+      maxX: Math.max(bounds.maxX, coordinate.x),
+      minY: Math.min(bounds.minY, coordinate.y),
+      maxY: Math.max(bounds.maxY, coordinate.y),
+    }),
+    {
+      minX: coordinates[0]?.x ?? 0,
+      maxX: coordinates[0]?.x ?? 0,
+      minY: coordinates[0]?.y ?? 0,
+      maxY: coordinates[0]?.y ?? 0,
+    },
+  );
+}
+
+function isExpandedRoomsEnabled(env: Env): boolean {
+  const raw = env.EXPANDED_ROOMS_ENABLED?.trim().toLowerCase();
+  return raw !== '0' && raw !== 'false' && raw !== 'off';
 }
 
 export async function handleRoomRushLeaderboards(

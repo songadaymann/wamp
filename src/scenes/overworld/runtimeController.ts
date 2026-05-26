@@ -45,6 +45,7 @@ interface OverworldRuntimeControllerHost<TLiveObject> {
   getActiveCourseSnapshot(): CourseSnapshot | null;
   getActiveCourseRun(): ActiveCourseRunState | null;
   getActiveRoomRushRun(): unknown | null;
+  isRoomTransitionLocked(): boolean;
   getShouldRespawnPlayer(): boolean;
   setShouldRespawnPlayer(value: boolean): void;
   getPlayer(): Phaser.GameObjects.Rectangle | null;
@@ -74,6 +75,7 @@ interface OverworldRuntimeControllerHost<TLiveObject> {
   destroyRoomEdgeWalls(loadedRoom: LoadedFullRoom<TLiveObject, OverworldRoomEdgeWall>): void;
   getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number };
   getCellStateAt(coordinates: RoomCoordinates): SelectedCellState;
+  getExpandedRoomIdAt(coordinates: RoomCoordinates): string | null;
   syncBackdropCameraIgnores(): void;
 }
 
@@ -198,6 +200,18 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
     roomCoordinates: RoomCoordinates,
     neighborCoordinates: RoomCoordinates,
   ): boolean {
+    if (this.host.isRoomTransitionLocked()) {
+      return false;
+    }
+
+    const expandedRoomId = this.host.getExpandedRoomIdAt(roomCoordinates);
+    if (
+      expandedRoomId &&
+      expandedRoomId === this.host.getExpandedRoomIdAt(neighborCoordinates)
+    ) {
+      return true;
+    }
+
     const activeCourseSnapshot = this.host.getActiveCourseSnapshot();
     if (activeCourseSnapshot) {
       const deltaX = Math.abs(neighborCoordinates.x - roomCoordinates.x);
@@ -214,7 +228,18 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
       const neighborInCourse = activeCourseSnapshot.roomRefs.some(
         (roomRef) => roomRef.roomId === neighborRoomId,
       );
-      return currentInCourse && neighborInCourse;
+      if (currentInCourse && neighborInCourse) {
+        return true;
+      }
+
+      const activeCourseRun = this.host.getActiveCourseRun();
+      if (activeCourseRun?.expandedRoomId && (currentInCourse || neighborInCourse)) {
+        const outsideCoordinates = currentInCourse ? neighborCoordinates : roomCoordinates;
+        const outsideState = this.host.getCellStateAt(outsideCoordinates);
+        return outsideState === 'published' || outsideState === 'draft';
+      }
+
+      return false;
     }
 
     const neighborState = this.host.getCellStateAt(neighborCoordinates);

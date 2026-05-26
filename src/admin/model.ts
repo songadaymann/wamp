@@ -35,6 +35,8 @@ export interface LaunchStatsTotals {
   roomRuns: number;
   courses: number;
   courseRuns: number;
+  expandedRooms: number;
+  expandedRoomRuns: number;
   chatMessages: number;
   agents: number;
   agentTokens: number;
@@ -53,10 +55,13 @@ export interface LaunchStatsActivityWindow {
   roomClaims: number;
   roomPublishes: number;
   coursePublishes: number;
+  expandedRoomPublishes: number;
   roomRunStarts: number;
   roomRunFinishes: number;
   courseRunStarts: number;
   courseRunFinishes: number;
+  expandedRoomRunStarts: number;
+  expandedRoomRunFinishes: number;
 }
 
 export type LaunchStatsActivityRangeKey =
@@ -352,6 +357,7 @@ export interface AdminBuilderCapOverride {
   publishLimitPerDay: number | null;
   objectLimit: number | null;
   collectibleLimit: number | null;
+  expandedRoomCellLimit: number | null;
   reason: string | null;
   updatedAt: string | null;
   updatedBy: string | null;
@@ -399,6 +405,7 @@ export interface AdminProgressionCapsUpdateRequest {
   publishLimitPerDay: number | null;
   objectLimit: number | null;
   collectibleLimit: number | null;
+  expandedRoomCellLimit: number | null;
   reason: string | null;
   operatorLabel: string;
 }

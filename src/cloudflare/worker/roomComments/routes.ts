@@ -38,8 +38,9 @@ import type { Env } from '../core/types';
 import { sendRoomCommentApprovedEmail } from './email';
 import {
   countRecentRoomCommentsForUser,
-  countRecentRoomCommentsForUserRoom,
+  countRecentRoomCommentsForUserTarget,
   createRoomComment,
+  getRoomCommentAreaContext,
   listAdminRoomComments,
   listApprovedRoomComments,
   loadAdminRoomComment,
@@ -76,6 +77,7 @@ export async function handleRoomCommentList(
 
   const response: RoomCommentListResponse = {
     comments: await listApprovedRoomComments(env, target, limit),
+    commentArea: getRoomCommentAreaContext(target),
   };
   return jsonResponse(request, response);
 }
@@ -106,8 +108,7 @@ export async function handleRoomCommentCreate(
   const now = new Date();
   await assertRoomCommentRateLimit(env, {
     userId: auth.user.id,
-    roomId: target.roomId,
-    roomVersion: target.roomVersion,
+    target,
     nowMs: now.getTime(),
   });
 
@@ -129,6 +130,7 @@ export async function handleRoomCommentCreate(
     comment,
     status: 'pending_review',
     message: 'Comment submitted for review.',
+    commentArea: getRoomCommentAreaContext(target),
   };
   return jsonResponse(request, response, { status: 201 });
 }
@@ -139,10 +141,7 @@ async function sendRoomCommentAdminReviewNotification(
   comment: RoomCommentRecord,
   target: RoomCommentTarget,
 ): Promise<void> {
-  const roomLabel =
-    target.roomTitle?.trim()
-      ? `"${target.roomTitle.trim()}"`
-      : `Room ${target.coordinates.x},${target.coordinates.y}`;
+  const roomLabel = getRoomCommentTargetLabel(target);
   const result = await sendAdminReviewNotificationEmail(env, {
     subject: `Comment needs approval: ${roomLabel}`,
     heading: 'New comment needs approval',
@@ -151,6 +150,7 @@ async function sendRoomCommentAdminReviewNotification(
       `Comment: ${comment.body}`,
       `Room: ${roomLabel}`,
       `Room link: ${buildPublicAppUrl(request, env, `/r/${target.coordinates.x}/${target.coordinates.y}`)}`,
+      ...(target.areaScope ? [`Focused cell: ${target.coordinates.x},${target.coordinates.y}`] : []),
       `Submitted: ${comment.createdAt}`,
     ],
     actionUrl: buildAdminReviewUrl(request, env, '/launch-admin.html'),
@@ -298,8 +298,7 @@ async function assertRoomCommentRateLimit(
   env: Env,
   input: {
     userId: string;
-    roomId: string;
-    roomVersion: number;
+    target: RoomCommentTarget;
     nowMs: number;
   },
 ): Promise<void> {
@@ -315,16 +314,33 @@ async function assertRoomCommentRateLimit(
     throw new HttpError(429, 'You have left enough comments for today.');
   }
 
-  const recentRoomDay = await countRecentRoomCommentsForUserRoom(
+  const recentRoomDay = await countRecentRoomCommentsForUserTarget(
     env,
     input.userId,
-    input.roomId,
-    input.roomVersion,
+    input.target,
     dayAgo,
   );
   if (recentRoomDay >= ROOM_COMMENT_USER_ROOM_DAILY_LIMIT) {
     throw new HttpError(429, 'You have already commented on this room today.');
   }
+}
+
+function getRoomCommentTargetLabel(target: RoomCommentTarget): string {
+  const areaTitle = target.areaScope?.title?.trim();
+  if (areaTitle) {
+    return `"${areaTitle}"`;
+  }
+
+  const roomTitle = target.roomTitle?.trim();
+  if (roomTitle) {
+    return `"${roomTitle}"`;
+  }
+
+  if (target.areaScope) {
+    return `Expanded Room ${target.areaScope.anchorCoordinates.x},${target.areaScope.anchorCoordinates.y}`;
+  }
+
+  return `Room ${target.coordinates.x},${target.coordinates.y}`;
 }
 
 function normalizeAdminCommentStatus(value: string | null): RoomCommentStatus | 'all' {

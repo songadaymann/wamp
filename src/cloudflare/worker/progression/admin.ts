@@ -38,6 +38,7 @@ interface AdminProgressionIdentitySummary {
     publishLimitPerDay: number | null;
     objectLimit: number | null;
     collectibleLimit: number | null;
+    expandedRoomCellLimit: number | null;
     reason: string | null;
     updatedAt: string | null;
     updatedBy: string | null;
@@ -78,6 +79,7 @@ async function buildAdminProgressionIdentitySummary(
       publishLimitPerDay: progress.builder_publish_limit_override,
       objectLimit: progress.builder_object_limit_override,
       collectibleLimit: progress.builder_collectible_limit_override,
+      expandedRoomCellLimit: progress.builder_expanded_room_cell_limit_override,
       reason: progress.builder_cap_override_reason,
       updatedAt: progress.builder_cap_override_updated_at,
       updatedBy: progress.builder_cap_override_updated_by,
@@ -157,6 +159,7 @@ export async function updateAdminBuilderCapOverride(
     publishLimitPerDay: number | null;
     objectLimit: number | null;
     collectibleLimit: number | null;
+    expandedRoomCellLimit?: number | null;
     reason: string | null;
     operatorLabel: string;
   },
@@ -166,11 +169,13 @@ export async function updateAdminBuilderCapOverride(
   const publishLimitPerDay = sanitizeOptionalOverride(params.publishLimitPerDay);
   const objectLimit = sanitizeOptionalOverride(params.objectLimit);
   const collectibleLimit = sanitizeOptionalOverride(params.collectibleLimit);
+  const expandedRoomCellLimit = sanitizeOptionalOverride(params.expandedRoomCellLimit);
   const overrideActive =
     claimLimitPerDay !== null ||
     publishLimitPerDay !== null ||
     objectLimit !== null ||
-    collectibleLimit !== null;
+    collectibleLimit !== null ||
+    expandedRoomCellLimit !== null;
   const now = new Date().toISOString();
   const normalizedReason = params.reason?.trim() ? params.reason.trim() : null;
   const normalizedOperator = params.operatorLabel.trim() || 'Admin';
@@ -181,6 +186,7 @@ export async function updateAdminBuilderCapOverride(
     builder_publish_limit_override: publishLimitPerDay,
     builder_object_limit_override: objectLimit,
     builder_collectible_limit_override: collectibleLimit,
+    builder_expanded_room_cell_limit_override: expandedRoomCellLimit,
     builder_cap_override_reason: overrideActive ? normalizedReason : null,
     builder_cap_override_updated_at: overrideActive ? now : null,
     builder_cap_override_updated_by: overrideActive ? normalizedOperator : null,
