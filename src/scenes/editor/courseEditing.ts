@@ -23,6 +23,10 @@ export interface BuildCourseEditorStateOptions {
   coursePlacementMode: EditorMarkerPlacementMode | null;
 }
 
+export interface CourseGoalSummaryContext {
+  collectiblesPlaced?: number;
+}
+
 export function getCourseEditorContextStatusText(
   activeCourseMarkerEdit: EditorCourseEditData | null,
   draft: CourseSnapshot | null,
@@ -53,7 +57,10 @@ export function buildCourseEditedRoomData(
   };
 }
 
-export function getCourseGoalSummaryText(draft: CourseSnapshot | null): string {
+export function getCourseGoalSummaryText(
+  draft: CourseSnapshot | null,
+  context: CourseGoalSummaryContext = {},
+): string {
   const goal = draft?.goal ?? null;
   if (!goal) {
     return 'No expanded room goal selected.';
@@ -72,9 +79,14 @@ export function getCourseGoalSummaryText(draft: CourseSnapshot | null): string {
       parts.push(`${goal.checkpoints.length} checkpoint${goal.checkpoints.length === 1 ? '' : 's'}`);
       parts.push(goal.finish ? 'finish set' : 'finish missing');
       break;
-    case 'collect_target':
-      parts.push(`Collect Target · ${goal.requiredCount} required`);
+    case 'collect_target': {
+      const placedText =
+        typeof context.collectiblesPlaced === 'number'
+          ? ` (${context.collectiblesPlaced} placed)`
+          : '';
+      parts.push(`Collect Target · ${goal.requiredCount} required${placedText}`);
       break;
+    }
     case 'defeat_all':
       parts.push('Defeat All');
       break;

@@ -41,6 +41,7 @@ import {
   canPlacedObjectTriggerOtherObjects,
   getObjectById,
   LAYER_NAMES,
+  placedObjectContributesToCategory,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
@@ -598,7 +599,11 @@ export class CourseEditorScene extends Phaser.Scene {
               : this.courseGoalPlacementMode === 'finish'
                 ? 'Click an expanded room cell to place the finish.'
                 : '',
-      summaryText: draft ? getCourseGoalSummaryText(draft) : 'No expanded room selected.',
+      summaryText: draft
+        ? getCourseGoalSummaryText(draft, {
+            collectiblesPlaced: this.countPlacedObjectsByCategory('collectible'),
+          })
+        : 'No expanded room selected.',
       placeStartHidden: !(goal?.type === 'reach_exit' || goal?.type === 'checkpoint_sprint'),
       placeStartActive: this.courseGoalPlacementMode === 'start',
       placeExitHidden: goal?.type !== 'reach_exit',
@@ -2874,6 +2879,18 @@ export class CourseEditorScene extends Phaser.Scene {
 
   private getSelectedSlice(): CourseRoomSlice | null {
     return this.selectedRoomId ? this.roomSlices.get(this.selectedRoomId) ?? null : null;
+  }
+
+  private countPlacedObjectsByCategory(category: 'collectible' | 'enemy'): number {
+    let count = 0;
+    for (const slice of this.roomSlices.values()) {
+      for (const placed of slice.placedObjects) {
+        if (placedObjectContributesToCategory(placed, category)) {
+          count += 1;
+        }
+      }
+    }
+    return count;
   }
 
   private selectRoomById(roomId: string | null): void {
