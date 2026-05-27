@@ -39,6 +39,7 @@ interface OverworldSceneFlowHost {
   getCurrentRoomCoordinates(): RoomCoordinates;
   setCurrentRoomCoordinates(coordinates: RoomCoordinates): void;
   getSelectedPublishedCourseId(): string | null;
+  loadPublishedCourseSnapshot(courseId: string): Promise<CourseSnapshot | null>;
   getCourseEditorReturnTarget(): CourseComposerReturnTarget | null;
   setCourseEditorReturnTarget(target: CourseComposerReturnTarget | null): void;
   getCellStateAt(coordinates: RoomCoordinates): SelectedCellState;
@@ -343,8 +344,7 @@ export class OverworldSceneFlowController {
 
     showBusyOverlay('Starting expanded room...', 'Loading expanded room...');
     try {
-      const record = await this.courseRepository.loadCourse(selectedCourseId);
-      const snapshot = record.published ? cloneCourseSnapshot(record.published) : null;
+      const snapshot = await this.host.loadPublishedCourseSnapshot(selectedCourseId);
       if (!snapshot) {
         throw new Error('This expanded room is not published yet.');
       }
@@ -366,44 +366,16 @@ export class OverworldSceneFlowController {
     snapshot: CourseSnapshot,
     roomSourceMode: CoursePlaybackRoomSourceMode,
   ): Promise<void> {
-    const authState = getAuthDebugState();
-    let hadPreviousCompletion = false;
-    let previousViewerRank: number | null = null;
-    if (snapshot.status === 'published' && authState.authenticated) {
-      try {
-        const expandedRoomId = expandedRoomIdFromLegacyCourseId(snapshot.id);
-        const leaderboard = await this.expandedRoomRepository.loadExpandedRoomLeaderboard(
-          expandedRoomId,
-          snapshot.version,
-          5,
-        );
-        hadPreviousCompletion = leaderboard.viewerBest !== null;
-        previousViewerRank = leaderboard.viewerRank;
-      } catch (error) {
-        console.warn('Failed to preload expanded-room completion history', error);
-        try {
-          const leaderboard = await this.courseRepository.loadCourseLeaderboard(
-            snapshot.id,
-            snapshot.version,
-            5,
-          );
-          hadPreviousCompletion = leaderboard.viewerBest !== null;
-          previousViewerRank = leaderboard.viewerRank;
-        } catch (fallbackError) {
-          console.warn('Failed to preload legacy course completion history', fallbackError);
-        }
-      }
-    }
-
     this.host.resetPlaySession();
     this.host.clearTouchGestureState();
     this.host.clearGoalRun();
     await this.host.prepareActiveCourseRoomOverrides(snapshot, { mode: roomSourceMode });
     const runState = this.host.createCourseRunState(snapshot, {
-      hadPreviousCompletion,
-      previousViewerRank,
+      hadPreviousCompletion: false,
+      previousViewerRank: null,
     });
     this.host.setActiveCourseRun(runState);
+    this.preloadCourseCompletionHistory(snapshot, runState);
 
     if (runState.leaderboardEligible) {
       this.host.startRemoteCourseRun(runState);
@@ -429,7 +401,47 @@ export class OverworldSceneFlowController {
     this.host.setCourseComposerStatusText(null);
     this.host.emitCourseComposerStateChanged();
     setFocusedCoordinatesInUrl(startRoom.coordinates);
-    await this.host.refreshAround(startRoom.coordinates, { forceChunkReload: true });
+    this.host.refreshAroundIfNeededOrFromCache(startRoom.coordinates, {
+      preferCachedWindow: true,
+      refreshLeaderboards: false,
+    });
+  }
+
+  private preloadCourseCompletionHistory(
+    snapshot: CourseSnapshot,
+    runState: ActiveCourseRunState,
+  ): void {
+    const authState = getAuthDebugState();
+    if (snapshot.status !== 'published' || !authState.authenticated) {
+      return;
+    }
+
+    const expandedRoomId = runState.expandedRoomId ?? expandedRoomIdFromLegacyCourseId(snapshot.id);
+
+    void this.expandedRoomRepository
+      .loadExpandedRoomLeaderboard(expandedRoomId, snapshot.version, 5)
+      .catch((error) => {
+        console.warn('Failed to preload expanded-room completion history', error);
+        return this.courseRepository.loadCourseLeaderboard(snapshot.id, snapshot.version, 5);
+      })
+      .then((leaderboard) => {
+        const activeRun = this.host.getActiveCourseRun();
+        if (
+          activeRun !== runState
+          || activeRun.course.id !== snapshot.id
+          || activeRun.course.version !== snapshot.version
+          || activeRun.pendingResult
+        ) {
+          return;
+        }
+
+        activeRun.hadPreviousCompletion = leaderboard.viewerBest !== null;
+        activeRun.previousViewerRank = leaderboard.viewerRank;
+        this.host.renderHud();
+      })
+      .catch((error) => {
+        console.warn('Failed to preload expanded-room completion history', error);
+      });
   }
 
   async openCourseEditor(): Promise<void> {

@@ -434,6 +434,8 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly courseRepository = createCourseRepository();
   private readonly expandedRoomEditorRepository = createExpandedRoomEditorRepository();
   private readonly profileRepository = createProfileRepository();
+  private readonly publishedCourseSnapshotsById = new Map<string, CourseSnapshot>();
+  private readonly publishedCourseSnapshotLoadsById = new Map<string, Promise<CourseSnapshot | null>>();
   private activeCourseRun: ActiveCourseRunState | null = null;
   private readonly roomRushRunController = new OverworldRoomRushRunController();
   private lastPvpSelfDeathHitId: string | null = null;
@@ -868,8 +870,14 @@ export class OverworldPlayScene extends Phaser.Scene {
       clearTransientRoomOverride: (roomId) => {
         this.worldStreamingController.clearTransientRoomOverride(roomId);
       },
+      clearTransientRoomOverrides: (roomIds) => {
+        this.worldStreamingController.clearTransientRoomOverrides(roomIds);
+      },
       setTransientRoomOverride: (snapshot) => {
         this.worldStreamingController.setTransientRoomOverride(snapshot);
+      },
+      setTransientRoomOverrides: (snapshots) => {
+        this.worldStreamingController.setTransientRoomOverrides(snapshots);
       },
       getRoomSnapshotForCoordinates: (coordinates) =>
         this.getRoomSnapshotForCoordinates(coordinates),
@@ -1601,8 +1609,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         };
       },
       loadPublishedCourseSnapshot: async (courseId) => {
-        const record = await this.courseRepository.loadCourse(courseId);
-        return record.published ? cloneCourseSnapshot(record.published) : null;
+        return this.loadPublishedCourseSnapshot(courseId);
       },
       countRoomEnemies: (room) => this.countRoomObjectsByCategory(room, 'enemy'),
       getScore: () => this.score,
@@ -1737,6 +1744,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.currentRoomCoordinates = { ...coordinates };
       },
       getSelectedPublishedCourseId: () => this.getSelectedCourseContext()?.courseId ?? null,
+      loadPublishedCourseSnapshot: (courseId) => this.loadPublishedCourseSnapshot(courseId),
       getCourseEditorReturnTarget: () => this.courseEditorReturnTarget ?? null,
       setCourseEditorReturnTarget: (target) => {
         this.courseEditorReturnTarget = target;
@@ -1828,6 +1836,38 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private getSelectedCourseContext() {
     return this.hudStateController.getSelectedCourseContext();
+  }
+
+  private async loadPublishedCourseSnapshot(courseId: string): Promise<CourseSnapshot | null> {
+    const cached = this.publishedCourseSnapshotsById.get(courseId) ?? null;
+    if (cached) {
+      return cloneCourseSnapshot(cached);
+    }
+
+    const inFlight = this.publishedCourseSnapshotLoadsById.get(courseId) ?? null;
+    if (inFlight) {
+      const snapshot = await inFlight;
+      return snapshot ? cloneCourseSnapshot(snapshot) : null;
+    }
+
+    const request = this.courseRepository
+      .loadCourse(courseId)
+      .then((record) => {
+        const snapshot = record.published ? cloneCourseSnapshot(record.published) : null;
+        if (snapshot) {
+          this.publishedCourseSnapshotsById.set(courseId, cloneCourseSnapshot(snapshot));
+        } else {
+          this.publishedCourseSnapshotsById.delete(courseId);
+        }
+        return snapshot;
+      })
+      .finally(() => {
+        this.publishedCourseSnapshotLoadsById.delete(courseId);
+      });
+
+    this.publishedCourseSnapshotLoadsById.set(courseId, request);
+    const snapshot = await request;
+    return snapshot ? cloneCourseSnapshot(snapshot) : null;
   }
 
   private getExpandedRoomIdAt(coordinates: RoomCoordinates): string | null {

@@ -58,7 +58,9 @@ interface OverworldCoursePlaybackHost {
   getActiveCourseRun(): ActiveCourseRunState | null;
   setActiveCourseRun(runState: ActiveCourseRunState | null): void;
   clearTransientRoomOverride(roomId: string): void;
+  clearTransientRoomOverrides(roomIds: Iterable<string>): void;
   setTransientRoomOverride(snapshot: RoomSnapshot): void;
+  setTransientRoomOverrides(snapshots: Iterable<RoomSnapshot>): void;
   getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null;
   countRoomObjectsByCategory(room: RoomSnapshot, category: GameObjectConfig['category']): number;
   showTransientStatus(message: string): void;
@@ -81,6 +83,7 @@ export class OverworldCoursePlaybackController {
   private readonly courseRepository = createCourseRepository();
   private readonly expandedRoomRepository = createExpandedRoomRepository();
   private readonly activeCourseRoomOverrideIds = new Set<string>();
+  private readonly pinnedCourseRoomSnapshotCache = new Map<string, RoomSnapshot>();
 
   constructor(private readonly host: OverworldCoursePlaybackHost) {}
 
@@ -89,9 +92,7 @@ export class OverworldCoursePlaybackController {
   }
 
   clearActiveCourseRoomOverrides(): void {
-    for (const roomId of this.activeCourseRoomOverrideIds) {
-      this.host.clearTransientRoomOverride(roomId);
-    }
+    this.host.clearTransientRoomOverrides(this.activeCourseRoomOverrideIds);
     this.activeCourseRoomOverrideIds.clear();
   }
 
@@ -124,8 +125,8 @@ export class OverworldCoursePlaybackController {
       }),
     );
 
+    this.host.setTransientRoomOverrides(snapshots);
     for (const snapshot of snapshots) {
-      this.host.setTransientRoomOverride(snapshot);
       this.activeCourseRoomOverrideIds.add(snapshot.id);
     }
   }
@@ -485,6 +486,11 @@ export class OverworldCoursePlaybackController {
   }
 
   private async loadPinnedCourseRoomSnapshot(roomRef: CourseRoomRef): Promise<RoomSnapshot> {
+    const cachedSnapshot = this.getCachedPinnedCourseRoomSnapshot(roomRef);
+    if (cachedSnapshot) {
+      return cachedSnapshot;
+    }
+
     const record = await this.roomRepository.loadRoom(roomRef.roomId, roomRef.coordinates);
     const historicalVersion =
       record.versions.find((entry) => entry.version === roomRef.roomVersion)?.snapshot ??
@@ -497,7 +503,39 @@ export class OverworldCoursePlaybackController {
       );
     }
 
+    this.setCachedPinnedCourseRoomSnapshot(roomRef, historicalVersion);
     return cloneRoomSnapshot(historicalVersion);
+  }
+
+  private getCachedPinnedCourseRoomSnapshot(roomRef: CourseRoomRef): RoomSnapshot | null {
+    const cacheKey = getPinnedCourseRoomSnapshotCacheKey(roomRef);
+    const cached = this.pinnedCourseRoomSnapshotCache.get(cacheKey) ?? null;
+    if (cached) {
+      return cloneRoomSnapshot(cached);
+    }
+
+    const loadedSnapshot = this.host.getRoomSnapshotForCoordinates(roomRef.coordinates);
+    if (
+      loadedSnapshot &&
+      loadedSnapshot.id === roomRef.roomId &&
+      loadedSnapshot.version === roomRef.roomVersion &&
+      loadedSnapshot.status === 'published'
+    ) {
+      this.setCachedPinnedCourseRoomSnapshot(roomRef, loadedSnapshot);
+      return cloneRoomSnapshot(loadedSnapshot);
+    }
+
+    return null;
+  }
+
+  private setCachedPinnedCourseRoomSnapshot(
+    roomRef: CourseRoomRef,
+    snapshot: RoomSnapshot,
+  ): void {
+    this.pinnedCourseRoomSnapshotCache.set(
+      getPinnedCourseRoomSnapshotCacheKey(roomRef),
+      cloneRoomSnapshot(snapshot),
+    );
   }
 
   private countCourseObjectsByCategory(
@@ -525,6 +563,10 @@ export class OverworldCoursePlaybackController {
 
     return this.host.getRoomSnapshotForCoordinates(roomRef.coordinates);
   }
+}
+
+function getPinnedCourseRoomSnapshotCacheKey(roomRef: CourseRoomRef): string {
+  return `${roomRef.roomId}@${roomRef.roomVersion}`;
 }
 
 function formatCourseRunSubmissionErrorMessage(

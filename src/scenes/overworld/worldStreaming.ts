@@ -268,8 +268,21 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   setTransientRoomOverride(room: RoomSnapshot): void {
-    this.transientRoomOverridesById.set(room.id, cloneRoomSnapshot(room));
-    this.invalidateRoomArtifacts(room.id, false);
+    this.setTransientRoomOverrides([room]);
+  }
+
+  setTransientRoomOverrides(rooms: Iterable<RoomSnapshot>): void {
+    const touchedRoomIds = new Set<string>();
+    for (const room of rooms) {
+      this.transientRoomOverridesById.set(room.id, cloneRoomSnapshot(room));
+      this.invalidateRoomArtifacts(room.id, false);
+      touchedRoomIds.add(room.id);
+    }
+
+    if (touchedRoomIds.size === 0) {
+      return;
+    }
+
     this.rebuildLoadedSummaryState();
     this.refreshVisibleRoomsFromCache();
   }
@@ -289,11 +302,24 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   clearTransientRoomOverride(roomId: string): void {
-    if (!this.transientRoomOverridesById.delete(roomId)) {
+    this.clearTransientRoomOverrides([roomId]);
+  }
+
+  clearTransientRoomOverrides(roomIds: Iterable<string>): void {
+    const touchedRoomIds = new Set<string>();
+    for (const roomId of roomIds) {
+      if (!this.transientRoomOverridesById.delete(roomId)) {
+        continue;
+      }
+
+      this.invalidateRoomArtifacts(roomId, false);
+      touchedRoomIds.add(roomId);
+    }
+
+    if (touchedRoomIds.size === 0) {
       return;
     }
 
-    this.invalidateRoomArtifacts(roomId, false);
     this.rebuildLoadedSummaryState();
     this.refreshVisibleRoomsFromCache();
   }
