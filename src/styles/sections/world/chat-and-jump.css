@@ -178,9 +178,65 @@
 }
 
 .chat-form {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.chat-mention-menu {
+  position: absolute;
+  left: 0;
+  right: 84px;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  max-height: 178px;
+  overflow-y: auto;
+  border: 2px solid #18161c;
+  background: #fffaf0;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+.chat-mention-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid rgba(44, 80, 113, 0.28);
+  background: transparent;
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-mention-option:last-child {
+  border-bottom: 0;
+}
+
+.chat-mention-option:hover,
+.chat-mention-option.is-active {
+  background: #79ccde;
+}
+
+.chat-mention-name,
+.chat-mention-handle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-mention-name {
+  font-size: 12px;
+}
+
+.chat-mention-handle {
+  color: #2c5071;
+  font-size: 11px;
 }
 
 .chat-input {
@@ -260,6 +316,11 @@
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.chat-message-mention {
+  color: #2c5071;
+  font-weight: 700;
 }
 
 .chat-message-actions {

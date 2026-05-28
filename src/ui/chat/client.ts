@@ -5,6 +5,7 @@ import type {
   ChatBanCreateRequestBody,
   ChatBanListResponse,
   ChatBanMutationResponse,
+  ChatMentionUserListResponse,
   ChatMessageCreateRequestBody,
   ChatMessageDeleteResponse,
   ChatMessageListResponse,
@@ -34,6 +35,18 @@ export async function sendChatMessage(text: string): Promise<ChatMessageRecord> 
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+export async function fetchChatMentionUsers(query: string): Promise<ChatMentionUserListResponse> {
+  const params = new URLSearchParams();
+  if (query.trim()) {
+    params.set('q', query.trim());
+  }
+
+  const suffix = params.toString();
+  return apiRequest<ChatMentionUserListResponse>(
+    `/api/chat/mention-users${suffix ? `?${suffix}` : ''}`
+  );
 }
 
 export async function deleteChatMessage(messageId: string): Promise<ChatMessageDeleteResponse> {

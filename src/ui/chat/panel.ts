@@ -2,6 +2,7 @@ import {
   type ChatMessageListResponse,
   CHAT_MESSAGE_MAX_LENGTH,
   DEFAULT_CHAT_MESSAGE_LIMIT,
+  type ChatMentionUserRecord,
   type ChatMessageRecord,
 } from '../../chat/model';
 import {
@@ -14,7 +15,13 @@ import { playSfx } from '../../audio/sfx';
 import { APP_READY_EVENT, isAppReady } from '../appFeedback';
 import { isTextInputFocused } from '../keyboardFocus';
 import { createProfileTriggerElement } from '../setup/profileEvents';
-import { banChatUser, deleteChatMessage, fetchChatMessages, sendChatMessage } from './client';
+import {
+  banChatUser,
+  deleteChatMessage,
+  fetchChatMentionUsers,
+  fetchChatMessages,
+  sendChatMessage,
+} from './client';
 
 const CHAT_POLL_INTERVAL_MS = 3000;
 const MAX_RENDERED_MESSAGES = 100;
@@ -28,6 +35,8 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   hour: 'numeric',
   minute: '2-digit',
 });
+const ACTIVE_MENTION_PATTERN = /(^|[^A-Za-z0-9_-])@([A-Za-z0-9_-]{0,24})$/;
+const RENDERED_MENTION_PATTERN = /(^|[^A-Za-z0-9_-])(@[A-Za-z0-9][A-Za-z0-9_-]{2,23})(?![A-Za-z0-9_-])/g;
 
 type ChatElements = {
   root: HTMLElement | null;
@@ -38,6 +47,7 @@ type ChatElements = {
   messages: HTMLElement | null;
   empty: HTMLElement | null;
   form: HTMLFormElement | null;
+  mentionMenu: HTMLElement | null;
   input: HTMLInputElement | null;
   sendButton: HTMLButtonElement | null;
   status: HTMLElement | null;
@@ -65,6 +75,12 @@ export class ChatPanelController {
   private loading = false;
   private sending = false;
   private moderationActionMessageId: string | null = null;
+  private mentionUsers: ChatMentionUserRecord[] = [];
+  private mentionQuery: string | null = null;
+  private mentionAnchorStart = 0;
+  private mentionAnchorEnd = 0;
+  private mentionActiveIndex = 0;
+  private mentionRequestId = 0;
   private destroyed = false;
 
   private readonly handleToggleClick = () => {
@@ -83,6 +99,16 @@ export class ChatPanelController {
   private readonly handleFormSubmit = (event: SubmitEvent) => {
     event.preventDefault();
     void this.submitMessage();
+  };
+
+  private readonly handleComposerInput = () => {
+    void this.refreshMentionSuggestions();
+  };
+
+  private readonly handleComposerKeydown = (event: KeyboardEvent) => {
+    if (this.handleMentionMenuKeydown(event)) {
+      event.stopPropagation();
+    }
   };
 
   private readonly handleDocumentKeydown = (event: KeyboardEvent) => {
@@ -123,6 +149,9 @@ export class ChatPanelController {
   private readonly handleAuthStateChanged = (event: Event) => {
     const detail = event instanceof CustomEvent ? (event.detail as AuthDebugState | undefined) : undefined;
     this.authState = detail ?? getAuthDebugState();
+    if (!this.canPost()) {
+      this.closeMentionMenu();
+    }
     this.render();
     this.renderMessages();
   };
@@ -140,6 +169,7 @@ export class ChatPanelController {
       messages: this.doc.getElementById('chat-messages'),
       empty: this.doc.getElementById('chat-empty'),
       form: this.doc.getElementById('chat-form') as HTMLFormElement | null,
+      mentionMenu: this.doc.getElementById('chat-mention-menu'),
       input: this.doc.getElementById('chat-input') as HTMLInputElement | null,
       sendButton: this.doc.getElementById('btn-chat-send') as HTMLButtonElement | null,
       status: this.doc.getElementById('chat-status'),
@@ -159,6 +189,8 @@ export class ChatPanelController {
     this.elements.toggleButton?.addEventListener('click', this.handleToggleClick);
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.form?.addEventListener('submit', this.handleFormSubmit);
+    this.elements.input?.addEventListener('input', this.handleComposerInput);
+    this.elements.input?.addEventListener('keydown', this.handleComposerKeydown);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
     this.doc.addEventListener('visibilitychange', this.handleVisibilityChange);
     this.windowObj.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
@@ -182,6 +214,8 @@ export class ChatPanelController {
     this.elements.toggleButton?.removeEventListener('click', this.handleToggleClick);
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.form?.removeEventListener('submit', this.handleFormSubmit);
+    this.elements.input?.removeEventListener('input', this.handleComposerInput);
+    this.elements.input?.removeEventListener('keydown', this.handleComposerKeydown);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
     this.doc.removeEventListener('visibilitychange', this.handleVisibilityChange);
     this.windowObj.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
@@ -206,6 +240,8 @@ export class ChatPanelController {
       role: this.authState.chatModeration.role,
       banned: this.authState.chatModeration.banned,
       moderationActionMessageId: this.moderationActionMessageId,
+      mentionSuggestionCount: this.mentionUsers.length,
+      mentionQuery: this.mentionQuery,
       messageCount: this.messages.length,
       unreadCount: this.unreadCount,
       latestCreatedAt: this.latestCreatedAt,
@@ -400,6 +436,7 @@ export class ChatPanelController {
   private closePanel(blurComposer: boolean = true): void {
     this.open = false;
     this.unreadCount = 0;
+    this.closeMentionMenu();
     if (blurComposer && this.doc.activeElement === this.elements.input) {
       this.elements.input?.blur();
     }
@@ -413,6 +450,7 @@ export class ChatPanelController {
 
     const rawValue = this.elements.input.value;
     const trimmed = rawValue.trim();
+    this.closeMentionMenu();
     if (!trimmed) {
       this.setStatus('Type a message first.');
       this.render();
@@ -512,6 +550,128 @@ export class ChatPanelController {
     }
   }
 
+  private async refreshMentionSuggestions(): Promise<void> {
+    if (!this.open || !this.canPost() || !this.elements.input) {
+      this.closeMentionMenu();
+      return;
+    }
+
+    const activeMention = this.getActiveMentionQuery();
+    if (!activeMention) {
+      this.closeMentionMenu();
+      return;
+    }
+
+    this.mentionQuery = activeMention.query;
+    this.mentionAnchorStart = activeMention.start;
+    this.mentionAnchorEnd = activeMention.end;
+    const requestId = ++this.mentionRequestId;
+
+    try {
+      const response = await fetchChatMentionUsers(activeMention.query);
+      if (requestId !== this.mentionRequestId) {
+        return;
+      }
+
+      this.mentionUsers = response.users;
+      this.mentionActiveIndex = 0;
+      this.renderMentionMenu();
+    } catch (error) {
+      console.error('Failed to load chat mention users', error);
+      if (requestId === this.mentionRequestId) {
+        this.closeMentionMenu();
+      }
+    }
+  }
+
+  private getActiveMentionQuery(): { query: string; start: number; end: number } | null {
+    const input = this.elements.input;
+    if (!input) {
+      return null;
+    }
+
+    const selectionStart = input.selectionStart ?? input.value.length;
+    const selectionEnd = input.selectionEnd ?? selectionStart;
+    if (selectionStart !== selectionEnd) {
+      return null;
+    }
+
+    const beforeCursor = input.value.slice(0, selectionStart);
+    const match = ACTIVE_MENTION_PATTERN.exec(beforeCursor);
+    if (!match) {
+      return null;
+    }
+
+    const query = (match[2] ?? '').toLowerCase();
+    const start = beforeCursor.length - query.length - 1;
+    return {
+      query,
+      start,
+      end: selectionStart,
+    };
+  }
+
+  private handleMentionMenuKeydown(event: KeyboardEvent): boolean {
+    if (this.mentionUsers.length === 0) {
+      return false;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.mentionActiveIndex = (this.mentionActiveIndex + 1) % this.mentionUsers.length;
+      this.renderMentionMenu();
+      return true;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.mentionActiveIndex =
+        (this.mentionActiveIndex - 1 + this.mentionUsers.length) % this.mentionUsers.length;
+      this.renderMentionMenu();
+      return true;
+    }
+
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault();
+      this.insertMentionUser(this.mentionUsers[this.mentionActiveIndex]);
+      return true;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.closeMentionMenu();
+      return true;
+    }
+
+    return false;
+  }
+
+  private insertMentionUser(user: ChatMentionUserRecord | undefined): void {
+    const input = this.elements.input;
+    if (!input || !user) {
+      return;
+    }
+
+    const activeMention = this.getActiveMentionQuery();
+    const start = activeMention?.start ?? this.mentionAnchorStart;
+    const end = activeMention?.end ?? this.mentionAnchorEnd;
+    const replacement = `@${user.username} `;
+    const nextValue = `${input.value.slice(0, start)}${replacement}${input.value.slice(end)}`;
+    input.value = nextValue.slice(0, CHAT_MESSAGE_MAX_LENGTH);
+    const cursor = Math.min(start + replacement.length, input.value.length);
+    input.setSelectionRange(cursor, cursor);
+    input.focus();
+    this.closeMentionMenu();
+  }
+
+  private closeMentionMenu(): void {
+    this.mentionRequestId += 1;
+    this.mentionUsers = [];
+    this.mentionQuery = null;
+    this.mentionActiveIndex = 0;
+    this.renderMentionMenu();
+  }
+
   private render(): void {
     if (!this.elements.root) {
       return;
@@ -551,6 +711,8 @@ export class ChatPanelController {
       this.elements.sendButton.disabled = !this.canPost() || this.sending;
       this.elements.sendButton.textContent = this.sending ? 'Sending...' : 'Send';
     }
+
+    this.renderMentionMenu();
 
     if (this.elements.empty) {
       this.elements.empty.classList.toggle('hidden', this.messages.length > 0);
@@ -630,7 +792,7 @@ export class ChatPanelController {
 
       const body = this.doc.createElement('div');
       body.className = 'chat-message-body';
-      body.textContent = message.body;
+      appendMentionHighlightedText(this.doc, body, message.body);
 
       const canModerateThisMessage =
         this.canModerateMessages()
@@ -673,6 +835,46 @@ export class ChatPanelController {
     }
   }
 
+  private renderMentionMenu(): void {
+    const menu = this.elements.mentionMenu;
+    if (!menu) {
+      return;
+    }
+
+    const visible = this.open && this.canPost() && this.mentionUsers.length > 0;
+    menu.classList.toggle('hidden', !visible);
+    menu.replaceChildren();
+    if (!visible) {
+      return;
+    }
+
+    this.mentionUsers.forEach((user, index) => {
+      const option = this.doc.createElement('button');
+      option.type = 'button';
+      option.className = 'chat-mention-option';
+      option.classList.toggle('is-active', index === this.mentionActiveIndex);
+      option.setAttribute('role', 'option');
+      option.setAttribute('aria-selected', index === this.mentionActiveIndex ? 'true' : 'false');
+      option.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+      });
+      option.addEventListener('click', () => {
+        this.insertMentionUser(user);
+      });
+
+      const name = this.doc.createElement('span');
+      name.className = 'chat-mention-name';
+      name.textContent = user.displayName;
+
+      const handle = this.doc.createElement('span');
+      handle.className = 'chat-mention-handle';
+      handle.textContent = `@${user.username}`;
+
+      option.append(name, handle);
+      menu.appendChild(option);
+    });
+  }
+
   private scrollMessagesToBottom(): void {
     if (!this.elements.messages) {
       return;
@@ -695,6 +897,30 @@ function formatMessageTimestamp(value: string): string {
     parsed.getDate() === now.getDate();
 
   return sameDay ? TIME_FORMATTER.format(parsed) : DATE_TIME_FORMATTER.format(parsed);
+}
+
+function appendMentionHighlightedText(doc: Document, container: HTMLElement, text: string): void {
+  let cursor = 0;
+
+  for (const match of text.matchAll(RENDERED_MENTION_PATTERN)) {
+    const fullMatchStart = match.index ?? 0;
+    const prefix = match[1] ?? '';
+    const mention = match[2] ?? '';
+    const mentionStart = fullMatchStart + prefix.length;
+    if (mentionStart > cursor) {
+      container.appendChild(doc.createTextNode(text.slice(cursor, mentionStart)));
+    }
+
+    const mentionNode = doc.createElement('span');
+    mentionNode.className = 'chat-message-mention';
+    mentionNode.textContent = mention;
+    container.appendChild(mentionNode);
+    cursor = mentionStart + mention.length;
+  }
+
+  if (cursor < text.length) {
+    container.appendChild(doc.createTextNode(text.slice(cursor)));
+  }
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {

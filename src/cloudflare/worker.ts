@@ -97,8 +97,12 @@ import {
 import { handleRoomShareRequest } from './worker/share/routes';
 import { handleSchoolRequest } from './worker/school/routes';
 
+type WorkerExecutionContext = {
+  waitUntil(promise: Promise<unknown>): void;
+};
+
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx?: WorkerExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const assetAlias = resolvePublicAssetAlias(url.pathname);
 
@@ -200,7 +204,7 @@ export default {
       }
 
       if (url.pathname.startsWith('/api/chat/')) {
-        return await handleChatRequest(request, url, env);
+        return await handleChatRequest(request, url, env, ctx);
       }
 
       if (url.pathname === '/api/guest-activity/heartbeat' && request.method === 'POST') {
