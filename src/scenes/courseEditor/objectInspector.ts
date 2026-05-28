@@ -2,10 +2,14 @@ import Phaser from 'phaser';
 import {
   canObjectBeStoredInContainer,
   canPlacedObjectBeContainer,
+  canPlacedObjectBeLinkedObjectTarget,
   canPlacedObjectBePressurePlateTarget,
   canPlacedObjectTriggerOtherObjects,
+  canPlacedObjectUseObjectLink,
   editorState,
   getObjectById,
+  isMovingPlatformEndpointObjectId,
+  isMovingPlatformObjectId,
   type PlacedObject,
 } from '../../config';
 import {
@@ -25,7 +29,6 @@ import {
   createEmptyCourseInspectorState,
   getContainerAcceptedContentsLabel,
   getContainerName,
-  getPressurePlateTargetLabel,
 } from './inspectorUi';
 
 interface CourseInspectorRoomSlice {
@@ -109,12 +112,12 @@ export class CourseEditorObjectInspectorController {
 
   clearFocusedPressurePlateConnection(): void {
     const source = this.getFocusedPressurePlateRef();
-    if (!source || !canPlacedObjectTriggerOtherObjects(source.placed)) {
+    if (!source || !canPlacedObjectUseObjectLink(source.placed)) {
       return;
     }
 
-    if (this.setCoursePressurePlateTarget(source, null)) {
-      this.pressurePlateStatusText = 'Pressure plate link cleared.';
+    if (this.setCourseObjectLinkTarget(source, null)) {
+      this.pressurePlateStatusText = `${this.getObjectLinkSourceLabel(source.placed)} link cleared.`;
       this.connectingPressurePlateInstanceId = null;
       this.focusedPressurePlateInstanceId = source.placed.instanceId ?? null;
       this.pinInspector('pressure', source.placed.instanceId ?? '');
@@ -128,7 +131,8 @@ export class CourseEditorObjectInspectorController {
     }
 
     this.connectingPressurePlateInstanceId = null;
-    this.pressurePlateStatusText = 'Pressure plate left unlinked for now.';
+    const focused = this.getFocusedPressurePlateRef();
+    this.pressurePlateStatusText = `${this.getObjectLinkSourceLabel(focused?.placed ?? null)} left unlinked for now.`;
     if (this.focusedPressurePlateInstanceId) {
       this.pinInspector('pressure', this.focusedPressurePlateInstanceId);
     }
@@ -199,7 +203,7 @@ export class CourseEditorObjectInspectorController {
   }
 
   handleObjectPlaced(placed: PlacedObject | null): boolean {
-    if (placed && canPlacedObjectTriggerOtherObjects(placed)) {
+    if (placed && canPlacedObjectUseObjectLink(placed)) {
       this.focusedContainerInstanceId = null;
       this.focusedPressurePlateInstanceId = placed.instanceId ?? null;
       this.pinInspector('pressure', placed.instanceId ?? '');
@@ -233,8 +237,8 @@ export class CourseEditorObjectInspectorController {
     if (this.pinnedInspector?.instanceId === removed.instanceId) {
       this.pinnedInspector = null;
     }
-    if (canPlacedObjectBePressurePlateTarget(removed)) {
-      this.pressurePlateStatusText = `${getPressurePlateTargetLabel(removed.id)} removed. Linked plates were cleared.`;
+    if (canPlacedObjectBePressurePlateTarget(removed) || isMovingPlatformEndpointObjectId(removed.id)) {
+      this.pressurePlateStatusText = `${this.getObjectLinkTargetLabel(removed.id)} removed. Linked objects were cleared.`;
     }
     if (canPlacedObjectBeContainer(removed)) {
       this.containerStatusText = `${getContainerName(removed.id)} removed.`;
@@ -256,17 +260,16 @@ export class CourseEditorObjectInspectorController {
       worldX,
       worldY,
       (placed) =>
-        canPlacedObjectBePressurePlateTarget(placed) &&
-        placed.instanceId !== source.placed.instanceId
+        this.canUseObjectLinkTarget(source, { slice, placed })
     );
     if (!target) {
-      this.pressurePlateStatusText = 'Pick a door, cage, or chest in this course.';
+      this.pressurePlateStatusText = this.getObjectLinkPickTargetStatus(source.placed);
       this.renderInspectorUi();
       return true;
     }
 
     if (
-      this.setCoursePressurePlateTarget(source, {
+      this.setCourseObjectLinkTarget(source, {
         slice,
         placed: target,
       })
@@ -274,7 +277,8 @@ export class CourseEditorObjectInspectorController {
       this.connectingPressurePlateInstanceId = null;
       this.focusedPressurePlateInstanceId = source.placed.instanceId ?? null;
       this.pinInspector('pressure', source.placed.instanceId ?? '');
-      this.pressurePlateStatusText = `Pressure plate linked to ${this.getPressurePlateTargetSummary({ slice, placed: target }, source.slice)}.`;
+      this.pressurePlateStatusText =
+        `${this.getObjectLinkSourceLabel(source.placed)} linked to ${this.getObjectLinkTargetSummary({ slice, placed: target }, source.slice)}.`;
       this.renderInspectorUi();
     }
     return true;
@@ -360,7 +364,7 @@ export class CourseEditorObjectInspectorController {
       const hoveredTrigger = hoveredSlice?.runtime.findPlacedObjectAt(
         worldPoint.x,
         worldPoint.y,
-        (placed) => canPlacedObjectTriggerOtherObjects(placed)
+        (placed) => canPlacedObjectUseObjectLink(placed)
       );
       if (hoveredTrigger) {
         if (this.focusedPressurePlateInstanceId !== hoveredTrigger.instanceId) {
@@ -378,7 +382,7 @@ export class CourseEditorObjectInspectorController {
       return;
     }
 
-    const currentTarget = this.getCoursePressurePlateTargetRef(source);
+    const currentTarget = this.getCourseObjectLinkTargetRef(source);
     if (currentTarget) {
       this.drawPressurePlateLink(graphics, source, currentTarget, 0x6dd5ff, 0.9);
     }
@@ -394,18 +398,18 @@ export class CourseEditorObjectInspectorController {
     );
 
     if (this.connectingPressurePlateInstanceId === source.placed.instanceId) {
-      const hoveredTargetPlaced = hoveredSlice?.runtime.findPlacedObjectAt(
-        worldPoint.x,
-        worldPoint.y,
-        (placed) =>
-          canPlacedObjectBePressurePlateTarget(placed) &&
-          placed.instanceId !== source.placed.instanceId
-      );
-      const hoveredTarget =
-        hoveredSlice && hoveredTargetPlaced
+      let hoveredTarget: CoursePlacedObjectRef | null = null;
+      if (hoveredSlice) {
+        const hoveredTargetPlaced = hoveredSlice.runtime.findPlacedObjectAt(
+          worldPoint.x,
+          worldPoint.y,
+          (placed) => this.canUseObjectLinkTarget(source, { slice: hoveredSlice, placed })
+        );
+        hoveredTarget = hoveredTargetPlaced
           ? { slice: hoveredSlice, placed: hoveredTargetPlaced }
           : null;
-      const eligibleTargets = this.getCoursePressurePlateEligibleTargets(source);
+      }
+      const eligibleTargets = this.getCourseObjectLinkEligibleTargets(source);
       for (const target of eligibleTargets) {
         const bounds = target.slice.runtime.getPlacedObjectBounds(target.placed);
         graphics.lineStyle(
@@ -520,19 +524,21 @@ export class CourseEditorObjectInspectorController {
     this.pinnedInspector = { kind, instanceId };
   }
 
-  private getCoursePressurePlateTargetRef(
+  private getCourseObjectLinkTargetRef(
     source: CoursePlacedObjectRef
   ): CoursePlacedObjectRef | null {
-    const courseLink = getCoursePressurePlateLink(
-      this.host.getActiveCourseDraft(),
-      source.slice.roomId,
-      source.placed.instanceId ?? '',
-    );
-    if (courseLink) {
-      return this.getPlacedObjectRefByInstanceId(
-        courseLink.targetInstanceId,
-        courseLink.targetRoomId,
+    if (canPlacedObjectTriggerOtherObjects(source.placed)) {
+      const courseLink = getCoursePressurePlateLink(
+        this.host.getActiveCourseDraft(),
+        source.slice.roomId,
+        source.placed.instanceId ?? '',
       );
+      if (courseLink) {
+        return this.getPlacedObjectRefByInstanceId(
+          courseLink.targetInstanceId,
+          courseLink.targetRoomId,
+        );
+      }
     }
 
     return this.getPlacedObjectRefByInstanceId(
@@ -541,16 +547,17 @@ export class CourseEditorObjectInspectorController {
     );
   }
 
-  private getCoursePressurePlateEligibleTargets(
+  private getCourseObjectLinkEligibleTargets(
     source: CoursePlacedObjectRef
   ): CoursePlacedObjectRef[] {
     const eligibleTargets: CoursePlacedObjectRef[] = [];
-    for (const slice of this.host.getRoomSlices()) {
+    const slices = canPlacedObjectTriggerOtherObjects(source.placed)
+      ? this.host.getRoomSlices()
+      : [source.slice];
+    for (const slice of slices) {
       for (const placed of slice.placedObjects) {
-        if (
-          canPlacedObjectBePressurePlateTarget(placed) &&
-          placed.instanceId !== source.placed.instanceId
-        ) {
+        const target = { slice, placed };
+        if (this.canUseObjectLinkTarget(source, target)) {
           eligibleTargets.push({ slice, placed });
         }
       }
@@ -558,12 +565,22 @@ export class CourseEditorObjectInspectorController {
     return eligibleTargets;
   }
 
-  private setCoursePressurePlateTarget(
+  private setCourseObjectLinkTarget(
     source: CoursePlacedObjectRef,
     target: CoursePlacedObjectRef | null,
   ): boolean {
     if (!source.placed.instanceId) {
       return false;
+    }
+
+    if (!canPlacedObjectTriggerOtherObjects(source.placed)) {
+      if (target && target.slice.roomId !== source.slice.roomId) {
+        return false;
+      }
+      return source.slice.runtime.setObjectLinkTarget(
+        source.placed.instanceId,
+        target?.placed.instanceId ?? null,
+      );
     }
 
     const previousCourseLink = getCoursePressurePlateLink(
@@ -652,14 +669,93 @@ export class CourseEditorObjectInspectorController {
     }
   }
 
-  private getPressurePlateTargetSummary(
+  private getObjectLinkTargetSummary(
     target: CoursePlacedObjectRef,
     sourceSlice: CourseInspectorRoomSlice,
   ): string {
-    const baseLabel = getPressurePlateTargetLabel(target.placed.id);
+    const baseLabel = this.getObjectLinkTargetLabel(target.placed.id);
     return target.slice.roomId === sourceSlice.roomId
       ? baseLabel
       : `${baseLabel} in ${this.host.getSliceLabel(target.slice)}`;
+  }
+
+  private canUseObjectLinkTarget(
+    source: CoursePlacedObjectRef,
+    target: CoursePlacedObjectRef,
+  ): boolean {
+    return (
+      target.placed.instanceId !== source.placed.instanceId &&
+      canPlacedObjectBeLinkedObjectTarget(source.placed, target.placed)
+    );
+  }
+
+  private getObjectLinkSourceLabel(source: PlacedObject | null): string {
+    if (source && isMovingPlatformObjectId(source.id)) {
+      return 'Moving platform';
+    }
+
+    return 'Pressure plate';
+  }
+
+  private getObjectLinkConnectStatus(source: PlacedObject, eligibleTargetCount: number): string {
+    if (eligibleTargetCount <= 0) {
+      return this.getObjectLinkNoTargetsStatus(source);
+    }
+
+    return this.getObjectLinkPickTargetStatus(source);
+  }
+
+  private getObjectLinkBeginStatus(source: PlacedObject, autoPlaced: boolean): string {
+    if (isMovingPlatformObjectId(source.id)) {
+      return autoPlaced
+        ? 'Moving platform placed. Click a Moving Platform Anchor to link it.'
+        : 'Click a Moving Platform Anchor to link this moving platform.';
+    }
+
+    return autoPlaced
+      ? 'Pressure plate placed. Click a door, cage, or chest to link it.'
+      : 'Click a door, cage, or chest to link this pressure plate.';
+  }
+
+  private getObjectLinkPickTargetStatus(source: PlacedObject): string {
+    return isMovingPlatformObjectId(source.id)
+      ? 'Pick a Moving Platform Anchor in this room.'
+      : 'Pick a door, cage, or chest in this expanded room.';
+  }
+
+  private getObjectLinkNoTargetsStatus(source: PlacedObject): string {
+    return isMovingPlatformObjectId(source.id)
+      ? 'No Moving Platform Anchor is in this room yet. You can link this moving platform later.'
+      : 'No door, cage, or chest is in this expanded room yet. You can link this pressure plate later.';
+  }
+
+  private getObjectLinkNoTargetsTitle(source: PlacedObject): string {
+    return isMovingPlatformObjectId(source.id)
+      ? 'Add a Moving Platform Anchor to this room first.'
+      : 'Add a door, cage, or chest to this expanded room first.';
+  }
+
+  private getObjectLinkTargetLabel(objectId: string): string {
+    if (isMovingPlatformEndpointObjectId(objectId)) {
+      return 'Moving Platform Anchor';
+    }
+
+    switch (objectId) {
+      case 'door_locked':
+        return 'door';
+      case 'door_metal':
+        return 'metal door';
+      case 'treasure_chest':
+        return 'treasure chest';
+      case 'cage':
+        return 'cage';
+      case 'trapdoor_metal':
+        return 'metal trapdoor';
+      case 'trapdoor_locked':
+        return 'locked trapdoor';
+      default:
+        return getObjectById(objectId)?.name ?? 'object';
+    }
   }
 
   private getFocusedPressurePlateRef(): CoursePlacedObjectRef | null {
@@ -669,7 +765,7 @@ export class CourseEditorObjectInspectorController {
     const activeId =
       this.connectingPressurePlateInstanceId ?? pinnedPressureId ?? this.focusedPressurePlateInstanceId;
     const focused = this.getPlacedObjectRefByInstanceId(activeId);
-    if (focused && canPlacedObjectTriggerOtherObjects(focused.placed)) {
+    if (focused && canPlacedObjectUseObjectLink(focused.placed)) {
       return focused;
     }
 
@@ -697,7 +793,7 @@ export class CourseEditorObjectInspectorController {
 
   private getConnectingPressurePlateRef(): CoursePlacedObjectRef | null {
     const focused = this.getPlacedObjectRefByInstanceId(this.connectingPressurePlateInstanceId);
-    if (focused && canPlacedObjectTriggerOtherObjects(focused.placed)) {
+    if (focused && canPlacedObjectUseObjectLink(focused.placed)) {
       return focused;
     }
 
@@ -706,20 +802,18 @@ export class CourseEditorObjectInspectorController {
 
   private beginPressurePlateConnection(triggerInstanceId: string, autoPlaced: boolean): void {
     const trigger = this.getPlacedObjectRefByInstanceId(triggerInstanceId);
-    if (!trigger || !canPlacedObjectTriggerOtherObjects(trigger.placed)) {
+    if (!trigger || !canPlacedObjectUseObjectLink(trigger.placed)) {
       return;
     }
 
     this.focusedPressurePlateInstanceId = trigger.placed.instanceId ?? null;
     this.connectingPressurePlateInstanceId = trigger.placed.instanceId ?? null;
     this.pinInspector('pressure', trigger.placed.instanceId ?? '');
-    const eligibleTargets = this.getCoursePressurePlateEligibleTargets(trigger);
+    const eligibleTargets = this.getCourseObjectLinkEligibleTargets(trigger);
     this.pressurePlateStatusText =
       eligibleTargets.length > 0
-        ? autoPlaced
-          ? 'Pressure plate placed. Click a door, cage, or chest to link it.'
-          : 'Click a door, cage, or chest to link this pressure plate.'
-        : 'No door, cage, or chest is in this course yet. You can link this pressure plate later.';
+        ? this.getObjectLinkBeginStatus(trigger.placed, autoPlaced)
+        : this.getObjectLinkNoTargetsStatus(trigger.placed);
     this.renderInspectorUi();
   }
 
@@ -767,13 +861,22 @@ export class CourseEditorObjectInspectorController {
         ? null
         : this.getFocusedPressurePlateRef();
     if (source && (editorState.paletteMode === 'objects' || connectMode)) {
-      const target = this.getCoursePressurePlateTargetRef(source);
+      const target = this.getCourseObjectLinkTargetRef(source);
+      const targetSummary = target ? this.getObjectLinkTargetSummary(target, source.slice) : null;
+      const eligibleTargetCount = this.getCourseObjectLinkEligibleTargets(source).length;
       this.host.renderInspector(
         buildPressurePlateInspectorState({
-          statusText: this.pressurePlateStatusText,
+          statusText:
+            this.pressurePlateStatusText ??
+            (connectMode
+              ? this.getObjectLinkConnectStatus(source.placed, eligibleTargetCount)
+              : targetSummary
+                ? `${this.getObjectLinkSourceLabel(source.placed)} linked to ${targetSummary}.`
+                : `${this.getObjectLinkSourceLabel(source.placed)} is not linked yet.`),
           connectMode,
-          targetSummary: target ? this.getPressurePlateTargetSummary(target, source.slice) : null,
-          eligibleTargetCount: this.getCoursePressurePlateEligibleTargets(source).length,
+          targetSummary,
+          eligibleTargetCount,
+          connectTitle: this.getObjectLinkNoTargetsTitle(source.placed),
         }),
       );
       return;

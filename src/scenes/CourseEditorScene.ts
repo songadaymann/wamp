@@ -38,7 +38,7 @@ import {
   type RoomPhraseArrangementMusic,
 } from '../music/model';
 import {
-  canPlacedObjectTriggerOtherObjects,
+  canPlacedObjectUseObjectLink,
   getObjectById,
   LAYER_NAMES,
   placedObjectContributesToCategory,
@@ -212,6 +212,7 @@ export class CourseEditorScene extends Phaser.Scene {
   private musicComposerMode: EditorMusicComposerMode = 'sequencer';
   private musicPreviewState: 'stopped' | 'playing' = 'stopped';
   private isPanning = false;
+  private pendingRightClickPanPointerId: number | null = null;
   private panStartPointer = { x: 0, y: 0 };
   private panStartScroll = { x: 0, y: 0 };
   private tileDragMode: TileDragMode = null;
@@ -254,6 +255,10 @@ export class CourseEditorScene extends Phaser.Scene {
     this.redrawRoomSliceBackground(slice);
     this.statusText = `Updated background for ${this.getSliceLabel(slice)}.`;
     this.renderUi();
+  };
+
+  private readonly handleCanvasContextMenu = (event: Event): void => {
+    event.preventDefault();
   };
 
   private readonly handleDocumentKeyDown = (event: KeyboardEvent): void => {
@@ -539,6 +544,7 @@ export class CourseEditorScene extends Phaser.Scene {
     this.events.on('wake', this.handleWake, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
     this.scale.on('resize', this.handleResize, this);
+    this.game.canvas.addEventListener('contextmenu', this.handleCanvasContextMenu);
     this.game.canvas.addEventListener('wheel', this.handleCanvasWheel, { passive: false });
     this.setupPointerControls();
     this.setupKeyboard();
@@ -3048,12 +3054,16 @@ export class CourseEditorScene extends Phaser.Scene {
   private setupPointerControls(): void {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.pointerRequestsPan(pointer)) {
-        this.isPanning = true;
-        this.panStartPointer = { x: pointer.x, y: pointer.y };
-        this.panStartScroll = {
-          x: this.cameras.main.scrollX,
-          y: this.cameras.main.scrollY,
-        };
+        this.beginPointerPan(pointer);
+        if (
+          pointer.rightButtonDown() &&
+          !this.modifierKeys.SPACE?.isDown &&
+          !this.modifierKeys.ALT?.isDown
+        ) {
+          this.pendingRightClickPanPointerId = pointer.id;
+        } else {
+          this.isPanning = true;
+        }
         return;
       }
 
@@ -3067,7 +3077,7 @@ export class CourseEditorScene extends Phaser.Scene {
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (this.isPanning) {
+      if (this.pendingRightClickPanPointerId === pointer.id) {
         const distance = Phaser.Math.Distance.Between(
           this.panStartPointer.x,
           this.panStartPointer.y,
@@ -3075,11 +3085,15 @@ export class CourseEditorScene extends Phaser.Scene {
           pointer.y,
         );
         if (distance >= PAN_THRESHOLD) {
-          const dx = (this.panStartPointer.x - pointer.x) / this.cameras.main.zoom;
-          const dy = (this.panStartPointer.y - pointer.y) / this.cameras.main.zoom;
-          this.cameras.main.setScroll(this.panStartScroll.x + dx, this.panStartScroll.y + dy);
-          this.constrainCamera();
+          this.pendingRightClickPanPointerId = null;
+          this.isPanning = true;
+          this.applyPointerPan(pointer);
         }
+        return;
+      }
+
+      if (this.isPanning) {
+        this.applyPointerPan(pointer);
         return;
       }
 
@@ -3094,6 +3108,12 @@ export class CourseEditorScene extends Phaser.Scene {
     });
 
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      if (this.pendingRightClickPanPointerId === pointer.id) {
+        this.pendingRightClickPanPointerId = null;
+        this.handleSecondaryPointerClick(pointer);
+        return;
+      }
+
       if (this.isPanning) {
         this.isPanning = false;
         return;
@@ -3163,7 +3183,7 @@ export class CourseEditorScene extends Phaser.Scene {
       const clickedPressurePlate = slice.runtime.findPlacedObjectAt(
         pointer.worldX,
         pointer.worldY,
-        (placed) => canPlacedObjectTriggerOtherObjects(placed)
+        (placed) => canPlacedObjectUseObjectLink(placed)
       );
       const clickedSign = slice.runtime.findPlacedObjectAt(
         pointer.worldX,
@@ -3256,6 +3276,39 @@ export class CourseEditorScene extends Phaser.Scene {
     }
 
     this.objectInspectorController.handleObjectRemoved(slice.roomId, removed);
+  }
+
+  private handleSecondaryPointerClick(pointer: Phaser.Input.Pointer): void {
+    if (this.musicModeActive) {
+      return;
+    }
+
+    const slice = this.getSliceForPointer(pointer);
+    if (!slice) {
+      return;
+    }
+
+    this.selectRoomById(slice.roomId);
+    const localTile = this.getLocalTileForPointer(pointer, slice);
+    if (!localTile) {
+      return;
+    }
+
+    if (editorState.paletteMode === 'objects') {
+      if (this.objectInspectorController.handleObjectModeSecondaryAction(slice, pointer.worldX, pointer.worldY)) {
+        this.renderUi();
+        return;
+      }
+
+      this.removeObjectAt(slice, pointer.worldX, pointer.worldY);
+      this.renderUi();
+      return;
+    }
+
+    slice.runtime.beginTileBatch();
+    slice.runtime.eraseTileAt(pointer.worldX, pointer.worldY);
+    slice.runtime.commitTileBatch();
+    this.renderUi();
   }
 
   private handlePointerDrag(pointer: Phaser.Input.Pointer): void {
@@ -3583,6 +3636,21 @@ export class CourseEditorScene extends Phaser.Scene {
     );
   }
 
+  private beginPointerPan(pointer: Phaser.Input.Pointer): void {
+    this.panStartPointer = { x: pointer.x, y: pointer.y };
+    this.panStartScroll = {
+      x: this.cameras.main.scrollX,
+      y: this.cameras.main.scrollY,
+    };
+  }
+
+  private applyPointerPan(pointer: Phaser.Input.Pointer): void {
+    const dx = (this.panStartPointer.x - pointer.x) / this.cameras.main.zoom;
+    const dy = (this.panStartPointer.y - pointer.y) / this.cameras.main.zoom;
+    this.cameras.main.setScroll(this.panStartScroll.x + dx, this.panStartScroll.y + dy);
+    this.constrainCamera();
+  }
+
   private syncCameraBounds(): void {
     const size = getCourseWorkspacePixelSize(this.workspaceBounds);
     const zoom = Math.max(this.cameras.main.zoom || this.inspectZoom, MIN_ZOOM);
@@ -3775,6 +3843,7 @@ export class CourseEditorScene extends Phaser.Scene {
     this.isShuttingDown = true;
     this.events.off('wake', this.handleWake, this);
     this.scale.off('resize', this.handleResize, this);
+    this.game.canvas.removeEventListener('contextmenu', this.handleCanvasContextMenu);
     this.game.canvas.removeEventListener('wheel', this.handleCanvasWheel);
     this.musicModeActive = false;
     this.musicPreviewState = 'stopped';
