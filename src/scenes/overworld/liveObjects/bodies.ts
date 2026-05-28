@@ -3,7 +3,11 @@ import Phaser from 'phaser';
 export type ArcadeObjectBody = Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody;
 
 export function isDynamicArcadeBody(body: ArcadeObjectBody | null): body is Phaser.Physics.Arcade.Body {
-  return Boolean(body && 'velocity' in body);
+  return Boolean(
+    body &&
+    'velocity' in body &&
+    typeof (body as Phaser.Physics.Arcade.Body).setAllowGravity === 'function'
+  );
 }
 
 export function getArcadeBodyBounds(body: ArcadeObjectBody): Phaser.Geom.Rectangle {
