@@ -6,6 +6,7 @@ export interface PressurePlateInspectorOptions {
   connectMode: boolean;
   targetSummary: string | null;
   eligibleTargetCount: number;
+  connectTitle?: string;
 }
 
 export interface ContainerInspectorOptions {
@@ -63,7 +64,9 @@ export function buildPressurePlateInspectorState(
           : 'This pressure plate is not linked yet.'),
     pressureConnectHidden: options.connectMode || targetExists,
     pressureConnectDisabled: options.connectMode || !canConnect,
-    pressureConnectTitle: canConnect ? '' : 'Add a door, metal door, cage, or chest to this course first.',
+    pressureConnectTitle: canConnect
+      ? ''
+      : options.connectTitle ?? 'Add a door, metal door, cage, or chest to this course first.',
     pressureClearHidden: options.connectMode,
     pressureClearDisabled: !targetExists,
     pressureDoneLaterHidden: !options.connectMode,
