@@ -102,6 +102,10 @@ export function getPressurePlateTargetLabel(objectId: string): string {
       return 'treasure chest';
     case 'cage':
       return 'cage';
+    case 'blast_door':
+      return 'blast door';
+    case 'barricade':
+      return 'barricade';
     default:
       return getObjectById(objectId)?.name ?? 'object';
   }

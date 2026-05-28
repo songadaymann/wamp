@@ -38,6 +38,8 @@ export function isPressureControlledObject(liveObject: LoadedRoomObject): boolea
     case 'treasure_chest':
     case 'trapdoor_metal':
     case 'trapdoor_locked':
+    case 'blast_door':
+    case 'barricade':
       return true;
     default:
       return false;

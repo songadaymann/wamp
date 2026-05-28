@@ -878,6 +878,10 @@ export class EditorInspectorController {
         return 'metal trapdoor';
       case 'trapdoor_locked':
         return 'locked trapdoor';
+      case 'blast_door':
+        return 'blast door';
+      case 'barricade':
+        return 'barricade';
       default:
         return getObjectById(objectId)?.name ?? 'object';
     }

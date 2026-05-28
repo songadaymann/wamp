@@ -151,6 +151,7 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
       switch (liveObject.config.id) {
         case 'door_metal':
         case 'trapdoor_metal':
+          // Opens while plate is pressed
           if (liveObject.runtime.pressureActive !== active) {
             liveObject.runtime.pressureActive = active;
             this.applyPressureDoorState(liveObject, active);
@@ -159,22 +160,47 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
             }
           }
           break;
+
+        case 'blast_door':
+          // Closes while plate is pressed (opposite of metal door)
+          const shouldBeClosed = active;
+          if (liveObject.runtime.pressureActive !== shouldBeClosed) {
+            liveObject.runtime.pressureActive = shouldBeClosed;
+            this.applyPressureDoorState(liveObject, !shouldBeClosed); // true = open
+            if (shouldBeClosed) {
+              this.options.playRoomSfx('door-open', loadedRoom.room.coordinates);
+            }
+          }
+          break;
+
+        case 'barricade':
+          // Builds permanently the first time plate is pressed
+          if (active && !liveObject.runtime.triggerLatched) {
+            liveObject.runtime.triggerLatched = true;
+            this.applyBarricadeBuiltState(liveObject);
+            this.options.playRoomSfx('door-open', loadedRoom.room.coordinates);
+          }
+          break;
+
         case 'door_locked':
         case 'trapdoor_locked':
           if (active) {
             this.triggerLinkedLockedDoor(loadedRoom, liveObject);
           }
           break;
+
         case 'cage':
           if (active) {
             this.openTriggeredCage(loadedRoom, liveObject);
           }
           break;
+
         case 'treasure_chest':
           if (active) {
             this.openTriggeredChest(loadedRoom, liveObject);
           }
           break;
+
         default:
           break;
       }
@@ -493,6 +519,18 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
       'door-open'
     );
     this.options.removeLiveObject(loadedRoom, liveObject, 'object-removed');
+  }
+
+  private applyBarricadeBuiltState(liveObject: LoadedRoomObject): void {
+    const body = liveObject.sprite.body as ArcadeObjectBody | null;
+    if (body) {
+      body.enable = true;
+      if ('updateFromGameObject' in body) {
+        body.updateFromGameObject();
+      }
+    }
+
+    liveObject.sprite.setAlpha(1);
   }
 
   private openTriggeredCage(
