@@ -269,6 +269,8 @@ const MOVING_PLATFORM_CARRY_MAX_UPWARD_PLAYER_SPEED = -60;
 const MOVING_PLATFORM_CARRY_EDGE_INSET_PX = 1;
 const MOVING_PLATFORM_CARRY_HOVER_TOLERANCE_PX = 10;
 const MOVING_PLATFORM_CARRY_PENETRATION_TOLERANCE_PX = 8;
+const MOVING_PLATFORM_OBJECT_CARRY_HOVER_TOLERANCE_PX = TILE_SIZE + 2;
+const MOVING_PLATFORM_OBJECT_CARRY_PENETRATION_TOLERANCE_PX = 8;
 const LIVE_OBJECT_CONVEYOR_SPEED = 48;
 const LIVE_OBJECT_GRAVITY_ACCELERATION = 700;
 const LIVE_OBJECT_MAX_GRAVITY_SPEED = 500;
@@ -871,6 +873,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       }
     }
 
+    this.carryMovingPlatformRiders(rooms);
     this.stabilizePushableStacks(rooms);
     this.triggerController.updatePressurePlates(rooms);
   }
@@ -1043,6 +1046,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const end = new Phaser.Math.Vector2(target.sprite.x, target.sprite.y);
     const distance = Phaser.Math.Distance.Between(start.x, start.y, end.x, end.y);
     if (distance < 2) {
+      liveObject.runtime.previousX = liveObject.sprite.x;
+      liveObject.runtime.previousY = liveObject.sprite.y;
       body.setVelocity(0, 0);
       return;
     }
@@ -1072,8 +1077,28 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     if (remaining <= step) {
       liveObject.runtime.directionX *= -1;
     }
+  }
 
-    this.carryPlayerOnMovingPlatform(body, next.x - previousX, next.y - previousY);
+  private carryMovingPlatformRiders(
+    rooms: Array<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
+  ): void {
+    for (const loadedRoom of rooms) {
+      for (const liveObject of loadedRoom.liveObjects) {
+        if (!isMovingPlatformObjectId(liveObject.config.id)) {
+          continue;
+        }
+
+        const body = this.getDynamicBody(liveObject.sprite);
+        if (!body) {
+          continue;
+        }
+
+        const deltaX = liveObject.sprite.x - liveObject.runtime.previousX;
+        const deltaY = liveObject.sprite.y - liveObject.runtime.previousY;
+        this.carryPlayerOnMovingPlatform(body, deltaX, deltaY);
+        this.carryObjectsOnMovingPlatform(rooms, liveObject, body, deltaX, deltaY);
+      }
+    }
   }
 
   private findLinkedMovingPlatformEndpoint(
@@ -1116,25 +1141,116 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       return;
     }
 
-    const horizontalOverlap =
-      playerBody.right - MOVING_PLATFORM_CARRY_EDGE_INSET_PX >
-        platformBody.left + MOVING_PLATFORM_CARRY_EDGE_INSET_PX &&
-      playerBody.left + MOVING_PLATFORM_CARRY_EDGE_INSET_PX <
-        platformBody.right - MOVING_PLATFORM_CARRY_EDGE_INSET_PX;
-    const footDistanceFromTop = playerBody.bottom - platformBody.top;
-    const standingOnPlatform =
-      horizontalOverlap &&
-      footDistanceFromTop >= -MOVING_PLATFORM_CARRY_HOVER_TOLERANCE_PX &&
-      footDistanceFromTop <= MOVING_PLATFORM_CARRY_PENETRATION_TOLERANCE_PX &&
-      playerBody.top < platformBody.top;
-    if (!standingOnPlatform) {
+    if (!this.bodyIsOnMovingPlatformTop(playerBody, platformBody, {
+      edgeInsetPx: MOVING_PLATFORM_CARRY_EDGE_INSET_PX,
+      hoverTolerancePx: MOVING_PLATFORM_CARRY_HOVER_TOLERANCE_PX,
+      penetrationTolerancePx: MOVING_PLATFORM_CARRY_PENETRATION_TOLERANCE_PX,
+    })) {
       return;
     }
 
     const velocityX = playerBody.velocity.x;
-    const velocityY = playerBody.velocity.y;
-    playerBody.reset(playerBody.center.x + deltaX, playerBody.center.y + deltaY);
-    playerBody.setVelocity(velocityX, velocityY);
+    const playerBounds = getArcadeBodyBounds(playerBody);
+    playerBody.reset(
+      playerBounds.centerX + deltaX,
+      platformBody.top - playerBounds.height * 0.5,
+    );
+    playerBody.setVelocity(velocityX, 0);
+  }
+
+  private carryObjectsOnMovingPlatform(
+    rooms: Array<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
+    platformObject: LoadedRoomObject,
+    platformBody: Phaser.Physics.Arcade.Body,
+    deltaX: number,
+    deltaY: number,
+  ): void {
+    if (deltaX === 0 && deltaY === 0) {
+      return;
+    }
+
+    for (const loadedRoom of rooms) {
+      for (const liveObject of loadedRoom.liveObjects) {
+        if (
+          liveObject === platformObject ||
+          !this.shouldCarryObjectOnMovingPlatform(liveObject) ||
+          !liveObject.sprite.active ||
+          !liveObject.sprite.body
+        ) {
+          continue;
+        }
+
+        const body = liveObject.sprite.body as ArcadeObjectBody;
+        if (
+          !body.enable ||
+          (
+            isDynamicArcadeBody(body) &&
+            body.velocity.y < MOVING_PLATFORM_CARRY_MAX_UPWARD_PLAYER_SPEED
+          ) ||
+          !this.bodyIsOnMovingPlatformTop(body, platformBody, {
+            edgeInsetPx: MOVING_PLATFORM_CARRY_EDGE_INSET_PX,
+            hoverTolerancePx: MOVING_PLATFORM_OBJECT_CARRY_HOVER_TOLERANCE_PX,
+            penetrationTolerancePx: MOVING_PLATFORM_OBJECT_CARRY_PENETRATION_TOLERANCE_PX,
+          })
+        ) {
+          continue;
+        }
+
+        this.moveCarriedLiveObjectToPlatformTop(liveObject, body, platformBody, deltaX);
+      }
+    }
+  }
+
+  private shouldCarryObjectOnMovingPlatform(liveObject: LoadedRoomObject): boolean {
+    return liveObject.config.category === 'collectible' || liveObject.config.category === 'enemy';
+  }
+
+  private bodyIsOnMovingPlatformTop(
+    body: ArcadeObjectBody,
+    platformBody: Phaser.Physics.Arcade.Body,
+    options: {
+      edgeInsetPx: number;
+      hoverTolerancePx: number;
+      penetrationTolerancePx: number;
+    },
+  ): boolean {
+    const bodyBounds = getArcadeBodyBounds(body);
+    const platformBounds = getArcadeBodyBounds(platformBody);
+    const horizontalOverlap =
+      bodyBounds.right - options.edgeInsetPx > platformBounds.left + options.edgeInsetPx &&
+      bodyBounds.left + options.edgeInsetPx < platformBounds.right - options.edgeInsetPx;
+    const footDistanceFromTop = bodyBounds.bottom - platformBounds.top;
+
+    return (
+      horizontalOverlap &&
+      footDistanceFromTop >= -options.hoverTolerancePx &&
+      footDistanceFromTop <= options.penetrationTolerancePx &&
+      bodyBounds.top < platformBounds.top
+    );
+  }
+
+  private moveCarriedLiveObjectToPlatformTop(
+    liveObject: LoadedRoomObject,
+    body: ArcadeObjectBody,
+    platformBody: Phaser.Physics.Arcade.Body,
+    deltaX: number,
+  ): void {
+    const bodyBounds = getArcadeBodyBounds(body);
+    const targetBodyCenterX = bodyBounds.centerX + deltaX;
+    const targetBodyCenterY = platformBody.top - bodyBounds.height * 0.5;
+    const nextSpriteX = liveObject.sprite.x + targetBodyCenterX - bodyBounds.centerX;
+    const nextSpriteY = liveObject.sprite.y + targetBodyCenterY - bodyBounds.centerY;
+
+    if (isDynamicArcadeBody(body)) {
+      const velocityX = body.velocity.x;
+      body.reset(nextSpriteX, nextSpriteY);
+      body.updateFromGameObject();
+      body.setVelocity(velocityX, 0);
+      liveObject.sprite.setPosition(nextSpriteX, nextSpriteY);
+      return;
+    }
+
+    body.reset(nextSpriteX, nextSpriteY);
   }
 
   findOverlappingLadder(
