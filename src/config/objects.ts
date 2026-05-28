@@ -85,6 +85,8 @@ export const PRESSURE_PLATE_TARGET_OBJECT_IDS = [
   'treasure_chest',
   'trapdoor_locked',
   'trapdoor_metal',
+  'barricade',
+  'blast_door',
 ] as const;
 
 export type PressurePlateTargetObjectId = (typeof PRESSURE_PLATE_TARGET_OBJECT_IDS)[number];
@@ -186,6 +188,8 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'door_metal',  name: 'Metal Door',  category: 'platform',    path: 'assets/objects/metal_door_locked.png', frameWidth: 32, frameHeight: 48, frameCount: 1,  fps: 0,  facingDirection: 'right', bodyWidth: 28, bodyHeight: 44, bodyOffsetX: 2, bodyOffsetY: 4, behavior: 'static',   description: 'Pressure-plate door. Opens while its linked plate stays pressed.' },
   { id: 'trapdoor_locked', name: 'Locked Trapdoor', category: 'interactive', path: 'assets/objects/trapdoor.png', frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  facingDirection: 'right', bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 0, bodyOffsetY: 0, behavior: 'static',   description: 'A key-gated trapdoor. Collect a key to unlock and pass through.' },
   { id: 'trapdoor_metal',  name: 'Metal Trapoor',  category: 'platform',    path: 'assets/objects/trapdoor2.png', frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  facingDirection: 'right', bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 0, bodyOffsetY: 0, behavior: 'static',   description: 'Pressure-plate trapdoor. Opens while its linked plate stays pressed.' },
+  { id: 'blast_door',  name: 'Blast Door',  category: 'platform',    path: 'assets/objects/blast_door.png', frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  facingDirection: 'right', bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 0, bodyOffsetY: 0, behavior: 'static',   description: 'Pressure-plate closing door. Closes while its linked plate stays pressed.' },
+  { id: 'barricade',  name: 'Barricade',  category: 'platform',    path: 'assets/objects/barricade.png', frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  facingDirection: 'right', bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 0, bodyOffsetY: 0, behavior: 'static',   description: 'Pressure-plate building barricade. Pressure plate activates the build to permanently block paths.' },
   { id: 'crate',       name: 'Crate',       category: 'platform',    path: 'assets/objects/crate_static.png', frameWidth: 32, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 0, bodyOffsetY: 16, previewWidth: 16, previewHeight: 16, previewOffsetX: 0, previewOffsetY: 16, behavior: 'static',   interaction: 'pushable', description: 'Solid block. Stand on it or push it.' },
   { id: 'brick_box',   name: 'Brick Box',   category: 'platform',    path: 'assets/objects/brick_box.png',   frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 0,  defaultFrame: 5, bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 8, bodyOffsetY: 8, previewWidth: 16, previewHeight: 16, previewOffsetX: 8, previewOffsetY: 8, placeUsingPreviewBounds: true, behavior: 'static',   description: 'Solid brick block. Stand on it like a platform.' },
   { id: MOVING_PLATFORM_OBJECT_ID, name: 'Moving Platform', category: 'platform', path: 'assets/tilesets/special.png?v=2026-05-12-special-tiles', frameWidth: 16, frameHeight: 16, frameCount: 64, fps: 0, defaultFrame: 2, facingDirection: 'right', bodyWidth: 16, bodyHeight: 8, bodyOffsetX: 0, bodyOffsetY: 4, behavior: 'static', collidesWithWorld: false, description: 'Linked platform. Connect it to a Moving Platform Anchor to make it patrol.' },

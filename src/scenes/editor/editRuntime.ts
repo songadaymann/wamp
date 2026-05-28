@@ -1130,6 +1130,9 @@ export class EditorEditRuntime {
       if (placed.id === 'trapdoor_metal') {
         sprite.setTint(0xb8c4d8);
       }
+      if (placed.id === 'blast_door') {
+        sprite.setTint(0xb8c4d8);
+      }
       this.applyPlacedObjectFacing(sprite, objectConfig, placed);
       this.objectSprites.push(sprite);
     }

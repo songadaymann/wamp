@@ -590,6 +590,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     if (config.id === 'trapdoor_metal') {
       sprite.setTint(0xb8c4d8);
     }
+    if (config.id === 'blast_door') {
+      this.applyPressureDoorStateForNewObject(sprite);
+    }
     if (
       config.bodyWidth > 0 &&
       config.bodyHeight > 0 &&
@@ -741,6 +744,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
                 this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
                   this.triggerController.handleLockedDoorContact(loadedRoom, liveObject);
                 })
+              );
+            } else if (liveObject.config.id === 'barricade') {
+              liveObject.interactions.push(
+                this.options.scene.physics.add.collider(player, liveObject.sprite)
               );
             }
             break;
@@ -2123,5 +2130,19 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       this.roomStateEventSuppressionDepth = Math.max(0, this.roomStateEventSuppressionDepth - 1);
     }
   }
+  private applyPressureDoorStateForNewObject(sprite: Phaser.GameObjects.Sprite): void {
+    sprite.setAlpha(0.28);
+    sprite.setTint(0x8ea0ba);
+  }
 
+  private applyBarricadeBuiltState(liveObject: LoadedRoomObject): void {
+    const body = liveObject.sprite.body as ArcadeObjectBody | null;
+    if (body) {
+      body.enable = true;
+      if ('updateFromGameObject' in body) {
+        body.updateFromGameObject();
+      }
+    }
+    liveObject.sprite.setAlpha(1);
+  }
 }
