@@ -2135,14 +2135,4 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     sprite.setTint(0x8ea0ba);
   }
 
-  private applyBarricadeBuiltState(liveObject: LoadedRoomObject): void {
-    const body = liveObject.sprite.body as ArcadeObjectBody | null;
-    if (body) {
-      body.enable = true;
-      if ('updateFromGameObject' in body) {
-        body.updateFromGameObject();
-      }
-    }
-    liveObject.sprite.setAlpha(1);
-  }
 }
