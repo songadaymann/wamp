@@ -5,6 +5,7 @@ import type {
   ChatBanCreateRequestBody,
   ChatBanListResponse,
   ChatBanMutationResponse,
+  ChatMentionUserListResponse,
   ChatMessageCreateRequestBody,
   ChatMessageDeleteResponse,
   ChatMessageListResponse,
@@ -34,6 +35,10 @@ import {
   resolveChatModerationViewer,
 } from './moderation';
 import {
+  logChatMentionEmailFailures,
+  sendChatMentionNotificationEmails,
+} from './mentions';
+import {
   createChatAdmin,
   createChatBan,
   createChatMessage,
@@ -46,22 +51,32 @@ import {
   loadChatBanRecord,
   loadChatMessageById,
   loadLatestChatMessageForUser,
+  searchChatMentionUsers,
   softDeleteChatMessage,
 } from './store';
 
 const CHAT_RATE_LIMIT_WINDOW_MS = 1000;
 
+type WorkerExecutionContext = {
+  waitUntil(promise: Promise<unknown>): void;
+};
+
 export async function handleChatRequest(
   request: Request,
   url: URL,
-  env: Env
+  env: Env,
+  ctx?: WorkerExecutionContext
 ): Promise<Response> {
   if (url.pathname === '/api/chat/messages' && request.method === 'GET') {
     return handleListChatMessages(request, url, env);
   }
 
   if (url.pathname === '/api/chat/messages' && request.method === 'POST') {
-    return handleCreateChatMessage(request, env);
+    return handleCreateChatMessage(request, env, ctx);
+  }
+
+  if (url.pathname === '/api/chat/mention-users' && request.method === 'GET') {
+    return handleListChatMentionUsers(request, url, env);
   }
 
   const deleteMessageMatch = /^\/api\/chat\/messages\/([^/]+)$/.exec(url.pathname);
@@ -122,7 +137,8 @@ export async function handleListChatMessages(
 
 export async function handleCreateChatMessage(
   request: Request,
-  env: Env
+  env: Env,
+  ctx?: WorkerExecutionContext
 ): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(env, request, 'send chat messages');
   assertNotSchoolRestricted(auth, 'send chat messages');
@@ -151,7 +167,45 @@ export async function handleCreateChatMessage(
     new Date(nowMs).toISOString()
   );
 
+  scheduleChatMentionNotificationEmails(request, env, message, auth.user, ctx);
+
   return jsonResponse(request, message, { status: 201 });
+}
+
+async function handleListChatMentionUsers(
+  request: Request,
+  url: URL,
+  env: Env
+): Promise<Response> {
+  const auth = await requireAuthenticatedRequestAuth(env, request, 'search chat mentions');
+  assertNotSchoolRestricted(auth, 'search chat mentions');
+  const responseBody: ChatMentionUserListResponse = {
+    users: await searchChatMentionUsers(env, url.searchParams.get('q') ?? ''),
+  };
+
+  return jsonResponse(request, responseBody);
+}
+
+function scheduleChatMentionNotificationEmails(
+  request: Request,
+  env: Env,
+  message: Awaited<ReturnType<typeof createChatMessage>>,
+  sender: Awaited<ReturnType<typeof requireAuthenticatedRequestAuth>>['user'],
+  ctx?: WorkerExecutionContext
+): void {
+  const notificationPromise = sendChatMentionNotificationEmails(request, env, message, sender)
+    .then(logChatMentionEmailFailures)
+    .catch((error) => {
+      const reason = error instanceof Error ? error.message : 'Unknown chat mention email failure.';
+      console.warn(`Chat mention emails failed: ${reason}`);
+    });
+
+  if (ctx) {
+    ctx.waitUntil(notificationPromise);
+    return;
+  }
+
+  void notificationPromise;
 }
 
 async function handleDeleteChatMessage(

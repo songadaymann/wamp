@@ -26,6 +26,16 @@ export interface ChatMessageCreateRequestBody {
   text: string;
 }
 
+export interface ChatMentionUserRecord {
+  userId: string;
+  displayName: string;
+  username: string;
+}
+
+export interface ChatMentionUserListResponse {
+  users: ChatMentionUserRecord[];
+}
+
 export interface ChatModerationUserRecord {
   userId: string;
   displayName: string;
