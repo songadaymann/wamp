@@ -57,8 +57,8 @@ export function buildPressurePlateInspectorState(
       options.statusText ??
       (options.connectMode
         ? canConnect
-          ? 'Click a door, metal door, cage, or chest anywhere in this course to link this pressure plate.'
-          : 'No door, metal door, cage, or chest is in this course yet.'
+          ? 'Click a door, barricade, cage, or chest anywhere in this course to link this pressure plate.'
+          : 'No door, barricade, cage, or chest is in this course yet.'
         : options.targetSummary
           ? `Linked to ${options.targetSummary}.`
           : 'This pressure plate is not linked yet.'),

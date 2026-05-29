@@ -838,8 +838,8 @@ export class EditorInspectorController {
     }
 
     return autoPlaced
-      ? 'Pressure plate placed. Click a door, cage, or chest to link it.'
-      : 'Click a door, cage, or chest to link this pressure plate.';
+      ? 'Pressure plate placed. Click a door, barricade, cage, or chest to link it.'
+      : 'Click a door, barricade, cage, or chest to link this pressure plate.';
   }
 
   private getObjectLinkPickTargetStatus(source: PlacedObject): string {
@@ -851,7 +851,7 @@ export class EditorInspectorController {
   private getObjectLinkNoTargetsStatus(source: PlacedObject): string {
     return isMovingPlatformObjectId(source.id)
       ? 'No Moving Platform Anchor is in this room yet. You can link this moving platform later.'
-      : 'No door, cage, or chest is in this room yet. You can link this pressure plate later.';
+      : 'No door, barricade, cage, or chest is in this room yet. You can link this pressure plate later.';
   }
 
   private getObjectLinkNoTargetsTitle(source: PlacedObject): string {

@@ -590,16 +590,15 @@ export class CourseEditorObjectInspectorController {
     );
     let changed = false;
 
-    if (!target || target.slice.roomId === source.slice.roomId) {
-      changed =
-        source.slice.runtime.setPressurePlateTarget(
-          source.placed.instanceId,
-          target?.placed.instanceId ?? null,
-        ) || changed;
-    } else {
-      changed =
-        source.slice.runtime.setPressurePlateTarget(source.placed.instanceId, null) || changed;
-    }
+    const localTargetInstanceId =
+      target?.slice.roomId === source.slice.roomId
+        ? target.placed.instanceId ?? null
+        : null;
+    changed =
+      source.slice.runtime.setPressurePlateTarget(
+        source.placed.instanceId,
+        localTargetInstanceId,
+      ) || changed;
 
     const draft = this.host.getActiveCourseDraft();
     if (!draft) {
@@ -607,11 +606,7 @@ export class CourseEditorObjectInspectorController {
     }
 
     const nextDraft = cloneCourseSnapshot(draft);
-    if (
-      target &&
-      target.slice.roomId !== source.slice.roomId &&
-      target.placed.instanceId
-    ) {
+    if (target && target.placed.instanceId) {
       setCoursePressurePlateLink(
         nextDraft,
         {
@@ -713,26 +708,26 @@ export class CourseEditorObjectInspectorController {
     }
 
     return autoPlaced
-      ? 'Pressure plate placed. Click a door, cage, or chest to link it.'
-      : 'Click a door, cage, or chest to link this pressure plate.';
+      ? 'Pressure plate placed. Click a door, barricade, cage, or chest to link it.'
+      : 'Click a door, barricade, cage, or chest to link this pressure plate.';
   }
 
   private getObjectLinkPickTargetStatus(source: PlacedObject): string {
     return isMovingPlatformObjectId(source.id)
       ? 'Pick a Moving Platform Anchor in this room.'
-      : 'Pick a door, cage, or chest in this expanded room.';
+      : 'Pick a door, barricade, cage, or chest in this expanded room.';
   }
 
   private getObjectLinkNoTargetsStatus(source: PlacedObject): string {
     return isMovingPlatformObjectId(source.id)
       ? 'No Moving Platform Anchor is in this room yet. You can link this moving platform later.'
-      : 'No door, cage, or chest is in this expanded room yet. You can link this pressure plate later.';
+      : 'No door, barricade, cage, or chest is in this expanded room yet. You can link this pressure plate later.';
   }
 
   private getObjectLinkNoTargetsTitle(source: PlacedObject): string {
     return isMovingPlatformObjectId(source.id)
       ? 'Add a Moving Platform Anchor to this room first.'
-      : 'Add a door, cage, or chest to this expanded room first.';
+      : 'Add a door, barricade, cage, or chest to this expanded room first.';
   }
 
   private getObjectLinkTargetLabel(objectId: string): string {
@@ -753,6 +748,10 @@ export class CourseEditorObjectInspectorController {
         return 'metal trapdoor';
       case 'trapdoor_locked':
         return 'locked trapdoor';
+      case 'blast_door':
+        return 'blast door';
+      case 'barricade':
+        return 'barricade';
       default:
         return getObjectById(objectId)?.name ?? 'object';
     }

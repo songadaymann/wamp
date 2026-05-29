@@ -108,6 +108,22 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
     }
   }
 
+  initializePressureControlledObjectState(liveObject: LoadedRoomObject): void {
+    switch (liveObject.config.id) {
+      case 'blast_door':
+        liveObject.runtime.pressureActive = false;
+        this.applyPressureDoorState(liveObject, true);
+        break;
+      case 'barricade':
+        liveObject.runtime.pressureActive = false;
+        liveObject.runtime.triggerLatched = false;
+        this.applyBarricadeUnbuiltState(liveObject);
+        break;
+      default:
+        break;
+    }
+  }
+
   updatePressurePlates(
     loadedRooms: LoadedFullRoom<LoadedRoomObject, TEdgeWall>[]
   ): void {
@@ -531,6 +547,17 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
     }
 
     liveObject.sprite.setAlpha(1);
+    liveObject.sprite.clearTint();
+  }
+
+  private applyBarricadeUnbuiltState(liveObject: LoadedRoomObject): void {
+    const body = liveObject.sprite.body as ArcadeObjectBody | null;
+    if (body) {
+      body.enable = false;
+    }
+
+    liveObject.sprite.setAlpha(0.28);
+    liveObject.sprite.setTint(0x8ea0ba);
   }
 
   private openTriggeredCage(

@@ -3754,7 +3754,12 @@ export class OverworldPlayScene extends Phaser.Scene {
           continue;
         }
 
-        const bounds = this.getArcadeBodyBounds(liveObject.sprite.body as ArcadeObjectBody);
+        const body = liveObject.sprite.body as ArcadeObjectBody;
+        if (!body.enable) {
+          continue;
+        }
+
+        const bounds = this.getArcadeBodyBounds(body);
         if (bounds.contains(worldX, worldY)) {
           return true;
         }

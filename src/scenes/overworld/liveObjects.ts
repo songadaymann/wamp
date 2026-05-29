@@ -592,9 +592,6 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     if (config.id === 'trapdoor_metal') {
       sprite.setTint(0xb8c4d8);
     }
-    if (config.id === 'blast_door') {
-      this.applyPressureDoorStateForNewObject(sprite);
-    }
     if (
       config.bodyWidth > 0 &&
       config.bodyHeight > 0 &&
@@ -664,6 +661,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       }),
     };
 
+    this.triggerController.initializePressureControlledObjectState(liveObject);
+
     return liveObject;
   }
 
@@ -706,17 +705,22 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
               liveObject.interactions.push(
                 this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
                   this.maybeBreakBrickBox(loadedRoom, liveObject);
-                })
+                }, () => this.shouldCollideWithLiveObject(liveObject))
               );
             } else if (isBlockSwitchObjectId(liveObject.config.id)) {
               liveObject.interactions.push(
                 this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
                   this.triggerController.maybeTriggerBlockSwitch(loadedRoom, liveObject);
-                })
+                }, () => this.shouldCollideWithLiveObject(liveObject))
               );
             } else {
               liveObject.interactions.push(
-                this.options.scene.physics.add.collider(player, liveObject.sprite)
+                this.options.scene.physics.add.collider(
+                  player,
+                  liveObject.sprite,
+                  undefined,
+                  () => this.shouldCollideWithLiveObject(liveObject),
+                )
               );
             }
             break;
@@ -739,17 +743,22 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
               liveObject.interactions.push(
                 this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
                   this.triggerController.handleLockedDoorContact(loadedRoom, liveObject);
-                })
+                }, () => this.shouldCollideWithLiveObject(liveObject))
               );
             } else if (liveObject.config.id === 'trapdoor_locked') {
               liveObject.interactions.push(
                 this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
                   this.triggerController.handleLockedDoorContact(loadedRoom, liveObject);
-                })
+                }, () => this.shouldCollideWithLiveObject(liveObject))
               );
             } else if (liveObject.config.id === 'barricade') {
               liveObject.interactions.push(
-                this.options.scene.physics.add.collider(player, liveObject.sprite)
+                this.options.scene.physics.add.collider(
+                  player,
+                  liveObject.sprite,
+                  undefined,
+                  () => this.shouldCollideWithLiveObject(liveObject),
+                )
               );
             }
             break;
@@ -1408,6 +1417,26 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     liveObject.worldColliders = [];
   }
 
+  private shouldCollideWithLiveObject(liveObject: LoadedRoomObject): boolean {
+    const body = liveObject.sprite.body as ArcadeObjectBody | null;
+    return Boolean(liveObject.sprite.active && body?.enable);
+  }
+
+  private shouldCollideLiveObjectWithWorld(liveObject: LoadedRoomObject): boolean {
+    const body = liveObject.sprite.body as ArcadeObjectBody | null;
+    return Boolean(liveObject.sprite.active && body?.enable);
+  }
+
+  private shouldCollideLiveObjectPair(
+    liveObject: LoadedRoomObject,
+    obstacle: LoadedRoomObject,
+  ): boolean {
+    return (
+      this.shouldCollideLiveObjectWithWorld(liveObject)
+      && this.shouldCollideWithLiveObject(obstacle)
+    );
+  }
+
   private syncWorldObjectColliders(
     loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
   ): void {
@@ -1443,13 +1472,20 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
         for (const collisionRoom of rooms) {
           liveObject.worldColliders.push(
-            this.options.scene.physics.add.collider(liveObject.sprite, collisionRoom.terrainLayer)
+            this.options.scene.physics.add.collider(
+              liveObject.sprite,
+              collisionRoom.terrainLayer,
+              undefined,
+              () => this.shouldCollideLiveObjectWithWorld(liveObject),
+            )
           );
           if (collisionRoom.terrainInsetBodies) {
             liveObject.worldColliders.push(
               this.options.scene.physics.add.collider(
                 liveObject.sprite,
                 collisionRoom.terrainInsetBodies,
+                undefined,
+                () => this.shouldCollideLiveObjectWithWorld(liveObject),
               )
             );
           }
@@ -1477,7 +1513,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             liveObject.worldColliders.push(
               this.options.scene.physics.add.collider(liveObject.sprite, obstacle.sprite, () => {
                 this.triggerController.handleBlockSwitchActorHit(obstacleLoadedRoom, obstacle, liveObject);
-              })
+              }, () => this.shouldCollideLiveObjectPair(liveObject, obstacle))
             );
             continue;
           }
@@ -1489,13 +1525,18 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             liveObject.worldColliders.push(
               this.options.scene.physics.add.collider(liveObject.sprite, obstacle.sprite, () => {
                 this.handleActorPushableContact(liveObject, obstacle);
-              })
+              }, () => this.shouldCollideLiveObjectPair(liveObject, obstacle))
             );
             continue;
           }
 
           liveObject.worldColliders.push(
-            this.options.scene.physics.add.collider(liveObject.sprite, obstacle.sprite)
+            this.options.scene.physics.add.collider(
+              liveObject.sprite,
+              obstacle.sprite,
+              undefined,
+              () => this.shouldCollideLiveObjectPair(liveObject, obstacle),
+            )
           );
         }
       }
@@ -2246,9 +2287,4 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       this.roomStateEventSuppressionDepth = Math.max(0, this.roomStateEventSuppressionDepth - 1);
     }
   }
-  private applyPressureDoorStateForNewObject(sprite: Phaser.GameObjects.Sprite): void {
-    sprite.setAlpha(0.28);
-    sprite.setTint(0x8ea0ba);
-  }
-
 }

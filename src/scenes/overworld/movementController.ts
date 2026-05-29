@@ -1224,15 +1224,12 @@ export class OverworldMovementController {
     }
 
     for (const liveObject of this.host.getLoadedLiveObjects()) {
-      if (
-        !isSolidRuntimeObjectConfig(liveObject.config) ||
-        !liveObject.sprite.active ||
-        !liveObject.sprite.body
-      ) {
+      const objectBody = this.getEnabledSolidRuntimeObjectBody(liveObject);
+      if (!objectBody) {
         continue;
       }
 
-      const objectBounds = this.host.getArcadeBodyBounds(liveObject.sprite.body as ArcadeObjectBody);
+      const objectBounds = this.host.getArcadeBodyBounds(objectBody);
       if (
         addedHeadroomBounds.width > 0 &&
         addedHeadroomBounds.height > 0 &&
@@ -1245,6 +1242,19 @@ export class OverworldMovementController {
     return true;
   }
 
+  private getEnabledSolidRuntimeObjectBody(liveObject: LoadedRoomObject): ArcadeObjectBody | null {
+    if (
+      !isSolidRuntimeObjectConfig(liveObject.config) ||
+      !liveObject.sprite.active ||
+      !liveObject.sprite.body
+    ) {
+      return null;
+    }
+
+    const body = liveObject.sprite.body as ArcadeObjectBody;
+    return body.enable ? body : null;
+  }
+
   private isSupportedBySolidRuntimeObject(playerBody: Phaser.Physics.Arcade.Body): boolean {
     if (playerBody.velocity.y < RUNTIME_OBJECT_SUPPORT_MAX_UPWARD_SPEED) {
       return false;
@@ -1255,15 +1265,12 @@ export class OverworldMovementController {
     const playerRight = playerBounds.right - RUNTIME_OBJECT_SUPPORT_EDGE_INSET_PX;
 
     for (const liveObject of this.host.getLoadedLiveObjects()) {
-      if (
-        !isSolidRuntimeObjectConfig(liveObject.config) ||
-        !liveObject.sprite.active ||
-        !liveObject.sprite.body
-      ) {
+      const objectBody = this.getEnabledSolidRuntimeObjectBody(liveObject);
+      if (!objectBody) {
         continue;
       }
 
-      const objectBounds = this.host.getArcadeBodyBounds(liveObject.sprite.body as ArcadeObjectBody);
+      const objectBounds = this.host.getArcadeBodyBounds(objectBody);
       const horizontalOverlap =
         playerRight > objectBounds.left + RUNTIME_OBJECT_SUPPORT_EDGE_INSET_PX &&
         playerLeft < objectBounds.right - RUNTIME_OBJECT_SUPPORT_EDGE_INSET_PX;
@@ -1317,15 +1324,17 @@ export class OverworldMovementController {
     let bestGap = Number.POSITIVE_INFINITY;
 
     for (const liveObject of this.host.getLoadedLiveObjects()) {
+      const candidateBody = liveObject.sprite.body as ArcadeObjectBody | null;
       if (
         !isPushableObjectConfig(liveObject.config) ||
         !liveObject.sprite.active ||
-        !isDynamicArcadeBody(liveObject.sprite.body as ArcadeObjectBody | null)
+        !isDynamicArcadeBody(candidateBody) ||
+        !candidateBody.enable
       ) {
         continue;
       }
 
-      const crateBody = liveObject.sprite.body as Phaser.Physics.Arcade.Body;
+      const crateBody = candidateBody;
       const crateBounds = this.host.getArcadeBodyBounds(crateBody);
       const crateTangent = this.projectBodyBounds(crateBounds, tangentVector);
       const crateGravity = this.projectBodyBounds(crateBounds, gravityVector);
