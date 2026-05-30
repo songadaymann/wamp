@@ -856,8 +856,12 @@ export class OverworldPlayScene extends Phaser.Scene {
       getMode: () => this.mode,
       getCurrentRoomSnapshot: () => this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates),
       isCurrentRoomPublished: () => this.getCellStateAt(this.currentRoomCoordinates) === 'published',
+      getWorldWindow: () => this.worldWindow,
+      getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
       getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
       getPlayerCommentPosition: () => this.getPlayerCommentPosition(),
+      getZoom: () => this.cameras.main.zoom,
+      selectRoomCoordinates: (coordinates) => this.selectRoomCoordinates(coordinates),
       showTransientStatus: (message) => this.showTransientStatus(message),
       onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
     });
@@ -1051,12 +1055,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       getZoom: () => this.cameras.main.zoom,
       getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
       getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
-      getRoomSnapshotForCoordinates: (coordinates) =>
-        this.getRoomSnapshotForCoordinates(coordinates),
       getRoomSummaryForCoordinates: (coordinates) =>
         this.roomSummariesById.get(roomIdFromCoordinates(coordinates)) ?? null,
-      getRoomDisplayTitle: (title, coordinates) =>
-        this.getRoomDisplayTitle(title, coordinates),
       getRoomEditorCount: (coordinates) => this.getRoomEditorCount(coordinates),
       isWithinLoadedRoomBounds: (coordinates) => this.isWithinLoadedRoomBounds(coordinates),
       playSelectedRoom: () => this.playSelectedRoom(),
@@ -5417,6 +5417,10 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   openRoomCommentComposer(): boolean {
+    if (this.mode === 'browse') {
+      return this.roomCommentsController.openSelectedBrowseComments();
+    }
+
     return this.roomCommentsController.openComposer();
   }
 
@@ -5624,10 +5628,6 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     window.clearTimeout(this.presenceSnapshotSyncTimer);
     this.presenceSnapshotSyncTimer = null;
-  }
-
-  private getRoomDisplayTitle(title: string | null, coordinates: RoomCoordinates): string {
-    return title?.trim() ? title : `Room ${coordinates.x},${coordinates.y}`;
   }
 
   private truncateOverlayText(value: string, maxLength: number): string {
