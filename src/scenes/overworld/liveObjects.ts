@@ -1872,13 +1872,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     liveObject: LoadedRoomObject,
     body: Phaser.Physics.Arcade.Body
   ): boolean {
-    const roomOrigin = this.options.getRoomOrigin(room.coordinates);
+    const bounds = this.getObjectResetWorldBounds(room, liveObject.config);
     const margin = this.options.settings.respawnFallDistance;
     if (
-      body.right >= roomOrigin.x - margin &&
-      body.left <= roomOrigin.x + ROOM_PX_WIDTH + margin &&
-      body.bottom >= roomOrigin.y - margin &&
-      body.top <= roomOrigin.y + ROOM_PX_HEIGHT + margin
+      body.right >= bounds.left - margin &&
+      body.left <= bounds.right + margin &&
+      body.bottom >= bounds.top - margin &&
+      body.top <= bounds.bottom + margin
     ) {
       return false;
     }
@@ -1989,11 +1989,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     room: RoomSnapshot,
     config: GameObjectConfig
   ): { left: number; right: number } {
-    const roomOrigin = this.options.getRoomOrigin(room.coordinates);
+    const bounds = this.getRoomWorldBounds(room);
     const halfWidth = Math.max(4, (config.bodyWidth > 0 ? config.bodyWidth : config.frameWidth) * 0.5);
     return {
-      left: roomOrigin.x + halfWidth + 2,
-      right: roomOrigin.x + ROOM_PX_WIDTH - halfWidth - 2,
+      left: bounds.left + halfWidth + 2,
+      right: bounds.right - halfWidth - 2,
     };
   }
 
@@ -2002,20 +2002,75 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     config: GameObjectConfig,
     gravityDirection: PlayerGravityDirection,
   ): { min: number; max: number } {
-    const roomOrigin = this.options.getRoomOrigin(room.coordinates);
+    const bounds = this.getObjectTravelWorldBounds(room, config);
     const rightVector = getGravityRightVector(gravityDirection);
     if (rightVector.x !== 0) {
       const halfWidth = Math.max(4, (config.bodyWidth > 0 ? config.bodyWidth : config.frameWidth) * 0.5);
       return {
-        min: roomOrigin.x + halfWidth + 2,
-        max: roomOrigin.x + ROOM_PX_WIDTH - halfWidth - 2,
+        min: bounds.left + halfWidth + 2,
+        max: bounds.right - halfWidth - 2,
       };
     }
 
     const halfHeight = Math.max(4, (config.bodyHeight > 0 ? config.bodyHeight : config.frameHeight) * 0.5);
     return {
-      min: roomOrigin.y + halfHeight + 2,
-      max: roomOrigin.y + ROOM_PX_HEIGHT - halfHeight - 2,
+      min: bounds.top + halfHeight + 2,
+      max: bounds.bottom - halfHeight - 2,
+    };
+  }
+
+  private getObjectTravelWorldBounds(
+    room: RoomSnapshot,
+    config: GameObjectConfig,
+  ): { left: number; right: number; top: number; bottom: number } {
+    if (this.usesLoadedRoomTravelBounds(config.id)) {
+      return this.getLoadedFullRoomWorldBounds() ?? this.getRoomWorldBounds(room);
+    }
+
+    return this.getRoomWorldBounds(room);
+  }
+
+  private getObjectResetWorldBounds(
+    room: RoomSnapshot,
+    config: GameObjectConfig,
+  ): { left: number; right: number; top: number; bottom: number } {
+    if (this.usesLoadedRoomTravelBounds(config.id)) {
+      return this.getLoadedFullRoomWorldBounds() ?? this.getRoomWorldBounds(room);
+    }
+
+    return this.getRoomWorldBounds(room);
+  }
+
+  private usesLoadedRoomTravelBounds(objectId: string): boolean {
+    return objectId === 'penguin';
+  }
+
+  private getLoadedFullRoomWorldBounds(): { left: number; right: number; top: number; bottom: number } | null {
+    let bounds: { left: number; right: number; top: number; bottom: number } | null = null;
+
+    for (const loadedRoom of this.options.getLoadedFullRooms()) {
+      const roomBounds = this.getRoomWorldBounds(loadedRoom.room);
+      if (!bounds) {
+        bounds = { ...roomBounds };
+        continue;
+      }
+
+      bounds.left = Math.min(bounds.left, roomBounds.left);
+      bounds.right = Math.max(bounds.right, roomBounds.right);
+      bounds.top = Math.min(bounds.top, roomBounds.top);
+      bounds.bottom = Math.max(bounds.bottom, roomBounds.bottom);
+    }
+
+    return bounds;
+  }
+
+  private getRoomWorldBounds(room: RoomSnapshot): { left: number; right: number; top: number; bottom: number } {
+    const roomOrigin = this.options.getRoomOrigin(room.coordinates);
+    return {
+      left: roomOrigin.x,
+      right: roomOrigin.x + ROOM_PX_WIDTH,
+      top: roomOrigin.y,
+      bottom: roomOrigin.y + ROOM_PX_HEIGHT,
     };
   }
 

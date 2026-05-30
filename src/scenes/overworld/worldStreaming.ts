@@ -1387,6 +1387,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       this.options.createLiveObjects(loadedRoom);
     });
     this.loadedFullRoomsById.set(room.id, loadedRoom);
+    this.syncLiveObjectWorldColliders();
     this.previewRenderer.syncPreviewVisibility();
     this.options.onBackdropObjectsChanged?.();
     this.options.onFullRoomVisibilityChanged?.();
