@@ -5,10 +5,7 @@ import {
   ROOM_GOAL_LABELS,
   type RoomGoalType,
 } from '../../goals/roomGoals';
-import {
-  type RoomCoordinates,
-  type RoomSnapshot,
-} from '../../persistence/roomModel';
+import { type RoomCoordinates } from '../../persistence/roomModel';
 import { type WorldRoomSummary, type WorldWindow } from '../../persistence/worldModel';
 import { RETRO_COLORS } from '../../visuals/starfield';
 import {
@@ -60,7 +57,6 @@ const SELECTED_ROOM_PLAY_BUTTON_MIN_SCALE = 1;
 const SELECTED_ROOM_PLAY_BUTTON_MAX_SCALE = 8;
 const MIN_ZOOM = 0.08;
 
-type GoalRoomBadge = OverworldBadgePlacement;
 type RoomActivityBadge = OverworldBadgePlacement;
 type ExpandedRoomBadge = OverworldBadgePlacement;
 type SemanticBadgeOwner = 'goal' | 'expanded-room';
@@ -87,9 +83,7 @@ interface OverworldBrowseOverlayControllerHost {
   getZoom(): number;
   getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number };
   getCellStateAt(coordinates: RoomCoordinates): SelectedCellState;
-  getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null;
   getRoomSummaryForCoordinates(coordinates: RoomCoordinates): WorldRoomSummary | null;
-  getRoomDisplayTitle(title: string | null, coordinates: RoomCoordinates): string;
   getRoomEditorCount(coordinates: RoomCoordinates): number;
   isWithinLoadedRoomBounds(coordinates: RoomCoordinates): boolean;
   playSelectedRoom(): void;
@@ -109,7 +103,6 @@ export class OverworldBrowseOverlayController {
     tierFadeSpan: ROOM_BADGE_TIER_FADE_SPAN,
   };
 
-  private roomGoalBadges: GoalRoomBadge[] = [];
   private roomActivityBadges: RoomActivityBadge[] = [];
   private expandedRoomBadges: ExpandedRoomBadge[] = [];
   private selectedRoomPlayAffordance: SelectedRoomPlayAffordance | null = null;
@@ -173,7 +166,6 @@ export class OverworldBrowseOverlayController {
   }
 
   destroy(): void {
-    this.destroyRoomGoalBadges();
     this.destroyRoomActivityBadges();
     this.destroyExpandedRoomBadges();
     this.selectedRoomPlayAffordance?.container.destroy(true);
@@ -182,9 +174,6 @@ export class OverworldBrowseOverlayController {
 
   getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
     const ignoredObjects: Phaser.GameObjects.GameObject[] = [];
-    for (const badge of this.roomGoalBadges) {
-      ignoredObjects.push(badge.container);
-    }
     for (const badge of this.roomActivityBadges) {
       ignoredObjects.push(badge.container);
     }
@@ -198,7 +187,6 @@ export class OverworldBrowseOverlayController {
   }
 
   redrawBrowseOverlays(): void {
-    this.destroyRoomGoalBadges();
     this.destroyRoomActivityBadges();
     this.destroyExpandedRoomBadges();
 
@@ -215,7 +203,6 @@ export class OverworldBrowseOverlayController {
           x: worldWindow.center.x + col - worldWindow.radius,
           y: worldWindow.center.y + row - worldWindow.radius,
         };
-        this.redrawGoalBadgeAt(coordinates);
         this.redrawActivityBadgeAt(coordinates);
         this.redrawExpandedRoomBadgeAt(coordinates);
       }
@@ -226,17 +213,9 @@ export class OverworldBrowseOverlayController {
   }
 
   syncScale(zoom: number): void {
-    syncBadgePlacements(this.roomGoalBadges, zoom, this.roomBadgeScaleConfig);
     syncBadgePlacements(this.roomActivityBadges, zoom, this.roomBadgeScaleConfig);
     syncBadgePlacements(this.expandedRoomBadges, zoom, this.roomBadgeScaleConfig);
     this.updateSelectedRoomPlayAffordance(zoom);
-  }
-
-  private destroyRoomGoalBadges(): void {
-    for (const badge of this.roomGoalBadges) {
-      badge.container.destroy(true);
-    }
-    this.roomGoalBadges = [];
   }
 
   private destroyRoomActivityBadges(): void {
@@ -251,29 +230,6 @@ export class OverworldBrowseOverlayController {
       badge.container.destroy(true);
     }
     this.expandedRoomBadges = [];
-  }
-
-  private redrawGoalBadgeAt(coordinates: RoomCoordinates): void {
-    const expandedRoom = this.host.getRoomSummaryForCoordinates(coordinates)?.expandedRoom ?? null;
-    if (expandedRoom && expandedRoom.source !== 'standalone_room' && expandedRoom.cellCount > 1) {
-      return;
-    }
-
-    const room = this.host.getRoomSnapshotForCoordinates(coordinates);
-    if (!room?.goal) {
-      return;
-    }
-
-    this.roomGoalBadges.push(
-      this.createSemanticRoomBadge({
-        owner: 'goal',
-        title: this.host.getRoomDisplayTitle(room.title, coordinates).toUpperCase(),
-        typeLabel: ROOM_GOAL_LABELS[room.goal.type].toUpperCase(),
-        compactCode: this.getSemanticBadgeCode(room.goal.type),
-        color: this.getSemanticBadgeColor(room.goal.type),
-        coordinates,
-      }),
-    );
   }
 
   private redrawActivityBadgeAt(coordinates: RoomCoordinates): void {
