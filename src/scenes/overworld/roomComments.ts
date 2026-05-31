@@ -87,6 +87,7 @@ interface RenderedBrowseDanmakuComment {
   active: boolean;
   key: string | null;
   commentId: string | null;
+  target: BrowseCommentTarget | null;
   laneIndex: number;
   screenX: number;
   widthPx: number;
@@ -104,6 +105,7 @@ interface OverworldRoomCommentsControllerOptions {
   getPlayerCommentPosition: () => { x: number; y: number } | null;
   getZoom?: () => number;
   selectRoomCoordinates?: (coordinates: RoomCoordinates) => void;
+  jumpToRoomCoordinates?: (coordinates: RoomCoordinates) => void | Promise<void>;
   showTransientStatus?: (message: string) => void;
   onDisplayObjectsChanged?: () => void;
   document?: Document;
@@ -1082,7 +1084,21 @@ export class OverworldRoomCommentsController {
     stream.laneIndex = laneIndex;
     stream.key = candidate.key;
     stream.commentId = candidate.comment.id;
+    stream.target = candidate.target;
     stream.active = true;
+    stream.container.removeInteractive();
+    stream.container.setInteractive(
+      new Phaser.Geom.Rectangle(
+        width * 0.5,
+        BROWSE_DANMAKU_HEIGHT * 0.5,
+        width,
+        BROWSE_DANMAKU_HEIGHT,
+      ),
+      Phaser.Geom.Rectangle.Contains,
+    );
+    if (stream.container.input) {
+      stream.container.input.cursor = 'pointer';
+    }
     stream.container.setVisible(true);
     this.activeBrowseDanmaku.add(stream);
     this.placeBrowseDanmakuStream(stream, camera, zoom);
@@ -1136,7 +1152,7 @@ export class OverworldRoomCommentsController {
     container.setDepth(BROWSE_DANMAKU_DEPTH);
     container.setVisible(false);
 
-    return {
+    const stream: RenderedBrowseDanmakuComment = {
       container,
       shell,
       accent,
@@ -1145,11 +1161,28 @@ export class OverworldRoomCommentsController {
       active: false,
       key: null,
       commentId: null,
+      target: null,
       laneIndex: 0,
       screenX: 0,
       widthPx: 96,
       speedPxPerSecond: BROWSE_DANMAKU_MIN_SPEED,
     };
+
+    container.setName('browse-danmaku-comment');
+    container.on(
+      Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN,
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation();
+        this.handleBrowseDanmakuClick(stream);
+      },
+    );
+
+    return stream;
   }
 
   private placeBrowseDanmakuStream(
@@ -1180,6 +1213,34 @@ export class OverworldRoomCommentsController {
     this.browseDanmakuCandidateCursor =
       (this.browseDanmakuCandidateCursor + 1) % candidates.length;
     return candidate;
+  }
+
+  private handleBrowseDanmakuClick(stream: RenderedBrowseDanmakuComment): void {
+    if (!stream.active || !stream.target) {
+      return;
+    }
+
+    const target = stream.target;
+    this.pinnedBrowseMarkerKey = target.signature;
+    this.hoveredBrowseMarkerKey = null;
+    this.syncBrowseCommentMarkerPresentation();
+    this.options.showTransientStatus?.('Opening comment room...');
+
+    if (this.options.jumpToRoomCoordinates) {
+      void Promise.resolve(this.options.jumpToRoomCoordinates(target.displayCoordinates))
+        .then(() => {
+          this.pinnedBrowseMarkerKey = target.signature;
+          this.syncBrowseCommentMarkers();
+          this.syncBrowseCommentMarkerPresentation();
+        })
+        .catch((error) => {
+          console.warn('Failed to jump to comment room.', error);
+          this.options.showTransientStatus?.('Could not open comment room.');
+        });
+      return;
+    }
+
+    this.options.selectRoomCoordinates?.(target.displayCoordinates);
   }
 
   private getAvailableBrowseDanmakuLane(now: number, laneCount: number): number {
@@ -1274,6 +1335,8 @@ export class OverworldRoomCommentsController {
     stream.active = false;
     stream.key = null;
     stream.commentId = null;
+    stream.target = null;
+    stream.container.removeInteractive();
     stream.container.setVisible(false);
     stream.container.setAlpha(0);
     this.idleBrowseDanmaku.push(stream);
