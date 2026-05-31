@@ -862,6 +862,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getPlayerCommentPosition: () => this.getPlayerCommentPosition(),
       getZoom: () => this.cameras.main.zoom,
       selectRoomCoordinates: (coordinates) => this.selectRoomCoordinates(coordinates),
+      jumpToRoomCoordinates: (coordinates) => this.jumpToCoordinates(coordinates),
       showTransientStatus: (message) => this.showTransientStatus(message),
       onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
     });
