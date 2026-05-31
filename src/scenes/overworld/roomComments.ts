@@ -12,6 +12,7 @@ import {
   updateGameSettings,
   type GameSettings,
 } from '../../settings/userSettings';
+import { getDeviceLayoutState } from '../../ui/deviceLayout';
 import type { OverworldMode } from '../sceneData';
 import {
   syncBadgePlacements,
@@ -70,6 +71,28 @@ interface RenderedBrowseCommentMarker extends OverworldBadgePlacement {
   jiggleOffsetMs: number;
 }
 
+interface BrowseDanmakuCandidate {
+  key: string;
+  target: BrowseCommentTarget;
+  comment: RoomCommentRecord;
+  accentColor: number;
+}
+
+interface RenderedBrowseDanmakuComment {
+  container: Phaser.GameObjects.Container;
+  shell: Phaser.GameObjects.Rectangle;
+  accent: Phaser.GameObjects.Rectangle;
+  bodyText: Phaser.GameObjects.Text;
+  metaText: Phaser.GameObjects.Text;
+  active: boolean;
+  key: string | null;
+  commentId: string | null;
+  laneIndex: number;
+  screenX: number;
+  widthPx: number;
+  speedPxPerSecond: number;
+}
+
 interface OverworldRoomCommentsControllerOptions {
   scene: Phaser.Scene;
   getMode: () => OverworldMode;
@@ -125,6 +148,27 @@ const BROWSE_COMMENT_COLORS = [
   0xff9f68,
   0x58d39b,
 ];
+const BROWSE_DANMAKU_DEPTH = BROWSE_COMMENT_DEPTH + 3;
+const BROWSE_DANMAKU_MIN_ZOOM = 0.105;
+const BROWSE_DANMAKU_MAX_ZOOM = 3.4;
+const BROWSE_DANMAKU_FONT_SIZE = 13;
+const BROWSE_DANMAKU_HEIGHT = 28;
+const BROWSE_DANMAKU_LANE_HEIGHT = 36;
+const BROWSE_DANMAKU_TOP_PADDING = 88;
+const BROWSE_DANMAKU_BOTTOM_PADDING = 118;
+const BROWSE_DANMAKU_MIN_LANES = 3;
+const BROWSE_DANMAKU_MAX_LANES = 10;
+const BROWSE_DANMAKU_DESKTOP_MAX_ACTIVE = 18;
+const BROWSE_DANMAKU_REDUCED_MAX_ACTIVE = 9;
+const BROWSE_DANMAKU_PHONE_MAX_ACTIVE = 6;
+const BROWSE_DANMAKU_SPAWN_MIN_MS = 760;
+const BROWSE_DANMAKU_SPAWN_MAX_MS = 1320;
+const BROWSE_DANMAKU_LANE_COOLDOWN_MS = 1450;
+const BROWSE_DANMAKU_MIN_SPEED = 52;
+const BROWSE_DANMAKU_MAX_SPEED = 82;
+const BROWSE_DANMAKU_MAX_COMMENT_LENGTH = 72;
+const BROWSE_DANMAKU_MAX_COMMENT_PER_TARGET = 3;
+const BROWSE_DANMAKU_SIDE_MARGIN = 28;
 
 export class OverworldRoomCommentsController {
   private readonly browseMarkerScaleConfig: RoomBadgeScaleConfig = {
@@ -153,6 +197,12 @@ export class OverworldRoomCommentsController {
   private readonly failedBrowseRoomSignaturesUntil = new Map<string, number>();
   private hoveredBrowseMarkerKey: string | null = null;
   private pinnedBrowseMarkerKey: string | null = null;
+  private readonly activeBrowseDanmaku = new Set<RenderedBrowseDanmakuComment>();
+  private readonly idleBrowseDanmaku: RenderedBrowseDanmakuComment[] = [];
+  private readonly browseDanmakuLaneCooldowns: number[] = [];
+  private lastBrowseDanmakuUpdateMs = 0;
+  private nextBrowseDanmakuSpawnAtMs = 0;
+  private browseDanmakuCandidateCursor = 0;
 
   constructor(private readonly options: OverworldRoomCommentsControllerOptions) {}
 
@@ -174,6 +224,7 @@ export class OverworldRoomCommentsController {
     this.pinnedBrowseMarkerKey = null;
     this.destroyRenderedComments();
     this.destroyBrowseCommentMarkers();
+    this.destroyBrowseDanmakuStreams();
   }
 
   destroy(): void {
@@ -201,6 +252,7 @@ export class OverworldRoomCommentsController {
 
     this.syncRenderedComments(room);
     this.syncBrowseCommentMarkers();
+    this.syncBrowseDanmakuStreams();
     this.renderComposer();
   }
 
@@ -293,6 +345,7 @@ export class OverworldRoomCommentsController {
     updateGameSettings({ roomCommentsVisible: visible });
     this.syncRenderedComments(this.getRenderableRoom());
     this.syncBrowseCommentMarkers();
+    this.syncBrowseDanmakuStreams();
     this.renderComposer();
   }
 
@@ -318,6 +371,7 @@ export class OverworldRoomCommentsController {
     return [
       ...Array.from(this.renderedCommentsById.values(), (rendered) => rendered.container),
       ...Array.from(this.browseCommentMarkersByKey.values(), (rendered) => rendered.container),
+      ...Array.from(this.activeBrowseDanmaku.values(), (rendered) => rendered.container),
     ];
   }
 
@@ -340,6 +394,8 @@ export class OverworldRoomCommentsController {
     browseCacheEntryCount: number;
     browseLoadingCount: number;
     pinnedBrowseMarkerKey: string | null;
+    browseDanmakuActiveCount: number;
+    browseDanmakuPoolCount: number;
   } {
     const currentRoom = this.options.getCurrentRoomSnapshot();
     return {
@@ -363,6 +419,8 @@ export class OverworldRoomCommentsController {
       browseCacheEntryCount: this.browseCommentCache.size,
       browseLoadingCount: this.loadingBrowseRoomSignatures.size,
       pinnedBrowseMarkerKey: this.pinnedBrowseMarkerKey,
+      browseDanmakuActiveCount: this.activeBrowseDanmaku.size,
+      browseDanmakuPoolCount: this.idleBrowseDanmaku.length,
     };
   }
 
@@ -396,6 +454,7 @@ export class OverworldRoomCommentsController {
     this.commentsVisible = settings.roomCommentsVisible;
     this.syncRenderedComments(this.getRenderableRoom());
     this.syncBrowseCommentMarkers();
+    this.syncBrowseDanmakuStreams();
     this.renderComposer();
   };
 
@@ -882,6 +941,365 @@ export class OverworldRoomCommentsController {
 
   private destroyBrowseCommentMarker(marker: RenderedBrowseCommentMarker): void {
     marker.container.destroy(true);
+  }
+
+  private syncBrowseDanmakuStreams(): void {
+    const now = this.options.scene.time.now;
+    const lastUpdate = this.lastBrowseDanmakuUpdateMs || now;
+    const deltaMs = Phaser.Math.Clamp(now - lastUpdate, 0, 80);
+    this.lastBrowseDanmakuUpdateMs = now;
+
+    const camera = this.options.scene.cameras.main;
+    const zoom = this.options.getZoom?.() ?? camera.zoom;
+    if (!this.shouldRenderBrowseDanmaku(zoom)) {
+      this.deactivateAllBrowseDanmakuStreams();
+      this.nextBrowseDanmakuSpawnAtMs = now + BROWSE_DANMAKU_SPAWN_MAX_MS;
+      return;
+    }
+
+    const candidates = this.getBrowseDanmakuCandidates();
+    if (candidates.length === 0) {
+      this.deactivateAllBrowseDanmakuStreams();
+      this.nextBrowseDanmakuSpawnAtMs = now + BROWSE_DANMAKU_SPAWN_MAX_MS;
+      return;
+    }
+
+    const validKeys = new Set(candidates.map((candidate) => candidate.key));
+    this.updateActiveBrowseDanmakuStreams(camera, zoom, deltaMs, validKeys);
+
+    const maxActive = this.getBrowseDanmakuMaxActive();
+    if (this.activeBrowseDanmaku.size >= maxActive || now < this.nextBrowseDanmakuSpawnAtMs) {
+      return;
+    }
+
+    const laneCount = this.getBrowseDanmakuLaneCount(camera);
+    const laneIndex = this.getAvailableBrowseDanmakuLane(now, laneCount);
+    if (laneIndex < 0) {
+      this.nextBrowseDanmakuSpawnAtMs = now + 260;
+      return;
+    }
+
+    const candidate = this.pickBrowseDanmakuCandidate(candidates);
+    if (!candidate) {
+      return;
+    }
+
+    this.activateBrowseDanmakuStream(candidate, laneIndex, camera, zoom);
+    this.nextBrowseDanmakuSpawnAtMs = now + Phaser.Math.Between(
+      BROWSE_DANMAKU_SPAWN_MIN_MS,
+      BROWSE_DANMAKU_SPAWN_MAX_MS,
+    );
+    this.browseDanmakuLaneCooldowns[laneIndex] =
+      now + BROWSE_DANMAKU_LANE_COOLDOWN_MS + Phaser.Math.Between(0, 620);
+  }
+
+  private shouldRenderBrowseDanmaku(zoom: number): boolean {
+    return (
+      this.options.getMode() === 'browse'
+      && this.commentsVisible
+      && zoom >= BROWSE_DANMAKU_MIN_ZOOM
+      && zoom <= BROWSE_DANMAKU_MAX_ZOOM
+      && !prefersReducedMotion()
+      && !this.hasBlockingModalOpen()
+    );
+  }
+
+  private getBrowseDanmakuCandidates(): BrowseDanmakuCandidate[] {
+    const candidates: BrowseDanmakuCandidate[] = [];
+    const markers = Array.from(this.browseCommentMarkersByKey.values()).sort((left, right) =>
+      left.key.localeCompare(right.key)
+    );
+    for (const marker of markers) {
+      const comments = marker.comments.slice(0, BROWSE_DANMAKU_MAX_COMMENT_PER_TARGET);
+      for (const comment of comments) {
+        candidates.push({
+          key: marker.key,
+          target: marker.target,
+          comment,
+          accentColor: marker.accentColor,
+        });
+      }
+    }
+
+    return candidates;
+  }
+
+  private updateActiveBrowseDanmakuStreams(
+    camera: Phaser.Cameras.Scene2D.Camera,
+    zoom: number,
+    deltaMs: number,
+    validKeys: Set<string>,
+  ): void {
+    for (const stream of Array.from(this.activeBrowseDanmaku)) {
+      if (!stream.key || !validKeys.has(stream.key)) {
+        this.deactivateBrowseDanmakuStream(stream);
+        continue;
+      }
+
+      stream.screenX -= stream.speedPxPerSecond * (deltaMs / 1000);
+      if (stream.screenX < -stream.widthPx - BROWSE_DANMAKU_SIDE_MARGIN) {
+        this.deactivateBrowseDanmakuStream(stream);
+        continue;
+      }
+
+      this.placeBrowseDanmakuStream(stream, camera, zoom);
+    }
+  }
+
+  private activateBrowseDanmakuStream(
+    candidate: BrowseDanmakuCandidate,
+    laneIndex: number,
+    camera: Phaser.Cameras.Scene2D.Camera,
+    zoom: number,
+  ): void {
+    const stream = this.idleBrowseDanmaku.pop() ?? this.createBrowseDanmakuStream();
+    const maxBodyLength = camera.width < 760
+      ? Math.min(48, BROWSE_DANMAKU_MAX_COMMENT_LENGTH)
+      : BROWSE_DANMAKU_MAX_COMMENT_LENGTH;
+    const body = truncateCommentBody(candidate.comment.body, maxBodyLength);
+    const author = truncateCommentBody(candidate.comment.authorDisplayName || 'Player', 18);
+    const title = candidate.target.title
+      ? truncateCommentBody(candidate.target.title, 24)
+      : `${candidate.target.displayCoordinates.x},${candidate.target.displayCoordinates.y}`;
+
+    stream.bodyText.setText(body);
+    stream.metaText.setText(`${author} / ${title}`);
+    stream.accent.setFillStyle(candidate.accentColor, 0.98);
+    const width = Math.ceil(
+      Math.max(stream.bodyText.width, stream.metaText.width) + 28,
+    );
+    stream.shell.setSize(width, BROWSE_DANMAKU_HEIGHT);
+    stream.accent.setSize(5, BROWSE_DANMAKU_HEIGHT);
+    stream.container.setSize(width, BROWSE_DANMAKU_HEIGHT);
+    stream.container.setAlpha(0.96);
+    stream.container.setDepth(BROWSE_DANMAKU_DEPTH);
+    stream.widthPx = width;
+    stream.screenX = camera.width + BROWSE_DANMAKU_SIDE_MARGIN;
+    stream.speedPxPerSecond = Phaser.Math.Between(
+      BROWSE_DANMAKU_MIN_SPEED,
+      BROWSE_DANMAKU_MAX_SPEED,
+    );
+    stream.laneIndex = laneIndex;
+    stream.key = candidate.key;
+    stream.commentId = candidate.comment.id;
+    stream.active = true;
+    stream.container.setVisible(true);
+    this.activeBrowseDanmaku.add(stream);
+    this.placeBrowseDanmakuStream(stream, camera, zoom);
+    this.options.onDisplayObjectsChanged?.();
+  }
+
+  private createBrowseDanmakuStream(): RenderedBrowseDanmakuComment {
+    const shell = this.options.scene.add.rectangle(
+      0,
+      0,
+      96,
+      BROWSE_DANMAKU_HEIGHT,
+      0x050505,
+      0.62,
+    );
+    shell.setOrigin(0, 0);
+    shell.setStrokeStyle(1, 0xfff3db, 0.36);
+    const accent = this.options.scene.add.rectangle(
+      0,
+      0,
+      5,
+      BROWSE_DANMAKU_HEIGHT,
+      BROWSE_COMMENT_COLORS[0],
+      0.98,
+    );
+    accent.setOrigin(0, 0);
+    const bodyText = this.options.scene.add.text(12, 3, '', {
+      fontFamily: 'IBM Plex Mono, Courier New, monospace',
+      fontSize: `${BROWSE_DANMAKU_FONT_SIZE}px`,
+      color: '#fff6df',
+      fontStyle: '700',
+      stroke: '#050505',
+      strokeThickness: 4,
+    });
+    bodyText.setShadow(2, 2, '#050505', 0, true, true);
+    const metaText = this.options.scene.add.text(13, 18, '', {
+      fontFamily: 'IBM Plex Mono, Courier New, monospace',
+      fontSize: '8px',
+      color: '#7de5ff',
+      fontStyle: '700',
+      stroke: '#050505',
+      strokeThickness: 3,
+    });
+    metaText.setShadow(1, 1, '#050505', 0, true, true);
+    const container = this.options.scene.add.container(0, 0, [
+      shell,
+      accent,
+      bodyText,
+      metaText,
+    ]);
+    container.setDepth(BROWSE_DANMAKU_DEPTH);
+    container.setVisible(false);
+
+    return {
+      container,
+      shell,
+      accent,
+      bodyText,
+      metaText,
+      active: false,
+      key: null,
+      commentId: null,
+      laneIndex: 0,
+      screenX: 0,
+      widthPx: 96,
+      speedPxPerSecond: BROWSE_DANMAKU_MIN_SPEED,
+    };
+  }
+
+  private placeBrowseDanmakuStream(
+    stream: RenderedBrowseDanmakuComment,
+    camera: Phaser.Cameras.Scene2D.Camera,
+    zoom: number,
+  ): void {
+    const safeZoom = Math.max(zoom, 0.001);
+    const screenScale = 1 / safeZoom;
+    const laneCount = this.getBrowseDanmakuLaneCount(camera);
+    const laneIndex = Math.min(stream.laneIndex, Math.max(0, laneCount - 1));
+    const screenY = this.getBrowseDanmakuLaneScreenY(laneIndex, laneCount, camera);
+    stream.container.setPosition(
+      camera.worldView.x + stream.screenX / safeZoom,
+      camera.worldView.y + screenY / safeZoom,
+    );
+    stream.container.setScale(screenScale);
+  }
+
+  private pickBrowseDanmakuCandidate(
+    candidates: BrowseDanmakuCandidate[],
+  ): BrowseDanmakuCandidate | null {
+    if (candidates.length === 0) {
+      return null;
+    }
+
+    const candidate = candidates[this.browseDanmakuCandidateCursor % candidates.length];
+    this.browseDanmakuCandidateCursor =
+      (this.browseDanmakuCandidateCursor + 1) % candidates.length;
+    return candidate;
+  }
+
+  private getAvailableBrowseDanmakuLane(now: number, laneCount: number): number {
+    this.browseDanmakuLaneCooldowns.length = laneCount;
+    let bestLane = -1;
+    let bestActiveCount = Number.POSITIVE_INFINITY;
+    for (let laneIndex = 0; laneIndex < laneCount; laneIndex += 1) {
+      const cooldownUntil = this.browseDanmakuLaneCooldowns[laneIndex] ?? 0;
+      if (cooldownUntil > now) {
+        continue;
+      }
+
+      const activeCount = this.countActiveBrowseDanmakuInLane(laneIndex);
+      if (activeCount < bestActiveCount) {
+        bestLane = laneIndex;
+        bestActiveCount = activeCount;
+      }
+    }
+
+    return bestLane;
+  }
+
+  private countActiveBrowseDanmakuInLane(laneIndex: number): number {
+    let count = 0;
+    for (const stream of this.activeBrowseDanmaku) {
+      if (stream.laneIndex === laneIndex) {
+        count += 1;
+      }
+    }
+
+    return count;
+  }
+
+  private getBrowseDanmakuLaneCount(camera: Phaser.Cameras.Scene2D.Camera): number {
+    const topPadding = camera.height > 520 ? BROWSE_DANMAKU_TOP_PADDING : 52;
+    const bottomPadding = camera.height > 520 ? BROWSE_DANMAKU_BOTTOM_PADDING : 72;
+    const availableHeight = Math.max(
+      BROWSE_DANMAKU_LANE_HEIGHT * BROWSE_DANMAKU_MIN_LANES,
+      camera.height - topPadding - bottomPadding,
+    );
+    const layout = getDeviceLayoutState();
+    const maxLanes = layout.deviceClass === 'phone'
+      ? 5
+      : layout.performanceProfile === 'reduced'
+        ? 7
+        : BROWSE_DANMAKU_MAX_LANES;
+    return Phaser.Math.Clamp(
+      Math.floor(availableHeight / BROWSE_DANMAKU_LANE_HEIGHT),
+      BROWSE_DANMAKU_MIN_LANES,
+      maxLanes,
+    );
+  }
+
+  private getBrowseDanmakuLaneScreenY(
+    laneIndex: number,
+    laneCount: number,
+    camera: Phaser.Cameras.Scene2D.Camera,
+  ): number {
+    const topPadding = camera.height > 520 ? BROWSE_DANMAKU_TOP_PADDING : 52;
+    const bottomPadding = camera.height > 520 ? BROWSE_DANMAKU_BOTTOM_PADDING : 72;
+    const bottom = Math.max(topPadding + BROWSE_DANMAKU_HEIGHT, camera.height - bottomPadding);
+    if (laneCount <= 1) {
+      return topPadding;
+    }
+
+    const spacing = (bottom - topPadding - BROWSE_DANMAKU_HEIGHT) / (laneCount - 1);
+    return topPadding + spacing * laneIndex;
+  }
+
+  private getBrowseDanmakuMaxActive(): number {
+    const layout = getDeviceLayoutState();
+    if (layout.deviceClass === 'phone') {
+      return BROWSE_DANMAKU_PHONE_MAX_ACTIVE;
+    }
+
+    return layout.performanceProfile === 'reduced'
+      ? BROWSE_DANMAKU_REDUCED_MAX_ACTIVE
+      : BROWSE_DANMAKU_DESKTOP_MAX_ACTIVE;
+  }
+
+  private deactivateAllBrowseDanmakuStreams(): void {
+    for (const stream of Array.from(this.activeBrowseDanmaku)) {
+      this.deactivateBrowseDanmakuStream(stream);
+    }
+  }
+
+  private deactivateBrowseDanmakuStream(stream: RenderedBrowseDanmakuComment): void {
+    if (!this.activeBrowseDanmaku.delete(stream) && !stream.active) {
+      return;
+    }
+
+    stream.active = false;
+    stream.key = null;
+    stream.commentId = null;
+    stream.container.setVisible(false);
+    stream.container.setAlpha(0);
+    this.idleBrowseDanmaku.push(stream);
+    this.options.onDisplayObjectsChanged?.();
+  }
+
+  private destroyBrowseDanmakuStreams(): void {
+    for (const stream of this.activeBrowseDanmaku) {
+      stream.container.destroy(true);
+    }
+    for (const stream of this.idleBrowseDanmaku) {
+      stream.container.destroy(true);
+    }
+    this.activeBrowseDanmaku.clear();
+    this.idleBrowseDanmaku.length = 0;
+    this.browseDanmakuLaneCooldowns.length = 0;
+    this.lastBrowseDanmakuUpdateMs = 0;
+    this.nextBrowseDanmakuSpawnAtMs = 0;
+  }
+
+  private hasBlockingModalOpen(): boolean {
+    const doc = this.options.document ?? document;
+    return Array.from(doc.querySelectorAll<HTMLElement>('.history-modal')).some((element) =>
+      !element.classList.contains('hidden')
+      && element.getAttribute('aria-hidden') !== 'true'
+    );
   }
 
   private async submitComposer(): Promise<void> {
