@@ -4,7 +4,6 @@ import {
   canPlacedObjectBeContainer,
   canPlacedObjectBeLinkedObjectTarget,
   canPlacedObjectBePressurePlateTarget,
-  canPlacedObjectTriggerOtherObjects,
   canPlacedObjectUseObjectLink,
   editorState,
   getObjectById,
@@ -527,7 +526,7 @@ export class CourseEditorObjectInspectorController {
   private getCourseObjectLinkTargetRef(
     source: CoursePlacedObjectRef
   ): CoursePlacedObjectRef | null {
-    if (canPlacedObjectTriggerOtherObjects(source.placed)) {
+    if (canPlacedObjectUseObjectLink(source.placed)) {
       const courseLink = getCoursePressurePlateLink(
         this.host.getActiveCourseDraft(),
         source.slice.roomId,
@@ -551,7 +550,7 @@ export class CourseEditorObjectInspectorController {
     source: CoursePlacedObjectRef
   ): CoursePlacedObjectRef[] {
     const eligibleTargets: CoursePlacedObjectRef[] = [];
-    const slices = canPlacedObjectTriggerOtherObjects(source.placed)
+    const slices = canPlacedObjectUseObjectLink(source.placed)
       ? this.host.getRoomSlices()
       : [source.slice];
     for (const slice of slices) {
@@ -573,7 +572,7 @@ export class CourseEditorObjectInspectorController {
       return false;
     }
 
-    if (!canPlacedObjectTriggerOtherObjects(source.placed)) {
+    if (!canPlacedObjectUseObjectLink(source.placed)) {
       if (target && target.slice.roomId !== source.slice.roomId) {
         return false;
       }
@@ -714,19 +713,19 @@ export class CourseEditorObjectInspectorController {
 
   private getObjectLinkPickTargetStatus(source: PlacedObject): string {
     return isMovingPlatformObjectId(source.id)
-      ? 'Pick a Moving Platform Anchor in this room.'
+      ? 'Pick a Moving Platform Anchor in this expanded room.'
       : 'Pick a door, barricade, cage, or chest in this expanded room.';
   }
 
   private getObjectLinkNoTargetsStatus(source: PlacedObject): string {
     return isMovingPlatformObjectId(source.id)
-      ? 'No Moving Platform Anchor is in this room yet. You can link this moving platform later.'
+      ? 'No Moving Platform Anchor is in this expanded room yet. You can link this moving platform later.'
       : 'No door, barricade, cage, or chest is in this expanded room yet. You can link this pressure plate later.';
   }
 
   private getObjectLinkNoTargetsTitle(source: PlacedObject): string {
     return isMovingPlatformObjectId(source.id)
-      ? 'Add a Moving Platform Anchor to this room first.'
+      ? 'Add a Moving Platform Anchor to this expanded room first.'
       : 'Add a door, barricade, cage, or chest to this expanded room first.';
   }
 
