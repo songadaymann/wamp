@@ -20,12 +20,16 @@ import {
   getEditorObjectConfigById,
   listEditorObjectConfigs,
 } from '../../customSprites/objectConfig';
-import { isCustomSpriteObjectId, parseCustomSpriteObjectId } from '../../customSprites/model';
-import { isLocalCustomSpriteId } from '../../customSprites/registry';
+import { parseCustomSpriteObjectId } from '../../customSprites/model';
+import { getCustomSpriteDefinitionByObjectId, isLocalCustomSpriteId } from '../../customSprites/registry';
 import { EDITOR_UI_STATE_CHANGED_EVENT } from '../../scenes/editor/uiEvents';
 import { getDeviceLayoutState, isCoarsePointerDevice } from '../deviceLayout';
 
 const MIN_SELECTION_OPAQUE_PIXELS = 96;
+const CUSTOM_OBJECT_SUBCATEGORIES = ['all', 'decoration', 'collectible', 'solid', 'pushable'] as const;
+
+type CustomObjectSubcategory = (typeof CUSTOM_OBJECT_SUBCATEGORIES)[number];
+type CustomObjectKindSubcategory = Exclude<CustomObjectSubcategory, 'all'>;
 
 type PaletteTooltipContent = {
   title: string;
@@ -40,14 +44,20 @@ export class PaletteController {
   private readonly tilePreviewCanvas: HTMLCanvasElement | null;
   private readonly objectGrid: HTMLElement | null;
   private readonly objectSearchInput: HTMLInputElement | null;
+  private readonly customObjectSubcategoryTabs: HTMLButtonElement[];
+  private readonly customObjectSubcategoryControls: HTMLElement | null;
   private readonly objectFacingControls: HTMLElement | null;
   private readonly objectFacingLeftBtn: HTMLButtonElement | null;
   private readonly objectFacingRightBtn: HTMLButtonElement | null;
+  private readonly objectSelectionDetails: HTMLElement | null;
+  private readonly objectSelectionName: HTMLElement | null;
+  private readonly objectSelectionDescription: HTMLElement | null;
 
   private readonly paletteImages = new Map<string, HTMLImageElement>();
   private readonly paletteTileOccupancy = new Map<string, boolean[]>();
   private readonly paletteTileVisibility = new Map<string, boolean[]>();
   private currentObjectCategory = 'all';
+  private currentCustomObjectSubcategory: CustomObjectSubcategory = 'all';
   private currentObjectSearch = '';
   private paletteDragStart: { col: number; row: number } | null = null;
   private paletteTooltipEl: HTMLDivElement | null = null;
@@ -60,17 +70,26 @@ export class PaletteController {
     this.tilePreviewCanvas = this.doc.getElementById('tile-preview') as HTMLCanvasElement | null;
     this.objectGrid = this.doc.getElementById('object-grid');
     this.objectSearchInput = this.doc.getElementById('object-search-input') as HTMLInputElement | null;
+    this.customObjectSubcategoryControls = this.doc.getElementById('custom-object-subcategory-tabs');
+    this.customObjectSubcategoryTabs = Array.from(
+      this.doc.querySelectorAll<HTMLButtonElement>('.object-subcategory-tab'),
+    );
     this.objectFacingControls = this.doc.getElementById('object-facing-controls');
     this.objectFacingLeftBtn = this.doc.getElementById('btn-object-facing-left') as HTMLButtonElement | null;
     this.objectFacingRightBtn = this.doc.getElementById('btn-object-facing-right') as HTMLButtonElement | null;
+    this.objectSelectionDetails = this.doc.getElementById('object-selection-details');
+    this.objectSelectionName = this.doc.getElementById('object-selection-name');
+    this.objectSelectionDescription = this.doc.getElementById('object-selection-description');
   }
 
   init(): void {
     this.loadPaletteImages();
     this.bindObjectSearchInput();
+    this.bindCustomObjectSubcategoryTabs();
     this.bindObjectFacingControls();
     this.renderObjectGrid();
     this.renderObjectFacingControls();
+    this.renderObjectSelectionDetails();
   }
 
   destroy(): void {
@@ -89,10 +108,18 @@ export class PaletteController {
       this.objectSearchInput.oninput = null;
       this.objectSearchInput.onchange = null;
     }
+    for (const tab of this.customObjectSubcategoryTabs) {
+      tab.onclick = null;
+    }
   }
 
   setObjectCategory(category: string): void {
     this.currentObjectCategory = category || 'all';
+    if (!this.isCustomObjectCategoryFilter(this.currentObjectCategory)) {
+      this.currentCustomObjectSubcategory = 'all';
+    }
+    this.resetObjectGridScroll();
+    this.renderCustomObjectSubcategoryTabs();
     this.renderObjectGrid();
   }
 
@@ -398,6 +425,7 @@ export class PaletteController {
       return;
     }
 
+    this.renderCustomObjectSubcategoryTabs();
     this.objectGrid.innerHTML = '';
 
     const filteredObjects = listEditorObjectConfigs().filter((objectConfig) => (
@@ -410,6 +438,7 @@ export class PaletteController {
       emptyState.className = 'object-grid-empty';
       emptyState.textContent = 'No objects match this filter.';
       this.objectGrid.appendChild(emptyState);
+      this.renderObjectSelectionDetails();
       this.renderObjectFacingControls();
       return;
     }
@@ -418,23 +447,10 @@ export class PaletteController {
       const item = this.doc.createElement('div');
       item.className = 'object-item';
       item.setAttribute('aria-label', objectConfig.name);
-      item.title = objectConfig.name;
       if (editorState.selectedObjectId === objectConfig.id) {
         item.classList.add('active');
       }
       item.dataset.objectId = objectConfig.id;
-
-      if (!isCoarsePointerDevice()) {
-        item.addEventListener('mouseenter', (event) => {
-          this.showPaletteTooltipForElement(
-            event.currentTarget as HTMLElement,
-            {
-              title: objectConfig.name,
-            },
-          );
-        });
-        item.addEventListener('mouseleave', () => this.hidePaletteTooltip());
-      }
 
       const img = this.doc.createElement('img');
       img.src = objectConfig.path;
@@ -481,6 +497,7 @@ export class PaletteController {
         item.classList.add('active');
 
         editorState.activeTool = 'pencil';
+        this.renderObjectSelectionDetails();
         this.renderObjectFacingControls();
         this.renderTilePreview();
         this.doc.defaultView?.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
@@ -490,6 +507,7 @@ export class PaletteController {
       this.objectGrid.appendChild(item);
     }
 
+    this.renderObjectSelectionDetails();
     this.renderObjectFacingControls();
   }
 
@@ -500,6 +518,7 @@ export class PaletteController {
 
     const applySearch = () => {
       this.currentObjectSearch = this.objectSearchInput?.value.trim().toLowerCase() ?? '';
+      this.resetObjectGridScroll();
       this.renderObjectGrid();
     };
 
@@ -513,6 +532,58 @@ export class PaletteController {
     if (this.objectSearchInput) {
       this.objectSearchInput.value = query;
     }
+  }
+
+  private bindCustomObjectSubcategoryTabs(): void {
+    for (const tab of this.customObjectSubcategoryTabs) {
+      tab.onclick = () => {
+        this.currentCustomObjectSubcategory = this.normalizeCustomObjectSubcategory(
+          tab.dataset.customObjectCategory,
+        );
+        this.resetObjectGridScroll();
+        this.renderCustomObjectSubcategoryTabs();
+        this.renderObjectGrid();
+      };
+    }
+  }
+
+  private renderCustomObjectSubcategoryTabs(): void {
+    const visible = this.isCustomObjectCategoryFilter(this.currentObjectCategory);
+    this.customObjectSubcategoryControls?.classList.toggle('hidden', !visible);
+
+    for (const tab of this.customObjectSubcategoryTabs) {
+      const tabCategory = this.normalizeCustomObjectSubcategory(tab.dataset.customObjectCategory);
+      const active = visible && tabCategory === this.currentCustomObjectSubcategory;
+      tab.classList.toggle('active', active);
+      tab.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+  }
+
+  private renderObjectSelectionDetails(): void {
+    if (!this.objectSelectionDetails || !this.objectSelectionName || !this.objectSelectionDescription) {
+      return;
+    }
+
+    const selectedObject = this.getSelectedObjectConfig();
+    if (!selectedObject) {
+      this.objectSelectionDetails.classList.add('is-empty');
+      this.objectSelectionName.textContent = 'Pick an object';
+      this.objectSelectionDescription.textContent = 'Click an object, then click on the canvas to place.';
+      return;
+    }
+
+    this.objectSelectionDetails.classList.remove('is-empty');
+    this.objectSelectionName.textContent = selectedObject.name;
+    this.objectSelectionDescription.textContent = selectedObject.description.trim() || 'No description available.';
+  }
+
+  private resetObjectGridScroll(): void {
+    if (!this.objectGrid) {
+      return;
+    }
+
+    this.objectGrid.scrollTop = 0;
+    this.objectGrid.scrollLeft = 0;
   }
 
   private requestPhoneEditorAutoCollapse(): void {
@@ -627,14 +698,6 @@ export class PaletteController {
     }
 
     return this.paletteTooltipEl;
-  }
-
-  private showPaletteTooltipForElement(
-    anchor: HTMLElement,
-    content: PaletteTooltipContent,
-  ): void {
-    const rect = anchor.getBoundingClientRect();
-    this.showPaletteTooltip(rect.right + 8, rect.top + rect.height / 2, content);
   }
 
   private showPaletteTooltip(
@@ -807,6 +870,7 @@ export class PaletteController {
     editorState.objectFacing = 'right';
     editorState.activeTool = 'pencil';
     this.currentObjectCategory = 'all';
+    this.currentCustomObjectSubcategory = 'all';
     this.setObjectSearch('moving platform');
     this.renderObjectGrid();
     this.renderObjectFacingControls();
@@ -1008,12 +1072,15 @@ export class PaletteController {
       return true;
     }
 
-    if (this.currentObjectCategory === 'custom') {
-      return isCustomSpriteObjectId(objectConfig.id);
-    }
-
-    if (this.currentObjectCategory === 'mine') {
-      return isLocalCustomSpriteId(parseCustomSpriteObjectId(objectConfig.id));
+    if (this.isCustomObjectCategoryFilter(this.currentObjectCategory)) {
+      const customSpriteId = parseCustomSpriteObjectId(objectConfig.id);
+      if (!customSpriteId) {
+        return false;
+      }
+      if (this.currentObjectCategory === 'mine' && !isLocalCustomSpriteId(customSpriteId)) {
+        return false;
+      }
+      return this.matchesCustomObjectSubcategory(objectConfig);
     }
 
     if (this.currentObjectCategory === 'interactive') {
@@ -1033,11 +1100,52 @@ export class PaletteController {
       objectConfig.id,
       objectConfig.description,
       objectConfig.category,
+      this.getCustomObjectSubcategory(objectConfig) ?? '',
     ]
       .join(' ')
       .toLowerCase();
 
     return searchableText.includes(this.currentObjectSearch);
+  }
+
+  private isCustomObjectCategoryFilter(category: string): boolean {
+    return category === 'custom' || category === 'mine';
+  }
+
+  private normalizeCustomObjectSubcategory(value: string | undefined): CustomObjectSubcategory {
+    return CUSTOM_OBJECT_SUBCATEGORIES.includes(value as CustomObjectSubcategory)
+      ? value as CustomObjectSubcategory
+      : 'all';
+  }
+
+  private matchesCustomObjectSubcategory(objectConfig: GameObjectConfig): boolean {
+    if (this.currentCustomObjectSubcategory === 'all') {
+      return true;
+    }
+
+    return this.getCustomObjectSubcategory(objectConfig) === this.currentCustomObjectSubcategory;
+  }
+
+  private getCustomObjectSubcategory(objectConfig: GameObjectConfig): CustomObjectKindSubcategory | null {
+    const sprite = getCustomSpriteDefinitionByObjectId(objectConfig.id);
+    if (sprite) {
+      return sprite.kind;
+    }
+
+    if (!parseCustomSpriteObjectId(objectConfig.id)) {
+      return null;
+    }
+
+    if (objectConfig.category === 'collectible') {
+      return 'collectible';
+    }
+    if (objectConfig.interaction === 'pushable') {
+      return 'pushable';
+    }
+    if (objectConfig.category === 'platform') {
+      return 'solid';
+    }
+    return 'decoration';
   }
 
   private shouldFlipSelectedObject(objectConfig: GameObjectConfig): boolean {

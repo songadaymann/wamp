@@ -346,6 +346,7 @@ body[data-app-mode='editor'] #sidebar .bar-btn,
 body[data-app-mode='editor'] #sidebar .tool-btn,
 body[data-app-mode='editor'] #sidebar .palette-tab,
 body[data-app-mode='editor'] #sidebar .obj-cat-tab,
+body[data-app-mode='editor'] #sidebar .object-subcategory-tab,
 body[data-app-mode='editor'] #sidebar .layer-btn,
 body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn,
 body[data-app-mode='editor'] #sidebar .object-item,
@@ -377,6 +378,7 @@ body[data-app-mode='editor'] #sidebar .bar-btn:hover,
 body[data-app-mode='editor'] #sidebar .tool-btn:hover,
 body[data-app-mode='editor'] #sidebar .palette-tab:hover,
 body[data-app-mode='editor'] #sidebar .obj-cat-tab:hover,
+body[data-app-mode='editor'] #sidebar .object-subcategory-tab:hover,
 body[data-app-mode='editor'] #sidebar .layer-btn:hover,
 body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn:hover,
 body[data-app-mode='editor'] #sidebar .object-item:hover,
@@ -418,6 +420,7 @@ body[data-app-mode='editor'] #sidebar .bar-btn-danger {
 body[data-app-mode='editor'] #sidebar .tool-btn,
 body[data-app-mode='editor'] #sidebar .palette-tab,
 body[data-app-mode='editor'] #sidebar .obj-cat-tab,
+body[data-app-mode='editor'] #sidebar .object-subcategory-tab,
 body[data-app-mode='editor'] #sidebar .layer-btn,
 body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn,
 body[data-app-mode='editor'] #sidebar .object-item {
@@ -430,7 +433,8 @@ body[data-app-mode='editor'] #sidebar .object-item {
 
 body[data-app-mode='editor'] #sidebar .tool-btn,
 body[data-app-mode='editor'] #sidebar .palette-tab,
-body[data-app-mode='editor'] #sidebar .obj-cat-tab {
+body[data-app-mode='editor'] #sidebar .obj-cat-tab,
+body[data-app-mode='editor'] #sidebar .object-subcategory-tab {
   font-family: var(--editor-ui-font);
   font-size: 10px;
   letter-spacing: 0.03em;
@@ -526,13 +530,33 @@ body[data-app-mode='editor'] #sidebar .tool-label {
 }
 
 body[data-app-mode='editor'] #sidebar .palette-tab.active,
-body[data-app-mode='editor'] #sidebar .obj-cat-tab.active {
+body[data-app-mode='editor'] #sidebar .obj-cat-tab.active,
+body[data-app-mode='editor'] #sidebar .object-subcategory-tab.active {
   background: var(--editor-retro-yellow) !important;
   background-color: var(--editor-retro-yellow) !important;
   background-image: none !important;
   border-color: var(--editor-retro-shadow) !important;
   box-shadow: inset 0 0 0 999px var(--editor-retro-yellow), 2px 2px 0 var(--editor-retro-shadow) !important;
   color: #000 !important;
+}
+
+body[data-app-mode='editor'] #sidebar .object-selection-details {
+  border: 2px solid var(--editor-retro-shadow);
+  border-radius: 0;
+  background: var(--editor-retro-paper);
+  box-shadow: 2px 2px 0 var(--editor-retro-shadow);
+}
+
+body[data-app-mode='editor'] #sidebar .object-selection-name {
+  color: var(--editor-retro-ink);
+}
+
+body[data-app-mode='editor'] #sidebar .object-selection-description {
+  color: var(--editor-retro-blue-deep);
+}
+
+body[data-app-mode='editor'] #sidebar .object-selection-details.is-empty .object-selection-name {
+  color: var(--editor-retro-blue-deep);
 }
 
 body[data-app-mode='editor'] #sidebar .layer-btn {

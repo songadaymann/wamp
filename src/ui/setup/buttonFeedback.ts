@@ -7,6 +7,7 @@ const PRESSABLE_SELECTOR = [
   '.layer-btn',
   '.palette-tab',
   '.obj-cat-tab',
+  '.object-subcategory-tab',
   '.object-item',
   '.editor-music-arrangement-slot',
   '.editor-music-library-item',
