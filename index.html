@@ -558,6 +558,13 @@
           <button class="obj-cat-tab" data-category="decoration">Deco</button>
           <button class="obj-cat-tab" data-category="interactive">Utility</button>
         </div>
+        <div id="custom-object-subcategory-tabs" class="object-subcategory-tabs hidden" aria-label="Custom object categories">
+          <button class="object-subcategory-tab active" type="button" data-custom-object-category="all">All</button>
+          <button class="object-subcategory-tab" type="button" data-custom-object-category="decoration">Deco</button>
+          <button class="object-subcategory-tab" type="button" data-custom-object-category="collectible">Collect</button>
+          <button class="object-subcategory-tab" type="button" data-custom-object-category="solid">Solid</button>
+          <button class="object-subcategory-tab" type="button" data-custom-object-category="pushable">Push</button>
+        </div>
         <div class="object-search-row">
           <input
             id="object-search-input"
@@ -574,8 +581,10 @@
           <button id="btn-object-facing-right" class="bar-btn bar-btn-small" type="button">Right</button>
         </div>
         <div id="object-grid"></div>
-        <div class="palette-hint">Click an object, then click on the canvas to place.</div>
-        <div class="palette-hint palette-hint-accent">Use Spawn Point to choose where players start.</div>
+        <div id="object-selection-details" class="object-selection-details" aria-live="polite">
+          <div id="object-selection-name" class="object-selection-name">Pick an object</div>
+          <div id="object-selection-description" class="object-selection-description">Click an object, then click on the canvas to place.</div>
+        </div>
       </div>
 
       <div class="sidebar-section hidden" id="course-goal-section" data-mobile-panel="goal" data-sidebar-collapsible="true">

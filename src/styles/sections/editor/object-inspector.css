@@ -42,11 +42,23 @@
 
 /* Object Category Tabs */
 
-.object-category-tabs {
+.object-category-tabs,
+.object-subcategory-tabs {
   display: flex;
   gap: 2px;
-  margin-bottom: 6px;
   flex-wrap: wrap;
+}
+
+.object-category-tabs {
+  margin-bottom: 6px;
+}
+
+.object-subcategory-tabs {
+  margin: -2px 0 6px;
+  padding: 5px;
+  border: 1px solid rgba(255, 243, 219, 0.12);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.16);
 }
 
 .object-search-row {
@@ -74,7 +86,8 @@
   box-shadow: 0 0 0 1px var(--accent-warm-soft);
 }
 
-.obj-cat-tab {
+.obj-cat-tab,
+.object-subcategory-tab {
   padding: 3px 6px;
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -94,17 +107,25 @@
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.28);
 }
 
-.obj-cat-tab:hover {
+.object-subcategory-tab {
+  font-size: 8px;
+  background: var(--field);
+}
+
+.obj-cat-tab:hover,
+.object-subcategory-tab:hover {
   background: var(--panel-3);
 }
 
-.obj-cat-tab.active {
+.obj-cat-tab.active,
+.object-subcategory-tab.active {
   background: var(--accent-warm-soft);
   border-color: var(--accent-warm);
   color: var(--text);
 }
 
-.obj-cat-tab.is-pressed {
+.obj-cat-tab.is-pressed,
+.object-subcategory-tab.is-pressed {
   transform: translateY(2px);
   box-shadow: 0 0 0 rgba(0, 0, 0, 0.18);
 }
@@ -227,6 +248,36 @@
 
 .palette-hint-accent {
   color: var(--accent-soft);
+}
+
+.object-selection-details {
+  margin-top: 8px;
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 243, 219, 0.14);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.18);
+  min-height: 54px;
+}
+
+.object-selection-name {
+  color: var(--text);
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.object-selection-description {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.object-selection-details.is-empty .object-selection-name {
+  color: var(--text-dim);
 }
 
 .pressure-plate-panel {
