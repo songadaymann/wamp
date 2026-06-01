@@ -90,8 +90,17 @@ interface RenderedBrowseDanmakuComment {
   target: BrowseCommentTarget | null;
   laneIndex: number;
   screenX: number;
+  trackOffsetX: number;
+  ageMs: number;
   widthPx: number;
   speedPxPerSecond: number;
+}
+
+interface BrowseDanmakuTrack {
+  centerX: number;
+  startX: number;
+  exitX: number;
+  screenY: number;
 }
 
 interface OverworldRoomCommentsControllerOptions {
@@ -155,7 +164,6 @@ const BROWSE_DANMAKU_MIN_ZOOM = 0.105;
 const BROWSE_DANMAKU_MAX_ZOOM = 3.4;
 const BROWSE_DANMAKU_FONT_SIZE = 13;
 const BROWSE_DANMAKU_HEIGHT = 28;
-const BROWSE_DANMAKU_LANE_HEIGHT = 36;
 const BROWSE_DANMAKU_TOP_PADDING = 88;
 const BROWSE_DANMAKU_BOTTOM_PADDING = 118;
 const BROWSE_DANMAKU_MIN_LANES = 3;
@@ -163,14 +171,26 @@ const BROWSE_DANMAKU_MAX_LANES = 10;
 const BROWSE_DANMAKU_DESKTOP_MAX_ACTIVE = 18;
 const BROWSE_DANMAKU_REDUCED_MAX_ACTIVE = 9;
 const BROWSE_DANMAKU_PHONE_MAX_ACTIVE = 6;
-const BROWSE_DANMAKU_SPAWN_MIN_MS = 760;
-const BROWSE_DANMAKU_SPAWN_MAX_MS = 1320;
-const BROWSE_DANMAKU_LANE_COOLDOWN_MS = 1450;
+const BROWSE_DANMAKU_CYCLE_MS = 10000;
+const BROWSE_DANMAKU_RETRY_MS = 500;
+const BROWSE_DANMAKU_DESKTOP_MIN_SPAWN_GAP_MS = 520;
+const BROWSE_DANMAKU_REDUCED_MIN_SPAWN_GAP_MS = 900;
+const BROWSE_DANMAKU_PHONE_MIN_SPAWN_GAP_MS = 1250;
+const BROWSE_DANMAKU_LANE_COOLDOWN_MS = 720;
+const BROWSE_DANMAKU_FADE_IN_MS = 520;
+const BROWSE_DANMAKU_FADE_OUT_MS = 780;
+const BROWSE_DANMAKU_MAX_ALPHA = 0.96;
 const BROWSE_DANMAKU_MIN_SPEED = 52;
 const BROWSE_DANMAKU_MAX_SPEED = 82;
 const BROWSE_DANMAKU_MAX_COMMENT_LENGTH = 72;
-const BROWSE_DANMAKU_MAX_COMMENT_PER_TARGET = 3;
+const BROWSE_DANMAKU_MAX_COMMENT_PER_TARGET = 12;
 const BROWSE_DANMAKU_SIDE_MARGIN = 28;
+const BROWSE_DANMAKU_ROOM_TRACK_MIN_HALF_WIDTH = 170;
+const BROWSE_DANMAKU_ROOM_TRACK_MAX_HALF_WIDTH = 520;
+const BROWSE_DANMAKU_ROOM_TRACK_VIEWPORT_MAX_FRACTION = 0.46;
+const BROWSE_DANMAKU_ROOM_TRACK_VERTICAL_RATIO = 0.36;
+const BROWSE_DANMAKU_ROOM_TRACK_LANE_SPACING_MIN = 20;
+const BROWSE_DANMAKU_ROOM_TRACK_LANE_SPACING_MAX = 38;
 
 export class OverworldRoomCommentsController {
   private readonly browseMarkerScaleConfig: RoomBadgeScaleConfig = {
@@ -398,6 +418,17 @@ export class OverworldRoomCommentsController {
     pinnedBrowseMarkerKey: string | null;
     browseDanmakuActiveCount: number;
     browseDanmakuPoolCount: number;
+    browseDanmakuStreams: Array<{
+      key: string | null;
+      commentId: string | null;
+      targetCoordinates: RoomCoordinates | null;
+      laneIndex: number;
+      screenX: number;
+      screenY: number;
+      widthPx: number;
+      alpha: number;
+      ageMs: number;
+    }>;
   } {
     const currentRoom = this.options.getCurrentRoomSnapshot();
     return {
@@ -423,6 +454,17 @@ export class OverworldRoomCommentsController {
       pinnedBrowseMarkerKey: this.pinnedBrowseMarkerKey,
       browseDanmakuActiveCount: this.activeBrowseDanmaku.size,
       browseDanmakuPoolCount: this.idleBrowseDanmaku.length,
+      browseDanmakuStreams: Array.from(this.activeBrowseDanmaku, (stream) => ({
+        key: stream.key,
+        commentId: stream.commentId,
+        targetCoordinates: stream.target ? { ...stream.target.displayCoordinates } : null,
+        laneIndex: stream.laneIndex,
+        screenX: Math.round(stream.screenX),
+        screenY: Math.round(this.getBrowseDanmakuDebugScreenY(stream)),
+        widthPx: stream.widthPx,
+        alpha: Number(stream.container.alpha.toFixed(2)),
+        ageMs: Math.round(stream.ageMs),
+      })),
     };
   }
 
@@ -955,14 +997,14 @@ export class OverworldRoomCommentsController {
     const zoom = this.options.getZoom?.() ?? camera.zoom;
     if (!this.shouldRenderBrowseDanmaku(zoom)) {
       this.deactivateAllBrowseDanmakuStreams();
-      this.nextBrowseDanmakuSpawnAtMs = now + BROWSE_DANMAKU_SPAWN_MAX_MS;
+      this.nextBrowseDanmakuSpawnAtMs = now + BROWSE_DANMAKU_RETRY_MS;
       return;
     }
 
-    const candidates = this.getBrowseDanmakuCandidates();
+    const candidates = this.getBrowseDanmakuCandidates(camera, zoom);
     if (candidates.length === 0) {
       this.deactivateAllBrowseDanmakuStreams();
-      this.nextBrowseDanmakuSpawnAtMs = now + BROWSE_DANMAKU_SPAWN_MAX_MS;
+      this.nextBrowseDanmakuSpawnAtMs = now + BROWSE_DANMAKU_RETRY_MS;
       return;
     }
 
@@ -974,25 +1016,28 @@ export class OverworldRoomCommentsController {
       return;
     }
 
-    const laneCount = this.getBrowseDanmakuLaneCount(camera);
+    const spawnIntervalMs = this.getBrowseDanmakuSpawnIntervalMs(candidates.length);
+    const laneCount = this.getBrowseDanmakuLaneCount();
     const laneIndex = this.getAvailableBrowseDanmakuLane(now, laneCount);
     if (laneIndex < 0) {
-      this.nextBrowseDanmakuSpawnAtMs = now + 260;
+      this.nextBrowseDanmakuSpawnAtMs = now + Math.min(BROWSE_DANMAKU_RETRY_MS, spawnIntervalMs);
       return;
     }
 
     const candidate = this.pickBrowseDanmakuCandidate(candidates);
     if (!candidate) {
+      this.nextBrowseDanmakuSpawnAtMs = now + Math.min(BROWSE_DANMAKU_RETRY_MS, spawnIntervalMs);
       return;
     }
 
-    this.activateBrowseDanmakuStream(candidate, laneIndex, camera, zoom);
-    this.nextBrowseDanmakuSpawnAtMs = now + Phaser.Math.Between(
-      BROWSE_DANMAKU_SPAWN_MIN_MS,
-      BROWSE_DANMAKU_SPAWN_MAX_MS,
-    );
+    if (!this.activateBrowseDanmakuStream(candidate, laneIndex, camera, zoom)) {
+      this.nextBrowseDanmakuSpawnAtMs = now + Math.min(BROWSE_DANMAKU_RETRY_MS, spawnIntervalMs);
+      return;
+    }
+
+    this.nextBrowseDanmakuSpawnAtMs = now + spawnIntervalMs;
     this.browseDanmakuLaneCooldowns[laneIndex] =
-      now + BROWSE_DANMAKU_LANE_COOLDOWN_MS + Phaser.Math.Between(0, 620);
+      now + Math.min(BROWSE_DANMAKU_LANE_COOLDOWN_MS, Math.max(360, spawnIntervalMs * 0.8));
   }
 
   private shouldRenderBrowseDanmaku(zoom: number): boolean {
@@ -1006,12 +1051,19 @@ export class OverworldRoomCommentsController {
     );
   }
 
-  private getBrowseDanmakuCandidates(): BrowseDanmakuCandidate[] {
+  private getBrowseDanmakuCandidates(
+    camera: Phaser.Cameras.Scene2D.Camera,
+    zoom: number,
+  ): BrowseDanmakuCandidate[] {
     const candidates: BrowseDanmakuCandidate[] = [];
     const markers = Array.from(this.browseCommentMarkersByKey.values()).sort((left, right) =>
       left.key.localeCompare(right.key)
     );
     for (const marker of markers) {
+      if (!this.isBrowseDanmakuTargetNearViewport(marker.target, camera, zoom)) {
+        continue;
+      }
+
       const comments = marker.comments.slice(0, BROWSE_DANMAKU_MAX_COMMENT_PER_TARGET);
       for (const comment of comments) {
         candidates.push({
@@ -1038,13 +1090,33 @@ export class OverworldRoomCommentsController {
         continue;
       }
 
-      stream.screenX -= stream.speedPxPerSecond * (deltaMs / 1000);
-      if (stream.screenX < -stream.widthPx - BROWSE_DANMAKU_SIDE_MARGIN) {
+      if (!stream.target) {
         this.deactivateBrowseDanmakuStream(stream);
         continue;
       }
 
-      this.placeBrowseDanmakuStream(stream, camera, zoom);
+      const track = this.getBrowseDanmakuTrack(
+        stream.target,
+        stream.laneIndex,
+        camera,
+        zoom,
+        stream.widthPx,
+      );
+      if (!track) {
+        this.deactivateBrowseDanmakuStream(stream);
+        continue;
+      }
+
+      stream.ageMs += deltaMs;
+      stream.trackOffsetX -= stream.speedPxPerSecond * (deltaMs / 1000);
+      stream.screenX = track.centerX + stream.trackOffsetX;
+      if (stream.screenX < track.exitX) {
+        this.deactivateBrowseDanmakuStream(stream);
+        continue;
+      }
+
+      stream.container.setAlpha(this.getBrowseDanmakuStreamAlpha(stream, track));
+      this.placeBrowseDanmakuStream(stream, camera, zoom, track);
     }
   }
 
@@ -1053,7 +1125,7 @@ export class OverworldRoomCommentsController {
     laneIndex: number,
     camera: Phaser.Cameras.Scene2D.Camera,
     zoom: number,
-  ): void {
+  ): boolean {
     const stream = this.idleBrowseDanmaku.pop() ?? this.createBrowseDanmakuStream();
     const maxBodyLength = camera.width < 760
       ? Math.min(48, BROWSE_DANMAKU_MAX_COMMENT_LENGTH)
@@ -1070,13 +1142,27 @@ export class OverworldRoomCommentsController {
     const width = Math.ceil(
       Math.max(stream.bodyText.width, stream.metaText.width) + 28,
     );
+    const track = this.getBrowseDanmakuTrack(
+      candidate.target,
+      laneIndex,
+      camera,
+      zoom,
+      width,
+    );
+    if (!track) {
+      this.idleBrowseDanmaku.push(stream);
+      return false;
+    }
+
     stream.shell.setSize(width, BROWSE_DANMAKU_HEIGHT);
     stream.accent.setSize(5, BROWSE_DANMAKU_HEIGHT);
     stream.container.setSize(width, BROWSE_DANMAKU_HEIGHT);
-    stream.container.setAlpha(0.96);
+    stream.container.setAlpha(0);
     stream.container.setDepth(BROWSE_DANMAKU_DEPTH);
     stream.widthPx = width;
-    stream.screenX = camera.width + BROWSE_DANMAKU_SIDE_MARGIN;
+    stream.screenX = track.startX;
+    stream.trackOffsetX = track.startX - track.centerX;
+    stream.ageMs = 0;
     stream.speedPxPerSecond = Phaser.Math.Between(
       BROWSE_DANMAKU_MIN_SPEED,
       BROWSE_DANMAKU_MAX_SPEED,
@@ -1089,8 +1175,8 @@ export class OverworldRoomCommentsController {
     stream.container.removeInteractive();
     stream.container.setInteractive(
       new Phaser.Geom.Rectangle(
-        width * 0.5,
-        BROWSE_DANMAKU_HEIGHT * 0.5,
+        0,
+        0,
         width,
         BROWSE_DANMAKU_HEIGHT,
       ),
@@ -1101,8 +1187,10 @@ export class OverworldRoomCommentsController {
     }
     stream.container.setVisible(true);
     this.activeBrowseDanmaku.add(stream);
-    this.placeBrowseDanmakuStream(stream, camera, zoom);
+    this.placeBrowseDanmakuStream(stream, camera, zoom, track);
+    stream.container.setAlpha(this.getBrowseDanmakuStreamAlpha(stream, track));
     this.options.onDisplayObjectsChanged?.();
+    return true;
   }
 
   private createBrowseDanmakuStream(): RenderedBrowseDanmakuComment {
@@ -1164,6 +1252,8 @@ export class OverworldRoomCommentsController {
       target: null,
       laneIndex: 0,
       screenX: 0,
+      trackOffsetX: 0,
+      ageMs: 0,
       widthPx: 96,
       speedPxPerSecond: BROWSE_DANMAKU_MIN_SPEED,
     };
@@ -1189,17 +1279,40 @@ export class OverworldRoomCommentsController {
     stream: RenderedBrowseDanmakuComment,
     camera: Phaser.Cameras.Scene2D.Camera,
     zoom: number,
+    track?: BrowseDanmakuTrack,
   ): void {
     const safeZoom = Math.max(zoom, 0.001);
     const screenScale = 1 / safeZoom;
-    const laneCount = this.getBrowseDanmakuLaneCount(camera);
-    const laneIndex = Math.min(stream.laneIndex, Math.max(0, laneCount - 1));
-    const screenY = this.getBrowseDanmakuLaneScreenY(laneIndex, laneCount, camera);
+    const localTrack =
+      track
+      ?? (stream.target
+        ? this.getBrowseDanmakuTrack(stream.target, stream.laneIndex, camera, zoom, stream.widthPx)
+        : null);
+    if (localTrack) {
+      stream.screenX = localTrack.centerX + stream.trackOffsetX;
+    }
+    const screenY =
+      localTrack?.screenY
+      ?? this.getBrowseDanmakuFallbackLaneScreenY(stream.laneIndex, camera);
     stream.container.setPosition(
       camera.worldView.x + stream.screenX / safeZoom,
       camera.worldView.y + screenY / safeZoom,
     );
     stream.container.setScale(screenScale);
+  }
+
+  private getBrowseDanmakuStreamAlpha(
+    stream: RenderedBrowseDanmakuComment,
+    track: BrowseDanmakuTrack,
+  ): number {
+    const fadeIn = Phaser.Math.Clamp(stream.ageMs / BROWSE_DANMAKU_FADE_IN_MS, 0, 1);
+    const fadeOutDistancePx = Math.max(
+      1,
+      stream.speedPxPerSecond * (BROWSE_DANMAKU_FADE_OUT_MS / 1000),
+    );
+    const distanceToExit = Math.max(0, stream.screenX - track.exitX);
+    const fadeOut = Phaser.Math.Clamp(distanceToExit / fadeOutDistancePx, 0, 1);
+    return BROWSE_DANMAKU_MAX_ALPHA * Math.min(fadeIn, fadeOut);
   }
 
   private pickBrowseDanmakuCandidate(
@@ -1209,10 +1322,58 @@ export class OverworldRoomCommentsController {
       return null;
     }
 
-    const candidate = candidates[this.browseDanmakuCandidateCursor % candidates.length];
-    this.browseDanmakuCandidateCursor =
-      (this.browseDanmakuCandidateCursor + 1) % candidates.length;
-    return candidate;
+    for (let attempt = 0; attempt < candidates.length; attempt += 1) {
+      const candidate = candidates[this.browseDanmakuCandidateCursor % candidates.length];
+      this.browseDanmakuCandidateCursor =
+        (this.browseDanmakuCandidateCursor + 1) % candidates.length;
+      if (!this.isBrowseDanmakuCandidateActive(candidate)) {
+        return candidate;
+      }
+    }
+
+    return null;
+  }
+
+  private isBrowseDanmakuCandidateActive(candidate: BrowseDanmakuCandidate): boolean {
+    for (const stream of this.activeBrowseDanmaku) {
+      if (stream.key === candidate.key && stream.commentId === candidate.comment.id) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private getBrowseDanmakuSpawnIntervalMs(candidateCount: number): number {
+    if (candidateCount <= 0) {
+      return BROWSE_DANMAKU_CYCLE_MS;
+    }
+
+    return Phaser.Math.Clamp(
+      BROWSE_DANMAKU_CYCLE_MS / candidateCount,
+      this.getBrowseDanmakuMinSpawnGapMs(),
+      BROWSE_DANMAKU_CYCLE_MS,
+    );
+  }
+
+  private getBrowseDanmakuMinSpawnGapMs(): number {
+    const layout = getDeviceLayoutState();
+    if (layout.deviceClass === 'phone') {
+      return BROWSE_DANMAKU_PHONE_MIN_SPAWN_GAP_MS;
+    }
+
+    return layout.performanceProfile === 'reduced'
+      ? BROWSE_DANMAKU_REDUCED_MIN_SPAWN_GAP_MS
+      : BROWSE_DANMAKU_DESKTOP_MIN_SPAWN_GAP_MS;
+  }
+
+  private getBrowseDanmakuDebugScreenY(stream: RenderedBrowseDanmakuComment): number {
+    const camera = this.options.scene.cameras.main;
+    const zoom = this.options.getZoom?.() ?? camera.zoom;
+    const track = stream.target
+      ? this.getBrowseDanmakuTrack(stream.target, stream.laneIndex, camera, zoom, stream.widthPx)
+      : null;
+    return track?.screenY ?? this.getBrowseDanmakuFallbackLaneScreenY(stream.laneIndex, camera);
   }
 
   private handleBrowseDanmakuClick(stream: RenderedBrowseDanmakuComment): void {
@@ -1274,31 +1435,20 @@ export class OverworldRoomCommentsController {
     return count;
   }
 
-  private getBrowseDanmakuLaneCount(camera: Phaser.Cameras.Scene2D.Camera): number {
-    const topPadding = camera.height > 520 ? BROWSE_DANMAKU_TOP_PADDING : 52;
-    const bottomPadding = camera.height > 520 ? BROWSE_DANMAKU_BOTTOM_PADDING : 72;
-    const availableHeight = Math.max(
-      BROWSE_DANMAKU_LANE_HEIGHT * BROWSE_DANMAKU_MIN_LANES,
-      camera.height - topPadding - bottomPadding,
-    );
+  private getBrowseDanmakuLaneCount(): number {
     const layout = getDeviceLayoutState();
-    const maxLanes = layout.deviceClass === 'phone'
-      ? 5
-      : layout.performanceProfile === 'reduced'
-        ? 7
-        : BROWSE_DANMAKU_MAX_LANES;
-    return Phaser.Math.Clamp(
-      Math.floor(availableHeight / BROWSE_DANMAKU_LANE_HEIGHT),
-      BROWSE_DANMAKU_MIN_LANES,
-      maxLanes,
-    );
+    if (layout.deviceClass === 'phone') {
+      return BROWSE_DANMAKU_MIN_LANES;
+    }
+
+    return layout.performanceProfile === 'reduced' ? 4 : 5;
   }
 
-  private getBrowseDanmakuLaneScreenY(
+  private getBrowseDanmakuFallbackLaneScreenY(
     laneIndex: number,
-    laneCount: number,
     camera: Phaser.Cameras.Scene2D.Camera,
   ): number {
+    const laneCount = Math.min(BROWSE_DANMAKU_MAX_LANES, this.getBrowseDanmakuLaneCount());
     const topPadding = camera.height > 520 ? BROWSE_DANMAKU_TOP_PADDING : 52;
     const bottomPadding = camera.height > 520 ? BROWSE_DANMAKU_BOTTOM_PADDING : 72;
     const bottom = Math.max(topPadding + BROWSE_DANMAKU_HEIGHT, camera.height - bottomPadding);
@@ -1307,7 +1457,92 @@ export class OverworldRoomCommentsController {
     }
 
     const spacing = (bottom - topPadding - BROWSE_DANMAKU_HEIGHT) / (laneCount - 1);
-    return topPadding + spacing * laneIndex;
+    const clampedLaneIndex = Phaser.Math.Clamp(laneIndex, 0, laneCount - 1);
+    return topPadding + spacing * clampedLaneIndex;
+  }
+
+  private isBrowseDanmakuTargetNearViewport(
+    target: BrowseCommentTarget,
+    camera: Phaser.Cameras.Scene2D.Camera,
+    zoom: number,
+  ): boolean {
+    return Boolean(this.getBrowseDanmakuTrack(target, 0, camera, zoom, 96));
+  }
+
+  private getBrowseDanmakuTrack(
+    target: BrowseCommentTarget,
+    laneIndex: number,
+    camera: Phaser.Cameras.Scene2D.Camera,
+    zoom: number,
+    widthPx: number,
+  ): BrowseDanmakuTrack | null {
+    const safeZoom = Math.max(zoom, 0.001);
+    const origin = this.options.getRoomOrigin(target.displayCoordinates);
+    const roomScreenWidth = ROOM_PX_WIDTH * safeZoom;
+    const roomScreenHeight = ROOM_PX_HEIGHT * safeZoom;
+    const roomLeft = (origin.x - camera.worldView.x) * safeZoom;
+    const roomTop = (origin.y - camera.worldView.y) * safeZoom;
+    const roomRight = roomLeft + roomScreenWidth;
+    const roomBottom = roomTop + roomScreenHeight;
+    const topPadding = camera.height > 520 ? BROWSE_DANMAKU_TOP_PADDING : 52;
+    const bottomPadding = camera.height > 520 ? BROWSE_DANMAKU_BOTTOM_PADDING : 72;
+    const safeBottom = camera.height - bottomPadding;
+
+    if (
+      roomRight < -BROWSE_DANMAKU_ROOM_TRACK_MAX_HALF_WIDTH ||
+      roomLeft > camera.width + BROWSE_DANMAKU_ROOM_TRACK_MAX_HALF_WIDTH ||
+      roomBottom < topPadding - BROWSE_DANMAKU_HEIGHT ||
+      roomTop > safeBottom + BROWSE_DANMAKU_HEIGHT
+    ) {
+      return null;
+    }
+
+    const laneCount = this.getBrowseDanmakuLaneCount();
+    const localLaneIndex = Phaser.Math.Wrap(laneIndex, 0, laneCount);
+    const centeredLaneIndex = localLaneIndex - (laneCount - 1) * 0.5;
+    const laneSpacing = Phaser.Math.Clamp(
+      roomScreenHeight * 0.16,
+      BROWSE_DANMAKU_ROOM_TRACK_LANE_SPACING_MIN,
+      BROWSE_DANMAKU_ROOM_TRACK_LANE_SPACING_MAX,
+    );
+    const unclampedScreenY =
+      roomTop
+      + roomScreenHeight * BROWSE_DANMAKU_ROOM_TRACK_VERTICAL_RATIO
+      + centeredLaneIndex * laneSpacing;
+    const screenY = Phaser.Math.Clamp(
+      unclampedScreenY,
+      topPadding,
+      Math.max(topPadding, safeBottom - BROWSE_DANMAKU_HEIGHT),
+    );
+
+    const roomCenterX = roomLeft + roomScreenWidth * 0.5;
+    const viewportTrackMax = Math.max(
+      BROWSE_DANMAKU_ROOM_TRACK_MIN_HALF_WIDTH,
+      camera.width * BROWSE_DANMAKU_ROOM_TRACK_VIEWPORT_MAX_FRACTION,
+    );
+    const trackHalfWidth = Phaser.Math.Clamp(
+      roomScreenWidth * 0.58,
+      BROWSE_DANMAKU_ROOM_TRACK_MIN_HALF_WIDTH,
+      Math.min(BROWSE_DANMAKU_ROOM_TRACK_MAX_HALF_WIDTH, viewportTrackMax),
+    );
+    const startX = Math.min(
+      camera.width + BROWSE_DANMAKU_SIDE_MARGIN,
+      roomCenterX + trackHalfWidth + BROWSE_DANMAKU_SIDE_MARGIN,
+    );
+    const exitX = Math.max(
+      -widthPx - BROWSE_DANMAKU_SIDE_MARGIN,
+      roomCenterX - trackHalfWidth - widthPx - BROWSE_DANMAKU_SIDE_MARGIN,
+    );
+    if (startX < -widthPx || exitX > camera.width + BROWSE_DANMAKU_SIDE_MARGIN) {
+      return null;
+    }
+
+    return {
+      centerX: roomCenterX,
+      startX,
+      exitX,
+      screenY,
+    };
   }
 
   private getBrowseDanmakuMaxActive(): number {
@@ -1336,6 +1571,8 @@ export class OverworldRoomCommentsController {
     stream.key = null;
     stream.commentId = null;
     stream.target = null;
+    stream.trackOffsetX = 0;
+    stream.ageMs = 0;
     stream.container.removeInteractive();
     stream.container.setVisible(false);
     stream.container.setAlpha(0);
