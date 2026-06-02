@@ -152,6 +152,7 @@ export async function computeCourseSnapshotVerificationHash(snapshot: CourseSnap
       coordinates: roomRef.coordinates,
       roomVersion: roomRef.roomVersion,
     })),
+    objectLinks: snapshot.objectLinks,
     pressurePlateLinks: snapshot.pressurePlateLinks,
   });
 }

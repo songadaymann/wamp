@@ -2836,6 +2836,7 @@ export class CourseEditorScene extends Phaser.Scene {
     updateActiveCourseDraftSession((draft) => {
       draft.title = normalized.title;
       draft.roomRefs = normalized.roomRefs;
+      draft.objectLinks = normalized.objectLinks;
       draft.pressurePlateLinks = normalized.pressurePlateLinks;
       draft.startPoint = normalized.startPoint;
       draft.goal = normalized.goal;

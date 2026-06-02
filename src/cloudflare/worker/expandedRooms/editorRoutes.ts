@@ -362,9 +362,10 @@ function stripRoomFromExpandedRoomDraft(
 ): CourseSnapshot {
   const draft = cloneCourseSnapshot(snapshot);
   draft.roomRefs = draft.roomRefs.filter((roomRef) => roomRef.roomId !== roomId);
-  draft.pressurePlateLinks = draft.pressurePlateLinks.filter(
+  draft.objectLinks = draft.objectLinks.filter(
     (link) => link.triggerRoomId !== roomId && link.targetRoomId !== roomId
   );
+  draft.pressurePlateLinks = draft.objectLinks.map((link) => ({ ...link }));
   if (draft.startPoint?.roomId === roomId) {
     draft.startPoint = null;
   }

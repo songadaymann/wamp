@@ -94,11 +94,13 @@ export function computeCourseWeightedChange(
 
   const previousRooms = previous.roomRefs.map((room) => `${room.roomId}:${room.roomVersion}`).join('|');
   const nextRooms = next.roomRefs.map((room) => `${room.roomId}:${room.roomVersion}`).join('|');
-  const previousLinks = previous.pressurePlateLinks
+  const previousObjectLinks = previous.objectLinks ?? previous.pressurePlateLinks;
+  const nextObjectLinks = next.objectLinks ?? next.pressurePlateLinks;
+  const previousLinks = previousObjectLinks
     .map((link) => `${link.triggerRoomId}:${link.triggerInstanceId}:${link.targetRoomId}:${link.targetInstanceId}`)
     .sort()
     .join('|');
-  const nextLinks = next.pressurePlateLinks
+  const nextLinks = nextObjectLinks
     .map((link) => `${link.triggerRoomId}:${link.triggerInstanceId}:${link.targetRoomId}:${link.targetInstanceId}`)
     .sort()
     .join('|');

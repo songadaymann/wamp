@@ -333,6 +333,8 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
       placedInstanceId: null,
       linkedTargetRoomId: null,
       linkedTargetInstanceId: null,
+      linkedTargetWorldX: null,
+      linkedTargetWorldY: null,
       containedObjectId: null,
       signText: null,
       layer: 'terrain',
