@@ -758,9 +758,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
               );
             } else if (liveObject.config.id === 'trapdoor_locked') {
               liveObject.interactions.push(
-                this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
-                  this.triggerController.handleLockedDoorContact(loadedRoom, liveObject);
-                }, () => this.shouldCollideWithLiveObject(liveObject))
+                this.options.scene.physics.add.collider(
+                  player,
+                  liveObject.sprite,
+                  undefined,
+                  () => this.shouldCollideWithLiveObject(liveObject),
+                )
               );
             } else if (liveObject.config.id === 'barricade') {
               liveObject.interactions.push(
