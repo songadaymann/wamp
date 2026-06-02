@@ -49,14 +49,17 @@
   font-size: 11px;
 }
 
-#world-hud .world-btn-comment:not(:disabled) {
+#world-hud .world-btn-comment:not(:disabled),
+#world-hud .world-btn-room-comment:not(:disabled) {
   background: #ffd65a;
   border-color: #18161c;
   color: #18161c;
 }
 
 #world-hud .world-btn-comment:not(:disabled):hover,
-#world-hud .world-btn-comment.active {
+#world-hud .world-btn-comment.active,
+#world-hud .world-btn-room-comment:not(:disabled):hover,
+#world-hud .world-btn-room-comment.active {
   background: #ffe48b;
   color: #18161c;
 }
