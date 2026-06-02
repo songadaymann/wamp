@@ -152,6 +152,7 @@ export interface EditorSceneBridge {
     instrumentId: RoomPatternInstrumentId,
     slotIndex: number,
   ) => Promise<void> | void;
+  setRoomMusicArrangementSlotCount?: (slotCount: number) => void;
   selectArrangementSlot?: (instrumentId: RoomPatternInstrumentId, slotIndex: number) => void;
   clearSelectedArrangementSlot?: () => void;
   clearAllArrangementSlots?: () => void;

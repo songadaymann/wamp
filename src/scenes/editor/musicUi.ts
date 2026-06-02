@@ -1,7 +1,7 @@
 import type { MusicPhraseRecord } from '../../music/library';
 import {
   ROOM_PATTERN_INSTRUMENT_IDS,
-  ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT,
+  ROOM_PHRASE_ARRANGEMENT_SLOT_OPTIONS,
   getPatternInstrumentColorCss,
   getPatternInstrumentColorRgbCss,
   getPatternInstrumentIcon,
@@ -55,6 +55,7 @@ export function renderMusicArrangementPanel(options: {
   const panel = document.getElementById('editor-music-arrangement-panel');
   const grid = document.getElementById('editor-music-arrangement-grid');
   const status = document.getElementById('editor-music-arrangement-status');
+  const slotCountRoot = document.getElementById('editor-music-arrangement-slot-count');
   const clearButton = document.getElementById('btn-editor-music-arrangement-clear-slot') as HTMLButtonElement | null;
   const clearAllButton = document.getElementById('btn-editor-music-arrangement-clear-all') as HTMLButtonElement | null;
   if (!panel || !grid || !status) {
@@ -69,15 +70,34 @@ export function renderMusicArrangementPanel(options: {
 
   const arrangement = options.getArrangement();
   const selection = options.getSelection();
-  const selectedPhraseId = arrangement.slots[selection.instrumentId][selection.slotIndex] ?? null;
+  const slotCount = arrangement.slotCount;
+  const selectedSlotIndex = Math.min(selection.slotIndex, Math.max(0, slotCount - 1));
+  const selectedPhraseId = arrangement.slots[selection.instrumentId][selectedSlotIndex] ?? null;
   const filledSlotCount = ROOM_PATTERN_INSTRUMENT_IDS.reduce(
     (count, instrumentId) =>
       count + arrangement.slots[instrumentId].filter((phraseId) => phraseId !== null).length,
     0,
   );
   status.textContent = selectedPhraseId
-    ? `Selected ${getPatternInstrumentLabel(selection.instrumentId)} ${selection.slotIndex + 1}. Drag in a phrase, click a library phrase, or clear this slot.`
-    : `Selected ${getPatternInstrumentLabel(selection.instrumentId)} ${selection.slotIndex + 1}. Drag in a phrase or click one in the library to patch it here.`;
+    ? `Selected ${getPatternInstrumentLabel(selection.instrumentId)} ${selectedSlotIndex + 1}. Drag in a phrase, click a library phrase, or clear this slot.`
+    : `Selected ${getPatternInstrumentLabel(selection.instrumentId)} ${selectedSlotIndex + 1}. Drag in a phrase or click one in the library to patch it here.`;
+
+  slotCountRoot?.replaceChildren(
+    ...ROOM_PHRASE_ARRANGEMENT_SLOT_OPTIONS.map((option) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'bar-btn bar-btn-small editor-music-arrangement-slot-count-button';
+      if (option === slotCount) {
+        button.classList.add('active');
+      }
+      button.dataset.roomMusicArrangementSlotCount = String(option);
+      button.dataset.roomMusicTooltip = `${option} arrangement slots`;
+      button.disabled = options.legacyLocked;
+      button.ariaLabel = `Set phrase arrangement to ${option} slots`;
+      button.textContent = String(option);
+      return button;
+    }),
+  );
 
   grid.replaceChildren(
     ...ROOM_PATTERN_INSTRUMENT_IDS.map((instrumentId) => {
@@ -94,14 +114,16 @@ export function renderMusicArrangementPanel(options: {
 
       const cells = document.createElement('div');
       cells.className = 'editor-music-arrangement-cells';
-      for (let slotIndex = 0; slotIndex < ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT; slotIndex += 1) {
+      cells.dataset.roomMusicArrangementSlotCount = String(slotCount);
+      cells.style.setProperty('--editor-music-arrangement-slot-count', String(slotCount));
+      for (let slotIndex = 0; slotIndex < slotCount; slotIndex += 1) {
         const phraseId = arrangement.slots[instrumentId][slotIndex] ?? null;
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'editor-music-arrangement-slot';
         if (
           selection.instrumentId === instrumentId &&
-          selection.slotIndex === slotIndex
+          selectedSlotIndex === slotIndex
         ) {
           button.classList.add('active');
         }

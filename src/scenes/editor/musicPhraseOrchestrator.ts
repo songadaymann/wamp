@@ -11,6 +11,8 @@ import {
 } from '../../music/libraryClient';
 import {
   ROOM_PATTERN_INSTRUMENT_IDS,
+  ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT,
+  normalizeRoomPhraseArrangementSlotCount,
   type RoomMusic,
   type RoomPatternInstrumentId,
 } from '../../music/model';
@@ -231,17 +233,32 @@ export class EditorMusicPhraseOrchestrator {
     this.libraryItems = nextItems;
   }
 
-  ensureArrangementSelection(instrumentId: RoomPatternInstrumentId): void {
+  ensureArrangementSelection(
+    instrumentId: RoomPatternInstrumentId,
+    slotCount: number = ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT,
+  ): void {
+    const maxSlotIndex = Math.max(0, normalizeRoomPhraseArrangementSlotCount(slotCount) - 1);
     if (!this.arrangementSelection || this.arrangementSelection.instrumentId !== instrumentId) {
       this.arrangementSelection = {
         instrumentId,
         slotIndex: 0,
       };
+      return;
+    }
+
+    if (this.arrangementSelection.slotIndex < 0 || this.arrangementSelection.slotIndex > maxSlotIndex) {
+      this.arrangementSelection = {
+        instrumentId,
+        slotIndex: Math.max(0, Math.min(maxSlotIndex, this.arrangementSelection.slotIndex)),
+      };
     }
   }
 
-  getArrangementSelection(activeInstrumentId: RoomPatternInstrumentId): EditorMusicArrangementSelection {
-    this.ensureArrangementSelection(activeInstrumentId);
+  getArrangementSelection(
+    activeInstrumentId: RoomPatternInstrumentId,
+    slotCount: number = ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT,
+  ): EditorMusicArrangementSelection {
+    this.ensureArrangementSelection(activeInstrumentId, slotCount);
     return this.arrangementSelection as EditorMusicArrangementSelection;
   }
 

@@ -34,11 +34,13 @@ import {
   getPatternInstrumentIcon,
   getPatternInstrumentLabel,
   normalizeRoomPatternBpm,
+  normalizeRoomPhraseArrangementSlotCount,
   normalizeRoomPatternSwingPercent,
   isPatternRoomMusic,
   isPhraseArrangementRoomMusic,
   isStemArrangementRoomMusic,
   rekeyRoomPatternMusicPreservingMidi,
+  setRoomPhraseArrangementSlotCount,
   type RoomMusic,
   type RoomMusicKeyMode,
   type RoomMusicKeyTonic,
@@ -134,6 +136,7 @@ export class EditorScene extends Phaser.Scene {
   private musicModeActive = false;
   private musicComposerMode: EditorMusicComposerMode = 'sequencer';
   private musicPreviewState: 'stopped' | 'playing' = 'stopped';
+  private preferredPhraseArrangementSlotCount = ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT;
   private readonly musicPhraseOrchestrator = new EditorMusicPhraseOrchestrator();
 
   // Tilemap
@@ -1891,7 +1894,7 @@ export class EditorScene extends Phaser.Scene {
   private getDisplayPhraseArrangement(): RoomPhraseArrangementMusic {
     return isPhraseArrangementRoomMusic(this.roomMusic)
       ? this.roomMusic
-      : createDefaultRoomPhraseArrangementMusic();
+      : createDefaultRoomPhraseArrangementMusic(this.preferredPhraseArrangementSlotCount);
   }
 
   private getEditablePhraseArrangement(): RoomPhraseArrangementMusic | null {
@@ -1901,7 +1904,7 @@ export class EditorScene extends Phaser.Scene {
 
     return isPhraseArrangementRoomMusic(this.roomMusic)
       ? cloneRoomPhraseArrangementMusic(this.roomMusic)
-      : createDefaultRoomPhraseArrangementMusic();
+      : createDefaultRoomPhraseArrangementMusic(this.preferredPhraseArrangementSlotCount);
   }
 
   private getActiveMusicPitchMode(): RoomPatternPitchMode {
@@ -2007,12 +2010,18 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private ensureArrangementSelection(instrumentId: RoomPatternInstrumentId): void {
-    this.musicPhraseOrchestrator.ensureArrangementSelection(instrumentId);
+    this.musicPhraseOrchestrator.ensureArrangementSelection(
+      instrumentId,
+      this.getDisplayPhraseArrangement().slotCount,
+    );
   }
 
   private getArrangementSelection(): EditorMusicArrangementSelection {
     const instrumentId = this.musicPatternController.getActiveInstrumentTab();
-    return this.musicPhraseOrchestrator.getArrangementSelection(instrumentId);
+    return this.musicPhraseOrchestrator.getArrangementSelection(
+      instrumentId,
+      this.getDisplayPhraseArrangement().slotCount,
+    );
   }
 
   private async loadMusicPhraseLibrary(reset: boolean): Promise<void> {
@@ -2324,7 +2333,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   selectArrangementSlot(instrumentId: RoomPatternInstrumentId, slotIndex: number): void {
-    if (slotIndex < 0 || slotIndex >= ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT) {
+    if (slotIndex < 0 || slotIndex >= this.getDisplayPhraseArrangement().slotCount) {
       return;
     }
 
@@ -2358,7 +2367,7 @@ export class EditorScene extends Phaser.Scene {
 
     let changed = false;
     for (const instrumentId of ROOM_PATTERN_INSTRUMENT_IDS) {
-      for (let slotIndex = 0; slotIndex < ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT; slotIndex += 1) {
+      for (let slotIndex = 0; slotIndex < arrangement.slotCount; slotIndex += 1) {
         if (arrangement.slots[instrumentId][slotIndex] !== null) {
           arrangement.slots[instrumentId][slotIndex] = null;
           changed = true;
@@ -2379,7 +2388,7 @@ export class EditorScene extends Phaser.Scene {
     instrumentId: RoomPatternInstrumentId,
     slotIndex: number,
   ): Promise<void> {
-    if (slotIndex < 0 || slotIndex >= ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT) {
+    if (slotIndex < 0 || slotIndex >= this.getDisplayPhraseArrangement().slotCount) {
       return;
     }
 
@@ -2417,9 +2426,32 @@ export class EditorScene extends Phaser.Scene {
     arrangement.slots[selection.instrumentId][selection.slotIndex] = phrase.id;
     this.musicPhraseOrchestrator.setArrangementSelection({
       instrumentId: selection.instrumentId,
-      slotIndex: Math.min(ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT - 1, selection.slotIndex + 1),
+      slotIndex: Math.min(arrangement.slotCount - 1, selection.slotIndex + 1),
     });
     this.commitRoomMusic(arrangement);
+  }
+
+  setRoomMusicArrangementSlotCount(slotCount: number): void {
+    const arrangement = this.getEditablePhraseArrangement();
+    if (!arrangement) {
+      return;
+    }
+
+    this.preferredPhraseArrangementSlotCount = normalizeRoomPhraseArrangementSlotCount(slotCount);
+    const nextArrangement = setRoomPhraseArrangementSlotCount(arrangement, slotCount);
+    if (nextArrangement.slotCount === arrangement.slotCount) {
+      this.renderEditorUi();
+      return;
+    }
+
+    const selection = this.getArrangementSelection();
+    if (selection.slotIndex >= nextArrangement.slotCount) {
+      this.musicPhraseOrchestrator.setArrangementSelection({
+        instrumentId: selection.instrumentId,
+        slotIndex: nextArrangement.slotCount - 1,
+      });
+    }
+    this.commitRoomMusic(nextArrangement);
   }
 
   toggleRoomMusicPreview(): void {
@@ -2478,6 +2510,9 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private commitRoomMusic(nextMusic: RoomMusic | null): RoomMusic | null {
+    if (isPhraseArrangementRoomMusic(nextMusic)) {
+      this.preferredPhraseArrangementSlotCount = normalizeRoomPhraseArrangementSlotCount(nextMusic.slotCount);
+    }
     const committed = this.editRuntime.setRoomMusic(nextMusic);
     if (this.musicPreviewState === 'playing') {
       this.syncRoomMusicPreviewPlayback();

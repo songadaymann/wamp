@@ -3,6 +3,9 @@ import type {
   RoomPatternInstrumentId,
   RoomPatternPitchMode,
 } from '../../music/model';
+import {
+  ROOM_PHRASE_ARRANGEMENT_SLOT_OPTIONS,
+} from '../../music/model';
 import { isCoarsePointerDevice } from '../deviceLayout';
 import { syncGameKeyboardFocus } from '../keyboardFocus';
 import { withActiveEditorScene } from './sceneBridge';
@@ -38,6 +41,18 @@ function withComposerMode(
   }
 
   callback(value);
+}
+
+function withArrangementSlotCount(
+  value: string | undefined,
+  callback: (slotCount: number) => void,
+): void {
+  const slotCount = value === undefined ? Number.NaN : Number(value);
+  if (!Number.isInteger(slotCount) || !ROOM_PHRASE_ARRANGEMENT_SLOT_OPTIONS.includes(slotCount as 8 | 12 | 16)) {
+    return;
+  }
+
+  callback(slotCount);
 }
 
 export function setupRoomMusicControls(
@@ -481,6 +496,16 @@ export function setupRoomMusicControls(
       withComposerMode(composerModeButton.dataset.roomMusicComposerMode, (mode) => {
         withActiveEditorScene(game, (scene) => {
           scene.setMusicComposerMode?.(mode);
+        });
+      });
+      return;
+    }
+
+    const arrangementSlotCountButton = target.closest<HTMLElement>('[data-room-music-arrangement-slot-count]');
+    if (arrangementSlotCountButton) {
+      withArrangementSlotCount(arrangementSlotCountButton.dataset.roomMusicArrangementSlotCount, (slotCount) => {
+        withActiveEditorScene(game, (scene) => {
+          scene.setRoomMusicArrangementSlotCount?.(slotCount);
         });
       });
       return;

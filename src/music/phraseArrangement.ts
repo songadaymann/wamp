@@ -34,7 +34,9 @@ import {
   type MusicPhraseRecord,
 } from './library';
 
-export const ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT = 8;
+export const ROOM_PHRASE_ARRANGEMENT_SLOT_OPTIONS = [8, 12, 16] as const;
+export type RoomPhraseArrangementSlotCount = typeof ROOM_PHRASE_ARRANGEMENT_SLOT_OPTIONS[number];
+export const ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT: RoomPhraseArrangementSlotCount = 8;
 export const ROOM_PHRASE_ARRANGEMENT_SEGMENT_BAR_COUNT = ROOM_PATTERN_BAR_COUNT;
 export const ROOM_PHRASE_ARRANGEMENT_SEGMENT_STEP_COUNT = ROOM_PATTERN_STEP_COUNT;
 export const ROOM_PHRASE_ARRANGEMENT_BAR_COUNT =
@@ -64,25 +66,64 @@ export interface RoomPhraseArrangementMusic {
   slots: RoomPhraseArrangementSlots;
 }
 
-export function createEmptyRoomPhraseArrangementSlots(): RoomPhraseArrangementSlots {
+export function normalizeRoomPhraseArrangementSlotCount(value: unknown): RoomPhraseArrangementSlotCount {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT;
+  }
+
+  const requested = Math.max(1, Math.floor(value));
+  return ROOM_PHRASE_ARRANGEMENT_SLOT_OPTIONS.find((option) => requested <= option)
+    ?? ROOM_PHRASE_ARRANGEMENT_SLOT_OPTIONS[ROOM_PHRASE_ARRANGEMENT_SLOT_OPTIONS.length - 1];
+}
+
+function getRoomPhraseArrangementStepCount(slotCount: number): number {
+  return normalizeRoomPhraseArrangementSlotCount(slotCount) * ROOM_PHRASE_ARRANGEMENT_SEGMENT_STEP_COUNT;
+}
+
+function getRoomPhraseArrangementBarCount(slotCount: number): number {
+  return normalizeRoomPhraseArrangementSlotCount(slotCount) * ROOM_PHRASE_ARRANGEMENT_SEGMENT_BAR_COUNT;
+}
+
+function getRawLaneSlotLength(value: unknown): number {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function inferRoomPhraseArrangementSlotCount(value: RoomPhraseArrangementMusic): RoomPhraseArrangementSlotCount {
+  const requestedSlotCount = Math.max(
+    typeof value.slotCount === 'number' && Number.isFinite(value.slotCount) ? value.slotCount : 0,
+    getRawLaneSlotLength(value.slots?.drums),
+    getRawLaneSlotLength(value.slots?.triangle),
+    getRawLaneSlotLength(value.slots?.saw),
+    getRawLaneSlotLength(value.slots?.square),
+  );
+  return normalizeRoomPhraseArrangementSlotCount(requestedSlotCount || ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT);
+}
+
+export function createEmptyRoomPhraseArrangementSlots(
+  slotCount: number = ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT,
+): RoomPhraseArrangementSlots {
+  const normalizedSlotCount = normalizeRoomPhraseArrangementSlotCount(slotCount);
   return {
-    drums: Array.from({ length: ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT }, () => null),
-    triangle: Array.from({ length: ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT }, () => null),
-    saw: Array.from({ length: ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT }, () => null),
-    square: Array.from({ length: ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT }, () => null),
+    drums: Array.from({ length: normalizedSlotCount }, () => null),
+    triangle: Array.from({ length: normalizedSlotCount }, () => null),
+    saw: Array.from({ length: normalizedSlotCount }, () => null),
+    square: Array.from({ length: normalizedSlotCount }, () => null),
   };
 }
 
-export function createDefaultRoomPhraseArrangementMusic(): RoomPhraseArrangementMusic {
+export function createDefaultRoomPhraseArrangementMusic(
+  slotCount: number = ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT,
+): RoomPhraseArrangementMusic {
+  const normalizedSlotCount = normalizeRoomPhraseArrangementSlotCount(slotCount);
   return {
     kind: 'phraseArrangement',
     bpm: ROOM_PATTERN_BPM,
     swingPercent: ROOM_PATTERN_SWING_PERCENT,
     beatsPerBar: ROOM_PATTERN_BEATS_PER_BAR,
     stepsPerBeat: ROOM_PATTERN_STEPS_PER_BEAT,
-    stepCount: ROOM_PHRASE_ARRANGEMENT_STEP_COUNT,
-    barCount: ROOM_PHRASE_ARRANGEMENT_BAR_COUNT,
-    slotCount: ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT,
+    stepCount: getRoomPhraseArrangementStepCount(normalizedSlotCount),
+    barCount: getRoomPhraseArrangementBarCount(normalizedSlotCount),
+    slotCount: normalizedSlotCount,
     segmentBarCount: ROOM_PHRASE_ARRANGEMENT_SEGMENT_BAR_COUNT,
     segmentStepCount: ROOM_PHRASE_ARRANGEMENT_SEGMENT_STEP_COUNT,
     pitchMode: 'scale',
@@ -94,7 +135,7 @@ export function createDefaultRoomPhraseArrangementMusic(): RoomPhraseArrangement
       square: DEFAULT_ROOM_PATTERN_OCTAVE_SHIFT.square,
     },
     mix: cloneRoomPatternInstrumentMix(DEFAULT_ROOM_PATTERN_INSTRUMENT_MIX),
-    slots: createEmptyRoomPhraseArrangementSlots(),
+    slots: createEmptyRoomPhraseArrangementSlots(normalizedSlotCount),
   };
 }
 
@@ -107,13 +148,14 @@ function normalizeSlotId(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function normalizeLaneSlots(value: unknown): RoomPhraseArrangementLaneSlots {
-  const next = Array.from({ length: ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT }, () => null) as RoomPhraseArrangementLaneSlots;
+function normalizeLaneSlots(value: unknown, slotCount: number): RoomPhraseArrangementLaneSlots {
+  const normalizedSlotCount = normalizeRoomPhraseArrangementSlotCount(slotCount);
+  const next = Array.from({ length: normalizedSlotCount }, () => null) as RoomPhraseArrangementLaneSlots;
   if (!Array.isArray(value)) {
     return next;
   }
 
-  for (let index = 0; index < ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT; index += 1) {
+  for (let index = 0; index < normalizedSlotCount; index += 1) {
     next[index] = normalizeSlotId(value[index]);
   }
 
@@ -127,15 +169,16 @@ export function cloneRoomPhraseArrangementMusic(
     return null;
   }
 
+  const slotCount = inferRoomPhraseArrangementSlotCount(value);
   return {
     kind: 'phraseArrangement',
     bpm: normalizeRoomPatternBpm(value.bpm),
     swingPercent: normalizeRoomPatternSwingPercent(value.swingPercent),
     beatsPerBar: ROOM_PATTERN_BEATS_PER_BAR,
     stepsPerBeat: ROOM_PATTERN_STEPS_PER_BEAT,
-    stepCount: ROOM_PHRASE_ARRANGEMENT_STEP_COUNT,
-    barCount: ROOM_PHRASE_ARRANGEMENT_BAR_COUNT,
-    slotCount: ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT,
+    stepCount: getRoomPhraseArrangementStepCount(slotCount),
+    barCount: getRoomPhraseArrangementBarCount(slotCount),
+    slotCount,
     segmentBarCount: ROOM_PHRASE_ARRANGEMENT_SEGMENT_BAR_COUNT,
     segmentStepCount: ROOM_PHRASE_ARRANGEMENT_SEGMENT_STEP_COUNT,
     pitchMode: value.pitchMode === 'chromatic' ? 'chromatic' : 'scale',
@@ -148,10 +191,29 @@ export function cloneRoomPhraseArrangementMusic(
     },
     mix: cloneRoomPatternInstrumentMix(value.mix),
     slots: {
-      drums: normalizeLaneSlots(value.slots?.drums),
-      triangle: normalizeLaneSlots(value.slots?.triangle),
-      saw: normalizeLaneSlots(value.slots?.saw),
-      square: normalizeLaneSlots(value.slots?.square),
+      drums: normalizeLaneSlots(value.slots?.drums, slotCount),
+      triangle: normalizeLaneSlots(value.slots?.triangle, slotCount),
+      saw: normalizeLaneSlots(value.slots?.saw, slotCount),
+      square: normalizeLaneSlots(value.slots?.square, slotCount),
+    },
+  };
+}
+
+export function setRoomPhraseArrangementSlotCount(
+  value: RoomPhraseArrangementMusic,
+  slotCount: number,
+): RoomPhraseArrangementMusic {
+  const normalizedSlotCount = normalizeRoomPhraseArrangementSlotCount(slotCount);
+  return {
+    ...value,
+    stepCount: getRoomPhraseArrangementStepCount(normalizedSlotCount),
+    barCount: getRoomPhraseArrangementBarCount(normalizedSlotCount),
+    slotCount: normalizedSlotCount,
+    slots: {
+      drums: normalizeLaneSlots(value.slots.drums, normalizedSlotCount),
+      triangle: normalizeLaneSlots(value.slots.triangle, normalizedSlotCount),
+      saw: normalizeLaneSlots(value.slots.saw, normalizedSlotCount),
+      square: normalizeLaneSlots(value.slots.square, normalizedSlotCount),
     },
   };
 }
@@ -207,6 +269,7 @@ export function getRoomPhraseArrangementKey(
 ): string {
   return [
     value.kind,
+    `slots:${value.slotCount}`,
     `bpm:${value.bpm}`,
     `swing:${value.swingPercent}`,
     value.pitchMode,
