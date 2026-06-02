@@ -127,6 +127,7 @@ interface OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall> {
   syncLiveObjectWorldColliders?: (
     loadedRooms: Iterable<LoadedFullRoom<TLiveObject, TEdgeWall>>,
   ) => void;
+  getProtectedFullRoomIds?: (targetFullRoomIds: ReadonlySet<string>) => Iterable<string>;
   onBackdropObjectsChanged?: () => void;
   onFullRoomVisibilityChanged?: () => void;
   onFullRoomDestroyed?: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
@@ -1423,11 +1424,17 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   private getRetainedFullRoomIds(targetFullRoomIds: Set<string>): Set<string> {
-    const retainedRoomIds = new Set<string>(targetFullRoomIds);
+    const protectedRoomIds = this.getProtectedLoadedFullRoomIds(targetFullRoomIds);
+    const effectiveTargetRoomIds = new Set<string>(targetFullRoomIds);
+    for (const roomId of protectedRoomIds) {
+      effectiveTargetRoomIds.add(roomId);
+    }
+
+    const retainedRoomIds = new Set<string>(effectiveTargetRoomIds);
     const now = this.options.scene.time.now;
     let nextReleaseAt: number | null = null;
 
-    for (const roomId of targetFullRoomIds) {
+    for (const roomId of effectiveTargetRoomIds) {
       this.fullRoomReleaseAtById.delete(roomId);
     }
 
@@ -1438,7 +1445,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
 
     for (const roomId of this.loadedFullRoomsById.keys()) {
-      if (targetFullRoomIds.has(roomId)) {
+      if (effectiveTargetRoomIds.has(roomId)) {
         continue;
       }
 
@@ -1454,6 +1461,17 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
     this.scheduleFullRoomReleaseCleanup(nextReleaseAt, now);
     return retainedRoomIds;
+  }
+
+  private getProtectedLoadedFullRoomIds(targetFullRoomIds: ReadonlySet<string>): Set<string> {
+    const protectedRoomIds = new Set<string>();
+    const protectedIds = this.options.getProtectedFullRoomIds?.(targetFullRoomIds) ?? [];
+    for (const roomId of protectedIds) {
+      if (this.loadedFullRoomsById.has(roomId)) {
+        protectedRoomIds.add(roomId);
+      }
+    }
+    return protectedRoomIds;
   }
 
   private scheduleFullRoomReleaseCleanup(releaseAt: number | null, now: number): void {
