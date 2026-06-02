@@ -5,6 +5,15 @@ export type CustomSpriteKind = 'decoration' | 'collectible' | 'solid' | 'pushabl
 export type CustomSpriteStatus = 'active' | 'blocked';
 export type CustomSpriteSize = 16 | 32;
 
+export interface CustomSpritePixelBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  width: number;
+  height: number;
+}
+
 export interface CustomSpriteDefinition {
   id: string;
   name: string;
@@ -68,6 +77,42 @@ export function normalizeCustomSpriteKind(value: unknown): CustomSpriteKind {
 
 export function normalizeCustomSpriteSize(value: unknown): CustomSpriteSize {
   return value === 32 ? 32 : 16;
+}
+
+export function getCustomSpritePixelBounds(
+  values: readonly (string | null)[],
+  spriteSize: CustomSpriteSize,
+): CustomSpritePixelBounds | null {
+  let minX: number = spriteSize;
+  let minY: number = spriteSize;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let index = 0; index < values.length; index += 1) {
+    if (!values[index]) {
+      continue;
+    }
+
+    const x = index % spriteSize;
+    const y = Math.floor(index / spriteSize);
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+
+  if (maxX < minX || maxY < minY) {
+    return null;
+  }
+
+  return {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    width: maxX - minX + 1,
+    height: maxY - minY + 1,
+  };
 }
 
 function normalizeHexColor(value: unknown): string | null {
