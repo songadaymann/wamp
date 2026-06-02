@@ -653,6 +653,10 @@
             <span class="tool-icon" aria-hidden="true">&#128640;</span>
             <span class="tool-label" data-button-label>Publish Room</span>
           </button>
+          <button id="btn-wamp-o-gram" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Create Wamp-O-Gram">
+            <span class="tool-icon" aria-hidden="true">&#128140;</span>
+            <span class="tool-label" data-button-label>Gram</span>
+          </button>
         </div>
         <div class="editor-top-tools desktop-editor-only">
           <div class="editor-top-tools-label">Tools</div>
@@ -1479,6 +1483,55 @@
       </div>
       <div id="room-history-error" class="history-modal-error hidden"></div>
       <div id="room-history-list" class="history-version-list"></div>
+    </div>
+  </div>
+
+  <div id="wamp-o-gram-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel wamp-o-gram-modal-panel" role="dialog" aria-modal="true" aria-labelledby="wamp-o-gram-modal-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <div class="history-modal-kicker">Wamp-O-Gram</div>
+          <h2 id="wamp-o-gram-modal-title" class="history-modal-title">Playable Postcard</h2>
+        </div>
+        <button id="btn-wamp-o-gram-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div id="wamp-o-gram-status" class="history-modal-error hidden"></div>
+      <div class="wamp-o-gram-body">
+        <div class="wamp-o-gram-form">
+          <label class="goal-control-label" for="wamp-o-gram-title">Title</label>
+          <input id="wamp-o-gram-title" class="goal-input room-title-input" type="text" maxlength="60" spellcheck="true" />
+          <div class="wamp-o-gram-name-grid">
+            <div>
+              <label class="goal-control-label" for="wamp-o-gram-recipient-name">To</label>
+              <input id="wamp-o-gram-recipient-name" class="goal-input room-title-input" type="text" maxlength="40" spellcheck="false" />
+            </div>
+            <div>
+              <label class="goal-control-label" for="wamp-o-gram-sender-name">From</label>
+              <input id="wamp-o-gram-sender-name" class="goal-input room-title-input" type="text" maxlength="40" spellcheck="false" />
+            </div>
+          </div>
+          <label class="goal-control-label" for="wamp-o-gram-recipient-email">Email</label>
+          <input id="wamp-o-gram-recipient-email" class="goal-input room-title-input" type="email" maxlength="254" spellcheck="false" autocomplete="email" />
+          <label class="goal-control-label" for="wamp-o-gram-occasion">Occasion</label>
+          <input id="wamp-o-gram-occasion" class="goal-input room-title-input" type="text" maxlength="32" spellcheck="true" />
+          <label class="goal-control-label" for="wamp-o-gram-message">Message</label>
+          <textarea id="wamp-o-gram-message" class="goal-input goal-textarea" maxlength="240" rows="4" spellcheck="true"></textarea>
+          <div class="wamp-o-gram-actions">
+            <button id="btn-wamp-o-gram-create" class="bar-btn" type="button">Create Link</button>
+            <button id="btn-wamp-o-gram-download" class="bar-btn bar-btn-small" type="button" disabled>Download Image</button>
+          </div>
+          <label class="goal-control-label" for="wamp-o-gram-share-link">Link</label>
+          <div class="wamp-o-gram-link-row">
+            <input id="wamp-o-gram-share-link" class="goal-input room-title-input" type="text" readonly spellcheck="false" />
+            <button id="btn-wamp-o-gram-copy" class="bar-btn bar-btn-small" type="button" disabled>Copy</button>
+            <button id="btn-wamp-o-gram-open" class="bar-btn bar-btn-small" type="button" disabled>Open</button>
+          </div>
+        </div>
+        <div class="wamp-o-gram-preview-shell">
+          <img id="wamp-o-gram-preview-image" class="wamp-o-gram-preview-image hidden" alt="Wamp-O-Gram preview" />
+          <div id="wamp-o-gram-preview-placeholder" class="wamp-o-gram-preview-placeholder">Preview</div>
+        </div>
+      </div>
     </div>
   </div>
 

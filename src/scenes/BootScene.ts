@@ -35,6 +35,7 @@ import {
   setBootStatus,
   showBootSplash,
 } from '../ui/appFeedback';
+import { loadWampOGramLaunchFromCurrentUrl } from '../wampOGram/launch';
 import {
   PVP_HEART_TEXTURE_KEY,
   PVP_HEART_TEXTURE_PATH,
@@ -312,6 +313,31 @@ export class BootScene extends Phaser.Scene {
     createGoalMarkerFlagAnimations(this);
 
     setBootProgress(1);
+    void this.startInitialScene();
+  }
+
+  private async startInitialScene(): Promise<void> {
+    try {
+      setBootStatus('Loading world...');
+      const wampOGramLaunch = await loadWampOGramLaunchFromCurrentUrl();
+      if (wampOGramLaunch) {
+        setBootStatus('Opening Wamp-O-Gram...');
+        logBootPhase('boot-scene:handoff-wamp-o-gram', {
+          slug: wampOGramLaunch.record.slug,
+          roomId: wampOGramLaunch.record.sourceRoomId,
+        });
+        this.scene.start('OverworldPlayScene', wampOGramLaunch.sceneData);
+        return;
+      }
+    } catch (error) {
+      logBootPhase(
+        'boot-scene:wamp-o-gram-load-failed',
+        { message: error instanceof Error ? error.message : String(error) },
+        { level: 'warn' },
+      );
+      console.warn('Failed to open Wamp-O-Gram link; falling back to world.', error);
+    }
+
     setBootStatus('Loading world...');
     logBootPhase('boot-scene:handoff-overworld');
     this.scene.start('OverworldPlayScene');

@@ -8,6 +8,10 @@ import {
   parsePlaylistSharePath,
 } from '../src/playlists/model.ts';
 import {
+  buildWampOGramSharePath,
+  parseWampOGramSharePath,
+} from '../src/wampOGram/links.ts';
+import {
   BACKGROUND_GROUPS,
   GAME_OBJECTS,
   ROOM_HEIGHT,
@@ -28,6 +32,7 @@ const ROOM_IMAGE_PATH_PATTERN = /^\/r\/(-?\d+)\/(-?\d+)\/image(?:\.png)?\/?$/;
 const DEFAULT_API_BASE_URL = 'https://api.wamp.land';
 const ROOM_META_TIMEOUT_MS = 1200;
 const PROFILE_META_TIMEOUT_MS = 1200;
+const WAMP_O_GRAM_META_TIMEOUT_MS = 1200;
 const ROOM_IMAGE_TIMEOUT_MS = 3500;
 const ROOM_IMAGE_RENDERER_VERSION = 'assets-v5';
 const ROOM_SHARE_IMAGE_WIDTH = 1200;
@@ -100,6 +105,19 @@ export default {
 
       const metadata = await loadPlaylistMetadata(request, env, url, playlistSlug);
       return renderPlaylistAppShell(request, env, metadata);
+    }
+
+    const wampOGramSlug = parseWampOGramSharePath(url.pathname);
+    if (wampOGramSlug) {
+      if (request.method !== 'GET' && request.method !== 'HEAD') {
+        return new Response('Method Not Allowed', {
+          status: 405,
+          headers: { Allow: 'GET, HEAD' },
+        });
+      }
+
+      const metadata = await loadWampOGramMetadata(request, env, url, wampOGramSlug);
+      return renderWampOGramAppShell(request, env, metadata);
     }
 
     const profileUsername = parseProfileSharePath(url.pathname);
@@ -316,6 +334,17 @@ function buildFallbackPlaylistMetadata(slug, publicUrl, origin) {
   };
 }
 
+function buildFallbackWampOGramMetadata(slug, publicUrl, apiBaseUrl) {
+  return {
+    title: 'Wamp-O-Gram',
+    description: 'Open this playable WAMP level postcard.',
+    url: publicUrl,
+    imageUrl: new URL(`/api/wamp-o-grams/${encodeURIComponent(slug)}/preview.png`, apiBaseUrl).toString(),
+    imageWidth: ROOM_SHARE_IMAGE_WIDTH,
+    imageHeight: ROOM_SHARE_IMAGE_HEIGHT,
+  };
+}
+
 function buildPublishedRoomMetadata(snapshot, fallback, coordinates) {
   const roomTitle = cleanText(snapshot?.title);
   const title = roomTitle
@@ -362,6 +391,49 @@ function buildPublishedPlaylistMetadata(playlist, fallback) {
     title: `${title} - WAMP playlist`,
     description: description || `${owner ? `${owner}'s ` : ''}WAMP playlist with ${roomText}.`,
   };
+}
+
+function buildPublishedWampOGramMetadata(record, fallback) {
+  const title = cleanText(record?.title);
+  const recipient = cleanText(record?.recipientName);
+  const sender = cleanText(record?.senderName) || cleanText(record?.creatorDisplayName);
+  const message = cleanText(record?.message);
+
+  return {
+    ...fallback,
+    title: title || (recipient ? `A Wamp-O-Gram for ${recipient}` : 'Wamp-O-Gram'),
+    description: message || (sender
+      ? `${sender} made a playable WAMP level postcard.`
+      : fallback.description),
+  };
+}
+
+async function loadWampOGramMetadata(request, env, url, slug) {
+  const apiBaseUrl = resolveApiBaseUrl(env, url);
+  const publicUrl = `${url.origin}${buildWampOGramSharePath(slug)}`;
+  const fallback = buildFallbackWampOGramMetadata(slug, publicUrl, apiBaseUrl);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), WAMP_O_GRAM_META_TIMEOUT_MS);
+
+  try {
+    const gramUrl = new URL(`/api/wamp-o-grams/${encodeURIComponent(slug)}`, apiBaseUrl);
+    const response = await fetch(gramUrl.toString(), {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': request.headers.get('User-Agent') || 'WAMP Wamp-O-Gram share renderer',
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      return fallback;
+    }
+
+    return buildPublishedWampOGramMetadata(await response.json(), fallback);
+  } catch {
+    return fallback;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function withRoomVersionQuery(imageUrl, version) {
@@ -517,6 +589,31 @@ async function renderPlaylistAppShell(request, env, metadata) {
   });
 }
 
+async function renderWampOGramAppShell(request, env, metadata) {
+  const indexResponse = await fetchAppShellAsset(request, env);
+  if (!indexResponse.ok) {
+    return fallbackWampOGramHtmlResponse(request, metadata);
+  }
+
+  const headers = new Headers(indexResponse.headers);
+  headers.set('Content-Type', 'text/html; charset=utf-8');
+  headers.set('Cache-Control', 'public, max-age=60, s-maxage=300');
+  headers.delete('Content-Length');
+
+  if (request.method === 'HEAD') {
+    return new Response(null, {
+      status: 200,
+      headers,
+    });
+  }
+
+  const html = await indexResponse.text();
+  return new Response(injectWampOGramMetadata(html, metadata), {
+    status: 200,
+    headers,
+  });
+}
+
 async function fetchAppShellAsset(request, env) {
   const url = new URL(request.url);
   for (const pathname of ['/index.html', '/']) {
@@ -602,6 +699,30 @@ function fallbackPlaylistHtmlResponse(request, metadata) {
   });
 }
 
+function fallbackWampOGramHtmlResponse(request, metadata) {
+  const body = [
+    '<!doctype html>',
+    '<html lang="en">',
+    '<head>',
+    '  <meta charset="utf-8">',
+    '  <meta name="viewport" content="width=device-width, initial-scale=1">',
+    buildRoomMetaTags(metadata),
+    '</head>',
+    '<body>',
+    `  <p><a href="${escapeHtml(metadata.url)}">Open this Wamp-O-Gram</a></p>`,
+    '</body>',
+    '</html>',
+  ].join('\n');
+
+  return new Response(request.method === 'HEAD' ? null : body, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'public, max-age=60, s-maxage=300',
+    },
+  });
+}
+
 function injectRoomMetadata(html, metadata) {
   let nextHtml = html;
   if (!/<base\s/i.test(nextHtml)) {
@@ -639,6 +760,19 @@ function injectPlaylistMetadata(html, metadata) {
   }
 
   return nextHtml.replace(/<\/head>/i, `${buildPlaylistMetaTags(metadata)}\n  </head>`);
+}
+
+function injectWampOGramMetadata(html, metadata) {
+  let nextHtml = html;
+  if (!/<base\s/i.test(nextHtml)) {
+    nextHtml = nextHtml.replace(/<head([^>]*)>/i, '<head$1>\n    <base href="/">');
+  }
+
+  if (/<title>[\s\S]*?<\/title>/i.test(nextHtml)) {
+    nextHtml = nextHtml.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(metadata.title)}</title>`);
+  }
+
+  return nextHtml.replace(/<\/head>/i, `${buildRoomMetaTags(metadata)}\n  </head>`);
 }
 
 function buildRoomMetaTags(metadata) {

@@ -8,6 +8,7 @@ body[data-app-mode='editor'] {
   --editor-retro-green: #277b30;
   --editor-retro-yellow: #fcea7c;
   --editor-retro-red: #ed5f4b;
+  --editor-retro-pink: #ee8bc4;
   --editor-retro-shadow: #18161c;
   --editor-retro-ink: #18161c;
   --editor-ui-font: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
@@ -804,6 +805,13 @@ body[data-app-mode='editor'] #sidebar #btn-mint-room {
   background-color: var(--editor-retro-red) !important;
   box-shadow: inset 0 0 0 999px var(--editor-retro-red), 2px 2px 0 var(--editor-retro-shadow) !important;
   color: var(--editor-retro-cream) !important;
+}
+
+body[data-app-mode='editor'] #sidebar #btn-wamp-o-gram {
+  background: var(--editor-retro-pink) !important;
+  background-color: var(--editor-retro-pink) !important;
+  box-shadow: inset 0 0 0 999px var(--editor-retro-pink), 2px 2px 0 var(--editor-retro-shadow) !important;
+  color: var(--editor-retro-ink) !important;
 }
 
 body[data-app-mode='editor'] #sidebar #btn-editor-publish-nudge {

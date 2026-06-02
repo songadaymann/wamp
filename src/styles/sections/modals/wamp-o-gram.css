@@ -1,0 +1,229 @@
+#wamp-o-gram-modal {
+  background: rgba(24, 22, 28, 0.8);
+  backdrop-filter: none;
+}
+
+#wamp-o-gram-modal .wamp-o-gram-modal-panel {
+  width: min(1120px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  gap: 16px;
+  padding: 20px 18px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #fff3db;
+  border: 3px solid #ee8bc4;
+  border-radius: 0;
+  box-shadow: 6px 6px 0 #18161c;
+  color: #18161c;
+}
+
+#wamp-o-gram-modal .history-modal-kicker {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+#wamp-o-gram-modal .history-modal-title {
+  margin-top: 6px;
+  color: #18161c;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 19px;
+  line-height: 1.25;
+}
+
+#wamp-o-gram-modal .history-modal-header > .bar-btn,
+#wamp-o-gram-modal .wamp-o-gram-actions .bar-btn,
+#wamp-o-gram-modal .wamp-o-gram-link-row .bar-btn {
+  min-height: 34px;
+  padding: 8px 12px 7px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #79ccde;
+  color: #000;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#wamp-o-gram-modal .history-modal-header > .bar-btn:hover,
+#wamp-o-gram-modal .wamp-o-gram-actions .bar-btn:hover,
+#wamp-o-gram-modal .wamp-o-gram-link-row .bar-btn:hover {
+  filter: brightness(1.06);
+}
+
+#wamp-o-gram-modal .history-modal-header > .bar-btn:disabled,
+#wamp-o-gram-modal .wamp-o-gram-actions .bar-btn:disabled,
+#wamp-o-gram-modal .wamp-o-gram-link-row .bar-btn:disabled {
+  background: #c2bbb6;
+  color: #6d6768;
+  box-shadow: none;
+}
+
+#wamp-o-gram-modal #btn-wamp-o-gram-create {
+  background: #277b30;
+  color: #fff3db;
+}
+
+#wamp-o-gram-modal #btn-wamp-o-gram-download {
+  background: #fcea7c;
+  color: #000;
+}
+
+#wamp-o-gram-modal .wamp-o-gram-body {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+#wamp-o-gram-modal .wamp-o-gram-form {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px;
+  border: 2px solid #79ccde;
+  border-radius: 0;
+  background: #fffaf0;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#wamp-o-gram-modal .goal-control-label {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+#wamp-o-gram-modal .goal-input {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 8px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #f9f5ea;
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+#wamp-o-gram-modal .goal-input:focus {
+  border-color: #277b30;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(39, 123, 48, 0.24);
+}
+
+#wamp-o-gram-modal .goal-textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+#wamp-o-gram-modal .wamp-o-gram-name-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+#wamp-o-gram-modal .wamp-o-gram-actions,
+#wamp-o-gram-modal .wamp-o-gram-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+#wamp-o-gram-modal .wamp-o-gram-actions {
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-top: 4px;
+}
+
+#wamp-o-gram-modal .wamp-o-gram-link-row .goal-input {
+  min-width: 0;
+}
+
+#wamp-o-gram-modal .wamp-o-gram-preview-shell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1200 / 630;
+  min-height: 260px;
+  border: 3px solid #2c5071;
+  border-radius: 0;
+  overflow: hidden;
+  background: #18161c;
+  box-shadow: 5px 5px 0 #18161c;
+}
+
+#wamp-o-gram-modal .wamp-o-gram-preview-image,
+#wamp-o-gram-modal .wamp-o-gram-preview-placeholder {
+  width: 100%;
+  height: 100%;
+}
+
+#wamp-o-gram-modal .wamp-o-gram-preview-image {
+  display: block;
+  object-fit: contain;
+  image-rendering: pixelated;
+  background: #18161c;
+}
+
+#wamp-o-gram-modal .wamp-o-gram-preview-placeholder {
+  display: grid;
+  place-items: center;
+  background: #fffaf0;
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+#wamp-o-gram-modal .history-modal-error {
+  padding: 12px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #ed5f4b;
+  color: #fff3db;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
+#wamp-o-gram-modal #wamp-o-gram-status[data-wamp-o-gram-tone='default'] {
+  border-color: #79ccde;
+  background: #fffaf0;
+  color: #2c5071;
+}
+
+@media (max-width: 840px) {
+  #wamp-o-gram-modal .wamp-o-gram-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #wamp-o-gram-modal .wamp-o-gram-preview-shell {
+    order: -1;
+    min-height: 180px;
+  }
+}
+
+@media (max-width: 560px) {
+  #wamp-o-gram-modal .wamp-o-gram-modal-panel {
+    width: min(420px, calc(100vw - 24px));
+    padding: 14px;
+  }
+
+  #wamp-o-gram-modal .wamp-o-gram-name-grid,
+  #wamp-o-gram-modal .wamp-o-gram-actions,
+  #wamp-o-gram-modal .wamp-o-gram-link-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

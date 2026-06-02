@@ -31,6 +31,7 @@ import { SettingsModalController } from './settingsModal';
 import { SignTextModalController } from './signTextModal';
 import { setupCollapsibleSidebarSections, setupEditorSidebarShell } from './sidebarSections';
 import { setupSceneCommands } from './sceneCommands';
+import { WampOGramModalController } from './wampOGramModal';
 import { XpReceiptController } from './xpReceipts';
 import { WelcomeModalController } from './welcomeModal';
 import { configureEditorUiBridgeRuntime } from '../../scenes/editor/uiBridge';
@@ -62,6 +63,7 @@ interface UiControllers {
   roomRushResultModal: RoomRushResultModalController;
   runRatingModal: RunRatingModalController;
   signTextModal: SignTextModalController;
+  wampOGramModal: WampOGramModalController;
   welcomeModal: WelcomeModalController;
   chatPanel: ChatPanelController;
   mobileUi: MobileUiController;
@@ -115,6 +117,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     roomRushResultModal: new RoomRushResultModalController(game),
     runRatingModal: new RunRatingModalController(game),
     signTextModal: new SignTextModalController(game),
+    wampOGramModal: new WampOGramModalController(game),
     welcomeModal,
     chatPanel: new ChatPanelController(),
     mobileUi: new MobileUiController(game),
@@ -146,6 +149,7 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.roomRushResultModal.init();
   controllers.runRatingModal.init();
   controllers.signTextModal.init();
+  controllers.wampOGramModal.init();
   controllers.welcomeModal.init();
   controllers.chatPanel.init();
   controllers.mobileUi.init();
@@ -169,6 +173,7 @@ function configureEditorBridge(controllers: UiControllers): void {
       controllers.playlistModal.close();
       controllers.playlistIntroModal.close();
       controllers.roomSequence.stop({ returnToWorld: false });
+      controllers.wampOGramModal.close();
     },
     openHistory: () => controllers.historyModal.open(),
   });

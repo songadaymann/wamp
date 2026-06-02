@@ -1478,6 +1478,10 @@ export class EditorScene extends Phaser.Scene {
     return record;
   }
 
+  exportWampOGramRoomSnapshot(): RoomSnapshot {
+    return cloneRoomSnapshot(this.exportRoomSnapshot());
+  }
+
   async revertToVersion(targetVersion: number): Promise<RoomRecord | null> {
     return this.persistenceController.revertToVersion(targetVersion);
   }

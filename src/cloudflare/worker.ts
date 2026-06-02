@@ -96,6 +96,7 @@ import {
 } from './worker/world/routes';
 import { handleRoomShareRequest } from './worker/share/routes';
 import { handleSchoolRequest } from './worker/school/routes';
+import { handleWampOGramRequest } from './worker/wampOGram/routes';
 
 type WorkerExecutionContext = {
   waitUntil(promise: Promise<unknown>): void;
@@ -610,6 +611,10 @@ export default {
 
       if (url.pathname.startsWith('/api/share/rooms/')) {
         return await handleRoomShareRequest(request, url, env);
+      }
+
+      if (url.pathname.startsWith('/api/wamp-o-grams')) {
+        return await handleWampOGramRequest(request, url, env);
       }
 
       if (!url.pathname.startsWith('/api/rooms/')) {
