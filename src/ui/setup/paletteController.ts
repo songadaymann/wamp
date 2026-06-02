@@ -42,6 +42,7 @@ export class PaletteController {
   private readonly paletteContainer: HTMLElement | null;
   private readonly selectionInfo: HTMLElement | null;
   private readonly tilePreviewCanvas: HTMLCanvasElement | null;
+  private readonly objectPaletteSection: HTMLElement | null;
   private readonly objectGrid: HTMLElement | null;
   private readonly objectSearchInput: HTMLInputElement | null;
   private readonly customObjectSubcategoryTabs: HTMLButtonElement[];
@@ -68,6 +69,7 @@ export class PaletteController {
     this.paletteContainer = this.doc.getElementById('palette-container');
     this.selectionInfo = this.doc.getElementById('selection-info');
     this.tilePreviewCanvas = this.doc.getElementById('tile-preview') as HTMLCanvasElement | null;
+    this.objectPaletteSection = this.doc.getElementById('object-palette-section');
     this.objectGrid = this.doc.getElementById('object-grid');
     this.objectSearchInput = this.doc.getElementById('object-search-input') as HTMLInputElement | null;
     this.customObjectSubcategoryControls = this.doc.getElementById('custom-object-subcategory-tabs');
@@ -549,6 +551,8 @@ export class PaletteController {
 
   private renderCustomObjectSubcategoryTabs(): void {
     const visible = this.isCustomObjectCategoryFilter(this.currentObjectCategory);
+    this.objectPaletteSection?.classList.toggle('has-custom-subcategories', visible);
+    this.objectPaletteSection?.setAttribute('data-object-category', this.currentObjectCategory);
     this.customObjectSubcategoryControls?.classList.toggle('hidden', !visible);
 
     for (const tab of this.customObjectSubcategoryTabs) {
