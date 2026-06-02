@@ -25,6 +25,7 @@ import {
   canPlacedObjectUseObjectLink,
   getObjectById,
   getObjectDisplayOffset,
+  isMovingPlatformObjectId,
   placedObjectContributesToCategory,
   type GameObjectConfig,
   ROOM_HEIGHT,
@@ -42,6 +43,7 @@ import {
   cloneRoomSnapshot,
   DEFAULT_ROOM_COORDINATES,
   isRoomMinted,
+  parseRoomId,
   roomIdFromCoordinates,
   type RoomCoordinates,
   type RoomSnapshot,
@@ -734,6 +736,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       destroyEdgeWalls: (loadedRoom) => this.destroyEdgeWalls(loadedRoom),
       syncLiveObjectWorldColliders: (loadedRooms) =>
         this.liveObjectController.syncLoadedWorldColliders(loadedRooms),
+      getProtectedFullRoomIds: (targetFullRoomIds) =>
+        this.getProtectedMovingPlatformSourceRoomIds(targetFullRoomIds),
       onBackdropObjectsChanged: () => this.syncBackdropCameraIgnores(),
       onFullRoomVisibilityChanged: () => this.syncGhostVisibility(),
       onFullRoomDestroyed: (loadedRoom) => {
@@ -2955,6 +2959,104 @@ export class OverworldPlayScene extends Phaser.Scene {
         liveObject.linkedTargetWorldY = targetPoint?.y ?? null;
       }
     }
+  }
+
+  private getProtectedMovingPlatformSourceRoomIds(
+    targetFullRoomIds: ReadonlySet<string>,
+  ): string[] {
+    if (this.mode !== 'play') {
+      return [];
+    }
+
+    const protectedRoomIds = new Set<string>();
+    for (const loadedRoom of this.loadedFullRoomsById.values()) {
+      if (targetFullRoomIds.has(loadedRoom.room.id)) {
+        continue;
+      }
+
+      const roomOrigin = this.getRoomOrigin(loadedRoom.room.coordinates);
+      for (const liveObject of loadedRoom.liveObjects) {
+        if (
+          !liveObject.sprite.active ||
+          !isMovingPlatformObjectId(liveObject.config.id) ||
+          liveObject.linkedTargetWorldX === null ||
+          liveObject.linkedTargetWorldY === null
+        ) {
+          continue;
+        }
+
+        if (
+          this.isWorldPointInsideRoomBounds(
+            liveObject.linkedTargetWorldX,
+            liveObject.linkedTargetWorldY,
+            roomOrigin
+          )
+        ) {
+          continue;
+        }
+
+        if (
+          this.movingPlatformRouteIntersectsFullRooms(
+            liveObject.runtime.baseX,
+            liveObject.runtime.baseY,
+            liveObject.linkedTargetWorldX,
+            liveObject.linkedTargetWorldY,
+            targetFullRoomIds
+          )
+        ) {
+          protectedRoomIds.add(loadedRoom.room.id);
+          break;
+        }
+      }
+    }
+
+    return Array.from(protectedRoomIds);
+  }
+
+  private isWorldPointInsideRoomBounds(
+    worldX: number,
+    worldY: number,
+    roomOrigin: { x: number; y: number },
+  ): boolean {
+    return (
+      worldX >= roomOrigin.x &&
+      worldX < roomOrigin.x + ROOM_PX_WIDTH &&
+      worldY >= roomOrigin.y &&
+      worldY < roomOrigin.y + ROOM_PX_HEIGHT
+    );
+  }
+
+  private movingPlatformRouteIntersectsFullRooms(
+    startX: number,
+    startY: number,
+    targetX: number,
+    targetY: number,
+    targetFullRoomIds: ReadonlySet<string>,
+  ): boolean {
+    const padding = TILE_SIZE;
+    const routeLeft = Math.min(startX, targetX) - padding;
+    const routeRight = Math.max(startX, targetX) + padding;
+    const routeTop = Math.min(startY, targetY) - padding;
+    const routeBottom = Math.max(startY, targetY) + padding;
+
+    for (const roomId of targetFullRoomIds) {
+      const coordinates = parseRoomId(roomId);
+      if (!coordinates) {
+        continue;
+      }
+
+      const roomOrigin = this.getRoomOrigin(coordinates);
+      if (
+        routeRight >= roomOrigin.x &&
+        routeLeft < roomOrigin.x + ROOM_PX_WIDTH &&
+        routeBottom >= roomOrigin.y &&
+        routeTop < roomOrigin.y + ROOM_PX_HEIGHT
+      ) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private resolveObjectLinkTargetWorldPoint(
