@@ -2,6 +2,14 @@ body[data-device-class='phone'][data-app-mode='editor'] {
   --phone-editor-sheet-height: min(46vh, 344px);
 }
 
+body[data-device-class='phone'][data-app-mode='editor'][data-editor-palette-mode='objects'] {
+  --phone-editor-sheet-height: min(58vh, 464px);
+}
+
+body[data-device-class='phone'][data-app-mode='editor'][data-editor-palette-mode='objects'][data-editor-custom-object-filter='true'] {
+  --phone-editor-sheet-height: min(66vh, 540px);
+}
+
 body[data-device-class='phone'][data-app-mode='editor'] #sidebar {
   position: fixed;
   left: 0;
@@ -112,12 +120,16 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #tile-palette-sect
 }
 
 body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section {
-  min-height: 340px;
-  max-height: 420px;
+  min-height: clamp(420px, 58vh, 520px);
+  max-height: min(620px, calc(100dvh - 120px));
+}
+
+body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section.has-custom-subcategories {
+  min-height: clamp(500px, 68vh, 600px);
+  max-height: min(720px, calc(100dvh - 72px));
 }
 
 body[data-app-mode='editor']:not([data-device-class='phone']) #tile-palette-section .sidebar-section-body,
 body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section .sidebar-section-body {
   overflow: hidden;
 }
-

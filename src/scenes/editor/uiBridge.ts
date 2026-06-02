@@ -1305,8 +1305,14 @@ export class EditorUiBridge {
     this.elements.tilePaletteSection?.classList.toggle('hidden', !paletteModeIsTiles);
     this.elements.objectPaletteSection?.classList.toggle('hidden', paletteModeIsTiles);
 
+    const objectCategory = this.currentObjectCategory || 'all';
+    const customObjectFilterActive = objectCategory === 'custom' || objectCategory === 'mine';
+    this.doc.body.dataset.editorPaletteMode = editorState.paletteMode;
+    this.doc.body.dataset.editorObjectCategory = objectCategory;
+    this.doc.body.dataset.editorCustomObjectFilter = customObjectFilterActive ? 'true' : 'false';
+
     for (const tab of this.elements.objectCategoryTabs) {
-      tab.classList.toggle('active', (tab.dataset.category || 'all') === this.currentObjectCategory);
+      tab.classList.toggle('active', (tab.dataset.category || 'all') === objectCategory);
     }
 
     const activeBackgroundId = getBackgroundSelectionValue(editorState.selectedBackground);
