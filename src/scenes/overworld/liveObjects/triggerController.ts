@@ -31,6 +31,11 @@ import {
 
 const BLOCK_SWITCH_COOLDOWN_MS = 320;
 
+interface PressureTargetState {
+  active: boolean;
+  latched: boolean;
+}
+
 interface LiveObjectTriggerControllerOptions<TEdgeWall> {
   getLoadedFullRooms: () => Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>;
   getPlayerBody: () => Phaser.Physics.Arcade.Body | null;
@@ -70,12 +75,16 @@ interface LiveObjectTriggerControllerOptions<TEdgeWall> {
 export class LiveObjectTriggerController<TEdgeWall = unknown> {
   private readonly switchStateByRoomId = new Map<string, boolean>();
   private readonly blockSwitchActorLatchesBySwitchKey = new Map<string, Set<string>>();
+  private readonly pressureTargetStateByKey = new Map<string, PressureTargetState>();
+  private readonly pressureTargetKeyBySourceKey = new Map<string, string>();
 
   constructor(private readonly options: LiveObjectTriggerControllerOptions<TEdgeWall>) {}
 
   resetSwitchStates(): void {
     this.switchStateByRoomId.clear();
     this.blockSwitchActorLatchesBySwitchKey.clear();
+    this.pressureTargetStateByKey.clear();
+    this.pressureTargetKeyBySourceKey.clear();
     for (const loadedRoom of this.options.getLoadedFullRooms()) {
       this.applySwitchBlockStates(loadedRoom);
     }
@@ -83,6 +92,16 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
 
   resetSwitchStateForRoom(roomId: string): void {
     this.switchStateByRoomId.delete(roomId);
+    for (const targetKey of [...this.pressureTargetStateByKey.keys()]) {
+      if (targetKey.startsWith(`${roomId}:`)) {
+        this.pressureTargetStateByKey.delete(targetKey);
+      }
+    }
+    for (const sourceKey of [...this.pressureTargetKeyBySourceKey.keys()]) {
+      if (sourceKey.startsWith(`${roomId}:`)) {
+        this.pressureTargetKeyBySourceKey.delete(sourceKey);
+      }
+    }
     for (const loadedRoom of this.options.getLoadedFullRooms()) {
       if (loadedRoom.room.id === roomId) {
         this.clearBlockSwitchActorLatchesForRoom(loadedRoom);
@@ -108,6 +127,32 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
     }
   }
 
+  clearPressureTriggerStatesForRoom(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>
+  ): void {
+    for (const liveObject of loadedRoom.liveObjects) {
+      if (liveObject.config.id !== 'floor_trigger') {
+        continue;
+      }
+
+      const sourceKey = this.getPressureSourceKey(loadedRoom, liveObject);
+      const targetKey =
+        this.pressureTargetKeyBySourceKey.get(sourceKey) ??
+        (liveObject.linkedTargetInstanceId
+          ? getLinkedTargetKey(
+              liveObject.linkedTargetRoomId ?? loadedRoom.room.id,
+              liveObject.linkedTargetInstanceId
+            )
+          : null);
+      if (!targetKey) {
+        continue;
+      }
+
+      this.releasePressureTargetState(targetKey, !targetKey.startsWith(`${loadedRoom.room.id}:`));
+      this.pressureTargetKeyBySourceKey.delete(sourceKey);
+    }
+  }
+
   initializePressureControlledObjectState(liveObject: LoadedRoomObject): void {
     switch (liveObject.config.id) {
       case 'blast_door':
@@ -128,15 +173,42 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
     loadedRooms: LoadedFullRoom<LoadedRoomObject, TEdgeWall>[]
   ): void {
     const pressureIndex = buildPressurePlateScanIndex(loadedRooms);
-    if (pressureIndex.triggers.length === 0 || pressureIndex.controlledObjects.length === 0) {
+    if (pressureIndex.triggers.length === 0 && pressureIndex.controlledObjects.length === 0) {
       return;
     }
 
+    const loadedControlledTargetKeys = new Set<string>();
+    for (const { loadedRoom, liveObject } of pressureIndex.controlledObjects) {
+      if (liveObject.placedInstanceId) {
+        loadedControlledTargetKeys.add(
+          getLinkedTargetKey(loadedRoom.room.id, liveObject.placedInstanceId)
+        );
+      }
+    }
+
+    const linkedTargetKeys = new Set<string>();
     const activeTargetKeys = new Set<string>();
 
     for (const { loadedRoom, liveObject } of pressureIndex.triggers) {
       if (liveObject.config.id !== 'floor_trigger' || !liveObject.sprite.active) {
         continue;
+      }
+
+      const sourceKey = this.getPressureSourceKey(loadedRoom, liveObject);
+      const targetKey = liveObject.linkedTargetInstanceId
+        ? getLinkedTargetKey(
+            liveObject.linkedTargetRoomId ?? loadedRoom.room.id,
+            liveObject.linkedTargetInstanceId
+          )
+        : null;
+      const previousTargetKey = this.pressureTargetKeyBySourceKey.get(sourceKey) ?? null;
+      if (previousTargetKey && previousTargetKey !== targetKey) {
+        this.releasePressureTargetState(previousTargetKey, true);
+      }
+      if (targetKey) {
+        this.pressureTargetKeyBySourceKey.set(sourceKey, targetKey);
+      } else {
+        this.pressureTargetKeyBySourceKey.delete(sourceKey);
       }
 
       const wasPressed = liveObject.runtime.pressureActive;
@@ -148,9 +220,27 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
       if (pressed && !wasPressed) {
         this.options.playRoomSfx('pressure-plate-down', loadedRoom.room.coordinates);
       }
-      if (pressed && liveObject.linkedTargetInstanceId) {
-        const targetRoomId = liveObject.linkedTargetRoomId ?? loadedRoom.room.id;
-        activeTargetKeys.add(getLinkedTargetKey(targetRoomId, liveObject.linkedTargetInstanceId));
+      if (pressed && targetKey) {
+        linkedTargetKeys.add(targetKey);
+        activeTargetKeys.add(targetKey);
+      } else if (targetKey) {
+        linkedTargetKeys.add(targetKey);
+      }
+    }
+
+    for (const targetKey of linkedTargetKeys) {
+      const previous = this.pressureTargetStateByKey.get(targetKey) ?? {
+        active: false,
+        latched: false,
+      };
+      const active = activeTargetKeys.has(targetKey);
+      const latched =
+        previous.latched || (active && !loadedControlledTargetKeys.has(targetKey));
+
+      if (active || latched) {
+        this.pressureTargetStateByKey.set(targetKey, { active, latched });
+      } else {
+        this.pressureTargetStateByKey.delete(targetKey);
       }
     }
 
@@ -160,67 +250,102 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
       }
 
       const placedInstanceId = liveObject.placedInstanceId;
-      const active = placedInstanceId
-        ? activeTargetKeys.has(getLinkedTargetKey(loadedRoom.room.id, placedInstanceId))
-        : false;
+      const targetKey = placedInstanceId
+        ? getLinkedTargetKey(loadedRoom.room.id, placedInstanceId)
+        : null;
+      const targetState = targetKey ? this.pressureTargetStateByKey.get(targetKey) : null;
+      const active = targetState?.active ?? false;
+      const latched = targetState?.latched ?? false;
 
-      switch (liveObject.config.id) {
-        case 'door_metal':
-        case 'trapdoor_metal':
-          // Opens while plate is pressed
-          if (liveObject.runtime.pressureActive !== active) {
-            liveObject.runtime.pressureActive = active;
-            this.applyPressureDoorState(liveObject, active);
-            if (active) {
-              this.options.playRoomSfx('door-open', loadedRoom.room.coordinates);
-            }
-          }
-          break;
+      this.applyPressureControlledObjectState(loadedRoom, liveObject, active, latched);
+    }
+  }
 
-        case 'blast_door':
-          // Closes while plate is pressed (opposite of metal door)
-          const shouldBeClosed = active;
-          if (liveObject.runtime.pressureActive !== shouldBeClosed) {
-            liveObject.runtime.pressureActive = shouldBeClosed;
-            this.applyPressureDoorState(liveObject, !shouldBeClosed); // true = open
-            if (shouldBeClosed) {
-              this.options.playRoomSfx('door-open', loadedRoom.room.coordinates);
-            }
-          }
-          break;
-
-        case 'barricade':
-          // Builds permanently the first time plate is pressed
-          if (active && !liveObject.runtime.triggerLatched) {
-            liveObject.runtime.triggerLatched = true;
-            this.applyBarricadeBuiltState(liveObject);
+  private applyPressureControlledObjectState(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+    active: boolean,
+    latched: boolean,
+  ): void {
+    switch (liveObject.config.id) {
+      case 'door_metal':
+      case 'trapdoor_metal':
+        // Opens while plate is pressed
+        if (liveObject.runtime.pressureActive !== active) {
+          liveObject.runtime.pressureActive = active;
+          this.applyPressureDoorState(liveObject, active);
+          if (active) {
             this.options.playRoomSfx('door-open', loadedRoom.room.coordinates);
           }
-          break;
+        }
+        break;
 
-        case 'door_locked':
-        case 'trapdoor_locked':
+      case 'blast_door':
+        // Closes while plate is pressed (opposite of metal door)
+        if (liveObject.runtime.pressureActive !== active) {
+          liveObject.runtime.pressureActive = active;
+          this.applyPressureDoorState(liveObject, !active); // true = open
           if (active) {
-            this.triggerLinkedLockedDoor(loadedRoom, liveObject);
+            this.options.playRoomSfx('door-open', loadedRoom.room.coordinates);
           }
-          break;
+        }
+        break;
 
-        case 'cage':
-          if (active) {
-            this.openTriggeredCage(loadedRoom, liveObject);
-          }
-          break;
+      case 'barricade':
+        // Builds permanently the first time plate is pressed
+        if ((active || latched) && !liveObject.runtime.triggerLatched) {
+          liveObject.runtime.triggerLatched = true;
+          this.applyBarricadeBuiltState(liveObject);
+          this.options.playRoomSfx('door-open', loadedRoom.room.coordinates);
+        }
+        break;
 
-        case 'treasure_chest':
-          if (active) {
-            this.openTriggeredChest(loadedRoom, liveObject);
-          }
-          break;
+      case 'door_locked':
+      case 'trapdoor_locked':
+        if (active || latched) {
+          this.triggerLinkedLockedDoor(loadedRoom, liveObject);
+        }
+        break;
 
-        default:
-          break;
-      }
+      case 'cage':
+        if (active || latched) {
+          this.openTriggeredCage(loadedRoom, liveObject);
+        }
+        break;
+
+      case 'treasure_chest':
+        if (active || latched) {
+          this.openTriggeredChest(loadedRoom, liveObject);
+        }
+        break;
+
+      default:
+        break;
     }
+  }
+
+  private getPressureSourceKey(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+  ): string {
+    return getLinkedTargetKey(loadedRoom.room.id, liveObject.placedInstanceId ?? liveObject.key);
+  }
+
+  private releasePressureTargetState(targetKey: string, preserveLatched: boolean): void {
+    const previous = this.pressureTargetStateByKey.get(targetKey);
+    if (!previous) {
+      return;
+    }
+
+    if (preserveLatched && previous.latched) {
+      this.pressureTargetStateByKey.set(targetKey, {
+        active: false,
+        latched: true,
+      });
+      return;
+    }
+
+    this.pressureTargetStateByKey.delete(targetKey);
   }
 
   updateBlockSwitchObject(

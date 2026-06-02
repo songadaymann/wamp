@@ -148,6 +148,8 @@ export interface LoadedRoomObject {
   placedInstanceId: string | null;
   linkedTargetRoomId: string | null;
   linkedTargetInstanceId: string | null;
+  linkedTargetWorldX: number | null;
+  linkedTargetWorldY: number | null;
   containedObjectId: string | null;
   signText: string | null;
   layer: LayerName;
@@ -301,6 +303,8 @@ export interface CreateLiveObjectEntryOptions {
   placedInstanceId: string | null;
   linkedTargetRoomId: string | null;
   linkedTargetInstanceId: string | null;
+  linkedTargetWorldX?: number | null;
+  linkedTargetWorldY?: number | null;
   containedObjectId: string | null;
   signText: string | null;
   objectiveMode?: SwordsmanObjectiveMode | null;
@@ -497,6 +501,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         placedInstanceId: placedObject.instanceId,
         linkedTargetRoomId: placedObject.triggerTargetInstanceId ? loadedRoom.room.id : null,
         linkedTargetInstanceId: placedObject.triggerTargetInstanceId ?? null,
+        linkedTargetWorldX: null,
+        linkedTargetWorldY: null,
         containedObjectId: placedObject.containedObjectId ?? null,
         signText: placedObject.signText ?? null,
         objectiveMode: placedObject.swordsmanObjectiveMode ?? null,
@@ -514,6 +520,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
   destroyLiveObjects(loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>): void {
     this.triggerController.clearBlockSwitchActorLatchesForRoom(loadedRoom);
+    this.triggerController.clearPressureTriggerStatesForRoom(loadedRoom);
     for (const liveObject of loadedRoom.liveObjects) {
       this.destroyLiveObjectInteractions(liveObject);
       this.destroyLiveObjectWorldColliders(liveObject);
@@ -552,6 +559,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       placedInstanceId,
       linkedTargetRoomId,
       linkedTargetInstanceId,
+      linkedTargetWorldX = null,
+      linkedTargetWorldY = null,
       containedObjectId,
       signText,
       objectiveMode = null,
@@ -640,6 +649,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       placedInstanceId,
       linkedTargetRoomId,
       linkedTargetInstanceId,
+      linkedTargetWorldX,
+      linkedTargetWorldY,
       containedObjectId,
       signText,
       layer: normalizedLayer,
@@ -1059,7 +1070,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
 
     const start = new Phaser.Math.Vector2(liveObject.runtime.baseX, liveObject.runtime.baseY);
-    const end = new Phaser.Math.Vector2(target.sprite.x, target.sprite.y);
+    const end = new Phaser.Math.Vector2(target.x, target.y);
     const distance = Phaser.Math.Distance.Between(start.x, start.y, end.x, end.y);
     if (distance < 2) {
       liveObject.runtime.previousX = liveObject.sprite.x;
@@ -1120,7 +1131,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private findLinkedMovingPlatformEndpoint(
     rooms: Array<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
     liveObject: LoadedRoomObject,
-  ): LoadedRoomObject | null {
+  ): { x: number; y: number } | null {
     if (!liveObject.linkedTargetInstanceId) {
       return null;
     }
@@ -1135,9 +1146,19 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           candidate.sprite.active &&
           isMovingPlatformEndpointObjectId(candidate.config.id)
         ) {
-          return candidate;
+          return { x: candidate.sprite.x, y: candidate.sprite.y };
         }
       }
+    }
+
+    if (
+      liveObject.linkedTargetWorldX !== null &&
+      liveObject.linkedTargetWorldY !== null
+    ) {
+      return {
+        x: liveObject.linkedTargetWorldX,
+        y: liveObject.linkedTargetWorldY,
+      };
     }
 
     return null;

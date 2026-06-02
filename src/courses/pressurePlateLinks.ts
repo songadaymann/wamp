@@ -1,25 +1,16 @@
+import {
+  clearCourseObjectLinksForInstance,
+  getCourseObjectLink,
+  setCourseObjectLink,
+} from './objectLinks';
 import type { CoursePressurePlateLink, CourseSnapshot } from './model';
-
-function getTriggerKey(triggerRoomId: string, triggerInstanceId: string): string {
-  return `${triggerRoomId}:${triggerInstanceId}`;
-}
 
 export function getCoursePressurePlateLink(
   snapshot: CourseSnapshot | null,
   triggerRoomId: string,
   triggerInstanceId: string
 ): CoursePressurePlateLink | null {
-  if (!snapshot) {
-    return null;
-  }
-
-  return (
-    snapshot.pressurePlateLinks.find(
-      (link) =>
-        link.triggerRoomId === triggerRoomId &&
-        link.triggerInstanceId === triggerInstanceId
-    ) ?? null
-  );
+  return getCourseObjectLink(snapshot, triggerRoomId, triggerInstanceId);
 }
 
 export function setCoursePressurePlateLink(
@@ -27,14 +18,7 @@ export function setCoursePressurePlateLink(
   link: CoursePressurePlateLink | null,
   source: { triggerRoomId: string; triggerInstanceId: string }
 ): void {
-  const sourceKey = getTriggerKey(source.triggerRoomId, source.triggerInstanceId);
-  const nextLinks = snapshot.pressurePlateLinks.filter(
-    (entry) => getTriggerKey(entry.triggerRoomId, entry.triggerInstanceId) !== sourceKey
-  );
-  if (link) {
-    nextLinks.push(link);
-  }
-  snapshot.pressurePlateLinks = nextLinks;
+  setCourseObjectLink(snapshot, link, source);
 }
 
 export function clearCoursePressurePlateLinksForInstance(
@@ -42,11 +26,5 @@ export function clearCoursePressurePlateLinksForInstance(
   roomId: string,
   instanceId: string
 ): void {
-  snapshot.pressurePlateLinks = snapshot.pressurePlateLinks.filter(
-    (link) =>
-      !(
-        (link.triggerRoomId === roomId && link.triggerInstanceId === instanceId) ||
-        (link.targetRoomId === roomId && link.targetInstanceId === instanceId)
-      )
-  );
+  clearCourseObjectLinksForInstance(snapshot, roomId, instanceId);
 }

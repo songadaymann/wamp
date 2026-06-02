@@ -16,10 +16,10 @@ import {
   type CourseSnapshot,
 } from '../../courses/model';
 import {
-  clearCoursePressurePlateLinksForInstance,
-  getCoursePressurePlateLink,
-  setCoursePressurePlateLink,
-} from '../../courses/pressurePlateLinks';
+  clearCourseObjectLinksForInstance,
+  getCourseObjectLink,
+  setCourseObjectLink,
+} from '../../courses/objectLinks';
 import type { EditorEditRuntime } from '../editor/editRuntime';
 import type { EditorInspectorState } from '../editor/uiBridge';
 import {
@@ -222,7 +222,7 @@ export class CourseEditorObjectInspectorController {
   }
 
   handleObjectRemoved(roomId: string, removed: PlacedObject): void {
-    this.pruneCoursePressurePlateLinksForInstance(roomId, removed.instanceId ?? null);
+    this.pruneCourseObjectLinksForInstance(roomId, removed.instanceId ?? null);
 
     if (removed.instanceId === this.connectingPressurePlateInstanceId) {
       this.connectingPressurePlateInstanceId = null;
@@ -527,7 +527,7 @@ export class CourseEditorObjectInspectorController {
     source: CoursePlacedObjectRef
   ): CoursePlacedObjectRef | null {
     if (canPlacedObjectUseObjectLink(source.placed)) {
-      const courseLink = getCoursePressurePlateLink(
+      const courseLink = getCourseObjectLink(
         this.host.getActiveCourseDraft(),
         source.slice.roomId,
         source.placed.instanceId ?? '',
@@ -582,7 +582,7 @@ export class CourseEditorObjectInspectorController {
       );
     }
 
-    const previousCourseLink = getCoursePressurePlateLink(
+    const previousCourseLink = getCourseObjectLink(
       this.host.getActiveCourseDraft(),
       source.slice.roomId,
       source.placed.instanceId,
@@ -606,7 +606,7 @@ export class CourseEditorObjectInspectorController {
 
     const nextDraft = cloneCourseSnapshot(draft);
     if (target && target.placed.instanceId) {
-      setCoursePressurePlateLink(
+      setCourseObjectLink(
         nextDraft,
         {
           triggerRoomId: source.slice.roomId,
@@ -624,7 +624,7 @@ export class CourseEditorObjectInspectorController {
         previousCourseLink?.targetRoomId !== target.slice.roomId ||
         previousCourseLink?.targetInstanceId !== target.placed.instanceId;
     } else {
-      setCoursePressurePlateLink(
+      setCourseObjectLink(
         nextDraft,
         null,
         {
@@ -642,7 +642,7 @@ export class CourseEditorObjectInspectorController {
     return changed;
   }
 
-  private pruneCoursePressurePlateLinksForInstance(
+  private pruneCourseObjectLinksForInstance(
     roomId: string,
     instanceId: string | null | undefined,
   ): void {
@@ -656,9 +656,9 @@ export class CourseEditorObjectInspectorController {
     }
 
     const nextDraft = cloneCourseSnapshot(draft);
-    const previousCount = nextDraft.pressurePlateLinks.length;
-    clearCoursePressurePlateLinksForInstance(nextDraft, roomId, instanceId);
-    if (nextDraft.pressurePlateLinks.length !== previousCount) {
+    const previousCount = nextDraft.objectLinks.length;
+    clearCourseObjectLinksForInstance(nextDraft, roomId, instanceId);
+    if (nextDraft.objectLinks.length !== previousCount) {
       this.host.setActiveCourseDraft(nextDraft);
     }
   }

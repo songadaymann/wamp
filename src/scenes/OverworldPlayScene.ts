@@ -9,7 +9,7 @@ import {
   isRoomMusicEmpty,
   type RoomMusic,
 } from '../music/model';
-import { getCoursePressurePlateLink } from '../courses/pressurePlateLinks';
+import { getCourseObjectLink } from '../courses/objectLinks';
 import {
   getActiveCourseDraftSessionCourseId,
   getActiveCourseDraftSessionDraft,
@@ -23,6 +23,8 @@ import {
 import { SceneFxController } from '../fx/controller';
 import {
   canPlacedObjectUseObjectLink,
+  getObjectById,
+  getObjectDisplayOffset,
   placedObjectContributesToCategory,
   type GameObjectConfig,
   ROOM_HEIGHT,
@@ -2934,19 +2936,54 @@ export class OverworldPlayScene extends Phaser.Scene {
         }
         const localTargetInstanceId = placedTrigger?.triggerTargetInstanceId ?? null;
         const courseLink = activeCourse
-          ? getCoursePressurePlateLink(activeCourse, loadedRoom.room.id, sourceInstanceId)
+          ? getCourseObjectLink(activeCourse, loadedRoom.room.id, sourceInstanceId)
           : null;
+        const targetRoomId = courseLink?.targetRoomId ?? (localTargetInstanceId ? loadedRoom.room.id : null);
+        const targetInstanceId = courseLink?.targetInstanceId ?? localTargetInstanceId;
+        const targetPoint =
+          targetRoomId && targetInstanceId
+            ? this.resolveObjectLinkTargetWorldPoint(
+                activeCourse,
+                targetRoomId,
+                targetInstanceId
+              )
+            : null;
 
-        if (courseLink) {
-          liveObject.linkedTargetRoomId = courseLink.targetRoomId;
-          liveObject.linkedTargetInstanceId = courseLink.targetInstanceId;
-          continue;
-        }
-
-        liveObject.linkedTargetRoomId = localTargetInstanceId ? loadedRoom.room.id : null;
-        liveObject.linkedTargetInstanceId = localTargetInstanceId;
+        liveObject.linkedTargetRoomId = targetRoomId;
+        liveObject.linkedTargetInstanceId = targetInstanceId;
+        liveObject.linkedTargetWorldX = targetPoint?.x ?? null;
+        liveObject.linkedTargetWorldY = targetPoint?.y ?? null;
       }
     }
+  }
+
+  private resolveObjectLinkTargetWorldPoint(
+    activeCourse: CourseSnapshot | null,
+    targetRoomId: string,
+    targetInstanceId: string,
+  ): { x: number; y: number } | null {
+    const loadedRoom = this.loadedFullRoomsById.get(targetRoomId) ?? null;
+    const roomRef =
+      activeCourse?.roomRefs.find((candidate) => candidate.roomId === targetRoomId) ?? null;
+    const room = loadedRoom?.room ?? (roomRef ? this.getRoomSnapshotForCoordinates(roomRef.coordinates) : null);
+    const roomCoordinates = loadedRoom?.room.coordinates ?? roomRef?.coordinates ?? room?.coordinates ?? null;
+    if (!room || !roomCoordinates) {
+      return null;
+    }
+
+    const placedTarget =
+      room.placedObjects.find((placed) => placed.instanceId === targetInstanceId) ?? null;
+    if (!placedTarget) {
+      return null;
+    }
+
+    const targetConfig = getObjectById(placedTarget.id);
+    const displayOffset = targetConfig ? getObjectDisplayOffset(targetConfig) : { x: 0, y: 0 };
+    const roomOrigin = this.getRoomOrigin(roomCoordinates);
+    return {
+      x: roomOrigin.x + placedTarget.x + displayOffset.x,
+      y: roomOrigin.y + placedTarget.y + displayOffset.y,
+    };
   }
 
   private syncPreviewVisibility(): void {
