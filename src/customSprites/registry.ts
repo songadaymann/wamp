@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import {
   getCustomSpriteCategory,
+  getCustomSpritePixelBounds,
   getCustomSpriteKindLabel,
   normalizeCustomSpriteDefinitions,
   parseCustomSpriteObjectId,
@@ -178,14 +179,7 @@ export function createCustomSpriteCanvas(sprite: CustomSpriteDefinition): HTMLCa
 
 export function buildCustomSpriteObjectConfig(sprite: CustomSpriteDefinition): GameObjectConfig {
   const category = getCustomSpriteCategory(sprite.kind);
-  const bodySize = sprite.kind === 'decoration'
-    ? 0
-    : sprite.kind === 'collectible'
-      ? Math.max(8, sprite.size - 4)
-      : sprite.size;
-  const bodyOffset = sprite.kind === 'collectible'
-    ? Math.floor((sprite.size - bodySize) / 2)
-    : 0;
+  const body = getCustomSpriteObjectBody(sprite);
 
   return {
     id: `custom_sprite:${sprite.id}`,
@@ -196,15 +190,43 @@ export function buildCustomSpriteObjectConfig(sprite: CustomSpriteDefinition): G
     frameHeight: sprite.size,
     frameCount: 1,
     fps: 0,
-    bodyWidth: bodySize,
-    bodyHeight: bodySize,
-    bodyOffsetX: bodyOffset,
-    bodyOffsetY: bodyOffset,
+    bodyWidth: body.width,
+    bodyHeight: body.height,
+    bodyOffsetX: body.offsetX,
+    bodyOffsetY: body.offsetY,
     behavior: 'static',
     interaction: sprite.kind === 'pushable' ? 'pushable' : undefined,
     customSpriteKind: sprite.kind,
     description: `${getCustomSpriteKindLabel(sprite.kind)} made in the pixel editor.`,
   };
+}
+
+function getCustomSpriteObjectBody(
+  sprite: CustomSpriteDefinition,
+): { width: number; height: number; offsetX: number; offsetY: number } {
+  if (sprite.kind === 'decoration') {
+    return { width: 0, height: 0, offsetX: 0, offsetY: 0 };
+  }
+
+  if (sprite.kind === 'collectible') {
+    const bodySize = Math.max(8, sprite.size - 4);
+    const bodyOffset = Math.floor((sprite.size - bodySize) / 2);
+    return { width: bodySize, height: bodySize, offsetX: bodyOffset, offsetY: bodyOffset };
+  }
+
+  if (sprite.kind === 'pushable') {
+    const bounds = getCustomSpritePixelBounds(sprite.pixels, sprite.size);
+    if (bounds) {
+      return {
+        width: bounds.width,
+        height: bounds.height,
+        offsetX: bounds.minX,
+        offsetY: bounds.minY,
+      };
+    }
+  }
+
+  return { width: sprite.size, height: sprite.size, offsetX: 0, offsetY: 0 };
 }
 
 export function getCustomSpriteObjectConfig(objectId: string | null | undefined): GameObjectConfig | null {
