@@ -108,6 +108,7 @@ export {
   ROOM_PHRASE_ARRANGEMENT_BAR_COUNT,
   ROOM_PHRASE_ARRANGEMENT_SEGMENT_BAR_COUNT,
   ROOM_PHRASE_ARRANGEMENT_SEGMENT_STEP_COUNT,
+  ROOM_PHRASE_ARRANGEMENT_SLOT_OPTIONS,
   ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT,
   ROOM_PHRASE_ARRANGEMENT_STEP_COUNT,
   cloneRoomPhraseArrangementMusic,
@@ -118,9 +119,12 @@ export {
   getRoomPhraseArrangementActiveStepCount,
   getRoomPhraseArrangementKey,
   isRoomPhraseArrangementEmpty,
+  normalizeRoomPhraseArrangementSlotCount,
   normalizeRoomPhraseArrangementMusic,
+  setRoomPhraseArrangementSlotCount,
   type RoomPhraseArrangementLaneSlots,
   type RoomPhraseArrangementMusic,
+  type RoomPhraseArrangementSlotCount,
   type RoomPhraseArrangementSlots,
 } from './phraseArrangement';
 

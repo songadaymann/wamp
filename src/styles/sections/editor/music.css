@@ -108,8 +108,22 @@
 
 .editor-music-arrangement-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
+}
+
+.editor-music-arrangement-slot-count {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 2px;
+}
+
+.editor-music-arrangement-slot-count-button {
+  min-width: 34px;
+  padding-inline: 8px;
 }
 
 .editor-music-status-note {
@@ -158,9 +172,17 @@
 
 .editor-music-arrangement-cells {
   display: grid;
-  grid-template-columns: repeat(8, 58px);
+  grid-template-columns: repeat(
+    var(--editor-music-arrangement-slot-count, 8),
+    var(--editor-music-arrangement-slot-size, 58px)
+  );
   gap: 8px;
   justify-content: start;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
 }
 
 .editor-music-arrangement-slot {
@@ -208,7 +230,7 @@
   font-size: 8px;
   color: inherit;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0;
 }
 
 .editor-music-arrangement-slot-glyph {
