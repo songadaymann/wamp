@@ -10,6 +10,11 @@ import {
 } from '../src/chat/roomChatModel';
 import type { RoomSnapshot } from '../src/persistence/roomModel';
 import {
+  resolvePartykitIdentitySigningSecret,
+  verifyPartykitIdentityToken,
+  type PartyKitIdentityTokenClaims,
+} from '../src/presence/identityToken';
+import {
   getMultiplayerModeDefinition,
   type PvpHitSource,
   type PvpInviteAcceptMessage,
@@ -154,7 +159,7 @@ interface HeartbeatMutationResponse {
 }
 
 export default class PresenceServer implements Party.Server {
-  static onBeforeConnect(req: Party.Request): Party.Request | Response {
+  static async onBeforeConnect(req: Party.Request, lobby: Party.Lobby): Promise<Party.Request | Response> {
     const url = new URL(req.url);
     if (url.pathname.includes(`/${METRICS_ROOM_ID}`)) {
       return new Response('Metrics room does not accept WebSocket connections.', {
@@ -162,8 +167,19 @@ export default class PresenceServer implements Party.Server {
       });
     }
 
-    if (!url.searchParams.get('userId') || !url.searchParams.get('displayName')) {
-      return new Response('Missing presence identity.', { status: 400 });
+    const token = url.searchParams.get('identityToken')?.trim() ?? '';
+    if (!token) {
+      return new Response('Missing signed presence identity.', { status: 401 });
+    }
+
+    const signingSecret = resolvePartykitIdentitySigningSecret(lobby.env);
+    if (!signingSecret) {
+      return new Response('PartyKit identity token secret is not configured.', { status: 503 });
+    }
+
+    const identity = await verifyPartykitIdentityToken(token, signingSecret.secret);
+    if (!identity) {
+      return new Response('Invalid signed presence identity.', { status: 401 });
     }
 
     return req;
@@ -227,11 +243,16 @@ export default class PresenceServer implements Party.Server {
     return new Response('Not found.', { status: 404 });
   }
 
-  onConnect(
+  async onConnect(
     connection: Party.Connection<ConnectionPresenceState>,
     ctx: Party.ConnectionContext
-  ): void {
-    const identity = this.parseIdentity(ctx.request.url);
+  ): Promise<void> {
+    const identity = await this.parseIdentity(ctx.request.url);
+    if (!identity) {
+      connection.close(1008, 'invalid-presence-identity');
+      return;
+    }
+
     connection.setState({
       ...identity,
       presence: null,
@@ -248,7 +269,7 @@ export default class PresenceServer implements Party.Server {
       connection.send(
         JSON.stringify({
           type: 'snapshot',
-          peers: this.listPeers(connection.id),
+          peers: this.listPeers(connection),
           roomPopulations: this.computeRoomPopulations(),
           roomEditors: this.computeRoomEditors(),
           roomPreviews: this.computeRoomPreviews(),
@@ -275,7 +296,7 @@ export default class PresenceServer implements Party.Server {
     }
 
     if (this.isPvpRoom()) {
-      this.handlePvpMessage(parsed as PvpMatchClientMessage, sender);
+      this.handlePvpMessage(parsed as unknown as PvpMatchClientMessage, sender);
       return;
     }
 
@@ -417,6 +438,10 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
+    if (!current) {
+      return;
+    }
+
     connection.setState({
       ...current,
       presence: null,
@@ -441,11 +466,18 @@ export default class PresenceServer implements Party.Server {
     }
   }
 
-  private listPeers(excludeConnectionId: string | null): WorldGhostPresence[] {
+  private listPeers(
+    viewer: Party.Connection<ConnectionPresenceState> | null,
+  ): WorldGhostPresence[] {
     const peers: WorldGhostPresence[] = [];
+    const excludeConnectionId = viewer?.id ?? null;
+    const excludeUserId = viewer?.state?.userId ?? null;
 
     for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
       if (excludeConnectionId && connection.id === excludeConnectionId) {
+        continue;
+      }
+      if (excludeUserId && connection.state?.userId === excludeUserId) {
         continue;
       }
 
@@ -914,7 +946,7 @@ export default class PresenceServer implements Party.Server {
     return `${METRICS_STORAGE_PREFIX}${shardId}`;
   }
 
-  private hasValidInternalToken(req: Request): boolean {
+  private hasValidInternalToken(req: Party.Request): boolean {
     const expected = this.getInternalToken();
     if (!expected) {
       return false;
@@ -945,21 +977,37 @@ export default class PresenceServer implements Party.Server {
     });
   }
 
-  private parseIdentity(
+  private async parseIdentity(
     urlString: string
-  ): Omit<ConnectionPresenceState, 'presence' | 'lastRoomChatSentAt' | 'lastPvpInviteSentAt'> {
+  ): Promise<Omit<ConnectionPresenceState, 'presence' | 'lastRoomChatSentAt' | 'lastPvpInviteSentAt'> | null> {
     const url = new URL(urlString);
-    const userId = (url.searchParams.get('userId') ?? '').trim() || crypto.randomUUID();
-    const displayName = (url.searchParams.get('displayName') ?? '').trim() || 'Guest';
-    const avatarId = (url.searchParams.get('avatarId') ?? '').trim() || 'default-player';
+    const claims = await this.verifyIdentityToken(url.searchParams.get('identityToken'));
+    if (!claims) {
+      return null;
+    }
+
     const channel = this.parseChannel(url.searchParams.get('channel'));
 
     return {
       channel,
-      userId,
-      displayName: displayName.slice(0, 32),
-      avatarId: avatarId.slice(0, 32),
+      userId: claims.userId,
+      displayName: claims.displayName,
+      avatarId: claims.avatarId,
     };
+  }
+
+  private async verifyIdentityToken(rawToken: string | null): Promise<PartyKitIdentityTokenClaims | null> {
+    const token = rawToken?.trim() ?? '';
+    if (!token) {
+      return null;
+    }
+
+    const signingSecret = resolvePartykitIdentitySigningSecret(this.room.env);
+    if (!signingSecret) {
+      return null;
+    }
+
+    return verifyPartykitIdentityToken(token, signingSecret.secret);
   }
 
   private parseChannel(rawChannel: string | null): RoomChatTransportChannel {
@@ -1718,11 +1766,18 @@ export default class PresenceServer implements Party.Server {
     }
 
     const raw = value as Partial<RoomCoordinates>;
-    if (!Number.isInteger(raw.x) || !Number.isInteger(raw.y)) {
+    const x = raw.x;
+    const y = raw.y;
+    if (
+      typeof x !== 'number' ||
+      typeof y !== 'number' ||
+      !Number.isInteger(x) ||
+      !Number.isInteger(y)
+    ) {
       return null;
     }
 
-    return { x: raw.x, y: raw.y };
+    return { x, y };
   }
 
   private normalizePvpPlayerState(value: unknown, userId: string): PvpMatchPlayerState | null {
@@ -1991,7 +2046,10 @@ export default class PresenceServer implements Party.Server {
     }
 
     for (const connection of presenceConnections) {
-      const visiblePeers = peers.filter((peer) => peer.connectionId !== connection.id);
+      const viewerUserId = connection.state?.userId ?? null;
+      const visiblePeers = peers.filter((peer) =>
+        peer.connectionId !== connection.id && (!viewerUserId || peer.userId !== viewerUserId)
+      );
       if (visiblePeers.length === 0) {
         continue;
       }
@@ -2126,17 +2184,23 @@ export default class PresenceServer implements Party.Server {
 
     const payload = value as Partial<PartyKitShardHeartbeat>;
     const updatedAtMs = Date.parse(String(payload.updatedAt ?? ''));
+    const totalConnections = payload.totalConnections;
+    const playConnections = payload.playConnections;
+    const editConnections = payload.editConnections;
     if (
       typeof payload.shardId !== 'string' ||
       !payload.shardId.trim() ||
       payload.shardId === METRICS_ROOM_ID ||
-      !Number.isInteger(payload.totalConnections) ||
-      !Number.isInteger(payload.playConnections) ||
-      !Number.isInteger(payload.editConnections) ||
-      payload.totalConnections < 0 ||
-      payload.playConnections < 0 ||
-      payload.editConnections < 0 ||
-      payload.playConnections + payload.editConnections > payload.totalConnections ||
+      typeof totalConnections !== 'number' ||
+      typeof playConnections !== 'number' ||
+      typeof editConnections !== 'number' ||
+      !Number.isInteger(totalConnections) ||
+      !Number.isInteger(playConnections) ||
+      !Number.isInteger(editConnections) ||
+      totalConnections < 0 ||
+      playConnections < 0 ||
+      editConnections < 0 ||
+      playConnections + editConnections > totalConnections ||
       !Number.isFinite(updatedAtMs)
     ) {
       return null;
@@ -2144,9 +2208,9 @@ export default class PresenceServer implements Party.Server {
 
     return {
       shardId: payload.shardId,
-      totalConnections: payload.totalConnections,
-      playConnections: payload.playConnections,
-      editConnections: payload.editConnections,
+      totalConnections,
+      playConnections,
+      editConnections,
       updatedAt: new Date(updatedAtMs).toISOString(),
     };
   }

@@ -20,6 +20,9 @@
     "smoke:preview:readonly": "npx --yes --quiet -p playwright node scripts/preview_smoke_readonly.mjs",
     "smoke:progression-rating": "npx --yes --quiet -p playwright node scripts/smoke_progression_rating_modal.mjs",
     "smoke:progression-api:local": "node scripts/smoke_progression_api_flow.mjs",
+    "smoke:dom-contract": "node scripts/smoke_dom_contract.mjs",
+    "smoke:worker-safety": "npx --yes --quiet tsx scripts/worker_safety_probes.ts",
+    "smoke:partykit-identity": "npx --yes --quiet tsx scripts/partykit_identity_token_probe.ts",
     "smoke:prod": "node scripts/smoke_prod.mjs",
     "stress:presence": "node scripts/presence_load_test.mjs",
     "avatar:cryptopunk:build": "python3 gen-avatar/cryptopunk/build-avatar-pack-for-punk-id.py",
@@ -52,7 +55,6 @@
   },
   "dependencies": {
     "@cloudflare/containers": "^0.3.3",
-    "@ethersproject/sha2": "^5.8.0",
     "@reown/appkit": "^1.8.19",
     "@reown/appkit-adapter-ethers": "^1.8.19",
     "@tonaljs/key": "^4.11.2",

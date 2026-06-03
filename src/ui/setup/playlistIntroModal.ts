@@ -1,4 +1,5 @@
 import type { RoomSequenceEntry } from './roomSequenceEvents';
+import { createModalLifecycle } from './modalLifecycle';
 
 type PlaylistIntroElements = {
   modal: HTMLElement | null;
@@ -16,22 +17,10 @@ export type PlaylistIntroDetail = {
 
 export class PlaylistIntroModalController {
   private readonly elements: PlaylistIntroElements;
+  private readonly lifecycle: ReturnType<typeof createModalLifecycle>;
   private pendingResolve: (() => void) | null = null;
 
   private readonly handleStartClick = () => {
-    this.close();
-  };
-
-  private readonly handleBackdropClick = (event: Event) => {
-    if (event.target === this.elements.modal) {
-      this.close();
-    }
-  };
-
-  private readonly handleDocumentKeydown = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape' || this.elements.modal?.classList.contains('hidden')) {
-      return;
-    }
     this.close();
   };
 
@@ -43,18 +32,21 @@ export class PlaylistIntroModalController {
       levels: this.doc.getElementById('playlist-intro-levels'),
       startButton: this.doc.getElementById('btn-playlist-intro-start') as HTMLButtonElement | null,
     };
+    this.lifecycle = createModalLifecycle({
+      doc: this.doc,
+      modal: this.elements.modal,
+      onClose: () => this.close(),
+    });
   }
 
   init(): void {
     this.elements.startButton?.addEventListener('click', this.handleStartClick);
-    this.elements.modal?.addEventListener('click', this.handleBackdropClick);
-    this.doc.addEventListener('keydown', this.handleDocumentKeydown);
+    this.lifecycle.attach();
   }
 
   destroy(): void {
     this.elements.startButton?.removeEventListener('click', this.handleStartClick);
-    this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
-    this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
+    this.lifecycle.detach();
     this.close();
   }
 
@@ -64,8 +56,7 @@ export class PlaylistIntroModalController {
     }
 
     this.render(detail);
-    this.elements.modal.classList.remove('hidden');
-    this.elements.modal.setAttribute('aria-hidden', 'false');
+    this.lifecycle.show();
     this.elements.startButton?.focus({ preventScroll: true });
 
     return new Promise((resolve) => {
@@ -74,12 +65,10 @@ export class PlaylistIntroModalController {
   }
 
   close(): void {
-    if (!this.elements.modal) {
+    if (!this.lifecycle.hide()) {
       return;
     }
 
-    this.elements.modal.classList.add('hidden');
-    this.elements.modal.setAttribute('aria-hidden', 'true');
     const resolve = this.pendingResolve;
     this.pendingResolve = null;
     resolve?.();

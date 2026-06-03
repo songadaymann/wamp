@@ -15,7 +15,7 @@ import {
   DEFAULT_CHAT_MESSAGE_LIMIT,
   MAX_CHAT_MESSAGE_LIMIT,
 } from '../../../chat/model';
-import { loadCurrentSession, requireAuthenticatedRequestAuth } from '../auth/request';
+import { loadCurrentSession, requireAuthenticatedRequestAuth, requireTrustedOriginForMutation } from '../auth/request';
 import { findUserByDisplayName } from '../auth/store';
 import { assertNotSchoolRestricted } from '../school/restrictions';
 import {
@@ -213,6 +213,7 @@ async function handleDeleteChatMessage(
   env: Env,
   messageId: string
 ): Promise<Response> {
+  requireTrustedOriginForMutation(request);
   const { session, viewer } = await requireChatModeratorSession(env, request, 'delete chat messages');
   const message = await loadChatMessageById(env, messageId);
   if (!message) {
@@ -248,6 +249,7 @@ async function handleListChatAdmins(request: Request, env: Env): Promise<Respons
 }
 
 async function handleCreateChatAdmin(request: Request, env: Env): Promise<Response> {
+  requireTrustedOriginForMutation(request);
   const { session, viewer } = await requireChatOwnerSession(env, request, 'grant chat admin access');
   const body = await parseJsonBody<ChatAdminCreateRequestBody>(request);
   const displayName = normalizeDisplayName(body.displayName);
@@ -290,6 +292,7 @@ async function handleDeleteChatAdmin(
   env: Env,
   userId: string
 ): Promise<Response> {
+  requireTrustedOriginForMutation(request);
   const { session, viewer } = await requireChatOwnerSession(env, request, 'revoke chat admin access');
   if (userId === session.user.id) {
     throw new HttpError(403, 'You cannot revoke your own chat access.');
@@ -329,6 +332,7 @@ async function handleListChatBans(request: Request, env: Env): Promise<Response>
 }
 
 async function handleCreateChatBan(request: Request, env: Env): Promise<Response> {
+  requireTrustedOriginForMutation(request);
   const { session, viewer } = await requireChatModeratorSession(env, request, 'ban chat users');
   const body = await parseJsonBody<ChatBanCreateRequestBody>(request);
   const userId = normalizeUserId(body.userId);
@@ -361,6 +365,7 @@ async function handleDeleteChatBan(
   env: Env,
   userId: string
 ): Promise<Response> {
+  requireTrustedOriginForMutation(request);
   const { session, viewer } = await requireChatModeratorSession(env, request, 'unban chat users');
   const existing = await loadChatBanRecord(env, userId);
   if (!existing) {

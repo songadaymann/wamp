@@ -253,7 +253,24 @@ export interface RoomRushRouteStepRecord {
   uniqueAreaVisitIndex?: number | null;
 }
 
+export interface RoomRushRunStartRequestBody {
+  difficulty: RoomRushDifficulty;
+  startRule: RoomRushStartRule;
+  startCoordinates: RoomCoordinates;
+}
+
+export interface RoomRushRunStartResponse {
+  startId: string;
+  clientRunId: string;
+  difficulty: RoomRushDifficulty;
+  startRule: RoomRushStartRule;
+  startCoordinates: RoomCoordinates;
+  startedAt: string;
+  expiresAt: string;
+}
+
 export interface RoomRushRunSubmissionRequestBody {
+  startId: string;
   clientRunId: string;
   difficulty: RoomRushDifficulty;
   startRule: RoomRushStartRule;

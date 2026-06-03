@@ -29,6 +29,7 @@ export interface Env {
   PARTYKIT_HOST?: string;
   PARTYKIT_PARTY?: string;
   PARTYKIT_INTERNAL_TOKEN?: string;
+  PARTYKIT_IDENTITY_TOKEN_SECRET?: string;
   RESEND_API_KEY?: string;
   AUTH_EMAIL_FROM?: string;
   AUTH_DEBUG_MAGIC_LINKS?: string;
@@ -419,6 +420,22 @@ export interface RoomRushRunRow {
   finish_y: number;
   route_json: string;
   finished_at: string;
+  created_at: string;
+}
+
+export interface RoomRushRunStartRow {
+  start_id: string;
+  client_run_id: string;
+  user_id: string;
+  difficulty: string;
+  start_rule: string;
+  start_room_id: string;
+  start_x: number;
+  start_y: number;
+  started_at: string;
+  expires_at: string;
+  consumed_attempt_id: string | null;
+  consumed_at: string | null;
   created_at: string;
 }
 

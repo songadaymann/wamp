@@ -5,7 +5,7 @@ import type {
   AdminProgressionUserLookupResponse,
 } from '../../../admin/model';
 import type { RoomRevertRequestBody } from '../../../persistence/roomModel';
-import { requireAdminRequest } from '../auth/request';
+import { requireAdminRequest, requireTrustedOriginForMutation } from '../auth/request';
 import { requireChatModeratorSession } from '../chat/moderation';
 import {
   getCoordinatesFromRequest,
@@ -155,6 +155,7 @@ async function handleAdminRoomRestore(
   env: Env,
   roomId: string
 ): Promise<Response> {
+  requireTrustedOriginForMutation(request);
   const { session } = await requireChatModeratorSession(env, request, `restore room ${roomId}`);
   const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
   const body = await parseJsonBody<RoomRevertRequestBody>(request);

@@ -16,7 +16,7 @@
     "isolatedModules": true,
     "noEmit": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "partykit/presenceServer.ts"],
   "exclude": [
     "node_modules",
     "dist",

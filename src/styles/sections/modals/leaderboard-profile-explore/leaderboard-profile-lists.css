@@ -8,40 +8,12 @@
   box-shadow: 3px 3px 0 #18161c;
 }
 
-#leaderboard-modal .leaderboard-discover-row {
-  width: 100%;
-  border: 2px solid #79ccde;
-  border-radius: 0;
-  background: #fffaf0;
-  color: inherit;
-  text-align: left;
-  padding: 12px;
-  cursor: pointer;
-  box-shadow: 3px 3px 0 #18161c;
-}
-
-#leaderboard-modal .leaderboard-discover-row:hover,
-#leaderboard-modal .leaderboard-discover-row:focus-visible,
 #profile-modal .profile-room-card:hover,
 #profile-modal .profile-room-card:focus-visible {
   border-color: #277b30;
   outline: none;
 }
 
-#leaderboard-modal .leaderboard-discover-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-}
-
-#leaderboard-modal .leaderboard-discover-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-#leaderboard-modal .leaderboard-discover-title,
 #leaderboard-modal .leaderboard-primary,
 #profile-modal .profile-room-card-title,
 #profile-modal .profile-display-name,
@@ -50,24 +22,10 @@
   font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
 }
 
-#leaderboard-modal .leaderboard-discover-title,
 #leaderboard-modal .leaderboard-primary,
 #profile-modal .profile-room-card-title {
   font-size: 13px;
   line-height: 1.3;
-}
-
-#leaderboard-modal .leaderboard-discover-feature-badge {
-  flex: 0 0 auto;
-  padding: 4px 8px;
-  border: 2px solid #79ccde;
-  background: #79ccde;
-  color: #000;
-  font-family: 'Early GameBoy', monospace;
-  font-size: 7px;
-  line-height: 1.3;
-  text-transform: uppercase;
-  box-shadow: 2px 2px 0 #18161c;
 }
 
 #profile-modal .profile-display-name {
@@ -85,7 +43,6 @@
 }
 
 #leaderboard-modal .leaderboard-secondary,
-#leaderboard-modal .leaderboard-discover-meta,
 #profile-modal .profile-room-card-meta,
 #profile-modal .profile-room-card-quality-label,
 #profile-modal .profile-overview-bio,
@@ -105,16 +62,6 @@
   font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
   font-size: 12px;
   line-height: 1.45;
-}
-
-#leaderboard-modal .leaderboard-discover-admin-btn {
-  justify-self: start;
-  min-width: 120px;
-}
-
-#leaderboard-modal .leaderboard-discover-admin-btn[data-featured-active='true'] {
-  background: #ed5f4b;
-  color: #fff3db;
 }
 
 #profile-modal .profile-room-card-ratings {

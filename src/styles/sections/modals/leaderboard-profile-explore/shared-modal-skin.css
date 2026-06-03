@@ -97,7 +97,6 @@
 #editor-music-phrase-save-modal .history-modal-header > .bar-btn,
 #leaderboard-modal .leaderboard-tabs .bar-btn,
 #leaderboard-modal .leaderboard-difficulty-actions .bar-btn,
-#leaderboard-modal .leaderboard-discover-filters .bar-btn,
 #explore-modal .leaderboard-discover-filters .bar-btn,
 #profile-modal .profile-tabs .bar-btn,
 #profile-modal .profile-edit-actions .bar-btn,
@@ -122,12 +121,9 @@
 #editor-music-phrase-save-modal .history-modal-header > .bar-btn:hover,
 #leaderboard-modal .leaderboard-tabs .bar-btn:hover,
 #leaderboard-modal .leaderboard-difficulty-actions .bar-btn:hover,
-#leaderboard-modal .leaderboard-discover-filters .bar-btn:hover,
 #profile-modal .profile-tabs .bar-btn:hover,
 #profile-modal .profile-edit-actions .bar-btn:hover,
 #editor-music-phrase-save-modal .music-phrase-save-actions .bar-btn:hover,
-#leaderboard-modal .leaderboard-discover-row:hover,
-#leaderboard-modal .leaderboard-discover-row:focus-visible,
 #profile-modal .profile-room-card:hover,
 #profile-modal .profile-room-card:focus-visible {
   filter: brightness(1.04);
@@ -139,7 +135,6 @@
 #editor-music-phrase-save-modal .history-modal-header > .bar-btn:disabled,
 #leaderboard-modal .leaderboard-tabs .bar-btn:disabled,
 #leaderboard-modal .leaderboard-difficulty-actions .bar-btn:disabled,
-#leaderboard-modal .leaderboard-discover-filters .bar-btn:disabled,
 #explore-modal .leaderboard-discover-filters .bar-btn:disabled,
 #profile-modal .profile-tabs .bar-btn:disabled,
 #profile-modal .profile-edit-actions .bar-btn:disabled,
@@ -314,7 +309,6 @@
 }
 
 #leaderboard-modal .leaderboard-difficulty-actions,
-#leaderboard-modal .leaderboard-discover-filters,
 #explore-modal .leaderboard-discover-filters,
 #editor-music-phrase-save-modal .music-phrase-save-actions {
   display: grid;
@@ -322,27 +316,22 @@
   gap: 8px;
 }
 
-#leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='easy'],
-#leaderboard-modal .leaderboard-discover-filters .bar-btn.active[data-discover-difficulty='easy'] {
+#leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='easy'] {
   background: #277b30;
   color: #fff3db;
 }
 
-#leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='medium'],
-#leaderboard-modal .leaderboard-discover-filters .bar-btn.active[data-discover-difficulty='medium'],
-#leaderboard-modal .leaderboard-discover-filters .bar-btn.active[data-discover-difficulty=''] {
+#leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='medium'] {
   background: #fcea7c;
   color: #000;
 }
 
-#leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='hard'],
-#leaderboard-modal .leaderboard-discover-filters .bar-btn.active[data-discover-difficulty='hard'] {
+#leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='hard'] {
   background: #ed5f4b;
   color: #fff3db;
 }
 
-#leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='extreme'],
-#leaderboard-modal .leaderboard-discover-filters .bar-btn.active[data-discover-difficulty='extreme'] {
+#leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='extreme'] {
   background: #2c5071;
   color: #fff3db;
 }
@@ -380,21 +369,6 @@
   box-shadow: 4px 4px 0 #18161c, inset 0 0 0 2px currentColor;
   color: #18161c;
   transform: translate(-1px, -1px);
-}
-
-#leaderboard-modal .leaderboard-discover-sorts .bar-btn.active[data-discover-sort='featured'] {
-  background: #79ccde;
-  color: #000;
-}
-
-#leaderboard-modal .leaderboard-discover-sorts .bar-btn.active[data-discover-sort='quality'] {
-  background: #fcea7c;
-  color: #000;
-}
-
-#leaderboard-modal .leaderboard-discover-sorts .bar-btn.active[data-discover-sort='newest'] {
-  background: #277b30;
-  color: #fff3db;
 }
 
 #explore-modal .leaderboard-discover-filters .bar-btn.active[data-explore-difficulty='easy'] {

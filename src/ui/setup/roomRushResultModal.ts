@@ -324,7 +324,7 @@ export class RoomRushResultModalController {
       return;
     }
 
-    if (!getAuthDebugState().authenticated) {
+    if (!getAuthDebugState().authenticated || !run.serverStartId) {
       return;
     }
 
@@ -340,6 +340,7 @@ function buildRoomRushSubmissionBody(
   run: ActiveRoomRushRunState
 ): RoomRushRunSubmissionRequestBody {
   return {
+    startId: run.serverStartId ?? '',
     clientRunId: run.runId,
     difficulty: run.difficulty,
     startRule: run.startRule,

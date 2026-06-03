@@ -31,6 +31,7 @@ import type { WorldRepository } from '../../persistence/worldRepository';
 import {
   computeWorldChunkPreviewHash,
   computeWorldSummariesFromOccupancySummariesInBounds,
+  containsWorldChunkBounds,
   createPublishedRoomSummary,
   createWorldWindowFromRoomBounds,
   isWithinRoomBounds,
@@ -40,7 +41,12 @@ import {
   type WorldRoomSummary,
   type WorldWindow,
 } from '../../persistence/worldModel';
-import { RETRO_COLORS, ensureStarfieldTexture } from '../../visuals/starfield';
+import {
+  RETRO_COLORS,
+  createStarfieldTileSprite,
+  getStarfieldLayerConfig,
+  syncStarfieldTileSprite,
+} from '../../visuals/starfield';
 import { buildRoomSnapshotTexture, buildRoomTextureKey } from '../../visuals/roomSnapshotTexture';
 import { registerCustomSpritesFromSnapshot } from '../../customSprites/registry';
 import {
@@ -403,7 +409,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         options.forceChunkReload ||
         !this.chunkWindow ||
         !this.loadedChunkBounds ||
-        !this.containsChunkBounds(this.loadedChunkBounds, desiredChunkBounds)
+        !containsWorldChunkBounds(this.loadedChunkBounds, desiredChunkBounds)
       ) {
         logBootPhase('world-stream:chunk-window:start', {
           desiredChunkBounds,
@@ -502,7 +508,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
 
     const desiredChunkBounds = this.getDesiredChunkBounds(centerCoordinates);
-    if (!this.containsChunkBounds(this.loadedChunkBounds, desiredChunkBounds)) {
+    if (!containsWorldChunkBounds(this.loadedChunkBounds, desiredChunkBounds)) {
       return 'cancelled';
     }
 
@@ -532,7 +538,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
   needsRefreshAround(centerCoordinates: RoomCoordinates): boolean {
     const desiredChunkBounds = this.getDesiredChunkBounds(centerCoordinates);
-    return !this.loadedChunkBounds || !this.containsChunkBounds(this.loadedChunkBounds, desiredChunkBounds);
+    return !this.loadedChunkBounds || !containsWorldChunkBounds(this.loadedChunkBounds, desiredChunkBounds);
   }
 
   refreshVisibleSelectionFromCache(): void {
@@ -1182,15 +1188,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return { minX, maxX, minY, maxY };
   }
 
-  private containsChunkBounds(container: WorldChunkBounds, inner: WorldChunkBounds): boolean {
-    return (
-      container.minChunkX <= inner.minChunkX &&
-      container.maxChunkX >= inner.maxChunkX &&
-      container.minChunkY <= inner.minChunkY &&
-      container.maxChunkY >= inner.maxChunkY
-    );
-  }
-
   private getChunkRadius(bounds: WorldChunkBounds): number {
     return Math.max(bounds.maxChunkX - bounds.minChunkX, bounds.maxChunkY - bounds.minChunkY) / 2;
   }
@@ -1590,8 +1587,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     const sprites: LoadedRoomBackgroundSprite[] = [];
 
     if (resolved.kind === 'none') {
-      const textureKey = ensureStarfieldTexture(this.options.scene);
-
       colorRect = this.options.scene.add.rectangle(
         origin.x,
         origin.y,
@@ -1602,40 +1597,22 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       colorRect.setOrigin(0, 0);
       colorRect.setDepth(8);
 
-      const farLayer = this.options.scene.add.tileSprite(
-        origin.x,
-        origin.y,
-        ROOM_PX_WIDTH,
-        ROOM_PX_HEIGHT,
-        textureKey,
-      );
-      farLayer.setOrigin(0, 0);
-      farLayer.setDepth(9);
-      farLayer.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-      sprites.push({
-        sprite: farLayer,
-        parallax: 0.035 * PLAY_ROOM_PARALLAX_MULTIPLIER,
-        tileScale: 1,
-        useVerticalParallax: true,
-      });
-
-      const nearLayer = this.options.scene.add.tileSprite(
-        origin.x,
-        origin.y,
-        ROOM_PX_WIDTH,
-        ROOM_PX_HEIGHT,
-        textureKey,
-      );
-      nearLayer.setOrigin(0, 0);
-      nearLayer.setDepth(9.1);
-      nearLayer.setAlpha(0.28);
-      nearLayer.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-      sprites.push({
-        sprite: nearLayer,
-        parallax: 0.12 * PLAY_ROOM_PARALLAX_MULTIPLIER,
-        tileScale: 0.58,
-        useVerticalParallax: true,
-      });
+      for (let index = 0; index < 2; index += 1) {
+        const config = getStarfieldLayerConfig(index, PLAY_ROOM_PARALLAX_MULTIPLIER);
+        sprites.push({
+          sprite: createStarfieldTileSprite(this.options.scene, {
+            x: origin.x,
+            y: origin.y,
+            width: ROOM_PX_WIDTH,
+            height: ROOM_PX_HEIGHT,
+            depth: 9 + index * 0.1,
+            alpha: config.alpha,
+          }),
+          parallax: config.parallax,
+          tileScale: config.tileScale,
+          useVerticalParallax: true,
+        });
+      }
 
       return { colorRect, sprites };
     }
@@ -1760,14 +1737,21 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       }
 
       const sprite = backgroundSprite.sprite as Phaser.GameObjects.TileSprite;
-      sprite.setPosition(origin.x, origin.y);
-      sprite.setSize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-      sprite.setTileScale(backgroundSprite.tileScale, backgroundSprite.tileScale);
-      sprite.tilePositionX =
-        (camera.scrollX * backgroundSprite.parallax) / backgroundSprite.tileScale;
-      sprite.tilePositionY = backgroundSprite.useVerticalParallax
-        ? (camera.scrollY * backgroundSprite.parallax) / backgroundSprite.tileScale
-        : 0;
+      syncStarfieldTileSprite(
+        sprite,
+        camera,
+        {
+          parallax: backgroundSprite.parallax,
+          tileScale: backgroundSprite.tileScale,
+        },
+        {
+          x: origin.x,
+          y: origin.y,
+          width: ROOM_PX_WIDTH,
+          height: ROOM_PX_HEIGHT,
+          useVerticalParallax: backgroundSprite.useVerticalParallax,
+        },
+      );
     }
   }
 }

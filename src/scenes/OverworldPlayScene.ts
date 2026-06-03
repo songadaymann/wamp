@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import { playSfx } from '../audio/sfx';
 import { createCourseRepository } from '../courses/courseRepository';
 import { createExpandedRoomEditorRepository } from '../expandedRooms/editorRepository';
-import { expandedRoomIdFromStandaloneRoomId } from '../expandedRooms/model';
 import { globalRoomMusicController } from '../music/controller';
 import {
   getRoomMusicKey,
@@ -58,7 +57,9 @@ import {
 } from '../persistence/worldModel';
 import {
   RETRO_COLORS,
-  ensureStarfieldTexture,
+  createStarfieldTileSprite,
+  getStarfieldLayerConfig,
+  syncStarfieldTileSprite,
 } from '../visuals/starfield';
 import type { RoomRushOverworldCapture } from '../social/roomRushShare';
 import { RoomLightingController } from '../lighting/controller';
@@ -96,7 +97,7 @@ import {
   PLAYFUN_GAME_RESUME_EVENT,
 } from '../playfun/client';
 import { createRunRepository } from '../runs/runRepository';
-import type { PvpMatchClient } from '../pvp/matchClient';
+import type { MultiplayerInstanceClient } from '../multiplayer/instanceClient';
 import type { MultiplayerModeDefinition, MultiplayerModeId } from '../multiplayer/model';
 import {
   type PvpHitSource,
@@ -235,8 +236,6 @@ import {
   type ActiveCourseRunState,
 } from './overworld/courseRuns';
 import {
-  OverworldRoomRushRunController,
-  ROOM_RUSH_NAME,
   type ActiveRoomRushRunState,
   type RoomRushDifficulty,
   type RoomRushStartRule,
@@ -245,6 +244,9 @@ import {
   OverworldRoomRushResultController,
   type RoomRushOverviewCameraState,
 } from './overworld/roomRushResults';
+import {
+  OverworldRoomRushModeController,
+} from './overworld/roomRushMode';
 import {
   RankedRunTraceRecorder,
   type RankedRunTraceBinding,
@@ -442,7 +444,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly publishedCourseSnapshotsById = new Map<string, CourseSnapshot>();
   private readonly publishedCourseSnapshotLoadsById = new Map<string, Promise<CourseSnapshot | null>>();
   private activeCourseRun: ActiveCourseRunState | null = null;
-  private readonly roomRushRunController = new OverworldRoomRushRunController();
   private lastPvpSelfDeathHitId: string | null = null;
   private lastPvpStompAt = 0;
   private pvpSpawnAppliedMatchId: string | null = null;
@@ -510,6 +511,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly signController: OverworldSignController<RoomEdgeWall>;
   private readonly specialTilesController: OverworldSpecialTilesController<LoadedRoomObject, RoomEdgeWall>;
   private readonly roomRushResultController: OverworldRoomRushResultController;
+  private readonly roomRushModeController: OverworldRoomRushModeController;
   private readonly worldStreamingController: OverworldWorldStreamingController<
     LoadedRoomObject,
     RoomEdgeWall
@@ -534,7 +536,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.syncScenePauseState();
   };
 
-  private get pvpMatchClient(): PvpMatchClient | null {
+  private get pvpMatchClient(): MultiplayerInstanceClient | null {
     return this.pvpArenaController.getClient();
   }
 
@@ -767,6 +769,57 @@ export class OverworldPlayScene extends Phaser.Scene {
       minZoom: MIN_ZOOM,
       maxZoom: MAX_ZOOM,
     });
+    this.roomRushModeController = new OverworldRoomRushModeController({
+      getMode: () => this.mode,
+      setMode: (mode) => {
+        this.mode = mode;
+      },
+      setCameraMode: (mode) => {
+        this.cameraMode = mode;
+      },
+      getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
+      setSelectedCoordinates: (coordinates) => {
+        this.selectedCoordinates = { ...coordinates };
+      },
+      setCurrentRoomCoordinates: (coordinates) => {
+        this.currentRoomCoordinates = { ...coordinates };
+      },
+      getInspectZoom: () => this.inspectZoom,
+      setInspectZoom: (zoom) => {
+        this.inspectZoom = zoom;
+      },
+      setBrowseInspectZoom: (zoom) => {
+        this.browseInspectZoom = zoom;
+      },
+      getFitZoomForRoom: () => this.getFitZoomForRoom(),
+      setShouldCenterCamera: (value) => {
+        this.shouldCenterCamera = value;
+      },
+      setShouldRespawnPlayer: (value) => {
+        this.shouldRespawnPlayer = value;
+      },
+      isWithinLoadedRoomBounds: (coordinates) =>
+        this.worldStreamingController.isWithinLoadedRoomBounds(coordinates),
+      refreshAround: (coordinates, options) => this.refreshAround(coordinates, options),
+      refreshAroundIfNeededOrFromCache: (coordinates, options) =>
+        this.refreshAroundIfNeededOrFromCache(coordinates, options),
+      getRoomSnapshotForCoordinates: (coordinates) =>
+        this.getRoomSnapshotForCoordinates(coordinates),
+      getExpandedRoomIdAt: (coordinates) => this.getExpandedRoomIdAt(coordinates),
+      isMultiCellExpandedRoomAt: (coordinates) => this.isMultiCellExpandedRoomAt(coordinates),
+      resetPlaySession: () => {
+        this.sessionResetController.resetPlaySession();
+      },
+      clearTouchGestureState: () => this.clearTouchGestureState(),
+      clearCurrentGoalRun: () => {
+        this.goalRunController.clearCurrentRun();
+      },
+      clearRoomGoalIntroState: () => this.clearRoomGoalIntroState(),
+      syncScenePauseState: () => this.syncScenePauseState(),
+      syncAppMode: () => this.syncAppMode(),
+      showTransientStatus: (message) => this.showTransientStatus(message),
+      renderHud: () => this.renderHud(),
+    }, this.roomRushResultController);
     this.presenceController = new OverworldPresenceController({
       scene: this,
       isFullRoomLoaded: (roomId) => this.loadedFullRoomsById.has(roomId),
@@ -1541,7 +1594,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.goalRunController.abandonActiveRun();
       },
       abandonRoomRushRun: () => {
-        this.roomRushRunController.abandonActiveRun();
+        this.roomRushModeController.abandonActiveRun();
       },
       finalizeActiveCourseRun: (result) => {
         void this.coursePlaybackController.finalizeActiveCourseRun(result);
@@ -1555,7 +1608,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.goalRunController.reset();
       },
       resetRoomRushController: () => {
-        this.roomRushRunController.reset();
+        this.roomRushModeController.resetRun();
       },
       redrawGoalMarkers: () => this.redrawGoalMarkers(),
     });
@@ -1839,7 +1892,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private get activeRoomRushRun(): ActiveRoomRushRunState | null {
-    return this.roomRushRunController.getCurrentRun();
+    return this.roomRushModeController.getCurrentRun();
   }
 
   private getSelectedCourseContext() {
@@ -1883,6 +1936,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.roomSummariesById.get(roomIdFromCoordinates(coordinates))?.expandedRoom?.expandedRoomId
       ?? null
     );
+  }
+
+  private isMultiCellExpandedRoomAt(coordinates: RoomCoordinates): boolean {
+    const expandedRoom = this.roomSummariesById.get(roomIdFromCoordinates(coordinates))?.expandedRoom ?? null;
+    return (expandedRoom?.cellCount ?? 0) > 1;
   }
 
   private getActiveCourseDraftSessionContextForRoom(roomId: string): EditorCourseEditData | null {
@@ -2336,8 +2394,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.score = 0;
     this.clearRankedRunTrace();
     this.goalRunController.reset();
-    this.roomRushRunController.reset();
-    this.roomRushResultController.reset();
+    this.roomRushModeController.reset();
     this.playerPresentationController.reset();
     this.browseOverlayController.destroy();
     this.shouldCenterCamera = false;
@@ -2401,19 +2458,17 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private createBackdrop(): void {
-    const textureKey = ensureStarfieldTexture(this);
-    const farLayer = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, textureKey);
-    farLayer.setOrigin(0, 0);
-    farLayer.setDepth(-80);
-    farLayer.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-
-    const nearLayer = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, textureKey);
-    nearLayer.setOrigin(0, 0);
-    nearLayer.setDepth(-79);
-    nearLayer.setAlpha(0.28);
-    nearLayer.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-
-    this.starfieldSprites = [farLayer, nearLayer];
+    this.starfieldSprites = [0, 1].map((index) => {
+      const config = getStarfieldLayerConfig(index);
+      return createStarfieldTileSprite(this, {
+        x: 0,
+        y: 0,
+        width: this.scale.width,
+        height: this.scale.height,
+        depth: -80 + index,
+        alpha: config.alpha,
+      });
+    });
     this.ensureBackdropCamera();
     this.syncBackdropCameraIgnores();
     this.updateBackdrop();
@@ -2428,19 +2483,13 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     const motionCamera = this.cameras.main;
     const backdropCamera = this.backdropCamera;
-    const configs = [
-      { parallax: 0.035, tileScale: 1 },
-      { parallax: 0.12, tileScale: 0.58 },
-    ];
 
     for (let index = 0; index < this.starfieldSprites.length; index++) {
       const sprite = this.starfieldSprites[index];
-      const config = configs[Math.min(index, configs.length - 1)];
-      sprite.setPosition(0, 0);
-      sprite.setSize(this.scale.width, this.scale.height);
-      sprite.setTileScale(config.tileScale, config.tileScale);
-      sprite.tilePositionX = (motionCamera.scrollX * config.parallax) / config.tileScale;
-      sprite.tilePositionY = (motionCamera.scrollY * config.parallax) / config.tileScale;
+      syncStarfieldTileSprite(sprite, motionCamera, getStarfieldLayerConfig(index), {
+        width: this.scale.width,
+        height: this.scale.height,
+      });
     }
 
     if (backdropCamera) {
@@ -3244,48 +3293,15 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private tickRoomRushRun(delta: number): void {
-    this.setRoomRushMutationStatus(this.roomRushRunController.tick(delta), {
-      renderHud: false,
-    });
+    this.roomRushModeController.tick(delta);
   }
 
   private recordRoomRushVisit(room: RoomSnapshot | null): void {
-    this.setRoomRushMutationStatus(
-      this.roomRushRunController.recordRoomVisit(room, this.getRoomRushAreaId(room)),
-    );
+    this.roomRushModeController.recordVisit(room);
   }
 
   private recordRoomRushDeath(reason: string): boolean {
-    const result = this.roomRushRunController.recordDeath(reason);
-    this.setRoomRushMutationStatus(result);
-    if (result.terminalResult === 'failed') {
-      this.showRoomRushResult(result.transientStatus);
-    }
-    return result.terminalResult === 'failed';
-  }
-
-  private setRoomRushMutationStatus(
-    result: { changed: boolean; transientStatus: string | null; terminalResult?: string | null },
-    options: { renderHud?: boolean } = {},
-  ): void {
-    if (!result.changed) {
-      return;
-    }
-
-    if (result.transientStatus) {
-      this.showTransientStatus(result.transientStatus);
-    }
-
-    if (options.renderHud !== false) {
-      this.renderHud();
-    }
-  }
-
-  private showRoomRushResult(finalStatus: string | null): void {
-    this.roomRushResultController.showResult(
-      this.roomRushRunController.getDebugSnapshot(),
-      finalStatus,
-    );
+    return this.roomRushModeController.recordDeath(reason);
   }
 
   private applyRoomRushResultOverviewCameraState(state: RoomRushOverviewCameraState): void {
@@ -3309,7 +3325,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   getRoomRushShareOverworldCapture(runState: ActiveRoomRushRunState): RoomRushOverworldCapture | null {
-    return this.roomRushResultController.getOverworldCapture(runState);
+    return this.roomRushModeController.getShareOverworldCapture(runState);
   }
 
   private async refreshLeaderboardForSelection(): Promise<void> {
@@ -3395,8 +3411,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       return false;
     }
     const forceGoalIntro = this.forceRoomGoalIntroFromOverworldPending;
-    this.roomGoalIntroFromOverworldPending = false;
-    this.forceRoomGoalIntroFromOverworldPending = false;
+    this.clearRoomGoalIntroState({ keepPauseRequest: true });
 
     const roomGoalIntroModal = getRoomGoalIntroModalController();
     if (!roomGoalIntroModal || roomGoalIntroModal.isOpen()) {
@@ -3404,6 +3419,14 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     return forceGoalIntro || roomGoalIntroModal.shouldShowForRoom(room);
+  }
+
+  private clearRoomGoalIntroState(options: { keepPauseRequest?: boolean } = {}): void {
+    this.roomGoalIntroFromOverworldPending = false;
+    this.forceRoomGoalIntroFromOverworldPending = false;
+    if (!options.keepPauseRequest) {
+      this.roomGoalIntroPauseRequested = false;
+    }
   }
 
   private areMultiplayerRoomGoalsActive(): boolean {
@@ -4437,149 +4460,19 @@ export class OverworldPlayScene extends Phaser.Scene {
     difficulty: RoomRushDifficulty;
     startRule: RoomRushStartRule;
   }): Promise<boolean> {
-    if (this.activeRoomRushRun) {
-      this.endRoomRushRun();
-      return true;
-    }
-
-    if (this.mode === 'play') {
-      this.showTransientStatus(`${ROOM_RUSH_NAME} starts from the overworld.`);
-      return false;
-    }
-
-    const startCoordinates =
-      options.startRule === 'origin'
-        ? { ...DEFAULT_ROOM_COORDINATES }
-        : { ...this.selectedCoordinates };
-    const returnCoordinates = { ...this.selectedCoordinates };
-
-    if (
-      options.startRule === 'origin' &&
-      !this.worldStreamingController.isWithinLoadedRoomBounds(startCoordinates)
-    ) {
-      const refreshed = await this.refreshAround(startCoordinates);
-      if (!refreshed) {
-        this.showTransientStatus(`Could not load origin room for ${ROOM_RUSH_NAME}.`);
-        return false;
-      }
-    }
-
-    const startRoom = this.getRoomSnapshotForCoordinates(startCoordinates);
-    if (!startRoom || startRoom.status !== 'published') {
-      this.showTransientStatus(`${ROOM_RUSH_NAME} starts on available rooms only.`);
-      return false;
-    }
-
-    this.sessionResetController.resetPlaySession();
-    this.clearTouchGestureState();
-    this.goalRunController.clearCurrentRun();
-    this.roomGoalIntroFromOverworldPending = false;
-    this.forceRoomGoalIntroFromOverworldPending = false;
-    this.roomGoalIntroPauseRequested = false;
-    this.syncScenePauseState();
-    this.setRoomRushMutationStatus(
-      this.roomRushRunController.startRun({
-        difficulty: options.difficulty,
-        startRule: options.startRule,
-        startCoordinates,
-        returnCoordinates,
-        startRoom,
-        startExpandedRoomId: this.getRoomRushAreaId(startRoom),
-      }),
-    );
-
-    this.browseInspectZoom = this.inspectZoom;
-    this.mode = 'play';
-    this.cameraMode = 'follow';
-    this.inspectZoom = this.getFitZoomForRoom();
-    this.syncAppMode();
-    this.currentRoomCoordinates = { ...startCoordinates };
-    this.selectedCoordinates = { ...startCoordinates };
-    this.shouldCenterCamera = true;
-    this.shouldRespawnPlayer = true;
-    setFocusedCoordinatesInUrl(startCoordinates);
-    this.refreshAroundIfNeededOrFromCache(startCoordinates, {
-      preferCachedWindow: true,
-      refreshLeaderboards: false,
-    });
-    return true;
+    return this.roomRushModeController.start(options);
   }
 
   private async restartRoomRushRun(): Promise<boolean> {
-    const runState = this.roomRushRunController.getDebugSnapshot();
-    if (!runState || runState.result !== 'active' || this.mode !== 'play') {
-      return false;
-    }
-
-    const startCoordinates = { ...runState.startCoordinates };
-    const returnCoordinates = { ...runState.returnCoordinates };
-    if (!this.worldStreamingController.isWithinLoadedRoomBounds(startCoordinates)) {
-      const refreshed = await this.refreshAround(startCoordinates);
-      if (!refreshed) {
-        this.showTransientStatus(`Could not reload ${ROOM_RUSH_NAME} start room.`);
-        return false;
-      }
-    }
-
-    const startRoom = this.getRoomSnapshotForCoordinates(startCoordinates);
-    if (!startRoom || startRoom.status !== 'published') {
-      this.showTransientStatus(`${ROOM_RUSH_NAME} start room is unavailable.`);
-      return false;
-    }
-
-    this.sessionResetController.resetPlaySession();
-    this.clearTouchGestureState();
-    this.goalRunController.clearCurrentRun();
-    this.roomGoalIntroFromOverworldPending = false;
-    this.forceRoomGoalIntroFromOverworldPending = false;
-    this.roomGoalIntroPauseRequested = false;
-    this.syncScenePauseState();
-    this.setRoomRushMutationStatus(
-      this.roomRushRunController.startRun({
-        difficulty: runState.difficulty,
-        startRule: runState.startRule,
-        startCoordinates,
-        returnCoordinates,
-        startRoom,
-        startExpandedRoomId: this.getRoomRushAreaId(startRoom),
-      }),
-    );
-
-    this.mode = 'play';
-    this.cameraMode = 'follow';
-    this.inspectZoom = this.getFitZoomForRoom();
-    this.syncAppMode();
-    this.currentRoomCoordinates = { ...startCoordinates };
-    this.selectedCoordinates = { ...startCoordinates };
-    this.shouldCenterCamera = true;
-    this.shouldRespawnPlayer = true;
-    setFocusedCoordinatesInUrl(startCoordinates);
-    await this.refreshAround(startCoordinates, { forceChunkReload: true });
-    this.renderHud();
-    return true;
+    return this.roomRushModeController.restart();
   }
 
   endRoomRushRun(): void {
-    const runState = this.activeRoomRushRun;
-    if (!runState) {
-      return;
-    }
-
-    const result = this.roomRushRunController.completeActiveRun();
-    const finalStatus = result.transientStatus;
-    this.setRoomRushMutationStatus(result);
-    this.showRoomRushResult(finalStatus);
+    this.roomRushModeController.end();
   }
 
   isRoomRushRunActive(): boolean {
-    return Boolean(this.activeRoomRushRun);
-  }
-
-  private getRoomRushAreaId(room: RoomSnapshot | null): string | null {
-    if (!room) {
-      return null;
-    }
-    return this.getExpandedRoomIdAt(room.coordinates) ?? expandedRoomIdFromStandaloneRoomId(room.id);
+    return this.roomRushModeController.isActive();
   }
 
   async invitePvpDuel(entry: {
@@ -5832,9 +5725,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     window.removeEventListener(PLAYFUN_GAME_RESUME_EVENT, this.handlePlayfunGameResume);
     this.playfunPauseDepth = 0;
     this.playfunPauseRequested = false;
-    this.roomGoalIntroFromOverworldPending = false;
-    this.forceRoomGoalIntroFromOverworldPending = false;
-    this.roomGoalIntroPauseRequested = false;
+    this.clearRoomGoalIntroState();
     this.scenePauseApplied = false;
     getRoomGoalIntroModalController()?.forceClose();
     this.scale.off('resize', this.handleResize, this);
@@ -5873,7 +5764,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     const camera = this.cameras.main;
     const cameraBounds = camera.getBounds();
     const goalRunSnapshot = this.goalRunController.getDebugSnapshot();
-    const roomRushRunSnapshot = this.roomRushRunController.getDebugSnapshot();
+    const roomRushRunSnapshot = this.roomRushModeController.getDebugSnapshot();
     const streamingMetrics = this.worldStreamingController.getDebugMetrics();
     const presenceDebug = this.presenceController.getDebugSnapshot();
     const roomChatDebug = this.roomChatController.getDebugSnapshot();

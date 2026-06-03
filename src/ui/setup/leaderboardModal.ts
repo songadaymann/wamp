@@ -1,8 +1,4 @@
 import Phaser from 'phaser';
-import {
-  hasFeaturedRoomsAdminKey,
-  setFeaturedRoomStatus,
-} from '../../admin/featuredRoomsClient';
 import { getAuthDebugState } from '../../auth/client';
 import { dispatchProgressionFeedback } from '../../progression/progressionFeedback';
 import { saveSeenRewardProgression } from '../../progression/rewardStingSeenState';
@@ -19,9 +15,6 @@ import {
   type RoomRushLeaderboardsResponse,
   type RoomRushStartRule,
   type RoomDifficulty,
-  type RoomDiscoveryEntry,
-  type RoomDiscoveryResponse,
-  type RoomDiscoverySort,
   type RoomLeaderboardEntry,
   type RoomLeaderboardResponse,
 } from '../../runs/model';
@@ -47,7 +40,7 @@ import {
   type PostRunRatingSubmittedDetail,
 } from '../../progression/postRunRatingEvents';
 
-type LeaderboardTab = 'room' | 'discover' | 'course' | 'roomRush' | 'global';
+type LeaderboardTab = 'room' | 'course' | 'roomRush' | 'global';
 
 const ROOM_RUSH_MODE_ORDER: RoomRushLeaderboardModeKey[] = [
   'easy:selected',
@@ -63,12 +56,10 @@ type LeaderboardModalElements = {
   error: HTMLElement | null;
   closeButton: HTMLElement | null;
   roomTabButton: HTMLButtonElement | null;
-  discoverTabButton: HTMLButtonElement | null;
   courseTabButton: HTMLButtonElement | null;
   roomRushTabButton: HTMLButtonElement | null;
   globalTabButton: HTMLButtonElement | null;
   roomPanel: HTMLElement | null;
-  discoverPanel: HTMLElement | null;
   coursePanel: HTMLElement | null;
   roomRushPanel: HTMLElement | null;
   globalPanel: HTMLElement | null;
@@ -80,10 +71,6 @@ type LeaderboardModalElements = {
   roomQualityButtons: HTMLButtonElement[];
   roomDifficultyButtons: HTMLButtonElement[];
   roomList: HTMLElement | null;
-  discoverFilterButtons: HTMLButtonElement[];
-  discoverSortButtons: HTMLButtonElement[];
-  discoverSummary: HTMLElement | null;
-  discoverList: HTMLElement | null;
   courseSummary: HTMLElement | null;
   courseViewer: HTMLElement | null;
   courseList: HTMLElement | null;
@@ -104,7 +91,6 @@ export class LeaderboardModalController {
   private currentPublishedVersion: number | null = null;
   private selectedVersion: number | null = null;
   private roomLeaderboard: RoomLeaderboardResponse | null = null;
-  private roomDiscovery: RoomDiscoveryResponse | null = null;
   private courseLeaderboard: CourseLeaderboardResponse | null = null;
   private roomRushLeaderboards: RoomRushLeaderboardsResponse | null = null;
   private globalLeaderboard: GlobalLeaderboardResponse | null = null;
@@ -112,8 +98,6 @@ export class LeaderboardModalController {
   private loading = false;
   private roomLoading = false;
   private roomLoaded = false;
-  private discoverLoading = false;
-  private discoverLoaded = false;
   private courseLoading = false;
   private courseLoaded = false;
   private roomRushLoading = false;
@@ -122,9 +106,6 @@ export class LeaderboardModalController {
   private globalLoading = false;
   private globalLoaded = false;
   private voteSubmitting = false;
-  private discoverFilter: RoomDifficulty | null = null;
-  private discoverSort: RoomDiscoverySort = 'featured';
-  private discoverFeaturePendingRoomId: string | null = null;
   private selectedRoomRushMode: RoomRushLeaderboardModeKey = 'easy:selected';
   private preferredInitialTab: LeaderboardTab | null = null;
 
@@ -158,14 +139,10 @@ export class LeaderboardModalController {
     if (detail.contentType === 'room') {
       const shouldRefreshRoom =
         this.roomLoaded && this.roomLeaderboard?.roomId === detail.contentId;
-      const shouldRefreshDiscover = this.discoverLoaded;
-      if (!shouldRefreshRoom && !shouldRefreshDiscover) {
+      if (!shouldRefreshRoom) {
         return;
       }
-      void Promise.allSettled([
-        shouldRefreshRoom ? this.loadRoomLeaderboard() : Promise.resolve(),
-        shouldRefreshDiscover ? this.loadDiscoveryResults() : Promise.resolve(),
-      ]);
+      void this.loadRoomLeaderboard();
       return;
     }
 
@@ -189,12 +166,10 @@ export class LeaderboardModalController {
       error: this.doc.getElementById('leaderboard-modal-error'),
       closeButton: this.doc.getElementById('btn-leaderboard-close'),
       roomTabButton: this.doc.getElementById('btn-leaderboard-tab-room') as HTMLButtonElement | null,
-      discoverTabButton: this.doc.getElementById('btn-leaderboard-tab-discover') as HTMLButtonElement | null,
       courseTabButton: this.doc.getElementById('btn-leaderboard-tab-course') as HTMLButtonElement | null,
       roomRushTabButton: this.doc.getElementById('btn-leaderboard-tab-room-rush') as HTMLButtonElement | null,
       globalTabButton: this.doc.getElementById('btn-leaderboard-tab-global') as HTMLButtonElement | null,
       roomPanel: this.doc.getElementById('leaderboard-room-panel'),
-      discoverPanel: this.doc.getElementById('leaderboard-discover-panel'),
       coursePanel: this.doc.getElementById('leaderboard-course-panel'),
       roomRushPanel: this.doc.getElementById('leaderboard-room-rush-panel'),
       globalPanel: this.doc.getElementById('leaderboard-global-panel'),
@@ -210,14 +185,6 @@ export class LeaderboardModalController {
         this.doc.querySelectorAll<HTMLButtonElement>('#leaderboard-room-difficulty-actions [data-room-difficulty]')
       ),
       roomList: this.doc.getElementById('leaderboard-room-list'),
-      discoverFilterButtons: Array.from(
-        this.doc.querySelectorAll<HTMLButtonElement>('#leaderboard-discover-filters [data-discover-difficulty]')
-      ),
-      discoverSortButtons: Array.from(
-        this.doc.querySelectorAll<HTMLButtonElement>('#leaderboard-discover-sorts [data-discover-sort]')
-      ),
-      discoverSummary: this.doc.getElementById('leaderboard-discover-summary'),
-      discoverList: this.doc.getElementById('leaderboard-discover-list'),
       courseSummary: this.doc.getElementById('leaderboard-course-summary'),
       courseViewer: this.doc.getElementById('leaderboard-course-viewer'),
       courseList: this.doc.getElementById('leaderboard-course-list'),
@@ -242,9 +209,6 @@ export class LeaderboardModalController {
       if (!this.elements.roomTabButton?.disabled) {
         void this.activateTab('room');
       }
-    });
-    this.elements.discoverTabButton?.addEventListener('click', () => {
-      void this.activateTab('discover');
     });
     this.elements.courseTabButton?.addEventListener('click', () => {
       if (!this.elements.courseTabButton?.disabled) {
@@ -276,24 +240,6 @@ export class LeaderboardModalController {
         if (qualityStars !== null) {
           void this.submitRoomQualityVote(qualityStars);
         }
-      });
-    }
-    for (const button of this.elements.discoverFilterButtons) {
-      button.addEventListener('click', () => {
-        const difficulty = this.parseDifficultyButtonValue(button.dataset.discoverDifficulty);
-        this.discoverFilter = difficulty;
-        void this.loadDiscoveryResults();
-      });
-    }
-    for (const button of this.elements.discoverSortButtons) {
-      button.addEventListener('click', () => {
-        const sort = this.parseDiscoverSortButtonValue(button.dataset.discoverSort);
-        if (!sort || sort === this.discoverSort) {
-          return;
-        }
-
-        this.discoverSort = sort;
-        void this.loadDiscoveryResults();
       });
     }
     for (const button of this.elements.roomRushModeButtons) {
@@ -332,8 +278,6 @@ export class LeaderboardModalController {
     this.loading = true;
     this.roomLoading = false;
     this.roomLoaded = false;
-    this.discoverLoading = false;
-    this.discoverLoaded = false;
     this.courseLoading = false;
     this.courseLoaded = false;
     this.roomRushLoading = false;
@@ -341,7 +285,6 @@ export class LeaderboardModalController {
     this.globalLoaded = false;
     this.voteSubmitting = false;
     this.roomLeaderboard = null;
-    this.roomDiscovery = null;
     this.courseLeaderboard = null;
     this.roomRushLeaderboards = null;
     this.roomRushLoadedModes.clear();
@@ -351,17 +294,10 @@ export class LeaderboardModalController {
     this.roomVersionOptions = [];
     this.currentPublishedVersion = null;
     this.selectedVersion = null;
-    this.discoverFilter = null;
-    this.discoverSort = 'featured';
-    this.discoverFeaturePendingRoomId = null;
     this.selectedRoomRushMode = 'easy:selected';
     this.activeTab = initialTab;
     this.render();
     await this.load();
-  }
-
-  async openDiscover(): Promise<void> {
-    await this.open('discover');
   }
 
   close(): void {
@@ -385,11 +321,6 @@ export class LeaderboardModalController {
       case 'room':
         if (!this.roomLoaded && !this.roomLoading) {
           await this.loadRoomLeaderboard();
-        }
-        return;
-      case 'discover':
-        if (!this.discoverLoaded && !this.discoverLoading) {
-          await this.loadDiscoveryResults();
         }
         return;
       case 'course':
@@ -555,29 +486,6 @@ export class LeaderboardModalController {
     };
   }
 
-  private async loadDiscoveryResults(): Promise<void> {
-    this.discoverLoading = true;
-    this.discoverLoaded = false;
-    this.render();
-    try {
-      this.roomDiscovery = await this.runRepository.loadRoomDiscovery(
-        this.discoverFilter,
-        this.discoverSort,
-        100,
-        this.isAllPublishedRoomDiscoveryFeed(),
-      );
-      this.setError(null);
-    } catch (error) {
-      console.error('Failed to load room discovery', error);
-      this.roomDiscovery = null;
-      this.setError(error instanceof Error ? error.message : 'Failed to load room discovery.');
-    } finally {
-      this.discoverLoading = false;
-      this.discoverLoaded = true;
-      this.render();
-    }
-  }
-
   private async loadGlobalLeaderboard(): Promise<void> {
     this.globalLoading = true;
     this.globalLoaded = false;
@@ -656,10 +564,7 @@ export class LeaderboardModalController {
         saveSeenRewardProgression(authUserId, response.progression);
       }
       requestProfileInvalidation(authUserId);
-      await Promise.all([
-        this.loadRoomLeaderboard(),
-        this.discoverLoaded ? this.loadDiscoveryResults() : Promise.resolve(),
-      ]);
+      await this.loadRoomLeaderboard();
       dispatchProgressionFeedback({
         previousProgression,
         currentProgression: response.progression,
@@ -687,7 +592,6 @@ export class LeaderboardModalController {
     const roomAvailable = this.roomVersions.length > 0 && this.roomContext?.state === 'published';
     const courseAvailable = Boolean(this.roomContext?.courseId);
     this.elements.roomTabButton?.classList.toggle('active', this.activeTab === 'room');
-    this.elements.discoverTabButton?.classList.toggle('active', this.activeTab === 'discover');
     this.elements.courseTabButton?.classList.toggle('active', this.activeTab === 'course');
     this.elements.roomRushTabButton?.classList.toggle('active', this.activeTab === 'roomRush');
     this.elements.globalTabButton?.classList.toggle('active', this.activeTab === 'global');
@@ -705,14 +609,12 @@ export class LeaderboardModalController {
     }
 
     this.elements.roomPanel?.classList.toggle('hidden', this.activeTab !== 'room');
-    this.elements.discoverPanel?.classList.toggle('hidden', this.activeTab !== 'discover');
     this.elements.coursePanel?.classList.toggle('hidden', this.activeTab !== 'course');
     this.elements.roomRushPanel?.classList.toggle('hidden', this.activeTab !== 'roomRush');
     this.elements.globalPanel?.classList.toggle('hidden', this.activeTab !== 'global');
     this.renderMeta();
     this.renderVersionSelect();
     this.renderRoomPanel();
-    this.renderDiscoverPanel();
     this.renderCoursePanel();
     this.renderRoomRushPanel();
     this.renderGlobalPanel();
@@ -734,16 +636,13 @@ export class LeaderboardModalController {
 
     if (this.elements.title) {
       this.elements.title.textContent =
-        this.activeTab === 'discover'
-          ? 'Explore Rooms'
-          : this.activeTab === 'roomRush'
+        this.activeTab === 'roomRush'
             ? 'Room Rush'
             : 'Leaderboard';
     }
 
     if (this.loading) {
-      this.elements.meta.textContent =
-        this.activeTab === 'discover' ? 'Loading room explorer...' : 'Loading leaderboards...';
+      this.elements.meta.textContent = 'Loading leaderboards...';
       return;
     }
 
@@ -760,17 +659,6 @@ export class LeaderboardModalController {
         ? `${this.courseLeaderboard.courseTitle?.trim() || 'Course'} · ${this.courseLeaderboard.goalType.replace('_', ' ')} · v${this.courseLeaderboard.courseVersion}`
         : 'No published course selected.';
       this.elements.meta.textContent = courseLabel;
-      return;
-    }
-
-    if (this.activeTab === 'discover') {
-      const filterLabel =
-        this.discoverFilter === null
-          ? this.isAllPublishedRoomDiscoveryFeed()
-            ? 'all newly published rooms'
-            : 'all published challenge rooms'
-          : `${ROOM_DIFFICULTY_LABELS[this.discoverFilter].toLowerCase()}-rated published rooms`;
-      this.elements.meta.textContent = `Browse ${filterLabel} sorted by ${this.getDiscoverSortLabel(this.discoverSort).toLowerCase()}.`;
       return;
     }
 
@@ -898,62 +786,6 @@ export class LeaderboardModalController {
         this.renderRoomEntry(entry, this.roomLeaderboard.rankingMode)
       );
     }
-  }
-
-  private renderDiscoverPanel(): void {
-    if (!this.elements.discoverList || !this.elements.discoverSummary) {
-      return;
-    }
-
-    const discoverPending =
-      this.loading || this.discoverLoading || (this.activeTab === 'discover' && !this.discoverLoaded);
-    this.elements.discoverList.replaceChildren();
-    for (const button of this.elements.discoverFilterButtons) {
-      const difficulty = this.parseDifficultyButtonValue(button.dataset.discoverDifficulty);
-      button.classList.toggle('active', difficulty === this.discoverFilter);
-    }
-    for (const button of this.elements.discoverSortButtons) {
-      const sort = this.parseDiscoverSortButtonValue(button.dataset.discoverSort);
-      button.classList.toggle('active', sort === this.discoverSort);
-      button.disabled = discoverPending;
-    }
-
-    if (discoverPending) {
-      this.elements.discoverSummary.textContent = 'Loading room explorer...';
-      return;
-    }
-
-    const results = this.roomDiscovery?.results ?? [];
-    const featuredCount = results.filter((entry) => entry.featured).length;
-    const roomCountLabel =
-      this.discoverFilter === null
-        ? this.isAllPublishedRoomDiscoveryFeed()
-          ? `${results.length} published room${results.length === 1 ? '' : 's'}`
-          : `${results.length} published challenge room${results.length === 1 ? '' : 's'}`
-        : `${results.length} ${ROOM_DIFFICULTY_LABELS[this.discoverFilter].toLowerCase()} room${results.length === 1 ? '' : 's'}`;
-    const featuredLabel = featuredCount > 0 ? ` · ${featuredCount} featured` : '';
-    this.elements.discoverSummary.textContent = `${roomCountLabel}${featuredLabel} · sorted by ${this.getDiscoverSortLabel(this.discoverSort).toLowerCase()}`;
-
-    if (results.length === 0) {
-      const empty = this.doc.createElement('div');
-      empty.className = 'leaderboard-empty';
-      empty.textContent =
-        this.discoverFilter === null
-          ? this.isAllPublishedRoomDiscoveryFeed()
-            ? 'No published rooms found yet.'
-            : 'No published challenge rooms found yet.'
-          : `No ${ROOM_DIFFICULTY_LABELS[this.discoverFilter].toLowerCase()}-rated rooms yet.`;
-      this.elements.discoverList.appendChild(empty);
-      return;
-    }
-
-    for (const entry of results) {
-      this.elements.discoverList.appendChild(this.renderDiscoverEntry(entry));
-    }
-  }
-
-  private isAllPublishedRoomDiscoveryFeed(): boolean {
-    return this.discoverFilter === null && this.discoverSort === 'newest';
   }
 
   private renderCoursePanel(): void {
@@ -1148,93 +980,6 @@ export class LeaderboardModalController {
     return row;
   }
 
-  private renderDiscoverEntry(entry: RoomDiscoveryEntry): HTMLElement {
-    const item = this.doc.createElement('div');
-    item.className = 'leaderboard-discover-item';
-
-    const button = this.doc.createElement('button');
-    button.className = 'leaderboard-discover-row';
-    button.type = 'button';
-    button.addEventListener('click', () => {
-      this.close();
-      void getActiveOverworldScene(this.game)?.jumpToCoordinates?.(entry.roomCoordinates);
-    });
-
-    const titleRow = this.doc.createElement('div');
-    titleRow.className = 'leaderboard-discover-title-row';
-
-    const title = this.doc.createElement('div');
-    title.className = 'leaderboard-discover-title';
-    title.textContent =
-      entry.roomTitle?.trim() || `Room ${entry.roomCoordinates.x},${entry.roomCoordinates.y}`;
-    titleRow.appendChild(title);
-
-    if (entry.featured) {
-      const badge = this.doc.createElement('div');
-      badge.className = 'leaderboard-discover-feature-badge';
-      badge.textContent = 'Featured';
-      titleRow.appendChild(badge);
-    }
-
-    if (entry.expandedRoom && entry.expandedRoom.cellCount > 1) {
-      const badge = this.doc.createElement('div');
-      badge.className = 'leaderboard-discover-area-badge';
-      badge.textContent = `${entry.expandedRoom.cellCount} cells`;
-      titleRow.appendChild(badge);
-    }
-
-    button.appendChild(titleRow);
-
-    const meta = this.doc.createElement('div');
-    meta.className = 'leaderboard-discover-meta';
-    const difficultyLabel = entry.consensusDifficulty
-      ? ROOM_DIFFICULTY_LABELS[entry.consensusDifficulty]
-      : entry.goalType
-        ? 'Unrated'
-        : 'No challenge';
-    const goalLabel = entry.goalType ? entry.goalType.replace(/_/g, ' ') : 'free play';
-    const versionLabel = entry.expandedRoom && typeof entry.expandedRoom.expandedRoomVersion === 'number'
-      ? `area v${entry.expandedRoom.expandedRoomVersion}`
-      : this.formatRoomVersionSummary(
-          entry.displayRoomVersion,
-          entry.roomVersion,
-          entry.leaderboardSourceVersion
-        );
-    const canonicalLabel =
-      entry.canonicalRoomVersion !== null &&
-      (entry.canonicalRoomVersion === entry.roomVersion ||
-        entry.canonicalRoomVersion === entry.displayRoomVersion)
-        ? ' · canonical'
-        : '';
-    meta.textContent = `${goalLabel} · ${versionLabel}${canonicalLabel} · ${difficultyLabel} · ${
-      entry.voteCount
-    } vote${entry.voteCount === 1 ? '' : 's'} · ${this.formatQualitySummary(entry.quality)}${this.formatTrophySuffix(entry.trophy)} · ${this.formatDiscoveryLocationSummary(entry)}`;
-    button.appendChild(meta);
-    item.appendChild(button);
-
-    if (hasFeaturedRoomsAdminKey()) {
-      const adminButton = this.doc.createElement('button');
-      adminButton.className = 'bar-btn bar-btn-small leaderboard-discover-admin-btn';
-      adminButton.type = 'button';
-      adminButton.textContent =
-        this.discoverFeaturePendingRoomId === entry.roomId
-          ? 'Saving...'
-          : entry.featured
-            ? 'Unfeature'
-            : 'Feature';
-      adminButton.disabled = this.discoverFeaturePendingRoomId !== null;
-      adminButton.dataset.featuredActive = entry.featured ? 'true' : 'false';
-      adminButton.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        void this.toggleFeaturedRoom(entry);
-      });
-      item.appendChild(adminButton);
-    }
-
-    return item;
-  }
-
   private renderCourseEntry(
     entry: CourseLeaderboardEntry,
     rankingMode: CourseLeaderboardResponse['rankingMode']
@@ -1325,7 +1070,7 @@ export class LeaderboardModalController {
   }
 
   private formatQualitySummary(
-    quality: RoomLeaderboardResponse['quality'] | CourseLeaderboardResponse['quality'] | RoomDiscoveryEntry['quality'] | null
+    quality: RoomLeaderboardResponse['quality'] | CourseLeaderboardResponse['quality'] | null
   ): string {
     if (!quality || quality.adjustedAverage === null) {
       return 'quality unrated';
@@ -1345,17 +1090,9 @@ export class LeaderboardModalController {
   }
 
   private formatTrophySuffix(
-    trophy: RoomLeaderboardResponse['trophy'] | CourseLeaderboardResponse['trophy'] | RoomDiscoveryEntry['trophy'] | null
+    trophy: RoomLeaderboardResponse['trophy'] | CourseLeaderboardResponse['trophy'] | null
   ): string {
     return trophy ? ' · trophy' : '';
-  }
-
-  private formatDiscoveryLocationSummary(entry: RoomDiscoveryEntry): string {
-    if (entry.expandedRoom && entry.expandedRoom.cellCount > 1) {
-      return `${entry.expandedRoom.cellCount} cells · focus ${entry.roomCoordinates.x},${entry.roomCoordinates.y}`;
-    }
-
-    return `${entry.roomCoordinates.x},${entry.roomCoordinates.y}`;
   }
 
   private getDifficultyStatusText(): string {
@@ -1441,22 +1178,6 @@ export class LeaderboardModalController {
     return Number.isInteger(parsed) && parsed >= 1 && parsed <= 5 ? parsed : null;
   }
 
-  private parseDiscoverSortButtonValue(value: string | undefined): RoomDiscoverySort | null {
-    if (
-      value === 'featured'
-      || value === 'quality'
-      || value === 'newest'
-      || value === 'builder'
-      || value === 'unbeaten'
-      || value === 'unvisited'
-      || value === 'unrated'
-    ) {
-      return value;
-    }
-
-    return null;
-  }
-
   private parseRoomRushModeButtonValue(value: string | undefined): RoomRushLeaderboardModeKey | null {
     if (
       value === 'easy:selected' ||
@@ -1491,9 +1212,6 @@ export class LeaderboardModalController {
     const roomAvailable = this.roomVersions.length > 0 && this.roomContext?.state === 'published';
     const courseAvailable = Boolean(this.roomContext?.courseId);
 
-    if (requested === 'discover') {
-      return 'discover';
-    }
     if (requested === 'global') {
       return 'global';
     }
@@ -1508,50 +1226,6 @@ export class LeaderboardModalController {
     }
 
     return roomAvailable ? 'room' : courseAvailable ? 'course' : 'global';
-  }
-
-  private getDiscoverSortLabel(sort: RoomDiscoverySort): string {
-    switch (sort) {
-      case 'featured':
-        return 'Featured';
-      case 'quality':
-        return 'Top Rated';
-      case 'newest':
-        return 'Newest';
-      case 'builder':
-        return 'Builder';
-      case 'unbeaten':
-        return "Haven't Beaten";
-      case 'unvisited':
-        return 'Never Visited';
-      case 'unrated':
-        return "Haven't Rated";
-    }
-  }
-
-  private async toggleFeaturedRoom(entry: RoomDiscoveryEntry): Promise<void> {
-    if (this.discoverFeaturePendingRoomId !== null) {
-      return;
-    }
-
-    this.discoverFeaturePendingRoomId = entry.roomId;
-    this.render();
-    try {
-      await setFeaturedRoomStatus(entry.roomId, {
-        roomVersion: entry.roomVersion,
-        featured: !entry.featured,
-      });
-      this.setError(null);
-      await this.loadDiscoveryResults();
-    } catch (error) {
-      console.error('Failed to update featured room state', error);
-      this.setError(
-        error instanceof Error ? error.message : 'Failed to update featured room state.'
-      );
-    } finally {
-      this.discoverFeaturePendingRoomId = null;
-      this.render();
-    }
   }
 
   private formatRoomVersionLabel(response: RoomLeaderboardResponse): string {

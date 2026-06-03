@@ -64,6 +64,24 @@ export interface WorldChunkBounds {
   maxChunkY: number;
 }
 
+export function areWorldChunkBoundsEqual(left: WorldChunkBounds, right: WorldChunkBounds): boolean {
+  return (
+    left.minChunkX === right.minChunkX &&
+    left.maxChunkX === right.maxChunkX &&
+    left.minChunkY === right.minChunkY &&
+    left.maxChunkY === right.maxChunkY
+  );
+}
+
+export function containsWorldChunkBounds(container: WorldChunkBounds, inner: WorldChunkBounds): boolean {
+  return (
+    container.minChunkX <= inner.minChunkX &&
+    container.maxChunkX >= inner.maxChunkX &&
+    container.minChunkY <= inner.minChunkY &&
+    container.maxChunkY >= inner.maxChunkY
+  );
+}
+
 export interface WorldChunk {
   id: string;
   coordinates: WorldChunkCoordinates;

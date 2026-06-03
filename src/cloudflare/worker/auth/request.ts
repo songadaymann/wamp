@@ -1,6 +1,6 @@
 import type { ApiTokenScope, AuthSessionResponse } from '../../../auth/model';
 import type { SchoolAuthContext } from '../../../school/model';
-import { HttpError } from '../core/http';
+import { HttpError, isTrustedRequestOrigin } from '../core/http';
 import type { AuthSession, Env, RequestAuth } from '../core/types';
 import { loadAgentTokenAuth } from '../agents/store';
 import { loadSchoolAuthContextForUser } from '../school/store';
@@ -21,6 +21,7 @@ import {
 } from './store';
 
 export const SESSION_COOKIE_NAME = 'ep_session';
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export async function requireCurrentSession(
   env: Env,
@@ -32,6 +33,7 @@ export async function requireCurrentSession(
     throw new HttpError(401, `You must be signed in to ${actionLabel}.`);
   }
 
+  requireTrustedOriginForMutation(request);
   return session;
 }
 
@@ -80,6 +82,7 @@ export async function loadOptionalRequestAuth(
   request: Request
 ): Promise<RequestAuth | null> {
   const isAdmin = isAdminRequest(env, request);
+  const preferHeaderAuth = shouldPreferHeaderAuthForMutation(request);
   const bearerToken = parseBearerToken(request.headers.get('Authorization'));
   if (bearerToken) {
     const tokenAuth = (await loadApiTokenAuth(env, bearerToken)) ?? (await loadAgentTokenAuth(env, bearerToken));
@@ -94,8 +97,16 @@ export async function loadOptionalRequestAuth(
     return requireEnabledSchoolContext(env, auth);
   }
 
+  if (preferHeaderAuth) {
+    const playfunAuth = await loadPlayfunRequestAuth(env, request, isAdmin);
+    if (playfunAuth || isAdmin) {
+      return playfunAuth;
+    }
+  }
+
   const session = await loadCurrentSession(env, request);
   if (session) {
+    requireTrustedOriginForMutation(request);
     await syncPlayfunLinkForUser(env, request, session.user.id);
     const auth = await attachSchoolContext(
       env,
@@ -109,6 +120,22 @@ export async function loadOptionalRequestAuth(
   }
 
   return loadPlayfunRequestAuth(env, request, isAdmin);
+}
+
+export function requireTrustedOriginForMutation(request: Request): void {
+  if (!isMutatingRequest(request) || isTrustedRequestOrigin(request)) {
+    return;
+  }
+
+  throw new HttpError(403, 'Request origin is not trusted for cookie-authenticated mutations.');
+}
+
+function shouldPreferHeaderAuthForMutation(request: Request): boolean {
+  return isMutatingRequest(request) && !isTrustedRequestOrigin(request);
+}
+
+function isMutatingRequest(request: Request): boolean {
+  return MUTATING_METHODS.has(request.method.toUpperCase());
 }
 
 export async function loadCurrentSession(env: Env, request: Request): Promise<AuthSession | null> {

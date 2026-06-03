@@ -1,5 +1,6 @@
 import PartySocket from 'partysocket';
 import { getAuthDebugState, getResolvedPartykitConfig } from '../auth/client';
+import { PartyKitIdentityTokenProvider } from './identityTokenClient';
 import { resolveActivePlayerAvatarId } from '../player/avatar/runtime';
 import type { DefaultPlayerAnimationState } from '../player/defaultPlayer';
 import {
@@ -174,6 +175,8 @@ export class WorldPresenceClient {
   private readonly roomEditorsByShardId = new Map<string, Map<string, number>>();
   private readonly roomPreviewsByShardId = new Map<string, Map<string, WorldPresenceRoomPreview>>();
   private readonly connectedShards = new Set<string>();
+  private readonly pendingSocketShardIds = new Set<string>();
+  private readonly identityTokenProvider: PartyKitIdentityTokenProvider;
   private desiredShardIds = new Set<string>();
   private localPresence: WorldPresencePayload | null = null;
   private localRoomPreview: PresencePreviewPayload | null = null;
@@ -188,15 +191,17 @@ export class WorldPresenceClient {
   private lastSnapshotEmittedAt = 0;
 
   constructor(private readonly options: WorldPresenceClientOptions) {
+    this.identityTokenProvider = new PartyKitIdentityTokenProvider(() => this.options.identity);
     this.emitSnapshot();
   }
 
   setSubscribedShards(chunks: WorldChunkCoordinates[]): void {
     const desired = new Set(chunks.map((chunk) => chunkIdFromCoordinates(chunk)));
+    this.desiredShardIds = desired;
 
     for (const chunk of chunks) {
       const shardId = chunkIdFromCoordinates(chunk);
-      if (this.socketsByShardId.has(shardId)) {
+      if (this.socketsByShardId.has(shardId) || this.pendingSocketShardIds.has(shardId)) {
         continue;
       }
 
@@ -211,7 +216,6 @@ export class WorldPresenceClient {
       this.closeShardSocket(shardId);
     }
 
-    this.desiredShardIds = desired;
     this.emitSnapshot();
   }
 
@@ -369,6 +373,9 @@ export class WorldPresenceClient {
 
   destroy(): void {
     this.clearQueuedSnapshotEmit();
+    this.desiredShardIds.clear();
+    this.pendingSocketShardIds.clear();
+    this.identityTokenProvider.clear();
     if (this.publishedShardId) {
       this.sendLeaveToShard(this.publishedShardId);
     }
@@ -397,15 +404,33 @@ export class WorldPresenceClient {
   }
 
   private openShardSocket(shardId: string): void {
+    this.pendingSocketShardIds.add(shardId);
+    void this.openShardSocketWithToken(shardId);
+  }
+
+  private async openShardSocketWithToken(shardId: string): Promise<void> {
+    let identityToken: string;
+    try {
+      identityToken = await this.identityTokenProvider.getToken();
+    } catch (error) {
+      this.pendingSocketShardIds.delete(shardId);
+      console.warn('Failed to issue PartyKit presence identity token.', error);
+      this.emitSnapshot();
+      return;
+    }
+
+    this.pendingSocketShardIds.delete(shardId);
+    if (!this.desiredShardIds.has(shardId) || this.socketsByShardId.has(shardId)) {
+      return;
+    }
+
     const socket = new PartySocket({
       host: this.options.host,
       protocol: this.options.protocol,
       party: this.options.party,
       room: shardId,
       query: {
-        userId: this.options.identity.userId,
-        displayName: this.options.identity.displayName,
-        avatarId: this.options.identity.avatarId,
+        identityToken,
       },
     });
 
@@ -426,7 +451,12 @@ export class WorldPresenceClient {
     });
 
     socket.addEventListener('close', () => {
+      if (this.socketsByShardId.get(shardId)?.socket !== socket) {
+        return;
+      }
+
       this.connectedShards.delete(shardId);
+      this.socketsByShardId.delete(shardId);
       this.removeGhostsForShard(shardId);
       this.roomPopulationsByShardId.delete(shardId);
       this.roomEditorsByShardId.delete(shardId);
@@ -437,6 +467,9 @@ export class WorldPresenceClient {
       }
       if (this.previewShardId === shardId) {
         this.lastPublishedPreviewJson = null;
+      }
+      if (this.desiredShardIds.has(shardId) && !this.pendingSocketShardIds.has(shardId)) {
+        this.openShardSocket(shardId);
       }
       this.emitSnapshot();
     });
@@ -456,6 +489,7 @@ export class WorldPresenceClient {
   }
 
   private closeShardSocket(shardId: string): void {
+    this.pendingSocketShardIds.delete(shardId);
     const record = this.socketsByShardId.get(shardId);
     if (!record) {
       return;
@@ -524,22 +558,14 @@ export class WorldPresenceClient {
       case 'snapshot':
         this.removeGhostsForShard(shardId);
         for (const peer of message.peers) {
-          this.ghostsByConnectionId.set(peer.connectionId, {
-            ...peer,
-            shardId,
-            roomId: roomIdFromCoordinates(peer.roomCoordinates),
-          });
+          this.storeRemoteGhost(shardId, peer);
         }
         this.replaceRoomPopulations(shardId, message.roomPopulations);
         this.replaceRoomEditors(shardId, message.roomEditors);
         this.replaceRoomPreviews(shardId, message.roomPreviews);
         break;
       case 'upsert':
-        this.ghostsByConnectionId.set(message.peer.connectionId, {
-          ...message.peer,
-          shardId,
-          roomId: roomIdFromCoordinates(message.peer.roomCoordinates),
-        });
+        this.storeRemoteGhost(shardId, message.peer);
         urgentSnapshot = Boolean(message.peer.pvp?.matchId);
         break;
       case 'upserts':
@@ -547,11 +573,7 @@ export class WorldPresenceClient {
           return;
         }
         for (const peer of message.peers) {
-          this.ghostsByConnectionId.set(peer.connectionId, {
-            ...peer,
-            shardId,
-            roomId: roomIdFromCoordinates(peer.roomCoordinates),
-          });
+          this.storeRemoteGhost(shardId, peer);
           urgentSnapshot ||= Boolean(peer.pvp?.matchId);
         }
         break;
@@ -704,13 +726,30 @@ export class WorldPresenceClient {
       subscribedShards,
       connectedShards,
       publishedShard: this.resolveLocalShardId(),
-      ghosts: Array.from(this.ghostsByConnectionId.values()).sort((left, right) =>
-        left.displayName.localeCompare(right.displayName)
-      ),
+      ghosts: Array.from(this.ghostsByConnectionId.values())
+        .filter((ghost) => !this.isLocalIdentityPeer(ghost))
+        .sort((left, right) => left.displayName.localeCompare(right.displayName)),
       roomPopulations,
       roomEditors,
       roomPreviews,
     });
+  }
+
+  private storeRemoteGhost(shardId: string, peer: WorldGhostPresence): void {
+    if (this.isLocalIdentityPeer(peer)) {
+      this.ghostsByConnectionId.delete(peer.connectionId);
+      return;
+    }
+
+    this.ghostsByConnectionId.set(peer.connectionId, {
+      ...peer,
+      shardId,
+      roomId: roomIdFromCoordinates(peer.roomCoordinates),
+    });
+  }
+
+  private isLocalIdentityPeer(peer: Pick<WorldGhostPresence, 'userId'>): boolean {
+    return peer.userId === this.options.identity.userId;
   }
 
   private queueSnapshotEmit(urgent = false): void {

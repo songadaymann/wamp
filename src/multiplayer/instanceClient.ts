@@ -1,4 +1,5 @@
 import PartySocket from 'partysocket';
+import { PartyKitIdentityTokenProvider } from '../presence/identityTokenClient';
 import { resolveWorldPresenceConfig } from '../presence/worldPresence';
 import type {
   MultiplayerHitSource,
@@ -32,6 +33,7 @@ export class MultiplayerInstanceClient {
   private lastSnapshot: MultiplayerInstanceSnapshot | null = null;
   private pendingMessages: MultiplayerInstanceClientMessage[] = [];
   private readonly closingSockets = new WeakSet<PartySocket>();
+  private connectAttemptId = 0;
 
   constructor(private readonly options: MultiplayerInstanceClientOptions) {}
 
@@ -43,16 +45,41 @@ export class MultiplayerInstanceClient {
     }
 
     this.disconnect();
+    const attemptId = this.connectAttemptId + 1;
+    this.connectAttemptId = attemptId;
     this.pendingMessages = [];
+    void this.openSocket(config, attemptId);
+
+    return true;
+  }
+
+  private async openSocket(
+    config: NonNullable<ReturnType<typeof resolveWorldPresenceConfig>>,
+    attemptId: number
+  ): Promise<void> {
+    const tokenProvider = new PartyKitIdentityTokenProvider(() => this.options.localIdentity);
+    let identityToken: string;
+    try {
+      identityToken = await tokenProvider.getToken();
+    } catch (error) {
+      if (this.connectAttemptId === attemptId) {
+        this.options.onStatus?.('PVP identity token unavailable.');
+      }
+      console.warn('Failed to issue PartyKit PVP identity token.', error);
+      return;
+    }
+
+    if (this.connectAttemptId !== attemptId) {
+      return;
+    }
+
     const socket = new PartySocket({
       host: config.host,
       protocol: config.protocol,
       party: config.party,
       room: `pvp:${this.options.matchId}`,
       query: {
-        userId: this.options.localIdentity.userId,
-        displayName: this.options.localIdentity.displayName,
-        avatarId: this.options.localIdentity.avatarId,
+        identityToken,
       },
     });
     this.socket = socket;
@@ -99,13 +126,13 @@ export class MultiplayerInstanceClient {
         this.options.onStatus?.('PVP match disconnected.');
       }
     });
-
-    return true;
   }
 
   disconnect(): void {
+    this.connectAttemptId += 1;
     const socket = this.socket;
     if (!socket) {
+      this.pendingMessages = [];
       return;
     }
 

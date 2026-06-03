@@ -20,7 +20,12 @@ import {
 } from '../../backgrounds/runtime';
 import type { RoomCoordinates } from '../../persistence/roomRepository';
 import type { WorldRepository } from '../../persistence/worldRepository';
-import { RETRO_COLORS, ensureStarfieldTexture } from '../../visuals/starfield';
+import {
+  RETRO_COLORS,
+  createStarfieldTileSprite,
+  getStarfieldLayerConfig,
+  syncStarfieldTileSprite,
+} from '../../visuals/starfield';
 import { buildRoomSnapshotTexture, buildRoomTextureKey } from '../../visuals/roomSnapshotTexture';
 
 interface ParallaxSprite {
@@ -111,24 +116,21 @@ export class EditorBackgroundController {
     const h = ROOM_PX_HEIGHT;
 
     if (resolved.kind === 'none') {
-      const textureKey = ensureStarfieldTexture(this.scene);
-
       this.bgColorRect = this.scene.add.rectangle(0, 0, w, h, RETRO_COLORS.backgroundNumber);
       this.bgColorRect.setOrigin(0, 0);
       this.bgColorRect.setDepth(-20);
 
-      const farLayer = this.scene.add.tileSprite(0, 0, w, h, textureKey);
-      farLayer.setOrigin(0, 0);
-      farLayer.setDepth(-10);
-      farLayer.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-
-      const nearLayer = this.scene.add.tileSprite(0, 0, w, h, textureKey);
-      nearLayer.setOrigin(0, 0);
-      nearLayer.setDepth(-9);
-      nearLayer.setAlpha(0.28);
-      nearLayer.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-
-      this.fallbackBgSprites = [farLayer, nearLayer];
+      this.fallbackBgSprites = [0, 1].map((index) => {
+        const config = getStarfieldLayerConfig(index);
+        return createStarfieldTileSprite(this.scene, {
+          x: 0,
+          y: 0,
+          width: w,
+          height: h,
+          depth: -10 + index,
+          alpha: config.alpha,
+        });
+      });
       this.syncBackgroundCameraIgnores();
       this.updateBackgroundPreview();
       return;
@@ -225,19 +227,12 @@ export class EditorBackgroundController {
       );
     }
 
-    const fallbackConfigs = [
-      { parallax: 0.035, tileScale: 1 },
-      { parallax: 0.12, tileScale: 0.58 },
-    ];
-
     for (let index = 0; index < this.fallbackBgSprites.length; index += 1) {
       const sprite = this.fallbackBgSprites[index];
-      const config = fallbackConfigs[Math.min(index, fallbackConfigs.length - 1)];
-      sprite.setPosition(0, 0);
-      sprite.setSize(w, h);
-      sprite.setTileScale(config.tileScale, config.tileScale);
-      sprite.tilePositionX = (cam.scrollX * config.parallax) / config.tileScale;
-      sprite.tilePositionY = (cam.scrollY * config.parallax) / config.tileScale;
+      syncStarfieldTileSprite(sprite, cam, getStarfieldLayerConfig(index), {
+        width: w,
+        height: h,
+      });
     }
   }
 

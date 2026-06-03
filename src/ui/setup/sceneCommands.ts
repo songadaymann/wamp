@@ -36,18 +36,6 @@ export function setupSceneCommands(
   const aboutOpenBtn = doc.getElementById('btn-about-open');
   const chatModerationOpenBtn = doc.getElementById('btn-chat-moderation-open');
   const worldJumpInput = doc.getElementById('world-jump-input') as HTMLInputElement | null;
-  const editorBackBtn = doc.getElementById('btn-editor-back');
-  const playBtn = doc.getElementById('btn-test-play');
-  const saveBtn = doc.getElementById('btn-save-draft');
-  const publishBtn = doc.getElementById('btn-publish-room');
-  const publishNudgeBtn = doc.getElementById('btn-editor-publish-nudge');
-  const historyBtn = doc.getElementById('btn-room-history');
-  const mintBtn = doc.getElementById('btn-mint-room');
-  const refreshMetadataBtn = doc.getElementById('btn-refresh-room-metadata');
-  const fitBtn = doc.getElementById('btn-fit-screen');
-  const mobileFitBtn = doc.getElementById('btn-mobile-editor-fit');
-  const mobileZoomInBtn = doc.getElementById('btn-mobile-editor-zoom-in');
-  const mobileZoomOutBtn = doc.getElementById('btn-mobile-editor-zoom-out');
   const courseSaveBtn = doc.getElementById('btn-course-editor-save-course');
   const coursePublishBtn = doc.getElementById('btn-course-editor-publish-course');
 
@@ -367,70 +355,6 @@ export function setupSceneCommands(
     }
   });
 
-  playBtn?.addEventListener('click', () => {
-    historyModal.close();
-    leaderboardModal.close();
-    exploreModal.close();
-    guestbookModal.close();
-    controlsModal.close();
-    aboutModal.close();
-    courseModal.close();
-    roomRushResultModal.close();
-    chatModerationModal.close();
-    getActiveEditorScene(game)?.startPlayMode?.();
-  });
-
-  editorBackBtn?.addEventListener('click', () => {
-    const editorScene = getActiveEditorScene(game);
-    const overworldScene = getActiveOverworldScene(game);
-    historyModal.close();
-    leaderboardModal.close();
-    exploreModal.close();
-    controlsModal.close();
-    aboutModal.close();
-    courseModal.close();
-    roomRushResultModal.close();
-    chatModerationModal.close();
-    const canReturnToCourseBuilder = editorScene?.getCourseEditorState?.().canReturnToCourseBuilder ?? false;
-    if (canReturnToCourseBuilder && editorScene?.returnToCourseBuilder) {
-      void editorScene.returnToCourseBuilder();
-      return;
-    }
-
-    if (editorScene?.returnToWorld) {
-      void editorScene.returnToWorld();
-      return;
-    }
-
-    overworldScene?.returnToWorld?.();
-  });
-
-  saveBtn?.addEventListener('click', async () => {
-    controlsModal.close();
-    aboutModal.close();
-    courseModal.close();
-    chatModerationModal.close();
-    exploreModal.close();
-    roomRushResultModal.close();
-    const editorScene = getActiveEditorScene(game);
-    if (editorScene?.saveDraft) {
-      await editorScene.saveDraft(true, { promptForSignInOnUnauthorized: true });
-    }
-  });
-
-  publishBtn?.addEventListener('click', async () => {
-    controlsModal.close();
-    aboutModal.close();
-    courseModal.close();
-    chatModerationModal.close();
-    exploreModal.close();
-    roomRushResultModal.close();
-    const editorScene = getActiveEditorScene(game);
-    if (editorScene?.publishRoom) {
-      await editorScene.publishRoom();
-    }
-  });
-
   courseSaveBtn?.addEventListener('click', async () => {
     controlsModal.close();
     aboutModal.close();
@@ -454,72 +378,5 @@ export function setupSceneCommands(
     if (editorScene?.publishCourseDraft) {
       await editorScene.publishCourseDraft();
     }
-  });
-
-  publishNudgeBtn?.addEventListener('click', async () => {
-    controlsModal.close();
-    aboutModal.close();
-    courseModal.close();
-    chatModerationModal.close();
-    const editorScene = getActiveEditorScene(game);
-    if (editorScene?.handlePublishNudgeAction) {
-      await editorScene.handlePublishNudgeAction();
-    }
-  });
-
-  mintBtn?.addEventListener('click', async () => {
-    controlsModal.close();
-    aboutModal.close();
-    courseModal.close();
-    chatModerationModal.close();
-    const editorScene = getActiveEditorScene(game);
-    if (editorScene?.mintRoom) {
-      await editorScene.mintRoom();
-    }
-  });
-
-  refreshMetadataBtn?.addEventListener('click', async () => {
-    controlsModal.close();
-    aboutModal.close();
-    courseModal.close();
-    chatModerationModal.close();
-    const editorScene = getActiveEditorScene(game);
-    if (editorScene?.refreshMintMetadata) {
-      await editorScene.refreshMintMetadata();
-    }
-  });
-
-  historyBtn?.addEventListener('click', () => {
-    controlsModal.close();
-    aboutModal.close();
-    courseModal.close();
-    chatModerationModal.close();
-    void historyModal.open();
-  });
-
-  fitBtn?.addEventListener('click', () => {
-    const editorScene = getActiveEditorScene(game);
-    if (editorScene?.fitToScreen) {
-      editorScene.fitToScreen();
-      return;
-    }
-
-    controlsModal.close();
-    aboutModal.close();
-    courseModal.close();
-    chatModerationModal.close();
-    getActiveOverworldScene(game)?.fitLoadedWorld?.();
-  });
-
-  mobileFitBtn?.addEventListener('click', () => {
-    getActiveEditorScene(game)?.fitToScreen?.();
-  });
-
-  mobileZoomInBtn?.addEventListener('click', () => {
-    getActiveEditorScene(game)?.zoomIn?.();
-  });
-
-  mobileZoomOutBtn?.addEventListener('click', () => {
-    getActiveEditorScene(game)?.zoomOut?.();
   });
 }

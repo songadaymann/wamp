@@ -542,6 +542,7 @@
         <div id="palette-container">
           <canvas id="palette-canvas"></canvas>
         </div>
+        <canvas id="tile-preview" width="64" height="64" hidden aria-hidden="true"></canvas>
         <div class="palette-hint">Click to select. Drag to select multiple.</div>
       </div>
 
@@ -1170,6 +1171,7 @@
             <div class="about-section">
               <div class="about-section-title">Setup</div>
               <div class="history-modal-meta">Save this title + cell list before opening the expanded room editor.</div>
+              <div id="course-workbench-summary" class="goal-summary"></div>
               <div class="course-room-actions">
                 <button id="btn-course-workbench-save" class="bar-btn" type="button">Save Setup</button>
                 <button id="btn-course-workbench-test" class="bar-btn" type="button">Test Draft</button>
@@ -1186,6 +1188,11 @@
               <div class="about-section-title">Cells</div>
               <div id="course-workbench-cell-limit" class="goal-summary">0/16 cells used</div>
               <div id="course-workbench-room-list" class="course-editor-list"></div>
+            </div>
+
+            <div class="about-section">
+              <div class="about-section-title">Checkpoints</div>
+              <div id="course-workbench-checkpoint-list" class="course-editor-list"></div>
             </div>
 
             <div class="about-section">
@@ -1264,6 +1271,17 @@
                   >--</div>
                 </div>
               </div>
+              <div class="mini-profile-progress" aria-hidden="true">
+                <div class="mini-profile-progress-track mini-profile-progress-track--player">
+                  <div id="world-selected-creator-player-progress" class="mini-profile-progress-fill mini-profile-progress-fill--player"></div>
+                </div>
+                <div class="mini-profile-progress-track mini-profile-progress-track--curator">
+                  <div id="world-selected-creator-curator-progress" class="mini-profile-progress-fill mini-profile-progress-fill--curator"></div>
+                </div>
+                <div class="mini-profile-progress-track mini-profile-progress-track--builder">
+                  <div id="world-selected-creator-builder-progress" class="mini-profile-progress-fill mini-profile-progress-fill--builder"></div>
+                </div>
+              </div>
             </div>
           </button>
           <button id="world-selected-coords" class="world-hud-value world-hud-value-button" type="button">0,0</button>
@@ -1276,6 +1294,7 @@
           <input id="world-jump-input" type="text" value="0,0" spellcheck="false" />
           <button id="btn-world-jump" class="bar-btn bar-btn-small">Warp</button>
         </div>
+        <div id="world-zoom-label" class="world-hud-meta world-zoom-label">Zoom: 1x</div>
         <div class="world-hud-row world-hud-row-primary-actions">
           <div id="room-sequence-hud" class="room-sequence-hud hidden" aria-hidden="true">
             <div class="room-sequence-copy">

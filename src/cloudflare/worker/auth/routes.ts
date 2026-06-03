@@ -62,6 +62,7 @@ import {
   loadOptionalRequestAuth,
   requireAuthenticatedRequestAuth,
   requireCurrentSession,
+  requireTrustedOriginForMutation,
 } from './request';
 import { NO_CHAT_MODERATION_VIEWER, resolveChatModerationViewer } from '../chat/moderation';
 import { assertPlayfunOnlyDisplayNameChangeAllowed } from '../playfun/leaderboardIsolation';
@@ -294,6 +295,7 @@ function buildMagicLinkRedirectUrl(
 export async function handleLogout(request: Request, env: Env): Promise<Response> {
   const existing = await loadCurrentSession(env, request);
   if (existing) {
+    requireTrustedOriginForMutation(request);
     await deleteSessionById(env, existing.sessionId);
   }
 

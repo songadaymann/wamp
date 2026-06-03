@@ -24,6 +24,9 @@ export interface RoomRushRouteStep {
 
 export interface ActiveRoomRushRunState {
   runId: string;
+  serverStartId: string | null;
+  serverStartedAt: string | null;
+  serverExpiresAt: string | null;
   playerDisplayName?: string | null;
   difficulty: RoomRushDifficulty;
   startRule: RoomRushStartRule;
@@ -39,6 +42,10 @@ export interface ActiveRoomRushRunState {
 }
 
 export interface StartRoomRushRunOptions {
+  runId?: string | null;
+  serverStartId?: string | null;
+  serverStartedAt?: string | null;
+  serverExpiresAt?: string | null;
   difficulty: RoomRushDifficulty;
   startRule: RoomRushStartRule;
   startCoordinates: RoomCoordinates;
@@ -73,7 +80,12 @@ export class OverworldRoomRushRunController {
 
   startRun(options: StartRoomRushRunOptions): RoomRushMutationResult {
     this.currentRun = {
-      runId: `room-rush-${Date.now().toString(36)}-${this.nextRunNumber.toString(36)}`,
+      runId:
+        options.runId?.trim()
+        || `room-rush-${Date.now().toString(36)}-${this.nextRunNumber.toString(36)}`,
+      serverStartId: options.serverStartId?.trim() || null,
+      serverStartedAt: options.serverStartedAt?.trim() || null,
+      serverExpiresAt: options.serverExpiresAt?.trim() || null,
       difficulty: options.difficulty,
       startRule: options.startRule,
       startCoordinates: { ...options.startCoordinates },
@@ -226,6 +238,9 @@ export class OverworldRoomRushRunController {
 
     return {
       ...this.currentRun,
+      serverStartId: this.currentRun.serverStartId,
+      serverStartedAt: this.currentRun.serverStartedAt,
+      serverExpiresAt: this.currentRun.serverExpiresAt,
       startCoordinates: { ...this.currentRun.startCoordinates },
       returnCoordinates: { ...this.currentRun.returnCoordinates },
       currentCoordinates: { ...this.currentRun.currentCoordinates },

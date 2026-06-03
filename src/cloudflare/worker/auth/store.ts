@@ -1164,14 +1164,9 @@ async function loadLegacyOptionalUserProfileFields(
 }
 
 export function resolvePublicBaseUrl(request: Request, env: Env): string {
-  const configured = env.APP_BASE_URL?.trim();
+  const configured = resolveConfiguredPublicBaseUrl(request, env);
   if (configured) {
-    const normalized = configured.replace(/\/+$/, '');
-    if (/^https?:\/\//i.test(normalized)) {
-      return normalized;
-    }
-
-    return `${new URL(request.url).protocol}//${normalized}`;
+    return configured;
   }
 
   const origin = request.headers.get('Origin')?.trim();
@@ -1185,7 +1180,7 @@ export function resolvePublicBaseUrl(request: Request, env: Env): string {
 export function resolveMagicLinkReturnBase(request: Request, env: Env): string {
   return (
     normalizeTrustedAuthRedirectBase(request.headers.get('Origin'), env)
-    ?? resolvePublicBaseUrl(request, env)
+    ?? resolveDefaultMagicLinkBaseUrl(request, env)
   );
 }
 
@@ -1194,7 +1189,25 @@ export function resolveMagicLinkRedirectBase(
   env: Env,
   candidate: string | null
 ): string {
-  return normalizeTrustedAuthRedirectBase(candidate, env) ?? resolvePublicBaseUrl(request, env);
+  return normalizeTrustedAuthRedirectBase(candidate, env) ?? resolveMagicLinkReturnBase(request, env);
+}
+
+function resolveDefaultMagicLinkBaseUrl(request: Request, env: Env): string {
+  return resolveConfiguredPublicBaseUrl(request, env) ?? new URL(request.url).origin;
+}
+
+function resolveConfiguredPublicBaseUrl(request: Request, env: Env): string | null {
+  const configured = env.APP_BASE_URL?.trim();
+  if (!configured) {
+    return null;
+  }
+
+  const normalized = configured.replace(/\/+$/, '');
+  if (/^https?:\/\//i.test(normalized)) {
+    return normalized;
+  }
+
+  return `${new URL(request.url).protocol}//${normalized}`;
 }
 
 function normalizeTrustedAuthRedirectBase(candidate: string | null, env: Env): string | null {

@@ -1,5 +1,22 @@
+import {
+  LAYER_NAMES,
+  ROOM_HEIGHT,
+  ROOM_PX_HEIGHT,
+  ROOM_PX_WIDTH,
+  ROOM_WIDTH,
+  TILE_SIZE,
+  getObjectById,
+  type LayerName,
+} from '../../../config';
+import {
+  normalizeCustomSpriteDefinitions,
+  parseCustomSpriteObjectId,
+} from '../../../customSprites/model';
 import { cloneRoomSnapshot, parseRoomId, roomIdFromCoordinates, type RoomCoordinates, type RoomSnapshot } from '../../../persistence/roomModel';
 import { type WorldChunkBounds } from '../../../persistence/worldModel';
+
+const MAX_ROOM_SNAPSHOT_BODY_BYTES = 2 * 1024 * 1024;
+const PLACED_OBJECT_POSITION_MARGIN_PX = TILE_SIZE * 8;
 
 export class HttpError extends Error {
   constructor(
@@ -24,7 +41,7 @@ export function corsHeaders(request: Request): HeadersInit {
     'Access-Control-Allow-Methods': 'GET,PUT,POST,PATCH,DELETE,OPTIONS',
   };
 
-  if (origin) {
+  if (origin && isTrustedOrigin(origin, request.url)) {
     headers['Access-Control-Allow-Origin'] = origin;
     headers['Access-Control-Allow-Credentials'] = 'true';
     headers.Vary = 'Origin';
@@ -33,6 +50,69 @@ export function corsHeaders(request: Request): HeadersInit {
   }
 
   return headers;
+}
+
+export function isTrustedRequestOrigin(request: Request): boolean {
+  const origin = request.headers.get('Origin');
+  return !origin || isTrustedOrigin(origin, request.url);
+}
+
+export function isTrustedOrigin(origin: string, requestUrl: string): boolean {
+  let parsedOrigin: URL;
+  let parsedRequestUrl: URL;
+  try {
+    parsedOrigin = new URL(origin);
+    parsedRequestUrl = new URL(requestUrl);
+  } catch {
+    return false;
+  }
+
+  if (parsedOrigin.protocol !== 'https:' && parsedOrigin.protocol !== 'http:') {
+    return false;
+  }
+
+  if (parsedOrigin.origin === parsedRequestUrl.origin) {
+    return true;
+  }
+
+  const hostname = parsedOrigin.hostname.toLowerCase();
+  if (isLocalDevHostname(hostname)) {
+    return true;
+  }
+
+  if (isTrustedAppHostname(hostname)) {
+    return true;
+  }
+
+  return isSafetyWorkerHostname(parsedRequestUrl.hostname.toLowerCase()) && isPrivateDevHostname(hostname);
+}
+
+function isLocalDevHostname(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1';
+}
+
+function isTrustedAppHostname(hostname: string): boolean {
+  return (
+    hostname === 'wamp.land' ||
+    hostname === 'www.wamp.land' ||
+    hostname === 'api.wamp.land' ||
+    hostname === 'everybodys-platformer.novox-robot.workers.dev' ||
+    hostname === 'everybodys-platformer-safety.novox-robot.workers.dev' ||
+    hostname === 'wampland.pages.dev' ||
+    hostname.endsWith('.wampland.pages.dev')
+  );
+}
+
+function isSafetyWorkerHostname(hostname: string): boolean {
+  return hostname === 'everybodys-platformer-safety.novox-robot.workers.dev';
+}
+
+function isPrivateDevHostname(hostname: string): boolean {
+  return (
+    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname)
+  );
 }
 
 export function jsonResponse(request: Request, body: unknown, init: ResponseInit = {}): Response {
@@ -59,12 +139,72 @@ export function redirectResponse(location: string, headers?: HeadersInit): Respo
   });
 }
 
-export async function parseJsonBody<T>(request: Request): Promise<T> {
+interface ParseJsonBodyOptions {
+  maxBytes?: number;
+}
+
+export async function parseJsonBody<T>(request: Request, options: ParseJsonBodyOptions = {}): Promise<T> {
   try {
+    if (typeof options.maxBytes === 'number') {
+      const text = await readRequestBodyTextWithLimit(request, options.maxBytes);
+      return JSON.parse(text) as T;
+    }
+
     return (await request.json()) as T;
-  } catch {
+  } catch (error) {
+    if (error instanceof HttpError) {
+      throw error;
+    }
     throw new HttpError(400, 'Request body must be valid JSON.');
   }
+}
+
+async function readRequestBodyTextWithLimit(request: Request, maxBytes: number): Promise<string> {
+  const contentLength = request.headers.get('Content-Length');
+  if (contentLength !== null) {
+    const parsedContentLength = Number(contentLength);
+    if (!Number.isSafeInteger(parsedContentLength) || parsedContentLength < 0) {
+      throw new HttpError(400, 'Content-Length must be a non-negative integer.');
+    }
+    if (parsedContentLength > maxBytes) {
+      throw new HttpError(413, 'Request body is too large.');
+    }
+  }
+
+  if (!request.body) {
+    return '';
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let receivedBytes = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    receivedBytes += value.byteLength;
+    if (receivedBytes > maxBytes) {
+      try {
+        await reader.cancel();
+      } catch {
+        // Continue with the validation error even if stream cancellation fails.
+      }
+      throw new HttpError(413, 'Request body is too large.');
+    }
+    chunks.push(value);
+  }
+
+  const bytes = new Uint8Array(receivedBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return new TextDecoder().decode(bytes);
 }
 
 export function normalizeRoomCoordinates(value: unknown): RoomCoordinates {
@@ -240,16 +380,146 @@ export function isRoomSnapshot(value: unknown): value is RoomSnapshot {
 }
 
 export async function parseRoomSnapshot(request: Request, roomId: string): Promise<RoomSnapshot> {
-  const body = await parseJsonBody<RoomSnapshot>(request);
+  const body = await parseJsonBody<RoomSnapshot>(request, {
+    maxBytes: MAX_ROOM_SNAPSHOT_BODY_BYTES,
+  });
 
   if (!isRoomSnapshot(body)) {
     throw new HttpError(400, 'Request body must be a room snapshot.');
   }
 
-  const canonicalRoomId = roomIdFromCoordinates(body.coordinates);
-  if (roomId !== canonicalRoomId || body.id !== canonicalRoomId) {
-    throw new HttpError(400, 'Room id must match snapshot coordinates.');
+  validateRoomSnapshotForWrite(body, roomId);
+
+  try {
+    return cloneRoomSnapshot(body);
+  } catch {
+    throw new HttpError(400, 'Request body must be a valid room snapshot.');
+  }
+}
+
+function validateRoomSnapshotForWrite(snapshot: RoomSnapshot, roomId: string): void {
+  validateRoomSnapshotIdentity(snapshot, roomId);
+  validateRoomSnapshotTileData(snapshot.tileData);
+  validateRoomSnapshotPlacedObjects(snapshot);
+}
+
+function validateRoomSnapshotIdentity(snapshot: RoomSnapshot, roomId: string): void {
+  if (!Number.isInteger(snapshot.coordinates.x) || !Number.isInteger(snapshot.coordinates.y)) {
+    throw new HttpError(400, 'Room coordinates must be integers.');
   }
 
-  return cloneRoomSnapshot(body);
+  const canonicalRoomId = roomIdFromCoordinates(snapshot.coordinates);
+  if (roomId !== canonicalRoomId || snapshot.id !== canonicalRoomId) {
+    throw new HttpError(400, 'Room id must match snapshot coordinates.');
+  }
+}
+
+function validateRoomSnapshotTileData(tileData: RoomSnapshot['tileData']): void {
+  if (!tileData || typeof tileData !== 'object' || Array.isArray(tileData)) {
+    throw new HttpError(400, 'tileData must be an object.');
+  }
+
+  const layerKeys = Object.keys(tileData).sort();
+  const expectedLayerKeys = [...LAYER_NAMES].sort();
+  if (
+    layerKeys.length !== expectedLayerKeys.length ||
+    layerKeys.some((key, index) => key !== expectedLayerKeys[index])
+  ) {
+    throw new HttpError(400, 'tileData must contain exactly background, terrain, and foreground layers.');
+  }
+
+  for (const layerName of LAYER_NAMES) {
+    validateRoomSnapshotTileLayer(tileData[layerName], layerName);
+  }
+}
+
+function validateRoomSnapshotTileLayer(layer: unknown, layerName: LayerName): void {
+  if (!Array.isArray(layer) || layer.length !== ROOM_HEIGHT) {
+    throw new HttpError(400, `tileData.${layerName} must contain ${ROOM_HEIGHT} rows.`);
+  }
+
+  for (let rowIndex = 0; rowIndex < layer.length; rowIndex += 1) {
+    const row = layer[rowIndex];
+    if (!Array.isArray(row) || row.length !== ROOM_WIDTH) {
+      throw new HttpError(400, `tileData.${layerName}[${rowIndex}] must contain ${ROOM_WIDTH} tile values.`);
+    }
+
+    for (let columnIndex = 0; columnIndex < row.length; columnIndex += 1) {
+      const value = row[columnIndex];
+      if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value)) {
+        throw new HttpError(400, `tileData.${layerName}[${rowIndex}][${columnIndex}] must be a finite integer.`);
+      }
+    }
+  }
+}
+
+function validateRoomSnapshotPlacedObjects(snapshot: RoomSnapshot): void {
+  if (!Array.isArray(snapshot.placedObjects)) {
+    throw new HttpError(400, 'placedObjects must be an array.');
+  }
+
+  const customSpriteIds = new Set(normalizeCustomSpriteDefinitions(snapshot.customSprites).map((sprite) => sprite.id));
+  for (let index = 0; index < snapshot.placedObjects.length; index += 1) {
+    validatePlacedObjectForWrite(snapshot.placedObjects[index], index, customSpriteIds);
+  }
+}
+
+function validatePlacedObjectForWrite(
+  placed: unknown,
+  index: number,
+  customSpriteIds: ReadonlySet<string>,
+): void {
+  if (!placed || typeof placed !== 'object') {
+    throw new HttpError(400, `placedObjects[${index}] must be an object.`);
+  }
+
+  const candidate = placed as {
+    id?: unknown;
+    x?: unknown;
+    y?: unknown;
+    containedObjectId?: unknown;
+  };
+
+  if (typeof candidate.id !== 'string' || !candidate.id.trim()) {
+    throw new HttpError(400, `placedObjects[${index}].id is required.`);
+  }
+  if (!isKnownSnapshotObjectId(candidate.id, customSpriteIds)) {
+    throw new HttpError(400, `Unknown object id "${candidate.id}".`);
+  }
+  if (!isFinitePlacedObjectPosition(candidate.x, ROOM_PX_WIDTH)) {
+    throw new HttpError(400, `placedObjects[${index}].x must be a finite room position.`);
+  }
+  if (!isFinitePlacedObjectPosition(candidate.y, ROOM_PX_HEIGHT)) {
+    throw new HttpError(400, `placedObjects[${index}].y must be a finite room position.`);
+  }
+  if (
+    candidate.containedObjectId !== undefined &&
+    candidate.containedObjectId !== null &&
+    !(typeof candidate.containedObjectId === 'string' && candidate.containedObjectId.trim() === '')
+  ) {
+    if (
+      typeof candidate.containedObjectId !== 'string' ||
+      !isKnownSnapshotObjectId(candidate.containedObjectId, customSpriteIds)
+    ) {
+      throw new HttpError(400, `placedObjects[${index}].containedObjectId must be a known object id.`);
+    }
+  }
+}
+
+function isFinitePlacedObjectPosition(value: unknown, roomSizePx: number): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= -PLACED_OBJECT_POSITION_MARGIN_PX &&
+    value <= roomSizePx + PLACED_OBJECT_POSITION_MARGIN_PX
+  );
+}
+
+function isKnownSnapshotObjectId(objectId: string, customSpriteIds: ReadonlySet<string>): boolean {
+  if (getObjectById(objectId)) {
+    return true;
+  }
+
+  const customSpriteId = parseCustomSpriteObjectId(objectId);
+  return customSpriteId !== null && customSpriteIds.has(customSpriteId);
 }
