@@ -17,7 +17,12 @@ import {
   type CustomBackgroundLayer,
   type CustomBackgroundObject,
 } from '../backgrounds/runtime';
-import { RETRO_COLORS, ensureStarfieldTexture } from '../visuals/starfield';
+import {
+  RETRO_COLORS,
+  createStarfieldTileSprite,
+  getStarfieldLayerConfig,
+  syncStarfieldTileSprite,
+} from '../visuals/starfield';
 
 export interface CourseEditorRoomBackgroundVisuals {
   origin: { x: number; y: number };
@@ -28,11 +33,6 @@ export interface CourseEditorRoomBackgroundVisuals {
   }>;
   fallbackSprites: Phaser.GameObjects.TileSprite[];
 }
-
-const FALLBACK_CONFIGS = [
-  { parallax: 0.035, tileScale: 1 },
-  { parallax: 0.12, tileScale: 0.58 },
-] as const;
 
 export function createCourseEditorRoomBackgroundVisuals(
   scene: Phaser.Scene,
@@ -48,7 +48,6 @@ export function createCourseEditorRoomBackgroundVisuals(
   };
 
   if (resolved.kind === 'none') {
-    const textureKey = ensureStarfieldTexture(scene);
     visuals.colorRect = scene.add.rectangle(
       origin.x,
       origin.y,
@@ -59,11 +58,16 @@ export function createCourseEditorRoomBackgroundVisuals(
     visuals.colorRect.setOrigin(0, 0);
     visuals.colorRect.setDepth(-40);
 
-    for (let index = 0; index < FALLBACK_CONFIGS.length; index += 1) {
-      const sprite = scene.add.tileSprite(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT, textureKey);
-      sprite.setOrigin(0, 0);
-      sprite.setDepth(-39 + index);
-      sprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    for (let index = 0; index < 2; index += 1) {
+      const config = getStarfieldLayerConfig(index);
+      const sprite = createStarfieldTileSprite(scene, {
+        x: origin.x,
+        y: origin.y,
+        width: ROOM_PX_WIDTH,
+        height: ROOM_PX_HEIGHT,
+        depth: -39 + index,
+        alpha: config.alpha,
+      });
       visuals.fallbackSprites.push(sprite);
     }
 
@@ -172,12 +176,12 @@ export function syncCourseEditorRoomBackgroundVisuals(
 
   for (let index = 0; index < visuals.fallbackSprites.length; index += 1) {
     const sprite = visuals.fallbackSprites[index];
-    const config = FALLBACK_CONFIGS[Math.min(index, FALLBACK_CONFIGS.length - 1)];
-    sprite.setPosition(visuals.origin.x, visuals.origin.y);
-    sprite.setSize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-    sprite.setTileScale(config.tileScale, config.tileScale);
-    sprite.tilePositionX = (camera.scrollX * config.parallax) / config.tileScale;
-    sprite.tilePositionY = (camera.scrollY * config.parallax) / config.tileScale;
+    syncStarfieldTileSprite(sprite, camera, getStarfieldLayerConfig(index), {
+      x: visuals.origin.x,
+      y: visuals.origin.y,
+      width: ROOM_PX_WIDTH,
+      height: ROOM_PX_HEIGHT,
+    });
   }
 }
 

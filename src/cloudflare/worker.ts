@@ -64,6 +64,7 @@ import {
   handlePlaylistItemDelete,
   handlePlaylistUpdate,
 } from './worker/playlists/routes';
+import { handlePresenceRequest } from './worker/presence/routes';
 import { handleProfileGet, handleProfileGetByUsername, handleProfileUpdateMe } from './worker/profiles/routes';
 import { handlePvpMatchSubmit } from './worker/pvp/routes';
 import {
@@ -78,6 +79,7 @@ import {
 } from './worker/runs/routes';
 import {
   handleRoomRushLeaderboards,
+  handleRoomRushRunStart,
   handleRoomRushRunSubmit,
 } from './worker/runs/roomRushLeaderboards';
 import {
@@ -252,6 +254,10 @@ export default {
 
       if (url.pathname === '/api/playfun/config' && request.method === 'GET') {
         return await handlePlayfunConfig(request, env);
+      }
+
+      if (url.pathname.startsWith('/api/presence/')) {
+        return await handlePresenceRequest(request, url, env);
       }
 
       if (url.pathname === '/api/music/phrases' && request.method === 'GET') {
@@ -599,6 +605,10 @@ export default {
 
       if (url.pathname === '/api/leaderboards/room-rush' && request.method === 'GET') {
         return await handleRoomRushLeaderboards(request, url, env);
+      }
+
+      if (url.pathname === '/api/room-rush/runs/start' && request.method === 'POST') {
+        return await handleRoomRushRunStart(request, env);
       }
 
       if (url.pathname === '/api/room-rush/runs' && request.method === 'POST') {

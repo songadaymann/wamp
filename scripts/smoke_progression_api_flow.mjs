@@ -32,6 +32,68 @@ function getSessionCookie(setCookieHeader) {
   return `${match[1]}=${match[2]}`;
 }
 
+function buildReachExitVerificationTrace(startResponse, course, elapsedMs) {
+  const goal = course?.goal;
+  const startPoint = course?.startPoint;
+  if (goal?.type !== 'reach_exit' || !goal.exit || !startPoint) {
+    throw new Error('Progression smoke currently expects a reach-exit course with start and exit markers.');
+  }
+
+  const exitRoomRef = course.roomRefs?.find((roomRef) => roomRef.roomId === goal.exit.roomId);
+  const startRoomRef = course.roomRefs?.find((roomRef) => roomRef.roomId === startPoint.roomId) ?? exitRoomRef;
+  if (!exitRoomRef || !startRoomRef) {
+    throw new Error('Progression smoke course markers must belong to published course rooms.');
+  }
+
+  return {
+    schemaVersion: startResponse.verificationSchemaVersion,
+    verificationNonce: startResponse.verificationNonce,
+    snapshotHash: startResponse.snapshotHash,
+    traceDurationMs: elapsedMs,
+    inputEvents: [
+      { atMs: 0, control: 'moveX', value: 1 },
+      { atMs: elapsedMs, control: 'moveX', value: 0 },
+    ],
+    breadcrumbs: [
+      {
+        atMs: 0,
+        roomX: startRoomRef.coordinates.x,
+        roomY: startRoomRef.coordinates.y,
+        x: startPoint.x,
+        y: startPoint.y,
+        vx: 0,
+        vy: 0,
+        grounded: true,
+      },
+      {
+        atMs: elapsedMs,
+        roomX: exitRoomRef.coordinates.x,
+        roomY: exitRoomRef.coordinates.y,
+        x: goal.exit.x,
+        y: goal.exit.y,
+        vx: 0,
+        vy: 0,
+        grounded: true,
+      },
+    ],
+    roomTransitions: [],
+    goalEvents: [
+      {
+        atMs: elapsedMs,
+        type: 'reach_exit',
+        actor: 'player',
+        roomId: goal.exit.roomId,
+        roomX: exitRoomRef.coordinates.x,
+        roomY: exitRoomRef.coordinates.y,
+        x: goal.exit.x,
+        y: goal.exit.y,
+        instanceId: null,
+        checkpointIndex: null,
+      },
+    ],
+  };
+}
+
 const requestLink = await fetchJson(`${apiBase}/api/auth/request-link`, {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
@@ -82,6 +144,7 @@ if (!attemptId) {
   throw new Error(`Expected course attempt id. Response: ${JSON.stringify(runStart.json)}`);
 }
 
+const finishElapsedMs = 5000;
 const finishResponse = await fetch(`${apiBase}/api/course-runs/${encodeURIComponent(attemptId)}/finish`, {
   method: 'POST',
   headers: {
@@ -90,11 +153,16 @@ const finishResponse = await fetch(`${apiBase}/api/course-runs/${encodeURICompon
   },
   body: JSON.stringify({
     result: 'completed',
-    elapsedMs: 5000,
+    elapsedMs: finishElapsedMs,
     deaths: 0,
     collectiblesCollected: 0,
     enemiesDefeated: 0,
     checkpointsReached: 0,
+    verificationTrace: buildReachExitVerificationTrace(
+      runStart.json,
+      courseRecord.json.published,
+      finishElapsedMs
+    ),
   }),
 });
 if (finishResponse.status !== 204) {

@@ -15,7 +15,11 @@ import type {
   PvpMatchSnapshot,
   PvpPresenceServerMessage,
 } from '../../pvp/model';
-import { type WorldChunkBounds } from '../../persistence/worldModel';
+import {
+  areWorldChunkBoundsEqual,
+  containsWorldChunkBounds,
+  type WorldChunkBounds,
+} from '../../persistence/worldModel';
 import {
   resolveWorldPresenceConfig,
   resolveWorldPresenceIdentity,
@@ -325,14 +329,14 @@ export class OverworldPresenceController {
       return;
     }
 
-    if (this.subscribedChunkBounds && this.areChunkBoundsEqual(this.subscribedChunkBounds, bounds)) {
+    if (this.subscribedChunkBounds && areWorldChunkBoundsEqual(this.subscribedChunkBounds, bounds)) {
       return;
     }
 
     const now = Date.now();
     if (
       this.subscribedChunkBounds &&
-      this.containsChunkBounds(this.subscribedChunkBounds, bounds) &&
+      containsWorldChunkBounds(this.subscribedChunkBounds, bounds) &&
       now < this.subscribedBoundsRetainUntil
     ) {
       return;
@@ -1067,24 +1071,6 @@ export class OverworldPresenceController {
     }
 
     return 24;
-  }
-
-  private areChunkBoundsEqual(left: WorldChunkBounds, right: WorldChunkBounds): boolean {
-    return (
-      left.minChunkX === right.minChunkX &&
-      left.maxChunkX === right.maxChunkX &&
-      left.minChunkY === right.minChunkY &&
-      left.maxChunkY === right.maxChunkY
-    );
-  }
-
-  private containsChunkBounds(container: WorldChunkBounds, inner: WorldChunkBounds): boolean {
-    return (
-      container.minChunkX <= inner.minChunkX &&
-      container.maxChunkX >= inner.maxChunkX &&
-      container.minChunkY <= inner.minChunkY &&
-      container.maxChunkY >= inner.maxChunkY
-    );
   }
 
   private createRenderedGhost(ghost: WorldGhostPresence): RenderedGhost {

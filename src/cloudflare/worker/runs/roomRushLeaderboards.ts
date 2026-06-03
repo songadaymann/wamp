@@ -1,5 +1,6 @@
 import { expandedRoomIdFromStandaloneRoomId } from '../../../expandedRooms/model';
 import {
+  DEFAULT_ROOM_COORDINATES,
   roomIdFromCoordinates,
   type RoomCoordinates,
 } from '../../../persistence/roomModel';
@@ -10,18 +11,21 @@ import type {
   RoomRushLeaderboardResponse,
   RoomRushLeaderboardsResponse,
   RoomRushRouteStepRecord,
+  RoomRushRunStartResponse,
+  RoomRushRunSubmissionRequestBody,
   RoomRushRunSubmissionResponse,
   RoomRushStartRule,
 } from '../../../runs/model';
 import { requireAuthenticatedRequestAuth, loadOptionalRequestAuth, requireOptionalScope } from '../auth/request';
 import { HttpError, jsonResponse, parsePositiveIntegerQueryParam } from '../core/http';
-import type { Env, RoomRushRunRow } from '../core/types';
+import type { Env, RoomRushRunRow, RoomRushRunStartRow } from '../core/types';
 import {
   assertWampLeaderboardWriteAllowed,
   sqlUserIdIsNotPlayfunOnly,
 } from '../playfun/leaderboardIsolation';
 import { loadPublishedExpandedRoomMembershipsInBounds } from '../expandedRooms/store';
-import { parseRoomRushRunSubmissionBody } from './requestBodies';
+import { loadPublishedRoom, loadPublishedRoomsInBounds } from '../rooms/store';
+import { parseRoomRushRunStartBody, parseRoomRushRunSubmissionBody } from './requestBodies';
 
 const ROOM_RUSH_MODE_ORDER: Array<{
   difficulty: RoomRushDifficulty;
@@ -35,9 +39,94 @@ const ROOM_RUSH_MODE_ORDER: Array<{
 
 const ROOM_RUSH_LEADERBOARD_ORDER =
   'unique_rooms DESC, elapsed_ms ASC, deaths ASC, finished_at ASC, attempt_id ASC';
+const ROOM_RUSH_START_TTL_MS = 2 * 60 * 60 * 1000;
+const ROOM_RUSH_FINALIZE_CLOCK_GRACE_MS = 10_000;
+const ROOM_RUSH_MIN_MS_PER_TRANSITION = 100;
 
 interface RankedRoomRushRunRow extends RoomRushRunRow {
   overall_rank: number | string | null;
+}
+
+interface ScoredRoomRushRoute {
+  uniqueRooms: number;
+  route: RoomRushRouteStepRecord[];
+}
+
+export async function handleRoomRushRunStart(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  const auth = await requireAuthenticatedRequestAuth(
+    env,
+    request,
+    'start Room Rush runs',
+    'runs:write'
+  );
+  await assertWampLeaderboardWriteAllowed(env, auth, 'play Room Rush');
+  const body = await parseRoomRushRunStartBody(request);
+
+  if (
+    body.startRule === 'origin' &&
+    !areRoomCoordinatesEqual(body.startCoordinates, DEFAULT_ROOM_COORDINATES)
+  ) {
+    throw new HttpError(400, 'Origin Room Rush runs must start at the world origin.');
+  }
+
+  const startRoomId = roomIdFromCoordinates(body.startCoordinates);
+  const startRoom = await loadPublishedRoom(env, startRoomId, body.startCoordinates);
+  if (!startRoom) {
+    throw new HttpError(400, 'Room Rush runs must start on a published room.');
+  }
+
+  const startId = crypto.randomUUID();
+  const clientRunId = `room-rush-${startId}`;
+  const startedAtDate = new Date();
+  const startedAt = startedAtDate.toISOString();
+  const expiresAt = new Date(startedAtDate.getTime() + ROOM_RUSH_START_TTL_MS).toISOString();
+
+  await env.DB.batch([
+    env.DB.prepare(
+      `
+        INSERT INTO room_rush_run_starts (
+          start_id,
+          client_run_id,
+          user_id,
+          difficulty,
+          start_rule,
+          start_room_id,
+          start_x,
+          start_y,
+          started_at,
+          expires_at,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `
+    ).bind(
+      startId,
+      clientRunId,
+      auth.user.id,
+      body.difficulty,
+      body.startRule,
+      startRoomId,
+      body.startCoordinates.x,
+      body.startCoordinates.y,
+      startedAt,
+      expiresAt,
+      startedAt
+    ),
+  ]);
+
+  const response: RoomRushRunStartResponse = {
+    startId,
+    clientRunId,
+    difficulty: body.difficulty,
+    startRule: body.startRule,
+    startCoordinates: { ...body.startCoordinates },
+    startedAt,
+    expiresAt,
+  };
+  return jsonResponse(request, response, { status: 201 });
 }
 
 export async function handleRoomRushRunSubmit(
@@ -52,6 +141,12 @@ export async function handleRoomRushRunSubmit(
   );
   await assertWampLeaderboardWriteAllowed(env, auth, 'play Room Rush');
   const body = await parseRoomRushRunSubmissionBody(request);
+  const start = await loadRoomRushRunStart(env, auth.user.id, body.startId);
+  if (!start) {
+    throw new HttpError(400, 'Room Rush run start was not found.');
+  }
+  assertRoomRushStartMatchesSubmission(start, body);
+
   const existing = await env.DB.prepare(
     `
       SELECT attempt_id
@@ -72,6 +167,13 @@ export async function handleRoomRushRunSubmit(
     return jsonResponse(request, response);
   }
 
+  if (start.consumed_attempt_id) {
+    throw new HttpError(409, 'Room Rush run start has already been finalized.');
+  }
+
+  const finishedAtDate = new Date();
+  assertRoomRushTimingIsPlausible(start, body, finishedAtDate);
+  assertRoomRushRouteIsPlausible(body);
   const scoredRoute = await scoreRoomRushRouteByExpandedRoom(env, body.route);
   const uniqueRooms = scoredRoute.uniqueRooms;
   if (uniqueRooms <= 0) {
@@ -79,7 +181,7 @@ export async function handleRoomRushRunSubmit(
   }
 
   const attemptId = crypto.randomUUID();
-  const finishedAt = new Date().toISOString();
+  const finishedAt = finishedAtDate.toISOString();
   const startRoomId = roomIdFromCoordinates(body.startCoordinates);
   const finishRoomId = roomIdFromCoordinates(body.finishCoordinates);
   const response: RoomRushRunSubmissionResponse = {
@@ -88,6 +190,16 @@ export async function handleRoomRushRunSubmit(
   };
 
   await env.DB.batch([
+    env.DB.prepare(
+      `
+        UPDATE room_rush_run_starts
+        SET consumed_attempt_id = ?,
+            consumed_at = ?
+        WHERE start_id = ?
+          AND user_id = ?
+          AND consumed_attempt_id IS NULL
+      `
+    ).bind(attemptId, finishedAt, start.start_id, auth.user.id),
     env.DB.prepare(
       `
         INSERT INTO room_rush_runs (
@@ -142,22 +254,35 @@ export async function handleRoomRushRunSubmit(
 async function scoreRoomRushRouteByExpandedRoom(
   env: Env,
   route: RoomRushRouteStepRecord[]
-): Promise<{ uniqueRooms: number; route: RoomRushRouteStepRecord[] }> {
-  if (route.length === 0 || !isExpandedRoomsEnabled(env)) {
-    return {
-      uniqueRooms: new Set(route.map((step) => step.roomId)).size,
-      route,
-    };
+): Promise<ScoredRoomRushRoute> {
+  if (route.length === 0) {
+    return { uniqueRooms: 0, route };
   }
 
   const bounds = getRouteBounds(route.map((step) => step.coordinates));
-  const memberships = await loadPublishedExpandedRoomMembershipsInBounds(
+  const publishedRooms = await loadPublishedRoomsInBounds(
     env,
     bounds.minX,
     bounds.maxX,
     bounds.minY,
-    bounds.maxY,
+    bounds.maxY
   );
+  const publishedRoomIds = new Set(publishedRooms.map((source) => source.snapshot.id));
+  for (const step of route) {
+    if (!publishedRoomIds.has(step.roomId)) {
+      throw new HttpError(400, 'Room Rush routes can only include published rooms.');
+    }
+  }
+
+  const memberships = isExpandedRoomsEnabled(env)
+    ? await loadPublishedExpandedRoomMembershipsInBounds(
+        env,
+        bounds.minX,
+        bounds.maxX,
+        bounds.minY,
+        bounds.maxY
+      )
+    : [];
   const expandedRoomIdByRoomId = new Map(
     memberships.map((membership) => [membership.roomId, membership.expandedRoomId])
   );
@@ -183,6 +308,133 @@ async function scoreRoomRushRouteByExpandedRoom(
     uniqueRooms: areaVisitIndexById.size,
     route: scoredRoute,
   };
+}
+
+async function loadRoomRushRunStart(
+  env: Env,
+  userId: string,
+  startId: string
+): Promise<RoomRushRunStartRow | null> {
+  const row = await env.DB.prepare(
+    `
+      SELECT
+        start_id,
+        client_run_id,
+        user_id,
+        difficulty,
+        start_rule,
+        start_room_id,
+        start_x,
+        start_y,
+        started_at,
+        expires_at,
+        consumed_attempt_id,
+        consumed_at,
+        created_at
+      FROM room_rush_run_starts
+      WHERE start_id = ?
+        AND user_id = ?
+      LIMIT 1
+    `
+  )
+    .bind(startId, userId)
+    .first<RoomRushRunStartRow>();
+
+  return row ?? null;
+}
+
+function assertRoomRushStartMatchesSubmission(
+  start: RoomRushRunStartRow,
+  body: RoomRushRunSubmissionRequestBody
+): void {
+  if (start.client_run_id !== body.clientRunId) {
+    throw new HttpError(400, 'Room Rush clientRunId does not match the server start.');
+  }
+
+  if (start.difficulty !== body.difficulty || start.start_rule !== body.startRule) {
+    throw new HttpError(400, 'Room Rush mode does not match the server start.');
+  }
+
+  if (
+    start.start_x !== body.startCoordinates.x ||
+    start.start_y !== body.startCoordinates.y ||
+    start.start_room_id !== roomIdFromCoordinates(body.startCoordinates)
+  ) {
+    throw new HttpError(400, 'Room Rush start coordinates do not match the server start.');
+  }
+}
+
+function assertRoomRushTimingIsPlausible(
+  start: RoomRushRunStartRow,
+  body: RoomRushRunSubmissionRequestBody,
+  finishedAtDate: Date
+): void {
+  const startedAtMs = Date.parse(start.started_at);
+  const expiresAtMs = Date.parse(start.expires_at);
+  const finishedAtMs = finishedAtDate.getTime();
+  if (!Number.isFinite(startedAtMs) || !Number.isFinite(expiresAtMs)) {
+    throw new HttpError(400, 'Room Rush run start timestamp is invalid.');
+  }
+
+  if (startedAtMs > finishedAtMs + ROOM_RUSH_FINALIZE_CLOCK_GRACE_MS) {
+    throw new HttpError(400, 'Room Rush run start is in the future.');
+  }
+
+  if (expiresAtMs <= finishedAtMs) {
+    throw new HttpError(400, 'Room Rush run start has expired.');
+  }
+
+  const maxElapsedMs = Math.max(
+    0,
+    finishedAtMs - startedAtMs + ROOM_RUSH_FINALIZE_CLOCK_GRACE_MS
+  );
+  if (body.elapsedMs > maxElapsedMs) {
+    throw new HttpError(400, 'Room Rush elapsed time exceeds the server run window.');
+  }
+
+  const minElapsedMs = Math.max(0, body.route.length - 1) * ROOM_RUSH_MIN_MS_PER_TRANSITION;
+  if (body.elapsedMs < minElapsedMs) {
+    throw new HttpError(400, 'Room Rush elapsed time is too short for the submitted route.');
+  }
+}
+
+function assertRoomRushRouteIsPlausible(body: RoomRushRunSubmissionRequestBody): void {
+  const firstStep = body.route[0];
+  const lastStep = body.route[body.route.length - 1];
+  if (!firstStep || !lastStep) {
+    throw new HttpError(400, 'Room Rush route must contain at least one room.');
+  }
+
+  if (!areRoomCoordinatesEqual(firstStep.coordinates, body.startCoordinates)) {
+    throw new HttpError(400, 'Room Rush route must begin at the server start room.');
+  }
+
+  if (!areRoomCoordinatesEqual(lastStep.coordinates, body.finishCoordinates)) {
+    throw new HttpError(400, 'Room Rush finish coordinates must match the route end.');
+  }
+
+  for (let index = 0; index < body.route.length; index += 1) {
+    const step = body.route[index];
+    if (step.routeIndex !== index) {
+      throw new HttpError(400, 'Room Rush route indexes must be contiguous.');
+    }
+
+    const previousStep = body.route[index - 1] ?? null;
+    if (!previousStep) {
+      continue;
+    }
+
+    const distance =
+      Math.abs(step.coordinates.x - previousStep.coordinates.x) +
+      Math.abs(step.coordinates.y - previousStep.coordinates.y);
+    if (distance !== 1) {
+      throw new HttpError(400, 'Room Rush route steps must be adjacent rooms.');
+    }
+  }
+}
+
+function areRoomCoordinatesEqual(left: RoomCoordinates, right: RoomCoordinates): boolean {
+  return left.x === right.x && left.y === right.y;
 }
 
 function getRouteBounds(coordinates: RoomCoordinates[]): {

@@ -1,5 +1,6 @@
 import PartySocket from 'partysocket';
 import { getAuthDebugState } from '../auth/client';
+import { PartyKitIdentityTokenProvider } from './identityTokenClient';
 import {
   ROOM_CHAT_MESSAGE_LIFETIME_MS,
   ROOM_CHAT_MESSAGE_MAX_LENGTH,
@@ -72,6 +73,8 @@ export class WorldRoomChatClient {
   private readonly socketsByShardId = new Map<string, PartySocketRecord>();
   private readonly connectedShards = new Set<string>();
   private readonly messagesByUserId = new Map<string, RoomChatMessageRecord>();
+  private readonly pendingSocketShardIds = new Set<string>();
+  private readonly identityTokenProvider: PartyKitIdentityTokenProvider;
   private desiredShardIds = new Set<string>();
   private localPresence: WorldPresencePayload | null = null;
   private publishedShardId: string | null = null;
@@ -80,15 +83,17 @@ export class WorldRoomChatClient {
   private lastSentAt = 0;
 
   constructor(private readonly options: WorldRoomChatClientOptions) {
+    this.identityTokenProvider = new PartyKitIdentityTokenProvider(() => this.options.identity);
     this.emitSnapshot();
   }
 
   setSubscribedShards(chunks: WorldChunkCoordinates[]): void {
     const desired = new Set(chunks.map((chunk) => chunkIdFromCoordinates(chunk)));
+    this.desiredShardIds = desired;
 
     for (const chunk of chunks) {
       const shardId = chunkIdFromCoordinates(chunk);
-      if (this.socketsByShardId.has(shardId)) {
+      if (this.socketsByShardId.has(shardId) || this.pendingSocketShardIds.has(shardId)) {
         continue;
       }
 
@@ -103,7 +108,6 @@ export class WorldRoomChatClient {
       this.closeShardSocket(shardId);
     }
 
-    this.desiredShardIds = desired;
     this.emitSnapshot();
   }
 
@@ -207,6 +211,9 @@ export class WorldRoomChatClient {
   }
 
   destroy(): void {
+    this.desiredShardIds.clear();
+    this.pendingSocketShardIds.clear();
+    this.identityTokenProvider.clear();
     if (this.publishedShardId) {
       this.sendLeaveToShard(this.publishedShardId);
     }
@@ -228,6 +235,26 @@ export class WorldRoomChatClient {
   }
 
   private openShardSocket(shardId: string): void {
+    this.pendingSocketShardIds.add(shardId);
+    void this.openShardSocketWithToken(shardId);
+  }
+
+  private async openShardSocketWithToken(shardId: string): Promise<void> {
+    let identityToken: string;
+    try {
+      identityToken = await this.identityTokenProvider.getToken();
+    } catch (error) {
+      this.pendingSocketShardIds.delete(shardId);
+      console.warn('Failed to issue PartyKit room chat identity token.', error);
+      this.emitSnapshot();
+      return;
+    }
+
+    this.pendingSocketShardIds.delete(shardId);
+    if (!this.desiredShardIds.has(shardId) || this.socketsByShardId.has(shardId)) {
+      return;
+    }
+
     const socket = new PartySocket({
       host: this.options.host,
       protocol: this.options.protocol,
@@ -235,9 +262,7 @@ export class WorldRoomChatClient {
       room: shardId,
       query: {
         channel: 'room-chat',
-        userId: this.options.identity.userId,
-        displayName: this.options.identity.displayName,
-        avatarId: this.options.identity.avatarId,
+        identityToken,
       },
     });
 
@@ -256,9 +281,17 @@ export class WorldRoomChatClient {
     });
 
     socket.addEventListener('close', () => {
+      if (this.socketsByShardId.get(shardId)?.socket !== socket) {
+        return;
+      }
+
       this.connectedShards.delete(shardId);
+      this.socketsByShardId.delete(shardId);
       if (this.publishedShardId === shardId) {
         this.lastPublishedPayloadJson = null;
+      }
+      if (this.desiredShardIds.has(shardId) && !this.pendingSocketShardIds.has(shardId)) {
+        this.openShardSocket(shardId);
       }
       this.emitSnapshot();
     });
@@ -278,6 +311,7 @@ export class WorldRoomChatClient {
   }
 
   private closeShardSocket(shardId: string): void {
+    this.pendingSocketShardIds.delete(shardId);
     const record = this.socketsByShardId.get(shardId);
     if (!record) {
       return;

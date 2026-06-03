@@ -29,7 +29,6 @@ import {
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { ensureCustomSpriteTexture } from '../../customSprites/registry';
-import { GHOST_OBJECT_ID } from '../../enemies/ghost';
 import {
   SWORDSMAN_AI_OBJECT_ID,
   type SwordsmanAiState,
@@ -71,6 +70,11 @@ import { LiveObjectTriggerController } from './liveObjects/triggerController';
 import { LiveObjectHazardController } from './liveObjects/hazardController';
 import { LiveObjectEnemyLifecycleController } from './liveObjects/enemyLifecycle';
 import { LiveObjectSwordsmanController } from './liveObjects/swordsmanController';
+import {
+  getLiveObjectBehavior,
+  type FlyingEnemyBehavior,
+} from './liveObjects/behaviorRegistry';
+import { carryMovingPlatformRiders } from './liveObjects/movingPlatforms';
 
 export { isDynamicArcadeBody } from './liveObjects/bodies';
 export type { ArcadeObjectBody } from './liveObjects/bodies';
@@ -267,12 +271,6 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   playBombExplosionFx: (x: number, y: number, roomCoordinates: RoomCoordinates) => void;
 }
 
-const MOVING_PLATFORM_CARRY_MAX_UPWARD_PLAYER_SPEED = -60;
-const MOVING_PLATFORM_CARRY_EDGE_INSET_PX = 1;
-const MOVING_PLATFORM_CARRY_HOVER_TOLERANCE_PX = 10;
-const MOVING_PLATFORM_CARRY_PENETRATION_TOLERANCE_PX = 8;
-const MOVING_PLATFORM_OBJECT_CARRY_HOVER_TOLERANCE_PX = TILE_SIZE + 2;
-const MOVING_PLATFORM_OBJECT_CARRY_PENETRATION_TOLERANCE_PX = 8;
 const LIVE_OBJECT_CONVEYOR_SPEED = 48;
 const LIVE_OBJECT_GRAVITY_ACCELERATION = 700;
 const LIVE_OBJECT_MAX_GRAVITY_SPEED = 500;
@@ -801,68 +799,24 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           this.updateLiveObjectSpecialTileState(liveObject, dynamicBody);
         }
 
-        switch (liveObject.config.id) {
-          case 'bat':
+        const behavior = getLiveObjectBehavior(liveObject.config.id);
+        switch (behavior.kind) {
+          case 'flyingEnemy': {
+            const motion = this.getFlyingEnemyMotion(behavior);
             this.updateFlyingEnemyObject(
               loadedRoom.room,
               liveObject,
               delta,
-              this.options.settings.batSpeed,
-              this.options.settings.batWaveAmplitude,
-              this.options.settings.batWaveSpeed
+              motion.speed,
+              motion.waveAmplitude,
+              motion.waveSpeed
             );
             break;
-          case 'bird':
-            this.updateFlyingEnemyObject(
-              loadedRoom.room,
-              liveObject,
-              delta,
-              this.options.settings.birdSpeed,
-              this.options.settings.birdWaveAmplitude,
-              this.options.settings.birdWaveSpeed
-            );
-            break;
-          case GHOST_OBJECT_ID:
-            this.updateFlyingEnemyObject(
-              loadedRoom.room,
-              liveObject,
-              delta,
-              this.options.settings.batSpeed * 0.62,
-              5,
-              0.006
-            );
-            break;
-          case 'fish':
-            this.updateFlyingEnemyObject(
-              loadedRoom.room,
-              liveObject,
-              delta,
-              this.options.settings.birdSpeed * 0.58,
-              3,
-              0.008
-            );
-            break;
-          case 'shark':
-            this.updateFlyingEnemyObject(
-              loadedRoom.room,
-              liveObject,
-              delta,
-              this.options.settings.birdSpeed * 0.82,
-              3,
-              0.006
-            );
-            break;
-          case 'crab':
-          case 'slime_blue':
-          case 'slime_red':
-          case 'snake':
-          case 'penguin':
-          case 'bear_brown':
-          case 'bear_polar':
-          case 'chicken':
+          }
+          case 'patrolEnemy':
             this.updatePatrolEnemy(loadedRoom.room, liveObject);
             break;
-          case SWORDSMAN_AI_OBJECT_ID:
+          case 'swordsman':
             this.swordsmanController.updateEnemy(loadedRoom, liveObject);
             break;
           case 'frog':
@@ -871,7 +825,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           case 'cannon':
             this.hazardController.updateCannonObject(loadedRoom, liveObject);
             break;
-          case 'cannon_bullet':
+          case 'cannonBullet':
             this.hazardController.updateCannonBullet(loadedRoom, liveObject);
             break;
           case 'bomb':
@@ -880,13 +834,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           case 'lightning':
             this.hazardController.updateLightningObject(liveObject);
             break;
-          case 'bounce_pad':
+          case 'bouncePad':
             this.hazardController.updateBouncePadObject(liveObject);
             break;
-          case 'moving_platform':
+          case 'movingPlatform':
             this.updateMovingPlatformObject(rooms, liveObject, delta);
             break;
-          case 'block_switch':
+          case 'blockSwitch':
             this.triggerController.updateBlockSwitchObject(loadedRoom, liveObject);
             break;
           default:
@@ -903,9 +857,37 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       }
     }
 
-    this.carryMovingPlatformRiders(rooms);
+    carryMovingPlatformRiders(rooms, {
+      getDynamicBody: (sprite) => this.getDynamicBody(sprite),
+      getPlayerBody: this.options.getPlayerBody,
+    });
     this.stabilizePushableStacks(rooms);
     this.triggerController.updatePressurePlates(rooms);
+  }
+
+  private getFlyingEnemyMotion(behavior: FlyingEnemyBehavior): {
+    speed: number;
+    waveAmplitude: number;
+    waveSpeed: number;
+  } {
+    const speedBase =
+      behavior.speedSetting === 'bat'
+        ? this.options.settings.batSpeed
+        : this.options.settings.birdSpeed;
+    const waveAmplitudeSetting = behavior.waveAmplitudeSetting ?? behavior.speedSetting;
+    const waveSpeedSetting = behavior.waveSpeedSetting ?? behavior.speedSetting;
+    const waveAmplitudeBase = waveAmplitudeSetting === 'bat'
+      ? this.options.settings.batWaveAmplitude
+      : this.options.settings.birdWaveAmplitude;
+    const waveSpeedBase = waveSpeedSetting === 'bat'
+      ? this.options.settings.batWaveSpeed
+      : this.options.settings.birdWaveSpeed;
+
+    return {
+      speed: speedBase * (behavior.speedMultiplier ?? 1),
+      waveAmplitude: behavior.waveAmplitude ?? waveAmplitudeBase,
+      waveSpeed: behavior.waveSpeed ?? waveSpeedBase,
+    };
   }
 
   private applyConveyorToLiveObject(liveObject: LoadedRoomObject): void {
@@ -1109,28 +1091,6 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
   }
 
-  private carryMovingPlatformRiders(
-    rooms: Array<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
-  ): void {
-    for (const loadedRoom of rooms) {
-      for (const liveObject of loadedRoom.liveObjects) {
-        if (!isMovingPlatformObjectId(liveObject.config.id)) {
-          continue;
-        }
-
-        const body = this.getDynamicBody(liveObject.sprite);
-        if (!body) {
-          continue;
-        }
-
-        const deltaX = liveObject.sprite.x - liveObject.runtime.previousX;
-        const deltaY = liveObject.sprite.y - liveObject.runtime.previousY;
-        this.carryPlayerOnMovingPlatform(body, deltaX, deltaY);
-        this.carryObjectsOnMovingPlatform(rooms, liveObject, body, deltaX, deltaY);
-      }
-    }
-  }
-
   private findLinkedMovingPlatformEndpoint(
     rooms: Array<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
     liveObject: LoadedRoomObject,
@@ -1165,132 +1125,6 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
 
     return null;
-  }
-
-  private carryPlayerOnMovingPlatform(
-    platformBody: Phaser.Physics.Arcade.Body,
-    deltaX: number,
-    deltaY: number,
-  ): void {
-    if (deltaX === 0 && deltaY === 0) {
-      return;
-    }
-
-    const playerBody = this.options.getPlayerBody();
-    if (!playerBody || playerBody.velocity.y < MOVING_PLATFORM_CARRY_MAX_UPWARD_PLAYER_SPEED) {
-      return;
-    }
-
-    if (!this.bodyIsOnMovingPlatformTop(playerBody, platformBody, {
-      edgeInsetPx: MOVING_PLATFORM_CARRY_EDGE_INSET_PX,
-      hoverTolerancePx: MOVING_PLATFORM_CARRY_HOVER_TOLERANCE_PX,
-      penetrationTolerancePx: MOVING_PLATFORM_CARRY_PENETRATION_TOLERANCE_PX,
-    })) {
-      return;
-    }
-
-    const velocityX = playerBody.velocity.x;
-    const playerBounds = getArcadeBodyBounds(playerBody);
-    playerBody.reset(
-      playerBounds.centerX + deltaX,
-      platformBody.top - playerBounds.height * 0.5,
-    );
-    playerBody.setVelocity(velocityX, 0);
-  }
-
-  private carryObjectsOnMovingPlatform(
-    rooms: Array<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
-    platformObject: LoadedRoomObject,
-    platformBody: Phaser.Physics.Arcade.Body,
-    deltaX: number,
-    deltaY: number,
-  ): void {
-    if (deltaX === 0 && deltaY === 0) {
-      return;
-    }
-
-    for (const loadedRoom of rooms) {
-      for (const liveObject of loadedRoom.liveObjects) {
-        if (
-          liveObject === platformObject ||
-          !this.shouldCarryObjectOnMovingPlatform(liveObject) ||
-          !liveObject.sprite.active ||
-          !liveObject.sprite.body
-        ) {
-          continue;
-        }
-
-        const body = liveObject.sprite.body as ArcadeObjectBody;
-        if (
-          !body.enable ||
-          (
-            isDynamicArcadeBody(body) &&
-            body.velocity.y < MOVING_PLATFORM_CARRY_MAX_UPWARD_PLAYER_SPEED
-          ) ||
-          !this.bodyIsOnMovingPlatformTop(body, platformBody, {
-            edgeInsetPx: MOVING_PLATFORM_CARRY_EDGE_INSET_PX,
-            hoverTolerancePx: MOVING_PLATFORM_OBJECT_CARRY_HOVER_TOLERANCE_PX,
-            penetrationTolerancePx: MOVING_PLATFORM_OBJECT_CARRY_PENETRATION_TOLERANCE_PX,
-          })
-        ) {
-          continue;
-        }
-
-        this.moveCarriedLiveObjectToPlatformTop(liveObject, body, platformBody, deltaX);
-      }
-    }
-  }
-
-  private shouldCarryObjectOnMovingPlatform(liveObject: LoadedRoomObject): boolean {
-    return liveObject.config.category === 'collectible' || liveObject.config.category === 'enemy';
-  }
-
-  private bodyIsOnMovingPlatformTop(
-    body: ArcadeObjectBody,
-    platformBody: Phaser.Physics.Arcade.Body,
-    options: {
-      edgeInsetPx: number;
-      hoverTolerancePx: number;
-      penetrationTolerancePx: number;
-    },
-  ): boolean {
-    const bodyBounds = getArcadeBodyBounds(body);
-    const platformBounds = getArcadeBodyBounds(platformBody);
-    const horizontalOverlap =
-      bodyBounds.right - options.edgeInsetPx > platformBounds.left + options.edgeInsetPx &&
-      bodyBounds.left + options.edgeInsetPx < platformBounds.right - options.edgeInsetPx;
-    const footDistanceFromTop = bodyBounds.bottom - platformBounds.top;
-
-    return (
-      horizontalOverlap &&
-      footDistanceFromTop >= -options.hoverTolerancePx &&
-      footDistanceFromTop <= options.penetrationTolerancePx &&
-      bodyBounds.top < platformBounds.top
-    );
-  }
-
-  private moveCarriedLiveObjectToPlatformTop(
-    liveObject: LoadedRoomObject,
-    body: ArcadeObjectBody,
-    platformBody: Phaser.Physics.Arcade.Body,
-    deltaX: number,
-  ): void {
-    const bodyBounds = getArcadeBodyBounds(body);
-    const targetBodyCenterX = bodyBounds.centerX + deltaX;
-    const targetBodyCenterY = platformBody.top - bodyBounds.height * 0.5;
-    const nextSpriteX = liveObject.sprite.x + targetBodyCenterX - bodyBounds.centerX;
-    const nextSpriteY = liveObject.sprite.y + targetBodyCenterY - bodyBounds.centerY;
-
-    if (isDynamicArcadeBody(body)) {
-      const velocityX = body.velocity.x;
-      body.reset(nextSpriteX, nextSpriteY);
-      body.updateFromGameObject();
-      body.setVelocity(velocityX, 0);
-      liveObject.sprite.setPosition(nextSpriteX, nextSpriteY);
-      return;
-    }
-
-    body.reset(nextSpriteX, nextSpriteY);
   }
 
   findOverlappingLadder(

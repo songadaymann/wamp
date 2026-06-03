@@ -12,6 +12,8 @@ import type {
   RoomProgressRatingRequestBody,
   RoomProgressRatingResponse,
   RoomRushLeaderboardsResponse,
+  RoomRushRunStartRequestBody,
+  RoomRushRunStartResponse,
   RoomRushRunSubmissionRequestBody,
   RoomRushRunSubmissionResponse,
   RunFinishRequestBody,
@@ -38,6 +40,7 @@ export interface RunRepository {
   ): Promise<RoomLeaderboardResponse>;
   submitRoomDifficultyVote(roomId: string, body: RoomDifficultyVoteRequestBody): Promise<void>;
   submitRoomRating(roomId: string, body: RoomProgressRatingRequestBody): Promise<RoomProgressRatingResponse>;
+  startRoomRushRun(body: RoomRushRunStartRequestBody): Promise<RoomRushRunStartResponse>;
   submitRoomRushRun(body: RoomRushRunSubmissionRequestBody): Promise<RoomRushRunSubmissionResponse>;
   loadRoomRushLeaderboards(
     limit?: number,
@@ -120,6 +123,15 @@ class ApiRunRepository implements RunRepository {
     body: RoomProgressRatingRequestBody
   ): Promise<RoomProgressRatingResponse> {
     return this.request<RoomProgressRatingResponse>(`/api/rooms/${encodeURIComponent(roomId)}/ratings`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async startRoomRushRun(
+    body: RoomRushRunStartRequestBody
+  ): Promise<RoomRushRunStartResponse> {
+    return this.request<RoomRushRunStartResponse>('/api/room-rush/runs/start', {
       method: 'POST',
       body: JSON.stringify(body),
     });

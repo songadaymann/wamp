@@ -19,6 +19,10 @@ const args = parseArgs(process.argv.slice(2));
 const host = getStringArg('host', DEFAULT_HOST);
 const party = getStringArg('party', DEFAULT_PARTY);
 const protocol = getProtocol(host, getStringArg('protocol', ''));
+const identityTokenSecret = getStringArg(
+  'identity-token-secret',
+  process.env.PARTYKIT_IDENTITY_TOKEN_SECRET || process.env.PARTYKIT_INTERNAL_TOKEN || '',
+);
 const observerUrl = withPerfParams(getStringArg('url', process.env.PRESENCE_LOAD_URL || DEFAULT_URL));
 const originRoom = parseRoomCoordinates(getStringArg('room', '0,0'));
 const counts = parseIntegerList(getStringArg('counts', DEFAULT_COUNTS));
@@ -47,6 +51,7 @@ const summary = {
   host,
   party,
   protocol,
+  identityTokenConfigured: Boolean(identityTokenSecret),
   observerUrl: noObserver ? null : observerUrl,
   originRoom,
   counts,
@@ -250,7 +255,7 @@ class PresenceBot {
     this.index = index;
     this.scenario = scenario;
     this.count = count;
-    this.userId = `presence-load-bot-${scenario}-${index}-${crypto.randomUUID()}`;
+    this.userId = `guest-load-${scenario.slice(0, 8)}-${index}-${crypto.randomUUID()}`;
     this.displayName = `Bot ${String(index + 1).padStart(2, '0')}`;
     this.avatarId = 'default-player';
     this.state = createInitialBotState(index, count, scenario);
@@ -271,6 +276,11 @@ class PresenceBot {
     this.destroySocket();
     this.shardId = nextShardId;
     this.connected = false;
+    const identityToken = await createPresenceIdentityToken({
+      userId: this.userId,
+      displayName: this.displayName,
+      avatarId: this.avatarId,
+    });
     this.socket = new PartySocket({
       host,
       protocol,
@@ -278,9 +288,7 @@ class PresenceBot {
       room: nextShardId,
       id: this.userId,
       query: {
-        userId: this.userId,
-        displayName: this.displayName,
-        avatarId: this.avatarId,
+        identityToken,
       },
       maxRetries: 0,
       connectionTimeout: 3000,
@@ -471,6 +479,42 @@ function buildPresencePayload(state) {
     mode: 'play',
     timestamp: Date.now(),
   };
+}
+
+async function createPresenceIdentityToken(identity) {
+  if (!identityTokenSecret) {
+    throw new Error(
+      'Presence load bots need PARTYKIT_IDENTITY_TOKEN_SECRET or PARTYKIT_INTERNAL_TOKEN to sign PartyKit identities.'
+    );
+  }
+
+  const now = Date.now();
+  const claims = {
+    ...identity,
+    source: 'guest',
+    iat: now,
+    exp: now + 5 * 60 * 1000,
+    nonce: crypto.randomUUID(),
+  };
+  const encoder = new TextEncoder();
+  const payload = base64UrlEncode(encoder.encode(JSON.stringify(claims)));
+  const signedValue = `v1.${payload}`;
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(identityTokenSecret),
+    {
+      name: 'HMAC',
+      hash: 'SHA-256',
+    },
+    false,
+    ['sign']
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(signedValue));
+  return `${signedValue}.${base64UrlEncode(new Uint8Array(signature))}`;
+}
+
+function base64UrlEncode(bytes) {
+  return Buffer.from(bytes).toString('base64url');
 }
 
 async function prepareObserverPage(page) {

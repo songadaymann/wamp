@@ -5,6 +5,7 @@ import type {
   RoomProgressRatingRequestBody,
   RoomRushDifficulty,
   RoomRushRouteStepRecord,
+  RoomRushRunStartRequestBody,
   RoomRushRunSubmissionRequestBody,
   RoomRushStartRule,
   RunFinishRequestBody,
@@ -93,6 +94,7 @@ export async function parseRoomRushRunSubmissionBody(
   request: Request
 ): Promise<RoomRushRunSubmissionRequestBody> {
   const body = await parseJsonBody<RoomRushRunSubmissionRequestBody>(request);
+  const startId = normalizeNonEmptyString(body.startId, 'startId', 128);
   const clientRunId = normalizeNonEmptyString(body.clientRunId, 'clientRunId', 128);
   const difficulty = normalizeRoomRushDifficulty(body.difficulty);
   const startRule = normalizeRoomRushStartRule(body.startRule);
@@ -103,6 +105,7 @@ export async function parseRoomRushRunSubmissionBody(
   const finishCoordinates = normalizeRoomCoordinates(body.finishCoordinates);
 
   return {
+    startId,
     clientRunId,
     difficulty,
     startRule,
@@ -114,6 +117,18 @@ export async function parseRoomRushRunSubmissionBody(
     startCoordinates,
     finishCoordinates,
     finishedAt: normalizeIsoTimestamp(body.finishedAt),
+  };
+}
+
+export async function parseRoomRushRunStartBody(
+  request: Request
+): Promise<RoomRushRunStartRequestBody> {
+  const body = await parseJsonBody<RoomRushRunStartRequestBody>(request);
+
+  return {
+    difficulty: normalizeRoomRushDifficulty(body.difficulty),
+    startRule: normalizeRoomRushStartRule(body.startRule),
+    startCoordinates: normalizeRoomCoordinates(body.startCoordinates),
   };
 }
 

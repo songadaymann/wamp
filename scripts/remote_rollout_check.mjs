@@ -176,15 +176,17 @@ async function assertEmptyPublishedWorld() {
   return response.json();
 }
 
-async function testPartyKit() {
+async function testPartyKit(accountA, accountB) {
   const events = {
     clientA: [],
     clientB: [],
   };
+  const tokenA = await issuePresenceToken(accountA);
+  const tokenB = await issuePresenceToken(accountB);
 
   await new Promise((resolve, reject) => {
-    const urlA = `wss://${PARTYKIT_HOST}/parties/main/0,0?_pk=rollout-a&userId=rollout-a&displayName=RolloutA&avatarId=default-player`;
-    const urlB = `wss://${PARTYKIT_HOST}/parties/main/0,0?_pk=rollout-b&userId=rollout-b&displayName=RolloutB&avatarId=default-player`;
+    const urlA = `wss://${PARTYKIT_HOST}/parties/main/0,0?_pk=rollout-a&identityToken=${encodeURIComponent(tokenA)}`;
+    const urlB = `wss://${PARTYKIT_HOST}/parties/main/0,0?_pk=rollout-b&identityToken=${encodeURIComponent(tokenB)}`;
     const clientA = new WebSocket(urlA);
     const clientB = new WebSocket(urlB);
     let opened = 0;
@@ -286,6 +288,24 @@ async function testPartyKit() {
   });
 
   return events;
+}
+
+async function issuePresenceToken(account) {
+  const response = await account.client.request('/api/presence/identity-token', {
+    method: 'POST',
+    body: JSON.stringify({
+      identity: {
+        avatarId: 'default-player',
+      },
+    }),
+  });
+  if (!response.ok || typeof response.json?.token !== 'string') {
+    throw new Error(
+      `${account.label} presence token issue failed: ${response.status} ${response.text}`
+    );
+  }
+
+  return response.json.token;
 }
 
 function d1Exec(sql) {
@@ -503,7 +523,7 @@ async function main() {
   summary.api.globalLeaderboardA = await accountA.client.request('/api/leaderboards/global?limit=10');
   summary.api.globalLeaderboardB = await accountB.client.request('/api/leaderboards/global?limit=10');
 
-  summary.partykit = await testPartyKit();
+  summary.partykit = await testPartyKit(accountA, accountB);
 
   summary.cleanup = cleanupRemoteData(accountA, accountB);
   summary.finishedAt = new Date().toISOString();

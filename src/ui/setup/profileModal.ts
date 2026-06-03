@@ -29,15 +29,13 @@ import {
   derivePlaylistSlugBase,
 } from '../../playlists/model';
 import { createPlaylistRepository, type PlaylistRepository } from '../../playlists/repository';
-import type { ProfilePublishedRoomEntry, ProfileStatsSummary, UserProfileResponse } from '../../profiles/model';
+import type { ProfilePublishedRoomEntry, UserProfileResponse } from '../../profiles/model';
 import { createProfileRepository, type ProfileRepository } from '../../profiles/profileRepository';
 import {
   buildProfileShareUrl,
   deriveProfileUsernameBase,
   parseProfileSharePath,
 } from '../../profiles/username';
-import type { ProgressionLaneSummary, ProgressionSummary } from '../../progression/model';
-import { ROOM_DIFFICULTY_LABELS } from '../../runs/model';
 import { getActiveOverworldScene } from './sceneBridge';
 import {
   PROFILE_INVALIDATED_EVENT,
@@ -46,6 +44,8 @@ import {
   type ProfileOpenRequestDetail,
 } from './profileEvents';
 import { requestPlaylistOpen } from './playlistEvents';
+import { renderProfileProgress, renderProfileStats } from './profileModalProgressRenderer';
+import { getProfileRoomTitle, renderProfileRooms } from './profileModalRoomRenderer';
 
 type ProfileTabId = 'rooms' | 'playlists' | 'progress' | 'stats';
 
@@ -96,41 +96,6 @@ type ProfileModalElements = {
   playlistsEmpty: HTMLElement | null;
   progressList: HTMLElement | null;
   statsList: HTMLElement | null;
-};
-
-type ProfileTone = 'player' | 'builder' | 'curator';
-
-const PROFILE_LANE_VISUALS: Record<
-  ProfileTone,
-  { iconSrc: string; iconLabel: string; fillClass: string }
-> = {
-  player: {
-    iconSrc: '/assets/ui-progress-player.png',
-    iconLabel: 'Player',
-    fillClass: 'profile-hero-lane-fill-player',
-  },
-  builder: {
-    iconSrc: '/assets/ui-progress-builder.png',
-    iconLabel: 'Builder',
-    fillClass: 'profile-hero-lane-fill-builder',
-  },
-  curator: {
-    iconSrc: '/assets/ui-progress-curator.png',
-    iconLabel: 'Curator',
-    fillClass: 'profile-hero-lane-fill-curator',
-  },
-};
-
-type ProfileInfoItem = {
-  label: string;
-  value: string;
-  iconSrc?: string;
-};
-
-type ProfileInfoCard = {
-  tone: ProfileTone;
-  title: string;
-  items: ProfileInfoItem[];
 };
 
 export class ProfileModalController {
@@ -687,8 +652,8 @@ export class ProfileModalController {
     this.renderAvatarPicker();
     this.renderRooms(profile?.publishedRooms ?? []);
     this.renderPlaylists(profile?.playlists ?? [], canEditProfileText);
-    this.renderProgress(profile?.progression ?? null);
-    this.renderStats(profile?.stats ?? null, profile?.publishedCourseCount ?? 0);
+    renderProfileProgress(this.doc, this.elements, profile?.progression ?? null);
+    renderProfileStats(this.doc, this.elements, profile?.stats ?? null, profile?.publishedCourseCount ?? 0);
     this.renderTabs();
   }
 
@@ -1320,129 +1285,26 @@ export class ProfileModalController {
   }
 
   private renderRooms(rooms: ProfilePublishedRoomEntry[]): void {
-    if (!this.elements.roomsList) {
-      return;
-    }
-
     this.resetRoomPreviewObserver();
-    this.elements.roomsEmpty?.classList.toggle('hidden', rooms.length > 0);
-    this.elements.roomsList.replaceChildren(
-      ...rooms.map((room) => this.createRoomRow(room))
-    );
-  }
-
-  private createRoomRow(room: ProfilePublishedRoomEntry): HTMLElement {
-    const button = this.doc.createElement('button');
-    button.type = 'button';
-    button.className = 'profile-room-card';
-    button.addEventListener('click', () => {
-      this.close();
-      void getActiveOverworldScene(this.game)?.jumpToCoordinates?.(room.roomCoordinates);
-    });
-
-    const preview = this.doc.createElement('div');
-    preview.className = 'profile-room-preview';
-
-    const previewImage = this.doc.createElement('img');
-    previewImage.className = 'profile-room-preview-image hidden';
-    previewImage.alt = `${this.getProfileRoomTitle(room)} preview`;
-
-    const previewFallback = this.doc.createElement('div');
-    previewFallback.className = 'profile-room-preview-fallback';
-    previewFallback.textContent = `${room.roomCoordinates.x},${room.roomCoordinates.y}`;
-
-    preview.append(previewImage, previewFallback);
-
-    const copy = this.doc.createElement('div');
-    copy.className = 'profile-room-card-copy';
-
-    const title = this.doc.createElement('div');
-    title.className = 'profile-room-card-title';
-    title.textContent = this.getProfileRoomTitle(room);
-
-    const meta = this.doc.createElement('div');
-    meta.className = 'profile-room-card-meta';
-    meta.textContent = this.getProfileRoomMeta(room);
-
-    copy.append(title, meta, this.createRoomRatingRow(room));
-    button.append(preview, copy);
-    this.observeRoomPreview(room, preview, previewImage, previewFallback);
-    if (this.currentProfile?.canEdit) {
-      const row = this.doc.createElement('div');
-      row.className = 'profile-room-playlist-row';
-      row.append(button, this.createAddRoomToPlaylistButton(room));
-      return row;
-    }
-
-    return button;
-  }
-
-  private createAddRoomToPlaylistButton(room: ProfilePublishedRoomEntry): HTMLButtonElement {
-    const button = this.doc.createElement('button');
-    button.type = 'button';
-    button.className = 'bar-btn bar-btn-small profile-add-room-playlist-btn';
     const playlists = this.currentProfile?.playlists ?? [];
     const selectedPlaylist = this.getSelectedPlaylist();
-    button.textContent = this.playlistBusy ? 'Adding...' : 'Add';
-    button.disabled = this.playlistBusy || playlists.length === 0 || !selectedPlaylist;
-    button.title = playlists.length === 0 ? 'Create a playlist first.' : 'Add this room to the selected playlist.';
-    button.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      void this.addRoomToSelectedPlaylist(room);
+    renderProfileRooms(this.doc, this.elements, rooms, {
+      canEdit: Boolean(this.currentProfile?.canEdit),
+      playlistBusy: this.playlistBusy,
+      hasPlaylists: playlists.length > 0,
+      hasSelectedPlaylist: Boolean(selectedPlaylist),
+      formatShortDate: (value) => this.formatShortDate(value),
+      onOpenRoom: (room) => {
+        this.close();
+        void getActiveOverworldScene(this.game)?.jumpToCoordinates?.(room.roomCoordinates);
+      },
+      onAddRoomToPlaylist: (room) => {
+        void this.addRoomToSelectedPlaylist(room);
+      },
+      observeRoomPreview: (room, previewEl, imageEl, fallbackEl) => {
+        this.observeRoomPreview(room, previewEl, imageEl, fallbackEl);
+      },
     });
-    return button;
-  }
-
-  private createRoomRatingRow(room: ProfilePublishedRoomEntry): HTMLElement {
-    const row = this.doc.createElement('div');
-    row.className = 'profile-room-card-ratings';
-
-    row.append(
-      this.createRoomDifficultyBadge(room),
-      this.createRoomQualitySummary(room),
-    );
-    return row;
-  }
-
-  private createRoomDifficultyBadge(room: ProfilePublishedRoomEntry): HTMLElement {
-    const badge = this.doc.createElement('div');
-    badge.className = 'profile-room-card-difficulty';
-    const difficulty = room.consensusDifficulty;
-    if (difficulty) {
-      badge.dataset.difficulty = difficulty;
-      badge.textContent = ROOM_DIFFICULTY_LABELS[difficulty];
-    } else {
-      badge.dataset.difficulty = 'unrated';
-      badge.textContent = 'Unrated';
-    }
-    return badge;
-  }
-
-  private createRoomQualitySummary(room: ProfilePublishedRoomEntry): HTMLElement {
-    const quality = this.doc.createElement('div');
-    quality.className = 'profile-room-card-quality';
-
-    const stars = this.doc.createElement('div');
-    stars.className = 'profile-room-card-stars';
-    const average = room.quality.adjustedAverage ?? room.quality.rawAverage ?? null;
-    const filledCount = average === null ? 0 : Math.max(0, Math.min(5, Math.round(average)));
-    for (let index = 0; index < 5; index += 1) {
-      const star = this.doc.createElement('span');
-      star.className = 'profile-room-card-star';
-      if (index < filledCount) {
-        star.classList.add('active');
-      }
-      star.textContent = '★';
-      stars.appendChild(star);
-    }
-
-    const label = this.doc.createElement('div');
-    label.className = 'profile-room-card-quality-label';
-    label.textContent = average === null ? 'Not rated yet' : `${average.toFixed(1)} stars`;
-
-    quality.append(stars, label);
-    return quality;
   }
 
   private renderPlaylists(playlists: RoomPlaylistSummary[], canEdit: boolean): void {
@@ -1607,7 +1469,7 @@ export class ProfileModalController {
         roomVersion: room.roomVersion,
       });
       await this.reloadCurrentProfile();
-      this.setPlaylistStatus(`Added "${this.getProfileRoomTitle(room)}" to "${playlist.title}".`);
+      this.setPlaylistStatus(`Added "${getProfileRoomTitle(room)}" to "${playlist.title}".`);
     } catch (error) {
       this.setPlaylistStatus('');
       this.setError(error instanceof Error ? error.message : 'Failed to add room to playlist.');
@@ -1785,32 +1647,9 @@ export class ProfileModalController {
       return;
     }
 
-    fallbackEl.textContent = this.getProfileRoomTitle(room);
+    fallbackEl.textContent = getProfileRoomTitle(room);
     imageEl.classList.add('hidden');
     fallbackEl.classList.remove('hidden');
-  }
-
-  private getProfileRoomTitle(room: ProfilePublishedRoomEntry): string {
-    return (
-      room.expandedRoom?.title?.trim()
-      || room.roomTitle?.trim()
-      || `Room ${room.roomCoordinates.x},${room.roomCoordinates.y}`
-    );
-  }
-
-  private getProfileRoomMeta(room: ProfilePublishedRoomEntry): string {
-    const goalText = room.goalType ? room.goalType.replace(/_/g, ' ') : 'free play';
-    const publishedText = room.publishedAt ? this.formatShortDate(room.publishedAt) : 'Unpublished';
-    const expandedRoom = room.expandedRoom;
-    if (expandedRoom && expandedRoom.cellCount > 1) {
-      const versionText =
-        typeof expandedRoom.expandedRoomVersion === 'number'
-          ? `v${expandedRoom.expandedRoomVersion}`
-          : `v${room.roomVersion}`;
-      return `${goalText} · ${expandedRoom.cellCount} cells · ${versionText} · focus ${room.roomCoordinates.x},${room.roomCoordinates.y} · ${publishedText}`;
-    }
-
-    return `${goalText} · v${room.roomVersion} · ${room.roomCoordinates.x},${room.roomCoordinates.y} · ${publishedText}`;
   }
 
   private loadRoomPreview(room: ProfilePublishedRoomEntry): Promise<string | null> {
@@ -1850,247 +1689,6 @@ export class ProfileModalController {
     return `${room.roomId}:${room.roomVersion}`;
   }
 
-  private renderStats(stats: ProfileStatsSummary | null, publishedCourseCount: number): void {
-    if (!this.elements.statsList) {
-      return;
-    }
-
-    if (!stats) {
-      this.elements.statsList.replaceChildren(
-        this.createInfoCard({
-          tone: 'curator',
-          title: 'Stats',
-          items: [{ label: 'Status', value: 'No stats yet.' }],
-        }),
-      );
-      return;
-    }
-
-    const cards: ProfileInfoCard[] = [
-      {
-        tone: 'player',
-        title: 'Runs',
-        items: [
-          {
-            label: 'Completed',
-            value: String(stats.completedRuns),
-            iconSrc: '/assets/ui-progress-player.png',
-          },
-          {
-            label: 'Failed',
-            value: String(stats.failedRuns),
-            iconSrc: '/assets/enemies/saw.png',
-          },
-          {
-            label: 'Abandoned',
-            value: String(stats.abandonedRuns),
-            iconSrc: '/assets/objects/sign_arrow.png',
-          },
-          {
-            label: 'Best score',
-            value: String(stats.bestScore),
-            iconSrc: '/assets/objects/flag-checkered-gold.png',
-          },
-          {
-            label: 'Fastest clear',
-            value: stats.fastestClearMs ? formatDuration(stats.fastestClearMs) : 'None yet',
-            iconSrc: '/assets/objects/flag-checkered.png',
-          },
-        ],
-      },
-      {
-        tone: 'player',
-        title: 'PVP',
-        items: [
-          {
-            label: 'Wins',
-            value: String(stats.pvpWins),
-            iconSrc: '/assets/objects/crown.png',
-          },
-          {
-            label: 'Losses',
-            value: String(stats.pvpLosses),
-            iconSrc: '/assets/objects/skull.png',
-          },
-          {
-            label: 'Draws',
-            value: String(stats.pvpDraws),
-            iconSrc: '/assets/objects/heart.png',
-          },
-        ],
-      },
-      {
-        tone: 'builder',
-        title: 'Built',
-        items: [
-          {
-            label: 'Rooms published',
-            value: String(stats.totalRoomsPublished),
-            iconSrc: '/assets/ui-progress-builder.png',
-          },
-          {
-            label: 'Expanded rooms published',
-            value: String(publishedCourseCount),
-            iconSrc: '/assets/objects/flag-green.png',
-          },
-        ],
-      },
-      {
-        tone: 'curator',
-        title: 'World',
-        items: [
-          {
-            label: 'Total points',
-            value: String(stats.totalPoints),
-            iconSrc: '/assets/ui-progress-curator.png',
-          },
-          {
-            label: 'Global rank',
-            value: stats.globalRank ? `#${stats.globalRank}` : 'Unranked',
-            iconSrc: '/assets/objects/flag-checkered-gold.png',
-          },
-          {
-            label: 'Collectibles',
-            value: String(stats.totalCollectibles),
-            iconSrc: '/assets/objects/coin_small_gold.png',
-          },
-          {
-            label: 'Enemies',
-            value: String(stats.totalEnemiesDefeated),
-            iconSrc: '/assets/enemies/slime_red.png',
-          },
-          {
-            label: 'Checkpoints',
-            value: String(stats.totalCheckpoints),
-            iconSrc: '/assets/objects/flag-green.png',
-          },
-          {
-            label: 'Deaths',
-            value: String(stats.totalDeaths),
-            iconSrc: '/assets/enemies/saw.png',
-          },
-        ],
-      },
-    ];
-
-    this.elements.statsList.replaceChildren(...cards.map((card) => this.createInfoCard(card)));
-  }
-
-  private renderProgress(progression: ProgressionSummary | null): void {
-    if (this.elements.heroLanes) {
-      if (!progression) {
-        this.elements.heroLanes.replaceChildren();
-      } else {
-        this.elements.heroLanes.replaceChildren(
-          this.createHeroLaneRow(progression.player, 'player'),
-          this.createHeroLaneRow(progression.builder, 'builder'),
-          this.createHeroLaneRow(progression.curator, 'curator'),
-        );
-      }
-    }
-
-    if (this.elements.heroProgress) {
-      const chips: HTMLElement[] = [];
-      if (progression && progression.founderNumber !== null) {
-        chips.push(this.createHeroSummaryChip(`WAMP #${progression.founderNumber}`, 'curator'));
-      }
-      if (progression) {
-        chips.push(this.createHeroSummaryChip(`${progression.badgeCount} ${pluralize('badge', progression.badgeCount)}`, 'builder'));
-        chips.push(this.createHeroSummaryChip(`${progression.trophyCount} ${pluralize('trophy', progression.trophyCount)}`, 'player'));
-      }
-      this.elements.heroProgress.replaceChildren(...chips);
-      this.elements.heroProgress.classList.toggle('hidden', chips.length === 0);
-    }
-
-    if (!this.elements.progressList) {
-      return;
-    }
-
-    if (!progression) {
-      this.elements.progressList.replaceChildren(
-        this.createInfoCard({
-          tone: 'curator',
-          title: 'Progress',
-          items: [{ label: 'Status', value: 'No progression data yet.' }],
-        }),
-      );
-      return;
-    }
-
-    const milestoneItems: ProfileInfoItem[] = [];
-    if (progression.builderCaps.overrideActive) {
-      milestoneItems.push({
-        label: 'Cap boost',
-        value: 'Admin boost active',
-        iconSrc: '/assets/ui-progress-builder.png',
-      });
-    }
-    for (const badge of progression.featuredBadges.slice(0, 3)) {
-      milestoneItems.push({
-        label: badge.category,
-        value: `${badge.label} · ${badge.description}`,
-        iconSrc: '/assets/ui-progress-curator.png',
-      });
-    }
-    for (const trophy of progression.recentTrophies.slice(0, 3)) {
-      milestoneItems.push({
-        label: 'Trophy',
-        value: `${trophy.contentType} ${trophy.contentId} v${trophy.versionKey} · ${trophy.trophyType}`,
-        iconSrc: '/assets/objects/flag-checkered-gold.png',
-      });
-    }
-
-    const cards: ProfileInfoCard[] = [
-      {
-        tone: 'builder',
-        title: 'Build Limits',
-        items: [
-          {
-            label: 'Placed objects',
-            value: String(progression.builderCaps.objectLimit),
-            iconSrc: '/assets/ui-progress-builder.png',
-          },
-          {
-            label: 'Collectibles',
-            value: String(progression.builderCaps.collectibleLimit),
-            iconSrc: '/assets/objects/coin_small_gold.png',
-          },
-          {
-            label: 'Expanded cells',
-            value: String(progression.builderCaps.expandedRoomCellLimit),
-            iconSrc: '/assets/objects/key.png',
-          },
-        ],
-      },
-      {
-        tone: 'builder',
-        title: 'Daily Rhythm',
-        items: [
-          {
-            label: 'Publish / day',
-            value: String(progression.builderCaps.publishLimitPerDay),
-            iconSrc: '/assets/objects/flag-green.png',
-          },
-          {
-            label: 'Claim / day',
-            value: String(progression.builderCaps.claimLimitPerDay),
-            iconSrc: '/assets/objects/key.png',
-          },
-        ],
-      },
-    ];
-
-    if (milestoneItems.length > 0) {
-      cards.push({
-        tone: 'curator',
-        title: 'Milestones',
-        items: milestoneItems,
-      });
-    }
-
-    this.elements.progressList.replaceChildren(...cards.map((card) => this.createInfoCard(card)));
-  }
-
   private selectDefaultTab(profile: UserProfileResponse): void {
     if (this.activeTabAutoSelected) {
       return;
@@ -2098,109 +1696,6 @@ export class ProfileModalController {
 
     this.activeTab = profile.isSelf ? 'progress' : 'rooms';
     this.activeTabAutoSelected = true;
-  }
-
-  private createHeroLaneRow(
-    lane: ProgressionLaneSummary,
-    tone: ProfileTone,
-  ): HTMLElement {
-    const visual = PROFILE_LANE_VISUALS[tone];
-    const row = this.doc.createElement('div');
-    row.className = `profile-hero-lane profile-hero-lane-${tone}`;
-
-    const labelWrap = this.doc.createElement('div');
-    labelWrap.className = 'profile-hero-lane-label-wrap';
-
-    const icon = this.doc.createElement('img');
-    icon.className = 'profile-hero-lane-icon';
-    icon.src = visual.iconSrc;
-    icon.alt = '';
-    icon.setAttribute('aria-hidden', 'true');
-
-    const label = this.doc.createElement('span');
-    label.className = 'profile-hero-lane-label';
-    label.textContent = `LVL ${lane.level}`;
-
-    labelWrap.append(icon, label);
-
-    const progress = this.doc.createElement('div');
-    progress.className = 'profile-hero-lane-progress';
-
-    const fill = this.doc.createElement('div');
-    fill.className = `profile-hero-lane-fill ${visual.fillClass}`;
-    fill.style.width = `${(Math.max(0, Math.min(1, lane.progressFraction)) * 100).toFixed(1)}%`;
-    progress.appendChild(fill);
-
-    const total = this.doc.createElement('span');
-    total.className = 'profile-hero-lane-total';
-    total.textContent = formatLaneTarget(lane);
-
-    row.append(labelWrap, progress, total);
-    row.setAttribute('aria-label', `${visual.iconLabel} level ${lane.level}, ${formatLaneTarget(lane)} to next level`);
-    return row;
-  }
-
-  private createHeroSummaryChip(text: string, tone: ProfileTone): HTMLElement {
-    const chip = this.doc.createElement('div');
-    chip.className = `profile-hero-summary-chip profile-hero-summary-chip-${tone}`;
-    chip.textContent = text;
-    return chip;
-  }
-
-  private createInfoCard(card: ProfileInfoCard): HTMLElement {
-    const visual = PROFILE_LANE_VISUALS[card.tone];
-    const section = this.doc.createElement('section');
-    section.className = `profile-info-card profile-info-card-${card.tone}`;
-
-    const header = this.doc.createElement('div');
-    header.className = 'profile-info-card-header';
-
-    const icon = this.doc.createElement('img');
-    icon.className = 'profile-info-card-header-icon';
-    icon.src = visual.iconSrc;
-    icon.alt = '';
-    icon.setAttribute('aria-hidden', 'true');
-
-    const title = this.doc.createElement('div');
-    title.className = 'profile-info-card-title';
-    title.textContent = card.title;
-
-    header.append(icon, title);
-
-    const grid = this.doc.createElement('div');
-    grid.className = 'profile-info-card-grid';
-
-    for (const item of card.items) {
-      const row = this.doc.createElement('div');
-      row.className = 'profile-info-item';
-
-      if (item.iconSrc) {
-        const rowIcon = this.doc.createElement('img');
-        rowIcon.className = 'profile-info-item-icon';
-        rowIcon.src = item.iconSrc;
-        rowIcon.alt = '';
-        rowIcon.setAttribute('aria-hidden', 'true');
-        row.appendChild(rowIcon);
-      }
-
-      const copy = this.doc.createElement('div');
-      copy.className = 'profile-info-item-copy';
-
-      const label = this.doc.createElement('div');
-      label.className = 'profile-info-item-label';
-      label.textContent = item.label;
-
-      const value = this.doc.createElement('div');
-      value.className = 'profile-info-item-value';
-      value.textContent = item.value;
-
-      copy.append(label, value);
-      row.appendChild(copy);
-      grid.appendChild(row);
-    }
-
-    section.append(header, grid);
-    return section;
   }
 
   private renderTabs(): void {
@@ -2298,30 +1793,4 @@ function parsePunkIdInput(rawValue: string): number | null {
 
   const punkId = Number(rawValue);
   return punkId >= 0 && punkId <= 9999 ? punkId : null;
-}
-
-function formatDuration(milliseconds: number): string {
-  if (!Number.isFinite(milliseconds) || milliseconds <= 0) {
-    return '0.00s';
-  }
-
-  if (milliseconds < 60_000) {
-    return `${(milliseconds / 1000).toFixed(2)}s`;
-  }
-
-  const totalSeconds = Math.floor(milliseconds / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  const hundredths = Math.floor((milliseconds % 1000) / 10);
-  return `${minutes}:${seconds.toString().padStart(2, '0')}.${hundredths.toString().padStart(2, '0')}`;
-}
-
-function formatLaneTarget(lane: ProgressionLaneSummary): string {
-  const span = Math.max(1, lane.nextLevelXp - lane.currentLevelStartXp);
-  const current = Math.max(0, Math.min(span, lane.xp - lane.currentLevelStartXp));
-  return `${current}/${span}`;
-}
-
-function pluralize(label: string, count: number): string {
-  return count === 1 ? label : `${label}s`;
 }

@@ -1,3 +1,5 @@
+import { createModalLifecycle } from './modalLifecycle';
+
 type AboutModalElements = {
   modal: HTMLElement | null;
   closeButton: HTMLElement | null;
@@ -8,6 +10,7 @@ type AboutModalElements = {
 
 export class AboutModalController {
   private readonly elements: AboutModalElements;
+  private readonly lifecycle: ReturnType<typeof createModalLifecycle>;
   private copyStatusResetTimer: number | null = null;
 
   private readonly handleCloseClick = () => {
@@ -16,20 +19,6 @@ export class AboutModalController {
 
   private readonly handleCopySkillUrlClick = () => {
     void this.copySkillUrl();
-  };
-
-  private readonly handleBackdropClick = (event: Event) => {
-    if (event.target === this.elements.modal) {
-      this.close();
-    }
-  };
-
-  private readonly handleDocumentKeydown = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape' || this.elements.modal?.classList.contains('hidden')) {
-      return;
-    }
-
-    this.close();
   };
 
   constructor(
@@ -42,41 +31,34 @@ export class AboutModalController {
       copySkillUrlButton: this.doc.getElementById('btn-about-copy-skill-url') as HTMLButtonElement | null,
       copyStatus: this.doc.getElementById('about-copy-status'),
     };
+    this.lifecycle = createModalLifecycle({
+      doc: this.doc,
+      modal: this.elements.modal,
+      onClose: () => this.close(),
+    });
   }
 
   init(): void {
     this.syncSkillLinkHref();
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.copySkillUrlButton?.addEventListener('click', this.handleCopySkillUrlClick);
-    this.elements.modal?.addEventListener('click', this.handleBackdropClick);
-    this.doc.addEventListener('keydown', this.handleDocumentKeydown);
+    this.lifecycle.attach();
   }
 
   destroy(): void {
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.copySkillUrlButton?.removeEventListener('click', this.handleCopySkillUrlClick);
-    this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
-    this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
+    this.lifecycle.detach();
     this.clearCopyStatusResetTimer();
     this.close();
   }
 
   open(): void {
-    if (!this.elements.modal) {
-      return;
-    }
-
-    this.elements.modal.classList.remove('hidden');
-    this.elements.modal.setAttribute('aria-hidden', 'false');
+    this.lifecycle.show();
   }
 
   close(): void {
-    if (!this.elements.modal) {
-      return;
-    }
-
-    this.elements.modal.classList.add('hidden');
-    this.elements.modal.setAttribute('aria-hidden', 'true');
+    this.lifecycle.hide();
   }
 
   private syncSkillLinkHref(): void {

@@ -129,6 +129,11 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-p
 
 body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'][data-app-mode='world'] #world-hud .world-hud-row-primary-actions {
   grid-area: primary;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'][data-app-mode='world'] #world-hud #btn-world-room-comment {
+  display: none !important;
 }
 
 body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'][data-app-mode='world'] #world-hud .world-hud-row-secondary-actions {
@@ -189,4 +194,3 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-p
 body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'][data-app-mode='world'] #world-hud .world-hud-goal {
   grid-area: goal;
 }
-
