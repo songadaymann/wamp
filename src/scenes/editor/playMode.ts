@@ -66,6 +66,9 @@ export function buildEditorPlayModeData(
     forceRefreshAround: usePublishedCourseRoomVersion,
     courseDraftPreviewId: coursePreview?.id ?? null,
     courseEditedRoom,
+    editorPlaytestReturnTarget: {
+      roomCoordinates: { ...roomCoordinates },
+    },
     statusMessage: coursePreview ? 'Testing draft course.' : null,
     mode: 'play',
   };

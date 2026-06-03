@@ -504,6 +504,7 @@ export class PaletteController {
         this.renderTilePreview();
         this.doc.defaultView?.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
         this.requestPhoneEditorAutoCollapse();
+        this.focusGameCanvasForShortcuts();
       });
 
       this.objectGrid.appendChild(item);
@@ -534,6 +535,37 @@ export class PaletteController {
     if (this.objectSearchInput) {
       this.objectSearchInput.value = query;
     }
+  }
+
+  private focusGameCanvasForShortcuts(): void {
+    const activeElement = this.doc.activeElement;
+    if (activeElement instanceof HTMLElement && this.objectPaletteSection?.contains(activeElement)) {
+      activeElement.blur();
+    }
+
+    const gameCanvas = this.findPrimaryGameCanvas();
+    if (!gameCanvas) {
+      return;
+    }
+
+    if (gameCanvas.tabIndex < 0) {
+      gameCanvas.tabIndex = 0;
+    }
+    gameCanvas.focus({ preventScroll: true });
+  }
+
+  private findPrimaryGameCanvas(): HTMLCanvasElement | null {
+    let bestCanvas: HTMLCanvasElement | null = null;
+    let bestArea = 0;
+    for (const canvas of this.doc.querySelectorAll<HTMLCanvasElement>('#game-container canvas')) {
+      const area = (canvas.clientWidth || canvas.width) * (canvas.clientHeight || canvas.height);
+      if (area > bestArea) {
+        bestArea = area;
+        bestCanvas = canvas;
+      }
+    }
+
+    return bestCanvas;
   }
 
   private bindCustomObjectSubcategoryTabs(): void {

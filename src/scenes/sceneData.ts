@@ -16,6 +16,10 @@ export interface CourseComposerReturnTarget {
   centerCoordinates: RoomCoordinates;
 }
 
+export interface EditorPlaytestReturnTarget {
+  roomCoordinates: RoomCoordinates;
+}
+
 export interface EditorSceneData {
   roomCoordinates?: RoomCoordinates;
   source?: 'world' | 'direct';
@@ -65,4 +69,5 @@ export interface OverworldPlaySceneData {
   courseDraftPreviewId?: string | null;
   courseEditedRoom?: CourseEditedRoomData | null;
   courseEditorReturnTarget?: CourseComposerReturnTarget | null;
+  editorPlaytestReturnTarget?: EditorPlaytestReturnTarget | null;
 }

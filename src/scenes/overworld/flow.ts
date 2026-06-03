@@ -21,6 +21,7 @@ import type {
   CourseComposerSceneData,
   CourseEditorSceneData,
   EditorCourseEditData,
+  EditorPlaytestReturnTarget,
   EditorSceneData,
   OverworldMode,
 } from '../sceneData';
@@ -42,6 +43,8 @@ interface OverworldSceneFlowHost {
   loadPublishedCourseSnapshot(courseId: string): Promise<CourseSnapshot | null>;
   getCourseEditorReturnTarget(): CourseComposerReturnTarget | null;
   setCourseEditorReturnTarget(target: CourseComposerReturnTarget | null): void;
+  getEditorPlaytestReturnTarget(): EditorPlaytestReturnTarget | null;
+  setEditorPlaytestReturnTarget(target: EditorPlaytestReturnTarget | null): void;
   getCellStateAt(coordinates: RoomCoordinates): SelectedCellState;
   isFrontierBuildBlockedByClaimLimit(): boolean;
   getSelectedRoomSnapshot(coordinates: RoomCoordinates): RoomSnapshot | null;
@@ -206,7 +209,9 @@ export class OverworldSceneFlowController {
       ?? this.host.getActiveRoomRushRun()?.returnCoordinates
       ?? this.host.getCurrentRoomCoordinates();
     const courseEditorReturnTarget = this.host.getCourseEditorReturnTarget();
+    const editorPlaytestReturnTarget = this.host.getEditorPlaytestReturnTarget();
     this.host.setCourseEditorReturnTarget(null);
+    this.host.setEditorPlaytestReturnTarget(null);
     this.host.resetPlaySession();
     this.host.clearTouchGestureState();
     this.host.setMode('browse');
@@ -233,6 +238,25 @@ export class OverworldSceneFlowController {
         this.scene.scene.bringToTop('CourseEditorScene');
       } else {
         this.scene.scene.run('CourseEditorScene', sceneData);
+      }
+      this.scene.scene.sleep();
+      return;
+    }
+
+    if (editorPlaytestReturnTarget) {
+      const sceneData: EditorSceneData = {
+        roomCoordinates: { ...editorPlaytestReturnTarget.roomCoordinates },
+        source: 'world',
+      };
+      if (
+        this.scene.scene.isSleeping('EditorScene')
+        || this.scene.scene.isPaused('EditorScene')
+      ) {
+        this.scene.scene.wake('EditorScene', sceneData);
+      } else if (this.scene.scene.isActive('EditorScene')) {
+        this.scene.scene.bringToTop('EditorScene');
+      } else {
+        this.scene.scene.run('EditorScene', sceneData);
       }
       this.scene.scene.sleep();
       return;

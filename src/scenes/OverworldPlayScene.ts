@@ -457,6 +457,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private pvpInstanceStateSequence = 0;
   private activeMultiplayerGoalPolicy: MultiplayerModeDefinition['goals'] | null = null;
   private courseEditorReturnTarget: OverworldPlaySceneData['courseEditorReturnTarget'] = null;
+  private editorPlaytestReturnTarget: OverworldPlaySceneData['editorPlaytestReturnTarget'] = null;
 
   private coyoteTime = 0;
   private jumpBuffered = false;
@@ -1049,6 +1050,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       showTransientStatus: (message) => this.showTransientStatus(message),
       setCourseEditorReturnTarget: (target) => {
         this.courseEditorReturnTarget = target;
+      },
+      setEditorPlaytestReturnTarget: (target) => {
+        this.editorPlaytestReturnTarget = target
+          ? { roomCoordinates: { ...target.roomCoordinates } }
+          : null;
       },
       syncCourseComposerRecordFromSession: () => {
         this.courseComposerController.syncRecordFromSession();
@@ -1810,6 +1816,15 @@ export class OverworldPlayScene extends Phaser.Scene {
       setCourseEditorReturnTarget: (target) => {
         this.courseEditorReturnTarget = target;
       },
+      getEditorPlaytestReturnTarget: () =>
+        this.editorPlaytestReturnTarget
+          ? { roomCoordinates: { ...this.editorPlaytestReturnTarget.roomCoordinates } }
+          : null,
+      setEditorPlaytestReturnTarget: (target) => {
+        this.editorPlaytestReturnTarget = target
+          ? { roomCoordinates: { ...target.roomCoordinates } }
+          : null;
+      },
       getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
       isFrontierBuildBlockedByClaimLimit: () => this.isFrontierBuildBlockedByClaimLimit(),
       getSelectedRoomSnapshot: (coordinates) => this.getRoomSnapshotForCoordinates(coordinates),
@@ -2066,6 +2081,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       invalidateRoomId: data?.invalidateRoomId ?? null,
       forceRefreshAround: data?.forceRefreshAround ?? false,
       statusMessage: data?.statusMessage ?? null,
+      editorPlaytestReturnTarget: data?.editorPlaytestReturnTarget ?? null,
     });
     if (deepLinkedInitialFocus && (data?.mode ?? 'browse') === 'browse') {
       const fitZoom = this.getFitZoomForRoom();
@@ -2407,6 +2423,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.coursePlaybackController.clearActiveCourseRoomOverrides();
     this.activeCourseRun = null;
     this.courseEditorReturnTarget = null;
+    this.editorPlaytestReturnTarget = null;
     this.hudBridge?.destroy();
     this.hudBridge = null;
     this.fxController?.destroy();

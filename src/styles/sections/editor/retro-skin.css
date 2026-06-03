@@ -814,6 +814,12 @@ body[data-app-mode='editor'] #sidebar #btn-wamp-o-gram {
   color: var(--editor-retro-ink) !important;
 }
 
+body[data-app-mode='editor'] #sidebar #btn-publish-room .tool-label {
+  font-size: 7px;
+  letter-spacing: 0;
+  line-height: 1.05;
+}
+
 body[data-app-mode='editor'] #sidebar #btn-editor-publish-nudge {
   font-family: var(--editor-ui-font);
   font-size: 11px;
