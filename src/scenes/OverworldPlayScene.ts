@@ -319,8 +319,8 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly GRAVITY = 700;
   private readonly PLAYER_WIDTH = 10;
   private readonly PLAYER_HEIGHT = 14;
-  private readonly PLAYER_STANDING_HEIGHT = 22;
-  private readonly PLAYER_CROUCH_HEIGHT = 9;
+  private readonly PLAYER_STANDING_HEIGHT = 26;
+  private readonly PLAYER_CROUCH_HEIGHT = 14;
   private readonly PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT = 15;
   private readonly CRAWL_SPEED = 70;
   private readonly CRATE_PUSH_SPEED = 78;
