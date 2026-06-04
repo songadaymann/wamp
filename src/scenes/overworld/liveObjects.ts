@@ -748,6 +748,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
               }
             } else if (liveObject.config.id === 'bounce_pad') {
               this.hazardController.addBouncePadInteraction(loadedRoom, liveObject, player);
+            } else if (liveObject.config.id === 'tornado' || liveObject.config.id === 'tornado_sand') {
+              this.hazardController.addHazardInteraction(loadedRoom, liveObject, player);
             } else if (liveObject.config.id === 'door_locked') {
               liveObject.interactions.push(
                 this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
@@ -825,8 +827,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           case 'cannon':
             this.hazardController.updateCannonObject(loadedRoom, liveObject);
             break;
-          case 'cannonBullet':
-            this.hazardController.updateCannonBullet(loadedRoom, liveObject);
+          case 'travelingProjectile':
+            this.hazardController.updateTravelingProjectile(loadedRoom, liveObject);
             break;
           case 'bomb':
             this.hazardController.updateBombObject(liveObject);
@@ -1009,6 +1011,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       isMovingPlatformObjectId(config.id) ||
       config.behavior === 'fly' ||
       config.id === 'cannon_bullet' ||
+      config.id === 'fireball' ||
       config.id === 'cage'
     ) {
       return false;
@@ -1993,6 +1996,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     return (
       config.behavior !== 'fly' &&
       config.id !== 'cannon_bullet' &&
+      config.id !== 'fireball' &&
       config.id !== 'cage' &&
       !isMovingPlatformObjectId(config.id)
     );

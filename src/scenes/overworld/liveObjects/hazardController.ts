@@ -163,7 +163,7 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
     this.spawnCannonBullet(loadedRoom, liveObject);
   }
 
-  updateCannonBullet(
+  updateTravelingProjectile(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject
   ): void {
@@ -173,13 +173,25 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
       return;
     }
 
-    if (this.options.getCurrentTime() >= liveObject.runtime.activatedUntil) {
+    if (
+      liveObject.runtime.activatedUntil > 0 &&
+      this.options.getCurrentTime() >= liveObject.runtime.activatedUntil
+    ) {
       this.options.removeLiveObject(loadedRoom, liveObject);
       return;
     }
 
-    body.setVelocityX(liveObject.runtime.directionX * this.options.settings.cannonBulletSpeed);
-    this.options.applyDirectionalFacing(liveObject.sprite, liveObject.config, liveObject.runtime.directionX);
+    const directionX = liveObject.runtime.directionX || 1;
+    const hitHorizontalObstacle =
+      (directionX < 0 && (body.blocked.left || body.touching.left)) ||
+      (directionX > 0 && (body.blocked.right || body.touching.right));
+    if (hitHorizontalObstacle) {
+      this.options.removeLiveObject(loadedRoom, liveObject);
+      return;
+    }
+
+    body.setVelocityX(directionX * this.options.settings.cannonBulletSpeed);
+    this.options.applyDirectionalFacing(liveObject.sprite, liveObject.config, directionX);
 
     const roomOrigin = this.options.getRoomOrigin(loadedRoom.room.coordinates);
     if (

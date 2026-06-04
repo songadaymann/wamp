@@ -260,6 +260,10 @@ function normalizePlacedObject(
     return null;
   }
 
+  const customSpriteKind = placed.customSpriteKind
+    ? normalizeCustomSpriteKind(placed.customSpriteKind)
+    : null;
+
   const normalized: PlacedObject = {
     id: placed.id,
     x: placed.x,
@@ -275,9 +279,7 @@ function normalizePlacedObject(
       },
       index,
     ),
-    customSpriteKind: placed.customSpriteKind
-      ? normalizeCustomSpriteKind(placed.customSpriteKind)
-      : null,
+    customSpriteKind,
     facing: placed.facing === 'left' || placed.facing === 'right' ? placed.facing : undefined,
     layer:
       placed.layer === 'background' || placed.layer === 'terrain' || placed.layer === 'foreground'
@@ -291,7 +293,7 @@ function normalizePlacedObject(
       typeof placed.containedObjectId === 'string' && placed.containedObjectId.trim()
         ? placed.containedObjectId
         : null,
-    signText: canPlacedObjectHaveSignText({ id: placed.id })
+    signText: canPlacedObjectHaveSignText({ id: placed.id, customSpriteKind })
       ? normalizeSignText(placed.signText)
       : null,
     swordsmanObjectiveMode:

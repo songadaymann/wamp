@@ -160,8 +160,8 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'lava_surface',name: 'Lava Pool',   category: 'hazard',      path: 'assets/deco/lava_surface.png',   frameWidth: 48, frameHeight: 48, frameCount: 8,  fps: 8,  bodyWidth: 44, bodyHeight: 22, bodyOffsetX: 2, bodyOffsetY: 24, behavior: 'animated', lightEmission: LAVA_OBJECT_LIGHT_EMISSION, description: 'Animated lava surface. There is no swimming, only death.' },
   { id: 'water_surface_a', name: 'Water Pool', category: 'hazard',   path: 'assets/deco/water_surface_a.png',frameWidth: 32, frameHeight: 32, frameCount: 8,  fps: 8,  bodyWidth: 28, bodyHeight: 16, bodyOffsetX: 2, bodyOffsetY: 16, behavior: 'animated', description: 'Animated water surface. No swim move exists yet, so it is lethal.' },
   { id: 'water_surface_b', name: 'Water Ripple', category: 'hazard', path: 'assets/deco/water_surface_b.png',frameWidth: 16, frameHeight: 16, frameCount: 5,  fps: 8,  bodyWidth: 14, bodyHeight: 8,  bodyOffsetX: 1, bodyOffsetY: 8,  behavior: 'animated', description: 'Small water hazard. Touching it is lethal for now.' },
-  { id: 'tornado_sand',name: 'Sand Tornado',category: 'hazard',      path: 'assets/enemies/tornado_sand.png',frameWidth: 48, frameHeight: 48, frameCount: 8,  fps: 10, bodyWidth: 28, bodyHeight: 40, behavior: 'animated', description: 'Launches player in air.' },
-  { id: 'tornado',     name: 'Tornado',     category: 'hazard',      path: 'assets/enemies/tornado.png',     frameWidth: 48, frameHeight: 48, frameCount: 8,  fps: 10, bodyWidth: 28, bodyHeight: 40, behavior: 'animated', description: 'Launches player in air.' },
+  { id: 'tornado_sand',name: 'Sand Tornado',category: 'interactive', path: 'assets/enemies/tornado_sand.png',frameWidth: 48, frameHeight: 48, frameCount: 8,  fps: 10, bodyWidth: 28, bodyHeight: 40, behavior: 'animated', description: 'Utility tornado. Launches player in air.' },
+  { id: 'tornado',     name: 'Tornado',     category: 'interactive', path: 'assets/enemies/tornado.png',     frameWidth: 48, frameHeight: 48, frameCount: 8,  fps: 10, bodyWidth: 28, bodyHeight: 40, behavior: 'animated', description: 'Utility tornado. Launches player in air.' },
 
   // ── Enemies ──
   { id: 'slime_blue',  name: 'Blue Slime',  category: 'enemy',       path: 'assets/enemies/slime_blue.png',  frameWidth: 16, frameHeight: 16, frameCount: 5,  fps: 6,  facingDirection: 'left', bodyWidth: 12, bodyHeight: 10, behavior: 'patrol',   description: 'Patrols back and forth. Kills on contact.' },
@@ -238,6 +238,7 @@ export function isDynamicRuntimeObjectConfig(
     isPushableObjectConfig(config)
     || config.behavior === 'fly'
     || config.id === 'cannon_bullet'
+    || config.id === 'fireball'
     || config.id === 'crab'
     || config.id === 'slime_blue'
     || config.id === 'slime_red'

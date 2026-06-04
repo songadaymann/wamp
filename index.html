@@ -563,6 +563,7 @@
           <button class="object-subcategory-tab active" type="button" data-custom-object-category="all">All</button>
           <button class="object-subcategory-tab" type="button" data-custom-object-category="decoration">Deco</button>
           <button class="object-subcategory-tab" type="button" data-custom-object-category="collectible">Collect</button>
+          <button class="object-subcategory-tab" type="button" data-custom-object-category="sign">Sign</button>
           <button class="object-subcategory-tab" type="button" data-custom-object-category="solid">Solid</button>
           <button class="object-subcategory-tab" type="button" data-custom-object-category="pushable">Push</button>
         </div>
@@ -1062,6 +1063,7 @@
                 <option value="">Choose...</option>
                 <option value="decoration">Decoration</option>
                 <option value="collectible">Collectible</option>
+                <option value="sign">Sign</option>
                 <option value="solid">Solid Block</option>
                 <option value="pushable">Pushable Block</option>
               </select>
@@ -1095,7 +1097,7 @@
           <div id="editor-sprite-kind-help" class="editor-sprite-kind-help hidden">
             <div class="editor-sprite-kind-help-copy">
               <div class="editor-sprite-kind-help-title">Choose what this sprite does.</div>
-              <div class="editor-sprite-kind-help-text">Decoration and Solid Block are best for repeated tiles. Collectible and Pushable Block stay as objects because they need behavior.</div>
+              <div class="editor-sprite-kind-help-text">Decoration and Solid Block are best for repeated tiles. Collectible, Sign, and Pushable Block stay as objects because they need behavior.</div>
             </div>
             <div class="editor-sprite-kind-help-grid">
               <button class="editor-sprite-kind-choice" data-editor-sprite-kind-choice="decoration" type="button">
@@ -1109,6 +1111,10 @@
               <button class="editor-sprite-kind-choice" data-editor-sprite-kind-choice="collectible" type="button">
                 <span class="editor-sprite-kind-choice-title">Collectible</span>
                 <span class="editor-sprite-kind-choice-text">Items the player can pick up.</span>
+              </button>
+              <button class="editor-sprite-kind-choice" data-editor-sprite-kind-choice="sign" type="button">
+                <span class="editor-sprite-kind-choice-title">Sign</span>
+                <span class="editor-sprite-kind-choice-text">Objects that can show sign text in play mode.</span>
               </button>
               <button class="editor-sprite-kind-choice" data-editor-sprite-kind-choice="pushable" type="button">
                 <span class="editor-sprite-kind-choice-title">Pushable Block</span>

@@ -1,4 +1,5 @@
 import type { PlacedObject } from '../config';
+import type { CustomSpriteKind } from '../customSprites/model';
 
 export const SIGN_TEXT_MAX_LENGTH = 140;
 
@@ -10,10 +11,10 @@ export function isSignObjectId(id: string): id is SignObjectId {
   return (SIGN_OBJECT_IDS as readonly string[]).includes(id);
 }
 
-export function canPlacedObjectHaveSignText<T extends { id: string }>(
+export function canPlacedObjectHaveSignText<T extends { id: string; customSpriteKind?: CustomSpriteKind | null }>(
   placed: T | null | undefined,
-): placed is T & { id: SignObjectId } {
-  return isSignObjectId(placed?.id ?? '');
+): placed is T {
+  return isSignObjectId(placed?.id ?? '') || placed?.customSpriteKind === 'sign';
 }
 
 export function normalizeSignText(value: unknown): string | null {
@@ -30,7 +31,7 @@ export function normalizeSignText(value: unknown): string | null {
 }
 
 export function getPlacedObjectSignText(
-  placed: Pick<PlacedObject, 'id' | 'signText'> | null | undefined,
+  placed: Pick<PlacedObject, 'id' | 'signText' | 'customSpriteKind'> | null | undefined,
 ): string | null {
   if (!canPlacedObjectHaveSignText(placed)) {
     return null;

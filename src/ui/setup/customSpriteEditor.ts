@@ -334,7 +334,11 @@ export function setupCustomSpriteEditor(
 
   const getKind = (): CustomSpriteKind | null => {
     const value = kindSelect?.value;
-    return value === 'decoration' || value === 'collectible' || value === 'solid' || value === 'pushable'
+    return value === 'decoration' ||
+      value === 'collectible' ||
+      value === 'solid' ||
+      value === 'pushable' ||
+      value === 'sign'
       ? value
       : null;
   };
@@ -1010,7 +1014,13 @@ export function setupCustomSpriteEditor(
   for (const button of kindChoiceButtons) {
     button.addEventListener('click', () => {
       const value = button.dataset.editorSpriteKindChoice;
-      if (value !== 'decoration' && value !== 'collectible' && value !== 'solid' && value !== 'pushable') {
+      if (
+        value !== 'decoration' &&
+        value !== 'collectible' &&
+        value !== 'solid' &&
+        value !== 'pushable' &&
+        value !== 'sign'
+      ) {
         return;
       }
       setKind(value);

@@ -19,7 +19,7 @@ export type LiveObjectBehavior =
   | { kind: 'swordsman' }
   | { kind: 'frog' }
   | { kind: 'cannon' }
-  | { kind: 'cannonBullet' }
+  | { kind: 'travelingProjectile' }
   | { kind: 'bomb' }
   | { kind: 'lightning' }
   | { kind: 'bouncePad' }
@@ -72,7 +72,8 @@ const BEHAVIORS_BY_OBJECT_ID: Record<string, LiveObjectBehavior> = {
   [SWORDSMAN_AI_OBJECT_ID]: { kind: 'swordsman' },
   frog: { kind: 'frog' },
   cannon: { kind: 'cannon' },
-  cannon_bullet: { kind: 'cannonBullet' },
+  cannon_bullet: { kind: 'travelingProjectile' },
+  fireball: { kind: 'travelingProjectile' },
   bomb: { kind: 'bomb' },
   lightning: { kind: 'lightning' },
   bounce_pad: { kind: 'bouncePad' },

@@ -26,7 +26,7 @@ import { EDITOR_UI_STATE_CHANGED_EVENT } from '../../scenes/editor/uiEvents';
 import { getDeviceLayoutState, isCoarsePointerDevice } from '../deviceLayout';
 
 const MIN_SELECTION_OPAQUE_PIXELS = 96;
-const CUSTOM_OBJECT_SUBCATEGORIES = ['all', 'decoration', 'collectible', 'solid', 'pushable'] as const;
+const CUSTOM_OBJECT_SUBCATEGORIES = ['all', 'decoration', 'collectible', 'sign', 'solid', 'pushable'] as const;
 
 type CustomObjectSubcategory = (typeof CUSTOM_OBJECT_SUBCATEGORIES)[number];
 type CustomObjectKindSubcategory = Exclude<CustomObjectSubcategory, 'all'>;

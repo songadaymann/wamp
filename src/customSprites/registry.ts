@@ -204,7 +204,7 @@ export function buildCustomSpriteObjectConfig(sprite: CustomSpriteDefinition): G
 function getCustomSpriteObjectBody(
   sprite: CustomSpriteDefinition,
 ): { width: number; height: number; offsetX: number; offsetY: number } {
-  if (sprite.kind === 'decoration') {
+  if (sprite.kind === 'decoration' || sprite.kind === 'sign') {
     return { width: 0, height: 0, offsetX: 0, offsetY: 0 };
   }
 
