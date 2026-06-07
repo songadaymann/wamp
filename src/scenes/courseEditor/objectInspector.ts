@@ -737,8 +737,12 @@ export class CourseEditorObjectInspectorController {
     switch (objectId) {
       case 'door_locked':
         return 'door';
+      case 'door_wood_narrow':
+        return 'narrow wooden door';
       case 'door_metal':
         return 'metal door';
+      case 'door_metal_narrow':
+        return 'narrow metal door';
       case 'treasure_chest':
         return 'treasure chest';
       case 'cage':
@@ -751,6 +755,8 @@ export class CourseEditorObjectInspectorController {
         return 'blast door';
       case 'barricade':
         return 'barricade';
+      case 'wooden_bridge':
+        return 'wooden bridge';
       default:
         return getObjectById(objectId)?.name ?? 'object';
     }

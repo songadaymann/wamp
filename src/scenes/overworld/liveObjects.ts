@@ -774,6 +774,15 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
                   () => this.shouldCollideWithLiveObject(liveObject),
                 )
               );
+            } else if (liveObject.config.id === 'wooden_bridge') {
+              liveObject.interactions.push(
+                this.options.scene.physics.add.collider(
+                  player,
+                  liveObject.sprite,
+                  undefined,
+                  () => this.shouldCollideWithLiveObject(liveObject),
+                )
+              );
             }
             break;
           default:

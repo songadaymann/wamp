@@ -1348,6 +1348,7 @@ function getObjectPreviewDimensions(id) {
   if (id.includes('sun')) return { width: 48, height: 48 };
   if (id.includes('water')) return { width: 16, height: 16 };
   if (id.includes('platform')) return { width: 48, height: 12 };
+  if (id.includes('bridge')) return { width: 48, height: 16 };
   return { width: 24, height: 24 };
 }
 

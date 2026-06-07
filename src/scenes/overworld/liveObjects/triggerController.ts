@@ -164,6 +164,11 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
         liveObject.runtime.triggerLatched = false;
         this.applyBarricadeUnbuiltState(liveObject);
         break;
+      case 'wooden_bridge':
+        liveObject.runtime.pressureActive = false;
+        liveObject.runtime.triggerLatched = false;
+        this.applyBarricadeUnbuiltState(liveObject);
+        break;
       default:
         break;
     }
