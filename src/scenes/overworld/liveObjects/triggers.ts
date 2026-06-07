@@ -35,13 +35,16 @@ export function canActorTriggerBlockSwitchByContact(liveObject: LoadedRoomObject
 export function isPressureControlledObject(liveObject: LoadedRoomObject): boolean {
   switch (liveObject.config.id) {
     case 'door_metal':
+    case 'door_metal_narrow':
     case 'door_locked':
+    case 'door_locked_narrow':
     case 'cage':
     case 'treasure_chest':
     case 'trapdoor_metal':
     case 'trapdoor_locked':
     case 'blast_door':
     case 'barricade':
+    case 'wooden_bridge':
       return true;
     default:
       return false;

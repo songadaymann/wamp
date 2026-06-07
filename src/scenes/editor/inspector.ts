@@ -882,6 +882,12 @@ export class EditorInspectorController {
         return 'blast door';
       case 'barricade':
         return 'barricade';
+      case 'door_locked_narrow':
+        return 'narrow door';
+      case 'door_metal_narrow':
+        return 'narrow metal door';
+      case 'wooden_bridge':
+        return 'wooden bridge';
       default:
         return getObjectById(objectId)?.name ?? 'object';
     }

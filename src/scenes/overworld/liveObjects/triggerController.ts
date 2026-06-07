@@ -270,6 +270,7 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
     switch (liveObject.config.id) {
       case 'door_metal':
       case 'trapdoor_metal':
+      case 'door_metal_narrow':
         // Opens while plate is pressed
         if (liveObject.runtime.pressureActive !== active) {
           liveObject.runtime.pressureActive = active;
@@ -292,6 +293,7 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
         break;
 
       case 'barricade':
+      case 'wooden_bridge':
         // Builds permanently the first time plate is pressed
         if ((active || latched) && !liveObject.runtime.triggerLatched) {
           liveObject.runtime.triggerLatched = true;
@@ -302,6 +304,7 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
 
       case 'door_locked':
       case 'trapdoor_locked':
+      case 'door_locked_narrow':
         if (active || latched) {
           this.triggerLinkedLockedDoor(loadedRoom, liveObject);
         }
