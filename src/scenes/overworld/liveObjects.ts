@@ -593,7 +593,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       sprite.stop();
       sprite.setVisible(false);
     }
-    if (config.id === 'door_metal') {
+    if (config.id === 'door_metal' || config.id === 'door_metal_narrow') {
       sprite.setTint(0xb8c4d8);
     }
     if (config.id === 'trapdoor_metal') {
@@ -750,7 +750,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
               this.hazardController.addBouncePadInteraction(loadedRoom, liveObject, player);
             } else if (liveObject.config.id === 'tornado' || liveObject.config.id === 'tornado_sand') {
               this.hazardController.addHazardInteraction(loadedRoom, liveObject, player);
-            } else if (liveObject.config.id === 'door_locked') {
+            } else if (
+              liveObject.config.id === 'door_locked' ||
+              liveObject.config.id === 'door_locked_narrow'
+            ) {
               liveObject.interactions.push(
                 this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
                   this.triggerController.handleLockedDoorContact(loadedRoom, liveObject);

@@ -737,7 +737,7 @@ export class CourseEditorObjectInspectorController {
     switch (objectId) {
       case 'door_locked':
         return 'door';
-      case 'door_wood_narrow':
+      case 'door_locked_narrow':
         return 'narrow wooden door';
       case 'door_metal':
         return 'metal door';

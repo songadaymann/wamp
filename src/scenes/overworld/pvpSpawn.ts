@@ -160,7 +160,12 @@ export function isPvpSolidObjectConfig(
     config &&
     config.bodyWidth > 0 &&
     config.bodyHeight > 0 &&
-    (config.category === 'platform' || config.id === 'door_locked' || config.id === 'trapdoor_locked'),
+    (
+      config.category === 'platform' ||
+      config.id === 'door_locked' ||
+      config.id === 'door_locked_narrow' ||
+      config.id === 'trapdoor_locked'
+    ),
   );
 }
 

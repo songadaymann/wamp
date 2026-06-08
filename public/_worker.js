@@ -1328,7 +1328,7 @@ function drawFallbackObject(canvas, placed) {
     fillRect(canvas, x + width - 9, centerY, 5, 5, 0xffd447);
   } else if (id === 'spawn_point') {
     drawDiamond(canvas, centerX, centerY, Math.max(9, Math.floor(Math.min(width, height) * 0.38)), 0x7fd4ff);
-  } else if (id.includes('platform')) {
+  } else if (id.includes('platform') || id.includes('bridge')) {
     fillRect(canvas, x, y, width, height, 0x9a6b44);
     fillRect(canvas, x, y, width, 5, 0xd6a268);
     drawBorder(canvas, x, y, width, height, 0x4b2d1f);
@@ -1342,13 +1342,14 @@ function getObjectPreviewDimensions(id) {
   if (id.includes('trapdoor')) return { width: 16, height: 16 };
   if (id === 'blast_door') return { width: 16, height: 16 };
   if (id === 'barricade') return { width: 16, height: 16 };
+  if (id.includes('narrow') && id.includes('door')) return { width: 16, height: 48 };
   if (id.includes('door')) return { width: 32, height: 48 };
   if (id === 'flag' || id.includes('checkpoint')) return { width: 32, height: 48 };
   if (id.includes('tree')) return { width: 48, height: 64 };
   if (id.includes('sun')) return { width: 48, height: 48 };
   if (id.includes('water')) return { width: 16, height: 16 };
+  if (id.includes('bridge')) return { width: 64, height: 16 };
   if (id.includes('platform')) return { width: 48, height: 12 };
-  if (id.includes('bridge')) return { width: 48, height: 16 };
   return { width: 24, height: 24 };
 }
 
