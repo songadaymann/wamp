@@ -227,6 +227,7 @@ import {
 } from './overworld/selection';
 import { OverworldSignController } from './overworld/signPosts';
 import { OverworldSpecialTilesController } from './overworld/specialTiles';
+import { OverworldPortalObjectController } from './overworld/portalObjects';
 import {
   OverworldRoomCellController,
 } from './overworld/roomCells';
@@ -514,6 +515,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly hudStateController: OverworldHudStateController;
   private readonly liveObjectController: OverworldLiveObjectController<RoomEdgeWall>;
   private readonly signController: OverworldSignController<RoomEdgeWall>;
+  private readonly portalObjectController: OverworldPortalObjectController<RoomEdgeWall>;
   private readonly specialTilesController: OverworldSpecialTilesController<LoadedRoomObject, RoomEdgeWall>;
   private readonly roomRushResultController: OverworldRoomRushResultController;
   private readonly roomRushModeController: OverworldRoomRushModeController;
@@ -708,6 +710,18 @@ export class OverworldPlayScene extends Phaser.Scene {
       getPlayerBody: () => this.playerBody,
       getLoadedFullRooms: () => this.loadedFullRoomsById.values(),
     });
+    this.portalObjectController = new OverworldPortalObjectController({
+      getMode: () => this.mode,
+      getCurrentTime: () => this.time.now,
+      getPlayerBody: () => this.playerBody,
+      getLoadedFullRooms: () => this.loadedFullRoomsById.values(),
+      getLoadedFullRoomById: (roomId) => this.loadedFullRoomsById.get(roomId) ?? null,
+      teleportPlayerTo: (x, y, velocity) =>
+        this.teleportPlayerToPortalObject(x, y, velocity),
+      playPortalFx: () => {
+        playSfx('warp');
+      },
+    });
     this.specialTilesController = new OverworldSpecialTilesController(this, {
       getMode: () => this.mode,
       getCurrentTime: () => this.time.now,
@@ -723,11 +737,6 @@ export class OverworldPlayScene extends Phaser.Scene {
         );
       },
       handlePlayerDeath: (reason) => this.sessionResetController.handlePlayerDeath(reason),
-      teleportPlayerTo: (x, y, velocity) =>
-        this.teleportPlayerToSpecialTile(x, y, velocity),
-      playPortalFx: () => {
-        playSfx('warp');
-      },
       playBounceFx: (x, y, roomCoordinates, cue) =>
         this.fxController?.playBounceFx(
           x,
@@ -758,6 +767,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       onFullRoomVisibilityChanged: () => this.syncGhostVisibility(),
       onFullRoomDestroyed: (loadedRoom) => {
         this.specialTilesController.handleFullRoomDestroyed(loadedRoom.room.id);
+        this.portalObjectController.handleFullRoomDestroyed(loadedRoom.room.id);
       },
       measurePerformance: (label, callback) => this.measureMobilePerformance(label, callback),
     });
@@ -2206,6 +2216,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.measureMobilePerformance('update.specialTiles', () => {
         this.updateSpecialTiles();
       });
+      this.measureMobilePerformance('update.portalObjects', () => {
+        this.updatePortalObjects();
+      });
       const movement = this.measureMobilePerformance('update.movement', () =>
         this.movementController.updateMovement(delta, inQuicksand)
       );
@@ -3053,7 +3066,11 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.specialTilesController.update();
   }
 
-  private teleportPlayerToSpecialTile(
+  private updatePortalObjects(): void {
+    this.portalObjectController.update();
+  }
+
+  private teleportPlayerToPortalObject(
     x: number,
     y: number,
     velocity: { x: number; y: number },
@@ -4426,6 +4443,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.liveObjectController.resetSwitchStates();
     this.playerPresentationController.resetTransientPlayState();
     this.specialTilesController.resetAll();
+    this.portalObjectController.resetAll();
   }
 
   private clearTouchGestureState(): void {
@@ -4446,6 +4464,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     this.specialTilesController.resetForRoom(loadedRoom);
+    this.portalObjectController.resetForRoom(loadedRoom);
     this.destroyLiveObjects(loadedRoom);
     this.createLiveObjects(loadedRoom);
     this.syncLiveObjectInteractions();

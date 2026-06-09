@@ -58,7 +58,6 @@ const BOUNCE_TILE_LAUNCH_GRACE_MS = 180;
 const DAMAGE_TILE_COOLDOWN_MS = 600;
 const ONE_WAY_DROP_THROUGH_MS = 240;
 const ONE_WAY_DROP_THROUGH_VELOCITY = 86;
-const PORTAL_TELEPORT_COOLDOWN_MS = 220;
 const WIND_ZONE_SCAN_PADDING_PX = 8;
 
 const GRAVITY_DIRECTION_BY_TILE_KIND: Partial<Record<SpecialTileKind, PlayerGravityDirection>> = {
@@ -67,17 +66,6 @@ const GRAVITY_DIRECTION_BY_TILE_KIND: Partial<Record<SpecialTileKind, PlayerGrav
   gravityLeft: 'left',
   gravityRight: 'right',
 };
-
-type PortalTileKind = Extract<SpecialTileKind, 'portalA' | 'portalB'>;
-
-const PORTAL_DESTINATION_KIND: Record<PortalTileKind, PortalTileKind> = {
-  portalA: 'portalB',
-  portalB: 'portalA',
-};
-
-function isPortalTileKind(kind: SpecialTileKind): kind is PortalTileKind {
-  return kind === 'portalA' || kind === 'portalB';
-}
 
 interface OverworldSpecialTilesControllerHost<TLiveObject, TEdgeWall> {
   getMode: () => OverworldMode;
@@ -89,16 +77,6 @@ interface OverworldSpecialTilesControllerHost<TLiveObject, TEdgeWall> {
   getRoomOrigin: (coordinates: RoomCoordinates) => { x: number; y: number };
   grantExternalLaunchGrace: (durationMs: number) => void;
   handlePlayerDeath: (reason: string) => void;
-  teleportPlayerTo: (
-    x: number,
-    y: number,
-    velocity: { x: number; y: number },
-  ) => void;
-  playPortalFx: (
-    x: number,
-    y: number,
-    roomCoordinates: RoomCoordinates,
-  ) => void;
   playBounceFx: (
     x: number,
     y: number,
@@ -113,10 +91,6 @@ interface SpecialTileMatch<TLiveObject, TEdgeWall> {
   tileX: number;
   tileY: number;
   kind: SpecialTileKind;
-}
-
-interface PortalTileMatch<TLiveObject, TEdgeWall> extends SpecialTileMatch<TLiveObject, TEdgeWall> {
-  kind: PortalTileKind;
 }
 
 export function getGravityVector(direction: PlayerGravityDirection): DirectionVector {
@@ -202,8 +176,6 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
   private bounceCooldownUntil = 0;
   private damageCooldownUntil = 0;
   private oneWayDropThroughUntil = 0;
-  private portalCooldownUntil = 0;
-  private suppressedPortalTileKey: string | null = null;
   private playerEnvironment: SpecialTilePlayerEnvironment = { ...DEFAULT_PLAYER_ENVIRONMENT };
   private latchedGravityDirection: PlayerGravityDirection = 'down';
   private latchedGravityRoomId: string | null = null;
@@ -223,7 +195,6 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
 
     this.playerEnvironment = this.scanPlayerEnvironment();
     this.applyImmediatePlayerEffects();
-    this.maybeTeleportPlayerThroughPortal();
     this.maybeBreakSpecialBrickTile();
   }
 
@@ -343,9 +314,6 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
     if (this.latchedGravityRoomId === roomId) {
       this.resetGravityLatch();
     }
-    if (this.suppressedPortalTileKey?.startsWith(`${roomId}:`)) {
-      this.suppressedPortalTileKey = null;
-    }
   }
 
   resetAll(): void {
@@ -358,8 +326,6 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
     this.bounceCooldownUntil = 0;
     this.damageCooldownUntil = 0;
     this.oneWayDropThroughUntil = 0;
-    this.portalCooldownUntil = 0;
-    this.suppressedPortalTileKey = null;
   }
 
   resetForRoom(loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>): void {
@@ -710,131 +676,6 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
       matches.push({ loadedRoom, layerName, tileX, tileY, kind });
     }
     return matches;
-  }
-
-  private maybeTeleportPlayerThroughPortal(): void {
-    const playerBody = this.host.getPlayerBody();
-    if (!playerBody) {
-      this.suppressedPortalTileKey = null;
-      return;
-    }
-
-    const portalMatches = this.findPortalTilesOverlappingBody(playerBody);
-    if (portalMatches.length === 0) {
-      this.suppressedPortalTileKey = null;
-      return;
-    }
-
-    if (
-      this.suppressedPortalTileKey &&
-      portalMatches.some((match) => this.getSpecialTileKey(match) === this.suppressedPortalTileKey)
-    ) {
-      return;
-    }
-
-    this.suppressedPortalTileKey = null;
-    if (this.host.getCurrentTime() < this.portalCooldownUntil) {
-      return;
-    }
-
-    const source = this.pickNearestPortalTileMatch(portalMatches, playerBody.center.x, playerBody.center.y);
-    const destination = this.findNearestPortalDestination(source);
-    if (!destination) {
-      return;
-    }
-
-    const target = this.getSpecialTileWorldCenter(destination);
-    this.host.teleportPlayerTo(target.x, target.y, {
-      x: playerBody.velocity.x,
-      y: playerBody.velocity.y,
-    });
-    this.portalCooldownUntil = this.host.getCurrentTime() + PORTAL_TELEPORT_COOLDOWN_MS;
-    this.suppressedPortalTileKey = this.getSpecialTileKey(destination);
-    this.host.playPortalFx(target.x, target.y, destination.loadedRoom.room.coordinates);
-  }
-
-  private findPortalTilesOverlappingBody(
-    body: Phaser.Physics.Arcade.Body,
-  ): Array<PortalTileMatch<TLiveObject, TEdgeWall>> {
-    return this.findSpecialTilesOverlappingBody(body).filter(
-      (match): match is PortalTileMatch<TLiveObject, TEdgeWall> => isPortalTileKind(match.kind),
-    );
-  }
-
-  private pickNearestPortalTileMatch(
-    matches: Array<PortalTileMatch<TLiveObject, TEdgeWall>>,
-    worldX: number,
-    worldY: number,
-  ): PortalTileMatch<TLiveObject, TEdgeWall> {
-    let best = matches[0];
-    let bestDistance = Number.POSITIVE_INFINITY;
-    for (const match of matches) {
-      const center = this.getSpecialTileWorldCenter(match);
-      const distance = Phaser.Math.Distance.Squared(worldX, worldY, center.x, center.y);
-      if (distance < bestDistance) {
-        best = match;
-        bestDistance = distance;
-      }
-    }
-    return best;
-  }
-
-  private findNearestPortalDestination(
-    source: PortalTileMatch<TLiveObject, TEdgeWall>,
-  ): PortalTileMatch<TLiveObject, TEdgeWall> | null {
-    const destinationKind = PORTAL_DESTINATION_KIND[source.kind];
-    const sourceCenter = this.getSpecialTileWorldCenter(source);
-    let best: PortalTileMatch<TLiveObject, TEdgeWall> | null = null;
-    let bestDistance = Number.POSITIVE_INFINITY;
-
-    for (const loadedRoom of this.host.getLoadedFullRooms()) {
-      for (let tileY = 0; tileY < ROOM_HEIGHT; tileY += 1) {
-        for (let tileX = 0; tileX < ROOM_WIDTH; tileX += 1) {
-          for (const layerName of LAYER_NAMES) {
-            const decoded = decodeTileDataValue(loadedRoom.room.tileData[layerName][tileY][tileX]);
-            const kind = getSpecialTileKindForGid(decoded.gid);
-            if (kind !== destinationKind) {
-              continue;
-            }
-
-            const match: PortalTileMatch<TLiveObject, TEdgeWall> = {
-              loadedRoom,
-              layerName,
-              tileX,
-              tileY,
-              kind,
-            };
-            const center = this.getSpecialTileWorldCenter(match);
-            const distance = Phaser.Math.Distance.Squared(
-              sourceCenter.x,
-              sourceCenter.y,
-              center.x,
-              center.y,
-            );
-            if (distance < bestDistance) {
-              best = match;
-              bestDistance = distance;
-            }
-          }
-        }
-      }
-    }
-
-    return best;
-  }
-
-  private getSpecialTileWorldCenter(
-    match: Pick<SpecialTileMatch<TLiveObject, TEdgeWall>, 'loadedRoom' | 'tileX' | 'tileY'>,
-  ): { x: number; y: number } {
-    const origin = this.host.getRoomOrigin(match.loadedRoom.room.coordinates);
-    return {
-      x: origin.x + match.tileX * TILE_SIZE + TILE_SIZE / 2,
-      y: origin.y + match.tileY * TILE_SIZE + TILE_SIZE / 2,
-    };
-  }
-
-  private getSpecialTileKey(match: SpecialTileMatch<TLiveObject, TEdgeWall>): string {
-    return `${match.loadedRoom.room.id}:${match.layerName}:${match.tileX},${match.tileY}:${match.kind}`;
   }
 
   private maybeBreakSpecialBrickTile(): void {

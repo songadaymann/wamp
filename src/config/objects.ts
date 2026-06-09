@@ -97,6 +97,13 @@ export const CONTAINER_OBJECT_IDS = ['cage', 'treasure_chest'] as const;
 export type ContainerObjectId = (typeof CONTAINER_OBJECT_IDS)[number];
 export const MOVING_PLATFORM_OBJECT_ID = 'moving_platform';
 export const MOVING_PLATFORM_ENDPOINT_OBJECT_ID = 'moving_platform_endpoint';
+export const PORTAL_A_OBJECT_ID = 'portal_a' as const;
+export const PORTAL_B_OBJECT_ID = 'portal_b' as const;
+export const PORTAL_OBJECT_IDS = [
+  PORTAL_A_OBJECT_ID,
+  PORTAL_B_OBJECT_ID,
+] as const;
+export type PortalObjectId = (typeof PORTAL_OBJECT_IDS)[number];
 export const BLOCK_SWITCH_OBJECT_ID = 'block_switch' as const;
 export const SWITCH_BLOCK_ON_OBJECT_ID = 'switch_block_on' as const;
 export const SWITCH_BLOCK_OFF_OBJECT_ID = 'switch_block_off' as const;
@@ -200,6 +207,8 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'brick_box',   name: 'Brick Box',   category: 'platform',    path: 'assets/objects/brick_box.png',   frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 0,  defaultFrame: 5, bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 8, bodyOffsetY: 8, previewWidth: 16, previewHeight: 16, previewOffsetX: 8, previewOffsetY: 8, placeUsingPreviewBounds: true, behavior: 'static',   description: 'Solid brick block. Stand on it like a platform.' },
   { id: MOVING_PLATFORM_OBJECT_ID, name: 'Moving Platform', category: 'platform', path: 'assets/objects/moving_platform.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, facingDirection: 'right', bodyWidth: 16, bodyHeight: 8, bodyOffsetX: 0, bodyOffsetY: 4, behavior: 'static', collidesWithWorld: false, description: 'Linked platform. Connect it to a Moving Platform Anchor to make it patrol.' },
   { id: MOVING_PLATFORM_ENDPOINT_OBJECT_ID, name: 'Moving Platform Anchor', category: 'interactive', path: 'assets/objects/platform_anchor.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Editor marker for linked moving platforms.' },
+  { id: PORTAL_A_OBJECT_ID, name: 'Portal A', category: 'interactive', path: 'assets/tilesets/special.png?v=2026-06-09-portal-objects', frameWidth: 16, frameHeight: 16, frameCount: 18, fps: 0, defaultFrame: 16, bodyWidth: 16, bodyHeight: 16, behavior: 'static', collidesWithWorld: false, description: 'Teleport portal. Link it to a Portal B object.' },
+  { id: PORTAL_B_OBJECT_ID, name: 'Portal B', category: 'interactive', path: 'assets/tilesets/special.png?v=2026-06-09-portal-objects', frameWidth: 16, frameHeight: 16, frameCount: 18, fps: 0, defaultFrame: 17, bodyWidth: 16, bodyHeight: 16, behavior: 'static', collidesWithWorld: false, description: 'Teleport portal. Link it to a Portal A object.' },
   { id: BLOCK_SWITCH_OBJECT_ID, name: 'Block Switch', category: 'platform', path: 'assets/objects/switch-block-blue-active.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 16, bodyHeight: 16, behavior: 'static', description: 'Hit this active-color block from below, or bump it with certain enemies/projectiles, to swap red and blue switch blocks in this room.' },
   { id: SWITCH_BLOCK_ON_OBJECT_ID, name: 'Blue Switch Block', category: 'platform', path: 'assets/objects/switch-block-blue.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 16, bodyHeight: 16, behavior: 'static', description: 'Blue platform block. Starts solid, then toggles with a Block Switch.' },
   { id: SWITCH_BLOCK_OFF_OBJECT_ID, name: 'Red Switch Block', category: 'platform', path: 'assets/objects/switch-block-red.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 16, bodyHeight: 16, behavior: 'static', description: 'Red platform block. Starts inactive, then toggles with a Block Switch.' },
@@ -580,6 +589,20 @@ export function isMovingPlatformEndpointObjectId(
   return id === MOVING_PLATFORM_ENDPOINT_OBJECT_ID;
 }
 
+export function isPortalObjectId(id: string): id is PortalObjectId {
+  return (PORTAL_OBJECT_IDS as readonly string[]).includes(id);
+}
+
+export function getOppositePortalObjectId(id: string): PortalObjectId | null {
+  if (id === PORTAL_A_OBJECT_ID) {
+    return PORTAL_B_OBJECT_ID;
+  }
+  if (id === PORTAL_B_OBJECT_ID) {
+    return PORTAL_A_OBJECT_ID;
+  }
+  return null;
+}
+
 export function canPlacedObjectUseObjectLink(
   placed: Pick<PlacedObject, 'id'> | null | undefined
 ): boolean {
@@ -587,7 +610,11 @@ export function canPlacedObjectUseObjectLink(
     return false;
   }
 
-  return canPlacedObjectTriggerOtherObjects(placed) || isMovingPlatformObjectId(placed.id);
+  return (
+    canPlacedObjectTriggerOtherObjects(placed) ||
+    isMovingPlatformObjectId(placed.id) ||
+    isPortalObjectId(placed.id)
+  );
 }
 
 export function canPlacedObjectBeLinkedObjectTarget(
@@ -604,6 +631,10 @@ export function canPlacedObjectBeLinkedObjectTarget(
 
   if (isMovingPlatformObjectId(source.id)) {
     return isMovingPlatformEndpointObjectId(target.id);
+  }
+
+  if (isPortalObjectId(source.id)) {
+    return getOppositePortalObjectId(source.id) === target.id;
   }
 
   return false;

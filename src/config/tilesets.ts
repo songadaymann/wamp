@@ -173,9 +173,7 @@ export type SpecialTileKind =
   | 'gravityRight'
   | 'water'
   | 'windLeft'
-  | 'windRight'
-  | 'portalA'
-  | 'portalB';
+  | 'windRight';
 
 export const SPECIAL_TILE_LOCAL_INDICES = {
   breakableBrick: 0,
@@ -194,8 +192,6 @@ export const SPECIAL_TILE_LOCAL_INDICES = {
   water: 13,
   windLeft: 14,
   windRight: 15,
-  portalA: 16,
-  portalB: 17,
 } as const satisfies Record<SpecialTileKind, number>;
 
 export const SPECIAL_TILE_BREAKABLE_BRICK_LOCAL_INDEX =
@@ -307,19 +303,9 @@ function createSpecialTileEditorMetadata(): Partial<Record<number, EditorTileMet
       description: 'Wind zone that pushes right.',
       enabled: true,
     },
-    16: {
-      label: 'Portal A',
-      description: 'Teleport tile. Sends the player to the nearest Portal B tile.',
-      enabled: true,
-    },
-    17: {
-      label: 'Portal B',
-      description: 'Teleport tile. Sends the player to the nearest Portal A tile.',
-      enabled: true,
-    },
   };
 
-  for (let index = 18; index < SPECIAL_TILE_COUNT; index += 1) {
+  for (let index = 16; index < SPECIAL_TILE_COUNT; index += 1) {
     metadata[index] = {
       label: `Reserved ${index + 1}`,
       description: 'Reserved special tile slot.',
@@ -648,7 +634,7 @@ export const TILESETS: TilesetConfig[] = [
   {
     key: SPECIAL_TILESET_KEY,
     name: 'Special',
-    path: 'assets/tilesets/special.png?v=2026-06-09-portals',
+    path: 'assets/tilesets/special.png',
     imageWidth: 128,
     imageHeight: 128,
     columns: 8,

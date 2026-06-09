@@ -9,6 +9,7 @@ import {
   getObjectById,
   isMovingPlatformEndpointObjectId,
   isMovingPlatformObjectId,
+  isPortalObjectId,
   type PlacedObject,
 } from '../../config';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
@@ -887,6 +888,9 @@ export class EditorInspectorController {
     if (source && isMovingPlatformObjectId(source.id)) {
       return 'Moving platform';
     }
+    if (source && isPortalObjectId(source.id)) {
+      return getObjectById(source.id)?.name ?? 'Portal';
+    }
 
     return 'Pressure plate';
   }
@@ -905,6 +909,12 @@ export class EditorInspectorController {
         ? 'Moving platform placed. Click Moving Platform Anchors to add path stops.'
         : 'Click Moving Platform Anchors to add or remove path stops.';
     }
+    if (isPortalObjectId(source.id)) {
+      const sourceLabel = this.getObjectLinkSourceLabel(source);
+      return autoPlaced
+        ? `${sourceLabel} placed. Click the opposite portal to connect it.`
+        : `Click the opposite portal to connect this ${sourceLabel}.`;
+    }
 
     return autoPlaced
       ? 'Pressure plate placed. Click a door, barricade, cage, or chest to link it.'
@@ -912,26 +922,41 @@ export class EditorInspectorController {
   }
 
   private getObjectLinkPickTargetStatus(source: PlacedObject): string {
-    return isMovingPlatformObjectId(source.id)
-      ? 'Pick Moving Platform Anchors in this room.'
-      : 'Pick a door, cage, or chest in this room.';
+    if (isMovingPlatformObjectId(source.id)) {
+      return 'Pick Moving Platform Anchors in this room.';
+    }
+    if (isPortalObjectId(source.id)) {
+      return 'Pick the opposite portal in this room.';
+    }
+    return 'Pick a door, cage, or chest in this room.';
   }
 
   private getObjectLinkNoTargetsStatus(source: PlacedObject): string {
-    return isMovingPlatformObjectId(source.id)
-      ? 'No Moving Platform Anchor is in this room yet. You can link this moving platform later.'
-      : 'No door, barricade, cage, or chest is in this room yet. You can link this pressure plate later.';
+    if (isMovingPlatformObjectId(source.id)) {
+      return 'No Moving Platform Anchor is in this room yet. You can link this moving platform later.';
+    }
+    if (isPortalObjectId(source.id)) {
+      return 'No opposite portal is in this room yet. You can link this portal later.';
+    }
+    return 'No door, barricade, cage, or chest is in this room yet. You can link this pressure plate later.';
   }
 
   private getObjectLinkNoTargetsTitle(source: PlacedObject): string {
-    return isMovingPlatformObjectId(source.id)
-      ? 'Add a Moving Platform Anchor first.'
-      : 'Add a door, cage, or chest first.';
+    if (isMovingPlatformObjectId(source.id)) {
+      return 'Add a Moving Platform Anchor first.';
+    }
+    if (isPortalObjectId(source.id)) {
+      return 'Add the opposite portal first.';
+    }
+    return 'Add a door, cage, or chest first.';
   }
 
   private getObjectLinkTargetLabel(objectId: string): string {
     if (isMovingPlatformEndpointObjectId(objectId)) {
       return 'Moving Platform Anchor';
+    }
+    if (isPortalObjectId(objectId)) {
+      return getObjectById(objectId)?.name ?? 'Portal';
     }
 
     switch (objectId) {
