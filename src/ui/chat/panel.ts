@@ -112,11 +112,18 @@ export class ChatPanelController {
   };
 
   private readonly handleDocumentKeydown = (event: KeyboardEvent) => {
-    if (!this.isWorldModeActive()) {
+    if (!this.isChatModeActive()) {
       return;
     }
 
-    if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey) {
+    if (
+      this.isWorldModeActive()
+      && event.key === 'Enter'
+      && !event.shiftKey
+      && !event.metaKey
+      && !event.ctrlKey
+      && !event.altKey
+    ) {
       if (isTextInputFocused()) {
         return;
       }
@@ -140,7 +147,7 @@ export class ChatPanelController {
   };
 
   private readonly handleAppReady = () => {
-    if (this.isWorldModeActive()) {
+    if (this.isChatModeActive()) {
       void this.ensureLoaded();
       void this.pollForNewMessages();
     }
@@ -232,7 +239,8 @@ export class ChatPanelController {
 
   getDebugState(): Record<string, unknown> {
     return {
-      visible: this.isWorldModeActive(),
+      visible: this.isChatModeActive(),
+      mode: this.getAppMode(),
       open: this.open,
       authenticated: this.authState.authenticated,
       loading: this.loading,
@@ -251,8 +259,8 @@ export class ChatPanelController {
   }
 
   private handleAppModeChange(): void {
-    if (this.isWorldModeActive()) {
-      if (!this.openedOnFirstWorldVisit) {
+    if (this.isChatModeActive()) {
+      if (this.isWorldModeActive() && !this.openedOnFirstWorldVisit) {
         this.openedOnFirstWorldVisit = true;
         if (this.shouldAutoOpenOnFirstWorldVisit()) {
           this.openPanel(false);
@@ -270,8 +278,17 @@ export class ChatPanelController {
     this.closePanel(false);
   }
 
+  private getAppMode(): string | undefined {
+    return this.doc.body.dataset.appMode;
+  }
+
+  private isChatModeActive(): boolean {
+    const mode = this.getAppMode();
+    return mode === 'world' || mode === 'play-world' || mode === 'editor';
+  }
+
   private isWorldModeActive(): boolean {
-    const mode = this.doc.body.dataset.appMode;
+    const mode = this.getAppMode();
     return mode === 'world' || mode === 'play-world';
   }
 
@@ -292,7 +309,7 @@ export class ChatPanelController {
 
   private async ensureLoaded(): Promise<void> {
     if (
-      !this.isWorldModeActive() ||
+      !this.isChatModeActive() ||
       !isAppReady() ||
       this.historyLoaded ||
       this.initialLoadInFlight ||
@@ -350,7 +367,7 @@ export class ChatPanelController {
   }
 
   private shouldPoll(): boolean {
-    return this.isWorldModeActive() && isAppReady() && this.doc.visibilityState === 'visible' && !this.destroyed;
+    return this.isChatModeActive() && isAppReady() && this.doc.visibilityState === 'visible' && !this.destroyed;
   }
 
   private replaceMessages(nextMessages: ChatMessageRecord[]): void {

@@ -230,6 +230,15 @@ body[data-device-class='phone'] #global-chat {
   bottom: calc(60px + var(--safe-bottom));
 }
 
+body[data-device-class='phone'][data-app-mode='editor'] #global-chat {
+  bottom: calc(var(--phone-editor-sheet-height) + 52px + var(--safe-bottom));
+  z-index: 18;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-collapsed='true'] #global-chat {
+  bottom: calc(56px + var(--safe-bottom));
+}
+
 body[data-device-class='phone'] .room-chat-composer {
   bottom: calc(112px + var(--safe-bottom));
   width: min(320px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
@@ -247,6 +256,11 @@ body[data-device-class='phone'] #global-chat.is-open {
   left: calc(8px + var(--safe-left));
   z-index: 22;
   gap: 0;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #global-chat.is-open {
+  bottom: calc(8px + var(--safe-bottom));
+  z-index: 30;
 }
 
 body[data-device-class='phone'] #global-chat.is-open .chat-toggle {
@@ -329,4 +343,3 @@ body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-room-chat
 body[data-device-class='phone'][data-app-mode='play-world'] .room-chat-composer-form {
   padding: 8px 10px;
 }
-
