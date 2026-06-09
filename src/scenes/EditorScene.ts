@@ -91,6 +91,12 @@ import {
   type RoomLightingSettings,
 } from '../lighting/model';
 import { resolvePlayerAuraDarkAuraDiameter } from '../lighting/presets';
+import { RoomWeatherController } from '../weather/controller';
+import {
+  cloneRoomWeatherSettings,
+  type RoomWeatherSettings,
+} from '../weather/model';
+import { buildRoomWeatherSurfaceSegments } from '../weather/surfaces';
 import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
 
 const EDITOR_NEIGHBOR_RADIUS = 1;
@@ -123,6 +129,7 @@ export class EditorScene extends Phaser.Scene {
   private readonly toolController: EditorToolController;
   private readonly chromeController: EditorChromeController;
   private readonly lightingController: RoomLightingController;
+  private readonly weatherController: RoomWeatherController;
   private lightingPreviewStaticEmitters: RoomStaticLightingEmitters = {
     emitters: [],
     objectCount: 0,
@@ -369,6 +376,10 @@ export class EditorScene extends Phaser.Scene {
       setSelectedLightingSettings: (lighting) => {
         this.setSelectedLightingSettings(lighting);
       },
+      getSelectedWeatherSettings: () => this.getSelectedWeatherSettings(),
+      setSelectedWeatherSettings: (weather) => {
+        this.setSelectedWeatherSettings(weather);
+      },
       getPlacedObjects: () => editorState.placedObjects,
       setPlacedObjects: (placedObjects) => {
         editorState.placedObjects = placedObjects;
@@ -376,6 +387,9 @@ export class EditorScene extends Phaser.Scene {
       updateBackgroundSelectValue: () => {},
       updateLightingControlsValue: (lighting) => {
         this.syncLightingControls(lighting);
+      },
+      updateWeatherControlsValue: (weather) => {
+        this.syncWeatherControls(weather);
       },
       updateBackground: () => this.updateBackground(),
       updateGoalUi: () => this.updateGoalUi(),
@@ -590,6 +604,7 @@ export class EditorScene extends Phaser.Scene {
         }
 
         ignored.push(...this.lightingController.getBackdropIgnoredObjects());
+        ignored.push(...this.weatherController.getBackdropIgnoredObjects());
         ignored.push(...this.musicPatternController.getIgnoredObjects());
 
         return ignored;
@@ -599,6 +614,10 @@ export class EditorScene extends Phaser.Scene {
     this.lightingController = new RoomLightingController({
       scene: this,
       overlayDepth: 80,
+    });
+    this.weatherController = new RoomWeatherController({
+      scene: this,
+      depth: 76,
     });
   }
 
@@ -799,6 +818,8 @@ export class EditorScene extends Phaser.Scene {
       onSelectLighting: (mode) => this.applySelectedLightingMode(mode),
       onSetLightingDarkness: (darkness) => this.applySelectedLightingDarkness(darkness),
       onSetLightingRadius: (radius) => this.applySelectedLightingRadius(radius),
+      onSelectWeather: (mode) => this.applySelectedWeatherMode(mode),
+      onSetWeatherIntensity: (intensity) => this.applySelectedWeatherIntensity(intensity),
       onSetGoalType: (nextType) => this.toolController.setGoalType(nextType),
       onSetGoalTimeLimitSeconds: (seconds) => this.toolController.setGoalTimeLimitSeconds(seconds),
       onSetGoalRequiredCount: (requiredCount) => this.toolController.setGoalRequiredCount(requiredCount),
@@ -834,6 +855,7 @@ export class EditorScene extends Phaser.Scene {
     this.syncBackgroundCameraIgnores();
     this.updateBackgroundPreview();
     this.updateLightingPreview();
+    this.updateWeatherPreview();
     this.renderMusicUi();
 
     this.events.on('wake', this.handleWake, this);
@@ -858,6 +880,7 @@ export class EditorScene extends Phaser.Scene {
     this.presenceController.sync();
     this.updateBackgroundPreview();
     this.updateLightingPreview();
+    this.updateWeatherPreview();
     this.updateCursorHighlight();
     this.overlayController.updateLayerGuideOverlay();
     this.overlayController.updatePressurePlateOverlay((graphics) => {
@@ -880,6 +903,7 @@ export class EditorScene extends Phaser.Scene {
 
   private resetRuntimeState(): void {
     this.lightingController.reset();
+    this.weatherController.reset();
     this.lightingPreviewStaticEmitters = {
       emitters: [],
       objectCount: 0,
@@ -903,6 +927,7 @@ export class EditorScene extends Phaser.Scene {
     editorState.tileFlipX = false;
     editorState.tileFlipY = false;
     this.setSelectedLightingSettings(null);
+    this.setSelectedWeatherSettings(null);
     editorState.isPlaying = false;
     this.musicWorkflow.resetForRuntimeClear();
     globalRoomMusicController.stopPreviewClip();
@@ -958,6 +983,35 @@ export class EditorScene extends Phaser.Scene {
     }
   }
 
+  private getSelectedWeatherSettings(): RoomWeatherSettings {
+    return cloneRoomWeatherSettings({
+      mode: editorState.selectedWeatherMode,
+      intensity: editorState.selectedWeatherIntensity,
+    });
+  }
+
+  private setSelectedWeatherSettings(weather: RoomWeatherSettings | null | undefined): void {
+    const normalized = cloneRoomWeatherSettings(weather);
+    editorState.selectedWeatherMode = normalized.mode;
+    editorState.selectedWeatherIntensity = normalized.intensity;
+  }
+
+  private syncWeatherControls(weather: RoomWeatherSettings | null | undefined): void {
+    const normalized = cloneRoomWeatherSettings(weather);
+    const weatherSelect = document.getElementById(
+      'weather-mode-select'
+    ) as HTMLSelectElement | null;
+    const intensityRange = document.getElementById(
+      'weather-intensity-range'
+    ) as HTMLInputElement | null;
+    if (weatherSelect) {
+      weatherSelect.value = normalized.mode;
+    }
+    if (intensityRange) {
+      intensityRange.value = String(normalized.intensity);
+    }
+  }
+
   private applySelectedLightingMode(mode: RoomSnapshot['lighting']['mode']): void {
     editorState.selectedLightingMode = mode;
     this.updateLightingPreview();
@@ -975,6 +1029,20 @@ export class EditorScene extends Phaser.Scene {
   private applySelectedLightingRadius(radius: number): void {
     editorState.selectedLightingRadius = radius;
     this.updateLightingPreview();
+    this.persistenceController.markRoomDirty();
+    this.renderEditorUi();
+  }
+
+  private applySelectedWeatherMode(mode: RoomSnapshot['weather']['mode']): void {
+    editorState.selectedWeatherMode = mode;
+    this.updateWeatherPreview();
+    this.persistenceController.markRoomDirty();
+    this.renderEditorUi();
+  }
+
+  private applySelectedWeatherIntensity(intensity: number): void {
+    editorState.selectedWeatherIntensity = intensity;
+    this.updateWeatherPreview();
     this.persistenceController.markRoomDirty();
     this.renderEditorUi();
   }
@@ -1023,6 +1091,26 @@ export class EditorScene extends Phaser.Scene {
         staticObjectEmitterCount: this.lightingPreviewStaticEmitters.objectCount,
         staticTileEmitterCount: this.lightingPreviewStaticEmitters.tileCount,
       },
+    });
+
+    if (structureChanged) {
+      this.syncBackgroundCameraIgnores();
+    }
+  }
+
+  private updateWeatherPreview(): void {
+    const weather = this.getSelectedWeatherSettings();
+    const weatherRoom = weather.mode === 'rain' ? this.editRuntime.exportRoomSnapshot() : null;
+    const structureChanged = this.weatherController.sync({
+      roomId: this.roomId,
+      bounds: {
+        x: 0,
+        y: 0,
+        width: ROOM_PX_WIDTH,
+        height: ROOM_PX_HEIGHT,
+      },
+      weather,
+      surfaces: weatherRoom ? buildRoomWeatherSurfaceSegments(weatherRoom) : [],
     });
 
     if (structureChanged) {
@@ -1728,6 +1816,7 @@ export class EditorScene extends Phaser.Scene {
       backgroundLayerCount: this.backgroundController.backgroundLayerCount,
       hasBackgroundCamera: this.backgroundController.hasBackgroundCamera,
       lighting: this.lightingController.getDebugState(),
+      weather: this.weatherController.getDebugState(),
       activeTool: editorState.activeTool,
       selectedLayer: editorState.activeLayer,
       zoom: editorState.zoom,

@@ -28,6 +28,11 @@ import {
   type RoomLightingSettings,
 } from '../lighting/model';
 import {
+  cloneRoomWeatherSettings,
+  normalizeRoomWeatherSettings,
+  type RoomWeatherSettings,
+} from '../weather/model';
+import {
   isRoomMusicEmpty,
   normalizeRoomMusic,
   type RoomMusic,
@@ -94,6 +99,7 @@ export interface RoomSnapshot {
   goalIntroText: string | null;
   background: string;
   lighting: RoomLightingSettings;
+  weather: RoomWeatherSettings;
   music: RoomMusic | null;
   goal: RoomGoal | null;
   spawnPoint: RoomSpawnPoint | null;
@@ -219,6 +225,7 @@ export function createDefaultRoomSnapshot(
     goalIntroText: null,
     background: DEFAULT_ROOM_BACKGROUND,
     lighting: cloneRoomLightingSettings(null),
+    weather: cloneRoomWeatherSettings(null),
     music: null,
     goal: null,
     spawnPoint: null,
@@ -473,6 +480,7 @@ export function cloneRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
     goalIntroText: normalizeRoomGoalIntroText(room.goalIntroText),
     background: normalizeRoomBackground(room.background),
     lighting: normalizeRoomLightingSettings(room.lighting),
+    weather: normalizeRoomWeatherSettings(room.weather),
     music: normalizeRoomMusic(room.music),
     goal: normalizeRoomGoal(room.goal),
     spawnPoint: room.spawnPoint ? { ...room.spawnPoint } : null,

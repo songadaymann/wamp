@@ -88,6 +88,10 @@ import {
   type RoomLightingSettings,
 } from '../../lighting/model';
 import {
+  cloneRoomWeatherSettings,
+  type RoomWeatherSettings,
+} from '../../weather/model';
+import {
   cloneRoomMusic,
   createDefaultRoomPatternMusic,
   isRoomMusicEmpty,
@@ -160,10 +164,13 @@ interface EditorEditRuntimeHost {
   setSelectedBackground(backgroundId: string): void;
   getSelectedLightingSettings(): RoomLightingSettings;
   setSelectedLightingSettings(lighting: RoomLightingSettings): void;
+  getSelectedWeatherSettings(): RoomWeatherSettings;
+  setSelectedWeatherSettings(weather: RoomWeatherSettings): void;
   getPlacedObjects(): PlacedObject[];
   setPlacedObjects(placedObjects: PlacedObject[]): void;
   updateBackgroundSelectValue(backgroundId: string): void;
   updateLightingControlsValue(lighting: RoomLightingSettings): void;
+  updateWeatherControlsValue(weather: RoomWeatherSettings): void;
   updateBackground(): void;
   updateGoalUi(): void;
   syncBackgroundCameraIgnores(): void;
@@ -385,6 +392,8 @@ export class EditorEditRuntime {
     this.host.updateBackgroundSelectValue(normalizeRoomBackground(room.background));
     this.host.setSelectedLightingSettings(room.lighting);
     this.host.updateLightingControlsValue(room.lighting);
+    this.host.setSelectedWeatherSettings(room.weather);
+    this.host.updateWeatherControlsValue(room.weather);
     this.host.updateBackground();
 
     this.roomGoal = cloneRoomGoal(room.goal);
@@ -525,6 +534,7 @@ export class EditorEditRuntime {
       goalIntroText: this.roomGoal ? normalizeRoomGoalIntroText(this.roomGoalIntroText) : null,
       background: normalizeRoomBackground(this.host.getSelectedBackground()),
       lighting: cloneRoomLightingSettings(this.host.getSelectedLightingSettings()),
+      weather: cloneRoomWeatherSettings(this.host.getSelectedWeatherSettings()),
       music: cloneRoomMusic(this.roomMusic),
       goal: cloneRoomGoal(this.roomGoal),
       spawnPoint: this.roomSpawnPoint ? { ...this.roomSpawnPoint } : null,

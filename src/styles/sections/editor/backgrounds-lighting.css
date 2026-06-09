@@ -329,7 +329,8 @@
   }
 }
 
-#lighting-mode-select {
+#lighting-mode-select,
+#weather-mode-select {
   width: 100%;
   padding: 5px 8px;
   background: var(--panel-2);
@@ -341,11 +342,27 @@
   cursor: pointer;
 }
 
-#lighting-mode-select option {
+#lighting-mode-select option,
+#weather-mode-select option {
   background: var(--panel);
 }
 
-.lighting-tuning-controls {
+.environment-panel-section + .environment-panel-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(243, 238, 226, 0.1);
+}
+
+.environment-subsection-label {
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lighting-tuning-controls,
+.weather-tuning-controls {
   margin-top: 10px;
 }
 

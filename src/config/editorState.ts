@@ -3,6 +3,10 @@ import {
   DEFAULT_ROOM_LIGHTING_RADIUS,
   type RoomLightingMode,
 } from '../lighting/model';
+import {
+  DEFAULT_ROOM_WEATHER_INTENSITY,
+  type RoomWeatherMode,
+} from '../weather/model';
 import { getTilesetByKey } from './tilesets';
 import {
   TILE_FLIP_X_FLAG,
@@ -37,6 +41,8 @@ export interface EditorState {
   selectedLightingMode: RoomLightingMode;
   selectedLightingDarkness: number;
   selectedLightingRadius: number;
+  selectedWeatherMode: RoomWeatherMode;
+  selectedWeatherIntensity: number;
   placedObjects: PlacedObject[];
 }
 
@@ -80,6 +86,8 @@ export const editorState: EditorState = {
   selectedLightingMode: 'off',
   selectedLightingDarkness: DEFAULT_ROOM_LIGHTING_DARKNESS,
   selectedLightingRadius: DEFAULT_ROOM_LIGHTING_RADIUS,
+  selectedWeatherMode: 'off',
+  selectedWeatherIntensity: DEFAULT_ROOM_WEATHER_INTENSITY,
   placedObjects: [],
 };
 

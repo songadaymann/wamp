@@ -73,6 +73,10 @@ export interface EditorUiElements {
   lightingDarknessValue: HTMLElement | null;
   lightingRadiusInput: HTMLInputElement | null;
   lightingRadiusValue: HTMLElement | null;
+  weatherSelect: HTMLSelectElement | null;
+  weatherTuningControls: HTMLElement | null;
+  weatherIntensityInput: HTMLInputElement | null;
+  weatherIntensityValue: HTMLElement | null;
   backgroundButtons: HTMLButtonElement[];
   goalTypeSelect: HTMLSelectElement | null;
   goalContextNote: HTMLElement | null;
@@ -229,6 +233,10 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     lightingDarknessValue: byId<HTMLElement>(doc, 'lighting-darkness-value'),
     lightingRadiusInput: byId<HTMLInputElement>(doc, 'lighting-radius-range'),
     lightingRadiusValue: byId<HTMLElement>(doc, 'lighting-radius-value'),
+    weatherSelect: byId<HTMLSelectElement>(doc, 'weather-mode-select'),
+    weatherTuningControls: byId<HTMLElement>(doc, 'weather-tuning-controls'),
+    weatherIntensityInput: byId<HTMLInputElement>(doc, 'weather-intensity-range'),
+    weatherIntensityValue: byId<HTMLElement>(doc, 'weather-intensity-value'),
     backgroundButtons: all<HTMLButtonElement>(doc, '[data-background-id]'),
     goalTypeSelect: byId<HTMLSelectElement>(doc, 'goal-type-select'),
     goalContextNote: byId<HTMLElement>(doc, 'goal-context-note'),

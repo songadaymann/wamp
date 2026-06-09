@@ -81,6 +81,7 @@ export function computeRoomWeightedChange(
   score += (JSON.stringify(previous.spawnPoint) === JSON.stringify(next.spawnPoint) ? 0 : 0.08);
   score += (previous.background === next.background ? 0 : 0.04);
   score += (JSON.stringify(previous.lighting) === JSON.stringify(next.lighting) ? 0 : 0.04);
+  score += (JSON.stringify(previous.weather) === JSON.stringify(next.weather) ? 0 : 0.04);
 
   return Math.max(0, Math.min(1, score));
 }

@@ -12,6 +12,11 @@ import { getRoomBackgroundLabel, normalizeRoomBackground } from '../backgrounds/
 import { cloneRoomGoal, normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
 import { cloneRoomLightingSettings, type RoomLightingSettings } from '../lighting/model';
 import {
+  cloneRoomWeatherSettings,
+  type RoomWeatherMode,
+  type RoomWeatherSettings,
+} from '../weather/model';
+import {
   createDefaultRoomSnapshot,
   normalizeRoomTitle,
   type RoomCoordinates,
@@ -50,6 +55,7 @@ export interface WampMintedRoomPayload {
   title: string | null;
   background: string;
   lighting: RoomLightingSettings;
+  weather: RoomWeatherSettings;
   goal: RoomGoal | null;
   spawnPoint: [number, number] | null;
   tiles: Record<LayerName, string>;
@@ -135,6 +141,7 @@ export interface WampMintedRoomPayloadV4 {
   n?: string;
   b: string;
   l?: [number, number];
+  w?: ['r' | 's' | 'f', number];
   g?: WampMintedRoomGoalV2;
   s?: [number, number];
   t?: Partial<Record<WampV2LayerKey, string>>;
@@ -227,6 +234,7 @@ export function buildWampMintedRoomPayload(snapshot: RoomSnapshot): WampMintedRo
     title: normalizeRoomTitle(snapshot.title),
     background: normalizeRoomBackground(snapshot.background),
     lighting: cloneRoomLightingSettings(snapshot.lighting),
+    weather: cloneRoomWeatherSettings(snapshot.weather),
     goal: cloneRoomGoal(snapshot.goal),
     spawnPoint: snapshot.spawnPoint ? [snapshot.spawnPoint.x, snapshot.spawnPoint.y] : null,
     tiles: {
@@ -259,6 +267,7 @@ export function buildRoomSnapshotFromMintedPayload(
   snapshot.title = normalizeRoomTitle(payload.title);
   snapshot.background = normalizeRoomBackground(payload.background);
   snapshot.lighting = cloneRoomLightingSettings(payload.lighting);
+  snapshot.weather = cloneRoomWeatherSettings(payload.weather);
   snapshot.goal = normalizeRoomGoal(payload.goal);
   snapshot.spawnPoint = payload.spawnPoint
     ? {
@@ -401,6 +410,9 @@ function serializeMintedRoomPayload(payload: WampMintedRoomPayload): StoredWampM
     ...(payload.lighting.mode === 'playerAuraDark'
       ? { l: [payload.lighting.darkness, payload.lighting.radius] as [number, number] }
       : {}),
+    ...(payload.weather.mode !== 'off'
+      ? { w: [serializeWeatherModeCode(payload.weather.mode), payload.weather.intensity] as ['r' | 's' | 'f', number] }
+      : {}),
     ...(payload.goal ? { g: serializeRoomGoalV2(payload.goal) } : {}),
     ...(payload.spawnPoint ? { s: [...payload.spawnPoint] as [number, number] } : {}),
     ...(tiles ? { t: tiles } : {}),
@@ -409,6 +421,29 @@ function serializeMintedRoomPayload(payload: WampMintedRoomPayload): StoredWampM
     pv: payload.version,
     ...(payload.publishedAt ? { pt: payload.publishedAt } : {}),
   };
+}
+
+function serializeWeatherModeCode(mode: RoomWeatherMode): 'r' | 's' | 'f' {
+  if (mode === 'snow') {
+    return 's';
+  }
+  if (mode === 'fog') {
+    return 'f';
+  }
+  return 'r';
+}
+
+function normalizeWeatherModeCode(value: unknown): RoomWeatherMode {
+  if (value === 'r') {
+    return 'rain';
+  }
+  if (value === 's') {
+    return 'snow';
+  }
+  if (value === 'f') {
+    return 'fog';
+  }
+  return 'off';
 }
 
 function serializeMintedRoomTilesV2(
@@ -525,6 +560,7 @@ function normalizeMintedRoomPayloadV1(value: Partial<WampMintedRoomPayload>): Wa
     title: normalizeRoomTitle(value.title),
     background: normalizeRoomBackground(value.background),
     lighting: cloneRoomLightingSettings(value.lighting),
+    weather: cloneRoomWeatherSettings(value.weather),
     goal: normalizeRoomGoal(value.goal),
     spawnPoint:
       spawnPoint &&
@@ -583,6 +619,7 @@ function normalizeMintedRoomPayloadV2(value: Partial<WampMintedRoomPayloadV2>): 
     title: normalizeRoomTitle(value.n),
     background: normalizeRoomBackground(value.b),
     lighting: cloneRoomLightingSettings(null),
+    weather: cloneRoomWeatherSettings(null),
     goal: normalizeRoomGoalV2(value.g),
     spawnPoint:
       spawnPoint &&
@@ -631,6 +668,7 @@ function normalizeMintedRoomPayloadV3(value: Partial<WampMintedRoomPayloadV3>): 
     lighting: cloneRoomLightingSettings({
       mode: value.l === 1 ? 'playerAuraDark' : 'off',
     }),
+    weather: cloneRoomWeatherSettings(null),
     goal: normalizeRoomGoalV2(value.g),
     spawnPoint:
       spawnPoint &&
@@ -665,6 +703,12 @@ function normalizeMintedRoomPayloadV4(value: Partial<WampMintedRoomPayloadV4>): 
     typeof value.l[1] === 'number'
       ? value.l
       : null;
+  const weatherTuple =
+    Array.isArray(value.w) &&
+    value.w.length === 2 &&
+    typeof value.w[1] === 'number'
+      ? value.w
+      : null;
 
   if (
     value.v !== WAMP_MINTED_ROOM_SCHEMA_VERSION_V4 ||
@@ -689,6 +733,14 @@ function normalizeMintedRoomPayloadV4(value: Partial<WampMintedRoomPayloadV4>): 
             mode: 'playerAuraDark',
             darkness: lightingTuple[0],
             radius: lightingTuple[1],
+          }
+        : null,
+    ),
+    weather: cloneRoomWeatherSettings(
+      weatherTuple
+        ? {
+            mode: normalizeWeatherModeCode(weatherTuple[0]),
+            intensity: weatherTuple[1],
           }
         : null,
     ),

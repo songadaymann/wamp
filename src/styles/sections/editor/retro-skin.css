@@ -516,7 +516,7 @@ body[data-app-mode='editor'] #sidebar .editor-feature-panel {
 }
 
 body[data-app-mode='editor'] #sidebar #editor-lighting-feature-panel {
-  border-color: var(--editor-retro-red);
+  border-color: var(--editor-retro-yellow);
 }
 
 body[data-app-mode='editor'] #sidebar .tool-icon {
@@ -706,6 +706,7 @@ body[data-app-mode='editor'] #sidebar .lighting-slider-value {
 body[data-app-mode='editor'] #sidebar .palette-hint,
 body[data-app-mode='editor'] #sidebar .goal-summary,
 body[data-app-mode='editor'] #sidebar .room-lighting-note,
+body[data-app-mode='editor'] #sidebar .environment-subsection-label,
 body[data-app-mode='editor'] #sidebar .history-modal-meta,
 body[data-app-mode='editor'] #sidebar #music-summary,
 body[data-app-mode='editor'] #sidebar .lighting-slider-endpoints,
