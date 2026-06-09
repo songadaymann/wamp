@@ -418,6 +418,7 @@ body[data-app-mode="play-world"] #world-hud {
 }
 
 body[data-app-mode="world"] #global-chat,
+body[data-app-mode="editor"] #global-chat,
 body[data-app-mode="play-world"] #global-chat {
   display: flex;
 }
