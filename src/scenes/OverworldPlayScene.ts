@@ -715,6 +715,11 @@ export class OverworldPlayScene extends Phaser.Scene {
         );
       },
       handlePlayerDeath: (reason) => this.sessionResetController.handlePlayerDeath(reason),
+      teleportPlayerTo: (x, y, velocity) =>
+        this.teleportPlayerToSpecialTile(x, y, velocity),
+      playPortalFx: () => {
+        playSfx('warp');
+      },
       playBounceFx: (x, y, roomCoordinates, cue) =>
         this.fxController?.playBounceFx(
           x,
@@ -2984,6 +2989,23 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private updateSpecialTiles(): void {
     this.specialTilesController.update();
+  }
+
+  private teleportPlayerToSpecialTile(
+    x: number,
+    y: number,
+    velocity: { x: number; y: number },
+  ): void {
+    if (!this.player || !this.playerBody) {
+      return;
+    }
+
+    this.movementController.clearLadderState();
+    this.player.setPosition(x, y);
+    this.playerBody.reset(x, y);
+    this.playerBody.setVelocity(velocity.x, velocity.y);
+    this.playerPresentationController.syncPlayerPickupSensor();
+    this.playerPresentationController.syncPlayerVisual();
   }
 
   private syncActiveCourseObjectLinks(
