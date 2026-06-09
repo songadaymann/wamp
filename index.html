@@ -696,9 +696,9 @@
                 <span class="tool-icon" aria-hidden="true">&#9835;</span>
                 <span class="tool-label" data-button-label>Music</span>
               </button>
-              <button class="tool-btn editor-feature-btn" data-editor-feature="lighting" type="button" title="Lighting Settings" aria-pressed="false">
-                <span class="tool-icon" aria-hidden="true">&#9728;</span>
-                <span class="tool-label">Light</span>
+              <button class="tool-btn editor-feature-btn" data-editor-feature="lighting" type="button" title="Environment Settings" aria-pressed="false">
+                <span class="tool-icon" aria-hidden="true">&#9729;</span>
+                <span class="tool-label">Env</span>
               </button>
               <button id="btn-editor-sprite-mode" class="tool-btn editor-feature-btn" data-editor-feature="sprite" type="button" title="Sprite Editor" aria-pressed="false">
                 <span class="tool-icon" aria-hidden="true">&#9998;</span>
@@ -763,54 +763,90 @@
               <div id="goal-placement-hint" class="goal-placement-hint hidden">Click the canvas to place the selected goal marker.</div>
               <div id="goal-summary" class="goal-summary">No room goal selected.</div>
             </div>
-            <div id="editor-lighting-feature-panel" class="editor-feature-panel editor-lighting-panel hidden" data-editor-feature-panel="lighting">
-              <div class="section-label">Lighting</div>
-              <select id="lighting-mode-select">
-                <option value="off">Normal</option>
-                <option value="playerAuraDark">Dark Aura</option>
-              </select>
-              <div id="lighting-tuning-controls" class="lighting-tuning-controls hidden">
-                <div class="lighting-slider-group">
-                  <div class="lighting-slider-header">
-                    <span class="lighting-slider-label">Darkness</span>
-                    <span id="lighting-darkness-value" class="lighting-slider-value">80%</span>
+            <div id="editor-lighting-feature-panel" class="editor-feature-panel editor-lighting-panel editor-environment-panel hidden" data-editor-feature-panel="lighting">
+              <div class="section-label">Environment</div>
+              <div class="environment-panel-section">
+                <div class="environment-subsection-label">Lighting</div>
+                <select id="lighting-mode-select">
+                  <option value="off">Normal</option>
+                  <option value="playerAuraDark">Dark Aura</option>
+                </select>
+                <div id="lighting-tuning-controls" class="lighting-tuning-controls hidden">
+                  <div class="lighting-slider-group">
+                    <div class="lighting-slider-header">
+                      <span class="lighting-slider-label">Darkness</span>
+                      <span id="lighting-darkness-value" class="lighting-slider-value">80%</span>
+                    </div>
+                    <input
+                      id="lighting-darkness-range"
+                      class="lighting-slider-input"
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value="80"
+                    />
+                    <div class="lighting-slider-endpoints" aria-hidden="true">
+                      <span>Barely dark</span>
+                      <span>Pitch black</span>
+                    </div>
                   </div>
-                  <input
-                    id="lighting-darkness-range"
-                    class="lighting-slider-input"
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value="80"
-                  />
-                  <div class="lighting-slider-endpoints" aria-hidden="true">
-                    <span>Barely dark</span>
-                    <span>Pitch black</span>
+                  <div class="lighting-slider-group">
+                    <div class="lighting-slider-header">
+                      <span class="lighting-slider-label">Spotlight Radius</span>
+                      <span id="lighting-radius-value" class="lighting-slider-value">50%</span>
+                    </div>
+                    <input
+                      id="lighting-radius-range"
+                      class="lighting-slider-input"
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value="50"
+                    />
+                    <div class="lighting-slider-endpoints" aria-hidden="true">
+                      <span>Tight</span>
+                      <span>Wide</span>
+                    </div>
                   </div>
                 </div>
-                <div class="lighting-slider-group">
-                  <div class="lighting-slider-header">
-                    <span class="lighting-slider-label">Spotlight Radius</span>
-                    <span id="lighting-radius-value" class="lighting-slider-value">50%</span>
-                  </div>
-                  <input
-                    id="lighting-radius-range"
-                    class="lighting-slider-input"
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value="50"
-                  />
-                  <div class="lighting-slider-endpoints" aria-hidden="true">
-                    <span>Tight</span>
-                    <span>Wide</span>
-                  </div>
+                <div class="room-lighting-note">
+                  Dark Aura previews the active room as dim and opens light from the spawn point.
                 </div>
               </div>
-              <div class="room-lighting-note">
-                Dark Aura previews the active room as dim and opens light from the spawn point.
+              <div class="environment-panel-section">
+                <div class="environment-subsection-label">Weather</div>
+                <select id="weather-mode-select">
+                  <option value="off">Clear</option>
+                  <option value="rain">Rain</option>
+                  <option value="snow">Snow</option>
+                  <option value="fog">Fog</option>
+                </select>
+                <div id="weather-tuning-controls" class="weather-tuning-controls hidden">
+                  <div class="lighting-slider-group">
+                    <div class="lighting-slider-header">
+                      <span class="lighting-slider-label">Intensity</span>
+                      <span id="weather-intensity-value" class="lighting-slider-value">50%</span>
+                    </div>
+                    <input
+                      id="weather-intensity-range"
+                      class="lighting-slider-input"
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value="50"
+                    />
+                    <div class="lighting-slider-endpoints" aria-hidden="true">
+                      <span>Light</span>
+                      <span>Heavy</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="room-lighting-note room-weather-note">
+                  Rain, snow, and fog are procedural room effects, so no sprite assets are needed.
+                </div>
               </div>
             </div>
           </div>

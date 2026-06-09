@@ -35,6 +35,10 @@ import {
   normalizeRoomLightingSliderValue,
   type RoomLightingMode,
 } from '../../lighting/model';
+import {
+  normalizeRoomWeatherIntensityValue,
+  type RoomWeatherMode,
+} from '../../weather/model';
 import { AUTH_STATE_CHANGED_EVENT } from '../../auth/client';
 import { EDITOR_UI_STATE_CHANGED_EVENT } from './uiEvents';
 import type {
@@ -525,6 +529,31 @@ export class EditorUiBridge {
         ),
       (value) => {
         this.applyLightingRadius(value);
+      },
+    );
+
+    const handleWeatherSelectChange = () => {
+      if (!this.elements.weatherSelect) {
+        return;
+      }
+      this.applyWeatherSelection(this.elements.weatherSelect.value as RoomWeatherMode);
+    };
+    this.elements.weatherSelect?.addEventListener('change', handleWeatherSelectChange);
+    if (this.elements.weatherSelect) {
+      this.cleanupCallbacks.push(() =>
+        this.elements.weatherSelect?.removeEventListener('change', handleWeatherSelectChange)
+      );
+    }
+    bindRangeInput(
+      this.cleanupCallbacks,
+      this.elements.weatherIntensityInput,
+      () =>
+        normalizeRoomWeatherIntensityValue(
+          Number.parseInt(this.elements.weatherIntensityInput?.value ?? '', 10),
+          editorState.selectedWeatherIntensity,
+        ),
+      (value) => {
+        this.applyWeatherIntensity(value);
       },
     );
 
@@ -1143,6 +1172,25 @@ export class EditorUiBridge {
     this.syncEditorChromeState();
   }
 
+  private applyWeatherSelection(nextWeatherMode: RoomWeatherMode): void {
+    if (!nextWeatherMode || editorState.selectedWeatherMode === nextWeatherMode) {
+      return;
+    }
+    editorState.selectedWeatherMode = nextWeatherMode;
+    this.actions.onSelectWeather(nextWeatherMode);
+    this.syncEditorChromeState();
+    this.requestPhoneEditorAutoCollapse();
+  }
+
+  private applyWeatherIntensity(nextIntensity: number): void {
+    if (editorState.selectedWeatherIntensity === nextIntensity) {
+      return;
+    }
+    editorState.selectedWeatherIntensity = nextIntensity;
+    this.actions.onSetWeatherIntensity(nextIntensity);
+    this.syncEditorChromeState();
+  }
+
   private handleFeatureLauncher(feature: EditorFeatureLauncher): void {
     this.moreToolsOpen = false;
 
@@ -1360,6 +1408,13 @@ export class EditorUiBridge {
     setValue(this.elements.lightingRadiusInput, String(editorState.selectedLightingRadius));
     setText(this.elements.lightingDarknessValue, `${editorState.selectedLightingDarkness}%`);
     setText(this.elements.lightingRadiusValue, `${editorState.selectedLightingRadius}%`);
+    setValue(this.elements.weatherSelect, editorState.selectedWeatherMode);
+    setHidden(
+      this.elements.weatherTuningControls,
+      editorState.selectedWeatherMode === 'off'
+    );
+    setValue(this.elements.weatherIntensityInput, String(editorState.selectedWeatherIntensity));
+    setText(this.elements.weatherIntensityValue, `${editorState.selectedWeatherIntensity}%`);
     for (const button of this.elements.backgroundButtons) {
       const active = button.dataset.backgroundId === activeBackgroundId;
       button.classList.toggle('active', active);

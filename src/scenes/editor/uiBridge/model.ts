@@ -3,6 +3,7 @@ import type { CourseGoalType } from '../../../courses/model';
 import type { SwordsmanDefeatMode, SwordsmanObjectiveMode } from '../../../enemies/swordsmanObjectives';
 import type { RoomGoalType } from '../../../goals/roomGoals';
 import type { RoomLightingMode } from '../../../lighting/model';
+import type { RoomWeatherMode } from '../../../weather/model';
 import type { EditorMarkerPlacementMode } from '../../../ui/setup/sceneBridge';
 
 export interface EditorGoalUiViewModel {
@@ -168,6 +169,8 @@ export interface EditorUiBridgeActions {
   onSelectLighting: (mode: RoomLightingMode) => void;
   onSetLightingDarkness: (darkness: number) => void;
   onSetLightingRadius: (radius: number) => void;
+  onSelectWeather: (mode: RoomWeatherMode) => void;
+  onSetWeatherIntensity: (intensity: number) => void;
   onSetGoalType: (nextType: RoomGoalType | null) => void;
   onSetGoalTimeLimitSeconds: (seconds: number | null) => void;
   onSetGoalRequiredCount: (requiredCount: number) => void;

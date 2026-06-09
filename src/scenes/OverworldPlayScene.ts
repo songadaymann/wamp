@@ -65,6 +65,8 @@ import type { RoomRushOverworldCapture } from '../social/roomRushShare';
 import { RoomLightingController } from '../lighting/controller';
 import { type RoomLightingEmitter } from '../lighting/model';
 import { resolvePlayerAuraDarkAuraDiameter } from '../lighting/presets';
+import { RoomWeatherController } from '../weather/controller';
+import { buildRoomWeatherSurfaceSegments } from '../weather/surfaces';
 import {
   DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
   type DefaultPlayerAnimationState,
@@ -485,6 +487,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly goalRunController: OverworldGoalRunController;
   private readonly roomAudioController: OverworldRoomAudioController;
   private readonly lightingController: RoomLightingController;
+  private readonly weatherController: RoomWeatherController;
   private readonly flowController: OverworldSceneFlowController;
   private readonly inspectInputController: OverworldInspectInputController;
   private readonly gridOverlayController: OverworldGridOverlayController;
@@ -583,6 +586,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.lightingController = new RoomLightingController({
       scene: this,
       overlayDepth: 35,
+    });
+    this.weatherController = new RoomWeatherController({
+      scene: this,
+      depth: 34,
     });
     this.liveObjectController = new OverworldLiveObjectController({
       scene: this,
@@ -2182,6 +2189,9 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.measureMobilePerformance('update.lighting', () => {
           this.updateRoomLighting();
         });
+        this.measureMobilePerformance('update.weather', () => {
+          this.updateRoomWeather();
+        });
         this.renderFrameHud();
         return;
       }
@@ -2262,6 +2272,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       });
       this.measureMobilePerformance('update.lighting', () => {
         this.updateRoomLighting();
+      });
+      this.measureMobilePerformance('update.weather', () => {
+        this.updateRoomWeather();
       });
       this.measureMobilePerformance('update.objective', () => {
         this.objectiveController.update(delta);
@@ -2367,6 +2380,52 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
   }
 
+  private updateRoomWeather(): void {
+    if (this.mode !== 'play' || !this.player || !this.playerBody) {
+      const structureChanged = this.weatherController.sync({
+        roomId: null,
+        bounds: null,
+        weather: null,
+      });
+      if (structureChanged) {
+        this.syncBackdropCameraIgnores();
+      }
+      return;
+    }
+
+    const currentRoom = this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates);
+    if (!currentRoom) {
+      const structureChanged = this.weatherController.sync({
+        roomId: null,
+        bounds: null,
+        weather: null,
+      });
+      if (structureChanged) {
+        this.syncBackdropCameraIgnores();
+      }
+      return;
+    }
+
+    const roomOrigin = this.getRoomOrigin(currentRoom.coordinates);
+    const structureChanged = this.weatherController.sync({
+      roomId: currentRoom.id,
+      bounds: {
+        x: roomOrigin.x,
+        y: roomOrigin.y,
+        width: ROOM_PX_WIDTH,
+        height: ROOM_PX_HEIGHT,
+      },
+      weather: currentRoom.weather,
+      surfaces: currentRoom.weather.mode === 'rain'
+        ? buildRoomWeatherSurfaceSegments(currentRoom, roomOrigin)
+        : [],
+    });
+
+    if (structureChanged) {
+      this.syncBackdropCameraIgnores();
+    }
+  }
+
   private resetRuntimeState(): void {
     this.removeMobilePortraitCameraTunerApi();
     if (this.backdropCamera && this.cameras.cameras.includes(this.backdropCamera)) {
@@ -2384,6 +2443,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.worldStreamingController.reset();
     this.liveObjectController.resetSwitchStates();
     this.lightingController.reset();
+    this.weatherController.reset();
     this.pvpInstanceRenderer.clear();
     this.combatPresentationController.destroyProjectiles();
     this.starfieldSprites = [];
@@ -2566,6 +2626,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     ignoredObjects.push(...this.combatController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.pvpInstanceRenderer.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.lightingController.getBackdropIgnoredObjects());
+    ignoredObjects.push(...this.weatherController.getBackdropIgnoredObjects());
 
     for (const image of this.previewImages) {
       ignoredObjects.push(image);
@@ -5757,6 +5818,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.roomCommentsController.destroy();
     this.roomAudioController.destroy();
     this.lightingController.destroy();
+    this.weatherController.destroy();
     this.clearPresenceSnapshotSyncTimer();
     window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
     window.removeEventListener(PLAYER_AVATAR_CHANGED_EVENT, this.handlePlayerAvatarChanged);
@@ -5810,6 +5872,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     const roomCommentsDebug = this.roomCommentsController.getDebugSnapshot();
     const roomAudioDebug = this.roomAudioController.getDebugSnapshot();
     const lightingDebug = this.lightingController.getDebugState();
+    const weatherDebug = this.weatherController.getDebugState();
     const localPresenceIdentity = this.presenceController.getIdentity();
     const currentLoadedRoom = this.loadedFullRoomsById.get(
       roomIdFromCoordinates(this.currentRoomCoordinates)
@@ -6015,6 +6078,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       roomComments: roomCommentsDebug,
       roomAudio: roomAudioDebug,
       lighting: lightingDebug,
+      weather: weatherDebug,
       mobilePerformance: this.mobilePerformanceProfiler?.getSnapshot('describe-state') ?? null,
       zoom: Number(camera.zoom.toFixed(3)),
       mobilePortraitCamera: this.buildMobilePortraitCameraTuningSnapshot(),

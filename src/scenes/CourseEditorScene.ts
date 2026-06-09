@@ -103,6 +103,7 @@ import type { CourseComposerSceneData, CourseEditorSceneData, OverworldPlayScene
 import { constrainInspectCamera, getScrollForScreenAnchor, getScreenAnchorWorldPoint } from './overworld/camera';
 import { RETRO_COLORS } from '../visuals/starfield';
 import { cloneRoomLightingSettings, type RoomLightingSettings } from '../lighting/model';
+import { cloneRoomWeatherSettings, type RoomWeatherSettings } from '../weather/model';
 import {
   createCourseEditorRoomBackgroundVisuals,
   destroyCourseEditorRoomBackgroundVisuals,
@@ -135,6 +136,7 @@ interface CourseRoomSlice {
   roomTitle: string | null;
   backgroundId: string;
   lighting: RoomLightingSettings;
+  weather: RoomWeatherSettings;
   placedObjects: PlacedObject[];
   permissions: RoomPermissions;
   roomVersionHistory: RoomVersionRecord[];
@@ -512,6 +514,28 @@ export class CourseEditorScene extends Phaser.Scene {
           slice.lighting = cloneRoomLightingSettings({
             ...slice.lighting,
             radius,
+          });
+        }
+        this.renderUi();
+      },
+      onSelectWeather: (mode) => {
+        editorState.selectedWeatherMode = mode;
+        const slice = this.getSelectedSlice();
+        if (slice) {
+          slice.weather = cloneRoomWeatherSettings({
+            ...slice.weather,
+            mode,
+          });
+        }
+        this.renderUi();
+      },
+      onSetWeatherIntensity: (intensity) => {
+        editorState.selectedWeatherIntensity = intensity;
+        const slice = this.getSelectedSlice();
+        if (slice) {
+          slice.weather = cloneRoomWeatherSettings({
+            ...slice.weather,
+            intensity,
           });
         }
         this.renderUi();
@@ -1393,6 +1417,7 @@ export class CourseEditorScene extends Phaser.Scene {
       roomTitle: roomRef.roomTitle,
       backgroundId: 'none',
       lighting: cloneRoomLightingSettings(null),
+      weather: cloneRoomWeatherSettings(null),
       placedObjects: [],
       permissions: {
         canSaveDraft: true,
@@ -1438,6 +1463,10 @@ export class CourseEditorScene extends Phaser.Scene {
         setSelectedLightingSettings: (lighting) => {
           slice.lighting = cloneRoomLightingSettings(lighting);
         },
+        getSelectedWeatherSettings: () => cloneRoomWeatherSettings(slice.weather),
+        setSelectedWeatherSettings: (weather) => {
+          slice.weather = cloneRoomWeatherSettings(weather);
+        },
         getPlacedObjects: () => slice.placedObjects,
         setPlacedObjects: (placedObjects) => {
           slice.placedObjects = placedObjects.map((placed) => ({ ...placed }));
@@ -1473,6 +1502,24 @@ export class CourseEditorScene extends Phaser.Scene {
           }
           if (radiusRange) {
             radiusRange.value = String(normalizedLighting.radius);
+          }
+        },
+        updateWeatherControlsValue: (weather) => {
+          if (this.selectedRoomId !== slice.roomId) {
+            return;
+          }
+          const select = document.getElementById(
+            'weather-mode-select'
+          ) as HTMLSelectElement | null;
+          const intensityRange = document.getElementById(
+            'weather-intensity-range'
+          ) as HTMLInputElement | null;
+          const normalizedWeather = cloneRoomWeatherSettings(weather);
+          if (select) {
+            select.value = normalizedWeather.mode;
+          }
+          if (intensityRange) {
+            intensityRange.value = String(normalizedWeather.intensity);
           }
         },
         updateBackground: () => {
@@ -1537,6 +1584,7 @@ export class CourseEditorScene extends Phaser.Scene {
     slice.publishedAt = snapshot.publishedAt;
     slice.backgroundId = snapshot.background;
     slice.lighting = cloneRoomLightingSettings(snapshot.lighting);
+    slice.weather = cloneRoomWeatherSettings(snapshot.weather);
     slice.placedObjects = snapshot.placedObjects.map((placed) => ({ ...placed }));
     slice.label.setText(slice.roomTitle?.trim() || `${slice.coordinates.x},${slice.coordinates.y}`);
     slice.runtime.applyRoomSnapshot(cloneRoomSnapshot(snapshot));
@@ -1724,6 +1772,8 @@ export class CourseEditorScene extends Phaser.Scene {
       editorState.selectedLightingMode = slice.lighting.mode;
       editorState.selectedLightingDarkness = slice.lighting.darkness;
       editorState.selectedLightingRadius = slice.lighting.radius;
+      editorState.selectedWeatherMode = slice.weather.mode;
+      editorState.selectedWeatherIntensity = slice.weather.intensity;
       const select = document.getElementById('background-select') as HTMLSelectElement | null;
       if (select) {
         select.value = getBackgroundSelectionValue(slice.backgroundId);
@@ -1743,6 +1793,12 @@ export class CourseEditorScene extends Phaser.Scene {
       const radiusRange = document.getElementById(
         'lighting-radius-range'
       ) as HTMLInputElement | null;
+      const weatherSelect = document.getElementById(
+        'weather-mode-select'
+      ) as HTMLSelectElement | null;
+      const weatherIntensityRange = document.getElementById(
+        'weather-intensity-range'
+      ) as HTMLInputElement | null;
       if (lightingSelect) {
         lightingSelect.value = slice.lighting.mode;
       }
@@ -1751,6 +1807,12 @@ export class CourseEditorScene extends Phaser.Scene {
       }
       if (radiusRange) {
         radiusRange.value = String(slice.lighting.radius);
+      }
+      if (weatherSelect) {
+        weatherSelect.value = slice.weather.mode;
+      }
+      if (weatherIntensityRange) {
+        weatherIntensityRange.value = String(slice.weather.intensity);
       }
     }
     this.redrawSelection();
