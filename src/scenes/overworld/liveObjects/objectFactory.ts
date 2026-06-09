@@ -55,6 +55,8 @@ export function createLiveObjectRuntimeState(options: {
     inWater: false,
     initialDirectionX,
     directionX: initialDirectionX,
+    movingPlatformTargetIndex: 1,
+    movingPlatformPathDirection: 1,
     aiFacingDirectionX: initialDirectionX,
     aiFacingLastFlipAt: getCurrentTime(),
     aiFacingLastFlipX: sprite.x,

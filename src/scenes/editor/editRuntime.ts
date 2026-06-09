@@ -63,6 +63,11 @@ import {
   findConflictingPlacedObjectAtAnchorCell,
 } from '../../placedObjects/occupancy';
 import {
+  canPlacedObjectUseObjectPath,
+  getPlacedObjectPathTargetIds,
+  withPlacedObjectPathTargets,
+} from '../../placedObjects/objectPaths';
+import {
   cloneRoomGoal,
   createDefaultRoomGoal,
   createGoalMarkerPointFromTile,
@@ -976,6 +981,7 @@ export class EditorEditRuntime {
       facing: objectConfig.facingDirection ? editorState.objectFacing : undefined,
       layer: editorState.activeLayer,
       triggerTargetInstanceId: null,
+      linkedTargetInstanceIds: null,
       containedObjectId: null,
       signText: null,
       swordsmanObjectiveMode:
@@ -1003,9 +1009,7 @@ export class EditorEditRuntime {
       ? previous
           .filter((_, index) => index !== conflict.index)
           .map((candidate) =>
-            candidate.triggerTargetInstanceId === conflict.placed.instanceId
-              ? { ...candidate, triggerTargetInstanceId: null }
-              : candidate
+            this.removeLinkedTargetFromPlacedObject(candidate, conflict.placed.instanceId)
           )
           .concat(placed)
       : [...previous, placed];
@@ -1065,9 +1069,7 @@ export class EditorEditRuntime {
     const next = previous
       .filter((_, index) => index !== bestIndex)
       .map((placed) =>
-        placed.triggerTargetInstanceId === removed.instanceId
-          ? { ...placed, triggerTargetInstanceId: null }
-          : placed
+        this.removeLinkedTargetFromPlacedObject(placed, removed.instanceId)
       );
     this.host.setPlacedObjects(next);
     this.undoStack.push({
@@ -1432,16 +1434,24 @@ export class EditorEditRuntime {
     }
 
     const previous = this.clonePlacedObjects();
+    const previousPathTargetIds = getPlacedObjectPathTargetIds(previous[sourceIndex]);
+    const nextPathTargetIds = targetInstanceId ? [targetInstanceId] : [];
     const next = previous.map((placed, index) =>
       index === sourceIndex
-        ? {
-            ...placed,
-            triggerTargetInstanceId: targetInstanceId,
-          }
+        ? canPlacedObjectUseObjectPath(placed)
+          ? withPlacedObjectPathTargets(placed, nextPathTargetIds)
+          : {
+              ...placed,
+              triggerTargetInstanceId: targetInstanceId,
+              linkedTargetInstanceIds: null,
+            }
         : placed
     );
     const previousTarget = previous[sourceIndex]?.triggerTargetInstanceId ?? null;
-    if (previousTarget === targetInstanceId) {
+    if (
+      previousTarget === targetInstanceId &&
+      previousPathTargetIds.join('|') === nextPathTargetIds.join('|')
+    ) {
       return true;
     }
 
@@ -1454,6 +1464,109 @@ export class EditorEditRuntime {
     this.rebuildObjectSprites();
     this.markRoomDirty();
     return true;
+  }
+
+  setObjectPathTargets(
+    sourceInstanceId: string,
+    targetInstanceIds: readonly string[],
+  ): boolean {
+    const placedObjects = this.host.getPlacedObjects();
+    const sourceIndex = placedObjects.findIndex(
+      (placed) => placed.instanceId === sourceInstanceId
+    );
+    if (sourceIndex < 0) {
+      return false;
+    }
+
+    const source = placedObjects[sourceIndex];
+    if (!canPlacedObjectUseObjectPath(source)) {
+      return false;
+    }
+
+    const nextTargetIds: string[] = [];
+    for (const targetInstanceId of targetInstanceIds) {
+      const target = this.getPlacedObjectByInstanceId(targetInstanceId);
+      if (
+        target &&
+        target.instanceId !== sourceInstanceId &&
+        canPlacedObjectBeLinkedObjectTarget(source, target) &&
+        !nextTargetIds.includes(target.instanceId)
+      ) {
+        nextTargetIds.push(target.instanceId);
+      }
+    }
+
+    const previous = this.clonePlacedObjects();
+    const previousTargetIds = getPlacedObjectPathTargetIds(previous[sourceIndex]);
+    if (previousTargetIds.join('|') === nextTargetIds.join('|')) {
+      return true;
+    }
+
+    const next = previous.map((placed, index) =>
+      index === sourceIndex
+        ? withPlacedObjectPathTargets(placed, nextTargetIds)
+        : placed
+    );
+    this.host.setPlacedObjects(next);
+    this.undoStack.push({
+      kind: 'objects',
+      action: { previous, next: this.clonePlacedObjects(next) },
+    });
+    this.redoStack = [];
+    this.rebuildObjectSprites();
+    this.markRoomDirty();
+    return true;
+  }
+
+  toggleObjectPathTarget(
+    sourceInstanceId: string,
+    targetInstanceId: string,
+  ): 'added' | 'removed' | 'unchanged' {
+    const source = this.getPlacedObjectByInstanceId(sourceInstanceId);
+    if (!source || !canPlacedObjectUseObjectPath(source)) {
+      return 'unchanged';
+    }
+
+    const currentTargetIds = getPlacedObjectPathTargetIds(source);
+    const targetIndex = currentTargetIds.indexOf(targetInstanceId);
+    const nextTargetIds =
+      targetIndex >= 0
+        ? currentTargetIds.filter((id) => id !== targetInstanceId)
+        : [...currentTargetIds, targetInstanceId];
+    if (!this.setObjectPathTargets(sourceInstanceId, nextTargetIds)) {
+      return 'unchanged';
+    }
+
+    return targetIndex >= 0 ? 'removed' : 'added';
+  }
+
+  getObjectPathTargetIds(sourceInstanceId: string | null | undefined): string[] {
+    return getPlacedObjectPathTargetIds(this.getPlacedObjectByInstanceId(sourceInstanceId));
+  }
+
+  getObjectPathTargets(sourceInstanceId: string | null | undefined): PlacedObject[] {
+    return this.getObjectPathTargetIds(sourceInstanceId)
+      .map((targetInstanceId) => this.getPlacedObjectByInstanceId(targetInstanceId))
+      .filter((target): target is PlacedObject => Boolean(target));
+  }
+
+  private removeLinkedTargetFromPlacedObject(placed: PlacedObject, targetInstanceId: string | null | undefined): PlacedObject {
+    if (!targetInstanceId) {
+      return placed;
+    }
+
+    if (canPlacedObjectUseObjectPath(placed)) {
+      const nextTargetIds = getPlacedObjectPathTargetIds(placed).filter(
+        (candidateId) => candidateId !== targetInstanceId,
+      );
+      if (nextTargetIds.length !== getPlacedObjectPathTargetIds(placed).length) {
+        return withPlacedObjectPathTargets(placed, nextTargetIds);
+      }
+    }
+
+    return placed.triggerTargetInstanceId === targetInstanceId
+      ? { ...placed, triggerTargetInstanceId: null, linkedTargetInstanceIds: null }
+      : placed;
   }
 
   getPlacedObjectBounds(placed: PlacedObject): Phaser.Geom.Rectangle {

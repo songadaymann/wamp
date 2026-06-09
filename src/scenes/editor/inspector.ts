@@ -25,6 +25,7 @@ import {
 } from '../../enemies/swordsmanObjectives';
 import { requestSignTextEdit } from '../../signs/events';
 import { canPlacedObjectHaveSignText, getPlacedObjectSignText } from '../../signs/model';
+import { canPlacedObjectUseObjectPath } from '../../placedObjects/objectPaths';
 import { type EditorEditRuntime } from './editRuntime';
 import type { EditorInspectorState } from './uiBridge';
 
@@ -129,10 +130,8 @@ export class EditorInspectorController {
       return;
     }
 
-    const currentTarget = this.editRuntime.getPlacedObjectByInstanceId(source.triggerTargetInstanceId ?? null);
-    if (currentTarget) {
-      this.drawPressurePlateLink(graphics, source, currentTarget, 0x6dd5ff, 0.9);
-    }
+    const currentTargets = this.getObjectLinkTargets(source);
+    this.drawObjectLinkPath(graphics, source, currentTargets, 0x6dd5ff, 0.9);
 
     const sourceBounds = this.editRuntime.getPlacedObjectBounds(source);
     graphics.lineStyle(2, 0xc3f4ff, 0.88);
@@ -168,11 +167,18 @@ export class EditorInspectorController {
       }
 
       if (hoveredTarget) {
-        this.drawPressurePlateLink(graphics, source, hoveredTarget, 0x9dff8a, 0.95);
+        this.drawPressurePlateLink(
+          graphics,
+          this.getObjectLinkPreviewSource(source, currentTargets, hoveredTarget),
+          hoveredTarget,
+          0x9dff8a,
+          0.95,
+        );
       } else {
+        const previewSource = this.getObjectLinkPreviewSource(source, currentTargets, null);
         graphics.lineStyle(2, 0xffd36b, 0.5);
         graphics.beginPath();
-        graphics.moveTo(source.x, source.y - 4);
+        graphics.moveTo(previewSource.x, previewSource.y - 4);
         graphics.lineTo(worldPoint.x, worldPoint.y);
         graphics.strokePath();
       }
@@ -533,6 +539,20 @@ export class EditorInspectorController {
     graphics.fillCircle(target.x, target.y - 6, 3);
   }
 
+  private drawObjectLinkPath(
+    graphics: Phaser.GameObjects.Graphics,
+    source: PlacedObject,
+    targets: PlacedObject[],
+    color: number,
+    alpha: number,
+  ): void {
+    let previous = source;
+    for (const target of targets) {
+      this.drawPressurePlateLink(graphics, previous, target, color, alpha);
+      previous = target;
+    }
+  }
+
   private renderPressurePlatePanel(): void {
     this.renderInspectorUi();
   }
@@ -578,7 +598,7 @@ export class EditorInspectorController {
         ? null
         : this.getFocusedPressurePlate();
     if (source && (editorState.paletteMode === 'objects' || connectMode)) {
-      const target = this.editRuntime.getPlacedObjectByInstanceId(source.triggerTargetInstanceId ?? null);
+      const targets = this.getObjectLinkTargets(source);
       const eligibleTargetCount = this.editRuntime.getObjectLinkEligibleTargets(source.instanceId).length;
       this.renderInspector({
         ...hiddenState,
@@ -588,14 +608,14 @@ export class EditorInspectorController {
           this.pressurePlateStatusText ??
           (connectMode
             ? this.getObjectLinkConnectStatus(source, eligibleTargetCount)
-            : target
-              ? `${this.getObjectLinkSourceLabel(source)} linked to ${this.getObjectLinkTargetLabel(target.id)}.`
+            : targets.length > 0
+              ? this.getObjectLinkLinkedStatus(source, targets)
               : `${this.getObjectLinkSourceLabel(source)} is not linked yet.`),
         pressureConnectHidden: connectMode,
         pressureConnectDisabled: connectMode || eligibleTargetCount === 0,
         pressureConnectTitle: eligibleTargetCount === 0 ? this.getObjectLinkNoTargetsTitle(source) : '',
         pressureClearHidden: connectMode,
-        pressureClearDisabled: !target,
+        pressureClearDisabled: targets.length === 0,
         pressureDoneLaterHidden: !connectMode,
       });
       return;
@@ -690,6 +710,22 @@ export class EditorInspectorController {
     if (!target) {
       this.pressurePlateStatusText = this.getObjectLinkPickTargetStatus(source);
       this.renderPressurePlatePanel();
+      return true;
+    }
+
+    if (canPlacedObjectUseObjectPath(source)) {
+      const toggleResult = this.editRuntime.toggleObjectPathTarget(source.instanceId, target.instanceId);
+      if (toggleResult !== 'unchanged') {
+        const targetCount = this.editRuntime.getObjectPathTargetIds(source.instanceId).length;
+        this.connectingPressurePlateInstanceId = source.instanceId;
+        this.focusedPressurePlateInstanceId = source.instanceId;
+        this.pinInspector('pressure', source.instanceId);
+        this.pressurePlateStatusText =
+          toggleResult === 'added'
+            ? `Added ${this.getObjectLinkTargetLabel(target.id)} stop ${targetCount}. Click another anchor, or use Done Later.`
+            : `Removed ${this.getObjectLinkTargetLabel(target.id)} from the path. Click another anchor, or use Done Later.`;
+        this.renderPressurePlatePanel();
+      }
       return true;
     }
 
@@ -814,6 +850,39 @@ export class EditorInspectorController {
     return target.instanceId !== source.instanceId && canPlacedObjectBeLinkedObjectTarget(source, target);
   }
 
+  private getObjectLinkTargets(source: PlacedObject): PlacedObject[] {
+    if (canPlacedObjectUseObjectPath(source)) {
+      return this.editRuntime.getObjectPathTargets(source.instanceId);
+    }
+
+    const target = this.editRuntime.getPlacedObjectByInstanceId(source.triggerTargetInstanceId ?? null);
+    return target ? [target] : [];
+  }
+
+  private getObjectLinkPreviewSource(
+    source: PlacedObject,
+    currentTargets: PlacedObject[],
+    hoveredTarget: PlacedObject | null,
+  ): PlacedObject {
+    if (!canPlacedObjectUseObjectPath(source)) {
+      return source;
+    }
+
+    const pathTargets = hoveredTarget
+      ? currentTargets.filter((target) => target.instanceId !== hoveredTarget.instanceId)
+      : currentTargets;
+    return pathTargets[pathTargets.length - 1] ?? source;
+  }
+
+  private getObjectLinkLinkedStatus(source: PlacedObject, targets: PlacedObject[]): string {
+    if (canPlacedObjectUseObjectPath(source)) {
+      const stopLabel = targets.length === 1 ? 'stop' : 'stops';
+      return `Moving platform path has ${targets.length} ${stopLabel}.`;
+    }
+
+    return `${this.getObjectLinkSourceLabel(source)} linked to ${this.getObjectLinkTargetLabel(targets[0].id)}.`;
+  }
+
   private getObjectLinkSourceLabel(source: PlacedObject | null): string {
     if (source && isMovingPlatformObjectId(source.id)) {
       return 'Moving platform';
@@ -833,8 +902,8 @@ export class EditorInspectorController {
   private getObjectLinkBeginStatus(source: PlacedObject, autoPlaced: boolean): string {
     if (isMovingPlatformObjectId(source.id)) {
       return autoPlaced
-        ? 'Moving platform placed. Click a Moving Platform Anchor to link it.'
-        : 'Click a Moving Platform Anchor to link this moving platform.';
+        ? 'Moving platform placed. Click Moving Platform Anchors to add path stops.'
+        : 'Click Moving Platform Anchors to add or remove path stops.';
     }
 
     return autoPlaced
@@ -844,7 +913,7 @@ export class EditorInspectorController {
 
   private getObjectLinkPickTargetStatus(source: PlacedObject): string {
     return isMovingPlatformObjectId(source.id)
-      ? 'Pick a Moving Platform Anchor in this room.'
+      ? 'Pick Moving Platform Anchors in this room.'
       : 'Pick a door, cage, or chest in this room.';
   }
 

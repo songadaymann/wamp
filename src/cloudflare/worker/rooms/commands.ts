@@ -624,6 +624,7 @@ function placeObjectAtTile(command: PlaceObjectCommand): PlacedObject {
     facing: objectConfig.facingDirection ? command.facing : undefined,
     layer: command.layer,
     triggerTargetInstanceId: null,
+    linkedTargetInstanceIds: null,
     containedObjectId: null,
     signText: null,
     swordsmanObjectiveMode:

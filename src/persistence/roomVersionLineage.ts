@@ -12,6 +12,7 @@ import {
 import { normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
 import { getPlacedObjectSignText } from '../signs/model';
 import { normalizeCustomSpriteDefinitions } from '../customSprites/model';
+import { getPlacedObjectPathTargetIds } from '../placedObjects/objectPaths';
 import type { RoomSnapshot, RoomVersionRecord } from './roomModel';
 
 type CanonicalGoalPayload =
@@ -56,6 +57,7 @@ type CanonicalPlacedObjectPayload = {
   swordsmanDefeatMode: string | null;
   signText: string | null;
   triggerTarget: string | null;
+  linkedTargets: string[];
 };
 
 type CanonicalRoomFingerprintPayload = {
@@ -292,6 +294,7 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
         typeof placed.triggerTargetInstanceId === 'string' && placed.triggerTargetInstanceId.trim().length > 0
           ? placed.triggerTargetInstanceId
           : null,
+      linkedTargetInstanceIds: getPlacedObjectPathTargetIds(placed),
       x: Math.round(placed.x),
       y: Math.round(placed.y),
     };
@@ -321,6 +324,9 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
       triggerTarget: placed.triggerTargetInstanceId
         ? canonicalIdentityByInstanceId.get(placed.triggerTargetInstanceId) ?? null
         : null,
+      linkedTargets: placed.linkedTargetInstanceIds.map(
+        (targetInstanceId) => canonicalIdentityByInstanceId.get(targetInstanceId) ?? targetInstanceId,
+      ),
     }))
     .sort(compareCanonicalPlacedObjects);
 }
@@ -360,7 +366,8 @@ function compareCanonicalPlacedObjects(
     (left.swordsmanObjectiveMode ?? '').localeCompare(right.swordsmanObjectiveMode ?? '') ||
     (left.swordsmanDefeatMode ?? '').localeCompare(right.swordsmanDefeatMode ?? '') ||
     (left.signText ?? '').localeCompare(right.signText ?? '') ||
-    (left.triggerTarget ?? '').localeCompare(right.triggerTarget ?? '')
+    (left.triggerTarget ?? '').localeCompare(right.triggerTarget ?? '') ||
+    left.linkedTargets.join('|').localeCompare(right.linkedTargets.join('|'))
   );
 }
 

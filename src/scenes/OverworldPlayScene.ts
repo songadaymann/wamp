@@ -47,6 +47,7 @@ import {
   type RoomCoordinates,
   type RoomSnapshot,
 } from '../persistence/roomModel';
+import { getPlacedObjectPathTargetIds } from '../placedObjects/objectPaths';
 import { createRoomRepository } from '../persistence/roomRepository';
 import { createWorldRepository } from '../persistence/worldRepository';
 import {
@@ -3026,12 +3027,16 @@ export class OverworldPlayScene extends Phaser.Scene {
         if (!canPlacedObjectUseObjectLink(placedTrigger)) {
           continue;
         }
-        const localTargetInstanceId = placedTrigger?.triggerTargetInstanceId ?? null;
+        const localTargetInstanceIds = getPlacedObjectPathTargetIds(placedTrigger);
+        const localTargetInstanceId = localTargetInstanceIds[0] ?? null;
         const courseLink = activeCourse
           ? getCourseObjectLink(activeCourse, loadedRoom.room.id, sourceInstanceId)
           : null;
         const targetRoomId = courseLink?.targetRoomId ?? (localTargetInstanceId ? loadedRoom.room.id : null);
         const targetInstanceId = courseLink?.targetInstanceId ?? localTargetInstanceId;
+        const targetInstanceIds = courseLink?.targetInstanceId
+          ? [courseLink.targetInstanceId]
+          : localTargetInstanceIds;
         const targetPoint =
           targetRoomId && targetInstanceId
             ? this.resolveObjectLinkTargetWorldPoint(
@@ -3043,6 +3048,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
         liveObject.linkedTargetRoomId = targetRoomId;
         liveObject.linkedTargetInstanceId = targetInstanceId;
+        liveObject.linkedTargetInstanceIds = targetInstanceIds;
         liveObject.linkedTargetWorldX = targetPoint?.x ?? null;
         liveObject.linkedTargetWorldY = targetPoint?.y ?? null;
       }

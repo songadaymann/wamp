@@ -32,6 +32,7 @@ function serializePlacedObjectFingerprint(object: PlacedObject): string {
     object.facing ?? '',
     object.layer ?? '',
     object.triggerTargetInstanceId ?? '',
+    object.linkedTargetInstanceIds?.join(',') ?? '',
     object.containedObjectId ?? '',
     object.instanceId ?? '',
   ].join(':');

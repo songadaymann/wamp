@@ -51,6 +51,12 @@ import {
   dedupePlacedObjectsByAnchorCell,
   resolvePlacedObjectInstanceAlias,
 } from '../placedObjects/occupancy';
+import {
+  canPlacedObjectUseObjectPath,
+  getPlacedObjectPathTargetIds,
+  normalizePlacedObjectPathTargetIds,
+  validatePlacedObjectPathTargetIds,
+} from '../placedObjects/objectPaths';
 
 export interface RoomCoordinates {
   x: number;
@@ -263,6 +269,17 @@ function normalizePlacedObject(
   const customSpriteKind = placed.customSpriteKind
     ? normalizeCustomSpriteKind(placed.customSpriteKind)
     : null;
+  const triggerTargetInstanceId =
+    typeof placed.triggerTargetInstanceId === 'string' && placed.triggerTargetInstanceId.trim()
+      ? placed.triggerTargetInstanceId
+      : null;
+  const linkedTargetInstanceIds = canPlacedObjectUseObjectPath({ id: placed.id })
+    ? normalizePlacedObjectPathTargetIds(
+        normalizePlacedObjectPathTargetIds(placed.linkedTargetInstanceIds).length > 0
+          ? placed.linkedTargetInstanceIds
+          : [triggerTargetInstanceId],
+      )
+    : [];
 
   const normalized: PlacedObject = {
     id: placed.id,
@@ -285,9 +302,10 @@ function normalizePlacedObject(
       placed.layer === 'background' || placed.layer === 'terrain' || placed.layer === 'foreground'
         ? placed.layer
         : undefined,
-    triggerTargetInstanceId:
-      typeof placed.triggerTargetInstanceId === 'string' && placed.triggerTargetInstanceId.trim()
-        ? placed.triggerTargetInstanceId
+    triggerTargetInstanceId: linkedTargetInstanceIds[0] ?? triggerTargetInstanceId,
+    linkedTargetInstanceIds:
+      canPlacedObjectUseObjectPath({ id: placed.id }) && linkedTargetInstanceIds.length > 0
+        ? linkedTargetInstanceIds
         : null,
     containedObjectId:
       typeof placed.containedObjectId === 'string' && placed.containedObjectId.trim()
@@ -326,6 +344,16 @@ function clonePlacedObjects(placedObjects: PlacedObject[]): PlacedObject[] {
   const ids = new Set(deduped.map((placed) => placed.instanceId));
 
   return deduped.map((placed) => {
+    const pathTargetIds = canPlacedObjectUseObjectPath(placed)
+      ? getPlacedObjectPathTargetIds(placed).map((targetId) =>
+          resolvePlacedObjectInstanceAlias(targetId, replacedInstanceIds),
+        )
+      : [];
+    const validPathTargetIds = validatePlacedObjectPathTargetIds(
+      placed,
+      pathTargetIds.filter((targetId): targetId is string => Boolean(targetId)),
+      (targetId) => deduped.find((candidate) => candidate.instanceId === targetId) ?? null,
+    );
     const target = resolvePlacedObjectInstanceAlias(
       placed.triggerTargetInstanceId,
       replacedInstanceIds,
@@ -344,10 +372,20 @@ function clonePlacedObjects(placedObjects: PlacedObject[]): PlacedObject[] {
       typeof containedObjectId === 'string' &&
       containedObjectId.trim().length > 0 &&
       canObjectBeStoredInContainer(placed.id, getObjectById(containedObjectId));
+    const nextTargetInstanceIds = canPlacedObjectUseObjectPath(placed)
+      ? validPathTargetIds
+      : validTarget
+        ? [target]
+        : [];
+    const primaryTargetInstanceId = nextTargetInstanceIds[0] ?? null;
 
     return {
       ...placed,
-      triggerTargetInstanceId: validTarget ? target : null,
+      triggerTargetInstanceId: primaryTargetInstanceId,
+      linkedTargetInstanceIds:
+        canPlacedObjectUseObjectPath(placed) && nextTargetInstanceIds.length > 0
+          ? nextTargetInstanceIds
+          : null,
       containedObjectId: validContainedObjectId ? containedObjectId : null,
       signText: canPlacedObjectHaveSignText(placed) ? normalizeSignText(placed.signText) : null,
       swordsmanObjectiveMode:

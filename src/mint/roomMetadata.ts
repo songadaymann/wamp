@@ -285,6 +285,7 @@ export function buildRoomSnapshotFromMintedPayload(
     facing: placed.facing ?? undefined,
     layer: placed.layer,
     triggerTargetInstanceId: null,
+    linkedTargetInstanceIds: null,
     containedObjectId: placed.containedObjectId ?? null,
   }));
   snapshot.version = payload.version;

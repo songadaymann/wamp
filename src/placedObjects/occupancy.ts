@@ -5,6 +5,7 @@ import {
   type LayerName,
   type PlacedObject,
 } from '../config';
+import { getPlacedObjectPathTargetIds } from './objectPaths';
 
 export interface PlacedObjectAnchorCell {
   tileX: number;
@@ -138,6 +139,12 @@ function mergeDuplicatePlacedObjects(existing: PlacedObject, incoming: PlacedObj
   return {
     ...incoming,
     triggerTargetInstanceId: incoming.triggerTargetInstanceId ?? existing.triggerTargetInstanceId ?? null,
+    linkedTargetInstanceIds:
+      getPlacedObjectPathTargetIds(incoming).length > 0
+        ? getPlacedObjectPathTargetIds(incoming)
+        : getPlacedObjectPathTargetIds(existing).length > 0
+          ? getPlacedObjectPathTargetIds(existing)
+          : null,
     containedObjectId: incoming.containedObjectId ?? existing.containedObjectId ?? null,
   };
 }

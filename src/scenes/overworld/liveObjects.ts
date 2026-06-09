@@ -75,6 +75,7 @@ import {
   type FlyingEnemyBehavior,
 } from './liveObjects/behaviorRegistry';
 import { carryMovingPlatformRiders } from './liveObjects/movingPlatforms';
+import { getPlacedObjectPathTargetIds } from '../../placedObjects/objectPaths';
 
 export { isDynamicArcadeBody } from './liveObjects/bodies';
 export type { ArcadeObjectBody } from './liveObjects/bodies';
@@ -96,6 +97,8 @@ export interface LoadedRoomObjectRuntimeState {
   inWater: boolean;
   initialDirectionX: number;
   directionX: number;
+  movingPlatformTargetIndex: number;
+  movingPlatformPathDirection: -1 | 1;
   aiFacingDirectionX: number;
   aiFacingLastFlipAt: number;
   aiFacingLastFlipX: number;
@@ -152,6 +155,7 @@ export interface LoadedRoomObject {
   placedInstanceId: string | null;
   linkedTargetRoomId: string | null;
   linkedTargetInstanceId: string | null;
+  linkedTargetInstanceIds: string[];
   linkedTargetWorldX: number | null;
   linkedTargetWorldY: number | null;
   containedObjectId: string | null;
@@ -301,6 +305,7 @@ export interface CreateLiveObjectEntryOptions {
   placedInstanceId: string | null;
   linkedTargetRoomId: string | null;
   linkedTargetInstanceId: string | null;
+  linkedTargetInstanceIds?: string[];
   linkedTargetWorldX?: number | null;
   linkedTargetWorldY?: number | null;
   containedObjectId: string | null;
@@ -488,6 +493,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         continue;
       }
 
+      const linkedTargetInstanceIds = getPlacedObjectPathTargetIds(placedObject);
       const liveObject = this.createLiveObjectEntry(loadedRoom, {
         key: objectKey,
         config,
@@ -497,8 +503,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         layer: placedObject.layer,
         baseTimeSeed: placedObject.x + placedObject.y,
         placedInstanceId: placedObject.instanceId,
-        linkedTargetRoomId: placedObject.triggerTargetInstanceId ? loadedRoom.room.id : null,
-        linkedTargetInstanceId: placedObject.triggerTargetInstanceId ?? null,
+        linkedTargetRoomId: linkedTargetInstanceIds.length > 0 ? loadedRoom.room.id : null,
+        linkedTargetInstanceId: linkedTargetInstanceIds[0] ?? null,
+        linkedTargetInstanceIds,
         linkedTargetWorldX: null,
         linkedTargetWorldY: null,
         containedObjectId: placedObject.containedObjectId ?? null,
@@ -557,6 +564,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       placedInstanceId,
       linkedTargetRoomId,
       linkedTargetInstanceId,
+      linkedTargetInstanceIds = linkedTargetInstanceId ? [linkedTargetInstanceId] : [],
       linkedTargetWorldX = null,
       linkedTargetWorldY = null,
       containedObjectId,
@@ -647,6 +655,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       placedInstanceId,
       linkedTargetRoomId,
       linkedTargetInstanceId,
+      linkedTargetInstanceIds,
       linkedTargetWorldX,
       linkedTargetWorldY,
       containedObjectId,
@@ -1061,34 +1070,32 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       return;
     }
 
-    const target = this.findLinkedMovingPlatformEndpoint(rooms, liveObject);
-    if (!target) {
+    const pathPoints = this.getMovingPlatformPathPoints(rooms, liveObject);
+    if (pathPoints.length < 2) {
       liveObject.runtime.previousX = liveObject.sprite.x;
       liveObject.runtime.previousY = liveObject.sprite.y;
       body.setVelocity(0, 0);
       return;
     }
 
-    const start = new Phaser.Math.Vector2(liveObject.runtime.baseX, liveObject.runtime.baseY);
-    const end = new Phaser.Math.Vector2(target.x, target.y);
-    const distance = Phaser.Math.Distance.Between(start.x, start.y, end.x, end.y);
-    if (distance < 2) {
-      liveObject.runtime.previousX = liveObject.sprite.x;
-      liveObject.runtime.previousY = liveObject.sprite.y;
-      body.setVelocity(0, 0);
-      return;
+    let targetIndex = Math.round(liveObject.runtime.movingPlatformTargetIndex);
+    let pathDirection: -1 | 1 = liveObject.runtime.movingPlatformPathDirection === -1 ? -1 : 1;
+    if (targetIndex < 0 || targetIndex >= pathPoints.length) {
+      targetIndex = pathDirection >= 0 ? 1 : pathPoints.length - 2;
     }
+    targetIndex = Phaser.Math.Clamp(targetIndex, 0, pathPoints.length - 1);
 
-    const destination = liveObject.runtime.directionX >= 0 ? end : start;
+    const destinationPoint = pathPoints[targetIndex];
+    const destination = new Phaser.Math.Vector2(destinationPoint.x, destinationPoint.y);
     const current = new Phaser.Math.Vector2(liveObject.sprite.x, liveObject.sprite.y);
-    const deltaSeconds = Math.max(delta / 1000, 1 / 60);
-    const step = Math.max(1, 44 * deltaSeconds);
     const remaining = Phaser.Math.Distance.Between(
       current.x,
       current.y,
       destination.x,
       destination.y,
     );
+    const deltaSeconds = Math.max(delta / 1000, 1 / 60);
+    const step = Math.max(1, 44 * deltaSeconds);
     const next =
       remaining <= step
         ? destination
@@ -1102,44 +1109,71 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     liveObject.runtime.previousX = previousX;
     liveObject.runtime.previousY = previousY;
     if (remaining <= step) {
-      liveObject.runtime.directionX *= -1;
+      if (targetIndex === pathPoints.length - 1) {
+        pathDirection = -1;
+      } else if (targetIndex === 0) {
+        pathDirection = 1;
+      }
+      liveObject.runtime.movingPlatformPathDirection = pathDirection;
+      liveObject.runtime.movingPlatformTargetIndex = Phaser.Math.Clamp(
+        targetIndex + pathDirection,
+        0,
+        pathPoints.length - 1,
+      );
+      liveObject.runtime.directionX = pathDirection;
+    } else {
+      liveObject.runtime.movingPlatformPathDirection = pathDirection;
+      liveObject.runtime.movingPlatformTargetIndex = targetIndex;
+      liveObject.runtime.directionX = next.x >= previousX ? 1 : -1;
     }
   }
 
-  private findLinkedMovingPlatformEndpoint(
+  private getMovingPlatformPathPoints(
     rooms: Array<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
     liveObject: LoadedRoomObject,
-  ): { x: number; y: number } | null {
-    if (!liveObject.linkedTargetInstanceId) {
-      return null;
+  ): Array<{ x: number; y: number }> {
+    const targetInstanceIds = liveObject.linkedTargetInstanceIds.length > 0
+      ? liveObject.linkedTargetInstanceIds
+      : liveObject.linkedTargetInstanceId
+        ? [liveObject.linkedTargetInstanceId]
+        : [];
+    if (targetInstanceIds.length === 0) {
+      return [];
     }
 
+    const points: Array<{ x: number; y: number }> = [
+      { x: liveObject.runtime.baseX, y: liveObject.runtime.baseY },
+    ];
     for (const loadedRoom of rooms) {
       if (liveObject.linkedTargetRoomId && loadedRoom.room.id !== liveObject.linkedTargetRoomId) {
         continue;
       }
       for (const candidate of loadedRoom.liveObjects) {
-        if (
-          candidate.placedInstanceId === liveObject.linkedTargetInstanceId &&
-          candidate.sprite.active &&
-          isMovingPlatformEndpointObjectId(candidate.config.id)
-        ) {
-          return { x: candidate.sprite.x, y: candidate.sprite.y };
+        if (!candidate.sprite.active || !isMovingPlatformEndpointObjectId(candidate.config.id)) {
+          continue;
+        }
+
+        const targetIndex = candidate.placedInstanceId
+          ? targetInstanceIds.indexOf(candidate.placedInstanceId)
+          : -1;
+        if (targetIndex >= 0) {
+          points[targetIndex + 1] = { x: candidate.sprite.x, y: candidate.sprite.y };
         }
       }
     }
 
     if (
       liveObject.linkedTargetWorldX !== null &&
-      liveObject.linkedTargetWorldY !== null
+      liveObject.linkedTargetWorldY !== null &&
+      points.length === 1
     ) {
-      return {
+      points.push({
         x: liveObject.linkedTargetWorldX,
         y: liveObject.linkedTargetWorldY,
-      };
+      });
     }
 
-    return null;
+    return points.filter((point): point is { x: number; y: number } => Boolean(point));
   }
 
   findOverlappingLadder(
