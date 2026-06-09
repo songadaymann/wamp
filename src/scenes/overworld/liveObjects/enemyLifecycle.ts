@@ -261,6 +261,7 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
       placedInstanceId: liveObject.placedInstanceId,
       linkedTargetRoomId: liveObject.linkedTargetRoomId,
       linkedTargetInstanceId: liveObject.linkedTargetInstanceId,
+      linkedTargetInstanceIds: liveObject.linkedTargetInstanceIds,
       containedObjectId: liveObject.containedObjectId,
       signText: liveObject.signText,
       objectiveMode: liveObject.runtime.aiObjectiveMode,

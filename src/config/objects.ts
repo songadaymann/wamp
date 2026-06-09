@@ -499,6 +499,7 @@ export interface PlacedObject {
   facing?: 'left' | 'right';
   layer?: LayerName;
   triggerTargetInstanceId?: string | null;
+  linkedTargetInstanceIds?: string[] | null;
   containedObjectId?: string | null;
   signText?: string | null;
   swordsmanObjectiveMode?: SwordsmanObjectiveMode | null;

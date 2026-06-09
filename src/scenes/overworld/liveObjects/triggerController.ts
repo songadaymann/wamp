@@ -782,6 +782,7 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
       placedInstanceId: null,
       linkedTargetRoomId: null,
       linkedTargetInstanceId: null,
+      linkedTargetInstanceIds: [],
       containedObjectId: null,
       signText: null,
       objectiveMode: null,

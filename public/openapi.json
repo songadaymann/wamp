@@ -545,6 +545,17 @@
       },
       "PlacedObject": {
         "type": "object",
+        "properties": {
+          "triggerTargetInstanceId": {
+            "description": "Primary linked object instance id. For moving platforms, this mirrors the first path stop for backward compatibility.",
+            "type": ["string", "null"]
+          },
+          "linkedTargetInstanceIds": {
+            "description": "Ordered linked object instance ids. Moving platforms use this as their path stop list.",
+            "type": ["array", "null"],
+            "items": { "type": "string" }
+          }
+        },
         "additionalProperties": true
       },
       "RoomSnapshot": {

@@ -7,6 +7,7 @@ export interface PressurePlateInspectorOptions {
   targetSummary: string | null;
   eligibleTargetCount: number;
   connectTitle?: string;
+  allowReconnectWithTarget?: boolean;
 }
 
 export interface ContainerInspectorOptions {
@@ -62,7 +63,7 @@ export function buildPressurePlateInspectorState(
         : options.targetSummary
           ? `Linked to ${options.targetSummary}.`
           : 'This pressure plate is not linked yet.'),
-    pressureConnectHidden: options.connectMode || targetExists,
+    pressureConnectHidden: options.connectMode || (targetExists && !options.allowReconnectWithTarget),
     pressureConnectDisabled: options.connectMode || !canConnect,
     pressureConnectTitle: canConnect
       ? ''

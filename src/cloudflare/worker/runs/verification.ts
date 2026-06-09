@@ -136,6 +136,7 @@ export async function computeRoomSnapshotVerificationHash(snapshot: RoomSnapshot
       swordsmanDefeatMode: placed.swordsmanDefeatMode ?? null,
       containedObjectId: placed.containedObjectId ?? null,
       triggerTargetInstanceId: placed.triggerTargetInstanceId ?? null,
+      linkedTargetInstanceIds: placed.linkedTargetInstanceIds ?? null,
     })),
   });
 }
