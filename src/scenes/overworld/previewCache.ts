@@ -100,6 +100,22 @@ export class OverworldPreviewCache {
           return;
         }
 
+        if (
+          candidate.summary?.state === 'published' &&
+          candidate.sharedPreview &&
+          fullRoomIds.has(candidate.summary.id)
+        ) {
+          const publishedRoom = await this.ensurePublishedRoomSnapshot(candidate.summary);
+          if (publishedRoom) {
+            renderableRooms.set(candidate.id, {
+              id: candidate.id,
+              coordinates: { ...candidate.coordinates },
+              room: publishedRoom,
+            });
+            return;
+          }
+        }
+
         if (candidate.sharedPreview) {
           renderableRooms.set(candidate.id, {
             id: candidate.id,

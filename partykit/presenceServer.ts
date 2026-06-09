@@ -42,6 +42,7 @@ const INTERNAL_TOKEN_HEADER = 'x-partykit-internal-token';
 const METRICS_ROOM_ID = '__launch-stats__';
 const METRICS_STORAGE_PREFIX = 'shard:';
 const PREVIEW_STORAGE_PREFIX = 'preview:';
+const ROOM_PREVIEW_TTL_MS = 120_000;
 const PRESENCE_UPSERT_FLUSH_MS = 80;
 
 type PresenceMode = 'browse' | 'play' | 'edit';
@@ -127,6 +128,8 @@ type IncomingMessage =
     }
   | {
       type: 'presence:preview:clear';
+      roomCoordinates?: RoomCoordinates;
+      timestamp?: number;
     }
   | {
       type: 'presence:leave';
@@ -209,9 +212,10 @@ export default class PresenceServer implements Party.Server {
     const entries = await this.room.storage.list<SharedRoomPreview>({
       prefix: PREVIEW_STORAGE_PREFIX,
     });
-    for (const storedPreview of entries.values()) {
+    for (const [storageKey, storedPreview] of entries.entries()) {
       const preview = this.normalizeStoredSharedPreview(storedPreview);
-      if (!preview) {
+      if (!preview || this.isRoomPreviewExpired(preview)) {
+        void this.room.storage.delete(storageKey);
         continue;
       }
 
@@ -326,7 +330,7 @@ export default class PresenceServer implements Party.Server {
     }
 
     if (parsed.type === 'presence:preview:clear') {
-      this.clearPreview(sender);
+      this.clearPreview(sender, parsed);
       return;
     }
 
@@ -362,6 +366,7 @@ export default class PresenceServer implements Party.Server {
       this.previewsByConnectionId.set(sender.id, nextPreview);
     } else {
       this.previewsByConnectionId.delete(sender.id);
+      this.clearStoredPreviewForPayload(previousPreview);
     }
 
     sender.setState({
@@ -400,8 +405,10 @@ export default class PresenceServer implements Party.Server {
     }
 
     const presence = connection.state?.presence;
+    const preview = this.previewsByConnectionId.get(connection.id) ?? null;
     this.pendingPresenceUpsertsByConnectionId.delete(connection.id);
     this.previewsByConnectionId.delete(connection.id);
+    this.clearStoredPreviewForPayload(preview);
     if (connection.state?.channel === 'presence' && this.isVisiblePresence(presence)) {
       this.sendPresenceMessage({
         type: 'remove',
@@ -422,6 +429,7 @@ export default class PresenceServer implements Party.Server {
     const previousPreview = this.previewsByConnectionId.get(connection.id) ?? null;
     this.pendingPresenceUpsertsByConnectionId.delete(connection.id);
     this.previewsByConnectionId.delete(connection.id);
+    this.clearStoredPreviewForPayload(previousPreview);
     if (!previousPresence) {
       connection.setState(
         current
@@ -531,11 +539,12 @@ export default class PresenceServer implements Party.Server {
   }
 
   private computeRoomPreviews(): Record<string, SharedRoomPreview> {
+    this.pruneExpiredPersistedPreviews();
     const previewsByRoomId = new Map<string, SharedRoomPreview>(this.persistedPreviewsByRoomId);
 
     for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
       const preview = this.toRoomPreview(connection);
-      if (!preview) {
+      if (!preview || this.isRoomPreviewExpired(preview)) {
         continue;
       }
 
@@ -600,6 +609,7 @@ export default class PresenceServer implements Party.Server {
       userId: state.userId,
       displayName: state.displayName,
       shardId: this.room.id,
+      timestamp: Date.now(),
     };
   }
 
@@ -617,6 +627,13 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
+    const previousPreview = this.previewsByConnectionId.get(connection.id) ?? null;
+    if (
+      previousPreview &&
+      this.getRoomId(previousPreview.roomCoordinates) !== this.getRoomId(preview.roomCoordinates)
+    ) {
+      this.clearStoredPreviewForPayload(previousPreview);
+    }
     this.previewsByConnectionId.set(connection.id, preview);
     const sharedPreview = this.toStoredSharedPreview(connection, preview);
     if (sharedPreview) {
@@ -626,20 +643,37 @@ export default class PresenceServer implements Party.Server {
     this.broadcastPopulations();
   }
 
-  private clearPreview(connection: Party.Connection<ConnectionPresenceState>): void {
+  private clearPreview(
+    connection: Party.Connection<ConnectionPresenceState>,
+    message?: { roomCoordinates?: RoomCoordinates; timestamp?: number },
+  ): void {
     if (connection.state?.channel !== 'presence') {
       return;
     }
 
     const preview = this.previewsByConnectionId.get(connection.id) ?? null;
-    if (!preview) {
+    const roomId = preview
+      ? this.getRoomId(preview.roomCoordinates)
+      : this.getRoomIdFromMaybeCoordinates(message?.roomCoordinates);
+    if (!roomId) {
       return;
     }
 
     this.previewsByConnectionId.delete(connection.id);
-    const roomId = this.getRoomId(preview.roomCoordinates);
-    this.persistedPreviewsByRoomId.delete(roomId);
-    void this.room.storage.delete(this.getPreviewStorageKey(roomId));
+    if (preview) {
+      this.clearStoredPreviewForPayload(preview);
+    } else {
+      const messageTimestamp =
+        typeof message?.timestamp === 'number' && Number.isFinite(message.timestamp)
+          ? message.timestamp
+          : null;
+      const persisted = this.persistedPreviewsByRoomId.get(roomId) ?? null;
+      if (persisted && messageTimestamp !== null && persisted.timestamp > messageTimestamp) {
+        return;
+      }
+      this.persistedPreviewsByRoomId.delete(roomId);
+      void this.room.storage.delete(this.getPreviewStorageKey(roomId));
+    }
     this.broadcastPopulations();
   }
 
@@ -665,6 +699,19 @@ export default class PresenceServer implements Party.Server {
 
   private getRoomId(roomCoordinates: RoomCoordinates): string {
     return `${roomCoordinates.x},${roomCoordinates.y}`;
+  }
+
+  private getRoomIdFromMaybeCoordinates(roomCoordinates: unknown): string | null {
+    if (
+      !roomCoordinates ||
+      typeof roomCoordinates !== 'object' ||
+      !Number.isInteger((roomCoordinates as Partial<RoomCoordinates>).x) ||
+      !Number.isInteger((roomCoordinates as Partial<RoomCoordinates>).y)
+    ) {
+      return null;
+    }
+
+    return this.getRoomId(roomCoordinates as RoomCoordinates);
   }
 
   private getPreviewStorageKey(roomId: string): string {
@@ -729,6 +776,7 @@ export default class PresenceServer implements Party.Server {
       !Number.isInteger(payload.roomCoordinates.x) ||
       !Number.isInteger(payload.roomCoordinates.y) ||
       typeof payload.timestamp !== 'number' ||
+      !Number.isFinite(payload.timestamp) ||
       !payload.snapshot ||
       typeof payload.snapshot !== 'object'
     ) {
@@ -761,6 +809,41 @@ export default class PresenceServer implements Party.Server {
       snapshot: payload.snapshot as RoomSnapshot,
       timestamp: payload.timestamp,
     };
+  }
+
+  private clearStoredPreviewForPayload(preview: RoomPreviewPayload | null): boolean {
+    if (!preview) {
+      return false;
+    }
+
+    const roomId = this.getRoomId(preview.roomCoordinates);
+    const persisted = this.persistedPreviewsByRoomId.get(roomId) ?? null;
+    if (persisted && persisted.timestamp > preview.timestamp) {
+      return false;
+    }
+
+    this.persistedPreviewsByRoomId.delete(roomId);
+    void this.room.storage.delete(this.getPreviewStorageKey(roomId));
+    return Boolean(persisted);
+  }
+
+  private pruneExpiredPersistedPreviews(): boolean {
+    let pruned = false;
+    for (const [roomId, preview] of this.persistedPreviewsByRoomId.entries()) {
+      if (!this.isRoomPreviewExpired(preview)) {
+        continue;
+      }
+
+      this.persistedPreviewsByRoomId.delete(roomId);
+      void this.room.storage.delete(this.getPreviewStorageKey(roomId));
+      pruned = true;
+    }
+
+    return pruned;
+  }
+
+  private isRoomPreviewExpired(preview: Pick<RoomPreviewPayload, 'timestamp'>): boolean {
+    return Date.now() - preview.timestamp > ROOM_PREVIEW_TTL_MS;
   }
 
   private async maybeSendShardHeartbeat(force = false): Promise<void> {

@@ -772,6 +772,22 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         continue;
       }
 
+      if (
+        candidate.summary?.state === 'published' &&
+        candidate.sharedPreview &&
+        fullRoomIds.has(candidate.summary.id)
+      ) {
+        const cachedPublishedRoom = this.previewCache.getRoomSnapshot(candidate.summary.id);
+        if (cachedPublishedRoom) {
+          renderableRooms.set(candidate.id, {
+            id: candidate.id,
+            coordinates: { ...candidate.coordinates },
+            room: cachedPublishedRoom,
+          });
+          continue;
+        }
+      }
+
       if (candidate.sharedPreview) {
         renderableRooms.set(candidate.id, {
           id: candidate.id,
@@ -994,7 +1010,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         summary: existing?.summary ?? null,
         draft: null,
         sharedPreview: cloneRoomSnapshot(previewRoom),
-        allowFullRoomLoad: false,
+        allowFullRoomLoad: existing?.summary?.state === 'published',
       });
     }
 

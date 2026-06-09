@@ -31,6 +31,7 @@ const PVP_PRESENCE_MOVING_PUBLISH_INTERVAL_MS = 25;
 const PRESENCE_IDLE_KEEPALIVE_MS = 5_000;
 const REMOTE_PRESENCE_SNAPSHOT_FLUSH_INTERVAL_MS = 140;
 const PRESENCE_GUEST_IDENTITY_STORAGE_KEY = 'ep_presence_guest_identity_v1';
+const ROOM_PREVIEW_TTL_MS = 120_000;
 
 export interface WorldPresenceIdentity {
   userId: string;
@@ -155,6 +156,8 @@ interface PresencePreviewUpdateMessage {
 
 interface PresencePreviewClearMessage {
   type: 'presence:preview:clear';
+  roomCoordinates?: RoomCoordinates;
+  timestamp?: number;
 }
 
 interface WorldPresenceClientOptions {
@@ -277,6 +280,8 @@ export class WorldPresenceClient {
     roomCoordinates: RoomCoordinates;
     snapshot: RoomSnapshot;
   } | null): void {
+    const previousPreview = this.localRoomPreview;
+    const previousShardId = this.previewShardId;
     const normalizedPreview = nextPreview
       ? {
           roomCoordinates: { ...nextPreview.roomCoordinates },
@@ -291,12 +296,17 @@ export class WorldPresenceClient {
     this.localRoomPreview = normalizedPreview;
     if (!normalizedPreview || !nextShardId) {
       if (this.previewShardId) {
-        this.sendPreviewClearToShard(this.previewShardId);
+        this.sendPreviewClearToShard(this.previewShardId, previousPreview);
       }
       this.previewShardId = null;
       this.lastPublishedPreviewJson = null;
       this.emitSnapshot();
       return;
+    }
+
+    if (previousShardId && previousShardId !== nextShardId) {
+      this.sendPreviewClearToShard(previousShardId, previousPreview);
+      this.lastPublishedPreviewJson = null;
     }
 
     const shardSocket = this.socketsByShardId.get(nextShardId)?.socket ?? null;
@@ -380,7 +390,7 @@ export class WorldPresenceClient {
       this.sendLeaveToShard(this.publishedShardId);
     }
     if (this.previewShardId) {
-      this.sendPreviewClearToShard(this.previewShardId);
+      this.sendPreviewClearToShard(this.previewShardId, this.localRoomPreview);
     }
 
     for (const shardId of Array.from(this.socketsByShardId.keys())) {
@@ -502,6 +512,7 @@ export class WorldPresenceClient {
       this.lastPublishedPresenceSignature = null;
     }
     if (this.previewShardId === shardId) {
+      this.sendPreviewClearToShard(shardId, this.localRoomPreview);
       this.previewShardId = null;
       this.lastPublishedPreviewJson = null;
     }
@@ -522,13 +533,21 @@ export class WorldPresenceClient {
     socket.send(JSON.stringify({ type: 'presence:leave' } satisfies PresenceLeaveMessage));
   }
 
-  private sendPreviewClearToShard(shardId: string): void {
+  private sendPreviewClearToShard(shardId: string, preview: PresencePreviewPayload | null): void {
     const socket = this.socketsByShardId.get(shardId)?.socket ?? null;
     if (!socket || socket.readyState !== PartySocket.OPEN) {
       return;
     }
 
-    socket.send(JSON.stringify({ type: 'presence:preview:clear' } satisfies PresencePreviewClearMessage));
+    socket.send(JSON.stringify({
+      type: 'presence:preview:clear',
+      ...(preview
+        ? {
+            roomCoordinates: { ...preview.roomCoordinates },
+            timestamp: preview.timestamp,
+          }
+        : {}),
+    } satisfies PresencePreviewClearMessage));
   }
 
   private handlePresenceMessage(shardId: string, rawMessage: string): void {
@@ -627,6 +646,9 @@ export class WorldPresenceClient {
     const shardPreviews = new Map<string, WorldPresenceRoomPreview>();
     for (const [roomId, preview] of Object.entries(next ?? {})) {
       if (!preview || typeof preview !== 'object' || typeof preview.timestamp !== 'number') {
+        continue;
+      }
+      if (isRoomPreviewExpired(preview.timestamp)) {
         continue;
       }
 
@@ -790,6 +812,10 @@ export class WorldPresenceClient {
 
 function getNowMs(): number {
   return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
+function isRoomPreviewExpired(timestamp: number): boolean {
+  return !Number.isFinite(timestamp) || Date.now() - timestamp > ROOM_PREVIEW_TTL_MS;
 }
 
 function getPresencePublishSignature(presence: WorldPresencePayload): string {
