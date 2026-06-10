@@ -2242,9 +2242,18 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   ): void {
     const sprite = liveObject.sprite;
     const body = sprite.body as ArcadeObjectBody | null;
-    const revealedObject = this.revealContainedObjectFromBrokenContainer(loadedRoom, liveObject);
+    const removalReason: LiveObjectExplicitRemovalReason =
+      liveObject.config.id === 'crate' ? 'crate-broken' : 'brick-broken';
+    const canPlayBreakAnimation = this.options.scene.anims.exists(animationKey);
 
-    this.emitLiveObjectRemovedForObject(loadedRoom, liveObject, 'brick-broken');
+    if (canPlayBreakAnimation) {
+      sprite.play(animationKey);
+      sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+        sprite.destroy();
+      });
+    }
+    const revealedObject = this.revealContainedObjectFromBrokenContainer(loadedRoom, liveObject);
+    this.emitLiveObjectRemovedForObject(loadedRoom, liveObject, removalReason);
     this.destroyLiveObjectInteractions(liveObject);
     this.destroyLiveObjectWorldColliders(liveObject);
     this.destroyLiveObjectHelpers(liveObject);
@@ -2257,15 +2266,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       this.syncLiveObjectInteractions([loadedRoom]);
     }
 
-    if (!this.options.scene.anims.exists(animationKey)) {
+    if (!canPlayBreakAnimation) {
       sprite.destroy();
-      return;
     }
-
-    sprite.play(animationKey);
-    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
-      sprite.destroy();
-    });
   }
 
   private removeLiveObject(
