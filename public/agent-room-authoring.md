@@ -228,6 +228,7 @@ Common valid object ids by category:
   - `log_wall`
   - `cage`
 - note:
+  - `brick_box`, `crate`, and `treasure_chest` can hold collectibles that appear when the container opens or breaks.
   - `crate` is the baseline pushable/interactable block behavior; future custom solid objects can reuse that capability instead of being crate-specific
 - `decoration`:
   - `sign`

@@ -7,3 +7,7 @@ export function buildLiveObjectKeyIndex<TLiveObject extends { key: string }>(
   }
   return liveObjectByKey;
 }
+
+export function getContainedLiveObjectKey(containerKey: string, containedObjectId: string): string {
+  return `container:${containerKey}:contents:${containedObjectId}`;
+}

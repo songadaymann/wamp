@@ -119,11 +119,29 @@ export function getPressurePlateTargetLabel(objectId: string): string {
 }
 
 export function getContainerLabel(objectId: string): string {
-  return objectId === 'cage' ? 'cage' : 'treasure chest';
+  switch (objectId) {
+    case 'cage':
+      return 'cage';
+    case 'brick_box':
+      return 'brick box';
+    case 'crate':
+      return 'crate';
+    default:
+      return 'treasure chest';
+  }
 }
 
 export function getContainerName(objectId: string): string {
-  return objectId === 'cage' ? 'This cage' : 'This treasure chest';
+  switch (objectId) {
+    case 'cage':
+      return 'This cage';
+    case 'brick_box':
+      return 'This brick box';
+    case 'crate':
+      return 'This crate';
+    default:
+      return 'This treasure chest';
+  }
 }
 
 export function getContainerAcceptedContentsLabel(objectId: string): string {

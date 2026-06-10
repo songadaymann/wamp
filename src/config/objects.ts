@@ -93,7 +93,7 @@ export const PRESSURE_PLATE_TARGET_OBJECT_IDS = [
 ] as const;
 
 export type PressurePlateTargetObjectId = (typeof PRESSURE_PLATE_TARGET_OBJECT_IDS)[number];
-export const CONTAINER_OBJECT_IDS = ['cage', 'treasure_chest'] as const;
+export const CONTAINER_OBJECT_IDS = ['cage', 'treasure_chest', 'brick_box', 'crate'] as const;
 export type ContainerObjectId = (typeof CONTAINER_OBJECT_IDS)[number];
 export const MOVING_PLATFORM_OBJECT_ID = 'moving_platform';
 export const MOVING_PLATFORM_ENDPOINT_OBJECT_ID = 'moving_platform_endpoint';
@@ -671,7 +671,7 @@ export function canObjectBeStoredInContainer(
   if (containerId === 'cage') {
     return objectConfig.category === 'enemy' || isPushableObjectConfig(objectConfig);
   }
-  if (containerId === 'treasure_chest') {
+  if (containerId === 'treasure_chest' || containerId === 'brick_box' || containerId === 'crate') {
     return objectConfig.category === 'collectible';
   }
 
