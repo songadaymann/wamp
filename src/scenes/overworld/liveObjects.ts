@@ -289,6 +289,7 @@ const LIVE_OBJECT_WATER_DAMPING_FACTOR = 0.965;
 const BUTT_STOMP_BREAK_BOUNCE_VELOCITY = -150;
 const BUTT_STOMP_BREAK_TOP_TOLERANCE_PX = 12;
 const BUTT_STOMP_BREAK_MIN_HORIZONTAL_OVERLAP_PX = 3;
+const BUTT_STOMP_BREAK_STACK_VERTICAL_GAP_TOLERANCE_PX = 4;
 const GROUND_ENEMY_EDGE_SAFE_SPECIAL_TILE_KINDS = new Set<SpecialTileKind>([
   'conveyorLeft',
   'conveyorRight',
@@ -2190,7 +2191,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     this.options.handlePlayerButtStompImpact(BUTT_STOMP_BREAK_BOUNCE_VELOCITY);
     if (liveObject.config.id === 'brick_box') {
-      this.breakBrickBox(loadedRoom, liveObject);
+      this.breakBrickBoxButtStompStack(loadedRoom, liveObject);
       return true;
     }
 
@@ -2200,6 +2201,81 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
   private isButtStompBreakableObject(liveObject: LoadedRoomObject): boolean {
     return liveObject.config.id === 'brick_box' || liveObject.config.id === 'crate';
+  }
+
+  private breakBrickBoxButtStompStack(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    topBrick: LoadedRoomObject,
+  ): void {
+    const bricks = this.collectBrickBoxButtStompStack(loadedRoom, topBrick);
+    for (const brick of bricks) {
+      if (brick.sprite.active) {
+        this.breakBrickBox(loadedRoom, brick);
+      }
+    }
+  }
+
+  private collectBrickBoxButtStompStack(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    topBrick: LoadedRoomObject,
+  ): LoadedRoomObject[] {
+    const topBody = topBrick.sprite.body as ArcadeObjectBody | null;
+    if (!topBody) {
+      return [topBrick];
+    }
+
+    const stack: LoadedRoomObject[] = [topBrick];
+    const visited = new Set<LoadedRoomObject>(stack);
+    const columnBounds = getArcadeBodyBounds(topBody);
+    let cursorBottom = columnBounds.bottom;
+
+    while (true) {
+      let next: { liveObject: LoadedRoomObject; bounds: Phaser.Geom.Rectangle } | null = null;
+      for (const candidate of loadedRoom.liveObjects) {
+        if (
+          visited.has(candidate) ||
+          candidate.config.id !== 'brick_box' ||
+          !candidate.sprite.active
+        ) {
+          continue;
+        }
+
+        const body = candidate.sprite.body as ArcadeObjectBody | null;
+        if (!body) {
+          continue;
+        }
+
+        const bounds = getArcadeBodyBounds(body);
+        const verticalGap = bounds.top - cursorBottom;
+        if (
+          verticalGap < -BUTT_STOMP_BREAK_STACK_VERTICAL_GAP_TOLERANCE_PX ||
+          verticalGap > BUTT_STOMP_BREAK_STACK_VERTICAL_GAP_TOLERANCE_PX
+        ) {
+          continue;
+        }
+
+        const columnOverlap =
+          Math.min(columnBounds.right, bounds.right) -
+          Math.max(columnBounds.left, bounds.left);
+        if (columnOverlap < BUTT_STOMP_BREAK_MIN_HORIZONTAL_OVERLAP_PX) {
+          continue;
+        }
+
+        if (!next || bounds.top < next.bounds.top) {
+          next = { liveObject: candidate, bounds };
+        }
+      }
+
+      if (!next) {
+        break;
+      }
+
+      stack.push(next.liveObject);
+      visited.add(next.liveObject);
+      cursorBottom = next.bounds.bottom;
+    }
+
+    return stack;
   }
 
   private isPlayerButtStompImpactFromAbove(

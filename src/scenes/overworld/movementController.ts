@@ -247,11 +247,13 @@ export class OverworldMovementController {
   handleButtStompImpact(bounceVelocity: number): void {
     const playerBody = this.host.getPlayerBody();
     this.clearButtStompState();
+    this.host.state.isCrouching = false;
     if (!playerBody) {
       return;
     }
 
     playerBody.setVelocityY(Math.min(playerBody.velocity.y, bounceVelocity));
+    this.syncPlayerHitbox(false);
   }
 
   updateMovement(delta: number, inQuicksand: boolean): OverworldMovementStepResult {
