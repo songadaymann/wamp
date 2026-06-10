@@ -37,6 +37,8 @@ interface OverworldPlayerPresentationControllerHost {
   getWallContactSide(): -1 | 1 | 0;
   getWallJumpActive(): boolean;
   getIsCrouching(): boolean;
+  getIsButtStomping(): boolean;
+  getButtStompFlipUntil(): number;
   getActiveCrateInteractionMode(): 'push' | 'pull' | null;
   getActiveCrateInteractionFacing(): -1 | 1 | null;
   getGroundedOverride(): boolean | null;
@@ -201,6 +203,12 @@ export class OverworldPlayerPresentationController {
 
     if (this.host.getWallJumpActive()) {
       return 'wall-jump';
+    }
+
+    if (this.host.getIsButtStomping()) {
+      return input.now < this.host.getButtStompFlipUntil()
+        ? 'butt-stomp-flip'
+        : 'crouch';
     }
 
     if (!input.grounded) {

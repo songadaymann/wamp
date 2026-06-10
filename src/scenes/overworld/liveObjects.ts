@@ -225,6 +225,8 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   swordsmanTraversalPlannerMode: SwordsmanTraversalPlannerMode;
   isPlayerClimbingLadder: () => boolean;
   isLadderDropRequested: () => boolean;
+  isPlayerButtStomping: () => boolean;
+  handlePlayerButtStompImpact: (bounceVelocity: number) => void;
   getCurrentTime: () => number;
   addScore: (delta: number) => void;
   onKeyCollected: () => void;
@@ -281,6 +283,9 @@ const LIVE_OBJECT_MAX_GRAVITY_SPEED = 500;
 const LIVE_OBJECT_WATER_GRAVITY_FACTOR = 0.35;
 const LIVE_OBJECT_WATER_MAX_GRAVITY_SPEED = 118;
 const LIVE_OBJECT_WATER_DAMPING_FACTOR = 0.965;
+const BUTT_STOMP_BREAK_BOUNCE_VELOCITY = -150;
+const BUTT_STOMP_BREAK_TOP_TOLERANCE_PX = 12;
+const BUTT_STOMP_BREAK_MIN_HORIZONTAL_OVERLAP_PX = 3;
 const GROUND_ENEMY_EDGE_SAFE_SPECIAL_TILE_KINDS = new Set<SpecialTileKind>([
   'conveyorLeft',
   'conveyorRight',
@@ -723,6 +728,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
               liveObject.interactions.push(
                 this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
                   this.maybeBreakBrickBox(loadedRoom, liveObject);
+                }, () => this.shouldCollideWithLiveObject(liveObject))
+              );
+            } else if (liveObject.config.id === 'crate') {
+              liveObject.interactions.push(
+                this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
+                  this.maybeBreakButtStompableObject(loadedRoom, liveObject);
                 }, () => this.shouldCollideWithLiveObject(liveObject))
               );
             } else if (isBlockSwitchObjectId(liveObject.config.id)) {
@@ -2124,6 +2135,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     if (!playerBody || !brickBody) {
       return;
     }
+    if (this.maybeBreakButtStompableObject(loadedRoom, liveObject)) {
+      return;
+    }
 
     const upwardDelta =
       typeof playerBody.deltaY === 'function'
@@ -2144,9 +2158,78 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     this.breakBrickBox(loadedRoom, liveObject);
   }
 
+  private maybeBreakButtStompableObject(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+  ): boolean {
+    if (
+      !this.isButtStompBreakableObject(liveObject) ||
+      !this.options.isPlayerButtStomping() ||
+      !liveObject.sprite.active
+    ) {
+      return false;
+    }
+
+    const playerBody = this.options.getPlayerBody();
+    const objectBody = liveObject.sprite.body as ArcadeObjectBody | null;
+    if (!playerBody || !objectBody) {
+      return false;
+    }
+    if (!this.isPlayerButtStompImpactFromAbove(playerBody, objectBody)) {
+      return false;
+    }
+
+    this.options.handlePlayerButtStompImpact(BUTT_STOMP_BREAK_BOUNCE_VELOCITY);
+    if (liveObject.config.id === 'brick_box') {
+      this.breakBrickBox(loadedRoom, liveObject);
+      return true;
+    }
+
+    this.breakLiveObjectWithAnimation(loadedRoom, liveObject, 'crate_break_anim');
+    return true;
+  }
+
+  private isButtStompBreakableObject(liveObject: LoadedRoomObject): boolean {
+    return liveObject.config.id === 'brick_box' || liveObject.config.id === 'crate';
+  }
+
+  private isPlayerButtStompImpactFromAbove(
+    playerBody: Phaser.Physics.Arcade.Body,
+    objectBody: ArcadeObjectBody,
+  ): boolean {
+    const playerBounds = getArcadeBodyBounds(playerBody);
+    const objectBounds = getArcadeBodyBounds(objectBody);
+    const horizontalOverlap =
+      Math.min(playerBounds.right, objectBounds.right) -
+      Math.max(playerBounds.left, objectBounds.left);
+    if (horizontalOverlap < BUTT_STOMP_BREAK_MIN_HORIZONTAL_OVERLAP_PX) {
+      return false;
+    }
+
+    const downwardDelta =
+      typeof playerBody.deltaY === 'function'
+        ? playerBody.deltaY()
+        : playerBody.y - (playerBody.prev?.y ?? playerBody.y);
+    const separatedDown = Boolean(playerBody.blocked?.down) || Boolean(playerBody.touching?.down);
+    const movingDown = separatedDown || playerBody.velocity.y > 40 || downwardDelta > 0.5;
+    return (
+      movingDown &&
+      playerBounds.centerY < objectBounds.centerY &&
+      playerBounds.bottom <= objectBounds.top + BUTT_STOMP_BREAK_TOP_TOLERANCE_PX
+    );
+  }
+
   private breakBrickBox(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
+  ): void {
+    this.breakLiveObjectWithAnimation(loadedRoom, liveObject, 'brick_box_break_anim');
+  }
+
+  private breakLiveObjectWithAnimation(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+    animationKey: string,
   ): void {
     const sprite = liveObject.sprite;
     const body = sprite.body as ArcadeObjectBody | null;
@@ -2161,7 +2244,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     loadedRoom.liveObjects = loadedRoom.liveObjects.filter((candidate) => candidate !== liveObject);
     this.syncWorldObjectColliders(this.options.getLoadedFullRooms());
 
-    sprite.play('brick_box_break_anim');
+    if (!this.options.scene.anims.exists(animationKey)) {
+      sprite.destroy();
+      return;
+    }
+
+    sprite.play(animationKey);
     sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       sprite.destroy();
     });

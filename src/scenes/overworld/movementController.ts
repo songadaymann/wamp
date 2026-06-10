@@ -50,6 +50,9 @@ const RUNTIME_OBJECT_SUPPORT_MAX_UPWARD_SPEED = -60;
 const RUNTIME_OBJECT_SUPPORT_HOVER_TOLERANCE_PX = 8;
 const RUNTIME_OBJECT_SUPPORT_PENETRATION_TOLERANCE_PX = 5;
 const RUNTIME_OBJECT_SUPPORT_EDGE_INSET_PX = 1;
+const BUTT_STOMP_FALL_SPEED = 520;
+const BUTT_STOMP_FLIP_MS = 190;
+const BUTT_STOMP_IMPACT_GRACE_MS = 120;
 
 export interface OverworldCrateInteraction {
   crateBody: Phaser.Physics.Arcade.Body;
@@ -70,6 +73,9 @@ interface DirectionalGravityControls {
 
 export interface OverworldMovementControllerState {
   isCrouching: boolean;
+  isButtStomping: boolean;
+  buttStompFlipUntil: number;
+  buttStompImpactGraceUntil: number;
   activeCrateInteractionMode: 'push' | 'pull' | null;
   activeCrateInteractionFacing: -1 | 1 | null;
   weaponKnockbackVelocityX: number;
@@ -161,6 +167,7 @@ export class OverworldMovementController {
     this.host.state.jumpBuffered = false;
     this.host.state.jumpBufferTime = 0;
     this.host.state.isCrouching = false;
+    this.clearButtStompState();
     this.clearCrateInteractionState();
     this.host.state.weaponKnockbackVelocityX = 0;
     this.host.state.weaponKnockbackUntil = 0;
@@ -172,10 +179,12 @@ export class OverworldMovementController {
   handleNoPlayerRuntime(): void {
     this.clearCrateInteractionState();
     this.resetWallMovementState();
+    this.clearButtStompState();
   }
 
   handlePlayerCreated(): void {
     this.host.state.isCrouching = false;
+    this.clearButtStompState();
     this.clearCrateInteractionState();
     this.host.state.weaponKnockbackVelocityX = 0;
     this.host.state.weaponKnockbackUntil = 0;
@@ -187,6 +196,7 @@ export class OverworldMovementController {
 
   handlePlayerDestroyed(): void {
     this.host.state.isCrouching = false;
+    this.clearButtStompState();
     this.clearCrateInteractionState();
     this.host.state.weaponKnockbackVelocityX = 0;
     this.host.state.weaponKnockbackUntil = 0;
@@ -197,6 +207,7 @@ export class OverworldMovementController {
 
   handleRespawnReset(): void {
     this.host.state.isCrouching = false;
+    this.clearButtStompState();
     this.clearCrateInteractionState();
     this.host.state.weaponKnockbackVelocityX = 0;
     this.host.state.weaponKnockbackUntil = 0;
@@ -208,6 +219,7 @@ export class OverworldMovementController {
 
   resetTransientPlayState(): void {
     this.host.state.isCrouching = false;
+    this.clearButtStompState();
     this.clearCrateInteractionState();
     this.resetWallMovementState();
     this.syncPlayerHitbox();
@@ -230,6 +242,16 @@ export class OverworldMovementController {
     this.host.state.weaponKnockbackVelocityX = velocityX;
     this.host.state.weaponKnockbackUntil = this.host.getCurrentTime() + this.options.weaponKnockbackMs;
     playerBody.setVelocityX(velocityX);
+  }
+
+  handleButtStompImpact(bounceVelocity: number): void {
+    const playerBody = this.host.getPlayerBody();
+    this.clearButtStompState();
+    if (!playerBody) {
+      return;
+    }
+
+    playerBody.setVelocityY(Math.min(playerBody.velocity.y, bounceVelocity));
   }
 
   updateMovement(delta: number, inQuicksand: boolean): OverworldMovementStepResult {
@@ -287,6 +309,7 @@ export class OverworldMovementController {
     playerBody.setAllowGravity(playerGravityDirection === 'down');
 
     if (playerGravityDirection !== 'down') {
+      this.clearButtStompState();
       const directionalControls = this.resolveDirectionalGravityControls(playerGravityDirection, {
         horizontalInput,
         verticalInput,
@@ -324,6 +347,7 @@ export class OverworldMovementController {
       this.host.state.jumpBuffered = false;
       this.host.state.jumpBufferTime = 0;
       this.host.state.isCrouching = false;
+      this.clearButtStompState();
       this.clearCrateInteractionState();
       this.resetWallMovementState();
       this.syncPlayerHitbox();
@@ -350,6 +374,17 @@ export class OverworldMovementController {
     ) {
       grounded = true;
     }
+    if (grounded) {
+      this.clearButtStompState({ keepImpactGrace: true });
+    } else if (specialEnvironment.inWater || inQuicksand) {
+      this.clearButtStompState();
+    } else if (
+      !this.host.state.isButtStomping &&
+      !this.host.state.isClimbingLadder &&
+      (downPressed || touchDown)
+    ) {
+      this.startButtStomp(playerBody);
+    }
 
     const crateInteraction =
       !inQuicksand && (grounded || specialEnvironment.inWater) && horizontalInput !== 0
@@ -368,7 +403,8 @@ export class OverworldMovementController {
     const canWallAttach =
       !grounded &&
       crateInteraction === null &&
-      !this.host.state.isCrouching;
+      !this.host.state.isCrouching &&
+      !this.host.state.isButtStomping;
     this.updateWallMovementState(horizontalInput, grounded, canWallAttach);
     if (grounded) {
       this.host.state.coyoteTime = this.options.coyoteMs;
@@ -376,6 +412,7 @@ export class OverworldMovementController {
       this.host.state.coyoteTime = Math.max(0, this.host.state.coyoteTime - delta);
     }
 
+    const buttStompInFlipPause = this.isButtStompInFlipPause();
     if (crateInteraction) {
       const moveSpeed =
         crateInteraction.mode === 'push' ? this.options.cratePushSpeed : this.options.cratePullSpeed;
@@ -384,7 +421,9 @@ export class OverworldMovementController {
       this.applyCrateInteraction(playerBody, crateInteraction, moveSpeed, delta);
     } else {
       this.clearCrateInteractionState();
-      if (this.host.getCurrentTime() < this.host.state.weaponKnockbackUntil) {
+      if (buttStompInFlipPause) {
+        playerBody.setVelocityX(0);
+      } else if (this.host.getCurrentTime() < this.host.state.weaponKnockbackUntil) {
         playerBody.setVelocityX(this.host.state.weaponKnockbackVelocityX);
       } else if (
         this.host.getCurrentTime() < this.host.state.wallJumpLockUntil &&
@@ -425,7 +464,9 @@ export class OverworldMovementController {
     }
 
     const jumpPressed =
-      !this.host.state.isCrouching && (spacePressed || (upPressed && overlappingLadder === null));
+      !this.host.state.isCrouching &&
+      !this.host.state.isButtStomping &&
+      (spacePressed || (upPressed && overlappingLadder === null));
     const specialJumpVelocity =
       specialEnvironment.inWater
         ? WATER_SWIM_KICK_VELOCITY
@@ -497,6 +538,9 @@ export class OverworldMovementController {
     ) {
       playerBody.setVelocityY(this.options.wallSlideMaxFallSpeed);
     }
+    if (this.host.state.isButtStomping) {
+      this.updateButtStompVelocity(playerBody);
+    }
 
     if (inQuicksand && grounded) {
       playerBody.setVelocityY(Math.max(playerBody.velocity.y, 4));
@@ -548,6 +592,7 @@ export class OverworldMovementController {
 
     this.setPlayerLadderState(null);
     this.host.state.isCrouching = false;
+    this.clearButtStompState();
     this.syncPlayerHitbox();
 
     const gravityScale = specialEnvironment.inWater ? WATER_GRAVITY_FACTOR : 1;
@@ -796,6 +841,52 @@ export class OverworldMovementController {
     this.host.state.wallJumpChainActive = false;
   }
 
+  private clearButtStompState(options: { keepImpactGrace?: boolean } = {}): void {
+    const wasButtStomping = this.host.state.isButtStomping;
+    this.host.state.isButtStomping = false;
+    this.host.state.buttStompFlipUntil = 0;
+    if (options.keepImpactGrace && wasButtStomping) {
+      this.host.state.buttStompImpactGraceUntil =
+        this.host.getCurrentTime() + BUTT_STOMP_IMPACT_GRACE_MS;
+    } else if (!options.keepImpactGrace) {
+      this.host.state.buttStompImpactGraceUntil = 0;
+    }
+  }
+
+  private startButtStomp(playerBody: Phaser.Physics.Arcade.Body): void {
+    this.host.state.isButtStomping = true;
+    this.host.state.buttStompFlipUntil = this.host.getCurrentTime() + BUTT_STOMP_FLIP_MS;
+    this.host.state.buttStompImpactGraceUntil = 0;
+    this.host.state.jumpBuffered = false;
+    this.host.state.jumpBufferTime = 0;
+    this.host.state.coyoteTime = 0;
+    this.host.state.isCrouching = false;
+    this.clearCrateInteractionState();
+    this.resetWallMovementState();
+    this.updateButtStompVelocity(playerBody);
+  }
+
+  private isButtStompInFlipPause(now = this.host.getCurrentTime()): boolean {
+    return this.host.state.isButtStomping && now < this.host.state.buttStompFlipUntil;
+  }
+
+  private updateButtStompVelocity(playerBody: Phaser.Physics.Arcade.Body): void {
+    if (this.isButtStompInFlipPause()) {
+      playerBody.setAllowGravity(false);
+      playerBody.setVelocityY(0);
+      return;
+    }
+
+    playerBody.setAllowGravity(true);
+    this.applyButtStompVelocity(playerBody);
+  }
+
+  private applyButtStompVelocity(playerBody: Phaser.Physics.Arcade.Body): void {
+    if (playerBody.velocity.y < BUTT_STOMP_FALL_SPEED) {
+      playerBody.setVelocityY(BUTT_STOMP_FALL_SPEED);
+    }
+  }
+
   private clearWallContactState(): void {
     this.host.state.wallContactSide = 0;
     this.host.state.wallContactGraceSide = 0;
@@ -970,6 +1061,7 @@ export class OverworldMovementController {
     }
 
     if (enteringLadder) {
+      this.clearButtStompState();
       playerBody.setVelocityY(0);
     }
   }
