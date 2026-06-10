@@ -69,6 +69,7 @@ function buildPackAnimationKeys(packId: PlayerAvatarId): Record<PlayerAnimationS
     'jump-fall': `player-${packId}-jump-fall`,
     'wall-slide': `player-${packId}-wall-slide`,
     'wall-jump': `player-${packId}-wall-jump`,
+    'butt-stomp-flip': `player-${packId}-butt-stomp-flip`,
     land: `player-${packId}-land`,
     'ladder-climb': `player-${packId}-ladder-climb`,
     crouch: `player-${packId}-crouch`,

@@ -113,7 +113,11 @@ export class OverworldHudStateController {
 
   getSelectedCourseContext(): SelectedCourseContext | null {
     const expandedRoom = this.selectedSummary?.expandedRoom ?? null;
-    if (expandedRoom?.legacyCourseId) {
+    if (expandedRoom) {
+      if (!expandedRoom.legacyCourseId) {
+        return null;
+      }
+
       return {
         courseId: expandedRoom.legacyCourseId,
         courseTitle: expandedRoom.title,

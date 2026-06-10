@@ -52,9 +52,15 @@ const ROOM_BADGE_SEMANTIC_CODES: Record<RoomGoalType, string> = {
   survival: 'SV',
 };
 const SELECTED_ROOM_PLAY_BUTTON_RADIUS = 10;
+const SELECTED_ROOM_PLAY_BUTTON_HIT_RADIUS = SELECTED_ROOM_PLAY_BUTTON_RADIUS + 4;
 const SELECTED_ROOM_PLAY_BUTTON_SCALE_FACTOR = 0.9;
 const SELECTED_ROOM_PLAY_BUTTON_MIN_SCALE = 1;
 const SELECTED_ROOM_PLAY_BUTTON_MAX_SCALE = 8;
+const SELECTED_ROOM_WARP_BUTTON_WIDTH = 144;
+const SELECTED_ROOM_WARP_BUTTON_HEIGHT = 44;
+const SELECTED_ROOM_WARP_BUTTON_SCALE_FACTOR = 0.62;
+const SELECTED_ROOM_WARP_BUTTON_MIN_SCALE = 0.65;
+const SELECTED_ROOM_WARP_BUTTON_MAX_SCALE = 2.8;
 const MIN_ZOOM = 0.08;
 
 type RoomActivityBadge = OverworldBadgePlacement;
@@ -73,6 +79,9 @@ interface SemanticRoomBadgeDescriptor {
 interface SelectedRoomPlayAffordance {
   container: Phaser.GameObjects.Container;
   background: Phaser.GameObjects.Arc;
+  icon: Phaser.GameObjects.Graphics;
+  warpBackground: Phaser.GameObjects.Rectangle;
+  warpLabel: Phaser.GameObjects.Text;
 }
 
 interface OverworldBrowseOverlayControllerHost {
@@ -86,7 +95,9 @@ interface OverworldBrowseOverlayControllerHost {
   getRoomSummaryForCoordinates(coordinates: RoomCoordinates): WorldRoomSummary | null;
   getRoomEditorCount(coordinates: RoomCoordinates): number;
   isWithinLoadedRoomBounds(coordinates: RoomCoordinates): boolean;
+  canWarpToSelectedRoom(): boolean;
   playSelectedRoom(): void;
+  warpToSelectedRoom(): void;
   truncateOverlayText(value: string, maxLength: number): string;
 }
 
@@ -127,24 +138,66 @@ export class OverworldBrowseOverlayController {
     icon.fillStyle(RETRO_COLORS.selected, 1);
     icon.fillTriangle(-3, -5, -3, 5, 5, 0);
 
-    const container = this.host.scene.add.container(0, 0, [background, icon]);
+    const warpBackground = this.host.scene.add.rectangle(
+      0,
+      0,
+      SELECTED_ROOM_WARP_BUTTON_WIDTH,
+      SELECTED_ROOM_WARP_BUTTON_HEIGHT,
+      0x79ccde,
+      0.96,
+    );
+    warpBackground.setStrokeStyle(2, 0x18161c, 1);
+    warpBackground.setVisible(false);
+
+    const warpLabel = this.host.scene.add.text(0, 0, 'WARP', {
+      fontFamily: 'Early GameBoy, monospace',
+      fontSize: '12px',
+      color: '#fff3db',
+      stroke: '#18161c',
+      strokeThickness: 0,
+      align: 'center',
+    });
+    warpLabel.setOrigin(0.5, 0.5);
+    warpLabel.setResolution(2);
+    warpLabel.setVisible(false);
+
+    const container = this.host.scene.add.container(0, 0, [
+      background,
+      icon,
+      warpBackground,
+      warpLabel,
+    ]);
     container.setDepth(28);
     container.setVisible(false);
     container.setSize(
-      SELECTED_ROOM_PLAY_BUTTON_RADIUS * 2,
-      SELECTED_ROOM_PLAY_BUTTON_RADIUS * 2,
+      SELECTED_ROOM_WARP_BUTTON_WIDTH,
+      SELECTED_ROOM_WARP_BUTTON_HEIGHT,
     );
     container.setInteractive(
-      new Phaser.Geom.Circle(0, 0, SELECTED_ROOM_PLAY_BUTTON_RADIUS + 4),
-      Phaser.Geom.Circle.Contains,
+      new Phaser.Geom.Rectangle(
+        -SELECTED_ROOM_WARP_BUTTON_WIDTH * 0.5,
+        -SELECTED_ROOM_WARP_BUTTON_HEIGHT * 0.5,
+        SELECTED_ROOM_WARP_BUTTON_WIDTH,
+        SELECTED_ROOM_WARP_BUTTON_HEIGHT,
+      ),
+      Phaser.Geom.Rectangle.Contains,
     );
+    if (container.input) {
+      container.input.cursor = 'pointer';
+    }
     container.on(
       Phaser.Input.Events.GAMEOBJECT_POINTER_OVER,
-      () => background.setFillStyle(RETRO_COLORS.backgroundNumber, 0.98),
+      () => {
+        background.setFillStyle(RETRO_COLORS.backgroundNumber, 0.98);
+        warpBackground.setFillStyle(0x79ccde, 1);
+      },
     );
     container.on(
       Phaser.Input.Events.GAMEOBJECT_POINTER_OUT,
-      () => background.setFillStyle(RETRO_COLORS.backgroundNumber, 0.9),
+      () => {
+        background.setFillStyle(RETRO_COLORS.backgroundNumber, 0.9);
+        warpBackground.setFillStyle(0x79ccde, 0.96);
+      },
     );
     container.on(
       Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN,
@@ -155,6 +208,11 @@ export class OverworldBrowseOverlayController {
         event: Phaser.Types.Input.EventData,
       ) => {
         event.stopPropagation();
+        if (this.host.getMode() === 'play') {
+          this.host.warpToSelectedRoom();
+          return;
+        }
+
         this.host.playSelectedRoom();
       },
     );
@@ -162,6 +220,9 @@ export class OverworldBrowseOverlayController {
     this.selectedRoomPlayAffordance = {
       container,
       background,
+      icon,
+      warpBackground,
+      warpLabel,
     };
   }
 
@@ -216,6 +277,10 @@ export class OverworldBrowseOverlayController {
     syncBadgePlacements(this.roomActivityBadges, zoom, this.roomBadgeScaleConfig);
     syncBadgePlacements(this.expandedRoomBadges, zoom, this.roomBadgeScaleConfig);
     this.updateSelectedRoomPlayAffordance(zoom);
+  }
+
+  isSelectedRoomPlayAffordanceVisible(): boolean {
+    return this.selectedRoomPlayAffordance?.container.visible ?? false;
   }
 
   private destroyRoomActivityBadges(): void {
@@ -320,9 +385,10 @@ export class OverworldBrowseOverlayController {
 
     const selectedCoordinates = this.host.getSelectedCoordinates();
     const selectedState = this.host.getCellStateAt(selectedCoordinates);
+    const mode = this.host.getMode();
     const shouldShow =
       Boolean(this.host.getWorldWindow()) &&
-      this.host.getMode() === 'browse' &&
+      (mode === 'browse' || this.host.canWarpToSelectedRoom()) &&
       (selectedState === 'published' || selectedState === 'draft') &&
       this.host.isWithinLoadedRoomBounds(selectedCoordinates);
 
@@ -336,7 +402,48 @@ export class OverworldBrowseOverlayController {
       origin.x + ROOM_PX_WIDTH * 0.5,
       origin.y + ROOM_PX_HEIGHT * 0.5,
     );
-    affordance.container.setScale(this.getSelectedRoomPlayAffordanceScale(zoom));
+    this.syncSelectedRoomPlayAffordanceMode(affordance, mode);
+    affordance.container.setScale(
+      mode === 'play'
+        ? this.getSelectedRoomWarpAffordanceScale(zoom)
+        : this.getSelectedRoomPlayAffordanceScale(zoom),
+    );
+  }
+
+  private syncSelectedRoomPlayAffordanceMode(
+    affordance: SelectedRoomPlayAffordance,
+    mode: OverworldMode,
+  ): void {
+    const warpMode = mode === 'play';
+    affordance.background.setVisible(!warpMode);
+    affordance.icon.setVisible(!warpMode);
+    affordance.warpBackground.setVisible(warpMode);
+    affordance.warpLabel.setVisible(warpMode);
+
+    if (warpMode) {
+      affordance.container.setSize(
+        SELECTED_ROOM_WARP_BUTTON_WIDTH,
+        SELECTED_ROOM_WARP_BUTTON_HEIGHT,
+      );
+      affordance.container.input?.hitArea.setTo(
+        -SELECTED_ROOM_WARP_BUTTON_WIDTH * 0.5,
+        -SELECTED_ROOM_WARP_BUTTON_HEIGHT * 0.5,
+        SELECTED_ROOM_WARP_BUTTON_WIDTH,
+        SELECTED_ROOM_WARP_BUTTON_HEIGHT,
+      );
+      return;
+    }
+
+    affordance.container.setSize(
+      SELECTED_ROOM_PLAY_BUTTON_HIT_RADIUS * 2,
+      SELECTED_ROOM_PLAY_BUTTON_HIT_RADIUS * 2,
+    );
+    affordance.container.input?.hitArea.setTo(
+      -SELECTED_ROOM_PLAY_BUTTON_HIT_RADIUS,
+      -SELECTED_ROOM_PLAY_BUTTON_HIT_RADIUS,
+      SELECTED_ROOM_PLAY_BUTTON_HIT_RADIUS * 2,
+      SELECTED_ROOM_PLAY_BUTTON_HIT_RADIUS * 2,
+    );
   }
 
   private getSelectedRoomPlayAffordanceScale(zoom: number): number {
@@ -344,6 +451,14 @@ export class OverworldBrowseOverlayController {
       SELECTED_ROOM_PLAY_BUTTON_SCALE_FACTOR / Math.max(zoom, MIN_ZOOM),
       SELECTED_ROOM_PLAY_BUTTON_MIN_SCALE,
       SELECTED_ROOM_PLAY_BUTTON_MAX_SCALE,
+    );
+  }
+
+  private getSelectedRoomWarpAffordanceScale(zoom: number): number {
+    return Phaser.Math.Clamp(
+      SELECTED_ROOM_WARP_BUTTON_SCALE_FACTOR / Math.max(zoom, MIN_ZOOM),
+      SELECTED_ROOM_WARP_BUTTON_MIN_SCALE,
+      SELECTED_ROOM_WARP_BUTTON_MAX_SCALE,
     );
   }
 

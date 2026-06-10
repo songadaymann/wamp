@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { playSfx } from '../../audio/sfx';
 import { getAuthDebugState } from '../../auth/client';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
 import { createCourseRepository } from '../../courses/courseRepository';
@@ -62,6 +63,7 @@ interface OverworldSceneFlowHost {
   syncModeRuntime(): void;
   setShouldCenterCamera(value: boolean): void;
   setShouldRespawnPlayer(value: boolean): void;
+  setPendingWarpSpawnCoordinates(coordinates: RoomCoordinates | null): void;
   refreshAround(
     coordinates: RoomCoordinates,
     options?: { forceChunkReload?: boolean }
@@ -153,6 +155,46 @@ export class OverworldSceneFlowController {
     this.host.setShouldCenterCamera(true);
     this.host.setShouldRespawnPlayer(true);
     setFocusedCoordinatesInUrl(selectedCoordinates);
+    this.host.refreshAroundIfNeededOrFromCache(selectedCoordinates, {
+      preferCachedWindow: true,
+    });
+  }
+
+  async warpToSelectedRoom(): Promise<void> {
+    if (this.host.getMode() !== 'play') {
+      return;
+    }
+
+    const selectedCoordinates = this.host.getSelectedCoordinates();
+    const currentCoordinates = this.host.getCurrentRoomCoordinates();
+    if (
+      selectedCoordinates.x === currentCoordinates.x &&
+      selectedCoordinates.y === currentCoordinates.y
+    ) {
+      return;
+    }
+
+    const selectedState = this.host.getCellStateAt(selectedCoordinates);
+    if (selectedState !== 'published' && selectedState !== 'draft') {
+      return;
+    }
+
+    this.host.resetPlaySession();
+    this.host.clearTouchGestureState();
+    this.host.requestRoomGoalIntroForNextOverworldEntry();
+    this.host.setBrowseInspectZoom(this.host.getInspectZoom());
+    this.host.setMode('play');
+    this.host.setCameraMode('follow');
+    this.host.setInspectZoom(this.host.getFitZoomForRoom());
+    this.host.syncAppMode();
+    this.host.setCurrentRoomCoordinates({ ...selectedCoordinates });
+    this.host.setSelectedCoordinates({ ...selectedCoordinates });
+    this.host.setShouldCenterCamera(true);
+    this.host.setShouldRespawnPlayer(true);
+    this.host.setPendingWarpSpawnCoordinates({ ...selectedCoordinates });
+    this.host.syncModeRuntime();
+    setFocusedCoordinatesInUrl(selectedCoordinates);
+    playSfx('warp');
     this.host.refreshAroundIfNeededOrFromCache(selectedCoordinates, {
       preferCachedWindow: true,
     });
@@ -361,6 +403,10 @@ export class OverworldSceneFlowController {
       return;
     }
 
+    await this.startSelectedPublishedCourse();
+  }
+
+  private async startSelectedPublishedCourse(): Promise<void> {
     const selectedCourseId = this.host.getSelectedPublishedCourseId();
     if (!selectedCourseId) {
       return;

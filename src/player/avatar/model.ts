@@ -5,6 +5,7 @@ export const PLAYER_ANIMATION_STATES = [
   'jump-fall',
   'wall-slide',
   'wall-jump',
+  'butt-stomp-flip',
   'land',
   'ladder-climb',
   'crouch',
