@@ -145,6 +145,7 @@ import {
   type LiveObjectSwitchStateChangedEvent,
   type WeaponHitResult,
 } from './overworld/liveObjects';
+import { getContainedLiveObjectKey } from './overworld/liveObjects/indexing';
 import {
   type SwordsmanTraversalPlannerMode,
 } from '../enemies/swordsmanRobustPlanner';
@@ -4474,13 +4475,19 @@ export class OverworldPlayScene extends Phaser.Scene {
     let restoredKeyCount = 0;
 
     for (let index = 0; index < room.placedObjects.length; index += 1) {
-      const runtimeKey = this.getPlacedObjectRuntimeKey(room.id, room.placedObjects[index], index);
-      if (!this.collectedObjectKeys.delete(runtimeKey)) {
-        continue;
+      const placedObject = room.placedObjects[index];
+      const runtimeKey = this.getPlacedObjectRuntimeKey(room.id, placedObject, index);
+
+      if (this.collectedObjectKeys.delete(runtimeKey) && placedObject.id === 'key') {
+        restoredKeyCount += 1;
       }
 
-      if (room.placedObjects[index]?.id === 'key') {
-        restoredKeyCount += 1;
+      const containedObjectId = placedObject.containedObjectId;
+      if (containedObjectId) {
+        const containedObjectKey = getContainedLiveObjectKey(runtimeKey, containedObjectId);
+        if (this.collectedObjectKeys.delete(containedObjectKey) && containedObjectId === 'key') {
+          restoredKeyCount += 1;
+        }
       }
     }
 

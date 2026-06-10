@@ -11,6 +11,7 @@ import type { RoomCoordinates } from '../../../persistence/roomModel';
 import type { SfxCue } from '../../../audio/sfx';
 import type {
   CreateLiveObjectEntryOptions,
+  LiveObjectExplicitRemovalReason,
   LoadedRoomObject,
 } from '../liveObjects';
 import type { LoadedFullRoom } from '../worldStreaming';
@@ -57,7 +58,7 @@ interface LiveObjectTriggerControllerOptions<TEdgeWall> {
   removeLiveObject: (
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
-    reason?: 'object-removed',
+    reason?: LiveObjectExplicitRemovalReason,
   ) => void;
   onRoomSwitchStateChanged: (event: {
     roomId: string;

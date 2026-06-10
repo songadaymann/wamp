@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import type { SfxCue } from '../../audio/sfx';
 import {
+  canObjectBeStoredInContainer,
   decodeTileDataValue,
+  getObjectById,
   getObjectDefaultFrame,
   getObjectDisplayOffset,
   getObjectDisplayScale,
@@ -76,6 +78,7 @@ import {
 } from './liveObjects/behaviorRegistry';
 import { carryMovingPlatformRiders } from './liveObjects/movingPlatforms';
 import { getPlacedObjectPathTargetIds } from '../../placedObjects/objectPaths';
+import { getContainedLiveObjectKey } from './liveObjects/indexing';
 
 export { isDynamicArcadeBody } from './liveObjects/bodies';
 export type { ArcadeObjectBody } from './liveObjects/bodies';
@@ -327,7 +330,13 @@ export type LiveObjectRemovedReason =
   | 'collectible-collected'
   | 'enemy-collected'
   | 'object-removed'
-  | 'brick-broken';
+  | 'brick-broken'
+  | 'crate-broken';
+
+export type LiveObjectExplicitRemovalReason = Extract<
+  LiveObjectRemovedReason,
+  'object-removed' | 'brick-broken' | 'crate-broken'
+>;
 
 export interface LiveObjectRemovedEvent {
   roomId: string;
@@ -2150,6 +2159,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   ): void {
     const sprite = liveObject.sprite;
     const body = sprite.body as ArcadeObjectBody | null;
+    const revealedObject = this.revealContainedObjectFromBrokenContainer(loadedRoom, liveObject);
 
     this.emitLiveObjectRemovedForObject(loadedRoom, liveObject, 'brick-broken');
     this.destroyLiveObjectInteractions(liveObject);
@@ -2160,6 +2170,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
     loadedRoom.liveObjects = loadedRoom.liveObjects.filter((candidate) => candidate !== liveObject);
     this.syncWorldObjectColliders(this.options.getLoadedFullRooms());
+    if (revealedObject) {
+      this.syncLiveObjectInteractions([loadedRoom]);
+    }
 
     sprite.play('brick_box_break_anim');
     sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
@@ -2170,8 +2183,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private removeLiveObject(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
-    reason: 'object-removed' = 'object-removed',
+    reason: LiveObjectExplicitRemovalReason = 'object-removed',
   ): void {
+    const revealedObject = this.revealContainedObjectFromBrokenContainer(loadedRoom, liveObject);
     this.emitLiveObjectRemovedForObject(loadedRoom, liveObject, reason);
     this.destroyLiveObjectInteractions(liveObject);
     this.destroyLiveObjectWorldColliders(liveObject);
@@ -2179,6 +2193,70 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     liveObject.sprite.destroy();
     loadedRoom.liveObjects = loadedRoom.liveObjects.filter((candidate) => candidate !== liveObject);
     this.syncWorldObjectColliders(this.options.getLoadedFullRooms());
+    if (revealedObject) {
+      this.syncLiveObjectInteractions([loadedRoom]);
+    }
+  }
+
+  private revealContainedObjectFromBrokenContainer(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    container: LoadedRoomObject,
+  ): LoadedRoomObject | null {
+    if (!container.containedObjectId) {
+      return null;
+    }
+
+    const containedConfig = getObjectById(container.containedObjectId);
+    if (!containedConfig || !canObjectBeStoredInContainer(container.config.id, containedConfig)) {
+      return null;
+    }
+
+    const roomOrigin = this.options.getRoomOrigin(loadedRoom.room.coordinates);
+    const x = container.sprite.x - roomOrigin.x;
+    const y = container.sprite.y - roomOrigin.y + this.getContainedObjectRevealYOffset(container);
+    const key = getContainedLiveObjectKey(container.key, container.containedObjectId);
+    if (this.options.isCollectedObjectKey(key)) {
+      return null;
+    }
+
+    const liveObject = this.createLiveObjectEntry(loadedRoom, {
+      key,
+      config: containedConfig,
+      x,
+      y,
+      facing: container.runtime.directionX >= 0 ? 'right' : 'left',
+      layer: container.layer,
+      baseTimeSeed: x + y,
+      placedInstanceId: null,
+      linkedTargetRoomId: null,
+      linkedTargetInstanceId: null,
+      linkedTargetInstanceIds: [],
+      linkedTargetWorldX: null,
+      linkedTargetWorldY: null,
+      containedObjectId: null,
+      signText: null,
+      objectiveMode: null,
+      defeatMode: null,
+      countsTowardGoals: true,
+    });
+    if (!liveObject) {
+      return null;
+    }
+
+    loadedRoom.liveObjects.push(liveObject);
+    return liveObject;
+  }
+
+  private getContainedObjectRevealYOffset(container: LoadedRoomObject): number {
+    switch (container.config.id) {
+      case 'brick_box':
+      case 'treasure_chest':
+        return -12;
+      case 'crate':
+        return -10;
+      default:
+        return 0;
+    }
   }
 
   private collectLiveObject(
@@ -2208,7 +2286,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private emitLiveObjectRemovedForObject(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
-    reason: 'object-removed' | 'brick-broken',
+    reason: LiveObjectExplicitRemovalReason,
   ): void {
     if (!liveObject.sprite.active) {
       return;

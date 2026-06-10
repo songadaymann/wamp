@@ -303,6 +303,7 @@ export type MultiplayerRoomStateEventReason =
   | 'enemy-collected'
   | 'object-removed'
   | 'brick-broken'
+  | 'crate-broken'
   | 'switch-state';
 
 export interface MultiplayerRoomLiveObjectRemovedEvent {

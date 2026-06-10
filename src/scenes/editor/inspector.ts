@@ -988,11 +988,29 @@ export class EditorInspectorController {
   }
 
   private getContainerLabel(objectId: string): string {
-    return objectId === 'cage' ? 'cage' : 'treasure chest';
+    switch (objectId) {
+      case 'cage':
+        return 'cage';
+      case 'brick_box':
+        return 'brick box';
+      case 'crate':
+        return 'crate';
+      default:
+        return 'treasure chest';
+    }
   }
 
   private getContainerName(objectId: string): string {
-    return objectId === 'cage' ? 'This cage' : 'This treasure chest';
+    switch (objectId) {
+      case 'cage':
+        return 'This cage';
+      case 'brick_box':
+        return 'This brick box';
+      case 'crate':
+        return 'This crate';
+      default:
+        return 'This treasure chest';
+    }
   }
 
   private getContainerAcceptedContentsLabel(objectId: string): string {

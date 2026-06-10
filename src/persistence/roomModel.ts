@@ -443,6 +443,11 @@ function migrateLegacyBrickBoxesToSpecialTerrain(
       continue;
     }
 
+    if (placed.containedObjectId) {
+      nextPlacedObjects.push(placed);
+      continue;
+    }
+
     const cell = getLegacyBrickBoxTerrainCell(placed);
     if (!cell) {
       nextPlacedObjects.push(placed);
