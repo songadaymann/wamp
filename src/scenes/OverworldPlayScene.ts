@@ -515,6 +515,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private shouldCenterCamera = false;
   private shouldRespawnPlayer = false;
+  private pendingWarpSpawnRoomCoordinates: RoomCoordinates | null = null;
   private readonly handlePlayfunGamePause = (): void => {
     this.playfunPauseDepth += 1;
     this.playfunPauseRequested = true;
@@ -1052,7 +1053,11 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.roomSummariesById.get(roomIdFromCoordinates(coordinates)) ?? null,
       getRoomEditorCount: (coordinates) => this.getRoomEditorCount(coordinates),
       isWithinLoadedRoomBounds: (coordinates) => this.isWithinLoadedRoomBounds(coordinates),
+      canWarpToSelectedRoom: () => this.canWarpToSelectedRoom(),
       playSelectedRoom: () => this.playSelectedRoom(),
+      warpToSelectedRoom: () => {
+        void this.warpToSelectedRoom();
+      },
       truncateOverlayText: (value, maxLength) =>
         this.truncateOverlayText(value, maxLength),
     });
@@ -1772,6 +1777,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       setShouldRespawnPlayer: (value) => {
         this.shouldRespawnPlayer = value;
       },
+      setPendingWarpSpawnCoordinates: (coordinates) => {
+        this.pendingWarpSpawnRoomCoordinates = coordinates ? { ...coordinates } : null;
+      },
       refreshAround: (coordinates, options) => this.refreshAround(coordinates, options),
       refreshAroundIfNeededOrFromCache: (coordinates, options) =>
         this.refreshAroundIfNeededOrFromCache(coordinates, options),
@@ -2295,6 +2303,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.browseOverlayController.destroy();
     this.shouldCenterCamera = false;
     this.shouldRespawnPlayer = false;
+    this.pendingWarpSpawnRoomCoordinates = null;
     this.presenceController.reset();
     this.roomChatController.reset();
     this.roomCommentsController.reset();
@@ -2483,6 +2492,16 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private selectRoomCoordinates(coordinates: RoomCoordinates): void {
+    if (
+      this.mode === 'play' &&
+      coordinates.x === this.selectedCoordinates.x &&
+      coordinates.y === this.selectedCoordinates.y &&
+      this.canWarpToSelectedRoom()
+    ) {
+      void this.warpToSelectedRoom();
+      return;
+    }
+
     this.selectionController.selectRoomCoordinates(coordinates);
   }
 
@@ -2620,6 +2639,33 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   async jumpToCoordinates(coordinates: RoomCoordinates): Promise<void> {
     await this.selectionController.jumpToCoordinates(coordinates);
+  }
+
+  async warpToSelectedRoom(): Promise<void> {
+    if (!this.canWarpToSelectedRoom()) {
+      return;
+    }
+
+    await this.flowController.warpToSelectedRoom();
+  }
+
+  private canWarpToSelectedRoom(): boolean {
+    if (this.mode !== 'play' || this.isPvpArenaActive() || this.activeRoomRushRun) {
+      return false;
+    }
+
+    if (
+      this.selectedCoordinates.x === this.currentRoomCoordinates.x &&
+      this.selectedCoordinates.y === this.currentRoomCoordinates.y
+    ) {
+      return false;
+    }
+
+    const selectedState = this.getCellStateAt(this.selectedCoordinates);
+    return (
+      (selectedState === 'published' || selectedState === 'draft') &&
+      this.isWithinLoadedRoomBounds(this.selectedCoordinates)
+    );
   }
 
   private maybeAutoPlayDeepLinkedRoomOnBoot(refreshed: boolean): void {
@@ -3666,12 +3712,48 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (this.shouldHoldPlayerSpriteForDynamicAvatar()) {
       this.playerSprite.setVisible(false);
     }
+    this.clampPendingWarpSpawnIntoRoom(startRoom);
     this.externalLaunchGraceUntil = 0;
     this.movementController.handlePlayerCreated();
     this.combatController.clearAttackAnimation();
     this.playerPresentationController.handlePlayerCreated();
     this.maybeApplyPvpStartingPosition();
     void this.ensureCurrentAvatarPackLoaded();
+  }
+
+  private clampPendingWarpSpawnIntoRoom(startRoom: RoomSnapshot): void {
+    const pending = this.pendingWarpSpawnRoomCoordinates;
+    this.pendingWarpSpawnRoomCoordinates = null;
+    if (
+      !pending ||
+      pending.x !== startRoom.coordinates.x ||
+      pending.y !== startRoom.coordinates.y ||
+      !this.player ||
+      !this.playerBody ||
+      !this.playerPickupSensor ||
+      !this.playerPickupSensorBody
+    ) {
+      return;
+    }
+
+    const origin = this.getRoomOrigin(startRoom.coordinates);
+    const inset = 4;
+    const minX = origin.x + this.playerBody.width * 0.5 + inset;
+    const maxX = origin.x + ROOM_PX_WIDTH - this.playerBody.width * 0.5 - inset;
+    const minY = origin.y + this.playerBody.height * 0.5 + inset;
+    const maxY = origin.y + ROOM_PX_HEIGHT - this.playerBody.height * 0.5 - inset;
+    const x = Phaser.Math.Clamp(this.player.x, minX, maxX);
+    const y = Phaser.Math.Clamp(this.player.y, minY, maxY);
+    if (Math.abs(x - this.player.x) < 0.001 && Math.abs(y - this.player.y) < 0.001) {
+      return;
+    }
+
+    this.player.setPosition(x, y);
+    this.playerBody.reset(x, y);
+    this.playerBody.setVelocity(0, 0);
+    this.playerPickupSensor.setPosition(x, y);
+    this.playerPickupSensorBody.reset(x, y);
+    this.playerPickupSensorBody.setVelocity(0, 0);
   }
 
   private findOverlappingLadder(): LoadedRoomObject | null {
@@ -5753,6 +5835,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       currentRoom: { ...this.currentRoomCoordinates },
       windowCenter: { ...this.windowCenterCoordinates },
       selectedState: this.getCellStateAt(this.selectedCoordinates),
+      playWarpAffordanceVisible: this.browseOverlayController.isSelectedRoomPlayAffordanceVisible(),
+      canWarpToSelectedRoom: this.canWarpToSelectedRoom(),
       publishedRoomsInWindow: Array.from(this.roomSummariesById.values()).filter(
         (room) => room.state === 'published'
       ).length,
