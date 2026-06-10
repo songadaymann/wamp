@@ -757,7 +757,7 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
       }
 
       this.host.handlePlayerButtStompImpact(BUTT_STOMP_BRICK_BOUNCE_VELOCITY);
-      this.breakSpecialBrickTile(match.loadedRoom, match.tileX, match.tileY);
+      this.breakSpecialBrickTileStack(match.loadedRoom, match.tileX, match.tileY);
       return true;
     }
 
@@ -781,6 +781,36 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
     );
   }
 
+  private breakSpecialBrickTileStack(
+    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
+    tileX: number,
+    topTileY: number,
+  ): void {
+    for (let tileY = topTileY; tileY < ROOM_HEIGHT; tileY += 1) {
+      if (!this.canBreakSpecialBrickTile(loadedRoom, tileX, tileY)) {
+        break;
+      }
+
+      this.breakSpecialBrickTile(loadedRoom, tileX, tileY);
+    }
+  }
+
+  private canBreakSpecialBrickTile(
+    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
+    tileX: number,
+    tileY: number,
+  ): boolean {
+    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
+      return false;
+    }
+    if (this.isSpecialBrickTileBroken(loadedRoom.room.id, tileX, tileY)) {
+      return false;
+    }
+
+    const { gid } = decodeTileDataValue(loadedRoom.room.tileData.terrain[tileY][tileX]);
+    return isSpecialBreakableBrickGid(gid) && Boolean(loadedRoom.terrainLayer.getTileAt(tileX, tileY));
+  }
+
   private findSpecialBreakableBrickTileAtWorldPoint(
     worldX: number,
     worldY: number,
@@ -799,15 +829,7 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
       return null;
     }
 
-    if (this.isSpecialBrickTileBroken(roomId, tileX, tileY)) {
-      return null;
-    }
-
-    const { gid } = decodeTileDataValue(loadedRoom.room.tileData.terrain[tileY][tileX]);
-    if (!isSpecialBreakableBrickGid(gid)) {
-      return null;
-    }
-    if (!loadedRoom.terrainLayer.getTileAt(tileX, tileY)) {
+    if (!this.canBreakSpecialBrickTile(loadedRoom, tileX, tileY)) {
       return null;
     }
 
