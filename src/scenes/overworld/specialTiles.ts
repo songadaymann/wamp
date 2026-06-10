@@ -59,6 +59,9 @@ const DAMAGE_TILE_COOLDOWN_MS = 600;
 const ONE_WAY_DROP_THROUGH_MS = 240;
 const ONE_WAY_DROP_THROUGH_VELOCITY = 86;
 const WIND_ZONE_SCAN_PADDING_PX = 8;
+const BUTT_STOMP_BRICK_BOUNCE_VELOCITY = -150;
+const BUTT_STOMP_BRICK_TOP_TOLERANCE_PX = 12;
+const BUTT_STOMP_BRICK_MIN_HORIZONTAL_OVERLAP_PX = 3;
 
 const GRAVITY_DIRECTION_BY_TILE_KIND: Partial<Record<SpecialTileKind, PlayerGravityDirection>> = {
   gravityUp: 'up',
@@ -76,6 +79,8 @@ interface OverworldSpecialTilesControllerHost<TLiveObject, TEdgeWall> {
   getRoomCoordinatesForPoint: (x: number, y: number) => RoomCoordinates;
   getRoomOrigin: (coordinates: RoomCoordinates) => { x: number; y: number };
   grantExternalLaunchGrace: (durationMs: number) => void;
+  isPlayerButtStomping: () => boolean;
+  handlePlayerButtStompImpact: (bounceVelocity: number) => void;
   handlePlayerDeath: (reason: string) => void;
   playBounceFx: (
     x: number,
@@ -683,6 +688,9 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
     if (!playerBody) {
       return;
     }
+    if (this.maybeBreakSpecialBrickTileFromButtStomp(playerBody)) {
+      return;
+    }
 
     const upwardDelta =
       typeof playerBody.deltaY === 'function'
@@ -713,6 +721,64 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
       this.breakSpecialBrickTile(match.loadedRoom, match.tileX, match.tileY);
       return;
     }
+  }
+
+  private maybeBreakSpecialBrickTileFromButtStomp(
+    playerBody: Phaser.Physics.Arcade.Body,
+  ): boolean {
+    if (!this.host.isPlayerButtStomping()) {
+      return false;
+    }
+
+    const downwardDelta =
+      typeof playerBody.deltaY === 'function'
+        ? playerBody.deltaY()
+        : playerBody.y - (playerBody.prev?.y ?? playerBody.y);
+    const separatedDown = Boolean(playerBody.blocked?.down) || Boolean(playerBody.touching?.down);
+    const hitFromAbove = downwardDelta > 0.5 || playerBody.velocity.y > 40 || separatedDown;
+    if (!hitFromAbove) {
+      return false;
+    }
+
+    const sampleY = playerBody.bottom + 1;
+    const sampleXs = [
+      playerBody.center.x,
+      playerBody.left + 2,
+      playerBody.right - 2,
+    ].filter((value, index, values) => values.indexOf(value) === index);
+
+    for (const sampleX of sampleXs) {
+      const match = this.findSpecialBreakableBrickTileAtWorldPoint(sampleX, sampleY);
+      if (
+        !match ||
+        !this.isPlayerButtStompImpactFromAbove(playerBody, match.loadedRoom, match.tileX, match.tileY)
+      ) {
+        continue;
+      }
+
+      this.host.handlePlayerButtStompImpact(BUTT_STOMP_BRICK_BOUNCE_VELOCITY);
+      this.breakSpecialBrickTile(match.loadedRoom, match.tileX, match.tileY);
+      return true;
+    }
+
+    return false;
+  }
+
+  private isPlayerButtStompImpactFromAbove(
+    playerBody: Phaser.Physics.Arcade.Body,
+    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
+    tileX: number,
+    tileY: number,
+  ): boolean {
+    const bounds = this.getSpecialBrickTileWorldBounds(loadedRoom, tileX, tileY);
+    const horizontalOverlap =
+      Math.min(playerBody.right, bounds.right) -
+      Math.max(playerBody.left, bounds.left);
+    return (
+      horizontalOverlap >= BUTT_STOMP_BRICK_MIN_HORIZONTAL_OVERLAP_PX &&
+      playerBody.center.y < bounds.top + TILE_SIZE / 2 &&
+      playerBody.bottom <= bounds.top + BUTT_STOMP_BRICK_TOP_TOLERANCE_PX
+    );
   }
 
   private findSpecialBreakableBrickTileAtWorldPoint(
@@ -874,6 +940,27 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
     }
 
     sprite.destroy();
+  }
+
+  private getSpecialBrickTileWorldBounds(
+    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
+    tileX: number,
+    tileY: number,
+  ): {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+  } {
+    const origin = this.host.getRoomOrigin(loadedRoom.room.coordinates);
+    const left = origin.x + tileX * TILE_SIZE;
+    const top = origin.y + tileY * TILE_SIZE;
+    return {
+      left,
+      right: left + TILE_SIZE,
+      top,
+      bottom: top + TILE_SIZE,
+    };
   }
 
   private getTileWorldBounds(tile: Phaser.Tilemaps.Tile): {

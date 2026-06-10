@@ -405,6 +405,9 @@ export class OverworldPlayScene extends Phaser.Scene {
   };
   private cameraToggleKey!: Phaser.Input.Keyboard.Key;
   private isCrouching = false;
+  private isButtStomping = false;
+  private buttStompFlipUntil = 0;
+  private buttStompImpactGraceUntil = 0;
   private activeCrateInteractionMode: 'push' | 'pull' | null = null;
   private activeCrateInteractionFacing: -1 | 1 | null = null;
   private weaponKnockbackVelocityX = 0;
@@ -643,6 +646,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       swordsmanTraversalPlannerMode: this.getSwordsmanTraversalPlannerMode(),
       isPlayerClimbingLadder: () => this.isClimbingLadder,
       isLadderDropRequested: () => this.isLadderDropRequested(),
+      isPlayerButtStomping: () =>
+        this.isButtStomping || this.time.now <= this.buttStompImpactGraceUntil,
+      handlePlayerButtStompImpact: (bounceVelocity) =>
+        this.movementController.handleButtStompImpact(bounceVelocity),
       getCurrentTime: () => this.time.now,
       addScore: (delta) => {
         this.score += delta;
@@ -736,6 +743,10 @@ export class OverworldPlayScene extends Phaser.Scene {
           this.time.now + durationMs
         );
       },
+      isPlayerButtStomping: () =>
+        this.isButtStomping || this.time.now <= this.buttStompImpactGraceUntil,
+      handlePlayerButtStompImpact: (bounceVelocity) =>
+        this.movementController.handleButtStompImpact(bounceVelocity),
       handlePlayerDeath: (reason) => this.sessionResetController.handlePlayerDeath(reason),
       playBounceFx: (x, y, roomCoordinates, cue) =>
         this.fxController?.playBounceFx(
@@ -1353,6 +1364,8 @@ export class OverworldPlayScene extends Phaser.Scene {
         getWallContactSide: () => this.wallContactSide,
         getWallJumpActive: () => this.wallJumpActive,
         getIsCrouching: () => this.isCrouching,
+        getIsButtStomping: () => this.isButtStomping,
+        getButtStompFlipUntil: () => this.buttStompFlipUntil,
         getActiveCrateInteractionMode: () => this.activeCrateInteractionMode,
         getActiveCrateInteractionFacing: () => this.activeCrateInteractionFacing,
         getGroundedOverride: () => this.playerPresentationGroundedOverride,
@@ -1375,6 +1388,24 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       set isCrouching(value: boolean) {
         thisScene.isCrouching = value;
+      },
+      get isButtStomping() {
+        return thisScene.isButtStomping;
+      },
+      set isButtStomping(value: boolean) {
+        thisScene.isButtStomping = value;
+      },
+      get buttStompFlipUntil() {
+        return thisScene.buttStompFlipUntil;
+      },
+      set buttStompFlipUntil(value: number) {
+        thisScene.buttStompFlipUntil = value;
+      },
+      get buttStompImpactGraceUntil() {
+        return thisScene.buttStompImpactGraceUntil;
+      },
+      set buttStompImpactGraceUntil(value: number) {
+        thisScene.buttStompImpactGraceUntil = value;
       },
       get activeCrateInteractionMode() {
         return thisScene.activeCrateInteractionMode;
@@ -6063,6 +6094,12 @@ export class OverworldPlayScene extends Phaser.Scene {
       enemies: this.countLiveObjectsByCategory('enemy'),
       combat: {
         crouching: this.isCrouching,
+        buttStomping: this.isButtStomping,
+        buttStompFlipMs: Math.max(0, Math.round(this.buttStompFlipUntil - this.time.now)),
+        buttStompImpactGraceMs: Math.max(
+          0,
+          Math.round(this.buttStompImpactGraceUntil - this.time.now),
+        ),
         activeAttackAnimation: this.combatController.getActiveAttackAnimation(),
         crateInteractionMode: this.activeCrateInteractionMode,
         crateInteractionFacing: this.activeCrateInteractionFacing,
@@ -6137,6 +6174,12 @@ export class OverworldPlayScene extends Phaser.Scene {
             bodyTop: Math.round(this.playerBody.top),
             bodyBottom: Math.round(this.playerBody.bottom),
             crouching: this.isCrouching,
+            buttStomping: this.isButtStomping,
+            buttStompFlipMs: Math.max(0, Math.round(this.buttStompFlipUntil - this.time.now)),
+            buttStompImpactGraceMs: Math.max(
+              0,
+              Math.round(this.buttStompImpactGraceUntil - this.time.now),
+            ),
             climbing: this.isClimbingLadder,
             jumpBuffered: this.jumpBuffered,
             jumpBufferMs: Math.max(0, Math.round(this.jumpBufferTime)),

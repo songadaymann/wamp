@@ -230,6 +230,18 @@ export class BootScene extends Phaser.Scene {
       });
     }
 
+    if (!this.anims.exists('crate_break_anim')) {
+      this.anims.create({
+        key: 'crate_break_anim',
+        frames: [0, 1, 2, 3].map((frame) => ({
+          key: 'crate',
+          frame,
+        })),
+        frameRate: 18,
+        repeat: 0,
+      });
+    }
+
     for (const animation of SWORDSMAN_AI_ANIMATIONS) {
       if (this.anims.exists(animation.key)) {
         continue;
