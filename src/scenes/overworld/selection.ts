@@ -156,6 +156,10 @@ export class OverworldSelectionController {
     if (summary?.state === 'frontier') {
       return 'frontier';
     }
+    const snapshot = this.host.getRoomSnapshotForCoordinates(coordinates);
+    if (snapshot?.status === 'draft') {
+      return 'claimed_unpublished';
+    }
     return 'empty';
   }
 

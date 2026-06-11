@@ -96,6 +96,7 @@ interface PresenceSummaryInput {
 interface OverworldPresenceControllerOptions {
   scene: Phaser.Scene;
   isFullRoomLoaded: (roomId: string) => boolean;
+  isConstructionRoomLoaded: (roomId: string) => boolean;
   getMode: () => OverworldMode;
   getCurrentRoomCoordinates: () => RoomCoordinates;
   getSelectedCoordinates: () => RoomCoordinates;
@@ -898,8 +899,21 @@ export class OverworldPresenceController {
         ? this.options.getCurrentRoomCoordinates()
         : this.options.getSelectedCoordinates();
 
+    const currentRoomId =
+      this.options.getMode() === 'play'
+        ? roomIdFromCoordinates(this.options.getCurrentRoomCoordinates())
+        : null;
+
     return [...(this.snapshot?.ghosts ?? [])]
-      .filter((ghost) => ghost.mode === 'play')
+      .filter((ghost) =>
+        ghost.mode === 'play' ||
+        (
+          ghost.mode === 'edit' &&
+          currentRoomId !== null &&
+          ghost.roomId === currentRoomId &&
+          this.options.isConstructionRoomLoaded(ghost.roomId)
+        )
+      )
       .sort((left, right) => {
         const leftLoaded = this.options.isFullRoomLoaded(left.roomId) ? 0 : 1;
         const rightLoaded = this.options.isFullRoomLoaded(right.roomId) ? 0 : 1;

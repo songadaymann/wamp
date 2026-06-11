@@ -15,6 +15,10 @@ import {
   type PartyKitIdentityTokenClaims,
 } from '../src/presence/identityToken';
 import {
+  resolveConstructionPreviewTokenSigningSecret,
+  verifyConstructionPreviewToken,
+} from '../src/presence/constructionPreviewToken';
+import {
   getMultiplayerModeDefinition,
   type PvpHitSource,
   type PvpInviteAcceptMessage,
@@ -89,6 +93,7 @@ interface RoomPreviewPayload {
   roomCoordinates: RoomCoordinates;
   snapshot: RoomSnapshot;
   timestamp: number;
+  constructionPreviewToken?: string;
 }
 
 interface ConnectionPresenceState {
@@ -110,7 +115,7 @@ interface WorldGhostPresence extends PresencePayload {
   roomId: string;
 }
 
-interface SharedRoomPreview extends RoomPreviewPayload {
+interface SharedRoomPreview extends Omit<RoomPreviewPayload, 'constructionPreviewToken'> {
   roomId: string;
   userId: string;
   displayName: string;
@@ -335,7 +340,9 @@ export default class PresenceServer implements Party.Server {
     }
 
     if (parsed.type === 'presence:preview:update') {
-      this.updatePreview(sender, parsed.preview);
+      void this.updatePreview(sender, parsed.preview).catch((error) => {
+        console.warn('Failed to update construction preview.', error);
+      });
       return;
     }
 
@@ -613,10 +620,10 @@ export default class PresenceServer implements Party.Server {
     };
   }
 
-  private updatePreview(
+  private async updatePreview(
     connection: Party.Connection<ConnectionPresenceState>,
     value: unknown,
-  ): void {
+  ): Promise<void> {
     const current = connection.state;
     if (!current || current.channel !== 'presence') {
       return;
@@ -624,6 +631,10 @@ export default class PresenceServer implements Party.Server {
 
     const preview = this.normalizeRoomPreviewPayload(value);
     if (!preview) {
+      return;
+    }
+    const authorized = await this.isAuthorizedConstructionPreview(connection, preview);
+    if (!authorized) {
       return;
     }
 
@@ -641,6 +652,37 @@ export default class PresenceServer implements Party.Server {
       void this.room.storage.put(this.getPreviewStorageKey(sharedPreview.roomId), sharedPreview);
     }
     this.broadcastPopulations();
+  }
+
+  private async isAuthorizedConstructionPreview(
+    connection: Party.Connection<ConnectionPresenceState>,
+    preview: RoomPreviewPayload,
+  ): Promise<boolean> {
+    const state = connection.state;
+    const token = preview.constructionPreviewToken?.trim() ?? '';
+    if (!state || !token) {
+      return false;
+    }
+
+    const signingSecret = resolveConstructionPreviewTokenSigningSecret(this.room.env);
+    if (!signingSecret) {
+      return false;
+    }
+
+    const claims = await verifyConstructionPreviewToken(token, signingSecret.secret);
+    if (!claims || claims.userId !== state.userId) {
+      return false;
+    }
+
+    const roomId = this.getRoomId(preview.roomCoordinates);
+    return (
+      claims.roomId === roomId &&
+      claims.roomCoordinates.x === preview.roomCoordinates.x &&
+      claims.roomCoordinates.y === preview.roomCoordinates.y &&
+      preview.snapshot.id === roomId &&
+      preview.snapshot.status === 'draft' &&
+      preview.snapshot.publishedAt === null
+    );
   }
 
   private clearPreview(
@@ -726,9 +768,10 @@ export default class PresenceServer implements Party.Server {
     if (!state) {
       return null;
     }
+    const { constructionPreviewToken: _token, ...storedPreview } = preview;
 
     return {
-      ...preview,
+      ...storedPreview,
       roomId: this.getRoomId(preview.roomCoordinates),
       userId: state.userId,
       displayName: state.displayName,
@@ -808,6 +851,11 @@ export default class PresenceServer implements Party.Server {
       },
       snapshot: payload.snapshot as RoomSnapshot,
       timestamp: payload.timestamp,
+      ...(typeof payload.constructionPreviewToken === 'string' &&
+      payload.constructionPreviewToken.trim().length > 0 &&
+      payload.constructionPreviewToken.length <= 2048
+        ? { constructionPreviewToken: payload.constructionPreviewToken.trim() }
+        : {}),
     };
   }
 

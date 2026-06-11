@@ -198,6 +198,32 @@ export async function loadPublishedRoom(
   return parseStoredSnapshot(row.published_json, 'published room');
 }
 
+export async function loadConstructionRoom(
+  env: Env,
+  roomId: string,
+  coordinates: RoomCoordinates
+): Promise<RoomSnapshot | null> {
+  const row = await env.DB.prepare(
+    `
+      SELECT draft_json
+      FROM rooms
+      WHERE (id = ? OR (x = ? AND y = ?))
+        AND published_json IS NULL
+        AND claimer_user_id IS NOT NULL
+        AND claimed_at IS NOT NULL
+      LIMIT 1
+    `
+  )
+    .bind(roomId, coordinates.x, coordinates.y)
+    .first<{ draft_json: string | null }>();
+
+  if (!row?.draft_json) {
+    return null;
+  }
+
+  return parseStoredSnapshot(row.draft_json, 'construction room');
+}
+
 export async function loadPublishedRoomsInBounds(
   env: Env,
   minX: number,

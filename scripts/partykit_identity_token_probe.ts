@@ -4,6 +4,10 @@ import {
   verifyPartykitIdentityToken,
   type PartyKitIdentity,
 } from '../src/presence/identityToken';
+import {
+  createConstructionPreviewToken,
+  verifyConstructionPreviewToken,
+} from '../src/presence/constructionPreviewToken';
 import { handlePresenceRequest } from '../src/cloudflare/worker/presence/routes';
 import type { Env } from '../src/cloudflare/worker/core/types';
 
@@ -24,6 +28,35 @@ async function main(): Promise<void> {
   const tamperedToken = `${token.slice(0, -1)}${token.endsWith('a') ? 'b' : 'a'}`;
   const tampered = await verifyPartykitIdentityToken(tamperedToken, secret);
   assert(tampered === null, 'tampered token should not verify');
+
+  const { token: constructionPreviewToken } = await createConstructionPreviewToken(
+    {
+      roomId: '4,-2',
+      roomCoordinates: { x: 4, y: -2 },
+      userId: 'user-builder-1',
+    },
+    secret,
+    {
+      nonce: 'construction-preview-probe-nonce',
+    }
+  );
+  const verifiedConstructionPreview = await verifyConstructionPreviewToken(
+    constructionPreviewToken,
+    secret
+  );
+  assert(
+    verifiedConstructionPreview?.roomId === '4,-2' &&
+      verifiedConstructionPreview.userId === 'user-builder-1',
+    'construction preview token should verify room and builder claims'
+  );
+  const tamperedConstructionPreviewToken = `${constructionPreviewToken.slice(0, -1)}${
+    constructionPreviewToken.endsWith('a') ? 'b' : 'a'
+  }`;
+  const tamperedConstructionPreview = await verifyConstructionPreviewToken(
+    tamperedConstructionPreviewToken,
+    secret
+  );
+  assert(tamperedConstructionPreview === null, 'tampered construction preview token should not verify');
 
   const validConnect = await PresenceServer.onBeforeConnect(
     new Request(`https://presence.example.test/parties/main/0,0?identityToken=${encodeURIComponent(token)}`) as never,

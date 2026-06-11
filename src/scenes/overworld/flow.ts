@@ -132,7 +132,11 @@ export class OverworldSceneFlowController {
 
     const selectedCoordinates = this.host.getSelectedCoordinates();
     const selectedState = this.host.getCellStateAt(selectedCoordinates);
-    if (selectedState !== 'published' && selectedState !== 'draft') {
+    if (
+      selectedState !== 'published' &&
+      selectedState !== 'draft' &&
+      selectedState !== 'claimed_unpublished'
+    ) {
       return;
     }
 
@@ -175,7 +179,11 @@ export class OverworldSceneFlowController {
     }
 
     const selectedState = this.host.getCellStateAt(selectedCoordinates);
-    if (selectedState !== 'published' && selectedState !== 'draft') {
+    if (
+      selectedState !== 'published' &&
+      selectedState !== 'draft' &&
+      selectedState !== 'claimed_unpublished'
+    ) {
       return;
     }
 
@@ -225,7 +233,11 @@ export class OverworldSceneFlowController {
 
     const restartCoordinates = this.host.getCurrentRoomCoordinates();
     const restartState = this.host.getCellStateAt(restartCoordinates);
-    if (restartState !== 'published' && restartState !== 'draft') {
+    if (
+      restartState !== 'published' &&
+      restartState !== 'draft' &&
+      restartState !== 'claimed_unpublished'
+    ) {
       return;
     }
 

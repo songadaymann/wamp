@@ -143,6 +143,7 @@ interface PresencePreviewPayload {
   roomCoordinates: RoomCoordinates;
   snapshot: RoomSnapshot;
   timestamp: number;
+  constructionPreviewToken?: string;
 }
 
 interface PresenceLeaveMessage {
@@ -279,6 +280,7 @@ export class WorldPresenceClient {
   updateLocalRoomPreview(nextPreview: {
     roomCoordinates: RoomCoordinates;
     snapshot: RoomSnapshot;
+    constructionPreviewToken?: string;
   } | null): void {
     const previousPreview = this.localRoomPreview;
     const previousShardId = this.previewShardId;
@@ -287,6 +289,9 @@ export class WorldPresenceClient {
           roomCoordinates: { ...nextPreview.roomCoordinates },
           snapshot: cloneRoomSnapshot(nextPreview.snapshot),
           timestamp: Date.now(),
+          ...(nextPreview.constructionPreviewToken
+            ? { constructionPreviewToken: nextPreview.constructionPreviewToken }
+            : {}),
         }
       : null;
     const nextShardId = normalizedPreview

@@ -1,129 +1,69 @@
-const TOKEN_VERSION = 'v1';
-const DEFAULT_TOKEN_TTL_MS = 5 * 60 * 1000;
-const MAX_TOKEN_TTL_MS = 10 * 60 * 1000;
+import { roomIdFromCoordinates, type RoomCoordinates } from '../persistence/roomModel';
+import type {
+  PartyKitIdentityTokenSecretEnv,
+  PartyKitIdentityTokenSecretSource,
+} from './identityToken';
+import { resolvePartykitIdentitySigningSecret } from './identityToken';
+
+const TOKEN_VERSION = 'cpv1';
+const DEFAULT_TOKEN_TTL_MS = 2 * 60 * 1000;
+const MAX_TOKEN_TTL_MS = 5 * 60 * 1000;
 const CLOCK_SKEW_MS = 30 * 1000;
 const MAX_TOKEN_LENGTH = 2048;
 const MAX_USER_ID_LENGTH = 96;
-const MAX_DISPLAY_NAME_LENGTH = 32;
-const MAX_AVATAR_ID_LENGTH = 96;
 const MAX_NONCE_LENGTH = 96;
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
-export type PartyKitIdentityTokenSource = 'auth' | 'guest';
-export type PartyKitIdentityTokenSecretSource =
-  | 'PARTYKIT_IDENTITY_TOKEN_SECRET'
-  | 'PARTYKIT_INTERNAL_TOKEN';
-
-export interface PartyKitIdentityTokenSecretEnv {
-  PARTYKIT_IDENTITY_TOKEN_SECRET?: unknown;
-  PARTYKIT_INTERNAL_TOKEN?: unknown;
-}
-
-export interface PartyKitIdentity {
+export interface ConstructionPreviewTokenClaims {
+  roomId: string;
+  roomCoordinates: RoomCoordinates;
   userId: string;
-  displayName: string;
-  avatarId: string;
-}
-
-export interface PartyKitIdentityTokenClaims extends PartyKitIdentity {
-  source: PartyKitIdentityTokenSource;
   iat: number;
   exp: number;
   nonce: string;
 }
 
-export interface PartyKitIdentityTokenIssueRequestBody {
-  identity?: Partial<PartyKitIdentity> | null;
-  userId?: unknown;
-  displayName?: unknown;
-  avatarId?: unknown;
-}
-
-export interface PartyKitIdentityTokenIssueResponse {
+export interface ConstructionPreviewTokenIssueResponse {
   token: string;
   expiresAt: string;
-  identity: PartyKitIdentity;
-  source: PartyKitIdentityTokenSource;
 }
 
-export interface PartyKitIdentityTokenCreateOptions {
+export interface ConstructionPreviewTokenCreateOptions {
   nowMs?: number;
   ttlMs?: number;
   nonce?: string;
 }
 
-export interface PartyKitIdentityTokenVerifyOptions {
+export interface ConstructionPreviewTokenVerifyOptions {
   nowMs?: number;
 }
 
-export function resolvePartykitIdentitySigningSecret(
+export function resolveConstructionPreviewTokenSigningSecret(
   env: PartyKitIdentityTokenSecretEnv
 ): { secret: string; source: PartyKitIdentityTokenSecretSource } | null {
-  const dedicated = normalizeSecret(env.PARTYKIT_IDENTITY_TOKEN_SECRET);
-  if (dedicated) {
-    return {
-      secret: dedicated,
-      source: 'PARTYKIT_IDENTITY_TOKEN_SECRET',
-    };
-  }
-
-  const fallback = normalizeSecret(env.PARTYKIT_INTERNAL_TOKEN);
-  return fallback
-    ? {
-        secret: fallback,
-        source: 'PARTYKIT_INTERNAL_TOKEN',
-      }
-    : null;
+  return resolvePartykitIdentitySigningSecret(env);
 }
 
-export function normalizePartykitAuthIdentity(input: {
-  userId: unknown;
-  displayName: unknown;
-  avatarId: unknown;
-}): PartyKitIdentity | null {
-  const userId = normalizeIdentityString(input.userId, MAX_USER_ID_LENGTH);
-  const displayName = normalizeIdentityString(input.displayName, MAX_DISPLAY_NAME_LENGTH);
-  const avatarId = normalizeIdentityString(input.avatarId, MAX_AVATAR_ID_LENGTH) || 'default-player';
-  if (!userId || !displayName || !avatarId) {
-    return null;
-  }
-
-  return {
-    userId,
-    displayName,
-    avatarId,
-  };
-}
-
-export function normalizePartykitGuestIdentity(input: {
-  userId: unknown;
-  displayName: unknown;
-  avatarId: unknown;
-}): PartyKitIdentity | null {
-  const identity = normalizePartykitAuthIdentity(input);
-  if (!identity || !isGuestPresenceUserId(identity.userId)) {
-    return null;
-  }
-
-  return identity;
-}
-
-export async function createPartykitIdentityToken(
-  identity: PartyKitIdentity,
-  source: PartyKitIdentityTokenSource,
+export async function createConstructionPreviewToken(
+  input: {
+    roomId: string;
+    roomCoordinates: RoomCoordinates;
+    userId: string;
+  },
   secret: string,
-  options: PartyKitIdentityTokenCreateOptions = {}
-): Promise<{ token: string; claims: PartyKitIdentityTokenClaims }> {
+  options: ConstructionPreviewTokenCreateOptions = {}
+): Promise<{ token: string; claims: ConstructionPreviewTokenClaims }> {
   const ttlMs = clampTokenTtl(options.ttlMs ?? DEFAULT_TOKEN_TTL_MS);
   const nowMs = Math.floor(options.nowMs ?? Date.now());
-  const claims: PartyKitIdentityTokenClaims = {
-    ...identity,
-    source,
+  const claims: ConstructionPreviewTokenClaims = {
+    roomId: input.roomId,
+    roomCoordinates: { ...input.roomCoordinates },
+    userId: input.userId,
     iat: nowMs,
     exp: nowMs + ttlMs,
-    nonce: normalizeIdentityString(options.nonce, MAX_NONCE_LENGTH) || crypto.randomUUID(),
+    nonce: normalizeShortString(options.nonce, MAX_NONCE_LENGTH) || crypto.randomUUID(),
   };
   const payload = encodeBase64Url(textEncoder.encode(JSON.stringify(claims)));
   const signedValue = `${TOKEN_VERSION}.${payload}`;
@@ -134,11 +74,11 @@ export async function createPartykitIdentityToken(
   };
 }
 
-export async function verifyPartykitIdentityToken(
+export async function verifyConstructionPreviewToken(
   token: string,
   secret: string,
-  options: PartyKitIdentityTokenVerifyOptions = {}
-): Promise<PartyKitIdentityTokenClaims | null> {
+  options: ConstructionPreviewTokenVerifyOptions = {}
+): Promise<ConstructionPreviewTokenClaims | null> {
   const trimmed = token.trim();
   if (trimmed.length === 0 || trimmed.length > MAX_TOKEN_LENGTH) {
     return null;
@@ -178,31 +118,24 @@ export async function verifyPartykitIdentityToken(
 function normalizeVerifiedClaims(
   value: unknown,
   nowMs: number
-): PartyKitIdentityTokenClaims | null {
+): ConstructionPreviewTokenClaims | null {
   if (!value || typeof value !== 'object') {
     return null;
   }
 
-  const raw = value as Partial<PartyKitIdentityTokenClaims>;
-  const source = raw.source === 'auth' || raw.source === 'guest' ? raw.source : null;
-  const rawIdentity = {
-    userId: raw.userId,
-    displayName: raw.displayName,
-    avatarId: raw.avatarId,
-  };
-  const identity =
-    source === 'guest'
-      ? normalizePartykitGuestIdentity(rawIdentity)
-      : source === 'auth'
-        ? normalizePartykitAuthIdentity(rawIdentity)
-        : null;
+  const raw = value as Partial<ConstructionPreviewTokenClaims>;
+  const coordinates = normalizeRoomCoordinates(raw.roomCoordinates);
+  const roomId = normalizeShortString(raw.roomId, 96);
+  const userId = normalizeShortString(raw.userId, MAX_USER_ID_LENGTH);
   const iat = Number(raw.iat);
   const exp = Number(raw.exp);
-  const nonce = normalizeIdentityString(raw.nonce, MAX_NONCE_LENGTH);
+  const nonce = normalizeShortString(raw.nonce, MAX_NONCE_LENGTH);
 
   if (
-    !source ||
-    !identity ||
+    !coordinates ||
+    !roomId ||
+    roomId !== roomIdFromCoordinates(coordinates) ||
+    !userId ||
     !nonce ||
     !Number.isFinite(iat) ||
     !Number.isFinite(exp) ||
@@ -215,24 +148,44 @@ function normalizeVerifiedClaims(
   }
 
   return {
-    ...identity,
-    source,
+    roomId,
+    roomCoordinates: coordinates,
+    userId,
     iat,
     exp,
     nonce,
   };
 }
 
-function normalizeSecret(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+function normalizeRoomCoordinates(value: unknown): RoomCoordinates | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const raw = value as Partial<RoomCoordinates>;
+  const x = raw.x;
+  const y = raw.y;
+  if (
+    typeof x !== 'number' ||
+    typeof y !== 'number' ||
+    !Number.isInteger(x) ||
+    !Number.isInteger(y)
+  ) {
+    return null;
+  }
+
+  return {
+    x,
+    y,
+  };
 }
 
-function normalizeIdentityString(value: unknown, maxLength: number): string | null {
+function normalizeShortString(value: unknown, maxLength: number): string | null {
   if (typeof value !== 'string') {
     return null;
   }
 
-  const normalized = value.trim().replace(/\s+/g, ' ');
+  const normalized = value.trim();
   if (
     normalized.length === 0 ||
     normalized.length > maxLength ||
@@ -242,10 +195,6 @@ function normalizeIdentityString(value: unknown, maxLength: number): string | nu
   }
 
   return normalized;
-}
-
-function isGuestPresenceUserId(userId: string): boolean {
-  return /^guest-[a-zA-Z0-9-]{8,80}$/.test(userId);
 }
 
 function clampTokenTtl(ttlMs: number): number {
