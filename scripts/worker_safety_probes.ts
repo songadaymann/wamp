@@ -9,6 +9,10 @@ import {
   handleRoomRushRunSubmit,
 } from '../src/cloudflare/worker/runs/roomRushLeaderboards';
 import {
+  loadConstructionRoom,
+} from '../src/cloudflare/worker/rooms/store';
+import type { Env } from '../src/cloudflare/worker/core/types';
+import {
   createDefaultRoomSnapshot,
   roomIdFromCoordinates,
   type RoomCoordinates,
@@ -89,10 +93,16 @@ class MockD1Database {
       return { found: 0 } as T;
     }
 
+    if (query.includes('SELECT draft_json') && query.includes('published_json IS NULL')) {
+      const roomId = String(values[0]);
+      const room = this.rooms.get(roomId);
+      return room?.status === 'draft' ? ({ draft_json: JSON.stringify(room) } as T) : null;
+    }
+
     if (query.includes('SELECT published_json') && query.includes('FROM rooms')) {
       const roomId = String(values[0]);
       const room = this.rooms.get(roomId);
-      return room ? ({ published_json: JSON.stringify(room) } as T) : null;
+      return room?.status === 'published' ? ({ published_json: JSON.stringify(room) } as T) : null;
     }
 
     if (query.includes('FROM room_rush_run_starts')) {
@@ -181,6 +191,16 @@ function publishedRoom(coordinates: RoomCoordinates): RoomSnapshot {
     ...createDefaultRoomSnapshot(id, coordinates),
     status: 'published',
     publishedAt: new Date(0).toISOString(),
+  };
+}
+
+function constructionRoom(coordinates: RoomCoordinates): RoomSnapshot {
+  const id = roomIdFromCoordinates(coordinates);
+  return {
+    ...createDefaultRoomSnapshot(id, coordinates),
+    title: 'Playable Draft',
+    status: 'draft',
+    publishedAt: null,
   };
 }
 
@@ -330,7 +350,33 @@ async function probeRoomRush(): Promise<void> {
   assert.equal(db.runs.length, 1);
 }
 
+async function probeConstructionRoomSnapshots(): Promise<void> {
+  const db = new MockD1Database();
+  const draft = constructionRoom({ x: 2, y: 0 });
+  const published = publishedRoom({ x: 3, y: 0 });
+  db.rooms.set(draft.id, draft);
+  db.rooms.set(published.id, published);
+
+  const construction = await loadConstructionRoom(
+    { DB: db } as unknown as Env,
+    draft.id,
+    draft.coordinates,
+  );
+  assert(construction, 'claimed unpublished construction room should be returned');
+  assert.equal(construction.id, draft.id);
+  assert.equal(construction.status, 'draft');
+  assert.equal(construction.publishedAt, null);
+
+  const hiddenPublished = await loadConstructionRoom(
+    { DB: db } as unknown as Env,
+    published.id,
+    published.coordinates,
+  );
+  assert.equal(hiddenPublished, null, 'published rooms should not be exposed as construction rooms');
+}
+
 await probeCors();
 await probeRoomSnapshots();
+await probeConstructionRoomSnapshots();
 await probeRoomRush();
 console.log('Worker safety probes passed.');

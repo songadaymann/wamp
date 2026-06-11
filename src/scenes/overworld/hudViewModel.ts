@@ -328,8 +328,8 @@ export function buildOverworldHudViewModel(
     }
     metaParts.push(
       viewerOwnsSelectedRoom
-        ? 'unpublished draft stored on the server'
-        : 'unpublished work in progress'
+        ? 'playable unpublished draft'
+        : 'playable work in progress'
     );
     selectedMetaText = metaParts.join(' · ');
     selectedMetaTone = 'claimed_unpublished';
@@ -440,7 +440,7 @@ export function buildOverworldHudViewModel(
         : selectedState === 'published'
           ? 'Published'
         : selectedState === 'claimed_unpublished'
-          ? 'Claimed'
+          ? 'Building'
         : selectedState === 'draft'
           ? 'Draft'
           : selectedState === 'frontier'
@@ -475,7 +475,9 @@ export function buildOverworldHudViewModel(
         ? true
         : mode === 'play'
           ? false
-          : selectedState !== 'published' && selectedState !== 'draft',
+          : selectedState !== 'published' &&
+            selectedState !== 'draft' &&
+            selectedState !== 'claimed_unpublished',
     playButtonActive: mode === 'play' && !activeRoomRushRun,
     restartButtonText: 'Restart',
     restartButtonDisabled: mode !== 'play',

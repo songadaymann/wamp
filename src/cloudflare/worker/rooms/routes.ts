@@ -9,6 +9,11 @@ import {
   annotateRoomVersionRecordsWithTilesetHints,
 } from '../../../agentBuilder/tilesetCatalog';
 import {
+  createConstructionPreviewToken,
+  resolveConstructionPreviewTokenSigningSecret,
+  type ConstructionPreviewTokenIssueResponse,
+} from '../../../presence/constructionPreviewToken';
+import {
   buildMusicPhraseActor,
   buildRoomMutationActor,
 } from '../auth/actors';
@@ -58,8 +63,10 @@ import {
   saveDraftFromCommandRequest,
 } from './commands';
 import {
+  loadConstructionRoom,
   loadPublishedRoom,
   loadRoomRecord,
+  loadRoomRecordForMutation,
   publishRoom,
   revertRoom,
   saveDraft,
@@ -128,6 +135,66 @@ export async function handleRoomRequest(
     }
 
     return jsonResponse(request, annotateRoomSnapshotWithTilesetHint(publishedRoom));
+  }
+
+  if (segments.length === 4 && segments[3] === 'construction' && request.method === 'GET') {
+    const auth = await loadOptionalRequestAuth(env, request);
+    requireOptionalScope(auth, 'rooms:read', 'read construction rooms');
+    const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
+    const constructionRoom = await loadConstructionRoom(env, roomId, coordinates);
+
+    if (!constructionRoom) {
+      throw new HttpError(404, 'Construction room not found.');
+    }
+
+    return jsonResponse(request, annotateRoomSnapshotWithTilesetHint(constructionRoom));
+  }
+
+  if (
+    segments.length === 4 &&
+    segments[3] === 'construction-preview-token' &&
+    request.method === 'POST'
+  ) {
+    const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
+    const auth = await requireAuthenticatedRequestAuth(
+      env,
+      request,
+      'share live construction previews',
+      'rooms:write',
+    );
+    const signingSecret = resolveConstructionPreviewTokenSigningSecret(env);
+    if (!signingSecret) {
+      throw new HttpError(503, 'Construction preview token signing is not configured.');
+    }
+
+    const record = await loadRoomRecordForMutation(
+      env,
+      roomId,
+      coordinates,
+      auth.user,
+      auth.isAdmin,
+    );
+    if (record.published !== null || !record.claimerUserId || !record.claimedAt) {
+      throw new HttpError(404, 'Construction preview is only available for unpublished claimed rooms.');
+    }
+    if (!record.permissions.canSaveDraft) {
+      throw new HttpError(403, 'Only the room claimer can share live construction previews.');
+    }
+
+    const { token, claims } = await createConstructionPreviewToken(
+      {
+        roomId: record.draft.id,
+        roomCoordinates: record.draft.coordinates,
+        userId: auth.user.id,
+      },
+      signingSecret.secret,
+    );
+    const response: ConstructionPreviewTokenIssueResponse = {
+      token,
+      expiresAt: new Date(claims.exp).toISOString(),
+    };
+
+    return jsonResponse(request, response);
   }
 
   if (segments.length === 4 && segments[3] === 'draft' && request.method === 'PUT') {

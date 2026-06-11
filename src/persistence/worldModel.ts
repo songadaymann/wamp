@@ -298,7 +298,7 @@ export function computeWorldChunk(
     coordinates: { ...coordinates },
     roomBounds,
     rooms: computeWorldSummariesInBounds(rooms, roomBounds),
-    previewRooms: computePublishedRoomPreviewSnapshotsInBounds(rooms, roomBounds),
+    previewRooms: computeRoomPreviewSnapshotsInBounds(rooms, roomBounds),
     chunkPreviewHash: '',
   };
 
@@ -463,18 +463,14 @@ function compareRoomSnapshots(a: RoomSnapshot, b: RoomSnapshot): number {
   return a.coordinates.x - b.coordinates.x;
 }
 
-function computePublishedRoomPreviewSnapshotsInBounds(
+function computeRoomPreviewSnapshotsInBounds(
   rooms: WorldRoomSource[],
   bounds: WorldRoomBounds
 ): RoomSnapshot[] {
   const roomsById = new Map<string, RoomSnapshot>();
 
   for (const room of rooms) {
-    if (!isPublishedWorldRoomSource(room)) {
-      continue;
-    }
-
-    const snapshot = getPublishedWorldRoomSnapshot(room);
+    const snapshot = getWorldRoomSourceSnapshot(room);
     if (isWithinRoomBounds(snapshot.coordinates, bounds)) {
       roomsById.set(snapshot.id, cloneRoomSnapshot(snapshot));
     }

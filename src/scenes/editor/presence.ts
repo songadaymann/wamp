@@ -2,8 +2,10 @@ import {
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
 } from '../../config';
-import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomRepository';
+import { roomIdFromCoordinates, type RoomCoordinates, type RoomSnapshot } from '../../persistence/roomRepository';
 import { roomToChunkCoordinates } from '../../persistence/worldModel';
+import { apiRequest } from '../../api/request';
+import type { ConstructionPreviewTokenIssueResponse } from '../../presence/constructionPreviewToken';
 import {
   resolveWorldPresenceConfig,
   resolveWorldPresenceIdentity,
@@ -12,6 +14,7 @@ import {
 } from '../../presence/worldPresence';
 
 const SHARED_PREVIEW_PUBLISH_INTERVAL_MS = 1_200;
+const CONSTRUCTION_PREVIEW_TOKEN_REFRESH_SKEW_MS = 30_000;
 
 interface EditorPresenceHost {
   getRoomCoordinates(): RoomCoordinates;
@@ -28,6 +31,12 @@ export class EditorPresenceController {
   private sharedConstructionPreviewDirty = true;
   private lastSharedConstructionPreviewPublishAt = 0;
   private lastSharedConstructionPreviewStateKey: string | null = null;
+  private constructionPreviewToken: {
+    roomId: string;
+    token: string;
+    expiresAtMs: number;
+  } | null = null;
+  private pendingConstructionPreviewTokenRequest: Promise<string | null> | null = null;
 
   constructor(private readonly host: EditorPresenceHost) {}
 
@@ -134,6 +143,12 @@ export class EditorPresenceController {
       return;
     }
 
+    const constructionPreviewToken = this.getConstructionPreviewToken(roomCoordinates);
+    if (!constructionPreviewToken) {
+      this.requestConstructionPreviewToken(roomCoordinates);
+      return;
+    }
+
     const now = performance.now();
     const stateChanged = this.lastSharedConstructionPreviewStateKey !== stateKey;
     if (
@@ -156,10 +171,73 @@ export class EditorPresenceController {
     this.client.updateLocalRoomPreview({
       roomCoordinates,
       snapshot: this.buildSharedConstructionPreviewSnapshot(),
+      constructionPreviewToken,
     });
     this.sharedConstructionPreviewDirty = false;
     this.lastSharedConstructionPreviewPublishAt = now;
     this.lastSharedConstructionPreviewStateKey = stateKey;
+  }
+
+  private getConstructionPreviewToken(roomCoordinates: RoomCoordinates): string | null {
+    const roomId = roomIdFromCoordinates(roomCoordinates);
+    const cached = this.constructionPreviewToken;
+    if (
+      cached &&
+      cached.roomId === roomId &&
+      cached.expiresAtMs - CONSTRUCTION_PREVIEW_TOKEN_REFRESH_SKEW_MS > Date.now()
+    ) {
+      return cached.token;
+    }
+
+    return null;
+  }
+
+  private requestConstructionPreviewToken(roomCoordinates: RoomCoordinates): void {
+    if (this.pendingConstructionPreviewTokenRequest) {
+      return;
+    }
+
+    this.pendingConstructionPreviewTokenRequest = this.fetchConstructionPreviewToken(roomCoordinates)
+      .catch((error) => {
+        console.warn('Failed to issue construction preview token.', error);
+        return null;
+      })
+      .finally(() => {
+        this.pendingConstructionPreviewTokenRequest = null;
+      });
+    void this.pendingConstructionPreviewTokenRequest.then((token) => {
+      if (!token) {
+        return;
+      }
+
+      this.sharedConstructionPreviewDirty = true;
+      this.sync();
+    });
+  }
+
+  private async fetchConstructionPreviewToken(roomCoordinates: RoomCoordinates): Promise<string | null> {
+    const roomId = roomIdFromCoordinates(roomCoordinates);
+    const params = new URLSearchParams({
+      x: String(roomCoordinates.x),
+      y: String(roomCoordinates.y),
+    });
+    const response = await apiRequest<ConstructionPreviewTokenIssueResponse>(
+      `/api/rooms/${encodeURIComponent(roomId)}/construction-preview-token?${params.toString()}`,
+      {
+        method: 'POST',
+      },
+    );
+    const expiresAtMs = Date.parse(response.expiresAt);
+    if (!response.token || !Number.isFinite(expiresAtMs)) {
+      return null;
+    }
+
+    this.constructionPreviewToken = {
+      roomId,
+      token: response.token,
+      expiresAtMs,
+    };
+    return response.token;
   }
 
   private clearSharedConstructionPreview(options?: { force?: boolean }): void {
@@ -190,5 +268,7 @@ export class EditorPresenceController {
     this.sharedConstructionPreviewDirty = true;
     this.lastSharedConstructionPreviewPublishAt = 0;
     this.lastSharedConstructionPreviewStateKey = null;
+    this.constructionPreviewToken = null;
+    this.pendingConstructionPreviewTokenRequest = null;
   }
 }

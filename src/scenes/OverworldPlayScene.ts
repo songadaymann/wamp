@@ -782,6 +782,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.specialTilesController.handleFullRoomDestroyed(loadedRoom.room.id);
         this.portalObjectController.handleFullRoomDestroyed(loadedRoom.room.id);
       },
+      onFullRoomReplaced: (loadedRoom) => this.handleFullRoomReplaced(loadedRoom),
       measurePerformance: (label, callback) => this.measureMobilePerformance(label, callback),
     });
     this.roomRushResultController = new OverworldRoomRushResultController(this, {
@@ -860,6 +861,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.presenceController = new OverworldPresenceController({
       scene: this,
       isFullRoomLoaded: (roomId) => this.loadedFullRoomsById.has(roomId),
+      isConstructionRoomLoaded: (roomId) =>
+        this.loadedFullRoomsById.get(roomId)?.room.status === 'draft',
       getMode: () => this.mode,
       getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
       getSelectedCoordinates: () => this.selectedCoordinates,
@@ -4267,6 +4270,24 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.shouldRespawnPlayer = true;
     void this.refreshAround(coordinates, { forceChunkReload: true });
     playSfx('respawn');
+  }
+
+  private handleFullRoomReplaced(loadedRoom: SceneLoadedFullRoom): void {
+    const currentRoomId = roomIdFromCoordinates(this.currentRoomCoordinates);
+    if (
+      this.mode !== 'play' ||
+      loadedRoom.room.status !== 'draft' ||
+      loadedRoom.room.id !== currentRoomId
+    ) {
+      return;
+    }
+
+    this.sessionResetController.resetPlaySession();
+    this.shouldRespawnPlayer = true;
+    this.shouldCenterCamera = true;
+    this.showTransientStatus('Construction updated.');
+    this.syncModeRuntime();
+    this.renderHud();
   }
 
   private startRankedRunTrace(kind: 'room' | 'course', binding: RankedRunTraceBinding): void {

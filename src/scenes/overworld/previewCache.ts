@@ -3,6 +3,12 @@ import type { WorldRepository } from '../../persistence/worldRepository';
 import type { WorldChunkWindow, WorldRoomSummary } from '../../persistence/worldModel';
 import type { RoomCoordinates } from '../../persistence/roomModel';
 
+export type PlayableRoomSource =
+  | 'published'
+  | 'local_draft'
+  | 'live_construction_preview'
+  | 'saved_construction_draft';
+
 export interface StreamingRoomCandidate {
   id: string;
   coordinates: RoomCoordinates;
@@ -10,12 +16,25 @@ export interface StreamingRoomCandidate {
   draft: RoomSnapshot | null;
   sharedPreview: RoomSnapshot | null;
   allowFullRoomLoad: boolean;
+  source: PlayableRoomSource;
 }
 
 export interface RenderableRoom {
   id: string;
   coordinates: RoomCoordinates;
   room: RoomSnapshot;
+  source: PlayableRoomSource;
+}
+
+export function isStreamingRoomCandidateRenderable(
+  roomCandidate: Pick<StreamingRoomCandidate, 'draft' | 'sharedPreview' | 'summary'>,
+): boolean {
+  return (
+    roomCandidate.draft !== null ||
+    roomCandidate.sharedPreview !== null ||
+    roomCandidate.summary?.state === 'published' ||
+    roomCandidate.summary?.state === 'claimed_unpublished'
+  );
 }
 
 export class OverworldPreviewCache {
@@ -96,43 +115,45 @@ export class OverworldPreviewCache {
             id: candidate.id,
             coordinates: { ...candidate.coordinates },
             room: candidate.draft,
+            source: candidate.source,
           });
           return;
         }
 
-        if (
-          candidate.summary?.state === 'published' &&
-          candidate.sharedPreview &&
-          fullRoomIds.has(candidate.summary.id)
-        ) {
+        if (candidate.summary?.state === 'published' && candidate.sharedPreview) {
           const publishedRoom = await this.ensurePublishedRoomSnapshot(candidate.summary);
           if (publishedRoom) {
             renderableRooms.set(candidate.id, {
               id: candidate.id,
               coordinates: { ...candidate.coordinates },
               room: publishedRoom,
+              source: 'published',
             });
             return;
           }
         }
 
-        if (candidate.sharedPreview) {
+        if (candidate.sharedPreview && candidate.summary?.state !== 'published') {
           renderableRooms.set(candidate.id, {
             id: candidate.id,
             coordinates: { ...candidate.coordinates },
             room: candidate.sharedPreview,
+            source: candidate.source,
           });
           return;
         }
 
-        if (!candidate.summary || candidate.summary.state !== 'published') {
+        if (
+          !candidate.summary ||
+          (candidate.summary.state !== 'published' && candidate.summary.state !== 'claimed_unpublished')
+        ) {
           return;
         }
 
         const cachedRoom = this.roomSnapshotsById.get(candidate.summary.id) ?? null;
         const publishedRoom =
           cachedRoom ??
-          (fullRoomIds.has(candidate.summary.id)
+          (candidate.summary.state === 'published' && fullRoomIds.has(candidate.summary.id)
             ? await this.ensurePublishedRoomSnapshot(candidate.summary)
             : null);
         if (!publishedRoom) {
@@ -143,6 +164,7 @@ export class OverworldPreviewCache {
           id: candidate.id,
           coordinates: { ...candidate.coordinates },
           room: publishedRoom,
+          source: candidate.summary.state === 'published' ? 'published' : 'saved_construction_draft',
         });
       })
     );

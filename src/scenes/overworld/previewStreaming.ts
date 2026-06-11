@@ -1,4 +1,3 @@
-import Phaser from 'phaser';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
 import type { RoomCoordinates } from '../../persistence/roomModel';
 import {
@@ -110,7 +109,7 @@ export function getDesiredChunkBounds(input: {
     Math.ceil(Math.max(visibleRoomsX, visibleRoomsY) * 0.5) + 2
   );
   const maxChunkRadius = getMaxChunkRadius(mode, zoom, performanceProfile);
-  const chunkRadius = Phaser.Math.Clamp(
+  const chunkRadius = clamp(
     Math.ceil(paddedRoomRadius / WORLD_CHUNK_SIZE),
     1,
     maxChunkRadius
@@ -406,6 +405,10 @@ function getPlayPreviewTier(zoom: number): PlayPreviewTier {
   }
 
   return 'near';
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function expandRoomBounds(bounds: WorldRoomBounds, padding: number): WorldRoomBounds {
