@@ -537,6 +537,11 @@ export class RoomMusicController {
       currentArrangement: cloneRoomMusic(this.currentArrangement),
       currentArrangementKey: getRoomMusicKey(this.currentArrangement),
       previewClipId: this.previewClipPlayback?.clipId ?? null,
+      bufferCaches: {
+        clipBufferPromiseCount: this.bufferPromises.size,
+        laneLoopBufferPromiseCount: this.laneLoopBufferPromises.size,
+        renderedLoopBufferPromiseCount: this.patternLoopBufferPromises.size,
+      },
     };
   }
 

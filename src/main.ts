@@ -36,6 +36,7 @@ import {
 import { getGameDebugState, getSwordHunterDebugState } from './main/debugState';
 import { installPreviewSmokeActions } from './main/previewSmoke';
 import { normalizeRendererQuery, parseBooleanQuery, resolveRendererType } from './main/query';
+import { getRuntimeResourceDebugState } from './main/resourceDebug';
 import { getGameSettings, subscribeGameSettings, type GameSettings } from './settings/userSettings';
 import {
   getGameSettingsSyncDebugState,
@@ -204,6 +205,7 @@ window.render_game_to_text = () =>
 
 window.get_room_music_debug_state = () => globalRoomMusicController.getDebugState();
 window.get_sword_hunter_debug = () => getSwordHunterDebugState(game);
+window.get_wamp_resource_debug = () => getRuntimeResourceDebugState(game);
 initializeGuestActivityTracking(getGuestActivitySnapshot);
 
 if (query.get('previewSmoke') === '1') {

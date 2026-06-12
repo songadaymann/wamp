@@ -137,6 +137,20 @@ export function listLocalCustomSpriteDefinitions(): CustomSpriteDefinition[] {
   return listCustomSpriteDefinitions().filter((sprite) => localSpriteIds.has(sprite.id));
 }
 
+export function getCustomSpriteRegistryDebugState(): Record<string, unknown> {
+  let approximateDataUrlBytes = 0;
+  for (const dataUrl of dataUrlById.values()) {
+    approximateDataUrlBytes += dataUrl.length * 2;
+  }
+
+  return {
+    definitionCount: spriteById.size,
+    localDefinitionCount: localSpriteIds.size,
+    dataUrlCacheCount: dataUrlById.size,
+    approximateDataUrlBytes,
+  };
+}
+
 export function isLocalCustomSpriteId(id: string | null | undefined): boolean {
   return Boolean(id && localSpriteIds.has(id));
 }
