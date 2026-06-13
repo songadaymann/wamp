@@ -4,6 +4,7 @@ import { globalRoomMusicController } from '../music/controller';
 import { getDynamicAvatarDebugState } from '../player/avatar/dynamic';
 import { getRoomSnapshotTextureDebugState } from '../visuals/roomSnapshotTexture';
 import { globalSfxController } from '../audio/sfx';
+import { getGameLoopFocusRecoveryDebugState } from './runtimeFocusRecovery';
 
 const SCENE_KEYS = [
   'BootScene',
@@ -136,6 +137,21 @@ function getLoopDebugState(game: Phaser.Game): Record<string, unknown> {
   };
 }
 
+function getDocumentDebugState(): Record<string, unknown> {
+  const activeElement = document.activeElement;
+  return {
+    visibilityState: document.visibilityState,
+    hidden: document.hidden,
+    hasFocus: document.hasFocus(),
+    activeElementTagName: activeElement?.tagName ?? null,
+    activeElementId: activeElement instanceof HTMLElement ? activeElement.id || null : null,
+    activeElementClassName:
+      activeElement instanceof HTMLElement && typeof activeElement.className === 'string'
+        ? activeElement.className || null
+        : null,
+  };
+}
+
 function getRendererDebugState(game: Phaser.Game): Record<string, unknown> {
   const renderer = game.renderer as Phaser.Renderer.Canvas.CanvasRenderer & Phaser.Renderer.WebGL.WebGLRenderer & {
     type?: number;
@@ -160,7 +176,9 @@ export function getRuntimeResourceDebugState(game: Phaser.Game): Record<string, 
     capturedAt: new Date().toISOString(),
     memory: getChromeMemoryDebugState(),
     renderer: getRendererDebugState(game),
+    document: getDocumentDebugState(),
     loop: getLoopDebugState(game),
+    loopRecovery: getGameLoopFocusRecoveryDebugState(),
     scenes: getSceneDebugState(game),
     textures: summarizeTextures(textureKeys),
     customSprites: getCustomSpriteRegistryDebugState(),

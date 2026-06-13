@@ -37,6 +37,7 @@ import { getGameDebugState, getSwordHunterDebugState } from './main/debugState';
 import { installPreviewSmokeActions } from './main/previewSmoke';
 import { normalizeRendererQuery, parseBooleanQuery, resolveRendererType } from './main/query';
 import { getRuntimeResourceDebugState } from './main/resourceDebug';
+import { installGameLoopFocusRecovery } from './main/runtimeFocusRecovery';
 import { getGameSettings, subscribeGameSettings, type GameSettings } from './settings/userSettings';
 import {
   getGameSettingsSyncDebugState,
@@ -117,6 +118,7 @@ logBootPhase('main:ui-ready');
 void setupAuthUi();
 void setupPlayfunClient();
 syncGameKeyboardFocus(game);
+installGameLoopFocusRecovery(game);
 
 const resizeGameToContainer = () => {
   const width = Math.round(gameContainer.clientWidth);
