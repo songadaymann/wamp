@@ -118,6 +118,15 @@ const TOP_DECOR_INDICES_LAVA = [
   69, 70, 71,
   85,
 ];
+const TOP_DECOR_INDICES_BACKROOMS = [
+  0, 1, 9,
+  12, 13, 21, 23,
+  24, 25, 33, 35,
+  36, 37, 38, 39, 40, 41, 42, 47,
+  48, 49, 50, 51, 52, 53, 54, 55, 59,
+  60, 61, 62, 63, 64, 65, 66, 67, 71,
+  72, 73, 74, 75, 76, 77, 78, 79, 80, 82, 83,
+];
 const DECO_ONLY_INDICES_FOREST = [
   0, 1, 2, 3, 4, 5, 6, 7, 8, 10,
   13, 18, 22,
@@ -140,6 +149,15 @@ const DECO_ONLY_INDICES_SIGNS = [
   18, 19, 20, 21, 22, 23,
   24, 25, 26, 27, 28, 29,
   30, 31, 32, 33, 34, 35,
+]
+const DECO_ONLY_INDICES_BACKROOMS = [
+  2, 3, 4, 5, 6, 7, 8, 10, 11,
+  14, 15, 16, 17, 18, 19, 20, 22,
+  26, 27, 28, 29, 30, 31, 32, 34,
+  43, 44, 45,
+  56, 57, 58,
+  68, 69, 70, 71,
+  81,
 ]
 const DECO_ONLY_INDICES_WATER = [1, 2, 3, 5, 13, 18];
 // Snow still has three bottom-anchored cap overlays above the main platform tops.
@@ -677,6 +695,27 @@ export const TILESETS: TilesetConfig[] = [
       accentAlt: 0xd8b373,
     },
   },
+  {
+    key: 'backrooms',
+    name: 'Backrooms',
+    path: 'assets/tilesets/backrooms.png',
+    imageWidth: 192,
+    imageHeight: 112,
+    columns: 12,
+    rows: 7,
+    tileCount: 84,
+    firstGid: 805,
+    terrainCollisionProfiles: {
+      ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_BACKROOMS, DECORATED_TOP_PROFILE),
+      ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_BACKROOMS, NO_COLLISION_PROFILE),
+    },
+    uiTheme: {
+      accentCool: 0x5ca9ff,
+      accentWarm: 0xfbd45b,
+      accentHot: 0xff7865,
+      accentAlt: 0x86d54a,
+    },
+  }
 ];
 
 const LEGACY_TILESET_KEY_ALIASES: Record<string, string> = {
