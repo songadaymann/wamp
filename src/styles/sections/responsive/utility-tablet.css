@@ -13,8 +13,8 @@ body[data-device-class='tablet'][data-coarse-pointer='true'] .object-item {
   min-height: 44px;
 }
 
-body[data-device-class='tablet'][data-app-mode='editor'] #sidebar {
-  width: 340px;
+body[data-device-class='tablet'][data-app-mode='editor'] {
+  --app-sidebar-width: clamp(340px, 36vw, 400px);
 }
 
 body[data-device-class='tablet'][data-coarse-pointer='true'] #auth-panel {
@@ -40,4 +40,3 @@ body[data-device-class='tablet'][data-coarse-pointer='true'] #global-chat .chat-
   background: #fff3db;
   backdrop-filter: none;
 }
-

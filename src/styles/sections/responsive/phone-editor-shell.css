@@ -115,8 +115,8 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-se
 }
 
 body[data-app-mode='editor']:not([data-device-class='phone']) #tile-palette-section {
-  min-height: 220px;
-  max-height: 270px;
+  min-height: 280px;
+  max-height: clamp(320px, 46vh, 430px);
 }
 
 body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section {
