@@ -126,6 +126,7 @@ const TOP_DECOR_INDICES_BACKROOMS = [
   48, 49, 50, 51, 52, 53, 54, 55, 59,
   60, 61, 62, 63, 64, 65, 66, 67, 71,
   73, 74, 75, 76, 77, 78, 79, 80,
+  90, 91,
 ];
 const DECO_ONLY_INDICES_FOREST = [
   0, 1, 2, 3, 4, 5, 6, 7, 8, 10,
@@ -158,6 +159,7 @@ const DECO_ONLY_INDICES_BACKROOMS = [
   56, 57, 58,
   68, 69, 70, 71,
   72, 81, 82, 83,
+  84, 85, 86, 87, 88, 89, 92, 93, 94, 95,
 ]
 const DECO_ONLY_INDICES_WATER = [1, 2, 3, 5, 13, 18];
 // Snow still has three bottom-anchored cap overlays above the main platform tops.
@@ -700,10 +702,10 @@ export const TILESETS: TilesetConfig[] = [
     name: 'Backrooms',
     path: 'assets/tilesets/backrooms.png',
     imageWidth: 192,
-    imageHeight: 112,
+    imageHeight: 128,
     columns: 12,
-    rows: 7,
-    tileCount: 84,
+    rows: 8,
+    tileCount: 96,
     firstGid: 805,
     terrainCollisionProfiles: {
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_BACKROOMS, DECORATED_TOP_PROFILE),
