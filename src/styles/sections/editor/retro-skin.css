@@ -221,6 +221,60 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #sidebar {
   overflow: hidden;
 }
 
+body[data-app-mode='editor']:not([data-device-class='phone']) .editor-sidebar-resize-handle {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  z-index: 12;
+  display: flex;
+  width: 18px;
+  height: 88px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  color: var(--editor-retro-ink);
+  background: var(--editor-retro-blue);
+  border: 2px solid var(--editor-retro-shadow);
+  border-right: 0;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 var(--editor-retro-shadow);
+  cursor: ew-resize;
+  transform: translateY(-50%);
+  touch-action: none;
+}
+
+body[data-app-mode='editor']:not([data-device-class='phone']) .editor-sidebar-resize-handle::before {
+  content: '';
+  width: 2px;
+  height: 44px;
+  background: currentColor;
+  box-shadow:
+    -5px 0 0 currentColor,
+    5px 0 0 currentColor;
+  opacity: 0.78;
+}
+
+body[data-app-mode='editor']:not([data-device-class='phone']) .editor-sidebar-resize-handle:hover,
+body[data-app-mode='editor']:not([data-device-class='phone']) .editor-sidebar-resize-handle:focus-visible {
+  background: var(--editor-retro-yellow);
+  outline: 0;
+}
+
+body[data-app-mode='editor']:not([data-device-class='phone']) .editor-sidebar-resize-handle:active {
+  box-shadow: 1px 1px 0 var(--editor-retro-shadow);
+  transform: translate(2px, calc(-50% + 2px));
+}
+
+body[data-editor-sidebar-resizing='true'] {
+  cursor: ew-resize;
+  user-select: none;
+}
+
+body[data-editor-sidebar-resizing='true'] #sidebar,
+body[data-editor-sidebar-resizing='true'] #game-container {
+  cursor: ew-resize;
+}
+
 #editor-fixed-stack,
 #editor-sidebar-scroll {
   display: contents;

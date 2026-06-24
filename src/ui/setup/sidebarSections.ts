@@ -1,6 +1,280 @@
+export const EDITOR_SIDEBAR_RESIZED_EVENT = 'editor-sidebar-resized';
+
+const EDITOR_SIDEBAR_WIDTH_STORAGE_KEY = 'wamp_editor_sidebar_width_v1';
+const MIN_EDITOR_SIDEBAR_WIDTH = 280;
+const MAX_EDITOR_SIDEBAR_WIDTH = 560;
+const DESKTOP_MIN_EDITOR_STAGE_WIDTH = 520;
+const TABLET_MIN_EDITOR_STAGE_WIDTH = 420;
+const SIDEBAR_KEYBOARD_RESIZE_STEP = 24;
+
+let sidebarResizeEventQueued = false;
+
 function isPhoneEditorActive(doc: Document): boolean {
   const body = doc.body;
   return body.dataset.appMode === 'editor' && body.dataset.deviceClass === 'phone';
+}
+
+function isEditorSidebarResizable(doc: Document): boolean {
+  const body = doc.body;
+  return body.dataset.appMode === 'editor' && body.dataset.deviceClass !== 'phone';
+}
+
+function readStoredEditorSidebarWidth(win: Window): number | null {
+  try {
+    const stored = win.localStorage.getItem(EDITOR_SIDEBAR_WIDTH_STORAGE_KEY);
+    if (!stored) {
+      return null;
+    }
+    const parsed = Number.parseFloat(stored);
+    return Number.isFinite(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredEditorSidebarWidth(win: Window, width: number): void {
+  try {
+    win.localStorage.setItem(EDITOR_SIDEBAR_WIDTH_STORAGE_KEY, String(Math.round(width)));
+  } catch {
+    // Local storage can be unavailable in restricted browser contexts.
+  }
+}
+
+function clearStoredEditorSidebarWidth(win: Window): void {
+  try {
+    win.localStorage.removeItem(EDITOR_SIDEBAR_WIDTH_STORAGE_KEY);
+  } catch {
+    // Local storage can be unavailable in restricted browser contexts.
+  }
+}
+
+function getMaxEditorSidebarWidth(doc: Document): number {
+  const win = doc.defaultView;
+  const viewportWidth = win?.innerWidth ?? doc.documentElement.clientWidth;
+  if (!viewportWidth) {
+    return MAX_EDITOR_SIDEBAR_WIDTH;
+  }
+
+  const stageMinWidth =
+    doc.body.dataset.deviceClass === 'tablet' ? TABLET_MIN_EDITOR_STAGE_WIDTH : DESKTOP_MIN_EDITOR_STAGE_WIDTH;
+  return Math.max(MIN_EDITOR_SIDEBAR_WIDTH, Math.min(MAX_EDITOR_SIDEBAR_WIDTH, viewportWidth - stageMinWidth));
+}
+
+function clampEditorSidebarWidth(width: number, doc: Document): number {
+  if (!Number.isFinite(width)) {
+    return MIN_EDITOR_SIDEBAR_WIDTH;
+  }
+  return Math.max(MIN_EDITOR_SIDEBAR_WIDTH, Math.min(getMaxEditorSidebarWidth(doc), width));
+}
+
+function getCurrentEditorSidebarWidth(sidebar: HTMLElement, doc: Document): number {
+  const inlineWidth = Number.parseFloat(doc.body.style.getPropertyValue('--app-sidebar-width'));
+  if (Number.isFinite(inlineWidth)) {
+    return inlineWidth;
+  }
+  return sidebar.getBoundingClientRect().width;
+}
+
+function queueEditorSidebarResizeEvent(doc: Document, resizeGame = true): void {
+  const win = doc.defaultView;
+  if (!win || sidebarResizeEventQueued) {
+    return;
+  }
+
+  sidebarResizeEventQueued = true;
+  const dispatch = () => {
+    sidebarResizeEventQueued = false;
+    win.dispatchEvent(new win.CustomEvent(EDITOR_SIDEBAR_RESIZED_EVENT));
+    if (resizeGame) {
+      win.dispatchEvent(new win.Event('resize'));
+    }
+  };
+
+  if (typeof win.requestAnimationFrame === 'function') {
+    win.requestAnimationFrame(dispatch);
+  } else {
+    dispatch();
+  }
+}
+
+function applyEditorSidebarWidth(
+  doc: Document,
+  width: number,
+  options: { persist?: boolean; notify?: boolean; resizeGame?: boolean } = {},
+): number {
+  const clampedWidth = clampEditorSidebarWidth(width, doc);
+  doc.body.style.setProperty('--app-sidebar-width', `${Math.round(clampedWidth)}px`);
+
+  const win = doc.defaultView;
+  if (win && options.persist) {
+    writeStoredEditorSidebarWidth(win, clampedWidth);
+  }
+  if (options.notify !== false) {
+    queueEditorSidebarResizeEvent(doc, options.resizeGame !== false);
+  }
+
+  return clampedWidth;
+}
+
+function resetEditorSidebarWidth(doc: Document): void {
+  doc.body.style.removeProperty('--app-sidebar-width');
+  const win = doc.defaultView;
+  if (win) {
+    clearStoredEditorSidebarWidth(win);
+  }
+  queueEditorSidebarResizeEvent(doc);
+}
+
+function applyStoredEditorSidebarWidth(doc: Document): void {
+  const win = doc.defaultView;
+  if (!win || !isEditorSidebarResizable(doc)) {
+    return;
+  }
+
+  const storedWidth = readStoredEditorSidebarWidth(win);
+  if (storedWidth !== null) {
+    applyEditorSidebarWidth(doc, storedWidth, { persist: false });
+  }
+}
+
+function setupEditorSidebarResizeHandle(sidebar: HTMLElement, doc: Document): void {
+  const win = doc.defaultView;
+  if (!win) {
+    return;
+  }
+
+  let handle = doc.getElementById('editor-sidebar-resize-handle') as HTMLButtonElement | null;
+  if (!handle) {
+    handle = doc.createElement('button');
+    handle.id = 'editor-sidebar-resize-handle';
+    handle.className = 'editor-sidebar-resize-handle';
+    handle.type = 'button';
+    handle.setAttribute('aria-label', 'Resize editor panel');
+    handle.title = 'Drag to resize editor panel. Double-click to reset.';
+  }
+  if (handle.parentElement !== sidebar) {
+    sidebar.append(handle);
+  }
+
+  applyStoredEditorSidebarWidth(doc);
+
+  if (handle.dataset.editorSidebarResizeReady === 'true') {
+    return;
+  }
+
+  let activeDrag: { pointerId: number; startX: number; startWidth: number } | null = null;
+
+  const finishDrag = () => {
+    if (!activeDrag) {
+      return;
+    }
+    const finalWidth = clampEditorSidebarWidth(getCurrentEditorSidebarWidth(sidebar, doc), doc);
+    writeStoredEditorSidebarWidth(win, finalWidth);
+    activeDrag = null;
+    delete doc.body.dataset.editorSidebarResizing;
+  };
+
+  handle.addEventListener('pointerdown', (event) => {
+    if (!isEditorSidebarResizable(doc) || event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    activeDrag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startWidth: sidebar.getBoundingClientRect().width,
+    };
+    doc.body.dataset.editorSidebarResizing = 'true';
+    try {
+      handle.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture can fail if the event target is detached mid-interaction.
+    }
+  });
+
+  win.addEventListener('pointermove', (event) => {
+    if (!activeDrag || event.pointerId !== activeDrag.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    applyEditorSidebarWidth(doc, activeDrag.startWidth + event.clientX - activeDrag.startX, {
+      persist: false,
+    });
+  }, { capture: true });
+
+  win.addEventListener('pointerup', (event) => {
+    if (!activeDrag || event.pointerId !== activeDrag.pointerId) {
+      return;
+    }
+    try {
+      handle.releasePointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture may already be released by the browser.
+    }
+    finishDrag();
+  }, { capture: true });
+
+  win.addEventListener('pointercancel', (event) => {
+    if (!activeDrag || event.pointerId !== activeDrag.pointerId) {
+      return;
+    }
+    finishDrag();
+  }, { capture: true });
+
+  handle.addEventListener('dblclick', (event) => {
+    event.preventDefault();
+    resetEditorSidebarWidth(doc);
+  });
+
+  handle.addEventListener('keydown', (event) => {
+    if (!isEditorSidebarResizable(doc)) {
+      return;
+    }
+
+    const currentWidth = getCurrentEditorSidebarWidth(sidebar, doc);
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      applyEditorSidebarWidth(doc, currentWidth - SIDEBAR_KEYBOARD_RESIZE_STEP, { persist: true });
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      applyEditorSidebarWidth(doc, currentWidth + SIDEBAR_KEYBOARD_RESIZE_STEP, { persist: true });
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      applyEditorSidebarWidth(doc, MIN_EDITOR_SIDEBAR_WIDTH, { persist: true });
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      applyEditorSidebarWidth(doc, getMaxEditorSidebarWidth(doc), { persist: true });
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      resetEditorSidebarWidth(doc);
+    }
+  });
+
+  win.addEventListener('resize', () => {
+    if (
+      activeDrag ||
+      !isEditorSidebarResizable(doc) ||
+      !doc.body.style.getPropertyValue('--app-sidebar-width')
+    ) {
+      return;
+    }
+
+    const preferredWidth = readStoredEditorSidebarWidth(win) ?? getCurrentEditorSidebarWidth(sidebar, doc);
+    const nextWidth = clampEditorSidebarWidth(preferredWidth, doc);
+    if (Math.abs(nextWidth - getCurrentEditorSidebarWidth(sidebar, doc)) > 0.5) {
+      applyEditorSidebarWidth(doc, nextWidth, { persist: false, resizeGame: false });
+    }
+  });
+
+  const modeObserver = new win.MutationObserver(() => {
+    applyStoredEditorSidebarWidth(doc);
+  });
+  modeObserver.observe(doc.body, {
+    attributes: true,
+    attributeFilter: ['data-app-mode', 'data-device-class'],
+  });
+
+  handle.dataset.editorSidebarResizeReady = 'true';
 }
 
 function shouldCollapseSectionByDefault(section: HTMLElement, doc: Document): boolean {
@@ -45,6 +319,7 @@ export function setupEditorSidebarShell(doc: Document = document): void {
   if (scrollShell.parentElement !== sidebar) {
     sidebar.append(scrollShell);
   }
+  setupEditorSidebarResizeHandle(sidebar, doc);
 
   const sections = Array.from(sidebar.querySelectorAll<HTMLElement>('.sidebar-section'));
   const sectionById = new Map<string, HTMLElement>();

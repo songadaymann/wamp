@@ -18,6 +18,10 @@ body[data-app-mode='editor']:not([data-device-class='phone']) {
   overflow-x: hidden;
 }
 
+.editor-sidebar-resize-handle {
+  display: none;
+}
+
 .desktop-editor-only {
   display: block;
 }

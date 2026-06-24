@@ -29,7 +29,11 @@ import { RoomRushResultModalController } from './roomRushResultModal';
 import { RunRatingModalController } from './runRatingModal';
 import { SettingsModalController } from './settingsModal';
 import { SignTextModalController } from './signTextModal';
-import { setupCollapsibleSidebarSections, setupEditorSidebarShell } from './sidebarSections';
+import {
+  EDITOR_SIDEBAR_RESIZED_EVENT,
+  setupCollapsibleSidebarSections,
+  setupEditorSidebarShell,
+} from './sidebarSections';
 import { setupSceneCommands } from './sceneCommands';
 import { WampOGramModalController } from './wampOGramModal';
 import { XpReceiptController } from './xpReceipts';
@@ -197,6 +201,15 @@ function setupUiControllerCommands(game: Phaser.Game, controllers: UiControllers
 }
 
 function setupPaletteRefreshListeners(paletteController: PaletteController): void {
+  const refreshPaletteSurfaces = () => {
+    paletteController.renderPalette();
+    paletteController.renderObjectGrid();
+    paletteController.renderTilePreview();
+  };
+
+  window.addEventListener(EDITOR_SIDEBAR_RESIZED_EVENT, refreshPaletteSurfaces);
+  window.requestAnimationFrame(refreshPaletteSurfaces);
+
   window.addEventListener('tileset-changed', () => {
     paletteController.renderPalette();
   });
