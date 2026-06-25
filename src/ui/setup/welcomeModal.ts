@@ -15,7 +15,7 @@ import { getActiveOverworldScene } from './sceneBridge';
 const WELCOME_MODAL_SEEN_STORAGE_KEY = 'wamp_welcome_modal_seen_v1';
 const WELCOME_MODAL_AUTO_OPEN_DELAY_MS = 540;
 const BUILD_FRONTIER_RADIUS = 24;
-const WELCOME_PLAY_ROOM_COORDINATES: RoomCoordinates = { x: 1, y: 1 };
+const WELCOME_PLAY_ROOM_COORDINATES: RoomCoordinates = { x: 1, y: 0 };
 
 type WelcomeModalElements = {
   modal: HTMLElement | null;
