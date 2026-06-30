@@ -179,7 +179,6 @@ export class WorldPresenceClient {
   private readonly roomEditorsByShardId = new Map<string, Map<string, number>>();
   private readonly roomPreviewsByShardId = new Map<string, Map<string, WorldPresenceRoomPreview>>();
   private readonly connectedShards = new Set<string>();
-  private readonly pendingSocketShardIds = new Set<string>();
   private readonly identityTokenProvider: PartyKitIdentityTokenProvider;
   private desiredShardIds = new Set<string>();
   private localPresence: WorldPresencePayload | null = null;
@@ -205,7 +204,7 @@ export class WorldPresenceClient {
 
     for (const chunk of chunks) {
       const shardId = chunkIdFromCoordinates(chunk);
-      if (this.socketsByShardId.has(shardId) || this.pendingSocketShardIds.has(shardId)) {
+      if (this.socketsByShardId.has(shardId)) {
         continue;
       }
 
@@ -389,7 +388,6 @@ export class WorldPresenceClient {
   destroy(): void {
     this.clearQueuedSnapshotEmit();
     this.desiredShardIds.clear();
-    this.pendingSocketShardIds.clear();
     this.identityTokenProvider.clear();
     if (this.publishedShardId) {
       this.sendLeaveToShard(this.publishedShardId);
@@ -419,22 +417,6 @@ export class WorldPresenceClient {
   }
 
   private openShardSocket(shardId: string): void {
-    this.pendingSocketShardIds.add(shardId);
-    void this.openShardSocketWithToken(shardId);
-  }
-
-  private async openShardSocketWithToken(shardId: string): Promise<void> {
-    let identityToken: string;
-    try {
-      identityToken = await this.identityTokenProvider.getToken();
-    } catch (error) {
-      this.pendingSocketShardIds.delete(shardId);
-      console.warn('Failed to issue PartyKit presence identity token.', error);
-      this.emitSnapshot();
-      return;
-    }
-
-    this.pendingSocketShardIds.delete(shardId);
     if (!this.desiredShardIds.has(shardId) || this.socketsByShardId.has(shardId)) {
       return;
     }
@@ -444,9 +426,7 @@ export class WorldPresenceClient {
       protocol: this.options.protocol,
       party: this.options.party,
       room: shardId,
-      query: {
-        identityToken,
-      },
+      query: () => this.getSocketQuery(),
     });
 
     socket.addEventListener('open', () => {
@@ -471,7 +451,6 @@ export class WorldPresenceClient {
       }
 
       this.connectedShards.delete(shardId);
-      this.socketsByShardId.delete(shardId);
       this.removeGhostsForShard(shardId);
       this.roomPopulationsByShardId.delete(shardId);
       this.roomEditorsByShardId.delete(shardId);
@@ -482,9 +461,6 @@ export class WorldPresenceClient {
       }
       if (this.previewShardId === shardId) {
         this.lastPublishedPreviewJson = null;
-      }
-      if (this.desiredShardIds.has(shardId) && !this.pendingSocketShardIds.has(shardId)) {
-        this.openShardSocket(shardId);
       }
       this.emitSnapshot();
     });
@@ -503,8 +479,13 @@ export class WorldPresenceClient {
     });
   }
 
+  private async getSocketQuery(): Promise<{ identityToken: string }> {
+    return {
+      identityToken: await this.identityTokenProvider.getToken(),
+    };
+  }
+
   private closeShardSocket(shardId: string): void {
-    this.pendingSocketShardIds.delete(shardId);
     const record = this.socketsByShardId.get(shardId);
     if (!record) {
       return;

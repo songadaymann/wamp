@@ -73,7 +73,6 @@ export class WorldRoomChatClient {
   private readonly socketsByShardId = new Map<string, PartySocketRecord>();
   private readonly connectedShards = new Set<string>();
   private readonly messagesByUserId = new Map<string, RoomChatMessageRecord>();
-  private readonly pendingSocketShardIds = new Set<string>();
   private readonly identityTokenProvider: PartyKitIdentityTokenProvider;
   private desiredShardIds = new Set<string>();
   private localPresence: WorldPresencePayload | null = null;
@@ -93,7 +92,7 @@ export class WorldRoomChatClient {
 
     for (const chunk of chunks) {
       const shardId = chunkIdFromCoordinates(chunk);
-      if (this.socketsByShardId.has(shardId) || this.pendingSocketShardIds.has(shardId)) {
+      if (this.socketsByShardId.has(shardId)) {
         continue;
       }
 
@@ -212,7 +211,6 @@ export class WorldRoomChatClient {
 
   destroy(): void {
     this.desiredShardIds.clear();
-    this.pendingSocketShardIds.clear();
     this.identityTokenProvider.clear();
     if (this.publishedShardId) {
       this.sendLeaveToShard(this.publishedShardId);
@@ -235,22 +233,6 @@ export class WorldRoomChatClient {
   }
 
   private openShardSocket(shardId: string): void {
-    this.pendingSocketShardIds.add(shardId);
-    void this.openShardSocketWithToken(shardId);
-  }
-
-  private async openShardSocketWithToken(shardId: string): Promise<void> {
-    let identityToken: string;
-    try {
-      identityToken = await this.identityTokenProvider.getToken();
-    } catch (error) {
-      this.pendingSocketShardIds.delete(shardId);
-      console.warn('Failed to issue PartyKit room chat identity token.', error);
-      this.emitSnapshot();
-      return;
-    }
-
-    this.pendingSocketShardIds.delete(shardId);
     if (!this.desiredShardIds.has(shardId) || this.socketsByShardId.has(shardId)) {
       return;
     }
@@ -260,10 +242,7 @@ export class WorldRoomChatClient {
       protocol: this.options.protocol,
       party: this.options.party,
       room: shardId,
-      query: {
-        channel: 'room-chat',
-        identityToken,
-      },
+      query: () => this.getSocketQuery(),
     });
 
     socket.addEventListener('open', () => {
@@ -286,12 +265,8 @@ export class WorldRoomChatClient {
       }
 
       this.connectedShards.delete(shardId);
-      this.socketsByShardId.delete(shardId);
       if (this.publishedShardId === shardId) {
         this.lastPublishedPayloadJson = null;
-      }
-      if (this.desiredShardIds.has(shardId) && !this.pendingSocketShardIds.has(shardId)) {
-        this.openShardSocket(shardId);
       }
       this.emitSnapshot();
     });
@@ -310,8 +285,14 @@ export class WorldRoomChatClient {
     });
   }
 
+  private async getSocketQuery(): Promise<{ channel: string; identityToken: string }> {
+    return {
+      channel: 'room-chat',
+      identityToken: await this.identityTokenProvider.getToken(),
+    };
+  }
+
   private closeShardSocket(shardId: string): void {
-    this.pendingSocketShardIds.delete(shardId);
     const record = this.socketsByShardId.get(shardId);
     if (!record) {
       return;
