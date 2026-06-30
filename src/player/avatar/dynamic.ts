@@ -33,6 +33,21 @@ export function isSceneAvatarPackLoaded(
   return sceneLoadedAvatarIds.get(scene)?.has(avatarId) ?? false;
 }
 
+export function getDynamicAvatarDebugState(scene?: Phaser.Scene | null): Record<string, unknown> {
+  const sceneLoadedAvatarIdsForScene = scene ? sceneLoadedAvatarIds.get(scene) ?? null : null;
+  const scenePendingAvatarLoads = scene ? sceneLoadPromises.get(scene) ?? null : null;
+
+  return {
+    registrationPromiseCount: registrationPromisesByAvatarId.size,
+    registeredDynamicAvatarIds: Array.from(registrationPromisesByAvatarId.keys()).sort(),
+    sceneLoadedAvatarCount: sceneLoadedAvatarIdsForScene?.size ?? 0,
+    sceneLoadedAvatarIds: sceneLoadedAvatarIdsForScene
+      ? Array.from(sceneLoadedAvatarIdsForScene.values()).sort()
+      : [],
+    scenePendingAvatarLoadCount: scenePendingAvatarLoads?.size ?? 0,
+  };
+}
+
 export async function ensurePlayerAvatarPackRegistered(
   avatarId: PlayerAvatarId
 ): Promise<ResolvedPlayerAvatarPack | null> {

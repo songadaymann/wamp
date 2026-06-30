@@ -21,9 +21,17 @@ interface Window {
   advanceTime?: (ms: number) => Promise<void>;
   get_auth_debug_state?: () => Record<string, unknown>;
   get_room_music_debug_state?: () => Record<string, unknown>;
+  get_wamp_resource_debug?: () => Record<string, unknown>;
+  get_wamp_resource_log?: () => Record<string, unknown>[];
   get_sword_hunter_debug?: () => Record<string, unknown>;
   get_sfx_debug_state?: () => Record<string, unknown>;
   get_wamp_boot_debug_state?: () => Record<string, unknown>;
+  download_wamp_resource_log?: () => void;
+  clear_wamp_resource_log?: () => void;
+  wampResourceDebug?: import('./main/resourceDebug').ResourceDebugLoggerApi;
+  wampResourceWebSocketTracker?: {
+    getState: () => Record<string, unknown>;
+  };
   play_sfx_debug?: (
     cue: import('./audio/sfx').SfxCue,
     playbackOptions?: import('./audio/sfx').SfxPlaybackOptions,

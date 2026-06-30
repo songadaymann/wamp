@@ -36,6 +36,10 @@ import {
 import { getGameDebugState, getSwordHunterDebugState } from './main/debugState';
 import { installPreviewSmokeActions } from './main/previewSmoke';
 import { normalizeRendererQuery, parseBooleanQuery, resolveRendererType } from './main/query';
+import {
+  getRuntimeResourceDebugState,
+  installRuntimeResourceDebugLogger,
+} from './main/resourceDebug';
 import { getGameSettings, subscribeGameSettings, type GameSettings } from './settings/userSettings';
 import {
   getGameSettingsSyncDebugState,
@@ -104,6 +108,8 @@ const applyRuntimeSettings = (settings: GameSettings) => {
 applyRuntimeSettings(getGameSettings());
 subscribeGameSettings(applyRuntimeSettings);
 initializeGameSettingsSync();
+window.get_wamp_resource_debug = () => getRuntimeResourceDebugState(game);
+installRuntimeResourceDebugLogger(game, query);
 
 if (import.meta.env.DEV) {
   (window as Window & { __EVERYBODYS_PLATFORMER_GAME__?: Phaser.Game }).__EVERYBODYS_PLATFORMER_GAME__ = game;

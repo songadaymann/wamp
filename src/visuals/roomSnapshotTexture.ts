@@ -55,6 +55,20 @@ const customBackgroundSourceIds = new WeakMap<object, number>();
 const customBackgroundDrawCache = new Map<string, HTMLCanvasElement>();
 let nextCustomBackgroundSourceId = 1;
 
+export function getRoomSnapshotTextureDebugState(): Record<string, unknown> {
+  let approximateCustomBackgroundCachePixels = 0;
+  for (const canvas of customBackgroundDrawCache.values()) {
+    approximateCustomBackgroundCachePixels += canvas.width * canvas.height;
+  }
+
+  return {
+    customBackgroundDrawCacheCount: customBackgroundDrawCache.size,
+    customBackgroundDrawCacheMaxEntries: CUSTOM_BACKGROUND_DRAW_CACHE_MAX_ENTRIES,
+    customBackgroundSourceCount: nextCustomBackgroundSourceId - 1,
+    approximateCustomBackgroundCachePixels,
+  };
+}
+
 export function buildRoomTextureKey(
   room: RoomSnapshot,
   mode: RoomTextureMode,
