@@ -1660,7 +1660,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
           }),
           parallax: config.parallax,
           tileScale: config.tileScale,
-          useVerticalParallax: true,
+          useVerticalParallax: false,
         });
       }
 
