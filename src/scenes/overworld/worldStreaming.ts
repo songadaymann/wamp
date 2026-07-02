@@ -680,6 +680,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
   updateFullRoomBackgrounds(camera: Phaser.Cameras.Scene2D.Camera): void {
     if (this.options.getMode() === 'play' && this.getEffectivePerformanceProfile() === 'reduced') {
+      const currentRoomId = roomIdFromCoordinates(this.options.getCurrentRoomCoordinates());
+      const currentLoadedRoom = this.loadedFullRoomsById.get(currentRoomId);
+      if (currentLoadedRoom) {
+        this.updateFullRoomBackground(currentLoadedRoom, camera);
+      }
       return;
     }
 
