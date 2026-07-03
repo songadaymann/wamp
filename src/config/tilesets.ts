@@ -14,6 +14,7 @@ export interface TilesetConfig {
   terrainCollisionProfiles?: Partial<Record<number, TerrainCollisionProfileId>>;
   lightEmissionProfiles?: Partial<Record<number, TileLightEmissionConfig>>;
   editorTileMetadata?: Partial<Record<number, EditorTileMetadata>>;
+  editorPaletteBackgroundColor?: string;
   uiTheme?: TilesetUiThemeConfig;
 }
 
@@ -241,6 +242,7 @@ const DEFAULT_TILESET_UI_THEME: TilesetUiThemeConfig = {
   accentHot: 0xff7a5c,
   accentAlt: 0x63d6cb,
 };
+export const DEFAULT_TILESET_EDITOR_PALETTE_BACKGROUND_COLOR = '#0b0b0b';
 
 export const SPECIAL_TILESET_KEY = 'special';
 export const SPECIAL_TILESET_FIRST_GID = 669;
@@ -691,6 +693,7 @@ export const TILESETS: TilesetConfig[] = [
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_TEXT, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_TEXT, NO_COLLISION_PROFILE),
     },
+    editorPaletteBackgroundColor: '#f3eee2',
     uiTheme: {
       accentCool: 0x5ca9ff,
       accentWarm: 0xfbd45b,
@@ -809,7 +812,7 @@ export const TILESETS: TilesetConfig[] = [
   {
     key: 'micromono',
     name: 'MicroMono',
-    path: 'assets/tilesets/micromono.png',
+    path: 'assets/tilesets/MicroMono.png',
     imageWidth: 128,
     imageHeight: 336,
     columns: 8,
@@ -819,6 +822,7 @@ export const TILESETS: TilesetConfig[] = [
     terrainCollisionProfiles: {
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_MICROMONO, NO_COLLISION_PROFILE),
     },
+    editorPaletteBackgroundColor: '#f3eee2',
     uiTheme: {
       accentCool: 0x5ca9ff,
       accentWarm: 0xfbd45b,
@@ -839,6 +843,19 @@ export function getTilesetByKey(key: string): TilesetConfig | undefined {
 
 export function getTilesetUiTheme(key: string | null | undefined): TilesetUiThemeConfig {
   return getTilesetByKey(key ?? '')?.uiTheme ?? DEFAULT_TILESET_UI_THEME;
+}
+
+function normalizeTilesetEditorPaletteBackgroundColor(color: string | null | undefined): string {
+  const trimmed = color?.trim();
+  return trimmed && trimmed.length > 0
+    ? trimmed
+    : DEFAULT_TILESET_EDITOR_PALETTE_BACKGROUND_COLOR;
+}
+
+export function getTilesetEditorPaletteBackgroundColor(key: string | null | undefined): string {
+  return normalizeTilesetEditorPaletteBackgroundColor(
+    getTilesetByKey(key ?? '')?.editorPaletteBackgroundColor,
+  );
 }
 
 export function colorNumberToCssHex(value: number): string {

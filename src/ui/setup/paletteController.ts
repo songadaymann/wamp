@@ -7,6 +7,7 @@ import {
   getObjectDefaultFrame,
   getObjectFrameSourceRect,
   getTilesetByKey,
+  getTilesetEditorPaletteBackgroundColor,
   getTilesetUiTheme,
   isTilesetLocalTileEditorEnabled,
   MOVING_PLATFORM_OBJECT_ID,
@@ -202,6 +203,7 @@ export class PaletteController {
     this.paletteCanvas.height = scaledHeight;
     this.paletteCanvas.style.width = `${scaledWidth}px`;
     this.paletteCanvas.style.height = `${scaledHeight}px`;
+    this.paletteCanvas.style.background = getTilesetEditorPaletteBackgroundColor(ts.key);
     this.paletteCanvas.style.touchAction = 'none';
 
     const ctx = this.paletteCanvas.getContext('2d');
@@ -210,6 +212,8 @@ export class PaletteController {
     }
 
     ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = getTilesetEditorPaletteBackgroundColor(ts.key);
+    ctx.fillRect(0, 0, scaledWidth, scaledHeight);
     ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
     this.drawDisabledTileOverlays(ctx, ts, scaledTile);
 
@@ -333,6 +337,7 @@ export class PaletteController {
         objectImage.onload = () => {
           this.tilePreviewCanvas!.width = 64;
           this.tilePreviewCanvas!.height = 64;
+          this.tilePreviewCanvas!.style.background = '';
           ctx.clearRect(0, 0, 64, 64);
 
           const sourceSize = this.getObjectPreviewSourceSize(selectedObject);
@@ -373,7 +378,11 @@ export class PaletteController {
 
     this.tilePreviewCanvas.width = 64;
     this.tilePreviewCanvas.height = 64;
+    this.tilePreviewCanvas.style.background = getTilesetEditorPaletteBackgroundColor(ts.key);
     ctx.clearRect(0, 0, 64, 64);
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = getTilesetEditorPaletteBackgroundColor(ts.key);
+    ctx.fillRect(0, 0, 64, 64);
 
     const offsetX = Math.floor((64 - drawWidth) / 2);
     const offsetY = Math.floor((64 - drawHeight) / 2);
