@@ -326,6 +326,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly PLAYER_HEIGHT = 14;
   private readonly PLAYER_STANDING_HEIGHT = 26;
   private readonly PLAYER_CROUCH_HEIGHT = 14;
+  private readonly PLAYER_PUSH_HEIGHT = 22;
   private readonly PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT = 15;
   private readonly CRAWL_SPEED = 70;
   private readonly CRATE_PUSH_SPEED = 78;
@@ -1557,6 +1558,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         playerHeight: this.PLAYER_HEIGHT,
         playerStandingHeight: this.PLAYER_STANDING_HEIGHT,
         playerCrouchHeight: this.PLAYER_CROUCH_HEIGHT,
+        playerPushHeight: this.PLAYER_PUSH_HEIGHT,
         playerSpeed: this.PLAYER_SPEED,
         crawlSpeed: this.CRAWL_SPEED,
         cratePushSpeed: this.CRATE_PUSH_SPEED,
