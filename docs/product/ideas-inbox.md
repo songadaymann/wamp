@@ -8,7 +8,7 @@ The intended flow is:
 
 1. Dump ideas here freely.
 2. Review and combine related notes later.
-3. Promote the good ones into [backlog.md](/Users/jonathanmann/SongADAO%20Dropbox/Jonathan%20Mann/projects/games/everybodys-platformer/docs/backlog.md) as concrete backlog items.
+3. Promote the good ones into [backlog.md](backlog.md) as concrete backlog items.
 
 ## What Belongs Here
 
@@ -60,4 +60,3 @@ Start from a template - empty canvas is hard
 other ideas: i think the badges as we have them currently 
 
 bugs: 
-

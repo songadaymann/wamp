@@ -2,7 +2,7 @@
 
 This is the curated working backlog for `everybodys-platformer`.
 
-Use [ideas-inbox.md](/Users/jonathanmann/SongADAO%20Dropbox/Jonathan%20Mann/projects/games/everybodys-platformer/docs/ideas-inbox.md) for rough thoughts, half-formed ideas, screenshots-to-follow, and quick notes.
+Use [ideas-inbox.md](ideas-inbox.md) for rough thoughts, half-formed ideas, screenshots-to-follow, and quick notes.
 
 Use this file for ideas that have been triaged into concrete work.
 
