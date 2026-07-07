@@ -616,19 +616,19 @@ export class EditorInteractionController {
   private constrainEditorCamera(): void {
     const cam = this.scene.cameras.main;
     const bounds = cam.getBounds();
-    const minScrollX = bounds.x + (cam.displayWidth - cam.width) * 0.5;
-    const maxScrollX = Math.max(minScrollX, minScrollX + bounds.width - cam.displayWidth);
-    const minScrollY = bounds.y + (cam.displayHeight - cam.height) * 0.5;
-    const maxScrollY = Math.max(minScrollY, minScrollY + bounds.height - cam.displayHeight);
+    const viewWidth = cam.displayWidth;
+    const viewHeight = cam.displayHeight;
+    const maxScrollX = bounds.right - viewWidth;
+    const maxScrollY = bounds.bottom - viewHeight;
 
     cam.scrollX =
-      maxScrollX < minScrollX
-        ? bounds.centerX - cam.width * cam.originX
-        : Phaser.Math.Clamp(cam.scrollX, minScrollX, maxScrollX);
+      viewWidth >= bounds.width
+        ? bounds.centerX - viewWidth * cam.originX
+        : Phaser.Math.Clamp(cam.scrollX, bounds.left, maxScrollX);
     cam.scrollY =
-      maxScrollY < minScrollY
-        ? bounds.centerY - cam.height * cam.originY
-        : Phaser.Math.Clamp(cam.scrollY, minScrollY, maxScrollY);
+      viewHeight >= bounds.height
+        ? bounds.centerY - viewHeight * cam.originY
+        : Phaser.Math.Clamp(cam.scrollY, bounds.top, maxScrollY);
   }
 
   private handleZoom(zoomFactor: number): void {
