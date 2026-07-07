@@ -197,7 +197,12 @@ export class EditorInteractionController {
   centerCameraOnRoom(): void {
     const cam = this.scene.cameras.main;
     cam.setZoom(editorState.zoom);
-    cam.centerOn(ROOM_PX_WIDTH / 2, ROOM_PX_HEIGHT / 2);
+    const viewWidth = cam.width / cam.zoom;
+    const viewHeight = cam.height / cam.zoom;
+    cam.setScroll(
+      ROOM_PX_WIDTH / 2 - viewWidth * cam.originX,
+      ROOM_PX_HEIGHT / 2 - viewHeight * cam.originY,
+    );
     this.constrainEditorCamera();
   }
 
@@ -616,19 +621,21 @@ export class EditorInteractionController {
   private constrainEditorCamera(): void {
     const cam = this.scene.cameras.main;
     const bounds = cam.getBounds();
-    const viewWidth = cam.displayWidth;
-    const viewHeight = cam.displayHeight;
-    const maxScrollX = bounds.right - viewWidth;
-    const maxScrollY = bounds.bottom - viewHeight;
+    const viewWidth = cam.width / cam.zoom;
+    const viewHeight = cam.height / cam.zoom;
+    const boundsRight = bounds.x + bounds.width;
+    const boundsBottom = bounds.y + bounds.height;
+    const maxScrollX = boundsRight - viewWidth;
+    const maxScrollY = boundsBottom - viewHeight;
 
     cam.scrollX =
       viewWidth >= bounds.width
-        ? bounds.centerX - viewWidth * cam.originX
-        : Phaser.Math.Clamp(cam.scrollX, bounds.left, maxScrollX);
+        ? bounds.x + bounds.width * 0.5 - viewWidth * cam.originX
+        : Phaser.Math.Clamp(cam.scrollX, bounds.x, maxScrollX);
     cam.scrollY =
       viewHeight >= bounds.height
-        ? bounds.centerY - viewHeight * cam.originY
-        : Phaser.Math.Clamp(cam.scrollY, bounds.top, maxScrollY);
+        ? bounds.y + bounds.height * 0.5 - viewHeight * cam.originY
+        : Phaser.Math.Clamp(cam.scrollY, bounds.y, maxScrollY);
   }
 
   private handleZoom(zoomFactor: number): void {
