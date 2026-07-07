@@ -73,6 +73,8 @@ export class EditorInteractionController {
   private touchPrimaryPointerId: number | null = null;
   private pinchDistance = 0;
   private pinchAnchor = { x: 0, y: 0 };
+  private pinchAnchorWorld = { x: 0, y: 0 };
+  private hasUserAdjustedCamera = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -169,6 +171,8 @@ export class EditorInteractionController {
     this.touchPrimaryPointerId = null;
     this.pinchDistance = 0;
     this.pinchAnchor = { x: 0, y: 0 };
+    this.pinchAnchorWorld = { x: 0, y: 0 };
+    this.hasUserAdjustedCamera = false;
   }
 
   setupCamera(): void {
@@ -183,7 +187,11 @@ export class EditorInteractionController {
       ROOM_PX_HEIGHT + previewSpanY * 2 + margin * 2,
     );
     cam.transparent = true;
-    this.centerCameraOnRoom();
+    if (this.shouldUsePhonePortraitFit()) {
+      this.fitToScreen({ markManualAdjustment: false });
+    } else {
+      this.centerCameraOnRoom();
+    }
   }
 
   centerCameraOnRoom(): void {
@@ -193,21 +201,42 @@ export class EditorInteractionController {
     this.constrainEditorCamera();
   }
 
-  fitToScreen(): void {
+  handleViewportResize(): void {
+    if (this.shouldUsePhonePortraitFit() && !this.hasUserAdjustedCamera) {
+      this.fitToScreen({ markManualAdjustment: false });
+      return;
+    }
+
+    if (this.shouldUsePhonePortraitFit()) {
+      this.constrainEditorCamera();
+      return;
+    }
+
+    this.centerCameraOnRoom();
+  }
+
+  fitToScreen(options: { markManualAdjustment?: boolean } = {}): void {
     const viewW = this.scene.scale.width;
     const viewH = this.scene.scale.height;
-    const padding = 32;
+    const usePhonePortraitFit = this.shouldUsePhonePortraitFit();
+    const padding = usePhonePortraitFit ? 12 : 32;
     const fitZoom = Math.min(
       (viewW - padding) / ROOM_PX_WIDTH,
       (viewH - padding) / ROOM_PX_HEIGHT,
     );
 
-    editorState.zoom = Math.round(fitZoom * 4) / 4;
+    editorState.zoom = usePhonePortraitFit
+      ? Number(fitZoom.toFixed(2))
+      : Math.round(fitZoom * 4) / 4;
     editorState.zoom = Math.max(0.25, Math.min(6, editorState.zoom));
 
     this.centerCameraOnRoom();
     this.host.updateBackgroundPreview();
     this.host.updateZoomUI();
+
+    if (options.markManualAdjustment !== false) {
+      this.hasUserAdjustedCamera = false;
+    }
   }
 
   zoomIn(): void {
@@ -462,6 +491,7 @@ export class EditorInteractionController {
         this.scene.cameras.main.scrollY = this.panStartScroll.y + dy;
         this.constrainEditorCamera();
         this.host.updateBackgroundPreview();
+        this.hasUserAdjustedCamera = true;
         return;
       }
 
@@ -608,6 +638,7 @@ export class EditorInteractionController {
     }
 
     editorState.zoom = Number(nextZoom.toFixed(2));
+    this.hasUserAdjustedCamera = true;
     this.centerCameraOnRoom();
     this.host.updateBackgroundPreview();
     this.host.updateZoomUI();
@@ -878,6 +909,11 @@ export class EditorInteractionController {
       x: (firstPoint.x + secondPoint.x) * 0.5,
       y: (firstPoint.y + secondPoint.y) * 0.5,
     };
+    const anchorWorld = this.screenToWorld(this.pinchAnchor.x, this.pinchAnchor.y);
+    this.pinchAnchorWorld = {
+      x: anchorWorld.x,
+      y: anchorWorld.y,
+    };
     this.panStartScroll = {
       x: this.scene.cameras.main.scrollX,
       y: this.scene.cameras.main.scrollY,
@@ -906,43 +942,39 @@ export class EditorInteractionController {
     const centerY = (firstPoint.y + secondPoint.y) * 0.5;
     const zoomFactor = nextDistance / this.pinchDistance;
     if (Math.abs(zoomFactor - 1) > 0.02) {
-      this.zoomAroundPoint(zoomFactor, centerX, centerY);
+      const nextZoom = Phaser.Math.Clamp(editorState.zoom * zoomFactor, 0.25, 6);
+      if (Math.abs(nextZoom - editorState.zoom) >= 0.0001) {
+        editorState.zoom = Number(nextZoom.toFixed(2));
+        this.scene.cameras.main.setZoom(editorState.zoom);
+        this.host.updateZoomUI();
+      }
       this.pinchDistance = nextDistance;
     }
 
-    const camera = this.scene.cameras.main;
-    const dx = (this.pinchAnchor.x - centerX) / camera.zoom;
-    const dy = (this.pinchAnchor.y - centerY) / camera.zoom;
-    camera.setScroll(this.panStartScroll.x + dx, this.panStartScroll.y + dy);
+    this.scrollWorldPointToScreen(this.pinchAnchorWorld.x, this.pinchAnchorWorld.y, centerX, centerY);
     this.constrainEditorCamera();
     this.host.updateBackgroundPreview();
+    this.hasUserAdjustedCamera = true;
   }
 
-  private zoomAroundPoint(zoomFactor: number, screenX: number, screenY: number): void {
+  private screenToWorld(screenX: number, screenY: number): Phaser.Math.Vector2 {
     const camera = this.scene.cameras.main;
-    const nextZoom = Phaser.Math.Clamp(editorState.zoom * zoomFactor, 0.25, 6);
-    if (Math.abs(nextZoom - editorState.zoom) < 0.0001) {
-      return;
-    }
-
     const localX = screenX - camera.x;
     const localY = screenY - camera.y;
-    const anchorWorldX =
-      camera.scrollX + camera.width * camera.originX - camera.displayWidth * 0.5 + localX / camera.zoom;
-    const anchorWorldY =
-      camera.scrollY + camera.height * camera.originY - camera.displayHeight * 0.5 + localY / camera.zoom;
+    return new Phaser.Math.Vector2(
+      camera.scrollX + camera.width * camera.originX - camera.displayWidth * 0.5 + localX / camera.zoom,
+      camera.scrollY + camera.height * camera.originY - camera.displayHeight * 0.5 + localY / camera.zoom,
+    );
+  }
 
-    editorState.zoom = Number(nextZoom.toFixed(2));
-    camera.setZoom(editorState.zoom);
-
-    const nextScrollX =
-      anchorWorldX - camera.width * camera.originX + camera.displayWidth * 0.5 - localX / camera.zoom;
-    const nextScrollY =
-      anchorWorldY - camera.height * camera.originY + camera.displayHeight * 0.5 - localY / camera.zoom;
-    camera.setScroll(nextScrollX, nextScrollY);
-    this.constrainEditorCamera();
-    this.host.updateBackgroundPreview();
-    this.host.updateZoomUI();
+  private scrollWorldPointToScreen(worldX: number, worldY: number, screenX: number, screenY: number): void {
+    const camera = this.scene.cameras.main;
+    const localX = screenX - camera.x;
+    const localY = screenY - camera.y;
+    camera.setScroll(
+      worldX - camera.width * camera.originX + camera.displayWidth * 0.5 - localX / camera.zoom,
+      worldY - camera.height * camera.originY + camera.displayHeight * 0.5 - localY / camera.zoom,
+    );
   }
 
   private isTouchPointer(pointer: Phaser.Input.Pointer): boolean {
@@ -961,5 +993,14 @@ export class EditorInteractionController {
     }
 
     return layout.coarsePointer;
+  }
+
+  private shouldUsePhonePortraitFit(): boolean {
+    const layout = getDeviceLayoutState();
+    return (
+      layout.deviceClass === 'phone' &&
+      layout.orientationState === 'portrait' &&
+      layout.coarsePointer
+    );
   }
 }
