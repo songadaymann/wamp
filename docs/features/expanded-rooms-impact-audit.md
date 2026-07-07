@@ -21,7 +21,7 @@ Expanded Rooms need to become the canonical playable identity everywhere player-
 
 ## Current State
 
-Already implemented in this worktree:
+Already implemented in the source branch:
 
 - `migrations/0037_expanded_rooms.sql` creates `expanded_rooms`, `expanded_room_versions`, `expanded_room_cells`, `expanded_room_runs`, and `expanded_room_ratings`.
 - Published courses are migrated into `expanded_rooms` using ids like `course:<legacyCourseId>`.

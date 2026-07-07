@@ -15,18 +15,14 @@ progress.md
 
 .DS_Store
 
+# Local environment files. Keep examples in docs/development/environment.md
+# instead of tracking secret-shaped files at the repo root.
 .dev.vars
 .dev.vars.*
-!.dev.vars.example
-
 env.local
 env.local.*
-!env.local.example
-
 .env
 .env.*
-!.env.example
-!.env.*.example
 
 .claude/settings.local.json
 
