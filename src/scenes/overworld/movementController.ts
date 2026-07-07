@@ -128,6 +128,7 @@ interface OverworldMovementControllerOptions {
   playerHeight: number;
   playerStandingHeight: number;
   playerCrouchHeight: number;
+  playerPushHeight: number;
   playerSpeed: number;
   crawlSpeed: number;
   cratePushSpeed: number;
@@ -392,6 +393,7 @@ export class OverworldMovementController {
       !inQuicksand && (grounded || specialEnvironment.inWater) && horizontalInput !== 0
         ? this.findCrateInteraction(horizontalInput, downHeld, specialEnvironment.gravityDirection)
         : null;
+    this.syncCrateInteractionState(crateInteraction);
     const standingHitboxFits =
       !grounded ||
       playerBody.height >= this.options.playerStandingHeight ||
@@ -418,11 +420,8 @@ export class OverworldMovementController {
     if (crateInteraction) {
       const moveSpeed =
         crateInteraction.mode === 'push' ? this.options.cratePushSpeed : this.options.cratePullSpeed;
-      this.host.state.activeCrateInteractionMode = crateInteraction.mode;
-      this.host.state.activeCrateInteractionFacing = crateInteraction.facing;
       this.applyCrateInteraction(playerBody, crateInteraction, moveSpeed, delta);
     } else {
-      this.clearCrateInteractionState();
       if (buttStompInFlipPause) {
         playerBody.setVelocityX(0);
       } else if (this.host.getCurrentTime() < this.host.state.weaponKnockbackUntil) {
@@ -595,6 +594,7 @@ export class OverworldMovementController {
     this.setPlayerLadderState(null);
     this.host.state.isCrouching = false;
     this.clearButtStompState();
+    this.clearCrateInteractionState();
     this.syncPlayerHitbox();
 
     const gravityScale = specialEnvironment.inWater ? WATER_GRAVITY_FACTOR : 1;
@@ -621,6 +621,7 @@ export class OverworldMovementController {
       !inQuicksand && (grounded || specialEnvironment.inWater) && controls.tangentInput !== 0
         ? this.findCrateInteraction(controls.tangentInput, controls.crouchHeld, gravityDirection)
         : null;
+    this.syncCrateInteractionState(crateInteraction);
     this.host.state.isCrouching = grounded && controls.crouchHeld && !crateInteraction;
     this.syncPlayerHitbox();
     const canWallAttach =
@@ -640,11 +641,8 @@ export class OverworldMovementController {
     if (crateInteraction) {
       const moveSpeed =
         crateInteraction.mode === 'push' ? this.options.cratePushSpeed : this.options.cratePullSpeed;
-      this.host.state.activeCrateInteractionMode = crateInteraction.mode;
-      this.host.state.activeCrateInteractionFacing = crateInteraction.facing;
       this.applyCrateInteraction(playerBody, crateInteraction, moveSpeed, delta);
     } else {
-      this.clearCrateInteractionState();
       if (
         this.host.getCurrentTime() < this.host.state.wallJumpLockUntil &&
         this.host.state.wallJumpDirection !== 0
@@ -1078,11 +1076,29 @@ export class OverworldMovementController {
       useGroundedProfile ??
       Boolean((playerBody.blocked.down || playerBody.touching.down) && playerBody.velocity.y >= 0);
     const nextHeight = this.getPlayerHitboxHeight(playerBody, groundedProfile);
+    const previousBottom = playerBody.bottom;
+    const nextIsPushProfile = this.isPushHitboxProfile(nextHeight, groundedProfile);
+    const currentIsPushProfile = this.isCurrentPushHitboxProfile(playerBody);
     if (playerBody.width !== this.options.playerWidth || playerBody.height !== nextHeight) {
       playerBody.setSize(this.options.playerWidth, nextHeight, false);
       playerBody.setOffset(0, this.options.playerStandingHeight - nextHeight);
+      if (nextIsPushProfile || currentIsPushProfile) {
+        playerBody.y = previousBottom - nextHeight;
+        playerBody.updateCenter();
+      }
     }
     this.host.syncPlayerPickupSensor();
+  }
+
+  private isPushHitboxProfile(height: number, groundedProfile: boolean): boolean {
+    return groundedProfile &&
+      this.host.state.activeCrateInteractionMode === 'push' &&
+      height === this.options.playerPushHeight;
+  }
+
+  private isCurrentPushHitboxProfile(playerBody: Phaser.Physics.Arcade.Body): boolean {
+    return playerBody.height === this.options.playerPushHeight &&
+      playerBody.offset.y === this.options.playerStandingHeight - this.options.playerPushHeight;
   }
 
   private getPlayerHitboxHeight(playerBody: Phaser.Physics.Arcade.Body, groundedProfile: boolean): number {
@@ -1092,6 +1108,10 @@ export class OverworldMovementController {
 
     if (this.host.shouldForceFullBodyHitbox()) {
       return this.options.playerStandingHeight;
+    }
+
+    if (groundedProfile && this.host.state.activeCrateInteractionMode === 'push') {
+      return this.options.playerPushHeight;
     }
 
     if (!groundedProfile) {
@@ -1287,6 +1307,16 @@ export class OverworldMovementController {
       1000 *
       CRATE_PULL_DRAG_COMPENSATION_SCALE;
     return crateInteraction.moveDirectionX * (moveSpeed + dragCompensation);
+  }
+
+  private syncCrateInteractionState(crateInteraction: OverworldCrateInteraction | null): void {
+    if (!crateInteraction) {
+      this.clearCrateInteractionState();
+      return;
+    }
+
+    this.host.state.activeCrateInteractionMode = crateInteraction.mode;
+    this.host.state.activeCrateInteractionFacing = crateInteraction.facing;
   }
 
   private canPlayerFitHitbox(height: number, playerBody = this.host.getPlayerBody()): boolean {
